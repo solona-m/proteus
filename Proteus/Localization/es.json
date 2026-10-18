@@ -416,8 +416,8 @@
     "description": ""
   },
   "Chat.HatCompat": {
-    "message": "[Proteus] Proteus ha hecho que este peinado quepa bajo los sombreros. Puedes deshacerlo, o desactivar la función, en /proteus > Ajustes > Sombreros.",
-    "description": "Chat line shown once ever, the first time Proteus makes a hairstyle fit under hats by itself. Do NOT translate \"Proteus\" or the command \"/proteus\". \"Settings\" and \"Hats\" name a tab and a section in Proteus' own window - use the same words you used for \"Tab.Settings\" and \"Settings.Section.HatCompat\"."
+    "message": "[Proteus] Proteus ha hecho que este peinado quepa bajo los sombreros. Puedes deshacerlo, o desactivar la función, en /proteus > Ajustes > Pelo.",
+    "description": "Chat line shown once ever, the first time Proteus makes a hairstyle fit under hats by itself. Do NOT translate \"Proteus\" or the command \"/proteus\". \"Settings\" and \"Hair\" name a tab and a section in Proteus' own window - use the same words you used for \"Tab.Settings\" and \"Settings.Section.HairPort\"."
   },
   "Chat.MirrorRepo": {
     "message": "[Proteus] Instalaste desde la URL antigua del repositorio de plugins. Cambiarla a https://dl.solona.info/repo.json en /xlplugins > Experimental hace que las actualizaciones sean más rápidas y reduce la carga en GitHub. Tu instalación seguirá funcionando de cualquier modo. Este aviso se muestra unas pocas veces y luego deja de aparecer.",
@@ -1689,7 +1689,7 @@
   },
   "HatCompat.InheritedTag": {
     "message": "Este peinado venía con soporte para sombreros, pero oculta mucho más pelo del que un sombrero cubre — probablemente heredado del peinado en el que se basa y nunca ajustado a este. Proteus puede medirlo de nuevo y reemplazarlo.",
-    "description": "Shown in the Hats section for a hairstyle that arrived with hat support that hides hair no hat covers. \"Proteus\" is a plugin name - never translate it."
+    "description": "Shown in the hats part of the Settings > Hair section for a hairstyle that arrived with hat support that hides hair no hat covers. \"Proteus\" is a plugin name - never translate it."
   },
   "HatCompat.InheritedTag.Tip": {
     "message": "Solo se reemplaza la parte que oculta el pelo. El peinado conserva su propio\naplanado, así que lo peor que puede pasar es que un sombrero atraviese el\npelo, en vez de que desaparezca pelo que ningún sombrero cubriría.\n\nDeshacer restaura exactamente lo que traía el peinado.",
@@ -1733,7 +1733,7 @@
   },
   "HatCompat.NoHead": {
     "message": "Proteus no pudo determinar dónde está tu cabeza, así que ha dejado este peinado sin tocar. Lee la cara de tu personaje para saber dónde se asienta un sombrero; sin eso, la línea del sombrero sería una suposición.",
-    "description": "Shown in the Hats section when Proteus cannot read the wearer's face model and so refuses to change the hairstyle. \"Proteus\" is a plugin name - never translate it."
+    "description": "Shown in the hats part of the Settings > Hair section when Proteus cannot read the wearer's face model and so refuses to change the hairstyle. \"Proteus\" is a plugin name - never translate it."
   },
   "HatCompat.Apply.NoHead": {
     "message": "Proteus no pudo leer la cabeza de tu personaje, así que no ha cambiado este peinado.",
@@ -1741,7 +1741,7 @@
   },
   "HatCompat.UndoAll.Fmt": {
     "message": "Deshacer los {0} peinados de este mod",
-    "description": "Button in the Hats section. {0} is how many hairstyle files Proteus has changed in this mod. Keep it short - it is a button label."
+    "description": "Button in the hats part of the Settings > Hair section. {0} is how many hairstyle files Proteus has changed in this mod. Keep it short - it is a button label."
   },
   "HatCompat.UndoAll.Tip": {
     "message": "Deshacer restaura el peinado que llevas puesto. Un mod de pelo suele incluir\nun modelo por raza, así que un peinado que ajustaste como otra raza no es el\nque llevas ahora, y Deshacer no puede alcanzarlo.\n\nEsto restaura todos los peinados que Proteus ha cambiado en este mod.",
@@ -3231,10 +3231,6 @@
     "message": "General",
     "description": ""
   },
-  "Settings.Section.HatCompat": {
-    "message": "Sombreros",
-    "description": ""
-  },
   "Settings.Section.Hosting": {
     "message": "Alojamiento",
     "description": ""
@@ -4091,6 +4087,22 @@
     "message": "(vanilla)",
     "description": ""
   },
+  "WhatsNew.HairPort.Head": {
+    "message": "Los mods de pelo hechos para otra raza ya se ajustan a la tuya",
+    "description": "Release-notes section heading for hair mods fitted automatically from another race to the player's."
+  },
+  "WhatsNew.HairPort.Body": {
+    "message": "Muchos mods de pelo están hechos para una sola raza, así que en cualquier otra el juego muestra su propio peinado. Ahora Proteus dobla el peinado del mod sobre la cabeza de tu raza y lo añade a la misma opción del mismo mod. Revisa ahora una vez los mods de pelo activos en tu colección, y de nuevo cada vez que se instala, se activa o se cambia uno. El chat indica los números de peinado que ha ajustado, para que sepas cuál elegir. El pelo con físicas conserva sus físicas.\n\nSigue funcionando con Proteus desactivado y viaja con el mod. Puedes desactivarlo, volver a comprobar o deshacer un peinado ajustado en Ajustes, Pelo.",
+    "description": "Release-notes section on hair fitted automatically from another race. 'Settings, Hair' names the Settings tab and its Hair section - match Tab.Settings and Settings.Section.HairPort. 'Physics hair' is hair that sways with its own bones."
+  },
+  "WhatsNew.HairPortStudio.Head": {
+    "message": "Porta un peinado a todas las razas a la vez",
+    "description": "Release-notes section heading for the Studio's tool that ports one hair mod to every race at once."
+  },
+  "WhatsNew.HairPortStudio.Body": {
+    "message": "Para que un mod de pelo funcione para todos, no solo para ti, abre uno de sus modelos de pelo en el Estudio y usa «Portar a todas las razas». Proteus lo dobla sobre todas las demás razas del mismo sexo de una sola vez y añade los resultados a la misma opción del mod. Las razas para las que lo hizo el autor se dejan como están, y «Quitar versiones portadas» las vuelve a quitar todas.",
+    "description": "Release-notes section on the Studio's \"Port to all races\". 'Studio' is the tab name (Tab.Parts); the two quoted labels must match HairPort.Studio.Header and HairPort.Studio.Remove."
+  },
   "WhatsNew.AutoRefit.Body": {
     "message": "Proteus ahora puede ajustar por sí solo el equipo de pecho, piernas, manos y pies a tu cuerpo en cuanto te lo pones. Averigua para qué mod de cuerpo y qué talla se hizo el equipo, lo ajusta junto con las partes del cuerpo que cubre, guarda la nueva talla en el propio mod del equipo y la activa. El chat avisa cuando empieza y cuando termina.\n\nPara usarlo, abre Ajustes › Ajuste al cuerpo. Marca «Ajustar el equipo a mi cuerpo al ponérmelo» y elige tu mod de cuerpo y sus tallas de pecho y piernas para cada colección de Penumbra; las manos y los pies se emparejan solos. El equipo que ya llevas se ajusta con «Ajustar lo que llevo puesto», y el equipo original del juego tiene su propia casilla. Elegir «Original» u otra talla en Penumbra siempre se respeta.",
     "description": ""
@@ -4100,8 +4112,8 @@
     "description": ""
   },
   "WhatsNew.IntroAll": {
-    "message": "Cuatro cosas que conviene saber sobre Proteus. Esta ventana se abre una vez y no vuelve a abrirse.",
-    "description": ""
+    "message": "Algunas cosas que conviene saber sobre Proteus. Esta ventana se abre una vez y no vuelve a abrirse.",
+    "description": "First line of the release-notes window for someone who has never seen it; every section follows."
   },
   "WhatsNew.IntroSince": {
     "message": "Hay algo nuevo desde la última vez que viste esta ventana. Se abre una vez y no vuelve a abrirse.",
@@ -4124,7 +4136,7 @@
     "description": ""
   },
   "WhatsNew.Hats.Body": {
-    "message": "«Hacer que los peinados encajen bajo los sombreros» ahora está activado por defecto. Proteus espera a que lleves un sombrero de verdad y entonces aplasta contra la cabeza el pelo que el sombrero taparía, para que deje de atravesarlo.\n\nEdita los archivos del propio mod de pelo, pero conserva los originales, así que se puede deshacer — o desactivar del todo — en Ajustes, Sombreros.",
+    "message": "«Hacer que los peinados encajen bajo los sombreros» ahora está activado por defecto. Proteus espera a que lleves un sombrero de verdad y entonces aplasta contra la cabeza el pelo que el sombrero taparía, para que deje de atravesarlo.\n\nEdita los archivos del propio mod de pelo, pero conserva los originales, así que se puede deshacer — o desactivar del todo — en Ajustes, Pelo.",
     "description": ""
   },
   "WhatsNew.Designs.Head": {
@@ -5051,10 +5063,6 @@
     "message": "Adaptar los mods de pelo hechos para otra raza",
     "description": ""
   },
-  "HairPort.Auto.Tip": {
-    "message": "Muchos mods de pelo están hechos para una sola raza, así que en cualquier otra\nel juego muestra su propio peinado. Con esto activado, Proteus lo detecta, dobla\nel peinado del mod sobre la cabeza de tu raza y lo añade a la misma opción del\nmismo mod.\n\nSolo entre razas del mismo sexo, y solo para el peinado que llevas. Sigue\nfuncionando con Proteus desactivado, viaja con el mod y se ve en todos los que\nse muestren con ese mod activo. Se puede deshacer aquí.",
-    "description": ""
-  },
   "HairPort.Settings.None": {
     "message": "El peinado que llevas no necesita ajuste.",
     "description": ""
@@ -5169,6 +5177,90 @@
   },
   "HairPort.Refused.RecordUnreadable": {
     "message": "No se pudo leer el registro de Proteus de los peinados portados de este mod (Proteus/hairport.json), así que no se cambió nada.",
+    "description": ""
+  },
+  "HairPort.Auto.Tip2": {
+    "message": "Muchos mods de pelo están hechos para una sola raza, así que en cualquier otra\nel juego muestra su propio peinado. Con esto activado, Proteus dobla el peinado\ndel mod sobre la cabeza de tu raza y lo añade a la misma opción del mismo mod:\npara el peinado que te pones y, por adelantado, para los mods de pelo activos en\ntu colección: al activar esto, al instalar, activar o cambiar un mod, y al pulsar\n«Comprobar ahora».\n\nSolo para tu propia raza, desde razas del mismo sexo. Sigue funcionando con\nProteus desactivado, viaja con el mod y se ve en todos los que se muestren con\nese mod activo. Se puede deshacer aquí.",
+    "description": ""
+  },
+  "HairPort.Scan.Starting": {
+    "message": "Comprobando tus mods de pelo…",
+    "description": ""
+  },
+  "HairPort.Scan.Checking.Fmt": {
+    "message": "Comprobando tus mods de pelo… {0} de {1}",
+    "description": ""
+  },
+  "HairPort.Scan.None": {
+    "message": "Tus mods de pelo aún no se han comprobado en esta sesión.",
+    "description": ""
+  },
+  "HairPort.Scan.Checked.Fmt": {
+    "message": "{0} peinado(s) de tus mods de pelo están ajustados a {1}.",
+    "description": ""
+  },
+  "HairPort.Scan.CheckNow": {
+    "message": "Comprobar ahora",
+    "description": ""
+  },
+  "HairPort.Scan.CheckNow.Tip": {
+    "message": "Revisar todos los mods de pelo activos en tu colección y ajustar a tu raza los\nhechos para otra.",
+    "description": ""
+  },
+  "HairPort.Scan.WearHint": {
+    "message": "Para llevar uno, elige ese número de peinado para tu personaje; Glamourer muestra el número.",
+    "description": ""
+  },
+  "HairPort.Scan.List.Fmt": {
+    "message": "Mods de pelo para tu raza ({0})",
+    "description": ""
+  },
+  "HairPort.Scan.Row.Fmt": {
+    "message": "Peinado {0} — {1}: {2}",
+    "description": ""
+  },
+  "HairPort.Scan.State.Fitted": {
+    "message": "ajustado",
+    "description": ""
+  },
+  "HairPort.Scan.State.Already": {
+    "message": "ya ajustado",
+    "description": ""
+  },
+  "HairPort.Scan.State.Remade": {
+    "message": "ajustado de nuevo (el mod cambió)",
+    "description": ""
+  },
+  "HairPort.Scan.State.Undone": {
+    "message": "deshecho",
+    "description": ""
+  },
+  "HairPort.Scan.State.Refused": {
+    "message": "no ajustado",
+    "description": ""
+  },
+  "HairPort.Scan.State.Refused.Fmt": {
+    "message": "no ajustado: {0}",
+    "description": ""
+  },
+  "HairPort.Scan.UndoChecked": {
+    "message": "Deshacer todo lo que ajustó esta comprobación",
+    "description": ""
+  },
+  "HairPort.Scan.Entry.Fmt": {
+    "message": "peinado {0} ({1})",
+    "description": ""
+  },
+  "HairPort.Scan.More.Fmt": {
+    "message": " y {0} más",
+    "description": ""
+  },
+  "Chat.HairPortScan.Fmt": {
+    "message": "[Proteus] Ajustado a tu raza: {0}. Para llevar uno, elige ese número de peinado para tu personaje. Deshazlo o desactiva esto en /proteus > Ajustes > Pelo.",
+    "description": ""
+  },
+  "HairPort.Scan.UndoChecked.Confirm.Fmt": {
+    "message": "Vuelve a pulsar para deshacer {0} peinado(s) definitivamente",
     "description": ""
   }
 }

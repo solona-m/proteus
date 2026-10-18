@@ -78,17 +78,17 @@ internal sealed class SettingsTab
         using (ProteusStyle.Card())
             DrawOutputSettings();
 
-        // Always drawn: its governing switch lives inside it.
-        ImGui.Spacing();
-        ProteusStyle.SectionHeader(s.SecHatCompat);
-        using (ProteusStyle.Card())
-            hatCompat.Draw();
-
-        // Always drawn: its switch lives inside it.
+        // Always drawn: both switches live inside it. Hair fitted to the race, then hats fitted to the hair.
         ImGui.Spacing();
         ProteusStyle.SectionHeader(s.SecHairPort);
         using (ProteusStyle.Card())
+        {
             hairPort.Draw();
+            ImGui.Spacing();
+            ImGui.Separator();
+            ImGui.Spacing();
+            hatCompat.Draw();
+        }
 
         // Always drawn, for the same reason: its switch lives inside it.
         ImGui.Spacing();

@@ -47,6 +47,10 @@ internal sealed class HairPortRecord
         [JsonPropertyName("Materials")] public Dictionary<string, string> Materials { get; set; } = new(StringComparer.OrdinalIgnoreCase);
         /// <summary>The extra skeleton (<c>Est</c> entry) the port added for its race beside it; 0 for none.</summary>
         [JsonPropertyName("Est")] public int Est { get; set; }
+        /// <summary>The source race's skeleton the port carries as its race's own for the hairstyle, published among
+        /// <see cref="Materials"/>: what the source borrowed, or the hairstyle's own; 0 for none. Ports made before it
+        /// existed read 0, as they carry none.</summary>
+        [JsonPropertyName("SkeletonFrom")] public int SkeletonFrom { get; set; }
         /// <summary>Made on equip rather than in Studio.</summary>
         [JsonPropertyName("Auto")] public bool Auto { get; set; }
         [JsonPropertyName("PortVersion")] public int PortVersion { get; set; }

@@ -25,13 +25,13 @@ public sealed class Plugin : IDalamudPlugin
     [PluginService] public static ITextureProvider TextureProvider { get; private set; } = null!;
 
     /// <summary>Hand-maintained; bump it for in-game testing. <see cref="BuildStamp"/> is the one that can't go stale.</summary>
-    public const int BuildNumber = 1304;
+    public const int BuildNumber = 1310;
 
     /// <summary>
     /// Which set of release notes is current. Raise it when a release has something new to say: the window
     /// then opens once more for everyone whose <see cref="Configuration.WhatsNewShown"/> is below it.
     /// </summary>
-    public const int CurrentWhatsNew = 2;
+    public const int CurrentWhatsNew = 3;
 
     /// <summary>
     /// When this assembly was compiled, as MM-dd HH:mm:ss, baked in by the csproj: Dalamud loads plugins from a stream,

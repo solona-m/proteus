@@ -4,7 +4,7 @@
 [English](../README.md) · [日本語](README.ja.md) · [Deutsch](README.de.md) · **Français** · [简体中文](README.zh.md) · [한국어](README.ko.md) · [Español](README.es.md) · [Русский](README.ru.md)
 <!--/i18n-->
 
-Proteus est un plugin Dalamud pour FFXIV qui compose des textures de calque sur la peau et l'équipement de votre personnage en temps réel. Les auteurs de mods livrent de petits calques PNG à côté de leurs mods Penumbra ; Proteus les fusionne avec les textures de base chaque fois que vous changez d'option, sans toucher aux fichiers d'origine du mod. Proteus peut importer des fichiers pmp compatibles Proteus, des fichiers de calques omp d'Onion et des tatouages lumineux Atramentum Luminis. Il peut aussi modifier les modèles de n'importe quel mod installé, Proteus ou non : remodeler des vêtements, peindre le balancement au vent, ajouter des interrupteurs de pièces et adapter les cheveux aux chapeaux.
+Proteus est un plugin Dalamud pour FFXIV qui compose des textures de calque sur la peau et l'équipement de votre personnage en temps réel. Les auteurs de mods livrent de petits calques PNG à côté de leurs mods Penumbra ; Proteus les fusionne avec les textures de base chaque fois que vous changez d'option, sans toucher aux fichiers d'origine du mod. Proteus peut importer des fichiers pmp compatibles Proteus, des fichiers de calques omp d'Onion et des tatouages lumineux Atramentum Luminis. Il peut aussi modifier les modèles de n'importe quel mod installé, Proteus ou non : remodeler des vêtements, peindre le balancement au vent, ajouter des interrupteurs de pièces, adapter à votre race les cheveux faits pour une autre, et adapter les cheveux aux chapeaux.
 
 Les calques peuvent être rendus de deux façons : peints dans votre peau, ou en **seconde peau** — une copie du maillage de votre corps dessinée comme un équipement, ce qui permet à un calque d'utiliser des sphere maps, de la métallicité et une lueur animée, choses impossibles avec les matériaux de peau.
 
@@ -13,6 +13,7 @@ Les calques peuvent être rendus de deux façons : peints dans votre peau, ou en
 - **Réajustez une tenue à votre corps.** Le **Studio** peut faire passer un vêtement conçu pour une taille de corps à une autre, ou d'un mod de corps à un autre, par exemple de Neolithe à Rue ou de TBSE à TBSE-X, et l'enregistrer comme nouvelle option dans le mod. Cela fonctionne aussi sur l'équipement d'origine du jeu, et peut ajouter d'un coup toutes les tailles d'autres corps à un mod entier.
 - **Laissez l'équipement s'ajuster tout seul quand vous le portez.** Choisissez votre corps une fois par collection Penumbra, et l'équipement de torse, de jambes, de mains et de pieds, ainsi que les accessoires qui couvrent le corps, comme une veste sur un collier, y sont ajustés dès que vous les portez.
 - **Ajoutez des interrupteurs à n'importe quelle pièce de n'importe quel mod, pas seulement ceux de Proteus.** Quand un mod soude un nœud, un collier ou une sangle dans une géométrie que son auteur n'a jamais rendue optionnelle, l'onglet **Studio** peut détacher cette pièce et lui donner un vrai interrupteur.
+- **Portez des mods de cheveux faits pour une autre race.** Beaucoup de mods de cheveux ne sont faits que pour une seule race, si bien que sur toute autre, le jeu affiche sa propre coiffure à la place. Proteus plie la coiffure du mod sur la tête de votre race et l'ajoute au même mod, physique comprise : ça fonctionne, tout simplement.
 - **Adaptez les cheveux moddés aux chapeaux.** Proteus plaque contre votre tête les cheveux qu'un chapeau recouvrirait, pour que le chapeau cesse de passer au travers. C'est activé par défaut, et cela n'agit que pendant que vous portez un chapeau.
 
 
@@ -271,9 +272,20 @@ Quatre boutons ici méritent d'être connus :
 - **Vider le cache de textures** — à utiliser quand une modification de texture n'apparaît pas, par exemple après avoir réexporté un calque à la même taille.
 - **Textures d'effet lumineux** — ouvre le dossier dans lequel Proteus lit les cartes de défilement de lueur animée. Déposez-y des images et elles apparaîtront dans la liste Effet de chaque calque d'équipement. Survolez le bouton pour voir le chemin complet.
 
-##### Chapeaux
+##### Cheveux
 
-La plupart des cheveux moddés ne gèrent pas les chapeaux, si bien qu'un chapeau porté par-dessus passe au travers. La section **Chapeaux** plaque contre votre tête les cheveux qu'un chapeau recouvrirait. Comme le Studio, elle modifie les fichiers du mod de cheveux lui-même, donc l'adaptation continue de fonctionner avec Proteus désactivé et suit le mod si vous l'exportez.
+La section **Cheveux** adapte les mods de cheveux à votre personnage de deux façons : les cheveux faits pour une autre race sur la tête de votre race, et les cheveux sous les chapeaux. Comme le Studio, les deux modifient les fichiers du mod de cheveux lui-même, donc ils continuent de fonctionner avec Proteus désactivé et suivent le mod si vous l'exportez.
+
+**Cheveux faits pour une autre race.** Beaucoup de mods de cheveux ne sont faits que pour une seule race, si bien que sur toute autre race, le jeu affiche sa propre coiffure à la place. Avec **Adapter les mods de coiffure faits pour une autre race** activé, Proteus plie la coiffure du mod sur la tête de votre race et l'ajoute à la même option du même mod, de sorte qu'elle suit les interrupteurs de ce mod.
+
+- Il vérifie les mods de cheveux activés dans votre collection une fois après chaque mise à jour, quand vous activez le réglage, quand vous appuyez sur **Vérifier maintenant**, et chaque fois qu'un mod de cheveux est installé, activé ou modifié. La coiffure que vous mettez est adaptée elle aussi. Le chat indique les numéros des coiffures adaptées, pour que vous sachiez laquelle choisir ; Glamourer affiche ce numéro.
+- La section affiche la vérification pendant qu'elle se déroule, avec **Annuler**, et liste chaque coiffure adaptée. Chacune a son propre bouton **Annuler**, et **Annuler tout ce que cette vérification a adapté** les rétablit toutes (cliquez deux fois). Une coiffure annulée n'est pas adaptée de nouveau d'elle-même.
+- Uniquement pour votre propre race, à partir de races du même sexe. Une race que vous ne faites qu'essayer n'est pas adaptée : Proteus attend que vous l'ayez gardée 30 secondes.
+- Les cheveux à physique gardent leur physique. Quand le squelette de votre race n'a pas les os avec lesquels une coiffure bouge, le portage apporte le squelette et la physique de la race d'origine pour cette coiffure.
+- Une coiffure qui ne tomberait pas correctement sur votre tête est laissée telle quelle, et la liste en indique la raison.
+- Pour couvrir toutes les races d'un coup, ouvrez un modèle de cheveux dans le **Studio** et utilisez **Transposer à toutes les races**.
+
+**Chapeaux.** La plupart des cheveux moddés ne gèrent pas les chapeaux, si bien qu'un chapeau porté par-dessus passe au travers. Proteus plaque contre votre tête les cheveux qu'un chapeau recouvrirait.
 
 - **Adapter les coiffures aux chapeaux** est activé par défaut. Proteus attend que vous portiez réellement un chapeau, puis adapte la coiffure en dessous et vous le signale dans le chat. Si vous ne portez jamais de chapeau, vos mods de cheveux ne sont jamais touchés. Décochez pour arrêter, et votre choix est conservé.
 - **Masquer les queues de cheval** fait en plus disparaître, pendant qu'un chapeau est porté, les parties qu'aucun chapeau ne pourrait couvrir : queues de cheval, couettes, une longue chute dans le dos. Désactivé par défaut, car le masquage est tout ou rien et une partie mal jugée disparaît purement et simplement.

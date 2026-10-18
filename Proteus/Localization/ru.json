@@ -416,8 +416,8 @@
     "description": ""
   },
   "Chat.HatCompat": {
-    "message": "[Proteus] Proteus подогнал эту причёску под шляпы. Отменить это или отключить функцию можно в /proteus > Настройки > Шляпы.",
-    "description": "Chat line shown once ever, the first time Proteus makes a hairstyle fit under hats by itself. Do NOT translate \"Proteus\" or the command \"/proteus\". \"Settings\" and \"Hats\" name a tab and a section in Proteus' own window - use the same words you used for \"Tab.Settings\" and \"Settings.Section.HatCompat\"."
+    "message": "[Proteus] Proteus подогнал эту причёску под шляпы. Отменить это или отключить функцию можно в /proteus > Настройки > Волосы.",
+    "description": "Chat line shown once ever, the first time Proteus makes a hairstyle fit under hats by itself. Do NOT translate \"Proteus\" or the command \"/proteus\". \"Settings\" and \"Hair\" name a tab and a section in Proteus' own window - use the same words you used for \"Tab.Settings\" and \"Settings.Section.HairPort\"."
   },
   "Chat.MirrorRepo": {
     "message": "[Proteus] Вы установили плагин по старому адресу репозитория. Если поменять его на https://dl.solona.info/repo.json в /xlplugins > Experimental, обновления станут быстрее, а нагрузка на GitHub снизится. Установка продолжит работать в любом случае. Это напоминание появится ещё несколько раз, а затем исчезнет.",
@@ -1689,7 +1689,7 @@
   },
   "HatCompat.InheritedTag": {
     "message": "У этой причёски есть собственная поддержка шляп, но она скрывает гораздо больше волос, чем закрывает шляпа, — вероятно, унаследована от причёски-основы и никогда не подгонялась под эту. Proteus может измерить заново и заменить её.",
-    "description": "Shown in the Hats section for a hairstyle that arrived with hat support that hides hair no hat covers. \"Proteus\" is a plugin name - never translate it."
+    "description": "Shown in the hats part of the Settings > Hair section for a hairstyle that arrived with hat support that hides hair no hat covers. \"Proteus\" is a plugin name - never translate it."
   },
   "HatCompat.InheritedTag.Tip": {
     "message": "Заменяется только то, что скрывает волосы. Собственное приглаживание\nпричёски остаётся, так что худшее — шляпа будет просвечивать через волосы,\nа не волосы исчезнут там, где шляпа их и не закрывает.\n\n«Отменить» вернёт ровно то, с чем причёска пришла.",
@@ -1733,7 +1733,7 @@
   },
   "HatCompat.NoHead": {
     "message": "Proteus не смог определить, где находится ваша голова, и оставил эту причёску без изменений. Чтобы понять, где сидит шляпа, он читает лицо персонажа; без этого линия шляпы была бы догадкой.",
-    "description": "Shown in the Hats section when Proteus cannot read the wearer's face model and so refuses to change the hairstyle. \"Proteus\" is a plugin name - never translate it."
+    "description": "Shown in the hats part of the Settings > Hair section when Proteus cannot read the wearer's face model and so refuses to change the hairstyle. \"Proteus\" is a plugin name - never translate it."
   },
   "HatCompat.Apply.NoHead": {
     "message": "Proteus не смог прочитать голову персонажа, поэтому не менял эту причёску.",
@@ -1741,7 +1741,7 @@
   },
   "HatCompat.UndoAll.Fmt": {
     "message": "Отменить все причёски этого мода ({0})",
-    "description": "Button in the Hats section. {0} is how many hairstyle files Proteus has changed in this mod. Keep it short - it is a button label."
+    "description": "Button in the hats part of the Settings > Hair section. {0} is how many hairstyle files Proteus has changed in this mod. Keep it short - it is a button label."
   },
   "HatCompat.UndoAll.Tip": {
     "message": "«Отменить» возвращает причёску, которая на вас сейчас. Мод на волосы обычно\nсодержит по одной модели на расу, поэтому причёска, подогнанная за другую\nрасу, — не та, что на вас, и «Отменить» до неё не дотянется.\n\nЭто вернёт все причёски, которые Proteus изменил в этом моде.",
@@ -3231,10 +3231,6 @@
     "message": "Общие",
     "description": ""
   },
-  "Settings.Section.HatCompat": {
-    "message": "Шляпы",
-    "description": ""
-  },
   "Settings.Section.Hosting": {
     "message": "Размещение",
     "description": ""
@@ -4091,6 +4087,22 @@
     "message": "(оригинал)",
     "description": ""
   },
+  "WhatsNew.HairPort.Head": {
+    "message": "Моды причёсок, сделанные для другой расы, теперь подходят и вашей",
+    "description": "Release-notes section heading for hair mods fitted automatically from another race to the player's."
+  },
+  "WhatsNew.HairPort.Body": {
+    "message": "Многие моды причёсок сделаны только для одной расы, поэтому на любой другой игра показывает вместо них свою причёску. Теперь Proteus изгибает причёску из мода под голову вашей расы и добавляет её в тот же вариант того же мода. Он сразу просматривает моды причёсок, включённые в вашей коллекции, а затем делает это снова всякий раз, когда какой-либо из них устанавливают, включают или меняют. В чате указываются номера подогнанных причёсок, чтобы вы знали, какую выбрать. Причёски с физикой сохраняют свою физику.\n\nЭто продолжает работать и с выключенным Proteus и уезжает вместе с модом. Отключить функцию, запустить проверку заново или отменить подгонку причёски можно в Настройки › Волосы.",
+    "description": "Release-notes section on hair fitted automatically from another race. 'Settings, Hair' names the Settings tab and its Hair section - match Tab.Settings and Settings.Section.HairPort. 'Physics hair' is hair that sways with its own bones."
+  },
+  "WhatsNew.HairPortStudio.Head": {
+    "message": "Перенос причёски сразу на все расы",
+    "description": "Release-notes section heading for the Studio's tool that ports one hair mod to every race at once."
+  },
+  "WhatsNew.HairPortStudio.Body": {
+    "message": "Чтобы мод причёски работал у всех, а не только у вас, откройте одну из его моделей причёски в Студии и нажмите «Перенести на все расы». Proteus за один раз изгибает её под каждую другую расу того же пола и добавляет результаты в тот же вариант мода. Расы, для которых её сделал автор, не затрагиваются, а «Удалить переносы» убирает все переносы обратно.",
+    "description": "Release-notes section on the Studio's \"Port to all races\". 'Studio' is the tab name (Tab.Parts); the two quoted labels must match HairPort.Studio.Header and HairPort.Studio.Remove."
+  },
   "WhatsNew.AutoRefit.Body": {
     "message": "Теперь Proteus может сам подгонять снаряжение для груди, ног, рук и ступней под ваше тело в тот момент, когда вы его надеваете. Он определяет, под какой мод тела и какой размер сделано снаряжение, подгоняет его вместе с частями тела, которые оно закрывает, сохраняет новый размер в мод самого снаряжения и включает его. Начало и конец подгонки сообщаются в чате.\n\nЧтобы включить, откройте Настройки › Подгонка под тело. Отметьте «Подгонять снаряжение под моё тело при надевании», затем для каждой коллекции Penumbra выберите мод тела и размеры груди и ног; руки и ступни подбираются сами. Уже надетое снаряжение подгоняется кнопкой «Подогнать то, что надето сейчас», а для стандартного снаряжения игры есть отдельный флажок. Выбор «Original» или другого размера в Penumbra всегда остаётся нетронутым.",
     "description": ""
@@ -4100,8 +4112,8 @@
     "description": ""
   },
   "WhatsNew.IntroAll": {
-    "message": "Четыре вещи, которые стоит знать о Proteus. Это окно открывается один раз и больше не появится.",
-    "description": ""
+    "message": "Несколько вещей, которые стоит знать о Proteus. Это окно открывается один раз и больше не появится.",
+    "description": "First line of the release-notes window for someone who has never seen it; every section follows."
   },
   "WhatsNew.IntroSince": {
     "message": "С тех пор как вы последний раз видели это окно, появилось кое-что новое. Оно открывается один раз и больше не появится.",
@@ -4124,7 +4136,7 @@
     "description": ""
   },
   "WhatsNew.Hats.Body": {
-    "message": "«Подгонять причёски под шляпы» теперь включено по умолчанию. Proteus ждёт, пока вы действительно наденете шляпу, и только тогда прижимает к голове волосы, которые она закрыла бы, — и шляпа перестаёт проходить насквозь.\n\nПри этом правятся файлы самого мода волос, но оригиналы сохраняются, так что изменение можно отменить — или отключить целиком — в Настройках, раздел «Шляпы».",
+    "message": "«Подгонять причёски под шляпы» теперь включено по умолчанию. Proteus ждёт, пока вы действительно наденете шляпу, и только тогда прижимает к голове волосы, которые она закрыла бы, — и шляпа перестаёт проходить насквозь.\n\nПри этом правятся файлы самого мода волос, но оригиналы сохраняются, так что изменение можно отменить — или отключить целиком — в Настройках, раздел «Волосы».",
     "description": ""
   },
   "WhatsNew.Designs.Head": {
@@ -5051,10 +5063,6 @@
     "message": "Подгонять моды причёсок, сделанные для другой расы",
     "description": ""
   },
-  "HairPort.Auto.Tip": {
-    "message": "Многие моды причёсок сделаны только для одной расы, поэтому на любой другой\nигра показывает свою причёску. Когда включено, Proteus замечает это,\nизгибает причёску мода под голову вашей расы и добавляет её в тот же вариант\nтого же мода.\n\nТолько между расами одного пола и только для причёски, которая на вас.\nРаботает и с выключенным Proteus, переносится вместе с модом и видна всем,\nкто отображается с этим модом. Это можно отменить здесь.",
-    "description": ""
-  },
   "HairPort.Settings.None": {
     "message": "Причёску, которая на вас, подгонять не нужно.",
     "description": ""
@@ -5169,6 +5177,90 @@
   },
   "HairPort.Refused.RecordUnreadable": {
     "message": "Не удалось прочитать запись Proteus о перенесённых причёсках этого мода (Proteus/hairport.json), поэтому ничего не изменено.",
+    "description": ""
+  },
+  "HairPort.Auto.Tip2": {
+    "message": "Многие моды причёсок сделаны только для одной расы, поэтому на любой другой\nигра показывает свою причёску. Когда включено, Proteus изгибает причёску мода\nпод голову вашей расы и добавляет её в тот же вариант того же мода — для\nпричёски, которую вы надели, и заранее для модов причёсок, включённых в вашей\nколлекции: при включении этой настройки, при установке, включении или\nизменении мода и по кнопке «Проверить сейчас».\n\nТолько для вашей расы, из рас того же пола. Работает и с выключенным Proteus,\nпереносится вместе с модом и видна всем, кто отображается с этим модом.\nЭто можно отменить здесь.",
+    "description": ""
+  },
+  "HairPort.Scan.Starting": {
+    "message": "Проверка ваших модов причёсок…",
+    "description": ""
+  },
+  "HairPort.Scan.Checking.Fmt": {
+    "message": "Проверка ваших модов причёсок… {0} из {1}",
+    "description": ""
+  },
+  "HairPort.Scan.None": {
+    "message": "Моды причёсок в этом сеансе ещё не проверялись.",
+    "description": ""
+  },
+  "HairPort.Scan.Checked.Fmt": {
+    "message": "Причёсок из ваших модов, подогнанных под {1}: {0}.",
+    "description": ""
+  },
+  "HairPort.Scan.CheckNow": {
+    "message": "Проверить сейчас",
+    "description": ""
+  },
+  "HairPort.Scan.CheckNow.Tip": {
+    "message": "Просмотреть все моды причёсок, включённые в вашей коллекции, и подогнать\nпод вашу расу сделанные для другой.",
+    "description": ""
+  },
+  "HairPort.Scan.WearHint": {
+    "message": "Чтобы надеть причёску, выберите её номер для персонажа — Glamourer показывает номер.",
+    "description": ""
+  },
+  "HairPort.Scan.List.Fmt": {
+    "message": "Моды причёсок для вашей расы ({0})",
+    "description": ""
+  },
+  "HairPort.Scan.Row.Fmt": {
+    "message": "Причёска {0} — {1}: {2}",
+    "description": ""
+  },
+  "HairPort.Scan.State.Fitted": {
+    "message": "подогнана",
+    "description": ""
+  },
+  "HairPort.Scan.State.Already": {
+    "message": "уже подогнана",
+    "description": ""
+  },
+  "HairPort.Scan.State.Remade": {
+    "message": "подогнана заново (мод изменился)",
+    "description": ""
+  },
+  "HairPort.Scan.State.Undone": {
+    "message": "отменена",
+    "description": ""
+  },
+  "HairPort.Scan.State.Refused": {
+    "message": "не подогнана",
+    "description": ""
+  },
+  "HairPort.Scan.State.Refused.Fmt": {
+    "message": "не подогнана — {0}",
+    "description": ""
+  },
+  "HairPort.Scan.UndoChecked": {
+    "message": "Отменить всё, что подогнала эта проверка",
+    "description": ""
+  },
+  "HairPort.Scan.Entry.Fmt": {
+    "message": "причёска {0} ({1})",
+    "description": ""
+  },
+  "HairPort.Scan.More.Fmt": {
+    "message": " и ещё {0}",
+    "description": ""
+  },
+  "Chat.HairPortScan.Fmt": {
+    "message": "[Proteus] Подогнано под вашу расу: {0}. Чтобы надеть, выберите этот номер причёски для персонажа. Отменить или выключить можно в /proteus > Настройки > Причёски.",
+    "description": ""
+  },
+  "HairPort.Scan.UndoChecked.Confirm.Fmt": {
+    "message": "Нажмите ещё раз, чтобы окончательно отменить причёски: {0}",
     "description": ""
   }
 }

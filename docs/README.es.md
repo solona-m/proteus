@@ -4,7 +4,7 @@
 [English](../README.md) · [日本語](README.ja.md) · [Deutsch](README.de.md) · [Français](README.fr.md) · [简体中文](README.zh.md) · [한국어](README.ko.md) · **Español** · [Русский](README.ru.md)
 <!--/i18n-->
 
-Proteus es un plugin de Dalamud para FFXIV que compone texturas de superposición sobre la piel y el equipo de tu personaje en tiempo real. Los autores de mods distribuyen pequeñas superposiciones PNG junto a sus mods de Penumbra; Proteus las mezcla con las texturas base cada vez que cambias de opción, sin tocar los archivos originales del mod. Proteus puede importar archivos pmp compatibles con Proteus, archivos omp de superposiciones de Onion y tatuajes luminosos de Atramentum Luminis. También puede editar los modelos de cualquier mod que tengas instalado, sea de Proteus o no: remodelar la ropa, pintar el balanceo con el viento, añadir interruptores de piezas y adaptar el pelo bajo los sombreros.
+Proteus es un plugin de Dalamud para FFXIV que compone texturas de superposición sobre la piel y el equipo de tu personaje en tiempo real. Los autores de mods distribuyen pequeñas superposiciones PNG junto a sus mods de Penumbra; Proteus las mezcla con las texturas base cada vez que cambias de opción, sin tocar los archivos originales del mod. Proteus puede importar archivos pmp compatibles con Proteus, archivos omp de superposiciones de Onion y tatuajes luminosos de Atramentum Luminis. También puede editar los modelos de cualquier mod que tengas instalado, sea de Proteus o no: remodelar la ropa, pintar el balanceo con el viento, añadir interruptores de piezas, adaptar a tu raza el pelo hecho para otra y adaptar el pelo bajo los sombreros.
 
 Las superposiciones pueden representarse de dos maneras: pintadas en tu piel, o como una **segunda piel** — una copia de la malla de tu cuerpo dibujada como equipo, de modo que una superposición puede usar sphere maps, metalicidad y brillo animado, cosas que los materiales de piel no permiten.
 
@@ -13,6 +13,7 @@ Las superposiciones pueden representarse de dos maneras: pintadas en tu piel, o 
 - **Reajusta un conjunto a tu cuerpo.** El **Estudio** puede pasar una prenda hecha para una talla de cuerpo a otra, o de un mod de cuerpo a otro, como de Neolithe a Rue o de TBSE a TBSE-X, y guardarla como una opción nueva del mod. También funciona con el equipo propio del juego, y puede añadir de una vez todas las tallas de otros cuerpos a un mod entero.
 - **Haz que el equipo se ajuste solo al ponértelo.** Elige tu cuerpo una vez por colección de Penumbra, y el equipo de torso, piernas, manos y pies, y los accesorios que cubren el cuerpo, como una chaqueta en un collar, se ajustan a él en cuanto te los pones.
 - **Añade interruptores a cualquier pieza de cualquier mod, no solo a los de Proteus.** Cuando un mod suelda un lazo, un collar o una correa dentro de una geometría que su autor nunca hizo opcional, la pestaña **Estudio** puede separar esa pieza y darle un interruptor de verdad.
+- **Lleva mods de pelo hechos para otra raza.** Muchos mods de pelo están hechos para una sola raza, así que en cualquier otra el juego muestra su propio peinado en su lugar. Proteus adapta el peinado del mod a la cabeza de tu raza y lo añade al mismo mod, físicas incluidas, así que simplemente funciona.
 - **Haz que el pelo con mods quepa bajo los sombreros.** Proteus aplasta contra tu cabeza el pelo que cubriría un sombrero, para que el sombrero deje de atravesarlo. Está activado por defecto y solo actúa mientras llevas un sombrero puesto.
 
 
@@ -271,9 +272,20 @@ Cuatro botones de aquí merecen mención:
 - **Vaciar caché de texturas** — úsalo cuando una edición de textura no aparece, por ejemplo si has vuelto a exportar una superposición con el mismo tamaño.
 - **Texturas de efecto de brillo** — abre la carpeta de la que Proteus lee los mapas de desplazamiento del brillo animado. Deja imágenes ahí y aparecerán en la lista Efecto de cada superposición de equipo. Pasa el ratón por el botón para ver la ruta completa.
 
-##### Sombreros
+##### Pelo
 
-La mayoría del pelo con mods no tiene soporte para sombreros, así que un sombrero puesto encima lo atraviesa. La sección **Sombreros** aplasta contra tu cabeza el pelo que cubriría un sombrero. Igual que el Estudio, edita los archivos del propio mod de pelo, así que el ajuste sigue funcionando con Proteus apagado y viaja con el mod si lo exportas.
+La sección **Pelo** adapta los mods de pelo a ti de dos maneras: lleva el pelo hecho para otra raza a la cabeza de tu raza, y hace que el pelo quepa bajo los sombreros. Igual que el Estudio, ambas editan los archivos del propio mod de pelo, así que siguen funcionando con Proteus apagado y viajan con el mod si lo exportas.
+
+**Pelo hecho para otra raza.** Muchos mods de pelo están hechos para una sola raza, así que en cualquier otra raza el juego muestra su propio peinado en su lugar. Con **Adaptar los mods de pelo hechos para otra raza** activado, Proteus adapta el peinado del mod a la cabeza de tu raza y lo añade a la misma opción del mismo mod, de modo que sigue los propios interruptores de ese mod.
+
+- Revisa los mods de pelo activados en tu colección una vez después de actualizar, al activar el ajuste, al pulsar **Comprobar ahora** y cada vez que se instala, se activa o se cambia un mod de pelo. El peinado que te pones también se adapta. El chat indica los números de los peinados adaptados, para que sepas cuál elegir; Glamourer muestra el número.
+- La sección muestra la comprobación mientras avanza, con **Cancelar**, y lista cada peinado que adaptó. Cada uno tiene su propio **Deshacer**, y **Deshacer todo lo que ajustó esta comprobación** los revierte todos (haz clic dos veces). Un peinado deshecho no vuelve a adaptarse por sí solo.
+- Solo para tu propia raza, desde razas del mismo sexo. Una raza que solo te estás probando no se adapta: Proteus espera a que la hayas mantenido 30 segundos.
+- El pelo con físicas conserva sus físicas. Cuando al esqueleto de tu raza le faltan los huesos con los que se mueve un peinado, la adaptación trae consigo el esqueleto y las físicas de la raza de origen para ese peinado.
+- Un peinado que no quedaría bien en tu cabeza se deja como está, y la lista dice por qué.
+- Para cubrir todas las razas a la vez, abre un modelo de pelo en el **Estudio** y usa **Portar a todas las razas**.
+
+**Sombreros.** La mayoría del pelo con mods no tiene soporte para sombreros, así que un sombrero puesto encima lo atraviesa. Proteus aplasta contra tu cabeza el pelo que cubriría un sombrero.
 
 - **Adaptar los peinados a los sombreros** está activado por defecto. Proteus espera a que lleves un sombrero de verdad, entonces adapta el peinado debajo y te lo dice en el chat. Si nunca llevas sombrero, tus mods de pelo no se tocan nunca. Desmárcalo para detenerlo, y tu elección se mantiene.
 - **Ocultar las coletas** hace además que desaparezcan, mientras llevas un sombrero, las partes que ningún sombrero podría cubrir: coletas, coletas laterales, una caída larga por la espalda. Desactivado por defecto, porque ocultar es todo o nada y una parte mal juzgada sencillamente desaparece.

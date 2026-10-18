@@ -158,6 +158,32 @@ internal static class HairPortFixtures
         return path => files.TryGetValue(path, out var b) ? b : null;
     }
 
+    /// <summary>A race's model of hairstyle <paramref name="id"/>: the same cap, its material named for that race and id.
+    /// <paramref name="radius"/> changes the bytes without moving it off the head.</summary>
+    public static byte[] HairModelOf(ushort race, int id, float radius = 0.1f)
+        => SyntheticModel.BuildSurface([],
+            [Sphere($"/mt_c{race:D4}h{id:D4}_hir_a.mtrl", Head + Offset(race), radius, [("j_kao", 1f)], minY: -0.2f)]);
+
+    /// <summary>The game's own files for several hairstyles: each race's face, its model of each id, and the material
+    /// that model names — which a port copies when the mod has none of its own.</summary>
+    public static Func<string, byte[]?> GameOf(IEnumerable<ushort> races, IEnumerable<int> ids,
+                                               IDictionary<string, byte[]>? more = null)
+    {
+        var files = new Dictionary<string, byte[]>(StringComparer.OrdinalIgnoreCase);
+        foreach (var race in races)
+        {
+            files[HairPortPlan.HeadPaths(race).First()] = HeadModel(race);
+            foreach (int id in ids)
+            {
+                files[HairPortPlan.HairPath(race, id)] = HairModelOf(race, id);
+                if (HairMaterialPath.GamePath(race, id, $"/mt_c{race:D4}h{id:D4}_hir_a.mtrl") is { } mtrl)
+                    files[mtrl] = [1, 2, 3, (byte)(race / 100), (byte)id];
+            }
+        }
+        if (more != null) foreach (var (k, v) in more) files[k] = v;
+        return path => files.TryGetValue(path, out var b) ? b : null;
+    }
+
     /// <summary>A throwaway mod folder: a manifest and the files it names.</summary>
     public sealed class Mod : IDisposable
     {

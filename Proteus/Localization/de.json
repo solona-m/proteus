@@ -416,8 +416,8 @@
     "description": ""
   },
   "Chat.HatCompat": {
-    "message": "[Proteus] Proteus hat diese Frisur hutkompatibel gemacht. Du kannst das unter /proteus > Einstellungen > Hüte rückgängig machen oder die Funktion dort abschalten.",
-    "description": "Chat line shown once ever, the first time Proteus makes a hairstyle fit under hats by itself. Do NOT translate \"Proteus\" or the command \"/proteus\". \"Settings\" and \"Hats\" name a tab and a section in Proteus' own window - use the same words you used for \"Tab.Settings\" and \"Settings.Section.HatCompat\"."
+    "message": "[Proteus] Proteus hat diese Frisur hutkompatibel gemacht. Du kannst das unter /proteus > Einstellungen > Haare rückgängig machen oder die Funktion dort abschalten.",
+    "description": "Chat line shown once ever, the first time Proteus makes a hairstyle fit under hats by itself. Do NOT translate \"Proteus\" or the command \"/proteus\". \"Settings\" and \"Hair\" name a tab and a section in Proteus' own window - use the same words you used for \"Tab.Settings\" and \"Settings.Section.HairPort\"."
   },
   "Chat.MirrorRepo": {
     "message": "[Proteus] Du hast über die alte Plugin-Repository-URL installiert. Wenn du sie unter /xlplugins > Experimental auf https://dl.solona.info/repo.json umstellst, werden Updates schneller und GitHub wird entlastet. Deine Installation funktioniert so oder so weiter. Dieser Hinweis erscheint noch einige Male und hört dann auf.",
@@ -1689,7 +1689,7 @@
   },
   "HatCompat.InheritedTag": {
     "message": "Diese Frisur kam mit Hut-Unterstützung, die aber viel mehr Haar verbirgt als ein Hut bedeckt — wahrscheinlich von der Frisur übernommen, auf der sie aufbaut, und nie an diese angepasst. Proteus kann sie neu vermessen und ersetzen.",
-    "description": "Shown in the Hats section for a hairstyle that arrived with hat support that hides hair no hat covers. \"Proteus\" is a plugin name - never translate it."
+    "description": "Shown in the hats part of the Settings > Hair section for a hairstyle that arrived with hat support that hides hair no hat covers. \"Proteus\" is a plugin name - never translate it."
   },
   "HatCompat.InheritedTag.Tip": {
     "message": "Nur der Teil, der Haar verbirgt, wird ersetzt. Die Frisur behält ihr eigenes\nFlachdrücken, im schlimmsten Fall ragt also ein Hut durch das Haar, statt\ndass Haar verschwindet, das kein Hut bedeckt hätte.\n\n„Rückgängig“ stellt genau das wieder her, was die Frisur mitbrachte.",
@@ -1733,7 +1733,7 @@
   },
   "HatCompat.NoHead": {
     "message": "Proteus konnte nicht bestimmen, wo dein Kopf ist, und hat diese Frisur daher unverändert gelassen. Es liest das Gesicht deines Charakters, um zu wissen, wo ein Hut sitzt; ohne das wäre die Hutlinie nur geraten.",
-    "description": "Shown in the Hats section when Proteus cannot read the wearer's face model and so refuses to change the hairstyle. \"Proteus\" is a plugin name - never translate it."
+    "description": "Shown in the hats part of the Settings > Hair section when Proteus cannot read the wearer's face model and so refuses to change the hairstyle. \"Proteus\" is a plugin name - never translate it."
   },
   "HatCompat.Apply.NoHead": {
     "message": "Proteus konnte den Kopf deines Charakters nicht lesen und hat diese Frisur daher nicht verändert.",
@@ -1741,7 +1741,7 @@
   },
   "HatCompat.UndoAll.Fmt": {
     "message": "Alle {0} Frisuren dieses Mods zurücksetzen",
-    "description": "Button in the Hats section. {0} is how many hairstyle files Proteus has changed in this mod. Keep it short - it is a button label."
+    "description": "Button in the hats part of the Settings > Hair section. {0} is how many hairstyle files Proteus has changed in this mod. Keep it short - it is a button label."
   },
   "HatCompat.UndoAll.Tip": {
     "message": "„Rückgängig“ stellt die Frisur wieder her, die du gerade trägst. Ein Haar-Mod\nliefert meist ein Modell pro Volk, also ist eine als anderes Volk angepasste\nFrisur nicht die aktuelle, und „Rückgängig“ erreicht sie nicht.\n\nDies stellt jede Frisur wieder her, die Proteus in diesem Mod geändert hat.",
@@ -3231,10 +3231,6 @@
     "message": "Allgemein",
     "description": ""
   },
-  "Settings.Section.HatCompat": {
-    "message": "Hüte",
-    "description": ""
-  },
   "Settings.Section.Hosting": {
     "message": "Hosting",
     "description": ""
@@ -4091,6 +4087,22 @@
     "message": "(Vanilla)",
     "description": ""
   },
+  "WhatsNew.HairPort.Head": {
+    "message": "Haar-Mods für ein anderes Volk passen jetzt auch zu deinem",
+    "description": "Release-notes section heading for hair mods fitted automatically from another race to the player's."
+  },
+  "WhatsNew.HairPort.Body": {
+    "message": "Viele Haar-Mods sind nur für ein Volk gemacht, daher zeigt das Spiel bei jedem anderen Volk stattdessen seine eigene Frisur. Proteus biegt die Frisur des Mods jetzt auf den Kopf deines Volkes und fügt sie derselben Option desselben Mods hinzu. Die in deiner Sammlung aktiven Haar-Mods sieht es jetzt einmal durch und danach erneut, sobald einer installiert, aktiviert oder geändert wird. Der Chat nennt die Nummern der angepassten Frisuren, damit du weißt, welche du wählen musst. Haare mit Physik behalten ihre Physik.\n\nDas funktioniert auch mit ausgeschaltetem Proteus und wandert mit dem Mod. Abschalten, erneut prüfen oder eine angepasste Frisur rückgängig machen kannst du unter Einstellungen, Haare.",
+    "description": "Release-notes section on hair fitted automatically from another race. 'Settings, Hair' names the Settings tab and its Hair section - match Tab.Settings and Settings.Section.HairPort. 'Physics hair' is hair that sways with its own bones."
+  },
+  "WhatsNew.HairPortStudio.Head": {
+    "message": "Eine Frisur auf einmal auf alle Völker übertragen",
+    "description": "Release-notes section heading for the Studio's tool that ports one hair mod to every race at once."
+  },
+  "WhatsNew.HairPortStudio.Body": {
+    "message": "Damit ein Haar-Mod nicht nur bei dir, sondern bei allen funktioniert, öffne eines seiner Haarmodelle im Studio und nutze „Auf alle Völker übertragen“. Proteus biegt es in einem Durchgang auf jedes andere Volk desselben Geschlechts und fügt die Ergebnisse derselben Option des Mods hinzu. Völker, für die der Mod gemacht wurde, bleiben unberührt, und „Übertragungen entfernen“ nimmt alle Übertragungen wieder heraus.",
+    "description": "Release-notes section on the Studio's \"Port to all races\". 'Studio' is the tab name (Tab.Parts); the two quoted labels must match HairPort.Studio.Header and HairPort.Studio.Remove."
+  },
   "WhatsNew.AutoRefit.Body": {
     "message": "Proteus kann Ausrüstung für Brust, Beine, Hände und Füße jetzt ganz von selbst an deinen Körper anpassen, sobald du sie anlegst. Es ermittelt, für welchen Körper-Mod und welche Größe die Ausrüstung gemacht wurde, passt sie und die Körperteile, die sie erreicht, an, speichert die neue Größe im Mod der Ausrüstung und schaltet sie ein. Der Chat meldet Beginn und Ende.\n\nSo nutzt du es: Öffne Einstellungen › Körperanpassung. Hake „Ausrüstung beim Anlegen an meinen Körper anpassen“ an und wähle für jede Penumbra-Kollektion deinen Körper-Mod sowie Brust- und Beingröße; Hände und Füße werden passend gewählt. Bereits getragene Ausrüstung passt du mit „Was ich gerade trage anpassen“ an, und für die Ausrüstung des Spiels gibt es ein eigenes Kästchen. Wählst du in Penumbra „Original“ oder eine andere Größe, bleibt das immer unangetastet.",
     "description": ""
@@ -4100,8 +4112,8 @@
     "description": ""
   },
   "WhatsNew.IntroAll": {
-    "message": "Vier Dinge, die du über Proteus wissen solltest. Dieses Fenster öffnet sich einmal und dann nicht wieder.",
-    "description": ""
+    "message": "Ein paar Dinge, die du über Proteus wissen solltest. Dieses Fenster öffnet sich einmal und dann nicht wieder.",
+    "description": "First line of the release-notes window for someone who has never seen it; every section follows."
   },
   "WhatsNew.IntroSince": {
     "message": "Seit du dieses Fenster zuletzt gesehen hast, gibt es etwas Neues. Es öffnet sich einmal und dann nicht wieder.",
@@ -4124,7 +4136,7 @@
     "description": ""
   },
   "WhatsNew.Hats.Body": {
-    "message": "„Frisuren unter Hüte passen lassen“ ist jetzt standardmäßig an. Proteus wartet, bis du tatsächlich einen Hut trägst, und drückt dann die Haare, die der Hut verdecken würde, flach an den Kopf, damit der Hut nicht mehr hindurchgeht.\n\nDabei werden die Dateien der Haar-Mod selbst bearbeitet, die Originale bleiben erhalten — es lässt sich also rückgängig machen oder unter Einstellungen, Hüte ganz abschalten.",
+    "message": "„Frisuren unter Hüte passen lassen“ ist jetzt standardmäßig an. Proteus wartet, bis du tatsächlich einen Hut trägst, und drückt dann die Haare, die der Hut verdecken würde, flach an den Kopf, damit der Hut nicht mehr hindurchgeht.\n\nDabei werden die Dateien der Haar-Mod selbst bearbeitet, die Originale bleiben erhalten — es lässt sich also rückgängig machen oder unter Einstellungen, Haare ganz abschalten.",
     "description": ""
   },
   "WhatsNew.Designs.Head": {
@@ -5051,10 +5063,6 @@
     "message": "Haar-Mods für ein anderes Volk anpassen",
     "description": ""
   },
-  "HairPort.Auto.Tip": {
-    "message": "Viele Haar-Mods sind nur für ein Volk gemacht, daher zeigt das Spiel bei jedem\nanderen Volk seine eigene Frisur. Ist dies aktiv, bemerkt Proteus das, biegt\ndie Frisur des Mods auf den Kopf deines Volkes und fügt sie derselben Option\ndesselben Mods hinzu.\n\nNur zwischen Völkern eines Geschlechts und nur für die Frisur, die du trägst.\nEs funktioniert auch mit ausgeschaltetem Proteus, bleibt beim Mod und ist für\njeden sichtbar, der mit diesem Mod dargestellt wird. Es lässt sich hier\nrückgängig machen.",
-    "description": ""
-  },
   "HairPort.Settings.None": {
     "message": "Die Frisur, die du trägst, muss nicht angepasst werden.",
     "description": ""
@@ -5169,6 +5177,90 @@
   },
   "HairPort.Refused.RecordUnreadable": {
     "message": "Proteus' Aufzeichnung der Frisur-Übertragungen dieser Mod (Proteus/hairport.json) konnte nicht gelesen werden, daher wurde nichts geändert.",
+    "description": ""
+  },
+  "HairPort.Auto.Tip2": {
+    "message": "Viele Haar-Mods sind nur für ein Volk gemacht, daher zeigt das Spiel bei jedem\nanderen Volk seine eigene Frisur. Ist dies aktiv, biegt Proteus die Frisur des\nMods auf den Kopf deines Volkes und fügt sie derselben Option desselben Mods\nhinzu – für die Frisur, die du trägst, und vorab für die Haar-Mods, die in deiner\nSammlung aktiv sind: beim Einschalten, wenn ein Mod installiert, aktiviert oder\ngeändert wird, und wenn du „Jetzt prüfen“ drückst.\n\nNur für dein eigenes Volk, aus Völkern desselben Geschlechts. Funktioniert auch\nmit ausgeschaltetem Proteus, wandert mit dem Mod und ist für alle sichtbar, die\nmit diesem Mod dargestellt werden. Hier rückgängig zu machen.",
+    "description": ""
+  },
+  "HairPort.Scan.Starting": {
+    "message": "Deine Haar-Mods werden geprüft …",
+    "description": ""
+  },
+  "HairPort.Scan.Checking.Fmt": {
+    "message": "Deine Haar-Mods werden geprüft … {0} von {1}",
+    "description": ""
+  },
+  "HairPort.Scan.None": {
+    "message": "Deine Haar-Mods wurden in dieser Sitzung noch nicht geprüft.",
+    "description": ""
+  },
+  "HairPort.Scan.Checked.Fmt": {
+    "message": "{0} Frisur(en) aus deinen Haar-Mods sind an {1} angepasst.",
+    "description": ""
+  },
+  "HairPort.Scan.CheckNow": {
+    "message": "Jetzt prüfen",
+    "description": ""
+  },
+  "HairPort.Scan.CheckNow.Tip": {
+    "message": "Alle in deiner Sammlung aktiven Haar-Mods durchsehen und die für ein anderes\nVolk gemachten an deines anpassen.",
+    "description": ""
+  },
+  "HairPort.Scan.WearHint": {
+    "message": "Um eine zu tragen, wähle diese Frisurnummer für deinen Charakter – Glamourer zeigt die Nummer an.",
+    "description": ""
+  },
+  "HairPort.Scan.List.Fmt": {
+    "message": "Haar-Mods für dein Volk ({0})",
+    "description": ""
+  },
+  "HairPort.Scan.Row.Fmt": {
+    "message": "Frisur {0} – {1}: {2}",
+    "description": ""
+  },
+  "HairPort.Scan.State.Fitted": {
+    "message": "angepasst",
+    "description": ""
+  },
+  "HairPort.Scan.State.Already": {
+    "message": "bereits angepasst",
+    "description": ""
+  },
+  "HairPort.Scan.State.Remade": {
+    "message": "neu angepasst (der Mod hat sich geändert)",
+    "description": ""
+  },
+  "HairPort.Scan.State.Undone": {
+    "message": "rückgängig gemacht",
+    "description": ""
+  },
+  "HairPort.Scan.State.Refused": {
+    "message": "nicht angepasst",
+    "description": ""
+  },
+  "HairPort.Scan.State.Refused.Fmt": {
+    "message": "nicht angepasst – {0}",
+    "description": ""
+  },
+  "HairPort.Scan.UndoChecked": {
+    "message": "Alles rückgängig machen, was diese Prüfung angepasst hat",
+    "description": ""
+  },
+  "HairPort.Scan.Entry.Fmt": {
+    "message": "Frisur {0} ({1})",
+    "description": ""
+  },
+  "HairPort.Scan.More.Fmt": {
+    "message": " und {0} weitere",
+    "description": ""
+  },
+  "Chat.HairPortScan.Fmt": {
+    "message": "[Proteus] An dein Volk angepasst: {0}. Um eine zu tragen, wähle diese Frisurnummer für deinen Charakter. Rückgängig machen oder ausschalten unter /proteus > Einstellungen > Haare.",
+    "description": ""
+  },
+  "HairPort.Scan.UndoChecked.Confirm.Fmt": {
+    "message": "Erneut klicken, um {0} Frisur(en) endgültig rückgängig zu machen",
     "description": ""
   }
 }
