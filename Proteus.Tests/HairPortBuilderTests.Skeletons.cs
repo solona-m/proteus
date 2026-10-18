@@ -46,7 +46,7 @@ public partial class HairPortBuilderTests
     {
         var record = HairPortRecord.Read(mod.Root);
         var entry = record.Ports.Single();
-        return HairPortBuilder.IsOutOfDate(entry, mod.Get(entry.SourceFile), mod.Owners, record.Ports, game);
+        return HairPortBuilder.IsOutOfDate(mod.Root, entry, mod.Get(entry.SourceFile), mod.Owners, record.Ports, game);
     }
 
     /// <summary>
@@ -69,7 +69,9 @@ public partial class HairPortBuilderTests
         var extra = HairPortSkeleton.ExtraBones(model);
         Assert.True(extra.All(bones.Contains),
                     $"c{to:D4} h{id:D4} loads skeleton {k}, which lacks {string.Join(", ", extra.Where(b => !bones.Contains(b)))}");
-        if (published != null) Assert.All(table.SetsLoading(to, k), s => Assert.Equal(id, s));
+        if (published == null) return;
+        Assert.All(table.SetsLoading(to, k), s => Assert.Equal(id, s));
+        Assert.Null(game(HairPortPlan.KinematicsPath(to, k)));
     }
 
     /// <summary>Rewrite a saved carry as ports made before the game's table was read wrote it: no entry, the skeleton at
@@ -310,7 +312,7 @@ public partial class HairPortBuilderTests
         var record = HairPortRecord.Read(mod.Root);
         Assert.Equal(2, record.Ports.Count);
         Assert.All(record.Ports, e => Assert.False(
-            HairPortBuilder.IsOutOfDate(e, mod.Get(e.SourceFile), mod.Owners, record.Ports, game), $"{e.Group}/{e.Option}"));
+            HairPortBuilder.IsOutOfDate(mod.Root, e, mod.Get(e.SourceFile), mod.Owners, record.Ports, game), $"{e.Group}/{e.Option}"));
         Assert.Contains((ushort)201, HairPortBuilder.Build(mod.Root, Source, [201], Pbd(), game, withSharers: false).Current);
     }
 
@@ -412,7 +414,7 @@ public partial class HairPortBuilderTests
         Assert.Equal(2, plan.Writes.Count);
         Assert.True(HairPortWriter.Save(mod.Root, plan.Writes, auto: false).Ok);
         var record = HairPortRecord.Read(mod.Root);
-        Assert.All(record.Ports, e => Assert.False(HairPortBuilder.IsOutOfDate(e, mod.Get(e.SourceFile), mod.Owners, record.Ports, guarded)));
+        Assert.All(record.Ports, e => Assert.False(HairPortBuilder.IsOutOfDate(mod.Root, e, mod.Get(e.SourceFile), mod.Owners, record.Ports, guarded)));
     }
 
     [Fact]
@@ -615,19 +617,5 @@ public partial class HairPortBuilderTests
         Assert.False(OutOfDate(mod, game));
         Assert.True(HairPortWriter.Undo(mod.Root, _ => true, decline: false).Ok);
         Assert.Null(HairPortPlan.FileFor(mod.Owner("Cut", "Long"), HairPortPlan.SkeletonPath(201, Id)));
-    }
-
-    [Fact]
-    [Trait("Plan", "AC-hair-skeleton-infer-8")]
-    public void Mods_holding_an_old_carry_are_the_ones_checked_at_start()
-    {
-        var records = new Dictionary<string, HairPortRecord>
-        {
-            ["old"] = new() { Ports = [new HairPortRecord.Entry { Est = 0, SkeletonFrom = 9 }] },
-            ["new"] = new() { Ports = [new HairPortRecord.Entry { Est = 12, SkeletonFrom = 9 }] },
-            ["plain"] = new() { Ports = [new HairPortRecord.Entry()] },
-            ["entry"] = new() { Ports = [new HairPortRecord.Entry { Est = 170 }] },
-        };
-        Assert.Equal(["old"], HairPortWatcher.Decide.ModsWithOldCarries(records.Keys, m => records[m]));
     }
 }

@@ -136,7 +136,7 @@ internal static class HairPortBuilder
                 var bytes = sources[rel]!;
                 var was = record.Ports.FirstOrDefault(e => HairPortPlan.Same(e.Owner, owner)
                     && e.TargetGamePath.Equals(target, StringComparison.OrdinalIgnoreCase));
-                if (was != null && !IsOutOfDate(was, bytes, owners, record.Ports, readGame, table)) { anyCurrent = true; continue; }
+                if (was != null && !IsOutOfDate(modRoot, was, bytes, owners, record.Ports, readGame, table)) { anyCurrent = true; continue; }
                 if (was == null && !HairPortPlan.CanPortInto(owners, owner, target)) continue;
 
                 var place = new HairPortSkeleton.Place(modRoot, owners, owner, was, record.Ports, from, to, id, readGame, table);
@@ -172,7 +172,6 @@ internal static class HairPortBuilder
             {
                 writes.RemoveAll(w => w.TargetGamePath.Equals(target, StringComparison.OrdinalIgnoreCase));
                 refused[to] = why;
-                writes.AddRange(Strips(modRoot, record, target, table));
             }
             else if (anyCurrent && !writes.Any(w => w.TargetGamePath.Equals(target, StringComparison.OrdinalIgnoreCase)))
                 current.Add(to);
@@ -184,11 +183,15 @@ internal static class HairPortBuilder
             foreach (var to in wanted.Where(refused.ContainsKey).ToList())
                 foreach (var s in Sharers(from, to, id, names, canWear).Where(s => !refused.ContainsKey(s)))
                 {
-                    writes.RemoveAll(w => !w.Stripped
-                                          && w.TargetGamePath.Equals(HairPortPlan.HairPath(s, id), StringComparison.OrdinalIgnoreCase));
+                    writes.RemoveAll(w => w.TargetGamePath.Equals(HairPortPlan.HairPath(s, id), StringComparison.OrdinalIgnoreCase));
                     refused[s] = string.Format(Loc.Localize("HairPort.Refused.SharerRefused.Fmt",
                         "it shares its material with c{0:D4}, which could not be ported: {1}"), to, refused[to]);
                 }
+
+        // Every race refused, however: a port of it from before that carries a skeleton another hairstyle of the race
+        // loads stops doing that.
+        foreach (var to in refused.Keys)
+            writes.AddRange(Strips(modRoot, owners, record, from, to, id, readGame, table));
 
         return new Plan(writes, refused, current, Unreadable: tableMissing);
     }
@@ -198,21 +201,24 @@ internal static class HairPortBuilder
         => Loc.Localize("HairPort.Refused.NoSkeletonTable", "the game's table of hairstyle skeletons could not be read");
 
     /// <summary>
-    /// For a target that could not be ported again: each port of it made before the game's table was read whose skeleton
-    /// copy another hairstyle of the race loads (<see cref="HairPortSkeleton.Harmful"/>), saved again without the skeleton
-    /// and its physics — the model and its materials kept — so it stops changing that hairstyle. Nothing for any other.
+    /// For a race that could not be ported again: each port of it that carries a skeleton to a slot another hairstyle of
+    /// the race loads (<see cref="HairPortSkeleton.Harmful"/>), saved again without that skeleton, its physics and the
+    /// entry pointing there — the model, its materials and its hat fit kept — so it stops changing that hairstyle.
     /// </summary>
-    private static IEnumerable<HairPortWriter.PortWrite> Strips(string modRoot, HairPortRecord record, string target,
-                                                               Func<HairSkeletonTable?> table)
+    private static IEnumerable<HairPortWriter.PortWrite> Strips(string modRoot, IReadOnlyList<HairPortPlan.Owner> owners,
+        HairPortRecord record, ushort from, ushort to, int id, Func<string, byte[]?> readGame, Func<HairSkeletonTable?> table)
     {
-        if (HairPortPlan.Parse(target) is not { } t) yield break;
+        string target = HairPortPlan.HairPath(to, id);
         foreach (var e in record.Ports.Where(e => e.TargetGamePath.Equals(target, StringComparison.OrdinalIgnoreCase)))
         {
-            if (!HairPortSkeleton.Harmful(e, table()) || ReadMod(modRoot, e.File) is not { } model) continue;
-            var skeleton = new[] { HairPortPlan.SkeletonPath(t.Race, t.Id), HairPortPlan.PhysicsPath(t.Race, t.Id) };
+            if (owners.FirstOrDefault(o => HairPortPlan.Same(o, e.Owner)) is not { } owner) continue;
+            var place = new HairPortSkeleton.Place(modRoot, owners, owner, e, record.Ports, from, to, id, readGame, table);
+            if (!HairPortSkeleton.Harmful(place, e) || ReadMod(modRoot, e.File) is not { } model) continue;
+            int slot = e.Est > 0 ? e.Est : id;
+            var skeleton = new[] { HairPortPlan.SkeletonPath(to, slot), HairPortPlan.PhysicsPath(to, slot) };
             var kept = e.Materials.Where(m => !skeleton.Contains(m.Key, StringComparer.OrdinalIgnoreCase))
                                   .Select(m => new HairPortWriter.MaterialWrite(m.Key, m.Value, null)).ToList();
-            yield return new HairPortWriter.PortWrite(e.Owner, e.SourceGamePath, e.SourceFile, e.SourceSha8, e.TargetGamePath,
+            yield return new HairPortWriter.PortWrite(owner, e.SourceGamePath, e.SourceFile, e.SourceSha8, e.TargetGamePath,
                                                       model, kept, Stripped: true);
         }
     }
@@ -266,22 +272,24 @@ internal static class HairPortBuilder
     /// the model alone.</param>
     /// <param name="ports">Every port the mod's record holds, to tell a skeleton entry of ours in the default data from
     /// the author's.</param>
+    /// <param name="modRoot">The mod, whose own skeleton files an entry may point at.</param>
     /// <param name="readGame">Reads the game's own files: its skeletons, and its table of them.</param>
-    internal static bool IsOutOfDate(HairPortRecord.Entry entry, byte[] source, IReadOnlyList<HairPortPlan.Owner>? owners,
-                                     IReadOnlyList<HairPortRecord.Entry> ports, Func<string, byte[]?> readGame)
-        => IsOutOfDate(entry, source, owners, ports, readGame, HairSkeletonTable.Lazy(readGame));
+    internal static bool IsOutOfDate(string modRoot, HairPortRecord.Entry entry, byte[] source,
+                                     IReadOnlyList<HairPortPlan.Owner>? owners, IReadOnlyList<HairPortRecord.Entry> ports,
+                                     Func<string, byte[]?> readGame)
+        => IsOutOfDate(modRoot, entry, source, owners, ports, readGame, HairSkeletonTable.Lazy(readGame));
 
-    /// <inheritdoc cref="IsOutOfDate(HairPortRecord.Entry, byte[], IReadOnlyList{HairPortPlan.Owner}?, IReadOnlyList{HairPortRecord.Entry}, Func{string, byte[]?})"/>
+    /// <inheritdoc cref="IsOutOfDate(string, HairPortRecord.Entry, byte[], IReadOnlyList{HairPortPlan.Owner}?, IReadOnlyList{HairPortRecord.Entry}, Func{string, byte[]?})"/>
     /// <param name="table">The game's table, read at most once for every port a caller judges.</param>
-    internal static bool IsOutOfDate(HairPortRecord.Entry entry, byte[] source, IReadOnlyList<HairPortPlan.Owner>? owners,
-                                     IReadOnlyList<HairPortRecord.Entry> ports, Func<string, byte[]?> readGame,
-                                     Func<HairSkeletonTable?> table)
+    internal static bool IsOutOfDate(string modRoot, HairPortRecord.Entry entry, byte[] source,
+                                     IReadOnlyList<HairPortPlan.Owner>? owners, IReadOnlyList<HairPortRecord.Entry> ports,
+                                     Func<string, byte[]?> readGame, Func<HairSkeletonTable?> table)
     {
         if (HairPortPlan.IsStale(entry, source)) return true;
         if (owners?.FirstOrDefault(o => HairPortPlan.Same(o, entry.Owner)) is not { } owner) return false;
         if (HairPortPlan.Parse(entry.SourceGamePath) is not { } src || HairPortPlan.Parse(entry.TargetGamePath) is not { } dst)
             return false;
-        var place = new HairPortSkeleton.Place("", owners, owner, entry, ports, src.Race, dst.Race, dst.Id, readGame, table);
+        var place = new HairPortSkeleton.Place(modRoot, owners, owner, entry, ports, src.Race, dst.Race, dst.Id, readGame, table);
         return !HairPortSkeleton.Current(place, entry, source);
     }
 
@@ -366,7 +374,7 @@ internal static class HairPortBuilder
     private static byte[]? FirstFile(IEnumerable<string> paths, Func<string, byte[]?> read)
         => paths.Select(read).FirstOrDefault(b => b != null);
 
-    private static byte[]? ReadMod(string modRoot, string rel)
+    internal static byte[]? ReadMod(string modRoot, string rel)
     {
         try { return File.ReadAllBytes(Path.Combine(modRoot, rel.Replace('/', Path.DirectorySeparatorChar).Replace('\\', Path.DirectorySeparatorChar))); }
         catch (Exception) { return null; }

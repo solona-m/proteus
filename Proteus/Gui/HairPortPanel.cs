@@ -182,8 +182,13 @@ internal sealed class HairPortPanel(Func<string, byte[]?> readGameFile, IPluginL
             ct.ThrowIfCancellationRequested();
             var outcome = HairPortWriter.Save(modRoot, plan.Writes, auto: false);
             foreach (var w in plan.Writes)
-                log.Information("hair port: {0} → {1} in {2} / {3}, bent in {4} ms", w.SourceGamePath, w.TargetGamePath,
-                                w.Into.Group, w.Into.Option, w.Millis);
+                if (w.Stripped)
+                    log.Information("hair port: {0} in {1} / {2} — its old port's skeleton, which another hairstyle of the "
+                                    + "race loads, taken out", w.TargetGamePath, w.Into.Group, w.Into.Option);
+                else
+                    log.Information("hair port: {0} → {1} in {2} / {3}, bent in {4} ms, skeleton entry {5}, carried from {6}",
+                                    w.SourceGamePath, w.TargetGamePath, w.Into.Group, w.Into.Option, w.Millis, w.Est,
+                                    w.SkeletonFrom);
             foreach (var (race, why) in plan.Refused) log.Information("hair port: c{0:D4} not ported — {1}", race, why);
             return (plan, outcome, false);
         }, ct);
@@ -235,7 +240,9 @@ internal sealed class HairPortPanel(Func<string, byte[]?> readGameFile, IPluginL
             // Partly done: what was left, and why, beside what was taken out.
             result = string.Format(Strings.HairPort.RemovedFmt, outcome.Count)
                    + (outcome.Message.Length > 0 ? " " + outcome.Message : "");
-        else result = outcome.Count > 0 ? string.Format(Strings.HairPort.DoneFmt, outcome.Count) : Strings.HairPort.NothingToDo;
+        // A strip is saved, but nothing was ported: its race is among the refusals, with why.
+        else if (plan.Writes.Count(w => !w.Stripped) is > 0 and var ported) result = string.Format(Strings.HairPort.DoneFmt, ported);
+        else result = Strings.HairPort.NothingToDo;
         if (outcome.Count > 0) afterChange(modDir);
         Read(modRoot, sourceGamePath);
     }
@@ -247,7 +254,7 @@ internal sealed class HairPortPanel(Func<string, byte[]?> readGameFile, IPluginL
     {
         var table = HairSkeletonTable.Lazy(readGame);
         return e => ReadMod(modRoot, e.SourceFile) is { } b
-                    && HairPortBuilder.IsOutOfDate(e, b, owners, record.Ports, readGame, table);
+                    && HairPortBuilder.IsOutOfDate(modRoot, e, b, owners, record.Ports, readGame, table);
     }
 
     private static byte[]? ReadMod(string modRoot, string rel)

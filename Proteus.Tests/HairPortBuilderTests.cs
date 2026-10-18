@@ -414,6 +414,7 @@ public partial class HairPortBuilderTests
     /// <summary>The author changes which skeleton the source borrows, in the manifest: the port is out of date.</summary>
     [Fact]
     [Trait("Plan", "AC-hair-race-port-8")]
+    [Trait("Plan", "EDGE-hair-skeleton-infer-18")]
     public void A_carried_skeleton_is_out_of_date_once_the_source_borrows_another()
     {
         using var mod = PhysicsMod([PenumbraManipulations.EstManipulation("0801", "Hair", Id, 170)]);
@@ -421,12 +422,12 @@ public partial class HairPortBuilderTests
         Assert.True(HairPortWriter.Save(mod.Root, HairPortBuilder.Build(mod.Root, Source, [201], Pbd(), game, false).Writes, false).Ok);
         var model = File.ReadAllBytes(Path.Combine(mod.Root, "long.mdl"));
         var entry = HairPortRecord.Read(mod.Root).Ports.Single();
-        Assert.False(HairPortBuilder.IsOutOfDate(entry, model, HairPortPlan.ReadOwners(mod.Root)!, [entry], game));
+        Assert.False(HairPortBuilder.IsOutOfDate(mod.Root, entry, model, HairPortPlan.ReadOwners(mod.Root)!, [entry], game));
 
         SetOptionManipulations(mod, PenumbraManipulations.EstManipulation("0801", "Hair", Id, 171),
                                PenumbraManipulations.EstManipulation("0201", "Hair", Id, Id));
         entry = HairPortRecord.Read(mod.Root).Ports.Single();
-        Assert.True(HairPortBuilder.IsOutOfDate(entry, model, HairPortPlan.ReadOwners(mod.Root)!, [entry], game));
+        Assert.True(HairPortBuilder.IsOutOfDate(mod.Root, entry, model, HairPortPlan.ReadOwners(mod.Root)!, [entry], game));
     }
 
     /// <summary>
@@ -703,6 +704,7 @@ public partial class HairPortBuilderTests
     [Fact]
     [Trait("Plan", "AC-hair-race-port-8")]
     [Trait("Plan", "EDGE-hair-race-port-15")]
+    [Trait("Plan", "EDGE-hair-skeleton-infer-26")]
     public void A_borrow_changed_in_the_manifest_alone_is_out_of_date_everywhere()
     {
         using var mod = PhysicsMod([PenumbraManipulations.EstManipulation("0801", "Hair", Id, 170)]);
@@ -711,13 +713,13 @@ public partial class HairPortBuilderTests
         var entry = HairPortRecord.Read(mod.Root).Ports.Single();
         var source = mod.Get("long.mdl");
         var ports = HairPortRecord.Read(mod.Root).Ports;
-        Assert.False(HairPortBuilder.IsOutOfDate(entry, source, mod.Owners, ports, game));
+        Assert.False(HairPortBuilder.IsOutOfDate(mod.Root, entry, source, mod.Owners, ports, game));
 
         SetSourceEst(mod, 180);
-        Assert.True(HairPortBuilder.IsOutOfDate(entry, source, mod.Owners, ports, game));
+        Assert.True(HairPortBuilder.IsOutOfDate(mod.Root, entry, source, mod.Owners, ports, game));
         // With the manifest unreadable, only the model decides; a port whose option is gone is left alone.
-        Assert.False(HairPortBuilder.IsOutOfDate(entry, source, null, ports, game));
-        Assert.False(HairPortBuilder.IsOutOfDate(new HairPortRecord.Entry
+        Assert.False(HairPortBuilder.IsOutOfDate(mod.Root, entry, source, null, ports, game));
+        Assert.False(HairPortBuilder.IsOutOfDate(mod.Root, new HairPortRecord.Entry
         {
             Group = "Cut", Option = "Gone", SourceGamePath = entry.SourceGamePath, TargetGamePath = entry.TargetGamePath,
             SourceSha8 = entry.SourceSha8, PortVersion = entry.PortVersion, Est = 170,
@@ -800,7 +802,7 @@ public partial class HairPortBuilderTests
         var record = HairPortRecord.Read(mod.Root);
         Assert.Equal(2, record.Ports.Count);
         Assert.All(record.Ports, e => Assert.False(
-            HairPortBuilder.IsOutOfDate(e, mod.Get(e.SourceFile), mod.Owners, record.Ports, game), $"{e.Group}/{e.Option}"));
+            HairPortBuilder.IsOutOfDate(mod.Root, e, mod.Get(e.SourceFile), mod.Owners, record.Ports, game), $"{e.Group}/{e.Option}"));
         var again = HairPortBuilder.Build(mod.Root, Source, [201], Pbd(), game, withSharers: false);
         Assert.Empty(again.Writes);
         Assert.Contains((ushort)201, again.Current);

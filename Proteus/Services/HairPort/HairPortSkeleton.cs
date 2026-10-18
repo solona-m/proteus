@@ -69,8 +69,9 @@ internal static class HairPortSkeleton
     /// <item>The source loads a skeleton: a copy of it.</item>
     /// <item>Otherwise what the target loads, which the bend's own check refuses.</item>
     /// </list>
-    /// A skeleton a place of the mod republishes, other than this target's own ports, is never the target of an entry:
-    /// the game would load the mod's file, not the one checked.
+    /// An entry is judged by the file the game will load with the port on: the author's own where the port's place or
+    /// the default data publishes one, the game's otherwise — and never points where another place of the mod (or a
+    /// port of another hairstyle) publishes the skeleton, which may be what loads instead.
     /// </summary>
     internal static Choice Choose(Place p, byte[] model)
     {
@@ -95,16 +96,37 @@ internal static class HairPortSkeleton
         return new Choice(Route.Own, loaded, loaded, 0, own);
     }
 
-    /// <summary>The target race's own skeleton <paramref name="skeleton"/>'s bones, when it has every one the model moves
-    /// with and the game will serve its own file for it; null otherwise.</summary>
+    /// <summary>
+    /// The target race's own skeleton <paramref name="skeleton"/>'s bones, when it has every one the model moves with:
+    /// the game's file, or the author's when the port's place (or the default data) publishes one — what the game loads
+    /// with the port on. Null otherwise, and when another place of the mod publishes it, which may win or not.
+    /// </summary>
     private static HashSet<string>? Fits(Place p, List<string> extra, int skeleton)
     {
-        var bones = Bones(p, p.To, skeleton);
-        if (Missing(extra, bones).Count > 0) return null;
-        if (!Explained(p, HairPortPlan.SkeletonPath(p.To, skeleton)) || !Explained(p, HairPortPlan.PhysicsPath(p.To, skeleton)))
-            return null;
-        return bones;
+        string skl = HairPortPlan.SkeletonPath(p.To, skeleton), phy = HairPortPlan.PhysicsPath(p.To, skeleton);
+        if (!ExplainedOrAuthors(p, skl) || !ExplainedOrAuthors(p, phy)) return null;
+        var author = AuthorsOwn(p, skl);
+        var bones = author != null ? HairPortPlan.SkeletonBones(HairPortBuilder.ReadMod(p.ModRoot, author))
+                                   : Bones(p, p.To, skeleton);
+        return Missing(extra, bones).Count > 0 ? null : bones;
     }
+
+    /// <summary>The author's file the port's place — else the default data — publishes at <paramref name="gamePath"/>:
+    /// what the game loads there with the port on. Null for none, or one of our ports'.</summary>
+    private static string? AuthorsOwn(Place p, string gamePath)
+        => new[] { p.Owner, p.Defaults }.OfType<HairPortPlan.Owner>()
+                                         .Select(o => HairPortPlan.FileFor(o, gamePath))
+                                         .FirstOrDefault(f => f != null && !HairPortPlan.IsPortFile(f));
+
+    /// <summary>Whether every place publishing <paramref name="gamePath"/> does so for this target's own ports, or is
+    /// the port's place or the default data publishing the author's own file — the one the game loads with the port on.
+    /// Another place's file, or a port of another hairstyle, may be what the game loads instead.</summary>
+    private static bool ExplainedOrAuthors(Place p, string gamePath)
+        => p.Owners.All(o => HairPortPlan.FileFor(o, gamePath) is not { } file
+                             || ((HairPortPlan.Same(o, p.Owner) || o.IsDefault) && !HairPortPlan.IsPortFile(file))
+                             || p.Ports.Any(e => HairPortPlan.Same(e.Owner, o)
+                                                 && e.TargetGamePath.Equals(p.Target, StringComparison.OrdinalIgnoreCase)
+                                                 && e.Materials.ContainsKey(gamePath)));
 
     /// <summary>The bones of a race's skeleton as the game ships it; none for skeleton 0 or no file.</summary>
     private static HashSet<string> Bones(Place p, ushort race, int skeleton)
@@ -223,12 +245,12 @@ internal static class HairPortSkeleton
         return slot > 0 && SlotFree(p, table, slot);
     }
 
-    /// <summary>Whether a port is one written before the game's table was read — a skeleton copied to the hairstyle's own
-    /// number, with no entry — whose copy another hairstyle of the race loads, so it changes that hairstyle.</summary>
-    internal static bool Harmful(HairPortRecord.Entry entry, HairSkeletonTable? table)
+    /// <summary>Whether a port carries its skeleton to a slot another hairstyle of the race loads — by the game's table,
+    /// or an entry of the mod — so it changes that hairstyle: one written before the table was read, at the hairstyle's
+    /// own number, or one whose slot the game gave another hairstyle since.</summary>
+    internal static bool Harmful(Place p, HairPortRecord.Entry entry)
     {
-        if (entry is not { Est: 0, SkeletonFrom: > 0 } || table == null) return false;
-        if (HairPortPlan.Parse(entry.TargetGamePath) is not { } t) return false;
-        return table.SetsLoading(t.Race, t.Id).Any(s => s != t.Id);
+        if (entry.SkeletonFrom <= 0 || p.Table() is not { } table) return false;
+        return Taken(p, table).Contains(entry.Est > 0 ? entry.Est : p.Id);
     }
 }

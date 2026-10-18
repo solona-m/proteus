@@ -334,6 +334,20 @@ public sealed class HairPortLocalTests(ITestOutputHelper o)
             }
         o.WriteLine($"{table.Count} entries; {examined} of the game's hairstyles checked");
         foreach (var w in wrong) o.WriteLine(w);
+
+        // What else a slot ships beside its skeleton: a carry skips a slot with kinematics (.kdb) rather than pair them
+        // with a foreign skeleton, and copies no .skp — the game ships none for hair. (.bnmb has no hair path Penumbra
+        // knows of, so none is looked for.)
+        int skp = 0;
+        var kdb = new List<string>();
+        foreach (ushort race in Enumerable.Range(1, 18).Select(n => (ushort)(n * 100 + 1)))
+            foreach (int slot in table.SkeletonsLoaded(race, except: 0))
+            {
+                if (game.File(HairPortPlan.SkeletonPath(race, slot).Replace(".sklb", ".skp")) != null) skp++;
+                if (game.File(HairPortPlan.KinematicsPath(race, slot)) != null) kdb.Add($"c{race:D4} h{slot:D4}");
+            }
+        o.WriteLine($"hair skeleton slots shipping .skp: {skp}; .kdb: {kdb.Count} ({string.Join(", ", kdb)})");
+        Assert.Equal(0, skp);
         Assert.True(examined > 1000, $"only {examined} hairstyles found");
         Assert.Equal(quirks, wrong.Select(w => w[..11]));
     }
@@ -394,7 +408,7 @@ public sealed class HairPortLocalTests(ITestOutputHelper o)
         Assert.True(HairPortWriter.Save(mod.Root, plan.Writes, auto: true).Ok);
         var record = HairPortRecord.Read(mod.Root);
         Assert.All(record.Ports, e => Assert.False(
-            HairPortBuilder.IsOutOfDate(e, mod.Get(e.SourceFile), mod.Owners, record.Ports, game.File), e.TargetGamePath));
+            HairPortBuilder.IsOutOfDate(mod.Root, e, mod.Get(e.SourceFile), mod.Owners, record.Ports, game.File), e.TargetGamePath));
         var again = HairPortBuilder.Build(mod.Root, source, fitted, game.Pbd, game.File, withSharers: true);
         Assert.Empty(again.Writes);
         Assert.Equal(fitted.Order(), again.Current.Order());

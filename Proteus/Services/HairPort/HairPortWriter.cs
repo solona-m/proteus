@@ -27,8 +27,10 @@ internal static class HairPortWriter
     /// 0 for none. With <paramref name="SkeletonFrom"/>, the slot the carried skeleton is published at.</param>
     /// <param name="SkeletonFrom">The source race's skeleton the port carries, among <paramref name="Materials"/>, to
     /// slot <paramref name="Est"/> of the target race (see <see cref="HairPortSkeleton.CarryAt"/>); 0 for none.</param>
-    /// <param name="Stripped">Not a port made now: one from before, saved again as it was without the skeleton it
-    /// carried, because it could not be made again and that skeleton changed another hairstyle.</param>
+    /// <param name="Stripped">Not a port made now: one from before, saved again without the skeleton it carried,
+    /// because it could not be made again and that skeleton changed another hairstyle. Only its redirects change: its
+    /// model file is not written (<paramref name="Model"/> is what it holds), its hat fit is kept, and its record keeps
+    /// how and when it was made.</param>
     public sealed record PortWrite(HairPortPlan.Owner Into, string SourceGamePath, string SourceFile, string SourceSha8,
                                    string TargetGamePath, byte[] Model, IReadOnlyList<MaterialWrite> Materials,
                                    long Millis = 0, int Est = 0, int SkeletonFrom = 0, bool Stripped = false);
@@ -114,10 +116,13 @@ internal static class HairPortWriter
             {
                 foreach (var (w, owner, file, was) in plan)
                 {
+                    // A strip changes redirects only: the model on disk is the port as it was — hat fit and all, whose
+                    // backup and record stay.
+                    bool stripped = w.Stripped && was != null;
                     // A hat fit of the old port has nothing to restore once the port is remade.
-                    if (was != null && HatCompatService.Forget(modRoot, file) is { } why)
+                    if (was != null && !stripped && HatCompatService.Forget(modRoot, file) is { } why)
                         throw new IOException(why);
-                    WriteFile(modRoot, file, w.Model, created);
+                    if (!stripped) WriteFile(modRoot, file, w.Model, created);
 
                     var add = redirects.TryGetValue(owner, out var a) ? a : redirects[owner] = new(StringComparer.OrdinalIgnoreCase);
                     if (was is { Est: > 0 })
@@ -143,8 +148,10 @@ internal static class HairPortWriter
                     {
                         Group = owner.Group, Option = owner.Option, SourceGamePath = w.SourceGamePath,
                         SourceFile = HairPortRecord.Rel(w.SourceFile), SourceSha8 = w.SourceSha8,
-                        TargetGamePath = w.TargetGamePath, File = file, Materials = materials, Auto = auto,
-                        PortVersion = HairPortBaker.Version, Est = w.Est, SkeletonFrom = w.SkeletonFrom,
+                        TargetGamePath = w.TargetGamePath, File = file, Materials = materials,
+                        // A strip is the same port, made when and how it was.
+                        Auto = stripped ? was!.Auto : auto,
+                        PortVersion = stripped ? was!.PortVersion : HairPortBaker.Version, Est = w.Est, SkeletonFrom = w.SkeletonFrom,
                     });
                 }
 
