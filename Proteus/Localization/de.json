@@ -4307,6 +4307,78 @@
     "message": "das neue Modell konnte nicht zurückgelesen werden",
     "description": "Why a model for the wearer's race could not be made; the {1} of Parts.Retarget.BakeFailed.Fmt. Lower-case, no full stop."
   },
+  "Parts.Retarget.Race.Label": {
+    "message": "Anpassen für",
+    "description": "Heads the dropdown that picks which race's model a refit is made and saved as."
+  },
+  "Parts.Retarget.Race.Tip": {
+    "message": "Für welche Rasse die Anpassung ist. Eine andere Rasse desselben Geschlechts bekommt ein eigenes Modell, aus diesem so gebogen, wie das Spiel es biegt, auf den Körper dieser Rasse angepasst und dort gespeichert, wo diese Rasse es lädt. Alle anderen behalten dieses Modell.",
+    "description": "Tooltip of Parts.Retarget.Race.Label."
+  },
+  "Parts.Retarget.Race.ThisModel.Fmt": {
+    "message": "{0} (dieses Modell)",
+    "description": "An entry of the Refit for list; {0} is a race such as \"Midlander M\": the race of the model open."
+  },
+  "Parts.Retarget.Race.AsWorn.Fmt": {
+    "message": "{0} (wie dein Charakter es trägt)",
+    "description": "An entry of the Refit for list; {0} is a race such as \"Midlander F\": the race the logged-in character would get it as."
+  },
+  "Parts.Retarget.Race.OwnModel.Fmt": {
+    "message": "Diese Mod hat bereits ein eigenes {0}-Modell. Passe stattdessen dieses an.",
+    "description": "{0} is a race such as \"Highlander M\" the mod already ships a model of."
+  },
+  "Parts.Retarget.Race.OpenModel.Fmt": {
+    "message": "{0}-Modell öffnen",
+    "description": "A button; {0} is a race such as \"Highlander M\"."
+  },
+  "Parts.Retarget.Race.Baking.Fmt": {
+    "message": "{0}-Modell wird erstellt…",
+    "description": "Shown while the model for a picked race is made; {0} is a race such as \"Highlander M\"."
+  },
+  "Parts.Retarget.Race.Only.Fmt": {
+    "message": "Nur {0} trägt die gespeicherte Anpassung; {1} behält dieses Modell.",
+    "description": "{0} is the race picked, {1} the race of the model open."
+  },
+  "Parts.Retarget.Race.SourceBaked.Fmt": {
+    "message": "Die Körper, für die es gemacht wurde, werden genauso zu {0} gebogen, damit es so auf ihnen sitzt wie vorher.",
+    "description": "{0} is the race picked."
+  },
+  "Parts.Retarget.Race.PreviewOther.Fmt": {
+    "message": "Dein Charakter ist nicht {0}, daher wird die Live-Vorschau auf deinen Charakter gebogen und zeigt nicht, was {0} sehen wird.",
+    "description": "{0} is the race picked."
+  },
+  "Parts.Retarget.Race.PreviewNotDrawn.Fmt": {
+    "message": "Dein Charakter trägt dieses Modell nicht, daher gibt es keine Live-Vorschau. Die gespeicherte Anpassung ist das, was {0} tragen wird.",
+    "description": "{0} is the race picked."
+  },
+  "Parts.Retarget.Race.SkeletonFallback.Fmt": {
+    "message": "Das Skelett von {0} aus deinen Mods konnte nicht gelesen werden, daher wurde das des Spiels verwendet.",
+    "description": "{0} is the race picked."
+  },
+  "Parts.Retarget.Race.EstCarried.Fmt": {
+    "message": "Beim Speichern bekommt {0} auch das Zusatzskelett, das {1} für dieses Teil lädt ({2}), damit sich seine zusätzlichen Knochen bewegen.",
+    "description": "{0} is the race picked, {1} the race of the model open, {2} the extra skeleton's number."
+  },
+  "Parts.Retarget.Race.NoDeformer": {
+    "message": "der Rassen-Deformer des Spiels konnte nicht gelesen werden",
+    "description": "Why a model for a picked race could not be made; the {1} of Parts.Retarget.BakeFailed.Fmt. Lower-case, no full stop."
+  },
+  "Parts.Retarget.Race.NoSkeleton.Fmt": {
+    "message": "das Skelett von {0} konnte nicht gelesen werden",
+    "description": "Why a model for a picked race could not be made; {0} is a race. Lower-case, no full stop."
+  },
+  "Parts.Retarget.Race.Unbendable.Fmt": {
+    "message": "{0} würde sich mit dem Skelett von {1} nicht bewegen: {2}",
+    "description": "Why a model for a picked race could not be made: {0} is Parts.Retarget.Race.OneBone or .ManyBones.Fmt, {1} a race, {2} bone names. Lower-case, no full stop."
+  },
+  "Parts.Retarget.Race.OneBone": {
+    "message": "ein Knochen, an dem das Kleidungsstück hängt",
+    "description": "The {0} of Parts.Retarget.Race.Unbendable.Fmt."
+  },
+  "Parts.Retarget.Race.ManyBones.Fmt": {
+    "message": "{0} Knochen, an denen das Kleidungsstück hängt",
+    "description": "The {0} of Parts.Retarget.Race.Unbendable.Fmt; {0} here is a count."
+  },
   "Parts.Retarget.BodyFallback": {
     "message": "Körper",
     "description": "Body size: starts the name of a saved Penumbra option when the target body mod's own name is unknown."

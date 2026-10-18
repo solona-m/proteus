@@ -3044,6 +3044,55 @@ public sealed class PartsStrings
     public readonly string RetargetBakeReadBack = Loc.Localize("Parts.Retarget.Bake.ReadBack",
         "the new model could not be read back");
 
+    /// <summary>Heads the "Refit for" dropdown: which race's model the refit is made and saved as.</summary>
+    public readonly string RetargetRaceLabel = Loc.Localize("Parts.Retarget.Race.Label", "Refit for");
+
+    public readonly string RetargetRaceTip = Loc.Localize("Parts.Retarget.Race.Tip",
+        "Which race the refit is for. Another race of the garment's sex gets its own model, made from this one the way the game bends it, refitted onto that race's body and saved where that race loads it. Everyone else keeps this model.");
+
+    /// <summary>{0} is a race such as "Midlander M".</summary>
+    public readonly string RetargetRaceThisModelFmt = Loc.Localize("Parts.Retarget.Race.ThisModel.Fmt", "{0} (this model)");
+
+    /// <summary>{0} is a race such as "Midlander F": the race the logged-in character would get it as.</summary>
+    public readonly string RetargetRaceAsWornFmt = Loc.Localize("Parts.Retarget.Race.AsWorn.Fmt",
+        "{0} (as your character wears it)");
+
+    /// <summary>{0} is a race such as "Highlander M".</summary>
+    public readonly string RetargetRaceOwnModelFmt = Loc.Localize("Parts.Retarget.Race.OwnModel.Fmt",
+        "This mod already has its own {0} model. Refit that one instead.");
+
+    /// <summary>A button; {0} is a race such as "Highlander M".</summary>
+    public readonly string RetargetRaceOpenModelFmt = Loc.Localize("Parts.Retarget.Race.OpenModel.Fmt",
+        "Open the {0} model");
+
+    /// <summary>{0} is a race such as "Highlander M".</summary>
+    public readonly string RetargetRaceBakingFmt = Loc.Localize("Parts.Retarget.Race.Baking.Fmt",
+        "Making the {0} model…");
+
+    /// <summary>{0} is the race picked, {1} the race of the model open.</summary>
+    public readonly string RetargetRaceOnlyFmt = Loc.Localize("Parts.Retarget.Race.Only.Fmt",
+        "Only {0} will wear the saved refit; {1} keeps this model.");
+
+    /// <summary>{0} is the race picked.</summary>
+    public readonly string RetargetRaceSourceBakedFmt = Loc.Localize("Parts.Retarget.Race.SourceBaked.Fmt",
+        "The bodies it was made for are bent to {0} the same way, so it sits on them as it did before.");
+
+    /// <summary>{0} is the race picked.</summary>
+    public readonly string RetargetRacePreviewOtherFmt = Loc.Localize("Parts.Retarget.Race.PreviewOther.Fmt",
+        "Your character isn't {0}, so the live preview is bent onto your character, not what {0} will see.");
+
+    /// <summary>{0} is the race picked.</summary>
+    public readonly string RetargetRacePreviewNotDrawnFmt = Loc.Localize("Parts.Retarget.Race.PreviewNotDrawn.Fmt",
+        "Your character isn't wearing this model, so there is no live preview. The saved refit is what {0} will wear.");
+
+    /// <summary>{0} is the race picked.</summary>
+    public readonly string RetargetRaceSkeletonFallbackFmt = Loc.Localize("Parts.Retarget.Race.SkeletonFallback.Fmt",
+        "{0}'s skeleton from your mods couldn't be read, so the game's own was used.");
+
+    /// <summary>{0} is the race picked, {1} the race of the model open, {2} the extra skeleton's number.</summary>
+    public readonly string RetargetRaceEstCarriedFmt = Loc.Localize("Parts.Retarget.Race.EstCarried.Fmt",
+        "Saving also gives {0} the extra skeleton {1} loads for this item ({2}), so its extra bones move.");
+
     /// <summary>Starts a saved option's name when the target body mod's own name is not known.</summary>
     public readonly string RetargetBodyFallback = Loc.Localize("Parts.Retarget.BodyFallback", "Body");
 
