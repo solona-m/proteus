@@ -5171,6 +5171,10 @@
     "message": "게임의 종족 디포머를 읽을 수 없습니다",
     "description": ""
   },
+  "HairPort.Refused.NoSkeletonTable": {
+    "message": "게임의 헤어스타일 스켈레톤 표를 읽을 수 없습니다",
+    "description": ""
+  },
   "HairPort.Declined.Fmt": {
     "message": "{1}의 헤어스타일 {0} 이식이 취소되어 그대로 둡니다.",
     "description": ""

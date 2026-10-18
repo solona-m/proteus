@@ -5171,6 +5171,10 @@
     "message": "no se pudo leer el deformador racial del juego",
     "description": ""
   },
+  "HairPort.Refused.NoSkeletonTable": {
+    "message": "no se pudo leer la tabla de esqueletos de peinados del juego",
+    "description": ""
+  },
   "HairPort.Declined.Fmt": {
     "message": "El portado del peinado {0} en {1} se deshizo, así que se deja como está.",
     "description": ""

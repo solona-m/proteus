@@ -5171,6 +5171,10 @@
     "message": "无法读取游戏的种族变形器",
     "description": ""
   },
+  "HairPort.Refused.NoSkeletonTable": {
+    "message": "无法读取游戏的发型骨架表",
+    "description": ""
+  },
   "HairPort.Declined.Fmt": {
     "message": "{1} 中发型 {0} 的移植已被撤销，因此保持不变。",
     "description": ""

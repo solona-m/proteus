@@ -5171,6 +5171,10 @@
     "message": "der Volks-Deformer des Spiels konnte nicht gelesen werden",
     "description": ""
   },
+  "HairPort.Refused.NoSkeletonTable": {
+    "message": "die Tabelle der Frisurskelette des Spiels konnte nicht gelesen werden",
+    "description": ""
+  },
   "HairPort.Declined.Fmt": {
     "message": "Die Übertragung der Frisur {0} in {1} wurde rückgängig gemacht und bleibt daher aus.",
     "description": ""

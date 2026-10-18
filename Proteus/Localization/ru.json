@@ -5171,6 +5171,10 @@
     "message": "не удалось прочитать расовый деформер игры",
     "description": ""
   },
+  "HairPort.Refused.NoSkeletonTable": {
+    "message": "не удалось прочитать таблицу скелетов причёсок игры",
+    "description": ""
+  },
   "HairPort.Declined.Fmt": {
     "message": "Перенос причёски {0} в {1} был отменён, поэтому она оставлена как есть.",
     "description": ""

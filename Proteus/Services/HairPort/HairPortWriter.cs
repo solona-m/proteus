@@ -24,12 +24,14 @@ internal static class HairPortWriter
     /// <summary>One port to publish from one place in the mod.</summary>
     /// <param name="Millis">How long the bend took, for the log.</param>
     /// <param name="Est">The extra skeleton to give the target race beside the port (<see cref="HairPortPlan.HairEst"/>);
-    /// 0 for none.</param>
-    /// <param name="SkeletonFrom">The source race's skeleton the port carries as the target's own for the hairstyle,
-    /// among <paramref name="Materials"/> (see <see cref="HairPortBuilder.CarrySkeleton"/>); 0 for none.</param>
+    /// 0 for none. With <paramref name="SkeletonFrom"/>, the slot the carried skeleton is published at.</param>
+    /// <param name="SkeletonFrom">The source race's skeleton the port carries, among <paramref name="Materials"/>, to
+    /// slot <paramref name="Est"/> of the target race (see <see cref="HairPortSkeleton.CarryAt"/>); 0 for none.</param>
+    /// <param name="Stripped">Not a port made now: one from before, saved again as it was without the skeleton it
+    /// carried, because it could not be made again and that skeleton changed another hairstyle.</param>
     public sealed record PortWrite(HairPortPlan.Owner Into, string SourceGamePath, string SourceFile, string SourceSha8,
                                    string TargetGamePath, byte[] Model, IReadOnlyList<MaterialWrite> Materials,
-                                   long Millis = 0, int Est = 0, int SkeletonFrom = 0);
+                                   long Millis = 0, int Est = 0, int SkeletonFrom = 0, bool Stripped = false);
 
     /// <summary>The <c>Est</c> manipulation that gives a port's race its extra skeleton.</summary>
     internal static object EstFor(string targetGamePath, int entry)
@@ -231,12 +233,13 @@ internal static class HairPortWriter
         => string.Format(Loc.Localize("HairPort.Refused.Covered.Fmt", "the mod already publishes {0} there"), gamePath);
 
     /// <summary>Whether <paramref name="gamePath"/> is the skeleton, or its physics, <paramref name="w"/> carries for its
-    /// race's hairstyle (<see cref="PortWrite.SkeletonFrom"/>).</summary>
+    /// race's hairstyle (<see cref="PortWrite.SkeletonFrom"/>) — at the slot its entry points to.</summary>
     private static bool CarriesSkeleton(PortWrite w, string gamePath)
     {
         if (w.SkeletonFrom <= 0 || HairPortPlan.Parse(w.TargetGamePath) is not { } t) return false;
-        return gamePath.Equals(HairPortPlan.SkeletonPath(t.Race, t.Id), StringComparison.OrdinalIgnoreCase)
-            || gamePath.Equals(HairPortPlan.PhysicsPath(t.Race, t.Id), StringComparison.OrdinalIgnoreCase);
+        int slot = w.Est > 0 ? w.Est : t.Id;
+        return gamePath.Equals(HairPortPlan.SkeletonPath(t.Race, slot), StringComparison.OrdinalIgnoreCase)
+            || gamePath.Equals(HairPortPlan.PhysicsPath(t.Race, slot), StringComparison.OrdinalIgnoreCase);
     }
 
     /// <summary>

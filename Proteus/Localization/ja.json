@@ -5171,6 +5171,10 @@
     "message": "ゲームの種族デフォーマーを読み込めませんでした",
     "description": ""
   },
+  "HairPort.Refused.NoSkeletonTable": {
+    "message": "ゲームの髪型スケルトン表を読み込めませんでした",
+    "description": ""
+  },
   "HairPort.Declined.Fmt": {
     "message": "{1} の髪型 {0} の移植は取り消されたため、そのままにします。",
     "description": ""

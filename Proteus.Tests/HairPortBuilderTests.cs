@@ -10,7 +10,7 @@ using static Proteus.Tests.HairPortFixtures;
 namespace Proteus.Tests;
 
 /// <summary>What a port of one hairstyle writes, worked out from the mod and the game, on the synthetic deformer.</summary>
-public class HairPortBuilderTests
+public partial class HairPortBuilderTests
 {
     private static readonly string Source = HairPortPlan.HairPath(801, Id);
     private static readonly string Target = HairPortPlan.HairPath(201, Id);
@@ -262,10 +262,14 @@ public class HairPortBuilderTests
         }) + "]";
         using var mod = new Mod(groups);
         mod.Put("long.mdl", HairModel(801, bones: [("j_ex_h0170_ke_b", 1f)]));
-        var plan = HairPortBuilder.Build(mod.Root, Source, [201], Pbd(), Game(Races), withSharers: false);
+        var plan = HairPortBuilder.Build(mod.Root, Source, [201], Pbd(), Game(Races, Table((201, Id, Id))), withSharers: false);
         Assert.Empty(plan.Writes);
         Assert.Contains("j_ex_h0170_ke_b", plan.Refused[201]);
     }
+
+    /// <summary>The game's table of hairstyle skeletons, as a game file.</summary>
+    private static Dictionary<string, byte[]> Table(params (ushort Race, int Set, int Skeleton)[] entries)
+        => new() { [HairSkeletonTable.GamePath] = EstBytes(entries) };
 
     private static readonly byte[] H0170Skeleton =
         System.Text.Encoding.ASCII.GetBytes("\0\0hkaSkeleton\0j_ex_h0170_ke_b\0j_ex_h0170_ke_c\0");
@@ -338,11 +342,15 @@ public class HairPortBuilderTests
     private static readonly byte[] H0170Physics = System.Text.Encoding.ASCII.GetBytes("\0phyb\0j_ex_h0170_ke_b\0");
 
     /// <summary>The game as a Midlander without hairstyle 170's bones sees it — and the Miqo'te skeleton and physics that
-    /// have them.</summary>
+    /// have them. The Midlander's hairstyle loads its own skeleton, when it has one; <paramref name="table"/> replaces
+    /// that entry.</summary>
     private static Func<string, byte[]?> MiqoteOnlyBones(bool sourcePhysics = true, bool targetPhysics = false,
-                                                         bool targetSkeleton = true, Dictionary<string, byte[]>? more = null)
+                                                         bool targetSkeleton = true, Dictionary<string, byte[]>? more = null,
+                                                         (ushort Race, int Set, int Skeleton)[]? table = null)
     {
-        var files = new Dictionary<string, byte[]>(more ?? []) { [HairPortPlan.SkeletonPath(801, 170)] = H0170Skeleton };
+        var files = new Dictionary<string, byte[]>(more ?? []);
+        files.TryAdd(HairPortPlan.SkeletonPath(801, 170), H0170Skeleton);
+        files.TryAdd(HairSkeletonTable.GamePath, EstBytes(table ?? (targetSkeleton ? [(201, Id, Id)] : [])));
         // The Midlander's own skeleton of the hairstyle, without hairstyle 170's bones.
         if (targetSkeleton) files[HairPortPlan.SkeletonPath(201, Id)] = System.Text.Encoding.ASCII.GetBytes("\0j_ex_h0130_ke_f\0");
         if (sourcePhysics) files[HairPortPlan.PhysicsPath(801, 170)] = H0170Physics;
@@ -352,10 +360,12 @@ public class HairPortBuilderTests
 
     /// <summary>
     /// The target race's skeleton lacks the bones the model moves with: the port carries the source race's skeleton and
-    /// physics as the target's own for the hairstyle, with no Est entry, stays current, and undo takes them out.
+    /// physics to the slot the target loads for the hairstyle — only it loads it — with an entry pointing there, stays
+    /// current, and undo takes them out.
     /// </summary>
     [Fact]
     [Trait("Plan", "EDGE-hair-race-port-5")]
+    [Trait("Plan", "AC-hair-skeleton-infer-3")]
     public void A_skeleton_the_target_lacks_is_carried_from_the_source_race()
     {
         using var mod = PhysicsMod([PenumbraManipulations.EstManipulation("0801", "Hair", Id, 170)]);
@@ -364,11 +374,11 @@ public class HairPortBuilderTests
         var plan = HairPortBuilder.Build(mod.Root, Source, [201], Pbd(), game, withSharers: false);
         Assert.Empty(plan.Refused);
         var write = Assert.Single(plan.Writes);
-        Assert.Equal((0, 170), (write.Est, write.SkeletonFrom));
+        Assert.Equal((Id, 170), (write.Est, write.SkeletonFrom));
         Assert.True(HairPortWriter.Save(mod.Root, plan.Writes, auto: false).Ok);
 
         var owner = mod.Owner("Cut", "Long");
-        Assert.Null(HairPortPlan.HairEst(owner, 201, Id));
+        Assert.Equal(Id, HairPortPlan.HairEst(owner, 201, Id));
         var skl = HairPortPlan.FileFor(owner, HairPortPlan.SkeletonPath(201, Id));
         var phy = HairPortPlan.FileFor(owner, HairPortPlan.PhysicsPath(201, Id));
         Assert.True(skl != null && HairPortPlan.IsPortFile(skl));
@@ -386,6 +396,7 @@ public class HairPortBuilderTests
         Assert.Null(HairPortPlan.FileFor(owner, HairPortPlan.SkeletonPath(201, Id)));
         Assert.Null(HairPortPlan.FileFor(owner, HairPortPlan.PhysicsPath(201, Id)));
         Assert.False(File.Exists(Path.Combine(mod.Root, skl!)));
+        Assert.Null(HairPortPlan.HairEst(owner, 201, Id));
         Assert.Equal(170, HairPortPlan.HairEst(owner, 801, Id));
     }
 
@@ -406,14 +417,16 @@ public class HairPortBuilderTests
     public void A_carried_skeleton_is_out_of_date_once_the_source_borrows_another()
     {
         using var mod = PhysicsMod([PenumbraManipulations.EstManipulation("0801", "Hair", Id, 170)]);
-        Assert.True(HairPortWriter.Save(mod.Root, HairPortBuilder.Build(mod.Root, Source, [201], Pbd(), MiqoteOnlyBones(), false).Writes, false).Ok);
+        var game = MiqoteOnlyBones();
+        Assert.True(HairPortWriter.Save(mod.Root, HairPortBuilder.Build(mod.Root, Source, [201], Pbd(), game, false).Writes, false).Ok);
         var model = File.ReadAllBytes(Path.Combine(mod.Root, "long.mdl"));
         var entry = HairPortRecord.Read(mod.Root).Ports.Single();
-        Assert.False(HairPortBuilder.IsOutOfDate(entry, model, HairPortPlan.ReadOwners(mod.Root)!, [entry]));
+        Assert.False(HairPortBuilder.IsOutOfDate(entry, model, HairPortPlan.ReadOwners(mod.Root)!, [entry], game));
 
-        SetOptionManipulations(mod, PenumbraManipulations.EstManipulation("0801", "Hair", Id, 171));
+        SetOptionManipulations(mod, PenumbraManipulations.EstManipulation("0801", "Hair", Id, 171),
+                               PenumbraManipulations.EstManipulation("0201", "Hair", Id, Id));
         entry = HairPortRecord.Read(mod.Root).Ports.Single();
-        Assert.True(HairPortBuilder.IsOutOfDate(entry, model, HairPortPlan.ReadOwners(mod.Root)!, [entry]));
+        Assert.True(HairPortBuilder.IsOutOfDate(entry, model, HairPortPlan.ReadOwners(mod.Root)!, [entry], game));
     }
 
     /// <summary>
@@ -478,16 +491,20 @@ public class HairPortBuilderTests
         Assert.Contains("j_ex_h0170_ke_b", plan.Refused[201]);
     }
 
-    /// <summary>A race the game ships no skeleton of the hairstyle for loads none at that path: nothing is carried
-    /// there, and the port is refused as before.</summary>
+    /// <summary>A race whose hairstyle loads no skeleton at all — no entry in the game's table, no file — gets the
+    /// source's at the hairstyle's own number, which nothing else of the race loads, with an entry pointing there.</summary>
     [Fact]
     [Trait("Plan", "EDGE-hair-race-port-5")]
-    public void No_skeleton_is_carried_where_the_game_loads_none()
+    [Trait("Plan", "AC-hair-skeleton-infer-3")]
+    [Trait("Plan", "EDGE-hair-skeleton-infer-9")]
+    public void A_race_that_loads_no_skeleton_for_the_hairstyle_gets_one_at_its_own_id()
     {
         using var mod = PhysicsMod([PenumbraManipulations.EstManipulation("0801", "Hair", Id, 170)]);
-        var plan = HairPortBuilder.Build(mod.Root, Source, [201], Pbd(), MiqoteOnlyBones(targetSkeleton: false), withSharers: false);
-        Assert.Empty(plan.Writes);
-        Assert.Contains("j_ex_h0170_ke_b", plan.Refused[201]);
+        var game = MiqoteOnlyBones(targetSkeleton: false);
+        var write = Assert.Single(HairPortBuilder.Build(mod.Root, Source, [201], Pbd(), game, withSharers: false).Writes);
+        Assert.Equal((Id, 170), (write.Est, write.SkeletonFrom));
+        Assert.Equal(H0170Skeleton, write.Materials.Single(m => m.GamePath == HairPortPlan.SkeletonPath(201, Id)).Bytes);
+        AssertLoadsEveryBone(write, mod.Get("long.mdl"), game);
     }
 
     /// <summary>The source race's skeleton lacks the bones too: nothing to carry, refused.</summary>
@@ -504,17 +521,18 @@ public class HairPortBuilderTests
         Assert.Contains("j_ex_h0170_ke_b", plan.Refused[201]);
     }
 
-    /// <summary>The target race has physics for the hairstyle and the source none to replace it with: that physics would
-    /// swing bones the carried skeleton lacks, so the port is refused as before.</summary>
+    /// <summary>The target race has physics at the slot it loads and the source none to replace it with: that physics
+    /// would swing bones the carried skeleton lacks, so the skeleton goes to the lowest slot with no physics.</summary>
     [Fact]
     [Trait("Plan", "EDGE-hair-race-port-5")]
-    public void A_carried_skeleton_without_physics_over_the_targets_own_is_refused()
+    [Trait("Plan", "EDGE-hair-skeleton-infer-12")]
+    public void A_carried_skeleton_without_physics_skips_the_targets_own()
     {
         using var mod = PhysicsMod([PenumbraManipulations.EstManipulation("0801", "Hair", Id, 170)]);
-        var plan = HairPortBuilder.Build(mod.Root, Source, [201], Pbd(),
-                                         MiqoteOnlyBones(sourcePhysics: false, targetPhysics: true), withSharers: false);
-        Assert.Empty(plan.Writes);
-        Assert.Contains("j_ex_h0170_ke_b", plan.Refused[201]);
+        var write = Assert.Single(HairPortBuilder.Build(mod.Root, Source, [201], Pbd(),
+                                  MiqoteOnlyBones(sourcePhysics: false, targetPhysics: true), withSharers: false).Writes);
+        Assert.Equal((1, 170), (write.Est, write.SkeletonFrom));
+        Assert.DoesNotContain(write.Materials, m => m.GamePath.EndsWith(".phyb", StringComparison.Ordinal));
     }
 
     /// <summary>The mod ships the source race's skeleton itself: the port names the author's file, copies nothing.</summary>
@@ -693,29 +711,29 @@ public class HairPortBuilderTests
         var entry = HairPortRecord.Read(mod.Root).Ports.Single();
         var source = mod.Get("long.mdl");
         var ports = HairPortRecord.Read(mod.Root).Ports;
-        Assert.False(HairPortBuilder.IsOutOfDate(entry, source, mod.Owners, ports));
+        Assert.False(HairPortBuilder.IsOutOfDate(entry, source, mod.Owners, ports, game));
 
         SetSourceEst(mod, 180);
-        Assert.True(HairPortBuilder.IsOutOfDate(entry, source, mod.Owners, ports));
+        Assert.True(HairPortBuilder.IsOutOfDate(entry, source, mod.Owners, ports, game));
         // With the manifest unreadable, only the model decides; a port whose option is gone is left alone.
-        Assert.False(HairPortBuilder.IsOutOfDate(entry, source, null, ports));
+        Assert.False(HairPortBuilder.IsOutOfDate(entry, source, null, ports, game));
         Assert.False(HairPortBuilder.IsOutOfDate(new HairPortRecord.Entry
         {
             Group = "Cut", Option = "Gone", SourceGamePath = entry.SourceGamePath, TargetGamePath = entry.TargetGamePath,
             SourceSha8 = entry.SourceSha8, PortVersion = entry.PortVersion, Est = 170,
-        }, source, mod.Owners, ports));
+        }, source, mod.Owners, ports, game));
 
         // Studio lists it as out of date (and ticks it), through the test its panel uses …
         var record = HairPortRecord.Read(mod.Root);
         var rows = Gui.HairPortPanel.Rows(Source, mod.Owners, record, _ => true,
-                                          Gui.HairPortPanel.OutOfDate(mod.Root, mod.Owners, record));
+                                          Gui.HairPortPanel.OutOfDate(mod.Root, mod.Owners, record, game));
         Assert.Equal(Gui.HairPortPanel.State.Stale, rows.Single(r => r.Race == 201).State);
 
         // … and the automatic path, worn, remakes it.
         var worn = HairPortPlan.HairPath(201, Id);
         var file = Path.Combine(mod.Root, entry.File.Replace('/', Path.DirectorySeparatorChar));
         var decision = HairPortWatcher.Decide.What(worn, new Dictionary<string, string?> { [worn] = file }, [],
-                                                    Path.GetDirectoryName(mod.Root)!, HairPortRecord.Read);
+                                                    Path.GetDirectoryName(mod.Root)!, HairPortRecord.Read, game);
         Assert.Equal(HairPortWatcher.Decide.Kind.Port, decision.Kind);
         Assert.True(decision.Stale);
     }
@@ -782,7 +800,7 @@ public class HairPortBuilderTests
         var record = HairPortRecord.Read(mod.Root);
         Assert.Equal(2, record.Ports.Count);
         Assert.All(record.Ports, e => Assert.False(
-            HairPortBuilder.IsOutOfDate(e, mod.Get(e.SourceFile), mod.Owners, record.Ports), $"{e.Group}/{e.Option}"));
+            HairPortBuilder.IsOutOfDate(e, mod.Get(e.SourceFile), mod.Owners, record.Ports, game), $"{e.Group}/{e.Option}"));
         var again = HairPortBuilder.Build(mod.Root, Source, [201], Pbd(), game, withSharers: false);
         Assert.Empty(again.Writes);
         Assert.Contains((ushort)201, again.Current);

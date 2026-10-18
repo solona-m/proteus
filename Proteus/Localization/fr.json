@@ -5171,6 +5171,10 @@
     "message": "le déformateur racial du jeu n'a pas pu être lu",
     "description": ""
   },
+  "HairPort.Refused.NoSkeletonTable": {
+    "message": "la table des squelettes de coiffures du jeu n'a pas pu être lue",
+    "description": ""
+  },
   "HairPort.Declined.Fmt": {
     "message": "La transposition de la coiffure {0} dans {1} a été annulée, elle est donc laissée telle quelle.",
     "description": ""

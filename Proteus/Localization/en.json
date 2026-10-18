@@ -5171,6 +5171,10 @@
     "message": "the game's racial deformer could not be read",
     "description": "Why nothing could be ported: the game's racial deformer file could not be read."
   },
+  "HairPort.Refused.NoSkeletonTable": {
+    "message": "the game's table of hairstyle skeletons could not be read",
+    "description": "Why a hairstyle was not ported: the game's file listing which extra skeleton (physics bones) each race's hairstyle uses could not be read."
+  },
   "HairPort.Declined.Fmt": {
     "message": "The port of hairstyle {0} in {1} was undone, so it is left alone.",
     "description": "Settings > Hair status: the automatic port of hairstyle {0} in mod {1} was undone by the user and is not redone."
