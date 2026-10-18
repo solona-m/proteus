@@ -101,7 +101,8 @@ public sealed partial class AutoRefitWatcher
         bool Chosen(string slot) => (slot == "_top" ? g.Preference.Chest : g.Preference.Legs) != null;
         if (AccessoryCover.WithoutSize(covered, TargetFor, Chosen) is { } unsized)
         {
-            if (unsized.Why == AccessoryCover.NoSize.ForRace) SayNoSizeForRace(targets.NameOf(unsized.Slot), unsized.Slot, race, item);
+            if (targets.MissingDir(unsized.Slot) is { } gone) SayBodyMissing(r, gone);
+            else if (unsized.Why == AccessoryCover.NoSize.ForRace) SayNoSizeForRace(targets.NameOf(unsized.Slot), unsized.Slot, race, item);
             else
                 Say(string.Format(Loc.Localize("Chat.AutoRefit.NoSizeChosen.Fmt",
                         "[Proteus] No {0} size is chosen for {1}, so {2} was left as it is. Choose one under /proteus > "
@@ -181,12 +182,30 @@ public sealed partial class AutoRefitWatcher
                 problem: true);
             return;
         }
-        var sources = parts.Sources;
+        var sources = new Dictionary<string, AutoRefitDecisions.Pick>(parts.Sources, StringComparer.Ordinal);
         var leftOut = parts.LeftOut.Select(SlotName).ToList();
         ct.ThrowIfCancellationRequested();
 
         var pickOf = sources[primary];
-        if (sources.All(s => AutoRefitDecisions.SameFile(s.Value.Dir, s.Value.Option, targets.DirOf(s.Key), TargetFor(s.Key)!)))
+        // Each covered part onto its own body — but measured as first on a part that stays on the body mod it was made
+        // on, the others go onto that same body (see AutoRefitTargets.CoverTarget).
+        bool leadStays = string.Equals(pickOf.Dir, lead.Dir, StringComparison.OrdinalIgnoreCase);
+        var placed = new Dictionary<string, (BodyModIndex.Entry Body, BodyOption To)>(StringComparer.Ordinal);
+        foreach (string slot in covered.Where(sources.ContainsKey).ToList())
+        {
+            if (targets.CoverTarget(slot, lead, target, leadStays, TargetFor(slot)) is { } there)
+            {
+                placed[slot] = there;
+                if (!string.Equals(there.Body.Dir, targets.DirOf(slot), StringComparison.OrdinalIgnoreCase))
+                    log.Information("[Proteus] auto refit: {0} stays on {1}, the body it was made on; its {2} goes onto {1} "
+                                  + "with it rather than onto {3}", item, lead.Name, slot, targets.NameOf(slot));
+                continue;
+            }
+            log.Information("[Proteus] auto refit: {0} {1} left out: {2} has no size of it", item, slot, lead.Name);
+            leftOut.Add(SlotName(slot));
+            sources.Remove(slot);
+        }
+        if (sources.All(s => AutoRefitDecisions.SameFile(s.Value.Dir, s.Value.Option, placed[s.Key].Body.Dir, placed[s.Key].To)))
         {
             log.Information("[Proteus] auto refit: {0} already fits {1} / {2}", item, lead.Name, target.Label);
             return;
@@ -195,10 +214,10 @@ public sealed partial class AutoRefitWatcher
         // ── where it goes: sized with other pieces in one of the author's groups, into their refit, or not at all ──
         if (WhereItGoes(r, g, lead, redirects, item) is not { } where) return;
         var (saveRoot, group, cutFrom) = where;
-        var onBodies = covered.Where(sources.ContainsKey).Select(s => (Body: targets.NameOf(s), TargetFor(s)!.Label)).ToList();
+        var onBodies = covered.Where(sources.ContainsKey).Select(s => (Body: placed[s].Body.Name, placed[s].To.Label)).ToList();
         var labels = onBodies.Select(p => p.Label).ToList();
-        var onto = sources.ToDictionary(s => s.Key, s => TargetFor(s.Key)!.Rel, StringComparer.Ordinal);
-        var ontoBodies = onto.Keys.ToDictionary(k => k, targets.DirOf, StringComparer.Ordinal);
+        var onto = sources.ToDictionary(s => s.Key, s => placed[s.Key].To.Rel, StringComparer.Ordinal);
+        var ontoBodies = onto.Keys.ToDictionary(k => k, k => placed[k].Body.Dir, StringComparer.Ordinal);
         var chosenFiles = new Dictionary<string, (string Dir, string Rel)>(StringComparer.Ordinal);
         foreach (string slot in new[] { "_top", "_dwn" })
             if (TargetFor(slot) is { } to) chosenFiles[slot] = (targets.DirOf(slot), to.Rel);
@@ -256,11 +275,10 @@ public sealed partial class AutoRefitWatcher
         {
             var pick = sources[slot];
             var sourceCat = CatalogOf(pick.Dir)!;   // a source with no catalog does not clear (SourcesFor)
-            var to = TargetFor(slot)!;
-            string toDir = targets.DirOf(slot);
-            if (BodyRetarget.BuildPair(slot, sourceCat.PathOf(pick.Option), targets.PathOf(slot, to), SlotName(slot), male,
+            var (toBody, to) = placed[slot];
+            if (BodyRetarget.BuildPair(slot, sourceCat.PathOf(pick.Option), toBody.Catalog.PathOf(to), SlotName(slot), male,
                                        RefitCore.MaskOf(pick.Dir, sourceCat, slot, OptionsOf(g.Settings, pick.Dir)),
-                                       RefitCore.MaskOf(toDir, targets.Catalog(slot), slot, OptionsOf(g.Settings, toDir)),
+                                       RefitCore.MaskOf(toBody.Dir, toBody.Catalog, slot, OptionsOf(g.Settings, toBody.Dir)),
                                        uvRemap, out var pair) is { } refusal)
             {
                 if (slot == primary)
@@ -278,7 +296,7 @@ public sealed partial class AutoRefitWatcher
         ct.ThrowIfCancellationRequested();
 
         AssertOffFramework("the refit");
-        bool across = AutoRefitTargets.Across(pickOf.Dir, covered.Where(sources.ContainsKey).Select(targets.DirOf));
+        bool across = AutoRefitTargets.Across(pickOf.Dir, covered.Where(sources.ContainsKey).Select(s => placed[s].Body.Dir));
         var plan = RefitCore.PlanAccessoryRefit(garment, bytes, pairs, covered.Contains("_top") ? "_top" : null,
                                                 across, out var pieceNames,
                                                 line => log.Debug("[Proteus] auto refit: {0}", line),

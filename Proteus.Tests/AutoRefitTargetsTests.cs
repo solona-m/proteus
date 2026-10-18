@@ -251,7 +251,6 @@ public class AutoRefitTargetsTests
 
     [Fact]
     [Trait("Plan", "EDGE-auto-refit-part-bodies-24")]
-    [Trait("Plan", "EDGE-auto-refit-part-bodies-33")]
     public void Chest_beneath_targets_the_chest_body_and_never_crosses_the_legs()
     {
         // Wanted when the chest's body is another than the legs garment was made on, even with the legs in their mod.
@@ -266,6 +265,153 @@ public class AutoRefitTargetsTests
         Assert.True(RefitCore.IsOwnPart("_dwn"));
     }
 
+    // ── what a garment takes along (PlanParts) ───────────────────────────────
+
+    private static BodyOption Of(BodyModIndex.Entry body, string slot, string name)
+        => body.Catalog.For(slot).First(o => o.Name == name);
+
+    /// <summary>A chest-only body, for a garment's own body that has no legs.</summary>
+    private static readonly BodyModIndex.Entry Chesty = BodyMod("Chesty", Size("_top", "M"), Size("_top", "L"));
+
+    private static BodyModIndex.Entry? FindAll(string dir) => dir == "Chesty" ? Chesty : Find(dir);
+
+    [Fact]
+    [Trait("Plan", "AC-auto-refit-part-bodies-5")]
+    [Trait("Plan", "EDGE-auto-refit-part-bodies-16")]
+    public void Single_body_job_keeps_todays_parts_across_and_early_return()
+    {
+        // The old RunJob: across = made on another body mod; nothing to do when the garment's own part is already on
+        // its size and nothing moves... between mods; a reached part already on its size dropped within one mod.
+        foreach (var pref in new[] { Legacy(Bibo.Dir, Ref(Bibo, "_top", "M"), null), Legacy(Bibo.Dir, Ref(Bibo, "_top", "L"),
+                                                                                          Ref(Bibo, "_dwn", "L")) })
+            foreach (string sourceDir in new[] { Bibo.Dir, Yab.Dir })
+                foreach (var legsFrom in new[] { Of(Bibo, "_dwn", "M"), Of(Bibo, "_dwn", "L") })
+                    foreach (var chestFrom in new[] { Of(Bibo, "_top", "M"), Of(Bibo, "_top", "L") })
+                    {
+                        var targets = new AutoRefitTargets(pref, Find, "0201");
+                        var target = targets.TargetFor("_top", "_top")!;
+                        var plan = targets.PlanParts("_top", Bibo, target, sourceDir, chestFrom,
+                                                     [("_dwn", legsFrom), ("_glv", Of(Bibo, "_glv", "M"))]);
+                        bool across = sourceDir != Bibo.Dir;
+                        Assert.Equal(across, plan.Across);
+                        Assert.Equal(!across && AutoRefitDecisions.SameFile(sourceDir, chestFrom, Bibo.Dir, target),
+                                     plan.AlreadyFits);
+                        var expected = new[] { ("_dwn", legsFrom), ("_glv", Of(Bibo, "_glv", "M")) }
+                            .Where(p => targets.TargetFor(p.Item1, "_top") is { } to
+                                        && !AutoRefitDecisions.SameFile(sourceDir, p.Item2, Bibo.Dir, to))
+                            .Select(p => (p.Item1, targets.TargetFor(p.Item1, "_top")));
+                        Assert.Equal(expected, plan.Others.Select(o => (o.Slot, (BodyOption?)o.To)));
+                        Assert.All(plan.Others, o => Assert.Equal(Bibo, o.Body));
+                        Assert.Empty(plan.Left.Where(l => l.Listed));
+                        Assert.Empty(plan.KeptOnLead);
+                    }
+    }
+
+    [Fact]
+    [Trait("Plan", "AC-auto-refit-part-bodies-6")]
+    [Trait("Plan", "EDGE-auto-refit-part-bodies-31")]
+    [Trait("Plan", "EDGE-auto-refit-part-bodies-17")]
+    public void A_garment_kept_on_its_own_body_takes_the_parts_it_reaches_onto_that_body()
+    {
+        var targets = new AutoRefitTargets(Mixed(Ref(Bibo, "_top", "L"), Ref(Yab, "_dwn", "S")), Find, "0201");
+        var plan = targets.PlanParts("_top", Bibo, Of(Bibo, "_top", "L"), Bibo.Dir, Of(Bibo, "_top", "M"),
+                                     [("_dwn", Of(Bibo, "_dwn", "M"))]);
+        var legs = Assert.Single(plan.Others);
+        Assert.Equal(Bibo, legs.Body);                    // not YAB+, which it is set to
+        Assert.Equal("L", legs.To.Name);                  // no "S" on Bibo+: the one named for the chest's L
+        Assert.Equal(["_dwn"], plan.KeptOnLead);
+        Assert.False(plan.Across);
+    }
+
+    [Fact]
+    [Trait("Plan", "AC-auto-refit-part-bodies-6")]
+    [Trait("Plan", "EDGE-auto-refit-part-bodies-35")]
+    public void A_garment_moving_to_another_body_sends_each_part_onto_its_own()
+    {
+        // Made on YAB+: the chest goes to Bibo+, the legs stay on YAB+ — already their size, still paired.
+        var targets = new AutoRefitTargets(Mixed(Ref(Bibo, "_top", "M"), Ref(Yab, "_dwn", "S")), Find, "0201");
+        var plan = targets.PlanParts("_top", Bibo, Of(Bibo, "_top", "M"), Yab.Dir, Of(Yab, "_top", "S"),
+                                     [("_dwn", Of(Yab, "_dwn", "S"))]);
+        var legs = Assert.Single(plan.Others);
+        Assert.Equal(Yab, legs.Body);
+        Assert.Equal("S", legs.To.Name);
+        Assert.True(plan.Across);
+        Assert.False(plan.AlreadyFits);
+        Assert.Empty(plan.KeptOnLead);
+    }
+
+    [Fact]
+    [Trait("Plan", "EDGE-auto-refit-part-bodies-12")]
+    [Trait("Plan", "EDGE-auto-refit-part-bodies-32")]
+    public void Parts_with_nothing_to_go_onto_are_left_out_and_said_only_when_a_body_was_chosen()
+    {
+        // Kept on its own body, which has no legs: left out, and said.
+        var pref = Mixed(Ref(Chesty, "_top", "L"), Ref(Yab, "_dwn", "S"));
+        pref.SetBody("_top", Chesty.Dir);
+        var plan = new AutoRefitTargets(pref, FindAll, "0201")
+            .PlanParts("_top", Chesty, Of(Chesty, "_top", "L"), Chesty.Dir, Of(Chesty, "_top", "M"), [("_dwn", Of(Bibo, "_dwn", "M"))]);
+        Assert.Empty(plan.Others);
+        Assert.True(Assert.Single(plan.Left).Listed);
+
+        // No body chosen for it at all: left out quietly, as a part of one body always was.
+        pref.SetBody("_dwn", "");
+        plan = new AutoRefitTargets(pref, FindAll, "0201")
+            .PlanParts("_top", Chesty, Of(Chesty, "_top", "L"), Yab.Dir, Of(Yab, "_top", "M"), [("_dwn", Of(Yab, "_dwn", "M"))]);
+        Assert.False(Assert.Single(plan.Left).Listed);
+
+        // Moving between bodies, a part set to another body with no size there: left out, said — never guessed.
+        var moving = new AutoRefitTargets(Mixed(Ref(Bibo, "_top", "M")), Find, "0201")
+            .PlanParts("_top", Bibo, Of(Bibo, "_top", "M"), Yab.Dir, Of(Yab, "_top", "S"), [("_dwn", Of(Yab, "_dwn", "S"))]);
+        Assert.Empty(moving.Others);
+        Assert.True(Assert.Single(moving.Left).Listed);
+    }
+
+    [Fact]
+    [Trait("Plan", "EDGE-auto-refit-part-bodies-24")]
+    public void A_skirt_on_its_own_file_with_another_chest_body_is_left_as_is()
+    {
+        // Legs on Bibo+, chest on YAB+: the chest beneath is no part of the skirt's, so it neither makes the refit one
+        // between bodies nor stops the skirt already fitting.
+        var pref = Mixed(Ref(Bibo, "_top", "M"), Ref(Yab, "_dwn", "S"));
+        pref.SetBody("_top", Yab.Dir);
+        pref.SetBody("_dwn", Bibo.Dir);
+        pref.Chest = Ref(Yab, "_top", "M");
+        pref.Legs = Ref(Bibo, "_dwn", "M");
+        var targets = new AutoRefitTargets(pref, Find, "0201");
+        var plan = targets.PlanParts("_dwn", Bibo, targets.TargetFor("_dwn", "_dwn")!, Bibo.Dir, Of(Bibo, "_dwn", "M"), []);
+        Assert.False(plan.Across);
+        Assert.True(plan.AlreadyFits);
+    }
+
+    [Fact]
+    [Trait("Plan", "EDGE-auto-refit-part-bodies-33")]
+    public void Author_sizes_are_passed_over_only_when_a_part_goes_onto_another_body()
+    {
+        var targets = new AutoRefitTargets(Mixed(Ref(Bibo, "_top", "M"), Ref(Yab, "_dwn", "S")), Find, "0201");
+        Assert.True(targets.AuthorSizesPassedOver(Bibo, Yab.Dir, ["_dwn"]));     // legs go to YAB+ for real
+        Assert.False(targets.AuthorSizesPassedOver(Bibo, Bibo.Dir, ["_dwn"]));   // made on Bibo+: legs come along
+        Assert.False(targets.AuthorSizesPassedOver(Bibo, Yab.Dir, ["_sho"]));    // feet on Bibo+ with the chest
+        var one = new AutoRefitTargets(Legacy(Bibo.Dir, Ref(Bibo, "_top", "M"), null), Find, "0201");
+        Assert.False(one.AuthorSizesPassedOver(Bibo, Yab.Dir, ["_dwn"]));
+    }
+
+    [Fact]
+    [Trait("Plan", "AC-auto-refit-part-bodies-8")]
+    public void An_accessory_kept_on_its_body_takes_its_other_part_onto_that_body()
+    {
+        var targets = new AutoRefitTargets(Mixed(Ref(Bibo, "_top", "L"), Ref(Yab, "_dwn", "S")), Find, "0201");
+        var own = targets.TargetFor("_dwn", "_dwn");
+        var kept = targets.CoverTarget("_dwn", Bibo, Of(Bibo, "_top", "L"), leadStays: true, own)!.Value;
+        Assert.Equal(Bibo, kept.Body);
+        Assert.Equal("L", kept.To.Name);
+        var moved = targets.CoverTarget("_dwn", Bibo, Of(Bibo, "_top", "L"), leadStays: false, own)!.Value;
+        Assert.Equal(Yab, moved.Body);
+        Assert.Equal("S", moved.To.Name);
+        var own2 = targets.CoverTarget("_top", Bibo, Of(Bibo, "_top", "L"), leadStays: true, Of(Bibo, "_top", "L"))!.Value;
+        Assert.Equal(Bibo, own2.Body);
+        Assert.Equal("L", own2.To.Name);
+    }
+
     // ── Rue goes only with Rue ───────────────────────────────────────────────
 
     [Fact]
@@ -276,6 +422,7 @@ public class AutoRefitTargetsTests
         Assert.True(AutoRefitTargets.IsRue("LavaBod+ LaRue", null));
         Assert.False(AutoRefitTargets.IsRue("Bibo+", "Bibo+"));
         Assert.False(AutoRefitTargets.IsRue("Butt Plug - True Colors", null));
+        Assert.True(AutoRefitTargets.IsRue("NeoRue Body", null));
 
         var pref = new AutoRefitPreference { ChestBody = Rue.Dir, LegsBody = Bibo.Dir, Chest = Ref(Rue, "_top", "M"),
                                              Legs = Ref(Bibo, "_dwn", "M") };

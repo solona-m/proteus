@@ -85,6 +85,14 @@ public sealed partial class AutoRefitWatcher
             case KeepEnds.LeftAsIs:
                 SayUnsure(item);
                 return;
+            // No body chosen for its hands or feet, or one across the Rue line from its arms' or legs': no size of its
+            // own to draw its skin like, which says nothing about the race. Logged only, as a part with no body is.
+            case KeepEnds.NoSize noSize when j.Targets.DirOf(noSize.Slot).Length == 0
+                                             || j.Targets.TargetFor(noSize.Slot, slot) == null
+                                                && j.Targets.Options(noSize.Slot).Count > 0:
+                log.Debug("[Proteus] auto refit: {0} left as it is: its {1} have no body to go by", item,
+                          feet ? "feet" : "hands");
+                return;
             case KeepEnds.NoSize noSize:
                 Say(string.Format(Loc.Localize("Chat.AutoRefit.NoSizeForRace.Fmt",
                         "[Proteus] {0} has no {1} size for {2}, so {3} was left as it is."),

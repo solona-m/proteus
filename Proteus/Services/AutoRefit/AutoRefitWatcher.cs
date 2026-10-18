@@ -615,8 +615,12 @@ public sealed partial class AutoRefitWatcher : IDisposable
                         {
                             try
                             {
-                                if (disposed || read.IsFaulted || !config.AutoRefitByCollection.TryGetValue(active, out var live))
+                                if (read.IsFaulted)
+                                {
+                                    log.Warning(read.Exception, "[Proteus] auto refit: reading the sizes worn failed");
                                     return;
+                                }
+                                if (disposed || !config.AutoRefitByCollection.TryGetValue(active, out var live)) return;
                                 if (Fill(active, live, new AutoRefitTargets(live, state.Find, race, read.Result), readIn))
                                     config.Save();
                             }
@@ -643,7 +647,8 @@ public sealed partial class AutoRefitWatcher : IDisposable
                       IReadOnlyDictionary<string, string>? readIn)
     {
         if (!AutoRefitDecisions.ApplySnapshot(pref, targets, readIn, out var first)) return false;
-        log.Information("[Proteus] auto refit: sizes filled in {0}: {1}{2}", pref.CollectionName,
+        // By the parts alone: a collection is often named after a character, and logs travel.
+        log.Information("[Proteus] auto refit: sizes filled: {0}{1}",
                         string.Join(", ", AutoRefitDecisions.Slots.Select(s => $"{s} {pref.SizeOf(s)?.Name ?? "-"}")),
                         first.Count > 0 ? $" (first size for {string.Join(", ", first)})" : "");
         if (first.Count > 0) NotePrefilled(key, first.Concat(PrefilledIn(key)).Distinct().ToList());
@@ -1144,17 +1149,21 @@ public sealed partial class AutoRefitWatcher : IDisposable
         // Never a guess at the size itself: picking a body in Settings clears both sizes, and a refit in the moment before
         // they were chosen again took the body's first size — every piece put on came out in Neolithe "SFW XS". Hands and
         // feet follow whichever of chest and legs was chosen.
+        // A shoe's or glove's legs or arms follow the other of chest and legs only on that one's body.
+        string otherOfLead = leadSlot == "_top" ? "_dwn" : "_top";
         bool chosen = primary switch
         {
             "_top" => g.Preference.Chest != null,
             "_dwn" => g.Preference.Legs != null,
-            _ => g.Preference.Chest != null || g.Preference.Legs != null,
+            _ => g.Preference.SizeOf(leadSlot) != null
+                 || (g.Preference.SizeOf(otherOfLead) != null
+                     && string.Equals(targets.DirOf(otherOfLead), lead.Dir, StringComparison.OrdinalIgnoreCase)),
         };
         if (!chosen)
         {
             Say(string.Format(Loc.Localize("Chat.AutoRefit.NoSizeChosen.Fmt",
                     "[Proteus] No {0} size is chosen for {1}, so {2} was left as it is. Choose one under /proteus > "
-                  + "Settings."), SlotName(primary), lead.Name, item), problem: true);
+                  + "Settings."), SlotName(leadSlot), lead.Name, item), problem: true);
             return;
         }
 
@@ -1265,12 +1274,10 @@ public sealed partial class AutoRefitWatcher : IDisposable
 
         if (mixedParts)
         {
-            // A dress reaching legs on another body is not "the author's Rue M": that size fits its chest alone.
-            var elsewhere = otherFrom.Keys.FirstOrDefault(s => !string.Equals(targets.DirOf(s), lead.Dir,
-                                                                              StringComparison.OrdinalIgnoreCase));
-            if (elsewhere != null)
-                log.Information("[Proteus] auto refit: {0} reaches the {1}, on another body; the author's own sizes are not "
-                              + "looked at", item, SlotName(elsewhere));
+            // A dress reaching legs that go onto another body is not "the author's Rue M": that size fits its chest alone.
+            if (targets.AuthorSizesPassedOver(lead, source?.Dir, otherFrom.Keys))
+                log.Information("[Proteus] auto refit: {0} reaches a part going onto another body; the author's own sizes "
+                              + "are not looked at", item);
             else if (await SwitchToAuthorSize(r, g, item, redirects, ownRecord, route, lead, target, primary, race,
                                               state.Version, null, ct, together, targets))
                 return;
@@ -1304,75 +1311,42 @@ public sealed partial class AutoRefitWatcher : IDisposable
         log.Information("[Proteus] auto refit: {0} {1} made on {2} / {3} ({4}{5})", item, primary, sourceName,
                         pick.Option.Label, pick.Confidence, pick.FromCloth ? ", from cloth" : "");
 
-        // ── the other parts of the body the garment reaches, each onto its chosen size, on its own body ──
-        var reached = new List<(string Slot, BodyOption From, BodyOption To)>();
-        var dropped = new List<string>();
+        // ── the other parts of the body the garment reaches, each onto its chosen size, on its body (see PlanParts) ──
+        var reachedFrom = new List<(string Slot, BodyOption From)>();
         foreach (string slot in AutoRefitDecisions.Slots)
         {
             if (slot == primary || !otherFrom.TryGetValue(slot, out string? fromRel)) continue;
-            if (OptionByFile(sourceCat.For(slot, race), fromRel) is not { } from) continue;
-            if (TargetFor(slot) is not { } to)
+            if (OptionByFile(sourceCat.For(slot, race), fromRel) is { } from) reachedFrom.Add((slot, from));
+        }
+        var parts = targets.PlanParts(primary, lead, target, pick.Dir, pick.Option, reachedFrom);
+        var dropped = new List<string>();
+        foreach (var left in parts.Left)
+        {
+            if (!left.Listed)
             {
-                // A part on another body with nothing chosen there, or a body no longer installed: left out, and said.
-                // One body has nothing to say here, as it never had.
-                if (targets.MissingDir(slot) != null
-                    || !string.Equals(targets.DirOf(slot), lead.Dir, StringComparison.OrdinalIgnoreCase))
-                {
-                    log.Information("[Proteus] auto refit: {0} {1} left out: {2}", item, slot,
-                                    targets.MissingDir(slot) is { } gone ? $"its body {gone} isn't installed"
-                                    : targets.DirOf(slot).Length == 0 ? "no body is chosen for it"
-                                    : AutoRefitTargets.IsRue(targets.DirOf(slot), targets.Body(slot)?.Name)
-                                      != AutoRefitTargets.IsRue(lead.Dir, lead.Name) ? "Rue goes only with Rue"
-                                    : "no size is chosen for it on its body");
-                    dropped.Add(SlotName(slot));
-                }
+                log.Debug("[Proteus] auto refit: {0} {1} left out: {2}", item, left.Slot, left.Why);
                 continue;
             }
-            reached.Add((slot, from, to));
+            log.Information("[Proteus] auto refit: {0} {1} left out: {2}", item, left.Slot, left.Why);
+            dropped.Add(SlotName(left.Slot));
         }
-
-        // The body each part goes onto: its own — but for a garment staying on the body mod it was made on, a part it
-        // reaches goes onto that same body too, as a refit of one body always took it. A refit between bodies with the
-        // garment's own part kept on its body and another sent elsewhere is beyond it: measured on a dress whose skin
-        // runs from chest to legs, the legs' skin went missing, or the whole skin was kept and folded.
-        var bodyOf = reached.ToDictionary(o => o.Slot, o => targets.Body(o.Slot)!, StringComparer.Ordinal);
+        foreach (string slot in parts.KeptOnLead)
+            log.Information("[Proteus] auto refit: {0} stays on {1}, the body it was made on; its {2} goes onto {1} with it "
+                          + "rather than onto {3}", item, lead.Name, slot, targets.NameOf(slot));
+        var bodyOf = parts.Others.ToDictionary(o => o.Slot, o => o.Body, StringComparer.Ordinal);
         bodyOf[primary] = lead;
-        string? keptOnLead = null;
-        if (string.Equals(pick.Dir, lead.Dir, StringComparison.OrdinalIgnoreCase))
-            for (int i = reached.Count - 1; i >= 0; i--)
-            {
-                var (slot, from, _) = reached[i];
-                if (string.Equals(bodyOf[slot].Dir, lead.Dir, StringComparison.OrdinalIgnoreCase)) continue;
-                var onLead = lead.Catalog.For(slot, race);
-                if ((AutoRefitDecisions.Resolve(onLead, g.Preference.SizeOf(slot))
-                     ?? AutoRefitDecisions.Companion(onLead, target, null)) is not { } to)
-                {
-                    log.Information("[Proteus] auto refit: {0} {1} left out: {2} has no size of it", item, slot, lead.Name);
-                    dropped.Add(SlotName(slot));
-                    reached.RemoveAt(i);
-                    continue;
-                }
-                log.Information("[Proteus] auto refit: {0} stays on {1}, the body it was made on; its {2} goes onto {1} / {3} "
-                              + "with it rather than onto {4}", item, lead.Name, slot, to.Label, bodyOf[slot].Name);
-                reached[i] = (slot, from, to);
-                bodyOf[slot] = lead;
-                keptOnLead = SlotName(slot);
-            }
         string OnDir(string slot) => bodyOf[slot].Dir;
-
         // Between body mods when any part of the garment goes onto another than it was made on — then the whole garment
         // is refitted that way, its parts swapped onto each one's body (see AutoRefitTargets.Across).
-        bool across = AutoRefitTargets.Across(pick.Dir, reached.Select(o => OnDir(o.Slot)).Prepend(lead.Dir));
+        bool across = parts.Across;
 
-        if (!across && AutoRefitDecisions.SameFile(pick.Dir, pick.Option, lead.Dir, target))
+        if (parts.AlreadyFits)
         {
             log.Information("[Proteus] auto refit: {0} already fits {1} / {2}", item, lead.Name, target.Label);
             Outcome(r, onTarget: true, pick, r.Worn.Rel);
             return;
         }
-        // Within one body mod a part already on its size has nothing to do; between body mods every part goes.
-        var others = reached.Where(o => across || !AutoRefitDecisions.SameFile(pick.Dir, o.From, OnDir(o.Slot), o.To))
-                            .ToList();
+        var others = parts.Others.Select(o => (o.Slot, o.From, o.To)).ToList();
 
         ushort? SourceMask(string slot) => RefitCore.MaskOf(pick.Dir, sourceCat, slot, OptionsOf(g.Settings, pick.Dir));
         ushort? TargetMask(string slot)
@@ -1514,10 +1488,11 @@ public sealed partial class AutoRefitWatcher : IDisposable
         string done = string.Format(Loc.Localize("Chat.AutoRefit.Done.Fmt",
                 "[Proteus] {0} now fits {1}. Saved as \"{2}\" in {3} and switched on."),
                 item, targetLabel, option, SavedIn(g, savedRoot, lead));
-        if (keptOnLead != null)
+        var keptOn = parts.KeptOnLead.Where(s => kept.Any(k => k.Slot == s)).Select(SlotName).ToList();
+        if (keptOn.Count > 0)
             done += " " + string.Format(Loc.Localize("Chat.AutoRefit.MixedKept.Fmt",
                         "It was made on {0}, so its {1} went onto {0} with it rather than onto the body chosen for the "
-                      + "{1}."), lead.Name, keptOnLead);
+                      + "{1}."), lead.Name, string.Join(", ", keptOn));
         if (dropped.Count > 0)
             done += " " + string.Format(Loc.Localize("Chat.AutoRefit.PartsLeftOut.Fmt",
                         "These parts could not be refitted with it and kept their size: {0}."),

@@ -94,7 +94,111 @@ internal sealed class AutoRefitTargets
     /// Rue's parts are made to meet only each other's: a part on Rue is never put beside a part on another body.
     /// </summary>
     internal static bool IsRue(string dir, string? name)
-        => AutoRefitDecisions.Words(dir + " " + (name ?? "")).Any(w => w is "rue" or "larue");
+        => AutoRefitDecisions.Words(dir + " " + (name ?? "")).Any(w => w.EndsWith("rue", StringComparison.Ordinal) && w != "true");
+
+    /// <summary>A part's body is on the other side of the Rue line from <paramref name="lead"/>'s.</summary>
+    private bool AcrossRue(string slot, BodyModIndex.Entry lead)
+        => DirOf(slot).Length > 0 && IsRue(DirOf(slot), Body(slot)?.Name) != IsRue(lead.Dir, lead.Name);
+
+    // ── what a garment's refit takes along (see AutoRefitWatcher.RunJob) ─────
+
+    /// <summary>A part a garment reaches, the size it goes onto and the body that size is of.</summary>
+    internal sealed record Part(string Slot, BodyOption From, BodyOption To, BodyModIndex.Entry Body);
+
+    /// <summary>A part left out of a garment's refit, and why — said to the player only when <paramref name="Listed"/>.</summary>
+    internal sealed record LeftOut(string Slot, string Why, bool Listed);
+
+    /// <summary>What a garment's refit goes onto, worked out once the garment is read.</summary>
+    /// <param name="Others">The parts it reaches that are refitted with it.</param>
+    /// <param name="Across">Between body mods (see <see cref="Across(string, IEnumerable{string})"/>).</param>
+    /// <param name="AlreadyFits">It is already the size chosen, and nothing it reaches moves: nothing to do.</param>
+    /// <param name="KeptOnLead">Parts set to another body that went onto the garment's own instead.</param>
+    internal sealed record Plan(IReadOnlyList<Part> Others, bool Across, bool AlreadyFits, IReadOnlyList<LeftOut> Left,
+                                IReadOnlyList<string> KeptOnLead);
+
+    /// <summary>
+    /// The parts a garment in <paramref name="primary"/>, read as made on <paramref name="sourceDir"/>'s
+    /// <paramref name="source"/>, takes along, and onto what (see <see cref="TargetFor"/>).
+    /// <para/>
+    /// A garment staying on the body mod it was made on takes every part it reaches onto that body too — the size
+    /// chosen there, else the one named for the garment's — as a refit of one body always did: the refit between bodies
+    /// cannot keep the garment's own part where it is and send another elsewhere (measured on a dress whose skin runs
+    /// from chest to legs: the legs' skin went missing, or the whole skin was kept and folded). A part across the Rue
+    /// line stays out. Otherwise each part goes onto its own body, and one with nothing to go onto is left out — said
+    /// to the player when a body was chosen for it, only logged when none was, as a part of one body always was.
+    /// </summary>
+    /// <param name="reached">The parts the garment reaches, each with its size on the body it was made on.</param>
+    internal Plan PlanParts(string primary, BodyModIndex.Entry lead, BodyOption target, string sourceDir, BodyOption source,
+                            IEnumerable<(string Slot, BodyOption From)> reached)
+    {
+        bool stays = string.Equals(sourceDir, lead.Dir, StringComparison.OrdinalIgnoreCase);
+        var parts = new List<Part>();
+        var left = new List<LeftOut>();
+        var kept = new List<string>();
+        foreach (var (slot, from) in reached)
+        {
+            if (AcrossRue(slot, lead))
+            {
+                left.Add(new LeftOut(slot, "Rue goes only with Rue", true));
+                continue;
+            }
+            var to = TargetFor(slot, primary);
+            var body = Body(slot);
+            bool onLead = body != null && string.Equals(body.Dir, lead.Dir, StringComparison.OrdinalIgnoreCase);
+            if (stays && !onLead)
+            {
+                var options = lead.Catalog.For(slot, Race);
+                if ((AutoRefitDecisions.Resolve(options, pref.SizeOf(slot)) ?? AutoRefitDecisions.Companion(options, target, null))
+                    is { } there)
+                {
+                    parts.Add(new Part(slot, from, there, lead));
+                    if (DirOf(slot).Length > 0) kept.Add(slot);
+                    continue;
+                }
+                left.Add(new LeftOut(slot, $"{lead.Name} has no size of it", DirOf(slot).Length > 0));
+                continue;
+            }
+            if (to != null && body != null)
+            {
+                parts.Add(new Part(slot, from, to, body));
+                continue;
+            }
+            left.Add(MissingDir(slot) is { } gone ? new LeftOut(slot, $"its body {gone} isn't installed", true)
+                   : DirOf(slot).Length == 0 ? new LeftOut(slot, "no body is chosen for it", false)
+                   : onLead ? new LeftOut(slot, "its body has no size of it here", false)
+                   : new LeftOut(slot, "no size is chosen for it on its body", true));
+        }
+        bool across = Across(sourceDir, parts.Select(p => p.Body.Dir).Prepend(lead.Dir));
+        bool fits = !across && AutoRefitDecisions.SameFile(sourceDir, source, lead.Dir, target);
+        // Within one body mod a part already on its size has nothing to do; between body mods every part goes.
+        var others = parts.Where(p => across || !AutoRefitDecisions.SameFile(sourceDir, p.From, p.Body.Dir, p.To)).ToList();
+        return new Plan(others, across, fits, left, kept);
+    }
+
+    /// <summary>
+    /// Whether the author's own sizes are passed over for a garment: it reaches a part that will go onto another body
+    /// than its own part's — then no option of the author's is the size chosen for both. A garment made on its own
+    /// part's body takes every part along onto that body (see <see cref="PlanParts"/>), so its author's sizes stand.
+    /// </summary>
+    internal bool AuthorSizesPassedOver(BodyModIndex.Entry lead, string? sourceDir, IEnumerable<string> reached)
+        => !string.Equals(sourceDir, lead.Dir, StringComparison.OrdinalIgnoreCase)
+           && reached.Any(s => !AcrossRue(s, lead)
+                               && !string.Equals(DirOf(s), lead.Dir, StringComparison.OrdinalIgnoreCase));
+
+    /// <summary>
+    /// For a garment on an accessory slot, the body and size each covered part goes onto: its own — but when the part
+    /// it is measured as first stays on the body mod it was made on, the others go onto that same body (see
+    /// <see cref="PlanParts"/>). Null for a part with nothing there to go onto.
+    /// </summary>
+    internal (BodyModIndex.Entry Body, BodyOption To)? CoverTarget(string slot, BodyModIndex.Entry lead, BodyOption leadTarget,
+                                                                    bool leadStays, BodyOption? own)
+    {
+        if (!leadStays || (Body(slot) is { } body && string.Equals(body.Dir, lead.Dir, StringComparison.OrdinalIgnoreCase)))
+            return own != null && Body(slot) is { } mine ? (mine, own) : null;
+        var options = lead.Catalog.For(slot, Race);
+        return (AutoRefitDecisions.Resolve(options, pref.SizeOf(slot)) ?? AutoRefitDecisions.Companion(options, leadTarget, null))
+               is { } there ? (lead, there) : null;
+    }
 
     /// <summary>Whether a part on <paramref name="dir"/> is on the other side of the Rue line (see <see cref="IsRue"/>)
     /// from the bodies the other parts are on.</summary>
