@@ -3,12 +3,40 @@
     "message": "Körper",
     "description": ""
   },
-  "AutoRefit.BodyMissing.Fmt": {
-    "message": "Der hier gewählte Körper „{0}“ ist nicht mehr installiert. Wähle einen anderen.",
+  "AutoRefit.Part": {
+    "message": "Teil",
     "description": ""
   },
-  "AutoRefit.ChestSize": {
-    "message": "Brustgröße",
+  "AutoRefit.Size": {
+    "message": "Größe",
+    "description": ""
+  },
+  "AutoRefit.PartsHint": {
+    "message": "Jeder Teil kann seinen eigenen Körper nutzen. Der erste Körper, den du wählst, gilt für jeden Teil, den er hat.",
+    "description": ""
+  },
+  "AutoRefit.Matched.Fmt": {
+    "message": "Angepasst ({0})",
+    "description": ""
+  },
+  "AutoRefit.MatchedWorn.Fmt": {
+    "message": "Angepasst (die getragene Größe, sonst {0})",
+    "description": ""
+  },
+  "AutoRefit.Match": {
+    "message": "An die Brust- oder Beingröße anpassen",
+    "description": ""
+  },
+  "AutoRefit.SizesPending": {
+    "message": "Die in diesem Körper getragenen Größen werden gelesen …",
+    "description": ""
+  },
+  "AutoRefit.Prefilled.Fmt": {
+    "message": "Die getragene Größe ließ sich nicht lesen, daher hat {0} die erste Größe des Körpers bekommen. Prüfe sie oben.",
+    "description": ""
+  },
+  "AutoRefit.BodyMissing.Fmt": {
+    "message": "Der hier gewählte Körper „{0}“ ist nicht mehr installiert. Wähle einen anderen.",
     "description": ""
   },
   "AutoRefit.Choose": {
@@ -43,20 +71,12 @@
     "message": "Suche nach Körper-Mods …",
     "description": ""
   },
-  "AutoRefit.HandsFeet.Fmt": {
-    "message": "Hände und Füße werden passend dazu gewählt: {0} und {1}.",
-    "description": ""
-  },
   "AutoRefit.Intro": {
     "message": "Wenn du Ausrüstung für Brust, Beine, Hände oder Füße anlegst – oder ein Accessoire, das den Körper bedeckt, etwa eine Jacke auf einer Halskette –, ermittelt Proteus, für welchen Körper sie gemacht wurde, passt sie an den hier gewählten Körper und die gewählten Größen an und schaltet die neue Größe ein. Jede Penumbra-Kollektion hat ihre eigene Auswahl.",
     "description": ""
   },
   "AutoRefit.ItemInMod.Fmt": {
     "message": "{0} ({1})",
-    "description": ""
-  },
-  "AutoRefit.LegsSize": {
-    "message": "Beingröße",
     "description": ""
   },
   "AutoRefit.NoBodies": {
@@ -315,6 +335,10 @@
     "message": "[Proteus] Der für automatische Anpassungen in dieser Kollektion gewählte Körper „{0}“ ist nicht installiert, daher wird nichts angepasst. Wähle unter /proteus > Einstellungen einen anderen.",
     "description": ""
   },
+  "Chat.AutoRefit.PartBodyMissing.Fmt": {
+    "message": "[Proteus] Der für {0} in dieser Kollektion gewählte Körper „{1}“ ist nicht installiert, daher wurde {2} nicht darauf angepasst. Wähle unter /proteus > Einstellungen einen anderen.",
+    "description": ""
+  },
   "Chat.AutoRefit.Done.Fmt": {
     "message": "[Proteus] {0} passt jetzt zu {1}. Als „{2}“ in {3} gespeichert und eingeschaltet.",
     "description": ""
@@ -349,6 +373,10 @@
   },
   "Chat.AutoRefit.PartsLeftOut.Fmt": {
     "message": "Diese Körperteile konnten nicht mit angepasst werden und behalten ihre Größe: {0}.",
+    "description": ""
+  },
+  "Chat.AutoRefit.MixedKept.Fmt": {
+    "message": "Es wurde für {0} gemacht, daher kam der Teil {1} mit auf {0} statt auf den Körper, der für {1} gewählt ist.",
     "description": ""
   },
   "Chat.AutoRefit.SkinOnly.Fmt": {

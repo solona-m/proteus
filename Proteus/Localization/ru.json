@@ -3,12 +3,40 @@
     "message": "Тело",
     "description": ""
   },
-  "AutoRefit.BodyMissing.Fmt": {
-    "message": "Выбранное здесь тело «{0}» больше не установлено. Выберите другое.",
+  "AutoRefit.Part": {
+    "message": "Часть",
     "description": ""
   },
-  "AutoRefit.ChestSize": {
-    "message": "Размер груди",
+  "AutoRefit.Size": {
+    "message": "Размер",
+    "description": ""
+  },
+  "AutoRefit.PartsHint": {
+    "message": "Для каждой части можно выбрать своё тело. Первое выбранное тело ставится на все части, которые у него есть.",
+    "description": ""
+  },
+  "AutoRefit.Matched.Fmt": {
+    "message": "Подобрано ({0})",
+    "description": ""
+  },
+  "AutoRefit.MatchedWorn.Fmt": {
+    "message": "Подобрано (размер, который на вас, иначе {0})",
+    "description": ""
+  },
+  "AutoRefit.Match": {
+    "message": "Подобрать под размер груди или ног",
+    "description": ""
+  },
+  "AutoRefit.SizesPending": {
+    "message": "Считываю размеры, которые на вас в этом теле...",
+    "description": ""
+  },
+  "AutoRefit.Prefilled.Fmt": {
+    "message": "Не удалось считать ваш размер, поэтому для {0} выбран первый размер тела. Проверьте его выше.",
+    "description": ""
+  },
+  "AutoRefit.BodyMissing.Fmt": {
+    "message": "Выбранное здесь тело «{0}» больше не установлено. Выберите другое.",
     "description": ""
   },
   "AutoRefit.Choose": {
@@ -43,20 +71,12 @@
     "message": "Поиск модов тела…",
     "description": ""
   },
-  "AutoRefit.HandsFeet.Fmt": {
-    "message": "Руки и ступни подбираются под эти размеры: {0} и {1}.",
-    "description": ""
-  },
   "AutoRefit.Intro": {
     "message": "Когда вы надеваете снаряжение для торса, ног, рук или ступней — или аксессуар, который закрывает тело, например куртку на ожерелье, — Proteus определяет, для какого тела оно сделано, подгоняет его под выбранные здесь тело и размеры и включает новый размер. У каждой коллекции Penumbra свой выбор.",
     "description": ""
   },
   "AutoRefit.ItemInMod.Fmt": {
     "message": "{0} ({1})",
-    "description": ""
-  },
-  "AutoRefit.LegsSize": {
-    "message": "Размер ног",
     "description": ""
   },
   "AutoRefit.NoBodies": {
@@ -315,6 +335,10 @@
     "message": "[Proteus] Тело, выбранное для автоматической подгонки в этой коллекции («{0}»), не установлено, поэтому ничего не подгоняется. Выберите другое в /proteus > Настройки.",
     "description": ""
   },
+  "Chat.AutoRefit.PartBodyMissing.Fmt": {
+    "message": "[Proteus] Тело для части «{0}», выбранное в этой коллекции («{1}»), не установлено, поэтому {2} не подогнано под него. Выберите другое в /proteus > Настройки.",
+    "description": ""
+  },
   "Chat.AutoRefit.Done.Fmt": {
     "message": "[Proteus] {0} теперь подогнано под {1}. Сохранено как «{2}» в {3} и включено.",
     "description": ""
@@ -349,6 +373,10 @@
   },
   "Chat.AutoRefit.PartsLeftOut.Fmt": {
     "message": "Эти части не удалось подогнать вместе с ним, они сохранили свой размер: {0}.",
+    "description": ""
+  },
+  "Chat.AutoRefit.MixedKept.Fmt": {
+    "message": "Вещь сделана для {0}, поэтому часть «{1}» подогнана под {0} вместе с ней, а не под тело, выбранное для «{1}».",
     "description": ""
   },
   "Chat.AutoRefit.SkinOnly.Fmt": {

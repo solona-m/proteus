@@ -233,6 +233,16 @@ internal static class AccessoryCover
         => "cover|" + Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(bytes))
          + $"|{targetDir.ToLowerInvariant()}|{RefitCore.Normal(chestRel ?? "")}|{RefitCore.Normal(legsRel ?? "")}|{race}";
 
+    /// <inheritdoc cref="Key(byte[], string, string?, string?, string)"/>
+    /// <remarks>The chest and legs on one body give exactly the key one body always gave, so readings kept stay good; on
+    /// two, both bodies are in it.</remarks>
+    internal static string Key(byte[] bytes, AutoRefitTargets.AccessoryChosen chosen, string race)
+        => Key(bytes,
+               string.Equals(chosen.ChestDir, chosen.LegsDir, StringComparison.OrdinalIgnoreCase)
+                   ? chosen.ChestDir
+                   : chosen.ChestDir + "|" + chosen.LegsDir,
+               chosen.ChestRel, chosen.LegsRel, race);
+
     private const string ChestKey = "_top", LegsKey = "_dwn";
 
     /// <summary>A cover reading as the detection cache keeps it.</summary>
@@ -308,7 +318,7 @@ internal static class AccessoryCover
         if (gameOwn) return new Beneath(null, Refusal.GameBeneath);
         if (record != null)
         {
-            if (!string.Equals(record.BodyMod, targetDir, StringComparison.OrdinalIgnoreCase))
+            if (!string.Equals(record.BodyOf(slot), targetDir, StringComparison.OrdinalIgnoreCase))
                 return new Beneath(null, Refusal.NotOnTarget);
             if (record.SourceDir == null || record.SourceRel == null || record.Targets == null)
                 return new Beneath(null, Refusal.OldRecord);

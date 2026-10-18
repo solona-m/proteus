@@ -238,9 +238,29 @@ public sealed class AutoRefitStrings
 
     public readonly string Body = Loc.Localize("AutoRefit.Body", "Body");
 
-    public readonly string ChestSize = Loc.Localize("AutoRefit.ChestSize", "Chest size");
+    /// <summary>The parts table's first column: chest, legs, hands, feet.</summary>
+    public readonly string Part = Loc.Localize("AutoRefit.Part", "Part");
 
-    public readonly string LegsSize = Loc.Localize("AutoRefit.LegsSize", "Legs size");
+    public readonly string Size = Loc.Localize("AutoRefit.Size", "Size");
+
+    public readonly string PartsHint = Loc.Localize("AutoRefit.PartsHint",
+        "Each part can use its own body. The first body you pick is used for every part it has.");
+
+    /// <summary>{0} is the size hands or feet follow the chest or legs to.</summary>
+    public readonly string MatchedFmt = Loc.Localize("AutoRefit.Matched.Fmt", "Matched ({0})");
+
+    /// <summary>{0} is the size taken when the size worn cannot be told.</summary>
+    public readonly string MatchedWornFmt = Loc.Localize("AutoRefit.MatchedWorn.Fmt",
+        "Matched (the size you wear, else {0})");
+
+    public readonly string Match = Loc.Localize("AutoRefit.Match", "Match the chest or legs size");
+
+    public readonly string SizesPending = Loc.Localize("AutoRefit.SizesPending",
+        "Reading the sizes you wear in this body...");
+
+    /// <summary>{0} lists the parts given the body's first size.</summary>
+    public readonly string PrefilledFmt = Loc.Localize("AutoRefit.Prefilled.Fmt",
+        "The size you wear couldn't be read, so {0} got the body's first size. Check it above.");
 
     public readonly string Choose = Loc.Localize("AutoRefit.Choose", "Choose...");
 
@@ -257,9 +277,6 @@ public sealed class AutoRefitStrings
 
     public readonly string NoCollections = Loc.Localize("AutoRefit.NoCollections",
         "Penumbra isn't available, so its collections can't be listed.");
-
-    public readonly string HandsFeetFmt = Loc.Localize("AutoRefit.HandsFeet.Fmt",
-        "Hands and feet are matched to these sizes: {0} and {1}.");
 
     public readonly string EndsKept = Loc.Localize("AutoRefit.EndsKept",
         "Gloves and shoes keep the hands and feet they were made with; only the arms and legs they reach are refitted.");

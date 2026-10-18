@@ -35,8 +35,9 @@ internal static class OutfitPartners
     /// what it records must agree, and a refit recording neither (made before they were kept) says nothing and is no
     /// partner.
     /// </summary>
+    /// <param name="targetDir">The body <paramref name="targetRel"/> is of; null takes the record's body as it is.</param>
     private static bool OnTarget(BodyRetargetWriter.Entry e, string slot, AutoRefitDecisions.Pick source, string targetRel,
-                                 Action<string> note, string what)
+                                 Action<string> note, string what, string? targetDir = null)
     {
         if (e.Targets == null || !e.Targets.TryGetValue(slot, out string? onto) || e.SourceDir == null || e.SourceRel == null)
         {
@@ -44,7 +45,9 @@ internal static class OutfitPartners
                + "kept outside it");
             return false;
         }
-        if (RefitCore.Normal(onto) != RefitCore.Normal(targetRel))
+        // A fork can name its sizes' files as the body it came from does: the same file on another body is another size.
+        if (RefitCore.Normal(onto) != RefitCore.Normal(targetRel)
+            || (targetDir != null && !string.Equals(e.BodyOf(slot), targetDir, StringComparison.OrdinalIgnoreCase)))
         {
             note($"its {PieceName(slot)} piece's refit {what} is for another size, so it was not kept outside it");
             return false;
@@ -98,10 +101,11 @@ internal static class OutfitPartners
     /// <param name="besideRel">Its file in that mod.</param>
     /// <param name="outcome">What its own refit came to in this batch; null when it was not refitted in it.</param>
     /// <param name="record">The mod's record.</param>
+    /// <param name="targetDir">The body <paramref name="targetRel"/> is of: a refit of ours on another is no partner.</param>
     internal static Partner? ForAutoRefit(string modRoot, SiblingPiece.Candidate sibling, string slot,
                                           AutoRefitDecisions.Pick source, string targetRel, string? besideRoot,
                                           string? besideGamePath, string? besideRel, PieceOutcome? outcome,
-                                          BodyRetargetWriter.Record? record, Action<string> note)
+                                          BodyRetargetWriter.Record? record, Action<string> note, string? targetDir = null)
     {
         string piece = PieceName(slot);
         if (besideRoot == null || besideRel == null
@@ -146,7 +150,7 @@ internal static class OutfitPartners
                 note($"its {piece} piece's refit has no record, so it was not kept outside it");
                 return null;
             }
-            return OnTarget(entry, slot, source, targetRel, note, $"\"{entry.Name}\"")
+            return OnTarget(entry, slot, source, targetRel, note, $"\"{entry.Name}\"", targetDir)
                 ? new Partner(slot, sibling.File, entry.File)
                 : null;
         }

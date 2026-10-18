@@ -334,14 +334,23 @@ internal static partial class RacialModelBake
     /// </summary>
     /// <returns>The model, and the materials renamed (none when its skin is all the body's already).</returns>
     public static byte[] SkinLikeBody(byte[] model, byte[] body, out List<string> renamed)
+        => SkinLikeBody(model, [body], out renamed);
+
+    /// <inheritdoc cref="SkinLikeBody(byte[], byte[], out List{string})"/>
+    /// <param name="bodies">Every body the model was refitted onto, the lead's first: a skin material of any of them is
+    /// the body's own and stays — the legs drawn from a second body keep its skin — and the rest take the lead's.</param>
+    public static byte[] SkinLikeBody(byte[] model, IReadOnlyList<byte[]> bodies, out List<string> renamed)
     {
         renamed = [];
-        var bodySkins = SecondSkinWriter.Parse(body).MatNames.Where(SecondSkinWriter.IsBodySkinMaterial).ToList();
+        var bodySkins = SecondSkinWriter.Parse(bodies[0]).MatNames.Where(SecondSkinWriter.IsBodySkinMaterial).ToList();
         if (bodySkins.Count == 0) return model;
+        var everyBody = new HashSet<string>(bodySkins, StringComparer.Ordinal);
+        foreach (var other in bodies.Skip(1))
+            everyBody.UnionWith(SecondSkinWriter.Parse(other).MatNames.Where(SecondSkinWriter.IsBodySkinMaterial));
 
         foreach (string name in SecondSkinWriter.Parse(model).MatNames)
         {
-            if (!SecondSkinWriter.IsBodySkinMaterial(name) || bodySkins.Contains(name)) continue;
+            if (!SecondSkinWriter.IsBodySkinMaterial(name) || everyBody.Contains(name)) continue;
             model = ModelAttributeWriter.RenameMaterial(model, name, bodySkins[0]);
             renamed.Add(name);
         }

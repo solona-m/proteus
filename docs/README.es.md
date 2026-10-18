@@ -301,7 +301,7 @@ Ajusta por sí solo el equipo de torso, piernas, manos y pies a tu cuerpo, en cu
 
 1. Marca **Ajustar el equipo a mi cuerpo al ponérmelo**.
 2. Elige una **Colección**. Cada colección de Penumbra tiene su propia elección, y empieza en la que estás usando ahora.
-3. Elige tu mod de **Cuerpo** y luego su **Talla de pecho** y su **Talla de piernas**. Las manos y los pies se emparejan con ellas por ti.
+3. Para cada parte —pecho, piernas, manos y pies— elige un mod de **Cuerpo** y una **Talla**. El primer cuerpo que elijas se pone en todas las partes que tenga, con la talla que llevas en él (o, si no, su primera talla). Las manos y los pies siguen la talla del pecho o de las piernas salvo que elijas una. Los cuerpos Rue solo se combinan con Rue.
 4. El equipo que te pongas a partir de ahora se reajusta. Para lo que ya llevas puesto, pulsa **Ajustar lo que llevo puesto**.
 
 Conviene saber:

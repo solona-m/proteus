@@ -301,7 +301,7 @@ Ajuste tout seul l'équipement de torse, de jambes, de mains et de pieds à votr
 
 1. Cochez **Ajuster l'équipement à mon corps quand je l'équipe**.
 2. Choisissez une **Collection**. Chaque collection Penumbra a son propre choix, et cela démarre sur celle que vous utilisez actuellement.
-3. Choisissez votre mod de **Corps**, puis sa **Taille de poitrine** et sa **Taille des jambes**. Les mains et les pieds sont accordés à celles-ci pour vous.
+3. Pour chaque partie — poitrine, jambes, mains et pieds — choisissez un mod de **Corps** et une **Taille**. Le premier corps choisi est mis sur toutes les parties qu'il possède, avec la taille que vous portez dedans (sinon sa première taille). Les mains et les pieds suivent la taille de la poitrine ou des jambes tant que vous n'en choisissez pas. Les corps Rue ne se combinent qu'avec Rue.
 4. L'équipement que vous mettez à partir de maintenant est réajusté. Pour ce que vous portez déjà, appuyez sur **Ajuster ce que je porte maintenant**.
 
 Bon à savoir :

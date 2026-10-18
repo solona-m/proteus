@@ -3,12 +3,40 @@
     "message": "体型",
     "description": ""
   },
-  "AutoRefit.BodyMissing.Fmt": {
-    "message": "此处选择的体型“{0}”已不再安装。请另选一个。",
+  "AutoRefit.Part": {
+    "message": "部位",
     "description": ""
   },
-  "AutoRefit.ChestSize": {
-    "message": "胸部尺寸",
+  "AutoRefit.Size": {
+    "message": "尺寸",
+    "description": ""
+  },
+  "AutoRefit.PartsHint": {
+    "message": "每个部位都可以使用各自的身体。你选的第一个身体会用于它拥有的所有部位。",
+    "description": ""
+  },
+  "AutoRefit.Matched.Fmt": {
+    "message": "匹配（{0}）",
+    "description": ""
+  },
+  "AutoRefit.MatchedWorn.Fmt": {
+    "message": "匹配（你穿的尺寸，否则为{0}）",
+    "description": ""
+  },
+  "AutoRefit.Match": {
+    "message": "匹配胸部或腿部尺寸",
+    "description": ""
+  },
+  "AutoRefit.SizesPending": {
+    "message": "正在读取你在此身体上穿的尺寸……",
+    "description": ""
+  },
+  "AutoRefit.Prefilled.Fmt": {
+    "message": "无法读取你穿的尺寸，因此{0}使用了该身体的第一个尺寸。请在上方检查。",
+    "description": ""
+  },
+  "AutoRefit.BodyMissing.Fmt": {
+    "message": "此处选择的体型“{0}”已不再安装。请另选一个。",
     "description": ""
   },
   "AutoRefit.Choose": {
@@ -43,20 +71,12 @@
     "message": "正在查找体型 MOD…",
     "description": ""
   },
-  "AutoRefit.HandsFeet.Fmt": {
-    "message": "手部和脚部会自动匹配这些尺寸：{0} 和 {1}。",
-    "description": ""
-  },
   "AutoRefit.Intro": {
     "message": "当你穿上胸部、腿部、手部或脚部装备——或遮盖身体的饰品，例如放在项链栏的外套——时，Proteus 会判断它是为哪个身体制作的，按这里选择的身体和尺码进行适配，然后启用新尺码。每个 Penumbra 合集都有各自的选择。",
     "description": ""
   },
   "AutoRefit.ItemInMod.Fmt": {
     "message": "{0}（{1}）",
-    "description": ""
-  },
-  "AutoRefit.LegsSize": {
-    "message": "腿部尺寸",
     "description": ""
   },
   "AutoRefit.NoBodies": {
@@ -315,6 +335,10 @@
     "message": "[Proteus] 此合集用于自动适配的体型“{0}”未安装，因此不会进行任何适配。请在 /proteus > 设置 中另选一个。",
     "description": ""
   },
+  "Chat.AutoRefit.PartBodyMissing.Fmt": {
+    "message": "[Proteus] 此合集中为{0}选择的体型“{1}”未安装，因此{2}未适配到该体型。请在 /proteus > 设置 中另选一个。",
+    "description": ""
+  },
   "Chat.AutoRefit.Done.Fmt": {
     "message": "[Proteus] {0} 现已适配 {1}。已在 {3} 中保存为“{2}”并启用。",
     "description": ""
@@ -349,6 +373,10 @@
   },
   "Chat.AutoRefit.PartsLeftOut.Fmt": {
     "message": "以下部位无法一同适配，保持原尺寸：{0}。",
+    "description": ""
+  },
+  "Chat.AutoRefit.MixedKept.Fmt": {
+    "message": "它是为{0}制作的，因此其{1}部位也随之改配到{0}，而不是为{1}选择的身体。",
     "description": ""
   },
   "Chat.AutoRefit.SkinOnly.Fmt": {

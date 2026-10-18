@@ -307,7 +307,7 @@ Refits chest, legs, hands and feet gear to your body by itself, the moment you p
 
 1. Tick **Refit gear to my body as I put it on**.
 2. Pick a **Collection**. Each Penumbra collection has its own choice, and it starts on the one you're using now.
-3. Pick your **Body** mod, then its **Chest size** and **Legs size**. Hands and feet are matched to those for you.
+3. For each part — Chest, Legs, Hands and Feet — pick a **Body** mod and a **Size**. The first body you pick is filled in for every part it has, with the size you're wearing in it (or else its first size). Hands and feet follow the chest or legs size unless you pick one. Rue bodies are only combined with Rue.
 4. Gear you put on from now on is refitted. For what you're already wearing, press **Refit what I'm wearing now**.
 
 Things worth knowing:
