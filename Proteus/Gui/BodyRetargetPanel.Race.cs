@@ -58,6 +58,9 @@ internal sealed partial class BodyRetargetPanel
     /// <summary>The "made for" bodies the sizes chosen now were chosen from.</summary>
     private BodySizeCatalog? madeForOf;
 
+    /// <summary>Counts the changes of <see cref="madeForOf"/>, so a plan made against other bodies goes stale.</summary>
+    private int madeForGeneration;
+
     /// <summary>
     /// The "made for" bodies changed under an open garment without its race changing — a pick put in force or taken back
     /// where the character's own route reaches the same race, so bent bodies came or went. A size chosen from the others
@@ -69,6 +72,7 @@ internal sealed partial class BodyRetargetPanel
         if (ReferenceEquals(now, madeForOf)) return;
         bool had = madeForOf != null;
         madeForOf = now;
+        madeForGeneration++;
         if (!had) return;
         from.Clear();
         detected.Clear();
@@ -116,7 +120,10 @@ internal sealed partial class BodyRetargetPanel
                     if (ImGui.Selectable(EntryLabel(entry) + "##race" + entry.Race + entry.Kind, entry == current)
                         && (entry != current || refusedTo != 0))
                     {
-                        raceChoice = new OtherRaceRefit.Choice(ctx.ModelRel, entry.Race);
+                        // Nothing picked and the entry shown clicked again: the character's own bake is retried as it
+                        // is, not turned into a pick read from files.
+                        if (!(chosen == 0 && entry == current))
+                            raceChoice = new OtherRaceRefit.Choice(ctx.ModelRel, entry.Race);
                         bakeRefusalFor = null;
                         raceInputs = null;
                         raceInputsFor = null;
@@ -178,21 +185,30 @@ internal sealed partial class BodyRetargetPanel
     /// <summary>
     /// Gather, on the framework thread, what the bake for <paramref name="race"/> reads: the race's base skeleton as the
     /// collection gives it and as the game ships it, the game's deformer, and the extra-skeleton entries that may apply
-    /// with the skeletons they name — those only from the mod's own files or the game's.
+    /// with the skeletons they name — from the mod's default files, the option the refit is cut from (see
+    /// <see cref="BakeCutFrom"/>), or the game's.
     /// </summary>
-    private OtherRaceWearer.Inputs RaceInputs(in RetargetContext ctx, ushort race)
+    private OtherRaceWearer.Inputs RaceInputs(in RetargetContext ctx, ushort race, string? cutFrom)
     {
-        string key = ctx.ModelRel + "|" + race;
+        string key = ctx.ModelRel + "|" + race + "|" + cutFrom;
         if (raceInputs != null && raceInputsFor == key) return raceInputs;
 
         var given = ctx;
         raceInputs = OtherRaceWearer.Gather(race, ctx.GamePath, ReadGame, penumbra.ResolvePlayer,
-                                            path => ModFile(given, path),
-                                            ctx.ModRoot != null ? ModEstEntries(ctx) : [],
+                                            path => ModFile(given, cutFrom, path),
+                                            ctx.ModRoot != null ? ModEstEntries(ctx, cutFrom, optionOnly: false) : [],
                                             (file, ex) => log.Warning(ex, "[Proteus] retarget: could not read {0}", file));
         raceInputsFor = key;
         return raceInputs;
     }
+
+    /// <summary>
+    /// The option a refit of the open model is cut from when saved where the panel saves it by default — the author's
+    /// group that switches it, in the garment's own mod — as "Group / Option"; null when there is none. Its files are
+    /// what the saved option carries, so an extra skeleton is looked for there; a save elsewhere is checked against it.
+    /// </summary>
+    private string? BakeCutFrom(in RetargetContext ctx)
+        => toNewMod || ctx.ModRoot == null ? null : OtherRaceRefit.CutFrom(ctx.Redirects, ctx.ModelRel, SwitchingGroup(ctx));
 
     private byte[]? ReadGame(string path)
     {
@@ -207,32 +223,33 @@ internal sealed partial class BodyRetargetPanel
     }
 
     /// <summary>
-    /// A file the garment's own mod publishes at <paramref name="gamePath"/> alongside the open model — in its default
-    /// files or an option that publishes the model, which the saved refit carries — read; null when it has none. A file
-    /// in some other option would not be loaded with the refit, and an entry pointing at it would point at nothing.
+    /// A file the garment's own mod publishes at <paramref name="gamePath"/> where a refit cut from
+    /// <paramref name="cutFrom"/> loads it — its default files or that option (see <see cref="OtherRaceRefit.CarriedFile"/>)
+    /// — read; null when it has none.
     /// </summary>
-    private static byte[]? ModFile(in RetargetContext ctx, string gamePath)
+    private static byte[]? ModFile(in RetargetContext ctx, string? cutFrom, string gamePath)
     {
-        if (ctx.ModRoot == null || OtherRaceRefit.CarriedFile(ctx.Redirects, ctx.ModelRel, gamePath) is not { } rel)
+        if (ctx.ModRoot == null || OtherRaceRefit.CarriedFile(ctx.Redirects, cutFrom, gamePath) is not { } rel)
             return null;
         try { return File.ReadAllBytes(BodySizeCatalog.ResolveCaseInsensitive(ctx.ModRoot, rel)); }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { return null; }
     }
 
     /// <summary>
-    /// The Est entries that apply with the open model: those of every option that publishes it, and the mod's default
-    /// data — what the game reads beside the model when that option is on.
+    /// The Est entries that apply with a refit cut from <paramref name="cutFrom"/>: that option's, and — unless
+    /// <paramref name="optionOnly"/> — the mod's default data, what the game reads beside it.
     /// </summary>
-    private static List<EstTable.ModEntry> ModEstEntries(in RetargetContext ctx)
+    private static List<EstTable.ModEntry> ModEstEntries(in RetargetContext ctx, string? cutFrom, bool optionOnly)
     {
         var found = new List<EstTable.ModEntry>();
         if (ctx.ModRoot is not { } root) return found;
-        if (PenumbraModMeta.TryReadDefaultData(root) is { } dflt) found.AddRange(EstTable.FromManipulations(dflt.Manipulations));
+        if (!optionOnly && PenumbraModMeta.TryReadDefaultData(root) is { } dflt)
+            found.AddRange(EstTable.FromManipulations(dflt.Manipulations));
+        if (cutFrom == null) return found;
 
-        var sources = OtherRaceRefit.OptionsOfModel(ctx.Redirects, ctx.ModelRel);
         foreach (var (group, json) in PenumbraModMeta.TryReadGroups(root) ?? [])
             foreach (var option in PenumbraModMeta.FileOptionsOf(json) ?? [])
-                if (sources.Contains($"{group} / {option.Name}", StringComparer.Ordinal))
+                if ($"{group} / {option.Name}" == cutFrom)
                     found.AddRange(EstTable.FromManipulations(option.Manipulations));
         return found;
     }
@@ -246,7 +263,12 @@ internal sealed partial class BodyRetargetPanel
         var bytes = given.GarmentBytes;
         string savePath = route.SavePath(given.GamePath);
         string drawnPath = given.GamePath;
-        var inputs = RaceInputs(given, route.To);
+        string? cutFrom = BakeCutFrom(given);
+        var inputs = RaceInputs(given, route.To, cutFrom);
+        // What of the extra skeleton only the cut-from option supplies: then only a save cut from it loads it.
+        var optionFiles = given.Redirects.Where(r => cutFrom != null && r.Source == cutFrom).Select(r => r.GamePath)
+                               .ToHashSet(StringComparer.OrdinalIgnoreCase);
+        var optionEst = ModEstEntries(given, cutFrom, optionOnly: true);
         string drawnCode = $"{route.Drawn:D4}";
         var source = OtherRaceRefit.MadeFor(fromBodyDir, fromCatalog, catalog, drawnCode,
                                             code => VanillaBodyCatalog.Read(code, readGameFile, drawn: true));
@@ -275,8 +297,10 @@ internal sealed partial class BodyRetargetPanel
             log.Information("[Proteus] retarget: c{0:D4} wearer from {1}{2}; est {3}; {4} made-for bodies bent in {5} ms",
                             route.To, inputs.ModdedFrom ?? "the game", made.FellBack ? " (unreadable, the game's used)" : "",
                             made.Est.Outcome, bodies?.Options.Count ?? 0, clock.ElapsedMilliseconds);
+            bool needsOption = OtherRaceRefit.EstNeedsOption(made.Est, route.To, inputs.Slot, inputs.Set, optionFiles, optionEst);
             return (key, new Baked(key, bytes, route, model, parts, savePath, who)
             {
+                CutFrom = cutFrom, EstNeedsOption = needsOption,
                 Explicit = true, Bodies = bodies, LeftOut = leftOut, Est = made.Est, FellBack = made.FellBack, DrawnPath = drawnPath,
             }, "");
         });

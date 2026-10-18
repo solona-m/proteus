@@ -59,6 +59,20 @@ public class OtherRaceWearerTests
         Assert.NotEmpty(noDeformer.Refusal);
     }
 
+    /// <summary>A deformer file cut short, or with a count no file could hold, is a refusal saying why — never a throw,
+    /// which the panel would retry every frame.</summary>
+    [Theory]
+    [InlineData(new byte[] { 1, 0, 0, 0, 0, 0 })]                 // one header promised, two bytes of it there
+    [InlineData(new byte[] { 0xFF, 0xFF, 0xFF, 0xFF, 0, 0, 0, 0 })] // a count of -1
+    [InlineData(new byte[] { 0x10, 0, 0, 0 })]                    // sixteen headers, none there
+    [Trait("Plan", "EDGE-refit-other-race-27")]
+    public void A_damaged_deformer_is_refused_not_thrown(byte[] pbd)
+    {
+        var made = OtherRaceWearer.Build(Inputs(pbd: pbd), SyntheticSkeleton.Leaning("j_kosi"));
+        Assert.Null(made.Wearer);
+        Assert.Contains("(", made.Refusal);   // the cause, after the reason
+    }
+
     /// <summary>
     /// A custom skeleton's bone is moved with its parent: IVCS's own bones bend like the spine they hang from. Without
     /// that skeleton — the mod not enabled — the same bone has nothing to follow, and the bake is refused naming it.

@@ -92,26 +92,43 @@ internal static partial class OtherRaceRefit
                                              string drawn, Func<string, BodySizeCatalog> gameBody)
         => fromDir == VanillaBodyCatalog.Key ? gameBody(drawn) : fromCatalog ?? onto;
 
-    /// <summary>The options that publish the model at <paramref name="modelRel"/>, as "Group / Option".</summary>
-    internal static List<string> OptionsOfModel(IEnumerable<PenumbraModMeta.Redirect> redirects, string modelRel)
-    {
-        string want = MeshVolumeService.Rel(modelRel);
-        return redirects.Where(r => string.Equals(MeshVolumeService.Rel(r.File), want, StringComparison.OrdinalIgnoreCase))
-                        .Select(r => r.Source).Where(s => s.Contains(" / ", StringComparison.Ordinal))
-                        .Distinct(StringComparer.Ordinal).ToList();
-    }
+    /// <summary>
+    /// The file a mod publishes at <paramref name="gamePath"/> where a refit cut from <paramref name="cutFrom"/> ("Group /
+    /// Option", or null for none) will load it: the mod's default files, or that one option, whose files the saved
+    /// option carries — or null. A file of some other option would not load with the refit, and an extra-skeleton entry
+    /// pointing at it would point at nothing.
+    /// </summary>
+    internal static string? CarriedFile(IEnumerable<PenumbraModMeta.Redirect> redirects, string? cutFrom, string gamePath)
+        => redirects.FirstOrDefault(r => (r.Source.Length == 0 || r.Source == cutFrom)
+                                         && string.Equals(r.GamePath, gamePath, StringComparison.OrdinalIgnoreCase)).File;
 
     /// <summary>
-    /// The file a mod publishes at <paramref name="gamePath"/> alongside the model at <paramref name="modelRel"/> — in its
-    /// default files or an option that publishes that model, which a refit cut from it carries — or null. A file of some
-    /// other option would not load with the refit, and an extra-skeleton entry pointing at it would point at nothing.
+    /// The option a refit of the model at <paramref name="modelRel"/> saved into <paramref name="group"/> is cut from, as
+    /// "Group / Option" — the one whose files the save carries — or null when that group publishes no such option.
     /// </summary>
-    internal static string? CarriedFile(IEnumerable<PenumbraModMeta.Redirect> redirects, string modelRel, string gamePath)
+    internal static string? CutFrom(IEnumerable<PenumbraModMeta.Redirect> redirects, string modelRel, string? group)
+        => group != null && BodyRetargetWriter.OptionOfFile(redirects, modelRel, group) is { } option
+            ? $"{group} / {option}"
+            : null;
+
+    /// <summary>
+    /// Whether the extra skeleton <paramref name="est"/> settled on comes from the cut-from option itself — its entry,
+    /// or its skeleton file — rather than the mod's default files or the game: then only a save cut from that very
+    /// option loads it.
+    /// </summary>
+    /// <param name="optionFiles">The game paths the cut-from option publishes.</param>
+    /// <param name="optionEst">The Est entries the cut-from option sets.</param>
+    internal static bool EstNeedsOption(EstPlan est, ushort race, string slot, int set,
+                                        IReadOnlySet<string> optionFiles, IReadOnlyList<EstTable.ModEntry> optionEst)
     {
-        var all = redirects as IReadOnlyCollection<PenumbraModMeta.Redirect> ?? redirects.ToList();
-        var carried = OptionsOfModel(all, modelRel).Append("").ToHashSet(StringComparer.Ordinal);
-        return all.FirstOrDefault(r => carried.Contains(r.Source)
-                                       && string.Equals(r.GamePath, gamePath, StringComparison.OrdinalIgnoreCase)).File;
+        if (est.Outcome is not (EstOutcome.Present or EstOutcome.Carry)) return false;
+        if (EstTable.SkeletonPath(race, slot, est.Entry) is { } path && optionFiles.Contains(path)) return true;
+        // A carried entry is written into the saved option itself; one already there is the option's own only when the
+        // option sets it — then it travels only with a save cut from that option.
+        string? estSlot = EstTable.EstSlot(slot);
+        return est.Outcome == EstOutcome.Present
+            && optionEst.Any(e => e.Race == race && e.Set == set && e.Entry == est.Entry
+                                  && string.Equals(e.Slot, estSlot, StringComparison.OrdinalIgnoreCase));
     }
 
     /// <summary>

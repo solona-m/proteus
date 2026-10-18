@@ -208,8 +208,8 @@ public class OtherRaceRefitTests
     }
 
     /// <summary>
-    /// An extra skeleton is taken from the mod only where the saved refit will load it: the mod's default files or an
-    /// option that publishes the model it is cut from — not some other option's.
+    /// An extra skeleton is taken from the mod only where the saved refit will load it: the mod's default files or the
+    /// very option it is cut from — not another option, even one publishing the same model (physics on and off).
     /// </summary>
     [Fact]
     [Trait("Plan", "AC-refit-other-race-8")]
@@ -218,15 +218,42 @@ public class OtherRaceRefitTests
     {
         const string skeleton = "chara/human/c0301/skeleton/top/t6085/skl_c0301t6085.sklb";
         PenumbraModMeta.Redirect R(string game, string file, string source) => new(game, file, source);
-        var shirt = R(Shirt, "shirt/c0101e6091_top.mdl", "Shirt / Everything");
+        var redirects = new[]
+        {
+            R(Shirt, "shirt/c0101e6091_top.mdl", "Shirt / Physics on"),
+            R(Shirt, "shirt/c0101e6091_top.mdl", "Shirt / Physics off"),
+            R(skeleton, "on/skl.sklb", "Shirt / Physics on"),
+        };
+        Assert.Equal("Shirt / Physics on", OtherRaceRefit.CutFrom(redirects, "shirt/c0101e6091_top.mdl", "Shirt"));
+        Assert.Null(OtherRaceRefit.CutFrom(redirects, "shirt/c0101e6091_top.mdl", "A new group"));
+        Assert.Null(OtherRaceRefit.CutFrom(redirects, "shirt/c0101e6091_top.mdl", null));
 
-        Assert.Null(OtherRaceRefit.CarriedFile([shirt, R(skeleton, "other/skl.sklb", "Shirt / Neolithe")],
-                                               "shirt/c0101e6091_top.mdl", skeleton));
-        Assert.Equal("mine/skl.sklb", OtherRaceRefit.CarriedFile([shirt, R(skeleton, "mine/skl.sklb", "Shirt / Everything")],
-                                                                  "shirt/c0101e6091_top.mdl", skeleton));
-        Assert.Equal("dflt/skl.sklb", OtherRaceRefit.CarriedFile([shirt, R(skeleton, "dflt/skl.sklb", "")],
-                                                                  "shirt/c0101e6091_top.mdl", skeleton));
-        Assert.Equal(["Shirt / Everything"], OtherRaceRefit.OptionsOfModel([shirt], "shirt/c0101e6091_top.mdl"));
+        Assert.Equal("on/skl.sklb", OtherRaceRefit.CarriedFile(redirects, "Shirt / Physics on", skeleton));
+        Assert.Null(OtherRaceRefit.CarriedFile(redirects, "Shirt / Physics off", skeleton));
+        Assert.Null(OtherRaceRefit.CarriedFile(redirects, null, skeleton));
+        Assert.Equal("dflt/skl.sklb", OtherRaceRefit.CarriedFile([.. redirects, R(skeleton, "dflt/skl.sklb", "")], null, skeleton));
+    }
+
+    /// <summary>
+    /// Whether only the cut-from option supplies the extra skeleton — then a save cut from any other option is refused:
+    /// its skeleton file, or for an entry the race already has, the option's own entry.
+    /// </summary>
+    [Fact]
+    [Trait("Plan", "AC-refit-other-race-8")]
+    [Trait("Plan", "EDGE-refit-other-race-21")]
+    public void An_extra_skeleton_needs_its_option_only_when_the_option_supplies_it()
+    {
+        string path = EstTable.SkeletonPath(301, "_top", 6085)!;
+        var carry = new EstPlan(EstOutcome.Carry, 6085);
+        var present = new EstPlan(EstOutcome.Present, 6085);
+        var noFiles = new HashSet<string>();
+        EstTable.ModEntry[] itsEntry = [new(301, "Body", 6091, 6085)];
+
+        Assert.True(OtherRaceRefit.EstNeedsOption(carry, 301, "_top", 6091, new HashSet<string> { path }, []));
+        Assert.False(OtherRaceRefit.EstNeedsOption(carry, 301, "_top", 6091, noFiles, itsEntry));   // written by the save
+        Assert.True(OtherRaceRefit.EstNeedsOption(present, 301, "_top", 6091, noFiles, itsEntry));
+        Assert.False(OtherRaceRefit.EstNeedsOption(present, 301, "_top", 6091, noFiles, []));       // the game's
+        Assert.False(OtherRaceRefit.EstNeedsOption(EstPlan.NotNeeded, 301, "_top", 6091, new HashSet<string> { path }, itsEntry));
     }
 
     [Fact]

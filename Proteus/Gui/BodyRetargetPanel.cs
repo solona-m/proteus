@@ -221,9 +221,11 @@ internal sealed partial class BodyRetargetPanel(PenumbraBridge penumbra, UVRemap
     /// slots, or the whole garment where the leg alone was asked for, and is dropped.</param>
     /// <param name="Studio">What a kept-end garment was read as; null when the layout keeps none.</param>
     /// <param name="EndsUnreadable">The kept-end layout was asked for, and the rig could not be read.</param>
+    /// <param name="Bodies">The very "made for" bodies it ranked. A race picked while it ran swaps them for bent copies
+    /// under the same body mod, whose files its options do not name.</param>
     private sealed record DetectResult(string ModelRel, string? Source, Dictionary<string, BodySizeMatch.Ranking> Rankings,
                                        RetargetInputs.Layout Layout, KeepEnds.StudioReading? Studio = null,
-                                       bool EndsUnreadable = false);
+                                       bool EndsUnreadable = false, BodySizeCatalog? Bodies = null);
 
     /// <summary>The body mod the "made for" sizes come from: the other one, or the refit-onto one.</summary>
     private string? SourceDir => fromBodyDir ?? bodyDir;
@@ -499,6 +501,12 @@ internal sealed partial class BodyRetargetPanel(PenumbraBridge penumbra, UVRemap
 
         /// <summary>The skeleton the collection gives the race could not be read; the game's was used.</summary>
         public bool FellBack { get; init; }
+
+        /// <summary>The option the bake took the mod's extra skeleton from ("Group / Option"), or null.</summary>
+        public string? CutFrom { get; init; }
+
+        /// <summary>The extra skeleton <see cref="Est"/> settled on is supplied by <see cref="CutFrom"/> itself.</summary>
+        public bool EstNeedsOption { get; init; }
 
         /// <summary>Bodies of the "made for" mod left out of <see cref="Bodies"/>, each with why.</summary>
         public IReadOnlyList<string> LeftOut { get; init; } = [];
@@ -1707,12 +1715,12 @@ internal sealed partial class BodyRetargetPanel(PenumbraBridge penumbra, UVRemap
             if (layout.KeepEnds)
             {
                 if (KeepEnds.Read(layout.WornSlot, garment, garmentBytes, pieces) is not { } reading)
-                    return new DetectResult(rel, sourceDir, rankings, layout, EndsUnreadable: true);
+                    return new DetectResult(rel, sourceDir, rankings, layout, EndsUnreadable: true, Bodies: snapshot);
                 read = KeepEnds.StudioLimb(reading, garment, garmentBones, garmentRace ?? "", sourceDir ?? "", snapshot);
                 if (read.Shown is { } shown)
                     rankings[read.Route == KeepEnds.Route.SkinOnly ? layout.EndSlot! : layout.Primary] = shown;
             }
-            return new DetectResult(rel, sourceDir, rankings, layout, read);
+            return new DetectResult(rel, sourceDir, rankings, layout, read, Bodies: snapshot);
         });
     }
 
@@ -1968,6 +1976,16 @@ internal sealed partial class BodyRetargetPanel(PenumbraBridge penumbra, UVRemap
     {
         if (saveTask != null || planned is not { Count: > 0 } all) return;
 
+        // A picked race's extra skeleton that only the option the bake was cut from supplies: saved cut from another
+        // option, or into a mod of its own, the refit would name a skeleton nothing loads with it. Refused, saying where.
+        if (active is { Explicit: true, EstNeedsOption: true } needs
+            && (toNewMod ? null : OtherRaceRefit.CutFrom(ctx.Redirects, ctx.ModelRel, Destination())) != needs.CutFrom)
+        {
+            ctx.SetStatus(string.Format(Strings.Parts.RetargetRaceSaveWhereCutFmt,
+                                        ModelRace.Describe($"{needs.Route.To:D4}"), needs.CutFrom), true);
+            return;
+        }
+
         string? root = toNewMod ? null : ctx.ModRoot;
         wroteInto = ctx.ModDir;
         if (root == null)
@@ -2090,9 +2108,12 @@ internal sealed partial class BodyRetargetPanel(PenumbraBridge penumbra, UVRemap
 
     /// <summary>What a plan was made from: the model, each chosen pair, and which parts were held. A plan whose key no
     /// longer matches is stale — see <see cref="plannedKey"/>.</summary>
+    /// <para/>
+    /// The "made for" bodies' generation is part of it: the same option names a bent body under a picked race and an
+    /// unbent one without, and a plan made against the other must not be shown or saved.
     private string Key(in RetargetContext ctx)
         => RetargetInputs.Key(ctx.ModelRel, fromBodyDir, Inputs(ctx), Chosen(ctx), from, to, ctx.Held, ctx.KeepShape,
-                              replaceSkin, cutHidden, clearBody, carryPiercings);
+                              replaceSkin, cutHidden, clearBody, carryPiercings) + "|g" + madeForGeneration;
 
     /// <summary>The framework-thread half: take up whatever finished, and do the parts only this thread may.</summary>
     private void Consume(in RetargetContext ctx)
@@ -2114,9 +2135,12 @@ internal sealed partial class BodyRetargetPanel(PenumbraBridge penumbra, UVRemap
             // choice is filled in.
             // And only one made for the rows shown NOW: one for the other layout ranked the whole garment where the leg
             // alone was asked for, and its guess would stick the same way.
+            // And only one over the very bodies offered NOW, which a race picked in "Refit for" swaps for bent copies
+            // under the same body mod.
             bool current = !Faulted(dt, ctx) && dt.Result.ModelRel == ctx.ModelRel
                            && string.Equals(dt.Result.Source, SourceDir, StringComparison.OrdinalIgnoreCase)
-                           && dt.Result.Layout == Layout(ctx);
+                           && dt.Result.Layout == Layout(ctx)
+                           && ReferenceEquals(dt.Result.Bodies, SourceCatalog);
             if (current && dt.Result.EndsUnreadable)
             {
                 // The rows change next frame (see Draw), and the detector runs again for them.

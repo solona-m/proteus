@@ -164,6 +164,7 @@ public sealed class HavokSkeleton
         }
         private readonly List<string?> strings = ["", null];
         private readonly List<Class?> classes = [null];
+        private readonly HashSet<Class> defined = [];
         private readonly Dictionary<string, Class> byName = new(StringComparer.Ordinal);
 
         public int At => at;
@@ -210,7 +211,7 @@ public sealed class HavokSkeleton
         {
             string className = ReadString() ?? throw new Bad("a class without a name");
             // A member may name a class before its layout comes; that member already holds this very instance.
-            var klass = byName.TryGetValue(className, out var named) && named.Members.Count == 0 && !classes.Contains(named)
+            var klass = byName.TryGetValue(className, out var named) && named.Members.Count == 0 && !defined.Contains(named)
                 ? named
                 : byName[className] = new Class(className);
             ReadInt();   // the class version
@@ -238,6 +239,7 @@ public sealed class HavokSkeleton
                 klass.Members.Add(new Member(name, type, tuple, of));
             }
             classes.Add(klass);
+            defined.Add(klass);
         }
 
         private void ReadMembers(Obj obj)

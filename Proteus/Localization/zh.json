@@ -4387,6 +4387,10 @@
     "message": "其骨骼 {0} 无法随{1}的骨骼移动",
     "description": "Why a made-for body was left out: {0} lists bone names, {1} is a race. Lower-case, no full stop."
   },
+  "Parts.Retarget.Race.SaveWhereCut.Fmt": {
+    "message": "{0}的额外骨骼来自「{1}」。请保存到此模组中该选项所在的组，否则{0}不会加载它。",
+    "description": "Shown when saving is refused: {0} is the race picked, {1} the mod's \"Group / Option\" its extra skeleton comes from."
+  },
   "Parts.Retarget.BodyFallback": {
     "message": "体型",
     "description": "Body size: starts the name of a saved Penumbra option when the target body mod's own name is unknown."

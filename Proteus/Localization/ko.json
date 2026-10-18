@@ -4387,6 +4387,10 @@
     "message": "본 {0}이(가) {1} 스켈레톤으로는 움직이지 않습니다",
     "description": "Why a made-for body was left out: {0} lists bone names, {1} is a race. Lower-case, no full stop."
   },
+  "Parts.Retarget.Race.SaveWhereCut.Fmt": {
+    "message": "{0}의 추가 스켈레톤은 \"{1}\"에서 옵니다. 이 모드의 그 옵션 그룹에 저장하세요. 그렇지 않으면 {0}이(가) 불러오지 않습니다.",
+    "description": "Shown when saving is refused: {0} is the race picked, {1} the mod's \"Group / Option\" its extra skeleton comes from."
+  },
   "Parts.Retarget.BodyFallback": {
     "message": "체형",
     "description": "Body size: starts the name of a saved Penumbra option when the target body mod's own name is unknown."
