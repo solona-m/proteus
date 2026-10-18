@@ -102,8 +102,8 @@ public sealed partial class AutoRefitWatcher : IDisposable
     /// <summary>Pieces this watcher switched on itself, by slot and game path, until the tick count given.</summary>
     private readonly ConcurrentDictionary<string, long> ours = new(StringComparer.OrdinalIgnoreCase);
 
-    /// <summary>Collections already told their body mod is missing, so a session of equips says it once.</summary>
-    private readonly ConcurrentDictionary<Guid, byte> toldMissing = new();
+    /// <summary>Bodies already told missing, by collection and folder, so a session of equips says each once.</summary>
+    private readonly ConcurrentDictionary<string, byte> toldMissing = new(StringComparer.Ordinal);
 
     /// <summary>Pieces whose failure has already been put in chat this session; another failure of one goes to the log.</summary>
     private readonly ConcurrentDictionary<string, byte> toldFailed = new(StringComparer.OrdinalIgnoreCase);
@@ -1141,7 +1141,7 @@ public sealed partial class AutoRefitWatcher : IDisposable
         }
         if (targets.Body(leadSlot) is not { } lead)
         {
-            SayBodyMissing(r, targets.DirOf(leadSlot));
+            SayBodyMissing(r, targets.DirOf(leadSlot), leadSlot, item, targets);
             return;
         }
 

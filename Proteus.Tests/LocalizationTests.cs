@@ -686,7 +686,7 @@ public sealed class LocalizationTests
                  {
                      "AutoRefit.Part", "AutoRefit.Size", "AutoRefit.PartsHint", "AutoRefit.Matched.Fmt",
                      "AutoRefit.MatchedWorn.Fmt", "AutoRefit.Match", "AutoRefit.SizesPending", "AutoRefit.Prefilled.Fmt",
-                     "Chat.AutoRefit.MixedKept.Fmt",
+                     "Chat.AutoRefit.MixedKept.Fmt", "Chat.AutoRefit.PartBodyMissing.Fmt",
                  })
         {
             Assert.True(tr.ContainsKey(key), $"[{lang}] has no {key}");

@@ -89,7 +89,7 @@ public sealed partial class AutoRefitWatcher
             // own to draw its skin like, which says nothing about the race. Logged only, as a part with no body is.
             // Its hands' or feet's body is not installed: said so, as any garment whose body is gone is.
             case KeepEnds.NoSize noSize when noSize.Slot == reading.Slot && j.Targets.MissingDir(noSize.Slot) is { } gone:
-                SayBodyMissing(r, gone);
+                SayBodyMissing(r, gone, noSize.Slot, item, j.Targets);
                 return;
             case KeepEnds.NoSize noSize when noSize.Slot == reading.Slot
                                              && (j.Targets.DirOf(noSize.Slot).Length == 0
@@ -107,6 +107,10 @@ public sealed partial class AutoRefitWatcher
                 log.Information("[Proteus] auto refit: {0} already fits {1} / {2}", item, lead.Name, fits.Target.Label);
                 return;
         }
+
+        // Refitted without its hands' or feet's shape because their body is gone: still refitted, and the player told.
+        if (decision is KeepEnds.Refit { EndTo: null } && j.Targets.MissingDir(reading.Slot) is { } endGone)
+            SayBodyMissing(r, endGone, reading.Slot, item, j.Targets);
 
         // A skin-only redraw is cheap and says by itself whether anything needs doing: one already drawn like the new
         // body — a redraw put on again among them — is left as it is, quietly, rather than put back and announced on every

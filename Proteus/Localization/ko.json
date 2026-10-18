@@ -335,6 +335,10 @@
     "message": "[Proteus] 이 컬렉션의 자동 맞춤용으로 고른 체형 \"{0}\"이(가) 설치되어 있지 않아 아무것도 맞추지 않습니다. /proteus > 설정 에서 다른 체형을 고르세요.",
     "description": ""
   },
+  "Chat.AutoRefit.PartBodyMissing.Fmt": {
+    "message": "[Proteus] 이 컬렉션에서 {0}용으로 고른 체형 \"{1}\"이(가) 설치되어 있지 않아 {2}을(를) 그 체형에 맞추지 않았습니다. /proteus > 설정 에서 다른 체형을 고르세요.",
+    "description": ""
+  },
   "Chat.AutoRefit.Done.Fmt": {
     "message": "[Proteus] {0}이(가) 이제 {1}에 맞습니다. {3}에 \"{2}\"(으)로 저장하고 켰습니다.",
     "description": ""

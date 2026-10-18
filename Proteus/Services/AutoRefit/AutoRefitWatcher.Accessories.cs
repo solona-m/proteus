@@ -57,7 +57,8 @@ public sealed partial class AutoRefitWatcher
         var targets = new AutoRefitTargets(g.Preference, state.Find, race);
         if (targets.Body("_top") == null && targets.Body("_dwn") == null)
         {
-            if ((targets.MissingDir("_top") ?? targets.MissingDir("_dwn")) is { } missing) SayBodyMissing(r, missing);
+            string missingSlot = targets.MissingDir("_top") != null ? "_top" : "_dwn";
+            if (targets.MissingDir(missingSlot) is { } missing) SayBodyMissing(r, missing, missingSlot, ItemName(r, g), targets);
             return;
         }
         string item = ItemName(r, g);
@@ -101,7 +102,7 @@ public sealed partial class AutoRefitWatcher
         bool Chosen(string slot) => (slot == "_top" ? g.Preference.Chest : g.Preference.Legs) != null;
         if (AccessoryCover.WithoutSize(covered, TargetFor, Chosen) is { } unsized)
         {
-            if (targets.MissingDir(unsized.Slot) is { } gone) SayBodyMissing(r, gone);
+            if (targets.MissingDir(unsized.Slot) is { } gone) SayBodyMissing(r, gone, unsized.Slot, item, targets);
             else if (unsized.Why == AccessoryCover.NoSize.ForRace) SayNoSizeForRace(targets.NameOf(unsized.Slot), unsized.Slot, race, item);
             else
                 Say(string.Format(Loc.Localize("Chat.AutoRefit.NoSizeChosen.Fmt",
@@ -403,16 +404,25 @@ public sealed partial class AutoRefitWatcher
                 : null);
     }
 
-    /// <summary>A body mod chosen for this collection is not installed: said, and in chat once a session.</summary>
-    /// <param name="dir">The body chosen for the garment's own part.</param>
-    private void SayBodyMissing(Request r, string dir)
+    /// <summary>
+    /// A body mod chosen for this collection is not installed: said, and in chat once a session for each body gone.
+    /// With one body for every part nothing is refitted, and said so; with a body per part only that part's gear is
+    /// left, and the line names the part — the others still refit.
+    /// </summary>
+    /// <param name="dir">The body chosen for <paramref name="slot"/>.</param>
+    private void SayBodyMissing(Request r, string dir, string slot, string item, AutoRefitTargets targets)
     {
-        string missing = string.Format(Loc.Localize("Chat.AutoRefit.BodyMissing.Fmt",
-                "[Proteus] The body chosen for automatic refits in this collection, \"{0}\", isn't installed, "
-              + "so nothing is being refitted. Choose another under /proteus > Settings."),
-                dir);
+        bool oneBody = AutoRefitDecisions.Slots.Select(targets.DirOf).Where(d => d.Length > 0)
+                                       .Distinct(StringComparer.OrdinalIgnoreCase).Count() <= 1;
+        string missing = oneBody
+            ? string.Format(Loc.Localize("Chat.AutoRefit.BodyMissing.Fmt",
+                  "[Proteus] The body chosen for automatic refits in this collection, \"{0}\", isn't installed, "
+                + "so nothing is being refitted. Choose another under /proteus > Settings."), dir)
+            : string.Format(Loc.Localize("Chat.AutoRefit.PartBodyMissing.Fmt",
+                  "[Proteus] The {0} body chosen for automatic refits in this collection, \"{1}\", isn't installed, so "
+                + "{2} wasn't refitted onto it. Choose another under /proteus > Settings."), SlotName(slot), dir, item);
         Say(missing, problem: true);
-        if (toldMissing.TryAdd(r.Collection, 0)) Chat(missing, problem: true);
+        if (toldMissing.TryAdd(r.Collection + "|" + dir.ToLowerInvariant(), 0)) Chat(missing, problem: true);
     }
 
     /// <summary>The body chosen has no size of <paramref name="slot"/> at <paramref name="race"/>: said.</summary>

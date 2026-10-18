@@ -335,6 +335,10 @@
     "message": "[Proteus] Der für automatische Anpassungen in dieser Kollektion gewählte Körper „{0}“ ist nicht installiert, daher wird nichts angepasst. Wähle unter /proteus > Einstellungen einen anderen.",
     "description": ""
   },
+  "Chat.AutoRefit.PartBodyMissing.Fmt": {
+    "message": "[Proteus] Der für {0} in dieser Kollektion gewählte Körper „{1}“ ist nicht installiert, daher wurde {2} nicht darauf angepasst. Wähle unter /proteus > Einstellungen einen anderen.",
+    "description": ""
+  },
   "Chat.AutoRefit.Done.Fmt": {
     "message": "[Proteus] {0} passt jetzt zu {1}. Als „{2}“ in {3} gespeichert und eingeschaltet.",
     "description": ""

@@ -335,6 +335,10 @@
     "message": "[Proteus] 此合集用于自动适配的体型“{0}”未安装，因此不会进行任何适配。请在 /proteus > 设置 中另选一个。",
     "description": ""
   },
+  "Chat.AutoRefit.PartBodyMissing.Fmt": {
+    "message": "[Proteus] 此合集中为{0}选择的体型“{1}”未安装，因此{2}未适配到该体型。请在 /proteus > 设置 中另选一个。",
+    "description": ""
+  },
   "Chat.AutoRefit.Done.Fmt": {
     "message": "[Proteus] {0} 现已适配 {1}。已在 {3} 中保存为“{2}”并启用。",
     "description": ""

@@ -335,6 +335,10 @@
     "message": "[Proteus] The body chosen for automatic refits in this collection, \"{0}\", isn't installed, so nothing is being refitted. Choose another under /proteus > Settings.",
     "description": "Chat line when the body chosen for the collection is no longer installed. {0} is the body mod's folder name. \"/proteus\" is a command and \"Settings\" matches Tab.Settings. Do NOT translate \"Proteus\" or \"/proteus\"."
   },
+  "Chat.AutoRefit.PartBodyMissing.Fmt": {
+    "message": "[Proteus] The {0} body chosen for automatic refits in this collection, \"{1}\", isn't installed, so {2} wasn't refitted onto it. Choose another under /proteus > Settings.",
+    "description": "Said when the body mod chosen for ONE part (Chest, Legs, Hands or Feet) in Settings > Body refit is not installed, while the other parts' gear still refits. {0} is the part, {1} the body mod's folder name, {2} the piece of gear. \"/proteus > Settings\" names the Settings tab - use the same words as Chat.AutoRefit.BodyMissing.Fmt."
+  },
   "Chat.AutoRefit.Done.Fmt": {
     "message": "[Proteus] {0} now fits {1}. Saved as \"{2}\" in {3} and switched on.",
     "description": "Chat line when an automatic refit is finished and worn. {0} names the gear, {1} the body and size, {2} the new option's name in Penumbra, {3} the mod it was saved into. Do NOT translate \"Proteus\"."
