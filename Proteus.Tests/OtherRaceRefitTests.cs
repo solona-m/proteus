@@ -321,7 +321,43 @@ public class OtherRaceRefitTests
         Assert.NotEqual("", Print("Size / L", new EstTable.ModEntry(301, "Body", 6091, 7000)));
         Assert.Equal("", Print("Size / L", new EstTable.ModEntry(301, "Body", 6092, 7000)));   // another item's
         Assert.Equal("", Print("Size / L", new EstTable.ModEntry(301, "Head", 6091, 7000)));   // the head's
+
+        // Two options giving different things never share a model: another entry, or another skeleton file.
+        Assert.NotEqual(Print("Size / L", new EstTable.ModEntry(301, "Body", 6091, 7000)),
+                        Print("Size / L", new EstTable.ModEntry(301, "Body", 6091, 7001)));
+        PenumbraModMeta.Redirect[] other =
+        [
+            .. redirects.Where(r => r.GamePath != skeleton),
+            R(skeleton, "phys/other.sklb", "Physics / On"),
+        ];
+        Assert.NotEqual(Print("Physics / On"), OtherRaceRefit.EstFingerprint(other, "Physics / On", [], "_top", 6091));
+
+        // Skeletons the bake never reads for this item — a hairstyle's, a base skeleton — are nothing to it.
+        PenumbraModMeta.Redirect[] unread =
+        [
+            R("chara/human/c0301/skeleton/hair/h0001/skl_c0301h0001.sklb", "h.sklb", "Size / L"),
+            R("chara/human/c0301/skeleton/base/b0001/skl_c0301b0001.sklb", "b.sklb", "Size / L"),
+        ];
+        Assert.Equal("", OtherRaceRefit.EstFingerprint(unread, "Size / L", [], "_top", 6091));
+
+        // Spelled in capitals, or listed in another order, the same option gives the same fingerprint.
+        PenumbraModMeta.Redirect[] shouting = [R(skeleton.ToUpperInvariant(), "phys/skl.sklb", "Physics / On")];
+        Assert.Equal(Print("Physics / On"), OtherRaceRefit.EstFingerprint(shouting, "Physics / On", [], "_top", 6091));
+        Assert.Equal(Print("Physics / On"), OtherRaceRefit.EstFingerprint(redirects.Reverse(), "Physics / On", [], "_top", 6091));
     }
+
+    /// <summary>A save of a picked race's model is refused only when where it goes now gives the bake something else;
+    /// the character's own bakes, which read nothing of the option, never are.</summary>
+    [Theory]
+    [InlineData(true, "", "", false)]
+    [InlineData(true, "a|", "a|", false)]
+    [InlineData(true, "", "a|", true)]
+    [InlineData(true, "a|", "b|", true)]
+    [InlineData(false, "", "a|", false)]
+    [Trait("Plan", "AC-refit-other-race-8")]
+    public void A_save_is_refused_only_when_its_option_changes_what_the_bake_read(bool picked, string baked, string now,
+                                                                               bool refused)
+        => Assert.Equal(refused, OtherRaceRefit.RefusesSave(picked, baked, now));
 
     /// <summary>
     /// The option the bake reads its extra skeleton by is the one the save carries, for an author's manifest too —

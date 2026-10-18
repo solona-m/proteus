@@ -341,6 +341,12 @@ internal sealed partial class BodyRetargetPanel(PenumbraBridge penumbra, UVRemap
 
         // Where a save goes, for this mod and model, ahead of the bake: a race picked in "Refit for" is made against the
         // option a save there is cut from, and the last model's choice of where to save is not this one's.
+        // A new garment starts over: the author's mod is the default, and a choice made about the last garment is not a
+        // choice about this one. The game's own gear has no author's mod to default to. First, because the record below
+        // is read from the mod a save goes to, which this decides — and the default group from that record.
+        bool newModel = groupNameFor != given.ModelRel;
+        if (newModel) toNewMod = given.IsVanilla;
+
         string? modRoot = RecordRoot(given);
         if (recordFor != modRoot)
         {
@@ -351,12 +357,9 @@ internal sealed partial class BodyRetargetPanel(PenumbraBridge penumbra, UVRemap
             multiGroups = modRoot != null ? RefitCore.MultiGroups(modRoot) : [];
         }
 
-        if (groupNameFor != given.ModelRel)
+        if (newModel)
         {
             groupNameFor = given.ModelRel;
-            // A new garment starts over: the author's mod is the default, and a choice made about the last garment
-            // is not a choice about this one. The game's own gear has no author's mod to default to.
-            toNewMod = given.IsVanilla;
             groupName = string.Format(ps.RetargetGroupFmt, given.ModelLabel);
             saveTo = SwitchingGroup(given);
         }
@@ -504,10 +507,8 @@ internal sealed partial class BodyRetargetPanel(PenumbraBridge penumbra, UVRemap
         /// <summary>The skeleton the collection gives the race could not be read; the game's was used.</summary>
         public bool FellBack { get; init; }
 
-        /// <summary>The option the bake took the mod's extra skeleton from ("Group / Option"), or null.</summary>
-        public string? CutFrom { get; init; }
-
-        /// <summary>What that option gave the bake to read (<see cref="OtherRaceRefit.EstFingerprint"/>).</summary>
+        /// <summary>What the option a save goes into gave the bake to read (<see cref="OtherRaceRefit.EstFingerprint"/>);
+        /// every option with the same answer makes the same model.</summary>
         public string Fingerprint { get; init; } = "";
 
         /// <summary>Bodies of the "made for" mod left out of <see cref="Bodies"/>, each with why.</summary>
@@ -1983,7 +1984,7 @@ internal sealed partial class BodyRetargetPanel(PenumbraBridge penumbra, UVRemap
         // A picked race's model was made against what the option a save goes into gives it — its extra skeleton. The
         // bake follows where Save points, so the two agree by the time a save can be asked for; checked here all the
         // same, since this writes into somebody's mod.
-        if (active is { Explicit: true } picked && picked.Fingerprint != BakeFingerprint(ctx))
+        if (active is { } picked && OtherRaceRefit.RefusesSave(picked.Explicit, picked.Fingerprint, BakeFingerprint(ctx)))
         {
             ctx.SetStatus(string.Format(Strings.Parts.RetargetRaceRemakeFmt, ModelRace.Describe($"{picked.Route.To:D4}")), true);
             return;

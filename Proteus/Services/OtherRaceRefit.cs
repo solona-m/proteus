@@ -143,6 +143,13 @@ internal static partial class OtherRaceRefit
         return print == "|" ? "" : print;
     }
 
+    /// <summary>
+    /// Whether a save of a model made for a picked race (<paramref name="picked"/>) must be refused: the option it goes
+    /// into now gives the bake something other than what it was made with — it is being made again.
+    /// </summary>
+    internal static bool RefusesSave(bool picked, string bakedFingerprint, string currentFingerprint)
+        => picked && !string.Equals(bakedFingerprint, currentFingerprint, StringComparison.Ordinal);
+
     [System.Text.RegularExpressions.GeneratedRegex(@"^chara/human/c\d{4}/skeleton/(top|met)/",
                                                    System.Text.RegularExpressions.RegexOptions.IgnoreCase)]
     private static partial System.Text.RegularExpressions.Regex ExtraSkeletonPath();

@@ -27,9 +27,10 @@ internal sealed partial class BodyRetargetPanel
     /// <summary>The route the character's race decides, this frame — what "as before" means in the list.</summary>
     private RacialModelBake.Route automaticRoute;
 
-    /// <summary>What the bake for a picked race reads, gathered once per garment and race.</summary>
+    /// <summary>What the bake for a picked race reads, gathered once per garment, race and manifest read.</summary>
     private OtherRaceWearer.Inputs? raceInputs;
     private string? raceInputsFor;
+    private object? raceInputsRedirects;
 
     /// <summary>
     /// The refit-onto mod's bodies as the refit uses them. For a picked race, that race's own alone: a part the mod has
@@ -190,8 +191,12 @@ internal sealed partial class BodyRetargetPanel
     /// </summary>
     private OtherRaceWearer.Inputs RaceInputs(in RetargetContext ctx, ushort race, string? cutFrom)
     {
-        string key = ctx.ModelRel + "|" + race + "|" + cutFrom;
-        if (raceInputs != null && raceInputsFor == key) return raceInputs;
+        // Keyed as the bake is: a manifest edited under the open panel can change what the option gives without changing
+        // its name, and the bake made again for it must read it again.
+        string key = ctx.ModelRel + "|" + race + "|" + cutFrom + "|" + BakeFingerprint(ctx);
+        if (raceInputs != null && raceInputsFor == key && ReferenceEquals(raceInputsRedirects, ctx.Redirects))
+            return raceInputs;
+        raceInputsRedirects = ctx.Redirects;
 
         var given = ctx;
         raceInputs = OtherRaceWearer.Gather(race, ctx.GamePath, ReadGame, penumbra.ResolvePlayer,
@@ -331,7 +336,7 @@ internal sealed partial class BodyRetargetPanel
                             made.Est.Outcome, bodies?.Options.Count ?? 0, clock.ElapsedMilliseconds);
             return (key, new Baked(key, bytes, route, model, parts, savePath, who)
             {
-                CutFrom = cutFrom, Fingerprint = print,
+                Fingerprint = print,
                 Explicit = true, Bodies = bodies, LeftOut = leftOut, Est = made.Est, FellBack = made.FellBack, DrawnPath = drawnPath,
             }, "");
         });
