@@ -262,8 +262,10 @@ internal sealed class AutoRefitPanel(AutoRefitWatcher watcher, PenumbraBridge pe
         {
             // Column ids, not display text, so they stay English.
             ImGui.TableSetupColumn("Part", ImGuiTableColumnFlags.WidthFixed, ProteusStyle.S(70f));
-            ImGui.TableSetupColumn("Body", ImGuiTableColumnFlags.WidthStretch);
-            ImGui.TableSetupColumn("Size", ImGuiTableColumnFlags.WidthStretch);
+            // Explicit weights: unweighted, both share by content width, and a full-width combo has none, so Size
+            // shrank to its arrow.
+            ImGui.TableSetupColumn("Body", ImGuiTableColumnFlags.WidthStretch, 3f);
+            ImGui.TableSetupColumn("Size", ImGuiTableColumnFlags.WidthStretch, 2f);
             ImGui.TableNextRow(ImGuiTableRowFlags.Headers);
             ImGui.TableNextColumn(); ImGui.TableHeader(s.Part);
             ImGui.TableNextColumn(); ImGui.TableHeader(s.Body);
