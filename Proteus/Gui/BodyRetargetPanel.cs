@@ -867,7 +867,7 @@ internal sealed class BodyRetargetPanel(PenumbraBridge penumbra, UVRemapService 
     /// </summary>
     private BodySizeCatalog? LoadSource(string? dir)
         => dir == null ? null
-         : dir == VanillaBodyCatalog.Key ? VanillaBodyCatalog.Read(race ?? "0201", readGameFile)
+         : dir == VanillaBodyCatalog.Key ? VanillaBodyCatalog.Read(race ?? "0201", readGameFile, drawn: true)
          : BodyRoot(dir) is { } root ? BodySizeCatalog.Read(root)
          : null;
 

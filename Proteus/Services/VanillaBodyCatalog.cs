@@ -73,18 +73,24 @@ internal static class VanillaBodyCatalog
     /// </summary>
     /// <param name="race">The body's race code, as <see cref="BodySizeCatalog.RaceOf"/> reads it off a game path.</param>
     /// <param name="read">Reads a game path out of the game's own data — <c>TextureLoader.LoadRawFile(null, path)</c>.</param>
+    /// <param name="drawn">
+    /// The body the game DRAWS for the race, following its fallback chain when it ships none of its own (see
+    /// <see cref="Chain"/>) — what a "made for" list wants. Off, only the race's own body: what the racial route and the
+    /// automatic refit ask, since "this race has no body" is how they know to bend a racial piece through a shared one.
+    /// </param>
     /// <returns>
     /// A catalog over the extract folder, empty when the game has no body for that race. An empty one answers
     /// <see cref="BodySizeCatalog.IsBody"/> false, which is what the picker checks.
     /// </returns>
-    internal static BodySizeCatalog Read(string race, Func<string, byte[]?> read)
+    internal static BodySizeCatalog Read(string race, Func<string, byte[]?> read, bool drawn = false)
     {
         lock (Gate)
         {
-            if (!extracted.TryGetValue(race, out var options))
+            string key = drawn ? race + "~drawn" : race;
+            if (!extracted.TryGetValue(key, out var options))
             {
-                options = Extract(race, read);
-                extracted[race] = options;
+                options = Extract(race, read, drawn);
+                extracted[key] = options;
             }
             return new BodySizeCatalog(Dir, options);
         }
@@ -94,23 +100,16 @@ internal static class VanillaBodyCatalog
     internal static string GamePathOf(string race, string slot)
         => $"chara/equipment/e0000/model/c{race}e0000{slot}.mdl";
 
-    private static List<BodyOption> Extract(string race, Func<string, byte[]?> read)
+    private static List<BodyOption> Extract(string race, Func<string, byte[]?> read, bool drawn)
     {
         var options = new List<BodyOption>();
         foreach (string slot in Slots)
         {
+            // Filed under the race asked for whatever model it came from: that is the body the game draws for it, and a
+            // fallback across sexes (a Lalafell woman's hands are the man's) must still pass the picker's race rule. The
+            // file name can be shared by both modes: where the race has its own model, the chain's first answer is it.
             string gamePath = GamePathOf(race, slot);
-            byte[]? bytes;
-            try
-            {
-                bytes = read(gamePath);
-            }
-            catch (Exception)
-            {
-                // The game's data reader throws for a path it does not have as readily as it returns null.
-                continue;
-            }
-            if (bytes is not { Length: > 0 }) continue;
+            if (FirstInChain(drawn ? Chain(race) : [race], slot, read) is not { } bytes) continue;
 
             string rel = $"c{race}e0000{slot}.mdl";
             string full = Path.Combine(Dir, rel);
@@ -131,6 +130,55 @@ internal static class VanillaBodyCatalog
             options.Add(new BodyOption(GroupName, Section: "", Name: SizeName, rel, gamePath, slot));
         }
         return options;
+    }
+
+    /// <summary>
+    /// The model the game draws one slot of a race's body with: its own, else the first race it falls back to that has
+    /// one. Most races ship no body of their own — Miqo'te, Au Ra, Elezen, Viera, Hrothgar and the Highlander and
+    /// Roegadyn women all draw a Midlander's or a Roegadyn man's — so asking for the race's own file alone left the
+    /// "made for" list empty for them.
+    /// </summary>
+    private static byte[]? FirstInChain(IEnumerable<string> chain, string slot, Func<string, byte[]?> read)
+    {
+        foreach (string code in chain)
+        {
+            byte[]? bytes;
+            try
+            {
+                bytes = read(GamePathOf(code, slot));
+            }
+            catch (Exception)
+            {
+                // The game's data reader throws for a path it does not have as readily as it returns null.
+                continue;
+            }
+            if (bytes is { Length: > 0 }) return bytes;
+        }
+        return null;
+    }
+
+    /// <summary>
+    /// A race and the races its models fall back to, in order, ending at the Midlander man. The game's own table, as
+    /// Penumbra.GameData's <c>GenderRace.Fallback</c> has it.
+    /// </summary>
+    internal static IEnumerable<string> Chain(string race)
+    {
+        string code = race;
+        for (int step = 0; step < 8; step++)
+        {
+            yield return code;
+            if (code == "0101" || !int.TryParse(code, out int n)) yield break;
+            code = n switch
+            {
+                104 or 201 => "0101",
+                904 or 1501 => "0901",
+                1104 or 1201 or 1204 => "1101",
+                1304 or 1404 => "1301",
+                _ when n % 10 == 4 => "0104",
+                _ when n / 100 % 2 == 0 => "0201",
+                _ => "0101",
+            };
+        }
     }
 
     /// <summary>What the one size is called. A body mod's sizes are named by its author; vanilla has just the one.</summary>

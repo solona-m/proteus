@@ -93,6 +93,56 @@ public class VanillaRefitTests : IDisposable
     }
 
     [Fact]
+    public void A_race_with_no_body_of_its_own_gets_the_body_the_game_draws_for_it()
+    {
+        // A Miqo'te woman's gear is drawn on the Midlander woman's body: the game ships no c0801 body. Filed under her
+        // own race, so the picker's race rule finds it.
+        var asked = new List<string>();
+        var catalog = VanillaBodyCatalog.Read("0801", Game(asked, EverySlot("0201")), drawn: true);
+
+        Assert.Equal(["_top", "_dwn", "_glv", "_sho"], catalog.Slots);
+        Assert.All(catalog.Options, o => Assert.Equal("0801", BodySizeCatalog.RaceOf(o.GamePath)));
+        Assert.Single(catalog.For("_top", "0801"));
+    }
+
+    [Fact]
+    public void Asked_for_its_own_body_a_race_that_ships_none_still_has_none()
+    {
+        // The racial route and the automatic refit read "no body" as the cue to bend a racial piece through a shared one.
+        var asked = new List<string>();
+        var read = Game(asked, EverySlot("0201"));
+
+        Assert.False(VanillaBodyCatalog.Read("0801", read).IsBody);
+        Assert.True(VanillaBodyCatalog.Read("0801", read, drawn: true).IsBody);   // the two are cached apart
+        Assert.False(VanillaBodyCatalog.Read("0801", read).IsBody);
+    }
+
+    [Fact]
+    public void A_fallback_across_sexes_still_reaches_the_picker()
+    {
+        // A Lalafell woman has her own chest and legs, but her hands and feet are the Lalafell man's.
+        var asked = new List<string>();
+        var catalog = VanillaBodyCatalog.Read("1201", Game(asked,
+            VanillaBodyCatalog.GamePathOf("1201", "_top"), VanillaBodyCatalog.GamePathOf("1201", "_dwn"),
+            VanillaBodyCatalog.GamePathOf("1101", "_glv"), VanillaBodyCatalog.GamePathOf("1101", "_sho")), drawn: true);
+
+        Assert.Equal(["_top", "_dwn", "_glv", "_sho"], catalog.Slots);
+        Assert.Single(catalog.For("_glv", "1201"));
+        Assert.Contains(VanillaBodyCatalog.GamePathOf("1101", "_glv"), asked);
+        Assert.DoesNotContain(VanillaBodyCatalog.GamePathOf("0201", "_glv"), asked);
+    }
+
+    [Theory]
+    [InlineData("0801", "0801,0201,0101")]
+    [InlineData("1501", "1501,0901,0101")]
+    [InlineData("1201", "1201,1101,0101")]
+    [InlineData("1404", "1404,1301,0101")]
+    [InlineData("0301", "0301,0101")]
+    [InlineData("0101", "0101")]
+    public void The_fallback_chain_is_the_game_s(string race, string chain)
+        => Assert.Equal(chain.Split(','), VanillaBodyCatalog.Chain(race));
+
+    [Fact]
     public void A_slot_the_game_is_missing_is_left_out_and_the_rest_stand()
     {
         var asked = new List<string>();
