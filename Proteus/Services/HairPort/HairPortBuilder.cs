@@ -213,13 +213,13 @@ internal static class HairPortBuilder
         {
             if (owners.FirstOrDefault(o => HairPortPlan.Same(o, e.Owner)) is not { } owner) continue;
             var place = new HairPortSkeleton.Place(modRoot, owners, owner, e, record.Ports, from, to, id, readGame, table);
-            if (!HairPortSkeleton.Harmful(place, e) || ReadMod(modRoot, e.File) is not { } model) continue;
+            if (!HairPortSkeleton.Harmful(place, e)) continue;
             int slot = e.Est > 0 ? e.Est : id;
             var skeleton = new[] { HairPortPlan.SkeletonPath(to, slot), HairPortPlan.PhysicsPath(to, slot) };
             var kept = e.Materials.Where(m => !skeleton.Contains(m.Key, StringComparer.OrdinalIgnoreCase))
                                   .Select(m => new HairPortWriter.MaterialWrite(m.Key, m.Value, null)).ToList();
             yield return new HairPortWriter.PortWrite(owner, e.SourceGamePath, e.SourceFile, e.SourceSha8, e.TargetGamePath,
-                                                      model, kept, Stripped: true);
+                                                      [], kept, Stripped: true);
         }
     }
 

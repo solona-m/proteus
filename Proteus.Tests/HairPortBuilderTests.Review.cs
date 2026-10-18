@@ -158,6 +158,44 @@ public partial class HairPortBuilderTests
         Assert.Equal((before.PortVersion, before.Auto, 0, 0), (after.PortVersion, after.Auto, after.Est, after.SkeletonFrom));
     }
 
+    /// <summary>The port was undone between the plan and the save: its strip brings nothing back — no redirect to the
+    /// model or to files the undo deleted, and the undo stays remembered.</summary>
+    [Fact]
+    [Trait("Plan", "EDGE-hair-skeleton-infer-28")]
+    public void A_strip_of_a_port_undone_meanwhile_brings_nothing_back()
+    {
+        var (mod, game) = StrippableOldCarry();
+        using var _ = mod;
+        var plan = HairPortBuilder.Build(mod.Root, Source, [201], Pbd(), game, withSharers: false);
+        Assert.True(Assert.Single(plan.Writes).Stripped);
+        Assert.True(HairPortWriter.Undo(mod.Root, _ => true, decline: true).Ok);
+
+        Assert.True(HairPortWriter.Save(mod.Root, plan.Writes, auto: true).Ok);
+        var owner = mod.Owner("Cut", "Long");
+        Assert.Null(HairPortPlan.FileFor(owner, Target));
+        Assert.All(mod.Owners.SelectMany(o => o.Files.Values), rel => Assert.True(mod.Has(rel), rel));
+        var record = HairPortRecord.Read(mod.Root);
+        Assert.Empty(record.Ports);
+        Assert.Contains(HairPortPlan.DeclineKey(Target), record.Declined);
+    }
+
+    /// <summary>A strip writes no model, so a port the user edited since is stripped all the same — the edit kept.</summary>
+    [Fact]
+    [Trait("Plan", "EDGE-hair-skeleton-infer-28")]
+    public void A_strip_of_an_edited_port_goes_through_and_keeps_the_edit()
+    {
+        var (mod, game) = StrippableOldCarry();
+        using var _ = mod;
+        var file = HairPortRecord.Read(mod.Root).Ports.Single().File;
+        var edited = mod.Get(file);
+        mod.Put(Path.Combine(SidecarDiscoveryService.SidecarSubdir, MeshVolumeService.BackupSubdir, file), [9, 9]);
+
+        var plan = HairPortBuilder.Build(mod.Root, Source, [201], Pbd(), game, withSharers: false);
+        Assert.True(HairPortWriter.Save(mod.Root, plan.Writes, auto: true).Ok);
+        Assert.Equal(edited, mod.Get(file));
+        Assert.Null(HairPortPlan.FileFor(mod.Owner("Cut", "Long"), HairPortPlan.SkeletonPath(201, Id)));
+    }
+
     /// <summary>A carry made with the table whose slot the game gave another hairstyle since, and that cannot be made
     /// again, loses its skeleton and its entry too.</summary>
     [Fact]

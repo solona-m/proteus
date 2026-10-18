@@ -29,8 +29,8 @@ internal static class HairPortWriter
     /// slot <paramref name="Est"/> of the target race (see <see cref="HairPortSkeleton.CarryAt"/>); 0 for none.</param>
     /// <param name="Stripped">Not a port made now: one from before, saved again without the skeleton it carried,
     /// because it could not be made again and that skeleton changed another hairstyle. Only its redirects change: its
-    /// model file is not written (<paramref name="Model"/> is what it holds), its hat fit is kept, and its record keeps
-    /// how and when it was made.</param>
+    /// model file is not written (<paramref name="Model"/> is unused), its hat fit and the user's edits are kept, and
+    /// its record keeps how and when it was made. Skipped when the port is gone by the time it is saved.</param>
     public sealed record PortWrite(HairPortPlan.Owner Into, string SourceGamePath, string SourceFile, string SourceSha8,
                                    string TargetGamePath, byte[] Model, IReadOnlyList<MaterialWrite> Materials,
                                    long Millis = 0, int Est = 0, int SkeletonFrom = 0, bool Stripped = false);
@@ -86,10 +86,14 @@ internal static class HairPortWriter
 
                 var was = record.Ports.FirstOrDefault(e => HairPortPlan.Same(e.Owner, owner)
                     && e.TargetGamePath.Equals(w.TargetGamePath, StringComparison.OrdinalIgnoreCase));
+                // A strip of a port undone (or taken out by hand) since the plan: nothing is left to strip — and writing
+                // it would bring the port back.
+                if (w.Stripped && was == null) continue;
                 if (was != null)
                 {
-                    // A port the user has since edited is theirs now: remaking it would throw that edit away.
-                    if (EditedBy(modRoot, was.File) is { } later)
+                    // A port the user has since edited is theirs now: remaking it would throw that edit away. A strip
+                    // writes no model, so the edit stays.
+                    if (!w.Stripped && EditedBy(modRoot, was.File) is { } later)
                         return new Outcome(false, ModelBackupOrder.BlockedMessage(later), 0);
                 }
                 else if (!HairPortPlan.CanPortInto(owners, owner, w.TargetGamePath))
@@ -116,9 +120,9 @@ internal static class HairPortWriter
             {
                 foreach (var (w, owner, file, was) in plan)
                 {
-                    // A strip changes redirects only: the model on disk is the port as it was — hat fit and all, whose
-                    // backup and record stay.
-                    bool stripped = w.Stripped && was != null;
+                    // A strip changes redirects only: the model on disk is the port as it was — hat fit and edits and
+                    // all, whose backups and records stay.
+                    bool stripped = w.Stripped;
                     // A hat fit of the old port has nothing to restore once the port is remade.
                     if (was != null && !stripped && HatCompatService.Forget(modRoot, file) is { } why)
                         throw new IOException(why);
