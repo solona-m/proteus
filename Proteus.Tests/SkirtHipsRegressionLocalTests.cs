@@ -34,9 +34,12 @@ public class SkirtHipsRegressionLocalTests(ITestOutputHelper output)
 
     private static readonly BodyRetarget.Tuning RuleOff = new(NoOpenEdgeFit: true);
 
-    private sealed record Refitted(ModelParts Model, int Folded, int Inside);
+    /// <param name="Laid">The garment as the plan laid it, by the garment's own vertices: what is counted turned over and
+    /// stretched against it.</param>
+    private sealed record Refitted(ModelParts Model, int Folded, int Inside, ModelParts? Laid = null, float WorstMove = 0f);
 
-    private sealed record Runs(Refitted Now, Refitted Before, ModelParts Author, int AuthorInside, Refitted Fitted);
+    private sealed record Runs(Refitted Now, Refitted Before, ModelParts Author, int AuthorInside, Refitted Fitted,
+                               ModelParts Garment);
 
     /// <summary><paramref name="fromRel"/> refitted onto the body option the author's <paramref name="toRel"/> was made
     /// on, as the size set refits it (the skin taken, its default Keep shape pieces).</summary>
@@ -75,10 +78,11 @@ public class SkirtHipsRegressionLocalTests(ITestOutputHelper output)
                                                                            trace: (s, d) => { if (s == "layer-order") final = d; }));
             Assert.NotNull(final);
             var model = ModelPartReader.Read(plan.Model)!;
-            return new Refitted(model, BodyRetarget.FoldedTriangles(sets, final!), BodySizeMatch.ClothAgainst(model, target)!.Value.Inside);
+            return new Refitted(model, BodyRetarget.FoldedTriangles(sets, final!), BodySizeMatch.ClothAgainst(model, target)!.Value.Inside,
+                                SkinTuckSheet.Laid(bytes, plan), plan.Report.WorstMove);
         }
         return new Runs(Run(RuleOff), Run(Old), author, BodySizeMatch.ClothAgainst(author, target)!.Value.Inside,
-                        Run(new BodyRetarget.Tuning()));
+                        Run(new BodyRetarget.Tuning()), garment);
     }
 
     /// <summary>The mean distance from each cloth point of the author's own size to the nearest cloth point of the refit.</summary>
@@ -122,9 +126,12 @@ public class SkirtHipsRegressionLocalTests(ITestOutputHelper output)
     }
 
     /// <param name="acceptedFolds">Folds the made-on body's reading may add, accepted at their measured count.</param>
-    private void NoWorse(string what, Runs r, bool againstAuthor, float slack = 0f, int acceptedFolds = 0)
+    /// <param name="acceptedTurned">Triangles turned over against the authored garment it may add, the same way.</param>
+    /// <param name="acceptedMove">How much further its worst move may reach, the same way (metres).</param>
+    private void NoWorse(string what, Runs r, bool againstAuthor, float slack = 0f, int acceptedFolds = 0, int acceptedTurned = 0,
+                         float acceptedMove = 0f)
     {
-        FitNoWorse(what, r, againstAuthor, acceptedFolds);
+        FitNoWorse(what, r, againstAuthor, acceptedFolds, acceptedTurned, acceptedMove);
         float now = FromAuthor(r.Author, r.Now.Model), before = FromAuthor(r.Author, r.Before.Model);
         output.WriteLine($"{what}: from the author's own {before * 1000f:F3} -> {now * 1000f:F3} mm; folded {r.Before.Folded} -> "
                        + $"{r.Now.Folded}; inside {r.Before.Inside} -> {r.Now.Inside} (the author's own {r.AuthorInside})");
@@ -142,15 +149,30 @@ public class SkirtHipsRegressionLocalTests(ITestOutputHelper output)
     /// <summary>
     /// [AC-open-patch-authored-9] The made-on body's reading of cloth past an open skin edge (see
     /// <see cref="BodyRetarget.TargetBody.Fitted"/>) on, against the same refit without it: no more cloth inside the new
-    /// body, no more folds than accepted, and no further from the author's own size.
+    /// body (against the author's own size, no further from the author's count), no more folds, triangles turned over or
+    /// edges stretched against the authored garment than accepted, the worst move no further than accepted, and no further
+    /// from the author's own size.
     /// </summary>
-    private void FitNoWorse(string what, Runs r, bool againstAuthor, int acceptedFolds)
+    private void FitNoWorse(string what, Runs r, bool againstAuthor, int acceptedFolds, int acceptedTurned, float acceptedMove)
     {
         float on = FromAuthor(r.Author, r.Fitted.Model), off = FromAuthor(r.Author, r.Now.Model);
+        int turnedOn = SkinTuckSheet.FoldedAgainstAuthored(r.Garment, r.Fitted.Laid!);
+        int turnedOff = SkinTuckSheet.FoldedAgainstAuthored(r.Garment, r.Now.Laid!);
+        int stretchedOn = SkinTuckSheet.ClothStretch(r.Garment, r.Fitted.Laid!);
+        int stretchedOff = SkinTuckSheet.ClothStretch(r.Garment, r.Now.Laid!);
         output.WriteLine($"{what}, open-edge fit: from the author's own {off * 1000f:F3} -> {on * 1000f:F3} mm; folded {r.Now.Folded} -> "
-                       + $"{r.Fitted.Folded}; inside {r.Now.Inside} -> {r.Fitted.Inside}");
-        Assert.True(r.Fitted.Inside <= r.Now.Inside, $"{r.Fitted.Inside} inside with the fit, {r.Now.Inside} without");
+                       + $"{r.Fitted.Folded}; inside {r.Now.Inside} -> {r.Fitted.Inside}; turned {turnedOff} -> {turnedOn}; stretched "
+                       + $"{stretchedOff} -> {stretchedOn}; worst move {r.Now.WorstMove * 1000f:F1} -> {r.Fitted.WorstMove * 1000f:F1} mm");
+        if (againstAuthor)
+            Assert.True(Math.Abs(r.Fitted.Inside - r.AuthorInside) <= Math.Abs(r.Now.Inside - r.AuthorInside),
+                        $"{r.Fitted.Inside} inside with the fit, {r.Now.Inside} without, the author's own {r.AuthorInside}");
+        else
+            Assert.True(r.Fitted.Inside <= r.Now.Inside, $"{r.Fitted.Inside} inside with the fit, {r.Now.Inside} without");
         Assert.True(r.Fitted.Folded <= r.Now.Folded + acceptedFolds, $"{r.Fitted.Folded} folded with the fit, {r.Now.Folded} without");
+        Assert.True(turnedOn <= turnedOff + acceptedTurned, $"{turnedOn} turned with the fit, {turnedOff} without");
+        Assert.True(stretchedOn <= stretchedOff, $"{stretchedOn} stretched with the fit, {stretchedOff} without");
+        Assert.True(r.Fitted.WorstMove <= r.Now.WorstMove + acceptedMove + 1e-5f,
+                    $"worst move {r.Fitted.WorstMove * 1000f:F1} mm with the fit, {r.Now.WorstMove * 1000f:F1} without");
         if (againstAuthor) Assert.True(on <= off + 1e-5f, $"{on * 1000f:F3} mm from the author's own with the fit, {off * 1000f:F3} without");
     }
 
@@ -207,6 +229,7 @@ public class SkirtHipsRegressionLocalTests(ITestOutputHelper output)
                          "size/rue l/chara/equipment/e6255/model/c0201e6255_top.mdl", "_top", [Rue, Neolithe]), againstAuthor: false,
                    // Accepted (build 1316): the made-on body's reading takes 2,619 of its points in, against Neolithe's
                    // push-up L and its undies: cloth inside Rue L 67 -> 18, edges stretched against the authored garment
-                   // 96 -> 47, and folds 14 -> 21 — the new ones in the underbust crease.
-                   acceptedFolds: 7);
+                   // 96 -> 47, folds 14 -> 21 and triangles turned over against it 7 -> 14 — the new ones in the
+                   // underbust crease — and its worst move 60.2 -> 62.4 mm.
+                   acceptedFolds: 7, acceptedTurned: 7, acceptedMove: 0.0025f);
 }

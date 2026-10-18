@@ -122,6 +122,13 @@ public class OpenPatchGameTopLocalTests(ITestOutputHelper output)
                                            .Where(x => !float.IsNaN(x)).ToList();
         var depthOff = Depths(off.Final);
         var depthOn = Depths(on.Final);
+        // That "nothing inside" is read off the new body, not off missing readings: most of the bust front reads on it, away
+        // from any open edge of its skin.
+        var edges = BodyRetarget.SkinEdges.Of(ModelPartReader.Read(File.ReadAllBytes(target))!);
+        int readable = bust.Count(n => body.Nearest(new Vector3(sets.NodeAt[n].X + on.Final[n].X, sets.NodeAt[n].Y + on.Final[n].Y,
+                                                                sets.NodeAt[n].Z + on.Final[n].Z), 0.03f, out var h)
+                                       && !BodyRetarget.PastEdge(h, edges));
+        Assert.True(readable >= bust.Count / 2, $"only {readable} of {bust.Count} bust points read on the new body");
         var laidOff = SkinTuckSheet.Laid(bytes, off.Plan);
         var laidOn = SkinTuckSheet.Laid(bytes, on.Plan);
         int turnedOn = SkinTuckSheet.FoldedAgainstAuthored(garment, laidOn), turnedOff = SkinTuckSheet.FoldedAgainstAuthored(garment, laidOff);
@@ -150,6 +157,7 @@ public class OpenPatchGameTopLocalTests(ITestOutputHelper output)
         Assert.True(depthOn.Max() <= depthOff.Max() + 1e-4f, $"deepest {depthOn.Max() * 1000:0.0} mm against {depthOff.Max() * 1000:0.0}");
         Assert.True(throughOn <= throughOff + 0.5, $"{throughOn:0.0} cm² of skin through against {throughOff:0.0}");
         Assert.True(foldsOn <= foldsOff, $"{foldsOn} folded against {foldsOff}");
+        Assert.True(on.Plan.Report.Folded <= off.Plan.Report.Folded);
         Assert.True(turnedOn <= Math.Max(turnedOff, turnedGame), $"{turnedOn} turned over");
         int allowed = Math.Max(Math.Max(stretchedOff, stretchedGame), AcceptedStretch.GetValueOrDefault((garmentName, modNeed, rel)));
         Assert.True(stretchedOn <= allowed, $"{stretchedOn} stretched, {allowed} allowed");

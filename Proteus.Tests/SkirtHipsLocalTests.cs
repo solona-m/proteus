@@ -229,13 +229,17 @@ public class SkirtHipsLocalTests(ITestOutputHelper output)
                             $"worst move {now.Plan.Report.WorstMove * 1000f:F1} mm, {before.Plan.Report.WorstMove * 1000f:F1} before");
 
                 // [AC-open-patch-authored-9] The made-on body's reading on, against the same refit without it: no more cloth
-                // inside, folds or edges stretched against the authored garment, and the worst move within 2 mm.
+                // inside, folds, triangles turned over or edges stretched against the authored garment, and the worst move
+                // within 2 mm.
                 var fitted = Run(new BodyRetarget.Tuning());
                 var inFitted = BodySizeMatch.ClothAgainst(ModelPartReader.Read(fitted.Plan.Model)!, target.Catalog.PathOf(legsTo))!.Value;
-                int stretchedNow = SkinTuckSheet.ClothStretch(pants, SkinTuckSheet.Laid(bytes, now.Plan));
-                int stretchedFitted = SkinTuckSheet.ClothStretch(pants, SkinTuckSheet.Laid(bytes, fitted.Plan));
+                var laidNow = SkinTuckSheet.Laid(bytes, now.Plan);
+                var laidFitted = SkinTuckSheet.Laid(bytes, fitted.Plan);
+                int stretchedNow = SkinTuckSheet.ClothStretch(pants, laidNow), stretchedFitted = SkinTuckSheet.ClothStretch(pants, laidFitted);
+                int turnedNow = SkinTuckSheet.FoldedAgainstAuthored(pants, laidNow);
+                int turnedFitted = SkinTuckSheet.FoldedAgainstAuthored(pants, laidFitted);
                 output.WriteLine($"  open-edge fit: inside {inNow.Inside} -> {inFitted.Inside}; folds {now.Folds} -> {fitted.Folds}; "
-                               + $"stretched {stretchedNow} -> {stretchedFitted}; worst move {now.Plan.Report.WorstMove * 1000f:F1} -> "
+                               + $"stretched {stretchedNow} -> {stretchedFitted}; turned {turnedNow} -> {turnedFitted}; worst move {now.Plan.Report.WorstMove * 1000f:F1} -> "
                                + $"{fitted.Plan.Report.WorstMove * 1000f:F1} mm");
                 // Accepted (build 1316): Heartthrob onto Neolithe SFW M, 2 more edges stretched (13 -> 15), with one fewer fold
                 // and one fewer point inside.
@@ -243,6 +247,7 @@ public class SkirtHipsLocalTests(ITestOutputHelper output)
                 Assert.True(inFitted.Inside <= inNow.Inside, $"{inFitted.Inside} inside with the fit, {inNow.Inside} without");
                 Assert.True(fitted.Folds <= now.Folds, $"{fitted.Folds} folded with the fit, {now.Folds} without");
                 Assert.True(stretchedFitted <= stretchedNow + acceptedStretch, $"{stretchedFitted} stretched with the fit, {stretchedNow} without");
+                Assert.True(turnedFitted <= turnedNow, $"{turnedFitted} turned with the fit, {turnedNow} without");
                 Assert.True(fitted.Plan.Report.WorstMove <= now.Plan.Report.WorstMove + 0.002f,
                             $"worst move {fitted.Plan.Report.WorstMove * 1000f:F1} mm with the fit, {now.Plan.Report.WorstMove * 1000f:F1} without");
             }

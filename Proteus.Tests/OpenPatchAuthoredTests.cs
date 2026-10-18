@@ -328,7 +328,8 @@ public class OpenPatchAuthoredTests
             Assert.True(before.Fitted(Authored(on.Sets, n), BodyRetarget.AuthoredProbeRange, out float standoff));
             Assert.Equal(0f, standoff, 5);
             Assert.True(on.Fitted[n]);
-            Assert.True(Standoff(Final(on, n), target) >= -1e-4f);
+            // Held on the surface, at its own standoff of nothing, not at the clearance.
+            Assert.InRange(Standoff(Final(on, n), target), -1e-4f, BodyRetarget.Clearance - 5e-4f);
         }
     }
 
