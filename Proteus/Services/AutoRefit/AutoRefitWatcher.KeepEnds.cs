@@ -87,6 +87,10 @@ public sealed partial class AutoRefitWatcher
                 return;
             // No body chosen for its hands or feet, or one across the Rue line from its arms' or legs': no size of its
             // own to draw its skin like, which says nothing about the race. Logged only, as a part with no body is.
+            // Its hands' or feet's body is not installed: said so, as any garment whose body is gone is.
+            case KeepEnds.NoSize noSize when noSize.Slot == reading.Slot && j.Targets.MissingDir(noSize.Slot) is { } gone:
+                SayBodyMissing(r, gone);
+                return;
             case KeepEnds.NoSize noSize when noSize.Slot == reading.Slot
                                              && (j.Targets.DirOf(noSize.Slot).Length == 0
                                                  || j.Targets.AcrossRue(noSize.Slot, j.Lead)):

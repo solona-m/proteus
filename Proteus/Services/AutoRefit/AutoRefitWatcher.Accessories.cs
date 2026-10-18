@@ -163,7 +163,8 @@ public sealed partial class AutoRefitWatcher
         // ── what it was made on, per part it covers ──
         // A part with no size of its own — set to another body with none chosen there — is read as though it went onto
         // the accessory's own body, which it does should the accessory stay on the body it was made on (CoverTarget
-        // below decides); otherwise it is left out then, as it always was.
+        // below decides); otherwise it is left out then, as it always was. A part with no size on the accessory's own
+        // body is left out as it always was too: one body's accessory refits are unchanged.
         (BodyModIndex.Entry Body, BodyOption To)? ReadOnto(string slot)
             => slot == primary ? (lead, target)
              : TargetFor(slot) is { } own && targets.Body(slot) is { } body ? (body, own)
@@ -208,7 +209,9 @@ public sealed partial class AutoRefitWatcher
                                   + "with it rather than onto {3}", item, lead.Name, slot, targets.NameOf(slot));
                 continue;
             }
-            log.Information("[Proteus] auto refit: {0} {1} left out: {2} has no size of it", item, slot, lead.Name);
+            log.Information("[Proteus] auto refit: {0} {1} left out: {2}", item, slot,
+                            TargetFor(slot) == null ? $"no size is chosen for it on {targets.NameOf(slot)}"
+                                                    : $"{lead.Name} has no size of it");
             leftOut.Add(SlotName(slot));
             sources.Remove(slot);
         }
