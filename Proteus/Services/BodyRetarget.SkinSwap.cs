@@ -596,7 +596,7 @@ internal static partial class BodyRetarget
 
     /// <summary>Whether a landing on the author's skin is on its open edge — an edge only one of its triangles uses,
     /// or a corner on one — rather than inside it.</summary>
-    private static bool PastEdge(BodySurface.Hit hit, SkinEdges edges)
+    internal static bool PastEdge(BodySurface.Hit hit, SkinEdges edges)
     {
         const float inside = 0.01f;   // a landing clamped onto an edge has a zero weight; this is off it
         bool offA = hit.U < inside, offB = hit.V < inside, offC = hit.W < inside;
@@ -886,7 +886,7 @@ internal static partial class BodyRetarget
         private readonly HashSet<(int, int)> shared = [];
         private readonly HashSet<int> boundary = [];
 
-        private SkinEdges(ModelParts m)
+        private SkinEdges(ModelParts m, bool smallclothes)
         {
             int vc = m.Positions.Length / 3;
             var pos = new Vec3[vc];
@@ -896,7 +896,9 @@ internal static partial class BodyRetarget
             var seen = new HashSet<(int, int)>();
             foreach (var part in m.Parts)
             {
-                if (part.Island >= 0 || !SecondSkinWriter.IsBodySkinMaterial(part.Material)) continue;
+                if (part.Island >= 0) continue;
+                if (!SecondSkinWriter.IsBodySkinMaterial(part.Material)
+                    && !(smallclothes && BodySurface.IsSmallclothes(part.Material))) continue;
                 for (int t = 0; t + 2 < part.Triangles.Length; t += 3)
                     for (int e = 0; e < 3; e++)
                     {
@@ -912,7 +914,11 @@ internal static partial class BodyRetarget
                 }
         }
 
-        internal static SkinEdges Of(ModelParts m) => new(m);
+        internal static SkinEdges Of(ModelParts m) => new(m, smallclothes: false);
+
+        /// <summary>The edges of a body as it is worn bare: its skin and its own smallclothes together (see
+        /// <see cref="BodySurface.OfBodyWorn"/>).</summary>
+        internal static SkinEdges OfWorn(ModelParts m) => new(m, smallclothes: true);
 
         /// <summary>Whether the edge between these two vertices of the model is used by two triangles or more.</summary>
         internal bool IsShared(int a, int b) => shared.Contains(Key(a, b));
