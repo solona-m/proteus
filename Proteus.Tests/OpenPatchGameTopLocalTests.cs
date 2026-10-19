@@ -115,7 +115,10 @@ public class OpenPatchGameTopLocalTests(ITestOutputHelper output)
         // The written models, the kept skin in the new body's layout, as the Studio and the automatic refit draw them.
         byte[] Drawn(BodyRetarget.Planned plan) => RefitCore.MatchSkinToBody(plan.Model, source, target, uv, false, log);
         int Inside(BodyRetarget.Planned plan) => BodySizeMatch.ClothAgainst(ModelPartReader.Read(plan.Model)!, target)!.Value.Inside;
-        var body = new BodySurface(ModelPartReader.Read(File.ReadAllBytes(target))!, 0.01f);
+        // The new body as worn: a bra option (Bibo+'s SFW Bra) has no skin under its bra, only the bra, and read on its skin
+        // alone the bust would land on the hole's rim and read nothing.
+        var targetModel = ModelPartReader.Read(File.ReadAllBytes(target))!;
+        var body = BodySurface.OfBodyWorn(targetModel, 0.01f);
         var bust = sets.ClothNodes.Where(n => sets.NodeAt[n].Y is > 1.12f and < 1.32f && sets.NodeAt[n].Z > 0.03f).ToList();
         List<float> Depths(Vec3[] d) => bust.Select(n => -SkinTuckSheet.Standoff(
                                                new Vector3(sets.NodeAt[n].X + d[n].X, sets.NodeAt[n].Y + d[n].Y, sets.NodeAt[n].Z + d[n].Z), body))
@@ -124,7 +127,7 @@ public class OpenPatchGameTopLocalTests(ITestOutputHelper output)
         var depthOn = Depths(on.Final);
         // That "nothing inside" is read off the new body, not off missing readings: most of the bust front reads on it, away
         // from any open edge of its skin.
-        var edges = BodyRetarget.SkinEdges.Of(ModelPartReader.Read(File.ReadAllBytes(target))!);
+        var edges = BodyRetarget.SkinEdges.OfWorn(targetModel);
         int readable = bust.Count(n => body.Nearest(new Vector3(sets.NodeAt[n].X + on.Final[n].X, sets.NodeAt[n].Y + on.Final[n].Y,
                                                                 sets.NodeAt[n].Z + on.Final[n].Z), 0.03f, out var h)
                                        && !BodyRetarget.PastEdge(h, edges));

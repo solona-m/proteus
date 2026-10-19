@@ -25,14 +25,15 @@ public class OpenPatchAuthoredTests
     private static readonly HashSet<int> NoneHeld = [];
 
     /// <summary>A refit, the solve's nodes, its last stage, the points the rule took in, and its log.</summary>
-    private sealed record Run(BodyRetarget.Planned Plan, ModelParts Garment, BodyRetarget.Sets Sets, Vec3[] Final,
+    /// <param name="Pushed">Where the solve stood when the push-out ran: the "follow" stage.</param>
+    private sealed record Run(BodyRetarget.Planned Plan, ModelParts Garment, BodyRetarget.Sets Sets, Vec3[] Final, Vec3[] Pushed,
                               bool[] Fitted, float[] NeedDirect, List<string> Log);
 
     private static Run Refit(byte[] top, BodyRetarget.SlotPair[] pairs, BodyRetarget.Tuning? tuning = null, string slot = "_top",
                              bool clearBody = false, bool replaceSkin = true)
     {
         var garment = ModelPartReader.Read(top)!;
-        Vec3[]? final = null;
+        Vec3[]? final = null, pushed = null;
         float[]? fitted = null, needDirect = null;
         var log = new List<string>();
         BodyRetarget.Planned Plan()
@@ -45,7 +46,11 @@ public class OpenPatchAuthoredTests
             try
             {
                 return BodyRetarget.Plan(garment, top, pairs, slot, held: NoneHeld, replaceSkin: replaceSkin, acrossBodies: true,
-                                         clearBody: clearBody, cutHidden: true, log: log.Add, trace: (_, d) => final = d);
+                                         clearBody: clearBody, cutHidden: true, log: log.Add, trace: (s, d) =>
+                                         {
+                                             final = d;
+                                             if (s == "follow") pushed = d;
+                                         });
             }
             finally { BodyRetarget.PushTrace.Value = null; }
         }
@@ -53,7 +58,7 @@ public class OpenPatchAuthoredTests
         var sets = BodyRetarget.Sets.From(garment, NoneHeld, BodyRetarget.PartedSkinMeshes(garment, pairs, slot, replaceSkin, null));
         Assert.Equal(sets.NodeCount, final!.Length);
         var taken = fitted is { } f ? Array.ConvertAll(f, x => x > 0f) : new bool[sets.NodeCount];
-        return new Run(plan, garment, sets, final, taken, needDirect ?? new float[sets.NodeCount], log);
+        return new Run(plan, garment, sets, final, pushed!, taken, needDirect ?? new float[sets.NodeCount], log);
     }
 
     private static Vector3 Authored(BodyRetarget.Sets sets, int n) => new(sets.NodeAt[n].X, sets.NodeAt[n].Y, sets.NodeAt[n].Z);
@@ -328,8 +333,11 @@ public class OpenPatchAuthoredTests
             Assert.True(before.Fitted(Authored(on.Sets, n), BodyRetarget.AuthoredProbeRange, out float standoff));
             Assert.Equal(0f, standoff, 5);
             Assert.True(on.Fitted[n]);
-            // Held on the surface, at its own standoff of nothing, not at the clearance.
-            Assert.InRange(Standoff(Final(on, n), target), -1e-4f, BodyRetarget.Clearance - 5e-4f);
+            // Pushed to its own standoff of nothing, not to the clearance: the push asks for exactly the depth it found.
+            var p = Authored(on.Sets, n) + new Vector3(on.Pushed[n].X, on.Pushed[n].Y, on.Pushed[n].Z);
+            float depth = -Standoff(p, target);
+            Assert.True(depth > 0f, $"node {n} not inside the new bust when pushed");
+            Assert.Equal(depth, on.NeedDirect[n], 4);
         }
     }
 
