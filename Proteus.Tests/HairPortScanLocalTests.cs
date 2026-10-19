@@ -86,7 +86,7 @@ public sealed class HairPortScanLocalTests(ITestOutputHelper o)
                 var target = HairPortPlan.HairPath(Me, id);
                 var resolved = HairPortScan.PathsFor(Me, id, candidatesFor).ToDictionary(p => p, p => (string?)host.Resolve(p),
                                                                                          StringComparer.OrdinalIgnoreCase);
-                var d = HairPortWatcher.Decide.What(target, resolved, candidatesFor, mods, HairPortRecord.Read);
+                var d = HairPortWatcher.Decide.What(target, resolved, candidatesFor, mods, HairPortRecord.Read, game.File);
                 if (d.Kind != HairPortWatcher.Decide.Kind.Port
                     || !string.Equals(d.ModRoot, root, StringComparison.OrdinalIgnoreCase)) continue;
                 var t0 = clock.ElapsedMilliseconds;

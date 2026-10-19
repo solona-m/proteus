@@ -23,6 +23,9 @@ internal static partial class BodyRetarget
     /// number. The garment's own body mesh is an open patch — whatever part of the body the garment happens to show —
     /// and a winding number over an open patch is meaningless. Within <see cref="PushProbeRange"/>, which is all this
     /// pass looks at, the local test is also simply correct.
+    /// <para/>
+    /// Except past the patch's open edge, where the nearest point is ON the edge and the normal there says nothing about
+    /// a point beyond it — see <see cref="Fitted"/>.
     /// </summary>
     internal sealed class TargetBody
     {
@@ -34,11 +37,27 @@ internal static partial class BodyRetarget
         /// </summary>
         private readonly bool[] witnessed;
 
-        private TargetBody(BodySurface[] surfaces, bool[] witnessed)
+        /// <summary>Per surface, its skin's shared edges, read only once a landing on it needs them.</summary>
+        private readonly Lazy<SkinEdges>[] edges;
+
+        /// <summary>The bodies the garment was made on for its own slot, which it does not draw — see <see cref="Fitted"/>.
+        /// Never among <see cref="surfaces"/>. Empty but for the BEFORE surface.</summary>
+        private readonly BodySurface[] made;
+
+        private readonly Lazy<SkinEdges>[] madeEdges;
+
+        private TargetBody(BodySurface[] surfaces, bool[] witnessed, Lazy<SkinEdges>[] edges, BodySurface[] made,
+                           Lazy<SkinEdges>[] madeEdges)
         {
             this.surfaces = surfaces;
             this.witnessed = witnessed;
+            this.edges = edges;
+            this.made = made;
+            this.madeEdges = madeEdges;
         }
+
+        private static Lazy<SkinEdges> EdgesOf(ModelParts model)
+            => new(() => SkinEdges.Of(model), System.Threading.LazyThreadSafetyMode.ExecutionAndPublication);
 
         /// <param name="garmentSlot">The slot the garment is worn in, whose body is therefore not drawn. Null to keep
         /// every slot's body, for a caller that cannot say.</param>
@@ -57,20 +76,37 @@ internal static partial class BodyRetarget
         /// down to <see cref="ClearDepth"/>. A top's legs pair keeps the rule: under a top's hem the legs on screen are
         /// the body's own or a pair of trousers, never another garment's sculpted belly, and the authors' own sizes
         /// were measured with it.
+        /// <para/>
+        /// The BEFORE surface also keeps the garment's own slot's source bodies aside, never drawn — see
+        /// <see cref="Fitted"/>. Not a <see cref="SlotPair.ShapeOnly"/> pair's: there the garment keeps its own skin for
+        /// that slot (a shoe keeping its foot), and the rule was never measured on it.
         /// </remarks>
         public static TargetBody Build(IReadOnlyList<SlotPair> pairs, string? garmentSlot, ModelParts? garmentSkin,
                                        bool before)
         {
             var surfaces = new List<BodySurface>();
             var witnessed = new List<bool>();
+            var edges = new List<Lazy<SkinEdges>>();
+            var made = new List<BodySurface>();
+            var madeEdges = new List<Lazy<SkinEdges>>();
             foreach (var pair in pairs)
             {
-                if (garmentSlot != null && string.Equals(pair.Slot, garmentSlot, StringComparison.Ordinal)) continue;
+                if (garmentSlot != null && string.Equals(pair.Slot, garmentSlot, StringComparison.Ordinal))
+                {
+                    if (!before || pair.ShapeOnly) continue;
+                    var source = pair.Correspondence.Source;
+                    var on = BodySurface.OfBodyWorn(source, BodySurface.CellFor(MeanEdgeOf(source)));
+                    if (on.IsEmpty) continue;
+                    made.Add(on);
+                    madeEdges.Add(new(() => SkinEdges.OfWorn(source), System.Threading.LazyThreadSafetyMode.ExecutionAndPublication));
+                    continue;
+                }
                 var model = before ? pair.Correspondence.Source : pair.Target;
                 var body = new BodySurface(model, BodySurface.CellFor(MeanEdgeOf(model)));
                 if (body.IsEmpty) continue;
                 surfaces.Add(body);
                 witnessed.Add(!(garmentSlot == "_dwn" && pair.Slot == "_top"));
+                edges.Add(EdgesOf(model));
             }
 
             if (garmentSkin != null)
@@ -80,10 +116,12 @@ internal static partial class BodyRetarget
                 {
                     surfaces.Add(own);
                     witnessed.Add(true);
+                    edges.Add(EdgesOf(garmentSkin));
                 }
             }
 
-            return new TargetBody(surfaces.ToArray(), witnessed.ToArray());
+            return new TargetBody(surfaces.ToArray(), witnessed.ToArray(), edges.ToArray(), made.ToArray(),
+                                  madeEdges.ToArray());
         }
 
         /// <summary>
@@ -94,15 +132,22 @@ internal static partial class BodyRetarget
         /// nearer, such a point reads as clear while the other surface goes straight through it — which is what a
         /// stocking looked like with the body showing through the fabric all up the leg.
         /// </summary>
-        public bool Deepest(Vector3 p, float maxDistance, out BodySurface.Hit hit)
+        public bool Deepest(Vector3 p, float maxDistance, out BodySurface.Hit hit) => Deepest(p, maxDistance, out hit, false);
+
+        /// <inheritdoc cref="Deepest(Vector3, float, out BodySurface.Hit)"/>
+        /// <param name="openEdgeOutside">Pass over a landing past a surface's open edge that reads the point inside: the
+        /// normal there says nothing about a point beyond the edge (see <see cref="Fitted"/>). For cloth the push-out took
+        /// in by that very reading; false for every other point, which reads as it always did.</param>
+        public bool Deepest(Vector3 p, float maxDistance, out BodySurface.Hit hit, bool openEdgeOutside)
         {
             hit = default;
             bool found = false;
             float worst = 0f;
-            foreach (var surface in surfaces)
+            for (int s = 0; s < surfaces.Length; s++)
             {
-                if (!surface.Nearest(p, maxDistance, out var candidate)) continue;
+                if (!surfaces[s].Nearest(p, maxDistance, out var candidate)) continue;
                 float signed = Vector3.Dot(p - candidate.Point, candidate.Normal);
+                if (openEdgeOutside && signed < 0f && PastEdge(candidate, edges[s].Value)) continue;
                 if (found && signed >= worst) continue;
                 worst = signed;
                 hit = candidate;
@@ -129,10 +174,25 @@ internal static partial class BodyRetarget
         /// <param name="witnessed">Whether cloth inside that surface can be the author's doing — see
         /// <see cref="Build"/>.</param>
         public bool Nearest(Vector3 p, float maxDistance, out BodySurface.Hit hit, out bool witnessed)
+            => NearestOn(p, maxDistance, out hit, out witnessed) >= 0;
+
+        /// <inheritdoc cref="Nearest(Vector3, float, out BodySurface.Hit, out bool)"/>
+        /// <param name="pastEdge">Whether the point is inside the surface by its landing and that landing is on the
+        /// surface's open edge (see <see cref="PastEdge"/>) — a reading that says nothing (see <see cref="Fitted"/>). False
+        /// for a point outside: only an inside reading is ever in doubt, and only it needs the edges read.</param>
+        public bool Nearest(Vector3 p, float maxDistance, out BodySurface.Hit hit, out bool witnessed, out bool pastEdge)
+        {
+            int on = NearestOn(p, maxDistance, out hit, out witnessed);
+            pastEdge = on >= 0 && Vector3.Dot(p - hit.Point, hit.Normal) < 0f && PastEdge(hit, edges[on].Value);
+            return on >= 0;
+        }
+
+        /// <summary>The surface the nearest landing is on, or -1 for none within reach.</summary>
+        private int NearestOn(Vector3 p, float maxDistance, out BodySurface.Hit hit, out bool witnessed)
         {
             hit = default;
             witnessed = true;
-            bool found = false;
+            int on = -1;
             float best = maxDistance;
             for (int s = 0; s < surfaces.Length; s++)
             {
@@ -140,9 +200,41 @@ internal static partial class BodyRetarget
                 best = candidate.Distance;
                 hit = candidate;
                 witnessed = this.witnessed[s];
-                found = true;
+                on = s;
             }
-            return found;
+            return on;
+        }
+
+        /// <summary>
+        /// How far a point stands off the body the garment was made on for its own slot: the signed distance at the
+        /// nearest landing across those bodies — what an author fitted the cloth to where the garment's own skin cannot
+        /// say. Asked for cloth whose nearest authored skin is an open edge it lies behind (<see cref="Nearest"/>'s
+        /// pastEdge): there the edge's normal reads anything at all. Measured on "Dei Gratia" (a top made on the game's
+        /// body, its chest skin cut away under the blouse): the bust cloth 6-9 cm below the upper chest's open edge read
+        /// 3-45 mm inside it, while against the game's body it lies 3.0 mm inside to 5.3 mm outside — on its bra.
+        /// <para/>
+        /// The body is read as worn, its own smallclothes with its skin (<see cref="BodySurface.OfBodyWorn"/>): the game's
+        /// chest has no skin under its bra, and read on the skin alone every one of those points landed on the hole's rim,
+        /// past an open edge again, and was taken in by none.
+        /// </summary>
+        /// <returns>False when there is no such body, nothing of it within <paramref name="maxDistance"/>, or the landing
+        /// is past its own open edge — no reading.</returns>
+        public bool Fitted(Vector3 p, float maxDistance, out float standoff)
+        {
+            standoff = 0f;
+            int on = -1;
+            BodySurface.Hit hit = default;
+            float best = maxDistance;
+            for (int s = 0; s < made.Length; s++)
+            {
+                if (!made[s].Nearest(p, best, out var candidate)) continue;
+                best = candidate.Distance;
+                hit = candidate;
+                on = s;
+            }
+            if (on < 0 || PastEdge(hit, madeEdges[on].Value)) return false;
+            standoff = Vector3.Dot(p - hit.Point, hit.Normal);
+            return true;
         }
     }
 
@@ -238,6 +330,7 @@ internal static partial class BodyRetarget
     /// the fold guard) — and "settled", how far the settle then moved each node. A copy each time; per
     /// logical call, as <see cref="Tuned"/>; null for every refit.</summary>
     internal static readonly System.Threading.AsyncLocal<Action<string, float[]>?> PushTrace = new();
+
 
     /// <summary>How far apart a thick shell's two walls may be to be paired (3 mm) — see <see cref="FaceCheck.WallPartner"/>.
     /// Geometric's skirt: exactly 2 mm.</summary>
@@ -391,10 +484,16 @@ internal static partial class BodyRetarget
         public int NodeCount => sets.NodeCount;
 
 
+        /// <summary>Per node: taken into the push-out by the made-on body's reading alone (see
+        /// <see cref="TargetBody.Fitted"/>), so an open edge's landing never seeds a lift on it either.</summary>
+        public readonly bool[] Fitted;
+
+        /// <param name="fitted">See <see cref="Fitted"/>; null for none.</param>
         public FaceCheck(Sets sets, IReadOnlyList<int> nodes, TargetBody before, TargetBody after, float[] authored,
-                         bool clearBody)
+                         bool clearBody, bool[]? fitted = null)
         {
             this.sets = sets;
+            Fitted = fitted ?? new bool[sets.NodeCount];
             this.authored = authored;
             this.clearBody = clearBody;
             drawn = Grid(after.Points());
@@ -646,10 +745,11 @@ internal static partial class BodyRetarget
     private static int PushOut(Sets sets, IReadOnlyList<int> candidates, TargetBody before, TargetBody after,
                                Vec3[] nodeDelta, bool clearBody, out float worst, out FaceCheck faceCheck,
                                out float[] pushedBy, bool[]? snapped, Func<int, BodySurface.Hit, float, bool>? deep,
-                               out List<int> deepCleared, out float deepWorst)
+                               out List<int> deepCleared, out float deepWorst, out int openEdgeFitted)
     {
         worst = 0f;
         deepCleared = [];
+        openEdgeFitted = 0;
         deepWorst = 0f;
         pushedBy = new float[sets.NodeCount];
         // Nodes the deep clear reached, here or in the settle — counted once, by how far they ended up from where this
@@ -661,6 +761,9 @@ internal static partial class BodyRetarget
         // push nor a receiver of the spread below, which would otherwise drag hidden cloth out at the boundary.
         var nodes = new List<int>(candidates.Count);
         var authored = new float[sets.NodeCount];
+        // Taken in by the made-on body's reading alone (see TargetBody.Fitted): the open edges that misread them as
+        // tucked in are passed over below as well, wherever a landing could start a push.
+        var fitted = new bool[sets.NodeCount];
         foreach (int n in candidates)
         {
             if (clearBody)
@@ -685,7 +788,7 @@ internal static partial class BodyRetarget
             // the surface their cloth sits on. Reading it against whichever surface the point is deepest inside counts
             // more cloth as deliberately hidden and quietly stops the pass undoing clips it should — measured on a
             // stocking, 350 buried points became 622 with the default settings.
-            if (before.Nearest(p0, AuthoredProbeRange, out var h0, out bool witnessed))
+            if (before.Nearest(p0, AuthoredProbeRange, out var h0, out bool witnessed, out bool pastEdge))
             {
                 float s0 = Vector3.Dot(p0 - h0.Point, h0.Normal);
                 if (s0 < 0f)
@@ -693,8 +796,20 @@ internal static partial class BodyRetarget
                     // Inside a surface that cannot say what the author saw (a legs garment's chest — see TargetBody):
                     // a clip to undo, held to the clearance as clearBody holds it. Deeper than ClearDepth it is still
                     // the garment's own structure.
-                    if (witnessed || s0 < -ClearDepth) continue;
-                    authored[n] = float.MaxValue;
+                    if (witnessed || s0 < -ClearDepth)
+                    {
+                        // Unless the landing is the open edge of a patch the point lies beyond, which says nothing: then
+                        // the body the garment was made on decides. Cloth outside it comes in at the author's own
+                        // standoff; cloth lying on it, within FitSlack, at the clearance. Cloth buried deeper stays out
+                        // as it always did — the game buries its tops' cloth 6-15 mm, and pulling that out moves cloth no
+                        // one complained of (see TargetBody.Fitted).
+                        if (!pastEdge || Tuned.NoOpenEdgeFit || !before.Fitted(p0, AuthoredProbeRange, out float made)
+                            || made < -FitSlack) continue;
+                        authored[n] = made >= 0f ? made : float.MaxValue;
+                        fitted[n] = true;
+                        openEdgeFitted++;
+                    }
+                    else authored[n] = float.MaxValue;
                 }
                 else authored[n] = s0;
             }
@@ -716,7 +831,7 @@ internal static partial class BodyRetarget
                                       sets.NodeAt[n].Y + nodeDelta[n].Y,
                                       sets.NodeAt[n].Z + nodeDelta[n].Z));
 
-            if (!after.Deepest(p, PushProbeRange, out var hit)) continue;
+            if (!after.Deepest(p, PushProbeRange, out var hit, openEdgeOutside: fitted[n])) continue;
 
             dir[n] = ToVec(hit.Normal);
             hasDir[n] = true;
@@ -741,8 +856,9 @@ internal static partial class BodyRetarget
         }
 
         var pushTrace = PushTrace.Value;
+        pushTrace?.Invoke("fitted", Array.ConvertAll(fitted, f => f ? 1f : 0f));
         pushTrace?.Invoke("need-direct", (float[])need.Clone());
-        faceCheck = new FaceCheck(sets, nodes, before, after, authored, clearBody);
+        faceCheck = new FaceCheck(sets, nodes, before, after, authored, clearBody, fitted);
         any |= SkinThroughFaces(faceCheck, nodeDelta, need, dir, hasDir);
         pushTrace?.Invoke("need-faces", (float[])need.Clone());
 
@@ -885,7 +1001,8 @@ internal static partial class BodyRetarget
         // what the refit is measured on afterwards (folds, stretch), not by that guard.
         var beforeSettle = pushTrace != null ? (Vec3[])nodeDelta.Clone() : null;
         if (!Tuned.NoSettle)
-            pushed += Settle(sets, nodes, after, nodeDelta, authored, clearBody, pushedBy, ref worst, deep, deepNode);
+            pushed += Settle(sets, nodes, after, nodeDelta, authored, clearBody, pushedBy, ref worst, deep, deepNode,
+                             fitted);
         if (pushTrace != null)
         {
             var settled = new float[sets.NodeCount];
@@ -1066,7 +1183,8 @@ internal static partial class BodyRetarget
         {
             if (!check.Considered[n]) continue;
             var p = check.At(n, nodeDelta);
-            if (!drawn.Deepest(p, PushProbeRange, out var hit) || !IsUnderbust(hit.Normal)) continue;
+            if (!drawn.Deepest(p, PushProbeRange, out var hit, openEdgeOutside: check.Fitted[n])
+                || !IsUnderbust(hit.Normal)) continue;
             float s = Vector3.Dot(p - hit.Point, hit.Normal);
             if (s >= UnderbustClearance || s < -ClearDepth) continue;   // clear already, or buried on purpose
             need[n] = UnderbustClearance - s;
@@ -1483,7 +1601,7 @@ internal static partial class BodyRetarget
     /// <param name="deepNode">Marked for every node it clears from that deep.</param>
     private static int Settle(Sets sets, List<int> nodes, TargetBody after, Vec3[] nodeDelta, float[] authored,
                               bool clearBody, float[] pushedBy, ref float worst,
-                              Func<int, BodySurface.Hit, float, bool>? deep, bool[] deepNode)
+                              Func<int, BodySurface.Hit, float, bool>? deep, bool[] deepNode, bool[] fitted)
     {
         var inSet = new bool[sets.NodeCount];
         foreach (int n in nodes) inSet[n] = true;
@@ -1493,7 +1611,7 @@ internal static partial class BodyRetarget
         {
             normal = default;
             var p = Placed(sets, nodeDelta, n);
-            if (!after.Deepest(p, PushProbeRange, out var hit)) return 0f;
+            if (!after.Deepest(p, PushProbeRange, out var hit, openEdgeOutside: fitted[n])) return 0f;
             float s = Vector3.Dot(p - hit.Point, hit.Normal);
             if (s >= -SettleTolerance) return 0f;
             if (clearBody && s < -ClearDepth)

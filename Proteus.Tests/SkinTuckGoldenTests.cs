@@ -438,17 +438,39 @@ public class SkinTuckGoldenTests(ITestOutputHelper output)
 
     [LocalDataFact(LocalData.GameData, Neolithe)]
     [Trait("Plan", "AC-neckline-skin-tuck-3")]
+    [Trait("Plan", "AC-open-patch-authored-4")]
     public void A_modders_cut_on_Neolithe_plans_as_before()
     {
         var (bytes, source, target, pair, _) = Setup("Neo-Ishgardian Top of Maiming", "neobelly chest - smallclothes/sfw m.mdl");
         if (!SameInputs(("garment", bytes, MaimingSha), ("source", File.ReadAllBytes(source), VanillaTopSha),
                         ("target", File.ReadAllBytes(target), NeobellyMSha))) return;
         var garment = ModelPartReader.Read(bytes)!;
-        var plan = BodyRetarget.Plan(garment, bytes, [pair], "_top", held: NoneHeld, replaceSkin: true, acrossBodies: true,
-                                     clearBody: false, cutHidden: true,
-                                     keepShape: RefitCore.ShapePieces(garment, RefitCore.DefaultKeepShape(garment)));
+        // As it was pinned: before cloth past the top's own open skin edge was read against the body it was made on
+        // (build 1323), which takes 80 of its points in — see A_modders_cut_on_Neolithe_plans_as_fitted.
+        var plan = BodyRetarget.WithTuning(new BodyRetarget.Tuning(NoOpenEdgeFit: true), () => MaimingCut(garment, bytes, pair));
         Pinned(plan.Model, MaimingStudioCut);
     }
+
+    /// <summary>
+    /// The same cut with the made-on body's reading (<see cref="BodyRetarget.TargetBody.Fitted"/>), pinned on build 1323.
+    /// Measured against the refit above: cloth inside the new body 40 → 14 points, folds 0 → 0, nothing turned over, and
+    /// stretched against the game's own top 4 → 10 edges across the bust — where it used to pass through it. Accepted
+    /// (build 1323); judged in OpenPatchGameTopLocalTests.
+    /// </summary>
+    [LocalDataFact(LocalData.GameData, Neolithe)]
+    [Trait("Plan", "AC-open-patch-authored-9")]
+    public void A_modders_cut_on_Neolithe_plans_as_fitted()
+    {
+        var (bytes, source, target, pair, _) = Setup("Neo-Ishgardian Top of Maiming", "neobelly chest - smallclothes/sfw m.mdl");
+        if (!SameInputs(("garment", bytes, MaimingSha), ("source", File.ReadAllBytes(source), VanillaTopSha),
+                        ("target", File.ReadAllBytes(target), NeobellyMSha))) return;
+        Pinned(MaimingCut(ModelPartReader.Read(bytes)!, bytes, pair).Model, MaimingStudioCutFitted);
+    }
+
+    private static BodyRetarget.Planned MaimingCut(ModelParts garment, byte[] bytes, BodyRetarget.SlotPair pair)
+        => BodyRetarget.Plan(garment, bytes, [pair], "_top", held: NoneHeld, replaceSkin: true, acrossBodies: true,
+                             clearBody: false, cutHidden: true,
+                             keepShape: RefitCore.ShapePieces(garment, RefitCore.DefaultKeepShape(garment)));
 
     [LocalDataFact(LocalData.GameData, Neolithe)]
     [Trait("Plan", "AC-neckline-skin-tuck-3")]
@@ -482,6 +504,8 @@ public class SkinTuckGoldenTests(ITestOutputHelper output)
     private const string PullMoves = "7859DFEE4147CB00F617F9325A92C1A76C1E23150EB68A1ED516F79DBD892A81";
     private const string GameTopUntucked = "E3DA5ACD964F2FD5ACC8E7BC87EA163456C2955C9035B9B864F755DD3F9742F7";
     private const string MaimingStudioCut = "6B0216E852B601965EDB47C63572FCA53FFCDB7C80CC1E36CB821DCDB30DADE1";
+    // Pinned on build 1323.
+    private const string MaimingStudioCutFitted = "28EF6EB3F30337E37E268FC8D5DC9330841188A93D15514B32D8E89FD027C703";
     private const string DirndlGameRefit = "1B6456AF7163D39F5EDB5B2E38EE8F50B35D1B15BDCE0DDEF414BD4FDC5FD61B";
 
     // Pinned on 72dde80, change (a)'s final commit.

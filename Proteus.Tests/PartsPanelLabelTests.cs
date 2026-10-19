@@ -105,4 +105,28 @@ public class PartsPanelLabelTests
     [Fact]
     public void APathThatNamesNoSlotFallsBackToItsFileName()
         => Assert.Equal(["thing.mdl"], PartsPanel.ModelLabels([R("chara/thing.mdl", "thing.mdl", "")]));
+
+    /// <summary>
+    /// Body size's "Open the Highlander M model": the row of the author's own model for that race — the one in the open
+    /// model's option when several options ship one — or none, and then no button.
+    /// </summary>
+    [Fact]
+    [Trait("Plan", "AC-refit-other-race-6")]
+    [Trait("Plan", "EDGE-refit-other-race-17")]
+    public void TheSiblingModelIsTheOneInTheOpenModelsOption()
+    {
+        const string mid = "chara/equipment/e6091/model/c0101e6091_top.mdl";
+        const string high = "chara/equipment/e6091/model/c0301e6091_top.mdl";
+        var models = new[]
+        {
+            R(mid, "a/mid.mdl", "Shirt / Everything"),
+            R(high, "b/high.mdl", "Shirt / Neolithe"),
+            R(mid, "b/mid.mdl", "Shirt / Neolithe"),
+            R(high, "a/high.mdl", "Shirt / Everything"),
+        };
+        Assert.Equal(3, PartsPanel.SiblingModelIndex(models, models[0], high));
+        Assert.Equal(1, PartsPanel.SiblingModelIndex(models, models[2], high));
+        Assert.Equal(1, PartsPanel.SiblingModelIndex(models, null, high));
+        Assert.Equal(-1, PartsPanel.SiblingModelIndex(models, models[0], "chara/equipment/e6091/model/c0901e6091_top.mdl"));
+    }
 }

@@ -425,6 +425,118 @@ internal static class SkinTuckSheet
 
     internal static string Sha(byte[] bytes) => Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(bytes));
 
+    /// <summary>The game's smallclothes material, as a body model names its own bra (see <see cref="BodySurface.IsSmallclothes"/>).</summary>
+    internal const string Smallclothes = "/mt_c0201e0000_top_a.mtrl";
+
+    /// <summary>
+    /// A grid patch over rows <paramref name="from"/>..<paramref name="to"/>, every vertex with <paramref name="normal"/>,
+    /// leaving out the grid cells <paramref name="skip"/> names (by their lower-left row and column), and with the vertices
+    /// of column <paramref name="seamColumn"/> doubled — the cells to its left and right each their own copy, as a uv seam
+    /// splits a body mesh.
+    /// </summary>
+    private static SyntheticModel.SurfaceMesh Patch(string material, int from, int to, Func<int, int, float> z,
+                                                    Func<int, int, Vector3> normal, Func<int, int, bool>? skip = null,
+                                                    int? seamColumn = null)
+    {
+        var pos = new List<Vector3>();
+        var nrm = new List<Vector3>();
+        var index = new Dictionary<(int, int, bool), int>();
+        int At(int r, int c, bool right)
+        {
+            bool split = seamColumn == c;
+            var key = (r, c, split && right);
+            if (!index.TryGetValue(key, out int i))
+            {
+                index[key] = i = pos.Count;
+                pos.Add(new Vector3(X(c), Y(r), z(r, c)));
+                nrm.Add(Vector3.Normalize(normal(r, c)));
+            }
+            return i;
+        }
+        var tris = new List<int>();
+        for (int r = from; r < to; r++)
+            for (int c = 0; c + 1 < Columns; c++)
+            {
+                if (skip?.Invoke(r, c) == true) continue;
+                // A cell right of the seam takes the seam's right-hand copy; one left of it, the left-hand one.
+                int a = At(r, c, true), b = At(r, c + 1, false), d = At(r + 1, c, true), e = At(r + 1, c + 1, false);
+                tris.AddRange([a, b, e, a, e, d]);
+            }
+        return new SyntheticModel.SurfaceMesh(material, [.. pos], [.. nrm], [.. pos.Select(_ => Vector2.Zero)],
+                                              [.. pos.Select(_ => ((string, float)[]?)[("j_sebo_c", 1f)])], [(0u, [.. tris])]);
+    }
+
+    /// <summary>
+    /// A top whose own skin is an open patch over rows <paramref name="patchFrom"/> and up, flat at z = 0 with every vertex
+    /// facing <paramref name="patchNormal"/> — an upper chest whose normal tilts up and out, as the patch Dei Gratia's author
+    /// left above the bust — and cloth over rows <paramref name="clothFrom"/>..<paramref name="clothTo"/> below it, each
+    /// point <paramref name="clothZ"/>(row, column) off the plane.
+    /// </summary>
+    /// <param name="seamColumn">Split the patch's vertices along this column, as a uv seam does.</param>
+    /// <param name="underPatch">More cloth over these rows under the patch, at this height (negative: tucked under it).</param>
+    /// <param name="clothShift">Moves the cloth below the patch off the grid's own vertices.</param>
+    internal static byte[] OpenPatchTop(Func<int, int, float> clothZ, Vector3 patchNormal, int patchFrom = Edge, int clothFrom = 2,
+                                        int clothTo = Edge - 1, int? seamColumn = null, (int From, int To, float Z)? underPatch = null,
+                                        Vector3 clothShift = default)
+    {
+        var meshes = new List<SyntheticModel.SurfaceMesh>
+        {
+            Patch(Skin, patchFrom, Rows - 1, (_, _) => 0f, (_, _) => patchNormal, seamColumn: seamColumn),
+        };
+        if (clothTo >= clothFrom)
+        {
+            var cloth = Sheet(Cloth, clothFrom, clothTo, clothZ);
+            meshes.Add(cloth with { Positions = [.. cloth.Positions.Select(p => p + clothShift)] });
+        }
+        if (underPatch is { } under) meshes.Add(Sheet(Cloth, under.From, under.To, _ => under.Z));
+        return SyntheticModel.BuildSurface([], [.. meshes]);
+    }
+
+    /// <summary>The tilt <see cref="OpenPatchTop"/>'s patch is given unless a test says otherwise: up and out.</summary>
+    internal static readonly Vector3 UpAndOut = Vector3.Normalize(new Vector3(0f, 0.5f, 0.87f));
+
+    /// <summary>
+    /// A chest pair whose transfer moves nothing — its correspondence is <paramref name="source"/> onto itself — while the
+    /// body it is pushed against and swaps in is <paramref name="target"/>: cloth fitted on the first left where it was,
+    /// buried in a grown second, as Dei Gratia's bust was left 5-16 mm inside Bibo+'s breast.
+    /// </summary>
+    internal static BodyRetarget.SlotPair Undershot(byte[] source, byte[] target, string slot = "_top")
+    {
+        var s = ModelPartReader.Read(source)!;
+        var t = ModelPartReader.Read(target)!;
+        Assert.True(IdentityCorrespondence.TryBuild(s, s, slot, out var built, out string refusal), refusal);
+        return new BodyRetarget.SlotPair(slot, built!, t, target, source);
+    }
+
+    /// <summary>A flat body whose skin starts at row <paramref name="firstRow"/>: an open bottom edge there.</summary>
+    /// <param name="z">The skin's height by row and column; flat when null.</param>
+    /// <param name="normal">Every vertex's normal, instead of the surface's own.</param>
+    internal static byte[] BodyFrom(int firstRow, Func<int, int, float>? z = null, Vector3? normal = null)
+    {
+        var height = z ?? ((_, _) => 0f);
+        var skin = normal is { } n ? Patch(Skin, firstRow, Rows - 1, height, (_, _) => n)
+                                   : Sheet(Skin, firstRow, Rows - 1, height, shaped: z != null);
+        return SyntheticModel.BuildSurface([], skin);
+    }
+
+    /// <summary>A body whose rows below <see cref="Edge"/> sit <paramref name="riseBelow"/> behind the rows above it: the
+    /// bottom edge of an upper patch over it faces down and out, as an underbust does.</summary>
+    internal static byte[] Stepped(float riseBelow) => Body(z: (r, _) => r < Edge ? -riseBelow : 0f);
+
+    /// <summary>
+    /// A body as the game draws its chest: a hole in its skin over the cells of rows <paramref name="rows"/> and columns
+    /// <paramref name="columns"/>, filled — when <paramref name="filled"/> — by its own smallclothes there, flat with it.
+    /// </summary>
+    internal static byte[] WornBody((int From, int To) rows, (int From, int To) columns, bool filled)
+    {
+        bool Hole(int r, int c) => r >= rows.From && r < rows.To && c >= columns.From && c < columns.To;
+        var meshes = new List<SyntheticModel.SurfaceMesh> { Patch(Skin, 0, Rows - 1, (_, _) => 0f, (_, _) => Vector3.UnitZ, Hole) };
+        if (filled)
+            meshes.Add(Patch(Smallclothes, rows.From, rows.To, (_, _) => 0f, (_, _) => Vector3.UnitZ,
+                             (r, c) => !Hole(r, c)));
+        return SyntheticModel.BuildSurface([], [.. meshes]);
+    }
+
     /// <summary>
     /// The body skin triangles <paramref name="tucked"/> draws that <paramref name="untucked"/> does not, and of those how
     /// many are NOT one of <paramref name="body"/>'s own skin triangles at the same three positions wound the same way —

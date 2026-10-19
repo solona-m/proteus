@@ -75,7 +75,16 @@ internal sealed class BodySurface
     /// </summary>
     public static BodySurface OfCloth(ModelParts garment, float cellSize) => new(garment, cellSize, cloth: true);
 
-    private BodySurface(ModelParts body, float cellSize, bool cloth)
+    /// <summary>
+    /// A body as it is worn bare: its skin and its own smallclothes (see <see cref="IsSmallclothes"/>), which the game's
+    /// body draws in place of the skin under them — the vanilla chest has no skin under its bra at all, only the bra.
+    /// </summary>
+    public static BodySurface OfBodyWorn(ModelParts body, float cellSize) => new(body, cellSize, cloth: false, smallclothes: true);
+
+    /// <summary>A body model's own smallclothes: what it draws with the game's smallclothes material, set e0000.</summary>
+    public static bool IsSmallclothes(string material) => material.Contains("e0000_", StringComparison.Ordinal);
+
+    private BodySurface(ModelParts body, float cellSize, bool cloth, bool smallclothes = false)
     {
         int vc = body.Positions.Length / 3;
         pos = new Vector3[vc];
@@ -91,7 +100,10 @@ internal sealed class BodySurface
         foreach (var part in body.Parts)
         {
             // An island is a subset of its own submesh; taking both would index every triangle twice.
-            if (part.Island >= 0 || SecondSkinWriter.IsBodySkinMaterial(part.Material) == cloth) continue;
+            if (part.Island >= 0) continue;
+            bool skinPart = SecondSkinWriter.IsBodySkinMaterial(part.Material)
+                            || (smallclothes && IsSmallclothes(part.Material));
+            if (skinPart == cloth) continue;
             for (int t = 0; t + 2 < part.Triangles.Length; t += 3)
             {
                 int a = part.Triangles[t], b = part.Triangles[t + 1], c = part.Triangles[t + 2];

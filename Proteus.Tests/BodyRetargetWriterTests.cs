@@ -761,6 +761,107 @@ public class BodyRetargetWriterTests : IDisposable
         Assert.Single(options.Single(o => o.Name == "Rue Small").Manipulations!);
     }
 
+    // ── a refit for a race picked in "Refit for" ────────────────────────────────────────────────────────
+
+    private const string Shirt = "chara/equipment/e6091/model/c0101e6091_top.mdl";
+    private const string HighlanderShirt = "chara/equipment/e6091/model/c0301e6091_top.mdl";
+    private const string ShirtMaterial = "chara/equipment/e6091/material/v0001/mt_c0101e6091_top_a.mtrl";
+    private const string Lumberjack = "Summer Indigo Shirt";
+
+    /// <summary>The Lumberjack's layout: one group, its option publishing the Midlander shirt and its material.</summary>
+    private void WriteShirtGroup(string type)
+        => File.WriteAllText(Path.Combine(root, PenumbraModMeta.MetaFile), $$"""
+        {
+          "FileVersion": 4, "Name": "The Lumberjack",
+          "Groups": [
+            { "Version": 0, "Name": "{{Lumberjack}}", "Priority": 0, "Type": "{{type}}", "DefaultSettings": 1, "Options": [
+              { "Name": "Everything", "Files": { "{{Shirt}}": "shirt/c0101e6091_top.mdl", "{{ShirtMaterial}}": "shirt/top_a.mtrl" },
+                "Manipulations": [ { "Type": "Est", "Manipulation": { "Gender": "Female", "Race": "Midlander", "SetId": 6091,
+                                                                         "Slot": "Body", "Entry": 6085 } } ] } ] },
+            { "Version": 0, "Name": "After", "Priority": 0, "Type": "Single", "DefaultSettings": 0, "Options": [] }
+          ]
+        }
+        """);
+
+    private static List<object> HighlanderManipulations()
+    {
+        var route = new RacialModelBake.Route(101, 301, Down: false);
+        return [route.Eqdp(route.SavePath(Shirt))!, PenumbraManipulations.EstManipulation("0301", "Body", 6091, 6085)];
+    }
+
+    [Theory]
+    [InlineData("Single")]
+    [InlineData("Multi")]
+    [Trait("Plan", "AC-refit-other-race-3")]
+    [Trait("Plan", "AC-refit-other-race-8")]
+    [Trait("Plan", "EDGE-refit-other-race-15")]
+    public void A_highlander_refit_joins_the_author_s_group_and_keeps_the_midlander_model(string type)
+    {
+        WriteShirtGroup(type);
+        var before = Read(Lumberjack);
+        var route = new RacialModelBake.Route(101, 301, Down: false);
+        var outcome = BodyRetargetWriter.Save(root, Lumberjack, route.SavePath(Shirt), "TBSE-X", "Core files",
+                                              [new BodyRetargetWriter.Refit("TBSE-X — M Highlander", [9], "M Highlander")],
+                                              fromOption: "Everything", manipulations: HighlanderManipulations());
+        Assert.True(outcome.Ok, outcome.Message);
+
+        // Appended after the author's option, in their group, and nothing else moved.
+        Assert.Equal([Lumberjack, "After"], GroupNames());
+        var options = PenumbraModMeta.TryReadFileOptions(root, Lumberjack)!;
+        Assert.Equal(["Everything", "TBSE-X — M Highlander"], options.Select(o => o.Name));
+        Assert.True(Same(before.GetProperty("Options")[0], Read(Lumberjack).GetProperty("Options")[0]),
+                    "the author's option changed");
+
+        // Highlander men load the refit; the Midlander model and the material ride along, so everyone else draws what
+        // they drew with the option it was cut from.
+        var refit = options[1];
+        Assert.Equal([9], File.ReadAllBytes(Path.Combine(root, refit.Files[HighlanderShirt])));
+        Assert.Equal("shirt/c0101e6091_top.mdl", refit.Files[Shirt]);
+        Assert.Equal("shirt/top_a.mtrl", refit.Files[ShirtMaterial]);
+
+        // His EQDP entry and the extra skeleton carried for him, once each, beside the author's own entry.
+        var manips = refit.Manipulations!.Cast<JsonElement>().ToList();
+        Assert.Single(manips, m => m.GetProperty("Type").GetString() == "Eqdp");
+        Assert.Single(EstTable.FromManipulations(refit.Manipulations), e => e.Race == 301);
+        Assert.Single(EstTable.FromManipulations(refit.Manipulations), e => e.Race == 201);
+    }
+
+    [Fact]
+    [Trait("Plan", "EDGE-refit-other-race-7")]
+    public void Saving_the_highlander_size_again_keeps_one_eqdp_and_one_est_entry()
+    {
+        WriteShirtGroup("Single");
+        var route = new RacialModelBake.Route(101, 301, Down: false);
+        for (int i = 0; i < 2; i++)
+            Assert.True(BodyRetargetWriter.Save(root, Lumberjack, route.SavePath(Shirt), "TBSE-X", "Core files",
+                                                [new BodyRetargetWriter.Refit("TBSE-X — M Highlander", [(byte)i], "M Highlander")],
+                                                fromOption: "Everything", manipulations: HighlanderManipulations()).Ok);
+
+        var refit = PenumbraModMeta.TryReadFileOptions(root, Lumberjack)!.Single(o => o.Name == "TBSE-X — M Highlander");
+        var manips = refit.Manipulations!.Cast<JsonElement>().ToList();
+        Assert.Single(manips, m => m.GetProperty("Type").GetString() == "Eqdp");
+        Assert.Single(EstTable.FromManipulations(refit.Manipulations), e => e.Race == 301);
+        Assert.Equal([1], File.ReadAllBytes(Path.Combine(root, refit.Files[HighlanderShirt])));
+    }
+
+    /// <summary>A bake refused: the refit is of the model as drawn, saved over it, with no entry for another race.</summary>
+    [Fact]
+    [Trait("Plan", "EDGE-refit-other-race-6")]
+    public void A_refused_bake_saves_at_the_drawn_path_with_no_eqdp()
+    {
+        var none = RacialModelBake.Route.None;
+        Assert.Equal(Shirt, none.SavePath(Shirt));
+        Assert.Null(none.Eqdp(none.SavePath(Shirt)));
+
+        WriteShirtGroup("Single");
+        Assert.True(BodyRetargetWriter.Save(root, Lumberjack, none.SavePath(Shirt), "TBSE-X", "Core files",
+                                            [new BodyRetargetWriter.Refit("TBSE-X — M", [3], "M")],
+                                            fromOption: "Everything").Ok);
+        var refit = PenumbraModMeta.TryReadFileOptions(root, Lumberjack)!.Single(o => o.Name == "TBSE-X — M");
+        Assert.False(refit.Files.ContainsKey(HighlanderShirt));
+        Assert.DoesNotContain(refit.Manipulations?.Cast<JsonElement>() ?? [], m => m.GetProperty("Type").GetString() == "Eqdp");
+    }
+
     /// <summary>
     /// Lay out author groups in this order, each a one-option group with nothing in it — except any group of ours
     /// already present, which is kept exactly as it is and simply placed where the list says.

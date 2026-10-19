@@ -4307,6 +4307,90 @@
     "message": "无法回读新模型",
     "description": "Why a model for the wearer's race could not be made; the {1} of Parts.Retarget.BakeFailed.Fmt. Lower-case, no full stop."
   },
+  "Parts.Retarget.Race.Label": {
+    "message": "转换给种族",
+    "description": "Heads the dropdown that picks which race's model a refit is made and saved as."
+  },
+  "Parts.Retarget.Race.Tip": {
+    "message": "转换给哪个种族。选择与服装同性别的其他种族时，会按游戏的弯曲方式从此模型生成专用模型，转换到该种族的体型，并保存到该种族读取的位置。其他种族仍使用此模型。",
+    "description": "Tooltip of Parts.Retarget.Race.Label."
+  },
+  "Parts.Retarget.Race.ThisModel.Fmt": {
+    "message": "{0}（此模型）",
+    "description": "An entry of the Refit for list; {0} is a race such as \"Midlander M\": the race of the model open."
+  },
+  "Parts.Retarget.Race.AsWorn.Fmt": {
+    "message": "{0}（按你的角色穿着）",
+    "description": "An entry of the Refit for list; {0} is a race such as \"Midlander F\": the race the logged-in character would get it as."
+  },
+  "Parts.Retarget.Race.OwnModel.Fmt": {
+    "message": "此模组已有自己的{0}模型。请改为转换那个模型。",
+    "description": "{0} is a race such as \"Highlander M\" the mod already ships a model of."
+  },
+  "Parts.Retarget.Race.OpenModel.Fmt": {
+    "message": "打开{0}模型",
+    "description": "A button; {0} is a race such as \"Highlander M\"."
+  },
+  "Parts.Retarget.Race.Baking.Fmt": {
+    "message": "正在生成{0}模型…",
+    "description": "Shown while the model for a picked race is made; {0} is a race such as \"Highlander M\"."
+  },
+  "Parts.Retarget.Race.Only.Fmt": {
+    "message": "只有{0}会穿保存的转换结果；{1}仍使用此模型。",
+    "description": "{0} is the race picked, {1} the race of the model open."
+  },
+  "Parts.Retarget.Race.SourceBaked.Fmt": {
+    "message": "原本适配的体型也会以同样方式弯曲为{0}，因此贴合方式与之前一样。",
+    "description": "{0} is the race picked."
+  },
+  "Parts.Retarget.Race.PreviewOther.Fmt": {
+    "message": "你的角色不是{0}，所以实时预览按你的角色弯曲，并不是{0}看到的样子。",
+    "description": "{0} is the race picked."
+  },
+  "Parts.Retarget.Race.PreviewNotDrawn.Fmt": {
+    "message": "你的角色没有穿这个模型，因此没有实时预览。保存的转换结果就是{0}会穿的样子。",
+    "description": "{0} is the race picked."
+  },
+  "Parts.Retarget.Race.SkeletonFallback.Fmt": {
+    "message": "无法读取你的模组中{0}的骨骼，已改用游戏自带的骨骼。",
+    "description": "{0} is the race picked."
+  },
+  "Parts.Retarget.Race.EstCarried.Fmt": {
+    "message": "保存时还会为{0}设置{1}在此物品上加载的额外骨骼（{2}），让它的额外骨骼能够活动。",
+    "description": "{0} is the race picked, {1} the race of the model open, {2} the extra skeleton's number."
+  },
+  "Parts.Retarget.Race.NoDeformer": {
+    "message": "无法读取游戏的种族变形数据",
+    "description": "Why a model for a picked race could not be made; the {1} of Parts.Retarget.BakeFailed.Fmt. Lower-case, no full stop."
+  },
+  "Parts.Retarget.Race.NoSkeleton.Fmt": {
+    "message": "无法读取{0}的骨骼",
+    "description": "Why a model for a picked race could not be made; {0} is a race. Lower-case, no full stop."
+  },
+  "Parts.Retarget.Race.Unbendable.Fmt": {
+    "message": "{0}无法随{1}的骨骼移动：{2}",
+    "description": "Why a model for a picked race could not be made: {0} is Parts.Retarget.Race.OneBone or .ManyBones.Fmt, {1} a race, {2} bone names. Lower-case, no full stop."
+  },
+  "Parts.Retarget.Race.OneBone": {
+    "message": "服装依附的一根骨骼",
+    "description": "The {0} of Parts.Retarget.Race.Unbendable.Fmt."
+  },
+  "Parts.Retarget.Race.ManyBones.Fmt": {
+    "message": "服装依附的{0}根骨骼",
+    "description": "The {0} of Parts.Retarget.Race.Unbendable.Fmt; {0} here is a count."
+  },
+  "Parts.Retarget.Race.LeftOut.Fmt": {
+    "message": "已从原本适配的体型中排除，因为它们无法以同样方式弯曲：{0}",
+    "description": "{0} lists the left-out bodies, each with Parts.Retarget.Race.BodyBones.Fmt or another reason."
+  },
+  "Parts.Retarget.Race.BodyBones.Fmt": {
+    "message": "其骨骼 {0} 无法随{1}的骨骼移动",
+    "description": "Why a made-for body was left out: {0} lists bone names, {1} is a race. Lower-case, no full stop."
+  },
+  "Parts.Retarget.Race.Remake.Fmt": {
+    "message": "保存位置会改变{0}模型，正在重新生成。请重新转换并预览，然后再保存。",
+    "description": "A save refused: where it goes changes what the picked race's model is made with. {0} is the race picked."
+  },
   "Parts.Retarget.BodyFallback": {
     "message": "体型",
     "description": "Body size: starts the name of a saved Penumbra option when the target body mod's own name is unknown."
@@ -5169,6 +5253,14 @@
   },
   "HairPort.Refused.NoPbd": {
     "message": "无法读取游戏的种族变形器",
+    "description": ""
+  },
+  "HairPort.Refused.NoSkeletonTable": {
+    "message": "无法读取游戏的发型骨架表",
+    "description": ""
+  },
+  "HairPort.Refused.SkeletonUnreadable.Fmt": {
+    "message": "无法读取模组的骨架 {0}",
     "description": ""
   },
   "HairPort.Declined.Fmt": {
