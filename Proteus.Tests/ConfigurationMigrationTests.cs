@@ -52,6 +52,31 @@ public class ConfigurationMigrationTests
     }
 
     [Fact]
+    [Trait("Plan", "AC-earless-miqote-hair-1")]
+    public void Earless_defaults_off_and_missing_property_reads_off()
+    {
+        var fresh = new Configuration();
+        Assert.False(fresh.EarlessMiqoteHair);
+        Assert.False(fresh.EarlessRestorePending);
+        var old = Newtonsoft.Json.JsonConvert.DeserializeObject<Configuration>(
+            $$"""{"Version":{{Configuration.CurrentVersion}},"AutoHairPort":true}""")!;
+        old.Migrate();
+        Assert.False(old.EarlessMiqoteHair);
+        Assert.False(old.EarlessRestorePending);
+        Assert.Equal(Configuration.CurrentVersion, old.Version);
+    }
+
+    [Fact]
+    [Trait("Plan", "AC-earless-miqote-hair-1")]
+    public void Earless_round_trips()
+    {
+        var json = Newtonsoft.Json.JsonConvert.SerializeObject(new Configuration { EarlessMiqoteHair = true, EarlessRestorePending = true });
+        var back = Newtonsoft.Json.JsonConvert.DeserializeObject<Configuration>(json)!;
+        Assert.True(back.EarlessMiqoteHair);
+        Assert.True(back.EarlessRestorePending);
+    }
+
+    [Fact]
     [Trait("Plan", "AC-refit-piercings-option-4")]
     [Trait("Plan", "AC-refit-piercings-option-5")]
     [Trait("Plan", "EDGE-refit-piercings-option-10")]

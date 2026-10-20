@@ -58,7 +58,10 @@ public sealed class TranslateGizmo
     /// </summary>
     public int Frame { get; private set; } = -1;
 
-    private Vector3 dragPivot;
+    /// <summary>The pivot the current or last drag started at — what <see cref="Offset"/> is measured from. Kept after
+    /// release, so the frame a drag ends can still read it.</summary>
+    public Vector3 DragPivot { get; private set; }
+
     private float dragT0;
     private Vector3 dragHit0;
 
@@ -81,7 +84,7 @@ public sealed class TranslateGizmo
     {
         Started = Ended = false;
         Frame = ImGui.GetFrameCount();
-        var centre = Active != Handle.None ? dragPivot : pivot;
+        var centre = Active != Handle.None ? DragPivot : pivot;
 
         if (toScreen(centre) is not { } sc) { CancelHover(); return; }
         float len = ModelLengthForPixels(centre, sc, toScreen);
@@ -110,7 +113,7 @@ public sealed class TranslateGizmo
                 && Measure(Hovered, centre, mr.Origin, mr.Dir, view, out float t, out var hit))
             {
                 Active = Hovered;
-                dragPivot = centre;
+                DragPivot = centre;
                 dragT0 = t;
                 dragHit0 = hit;
                 Offset = Vector3.Zero;

@@ -38,7 +38,9 @@ public partial class CompositorService
     /// started after the trigger, or a null result on timeout. A cancelled run posts nothing, so the one that
     /// superseded it answers. <c>NotRun</c> says why no composite could start.
     /// </summary>
-    public async Task<(CompositorResult? Result, string? NotRun)> FullRefreshAsync(TimeSpan timeout)
+    /// <param name="keepUpstreams">Rebuild everything but keep the upstream memo: for a rebuild while a renamed copy of
+    /// the managed mod still masks the real bases (see <see cref="AddManagedAlias"/>).</param>
+    public async Task<(CompositorResult? Result, string? NotRun)> FullRefreshAsync(TimeSpan timeout, bool keepUpstreams = false)
     {
         // The same early-outs as TriggerRecomposite, which would otherwise leave this waiting out the timeout.
         if (_disposed) return (null, "plugin unloading");
@@ -57,7 +59,13 @@ public partial class CompositorService
         using var timeoutCts = new CancellationTokenSource();
         try
         {
-            RefreshAndRecomposite(full: true);
+            if (keepUpstreams)
+            {
+                _lastCompositeFingerprint = null;
+                TriggerRecomposite("managed-rebuild", 0);
+            }
+            else
+                RefreshAndRecomposite(full: true);
             var finished = await Task.WhenAny(done.Task, Task.Delay(timeout, timeoutCts.Token)).ConfigureAwait(false);
             return (finished == done.Task ? done.Task.Result : null, null);
         }

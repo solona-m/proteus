@@ -33,6 +33,21 @@ public class BodyRetargetWriterTests : IDisposable
     }
 
     [Fact]
+    [Trait("Plan", "EDGE-mod-rename-33")]
+    public void Save_refuses_when_mod_folder_is_gone()
+    {
+        // Renamed in Penumbra while the refit ran: writing would bring the old folder back as a ghost.
+        string gone = root + "-renamed-away";
+
+        var outcome = BodyRetargetWriter.Save(gone, Group, "Neolithe SFW L", GamePath, [1, 2, 3],
+                                              "Neolithe", "SFW M", "SFW L");
+
+        Assert.False(outcome.Ok);
+        Assert.Contains(Path.GetFileName(gone), outcome.Message);
+        Assert.False(Directory.Exists(gone));
+    }
+
+    [Fact]
     public void Saving_adds_a_group_with_an_original_option_that_carries_nothing()
     {
         var outcome = BodyRetargetWriter.Save(root, Group, "Neolithe SFW L", GamePath, [1, 2, 3],
@@ -842,6 +857,77 @@ public class BodyRetargetWriterTests : IDisposable
         Assert.Single(manips, m => m.GetProperty("Type").GetString() == "Eqdp");
         Assert.Single(EstTable.FromManipulations(refit.Manipulations), e => e.Race == 301);
         Assert.Equal([1], File.ReadAllBytes(Path.Combine(root, refit.Files[HighlanderShirt])));
+    }
+
+    // ── a Highlander-only group refitted for Midlanders (refit-race-down) ───
+
+    private const string HighlanderMaterial = "chara/equipment/e6091/material/v0001/mt_c0301e6091_top_a.mtrl";
+
+    private void WriteHighlanderGroup(string type)
+        => File.WriteAllText(Path.Combine(root, PenumbraModMeta.MetaFile), $$"""
+        {
+          "FileVersion": 4, "Name": "Highlander only",
+          "Groups": [
+            { "Version": 0, "Name": "{{Lumberjack}}", "Priority": 0, "Type": "{{type}}", "DefaultSettings": 1, "Options": [
+              { "Name": "Everything", "Files": { "{{HighlanderShirt}}": "shirt/c0301e6091_top.mdl",
+                                                 "{{HighlanderMaterial}}": "shirt/top_a.mtrl" } } ] },
+            { "Version": 0, "Name": "After", "Priority": 0, "Type": "Single", "DefaultSettings": 0, "Options": [] }
+          ]
+        }
+        """);
+
+    private static readonly RacialModelBake.Route Lowered = new(301, 101, Down: false, Lowered: true);
+
+    private static List<object> MidlanderManipulations()
+        => [Lowered.Eqdp(Lowered.SavePath(HighlanderShirt))!, PenumbraManipulations.EstManipulation("0101", "Body", 6091, 6085)];
+
+    [Theory]
+    [InlineData("Single")]
+    [InlineData("Multi")]
+    [Trait("Plan", "AC-refit-race-down-3")]
+    public void A_midlander_refit_of_a_highlander_only_group_keeps_the_highlander_model(string type)
+    {
+        WriteHighlanderGroup(type);
+        var before = Read(Lumberjack);
+        Assert.Equal(Shirt, Lowered.SavePath(HighlanderShirt));
+        var outcome = BodyRetargetWriter.Save(root, Lumberjack, Lowered.SavePath(HighlanderShirt), "TBSE-X", "Core files",
+                                              [new BodyRetargetWriter.Refit("TBSE-X — Large (Midlander M)", [7], "Large")],
+                                              fromOption: "Everything", manipulations: [Lowered.Eqdp(Shirt)!]);
+        Assert.True(outcome.Ok, outcome.Message);
+
+        Assert.Equal([Lumberjack, "After"], GroupNames());
+        var options = PenumbraModMeta.TryReadFileOptions(root, Lumberjack)!;
+        Assert.Equal(["Everything", "TBSE-X — Large (Midlander M)"], options.Select(o => o.Name));
+        Assert.True(Same(before.GetProperty("Options")[0], Read(Lumberjack).GetProperty("Options")[0]),
+                    "the author's option changed");
+
+        // Midlander men load the refit; the Highlander model and its material ride along.
+        var refit = options[1];
+        Assert.Equal([7], File.ReadAllBytes(Path.Combine(root, refit.Files[Shirt])));
+        Assert.Equal("shirt/c0301e6091_top.mdl", refit.Files[HighlanderShirt]);
+        Assert.Equal("shirt/top_a.mtrl", refit.Files[HighlanderMaterial]);
+        var eqdp = Assert.Single(refit.Manipulations!.Cast<JsonElement>());
+        var m = eqdp.GetProperty("Manipulation");
+        Assert.Equal(("Eqdp", "Midlander", "Male", 6091),
+                     (eqdp.GetProperty("Type").GetString(), m.GetProperty("Race").GetString(),
+                      m.GetProperty("Gender").GetString(), m.GetProperty("SetId").GetInt32()));
+    }
+
+    [Fact]
+    [Trait("Plan", "EDGE-refit-race-down-11")]
+    public void Saving_the_midlander_size_again_keeps_one_eqdp_and_one_est_entry()
+    {
+        WriteHighlanderGroup("Single");
+        for (int i = 0; i < 2; i++)
+            Assert.True(BodyRetargetWriter.Save(root, Lumberjack, Lowered.SavePath(HighlanderShirt), "TBSE-X", "Core files",
+                                                [new BodyRetargetWriter.Refit("TBSE-X — Large (Midlander M)", [(byte)i], "Large")],
+                                                fromOption: "Everything", manipulations: MidlanderManipulations()).Ok);
+
+        var refit = PenumbraModMeta.TryReadFileOptions(root, Lumberjack)!.Single(o => o.Name == "TBSE-X — Large (Midlander M)");
+        var manips = refit.Manipulations!.Cast<JsonElement>().ToList();
+        Assert.Single(manips, m => m.GetProperty("Type").GetString() == "Eqdp");
+        Assert.Single(EstTable.FromManipulations(refit.Manipulations), e => e.Race == 101);
+        Assert.Equal([1], File.ReadAllBytes(Path.Combine(root, refit.Files[Shirt])));
     }
 
     /// <summary>A bake refused: the refit is of the model as drawn, saved over it, with no entry for another race.</summary>

@@ -2623,8 +2623,8 @@
     "message": "Una pieza movida sigue los huesos para los que se hizo, así que si la alejas mucho de ellos puede doblarse de forma extraña en algunas poses.",
     "description": ""
   },
-  "Parts.Move.SkinTip": {
-    "message": "La piel no se puede mover.",
+  "Parts.Move.SkinOff.Tip": {
+    "message": "Activa «Mover también la piel» para mover la piel.",
     "description": ""
   },
   "Parts.Move.LockedTip": {
@@ -2855,8 +2855,48 @@
     "message": "Espejo izquierda/derecha",
     "description": ""
   },
-  "Parts.Brush.Mirror.Tip": {
-    "message": "Pinta ambos lados a la vez, reflejados respecto al centro del cuerpo.",
+  "Parts.Mirror.Tip": {
+    "message": "Trabaja ambos lados a la vez, reflejados respecto al centro del cuerpo. Los pinceles también pintan la imagen reflejada; Mover, Rotar y Escalar mueven la tela correspondiente del otro lado de forma reflejada. Una pieza que es su propio reflejo se queda centrada.",
+    "description": "Tooltip on the Mirror left/right checkbox, shown under the brushes and under Move, Rotate and Scale."
+  },
+  "Parts.Move.Mirror.Paired.Fmt": {
+    "message": "Espejo: {0:N0} de {1:N0} puntos seleccionados tienen pareja en el otro lado.",
+    "description": "{0} is how many selected points matched a point on the other side; {1} is how many points are selected."
+  },
+  "Parts.Move.Mirror.Held.Fmt": {
+    "message": "{0:N0} de las parejas están bloqueadas y no se mueven.",
+    "description": "{0} is how many of the matching points are locked."
+  },
+  "Parts.Move.Mirror.None": {
+    "message": "Espejo: nada del otro lado coincide con esta selección, así que solo se mueve este lado.",
+    "description": "Shown under Move, Rotate and Scale with Mirror on when nothing matched."
+  },
+  "Parts.Move.Mirror.Centred": {
+    "message": "Espejo: esta selección es su propio reflejo, así que se mueve como una sola pieza y se queda centrada. Se omiten los movimientos y giros laterales.",
+    "description": "Shown under Move, Rotate and Scale with Mirror on when the selection crosses the centre and mirrors itself."
+  },
+  "Parts.SkinMoves": {
+    "message": "Mover también la piel",
+    "description": ""
+  },
+  "Parts.SkinMoves.Tip": {
+    "message": "Permite que los pinceles y Mover, Rotar y Escalar muevan la piel del cuerpo además de la ropa. La ropa que descansa sobre la piel (a unos 3 cm o menos) se mueve con ella para que el cuerpo no la atraviese; la ropa más alejada se queda donde está. Desactivado, la piel se queda exactamente donde la puso el autor.\n\nLos pinceles dejan en su sitio los bordes de la piel donde esta pieza se une con la siguiente. Mover la piel ahí con Mover, Rotar o Escalar puede abrir un hueco en la cintura, las muñecas o el cuello.\n\nTalla del cuerpo y el ajuste automático sustituyen la piel de una prenda por la del cuerpo nuevo, así que una piel esculpida no sobrevive a un ajuste.",
+    "description": ""
+  },
+  "Parts.SkinMoves.NotThisBrush.Tip": {
+    "message": "Los pinceles Puente y Viento solo actúan sobre la ropa; la piel se queda quieta debajo.",
+    "description": ""
+  },
+  "Parts.SkinMoves.Preparing": {
+    "message": "Preparando la piel…",
+    "description": ""
+  },
+  "Parts.SkinMoves.BodyModel.Warn": {
+    "message": "Esto es un cuerpo. Las prendas hechas para él se reconocen por su forma exacta, así que tras esculpirlo Talla del cuerpo y el ajuste automático quizá ya no sepan para qué cuerpo se hicieron.",
+    "description": ""
+  },
+  "Parts.SkinMoves.Failed": {
+    "message": "No se pudo preparar la piel, así que se queda quieta. El registro dice por qué.",
     "description": ""
   },
   "Parts.Brush.Lock.Hint": {
@@ -2875,8 +2915,8 @@
     "message": "Desbloquear todo",
     "description": ""
   },
-  "Parts.Brush.Lock.Skin.Tip": {
-    "message": "La piel nunca se mueve.",
+  "Parts.Brush.Lock.SkinOff.Tip": {
+    "message": "La piel se queda quieta mientras «Mover también la piel» esté desactivado.",
     "description": ""
   },
   "MeshVolume.Apply.Nothing": {
@@ -3723,6 +3763,10 @@
     "message": "No hay cuerpos {0} entre los que ajustar, así que el modelo {0} se ajusta en la forma {1}, como lo deforma el juego, y se guarda de nuevo como {0}.",
     "description": ""
   },
+  "Parts.Retarget.Lowered.Fmt": {
+    "message": "Se crea un modelo {1} a partir del modelo {0}, doblado a la forma {1} tal como el juego dobla entre ambos. Guardar añade los metadatos que necesita el juego.",
+    "description": "{0} is the race of the model open, {1} the race picked below it."
+  },
   "Parts.Retarget.Bake.BendBack.Fmt": {
     "message": "el ajuste no se pudo devolver a la forma {0} ({1})",
     "description": ""
@@ -4312,7 +4356,7 @@
     "description": "Heads the dropdown that picks which race's model a refit is made and saved as."
   },
   "Parts.Retarget.Race.Tip": {
-    "message": "Para qué raza es el ajuste. Otra raza del mismo sexo recibe su propio modelo, hecho a partir de este tal como lo dobla el juego, ajustado al cuerpo de esa raza y guardado donde esa raza lo carga. Los demás conservan este modelo.",
+    "message": "Para qué raza es el ajuste. Otra raza del mismo sexo recibe su propio modelo, hecho a partir de este tal como lo dobla el juego, ajustado al cuerpo de esa raza y guardado donde esa raza lo carga. Este modelo queda como está.",
     "description": "Tooltip of Parts.Retarget.Race.Label."
   },
   "Parts.Retarget.Race.ThisModel.Fmt": {
@@ -4338,6 +4382,14 @@
   "Parts.Retarget.Race.Only.Fmt": {
     "message": "Solo {0} llevará el ajuste guardado; {1} conserva este modelo.",
     "description": "{0} is the race picked, {1} the race of the model open."
+  },
+  "Parts.Retarget.Race.Below.Fmt": {
+    "message": "{0} llevará el ajuste guardado, y también toda raza de ese sexo sin modelo propio para esta prenda; {1} conserva este modelo.",
+    "description": "{0} is the race picked, {1} the race of the model open; said for a race the open one falls back to."
+  },
+  "Parts.Retarget.Race.BelowExtraBones.Fmt": {
+    "message": "Esta prenda usa huesos extra. Solo {0} recibe el esqueleto extra para ellos, así que en las demás razas que lleven este ajuste esos huesos no se moverán.",
+    "description": "{0} is the race picked."
   },
   "Parts.Retarget.Race.SourceBaked.Fmt": {
     "message": "Los cuerpos para los que se hizo se doblan a {0} de la misma forma, así que se asienta sobre ellos como antes.",
@@ -4542,6 +4594,10 @@
   "Parts.Retarget.Save.Legacy": {
     "message": "Este mod sigue en el formato de carpeta antiguo de Penumbra, que Proteus no edita. Actívalo una vez en Penumbra para que lo actualice y luego vuelve.",
     "description": "Body size status line: the mod is in Penumbra's pre-v3 folder format."
+  },
+  "Parts.Retarget.Save.ModGone.Fmt": {
+    "message": "«{0}» ya no está entre los mods de Penumbra: se renombró o se eliminó allí. No se guardó nada.",
+    "description": "Body size status line when the mod's folder is gone. {0} is the mod's folder name."
   },
   "Parts.Retarget.Save.Failed.Fmt": {
     "message": "No se pudo guardar: {0}",
@@ -5353,6 +5409,54 @@
   },
   "HairPort.Scan.UndoChecked.Confirm.Fmt": {
     "message": "Vuelve a pulsar para deshacer {0} peinado(s) definitivamente",
+    "description": ""
+  },
+  "HairPort.Earless.Label": {
+    "message": "Quitar las orejas a los mods de pelo de miqo'te",
+    "description": ""
+  },
+  "HairPort.Earless.Tip": {
+    "message": "Para una miqo'te: cuando llevas un mod de pelo cuyo peinado tiene orejas de\ngato, Proteus hace una copia sin orejas y apunta la opción del mod a esa copia.\nLos archivos del autor nunca se cambian.\n\nEsto cambia el propio mod, así que todos los personajes que se vean con ese mod\nactivo —en todas las colecciones, y cualquiera con quien lo compartas— no tienen\norejas con él. Al desactivarlo, Proteus devuelve las orejas en todos los mods que\ncambió. Funciona con o sin el ajuste de mods de pelo hechos para otra raza.",
+    "description": ""
+  },
+  "HairPort.Settings.Earless.Fmt": {
+    "message": "El peinado {0} de {1} se muestra sin orejas, para todos los personajes que se vean con este mod activo, en todas las colecciones. Al desactivar el ajuste vuelven.",
+    "description": ""
+  },
+  "HairPort.Settings.EarlessOptionHint.Fmt": {
+    "message": "Este mod tiene su propia opción sin orejas: {0}",
+    "description": ""
+  },
+  "HairPort.Earless.Chat": {
+    "message": "[Proteus] Se han quitado las orejas de gato de este peinado: Proteus ha apuntado su mod a una copia sin orejas, así que todos los personajes que se vean con este mod activo, en todas las colecciones, ya no tienen orejas con él. Desactiva «Quitar las orejas a los mods de pelo de miqo'te» en /proteus > Ajustes > Pelo para devolverlas.",
+    "description": ""
+  },
+  "HairPort.Earless.RestoreBlocked.Fmt": {
+    "message": "[Proteus] No se pudieron devolver las orejas en {0}: {1}",
+    "description": ""
+  },
+  "HairPort.Earless.Restored.Fmt": {
+    "message": "Orejas devueltas a {0} peinado(s).",
+    "description": ""
+  },
+  "HairPort.Earless.Refused.AuthorMissing.Fmt": {
+    "message": "falta el archivo del autor {0}, así que se ha conservado la copia sin orejas",
+    "description": ""
+  },
+  "HairPort.Earless.Refused.Changed": {
+    "message": "el mod cambió mientras Proteus trabajaba en él, así que no se escribió nada",
+    "description": ""
+  },
+  "HairPort.Earless.Refused.Leftover": {
+    "message": "no se pudieron quitar todas sus orejas",
+    "description": ""
+  },
+  "HairPort.Earless.Refused.RecordUnreadable": {
+    "message": "No se pudo leer el registro de Proteus de los peinados sin orejas de este mod (Proteus/earlesshair.json), así que no se cambió nada.",
+    "description": ""
+  },
+  "HairPort.Earless.Refused.Outside.Fmt": {
+    "message": "{0} no es una ruta dentro de la carpeta sin orejas del mod, así que no se escribió nada",
     "description": ""
   }
 }

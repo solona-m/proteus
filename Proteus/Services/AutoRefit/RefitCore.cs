@@ -645,8 +645,9 @@ internal static partial class RefitCore
     /// <summary>
     /// A refit of a routed garment, made ready to save: up, its kept skin drawn with the body's material
     /// (<see cref="WithBodySkin"/>), and the preview bent back into the drawn race from the model BEFORE that rename —
-    /// the preview goes on the drawn race's path, where the garment's own material is the one that loads. Down, bent
-    /// forward into the drawn race, which is both what is saved and what is previewed.
+    /// the preview goes on the drawn race's path, where the garment's own material is the one that loads. A lowered
+    /// route (a Highlander model made a Midlander's) is finished the same way: saved in the race below, previewed bent
+    /// back up. Down, bent forward into the drawn race, which is both what is saved and what is previewed.
     /// </summary>
     /// <returns>The plan to save; the preview to push on the drawn path, null for the plan's own model; and why, when
     /// the plan is null, it could not be bent back. A down refit never comes back in the shared shape: saved at the

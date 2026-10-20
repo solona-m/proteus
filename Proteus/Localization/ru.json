@@ -2623,8 +2623,8 @@
     "message": "Перемещённая часть по-прежнему следует за своими костями, поэтому, отодвинутая далеко от них, она может странно изгибаться в позах.",
     "description": ""
   },
-  "Parts.Move.SkinTip": {
-    "message": "Кожу нельзя перемещать.",
+  "Parts.Move.SkinOff.Tip": {
+    "message": "Включите «Двигать и кожу», чтобы двигать кожу.",
     "description": ""
   },
   "Parts.Move.LockedTip": {
@@ -2855,8 +2855,48 @@
     "message": "Зеркально слева/справа",
     "description": ""
   },
-  "Parts.Brush.Mirror.Tip": {
-    "message": "Рисует обе стороны сразу, зеркально относительно центра тела.",
+  "Parts.Mirror.Tip": {
+    "message": "Работает с обеими сторонами сразу, зеркально относительно центра тела. Кисти рисуют и зеркальное отражение; «Перемещение», «Повернуть» и «Масштаб» двигают соответствующую ткань на другой стороне зеркально. Деталь, которая сама себе зеркальна, остаётся по центру.",
+    "description": "Tooltip on the Mirror left/right checkbox, shown under the brushes and under Move, Rotate and Scale."
+  },
+  "Parts.Move.Mirror.Paired.Fmt": {
+    "message": "Зеркально: у {0:N0} из {1:N0} выбранных точек есть пара на другой стороне.",
+    "description": "{0} is how many selected points matched a point on the other side; {1} is how many points are selected."
+  },
+  "Parts.Move.Mirror.Held.Fmt": {
+    "message": "{0:N0} из парных точек заблокированы и остаются на месте.",
+    "description": "{0} is how many of the matching points are locked."
+  },
+  "Parts.Move.Mirror.None": {
+    "message": "Зеркально: на другой стороне нет ничего, что соответствует выделению, поэтому двигается только эта сторона.",
+    "description": "Shown under Move, Rotate and Scale with Mirror on when nothing matched."
+  },
+  "Parts.Move.Mirror.Centred": {
+    "message": "Зеркально: это выделение само себе зеркально, поэтому оно двигается целиком и остаётся по центру. Боковые перемещения и повороты вбок не применяются.",
+    "description": "Shown under Move, Rotate and Scale with Mirror on when the selection crosses the centre and mirrors itself."
+  },
+  "Parts.SkinMoves": {
+    "message": "Двигать и кожу",
+    "description": ""
+  },
+  "Parts.SkinMoves.Tip": {
+    "message": "Позволяет кистям, а также Перемещению, Повороту и Масштабу двигать не только одежду, но и кожу тела. Одежда, лежащая на коже (примерно в пределах 3 см), движется вместе с ней, чтобы тело не проступало насквозь; одежда дальше остаётся на месте. Если выключено, кожа остаётся ровно там, где её поставил автор.\n\nКисти оставляют на месте края кожи там, где эта часть стыкуется со следующей. Если сдвинуть там кожу Перемещением, Поворотом или Масштабом, на талии, запястьях или шее может появиться щель.\n\nРазмер тела и автоматическая подгонка заменяют кожу вещи кожей нового тела, поэтому вылепленная кожа подгонку не переживёт.",
+    "description": ""
+  },
+  "Parts.SkinMoves.NotThisBrush.Tip": {
+    "message": "Кисти «Мост» и «Ветер» действуют только на одежду; кожа под ними не двигается.",
+    "description": ""
+  },
+  "Parts.SkinMoves.Preparing": {
+    "message": "Подготовка кожи…",
+    "description": ""
+  },
+  "Parts.SkinMoves.BodyModel.Warn": {
+    "message": "Это тело. Одежду, сделанную для него, узнают по его точной форме, поэтому после лепки Размер тела и автоматическая подгонка могут перестать понимать, для какого тела она сделана.",
+    "description": ""
+  },
+  "Parts.SkinMoves.Failed": {
+    "message": "Не удалось подготовить кожу, поэтому она не двигается. Причина — в журнале.",
     "description": ""
   },
   "Parts.Brush.Lock.Hint": {
@@ -2875,8 +2915,8 @@
     "message": "Разблокировать всё",
     "description": ""
   },
-  "Parts.Brush.Lock.Skin.Tip": {
-    "message": "Кожа никогда не двигается.",
+  "Parts.Brush.Lock.SkinOff.Tip": {
+    "message": "Кожа не двигается, пока «Двигать и кожу» выключено.",
     "description": ""
   },
   "MeshVolume.Apply.Nothing": {
@@ -3723,6 +3763,10 @@
     "message": "Тел {0} нет, поэтому модель {0} подгоняется в форме {1} — так, как её деформирует игра, — и сохраняется обратно как {0}.",
     "description": ""
   },
+  "Parts.Retarget.Lowered.Fmt": {
+    "message": "Из модели {0} делается модель {1}, изогнутая в форму {1} так, как игра изгибает между ними. Сохранение добавит метаданные, нужные игре.",
+    "description": "{0} is the race of the model open, {1} the race picked below it."
+  },
   "Parts.Retarget.Bake.BendBack.Fmt": {
     "message": "подгонку не удалось вернуть в форму {0} ({1})",
     "description": ""
@@ -4312,7 +4356,7 @@
     "description": "Heads the dropdown that picks which race's model a refit is made and saved as."
   },
   "Parts.Retarget.Race.Tip": {
-    "message": "Для какой расы подгонка. Другая раса того же пола получает свою модель, сделанную из этой так, как её изгибает игра, подогнанную под тело этой расы и сохранённую там, где эта раса её загружает. Все остальные сохраняют эту модель.",
+    "message": "Для какой расы подгонка. Другая раса того же пола получает свою модель, сделанную из этой так, как её изгибает игра, подогнанную под тело этой расы и сохранённую там, где эта раса её загружает. Эта модель остаётся как есть.",
     "description": "Tooltip of Parts.Retarget.Race.Label."
   },
   "Parts.Retarget.Race.ThisModel.Fmt": {
@@ -4338,6 +4382,14 @@
   "Parts.Retarget.Race.Only.Fmt": {
     "message": "Сохранённую подгонку будет носить только {0}; {1} сохраняет эту модель.",
     "description": "{0} is the race picked, {1} the race of the model open."
+  },
+  "Parts.Retarget.Race.Below.Fmt": {
+    "message": "Сохранённую подгонку будет носить {0}, а также каждая раса этого пола без собственной модели этого предмета; {1} сохраняет эту модель.",
+    "description": "{0} is the race picked, {1} the race of the model open; said for a race the open one falls back to."
+  },
+  "Parts.Retarget.Race.BelowExtraBones.Fmt": {
+    "message": "Эта одежда использует дополнительные кости. Дополнительный скелет для них получает только {0}, поэтому у других рас, носящих эту подгонку, эти кости двигаться не будут.",
+    "description": "{0} is the race picked."
   },
   "Parts.Retarget.Race.SourceBaked.Fmt": {
     "message": "Тела, под которые она сделана, изгибаются к {0} так же, поэтому она сидит на них, как прежде.",
@@ -4542,6 +4594,10 @@
   "Parts.Retarget.Save.Legacy": {
     "message": "Этот мод всё ещё в старом формате папок Penumbra, который Proteus не редактирует. Включите его один раз в Penumbra, чтобы она его обновила, и возвращайтесь.",
     "description": "Body size status line: the mod is in Penumbra's pre-v3 folder format."
+  },
+  "Parts.Retarget.Save.ModGone.Fmt": {
+    "message": "«{0}» больше нет среди модов Penumbra: его переименовали или удалили там. Ничего не сохранено.",
+    "description": "Body size status line when the mod's folder is gone. {0} is the mod's folder name."
   },
   "Parts.Retarget.Save.Failed.Fmt": {
     "message": "Не удалось сохранить: {0}",
@@ -5353,6 +5409,54 @@
   },
   "HairPort.Scan.UndoChecked.Confirm.Fmt": {
     "message": "Нажмите ещё раз, чтобы окончательно отменить причёски: {0}",
+    "description": ""
+  },
+  "HairPort.Earless.Label": {
+    "message": "Убирать уши у модов причёсок мико'те",
+    "description": ""
+  },
+  "HairPort.Earless.Tip": {
+    "message": "Для мико'те: когда вы надеваете мод причёски с кошачьими ушами, Proteus\nделает её копию без ушей и направляет опцию мода на эту копию. Файлы автора\nникогда не меняются.\n\nЭто меняет сам мод, поэтому у каждого персонажа, отображаемого с этим модом —\nво всех коллекциях и у всех, с кем вы им делитесь, — ушей с ним нет. Если\nвыключить, Proteus вернёт уши во все изменённые им моды. Работает и с подгонкой\nмодов причёсок для другой расы, и без неё.",
+    "description": ""
+  },
+  "HairPort.Settings.Earless.Fmt": {
+    "message": "Причёска {0} из {1} отображается без ушей — у каждого персонажа, отображаемого с этим модом, во всех коллекциях. Если выключить настройку, они вернутся.",
+    "description": ""
+  },
+  "HairPort.Settings.EarlessOptionHint.Fmt": {
+    "message": "У этого мода есть своя опция без ушей: {0}",
+    "description": ""
+  },
+  "HairPort.Earless.Chat": {
+    "message": "[Proteus] Кошачьи уши этой причёски убраны: Proteus направил её мод на копию без ушей, поэтому у каждого персонажа, отображаемого с этим модом, во всех коллекциях, теперь нет ушей. Чтобы вернуть их, выключите «Убирать уши у модов причёсок мико'те» в /proteus > Настройки > Волосы.",
+    "description": ""
+  },
+  "HairPort.Earless.RestoreBlocked.Fmt": {
+    "message": "[Proteus] Не удалось вернуть уши в {0}: {1}",
+    "description": ""
+  },
+  "HairPort.Earless.Restored.Fmt": {
+    "message": "Уши возвращены на причёсках: {0}.",
+    "description": ""
+  },
+  "HairPort.Earless.Refused.AuthorMissing.Fmt": {
+    "message": "файл автора {0} отсутствует, поэтому копия без ушей оставлена",
+    "description": ""
+  },
+  "HairPort.Earless.Refused.Changed": {
+    "message": "мод изменился, пока Proteus с ним работал, поэтому ничего не записано",
+    "description": ""
+  },
+  "HairPort.Earless.Refused.Leftover": {
+    "message": "не все её уши удалось убрать",
+    "description": ""
+  },
+  "HairPort.Earless.Refused.RecordUnreadable": {
+    "message": "Запись Proteus о причёсках этого мода без ушей (Proteus/earlesshair.json) не удалось прочитать, поэтому ничего не изменено.",
+    "description": ""
+  },
+  "HairPort.Earless.Refused.Outside.Fmt": {
+    "message": "{0} — не путь внутри папки мода для копий без ушей, поэтому ничего не записано",
     "description": ""
   }
 }

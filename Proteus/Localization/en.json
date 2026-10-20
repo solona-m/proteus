@@ -2623,9 +2623,9 @@
     "message": "A moved part still follows the bones it was made for, so a part moved far from them can bend oddly in poses.",
     "description": "Note under the Move tool's controls."
   },
-  "Parts.Move.SkinTip": {
-    "message": "Skin can't be moved.",
-    "description": "Tooltip on a skin part in the list under the Move tool."
+  "Parts.Move.SkinOff.Tip": {
+    "message": "Turn on “Move skin too” to move skin.",
+    "description": "Tooltip on a skin part in the list under the Move tool, while \"Move skin too\" is off."
   },
   "Parts.Move.LockedTip": {
     "message": "This part is locked. Tick the box beside it to move it.",
@@ -2855,9 +2855,49 @@
     "message": "Mirror left/right",
     "description": ""
   },
-  "Parts.Brush.Mirror.Tip": {
-    "message": "Paint both sides at once, mirrored across the body's centre.",
-    "description": ""
+  "Parts.Mirror.Tip": {
+    "message": "Work on both sides at once, mirrored across the body's centre. The brushes paint the mirror image too; Move, Rotate and Scale move the matching cloth on the other side the mirrored way. A piece that is its own mirror stays centred.",
+    "description": "Tooltip on the Mirror left/right checkbox, shown under the brushes and under Move, Rotate and Scale."
+  },
+  "Parts.Move.Mirror.Paired.Fmt": {
+    "message": "Mirror: {0:N0} of {1:N0} selected points have a match on the other side.",
+    "description": "{0} is how many selected points matched a point on the other side; {1} is how many points are selected."
+  },
+  "Parts.Move.Mirror.Held.Fmt": {
+    "message": "{0:N0} of the matching points are locked and stay put.",
+    "description": "{0} is how many of the matching points are locked."
+  },
+  "Parts.Move.Mirror.None": {
+    "message": "Mirror: nothing on the other side matches this selection, so only this side moves.",
+    "description": "Shown under Move, Rotate and Scale with Mirror on when nothing matched."
+  },
+  "Parts.Move.Mirror.Centred": {
+    "message": "Mirror: this selection is its own mirror, so it moves as one piece and stays centred. Sideways moves and sideways turns are left out.",
+    "description": "Shown under Move, Rotate and Scale with Mirror on when the selection crosses the centre and mirrors itself."
+  },
+  "Parts.SkinMoves": {
+    "message": "Move skin too",
+    "description": "Checkbox in the Studio brush and Move/Rotate/Scale settings: lets the tools move the body's skin, with the clothes lying on it following."
+  },
+  "Parts.SkinMoves.Tip": {
+    "message": "Lets the brushes and Move, Rotate and Scale move the body's skin as well as the clothes. Clothes lying on the skin (within about 3 cm) move with it so the body doesn't poke through; clothes further out stay put. Off, the skin stays exactly where the author put it.\n\nThe brushes leave the skin's edges in place where this piece meets the next. Moving skin there with Move, Rotate or Scale can open a gap at the waist, wrists or neck.\n\nBody size and the automatic refit replace a garment's skin with the new body's, so a sculpted skin does not survive a refit.",
+    "description": "Tooltip on the \"Move skin too\" checkbox."
+  },
+  "Parts.SkinMoves.NotThisBrush.Tip": {
+    "message": "The bridge and wind brushes work on clothes only; the skin stays still under them.",
+    "description": "Tooltip on the \"Move skin too\" checkbox while the Bridge or Wind brush is chosen, where it is disabled."
+  },
+  "Parts.SkinMoves.Preparing": {
+    "message": "Getting the skin ready…",
+    "description": "Note under \"Move skin too\" while the clothes are being bound to the skin in the background."
+  },
+  "Parts.SkinMoves.BodyModel.Warn": {
+    "message": "This is a body. Garments made for it are recognised by its exact shape, so after sculpting it Body size and the automatic refit may no longer know which body they were made for.",
+    "description": "Warning under \"Move skin too\" when the open model is a body (skin and its nails/piercings only)."
+  },
+  "Parts.SkinMoves.Failed": {
+    "message": "The skin could not be got ready, so it stays still. The log says why.",
+    "description": "Tooltip on the disabled \"Move skin too\" checkbox when preparing the skin failed."
   },
   "Parts.Brush.Lock.Hint": {
     "message": "Shift-click a part to lock it.",
@@ -2875,9 +2915,9 @@
     "message": "Unlock all",
     "description": ""
   },
-  "Parts.Brush.Lock.Skin.Tip": {
-    "message": "Skin never moves.",
-    "description": ""
+  "Parts.Brush.Lock.SkinOff.Tip": {
+    "message": "Skin stays still while “Move skin too” is off.",
+    "description": "Tooltip on a skin part's fixed checkbox in the part list under a brush, while \"Move skin too\" is off."
   },
   "MeshVolume.Apply.Nothing": {
     "message": "Nothing has been painted, so there is nothing to save.",
@@ -3723,6 +3763,10 @@
     "message": "There are no {0} bodies to refit between, so the {0} model is refitted in the {1} shape, the way the game bends it, and saved back as {0}.",
     "description": ""
   },
+  "Parts.Retarget.Lowered.Fmt": {
+    "message": "A {1} model is made from the {0} model, bent into the {1} shape the way the game bends between them. Saving adds the metadata the game needs.",
+    "description": "{0} is the race of the model open, {1} the race picked below it."
+  },
   "Parts.Retarget.Bake.BendBack.Fmt": {
     "message": "the refit could not be bent back into the {0} shape ({1})",
     "description": ""
@@ -4312,7 +4356,7 @@
     "description": "Heads the dropdown that picks which race's model a refit is made and saved as."
   },
   "Parts.Retarget.Race.Tip": {
-    "message": "Which race the refit is for. Another race of the garment's sex gets its own model, made from this one the way the game bends it, refitted onto that race's body and saved where that race loads it. Everyone else keeps this model.",
+    "message": "Which race the refit is for. Another race of the garment's sex gets its own model, made from this one the way the game bends it, refitted onto that race's body and saved where that race loads it. This model stays as it is.",
     "description": "Tooltip of Parts.Retarget.Race.Label."
   },
   "Parts.Retarget.Race.ThisModel.Fmt": {
@@ -4338,6 +4382,14 @@
   "Parts.Retarget.Race.Only.Fmt": {
     "message": "Only {0} will wear the saved refit; {1} keeps this model.",
     "description": "{0} is the race picked, {1} the race of the model open."
+  },
+  "Parts.Retarget.Race.Below.Fmt": {
+    "message": "{0} will wear the saved refit, and so will every race of that sex with no model of its own for this item; {1} keeps this model.",
+    "description": "{0} is the race picked, {1} the race of the model open; said for a race the open one falls back to."
+  },
+  "Parts.Retarget.Race.BelowExtraBones.Fmt": {
+    "message": "This garment uses extra bones. Only {0} is given the extra skeleton for them, so on the other races that wear this refit those bones won't move.",
+    "description": "{0} is the race picked."
   },
   "Parts.Retarget.Race.SourceBaked.Fmt": {
     "message": "The bodies it was made for are bent to {0} the same way, so it sits on them as it did before.",
@@ -4542,6 +4594,10 @@
   "Parts.Retarget.Save.Legacy": {
     "message": "This mod is still in Penumbra's old folder format, which Proteus will not edit. Enable it in Penumbra once so Penumbra upgrades it, then come back.",
     "description": "Body size status line: the mod is in Penumbra's pre-v3 folder format."
+  },
+  "Parts.Retarget.Save.ModGone.Fmt": {
+    "message": "\"{0}\" is no longer in Penumbra's mods: it was renamed or deleted there. Nothing was saved.",
+    "description": "Body size status line when the mod's folder is gone. {0} is the mod's folder name."
   },
   "Parts.Retarget.Save.Failed.Fmt": {
     "message": "Could not save: {0}",
@@ -5354,5 +5410,53 @@
   "HairPort.Scan.UndoChecked.Confirm.Fmt": {
     "message": "Click again to undo {0} hairstyle(s) for good",
     "description": "Second click of 'Undo everything this check fitted'. {0} = how many."
+  },
+  "HairPort.Earless.Label": {
+    "message": "Take the ears off Miqo'te hair mods",
+    "description": ""
+  },
+  "HairPort.Earless.Tip": {
+    "message": "For a Miqo'te: when you wear a hair mod whose hairstyle has cat ears, Proteus\nmakes an earless copy of it and points the mod's option at that copy. The\nauthor's own files are never changed.\n\nThis changes the mod itself, so every character drawn with that mod on — in\nevery collection, and anyone you share it with — has no ears with it. Turning\nthis off puts the ears back in every mod Proteus changed. Works with or without\nfitting hair mods made for another race.",
+    "description": ""
+  },
+  "HairPort.Settings.Earless.Fmt": {
+    "message": "Hairstyle {0} from {1} is drawn without its ears — for every character drawn with this mod on, in every collection. Turning the setting off puts them back.",
+    "description": ""
+  },
+  "HairPort.Settings.EarlessOptionHint.Fmt": {
+    "message": "This mod has its own earless option: {0}",
+    "description": ""
+  },
+  "HairPort.Earless.Chat": {
+    "message": "[Proteus] This hairstyle's cat ears are taken off: Proteus pointed its mod at an earless copy, so every character drawn with this mod on, in every collection, has no ears with it now. Turn off \"Take the ears off Miqo'te hair mods\" under /proteus > Settings > Hair to put them back.",
+    "description": ""
+  },
+  "HairPort.Earless.RestoreBlocked.Fmt": {
+    "message": "[Proteus] The ears could not be put back in {0}: {1}",
+    "description": ""
+  },
+  "HairPort.Earless.Restored.Fmt": {
+    "message": "Ears put back on {0} hairstyle(s).",
+    "description": ""
+  },
+  "HairPort.Earless.Refused.AuthorMissing.Fmt": {
+    "message": "the author's file {0} is missing, so the earless copy was kept",
+    "description": ""
+  },
+  "HairPort.Earless.Refused.Changed": {
+    "message": "the mod changed while Proteus was working on it, so nothing was written",
+    "description": ""
+  },
+  "HairPort.Earless.Refused.Leftover": {
+    "message": "not all of its ears could be taken out",
+    "description": ""
+  },
+  "HairPort.Earless.Refused.RecordUnreadable": {
+    "message": "Proteus's record of this mod's earless hairstyles (Proteus/earlesshair.json) could not be read, so nothing was changed.",
+    "description": ""
+  },
+  "HairPort.Earless.Refused.Outside.Fmt": {
+    "message": "{0} is not a path inside the mod's earless folder, so nothing was written",
+    "description": ""
   }
 }

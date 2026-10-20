@@ -2623,8 +2623,8 @@
     "message": "移动后的部件仍跟随原本的骨骼，离骨骼太远时在某些姿势下可能会弯曲异常。",
     "description": ""
   },
-  "Parts.Move.SkinTip": {
-    "message": "皮肤无法移动。",
+  "Parts.Move.SkinOff.Tip": {
+    "message": "打开“同时移动皮肤”即可移动皮肤。",
     "description": ""
   },
   "Parts.Move.LockedTip": {
@@ -2855,8 +2855,48 @@
     "message": "左右镜像",
     "description": ""
   },
-  "Parts.Brush.Mirror.Tip": {
-    "message": "以身体中心为轴，同时镜像涂抹两侧。",
+  "Parts.Mirror.Tip": {
+    "message": "以身体中心为轴，同时镜像编辑两侧。笔刷也会涂抹镜像侧；移动、旋转和缩放会以镜像方式移动另一侧对应的布料。本身左右对称的部件会保持居中。",
+    "description": "Tooltip on the Mirror left/right checkbox, shown under the brushes and under Move, Rotate and Scale."
+  },
+  "Parts.Move.Mirror.Paired.Fmt": {
+    "message": "镜像：所选 {1:N0} 个点中有 {0:N0} 个在另一侧有对应点。",
+    "description": "{0} is how many selected points matched a point on the other side; {1} is how many points are selected."
+  },
+  "Parts.Move.Mirror.Held.Fmt": {
+    "message": "其中 {0:N0} 个对应点已锁定，保持不动。",
+    "description": "{0} is how many of the matching points are locked."
+  },
+  "Parts.Move.Mirror.None": {
+    "message": "镜像：另一侧没有与此选择对应的部分，因此只移动这一侧。",
+    "description": "Shown under Move, Rotate and Scale with Mirror on when nothing matched."
+  },
+  "Parts.Move.Mirror.Centred": {
+    "message": "镜像：此选择本身左右对称，因此作为一个整体移动并保持居中。横向移动和横向旋转会被忽略。",
+    "description": "Shown under Move, Rotate and Scale with Mirror on when the selection crosses the centre and mirrors itself."
+  },
+  "Parts.SkinMoves": {
+    "message": "同时移动皮肤",
+    "description": ""
+  },
+  "Parts.SkinMoves.Tip": {
+    "message": "让笔刷以及移动、旋转、缩放除了衣物之外也能移动身体的皮肤。贴在皮肤上的衣物（约 3 厘米以内）会随皮肤一起移动，身体不会穿出来；更远的衣物保持不动。关闭时，皮肤完全停留在作者放置的位置。\n\n笔刷会让这个部件与下一个部件相接处的皮肤边缘保持不动。在那里用移动、旋转或缩放移动皮肤，可能会在腰部、手腕或颈部留下缝隙。\n\n体型尺寸和自动适配会用新体型的皮肤替换装备的皮肤，因此雕塑过的皮肤在适配后不会保留。",
+    "description": ""
+  },
+  "Parts.SkinMoves.NotThisBrush.Tip": {
+    "message": "搭桥和风笔刷只作用于衣物；其下的皮肤保持不动。",
+    "description": ""
+  },
+  "Parts.SkinMoves.Preparing": {
+    "message": "正在准备皮肤…",
+    "description": ""
+  },
+  "Parts.SkinMoves.BodyModel.Warn": {
+    "message": "这是一个体型。为它制作的装备是按它的精确形状识别的，雕塑之后，体型尺寸和自动适配可能无法再判断这些装备是为哪个体型制作的。",
+    "description": ""
+  },
+  "Parts.SkinMoves.Failed": {
+    "message": "无法准备皮肤，因此皮肤保持不动。原因见日志。",
     "description": ""
   },
   "Parts.Brush.Lock.Hint": {
@@ -2875,8 +2915,8 @@
     "message": "全部解锁",
     "description": ""
   },
-  "Parts.Brush.Lock.Skin.Tip": {
-    "message": "皮肤永远不会移动。",
+  "Parts.Brush.Lock.SkinOff.Tip": {
+    "message": "“同时移动皮肤”关闭时，皮肤保持不动。",
     "description": ""
   },
   "MeshVolume.Apply.Nothing": {
@@ -3723,6 +3763,10 @@
     "message": "没有 {0} 身体可供转换，因此 {0} 模型会像游戏那样变形为 {1} 体型进行转换，再保存回 {0}。",
     "description": ""
   },
+  "Parts.Retarget.Lowered.Fmt": {
+    "message": "根据 {0} 模型生成 {1} 模型，按游戏在两者之间的弯曲方式弯成 {1} 体型。保存时会添加游戏所需的元数据。",
+    "description": "{0} is the race of the model open, {1} the race picked below it."
+  },
   "Parts.Retarget.Bake.BendBack.Fmt": {
     "message": "无法将转换结果变形回 {0} 体型（{1}）",
     "description": ""
@@ -4312,7 +4356,7 @@
     "description": "Heads the dropdown that picks which race's model a refit is made and saved as."
   },
   "Parts.Retarget.Race.Tip": {
-    "message": "转换给哪个种族。选择与服装同性别的其他种族时，会按游戏的弯曲方式从此模型生成专用模型，转换到该种族的体型，并保存到该种族读取的位置。其他种族仍使用此模型。",
+    "message": "转换给哪个种族。选择与服装同性别的其他种族时，会按游戏的弯曲方式从此模型生成专用模型，转换到该种族的体型，并保存到该种族读取的位置。此模型保持不变。",
     "description": "Tooltip of Parts.Retarget.Race.Label."
   },
   "Parts.Retarget.Race.ThisModel.Fmt": {
@@ -4338,6 +4382,14 @@
   "Parts.Retarget.Race.Only.Fmt": {
     "message": "只有{0}会穿保存的转换结果；{1}仍使用此模型。",
     "description": "{0} is the race picked, {1} the race of the model open."
+  },
+  "Parts.Retarget.Race.Below.Fmt": {
+    "message": "{0}会穿保存的转换结果，此装备没有自身模型的同性别种族也会穿；{1}仍使用此模型。",
+    "description": "{0} is the race picked, {1} the race of the model open; said for a race the open one falls back to."
+  },
+  "Parts.Retarget.Race.BelowExtraBones.Fmt": {
+    "message": "此服装使用额外骨骼。只有{0}获得对应的额外骨架，因此穿此转换结果的其他种族身上这些骨骼不会动。",
+    "description": "{0} is the race picked."
   },
   "Parts.Retarget.Race.SourceBaked.Fmt": {
     "message": "原本适配的体型也会以同样方式弯曲为{0}，因此贴合方式与之前一样。",
@@ -4542,6 +4594,10 @@
   "Parts.Retarget.Save.Legacy": {
     "message": "此模组仍是 Penumbra 的旧文件夹格式，Proteus 不会编辑它。请先在 Penumbra 中启用一次让其升级，然后再回来。",
     "description": "Body size status line: the mod is in Penumbra's pre-v3 folder format."
+  },
+  "Parts.Retarget.Save.ModGone.Fmt": {
+    "message": "“{0}”已不在 Penumbra 的模组中：它在那里被重命名或删除了。未保存任何内容。",
+    "description": "Body size status line when the mod's folder is gone. {0} is the mod's folder name."
   },
   "Parts.Retarget.Save.Failed.Fmt": {
     "message": "无法保存：{0}",
@@ -5353,6 +5409,54 @@
   },
   "HairPort.Scan.UndoChecked.Confirm.Fmt": {
     "message": "再次点击以永久撤销 {0} 个发型",
+    "description": ""
+  },
+  "HairPort.Earless.Label": {
+    "message": "移除猫魅族头发 Mod 的耳朵",
+    "description": ""
+  },
+  "HairPort.Earless.Tip": {
+    "message": "适用于猫魅族：当你佩戴的头发 Mod 的发型带有猫耳时，Proteus 会制作一份\n无耳副本，并让该 Mod 的选项指向这份副本。作者自己的文件从不改动。\n\n这会改动 Mod 本身，因此所有启用该 Mod 显示的角色——在每个合集中，以及你\n分享给的任何人——都不会带耳朵。关闭此项会把耳朵放回 Proteus 改动过的每个\nMod。无论是否开启为其他种族适配头发 Mod 都可使用。",
+    "description": ""
+  },
+  "HairPort.Settings.Earless.Fmt": {
+    "message": "{1} 中的发型 {0} 显示为无耳——适用于所有启用此 Mod 显示的角色，在每个合集中。关闭此设置会把耳朵放回。",
+    "description": ""
+  },
+  "HairPort.Settings.EarlessOptionHint.Fmt": {
+    "message": "此 Mod 自带无耳选项：{0}",
+    "description": ""
+  },
+  "HairPort.Earless.Chat": {
+    "message": "[Proteus] 已移除此发型的猫耳：Proteus 已让其 Mod 指向一份无耳副本，因此所有启用此 Mod 显示的角色（在每个合集中）现在都不带耳朵。要放回耳朵，请在 /proteus > 设置 > 头发 中关闭“移除猫魅族头发 Mod 的耳朵”。",
+    "description": ""
+  },
+  "HairPort.Earless.RestoreBlocked.Fmt": {
+    "message": "[Proteus] 无法在 {0} 中放回耳朵：{1}",
+    "description": ""
+  },
+  "HairPort.Earless.Restored.Fmt": {
+    "message": "已为 {0} 个发型放回耳朵。",
+    "description": ""
+  },
+  "HairPort.Earless.Refused.AuthorMissing.Fmt": {
+    "message": "作者的文件 {0} 不见了，因此保留了无耳副本",
+    "description": ""
+  },
+  "HairPort.Earless.Refused.Changed": {
+    "message": "Proteus 处理期间 Mod 发生了变化，因此未写入任何内容",
+    "description": ""
+  },
+  "HairPort.Earless.Refused.Leftover": {
+    "message": "未能移除它的全部耳朵",
+    "description": ""
+  },
+  "HairPort.Earless.Refused.RecordUnreadable": {
+    "message": "无法读取 Proteus 对此 Mod 无耳发型的记录（Proteus/earlesshair.json），因此未做任何更改。",
+    "description": ""
+  },
+  "HairPort.Earless.Refused.Outside.Fmt": {
+    "message": "{0} 不是该 Mod 无耳文件夹内的路径，因此未写入任何内容",
     "description": ""
   }
 }

@@ -2623,8 +2623,8 @@
     "message": "Ein verschobenes Teil folgt weiter den Knochen, für die es gemacht wurde; weit davon entfernt kann es sich in Posen seltsam biegen.",
     "description": ""
   },
-  "Parts.Move.SkinTip": {
-    "message": "Haut kann nicht verschoben werden.",
+  "Parts.Move.SkinOff.Tip": {
+    "message": "Schalte „Haut mitbewegen“ ein, um Haut zu bewegen.",
     "description": ""
   },
   "Parts.Move.LockedTip": {
@@ -2855,8 +2855,48 @@
     "message": "Links/rechts spiegeln",
     "description": ""
   },
-  "Parts.Brush.Mirror.Tip": {
-    "message": "Malt beide Seiten zugleich, gespiegelt an der Körpermitte.",
+  "Parts.Mirror.Tip": {
+    "message": "Bearbeitet beide Seiten zugleich, gespiegelt an der Körpermitte. Die Pinsel malen auch das Spiegelbild; Verschieben, Drehen und Skalieren bewegen den passenden Stoff auf der anderen Seite gespiegelt mit. Ein Teil, das sein eigenes Spiegelbild ist, bleibt mittig.",
+    "description": "Tooltip on the Mirror left/right checkbox, shown under the brushes and under Move, Rotate and Scale."
+  },
+  "Parts.Move.Mirror.Paired.Fmt": {
+    "message": "Spiegeln: {0:N0} von {1:N0} ausgewählten Punkten haben ein Gegenstück auf der anderen Seite.",
+    "description": "{0} is how many selected points matched a point on the other side; {1} is how many points are selected."
+  },
+  "Parts.Move.Mirror.Held.Fmt": {
+    "message": "{0:N0} der Gegenstücke sind gesperrt und bleiben, wo sie sind.",
+    "description": "{0} is how many of the matching points are locked."
+  },
+  "Parts.Move.Mirror.None": {
+    "message": "Spiegeln: Auf der anderen Seite passt nichts zu dieser Auswahl, daher bewegt sich nur diese Seite.",
+    "description": "Shown under Move, Rotate and Scale with Mirror on when nothing matched."
+  },
+  "Parts.Move.Mirror.Centred": {
+    "message": "Spiegeln: Diese Auswahl ist ihr eigenes Spiegelbild, daher bewegt sie sich als ein Stück und bleibt mittig. Seitliche Verschiebungen und Drehungen zur Seite entfallen.",
+    "description": "Shown under Move, Rotate and Scale with Mirror on when the selection crosses the centre and mirrors itself."
+  },
+  "Parts.SkinMoves": {
+    "message": "Haut mitbewegen",
+    "description": ""
+  },
+  "Parts.SkinMoves.Tip": {
+    "message": "Lässt die Pinsel sowie Verschieben, Drehen und Skalieren neben der Kleidung auch die Haut des Körpers bewegen. Kleidung, die auf der Haut liegt (bis etwa 3 cm), bewegt sich mit, damit der Körper nicht durchstößt; weiter entfernte Kleidung bleibt, wo sie ist. Ausgeschaltet bleibt die Haut genau dort, wo der Autor sie hingesetzt hat.\n\nDie Pinsel lassen die Ränder der Haut dort, wo dieses Teil an das nächste stößt, an ihrem Platz. Haut dort mit Verschieben, Drehen oder Skalieren zu bewegen, kann an Taille, Handgelenken oder Hals eine Lücke öffnen.\n\nKörpergröße und die automatische Anpassung ersetzen die Haut eines Kleidungsstücks durch die des neuen Körpers; eine modellierte Haut übersteht eine Anpassung also nicht.",
+    "description": ""
+  },
+  "Parts.SkinMoves.NotThisBrush.Tip": {
+    "message": "Die Pinsel Überbrücken und Wind wirken nur auf Kleidung; die Haut bleibt darunter still.",
+    "description": ""
+  },
+  "Parts.SkinMoves.Preparing": {
+    "message": "Haut wird vorbereitet …",
+    "description": ""
+  },
+  "Parts.SkinMoves.BodyModel.Warn": {
+    "message": "Das ist ein Körper. Für ihn gemachte Kleidung wird an seiner genauen Form erkannt; nach dem Modellieren wissen Körpergröße und die automatische Anpassung womöglich nicht mehr, für welchen Körper sie gemacht wurde.",
+    "description": ""
+  },
+  "Parts.SkinMoves.Failed": {
+    "message": "Die Haut konnte nicht vorbereitet werden und bleibt daher still. Der Grund steht im Log.",
     "description": ""
   },
   "Parts.Brush.Lock.Hint": {
@@ -2875,8 +2915,8 @@
     "message": "Alle entsperren",
     "description": ""
   },
-  "Parts.Brush.Lock.Skin.Tip": {
-    "message": "Haut bewegt sich nie.",
+  "Parts.Brush.Lock.SkinOff.Tip": {
+    "message": "Die Haut bleibt still, solange „Haut mitbewegen“ aus ist.",
     "description": ""
   },
   "MeshVolume.Apply.Nothing": {
@@ -3723,6 +3763,10 @@
     "message": "Es gibt keine {0}-Körper, zwischen denen angepasst werden kann. Daher wird das {0}-Modell in der {1}-Form angepasst, so wie das Spiel es verformt, und wieder als {0} gespeichert.",
     "description": ""
   },
+  "Parts.Retarget.Lowered.Fmt": {
+    "message": "Aus dem {0}-Modell wird ein {1}-Modell gemacht, in die {1}-Form gebogen, so wie das Spiel zwischen beiden biegt. Beim Speichern werden die Metadaten hinzugefügt, die das Spiel braucht.",
+    "description": "{0} is the race of the model open, {1} the race picked below it."
+  },
   "Parts.Retarget.Bake.BendBack.Fmt": {
     "message": "die Anpassung konnte nicht in die {0}-Form zurückgebracht werden ({1})",
     "description": ""
@@ -4312,7 +4356,7 @@
     "description": "Heads the dropdown that picks which race's model a refit is made and saved as."
   },
   "Parts.Retarget.Race.Tip": {
-    "message": "Für welche Rasse die Anpassung ist. Eine andere Rasse desselben Geschlechts bekommt ein eigenes Modell, aus diesem so gebogen, wie das Spiel es biegt, auf den Körper dieser Rasse angepasst und dort gespeichert, wo diese Rasse es lädt. Alle anderen behalten dieses Modell.",
+    "message": "Für welche Rasse die Anpassung ist. Eine andere Rasse desselben Geschlechts bekommt ein eigenes Modell, aus diesem so gebogen, wie das Spiel es biegt, auf den Körper dieser Rasse angepasst und dort gespeichert, wo diese Rasse es lädt. Dieses Modell bleibt, wie es ist.",
     "description": "Tooltip of Parts.Retarget.Race.Label."
   },
   "Parts.Retarget.Race.ThisModel.Fmt": {
@@ -4338,6 +4382,14 @@
   "Parts.Retarget.Race.Only.Fmt": {
     "message": "Nur {0} trägt die gespeicherte Anpassung; {1} behält dieses Modell.",
     "description": "{0} is the race picked, {1} the race of the model open."
+  },
+  "Parts.Retarget.Race.Below.Fmt": {
+    "message": "{0} trägt die gespeicherte Anpassung, ebenso jede Rasse dieses Geschlechts ohne eigenes Modell für dieses Teil; {1} behält dieses Modell.",
+    "description": "{0} is the race picked, {1} the race of the model open; said for a race the open one falls back to."
+  },
+  "Parts.Retarget.Race.BelowExtraBones.Fmt": {
+    "message": "Dieses Kleidungsstück nutzt zusätzliche Knochen. Nur {0} bekommt das zusätzliche Skelett dafür, daher bewegen sich diese Knochen bei den anderen Rassen, die diese Anpassung tragen, nicht.",
+    "description": "{0} is the race picked."
   },
   "Parts.Retarget.Race.SourceBaked.Fmt": {
     "message": "Die Körper, für die es gemacht wurde, werden genauso zu {0} gebogen, damit es so auf ihnen sitzt wie vorher.",
@@ -4542,6 +4594,10 @@
   "Parts.Retarget.Save.Legacy": {
     "message": "Diese Mod liegt noch im alten Ordnerformat von Penumbra vor, das Proteus nicht bearbeitet. Aktiviere sie einmal in Penumbra, damit Penumbra sie aktualisiert, und komm dann zurück.",
     "description": "Body size status line: the mod is in Penumbra's pre-v3 folder format."
+  },
+  "Parts.Retarget.Save.ModGone.Fmt": {
+    "message": "„{0}“ ist nicht mehr unter Penumbras Mods: Er wurde dort umbenannt oder gelöscht. Es wurde nichts gespeichert.",
+    "description": "Body size status line when the mod's folder is gone. {0} is the mod's folder name."
   },
   "Parts.Retarget.Save.Failed.Fmt": {
     "message": "Speichern fehlgeschlagen: {0}",
@@ -5353,6 +5409,54 @@
   },
   "HairPort.Scan.UndoChecked.Confirm.Fmt": {
     "message": "Erneut klicken, um {0} Frisur(en) endgültig rückgängig zu machen",
+    "description": ""
+  },
+  "HairPort.Earless.Label": {
+    "message": "Ohren von Miqo'te-Haar-Mods entfernen",
+    "description": ""
+  },
+  "HairPort.Earless.Tip": {
+    "message": "Für Miqo'te: Trägst du einen Haar-Mod, dessen Frisur Katzenohren hat, erstellt\nProteus eine ohrenlose Kopie davon und stellt die Option des Mods auf diese\nKopie um. Die Dateien des Autors werden nie verändert.\n\nDas ändert den Mod selbst: Jede Figur, die mit diesem Mod dargestellt wird — in\njeder Sammlung und bei allen, mit denen du ihn teilst —, hat damit keine Ohren.\nSchaltest du das ab, setzt Proteus die Ohren in jedem geänderten Mod wieder ein.\nFunktioniert mit und ohne das Anpassen von Haar-Mods für ein anderes Volk.",
+    "description": ""
+  },
+  "HairPort.Settings.Earless.Fmt": {
+    "message": "Frisur {0} aus {1} wird ohne Ohren dargestellt — für jede Figur, die mit diesem Mod dargestellt wird, in jeder Sammlung. Schaltest du die Einstellung ab, kommen sie zurück.",
+    "description": ""
+  },
+  "HairPort.Settings.EarlessOptionHint.Fmt": {
+    "message": "Dieser Mod hat eine eigene ohrenlose Option: {0}",
+    "description": ""
+  },
+  "HairPort.Earless.Chat": {
+    "message": "[Proteus] Die Katzenohren dieser Frisur sind entfernt: Proteus hat ihren Mod auf eine ohrenlose Kopie umgestellt, daher hat jede Figur, die mit diesem Mod dargestellt wird, in jeder Sammlung jetzt keine Ohren damit. Schalte „Ohren von Miqo'te-Haar-Mods entfernen“ unter /proteus > Einstellungen > Haare ab, um sie zurückzubekommen.",
+    "description": ""
+  },
+  "HairPort.Earless.RestoreBlocked.Fmt": {
+    "message": "[Proteus] Die Ohren konnten in {0} nicht wieder eingesetzt werden: {1}",
+    "description": ""
+  },
+  "HairPort.Earless.Restored.Fmt": {
+    "message": "Ohren an {0} Frisur(en) wieder eingesetzt.",
+    "description": ""
+  },
+  "HairPort.Earless.Refused.AuthorMissing.Fmt": {
+    "message": "die Datei {0} des Autors fehlt, daher wurde die ohrenlose Kopie behalten",
+    "description": ""
+  },
+  "HairPort.Earless.Refused.Changed": {
+    "message": "der Mod hat sich geändert, während Proteus daran gearbeitet hat, daher wurde nichts geschrieben",
+    "description": ""
+  },
+  "HairPort.Earless.Refused.Leftover": {
+    "message": "nicht alle Ohren konnten entfernt werden",
+    "description": ""
+  },
+  "HairPort.Earless.Refused.RecordUnreadable": {
+    "message": "Proteus' Aufzeichnung der ohrenlosen Frisuren dieses Mods (Proteus/earlesshair.json) konnte nicht gelesen werden, daher wurde nichts geändert.",
+    "description": ""
+  },
+  "HairPort.Earless.Refused.Outside.Fmt": {
+    "message": "{0} ist kein Pfad im ohrenlosen Ordner des Mods, daher wurde nichts geschrieben",
     "description": ""
   }
 }

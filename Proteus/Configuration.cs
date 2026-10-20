@@ -240,6 +240,19 @@ public class Configuration : IPluginConfiguration
     public bool HairPortFullScanDone { get; set; }
 
     /// <summary>
+    /// When a Miqo'te wears a hair mod whose hairstyle has cat ears, point the mod's redirect at an earless copy of it
+    /// (<c>HairPortWatcher</c>, <c>EarlessHairWriter</c>); turning it off points every one back. Off by default; a
+    /// missing property reads off, so no migration. Works with <see cref="AutoHairPort"/> on or off.
+    /// </summary>
+    public bool EarlessMiqoteHair { get; set; }
+
+    /// <summary>
+    /// <see cref="EarlessMiqoteHair"/> was turned off and the pass putting the ears back on every mod has not finished
+    /// yet: kept across a restart, so a pass Penumbra was not there for, or that was busy, still runs.
+    /// </summary>
+    public bool EarlessRestorePending { get; set; }
+
+    /// <summary>
     /// Fit a hairstyle whose author already gave it hat support too, discarding theirs (<c>shp_hib</c> and
     /// <c>atr_kam</c>) for Proteus's own. Off by default: an author's hand-made press is usually the better one.
     /// Switching it off in Settings > Hair puts the author's version back, from the backup, on every hairstyle it

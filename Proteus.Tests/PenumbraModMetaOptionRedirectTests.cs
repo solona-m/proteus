@@ -43,6 +43,41 @@ public class PenumbraModMetaOptionRedirectTests
     }
 
     [Fact]
+    [Trait("Plan", "AC-earless-miqote-hair-3")]
+    public void Swap_changes_only_the_named_value_and_keeps_groups_in_place()
+    {
+        using var mod = Sample();
+        var before = Root(mod);
+        int n = PenumbraModMeta.SwapOptionRedirects(mod.Root, "First", "A",
+            new Dictionary<string, (string, string)> { ["P/A"] = ("a.mdl", "Proteus Earless/a.mdl") });
+        Assert.Equal(1, n);
+        var after = Root(mod);
+        Assert.Equal("Proteus Earless/a.mdl", mod.Owner("First", "A").Files["p/a"]);
+        // The key keeps its spelling; everything else is as it was.
+        Assert.True(mod.Owner("First", "A").Files.ContainsKey("p/a"));
+        Assert.Equal(["First", "Second"], after.GetProperty("Groups").EnumerateArray().Select(g => g.GetProperty("Name").GetString()));
+        Assert.True(System.Text.Json.Nodes.JsonNode.DeepEquals(System.Text.Json.Nodes.JsonNode.Parse(before.GetProperty("Groups")[1].GetRawText()),
+                                                               System.Text.Json.Nodes.JsonNode.Parse(after.GetProperty("Groups")[1].GetRawText())));
+        Assert.True(System.Text.Json.Nodes.JsonNode.DeepEquals(System.Text.Json.Nodes.JsonNode.Parse(before.GetProperty("DefaultData").GetRawText()),
+                                                               System.Text.Json.Nodes.JsonNode.Parse(after.GetProperty("DefaultData").GetRawText())));
+        var a = after.GetProperty("Groups")[0];
+        Assert.Equal(before.GetProperty("Groups")[0].GetProperty("Options").GetArrayLength(), a.GetProperty("Options").GetArrayLength());
+        Assert.Equal("Single", a.GetProperty("Type").GetString());
+    }
+
+    [Fact]
+    [Trait("Plan", "AC-earless-miqote-hair-3")]
+    public void Swap_skips_a_value_that_no_longer_matches_From()
+    {
+        using var mod = Sample();
+        int n = PenumbraModMeta.SwapOptionRedirects(mod.Root, "", "",
+            new Dictionary<string, (string, string)> { ["p/d"] = ("other.mdl", "x.mdl"), ["p/none"] = ("a", "b") });
+        Assert.Equal(0, n);
+        Assert.Equal("d.mdl", mod.Owners.First(o => o.IsDefault).Files["p/d"]);
+        Assert.False(mod.Owners.First(o => o.IsDefault).Files.ContainsKey("p/none"));
+    }
+
+    [Fact]
     [Trait("Plan", "AC-hair-race-port-10")]
     public void Remove_only_removes_keys_still_pointing_at_our_file()
     {

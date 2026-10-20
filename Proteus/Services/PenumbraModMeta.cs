@@ -926,6 +926,29 @@ internal static class PenumbraModMeta
         return removed;
     }
 
+    /// <summary>
+    /// Point redirects of one option (or the default data) at other files — each only while it still names the file it
+    /// is swapped from, so a redirect the author has pointed elsewhere since is left alone. The game path keeps its
+    /// spelling; every other field, option and group is left exactly as it was. Throws for a group or option that is not
+    /// there, and for a Combining group. Returns how many were swapped.
+    /// </summary>
+    public static int SwapOptionRedirects(string modRoot, string groupName, string optionName,
+                                          IReadOnlyDictionary<string, (string From, string To)> swaps)
+    {
+        int swapped = 0;
+        EditOptionFiles(modRoot, groupName, optionName, (files, _) =>
+        {
+            foreach (var (path, (from, to)) in swaps)
+                if (KeyOf(files, path) is { } key && files[key]?.GetValueKind() == JsonValueKind.String
+                    && SameFile(files[key]!.GetValue<string>(), from))
+                {
+                    files[key] = to;
+                    swapped++;
+                }
+        });
+        return swapped;
+    }
+
     private static bool SameFile(string a, string b)
         => string.Equals(a.Replace('\\', '/'), b.Replace('\\', '/'), StringComparison.OrdinalIgnoreCase);
 
