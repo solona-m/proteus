@@ -5410,5 +5410,53 @@
   "HairPort.Scan.UndoChecked.Confirm.Fmt": {
     "message": "Erneut klicken, um {0} Frisur(en) endgültig rückgängig zu machen",
     "description": ""
+  },
+  "HairPort.Earless.Label": {
+    "message": "Ohren von Miqo'te-Haar-Mods entfernen",
+    "description": ""
+  },
+  "HairPort.Earless.Tip": {
+    "message": "Für Miqo'te: Trägst du einen Haar-Mod, dessen Frisur Katzenohren hat, erstellt\nProteus eine ohrenlose Kopie davon und stellt die Option des Mods auf diese\nKopie um. Die Dateien des Autors werden nie verändert.\n\nDas ändert den Mod selbst: Jede Figur, die mit diesem Mod dargestellt wird — in\njeder Sammlung und bei allen, mit denen du ihn teilst —, hat damit keine Ohren.\nSchaltest du das ab, setzt Proteus die Ohren in jedem geänderten Mod wieder ein.\nFunktioniert mit und ohne das Anpassen von Haar-Mods für ein anderes Volk.",
+    "description": ""
+  },
+  "HairPort.Settings.Earless.Fmt": {
+    "message": "Frisur {0} aus {1} wird ohne Ohren dargestellt — für jede Figur, die mit diesem Mod dargestellt wird, in jeder Sammlung. Schaltest du die Einstellung ab, kommen sie zurück.",
+    "description": ""
+  },
+  "HairPort.Settings.EarlessOptionHint.Fmt": {
+    "message": "Dieser Mod hat eine eigene ohrenlose Option: {0}",
+    "description": ""
+  },
+  "HairPort.Earless.Chat": {
+    "message": "[Proteus] Die Katzenohren dieser Frisur sind entfernt: Proteus hat ihren Mod auf eine ohrenlose Kopie umgestellt, daher hat jede Figur, die mit diesem Mod dargestellt wird, in jeder Sammlung jetzt keine Ohren damit. Schalte „Ohren von Miqo'te-Haar-Mods entfernen“ unter /proteus > Einstellungen > Haare ab, um sie zurückzubekommen.",
+    "description": ""
+  },
+  "HairPort.Earless.RestoreBlocked.Fmt": {
+    "message": "[Proteus] Die Ohren konnten in {0} nicht wieder eingesetzt werden: {1}",
+    "description": ""
+  },
+  "HairPort.Earless.Restored.Fmt": {
+    "message": "Ohren an {0} Frisur(en) wieder eingesetzt.",
+    "description": ""
+  },
+  "HairPort.Earless.Refused.AuthorMissing.Fmt": {
+    "message": "die Datei {0} des Autors fehlt, daher wurde die ohrenlose Kopie behalten",
+    "description": ""
+  },
+  "HairPort.Earless.Refused.Changed": {
+    "message": "der Mod hat sich geändert, während Proteus daran gearbeitet hat, daher wurde nichts geschrieben",
+    "description": ""
+  },
+  "HairPort.Earless.Refused.Leftover": {
+    "message": "nicht alle Ohren konnten entfernt werden",
+    "description": ""
+  },
+  "HairPort.Earless.Refused.RecordUnreadable": {
+    "message": "Proteus' Aufzeichnung der ohrenlosen Frisuren dieses Mods (Proteus/earlesshair.json) konnte nicht gelesen werden, daher wurde nichts geändert.",
+    "description": ""
+  },
+  "HairPort.Earless.Refused.Outside.Fmt": {
+    "message": "{0} ist kein Pfad im ohrenlosen Ordner des Mods, daher wurde nichts geschrieben",
+    "description": ""
   }
 }

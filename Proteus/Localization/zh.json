@@ -5410,5 +5410,53 @@
   "HairPort.Scan.UndoChecked.Confirm.Fmt": {
     "message": "再次点击以永久撤销 {0} 个发型",
     "description": ""
+  },
+  "HairPort.Earless.Label": {
+    "message": "移除猫魅族头发 Mod 的耳朵",
+    "description": ""
+  },
+  "HairPort.Earless.Tip": {
+    "message": "适用于猫魅族：当你佩戴的头发 Mod 的发型带有猫耳时，Proteus 会制作一份\n无耳副本，并让该 Mod 的选项指向这份副本。作者自己的文件从不改动。\n\n这会改动 Mod 本身，因此所有启用该 Mod 显示的角色——在每个合集中，以及你\n分享给的任何人——都不会带耳朵。关闭此项会把耳朵放回 Proteus 改动过的每个\nMod。无论是否开启为其他种族适配头发 Mod 都可使用。",
+    "description": ""
+  },
+  "HairPort.Settings.Earless.Fmt": {
+    "message": "{1} 中的发型 {0} 显示为无耳——适用于所有启用此 Mod 显示的角色，在每个合集中。关闭此设置会把耳朵放回。",
+    "description": ""
+  },
+  "HairPort.Settings.EarlessOptionHint.Fmt": {
+    "message": "此 Mod 自带无耳选项：{0}",
+    "description": ""
+  },
+  "HairPort.Earless.Chat": {
+    "message": "[Proteus] 已移除此发型的猫耳：Proteus 已让其 Mod 指向一份无耳副本，因此所有启用此 Mod 显示的角色（在每个合集中）现在都不带耳朵。要放回耳朵，请在 /proteus > 设置 > 头发 中关闭“移除猫魅族头发 Mod 的耳朵”。",
+    "description": ""
+  },
+  "HairPort.Earless.RestoreBlocked.Fmt": {
+    "message": "[Proteus] 无法在 {0} 中放回耳朵：{1}",
+    "description": ""
+  },
+  "HairPort.Earless.Restored.Fmt": {
+    "message": "已为 {0} 个发型放回耳朵。",
+    "description": ""
+  },
+  "HairPort.Earless.Refused.AuthorMissing.Fmt": {
+    "message": "作者的文件 {0} 不见了，因此保留了无耳副本",
+    "description": ""
+  },
+  "HairPort.Earless.Refused.Changed": {
+    "message": "Proteus 处理期间 Mod 发生了变化，因此未写入任何内容",
+    "description": ""
+  },
+  "HairPort.Earless.Refused.Leftover": {
+    "message": "未能移除它的全部耳朵",
+    "description": ""
+  },
+  "HairPort.Earless.Refused.RecordUnreadable": {
+    "message": "无法读取 Proteus 对此 Mod 无耳发型的记录（Proteus/earlesshair.json），因此未做任何更改。",
+    "description": ""
+  },
+  "HairPort.Earless.Refused.Outside.Fmt": {
+    "message": "{0} 不是该 Mod 无耳文件夹内的路径，因此未写入任何内容",
+    "description": ""
   }
 }

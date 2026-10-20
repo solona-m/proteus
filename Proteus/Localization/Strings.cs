@@ -439,6 +439,26 @@ public sealed class HairPortStrings
 
     public readonly string Working = Loc.Localize("HairPort.Working", "Working…");
 
+    // ── Earless Miqo'te hair ─────────────────────────────────────────────────────────────────────────
+    public readonly string Earless = Loc.Localize(
+        "HairPort.Earless.Label", "Take the ears off Miqo'te hair mods") + "###hairEarless";
+
+    public readonly string EarlessTip = Loc.Localize("HairPort.Earless.Tip",
+        "For a Miqo'te: when you wear a hair mod whose hairstyle has cat ears, Proteus\n" +
+        "makes an earless copy of it and points the mod's option at that copy. The\n" +
+        "author's own files are never changed.\n\n" +
+        "This changes the mod itself, so every character drawn with that mod on — in\n" +
+        "every collection, and anyone you share it with — has no ears with it. Turning\n" +
+        "this off puts the ears back in every mod Proteus changed. Works with or without\n" +
+        "fitting hair mods made for another race.");
+
+    public readonly string EarlessFmt = Loc.Localize("HairPort.Settings.Earless.Fmt",
+        "Hairstyle {0} from {1} is drawn without its ears — for every character drawn with this mod on, in every " +
+        "collection. Turning the setting off puts them back.");
+
+    public readonly string EarlessOptionHintFmt = Loc.Localize("HairPort.Settings.EarlessOptionHint.Fmt",
+        "This mod has its own earless option: {0}");
+
     // ── Check of every hair mod ──────────────────────────────────────────────────────────────────────
     public readonly string CheckingStart = Loc.Localize("HairPort.Scan.Starting", "Checking your hair mods…");
     public readonly string CheckingFmt = Loc.Localize("HairPort.Scan.Checking.Fmt", "Checking your hair mods… {0} of {1}");
