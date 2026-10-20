@@ -543,6 +543,14 @@
     "message": "\nГлобальная настройка — она НЕ входит в привязку, которую вы редактируете.",
     "description": ""
   },
+  "Colors.Bodies.Men.Label": {
+    "message": "Накладывать на мужчин",
+    "description": "Checkbox label in the colour-table editor window's Advanced section, under \"Overlay gen2/vanilla\". Ticked = this mod's women's art is also painted on men."
+  },
+  "Colors.Bodies.Men.Tip": {
+    "message": "Рисует женские узоры этого мода и на мужчинах (TBSE или мужское vanilla-тело),\nперенося их в его собственную раскладку через карты мужского тела.\nУзоры, сделанные для мужчин, никогда не меняются.\nДействует на весь мод, а не только на эту опцию.",
+    "description": "Tooltip for the checkbox above. \"TBSE\" is a body-mod name - never translated. Contains deliberate line breaks - keep the same number, moving them where your language needs."
+  },
   "Colors.Bodies.Vanilla.Label": {
     "message": "Накладывать на gen2/ваниль",
     "description": "Checkbox label in the colour-table editor window's Advanced section. \"gen2\" is a body-mod name - never translated. Ticked = this mod is also painted onto vanilla skin."
@@ -2330,6 +2338,10 @@
   "Mods.Inert.MaskNeedsShell.Fmt": {
     "message": "Его маски отображаются как экипировка, а одежда строится именно из маски — но в группе «{0}» в Penumbra ничего не отмечено.",
     "description": ""
+  },
+  "Mods.Inert.AwaitingMenMaps": {
+    "message": "Узоры этого мода сделаны для женских тел. Они будут нарисованы на вас, в вашей собственной раскладке, как только загрузятся карты мужского тела (если загрузка не удалась, повторите её из уведомления о UV-картах).",
+    "description": "Why an enabled mod paints nothing yet: it is women's art on a man, waiting for the men's body maps to download. \"UV maps\" names the notice in the plugin's status window."
   },
   "Mods.Inert.NothingReached": {
     "message": "Отмеченные параметры обработаны, но ни один из них не достиг поверхности, загруженной этим персонажем.",

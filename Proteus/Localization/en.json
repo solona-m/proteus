@@ -543,6 +543,14 @@
     "message": "\nGlobal — this one is NOT part of the binding you're editing.",
     "description": "Appears in the colour-table editor window. Contains deliberate line breaks - keep the same number, moving them where your language needs."
   },
+  "Colors.Bodies.Men.Label": {
+    "message": "Overlay on men",
+    "description": "Checkbox label in the colour-table editor window's Advanced section, under \"Overlay gen2/vanilla\". Ticked = this mod's women's art is also painted on men."
+  },
+  "Colors.Bodies.Men.Tip": {
+    "message": "Also paint this mod's women's art on men (TBSE or the men's vanilla body),\nmoved into his layout through the men's body maps.\nArt made for men is never changed.\nApplies to the whole mod, not just this option.",
+    "description": "Tooltip for the checkbox above. \"TBSE\" is a body-mod name - never translated. Contains deliberate line breaks - keep the same number, moving them where your language needs."
+  },
   "Colors.Bodies.Vanilla.Label": {
     "message": "Overlay gen2/vanilla",
     "description": "Checkbox label in the colour-table editor window's Advanced section. \"gen2\" is a body-mod name - never translated. Ticked = this mod is also painted onto vanilla skin."
@@ -2330,6 +2338,10 @@
   "Mods.Inert.MaskNeedsShell.Fmt": {
     "message": "Its masks render as gear, which needs a mask to build the garment from — and nothing is ticked in its \"{0}\" group in Penumbra.",
     "description": "Why a mod that is switched on paints nothing. Tooltip on the Mods tab and a notice in the colour panel - wrapped prose, not a fixed-width column label. {0} is the Penumbra group name for masks, always the literal English \"Masks\" (it is the author's own group name and arrives already untranslated) - keep the quotes around it. \"Penumbra\" is a product name and is never translated. \"Gear\" here means worn equipment as opposed to skin."
+  },
+  "Mods.Inert.AwaitingMenMaps": {
+    "message": "This mod's art is made for women's bodies. It will be painted on you, in your own layout, once the men's body maps are downloaded (retry from the UV maps notice if the download failed).",
+    "description": "Why an enabled mod paints nothing yet: it is women's art on a man, waiting for the men's body maps to download. \"UV maps\" names the notice in the plugin's status window."
   },
   "Mods.Inert.NothingReached": {
     "message": "Its ticked options resolved, but none of them reached a surface this character has loaded.",

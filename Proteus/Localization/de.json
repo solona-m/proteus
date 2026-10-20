@@ -543,6 +543,14 @@
     "message": "\nGlobal — dies ist NICHT Teil der Bindung, die du gerade bearbeitest.",
     "description": ""
   },
+  "Colors.Bodies.Men.Label": {
+    "message": "Auf Männern überlagern",
+    "description": "Checkbox label in the colour-table editor window's Advanced section, under \"Overlay gen2/vanilla\". Ticked = this mod's women's art is also painted on men."
+  },
+  "Colors.Bodies.Men.Tip": {
+    "message": "Malt die Frauen-Motive dieses Mods auch auf Männer (TBSE oder den männlichen Vanilla-Körper),\nüber die Männer-Körperkarten in sein eigenes Layout übertragen.\nFür Männer gemachte Motive werden nie verändert.\nGilt für den ganzen Mod, nicht nur für diese Option.",
+    "description": "Tooltip for the checkbox above. \"TBSE\" is a body-mod name - never translated. Contains deliberate line breaks - keep the same number, moving them where your language needs."
+  },
   "Colors.Bodies.Vanilla.Label": {
     "message": "Auf gen2/Vanilla überlagern",
     "description": "Checkbox label in the colour-table editor window's Advanced section. \"gen2\" is a body-mod name - never translated. Ticked = this mod is also painted onto vanilla skin."
@@ -2330,6 +2338,10 @@
   "Mods.Inert.MaskNeedsShell.Fmt": {
     "message": "Seine Masken werden als Ausrüstung gerendert, und dafür wird eine Maske benötigt, aus der das Kleidungsstück gebaut wird — in seiner Gruppe „{0}“ ist in Penumbra aber nichts ausgewählt.",
     "description": ""
+  },
+  "Mods.Inert.AwaitingMenMaps": {
+    "message": "Die Motive dieses Mods sind für Frauenkörper gemacht. Sie werden in deinem eigenen Layout auf dich gemalt, sobald die Männer-Körperkarten heruntergeladen sind (schlägt der Download fehl, versuche es über den Hinweis zu den UV-Karten erneut).",
+    "description": "Why an enabled mod paints nothing yet: it is women's art on a man, waiting for the men's body maps to download. \"UV maps\" names the notice in the plugin's status window."
   },
   "Mods.Inert.NothingReached": {
     "message": "Seine ausgewählten Optionen wurden aufgelöst, aber keine davon hat eine Oberfläche erreicht, die dieser Charakter geladen hat.",

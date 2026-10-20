@@ -747,6 +747,9 @@ public sealed partial class SecondSkinService
         return asym != null ? routeOf(asym)?.Src : null;
     }
 
+    /// <summary>The source layout the shell reads off a layer: declared, else the one layout all its paths agree on.</summary>
+    internal static string? ShellLegacySourceOf(OverlayDescriptor d) => d.SourceBodyType ?? InferOverlayBodyType(d);
+
     private static string? InferOverlayBodyType(OverlayDescriptor d)
     {
         string? found = null;
@@ -813,7 +816,8 @@ public sealed partial class SecondSkinService
             {
                 uvRemap.MarkRouteMissing(men.Route);
                 if (mensRoutesLogged.TryAdd(men.Route, 0))
-                    log.Information("[Proteus] men's route {0}→{1} unavailable ({2}); drawn as today",
+                    log.Information("[Proteus] men's route {0}→{1} unavailable ({2}); drawn in the old layout this once, "
+                                  + "held until the maps load",
                         men.Route.Src, men.Route.Dst, UVRemapService.MapFilesOf(men.Route));
             }
             if (men.Legacy == null || string.Equals(men.Legacy, dstType, StringComparison.OrdinalIgnoreCase)) return png;
@@ -1027,13 +1031,21 @@ public sealed partial class SecondSkinService
         IReadOnlySet<string>? hiddenParts = null,
         // Whether the character wears a man's body in TBSE's layout group, and whether the bibo↔TBSE maps were on disk
         // when the composite began (see CompositeRun): a woman's layer is carried into his layout only when both hold.
-        bool wearerIsMan = false, bool menMapsReady = false)
+        bool wearerIsMan = false, bool menMapsReady = false,
+        // Whether a mod's women's art may be painted on a man ("Overlay on men"); null allows every mod.
+        Func<string, bool>? menAllowed = null)
     {
         return new ShellSetBuild(this, charCode, gearOverlays, outputRoot, bodyType, effectsFolder, equippedPartModels, equippedAccessories, gen2Allowed, invisibleGlassesSet, metModels, enabledBodyShapes, maskShellMods, bareBodyModels, drawnRaceCode, activeMaterials, emperorRingVariant, invisibleGlassesVariant, humanPartModels, contentLayers, allEntries, pristineHumanModels, shellTexSize, equippedSlotVariants, hiddenParts)
         {
-            WearerIsMan = wearerIsMan, MenMapsReady = menMapsReady,
+            WearerIsMan = wearerIsMan, MenMapsReady = menMapsReady, MenAllowed = menAllowed,
         }.Run();
     }
+
+    /// <summary>
+    /// Whether the last <see cref="Build"/> held every one of its layers off a man (women's art he cannot have in his
+    /// layout yet, or switched off): the shell then wants no carrier at all.
+    /// </summary>
+    internal bool LastBuildHeldAll { get; private set; }
 
     private static string Rel(string root, string full) => Path.GetRelativePath(root, full).Replace('/', '\\');
 

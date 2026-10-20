@@ -356,6 +356,7 @@ Unter den Zeilen hält **Erweitert** die Einstellungen bereit, die für den ganz
 |---------|-------------|
 | Darstellungsmodus erzwingen | Heftet Skin / Cloth / Animiertes Leuchten an, statt die Funktionen entscheiden zu lassen. **Zurück zu automatisch** löst das wieder. |
 | gen2/Vanilla mit überlagern | Malt diesen Mod auch auf Vanilla-Haut (gen2), die du trägst, meist Haut, die mit einem Ausrüstungsteil mitkommt. Standardmäßig an, und es kostet nichts, wenn keine Vanilla-Haut an dir ist. bibo und gen3/Eve werden immer bemalt. Gilt für den ganzen Mod und ist eine globale Einstellung: Design-Bindungen erfassen sie nicht. |
+| Auf Männern überlagern | Malt die Frauen-Motive dieses Mods auch auf Männer (TBSE oder den männlichen Vanilla-Körper), über die Männer-Körperkarten in sein eigenes Layout übertragen; die Karten werden beim ersten Bedarf heruntergeladen, und bis dahin wird nichts auf ihn gemalt. Für Männer gemachte Motive werden nie verändert. Standardmäßig an; gilt für den ganzen Mod und ist eine globale Einstellung: Design-Bindungen erfassen sie nicht. |
 | Auf Standard zurücksetzen | Setzt Farben, Leuchten und Modus dieser Option auf die Einstellungen zurück, die Proteus für den Mod zuerst erfasst hat. Halte Strg, um es scharf zu schalten. |
 
 Hat ein Mod keine aktive Option, gibt es keine Farben anzuzeigen, aber **Erweitert** erscheint trotzdem, damit **gen2/Vanilla mit überlagern** erreichbar bleibt.

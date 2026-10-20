@@ -996,7 +996,8 @@ public partial class CompositorService
                 bool first;
                 lock (run.mensRoutesLogged) first = run.mensRoutesLogged.Add(route);
                 if (first)
-                    run.compositor.log.Information("[Proteus] men's route {0}→{1} unavailable ({2}); drawn as today",
+                    run.compositor.log.Information("[Proteus] men's route {0}→{1} unavailable ({2}); drawn in the old layout "
+                            + "this once, held until the maps load",
                         route.Src, route.Dst, UVRemapService.MapFilesOf(route));
             }
 

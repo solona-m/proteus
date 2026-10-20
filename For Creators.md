@@ -163,6 +163,8 @@ A normal-only overlay hides the normals beneath it in the same mod only **where 
 
 > A `Mask`-only overlay (no `Diffuse` **and** no `Normal`) is also supported: the mask PNG's own alpha defines where it applies. Useful for effects carried entirely in the mask/multi map, like wetness specular.
 
+**Men's bodies.** You don't need to list men's races. An overlay made for women (saved as bibo, or naming only women's bibo or gen3 body materials) is also painted on a man wearing TBSE or the men's vanilla body. It is moved into his own layout through the men's body maps (see [docs/uvmaps.md](docs/uvmaps.md)), and its gear and mask shells are moved with it. An overlay saved as gen3 or gen2 counts as a man's own art and is never moved. Players can switch this off per mod with **Overlay on men**.
+
 ### Skin-tone masking
 
 The skin shader (`skin.shpk`, used by Bibo+ bodies) multiplies the diffuse by the character's **skin tone**. Because Proteus composites your overlay into that diffuse, an opaque overlay would otherwise be darkened/tinted by skin tone — most visible as a bright/white overlay turning beige on darker skin. Proteus masks the skin tone out of opaque overlay pixels so they render at their authored color on any skin tone. The masking is automatically scaled by pixel brightness (bright pixels are fully de-tinted; dark pixels are left alone, since skin tone is invisible on dark color and masking it would slightly increase shine).

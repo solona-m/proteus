@@ -35,6 +35,9 @@ public static class InertModDiagnosis
         MaskNeedsShell,
         /// <summary>Options resolved but none reached a surface this character has loaded: the "we don't know" rung.</summary>
         NothingReached,
+        /// <summary>Women's art on a man, held off him until the men's body maps (bibo↔TBSE) are downloaded. Tested before
+        /// <see cref="WrongRace"/>: the race is not the reason, the missing maps are.</summary>
+        AwaitingMenMaps,
     }
 
     /// <summary>
@@ -61,6 +64,8 @@ public static class InertModDiagnosis
     /// and not a wrong-body problem at all.</param>
     /// <param name="wants">What the pack paints, already readable. Empty when unknown.</param>
     /// <param name="have">What the character is, same shape. Empty when unknown (mid-redraw); never a mismatch.</param>
+    /// <param name="awaitingMenMaps">Its women's art would be painted on this man, and is held until the men's body maps
+    /// are downloaded.</param>
     internal static InertReason Explain(
         ResolutionDiagnostic diag,
         bool maskGroupPresent,
@@ -69,7 +74,8 @@ public static class InertModDiagnosis
         bool materialsFiltered,
         string wants,
         string have,
-        bool bodyMismatch)
+        bool bodyMismatch,
+        bool awaitingMenMaps = false)
     {
         // 1. We could not find out. Only Unavailable counts; NotAsked is healthy.
         if (diag.Settings == SettingsRead.Unavailable)
@@ -90,6 +96,10 @@ public static class InertModDiagnosis
             if (maskGroupPresent && masksSelected == 0) names.Add(SidecarDiscoveryService.MaskGroupName);
             return new InertReason(InertCause.NothingTicked, selectable, string.Join(", ", names), "", "");
         }
+
+        // 3½. Women's art on a man, waiting for the maps that carry it into his layout: not a wrong race at all.
+        if (awaitingMenMaps)
+            return new InertReason(InertCause.AwaitingMenMaps, 0, "", "", "");
 
         // 4. Ticked, but for a body nobody here is wearing. Requires a known wearer AND a real mismatch: a pack
         //    painting this very character's face still has a material dropped whenever the snapshot hasn't caught
@@ -177,6 +187,8 @@ public static class InertModDiagnosis
             $"nothing is ticked in Penumbra — its {r.GroupCount} option group(s) [{r.Groups}] are all empty",
         InertCause.WrongRace =>
             $"it paints {r.Wants}, and this character is {r.Have}",
+        InertCause.AwaitingMenMaps =>
+            "its women's art is held off this man until the men's body maps (bibo↔TBSE) are downloaded",
         InertCause.MaskNeedsShell =>
             $"its masks render as gear, which needs a mask to build the shell from, and nothing is ticked "
           + $"in its \"{r.Groups}\" group",

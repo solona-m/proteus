@@ -356,6 +356,7 @@ Sous les lignes, **Avancé** regroupe les réglages qui s'appliquent à tout le 
 |---------|-------------|
 | Forcer le mode de rendu | Épingle Skin / Cloth / Lueur animée au lieu de laisser les fonctions décider. **Revenir à auto** le libère. |
 | Calquer sur gen2/vanilla | Peint aussi ce mod sur la peau vanilla (gen2) que vous portez, généralement une peau fournie avec une pièce d'équipement. Activé par défaut, et cela ne coûte rien quand vous n'avez aucune peau vanilla sur vous. bibo et gen3/Eve sont toujours peints. S'applique à tout le mod, et c'est un réglage global : les liaisons de design ne le capturent pas. |
+| Superposer sur les hommes | Peint aussi les motifs féminins de ce mod sur les hommes (TBSE ou le corps masculin vanilla), transposés dans sa propre disposition grâce aux cartes de corps masculin, téléchargées la première fois qu'elles servent ; d'ici là, rien n'est peint sur lui. Les motifs faits pour les hommes ne sont jamais modifiés. Activé par défaut ; s'applique à tout le mod et c'est un réglage global : les liaisons de design ne le capturent pas. |
 | Rétablir les valeurs par défaut | Rétablit les couleurs, la lueur et le mode de cette option aux réglages que Proteus a enregistrés en premier pour ce mod. Maintenez Ctrl pour l'armer. |
 
 Si un mod n'a aucune option active, il n'y a pas de couleurs à montrer, mais **Avancé** apparaît quand même pour que **Calquer sur gen2/vanilla** reste accessible.
