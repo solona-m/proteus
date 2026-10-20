@@ -269,7 +269,7 @@ internal static class UvTransferBakeJob
         {
             ["validPixels"] = s.ValidPixels, ["destCoverage"] = s.DestCoverage, ["rayHits"] = s.RayHits,
             ["closestFallbacks"] = s.ClosestFallbacks, ["regionAdjacentHits"] = s.RegionAdjacentHits,
-            ["rimRejected"] = s.RimRejected, ["rimFallbacks"] = s.RimFallbacks, ["unreached"] = s.Unreached, ["overlapTexels"] = s.OverlapPixels,
+            ["unreached"] = s.Unreached, ["overlapTexels"] = s.OverlapPixels,
             ["mirrorFilled"] = s.MirrorFilled, ["folds"] = f.FoldShare,
             ["roundTripModerate"] = f.RoundTripModerate, ["roundTripGross"] = f.RoundTripGross,
             ["regions"] = regions, ["landmarksMm"] = landmarks, ["landmarksAcrossSkinMm"] = tangent,

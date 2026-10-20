@@ -23,13 +23,19 @@ public class UvTransferBakeLocalTests(ITestOutputHelper output)
             data.GetFile(OtherRaceWearer.BaseSkeletonPath(101))!.Data);
     }
 
+    /// <summary>A body file the job cannot read fails the bake whole: no map comes back, and the reason does.</summary>
     [LocalDataFact(LocalData.GameData, Bibo, Tbse)]
-    [Trait("Plan", "AC-tbse-uvmap-1")]
-    public void Low_resolution_bake_reports() // [AC-tbse-uvmap-1]
+    [Trait("Plan", "EDGE-tbse-uvmap-28")]
+    public void Unreadable_input_fails_without_maps() // [EDGE-tbse-uvmap-28]
     {
-        var result = UvTransferBakeJob.Run(Inputs(), 4096);
-        output.WriteLine(result.Report.ToJsonString(new System.Text.Json.JsonSerializerOptions { WriteIndented = true }));
-        Assert.NotNull(result.Report["stats"]);
+        var good = Inputs();
+        var tbse = good.Tbse.ToDictionary(f => f.Key, f => f.Value);
+        tbse[UvBakeInputs.TbseChest] = [1, 2, 3, 4];
+        var result = UvTransferBakeJob.Run(good with { Tbse = tbse }, 256);
+        Assert.False(result.Passed);
+        Assert.Null(result.BiboToTbseBytes);
+        Assert.Null(result.TbseToBiboBytes);
+        output.WriteLine(string.Join("; ", result.Failures));
     }
 }
 

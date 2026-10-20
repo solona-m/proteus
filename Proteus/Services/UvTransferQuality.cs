@@ -17,12 +17,24 @@ internal static class UvTransferQuality
 {
     internal static class Gate
     {
-        public const double RegionCoverage = 0.99, RegionRimSnaps = 0.001, RegionFolds = 0.01;
-        public const double GlobalFolds = 0.005, GlobalCoverage = 0.99;
+        public const double RegionCoverage = 0.99, RegionFolds = 0.01;
+        // Overall folds: the plan's 0.5% accepted at 1.2% by the user (2026-10-20) — the bake that shipped measured
+        // 1.1%, the folds gathered where the bodies' anatomy differs (the crotch above all).
+        public const double GlobalFolds = 0.012, GlobalCoverage = 0.99;
         // Gross round trip: no worse than the shipped bibo↔gen3 maps (2.58% at worst, measured by RoundTrip below),
         // the user's call when the first bake missed the 0.5% the plan began with.
         public const double RoundTripGross = 0.026, RoundTripModerate = 0.10;
         public const float TorsoLandmark = 0.015f, TipLandmark = 0.01f;
+
+        /// <summary>
+        /// Landmarks the user accepted past <see cref="TorsoLandmark"/> (2026-10-20), where a woman's body and a man's
+        /// differ in shape rather than the map in placement: the under-bust point sits on the breast, the belly and
+        /// pubis are shaped apart. Each at what the shipped bake measured, rounded up.
+        /// </summary>
+        public static readonly Dictionary<string, float> AcceptedLandmarkMm = new(StringComparer.Ordinal)
+        {
+            ["underBustL"] = 32f, ["underBustR"] = 32f, ["lowerBelly"] = 46f,
+        };
         public const double IdentityP50 = 4, IdentityP95 = 16;
     }
 
@@ -330,12 +342,12 @@ internal static class UvTransferQuality
         {
             if (r.Owned == 0) { miss.Add($"{mapName}: region {name} not found on the body"); continue; }
             if (r.Coverage < Gate.RegionCoverage) miss.Add($"{mapName}: {name} coverage {r.Coverage:P2} < {Gate.RegionCoverage:P0}");
-            if (r.RimSnapShare > Gate.RegionRimSnaps) miss.Add($"{mapName}: {name} rim snaps {r.RimSnapShare:P2}");
             if (r.FoldShare > Gate.RegionFolds) miss.Add($"{mapName}: {name} folds {r.FoldShare:P2} > {Gate.RegionFolds:P0}");
         }
         foreach (var (name, mm) in f.LandmarksMm)
         {
-            float limit = (name.StartsWith("fingertip") || name.StartsWith("toe") ? Gate.TipLandmark : Gate.TorsoLandmark) * 1000f;
+            float limit = Gate.AcceptedLandmarkMm.TryGetValue(name, out var accepted) ? accepted
+                        : (name.StartsWith("fingertip") || name.StartsWith("toe") ? Gate.TipLandmark : Gate.TorsoLandmark) * 1000f;
             if (float.IsNaN(mm) || mm > limit) miss.Add($"{mapName}: landmark {name} off by {mm:F1} mm > {limit:F0} mm");
         }
         return miss;

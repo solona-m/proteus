@@ -106,11 +106,6 @@ internal sealed class BakeBody
             return cover.Closest(q, CoverReach, o => o != t, out _, out _, out _, out _, out _);
         });
         Smooth = SmoothNormals(SmoothPasses);
-        TriNearRim = new bool[tc];
-        var nearRim = new bool[P.Length];
-        for (int v = 0; v < P.Length; v++) nearRim[v] = Rim.Near(P[v], UvTransferBake.RimReach);
-        for (int t = 0; t < tc; t++)
-            TriNearRim[t] = nearRim[Tri[t * 3]] || nearRim[Tri[t * 3 + 1]] || nearRim[Tri[t * 3 + 2]];
     }
 
     /// <summary>How far off an open edge, along the surface, the bake looks for skin lapped over it.</summary>
@@ -127,9 +122,6 @@ internal sealed class BakeBody
 
     /// <summary>Per vertex, the normal averaged over the welded surface around it (<see cref="SmoothPasses"/> rings).</summary>
     public readonly Vector3[] Smooth;
-
-    /// <summary>Per triangle, whether a corner lies within <see cref="UvTransferBake.RimReach"/> of the open rim.</summary>
-    public readonly bool[] TriNearRim;
 
     private Vector3[] SmoothNormals(int passes)
     {
@@ -465,20 +457,20 @@ internal sealed class TriangleBvh
 /// Each destination texel is rasterised to its point on the destination's surface; that point is projected along its
 /// normal onto the source's surface, among triangles of the same or a neighbouring body region whose normal agrees, and
 /// the source uv there is written. Where the projection finds nothing, the closest such point within reach stands in.
-/// A landing within a centimetre of the source's open rim is refused unless the destination point is at its own rim:
-/// a hole's edge is not the skin that should have been under it.
+/// <para/>
+/// Landings at the source's open rim are kept. The nude bodies the maps are baked from have no holes in their skin, and
+/// what rims they have are the ends of the body (neck, waist, wrists, ankles) and the joins between lapped pieces — a
+/// rule refusing them dropped skin that was there and folded what fell back elsewhere (measured, 2026-10-20).
 /// </summary>
 internal static class UvTransferBake
 {
     internal const float Reach = 0.08f;          // 8 cm: bodies bent to one race differ by less, limb for limb
     internal const float RimReach = 0.01f;
     internal const float NormalAgree = 0.3f;
-    internal static bool RimFallback = false;
-    internal static bool RimReject = false;
 
     internal sealed class Stats
     {
-        public long OwnedPixels, ValidPixels, RayHits, ClosestFallbacks, RegionAdjacentHits, RimRejected, Unreached, RimFallbacks;
+        public long OwnedPixels, ValidPixels, RayHits, ClosestFallbacks, RegionAdjacentHits, Unreached;
         public long OverlapPixels;
         /// <summary>The sheet half filled by mirror because no texel of it was reached, or null.</summary>
         public string? MirrorFilled;
@@ -544,26 +536,16 @@ internal static class UvTransferBake
     }
 
     /// <summary>Where on <paramref name="src"/> the destination point at (<paramref name="p"/>, <paramref name="n"/>) of region <paramref name="region"/> lands.</summary>
-    internal readonly record struct Landing(bool Found, int Tri, float U, float V, float W, bool ByRay, bool Adjacent,
-                                            bool OffRim = false);
+    internal readonly record struct Landing(bool Found, int Tri, float U, float V, float W, bool ByRay, bool Adjacent);
 
-    /// <param name="atRim">Whether the destination point is itself at its body's rim, where landing at the source's
-    /// rim is right. Otherwise a landing on a triangle at the source's rim — a hole's edge — is replaced by the closest
-    /// point on skin away from it.</param>
-    internal static Landing Land(TriangleBvh bvh, BakeBody src, Vector3 p, Vector3 n, Region region, bool atRim = true)
+    internal static Landing Land(TriangleBvh bvh, BakeBody src, Vector3 p, Vector3 n, Region region)
     {
         bool Accept(int t) => UvBakeBones.Adjacent(region, src.TriRegion[t]) && Vector3.Dot(src.FaceNormal[t], n) > NormalAgree;
         bool Facing(int t) => UvBakeBones.Adjacent(region, src.TriRegion[t]) && Vector3.Dot(src.FaceNormal[t], n) > 0f;
-        Landing found = default;
         if (n != Vector3.Zero && bvh.Ray(p, n, Reach, Accept, out int t1, out float u1, out float v1, out float w1, out _))
-            found = new Landing(true, t1, u1, v1, w1, true, src.TriRegion[t1] != region);
-        else if (bvh.Closest(p, Reach, Facing, out int t2, out float u2, out float v2, out float w2, out _))
-            found = new Landing(true, t2, u2, v2, w2, false, src.TriRegion[t2] != region);
-        if (!RimFallback || !found.Found || atRim || !src.TriNearRim[found.Tri]) return found;
-
-        bool AwayFromRim(int t) => !src.TriNearRim[t] && Facing(t);
-        if (bvh.Closest(p, Reach, AwayFromRim, out int t3, out float u3, out float v3, out float w3, out _))
-            return new Landing(true, t3, u3, v3, w3, false, src.TriRegion[t3] != region, OffRim: true);
+            return new Landing(true, t1, u1, v1, w1, true, src.TriRegion[t1] != region);
+        if (bvh.Closest(p, Reach, Facing, out int t2, out float u2, out float v2, out float w2, out _))
+            return new Landing(true, t2, u2, v2, w2, false, src.TriRegion[t2] != region);
         return default;
     }
 
@@ -577,7 +559,7 @@ internal static class UvTransferBake
         var valid = new bool[size * size];
         var stats = new Stats { OverlapPixels = raster.Overlap, OverlapByOption = raster.OverlapByOption };
 
-        Parallel.For(0, size, () => new long[7], (y, _, local) =>
+        Parallel.For(0, size, () => new long[5], (y, _, local) =>
         {
             for (int x = 0; x < size; x++)
             {
@@ -589,12 +571,9 @@ internal static class UvTransferBake
                 var pos = dest.At(t, u, v, w).Pos;
                 var nrm = dest.SmoothAt(t, u, v, w);
                 var region = dest.RegionAt(t, u, v, w);
-                bool atRim = dest.Rim.Near(pos, RimReach);
-                var land = Land(bvh, src, pos, nrm, region, atRim);
-                if (!land.Found) { local[5]++; continue; }
-                var (hit, _, uv) = src.At(land.Tri, land.U, land.V, land.W);
-                if (RimReject && !atRim && src.Rim.Near(hit, RimReach)) { local[4]++; continue; }
-                if (land.OffRim) local[6]++;
+                var land = Land(bvh, src, pos, nrm, region);
+                if (!land.Found) { local[4]++; continue; }
+                var uv = src.At(land.Tri, land.U, land.V, land.W).Uv;
                 if (land.ByRay) local[1]++; else local[2]++;
                 if (land.Adjacent) local[3]++;
                 r[i] = Quantize(uv.X);
@@ -608,9 +587,7 @@ internal static class UvTransferBake
             Interlocked.Add(ref stats.RayHits, local[1]);
             Interlocked.Add(ref stats.ClosestFallbacks, local[2]);
             Interlocked.Add(ref stats.RegionAdjacentHits, local[3]);
-            Interlocked.Add(ref stats.RimRejected, local[4]);
-            Interlocked.Add(ref stats.Unreached, local[5]);
-            Interlocked.Add(ref stats.RimFallbacks, local[6]);
+            Interlocked.Add(ref stats.Unreached, local[4]);
         });
         stats.ValidPixels = stats.RayHits + stats.ClosestFallbacks;
         return new Result(r, g, valid, size, stats);
