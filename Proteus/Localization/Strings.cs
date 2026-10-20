@@ -3027,6 +3027,10 @@ public sealed class PartsStrings
 
     public readonly string RetargetShaping = Loc.Localize("Parts.Retarget.Shaping", "Bending the model into the shape the bodies are made for…");
 
+    /// <summary>{0} is the race of the model open, {1} the race picked below it.</summary>
+    public readonly string RetargetLoweredFmt = Loc.Localize("Parts.Retarget.Lowered.Fmt",
+        "A {1} model is made from the {0} model, bent into the {1} shape the way the game bends between them. Saving adds the metadata the game needs.");
+
     public readonly string RetargetShapedDownFmt = Loc.Localize("Parts.Retarget.ShapedDown.Fmt",
         "There are no {0} bodies to refit between, so the {0} model is refitted in the {1} shape, the way the game bends it, and saved back as {0}.");
 
@@ -3048,7 +3052,7 @@ public sealed class PartsStrings
     public readonly string RetargetRaceLabel = Loc.Localize("Parts.Retarget.Race.Label", "Refit for");
 
     public readonly string RetargetRaceTip = Loc.Localize("Parts.Retarget.Race.Tip",
-        "Which race the refit is for. Another race of the garment's sex gets its own model, made from this one the way the game bends it, refitted onto that race's body and saved where that race loads it. Everyone else keeps this model.");
+        "Which race the refit is for. Another race of the garment's sex gets its own model, made from this one the way the game bends it, refitted onto that race's body and saved where that race loads it. This model stays as it is.");
 
     /// <summary>{0} is a race such as "Midlander M".</summary>
     public readonly string RetargetRaceThisModelFmt = Loc.Localize("Parts.Retarget.Race.ThisModel.Fmt", "{0} (this model)");
@@ -3072,6 +3076,14 @@ public sealed class PartsStrings
     /// <summary>{0} is the race picked, {1} the race of the model open.</summary>
     public readonly string RetargetRaceOnlyFmt = Loc.Localize("Parts.Retarget.Race.Only.Fmt",
         "Only {0} will wear the saved refit; {1} keeps this model.");
+
+    /// <summary>{0} is the race picked, {1} the race of the model open; said for a race the open one falls back to.</summary>
+    public readonly string RetargetRaceBelowFmt = Loc.Localize("Parts.Retarget.Race.Below.Fmt",
+        "{0} will wear the saved refit, and so will every race of that sex with no model of its own for this item; {1} keeps this model.");
+
+    /// <summary>{0} is the race picked.</summary>
+    public readonly string RetargetRaceBelowExtraBonesFmt = Loc.Localize("Parts.Retarget.Race.BelowExtraBones.Fmt",
+        "This garment uses extra bones. Only {0} is given the extra skeleton for them, so on the other races that wear this refit those bones won't move.");
 
     /// <summary>{0} is the race picked.</summary>
     public readonly string RetargetRaceSourceBakedFmt = Loc.Localize("Parts.Retarget.Race.SourceBaked.Fmt",

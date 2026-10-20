@@ -3747,6 +3747,10 @@
     "message": "{0} 바디가 없어서 {0} 모델을 게임이 변형하는 방식대로 {1} 체형에서 리핏한 뒤 다시 {0}(으)로 저장합니다.",
     "description": ""
   },
+  "Parts.Retarget.Lowered.Fmt": {
+    "message": "{0} 모델로 {1} 모델을 만들어, 게임이 둘 사이를 휘는 방식 그대로 {1} 체형으로 휩니다. 저장하면 게임에 필요한 메타데이터가 추가됩니다.",
+    "description": "{0} is the race of the model open, {1} the race picked below it."
+  },
   "Parts.Retarget.Bake.BendBack.Fmt": {
     "message": "리핏을 {0} 체형으로 되돌리지 못했습니다({1})",
     "description": ""
@@ -4336,7 +4340,7 @@
     "description": "Heads the dropdown that picks which race's model a refit is made and saved as."
   },
   "Parts.Retarget.Race.Tip": {
-    "message": "어느 종족용으로 리핏할지 고릅니다. 의상과 같은 성별의 다른 종족을 고르면, 게임이 휘는 방식 그대로 이 모델에서 전용 모델을 만들어 그 종족의 체형에 리핏하고, 그 종족이 불러오는 위치에 저장합니다. 다른 종족은 이 모델을 그대로 씁니다.",
+    "message": "어느 종족용으로 리핏할지 고릅니다. 의상과 같은 성별의 다른 종족을 고르면, 게임이 휘는 방식 그대로 이 모델에서 전용 모델을 만들어 그 종족의 체형에 리핏하고, 그 종족이 불러오는 위치에 저장합니다. 이 모델은 그대로 남습니다.",
     "description": "Tooltip of Parts.Retarget.Race.Label."
   },
   "Parts.Retarget.Race.ThisModel.Fmt": {
@@ -4362,6 +4366,14 @@
   "Parts.Retarget.Race.Only.Fmt": {
     "message": "저장한 리핏은 {0}만 입습니다. {1}은(는) 이 모델을 그대로 씁니다.",
     "description": "{0} is the race picked, {1} the race of the model open."
+  },
+  "Parts.Retarget.Race.Below.Fmt": {
+    "message": "저장한 리핏은 {0}이(가) 입으며, 이 장비의 자체 모델이 없는 같은 성별의 모든 종족도 입습니다. {1}은(는) 이 모델을 그대로 씁니다.",
+    "description": "{0} is the race picked, {1} the race of the model open; said for a race the open one falls back to."
+  },
+  "Parts.Retarget.Race.BelowExtraBones.Fmt": {
+    "message": "이 의상은 추가 본을 사용합니다. 추가 스켈레톤은 {0}에게만 주어지므로, 이 리핏을 입는 다른 종족에서는 그 본이 움직이지 않습니다.",
+    "description": "{0} is the race picked."
   },
   "Parts.Retarget.Race.SourceBaked.Fmt": {
     "message": "원래 맞춰진 체형도 같은 방식으로 {0}에 맞게 휘므로, 전과 똑같이 몸에 맞습니다.",

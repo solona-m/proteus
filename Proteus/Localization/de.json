@@ -3747,6 +3747,10 @@
     "message": "Es gibt keine {0}-Körper, zwischen denen angepasst werden kann. Daher wird das {0}-Modell in der {1}-Form angepasst, so wie das Spiel es verformt, und wieder als {0} gespeichert.",
     "description": ""
   },
+  "Parts.Retarget.Lowered.Fmt": {
+    "message": "Aus dem {0}-Modell wird ein {1}-Modell gemacht, in die {1}-Form gebogen, so wie das Spiel zwischen beiden biegt. Beim Speichern werden die Metadaten hinzugefügt, die das Spiel braucht.",
+    "description": "{0} is the race of the model open, {1} the race picked below it."
+  },
   "Parts.Retarget.Bake.BendBack.Fmt": {
     "message": "die Anpassung konnte nicht in die {0}-Form zurückgebracht werden ({1})",
     "description": ""
@@ -4336,7 +4340,7 @@
     "description": "Heads the dropdown that picks which race's model a refit is made and saved as."
   },
   "Parts.Retarget.Race.Tip": {
-    "message": "Für welche Rasse die Anpassung ist. Eine andere Rasse desselben Geschlechts bekommt ein eigenes Modell, aus diesem so gebogen, wie das Spiel es biegt, auf den Körper dieser Rasse angepasst und dort gespeichert, wo diese Rasse es lädt. Alle anderen behalten dieses Modell.",
+    "message": "Für welche Rasse die Anpassung ist. Eine andere Rasse desselben Geschlechts bekommt ein eigenes Modell, aus diesem so gebogen, wie das Spiel es biegt, auf den Körper dieser Rasse angepasst und dort gespeichert, wo diese Rasse es lädt. Dieses Modell bleibt, wie es ist.",
     "description": "Tooltip of Parts.Retarget.Race.Label."
   },
   "Parts.Retarget.Race.ThisModel.Fmt": {
@@ -4362,6 +4366,14 @@
   "Parts.Retarget.Race.Only.Fmt": {
     "message": "Nur {0} trägt die gespeicherte Anpassung; {1} behält dieses Modell.",
     "description": "{0} is the race picked, {1} the race of the model open."
+  },
+  "Parts.Retarget.Race.Below.Fmt": {
+    "message": "{0} trägt die gespeicherte Anpassung, ebenso jede Rasse dieses Geschlechts ohne eigenes Modell für dieses Teil; {1} behält dieses Modell.",
+    "description": "{0} is the race picked, {1} the race of the model open; said for a race the open one falls back to."
+  },
+  "Parts.Retarget.Race.BelowExtraBones.Fmt": {
+    "message": "Dieses Kleidungsstück nutzt zusätzliche Knochen. Nur {0} bekommt das zusätzliche Skelett dafür, daher bewegen sich diese Knochen bei den anderen Rassen, die diese Anpassung tragen, nicht.",
+    "description": "{0} is the race picked."
   },
   "Parts.Retarget.Race.SourceBaked.Fmt": {
     "message": "Die Körper, für die es gemacht wurde, werden genauso zu {0} gebogen, damit es so auf ihnen sitzt wie vorher.",

@@ -3747,6 +3747,10 @@
     "message": "No hay cuerpos {0} entre los que ajustar, así que el modelo {0} se ajusta en la forma {1}, como lo deforma el juego, y se guarda de nuevo como {0}.",
     "description": ""
   },
+  "Parts.Retarget.Lowered.Fmt": {
+    "message": "Se crea un modelo {1} a partir del modelo {0}, doblado a la forma {1} tal como el juego dobla entre ambos. Guardar añade los metadatos que necesita el juego.",
+    "description": "{0} is the race of the model open, {1} the race picked below it."
+  },
   "Parts.Retarget.Bake.BendBack.Fmt": {
     "message": "el ajuste no se pudo devolver a la forma {0} ({1})",
     "description": ""
@@ -4336,7 +4340,7 @@
     "description": "Heads the dropdown that picks which race's model a refit is made and saved as."
   },
   "Parts.Retarget.Race.Tip": {
-    "message": "Para qué raza es el ajuste. Otra raza del mismo sexo recibe su propio modelo, hecho a partir de este tal como lo dobla el juego, ajustado al cuerpo de esa raza y guardado donde esa raza lo carga. Los demás conservan este modelo.",
+    "message": "Para qué raza es el ajuste. Otra raza del mismo sexo recibe su propio modelo, hecho a partir de este tal como lo dobla el juego, ajustado al cuerpo de esa raza y guardado donde esa raza lo carga. Este modelo queda como está.",
     "description": "Tooltip of Parts.Retarget.Race.Label."
   },
   "Parts.Retarget.Race.ThisModel.Fmt": {
@@ -4362,6 +4366,14 @@
   "Parts.Retarget.Race.Only.Fmt": {
     "message": "Solo {0} llevará el ajuste guardado; {1} conserva este modelo.",
     "description": "{0} is the race picked, {1} the race of the model open."
+  },
+  "Parts.Retarget.Race.Below.Fmt": {
+    "message": "{0} llevará el ajuste guardado, y también toda raza de ese sexo sin modelo propio para esta prenda; {1} conserva este modelo.",
+    "description": "{0} is the race picked, {1} the race of the model open; said for a race the open one falls back to."
+  },
+  "Parts.Retarget.Race.BelowExtraBones.Fmt": {
+    "message": "Esta prenda usa huesos extra. Solo {0} recibe el esqueleto extra para ellos, así que en las demás razas que lleven este ajuste esos huesos no se moverán.",
+    "description": "{0} is the race picked."
   },
   "Parts.Retarget.Race.SourceBaked.Fmt": {
     "message": "Los cuerpos para los que se hizo se doblan a {0} de la misma forma, así que se asienta sobre ellos como antes.",
