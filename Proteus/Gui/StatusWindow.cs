@@ -790,7 +790,7 @@ public class StatusWindow : Window
             {
                 ImGui.SameLine();
                 if (ImGui.SmallButton(Strings.Band.Retry))
-                    uvMapDl.EnsureMapsAsync();
+                    uvMapDl.RetryFailed();
             }
         }
 

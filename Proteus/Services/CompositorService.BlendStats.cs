@@ -42,6 +42,7 @@ public partial class CompositorService
     // them: it calls RemapIfNeeded, which would double-count against `load`.
     private readonly PhaseCounter blendLoadStats     = new();   // LoadPng + RemapIfNeeded
     private readonly PhaseCounter blendGen2Stats     = new();   //   of which: the vanilla-sibling crop, cached or not
+    private readonly PhaseCounter blendMenStats      = new();   //   of which: a woman's art onto a man, through the bibo↔TBSE maps
     private readonly PhaseCounter blendBaseLoadStats = new();   // LoadBaseTexture
     private readonly PhaseCounter blendResolveStats  = new();   // ResolveUpstream
     private readonly PhaseCounter blendSuppressStats = new();   // Suppress: clone + SERIAL full-buffer pass
@@ -64,6 +65,7 @@ public partial class CompositorService
         blendSeamDropStats.Reset();
         blendLoadStats.Reset();
         blendGen2Stats.Reset();
+        blendMenStats.Reset();
         blendBlurCacheHits.Reset();
         blendBaseLoadStats.Reset();
         blendResolveStats.Reset();
@@ -289,7 +291,7 @@ public partial class CompositorService
             "prefetch {5:F0}ms bg (decode work {6:F0}ms, {7} native of {8}) | remap {9:F0}ms ({10}) | " +
             "blend {11:F0}ms (islands {12:F0} | seam {13:F0}/{14} | ao {15:F0} [sil {16:F0}/{17} + blur {18:F0}/{19} ({59} cached) " +
             "+ apply {20:F0}] | tag {21:F0}/{22} | overlays {23:F0} [cov {24:F0}/{25} + idxmerge {26:F0}/{27} " +
-            "+ diffuse {28:F0}/{29} + normal {30:F0}/{31} + seamdrop {32:F0}/{33} + load {34:F0}/{35} (gen2 {57:F0}/{58}) " +
+            "+ diffuse {28:F0}/{29} + normal {30:F0}/{31} + seamdrop {32:F0}/{33} + load {34:F0}/{35} (gen2 {57:F0}/{58}, men {62:F0}/{63}) " +
             "+ baseload {36:F0}/{37} + resolve {38:F0}/{39} + suppress {40:F0}/{41} + glue {42:F0}] | " +
             "maskrelief {43:F0} | maskdiffuse {44:F0} | rest {45:F0}) | " +
             "swizzle {46:F0}ms | encode {60:F0}ms ({61} surface(s)) | " +
@@ -313,6 +315,6 @@ public partial class CompositorService
             cacheEntries, cacheBytes / (1024.0 * 1024.0), textureLoader.Evictions,
             textureLoader.DecodeCacheBudgetBytes / (1024.0 * 1024.0),
             blendGen2Stats.Ms, blendGen2Stats.Calls, blendBlurCacheHits.Calls,
-            encode.Ms, encode.Calls);
+            encode.Ms, encode.Calls, blendMenStats.Ms, blendMenStats.Calls);
     }
 }

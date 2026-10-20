@@ -2,6 +2,10 @@ name: Upload UV Maps
 
 on:
   workflow_dispatch:
+    inputs:
+      tag:
+        description: "The uvmaps-* release to create (must be listed in Proteus/uvmaps/releases.json)"
+        required: true
   push:
     tags:
       - 'uvmaps-*'
@@ -18,30 +22,52 @@ jobs:
         with:
           lfs: true
 
-      - name: Sanity-check file sizes
+      # Which files a tag publishes comes from Proteus/uvmaps/releases.json — the same table the client's pinned lists
+      # are tested against — so the workflow names no file itself. A tag the table does not list is refused.
+      - name: Resolve the tag's files
         shell: pwsh
         run: |
-          $minBytes = 100MB
-          foreach ($f in @("Proteus\uvmaps\bibo_to_gen3_transfer.tif", "Proteus\uvmaps\gen3_to_bibo_transfer.tif")) {
-            $size = (Get-Item $f).Length
-            if ($size -lt $minBytes) {
-              Write-Error "$f is only $size bytes — looks like an LFS pointer, not the real file. Aborting."
+          $tag = if ("${{ github.ref_type }}" -eq "tag") { "${{ github.ref_name }}" } else { "${{ github.event.inputs.tag }}" }
+          if ([string]::IsNullOrWhiteSpace($tag)) {
+            Write-Error "No tag: push a uvmaps-* tag or give the dispatch a tag input."
+            exit 1
+          }
+          $table = Get-Content "Proteus\uvmaps\releases.json" -Raw | ConvertFrom-Json
+          $names = $table.$tag
+          if (-not $names) {
+            Write-Error "Tag $tag is not listed in Proteus/uvmaps/releases.json."
+            exit 1
+          }
+          $files = ($names | ForEach-Object { "Proteus\uvmaps\$_" }) -join ";"
+          "TAG=$tag" | Out-File -Append $env:GITHUB_ENV
+          "MAP_FILES=$files" | Out-File -Append $env:GITHUB_ENV
+
+      # A real TIFF, not a Git LFS pointer ("version https://..."): the new maps are compressed, so their size no longer
+      # tells the two apart, but a pointer never starts with a TIFF's magic.
+      - name: Sanity-check the files are TIFFs
+        shell: pwsh
+        run: |
+          foreach ($f in $env:MAP_FILES.Split(";")) {
+            $bytes = [System.IO.File]::ReadAllBytes((Resolve-Path $f))
+            $tiff = $bytes.Length -ge 4 -and (
+              ($bytes[0] -eq 0x49 -and $bytes[1] -eq 0x49 -and $bytes[2] -eq 42 -and $bytes[3] -eq 0) -or
+              ($bytes[0] -eq 0x4D -and $bytes[1] -eq 0x4D -and $bytes[2] -eq 0 -and $bytes[3] -eq 42))
+            if (-not $tiff) {
+              Write-Error "$f is not a TIFF ($($bytes.Length) bytes) — looks like an LFS pointer, not the real file. Aborting."
               exit 1
             }
-            Write-Host "$f OK ($([math]::Round($size/1MB, 1)) MB)"
+            Write-Host "$f OK ($([math]::Round($bytes.Length/1MB, 1)) MB)"
           }
 
       # A tag's assets are IMMUTABLE. UVMapDownloadService pins a tag plus a SHA-256 per file, and the
       # download mirror caches by URL — so replacing the assets under an existing tag would serve stale
       # bytes from the edge and fail the client's checksum against whatever it eventually got. Revising a
-      # map means a NEW tag (uvmaps-v2, -v3, ...) and bumping MapsTag in the client to match.
+      # map means a NEW tag (uvmaps-v3, ...), listed in releases.json, and the client's pinned list to match.
       - name: Refuse to overwrite an existing release
         shell: pwsh
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          $tag = if ("${{ github.ref_type }}" -eq "tag") { "${{ github.ref_name }}" } else { "uvmaps-v1" }
-
           # `gh release view` exits non-zero when the release is ABSENT — which is the normal, expected
           # case here. Actions prepends $ErrorActionPreference = 'Stop' to every pwsh step, and
           # PowerShell 7.4+ defaults $PSNativeCommandUseErrorActionPreference to $true, which promotes a
@@ -49,26 +75,25 @@ jobs:
           # abort this step on exactly the path it exists to permit — a brand-new tag — and the release
           # would never be created. Opt out for this one command and read the exit code directly.
           $PSNativeCommandUseErrorActionPreference = $false
-          gh release view $tag *> $null
+          gh release view $env:TAG *> $null
           $exists = ($LASTEXITCODE -eq 0)
           $global:LASTEXITCODE = 0
 
           if ($exists) {
-            Write-Error "Release $tag already exists. Its assets are immutable because the client pins their checksums and the mirror caches them — push a new tag (e.g. uvmaps-v2) and bump MapsTag in UVMapDownloadService instead."
+            Write-Error "Release $env:TAG already exists. Its assets are immutable because the client pins their checksums and the mirror caches them — push a new tag and list it in Proteus/uvmaps/releases.json instead."
             exit 1
           }
-          "TAG=$tag" | Out-File -Append $env:GITHUB_ENV
 
       - name: Create release
         shell: pwsh
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
+          $files = $env:MAP_FILES.Split(";")
           gh release create $env:TAG `
             --title "UV Transfer Maps ($env:TAG)" `
             --notes "Static UV transfer map data files for Proteus. Downloaded automatically on first use — do not install manually." `
-            "Proteus\uvmaps\bibo_to_gen3_transfer.tif" `
-            "Proteus\uvmaps\gen3_to_bibo_transfer.tif"
+            @files
 
       # The client verifies every download against a pinned size and SHA-256, which is what catches a
       # THROTTLED transfer — a truncated body arrives with a 200 on it and no other check would notice.
@@ -77,12 +102,12 @@ jobs:
         shell: pwsh
         run: |
           $lines = @()
-          $lines += "Paste into UVMapDownloadService.MapFiles, and set MapsTag = ""$env:TAG"":"
+          $lines += "The client's pinned entries for ${env:TAG} (UVMapDownloadService):"
           $lines += '```csharp'
-          foreach ($f in @("Proteus\uvmaps\bibo_to_gen3_transfer.tif", "Proteus\uvmaps\gen3_to_bibo_transfer.tif")) {
+          foreach ($f in $env:MAP_FILES.Split(";")) {
             $i = Get-Item $f
             $h = (Get-FileHash $f -Algorithm SHA256).Hash.ToLower()
-            $lines += '        ("{0}", {1}L, "{2}"),' -f $i.Name, $i.Length, $h
+            $lines += '        new("{0}", "{1}", {2}L, "{3}"),' -f $i.Name, $env:TAG, $i.Length, $h
           }
           $lines += '```'
           $lines | ForEach-Object { Write-Host $_ }

@@ -38,6 +38,12 @@ public partial class CompositorService
         private HashSet<string> filteredOut = null!;
         private HashSet<string>? wornCharCodes;
         private HashSet<string>? wornHeadCodes;
+        // Whether both bibo↔TBSE maps were on disk when this run began, and whether the character wears a man's body in the
+        // layout TBSE shares (see UVRemapService.WearerIsMan). A woman's art takes a men's route only when both hold.
+        private bool menMapsReady;
+        private bool wearerIsMan;
+        // Men's routes this run found unavailable and said so; logged once per run each.
+        private HashSet<MensRoute> mensRoutesLogged = null!;
         private HashSet<string> toeCapMods = null!;
         private bool wearingMirroredBody;
         private HashSet<string> unmirrorMods = null!;
@@ -275,6 +281,9 @@ public partial class CompositorService
             // them; null until the filter runs, and empty when that half is unknown ("don't know", not "no match").
             wornCharCodes = null;
             wornHeadCodes = null;
+            menMapsReady = compositor.uvRemap.MenMapsPresent();
+            wearerIsMan = false;
+            mensRoutesLogged = [];
 
             // Is a toe cap selected anywhere in the look? A cap belongs to the foot, not the mod, and must be known before
             // promotion because a cap is geometry and needs a shell.
@@ -543,6 +552,7 @@ public partial class CompositorService
                     // set, as Glamourer displays it) and the head's, which are judged separately.
                     wornCharCodes = effectiveCharCodes;
                     wornHeadCodes = wornHead;
+                    wearerIsMan = UVRemapService.WearerIsMan(glamCode, effectiveCharCodes, wornHead);
 
                     // Noted before the removal, which destroys the evidence.
                     void NoteDropped(string key)

@@ -52,6 +52,7 @@ public sealed class Plugin : IDalamudPlugin
     private readonly SidecarDiscoveryService discovery;
     private readonly UVRemapService uvRemap;
     private readonly UVMapDownloadService uvMapDl;
+    private readonly UvMapsCoordinator uvMaps;
     private readonly DefaultEffectsDownloadService effectsDl;
     private readonly CompositorService compositor;
     private volatile bool _disposed;
@@ -129,14 +130,11 @@ public sealed class Plugin : IDalamudPlugin
         uvMapDl = new UVMapDownloadService(log, dataDir, assemblyDir);
         compositor = new CompositorService(penumbra, glamourer, discovery, textureLoader, config, log, uvRemap);
 
-        if (!uvMapDl.MapsPresent())
-        {
-            uvMapDl.EnsureMapsAsync(onComplete: () =>
-            {
-                if (!_disposed && config.PluginEnabled && penumbra.IsAvailable)
-                    compositor.TriggerRecomposite("uvmaps-downloaded");
-            });
-        }
+        // Subscribed before the first download starts, so its arrival is never missed.
+        uvMaps = new UvMapsCoordinator(uvRemap, uvMapDl,
+            () => !_disposed && config.PluginEnabled && penumbra.IsAvailable,
+            () => compositor.TriggerRecomposite("uvmaps-downloaded"));
+        uvMapDl.EnsureMapsAsync();
         designBindings = new DesignBindingService(penumbra, glamourer, discovery, compositor, config, pluginInterface, framework, log);
         // Told to the bridge too: GetDesign's on-disk fallback must read the same folder as the watcher.
         glamourer.DesignsDirectoryOverride = config.GlamourerDesignDirOverride;
@@ -523,6 +521,7 @@ public sealed class Plugin : IDalamudPlugin
         designBindings.PresetsSuperseded -= presets.ClearAllApplied;
         presets.Dispose();
         designBindings.Dispose();
+        uvMaps.Dispose();      // before the downloads: no recomposite after this
         uvMapDl.Dispose();
         effectsDl.Dispose();
         autoRefit.Dispose();   // before the compositor and the bridges, whose events it unsubscribes from
