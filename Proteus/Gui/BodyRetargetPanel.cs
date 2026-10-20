@@ -1665,8 +1665,20 @@ internal sealed partial class BodyRetargetPanel(PenumbraBridge penumbra, UVRemap
             ImGui.SetTooltip(ps.BrushRevertArmTip);
     }
 
+    /// <summary>
+    /// What the status line says once a refit is previewed, where the new body draws underwear in place of skin: that it
+    /// could not be brought in, or that it shows only after saving — the preview pushes the model alone, and the copy
+    /// of its material the save publishes is not in game yet. Empty for every other refit.
+    /// </summary>
+    internal static string SmallclothesNote(IEnumerable<BodyRetarget.Planned> plans)
+    {
+        var all = plans.ToList();
+        if (all.Any(p => p.Report.SmallclothesFallback > 0)) return Strings.Parts.RetargetSmallclothesFallback;
+        return all.Any(p => p.Materials is { Count: > 0 }) ? Strings.Parts.RetargetSmallclothesAfterSave : "";
+    }
+
     /// <summary>A refit's counts, for the log. Not localized: it is read when diagnosing, not by the player.</summary>
-    private static string Describe(BodyRetarget.Report r, IReadOnlyList<string> shapeNames)
+    internal static string Describe(BodyRetarget.Report r, IReadOnlyList<string> shapeNames)
     {
         var parts = new List<string> { $"moved up to {r.WorstMove * 1000f:F1} mm" };
         if (RefitCore.ReleasedLog(r, shapeNames) is { } released) parts.Add($"let go of kept piece(s) {released}");
@@ -2226,12 +2238,7 @@ internal sealed partial class BodyRetargetPanel(PenumbraBridge penumbra, UVRemap
                 showing = 0;
                 var first = done[0].Planned;
                 if (!ctx.PushPreview(first.Model)) pendingPreview = first.Model;
-                // The preview pushes the model alone: a material it draws that the save publishes is not in game yet.
-                ctx.SetStatus(done.Any(d => d.Planned.Report.SmallclothesFallback > 0)
-                                  ? Strings.Parts.RetargetSmallclothesFallback
-                                  : done.Any(d => d.Planned.Materials is { Count: > 0 })
-                                      ? Strings.Parts.RetargetSmallclothesAfterSave
-                                      : "", false);
+                ctx.SetStatus(SmallclothesNote(done.Select(d => d.Planned)), false);
                 foreach (var (to, plan) in done)
                     log.Information("[Proteus] retarget: {0} onto {1}: {2}", ctx.ModelRel, to.Label,
                                     Describe(plan.Report, plannedShapeNames));

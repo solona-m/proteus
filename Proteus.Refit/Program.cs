@@ -27,7 +27,8 @@ namespace Proteus.Refit;
 /// to one legs option of the target mod for every size (<c>--legs-to</c>).
 /// <para/>
 /// Writes <c>&lt;out-dir&gt;/&lt;label&gt;.mdl</c> for each target and one JSON report on stdout. A refused size is in the
-/// report with its reason and no file; the exit code is non-zero only when nothing could run at all.
+/// report with its reason and no file (under <c>refusal</c>, as every refused size is); the exit code is non-zero only
+/// when nothing could run at all, or no size was written.
 /// </summary>
 internal static class Program
 {
@@ -1110,6 +1111,7 @@ internal static class Program
         }
 
         var sizes = new List<object>();
+        int written = 0;
         foreach (var (label, option) in targets)
         {
             var pairs = new List<BodyRetarget.SlotPair>();
@@ -1174,8 +1176,9 @@ internal static class Program
                 });
                 continue;
             }
-            string written = Path.Combine(outDir, label + ".mdl");
-            File.WriteAllBytes(written, planned.Model);
+            string writtenPath = Path.Combine(outDir, label + ".mdl");
+            File.WriteAllBytes(writtenPath, planned.Model);
+            written++;
 
             var r = planned.Report;
             sizes.Add(new
@@ -1186,7 +1189,7 @@ internal static class Program
                 legsNote,
                 chestTo,
                 chestNote,
-                written,
+                written = writtenPath,
                 report = new
                 {
                     nodes = r.Nodes, snapped = r.Snapped, transferred = r.Transferred, missed = r.Missed,
@@ -1215,7 +1218,8 @@ internal static class Program
             sizes,
         };
         Console.WriteLine(JsonSerializer.Serialize(result, new JsonSerializerOptions { WriteIndented = true }));
-        return 0;
+        // Every size refused — none could run: a batch script must not read that as done.
+        return written == 0 && targets.Count > 0 ? 2 : 0;
     }
 
     /// <summary>

@@ -153,6 +153,55 @@ public class SkinlessTargetLocalTests(ITestOutputHelper output)
         }
     }
 
+    [LocalDataFact(Laurel, Neolithe, LocalData.MusePack)]
+    [Trait("Plan", "EDGE-skinless-target-33")]
+    public void Materials_survive_the_refit_s_finishing_passes()
+    {
+        var plan = RefitBottoms("Defined - SFW Flat", auto: false, out _);
+        Assert.NotNull(plan.Materials);
+        string temp = Path.Combine(Path.GetTempPath(), "proteus-skinless-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(temp);
+        try
+        {
+            string target = Path.Combine(temp, "c0201e0000_dwn.mdl");
+            File.WriteAllBytes(target, MuseLegs("Defined - SFW Flat"));
+            var log = NSubstitute.Substitute.For<Dalamud.Plugin.Services.IPluginLog>();
+            string source = NeolithePath(SkinlessTargetMeasureLocalTests.NeolitheSfwSmall[0]);
+            Assert.Same(plan.Materials, RefitCore.WithBodySkin(plan, target, log).Materials);
+            Assert.Same(plan.Materials, RefitCore.MatchSkinToBody(plan, source, target, null, false, log).Materials);
+            Assert.Same(plan.Materials, RefitCore.Finish(plan, default, null, target, log).Saved!.Materials);
+        }
+        finally
+        {
+            Directory.Delete(temp, recursive: true);
+        }
+    }
+
+    [LocalDataFact(Laurel, Neolithe, LocalData.MusePack)]
+    [Trait("Plan", "EDGE-skinless-target-22")]
+    public void Without_the_underwear_material_the_bottoms_keep_their_own_skin()
+    {
+        // The body mod's material cannot be read: the legs keep the garment's own skin, whole, and nothing is published.
+        var bodies = new[] { Neolithe }
+            .Select(b => (Dir: Path.GetFileName(LocalData.Path(b)), Catalog: BodySizeCatalog.Read(LocalData.Path(b)))).ToList();
+        var bytes = File.ReadAllBytes(BodySizeCatalog.ResolveCaseInsensitive(LocalData.Path(Laurel), Bottoms));
+        var garment = ModelPartReader.Read(bytes)!;
+        var from = RefitCore.DetectSource(garment, new HashSet<string>(SecondSkinWriter.Parse(bytes).BoneNames, StringComparer.Ordinal),
+                                          "_dwn", "0201", bodies, null, _ => true)!;
+        Assert.Null(BodyRetarget.BuildPair("_dwn", File.ReadAllBytes(bodies[0].Catalog.PathOf(from.Option)),
+                                           MuseLegs("Defined - SFW Flat"), "_dwn", false, null, null, null, out var pair));
+        var plan = BodyRetarget.Plan(garment, bytes, [pair], "_dwn", held: new HashSet<int>(), replaceSkin: true,
+                                     acrossBodies: true, cutHidden: true);
+        output.WriteLine($"swap {plan.Report.Swap}; fallback {plan.Report.SmallclothesFallback}");
+        Assert.Equal(1, plan.Report.SmallclothesFallback);
+        Assert.Null(plan.Materials);
+        Assert.Equal(0, plan.Report.Swap?.Removed ?? 0);
+        int skinBefore = garment.Parts.Where(p => p.Island < 0 && SecondSkinWriter.IsBodySkinMaterial(p.Material)).Sum(p => p.TriangleCount);
+        int skinAfter = ModelPartReader.Read(plan.Model)!.Parts
+                                       .Where(p => p.Island < 0 && SecondSkinWriter.IsBodySkinMaterial(p.Material)).Sum(p => p.TriangleCount);
+        Assert.Equal(skinBefore, skinAfter);
+    }
+
     private BodyRetarget.Planned RefitBottoms(string museLegs, bool auto, out ModelParts garment)
     {
         var bodies = new[] { Neolithe }
@@ -193,6 +242,18 @@ public class SkinlessTargetLocalTests(ITestOutputHelper output)
         output.WriteLine($"boxers drawn: {boxerTris} triangles of {swap.Value.Smallclothes}");
         Assert.InRange(boxerTris, 1, swap.Value.Smallclothes);
 
+        // The boxers as written are a valid surface: no triangle without area, none out of range.
+        int vc = drawn.Positions.Length / 3, degenerate = 0;
+        foreach (var part in drawn.Parts.Where(p => p.Island < 0 && p.Material == "/" + material.Name))
+            for (int t = 0; t + 2 < part.Triangles.Length; t += 3)
+            {
+                int a = part.Triangles[t], b = part.Triangles[t + 1], c = part.Triangles[t + 2];
+                Assert.True(a < vc && b < vc && c < vc);
+                Vector3 P(int v) => new(drawn.Positions[v * 3], drawn.Positions[v * 3 + 1], drawn.Positions[v * 3 + 2]);
+                if (Vector3.Cross(P(b) - P(a), P(c) - P(a)).LengthSquared() < 1e-16f) degenerate++;
+            }
+        Assert.Equal(0, degenerate);
+
         // No more folded than the same garment onto a Muse option with skin there.
         var genA = RefitBottoms("Defined - Gen A", auto, out _);
         output.WriteLine($"folded: {plan.Report.Folded} onto SFW Flat, {genA.Report.Folded} onto Gen A");
@@ -211,7 +272,7 @@ public class SkinlessTargetLocalTests(ITestOutputHelper output)
         var drawn = ModelPartReader.Read(plan.Model)!;
         var skin = ModelSkinReader.Read(plan.Model, null, null)!;
 
-        int hip = 0, agree = 0;
+        int hip = 0, agree = 0, close = 0;
         foreach (int v in drawn.Parts.Where(p => p.Island < 0 && p.Material.Contains("e6144", StringComparison.Ordinal))
                                      .SelectMany(p => p.Triangles).Distinct())
         {
@@ -222,12 +283,20 @@ public class SkinlessTargetLocalTests(ITestOutputHelper output)
             foreach (var (corner, w) in new[] { (hit.A, hit.U), (hit.B, hit.V), (hit.C, hit.W) })
                 foreach (var (bone, x) in Weights(targetSkin, corner)) body[bone] = body.GetValueOrDefault(bone) + x * w;
             string bodyTop = body.MaxBy(kv => kv.Value).Key;
-            string clothTop = Weights(skin, v).MaxBy(w => w.Weight).Bone;
+            var cloth = Weights(skin, v).GroupBy(w => w.Bone).ToDictionary(g => g.Key, g => g.Sum(w => w.Weight));
+            string clothTop = cloth.MaxBy(kv => kv.Value).Key;
             if (bodyTop == clothTop) agree++;
+            float l1 = body.Keys.Union(cloth.Keys).Sum(b => MathF.Abs(body.GetValueOrDefault(b) - cloth.GetValueOrDefault(b)));
+            if (l1 <= 0.1f) close++;
         }
-        output.WriteLine($"hip cloth points: {hip}; their heaviest bone the worn body's there: {agree} ({(float)agree / hip:P1})");
+        output.WriteLine($"hip cloth points: {hip}; their heaviest bone the worn body's there: {agree} ({(float)agree / hip:P1}); " +
+                         $"within 0.1 L1 of the worn body's weights: {close} ({(float)close / hip:P1})");
+        // Across body mods the cloth keeps its author's weighting and takes the change between the two bodies, so it never
+        // equals the boxers' weights outright. Measured 2026-10-20: 92.1% share the boxers' heaviest bone there, 77.5% sit
+        // within 0.1 (L1) of their weights.
         Assert.True(hip > 100, $"only {hip} hip cloth points");
         Assert.True(agree >= 0.9f * hip, $"{agree} of {hip}");
+        Assert.True(close >= 0.75f * hip, $"{close} of {hip} within 0.1 L1");
     }
 
     private static IEnumerable<(string Bone, float Weight)> Weights(XivLiveMesh.SkinnedMesh skin, int v)

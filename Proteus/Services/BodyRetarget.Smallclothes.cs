@@ -111,6 +111,8 @@ internal static partial class BodyRetarget
         while (root != null && !PenumbraModMeta.HasReadableManifest(root)) root = Path.GetDirectoryName(root);
         if (root == null) return null;
         string modRoot = root;
+        // Only files inside the body mod: the bytes are copied into the garment's mod, which travels with an export.
+        string inside = Path.TrimEndingDirectorySeparator(Path.GetFullPath(modRoot)) + Path.DirectorySeparatorChar;
         List<PenumbraModMeta.Redirect>? redirects = null;
         return leaf =>
         {
@@ -118,8 +120,9 @@ internal static partial class BodyRetarget
             string gamePath = "chara/equipment/e0000/material/v0001/" + leaf;
             var files = redirects.Where(r => string.Equals(r.GamePath.Replace('\\', '/'), gamePath,
                                                            StringComparison.OrdinalIgnoreCase))
-                                 .Select(r => Path.Combine(modRoot, r.File.Replace('\\', Path.DirectorySeparatorChar)))
-                                 .Where(File.Exists)
+                                 .Select(r => Path.GetFullPath(Path.Combine(modRoot,
+                                                                            r.File.Replace('\\', Path.DirectorySeparatorChar))))
+                                 .Where(f => f.StartsWith(inside, StringComparison.OrdinalIgnoreCase) && File.Exists(f))
                                  .Select(File.ReadAllBytes)
                                  .ToList();
             if (files.Count == 0) return null;

@@ -134,13 +134,41 @@ public class SkinlessTargetDownstreamTests
     }
 
     [Fact]
-    [Trait("Plan", "EDGE-skinless-target-33")]
-    public void Materials_survive_a_plan_s_model_being_replaced()
+    [Trait("Plan", "EDGE-skinless-target-36")]
+    public void The_push_reads_the_source_as_worn_only_on_worn_pairs()
     {
-        var plan = new BodyRetarget.Planned(new RetargetEdit([], [], []), [1],
-                                            new BodyRetarget.Report(0, 0, 0, 0, 0, 0f, 0f, 0, false),
-                                            [new BodyRetarget.PublishedMaterial("mt_c0201e6144_dwn_z.mtrl", BoxersMaterial, "/b")]);
-        var finished = plan with { Model = [2] };   // as RefitCore.Finish, WithBodySkin and the racial bake do
-        Assert.Same(plan.Materials, finished.Materials);
+        // A source with its own smallclothes over its hips, as Neolithe's undies are.
+        var (sheet, uv) = SkinlessTargetTests.Target((2f, 3f), "/mt_c0201e0000_top_neolithe_undies.mtrl", 0.003f);
+        var (target, targetUv) = SkinlessTargetTests.Target((0.6f, 0.9f), SkinlessTargetTests.Boxers, 0.003f);
+        Assert.True(UvAtlasCorrespondence.TryBuild(sheet, uv, target, targetUv, "legs", out var worn, out string refusal,
+                                                   out _, sameLayout: true), refusal);
+        var pair = new BodyRetarget.SlotPair("_dwn", worn!, target);
+        Assert.True(pair.Worn);
+        Assert.Contains(pair.SourceSurface().SkinVertices, v => sheet.Positions[v * 3 + 2] > 0.002f);
+
+        var (plain, plainUv) = SkinlessTargetTests.Target((0.85f, 0.9f), SkinlessTargetTests.Boxers, 0.003f);
+        Assert.True(UvAtlasCorrespondence.TryBuild(sheet, uv, plain, plainUv, "legs", out var notWorn, out refusal,
+                                                   out _, sameLayout: true), refusal);
+        var skinOnly = new BodyRetarget.SlotPair("_dwn", notWorn!, plain);
+        Assert.False(skinOnly.Worn);
+        Assert.DoesNotContain(skinOnly.SourceSurface().SkinVertices, v => sheet.Positions[v * 3 + 2] > 0.002f);
+    }
+
+    private static BodyRetarget.Planned PlanWith(IReadOnlyList<BodyRetarget.PublishedMaterial>? materials, int fallback = 0)
+        => new(new RetargetEdit([], [], []), [1],
+               new BodyRetarget.Report(0, 0, 0, 0, 0, 0f, 0f, 0, false, SmallclothesFallback: fallback), materials);
+
+    [Fact]
+    [Trait("Plan", "EDGE-skinless-target-34")]
+    [Trait("Plan", "AC-skinless-target-8")]
+    public void Preview_says_underwear_shows_after_saving()
+    {
+        var boxers = new BodyRetarget.PublishedMaterial("mt_c0201e6144_dwn_z.mtrl", BoxersMaterial, "/b");
+        Assert.Equal(Proteus.Localization.Strings.Parts.RetargetSmallclothesAfterSave,
+                     Proteus.Gui.BodyRetargetPanel.SmallclothesNote([PlanWith(null), PlanWith([boxers])]));
+        Assert.Equal(Proteus.Localization.Strings.Parts.RetargetSmallclothesFallback,
+                     Proteus.Gui.BodyRetargetPanel.SmallclothesNote([PlanWith([boxers]), PlanWith(null, fallback: 1)]));
+        Assert.Equal("", Proteus.Gui.BodyRetargetPanel.SmallclothesNote([PlanWith(null)]));
+        Assert.Contains("kept their own skin", Proteus.Gui.BodyRetargetPanel.Describe(PlanWith(null, 1).Report, []));
     }
 }

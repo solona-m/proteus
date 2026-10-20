@@ -331,6 +331,97 @@ public class SkinlessTargetTests
         Assert.Equal(m.NoLanding, m.Excused);
     }
 
+    [Fact]
+    [Trait("Plan", "EDGE-skinless-target-11")]
+    public void Outside_the_midline_band_a_point_stays_on_its_side()
+    {
+        // Boxers only on the other side of the body, 25 mm across the midline from the sheet: in reach, but not its own.
+        var (source, sourceUv) = Sheet(Skin);
+        var (target, targetUv) = Target(Band, Boxers, Standoff, boxersX: (-0.2f, -0.005f));
+
+        Assert.False(Build(source, sourceUv, target, targetUv, out _, out string refusal, out var m));
+        Assert.Contains("texture layout", refusal);
+        Assert.Equal(0, m.Excused);
+    }
+
+    [Fact]
+    [Trait("Plan", "EDGE-skinless-target-11")]
+    public void In_the_band_the_crotch_midline_is_reachable()
+    {
+        // The boxers reach across the midline; the sheet's points (x >= 20 mm) land on their own side of it.
+        var (source, sourceUv) = Sheet(Skin);
+        var (target, targetUv) = Target(Band, Boxers, Standoff, boxersX: (-0.05f, 0.2f));
+
+        Assert.True(Build(source, sourceUv, target, targetUv, out var built, out string refusal, out _), refusal);
+        foreach (int v in BandVertices(source, Band))
+            Assert.True(At(source, v).X + built!.Field[v]!.Value.X > 0f, $"vertex {v} crossed the midline");
+    }
+
+    [Fact]
+    [Trait("Plan", "EDGE-skinless-target-9")]
+    public void A_floating_skinless_island_takes_its_nearest_placed_move_then_the_boxers()
+    {
+        // A small island of its own in the band, joined to nothing, on a patch of the sheet the target has no skin on.
+        var (sheet, uv) = Sheet(Skin);
+        var pos = sheet.Positions.ToList();
+        var uvs = uv.ToList();
+        var tris = sheet.Parts[0].Triangles.ToList();
+        int first = pos.Count / 3;
+        for (int j = 0; j <= 2; j++)
+            for (int i = 0; i <= 2; i++)
+            {
+                pos.AddRange([0.08f + 0.02f * i, 0.7f + 0.02f * j, -0.002f]);
+                uvs.AddRange([0.6f + 0.02f * i, 0.6f + 0.02f * j]);
+            }
+        var island = Enumerable.Range(first, 9).ToList();
+        for (int j = 0; j < 2; j++)
+            for (int i = 0; i < 2; i++)
+            {
+                int a = first + j * 3 + i, b = a + 1, d = a + 3, e = d + 1;
+                tris.AddRange([a, b, e, a, e, d]);
+            }
+        var source = Model(pos.ToArray(), [(Skin, tris.ToArray(), 0u)], []);
+        var (target, targetUv) = Target(Band, Boxers, Standoff);
+
+        Assert.True(Build(source, uvs.ToArray(), target, targetUv, out var built, out string refusal, out _), refusal);
+        foreach (int v in island)
+        {
+            var landed = At(source, v) + built!.Field[v]!.Value;
+            Assert.True(MathF.Abs(landed.Z - Standoff) < 1e-3f, $"island vertex {v} at {landed.Z * 1000f:F2} mm");
+        }
+    }
+
+    [Fact]
+    [Trait("Plan", "EDGE-skinless-target-20")]
+    public void A_wrong_landing_on_the_new_path_is_set_aside()
+    {
+        // One vertex beside the hips whose uv points 15 cm down the leg: it lands, wrongly, and its neighbours disagree.
+        var (source, sourceUv) = Sheet(Skin);
+        var (target, targetUv) = Target(Band, Boxers, Standoff);
+        int lifted = Enumerable.Range(0, source.Positions.Length / 3)
+                               .First(v => MathF.Abs(source.Positions[v * 3 + 1] - 0.55f) < 1e-3f
+                                           && MathF.Abs(source.Positions[v * 3] - 0.11f) < 1e-3f);
+        sourceUv[lifted * 2 + 1] -= 0.9f * 0.15f;
+
+        Assert.True(Build(source, sourceUv, target, targetUv, out var built, out string refusal, out var m), refusal);
+        Assert.True(m.Disagreed >= 1, "the wrong landing was trusted");
+        // It follows the skin around it instead: a few millimetres, not 15 cm.
+        Assert.True(built!.Field[lifted]!.Value.Length() < 0.01f);
+    }
+
+    [Fact]
+    [Trait("Plan", "EDGE-skinless-target-10")]
+    public void A_sharp_dent_in_the_boxers_leaves_no_fold()
+    {
+        // The seat's middle vertex pushed 30 mm in: landings round it pull in toward the dent and can cross.
+        var (source, sourceUv) = Sheet(Skin);
+        var (target, targetUv) = Target(Band, Boxers, Standoff, notch: 0.03f);
+
+        Assert.True(Build(source, sourceUv, target, targetUv, out var built, out string refusal, out var m), refusal);
+        Assert.Equal(0, Folded(source, built!));
+        Assert.True(m.Unprojected <= UvAtlasCorrespondence.MaxUnprojectedShare * m.Excused);
+    }
+
     private static bool Build(ModelParts source, float[] sourceUv, ModelParts target, float[] targetUv,
                               out UvAtlasCorrespondence? built, out string refusal, out UvAtlasCorrespondence.Stats m)
         => UvAtlasCorrespondence.TryBuild(source, sourceUv, target, targetUv, "legs", out built, out refusal, out m,
@@ -369,9 +460,12 @@ public class SkinlessTargetTests
     /// The source's sheet with the skin cut out of <paramref name="bare"/> (and <paramref name="alsoBare"/>), and a sheet
     /// of <paramref name="boxers"/> laid <paramref name="standoff"/> in front of the bare band, on a uv sheet of its own.
     /// </summary>
+    /// <param name="boxersX">Across where the boxers lie: the sheet's own 0.02..0.2 m when null.</param>
+    /// <param name="notch">Pushes the boxers' vertex nearest the band's middle this far in, for a sharp dent.</param>
     internal static (ModelParts Model, float[] Uv) Target((float Y0, float Y1) bare, string? boxers, float standoff,
                                                          (float Y0, float Y1)? alsoBare = null, string skin = Skin,
-                                                         string? boxersAttribute = null)
+                                                         string? boxersAttribute = null,
+                                                         (float X0, float X1)? boxersX = null, float notch = 0f)
     {
         var (sheet, uv) = Sheet(skin);
         var pos = sheet.Positions.ToList();
@@ -388,11 +482,13 @@ public class SkinlessTargetTests
         if (boxers != null)
         {
             int first = pos.Count / 3, rows = 12;
+            var (x0, x1) = boxersX ?? (0.02f, 0.2f);
             for (int j = 0; j <= rows; j++)
                 for (int i = 0; i <= Nx; i++)
                 {
                     float y = bare.Y0 - 0.02f + (bare.Y1 - bare.Y0 + 0.04f) * j / rows;
-                    pos.AddRange([0.02f + 0.18f * i / Nx, y, standoff]);
+                    float z = standoff - (notch != 0f && j == rows / 2 && i == Nx / 2 ? notch : 0f);
+                    pos.AddRange([x0 + (x1 - x0) * i / Nx, y, z]);
                     uvs.AddRange([0.6f + 0.3f * i / Nx, 0.1f + 0.3f * j / rows]);
                 }
             var bt = new List<int>();

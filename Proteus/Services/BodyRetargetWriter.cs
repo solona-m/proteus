@@ -428,7 +428,7 @@ internal static class BodyRetargetWriter
                     string folder = FolderOf(options, refit.Option) ?? Sanitise(refit.Option);
                     if (refit.Materials is { Count: > 0 })
                         (refit, materialFiles[refit.Option]) = WriteMaterials(modRoot, groupName, gamePath, refit,
-                                                                              folder, redirects, claimed);
+                                                                              folder, redirects, claimed, bodyMod);
                     string rel = Free(claimed, folder, TailOf(gamePath));
                     claimed.Add(rel.Replace('\\', '/'));   // and two refits in one batch cannot collide either
                     string full = Path.Combine(modRoot, rel);
@@ -969,8 +969,11 @@ internal static class BodyRetargetWriter
         var mat = VariantMaterial.Match(path.Replace('\\', '/'));
         if (!set.Success || !mat.Success
             || !string.Equals(set.Groups[1].Value, mat.Groups[1].Value, StringComparison.OrdinalIgnoreCase)) return false;
-        string model = Path.GetFileNameWithoutExtension(modelGamePath);   // c0201e6144_dwn
-        return mat.Groups[3].Value.StartsWith("mt_" + model + "_", StringComparison.OrdinalIgnoreCase);
+        // c0201e6144_dwn -> e6144_dwn: any race's, since a racial bake draws a material of another race than the model's.
+        string model = Path.GetFileNameWithoutExtension(modelGamePath);
+        string setSlot = model.Length > 5 ? model[5..] : model;
+        return Regex.IsMatch(mat.Groups[3].Value, @"^mt_c\d{4}" + Regex.Escape(setSlot) + "_",
+                             RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
     }
 
     /// <summary>
@@ -983,11 +986,16 @@ internal static class BodyRetargetWriter
     /// <returns>The refit, its model renamed where a name was taken, and the game path of each file to its place.</returns>
     private static (Refit Refit, Dictionary<string, string> Files) WriteMaterials(
         string modRoot, string groupName, string gamePath, Refit refit, string folder,
-        IReadOnlyList<PenumbraModMeta.Redirect> redirects, HashSet<string> claimed)
+        IReadOnlyList<PenumbraModMeta.Redirect> redirects, HashSet<string> claimed, string bodyMod)
     {
         var files = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
         var set = SetFolder.Match(gamePath.Replace('\\', '/'));
-        if (!set.Success) return (refit, files);
+        if (!set.Success)
+        {
+            Plugin.Log?.Warning("[Proteus] refit: {0} is not an equipment model; the new body's smallclothes material it " +
+                                "draws was not published", gamePath);
+            return (refit, files);
+        }
         string materials = set.Groups[1].Value + "material/";
 
         string replacing = $"{groupName} / {refit.Option}";
@@ -1021,7 +1029,13 @@ internal static class BodyRetargetWriter
                 string? free = null;
                 for (char c = 'z'; c >= 'a' && free == null; c--)
                     if (!taken.Contains(stem + c + ".mtrl") && !names.Contains(stem + c + ".mtrl")) free = stem + c + ".mtrl";
-                if (free == null) continue;   // every letter taken: the layer draws whatever the mod has there
+                if (free == null)
+                {
+                    // Every letter taken: the layer draws whatever the mod publishes under that name.
+                    Plugin.Log?.Warning("[Proteus] refit: no free name for the new body's smallclothes material beside {0}",
+                                        gamePath);
+                    continue;
+                }
                 model = ModelAttributeWriter.RenameMaterial(model, "/" + name, "/" + free);
                 names.Add(free);
                 name = free;
@@ -1035,8 +1049,8 @@ internal static class BodyRetargetWriter
             PenumbraModMeta.AtomicWrite(full, material.Bytes);
             foreach (string v in variants) files[materials + v + "/" + name] = rel.Replace('\\', '/');
             published.Add(material with { Name = name });
-            Plugin.Log?.Information("[Proteus] refit: smallclothes material {0} from {1} sha256 {2} published at {3} " +
-                                    "folders", name, material.From,
+            Plugin.Log?.Information("[Proteus] refit: smallclothes material {0} from {1} ({2}) sha256 {3} published at " +
+                                    "{4} folders", name, bodyMod, material.From,
                                     Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(material.Bytes))[..8],
                                     variants.Count);
         }
