@@ -785,7 +785,17 @@ internal static partial class BodyRetarget
         // Both are one rebuild, and nothing is rebuilt when neither applies — a same-rig refit with the skin kept stays
         // the in-place rewrite above.
         SwapReport? swap = null;
-        var weights = PlanWeights(model, pairs, acrossBodies, before: garmentBytes, held: held);
+        // The pieces still kept whole: one the solve let go bends with the body, and eases with it point by point.
+        var whole = keepShape != null && solved.Shapes is { } judged
+            ? keepShape.Where((_, k) => k >= judged.Count || !judged[k].Released).ToList()
+            : keepShape;
+        var weights = PlanWeights(model, pairs, acrossBodies, before: garmentBytes, held: held, keepShape: whole);
+        if (weights?.CrotchNotes is { } crotchNotes)
+        {
+            foreach (var note in crotchNotes) log?.Invoke($"crotch: {note}");
+            if (weights.CrotchEased > 0)
+                log?.Invoke($"crotch: {weights.CrotchEased} cloth points between the legs eased off them");
+        }
         if (replaceSkin || weights != null)
         {
             var rebuilt = Rebuild(model, pairs, replaceSkin, weights, out var swapped, cutHidden, acrossBodies,

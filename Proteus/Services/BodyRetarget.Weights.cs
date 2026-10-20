@@ -69,9 +69,13 @@ internal static partial class BodyRetarget
     /// <param name="Trimmed">Vertices whose body weights were cut to fit the eight-influence limit.</param>
     /// <param name="BodyBones">Every bone either body rigs — what "body bone" means for this refit.</param>
     /// <param name="Donors">The target body models, whose bones the rebuilt model must be able to name.</param>
+    /// <param name="CrotchEased">Cloth vertices between the legs eased off them (see <see cref="EaseCrotch"/>).</param>
+    /// <param name="CrotchVetoed">Pieces between the legs left on them, because they go on down a leg.</param>
+    /// <param name="CrotchNotes">For the log: where the crotch is, and why each piece was left on the legs.</param>
     internal sealed record WeightPlan(
         IReadOnlyDictionary<int, (string Bone, float W)[]?[]> PerMesh, int Reweighted, int Trimmed,
-        IReadOnlySet<string> BodyBones, IReadOnlyList<byte[]> Donors)
+        IReadOnlySet<string> BodyBones, IReadOnlyList<byte[]> Donors, int CrotchEased = 0, int CrotchVetoed = 0,
+        IReadOnlyList<string>? CrotchNotes = null)
     {
         public (string Bone, float W)[]?[]? For(int mesh) => PerMesh.TryGetValue(mesh, out var w) ? w : null;
     }
@@ -108,8 +112,11 @@ internal static partial class BodyRetarget
     /// <param name="held">Vertices of parts the user unticked. Held means the author's work stands: a part held in
     /// place keeps the bones it follows too, or it would sit still in the bind pose and fly apart in a posed one —
     /// which is what a rigid heel did when it was held but reweighted.</param>
+    /// <param name="keepShape">The pieces the refit kept whole, as vertex sets: each eases off the legs whole (see
+    /// <see cref="EaseCrotch"/>). Null for none.</param>
     internal static WeightPlan? PlanWeights(byte[] garment, IReadOnlyList<SlotPair> pairs, bool acrossBodies = false,
-                                            byte[]? before = null, IReadOnlySet<int>? held = null)
+                                            byte[]? before = null, IReadOnlySet<int>? held = null,
+                                            IReadOnlyList<IReadOnlyCollection<int>>? keepShape = null)
     {
         if (pairs.Count == 0 || pairs.Any(p => p.SourceModel == null || p.TargetModel == null)) return null;
 
@@ -258,6 +265,16 @@ internal static partial class BodyRetarget
             if (acrossBodies && !tuned.NoWeightSmooth) BlendShiri(model, own, result, bodyBones, held, legFill);
         }
 
+        // After the skin hug, which would rig the cloth between the legs as the skin again, and before the layers are
+        // paired, so partners still come out identical. Across body mods only, as the smoothing: within one, the author's
+        // weighting stands. Not CrossBodyPassesWithinBody, which restores what builds before 1221 did; they had no ease.
+        CrotchOutcome? crotch = null;
+        if (acrossBodies && !tuned.NoCrotchEase)
+        {
+            crotch = EaseCrotch(model, own, pairs, targets, result, bodyBones, held, legFill, keepShape);
+            reweighted += crotch.Added;
+        }
+
         reweighted += KeepLayersTogether(model, own, wasAt, result, held);
 
         // The garment's own body mesh. It IS the body, so it takes the new body's weights OUTRIGHT rather than the
@@ -302,7 +319,8 @@ internal static partial class BodyRetarget
             if (any) perMesh[span.Mesh] = local;
         }
 
-        return new WeightPlan(perMesh, reweighted, trimmed, bodyBones, pairs.Select(p => p.TargetModel!).ToList());
+        return new WeightPlan(perMesh, reweighted, trimmed, bodyBones, pairs.Select(p => p.TargetModel!).ToList(),
+                              crotch?.Eased ?? 0, crotch?.Vetoed ?? 0, crotch?.Notes);
     }
 
     /// <summary>
