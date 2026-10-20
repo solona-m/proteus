@@ -176,7 +176,7 @@ public sealed class LocalizationTests
         ["en"] = "Have gear refit itself as you put it on.", ["de"] = "Lass Ausrüstung sich beim Anlegen selbst anpassen.",
         ["es"] = "Haz que el equipo se ajuste solo al ponértelo.",
         ["fr"] = "Laissez l'équipement s'ajuster tout seul quand vous le portez.",
-        ["ja"] = "装備を着た瞬間に自分の体に合わせ直せます。", ["ko"] = "장비를 입는 순간 저절로 내 몸에 맞춰지게 하세요.",
+        ["ja"] = "装備を身に着けると、自動で体に合わせ直されます。", ["ko"] = "장비를 입는 순간 저절로 내 몸에 맞춰지게 하세요.",
         ["ru"] = "Пусть снаряжение подгоняется само, когда вы его надеваете.", ["zh"] = "让装备在穿上时自动改配。",
     };
 
