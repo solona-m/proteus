@@ -154,8 +154,8 @@ public class UvTransferMapsLocalTests(TbseBakeFixture bake, ITestOutputHelper ou
         var got = conv(biboSternum.X, biboSternum.Y, 1);
         Assert.NotNull(got);
         float wantU = (tbseSternum.X >= 0.5f ? tbseSternum.X : 1f - tbseSternum.X) * 2f - 1f;
-        Assert.InRange(MathF.Abs(got!.Value.U - wantU) * 2048f, 0f, 24f);
-        Assert.InRange(MathF.Abs(got.Value.V - tbseSternum.Y) * 4096f, 0f, 24f);
+        Assert.InRange(MathF.Abs(got!.Value.U - wantU) * 2048f, 0f, UvTransferQuality.Gate.SternumDotPx);
+        Assert.InRange(MathF.Abs(got.Value.V - tbseSternum.Y) * 4096f, 0f, UvTransferQuality.Gate.SternumDotPx);
     }
 
     [LocalDataFact(LocalData.GameData, Bibo, Tbse, LocalData.UvMaps)]
@@ -169,7 +169,7 @@ public class UvTransferMapsLocalTests(TbseBakeFixture bake, ITestOutputHelper ou
         Assert.NotNull(got);
         float px = (new System.Numerics.Vector2(got!.Value.U, got.Value.V) - tbseSternum).Length() * 4096f;
         output.WriteLine($"bibo sternum {biboSternum} -> {got.Value}, TBSE sternum {tbseSternum}: {px:F1} px");
-        Assert.InRange(px, 0f, 24f);
+        Assert.InRange(px, 0f, UvTransferQuality.Gate.SternumDotPx);
     }
 
     /// <summary>Each body's sternum landmark, as a uv on its own sheet.</summary>

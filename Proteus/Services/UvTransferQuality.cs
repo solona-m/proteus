@@ -35,7 +35,13 @@ internal static class UvTransferQuality
         {
             ["underBustL"] = 32f, ["underBustR"] = 32f, ["lowerBelly"] = 46f,
         };
-        public const double IdentityP50 = 4, IdentityP95 = 16;
+        // Identity (two bodies on one layout baked onto each other), in px at 4096: the plan's 4 / 16 accepted by the user
+        // (2026-10-20, after checking tattoos in game) at what was measured — Rue+→Bibo+ 4.5 / 30, TBSE-X→TBSE 2.7 / 66 —
+        // rounded up. The outliers are where those bodies' shapes differ (Rue+'s wide hips, TBSE-X's torso).
+        public const double IdentityP50 = 5, IdentityP95 = 68;
+
+        /// <summary>How far, in px at 4096, a dot on one body's sternum may land from the other's (6.5 mm measured; 27 px).</summary>
+        public const float SternumDotPx = 30f;
     }
 
     /// <summary>The named places on the torso and legs the gate checks, by name.</summary>

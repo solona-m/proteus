@@ -76,6 +76,9 @@ It loads once a session, only on a man who needs it, and is a tenth the download
 ² Accepted by the user over the plan's 0.5% and 15 mm, where a woman's body and a man's differ in shape (breast, belly,
 crotch) rather than the map in placement.
 
-Art over the chest and crotch stretches, because the anatomy differs. An identity check is still open with the user:
-two bodies sharing one layout (Rue+→Bibo+, TBSE-X→TBSE) baked onto each other, which shows how far geometric matching
-strays from authored uvs where shapes differ. It measures p50 2–5 px, but p95 30–66 px at 4096.
+Art over the chest and crotch stretches, because the anatomy differs.
+
+The identity check bakes two bodies that share one layout onto each other (Rue+→Bibo+, TBSE-X→TBSE), to show how far
+geometric matching strays from authored uvs where shapes differ. It measures p50 2.7–4.5 px and p95 30–66 px at 4096.
+The user accepted that after checking tattoos in game: the gate is now p50 ≤ 5 and p95 ≤ 68, against the plan's 4 and 16.
+A dot on Bibo+'s sternum lands 27 px (about 6.5 mm) from TBSE's own; the bound is 30 px.
