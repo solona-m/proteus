@@ -135,7 +135,8 @@ public partial class CompositorService
         if (_lastBaseUpstreams is { } upstreams)
             _lastBaseUpstreams = LedgeredPaths(new Dictionary<string, string>(upstreams, StringComparer.OrdinalIgnoreCase));
         _appendHostSources = LedgeredPaths(_appendHostSources);
-        _inertMods         = Ledgered(new Dictionary<string, InertReason>(_inertMods, StringComparer.OrdinalIgnoreCase));
+        _inertMods         = Ledgered(new Dictionary<string, InertModDiagnosis.InertReason>(_inertMods,
+                                                                                            StringComparer.OrdinalIgnoreCase));
         _contentMaterials  = Ledgered(_contentMaterials);
         _contentModels     = Ledgered(_contentModels);
         _shellMaterials    = Ledgered(_shellMaterials);
