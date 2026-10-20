@@ -161,6 +161,21 @@ internal static class HairPortFixtures
             [Sphere(material ?? $"/mt_c{race:D4}h{Id:D4}_hir_a.mtrl", Head + Offset(race), 0.1f,
                     bones ?? [("j_kao", 1f)], minY: -0.2f), .. extra]);
 
+    /// <summary>A Miqo'te ear: a small cap beside the head, carried by the ear bone with <paramref name="weight"/> of
+    /// each vertex (the rest on the head bone).</summary>
+    public static SyntheticModel.SurfaceMesh Ear(ushort race, float weight = 1f)
+        => Sphere($"/mt_c{race:D4}h{Id:D4}_hir_a.mtrl", Head + Offset(race) + new Vector3(0.07f, 0.08f, 0f), 0.02f,
+                  weight >= 1f ? [("j_mimi_l", 1f)] : [("j_kao", 1f - weight), ("j_mimi_l", weight)], rings: 4, segments: 6);
+
+    /// <summary>A race's hairstyle with a Miqo'te ear on it; <paramref name="radius"/> changes the bytes, not the fit.</summary>
+    public static byte[] EaredHairModel(ushort race, float radius = 0.1f, float earWeight = 1f)
+        => SyntheticModel.BuildSurface([],
+            [Sphere($"/mt_c{race:D4}h{Id:D4}_hir_a.mtrl", Head + Offset(race), radius, [("j_kao", 1f)], minY: -0.2f),
+             Ear(race, earWeight)]);
+
+    /// <summary>The same hairstyle without ears, as an author's own earless option ships it.</summary>
+    public static byte[] EarlessHairModel(ushort race, float radius = 0.1f) => HairModelOf(race, Id, radius);
+
     /// <summary>The game's own files the builder reads: each race's face, and its own model of the hairstyle.</summary>
     public static Func<string, byte[]?> Game(IEnumerable<ushort> races, IDictionary<string, byte[]>? more = null)
     {

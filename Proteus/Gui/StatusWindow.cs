@@ -104,6 +104,20 @@ public class StatusWindow : Window
     /// <summary>Mod whose colour editor window is open, or null. A window rather than a popup, so it survives clicks into the game.</summary>
     private string? _colorWindowMod;
 
+    /// <summary>
+    /// A mod renamed in Penumbra: everything this window holds by its folder follows it — the open colour editor and its
+    /// scope, a drag in progress, the Export tab's selection and the Studio's open mod. Framework thread.
+    /// </summary>
+    private void FollowMove(string oldDir, string newDir)
+    {
+        _colorWindowMod = ModMoveMigration.Follow(_colorWindowMod, oldDir, newDir);
+        ModMoveMigration.RekeyKey(_colorEditorSel, oldDir, newDir);
+        _groupOrderCache.Remove(oldDir);
+        if (_stackDragSrc is { } drag && ModMoveMigration.Same(drag.Mod, oldDir)) _stackDragSrc = null;
+        exportTab.FollowMove(oldDir, newDir);
+        parts.FollowMove(oldDir, newDir);
+    }
+
     /// <summary>Open the colour editor for a mod, or close it when it is already open for that mod.</summary>
     internal void ToggleColorWindow(string modDirectory)
         => _colorWindowMod = _colorWindowMod == modDirectory ? null : modDirectory;
@@ -150,6 +164,7 @@ public class StatusWindow : Window
         HatCompatWatcher hatCompatWatcher,
         HairPortWatcher hairPortWatcher,
         AutoRefitWatcher autoRefitWatcher,
+        ModMoveService modMoves,
         LogExportService logExport)
         // "###ProteusStatus" is the stable window id; the title shows the assembly version, not the dev BuildNumber.
         : base($"Proteus  v{typeof(Plugin).Assembly.GetName().Version}###ProteusStatus", ImGuiWindowFlags.AlwaysAutoResize)
@@ -186,6 +201,9 @@ public class StatusWindow : Window
                                       new AutoRefitPanel(autoRefitWatcher, penumbra, config), logExport);
 
         SizeConstraints = AutoFitConstraints;
+
+        // Never unsubscribed: the service is built just before this window and disposed with it, at unload.
+        modMoves.Moved += FollowMove;
 
         TitleBarButtons.Add(new TitleBarButton
         {
@@ -629,6 +647,7 @@ public class StatusWindow : Window
         // No colour editor open means no highlight glow.
         if (_colorWindowMod == null) { ColorTableEditor.Highlighter?.Clear(); return; }
 
+        compositor.RefreshDisplayNames();   // the editor's title names the mod
         var entry = compositor.LastDiscovered.FirstOrDefault(e => e.ModDirectory == _colorWindowMod);
         if (entry == null) { _colorWindowMod = null; ColorTableEditor.Highlighter?.Clear(); return; }
 

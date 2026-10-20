@@ -67,10 +67,13 @@ internal static partial class BodyRetarget
     /// <param name="TuckUnread">Slots the tuck was asked for whose body's weights could not be read: nothing tucked there.</param>
     /// <param name="Opened">Of <paramref name="Tucked"/>, triangles drawn in the open, inside the author's own skin
     /// (see <see cref="TuckSpanShare"/>).</param>
+    /// <param name="Smallclothes">Triangles of the new body's smallclothes brought in with its skin, where it draws them
+    /// in place of skin (see <see cref="ReadySmallclothes"/>), before the cut.</param>
     internal readonly record struct SwapReport(int Removed, int Added, int Kept, int LostShapes,
                                                int Reweighted = 0, int Trimmed = 0, int ExtrasDropped = 0,
                                                int Unplaced = 0, int Posed = 0, int Cut = 0, int Slotted = 0,
-                                               int Adorned = 0, int Tucked = 0, int TuckUnread = 0, int Opened = 0);
+                                               int Adorned = 0, int Tucked = 0, int TuckUnread = 0, int Opened = 0,
+                                               int Smallclothes = 0);
 
     /// <summary>
     /// Swap the garment's skin for the new body's, one body slot at a time: every skin mesh of the garment that belongs
@@ -127,8 +130,8 @@ internal static partial class BodyRetarget
         var swappable = swapSkin ? pairs.Where(p => p.Swaps).ToList() : [];
         if ((swappable.Count == 0 && weights == null) || ModelPartReader.Read(garment) is not { } model) return null;
 
-        var surfaces = swappable.Select(p => new BodySurface(p.Target, BodySurface.CellFor(MeanEdgeOf(p.Target))))
-                                .ToList();
+        // As worn on a slot that brings its smallclothes in: the garment's skin laid on Muse+'s boxers is that slot's.
+        var surfaces = swappable.Select(p => p.TargetSurface()).ToList();
 
         // Each skin mesh's vertices, and which slot claims it.
         var skinMeshes = model.Parts.Where(p => p.Island < 0 && SecondSkinWriter.IsBodySkinMaterial(p.Material))
@@ -256,7 +259,8 @@ internal static partial class BodyRetarget
             cuts[s] = !cutThis || drawn == null || drawn.IsEmpty ? null : CutLike(drawn, drawnEdges!, cloth,
                                                                       swappable[s].TargetModel!, swappable[s].TargetHidden,
                                                                       tuck, out these, out gone, out pulled, out tucked,
-                                                                      out authorCut, out tuckUnread, out opened);
+                                                                      out authorCut, out tuckUnread, out opened,
+                                                                      smallclothes: swappable[s].Smallclothes != null);
             authorCuts[s] = authorCut ?? cuts[s];
             bodyOf[s] = pulled ?? swappable[s].TargetModel!;
             keptTris += cuts[s] == null ? SkinTriangles(swappable[s].Target) : these;
@@ -278,7 +282,10 @@ internal static partial class BodyRetarget
                                                                              carryPiercings)))
                                   .Where(a => a.Adorn.Materials.Count > 0)
                                   .ToList();
-        int room = SecondSkinWriter.MaxMaterials - SecondSkinWriter.Parse(garment).MatNames.Count - claimedBy.Count;
+        // The smallclothes a slot brings in come before them: without its boxers, Muse+'s hips would be a hole.
+        int smallclothesLayers = claimedBy.Sum(s => swappable[s].Smallclothes?.Count ?? 0);
+        int room = SecondSkinWriter.MaxMaterials - SecondSkinWriter.Parse(garment).MatNames.Count - claimedBy.Count
+                 - smallclothesLayers;
         bool fits = adornments.Sum(a => a.Adorn.Materials.Count) <= room;
         int adorned = 0;
         var adornMaterials = new Dictionary<int, List<string>>();
@@ -309,6 +316,23 @@ internal static partial class BodyRetarget
                                             HiddenAttributes: swappable[s].TargetHidden,
                                             DropVariantAttributes: true, DrawOnly: cuts[s])],
         }).ToList();
+        // The new body's smallclothes, where it draws them in place of skin: each a layer of its own, under the garment's
+        // own name for the copy of its material the save publishes (see ReadySmallclothes), cut as its skin is.
+        int smallclothesTris = 0;
+        foreach (int s in claimedBy.OrderBy(s => s))
+            foreach (var (bodyMaterial, garmentMaterial) in swappable[s].Smallclothes ?? new Dictionary<string, string>())
+            {
+                layers.Add(new SecondSkinLayer
+                {
+                    MaterialName = garmentMaterial,
+                    Geometry = [new ContentGeometry(bodyOf[s], m => string.Equals(m, bodyMaterial, StringComparison.Ordinal),
+                                                    HiddenAttributes: swappable[s].TargetHidden,
+                                                    DropVariantAttributes: true, DrawOnly: cuts[s])],
+                });
+                smallclothesTris += swappable[s].Target.Parts
+                    .Where(p => p.Island < 0 && string.Equals(p.Material, bodyMaterial, StringComparison.Ordinal))
+                    .Sum(p => p.Triangles.Length / 3);
+            }
         foreach (var (s, materials) in adornMaterials.OrderBy(a => a.Key))
             foreach (string material in materials)
                 layers.Add(new SecondSkinLayer
@@ -326,7 +350,8 @@ internal static partial class BodyRetarget
 
         report = new SwapReport(removed, keptTris, kept, SecondSkinWriter.Parse(garment).Shapes.Count,
                                 weights?.Reweighted ?? 0, weights?.Trimmed ?? 0, extras, reskinned.Dropped, posed,
-                                cutTris, reskinned.Trimmed, adorned, tuckedTris, tuckUnreadSlots, openedTris);
+                                cutTris, reskinned.Trimmed, adorned, tuckedTris, tuckUnreadSlots, openedTris,
+                                smallclothesTris);
         return rebuilt;
     }
 
@@ -356,7 +381,8 @@ internal static partial class BodyRetarget
                                                              out int kept, out int cut, out byte[]? pulled,
                                                              out int tucked,
                                                              out Dictionary<int, HashSet<ushort>>? authorCut,
-                                                             out bool tuckUnread, out int opened)
+                                                             out bool tuckUnread, out int opened,
+                                                             bool smallclothes = false)
     {
         kept = cut = tucked = opened = 0;
         pulled = null;
@@ -401,6 +427,7 @@ internal static partial class BodyRetarget
             }
         }
         if (cut == 0) { kept = 0; return null; }   // nothing cut: the body goes in whole, as before
+        if (smallclothes) CutSmallclothes(drawn, edges, parts, baseOf, sets);
         pulled = PullToEdge(drawn, edges, cloth, body, parts, drawnCorners, keptTris, out var movedAt);
         if (!tuck) return sets;
 
@@ -423,6 +450,26 @@ internal static partial class BodyRetarget
         void Keep(HashSet<ushort> set, int v, int bv)
         {
             if (covered[v] && v - bv is >= 0 and <= ushort.MaxValue) set.Add((ushort)(v - bv));
+        }
+    }
+
+    /// <summary>
+    /// The author's cut, carried onto the new body's smallclothes as onto its skin: they draw where the garment's skin
+    /// drew — laid onto them, where the new body has no skin of its own — and not where the author deleted it. Every
+    /// smallclothes mesh gets its entry, empty or not, as the skin's do (a mesh missing from the cut draws whole). Never
+    /// pulled to the author's edge or tucked: those passes read the body's skin.
+    /// </summary>
+    private static void CutSmallclothes(BodySurface drawn, SkinEdges edges, ModelParts parts,
+                                        Dictionary<int, int> baseOf, Dictionary<int, HashSet<ushort>> sets)
+    {
+        foreach (var part in parts.Parts)
+        {
+            if (part.Island >= 0 || SecondSkinWriter.IsBodySkinMaterial(part.Material)
+                || !BodySurface.IsSmallclothes(part.Material) || !baseOf.TryGetValue(part.Mesh, out int bv)) continue;
+            var set = sets.TryGetValue(part.Mesh, out var have) ? have : sets[part.Mesh] = [];
+            foreach (int v in part.Triangles.Distinct())
+                if (Covers(drawn, At(parts, v), edges) && v - bv is >= 0 and <= ushort.MaxValue)
+                    set.Add((ushort)(v - bv));
         }
     }
 

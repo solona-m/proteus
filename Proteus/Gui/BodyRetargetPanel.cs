@@ -604,7 +604,7 @@ internal sealed partial class BodyRetargetPanel(PenumbraBridge penumbra, UVRemap
         // is made with another wearer, and bends the bodies of the "made for" mod with it, so those are in it too.
         // And what the option a save goes into gives it to read: a change of where to save that changes what will load
         // makes the model again; one that changes nothing does not.
-        string key = given.ModelRel + "|" + (route.Down ? "v" : "^") + route.To
+        string key = given.ModelRel + "|" + route.Tag + route.To
                    + (picked ? "|x|" + (fromBodyDir ?? bodyDir) + "|" + BakeFingerprint(given) : "");
         if (!route.Any || bakeRefusalFor == key)
         {
@@ -700,7 +700,8 @@ internal sealed partial class BodyRetargetPanel(PenumbraBridge penumbra, UVRemap
         {
             baked = made;
             if (made.Explicit) OnRaceBaked(made);
-            log.Information("[Proteus] retarget: {0} {1} from c{2:D4} to c{3:D4}", made.Route.Down ? "shaped" : "baked",
+            log.Information("[Proteus] retarget: {0} {1} from c{2:D4} to c{3:D4}",
+                            made.Route.Down ? "shaped" : made.Route.Lowered ? "lowered" : "baked",
                             made.SavePath, made.Route.Drawn, made.Route.To);
         }
         else
@@ -755,7 +756,10 @@ internal sealed partial class BodyRetargetPanel(PenumbraBridge penumbra, UVRemap
         var ps = Strings.Parts;
         if (active is { } b)
         {
-            ImGui.TextWrapped(string.Format(b.Route.Down ? ps.RetargetShapedDownFmt : ps.RetargetBakedFmt,
+            // Lowered, the race below usually has a model of the game's already (Midlanders wear the game's shirt):
+            // the note says one is made, not that none exists.
+            ImGui.TextWrapped(string.Format(b.Route.Down ? ps.RetargetShapedDownFmt
+                                            : b.Route.Lowered ? ps.RetargetLoweredFmt : ps.RetargetBakedFmt,
                                             ModelRace.Describe($"{b.Route.Drawn:D4}"),
                                             ModelRace.Describe($"{b.Route.To:D4}")));
             DrawRaceNotes(b);
@@ -1661,8 +1665,20 @@ internal sealed partial class BodyRetargetPanel(PenumbraBridge penumbra, UVRemap
             ImGui.SetTooltip(ps.BrushRevertArmTip);
     }
 
+    /// <summary>
+    /// What the status line says once a refit is previewed, where the new body draws underwear in place of skin: that it
+    /// could not be brought in, or that it shows only after saving — the preview pushes the model alone, and the copy
+    /// of its material the save publishes is not in game yet. Empty for every other refit.
+    /// </summary>
+    internal static string SmallclothesNote(IEnumerable<BodyRetarget.Planned> plans)
+    {
+        var all = plans.ToList();
+        if (all.Any(p => p.Report.SmallclothesFallback > 0)) return Strings.Parts.RetargetSmallclothesFallback;
+        return all.Any(p => p.Materials is { Count: > 0 }) ? Strings.Parts.RetargetSmallclothesAfterSave : "";
+    }
+
     /// <summary>A refit's counts, for the log. Not localized: it is read when diagnosing, not by the player.</summary>
-    private static string Describe(BodyRetarget.Report r, IReadOnlyList<string> shapeNames)
+    internal static string Describe(BodyRetarget.Report r, IReadOnlyList<string> shapeNames)
     {
         var parts = new List<string> { $"moved up to {r.WorstMove * 1000f:F1} mm" };
         if (RefitCore.ReleasedLog(r, shapeNames) is { } released) parts.Add($"let go of kept piece(s) {released}");
@@ -1680,10 +1696,13 @@ internal sealed partial class BodyRetargetPanel(PenumbraBridge penumbra, UVRemap
             if (swap.Posed > 0) parts.Add($"{swap.Posed} posed skin mesh(es) kept");
             if (swap.ExtrasDropped > 0) parts.Add($"{swap.ExtrasDropped:N0} extras tris dropped");
             if (swap.Adorned > 0) parts.Add($"{swap.Adorned:N0} nail/piercing tris carried");
+            if (swap.Smallclothes > 0) parts.Add($"{swap.Smallclothes:N0} smallclothes tris brought in");
             if (swap.Unplaced > 0) parts.Add($"{swap.Unplaced:N0} weights unplaced");
             if (swap.LostShapes > 0) parts.Add($"{swap.LostShapes} shape key(s) lost");
         }
         else if (r.Laid > 0) parts.Add($"{r.Laid:N0} skin points laid");
+        if (r.SmallclothesFallback > 0)
+            parts.Add($"{r.SmallclothesFallback} kept their own skin: the new body's underwear could not be brought in");
         return string.Join(", ", parts);
     }
 
@@ -2003,9 +2022,11 @@ internal sealed partial class BodyRetargetPanel(PenumbraBridge penumbra, UVRemap
             madeModFor = null;   // it exists now, and the lookup above was told it did not
         }
         string group = Destination();
-        // A bake is saved under the wearer's race, beside the drawn model rather than over it — which men, and every
-        // other race falling through to it, go on wearing — with the EQDP entry that makes the game load it. A garment
-        // bent down is saved over the drawn model, bent back up, and needs none.
+        // A bake is saved under the new race, beside the drawn model rather than over it, with the EQDP entry that makes
+        // the game load it. Up, the drawn race and every other race falling through to it go on wearing the drawn
+        // model; lowered (a Highlander model made a Midlander's), the drawn race does, and the races falling through to
+        // the new one wear the refit unless they have a model of their own. A garment bent down only to be refitted is
+        // saved over the drawn model, bent back up, and needs none.
         string path = SavePath(ctx);
         List<object>? manipulations = active?.Route.Eqdp(path) is { } eqdp ? [eqdp] : null;
         // A race picked in "Refit for" loads no extra skeleton for the item unless it is told to: the drawn race's,
@@ -2028,7 +2049,7 @@ internal sealed partial class BodyRetargetPanel(PenumbraBridge penumbra, UVRemap
             // Two sizes can carry the same label under different headings; each still needs an option of its own.
             string option = OptionName(ctx, target);
             for (int n = 2; !used.Add(option); n++) option = $"{OptionName(ctx, target)} ({n})";
-            refits.Add(new BodyRetargetWriter.Refit(option, plan.Model, ToLabel(ctx, target)));
+            refits.Add(new BodyRetargetWriter.Refit(option, plan.Model, ToLabel(ctx, target), Materials: plan.Materials));
         }
 
         // What to switch on once it is written. A refit appended to a group the AUTHOR already ships lands beside
@@ -2217,7 +2238,7 @@ internal sealed partial class BodyRetargetPanel(PenumbraBridge penumbra, UVRemap
                 showing = 0;
                 var first = done[0].Planned;
                 if (!ctx.PushPreview(first.Model)) pendingPreview = first.Model;
-                ctx.SetStatus("", false);
+                ctx.SetStatus(SmallclothesNote(done.Select(d => d.Planned)), false);
                 foreach (var (to, plan) in done)
                     log.Information("[Proteus] retarget: {0} onto {1}: {2}", ctx.ModelRel, to.Label,
                                     Describe(plan.Report, plannedShapeNames));

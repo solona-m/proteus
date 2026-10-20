@@ -16,7 +16,7 @@ namespace Proteus.Services;
 /// "Touching" is through WELDED corners: two polygons are neighbours when they share a corner position, which is how a
 /// model's surface stays joined across the vertex splits every uv seam makes. Two pieces that merely sit close together
 /// share no corner and are not neighbours — the reason a selection grows along the garment and not across a gap.
-/// Skin is never offered: nothing in the Move tools may move it.
+/// Skin is offered only when asked for: the Move tools move it only with "Move skin too" on.
 /// </summary>
 internal sealed class PolygonSelection
 {
@@ -39,10 +39,11 @@ internal sealed class PolygonSelection
     private readonly Dictionary<int, List<int>> byNode = [];   // welded corner -> polygons touching it
     private readonly Dictionary<Key, int> index = [];
 
-    /// <param name="model">The garment. Whole submeshes only — islands repeat their submesh's triangles — and never
-    /// skin.</param>
+    /// <param name="model">The garment. Whole submeshes only — islands repeat their submesh's triangles — and skin only
+    /// with <paramref name="includeSkin"/>.</param>
     /// <param name="movable">Optional further filter on parts, for the locked ones.</param>
-    public PolygonSelection(ModelParts model, Func<ModelPart, bool>? movable = null)
+    /// <param name="includeSkin">Offer the body's skin too ("Move skin too").</param>
+    public PolygonSelection(ModelParts model, Func<ModelPart, bool>? movable = null, bool includeSkin = false)
     {
         int vc = model.Positions.Length / 3;
         var at = new SecondSkinWriter.Vec3[vc];
@@ -53,7 +54,7 @@ internal sealed class PolygonSelection
         var list = new List<Key>();
         foreach (var part in model.Parts)
         {
-            if (part.Island >= 0 || SecondSkinWriter.IsBodySkinMaterial(part.Material)) continue;
+            if (part.Island >= 0 || (!includeSkin && SecondSkinWriter.IsBodySkinMaterial(part.Material))) continue;
             if (movable != null && !movable(part)) continue;
             for (int t = 0; t + 2 < part.Triangles.Length; t += 3)
             {
@@ -79,7 +80,7 @@ internal sealed class PolygonSelection
     /// <summary>How many polygons may be selected.</summary>
     public int Count => polygons.Length;
 
-    /// <summary>Whether <paramref name="key"/> is a polygon that may be selected — cloth, not skin, not locked.</summary>
+    /// <summary>Whether <paramref name="key"/> is a polygon that may be selected — not locked, and not skin unless offered.</summary>
     public bool Contains(Key key) => index.ContainsKey(key);
 
     /// <summary>Every corner of the selected polygons, for the move to seed from.</summary>

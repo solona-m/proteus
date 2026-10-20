@@ -70,8 +70,8 @@ internal static partial class BodyRetarget
         foreach (var pair in pairs)
         {
             if (pair.ShapeOnly) continue;
-            var s = new BodySurface(pair.Correspondence.Source, BodySurface.CellFor(MeanEdgeOf(pair.Correspondence.Source)));
-            var t = new BodySurface(pair.Target, BodySurface.CellFor(MeanEdgeOf(pair.Target)));
+            var s = pair.SourceSurface();
+            var t = pair.TargetSurface();
             if (s.IsEmpty || t.IsEmpty) continue;
             source.Add(s);
             target.Add(t);

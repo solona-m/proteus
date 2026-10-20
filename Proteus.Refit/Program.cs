@@ -27,7 +27,8 @@ namespace Proteus.Refit;
 /// to one legs option of the target mod for every size (<c>--legs-to</c>).
 /// <para/>
 /// Writes <c>&lt;out-dir&gt;/&lt;label&gt;.mdl</c> for each target and one JSON report on stdout. A refused size is in the
-/// report with its reason and no file; the exit code is non-zero only when nothing could run at all.
+/// report with its reason and no file (under <c>refusal</c>, as every refused size is); the exit code is non-zero only
+/// when nothing could run at all.
 /// </summary>
 internal static class Program
 {
@@ -1156,6 +1157,7 @@ internal static class Program
                     "NoNippleSmooth" => tuning with { NoNippleSmooth = true },
                     "NoSnapPush" => tuning with { NoSnapPush = true },
                     "NoOpenEdgeFit" => tuning with { NoOpenEdgeFit = true },
+                    "NoCrotchEase" => tuning with { NoCrotchEase = true },
                     _ => throw new UsageException($"Unknown --tune knob \"{knob}\"."),
                 };
             // The passes that explain themselves, on stderr: stdout is the JSON report.
@@ -1164,8 +1166,22 @@ internal static class Program
                 replaceSkin: true, acrossBodies: acrossBodies, cutHidden: !opts.ContainsKey("whole"),
                 keepShape: keepShape, log: line => Console.Error.WriteLine($"{label}: {line}"),
                 carryPiercings: RetargetInputs.CliCarryPiercings(opts)));
-            string written = Path.Combine(outDir, label + ".mdl");
-            File.WriteAllBytes(written, planned.Model);
+            // A model that draws the new body's underwear needs that material published beside it, under the garment's
+            // name for it, by a mod: a lone .mdl here would draw it with a material the game cannot find.
+            if (planned.Materials is { Count: > 0 } materials)
+            {
+                sizes.Add(new
+                {
+                    label, to = option.Rel,
+                    refusal = "this refit brings in the new body's underwear (" +
+                              string.Join(", ", materials.Select(m => m.From)) +
+                              "), whose material has to be saved into the mod beside the model; the command line " +
+                              "cannot do that — refit it in the Studio",
+                });
+                continue;
+            }
+            string writtenPath = Path.Combine(outDir, label + ".mdl");
+            File.WriteAllBytes(writtenPath, planned.Model);
 
             var r = planned.Report;
             sizes.Add(new
@@ -1176,7 +1192,7 @@ internal static class Program
                 legsNote,
                 chestTo,
                 chestNote,
-                written,
+                written = writtenPath,
                 report = new
                 {
                     nodes = r.Nodes, snapped = r.Snapped, transferred = r.Transferred, missed = r.Missed,
@@ -1205,6 +1221,8 @@ internal static class Program
             sizes,
         };
         Console.WriteLine(JsonSerializer.Serialize(result, new JsonSerializerOptions { WriteIndented = true }));
+        // Refused sizes are in the report, as they always were: ModPacker reads them there and treats any non-zero exit
+        // as the tool failing, so a size list all of whose sizes were refused is still a run that worked.
         return 0;
     }
 

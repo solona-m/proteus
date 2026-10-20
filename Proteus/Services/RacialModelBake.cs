@@ -24,6 +24,10 @@ namespace Proteus.Services;
 /// ship no bodies of that race: theirs are the shared Midlander shape, which the game bends onto her. Such a garment
 /// is bent back into that shape (<see cref="Route.Down"/>), refitted between the bodies there, and the refit bent
 /// forward again — what the game would draw of it had it been a Midlander model — and saved where it was drawn from.
+/// <para/>
+/// And down for good (<see cref="Route.Lowered"/>): a Highlander man's model made a Midlander man's, the race his falls
+/// through to. Bent down as the shared-shape route bends it, but kept there and saved at the Midlander path with its own
+/// EQDP entry, beside the Highlander model rather than over it.
 /// </summary>
 internal static partial class RacialModelBake
 {
@@ -32,39 +36,50 @@ internal static partial class RacialModelBake
     /// </summary>
     /// <param name="Drawn">The race of the model the game draws on the wearer.</param>
     /// <param name="To">The race it is refitted as; 0 for none — refitted as drawn.</param>
-    /// <param name="Down">Up (<c>false</c>): a man's model baked into the wearer's race, saved there with an EQDP entry.
-    /// Down: a racial model bent back into its shared shape, the refit bent forward again and saved where it was drawn.</param>
-    internal readonly record struct Route(ushort Drawn, ushort To, bool Down)
+    /// <param name="Down">Up (<c>false</c>): a model baked into a race that falls through to it, saved there with an EQDP
+    /// entry. Down: a racial model bent back into its shared shape, the refit bent forward again and saved where it was
+    /// drawn.</param>
+    /// <param name="Lowered">With <paramref name="Down"/> false: a model bent into a race IT falls through to (a
+    /// Highlander's into a Midlander's), as down bends it, and saved there as up saves — at that race's path, with its
+    /// EQDP entry. Never with <paramref name="Down"/>; only a race picked in "Refit for" makes one.</param>
+    internal readonly record struct Route(ushort Drawn, ushort To, bool Down, bool Lowered = false)
     {
         public static Route None => default;
 
         public bool Any => To != 0;
 
-        /// <summary>Up only: the bake is itself a change to the model, worth saving even when the refit changed nothing
-        /// else. A down route's bend there and back is not.</summary>
+        /// <summary>The garment is bent down into <see cref="To"/>'s shape, for good or only to be refitted there.</summary>
+        public bool BendsDown => Down || Lowered;
+
+        /// <summary>The direction, short, for keys: the same race reached another way is another model.</summary>
+        public string Tag => Down ? "v" : Lowered ? "_" : "^";
+
+        /// <summary>Up or lowered: the bake is itself a change to the model, worth saving even when the refit changed
+        /// nothing else. A down route's bend there and back is not.</summary>
         public bool ChangesModel => Any && !Down;
 
         /// <summary>The race every body list is filtered by, as a <c>"0201"</c> code.</summary>
         public string? Race(string drawnPath) => Any ? $"{To:D4}" : BodySizeCatalog.RaceOf(drawnPath);
 
-        /// <summary>Where a refit is saved: up, beside the drawn model under the wearer's race; otherwise over it.</summary>
+        /// <summary>Where a refit is saved: up or lowered, beside the drawn model under the new race; down, over it.</summary>
         public string SavePath(string drawnPath) => Any && !Down ? WithRace(drawnPath, To) : drawnPath;
 
-        /// <summary>The EQDP entry an up route's save needs, so the game loads the new race's model; null otherwise.</summary>
+        /// <summary>The EQDP entry an up or lowered route's save needs, so the game loads the new race's model; null
+        /// otherwise.</summary>
         public object? Eqdp(string savePath) => Any && !Down ? Switch(savePath, To) : null;
 
-        /// <summary>The garment as it is refitted: baked up, or bent down into its shared shape.</summary>
+        /// <summary>The garment as it is refitted: baked up, or bent down into the race below.</summary>
         public byte[]? Into(byte[] drawnModel, Wearer who, out string refusal)
-            => Down ? Unbake(drawnModel, To, Drawn, who.Pbd, who.ParentOf, out refusal)
-                    : Bake(drawnModel, Drawn, To, who.Pbd, who.ParentOf, out refusal);
+            => BendsDown ? Unbake(drawnModel, To, Drawn, who.Pbd, who.ParentOf, out refusal)
+                         : Bake(drawnModel, Drawn, To, who.Pbd, who.ParentOf, out refusal);
 
         /// <summary>
-        /// A refit put back into the drawn race's shape. Up, that is only the preview — pushed onto the drawn path, the
-        /// game bends it forward again. Down, it is the model itself, saved and previewed alike.
+        /// A refit put back into the drawn race's shape. Up or lowered, that is only the preview — pushed onto the drawn
+        /// path, the game bends it onto whoever draws that path. Down, it is the model itself, saved and previewed alike.
         /// </summary>
         public byte[]? Back(byte[] refitted, Wearer who, out string refusal)
-            => Down ? Bake(refitted, To, Drawn, who.Pbd, who.ParentOf, out refusal)
-                    : Unbake(refitted, Drawn, To, who.Pbd, who.ParentOf, out refusal);
+            => BendsDown ? Bake(refitted, To, Drawn, who.Pbd, who.ParentOf, out refusal)
+                         : Unbake(refitted, Drawn, To, who.Pbd, who.ParentOf, out refusal);
     }
 
     /// <summary>

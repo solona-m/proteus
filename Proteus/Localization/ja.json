@@ -2623,8 +2623,8 @@
     "message": "移動したパーツは元のボーンに従うため、ボーンから大きく離すとポーズによって不自然に曲がることがあります。",
     "description": ""
   },
-  "Parts.Move.SkinTip": {
-    "message": "肌は移動できません。",
+  "Parts.Move.SkinOff.Tip": {
+    "message": "肌を動かすには「肌も動かす」をオンにしてください。",
     "description": ""
   },
   "Parts.Move.LockedTip": {
@@ -2855,8 +2855,48 @@
     "message": "左右対称",
     "description": ""
   },
-  "Parts.Brush.Mirror.Tip": {
-    "message": "体の中心を軸に、左右を同時に鏡映しで塗ります。",
+  "Parts.Mirror.Tip": {
+    "message": "体の中心を軸に、左右を同時に鏡映しで編集します。ブラシは鏡像側も塗り、移動・回転・拡大縮小は反対側の対応する布を鏡映しで動かします。それ自体が左右対称のパーツは中心に留まります。",
+    "description": "Tooltip on the Mirror left/right checkbox, shown under the brushes and under Move, Rotate and Scale."
+  },
+  "Parts.Move.Mirror.Paired.Fmt": {
+    "message": "左右対称: 選択した {1:N0} 点のうち {0:N0} 点に反対側の対応点があります。",
+    "description": "{0} is how many selected points matched a point on the other side; {1} is how many points are selected."
+  },
+  "Parts.Move.Mirror.Held.Fmt": {
+    "message": "対応点のうち {0:N0} 点はロックされているため動きません。",
+    "description": "{0} is how many of the matching points are locked."
+  },
+  "Parts.Move.Mirror.None": {
+    "message": "左右対称: 反対側にこの選択に対応するものがないため、こちら側だけが動きます。",
+    "description": "Shown under Move, Rotate and Scale with Mirror on when nothing matched."
+  },
+  "Parts.Move.Mirror.Centred": {
+    "message": "左右対称: この選択はそれ自体が左右対称なので、一つのまとまりとして動き、中心に留まります。横方向の移動と横向きの回転は除かれます。",
+    "description": "Shown under Move, Rotate and Scale with Mirror on when the selection crosses the centre and mirrors itself."
+  },
+  "Parts.SkinMoves": {
+    "message": "肌も動かす",
+    "description": ""
+  },
+  "Parts.SkinMoves.Tip": {
+    "message": "ブラシと移動・回転・拡大縮小で、服だけでなく体の肌も動かせるようにします。肌の上にある服（約3 cm以内）は肌と一緒に動くので、体が突き抜けません。それより離れた服はそのままです。オフのときは、肌は作者が置いた位置から動きません。\n\nブラシは、このパーツが次のパーツとつながる肌の縁をその場に残します。そこで移動・回転・拡大縮小を使って肌を動かすと、腰・手首・首にすき間ができることがあります。\n\n体型サイズと自動調整は、装備の肌を新しい体の肌に置き換えるため、形を整えた肌は調整後には残りません。",
+    "description": ""
+  },
+  "Parts.SkinMoves.NotThisBrush.Tip": {
+    "message": "橋渡しと風のブラシは服にだけ作用し、その下の肌は動きません。",
+    "description": ""
+  },
+  "Parts.SkinMoves.Preparing": {
+    "message": "肌を準備しています…",
+    "description": ""
+  },
+  "Parts.SkinMoves.BodyModel.Warn": {
+    "message": "これは体です。この体向けの装備は体の正確な形で判別されるため、形を変えると、体型サイズと自動調整がどの体向けに作られた装備か分からなくなることがあります。",
+    "description": ""
+  },
+  "Parts.SkinMoves.Failed": {
+    "message": "肌を準備できなかったため、肌は動きません。理由はログに記録されています。",
     "description": ""
   },
   "Parts.Brush.Lock.Hint": {
@@ -2875,8 +2915,8 @@
     "message": "すべてロック解除",
     "description": ""
   },
-  "Parts.Brush.Lock.Skin.Tip": {
-    "message": "肌は動きません。",
+  "Parts.Brush.Lock.SkinOff.Tip": {
+    "message": "「肌も動かす」がオフの間、肌は動きません。",
     "description": ""
   },
   "MeshVolume.Apply.Nothing": {
@@ -3723,6 +3763,10 @@
     "message": "{0}のボディがないため、{0}モデルはゲームと同じ方法で{1}の体型に変形してリフィットし、{0}として保存し直します。",
     "description": ""
   },
+  "Parts.Retarget.Lowered.Fmt": {
+    "message": "{0}モデルから{1}モデルを作り、ゲームが両者の間で曲げるのと同じ方法で{1}の体型に曲げます。保存するとゲームに必要なメタデータが追加されます。",
+    "description": "{0} is the race of the model open, {1} the race picked below it."
+  },
   "Parts.Retarget.Bake.BendBack.Fmt": {
     "message": "リフィットを{0}の体型に戻せませんでした（{1}）",
     "description": ""
@@ -3878,6 +3922,14 @@
   "Parts.Retarget.SkinAlreadyMatches": {
     "message": "変更はありません。肌はすでに新しいボディと同じように描かれています。",
     "description": ""
+  },
+  "Parts.Retarget.Smallclothes.AfterSave": {
+    "message": "新しい体は肌のない部分に下着を描いており、変換はそれを取り込みます。ゲーム内で表示されるのは保存した後です。",
+    "description": "Body size status: the preview cannot show the new body's underwear, whose material is only published when the refit is saved."
+  },
+  "Parts.Retarget.Smallclothes.Fallback": {
+    "message": "新しい体は肌のない部分に下着を描いていますが、この装備に取り込めなかったため、その部分は装備自身の肌のままです。",
+    "description": "Body size status: the new body's underwear (drawn where it has no skin) could not be added to the garment, so the garment keeps its own skin there."
   },
   "Parts.Retarget.AlreadyFits.Fmt": {
     "message": "変更はありません。この装備が届く範囲では、{0} は作られた元のサイズと同じ形です。",
@@ -4312,7 +4364,7 @@
     "description": "Heads the dropdown that picks which race's model a refit is made and saved as."
   },
   "Parts.Retarget.Race.Tip": {
-    "message": "どの種族向けにリフィットするか。衣装と同じ性別の別の種族を選ぶと、このモデルからゲームと同じ方法で曲げた専用モデルを作り、その種族の体型にリフィットして、その種族が読み込む場所に保存します。他の種族はこのモデルのままです。",
+    "message": "どの種族向けにリフィットするか。衣装と同じ性別の別の種族を選ぶと、このモデルからゲームと同じ方法で曲げた専用モデルを作り、その種族の体型にリフィットして、その種族が読み込む場所に保存します。このモデルはそのまま残ります。",
     "description": "Tooltip of Parts.Retarget.Race.Label."
   },
   "Parts.Retarget.Race.ThisModel.Fmt": {
@@ -4338,6 +4390,14 @@
   "Parts.Retarget.Race.Only.Fmt": {
     "message": "保存したリフィットを着るのは{0}だけです。{1}はこのモデルのままです。",
     "description": "{0} is the race picked, {1} the race of the model open."
+  },
+  "Parts.Retarget.Race.Below.Fmt": {
+    "message": "保存したリフィットは{0}が着ます。この装備に専用モデルを持たない同じ性別の種族も同様です。{1}はこのモデルのままです。",
+    "description": "{0} is the race picked, {1} the race of the model open; said for a race the open one falls back to."
+  },
+  "Parts.Retarget.Race.BelowExtraBones.Fmt": {
+    "message": "この衣装は追加ボーンを使います。追加スケルトンが与えられるのは{0}だけなので、このリフィットを着る他の種族ではそのボーンは動きません。",
+    "description": "{0} is the race picked."
   },
   "Parts.Retarget.Race.SourceBaked.Fmt": {
     "message": "作成元の体型も同じ方法で{0}に曲げるので、元と同じように体に沿います。",
@@ -4543,9 +4603,21 @@
     "message": "この Mod はまだ Penumbra の旧フォルダー形式で、Proteus は編集しません。Penumbra で一度有効にしてアップグレードさせてから、戻ってきてください。",
     "description": "Body size status line: the mod is in Penumbra's pre-v3 folder format."
   },
+  "Parts.Retarget.Save.ModGone.Fmt": {
+    "message": "「{0}」はPenumbraのModにもうありません。Penumbraで名前が変更されたか削除されました。何も保存されていません。",
+    "description": "Body size status line when the mod's folder is gone. {0} is the mod's folder name."
+  },
   "Parts.Retarget.Save.Failed.Fmt": {
     "message": "保存できませんでした：{0}",
     "description": "Body size status line. {0} is the error message."
+  },
+  "Parts.Retarget.Save.NoMaterialSet.Fmt": {
+    "message": "{0} は新しい体の下着を描いていますが、その素材は装備またはアクセサリーのモデルの横にしか保存できません。",
+    "description": "Body size save refused: {0} is the model's game path. The refit draws the new body's underwear, whose material must be saved beside an equipment model."
+  },
+  "Parts.Retarget.Save.NoMaterialName.Fmt": {
+    "message": "{0} が使える素材名はすべて使用済みのため、新しい体の下着を保存する固有の名前がありません。",
+    "description": "Body size save refused: {0} is the model's game path. Every free material name for the new body's underwear copy is already used."
   },
   "Parts.Retarget.Undo.Removed.Fmt": {
     "message": "「{0}」を削除しました。",
@@ -4582,6 +4654,10 @@
   "Parts.Retarget.Refuse.LowCoverage.Fmt": {
     "message": "変換元の{0}の体のうち、テクスチャ座標で変換先に位置が見つかるのは {1:P0} だけです。両者はテクスチャレイアウトを共有していないため、相互に変換できません。",
     "description": "Body size: why two bodies cannot be paired. {0} is the body part (chest, legs…), {1:P0} the share that matched — keep the :P0."
+  },
+  "Parts.Retarget.Refuse.NoSkinThere.Fmt": {
+    "message": "変換元の{0}の体のうち、着地できる肌が見つかるのは {1:P0} だけです。変換先の体のこの{0}オプションには残りの部分に肌がなく、代わりにモデリングされた下着などが描かれていて、そこに合わせることができませんでした。その部分に肌があるこの体のオプションを選ぶか、別の体に変換してください。",
+    "description": "Body size: why two bodies cannot be paired when the target option draws something else (such as modelled underwear) where the source has skin. {0} is the body part (chest, legs…), {1:P0} the share that landed on skin — keep the :P0."
   },
   "Parts.Retarget.Bake.NoPath.Fmt": {
     "message": "種族デフォーマーに c{0:D4} から c{1:D4} への経路がありません",
@@ -5353,6 +5429,54 @@
   },
   "HairPort.Scan.UndoChecked.Confirm.Fmt": {
     "message": "もう一度クリックすると髪型 {0} 件を元に戻します（以後自動では合わせません）",
+    "description": ""
+  },
+  "HairPort.Earless.Label": {
+    "message": "ミコッテの髪Modから耳を取る",
+    "description": ""
+  },
+  "HairPort.Earless.Tip": {
+    "message": "ミコッテ向け：猫耳のある髪型の髪Modを身に着けると、Proteus が耳のない\nコピーを作り、Modのオプションをそのコピーに向けます。作者のファイルは一切\n変更しません。\n\nMod自体を変更するため、そのModを有効にして表示されるすべてのキャラクター\n（すべてのコレクション、共有相手も含む）は耳がなくなります。オフにすると、\nProteus が変更したすべてのModに耳を戻します。別の種族向けの髪Modの調整が\nオンでもオフでも動作します。",
+    "description": ""
+  },
+  "HairPort.Settings.Earless.Fmt": {
+    "message": "{1} の髪型 {0} は耳なしで表示されています。このModを有効にして表示されるすべてのキャラクター（すべてのコレクション）が対象です。設定をオフにすると元に戻ります。",
+    "description": ""
+  },
+  "HairPort.Settings.EarlessOptionHint.Fmt": {
+    "message": "このModには独自の耳なしオプションがあります：{0}",
+    "description": ""
+  },
+  "HairPort.Earless.Chat": {
+    "message": "[Proteus] この髪型の猫耳を取りました。Proteus がModを耳なしのコピーに向けたため、このModを有効にして表示されるすべてのキャラクター（すべてのコレクション）は耳がなくなっています。耳を戻すには /proteus > 設定 > 髪 で「ミコッテの髪Modから耳を取る」をオフにしてください。",
+    "description": ""
+  },
+  "HairPort.Earless.RestoreBlocked.Fmt": {
+    "message": "[Proteus] {0} の耳を戻せませんでした：{1}",
+    "description": ""
+  },
+  "HairPort.Earless.Restored.Fmt": {
+    "message": "{0} 個の髪型に耳を戻しました。",
+    "description": ""
+  },
+  "HairPort.Earless.Refused.AuthorMissing.Fmt": {
+    "message": "作者のファイル {0} が見つからないため、耳なしのコピーを残しました",
+    "description": ""
+  },
+  "HairPort.Earless.Refused.Changed": {
+    "message": "Proteus の作業中にModが変更されたため、何も書き込みませんでした",
+    "description": ""
+  },
+  "HairPort.Earless.Refused.Leftover": {
+    "message": "耳をすべて取り除くことができませんでした",
+    "description": ""
+  },
+  "HairPort.Earless.Refused.RecordUnreadable": {
+    "message": "このModの耳なし髪型の Proteus の記録（Proteus/earlesshair.json）を読み込めなかったため、何も変更しませんでした。",
+    "description": ""
+  },
+  "HairPort.Earless.Refused.Outside.Fmt": {
+    "message": "{0} はModの耳なしフォルダー内のパスではないため、何も書き込みませんでした",
     "description": ""
   }
 }

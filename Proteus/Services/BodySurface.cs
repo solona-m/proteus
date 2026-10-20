@@ -11,8 +11,8 @@ namespace Proteus.Services;
 /// Deliberately NOT <c>BrushTransfer.Surface</c> with a flag. Three of that class's four behaviours are the opposite
 /// of what is wanted here, and all three are load-bearing to the brush:
 /// <list type="bullet">
-/// <item>it skips <see cref="SecondSkinWriter.IsBodySkinMaterial"/>, because for a brush "skin is never a source";
-/// here skin is the ONLY source.</item>
+/// <item>it skips <see cref="SecondSkinWriter.IsBodySkinMaterial"/> among its cloth, because skin is never a source for
+/// a size's cloth; here skin is the ONLY source.</item>
 /// <item>it keeps a grid per material and prefers the nearest point on the SAME material, so a vest does not borrow
 /// from the top beneath it; a body is one surface and the distinction is meaningless.</item>
 /// <item>it stops at a hard <c>MaxReach</c>, which is right when "no counterpart" means "no edit"; a retarget needs
@@ -81,10 +81,17 @@ internal sealed class BodySurface
     /// </summary>
     public static BodySurface OfBodyWorn(ModelParts body, float cellSize) => new(body, cellSize, cloth: false, smallclothes: true);
 
+    /// <summary>
+    /// A body's own smallclothes alone, without its skin: whether a body draws underwear where another body's skin would
+    /// be (see <see cref="UvAtlasCorrespondence"/>). <see cref="SkinVertices"/> then lists the smallclothes' vertices.
+    /// </summary>
+    public static BodySurface OfSmallclothes(ModelParts body, float cellSize)
+        => new(body, cellSize, cloth: false, smallclothes: true, skin: false);
+
     /// <summary>A body model's own smallclothes: what it draws with the game's smallclothes material, set e0000.</summary>
     public static bool IsSmallclothes(string material) => material.Contains("e0000_", StringComparison.Ordinal);
 
-    private BodySurface(ModelParts body, float cellSize, bool cloth, bool smallclothes = false)
+    private BodySurface(ModelParts body, float cellSize, bool cloth, bool smallclothes = false, bool skin = true)
     {
         int vc = body.Positions.Length / 3;
         pos = new Vector3[vc];
@@ -96,26 +103,26 @@ internal sealed class BodySurface
         }
 
         cell = cellSize;
-        var skin = new HashSet<int>();
+        var indexed = new HashSet<int>();
         foreach (var part in body.Parts)
         {
             // An island is a subset of its own submesh; taking both would index every triangle twice.
             if (part.Island >= 0) continue;
-            bool skinPart = SecondSkinWriter.IsBodySkinMaterial(part.Material)
-                            || (smallclothes && IsSmallclothes(part.Material));
+            bool isSkin = SecondSkinWriter.IsBodySkinMaterial(part.Material);
+            bool skinPart = (skin && isSkin) || (smallclothes && !isSkin && IsSmallclothes(part.Material));
             if (skinPart == cloth) continue;
             for (int t = 0; t + 2 < part.Triangles.Length; t += 3)
             {
                 int a = part.Triangles[t], b = part.Triangles[t + 1], c = part.Triangles[t + 2];
                 if (a < 0 || b < 0 || c < 0 || a >= vc || b >= vc || c >= vc) continue;
                 Add(a, b, c);
-                skin.Add(a);
-                skin.Add(b);
-                skin.Add(c);
+                indexed.Add(a);
+                indexed.Add(b);
+                indexed.Add(c);
             }
         }
 
-        var list = new List<int>(skin);
+        var list = new List<int>(indexed);
         list.Sort();
         SkinVertices = list;
     }

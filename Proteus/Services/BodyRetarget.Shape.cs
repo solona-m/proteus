@@ -59,6 +59,8 @@ internal static partial class BodyRetarget
     /// <param name="NoOpenEdgeFit">Leave cloth whose nearest authored skin is an open skin edge it lies behind out of the
     /// push-out, outside the body the garment was made on or not, as builds before 1323 did (see
     /// <see cref="TargetBody.Fitted"/>).</param>
+    /// <param name="NoCrotchEase">Leave cloth between the legs on the legs' weights the reading gave it, as builds before
+    /// 1335 did (see <see cref="EaseCrotch"/>).</param>
     internal sealed record Tuning(bool NoFollow = false, bool NoOwnSkinWeights = false,
                                   float OwnSkinReach = OwnSkinReachDefault, float CopyReach = CopyReachDefault,
                                   float CopyTolerance = CopyToleranceDefault, bool NoGiveUp = false,
@@ -70,7 +72,7 @@ internal static partial class BodyRetarget
                                   bool NoNippleSmooth = false, bool NoOutfitOrder = false, bool NoWallPair = false,
                                   bool NoWallCover = false, bool NoRimTurnGuard = false, bool NoSnapPush = false,
                                   bool NoTuck = false, bool NoDeepClear = false, bool NoOpenSkin = false,
-                                  bool NoKeepStandoff = false, bool NoOpenEdgeFit = false);
+                                  bool NoKeepStandoff = false, bool NoOpenEdgeFit = false, bool NoCrotchEase = false);
 
     private static readonly Tuning DefaultTuning = new();
 
@@ -130,7 +132,7 @@ internal static partial class BodyRetarget
         var drawn = new List<BodySurface>(pairs.Count);
         foreach (var pair in pairs)
         {
-            var surface = new BodySurface(pair.Target, BodySurface.CellFor(MeanEdgeOf(pair.Target)));
+            var surface = pair.TargetSurface();
             if (!surface.IsEmpty) drawn.Add(surface);
         }
 

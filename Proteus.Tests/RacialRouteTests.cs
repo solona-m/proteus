@@ -239,4 +239,67 @@ public class RacialRouteTests
         Assert.Contains(ModelRace.Describe("0201"), note);
         Assert.NotEqual(ModelRace.Describe("1401"), ModelRace.Describe("0201"));
     }
+
+    // ── lowered: a model made the race it falls through to's (refit-race-down) ──
+
+    private static RacialModelBake.Wearer Lifting(ushort drawn, ushort to)
+        => new(to, new Dictionary<string, string?>(),
+               new XivLiveMesh.PbdFile(SyntheticSkeleton.Pbd(to, new Dictionary<ushort, string[]>
+               {
+                   [drawn] = ["j_sebo_c", "j_mune_l", "j_mune_r"],
+               }, lift: 0.02f)));
+
+    [Theory]
+    [InlineData(301, 101)]
+    [InlineData(401, 201)]
+    [InlineData(1501, 901)]
+    [InlineData(1401, 201)]
+    [Trait("Plan", "AC-refit-race-down-3")]
+    [Trait("Plan", "AC-refit-race-down-7")]
+    public void A_lowered_route_bends_down_and_saves_at_the_picked_race(int drawn, int to)
+    {
+        string path = $"chara/equipment/e6091/model/c{drawn:D4}e6091_top.mdl";
+        var route = new RacialModelBake.Route((ushort)drawn, (ushort)to, Down: false, Lowered: true);
+        Assert.Equal($"chara/equipment/e6091/model/c{to:D4}e6091_top.mdl", route.SavePath(path));
+        Assert.NotEqual(path, route.SavePath(path));
+        Assert.NotNull(route.Eqdp(route.SavePath(path)));
+        Assert.True(route.ChangesModel);
+        Assert.True(route.BendsDown);
+        Assert.Equal("_", route.Tag);
+
+        var who = Lifting((ushort)drawn, (ushort)to);
+        byte[] garment = SyntheticChest.Body(0.02f, 0.02f);
+        var into = route.Into(garment, who, out string why);
+        Assert.True(into != null, why);
+        Assert.Equal(RacialModelBake.Unbake(garment, (ushort)to, (ushort)drawn, who.Pbd, who.ParentOf, out _), into);
+        // Down by the lift, and back up again by Back.
+        var before = ModelPartReader.Read(garment)!;
+        Assert.Equal(-0.02f, ModelPartReader.Read(into!)!.Positions[1] - before.Positions[1], 4);
+        var back = route.Back(into!, who, out why);
+        Assert.True(back != null, why);
+        Assert.Equal(before.Positions[1], ModelPartReader.Read(back!)!.Positions[1], 4);
+    }
+
+    [Fact]
+    [Trait("Plan", "AC-refit-race-down-3")]
+    [Trait("Plan", "AC-refit-race-down-6")]
+    public void Finishing_a_lowered_refit_keeps_it_in_the_picked_shape_and_previews_it_bent_up()
+    {
+        var route = new RacialModelBake.Route(301, 101, Down: false, Lowered: true);
+        var who = Lifting(301, 101);
+        var log = NSubstitute.Substitute.For<Dalamud.Plugin.Services.IPluginLog>();
+        byte[] refit = route.Into(SyntheticChest.Body(0.02f, 0.02f), who, out string why)!;
+        Assert.True(refit != null, why);
+        string body = System.IO.Path.Combine(System.IO.Path.GetTempPath(), $"proteus-test-body-{Guid.NewGuid():N}.mdl");
+        System.IO.File.WriteAllBytes(body, SyntheticChest.Body(0.01f, 0.01f));
+        try
+        {
+            var (saved, preview, refusal) = RefitCore.Finish(KeepEnds.SkinOnlyPlanned(refit), route, who, body, log);
+            Assert.True(saved != null, refusal);
+            Assert.Equal(ModelPartReader.Read(refit)!.Positions, ModelPartReader.Read(saved!.Model)!.Positions);
+            Assert.NotNull(preview);
+            Assert.Equal(RacialModelBake.Bake(refit, 101, 301, who.Pbd, who.ParentOf, out _), preview);
+        }
+        finally { System.IO.File.Delete(body); }
+    }
 }

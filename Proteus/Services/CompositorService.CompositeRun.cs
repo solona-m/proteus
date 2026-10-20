@@ -1121,10 +1121,11 @@ public partial class CompositorService
 
             // Publish the locators in one step. Null ⇒ no shell built, when the editor should see them empty. Early-return
             // tear-downs use ClearShellLocators instead.
-            compositor._shellMaterials   = nextShellMaterials ?? new();
-            compositor._contentMaterials = nextContentMaterials ?? new(StringComparer.OrdinalIgnoreCase);
-            compositor._contentModels    = nextContentModels ?? new(StringComparer.OrdinalIgnoreCase);
-            compositor._appendHostSources = nextAppendHostSources ?? new(StringComparer.OrdinalIgnoreCase);
+            // Through the recent renames: a run that started before one still names the old folder.
+            compositor._shellMaterials   = compositor.Ledgered(nextShellMaterials ?? new());
+            compositor._contentMaterials = compositor.Ledgered(nextContentMaterials ?? new(StringComparer.OrdinalIgnoreCase));
+            compositor._contentModels    = compositor.Ledgered(nextContentModels ?? new(StringComparer.OrdinalIgnoreCase));
+            compositor._appendHostSources = compositor.LedgeredPaths(nextAppendHostSources ?? new(StringComparer.OrdinalIgnoreCase));
             compositor._shellLight       = nextShellLight ?? new(StringComparer.OrdinalIgnoreCase);
             compositor._shellDrawnCheck  = nextShellDrawnCheck;
 
@@ -1183,7 +1184,8 @@ public partial class CompositorService
             compositor.RecordCompositeBaseKeys(baseKeys.Concat(compositor._upstreamByGamePath.Keys), baseSignature,
                 authoritative: !skinReused);
             // What those base paths resolved to, so the next settings change is judged against a composite that happened.
-            compositor._lastBaseUpstreams = new Dictionary<string, string>(compositor._upstreamByGamePath, StringComparer.OrdinalIgnoreCase);
+            compositor._lastBaseUpstreams = compositor.LedgeredPaths(
+                new Dictionary<string, string>(compositor._upstreamByGamePath, StringComparer.OrdinalIgnoreCase));
         }
 
         private void ReconcileAndVerify()
