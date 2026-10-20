@@ -641,6 +641,8 @@ public class CrotchWeightsTests
         var eased = Refit(garment);
         AllSame(garment, eased, Refit(garment, ease: false));
         Assert.Equal(0, eased.Plan.CrotchEased);
+        // Nothing on a thigh, so nothing said: not even that there was no crotch to look for.
+        Assert.Empty(eased.Plan.CrotchNotes ?? []);
     }
 
     [Fact]

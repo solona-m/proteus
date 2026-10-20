@@ -322,21 +322,29 @@ internal static partial class BodyRetarget
                                             IReadOnlyList<IReadOnlyCollection<int>>? keepShape)
     {
         var notes = new List<string>();
-        if (FindCrotch([.. pairs.Select((p, i) => (p.Target, targets[i].Skin))]) is not { } a)
-        {
-            notes.Add("no crotch to anchor on");
-            return new CrotchOutcome(0, 0, 0, notes);
-        }
-        float k = a.Scale;
-
         int vc = model.Positions.Length / 3;
         Vector3 At(int v) => new(model.Positions[v * 3], model.Positions[v * 3 + 1], model.Positions[v * 3 + 2]);
         List<(string Bone, float W)> Now(int v) => result[v] is { } w ? [.. w] : Influences(own, v);
         bool Free(int v) => held == null || !held.Contains(v);
+        var cloth = ClothVertices(model);
+
+        // Gloves, shoes, a hat, a top: no cloth on a thigh, nothing to look for — and no crotch search, on every refit.
+        var thighs = cloth.Where(v => Free(v) && legFill[v] == null)
+                          .Select(v => (Now: Thighs(Now(v)), Authored: Thighs(Influences(own, v)))).ToList();
+        static bool On((float Left, float Right) t, bool both)
+            => both ? t.Left >= CrotchThighMin && t.Right >= CrotchThighMin : t.Left >= CrotchThighMin || t.Right >= CrotchThighMin;
+        if (!thighs.Any(t => On(t.Now, false) || On(t.Authored, false))) return new CrotchOutcome(0, 0, 0, notes);
+
+        if (FindCrotch([.. pairs.Select((p, i) => (p.Target, targets[i].Skin))]) is not { } a)
+        {
+            // Said only where it explains something: cloth rigged to both thighs, with nowhere to ease it about.
+            if (thighs.Any(t => On(t.Now, true) || On(t.Authored, true))) notes.Add("no crotch to anchor on");
+            return new CrotchOutcome(0, 0, 0, notes);
+        }
+        float k = a.Scale;
 
         // Cloth on the skin at the crotch rigged to each thigh — one vertex shared between them, or one on each side of a
         // body that splits its crotch down the middle — as it is now or as its author rigged it.
-        var cloth = ClothVertices(model);
         bool onLeft = false, onRight = false;
         foreach (int v in cloth)
         {
