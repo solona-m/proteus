@@ -16,7 +16,8 @@ internal static class EarlessHairBuilder
     /// <summary>One redirect to point at an earless copy (or a copy to make again), in one place.</summary>
     /// <param name="From">What the redirect names now: the author's file, or for a remake the copy itself.</param>
     /// <param name="To">The copy it names afterwards.</param>
-    /// <param name="Model">The copy's bytes.</param>
+    /// <param name="Model">The copy's bytes; empty when the copy is there and current already (another place draws it),
+    /// or for a redirect pointed back at the author's own file.</param>
     /// <param name="Remake">A copy of ours made again — its redirect already names it.</param>
     /// <param name="TrimRefusal">Why the copy keeps its lower LODs (see <see cref="EarlessHair.Result.TrimRefusal"/>).</param>
     public sealed record SwapWrite(HairPortPlan.Owner Into, string GamePath, string AuthorFile, string AuthorSha8,
@@ -49,10 +50,13 @@ internal static class EarlessHairBuilder
         foreach (var owner in serving)
         {
             string rel = HairPortRecord.Rel(HairPortPlan.FileFor(owner, gamePath)!);
-            string? author = EarlessHairPlan.AuthorFileFor(record, owner, gamePath, rel, exists);
-            if (author == null) return new Plan([], 0, AuthorMissing(rel.Length > EarlessHairPlan.Folder.Length
-                                                                       ? rel[(EarlessHairPlan.Folder.Length + 1)..] : rel));
+            // A path climbing out of the mod is never read, copied or written for.
+            if (!EarlessHairPlan.StaysInside(rel)) continue;
             bool copy = EarlessHairPlan.IsEarlessFile(rel);
+            // An option naming a model it does not ship draws nothing there: nothing to take ears off.
+            if (!copy && !exists(rel)) continue;
+            string? author = EarlessHairPlan.AuthorFileFor(record, owner, gamePath, rel, exists);
+            if (author == null || !exists(author)) return new Plan([], 0, AuthorMissing(author ?? EarlessHairPlan.AuthorOfCopy(rel)));
 
             if (!made.TryGetValue(author, out var m))
             {
@@ -68,8 +72,13 @@ internal static class EarlessHairBuilder
             {
                 // The author's own file, without ear fur to take out: nothing to do there.
                 if (m.Result == null) continue;
-                writes.Add(new SwapWrite(owner, gamePath, author, m.Sha8, rel, EarlessHairPlan.CopyFile(author),
-                                         m.Result.Model, Remake: false, m.Result.TrimRefusal));
+                string to = EarlessHairPlan.CopyFile(author);
+                // Another place already draws an up-to-date copy of the same file: point this one at it too, without
+                // writing the copy over — which would throw away a hat fit made of it since.
+                bool shared = exists(to) && record.Swaps.Any(e => e.File.Equals(to, StringComparison.OrdinalIgnoreCase)
+                    && e.EarlessVersion >= EarlessHair.Version && string.Equals(e.AuthorSha8, m.Sha8, StringComparison.OrdinalIgnoreCase));
+                writes.Add(new SwapWrite(owner, gamePath, author, m.Sha8, rel, to, shared ? [] : m.Result.Model,
+                                         Remake: false, shared ? "" : m.Result.TrimRefusal));
                 continue;
             }
 

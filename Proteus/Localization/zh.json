@@ -5426,5 +5426,9 @@
   "HairPort.Earless.Refused.RecordUnreadable": {
     "message": "无法读取 Proteus 对此 Mod 无耳发型的记录（Proteus/earlesshair.json），因此未做任何更改。",
     "description": ""
+  },
+  "HairPort.Earless.Refused.Outside.Fmt": {
+    "message": "{0} 不是该 Mod 无耳文件夹内的路径，因此未写入任何内容",
+    "description": ""
   }
 }

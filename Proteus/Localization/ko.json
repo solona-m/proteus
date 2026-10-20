@@ -5426,5 +5426,9 @@
   "HairPort.Earless.Refused.RecordUnreadable": {
     "message": "이 모드의 귀 없는 헤어스타일에 대한 Proteus 기록(Proteus/earlesshair.json)을 읽을 수 없어 아무것도 변경하지 않았습니다.",
     "description": ""
+  },
+  "HairPort.Earless.Refused.Outside.Fmt": {
+    "message": "{0}은(는) 모드의 귀 없는 폴더 안의 경로가 아니어서 아무것도 기록하지 않았습니다",
+    "description": ""
   }
 }

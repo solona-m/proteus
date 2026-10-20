@@ -58,7 +58,9 @@ public partial class HairPortBuilderTests
         File.Delete(Path.Combine(mod.Root, "long.mdl"));
         var plan = HairPortBuilder.Build(mod.Root, Source, [201], Pbd(), Game(Races), withSharers: false);
         Assert.Empty(plan.Writes);
-        Assert.True(plan.Refused.ContainsKey(201));
+        // Said as it is — the author's file is gone — and a verdict: looking again changes nothing.
+        Assert.Equal(EarlessHairBuilder.AuthorMissing("long.mdl"), plan.Refused[201]);
+        Assert.True(plan.IsVerdict(201));
     }
 
     [Fact]

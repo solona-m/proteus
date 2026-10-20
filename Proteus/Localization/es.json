@@ -5426,5 +5426,9 @@
   "HairPort.Earless.Refused.RecordUnreadable": {
     "message": "No se pudo leer el registro de Proteus de los peinados sin orejas de este mod (Proteus/earlesshair.json), así que no se cambió nada.",
     "description": ""
+  },
+  "HairPort.Earless.Refused.Outside.Fmt": {
+    "message": "{0} no es una ruta dentro de la carpeta sin orejas del mod, así que no se escribió nada",
+    "description": ""
   }
 }

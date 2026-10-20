@@ -5426,5 +5426,9 @@
   "HairPort.Earless.Refused.RecordUnreadable": {
     "message": "Запись Proteus о причёсках этого мода без ушей (Proteus/earlesshair.json) не удалось прочитать, поэтому ничего не изменено.",
     "description": ""
+  },
+  "HairPort.Earless.Refused.Outside.Fmt": {
+    "message": "{0} — не путь внутри папки мода для копий без ушей, поэтому ничего не записано",
+    "description": ""
   }
 }

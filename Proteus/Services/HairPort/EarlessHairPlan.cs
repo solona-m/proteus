@@ -24,6 +24,25 @@ internal static class EarlessHairPlan
     /// one copy, and the author's file can be read back from the copy's path.</summary>
     public static string CopyFile(string authorRel) => $"{Folder}/{HairPortRecord.Rel(authorRel)}";
 
+    /// <summary>The author's file a copy's own path names (<see cref="CopyFile"/> backwards); the path itself for one
+    /// that is not a copy.</summary>
+    public static string AuthorOfCopy(string rel)
+    {
+        rel = HairPortRecord.Rel(rel);
+        return IsEarlessFile(rel) ? rel[(Folder.Length + 1)..] : rel;
+    }
+
+    /// <summary>
+    /// Whether a mod-relative path stays inside the mod: not rooted, and no <c>..</c> step. A manifest comes with a
+    /// downloaded mod; a copy is only ever made of, and written for, a path that cannot climb out of it.
+    /// </summary>
+    public static bool StaysInside(string rel)
+    {
+        rel = HairPortRecord.Rel(rel);
+        if (rel.Length == 0 || Path.IsPathRooted(rel) || rel.StartsWith('/') || rel.Contains(':')) return false;
+        return !rel.Split('/').Any(s => s == "..");
+    }
+
     /// <summary>
     /// The author's file behind a redirect of <paramref name="gamePath"/> to <paramref name="rel"/>: <paramref name="rel"/>
     /// itself unless it is an earless copy; for a copy, what the record says it was made from, else the copy's own path
@@ -33,9 +52,9 @@ internal static class EarlessHairPlan
                                         Func<string, bool> fileExists)
     {
         if (!IsEarlessFile(rel)) return rel;
-        if (record.Find(owner, gamePath, rel) is { } entry) return entry.AuthorFile;
-        var derived = HairPortRecord.Rel(rel)[(Folder.Length + 1)..];
-        return derived.Length > 0 && fileExists(derived) ? derived : null;
+        if (record.Find(owner, gamePath, rel) is { } entry) return StaysInside(entry.AuthorFile) ? entry.AuthorFile : null;
+        var derived = AuthorOfCopy(rel);
+        return StaysInside(derived) && fileExists(derived) ? derived : null;
     }
 
     /// <summary>Whether a mod-relative file is there.</summary>

@@ -74,12 +74,19 @@ internal static class HairPortBuilder
             if (earless.Unreadable)
                 return new Plan(writes, wanted.ToDictionary(t => t, _ => EarlessHairRecord.UnreadableMessage), current, Unreadable: true);
             var exists = EarlessHairPlan.Exists(modRoot);
+            string? missing = null;
             foreach (var o in serving)
-                if (EarlessHairPlan.AuthorFileFor(earless, o, sourceGamePath, HairPortPlan.FileFor(o, sourceGamePath)!, exists)
-                    is { } author)
+            {
+                var rel = HairPortPlan.FileFor(o, sourceGamePath)!;
+                if (EarlessHairPlan.AuthorFileFor(earless, o, sourceGamePath, rel, exists) is { } author && exists(author))
                     sourceOf[o] = author;
-            // A copy whose author's file is gone has nothing to port from: that place gets no port.
+                else missing = EarlessHairBuilder.AuthorMissing(EarlessHairPlan.AuthorOfCopy(rel));
+            }
+            // A copy whose author's file is gone has nothing to port from: that place gets no port — a verdict, since the
+            // same mod would get it again.
             serving.RemoveAll(o => !sourceOf.ContainsKey(o));
+            if (serving.Count == 0 && missing != null)
+                return new Plan(writes, wanted.ToDictionary(t => t, _ => missing), current);
         }
         else
             foreach (var o in serving) sourceOf[o] = HairPortPlan.FileFor(o, sourceGamePath)!;

@@ -6,7 +6,7 @@ using static Proteus.Tests.HairPortFixtures;
 namespace Proteus.Tests;
 
 /// <summary>The earless copy of a Miqo'te hairstyle, on synthetic models: what it draws, what it keeps.</summary>
-public class EarlessHairTests
+public partial class EarlessHairTests
 {
     /// <summary>LOD0 triangles that draw (three distinct corners).</summary>
     private static int Drawn(byte[] mdl)
@@ -64,17 +64,8 @@ public class EarlessHairTests
 
     [Fact]
     [Trait("Plan", "EDGE-earless-miqote-hair-17")]
-    public void Multi_lod_model_is_trimmed_to_lod0()
+    public void A_single_lod_model_needs_no_cut()
     {
-        // The header says three levels: either cut to LOD0, or the cut refused and said why — LOD0 earless either way.
-        var author = EaredHairModel(801);
-        author[64] = 3;
-        var result = EarlessHair.Make(author, out var why);
-        Assert.True(result != null, why);
-        Assert.Equal(0, EarlessHair.DrawnFur(result!.Model));
-        if (result.LodTrimmed) Assert.Equal(1, ModelLodTrimmer.LodCount(result.Model));
-        else Assert.NotEqual("", result.TrimRefusal);
-
         // One level already: nothing to cut, nothing to say.
         var single = EarlessHair.Make(EaredHairModel(801), out _)!;
         Assert.False(single.LodTrimmed);

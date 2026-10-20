@@ -5426,5 +5426,9 @@
   "HairPort.Earless.Refused.RecordUnreadable": {
     "message": "Le registre de Proteus des coiffures sans oreilles de ce mod (Proteus/earlesshair.json) n'a pas pu être lu, rien n'a donc été modifié.",
     "description": ""
+  },
+  "HairPort.Earless.Refused.Outside.Fmt": {
+    "message": "{0} n'est pas un chemin dans le dossier sans oreilles du mod, rien n'a donc été écrit",
+    "description": ""
   }
 }

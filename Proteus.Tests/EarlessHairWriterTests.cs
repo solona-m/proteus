@@ -12,7 +12,7 @@ namespace Proteus.Tests;
 /// Earless copies written into a Miqo'te hair mod and taken out again: which redirects change, what is written and
 /// deleted, and what is never touched — through <see cref="EarlessHairBuilder"/> and <see cref="EarlessHairWriter"/>.
 /// </summary>
-public class EarlessHairWriterTests
+public partial class EarlessHairWriterTests
 {
     private static readonly string Worn = HairPortPlan.HairPath(801, Id);
     private const string Copy = "Proteus Earless/long.mdl";

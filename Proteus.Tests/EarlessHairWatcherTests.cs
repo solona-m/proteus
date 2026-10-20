@@ -14,7 +14,7 @@ namespace Proteus.Tests;
 /// and how the ears come back — through <see cref="HairPortWatcher.Run"/> and the restore pass with Penumbra and the
 /// game stood in for.
 /// </summary>
-public class EarlessHairWatcherTests
+public partial class EarlessHairWatcherTests
 {
     private static readonly string Worn = HairPortPlan.HairPath(801, Id);
     private static readonly ushort[] Races = [101, 201, 401, 601, 801, 1001, 1101, 1201, 1401, 1601, 1801];
@@ -467,10 +467,11 @@ public class EarlessHairWatcherTests
         s.Host.Enabled = false;
         string? key = null;
         HairPortWatcher.Run(s.Host, Worn, ref key);
-        // Fitting switched on: the watcher drops the key on that edge, so the same hairstyle is looked at afresh.
-        Assert.Null(HairPortWatcher.Decide.KeyAfterPortingEdge(key, wasPorting: false, porting: true));
-        Assert.Equal(key, HairPortWatcher.Decide.KeyAfterPortingEdge(key, wasPorting: true, porting: true));
-        key = HairPortWatcher.Decide.KeyAfterPortingEdge(key, false, true);
+        // Fitting switched on owes a fresh look, which drops the key — even served late, as a plain refresh after a
+        // check that held the flight.
+        Assert.Equal(key, HairPortWatcher.Decide.KeyForLook(key, afreshOwed: false));
+        key = HairPortWatcher.Decide.KeyForLook(key, afreshOwed: true);
+        Assert.Null(key);
         s.Host.Enabled = true;
         var view = HairPortWatcher.Run(s.Host, Worn, ref key);
         Assert.True(view.Ported, view.Message);

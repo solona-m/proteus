@@ -37,7 +37,17 @@ public sealed partial class HairPortWatcher
         config.EarlessRestorePending = !on;
         config.Save();
         earlessBackoff.Reset();
-        if (on) Refresh(force: true);
+        if (on) LookAfresh();
+    }
+
+    /// <summary>The next examination ignores what the last one saw — however long it waits for a check or a port that
+    /// holds the flight: a forced refresh owed while busy is served as a plain one, which would stop at the key.</summary>
+    private int lookAfresh;
+
+    private void LookAfresh()
+    {
+        Interlocked.Exchange(ref lookAfresh, 1);
+        Refresh();
     }
 
     private void LookAgainLater()
@@ -87,7 +97,7 @@ public sealed partial class HairPortWatcher
                 }
                 log.Information("hair port: ears put back on {0} hairstyle(s); {1} mod(s) kept theirs, {2} could not be read",
                                 pass.Restored, pass.Blocked.Count, pass.Unreadable.Count);
-                current = new View(worn, Message: pass.Restored > 0 ? string.Format(RestoredFmt, pass.Restored) : "");
+                current = PassView(pass, worn);
                 RequestWalkIn(0);
             }
             catch (Exception ex)
@@ -109,8 +119,18 @@ public sealed partial class HairPortWatcher
     /// <param name="Unreadable">Mods whose manifest or record could not be read: left to the next pass, or to the
     /// hairstyle being worn.</param>
     /// <param name="Completed">Every mod was looked at: not stopped by the setting going on again.</param>
+    /// <param name="Lines">The chat line told for each blocked mod, in order.</param>
     internal sealed record PassResult(int Restored, bool WornRestored, IReadOnlyList<string> Blocked,
-                                      IReadOnlyList<string> Unreadable, bool Completed);
+                                      IReadOnlyList<string> Unreadable, bool Completed, IReadOnlyList<string>? Lines = null);
+
+    /// <summary>What the panel shows once a pass has ended: the mods that kept a copy and why, else how many hairstyles
+    /// got their ears back.</summary>
+    internal static View PassView(PassResult pass, string? worn)
+    {
+        if (pass.Lines is { Count: > 0 } lines)
+            return new View(worn, Message: lines.Count == 1 ? lines[0] : string.Join("\n", lines), Failed: true);
+        return new View(worn, Message: pass.Restored > 0 ? string.Format(RestoredFmt, pass.Restored) : "");
+    }
 
     /// <summary>
     /// Put the ears back in every mod under <paramref name="modsRoot"/> that has an earless copy or a record of one: each
@@ -123,14 +143,18 @@ public sealed partial class HairPortWatcher
         bool wornRestored = false;
         var blocked = new List<string>();
         var unreadable = new List<string>();
+        var lines = new List<string>();
         var mods = Directory.EnumerateDirectories(modsRoot)
                             .Where(d => EarlessHairRecord.Exists(d) || Directory.Exists(Path.Combine(d, EarlessHairPlan.Folder)))
                             .ToList();
         foreach (var dir in mods)
         {
-            if (stop()) return new PassResult(restored, wornRestored, blocked, unreadable, Completed: false);
+            if (stop()) return new PassResult(restored, wornRestored, blocked, unreadable, Completed: false, lines);
             string modDir = Path.GetFileName(dir);
-            var outcome = EarlessHairWriter.Restore(dir);
+            EarlessHairWriter.Outcome outcome;
+            // One mod that cannot be restored never holds up the rest.
+            try { outcome = EarlessHairWriter.Restore(dir); }
+            catch (Exception ex) { outcome = new EarlessHairWriter.Outcome(false, ex.Message, 0); }
             if (outcome.Unreadable)
             {
                 host.Log($"{modDir}: ears not put back — {outcome.Message}");
@@ -148,12 +172,14 @@ public sealed partial class HairPortWatcher
             {
                 host.Log($"{modDir}: an earless copy was kept — {outcome.Message}");
                 blocked.Add(modDir);
-                host.AnnounceEarless(string.Format(RestoreBlockedFmt, host.ModName(modDir), outcome.Message));
+                var line = string.Format(RestoreBlockedFmt, host.ModName(modDir), outcome.Message);
+                lines.Add(line);
+                host.AnnounceEarless(line);
             }
         }
         if (wornRestored && (host.WornNow() is not { } now || string.Equals(now, worn, StringComparison.OrdinalIgnoreCase)))
             host.Redraw();
-        return new PassResult(restored, wornRestored, blocked, unreadable, Completed: true);
+        return new PassResult(restored, wornRestored, blocked, unreadable, Completed: true, lines);
     }
 
     /// <summary>
@@ -191,8 +217,9 @@ public sealed partial class HairPortWatcher
             return plan.Current > 0 ? new View(worn, modRoot, Earless: true, EarlessOptions: hint) : null;
 
         foreach (var w in plan.Writes.Where(w => w.TrimRefusal.Length > 0))
-            host.Log($"{w.To} keeps its lower levels of detail, which still draw the ears from a distance — {w.TrimRefusal}");
-        host.Log($"{worn} is drawn without its ears — {saved.Count} place(s) in {modDir}");
+            host.Warn($"{w.To} keeps its lower levels of detail, which still draw the ears from a distance — {w.TrimRefusal}");
+        host.Log($"{worn} is drawn without its ears — {saved.Count} place(s) in {modDir}"
+               + (saved.Message.Length > 0 ? $" (its record was not updated: {saved.Message})" : ""));
         if (plan.Writes.Any(w => !w.Remake && EarlessHairPlan.IsEarlessFile(w.To))) host.AnnounceEarless(ChatLine);
         ReloadAndRedraw(host, modDir, worn);
         lastKey = null;
@@ -294,9 +321,9 @@ public sealed partial class HairPortWatcher
         public static bool ClearPending(bool completed, int generationAtStart, int generationNow)
             => completed && generationAtStart == generationNow;
 
-        /// <summary>The key to examine with once hair fitting may have just come on: none, so the worn hairstyle is
-        /// looked at afresh — with fitting off, a look keeps its key and would otherwise see nothing new.</summary>
-        public static string? KeyAfterPortingEdge(string? key, bool wasPorting, bool porting)
-            => porting && !wasPorting ? null : key;
+        /// <summary>The key an examination starts from: none when a fresh look was asked for since the last one began —
+        /// by the setting switched on, or fitting coming on (with fitting off a look keeps its key, and would otherwise
+        /// see nothing new) — even if that look had to wait for the flight.</summary>
+        public static string? KeyForLook(string? lastKey, bool afreshOwed) => afreshOwed ? null : lastKey;
     }
 }

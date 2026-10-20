@@ -28,6 +28,10 @@ internal static class EarlessHairWriter
     /// thread, since tests run in parallel. Never set outside tests.</summary>
     [ThreadStatic] internal static Action<int>? BeforeSwap;
 
+    /// <summary>A test seam: called once the redirects are in, before the record is written. Per thread. Never set
+    /// outside tests.</summary>
+    [ThreadStatic] internal static Action? AfterSwaps;
+
     /// <summary>
     /// Save <paramref name="writes"/>: the copies first, then the manifest one place at a time, then the record. On a
     /// failure the places already swapped are swapped back before the copies they named are deleted, so a failed save
@@ -113,8 +117,15 @@ internal static class EarlessHairWriter
                     File = HairPortRecord.Rel(w.To), EarlessVersion = EarlessHair.Version,
                 });
             }
-            EarlessHairRecord.Write(modRoot, record);
-            DeleteUnnamed(modRoot);
+            // The swaps are in: a record that cannot be written is recovered from the copies' own paths
+            // (EarlessHairPlan.AuthorFileFor), so the save stands — and the caller still reloads.
+            try
+            {
+                AfterSwaps?.Invoke();
+                EarlessHairRecord.Write(modRoot, record);
+                DeleteUnnamed(modRoot);
+            }
+            catch (Exception ex) { return new Outcome(true, ex.Message, plan.Count); }
             return new Outcome(true, "", plan.Count);
         }
     }
@@ -154,7 +165,7 @@ internal static class EarlessHairWriter
                     var author = EarlessHairPlan.AuthorFileFor(record, owner, path, rel, exists);
                     if (author == null || !exists(author))
                     {
-                        blocked = EarlessHairBuilder.AuthorMissing(author ?? HairPortRecord.Rel(rel)[(EarlessHairPlan.Folder.Length + 1)..]);
+                        blocked = EarlessHairBuilder.AuthorMissing(author ?? EarlessHairPlan.AuthorOfCopy(rel));
                         continue;
                     }
                     try
@@ -168,8 +179,14 @@ internal static class EarlessHairWriter
                     restored.Add(path);
                 }
 
-            EarlessHairRecord.Write(modRoot, record);
-            DeleteUnnamed(modRoot);
+            // What was pointed back is back, whatever happens to the bookkeeping after: said, so the caller reloads.
+            try
+            {
+                AfterSwaps?.Invoke();
+                if (restored.Count > 0) EarlessHairRecord.Write(modRoot, record);
+                DeleteUnnamed(modRoot);
+            }
+            catch (Exception ex) { blocked = ex.Message; }
             return new Outcome(blocked.Length == 0, blocked, restored.Count, restored);
         }
     }
@@ -201,6 +218,11 @@ internal static class EarlessHairWriter
     private static void WriteFile(string modRoot, string rel, byte[] bytes, List<string> created)
     {
         var path = Native(modRoot, rel);
+        // Only ever inside the copies' folder: a manifest path that climbs out of it fails the save, which rolls back.
+        var folder = Path.GetFullPath(Path.Combine(modRoot, EarlessHairPlan.Folder)) + Path.DirectorySeparatorChar;
+        if (!Path.GetFullPath(path).StartsWith(folder, StringComparison.OrdinalIgnoreCase))
+            throw new IOException(string.Format(Loc.Localize("HairPort.Earless.Refused.Outside.Fmt",
+                "{0} is not a path inside the mod's earless folder, so nothing was written"), rel));
         if (!File.Exists(path)) created.Add(rel);
         Directory.CreateDirectory(Path.GetDirectoryName(path)!);
         PenumbraModMeta.AtomicWrite(path, bytes);

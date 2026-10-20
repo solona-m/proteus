@@ -133,7 +133,8 @@ internal static class EarlessHair
             refusal = Unreadable;
             return null;
         }
-        if (DrawnFur(model) > 0)
+        // Every shape key too: a body slider must not open a collapsed ear again.
+        if (DrawnFur(model, shapes: true) > 0)
         {
             refusal = Loc.Localize("HairPort.Earless.Refused.Leftover", "not all of its ears could be taken out");
             return null;

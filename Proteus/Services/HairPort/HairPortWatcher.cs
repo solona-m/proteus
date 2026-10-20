@@ -224,7 +224,7 @@ public sealed partial class HairPortWatcher : IDisposable
         {
             RequestWalk();
             // Looked at again even where nothing resolves differently: with fitting off, the last look kept its key.
-            lastKey = Decide.KeyAfterPortingEdge(lastKey, wasEnabled, enabled);
+            LookAfresh();
             // Penumbra back: what waited out a back-off while it was gone is asked for again now.
             Interlocked.Exchange(ref retryMs, 0);
             schedule.Resume(now);
@@ -460,7 +460,7 @@ public sealed partial class HairPortWatcher : IDisposable
 
     private void Examine()
     {
-        string? key = lastKey;
+        string? key = Decide.KeyForLook(lastKey, Interlocked.Exchange(ref lookAfresh, 0) != 0);
         var view = Run(new Host(this), Decide.WornHair(livePartsCache), ref key);
         lastKey = key;
         if (!ReferenceEquals(view, Unchanged)) current = view;
@@ -513,6 +513,9 @@ public sealed partial class HairPortWatcher : IDisposable
 
         /// <summary>A look got an answer from the mod: the earless back-off starts over.</summary>
         void EarlessSettled() { }
+
+        /// <summary>A line for the log that something did not come out as it should.</summary>
+        void Warn(string message) => Log(message);
     }
 
     private sealed class Host(HairPortWatcher w) : IHost
@@ -566,6 +569,7 @@ public sealed partial class HairPortWatcher : IDisposable
         // The back-off lives on the watcher: a host is made for every look.
         public void RequestLookAgain() => w.LookAgainLater();
         public void EarlessSettled() => w.earlessBackoff.Reset();
+        public void Warn(string message) => w.log.Warning("hair port: {0}", message);
     }
 
     /// <summary>
