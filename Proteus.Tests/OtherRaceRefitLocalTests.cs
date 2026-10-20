@@ -27,6 +27,10 @@ public class OtherRaceRefitLocalTests(ITestOutputHelper o)
     /// <summary>Cloth faces of 1 mm² or more the Highlander refit of the shirt turns over today (a known limit).</summary>
     private const int KnownPecFolds = 4;
 
+    /// <summary>Cloth faces of 1 mm² or more the Highlander shirt lowered onto TBSE-X's Midlander body turns over today
+    /// (measured 2026-10-20; the same shirt refitted as is, Highlander to Highlander, turns 14).</summary>
+    private const int KnownLoweredFolds = 10;
+
     private static byte[] Game(string path) => HavokSkeletonLocalTests.GameFile(path);
 
     private static byte[] ShirtBytes()
@@ -159,6 +163,149 @@ public class OtherRaceRefitLocalTests(ITestOutputHelper o)
         o.WriteLine($"TBSE c0101 bent to c0301 against TBSE c0301 ({a.Positions.Length / 3} vs {b.Positions.Length / 3} "
                     + $"vertices): p50 {p50 * 1000f:F2} mm, p95 {p95 * 1000f:F2} mm, max {max * 1000f:F2} mm, "
                     + $"{within2:P1} within 2 mm");
+    }
+
+    // ── the other way: the Highlander shirt made a Midlander's (refit-race-down) ──
+
+    private const string HighlanderShirt = "chara/equipment/e6091/model/c0301e6091_top.mdl";
+
+    private static byte[] HighlanderShirtBytes()
+    {
+        string root = LocalData.Path(Lumberjack);
+        var r = PenumbraModMeta.ReadAllRedirects(root).First(x => x.GamePath == HighlanderShirt);
+        return File.ReadAllBytes(BodySizeCatalog.ResolveCaseInsensitive(root, r.File));
+    }
+
+    /// <summary>The wearer the panel builds for a Midlander man picked under a Highlander model: the game's skeleton.</summary>
+    private static OtherRaceWearer.Made MidlanderWearer(byte[] shirt)
+    {
+        var inputs = new OtherRaceWearer.Inputs(101, 301, "_top", 6091, null, null,
+            Game(OtherRaceWearer.BaseSkeletonPath(101)), Game(OtherRaceWearer.PbdPath), [],
+            EstTable.Parse(Game("chara/xls/charadb/extra_top.est")), new Dictionary<string, byte[]>());
+        return OtherRaceWearer.Build(inputs, ModelSkinReader.Read(shirt, null, null)!);
+    }
+
+    [LocalDataFact(LocalData.GameData, Lumberjack, TbseX)]
+    [Trait("Plan", "AC-refit-race-down-1")]
+    public void Tbse_x_offers_midlander_for_the_lumberjack_s_highlander_shirt()
+    {
+        var target = BodySizeCatalog.Read(LocalData.Path(TbseX));
+        var redirects = PenumbraModMeta.ReadAllRedirects(LocalData.Path(Lumberjack));
+
+        // The Lumberjack ships its own Midlander shirt: that is the one to refit.
+        var own = Assert.Single(OtherRaceRefit.Offered(HighlanderShirt, target, redirects, null, isVanilla: false));
+        Assert.Equal((101, OtherRaceRefit.Block.OwnModel, true), (own.Race, own.Blocked, own.Below));
+        Assert.Equal(Shirt, own.OwnModelPath);
+
+        // A mod that ships only the Highlander shirt: Midlander is offered, free.
+        var onlyHighlander = redirects.Where(r => !r.GamePath.Contains("c0101", StringComparison.Ordinal)).ToList();
+        var free = Assert.Single(OtherRaceRefit.Offered(HighlanderShirt, target, onlyHighlander, null, false));
+        Assert.Equal((101, OtherRaceRefit.Block.None), (free.Race, free.Blocked));
+    }
+
+    /// <summary>
+    /// Bend the Highlander shirt down to Midlander, bend the bodies it was made on down the same way, refit onto TBSE-X's
+    /// Midlander torso and finish it as the save would — measured inside the pass, against the same shirt refitted as it
+    /// is, Highlander to Highlander (TBSE's onto TBSE-X's), with no bend at all: the bend must add no fold of its own.
+    /// </summary>
+    /// <remarks>Measured 2026-10-20: 14 faces as is, 10 lowered — both the refit meeting TBSE-X's chest (#21).</remarks>
+    [LocalDataFact(LocalData.GameData, Lumberjack, Tbse, TbseX)]
+    [Trait("Plan", "AC-refit-race-down-10")]
+    [Trait("Plan", "AC-refit-race-down-2")]
+    public void A_midlander_refit_of_the_highlander_shirt_has_no_new_folds()
+    {
+        var log = Substitute.For<Dalamud.Plugin.Services.IPluginLog>();
+        var uv = new UVRemapService(log, ".");
+        var shirt = HighlanderShirtBytes();
+        var made = MidlanderWearer(shirt);
+        Assert.True(made.Wearer != null, made.Refusal);
+        var who = made.Wearer!;
+        o.WriteLine($"est: {made.Est.Outcome}");
+
+        var route = new RacialModelBake.Route(301, 101, Down: false, Lowered: true);
+        var lowered = route.Into(shirt, who, out string why);
+        Assert.True(lowered != null, why);
+        var garment = ModelPartReader.Read(lowered!)!;
+
+        // Bent down and straight back up, unrefitted: the shirt as the author made it, within half a millimetre.
+        var round = route.Back(lowered!, who, out why);
+        Assert.True(round != null, why);
+        var authored = ModelPartReader.Read(shirt)!;
+        var returned = ModelPartReader.Read(round!)!;
+        float trip = 0f;
+        for (int v = 0; v < authored.Positions.Length / 3; v++)
+            trip = MathF.Max(trip, Vector3.Distance(At(authored.Positions, v), At(returned.Positions, v)));
+        o.WriteLine($"down and back up: {trip * 1000f:F4} mm at most");
+        Assert.True(trip < 5e-4f, $"down and back up moved the shirt {trip * 1000f:F4} mm");
+
+        var madeFor = BakedBodyCatalog.Lowered(BodySizeCatalog.Read(LocalData.Path(Tbse)), 301, 101, who, ["_top"],
+                                               out var failed);
+        Assert.Empty(failed);
+        var source = Assert.Single(madeFor.For("_top", "0101"));
+        Assert.Equal("chara/equipment/e0000/model/c0101e0000_top.mdl", source.GamePath);
+
+        var target = BodySizeCatalog.Read(LocalData.Path(TbseX));
+        var onto = Assert.Single(OtherRaceRefit.OnlyRace(target, 101).For("_top", "0101"));
+        string sourcePath = madeFor.PathOf(source), targetPath = target.PathOf(onto);
+        Assert.Null(BodyRetarget.BuildPair("_top", sourcePath, targetPath, "_top", true, null, null, uv, out var pair));
+        var plan = BodyRetarget.Plan(garment, lowered!, [pair], "_top", replaceSkin: true, acrossBodies: true,
+                                     cutHidden: true);
+        plan = RefitCore.MatchSkinToBody(plan, sourcePath, targetPath, uv, true, log);
+        o.WriteLine($"onto {onto.Label}: moved up to {plan.Report.WorstMove * 1000f:F1} mm, report folded "
+                    + $"{plan.Report.Folded}, swap {plan.Report.Swap}");
+
+        var (saved, preview, refusal) = RefitCore.Finish(plan, route, who, targetPath, log);
+        Assert.True(saved != null, refusal);
+        Assert.NotNull(preview);
+        Assert.Equal(Shirt, route.SavePath(HighlanderShirt));
+        Assert.NotNull(route.Eqdp(route.SavePath(HighlanderShirt)));
+
+        int folded = ClothFolded(garment, SkinTuckSheet.Laid(lowered!, plan), o.WriteLine);
+        var planParts = ModelPartReader.Read(plan.Model)!;
+        int collapsed = RacialRouteLocalTests.Collapsed(planParts, ModelPartReader.Read(preview!)!);
+
+        // The baseline: the shirt as it is, between the two mods' Highlander torsos.
+        var tbse = BodySizeCatalog.Read(LocalData.Path(Tbse));
+        string highFrom = tbse.PathOf(tbse.For("_top", "0301").Single(b => BodySizeCatalog.RaceOf(b.GamePath) == "0301"));
+        string highTo = target.PathOf(target.For("_top", "0301").Single(b => BodySizeCatalog.RaceOf(b.GamePath) == "0301"));
+        Assert.Null(BodyRetarget.BuildPair("_top", highFrom, highTo, "_top", true, null, null, uv, out var asIsPair));
+        var asIs = BodyRetarget.Plan(authored, shirt, [asIsPair], "_top", replaceSkin: true, acrossBodies: true,
+                                     cutHidden: true);
+        asIs = RefitCore.MatchSkinToBody(asIs, highFrom, highTo, uv, true, log);
+        int baseline = ClothFolded(authored, SkinTuckSheet.Laid(shirt, asIs));
+        o.WriteLine($"cloth turned over by the refit, of 1 mm² or more: {folded} lowered, {baseline} as is; preview "
+                    + $"{collapsed} collapsed");
+        Assert.True(folded <= baseline, $"{folded} cloth faces turned over, more than the {baseline} the shirt turns as is");
+        // And no more than measured when it was made: a refit worse for both would otherwise pass unnoticed.
+        Assert.True(folded <= KnownLoweredFolds, $"{folded} cloth faces turned over, more than the {KnownLoweredFolds} known");
+        Assert.Equal(0, collapsed);
+        Assert.NotNull(ModelPartReader.Read(saved!.Model));
+
+        // Logged only: how far the result is from the author's own Midlander shirt.
+        string root = LocalData.Path(Lumberjack);
+        var mid = PenumbraModMeta.ReadAllRedirects(root).First(x => x.GamePath == Shirt);
+        var own = ModelPartReader.Read(File.ReadAllBytes(BodySizeCatalog.ResolveCaseInsensitive(root, mid.File)))!;
+        var d = NearestDistances(planParts.Positions, own.Positions);
+        Array.Sort(d);
+        o.WriteLine($"against the author's Midlander shirt: p50 {d[d.Length / 2] * 1000f:F2} mm, "
+                    + $"p95 {d[(int)(d.Length * 0.95)] * 1000f:F2} mm");
+    }
+
+    /// <summary>
+    /// The game's own bodies on the made-for side of a refit down are each race's own: Au Ra women ship no body, so a
+    /// refit of an Au Ra woman's model down to Midlander women is made for the Midlander women's body alone — never that
+    /// body filed again as an Au Ra one, which the lowering would bend a second time.
+    /// </summary>
+    [LocalDataFact(LocalData.GameData)]
+    [Trait("Plan", "EDGE-refit-race-down-3")]
+    public void A_game_made_for_side_below_is_each_race_s_own_body()
+    {
+        var data = new Lumina.GameData(LocalData.Path(LocalData.GameData));
+        byte[]? Read(string path) => data.GetFile(path)?.Data;
+        var made = OtherRaceRefit.MadeForBelow(VanillaBodyCatalog.Key, null, null, 1401, 201, Read)!;
+        Assert.DoesNotContain(made.Options, o => BodySizeCatalog.RaceOf(o.GamePath) == "1401");
+        Assert.Contains(made.Options, o => BodySizeCatalog.RaceOf(o.GamePath) == "0201" && o.Slot == "_top");
+        Assert.Equal(VanillaBodyCatalog.Dir, made.ModRoot);
     }
 
     private static Vector3 At(float[] p, int v) => new(p[v * 3], p[v * 3 + 1], p[v * 3 + 2]);
