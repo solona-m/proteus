@@ -237,7 +237,7 @@ public sealed class Plugin : IDalamudPlugin
         statusWindow = new StatusWindow(compositor, discovery, penumbra, config, designBindings,
             presets, editRouter, uvMapDl, uvRemap,
             modCreation, onionImport, contentImport, luminisImport, emissiveImport, eyeImport, modExport,
-            textureLoader, partsPanel, hatCompat, hairPort, autoRefit,
+            textureLoader, partsPanel, hatCompat, hairPort, autoRefit, modMoves,
             new LogExportService(capture, compositor, penumbra, config, dataDir));
 
         liveMesh = new Gui.LiveMeshOverlay(ObjectTable, DataManager, penumbra, ChatGui, log);
