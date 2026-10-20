@@ -233,8 +233,9 @@ internal static class HairPortBaker
     /// <summary>
     /// Take the ears out of a Miqo'te hairstyle, in place: every triangle with a corner on the fur or the ear's own skin
     /// (<see cref="HatCompatSolve.ReadEarGeometry"/>) collapses, so nothing is drawn where the target has no ears.
+    /// Also how a Miqo'te's own hairstyle is made earless (<see cref="EarlessHair.Make"/>).
     /// </summary>
-    private static int HideEars(byte[] model, SecondSkinWriter.Source src)
+    internal static int HideEars(byte[] model, SecondSkinWriter.Source src)
     {
         var meshes = HatCompatSolve.ReadLod0Meshes(model);
         var ears = HatCompatSolve.ReadEarGeometry(model, src, meshes);

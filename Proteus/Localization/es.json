@@ -5386,5 +5386,53 @@
   "HairPort.Scan.UndoChecked.Confirm.Fmt": {
     "message": "Vuelve a pulsar para deshacer {0} peinado(s) definitivamente",
     "description": ""
+  },
+  "HairPort.Earless.Label": {
+    "message": "Quitar las orejas a los mods de pelo de miqo'te",
+    "description": ""
+  },
+  "HairPort.Earless.Tip": {
+    "message": "Para una miqo'te: cuando llevas un mod de pelo cuyo peinado tiene orejas de\ngato, Proteus hace una copia sin orejas y apunta la opción del mod a esa copia.\nLos archivos del autor nunca se cambian.\n\nEsto cambia el propio mod, así que todos los personajes que se vean con ese mod\nactivo —en todas las colecciones, y cualquiera con quien lo compartas— no tienen\norejas con él. Al desactivarlo, Proteus devuelve las orejas en todos los mods que\ncambió. Funciona con o sin el ajuste de mods de pelo hechos para otra raza.",
+    "description": ""
+  },
+  "HairPort.Settings.Earless.Fmt": {
+    "message": "El peinado {0} de {1} se muestra sin orejas, para todos los personajes que se vean con este mod activo, en todas las colecciones. Al desactivar el ajuste vuelven.",
+    "description": ""
+  },
+  "HairPort.Settings.EarlessOptionHint.Fmt": {
+    "message": "Este mod tiene su propia opción sin orejas: {0}",
+    "description": ""
+  },
+  "HairPort.Earless.Chat": {
+    "message": "[Proteus] Se han quitado las orejas de gato de este peinado: Proteus ha apuntado su mod a una copia sin orejas, así que todos los personajes que se vean con este mod activo, en todas las colecciones, ya no tienen orejas con él. Desactiva «Quitar las orejas a los mods de pelo de miqo'te» en /proteus > Ajustes > Pelo para devolverlas.",
+    "description": ""
+  },
+  "HairPort.Earless.RestoreBlocked.Fmt": {
+    "message": "[Proteus] No se pudieron devolver las orejas en {0}: {1}",
+    "description": ""
+  },
+  "HairPort.Earless.Restored.Fmt": {
+    "message": "Orejas devueltas a {0} peinado(s).",
+    "description": ""
+  },
+  "HairPort.Earless.Refused.AuthorMissing.Fmt": {
+    "message": "falta el archivo del autor {0}, así que se ha conservado la copia sin orejas",
+    "description": ""
+  },
+  "HairPort.Earless.Refused.Changed": {
+    "message": "el mod cambió mientras Proteus trabajaba en él, así que no se escribió nada",
+    "description": ""
+  },
+  "HairPort.Earless.Refused.Leftover": {
+    "message": "no se pudieron quitar todas sus orejas",
+    "description": ""
+  },
+  "HairPort.Earless.Refused.RecordUnreadable": {
+    "message": "No se pudo leer el registro de Proteus de los peinados sin orejas de este mod (Proteus/earlesshair.json), así que no se cambió nada.",
+    "description": ""
+  },
+  "HairPort.Earless.Refused.Outside.Fmt": {
+    "message": "{0} no es una ruta dentro de la carpeta sin orejas del mod, así que no se escribió nada",
+    "description": ""
   }
 }

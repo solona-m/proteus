@@ -5386,5 +5386,53 @@
   "HairPort.Scan.UndoChecked.Confirm.Fmt": {
     "message": "Нажмите ещё раз, чтобы окончательно отменить причёски: {0}",
     "description": ""
+  },
+  "HairPort.Earless.Label": {
+    "message": "Убирать уши у модов причёсок мико'те",
+    "description": ""
+  },
+  "HairPort.Earless.Tip": {
+    "message": "Для мико'те: когда вы надеваете мод причёски с кошачьими ушами, Proteus\nделает её копию без ушей и направляет опцию мода на эту копию. Файлы автора\nникогда не меняются.\n\nЭто меняет сам мод, поэтому у каждого персонажа, отображаемого с этим модом —\nво всех коллекциях и у всех, с кем вы им делитесь, — ушей с ним нет. Если\nвыключить, Proteus вернёт уши во все изменённые им моды. Работает и с подгонкой\nмодов причёсок для другой расы, и без неё.",
+    "description": ""
+  },
+  "HairPort.Settings.Earless.Fmt": {
+    "message": "Причёска {0} из {1} отображается без ушей — у каждого персонажа, отображаемого с этим модом, во всех коллекциях. Если выключить настройку, они вернутся.",
+    "description": ""
+  },
+  "HairPort.Settings.EarlessOptionHint.Fmt": {
+    "message": "У этого мода есть своя опция без ушей: {0}",
+    "description": ""
+  },
+  "HairPort.Earless.Chat": {
+    "message": "[Proteus] Кошачьи уши этой причёски убраны: Proteus направил её мод на копию без ушей, поэтому у каждого персонажа, отображаемого с этим модом, во всех коллекциях, теперь нет ушей. Чтобы вернуть их, выключите «Убирать уши у модов причёсок мико'те» в /proteus > Настройки > Волосы.",
+    "description": ""
+  },
+  "HairPort.Earless.RestoreBlocked.Fmt": {
+    "message": "[Proteus] Не удалось вернуть уши в {0}: {1}",
+    "description": ""
+  },
+  "HairPort.Earless.Restored.Fmt": {
+    "message": "Уши возвращены на причёсках: {0}.",
+    "description": ""
+  },
+  "HairPort.Earless.Refused.AuthorMissing.Fmt": {
+    "message": "файл автора {0} отсутствует, поэтому копия без ушей оставлена",
+    "description": ""
+  },
+  "HairPort.Earless.Refused.Changed": {
+    "message": "мод изменился, пока Proteus с ним работал, поэтому ничего не записано",
+    "description": ""
+  },
+  "HairPort.Earless.Refused.Leftover": {
+    "message": "не все её уши удалось убрать",
+    "description": ""
+  },
+  "HairPort.Earless.Refused.RecordUnreadable": {
+    "message": "Запись Proteus о причёсках этого мода без ушей (Proteus/earlesshair.json) не удалось прочитать, поэтому ничего не изменено.",
+    "description": ""
+  },
+  "HairPort.Earless.Refused.Outside.Fmt": {
+    "message": "{0} — не путь внутри папки мода для копий без ушей, поэтому ничего не записано",
+    "description": ""
   }
 }
