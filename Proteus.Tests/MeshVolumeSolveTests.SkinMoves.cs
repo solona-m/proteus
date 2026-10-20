@@ -502,14 +502,21 @@ public partial class MeshVolumeSolveTests
         solve.Paint(At(model.Positions, index[10, 10]), 1f, 0.002f);
         var after = solve.Positions();
 
+        // The same sheet as cloth, which no edge holds: what the stroke gives each point without the fade.
+        var (clothModel, _) = SkinSheet(21, material: "/mt_test.mtrl");
+        var cloth = new MeshVolumeSolve(clothModel);
+        cloth.Paint(At(model.Positions, index[10, 10]), 1f, 0.002f);
+        var free = cloth.Positions();
+
         for (int k = 0; k < 21; k++)
         {
             Assert.Equal(0f, At(after, index[0, k]).Y);
             Assert.Equal(0f, At(after, index[k, 20]).Y);
         }
-        // 30 mm in and further: the whole stroke.
-        for (int i = 3; i <= 17; i++) Assert.Equal(0.002f, At(after, index[i, 10]).Y, 1e-6f);
-        for (int i = 0; i < 3; i++) Assert.True(At(after, index[i, 10]).Y <= At(after, index[i + 1, 10]).Y);
+        // Past 30 mm in: the whole stroke.
+        for (int i = 4; i <= 16; i++) Assert.Equal(At(free, index[i, 10]).Y, At(after, index[i, 10]).Y, 1e-7f);
+        float Share(int i) => At(after, index[i, 10]).Y / At(free, index[i, 10]).Y;
+        for (int i = 0; i < 4; i++) Assert.True(Share(i) <= Share(i + 1));
     }
 
     [Fact]

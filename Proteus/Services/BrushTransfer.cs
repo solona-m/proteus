@@ -107,6 +107,8 @@ internal static class BrushTransfer
         }
 
         solve.ImportEdit(samples, edit.WindPainted);
+        // This size's cloth sampled the brushed size's, which rode that size's skin: held off this size's own skin.
+        if (edit.SkinMoved) solve.GuardImportedRiders(SkinFollow.Bind(solve.FollowInputs));
         return solve;
     }
 

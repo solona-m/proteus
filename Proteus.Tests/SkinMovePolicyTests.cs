@@ -47,13 +47,13 @@ public class SkinMovePolicyTests
     public void SkinMovePolicy_WaitsForTheBinding() => Assert.False(SkinMovePolicy.Applies(true, false, followReady: false));
 
     [Theory]
-    [InlineData(false, false, SkinMovePolicy.SkinRowKind.FixedTicked)]
-    [InlineData(true, false, SkinMovePolicy.SkinRowKind.Lockable)]
-    [InlineData(false, true, SkinMovePolicy.SkinRowKind.MoveDisabled)]
-    [InlineData(true, true, SkinMovePolicy.SkinRowKind.MovePickable)]
+    [InlineData(false, false, "FixedTicked")]
+    [InlineData(true, false, "Lockable")]
+    [InlineData(false, true, "MoveDisabled")]
+    [InlineData(true, true, "MovePickable")]
     [Trait("Plan", "AC-studio-move-skin-6")]
-    public void SkinMovePolicy_SkinRowKinds(bool skinMoves, bool moving, SkinMovePolicy.SkinRowKind expected)
-        => Assert.Equal(expected, SkinMovePolicy.SkinRow(skinMoves, moving));
+    public void SkinMovePolicy_SkinRowKinds(bool skinMoves, bool moving, string expected)
+        => Assert.Equal(expected, SkinMovePolicy.SkinRow(skinMoves, moving).ToString());
 
     [Theory]
     [InlineData(false, false, false, true)]   // cloth: always
