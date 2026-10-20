@@ -256,6 +256,25 @@ public sealed class HairPortLocalTests(ITestOutputHelper o)
         o.WriteLine($"{withFur} of the Miqo'te hairstyles carried fur");
     }
 
+    /// <summary>
+    /// The reported pack (Loosened Bun) is a mashup of the game's Miqo'te h0194 and h0195, and like them was refused
+    /// for a Lalafell: its fur, turned over by the Lalafell's own ear bones, was counted though it is taken out.
+    /// </summary>
+    [LocalDataFact(LocalData.GameData)]
+    [Trait("Plan", "EDGE-hair-race-port-4")]
+    public void Miqote_hair_with_fur_ports_to_a_lalafell()
+    {
+        var game = Load();
+        foreach (int id in new[] { 194, 195 })
+        {
+            var src = game.File(HairPath(801, id))!;
+            var result = HairPortBaker.Prepare(src, 801, 1201, id, game.Pbd, game.ExtraBones(1201, id), game.Head(801),
+                                               game.Head(1201), out var why);
+            Assert.True(result != null, $"h{id:D4}: {why}");
+            Assert.True(result!.FurHidden > 0, $"h{id:D4} no longer carries fur");
+        }
+    }
+
     /// <summary>A port keeps every shape key, LOD and mesh of the game's own hairstyles that carry them.</summary>
     [LocalDataFact(LocalData.GameData)]
     [Trait("Plan", "EDGE-hair-race-port-26")]

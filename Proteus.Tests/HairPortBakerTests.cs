@@ -170,4 +170,37 @@ public class HairPortBakerTests
         Assert.Null(result);
         Assert.Contains("inside out", why);
     }
+
+    /// <summary>
+    /// A target whose deformer has ear bones of its own turns a Miqo'te's fur over — a Lalafell's does — but the fur is
+    /// taken out of the port, so it is not counted against it.
+    /// </summary>
+    [Fact]
+    [Trait("Plan", "EDGE-hair-race-port-4")]
+    public void Fur_the_bend_turns_over_is_not_counted()
+    {
+        var mirror = Matrix4x4.CreateScale(-1f, 1f, 1f);
+        var pbd = new XivLiveMesh.PbdFile(BuildPbd(
+        [
+            (101, ushort.MaxValue, new() { ["j_kao"] = Matrix4x4.Identity }),
+            (201, 101, new() { ["j_kao"] = Matrix4x4.Identity }),
+            (801, 201, new() { ["j_kao"] = Matrix4x4.CreateTranslation(Offset(801)) }),
+            (1101, 101, new() { ["j_kao"] = Matrix4x4.CreateTranslation(Offset(1101)) }),
+            (1201, 1101, new() { ["j_kao"] = Matrix4x4.Identity, ["j_mimi_l"] = mirror }),
+        ]));
+        var ear = Sphere("/mt_c0801h0130_hir_a.mtrl", Head + Offset(801) + new Vector3(0.07f, 0.08f, 0f), 0.02f,
+                         [("j_mimi_l", 1f)], rings: 4, segments: 6);
+        var hair = HairModel(801, extra: ear);
+        // Counted, the turned fur alone would be over the limit.
+        var a = ModelPartReader.Read(hair)!;
+        var bent = RacialModelBake.Port(hair, 801, 1201, pbd, HairPortBaker.ParentOf, out var bendWhy);
+        Assert.True(bent != null, bendWhy);
+        Assert.True(HairPortBaker.Folded(a, ModelPartReader.Read(bent!)!)
+                    > HairPortBaker.FoldedShare * a.Parts.Where(p => p.Island == -1).Sum(p => p.TriangleCount),
+                    "the bend no longer turns the fur over");
+
+        var result = HairPortBaker.Prepare(hair, 801, 1201, Id, pbd, NoExtra, HeadModel(801), HeadModel(1201), out var why);
+        Assert.True(result != null, why);
+        Assert.True(result!.FurHidden > 0);
+    }
 }
