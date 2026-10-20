@@ -43,7 +43,7 @@ public class UVMapDownloadServiceTests : IDisposable
 
     private static void WaitFor(Func<bool> done)
     {
-        for (int i = 0; i < 500 && !done(); i++) Thread.Sleep(10);
+        for (int i = 0; i < 3000 && !done(); i++) Thread.Sleep(10);   // 30 s: the full suite starves the thread pool
         Assert.True(done());
     }
 
@@ -201,7 +201,7 @@ public class UvMapsCoordinatorTests : IDisposable
 
     private static void WaitFor(Func<bool> done)
     {
-        for (int i = 0; i < 500 && !done(); i++) Thread.Sleep(10);
+        for (int i = 0; i < 3000 && !done(); i++) Thread.Sleep(10);   // 30 s: the full suite starves the thread pool
         Assert.True(done());
     }
 
