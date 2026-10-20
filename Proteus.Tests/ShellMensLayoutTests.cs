@@ -69,6 +69,35 @@ public class ShellMensLayoutTests
 
     [Fact]
     [Trait("Plan", "EDGE-tbse-uvmap-13")]
+    public void Women_way_unmirror_drops_his_layout() // [EDGE-tbse-uvmap-13]
+    {
+        const string mv = UVRemapService.MaleVanillaSpace;
+        // Nothing un-mirrored: his layout, in the space it was read in.
+        Assert.Equal((mv, "gen2"), SecondSkinService.MenAfterUnmirror(mv, "gen2", unmirror: false, menUnmirror: false));
+        // Un-mirrored by the men's maps: kept (the women's layers are then native to the shell anyway).
+        Assert.Equal((mv, "gen2"), SecondSkinService.MenAfterUnmirror(mv, "gen2", unmirror: true, menUnmirror: true));
+        // Un-mirrored the women's way: dropped, so the woman's layer takes no route into a layout the shell has left.
+        Assert.Equal(((string?)null, (string?)null), SecondSkinService.MenAfterUnmirror(mv, "gen2", unmirror: true, menUnmirror: false));
+        Assert.Equal(((string?)null, (string?)null), SecondSkinService.MenAfterUnmirror(null, "gen3", unmirror: false, menUnmirror: false));
+
+        // And the build feeds exactly these into the per-layer decision (no compositor harness: read from source).
+        var src = File.ReadAllText(RepoFile("Proteus", "Services", "SecondSkinService.ShellSetBuild.cs"));
+        Assert.Contains("(menLayout, menOwnSpace) = MenAfterUnmirror(menLayout, menOwnSpace, unmirror, menUnmirror);", src);
+        Assert.Contains("BodyLayerSource(d, menLayout, menUnmirror, s.UvSpace, menOwnSpace,", src);
+    }
+
+    private static string RepoFile(params string[] parts)
+    {
+        for (var d = new DirectoryInfo(System.AppContext.BaseDirectory); d != null; d = d.Parent)
+        {
+            var p = Path.Combine([d.FullName, .. parts]);
+            if (File.Exists(p)) return p;
+        }
+        throw new FileNotFoundException(Path.Combine(parts));
+    }
+
+    [Fact]
+    [Trait("Plan", "EDGE-tbse-uvmap-13")]
     public void Vanilla_gate_applies_to_male_vanilla_parts() // [EDGE-tbse-uvmap-13]
     {
         // A man's vanilla part reads as gen2 to the shell, so the "Overlay gen2/vanilla" gate applies to it as today.

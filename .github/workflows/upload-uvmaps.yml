@@ -37,7 +37,7 @@ jobs:
             Write-Error "No tag: push a uvmaps-* tag or give the dispatch a tag input."
             exit 1
           }
-          if ($tag -notmatch '^uvmaps-v\d+$') {
+          if ($tag -cnotmatch '^uvmaps-v\d+\z') {
             Write-Error "Tag '$tag' is not of the form uvmaps-v<number>."
             exit 1
           }

@@ -727,6 +727,15 @@ public sealed partial class SecondSkinService
     }
 
     /// <summary>
+    /// The men's layout and the space it was read in, once the shell has (or has not) been un-mirrored: kept when nothing
+    /// was un-mirrored or the men's maps did it, dropped when the shell was un-mirrored the women's way (a layer of his own
+    /// is on it) — the shell has then left his layout, and no woman's layer may be carried into it.
+    /// </summary>
+    internal static (string? Layout, string? OwnSpace) MenAfterUnmirror(string? menLayout, string? spaceBefore, bool unmirror,
+                                                                        bool menUnmirror)
+        => menLayout == null || (unmirror && !menUnmirror) ? (null, null) : (menLayout, spaceBefore);
+
+    /// <summary>
     /// The space a man's vanilla parts are un-mirrored into for a woman's asymmetric art — only when EVERY body layer of
     /// the shell is a woman's art taking a men's route (vertices are the whole shell's, and a man's own layer must see
     /// them as today) — or null.

@@ -774,9 +774,7 @@ public sealed partial class SecondSkinService
             unmirror = unmirrorInto != null;
             // No part could be un-mirrored after all: the men's un-mirror falls away with it.
             menUnmirror &= unmirror;
-            // Un-mirrored the women's way (a layer of his own is on the shell): the shell has left his layout, so no
-            // woman's layer may be carried into it.
-            if (unmirror && !menUnmirror) menLayout = null;
+            (menLayout, menOwnSpace) = MenAfterUnmirror(menLayout, menOwnSpace, unmirror, menUnmirror);
             if (!unmirror) Array.Clear(unmirrorPart);
         }
 
