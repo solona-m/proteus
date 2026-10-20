@@ -2855,9 +2855,25 @@
     "message": "左右镜像",
     "description": ""
   },
-  "Parts.Brush.Mirror.Tip": {
-    "message": "以身体中心为轴，同时镜像涂抹两侧。",
-    "description": ""
+  "Parts.Mirror.Tip": {
+    "message": "以身体中心为轴，同时镜像编辑两侧。笔刷也会涂抹镜像侧；移动、旋转和缩放会以镜像方式移动另一侧对应的布料。本身左右对称的部件会保持居中。",
+    "description": "Tooltip on the Mirror left/right checkbox, shown under the brushes and under Move, Rotate and Scale."
+  },
+  "Parts.Move.Mirror.Paired.Fmt": {
+    "message": "镜像：所选 {1:N0} 个点中有 {0:N0} 个在另一侧有对应点。",
+    "description": "{0} is how many selected points matched a point on the other side; {1} is how many points are selected."
+  },
+  "Parts.Move.Mirror.Held.Fmt": {
+    "message": "其中 {0:N0} 个对应点已锁定，保持不动。",
+    "description": "{0} is how many of the matching points are locked."
+  },
+  "Parts.Move.Mirror.None": {
+    "message": "镜像：另一侧没有与此选择对应的部分，因此只移动这一侧。",
+    "description": "Shown under Move, Rotate and Scale with Mirror on when nothing matched."
+  },
+  "Parts.Move.Mirror.Centred": {
+    "message": "镜像：此选择本身左右对称，因此作为一个整体移动并保持居中。横向移动和横向旋转会被忽略。",
+    "description": "Shown under Move, Rotate and Scale with Mirror on when the selection crosses the centre and mirrors itself."
   },
   "Parts.Brush.Lock.Hint": {
     "message": "Shift+点击部件可将其锁定。",

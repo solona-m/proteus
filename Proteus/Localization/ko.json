@@ -2855,9 +2855,25 @@
     "message": "좌우 대칭",
     "description": ""
   },
-  "Parts.Brush.Mirror.Tip": {
-    "message": "몸의 중심을 기준으로 양쪽을 동시에 대칭으로 칠합니다.",
-    "description": ""
+  "Parts.Mirror.Tip": {
+    "message": "몸의 중심을 기준으로 양쪽을 동시에 대칭으로 편집합니다. 브러시는 대칭 쪽도 칠하고, 이동·회전·크기 조절은 반대쪽의 대응하는 천을 대칭으로 움직입니다. 그 자체로 좌우 대칭인 부분은 중앙에 유지됩니다.",
+    "description": "Tooltip on the Mirror left/right checkbox, shown under the brushes and under Move, Rotate and Scale."
+  },
+  "Parts.Move.Mirror.Paired.Fmt": {
+    "message": "좌우 대칭: 선택한 {1:N0}개 점 중 {0:N0}개가 반대쪽에 대응점이 있습니다.",
+    "description": "{0} is how many selected points matched a point on the other side; {1} is how many points are selected."
+  },
+  "Parts.Move.Mirror.Held.Fmt": {
+    "message": "대응점 중 {0:N0}개는 잠겨 있어 움직이지 않습니다.",
+    "description": "{0} is how many of the matching points are locked."
+  },
+  "Parts.Move.Mirror.None": {
+    "message": "좌우 대칭: 반대쪽에 이 선택과 대응하는 것이 없어 이쪽만 움직입니다.",
+    "description": "Shown under Move, Rotate and Scale with Mirror on when nothing matched."
+  },
+  "Parts.Move.Mirror.Centred": {
+    "message": "좌우 대칭: 이 선택은 그 자체로 좌우 대칭이라 한 덩어리로 움직이며 중앙에 유지됩니다. 옆으로의 이동과 회전은 제외됩니다.",
+    "description": "Shown under Move, Rotate and Scale with Mirror on when the selection crosses the centre and mirrors itself."
   },
   "Parts.Brush.Lock.Hint": {
     "message": "Shift+클릭으로 부위를 잠급니다.",
