@@ -2855,9 +2855,25 @@
     "message": "Espejo izquierda/derecha",
     "description": ""
   },
-  "Parts.Brush.Mirror.Tip": {
-    "message": "Pinta ambos lados a la vez, reflejados respecto al centro del cuerpo.",
-    "description": ""
+  "Parts.Mirror.Tip": {
+    "message": "Trabaja ambos lados a la vez, reflejados respecto al centro del cuerpo. Los pinceles también pintan la imagen reflejada; Mover, Rotar y Escalar mueven la tela correspondiente del otro lado de forma reflejada. Una pieza que es su propio reflejo se queda centrada.",
+    "description": "Tooltip on the Mirror left/right checkbox, shown under the brushes and under Move, Rotate and Scale."
+  },
+  "Parts.Move.Mirror.Paired.Fmt": {
+    "message": "Espejo: {0:N0} de {1:N0} puntos seleccionados tienen pareja en el otro lado.",
+    "description": "{0} is how many selected points matched a point on the other side; {1} is how many points are selected."
+  },
+  "Parts.Move.Mirror.Held.Fmt": {
+    "message": "{0:N0} de las parejas están bloqueadas y no se mueven.",
+    "description": "{0} is how many of the matching points are locked."
+  },
+  "Parts.Move.Mirror.None": {
+    "message": "Espejo: nada del otro lado coincide con esta selección, así que solo se mueve este lado.",
+    "description": "Shown under Move, Rotate and Scale with Mirror on when nothing matched."
+  },
+  "Parts.Move.Mirror.Centred": {
+    "message": "Espejo: esta selección es su propio reflejo, así que se mueve como una sola pieza y se queda centrada. Se omiten los movimientos y giros laterales.",
+    "description": "Shown under Move, Rotate and Scale with Mirror on when the selection crosses the centre and mirrors itself."
   },
   "Parts.Brush.Lock.Hint": {
     "message": "Mayús-clic en una pieza para bloquearla.",

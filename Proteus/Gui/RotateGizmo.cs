@@ -54,7 +54,11 @@ public sealed class RotateGizmo
     /// <summary>The whole drag so far as one model-space transform about the pivot the drag started at.</summary>
     public Matrix4x4 Transform { get; private set; } = Matrix4x4.Identity;
 
-    private Vector3 dragPivot, dragAxis;
+    /// <summary>The pivot the current or last drag started at — what <see cref="Transform"/> turns about. Kept after
+    /// release, so the frame a drag ends can still read it.</summary>
+    public Vector3 DragPivot { get; private set; }
+
+    private Vector3 dragAxis;
     private Vector2 pressMouse, grabTangent;
     private float pixelsPerRadian, grabTheta;
     private float dragLen;
@@ -65,7 +69,7 @@ public sealed class RotateGizmo
     {
         Started = Ended = false;
         Frame = ImGui.GetFrameCount();
-        var centre = Active != Handle.None ? dragPivot : pivot;
+        var centre = Active != Handle.None ? DragPivot : pivot;
 
         if (toScreen(centre) is not { } sc) { CancelHover(); return; }
         float len = Active != Handle.None ? dragLen : ModelLengthForPixels(centre, sc, toScreen);
@@ -84,7 +88,7 @@ public sealed class RotateGizmo
             else
             {
                 Angle = Vector2.Dot(mouse - pressMouse, grabTangent) / pixelsPerRadian;
-                Transform = About(dragPivot, dragAxis, Angle);
+                Transform = About(DragPivot, dragAxis, Angle);
             }
         }
         else
@@ -103,7 +107,7 @@ public sealed class RotateGizmo
                     var along = ahead - behind;
                     float pixels = along.Length();
                     Active = Hovered;
-                    dragPivot = centre;
+                    DragPivot = centre;
                     dragAxis = axis;
                     dragLen = len;
                     grabTheta = theta;
