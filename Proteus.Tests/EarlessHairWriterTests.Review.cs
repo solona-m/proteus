@@ -167,6 +167,38 @@ public partial class EarlessHairWriterTests
     }
 
     [Fact]
+    [Trait("Plan", "EDGE-earless-miqote-hair-10")]
+    public void A_swap_that_matches_nothing_is_not_saved_or_counted()
+    {
+        using var mod = Cut();
+        var plan = EarlessHairBuilder.Build(mod.Root, Worn);
+        // Between the plan's check and the swap, the redirect names something else: the swap matches nothing.
+        void Repoint(string file) => File.WriteAllText(Path.Combine(mod.Root, "meta.json"),
+            System.Text.RegularExpressions.Regex.Replace(mod.Manifest,
+                "(\"" + System.Text.RegularExpressions.Regex.Escape(Worn) + "\"\\s*:\\s*)\"[^\"]*\"", "$1\"" + file + "\""));
+        mod.Put("other.mdl", EaredHairModel(801, radius: 0.102f));
+        EarlessHairWriter.BeforeSwap = _ => Repoint("other.mdl");
+        EarlessHairWriter.Outcome saved;
+        try { saved = EarlessHairWriter.Save(mod.Root, plan.Writes); }
+        finally { EarlessHairWriter.BeforeSwap = null; }
+        Assert.False(saved.Ok);
+        Assert.Equal("other.mdl", Serves(mod, "Cut", "Long"));
+        Assert.False(EarlessHairRecord.Exists(mod.Root));
+        Assert.False(mod.Has(Copy));
+
+        // And a restore whose swap matches nothing counts nothing and keeps what it would have taken back.
+        Repoint("long.mdl");
+        Assert.True(Convert(mod).Ok);
+        EarlessHairWriter.BeforeSwap = _ => Repoint("other.mdl");
+        EarlessHairWriter.Outcome restored;
+        try { restored = EarlessHairWriter.Restore(mod.Root); }
+        finally { EarlessHairWriter.BeforeSwap = null; }
+        Assert.Equal(0, restored.Count);
+        Assert.Empty(restored.RestoredPaths);
+        Assert.Equal("other.mdl", Serves(mod, "Cut", "Long"));
+    }
+
+    [Fact]
     [Trait("Plan", "EDGE-earless-miqote-hair-7")]
     [Trait("Plan", "EDGE-earless-miqote-hair-11")]
     public void An_edited_copy_is_not_spread_to_another_place()

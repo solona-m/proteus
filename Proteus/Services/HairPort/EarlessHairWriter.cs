@@ -174,6 +174,7 @@ internal static class EarlessHairWriter
                     }
                     try
                     {
+                        BeforeSwap?.Invoke(restored.Count);
                         if (PenumbraModMeta.SwapOptionRedirects(modRoot, owner.Group, owner.Option,
                                 new Dictionary<string, (string, string)>(StringComparer.OrdinalIgnoreCase) { [path] = (rel, author) }) != 1)
                             continue;   // not swapped after all: nothing put back, nothing counted

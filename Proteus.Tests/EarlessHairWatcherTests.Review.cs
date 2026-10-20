@@ -27,6 +27,24 @@ public partial class EarlessHairWatcherTests
     }
 
     [Fact]
+    [Trait("Plan", "AC-earless-miqote-hair-9")]
+    [Trait("Plan", "EDGE-earless-miqote-hair-37")]
+    public void Proteus_back_on_looks_at_the_worn_hairstyle_again()
+    {
+        using var s = new Setup();
+        s.Run();
+        s.Reloaded();
+        string? key = null;
+        HairPortWatcher.Run(s.Host, Worn, ref key);
+        s.Host.Watching = false;
+        HairPortWatcher.Run(s.Host, Worn, ref key);
+        s.Host.Watching = true;
+        var view = HairPortWatcher.Run(s.Host, Worn, ref key);
+        Assert.NotSame(HairPortWatcher.Unchanged, view);
+        Assert.True(view.Earless);
+    }
+
+    [Fact]
     [Trait("Plan", "EDGE-earless-miqote-hair-31")]
     public void A_pass_notice_stays_on_the_panel_until_a_look_has_its_own_message()
     {

@@ -597,7 +597,12 @@ public sealed partial class HairPortWatcher : IDisposable
         var (race, id) = HairPortPlan.Parse(worn)!.Value;
 
         // Proteus off (a refresh can still be asked for from the settings): nothing is written into any mod.
-        if (!host.Watching) return new View(worn);
+        if (!host.Watching)
+        {
+            // Nothing was judged: once Proteus is back, the same hairstyle is looked at, not taken as unchanged.
+            lastKey = null;
+            return new View(worn);
+        }
 
         // Neither fitting nor the earless setting on: all there can be to do is put back ears an earless copy took off
         // — one left by a config lost, an older build, or a mod imported with it — so only the worn path is resolved.
