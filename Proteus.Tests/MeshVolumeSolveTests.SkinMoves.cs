@@ -887,8 +887,95 @@ public partial class MeshVolumeSolveTests
         var solve = SkinSolve(l.Model);
         solve.Paint(At(l.Model.Positions, l.SkinAt[11, 11]), 0.03f, 0.006f);
         solve.EndStroke();
-        Assert.Equal(0, SkinPoke.Uncovered(l.Model, solve.Positions(), 0.001f));
-        Assert.Equal(0, Folded(l.Model, solve.Positions()));
+        var after = solve.Positions();
+
+        // Every skin point stands no further outside the cloth over it than the author's 0.5 mm: measured on the cloth's
+        // FACES, between its vertices, where the peak of a 6 mm push would otherwise stand 2.5 mm through.
+        Assert.Equal(0, SkinPoke.MadeWorse(l.Model, after));
+        var cloth = l.Model.Parts[0].Triangles;
+        foreach (int s in l.SkinAt)
+        {
+            var p = At(after, s);
+            for (int t = 0; t + 2 < cloth.Length; t += 3)
+            {
+                var a = At(after, cloth[t]); var b = At(after, cloth[t + 1]); var c = At(after, cloth[t + 2]);
+                var q = BrushTransfer.ClosestOnTriangle(p, a, b, c, out float u, out float v, out float w);
+                if (u < 0.02f || v < 0.02f || w < 0.02f || Vector2.Distance(new(p.X, p.Z), new(q.X, q.Z)) > 1e-4f) continue;
+                Assert.True(p.Y - q.Y <= 0.0005f + SkinThroughCloth.Tolerance + 1e-5f,
+                            $"skin {s} stands {(p.Y - q.Y) * 1000f:F2} mm through the cloth, the author's 0.5");
+            }
+        }
+        Assert.Equal(0, Folded(l.Model, after));
+    }
+
+    /// <summary>
+    /// What the guard cannot lift — cloth locked over skin pushed through it — is counted after every operation, so the
+    /// panel can log it; with the cloth free, the same stroke leaves none.
+    /// </summary>
+    [Fact]
+    [Trait("Plan", "AC-studio-move-skin-4")]
+    [Trait("Plan", "EDGE-studio-move-skin-6")]
+    public void WhatTheGuardLeavesIsCountedForTheLog()
+    {
+        var l = Layered(21, 0.001f);
+        var locked = SkinSolve(l.Model);
+        locked.SetLocked(l.Model.Parts[0].Triangles);
+        int before = locked.GuardVersion;
+        locked.Paint(At(l.Model.Positions, l.SkinAt[10, 10]), 0.04f, 0.004f);
+        locked.EndStroke();
+        Assert.Equal(before + 1, locked.GuardVersion);
+        Assert.True(locked.SkinStillOutside > 0, "skin through locked cloth went uncounted");
+
+        var free = SkinSolve(l.Model);
+        free.Paint(At(l.Model.Positions, l.SkinAt[10, 10]), 0.04f, 0.004f);
+        free.EndStroke();
+        Assert.Equal(0, free.SkinStillOutside);
+    }
+
+    /// <summary>
+    /// The guard lifts riders of the skin it moved, not every bound cloth point it recorded: cloth the user deflated onto
+    /// skin that stayed (an open edge holds it) keeps where they put it.
+    /// </summary>
+    [Fact]
+    [Trait("Plan", "AC-studio-move-skin-4")]
+    public void ClothDeflatedOntoStillSkinIsNotLifted()
+    {
+        var l = Layered(21, 0.001f);
+        var solve = SkinSolve(l.Model);
+        // The skin's first three rows locked: one stroke moves the skin further in, and deflates the cloth over the
+        // locked rows below the skin, which stays where it is there.
+        solve.SetLocked(Enumerable.Range(0, 21).SelectMany(j => new[] { l.SkinAt[0, j], l.SkinAt[1, j], l.SkinAt[2, j] }));
+        solve.Paint(At(l.Model.Positions, l.ClothAt[0, 10]), 0.06f, -0.003f);
+        Assert.True(solve.SkinEdited, "the stroke should have moved the unlocked skin too");
+        solve.EndStroke();
+
+        // Riding no moved skin, it is not lifted back to the skin's floor (it would stand at +1 mm).
+        Assert.True(At(solve.Positions(), l.ClothAt[0, 10]).Y < 0f, "the deflated cloth was lifted back over still skin");
+    }
+
+    /// <summary>
+    /// How far cloth rode its skin is the Move tools' kind of displacement: the brush limit still allows the cloth's
+    /// own strokes their whole reach on top of it.
+    /// </summary>
+    [Fact]
+    [Trait("Plan", "AC-studio-move-skin-4")]
+    public void RiddenDistanceDoesNotEatTheBrushLimit()
+    {
+        var l = Layered(21, 0.005f);
+        var solve = SkinSolve(l.Model);
+        solve.MaxDisplacement = MeshVolumeSolve.MinMaxDisplacement;   // 10 mm
+        // The skin, and the cloth on it, 8 mm out.
+        solve.BeginMove(l.Model.Parts[1].Triangles, adjacent: false, falloffRadius: 0f);
+        solve.MoveTo(new Vector3(0f, 0.008f, 0f));
+        solve.EndMove();
+        int cloth = l.ClothAt[10, 10];
+        Assert.Equal(0.008f, Moved(l.Model, solve.Positions(), cloth).Y, 1e-5f);
+
+        // Then the cloth alone, pushed well past the limit: it stops 10 mm beyond where it rode to, not 2 mm.
+        solve.SetLocked(l.Model.Parts[1].Triangles);
+        for (int d = 0; d < 20; d++) solve.Paint(At(solve.Positions(), cloth), 0.03f, 0.002f);
+        Assert.Equal(0.018f, Moved(l.Model, solve.Positions(), cloth).Y, 1e-4f);
+        solve.EndStroke();
     }
 
     [Fact]

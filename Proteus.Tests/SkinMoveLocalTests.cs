@@ -113,7 +113,7 @@ public class SkinMoveLocalTests(ITestOutputHelper output)
             output.WriteLine($"  v{v}: {was * 1000f:F2} mm outside its face as authored, {now * 1000f:F2} mm now");
         output.WriteLine($"{name}: skin moved {went * 1000f:F2} mm; {worse} skin points pushed further through the cloth; "
                        + $"{uncovered} covered points now over 1 mm out; SkinThroughCloth {through} (author's {authoredThrough}); "
-                       + $"{folded} folded; {solve.FacesStillOutside} faces left outside");
+                       + $"{folded} folded; {solve.SkinStillOutside} skin points left outside");
         Assert.True(went > strength * 0.6f, $"{name}: the skin went only {went * 1000f:F2} mm");
         Assert.Equal(0, worse);
         Assert.Equal(0, uncovered);
@@ -178,10 +178,6 @@ public class SkinMoveLocalTests(ITestOutputHelper output)
         Assert.All(edge, v => Assert.Equal(At(model.Positions, v), At(solve.Positions(), v)));
     }
 
-    /// <summary>
-    /// A top sculpted with "Move skin too" is still read as made for its body, the way the automatic refit reads it:
-    /// first by the share of its skin lying exactly on a body, and where that is too weak, by how near it lies.
-    /// </summary>
     private const string Bibo = LocalData.Mods + ":Bibo+";
     private const string Yab = LocalData.Mods + ":hs-Yet Another Body+-4.2.0-tmi";
     private const string Neolithe = LocalData.Mods + ":Neolithe [ALL IN ONE]";

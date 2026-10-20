@@ -3479,8 +3479,8 @@ public sealed partial class PartsPanel
                     }
 
                     var target = BrushTransfer.Transfer(edit, source, targetParts);
-                    if (target.FacesStillOutside > 0)
-                        log.Information("[Proteus] brush: skin follow: {0} faces still outside on {1}", target.FacesStillOutside, t.Rel);
+                    if (target.SkinStillOutside > 0)
+                        log.Information("[Proteus] brush: skin follow: {0} skin points still outside the cloth on {1}", target.SkinStillOutside, t.Rel);
                     var result = MeshVolumeService.Apply(root, t.Rel, bytes, target, writeUntouched: true);
                     if (!result.Ok)
                     {

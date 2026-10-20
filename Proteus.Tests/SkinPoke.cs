@@ -16,6 +16,9 @@ internal static class SkinPoke
 {
     private const float Reach = SkinThroughCloth.Reach, Tolerance = SkinThroughCloth.Tolerance, OnEdge = 0.02f;
 
+    /// <summary>Further outside a face than this (2 mm) as authored, the skin covers it — the guard's own line.</summary>
+    private const float DeepClip = 0.002f;
+
     /// <summary>How many skin vertices stand more than <see cref="Tolerance"/> further outside the cloth nearest them in
     /// <paramref name="after"/> than in the author's model.</summary>
     public static int MadeWorse(ModelParts model, float[] after, List<(int Vertex, float Was, float Now)>? which = null)
@@ -63,7 +66,9 @@ internal static class SkinPoke
             // As the author had it, against the SAME face: skin already outside it covers cloth left inside the body,
             // and moving that skin further out shows nothing more.
             float was = Against(model.Positions, tris[face], At(model.Positions, s), n);
-            if (was > Tolerance) continue;
+            // Cloth left inside the body (skin more than DeepClip outside it as authored) is covered by that skin; a
+            // slighter clip is the author's to keep, and only its growth counts.
+            if (was > DeepClip || now - MathF.Max(was, 0f) <= Tolerance) continue;
             worse++;
             which?.Add((s, was, now));
         }

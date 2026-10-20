@@ -59,8 +59,8 @@ public sealed partial class PartsPanel
     {
         if (volume is not { } vol || vol.GuardVersion == guardLogged) return;
         guardLogged = vol.GuardVersion;
-        if (vol.FacesStillOutside > 0)
-            log.Information("[Proteus] brush: skin follow: {0} faces still outside", vol.FacesStillOutside);
+        if (vol.SkinStillOutside > 0)
+            log.Information("[Proteus] brush: skin follow: {0} skin points still outside the cloth", vol.SkinStillOutside);
     }
 
     /// <summary>Bind the open model's clothes to its skin on a worker; see <see cref="SkinFollow.Bind"/>.</summary>

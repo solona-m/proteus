@@ -237,8 +237,8 @@ internal sealed partial class MeshVolumeSolve
     /// The guard at the end of a skin-moving operation, over what the skin it moved can reach — never the whole model,
     /// whose clips are the author's. Two checks, as a game shows a poke two ways:
     /// <list type="bullet">
-    /// <item>a rider the operation recorded, below the skin it is bound to (<see cref="KeepAboveBoundSkin"/>), is
-    /// lifted to its floor;</item>
+    /// <item>a rider of skin this operation moved, below that skin (<see cref="KeepAboveBoundSkin"/>), is lifted to
+    /// its floor;</item>
     /// <item>moved skin standing further outside the cloth face nearest it than the author had it — between the cloth's
     /// vertices, where no vertex check sees it (<see cref="SkinThroughCloth"/>) — lifts that face's unlocked corners
     /// by the excess, each by its share of the nearest point. "Outside" is along the skin's own way out, so a lining
@@ -268,20 +268,20 @@ internal sealed partial class MeshVolumeSolve
         int pass = 0;
         while (pass < FacePasses && LiftFacesOverSkin(start, movedSkin, lift: true) > 0) pass++;
         // What is left, measured again after the last lift: logged by the caller, not chased.
-        FacesStillOutside = LiftFacesOverSkin(start, movedSkin, lift: false);
+        SkinStillOutside = LiftFacesOverSkin(start, movedSkin, lift: false);
         GuardVersion++;
     }
 
     /// <summary>The face check gives up after this many passes; what is left is logged, not chased.</summary>
-    private const int FacePasses = 4;
+    private const int FacePasses = 2;
 
     /// <summary>
     /// Skin points still further outside the cloth than the author had them after the last
     /// <see cref="KeepRidersAboveSkin"/> — the face check's leftovers, for the log. See <see cref="GuardVersion"/>.
     /// </summary>
-    public int FacesStillOutside { get; private set; }
+    public int SkinStillOutside { get; private set; }
 
-    /// <summary>Bumped by every run of the guard, so a caller can tell a new <see cref="FacesStillOutside"/> from an old one.</summary>
+    /// <summary>Bumped by every run of the guard, so a caller can tell a new <see cref="SkinStillOutside"/> from an old one.</summary>
     public int GuardVersion { get; private set; }
 
     /// <summary>
@@ -407,20 +407,20 @@ internal sealed partial class MeshVolumeSolve
             {
                 if (locked[c] || skin[c] || share <= 0f || sq < 1e-4f) continue;
                 // Never more than a few times the excess: a corner with a sliver of the share would be thrown off.
-                float by2 = MathF.Min(excess * share / sq, 2f * excess);
+                float cornerLift = MathF.Min(excess * share / sq, 2f * excess);
                 // The most any one skin point asks of the corner, not the sum: several points under one face each
                 // ask for the same lift, and adding them threw tight cloth centimetres off a 3 mm sculpt.
-                if (!lifts.TryGetValue(c, out var had) || by2 > had.Lift) lifts[c] = (by2, face);
+                if (!lifts.TryGetValue(c, out var had) || cornerLift > had.Lift) lifts[c] = (cornerLift, face);
                 any = true;
             }
             if (any) lifted++;
         }
         if (!lift) return outside;
 
-        foreach (var (c, (by, way)) in lifts)
+        foreach (var (c, (rise, way)) in lifts)
         {
             start.TryAdd(c, Snapshot(c));   // into the undo record before its first change, so undo stays exact
-            nodeDelta[c] = new Vec3(nodeDelta[c].X + way.X * by, nodeDelta[c].Y + way.Y * by, nodeDelta[c].Z + way.Z * by);
+            nodeDelta[c] = new Vec3(nodeDelta[c].X + way.X * rise, nodeDelta[c].Y + way.Y * rise, nodeDelta[c].Z + way.Z * rise);
         }
         return lifted;
     }
