@@ -2623,9 +2623,9 @@
     "message": "A moved part still follows the bones it was made for, so a part moved far from them can bend oddly in poses.",
     "description": "Note under the Move tool's controls."
   },
-  "Parts.Move.SkinTip": {
-    "message": "Skin can't be moved.",
-    "description": "Tooltip on a skin part in the list under the Move tool."
+  "Parts.Move.SkinOff.Tip": {
+    "message": "Turn on “Move skin too” to move skin.",
+    "description": "Tooltip on a skin part in the list under the Move tool, while \"Move skin too\" is off."
   },
   "Parts.Move.LockedTip": {
     "message": "This part is locked. Tick the box beside it to move it.",
@@ -2859,6 +2859,30 @@
     "message": "Paint both sides at once, mirrored across the body's centre.",
     "description": ""
   },
+  "Parts.SkinMoves": {
+    "message": "Move skin too",
+    "description": "Checkbox in the Studio brush and Move/Rotate/Scale settings: lets the tools move the body's skin, with the clothes lying on it following."
+  },
+  "Parts.SkinMoves.Tip": {
+    "message": "Lets the brushes and Move, Rotate and Scale move the body's skin as well as the clothes. Clothes lying on the skin (within about 3 cm) move with it so the body doesn't poke through; clothes further out stay put. Off, the skin stays exactly where the author put it.\n\nThe brushes leave the skin's edges in place where this piece meets the next. Moving skin there with Move, Rotate or Scale can open a gap at the waist, wrists or neck.\n\nBody size and the automatic refit replace a garment's skin with the new body's, so a sculpted skin does not survive a refit.",
+    "description": "Tooltip on the \"Move skin too\" checkbox."
+  },
+  "Parts.SkinMoves.NotThisBrush.Tip": {
+    "message": "The bridge and wind brushes work on clothes only; the skin stays still under them.",
+    "description": "Tooltip on the \"Move skin too\" checkbox while the Bridge or Wind brush is chosen, where it is disabled."
+  },
+  "Parts.SkinMoves.Preparing": {
+    "message": "Getting the skin ready…",
+    "description": "Note under \"Move skin too\" while the clothes are being bound to the skin in the background."
+  },
+  "Parts.SkinMoves.BodyModel.Warn": {
+    "message": "This is a body. Garments made for it are recognised by its exact shape, so after sculpting it Body size and the automatic refit may no longer know which body they were made for.",
+    "description": "Warning under \"Move skin too\" when the open model is a body (skin and its nails/piercings only)."
+  },
+  "Parts.SkinMoves.Failed": {
+    "message": "The skin could not be got ready, so it stays still. The log says why.",
+    "description": "Tooltip on the disabled \"Move skin too\" checkbox when preparing the skin failed."
+  },
   "Parts.Brush.Lock.Hint": {
     "message": "Shift-click a part to lock it.",
     "description": ""
@@ -2875,9 +2899,9 @@
     "message": "Unlock all",
     "description": ""
   },
-  "Parts.Brush.Lock.Skin.Tip": {
-    "message": "Skin never moves.",
-    "description": ""
+  "Parts.Brush.Lock.SkinOff.Tip": {
+    "message": "Skin stays still while “Move skin too” is off.",
+    "description": "Tooltip on a skin part's fixed checkbox in the part list under a brush, while \"Move skin too\" is off."
   },
   "MeshVolume.Apply.Nothing": {
     "message": "Nothing has been painted, so there is nothing to save.",

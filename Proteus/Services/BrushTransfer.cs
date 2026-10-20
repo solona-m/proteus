@@ -15,8 +15,9 @@ namespace Proteus.Services;
 /// from the top underneath it where the two lie close; any cloth where it does not.
 /// <para/>
 /// A size is a garment scaled or reshaped around the same body, so the nearest point on the brushed size is the
-/// matching spot on it. Skin is never a source: the brush never moves it, and a garment's lining lying on the body
-/// would otherwise pick up the body's zero.
+/// matching spot on it. Skin is never a source for cloth: a garment's lining lying on the body would otherwise pick up
+/// the body's zero. When "Move skin too" moved the skin (<see cref="Edit.SkinMoved"/>), the other size's skin reads the
+/// brushed skin alone, and its brushes' share fades in from that size's own open edges as it did on the brushed one.
 /// </summary>
 internal static class BrushTransfer
 {
@@ -34,8 +35,9 @@ internal static class BrushTransfer
     /// <param name="MaxDisplacement">The limit the other size imports under: the brushed model's, or further if the
     /// brushes already went further — painted under a raised limit that was then lowered — so a carried edit is never
     /// clipped short of what it is on the model it was painted on.</param>
+    /// <param name="SkinMoved">The brushed model's skin was moved, so the other size's skin takes the move too.</param>
     public sealed record Edit(Vector3[] Delta, float[] Weight, float[] Wind, bool WindPainted, float MeanEdge, Vector3[] Moved,
-                              float MaxDisplacement)
+                              float MaxDisplacement, bool SkinMoved = false)
     {
         /// <summary>Snapshot <paramref name="solve"/>, built over a model of <paramref name="vertexCount"/> vertices.</summary>
         public static Edit From(MeshVolumeSolve solve, int vertexCount)
@@ -56,7 +58,7 @@ internal static class BrushTransfer
                 // The brushes' share only, the one the import caps.
                 limit = MathF.Max(limit, (delta[v] - moved[v]).Length());
             }
-            return new Edit(delta, weight, wind, solve.WindEdited, solve.MeanEdge, moved, limit);
+            return new Edit(delta, weight, wind, solve.WindEdited, solve.MeanEdge, moved, limit, solve.SkinEdited);
         }
     }
 
@@ -72,9 +74,9 @@ internal static class BrushTransfer
     /// <param name="edit">The edit, snapshotted — see <see cref="Edit"/>.</param>
     public static MeshVolumeSolve Transfer(Edit edit, ModelParts sourceModel, ModelParts target)
     {
-        var src = new Surface(sourceModel, edit.MeanEdge);
+        var src = new Surface(sourceModel, edit.MeanEdge, edit.SkinMoved);
         // Before ImportEdit, which caps what it imports.
-        var solve = new MeshVolumeSolve(target) { MaxDisplacement = edit.MaxDisplacement };
+        var solve = new MeshVolumeSolve(target) { MaxDisplacement = edit.MaxDisplacement, MoveSkin = edit.SkinMoved };
 
         int vc = target.Positions.Length / 3;
         var materialOf = new string?[vc];
@@ -89,13 +91,18 @@ internal static class BrushTransfer
         for (int v = 0; v < vc; v++)
         {
             var p = new Vector3(target.Positions[v * 3], target.Positions[v * 3 + 1], target.Positions[v * 3 + 2]);
-            if (!src.Nearest(p, materialOf[v], out int a, out int b, out int c, out float u, out float w1, out float w2))
+            bool skin = edit.SkinMoved && materialOf[v] is { } mat && SecondSkinWriter.IsBodySkinMaterial(mat);
+            if (!(skin ? src.NearestSkin(p, out int a, out int b, out int c, out float u, out float w1, out float w2)
+                       : src.Nearest(p, materialOf[v], out a, out b, out c, out u, out w1, out w2)))
                 continue;
 
             var delta = edit.Delta[a] * u + edit.Delta[b] * w1 + edit.Delta[c] * w2;
             float weight = edit.Weight[a] * u + edit.Weight[b] * w1 + edit.Weight[c] * w2;
             float windAt = edit.Wind[a] * u + edit.Wind[b] * w1 + edit.Wind[c] * w2;
             var moved = edit.Moved[a] * u + edit.Moved[b] * w1 + edit.Moved[c] * w2;
+            // The brushes' share of skin fades in from THIS size's open edges, as it did from the brushed size's: a
+            // size whose waist sits a little off the other's must not read the moved skin inside it and open a gap.
+            if (skin) delta = moved + (delta - moved) * solve.SeamWeightAt(v);
             samples[v] = (delta, weight, windAt, moved);
         }
 
@@ -103,7 +110,8 @@ internal static class BrushTransfer
         return solve;
     }
 
-    /// <summary>The brushed model's cloth triangles, bucketed by material and by space for nearest-point queries.</summary>
+    /// <summary>The brushed model's cloth triangles, bucketed by material and by space for nearest-point queries; and,
+    /// when its skin moved, its skin triangles apart, for the other size's skin alone.</summary>
     private sealed class Surface
     {
         private readonly Vector3[] pos;
@@ -111,6 +119,7 @@ internal static class BrushTransfer
         private readonly int maxRing;
         private readonly Dictionary<string, Grid> byMaterial = new(StringComparer.OrdinalIgnoreCase);
         private readonly Grid any = new();
+        private readonly Grid skin = new();
         private int[] stamp = [];
         private int query;
 
@@ -120,7 +129,8 @@ internal static class BrushTransfer
             public readonly Dictionary<(int, int, int), List<int>> Cells = [];
         }
 
-        public Surface(ModelParts model, float meanEdge)
+        /// <param name="withSkin">Index the skin too, in its own grid — never among the cloth.</param>
+        public Surface(ModelParts model, float meanEdge, bool withSkin = false)
         {
             int vc = model.Positions.Length / 3;
             pos = new Vector3[vc];
@@ -132,7 +142,18 @@ internal static class BrushTransfer
 
             foreach (var part in model.Parts)
             {
-                if (part.Island >= 0 || SecondSkinWriter.IsBodySkinMaterial(part.Material)) continue;
+                if (part.Island >= 0) continue;
+                if (SecondSkinWriter.IsBodySkinMaterial(part.Material))
+                {
+                    if (!withSkin) continue;
+                    for (int t = 0; t + 2 < part.Triangles.Length; t += 3)
+                    {
+                        int a = part.Triangles[t], b = part.Triangles[t + 1], c = part.Triangles[t + 2];
+                        if (a < 0 || b < 0 || c < 0 || a >= vc || b >= vc || c >= vc) continue;
+                        Add(skin, a, b, c);
+                    }
+                    continue;
+                }
                 if (!byMaterial.TryGetValue(part.Material, out var grid)) byMaterial[part.Material] = grid = new Grid();
                 for (int t = 0; t + 2 < part.Triangles.Length; t += 3)
                 {
@@ -172,6 +193,10 @@ internal static class BrushTransfer
             if (Search(grid, p, out a, out b, out c, out u, out v, out w)) return true;
             return !ReferenceEquals(grid, any) && Search(any, p, out a, out b, out c, out u, out v, out w);
         }
+
+        /// <summary>The nearest point of the brushed model's SKIN within <see cref="MaxReach"/>.</summary>
+        public bool NearestSkin(Vector3 p, out int a, out int b, out int c, out float u, out float v, out float w)
+            => Search(skin, p, out a, out b, out c, out u, out v, out w);
 
         private bool Search(Grid grid, Vector3 p, out int a, out int b, out int c,
                             out float u, out float v, out float w)

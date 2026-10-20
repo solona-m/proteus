@@ -2623,8 +2623,8 @@
     "message": "移動したパーツは元のボーンに従うため、ボーンから大きく離すとポーズによって不自然に曲がることがあります。",
     "description": ""
   },
-  "Parts.Move.SkinTip": {
-    "message": "肌は移動できません。",
+  "Parts.Move.SkinOff.Tip": {
+    "message": "肌を動かすには「肌も動かす」をオンにしてください。",
     "description": ""
   },
   "Parts.Move.LockedTip": {
@@ -2859,6 +2859,30 @@
     "message": "体の中心を軸に、左右を同時に鏡映しで塗ります。",
     "description": ""
   },
+  "Parts.SkinMoves": {
+    "message": "肌も動かす",
+    "description": ""
+  },
+  "Parts.SkinMoves.Tip": {
+    "message": "ブラシと移動・回転・拡大縮小で、服だけでなく体の肌も動かせるようにします。肌の上にある服（約3 cm以内）は肌と一緒に動くので、体が突き抜けません。それより離れた服はそのままです。オフのときは、肌は作者が置いた位置から動きません。\n\nブラシは、このパーツが次のパーツとつながる肌の縁をその場に残します。そこで移動・回転・拡大縮小を使って肌を動かすと、腰・手首・首にすき間ができることがあります。\n\n体型サイズと自動調整は、装備の肌を新しい体の肌に置き換えるため、形を整えた肌は調整後には残りません。",
+    "description": ""
+  },
+  "Parts.SkinMoves.NotThisBrush.Tip": {
+    "message": "橋渡しと風のブラシは服にだけ作用し、その下の肌は動きません。",
+    "description": ""
+  },
+  "Parts.SkinMoves.Preparing": {
+    "message": "肌を準備しています…",
+    "description": ""
+  },
+  "Parts.SkinMoves.BodyModel.Warn": {
+    "message": "これは体です。この体向けの装備は体の正確な形で判別されるため、形を変えると、体型サイズと自動調整がどの体向けに作られた装備か分からなくなることがあります。",
+    "description": ""
+  },
+  "Parts.SkinMoves.Failed": {
+    "message": "肌を準備できなかったため、肌は動きません。理由はログに記録されています。",
+    "description": ""
+  },
   "Parts.Brush.Lock.Hint": {
     "message": "Shift+クリックでパーツをロックします。",
     "description": ""
@@ -2875,8 +2899,8 @@
     "message": "すべてロック解除",
     "description": ""
   },
-  "Parts.Brush.Lock.Skin.Tip": {
-    "message": "肌は動きません。",
+  "Parts.Brush.Lock.SkinOff.Tip": {
+    "message": "「肌も動かす」がオフの間、肌は動きません。",
     "description": ""
   },
   "MeshVolume.Apply.Nothing": {
