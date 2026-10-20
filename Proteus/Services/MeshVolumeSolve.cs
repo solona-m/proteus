@@ -1249,6 +1249,23 @@ internal sealed class MeshVolumeSolve : IMeshEdit
 
     // ── move ────────────────────────────────────────────────────────────────
 
+    /// <summary>Which tool a move drag comes from — what a centred mirror keeps of it (<see cref="MirrorMotion.CentredLinear"/>).</summary>
+    public enum MoveKind { Translate, Rotate, Scale }
+
+    /// <summary>A move drag mirrored across X = 0: the tool, and the pivot its gizmo's matrix is about.</summary>
+    public readonly record struct MoveMirror(MoveKind Kind, Vector3 Pivot);
+
+    /// <summary>
+    /// How a mirrored drag moves the other side. <see cref="Off"/>: nothing matched, so it is a plain drag.
+    /// <see cref="Sides"/>: this side takes the drag, the other its mirror image, blended across a strip at the centre.
+    /// <see cref="Centred"/>: the selection is its own mirror, so all of it takes the drag's symmetric part.
+    /// </summary>
+    public enum MirrorMode { Off, Sides, Centred }
+
+    /// <summary>What a mirrored drag or its preview found: how many selected nodes, how many of them matched a node on
+    /// the other side, how many of those matches are locked and stay put, and the mode.</summary>
+    public readonly record struct MirrorReport(int Selected, int Paired, int Held, MirrorMode Mode);
+
     /// <summary>Each node a move drag carries, with how much of the offset it takes; empty between drags.</summary>
     private readonly Dictionary<int, float> moveWeights = [];
 
