@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Linq;
 using System.Threading;
 
 namespace Proteus.Services;
@@ -76,6 +77,13 @@ public partial class UVRemapService
     }
 
     private string MapPath(string file) => Path.Combine(mapsDir, file);
+
+    /// <summary>The map files a route goes through, for a log line ("bibo_to_tbse_transfer.tif", or two for a chained route).</summary>
+    internal static string MapFilesOf(MensRoute route)
+    {
+        var hops = Hops(DoubledSpaceOf(route.Src) ?? route.Src, DoubledSpaceOf(route.Dst) ?? route.Dst);
+        return hops == null ? "no map" : string.Join(", ", hops.Select(h => $"{h.From}_to_{h.To}_transfer.tif"));
+    }
 
     /// <summary>Whether both bibo↔TBSE maps are on disk. Asked once per composite, which takes the answer for its whole run.</summary>
     internal bool MenMapsPresent()

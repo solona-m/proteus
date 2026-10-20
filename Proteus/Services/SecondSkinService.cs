@@ -780,6 +780,9 @@ public sealed partial class SecondSkinService
     // The filter is part of the key: an index map and a mask can be the same file.
     private readonly ConcurrentDictionary<(string Path, string? Src, string? Dst, int W, int H, ResampleFilter F), byte[]?> remapCache = new();
 
+    /// <summary>Men's routes this build found unavailable and said so; logged once per build each. Cleared with <see cref="remapCache"/>.</summary>
+    private readonly ConcurrentDictionary<MensRoute, byte> mensRoutesLogged = new();
+
     private byte[]? RemapPath(string path, string? srcType, string? dstType, int w, int h,
                               ResampleFilter filter = ResampleFilter.Auto)
     {
@@ -809,7 +812,9 @@ public sealed partial class SecondSkinService
             if (sheetSrc != null)
             {
                 uvRemap.MarkRouteMissing(men.Route);
-                log.Information("[Proteus] men's route {0}→{1} unavailable; drawn as today", men.Route.Src, men.Route.Dst);
+                if (mensRoutesLogged.TryAdd(men.Route, 0))
+                    log.Information("[Proteus] men's route {0}→{1} unavailable ({2}); drawn as today",
+                        men.Route.Src, men.Route.Dst, UVRemapService.MapFilesOf(men.Route));
             }
             if (men.Legacy == null || string.Equals(men.Legacy, dstType, StringComparison.OrdinalIgnoreCase)) return png;
             srcType = men.Legacy;

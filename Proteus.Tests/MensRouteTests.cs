@@ -196,6 +196,15 @@ public class MensRouteTests : IDisposable
     }
 
     [Fact]
+    [Trait("Plan", "EDGE-tbse-uvmap-16")]
+    public void Route_log_names_its_maps() // [EDGE-tbse-uvmap-16]
+    {
+        Assert.Equal("bibo_to_tbse_transfer.tif", UVRemapService.MapFilesOf(new MensRoute("bibo", "tbse")));
+        Assert.Equal("gen3_to_bibo_transfer.tif, bibo_to_tbse_transfer.tif", UVRemapService.MapFilesOf(new MensRoute("gen3", "tbse")));
+        Assert.Equal("bibo_to_tbse_transfer.tif", UVRemapService.MapFilesOf(new MensRoute("bibo", UVRemapService.MaleVanillaSpace)));
+    }
+
+    [Fact]
     [Trait("Plan", "EDGE-tbse-uvmap-12")]
     public void Mirrored_destination_crops_right_half() // [EDGE-tbse-uvmap-12]
     {

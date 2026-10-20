@@ -217,6 +217,7 @@ public sealed partial class SecondSkinService
 
             // Per-build, not per-session: only repetition within one build is worth caching.
             service.remapCache.Clear();
+            service.mensRoutesLogged.Clear();
 
             // The sheet size for THIS build, chosen before any art is decoded (every load is keyed on it). Per build, never a field of the service.
             int largestArt = 0;

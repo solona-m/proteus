@@ -996,7 +996,8 @@ public partial class CompositorService
                 bool first;
                 lock (run.mensRoutesLogged) first = run.mensRoutesLogged.Add(route);
                 if (first)
-                    run.compositor.log.Information("[Proteus] men's route {0}→{1} unavailable; drawn as today", route.Src, route.Dst);
+                    run.compositor.log.Information("[Proteus] men's route {0}→{1} unavailable ({2}); drawn as today",
+                        route.Src, route.Dst, UVRemapService.MapFilesOf(route));
             }
 
             /// <summary>A woman's overlay along <paramref name="route"/>, timed apart; null (and the route set aside) when it cannot be.</summary>
