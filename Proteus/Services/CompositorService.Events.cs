@@ -72,7 +72,8 @@ public partial class CompositorService
         // re-enables already-enabled mods after each redraw, which would otherwise loop RedrawPlayer() → this.
         if (sidecar && change is ModSettingChange.EnableState or ModSettingChange.MultiEnableState)
         {
-            var current = discovery.DiscoverAll();
+            // Remapped like the list it is compared with: a discovery from before a rename is no change.
+            var current = Ledgered(discovery.DiscoverAll());
             if (current.Count == 0) return;
             if (DiscoveredSetsEqual(current, LastDiscovered)) return;
             LastDiscovered = current;
@@ -153,12 +154,22 @@ public partial class CompositorService
         log.Debug("[Proteus] upstream cache cleared ({0})", reason);
     }
 
+    /// <summary>Whether a mod installed is news for the bases a composite reads: any mod but Proteus's own output.</summary>
+    internal static bool ModAddedInvalidatesUpstreams(string modDir)
+        => !string.Equals(modDir, SidecarDiscoveryService.ManagedModDir, StringComparison.OrdinalIgnoreCase);
+
     private void OnModAdded(string modDir)
     {
+        // A folder in use again: nothing is remapped away from it any more.
+        _moveLedger.Forget(modDir);
         // A mod the auto refit just made: its composites wait for the batch's end.
         bool own = IsOwnRefitWrite(modDir);
         // A (re)install almost always rewrites the mod's files — evict any stale cached decodes for it.
         textureLoader.EvictMod(modDir);
+        // Our own output mod, registered by a composite (EnsureManagedModExists): never a base, and the upstreams
+        // remembered point into other mods. Clearing them here would leave a rebuild that a renamed copy of this mod
+        // still masks (see AddManagedAlias) nothing but game data to stand on.
+        if (!ModAddedInvalidatesUpstreams(modDir)) return;
         InvalidateUpstreamCache($"ModAdded:{modDir}");
         if (HasSidecar(modDir))
         {
@@ -593,7 +604,7 @@ public partial class CompositorService
 
         // Glamourer applied a design / reset / reapplied state on the local player.
         // Diff the discovered set against the last known set — only recomposite if something changed.
-        var current = discovery.DiscoverAll();
+        var current = Ledgered(discovery.DiscoverAll());
 
         // Empty means Penumbra's IPC is temporarily unavailable: no information, not no mods.
         if (current.Count == 0) return;

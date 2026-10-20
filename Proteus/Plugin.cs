@@ -25,7 +25,7 @@ public sealed class Plugin : IDalamudPlugin
     [PluginService] public static ITextureProvider TextureProvider { get; private set; } = null!;
 
     /// <summary>Hand-maintained; bump it for in-game testing. <see cref="BuildStamp"/> is the one that can't go stale.</summary>
-    public const int BuildNumber = 1327;
+    public const int BuildNumber = 1331;
 
     /// <summary>
     /// Which set of release notes is current. Raise it when a release has something new to say: the window
@@ -70,6 +70,7 @@ public sealed class Plugin : IDalamudPlugin
     private readonly HatCompatWatcher hatCompat;
     private readonly HairPortWatcher hairPort;
     private readonly AutoRefitWatcher autoRefit;
+    private readonly ModMoveService modMoves;
     private readonly Gui.ProteusFonts fonts;
     private readonly Localization.LocSetup loc;
     private readonly ColorTableHighlighter highlighter;
@@ -229,10 +230,14 @@ public sealed class Plugin : IDalamudPlugin
                                          path => textureLoader.LoadRawFile(null, path), config, log, dataDir);
         partsPanel.UseBodyIndex(autoRefit.Index);
 
+        // A mod renamed in Penumbra: every owner of per-mod state follows it, in one fixed order.
+        modMoves = new ModMoveService(penumbra, config, presets, designBindings, compositor, hatCompat, hairPort,
+                                      autoRefit, log);
+
         statusWindow = new StatusWindow(compositor, discovery, penumbra, config, designBindings,
             presets, editRouter, uvMapDl, uvRemap,
             modCreation, onionImport, contentImport, luminisImport, emissiveImport, eyeImport, modExport,
-            textureLoader, partsPanel, hatCompat, hairPort, autoRefit,
+            textureLoader, partsPanel, hatCompat, hairPort, autoRefit, modMoves,
             new LogExportService(capture, compositor, penumbra, config, dataDir));
 
         liveMesh = new Gui.LiveMeshOverlay(ObjectTable, DataManager, penumbra, ChatGui, log);
@@ -520,6 +525,7 @@ public sealed class Plugin : IDalamudPlugin
         fonts.Dispose();
         ipcProvider.Dispose();
         designWatcher.Dispose();
+        modMoves.Dispose();   // before every service it calls
         designBindings.PresetsSuperseded -= presets.ClearAllApplied;
         presets.Dispose();
         designBindings.Dispose();

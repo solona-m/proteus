@@ -492,6 +492,30 @@ public class PresetService : IDisposable
         if (had || dropped) log.Debug("[Proteus] preset: pins cleared, superseded by a design");
     }
 
+    /// <summary>
+    /// The mod was renamed in Penumbra: its saved presets, its pin and the pinned look's live override follow it.
+    /// </summary>
+    /// <param name="packPresets">The author's presets, for re-deriving an id-less pin (see
+    /// <see cref="ModMoveMigration.Presets"/>); null reads them from the mod's new folder under
+    /// <paramref name="modsRoot"/>.</param>
+    public void MoveMod(string oldDir, string newDir, IReadOnlyList<ModPreset>? packPresets, string? modsRoot)
+    {
+        if (packPresets == null && !string.IsNullOrEmpty(modsRoot))
+            packPresets = SidecarDiscoveryService.TryReadMetadata(Path.Combine(modsRoot, newDir))?.Presets;
+
+        bool changed;
+        lock (gate)
+        {
+            changed = ModMoveMigration.Presets(store, oldDir, newDir, packPresets);
+            driftCache.Remove(oldDir);
+            if (changed) SaveDeferred();
+        }
+
+        bool republishedLook = overrides.RenameMod(oldDir, newDir);
+        if (changed || republishedLook)
+            log.Information("[Proteus] preset: {0}'s presets follow it to {1}", oldDir, newDir);
+    }
+
     private bool republished;
 
     private void OnPenumbraReady() => RepublishApplied(triggerComposite: true);

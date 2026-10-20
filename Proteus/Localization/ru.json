@@ -4571,6 +4571,10 @@
     "message": "Этот мод всё ещё в старом формате папок Penumbra, который Proteus не редактирует. Включите его один раз в Penumbra, чтобы она его обновила, и возвращайтесь.",
     "description": "Body size status line: the mod is in Penumbra's pre-v3 folder format."
   },
+  "Parts.Retarget.Save.ModGone.Fmt": {
+    "message": "«{0}» больше нет среди модов Penumbra: его переименовали или удалили там. Ничего не сохранено.",
+    "description": "Body size status line when the mod's folder is gone. {0} is the mod's folder name."
+  },
   "Parts.Retarget.Save.Failed.Fmt": {
     "message": "Не удалось сохранить: {0}",
     "description": "Body size status line. {0} is the error message."

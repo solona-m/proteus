@@ -125,6 +125,17 @@ internal sealed class HairPortScanSchedule
         lock (gate) mods.Remove(dir);
     }
 
+    /// <summary>A mod renamed in Penumbra: a check owed under the old folder is owed under the new one.</summary>
+    public void ModMoved(string oldDir, string newDir, long now)
+    {
+        lock (gate)
+        {
+            mods.Remove(oldDir);
+            ownReloads.Remove(oldDir);
+        }
+        OweMod(newDir, now);
+    }
+
     /// <summary>The watcher reloaded <paramref name="dir"/> itself; the <c>Edited</c> that comes back is not news.</summary>
     public void OwnReload(string dir, long now)
     {

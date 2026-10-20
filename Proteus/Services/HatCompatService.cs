@@ -160,7 +160,7 @@ public static class HatCompatService
         try
         {
             full = Path.GetFullPath(file);
-            root = Path.GetFullPath(modsRoot).TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+            root = NormalRoot(modsRoot);
         }
         catch (ArgumentException) { return false; }
         catch (NotSupportedException) { return false; }
@@ -174,6 +174,13 @@ public static class HatCompatService
         rel = tail[(cut + 1)..].Replace(Path.DirectorySeparatorChar, '/');
         return true;
     }
+
+    /// <summary>The mod root <see cref="InMods"/> names for <paramref name="folder"/>: the same normalisation, so the two
+    /// compare equal. Throws on a malformed <paramref name="modsRoot"/>, as <see cref="Path.GetFullPath(string)"/> does.</summary>
+    internal static string ModRootOf(string modsRoot, string folder) => Path.Combine(NormalRoot(modsRoot), folder);
+
+    private static string NormalRoot(string modsRoot)
+        => Path.GetFullPath(modsRoot).TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
 
     /// <summary>
     /// Whether this model already declares a hat shape, in which case its author has done this by hand. Reads

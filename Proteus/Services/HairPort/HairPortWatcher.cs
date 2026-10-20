@@ -177,6 +177,15 @@ public sealed partial class HairPortWatcher : IDisposable
         UpdateScan(s => s with { Rows = Decide.DropMod(s.List, modDirectory) });
     }
 
+    /// <summary>A mod renamed in Penumbra: its rows go, and a check owed for it is owed under the new folder. Called
+    /// by <see cref="ModMoveService"/>.</summary>
+    public void OnModMoved(string oldDir, string newDir)
+    {
+        if (Enabled) schedule.ModMoved(oldDir, newDir, Environment.TickCount64);
+        else schedule.ModDeleted(oldDir);
+        UpdateScan(s => s with { Rows = Decide.DropMod(s.List, oldDir) });
+    }
+
     /// <summary>Look through every hair mod in the player's collection now, hairstyles unchanged since the last look
     /// included.</summary>
     public void CheckNow()

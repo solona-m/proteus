@@ -399,6 +399,17 @@ public sealed class PartsPanel
     /// <summary>Drop the mod list so the next frame re-reads it — wired to the window's Refresh.</summary>
     public void Refresh() => mods = null;
 
+    /// <summary>
+    /// A mod renamed in Penumbra: the list is read again, and the open mod stays open under its new folder. Its files
+    /// are relative to the mod root, which follows <see cref="modDir"/>, so the next save lands in the new folder.
+    /// </summary>
+    public void FollowMove(string oldDir, string newDir)
+    {
+        Refresh();
+        modDir = ModMoveMigration.Follow(modDir, oldDir, newDir);
+        lastRefitModDir = ModMoveMigration.Follow(lastRefitModDir, oldDir, newDir);
+    }
+
     /// <summary>Every mod Penumbra knows, by folder → display name, less Proteus's own output mod.</summary>
     private Dictionary<string, string> LoadMods()
         => (penumbra.GetAllMods() ?? [])

@@ -412,7 +412,15 @@ public partial class CompositorService : IDisposable
     private const int UnsettledRaceMemoMs = 60_000;
 
     public CompositorResult? LastResult { get; private set; }
-    public List<OverlayEntry> LastDiscovered { get; private set; } = [];
+    /// <summary>
+    /// The Proteus mods found last, for the UI and IPC. Every write is remapped through the recent renames (see
+    /// <see cref="_moveLedger"/>), so a list read before a rename never brings the old folder back.
+    /// </summary>
+    public List<OverlayEntry> LastDiscovered
+    {
+        get => Volatile.Read(ref _lastDiscovered);
+        private set => Volatile.Write(ref _lastDiscovered, Ledgered(value));
+    }
     public event Action? ResultChanged;
 
     // Guards for EnsureDiscovered's background probe: one at a time, and not more often than this.
