@@ -83,6 +83,17 @@ public sealed class ModMoveService : IDisposable
         }
     }
 
+    /// <summary>
+    /// Whether the move goes in the compositor's ledger: not when the old folder is installed again already (a mod
+    /// added under that name before the move was handled), which the ledger would otherwise remap away for minutes.
+    /// </summary>
+    internal static bool RecordLedger(string oldDir, IReadOnlyDictionary<string, string>? installed)
+        => installed == null || !installed.Keys.Any(k => ModMoveMigration.Same(k, oldDir));
+
+    /// <summary>Penumbra answers that leave a mod switched off: done now, or it already was.</summary>
+    internal static bool SwitchedOff(Penumbra.Api.Enums.PenumbraApiEc ec)
+        => ec is Penumbra.Api.Enums.PenumbraApiEc.Success or Penumbra.Api.Enums.PenumbraApiEc.NothingChanged;
+
     /// <summary>What a rename of Proteus's own output mod calls for.</summary>
     internal enum ManagedAction { WarnOnly, RebuildThenSwitchOff }
 
@@ -135,7 +146,7 @@ public sealed class ModMoveService : IDisposable
             },
             ["presets"]    = () => presets.MoveMod(oldDir, newDir, snapshotEntry?.Metadata.Presets, modsRoot),
             ["bindings"]   = () => designBindings.MoveMod(oldDir, newDir),
-            ["compositor"] = () => compositor.OnModMoved(oldDir, newDir, newName),
+            ["compositor"] = () => compositor.OnModMoved(oldDir, newDir, newName, RecordLedger(oldDir, installed)),
             ["autoRefit"]  = () => autoRefit.OnModMoved(oldDir, newDir),
             ["hatCompat"]  = () => hatCompat.OnModMoved(oldDir, newDir, modsRoot),
             ["hairPort"]   = () => hairPort.OnModMoved(oldDir, newDir),
@@ -186,11 +197,23 @@ public sealed class ModMoveService : IDisposable
                     return;
                 }
 
+                // Each collection's own setting, under any temporary one; an inherited one is switched off where it is
+                // set, and writing it into the child would give the child a setting of its own.
                 var enabled = new Dictionary<Guid, bool?>();
                 foreach (var id in penumbra.GetCollections()?.Keys ?? Enumerable.Empty<Guid>())
-                    enabled[id] = penumbra.GetModSettings(id, copyDir)?.Enabled;
+                    enabled[id] = penumbra.GetCollectionModSettings(id, ignoreTemporary: true) is { } all
+                                  && all.TryGetValue(copyDir, out var s) && !s.Inherited
+                        ? s.Enabled
+                        : null;
                 var off = CollectionsToSwitchOff(enabled);
-                foreach (var id in off) penumbra.SetModEnabled(id, copyDir, false);
+                var failed = off.Where(id => !SwitchedOff(penumbra.SetModEnabled(id, copyDir, false))).ToList();
+                if (failed.Count > 0)
+                {
+                    // Still on somewhere: still ours, or the next composite reads the old composite as its base.
+                    log.Warning("[Proteus] the renamed output mod \"{0}\" could not be switched off in {1} of {2} "
+                              + "collection(s); switch it off in Penumbra", copyDir, failed.Count, off.Count);
+                    return;
+                }
                 compositor.RemoveManagedAlias(copyDir);
                 log.Information("[Proteus] the renamed output mod \"{0}\" is switched off in {1} collection(s)", copyDir, off.Count);
             }).ConfigureAwait(false);

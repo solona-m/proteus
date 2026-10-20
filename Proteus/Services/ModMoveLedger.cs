@@ -86,7 +86,9 @@ internal sealed class ModMoveLedger
         foreach (var e in list)
         {
             if (!moves.TryGetValue(e.ModDirectory, out var m)) { result.Add(e); continue; }
-            if (present.Contains(m.NewDir)) continue;
+            // The new folder listed too: this is the stale copy. Not for a change of case only, whose "new folder" is
+            // this very entry.
+            if (present.Contains(m.NewDir) && !ModMoveMigration.Same(e.ModDirectory, m.NewDir)) continue;
             result.Add(e with
             {
                 ModDirectory = m.NewDir,

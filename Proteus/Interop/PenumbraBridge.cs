@@ -173,23 +173,37 @@ public class PenumbraBridge : IDisposable
     private void OnModMoved(string oldDir, string newDir)
     {
         if (disposing.IsCancellationRequested) return;
-        Interlocked.Increment(ref pendingMoves);
+        PostCounted(
+            raise: () => { if (!disposing.IsCancellationRequested) ModMoved?.Invoke(oldDir, newDir); },
+            post: run => _ = Plugin.Framework.RunOnTick(run, delayTicks: 1, cancellationToken: disposing.Token),
+            inc: () => Interlocked.Increment(ref pendingMoves),
+            dec: () => Interlocked.Decrement(ref pendingMoves),
+            onError: (ex, posted) => log.Error(ex, posted
+                ? "[Proteus] handling the rename of {0} to {1} failed"
+                : "[Proteus] could not queue the rename of {0} to {1}", oldDir, newDir));
+    }
+
+    /// <summary>
+    /// Post <paramref name="raise"/> to a later tick (<see cref="Dispatch"/>), counted as pending from now until it has
+    /// run — whether it throws or not — or until posting it fails. <paramref name="onError"/> is told which.
+    /// </summary>
+    internal static void PostCounted(Action raise, Action<Action> post, Action inc, Action dec,
+                                     Action<Exception, bool> onError)
+    {
+        inc();
         try
         {
             Dispatch(() =>
             {
-                try
-                {
-                    if (!disposing.IsCancellationRequested) ModMoved?.Invoke(oldDir, newDir);
-                }
-                catch (Exception ex) { log.Error(ex, "[Proteus] handling the rename of {0} to {1} failed", oldDir, newDir); }
-                finally { Interlocked.Decrement(ref pendingMoves); }
-            }, run => _ = Plugin.Framework.RunOnTick(run, delayTicks: 1, cancellationToken: disposing.Token));
+                try { raise(); }
+                catch (Exception ex) { onError(ex, true); }
+                finally { dec(); }
+            }, post);
         }
         catch (Exception ex)
         {
-            Interlocked.Decrement(ref pendingMoves);
-            log.Error(ex, "[Proteus] could not queue the rename of {0} to {1}", oldDir, newDir);
+            dec();
+            onError(ex, false);
         }
     }
 

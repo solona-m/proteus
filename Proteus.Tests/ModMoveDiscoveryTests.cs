@@ -253,6 +253,18 @@ public class ModMoveDiscoveryTests
     }
 
     [Fact]
+    [Trait("Plan", "EDGE-mod-rename-3")]
+    public void Ledger_case_only_rename_keeps_the_entry()
+    {
+        var ledger = new ModMoveLedger();
+        ledger.Record("Bone", "bone", null, 0);
+
+        var remapped = ModMoveLedger.Remap([Entry("A"), Entry("Bone")], ledger.Live(1), Root);
+
+        Assert.Equal(["A", "bone"], remapped.Select(e => e.ModDirectory));
+    }
+
+    [Fact]
     [Trait("Plan", "EDGE-mod-rename-26")]
     public void Ledger_forgets_a_reused_folder()
     {

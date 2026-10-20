@@ -71,6 +71,67 @@ public class ModMoveServiceTests
     }
 
     [Fact]
+    [Trait("Plan", "EDGE-mod-rename-1")]
+    public void Pending_move_is_visible_before_the_deferred_handler_runs()
+    {
+        int pending = 0, raised = 0;
+        Action? posted = null;
+        PenumbraBridge.PostCounted(() => raised++, a => posted = a, () => pending++, () => pending--, (_, _) => { });
+
+        Assert.Equal((1, 0), (pending, raised));   // reported, not yet raised: walks wait
+        posted!();
+        Assert.Equal((0, 1), (pending, raised));
+    }
+
+    [Fact]
+    [Trait("Plan", "EDGE-mod-rename-1")]
+    public void Pending_move_clears_when_the_handler_throws()
+    {
+        int pending = 0;
+        bool? reportedPosted = null;
+        Action? posted = null;
+        PenumbraBridge.PostCounted(() => throw new InvalidOperationException(), a => posted = a,
+                                   () => pending++, () => pending--, (_, p) => reportedPosted = p);
+        posted!();
+
+        Assert.Equal(0, pending);
+        Assert.True(reportedPosted);
+    }
+
+    [Fact]
+    [Trait("Plan", "EDGE-mod-rename-1")]
+    public void Pending_move_clears_when_posting_fails()
+    {
+        int pending = 0, raised = 0;
+        bool? reportedPosted = null;
+        PenumbraBridge.PostCounted(() => raised++, _ => throw new InvalidOperationException(),
+                                   () => pending++, () => pending--, (_, p) => reportedPosted = p);
+
+        Assert.Equal((0, 0), (pending, raised));
+        Assert.False(reportedPosted);
+    }
+
+    [Fact]
+    [Trait("Plan", "EDGE-mod-rename-26")]
+    public void Ledger_not_recorded_when_old_folder_is_installed_again()
+    {
+        Assert.False(ModMoveService.RecordLedger("Old", new Dictionary<string, string> { ["old"] = "A new mod", ["New"] = "x" }));
+        Assert.True(ModMoveService.RecordLedger("Old", new Dictionary<string, string> { ["New"] = "x" }));
+        Assert.True(ModMoveService.RecordLedger("Old", null));
+    }
+
+    [Fact]
+    [Trait("Plan", "AC-mod-rename-9")]
+    [Trait("Plan", "EDGE-mod-rename-29")]
+    public void Managed_copy_counts_as_switched_off_only_when_penumbra_says_so()
+    {
+        Assert.True(ModMoveService.SwitchedOff(Penumbra.Api.Enums.PenumbraApiEc.Success));
+        Assert.True(ModMoveService.SwitchedOff(Penumbra.Api.Enums.PenumbraApiEc.NothingChanged));
+        Assert.False(ModMoveService.SwitchedOff(Penumbra.Api.Enums.PenumbraApiEc.UnknownError));
+        Assert.False(ModMoveService.SwitchedOff(Penumbra.Api.Enums.PenumbraApiEc.SystemDisposed));
+    }
+
+    [Fact]
     [Trait("Plan", "EDGE-mod-rename-31")]
     public void GetAllModsQuiet_logs_failures_at_debug()
     {

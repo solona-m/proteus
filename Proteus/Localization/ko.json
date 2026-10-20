@@ -4543,6 +4543,10 @@
     "message": "이 모드는 아직 Penumbra의 이전 폴더 형식이라 Proteus가 편집하지 않습니다. Penumbra에서 한 번 활성화해 업그레이드한 다음 다시 오세요.",
     "description": "Body size status line: the mod is in Penumbra's pre-v3 folder format."
   },
+  "Parts.Retarget.Save.ModGone.Fmt": {
+    "message": "\"{0}\"이(가) 더 이상 Penumbra 모드에 없습니다. Penumbra에서 이름이 바뀌었거나 삭제되었습니다. 아무것도 저장하지 않았습니다.",
+    "description": "Body size status line when the mod's folder is gone. {0} is the mod's folder name."
+  },
   "Parts.Retarget.Save.Failed.Fmt": {
     "message": "저장하지 못했습니다: {0}",
     "description": "Body size status line. {0} is the error message."

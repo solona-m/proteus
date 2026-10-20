@@ -295,7 +295,7 @@ public sealed class HatCompatWatcher : IDisposable
     {
         // A rename not handled yet: the hairstyle's identity has its new folder, the undo still the old one, and the
         // check below would drop the undo. Look again once it is handled (OnModMoved asks).
-        if (penumbra.MovePending) return;
+        if (penumbra.MovePending) { RequestWalkIn(WalkDebounceMs); return; }
 
         // Nothing that matters has changed: cheap on purpose, since Penumbra settings changes arrive in bursts.
         var live = livePartsCache;

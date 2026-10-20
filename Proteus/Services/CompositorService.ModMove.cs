@@ -122,25 +122,35 @@ public partial class CompositorService
     /// mod contributed (ambient: dropped with Auto redraw off — nothing here depends on it running). Framework thread,
     /// called by <see cref="ModMoveService"/> after the settings have moved.
     /// </summary>
-    public void OnModMoved(string oldDir, string newDir, string? newName)
+    /// <param name="recordLedger">False when the old folder is already in use again (a mod installed under it before
+    /// the move was handled): later lists must not remap that new mod away.</param>
+    public void OnModMoved(string oldDir, string newDir, string? newName, bool recordLedger = true)
     {
         var snapshot = LastDiscovered;
         var entry = snapshot.FirstOrDefault(e => ModMoveMigration.Same(e.ModDirectory, oldDir));
         bool needs = MoveNeedsComposite(entry, _lastBaseUpstreams, modsRoot, oldDir);
 
-        _moveLedger.Record(oldDir, newDir, newName ?? entry?.ModName, Environment.TickCount64);
+        if (recordLedger) _moveLedger.Record(oldDir, newDir, newName ?? entry?.ModName, Environment.TickCount64);
         if (MoveEntry(snapshot, oldDir, newDir, modsRoot, newName) is { } moved && !TryPublishDiscovered(snapshot, moved))
             LastDiscovered = LastDiscovered;   // replaced meanwhile: the setter remaps the newer list through the ledger
 
-        if (_lastBaseUpstreams is { } upstreams)
-            _lastBaseUpstreams = LedgeredPaths(new Dictionary<string, string>(upstreams, StringComparer.OrdinalIgnoreCase));
-        _appendHostSources = LedgeredPaths(_appendHostSources);
-        _inertMods         = Ledgered(new Dictionary<string, InertModDiagnosis.InertReason>(_inertMods,
-                                                                                            StringComparer.OrdinalIgnoreCase));
-        _contentMaterials  = Ledgered(_contentMaterials);
-        _contentModels     = Ledgered(_contentModels);
-        _shellMaterials    = Ledgered(_shellMaterials);
-        _skinGlowTargets   = Ledgered(_skinGlowTargets);
+        // Compare-and-swap each: a composite publishing a newer cache meanwhile must not be overwritten by this older
+        // one remapped. Its own publish already went through the ledger recorded above.
+        var one = new Dictionary<string, ModMoveLedger.MoveRecord>(StringComparer.OrdinalIgnoreCase)
+        {
+            [oldDir] = new(newDir, newName, long.MaxValue),
+        };
+#pragma warning disable CS0420   // the fields are volatile; Volatile.Read and Interlocked inside Swap keep that
+        Swap(ref _lastBaseUpstreams, u => u == null || !u.Values.Any(v => ModMoveMigration.Same(ModFolderOf(v), oldDir)) ? u
+            : ModMoveLedger.RemapPathValues(new Dictionary<string, string>(u, StringComparer.OrdinalIgnoreCase), one, modsRoot));
+        Swap(ref _appendHostSources, m => ModMoveLedger.RemapPathValues(m, one, modsRoot));
+        Swap(ref _inertMods, m => !m.Keys.Any(k => ModMoveMigration.Same(k, oldDir)) ? m
+            : ModMoveLedger.RemapKeys(new Dictionary<string, InertModDiagnosis.InertReason>(m, StringComparer.OrdinalIgnoreCase), one));
+        Swap(ref _contentMaterials, m => ModMoveLedger.RemapKeys(m, one));
+        Swap(ref _contentModels, m => ModMoveLedger.RemapKeys(m, one));
+        Swap(ref _shellMaterials, m => ModMoveLedger.RemapShell(m, one));
+        Swap(ref _skinGlowTargets, m => ModMoveLedger.RemapShell(m, one));
+#pragma warning restore CS0420
 
         ModMoveMigration.RekeyKey(_bodyModCache, oldDir, newDir);
         ModMoveMigration.RekeyKey(_knownDisabled, oldDir, newDir);
@@ -158,6 +168,24 @@ public partial class CompositorService
             log.Debug("[Proteus] {0} was renamed to {1} in Penumbra — it contributed nothing, no recomposite", oldDir, newDir);
     }
 
+    /// <summary>Replace a published reference with <paramref name="change"/> of it, retrying when another thread
+    /// published in between.</summary>
+    private static void Swap<T>(ref T field, Func<T, T> change) where T : class?
+    {
+        while (true)
+        {
+            var current = Volatile.Read(ref field);
+            var next = change(current);
+            if (ReferenceEquals(next, current)
+                || ReferenceEquals(Interlocked.CompareExchange(ref field, next, current), current))
+                return;
+        }
+    }
+
+    /// <summary>Whether <paramref name="diskPath"/> is inside a renamed copy of the managed mod still treated as ours.</summary>
+    internal bool IsUnderManagedAlias(string? diskPath)
+        => ModFolderOf(diskPath) is { } folder && IsManagedAlias(folder);
+
     /// <summary>A moved mod whose new folder is gone by the time the move is handled: forgotten as a deletion.</summary>
     public void ForgetMoved(string oldDir) => OnModDeleted(oldDir);
 
@@ -173,7 +201,8 @@ public partial class CompositorService
     /// </summary>
     public void RefreshDisplayNames()
     {
-        if (_disposed || !config.PluginEnabled || !penumbra.IsAvailable) return;
+        // A rename not handled yet would look like a folder that vanished, and a rediscovery here would get ahead of it.
+        if (_disposed || !config.PluginEnabled || !penumbra.IsAvailable || penumbra.MovePending) return;
         var now = Environment.TickCount64;
         if (!ProbeDue(now, Interlocked.Read(ref _lastNameProbeTick), NameProbeIntervalMs)) return;
         if (Interlocked.Exchange(ref _nameProbeRunning, 1) == 1) return;
