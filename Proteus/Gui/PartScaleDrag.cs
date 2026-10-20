@@ -84,7 +84,10 @@ public sealed class PartScaleDrag
     internal Shown Last { get; private set; }
 
     private float uiScale = 1f;
-    private Vector3 dragPivot;
+    /// <summary>The pivot the current or last drag started at — what <see cref="Transform"/> scales about. Kept after
+    /// release, so the frame a drag ends can still read it.</summary>
+    public Vector3 DragPivot { get; private set; }
+
     private Vector2 pressMouse;
     private Vector2 dragDir;
     private float dragSpan;
@@ -126,7 +129,7 @@ public sealed class PartScaleDrag
         this.uiScale = uiScale;
         Started = Ended = false;
         bool dragging = Active != Handle.None;
-        var centre = dragging ? dragPivot : pivot;
+        var centre = dragging ? DragPivot : pivot;
 
         if (toScreen(centre) is not { } sc) { CancelHover(); return; }
         float len = dragging ? dragLen : TranslateGizmo.LengthForPixels(centre, sc, toScreen, HandlePixels * uiScale);
@@ -165,7 +168,7 @@ public sealed class PartScaleDrag
                     ghost = ghostTip;
                 }
                 Factors = FactorsFor(Active, s);
-                Transform = Build(dragPivot, Factors);
+                Transform = Build(DragPivot, Factors);
             }
         }
         else
@@ -191,7 +194,7 @@ public sealed class PartScaleDrag
                 }
                 Active = Hovered;
                 Hovered = Handle.None;
-                dragPivot = centre;
+                DragPivot = centre;
                 dragLen = len;
                 dragView = view;
                 pressMouse = mouse;

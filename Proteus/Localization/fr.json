@@ -2855,9 +2855,25 @@
     "message": "Miroir gauche/droite",
     "description": ""
   },
-  "Parts.Brush.Mirror.Tip": {
-    "message": "Peint les deux côtés à la fois, en miroir par rapport au centre du corps.",
-    "description": ""
+  "Parts.Mirror.Tip": {
+    "message": "Agit sur les deux côtés à la fois, en miroir par rapport au centre du corps. Les pinceaux peignent aussi l'image miroir ; Déplacer, Pivoter et Échelle déplacent le tissu correspondant de l'autre côté en miroir. Une pièce qui est son propre miroir reste centrée.",
+    "description": "Tooltip on the Mirror left/right checkbox, shown under the brushes and under Move, Rotate and Scale."
+  },
+  "Parts.Move.Mirror.Paired.Fmt": {
+    "message": "Miroir : {0:N0} des {1:N0} points sélectionnés ont un correspondant de l'autre côté.",
+    "description": "{0} is how many selected points matched a point on the other side; {1} is how many points are selected."
+  },
+  "Parts.Move.Mirror.Held.Fmt": {
+    "message": "{0:N0} des points correspondants sont verrouillés et restent en place.",
+    "description": "{0} is how many of the matching points are locked."
+  },
+  "Parts.Move.Mirror.None": {
+    "message": "Miroir : rien de l'autre côté ne correspond à cette sélection, seul ce côté bouge.",
+    "description": "Shown under Move, Rotate and Scale with Mirror on when nothing matched."
+  },
+  "Parts.Move.Mirror.Centred": {
+    "message": "Miroir : cette sélection est son propre miroir, elle bouge d'un seul bloc et reste centrée. Les déplacements et rotations latéraux sont ignorés.",
+    "description": "Shown under Move, Rotate and Scale with Mirror on when the selection crosses the centre and mirrors itself."
   },
   "Parts.Brush.Lock.Hint": {
     "message": "Maj-clic sur une pièce pour la verrouiller.",
@@ -3723,6 +3739,10 @@
     "message": "Il n'y a pas de corps {0} entre lesquels ajuster, donc le modèle {0} est ajusté dans la forme {1}, comme le jeu le déforme, puis réenregistré en {0}.",
     "description": ""
   },
+  "Parts.Retarget.Lowered.Fmt": {
+    "message": "Un modèle {1} est créé à partir du modèle {0}, plié à la forme {1} comme le jeu plie entre les deux. Enregistrer ajoute les métadonnées nécessaires au jeu.",
+    "description": "{0} is the race of the model open, {1} the race picked below it."
+  },
   "Parts.Retarget.Bake.BendBack.Fmt": {
     "message": "l'ajustement n'a pas pu être ramené à la forme {0} ({1})",
     "description": ""
@@ -4312,7 +4332,7 @@
     "description": "Heads the dropdown that picks which race's model a refit is made and saved as."
   },
   "Parts.Retarget.Race.Tip": {
-    "message": "Pour quelle race est l'ajustement. Une autre race du même sexe reçoit son propre modèle, tiré de celui-ci comme le jeu le plie, ajusté au corps de cette race et enregistré là où cette race le charge. Tous les autres gardent ce modèle.",
+    "message": "Pour quelle race est l'ajustement. Une autre race du même sexe reçoit son propre modèle, tiré de celui-ci comme le jeu le plie, ajusté au corps de cette race et enregistré là où cette race le charge. Ce modèle reste tel quel.",
     "description": "Tooltip of Parts.Retarget.Race.Label."
   },
   "Parts.Retarget.Race.ThisModel.Fmt": {
@@ -4338,6 +4358,14 @@
   "Parts.Retarget.Race.Only.Fmt": {
     "message": "Seul {0} portera l'ajustement enregistré ; {1} garde ce modèle.",
     "description": "{0} is the race picked, {1} the race of the model open."
+  },
+  "Parts.Retarget.Race.Below.Fmt": {
+    "message": "{0} portera l'ajustement enregistré, ainsi que toute race de ce sexe sans modèle propre pour cette pièce ; {1} garde ce modèle.",
+    "description": "{0} is the race picked, {1} the race of the model open; said for a race the open one falls back to."
+  },
+  "Parts.Retarget.Race.BelowExtraBones.Fmt": {
+    "message": "Ce vêtement utilise des os supplémentaires. Seul {0} reçoit le squelette supplémentaire pour eux, donc sur les autres races qui portent cet ajustement, ces os ne bougeront pas.",
+    "description": "{0} is the race picked."
   },
   "Parts.Retarget.Race.SourceBaked.Fmt": {
     "message": "Les corps pour lesquels il a été fait sont pliés vers {0} de la même façon, il repose donc sur eux comme avant.",

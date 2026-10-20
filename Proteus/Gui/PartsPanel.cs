@@ -2145,14 +2145,15 @@ public sealed class PartsPanel
 
     /// <summary>
     /// How much of a move each vertex would take, for the rainbow over the chosen part and the cloth it carries — only
-    /// under Move, Rotate or Scale with "Move adjacent parts" on and something chosen; null otherwise. Measured again
-    /// only when the selection, the falloff or the cloth changes, and held while a drag is under way: the drag carries
-    /// the weights it started with.
+    /// under Move, Rotate or Scale with "Move adjacent parts" on, or Mirror on and matching something, and something
+    /// chosen; null otherwise (<see cref="ShowsMoveFalloff"/>). Measured again only when the selection, the falloff,
+    /// the mirror or the cloth changes, and held while a drag is under way: the drag carries the weights it started with.
+    /// With Mirror on it is measured even when not shown, for what the mirror would do (the status line).
     /// </summary>
     private float[]? MoveFalloffNow()
     {
         float[]? shown = null;
-        if (PartTool && moveAdjacent && moveFalloffMm > 0f && volume is { } vol)
+        if (PartTool && ((moveAdjacent && moveFalloffMm > 0f) || mirrorBrush) && volume is { } vol)
         {
             // Mid-drag, exactly what the drag is carrying — not the last measure, which a throttled slider may have
             // left behind it.
@@ -2163,7 +2164,8 @@ public sealed class PartsPanel
                     moveFalloffDragShown = true;
                     viewport.GeometryChanged();
                 }
-                shown = dragging;
+                if (ShowsMoveFalloff(PartTool, moveAdjacent, moveFalloffMm, mirrorBrush, vol.DragMirror?.Mode))
+                    shown = dragging;
             }
             else
             {
@@ -2177,7 +2179,10 @@ public sealed class PartsPanel
                 // measured again at most every MoveFalloffRefreshMs: each measure searches the mesh and re-projects
                 // the viewer, and a slider changes every frame it is held.
                 // The part by its name, not a hash of it: two names that hash alike must still count as a new choice.
-                var choice = (vol, vol.LockVersion, movePolygons, movePolysVersion, movePolygons ? null : movePart);
+                // Mirror and Move adjacent parts too: either changes what is measured (with the falloff off, a
+                // mirrored measure is of the selection and its match alone).
+                var choice = (vol, vol.LockVersion, movePolygons, movePolysVersion, movePolygons ? null : movePart,
+                              mirrorBrush, moveAdjacent);
                 bool chosen = moveFalloffChoice != choice;
                 bool reshaped = vol.EditVersion != moveFalloffEdit || moveFalloffMm != moveFalloffMeasuredMm;
                 long now = Environment.TickCount64;
@@ -2189,13 +2194,16 @@ public sealed class PartsPanel
                     moveFalloffMeasuredAt = now;
                     // Into the same buffer each time: a held slider would otherwise throw away an array a measure.
                     var measured = MoveSeeds() is { } seeds
-                        ? vol.MoveFalloff(seeds, moveFalloffMm / 1000f, movePolygons, movePreview)
+                        ? vol.MoveFalloff(seeds, moveAdjacent ? moveFalloffMm / 1000f : 0f, movePolygons, movePreview,
+                                          mirror: mirrorBrush)
                         : null;
                     if (measured != null) movePreview = measured;
                     movePreviewEmpty = measured == null;
                     viewport.GeometryChanged();   // the viewer interpolates the weights when it projects
                 }
-                shown = movePreviewEmpty ? null : movePreview;
+                if (!movePreviewEmpty
+                    && ShowsMoveFalloff(PartTool, moveAdjacent, moveFalloffMm, mirrorBrush, vol.PreviewMirror?.Mode))
+                    shown = movePreview;
             }
         }
 
@@ -2242,7 +2250,7 @@ public sealed class PartsPanel
     }
 
     // What movePreview was measured for, and when.
-    private (MeshVolumeSolve, int, bool, int, string?)? moveFalloffChoice;
+    private (MeshVolumeSolve, int, bool, int, string?, bool, bool)? moveFalloffChoice;
     private int moveFalloffEdit;
     private float moveFalloffMeasuredMm;
     private long moveFalloffMeasuredAt;
@@ -2285,7 +2293,16 @@ public sealed class PartsPanel
             if (volume.StrokeOpen) EndBrushStroke(volume);
             previewDirtyBeforeMove = previewDirty;
             previewPushesAtMove = previewPushes;
-            if (volume.BeginMove(seeds, moveAdjacent, moveFalloffMm / 1000f, alongSurface: movePolygons) == 0)
+            // Mirrored about exactly the pivot the gizmo's own matrix is about.
+            MeshVolumeSolve.MoveMirror? mirror = mirrorBrush
+                ? tool switch
+                {
+                    Tool.Move   => new(MeshVolumeSolve.MoveKind.Translate, moveGizmo.DragPivot),
+                    Tool.Rotate => new(MeshVolumeSolve.MoveKind.Rotate, rotateGizmo.DragPivot),
+                    _           => new(MeshVolumeSolve.MoveKind.Scale, scaleDrag.DragPivot),
+                }
+                : null;
+            if (volume.BeginMove(seeds, moveAdjacent, moveFalloffMm / 1000f, alongSurface: movePolygons, mirror: mirror) == 0)
             {
                 status = Strings.Parts.MoveNothingFree;
                 statusIsError = true;
@@ -2423,6 +2440,17 @@ public sealed class PartsPanel
         if (ImGui.IsItemHovered(ImGuiHoveredFlags.AllowWhenDisabled))
             ImGui.SetTooltip(movePolygons ? ps.MoveFalloffSurfaceTip : ps.MoveFalloffTip);
 
+        // A drag keeps the mirror it started with.
+        using (ImRaii.Disabled(volume is { Moving: true })) DrawMirrorToggle();
+        bool moving = volume is { Moving: true };
+        if (MirrorStatus(mirrorBrush, moving, volume?.DragMirror, MoveSeeds() == null ? null : volume?.PreviewMirror)
+            is { } mirrorSays)
+        {
+            ImGui.PushTextWrapPos(0);
+            ImGui.TextDisabled(mirrorSays);
+            ImGui.PopTextWrapPos();
+        }
+
         ImGui.Spacing();
         ImGui.PushTextWrapPos(0);
         ImGui.TextDisabled(ps.MoveBonesNote);
@@ -2436,6 +2464,41 @@ public sealed class PartsPanel
         }
 
         DrawEditActions();
+    }
+
+    /// <summary>The one Mirror left/right checkbox, under the brushes and under Move, Rotate and Scale alike.</summary>
+    private void DrawMirrorToggle()
+    {
+        var ps = Strings.Parts;
+        if (ImGui.Checkbox(ps.BrushMirror, ref mirrorBrush)) viewport.Recolour();
+        if (ImGui.IsItemHovered(ImGuiHoveredFlags.AllowWhenDisabled)) ImGui.SetTooltip(ps.MirrorTip);
+    }
+
+    /// <summary>
+    /// Whether the views show the move's rainbow: with the falloff on, as always; with Mirror on, whenever the mirror
+    /// matched something — so a selection with nothing to mirror looks exactly as with Mirror off.
+    /// </summary>
+    internal static bool ShowsMoveFalloff(bool partTool, bool adjacent, float falloffMm, bool mirror,
+                                          MeshVolumeSolve.MirrorMode? mode)
+        => partTool && ((adjacent && falloffMm > 0f)
+                        || (mirror && mode is MeshVolumeSolve.MirrorMode.Sides or MeshVolumeSolve.MirrorMode.Centred));
+
+    /// <summary>
+    /// What the line under the mirror says: the drag's own report while one is under way, else what the selection would
+    /// do. Null — nothing drawn — with Mirror off or nothing chosen.
+    /// </summary>
+    internal static string? MirrorStatus(bool mirror, bool moving, MeshVolumeSolve.MirrorReport? drag,
+                                         MeshVolumeSolve.MirrorReport? preview)
+    {
+        if (!mirror || (moving ? drag : preview) is not { Selected: > 0 } r) return null;
+        var ps = Strings.Parts;
+        return r.Mode switch
+        {
+            MeshVolumeSolve.MirrorMode.Off     => ps.MoveMirrorNone,
+            MeshVolumeSolve.MirrorMode.Centred => ps.MoveMirrorCentred,
+            _ => string.Format(ps.MoveMirrorPairedFmt, r.Paired, r.Selected)
+                 + (r.Held > 0 ? "\n" + string.Format(ps.MoveMirrorHeldFmt, r.Held) : ""),
+        };
     }
 
     /// <summary>Replace the polygon selection — a grow or a shrink. A grow stops at skin and locked parts.</summary>
@@ -3194,8 +3257,7 @@ public sealed class PartsPanel
         }
 
         ImGui.Spacing();
-        if (ImGui.Checkbox(ps.BrushMirror, ref mirrorBrush)) viewport.Recolour();
-        if (ImGui.IsItemHovered()) ImGui.SetTooltip(ps.BrushMirrorTip);
+        DrawMirrorToggle();
 
         // Locks are made on the model, the character or the part list; this only says how many, and lets them all go.
         if (parts != null && Locks.Count > 0)
