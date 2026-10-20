@@ -2623,8 +2623,8 @@
     "message": "Ein verschobenes Teil folgt weiter den Knochen, für die es gemacht wurde; weit davon entfernt kann es sich in Posen seltsam biegen.",
     "description": ""
   },
-  "Parts.Move.SkinTip": {
-    "message": "Haut kann nicht verschoben werden.",
+  "Parts.Move.SkinOff.Tip": {
+    "message": "Schalte „Haut mitbewegen“ ein, um Haut zu bewegen.",
     "description": ""
   },
   "Parts.Move.LockedTip": {
@@ -2875,6 +2875,30 @@
     "message": "Spiegeln: Diese Auswahl ist ihr eigenes Spiegelbild, daher bewegt sie sich als ein Stück und bleibt mittig. Seitliche Verschiebungen und Drehungen zur Seite entfallen.",
     "description": "Shown under Move, Rotate and Scale with Mirror on when the selection crosses the centre and mirrors itself."
   },
+  "Parts.SkinMoves": {
+    "message": "Haut mitbewegen",
+    "description": ""
+  },
+  "Parts.SkinMoves.Tip": {
+    "message": "Lässt die Pinsel sowie Verschieben, Drehen und Skalieren neben der Kleidung auch die Haut des Körpers bewegen. Kleidung, die auf der Haut liegt (bis etwa 3 cm), bewegt sich mit, damit der Körper nicht durchstößt; weiter entfernte Kleidung bleibt, wo sie ist. Ausgeschaltet bleibt die Haut genau dort, wo der Autor sie hingesetzt hat.\n\nDie Pinsel lassen die Ränder der Haut dort, wo dieses Teil an das nächste stößt, an ihrem Platz. Haut dort mit Verschieben, Drehen oder Skalieren zu bewegen, kann an Taille, Handgelenken oder Hals eine Lücke öffnen.\n\nKörpergröße und die automatische Anpassung ersetzen die Haut eines Kleidungsstücks durch die des neuen Körpers; eine modellierte Haut übersteht eine Anpassung also nicht.",
+    "description": ""
+  },
+  "Parts.SkinMoves.NotThisBrush.Tip": {
+    "message": "Die Pinsel Überbrücken und Wind wirken nur auf Kleidung; die Haut bleibt darunter still.",
+    "description": ""
+  },
+  "Parts.SkinMoves.Preparing": {
+    "message": "Haut wird vorbereitet …",
+    "description": ""
+  },
+  "Parts.SkinMoves.BodyModel.Warn": {
+    "message": "Das ist ein Körper. Für ihn gemachte Kleidung wird an seiner genauen Form erkannt; nach dem Modellieren wissen Körpergröße und die automatische Anpassung womöglich nicht mehr, für welchen Körper sie gemacht wurde.",
+    "description": ""
+  },
+  "Parts.SkinMoves.Failed": {
+    "message": "Die Haut konnte nicht vorbereitet werden und bleibt daher still. Der Grund steht im Log.",
+    "description": ""
+  },
   "Parts.Brush.Lock.Hint": {
     "message": "Shift-Klick auf ein Teil sperrt es.",
     "description": ""
@@ -2891,8 +2915,8 @@
     "message": "Alle entsperren",
     "description": ""
   },
-  "Parts.Brush.Lock.Skin.Tip": {
-    "message": "Haut bewegt sich nie.",
+  "Parts.Brush.Lock.SkinOff.Tip": {
+    "message": "Die Haut bleibt still, solange „Haut mitbewegen“ aus ist.",
     "description": ""
   },
   "MeshVolume.Apply.Nothing": {

@@ -2623,8 +2623,8 @@
     "message": "이동한 파츠는 원래 본을 계속 따르므로, 본에서 멀리 옮기면 포즈에 따라 이상하게 휠 수 있습니다.",
     "description": ""
   },
-  "Parts.Move.SkinTip": {
-    "message": "피부는 이동할 수 없습니다.",
+  "Parts.Move.SkinOff.Tip": {
+    "message": "피부를 움직이려면 \"피부도 움직이기\"를 켜세요.",
     "description": ""
   },
   "Parts.Move.LockedTip": {
@@ -2875,6 +2875,30 @@
     "message": "좌우 대칭: 이 선택은 그 자체로 좌우 대칭이라 한 덩어리로 움직이며 중앙에 유지됩니다. 옆으로의 이동과 회전은 제외됩니다.",
     "description": "Shown under Move, Rotate and Scale with Mirror on when the selection crosses the centre and mirrors itself."
   },
+  "Parts.SkinMoves": {
+    "message": "피부도 움직이기",
+    "description": ""
+  },
+  "Parts.SkinMoves.Tip": {
+    "message": "브러시와 이동·회전·크기 조절로 옷뿐 아니라 몸의 피부도 움직일 수 있게 합니다. 피부 위에 놓인 옷(약 3 cm 이내)은 피부와 함께 움직여 몸이 뚫고 나오지 않으며, 그보다 먼 옷은 그대로 있습니다. 끄면 피부는 제작자가 둔 자리에 그대로 있습니다.\n\n브러시는 이 부위가 다음 부위와 만나는 피부 가장자리를 제자리에 둡니다. 그곳의 피부를 이동·회전·크기 조절로 움직이면 허리, 손목, 목에 틈이 생길 수 있습니다.\n\n체형 크기와 자동 맞춤은 장비의 피부를 새 체형의 피부로 바꾸므로, 다듬은 피부는 맞춤 후에 남지 않습니다.",
+    "description": ""
+  },
+  "Parts.SkinMoves.NotThisBrush.Tip": {
+    "message": "다리 놓기와 바람 브러시는 옷에만 작용하며, 그 아래 피부는 움직이지 않습니다.",
+    "description": ""
+  },
+  "Parts.SkinMoves.Preparing": {
+    "message": "피부를 준비하는 중…",
+    "description": ""
+  },
+  "Parts.SkinMoves.BodyModel.Warn": {
+    "message": "이것은 체형입니다. 이 체형용 장비는 체형의 정확한 모양으로 알아보므로, 다듬은 뒤에는 체형 크기와 자동 맞춤이 어느 체형용 장비인지 알지 못할 수 있습니다.",
+    "description": ""
+  },
+  "Parts.SkinMoves.Failed": {
+    "message": "피부를 준비하지 못해 피부는 움직이지 않습니다. 이유는 로그에 있습니다.",
+    "description": ""
+  },
   "Parts.Brush.Lock.Hint": {
     "message": "Shift+클릭으로 부위를 잠급니다.",
     "description": ""
@@ -2891,8 +2915,8 @@
     "message": "모두 잠금 해제",
     "description": ""
   },
-  "Parts.Brush.Lock.Skin.Tip": {
-    "message": "피부는 움직이지 않습니다.",
+  "Parts.Brush.Lock.SkinOff.Tip": {
+    "message": "\"피부도 움직이기\"가 꺼져 있는 동안 피부는 움직이지 않습니다.",
     "description": ""
   },
   "MeshVolume.Apply.Nothing": {

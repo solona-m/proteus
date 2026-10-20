@@ -11,8 +11,8 @@ namespace Proteus.Services;
 /// Deliberately NOT <c>BrushTransfer.Surface</c> with a flag. Three of that class's four behaviours are the opposite
 /// of what is wanted here, and all three are load-bearing to the brush:
 /// <list type="bullet">
-/// <item>it skips <see cref="SecondSkinWriter.IsBodySkinMaterial"/>, because for a brush "skin is never a source";
-/// here skin is the ONLY source.</item>
+/// <item>it skips <see cref="SecondSkinWriter.IsBodySkinMaterial"/> among its cloth, because skin is never a source for
+/// a size's cloth; here skin is the ONLY source.</item>
 /// <item>it keeps a grid per material and prefers the nearest point on the SAME material, so a vest does not borrow
 /// from the top beneath it; a body is one surface and the distinction is meaningless.</item>
 /// <item>it stops at a hard <c>MaxReach</c>, which is right when "no counterpart" means "no edit"; a retarget needs

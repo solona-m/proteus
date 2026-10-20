@@ -82,10 +82,24 @@ public sealed class PartViewport : IDisposable, IBrushSurface
     private List<string?> parentOf = [];
 
     /// <summary>
-    /// For each pickable part, whether the brush may move it: false for skin, which is never tinted. Worked out once
-    /// per model in <see cref="Show"/>, not per colouring pass.
+    /// For each pickable part, whether the brush may move it: false for skin, which is tinted only while
+    /// <see cref="SkinMoves"/>. Worked out once per model in <see cref="Show"/>, not per colouring pass.
     /// </summary>
     private bool[] brushable = [];
+
+    /// <summary>"Move skin too" applies to the tool in use: skin is tinted by the brush and the falloff like cloth.</summary>
+    public bool SkinMoves
+    {
+        get => skinMoves;
+        set
+        {
+            if (skinMoves == value) return;
+            skinMoves = value;
+            coloursDirty = true;
+        }
+    }
+
+    private bool skinMoves;
 
     private Vector2 dragFrom;
     private bool dragging, dragMoved;
@@ -659,7 +673,7 @@ public sealed class PartViewport : IDisposable, IBrushSurface
             bool on = Selected.Contains(pickable[i].Label) || (parent != null && Selected.Contains(parent));
             bool hot = Hovered == pickable[i].Label || (parent != null && Hovered == parent);
             bool locked = lockMode && IsLocked(i);
-            canBrush[i] = i < brushable.Length && brushable[i] && !locked;
+            canBrush[i] = i < brushable.Length && SkinMovePolicy.HitCounts(!brushable[i], skinMoves) && !locked;
             tint[i] = locked      ? (hot ? (100, 110, 130) : (70, 70, 76))
                     : on && hot   ? (255, 220, 170)
                     : on          ? (ar, ag, ab)
