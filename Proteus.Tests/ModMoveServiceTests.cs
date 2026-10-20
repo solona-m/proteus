@@ -115,9 +115,23 @@ public class ModMoveServiceTests
     [Trait("Plan", "EDGE-mod-rename-26")]
     public void Ledger_not_recorded_when_old_folder_is_installed_again()
     {
-        Assert.False(ModMoveService.RecordLedger("Old", new Dictionary<string, string> { ["old"] = "A new mod", ["New"] = "x" }));
-        Assert.True(ModMoveService.RecordLedger("Old", new Dictionary<string, string> { ["New"] = "x" }));
-        Assert.True(ModMoveService.RecordLedger("Old", null));
+        Assert.False(ModMoveService.RecordLedger("Old", "New", new Dictionary<string, string> { ["old"] = "A new mod", ["New"] = "x" }));
+        Assert.True(ModMoveService.RecordLedger("Old", "New", new Dictionary<string, string> { ["New"] = "x" }));
+        Assert.True(ModMoveService.RecordLedger("Old", "New", null));
+    }
+
+    [Fact]
+    [Trait("Plan", "EDGE-mod-rename-3")]
+    public void Ledger_recorded_for_a_case_only_rename()
+        => Assert.True(ModMoveService.RecordLedger("Bone", "bone", new Dictionary<string, string> { ["bone"] = "Bone" }));
+
+    [Fact]
+    [Trait("Plan", "EDGE-mod-rename-29")]
+    public void Alias_kept_while_any_collection_could_not_be_read_or_switched_off()
+    {
+        Assert.True(ModMoveService.AliasMayGo(0, 0));
+        Assert.False(ModMoveService.AliasMayGo(1, 0));
+        Assert.False(ModMoveService.AliasMayGo(0, 1));
     }
 
     [Fact]

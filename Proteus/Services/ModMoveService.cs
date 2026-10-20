@@ -87,12 +87,17 @@ public sealed class ModMoveService : IDisposable
     /// Whether the move goes in the compositor's ledger: not when the old folder is installed again already (a mod
     /// added under that name before the move was handled), which the ledger would otherwise remap away for minutes.
     /// </summary>
-    internal static bool RecordLedger(string oldDir, IReadOnlyDictionary<string, string>? installed)
-        => installed == null || !installed.Keys.Any(k => ModMoveMigration.Same(k, oldDir));
+    internal static bool RecordLedger(string oldDir, string newDir, IReadOnlyDictionary<string, string>? installed)
+        => installed == null
+        || !installed.Keys.Any(k => ModMoveMigration.Same(k, oldDir) && !ModMoveMigration.Same(k, newDir));
 
     /// <summary>Penumbra answers that leave a mod switched off: done now, or it already was.</summary>
     internal static bool SwitchedOff(Penumbra.Api.Enums.PenumbraApiEc ec)
         => ec is Penumbra.Api.Enums.PenumbraApiEc.Success or Penumbra.Api.Enums.PenumbraApiEc.NothingChanged;
+
+    /// <summary>Whether the renamed copy stops counting as Proteus's own output: only when it is known to be off
+    /// everywhere — no switch-off refused, and no collection whose settings could not be read.</summary>
+    internal static bool AliasMayGo(int failedSwitchOffs, int unreadCollections) => failedSwitchOffs == 0 && unreadCollections == 0;
 
     /// <summary>What a rename of Proteus's own output mod calls for.</summary>
     internal enum ManagedAction { WarnOnly, RebuildThenSwitchOff }
@@ -146,7 +151,7 @@ public sealed class ModMoveService : IDisposable
             },
             ["presets"]    = () => presets.MoveMod(oldDir, newDir, snapshotEntry?.Metadata.Presets, modsRoot),
             ["bindings"]   = () => designBindings.MoveMod(oldDir, newDir),
-            ["compositor"] = () => compositor.OnModMoved(oldDir, newDir, newName, RecordLedger(oldDir, installed)),
+            ["compositor"] = () => compositor.OnModMoved(oldDir, newDir, newName, RecordLedger(oldDir, newDir, installed)),
             ["autoRefit"]  = () => autoRefit.OnModMoved(oldDir, newDir),
             ["hatCompat"]  = () => hatCompat.OnModMoved(oldDir, newDir, modsRoot),
             ["hairPort"]   = () => hairPort.OnModMoved(oldDir, newDir),
@@ -200,18 +205,21 @@ public sealed class ModMoveService : IDisposable
                 // Each collection's own setting, under any temporary one; an inherited one is switched off where it is
                 // set, and writing it into the child would give the child a setting of its own.
                 var enabled = new Dictionary<Guid, bool?>();
+                int unread = 0;
                 foreach (var id in penumbra.GetCollections()?.Keys ?? Enumerable.Empty<Guid>())
-                    enabled[id] = penumbra.GetCollectionModSettings(id, ignoreTemporary: true) is { } all
-                                  && all.TryGetValue(copyDir, out var s) && !s.Inherited
-                        ? s.Enabled
-                        : null;
+                {
+                    var all = penumbra.GetCollectionModSettings(id, ignoreTemporary: true);
+                    if (all == null) { unread++; continue; }
+                    enabled[id] = all.TryGetValue(copyDir, out var s) && !s.Inherited ? s.Enabled : null;
+                }
                 var off = CollectionsToSwitchOff(enabled);
                 var failed = off.Where(id => !SwitchedOff(penumbra.SetModEnabled(id, copyDir, false))).ToList();
-                if (failed.Count > 0)
+                if (!AliasMayGo(failed.Count, unread))
                 {
-                    // Still on somewhere: still ours, or the next composite reads the old composite as its base.
+                    // Possibly still on somewhere: still ours, or the next composite reads the old composite as its base.
                     log.Warning("[Proteus] the renamed output mod \"{0}\" could not be switched off in {1} of {2} "
-                              + "collection(s); switch it off in Penumbra", copyDir, failed.Count, off.Count);
+                              + "collection(s), and {3} collection(s) could not be read; switch it off in Penumbra",
+                                copyDir, failed.Count, off.Count, unread);
                     return;
                 }
                 compositor.RemoveManagedAlias(copyDir);
