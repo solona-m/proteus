@@ -46,7 +46,7 @@ public partial class CompositorService
                 }
 
                 run.compositor._channelContributions = run.nextChannelContributions;
-                run.compositor._skinGlowTargets      = run.nextSkinGlowTargets;
+                run.compositor._skinGlowTargets      = run.compositor.Ledgered(run.nextSkinGlowTargets);
 
                 // ── Second skin: one gear shell per Layer:Gear overlay ────────────
                 // Built from the body model the character is currently drawing (resolved live through Penumbra).

@@ -43,8 +43,15 @@ internal sealed class ExportTab
 
     // ── Export tab ───────────────────────────────────────────────────────────
 
+    /// <summary>A mod renamed in Penumbra: the selection stays on it.</summary>
+    internal void FollowMove(string oldDir, string newDir)
+        => _exportModDir = ModMoveMigration.Follow(_exportModDir, oldDir, newDir) ?? "";
+
     internal void DrawExportTab()
     {
+        // Penumbra has no event for a display-name change; this picks one up while the list is on screen.
+        compositor.RefreshDisplayNames();
+
         // Adopt the pool task's result here: nothing is left to do that closing the window could strand.
         if (_exportDone is { } done)
         {

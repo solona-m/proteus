@@ -239,10 +239,11 @@ internal sealed partial class MeshVolumeSolve
     /// <list type="bullet">
     /// <item>a rider of skin this operation moved, below that skin (<see cref="KeepAboveBoundSkin"/>), is lifted to
     /// its floor;</item>
-    /// <item>moved skin standing further outside the cloth face nearest it than the author had it — between the cloth's
-    /// vertices, where no vertex check sees it (<see cref="SkinThroughCloth"/>) — lifts that face's unlocked corners
-    /// by the excess, each by its share of the nearest point. "Outside" is along the skin's own way out, so a lining
-    /// is judged as the shell over it is.</item>
+    /// <item>skin — moved, or still skin the moved cloth passes over — standing further outside the cloth face nearest
+    /// it than the author had it (a clip deeper than <see cref="DeepClip"/> aside) — between the cloth's vertices, where
+    /// no vertex check sees it (<see cref="SkinThroughCloth"/>) — lifts that face's unlocked corners by the excess,
+    /// each by its share of the nearest point. "Outside" is along the skin's own way out, so a lining is judged as the
+    /// shell over it is.</item>
     /// </list>
     /// </summary>
     /// <param name="start">The operation's undo record: whatever the guard moves is recorded in it first, so undo stays
@@ -265,11 +266,41 @@ internal sealed partial class MeshVolumeSolve
             if (KeepAboveBoundSkin(n, nodeDelta[n], out var kept)) nodeDelta[n] = kept;
         }
 
+        // The face check judges the moved skin and any still skin the moved cloth passes over: at an open edge the skin
+        // holds while the cloth beside it rides, and the cloth can come to cross it.
+        var judged = JudgedSkin(start, movedSkin);
         int pass = 0;
-        while (pass < FacePasses && LiftFacesOverSkin(start, movedSkin, lift: true) > 0) pass++;
+        while (pass < FacePasses && LiftFacesOverSkin(start, judged, lift: true) > 0) pass++;
         // What is left, measured again after the last lift: logged by the caller, not chased.
-        SkinStillOutside = LiftFacesOverSkin(start, movedSkin, lift: false);
+        SkinStillOutside = LiftFacesOverSkin(start, judged, lift: false);
         GuardVersion++;
+    }
+
+    /// <summary>The moved skin, and every skin node within <see cref="SkinThroughCloth.Reach"/> of the box around what
+    /// the operation moved, skin or cloth.</summary>
+    private List<int> JudgedSkin(Dictionary<int, Was> start, List<int> movedSkin)
+    {
+        const float reach = SkinThroughCloth.Reach;
+        var lo = Here(movedSkin[0]);
+        var hi = lo;
+        foreach (var (n, was) in start)
+        {
+            if (nodeDelta[n] == was.Delta) continue;
+            var p = Here(n);
+            lo = new Vec3(MathF.Min(lo.X, p.X), MathF.Min(lo.Y, p.Y), MathF.Min(lo.Z, p.Z));
+            hi = new Vec3(MathF.Max(hi.X, p.X), MathF.Max(hi.Y, p.Y), MathF.Max(hi.Z, p.Z));
+        }
+        var judged = new List<int>(movedSkin);
+        var seen = new HashSet<int>(movedSkin);
+        for (int n = 0; n < nodeCount; n++)
+        {
+            if (!skin[n] || seen.Contains(n)) continue;
+            var p = Here(n);
+            if (p.X >= lo.X - reach && p.Y >= lo.Y - reach && p.Z >= lo.Z - reach
+                && p.X <= hi.X + reach && p.Y <= hi.Y + reach && p.Z <= hi.Z + reach)
+                judged.Add(n);
+        }
+        return judged;
     }
 
     /// <summary>The face check gives up after this many passes; what is left is logged, not chased.</summary>
@@ -293,14 +324,14 @@ internal sealed partial class MeshVolumeSolve
     /// <summary>One pass of the face check in <see cref="KeepRidersAboveSkin"/>.</summary>
     /// <param name="lift">Lift what is through; off, only count it.</param>
     /// <returns>Lifting, how many skin points it lifted cloth over; counting, how many are still through.</returns>
-    private int LiftFacesOverSkin(Dictionary<int, Was> start, List<int> movedSkin, bool lift)
+    private int LiftFacesOverSkin(Dictionary<int, Was> start, List<int> judged, bool lift)
     {
         const float reach = SkinThroughCloth.Reach, tolerance = SkinThroughCloth.Tolerance;
 
-        // Only cloth near the moved skin can be through by it.
-        var mlo = Here(movedSkin[0]);
+        // Only cloth near the skin judged can be through it.
+        var mlo = Here(judged[0]);
         var mhi = mlo;
-        foreach (int s in movedSkin)
+        foreach (int s in judged)
         {
             var p = Here(s);
             mlo = new Vec3(MathF.Min(mlo.X, p.X), MathF.Min(mlo.Y, p.Y), MathF.Min(mlo.Z, p.Z));
@@ -343,7 +374,7 @@ internal sealed partial class MeshVolumeSolve
         var lifts = new Dictionary<int, (float Lift, Vector3 Way)>();
         int lifted = 0, outside = 0;
         const float onEdge = 0.02f;
-        foreach (int s in movedSkin)
+        foreach (int s in judged)
         {
             var sp = ToVector(Here(s));
             if (!grid.TryGetValue(CellOf(Here(s)), out var near)) continue;

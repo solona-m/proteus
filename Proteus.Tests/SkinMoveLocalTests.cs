@@ -110,7 +110,7 @@ public class SkinMoveLocalTests(ITestOutputHelper output)
         int worse = SkinPoke.MadeWorse(model, after, which);
         int uncovered = SkinPoke.Uncovered(model, after, 0.001f);
         foreach (var (v, was, now) in which)
-            output.WriteLine($"  v{v}: {was * 1000f:F2} mm outside its face as authored, {now * 1000f:F2} mm now");
+            output.WriteLine($"  v{v}: {was * 1000f:F2} mm outside its face as authored, {now * 1000f:F2} mm now; skin moved {(At(after, v) - At(model.Positions, v)).Length() * 1000f:F2} mm, seam {solve.SeamWeightAt(v):F2}");
         output.WriteLine($"{name}: skin moved {went * 1000f:F2} mm; {worse} skin points pushed further through the cloth; "
                        + $"{uncovered} covered points now over 1 mm out; SkinThroughCloth {through} (author's {authoredThrough}); "
                        + $"{folded} folded; {solve.SkinStillOutside} skin points left outside");

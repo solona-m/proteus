@@ -87,6 +87,12 @@ internal sealed partial class MeshVolumeSolve : IMeshEdit
     /// </summary>
     private readonly Vec3[] nodeNormal;
 
+    /// <summary>Whether <see cref="nodeNormal"/> means anything — false where opposite normals were welded.</summary>
+    private readonly bool[] nodeNormalUsable;
+
+    /// <summary>Each node's material id; −1 for a node no whole submesh uses.</summary>
+    private readonly int[] nodeMaterial;
+
     /// <summary>
     /// The direction the brush moves each node: away from the nearest skin where the model carries skin, else
     /// along the node's normal. Away-from-skin gives both layers of a cloth shell and its hem one shared direction.
@@ -255,6 +261,18 @@ internal sealed partial class MeshVolumeSolve : IMeshEdit
                 if (v >= 0 && v < vc) skin[nodeOf[v]] = true;
         }
 
+        // Each node's material, by the first whole submesh that uses it: what a mirrored drag matches layers by.
+        nodeMaterial = new int[nodeCount];
+        Array.Fill(nodeMaterial, -1);
+        var materialIds = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
+        foreach (var part in model.Parts)
+        {
+            if (part.Island >= 0) continue;
+            if (!materialIds.TryGetValue(part.Material, out int id)) materialIds[part.Material] = id = materialIds.Count;
+            foreach (int v in part.Triangles)
+                if (v >= 0 && v < vc && nodeMaterial[nodeOf[v]] < 0) nodeMaterial[nodeOf[v]] = id;
+        }
+
         nodeNormal = new Vec3[nodeCount];
         var accum = new Vec3[nodeCount];
         var count = new int[nodeCount];
@@ -265,6 +283,14 @@ internal sealed partial class MeshVolumeSolve : IMeshEdit
             count[n]++;
         }
         for (int n = 0; n < nodeCount; n++) nodeNormal[n] = Unit(accum[n]);
+
+        // A node whose vertices' normals cancel (both faces of a double-sided card) has no facing to match by.
+        nodeNormalUsable = new bool[nodeCount];
+        for (int n = 0; n < nodeCount; n++)
+        {
+            var a = accum[n];
+            nodeNormalUsable[n] = count[n] > 0 && MathF.Sqrt(a.X * a.X + a.Y * a.Y + a.Z * a.Z) >= 0.5f * count[n];
+        }
 
         // Fallback for a mesh with no usable normals: face normals, so the brush still has a direction.
         if (nodeNormal.Any(n => n.X == 0f && n.Y == 0f && n.Z == 0f))
@@ -1298,11 +1324,29 @@ internal sealed partial class MeshVolumeSolve : IMeshEdit
         grabTerms.Clear();
         grabRiders.Clear();
         opSkin = false;
+        DragMirror = PreviewMirror = null;
         Dirty = false;
         Settle(null);
     }
 
     // ── move ────────────────────────────────────────────────────────────────
+
+    /// <summary>Which tool a move drag comes from — what a centred mirror keeps of it (<see cref="MirrorMotion.CentredLinear"/>).</summary>
+    public enum MoveKind { Translate, Rotate, Scale }
+
+    /// <summary>A move drag mirrored across X = 0: the tool, and the pivot its gizmo's matrix is about.</summary>
+    public readonly record struct MoveMirror(MoveKind Kind, Vector3 Pivot);
+
+    /// <summary>
+    /// How a mirrored drag moves the other side. <see cref="Off"/>: nothing matched, so it is a plain drag.
+    /// <see cref="Sides"/>: this side takes the drag, the other its mirror image, blended across a strip at the centre.
+    /// <see cref="Centred"/>: the selection is its own mirror, so all of it takes the drag's symmetric part.
+    /// </summary>
+    public enum MirrorMode { Off, Sides, Centred }
+
+    /// <summary>What a mirrored drag or its preview found: how many selected nodes, how many of them matched a node on
+    /// the other side, how many of those matches are locked and stay put, and the mode.</summary>
+    public readonly record struct MirrorReport(int Selected, int Paired, int Held, MirrorMode Mode);
 
     /// <summary>Each node a move drag carries, with how much of the offset it takes; empty between drags.</summary>
     private readonly Dictionary<int, float> moveWeights = [];
@@ -1320,19 +1364,26 @@ internal sealed partial class MeshVolumeSolve : IMeshEdit
     /// <param name="alongSurface">Measure the falloff ALONG the surface, through joined polygons only, instead of
     /// straight through space. What a polygon selection wants: the fade follows the garment, and a separate piece that
     /// merely sits nearby — the other cup, a strap over the cloth — takes none of the move.</param>
+    /// <param name="mirror">Mirror the drag across X = 0 onto the matching cloth on the other side — see
+    /// <see cref="PlanMirror"/>. Null for a plain drag.</param>
     /// <returns>How many nodes the drag will move; 0 when there is nothing it may.</returns>
-    public int BeginMove(IEnumerable<int> partVertices, bool adjacent, float falloffRadius, bool alongSurface = false)
+    public int BeginMove(IEnumerable<int> partVertices, bool adjacent, float falloffRadius, bool alongSurface = false,
+                         MoveMirror? mirror = null)
     {
         if (Moving) EndMove();
         if (Grabbing) EndGrab();
         if (StrokeOpen) EndStroke();
         BeginOp();
-        if (CollectMoveWeights(partVertices, adjacent, falloffRadius, alongSurface, moveWeights, opSkin) == 0)
+        int count = CollectMoveWeights(partVertices, adjacent, falloffRadius, alongSurface, moveWeights,
+                                       mirror?.Pivot, mirror != null, opSkin, out var plan);
+        DragMirror = plan?.Report;
+        if (count == 0)
         {
             opSkin = false;
             return 0;
         }
 
+        StartMirror(plan, mirror);
         stroke = [];
         foreach (int n in moveWeights.Keys) stroke[n] = Snapshot(n);
         moveMatrix = null;
@@ -1344,27 +1395,41 @@ internal sealed partial class MeshVolumeSolve : IMeshEdit
 
     /// <summary>
     /// Fill <paramref name="into"/> with each node a move of these part vertices carries and how much of it — see
-    /// <see cref="BeginMove"/>.
+    /// <see cref="BeginMove"/>. Mirrored, the selection is joined by its match on the other side first, and the
+    /// falloff is measured from both.
     /// </summary>
+    /// <param name="pivot">The gizmo's pivot, for a mirrored drag; null for the middle of the selection.</param>
     /// <param name="skinMoves">Skin may move: it is carried like cloth, and the cloth riding it goes with it.</param>
+    /// <param name="plan">The mirror's plan when <paramref name="mirror"/>, else null.</param>
     /// <returns>How many nodes that is; 0 when the part has nothing that may move.</returns>
     private int CollectMoveWeights(IEnumerable<int> partVertices, bool adjacent, float falloffRadius, bool alongSurface,
-                                   Dictionary<int, float> into, bool skinMoves)
+                                   Dictionary<int, float> into, Vector3? pivot, bool mirror, bool skinMoves,
+                                   out MirrorPlan? plan)
     {
         into.Clear();
+        plan = null;
         var seeds = new HashSet<int>();
         foreach (int v in partVertices)
             if (v >= 0 && v < nodeOf.Length && !Held(nodeOf[v], skinMoves)) seeds.Add(nodeOf[v]);
         if (seeds.Count == 0) return 0;
 
+        if (mirror)
+        {
+            plan = PlanMirror(seeds, pivot ?? SeedCentre(seeds));
+            seeds = plan.Seeds;
+        }
+
         foreach (int n in seeds) into[n] = 1f;
 
         if (adjacent && falloffRadius > 0f)
-            foreach (var (n, d) in alongSurface ? AlongSurface(seeds, falloffRadius, skinMoves)
-                                                : NearPart(seeds, falloffRadius, skinMoves))
+            foreach (var (n, d, from) in alongSurface ? AlongSurface(seeds, falloffRadius, skinMoves)
+                                                      : NearPart(seeds, falloffRadius, skinMoves))
             {
                 float w = Falloff(d / falloffRadius);
-                if (w > 0f) into[n] = w;
+                if (w <= 0f) continue;
+                into[n] = w;
+                // Cloth carried by a piece with no mirror image goes the way that piece goes, or the two would tear apart.
+                if (plan != null && plan.DirectOnly.Contains(from)) plan.DirectOnly.Add(n);
             }
         if (skinMoves && follow != null) AddMoveRiders(into);
         return into.Count;
@@ -1376,12 +1441,16 @@ internal sealed partial class MeshVolumeSolve : IMeshEdit
     /// What the view shows before a drag; nothing changes and no drag opens.
     /// </summary>
     /// <param name="into">A buffer from an earlier call to fill again rather than allocate; null for a new one.</param>
+    /// <param name="mirror">Measure the drag as mirrored, and say what the mirror would do in <see cref="PreviewMirror"/>.</param>
     /// <returns>Null when nothing would move; otherwise <paramref name="into"/> when it was big enough.</returns>
-    public float[]? MoveFalloff(IEnumerable<int> partVertices, float falloffRadius, bool alongSurface, float[]? into = null)
+    public float[]? MoveFalloff(IEnumerable<int> partVertices, float falloffRadius, bool alongSurface, float[]? into = null,
+                                bool mirror = false)
     {
         bool skinMoves = MoveSkin && follow != null;
-        if (CollectMoveWeights(partVertices, adjacent: true, falloffRadius, alongSurface, previewWeights, skinMoves) == 0)
-            return null;
+        int count = CollectMoveWeights(partVertices, adjacent: true, falloffRadius, alongSurface, previewWeights,
+                                       null, mirror, skinMoves, out var plan);
+        PreviewMirror = count == 0 ? null : plan?.Report;
+        if (count == 0) return null;
         return PerVertex(previewWeights, into);
     }
 
@@ -1413,15 +1482,18 @@ internal sealed partial class MeshVolumeSolve : IMeshEdit
     /// Every movable node outside <paramref name="seeds"/> reachable within <paramref name="radius"/> by walking the
     /// mesh's edges from one of them, with the shortest such walk, measured on the surface as it now stands. Dijkstra
     /// over the welded adjacency, so a walk crosses uv seams but never a gap between pieces. Held nodes (locked, and skin
-    /// unless <paramref name="skinMoves"/>) are walls: nothing that may not move is walked through to reach cloth beyond it.
+    /// unless <paramref name="skinMoves"/>) are walls: nothing that may not move is walked through to reach cloth beyond
+    /// it. Each comes with the seed its walk began at.
     /// </summary>
-    private List<(int Node, float Distance)> AlongSurface(HashSet<int> seeds, float radius, bool skinMoves)
+    private List<(int Node, float Distance, int Seed)> AlongSurface(HashSet<int> seeds, float radius, bool skinMoves)
     {
         var dist = new Dictionary<int, float>();
+        var from = new Dictionary<int, int>();
         var queue = new PriorityQueue<int, float>();
         foreach (int s in seeds)
         {
             dist[s] = 0f;
+            from[s] = s;
             queue.Enqueue(s, 0f);
         }
 
@@ -1438,27 +1510,28 @@ internal sealed partial class MeshVolumeSolve : IMeshEdit
                 if (next > radius) continue;
                 if (dist.TryGetValue(m, out float was) && was <= next) continue;
                 dist[m] = next;
+                from[m] = from[n];
                 queue.Enqueue(m, next);
             }
         }
 
-        var found = new List<(int, float)>(dist.Count);
+        var found = new List<(int, float, int)>(dist.Count);
         foreach (var (n, d) in dist)
-            if (!seeds.Contains(n)) found.Add((n, d));
+            if (!seeds.Contains(n)) found.Add((n, d, from[n]));
         return found;
     }
 
     /// <summary>
     /// Every movable node outside <paramref name="seeds"/> within <paramref name="radius"/> of one of them, with its
-    /// distance to the nearest, measured on the current surfaces. Grid-bucketed with a ring search.
+    /// distance to the nearest and that nearest seed, measured on the current surfaces. Grid-bucketed with a ring search.
     /// </summary>
-    private List<(int Node, float Distance)> NearPart(HashSet<int> seeds, float radius, bool skinMoves)
+    private List<(int Node, float Distance, int Seed)> NearPart(HashSet<int> seeds, float radius, bool skinMoves)
     {
-        var found = new List<(int, float)>();
+        var found = new List<(int, float, int)>();
         float cell = Math.Clamp(MathF.Max(MeanEdge * 2f, radius / 4f), 1e-4f, radius);
         int reach = (int)MathF.Ceiling(radius / cell);
 
-        var grid = new Dictionary<(int, int, int), List<Vec3>>();
+        var grid = new Dictionary<(int, int, int), List<(Vec3 At, int Seed)>>();
         var lo = new Vec3(float.MaxValue, float.MaxValue, float.MaxValue);
         var hi = new Vec3(float.MinValue, float.MinValue, float.MinValue);
         (int, int, int) CellOf(Vec3 p)
@@ -1469,7 +1542,7 @@ internal sealed partial class MeshVolumeSolve : IMeshEdit
             var p = Here(s);
             var key = CellOf(p);
             if (!grid.TryGetValue(key, out var list)) grid[key] = list = [];
-            list.Add(p);
+            list.Add((p, s));
             lo = new Vec3(MathF.Min(lo.X, p.X), MathF.Min(lo.Y, p.Y), MathF.Min(lo.Z, p.Z));
             hi = new Vec3(MathF.Max(hi.X, p.X), MathF.Max(hi.Y, p.Y), MathF.Max(hi.Z, p.Z));
         }
@@ -1485,7 +1558,7 @@ internal sealed partial class MeshVolumeSolve : IMeshEdit
 
             var (cx, cy, cz) = CellOf(p);
             float best = r2;
-            bool any = false;
+            int nearest = -1;
             for (int ring = 0; ring <= reach; ring++)
             {
                 for (int x = -ring; x <= ring; x++)
@@ -1494,18 +1567,18 @@ internal sealed partial class MeshVolumeSolve : IMeshEdit
                 {
                     if (Math.Max(Math.Abs(x), Math.Max(Math.Abs(y), Math.Abs(z))) != ring) continue;   // this shell only
                     if (!grid.TryGetValue((cx + x, cy + y, cz + z), out var near)) continue;
-                    foreach (var q in near)
+                    foreach (var (q, s) in near)
                     {
                         float dx = q.X - p.X, dy = q.Y - p.Y, dz = q.Z - p.Z;
                         float d2 = dx * dx + dy * dy + dz * dz;
-                        if (d2 < best) { best = d2; any = true; }
+                        if (d2 < best) { best = d2; nearest = s; }
                     }
                 }
                 // Every cell of the next ring is at least `ring` cells away, so nothing there can be nearer.
                 float shell = ring * cell;
-                if (any && best <= shell * shell) break;
+                if (nearest >= 0 && best <= shell * shell) break;
             }
-            if (any) found.Add((n, MathF.Sqrt(best)));
+            if (nearest >= 0) found.Add((n, MathF.Sqrt(best), nearest));
         }
         return found;
     }
@@ -1518,6 +1591,11 @@ internal sealed partial class MeshVolumeSolve : IMeshEdit
     {
         if (!Moving || stroke == null) return;
         moveMatrix = null;
+        if (moveMode != MirrorMode.Off)
+        {
+            MirroredMove(offset, null);
+            return;
+        }
         foreach (var (n, w) in moveWeights)
         {
             var was = stroke[n];
@@ -1538,6 +1616,11 @@ internal sealed partial class MeshVolumeSolve : IMeshEdit
     {
         if (!Moving || stroke == null) return;
         moveMatrix = transform;
+        if (moveMode != MirrorMode.Off)
+        {
+            MirroredMove(null, transform);
+            return;
+        }
         foreach (var (n, w) in moveWeights)
         {
             var was = stroke[n];
@@ -1605,6 +1688,7 @@ internal sealed partial class MeshVolumeSolve : IMeshEdit
                 }
             moveWeights.Clear();
             moveMatrix = null;
+            EndMirror();
             Dirty = dirtyBeforeMove;
             return false;
         }
@@ -1616,6 +1700,7 @@ internal sealed partial class MeshVolumeSolve : IMeshEdit
         RebaseNormals(touched!);
         moveWeights.Clear();
         moveMatrix = null;
+        EndMirror();
         Settle(null);
         return true;
     }
@@ -1633,18 +1718,24 @@ internal sealed partial class MeshVolumeSolve : IMeshEdit
     /// change exactly the matrix. Seam and falloff-band nodes keep the turned normals, a smooth approximation.
     /// Recorded rather than written once, so the next settle (any brush, move or undo) keeps it: see
     /// <see cref="ApplyRebase"/>. An even scale or a translation records nothing; their normals stay as they were.
+    /// <para/>
+    /// Mirrored, each node takes the map of the transform it was carried by — the drag's, its mirror image's, or the
+    /// centred part of it — and only where every node around it was carried by that same one.
     /// </summary>
     /// <param name="start">Each node the drag carried, as it was before the drag.</param>
     private void RebaseNormals(Dictionary<int, Was> start)
     {
-        if (moveMatrix is not { } m || LinearNormals.IsUniform(m) || LinearNormals.NormalMap(m) is not { } map) return;
+        if (moveMatrix is not { } m) return;
+        var maps = NodeMaps(m);
+        if (maps[MapDirect] == null && maps[MapMirror] == null && maps[MapCentred] == null) return;
         uniqueFaces ??= LinearNormals.UniqueFaces(tris, nodeOf);
         facesOfNode ??= LinearNormals.FacesOfNode(uniqueFaces, nodeOf, nodeCount);
 
         Vec3[]? before = null;
         foreach (var (n, w) in moveWeights)
         {
-            if (w < 1f || !CarriedWhole(n)) continue;
+            int id = MapIdOf(n);
+            if (w < 1f || maps[id] is not { } map || !CarriedWhole(n, id)) continue;
 
             // The surface as the drag found it: the snapshot's displacement on every node the drag carried.
             if (before == null)
@@ -1670,14 +1761,17 @@ internal sealed partial class MeshVolumeSolve : IMeshEdit
         }
     }
 
-    /// <summary>The open drag carries the node and every face around it whole.</summary>
-    private bool CarriedWhole(int n)
+    /// <summary>The open drag carries the node and every face around it whole, by the one map <paramref name="id"/>.</summary>
+    private bool CarriedWhole(int n, int id)
     {
         var faces = facesOfNode![n];
         if (faces.Length == 0) return false;
         foreach (int f in faces)
             for (int k = 0; k < 3; k++)
-                if (!moveWeights.TryGetValue(nodeOf[uniqueFaces![f + k]], out float w) || w < 1f) return false;
+            {
+                int c = nodeOf[uniqueFaces![f + k]];
+                if (!moveWeights.TryGetValue(c, out float w) || w < 1f || MapIdOf(c) != id) return false;
+            }
         return true;
     }
 

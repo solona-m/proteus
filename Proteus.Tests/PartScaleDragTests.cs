@@ -77,6 +77,27 @@ public class PartScaleDragTests
 
     // ── handles ──────────────────────────────────────────────────────────────
 
+    /// <summary>
+    /// The pivot a mirrored drag reflects is the one the handle's matrix is about: captured on the press, held while
+    /// the host's pivot moves with the part, and still readable on the frame the drag ends.
+    /// </summary>
+    [Fact]
+    [Trait("Plan", "AC-mirror-move-tools-1")]
+    public void DragPivotIsThePivotCapturedAtStart()
+    {
+        var start = new Vector3(0.03f, -0.02f, 0.01f);
+        var drag = PressOn(Oblique, Handle.Y, start);
+        Assert.Equal(start, drag.DragPivot);
+
+        var tip = TipOf(drag, Handle.Y);
+        Frame(drag, Oblique, tip + new Vector2(0f, -30f), down: true, pivot: start + new Vector3(0.01f, 0.05f, 0f));
+        Assert.Equal(start, drag.DragPivot);
+
+        Frame(drag, Oblique, tip + new Vector2(0f, -30f), down: false, pivot: Vector3.Zero);
+        Assert.True(drag.Ended);
+        Assert.Equal(start, drag.DragPivot);
+    }
+
     [Fact]
     [Trait("Plan", "AC-axis-scale-1")]
     [Trait("Plan", "EDGE-axis-scale-11")]

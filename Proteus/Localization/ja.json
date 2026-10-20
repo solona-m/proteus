@@ -2855,9 +2855,25 @@
     "message": "左右対称",
     "description": ""
   },
-  "Parts.Brush.Mirror.Tip": {
-    "message": "体の中心を軸に、左右を同時に鏡映しで塗ります。",
-    "description": ""
+  "Parts.Mirror.Tip": {
+    "message": "体の中心を軸に、左右を同時に鏡映しで編集します。ブラシは鏡像側も塗り、移動・回転・拡大縮小は反対側の対応する布を鏡映しで動かします。それ自体が左右対称のパーツは中心に留まります。",
+    "description": "Tooltip on the Mirror left/right checkbox, shown under the brushes and under Move, Rotate and Scale."
+  },
+  "Parts.Move.Mirror.Paired.Fmt": {
+    "message": "左右対称: 選択した {1:N0} 点のうち {0:N0} 点に反対側の対応点があります。",
+    "description": "{0} is how many selected points matched a point on the other side; {1} is how many points are selected."
+  },
+  "Parts.Move.Mirror.Held.Fmt": {
+    "message": "対応点のうち {0:N0} 点はロックされているため動きません。",
+    "description": "{0} is how many of the matching points are locked."
+  },
+  "Parts.Move.Mirror.None": {
+    "message": "左右対称: 反対側にこの選択に対応するものがないため、こちら側だけが動きます。",
+    "description": "Shown under Move, Rotate and Scale with Mirror on when nothing matched."
+  },
+  "Parts.Move.Mirror.Centred": {
+    "message": "左右対称: この選択はそれ自体が左右対称なので、一つのまとまりとして動き、中心に留まります。横方向の移動と横向きの回転は除かれます。",
+    "description": "Shown under Move, Rotate and Scale with Mirror on when the selection crosses the centre and mirrors itself."
   },
   "Parts.SkinMoves": {
     "message": "肌も動かす",
@@ -4578,6 +4594,10 @@
   "Parts.Retarget.Save.Legacy": {
     "message": "この Mod はまだ Penumbra の旧フォルダー形式で、Proteus は編集しません。Penumbra で一度有効にしてアップグレードさせてから、戻ってきてください。",
     "description": "Body size status line: the mod is in Penumbra's pre-v3 folder format."
+  },
+  "Parts.Retarget.Save.ModGone.Fmt": {
+    "message": "「{0}」はPenumbraのModにもうありません。Penumbraで名前が変更されたか削除されました。何も保存されていません。",
+    "description": "Body size status line when the mod's folder is gone. {0} is the mod's folder name."
   },
   "Parts.Retarget.Save.Failed.Fmt": {
     "message": "保存できませんでした：{0}",
