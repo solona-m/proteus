@@ -4,14 +4,12 @@
 [English](../README.md) · [日本語](README.ja.md) · **Deutsch** · [Français](README.fr.md) · [简体中文](README.zh.md) · [한국어](README.ko.md) · [Español](README.es.md) · [Русский](README.ru.md)
 <!--/i18n-->
 
-Proteus ist ein Dalamud-Plugin für FFXIV, das Overlay-Texturen zur Laufzeit auf die Haut und die Ausrüstung deines Charakters komponiert. Mod-Autoren liefern kleine PNG-Overlays zusammen mit ihren Penumbra-Mods aus; Proteus blendet sie bei jeder Optionsänderung in die Basistexturen ein, ohne die Originaldateien des Mods anzurühren. Proteus kann Proteus-fähige pmp-Dateien, Onion-Overlay-omp-Dateien und Atramentum-Luminis-Leuchttattoos importieren. Außerdem kann es die Modelle jedes installierten Mods bearbeiten, ob Proteus-Mod oder nicht: Kleidung umformen, Windbewegung malen, Teil-Schalter hinzufügen, Haar, das für ein anderes Volk gemacht wurde, an deines anpassen und Haar unter Hüte passen lassen.
+Proteus ist ein Dalamud-Plugin für FFXIV, das folgende Möglichkeiten bietet:
 
-Overlays können auf zwei Arten dargestellt werden: in die Haut gemalt, oder als **zweite Haut** — eine Kopie deines Körper-Meshs, die als Ausrüstung gezeichnet wird, sodass ein Overlay Sphere-Maps, Metallanteil und animiertes Leuchten nutzen kann, was Hautmaterialien nicht können.
-
+- **Komponiere Overlay-Texturen.** Legt zur Laufzeit Overlays auf die Haut und die Ausrüstung deines Charakters, die du wie normale Mods ein- und ausschalten kannst. Overlays werden auf alle kompatiblen UVs gebacken, etwa bibo/gen3/gen2/Vanilla.
+- **Lass Ausrüstung sich beim Anlegen selbst anpassen.** Wähle deinen Körper und deine Größe einmal pro Penumbra-Kollektion, und Brust-, Bein-, Hand- und Fußausrüstung sowie Accessoires, die den Körper bedecken, etwa eine Jacke auf einer Halskette, werden in dem Moment an ihn angepasst, in dem du sie trägst.
+- **Studio.** Bietet Blender-ähnliche Werkzeuge, mit denen du Meshes direkt an deinem Charakter bearbeitest, um Clipping zu beheben, Windeffekte hinzuzufügen und Ausrüstung in Sekunden stapelweise auf viele Körper hochzuskalieren.
 - **Trage Mods, ohne einen Ausrüstungsplatz aufzugeben.** Eine zweite Haut muss als Gegenstand gezeichnet werden, aber Proteus versteckt sie auf etwas, das du gerade nicht nutzt — einer unsichtbaren Brille, einem Ring, den du nicht trägst, oder angehängt an deine getragenen Accessoires — sodass dein eigentliches Glamour unangetastet bleibt. Es gibt nichts einzurichten: Proteus sucht sich den Träger selbst und nimmt dir nie einen Gegenstand weg, den du trägst.
-- **Forme die Kleidung jedes Mods um, direkt an deinem Charakter.** Male im Tab **Studio** auf ein getragenes Kleidungsstück, um es dort vom Körper wegzuziehen, wo Haut hindurchragt, es hineinzudrücken, es zu glätten, es über eine Falte zu spannen oder zu malen, wo der Wind es bewegt. Jede Änderung wird im Mod gespeichert und lässt sich rückgängig machen.
-- **Passe eine Montur an deinen Körper an.** Das **Studio** kann ein Kleidungsstück, das für eine Körpergröße gemacht wurde, auf eine andere übertragen, oder von einem Körper-Mod auf einen anderen, etwa Neolithe auf Rue oder TBSE auf TBSE-X, und es als neue Option im Mod speichern. Das klappt auch mit der Ausrüstung des Spiels selbst, und es kann einem ganzen Mod in einem Rutsch jede Größe anderer Körper hinzufügen.
-- **Lass Ausrüstung sich beim Anlegen selbst anpassen.** Wähle deinen Körper einmal pro Penumbra-Kollektion, und Brust-, Bein-, Hand- und Fußausrüstung sowie Accessoires, die den Körper bedecken, etwa eine Jacke auf einer Halskette, werden in dem Moment an ihn angepasst, in dem du sie trägst.
 - **Füge jedem Teil jedes Mods Schalter hinzu, nicht nur Proteus-Mods.** Wenn ein Mod eine Schleife, ein Halsband oder einen Riemen in Geometrie einschweißt, die sein Autor nie optional gemacht hat, kann der Tab **Studio** dieses Stück herauslösen und ihm einen echten Schalter geben.
 - **Trage Haar-Mods, die für ein anderes Volk gemacht wurden.** Viele Haar-Mods sind nur für ein Volk gemacht, bei allen anderen zeigt das Spiel stattdessen seine eigene Frisur. Proteus biegt die Frisur des Mods auf den Kopf deines Volkes und fügt sie demselben Mod hinzu, samt Physik, sodass sie einfach funktioniert.
 - **Lass gemoddetes Haar unter Hüte passen.** Proteus drückt das Haar, das ein Hut bedecken würde, flach an deinen Kopf, damit der Hut nicht mehr einfach hindurchgeht. Das ist standardmäßig an und greift nur, solange du einen Hut trägst.
@@ -21,6 +19,8 @@ Wenn du Hilfe brauchst, sieh bitte zuerst in den [Leitfaden zur Fehlerbehebung](
 Komm danach auf https://discord.gg/solona und frag im Kanal #help. Das Plugin ist noch neu, aber ich behebe Fehler so schnell ich kann!
 
 Wenn du selbst Mods für Proteus bauen willst, lies den [Leitfaden für Ersteller](../For%20Creators.md).
+
+Wie KI bei der Entwicklung von Proteus eingesetzt wurde und wie nicht (in deinem Spiel läuft zur Laufzeit keine KI): [KI-Erklärung](AI-DECLARATION.de.md)
 
 ---
 
