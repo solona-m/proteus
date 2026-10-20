@@ -2855,9 +2855,25 @@
     "message": "Miroir gauche/droite",
     "description": ""
   },
-  "Parts.Brush.Mirror.Tip": {
-    "message": "Peint les deux côtés à la fois, en miroir par rapport au centre du corps.",
-    "description": ""
+  "Parts.Mirror.Tip": {
+    "message": "Agit sur les deux côtés à la fois, en miroir par rapport au centre du corps. Les pinceaux peignent aussi l'image miroir ; Déplacer, Pivoter et Échelle déplacent le tissu correspondant de l'autre côté en miroir. Une pièce qui est son propre miroir reste centrée.",
+    "description": "Tooltip on the Mirror left/right checkbox, shown under the brushes and under Move, Rotate and Scale."
+  },
+  "Parts.Move.Mirror.Paired.Fmt": {
+    "message": "Miroir : {0:N0} des {1:N0} points sélectionnés ont un correspondant de l'autre côté.",
+    "description": "{0} is how many selected points matched a point on the other side; {1} is how many points are selected."
+  },
+  "Parts.Move.Mirror.Held.Fmt": {
+    "message": "{0:N0} des points correspondants sont verrouillés et restent en place.",
+    "description": "{0} is how many of the matching points are locked."
+  },
+  "Parts.Move.Mirror.None": {
+    "message": "Miroir : rien de l'autre côté ne correspond à cette sélection, seul ce côté bouge.",
+    "description": "Shown under Move, Rotate and Scale with Mirror on when nothing matched."
+  },
+  "Parts.Move.Mirror.Centred": {
+    "message": "Miroir : cette sélection est son propre miroir, elle bouge d'un seul bloc et reste centrée. Les déplacements et rotations latéraux sont ignorés.",
+    "description": "Shown under Move, Rotate and Scale with Mirror on when the selection crosses the centre and mirrors itself."
   },
   "Parts.Brush.Lock.Hint": {
     "message": "Maj-clic sur une pièce pour la verrouiller.",

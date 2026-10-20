@@ -3114,8 +3114,23 @@ public sealed class PartsStrings
     public readonly string BrushMirror = Loc.Localize("Parts.Brush.Mirror", "Mirror left/right")
                                        + "###partsBrushMirror";
 
-    public readonly string BrushMirrorTip = Loc.Localize("Parts.Brush.Mirror.Tip",
-        "Paint both sides at once, mirrored across the body's centre.");
+    /// <summary>On <see cref="BrushMirror"/>, shown under the brushes and under Move, Rotate and Scale alike.</summary>
+    public readonly string MirrorTip = Loc.Localize("Parts.Mirror.Tip",
+        "Work on both sides at once, mirrored across the body's centre. The brushes paint the mirror image too; Move, Rotate and Scale move the matching cloth on the other side the mirrored way. A piece that is its own mirror stays centred.");
+
+    /// <summary>Under Move, Rotate and Scale with Mirror on: {0} selected points matched, of {1}.</summary>
+    public readonly string MoveMirrorPairedFmt = Loc.Localize("Parts.Move.Mirror.Paired.Fmt",
+        "Mirror: {0:N0} of {1:N0} selected points have a match on the other side.");
+
+    /// <summary>Added under <see cref="MoveMirrorPairedFmt"/>: {0} of the matches are locked.</summary>
+    public readonly string MoveMirrorHeldFmt = Loc.Localize("Parts.Move.Mirror.Held.Fmt",
+        "{0:N0} of the matching points are locked and stay put.");
+
+    public readonly string MoveMirrorNone = Loc.Localize("Parts.Move.Mirror.None",
+        "Mirror: nothing on the other side matches this selection, so only this side moves.");
+
+    public readonly string MoveMirrorCentred = Loc.Localize("Parts.Move.Mirror.Centred",
+        "Mirror: this selection is its own mirror, so it moves as one piece and stays centred. Sideways moves and sideways turns are left out.");
 
     /// <summary>Added under every brush tool's tooltip.</summary>
     public readonly string BrushLockHint = Loc.Localize("Parts.Brush.Lock.Hint",

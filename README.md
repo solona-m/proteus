@@ -98,7 +98,7 @@ The tools:
 - **You paint straight onto your character**, and a garment shows each stroke as you paint it. Hold **Alt** to move the camera. Tick **Show model view** to paint on the model in the window instead: drag from the background to turn it, shift-drag to move it, scroll to zoom.
 - **Brush size** goes down to 1 mm. `[` and `]` change it, and Shift gives finer steps. The effect is strongest in the middle and fades to nothing at the edge; the brush's reach is drawn as a rainbow on the cloth so you can see it. Brushes work at the same pace at any frame rate. For **Pull out** and **Push in**, **Strength** is how far the middle of the brush moves the surface for each quarter second you hold it; for the other brushes it's how quickly they work. Small is usually right: clothing only has to clear the body by a fraction of a millimetre, and you can always paint the same place again.
 - **Limit** is the furthest the brushes may move any point from where the mod's author put it. Painting stops at the limit, so a held brush can't balloon the garment. Raise it for a bigger change.
-- **Mirror left/right** paints both sides at once.
+- **Mirror left/right** paints both sides at once. Move, Rotate and Scale mirror too.
 - **Skin never moves.** To keep a brush off anything else, lock it: Shift-click the part on your character or the model, or untick it in the part list. A locked part is also hidden, on the model and on your character, so clicks pass through it to what's underneath — lock a skirt to reach the underwear beneath it. Seams welded to a locked part hold too.
 - **Hair works too.** Hair, face, ears and tail redraw when you let go, rather than showing the stroke as you paint.
 - **Apply to other sizes** copies the edit onto the mod's other files for the same garment, matched by where they sit on it.
@@ -119,6 +119,7 @@ The tools:
 
 - **Whole parts or Polygons.** By default you move whole parts. Switch to **Polygons** to work on a few polygons instead: click one to select it, Shift-click to add or remove one, and **Grow** or **Shrink** the selection a ring at a time. Choosing a part in the list selects all of its polygons, and **Clear** empties the selection.
 - **Move adjacent parts** lets the cloth around what you're moving follow it, less the further away it is, so the garment bends instead of tearing. **Falloff** sets how far that reaches. With polygons, the falloff is measured along the surface, so only cloth joined to your selection follows: a separate piece that merely sits close by stays put. With **Move adjacent parts** off, only your selection moves, though points it shares exactly with a neighbour still move so seams stay closed.
+- **Mirror left/right** moves, turns or scales the matching cloth on the other side of the body the mirrored way, at the same time. A piece that is its own mirror, such as a whole bra or a choker, moves as one and stays centred, so sideways moves and turns are left out for it. Points with no match on the other side still move on their own side, and one **Undo move** takes back both sides.
 - **Skin and locked parts never move.** Unlock a part under a brush to move it.
 - A moved part still follows the bones it was made for, so a part moved far from them can bend oddly in poses.
 

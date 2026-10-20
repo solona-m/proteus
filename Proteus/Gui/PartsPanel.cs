@@ -3184,7 +3184,7 @@ public sealed class PartsPanel
 
         ImGui.Spacing();
         if (ImGui.Checkbox(ps.BrushMirror, ref mirrorBrush)) viewport.Recolour();
-        if (ImGui.IsItemHovered()) ImGui.SetTooltip(ps.BrushMirrorTip);
+        if (ImGui.IsItemHovered()) ImGui.SetTooltip(ps.MirrorTip);
 
         // Locks are made on the model, the character or the part list; this only says how many, and lets them all go.
         if (parts != null && Locks.Count > 0)
