@@ -3035,6 +3035,10 @@ public sealed class PartsStrings
 
     public readonly string RetargetShaping = Loc.Localize("Parts.Retarget.Shaping", "Bending the model into the shape the bodies are made for…");
 
+    /// <summary>{0} is the race of the model open, {1} the race picked below it.</summary>
+    public readonly string RetargetLoweredFmt = Loc.Localize("Parts.Retarget.Lowered.Fmt",
+        "A {1} model is made from the {0} model, bent into the {1} shape the way the game bends between them. Saving adds the metadata the game needs.");
+
     public readonly string RetargetShapedDownFmt = Loc.Localize("Parts.Retarget.ShapedDown.Fmt",
         "There are no {0} bodies to refit between, so the {0} model is refitted in the {1} shape, the way the game bends it, and saved back as {0}.");
 
@@ -3056,7 +3060,7 @@ public sealed class PartsStrings
     public readonly string RetargetRaceLabel = Loc.Localize("Parts.Retarget.Race.Label", "Refit for");
 
     public readonly string RetargetRaceTip = Loc.Localize("Parts.Retarget.Race.Tip",
-        "Which race the refit is for. Another race of the garment's sex gets its own model, made from this one the way the game bends it, refitted onto that race's body and saved where that race loads it. Everyone else keeps this model.");
+        "Which race the refit is for. Another race of the garment's sex gets its own model, made from this one the way the game bends it, refitted onto that race's body and saved where that race loads it. This model stays as it is.");
 
     /// <summary>{0} is a race such as "Midlander M".</summary>
     public readonly string RetargetRaceThisModelFmt = Loc.Localize("Parts.Retarget.Race.ThisModel.Fmt", "{0} (this model)");
@@ -3080,6 +3084,14 @@ public sealed class PartsStrings
     /// <summary>{0} is the race picked, {1} the race of the model open.</summary>
     public readonly string RetargetRaceOnlyFmt = Loc.Localize("Parts.Retarget.Race.Only.Fmt",
         "Only {0} will wear the saved refit; {1} keeps this model.");
+
+    /// <summary>{0} is the race picked, {1} the race of the model open; said for a race the open one falls back to.</summary>
+    public readonly string RetargetRaceBelowFmt = Loc.Localize("Parts.Retarget.Race.Below.Fmt",
+        "{0} will wear the saved refit, and so will every race of that sex with no model of its own for this item; {1} keeps this model.");
+
+    /// <summary>{0} is the race picked.</summary>
+    public readonly string RetargetRaceBelowExtraBonesFmt = Loc.Localize("Parts.Retarget.Race.BelowExtraBones.Fmt",
+        "This garment uses extra bones. Only {0} is given the extra skeleton for them, so on the other races that wear this refit those bones won't move.");
 
     /// <summary>{0} is the race picked.</summary>
     public readonly string RetargetRaceSourceBakedFmt = Loc.Localize("Parts.Retarget.Race.SourceBaked.Fmt",
@@ -3122,8 +3134,23 @@ public sealed class PartsStrings
     public readonly string BrushMirror = Loc.Localize("Parts.Brush.Mirror", "Mirror left/right")
                                        + "###partsBrushMirror";
 
-    public readonly string BrushMirrorTip = Loc.Localize("Parts.Brush.Mirror.Tip",
-        "Paint both sides at once, mirrored across the body's centre.");
+    /// <summary>On <see cref="BrushMirror"/>, shown under the brushes and under Move, Rotate and Scale alike.</summary>
+    public readonly string MirrorTip = Loc.Localize("Parts.Mirror.Tip",
+        "Work on both sides at once, mirrored across the body's centre. The brushes paint the mirror image too; Move, Rotate and Scale move the matching cloth on the other side the mirrored way. A piece that is its own mirror stays centred.");
+
+    /// <summary>Under Move, Rotate and Scale with Mirror on: {0} selected points matched, of {1}.</summary>
+    public readonly string MoveMirrorPairedFmt = Loc.Localize("Parts.Move.Mirror.Paired.Fmt",
+        "Mirror: {0:N0} of {1:N0} selected points have a match on the other side.");
+
+    /// <summary>Added under <see cref="MoveMirrorPairedFmt"/>: {0} of the matches are locked.</summary>
+    public readonly string MoveMirrorHeldFmt = Loc.Localize("Parts.Move.Mirror.Held.Fmt",
+        "{0:N0} of the matching points are locked and stay put.");
+
+    public readonly string MoveMirrorNone = Loc.Localize("Parts.Move.Mirror.None",
+        "Mirror: nothing on the other side matches this selection, so only this side moves.");
+
+    public readonly string MoveMirrorCentred = Loc.Localize("Parts.Move.Mirror.Centred",
+        "Mirror: this selection is its own mirror, so it moves as one piece and stays centred. Sideways moves and sideways turns are left out.");
 
     /// <summary>Added under every brush tool's tooltip.</summary>
     public readonly string BrushLockHint = Loc.Localize("Parts.Brush.Lock.Hint",

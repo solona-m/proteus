@@ -176,7 +176,7 @@ public sealed class LocalizationTests
         ["en"] = "Have gear refit itself as you put it on.", ["de"] = "Lass Ausrüstung sich beim Anlegen selbst anpassen.",
         ["es"] = "Haz que el equipo se ajuste solo al ponértelo.",
         ["fr"] = "Laissez l'équipement s'ajuster tout seul quand vous le portez.",
-        ["ja"] = "装備を着た瞬間に自分の体に合わせ直せます。", ["ko"] = "장비를 입는 순간 저절로 내 몸에 맞춰지게 하세요.",
+        ["ja"] = "装備を身に着けると、自動で体に合わせ直されます。", ["ko"] = "장비를 입는 순간 저절로 내 몸에 맞춰지게 하세요.",
         ["ru"] = "Пусть снаряжение подгоняется само, когда вы его надеваете.", ["zh"] = "让装备在穿上时自动改配。",
     };
 
@@ -724,12 +724,13 @@ public sealed class LocalizationTests
     [MemberData(nameof(Translations))]
     [Trait("Plan", "AC-refit-other-race-1")]
     [Trait("Plan", "AC-refit-other-race-9")]
+    [Trait("Plan", "AC-refit-race-down-9")]
     public void RefitOtherRace_strings_are_translated_not_copied(string lang)
     {
         var en = Load(Source);
         var tr = Load(lang);
         var keys = en.Keys.Where(k => k.StartsWith("Parts.Retarget.Race.", StringComparison.Ordinal)).ToList();
-        Assert.Equal(21, keys.Count);
+        Assert.Equal(23, keys.Count);
         foreach (string key in keys)
         {
             Assert.True(tr.ContainsKey(key), $"[{lang}] has no {key}");
@@ -752,6 +753,33 @@ public sealed class LocalizationTests
         Assert.Contains("M Highlander", bullet);
     }
 
+    /// <summary>
+    /// The README's Refit for bullet says it goes the other way too — a Highlander-only model made a Midlander's — in
+    /// the race names the plugin itself shows; and the note saying a lower race's model is made is translated.
+    /// </summary>
+    [Theory]
+    [MemberData(nameof(AllLocales))]
+    [Trait("Plan", "AC-refit-race-down-9")]
+    public void Readme_says_refit_for_goes_down_too(string lang)
+    {
+        var dir = new System.IO.DirectoryInfo(AppContext.BaseDirectory);
+        while (dir != null && !System.IO.File.Exists(System.IO.Path.Combine(dir.FullName, "proteus.slnx"))) dir = dir.Parent;
+        Assert.True(dir != null, $"Could not find proteus.slnx above {AppContext.BaseDirectory}.");
+        string readme = System.IO.File.ReadAllText(System.IO.Path.Combine(
+            dir!.FullName, lang == Source ? "README.md" : System.IO.Path.Combine("docs", $"README.{lang}.md")));
+        var loc = Load(lang);
+        string bullet = readme.Split('\n').Single(l => l.StartsWith("- **" + loc["Parts.Retarget.Race.Label"].Message + "**",
+                                                                    StringComparison.Ordinal));
+        string mid = loc["Common.Race.Midlander"].Message, high = loc["Common.Race.Highlander"].Message;
+        Assert.Contains(mid, bullet);
+        Assert.Contains(high, bullet);
+        Assert.True(bullet.IndexOf(high, StringComparison.Ordinal) < bullet.LastIndexOf(mid, StringComparison.Ordinal),
+                    $"[{lang}] the bullet does not name {high} before {mid}");
+
+        if (lang != Source)
+            Assert.NotEqual(Load(Source)["Parts.Retarget.Lowered.Fmt"].Message, loc["Parts.Retarget.Lowered.Fmt"].Message);
+    }
+
     /// <summary>The README's Body refit section says a body and a size are picked per part, in the words Settings uses.</summary>
     [Theory]
     [MemberData(nameof(AllLocales))]
@@ -769,5 +797,62 @@ public sealed class LocalizationTests
                                                                    StringComparison.Ordinal));
         Assert.Contains("**" + strings["AutoRefit.Body"].Message + "**", step);
         Assert.Contains("Rue", step);
+    }
+
+    private static readonly string[] MoveMirrorKeys =
+    [
+        "Parts.Mirror.Tip", "Parts.Move.Mirror.Paired.Fmt", "Parts.Move.Mirror.Held.Fmt",
+        "Parts.Move.Mirror.None", "Parts.Move.Mirror.Centred",
+    ];
+
+    /// <summary>The mirror's tooltip was re-keyed when it came to Move, Rotate and Scale: the old key is gone from every
+    /// language, and the new strings are each language's own words.</summary>
+    [Theory]
+    [MemberData(nameof(Translations))]
+    [Trait("Plan", "AC-mirror-move-tools-9")]
+    [Trait("Plan", "AC-mirror-move-tools-2")]
+    public void MoveMirror_strings_are_translated_not_copied(string lang)
+    {
+        var en = Load(Source);
+        var tr = Load(lang);
+        foreach (string key in MoveMirrorKeys)
+        {
+            Assert.True(tr.ContainsKey(key), $"[{lang}] has no {key}");
+            Assert.NotEqual(en[key].Message, tr[key].Message);
+        }
+        Assert.False(tr.ContainsKey("Parts.Brush.Mirror.Tip"), $"[{lang}] still has the old mirror tooltip");
+        Assert.False(en.ContainsKey("Parts.Brush.Mirror.Tip"), "en still has the old mirror tooltip");
+    }
+
+    /// <summary>The mirror's tooltip names the three move tools as that language's tool buttons call them.</summary>
+    [Theory]
+    [MemberData(nameof(AllLocales))]
+    [Trait("Plan", "AC-mirror-move-tools-2")]
+    public void Mirror_tip_names_the_move_tools(string lang)
+    {
+        var strings = Load(lang);
+        string tip = strings["Parts.Mirror.Tip"].Message;
+        foreach (string tool in new[] { "Parts.Tool.Move", "Parts.Tool.Rotate", "Parts.Tool.Scale" })
+            Assert.Contains(strings[tool].Message, tip);
+    }
+
+    /// <summary>Every README's Move, Rotate and Scale section has a Mirror bullet that says one undo takes back both
+    /// sides, in the words the buttons use.</summary>
+    [Theory]
+    [MemberData(nameof(AllLocales))]
+    [Trait("Plan", "AC-mirror-move-tools-9")]
+    public void Readme_says_move_tools_mirror(string lang)
+    {
+        var dir = new System.IO.DirectoryInfo(AppContext.BaseDirectory);
+        while (dir != null && !System.IO.File.Exists(System.IO.Path.Combine(dir.FullName, "proteus.slnx"))) dir = dir.Parent;
+        Assert.True(dir != null, $"Could not find proteus.slnx above {AppContext.BaseDirectory}.");
+        string readme = System.IO.File.ReadAllText(System.IO.Path.Combine(
+            dir!.FullName, lang == Source ? "README.md" : System.IO.Path.Combine("docs", $"README.{lang}.md")));
+        var strings = Load(lang);
+        string label = "- **" + strings["Parts.Brush.Mirror"].Message + "**";
+        string undo = "**" + strings["Parts.Move.Undo"].Message + "**";
+        var bullets = readme.Split('\n').Where(l => l.StartsWith(label, StringComparison.Ordinal)).ToList();
+        Assert.Equal(2, bullets.Count);                       // the brushes', and the move tools'
+        Assert.Contains(bullets, b => b.Contains(undo, StringComparison.Ordinal));
     }
 }

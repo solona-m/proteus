@@ -604,7 +604,7 @@ internal sealed partial class BodyRetargetPanel(PenumbraBridge penumbra, UVRemap
         // is made with another wearer, and bends the bodies of the "made for" mod with it, so those are in it too.
         // And what the option a save goes into gives it to read: a change of where to save that changes what will load
         // makes the model again; one that changes nothing does not.
-        string key = given.ModelRel + "|" + (route.Down ? "v" : "^") + route.To
+        string key = given.ModelRel + "|" + route.Tag + route.To
                    + (picked ? "|x|" + (fromBodyDir ?? bodyDir) + "|" + BakeFingerprint(given) : "");
         if (!route.Any || bakeRefusalFor == key)
         {
@@ -700,7 +700,8 @@ internal sealed partial class BodyRetargetPanel(PenumbraBridge penumbra, UVRemap
         {
             baked = made;
             if (made.Explicit) OnRaceBaked(made);
-            log.Information("[Proteus] retarget: {0} {1} from c{2:D4} to c{3:D4}", made.Route.Down ? "shaped" : "baked",
+            log.Information("[Proteus] retarget: {0} {1} from c{2:D4} to c{3:D4}",
+                            made.Route.Down ? "shaped" : made.Route.Lowered ? "lowered" : "baked",
                             made.SavePath, made.Route.Drawn, made.Route.To);
         }
         else
@@ -755,7 +756,10 @@ internal sealed partial class BodyRetargetPanel(PenumbraBridge penumbra, UVRemap
         var ps = Strings.Parts;
         if (active is { } b)
         {
-            ImGui.TextWrapped(string.Format(b.Route.Down ? ps.RetargetShapedDownFmt : ps.RetargetBakedFmt,
+            // Lowered, the race below usually has a model of the game's already (Midlanders wear the game's shirt):
+            // the note says one is made, not that none exists.
+            ImGui.TextWrapped(string.Format(b.Route.Down ? ps.RetargetShapedDownFmt
+                                            : b.Route.Lowered ? ps.RetargetLoweredFmt : ps.RetargetBakedFmt,
                                             ModelRace.Describe($"{b.Route.Drawn:D4}"),
                                             ModelRace.Describe($"{b.Route.To:D4}")));
             DrawRaceNotes(b);
@@ -2006,9 +2010,11 @@ internal sealed partial class BodyRetargetPanel(PenumbraBridge penumbra, UVRemap
             madeModFor = null;   // it exists now, and the lookup above was told it did not
         }
         string group = Destination();
-        // A bake is saved under the wearer's race, beside the drawn model rather than over it — which men, and every
-        // other race falling through to it, go on wearing — with the EQDP entry that makes the game load it. A garment
-        // bent down is saved over the drawn model, bent back up, and needs none.
+        // A bake is saved under the new race, beside the drawn model rather than over it, with the EQDP entry that makes
+        // the game load it. Up, the drawn race and every other race falling through to it go on wearing the drawn
+        // model; lowered (a Highlander model made a Midlander's), the drawn race does, and the races falling through to
+        // the new one wear the refit unless they have a model of their own. A garment bent down only to be refitted is
+        // saved over the drawn model, bent back up, and needs none.
         string path = SavePath(ctx);
         List<object>? manipulations = active?.Route.Eqdp(path) is { } eqdp ? [eqdp] : null;
         // A race picked in "Refit for" loads no extra skeleton for the item unless it is told to: the drawn race's,

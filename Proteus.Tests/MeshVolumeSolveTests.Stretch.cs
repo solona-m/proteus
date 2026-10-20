@@ -533,26 +533,38 @@ public partial class MeshVolumeSolveTests
                                     FaceNormal(after, t[i], t[i + 1], t[i + 2])) > 0f, $"triangle {i / 3} folded");
     }
 
+    /// <summary>
+    /// The model's triangles that turned over between <paramref name="before"/> and <paramref name="after"/> — a fold, a
+    /// hole in game — counting only those <paramref name="only"/> picks (every triangle when null). Islands are left
+    /// out: their triangles are already counted in their submesh.
+    /// </summary>
+    private static (int Folded, int Counted) FoldedTriangles(ModelParts model, float[] before, float[] after,
+                                                             Func<int, int, int, bool>? only = null)
+    {
+        int folded = 0, counted = 0;
+        foreach (var part in model.Parts)
+        {
+            if (part.Island >= 0) continue;
+            var t = part.Triangles;
+            for (int i = 0; i + 2 < t.Length; i += 3)
+            {
+                if (only != null && !only(t[i], t[i + 1], t[i + 2])) continue;
+                counted++;
+                if (Vector3.Dot(FaceNormal(before, t[i], t[i + 1], t[i + 2]),
+                                FaceNormal(after, t[i], t[i + 1], t[i + 2])) <= 0f) folded++;
+            }
+        }
+        return (folded, counted);
+    }
+
     /// <summary>Band triangles (any corner part-way carried) that turned over against how they faced before the drag.</summary>
     private static int FoldedBand(Matrix4x4 transform)
     {
         var (model, _, _) = TwoParts();
         var solve = new MeshVolumeSolve(model);
         Drag(solve, model.Parts[1].Triangles, transform, adjacent: true, falloff: 0.02f);
-        var after = solve.Positions();
-        int folded = 0, band = 0;
-        foreach (var part in model.Parts)
-        {
-            var t = part.Triangles;
-            for (int i = 0; i + 2 < t.Length; i += 3)
-            {
-                bool inBand = Enumerable.Range(0, 3).Any(k => solve.WeightAt(t[i + k]) is > 0f and < 1f);
-                if (!inBand) continue;
-                band++;
-                if (Vector3.Dot(FaceNormal(model.Positions, t[i], t[i + 1], t[i + 2]),
-                                FaceNormal(after, t[i], t[i + 1], t[i + 2])) <= 0f) folded++;
-            }
-        }
+        var (folded, band) = FoldedTriangles(model, model.Positions, solve.Positions(),
+            (a, b, c) => new[] { a, b, c }.Any(v => solve.WeightAt(v) is > 0f and < 1f));
         Assert.True(band > 0, "the fixture has no band");
         return folded;
     }

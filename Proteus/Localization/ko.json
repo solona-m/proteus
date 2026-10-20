@@ -2855,9 +2855,25 @@
     "message": "좌우 대칭",
     "description": ""
   },
-  "Parts.Brush.Mirror.Tip": {
-    "message": "몸의 중심을 기준으로 양쪽을 동시에 대칭으로 칠합니다.",
-    "description": ""
+  "Parts.Mirror.Tip": {
+    "message": "몸의 중심을 기준으로 양쪽을 동시에 대칭으로 편집합니다. 브러시는 대칭 쪽도 칠하고, 이동·회전·크기 조절은 반대쪽의 대응하는 천을 대칭으로 움직입니다. 그 자체로 좌우 대칭인 부분은 중앙에 유지됩니다.",
+    "description": "Tooltip on the Mirror left/right checkbox, shown under the brushes and under Move, Rotate and Scale."
+  },
+  "Parts.Move.Mirror.Paired.Fmt": {
+    "message": "좌우 대칭: 선택한 {1:N0}개 점 중 {0:N0}개가 반대쪽에 대응점이 있습니다.",
+    "description": "{0} is how many selected points matched a point on the other side; {1} is how many points are selected."
+  },
+  "Parts.Move.Mirror.Held.Fmt": {
+    "message": "대응점 중 {0:N0}개는 잠겨 있어 움직이지 않습니다.",
+    "description": "{0} is how many of the matching points are locked."
+  },
+  "Parts.Move.Mirror.None": {
+    "message": "좌우 대칭: 반대쪽에 이 선택과 대응하는 것이 없어 이쪽만 움직입니다.",
+    "description": "Shown under Move, Rotate and Scale with Mirror on when nothing matched."
+  },
+  "Parts.Move.Mirror.Centred": {
+    "message": "좌우 대칭: 이 선택은 그 자체로 좌우 대칭이라 한 덩어리로 움직이며 중앙에 유지됩니다. 옆으로의 이동과 회전은 제외됩니다.",
+    "description": "Shown under Move, Rotate and Scale with Mirror on when the selection crosses the centre and mirrors itself."
   },
   "Parts.Brush.Lock.Hint": {
     "message": "Shift+클릭으로 부위를 잠급니다.",
@@ -3723,6 +3739,10 @@
     "message": "{0} 바디가 없어서 {0} 모델을 게임이 변형하는 방식대로 {1} 체형에서 리핏한 뒤 다시 {0}(으)로 저장합니다.",
     "description": ""
   },
+  "Parts.Retarget.Lowered.Fmt": {
+    "message": "{0} 모델로 {1} 모델을 만들어, 게임이 둘 사이를 휘는 방식 그대로 {1} 체형으로 휩니다. 저장하면 게임에 필요한 메타데이터가 추가됩니다.",
+    "description": "{0} is the race of the model open, {1} the race picked below it."
+  },
   "Parts.Retarget.Bake.BendBack.Fmt": {
     "message": "리핏을 {0} 체형으로 되돌리지 못했습니다({1})",
     "description": ""
@@ -4320,7 +4340,7 @@
     "description": "Heads the dropdown that picks which race's model a refit is made and saved as."
   },
   "Parts.Retarget.Race.Tip": {
-    "message": "어느 종족용으로 리핏할지 고릅니다. 의상과 같은 성별의 다른 종족을 고르면, 게임이 휘는 방식 그대로 이 모델에서 전용 모델을 만들어 그 종족의 체형에 리핏하고, 그 종족이 불러오는 위치에 저장합니다. 다른 종족은 이 모델을 그대로 씁니다.",
+    "message": "어느 종족용으로 리핏할지 고릅니다. 의상과 같은 성별의 다른 종족을 고르면, 게임이 휘는 방식 그대로 이 모델에서 전용 모델을 만들어 그 종족의 체형에 리핏하고, 그 종족이 불러오는 위치에 저장합니다. 이 모델은 그대로 남습니다.",
     "description": "Tooltip of Parts.Retarget.Race.Label."
   },
   "Parts.Retarget.Race.ThisModel.Fmt": {
@@ -4346,6 +4366,14 @@
   "Parts.Retarget.Race.Only.Fmt": {
     "message": "저장한 리핏은 {0}만 입습니다. {1}은(는) 이 모델을 그대로 씁니다.",
     "description": "{0} is the race picked, {1} the race of the model open."
+  },
+  "Parts.Retarget.Race.Below.Fmt": {
+    "message": "저장한 리핏은 {0}이(가) 입으며, 이 장비의 자체 모델이 없는 같은 성별의 모든 종족도 입습니다. {1}은(는) 이 모델을 그대로 씁니다.",
+    "description": "{0} is the race picked, {1} the race of the model open; said for a race the open one falls back to."
+  },
+  "Parts.Retarget.Race.BelowExtraBones.Fmt": {
+    "message": "이 의상은 추가 본을 사용합니다. 추가 스켈레톤은 {0}에게만 주어지므로, 이 리핏을 입는 다른 종족에서는 그 본이 움직이지 않습니다.",
+    "description": "{0} is the race picked."
   },
   "Parts.Retarget.Race.SourceBaked.Fmt": {
     "message": "원래 맞춰진 체형도 같은 방식으로 {0}에 맞게 휘므로, 전과 똑같이 몸에 맞습니다.",

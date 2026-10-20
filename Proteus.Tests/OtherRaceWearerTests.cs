@@ -357,6 +357,180 @@ public class OtherRaceWearerTests
         try { Directory.Delete(dir, true); } catch (IOException) { }
     }
 
+    // ── down to a race the drawn one falls through to (refit-race-down) ────
+
+    private static readonly SyntheticSkeleton.Tree Game101 = SyntheticSkeleton.Human("c0101");
+
+    private static OtherRaceWearer.Inputs Lowering(byte[] pbd, IReadOnlyList<EstTable.ModEntry>? modEst = null,
+                                                   IReadOnlyDictionary<(int, ushort), int>? gameEst = null,
+                                                   IReadOnlyDictionary<string, byte[]>? skeletons = null)
+        => new(101, 301, "_top", 6091, null, null, SyntheticSkeleton.Sklb(Game101), pbd, modEst ?? [], gameEst,
+               skeletons ?? new Dictionary<string, byte[]>());
+
+    /// <summary>
+    /// Bent down, a bone the deformer chain from Midlander up to Highlander cannot move is refused by name, as it is going
+    /// up — the chain runs the other way, and was once found empty, which let every bone through.
+    /// </summary>
+    [Fact]
+    [Trait("Plan", "AC-refit-race-down-2")]
+    [Trait("Plan", "EDGE-refit-race-down-4")]
+    public void A_lowered_wearer_refuses_bones_that_would_not_move()
+    {
+        var spine = SyntheticSkeleton.Pbd(101, new Dictionary<ushort, string[]> { [301] = ["j_sebo_c"] });
+        var stuck = OtherRaceWearer.Build(Lowering(spine), SyntheticSkeleton.Leaning("j_sebo_c", "j_asi_a_l"));
+        Assert.Null(stuck.Wearer);
+        Assert.Equal(["j_asi_a_l"], stuck.Unbendable);
+        Assert.Contains("j_asi_a_l", stuck.Refusal);
+        Assert.Contains(ModelRace.Describe("0101"), stuck.Refusal);
+
+        // A bone hung below one the deformer lists bends with it.
+        var bends = OtherRaceWearer.Build(Lowering(spine), SyntheticSkeleton.Leaning("j_sebo_c", "j_kao"));
+        Assert.True(bends.Wearer != null, bends.Refusal);
+        Assert.Equal(101, bends.Wearer!.Race);
+    }
+
+    [Fact]
+    [Trait("Plan", "AC-refit-race-down-8")]
+    [Trait("Plan", "EDGE-refit-race-down-10")]
+    public void A_lowered_garment_s_extra_skeleton_is_planned_for_the_picked_race()
+    {
+        string[] weighted = ["j_kosi", "j_ex_top_a_l"];
+        var bones = Game101.Bones.ToHashSet();
+        HavokSkeleton? At(string path, string want) => path == want ? HavokSkeleton.Read(SyntheticSkeleton.Sklb(Tails)) : null;
+
+        // Midlander's own entry: used as it is.
+        var present = OtherRaceRefit.PlanEst(101, 301, "_top", 6091, weighted, bones, [],
+            new Dictionary<(int, ushort), int> { [(6091, 101)] = 7000, [(6091, 301)] = 6085 },
+            p => At(p, TailsPath(101, 7000)));
+        Assert.Equal((EstOutcome.Present, 7000), (present.Outcome, present.Entry));
+
+        // Only Highlander's: carried when Midlander's skeleton for it exists.
+        var highlanderOnly = new Dictionary<(int, ushort), int> { [(6091, 301)] = 6085 };
+        var carry = OtherRaceRefit.PlanEst(101, 301, "_top", 6091, weighted, bones, [], highlanderOnly,
+                                           p => At(p, TailsPath(101, 6085)));
+        Assert.Equal((EstOutcome.Carry, 6085), (carry.Outcome, carry.Entry));
+        var missing = OtherRaceRefit.PlanEst(101, 301, "_top", 6091, weighted, bones, [], highlanderOnly, _ => null);
+        Assert.Equal(EstOutcome.Missing, missing.Outcome);
+        Assert.Equal(["j_ex_top_a_l"], missing.Missing);
+    }
+
+    private static BodyOption Option(string name, string rel, string race, string slot = "_top")
+        => new("Chest", "", name, rel, $"chara/equipment/e0000/model/c{race}e0000{slot}.mdl", slot);
+
+    [Fact]
+    [Trait("Plan", "AC-refit-race-down-2")]
+    [Trait("Plan", "EDGE-refit-race-down-12")]
+    public void The_made_for_bodies_are_bent_down_and_filed_under_the_picked_race()
+    {
+        string dir = Path.Combine(Path.GetTempPath(), $"proteus-test-made-for-{Guid.NewGuid():N}");
+        try
+        {
+            Directory.CreateDirectory(dir);
+            File.WriteAllBytes(Path.Combine(dir, "small.mdl"), SyntheticChest.Body(0.01f, 0.01f));
+            File.WriteAllBytes(Path.Combine(dir, "large.mdl"), SyntheticChest.Body(0.03f, 0.03f));
+            var source = new BodySizeCatalog(dir, [Option("Small", "small.mdl", "0301"), Option("Large", "large.mdl", "0301")]);
+            var pbd = new PbdFile(SyntheticSkeleton.Pbd(101, new Dictionary<ushort, string[]> { [301] = ["j_sebo_c", "j_mune_l", "j_mune_r"] }, lift: 0.02f));
+            var who = new RacialModelBake.Wearer(101, new Dictionary<string, string?>(), pbd);
+
+            var bent = BakedBodyCatalog.Lowered(source, 301, 101, who, ["_top"], out var failed);
+            Assert.Empty(failed);
+            Assert.Equal(["Small", "Large"], bent.For("_top", "0101").Select(o => o.Name));
+            Assert.All(bent.Options, o => Assert.Equal("chara/equipment/e0000/model/c0101e0000_top.mdl", o.GamePath));
+
+            // Each moved down by the deformer's lift; the same file twice is bent once.
+            var before = ModelPartReader.Read(File.ReadAllBytes(Path.Combine(dir, "small.mdl")))!;
+            var after = ModelPartReader.Read(File.ReadAllBytes(bent.PathOf(bent.Options[0])))!;
+            Assert.Equal(-0.02f, after.Positions[1] - before.Positions[1], 4);
+            var again = BakedBodyCatalog.Lowered(source, 301, 101, who, ["_top"], out _);
+            Assert.Equal(bent.Options.Select(o => o.Rel), again.Options.Select(o => o.Rel));
+
+            // The same bytes bent up, as a Midlander body for a Highlander pick, are another file.
+            var asMidlander = new BodySizeCatalog(dir, [Option("Small", "small.mdl", "0101")]);
+            var up = BakedBodyCatalog.Of(asMidlander, "0101", 301, who, ["_top"], out failed);
+            Assert.Empty(failed);
+            Assert.NotEqual(bent.Options[0].Rel, Assert.Single(up.Options).Rel);
+            Assert.NotEqual(File.ReadAllBytes(bent.PathOf(bent.Options[0])), File.ReadAllBytes(up.PathOf(up.Options[0])));
+        }
+        finally
+        {
+            try { Directory.Delete(dir, true); } catch (IOException) { }
+        }
+    }
+
+    /// <summary>
+    /// TBSE-X has a Highlander torso but Midlander legs only, which a Highlander draws bent: the legs are the body the
+    /// garment's legs were cut against as he wears them, so bent down they are just themselves — taken byte for byte.
+    /// </summary>
+    [Fact]
+    [Trait("Plan", "EDGE-refit-race-down-2")]
+    public void A_slot_without_a_drawn_race_body_uses_the_nearest_on_the_line()
+    {
+        string dir = Path.Combine(Path.GetTempPath(), $"proteus-test-made-for-{Guid.NewGuid():N}");
+        try
+        {
+            Directory.CreateDirectory(dir);
+            File.WriteAllBytes(Path.Combine(dir, "top.mdl"), SyntheticChest.Body(0.01f, 0.01f));
+            File.WriteAllBytes(Path.Combine(dir, "mid.mdl"), SyntheticChest.Body(0.02f, 0.02f));
+            File.WriteAllBytes(Path.Combine(dir, "legs.mdl"), SyntheticChest.Body(0.03f, 0.03f));
+            var source = new BodySizeCatalog(dir, [
+                Option("Highlander", "top.mdl", "0301"),
+                Option("Midlander", "mid.mdl", "0101"),   // the drawn race has its own torso: this one is not used
+                Option("Legs", "legs.mdl", "0101", "_dwn"),
+            ]);
+            var pbd = new PbdFile(SyntheticSkeleton.Pbd(101, new Dictionary<ushort, string[]> { [301] = ["j_sebo_c", "j_mune_l", "j_mune_r"] }));
+            var who = new RacialModelBake.Wearer(101, new Dictionary<string, string?>(), pbd);
+
+            var bent = BakedBodyCatalog.Lowered(source, 301, 101, who, ["_top", "_dwn"], out var failed);
+            Assert.Empty(failed);
+            Assert.Equal("Highlander", Assert.Single(bent.For("_top", "0101")).Name);
+            var legs = Assert.Single(bent.For("_dwn", "0101"));
+            Assert.Equal("chara/equipment/e0000/model/c0101e0000_dwn.mdl", legs.GamePath);
+            Assert.Equal(File.ReadAllBytes(Path.Combine(dir, "legs.mdl")), File.ReadAllBytes(bent.PathOf(legs)));
+            Assert.NotEqual(File.ReadAllBytes(Path.Combine(dir, "top.mdl")),
+                            File.ReadAllBytes(bent.PathOf(bent.For("_top", "0101")[0])));
+        }
+        finally
+        {
+            try { Directory.Delete(dir, true); } catch (IOException) { }
+        }
+    }
+
+    /// <summary>A made-for mod, or none, is used as it is; the game is not read. (The game's own side is read race by
+    /// race in <c>OtherRaceRefitLocalTests</c>, against the real data: its body cache is the whole run's.)</summary>
+    [Fact]
+    [Trait("Plan", "EDGE-refit-race-down-3")]
+    public void A_made_for_mod_below_is_used_as_it_is()
+    {
+        var asked = new List<string>();
+        byte[]? Read(string path) { asked.Add(path); return null; }
+        var mod = new BodySizeCatalog("mod", []);
+        Assert.Same(mod, OtherRaceRefit.MadeForBelow("SomeBody", mod, null, 301, 101, Read));
+        Assert.Same(mod, OtherRaceRefit.MadeForBelow(null, null, mod, 301, 101, Read));
+        Assert.Empty(asked);
+    }
+
+    [Fact]
+    [Trait("Plan", "EDGE-refit-race-down-4")]
+    public void A_made_for_body_that_would_not_bend_down_is_left_out()
+    {
+        string dir = Path.Combine(Path.GetTempPath(), $"proteus-test-made-for-{Guid.NewGuid():N}");
+        try
+        {
+            Directory.CreateDirectory(dir);
+            File.WriteAllBytes(Path.Combine(dir, "body.mdl"), SyntheticChest.Body(0.02f, 0.02f));
+            var source = new BodySizeCatalog(dir, [Option("M", "body.mdl", "0301")]);
+            var pbd = new PbdFile(SyntheticSkeleton.Pbd(101, new Dictionary<ushort, string[]> { [301] = ["j_sebo_c"] }));
+            var bent = BakedBodyCatalog.Lowered(source, 301, 101, new RacialModelBake.Wearer(101, new Dictionary<string, string?>(), pbd),
+                                                ["_top"], out var leftOut);
+            Assert.Empty(bent.Options);
+            Assert.Contains("j_mune_l", Assert.Single(leftOut));
+        }
+        finally
+        {
+            try { Directory.Delete(dir, true); } catch (IOException) { }
+        }
+    }
+
     [Fact]
     [Trait("Plan", "AC-refit-other-race-2")]
     [Trait("Plan", "EDGE-refit-other-race-2")]

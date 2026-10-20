@@ -13,7 +13,8 @@ namespace Proteus.Gui;
 
 /// <summary>
 /// The "Refit for" choice: refitting a garment for another race of its sex than the one it is drawn for — a Midlander
-/// man's shirt for Highlander men — whoever is logged in (see <see cref="OtherRaceRefit"/>).
+/// man's shirt for Highlander men, or a Highlander-only one for Midlanders — whoever is logged in (see
+/// <see cref="OtherRaceRefit"/>).
 /// </summary>
 internal sealed partial class BodyRetargetPanel
 {
@@ -164,10 +165,14 @@ internal sealed partial class BodyRetargetPanel
         var ps = Strings.Parts;
         string to = ModelRace.Describe($"{b.Route.To:D4}");
         string drawn = ModelRace.Describe($"{b.Route.Drawn:D4}");
-        ImGui.TextWrapped(string.Format(ps.RetargetRaceOnlyFmt, to, drawn));
+        ImGui.TextWrapped(string.Format(OtherRaceRefit.Wears(b.Route) == OtherRaceRefit.WearNote.PickedAndFallThrough
+                                            ? ps.RetargetRaceBelowFmt : ps.RetargetRaceOnlyFmt, to, drawn));
         ImGui.TextDisabled(string.Format(ps.RetargetRaceSourceBakedFmt, to));
         if (b.Est is { Outcome: EstOutcome.Carry } est)
             ImGui.TextWrapped(string.Format(ps.RetargetRaceEstCarriedFmt, to, drawn, est.Entry));
+        if (OtherRaceRefit.WarnsFallThroughBones(b.Route, b.Est))
+            using (ImRaii.PushColor(ImGuiCol.Text, ProteusStyle.Warn))
+                ImGui.TextWrapped(string.Format(ps.RetargetRaceBelowExtraBonesFmt, to));
         if (b.FellBack)
             using (ImRaii.PushColor(ImGuiCol.Text, ProteusStyle.Warn))
                 ImGui.TextWrapped(string.Format(ps.RetargetRaceSkeletonFallbackFmt, to));
@@ -307,8 +312,12 @@ internal sealed partial class BodyRetargetPanel
         string print = BakeFingerprint(given);
         var inputs = RaceInputs(given, route.To, cutFrom);
         string drawnCode = $"{route.Drawn:D4}";
-        var source = OtherRaceRefit.MadeFor(fromBodyDir, fromCatalog, catalog, drawnCode,
-                                            code => VanillaBodyCatalog.Read(code, readGameFile, drawn: true));
+        // Down to a race the drawn one falls through to, the game's bodies are each race's own: the one a Highlander
+        // draws bent is the Midlander's, and bending it down again would bend it twice.
+        var source = route.Lowered
+            ? OtherRaceRefit.MadeForBelow(fromBodyDir, fromCatalog, catalog, route.Drawn, route.To, readGameFile)
+            : OtherRaceRefit.MadeFor(fromBodyDir, fromCatalog, catalog, drawnCode,
+                                     code => VanillaBodyCatalog.Read(code, readGameFile, drawn: true));
         // Only the parts the refit-onto mod has a body of the race for take part (see Onto), so only those are bent.
         var slots = catalog != null ? OtherRaceRefit.OnlyRace(catalog, route.To).SlotsFor($"{route.To:D4}").ToList() : [];
 
@@ -328,7 +337,9 @@ internal sealed partial class BodyRetargetPanel
             List<string> leftOut = [];
             if (source != null)
             {
-                bodies = BakedBodyCatalog.Of(source, drawnCode, route.To, who, slots, out leftOut);
+                bodies = route.Lowered
+                    ? BakedBodyCatalog.Lowered(source, route.Drawn, route.To, who, slots, out leftOut)
+                    : BakedBodyCatalog.Of(source, drawnCode, route.To, who, slots, out leftOut);
                 foreach (string f in leftOut) log.Warning("[Proteus] retarget: a made-for body could not be bent: {0}", f);
             }
             log.Information("[Proteus] retarget: c{0:D4} wearer from {1}{2}; est {3}; {4} made-for bodies bent in {5} ms",
