@@ -167,6 +167,38 @@ public sealed class OverlayOverrideBag
         return true;
     }
 
+    /// <summary>
+    /// The mod was renamed in Penumbra: its entry moves to the new folder, copy-on-write, and is published. False when
+    /// this channel does not govern the mod.
+    /// </summary>
+    public bool RenameMod(string oldDir, string newDir)
+    {
+        Dictionary<string, OverlayColorOverride> nextColors;
+        Dictionary<string, OverlayGearOverride>  nextGear;
+        Dictionary<string, List<string>>         nextStack;
+
+        lock (gate)
+        {
+            if (colors == null || !colors.ContainsKey(oldDir)) return false;
+
+            nextColors = Copy(colors);
+            nextGear   = Copy(gear);
+            nextStack  = Copy(stack);
+            ModMoveMigration.RekeyKey(nextColors, oldDir, newDir);
+            ModMoveMigration.RekeyKey(nextGear, oldDir, newDir);
+            ModMoveMigration.RekeyKey(nextStack, oldDir, newDir);
+
+            colors = nextColors;
+            gear   = nextGear;
+            stack  = nextStack;
+        }
+
+        publishColors(nextColors);
+        publishGear(nextGear);
+        publishStack(nextStack);
+        return true;
+    }
+
     private static Dictionary<string, T> Copy<T>(Dictionary<string, T>? source)
         => source == null
             ? new Dictionary<string, T>(StringComparer.OrdinalIgnoreCase)

@@ -224,7 +224,9 @@ public sealed class ModCreationService
     /// Whether a resolved disk path is a file Proteus itself published into the managed mod. A cheap prefix test;
     /// an unanswerable path reads as not ours.
     /// </summary>
-    private bool IsOwnOutput(string? diskPath) => IsOwnOutputUnder(diskPath, penumbra.GetModDirectory());
+    private bool IsOwnOutput(string? diskPath)
+        => IsOwnOutputUnder(diskPath, penumbra.GetModDirectory())
+        || compositor.IsUnderManagedAlias(diskPath);   // a renamed copy of the managed mod, still on
 
     /// <summary>
     /// <see cref="IsOwnOutput"/> against a given mods root. A live brush preview shared in the managed mod is the

@@ -345,6 +345,14 @@ internal static class BodyRetargetWriter
                 if (refits.Count == 0)
                     return new Outcome(false, groupName, "", Loc.Localize("Parts.Retarget.Save.Nothing", "Nothing to save."));
 
+                // The mod renamed or deleted in Penumbra since the refit began: writing would recreate its old folder,
+                // which Penumbra no longer knows.
+                if (!Directory.Exists(modRoot))
+                    return new Outcome(false, groupName, names, string.Format(
+                        Loc.Localize("Parts.Retarget.Save.ModGone.Fmt",
+                            "\"{0}\" is no longer in Penumbra's mods: it was renamed or deleted there. Nothing was saved."),
+                        Path.GetFileName(modRoot)));
+
                 bool author = IsAuthorGroup(modRoot, groupName);
                 var options = PenumbraModMeta.TryReadFileOptions(modRoot, groupName) ?? [];
 

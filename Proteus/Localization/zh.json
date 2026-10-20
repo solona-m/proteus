@@ -4579,6 +4579,10 @@
     "message": "此模组仍是 Penumbra 的旧文件夹格式，Proteus 不会编辑它。请先在 Penumbra 中启用一次让其升级，然后再回来。",
     "description": "Body size status line: the mod is in Penumbra's pre-v3 folder format."
   },
+  "Parts.Retarget.Save.ModGone.Fmt": {
+    "message": "“{0}”已不在 Penumbra 的模组中：它在那里被重命名或删除了。未保存任何内容。",
+    "description": "Body size status line when the mod's folder is gone. {0} is the mod's folder name."
+  },
   "Parts.Retarget.Save.Failed.Fmt": {
     "message": "无法保存：{0}",
     "description": "Body size status line. {0} is the error message."

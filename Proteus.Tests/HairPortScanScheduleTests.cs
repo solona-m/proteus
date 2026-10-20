@@ -20,6 +20,18 @@ public class HairPortScanScheduleTests
     private const long T = RaceSettleMs + 1000;
 
     [Fact]
+    [Trait("Plan", "AC-mod-rename-8")]
+    public void Schedule_ModMoved_drops_old_and_owes_new()
+    {
+        var s = Settled();
+        s.ModAdded("Old", T);
+        s.ModMoved("Old", "New", T);
+        var work = s.Take(T + SettleMs);
+        Assert.NotNull(work);
+        Assert.Equal(["New"], work!.Mods);
+    }
+
+    [Fact]
     [Trait("Plan", "AC-hair-port-scan-1")]
     public void Enabled_edge_owes_full_check_once_race_known()
     {

@@ -58,6 +58,8 @@ internal sealed class ModsTab
     {
         // ── Overlay mod list ─────────────────────────────────────────────────
         // The list comes from the last composite, so while the plugin is off say so rather than claim there are no mods.
+        // Penumbra has no event for a display-name change; this picks one up while the list is on screen.
+        compositor.RefreshDisplayNames();
         var mods = compositor.LastDiscovered;
         if (!ReferenceEquals(mods, _lastMods))
         {
