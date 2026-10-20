@@ -69,6 +69,9 @@ If either mod changes its UVs, the maps must be baked again and published under 
 | Sternum, shoulders, inner thighs | ≤ 15 mm | 6–14 mm | 6–14 mm |
 | Under-bust, lower belly | ≤ 32 / 46 mm² | 26–31 / 45 mm | 27 / 23 mm |
 
+A compressed map loads in about 0.56 s, against 0.23 s for an uncompressed v1 map: 2.5×, accepted by the user (gate 3×).
+It loads once a session, only on a man who needs it, and is a tenth the download.
+
 ¹ No worse than the shipped bibo↔gen3 maps, which measure 2.0–2.6% by the same yardstick.
 ² Accepted by the user over the plan's 0.5% and 15 mm, where a woman's body and a man's differ in shape (breast, belly,
 crotch) rather than the map in placement.

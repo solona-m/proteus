@@ -112,7 +112,9 @@ public class UvBakeStep0LocalTests(ITestOutputHelper output)
         UvTransferBaselineLocalTests.ReadMap(System.IO.Path.Combine(dir, "bibo_to_gen3_transfer.tif"));
         long raw = sw.ElapsedMilliseconds;
         output.WriteLine($"compressed {compressed} ms, raw v1 {raw} ms");
-        Assert.True(compressed <= 2 * Math.Max(raw, 1), $"compressed {compressed} ms > 2 × raw {raw} ms");
+        // 3×, not the plan's 2×: accepted by the user (2026-10-20) at 2.5× measured — a half-second load once a session,
+        // only on a man who needs the map, for a download a tenth the size.
+        Assert.True(compressed <= 3 * Math.Max(raw, 1), $"compressed {compressed} ms > 3 × raw {raw} ms");
     }
 
     [LocalDataFact(LocalData.GameData, Bibo, Tbse)]
