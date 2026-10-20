@@ -318,6 +318,18 @@ public class ModMoveDiscoveryTests
 
     [Fact]
     [Trait("Plan", "AC-mod-rename-9")]
+    public void Recreating_the_managed_mod_keeps_the_upstream_memo()
+    {
+        // The rebuild after a rename registers "Proteus" again; its ModAdded must not wipe the only record of the real
+        // bases while the renamed copy still masks them.
+        Assert.False(CompositorService.ModAddedInvalidatesUpstreams("Proteus"));
+        Assert.False(CompositorService.ModAddedInvalidatesUpstreams("proteus"));
+        Assert.True(CompositorService.ModAddedInvalidatesUpstreams("Proteus 2"));
+        Assert.True(CompositorService.ModAddedInvalidatesUpstreams("Some Body Mod"));
+    }
+
+    [Fact]
+    [Trait("Plan", "AC-mod-rename-9")]
     [Trait("Plan", "EDGE-mod-rename-5")]
     public void IsOwnOutput_treats_alias_folder_as_own_output()
     {

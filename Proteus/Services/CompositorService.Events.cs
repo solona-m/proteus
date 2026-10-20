@@ -154,6 +154,10 @@ public partial class CompositorService
         log.Debug("[Proteus] upstream cache cleared ({0})", reason);
     }
 
+    /// <summary>Whether a mod installed is news for the bases a composite reads: any mod but Proteus's own output.</summary>
+    internal static bool ModAddedInvalidatesUpstreams(string modDir)
+        => !string.Equals(modDir, SidecarDiscoveryService.ManagedModDir, StringComparison.OrdinalIgnoreCase);
+
     private void OnModAdded(string modDir)
     {
         // A folder in use again: nothing is remapped away from it any more.
@@ -162,6 +166,10 @@ public partial class CompositorService
         bool own = IsOwnRefitWrite(modDir);
         // A (re)install almost always rewrites the mod's files — evict any stale cached decodes for it.
         textureLoader.EvictMod(modDir);
+        // Our own output mod, registered by a composite (EnsureManagedModExists): never a base, and the upstreams
+        // remembered point into other mods. Clearing them here would leave a rebuild that a renamed copy of this mod
+        // still masks (see AddManagedAlias) nothing but game data to stand on.
+        if (!ModAddedInvalidatesUpstreams(modDir)) return;
         InvalidateUpstreamCache($"ModAdded:{modDir}");
         if (HasSidecar(modDir))
         {
