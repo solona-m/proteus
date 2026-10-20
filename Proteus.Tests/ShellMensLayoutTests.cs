@@ -56,6 +56,19 @@ public class ShellMensLayoutTests
 
     [Fact]
     [Trait("Plan", "EDGE-tbse-uvmap-13")]
+    public void Shell_moved_out_of_his_layout_takes_no_route() // [EDGE-tbse-uvmap-13]
+    {
+        // A vanilla man (shell in gen2) un-mirrored the women's way into bibo, because a layer of his own is on it: the
+        // woman's bibo layer is native to the bibo shell now and must not be carried into men's vanilla.
+        var woman = Art("bibo", asym: true, paths: ManGen3);
+        Assert.Equal("bibo", SecondSkinService.BodyLayerSource(woman, UVRemapService.MaleVanillaSpace, false, "bibo", "gen2",
+                                                               d => RouteOf(d, UVRemapService.MaleVanillaSpace)));
+        // No men's layout read at all: today's type.
+        Assert.Equal("bibo", SecondSkinService.BodyLayerSource(woman, null, false, "gen3", null, d => RouteOf(d, "tbse")));
+    }
+
+    [Fact]
+    [Trait("Plan", "EDGE-tbse-uvmap-13")]
     public void Vanilla_gate_applies_to_male_vanilla_parts() // [EDGE-tbse-uvmap-13]
     {
         // A man's vanilla part reads as gen2 to the shell, so the "Overlay gen2/vanilla" gate applies to it as today.

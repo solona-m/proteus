@@ -22,15 +22,17 @@ internal interface IMensRemapHost
 internal static class MensOverlayRemap
 {
     /// <summary>The overlay at <paramref name="overlayPath"/> in <paramref name="route"/>'s destination layout at w×h; null when it cannot be.</summary>
-    internal static byte[]? Convert(IMensRemapHost host, int w, int h, MensRoute route, string? overlayPath, ResampleFilter filter)
+    /// <param name="sheet">The maps' size; 4096 for the shipped ones.</param>
+    internal static byte[]? Convert(IMensRemapHost host, int w, int h, MensRoute route, string? overlayPath, ResampleFilter filter,
+                                    int sheet = 4096)
     {
         if (overlayPath == null) return null;
         return host.GetOrDerive(overlayPath, DeriveKey(route, filter), w, h, () =>
         {
-            var native = host.Load(overlayPath, 4096, 4096, filter);
+            var native = host.Load(overlayPath, sheet, sheet, filter);
             if (native == null) return null;
-            var sheet = host.UvRemap.ConvertSheet(native, 4096, 4096, route.Src, route.Dst);
-            return sheet is { } s ? TextureLoader.Resample(s.Rgba, s.W, s.H, w, h, filter) : null;
+            var converted = host.UvRemap.ConvertSheet(native, sheet, sheet, route.Src, route.Dst, sheet);
+            return converted is { } s ? TextureLoader.Resample(s.Rgba, s.W, s.H, w, h, filter) : null;
         });
     }
 

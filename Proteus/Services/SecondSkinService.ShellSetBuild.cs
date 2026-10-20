@@ -157,6 +157,9 @@ public sealed partial class SecondSkinService
         /// </summary>
         private string? menLayout;
 
+        /// <summary>The shell's space when <see cref="menLayout"/> was read (gen3 for TBSE parts, gen2 for vanilla ones).</summary>
+        private string? menOwnSpace;
+
         /// <summary>Whether the vanilla parts of a man were un-mirrored into a woman's asymmetric art's space by the men's maps.</summary>
         private bool menUnmirror;
 
@@ -640,6 +643,9 @@ public sealed partial class SecondSkinService
                                     .Select(b => PartMenLayout(b.Bytes)).Distinct().ToList();
                 if (layouts.Count == 1 && layouts[0] != null) menLayout = layouts[0];
             }
+            // The space the man's parts are in before any un-mirroring moves the shell elsewhere: a woman's art is carried
+            // into his layout only while the shell is still in it.
+            menOwnSpace = menLayout != null ? bodyType : null;
         }
 
         /// <summary>
@@ -768,6 +774,9 @@ public sealed partial class SecondSkinService
             unmirror = unmirrorInto != null;
             // No part could be un-mirrored after all: the men's un-mirror falls away with it.
             menUnmirror &= unmirror;
+            // Un-mirrored the women's way (a layer of his own is on the shell): the shell has left his layout, so no
+            // woman's layer may be carried into it.
+            if (unmirror && !menUnmirror) menLayout = null;
             if (!unmirror) Array.Clear(unmirrorPart);
         }
 
@@ -1764,7 +1773,7 @@ public sealed partial class SecondSkinService
         {
             var s = surfaces[layerSurface[layerIdx] >= 0 ? layerSurface[layerIdx] : 0];
             if (s.Key.IsBody)
-                return (BodyLayerSource(d, menLayout, menUnmirror, s.UvSpace, bodyType, x => MensRouteOf(x, menLayout)), s.UvSpace);
+                return (BodyLayerSource(d, menLayout, menUnmirror, s.UvSpace, menOwnSpace, x => MensRouteOf(x, menLayout)), s.UvSpace);
 
             // The one human-part exception: a face shell cut into the DOUBLED sheet needs ordinary face-layout art spread
             // across both halves; art already declaring the doubled sheet passes through. Only FACE spaces are honoured.

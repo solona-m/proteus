@@ -49,6 +49,72 @@ public class UvBakeStep0LocalTests(ITestOutputHelper output)
     private static int Covered(BakeBody body, int size)
         => UvTransferBake.Rasterize(body, size).Owner.Count(o => o >= 0);
 
+    /// <summary>Both nude bodies put each side on its own half of the sheet (+X on the right), which the bake assumes.</summary>
+    [LocalDataFact(Bibo, Tbse)]
+    [Trait("Plan", "EDGE-tbse-uvmap-27")]
+    public void Each_side_on_its_own_half() // [EDGE-tbse-uvmap-27]
+    {
+        var bibo = BiboFiles();
+        var tbse = TbseFiles();
+        foreach (var bytes in new[] { bibo[UvBakeInputs.BiboChest], bibo[UvBakeInputs.BiboLegs[0].Rel], bibo[UvBakeInputs.BiboHands],
+                                      bibo[UvBakeInputs.BiboFeet], tbse[UvBakeInputs.TbseChest], tbse[UvBakeInputs.TbseLegs[0].Rel],
+                                      tbse[UvBakeInputs.TbseHands], tbse[UvBakeInputs.TbseFeet] })
+            Assert.True(SideHalf(new BakeBody([UvBakeInputs.Part(bytes)!])).PlusRight >= 0.99);
+    }
+
+    [LocalDataFact(Tbse)]
+    [Trait("Plan", "EDGE-tbse-uvmap-21")]
+    public void Tbse_c0301_chest_uv_matches_c0101() // [EDGE-tbse-uvmap-21]
+    {
+        var tbse = TbseFiles();
+        double iou = UvTransferBakeJob.Iou(new BakeBody([UvBakeInputs.Part(tbse[UvBakeInputs.TbseHighlanderChest])!]),
+                                           new BakeBody([UvBakeInputs.Part(tbse[UvBakeInputs.TbseChest])!]), 1024);
+        output.WriteLine($"c0301 vs c0101 chest uv IoU {iou:F4}");
+        Assert.True(iou >= 0.99, $"IoU {iou:F4}: c0301 would need leaving out of the men's layout group");
+    }
+
+    [LocalDataFact(LocalData.GameData, Bibo, Tbse)]
+    [Trait("Plan", "EDGE-tbse-uvmap-22")]
+    public void Bone_report_has_no_unresolved_vertices() // [EDGE-tbse-uvmap-22]
+    {
+        var (_, _, bones) = Game();
+        foreach (var bytes in BiboFiles().Values.Concat(TbseFiles().Values))
+            if (UvBakeInputs.Part(bytes) is { } part)
+                Assert.DoesNotContain(UvBakeBones.Report(part.Weights, bones.Contains),
+                                      r => r.How == UvBakeBones.Resolution.Absent && r.Vertices > 0);
+    }
+
+    [LocalDataFact(Tbse)]
+    [Trait("Plan", "EDGE-tbse-uvmap-24")]
+    public void Genital_overlap_reported_per_option_pair() // [EDGE-tbse-uvmap-24]
+    {
+        var tbse = TbseFiles();
+        var legs = UvBakeInputs.TbseLegs.Select((l, i) => UvBakeInputs.Part(tbse[l.Rel], i)!).ToList();
+        var raster = UvTransferBake.Rasterize(new BakeBody(legs), 1024);
+        foreach (var ((a, b), n) in raster.OverlapByOption)
+            output.WriteLine($"{UvBakeInputs.TbseLegs[a].Name} | {UvBakeInputs.TbseLegs[b].Name}: {n} texels drawn at two places");
+        // The options model the crotch differently over shared texels: the conflicts exist, and every one is attributed.
+        Assert.NotEmpty(raster.OverlapByOption);
+        Assert.Equal(raster.Overlap, raster.OverlapByOption.Values.Sum());
+    }
+
+    [LocalDataFact(LocalData.TbseUvMaps, LocalData.UvMaps)]
+    [Trait("Plan", "EDGE-tbse-uvmap-29")]
+    public void Compressed_load_within_2x_raw_v1() // [EDGE-tbse-uvmap-29]
+    {
+        string dir = System.IO.Path.Combine(LocalData.Path(LocalData.TbseUvMaps), "uvmaps");
+        UvTransferBaselineLocalTests.ReadMap(System.IO.Path.Combine(dir, "bibo_to_tbse_transfer.tif"));   // warm up
+        UvTransferBaselineLocalTests.ReadMap(System.IO.Path.Combine(dir, "bibo_to_gen3_transfer.tif"));
+        var sw = System.Diagnostics.Stopwatch.StartNew();
+        UvTransferBaselineLocalTests.ReadMap(System.IO.Path.Combine(dir, "bibo_to_tbse_transfer.tif"));
+        long compressed = sw.ElapsedMilliseconds;
+        sw.Restart();
+        UvTransferBaselineLocalTests.ReadMap(System.IO.Path.Combine(dir, "bibo_to_gen3_transfer.tif"));
+        long raw = sw.ElapsedMilliseconds;
+        output.WriteLine($"compressed {compressed} ms, raw v1 {raw} ms");
+        Assert.True(compressed <= 2 * Math.Max(raw, 1), $"compressed {compressed} ms > 2 × raw {raw} ms");
+    }
+
     [LocalDataFact(LocalData.GameData, Bibo, Tbse)]
     [Trait("Plan", "AC-tbse-uvmap-2")]
     public void Measure_bodies() // [AC-tbse-uvmap-2]

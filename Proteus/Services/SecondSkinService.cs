@@ -713,11 +713,14 @@ public sealed partial class SecondSkinService
     /// carried into his layout as ART (a <see cref="UVRemapService.MensKey"/>), the shell's vertices untouched, so his
     /// own layers on the same shell see it exactly as today; every other layer has today's type.
     /// </summary>
+    /// <param name="menOwnSpace">The shell's space when the man's layout was read; a surface since moved out of it (an
+    /// un-mirror into a woman's asymmetric art's space) takes no men's route.</param>
     internal static string? BodyLayerSource(OverlayDescriptor d, string? menLayout, bool menUnmirror, string? surfaceUv,
-                                            string? bodyType, Func<OverlayDescriptor, MensRoute?> routeOf)
+                                            string? menOwnSpace, Func<OverlayDescriptor, MensRoute?> routeOf)
     {
         var legacy = d.SourceBodyType ?? InferOverlayBodyType(d);
-        if (!menUnmirror && menLayout != null && string.Equals(surfaceUv, bodyType, StringComparison.OrdinalIgnoreCase)
+        if (!menUnmirror && menLayout != null && menOwnSpace != null
+            && string.Equals(surfaceUv, menOwnSpace, StringComparison.OrdinalIgnoreCase)
             && routeOf(d) is { } route)
             return UVRemapService.MensKey(route, legacy);
         return legacy;

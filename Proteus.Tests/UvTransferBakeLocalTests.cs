@@ -71,5 +71,7 @@ public class UvTransferBaselineLocalTests(ITestOutputHelper output)
         var (m1, g1) = UvTransferQuality.RoundTrip(a, b);
         var (m2, g2) = UvTransferQuality.RoundTrip(b, a);
         output.WriteLine($"bibo_to_gen3: moderate {m1:P2} gross {g1:P2}; gen3_to_bibo: moderate {m2:P2} gross {g2:P2}");
+        // The yardstick the bibo↔TBSE gate's round trip is held to: no worse than these shipped maps.
+        Assert.True(Math.Max(g1, g2) <= UvTransferQuality.Gate.RoundTripGross, $"shipped maps gross {Math.Max(g1, g2):P2}");
     }
 }

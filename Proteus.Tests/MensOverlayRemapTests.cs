@@ -54,6 +54,56 @@ public class MensOverlayRemapTests
     }
 
     [Fact]
+    [Trait("Plan", "AC-tbse-uvmap-3")]
+    public void Convert_uses_the_map_and_caches_the_result() // [AC-tbse-uvmap-3]
+    {
+        // A 16-px bibo_to_tbse that mirrors the sheet: the converted overlay is ConvertSheet's, resampled, and a second
+        // call is served from the host's cache under the route's key.
+        const int S = 16;
+        var dir = Path.Combine(Path.GetTempPath(), "proteus-mensremap-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(Path.Combine(dir, "uvmaps"));
+        try
+        {
+            var r = new ushort[S * S]; var g = new ushort[S * S]; var ok = new bool[S * S];
+            for (int y = 0; y < S; y++)
+                for (int x = 0; x < S; x++)
+                {
+                    r[y * S + x] = UvTransferBake.Quantize((float)(S - 1 - x) / (S - 1));
+                    g[y * S + x] = UvTransferBake.Quantize((float)y / (S - 1));
+                    ok[y * S + x] = true;
+                }
+            UvTransferMapFile.WriteAtomic(Path.Combine(dir, "uvmaps", "bibo_to_tbse_transfer.tif"), UvTransferMapFile.Encode(r, g, ok, S));
+            var uv = new UVRemapService(Substitute.For<IPluginLog>(), dir);
+            var art = new byte[S * S * 4];
+            art[(5 * S + 3) * 4] = 255;
+            var host = new FakeHost(uv, art);
+            var route = new MensRoute("bibo", UVRemapService.TbseSpace);
+
+            var got = MensOverlayRemap.Convert(host, S, S, route, "a.png", ResampleFilter.Nearest, sheet: S);
+            var want = uv.ConvertSheet(art, S, S, "bibo", UVRemapService.TbseSpace, S)!.Value;
+            Assert.Equal(TextureLoader.Resample(want.Rgba, want.W, want.H, S, S, ResampleFilter.Nearest), got);
+            Assert.Equal(255, got![(5 * S + (S - 1 - 3)) * 4]);
+            Assert.Single(host.Cache);
+            Assert.Same(got, MensOverlayRemap.Convert(host, S, S, route, "a.png", ResampleFilter.Nearest, sheet: S));
+        }
+        finally { Directory.Delete(dir, true); }
+    }
+
+    [Fact]
+    [Trait("Plan", "EDGE-tbse-uvmap-20")]
+    public void MenMapsReady_is_a_per_run_snapshot() // [EDGE-tbse-uvmap-20]
+    {
+        // Read once when the composite starts; every decision of the run (skin and shells) reads that value, never the disk.
+        var cr = Source("CompositorService.CompositeRun.cs");
+        var mc = Source("CompositorService.MaterialComposite.cs");
+        var sp = Source("CompositorService.ShellPhase.cs");
+        Assert.Single(Regex.Matches(cr, @"menMapsReady = compositor\.uvRemap\.MenMapsPresent\(\);"));
+        Assert.Contains("if (!run.menMapsReady)", mc);
+        Assert.DoesNotContain("MenMapsPresent()", mc);
+        Assert.Contains("menMapsReady: run.menMapsReady", sp);
+    }
+
+    [Fact]
     [Trait("Plan", "AC-tbse-uvmap-5")]
     public void Null_route_leaves_RemapIfNeededCore_on_todays_path() // [AC-tbse-uvmap-5]
     {
