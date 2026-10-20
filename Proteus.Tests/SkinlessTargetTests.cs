@@ -346,9 +346,10 @@ public class SkinlessTargetTests
 
     [Fact]
     [Trait("Plan", "EDGE-skinless-target-11")]
-    public void In_the_band_the_crotch_midline_is_reachable()
+    public void Boxers_across_the_midline_take_each_point_on_its_own_side()
     {
-        // The boxers reach across the midline; the sheet's points (x >= 20 mm) land on their own side of it.
+        // The boxers reach across the midline; the sheet's points (x >= 20 mm, outside the band) land on their own side
+        // of it. A point inside the band is free to land either side: not exercised here.
         var (source, sourceUv) = Sheet(Skin);
         var (target, targetUv) = Target(Band, Boxers, Standoff, boxersX: (-0.05f, 0.2f));
 
@@ -422,6 +423,21 @@ public class SkinlessTargetTests
         Assert.True(m.Unprojected <= UvAtlasCorrespondence.MaxUnprojectedShare * m.Excused);
     }
 
+    [Fact]
+    [Trait("Plan", "EDGE-skinless-target-10")]
+    [Trait("Plan", "EDGE-skinless-target-21")]
+    public void Folds_that_remain_are_refused()
+    {
+        // Boxers whose normals face into the body: every triangle laid on them faces the wrong way, and relaxing toward
+        // the neighbours cannot turn it back. The pair is refused as having no skin there, not accepted inside out.
+        var (source, sourceUv) = Sheet(Skin);
+        var (target, targetUv) = Target(Band, Boxers, Standoff, flipBoxers: true);
+
+        Assert.False(Build(source, sourceUv, target, targetUv, out _, out string refusal, out var m));
+        Assert.Contains("finds skin to land on", refusal);
+        Assert.True(m.Excused > 0);
+    }
+
     private static bool Build(ModelParts source, float[] sourceUv, ModelParts target, float[] targetUv,
                               out UvAtlasCorrespondence? built, out string refusal, out UvAtlasCorrespondence.Stats m)
         => UvAtlasCorrespondence.TryBuild(source, sourceUv, target, targetUv, "legs", out built, out refusal, out m,
@@ -465,7 +481,8 @@ public class SkinlessTargetTests
     internal static (ModelParts Model, float[] Uv) Target((float Y0, float Y1) bare, string? boxers, float standoff,
                                                          (float Y0, float Y1)? alsoBare = null, string skin = Skin,
                                                          string? boxersAttribute = null,
-                                                         (float X0, float X1)? boxersX = null, float notch = 0f)
+                                                         (float X0, float X1)? boxersX = null, float notch = 0f,
+                                                         bool flipBoxers = false)
     {
         var (sheet, uv) = Sheet(skin);
         var pos = sheet.Positions.ToList();
@@ -500,7 +517,10 @@ public class SkinlessTargetTests
                 }
             parts.Add((boxers, bt.ToArray(), boxersAttribute != null ? 1u : 0u));
         }
-        return (Model(pos.ToArray(), parts, boxersAttribute != null ? [boxersAttribute] : []), uvs.ToArray());
+        var model = Model(pos.ToArray(), parts, boxersAttribute != null ? [boxersAttribute] : []);
+        if (flipBoxers && boxers != null)
+            foreach (int v in parts[^1].Item2) model.Normals[v * 3 + 2] = -1f;   // facing into the body
+        return (model, uvs.ToArray());
     }
 
     internal static ModelParts Model(float[] pos, List<(string Material, int[] Triangles, uint Mask)> parts,
