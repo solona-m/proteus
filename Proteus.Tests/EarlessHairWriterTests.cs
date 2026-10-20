@@ -180,6 +180,7 @@ public partial class EarlessHairWriterTests
         Assert.Equal(0, restored.Count);
         Assert.Equal("other.mdl", Serves(mod, "Cut", "Long"));
         Assert.False(mod.Has(Copy));
+        Assert.False(EarlessHairRecord.Exists(mod.Root));
     }
 
     [Fact]

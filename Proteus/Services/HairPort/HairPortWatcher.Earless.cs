@@ -161,6 +161,7 @@ public sealed partial class HairPortWatcher
                 unreadable.Add(modDir);
                 continue;
             }
+            if (outcome.Warning.Length > 0) host.Warn($"{modDir}: ears put back, but its record was not updated — {outcome.Warning}");
             if (outcome.Count > 0)
             {
                 host.Log($"{modDir}: ears put back on {outcome.Count} hairstyle(s)");
@@ -219,7 +220,7 @@ public sealed partial class HairPortWatcher
         foreach (var w in plan.Writes.Where(w => w.TrimRefusal.Length > 0))
             host.Warn($"{w.To} keeps its lower levels of detail, which still draw the ears from a distance — {w.TrimRefusal}");
         host.Log($"{worn} is drawn without its ears — {saved.Count} place(s) in {modDir}"
-               + (saved.Message.Length > 0 ? $" (its record was not updated: {saved.Message})" : ""));
+               + (saved.Warning.Length > 0 ? $" (its record was not updated: {saved.Warning})" : ""));
         if (plan.Writes.Any(w => !w.Remake && EarlessHairPlan.IsEarlessFile(w.To))) host.AnnounceEarless(ChatLine);
         ReloadAndRedraw(host, modDir, worn);
         lastKey = null;

@@ -18,8 +18,10 @@ internal static class EarlessHairWriter
 {
     /// <param name="Restored">For a restore: the game paths pointed back at the author's file.</param>
     /// <param name="Unreadable">The manifest or the record could not be read: no verdict, the next try may read it.</param>
+    /// <param name="Warning">The redirects are as asked, but the record or the sweep after them failed — for the log,
+    /// not for the player: what they asked for was done.</param>
     public sealed record Outcome(bool Ok, string Message, int Count, IReadOnlyList<string>? Restored = null,
-                                 bool Unreadable = false)
+                                 bool Unreadable = false, string Warning = "")
     {
         public IReadOnlyList<string> RestoredPaths => Restored ?? [];
     }
@@ -125,7 +127,7 @@ internal static class EarlessHairWriter
                 EarlessHairRecord.Write(modRoot, record);
                 DeleteUnnamed(modRoot);
             }
-            catch (Exception ex) { return new Outcome(true, ex.Message, plan.Count); }
+            catch (Exception ex) { return new Outcome(true, "", plan.Count, Warning: ex.Message); }
             return new Outcome(true, "", plan.Count);
         }
     }
@@ -179,15 +181,18 @@ internal static class EarlessHairWriter
                     restored.Add(path);
                 }
 
-            // What was pointed back is back, whatever happens to the bookkeeping after: said, so the caller reloads.
+            // What was pointed back is back, whatever happens to the bookkeeping after: counted, so the caller reloads.
+            // A record every entry of which was dropped on reading (the author re-pointed them) goes too.
+            string warning = "";
             try
             {
                 AfterSwaps?.Invoke();
-                if (restored.Count > 0) EarlessHairRecord.Write(modRoot, record);
+                if (restored.Count > 0 || (record.Swaps.Count == 0 && EarlessHairRecord.Exists(modRoot)))
+                    EarlessHairRecord.Write(modRoot, record);
                 DeleteUnnamed(modRoot);
             }
-            catch (Exception ex) { blocked = ex.Message; }
-            return new Outcome(blocked.Length == 0, blocked, restored.Count, restored);
+            catch (Exception ex) { warning = ex.Message; }
+            return new Outcome(blocked.Length == 0, blocked, restored.Count, restored, Warning: warning);
         }
     }
 

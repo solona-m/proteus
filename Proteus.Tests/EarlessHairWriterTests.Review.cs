@@ -137,11 +137,14 @@ public partial class EarlessHairWriterTests
             restored = EarlessHairWriter.Restore(mod.Root);
         }
         finally { EarlessHairWriter.AfterSwaps = null; }
-        // Saved and said why the record lags; restored and counted, so the caller reloads.
+        // Saved and restored as asked — counted, so the caller reloads — with why the record lags as a warning only.
         Assert.True(saved.Ok);
-        Assert.Contains("locked", saved.Message);
+        Assert.Equal("", saved.Message);
+        Assert.Contains("locked", saved.Warning);
+        Assert.True(restored.Ok);
         Assert.Equal(1, restored.Count);
-        Assert.Contains("locked", restored.Message);
+        Assert.Equal("", restored.Message);
+        Assert.Contains("locked", restored.Warning);
         Assert.Equal("long.mdl", Serves(mod, "Cut", "Long"));
     }
 
@@ -161,6 +164,21 @@ public partial class EarlessHairWriterTests
         Assert.Equal(Copy, HairPortPlan.FileFor(mod.Owners.First(o => o.IsDefault), Worn));
         Assert.Contains(Copy, HatCompatService.ReadRecord(mod.Root)!.Files);
         Assert.Equal(2, EarlessHairRecord.Read(mod.Root).Swaps.Count);
+    }
+
+    [Fact]
+    [Trait("Plan", "EDGE-earless-miqote-hair-7")]
+    [Trait("Plan", "EDGE-earless-miqote-hair-11")]
+    public void An_edited_copy_is_not_spread_to_another_place()
+    {
+        using var mod = Cut();
+        Assert.True(Convert(mod).Ok);
+        mod.Put($"Proteus/{MeshVolumeService.BackupSubdir}/{Copy}", [1, 2, 3]);
+        PenumbraModMeta.MergeOptionRedirects(mod.Root, "", "", new Dictionary<string, string> { [Worn] = "long.mdl" });
+        var plan = EarlessHairBuilder.Build(mod.Root, Worn);
+        Assert.Empty(plan.Writes);
+        Assert.NotEqual("", plan.Refusal);
+        Assert.Equal("long.mdl", HairPortPlan.FileFor(mod.Owners.First(o => o.IsDefault), Worn));
     }
 
     [Fact]

@@ -77,6 +77,9 @@ internal static class EarlessHairBuilder
                 // writing the copy over — which would throw away a hat fit made of it since.
                 bool shared = exists(to) && record.Swaps.Any(e => e.File.Equals(to, StringComparison.OrdinalIgnoreCase)
                     && e.EarlessVersion >= EarlessHair.Version && string.Equals(e.AuthorSha8, m.Sha8, StringComparison.OrdinalIgnoreCase));
+                // A copy the user edited since is theirs: it is not spread to another place either.
+                if (exists(to) && HairPortWriter.EditedBy(modRoot, to) is { } editedBy)
+                    return new Plan([], 0, ModelBackupOrder.BlockedMessage(editedBy));
                 writes.Add(new SwapWrite(owner, gamePath, author, m.Sha8, rel, to, shared ? [] : m.Result.Model,
                                          Remake: false, shared ? "" : m.Result.TrimRefusal));
                 continue;

@@ -61,7 +61,10 @@ public partial class EarlessHairWatcherTests
         Assert.Equal(2, pass.Restored);
         Assert.Equal(1, s.Host.Calls.Count(c => c == "reload Miqo Hair"));
         Assert.Equal(1, s.Host.Calls.Count(c => c == "reload Other Hair"));
-        Assert.Equal(2, pass.Blocked.Count);
+        // The ears are back: nothing to tell the player, only the log.
+        Assert.Empty(pass.Blocked);
+        Assert.DoesNotContain("announce-earless", s.Host.Calls);
+        Assert.Equal(2, s.Host.Lines.Count(l => l.Contains("record was not updated")));
         Assert.Equal("long.mdl", s.Serves());
         Assert.Equal("long.mdl", s.Serves(other));
     }
