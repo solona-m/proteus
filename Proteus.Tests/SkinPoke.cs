@@ -63,6 +63,9 @@ internal static class SkinPoke
             n = Vector3.Normalize(n);
             float now = Outside(after, tris, At(after, s), n, Hem, out int face);
             if (float.IsNaN(now) || now <= 2f * Tolerance) continue;
+            // A face turned more than 60° from the skin covers nothing there, as Uncovered reads it.
+            if (MathF.Abs(Vector3.Dot(FaceNormal(after, tris[face]), n)) < 0.5f
+                || MathF.Abs(Vector3.Dot(FaceNormal(model.Positions, tris[face]), n)) < 0.5f) continue;
             // As the author had it, against the SAME face: skin already outside it covers cloth left inside the body,
             // and moving that skin further out shows nothing more.
             float was = Against(model.Positions, tris[face], At(model.Positions, s), n);

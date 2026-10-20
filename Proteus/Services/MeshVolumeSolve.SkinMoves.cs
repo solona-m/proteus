@@ -189,7 +189,7 @@ internal sealed partial class MeshVolumeSolve
 
     /// <summary>
     /// The point of the skin rider <paramref name="n"/> is bound to, and the skin's way out there: as authored, or with
-    /// <paramref name="now"/> where the skin now stands, its authored normal turned as far as the triangle has.
+    /// <paramref name="now"/> where the skin now stands, each corner's normal turned as far as its faces have (<see cref="SkinOutNow"/>).
     /// </summary>
     private (Vec3 Point, Vec3 Normal) SkinUnder(int n, bool now)
     {
@@ -199,16 +199,11 @@ internal sealed partial class MeshVolumeSolve
         {
             var at = now ? Here(s) : nodeAt[s];
             px += at.X * w; py += at.Y * w; pz += at.Z * w;
-            nx += nodeNormal[s].X * w; ny += nodeNormal[s].Y * w; nz += nodeNormal[s].Z * w;
+            // Each corner's way out as its own faces have turned — a binding to one corner has no triangle to turn by.
+            var way = now ? SkinOutNow(s) : ToVector(nodeNormal[s]);
+            nx += way.X * w; ny += way.Y * w; nz += way.Z * w;
         }
-        var normal = Unit(new Vec3(nx, ny, nz));
-        if (now && corners.Count == 3)
-        {
-            var authored = MeshMath.TriNormal(nodeAt[corners[0].Skin], nodeAt[corners[1].Skin], nodeAt[corners[2].Skin]);
-            var current = MeshMath.TriNormal(Here(corners[0].Skin), Here(corners[1].Skin), Here(corners[2].Skin));
-            normal = Unit(LinearNormals.Turn(authored, current, normal));
-        }
-        return (new Vec3(px, py, pz), normal);
+        return (new Vec3(px, py, pz), Unit(new Vec3(nx, ny, nz)));
     }
 
     /// <summary>
@@ -327,6 +322,9 @@ internal sealed partial class MeshVolumeSolve
     /// </summary>
     private const float DeepClip = 0.002f;
 
+    /// <summary>A face covers the skin under it only facing within 60° of the skin's way out (cos 60° = 0.5).</summary>
+    private const float CoverCos = 0.5f;
+
     /// <summary>One pass of the face check in <see cref="KeepRidersAboveSkin"/>.</summary>
     /// <param name="lift">Lift what is through; off, only count it.</param>
     /// <returns>Lifting, how many skin points it lifted cloth over; counting, how many are still through.</returns>
@@ -416,16 +414,20 @@ internal sealed partial class MeshVolumeSolve
 
             // "Outside" is the skin's own way out, whichever way the face is wound: a lining faces the body, and
             // judged by its own normal every skin point under it is outside it — and lifted that way, it is driven
-            // into the body.
-            var skinOut = ToVector(nodeNormal[s]);
+            // into the body. Now, the skin's way out as its faces have turned: a skin part rotated round must not have
+            // its cloth judged by the way it faced before.
+            var skinOut = SkinOutNow(s);
             var face = OutAlong(Here(ca), Here(cb), Here(cc), skinOut);
             if (face == Vector3.Zero) continue;
+            // A face turned more than 60° from the skin under it — a band's wall, a seam standing up — covers nothing
+            // there, and the slightest turn flips which side of it is "outside".
+            if (Vector3.Dot(face, skinOut) < CoverCos) continue;
             float by = Vector3.Dot(sp - hq, face);
 
             // The author's own: how far outside the same face this skin point stood as authored.
             var aq = BrushTransfer.ClosestOnTriangle(ToVector(nodeAt[s]), ToVector(nodeAt[ca]), ToVector(nodeAt[cb]),
                                                      ToVector(nodeAt[cc]), out _, out _, out _);
-            var authoredFace = OutAlong(nodeAt[ca], nodeAt[cb], nodeAt[cc], skinOut);
+            var authoredFace = OutAlong(nodeAt[ca], nodeAt[cb], nodeAt[cc], ToVector(nodeNormal[s]));
             float authored = Vector3.Distance(ToVector(nodeAt[s]), aq) <= reach && authoredFace != Vector3.Zero
                 ? Vector3.Dot(ToVector(nodeAt[s]) - aq, authoredFace)
                 : 0f;
@@ -465,6 +467,40 @@ internal sealed partial class MeshVolumeSolve
             nodeDelta[c] = new Vec3(nodeDelta[c].X + way.X * rise, nodeDelta[c].Y + way.Y * rise, nodeDelta[c].Z + way.Z * rise);
         }
         return lifted;
+    }
+
+    private List<int>[]? skinFacesOf;
+
+    /// <summary>
+    /// Skin node <paramref name="s"/>'s authored normal, turned as far as the skin faces around it have turned — the
+    /// way out of the skin as it now stands, after a sculpt or a turn of the Move tools.
+    /// </summary>
+    private Vector3 SkinOutNow(int s)
+    {
+        if (skinFacesOf == null)
+        {
+            skinFacesOf = new List<int>[nodeCount];
+            for (int t = 0; t + 2 < nodeTris.Length; t += 3)
+            {
+                if (clothFaces[t / 3]) continue;
+                for (int k = 0; k < 3; k++) (skinFacesOf[nodeTris[t + k]] ??= []).Add(t);
+            }
+        }
+        var authored = ToVector(nodeNormal[s]);
+        if (skinFacesOf[s] is not { } faces) return authored;
+        float ax = 0f, ay = 0f, az = 0f, cx = 0f, cy = 0f, cz = 0f;
+        foreach (int t in faces)
+        {
+            var a = Unit(MeshMath.TriNormal(nodeAt[nodeTris[t]], nodeAt[nodeTris[t + 1]], nodeAt[nodeTris[t + 2]]));
+            var c = Unit(MeshMath.TriNormal(Here(nodeTris[t]), Here(nodeTris[t + 1]), Here(nodeTris[t + 2])));
+            ax += a.X; ay += a.Y; az += a.Z;
+            cx += c.X; cy += c.Y; cz += c.Z;
+        }
+        // Faces that mostly cancel — a crease, a fold, a sliver — say nothing about which way the skin turned.
+        float need = 0.5f * faces.Count;
+        if (MathF.Sqrt(ax * ax + ay * ay + az * az) < need || MathF.Sqrt(cx * cx + cy * cy + cz * cz) < need) return authored;
+        var turned = Unit(LinearNormals.Turn(new Vec3(ax, ay, az), new Vec3(cx, cy, cz), nodeNormal[s]));
+        return turned == default ? authored : ToVector(turned);
     }
 
     /// <summary>A face's normal, turned to agree with <paramref name="skinOut"/>, the skin's way out under it.</summary>

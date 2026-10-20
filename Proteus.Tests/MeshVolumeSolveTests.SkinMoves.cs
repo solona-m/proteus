@@ -1189,6 +1189,55 @@ public partial class MeshVolumeSolveTests
                     "the strip should keep only the symmetric part of the turn");
     }
 
+    /// <summary>
+    /// Once skin has moved, cloth riding it is held above it where it now is — even by a relax with the checkbox off,
+    /// which would otherwise measure its floor from the skin where the author had it and sink into the sculpt.
+    /// </summary>
+    [Fact]
+    [Trait("Plan", "EDGE-studio-move-skin-1")]
+    public void RelaxWithTheCheckboxOffKeepsClothAboveMovedSkin()
+    {
+        var l = Layered(21, 0.002f);
+        var solve = SkinSolve(l.Model);
+        solve.Paint(At(l.Model.Positions, l.SkinAt[10, 10]), 0.05f, 0.008f);
+        solve.EndStroke();
+
+        solve.MoveSkin = false;
+        var top = At(solve.Positions(), l.ClothAt[10, 10]);
+        for (int d = 0; d < 40; d++) solve.Relax(top, 0.04f, 1f);
+        solve.EndStroke();
+
+        var after = solve.Positions();
+        Assert.True(solve.SkinEdited);
+        for (int i = 6; i <= 14; i++)
+            Assert.True(At(after, l.ClothAt[i, 10]).Y - At(after, l.SkinAt[i, 10]).Y >= 0.0009f,
+                        $"cloth [{i},10] sank to {(At(after, l.ClothAt[i, 10]).Y - At(after, l.SkinAt[i, 10]).Y) * 1000f:F2} mm over the sculpt");
+    }
+
+    /// <summary>
+    /// A skin part turned right round with the cloth on it: the cloth goes with it, and the face check judges it by the
+    /// way the skin now faces — not the way it faced before, which would read the cloth as under the skin.
+    /// </summary>
+    [Fact]
+    [Trait("Plan", "AC-studio-move-skin-4")]
+    public void ClothRidesASkinPartTurnedRightRound()
+    {
+        var l = Layered(11, 0.005f);
+        var solve = SkinSolve(l.Model);
+        var pivot = At(l.Model.Positions, l.SkinAt[5, 5]);
+        var turn = Matrix4x4.CreateRotationX(2.5f, pivot);
+        solve.BeginMove(l.Model.Parts[1].Triangles, adjacent: false, falloffRadius: 0f);
+        solve.TransformTo(turn);
+        solve.EndMove();
+
+        var after = solve.Positions();
+        foreach (int v in l.ClothAt)
+            Assert.True(Vector3.Distance(Vector3.Transform(At(l.Model.Positions, v), turn), At(after, v)) < 1e-4f,
+                        $"cloth {v} was pulled off its turned skin");
+        // Every point exactly where the turn takes it: nothing folded. (Folded compares with the author's facing, which
+        // a turn past 90° reverses everywhere.)
+    }
+
     [Fact]
     [Trait("Plan", "EDGE-studio-move-skin-24")]
     public void AttachFollowIgnoresAnotherSolvesBinding()
