@@ -704,6 +704,7 @@ public sealed class LocalizationTests
     [MemberData(nameof(Translations))]
     [Trait("Plan", "AC-refit-other-race-1")]
     [Trait("Plan", "AC-refit-other-race-9")]
+    [Trait("Plan", "AC-refit-race-down-9")]
     public void RefitOtherRace_strings_are_translated_not_copied(string lang)
     {
         var en = Load(Source);
@@ -730,6 +731,32 @@ public sealed class LocalizationTests
         string label = Load(lang)["Parts.Retarget.Race.Label"].Message;
         string bullet = readme.Split('\n').Single(l => l.StartsWith("- **" + label + "**", StringComparison.Ordinal));
         Assert.Contains("M Highlander", bullet);
+    }
+
+    /// <summary>
+    /// The README's Refit for bullet says it goes the other way too — a Highlander-only model made a Midlander's — in
+    /// the race names the plugin itself shows; and the note saying a lower race's model is made is translated.
+    /// </summary>
+    [Theory]
+    [MemberData(nameof(AllLocales))]
+    [Trait("Plan", "AC-refit-race-down-9")]
+    public void Readme_says_refit_for_goes_down_too(string lang)
+    {
+        var dir = new System.IO.DirectoryInfo(AppContext.BaseDirectory);
+        while (dir != null && !System.IO.File.Exists(System.IO.Path.Combine(dir.FullName, "proteus.slnx"))) dir = dir.Parent;
+        Assert.True(dir != null, $"Could not find proteus.slnx above {AppContext.BaseDirectory}.");
+        string readme = System.IO.File.ReadAllText(System.IO.Path.Combine(
+            dir!.FullName, lang == Source ? "README.md" : System.IO.Path.Combine("docs", $"README.{lang}.md")));
+        var loc = Load(lang);
+        string bullet = readme.Split('\n').Single(l => l.StartsWith("- **" + loc["Parts.Retarget.Race.Label"].Message + "**",
+                                                                    StringComparison.Ordinal));
+        string mid = loc["Common.Race.Midlander"].Message, high = loc["Common.Race.Highlander"].Message;
+        Assert.Contains(mid, bullet);
+        Assert.True(bullet.IndexOf(high, StringComparison.Ordinal) < bullet.LastIndexOf(mid, StringComparison.Ordinal),
+                    $"[{lang}] the bullet does not name {high} before {mid}");
+
+        if (lang != Source)
+            Assert.NotEqual(Load(Source)["Parts.Retarget.Lowered.Fmt"].Message, loc["Parts.Retarget.Lowered.Fmt"].Message);
     }
 
     /// <summary>The README's Body refit section says a body and a size are picked per part, in the words Settings uses.</summary>

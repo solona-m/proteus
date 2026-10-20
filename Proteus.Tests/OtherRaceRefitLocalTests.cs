@@ -27,6 +27,10 @@ public class OtherRaceRefitLocalTests(ITestOutputHelper o)
     /// <summary>Cloth faces of 1 mm² or more the Highlander refit of the shirt turns over today (a known limit).</summary>
     private const int KnownPecFolds = 4;
 
+    /// <summary>Cloth faces of 1 mm² or more the Highlander shirt lowered onto TBSE-X's Midlander body turns over today
+    /// (measured 2026-10-20; the same shirt refitted as is, Highlander to Highlander, turns 14).</summary>
+    private const int KnownLoweredFolds = 10;
+
     private static byte[] Game(string path) => HavokSkeletonLocalTests.GameFile(path);
 
     private static byte[] ShirtBytes()
@@ -272,6 +276,8 @@ public class OtherRaceRefitLocalTests(ITestOutputHelper o)
         o.WriteLine($"cloth turned over by the refit, of 1 mm² or more: {folded} lowered, {baseline} as is; preview "
                     + $"{collapsed} collapsed");
         Assert.True(folded <= baseline, $"{folded} cloth faces turned over, more than the {baseline} the shirt turns as is");
+        // And no more than measured when it was made: a refit worse for both would otherwise pass unnoticed.
+        Assert.True(folded <= KnownLoweredFolds, $"{folded} cloth faces turned over, more than the {KnownLoweredFolds} known");
         Assert.Equal(0, collapsed);
         Assert.NotNull(ModelPartReader.Read(saved!.Model));
 
