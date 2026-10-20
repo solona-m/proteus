@@ -161,8 +161,11 @@ internal static partial class RacialModelBake
     /// </summary>
     /// <param name="parentOf">The skeleton's parent of a bone: a bone the deformer does not list takes its nearest
     /// listed ancestor's matrix, as in game.</param>
+    /// <param name="alias">The bone a vertex weighted to a bone is bent as, asked before the deformer is: a body mod's
+    /// own bones (an earring node TBSE's legs are rigged to) would otherwise take whatever matrix their name happens to
+    /// have. Null bends every bone as itself.</param>
     public static byte[]? Bake(byte[] mdl, ushort from, ushort to, PbdFile pbd, Func<string, string?> parentOf,
-                               out string refusal)
+                               out string refusal, Func<string, string>? alias = null)
     {
         var chain = pbd.Chain(from, to);
         if (chain.Count == 0)
@@ -171,7 +174,7 @@ internal static partial class RacialModelBake
                 "the racial deformer has no way from c{0:D4} to c{1:D4}"), from, to);
             return null;
         }
-        return Transform(mdl, [], chain, parentOf, out refusal);
+        return Transform(mdl, [], chain, parentOf, out refusal, alias);
     }
 
     /// <summary>
@@ -234,7 +237,8 @@ internal static partial class RacialModelBake
     /// </summary>
     private static byte[]? Transform(byte[] mdl, IReadOnlyList<IReadOnlyDictionary<string, Matrix4x4>> down,
                                      IReadOnlyList<IReadOnlyDictionary<string, Matrix4x4>> up,
-                                     Func<string, string?> parentOf, out string refusal)
+                                     Func<string, string?> parentOf, out string refusal,
+                                     Func<string, string>? alias = null)
     {
         var parts = ModelPartReader.Read(mdl);
         var skin = ModelSkinReader.Read(mdl, null, null);
@@ -258,8 +262,9 @@ internal static partial class RacialModelBake
         var raise = new Matrix4x4[skin.BoneNames.Length];
         for (int j = 0; j < lower.Length; j++)
         {
-            lower[j] = PbdFile.Resolve(down, skin.BoneNames[j], parentOf);
-            raise[j] = PbdFile.Resolve(up, skin.BoneNames[j], parentOf);
+            string bone = alias?.Invoke(skin.BoneNames[j]) ?? skin.BoneNames[j];
+            lower[j] = PbdFile.Resolve(down, bone, parentOf);
+            raise[j] = PbdFile.Resolve(up, bone, parentOf);
         }
 
         var edit = new Edit(parts.MeshSpans, count);
