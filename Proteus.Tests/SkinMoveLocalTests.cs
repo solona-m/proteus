@@ -108,13 +108,15 @@ public class SkinMoveLocalTests(ITestOutputHelper output)
         int folded = Folded(model, after);
         var which = new List<(int Vertex, float Was, float Now)>();
         int worse = SkinPoke.MadeWorse(model, after, which);
+        int uncovered = SkinPoke.Uncovered(model, after, 0.001f);
         foreach (var (v, was, now) in which)
             output.WriteLine($"  v{v}: {was * 1000f:F2} mm outside its face as authored, {now * 1000f:F2} mm now");
         output.WriteLine($"{name}: skin moved {went * 1000f:F2} mm; {worse} skin points pushed further through the cloth; "
-                       + $"SkinThroughCloth {through} (author's {authoredThrough}); {folded} folded; "
-                       + $"{solve.FacesStillOutside} faces left outside");
+                       + $"{uncovered} covered points now over 1 mm out; SkinThroughCloth {through} (author's {authoredThrough}); "
+                       + $"{folded} folded; {solve.FacesStillOutside} faces left outside");
         Assert.True(went > strength * 0.6f, $"{name}: the skin went only {went * 1000f:F2} mm");
         Assert.Equal(0, worse);
+        Assert.Equal(0, uncovered);
         Assert.Equal(0, folded);
         return solve;
     }
@@ -180,7 +182,23 @@ public class SkinMoveLocalTests(ITestOutputHelper output)
     /// A top sculpted with "Move skin too" is still read as made for its body, the way the automatic refit reads it:
     /// first by the share of its skin lying exactly on a body, and where that is too weak, by how near it lies.
     /// </summary>
-    [LocalDataFact(ThisOldThing, Rue)]
+    private const string Bibo = LocalData.Mods + ":Bibo+";
+    private const string Yab = LocalData.Mods + ":hs-Yet Another Body+-4.2.0-tmi";
+    private const string Neolithe = LocalData.Mods + ":Neolithe [ALL IN ONE]";
+
+    /// <summary>A body mod's chest models: what the exact reading compares a top's skin with.</summary>
+    private static List<string> Chests(string mod)
+        => Directory.EnumerateFiles(LocalData.Path(mod), "*.mdl", SearchOption.AllDirectories)
+                    .Where(p => Path.GetFileName(p).Contains("top", StringComparison.OrdinalIgnoreCase)
+                                || p.Contains("chest", StringComparison.OrdinalIgnoreCase))
+                    .ToList();
+
+    /// <summary>
+    /// A top sculpted with "Move skin too" is read as the automatic refit reads it — each installed body mod's best exact
+    /// share, then <see cref="AutoRefitDecisions.Family"/> and <see cref="AutoRefitDecisions.Choose"/> — and comes out
+    /// the same as unsculpted: the same mod, still strong enough to need no nearness reading, and the same body size.
+    /// </summary>
+    [LocalDataFact(ThisOldThing, Rue, Bibo, Yab, Neolithe)]
     [Trait("Plan", "AC-studio-move-skin-11")]
     [Trait("Plan", "EDGE-studio-move-skin-28")]
     public void SculptedGarmentStillRanksItsBodyFirst()
@@ -189,25 +207,30 @@ public class SkinMoveLocalTests(ITestOutputHelper output)
         var solve = Sculpt(model, "rue l");
         var sculpted = Deformed(model, solve);
 
-        var bodies = Directory.EnumerateFiles(LocalData.Path(Rue), "*.mdl", SearchOption.AllDirectories)
-                              .Where(p => Path.GetFileName(p).Contains("top", StringComparison.OrdinalIgnoreCase)
-                                          || p.Contains("chest", StringComparison.OrdinalIgnoreCase))
-                              .ToList();
-        Assert.NotEmpty(bodies);
-
         var before = BodySizeMatch.ProbeKeys(model);
         var after = BodySizeMatch.ProbeKeys(sculpted);
-        var shares = bodies.Select(b => (Body: b, Before: BodySizeMatch.Shared(before, b, out _), After: BodySizeMatch.Shared(after, b, out _)))
-                           .ToList();
-        var bestBefore = shares.MaxBy(s => s.Before);
-        var bestAfter = shares.MaxBy(s => s.After);
-        output.WriteLine($"best before {Path.GetFileName(Path.GetDirectoryName(bestBefore.Body))} {bestBefore.Before:P1}; "
-                       + $"after {Path.GetFileName(Path.GetDirectoryName(bestAfter.Body))} {bestAfter.After:P1}");
-        Assert.True(bestBefore.Before >= AutoRefitDecisions.WeakShare, "the unsculpted top is not read as Rue+ to begin with");
-        Assert.True(bestAfter.After >= AutoRefitDecisions.WeakShare,
-                    $"sculpted, its best share fell to {bestAfter.After:P1}: auto refit would read it by nearness instead");
-        Assert.True(bestAfter.After >= bestBefore.After - AutoRefitDecisions.FamilyMargin,
-                    "sculpted, another body reads as nearer the top's family");
+        var mods = new[] { Rue, Bibo, Yab, Neolithe };
+        var read = mods.Select(m =>
+        {
+            var shares = Chests(m).Select(b => (Body: b, Before: BodySizeMatch.Shared(before, b, out _),
+                                                After: BodySizeMatch.Shared(after, b, out _))).ToList();
+            return (Mod: m, Shares: shares);
+        }).ToList();
+
+        AutoRefitDecisions.ModShare Best(string mod, IEnumerable<float> shares) => new(mod, shares.DefaultIfEmpty(0f).Max(), false, true, 1);
+        var was = read.Select(r => Best(r.Mod, r.Shares.Select(s => s.Before))).ToList();
+        var now = read.Select(r => Best(r.Mod, r.Shares.Select(s => s.After))).ToList();
+        foreach (var (w, n) in was.Zip(now))
+            output.WriteLine($"{w.Dir}: {w.Share:P1} unsculpted, {n.Share:P1} sculpted");
+
+        Assert.Equal(Rue, AutoRefitDecisions.Choose(was));
+        Assert.Equal(AutoRefitDecisions.Family(was), AutoRefitDecisions.Family(now));
+        Assert.Equal(AutoRefitDecisions.Choose(was), AutoRefitDecisions.Choose(now));
+        Assert.False(AutoRefitDecisions.Weak(now.Max(m => m.Share)),
+                     "sculpted, the exact reading is too weak: the refit would read the top by nearness instead");
+
+        var rue = read.Single(r => r.Mod == Rue).Shares;
+        Assert.Equal(rue.MaxBy(s => s.Before).Body, rue.MaxBy(s => s.After).Body);
     }
 
     /// <summary>What binding and painting with skin moving cost on a long dress and a top, for the log. Report only.</summary>

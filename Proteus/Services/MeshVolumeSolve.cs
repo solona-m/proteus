@@ -207,8 +207,14 @@ internal sealed partial class MeshVolumeSolve : IMeshEdit
         nodeAt = new Vec3[nodeCount];
         for (int i = 0; i < vc; i++) nodeAt[nodeOf[i]] = basePos[i];
 
+        // Each triangle's part drawn with cloth rather than skin, beside it, for the skin-moving face check.
+        var triCloth = model.Parts.Where(p => p.Island < 0)
+                            .SelectMany(p => Enumerable.Repeat(!SecondSkinWriter.IsBodySkinMaterial(p.Material), p.Triangles.Length))
+                            .ToArray();
+
         // Node-level faces; degenerate triples (two corners welded together) are dropped.
         var nt = new List<int>(tris.Length);
+        var faceCloth = new List<bool>(tris.Length / 3);
         for (int t = 0; t + 2 < tris.Length; t += 3)
         {
             int a = tris[t], b = tris[t + 1], c = tris[t + 2];
@@ -216,8 +222,10 @@ internal sealed partial class MeshVolumeSolve : IMeshEdit
             int na = nodeOf[a], nb = nodeOf[b], nc = nodeOf[c];
             if (na == nb || nb == nc || na == nc) continue;
             nt.Add(na); nt.Add(nb); nt.Add(nc);
+            faceCloth.Add(triCloth[t]);
         }
         nodeTris = nt.ToArray();
+        clothFaces = faceCloth.ToArray();
 
         // Adjacency, deduped: a shared edge must not pull twice as hard as a boundary one. Deduped against the
         // node's own few neighbours, not a HashSet<long> of packed pairs: a long hashes as high ^ low, so neighbouring
@@ -1220,7 +1228,7 @@ internal sealed partial class MeshVolumeSolve : IMeshEdit
     /// </summary>
     private void SmoothStroke(Dictionary<int, Was> strokeStart)
     {
-        var nodes = strokeStart.Keys.Where(n => !(skin[n] && !opSkin) && !IsRider(n) && adj[n].Count > 0).ToArray();
+        var nodes = strokeStart.Keys.Where(n => !(skin[n] && !opSkin) && !RidesSkin(n) && adj[n].Count > 0).ToArray();
         if (nodes.Length == 0) return;
 
         var added = new Vec3[nodeCount];
@@ -1974,6 +1982,12 @@ internal sealed partial class MeshVolumeSolve : IMeshEdit
     /// <param name="allowCollapse">The stroke was a bridge — see <see cref="UnfoldStroke"/>.</param>
     private void Settle(Dictionary<int, Was>? strokeStart, bool allowCollapse = false)
     {
+        // Skin a stroke that does not move skin somehow recorded goes back where the stroke found it: nothing is meant to
+        // reach it (Held), and this is the edit written into the user's mod. A defence, not a step: it finds nothing.
+        if (strokeStart != null && !opSkin)
+            foreach (var (n, was) in strokeStart)
+                if (skin[n]) { nodeDelta[n] = was.Delta; nodeMoved[n] = was.Moved; nodeWeight[n] = was.Weight; }
+
         // No slope limit: it pulled painted displacement back on release. Smoothing is SmoothStroke's job.
         if (strokeStart is { Count: > 0 })
         {

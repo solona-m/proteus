@@ -47,6 +47,21 @@ public class SkinMovePolicyTests
     public void SkinMovePolicy_WaitsForTheBinding() => Assert.False(SkinMovePolicy.Applies(true, false, followReady: false));
 
     [Theory]
+    [InlineData(false, false, false, true, "Explains")]
+    [InlineData(true, false, false, false, "Explains")]        // a stroke, move or grab is open
+    [InlineData(false, true, false, false, "NotThisBrush")]
+    [InlineData(false, false, true, false, "Failed")]          // binding the clothes failed: disabled, and says why
+    [InlineData(false, true, true, false, "Failed")]
+    [Trait("Plan", "AC-studio-move-skin-5")]
+    [Trait("Plan", "EDGE-studio-move-skin-24")]
+    public void SkinMovePolicy_BindingFailedDisables(bool busy, bool bridgeOrWind, bool failed, bool enabled, string tip)
+    {
+        var (on, says) = SkinMovePolicy.Checkbox(busy, bridgeOrWind, failed);
+        Assert.Equal(enabled, on);
+        Assert.Equal(tip, says.ToString());
+    }
+
+    [Theory]
     [InlineData(false, false, "FixedTicked")]
     [InlineData(true, false, "Lockable")]
     [InlineData(false, true, "MoveDisabled")]

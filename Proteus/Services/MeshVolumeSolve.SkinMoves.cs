@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Numerics;
+using System.Linq;
 using Vec3 = Proteus.Services.SecondSkinWriter.Vec3;
 
 namespace Proteus.Services;
@@ -96,8 +97,18 @@ internal sealed partial class MeshVolumeSolve
     /// <summary><see cref="Held"/> for a question asked outside an operation — the move falloff the view previews.</summary>
     private bool Held(int n, bool skinMoves) => locked[n] || (skin[n] && !skinMoves);
 
-    /// <summary>Cloth that rides the skin in the operation under way.</summary>
+    /// <summary>Cloth bound to the skin, in an operation that moves skin.</summary>
     private bool IsRider(int n) => opSkin && !skin[n] && follow!.BindWeight(n) > 0f;
+
+    /// <summary>
+    /// Cloth that takes a real share of its skin's movement in this operation (<see cref="RiderShare"/>): it is settled
+    /// after the skin rather than smoothed on its own. Cloth over locked skin, or skin an open edge holds, is brushed —
+    /// and settled — as cloth, exactly as with the checkbox off.
+    /// </summary>
+    private bool RidesSkin(int n) => RiderShare(n) > RideMin;
+
+    /// <summary>Below this share of its skin's movement (1%), bound cloth is settled as cloth.</summary>
+    private const float RideMin = 0.01f;
 
     /// <summary>
     /// How much of its skin's movement rider <paramref name="n"/> takes in this operation: its bind weight times the
@@ -144,6 +155,9 @@ internal sealed partial class MeshVolumeSolve
                 if (locked[r]) continue;
                 into.TryAdd(r, Snapshot(r));
                 nodeDelta[r] = new Vec3(nodeDelta[r].X + d.X * w, nodeDelta[r].Y + d.Y * w, nodeDelta[r].Z + d.Z * w);
+                // Counted with the Move tool's share, not the brushes': the skin took the cloth there, and the brush cap
+                // must not then hold the cloth's own strokes short by however far it rode (nor its reach lag behind it).
+                nodeMoved[r] = new Vec3(nodeMoved[r].X + d.X * w, nodeMoved[r].Y + d.Y * w, nodeMoved[r].Z + d.Z * w);
                 // The rider's normals turn with it, as far as it follows the skin.
                 nodeWeight[r] = MathF.Max(nodeWeight[r], follow.BindWeight(r) * nodeWeight[s]);
             }
@@ -160,14 +174,14 @@ internal sealed partial class MeshVolumeSolve
     {
         var core = new Dictionary<int, Was>();
         foreach (var (n, was) in start)
-            if (!IsRider(n)) core[n] = was;
+            if (!RidesSkin(n)) core[n] = was;
         if (core.Count > 0) UnfoldStroke(core, allowCollapse);
 
         CarryRiders(core.Keys, start);
 
         var ride = new Dictionary<int, Was>();
         foreach (var (n, was) in start)
-            if (IsRider(n)) ride[n] = was;
+            if (RidesSkin(n)) ride[n] = was;
         if (ride.Count > 0) UnfoldStroke(ride, allowCollapse);
 
         KeepRidersAboveSkin(start);
@@ -236,31 +250,50 @@ internal sealed partial class MeshVolumeSolve
     private void KeepRidersAboveSkin(Dictionary<int, Was> start)
     {
         if (!opSkin) return;
-        var riders = new List<int>();
         var movedSkin = new List<int>();
         foreach (var (n, was) in start)
-        {
-            if (skin[n]) { if (nodeDelta[n] != was.Delta) movedSkin.Add(n); }
-            else if (!locked[n] && follow!.BindWeight(n) > 0f) riders.Add(n);
-        }
+            if (skin[n] && nodeDelta[n] != was.Delta) movedSkin.Add(n);
         if (movedSkin.Count == 0) return;
 
-        foreach (int r in riders)
-            if (KeepAboveBoundSkin(r, nodeDelta[r], out var kept)) nodeDelta[r] = kept;
+        // Riders of the skin this operation moved — not every bound cloth point it recorded: cloth the user deflated
+        // onto still skin is theirs.
+        var moved = new HashSet<int>(movedSkin);
+        foreach (var (n, _) in start)
+        {
+            if (skin[n] || locked[n] || follow!.BindWeight(n) <= 0f) continue;
+            if (!follow.CornersOf(n).Any(c => moved.Contains(c.Skin))) continue;
+            if (KeepAboveBoundSkin(n, nodeDelta[n], out var kept)) nodeDelta[n] = kept;
+        }
 
-        for (int pass = 0; pass < FacePasses; pass++)
-            if (LiftFacesOverSkin(start, movedSkin) == 0) break;
+        int pass = 0;
+        while (pass < FacePasses && LiftFacesOverSkin(start, movedSkin, lift: true) > 0) pass++;
+        // What is left, measured again after the last lift: logged by the caller, not chased.
+        FacesStillOutside = LiftFacesOverSkin(start, movedSkin, lift: false);
+        GuardVersion++;
     }
 
     /// <summary>The face check gives up after this many passes; what is left is logged, not chased.</summary>
     private const int FacePasses = 4;
 
-    /// <summary>Faces still showing skin after the last <see cref="KeepRidersAboveSkin"/>, for the log.</summary>
+    /// <summary>
+    /// Skin points still further outside the cloth than the author had them after the last
+    /// <see cref="KeepRidersAboveSkin"/> — the face check's leftovers, for the log. See <see cref="GuardVersion"/>.
+    /// </summary>
     public int FacesStillOutside { get; private set; }
 
+    /// <summary>Bumped by every run of the guard, so a caller can tell a new <see cref="FacesStillOutside"/> from an old one.</summary>
+    public int GuardVersion { get; private set; }
+
+    /// <summary>
+    /// Skin the author had further than this (2 mm) outside a face is cloth left inside the body: covered by the skin
+    /// whatever the sculpt does, and never lifted toward it. Less is a slight clip, and its growth is guarded.
+    /// </summary>
+    private const float DeepClip = 0.002f;
+
     /// <summary>One pass of the face check in <see cref="KeepRidersAboveSkin"/>.</summary>
-    /// <returns>How many faces it lifted.</returns>
-    private int LiftFacesOverSkin(Dictionary<int, Was> start, List<int> movedSkin)
+    /// <param name="lift">Lift what is through; off, only count it.</param>
+    /// <returns>Lifting, how many skin points it lifted cloth over; counting, how many are still through.</returns>
+    private int LiftFacesOverSkin(Dictionary<int, Was> start, List<int> movedSkin, bool lift)
     {
         const float reach = SkinThroughCloth.Reach, tolerance = SkinThroughCloth.Tolerance;
 
@@ -287,7 +320,7 @@ internal sealed partial class MeshVolumeSolve
             int a = nodeTris[t], b = nodeTris[t + 1], c = nodeTris[t + 2];
             // Cloth, with at least one corner of its own: a face of a stocking welded to the leg is cloth still.
             if (skin[a] && skin[b] && skin[c]) continue;
-            if (!ClothFaces[t / 3]) continue;
+            if (!clothFaces[t / 3]) continue;
             var pa = Here(a); var pb = Here(b); var pc = Here(c);
             if (!Near(pa) && !Near(pb) && !Near(pc)) continue;
             int f = faces.Count;
@@ -309,15 +342,17 @@ internal sealed partial class MeshVolumeSolve
         var hem = HemEdges();
         var lifts = new Dictionary<int, (float Lift, Vector3 Way)>();
         int lifted = 0, outside = 0;
+        const float onEdge = 0.02f;
         foreach (int s in movedSkin)
         {
             var sp = ToVector(Here(s));
             if (!grid.TryGetValue(CellOf(Here(s)), out var near)) continue;
 
+            // The face nearest the skin point. Not every face over it: within reach that takes in the far side of a
+            // strap or a stocking, and lifting those folded the cloth.
             int best = -1;
             float bestD = reach;
-            Vector3 bestQ = default;
-            float bu = 0f, bv = 0f, bw = 0f;
+            (int Face, Vector3 Q, float U, float V, float W) hit = default;
             foreach (int f in near)
             {
                 int t = faces[f];
@@ -325,24 +360,25 @@ internal sealed partial class MeshVolumeSolve
                                                         ToVector(Here(nodeTris[t + 2])), out float u, out float v, out float w);
                 float d = Vector3.Distance(sp, q);
                 if (d >= bestD) continue;
-                bestD = d; best = f; bestQ = q; bu = u; bv = v; bw = w;
+                bestD = d; best = f; hit = (f, q, u, v, w);
             }
             if (best < 0) continue;
 
-            int ft = faces[best];
+            var (hitFace, hq, bu, bv, bw) = hit;
+            int ft = faces[hitFace];
             int ca = nodeTris[ft], cb = nodeTris[ft + 1], cc = nodeTris[ft + 2];
             // Past a hem is not through anything — as SkinThroughCloth judges it.
-            const float onEdge = 0.02f;
             if ((bu < onEdge && hem.Contains(EdgeKey(cb, cc))) || (bv < onEdge && hem.Contains(EdgeKey(cc, ca)))
                 || (bw < onEdge && hem.Contains(EdgeKey(ca, cb))))
                 continue;
 
-            // "Outside" is the skin's own way out, whichever way the face is wound: a lining faces the body, and judged by
-            // its own normal every skin point under it is outside it — and lifted that way, it is driven into the body.
+            // "Outside" is the skin's own way out, whichever way the face is wound: a lining faces the body, and
+            // judged by its own normal every skin point under it is outside it — and lifted that way, it is driven
+            // into the body.
             var skinOut = ToVector(nodeNormal[s]);
             var face = OutAlong(Here(ca), Here(cb), Here(cc), skinOut);
             if (face == Vector3.Zero) continue;
-            float by = Vector3.Dot(sp - bestQ, face);
+            float by = Vector3.Dot(sp - hq, face);
 
             // The author's own: how far outside the same face this skin point stood as authored.
             var aq = BrushTransfer.ClosestOnTriangle(ToVector(nodeAt[s]), ToVector(nodeAt[ca]), ToVector(nodeAt[cb]),
@@ -352,14 +388,16 @@ internal sealed partial class MeshVolumeSolve
                 ? Vector3.Dot(ToVector(nodeAt[s]) - aq, authoredFace)
                 : 0f;
 
-            // Skin the author already had outside this face covers it: cloth left inside the body. Moving the skin further
-            // out shows nothing more, and lifting that cloth toward the skin would drag it through its own surface.
-            if (authored > tolerance) continue;
-            float excess = by - tolerance;
+            // Skin the author had well outside this face covers it: cloth left inside the body. Moving the skin
+            // further out shows nothing more, and lifting that cloth toward the skin would drag it through its own
+            // surface. A slight clip is the author's to keep, but not to grow.
+            if (authored > DeepClip) continue;
+            float excess = by - MathF.Max(authored, 0f) - tolerance;
             if (excess <= 0f) continue;
+            if (!lift) { outside++; continue; }
 
-            // Unlocked cloth corners only. Lifted by λ·share each, the face's point there rises λ·Σshare², so that is
-            // what the excess is divided by.
+            // Unlocked cloth corners only. Lifted by λ·share each, the face's point there rises λ·Σshare², so that
+            // is what the excess is divided by.
             var corners = new[] { (ca, bu), (cb, bv), (cc, bw) };
             float sq = 0f;
             foreach (var (c, share) in corners)
@@ -369,22 +407,21 @@ internal sealed partial class MeshVolumeSolve
             {
                 if (locked[c] || skin[c] || share <= 0f || sq < 1e-4f) continue;
                 // Never more than a few times the excess: a corner with a sliver of the share would be thrown off.
-                float lift = MathF.Min(excess * share / sq, 2f * excess);
+                float by2 = MathF.Min(excess * share / sq, 2f * excess);
                 // The most any one skin point asks of the corner, not the sum: several points under one face each
                 // ask for the same lift, and adding them threw tight cloth centimetres off a 3 mm sculpt.
-                if (!lifts.TryGetValue(c, out var had) || lift > had.Lift) lifts[c] = (lift, face);
+                if (!lifts.TryGetValue(c, out var had) || by2 > had.Lift) lifts[c] = (by2, face);
                 any = true;
             }
             if (any) lifted++;
-            else outside++;
         }
+        if (!lift) return outside;
 
-        foreach (var (c, (lift, way)) in lifts)
+        foreach (var (c, (by, way)) in lifts)
         {
             start.TryAdd(c, Snapshot(c));   // into the undo record before its first change, so undo stays exact
-            nodeDelta[c] = new Vec3(nodeDelta[c].X + way.X * lift, nodeDelta[c].Y + way.Y * lift, nodeDelta[c].Z + way.Z * lift);
+            nodeDelta[c] = new Vec3(nodeDelta[c].X + way.X * by, nodeDelta[c].Y + way.Y * by, nodeDelta[c].Z + way.Z * by);
         }
-        FacesStillOutside = outside;
         return lifted;
     }
 
@@ -397,35 +434,9 @@ internal sealed partial class MeshVolumeSolve
         return Vector3.Dot(f, skinOut) < 0f ? -f : f;
     }
 
-    private bool[]? clothFaceCache;
-
-    /// <summary>Per face of <see cref="nodeTris"/>, whether it is drawn with a cloth material rather than skin — a face
-    /// can be cloth with every corner welded to skin, or skin with none.</summary>
-    private bool[] ClothFaces
-    {
-        get
-        {
-            if (clothFaceCache != null) return clothFaceCache;
-            // The faces as the constructor made nodeTris: whole parts in order, invalid and degenerate ones dropped.
-            int vc = basePos.Length;
-            var faces = new List<bool>(nodeTris.Length / 3);
-            foreach (var part in sourceModel.Parts)
-            {
-                if (part.Island >= 0) continue;
-                bool cloth = !SecondSkinWriter.IsBodySkinMaterial(part.Material);
-                var t = part.Triangles;
-                for (int i = 0; i + 2 < t.Length; i += 3)
-                {
-                    int a = t[i], b = t[i + 1], c = t[i + 2];
-                    if (a < 0 || b < 0 || c < 0 || a >= vc || b >= vc || c >= vc) continue;
-                    int na = nodeOf[a], nb = nodeOf[b], nc = nodeOf[c];
-                    if (na == nb || nb == nc || na == nc) continue;
-                    faces.Add(cloth);
-                }
-            }
-            return clothFaceCache = faces.ToArray();
-        }
-    }
+    /// <summary>Per face of <see cref="nodeTris"/>, whether its part is drawn with cloth rather than skin — a face can be
+    /// cloth with every corner welded to skin. Filled by the constructor, which makes the faces.</summary>
+    private readonly bool[] clothFaces;
 
     private HashSet<(int, int)>? hemEdges;
 

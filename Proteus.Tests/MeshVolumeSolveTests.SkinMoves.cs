@@ -278,6 +278,7 @@ public partial class MeshVolumeSolveTests
         solve.GrabTo(new Vector3(0f, 0.01f, 0f));
         Assert.True(solve.EndGrab());
         Assert.True(Moved(l.Model, solve.Positions(), mid).Y > 0.009f);
+        Assert.Equal(0, Folded(l.Model, solve.Positions()));
     }
 
     // ── AC-3: the Move tools move skin ─────────────────────────────────────────────────────────────────────────────
@@ -428,6 +429,7 @@ public partial class MeshVolumeSolveTests
             var expected = Vector3.Transform(At(l.Model.Positions, v), m);
             Assert.True(Vector3.Distance(expected, At(solve.Positions(), v)) < 1e-4f, $"cloth {v} did not follow");
         }
+        Assert.Equal(0, Folded(l.Model, solve.Positions()));
     }
 
     /// <summary>A rider the brush carried has its normal turned with the skin under it, and that normal is written.</summary>
@@ -804,6 +806,91 @@ public partial class MeshVolumeSolveTests
         Assert.True(solve.SkinEdited);
     }
 
+    /// <summary>
+    /// A binding that arrives while a stroke, grab or move is open changes nothing about that operation: it began
+    /// without skin, and finishes without it, exactly as a solve that never had one. The next operation moves skin.
+    /// </summary>
+    [Theory]
+    [InlineData("paint")]
+    [InlineData("grab")]
+    [InlineData("move")]
+    [Trait("Plan", "EDGE-studio-move-skin-2")]
+    [Trait("Plan", "EDGE-studio-move-skin-24")]
+    public void ABindingArrivingMidOperationWaitsForTheNext(string op)
+    {
+        var l = Layered(21, 0.005f);
+        var never = new MeshVolumeSolve(l.Model) { MoveSkin = true };
+        var late = new MeshVolumeSolve(l.Model) { MoveSkin = true };
+        var binding = SkinFollow.Bind(late.FollowInputs);
+        var centre = At(l.Model.Positions, l.SkinAt[10, 10]);
+
+        foreach (var s in new[] { never, late })
+        {
+            bool attach = ReferenceEquals(s, late);
+            if (op == "paint")
+            {
+                s.Paint(centre, 0.05f, 0.002f);
+                if (attach) Assert.True(s.AttachFollow(binding));
+                s.Paint(centre, 0.05f, 0.002f);
+                s.EndStroke();
+            }
+            else if (op == "grab")
+            {
+                s.BeginGrab(centre, 0.05f);
+                if (attach) Assert.True(s.AttachFollow(binding));
+                s.GrabTo(new Vector3(0f, 0.01f, 0f));
+                s.EndGrab();
+            }
+            else
+            {
+                s.BeginMove(l.Model.Parts[0].Triangles, adjacent: true, falloffRadius: 0.03f);
+                if (attach) Assert.True(s.AttachFollow(binding));
+                s.MoveTo(new Vector3(0f, 0.01f, 0f));
+                s.EndMove();
+            }
+        }
+        Assert.Equal(never.Positions(), late.Positions());
+        Assert.False(late.SkinEdited);
+
+        late.Paint(centre, 0.05f, 0.002f);
+        late.EndStroke();
+        Assert.True(late.SkinEdited);
+    }
+
+    /// <summary>Cloth over locked skin is brushed AND settled as cloth: the stroke ends exactly as with the checkbox off.</summary>
+    [Fact]
+    [Trait("Plan", "EDGE-studio-move-skin-5")]
+    public void ClothOverLockedSkinSettlesAsWithTheCheckboxOff()
+    {
+        var l = Layered(21, 0.005f);
+        var on = SkinSolve(l.Model);
+        var off = new MeshVolumeSolve(l.Model);
+        foreach (var s in new[] { on, off })
+        {
+            s.SetLocked(l.Model.Parts[1].Triangles);
+            s.Paint(At(l.Model.Positions, l.ClothAt[10, 10]), 0.04f, 0.003f);
+            s.EndStroke();
+        }
+        Assert.Equal(off.Positions(), on.Positions());
+    }
+
+    /// <summary>
+    /// Cloth the author left a hair under the skin (0.5 mm — a slight clip, not cloth inside the body): the clip is
+    /// theirs to keep, but a sculpt pushing the skin through further is guarded like any other.
+    /// </summary>
+    [Fact]
+    [Trait("Plan", "AC-studio-move-skin-4")]
+    [Trait("Plan", "EDGE-studio-move-skin-8")]
+    public void ASlightClipIsKeptButNotGrown()
+    {
+        var l = Layered(21, -0.0005f, clothStride: 2);
+        var solve = SkinSolve(l.Model);
+        solve.Paint(At(l.Model.Positions, l.SkinAt[11, 11]), 0.03f, 0.006f);
+        solve.EndStroke();
+        Assert.Equal(0, SkinPoke.Uncovered(l.Model, solve.Positions(), 0.001f));
+        Assert.Equal(0, Folded(l.Model, solve.Positions()));
+    }
+
     [Fact]
     [Trait("Plan", "EDGE-studio-move-skin-24")]
     public void AttachFollowIgnoresAnotherSolvesBinding()
@@ -847,6 +934,7 @@ public partial class MeshVolumeSolveTests
         var after = other.Positions();
         Assert.True(Moved(target, after, l.SkinAt[10, 10]).Y > 0.004f, "the other size's skin did not take the move");
         Assert.True(At(after, l.ClothAt[10, 10]).Y - At(after, l.SkinAt[10, 10]).Y >= 0.001f);
+        Assert.Equal(0, Folded(target, after));
     }
 
     [Fact]
@@ -940,6 +1028,7 @@ public partial class MeshVolumeSolveTests
         solve.Paint(At(l.Model.Positions, l.SkinAt[11, 11]), 0.03f, 0.006f);
         solve.EndStroke();
         Assert.Equal(0, SkinThrough(l.Model, solve));
+        Assert.Equal(0, Folded(l.Model, solve.Positions()));
 
         solve.Undo();
         Assert.Equal(l.Model.Positions, solve.Positions());

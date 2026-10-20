@@ -33,6 +33,7 @@ public sealed partial class PartsPanel
     private void UpdateSkinMoves()
     {
         ConsumeFollow();
+        LogGuardLeftovers();
         if (moveSkin && volume is { FollowReady: false } && followTask == null && followError == null) StartFollow();
 
         bool now = SkinMovePolicy.Applies(moveSkin, tool is Tool.Bridge or Tool.Wind, volume?.FollowReady == true)
@@ -45,6 +46,21 @@ public sealed partial class PartsPanel
         polySelection = null;   // rebuilt with or without skin
         ForgetMoveFalloff();
         viewport.Recolour();
+    }
+
+    /// <summary>The guard run the log last heard about, so each is logged once.</summary>
+    private int guardLogged;
+
+    /// <summary>
+    /// After a skin-moving operation: if the guard gave up with skin still through the cloth, say how much, so a report
+    /// of skin showing after a sculpt has its answer in the log.
+    /// </summary>
+    private void LogGuardLeftovers()
+    {
+        if (volume is not { } vol || vol.GuardVersion == guardLogged) return;
+        guardLogged = vol.GuardVersion;
+        if (vol.FacesStillOutside > 0)
+            log.Information("[Proteus] brush: skin follow: {0} faces still outside", vol.FacesStillOutside);
     }
 
     /// <summary>Bind the open model's clothes to its skin on a worker; see <see cref="SkinFollow.Bind"/>.</summary>
@@ -82,6 +98,7 @@ public sealed partial class PartsPanel
         followTask = null;   // one still running was for the old solve, which AttachFollow would refuse anyway
         followError = null;
         followLogged = false;
+        guardLogged = 0;
         SkinMovesNow = false;
         if (!moveSkin && parts != null) SkinMovePolicy.DropSkinLocks(LockSet(lockedParts), parts.Parts);
     }
@@ -95,12 +112,16 @@ public sealed partial class PartsPanel
 
         ImGui.Spacing();
         bool on = moveSkin;
-        using (ImRaii.Disabled(busy || notThisBrush || followError != null))
+        var (enabled, tip) = SkinMovePolicy.Checkbox(busy, notThisBrush, followError != null);
+        using (ImRaii.Disabled(!enabled))
             if (ImGui.Checkbox(ps.SkinMoves, ref on)) SetMoveSkin(on);
         if (ImGui.IsItemHovered(ImGuiHoveredFlags.AllowWhenDisabled))
-            ImGui.SetTooltip(followError != null ? ps.SkinMovesFailed
-                             : notThisBrush ? ps.SkinMovesNotThisBrushTip
-                             : ps.SkinMovesTip);
+            ImGui.SetTooltip(tip switch
+            {
+                SkinMovePolicy.CheckboxTip.Failed => ps.SkinMovesFailed,
+                SkinMovePolicy.CheckboxTip.NotThisBrush => ps.SkinMovesNotThisBrushTip,
+                _ => ps.SkinMovesTip,
+            });
 
         if (!moveSkin || notThisBrush) return;
         ImGui.PushTextWrapPos(0);

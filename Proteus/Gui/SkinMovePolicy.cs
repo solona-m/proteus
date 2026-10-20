@@ -31,6 +31,27 @@ internal static partial class SkinMovePolicy
         MovePickable,
     }
 
+    /// <summary>Which tooltip the checkbox shows.</summary>
+    public enum CheckboxTip
+    {
+        /// <summary>What it does.</summary>
+        Explains,
+
+        /// <summary>Bridge and wind never move skin.</summary>
+        NotThisBrush,
+
+        /// <summary>The clothes could not be bound to the skin, so it stays still.</summary>
+        Failed,
+    }
+
+    /// <summary>
+    /// Whether the checkbox can be changed, and what its tooltip says: not while a stroke, move or grab is open (the
+    /// operation began with the answer it has), not under Bridge or Wind, and not once binding the clothes has failed.
+    /// </summary>
+    public static (bool Enabled, CheckboxTip Tip) Checkbox(bool busy, bool bridgeOrWind, bool bindingFailed)
+        => (!busy && !bridgeOrWind && !bindingFailed,
+            bindingFailed ? CheckboxTip.Failed : bridgeOrWind ? CheckboxTip.NotThisBrush : CheckboxTip.Explains);
+
     /// <summary>Skin moves now: the checkbox is on, the tool is not one of the two that never move skin, and the
     /// clothes have been bound to the skin.</summary>
     public static bool Applies(bool toggleOn, bool bridgeOrWind, bool followReady)

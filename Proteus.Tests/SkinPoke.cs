@@ -70,6 +70,46 @@ internal static class SkinPoke
         return worse;
     }
 
+    /// <summary>
+    /// A second reading that does not share <see cref="MadeWorse"/>'s rule (the nearest face, deep clips skipped): skin
+    /// vertices that ANY cloth face covered as authored — the skin at or under it, within reach — and now stands more
+    /// than <paramref name="by"/> outside of.
+    /// </summary>
+    public static int Uncovered(ModelParts model, float[] after, float by)
+    {
+        var whole = model.Parts.Where(p => p.Island < 0).ToList();
+        var tris = whole.Where(p => !SecondSkinWriter.IsBodySkinMaterial(p.Material))
+                        .SelectMany(p => Enumerable.Range(0, p.Triangles.Length / 3)
+                                                   .Select(t => (p.Triangles[t * 3], p.Triangles[t * 3 + 1], p.Triangles[t * 3 + 2])))
+                        .Where(t => t.Item1 != t.Item2 && t.Item2 != t.Item3 && t.Item1 != t.Item3)
+                        .ToList();
+        var skin = whole.Where(p => SecondSkinWriter.IsBodySkinMaterial(p.Material)).SelectMany(p => p.Triangles).Distinct().ToList();
+        int count = 0;
+        foreach (int s in skin)
+        {
+            var n = At(model.Normals, s);
+            if (n.LengthSquared() < 1e-12f) continue;
+            n = Vector3.Normalize(n);
+            var was = At(model.Positions, s);
+            foreach (var t in tris)
+            {
+                var pa = At(model.Positions, t.Item1);
+                if (MathF.Abs(pa.X - was.X) > 0.05f || MathF.Abs(pa.Y - was.Y) > 0.05f || MathF.Abs(pa.Z - was.Z) > 0.05f) continue;
+                var q = BrushTransfer.ClosestOnTriangle(was, pa, At(model.Positions, t.Item2), At(model.Positions, t.Item3),
+                                                        out float u, out float v, out float w);
+                // Covered: under the face proper, not beside its edge.
+                if (Vector3.Distance(was, q) > Reach || u < OnEdge || v < OnEdge || w < OnEdge) continue;
+                if (Against(model.Positions, t, was, n) is not (<= 0f)) continue;
+                // Covering faces lie across the skin's way out; one turned more than 60° from it — a band's wall, a seam
+                // standing up — flips which side is "outside" with the slightest turn, and says nothing about cover.
+                if (MathF.Abs(Vector3.Dot(FaceNormal(model.Positions, t), n)) < 0.5f
+                    || MathF.Abs(Vector3.Dot(FaceNormal(after, t), n)) < 0.5f) continue;
+                if (Against(after, t, At(after, s), n) > by) { count++; break; }
+            }
+        }
+        return count;
+    }
+
     /// <summary>How far <paramref name="s"/> stands outside the cloth face nearest it, along <paramref name="skinOut"/>;
     /// NaN when no face is within reach or the nearest point is past a hem.</summary>
     private static float Outside(float[] pos, List<(int, int, int)> tris, Vector3 s, Vector3 skinOut, Func<int, int, bool> hem,
@@ -106,6 +146,12 @@ internal static class SkinPoke
         f = Vector3.Normalize(f);
         if (Vector3.Dot(f, skinOut) < 0f) f = -f;
         return Vector3.Dot(s - q, f);
+    }
+
+    private static Vector3 FaceNormal(float[] pos, (int A, int B, int C) t)
+    {
+        var f = Vector3.Cross(At(pos, t.B) - At(pos, t.A), At(pos, t.C) - At(pos, t.A));
+        return f.LengthSquared() < 1e-14f ? Vector3.Zero : Vector3.Normalize(f);
     }
 
     private static Vector3 At(float[] p, int v) => new(p[v * 3], p[v * 3 + 1], p[v * 3 + 2]);
