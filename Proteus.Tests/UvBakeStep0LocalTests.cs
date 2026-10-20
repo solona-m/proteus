@@ -70,6 +70,10 @@ public class UvBakeStep0LocalTests(ITestOutputHelper output)
                 var (pr, pl, n) = SideHalf(body);
                 output.WriteLine($"{name} {rel}: {body.P.Length} v, {body.TriangleCount} t, pos {lo}..{hi}, uv {uvLo}..{uvHi}, "
                                  + $"+X→right {pr:P1} +X→left {pl:P1} of {n}, rim {body.Rim.SegmentCount}, cover@1024 {Covered(body, 1024)}");
+                foreach (var g in body.Rim.Segments.GroupBy(s => (MathF.Round((s.A.Y + s.B.Y) * 50f) / 100f,
+                                                                  MathF.Sign((s.A.X + s.B.X) * 0.5f))))
+                    output.WriteLine($"    rim y≈{g.Key.Item1:F2} side {g.Key.Item2}: {g.Count()} edges, "
+                                     + $"x {g.Min(s => s.A.X):F3}..{g.Max(s => s.A.X):F3} z {g.Min(s => s.A.Z):F3}..{g.Max(s => s.A.Z):F3}");
                 foreach (var (bone, count, how) in UvBakeBones.Report(part.Weights, bones.Contains))
                     if (how != UvBakeBones.Resolution.Own)
                         output.WriteLine($"    bone {bone}: {count} v, {how}");

@@ -19,7 +19,9 @@ internal static class UvTransferQuality
     {
         public const double RegionCoverage = 0.99, RegionRimSnaps = 0.001, RegionFolds = 0.01;
         public const double GlobalFolds = 0.005, GlobalCoverage = 0.99;
-        public const double RoundTripGross = 0.005, RoundTripModerate = 0.10;
+        // Gross round trip: no worse than the shipped bibo↔gen3 maps (2.58% at worst, measured by RoundTrip below),
+        // the user's call when the first bake missed the 0.5% the plan began with.
+        public const double RoundTripGross = 0.026, RoundTripModerate = 0.10;
         public const float TorsoLandmark = 0.015f, TipLandmark = 0.01f;
         public const double IdentityP50 = 4, IdentityP95 = 16;
     }
@@ -80,6 +82,7 @@ internal static class UvTransferQuality
         public long Folds, FoldMeasured;
         public Dictionary<string, RegionFigures> Regions = [];
         public Dictionary<string, float> LandmarksMm = [];
+        public Dictionary<string, float> LandmarksTangentMm = [];
         public List<string> Failures = [];
     }
 
@@ -194,14 +197,30 @@ internal static class UvTransferQuality
     }
 
     /// <summary>
-    /// Named points found on a body by its own shape, so the same point can be found on both bodies and compared:
-    /// fingertips, big-toe tips, sternum, under-bust, lower belly, inner thighs, nape, shoulder tops.
+    /// Named points found on each body the same way, so the same point can be found on both and compared. Heights and
+    /// sides come from the centroid of the skin each bone carries most of — the bodies share the game's skeleton once
+    /// TBSE is bent, so a bone's centroid is the same part of both — and the point is the body's surface there:
+    /// fingertips and big-toe tips (the extremes of the hand and foot), the sternum, under-bust and lower belly (the
+    /// front of the body at the upper spine, the middle spine and the pelvis), the nape (the back of the neck), the
+    /// inner thighs (the innermost thigh at the thigh bone) and the shoulder tops (the top of the body over the upper
+    /// arm bone).
     /// </summary>
     internal static Dictionary<string, (int Tri, Vector3 Bary)> Landmarks(BakeBody body)
     {
-        var frame = Frame.Of(body);
         var result = new Dictionary<string, (int, Vector3)>();
-        void Pick(string name, Func<Vector3, Vector3, Region, float?> score)
+        var centroid = new Dictionary<string, (Vector3 Sum, int N)>(StringComparer.Ordinal);
+        for (int v = 0; v < body.P.Length; v++)
+        {
+            string? top = null;
+            float best = 0f;
+            foreach (var (b, w) in body.Weights[v]) if (w > best) { best = w; top = b; }
+            if (top == null) continue;
+            var (sum, n) = centroid.GetValueOrDefault(top);
+            centroid[top] = (sum + body.P[v], n + 1);
+        }
+        Vector3? C(string bone) => centroid.TryGetValue(bone, out var c) && c.N > 0 ? c.Sum / c.N : null;
+
+        void Pick(string name, Func<Vector3, Region, float?> score)
         {
             float best = float.MinValue;
             int bestT = -1, bestK = 0;
@@ -209,31 +228,33 @@ internal static class UvTransferQuality
                 for (int k = 0; k < 3; k++)
                 {
                     int v = body.Tri[t * 3 + k];
-                    if (score(body.P[v], body.N[v], body.VertexRegion[v]) is { } s && (s > best || (s == best && t < bestT)))
+                    if (score(body.P[v], body.VertexRegion[v]) is { } s && (s > best || (s == best && t < bestT)))
                     { best = s; bestT = t; bestK = k; }
                 }
             if (bestT >= 0) result[name] = (bestT, bestK == 0 ? Vector3.UnitX : bestK == 1 ? Vector3.UnitY : Vector3.UnitZ);
         }
-        float H(Vector3 p) => frame.Span <= 1e-4f ? 0 : (p.Y - frame.PelvisY) / frame.Span;
+        const float Band = 0.01f;
 
-        foreach (var (side, sx) in new[] { ("L", 1f), ("R", -1f) })
+        foreach (var (side, sx, suffix) in new[] { ("L", 1f, "_l"), ("R", -1f, "_r") })
         {
             var hand = sx > 0 ? Region.HandL : Region.HandR;
             var foot = sx > 0 ? Region.FootL : Region.FootR;
             var thigh = sx > 0 ? Region.ThighL : Region.ThighR;
-            Pick("fingertip" + side, (p, _, r) => r == hand ? p.X * sx : null);
-            Pick("toe" + side, (p, _, r) => r == foot ? p.Z : null);
-            Pick("underBust" + side, (p, n, r) => r == Region.Torso && p.X * sx is > 0.06f and < 0.1f
-                                                  && H(p) is > 0.5f and < 0.56f ? p.Z : null);
-            Pick("innerThigh" + side, (p, _, r) => r == thigh && MathF.Abs(H(p) + 0.35f) < 0.03f ? -p.X * sx : null);
-            Pick("shoulder" + side, (p, _, r) => r is Region.Torso or Region.UpperArmL or Region.UpperArmR
-                                                 && p.X * sx is > 0.12f and < 0.16f ? p.Y : null);
+            Pick("fingertip" + side, (p, r) => r == hand ? p.X * sx : null);
+            Pick("toe" + side, (p, r) => r == foot ? p.Z : null);
+            if (C("j_sebo_b") is { } mid)
+                Pick("underBust" + side, (p, _) => MathF.Abs(p.X - 0.08f * sx) < Band && MathF.Abs(p.Y - mid.Y) < Band ? p.Z : null);
+            if (C("j_asi_a" + suffix) is { } th)
+                Pick("innerThigh" + side, (p, r) => r == thigh && MathF.Abs(p.Y - th.Y) < Band ? -p.X * sx : null);
+            if (C("j_ude_a" + suffix) is { } arm)
+                Pick("shoulder" + side, (p, _) => MathF.Abs(p.X - arm.X) < Band ? p.Y : null);
         }
-        Pick("sternum", (p, _, r) => r == Region.Torso && MathF.Abs(p.X) < 0.01f && H(p) is > 0.7f and < 0.76f ? p.Z : null);
-        Pick("lowerBelly", (p, _, r) => r is Region.Pelvis or Region.Torso && MathF.Abs(p.X) < 0.01f
-                                        && H(p) is > 0.08f and < 0.12f ? p.Z : null);
-        Pick("nape", (p, _, r) => r is Region.Head or Region.Torso && MathF.Abs(p.X) < 0.01f
-                                  && p.Z < frame.NeckZ ? p.Y : null);
+        if (C("j_sebo_c") is { } upper)
+            Pick("sternum", (p, _) => MathF.Abs(p.X) < Band && MathF.Abs(p.Y - upper.Y) < Band ? p.Z : null);
+        if (C("j_kosi") is { } pelvis)
+            Pick("lowerBelly", (p, _) => MathF.Abs(p.X) < Band && MathF.Abs(p.Y - pelvis.Y) < Band ? p.Z : null);
+        if (C("j_kubi") is { } neck)
+            Pick("nape", (p, _) => MathF.Abs(p.X) < Band && MathF.Abs(p.Y - neck.Y) < Band ? -p.Z : null);
         return result;
     }
 
@@ -242,8 +263,12 @@ internal static class UvTransferQuality
     /// <paramref name="src"/>'s surface there, and compared with <paramref name="src"/>'s own landmark of that name: the
     /// distance in millimetres. A landmark the map has no texel for is reported as NaN.
     /// </summary>
+    /// <param name="tangent">Filled, when given, with each error less its part along the source's normal there: how far
+    /// the landing is ACROSS the skin, which a correspondence decides, without how far the two surfaces stand apart,
+    /// which the bodies' shapes do (a breast stands centimetres before a man's chest).</param>
     internal static Dictionary<string, float> LandmarkErrors(UvTransferBake.Result map, BakeBody dest, BakeBody src,
-                                                             UvTransferBake.Raster srcRaster)
+                                                             UvTransferBake.Raster srcRaster,
+                                                             Dictionary<string, float>? tangent = null)
     {
         var mine = Landmarks(dest);
         var theirs = Landmarks(src);
@@ -258,6 +283,12 @@ internal static class UvTransferQuality
             if (SourcePoint(map, y * map.Size + x, src, srcRaster) is not { } landed) { errors[name] = float.NaN; continue; }
             var (want, _, _) = src.At(them.Tri, them.Bary.X, them.Bary.Y, them.Bary.Z);
             errors[name] = (landed - want).Length() * 1000f;
+            if (tangent != null)
+            {
+                var n = src.SmoothAt(them.Tri, them.Bary.X, them.Bary.Y, them.Bary.Z);
+                var d = landed - want;
+                tangent[name] = (d - n * Vector3.Dot(d, n)).Length() * 1000f;
+            }
         }
         return errors;
     }

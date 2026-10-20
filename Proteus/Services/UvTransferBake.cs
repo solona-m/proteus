@@ -92,7 +92,83 @@ internal sealed class BakeBody
             TriRegion[t] = a == b || a == c ? a : b == c ? b : a;
         }
 
-        Rim = RimIndex.Build(P, Tri);
+        // Covered: a step off the edge, away from its own triangle and along the surface, still finds skin there.
+        var cover = new TriangleBvh(this);
+        Rim = RimIndex.Build(P, Tri, (a, b, t) =>
+        {
+            var mid = (a + b) * 0.5f;
+            var c = (P[Tri[t * 3]] + P[Tri[t * 3 + 1]] + P[Tri[t * 3 + 2]]) / 3f;
+            var edge = b - a;
+            var outward = mid - c;
+            if (edge.LengthSquared() > 1e-20f) outward -= edge * (Vector3.Dot(outward, edge) / edge.LengthSquared());
+            if (outward.LengthSquared() < 1e-20f) return false;
+            var q = mid + Vector3.Normalize(outward) * CoverStep;
+            return cover.Closest(q, CoverReach, o => o != t, out _, out _, out _, out _, out _);
+        });
+        Smooth = SmoothNormals(SmoothPasses);
+        TriNearRim = new bool[tc];
+        var nearRim = new bool[P.Length];
+        for (int v = 0; v < P.Length; v++) nearRim[v] = Rim.Near(P[v], UvTransferBake.RimReach);
+        for (int t = 0; t < tc; t++)
+            TriNearRim[t] = nearRim[Tri[t * 3]] || nearRim[Tri[t * 3 + 1]] || nearRim[Tri[t * 3 + 2]];
+    }
+
+    /// <summary>How far off an open edge, along the surface, the bake looks for skin lapped over it.</summary>
+    internal const float CoverStep = 0.005f;
+
+    /// <summary>How near that point skin must be for the edge to be an overlap, not a hole.</summary>
+    internal const float CoverReach = 0.003f;
+
+    /// <summary>
+    /// How many times each vertex's normal is averaged with its neighbours' for the projection: about the width of
+    /// the cleavage, so a flat chest's texels are cast along the chest's own facing, not the breast's turned flank.
+    /// </summary>
+    internal const int SmoothPasses = 20;
+
+    /// <summary>Per vertex, the normal averaged over the welded surface around it (<see cref="SmoothPasses"/> rings).</summary>
+    public readonly Vector3[] Smooth;
+
+    /// <summary>Per triangle, whether a corner lies within <see cref="UvTransferBake.RimReach"/> of the open rim.</summary>
+    public readonly bool[] TriNearRim;
+
+    private Vector3[] SmoothNormals(int passes)
+    {
+        // Welded first: a uv seam splits a vertex in two, and averaging must not stop at it.
+        var id = RimIndex.WeldIds(P);
+        var neighbours = new HashSet<int>[P.Length];
+        for (int t = 0; t + 2 < Tri.Length; t += 3)
+            for (int k = 0; k < 3; k++)
+            {
+                int a = id[Tri[t + k]], b = id[Tri[t + (k + 1) % 3]];
+                if (a == b) continue;
+                (neighbours[a] ??= []).Add(b);
+                (neighbours[b] ??= []).Add(a);
+            }
+        var cur = new Vector3[P.Length];
+        for (int v = 0; v < P.Length; v++) cur[id[v]] += N[v];
+        var next = new Vector3[P.Length];
+        for (int pass = 0; pass < passes; pass++)
+        {
+            for (int v = 0; v < P.Length; v++)
+            {
+                if (id[v] != v) continue;
+                var sum = cur[v];
+                if (neighbours[v] != null) foreach (int u in neighbours[v]) sum += cur[u];
+                next[v] = sum.LengthSquared() > 1e-12f ? Vector3.Normalize(sum) : cur[v];
+            }
+            (cur, next) = (next, cur);
+        }
+        var smooth = new Vector3[P.Length];
+        for (int v = 0; v < P.Length; v++)
+            smooth[v] = cur[id[v]].LengthSquared() > 1e-12f ? Vector3.Normalize(cur[id[v]]) : N[v];
+        return smooth;
+    }
+
+    /// <summary>The smoothed normal at barycentrics (u, v, w) of triangle <paramref name="t"/>.</summary>
+    public Vector3 SmoothAt(int t, float u, float v, float w)
+    {
+        var n = Smooth[Tri[t * 3]] * u + Smooth[Tri[t * 3 + 1]] * v + Smooth[Tri[t * 3 + 2]] * w;
+        return n.LengthSquared() > 1e-12f ? Vector3.Normalize(n) : FaceNormal[t];
     }
 
     /// <summary>The surface point, interpolated normal and uv of triangle <paramref name="t"/> at barycentrics (u, v, w).</summary>
@@ -123,7 +199,8 @@ internal sealed class RimIndex
 
     public int SegmentCount { get; private set; }
 
-    public static RimIndex Build(Vector3[] p, int[] tri)
+    /// <summary>Per vertex, the first vertex at the same position (to 0.1 mm): one point of the surface, however split.</summary>
+    public static int[] WeldIds(Vector3[] p)
     {
         var id = new int[p.Length];
         var byKey = new Dictionary<(long, long, long), int>();
@@ -133,24 +210,49 @@ internal sealed class RimIndex
             if (!byKey.TryGetValue(key, out int w)) byKey[key] = w = v;
             id[v] = w;
         }
-        var uses = new Dictionary<(int, int), int>();
+        return id;
+    }
+
+    /// <summary>
+    /// The holes in a surface: the edges only one triangle uses once vertices are welded by position, less those
+    /// <paramref name="covered"/> says another piece of skin lies over. A body is built of overlapping pieces — the
+    /// chest runs down over the legs at the waist, the thigh is two meshes lapped at mid-thigh — and a piece's edge
+    /// there is no hole; only an edge nothing covers (a cut-out under the undies, the neck) is.
+    /// </summary>
+    /// <param name="covered">Given an edge's ends and the triangle that has the edge, whether other skin is there.</param>
+    public static RimIndex Build(Vector3[] p, int[] tri, Func<Vector3, Vector3, int, bool>? covered = null)
+    {
+        var id = WeldIds(p);
+        var uses = new Dictionary<(int, int), (int Count, int Tri)>();
         for (int t = 0; t + 2 < tri.Length; t += 3)
             for (int k = 0; k < 3; k++)
             {
                 int a = id[tri[t + k]], b = id[tri[t + (k + 1) % 3]];
                 if (a == b) continue;
                 var e = a < b ? (a, b) : (b, a);
-                uses[e] = uses.GetValueOrDefault(e) + 1;
+                var (count, first) = uses.GetValueOrDefault(e, (0, t / 3));
+                uses[e] = (count + 1, first);
             }
+        var open = new List<(int A, int B, int Tri)>();
+        foreach (var (e, (count, t)) in uses)
+            if (count == 1) open.Add((e.Item1, e.Item2, t));
+        open.Sort();
+
         var rim = new RimIndex();
-        foreach (var (e, count) in uses)
-            if (count == 1) rim.Add(p[e.Item1], p[e.Item2]);
+        foreach (var (a, b, t) in open)
+            if (covered == null || !covered(p[a], p[b], t)) rim.Add(p[a], p[b]);
         return rim;
     }
+
+    private readonly List<(Vector3 A, Vector3 B)> segments = [];
+
+    /// <summary>The rim's edges.</summary>
+    public IReadOnlyList<(Vector3 A, Vector3 B)> Segments => segments;
 
     private void Add(Vector3 a, Vector3 b)
     {
         SegmentCount++;
+        segments.Add((a, b));
         var lo = Vector3.Min(a, b);
         var hi = Vector3.Max(a, b);
         for (int x = (int)MathF.Floor(lo.X / Cell); x <= (int)MathF.Floor(hi.X / Cell); x++)
@@ -371,10 +473,12 @@ internal static class UvTransferBake
     internal const float Reach = 0.08f;          // 8 cm: bodies bent to one race differ by less, limb for limb
     internal const float RimReach = 0.01f;
     internal const float NormalAgree = 0.3f;
+    internal static bool RimFallback = false;
+    internal static bool RimReject = false;
 
     internal sealed class Stats
     {
-        public long OwnedPixels, ValidPixels, RayHits, ClosestFallbacks, RegionAdjacentHits, RimRejected, Unreached;
+        public long OwnedPixels, ValidPixels, RayHits, ClosestFallbacks, RegionAdjacentHits, RimRejected, Unreached, RimFallbacks;
         public long OverlapPixels;
         /// <summary>The sheet half filled by mirror because no texel of it was reached, or null.</summary>
         public string? MirrorFilled;
@@ -440,16 +544,26 @@ internal static class UvTransferBake
     }
 
     /// <summary>Where on <paramref name="src"/> the destination point at (<paramref name="p"/>, <paramref name="n"/>) of region <paramref name="region"/> lands.</summary>
-    internal readonly record struct Landing(bool Found, int Tri, float U, float V, float W, bool ByRay, bool Adjacent);
+    internal readonly record struct Landing(bool Found, int Tri, float U, float V, float W, bool ByRay, bool Adjacent,
+                                            bool OffRim = false);
 
-    internal static Landing Land(TriangleBvh bvh, BakeBody src, Vector3 p, Vector3 n, Region region)
+    /// <param name="atRim">Whether the destination point is itself at its body's rim, where landing at the source's
+    /// rim is right. Otherwise a landing on a triangle at the source's rim — a hole's edge — is replaced by the closest
+    /// point on skin away from it.</param>
+    internal static Landing Land(TriangleBvh bvh, BakeBody src, Vector3 p, Vector3 n, Region region, bool atRim = true)
     {
         bool Accept(int t) => UvBakeBones.Adjacent(region, src.TriRegion[t]) && Vector3.Dot(src.FaceNormal[t], n) > NormalAgree;
-        if (n != Vector3.Zero && bvh.Ray(p, n, Reach, Accept, out int t1, out float u1, out float v1, out float w1, out _))
-            return new Landing(true, t1, u1, v1, w1, true, src.TriRegion[t1] != region);
         bool Facing(int t) => UvBakeBones.Adjacent(region, src.TriRegion[t]) && Vector3.Dot(src.FaceNormal[t], n) > 0f;
-        if (bvh.Closest(p, Reach, Facing, out int t2, out float u2, out float v2, out float w2, out _))
-            return new Landing(true, t2, u2, v2, w2, false, src.TriRegion[t2] != region);
+        Landing found = default;
+        if (n != Vector3.Zero && bvh.Ray(p, n, Reach, Accept, out int t1, out float u1, out float v1, out float w1, out _))
+            found = new Landing(true, t1, u1, v1, w1, true, src.TriRegion[t1] != region);
+        else if (bvh.Closest(p, Reach, Facing, out int t2, out float u2, out float v2, out float w2, out _))
+            found = new Landing(true, t2, u2, v2, w2, false, src.TriRegion[t2] != region);
+        if (!RimFallback || !found.Found || atRim || !src.TriNearRim[found.Tri]) return found;
+
+        bool AwayFromRim(int t) => !src.TriNearRim[t] && Facing(t);
+        if (bvh.Closest(p, Reach, AwayFromRim, out int t3, out float u3, out float v3, out float w3, out _))
+            return new Landing(true, t3, u3, v3, w3, false, src.TriRegion[t3] != region, OffRim: true);
         return default;
     }
 
@@ -463,7 +577,7 @@ internal static class UvTransferBake
         var valid = new bool[size * size];
         var stats = new Stats { OverlapPixels = raster.Overlap, OverlapByOption = raster.OverlapByOption };
 
-        Parallel.For(0, size, () => new long[6], (y, _, local) =>
+        Parallel.For(0, size, () => new long[7], (y, _, local) =>
         {
             for (int x = 0; x < size; x++)
             {
@@ -472,12 +586,15 @@ internal static class UvTransferBake
                 if (t < 0) continue;
                 local[0]++;
                 float u = raster.BaryU[i], v = raster.BaryV[i], w = 1f - u - v;
-                var (pos, nrm, _) = dest.At(t, u, v, w);
+                var pos = dest.At(t, u, v, w).Pos;
+                var nrm = dest.SmoothAt(t, u, v, w);
                 var region = dest.RegionAt(t, u, v, w);
-                var land = Land(bvh, src, pos, nrm, region);
+                bool atRim = dest.Rim.Near(pos, RimReach);
+                var land = Land(bvh, src, pos, nrm, region, atRim);
                 if (!land.Found) { local[5]++; continue; }
                 var (hit, _, uv) = src.At(land.Tri, land.U, land.V, land.W);
-                if (src.Rim.Near(hit, RimReach) && !dest.Rim.Near(pos, RimReach)) { local[4]++; continue; }
+                if (RimReject && !atRim && src.Rim.Near(hit, RimReach)) { local[4]++; continue; }
+                if (land.OffRim) local[6]++;
                 if (land.ByRay) local[1]++; else local[2]++;
                 if (land.Adjacent) local[3]++;
                 r[i] = Quantize(uv.X);
@@ -493,6 +610,7 @@ internal static class UvTransferBake
             Interlocked.Add(ref stats.RegionAdjacentHits, local[3]);
             Interlocked.Add(ref stats.RimRejected, local[4]);
             Interlocked.Add(ref stats.Unreached, local[5]);
+            Interlocked.Add(ref stats.RimFallbacks, local[6]);
         });
         stats.ValidPixels = stats.RayHits + stats.ClosestFallbacks;
         return new Result(r, g, valid, size, stats);

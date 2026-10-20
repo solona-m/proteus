@@ -53,8 +53,8 @@ internal static class UvTransferBakeJob
         var fBtoA = UvTransferQuality.Measure(bToA, aRaster, aDest, bSrc, bSrcRaster);
         (fAtoB.RoundTripModerate, fAtoB.RoundTripGross) = UvTransferQuality.RoundTrip(aToB, bToA);
         (fBtoA.RoundTripModerate, fBtoA.RoundTripGross) = UvTransferQuality.RoundTrip(bToA, aToB);
-        fAtoB.LandmarksMm = UvTransferQuality.LandmarkErrors(aToB, bDest, aSrc, aSrcRaster);
-        fBtoA.LandmarksMm = UvTransferQuality.LandmarkErrors(bToA, aDest, bSrc, bSrcRaster);
+        fAtoB.LandmarksMm = UvTransferQuality.LandmarkErrors(aToB, bDest, aSrc, aSrcRaster, fAtoB.LandmarksTangentMm);
+        fBtoA.LandmarksMm = UvTransferQuality.LandmarkErrors(bToA, aDest, bSrc, bSrcRaster, fBtoA.LandmarksTangentMm);
         var failures = UvTransferQuality.Check("a_to_b", fAtoB).Concat(UvTransferQuality.Check("b_to_a", fBtoA)).ToList();
         return new Pair(aToB, bToA, fAtoB, fBtoA, failures);
     }
@@ -261,15 +261,18 @@ internal static class UvTransferBakeJob
         var landmarks = new JsonObject();
         foreach (var (name, mm) in f.LandmarksMm.OrderBy(k => k.Key, StringComparer.Ordinal))
             landmarks[name] = float.IsNaN(mm) ? null : Math.Round(mm, 1);
+        var tangent = new JsonObject();
+        foreach (var (name, mm) in f.LandmarksTangentMm.OrderBy(k => k.Key, StringComparer.Ordinal))
+            tangent[name] = float.IsNaN(mm) ? null : Math.Round(mm, 1);
         var s = map.Stats;
         return new JsonObject
         {
             ["validPixels"] = s.ValidPixels, ["destCoverage"] = s.DestCoverage, ["rayHits"] = s.RayHits,
             ["closestFallbacks"] = s.ClosestFallbacks, ["regionAdjacentHits"] = s.RegionAdjacentHits,
-            ["rimRejected"] = s.RimRejected, ["unreached"] = s.Unreached, ["overlapTexels"] = s.OverlapPixels,
+            ["rimRejected"] = s.RimRejected, ["rimFallbacks"] = s.RimFallbacks, ["unreached"] = s.Unreached, ["overlapTexels"] = s.OverlapPixels,
             ["mirrorFilled"] = s.MirrorFilled, ["folds"] = f.FoldShare,
             ["roundTripModerate"] = f.RoundTripModerate, ["roundTripGross"] = f.RoundTripGross,
-            ["regions"] = regions, ["landmarksMm"] = landmarks,
+            ["regions"] = regions, ["landmarksMm"] = landmarks, ["landmarksAcrossSkinMm"] = tangent,
         };
     }
 }
