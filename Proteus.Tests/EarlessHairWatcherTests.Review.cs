@@ -10,6 +10,38 @@ namespace Proteus.Tests;
 public partial class EarlessHairWatcherTests
 {
     [Fact]
+    [Trait("Plan", "EDGE-earless-miqote-hair-37")]
+    public void Plugin_disabled_writes_nothing_even_when_a_copy_is_worn()
+    {
+        using var s = new Setup();
+        s.Run();
+        s.Reloaded();
+        s.Host.Calls.Clear();
+        s.Host.Watching = false;
+        s.Host.Enabled = false;
+        s.Host.Earless = false;
+        var view = s.Run();
+        Assert.Equal("Proteus Earless/long.mdl", s.Serves());
+        Assert.Empty(s.Host.Calls);
+        Assert.False(view.Failed);
+    }
+
+    [Fact]
+    [Trait("Plan", "EDGE-earless-miqote-hair-31")]
+    public void A_pass_notice_stays_on_the_panel_until_a_look_has_its_own_message()
+    {
+        const string notice = "[Proteus] The ears could not be put back in Miqo Hair: gone";
+        var later = HairPortWatcher.Decide.WithNotice(new HairPortWatcher.View(Worn), notice);
+        Assert.Equal(notice, later.Message);
+        Assert.True(later.Failed);
+        var own = HairPortWatcher.Decide.WithNotice(new HairPortWatcher.View(Worn, Message: "mine"), notice);
+        Assert.Equal("mine", own.Message);
+        Assert.Same(HairPortWatcher.Unchanged, HairPortWatcher.Decide.WithNotice(HairPortWatcher.Unchanged, notice));
+        var none = new HairPortWatcher.View(Worn);
+        Assert.Same(none, HairPortWatcher.Decide.WithNotice(none, ""));
+    }
+
+    [Fact]
     [Trait("Plan", "EDGE-earless-miqote-hair-33")]
     public void Unreadable_record_at_an_equip_restore_asks_again_later()
     {

@@ -27,6 +27,7 @@ public partial class EarlessHairWatcherTests
         public readonly List<string> Resolved = [];
         public bool Enabled { get; set; }
         public bool Earless { get; set; } = true;
+        public bool Watching { get; set; } = true;
         public string? WornAfter { get; set; }
         public string WornPath { get; set; } = Worn;
 
@@ -467,8 +468,18 @@ public partial class EarlessHairWatcherTests
         s.Host.Enabled = false;
         string? key = null;
         HairPortWatcher.Run(s.Host, Worn, ref key);
-        // Fitting switched on owes a fresh look, which drops the key — even served late, as a plain refresh after a
-        // check that held the flight.
+        // Fitting switched on owes a fresh look (and only fitting coming on does), which drops the key — even served
+        // late, as a plain refresh after a check that held the flight.
+        var rose = HairPortWatcher.Decide.Edges(wasWatching: true, wasPorting: false, watching: true, porting: true);
+        Assert.True(rose.LookAfresh);
+        Assert.True(rose.ResumePorting);
+        Assert.True(rose.RequestWalk);
+        var watchOnly = HairPortWatcher.Decide.Edges(wasWatching: false, wasPorting: false, watching: true, porting: false);
+        Assert.Equal(new HairPortWatcher.Decide.EdgeActions(RequestWalk: true, LookAfresh: false, ResumePorting: false,
+                                                            StopCheck: false), watchOnly);
+        Assert.Equal(new HairPortWatcher.Decide.EdgeActions(false, false, false, StopCheck: true),
+                     HairPortWatcher.Decide.Edges(true, true, true, false));
+        Assert.Equal(default, HairPortWatcher.Decide.Edges(true, true, true, true));
         Assert.Equal(key, HairPortWatcher.Decide.KeyForLook(key, afreshOwed: false));
         key = HairPortWatcher.Decide.KeyForLook(key, afreshOwed: true);
         Assert.Null(key);

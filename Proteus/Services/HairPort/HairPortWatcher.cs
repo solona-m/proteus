@@ -219,12 +219,12 @@ public sealed partial class HairPortWatcher : IDisposable
         long now = Environment.TickCount64;
         var gates = Gates;
         bool enabled = gates.Porting, watching = gates.Watching;
-        if (watching && !wasWatching) RequestWalk();
-        if (enabled && !wasEnabled)
+        var edge = Decide.Edges(wasWatching, wasEnabled, watching, enabled);
+        if (edge.RequestWalk) RequestWalk();
+        // Looked at again even where nothing resolves differently: with fitting off, the last look kept its key.
+        if (edge.LookAfresh) LookAfresh();
+        if (edge.ResumePorting)
         {
-            RequestWalk();
-            // Looked at again even where nothing resolves differently: with fitting off, the last look kept its key.
-            LookAfresh();
             // Penumbra back: what waited out a back-off while it was gone is asked for again now.
             Interlocked.Exchange(ref retryMs, 0);
             schedule.Resume(now);
@@ -232,7 +232,7 @@ public sealed partial class HairPortWatcher : IDisposable
             if (!config.HairPortFullScanDone) schedule.OweFull(now);
             CheckOldCarries();
         }
-        else if (!enabled && wasEnabled) StopCheck();
+        if (edge.StopCheck) StopCheck();
         wasEnabled = enabled;
         wasWatching = watching;
         if (!watching) return;
@@ -463,7 +463,7 @@ public sealed partial class HairPortWatcher : IDisposable
         string? key = Decide.KeyForLook(lastKey, Interlocked.Exchange(ref lookAfresh, 0) != 0);
         var view = Run(new Host(this), Decide.WornHair(livePartsCache), ref key);
         lastKey = key;
-        if (!ReferenceEquals(view, Unchanged)) current = view;
+        if (!ReferenceEquals(view, Unchanged)) current = Decide.WithNotice(view, restoreNotice);
     }
 
     /// <summary>What the examination needs from the plugin, so the examination itself can be tested.</summary>
@@ -504,6 +504,9 @@ public sealed partial class HairPortWatcher : IDisposable
 
         /// <summary>"Take the ears off Miqo'te hair mods" is on (and Proteus, and Penumbra).</summary>
         bool Earless => false;
+
+        /// <summary>Proteus is on and Penumbra there: off, a look writes nothing at all — not even ears put back.</summary>
+        bool Watching => true;
 
         /// <summary>Post an earless conversion's chat line.</summary>
         void AnnounceEarless(string line) { }
@@ -565,6 +568,7 @@ public sealed partial class HairPortWatcher : IDisposable
             if (w.Enabled) w.schedule.ModAdded(modDir, Environment.TickCount64);
         }
         public bool Earless => w.Gates.Earless;
+        public bool Watching => w.Watching;
         public void AnnounceEarless(string line) => w.Announce(line);
         // The back-off lives on the watcher: a host is made for every look.
         public void RequestLookAgain() => w.LookAgainLater();
@@ -582,6 +586,9 @@ public sealed partial class HairPortWatcher : IDisposable
         var modsRoot = host.ModsRoot;
         if (worn == null || string.IsNullOrEmpty(modsRoot)) return new View();
         var (race, id) = HairPortPlan.Parse(worn)!.Value;
+
+        // Proteus off (a refresh can still be asked for from the settings): nothing is written into any mod.
+        if (!host.Watching) return new View(worn);
 
         // Neither fitting nor the earless setting on: all there can be to do is put back ears an earless copy took off
         // — one left by a config lost, an older build, or a mod imported with it — so only the worn path is resolved.
@@ -620,7 +627,7 @@ public sealed partial class HairPortWatcher : IDisposable
 
         // Port (or remake a stale port of) the worn hairstyle from decision.Source in decision.ModRoot.
         // Fitting off (the earless setting on): the key is kept, so the next walk does not resolve every race again —
-        // switching fitting on looks afresh (Decide.KeyAfterPortingEdge).
+        // switching fitting on looks afresh (Decide.Edges, Decide.KeyForLook).
         if (!host.Enabled) return new View(worn);
         var modRoot = decision.ModRoot!;
         string modDir = Path.GetFileName(modRoot);

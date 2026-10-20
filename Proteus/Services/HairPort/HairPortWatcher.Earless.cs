@@ -37,8 +37,13 @@ public sealed partial class HairPortWatcher
         config.EarlessRestorePending = !on;
         config.Save();
         earlessBackoff.Reset();
+        restoreNotice = "";
         if (on) LookAfresh();
     }
+
+    /// <summary>What the last restore pass has to say (the mods that kept a copy), kept on the panel across the looks
+    /// that follow it until the setting is switched or another pass runs.</summary>
+    private volatile string restoreNotice = "";
 
     /// <summary>The next examination ignores what the last one saw — however long it waits for a check or a port that
     /// holds the flight: a forced refresh owed while busy is served as a plain one, which would stop at the key.</summary>
@@ -47,7 +52,8 @@ public sealed partial class HairPortWatcher
     private void LookAfresh()
     {
         Interlocked.Exchange(ref lookAfresh, 1);
-        Refresh();
+        // Owed while Proteus is off: watching coming on walks, and that look takes it.
+        if (Watching) Refresh();
     }
 
     private void LookAgainLater()
@@ -73,6 +79,7 @@ public sealed partial class HairPortWatcher
     {
         if (!flight.TryEnter()) return;
         int generation = Volatile.Read(ref earlessToggleGen);
+        restoreNotice = "";
         modNames = penumbra.GetAllMods() ?? new Dictionary<string, string>();
         current = current with { Busy = true };
         Task.Run(() =>
@@ -97,7 +104,9 @@ public sealed partial class HairPortWatcher
                 }
                 log.Information("hair port: ears put back on {0} hairstyle(s); {1} mod(s) kept theirs, {2} could not be read",
                                 pass.Restored, pass.Blocked.Count, pass.Unreadable.Count);
-                current = PassView(pass, worn);
+                var passView = PassView(pass, worn);
+                restoreNotice = passView.Failed ? passView.Message : "";
+                current = passView;
                 RequestWalkIn(0);
             }
             catch (Exception ex)
@@ -248,6 +257,7 @@ public sealed partial class HairPortWatcher
             return new View(worn, modRoot, Earless: true, Message: outcome.Message, Failed: true);
         }
         host.EarlessSettled();
+        if (outcome.Warning.Length > 0) host.Warn($"{worn}: ears put back, but its record was not updated — {outcome.Warning}");
         if (outcome.Count == 0)
         {
             host.Log($"{worn}: the earless copy was kept — {outcome.Message}");
@@ -321,6 +331,24 @@ public sealed partial class HairPortWatcher
         /// while it ran.</summary>
         public static bool ClearPending(bool completed, int generationAtStart, int generationNow)
             => completed && generationAtStart == generationNow;
+
+        /// <summary>A look's view with the last restore pass's notice kept on it: a message of the look's own wins.</summary>
+        public static View WithNotice(View view, string notice)
+            => notice.Length == 0 || view.Message.Length > 0 || ReferenceEquals(view, Unchanged)
+                ? view : view with { Message = notice, Failed = true };
+
+        /// <param name="LookAfresh">Look at the worn hairstyle ignoring the last look's key.</param>
+        /// <param name="ResumePorting">Fitting came on: the scan's resume, first full check and old-carry sweep.</param>
+        public readonly record struct EdgeActions(bool RequestWalk, bool LookAfresh, bool ResumePorting, bool StopCheck);
+
+        /// <summary>What a frame does about the gates changing since the last: watching coming on asks for a walk;
+        /// fitting coming on asks for one too, looks afresh and resumes the scan; fitting going off stops a check.</summary>
+        public static EdgeActions Edges(bool wasWatching, bool wasPorting, bool watching, bool porting)
+        {
+            bool portingRose = porting && !wasPorting;
+            return new EdgeActions(RequestWalk: (watching && !wasWatching) || portingRose, LookAfresh: portingRose,
+                                   ResumePorting: portingRose, StopCheck: !porting && wasPorting);
+        }
 
         /// <summary>The key an examination starts from: none when a fresh look was asked for since the last one began —
         /// by the setting switched on, or fitting coming on (with fitting off a look keeps its key, and would otherwise

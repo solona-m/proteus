@@ -87,8 +87,10 @@ internal static class EarlessHairWriter
                     var swaps = place.ToDictionary(p => p.Write.GamePath, p => (p.Write.From, p.Write.To),
                                                    StringComparer.OrdinalIgnoreCase);
                     BeforeSwap?.Invoke(committed.Count);
-                    PenumbraModMeta.SwapOptionRedirects(modRoot, owner.Group, owner.Option, swaps);
+                    int swapped = PenumbraModMeta.SwapOptionRedirects(modRoot, owner.Group, owner.Option, swaps);
                     committed.Add((owner, swaps));
+                    // Fewer than planned (a manifest naming one path twice in two spellings): not saved as done.
+                    if (swapped != swaps.Count) throw new IOException(Changed);
                 }
             }
             catch (Exception ex)
@@ -172,8 +174,9 @@ internal static class EarlessHairWriter
                     }
                     try
                     {
-                        PenumbraModMeta.SwapOptionRedirects(modRoot, owner.Group, owner.Option,
-                            new Dictionary<string, (string, string)>(StringComparer.OrdinalIgnoreCase) { [path] = (rel, author) });
+                        if (PenumbraModMeta.SwapOptionRedirects(modRoot, owner.Group, owner.Option,
+                                new Dictionary<string, (string, string)>(StringComparer.OrdinalIgnoreCase) { [path] = (rel, author) }) != 1)
+                            continue;   // not swapped after all: nothing put back, nothing counted
                     }
                     catch (Exception ex) { blocked = ex.Message; continue; }
                     record.Swaps.RemoveAll(e => HairPortPlan.Same(e.Owner, owner)
