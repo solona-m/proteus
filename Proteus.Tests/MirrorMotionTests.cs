@@ -134,20 +134,42 @@ public class MirrorMotionTests
         Assert.True(IsZero(MirrorMotion.CentredLinear(Matrix4x4.CreateTranslation(0.1f, 0f, 0f), Kind.Translate)));
     }
 
+    /// <summary>
+    /// Cloth carried toward the centre gathers up at it: never there, never past it, in the order it started in
+    /// wherever the drag keeps that order, continuously — and a node not carried toward the centre is left exactly
+    /// where the drag puts it.
+    /// </summary>
     [Fact]
     [Trait("Plan", "AC-mirror-move-tools-4")]
-    public void SideShareIsSymmetric()
+    [Trait("Plan", "EDGE-mirror-move-tools-25")]
+    public void KeepOffCentreGathersClothAtTheCentreInOrder()
     {
-        const float band = 0.01f;
-        foreach (float sign in new[] { 1f, -1f })
+        const float margin = 0.01f;
+        foreach (float from in new[] { 0.002f, 0.01f, 0.03f })
         {
-            Assert.Equal(0.5f, MirrorMotion.Side(0f, sign, band));
-            Assert.Equal(1f, MirrorMotion.Side(0.02f * sign, sign, band));
-            Assert.Equal(0f, MirrorMotion.Side(-0.02f * sign, sign, band));
-            foreach (float x in new[] { 0.001f, 0.004f, 0.0099f, 0.03f })
-                Assert.Equal(1f - MirrorMotion.Side(x, sign, band), MirrorMotion.Side(-x, sign, band), 1e-6f);
+            // Not carried toward the centre, or not far: exactly the drag.
+            foreach (float to in new[] { from, from + 0.01f, MathF.Min(from, margin) })
+                Assert.Equal(to, MeshVolumeSolve.KeepOffCentre(from, to, margin));
+
+            // Past it: still off it, and further the further the drag would take it — continuously.
+            float last = MeshVolumeSolve.KeepOffCentre(from, MathF.Min(from, margin), margin);
+            for (float to = MathF.Min(from, margin); to > -0.1f; to -= 0.0005f)
+            {
+                float kept = MeshVolumeSolve.KeepOffCentre(from, to, margin);
+                Assert.True(kept > 0f, $"from {from}: {to} came out at {kept}");
+                Assert.True(kept <= last, $"from {from}: not increasing at {to}");
+                Assert.True(last - kept <= 0.0005f + 1e-7f, $"from {from}: jumped at {to}");
+                last = kept;
+            }
         }
-        Assert.Equal(1f, MirrorMotion.Side(0.001f, 1f, 0f));
-        Assert.Equal(0.5f, MirrorMotion.Side(0f, 1f, 0f));
+
+        // Two nodes in order stay in order when the drag keeps them in order, the inner one carried further in.
+        foreach (var (a, b) in new[] { (0.002f, 0.004f), (0.005f, 0.02f), (0.01f, 0.011f) })
+        foreach (float d in new[] { 0f, 0.005f, 0.02f, 0.08f })
+        {
+            float ka = MeshVolumeSolve.KeepOffCentre(a, a - d * 1.2f, margin);
+            float kb = MeshVolumeSolve.KeepOffCentre(b, b - d, margin);
+            if (a - d * 1.2f < b - d) Assert.True(ka < kb, $"{a},{b} by {d}: {ka} not inside {kb}");
+        }
     }
 }

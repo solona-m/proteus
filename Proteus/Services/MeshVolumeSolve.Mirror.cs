@@ -38,20 +38,19 @@ internal sealed partial class MeshVolumeSolve
     /// <param name="Seeds">Every node the drag carries whole: the selection and its match.</param>
     /// <param name="DirectOnly">Selected nodes of pieces with no mirror image: they take the drag itself, whatever side
     /// they are on, so such a piece is never torn by the strip at the centre.</param>
-    /// <param name="Sigma">The side the gizmo is on: +1 or −1.</param>
-    /// <param name="B0">The centre strip's half-width before the drag widens it.</param>
-    private sealed record MirrorPlan(MirrorMode Mode, HashSet<int> Seeds, HashSet<int> DirectOnly, float Sigma, float B0,
+    /// <param name="Sigma">The side the gizmo is on: +1 or −1. Its side takes the drag, the other the mirror image.</param>
+    private sealed record MirrorPlan(MirrorMode Mode, HashSet<int> Seeds, HashSet<int> DirectOnly, float Sigma,
                                      MirrorReport Report);
 
     private MirrorMode moveMode;
     private MoveKind moveKind;
     private Vector3 movePivot;
-    private float moveSigma = 1f, moveB0;
+    private float moveSigma = 1f;
     private HashSet<int> moveDirectOnly = [];
 
-    /// <summary>Each carried node's share of the drag's own motion as last applied — the rest is the mirror's.
-    /// Filled only in <see cref="MirrorMode.Sides"/>.</summary>
-    private readonly Dictionary<int, float> moveSide = [];
+    /// <summary>Which map (<see cref="MapDirect"/>, <see cref="MapMirror"/> or <see cref="MapNone"/>) each carried node
+    /// was last placed by. Filled only in <see cref="MirrorMode.Sides"/>.</summary>
+    private readonly Dictionary<int, int> moveMapId = [];
 
     /// <summary>The middle of the seeds' bounds as they now stand: the pivot a preview, which has no gizmo, assumes.</summary>
     private Vector3 SeedCentre(HashSet<int> seeds)
@@ -141,78 +140,29 @@ internal sealed partial class MeshVolumeSolve
         }
         var mode = anyCentred ? MirrorMode.Centred : anyMatched ? MirrorMode.Sides : MirrorMode.Off;
         report = report with { Mode = mode };
-        if (mode == MirrorMode.Off) return new MirrorPlan(mode, seeds, [], 1f, minX, report);
+        if (mode == MirrorMode.Off) return new MirrorPlan(mode, seeds, [], 1f, report);
 
         // The match: partners and the far side's own region, of the pieces that have one.
         bool Keeps(int s) => Root(piece[s]) is var r && (Centred(r) || Matched(r));
         var match = new HashSet<int>();
         foreach (var (s, p) in pairs.Partner) if (Keeps(s)) match.Add(p);
         foreach (var (m, s) in pairs.Reverse) if (Keeps(s)) match.Add(m);
-        CloseMatch(match, seeds);
 
         var all = new HashSet<int>(seeds);
         all.UnionWith(match);
 
         var direct = new HashSet<int>();
-        float sigma = MathF.Abs(pivot.X) < minX ? 1f : MathF.Sign(pivot.X);
-        float crossing = 0f;
         if (mode == MirrorMode.Sides)
-        {
-            var lo = new float[pieces];
-            var hi = new float[pieces];
-            Array.Fill(lo, float.MaxValue);
-            Array.Fill(hi, float.MinValue);
             foreach (int s in seeds)
-            {
-                int r = Root(piece[s]);
-                if (!Matched(r))
-                {
-                    direct.Add(s);
-                    continue;
-                }
-                float sx = sigma * Here(s).X;
-                lo[r] = MathF.Min(lo[r], sx);
-                hi[r] = MathF.Max(hi[r], sx);
-            }
-            // A matched piece reaching across the centre: the strip must span how far it reaches over.
-            for (int r = 0; r < pieces; r++)
-                if (hi[r] > 0f && lo[r] < 0f) crossing = MathF.Max(crossing, -lo[r]);
-        }
-        return new MirrorPlan(mode, all, direct, sigma, MathF.Max(minX, crossing), report);
-    }
-
-    /// <summary>
-    /// Two rounds of filling in the match: a movable node every one of whose movable neighbours (at least one) is in
-    /// it joins it, so with the falloff off nothing is left standing as a spike among moved cloth.
-    /// </summary>
-    private void CloseMatch(HashSet<int> match, HashSet<int> seeds)
-    {
-        for (int round = 0; round < 2; round++)
-        {
-            var add = new List<int>();
-            foreach (int n in match)
-                foreach (int m in adj[n])
-                {
-                    if (match.Contains(m) || seeds.Contains(m) || skin[m] || locked[m]) continue;
-                    int movable = 0;
-                    bool surrounded = true;
-                    foreach (int k in adj[m])
-                    {
-                        if (skin[k] || locked[k]) continue;
-                        movable++;
-                        if (!match.Contains(k)) { surrounded = false; break; }
-                    }
-                    if (surrounded && movable > 0) add.Add(m);
-                }
-            if (add.Count == 0) return;
-            match.UnionWith(add);
-        }
+                if (!Matched(Root(piece[s]))) direct.Add(s);
+        float sigma = MathF.Abs(pivot.X) < minX ? 1f : MathF.Sign(pivot.X);
+        return new MirrorPlan(mode, all, direct, sigma, report);
     }
 
     /// <summary>Take the plan for the drag that is beginning.</summary>
     private void StartMirror(MirrorPlan? plan, MoveMirror? mirror)
     {
-        moveSide.Clear();
+        moveMapId.Clear();
         moveMode = plan?.Mode ?? MirrorMode.Off;
         if (plan == null || mirror is not { } how)
         {
@@ -222,15 +172,31 @@ internal sealed partial class MeshVolumeSolve
         moveKind = how.Kind;
         movePivot = how.Pivot;
         moveSigma = plan.Sigma;
-        moveB0 = plan.B0;
         moveDirectOnly = plan.DirectOnly;
     }
 
     private void EndMirror()
     {
         moveMode = MirrorMode.Off;
-        moveSide.Clear();
+        moveMapId.Clear();
         moveDirectOnly = [];
+    }
+
+    /// <summary>
+    /// Where a node <paramref name="from"/> off the centre plane, carried by its own side's motion to
+    /// <paramref name="to"/> (negative past the centre), ends up: <paramref name="to"/> itself while that stays at
+    /// least <c>m = min(from, margin)</c> off the centre, else <c>m·e^((to − m)/m)</c> — closer and closer, never there.
+    /// <para/>
+    /// Continuous and increasing in <paramref name="to"/> with slope 1 where the two pieces meet, so nothing jumps as a
+    /// drag goes on; and for two nodes in order, the one nearer the centre has the smaller m, which (as m·e^(to/m−1)
+    /// grows with m) keeps it nearer — so cloth near the centre keeps its order wherever the drag itself keeps it, and
+    /// never crosses over. A node not moved toward the centre is not moved at all.
+    /// </summary>
+    internal static float KeepOffCentre(float from, float to, float margin)
+    {
+        float m = MathF.Min(from, margin);
+        if (to >= m) return to;
+        return m * MathF.Exp((to - m) / m);
     }
 
     /// <summary>
@@ -240,11 +206,10 @@ internal sealed partial class MeshVolumeSolve
     /// <see cref="MirrorMode.Centred"/>: every node takes the drag's symmetric part (<see cref="MirrorMotion"/>).
     /// <para/>
     /// <see cref="MirrorMode.Sides"/>: a node takes the drag (T) on the gizmo's side and its mirror image (S·T·S) on the
-    /// other, blended across a strip at the centre so the centre line stays on it. The strip is <c>b = b0 + κ</c>
-    /// wide each side, κ being how far the drag carries cloth near the centre toward it — weighed in softly with
-    /// distance, so the strip widens smoothly. Inside the strip a move then scales X by at least
-    /// <c>b0 / (b0 + κ)</c>, never zero, so cloth never crosses or folds over the centre. Measured with each node's
-    /// own side's motion, so κ is the same seen from either side and the result stays symmetric.
+    /// other — its own side's motion — and a node on the centre plane the average of the two, which keeps it there.
+    /// Only a node's distance from the centre is then passed through <see cref="KeepOffCentre"/>, so cloth carried
+    /// toward the centre gathers up at it instead of crossing over or folding. Each side is the exact mirror of the
+    /// other; a node the drag leaves well off the centre follows its side's motion exactly.
     /// </summary>
     private void MirroredMove(Vector3? offset, Matrix4x4? transform)
     {
@@ -275,45 +240,56 @@ internal sealed partial class MeshVolumeSolve
         }
         else
         {
-            // κ: how far the drag carries cloth near the centre toward it, by each node's own side's motion.
-            float kappa = 0f;
-            foreach (var (n, w) in moveWeights)
-            {
-                if (moveDirectOnly.Contains(n)) continue;
-                var p = Start(n);
-                float ax = MathF.Abs(p.X);
-                if (ax <= 0f) continue;
-                float dx = w * Step(p, moveSigma * p.X < 0f).X;
-                float toward = MathF.Max(0f, -MathF.Sign(p.X) * dx);
-                if (toward <= 0f) continue;
-                float reach = Math.Clamp((moveB0 + toward - ax) / moveB0, 0f, 1f);
-                kappa = MathF.Max(kappa, reach * toward);
-            }
-            float band = moveB0 + kappa;
-
+            float margin = MirrorMinX;
             foreach (var (n, w) in moveWeights)
             {
                 var p = Start(n);
-                float side = moveDirectOnly.Contains(n) ? 1f : MirrorMotion.Side(p.X, moveSigma, band);
-                var own = Step(p, false);
-                var s = side >= 1f ? own
-                      : side <= 0f ? Step(p, true)
-                      : own * side + Step(p, true) * (1f - side);
-                moveSide[n] = side;
-                Place(n, w, s);
-                // A turn re-lights all it carries; a move only the strip it stretches.
-                if (turns || side is > 0f and < 1f) nodeWeight[n] = MathF.Max(nodeWeight[n], w);
+                int id;
+                Vec3 step;
+                if (moveDirectOnly.Contains(n))
+                {
+                    id = MapDirect;
+                    step = Weighted(Step(p, false), w);
+                }
+                else if (p.X == 0f)
+                {
+                    // On the centre plane: the two sides' motions differ only in X, which they cancel.
+                    id = MapNone;
+                    step = Weighted((Step(p, false) + Step(p, true)) * 0.5f, w);
+                }
+                else
+                {
+                    bool mirrored = moveSigma * p.X < 0f;
+                    id = mirrored ? MapMirror : MapDirect;
+                    step = Weighted(Step(p, mirrored), w);
+                    float from = MathF.Abs(p.X), side = MathF.Sign(p.X);
+                    float to = from + side * step.X;
+                    float kept = KeepOffCentre(from, to, margin);
+                    if (kept != to)
+                    {
+                        id = MapNone;
+                        step = new Vec3(side * kept - p.X, step.Y, step.Z);
+                    }
+                }
+                moveMapId[n] = id;
+                Place(n, step);
+                // A turn re-lights all it carries; a move only what it gathers at the centre.
+                if (turns || id == MapNone) nodeWeight[n] = MathF.Max(nodeWeight[n], w);
             }
         }
         Dirty = true;
         Spread();
     }
 
+    private static Vec3 Weighted(Vector3 s, float w) => new(s.X * w, s.Y * w, s.Z * w);
+
     /// <summary>Set node <paramref name="n"/> to where the drag began plus <paramref name="w"/> of <paramref name="s"/>.</summary>
-    private void Place(int n, float w, Vector3 s)
+    private void Place(int n, float w, Vector3 s) => Place(n, Weighted(s, w));
+
+    /// <summary>Set node <paramref name="n"/> to where the drag began plus <paramref name="step"/>.</summary>
+    private void Place(int n, Vec3 step)
     {
         var was = stroke![n];
-        var step = new Vec3(s.X * w, s.Y * w, s.Z * w);
         nodeDelta[n] = new Vec3(was.Delta.X + step.X, was.Delta.Y + step.Y, was.Delta.Z + step.Z);
         nodeMoved[n] = new Vec3(was.Moved.X + step.X, was.Moved.Y + step.Y, was.Moved.Z + step.Z);
     }
@@ -330,8 +306,7 @@ internal sealed partial class MeshVolumeSolve
         {
             case MirrorMode.Centred: return MapCentred;
             case MirrorMode.Sides:
-                float side = moveSide.TryGetValue(n, out float s) ? s : 1f;
-                return side >= 1f ? MapDirect : side <= 0f ? MapMirror : MapNone;
+                return moveMapId.TryGetValue(n, out int id) ? id : MapNone;
             default: return MapDirect;
         }
     }

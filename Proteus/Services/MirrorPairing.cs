@@ -30,13 +30,6 @@ internal sealed class MirrorPairing
     private Dictionary<(int, int, int), List<int>>? currentGrid;
     private int currentVersion = -1;
 
-    /// <summary>
-    /// How much nearer than its own tolerance a far-side node's reflection must land on a selected node to join the
-    /// matching region from that side: under half the way to the next ring of the selection, so a same-density far
-    /// side gets exactly the mirror image and a finer one gets every node inside it.
-    /// </summary>
-    private const float ReverseShare = 0.6f;
-
     /// <param name="at">Authored node positions.</param>
     /// <param name="normal">Authored node normals, unit length.</param>
     /// <param name="normalUsable">Whether a node's normal means anything: false where opposite normals were welded
@@ -176,30 +169,30 @@ internal sealed class MirrorPairing
     }
 
     /// <summary>
-    /// The matching region as the far side is meshed: every movable cloth node whose reflection lands near a selected
-    /// node of its own material and facing. Kept only where it is joined, through itself and the partners, to a
-    /// partner — a frill row or a pleat that merely lies within reach of the reflection is not the match.
+    /// The matching region as the far side is meshed: every movable cloth node whose reflection lands among the
+    /// selection — the cloth node nearest its reflection, of its own material, is a selected node it matches (same
+    /// material, facing the mirrored way). A finer far side gets every node inside the selection's mirror image; a far
+    /// node whose reflection lands nearer unselected cloth is not taken, so the region is no wider than the selection.
+    /// Kept only where it is joined, through itself and the partners, to a partner — a frill row or a pleat that
+    /// merely lies within reach of the reflection is not the match.
     /// </summary>
     private Dictionary<int, int> ReverseRegion(IReadOnlyCollection<int> seeds, bool[] locked, Dictionary<int, int> partner)
     {
         var found = new Dictionary<int, int>();
         if (partner.Count == 0) return found;
 
-        // The selection's reflections, bucketed, and their bounds.
-        var grid = new Dictionary<(int, int, int), List<int>>();
+        var selected = seeds as IReadOnlySet<int> ?? new HashSet<int>(seeds);
         var lo = new Vec3(float.MaxValue, float.MaxValue, float.MaxValue);
         var hi = new Vec3(float.MinValue, float.MinValue, float.MinValue);
         foreach (int s in seeds)
         {
             var r = Reflect(at[s]);
-            var key = CellOf(r);
-            if (!grid.TryGetValue(key, out var list)) grid[key] = list = [];
-            list.Add(s);
             lo = new Vec3(MathF.Min(lo.X, r.X), MathF.Min(lo.Y, r.Y), MathF.Min(lo.Z, r.Z));
             hi = new Vec3(MathF.Max(hi.X, r.X), MathF.Max(hi.Y, r.Y), MathF.Max(hi.Z, r.Z));
         }
 
         float pad = TolCap;
+        var grid = authoredGrid!;
         for (int m = 0; m < at.Length; m++)
         {
             if (skin[m] || locked[m]) continue;
@@ -208,23 +201,29 @@ internal sealed class MirrorPairing
                 || p.X > hi.X + pad || p.Y > hi.Y + pad || p.Z > hi.Z + pad)
                 continue;
 
-            var (cx, cy, cz) = CellOf(p);
-            int best = -1;
-            float bestD = float.MaxValue;
+            // The cloth of m's own material nearest its reflection.
+            var q = Reflect(p);
+            var (cx, cy, cz) = CellOf(q);
+            int nearest = -1;
+            float nearestD = float.MaxValue;
             for (int x = -1; x <= 1; x++)
             for (int y = -1; y <= 1; y++)
             for (int z = -1; z <= 1; z++)
             {
                 if (!grid.TryGetValue((cx + x, cy + y, cz + z), out var list)) continue;
-                foreach (int s in list)
+                foreach (int c in list)
                 {
-                    float d = Distance(Reflect(at[s]), p);
-                    if (d > ReverseShare * tol[s] || d >= bestD || Tier(s, m) != 1) continue;
-                    best = s;
-                    bestD = d;
+                    if (material[c] != material[m]) continue;
+                    float d = Distance(at[c], q);
+                    if (d < nearestD || (d == nearestD && c < nearest))
+                    {
+                        nearest = c;
+                        nearestD = d;
+                    }
                 }
             }
-            if (best >= 0) found[m] = best;
+            if (nearest >= 0 && selected.Contains(nearest) && nearestD <= tol[nearest] && Tier(nearest, m) == 1)
+                found[m] = nearest;
         }
 
         // Keep the parts of the region joined to a partner.

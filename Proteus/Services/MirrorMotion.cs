@@ -82,16 +82,4 @@ internal static class MirrorMotion
     /// </summary>
     internal static Vector3 CentredStep(Vector3 p, Matrix4x4 linearMinusI, Vector3 pivot)
         => Vector3.TransformNormal(new Vector3(p.X, p.Y - pivot.Y, p.Z - pivot.Z), linearMinusI);
-
-    /// <summary>
-    /// How much of the gizmo's own motion a node at <paramref name="x"/> takes, 0..1 — the rest is the mirror's.
-    /// 1 on the dragged side (<paramref name="sign"/>) beyond <paramref name="band"/>, 0 beyond it on the other, ½ on
-    /// the centre plane, and linear between, so <c>Side(−x) = 1 − Side(x)</c> and the result stays symmetric.
-    /// </summary>
-    internal static float Side(float x, float sign, float band)
-    {
-        float s = sign * x;
-        if (band <= 0f) return s > 0f ? 1f : s < 0f ? 0f : 0.5f;
-        return Math.Clamp(0.5f + s / (2f * band), 0f, 1f);
-    }
 }
