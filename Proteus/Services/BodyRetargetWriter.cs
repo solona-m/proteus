@@ -421,6 +421,17 @@ internal static class BodyRetargetWriter
                 // Per refit, the material files it publishes beside its model: game path -> file in the mod.
                 var materialFiles = new Dictionary<string, Dictionary<string, string>>(StringComparer.OrdinalIgnoreCase);
                 var redirects = refits.Any(r => r.Materials is { Count: > 0 }) ? PenumbraModMeta.ReadAllRedirects(modRoot) : [];
+                // Material copies an earlier save of an option published for its model, which this save replaces: their
+                // files go once the manifest no longer names them, as undo's do.
+                var stale = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+                void DropStale()
+                {
+                    if (stale.Count == 0) return;
+                    var published = Published(modRoot);
+                    foreach (string rel in stale)
+                        if (Deletable(rel, published) && File.Exists(Path.Combine(modRoot, rel)))
+                            File.Delete(Path.Combine(modRoot, rel));
+                }
                 foreach (var refit0 in refits)
                 {
                     var refit = refit0;
@@ -457,7 +468,11 @@ internal static class BodyRetargetWriter
                         foreach (var (path, at) in own) files[path] = at;
                     if (existing.Files != null)
                         foreach (var (path, at) in existing.Files)
-                            if (!files.ContainsKey(path) && !IsPublishedMaterial(gamePath, path, at)) files[path] = at;
+                        {
+                            if (files.ContainsKey(path)) continue;
+                            if (IsPublishedMaterial(gamePath, path, at)) stale.Add(at);
+                            else files[path] = at;
+                        }
 
                     // And everything ELSE the option this was refitted from carried — its material, its textures, the
                     // other races' models. Most mods keep those in the default files or a required option and give a
@@ -536,6 +551,7 @@ internal static class BodyRetargetWriter
                     PenumbraModMeta.AddFileOptions(modRoot, groupName, written.Select(w => OptionFor(w.Refit, w.Rel))
                                                                               .ToList());
                     LogNotes();
+                    DropStale();
                     foreach (var (refit, rel) in written)
                     {
                         WriteRecord(modRoot, groupName, true, refit.Option, gamePath, rel, bodyMod, from, refit.To, auto,
@@ -575,6 +591,7 @@ internal static class BodyRetargetWriter
                 PenumbraModMeta.WriteFileOptionGroup(modRoot, Position(modRoot, groupName), groupName, priority, final,
                                                      final.Count - 1);
                 LogNotes();
+                DropStale();
 
                 foreach (var (refit, rel) in written)
                 {
@@ -979,9 +996,10 @@ internal static class BodyRetargetWriter
     /// <summary>
     /// Writes the materials a refit's model draws that it must publish (see <see cref="Refit.Materials"/>) into the
     /// option's own folder, and says where each goes in game: every variant folder of the model's set the mod publishes
-    /// materials in — the variants the garment is drawn in — or v0001 when it publishes none. A name another option or
-    /// the mod's default files already publish there is not taken over: the material moves to a free letter and the
-    /// model is renamed to match.
+    /// materials in — the variants the garment is drawn in — or v0001 when it publishes none. Named for the model it is
+    /// saved beside, with the first letter from z down that nothing else there publishes, and the model renamed to
+    /// match. A save that cannot publish it — no equipment set, every letter taken — fails rather than write a model
+    /// that draws a material nothing publishes, which the game does not draw at all.
     /// </summary>
     /// <returns>The refit, its model renamed where a name was taken, and the game path of each file to its place.</returns>
     private static (Refit Refit, Dictionary<string, string> Files) WriteMaterials(
@@ -990,12 +1008,10 @@ internal static class BodyRetargetWriter
     {
         var files = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
         var set = SetFolder.Match(gamePath.Replace('\\', '/'));
+        // A model that draws a material nothing publishes is not drawn at all in game: never save one.
         if (!set.Success)
-        {
-            Plugin.Log?.Warning("[Proteus] refit: {0} is not an equipment model; the new body's smallclothes material it " +
-                                "draws was not published", gamePath);
-            return (refit, files);
-        }
+            throw new InvalidDataException($"{gamePath} draws the new body's underwear, whose material can only be " +
+                                           "saved beside an equipment or accessory model");
         string materials = set.Groups[1].Value + "material/";
 
         string replacing = $"{groupName} / {refit.Option}";
@@ -1007,7 +1023,11 @@ internal static class BodyRetargetWriter
             if (!m.Success || !string.Equals(m.Groups[1].Value, set.Groups[1].Value, StringComparison.OrdinalIgnoreCase))
                 continue;
             variants.Add("v" + m.Groups[2].Value);
-            if (!string.Equals(r.Source, replacing, StringComparison.OrdinalIgnoreCase)) taken.Add(m.Groups[3].Value);
+            // Every name but this option's own copies for THIS model, which this save replaces: another slot's saved
+            // into the same option is still drawn by that slot's model.
+            if (!string.Equals(r.Source, replacing, StringComparison.OrdinalIgnoreCase)
+                || !IsPublishedMaterial(gamePath, r.GamePath, r.File))
+                taken.Add(m.Groups[3].Value);
         }
         if (variants.Count == 0)
         {
@@ -1017,28 +1037,27 @@ internal static class BodyRetargetWriter
         }
 
         byte[] model = refit.Model;
+        // The model's other materials: a copy's own placeholder name is about to be replaced, so it does not count.
         var names = new HashSet<string>(SecondSkinWriter.Parse(model).MatNames.Select(n => n.TrimStart('/')),
                                         StringComparer.OrdinalIgnoreCase);
+        foreach (var material in refit.Materials ?? []) names.Remove(material.Name);
+        // Named for the model it is saved beside — its race, set and slot — so a later save of the same model, and only
+        // of that model, recognises it as its own (see IsPublishedMaterial).
+        string stem = "mt_" + Path.GetFileNameWithoutExtension(gamePath) + "_";
         var published = new List<BodyRetarget.PublishedMaterial>();
         foreach (var material in refit.Materials ?? [])
         {
-            string name = material.Name;
-            if (taken.Contains(name))
+            string? name = null;
+            for (char c = 'z'; c >= 'a' && name == null; c--)
+                if (!taken.Contains(stem + c + ".mtrl") && !names.Contains(stem + c + ".mtrl")) name = stem + c + ".mtrl";
+            if (name == null)
+                throw new InvalidDataException($"every material name of {gamePath} is taken, so the new body's underwear " +
+                                               "it draws has no name of its own to be saved under");
+            if (!string.Equals(name, material.Name, StringComparison.OrdinalIgnoreCase))
             {
-                string stem = name[..(name.LastIndexOf('_') + 1)];
-                string? free = null;
-                for (char c = 'z'; c >= 'a' && free == null; c--)
-                    if (!taken.Contains(stem + c + ".mtrl") && !names.Contains(stem + c + ".mtrl")) free = stem + c + ".mtrl";
-                if (free == null)
-                {
-                    // Every letter taken: the layer draws whatever the mod publishes under that name.
-                    Plugin.Log?.Warning("[Proteus] refit: no free name for the new body's smallclothes material beside {0}",
-                                        gamePath);
-                    continue;
-                }
-                model = ModelAttributeWriter.RenameMaterial(model, "/" + name, "/" + free);
-                names.Add(free);
-                name = free;
+                model = ModelAttributeWriter.RenameMaterial(model, "/" + material.Name, "/" + name);
+                names.Remove(material.Name);
+                names.Add(name);
             }
             taken.Add(name);
 

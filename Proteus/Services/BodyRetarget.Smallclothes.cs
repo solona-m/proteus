@@ -105,24 +105,30 @@ internal static partial class BodyRetarget
     /// nearest folder above the model with a Penumbra manifest. Null when the mod publishes no such file, or more than
     /// one that differ — options of one group can each carry their own, and which is on cannot be told from here.
     /// </summary>
-    internal static Func<string, byte[]?>? BodyMaterialReader(string bodyModelPath)
+    internal static Func<string, byte[]?> BodyMaterialReader(string bodyModelPath)
     {
-        string? root = Path.GetDirectoryName(Path.GetFullPath(bodyModelPath));
-        while (root != null && !PenumbraModMeta.HasReadableManifest(root)) root = Path.GetDirectoryName(root);
-        if (root == null) return null;
-        string modRoot = root;
-        // Only files inside the body mod: the bytes are copied into the garment's mod, which travels with an export.
-        string inside = Path.TrimEndingDirectorySeparator(Path.GetFullPath(modRoot)) + Path.DirectorySeparatorChar;
+        // Found on the first read only: every pair is built with one, and only a worn one ever reads.
+        string? modRoot = null, inside = null;
         List<PenumbraModMeta.Redirect>? redirects = null;
         return leaf =>
         {
-            redirects ??= PenumbraModMeta.ReadAllRedirects(modRoot);
+            if (redirects == null)
+            {
+                string? root = Path.GetDirectoryName(Path.GetFullPath(bodyModelPath));
+                while (root != null && !PenumbraModMeta.HasReadableManifest(root)) root = Path.GetDirectoryName(root);
+                redirects = root != null ? PenumbraModMeta.ReadAllRedirects(root) : [];
+                modRoot = root ?? "";
+                // Only files inside the body mod: the bytes are copied into the garment's mod, which travels with an export.
+                inside = Path.TrimEndingDirectorySeparator(Path.GetFullPath(modRoot.Length > 0 ? modRoot : ".")) +
+                         Path.DirectorySeparatorChar;
+            }
+            if (modRoot!.Length == 0) return null;
             string gamePath = "chara/equipment/e0000/material/v0001/" + leaf;
             var files = redirects.Where(r => string.Equals(r.GamePath.Replace('\\', '/'), gamePath,
                                                            StringComparison.OrdinalIgnoreCase))
                                  .Select(r => Path.GetFullPath(Path.Combine(modRoot,
                                                                             r.File.Replace('\\', Path.DirectorySeparatorChar))))
-                                 .Where(f => f.StartsWith(inside, StringComparison.OrdinalIgnoreCase) && File.Exists(f))
+                                 .Where(f => f.StartsWith(inside!, StringComparison.OrdinalIgnoreCase) && File.Exists(f))
                                  .Select(File.ReadAllBytes)
                                  .ToList();
             if (files.Count == 0) return null;

@@ -273,7 +273,7 @@ public class SkinlessTargetLocalTests(ITestOutputHelper output)
         var skin = ModelSkinReader.Read(plan.Model, null, null)!;
 
         int hip = 0, agree = 0, close = 0;
-        foreach (int v in drawn.Parts.Where(p => p.Island < 0 && p.Material.Contains("e6144", StringComparison.Ordinal))
+        foreach (int v in drawn.Parts.Where(p => p.Island < 0 && IsCloth(plan, p.Material))
                                      .SelectMany(p => p.Triangles).Distinct())
         {
             var p = new Vector3(drawn.Positions[v * 3], drawn.Positions[v * 3 + 1], drawn.Positions[v * 3 + 2]);
@@ -292,12 +292,18 @@ public class SkinlessTargetLocalTests(ITestOutputHelper output)
         output.WriteLine($"hip cloth points: {hip}; their heaviest bone the worn body's there: {agree} ({(float)agree / hip:P1}); " +
                          $"within 0.1 L1 of the worn body's weights: {close} ({(float)close / hip:P1})");
         // Across body mods the cloth keeps its author's weighting and takes the change between the two bodies, so it never
-        // equals the boxers' weights outright. Measured 2026-10-20: 92.1% share the boxers' heaviest bone there, 77.5% sit
-        // within 0.1 (L1) of their weights.
+        // equals the boxers' weights outright. Measured 2026-10-20 over the cloth alone (the boxers' own copy left out):
+        // 59.9% within 0.1 (L1) of the boxers' weights there, against 26.1% with the weights read off the skin alone —
+        // the rim of the cut. The heaviest bone does not tell the two apart (86.0% against 90.0%), so it is only logged.
         Assert.True(hip > 100, $"only {hip} hip cloth points");
-        Assert.True(agree >= 0.9f * hip, $"{agree} of {hip}");
-        Assert.True(close >= 0.75f * hip, $"{close} of {hip} within 0.1 L1");
+        Assert.True(close >= 0.55f * hip, $"{close} of {hip} within 0.1 L1");
     }
+
+    /// <summary>The garment's own cloth: its e6144 materials, less the copy of the body's smallclothes material it now
+    /// draws under an e6144 name of its own — that mesh is the body's, weights and all.</summary>
+    private static bool IsCloth(BodyRetarget.Planned plan, string material)
+        => material.Contains("e6144", StringComparison.Ordinal)
+           && !(plan.Materials ?? []).Any(m => material == "/" + m.Name);
 
     private static IEnumerable<(string Bone, float Weight)> Weights(XivLiveMesh.SkinnedMesh skin, int v)
     {
@@ -342,7 +348,7 @@ public class SkinlessTargetLocalTests(ITestOutputHelper output)
         var drawn = ModelPartReader.Read(plan.Model)!;
         int hem = 0, inside = 0;
         float deepest = 0f;
-        foreach (int v in drawn.Parts.Where(p => p.Island < 0 && p.Material.Contains("e6144", StringComparison.Ordinal))
+        foreach (int v in drawn.Parts.Where(p => p.Island < 0 && IsCloth(plan, p.Material))
                                      .SelectMany(p => p.Triangles).Distinct())
         {
             var p = new Vector3(drawn.Positions[v * 3], drawn.Positions[v * 3 + 1], drawn.Positions[v * 3 + 2]);

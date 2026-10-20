@@ -495,10 +495,41 @@ public class BodyRetargetWriterTests : IDisposable
     {
         Assert.True(BodyRetargetWriter.Save(root, Group, GamePath, "Muse+", "SFW M", [WithBoxers("Muse SFW", [4, 2])]).Ok);
         // The same option made again onto a body with skin there: nothing to publish.
+        string copy = PenumbraModMeta.TryReadFileOptions(root, Group)!.Single(o => o.Name == "Muse SFW")
+                                     .Files["chara/equipment/e6255/material/v0001/" + Boxers];
         Assert.True(BodyRetargetWriter.Save(root, Group, GamePath, "Muse+", "SFW M",
                                             [new BodyRetargetWriter.Refit("Muse SFW", [9], "Gen A")]).Ok);
         var files = PenumbraModMeta.TryReadFileOptions(root, Group)!.Single(o => o.Name == "Muse SFW").Files;
         Assert.Equal([GamePath], files.Keys);
+        // And its file goes with the redirect: nothing names it any more.
+        Assert.False(File.Exists(FileOf(copy)));
+    }
+
+    [Fact]
+    [Trait("Plan", "EDGE-skinless-target-31")]
+    public void A_legs_model_drawing_the_top_s_material_keeps_its_copy_when_the_top_is_saved()
+    {
+        // Legs that share the outfit's top material: the copy is named for the LEGS model it is saved beside, so the top
+        // saved into the same option afterwards does not take it for its own stale copy.
+        var legs = new BodyRetargetWriter.Refit("Muse SFW", ModelDrawing(Boxers), "Muse SFW",
+                                                Materials: [new BodyRetarget.PublishedMaterial(Boxers, [4, 2], "/b")]);
+        Assert.True(BodyRetargetWriter.Save(root, Group, LegsPath, "Muse+", "SFW M", [legs]).Ok);
+        Assert.True(BodyRetargetWriter.Save(root, Group, GamePath, "Muse+", "SFW M",
+                                            [new BodyRetargetWriter.Refit("Muse SFW", [7], "Muse SFW")]).Ok);
+
+        var files = PenumbraModMeta.TryReadFileOptions(root, Group)!.Single(o => o.Name == "Muse SFW").Files;
+        const string legsCopy = "mt_c0201e6255_dwn_z.mtrl";
+        Assert.Equal([4, 2], File.ReadAllBytes(FileOf(files["chara/equipment/e6255/material/v0001/" + legsCopy])));
+        Assert.Contains("/" + legsCopy, SecondSkinWriter.Parse(File.ReadAllBytes(FileOf(files[LegsPath]))).MatNames);
+    }
+
+    [Fact]
+    public void A_model_outside_an_equipment_set_cannot_save_a_material_and_says_so()
+    {
+        var outcome = BodyRetargetWriter.Save(root, Group, "chara/human/c0201/obj/body/b0001/model/c0201b0001_top.mdl",
+                                              "Muse+", "SFW M", [WithBoxers("Muse SFW", [4, 2])]);
+        Assert.False(outcome.Ok);
+        Assert.Contains("underwear", outcome.Message);
     }
 
     [Fact]
@@ -515,7 +546,7 @@ public class BodyRetargetWriterTests : IDisposable
     }
 
     [Fact]
-    [Trait("Plan", "EDGE-skinless-target-26")]
+    [Trait("Plan", "EDGE-skinless-target-31")]
     public void A_second_slot_saved_into_the_option_keeps_the_first_slot_s_material()
     {
         Assert.True(BodyRetargetWriter.Save(root, Group, GamePath, "Muse+", "SFW M", [WithBoxers("Muse SFW", [4, 2])]).Ok);

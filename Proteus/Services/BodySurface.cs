@@ -91,12 +91,7 @@ internal sealed class BodySurface
     /// <summary>A body model's own smallclothes: what it draws with the game's smallclothes material, set e0000.</summary>
     public static bool IsSmallclothes(string material) => material.Contains("e0000_", StringComparison.Ordinal);
 
-    /// <summary>Whether a part is the body as worn: its skin, or its own smallclothes that are not skin.</summary>
-    public static bool IsWornPart(string material)
-        => SecondSkinWriter.IsBodySkinMaterial(material) || IsSmallclothes(material);
-
     private BodySurface(ModelParts body, float cellSize, bool cloth, bool smallclothes = false, bool skin = true)
-
     {
         int vc = body.Positions.Length / 3;
         pos = new Vector3[vc];
