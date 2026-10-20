@@ -5398,5 +5398,53 @@
   "HairPort.Scan.UndoChecked.Confirm.Fmt": {
     "message": "Click again to undo {0} hairstyle(s) for good",
     "description": "Second click of 'Undo everything this check fitted'. {0} = how many."
+  },
+  "HairPort.Earless.Label": {
+    "message": "Take the ears off Miqo'te hair mods",
+    "description": ""
+  },
+  "HairPort.Earless.Tip": {
+    "message": "For a Miqo'te: when you wear a hair mod whose hairstyle has cat ears, Proteus\nmakes an earless copy of it and points the mod's option at that copy. The\nauthor's own files are never changed.\n\nThis changes the mod itself, so every character drawn with that mod on — in\nevery collection, and anyone you share it with — has no ears with it. Turning\nthis off puts the ears back in every mod Proteus changed. Works with or without\nfitting hair mods made for another race.",
+    "description": ""
+  },
+  "HairPort.Settings.Earless.Fmt": {
+    "message": "Hairstyle {0} from {1} is drawn without its ears — for every character drawn with this mod on, in every collection. Turning the setting off puts them back.",
+    "description": ""
+  },
+  "HairPort.Settings.EarlessOptionHint.Fmt": {
+    "message": "This mod has its own earless option: {0}",
+    "description": ""
+  },
+  "HairPort.Earless.Chat": {
+    "message": "[Proteus] This hairstyle's cat ears are taken off: Proteus pointed its mod at an earless copy, so every character drawn with this mod on, in every collection, has no ears with it now. Turn off \"Take the ears off Miqo'te hair mods\" under /proteus > Settings > Hair to put them back.",
+    "description": ""
+  },
+  "HairPort.Earless.RestoreBlocked.Fmt": {
+    "message": "[Proteus] The ears could not be put back in {0}: {1}",
+    "description": ""
+  },
+  "HairPort.Earless.Restored.Fmt": {
+    "message": "Ears put back on {0} hairstyle(s).",
+    "description": ""
+  },
+  "HairPort.Earless.Refused.AuthorMissing.Fmt": {
+    "message": "the author's file {0} is missing, so the earless copy was kept",
+    "description": ""
+  },
+  "HairPort.Earless.Refused.Changed": {
+    "message": "the mod changed while Proteus was working on it, so nothing was written",
+    "description": ""
+  },
+  "HairPort.Earless.Refused.Leftover": {
+    "message": "not all of its ears could be taken out",
+    "description": ""
+  },
+  "HairPort.Earless.Refused.RecordUnreadable": {
+    "message": "Proteus's record of this mod's earless hairstyles (Proteus/earlesshair.json) could not be read, so nothing was changed.",
+    "description": ""
+  },
+  "HairPort.Earless.Refused.Outside.Fmt": {
+    "message": "{0} is not a path inside the mod's earless folder, so nothing was written",
+    "description": ""
   }
 }

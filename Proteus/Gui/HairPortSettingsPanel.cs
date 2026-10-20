@@ -34,14 +34,19 @@ internal sealed class HairPortSettingsPanel(HairPortWatcher watcher, Configurati
         ImGui.SameLine();
         ImGuiComponents.HelpMarker(s.AutoTip);
 
+        var earless = config.EarlessMiqoteHair;
+        if (ImGui.Checkbox(s.Earless, ref earless)) watcher.SetEarless(earless);
+        if (ImGui.IsItemHovered()) ImGui.SetTooltip(s.EarlessTip);
+        ImGui.SameLine();
+        ImGuiComponents.HelpMarker(s.EarlessTip);
+
         ImGui.Spacing();
         var view = watcher.Current;
         var scan = watcher.Scan;
         if (view.Busy && !scan.Running) ImGui.TextDisabled(s.Working);
         else if (view.Ported && view.ModRoot != null && view.Worn != null)
         {
-            ImGui.TextWrapped(string.Format(s.PortedFmt, HairPortPlan.Parse(view.Worn) is { } at ? $"h{at.Id:D4}" : "?",
-                                            System.IO.Path.GetFileName(view.ModRoot)));
+            ImGui.TextWrapped(WornText(view));
             using (ImRaii.Disabled(view.Busy))
             {
                 if (ImGui.Button(s.Undo)) watcher.Undo();
@@ -53,7 +58,8 @@ internal sealed class HairPortSettingsPanel(HairPortWatcher watcher, Configurati
                 }
             }
         }
-        else ImGui.TextWrapped(s.None);
+        else ImGui.TextWrapped(WornText(view));
+        if (!view.Busy && HintText(view) is { } hint) ImGui.TextDisabled(hint);
 
         if (view.Message.Length > 0)
         {
@@ -171,6 +177,22 @@ internal sealed class HairPortSettingsPanel(HairPortWatcher watcher, Configurati
     internal static bool CanUndo(HairPortScan.Row row, bool busy)
         => !busy && row.State is HairPortScan.RowState.Fitted or HairPortScan.RowState.AlreadyFitted
                                  or HairPortScan.RowState.Remade;
+
+    /// <summary>What Proteus did with the hairstyle being worn: fitted to the race, drawn without its ears, or nothing.</summary>
+    internal static string WornText(HairPortWatcher.View view)
+    {
+        var s = Strings.HairPort;
+        string id = view.Worn != null && HairPortPlan.Parse(view.Worn) is { } at ? $"h{at.Id:D4}" : "?";
+        string mod = view.ModRoot != null ? System.IO.Path.GetFileName(view.ModRoot) : "?";
+        if (view.Ported && view.ModRoot != null && view.Worn != null) return string.Format(s.PortedFmt, id, mod);
+        if (view.Earless && view.ModRoot != null && view.Worn != null) return string.Format(s.EarlessFmt, id, mod);
+        return s.None;
+    }
+
+    /// <summary>The mod's own earless versions of the hairstyle being worn, or null for none.</summary>
+    internal static string? HintText(HairPortWatcher.View view)
+        => view.EarlessOptions is { Count: > 0 } options
+            ? string.Format(Strings.HairPort.EarlessOptionHintFmt, string.Join(", ", options)) : null;
 
     /// <summary>"Midlander ♀" for c0201.</summary>
     internal static string RaceName(ushort race)

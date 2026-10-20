@@ -52,4 +52,38 @@ public class HairPortSettingsPanelTests
         Assert.False(HairPortSettingsPanel.CanUndo(Row(HairPortScan.RowState.Refused), busy: false));
         Assert.False(HairPortSettingsPanel.CanUndo(Row(HairPortScan.RowState.Undone), busy: false));
     }
+
+    [Fact]
+    [Trait("Plan", "AC-earless-miqote-hair-1")]
+    public void Earless_label_has_a_stable_id()
+    {
+        Assert.EndsWith("###hairEarless", Strings.HairPort.Earless);
+        Assert.Contains("every collection", Strings.HairPort.EarlessTip);
+    }
+
+    [Fact]
+    [Trait("Plan", "AC-earless-miqote-hair-9")]
+    public void Worn_text_names_the_earless_hairstyle_mod_and_reach()
+    {
+        var s = Strings.HairPort;
+        string worn = HairPortPlan.HairPath(801, 130), root = System.IO.Path.Combine("mods", "Miqo Hair");
+        Assert.Equal(string.Format(s.EarlessFmt, "h0130", "Miqo Hair"),
+                     HairPortSettingsPanel.WornText(new HairPortWatcher.View(worn, root, Earless: true)));
+        Assert.Contains("every collection", HairPortSettingsPanel.WornText(new HairPortWatcher.View(worn, root, Earless: true)));
+        Assert.Equal(string.Format(s.PortedFmt, "h0130", "Miqo Hair"),
+                     HairPortSettingsPanel.WornText(new HairPortWatcher.View(worn, root, Ported: true)));
+        Assert.Equal(s.None, HairPortSettingsPanel.WornText(new HairPortWatcher.View(worn)));
+        Assert.Equal(s.None, HairPortSettingsPanel.WornText(new HairPortWatcher.View()));
+    }
+
+    [Fact]
+    [Trait("Plan", "AC-earless-miqote-hair-9")]
+    [Trait("Plan", "EDGE-earless-miqote-hair-25")]
+    public void Hint_text_names_the_mods_earless_options()
+    {
+        Assert.Null(HairPortSettingsPanel.HintText(new HairPortWatcher.View()));
+        Assert.Null(HairPortSettingsPanel.HintText(new HairPortWatcher.View(EarlessOptions: [])));
+        Assert.Equal(string.Format(Strings.HairPort.EarlessOptionHintFmt, "Races / Miqote Earless, Extras / earless"),
+                     HairPortSettingsPanel.HintText(new HairPortWatcher.View(EarlessOptions: ["Races / Miqote Earless", "Extras / earless"])));
+    }
 }

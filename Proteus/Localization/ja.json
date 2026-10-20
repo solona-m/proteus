@@ -5398,5 +5398,53 @@
   "HairPort.Scan.UndoChecked.Confirm.Fmt": {
     "message": "もう一度クリックすると髪型 {0} 件を元に戻します（以後自動では合わせません）",
     "description": ""
+  },
+  "HairPort.Earless.Label": {
+    "message": "ミコッテの髪Modから耳を取る",
+    "description": ""
+  },
+  "HairPort.Earless.Tip": {
+    "message": "ミコッテ向け：猫耳のある髪型の髪Modを身に着けると、Proteus が耳のない\nコピーを作り、Modのオプションをそのコピーに向けます。作者のファイルは一切\n変更しません。\n\nMod自体を変更するため、そのModを有効にして表示されるすべてのキャラクター\n（すべてのコレクション、共有相手も含む）は耳がなくなります。オフにすると、\nProteus が変更したすべてのModに耳を戻します。別の種族向けの髪Modの調整が\nオンでもオフでも動作します。",
+    "description": ""
+  },
+  "HairPort.Settings.Earless.Fmt": {
+    "message": "{1} の髪型 {0} は耳なしで表示されています。このModを有効にして表示されるすべてのキャラクター（すべてのコレクション）が対象です。設定をオフにすると元に戻ります。",
+    "description": ""
+  },
+  "HairPort.Settings.EarlessOptionHint.Fmt": {
+    "message": "このModには独自の耳なしオプションがあります：{0}",
+    "description": ""
+  },
+  "HairPort.Earless.Chat": {
+    "message": "[Proteus] この髪型の猫耳を取りました。Proteus がModを耳なしのコピーに向けたため、このModを有効にして表示されるすべてのキャラクター（すべてのコレクション）は耳がなくなっています。耳を戻すには /proteus > 設定 > 髪 で「ミコッテの髪Modから耳を取る」をオフにしてください。",
+    "description": ""
+  },
+  "HairPort.Earless.RestoreBlocked.Fmt": {
+    "message": "[Proteus] {0} の耳を戻せませんでした：{1}",
+    "description": ""
+  },
+  "HairPort.Earless.Restored.Fmt": {
+    "message": "{0} 個の髪型に耳を戻しました。",
+    "description": ""
+  },
+  "HairPort.Earless.Refused.AuthorMissing.Fmt": {
+    "message": "作者のファイル {0} が見つからないため、耳なしのコピーを残しました",
+    "description": ""
+  },
+  "HairPort.Earless.Refused.Changed": {
+    "message": "Proteus の作業中にModが変更されたため、何も書き込みませんでした",
+    "description": ""
+  },
+  "HairPort.Earless.Refused.Leftover": {
+    "message": "耳をすべて取り除くことができませんでした",
+    "description": ""
+  },
+  "HairPort.Earless.Refused.RecordUnreadable": {
+    "message": "このModの耳なし髪型の Proteus の記録（Proteus/earlesshair.json）を読み込めなかったため、何も変更しませんでした。",
+    "description": ""
+  },
+  "HairPort.Earless.Refused.Outside.Fmt": {
+    "message": "{0} はModの耳なしフォルダー内のパスではないため、何も書き込みませんでした",
+    "description": ""
   }
 }
