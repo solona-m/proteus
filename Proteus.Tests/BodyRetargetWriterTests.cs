@@ -402,6 +402,123 @@ public class BodyRetargetWriterTests : IDisposable
         Assert.All(BodyRetargetWriter.ReadRecord(root)!.Options, e => Assert.True(e.InAuthorGroup));
     }
 
+    // ── the new body's smallclothes material, published beside the model (skinless-target) ──
+
+    private const string Boxers = "mt_c0201e6255_top_z.mtrl";
+
+    private static byte[] ModelDrawing(string material)
+        => SyntheticModel.Build([], new SyntheticModel.Mesh("/mt_c0201e6255_top_a.mtrl", new SyntheticModel.Sub(0)),
+                                new SyntheticModel.Mesh("/" + material, new SyntheticModel.Sub(0)));
+
+    private static BodyRetargetWriter.Refit WithBoxers(string option, byte[] material)
+        => new(option, ModelDrawing(Boxers), "Muse SFW",
+               Materials: [new BodyRetarget.PublishedMaterial(Boxers, material, "/mt_c0201e0000_dwn_b.mtrl")]);
+
+    private string FileOf(string rel) => Path.Combine(root, rel.Replace('/', Path.DirectorySeparatorChar));
+
+    [Fact]
+    [Trait("Plan", "AC-skinless-target-8")]
+    [Trait("Plan", "EDGE-skinless-target-25")]
+    public void Save_publishes_the_material_beside_the_model_and_undo_removes_it()
+    {
+        Assert.True(BodyRetargetWriter.Save(root, Group, GamePath, "Muse+", "SFW M", [WithBoxers("Muse SFW", [4, 2])]).Ok);
+
+        var files = PenumbraModMeta.TryReadFileOptions(root, Group)!.Single(o => o.Name == "Muse SFW").Files;
+        // The mod publishes no material of its own set: v0001 alone.
+        string at = files["chara/equipment/e6255/material/v0001/" + Boxers];
+        Assert.StartsWith(BodyRetargetWriter.Subfolder + "/", at, StringComparison.OrdinalIgnoreCase);
+        Assert.Equal([4, 2], File.ReadAllBytes(FileOf(at)));
+
+        Assert.True(BodyRetargetWriter.Undo(root, Group, "Muse SFW").Ok);
+        Assert.False(File.Exists(FileOf(at)));
+    }
+
+    [Fact]
+    [Trait("Plan", "EDGE-skinless-target-25")]
+    public void The_material_goes_in_every_variant_folder_the_mod_dresses()
+    {
+        File.WriteAllText(Path.Combine(root, PenumbraModMeta.MetaFile), $$"""
+        {
+          "FileVersion": 4, "Name": "Test Outfit",
+          "DefaultData": { "Files": { "chara/equipment/e6255/material/v0001/mt_c0201e6255_top_a.mtrl": "a1.mtrl",
+                                      "chara/equipment/e6255/material/v0003/mt_c0201e6255_top_a.mtrl": "a3.mtrl" } },
+          "Groups": []
+        }
+        """);
+        Assert.True(BodyRetargetWriter.Save(root, Group, GamePath, "Muse+", "SFW M", [WithBoxers("Muse SFW", [4, 2])]).Ok);
+
+        var files = PenumbraModMeta.TryReadFileOptions(root, Group)!.Single(o => o.Name == "Muse SFW").Files;
+        string v1 = files["chara/equipment/e6255/material/v0001/" + Boxers];
+        Assert.Equal(v1, files["chara/equipment/e6255/material/v0003/" + Boxers]);
+    }
+
+    [Fact]
+    [Trait("Plan", "EDGE-skinless-target-30")]
+    public void A_name_another_option_publishes_moves_to_the_next_letter_and_renames_the_model()
+    {
+        File.WriteAllText(Path.Combine(root, PenumbraModMeta.MetaFile), $$"""
+        {
+          "FileVersion": 4, "Name": "Test Outfit",
+          "DefaultData": { "Files": { "chara/equipment/e6255/material/v0001/{{Boxers}}": "theirs.mtrl" } },
+          "Groups": []
+        }
+        """);
+        Assert.True(BodyRetargetWriter.Save(root, Group, GamePath, "Muse+", "SFW M", [WithBoxers("Muse SFW", [4, 2])]).Ok);
+
+        var files = PenumbraModMeta.TryReadFileOptions(root, Group)!.Single(o => o.Name == "Muse SFW").Files;
+        const string next = "mt_c0201e6255_top_y.mtrl";
+        Assert.Equal([4, 2], File.ReadAllBytes(FileOf(files["chara/equipment/e6255/material/v0001/" + next])));
+        Assert.False(files.ContainsKey("chara/equipment/e6255/material/v0001/" + Boxers));
+        var model = File.ReadAllBytes(FileOf(files[GamePath]));
+        Assert.Contains("/" + next, SecondSkinWriter.Parse(model).MatNames);
+        Assert.DoesNotContain("/" + Boxers, SecondSkinWriter.Parse(model).MatNames);
+    }
+
+    [Fact]
+    [Trait("Plan", "EDGE-skinless-target-31")]
+    public void Saving_again_onto_a_body_with_skin_drops_the_old_material_redirect()
+    {
+        Assert.True(BodyRetargetWriter.Save(root, Group, GamePath, "Muse+", "SFW M", [WithBoxers("Muse SFW", [4, 2])]).Ok);
+        // The same option made again onto a body with skin there: nothing to publish.
+        Assert.True(BodyRetargetWriter.Save(root, Group, GamePath, "Muse+", "SFW M",
+                                            [new BodyRetargetWriter.Refit("Muse SFW", [9], "Gen A")]).Ok);
+        var files = PenumbraModMeta.TryReadFileOptions(root, Group)!.Single(o => o.Name == "Muse SFW").Files;
+        Assert.Equal([GamePath], files.Keys);
+    }
+
+    [Fact]
+    [Trait("Plan", "EDGE-skinless-target-31")]
+    public void Saving_again_keeps_one_copy()
+    {
+        Assert.True(BodyRetargetWriter.Save(root, Group, GamePath, "Muse+", "SFW M", [WithBoxers("Muse SFW", [4, 2])]).Ok);
+        Assert.True(BodyRetargetWriter.Save(root, Group, GamePath, "Muse+", "SFW M", [WithBoxers("Muse SFW", [5, 5])]).Ok);
+        var files = PenumbraModMeta.TryReadFileOptions(root, Group)!.Single(o => o.Name == "Muse SFW").Files;
+        var materials = files.Where(f => f.Key.EndsWith(".mtrl", StringComparison.Ordinal)).ToList();
+        var only = Assert.Single(materials);
+        Assert.EndsWith(Boxers, only.Key);
+        Assert.Equal([5, 5], File.ReadAllBytes(FileOf(only.Value)));
+    }
+
+    [Fact]
+    [Trait("Plan", "EDGE-skinless-target-26")]
+    public void A_second_slot_saved_into_the_option_keeps_the_first_slot_s_material()
+    {
+        Assert.True(BodyRetargetWriter.Save(root, Group, GamePath, "Muse+", "SFW M", [WithBoxers("Muse SFW", [4, 2])]).Ok);
+        Assert.True(BodyRetargetWriter.Save(root, Group, LegsPath, "Muse+", "SFW M",
+                                            [new BodyRetargetWriter.Refit("Muse SFW", [7], "Muse SFW")]).Ok);
+        var files = PenumbraModMeta.TryReadFileOptions(root, Group)!.Single(o => o.Name == "Muse SFW").Files;
+        Assert.True(files.ContainsKey("chara/equipment/e6255/material/v0001/" + Boxers));
+    }
+
+    [Fact]
+    [Trait("Plan", "AC-skinless-target-8")]
+    public void Without_materials_the_manifest_is_as_before()
+    {
+        Assert.True(BodyRetargetWriter.Save(root, Group, GamePath, "Muse+", "SFW M",
+                                            [new BodyRetargetWriter.Refit("Muse SFW", [1], "Gen A")]).Ok);
+        Assert.Equal([GamePath], PenumbraModMeta.TryReadFileOptions(root, Group)!.Single(o => o.Name == "Muse SFW").Files.Keys);
+    }
+
     /// <summary>An author's size group whose two sizes each carry their own material and legs, and Small a texture only it
     /// has.</summary>
     private void WriteSizesWithMaterials(string type)
