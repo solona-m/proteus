@@ -618,7 +618,7 @@ public class WomensArtOnMenTests(ITestOutputHelper output)
         double warm = sw.Elapsed.TotalMilliseconds;
 
         output.WriteLine($"cold {cold:F0} ms (incl. map read), maps loaded {mapsLoaded:F0} ms, warm (cache hit) {warm:F1} ms");
-        Assert.True(cold <= 2500, $"cold {cold:F0} ms over the 2.5 s budget");
+        Assert.True(cold <= 3000, $"cold {cold:F0} ms over the 3 s budget");   // 3 s: the user's call after 2.7 s measured
         Assert.True(warm <= 100, $"warm {warm:F1} ms over the 100 ms budget");
     }
 
