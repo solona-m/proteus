@@ -62,6 +62,9 @@ internal sealed class SmoothedCorrespondence : IBodyCorrespondence
     /// <summary>The smoothing moves the target's vertices, never renumbers them: whatever the landings were made on.</summary>
     public bool SameMesh => inner.SameMesh;
 
+    /// <summary>The smoothing moves skin only; whatever the target draws in place of skin is still drawn.</summary>
+    public bool TargetWorn => inner.TargetWorn;
+
     public IReadOnlyList<Vector3?> Field => shifted;
 
     public string Describe() => inner.Describe();

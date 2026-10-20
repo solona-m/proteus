@@ -39,4 +39,12 @@ internal interface IBodyCorrespondence
     /// <see cref="BodyRetarget.SnappedLandsElsewhere"/>).
     /// </summary>
     bool SameMesh => false;
+
+    /// <summary>
+    /// The target draws something other than skin over part of the source's skin — underwear modelled onto the body
+    /// (Muse+'s SFW legs: boxers, with the skin cut away under them) — and the field carries that part onto it. The rest
+    /// of the refit then reads the target as it is worn, its smallclothes with its skin (see
+    /// <see cref="BodySurface.OfBodyWorn"/>), and the swap brings those smallclothes in. False for every other pair.
+    /// </summary>
+    bool TargetWorn => false;
 }
