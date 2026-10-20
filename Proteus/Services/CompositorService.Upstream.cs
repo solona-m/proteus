@@ -302,17 +302,7 @@ public partial class CompositorService
         IReadOnlySet<string>? awaitingMenMaps = null,
         IReadOnlySet<ResolvedOverlay>? heldGear = null)
     {
-        // The four destinations a mod can reach, unioned in one pass. AO top-up materials carry empty lists and contribute no mod.
-        // A gear layer the shell will hold off a man (WomensArtOnMen) reaches nothing, nor does the mask shell of a mod
-        // waiting for the men's maps.
-        var contributing = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-        foreach (var list in byMaterial.Values)
-            foreach (var (e, _) in list) contributing.Add(e.ModDirectory);
-        foreach (var (e, o) in gearOverlays)
-            if (heldGear == null || !heldGear.Contains(o)) contributing.Add(e.ModDirectory);
-        foreach (var (e, _) in contentLayers) contributing.Add(e.ModDirectory);
-        foreach (var m in maskShellMods)
-            if (awaitingMenMaps == null || !awaitingMenMaps.Contains(m)) contributing.Add(m);
+        var contributing = Contributing(byMaterial, gearOverlays, contentLayers, maskShellMods, awaitingMenMaps, heldGear);
 
         var inert = entries.Where(e => !contributing.Contains(e.ModDirectory)).ToList();
         if (inert.Count == 0)

@@ -136,10 +136,11 @@ internal static class WomensArtOnMen
                 foreach (var m in destinations)
                 {
                     var layout = UVRemapService.LayoutOfMaterial(m, true)!;
+                    // Vanilla switched off for this mod: his vanilla skin is no destination at all — nothing to wait for.
+                    if (layout == UVRemapService.MaleVanillaSpace && !vanillaAllowed(mod)) continue;
                     var (v, route) = Judge(d, SkinLegacySourceOf(d), layout, menMapsReady, menAllowed(mod), routeAvailable);
                     Note(v, mod);
                     if (v != MenVerdict.Draw) continue;
-                    if (layout == UVRemapService.MaleVanillaSpace && !vanillaAllowed(mod)) continue;
                     if (byMaterial.TryGetValue(m, out var there))
                     {
                         if (there.Any(p => ReferenceEquals(p.Overlay, pair.Overlay))) continue;

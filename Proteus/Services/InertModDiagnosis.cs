@@ -53,6 +53,30 @@ public static class InertModDiagnosis
         InertCause Cause, int GroupCount, string Groups, string Wants, string Have);
 
     /// <summary>
+    /// The mods that reached something this composite: the four destinations a mod can reach, unioned. AO top-up
+    /// materials carry empty lists and contribute no mod. A gear layer the shell will hold off a man
+    /// (<see cref="WomensArtOnMen"/>) reaches nothing, nor does the mask shell of a mod waiting for the men's maps.
+    /// </summary>
+    internal static HashSet<string> Contributing(
+        IReadOnlyDictionary<string, List<(OverlayEntry Entry, ResolvedOverlay Overlay)>> byMaterial,
+        IEnumerable<(OverlayEntry Entry, ResolvedOverlay Overlay)> gearOverlays,
+        IEnumerable<(OverlayEntry Entry, ResolvedContent Content)> contentLayers,
+        IEnumerable<string> maskShellMods,
+        IReadOnlySet<string>? awaitingMenMaps = null,
+        IReadOnlySet<ResolvedOverlay>? heldGear = null)
+    {
+        var contributing = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var list in byMaterial.Values)
+            foreach (var (e, _) in list) contributing.Add(e.ModDirectory);
+        foreach (var (e, o) in gearOverlays)
+            if (heldGear == null || !heldGear.Contains(o)) contributing.Add(e.ModDirectory);
+        foreach (var (e, _) in contentLayers) contributing.Add(e.ModDirectory);
+        foreach (var m in maskShellMods)
+            if (awaitingMenMaps == null || !awaitingMenMaps.Contains(m)) contributing.Add(m);
+        return contributing;
+    }
+
+    /// <summary>
     /// Which rung one inert mod lands on. Pure, so the ladder is testable; first match wins, most specific first.
     /// </summary>
     /// <param name="masksSelected">Mask options ticked, toe cap excluded (it is not a mask).</param>
