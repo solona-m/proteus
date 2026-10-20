@@ -752,6 +752,7 @@ public sealed class LocalizationTests
                                                                     StringComparison.Ordinal));
         string mid = loc["Common.Race.Midlander"].Message, high = loc["Common.Race.Highlander"].Message;
         Assert.Contains(mid, bullet);
+        Assert.Contains(high, bullet);
         Assert.True(bullet.IndexOf(high, StringComparison.Ordinal) < bullet.LastIndexOf(mid, StringComparison.Ordinal),
                     $"[{lang}] the bullet does not name {high} before {mid}");
 
