@@ -262,7 +262,7 @@ public class SkinMoveLocalTests(ITestOutputHelper output)
         // The worst release: every skin part moved with a 50 mm falloff, so the guard looks over the whole garment.
         var skinTris = model.Parts.Where(p => p.Island < 0 && SecondSkinWriter.IsBodySkinMaterial(p.Material))
                             .SelectMany(p => p.Triangles).ToArray();
-        solve.BeginMove(skinTris, adjacent: true, falloffRadius: 0.05f);
+        Assert.True(solve.BeginMove(skinTris, adjacent: true, falloffRadius: 0.05f) > 0);
         solve.MoveTo(new Vector3(0f, 0.003f, 0.002f));
         clock.Restart();
         solve.EndMove();

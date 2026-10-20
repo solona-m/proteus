@@ -1449,10 +1449,13 @@ internal sealed partial class MeshVolumeSolve : IMeshEdit
         if (skinMoves && follow != null)
         {
             AddMoveRiders(into);
-            // Cloth riding skin that moves on its own side goes that way too, or the two would tear apart.
+            // Cloth riding skin that moves on its own side goes that way too, or the two would tear apart — unless the
+            // mirror has it: cloth selected, or matched to the selection, is mirrored as ever.
             if (plan is { } planned)
                 foreach (int n in into.Keys)
-                    if (!skin[n] && follow.CornersOf(n).Any(c => planned.DirectOnly.Contains(c.Skin))) planned.DirectOnly.Add(n);
+                    if (!skin[n] && !planned.Seeds.Contains(n)
+                        && follow.CornersOf(n).Any(c => planned.DirectOnly.Contains(c.Skin) && skin[c.Skin]))
+                        planned.DirectOnly.Add(n);
         }
         return into.Count;
     }

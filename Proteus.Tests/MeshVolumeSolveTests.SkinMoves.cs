@@ -964,13 +964,13 @@ public partial class MeshVolumeSolveTests
         var placed = solve.Positions().ToArray();
         Assert.True(placed[l.ClothAt[2, 10] * 3 + 1] < 0f, "the deflate should have reached under the skin");
 
-        // Then sculpts the skin further in, with it on: the guard looks over still skin near what this stroke moved,
-        // and leaves the cloth the earlier stroke placed where it is.
+        // Then sculpts the skin out nearby, with it on: the guard looks over still skin near what this stroke moved,
+        // and leaves the cloth the earlier stroke placed where it is — the boundary rows included.
         solve.MoveSkin = true;
         solve.Paint(At(l.Model.Positions, l.SkinAt[9, 10]), 0.04f, 0.003f);
         Assert.True(solve.SkinEdited);
         solve.EndStroke();
-        foreach (int i in new[] { 0, 1, 2 })
+        foreach (int i in new[] { 0, 1, 2, 3, 4 })
             Assert.Equal(placed[l.ClothAt[i, 10] * 3 + 1], At(solve.Positions(), l.ClothAt[i, 10]).Y);
     }
 
@@ -1046,6 +1046,78 @@ public partial class MeshVolumeSolveTests
         for (int d = 0; d < 20; d++) solve.Paint(At(solve.Positions(), cloth), 0.03f, 0.002f);
         Assert.Equal(0.018f, Moved(l.Model, solve.Positions(), cloth).Y, 1e-4f);
         solve.EndStroke();
+    }
+
+    /// <summary>
+    /// Skin and cloth picked together, mirrored. The cloth is mirrored as ever — here a strip across the centre, its own
+    /// mirror, which keeps only the drag's symmetric part — while the picked skin, and cloth riding it that was not
+    /// picked, take the drag itself on their own side. The other side's skin stays.
+    /// </summary>
+    [Fact]
+    [Trait("Plan", "AC-studio-move-skin-3")]
+    [Trait("Plan", "EDGE-studio-move-skin-17")]
+    public void AMirroredMoveOfSkinWithACentredClothStrip()
+    {
+        var l = Layered(21, 0.001f, centred: true);
+        var solve = SkinSolve(l.Model);
+        var at = l.Model.Positions;
+        var cloth = l.Model.Parts[0].Triangles;
+        var strip = Enumerable.Range(0, cloth.Length / 3)
+                              .Where(t => Enumerable.Range(0, 3).All(k => MathF.Abs(At(at, cloth[t * 3 + k]).X) <= 0.0201f))
+                              .SelectMany(t => new[] { cloth[t * 3], cloth[t * 3 + 1], cloth[t * 3 + 2] });
+        var skinSide = l.Model.Parts[1].Triangles.Where(v => At(at, v).X > 0.045f);
+        var pivot = At(at, l.SkinAt[10, 10]);
+        Assert.True(solve.BeginMove(strip.Concat(skinSide), adjacent: false, falloffRadius: 0f,
+                                    mirror: new MeshVolumeSolve.MoveMirror(MeshVolumeSolve.MoveKind.Translate, pivot)) > 0);
+        Assert.Equal(MeshVolumeSolve.MirrorMode.Centred, solve.DragMirror?.Mode);
+        var offset = new Vector3(0.002f, 0.004f, 0f);
+        solve.MoveTo(offset);
+        solve.EndMove();
+
+        var after = solve.Positions();
+        // The strip: the symmetric part, X dropped.
+        Assert.True(Vector3.Distance(MirrorMotion.CentredOffset(offset), Moved(l.Model, after, l.ClothAt[10, 5])) < 1e-5f);
+        // The picked skin, and the cloth riding it that was not picked: the drag itself.
+        Assert.True(Vector3.Distance(offset, Moved(l.Model, after, l.SkinAt[16, 5])) < 1e-5f);
+        Assert.True(Vector3.Distance(offset, Moved(l.Model, after, l.ClothAt[16, 5])) < 1e-4f);
+        // The other side's skin, unpicked, stays.
+        Assert.Equal(Vector3.Zero, Moved(l.Model, after, l.SkinAt[4, 5]));
+        Assert.Equal(0, Folded(l.Model, after));
+    }
+
+    /// <summary>
+    /// The same, with cloth on one side whose mirror match is on the other: that cloth and its match move as mirror
+    /// images, while the picked skin takes the drag on its own side and the other side's skin stays.
+    /// </summary>
+    [Fact]
+    [Trait("Plan", "AC-studio-move-skin-3")]
+    [Trait("Plan", "EDGE-studio-move-skin-17")]
+    public void AMirroredMoveOfSkinWithClothOnOneSide()
+    {
+        var l = Layered(21, 0.001f, centred: true);
+        var solve = SkinSolve(l.Model);
+        var at = l.Model.Positions;
+        var cloth = l.Model.Parts[0].Triangles;
+        var patch = Enumerable.Range(0, cloth.Length / 3)
+                              .Where(t => Enumerable.Range(0, 3).All(k => At(at, cloth[t * 3 + k]).X is >= 0.0399f and <= 0.0801f))
+                              .SelectMany(t => new[] { cloth[t * 3], cloth[t * 3 + 1], cloth[t * 3 + 2] });
+        var skinSide = l.Model.Parts[1].Triangles.Where(v => At(at, v).X > 0.045f);
+        var pivot = At(at, l.SkinAt[16, 10]);
+        Assert.True(solve.BeginMove(patch.Concat(skinSide), adjacent: false, falloffRadius: 0f,
+                                    mirror: new MeshVolumeSolve.MoveMirror(MeshVolumeSolve.MoveKind.Translate, pivot)) > 0);
+        Assert.Equal(MeshVolumeSolve.MirrorMode.Sides, solve.DragMirror?.Mode);
+        var offset = new Vector3(0.002f, 0.004f, 0f);
+        solve.MoveTo(offset);
+        solve.EndMove();
+
+        var after = solve.Positions();
+        // The patch on its own side, and its match across the centre as the mirror image.
+        Assert.True(Vector3.Distance(offset, Moved(l.Model, after, l.ClothAt[16, 5])) < 1e-4f);
+        Assert.True(Vector3.Distance(MirrorMotion.Reflect(offset), Moved(l.Model, after, l.ClothAt[4, 5])) < 1e-4f);
+        // The picked skin: the drag itself. The other side's skin stays.
+        Assert.True(Vector3.Distance(offset, Moved(l.Model, after, l.SkinAt[16, 5])) < 1e-5f);
+        Assert.Equal(Vector3.Zero, Moved(l.Model, after, l.SkinAt[4, 5]));
+        Assert.Equal(0, Folded(l.Model, after));
     }
 
     [Fact]
