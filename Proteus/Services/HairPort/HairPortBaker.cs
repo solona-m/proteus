@@ -37,7 +37,8 @@ internal static class HairPortBaker
     /// </summary>
     public const float GapMargin = 0.014f;
 
-    /// <summary>The share of a hairstyle's triangles a port may turn inside out; see <see cref="Folded"/>.</summary>
+    /// <summary>The share of a hairstyle's triangles a port may turn inside out; see <see cref="Folded"/>. Taken of its
+    /// LOD0 triangles, the hidden fur's included.</summary>
     public const float FoldedShare = 0.005f;
 
     /// <summary>How deep under the scalp a vertex must be before it counts as sunk into the head, in metres: the scalp
@@ -141,6 +142,8 @@ internal static class HairPortBaker
         var model = (byte[])source.Clone();
         int furHidden = 0;
         if (HasEars(from) && !HasEars(to)) furHidden = HideEars(model, src);
+        // What the bend is judged against: the hairstyle as it will be drawn, its fur already gone.
+        var shown = ModelPartReader.Read(model);
 
         model = RacialModelBake.Port(model, from, to, pbd, ParentOf, out refusal)!;
         if (model == null) return null;
@@ -161,8 +164,10 @@ internal static class HairPortBaker
 
         // A bend that turns the surface inside out draws its back face. A few strand-tip slivers do turn on the bigger
         // bends (2 to 6 of thousands, on the game's own Lalafell and Hrothgar hairstyles), unseen on hair that is drawn
-        // from both sides; more than that is a hairstyle the bend does not suit.
-        if (ModelPartReader.Read(source) is { } a && ModelPartReader.Read(model) is { } b
+        // from both sides; more than that is a hairstyle the bend does not suit. The fur is not counted: a Lalafell's
+        // deformer has ear bones of its own and turns a Miqo'te's fur over (Loosened Bun: 24 triangles), but it is not
+        // drawn.
+        if (shown is { } a && ModelPartReader.Read(model) is { } b
             && Folded(a, b) is var folded && folded > FoldedShare * a.Parts.Where(p => p.Island == -1).Sum(p => p.TriangleCount))
         {
             refusal = string.Format(Loc.Localize("HairPort.Refused.Folded.Fmt",

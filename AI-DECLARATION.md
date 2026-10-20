@@ -22,25 +22,27 @@ and trying to use it to displace artists misses the point about why we do art
 in the first place. My favorite take on this can be found here:
 https://www.youtube.com/live/RXyWtp8tuYY?si=GUcD40pQut0sIiLJ
 
-However, if a computer can be used to type boilerplate code, generate rote
-tests, documentation and standard deployment scripts in a way that frees me to
-get back to creating art, it is serving the greater good.
+Second, Proteus does not use AI at runtime when you use it. The algorithms
+are similar or identical to what you might find in Blender, but in some 
+cases take advantage of FF specific circumstances like compatible UVs
+to accomplish its tasks in ways that a 3D modeling program can't. But at 
+the end of the day, it's just a classical computer program running static 
+algorithms that can be repeated consistently, tuned and analyzed.
 
-I am not a vibe coder. As of this writing, I have 25 years of professional
+I am not a vibe coder. As of this writing, I have 26 years of professional
 development experience, primarily in c#, the language used in this plugin. I
 was laid off because I initially refused to use AI in any capacity. The perhaps
-unfortunate reality is that any software you've used in the last two years has
-incorporated AI assistance in some capacity. This document is meant to provide
-transparency about the exact level of involvement in each process. I know my
-craft and I am confident in the code.
+unfortunate reality is that 100% of the software you've used in the last two 
+years has incorporated AI assistance in some capacity. This document is meant
+to provide transparency about the exact level of involvement in each process. 
+I know my craft and I am confident in the code. You're welcome to not use it 
+if you refuse to use AI generated code, but to be consistent, you'd need to 
+also stop using the internet or any standalone software that has been updated
+after 2024.
 
 ## Architecture
 
-No involvement. Honestly, there was not much to architect. Proteus is not
-complicated. My initial design principle would be that it would basically just
-be a headless filesystem watcher. The user should be able to install and
-manipulate overlays mods using all the standard mod management tools like
-penumbra priorities and glamourer designs.
+No involvement. 100% of the designs and algorithms were done by me.
 
 ## Design
 
@@ -49,21 +51,19 @@ I know looks like it was designed by a backend dev because it was.
 
 ## Implementation
 
-Assist. As this was my first plugin, I often queried Claude to learn and deeply
-understand plugin structure and interfaces. Boilerplate code and comments were
-generated in small, verifiable chunks using precise prompts. The core logic at
-the heart of the plugin was mostly done by hand, although some of the image
-manipulation functions were corrected by Claude in code review.
+Assist. If a computer can be used to type boilerplate code, generate rote
+tests, documentation and standard deployment scripts in a way that frees me to
+get back to creating art, it is serving the greater good.
 
 ## Testing
 
-Pair. Test description and coverage were decided by human and carefully
-reviewed after. Test code was implemented by Claude.
+Pair. Non-shipping test code was implemented by Claude.
 
 ## Documentation
 
 Assist. An initial draft of the user guides was generated with a detailed
-prompt and analysis of the code, then hand edited.
+prompt and analysis of the code, then hand edited. This allows me to offer
+documentation in multiple languages.
 
 ## Review
 
