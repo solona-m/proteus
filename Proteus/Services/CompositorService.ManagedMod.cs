@@ -330,12 +330,14 @@ public partial class CompositorService
     internal bool IsManagedAlias(string folder)
         => _managedAliases.Any(a => string.Equals(a, folder, StringComparison.OrdinalIgnoreCase));
 
-    /// <summary>Treat <paramref name="folder"/> as Proteus's own output until <see cref="RemoveManagedAlias"/>.</summary>
+    /// <summary>
+    /// Treat <paramref name="folder"/> as Proteus's own output until <see cref="RemoveManagedAlias"/>. The upstream
+    /// memo is kept: while the copy is on it masks every base, and the memo is the only record of the real ones.
+    /// </summary>
     internal void AddManagedAlias(string folder)
     {
         lock (_aliasLock)
             if (!IsManagedAlias(folder)) _managedAliases = [.. _managedAliases, folder];
-        InvalidateUpstreamCache($"managed alias {folder}");
     }
 
     /// <summary>Stop treating <paramref name="folder"/> as ours: its copy is switched off, so nothing resolves into it.</summary>

@@ -310,6 +310,9 @@ public sealed class HatCompatWatcher : IDisposable
 
         patchedInMod = HatCompatService.PatchedCount(target.ModRoot);
 
+        // A rename that landed since the check at the top: the target may name the new folder and the undo the old.
+        if (penumbra.MovePending) { RequestWalkIn(WalkDebounceMs); return; }
+
         // Undo holds only until a different hairstyle is worn.
         if (undone != null && undone != Identity(target)) undone = null;
 

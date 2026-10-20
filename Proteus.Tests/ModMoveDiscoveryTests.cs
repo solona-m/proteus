@@ -34,6 +34,25 @@ public class ModMoveDiscoveryTests
 
     [Fact]
     [Trait("Plan", "AC-mod-rename-1")]
+    public void MoveEntry_drops_a_stale_entry_for_the_new_folder()
+    {
+        var moved = CompositorService.MoveEntry([Entry("Old"), Entry("New", "stale")], "Old", "New", Root, null)!;
+        Assert.Single(moved);
+        Assert.Equal("New", moved[0].ModDirectory);
+        Assert.Equal("Old", moved[0].ModName);
+    }
+
+    [Fact]
+    [Trait("Plan", "EDGE-mod-rename-17")]
+    public void A_folder_counts_as_vanished_only_on_two_probes_in_a_row()
+    {
+        Assert.Empty(CompositorService.StillMissing([], ["Old"]));
+        Assert.Equal(["Old"], CompositorService.StillMissing(["old"], ["Old"]));
+        Assert.Empty(CompositorService.StillMissing(["Old"], []));
+    }
+
+    [Fact]
+    [Trait("Plan", "AC-mod-rename-1")]
     public void MoveEntry_keeps_the_name_when_penumbra_gave_none()
         => Assert.Equal("Old name", CompositorService.MoveEntry(List(), "Old", "New", Root, null)![1].ModName);
 
@@ -307,6 +326,7 @@ public class ModMoveDiscoveryTests
 
         Assert.True(CompositorService.IsOwnOutputCore(Path.Combine(Root, "Proteus 2", "textures", "skin.tex"), managed, aliases));
         Assert.False(CompositorService.IsOwnOutputCore(Path.Combine(Root, "ProteusX", "textures", "skin.tex"), managed, aliases));
+        Assert.False(CompositorService.IsOwnOutputCore(Path.Combine(Root, "Proteus 2b", "x.tex"), managed, aliases));
         Assert.False(CompositorService.IsOwnOutputCore(Path.Combine(Root, "Body", "skin.tex"), managed, aliases));
         Assert.Null(CompositorService.IsOwnOutputCore(null, managed, aliases));
     }

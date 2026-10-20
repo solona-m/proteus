@@ -185,7 +185,7 @@ public sealed class ModMoveService : IDisposable
         {
             CompositorResult? result = null;
             string? notRun;
-            try { (result, notRun) = await compositor.FullRefreshAsync(TimeSpan.FromSeconds(60)).ConfigureAwait(false); }
+            try { (result, notRun) = await compositor.FullRefreshAsync(TimeSpan.FromSeconds(60), keepUpstreams: true).ConfigureAwait(false); }
             catch (Exception ex) { notRun = ex.Message; }
 
             await Plugin.Framework.RunOnFrameworkThread(() =>

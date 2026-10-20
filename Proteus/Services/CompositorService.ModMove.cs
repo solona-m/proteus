@@ -193,6 +193,11 @@ public partial class CompositorService
     private const int NameProbeIntervalMs = 2000;
     private int _nameProbeRunning;
     private long _lastNameProbeTick;
+    private List<string> _missingLastProbe = [];   // touched only by the single-flight probe
+
+    /// <summary>The folders missing from Penumbra's list on this probe that were missing on the last one too.</summary>
+    internal static List<string> StillMissing(IReadOnlyCollection<string> last, IReadOnlyCollection<string> now)
+        => now.Where(d => last.Any(l => ModMoveMigration.Same(l, d))).ToList();
 
     /// <summary>
     /// Pick up display names changed in Penumbra, for a tab showing the mod list. Safe to call every frame: one quiet
@@ -214,7 +219,10 @@ public partial class CompositorService
             {
                 if (_disposed || penumbra.GetAllModsQuiet() is not { Count: > 0 } names) return;
                 var snapshot = LastDiscovered;
-                var next = WithNames(snapshot, names, out var vanished);
+                var next = WithNames(snapshot, names, out var missing);
+                // Missing on two probes in a row: one answer can be a list Penumbra is still re-reading.
+                var vanished = StillMissing(_missingLastProbe, missing);
+                _missingLastProbe = missing;
                 if (vanished.Count > 0)
                 {
                     var found = discovery.DiscoverAll();
