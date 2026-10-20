@@ -70,6 +70,7 @@ public sealed class Plugin : IDalamudPlugin
     private readonly HatCompatWatcher hatCompat;
     private readonly HairPortWatcher hairPort;
     private readonly AutoRefitWatcher autoRefit;
+    private readonly ModMoveService modMoves;
     private readonly Gui.ProteusFonts fonts;
     private readonly Localization.LocSetup loc;
     private readonly ColorTableHighlighter highlighter;
@@ -228,6 +229,10 @@ public sealed class Plugin : IDalamudPlugin
         autoRefit = new AutoRefitWatcher(compositor, penumbra, glamourer, designBindings, uvRemap,
                                          path => textureLoader.LoadRawFile(null, path), config, log, dataDir);
         partsPanel.UseBodyIndex(autoRefit.Index);
+
+        // A mod renamed in Penumbra: every owner of per-mod state follows it, in one fixed order.
+        modMoves = new ModMoveService(penumbra, config, presets, designBindings, compositor, hatCompat, hairPort,
+                                      autoRefit, log);
 
         statusWindow = new StatusWindow(compositor, discovery, penumbra, config, designBindings,
             presets, editRouter, uvMapDl, uvRemap,
@@ -520,6 +525,7 @@ public sealed class Plugin : IDalamudPlugin
         fonts.Dispose();
         ipcProvider.Dispose();
         designWatcher.Dispose();
+        modMoves.Dispose();   // before every service it calls
         designBindings.PresetsSuperseded -= presets.ClearAllApplied;
         presets.Dispose();
         designBindings.Dispose();

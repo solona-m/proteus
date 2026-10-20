@@ -48,7 +48,14 @@ public class PenumbraBridge : IDisposable
     private readonly EventSubscriber<ModSettingChange, Guid, string, bool> modSettingChangedSub;
     private readonly EventSubscriber<string> modAddedSub;
     private readonly EventSubscriber<string> modDeletedSub;
+    private readonly EventSubscriber<string, string> modMovedSub;
     private readonly EventSubscriber<nint, int> gameObjectRedrawnSub;
+
+    /// <summary>Renames Penumbra reported that <see cref="ModMoved"/> has not yet been raised for (see <see cref="MovePending"/>).</summary>
+    private int pendingMoves;
+
+    /// <summary>Cancels the deferred <see cref="ModMoved"/> raises still queued when the plugin unloads.</summary>
+    private readonly CancellationTokenSource disposing = new();
     private readonly EventSubscriber initializedSub;
     private readonly EventSubscriber disposedSub;
 
@@ -72,6 +79,21 @@ public class PenumbraBridge : IDisposable
     public event Action<ModSettingChange, Guid, string, bool>? ModSettingChanged;
     public event Action<string>? ModAdded;
     public event Action<string>? ModDeleted;
+
+    /// <summary>
+    /// A mod renamed in Penumbra (old folder, new folder), raised on the framework thread one tick after Penumbra
+    /// reports it — never inline, even when Penumbra reports it on the framework thread. Penumbra raises it from
+    /// inside its own subscribers' loop, before its collections and caches are guaranteed to have caught up; a tick
+    /// later every one of them has, and nothing written back into Penumbra lands inside its dispatch.
+    /// </summary>
+    public event Action<string, string>? ModMoved;
+
+    /// <summary>
+    /// A rename has been reported and <see cref="ModMoved"/> not yet raised for it. Anything that reads the worn mods
+    /// against what it remembered by folder waits while this holds, or it would see a renamed piece as new.
+    /// </summary>
+    public bool MovePending => Volatile.Read(ref pendingMoves) > 0;
+
     /// <summary>Fired when the collection assigned to the local player changes.</summary>
     public event Action? PlayerCollectionChanged;
     /// <summary>Fired on the framework thread each time the local player's draw object is redrawn.</summary>
@@ -127,6 +149,7 @@ public class PenumbraBridge : IDisposable
             modDir => ModAdded?.Invoke(modDir));
         modDeletedSub = Penumbra.Api.IpcSubscribers.ModDeleted.Subscriber(pluginInterface,
             modDir => ModDeleted?.Invoke(modDir));
+        modMovedSub = Penumbra.Api.IpcSubscribers.ModMoved.Subscriber(pluginInterface, OnModMoved);
         gameObjectRedrawnSub = Penumbra.Api.IpcSubscribers.GameObjectRedrawn.Subscriber(pluginInterface, OnGameObjectRedrawn);
         initializedSub = Penumbra.Api.IpcSubscribers.Initialized.Subscriber(pluginInterface, OnPenumbraInitialized);
         disposedSub    = Penumbra.Api.IpcSubscribers.Disposed.Subscriber(pluginInterface, OnPenumbraDisposed);
@@ -145,6 +168,33 @@ public class PenumbraBridge : IDisposable
     {
         IsAvailable = false;
     }
+
+    // Any thread (Penumbra's caller's). Never blocks it: the raise is posted, not awaited.
+    private void OnModMoved(string oldDir, string newDir)
+    {
+        if (disposing.IsCancellationRequested) return;
+        Interlocked.Increment(ref pendingMoves);
+        try
+        {
+            Dispatch(() =>
+            {
+                try
+                {
+                    if (!disposing.IsCancellationRequested) ModMoved?.Invoke(oldDir, newDir);
+                }
+                catch (Exception ex) { log.Error(ex, "[Proteus] handling the rename of {0} to {1} failed", oldDir, newDir); }
+                finally { Interlocked.Decrement(ref pendingMoves); }
+            }, run => _ = Plugin.Framework.RunOnTick(run, delayTicks: 1, cancellationToken: disposing.Token));
+        }
+        catch (Exception ex)
+        {
+            Interlocked.Decrement(ref pendingMoves);
+            log.Error(ex, "[Proteus] could not queue the rename of {0} to {1}", oldDir, newDir);
+        }
+    }
+
+    /// <summary>How a Penumbra event is handed on: always posted to a later framework tick, never run inline.</summary>
+    internal static void Dispatch(Action run, Action<Action> postNextTick) => postNextTick(run);
 
     // Penumbra redraws a character when its assigned collection changes. There is no dedicated
     // collection-changed event, so on the local player's redraw we compare the effective
@@ -184,7 +234,23 @@ public class PenumbraBridge : IDisposable
     {
         if (!IsAvailable) return null;
         try { return getModList.Invoke(); }
-        catch (Exception ex) { log.Error(ex, "GetModList failed"); return null; }
+        catch (Exception ex) { LogModListFailure(log, ex, quiet: false); return null; }
+    }
+
+    /// <summary>
+    /// <see cref="GetAllMods"/> for a poll: a failure is logged at Debug, since the same call repeats seconds later.
+    /// </summary>
+    public Dictionary<string, string>? GetAllModsQuiet()
+    {
+        if (!IsAvailable) return null;
+        try { return getModList.Invoke(); }
+        catch (Exception ex) { LogModListFailure(log, ex, quiet: true); return null; }
+    }
+
+    internal static void LogModListFailure(IPluginLog log, Exception ex, bool quiet)
+    {
+        if (quiet) log.Debug("GetModList failed: {0}", ex.Message);
+        else log.Error(ex, "GetModList failed");
     }
 
     public string? GetModDirectory()
@@ -697,6 +763,8 @@ public class PenumbraBridge : IDisposable
         modSettingChangedSub.Dispose();
         modAddedSub.Dispose();
         modDeletedSub.Dispose();
+        modMovedSub.Dispose();
+        disposing.Cancel();
         gameObjectRedrawnSub.Dispose();
         initializedSub.Dispose();
         disposedSub.Dispose();

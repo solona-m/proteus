@@ -183,8 +183,9 @@ public sealed class HatCompatWatcher : IDisposable
         long due = Interlocked.Read(ref walkDueAt);
         if (due == 0 || Environment.TickCount64 < due) return;
 
-        // An examination is running; leave the request standing for a later frame.
-        if (Volatile.Read(ref busy) != 0) return;
+        // An examination is running, or a rename is still on its way to the undo it may move; leave the request standing
+        // for a later frame.
+        if (Volatile.Read(ref busy) != 0 || penumbra.MovePending) return;
 
         // Claim THIS request only; a newer signal's timestamp stays in place.
         Interlocked.CompareExchange(ref walkDueAt, 0, due);
@@ -292,6 +293,10 @@ public sealed class HatCompatWatcher : IDisposable
 
     private void ExamineCore(bool mayApply)
     {
+        // A rename not handled yet: the hairstyle's identity has its new folder, the undo still the old one, and the
+        // check below would drop the undo. Look again once it is handled (OnModMoved asks).
+        if (penumbra.MovePending) return;
+
         // Nothing that matters has changed: cheap on purpose, since Penumbra settings changes arrive in bursts.
         var live = livePartsCache;
         var key = live != null ? compositor.HatCompatKeyFor(live) : compositor.HatCompatKey();
@@ -368,6 +373,17 @@ public sealed class HatCompatWatcher : IDisposable
         // changed during a delay. No hat, no write: putting one on changes the key above and brings us back.
         if (mayApply && hatWorn && config.PluginEnabled && config.AutoHatCompat && !proposal.AlreadyCompatible)
             Write(target, proposal, automatic: true);
+    }
+
+    /// <summary>
+    /// A mod renamed in Penumbra: an undone hairstyle in it stays undone under the new folder. Called by
+    /// <see cref="ModMoveService"/> with the mod root the hairstyle's identity was built from.
+    /// </summary>
+    public void OnModMoved(string oldDir, string newDir, string modsRoot)
+    {
+        undone = ModMoveMigration.HatIdentity(undone, modsRoot, oldDir, newDir);
+        lastKey = null;
+        RequestWalk();
     }
 
     /// <summary>Which hairstyle this is, independent of anything an edit to it would change.</summary>

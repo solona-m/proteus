@@ -72,7 +72,8 @@ public partial class CompositorService
         // re-enables already-enabled mods after each redraw, which would otherwise loop RedrawPlayer() → this.
         if (sidecar && change is ModSettingChange.EnableState or ModSettingChange.MultiEnableState)
         {
-            var current = discovery.DiscoverAll();
+            // Remapped like the list it is compared with: a discovery from before a rename is no change.
+            var current = Ledgered(discovery.DiscoverAll());
             if (current.Count == 0) return;
             if (DiscoveredSetsEqual(current, LastDiscovered)) return;
             LastDiscovered = current;
@@ -155,6 +156,8 @@ public partial class CompositorService
 
     private void OnModAdded(string modDir)
     {
+        // A folder in use again: nothing is remapped away from it any more.
+        _moveLedger.Forget(modDir);
         // A mod the auto refit just made: its composites wait for the batch's end.
         bool own = IsOwnRefitWrite(modDir);
         // A (re)install almost always rewrites the mod's files — evict any stale cached decodes for it.
@@ -593,7 +596,7 @@ public partial class CompositorService
 
         // Glamourer applied a design / reset / reapplied state on the local player.
         // Diff the discovered set against the last known set — only recomposite if something changed.
-        var current = discovery.DiscoverAll();
+        var current = Ledgered(discovery.DiscoverAll());
 
         // Empty means Penumbra's IPC is temporarily unavailable: no information, not no mods.
         if (current.Count == 0) return;
