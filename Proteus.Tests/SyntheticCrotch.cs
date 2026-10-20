@@ -417,8 +417,9 @@ internal static class SyntheticCrotch
         return world;
     }
 
-    /// <summary>Cloth triangles whose posed face turned more than a right angle from its bind face.</summary>
-    internal static int Folded(byte[] mdl, Vector3[] posed)
+    /// <summary>Cloth triangles whose posed face turned more than a right angle from its bind face, or collapsed to
+    /// nothing; with <paramref name="where"/>, only those all of whose corners it holds for.</summary>
+    internal static int Folded(byte[] mdl, Vector3[] posed, Func<Vector3, bool>? where = null)
     {
         var parts = ModelPartReader.Read(mdl)!;
         var bind = Positions(mdl);
@@ -427,10 +428,11 @@ internal static class SyntheticCrotch
             for (int t = 0; t + 2 < part.Triangles.Length; t += 3)
             {
                 int a = part.Triangles[t], b = part.Triangles[t + 1], c = part.Triangles[t + 2];
+                if (where != null && !(where(bind[a]) && where(bind[b]) && where(bind[c]))) continue;
                 var n0 = Vector3.Cross(bind[b] - bind[a], bind[c] - bind[a]);
                 var n1 = Vector3.Cross(posed[b] - posed[a], posed[c] - posed[a]);
-                if (n0.LengthSquared() < 1e-14f || n1.LengthSquared() < 1e-14f) continue;
-                if (Vector3.Dot(n0, n1) < 0f) folded++;
+                if (n0.LengthSquared() < 1e-14f) continue;
+                if (n1.LengthSquared() < 1e-14f || Vector3.Dot(n0, n1) < 0f) folded++;
             }
         return folded;
     }

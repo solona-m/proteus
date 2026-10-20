@@ -206,6 +206,7 @@ public class CrotchWeightsLocalTests(ITestOutputHelper output)
     {
         // [AC-crotch-leg-weights-9] [AC-crotch-leg-weights-3] Pants down the legs onto Rue and Neolithe: the crotch seam
         // stays with the legs.
+        int compared = 0;
         foreach (var (mod, rel) in new[]
                  {
                      (Scarlet, "pant size/neolithe m/chara/equipment/e0041/model/c0201e0041_dwn.mdl"),
@@ -223,7 +224,10 @@ public class CrotchWeightsLocalTests(ITestOutputHelper output)
                 output.WriteLine($"{Path.GetFileName(LocalData.Path(mod))} onto {target.Dir}:");
                 foreach (var line in eased.Log.Where(l => l.StartsWith("crotch:", StringComparison.Ordinal))) output.WriteLine("  " + line);
                 Same(eased, before);
+                Assert.Contains(eased.Log, l => l.Contains("left on the legs", StringComparison.Ordinal));
+                compared++;
             }
+        Assert.True(compared > 0, "no pair of these pants was refitted between bodies: nothing was compared");
     }
 
     [LocalDataTheory(Swimsuit, Bibo, FixPubes, Rue, Neolithe)]

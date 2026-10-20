@@ -84,9 +84,9 @@ public class CrotchWeightsTests
         Assert.True(was > 0.15f, $"the gusset only stretched {was:P0} without the ease: the test does not bite");
         Assert.True(now <= 0.25f * was, $"eased, the gusset still stretched {now:P0} against {was:P0}");
 
-        // No new folds, spread or sitting.
+        // No gusset triangle folds or collapses, spread or sitting.
         foreach (var pose in new[] { Pose(Spread), Pose(Sit) })
-            Assert.True(Folded(eased.Rebuilt, Posed(eased.Rebuilt, pose)) <= Folded(before.Rebuilt, Posed(before.Rebuilt, pose)));
+            Assert.Equal(0, Folded(eased.Rebuilt, Posed(eased.Rebuilt, pose), Gusset));
     }
 
     [Fact]
@@ -351,7 +351,8 @@ public class CrotchWeightsTests
         var log = new List<string>();
         BodyRetarget.Plan(ModelPartReader.Read(garment)!, garment, [Pair(body, body)], "_dwn", acrossBodies: true,
                           log: log.Add);
-        Assert.Contains(log, l => l.StartsWith("crotch: anchored at 800 mm", StringComparison.Ordinal));
+        Assert.Contains(log, l => l.StartsWith("crotch: anchored at 800 mm", StringComparison.Ordinal)
+                                  && l.Contains(" on _dwn; scale ", StringComparison.Ordinal));
         Assert.Contains(log, l => l.StartsWith("crotch: ", StringComparison.Ordinal) && l.EndsWith("eased off them", StringComparison.Ordinal));
         Assert.Contains(log, l => l.Contains("left on the legs: ", StringComparison.Ordinal) && l.Contains(" mm sideways", StringComparison.Ordinal));
     }
@@ -429,6 +430,7 @@ public class CrotchWeightsTests
         // [EDGE-crotch-leg-weights-4] A lace layer 2 mm over the gusset, weighted as it.
         var garment = Garment([.. Briefs, new(Perineum, 0.003f, OwnMesh: true)]);
         var eased = Refit(garment);
+        var before = Refit(garment, ease: false);
         var at = Positions(garment);
         var outer = Where(garment, p => MathF.Abs(p.Y - (Crotch - 0.003f)) < 0.0005f);
         Assert.NotEmpty(outer);
@@ -437,6 +439,11 @@ public class CrotchWeightsTests
             int inner = Where(garment, p => MathF.Abs(p.Y - (Crotch - 0.001f)) < 0.0005f
                                             && MathF.Abs(p.X - at[v].X) < 1e-4f && MathF.Abs(p.Z - at[v].Z) < 1e-4f).Single();
             Same(eased.Weights, [.. eased.Weights.Select((_, i) => i == v ? eased.Weights[inner] : eased.Weights[i])], [v]);
+            // And eased, both: identical but left on the legs would pass the line above.
+            if (at[v].Z >= 0f && MathF.Abs(at[v].X) <= 0.03f)
+                foreach (int u in new[] { v, inner })
+                    Assert.True(Legs(eased.Weights[u]) <= 0.1f * Legs(before.Weights[u]) + Tol,
+                                $"layer vertex {u}: {Legs(eased.Weights[u])} of {Legs(before.Weights[u])}");
         }
     }
 

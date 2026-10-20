@@ -75,7 +75,8 @@ internal static partial class BodyRetarget
     /// <param name="Scale">The crotch's height over <see cref="CrotchReferenceHeight"/>, clamped to 0.4-1.5: what every
     /// extent of the ease is multiplied by.</param>
     /// <param name="At">The crotch point itself.</param>
-    internal readonly record struct CrotchAnchor(float Y, float MidX, float Scale, Vector3 At);
+    /// <param name="Body">Which of the bodies it was found on, as <see cref="FindCrotch"/> was given them.</param>
+    internal readonly record struct CrotchAnchor(float Y, float MidX, float Scale, Vector3 At, int Body = 0);
 
     /// <summary>Each thigh's share of a set of influences: left, right.</summary>
     private static (float Left, float Right) Thighs(IEnumerable<(string Bone, float W)> influences)
@@ -103,7 +104,7 @@ internal static partial class BodyRetarget
     internal static CrotchAnchor? FindCrotch(IReadOnlyList<(ModelParts Body, XivLiveMesh.SkinnedMesh Skin)> bodies)
     {
         // Per body: its skin welded by place, each place's share of each thigh, and which places its triangles join.
-        var shared = new List<(Vector3 P, float Even)>();
+        var shared = new List<(Vector3 P, float Even, int Body)>();
         var welded = new List<(Vector3[] At, float[] L, float[] R, HashSet<int>[] Next)>();
         foreach (var (body, skin) in bodies)
         {
@@ -145,7 +146,7 @@ internal static partial class BodyRetarget
                         next[nodeOf[b]].Add(nodeOf[a]);
                     }
             for (int n = 0; n < at.Count; n++)
-                if (l[n] >= CrotchAnchorThigh && r[n] >= CrotchAnchorThigh) shared.Add((at[n], MathF.Min(l[n], r[n])));
+                if (l[n] >= CrotchAnchorThigh && r[n] >= CrotchAnchorThigh) shared.Add((at[n], MathF.Min(l[n], r[n]), welded.Count));
             welded.Add((at.ToArray(), l.ToArray(), r.ToArray(), next));
         }
 
@@ -155,8 +156,10 @@ internal static partial class BodyRetarget
         // its edges all the same. Joined over the skin, so two thighs side by side below the crotch, two surfaces, never
         // meet. Not both ways at once: on a body that shares its crotch, the inner thigh beside it would pull it down.
         if (shared.Count > 0) return AnchorOn(shared);
-        var candidates = new List<(Vector3 P, float Even)>();
-        foreach (var (at, l, r, next) in welded)
+        var candidates = new List<(Vector3 P, float Even, int Body)>();
+        for (int body = 0; body < welded.Count; body++)
+        {
+            var (at, l, r, next) = welded[body];
             for (int n = 0; n < at.Length; n++)
             {
                 if (l[n] < CrotchAnchorThigh) continue;
@@ -183,23 +186,25 @@ internal static partial class BodyRetarget
                 if (best >= 0)
                 {
                     var mid = (at[n] + at[best]) / 2f;
-                    candidates.Add((mid with { Y = MathF.Max(at[n].Y, at[best].Y) }, MathF.Min(l[n], r[best])));
+                    candidates.Add((mid with { Y = MathF.Max(at[n].Y, at[best].Y) }, MathF.Min(l[n], r[best]), body));
                 }
             }
+        }
         return candidates.Count == 0 ? null : AnchorOn(candidates);
     }
 
     /// <summary>The crotch among the places the thighs meet, each weighted by how evenly — see <see cref="FindCrotch"/>.</summary>
-    private static CrotchAnchor? AnchorOn(List<(Vector3 P, float Even)> candidates)
+    private static CrotchAnchor? AnchorOn(List<(Vector3 P, float Even, int Body)> candidates)
     {
         float total = candidates.Sum(c => c.Even);
         float mid = candidates.Sum(c => c.P.X * c.Even) / total;
-        var onMid = candidates.Where(c => MathF.Abs(c.P.X - mid) <= 0.015f).Select(c => c.P).ToList();
+        var onMid = candidates.Where(c => MathF.Abs(c.P.X - mid) <= 0.015f).ToList();
         if (onMid.Count == 0) return null;
-        float low = onMid.Min(p => p.Y);
-        var band = onMid.Where(p => p.Y <= low + 0.01f).ToList();
-        var at = new Vector3(mid, low, band.Average(p => p.Z));
-        return new CrotchAnchor(low, mid, Math.Clamp(low / CrotchReferenceHeight, 0.4f, 1.5f), at);
+        var lowest = onMid.MinBy(c => c.P.Y);
+        float low = lowest.P.Y;
+        var band = onMid.Where(c => c.P.Y <= low + 0.01f).ToList();
+        var at = new Vector3(mid, low, band.Average(c => c.P.Z));
+        return new CrotchAnchor(low, mid, Math.Clamp(low / CrotchReferenceHeight, 0.4f, 1.5f), at, lowest.Body);
     }
 
     /// <summary>Whole within <paramref name="full"/>, gone at <paramref name="fade"/>, linear between.</summary>
@@ -346,7 +351,7 @@ internal static partial class BodyRetarget
             if (onLeft && onRight) break;
         }
         if (!onLeft || !onRight) return new CrotchOutcome(0, 0, 0, notes);
-        notes.Add($"anchored at {a.Y * 1000f:0} mm (x {a.MidX * 1000f:0}); scale {k:0.00}");
+        notes.Add($"anchored at {a.Y * 1000f:0} mm (x {a.MidX * 1000f:0}) on {pairs[a.Body].Slot}; scale {k:0.00}");
 
         // Pieces: one node per place, as SmoothWeights welds them, joined over the cloth's triangles.
         var piece = new int[vc];
