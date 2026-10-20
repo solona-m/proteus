@@ -495,27 +495,18 @@ public class OtherRaceWearerTests
         }
     }
 
+    /// <summary>A made-for mod, or none, is used as it is; the game is not read. (The game's own side is read race by
+    /// race in <c>OtherRaceRefitLocalTests</c>, against the real data: its body cache is the whole run's.)</summary>
     [Fact]
     [Trait("Plan", "EDGE-refit-race-down-3")]
-    public void A_game_made_for_side_below_is_read_race_by_race()
+    public void A_made_for_mod_below_is_used_as_it_is()
     {
         var asked = new List<string>();
-        BodySizeCatalog Own(string race)
-        {
-            asked.Add(race);
-            return new BodySizeCatalog("game", race == "0301" ? [Option("Vanilla", "c0301e0000_top.mdl", "0301")]
-                                                              : [Option("Vanilla", "c0101e0000_dwn.mdl", "0101", "_dwn")]);
-        }
-        var made = OtherRaceRefit.MadeForBelow(VanillaBodyCatalog.Key, null, null, 1501, 101, Own)!;
-        Assert.Equal(["1501", "0901", "0101"], asked);
-        Assert.Equal("game", made.ModRoot);
-        Assert.Equal(3, made.Options.Count);
-
-        // A made-for mod, or none, is used as it is.
+        byte[]? Read(string path) { asked.Add(path); return null; }
         var mod = new BodySizeCatalog("mod", []);
-        Assert.Same(mod, OtherRaceRefit.MadeForBelow("SomeBody", mod, null, 301, 101, Own));
-        Assert.Same(mod, OtherRaceRefit.MadeForBelow(null, null, mod, 301, 101, Own));
-        Assert.Equal(3, asked.Count);
+        Assert.Same(mod, OtherRaceRefit.MadeForBelow("SomeBody", mod, null, 301, 101, Read));
+        Assert.Same(mod, OtherRaceRefit.MadeForBelow(null, null, mod, 301, 101, Read));
+        Assert.Empty(asked);
     }
 
     [Fact]

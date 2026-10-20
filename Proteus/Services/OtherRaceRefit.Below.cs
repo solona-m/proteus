@@ -29,13 +29,14 @@ internal static partial class OtherRaceRefit
     /// is the game's — each race on the line read for its own body alone, so the body a Highlander draws bent is never
     /// taken for his own — else the made-for mod (or the refit-onto one, when they are the same).
     /// </summary>
-    /// <param name="ownGameBody">The game's own body for a race, and nothing it falls through to
-    /// (<see cref="VanillaBodyCatalog.Read"/>, not drawn); the framework thread's to call.</param>
+    /// <param name="readGame">Reads a game path out of the game's own data; asked, through
+    /// <see cref="VanillaBodyCatalog.Read"/>, for each race's own body and never the one it falls through to — so the
+    /// framework thread's to call.</param>
     internal static BodySizeCatalog? MadeForBelow(string? fromDir, BodySizeCatalog? fromCatalog, BodySizeCatalog? onto,
-                                                  ushort drawn, ushort to, Func<string, BodySizeCatalog> ownGameBody)
+                                                  ushort drawn, ushort to, Func<string, byte[]?> readGame)
     {
         if (fromDir != VanillaBodyCatalog.Key) return fromCatalog ?? onto;
-        var read = LineDown(drawn, to).Select(r => ownGameBody($"{r:D4}")).ToList();
+        var read = LineDown(drawn, to).Select(r => VanillaBodyCatalog.Read($"{r:D4}", readGame, drawn: false)).ToList();
         return new BodySizeCatalog(read.FirstOrDefault()?.ModRoot ?? VanillaBodyCatalog.Dir,
                                    read.SelectMany(c => c.Options).ToList());
     }

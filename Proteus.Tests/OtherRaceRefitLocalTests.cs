@@ -291,6 +291,23 @@ public class OtherRaceRefitLocalTests(ITestOutputHelper o)
                     + $"p95 {d[(int)(d.Length * 0.95)] * 1000f:F2} mm");
     }
 
+    /// <summary>
+    /// The game's own bodies on the made-for side of a refit down are each race's own: Au Ra women ship no body, so a
+    /// refit of an Au Ra woman's model down to Midlander women is made for the Midlander women's body alone — never that
+    /// body filed again as an Au Ra one, which the lowering would bend a second time.
+    /// </summary>
+    [LocalDataFact(LocalData.GameData)]
+    [Trait("Plan", "EDGE-refit-race-down-3")]
+    public void A_game_made_for_side_below_is_each_race_s_own_body()
+    {
+        var data = new Lumina.GameData(LocalData.Path(LocalData.GameData));
+        byte[]? Read(string path) => data.GetFile(path)?.Data;
+        var made = OtherRaceRefit.MadeForBelow(VanillaBodyCatalog.Key, null, null, 1401, 201, Read)!;
+        Assert.DoesNotContain(made.Options, o => BodySizeCatalog.RaceOf(o.GamePath) == "1401");
+        Assert.Contains(made.Options, o => BodySizeCatalog.RaceOf(o.GamePath) == "0201" && o.Slot == "_top");
+        Assert.Equal(VanillaBodyCatalog.Dir, made.ModRoot);
+    }
+
     private static Vector3 At(float[] p, int v) => new(p[v * 3], p[v * 3 + 1], p[v * 3 + 2]);
 
     /// <summary>

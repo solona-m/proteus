@@ -315,8 +315,7 @@ internal sealed partial class BodyRetargetPanel
         // Down to a race the drawn one falls through to, the game's bodies are each race's own: the one a Highlander
         // draws bent is the Midlander's, and bending it down again would bend it twice.
         var source = route.Lowered
-            ? OtherRaceRefit.MadeForBelow(fromBodyDir, fromCatalog, catalog, route.Drawn, route.To,
-                                          code => VanillaBodyCatalog.Read(code, readGameFile))
+            ? OtherRaceRefit.MadeForBelow(fromBodyDir, fromCatalog, catalog, route.Drawn, route.To, readGameFile)
             : OtherRaceRefit.MadeFor(fromBodyDir, fromCatalog, catalog, drawnCode,
                                      code => VanillaBodyCatalog.Read(code, readGameFile, drawn: true));
         // Only the parts the refit-onto mod has a body of the race for take part (see Onto), so only those are bent.
