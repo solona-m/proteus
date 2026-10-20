@@ -271,8 +271,8 @@ internal sealed partial class MeshVolumeSolve
         var judged = JudgedSkin(start, movedSkin);
         int pass = 0;
         var moving = new HashSet<int>(movedSkin);
-        // What the operation itself moved, fixed before the guard lifts anything: its own lifts must not widen what it
-        // may judge into cloth an earlier stroke placed.
+        // What the operation moved — its riders' floor included — fixed before the face passes lift anything: their own
+        // lifts must not widen what they may judge into cloth an earlier stroke placed.
         var opMoved = new HashSet<int>();
         foreach (var (n, was) in start)
             if (nodeDelta[n] != was.Delta) opMoved.Add(n);

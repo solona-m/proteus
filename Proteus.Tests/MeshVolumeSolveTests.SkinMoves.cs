@@ -1120,6 +1120,75 @@ public partial class MeshVolumeSolveTests
         Assert.Equal(0, Folded(l.Model, after));
     }
 
+    /// <summary>The cloth strip across the centre of a <see cref="Layered"/> centred sheet: |X| ≤ 20 mm.</summary>
+    private static IEnumerable<int> CentreStrip(Layers l)
+    {
+        var at = l.Model.Positions;
+        var cloth = l.Model.Parts[0].Triangles;
+        return Enumerable.Range(0, cloth.Length / 3)
+                         .Where(t => Enumerable.Range(0, 3).All(k => MathF.Abs(At(at, cloth[t * 3 + k]).X) <= 0.0201f))
+                         .SelectMany(t => new[] { cloth[t * 3], cloth[t * 3 + 1], cloth[t * 3 + 2] });
+    }
+
+    /// <summary>
+    /// Picked cloth lying on picked skin keeps its mirror: the strip's cloth over the picked skin takes the symmetric
+    /// part like the rest of the strip, not the skin's own drag.
+    /// </summary>
+    [Fact]
+    [Trait("Plan", "AC-studio-move-skin-3")]
+    [Trait("Plan", "EDGE-studio-move-skin-17")]
+    public void PickedClothOnPickedSkinKeepsItsMirror()
+    {
+        var l = Layered(21, 0.001f, centred: true);
+        var solve = SkinSolve(l.Model);
+        var at = l.Model.Positions;
+        var skinSide = l.Model.Parts[1].Triangles.Where(v => At(at, v).X > 0.005f);
+        Assert.True(solve.BeginMove(CentreStrip(l).Concat(skinSide), adjacent: false, falloffRadius: 0f,
+                                    mirror: new MeshVolumeSolve.MoveMirror(MeshVolumeSolve.MoveKind.Translate,
+                                                                           At(at, l.SkinAt[10, 10]))) > 0);
+        Assert.Equal(MeshVolumeSolve.MirrorMode.Centred, solve.DragMirror?.Mode);
+        var offset = new Vector3(0.002f, 0.004f, 0f);
+        solve.MoveTo(offset);
+        solve.EndMove();
+
+        var after = solve.Positions();
+        // ClothAt[12, 5] is strip cloth (X = 20 mm) over picked skin.
+        Assert.True(Vector3.Distance(MirrorMotion.CentredOffset(offset), Moved(l.Model, after, l.ClothAt[12, 5])) < 1e-5f);
+        Assert.True(Vector3.Distance(offset, Moved(l.Model, after, l.SkinAt[12, 5])) < 1e-5f);
+    }
+
+    /// <summary>
+    /// A mirrored Rotate about a slanted axis, centred: the picked skin turns by the whole rotation, and its normals turn
+    /// with it — not by the symmetric part the strip keeps, which would be written into the mod as wrong shading.
+    /// </summary>
+    [Fact]
+    [Trait("Plan", "AC-studio-move-skin-3")]
+    [Trait("Plan", "EDGE-studio-move-skin-17")]
+    public void AMirroredRotateTurnsPickedSkinNormalsByTheWholeTurn()
+    {
+        var l = Layered(21, 0.001f, centred: true);
+        var solve = SkinSolve(l.Model);
+        var at = l.Model.Positions;
+        var skinSide = l.Model.Parts[1].Triangles.Where(v => At(at, v).X > 0.045f);
+        var pivot = At(at, l.SkinAt[10, 10]);
+        Assert.True(solve.BeginMove(CentreStrip(l).Concat(skinSide), adjacent: false, falloffRadius: 0f,
+                                    mirror: new MeshVolumeSolve.MoveMirror(MeshVolumeSolve.MoveKind.Rotate, pivot)) > 0);
+        Assert.Equal(MeshVolumeSolve.MirrorMode.Centred, solve.DragMirror?.Mode);
+        var axis = Vector3.Normalize(new Vector3(0.6f, 0f, 0.8f));
+        var turn = Matrix4x4.CreateTranslation(-pivot) * Matrix4x4.CreateFromAxisAngle(axis, 0.1f)
+                   * Matrix4x4.CreateTranslation(pivot);
+        solve.TransformTo(turn);
+        solve.EndMove();
+
+        var expected = Vector3.Normalize(Vector3.TransformNormal(Vector3.UnitY, turn));
+        var n = solve.NormalAt(l.SkinAt[17, 10]);
+        Assert.True(Vector3.Distance(expected, Vector3.Normalize(new Vector3(n.X, n.Y, n.Z))) < 1e-3f,
+                    $"picked skin's normal is {n}, the turn gives {expected}");
+        var s = solve.NormalAt(l.ClothAt[10, 10]);
+        Assert.True(Vector3.Distance(expected, Vector3.Normalize(new Vector3(s.X, s.Y, s.Z))) > 1e-2f,
+                    "the strip should keep only the symmetric part of the turn");
+    }
+
     [Fact]
     [Trait("Plan", "EDGE-studio-move-skin-24")]
     public void AttachFollowIgnoresAnotherSolvesBinding()

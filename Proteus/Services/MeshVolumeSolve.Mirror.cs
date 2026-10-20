@@ -315,7 +315,8 @@ internal sealed partial class MeshVolumeSolve
     {
         switch (moveMode)
         {
-            case MirrorMode.Centred: return MapCentred;
+            // Skin (and the cloth riding it) is never mirrored: it took the drag itself.
+            case MirrorMode.Centred: return moveDirectOnly.Contains(n) ? MapDirect : MapCentred;
             case MirrorMode.Sides:
                 return moveMapId.TryGetValue(n, out int id) ? id : MapNone;
             default: return MapDirect;

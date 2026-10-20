@@ -1454,7 +1454,7 @@ internal sealed partial class MeshVolumeSolve : IMeshEdit
             if (plan is { } planned)
                 foreach (int n in into.Keys)
                     if (!skin[n] && !planned.Seeds.Contains(n)
-                        && follow.CornersOf(n).Any(c => planned.DirectOnly.Contains(c.Skin) && skin[c.Skin]))
+                        && follow.CornersOf(n).Any(c => planned.DirectOnly.Contains(c.Skin)))
                         planned.DirectOnly.Add(n);
         }
         return into.Count;
