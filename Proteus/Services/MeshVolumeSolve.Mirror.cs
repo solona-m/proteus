@@ -142,10 +142,16 @@ internal sealed partial class MeshVolumeSolve
         report = report with { Mode = mode };
         if (mode == MirrorMode.Off) return new MirrorPlan(mode, seeds, [], 1f, report);
 
-        // The match: partners and the far side's own region, of the pieces that have one.
+        // The match: partners and the far side's own region, of the pieces that have one. The report counts only
+        // matches that move with the drag: a piece with no mirror image keeps none.
         bool Keeps(int s) => Root(piece[s]) is var r && (Centred(r) || Matched(r));
         var match = new HashSet<int>();
-        foreach (var (s, p) in pairs.Partner) if (Keeps(s)) match.Add(p);
+        int paired = 0, held = 0;
+        foreach (var (s, p) in pairs.Partner)
+            if (Keeps(s)) { match.Add(p); paired++; }
+        foreach (int s in pairs.Held)
+            if (Keeps(s)) held++;
+        report = report with { Paired = paired + held, Held = held };
         foreach (var (m, s) in pairs.Reverse) if (Keeps(s)) match.Add(m);
 
         var all = new HashSet<int>(seeds);
@@ -241,6 +247,9 @@ internal sealed partial class MeshVolumeSolve
         else
         {
             float margin = MirrorMinX;
+            // Within this of the centre plane a node is on it: a centre seam an author or a refit left a hair off zero
+            // must not have its points sent alternately left and right.
+            float onPlane = 1e-3f * margin;
             foreach (var (n, w) in moveWeights)
             {
                 var p = Start(n);
@@ -251,7 +260,7 @@ internal sealed partial class MeshVolumeSolve
                     id = MapDirect;
                     step = Weighted(Step(p, false), w);
                 }
-                else if (p.X == 0f)
+                else if (MathF.Abs(p.X) <= onPlane)
                 {
                     // On the centre plane: the two sides' motions differ only in X, which they cancel.
                     id = MapNone;

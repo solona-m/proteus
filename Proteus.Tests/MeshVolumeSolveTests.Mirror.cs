@@ -578,6 +578,44 @@ public partial class MeshVolumeSolveTests
         Assert.Equal(Mode.Sides, report.Mode);
     }
 
+    /// <summary>
+    /// A piece with no mirror image, selected on the far side from the gizmo alongside one that has: with the falloff on,
+    /// the cloth it carries goes the way it goes — not the mirrored way its side would — so nothing tears between them.
+    /// </summary>
+    [Fact]
+    [Trait("Plan", "AC-mirror-move-tools-5")]
+    [Trait("Plan", "EDGE-mirror-move-tools-5")]
+    public void ClothAroundAnUnmatchedPieceGoesItsWay()
+    {
+        var mesh = new MirrorMesh();
+        var grid = mesh.Grid(Steps(-0.1f, 21), Steps(0f, 21));
+        var flap = mesh.Grid(Steps(-0.1f, 9), Steps(0.3f, 11));          // left only: nothing mirrors it
+        var model = mesh.Build();
+        var patch = Cells(grid, 14, 16, 8, 12);
+        var tab = Cells(flap, 2, 4, 2, 4);
+        var sel = patch.Concat(tab).ToArray();
+        var how = Mirrored(Kind.Translate, model.Positions, sel);
+        Assert.True(MathF.Abs(how.Pivot.X) < 0.0114f || how.Pivot.X > 0f, "the fixture's gizmo is meant on the +X side");
+
+        var solve = new MeshVolumeSolve(model);
+        solve.BeginMove(sel, true, 0.03f, mirror: how);
+        Assert.Equal(Mode.Sides, solve.DragMirror?.Mode);
+        var o = new Vector3(0.02f, 0f, 0f);
+        solve.MoveTo(o);
+        var after = solve.Positions();
+        foreach (int v in tab) AssertNear(At(model.Positions, v) + o, At(after, v), 1e-7f, "tab");
+        int carried = 0;
+        foreach (int v in All(flap))
+        {
+            float dx = At(after, v).X - At(model.Positions, v).X;
+            Assert.True(dx >= 0f, $"flap vertex {v} went {dx * 1000f:F2} mm the other way");
+            if (dx > 0f && !tab.Contains(v)) carried++;
+        }
+        Assert.True(carried > 0, "the falloff carried nothing around the tab");
+        var (folded, _) = FoldedTriangles(model, model.Positions, after);
+        Assert.Equal(0, folded);
+    }
+
     [Fact]
     [Trait("Plan", "AC-mirror-move-tools-5")]
     [Trait("Plan", "EDGE-mirror-move-tools-6")]
@@ -770,6 +808,15 @@ public partial class MeshVolumeSolveTests
         solve.MoveTo(new Vector3(0f, 0.002f, 0f));
         solve.EndMove();
 
+        // Lift both straps together: they match again, at their new place — found only by a search of where the right
+        // strap stands now, not where it stood when last searched.
+        solve.BeginMove(All(left).Concat(All(right)), false, 0f);
+        solve.MoveTo(new Vector3(0f, 0.05f, 0f));
+        solve.EndMove();
+        solve.BeginMove(All(left), false, 0f, mirror: Mirrored(Kind.Translate, solve.Positions(), All(left)));
+        Assert.Equal(All(left).Length, solve.DragMirror!.Value.Paired);
+        solve.EndMove();
+
         // Move the right strap well away: it no longer matches, whatever was found before.
         solve.BeginMove(All(right), false, 0f);
         solve.MoveTo(new Vector3(0f, 0.08f, 0f));
@@ -944,6 +991,62 @@ public partial class MeshVolumeSolveTests
             for (int v = 0; v < perBox; v++)
                 AssertNormal(Reflect(V(solve.NormalAt(v))), solve.NormalAt(v + perBox), 1e-5f, $"{kind}: after a stroke, vertex {v}");
         }
+    }
+
+    /// <summary>A centred turn about X gives the piece it carries whole the turn's own exact normals.</summary>
+    [Fact]
+    [Trait("Plan", "AC-mirror-move-tools-8")]
+    [Trait("Plan", "EDGE-mirror-move-tools-16")]
+    public void CentredTurnGivesTheTurnsNormals()
+    {
+        const int n = 21;
+        var model = Centred(n, (_, _) => 0f);
+        var pivot = new Vector3(0.02f, 0f, 0.1f);
+        var t = RotateGizmo.About(pivot, Vector3.UnitX, 0.3f);
+        var solve = new MeshVolumeSolve(model);
+        solve.BeginMove(model.Parts[0].Triangles, false, 0f, mirror: new MoveMirror(Kind.Rotate, pivot));
+        Assert.Equal(Mode.Centred, solve.DragMirror?.Mode);
+        solve.TransformTo(t);
+        Assert.True(solve.EndMove());
+        var expected = Vector3.Normalize(Vector3.TransformNormal(Vector3.UnitY, LinearNormals.NormalMap(t)!.Value));
+        foreach (int v in new[] { 10 * n + 10, 4 * n + 7, 16 * n + 7 })
+            AssertNormal(expected, solve.NormalAt(v), 1e-5f, $"vertex {v}");
+    }
+
+    /// <summary>
+    /// Cloth a turn gathers up at the centre was not carried by the turn itself, so it is given no exact normals of the
+    /// turn: it keeps the normals its own new shape gives it, as a falloff band does.
+    /// </summary>
+    [Fact]
+    [Trait("Plan", "AC-mirror-move-tools-8")]
+    [Trait("Plan", "EDGE-mirror-move-tools-16")]
+    public void ClothGatheredAtTheCentreKeepsItsShapesNormals()
+    {
+        const int n = 21;
+        var model = Centred(n, (i, j) => 0.004f * MathF.Sin(MathF.Abs(i - 10) * 0.9f + j * 0.7f));
+        var cup = Patch(n, 10, 20, 0, n - 1);
+        var pivot = BoundsCentre(model.Positions, cup);
+        var t = RotateGizmo.About(pivot, Vector3.UnitY, MathF.PI / 6f);
+        var solve = new MeshVolumeSolve(model);
+        solve.BeginMove(cup, false, 0f, mirror: new MoveMirror(Kind.Rotate, pivot));
+        Assert.Equal(Mode.Sides, solve.DragMirror?.Mode);
+        solve.TransformTo(t);
+        var after = solve.Positions();
+        var gathered = cup.Where(v => v / n > 10
+                                      && MathF.Abs(At(after, v).X - Vector3.Transform(At(model.Positions, v), t).X) > 1e-6f)
+                          .ToArray();
+        Assert.NotEmpty(gathered);
+        Assert.True(solve.EndMove());
+
+        var turned = TurnedNormalsOf(solve, model);
+        var mapped = Vector3.Normalize(Vector3.TransformNormal(Vector3.UnitY, LinearNormals.NormalMap(t)!.Value));
+        bool differs = false;
+        foreach (int v in gathered)
+        {
+            AssertNormal(V(turned[v]), solve.NormalAt(v), 1e-5f, $"gathered vertex {v}");
+            differs |= Vector3.Distance(mapped, V(solve.NormalAt(v))) > 1e-3f;
+        }
+        Assert.True(differs, "the gathered cloth's normals do not tell a record from none");
     }
 
     [Fact]

@@ -1359,10 +1359,13 @@ internal sealed partial class MeshVolumeSolve : IMeshEdit
         foreach (int n in seeds) into[n] = 1f;
 
         if (adjacent && falloffRadius > 0f)
-            foreach (var (n, d) in alongSurface ? AlongSurface(seeds, falloffRadius) : NearPart(seeds, falloffRadius))
+            foreach (var (n, d, from) in alongSurface ? AlongSurface(seeds, falloffRadius) : NearPart(seeds, falloffRadius))
             {
                 float w = Falloff(d / falloffRadius);
-                if (w > 0f) into[n] = w;
+                if (w <= 0f) continue;
+                into[n] = w;
+                // Cloth carried by a piece with no mirror image goes the way that piece goes, or the two would tear apart.
+                if (plan != null && plan.DirectOnly.Contains(from)) plan.DirectOnly.Add(n);
             }
         return into.Count;
     }
@@ -1413,15 +1416,18 @@ internal sealed partial class MeshVolumeSolve : IMeshEdit
     /// Every movable node outside <paramref name="seeds"/> reachable within <paramref name="radius"/> by walking the
     /// mesh's edges from one of them, with the shortest such walk, measured on the surface as it now stands. Dijkstra
     /// over the welded adjacency, so a walk crosses uv seams but never a gap between pieces. Skin and locked nodes are
-    /// walls: nothing that may not move is walked through to reach cloth beyond it.
+    /// walls: nothing that may not move is walked through to reach cloth beyond it. Each comes with the seed its walk
+    /// began at.
     /// </summary>
-    private List<(int Node, float Distance)> AlongSurface(HashSet<int> seeds, float radius)
+    private List<(int Node, float Distance, int Seed)> AlongSurface(HashSet<int> seeds, float radius)
     {
         var dist = new Dictionary<int, float>();
+        var from = new Dictionary<int, int>();
         var queue = new PriorityQueue<int, float>();
         foreach (int s in seeds)
         {
             dist[s] = 0f;
+            from[s] = s;
             queue.Enqueue(s, 0f);
         }
 
@@ -1438,27 +1444,28 @@ internal sealed partial class MeshVolumeSolve : IMeshEdit
                 if (next > radius) continue;
                 if (dist.TryGetValue(m, out float was) && was <= next) continue;
                 dist[m] = next;
+                from[m] = from[n];
                 queue.Enqueue(m, next);
             }
         }
 
-        var found = new List<(int, float)>(dist.Count);
+        var found = new List<(int, float, int)>(dist.Count);
         foreach (var (n, d) in dist)
-            if (!seeds.Contains(n)) found.Add((n, d));
+            if (!seeds.Contains(n)) found.Add((n, d, from[n]));
         return found;
     }
 
     /// <summary>
     /// Every movable node outside <paramref name="seeds"/> within <paramref name="radius"/> of one of them, with its
-    /// distance to the nearest, measured on the current surfaces. Grid-bucketed with a ring search.
+    /// distance to the nearest and that nearest seed, measured on the current surfaces. Grid-bucketed with a ring search.
     /// </summary>
-    private List<(int Node, float Distance)> NearPart(HashSet<int> seeds, float radius)
+    private List<(int Node, float Distance, int Seed)> NearPart(HashSet<int> seeds, float radius)
     {
-        var found = new List<(int, float)>();
+        var found = new List<(int, float, int)>();
         float cell = Math.Clamp(MathF.Max(MeanEdge * 2f, radius / 4f), 1e-4f, radius);
         int reach = (int)MathF.Ceiling(radius / cell);
 
-        var grid = new Dictionary<(int, int, int), List<Vec3>>();
+        var grid = new Dictionary<(int, int, int), List<(Vec3 At, int Seed)>>();
         var lo = new Vec3(float.MaxValue, float.MaxValue, float.MaxValue);
         var hi = new Vec3(float.MinValue, float.MinValue, float.MinValue);
         (int, int, int) CellOf(Vec3 p)
@@ -1469,7 +1476,7 @@ internal sealed partial class MeshVolumeSolve : IMeshEdit
             var p = Here(s);
             var key = CellOf(p);
             if (!grid.TryGetValue(key, out var list)) grid[key] = list = [];
-            list.Add(p);
+            list.Add((p, s));
             lo = new Vec3(MathF.Min(lo.X, p.X), MathF.Min(lo.Y, p.Y), MathF.Min(lo.Z, p.Z));
             hi = new Vec3(MathF.Max(hi.X, p.X), MathF.Max(hi.Y, p.Y), MathF.Max(hi.Z, p.Z));
         }
@@ -1485,7 +1492,7 @@ internal sealed partial class MeshVolumeSolve : IMeshEdit
 
             var (cx, cy, cz) = CellOf(p);
             float best = r2;
-            bool any = false;
+            int nearest = -1;
             for (int ring = 0; ring <= reach; ring++)
             {
                 for (int x = -ring; x <= ring; x++)
@@ -1494,18 +1501,18 @@ internal sealed partial class MeshVolumeSolve : IMeshEdit
                 {
                     if (Math.Max(Math.Abs(x), Math.Max(Math.Abs(y), Math.Abs(z))) != ring) continue;   // this shell only
                     if (!grid.TryGetValue((cx + x, cy + y, cz + z), out var near)) continue;
-                    foreach (var q in near)
+                    foreach (var (q, s) in near)
                     {
                         float dx = q.X - p.X, dy = q.Y - p.Y, dz = q.Z - p.Z;
                         float d2 = dx * dx + dy * dy + dz * dz;
-                        if (d2 < best) { best = d2; any = true; }
+                        if (d2 < best) { best = d2; nearest = s; }
                     }
                 }
                 // Every cell of the next ring is at least `ring` cells away, so nothing there can be nearer.
                 float shell = ring * cell;
-                if (any && best <= shell * shell) break;
+                if (nearest >= 0 && best <= shell * shell) break;
             }
-            if (any) found.Add((n, MathF.Sqrt(best)));
+            if (nearest >= 0) found.Add((n, MathF.Sqrt(best), nearest));
         }
         return found;
     }
