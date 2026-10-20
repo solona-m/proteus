@@ -41,6 +41,10 @@ internal static class LocalData
     /// skin, its chest skin cut away under the blouse — only an upper-chest patch left, its open edge above the bust.</summary>
     internal const string DeiGratiaPack = ModPacks + ":Dei Gratia v1.0.1.pmp";
 
+    /// <summary>"[YAS] Muse+": a Bibo-layout body whose SFW legs options model boxers (<c>mt_c0201e0000_dwn_b.mtrl</c>,
+    /// a sheet of their own) where the hips, butt and crotch skin would be — that skin is cut away under them.</summary>
+    internal const string MusePack = ModPacks + ":[YAS] Muse+.pmp";
+
     /// <summary>Bijeon's "Frost Veil Plus+": an invisible a0002 bracelet whose whole look is an item effect, in the v3 layout.</summary>
     internal const string FrostVeilPack = ModPacks + ":Frost Veil Plus+.pmp";
 
