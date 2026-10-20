@@ -2623,8 +2623,8 @@
     "message": "Une pièce déplacée suit toujours les os pour lesquels elle a été faite ; trop loin d'eux, elle peut se plier bizarrement dans certaines poses.",
     "description": ""
   },
-  "Parts.Move.SkinTip": {
-    "message": "La peau ne peut pas être déplacée.",
+  "Parts.Move.SkinOff.Tip": {
+    "message": "Activez « Déplacer aussi la peau » pour déplacer la peau.",
     "description": ""
   },
   "Parts.Move.LockedTip": {
@@ -2875,6 +2875,30 @@
     "message": "Miroir : cette sélection est son propre miroir, elle bouge d'un seul bloc et reste centrée. Les déplacements et rotations latéraux sont ignorés.",
     "description": "Shown under Move, Rotate and Scale with Mirror on when the selection crosses the centre and mirrors itself."
   },
+  "Parts.SkinMoves": {
+    "message": "Déplacer aussi la peau",
+    "description": ""
+  },
+  "Parts.SkinMoves.Tip": {
+    "message": "Permet aux pinceaux et à Déplacer, Pivoter et Échelle de déplacer la peau du corps en plus des vêtements. Les vêtements posés sur la peau (à environ 3 cm ou moins) bougent avec elle pour que le corps ne passe pas au travers ; les vêtements plus éloignés restent en place. Désactivé, la peau reste exactement là où l'auteur l'a mise.\n\nLes pinceaux laissent en place les bords de la peau, là où cette pièce rejoint la suivante. Y déplacer la peau avec Déplacer, Pivoter ou Échelle peut ouvrir un trou à la taille, aux poignets ou au cou.\n\nTaille du corps et l'ajustement automatique remplacent la peau d'un vêtement par celle du nouveau corps : une peau sculptée ne survit donc pas à un ajustement.",
+    "description": ""
+  },
+  "Parts.SkinMoves.NotThisBrush.Tip": {
+    "message": "Les pinceaux Pont et Vent n'agissent que sur les vêtements ; la peau reste immobile dessous.",
+    "description": ""
+  },
+  "Parts.SkinMoves.Preparing": {
+    "message": "Préparation de la peau…",
+    "description": ""
+  },
+  "Parts.SkinMoves.BodyModel.Warn": {
+    "message": "Ceci est un corps. Les vêtements faits pour lui sont reconnus à sa forme exacte : après l'avoir sculpté, Taille du corps et l'ajustement automatique risquent de ne plus savoir pour quel corps ils ont été faits.",
+    "description": ""
+  },
+  "Parts.SkinMoves.Failed": {
+    "message": "La peau n'a pas pu être préparée, elle reste donc immobile. Le journal indique pourquoi.",
+    "description": ""
+  },
   "Parts.Brush.Lock.Hint": {
     "message": "Maj-clic sur une pièce pour la verrouiller.",
     "description": ""
@@ -2891,8 +2915,8 @@
     "message": "Tout déverrouiller",
     "description": ""
   },
-  "Parts.Brush.Lock.Skin.Tip": {
-    "message": "La peau ne bouge jamais.",
+  "Parts.Brush.Lock.SkinOff.Tip": {
+    "message": "La peau reste immobile tant que « Déplacer aussi la peau » est désactivé.",
     "description": ""
   },
   "MeshVolume.Apply.Nothing": {

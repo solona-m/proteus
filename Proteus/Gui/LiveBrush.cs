@@ -160,8 +160,16 @@ public sealed unsafe class LiveBrush(IObjectTable objects, IDataManager data, Pe
                            IReadOnlySet<PolygonSelection.Key>? polygons = null,
                            Action<PolygonSelection.Key>? polygonClicked = null,
                            Func<PolygonSelection.Key, bool>? polygonPickable = null,
-                           float[]? moveFalloff = null, bool grabBrush = false)
+                           float[]? moveFalloff = null, bool grabBrush = false, bool skinMoves = false)
     {
+        if (skinMoves != this.skinMoves)
+        {
+            // The washes leave skin out or not: what they cached was worked out the other way.
+            this.skinMoves = skinMoves;
+            lockedTrianglesMesh = null;
+            tickedTrianglesMesh = null;
+            hotMesh = null;
+        }
         this.moveFalloff = moveFalloff;
         this.grabBrush = grabBrush;
         this.polygons = polygons;
@@ -191,6 +199,14 @@ public sealed unsafe class LiveBrush(IObjectTable objects, IDataManager data, Pe
     }
 
     private bool mirror;
+
+    /// <summary>See <see cref="ArmBrush"/>: "Move skin too" applies, so skin is hit, picked and washed like cloth.</summary>
+    private bool skinMoves;
+
+    /// <summary>Triangle <paramref name="t"/> is skin the tool in use leaves alone: the ray goes on, and no wash
+    /// covers it — see <see cref="SkinMovePolicy.HitCounts"/>.</summary>
+    private bool SkinBlocks(int t)
+        => t < skinTriangle.Length && !SkinMovePolicy.HitCounts(skinTriangle[t], skinMoves);
 
     /// <summary>See <see cref="ArmBrush"/>: the Move tools' falloff by vertex, or null.</summary>
     private float[]? moveFalloff;
@@ -363,7 +379,7 @@ public sealed unsafe class LiveBrush(IObjectTable objects, IDataManager data, Pe
 
         var io = ImGui.GetIO();
         var hit = hideLocked ? MouseHitPastLocked(projection, m, out bool overUi)
-                             : MouseHit(projection, world, m.Triangles, skinTriangle, out overUi);
+                             : MouseHit(projection, world, m.Triangles, skinMoves ? [] : skinTriangle, out overUi);
 
         // Picking a part instead of painting: every click under Toggle Parts, and a Shift-click under a brush (a lock).
         bool locking = lockClicked != null && (pickParts || io.KeyShift);
@@ -458,10 +474,10 @@ public sealed unsafe class LiveBrush(IObjectTable objects, IDataManager data, Pe
         var io = ImGui.GetIO();
         // Picking polygons looks THROUGH whatever cannot be picked — the skin a clip pokes out behind, a locked part —
         // rather than being stopped by it. Picking a part looks through locked parts too, which the preview no longer
-        // draws (PartsPanel.HiddenOnCharacter), but skin still stops it, as it does the brushes.
+        // draws (PartsPanel.HiddenOnCharacter), but skin still stops it, as it does the brushes — unless "Move skin too" lets skin be picked.
         var hit = polygonClicked != null && polygonPickable is { } pickable
             ? MouseHit(projection, world, m.Triangles,
-                       t => (t >= skinTriangle.Length || !skinTriangle[t]) && pickable(PolygonOf(m, t)), out bool overUi)
+                       t => !SkinBlocks(t) && pickable(PolygonOf(m, t)), out bool overUi)
             : MouseHitPastLocked(projection, m, out overUi);
 
         // No grey over the locked parts: they are not drawn under the Move tools.
@@ -905,7 +921,7 @@ public sealed unsafe class LiveBrush(IObjectTable objects, IDataManager data, Pe
                 int t = vertexTriangles[k];
                 if (washTriangleStamp[t] == washStamp) continue;   // already seen from another corner
                 washTriangleStamp[t] = washStamp;
-                if (t < skinTriangle.Length && skinTriangle[t]) continue;
+                if (SkinBlocks(t)) continue;
                 int o = t * 3;
                 int a = tris[o], b = tris[o + 1], c = tris[o + 2];
                 if (TurnedAway(t, a, b, c)) continue;
@@ -991,12 +1007,12 @@ public sealed unsafe class LiveBrush(IObjectTable objects, IDataManager data, Pe
 
     /// <summary>
     /// The garment under the mouse, looking through the locked parts, which the preview does not draw. Skin still stops
-    /// the ray, and a skin hit is still no hit — see the other <see cref="MouseHit(ScreenProjection, Vector3[], int[], bool[], out bool)"/>.
+    /// the ray, and a skin hit is still no hit unless skin moves (<see cref="SkinBlocks"/>) — see the other <see cref="MouseHit(ScreenProjection, Vector3[], int[], bool[], out bool)"/>.
     /// </summary>
     private LiveMeshHit? MouseHitPastLocked(ScreenProjection projection, SkinnedMesh m, out bool overUi)
     {
         var hit = MouseHit(projection, world, m.Triangles, t => !LockedTriangle(m, t), out overUi);
-        return hit is { } h && h.Triangle < skinTriangle.Length && skinTriangle[h.Triangle] ? null : hit;
+        return hit is { } h && SkinBlocks(h.Triangle) ? null : hit;
     }
 
     /// <summary>Whether every corner of triangle <paramref name="t"/> is locked in the solve — cloth of a locked part.</summary>
@@ -1034,7 +1050,7 @@ public sealed unsafe class LiveBrush(IObjectTable objects, IDataManager data, Pe
             var baseTris = m.BaseTriangles;
             for (int t = 0; t < m.TriangleCount; t++)
             {
-                if (t < skinTriangle.Length && skinTriangle[t]) continue;
+                if (SkinBlocks(t)) continue;
                 int o = t * 3;
                 if (solve.IsLocked(baseTris[o]) && solve.IsLocked(baseTris[o + 1]) && solve.IsLocked(baseTris[o + 2]))
                     lockedTriangles.Add(t);
@@ -1077,7 +1093,7 @@ public sealed unsafe class LiveBrush(IObjectTable objects, IDataManager data, Pe
             var baseTris = m.BaseTriangles;
             for (int t = 0; t < m.TriangleCount; t++)
             {
-                if (t < skinTriangle.Length && skinTriangle[t]) continue;
+                if (SkinBlocks(t)) continue;
                 if (polygons != null)
                 {
                     if (polygons.Contains(PolygonOf(m, t))) tickedTriangles.Add(t);
@@ -1103,7 +1119,7 @@ public sealed unsafe class LiveBrush(IObjectTable objects, IDataManager data, Pe
             hotTriangles.Clear();
             for (int t = 0; t < m.TriangleCount; t++)
             {
-                if (t < skinTriangle.Length && skinTriangle[t]) continue;
+                if (SkinBlocks(t)) continue;
                 if (partOf(baseTris[t * 3]) == part) hotTriangles.Add(t);
             }
             hotPart = part;
@@ -1145,7 +1161,7 @@ public sealed unsafe class LiveBrush(IObjectTable objects, IDataManager data, Pe
             var baseTris = m.BaseTriangles;
             for (int t = 0; t < m.TriangleCount; t++)
             {
-                if (t < skinTriangle.Length && skinTriangle[t]) continue;
+                if (t < skinTriangle.Length && skinTriangle[t]) continue;   // wind never paints skin
                 int o = t * 3;
                 if (solve.WindAt(baseTris[o]) > 0f || solve.WindAt(baseTris[o + 1]) > 0f || solve.WindAt(baseTris[o + 2]) > 0f)
                     windTriangles.Add(t);

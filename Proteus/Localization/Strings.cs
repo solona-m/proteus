@@ -2446,7 +2446,7 @@ public sealed class PartsStrings
     public readonly string MoveBonesNote = Loc.Localize("Parts.Move.BonesNote",
         "A moved part still follows the bones it was made for, so a part moved far from them can bend oddly in poses.");
 
-    public readonly string MoveSkinTip = Loc.Localize("Parts.Move.SkinTip", "Skin can't be moved.");
+    public readonly string MoveSkinTip = Loc.Localize("Parts.Move.SkinOff.Tip", "Turn on “Move skin too” to move skin.");
 
     public readonly string MoveLockedTip = Loc.Localize("Parts.Move.LockedTip",
         "This part is locked. Tick the box beside it to move it.");
@@ -3164,6 +3164,29 @@ public sealed class PartsStrings
     public readonly string MoveMirrorCentred = Loc.Localize("Parts.Move.Mirror.Centred",
         "Mirror: this selection is its own mirror, so it moves as one piece and stays centred. Sideways moves and sideways turns are left out.");
 
+    public readonly string SkinMoves = Loc.Localize("Parts.SkinMoves", "Move skin too") + "###partsSkinMoves";
+
+    public readonly string SkinMovesTip = Loc.Localize("Parts.SkinMoves.Tip",
+        "Lets the brushes and Move, Rotate and Scale move the body's skin as well as the clothes. Clothes lying on the "
+        + "skin (within about 3 cm) move with it so the body doesn't poke through; clothes further out stay put. Off, "
+        + "the skin stays exactly where the author put it.\n\n"
+        + "The brushes leave the skin's edges in place where this piece meets the next. Moving skin there with Move, "
+        + "Rotate or Scale can open a gap at the waist, wrists or neck.\n\n"
+        + "Body size and the automatic refit replace a garment's skin with the new body's, so a sculpted skin does not "
+        + "survive a refit.");
+
+    public readonly string SkinMovesNotThisBrushTip = Loc.Localize("Parts.SkinMoves.NotThisBrush.Tip",
+        "The bridge and wind brushes work on clothes only; the skin stays still under them.");
+
+    public readonly string SkinMovesPreparing = Loc.Localize("Parts.SkinMoves.Preparing", "Getting the skin ready…");
+
+    public readonly string SkinMovesBodyModelWarn = Loc.Localize("Parts.SkinMoves.BodyModel.Warn",
+        "This is a body. Garments made for it are recognised by its exact shape, so after sculpting it Body size and "
+        + "the automatic refit may no longer know which body they were made for.");
+
+    public readonly string SkinMovesFailed = Loc.Localize("Parts.SkinMoves.Failed",
+        "The skin could not be got ready, so it stays still. The log says why.");
+
     /// <summary>Added under every brush tool's tooltip.</summary>
     public readonly string BrushLockHint = Loc.Localize("Parts.Brush.Lock.Hint",
         "Shift-click a part to lock it.");
@@ -3179,8 +3202,8 @@ public sealed class PartsStrings
     public readonly string BrushUnlockAll = Loc.Localize("Parts.Brush.Lock.UnlockAll", "Unlock all")
                                           + "###partsBrushUnlockAll";
 
-    public readonly string BrushLockSkinTip = Loc.Localize("Parts.Brush.Lock.Skin.Tip",
-        "Skin never moves.");
+    public readonly string BrushLockSkinTip = Loc.Localize("Parts.Brush.Lock.SkinOff.Tip",
+        "Skin stays still while “Move skin too” is off.");
 
     /// <summary>{0} is how many model files were put back.</summary>
     public readonly string BrushRevertedFmt = Loc.Localize("Parts.Brush.Reverted.Fmt",

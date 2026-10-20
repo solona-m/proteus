@@ -9,6 +9,8 @@ namespace Proteus.Services;
 /// <summary>
 /// One model's geometry under the brush: what the user has pushed out so far. Pure geometry — no files, mods or game.
 /// Everything is decided per welded node, never per vertex: moving one copy of a seam and not its twin opens a crack.
+/// The garment's own body skin holds still, unless the operation was begun with <see cref="MoveSkin"/> — see
+/// MeshVolumeSolve.SkinMoves.cs.
 /// </summary>
 internal sealed partial class MeshVolumeSolve : IMeshEdit
 {
@@ -94,7 +96,7 @@ internal sealed partial class MeshVolumeSolve : IMeshEdit
     /// <summary>
     /// The direction the brush moves each node: away from the nearest skin where the model carries skin, else
     /// along the node's normal. Away-from-skin gives both layers of a cloth shell and its hem one shared direction.
-    /// Aimed once from the author's positions: skin never moves. Aimed on first use (see <see cref="Pull"/>), not up
+    /// Aimed once from the author's skin, even after "Move skin too" moved it. Aimed on first use (see <see cref="Pull"/>), not up
     /// front: a skirt hangs far from the skin and each of its nodes sums thousands of skin points, which made opening
     /// a dress take seconds on the draw thread.
     /// </summary>
@@ -110,8 +112,9 @@ internal sealed partial class MeshVolumeSolve : IMeshEdit
     private readonly Vec3[] initialPull;
 
     /// <summary>
-    /// Nodes belonging to skin (by <see cref="SecondSkinWriter.IsBodySkinMaterial"/>), which the brush never moves.
-    /// A cloth vertex welded onto a skin vertex is held with it.
+    /// Nodes belonging to skin (by <see cref="SecondSkinWriter.IsBodySkinMaterial"/>), which the brush moves only in an
+    /// operation begun with <see cref="MoveSkin"/> (see <see cref="Held(int)"/>). A cloth vertex welded onto a skin
+    /// vertex is held, or moved, with it.
     /// </summary>
     private readonly bool[] skin;
 
@@ -188,6 +191,7 @@ internal sealed partial class MeshVolumeSolve : IMeshEdit
 
     public MeshVolumeSolve(ModelParts model)
     {
+        sourceModel = model;
         Spans = model.MeshSpans;
 
         int vc = model.Positions.Length / 3;
@@ -209,8 +213,14 @@ internal sealed partial class MeshVolumeSolve : IMeshEdit
         nodeAt = new Vec3[nodeCount];
         for (int i = 0; i < vc; i++) nodeAt[nodeOf[i]] = basePos[i];
 
+        // Each triangle's part drawn with cloth rather than skin, beside it, for the skin-moving face check.
+        var triCloth = model.Parts.Where(p => p.Island < 0)
+                            .SelectMany(p => Enumerable.Repeat(!SecondSkinWriter.IsBodySkinMaterial(p.Material), p.Triangles.Length))
+                            .ToArray();
+
         // Node-level faces; degenerate triples (two corners welded together) are dropped.
         var nt = new List<int>(tris.Length);
+        var faceCloth = new List<bool>(tris.Length / 3);
         for (int t = 0; t + 2 < tris.Length; t += 3)
         {
             int a = tris[t], b = tris[t + 1], c = tris[t + 2];
@@ -218,8 +228,10 @@ internal sealed partial class MeshVolumeSolve : IMeshEdit
             int na = nodeOf[a], nb = nodeOf[b], nc = nodeOf[c];
             if (na == nb || nb == nc || na == nc) continue;
             nt.Add(na); nt.Add(nb); nt.Add(nc);
+            faceCloth.Add(triCloth[t]);
         }
         nodeTris = nt.ToArray();
+        clothFaces = faceCloth.ToArray();
 
         // Adjacency, deduped: a shared edge must not pull twice as hard as a boundary one. Deduped against the
         // node's own few neighbours, not a HashSet<long> of packed pairs: a long hashes as high ^ low, so neighbouring
@@ -392,8 +404,8 @@ internal sealed partial class MeshVolumeSolve : IMeshEdit
         }
     }
 
-    /// <summary>Skin nodes bucketed by <see cref="SkinCell"/>, filled once by <see cref="BuildSkinGrid"/>.
-    /// Skin never moves, so the buckets never go stale.</summary>
+    /// <summary>Skin nodes bucketed by <see cref="SkinCell"/> where the author put them, filled once by
+    /// <see cref="BuildSkinGrid"/>. Moved skin is found through its binding instead (<see cref="KeepAboveBoundSkin"/>).</summary>
     private readonly Dictionary<(int, int, int), List<int>> skinGrid = [];
 
     private static (int, int, int) Cell(Vec3 v)
@@ -447,7 +459,10 @@ internal sealed partial class MeshVolumeSolve : IMeshEdit
     /// </summary>
     private Vec3 KeepAboveSkin(int n, Vec3 delta)
     {
-        var p = new Vec3(nodeAt[n].X + delta.X, nodeAt[n].Y + delta.Y, nodeAt[n].Z + delta.Z);
+        // Cloth riding skin that has moved is held above that skin where it now is.
+        if ((opSkin || skinMoved) && KeepAboveBoundSkin(n, delta, out var kept)) return kept;
+
+        var p =new Vec3(nodeAt[n].X + delta.X, nodeAt[n].Y + delta.Y, nodeAt[n].Z + delta.Z);
         if (!SkinBeneath(p, out int s, out float height)) return delta;
 
         if (restClearance == null)
@@ -576,6 +591,7 @@ internal sealed partial class MeshVolumeSolve : IMeshEdit
     public int PaintWind(Vector3 centre, float radius, float target, float rate, bool mirror = false, int dabs = 1)
     {
         if (radius <= 0f || rate <= 0f || dabs <= 0) return 0;
+        if (stroke == null) BeginOp(skinMay: false);
         stroke ??= [];
         strokeWinds = true;
         target = Math.Clamp(target, 0f, 1f);
@@ -644,6 +660,7 @@ internal sealed partial class MeshVolumeSolve : IMeshEdit
     {
         if (radius <= 0f || strength == 0f || dabs <= 0) return 0;
         strength *= dabs;
+        if (stroke == null) BeginOp();
         stroke ??= [];
         var viewer = Unit(new Vec3(toViewer.X, toViewer.Y, toViewer.Z));
         var viewerMirrored = new Vec3(-viewer.X, viewer.Y, viewer.Z);
@@ -651,13 +668,15 @@ internal sealed partial class MeshVolumeSolve : IMeshEdit
         var c = new Vec3(centre.X, centre.Y, centre.Z);
         mirror = MirrorAt(centre, mirror);
         int moved = 0;
+        dabSkin.Clear();
 
         for (int n = 0; n < nodeCount; n++)
         {
-            if (skin[n] || locked[n]) continue;
+            if (Held(n)) continue;
 
             float w = DabWeight(n, c, radius, mirror, out bool mirrored);
             if (w <= 0f) continue;
+            if (opSkin && (w *= OpScale(n)) <= 0f) continue;
 
             var dir = Pull(n);
             if (dir.X == 0f && dir.Y == 0f && dir.Z == 0f) dir = mirrored ? viewerMirrored : viewer;   // double-sided: see toViewer
@@ -677,17 +696,22 @@ internal sealed partial class MeshVolumeSolve : IMeshEdit
             if (next == nodeDelta[n]) continue;
             nodeDelta[n] = next;
             nodeWeight[n] = MathF.Max(nodeWeight[n], w);
+            if (skin[n]) dabSkin.Add(n);
             moved++;
         }
 
         if (moved > 0)
         {
+            CarryRiders(dabSkin, stroke);
             Dirty = true;
             // The per-vertex view follows now, since the preview draws it; normals are only needed at write time.
             Spread();
         }
         return moved;
     }
+
+    /// <summary>The skin nodes the dab under way moved, whose riders it carries; reused.</summary>
+    private readonly List<int> dabSkin = [];
 
     /// <summary>
     /// One dab of the relax brush: a plain average toward the neighbours of the surface as it now is, strongest in the
@@ -709,6 +733,7 @@ internal sealed partial class MeshVolumeSolve : IMeshEdit
             TowardNeighbours(SmoothLambda * rate);
             CapGathered();
         }
+        CarryGathered();
         return FinishDab();
     }
 
@@ -744,13 +769,24 @@ internal sealed partial class MeshVolumeSolve : IMeshEdit
                 float k = rate * brushWeights[i];
                 var s = start[i];
                 var full = nodeDelta[n];
-                nodeDelta[n] = KeepAboveSkin(n, new Vec3(s.X + (full.X - s.X) * k,
-                                                         s.Y + (full.Y - s.Y) * k,
-                                                         s.Z + (full.Z - s.Z) * k));
+                var smoothed = new Vec3(s.X + (full.X - s.X) * k, s.Y + (full.Y - s.Y) * k, s.Z + (full.Z - s.Z) * k);
+                // Skin is not held above itself: that would lift every step it takes inward straight back.
+                nodeDelta[n] = skin[n] ? smoothed : KeepAboveSkin(n, smoothed);
             }
             CapGathered();   // per dab, as for relax
         }
+        CarryGathered();
         return FinishDab();
+    }
+
+    /// <summary>Carry the riders of the skin a smoothing dab gathered — see <see cref="CarryRiders"/>.</summary>
+    private void CarryGathered()
+    {
+        if (!opSkin) return;
+        dabSkin.Clear();
+        foreach (int n in brushNodes)
+            if (skin[n]) dabSkin.Add(n);
+        CarryRiders(dabSkin, stroke!);
     }
 
     /// <summary>Hold every gathered node's brush share within <see cref="MaxDisplacement"/> — see <see cref="CapBrush"/>.</summary>
@@ -768,6 +804,7 @@ internal sealed partial class MeshVolumeSolve : IMeshEdit
     /// <returns>How many it reaches.</returns>
     private int GatherDab(Vector3 centre, float radius, bool mirror)
     {
+        if (stroke == null) BeginOp();
         stroke ??= [];
         strokeSmooths = true;
         var c = new Vec3(centre.X, centre.Y, centre.Z);
@@ -779,9 +816,10 @@ internal sealed partial class MeshVolumeSolve : IMeshEdit
         weights.Clear();
         for (int n = 0; n < nodeCount; n++)
         {
-            if (skin[n] || locked[n] || adj[n].Count == 0) continue;
+            if (Held(n) || adj[n].Count == 0) continue;
             float w = DabWeight(n, c, radius, mirror, out _);
             if (w <= 0f) continue;
+            if (opSkin && (w *= OpScale(n)) <= 0f) continue;
             nodes.Add(n);
             weights.Add(w);
         }
@@ -822,7 +860,8 @@ internal sealed partial class MeshVolumeSolve : IMeshEdit
 
             float f = weighted ? factor * weights[i] : factor;
             var moved = new Vec3(d.X + (sx * inv - px) * f, d.Y + (sy * inv - py) * f, d.Z + (sz * inv - pz) * f);
-            next[i] = keepAboveSkin ? KeepAboveSkin(n, moved) : moved;
+            // Never skin above itself — see Smooth.
+            next[i] = keepAboveSkin && !skin[n] ? KeepAboveSkin(n, moved) : moved;
         }
         for (int i = 0; i < nodes.Count; i++) nodeDelta[nodes[i]] = next[i];
     }
@@ -896,6 +935,7 @@ internal sealed partial class MeshVolumeSolve : IMeshEdit
     public int Bridge(Vector3 centre, float radius, float rate, Vector3 toViewer, bool mirror = false)
     {
         if (radius <= 0f || rate <= 0f) return 0;
+        if (stroke == null) BeginOp(skinMay: false);
         stroke ??= [];
         strokeBridges = true;
 
@@ -1157,6 +1197,18 @@ internal sealed partial class MeshVolumeSolve : IMeshEdit
     /// or skin — is not settled, and its caller has nothing to show again or save.</returns>
     public bool EndStroke(bool bridge = false, bool wind = false)
     {
+        try
+        {
+            return FinishStroke(bridge, wind);
+        }
+        finally
+        {
+            opSkin = false;
+        }
+    }
+
+    private bool FinishStroke(bool bridge, bool wind)
+    {
         var touched = stroke;
         stroke = null;
         // The brush that painted it knows best: a stroke ended for it by a grab or move must finish the same way.
@@ -1197,11 +1249,12 @@ internal sealed partial class MeshVolumeSolve : IMeshEdit
 
     /// <summary>
     /// Lightly smooth what this stroke added, with Taubin pairs so the bulk does not shrink. Only the stroke's own
-    /// nodes are written, so earlier strokes stay intact and undo stays exact. Skin is never written.
+    /// nodes are written, so earlier strokes stay intact and undo stays exact. Skin is written only by a stroke that
+    /// moved it; the cloth riding it is not smoothed on its own, but carried after the skin is (<see cref="Settle"/>).
     /// </summary>
     private void SmoothStroke(Dictionary<int, Was> strokeStart)
     {
-        var nodes = strokeStart.Keys.Where(n => !skin[n] && adj[n].Count > 0).ToArray();
+        var nodes = strokeStart.Keys.Where(n => !(skin[n] && !opSkin) && !RidesSkin(n) && adj[n].Count > 0).ToArray();
         if (nodes.Length == 0) return;
 
         var added = new Vec3[nodeCount];
@@ -1269,6 +1322,8 @@ internal sealed partial class MeshVolumeSolve : IMeshEdit
         bridgeAxis = bridgeMirrorAxis = null;
         Grabbing = false;
         grabTerms.Clear();
+        grabRiders.Clear();
+        opSkin = false;
         DragMirror = PreviewMirror = null;
         Dirty = false;
         Settle(null);
@@ -1302,7 +1357,8 @@ internal sealed partial class MeshVolumeSolve : IMeshEdit
     /// <summary>
     /// Start dragging one part: its nodes take the whole offset and, with <paramref name="adjacent"/>, every other
     /// node within <paramref name="falloffRadius"/> (through space, joined or not) takes a fading share.
-    /// Skin and locked nodes never move; a part node welded to a neighbour moves both copies.
+    /// Locked nodes never move, nor does skin unless <see cref="MoveSkin"/> is on — then the cloth riding moved skin
+    /// goes with it (<see cref="AddMoveRiders"/>). A part node welded to a neighbour moves both copies.
     /// </summary>
     /// <param name="partVertices">The part's triangle corners, indexed like <see cref="ModelParts.Positions"/>.</param>
     /// <param name="alongSurface">Measure the falloff ALONG the surface, through joined polygons only, instead of
@@ -1317,10 +1373,15 @@ internal sealed partial class MeshVolumeSolve : IMeshEdit
         if (Moving) EndMove();
         if (Grabbing) EndGrab();
         if (StrokeOpen) EndStroke();
+        BeginOp();
         int count = CollectMoveWeights(partVertices, adjacent, falloffRadius, alongSurface, moveWeights,
-                                       mirror?.Pivot, mirror != null, out var plan);
+                                       mirror?.Pivot, mirror != null, opSkin, out var plan);
         DragMirror = plan?.Report;
-        if (count == 0) return 0;
+        if (count == 0)
+        {
+            opSkin = false;
+            return 0;
+        }
 
         StartMirror(plan, mirror);
         stroke = [];
@@ -1338,28 +1399,46 @@ internal sealed partial class MeshVolumeSolve : IMeshEdit
     /// falloff is measured from both.
     /// </summary>
     /// <param name="pivot">The gizmo's pivot, for a mirrored drag; null for the middle of the selection.</param>
+    /// <param name="skinMoves">Skin may move: it is carried like cloth, and the cloth riding it goes with it.</param>
     /// <param name="plan">The mirror's plan when <paramref name="mirror"/>, else null.</param>
     /// <returns>How many nodes that is; 0 when the part has nothing that may move.</returns>
     private int CollectMoveWeights(IEnumerable<int> partVertices, bool adjacent, float falloffRadius, bool alongSurface,
-                                   Dictionary<int, float> into, Vector3? pivot, bool mirror, out MirrorPlan? plan)
+                                   Dictionary<int, float> into, Vector3? pivot, bool mirror, bool skinMoves,
+                                   out MirrorPlan? plan)
     {
         into.Clear();
         plan = null;
         var seeds = new HashSet<int>();
         foreach (int v in partVertices)
-            if (v >= 0 && v < nodeOf.Length && !skin[nodeOf[v]] && !locked[nodeOf[v]]) seeds.Add(nodeOf[v]);
+            if (v >= 0 && v < nodeOf.Length && !Held(nodeOf[v], skinMoves)) seeds.Add(nodeOf[v]);
         if (seeds.Count == 0) return 0;
 
         if (mirror)
         {
-            plan = PlanMirror(seeds, pivot ?? SeedCentre(seeds));
-            seeds = plan.Seeds;
+            // Skin is never mirrored: the pairing matches cloth only, and skin's reflection would find the cloth lying
+            // on the other side's skin and carry it off that skin. Selected skin moves on its own side, as a piece with
+            // no mirror image does; the cloth selected with it is mirrored as ever.
+            var skinSeeds = skinMoves ? seeds.Where(n => skin[n]).ToHashSet() : null;
+            var clothSeeds = skinSeeds is { Count: > 0 } ? seeds.Where(n => !skin[n]).ToHashSet() : seeds;
+            var centre = pivot ?? SeedCentre(seeds);
+            if (clothSeeds.Count > 0)
+            {
+                plan = PlanMirror(clothSeeds, centre);
+                seeds = plan.Seeds;
+            }
+            else seeds = [];
+            if (skinSeeds is { Count: > 0 })
+            {
+                seeds.UnionWith(skinSeeds);
+                plan?.DirectOnly.UnionWith(skinSeeds);
+            }
         }
 
         foreach (int n in seeds) into[n] = 1f;
 
         if (adjacent && falloffRadius > 0f)
-            foreach (var (n, d, from) in alongSurface ? AlongSurface(seeds, falloffRadius) : NearPart(seeds, falloffRadius))
+            foreach (var (n, d, from) in alongSurface ? AlongSurface(seeds, falloffRadius, skinMoves)
+                                                      : NearPart(seeds, falloffRadius, skinMoves))
             {
                 float w = Falloff(d / falloffRadius);
                 if (w <= 0f) continue;
@@ -1367,6 +1446,17 @@ internal sealed partial class MeshVolumeSolve : IMeshEdit
                 // Cloth carried by a piece with no mirror image goes the way that piece goes, or the two would tear apart.
                 if (plan != null && plan.DirectOnly.Contains(from)) plan.DirectOnly.Add(n);
             }
+        if (skinMoves && follow != null)
+        {
+            AddMoveRiders(into);
+            // Cloth riding skin that moves on its own side goes that way too, or the two would tear apart — unless the
+            // mirror has it: cloth selected, or matched to the selection, is mirrored as ever.
+            if (plan is { } planned)
+                foreach (int n in into.Keys)
+                    if (!skin[n] && !planned.Seeds.Contains(n)
+                        && follow.CornersOf(n).Any(c => planned.DirectOnly.Contains(c.Skin)))
+                        planned.DirectOnly.Add(n);
+        }
         return into.Count;
     }
 
@@ -1381,8 +1471,9 @@ internal sealed partial class MeshVolumeSolve : IMeshEdit
     public float[]? MoveFalloff(IEnumerable<int> partVertices, float falloffRadius, bool alongSurface, float[]? into = null,
                                 bool mirror = false)
     {
+        bool skinMoves = MoveSkin && follow != null;
         int count = CollectMoveWeights(partVertices, adjacent: true, falloffRadius, alongSurface, previewWeights,
-                                       null, mirror, out var plan);
+                                       null, mirror, skinMoves, out var plan);
         PreviewMirror = count == 0 ? null : plan?.Report;
         if (count == 0) return null;
         return PerVertex(previewWeights, into);
@@ -1415,11 +1506,11 @@ internal sealed partial class MeshVolumeSolve : IMeshEdit
     /// <summary>
     /// Every movable node outside <paramref name="seeds"/> reachable within <paramref name="radius"/> by walking the
     /// mesh's edges from one of them, with the shortest such walk, measured on the surface as it now stands. Dijkstra
-    /// over the welded adjacency, so a walk crosses uv seams but never a gap between pieces. Skin and locked nodes are
-    /// walls: nothing that may not move is walked through to reach cloth beyond it. Each comes with the seed its walk
-    /// began at.
+    /// over the welded adjacency, so a walk crosses uv seams but never a gap between pieces. Held nodes (locked, and skin
+    /// unless <paramref name="skinMoves"/>) are walls: nothing that may not move is walked through to reach cloth beyond
+    /// it. Each comes with the seed its walk began at.
     /// </summary>
-    private List<(int Node, float Distance, int Seed)> AlongSurface(HashSet<int> seeds, float radius)
+    private List<(int Node, float Distance, int Seed)> AlongSurface(HashSet<int> seeds, float radius, bool skinMoves)
     {
         var dist = new Dictionary<int, float>();
         var from = new Dictionary<int, int>();
@@ -1437,7 +1528,7 @@ internal sealed partial class MeshVolumeSolve : IMeshEdit
             var here = Here(n);
             foreach (int m in adj[n])
             {
-                if (skin[m] || locked[m]) continue;
+                if (Held(m, skinMoves)) continue;
                 var there = Here(m);
                 float dx = there.X - here.X, dy = there.Y - here.Y, dz = there.Z - here.Z;
                 float next = d + MathF.Sqrt(dx * dx + dy * dy + dz * dz);
@@ -1459,7 +1550,7 @@ internal sealed partial class MeshVolumeSolve : IMeshEdit
     /// Every movable node outside <paramref name="seeds"/> within <paramref name="radius"/> of one of them, with its
     /// distance to the nearest and that nearest seed, measured on the current surfaces. Grid-bucketed with a ring search.
     /// </summary>
-    private List<(int Node, float Distance, int Seed)> NearPart(HashSet<int> seeds, float radius)
+    private List<(int Node, float Distance, int Seed)> NearPart(HashSet<int> seeds, float radius, bool skinMoves)
     {
         var found = new List<(int, float, int)>();
         float cell = Math.Clamp(MathF.Max(MeanEdge * 2f, radius / 4f), 1e-4f, radius);
@@ -1484,7 +1575,7 @@ internal sealed partial class MeshVolumeSolve : IMeshEdit
         float r2 = radius * radius;
         for (int n = 0; n < nodeCount; n++)
         {
-            if (seeds.Contains(n) || skin[n] || locked[n]) continue;
+            if (seeds.Contains(n) || Held(n, skinMoves)) continue;
             var p = Here(n);
             if (p.X < lo.X - radius || p.Y < lo.Y - radius || p.Z < lo.Z - radius
                 || p.X > hi.X + radius || p.Y > hi.Y + radius || p.Z > hi.Z + radius)
@@ -1589,6 +1680,18 @@ internal sealed partial class MeshVolumeSolve : IMeshEdit
     /// caller has nothing to save.</returns>
     public bool EndMove()
     {
+        try
+        {
+            return FinishMove();
+        }
+        finally
+        {
+            opSkin = false;
+        }
+    }
+
+    private bool FinishMove()
+    {
         if (!Moving) return false;
         Moving = false;
         var touched = stroke;
@@ -1618,6 +1721,7 @@ internal sealed partial class MeshVolumeSolve : IMeshEdit
         undo.Add(touched!);
         foreach (var (n, w) in moveWeights)
             if (w < 1f) nodeWeight[n] = MathF.Max(nodeWeight[n], w);
+        KeepRidersAboveSkin(touched!);
         RebaseNormals(touched!);
         moveWeights.Clear();
         moveMatrix = null;
@@ -1824,7 +1928,8 @@ internal sealed partial class MeshVolumeSolve : IMeshEdit
     /// <summary>
     /// Start an elastic grab at <paramref name="centre"/>, Blender's Elastic Deform brush: the surface around it
     /// follows the drag like rubber, with no hard edge. Every node within reach is measured once, from where it is
-    /// now, so the drag is absolute and cannot creep. Skin and locked nodes never move.
+    /// now, so the drag is absolute and cannot creep. Locked nodes never move, nor does skin unless
+    /// <see cref="MoveSkin"/> is on — then the cloth riding it is carried with it (<see cref="CarryGrabRiders"/>).
     /// </summary>
     /// <param name="mirror">Also grab the mirror image across the body's midline. Each node follows the grab on its own
     /// side, blended across a narrow band at the midline so the centre line stays on it.</param>
@@ -1834,8 +1939,10 @@ internal sealed partial class MeshVolumeSolve : IMeshEdit
         if (Moving) EndMove();
         if (Grabbing) EndGrab();
         if (StrokeOpen) EndStroke();
+        BeginOp();
         dirtyBeforeGrab = Dirty;
         grabTerms.Clear();
+        grabRiders.Clear();
         grabOffset = Vector3.Zero;
         Grabbing = true;
         stroke = [];
@@ -1852,7 +1959,7 @@ internal sealed partial class MeshVolumeSolve : IMeshEdit
         grabWeights.Clear();
         for (int n = 0; n < nodeCount; n++)
         {
-            if (skin[n] || locked[n]) continue;
+            if (Held(n)) continue;
             var h = Here(n);
             var p = new Vector3(h.X, h.Y, h.Z);
             var r = p - centre;
@@ -1862,6 +1969,12 @@ internal sealed partial class MeshVolumeSolve : IMeshEdit
 
             var (ka, kb) = Kelvinlet(d, radius);
             var (ma, mb) = mirror ? Kelvinlet(dm, radius) : (0f, 0f);
+            if (opSkin)
+            {
+                // Skin fades in from its open edges; a rider takes from the grab only what its skin does not bring.
+                float k = OpScale(n);
+                ka *= k; kb *= k; ma *= k; mb *= k;
+            }
             float t = mirror ? GrabSide(p.X, centre.X, radius, MirrorMinX) : 1f;
             grabTerms.Add(new GrabTerm(n, r, ka, kb, rm, ma, mb, t));
             stroke[n] = Snapshot(n);
@@ -1873,6 +1986,7 @@ internal sealed partial class MeshVolumeSolve : IMeshEdit
             if (t < 1f) w += (1f - t) * Math.Clamp(ma + mb * dm * dm, 0f, 1f);
             if (w > 0f) grabWeights[n] = w;
         }
+        CollectGrabRiders();
         grabFalloff = PerVertex(grabWeights, grabFalloff);
         return grabTerms.Count;
     }
@@ -1908,6 +2022,13 @@ internal sealed partial class MeshVolumeSolve : IMeshEdit
             // The Move tool's share, not the brushes': uncapped, and found where it now is by every later dab.
             nodeMoved[g.Node] = new Vec3(was.Moved.X + u.X, was.Moved.Y + u.Y, was.Moved.Z + u.Z);
         }
+        if (grabRiders.Count > 0)
+        {
+            grabPlaced ??= [];
+            grabPlaced.Clear();
+            foreach (var g in grabTerms) grabPlaced.Add(g.Node);
+            CarryGrabRiders(grabPlaced);
+        }
         Dirty = true;
         Spread();
         return grabTerms.Count;
@@ -1920,6 +2041,20 @@ internal sealed partial class MeshVolumeSolve : IMeshEdit
     /// </summary>
     /// <returns>Whether the grab moved anything; when not, there is nothing to show again or save.</returns>
     public bool EndGrab()
+    {
+        try
+        {
+            return FinishGrab();
+        }
+        finally
+        {
+            opSkin = false;
+        }
+    }
+
+    private HashSet<int>? grabPlaced;
+
+    private bool FinishGrab()
     {
         if (!Grabbing) return false;
         Grabbing = false;
@@ -1934,22 +2069,25 @@ internal sealed partial class MeshVolumeSolve : IMeshEdit
         if (!moved)
         {
             grabTerms.Clear();
+            grabRiders.Clear();
             Dirty = dirtyBeforeGrab;
             return false;
         }
 
         undo.Add(touched!);
         float len = grabOffset.Length();
-        foreach (var g in grabTerms)
+        // Every node the grab recorded — its own terms, and the riders its skin carried.
+        foreach (var (n, was) in touched!)
         {
-            var d = nodeDelta[g.Node];
-            var was = touched![g.Node].Delta;
-            float went = MathF.Sqrt((d.X - was.X) * (d.X - was.X) + (d.Y - was.Y) * (d.Y - was.Y)
-                                    + (d.Z - was.Z) * (d.Z - was.Z));
+            var d = nodeDelta[n];
+            float went = MathF.Sqrt((d.X - was.Delta.X) * (d.X - was.Delta.X) + (d.Y - was.Delta.Y) * (d.Y - was.Delta.Y)
+                                    + (d.Z - was.Delta.Z) * (d.Z - was.Delta.Z));
             float w = len > 1e-9f ? Math.Clamp(went / len, 0f, 1f) : 0f;
-            nodeWeight[g.Node] = MathF.Max(nodeWeight[g.Node], w);
+            nodeWeight[n] = MathF.Max(nodeWeight[n], w);
         }
+        KeepRidersAboveSkin(touched!);
         grabTerms.Clear();
+        grabRiders.Clear();
         Settle(null);
         return true;
     }
@@ -1963,12 +2101,22 @@ internal sealed partial class MeshVolumeSolve : IMeshEdit
     /// <param name="allowCollapse">The stroke was a bridge — see <see cref="UnfoldStroke"/>.</param>
     private void Settle(Dictionary<int, Was>? strokeStart, bool allowCollapse = false)
     {
-        // No slope limit: it pulled painted displacement back on release. Smoothing is SmoothStroke's job.
-        if (strokeStart is { Count: > 0 }) UnfoldStroke(strokeStart, allowCollapse);
+        // Skin a stroke that does not move skin somehow recorded goes back where the stroke found it: nothing is meant to
+        // reach it (Held), and this is the edit written into the user's mod. A defence, not a step: it finds nothing.
+        if (strokeStart != null && !opSkin)
+            foreach (var (n, was) in strokeStart)
+                if (skin[n]) { nodeDelta[n] = was.Delta; nodeMoved[n] = was.Moved; nodeWeight[n] = was.Weight; }
 
-        // Skin again, after the unfold, which knows nothing about it.
-        for (int n = 0; n < nodeCount; n++)
-            if (skin[n]) { nodeDelta[n] = default; nodeMoved[n] = default; nodeWeight[n] = 0f; }
+        // No slope limit: it pulled painted displacement back on release. Smoothing is SmoothStroke's job.
+        if (strokeStart is { Count: > 0 })
+        {
+            if (opSkin) SettleSkinStroke(strokeStart, allowCollapse);
+            else UnfoldStroke(strokeStart, allowCollapse);
+        }
+
+        // Skin is never in an operation that does not move it, so nothing here puts it back: skin a stroke moved with
+        // "Move skin too" stays where it was moved, whatever the stroke after.
+        if (follow != null) skinMoved = SkinEdited;
 
         Spread();
 
@@ -1981,7 +2129,7 @@ internal sealed partial class MeshVolumeSolve : IMeshEdit
         ApplyRebase();
 
         // Re-aim normal-following pulls from the current surface: inside a concavity the old directions drive the
-        // walls apart. Pulls aimed from skin stay, since the skin has not moved.
+        // walls apart. Pulls aimed from skin stay aimed from where the author put it.
         var accum = new Vec3[nodeCount];
         for (int i = 0; i < vertDelta.Length; i++)
         {
@@ -2085,7 +2233,8 @@ internal sealed partial class MeshVolumeSolve : IMeshEdit
     /// <summary>
     /// Take an edit made on another size of this garment (<see cref="BrushTransfer"/>) as this model's whole edit:
     /// per node the average displacement (brushes' share capped), strongest weight and, when <paramref name="wind"/>,
-    /// strongest wind. Skin is left alone. Settled with no undo history.
+    /// strongest wind. Skin is left alone unless <see cref="MoveSkin"/> is on: then the other size's skin takes its edit
+    /// too. Settled with no undo history.
     /// </summary>
     /// <param name="samples">Per vertex; null where the vertex has no counterpart and keeps nothing. Moved is the
     /// share of Delta that came from the Move tool.</param>
@@ -2118,11 +2267,13 @@ internal sealed partial class MeshVolumeSolve : IMeshEdit
         moveWeights.Clear();
         moveMatrix = null;
         grabTerms.Clear();
+        grabRiders.Clear();
+        opSkin = false;
         // Exact normals stay with the size they were made on: this size's own faces turn its normals.
         Array.Clear(nodeRebase);
         for (int n = 0; n < nodeCount; n++)
         {
-            if (skin[n] || count[n] == 0) continue;
+            if ((skin[n] && !MoveSkin) || count[n] == 0) continue;
             var d = new Vec3(sum[n].X / count[n], sum[n].Y / count[n], sum[n].Z / count[n]);
             nodeMoved[n] = new Vec3(movedSum[n].X / count[n], movedSum[n].Y / count[n], movedSum[n].Z / count[n]);
             nodeDelta[n] = CapBrush(n, d);

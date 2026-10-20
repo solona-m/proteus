@@ -2623,8 +2623,8 @@
     "message": "Una pieza movida sigue los huesos para los que se hizo, así que si la alejas mucho de ellos puede doblarse de forma extraña en algunas poses.",
     "description": ""
   },
-  "Parts.Move.SkinTip": {
-    "message": "La piel no se puede mover.",
+  "Parts.Move.SkinOff.Tip": {
+    "message": "Activa «Mover también la piel» para mover la piel.",
     "description": ""
   },
   "Parts.Move.LockedTip": {
@@ -2875,6 +2875,30 @@
     "message": "Espejo: esta selección es su propio reflejo, así que se mueve como una sola pieza y se queda centrada. Se omiten los movimientos y giros laterales.",
     "description": "Shown under Move, Rotate and Scale with Mirror on when the selection crosses the centre and mirrors itself."
   },
+  "Parts.SkinMoves": {
+    "message": "Mover también la piel",
+    "description": ""
+  },
+  "Parts.SkinMoves.Tip": {
+    "message": "Permite que los pinceles y Mover, Rotar y Escalar muevan la piel del cuerpo además de la ropa. La ropa que descansa sobre la piel (a unos 3 cm o menos) se mueve con ella para que el cuerpo no la atraviese; la ropa más alejada se queda donde está. Desactivado, la piel se queda exactamente donde la puso el autor.\n\nLos pinceles dejan en su sitio los bordes de la piel donde esta pieza se une con la siguiente. Mover la piel ahí con Mover, Rotar o Escalar puede abrir un hueco en la cintura, las muñecas o el cuello.\n\nTalla del cuerpo y el ajuste automático sustituyen la piel de una prenda por la del cuerpo nuevo, así que una piel esculpida no sobrevive a un ajuste.",
+    "description": ""
+  },
+  "Parts.SkinMoves.NotThisBrush.Tip": {
+    "message": "Los pinceles Puente y Viento solo actúan sobre la ropa; la piel se queda quieta debajo.",
+    "description": ""
+  },
+  "Parts.SkinMoves.Preparing": {
+    "message": "Preparando la piel…",
+    "description": ""
+  },
+  "Parts.SkinMoves.BodyModel.Warn": {
+    "message": "Esto es un cuerpo. Las prendas hechas para él se reconocen por su forma exacta, así que tras esculpirlo Talla del cuerpo y el ajuste automático quizá ya no sepan para qué cuerpo se hicieron.",
+    "description": ""
+  },
+  "Parts.SkinMoves.Failed": {
+    "message": "No se pudo preparar la piel, así que se queda quieta. El registro dice por qué.",
+    "description": ""
+  },
   "Parts.Brush.Lock.Hint": {
     "message": "Mayús-clic en una pieza para bloquearla.",
     "description": ""
@@ -2891,8 +2915,8 @@
     "message": "Desbloquear todo",
     "description": ""
   },
-  "Parts.Brush.Lock.Skin.Tip": {
-    "message": "La piel nunca se mueve.",
+  "Parts.Brush.Lock.SkinOff.Tip": {
+    "message": "La piel se queda quieta mientras «Mover también la piel» esté desactivado.",
     "description": ""
   },
   "MeshVolume.Apply.Nothing": {

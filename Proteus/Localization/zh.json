@@ -2623,8 +2623,8 @@
     "message": "移动后的部件仍跟随原本的骨骼，离骨骼太远时在某些姿势下可能会弯曲异常。",
     "description": ""
   },
-  "Parts.Move.SkinTip": {
-    "message": "皮肤无法移动。",
+  "Parts.Move.SkinOff.Tip": {
+    "message": "打开“同时移动皮肤”即可移动皮肤。",
     "description": ""
   },
   "Parts.Move.LockedTip": {
@@ -2875,6 +2875,30 @@
     "message": "镜像：此选择本身左右对称，因此作为一个整体移动并保持居中。横向移动和横向旋转会被忽略。",
     "description": "Shown under Move, Rotate and Scale with Mirror on when the selection crosses the centre and mirrors itself."
   },
+  "Parts.SkinMoves": {
+    "message": "同时移动皮肤",
+    "description": ""
+  },
+  "Parts.SkinMoves.Tip": {
+    "message": "让笔刷以及移动、旋转、缩放除了衣物之外也能移动身体的皮肤。贴在皮肤上的衣物（约 3 厘米以内）会随皮肤一起移动，身体不会穿出来；更远的衣物保持不动。关闭时，皮肤完全停留在作者放置的位置。\n\n笔刷会让这个部件与下一个部件相接处的皮肤边缘保持不动。在那里用移动、旋转或缩放移动皮肤，可能会在腰部、手腕或颈部留下缝隙。\n\n体型尺寸和自动适配会用新体型的皮肤替换装备的皮肤，因此雕塑过的皮肤在适配后不会保留。",
+    "description": ""
+  },
+  "Parts.SkinMoves.NotThisBrush.Tip": {
+    "message": "搭桥和风笔刷只作用于衣物；其下的皮肤保持不动。",
+    "description": ""
+  },
+  "Parts.SkinMoves.Preparing": {
+    "message": "正在准备皮肤…",
+    "description": ""
+  },
+  "Parts.SkinMoves.BodyModel.Warn": {
+    "message": "这是一个体型。为它制作的装备是按它的精确形状识别的，雕塑之后，体型尺寸和自动适配可能无法再判断这些装备是为哪个体型制作的。",
+    "description": ""
+  },
+  "Parts.SkinMoves.Failed": {
+    "message": "无法准备皮肤，因此皮肤保持不动。原因见日志。",
+    "description": ""
+  },
   "Parts.Brush.Lock.Hint": {
     "message": "Shift+点击部件可将其锁定。",
     "description": ""
@@ -2891,8 +2915,8 @@
     "message": "全部解锁",
     "description": ""
   },
-  "Parts.Brush.Lock.Skin.Tip": {
-    "message": "皮肤永远不会移动。",
+  "Parts.Brush.Lock.SkinOff.Tip": {
+    "message": "“同时移动皮肤”关闭时，皮肤保持不动。",
     "description": ""
   },
   "MeshVolume.Apply.Nothing": {
