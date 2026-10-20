@@ -99,11 +99,11 @@ internal sealed partial class UvAtlasCorrespondence : IBodyCorrespondence
     /// them, and not counted against the coverage.</param>
     /// <param name="Unprojected">Excused vertices kept where the carry put them, so no triangle turns over.</param>
     /// <param name="OnSkin">Excused vertices whose projection landed on the target's skin rather than its smallclothes.</param>
-    /// <param name="ComponentsReverted">Whole connected pieces of excused skin reverted to the carry for folding.</param>
     /// <param name="FoldedElsewhere">Source skin triangles turned over by the landings alone, none of their corners
     /// excused or carried: recorded, not judged.</param>
-    /// <param name="FoldedInIslands">Source skin triangles turned over on islands that landed nowhere and were pressed
-    /// flat onto the smallclothes: recorded, not judged.</param>
+    /// <param name="FoldedInIslands">Source skin triangles turned over where the skin was pressed onto the smallclothes
+    /// by its shape alone — islands that landed nowhere, and skin the smallclothes bridge (a cleft): recorded, not
+    /// judged.</param>
     /// <param name="P99Cover">How far the carried excused points were from the smallclothes, 99th percentile, metres.</param>
     /// <param name="MaxCover">The same, the furthest.</param>
     internal readonly record struct Stats(int Landed, int Placeable, int OffSheet, float VertexCoverage,
@@ -111,7 +111,7 @@ internal sealed partial class UvAtlasCorrespondence : IBodyCorrespondence
                                           int Carried, int Disagreed, int Unvouched, int Unjudged,
                                           float P99Disagreement, float MaxDisagreement, int Astray = 0, int NoLanding = 0,
                                           int Excused = 0, int Unprojected = 0, int OnSkin = 0,
-                                          int ComponentsReverted = 0, int FoldedElsewhere = 0, float P99Cover = 0f,
+                                          int FoldedElsewhere = 0, float P99Cover = 0f,
                                           float MaxCover = 0f, int FoldedInIslands = 0)
     {
         /// <summary>Landings the guard set aside.</summary>

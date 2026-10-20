@@ -4583,6 +4583,10 @@
     "message": "Лишь {1:P0} исходного тела ({0}) находят своё место на целевом по текстурным координатам, значит, у них разные раскладки текстур. Подогнать их друг под друга нельзя.",
     "description": "Body size: why two bodies cannot be paired. {0} is the body part (chest, legs…), {1:P0} the share that matched — keep the :P0."
   },
+  "Parts.Retarget.Refuse.NoSkinThere.Fmt": {
+    "message": "Только {1:P0} исходного тела ({0}) находит кожу, на которую можно лечь: в этом варианте «{0}» целевого тела на остальной части нет кожи, а вместо неё нарисовано что-то другое, например смоделированное бельё, на которое подгонка не смогла его посадить. Выберите вариант этого тела с кожей в этом месте или подгоните под другое тело.",
+    "description": "Body size: why two bodies cannot be paired when the target option draws something else (such as modelled underwear) where the source has skin. {0} is the body part (chest, legs…), {1:P0} the share that landed on skin — keep the :P0."
+  },
   "Parts.Retarget.Bake.NoPath.Fmt": {
     "message": "у расового деформера нет пути из c{0:D4} в c{1:D4}",
     "description": "Why a model for the wearer's race could not be made; the {1} of Parts.Retarget.BakeFailed.Fmt. {0:D4} and {1:D4} are race codes such as 0101 — keep the c and the :D4. Lower-case, no full stop."

@@ -59,15 +59,12 @@ public class SkinlessTargetMeasureLocalTests(ITestOutputHelper output)
     [MemberData(nameof(Pairs))]
     public void Neolithe_SFW_legs_onto_Muse_SFW_measure_within_the_thresholds(string neolithe, string muse)
     {
-        int carriedFar = 0;
-        UvAtlasCorrespondence.DebugHook = s => { if (s == "carried far") carriedFar++; else output.WriteLine(s); };
         var (built, refusal, m, _) = Measure(neolithe, muse);
-        output.WriteLine($"carried far {carriedFar}");
         output.WriteLine($"{neolithe} -> {muse}: {(built ? "built" : refusal)}");
         output.WriteLine($"  landed {m.Landed}/{m.Placeable} ({m.VertexCoverage:P1}); no landing {m.NoLanding}; astray {m.Astray}; " +
                          $"excused {m.Excused}; set aside {m.Disagreed}+{m.Unvouched}; cover p99 {m.P99Cover * 1000f:F1} mm " +
                          $"max {m.MaxCover * 1000f:F1} mm; unprojected {m.Unprojected}; on skin {m.OnSkin}; " +
-                         $"pieces reverted {m.ComponentsReverted}; folded elsewhere {m.FoldedElsewhere}; " +
+                         $"folded elsewhere {m.FoldedElsewhere}; " +
                          $"folded in islands {m.FoldedInIslands}");
         Assert.True(built, refusal);
 

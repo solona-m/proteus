@@ -4583,6 +4583,10 @@
     "message": "Solo el {1:P0} del cuerpo de {0} de origen encuentra su sitio en el destino por coordenada de textura, así que no comparten distribución de textura. No se pueden ajustar el uno al otro.",
     "description": "Body size: why two bodies cannot be paired. {0} is the body part (chest, legs…), {1:P0} the share that matched — keep the :P0."
   },
+  "Parts.Retarget.Refuse.NoSkinThere.Fmt": {
+    "message": "Solo el {1:P0} del cuerpo {0} de origen encuentra piel donde aterrizar: esta opción de {0} del cuerpo de destino no tiene piel sobre el resto y dibuja allí otra cosa, como ropa interior modelada, sobre la que el reajuste no pudo colocarlo. Elige una opción de ese cuerpo que tenga piel ahí, o reajusta a otro cuerpo.",
+    "description": "Body size: why two bodies cannot be paired when the target option draws something else (such as modelled underwear) where the source has skin. {0} is the body part (chest, legs…), {1:P0} the share that landed on skin — keep the :P0."
+  },
   "Parts.Retarget.Bake.NoPath.Fmt": {
     "message": "el deformador racial no tiene camino de c{0:D4} a c{1:D4}",
     "description": "Why a model for the wearer's race could not be made; the {1} of Parts.Retarget.BakeFailed.Fmt. {0:D4} and {1:D4} are race codes such as 0101 — keep the c and the :D4. Lower-case, no full stop."

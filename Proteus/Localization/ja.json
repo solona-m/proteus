@@ -4583,6 +4583,10 @@
     "message": "変換元の{0}の体のうち、テクスチャ座標で変換先に位置が見つかるのは {1:P0} だけです。両者はテクスチャレイアウトを共有していないため、相互に変換できません。",
     "description": "Body size: why two bodies cannot be paired. {0} is the body part (chest, legs…), {1:P0} the share that matched — keep the :P0."
   },
+  "Parts.Retarget.Refuse.NoSkinThere.Fmt": {
+    "message": "変換元の{0}の体のうち、着地できる肌が見つかるのは {1:P0} だけです。変換先の体のこの{0}オプションには残りの部分に肌がなく、代わりにモデリングされた下着などが描かれていて、そこに合わせることができませんでした。その部分に肌があるこの体のオプションを選ぶか、別の体に変換してください。",
+    "description": "Body size: why two bodies cannot be paired when the target option draws something else (such as modelled underwear) where the source has skin. {0} is the body part (chest, legs…), {1:P0} the share that landed on skin — keep the :P0."
+  },
   "Parts.Retarget.Bake.NoPath.Fmt": {
     "message": "種族デフォーマーに c{0:D4} から c{1:D4} への経路がありません",
     "description": "Why a model for the wearer's race could not be made; the {1} of Parts.Retarget.BakeFailed.Fmt. {0:D4} and {1:D4} are race codes such as 0101 — keep the c and the :D4. Lower-case, no full stop."

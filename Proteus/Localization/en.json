@@ -4583,6 +4583,10 @@
     "message": "Only {1:P0} of the source {0} body finds its place on the target by texture coordinate, so the two do not share a texture layout. They cannot be refitted onto each other.",
     "description": "Body size: why two bodies cannot be paired. {0} is the body part (chest, legs…), {1:P0} the share that matched — keep the :P0."
   },
+  "Parts.Retarget.Refuse.NoSkinThere.Fmt": {
+    "message": "Only {1:P0} of the source {0} body finds skin to land on: this {0} option of the target body has no skin over the rest of it and draws something else there, such as modelled underwear, that the refit could not fit it onto. Choose an option of that body that has skin there, or refit onto another body.",
+    "description": "Body size: why two bodies cannot be paired when the target option draws something else (such as modelled underwear) where the source has skin. {0} is the body part (chest, legs…), {1:P0} the share that landed on skin — keep the :P0."
+  },
   "Parts.Retarget.Bake.NoPath.Fmt": {
     "message": "the racial deformer has no way from c{0:D4} to c{1:D4}",
     "description": "Why a model for the wearer's race could not be made; the {1} of Parts.Retarget.BakeFailed.Fmt. {0:D4} and {1:D4} are race codes such as 0101 — keep the c and the :D4. Lower-case, no full stop."

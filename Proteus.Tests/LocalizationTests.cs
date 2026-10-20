@@ -203,6 +203,19 @@ public sealed class LocalizationTests
         }
     }
 
+    /// <summary>The refusal for a target option with no skin where the source has it is translated, not copied.</summary>
+    [Theory]
+    [MemberData(nameof(Translations))]
+    [Trait("Plan", "AC-skinless-target-4")]
+    public void NoSkinThere_is_translated_not_copied(string lang)
+    {
+        const string key = "Parts.Retarget.Refuse.NoSkinThere.Fmt";
+        var en = Load(Source);
+        var tr = Load(lang);
+        Assert.True(tr.ContainsKey(key), $"[{lang}] has no {key}");
+        Assert.NotEqual(en[key].Message, tr[key].Message);
+    }
+
     /// <summary>
     /// The Keep shape release's words: the warning, and the tooltip's last line — under a key of its own, so a
     /// translation of the tooltip as it was before cannot stand in for it.

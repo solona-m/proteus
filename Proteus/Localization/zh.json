@@ -4583,6 +4583,10 @@
     "message": "源{0}体型只有 {1:P0} 能通过贴图坐标在目标上找到位置，因此二者不共享贴图布局，无法相互转换。",
     "description": "Body size: why two bodies cannot be paired. {0} is the body part (chest, legs…), {1:P0} the share that matched — keep the :P0."
   },
+  "Parts.Retarget.Refuse.NoSkinThere.Fmt": {
+    "message": "源{0}身体只有 {1:P0} 能落到皮肤上：目标身体的这个{0}选项在其余部分没有皮肤，而是绘制了别的东西（例如建模的内衣），重新适配无法贴合上去。请选择该身体在此处有皮肤的选项，或改为适配到其他身体。",
+    "description": "Body size: why two bodies cannot be paired when the target option draws something else (such as modelled underwear) where the source has skin. {0} is the body part (chest, legs…), {1:P0} the share that landed on skin — keep the :P0."
+  },
   "Parts.Retarget.Bake.NoPath.Fmt": {
     "message": "种族变形器没有从 c{0:D4} 到 c{1:D4} 的路径",
     "description": "Why a model for the wearer's race could not be made; the {1} of Parts.Retarget.BakeFailed.Fmt. {0:D4} and {1:D4} are race codes such as 0101 — keep the c and the :D4. Lower-case, no full stop."

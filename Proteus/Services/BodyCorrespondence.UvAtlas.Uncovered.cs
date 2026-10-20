@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Numerics;
 
 namespace Proteus.Services;
@@ -23,6 +24,9 @@ internal sealed partial class UvAtlasCorrespondence
     /// </summary>
     internal const float CoverReach = 0.04f;
 
+    /// <summary>How far inside the target's smallclothes (1 mm) a carried point must lie to count as pressed out onto them.</summary>
+    private const float PressedDepth = 0.001f;
+
     /// <summary>The share of the source's skin that must land on real skin, whatever the target draws elsewhere.</summary>
     internal const float MinLandedOnSkin = 0.5f;
 
@@ -34,7 +38,7 @@ internal sealed partial class UvAtlasCorrespondence
 
     /// <summary>How many times a projection that turns a triangle over is relaxed node by node before its whole piece is
     /// undone.</summary>
-    private const int FoldRounds = 3;
+    private const int FoldRounds = 8;
 
     /// <summary>The most of the excused points that may keep their carried move instead of landing on the body.</summary>
     internal const float MaxUnprojectedShare = 0.05f;
@@ -125,7 +129,7 @@ internal sealed partial class UvAtlasCorrespondence
         result = result with
         {
             Unprojected = projection.Unprojected, OnSkin = projection.OnSkin,
-            ComponentsReverted = projection.ComponentsReverted, FoldedElsewhere = projection.FoldedElsewhere,
+            FoldedElsewhere = projection.FoldedElsewhere,
             FoldedInIslands = projection.FoldedInIslands,
         };
         if (!projection.Fits) return RefuseNoSkin(what, measured.VertexCoverage, out refusal);
@@ -147,14 +151,14 @@ internal sealed partial class UvAtlasCorrespondence
     }
 
     /// <summary>What the projection did, and whether the result may stand.</summary>
-    private readonly record struct Projection(bool Fits, int Unprojected, int OnSkin, int ComponentsReverted,
-                                              int FoldedElsewhere, int FoldedInIslands);
+    private readonly record struct Projection(bool Fits, int Unprojected, int OnSkin, int FoldedElsewhere,
+                                              int FoldedInIslands);
 
     /// <summary>
     /// Lands each excused point — weld twins together, from their averaged carried move — on the nearest point of the
-    /// target as worn, on its own side. A landing that turns a source skin triangle over is undone node by node, then
-    /// for its whole connected piece; a fold that still touches a moved point, too many points left at the carry, or one
-    /// of them left off the body, and the fit does not stand.
+    /// target as worn, on its own side. A landing that turns a source skin triangle over is relaxed toward its
+    /// neighbours; a fold that still touches a moved point, too many points left off the body, or one of them further
+    /// off it than <see cref="CarriedOnlyReach"/>, and the fit does not stand.
     /// </summary>
     private static Projection Project(ModelParts source, ModelParts target, List<int> skin, SkinNodes nodes,
                                       HashSet<int> excused, HashSet<int> setAside, Vector3?[] field, sbyte[] sides,
@@ -175,6 +179,8 @@ internal sealed partial class UvAtlasCorrespondence
 
         var projected = new HashSet<int>();
         var onSkinNodes = new HashSet<int>();
+        var normalOf = new Dictionary<int, Vector3>();
+        var pressed = new HashSet<int>();
         foreach (var (n, (members, sum)) in carriedOf)
         {
             var move = sum / members.Count;
@@ -185,6 +191,8 @@ internal sealed partial class UvAtlasCorrespondence
             {
                 landed = hit.Point - p;
                 projected.Add(n);
+                normalOf[n] = hit.Normal;
+                if (Vector3.Dot(p + move - hit.Point, hit.Normal) < -PressedDepth) pressed.Add(n);
                 if (!smallclothes[hit.A]) onSkinNodes.Add(n);
             }
             foreach (int v in members) field[v] = landed;
@@ -195,7 +203,6 @@ internal sealed partial class UvAtlasCorrespondence
         // turns half its triangles over by its shape alone (459 of the 493 folds measured on Muse). Such an island
         // follows the skin around it like one drawn off the sheet, and its folds are recorded, not judged.
         var tris = SkinTriangles(source);
-        var pieceOf = ExcusedPieces(tris, excused);
         var detached = DetachedIslands(tris, excused);
         var judged = new List<(int A, int B, int C)>();
         int inIslands = 0;
@@ -203,74 +210,101 @@ internal sealed partial class UvAtlasCorrespondence
             if (!detached.Contains(t.A) || !detached.Contains(t.B) || !detached.Contains(t.C)) judged.Add(t);
             else if (Folded(source, field, t.A, t.B, t.C)) inIslands++;
 
-        void Revert(int n)
+        // Skin the target's smallclothes bridge (the butt cleft, under the seat of Muse's boxers) lies inside them and
+        // is pressed out onto them: its walls meet on one smooth surface and cross there by their shape alone, every
+        // point on the body. A triangle every corner of which was pressed out is recorded like the islands, not judged.
+        bool Pressed(int a, int b, int c)
+            => pressed.Contains(nodes.NodeOf[a]) && pressed.Contains(nodes.NodeOf[b]) && pressed.Contains(nodes.NodeOf[c])
+               && excused.Contains(a) && excused.Contains(b) && excused.Contains(c);
+
+        // Turned over: for a triangle laid on the body (every corner landed), facing into it where it lies — a cleft's
+        // wall laid flat on the seat of the boxers faces sideways before and back after, and against its own normal
+        // reads as turned over by noise; for any other, against its own normal.
+        bool TurnedOver(int a, int b, int c)
         {
-            if (!projected.Remove(n)) return;
-            var (members, move) = carriedOf[n];
-            foreach (int v in members) field[v] = move;
+            if (normalOf.TryGetValue(nodes.NodeOf[a], out var na) && normalOf.TryGetValue(nodes.NodeOf[b], out var nb)
+                && normalOf.TryGetValue(nodes.NodeOf[c], out var nc)
+                && excused.Contains(a) && excused.Contains(b) && excused.Contains(c))
+            {
+                Vector3 pa = P(source, a) + field[a]!.Value, pb = P(source, b) + field[b]!.Value, pc = P(source, c) + field[c]!.Value;
+                return Vector3.Dot(Vector3.Cross(pb - pa, pc - pa), na + nb + nc) <= 0f;
+            }
+            return Folded(source, field, a, b, c);
         }
 
-        // A landing that turns a triangle over moves to where its neighbours landed, averaged, and lands again: the fold
-        // relaxes on the body instead of being pulled back to the carry, which can lie centimetres off it.
-        for (int round = 0; round < FoldRounds; round++)
+        // The excused nodes a triangle turned over touches.
+        HashSet<int> Folding()
         {
             var folding = new HashSet<int>();
             foreach (var (a, b, c) in judged)
             {
-                if (!Folded(source, field, a, b, c)) continue;
+                if (Pressed(a, b, c) || !TurnedOver(a, b, c)) continue;
                 foreach (int v in new[] { a, b, c })
-                    if (excused.Contains(v) && projected.Contains(nodes.NodeOf[v])) folding.Add(nodes.NodeOf[v]);
+                    if (excused.Contains(v)) folding.Add(nodes.NodeOf[v]);
             }
-            DebugHook?.Invoke($"round {round}: folding nodes {folding.Count}");
+            return folding;
+        }
+
+        // A node's neighbours' moves, averaged: where the skin around it says it goes.
+        Vector3? Around(int n)
+        {
+            var sum = Vector3.Zero;
+            int count = 0;
+            foreach (int m in nodes.Ring1[n])
+                foreach (int w in nodes.Members[m])
+                    if (field[w] is { } d) { sum += d; count++; }
+            return count > 0 ? sum / count : null;
+        }
+
+        // A landing that turns a triangle over moves to where its neighbours landed, averaged, and lands again: the fold
+        // relaxes on the body instead of being pulled back to the carry, which can lie centimetres off it. What still
+        // folds after that relaxes the same way off the body — a sliver between landings that cross — and is counted.
+        for (int round = 0; round < 2 * FoldRounds; round++)
+        {
+            var folding = Folding();
             if (folding.Count == 0) break;
 
-            var relaxed = new List<(int Node, Vector3 Move, bool Landed)>();
+            // The crossing is between neighbours (the butt cleft's two walls pressed onto one smooth seat), so the
+            // whole neighbourhood relaxes, not just the node a fold touches.
+            foreach (int n in folding.ToArray())
+                foreach (int m in nodes.Ring1[n])
+                    if (carriedOf.ContainsKey(m)) folding.Add(m);
+            bool land = round < FoldRounds;
+            var relaxed = new List<(int Node, Vector3 Move, Vector3? Normal)>();
             foreach (int n in folding)
             {
-                var sum = Vector3.Zero;
-                int count = 0;
-                foreach (int m in nodes.Ring1[n])
-                    foreach (int w in nodes.Members[m])
-                        if (field[w] is { } d) { sum += d; count++; }
-                if (count == 0) continue;
+                if (Around(n) is not { } move) continue;
                 var p = P(source, nodes.Members[n][0]);
-                var move = sum / count;
-                bool landed = worn.Nearest(p + move, CoverReach, out var hit, sides, -SideOf(p.X));
-                relaxed.Add((n, landed ? hit.Point - p : move, landed));
+                BodySurface.Hit hit = default;
+                bool landed = land && worn.Nearest(p + move, CoverReach, out hit, sides, -SideOf(p.X));
+                relaxed.Add((n, landed ? hit.Point - p : move, landed ? hit.Normal : null));
             }
-            foreach (var (n, move, landed) in relaxed)
+            foreach (var (n, move, normal) in relaxed)
             {
                 foreach (int v in carriedOf[n].Members) field[v] = move;
-                if (!landed) projected.Remove(n);
+                if (normal is { } landedNormal) normalOf[n] = landedNormal;
+                else
+                {
+                    projected.Remove(n);
+                    normalOf.Remove(n);
+                }
             }
         }
 
-        // Still folding: the whole connected piece of excused skin goes back to where the skin around it put it.
-        int components = 0;
-        var revertedPieces = new HashSet<int>();
-        foreach (var (a, b, c) in judged)
-        {
-            if (!Folded(source, field, a, b, c)) continue;
-            foreach (int v in new[] { a, b, c })
-            {
-                if (!excused.Contains(v) || !projected.Contains(nodes.NodeOf[v])) continue;
-                int piece = pieceOf[v];
-                if (!revertedPieces.Add(piece)) continue;
-                components++;
-                foreach (int w in excused)
-                    if (pieceOf[w] == piece) Revert(nodes.NodeOf[w]);
-            }
-        }
-
-        DebugHook?.Invoke($"pieces reverted {components}");
         bool fits = true;
         int elsewhere = 0;
         foreach (var (a, b, c) in judged)
         {
-            if (!Folded(source, field, a, b, c)) continue;
+            if (!TurnedOver(a, b, c)) continue;
+            if (Pressed(a, b, c) && projected.Contains(nodes.NodeOf[a]) && projected.Contains(nodes.NodeOf[b])
+                && projected.Contains(nodes.NodeOf[c]))
+            {
+                inIslands++;
+                continue;
+            }
             bool ours = excused.Contains(a) || excused.Contains(b) || excused.Contains(c)
                      || setAside.Contains(a) || setAside.Contains(b) || setAside.Contains(c);
-            if (ours) { fits = false; DebugHook?.Invoke($"fold left at y {P(source, a).Y:F3}"); }
+            if (ours) fits = false;
             else elsewhere++;
         }
 
@@ -283,11 +317,11 @@ internal sealed partial class UvAtlasCorrespondence
                 continue;
             }
             unprojected++;
-            if (!worn.Nearest(P(source, v) + field[v]!.Value, CarriedOnlyReach, out _)) { fits = false; DebugHook?.Invoke("carried far"); }
+            if (!worn.Nearest(P(source, v) + field[v]!.Value, CarriedOnlyReach, out _)) fits = false;
         }
         if (unprojected > MaxUnprojectedShare * excused.Count) fits = false;
 
-        return new Projection(fits, unprojected, onSkin, components, elsewhere, inIslands);
+        return new Projection(fits, unprojected, onSkin, elsewhere, inIslands);
     }
 
     /// <summary>
@@ -327,7 +361,6 @@ internal sealed partial class UvAtlasCorrespondence
         return detached;
     }
 
-    internal static Action<string>? DebugHook;
 
     private static Vector3 P(ModelParts m, int v) => new(m.Positions[v * 3], m.Positions[v * 3 + 1], m.Positions[v * 3 + 2]);
 
@@ -385,26 +418,5 @@ internal sealed partial class UvAtlasCorrespondence
         if (before.LengthSquared() < 1e-20f) return false;
         var after = Vector3.Cross(pb + db - (pa + da), pc + dc - (pa + da));
         return Vector3.Dot(before, after) <= 0f;
-    }
-
-    /// <summary>The connected pieces of excused skin, joined by triangle: each excused vertex's piece.</summary>
-    private static Dictionary<int, int> ExcusedPieces(List<(int A, int B, int C)> tris, HashSet<int> excused)
-    {
-        var parent = new Dictionary<int, int>();
-        foreach (int v in excused) parent[v] = v;
-        int Root(int v)
-        {
-            while (parent[v] != v) v = parent[v] = parent[parent[v]];
-            return v;
-        }
-        foreach (var (a, b, c) in tris)
-        {
-            if (excused.Contains(a) && excused.Contains(b)) parent[Root(b)] = Root(a);
-            if (excused.Contains(b) && excused.Contains(c)) parent[Root(c)] = Root(b);
-            if (excused.Contains(a) && excused.Contains(c)) parent[Root(c)] = Root(a);
-        }
-        var pieceOf = new Dictionary<int, int>();
-        foreach (int v in excused) pieceOf[v] = Root(v);
-        return pieceOf;
     }
 }
