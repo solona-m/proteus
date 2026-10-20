@@ -400,13 +400,217 @@ public class OtherRaceRefitTests
     [Fact]
     [Trait("Plan", "EDGE-refit-other-race-5")]
     [Trait("Plan", "EDGE-refit-other-race-13")]
-    public void No_choice_down_and_the_drawn_race_picked_is_as_drawn()
+    public void The_drawn_race_picked_is_as_drawn()
     {
-        // A Highlander man's model is never offered for Midlanders.
-        Assert.Empty(Offered(HighlanderShirt, TbseX(), [Model(HighlanderShirt, "s.mdl")]));
-        // The drawn race picked: refitted as drawn, even where the character would have had it baked.
+        // The drawn race picked: refitted as drawn, even where the character would have had it baked up.
         var forRoegadyn = new RacialModelBake.Route(101, 901, Down: false);
         Assert.Equal(RacialModelBake.Route.None, OtherRaceRefit.Resolve(forRoegadyn, 101, 101, Offered(Shirt, TbseX())));
+    }
+
+    // ── a race below the drawn one (refit-race-down) ────────────────────────
+
+    private static readonly PenumbraModMeta.Redirect[] OnlyHighlander = [Model(HighlanderShirt, "shirt/c0301e6091_top.mdl")];
+
+    private static readonly RacialModelBake.Route Lowered101 = new(301, 101, Down: false, Lowered: true);
+
+    [Theory]
+    [InlineData(0)]
+    [InlineData(101)]
+    [InlineData(301)]
+    [InlineData(201)]
+    [Trait("Plan", "AC-refit-race-down-1")]
+    [Trait("Plan", "EDGE-refit-race-down-8")]
+    public void A_highlander_only_top_is_offered_midlander_whatever_the_wearer(int wearer)
+    {
+        var target = TbseX(Body("0201", "_top", "F"));
+        var offered = Offered(HighlanderShirt, target, OnlyHighlander);
+        var only = Assert.Single(offered);   // never Midlander F
+        Assert.Equal((101, OtherRaceRefit.Block.None, true), (only.Race, only.Blocked, only.Below));
+
+        var races = RefitCore.RacesOf(target);
+        var automatic = wearer == 0 ? RacialModelBake.Route.None
+            : RefitCore.Route(HighlanderShirt, (ushort)wearer, c => races.Contains($"{c:D4}"),
+                              c => races.Contains($"{c:D4}"), OnlyHighlander, null);
+        var entries = OtherRaceRefit.PickerEntries(automatic, 301, offered);
+        Assert.Contains(entries, e => e.Kind == OtherRaceRefit.EntryKind.ThisModel && e.Race == 301);
+        Assert.Contains(entries, e => e.Kind == OtherRaceRefit.EntryKind.Other && e.Race == 101);
+        Assert.Equal(Lowered101, OtherRaceRefit.Resolve(automatic, 101, 301, offered));
+
+        // A Lalafell woman's model has no race of her sex below it.
+        const string lala = "chara/equipment/e6091/model/c1201e6091_top.mdl";
+        Assert.Empty(Offered(lala, TbseX(Body("1201", "_top", "Lala F"), Body("0201", "_top", "F")), [Model(lala, "l.mdl")]));
+    }
+
+    [Fact]
+    [Trait("Plan", "AC-refit-race-down-2")]
+    public void Picking_midlander_lowers_and_every_list_is_midlander_s()
+    {
+        var target = TbseX();
+        var route = OtherRaceRefit.Resolve(RacialModelBake.Route.None, 101, 301, Offered(HighlanderShirt, target, OnlyHighlander));
+        Assert.Equal(Lowered101, route);
+        Assert.True(route.ChangesModel);
+        Assert.True(route.BendsDown);
+        Assert.Equal("0101", route.Race(HighlanderShirt));
+        Assert.True(OtherRaceRefit.InForce(101, 301, Offered(HighlanderShirt, target, OnlyHighlander)));
+        var onto = OtherRaceRefit.OnlyRace(target, 101);
+        Assert.Equal(["_top", "_dwn"], onto.SlotsFor("0101"));
+        Assert.DoesNotContain(onto.Options, o => BodySizeCatalog.RaceOf(o.GamePath) != "0101");
+    }
+
+    [Fact]
+    [Trait("Plan", "AC-refit-race-down-4")]
+    public void The_note_says_who_wears_a_lowered_refit()
+    {
+        Assert.Equal(OtherRaceRefit.WearNote.PickedAndFallThrough, OtherRaceRefit.Wears(Lowered101));
+        Assert.Equal(OtherRaceRefit.WearNote.OnlyPicked, OtherRaceRefit.Wears(Up301));
+        string said = string.Format(Proteus.Localization.Strings.Parts.RetargetRaceBelowFmt, "Midlander M", "Highlander M");
+        Assert.Contains("Midlander M", said);
+        Assert.Contains("Highlander M", said);
+        // And the note above it says a model is made, never that none exists: Midlanders wear the game's today.
+        string made = string.Format(Proteus.Localization.Strings.Parts.RetargetLoweredFmt, "Highlander M", "Midlander M");
+        Assert.DoesNotContain("No Midlander", made);
+        Assert.Contains("Midlander M", made);
+    }
+
+    [Fact]
+    [Trait("Plan", "AC-refit-race-down-5")]
+    [Trait("Plan", "EDGE-refit-race-down-5")]
+    public void A_midlander_model_the_author_made_blocks_and_ours_does_not()
+    {
+        var authors = new[] { Model(HighlanderShirt, "s/c0301.mdl"), Model(Shirt, "s/c0101.mdl") };
+        var own = Assert.Single(Offered(HighlanderShirt, TbseX(), authors));
+        Assert.Equal(OtherRaceRefit.Block.OwnModel, own.Blocked);
+        Assert.Equal(Shirt, own.OwnModelPath);
+        Assert.True(OtherRaceRefit.Blocked(101, [own]));
+        Assert.Equal(RacialModelBake.Route.None, OtherRaceRefit.Resolve(RacialModelBake.Route.None, 101, 301, [own]));
+
+        var ours = new BodyRetargetWriter.Record { Options = [new BodyRetargetWriter.Entry { File = "Body Retarget/m.mdl" }] };
+        var saved = new[] { Model(HighlanderShirt, "s/c0301.mdl"), Model(Shirt, "Body Retarget/m.mdl") };
+        Assert.Equal(OtherRaceRefit.Block.None, Assert.Single(Offered(HighlanderShirt, TbseX(), saved, ours)).Blocked);
+    }
+
+    [Theory]
+    [InlineData(true, 301, "OtherRace")]   // a Highlander draws the preview, bent onto him
+    [InlineData(false, 101, "NotDrawn")]   // a Midlander draws the game's c0101, not this model
+    [InlineData(true, 101, "None")]
+    [Trait("Plan", "AC-refit-race-down-6")]
+    public void The_lowered_preview_note_follows_who_draws_the_highlander_path(bool draws, int character, string expected)
+        => Assert.Equal(expected, OtherRaceRefit.NoteFor(draws, (ushort)character, 101).ToString());
+
+    [Fact]
+    [Trait("Plan", "AC-refit-race-down-7")]
+    [Trait("Plan", "EDGE-refit-race-down-9")]
+    public void Every_same_sex_ancestor_with_bodies_is_offered_below()
+    {
+        var target = TbseX(Body("0901", "_top", "M Roegadyn"), Body("1501", "_top", "M Hrothgar"));
+        const string hrothgar = "chara/equipment/e6091/model/c1501e6091_top.mdl";
+        var forHim = Offered(hrothgar, target, [Model(hrothgar, "h.mdl")]);
+        Assert.Equal([(901, true), (101, true)], forHim.Select(c => ((int)c.Race, c.Below)).OrderByDescending(x => x.Item1));
+
+        const string roegadyn = "chara/equipment/e6091/model/c0901e6091_top.mdl";
+        var forRoe = Offered(roegadyn, target, [Model(roegadyn, "r.mdl")]);
+        Assert.Equal([(101, true), (1501, false)], forRoe.Select(c => ((int)c.Race, c.Below)).OrderBy(x => x.Item1));
+        Assert.Equal(new RacialModelBake.Route(901, 1501, false), OtherRaceRefit.Resolve(default, 1501, 901, forRoe));
+        Assert.Equal(new RacialModelBake.Route(901, 101, false, true), OtherRaceRefit.Resolve(default, 101, 901, forRoe));
+
+        Assert.Equal([1501, 901, 101], OtherRaceRefit.LineDown(1501, 101).Select(r => (int)r));
+        Assert.Equal([301, 101], OtherRaceRefit.LineDown(301, 101).Select(r => (int)r));
+        Assert.Empty(OtherRaceRefit.LineDown(301, 201));
+        Assert.Empty(OtherRaceRefit.LineDown(101, 301));
+
+        // The women's lines: Highlander and Au Ra women to Midlander women.
+        var hers = TbseX(Body("0201", "_top", "F"));
+        foreach (int race in new[] { 401, 1401 })
+        {
+            string path = $"chara/equipment/e6091/model/c{race:D4}e6091_top.mdl";
+            var c = Assert.Single(Offered(path, hers, [Model(path, "f.mdl")]));
+            Assert.Equal((201, true), (c.Race, c.Below));
+        }
+    }
+
+    [Fact]
+    [Trait("Plan", "EDGE-refit-race-down-1")]
+    public void This_model_keeps_the_character_s_down_route()
+    {
+        var autoDown = new RacialModelBake.Route(301, 101, Down: true);
+        var offered = Offered(HighlanderShirt, TbseX(), OnlyHighlander);
+        Assert.Equal(autoDown, OtherRaceRefit.Resolve(autoDown, 301, 301, offered));
+        var entries = OtherRaceRefit.PickerEntries(autoDown, 301, offered);
+        Assert.Equal(OtherRaceRefit.EntryKind.ThisModel, OtherRaceRefit.Current(entries, 301, autoDown, 301).Kind);
+        Assert.Equal(OtherRaceRefit.EntryKind.ThisModel, OtherRaceRefit.Current(entries, 0, autoDown, 301).Kind);
+        // An up route the character would have is still dropped for "this model", as before.
+        Assert.Equal(RacialModelBake.Route.None, OtherRaceRefit.Resolve(Up301, 101, 101, Offered(Shirt, TbseX())));
+    }
+
+    [Fact]
+    [Trait("Plan", "EDGE-refit-race-down-6")]
+    public void A_model_between_the_drawn_race_and_the_pick_does_not_block_it()
+    {
+        var target = TbseX(Body("0901", "_top", "M Roegadyn"), Body("1501", "_top", "M Hrothgar"));
+        const string hrothgar = "chara/equipment/e6091/model/c1501e6091_top.mdl";
+        const string roegadyn = "chara/equipment/e6091/model/c0901e6091_top.mdl";
+        var offered = Offered(hrothgar, target, [Model(hrothgar, "h.mdl"), Model(roegadyn, "r.mdl")]);
+        Assert.Equal(OtherRaceRefit.Block.None, offered.Single(c => c.Race == 101).Blocked);
+        var roe = offered.Single(c => c.Race == 901);
+        Assert.Equal((OtherRaceRefit.Block.OwnModel, roegadyn), (roe.Blocked, roe.OwnModelPath));
+    }
+
+    [Fact]
+    [Trait("Plan", "EDGE-refit-race-down-7")]
+    public void The_character_s_down_route_and_the_pick_are_different_models()
+    {
+        const string auri = "chara/equipment/e0258/model/c1401e0258_dwn.mdl";
+        var down = new RacialModelBake.Route(1401, 201, Down: true);
+        var lowered = new RacialModelBake.Route(1401, 201, Down: false, Lowered: true);
+        Assert.NotEqual(down, lowered);
+        Assert.NotEqual(down.Tag, lowered.Tag);
+        Assert.NotEqual(Up301.Tag, lowered.Tag);
+        Assert.Equal(auri, down.SavePath(auri));
+        Assert.Equal("chara/equipment/e0258/model/c0201e0258_dwn.mdl", lowered.SavePath(auri));
+        Assert.False(down.ChangesModel);
+        Assert.True(lowered.ChangesModel);
+    }
+
+    [Theory]
+    [InlineData("TBSE-X IVCS2 — Large", "TBSE-X IVCS2 — Large (Midlander M)")]
+    [InlineData("TBSE-X IVCS2 — M Midlander Miqo'te Au'ra Elezen Viera", "TBSE-X IVCS2 — M Midlander Miqo'te Au'ra Elezen Viera")]
+    [Trait("Plan", "EDGE-refit-race-down-13")]
+    public void The_option_name_says_midlander_once(string name, string expected)
+        => Assert.Equal(expected, OtherRaceRefit.OptionName(name, 101));
+
+    [Fact]
+    [Trait("Plan", "EDGE-refit-race-down-14")]
+    public void No_row_below_for_the_game_s_gear()
+        => Assert.Empty(OtherRaceRefit.Offered(HighlanderShirt, TbseX(), OnlyHighlander, null, isVanilla: true));
+
+    [Fact]
+    [Trait("Plan", "EDGE-refit-race-down-15")]
+    public void A_lowered_extra_skeleton_garment_warns_about_fall_through_wearers()
+    {
+        var carry = new EstPlan(EstOutcome.Carry, 6085);
+        var present = new EstPlan(EstOutcome.Present, 7000);
+        Assert.True(OtherRaceRefit.WarnsFallThroughBones(Lowered101, carry));
+        Assert.True(OtherRaceRefit.WarnsFallThroughBones(Lowered101, present));
+        Assert.False(OtherRaceRefit.WarnsFallThroughBones(Lowered101, EstPlan.NotNeeded));
+        Assert.False(OtherRaceRefit.WarnsFallThroughBones(Lowered101, null));
+        Assert.False(OtherRaceRefit.WarnsFallThroughBones(Up301, carry));
+        Assert.Contains("Midlander M", string.Format(Proteus.Localization.Strings.Parts.RetargetRaceBelowExtraBonesFmt, "Midlander M"));
+    }
+
+    /// <summary>
+    /// After a save, a Midlander man draws the lowered refit at c0101 from the garment mod: auto refit sees a Midlander
+    /// model on a Midlander, with no route at all — as it sees a Highlander refit saved for a Highlander.
+    /// </summary>
+    [Fact]
+    [Trait("Plan", "AC-refit-race-down-3")]
+    public void Auto_refit_reads_a_saved_midlander_refit_as_a_plain_midlander_model()
+    {
+        var races = RefitCore.RacesOf(TbseX());
+        var saved = new[] { Model(HighlanderShirt, "s/c0301.mdl"), Model(Shirt, "Body Retarget/m.mdl") };
+        var ours = new BodyRetargetWriter.Record { Options = [new BodyRetargetWriter.Entry { File = "Body Retarget/m.mdl" }] };
+        Assert.Equal(RacialModelBake.Route.None,
+                     RefitCore.Route(Lowered101.SavePath(HighlanderShirt), 101, c => races.Contains($"{c:D4}"),
+                                     c => races.Contains($"{c:D4}"), saved, ours));
     }
 
     [Fact]
