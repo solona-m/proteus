@@ -4,14 +4,12 @@
 **English** · [日本語](docs/README.ja.md) · [Deutsch](docs/README.de.md) · [Français](docs/README.fr.md) · [简体中文](docs/README.zh.md) · [한국어](docs/README.ko.md) · [Español](docs/README.es.md) · [Русский](docs/README.ru.md)
 <!--/i18n-->
 
-Proteus is a Dalamud plugin for FFXIV that composites overlay textures onto your character's skin and equipment at runtime. Mod authors ship small PNG overlays alongside their Penumbra mods; Proteus blends them onto the base textures every time you change options, without touching the original mod files. Proteus can import Proteus-enabled pmp files, onion overlay omp files, and Atramentum Luminis glow tattoos. It can also edit the models of any mod you have installed, Proteus or not: reshape clothing, paint wind sway, add part switches, fit hair made for another race to yours, and fit hair under hats.
+Proteus is a Dalamud plugin for FFXIV that offers the following capabilities:
 
-Overlays can render two ways: painted into your skin, or as a **second skin** — a copy of your body's mesh drawn as gear, so an overlay can use sphere maps, metalness and animated glow that skin materials can't do.
-
+- **Composite overlay textures.** Adds overlays onto your character's skin and equipment at runtime, allowing you to toggle them on and off like regular mods. Overlays are baked to all compatible UVs such as bibo/gen3/gen2/vanilla.
+- **Have gear refit itself as you put it on.** Pick your body and size once per Penumbra collection, and chest, legs, hands and feet gear, and accessories that cover the body, such as a jacket on a necklace, are refitted to it the moment you wear them. 
+- **Studio.** Provides blender-like tools to manipulate meshes right on your character to fix clipping, add wind effects, and batch upscale gear to many bodies in seconds.
 - **Wear mods without giving up a gear slot.** A second skin has to be drawn as an item, but Proteus hides it on something you aren't using — invisible glasses, or a ring you don't have on, or appends it to your equipped accessories — so your actual glamour is untouched. There's nothing to set up; it picks a host on its own and never takes an item you're wearing.
-- **Reshape any mod's clothing, right on your character.** In the **Studio** tab, paint on a garment you're wearing to pull it clear of your body where skin pokes through, push it in, smooth it, stretch it across a crease, or paint where the wind sways it. Every edit saves into the mod and can be undone.
-- **Refit an outfit to your body.** The **Studio** can move a garment made for one body size onto another, or from one body mod to another, such as Neolithe to Rue or TBSE to TBSE-X, and save it as a new option in the mod. It works on the game's own gear too, and can add every size of other bodies to a whole mod in one go.
-- **Have gear refit itself as you put it on.** Pick your body once per Penumbra collection, and chest, legs, hands and feet gear, and accessories that cover the body, such as a jacket on a necklace, are refitted to it the moment you wear them.
 - **Add toggles to any part of any mod, not just Proteus ones.** When a mod welds a bow, a collar or a strap into geometry its author never made optional, the **Studio** tab can split that piece out and give it a real switch.
 - **Wear hair mods made for another race.** Many hair mods are made for one race only, so on anyone else the game shows its own hairstyle instead. Proteus bends the mod's hairstyle onto your race's head and adds it to the same mod, physics included, so it just works.
 - **Make modded hair fit under hats.** Proteus presses the hair a hat would cover flat against your head, so a hat stops going straight through it. It's on by default and only acts while you're wearing a hat.
@@ -21,6 +19,8 @@ If you need help, please look at this [Troubleshooting Guide](TROUBLESHOOTING.md
 Then, join https://discord.gg/solona and ask in the #help channel. This is still new but I'll work to fix any bugs asap!
 
 If you're a creator and want to make mods for Proteus, read the [Creator's Guide](For%20Creators.md).
+
+How AI was and wasn't used to make Proteus (There is no AI used at runtime in your game): [AI declaration](AI-DECLARATION.md)
 
 ---
 

@@ -4,14 +4,12 @@
 [English](../README.md) · [日本語](README.ja.md) · [Deutsch](README.de.md) · **Français** · [简体中文](README.zh.md) · [한국어](README.ko.md) · [Español](README.es.md) · [Русский](README.ru.md)
 <!--/i18n-->
 
-Proteus est un plugin Dalamud pour FFXIV qui compose des textures de calque sur la peau et l'équipement de votre personnage en temps réel. Les auteurs de mods livrent de petits calques PNG à côté de leurs mods Penumbra ; Proteus les fusionne avec les textures de base chaque fois que vous changez d'option, sans toucher aux fichiers d'origine du mod. Proteus peut importer des fichiers pmp compatibles Proteus, des fichiers de calques omp d'Onion et des tatouages lumineux Atramentum Luminis. Il peut aussi modifier les modèles de n'importe quel mod installé, Proteus ou non : remodeler des vêtements, peindre le balancement au vent, ajouter des interrupteurs de pièces, adapter à votre race les cheveux faits pour une autre, et adapter les cheveux aux chapeaux.
+Proteus est un plugin Dalamud pour FFXIV qui offre les fonctionnalités suivantes :
 
-Les calques peuvent être rendus de deux façons : peints dans votre peau, ou en **seconde peau** — une copie du maillage de votre corps dessinée comme un équipement, ce qui permet à un calque d'utiliser des sphere maps, de la métallicité et une lueur animée, choses impossibles avec les matériaux de peau.
-
+- **Composez des textures de calque.** Proteus ajoute des calques sur la peau et l'équipement de votre personnage en temps réel, que vous pouvez activer et désactiver comme des mods ordinaires. Les calques sont appliqués sur tous les UV compatibles, comme bibo/gen3/gen2/vanilla.
+- **Laissez l'équipement s'ajuster tout seul quand vous le portez.** Choisissez votre corps et votre taille une fois par collection Penumbra, et l'équipement de torse, de jambes, de mains et de pieds, ainsi que les accessoires qui couvrent le corps, comme une veste sur un collier, y sont ajustés dès que vous les portez.
+- **Studio.** Fournit des outils semblables à ceux de Blender pour modifier les maillages directement sur votre personnage : corriger les endroits où la peau passe au travers, ajouter des effets de vent, et adapter d'un coup un équipement à de nombreux corps en quelques secondes.
 - **Portez des mods sans sacrifier un emplacement d'équipement.** Une seconde peau doit forcément être dessinée comme un objet, mais Proteus la dissimule sur quelque chose que vous n'utilisez pas — des lunettes invisibles, une bague que vous ne portez pas, ou en l'ajoutant à vos accessoires équipés — de sorte que votre glamour réel n'est pas touché. Il n'y a rien à configurer : Proteus choisit l'hôte tout seul et ne prend jamais un objet que vous portez.
-- **Remodelez les vêtements de n'importe quel mod, directement sur votre personnage.** Dans l'onglet **Studio**, peignez sur un vêtement que vous portez pour l'écarter de votre corps là où la peau passe au travers, le rentrer, le lisser, le tendre par-dessus un pli, ou peindre là où le vent le fait balancer. Chaque modification est enregistrée dans le mod et peut être annulée.
-- **Réajustez une tenue à votre corps.** Le **Studio** peut faire passer un vêtement conçu pour une taille de corps à une autre, ou d'un mod de corps à un autre, par exemple de Neolithe à Rue ou de TBSE à TBSE-X, et l'enregistrer comme nouvelle option dans le mod. Cela fonctionne aussi sur l'équipement d'origine du jeu, et peut ajouter d'un coup toutes les tailles d'autres corps à un mod entier.
-- **Laissez l'équipement s'ajuster tout seul quand vous le portez.** Choisissez votre corps une fois par collection Penumbra, et l'équipement de torse, de jambes, de mains et de pieds, ainsi que les accessoires qui couvrent le corps, comme une veste sur un collier, y sont ajustés dès que vous les portez.
 - **Ajoutez des interrupteurs à n'importe quelle pièce de n'importe quel mod, pas seulement ceux de Proteus.** Quand un mod soude un nœud, un collier ou une sangle dans une géométrie que son auteur n'a jamais rendue optionnelle, l'onglet **Studio** peut détacher cette pièce et lui donner un vrai interrupteur.
 - **Portez des mods de cheveux faits pour une autre race.** Beaucoup de mods de cheveux ne sont faits que pour une seule race, si bien que sur toute autre, le jeu affiche sa propre coiffure à la place. Proteus plie la coiffure du mod sur la tête de votre race et l'ajoute au même mod, physique comprise : ça fonctionne, tout simplement.
 - **Adaptez les cheveux moddés aux chapeaux.** Proteus plaque contre votre tête les cheveux qu'un chapeau recouvrirait, pour que le chapeau cesse de passer au travers. C'est activé par défaut, et cela n'agit que pendant que vous portez un chapeau.
@@ -21,6 +19,8 @@ Si vous avez besoin d'aide, consultez d'abord ce [guide de dépannage](../TROUBL
 Rejoignez ensuite https://discord.gg/solona et posez votre question dans le salon #help. C'est encore tout neuf, mais je corrigerai les bugs dès que possible !
 
 Si vous êtes créateur et souhaitez faire des mods pour Proteus, lisez le [guide du créateur](../For%20Creators.md).
+
+Comment l'IA a été utilisée, ou non, pour créer Proteus (aucune IA n'est utilisée pendant que vous jouez) : [déclaration sur l'IA](AI-DECLARATION.fr.md)
 
 ---
 

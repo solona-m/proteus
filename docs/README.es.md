@@ -4,14 +4,12 @@
 [English](../README.md) · [日本語](README.ja.md) · [Deutsch](README.de.md) · [Français](README.fr.md) · [简体中文](README.zh.md) · [한국어](README.ko.md) · **Español** · [Русский](README.ru.md)
 <!--/i18n-->
 
-Proteus es un plugin de Dalamud para FFXIV que compone texturas de superposición sobre la piel y el equipo de tu personaje en tiempo real. Los autores de mods distribuyen pequeñas superposiciones PNG junto a sus mods de Penumbra; Proteus las mezcla con las texturas base cada vez que cambias de opción, sin tocar los archivos originales del mod. Proteus puede importar archivos pmp compatibles con Proteus, archivos omp de superposiciones de Onion y tatuajes luminosos de Atramentum Luminis. También puede editar los modelos de cualquier mod que tengas instalado, sea de Proteus o no: remodelar la ropa, pintar el balanceo con el viento, añadir interruptores de piezas, adaptar a tu raza el pelo hecho para otra y adaptar el pelo bajo los sombreros.
+Proteus es un plugin de Dalamud para FFXIV que ofrece las siguientes funciones:
 
-Las superposiciones pueden representarse de dos maneras: pintadas en tu piel, o como una **segunda piel** — una copia de la malla de tu cuerpo dibujada como equipo, de modo que una superposición puede usar sphere maps, metalicidad y brillo animado, cosas que los materiales de piel no permiten.
-
+- **Compón texturas de superposición.** Añade superposiciones sobre la piel y el equipo de tu personaje en tiempo real, para que puedas activarlas y desactivarlas como mods normales. Las superposiciones se aplican a todas las UV compatibles, como bibo/gen3/gen2/vanilla.
+- **Haz que el equipo se ajuste solo al ponértelo.** Elige tu cuerpo y tu talla una vez por colección de Penumbra, y el equipo de torso, piernas, manos y pies, y los accesorios que cubren el cuerpo, como una chaqueta en un collar, se ajustan a él en cuanto te los pones.
+- **Estudio.** Ofrece herramientas al estilo de Blender para manipular mallas directamente sobre tu personaje: corregir clipping, añadir efectos de viento y adaptar por lotes el equipo a muchos cuerpos en segundos.
 - **Lleva mods sin renunciar a una ranura de equipo.** Una segunda piel tiene que dibujarse como un objeto, pero Proteus la esconde en algo que no estás usando — unas gafas invisibles, un anillo que no llevas puesto, o añadiéndola a los accesorios que sí llevas — así que tu glamour real queda intacto. No hay nada que configurar: elige el alojamiento por su cuenta y nunca te quita un objeto que llevas puesto.
-- **Remodela la ropa de cualquier mod, directamente sobre tu personaje.** En la pestaña **Estudio**, pinta sobre una prenda que llevas puesta para apartarla de tu cuerpo donde asoma la piel, empujarla hacia dentro, suavizarla, estirarla sobre un pliegue o pintar dónde la mece el viento. Cada edición se guarda en el mod y se puede deshacer.
-- **Reajusta un conjunto a tu cuerpo.** El **Estudio** puede pasar una prenda hecha para una talla de cuerpo a otra, o de un mod de cuerpo a otro, como de Neolithe a Rue o de TBSE a TBSE-X, y guardarla como una opción nueva del mod. También funciona con el equipo propio del juego, y puede añadir de una vez todas las tallas de otros cuerpos a un mod entero.
-- **Haz que el equipo se ajuste solo al ponértelo.** Elige tu cuerpo una vez por colección de Penumbra, y el equipo de torso, piernas, manos y pies, y los accesorios que cubren el cuerpo, como una chaqueta en un collar, se ajustan a él en cuanto te los pones.
 - **Añade interruptores a cualquier pieza de cualquier mod, no solo a los de Proteus.** Cuando un mod suelda un lazo, un collar o una correa dentro de una geometría que su autor nunca hizo opcional, la pestaña **Estudio** puede separar esa pieza y darle un interruptor de verdad.
 - **Lleva mods de pelo hechos para otra raza.** Muchos mods de pelo están hechos para una sola raza, así que en cualquier otra el juego muestra su propio peinado en su lugar. Proteus adapta el peinado del mod a la cabeza de tu raza y lo añade al mismo mod, físicas incluidas, así que simplemente funciona.
 - **Haz que el pelo con mods quepa bajo los sombreros.** Proteus aplasta contra tu cabeza el pelo que cubriría un sombrero, para que el sombrero deje de atravesarlo. Está activado por defecto y solo actúa mientras llevas un sombrero puesto.
@@ -21,6 +19,8 @@ Si necesitas ayuda, consulta primero esta [guía de resolución de problemas](..
 Después, únete a https://discord.gg/solona y pregunta en el canal #help. Esto es todavía muy nuevo, ¡pero corregiré los fallos lo antes posible!
 
 Si eres creador y quieres hacer mods para Proteus, lee la [guía para creadores](../For%20Creators.md).
+
+Cómo se usó y cómo no se usó la IA para hacer Proteus (no se usa ninguna IA en tiempo de ejecución en tu juego): [declaración de IA](AI-DECLARATION.es.md)
 
 ---
 
