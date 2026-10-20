@@ -4587,6 +4587,14 @@
     "message": "저장하지 못했습니다: {0}",
     "description": "Body size status line. {0} is the error message."
   },
+  "Parts.Retarget.Save.NoMaterialSet.Fmt": {
+    "message": "{0}은(는) 새 바디의 속옷을 그리지만, 그 재질은 장비나 액세서리 모델 옆에만 저장할 수 있습니다.",
+    "description": "Body size save refused: {0} is the model's game path. The refit draws the new body's underwear, whose material must be saved beside an equipment model."
+  },
+  "Parts.Retarget.Save.NoMaterialName.Fmt": {
+    "message": "{0}이(가) 쓸 수 있는 재질 이름이 모두 사용 중이어서, 새 바디의 속옷을 저장할 고유한 이름이 없습니다.",
+    "description": "Body size save refused: {0} is the model's game path. Every free material name for the new body's underwear copy is already used."
+  },
   "Parts.Retarget.Undo.Removed.Fmt": {
     "message": "\"{0}\"을(를) 제거했습니다.",
     "description": "Body size status line after Undo. {0} is the option removed."

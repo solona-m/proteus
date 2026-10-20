@@ -216,7 +216,8 @@ public sealed class LocalizationTests
         var en = Load(Source);
         var tr = Load(lang);
         foreach (string key in new[] { "Parts.Retarget.Refuse.NoSkinThere.Fmt", "Parts.Retarget.Smallclothes.AfterSave",
-                                       "Parts.Retarget.Smallclothes.Fallback" })
+                                       "Parts.Retarget.Smallclothes.Fallback", "Parts.Retarget.Save.NoMaterialSet.Fmt",
+                                       "Parts.Retarget.Save.NoMaterialName.Fmt" })
         {
             Assert.True(tr.ContainsKey(key), $"[{lang}] has no {key}");
             Assert.NotEqual(en[key].Message, tr[key].Message);

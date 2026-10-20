@@ -4587,6 +4587,14 @@
     "message": "Could not save: {0}",
     "description": "Body size status line. {0} is the error message."
   },
+  "Parts.Retarget.Save.NoMaterialSet.Fmt": {
+    "message": "{0} draws the new body's underwear, whose material can only be saved beside an equipment or accessory model.",
+    "description": "Body size save refused: {0} is the model's game path. The refit draws the new body's underwear, whose material must be saved beside an equipment model."
+  },
+  "Parts.Retarget.Save.NoMaterialName.Fmt": {
+    "message": "Every material name {0} could use is taken, so the new body's underwear it draws has no name of its own to be saved under.",
+    "description": "Body size save refused: {0} is the model's game path. Every free material name for the new body's underwear copy is already used."
+  },
   "Parts.Retarget.Undo.Removed.Fmt": {
     "message": "Removed \"{0}\".",
     "description": "Body size status line after Undo. {0} is the option removed."

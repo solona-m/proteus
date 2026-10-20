@@ -429,8 +429,8 @@ internal static class BodyRetargetWriter
                     if (stale.Count == 0) return;
                     var published = Published(modRoot);
                     foreach (string rel in stale)
-                        if (Deletable(rel, published) && File.Exists(Path.Combine(modRoot, rel)))
-                            File.Delete(Path.Combine(modRoot, rel));
+                        if (Deletable(rel, published))
+                            DeleteQuietly(Path.Combine(modRoot, rel.Replace('/', Path.DirectorySeparatorChar)));
                 }
                 foreach (var refit0 in refits)
                 {
@@ -1010,8 +1010,9 @@ internal static class BodyRetargetWriter
         var set = SetFolder.Match(gamePath.Replace('\\', '/'));
         // A model that draws a material nothing publishes is not drawn at all in game: never save one.
         if (!set.Success)
-            throw new InvalidDataException($"{gamePath} draws the new body's underwear, whose material can only be " +
-                                           "saved beside an equipment or accessory model");
+            throw new InvalidDataException(string.Format(Loc.Localize("Parts.Retarget.Save.NoMaterialSet.Fmt",
+                "{0} draws the new body's underwear, whose material can only be saved beside an equipment or accessory " +
+                "model."), gamePath));
         string materials = set.Groups[1].Value + "material/";
 
         string replacing = $"{groupName} / {refit.Option}";
@@ -1037,28 +1038,27 @@ internal static class BodyRetargetWriter
         }
 
         byte[] model = refit.Model;
-        // The model's other materials: a copy's own placeholder name is about to be replaced, so it does not count.
+        // The model's materials. Each copy's own placeholder is set aside only while that copy is named: the placeholders
+        // of copies still to come are names the model draws, and renaming onto one would make two materials one.
         var names = new HashSet<string>(SecondSkinWriter.Parse(model).MatNames.Select(n => n.TrimStart('/')),
                                         StringComparer.OrdinalIgnoreCase);
-        foreach (var material in refit.Materials ?? []) names.Remove(material.Name);
         // Named for the model it is saved beside — its race, set and slot — so a later save of the same model, and only
         // of that model, recognises it as its own (see IsPublishedMaterial).
         string stem = "mt_" + Path.GetFileNameWithoutExtension(gamePath) + "_";
         var published = new List<BodyRetarget.PublishedMaterial>();
         foreach (var material in refit.Materials ?? [])
         {
+            names.Remove(material.Name);
             string? name = null;
             for (char c = 'z'; c >= 'a' && name == null; c--)
                 if (!taken.Contains(stem + c + ".mtrl") && !names.Contains(stem + c + ".mtrl")) name = stem + c + ".mtrl";
             if (name == null)
-                throw new InvalidDataException($"every material name of {gamePath} is taken, so the new body's underwear " +
-                                               "it draws has no name of its own to be saved under");
+                throw new InvalidDataException(string.Format(Loc.Localize("Parts.Retarget.Save.NoMaterialName.Fmt",
+                    "Every material name {0} could use is taken, so the new body's underwear it draws has no name of its " +
+                    "own to be saved under."), gamePath));
             if (!string.Equals(name, material.Name, StringComparison.OrdinalIgnoreCase))
-            {
                 model = ModelAttributeWriter.RenameMaterial(model, "/" + material.Name, "/" + name);
-                names.Remove(material.Name);
-                names.Add(name);
-            }
+            names.Add(name);
             taken.Add(name);
 
             string rel = Free(claimed, folder, TailOf(materials + variants.Min + "/" + name));

@@ -524,6 +524,36 @@ public class BodyRetargetWriterTests : IDisposable
     }
 
     [Fact]
+    [Trait("Plan", "EDGE-skinless-target-30")]
+    public void Two_copies_in_one_model_never_end_up_under_one_name()
+    {
+        // A model bringing in two of the new body's smallclothes (a bra and boxers), its first copy's name taken by
+        // another option: that copy moves, and not onto the name the second still has.
+        File.WriteAllText(Path.Combine(root, PenumbraModMeta.MetaFile), $$"""
+        {
+          "FileVersion": 4, "Name": "Test Outfit",
+          "DefaultData": { "Files": { "chara/equipment/e6255/material/v0001/mt_c0201e6255_top_z.mtrl": "theirs.mtrl" } },
+          "Groups": []
+        }
+        """);
+        var model = SyntheticModel.Build([], new SyntheticModel.Mesh("/mt_c0201e6255_top_a.mtrl", new SyntheticModel.Sub(0)),
+                                         new SyntheticModel.Mesh("/mt_c0201e6255_top_z.mtrl", new SyntheticModel.Sub(0)),
+                                         new SyntheticModel.Mesh("/mt_c0201e6255_top_y.mtrl", new SyntheticModel.Sub(0)));
+        var refit = new BodyRetargetWriter.Refit("Muse SFW", model, "Muse SFW",
+            Materials: [new BodyRetarget.PublishedMaterial("mt_c0201e6255_top_z.mtrl", [1], "/bra"),
+                        new BodyRetarget.PublishedMaterial("mt_c0201e6255_top_y.mtrl", [2], "/boxers")]);
+        Assert.True(BodyRetargetWriter.Save(root, Group, GamePath, "Muse+", "SFW M", [refit]).Ok);
+
+        var files = PenumbraModMeta.TryReadFileOptions(root, Group)!.Single(o => o.Name == "Muse SFW").Files;
+        var names = SecondSkinWriter.Parse(File.ReadAllBytes(FileOf(files[GamePath]))).MatNames;
+        Assert.Equal(names.Count, names.Distinct().Count());
+        Assert.Equal([1], File.ReadAllBytes(FileOf(files["chara/equipment/e6255/material/v0001/mt_c0201e6255_top_x.mtrl"])));
+        Assert.Equal([2], File.ReadAllBytes(FileOf(files["chara/equipment/e6255/material/v0001/mt_c0201e6255_top_y.mtrl"])));
+        Assert.Contains("/mt_c0201e6255_top_x.mtrl", names);
+        Assert.Contains("/mt_c0201e6255_top_y.mtrl", names);
+    }
+
+    [Fact]
     public void A_model_outside_an_equipment_set_cannot_save_a_material_and_says_so()
     {
         var outcome = BodyRetargetWriter.Save(root, Group, "chara/human/c0201/obj/body/b0001/model/c0201b0001_top.mdl",
