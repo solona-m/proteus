@@ -60,7 +60,7 @@ internal static partial class BodyRetarget
     /// push-out, outside the body the garment was made on or not, as builds before 1323 did (see
     /// <see cref="TargetBody.Fitted"/>).</param>
     /// <param name="NoCrotchEase">Leave cloth between the legs on the legs' weights the reading gave it, as builds before
-    /// 1334 did (see <see cref="EaseCrotch"/>).</param>
+    /// 1335 did (see <see cref="EaseCrotch"/>).</param>
     internal sealed record Tuning(bool NoFollow = false, bool NoOwnSkinWeights = false,
                                   float OwnSkinReach = OwnSkinReachDefault, float CopyReach = CopyReachDefault,
                                   float CopyTolerance = CopyToleranceDefault, bool NoGiveUp = false,
