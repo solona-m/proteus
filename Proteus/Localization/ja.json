@@ -3723,6 +3723,10 @@
     "message": "{0}のボディがないため、{0}モデルはゲームと同じ方法で{1}の体型に変形してリフィットし、{0}として保存し直します。",
     "description": ""
   },
+  "Parts.Retarget.Lowered.Fmt": {
+    "message": "{0}モデルから{1}モデルを作り、ゲームが両者の間で曲げるのと同じ方法で{1}の体型に曲げます。保存するとゲームに必要なメタデータが追加されます。",
+    "description": "{0} is the race of the model open, {1} the race picked below it."
+  },
   "Parts.Retarget.Bake.BendBack.Fmt": {
     "message": "リフィットを{0}の体型に戻せませんでした（{1}）",
     "description": ""
@@ -4312,7 +4316,7 @@
     "description": "Heads the dropdown that picks which race's model a refit is made and saved as."
   },
   "Parts.Retarget.Race.Tip": {
-    "message": "どの種族向けにリフィットするか。衣装と同じ性別の別の種族を選ぶと、このモデルからゲームと同じ方法で曲げた専用モデルを作り、その種族の体型にリフィットして、その種族が読み込む場所に保存します。他の種族はこのモデルのままです。",
+    "message": "どの種族向けにリフィットするか。衣装と同じ性別の別の種族を選ぶと、このモデルからゲームと同じ方法で曲げた専用モデルを作り、その種族の体型にリフィットして、その種族が読み込む場所に保存します。このモデルはそのまま残ります。",
     "description": "Tooltip of Parts.Retarget.Race.Label."
   },
   "Parts.Retarget.Race.ThisModel.Fmt": {
@@ -4338,6 +4342,14 @@
   "Parts.Retarget.Race.Only.Fmt": {
     "message": "保存したリフィットを着るのは{0}だけです。{1}はこのモデルのままです。",
     "description": "{0} is the race picked, {1} the race of the model open."
+  },
+  "Parts.Retarget.Race.Below.Fmt": {
+    "message": "保存したリフィットは{0}が着ます。この装備に専用モデルを持たない同じ性別の種族も同様です。{1}はこのモデルのままです。",
+    "description": "{0} is the race picked, {1} the race of the model open; said for a race the open one falls back to."
+  },
+  "Parts.Retarget.Race.BelowExtraBones.Fmt": {
+    "message": "この衣装は追加ボーンを使います。追加スケルトンが与えられるのは{0}だけなので、このリフィットを着る他の種族ではそのボーンは動きません。",
+    "description": "{0} is the race picked."
   },
   "Parts.Retarget.Race.SourceBaked.Fmt": {
     "message": "作成元の体型も同じ方法で{0}に曲げるので、元と同じように体に沿います。",
