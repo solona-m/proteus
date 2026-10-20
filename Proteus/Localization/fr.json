@@ -5354,5 +5354,49 @@
   "HairPort.Scan.UndoChecked.Confirm.Fmt": {
     "message": "Cliquez de nouveau pour annuler définitivement {0} coiffure(s)",
     "description": ""
+  },
+  "HairPort.Earless.Label": {
+    "message": "Retirer les oreilles des mods de cheveux miqo'te",
+    "description": ""
+  },
+  "HairPort.Earless.Tip": {
+    "message": "Pour une Miqo'te : quand vous portez un mod de cheveux dont la coiffure a des\noreilles de chat, Proteus en fait une copie sans oreilles et fait pointer l'option\ndu mod vers cette copie. Les fichiers de l'auteur ne sont jamais modifiés.\n\nCela modifie le mod lui-même : tout personnage affiché avec ce mod actif — dans\ntoutes les collections, et chez toute personne avec qui vous le partagez — n'a\nplus d'oreilles avec. Désactiver cette option remet les oreilles dans chaque mod\nmodifié par Proteus. Fonctionne avec ou sans l'adaptation des mods de cheveux\nfaits pour une autre race.",
+    "description": ""
+  },
+  "HairPort.Settings.Earless.Fmt": {
+    "message": "La coiffure {0} de {1} est affichée sans ses oreilles — pour tout personnage affiché avec ce mod actif, dans toutes les collections. Désactiver l'option les remet.",
+    "description": ""
+  },
+  "HairPort.Settings.EarlessOptionHint.Fmt": {
+    "message": "Ce mod a sa propre option sans oreilles : {0}",
+    "description": ""
+  },
+  "HairPort.Earless.Chat": {
+    "message": "[Proteus] Les oreilles de chat de cette coiffure sont retirées : Proteus a fait pointer son mod vers une copie sans oreilles, donc tout personnage affiché avec ce mod actif, dans toutes les collections, n'a plus d'oreilles avec. Désactivez « Retirer les oreilles des mods de cheveux miqo'te » dans /proteus > Paramètres > Cheveux pour les remettre.",
+    "description": ""
+  },
+  "HairPort.Earless.RestoreBlocked.Fmt": {
+    "message": "[Proteus] Les oreilles n'ont pas pu être remises dans {0} : {1}",
+    "description": ""
+  },
+  "HairPort.Earless.Restored.Fmt": {
+    "message": "Oreilles remises sur {0} coiffure(s).",
+    "description": ""
+  },
+  "HairPort.Earless.Refused.AuthorMissing.Fmt": {
+    "message": "le fichier de l'auteur {0} est introuvable, la copie sans oreilles a donc été gardée",
+    "description": ""
+  },
+  "HairPort.Earless.Refused.Changed": {
+    "message": "le mod a changé pendant que Proteus travaillait dessus, rien n'a donc été écrit",
+    "description": ""
+  },
+  "HairPort.Earless.Refused.Leftover": {
+    "message": "toutes ses oreilles n'ont pas pu être retirées",
+    "description": ""
+  },
+  "HairPort.Earless.Refused.RecordUnreadable": {
+    "message": "Le registre de Proteus des coiffures sans oreilles de ce mod (Proteus/earlesshair.json) n'a pas pu être lu, rien n'a donc été modifié.",
+    "description": ""
   }
 }

@@ -60,11 +60,29 @@ internal static class HairPortBuilder
         if (HairPortPlan.ReadOwners(modRoot) is not { } owners)
             return new Plan(writes, wanted.ToDictionary(t => t, _ => HairPortWriter.Unreadable), current, Unreadable: true);
 
-        // Each place that publishes the hairstyle from the author's own file.
+        // Each place that publishes the hairstyle from the author's own file — or from an earless copy of it, which is
+        // ported from the author's file it was made from: a Miqo'te's ears come out of a port to a race without them
+        // anyway, and the port then never goes out of date for the earless setting being switched.
         var serving = owners.Where(o => HairPortPlan.FileFor(o, sourceGamePath) is { } rel && !HairPortPlan.IsPortFile(rel))
                             .ToList();
         if (serving.FirstOrDefault(o => o.IsCombining) is { } combining)
             return new Plan(writes, wanted.ToDictionary(t => t, _ => HairPortWriter.Combining(combining.Group)), current);
+        var sourceOf = new Dictionary<HairPortPlan.Owner, string>(ReferenceEqualityComparer.Instance);
+        if (serving.Any(o => EarlessHairPlan.IsEarlessFile(HairPortPlan.FileFor(o, sourceGamePath)!)))
+        {
+            var earless = EarlessHairRecord.Read(modRoot);
+            if (earless.Unreadable)
+                return new Plan(writes, wanted.ToDictionary(t => t, _ => EarlessHairRecord.UnreadableMessage), current, Unreadable: true);
+            var exists = EarlessHairPlan.Exists(modRoot);
+            foreach (var o in serving)
+                if (EarlessHairPlan.AuthorFileFor(earless, o, sourceGamePath, HairPortPlan.FileFor(o, sourceGamePath)!, exists)
+                    is { } author)
+                    sourceOf[o] = author;
+            // A copy whose author's file is gone has nothing to port from: that place gets no port.
+            serving.RemoveAll(o => !sourceOf.ContainsKey(o));
+        }
+        else
+            foreach (var o in serving) sourceOf[o] = HairPortPlan.FileFor(o, sourceGamePath)!;
         if (serving.Count == 0)
             return new Plan(writes, wanted.ToDictionary(t => t, _ => Loc.Localize("HairPort.Refused.NotInMod",
                 "the mod does not publish that hairstyle")), current);
@@ -73,7 +91,7 @@ internal static class HairPortBuilder
         var record = HairPortRecord.Read(modRoot);
         if (record.Unreadable)
             return new Plan(writes, wanted.ToDictionary(t => t, _ => HairPortRecord.UnreadableMessage), current, Unreadable: true);
-        var sources = serving.Select(o => HairPortPlan.FileFor(o, sourceGamePath)!).Distinct(StringComparer.OrdinalIgnoreCase)
+        var sources = serving.Select(o => sourceOf[o]).Distinct(StringComparer.OrdinalIgnoreCase)
                              .ToDictionary(rel => rel, rel => ReadMod(modRoot, rel), StringComparer.OrdinalIgnoreCase);
         if (sources.Values.Any(b => b == null))
             return new Plan(writes, wanted.ToDictionary(t => t, _ => Loc.Localize("Parts.Retarget.Bake.Unreadable",
@@ -138,7 +156,7 @@ internal static class HairPortBuilder
             int slot = 0;
             foreach (var owner in serving)
             {
-                string rel = HairPortPlan.FileFor(owner, sourceGamePath)!;
+                string rel = sourceOf[owner];
                 var bytes = sources[rel]!;
                 var was = record.Ports.FirstOrDefault(e => HairPortPlan.Same(e.Owner, owner)
                     && e.TargetGamePath.Equals(target, StringComparison.OrdinalIgnoreCase));

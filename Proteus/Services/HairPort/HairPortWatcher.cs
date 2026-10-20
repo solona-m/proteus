@@ -53,6 +53,7 @@ public sealed partial class HairPortWatcher : IDisposable
     private long walkDueAt;
     private long raceAskedAt;
     private bool wasEnabled;
+    private bool wasWatching;
     private int blanks;
     private volatile IReadOnlyList<string>? livePartsCache;
     private volatile bool disposed;
@@ -67,8 +68,12 @@ public sealed partial class HairPortWatcher : IDisposable
     /// <param name="ModRoot">The mod a port of the worn hairstyle lives in, or null.</param>
     /// <param name="Ported">The worn hairstyle is drawn from a port, which can be undone.</param>
     /// <param name="PortsInMod">How many ports that mod has, for the undo-all button.</param>
+    /// <param name="Earless">The worn hairstyle is drawn from an earless copy in <paramref name="ModRoot"/>.</param>
+    /// <param name="EarlessOptions">The mod's own earless versions of the worn hairstyle, as "Group / Option"
+    /// (<see cref="EarlessHairPlan.EarlessOptionHint"/>); null or empty for none.</param>
     public sealed record View(string? Worn = null, string? ModRoot = null, bool Ported = false, int PortsInMod = 0,
-                              bool Busy = false, string Message = "", bool Failed = false);
+                              bool Busy = false, string Message = "", bool Failed = false, bool Earless = false,
+                              IReadOnlyList<string>? EarlessOptions = null);
 
     private volatile View current = new();
     public View Current => current;
@@ -137,28 +142,36 @@ public sealed partial class HairPortWatcher : IDisposable
         penumbra.ModDeleted -= OnModDeleted;
     }
 
-    private bool Enabled => config.PluginEnabled && config.AutoHairPort && penumbra.IsAvailable;
+    private Decide.GateState Gates => Decide.Gates(config.PluginEnabled, penumbra.IsAvailable, config.AutoHairPort,
+                                                   config.EarlessMiqoteHair);
+
+    /// <summary>Hair fitting may port: the scan, its schedule and the equip port.</summary>
+    private bool Enabled => Gates.Porting;
+
+    /// <summary>The worn hairstyle is looked at: for porting, for the earless setting, and to put ears back.</summary>
+    private bool Watching => Gates.Watching;
 
     private void RequestWalk() => RequestWalkIn(WalkDebounceMs);
 
     private void RequestWalkIn(int ms)
     {
-        if (disposed || !Enabled) return;
+        if (disposed || !Watching) return;
         Interlocked.Exchange(ref walkDueAt, Environment.TickCount64 + ms);
     }
 
     private void OnModSettingChanged(Penumbra.Api.Enums.ModSettingChange change, Guid collection, string modDirectory,
                                      bool inherited)
     {
-        if (!Enabled) return;
+        if (!Watching) return;
         var mine = playerCollection;
-        schedule.ModEvent(change, modDirectory, mine == null || mine == collection.ToString("D"), Environment.TickCount64);
+        if (Enabled)
+            schedule.ModEvent(change, modDirectory, mine == null || mine == collection.ToString("D"), Environment.TickCount64);
         Refresh(delayMs: PenumbraSettleMs);
     }
 
     private void OnCollectionChanged()
     {
-        if (!Enabled) return;
+        if (!Watching) return;
         // What the last check found was for the other collection; one under way is for it too.
         Interlocked.Increment(ref collectionGeneration);
         StopCheck();
@@ -204,10 +217,14 @@ public sealed partial class HairPortWatcher : IDisposable
     {
         if (disposed) return;
         long now = Environment.TickCount64;
-        bool enabled = Enabled;
+        var gates = Gates;
+        bool enabled = gates.Porting, watching = gates.Watching;
+        if (watching && !wasWatching) RequestWalk();
         if (enabled && !wasEnabled)
         {
             RequestWalk();
+            // Looked at again even where nothing resolves differently: with fitting off, the last look kept its key.
+            lastKey = Decide.KeyAfterPortingEdge(lastKey, wasEnabled, enabled);
             // Penumbra back: what waited out a back-off while it was gone is asked for again now.
             Interlocked.Exchange(ref retryMs, 0);
             schedule.Resume(now);
@@ -217,10 +234,13 @@ public sealed partial class HairPortWatcher : IDisposable
         }
         else if (!enabled && wasEnabled) StopCheck();
         wasEnabled = enabled;
-        if (!enabled) return;
+        wasWatching = watching;
+        if (!watching) return;
+
+        EarlessTick(now);
 
         // A check waits to learn the player's race from a walk: make sure one comes.
-        if (schedule.Pending && schedule.Race == 0 && now - raceAskedAt > RaceAskMs)
+        if (enabled && schedule.Pending && schedule.Race == 0 && now - raceAskedAt > RaceAskMs)
         {
             raceAskedAt = now;
             if (Interlocked.Read(ref walkDueAt) == 0) RequestWalkIn(0);
@@ -233,7 +253,7 @@ public sealed partial class HairPortWatcher : IDisposable
             Walk(now);
         }
 
-        if (!flight.Busy && schedule.Take(now) is { } work) StartCheck(work);
+        if (enabled && !flight.Busy && schedule.Take(now) is { } work) StartCheck(work);
     }
 
     /// <summary>
@@ -481,6 +501,18 @@ public sealed partial class HairPortWatcher : IDisposable
 
         /// <summary>An equip port was saved in <paramref name="modDir"/>: look at its other hairstyles too.</summary>
         void CheckMod(string modDir) { }
+
+        /// <summary>"Take the ears off Miqo'te hair mods" is on (and Proteus, and Penumbra).</summary>
+        bool Earless => false;
+
+        /// <summary>Post an earless conversion's chat line.</summary>
+        void AnnounceEarless(string line) { }
+
+        /// <summary>The worn hairstyle's mod could not be read: look again after the earless back-off.</summary>
+        void RequestLookAgain() { }
+
+        /// <summary>A look got an answer from the mod: the earless back-off starts over.</summary>
+        void EarlessSettled() { }
     }
 
     private sealed class Host(HairPortWatcher w) : IHost
@@ -529,6 +561,11 @@ public sealed partial class HairPortWatcher : IDisposable
         {
             if (w.Enabled) w.schedule.ModAdded(modDir, Environment.TickCount64);
         }
+        public bool Earless => w.Gates.Earless;
+        public void AnnounceEarless(string line) => w.Announce(line);
+        // The back-off lives on the watcher: a host is made for every look.
+        public void RequestLookAgain() => w.LookAgainLater();
+        public void EarlessSettled() => w.earlessBackoff.Reset();
     }
 
     /// <summary>
@@ -541,6 +578,18 @@ public sealed partial class HairPortWatcher : IDisposable
         var modsRoot = host.ModsRoot;
         if (worn == null || string.IsNullOrEmpty(modsRoot)) return new View();
         var (race, id) = HairPortPlan.Parse(worn)!.Value;
+
+        // Neither fitting nor the earless setting on: all there can be to do is put back ears an earless copy took off
+        // — one left by a config lost, an older build, or a mod imported with it — so only the worn path is resolved.
+        if (!host.Enabled && !host.Earless)
+        {
+            var served = host.Resolve(worn);
+            var only = $"{worn}>{served}";
+            if (only == lastKey) return Unchanged;
+            lastKey = only;
+            return EarlessRestoreAtEquip(host, modsRoot!, worn, race, served, ref lastKey)
+                   ?? new View(worn, EarlessOptions: EarlessHint(modsRoot!, worn, race, served));
+        }
 
         // Cheap on purpose: Penumbra's settings events come in bursts. What the worn hairstyle and every same-sex
         // race's copy of it resolve to is everything a decision below reads.
@@ -556,13 +605,19 @@ public sealed partial class HairPortWatcher : IDisposable
         {
             case Decide.Kind.None:
                 if (decision.Message.Length > 0) host.Log(decision.Message);
-                return new View(worn, Message: decision.Message);
+                // Drawn from a mod made for the wearer's race: whether its ears come off is the earless setting's.
+                var file = resolved[worn];
+                return (host.Earless ? EarlessStep(host, modsRoot!, worn, race, file, ref lastKey)
+                                     : EarlessRestoreAtEquip(host, modsRoot!, worn, race, file, ref lastKey))
+                       ?? new View(worn, Message: decision.Message, EarlessOptions: EarlessHint(modsRoot!, worn, race, file));
             case Decide.Kind.Ported:
                 return new View(worn, decision.ModRoot, Ported: true, PortsInMod: HairPortRecord.Read(decision.ModRoot!).Ports.Count);
         }
 
         // Port (or remake a stale port of) the worn hairstyle from decision.Source in decision.ModRoot.
-        if (!host.Enabled) { lastKey = null; return new View(worn); }
+        // Fitting off (the earless setting on): the key is kept, so the next walk does not resolve every race again —
+        // switching fitting on looks afresh (Decide.KeyAfterPortingEdge).
+        if (!host.Enabled) return new View(worn);
         var modRoot = decision.ModRoot!;
         string modDir = Path.GetFileName(modRoot);
         host.Log($"{worn} is drawn as the game's own — porting {decision.Source} from "

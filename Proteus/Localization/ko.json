@@ -5354,5 +5354,49 @@
   "HairPort.Scan.UndoChecked.Confirm.Fmt": {
     "message": "한 번 더 누르면 헤어스타일 {0}개를 되돌립니다 (다시 자동으로 맞추지 않음)",
     "description": ""
+  },
+  "HairPort.Earless.Label": {
+    "message": "미코테 헤어 모드에서 귀 제거",
+    "description": ""
+  },
+  "HairPort.Earless.Tip": {
+    "message": "미코테용: 고양이 귀가 있는 헤어스타일의 헤어 모드를 착용하면, Proteus가\n귀 없는 사본을 만들고 모드의 옵션이 그 사본을 가리키게 합니다. 제작자의\n파일은 절대 변경하지 않습니다.\n\n모드 자체를 바꾸므로, 그 모드를 켠 채로 표시되는 모든 캐릭터(모든 컬렉션,\n공유한 상대 포함)는 귀가 없어집니다. 끄면 Proteus가 바꾼 모든 모드에 귀를\n되돌립니다. 다른 종족용 헤어 모드 맞추기를 켜든 끄든 작동합니다.",
+    "description": ""
+  },
+  "HairPort.Settings.Earless.Fmt": {
+    "message": "{1}의 헤어스타일 {0}은(는) 귀 없이 표시됩니다. 이 모드를 켠 채로 표시되는 모든 캐릭터(모든 컬렉션)에 적용됩니다. 설정을 끄면 되돌아옵니다.",
+    "description": ""
+  },
+  "HairPort.Settings.EarlessOptionHint.Fmt": {
+    "message": "이 모드에는 자체 귀 없는 옵션이 있습니다: {0}",
+    "description": ""
+  },
+  "HairPort.Earless.Chat": {
+    "message": "[Proteus] 이 헤어스타일의 고양이 귀를 제거했습니다. Proteus가 모드를 귀 없는 사본으로 바꿨으므로, 이 모드를 켠 채로 표시되는 모든 캐릭터(모든 컬렉션)는 이제 귀가 없습니다. 귀를 되돌리려면 /proteus > 설정 > 헤어 에서 \"미코테 헤어 모드에서 귀 제거\"를 끄세요.",
+    "description": ""
+  },
+  "HairPort.Earless.RestoreBlocked.Fmt": {
+    "message": "[Proteus] {0}에 귀를 되돌리지 못했습니다: {1}",
+    "description": ""
+  },
+  "HairPort.Earless.Restored.Fmt": {
+    "message": "헤어스타일 {0}개에 귀를 되돌렸습니다.",
+    "description": ""
+  },
+  "HairPort.Earless.Refused.AuthorMissing.Fmt": {
+    "message": "제작자의 파일 {0}이(가) 없어 귀 없는 사본을 유지했습니다",
+    "description": ""
+  },
+  "HairPort.Earless.Refused.Changed": {
+    "message": "Proteus가 작업하는 동안 모드가 바뀌어 아무것도 기록하지 않았습니다",
+    "description": ""
+  },
+  "HairPort.Earless.Refused.Leftover": {
+    "message": "귀를 모두 제거하지 못했습니다",
+    "description": ""
+  },
+  "HairPort.Earless.Refused.RecordUnreadable": {
+    "message": "이 모드의 귀 없는 헤어스타일에 대한 Proteus 기록(Proteus/earlesshair.json)을 읽을 수 없어 아무것도 변경하지 않았습니다.",
+    "description": ""
   }
 }
