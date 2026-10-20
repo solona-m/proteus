@@ -3879,6 +3879,14 @@
     "message": "Менять нечего: кожа уже рисуется так же, как у нового тела.",
     "description": ""
   },
+  "Parts.Retarget.Smallclothes.AfterSave": {
+    "message": "Новое тело рисует бельё там, где у него нет кожи, и подгонка переносит его: в игре оно появится только после сохранения.",
+    "description": "Body size status: the preview cannot show the new body's underwear, whose material is only published when the refit is saved."
+  },
+  "Parts.Retarget.Smallclothes.Fallback": {
+    "message": "Новое тело рисует бельё там, где у него нет кожи, но его не удалось перенести в эту одежду, поэтому там остаётся её собственная кожа.",
+    "description": "Body size status: the new body's underwear (drawn where it has no skin) could not be added to the garment, so the garment keeps its own skin there."
+  },
   "Parts.Retarget.AlreadyFits.Fmt": {
     "message": "Менять нечего: там, куда доходит вещь, {0} той же формы, что и размер, для которого она сделана.",
     "description": ""

@@ -1160,6 +1160,20 @@ internal static class Program
                 replaceSkin: true, acrossBodies: acrossBodies, cutHidden: !opts.ContainsKey("whole"),
                 keepShape: keepShape, log: line => Console.Error.WriteLine($"{label}: {line}"),
                 carryPiercings: RetargetInputs.CliCarryPiercings(opts)));
+            // A model that draws the new body's underwear needs that material published beside it, under the garment's
+            // name for it, by a mod: a lone .mdl here would draw it with a material the game cannot find.
+            if (planned.Materials is { Count: > 0 } materials)
+            {
+                sizes.Add(new
+                {
+                    label, to = option.Rel,
+                    refusal = "this refit brings in the new body's underwear (" +
+                              string.Join(", ", materials.Select(m => m.From)) +
+                              "), whose material has to be saved into the mod beside the model; the command line " +
+                              "cannot do that — refit it in the Studio",
+                });
+                continue;
+            }
             string written = Path.Combine(outDir, label + ".mdl");
             File.WriteAllBytes(written, planned.Model);
 

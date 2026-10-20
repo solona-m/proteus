@@ -3879,6 +3879,14 @@
     "message": "Nothing to change: its skin is already drawn the way the new body draws its own.",
     "description": "Status line after Preview when a shoe or glove that reaches no leg or arm already draws its skin like the new body."
   },
+  "Parts.Retarget.Smallclothes.AfterSave": {
+    "message": "The new body draws underwear where it has no skin, and the refit brings it in: it shows in game only once you save.",
+    "description": "Body size status: the preview cannot show the new body's underwear, whose material is only published when the refit is saved."
+  },
+  "Parts.Retarget.Smallclothes.Fallback": {
+    "message": "The new body draws underwear where it has no skin, which could not be brought into this garment, so it keeps its own skin there.",
+    "description": "Body size status: the new body's underwear (drawn where it has no skin) could not be added to the garment, so the garment keeps its own skin there."
+  },
   "Parts.Retarget.AlreadyFits.Fmt": {
     "message": "Nothing to change: where it reaches, {0} is the same shape as the size it was made for.",
     "description": "Status line after Preview when the chosen size is the same shape as the one the piece was made for. {0} = the chosen size's name."

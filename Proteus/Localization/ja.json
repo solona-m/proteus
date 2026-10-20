@@ -3879,6 +3879,14 @@
     "message": "変更はありません。肌はすでに新しいボディと同じように描かれています。",
     "description": ""
   },
+  "Parts.Retarget.Smallclothes.AfterSave": {
+    "message": "新しい体は肌のない部分に下着を描いており、変換はそれを取り込みます。ゲーム内で表示されるのは保存した後です。",
+    "description": "Body size status: the preview cannot show the new body's underwear, whose material is only published when the refit is saved."
+  },
+  "Parts.Retarget.Smallclothes.Fallback": {
+    "message": "新しい体は肌のない部分に下着を描いていますが、この装備に取り込めなかったため、その部分は装備自身の肌のままです。",
+    "description": "Body size status: the new body's underwear (drawn where it has no skin) could not be added to the garment, so the garment keeps its own skin there."
+  },
   "Parts.Retarget.AlreadyFits.Fmt": {
     "message": "変更はありません。この装備が届く範囲では、{0} は作られた元のサイズと同じ形です。",
     "description": ""

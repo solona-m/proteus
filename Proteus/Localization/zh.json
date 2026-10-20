@@ -3879,6 +3879,14 @@
     "message": "无需更改：它的皮肤已经按新身体的方式绘制。",
     "description": ""
   },
+  "Parts.Retarget.Smallclothes.AfterSave": {
+    "message": "新身体在没有皮肤的地方绘制了内衣，重新适配会将其带入：只有保存后才会在游戏中显示。",
+    "description": "Body size status: the preview cannot show the new body's underwear, whose material is only published when the refit is saved."
+  },
+  "Parts.Retarget.Smallclothes.Fallback": {
+    "message": "新身体在没有皮肤的地方绘制了内衣，但无法带入这件服装，因此该处保留服装自身的皮肤。",
+    "description": "Body size status: the new body's underwear (drawn where it has no skin) could not be added to the garment, so the garment keeps its own skin there."
+  },
   "Parts.Retarget.AlreadyFits.Fmt": {
     "message": "无需更改：在它覆盖的地方，{0} 与它原本制作时的尺码形状相同。",
     "description": ""

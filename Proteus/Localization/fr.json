@@ -3879,6 +3879,14 @@
     "message": "Rien à changer : sa peau est déjà dessinée comme celle du nouveau corps.",
     "description": ""
   },
+  "Parts.Retarget.Smallclothes.AfterSave": {
+    "message": "Le nouveau corps dessine des sous-vêtements là où il n'a pas de peau, et l'ajustement les reprend : ils n'apparaîtront en jeu qu'une fois enregistré.",
+    "description": "Body size status: the preview cannot show the new body's underwear, whose material is only published when the refit is saved."
+  },
+  "Parts.Retarget.Smallclothes.Fallback": {
+    "message": "Le nouveau corps dessine des sous-vêtements là où il n'a pas de peau, qui n'ont pas pu être repris dans ce vêtement : il garde donc sa propre peau à cet endroit.",
+    "description": "Body size status: the new body's underwear (drawn where it has no skin) could not be added to the garment, so the garment keeps its own skin there."
+  },
   "Parts.Retarget.AlreadyFits.Fmt": {
     "message": "Rien à changer : là où la pièce arrive, {0} a la même forme que la taille pour laquelle elle a été faite.",
     "description": ""

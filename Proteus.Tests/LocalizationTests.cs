@@ -203,17 +203,24 @@ public sealed class LocalizationTests
         }
     }
 
-    /// <summary>The refusal for a target option with no skin where the source has it is translated, not copied.</summary>
+    /// <summary>
+    /// The words for a target option that draws underwear where the source has skin — the refusal, and the two Body size
+    /// notes — are translated, not copied.
+    /// </summary>
     [Theory]
     [MemberData(nameof(Translations))]
     [Trait("Plan", "AC-skinless-target-4")]
+    [Trait("Plan", "EDGE-skinless-target-34")]
     public void NoSkinThere_is_translated_not_copied(string lang)
     {
-        const string key = "Parts.Retarget.Refuse.NoSkinThere.Fmt";
         var en = Load(Source);
         var tr = Load(lang);
-        Assert.True(tr.ContainsKey(key), $"[{lang}] has no {key}");
-        Assert.NotEqual(en[key].Message, tr[key].Message);
+        foreach (string key in new[] { "Parts.Retarget.Refuse.NoSkinThere.Fmt", "Parts.Retarget.Smallclothes.AfterSave",
+                                       "Parts.Retarget.Smallclothes.Fallback" })
+        {
+            Assert.True(tr.ContainsKey(key), $"[{lang}] has no {key}");
+            Assert.NotEqual(en[key].Message, tr[key].Message);
+        }
     }
 
     /// <summary>

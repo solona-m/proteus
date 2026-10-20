@@ -537,7 +537,7 @@ internal static partial class SizeSetRefit
                 ct.ThrowIfCancellationRequested();
                 bool lead = !piece.FollowsChest && !leadSources.ContainsKey(leadKey);
                 if (group.Save(target.Dir, RefitCore.LabelFrom(across ? chosen.Entry.Name : null, [chosen.Pick.Option.Label]),
-                               [new BodyRetargetWriter.Refit(option, plan.Model, toLabel)], sourceOption, notes,
+                               [new BodyRetargetWriter.Refit(option, plan.Model, toLabel, Materials: plan.Materials)], sourceOption, notes,
                                sourceFilesWin: request.Remake && lead)
                     && lead && sourceOption != null)
                     leadSources[leadKey] = sourceOption;

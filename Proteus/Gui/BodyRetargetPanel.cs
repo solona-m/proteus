@@ -1680,10 +1680,13 @@ internal sealed partial class BodyRetargetPanel(PenumbraBridge penumbra, UVRemap
             if (swap.Posed > 0) parts.Add($"{swap.Posed} posed skin mesh(es) kept");
             if (swap.ExtrasDropped > 0) parts.Add($"{swap.ExtrasDropped:N0} extras tris dropped");
             if (swap.Adorned > 0) parts.Add($"{swap.Adorned:N0} nail/piercing tris carried");
+            if (swap.Smallclothes > 0) parts.Add($"{swap.Smallclothes:N0} smallclothes tris brought in");
             if (swap.Unplaced > 0) parts.Add($"{swap.Unplaced:N0} weights unplaced");
             if (swap.LostShapes > 0) parts.Add($"{swap.LostShapes} shape key(s) lost");
         }
         else if (r.Laid > 0) parts.Add($"{r.Laid:N0} skin points laid");
+        if (r.SmallclothesFallback > 0)
+            parts.Add($"{r.SmallclothesFallback} kept their own skin: the new body's underwear could not be brought in");
         return string.Join(", ", parts);
     }
 
@@ -2028,7 +2031,7 @@ internal sealed partial class BodyRetargetPanel(PenumbraBridge penumbra, UVRemap
             // Two sizes can carry the same label under different headings; each still needs an option of its own.
             string option = OptionName(ctx, target);
             for (int n = 2; !used.Add(option); n++) option = $"{OptionName(ctx, target)} ({n})";
-            refits.Add(new BodyRetargetWriter.Refit(option, plan.Model, ToLabel(ctx, target)));
+            refits.Add(new BodyRetargetWriter.Refit(option, plan.Model, ToLabel(ctx, target), Materials: plan.Materials));
         }
 
         // What to switch on once it is written. A refit appended to a group the AUTHOR already ships lands beside
@@ -2217,7 +2220,12 @@ internal sealed partial class BodyRetargetPanel(PenumbraBridge penumbra, UVRemap
                 showing = 0;
                 var first = done[0].Planned;
                 if (!ctx.PushPreview(first.Model)) pendingPreview = first.Model;
-                ctx.SetStatus("", false);
+                // The preview pushes the model alone: a material it draws that the save publishes is not in game yet.
+                ctx.SetStatus(done.Any(d => d.Planned.Report.SmallclothesFallback > 0)
+                                  ? Strings.Parts.RetargetSmallclothesFallback
+                                  : done.Any(d => d.Planned.Materials is { Count: > 0 })
+                                      ? Strings.Parts.RetargetSmallclothesAfterSave
+                                      : "", false);
                 foreach (var (to, plan) in done)
                     log.Information("[Proteus] retarget: {0} onto {1}: {2}", ctx.ModelRel, to.Label,
                                     Describe(plan.Report, plannedShapeNames));

@@ -3879,6 +3879,14 @@
     "message": "바꿀 것이 없습니다. 피부가 이미 새 바디처럼 그려지고 있습니다.",
     "description": ""
   },
+  "Parts.Retarget.Smallclothes.AfterSave": {
+    "message": "새 바디는 피부가 없는 곳에 속옷을 그리며, 리핏이 이를 가져옵니다. 게임에서는 저장한 뒤에만 보입니다.",
+    "description": "Body size status: the preview cannot show the new body's underwear, whose material is only published when the refit is saved."
+  },
+  "Parts.Retarget.Smallclothes.Fallback": {
+    "message": "새 바디는 피부가 없는 곳에 속옷을 그리지만 이 의상에 가져올 수 없어서, 그 부분은 의상 자체의 피부를 유지합니다.",
+    "description": "Body size status: the new body's underwear (drawn where it has no skin) could not be added to the garment, so the garment keeps its own skin there."
+  },
   "Parts.Retarget.AlreadyFits.Fmt": {
     "message": "바꿀 것이 없습니다. 이 장비가 닿는 곳에서 {0}은(는) 원래 만들어진 사이즈와 모양이 같습니다.",
     "description": ""

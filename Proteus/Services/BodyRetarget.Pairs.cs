@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using System.IO;
 using Proteus.Localization;
@@ -25,10 +26,19 @@ internal static partial class BodyRetarget
                                       ushort? sourceMask, ushort? targetMask, UVRemapService? uvRemap,
                                       out SlotPair pair)
     {
+        return BuildPair(slot, File.ReadAllBytes(sourcePath), File.ReadAllBytes(targetPath), name, male, sourceMask,
+                         targetMask, uvRemap, out pair, BodyMaterialReader(targetPath));
+    }
+
+    /// <inheritdoc cref="BuildPair(string, string, string, string, bool, ushort?, ushort?, UVRemapService?, out SlotPair)"/>
+    /// <param name="targetMaterial">Reads the target body mod's materials (see <see cref="SlotPair.TargetMaterial"/>);
+    /// null when there is no mod to read them from.</param>
+    internal static string? BuildPair(string slot, byte[] sourceBytes, byte[] targetBytes, string name, bool male,
+                                      ushort? sourceMask, ushort? targetMask, UVRemapService? uvRemap,
+                                      out SlotPair pair, Func<string, byte[]?>? targetMaterial = null)
+    {
         pair = default;
 
-        var sourceBytes = File.ReadAllBytes(sourcePath);
-        var targetBytes = File.ReadAllBytes(targetPath);
         var source = ModelPartReader.Read(sourceBytes);
         var target = ModelPartReader.Read(targetBytes);
         if (source == null || target == null) return string.Format(Strings.Parts.RetargetUnreadableFmt, name);
@@ -39,7 +49,8 @@ internal static partial class BodyRetarget
                                          out var correspondence, out string refusal, uvRemap, male))
             return refusal;
 
-        pair = new SlotPair(slot, correspondence!, target, targetBytes, sourceBytes, targetHidden);
+        pair = new SlotPair(slot, correspondence!, target, targetBytes, sourceBytes, targetHidden,
+                            TargetMaterial: targetMaterial);
         return null;
     }
 
