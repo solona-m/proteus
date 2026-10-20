@@ -132,7 +132,7 @@ internal static partial class BodyRetarget
         var drawn = new List<BodySurface>(pairs.Count);
         foreach (var pair in pairs)
         {
-            var surface = new BodySurface(pair.Target, BodySurface.CellFor(MeanEdgeOf(pair.Target)));
+            var surface = pair.TargetSurface();
             if (!surface.IsEmpty) drawn.Add(surface);
         }
 

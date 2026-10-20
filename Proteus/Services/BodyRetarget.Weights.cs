@@ -136,7 +136,9 @@ internal static partial class BodyRetarget
             targetBones.UnionWith(pairTarget);
             if (ModelSkinReader.Read(pair.TargetModel!, null, null) is not { } skin) return null;
             if (skin.VertexCount * 3 != pair.Target.Positions.Length) return null;   // not the part reader's order
-            targets.Add((new BodySurface(pair.Target, BodySurface.CellFor(MeanEdgeOf(pair.Target))), skin));
+            // As worn on a pair whose new body draws smallclothes in place of skin: cloth over Muse+'s boxers takes the
+            // boxers' weights, not the weights of the skin's edge where the cut begins.
+            targets.Add((pair.TargetSurface(), skin));
             rigKept.Add(!acrossBodies && new HashSet<string>(pairSource, StringComparer.Ordinal).SetEquals(pairTarget));
 
             // The correspondence's own reading of the old body: without the variants its mod does not draw.

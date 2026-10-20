@@ -1509,7 +1509,8 @@ public sealed partial class AutoRefitWatcher : IDisposable
         string labelFrom = RefitCore.LabelFrom(across ? sourceName : null,
                                                new[] { pick.Option.Label }.Concat(kept.Select(k => k.From.Label)));
         var refit = new BodyRetargetWriter.Refit(option, plan.Model, string.Join(" + ",
-                                                     new[] { target.Label }.Concat(kept.Select(k => k.To.Label))));
+                                                     new[] { target.Label }.Concat(kept.Select(k => k.To.Label))),
+                                                 Materials: plan.Materials);
         var recorded = TargetsOf(primary, target, kept, chestBeneathTo);
         var recordedOn = recorded.Keys.ToDictionary(k => k, k => k == RefitCore.ChestBeneathKey ? chestDir : OnDir(k),
                                                     StringComparer.Ordinal);

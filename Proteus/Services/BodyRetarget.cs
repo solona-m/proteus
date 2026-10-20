@@ -223,13 +223,44 @@ internal static partial class BodyRetarget
     /// <param name="ShapeOnly">The slot is here for its shape alone — where its body sits, and what its skin weights
     /// are — and its skin is never swapped in, though the pair carries the body's file: a shoe keeping its own foot
     /// still has the feet body, which runs up the shin, to refit its stocking's shin by (see <see cref="KeepEnds.Plan"/>).</param>
+    /// <param name="TargetMaterial">Reads one of the target body mod's materials by the name its model gives it (see
+    /// <see cref="BodyMaterialReader"/>): what the swap copies the body's smallclothes material from, on a
+    /// <see cref="Worn"/> pair. Null when the body mod cannot be read.</param>
+    /// <param name="Smallclothes">On a <see cref="Worn"/> slot <see cref="ReadySmallclothes"/> readied: each of the new
+    /// body's smallclothes materials, and the name the garment draws it under. Null on every other slot.</param>
     internal readonly record struct SlotPair(string Slot, IBodyCorrespondence Correspondence, ModelParts Target,
                                              byte[]? TargetModel = null, byte[]? SourceModel = null,
-                                             IReadOnlySet<string>? TargetHidden = null, bool ShapeOnly = false)
+                                             IReadOnlySet<string>? TargetHidden = null, bool ShapeOnly = false,
+                                             Func<string, byte[]?>? TargetMaterial = null,
+                                             IReadOnlyDictionary<string, string>? Smallclothes = null)
     {
         /// <summary>Whether the swap puts this slot's body skin in: it carries the body's file, and is not
         /// <see cref="ShapeOnly"/>.</summary>
         public bool Swaps => TargetModel != null && !ShapeOnly;
+
+        /// <summary>The new body draws something other than skin where the old one has it — see
+        /// <see cref="IBodyCorrespondence.TargetWorn"/> — so the refit reads both bodies as they are worn.</summary>
+        public bool Worn => Correspondence.TargetWorn;
+
+        /// <summary>The new body as the refit reads it: as worn (<see cref="BodySurface.OfBodyWorn"/>) on a
+        /// <see cref="Worn"/> pair, its skin alone on every other, as always.</summary>
+        public BodySurface TargetSurface() => SurfaceOf(Target);
+
+        /// <summary>The new body's open edges, read as <see cref="TargetSurface"/> reads the body.</summary>
+        public SkinEdges TargetEdges() => Worn ? SkinEdges.OfWorn(Target) : SkinEdges.Of(Target);
+
+        /// <summary>The old body as the refit reads it: as worn on a <see cref="Worn"/> pair, so cloth its author fitted
+        /// over the old body's own smallclothes is judged as the new body's is.</summary>
+        public BodySurface SourceSurface() => SurfaceOf(Correspondence.Source);
+
+        /// <summary>The old body's open edges, read as <see cref="SourceSurface"/> reads the body.</summary>
+        public SkinEdges SourceEdges() => Worn ? SkinEdges.OfWorn(Correspondence.Source) : SkinEdges.Of(Correspondence.Source);
+
+        private BodySurface SurfaceOf(ModelParts body)
+        {
+            float cell = BodySurface.CellFor(MeanEdgeOf(body));
+            return Worn ? BodySurface.OfBodyWorn(body, cell) : new BodySurface(body, cell);
+        }
     }
 
     /// <summary>What happened, for the status line and the saved record.</summary>
@@ -252,13 +283,15 @@ internal static partial class BodyRetarget
     /// <param name="StandoffHeld">Of them, points a guard held short of where they would have come back to.</param>
     /// <param name="OpenEdgeFitted">Cloth points the push-out took in by the made-on body's reading, their nearest
     /// authored skin an open edge they lie behind — see <see cref="TargetBody.Fitted"/>.</param>
+    /// <param name="SmallclothesFallback">Slots whose new body draws smallclothes in place of skin, which kept the
+    /// garment's own skin because those smallclothes could not be brought in — see <see cref="ReadySmallclothes"/>.</param>
     internal sealed record Report(
         int Nodes, int Snapped, int Transferred, int Missed, int Pushed,
         float WorstMove, float WorstPush, int UnmappedSpares, bool HasOtherLods, int Held = 0, int Laid = 0,
         SwapReport? Swap = null, int Folded = 0, IReadOnlyList<ShapeOutcome>? Shapes = null, int Smoothed = 0,
         int Layered = 0, float LayerResidual = 0f, int DeepCleared = 0, float DeepWorst = 0f,
         IReadOnlyList<int>? DeepAt = null, int StandoffPulled = 0, float StandoffWorst = 0f, int StandoffHeld = 0,
-        int OpenEdgeFitted = 0)
+        int OpenEdgeFitted = 0, int SmallclothesFallback = 0)
     {
         /// <summary>Share of moved nodes that landed on a body vertex exactly. Low means the author sculpted the
         /// garment's body mesh rather than copying it, and the seam may not come out perfect.</summary>
@@ -266,7 +299,10 @@ internal static partial class BodyRetarget
     }
 
     /// <summary>The retarget, ready to preview or save.</summary>
-    internal sealed record Planned(RetargetEdit Edit, byte[] Model, Report Report);
+    /// <param name="Materials">Material files the model draws that the save must publish beside it: the new body's
+    /// smallclothes, brought in with its skin (see <see cref="ReadySmallclothes"/>). Null when there are none.</param>
+    internal sealed record Planned(RetargetEdit Edit, byte[] Model, Report Report,
+                                   IReadOnlyList<PublishedMaterial>? Materials = null);
 
     /// <summary>
     /// The geometry half of a retarget, with no file anywhere near it. Separated from <see cref="Plan"/> so the solve
@@ -715,6 +751,13 @@ internal static partial class BodyRetarget
         if (!Tuned.NoNippleSmooth)
             pairs = SmoothCoveredNipples(garment, pairs, out smoothed, log, swapSlot, Uv(garmentBytes), warn);
 
+        // A new body that draws smallclothes where it has no skin brings them in with its skin, or that slot keeps the
+        // garment's own skin: decided before anything reads which skin meshes the swap replaces.
+        pairs = ReadySmallclothes(garmentBytes, pairs, replaceSkin, out var smallclothes, out int smallclothesFallback);
+        if (smallclothesFallback > 0)
+            log?.Invoke($"smallclothes: {smallclothesFallback} slot(s) keep the garment's own skin — the new body's "
+                        + "underwear could not be brought in");
+
         // The solver and the rebuild must agree on which skin meshes go: the solver parts the cloth welded to them, and a
         // mesh it parted that the rebuild then keeps opens the seam (see Sets.From). Without a hold the two rules agree on
         // their own; with one, a held ankle ring stays where the old body had it and the rebuild, judging the laid model,
@@ -785,8 +828,13 @@ internal static partial class BodyRetarget
                                 written.UnmappedSpares, ModelLodTrimmer.LodCount(model) > 1, solved.Held, solved.Laid,
                                 swap, solved.Folded, solved.Shapes, smoothed, solved.Layered, solved.LayerResidual,
                                 solved.DeepCleared, solved.DeepWorst, solved.DeepAt, solved.StandoffPulled,
-                                solved.StandoffWorst, solved.StandoffHeld, solved.OpenEdgeFitted);
-        return new Planned(solved.Edit, model, report);
+                                solved.StandoffWorst, solved.StandoffHeld, solved.OpenEdgeFitted, smallclothesFallback);
+
+        // Only the copies the written model draws: a slot whose skin no mesh of the garment reached adds none.
+        var drawnMaterials = new HashSet<string>(SecondSkinWriter.Parse(model).MatNames.Select(m => m.TrimStart('/')),
+                                                 StringComparer.OrdinalIgnoreCase);
+        var publish = smallclothes.Where(m => drawnMaterials.Contains(m.Name)).ToList();
+        return new Planned(solved.Edit, model, report, publish.Count > 0 ? publish : null);
     }
 
     /// <summary>
@@ -1742,7 +1790,7 @@ internal static partial class BodyRetarget
         var targets = new List<BodySurface>(pairs.Count);
         foreach (var pair in pairs)
         {
-            var surface = new BodySurface(pair.Target, BodySurface.CellFor(MeanEdgeOf(pair.Target)));
+            var surface = pair.TargetSurface();
             if (!surface.IsEmpty) targets.Add(surface);
         }
 

@@ -15,7 +15,9 @@ namespace Proteus.Services;
 /// genuinely no way to say which point is which. Two layouts a transfer map or the gen2 affine converts between are
 /// mapped through it; a mirrored layout's body (gen2) is judged there by how much of its skin's surface lands — counting
 /// only the landings the skin around them agrees with — and the skin its target's layout has no place for follows the
-/// skin around it.
+/// skin around it. A body option that draws underwear where the other body has skin — Muse+'s SFW legs model boxers
+/// with the skin cut away under them — is in one layout too: the skin with no place there follows the skin around it
+/// onto that underwear, and the rest of the refit reads the target as it is worn.
 /// <para/>
 /// This replaced a guard that refused any pair that was not the same mesh. That was the wrong kind of answer: the pair
 /// that first hit it was two Neolithe chests with identical structure and 98.8% of their uvs in common, and every
@@ -82,7 +84,7 @@ internal static class BodyCorrespondence
         }
 
         if (UvAtlasCorrespondence.TryBuild(source, sourceUv, target, targetUv, what, out var atlas, out refusal, convert,
-                                           onSheet, byArea))
+                                           onSheet, byArea, sameLayout: from != null && from == to))
         {
             correspondence = atlas;
             return true;

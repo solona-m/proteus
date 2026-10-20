@@ -3923,6 +3923,14 @@
     "message": "変更はありません。肌はすでに新しいボディと同じように描かれています。",
     "description": ""
   },
+  "Parts.Retarget.Smallclothes.AfterSave": {
+    "message": "新しい体は肌のない部分に下着を描いており、変換はそれを取り込みます。ゲーム内で表示されるのは保存した後です。",
+    "description": "Body size status: the preview cannot show the new body's underwear, whose material is only published when the refit is saved."
+  },
+  "Parts.Retarget.Smallclothes.Fallback": {
+    "message": "新しい体は肌のない部分に下着を描いていますが、この装備に取り込めなかったため、その部分は装備自身の肌のままです。",
+    "description": "Body size status: the new body's underwear (drawn where it has no skin) could not be added to the garment, so the garment keeps its own skin there."
+  },
   "Parts.Retarget.AlreadyFits.Fmt": {
     "message": "変更はありません。この装備が届く範囲では、{0} は作られた元のサイズと同じ形です。",
     "description": ""
@@ -4603,6 +4611,14 @@
     "message": "保存できませんでした：{0}",
     "description": "Body size status line. {0} is the error message."
   },
+  "Parts.Retarget.Save.NoMaterialSet.Fmt": {
+    "message": "{0} は新しい体の下着を描いていますが、その素材は装備またはアクセサリーのモデルの横にしか保存できません。",
+    "description": "Body size save refused: {0} is the model's game path. The refit draws the new body's underwear, whose material must be saved beside an equipment model."
+  },
+  "Parts.Retarget.Save.NoMaterialName.Fmt": {
+    "message": "{0} が使える素材名はすべて使用済みのため、新しい体の下着を保存する固有の名前がありません。",
+    "description": "Body size save refused: {0} is the model's game path. Every free material name for the new body's underwear copy is already used."
+  },
   "Parts.Retarget.Undo.Removed.Fmt": {
     "message": "「{0}」を削除しました。",
     "description": "Body size status line after Undo. {0} is the option removed."
@@ -4638,6 +4654,10 @@
   "Parts.Retarget.Refuse.LowCoverage.Fmt": {
     "message": "変換元の{0}の体のうち、テクスチャ座標で変換先に位置が見つかるのは {1:P0} だけです。両者はテクスチャレイアウトを共有していないため、相互に変換できません。",
     "description": "Body size: why two bodies cannot be paired. {0} is the body part (chest, legs…), {1:P0} the share that matched — keep the :P0."
+  },
+  "Parts.Retarget.Refuse.NoSkinThere.Fmt": {
+    "message": "変換元の{0}の体のうち、着地できる肌が見つかるのは {1:P0} だけです。変換先の体のこの{0}オプションには残りの部分に肌がなく、代わりにモデリングされた下着などが描かれていて、そこに合わせることができませんでした。その部分に肌があるこの体のオプションを選ぶか、別の体に変換してください。",
+    "description": "Body size: why two bodies cannot be paired when the target option draws something else (such as modelled underwear) where the source has skin. {0} is the body part (chest, legs…), {1:P0} the share that landed on skin — keep the :P0."
   },
   "Parts.Retarget.Bake.NoPath.Fmt": {
     "message": "種族デフォーマーに c{0:D4} から c{1:D4} への経路がありません",

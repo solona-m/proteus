@@ -204,6 +204,27 @@ public sealed class LocalizationTests
     }
 
     /// <summary>
+    /// The words for a target option that draws underwear where the source has skin — the refusal, and the two Body size
+    /// notes — are translated, not copied.
+    /// </summary>
+    [Theory]
+    [MemberData(nameof(Translations))]
+    [Trait("Plan", "AC-skinless-target-4")]
+    [Trait("Plan", "EDGE-skinless-target-34")]
+    public void NoSkinThere_is_translated_not_copied(string lang)
+    {
+        var en = Load(Source);
+        var tr = Load(lang);
+        foreach (string key in new[] { "Parts.Retarget.Refuse.NoSkinThere.Fmt", "Parts.Retarget.Smallclothes.AfterSave",
+                                       "Parts.Retarget.Smallclothes.Fallback", "Parts.Retarget.Save.NoMaterialSet.Fmt",
+                                       "Parts.Retarget.Save.NoMaterialName.Fmt" })
+        {
+            Assert.True(tr.ContainsKey(key), $"[{lang}] has no {key}");
+            Assert.NotEqual(en[key].Message, tr[key].Message);
+        }
+    }
+
+    /// <summary>
     /// The Keep shape release's words: the warning, and the tooltip's last line — under a key of its own, so a
     /// translation of the tooltip as it was before cannot stand in for it.
     /// </summary>

@@ -408,10 +408,12 @@ public class Gen2LayoutRefitLocalTests(ITestOutputHelper output)
 
     /// <summary>
     /// The size set says in its log why it refused a size, not only in its notes: TBSE's SFW legs and TBSE-X's are cut
-    /// differently and do not pair, so legs made on TBSE get no TBSE-X size — and the log names the reason.
+    /// differently and do not pair, so legs made on TBSE get no TBSE-X size — and the log names the reason: TBSE-X
+    /// draws smallclothes where TBSE has skin.
     /// </summary>
     [LocalDataFact(TheBodySe, TheBodySeX)]
     [Trait("Plan", "AC-gen2-legs-refit-7")]
+    [Trait("Plan", "AC-skinless-target-4")]
     public void A_refused_size_is_logged_with_its_reason()
     {
         string copy = Path.Combine(Path.GetTempPath(), "proteus-sizeset-" + Guid.NewGuid().ToString("N"));
@@ -432,9 +434,11 @@ public class Gen2LayoutRefitLocalTests(ITestOutputHelper output)
             var (result, log, _) = Run(copy, ["tbse", "tbse-x"], remake: false, bodyMods: [TheBodySe, TheBodySeX]);
             Assert.Equal(0, result.Made);
             Assert.NotEmpty(result.Notes);
+            // TBSE-X's SFW legs draw smallclothes where TBSE's have skin, so the reason given is that, not the layout
+            // (skinless-target, 2026-10-20): 77% lands on skin, and the rest cannot be fitted onto them.
             Assert.Contains(log, l => l.Contains("size set:", StringComparison.Ordinal)
                                       && l.Contains("refused:", StringComparison.Ordinal)
-                                      && l.Contains("texture layout", StringComparison.Ordinal));
+                                      && l.Contains("finds skin to land on", StringComparison.Ordinal));
         }
         finally
         {
