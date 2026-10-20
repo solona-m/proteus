@@ -1415,8 +1415,23 @@ internal sealed partial class MeshVolumeSolve : IMeshEdit
 
         if (mirror)
         {
-            plan = PlanMirror(seeds, pivot ?? SeedCentre(seeds));
-            seeds = plan.Seeds;
+            // Skin is never mirrored: the pairing matches cloth only, and skin's reflection would find the cloth lying
+            // on the other side's skin and carry it off that skin. Selected skin moves on its own side, as a piece with
+            // no mirror image does; the cloth selected with it is mirrored as ever.
+            var skinSeeds = skinMoves ? seeds.Where(n => skin[n]).ToHashSet() : null;
+            var clothSeeds = skinSeeds is { Count: > 0 } ? seeds.Where(n => !skin[n]).ToHashSet() : seeds;
+            var centre = pivot ?? SeedCentre(seeds);
+            if (clothSeeds.Count > 0)
+            {
+                plan = PlanMirror(clothSeeds, centre);
+                seeds = plan.Seeds;
+            }
+            else seeds = [];
+            if (skinSeeds is { Count: > 0 })
+            {
+                seeds.UnionWith(skinSeeds);
+                plan?.DirectOnly.UnionWith(skinSeeds);
+            }
         }
 
         foreach (int n in seeds) into[n] = 1f;
@@ -1431,7 +1446,14 @@ internal sealed partial class MeshVolumeSolve : IMeshEdit
                 // Cloth carried by a piece with no mirror image goes the way that piece goes, or the two would tear apart.
                 if (plan != null && plan.DirectOnly.Contains(from)) plan.DirectOnly.Add(n);
             }
-        if (skinMoves && follow != null) AddMoveRiders(into);
+        if (skinMoves && follow != null)
+        {
+            AddMoveRiders(into);
+            // Cloth riding skin that moves on its own side goes that way too, or the two would tear apart.
+            if (plan is { } planned)
+                foreach (int n in into.Keys)
+                    if (!skin[n] && follow.CornersOf(n).Any(c => planned.DirectOnly.Contains(c.Skin))) planned.DirectOnly.Add(n);
+        }
         return into.Count;
     }
 

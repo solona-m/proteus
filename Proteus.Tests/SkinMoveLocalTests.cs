@@ -255,10 +255,22 @@ public class SkinMoveLocalTests(ITestOutputHelper output)
         clock.Restart();
         for (int d = 0; d < 20; d++) solve.Paint(at, 0.06f, 0.0001f);
         double paintMs = clock.Elapsed.TotalMilliseconds / 20;
+        clock.Restart();
         solve.EndStroke();
+        double settleMs = clock.Elapsed.TotalMilliseconds;
+
+        // The worst release: every skin part moved with a 50 mm falloff, so the guard looks over the whole garment.
+        var skinTris = model.Parts.Where(p => p.Island < 0 && SecondSkinWriter.IsBodySkinMaterial(p.Material))
+                            .SelectMany(p => p.Triangles).ToArray();
+        solve.BeginMove(skinTris, adjacent: true, falloffRadius: 0.05f);
+        solve.MoveTo(new Vector3(0f, 0.003f, 0.002f));
+        clock.Restart();
+        solve.EndMove();
+        double releaseMs = clock.Elapsed.TotalMilliseconds;
 
         output.WriteLine($"{Path.GetFileName(LocalData.Path(need))}: {model.Positions.Length / 3:N0} verts; seams {seamMs:F0} ms "
                        + $"({seams:N0} edge-faded skin points); bind {follow.BuildMilliseconds:F0} ms, {follow.RiderCount:N0} riders; "
-                       + $"relax dab {relaxMs:F1} ms; paint dab {paintMs:F1} ms");
+                       + $"relax dab {relaxMs:F1} ms; paint dab {paintMs:F1} ms; stroke settle {settleMs:F0} ms; "
+                       + $"whole-skin move release {releaseMs:F0} ms");
     }
 }

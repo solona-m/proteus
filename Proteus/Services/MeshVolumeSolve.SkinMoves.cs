@@ -270,9 +270,10 @@ internal sealed partial class MeshVolumeSolve
         // holds while the cloth beside it rides, and the cloth can come to cross it.
         var judged = JudgedSkin(start, movedSkin);
         int pass = 0;
-        while (pass < FacePasses && LiftFacesOverSkin(start, judged, lift: true) > 0) pass++;
+        var moving = new HashSet<int>(movedSkin);
+        while (pass < FacePasses && LiftFacesOverSkin(start, judged, moving, lift: true) > 0) pass++;
         // What is left, measured again after the last lift: logged by the caller, not chased.
-        SkinStillOutside = LiftFacesOverSkin(start, judged, lift: false);
+        SkinStillOutside = LiftFacesOverSkin(start, judged, moving, lift: false);
         GuardVersion++;
     }
 
@@ -324,7 +325,9 @@ internal sealed partial class MeshVolumeSolve
     /// <summary>One pass of the face check in <see cref="KeepRidersAboveSkin"/>.</summary>
     /// <param name="lift">Lift what is through; off, only count it.</param>
     /// <returns>Lifting, how many skin points it lifted cloth over; counting, how many are still through.</returns>
-    private int LiftFacesOverSkin(Dictionary<int, Was> start, List<int> judged, bool lift)
+    /// <param name="moving">The skin this operation moved. Still skin is judged only against a face this operation
+    /// moved: cloth placed by an earlier stroke is the user's, however it lies.</param>
+    private int LiftFacesOverSkin(Dictionary<int, Was> start, List<int> judged, HashSet<int> moving, bool lift)
     {
         const float reach = SkinThroughCloth.Reach, tolerance = SkinThroughCloth.Tolerance;
 
@@ -374,6 +377,7 @@ internal sealed partial class MeshVolumeSolve
         var lifts = new Dictionary<int, (float Lift, Vector3 Way)>();
         int lifted = 0, outside = 0;
         const float onEdge = 0.02f;
+        bool MovedNow(int n) => start.TryGetValue(n, out var was) && nodeDelta[n] != was.Delta;
         foreach (int s in judged)
         {
             var sp = ToVector(Here(s));
@@ -398,6 +402,7 @@ internal sealed partial class MeshVolumeSolve
             var (hitFace, hq, bu, bv, bw) = hit;
             int ft = faces[hitFace];
             int ca = nodeTris[ft], cb = nodeTris[ft + 1], cc = nodeTris[ft + 2];
+            if (!moving.Contains(s) && !MovedNow(ca) && !MovedNow(cb) && !MovedNow(cc)) continue;
             // Past a hem is not through anything — as SkinThroughCloth judges it.
             if ((bu < onEdge && hem.Contains(EdgeKey(cb, cc))) || (bv < onEdge && hem.Contains(EdgeKey(cc, ca)))
                 || (bw < onEdge && hem.Contains(EdgeKey(ca, cb))))

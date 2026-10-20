@@ -892,19 +892,33 @@ public partial class MeshVolumeSolveTests
         // Every skin point stands no further outside the cloth over it than the author's 0.5 mm: measured on the cloth's
         // FACES, between its vertices, where the peak of a 6 mm push would otherwise stand 2.5 mm through.
         Assert.Equal(0, SkinPoke.MadeWorse(l.Model, after));
+        // Straight down through the cloth face over each skin point: the face's height there, between its corners.
         var cloth = l.Model.Parts[0].Triangles;
+        int checks = 0;
+        float peak = float.NaN;
         foreach (int s in l.SkinAt)
         {
             var p = At(after, s);
             for (int t = 0; t + 2 < cloth.Length; t += 3)
             {
                 var a = At(after, cloth[t]); var b = At(after, cloth[t + 1]); var c = At(after, cloth[t + 2]);
-                var q = BrushTransfer.ClosestOnTriangle(p, a, b, c, out float u, out float v, out float w);
-                if (u < 0.02f || v < 0.02f || w < 0.02f || Vector2.Distance(new(p.X, p.Z), new(q.X, q.Z)) > 1e-4f) continue;
-                Assert.True(p.Y - q.Y <= 0.0005f + SkinThroughCloth.Tolerance + 1e-5f,
-                            $"skin {s} stands {(p.Y - q.Y) * 1000f:F2} mm through the cloth, the author's 0.5");
+                // Barycentrics of the skin point's XZ in the face's XZ, edges included.
+                float det = (b.Z - c.Z) * (a.X - c.X) + (c.X - b.X) * (a.Z - c.Z);
+                if (MathF.Abs(det) < 1e-12f) continue;
+                float u = ((b.Z - c.Z) * (p.X - c.X) + (c.X - b.X) * (p.Z - c.Z)) / det;
+                float v = ((c.Z - a.Z) * (p.X - c.X) + (a.X - c.X) * (p.Z - c.Z)) / det;
+                float w = 1f - u - v;
+                if (u < -1e-4f || v < -1e-4f || w < -1e-4f) continue;
+                float over = u * a.Y + v * b.Y + w * c.Y;
+                checks++;
+                if (s == l.SkinAt[11, 11]) peak = p.Y - over;
+                Assert.True(p.Y - over <= 0.0005f + SkinThroughCloth.Tolerance + 1e-5f,
+                            $"skin {s} stands {(p.Y - over) * 1000f:F2} mm through the cloth, the author's 0.5");
+                break;
             }
         }
+        Assert.True(checks >= 300, $"only {checks} skin points were measured");
+        Assert.False(float.IsNaN(peak), "the peak was not measured");
         Assert.Equal(0, Folded(l.Model, after));
     }
 
@@ -927,8 +941,10 @@ public partial class MeshVolumeSolveTests
         Assert.True(locked.SkinStillOutside > 0, "skin through locked cloth went uncounted");
 
         var free = SkinSolve(l.Model);
+        int freeBefore = free.GuardVersion;
         free.Paint(At(l.Model.Positions, l.SkinAt[10, 10]), 0.04f, 0.004f);
         free.EndStroke();
+        Assert.Equal(freeBefore + 1, free.GuardVersion);
         Assert.Equal(0, free.SkinStillOutside);
     }
 
@@ -941,16 +957,70 @@ public partial class MeshVolumeSolveTests
     public void ClothDeflatedOntoStillSkinIsNotLifted()
     {
         var l = Layered(21, 0.001f);
-        var solve = SkinSolve(l.Model);
-        // The skin's first three rows locked: one stroke moves the skin further in, and deflates the cloth over the
-        // locked rows below the skin, which stays where it is there.
-        solve.SetLocked(Enumerable.Range(0, 21).SelectMany(j => new[] { l.SkinAt[0, j], l.SkinAt[1, j], l.SkinAt[2, j] }));
-        solve.Paint(At(l.Model.Positions, l.ClothAt[0, 10]), 0.06f, -0.003f);
-        Assert.True(solve.SkinEdited, "the stroke should have moved the unlocked skin too");
+        var solve = SkinSolve(l.Model, on: false);
+        // The user deflates the cloth over the first rows into the skin, with the checkbox off.
+        solve.Paint(At(l.Model.Positions, l.ClothAt[2, 10]), 0.025f, -0.003f);
         solve.EndStroke();
+        var placed = solve.Positions().ToArray();
+        Assert.True(placed[l.ClothAt[2, 10] * 3 + 1] < 0f, "the deflate should have reached under the skin");
 
-        // Riding no moved skin, it is not lifted back to the skin's floor (it would stand at +1 mm).
-        Assert.True(At(solve.Positions(), l.ClothAt[0, 10]).Y < 0f, "the deflated cloth was lifted back over still skin");
+        // Then sculpts the skin further in, with it on: the guard looks over still skin near what this stroke moved,
+        // and leaves the cloth the earlier stroke placed where it is.
+        solve.MoveSkin = true;
+        solve.Paint(At(l.Model.Positions, l.SkinAt[9, 10]), 0.04f, 0.003f);
+        Assert.True(solve.SkinEdited);
+        solve.EndStroke();
+        foreach (int i in new[] { 0, 1, 2 })
+            Assert.Equal(placed[l.ClothAt[i, 10] * 3 + 1], At(solve.Positions(), l.ClothAt[i, 10]).Y);
+    }
+
+    /// <summary>
+    /// Still skin the moved cloth passes over is judged too: a row of skin locked between moving rows, under coarse
+    /// cloth whose corners ride the moving rows down — the face over the locked row comes to cross it, and is lifted.
+    /// </summary>
+    [Fact]
+    [Trait("Plan", "AC-studio-move-skin-4")]
+    [Trait("Plan", "EDGE-studio-move-skin-5")]
+    public void StillSkinUnderMovedClothIsJudged()
+    {
+        var l = Layered(21, 0.001f, clothStride: 2);
+        var solve = SkinSolve(l.Model);
+        solve.SetLocked(Enumerable.Range(0, 21).Select(j => l.SkinAt[11, j]));
+        solve.Paint(At(l.Model.Positions, l.SkinAt[11, 10]), 0.05f, -0.004f);
+        solve.EndStroke();
+        Assert.Equal(0f, At(solve.Positions(), l.SkinAt[11, 10]).Y);
+        Assert.Equal(0, SkinPoke.MadeWorse(l.Model, solve.Positions()));
+        Assert.Equal(0, Folded(l.Model, solve.Positions()));
+    }
+
+    /// <summary>
+    /// A mirrored Move of skin moves the picked skin on its own side, with the cloth on it, and nothing on the other
+    /// side: skin has no mirror match, and its reflection must not take the cloth lying on the other side's skin.
+    /// </summary>
+    [Fact]
+    [Trait("Plan", "AC-studio-move-skin-3")]
+    [Trait("Plan", "EDGE-studio-move-skin-17")]
+    public void AMirroredSkinMoveLeavesTheOtherSideAlone()
+    {
+        var l = Layered(21, 0.001f, centred: true);
+        var solve = SkinSolve(l.Model);
+        var picked = l.Model.Parts[1].Triangles.Where(v => At(l.Model.Positions, v).X > 0.03f).ToArray();
+        var pivot = At(l.Model.Positions, l.SkinAt[15, 10]);
+        Assert.True(solve.BeginMove(picked, adjacent: false, falloffRadius: 0f,
+                                    mirror: new MeshVolumeSolve.MoveMirror(MeshVolumeSolve.MoveKind.Translate, pivot)) > 0);
+        solve.MoveTo(new Vector3(0f, 0.005f, 0f));
+        solve.EndMove();
+
+        var after = solve.Positions();
+        Assert.Equal(0.005f, Moved(l.Model, after, l.SkinAt[15, 10]).Y, 1e-6f);
+        Assert.Equal(0.005f, Moved(l.Model, after, l.ClothAt[15, 10]).Y, 1e-4f);
+        for (int i = 0; i < 7; i++)
+        for (int j = 0; j < 21; j++)
+        {
+            Assert.Equal(Vector3.Zero, Moved(l.Model, after, l.ClothAt[i, j]));
+            Assert.Equal(Vector3.Zero, Moved(l.Model, after, l.SkinAt[i, j]));
+        }
+        Assert.Equal(0, Folded(l.Model, after));
     }
 
     /// <summary>
