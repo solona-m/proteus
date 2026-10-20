@@ -993,24 +993,95 @@ public partial class MeshVolumeSolveTests
         }
     }
 
-    /// <summary>A centred turn about X gives the piece it carries whole the turn's own exact normals.</summary>
+    /// <summary>
+    /// A hard box on the centre line is its own mirror; a centred stretch gives it the stretch's exact normals — its flat
+    /// sides stay flat-shaded — where turned normals would tilt its corners' split normals.
+    /// </summary>
     [Fact]
     [Trait("Plan", "AC-mirror-move-tools-8")]
     [Trait("Plan", "EDGE-mirror-move-tools-16")]
-    public void CentredTurnGivesTheTurnsNormals()
+    public void CentredStretchGivesTheStretchsNormals()
     {
-        const int n = 21;
-        var model = Centred(n, (_, _) => 0f);
-        var pivot = new Vector3(0.02f, 0f, 0.1f);
-        var t = RotateGizmo.About(pivot, Vector3.UnitX, 0.3f);
+        var (box, perBox) = HardBox();
+        var positions = (float[])box.Positions.Clone();
+        for (int v = 0; v < perBox; v++) positions[v * 3] -= BoxCentre.X;          // onto the centre line
+        var model = new ModelParts
+        {
+            Positions = positions, Normals = box.Normals, MeshSpans = box.MeshSpans, Parts = box.Parts,
+            AttributeNames = box.AttributeNames, Min = box.Min, Max = box.Max, ShatteredSubmeshes = box.ShatteredSubmeshes,
+        };
+        var pivot = new Vector3(0.01f, BoxCentre.Y, BoxCentre.Z);                   // the gizmo a little off the centre
+        var t = PartScaleDrag.Build(pivot, new Vector3(1f, 1.6f, 1f));
         var solve = new MeshVolumeSolve(model);
-        solve.BeginMove(model.Parts[0].Triangles, false, 0f, mirror: new MoveMirror(Kind.Rotate, pivot));
+        solve.BeginMove(Enumerable.Range(0, perBox), false, 0f, mirror: new MoveMirror(Kind.Scale, pivot));
         Assert.Equal(Mode.Centred, solve.DragMirror?.Mode);
         solve.TransformTo(t);
         Assert.True(solve.EndMove());
-        var expected = Vector3.Normalize(Vector3.TransformNormal(Vector3.UnitY, LinearNormals.NormalMap(t)!.Value));
-        foreach (int v in new[] { 10 * n + 10, 4 * n + 7, 16 * n + 7 })
-            AssertNormal(expected, solve.NormalAt(v), 1e-5f, $"vertex {v}");
+
+        var map = LinearNormals.NormalMap(Matrix4x4.Identity + MirrorMotion.CentredLinear(t, Kind.Scale))!.Value;
+        var turned = TurnedNormalsOf(solve, model);
+        bool turnedDiffers = false;
+        for (int v = 0; v < perBox; v++)
+        {
+            var expected = Vector3.Normalize(Vector3.TransformNormal(V(solve.AuthoredNormalAt(v)), map));
+            AssertNormal(expected, solve.NormalAt(v), 1e-5f, $"box vertex {v}");
+            turnedDiffers |= Vector3.Dot(expected, Vector3.Normalize(V(turned[v]))) < MathF.Cos(MathF.PI / 180f);
+        }
+        Assert.True(turnedDiffers, "the fixture does not tell exact normals from turned ones");
+    }
+
+    /// <summary>A centre seam left a hair off X = 0 is on the centre plane: an outward drag sends none of its points
+    /// sideways, so the seam does not zigzag.</summary>
+    [Fact]
+    [Trait("Plan", "AC-mirror-move-tools-4")]
+    [Trait("Plan", "EDGE-mirror-move-tools-11")]
+    public void ACentreSeamAHairOffZeroStaysOnTheCentre()
+    {
+        const int n = 21;
+        var model = Centred(n, (_, _) => 0f);
+        var positions = (float[])model.Positions.Clone();
+        const float hair = 4e-6f;                                                 // under 1e-3 of an edge
+        for (int j = 0; j < n; j++) positions[(10 * n + j) * 3] = j % 2 == 0 ? hair : -hair;
+        model = new ModelParts
+        {
+            Positions = positions, Normals = model.Normals, MeshSpans = model.MeshSpans, Parts = model.Parts,
+            AttributeNames = model.AttributeNames, Min = model.Min, Max = model.Max, ShatteredSubmeshes = model.ShatteredSubmeshes,
+        };
+        var cup = Patch(n, 10, 20, 0, n - 1);
+        var solve = new MeshVolumeSolve(model);
+        solve.BeginMove(cup, false, 0f, mirror: Mirrored(Kind.Translate, model.Positions, cup));
+        Assert.Equal(Mode.Sides, solve.DragMirror?.Mode);
+        solve.MoveTo(new Vector3(0.02f, 0f, 0f));
+        var after = solve.Positions();
+        for (int j = 0; j < n; j++)
+            Assert.True(MathF.Abs(At(after, 10 * n + j).X - positions[(10 * n + j) * 3]) <= 1e-7f,
+                        $"seam row {j} went {At(after, 10 * n + j).X * 1000f:F3} mm");
+    }
+
+    /// <summary>
+    /// The status line counts only matches that move: a piece selected alongside the one being mirrored, with a few of
+    /// its points matching but too few to have a mirror image, adds nothing to it — matched or held.
+    /// </summary>
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    [Trait("Plan", "AC-mirror-move-tools-5")]
+    [Trait("Plan", "EDGE-mirror-move-tools-7")]
+    public void ReportCountsOnlyMatchesThatMove(bool lockTheStub)
+    {
+        var mesh = new MirrorMesh();
+        var grid = mesh.Grid(Steps(-0.1f, 21), Steps(0f, 21));
+        var sash = mesh.Grid(Steps(0.02f, 19), Steps(0.3f, 3));                   // x 20..200 mm
+        var stub = mesh.Grid(Steps(-0.03f, 2), Steps(0.3f, 3));                   // mirrors the sash's first two columns only
+        var model = mesh.Build();
+        var patch = Cells(grid, 14, 16, 8, 12);
+        var sel = patch.Concat(All(sash)).ToArray();
+        var solve = new MeshVolumeSolve(model);
+        if (lockTheStub) solve.SetLocked(All(stub));
+        solve.BeginMove(sel, false, 0f, mirror: Mirrored(Kind.Translate, model.Positions, sel));
+        Assert.Equal(new MeshVolumeSolve.MirrorReport(sel.Length, patch.Length, 0, Mode.Sides), solve.DragMirror);
+        solve.MoveTo(new Vector3(0.01f, 0f, 0f));
+        AssertUnmoved(model.Positions, solve.Positions(), All(stub), "the stub");
     }
 
     /// <summary>
