@@ -33,6 +33,21 @@ public class BodyRetargetWriterTests : IDisposable
     }
 
     [Fact]
+    [Trait("Plan", "EDGE-mod-rename-33")]
+    public void Save_refuses_when_mod_folder_is_gone()
+    {
+        // Renamed in Penumbra while the refit ran: writing would bring the old folder back as a ghost.
+        string gone = root + "-renamed-away";
+
+        var outcome = BodyRetargetWriter.Save(gone, Group, "Neolithe SFW L", GamePath, [1, 2, 3],
+                                              "Neolithe", "SFW M", "SFW L");
+
+        Assert.False(outcome.Ok);
+        Assert.Contains(Path.GetFileName(gone), outcome.Message);
+        Assert.False(Directory.Exists(gone));
+    }
+
+    [Fact]
     public void Saving_adds_a_group_with_an_original_option_that_carries_nothing()
     {
         var outcome = BodyRetargetWriter.Save(root, Group, "Neolithe SFW L", GamePath, [1, 2, 3],
