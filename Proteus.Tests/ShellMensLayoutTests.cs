@@ -1,0 +1,119 @@
+using System.Collections.Generic;
+using System.IO;
+using Proteus.Services;
+using Xunit;
+
+namespace Proteus.Tests;
+
+/// <summary>A man's second-skin shell: a woman's layer carried into his layout by its art, his own layers untouched.</summary>
+public class ShellMensLayoutTests
+{
+    private static OverlayDescriptor Art(string? declared, bool asym = false, params string[] paths)
+        => new() { SourceBodyType = declared, AsymmetricArt = asym, MaterialGamePaths = [.. paths] };
+
+    private const string ManGen3 = "chara/human/c0101/obj/body/b0001/material/v0001/mt_c0101b0001_b.mtrl";
+
+    /// <summary>The route decision as the shell makes it, maps assumed here.</summary>
+    private static MensRoute? RouteOf(OverlayDescriptor d, string layout)
+        => UVRemapService.MensRouteFor(d.SourceBodyType, d.SourceBodyType ?? (d.MaterialGamePaths.Count > 0 ? "gen3" : null),
+                                       d.MaterialGamePaths, layout);
+
+    [Fact]
+    [Trait("Plan", "AC-tbse-uvmap-3")]
+    public void Tbse_shell_part_converts_into_bibo_art() // [AC-tbse-uvmap-3]
+    {
+        var woman = Art("bibo", paths: ManGen3);
+        var src = SecondSkinService.BodyLayerSource(woman, "tbse", false, "gen3", "gen3", d => RouteOf(d, "tbse"));
+        Assert.Equal((new MensRoute("bibo", "tbse"), "bibo"), UVRemapService.ParseMensKey(src));
+    }
+
+    [Fact]
+    [Trait("Plan", "AC-tbse-uvmap-5")]
+    public void Mixed_shell_own_layer_unchanged() // [AC-tbse-uvmap-5]
+    {
+        // One shell, a woman's bibo layer and his own gen3 layer: his keeps today's type; vertices are not un-mirrored.
+        var woman = Art("bibo", asym: true, paths: ManGen3);
+        var his = Art("gen3", paths: ManGen3);
+        Assert.Equal("gen3", SecondSkinService.BodyLayerSource(his, "tbse", false, "gen3", "gen3", d => RouteOf(d, "tbse")));
+        Assert.NotNull(UVRemapService.ParseMensKey(
+            SecondSkinService.BodyLayerSource(woman, "tbse", false, "gen3", "gen3", d => RouteOf(d, "tbse"))));
+        Assert.Null(SecondSkinService.MenUnmirrorInto([woman, his], d => RouteOf(d, UVRemapService.MaleVanillaSpace)));
+    }
+
+    [Fact]
+    [Trait("Plan", "AC-tbse-uvmap-4")]
+    [Trait("Plan", "EDGE-tbse-uvmap-13")]
+    public void Asymmetric_art_on_vanilla_man_unmirrors() // [AC-tbse-uvmap-4] [EDGE-tbse-uvmap-13]
+    {
+        var woman = Art("bibo", asym: true, paths: ManGen3);
+        Assert.Equal("bibo", SecondSkinService.MenUnmirrorInto([woman], d => RouteOf(d, UVRemapService.MaleVanillaSpace)));
+        // Un-mirrored into bibo, the woman's bibo art is native to the shell: no men's key on it.
+        Assert.Equal("bibo", SecondSkinService.BodyLayerSource(woman, UVRemapService.MaleVanillaSpace, true, "bibo", "bibo",
+                                                               d => RouteOf(d, UVRemapService.MaleVanillaSpace)));
+        // Symmetric art needs no un-mirroring.
+        Assert.Null(SecondSkinService.MenUnmirrorInto([Art("bibo", paths: ManGen3)], d => RouteOf(d, UVRemapService.MaleVanillaSpace)));
+    }
+
+    [Fact]
+    [Trait("Plan", "EDGE-tbse-uvmap-13")]
+    public void Shell_moved_out_of_his_layout_takes_no_route() // [EDGE-tbse-uvmap-13]
+    {
+        // A vanilla man (shell in gen2) un-mirrored the women's way into bibo, because a layer of his own is on it: the
+        // woman's bibo layer is native to the bibo shell now and must not be carried into men's vanilla.
+        var woman = Art("bibo", asym: true, paths: ManGen3);
+        Assert.Equal("bibo", SecondSkinService.BodyLayerSource(woman, UVRemapService.MaleVanillaSpace, false, "bibo", "gen2",
+                                                               d => RouteOf(d, UVRemapService.MaleVanillaSpace)));
+        // No men's layout read at all: today's type.
+        Assert.Equal("bibo", SecondSkinService.BodyLayerSource(woman, null, false, "gen3", null, d => RouteOf(d, "tbse")));
+    }
+
+    [Fact]
+    [Trait("Plan", "EDGE-tbse-uvmap-13")]
+    public void Women_way_unmirror_drops_his_layout() // [EDGE-tbse-uvmap-13]
+    {
+        const string mv = UVRemapService.MaleVanillaSpace;
+        // Nothing un-mirrored: his layout, in the space it was read in.
+        Assert.Equal((mv, "gen2"), SecondSkinService.MenAfterUnmirror(mv, "gen2", unmirror: false, menUnmirror: false));
+        // Un-mirrored by the men's maps: kept (the women's layers are then native to the shell anyway).
+        Assert.Equal((mv, "gen2"), SecondSkinService.MenAfterUnmirror(mv, "gen2", unmirror: true, menUnmirror: true));
+        // Un-mirrored the women's way: dropped, so the woman's layer takes no route into a layout the shell has left.
+        Assert.Equal(((string?)null, (string?)null), SecondSkinService.MenAfterUnmirror(mv, "gen2", unmirror: true, menUnmirror: false));
+        Assert.Equal(((string?)null, (string?)null), SecondSkinService.MenAfterUnmirror(null, "gen3", unmirror: false, menUnmirror: false));
+
+        // And the build feeds exactly these into the per-layer decision (no compositor harness: read from source).
+        var src = File.ReadAllText(RepoFile("Proteus", "Services", "SecondSkinService.ShellSetBuild.cs"));
+        Assert.Contains("(menLayout, menOwnSpace) = MenAfterUnmirror(menLayout, menOwnSpace, unmirror, menUnmirror);", src);
+        Assert.Contains("BodyLayerSource(d, menLayout, menUnmirror, s.UvSpace, menOwnSpace,", src);
+    }
+
+    private static string RepoFile(params string[] parts)
+    {
+        for (var d = new DirectoryInfo(System.AppContext.BaseDirectory); d != null; d = d.Parent)
+        {
+            var p = Path.Combine([d.FullName, .. parts]);
+            if (File.Exists(p)) return p;
+        }
+        throw new FileNotFoundException(Path.Combine(parts));
+    }
+
+    [Fact]
+    [Trait("Plan", "EDGE-tbse-uvmap-13")]
+    public void Vanilla_gate_applies_to_male_vanilla_parts() // [EDGE-tbse-uvmap-13]
+    {
+        // A man's vanilla part reads as gen2 to the shell, so the "Overlay gen2/vanilla" gate applies to it as today.
+        Assert.Equal("gen2", SecondSkin_SkinType("/mt_c0101b0001_a.mtrl"));
+    }
+
+    private static string? SecondSkin_SkinType(string material) => SecondSkinWriter.SkinMaterialBodyType(material);
+
+    [LocalDataFact(UvTransferBakeLocalTests.Tbse, UvTransferBakeLocalTests.Bibo)]
+    [Trait("Plan", "AC-tbse-uvmap-3")]
+    public void Part_layout_read_from_mdl_bytes() // [AC-tbse-uvmap-3]
+    {
+        // As a shell part is read: from the model's drawn skin material, no game path.
+        var tbse = File.ReadAllBytes(Path.Combine(LocalData.Path(UvTransferBakeLocalTests.Tbse), "common", "1", "c0101e0000_top.mdl"));
+        var bibo = File.ReadAllBytes(Path.Combine(LocalData.Path(UvTransferBakeLocalTests.Bibo), UvBakeInputs.BiboChest));
+        Assert.Equal(UVRemapService.TbseSpace, SecondSkinService.PartMenLayout(tbse));
+        Assert.Null(SecondSkinService.PartMenLayout(bibo));
+    }
+}

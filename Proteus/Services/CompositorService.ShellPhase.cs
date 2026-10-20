@@ -328,7 +328,8 @@ public partial class CompositorService
                     // The size the prefetch above warmed at — see `gs`.
                     shellTexSize: gs,
                     equippedSlotVariants: slotVariants,
-                    hiddenParts: hiddenParts);
+                    hiddenParts: hiddenParts,
+                    wearerIsMan: run.wearerIsMan, menMapsReady: run.menMapsReady);
             }
 
             private void ApplyShells()

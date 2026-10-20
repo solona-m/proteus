@@ -22,6 +22,9 @@ public partial class CompositorService
             private string mtrlGamePath = null!;
             private List<(OverlayEntry Entry, ResolvedOverlay Overlay)> pairs = null!;
             private string? dstBodyType;
+            // The men's layout this material is drawn in on a man (TBSE's or the men's vanilla), or null; only a woman's art
+            // routed by SourceHere reads it — a man's own art keeps dstBodyType's reading.
+            private string? dstLayout;
             private bool faceDoubled;
             private string? dstFaceSpace;
             private string? mtrlDisk;
@@ -87,6 +90,7 @@ public partial class CompositorService
                 (mtrlGamePath, pairs) = kvp;
 
                 dstBodyType = UVRemapService.InferBodyType(mtrlGamePath);
+                dstLayout = UVRemapService.LayoutOfMaterial(mtrlGamePath, run.wearerIsMan);
 
                 // This material renders the doubled face sheet (its model was rewritten, see FaceUvDoublingService): bases are
                 // expanded into that layout and art is loaded to match.
@@ -678,6 +682,13 @@ public partial class CompositorService
             private byte[]? RemapIfNeededCore(byte[]? png, int w, int h, string? srcType, string? overlayPath = null,
                                       ResampleFilter filter = ResampleFilter.Auto)
             {
+                // A woman's art on a man's material, routed by SourceHere: through the bibo↔TBSE maps, or — a map that would
+                // not load — on today's path with the type it would have had.
+                if (UVRemapService.ParseMensKey(srcType) is { } men)
+                {
+                    if (png != null && MensRemap(w, h, men.Route, overlayPath, filter) is { } routed) return routed;
+                    srcType = men.Legacy;
+                }
                 if (png == null || srcType == null) return png;
                 // A doubled face sheet that reached the skin path must be folded by a crop, not resampled: its right half is the
                 // vanilla layout ("keep the +X side and mirror it"). No live caller takes this (LoadRemapped folds first); kept
@@ -870,6 +881,7 @@ public partial class CompositorService
                         else if (gd.MaterialGamePaths.Any(p => UVRemapService.InferBodyType(p) == "gen3"))
                             gSrc = "gen3";
                     }
+                    gSrc = SourceHere(gd, gSrc);
                     var dp = Path.Combine(gEntry.SidecarRoot, gd.Diffuse);
                     var img = LoadRemapped(dp, w, h, gSrc);
                     if (img == null) continue;
@@ -952,12 +964,65 @@ public partial class CompositorService
 
             private string? SrcTypeOf(OverlayDescriptor d)
             {
-                if (d.SourceBodyType != null) return d.SourceBodyType;
+                if (d.SourceBodyType != null) return SourceHere(d, d.SourceBodyType);
                 if (d.MaterialGamePaths.Any(p => p.EndsWith("_bibo.mtrl", StringComparison.OrdinalIgnoreCase)))
-                    return "bibo";
+                    return SourceHere(d, "bibo");
                 if (d.MaterialGamePaths.Any(p => UVRemapService.InferBodyType(p) == "gen3"))
-                    return "gen3";
+                    return SourceHere(d, "gen3");
                 return null;
+            }
+
+            /// <summary>
+            /// The source type every remap site of overlay <paramref name="d"/> on this material passes along: the type
+            /// <paramref name="legacy"/> it has today, unless it is a woman's art on a man's material whose maps are here — then
+            /// a <see cref="UVRemapService.MensKey"/> carrying the route, which every site hands to RemapIfNeededCore and caches
+            /// by. Maps not here yet: today's type, and the maps asked for.
+            /// </summary>
+            internal string? SourceHere(OverlayDescriptor d, string? legacy)
+            {
+                if (UVRemapService.MensRouteFor(d.SourceBodyType, legacy, d.MaterialGamePaths, dstLayout) is not { } route) return legacy;
+                var uv = run.compositor.uvRemap;
+                if (!run.menMapsReady) { uv.RequestMenMaps(); return legacy; }
+                if (!uv.MensRouteAvailable(route))
+                {
+                    LogRouteUnavailable(route);
+                    return legacy;
+                }
+                return UVRemapService.MensKey(route, legacy);
+            }
+
+            private void LogRouteUnavailable(MensRoute route)
+            {
+                bool first;
+                lock (run.mensRoutesLogged) first = run.mensRoutesLogged.Add(route);
+                if (first)
+                    run.compositor.log.Information("[Proteus] men's route {0}→{1} unavailable ({2}); drawn as today",
+                        route.Src, route.Dst, UVRemapService.MapFilesOf(route));
+            }
+
+            /// <summary>A woman's overlay along <paramref name="route"/>, timed apart; null (and the route set aside) when it cannot be.</summary>
+            private byte[]? MensRemap(int w, int h, MensRoute route, string? overlayPath, ResampleFilter filter)
+            {
+                var t0 = PhaseCounter.Begin();
+                try
+                {
+                    var result = MensOverlayRemap.Convert(new MensHost(run.compositor), w, h, route, overlayPath, filter, out bool mapFailed);
+                    if (mapFailed)
+                    {
+                        run.compositor.uvRemap.MarkRouteMissing(route);
+                        LogRouteUnavailable(route);
+                    }
+                    return result;
+                }
+                finally { run.compositor.blendMenStats.Stop(t0); }
+            }
+
+            private sealed class MensHost(CompositorService compositor) : IMensRemapHost
+            {
+                public UVRemapService UvRemap => compositor.uvRemap;
+                public byte[]? Load(string path, int w, int h, ResampleFilter filter) => compositor.textureLoader.LoadPngAsRgba(path, w, h, filter);
+                public byte[]? GetOrDerive(string path, string key, int w, int h, Func<byte[]?> make)
+                    => compositor.textureLoader.GetOrDerive(path, key, w, h, make);
             }
 
             // One overlay's effective coverage: art alpha, then the Masks group, then opacity (same rules as CovAt).
