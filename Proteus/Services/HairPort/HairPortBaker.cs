@@ -37,7 +37,8 @@ internal static class HairPortBaker
     /// </summary>
     public const float GapMargin = 0.014f;
 
-    /// <summary>The share of a hairstyle's triangles a port may turn inside out; see <see cref="Folded"/>.</summary>
+    /// <summary>The share of a hairstyle's triangles a port may turn inside out; see <see cref="Folded"/>. Taken of its
+    /// LOD0 triangles, the hidden fur's included.</summary>
     public const float FoldedShare = 0.005f;
 
     /// <summary>How deep under the scalp a vertex must be before it counts as sunk into the head, in metres: the scalp
