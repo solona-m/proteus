@@ -3723,6 +3723,10 @@
     "message": "没有 {0} 身体可供转换，因此 {0} 模型会像游戏那样变形为 {1} 体型进行转换，再保存回 {0}。",
     "description": ""
   },
+  "Parts.Retarget.Lowered.Fmt": {
+    "message": "根据 {0} 模型生成 {1} 模型，按游戏在两者之间的弯曲方式弯成 {1} 体型。保存时会添加游戏所需的元数据。",
+    "description": "{0} is the race of the model open, {1} the race picked below it."
+  },
   "Parts.Retarget.Bake.BendBack.Fmt": {
     "message": "无法将转换结果变形回 {0} 体型（{1}）",
     "description": ""
@@ -4312,7 +4316,7 @@
     "description": "Heads the dropdown that picks which race's model a refit is made and saved as."
   },
   "Parts.Retarget.Race.Tip": {
-    "message": "转换给哪个种族。选择与服装同性别的其他种族时，会按游戏的弯曲方式从此模型生成专用模型，转换到该种族的体型，并保存到该种族读取的位置。其他种族仍使用此模型。",
+    "message": "转换给哪个种族。选择与服装同性别的其他种族时，会按游戏的弯曲方式从此模型生成专用模型，转换到该种族的体型，并保存到该种族读取的位置。此模型保持不变。",
     "description": "Tooltip of Parts.Retarget.Race.Label."
   },
   "Parts.Retarget.Race.ThisModel.Fmt": {
@@ -4338,6 +4342,14 @@
   "Parts.Retarget.Race.Only.Fmt": {
     "message": "只有{0}会穿保存的转换结果；{1}仍使用此模型。",
     "description": "{0} is the race picked, {1} the race of the model open."
+  },
+  "Parts.Retarget.Race.Below.Fmt": {
+    "message": "{0}会穿保存的转换结果，此装备没有自身模型的同性别种族也会穿；{1}仍使用此模型。",
+    "description": "{0} is the race picked, {1} the race of the model open; said for a race the open one falls back to."
+  },
+  "Parts.Retarget.Race.BelowExtraBones.Fmt": {
+    "message": "此服装使用额外骨骼。只有{0}获得对应的额外骨架，因此穿此转换结果的其他种族身上这些骨骼不会动。",
+    "description": "{0} is the race picked."
   },
   "Parts.Retarget.Race.SourceBaked.Fmt": {
     "message": "原本适配的体型也会以同样方式弯曲为{0}，因此贴合方式与之前一样。",

@@ -64,21 +64,61 @@ internal static class BakedBodyCatalog
         var made = new Dictionary<string, string?>(StringComparer.OrdinalIgnoreCase);   // source file -> baked rel
         foreach (string slot in slots)
             foreach (var option in source.For(slot, drawn).Where(o => BodySizeCatalog.RaceOf(o.GamePath) == drawn))
-            {
-                string path = source.PathOf(option);
-                if (!made.TryGetValue(path, out string? rel))
-                {
-                    rel = Bake(path, from, to, who, wearerKey, out string why);
-                    made[path] = rel;
-                    if (rel == null) failed.Add($"{option.FullLabel}: {why}");
-                }
-                if (rel == null) continue;
-                options.Add(option with { Rel = rel, GamePath = RacialModelBake.WithRace(option.GamePath, to) });
-            }
+                Add(options, made, failed, source, option, from, to, who, wearerKey);
         return new BodySizeCatalog(Dir, options);
     }
 
-    private static string? Bake(string path, ushort from, ushort to, RacialModelBake.Wearer who, string wearerKey,
+    /// <summary>
+    /// <paramref name="source"/>'s bodies bent DOWN into <paramref name="to"/>, a race the drawn one falls through to —
+    /// the "made for" side of a Highlander model refitted for Midlanders. Per slot, the bodies of the first race on the
+    /// line from the drawn race down to <paramref name="to"/> (<see cref="OtherRaceRefit.LineDown"/>) the source has
+    /// bodies of exactly: that is the body the garment's part was cut against, as the game draws it on the drawn race —
+    /// TBSE-X's Highlander torso, but its Midlander legs, which a Highlander draws bent. Bent down as the garment is, or
+    /// taken as they are when they already are <paramref name="to"/>'s.
+    /// </summary>
+    internal static BodySizeCatalog Lowered(BodySizeCatalog source, ushort drawn, ushort to, RacialModelBake.Wearer who,
+                                            IEnumerable<string> slots, out List<string> failed)
+    {
+        failed = [];
+        var line = OtherRaceRefit.LineDown(drawn, to).ToList();
+        string wearerKey = Key(who);
+        var options = new List<BodyOption>();
+        var made = new Dictionary<string, string?>(StringComparer.OrdinalIgnoreCase);
+        foreach (string slot in slots)
+        {
+            var all = source.For(slot);
+            foreach (ushort race in line)
+            {
+                string code = $"{race:D4}";
+                var own = all.Where(o => BodySizeCatalog.RaceOf(o.GamePath) == code).ToList();
+                if (own.Count == 0) continue;
+                foreach (var option in own) Add(options, made, failed, source, option, race, to, who, wearerKey);
+                break;
+            }
+        }
+        return new BodySizeCatalog(Dir, options);
+    }
+
+    private static void Add(List<BodyOption> options, Dictionary<string, string?> made, List<string> failed,
+                            BodySizeCatalog source, BodyOption option, ushort from, ushort to, RacialModelBake.Wearer who,
+                            string wearerKey)
+    {
+        string path = source.PathOf(option);
+        if (!made.TryGetValue(path, out string? rel))
+        {
+            rel = Bend(path, from, to, who, wearerKey, out string why);
+            made[path] = rel;
+            if (rel == null) failed.Add($"{option.FullLabel}: {why}");
+        }
+        if (rel != null) options.Add(option with { Rel = rel, GamePath = RacialModelBake.WithRace(option.GamePath, to) });
+    }
+
+    /// <summary>
+    /// One body bent from <paramref name="from"/> to <paramref name="to"/>: baked up when <paramref name="to"/> falls
+    /// through to it, bent down when it falls through to <paramref name="to"/>, copied when the two are one. The
+    /// direction is in the file's name, so a body bent one way is never taken for the same body bent the other.
+    /// </summary>
+    private static string? Bend(string path, ushort from, ushort to, RacialModelBake.Wearer who, string wearerKey,
                                 out string why)
     {
         why = "";
@@ -90,22 +130,31 @@ internal static class BakedBodyCatalog
             return null;
         }
 
-        string rel = $"{Hash(bytes)}-{wearerKey}-c{from:D4}-c{to:D4}.mdl";
+        bool down = from != to && RacialModelBake.SameSexLine(from).Contains(to);
+        string rel = from == to ? $"{Hash(bytes)}-c{to:D4}.mdl"
+                   : $"{Hash(bytes)}-{wearerKey}-c{from:D4}-{(down ? "down" : "up")}-c{to:D4}.mdl";
         string full = Path.Combine(Dir, rel);
         lock (Gate)
             if (File.Exists(full)) return rel;
 
-        // As the garment is: a body bone with nothing to follow would stay put while the rest of the body bent, and the
-        // garment would be read against a body half in one race's shape and half in another's. Left out, saying why.
-        if (ModelSkinReader.Read(bytes, null, null) is { } skin
-            && OtherRaceRefit.Unbendable(skin, who.Pbd, who.ParentOf, from, to) is { Count: > 0 } stuck)
+        byte[]? baked = bytes;
+        if (from != to)
         {
-            why = string.Format(Loc.Localize("Parts.Retarget.Race.BodyBones.Fmt",
-                                             "its bones {0} would not move with {1}'s skeleton"),
-                                string.Join(", ", stuck.Take(8)), ModelRace.Describe($"{to:D4}"));
-            return null;
+            // As the garment is: a body bone with nothing to follow would stay put while the rest of the body bent, and
+            // the garment would be read against a body half in one race's shape and half in another's. Left out, saying
+            // why.
+            if (ModelSkinReader.Read(bytes, null, null) is { } skin
+                && OtherRaceRefit.Unbendable(skin, who.Pbd, who.ParentOf, from, to) is { Count: > 0 } stuck)
+            {
+                why = string.Format(Loc.Localize("Parts.Retarget.Race.BodyBones.Fmt",
+                                                 "its bones {0} would not move with {1}'s skeleton"),
+                                    string.Join(", ", stuck.Take(8)), ModelRace.Describe($"{to:D4}"));
+                return null;
+            }
+            baked = down ? RacialModelBake.Unbake(bytes, to, from, who.Pbd, who.ParentOf, out why)
+                         : RacialModelBake.Bake(bytes, from, to, who.Pbd, who.ParentOf, out why);
+            if (baked == null) return null;
         }
-        if (RacialModelBake.Bake(bytes, from, to, who.Pbd, who.ParentOf, out why) is not { } baked) return null;
         lock (Gate)
         {
             try
