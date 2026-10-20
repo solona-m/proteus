@@ -304,6 +304,9 @@ public class UploadUvMapsWorkflowTests
         Assert.Contains("No tag: push a uvmaps-* tag", yml);
         Assert.Contains("looks like an LFS pointer", yml);
         Assert.Contains("already exists", yml);
+        // The tag comes in through the environment and must look like uvmaps-v<number>; never pasted into the script.
+        Assert.Contains("'^uvmaps-v\\d+$'", yml);
+        Assert.DoesNotContain("\"${{ github.event.inputs.tag }}\"", yml);
         // Every guard comes before the release is created.
         int create = yml.IndexOf("gh release create", StringComparison.Ordinal);
         foreach (var guard in new[] { "is not listed", "looks like an LFS pointer", "already exists" })

@@ -1005,8 +1005,8 @@ public partial class CompositorService
                 var t0 = PhaseCounter.Begin();
                 try
                 {
-                    var result = MensOverlayRemap.Convert(new MensHost(run.compositor), w, h, route, overlayPath, filter);
-                    if (result == null && overlayPath != null)
+                    var result = MensOverlayRemap.Convert(new MensHost(run.compositor), w, h, route, overlayPath, filter, out bool mapFailed);
+                    if (mapFailed)
                     {
                         run.compositor.uvRemap.MarkRouteMissing(route);
                         LogRouteUnavailable(route);

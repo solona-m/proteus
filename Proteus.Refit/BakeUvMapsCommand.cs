@@ -40,8 +40,18 @@ internal static class BakeUvMapsCommand
         if (reportOnly) return 0;
 
         Directory.CreateDirectory(outDir);
-        UvTransferMapFile.WriteAtomic(Path.Combine(outDir, UvTransferBakeJob.BiboToTbse), result.BiboToTbseBytes!);
-        UvTransferMapFile.WriteAtomic(Path.Combine(outDir, UvTransferBakeJob.TbseToBibo), result.TbseToBiboBytes!);
+        string first = Path.Combine(outDir, UvTransferBakeJob.BiboToTbse);
+        UvTransferMapFile.WriteAtomic(first, result.BiboToTbseBytes!);
+        try
+        {
+            UvTransferMapFile.WriteAtomic(Path.Combine(outDir, UvTransferBakeJob.TbseToBibo), result.TbseToBiboBytes!);
+        }
+        catch
+        {
+            // A pair or nothing: half a pair would load as a map with no reverse to check it against.
+            File.Delete(first);
+            throw;
+        }
         return 0;
     }
 }

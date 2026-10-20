@@ -796,7 +796,12 @@ public sealed partial class SecondSkinService
             var sheetSrc = textureLoader.LoadPngAsRgba(path, 4096, 4096, filter);
             if (sheetSrc != null && uvRemap.ConvertSheet(sheetSrc, 4096, 4096, men.Route.Src, men.Route.Dst) is { } sheet)
                 return TextureLoader.Resample(sheet.Rgba, sheet.W, sheet.H, w, h, filter);
-            uvRemap.MarkRouteMissing(men.Route);
+            // Only a map that failed says anything about the route; an overlay that would not decode does not.
+            if (sheetSrc != null)
+            {
+                uvRemap.MarkRouteMissing(men.Route);
+                log.Information("[Proteus] men's route {0}→{1} unavailable; drawn as today", men.Route.Src, men.Route.Dst);
+            }
             if (men.Legacy == null || string.Equals(men.Legacy, dstType, StringComparison.OrdinalIgnoreCase)) return png;
             srcType = men.Legacy;
         }

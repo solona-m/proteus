@@ -24,12 +24,21 @@ jobs:
 
       # Which files a tag publishes comes from Proteus/uvmaps/releases.json — the same table the client's pinned lists
       # are tested against — so the workflow names no file itself. A tag the table does not list is refused.
+      # The tag reaches the script through the environment, never pasted into it, and must look like uvmaps-v<number>.
       - name: Resolve the tag's files
         shell: pwsh
+        env:
+          REF_TYPE: ${{ github.ref_type }}
+          REF_NAME: ${{ github.ref_name }}
+          INPUT_TAG: ${{ github.event.inputs.tag }}
         run: |
-          $tag = if ("${{ github.ref_type }}" -eq "tag") { "${{ github.ref_name }}" } else { "${{ github.event.inputs.tag }}" }
+          $tag = if ($env:REF_TYPE -eq "tag") { $env:REF_NAME } else { $env:INPUT_TAG }
           if ([string]::IsNullOrWhiteSpace($tag)) {
             Write-Error "No tag: push a uvmaps-* tag or give the dispatch a tag input."
+            exit 1
+          }
+          if ($tag -notmatch '^uvmaps-v\d+$') {
+            Write-Error "Tag '$tag' is not of the form uvmaps-v<number>."
             exit 1
           }
           $table = Get-Content "Proteus\uvmaps\releases.json" -Raw | ConvertFrom-Json

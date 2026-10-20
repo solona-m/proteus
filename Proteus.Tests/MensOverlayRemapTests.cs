@@ -44,11 +44,17 @@ public class MensOverlayRemapTests
         {
             var host = new FakeHost(new UVRemapService(Substitute.For<IPluginLog>(), dir), new byte[4096 * 4096 * 4]);
             var route = new MensRoute("bibo", UVRemapService.TbseSpace);
-            Assert.Null(MensOverlayRemap.Convert(host, 2048, 2048, route, "a.png", ResampleFilter.Auto));
+            Assert.Null(MensOverlayRemap.Convert(host, 2048, 2048, route, "a.png", ResampleFilter.Auto, out bool mapFailed));
+            Assert.True(mapFailed);   // the overlay loaded; the map was not there
             Assert.Single(host.Keys);
             Assert.Contains("m2:tbse<bibo|a", host.Keys[0]);
             Assert.Empty(host.Cache);
-            Assert.Null(MensOverlayRemap.Convert(host, 2048, 2048, route, null, ResampleFilter.Auto));
+            Assert.Null(MensOverlayRemap.Convert(host, 2048, 2048, route, null, ResampleFilter.Auto, out _));
+
+            // An overlay that will not decode says nothing about the route.
+            var unreadable = new FakeHost(host.UvRemap, null!);
+            Assert.Null(MensOverlayRemap.Convert(unreadable, 2048, 2048, route, "b.png", ResampleFilter.Auto, out bool artFailed));
+            Assert.False(artFailed);
         }
         finally { Directory.Delete(dir, true); }
     }
@@ -79,12 +85,13 @@ public class MensOverlayRemapTests
             var host = new FakeHost(uv, art);
             var route = new MensRoute("bibo", UVRemapService.TbseSpace);
 
-            var got = MensOverlayRemap.Convert(host, S, S, route, "a.png", ResampleFilter.Nearest, sheet: S);
+            var got = MensOverlayRemap.Convert(host, S, S, route, "a.png", ResampleFilter.Nearest, out bool mapFailed, sheet: S);
+            Assert.False(mapFailed);
             var want = uv.ConvertSheet(art, S, S, "bibo", UVRemapService.TbseSpace, S)!.Value;
             Assert.Equal(TextureLoader.Resample(want.Rgba, want.W, want.H, S, S, ResampleFilter.Nearest), got);
             Assert.Equal(255, got![(5 * S + (S - 1 - 3)) * 4]);
             Assert.Single(host.Cache);
-            Assert.Same(got, MensOverlayRemap.Convert(host, S, S, route, "a.png", ResampleFilter.Nearest, sheet: S));
+            Assert.Same(got, MensOverlayRemap.Convert(host, S, S, route, "a.png", ResampleFilter.Nearest, out _, sheet: S));
         }
         finally { Directory.Delete(dir, true); }
     }

@@ -22,18 +22,25 @@ internal interface IMensRemapHost
 internal static class MensOverlayRemap
 {
     /// <summary>The overlay at <paramref name="overlayPath"/> in <paramref name="route"/>'s destination layout at w×h; null when it cannot be.</summary>
+    /// <param name="mapFailed">Whether the null came from the MAPS (one missing or unreadable) rather than the overlay
+    /// (a file that would not decode): only the former says anything about the route.</param>
     /// <param name="sheet">The maps' size; 4096 for the shipped ones.</param>
     internal static byte[]? Convert(IMensRemapHost host, int w, int h, MensRoute route, string? overlayPath, ResampleFilter filter,
-                                    int sheet = 4096)
+                                    out bool mapFailed, int sheet = 4096)
     {
+        mapFailed = false;
         if (overlayPath == null) return null;
-        return host.GetOrDerive(overlayPath, DeriveKey(route, filter), w, h, () =>
+        bool failed = false;
+        var result = host.GetOrDerive(overlayPath, DeriveKey(route, filter), w, h, () =>
         {
             var native = host.Load(overlayPath, sheet, sheet, filter);
             if (native == null) return null;
             var converted = host.UvRemap.ConvertSheet(native, sheet, sheet, route.Src, route.Dst, sheet);
-            return converted is { } s ? TextureLoader.Resample(s.Rgba, s.W, s.H, w, h, filter) : null;
+            if (converted == null) { failed = true; return null; }
+            return TextureLoader.Resample(converted.Value.Rgba, converted.Value.W, converted.Value.H, w, h, filter);
         });
+        mapFailed = failed;
+        return result;
     }
 
     /// <summary>The cache key of a route's result: distinct from every key the women's paths use (<c>gen2&lt;…</c>).</summary>

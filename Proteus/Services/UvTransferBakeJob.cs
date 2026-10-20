@@ -232,7 +232,7 @@ internal static class UvTransferBakeJob
         {
             ["bones"] = bones,
             ["genitalOverlap"] = genital,
-            ["c0301Iou"] = c0301,
+            ["c0301Iou"] = Num(c0301),
             ["biboChestCover"] = chest,
             ["rims"] = new JsonObject { ["bibo"] = biboDest.Rim.SegmentCount, ["tbse"] = tbseDest.Rim.SegmentCount },
         };
@@ -253,11 +253,14 @@ internal static class UvTransferBakeJob
         return either == 0 ? 0 : (double)both / either;
     }
 
+    /// <summary>A figure for the report: JSON has no NaN, so a figure that could not be measured is null.</summary>
+    private static JsonNode? Num(double v) => double.IsNaN(v) || double.IsInfinity(v) ? null : JsonValue.Create(v);
+
     private static JsonObject Stats(UvTransferBake.Result map, UvTransferQuality.Figures f)
     {
         var regions = new JsonObject();
         foreach (var (name, r) in f.Regions)
-            regions[name] = new JsonObject { ["coverage"] = r.Coverage, ["rimSnaps"] = r.RimSnapShare, ["folds"] = r.FoldShare, ["texels"] = r.Owned };
+            regions[name] = new JsonObject { ["coverage"] = Num(r.Coverage), ["rimSnaps"] = Num(r.RimSnapShare), ["folds"] = Num(r.FoldShare), ["texels"] = r.Owned };
         var landmarks = new JsonObject();
         foreach (var (name, mm) in f.LandmarksMm.OrderBy(k => k.Key, StringComparer.Ordinal))
             landmarks[name] = float.IsNaN(mm) ? null : Math.Round(mm, 1);
@@ -270,8 +273,8 @@ internal static class UvTransferBakeJob
             ["validPixels"] = s.ValidPixels, ["destCoverage"] = s.DestCoverage, ["rayHits"] = s.RayHits,
             ["closestFallbacks"] = s.ClosestFallbacks, ["regionAdjacentHits"] = s.RegionAdjacentHits,
             ["unreached"] = s.Unreached, ["overlapTexels"] = s.OverlapPixels,
-            ["mirrorFilled"] = s.MirrorFilled, ["folds"] = f.FoldShare,
-            ["roundTripModerate"] = f.RoundTripModerate, ["roundTripGross"] = f.RoundTripGross,
+            ["mirrorFilled"] = s.MirrorFilled, ["folds"] = Num(f.FoldShare),
+            ["roundTripModerate"] = Num(f.RoundTripModerate), ["roundTripGross"] = Num(f.RoundTripGross),
             ["regions"] = regions, ["landmarksMm"] = landmarks, ["landmarksAcrossSkinMm"] = tangent,
         };
     }
