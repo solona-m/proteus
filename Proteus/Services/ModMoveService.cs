@@ -224,6 +224,9 @@ public sealed class ModMoveService : IDisposable
                 }
                 compositor.RemoveManagedAlias(copyDir);
                 log.Information("[Proteus] the renamed output mod \"{0}\" is switched off in {1} collection(s)", copyDir, off.Count);
+                // The rebuild stood on the upstreams remembered before the rename; had none been remembered (a settings
+                // change just before), it stood on game data. With the copy off the real bases resolve again.
+                compositor.TriggerRecomposite($"renamed output mod {copyDir} off", force: false);
             }).ConfigureAwait(false);
         });
     }
