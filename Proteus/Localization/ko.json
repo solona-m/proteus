@@ -3923,6 +3923,14 @@
     "message": "바꿀 것이 없습니다. 피부가 이미 새 바디처럼 그려지고 있습니다.",
     "description": ""
   },
+  "Parts.Retarget.Smallclothes.AfterSave": {
+    "message": "새 바디는 피부가 없는 곳에 속옷을 그리며, 리핏이 이를 가져옵니다. 게임에서는 저장한 뒤에만 보입니다.",
+    "description": "Body size status: the preview cannot show the new body's underwear, whose material is only published when the refit is saved."
+  },
+  "Parts.Retarget.Smallclothes.Fallback": {
+    "message": "새 바디는 피부가 없는 곳에 속옷을 그리지만 이 의상에 가져올 수 없어서, 그 부분은 의상 자체의 피부를 유지합니다.",
+    "description": "Body size status: the new body's underwear (drawn where it has no skin) could not be added to the garment, so the garment keeps its own skin there."
+  },
   "Parts.Retarget.AlreadyFits.Fmt": {
     "message": "바꿀 것이 없습니다. 이 장비가 닿는 곳에서 {0}은(는) 원래 만들어진 사이즈와 모양이 같습니다.",
     "description": ""
@@ -4603,6 +4611,14 @@
     "message": "저장하지 못했습니다: {0}",
     "description": "Body size status line. {0} is the error message."
   },
+  "Parts.Retarget.Save.NoMaterialSet.Fmt": {
+    "message": "{0}은(는) 새 바디의 속옷을 그리지만, 그 재질은 장비나 액세서리 모델 옆에만 저장할 수 있습니다.",
+    "description": "Body size save refused: {0} is the model's game path. The refit draws the new body's underwear, whose material must be saved beside an equipment model."
+  },
+  "Parts.Retarget.Save.NoMaterialName.Fmt": {
+    "message": "{0}이(가) 쓸 수 있는 재질 이름이 모두 사용 중이어서, 새 바디의 속옷을 저장할 고유한 이름이 없습니다.",
+    "description": "Body size save refused: {0} is the model's game path. Every free material name for the new body's underwear copy is already used."
+  },
   "Parts.Retarget.Undo.Removed.Fmt": {
     "message": "\"{0}\"을(를) 제거했습니다.",
     "description": "Body size status line after Undo. {0} is the option removed."
@@ -4638,6 +4654,10 @@
   "Parts.Retarget.Refuse.LowCoverage.Fmt": {
     "message": "원본 {0} 체형 중 텍스처 좌표로 대상에서 자리를 찾는 부분은 {1:P0}뿐이므로, 둘은 텍스처 레이아웃을 공유하지 않습니다. 서로 변환할 수 없습니다.",
     "description": "Body size: why two bodies cannot be paired. {0} is the body part (chest, legs…), {1:P0} the share that matched — keep the :P0."
+  },
+  "Parts.Retarget.Refuse.NoSkinThere.Fmt": {
+    "message": "원본 {0} 바디 중 착지할 피부를 찾은 부분은 {1:P0}뿐입니다. 대상 바디의 이 {0} 옵션은 나머지 부분에 피부가 없고 모델링된 속옷 같은 다른 것을 그리고 있어, 리핏이 그 위에 맞출 수 없었습니다. 그 부분에 피부가 있는 바디 옵션을 고르거나 다른 바디로 리핏하세요.",
+    "description": "Body size: why two bodies cannot be paired when the target option draws something else (such as modelled underwear) where the source has skin. {0} is the body part (chest, legs…), {1:P0} the share that landed on skin — keep the :P0."
   },
   "Parts.Retarget.Bake.NoPath.Fmt": {
     "message": "종족 디포머에 c{0:D4}에서 c{1:D4}로 가는 경로가 없습니다",

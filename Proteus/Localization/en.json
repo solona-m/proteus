@@ -3923,6 +3923,14 @@
     "message": "Nothing to change: its skin is already drawn the way the new body draws its own.",
     "description": "Status line after Preview when a shoe or glove that reaches no leg or arm already draws its skin like the new body."
   },
+  "Parts.Retarget.Smallclothes.AfterSave": {
+    "message": "The new body draws underwear where it has no skin, and the refit brings it in: it shows in game only once you save.",
+    "description": "Body size status: the preview cannot show the new body's underwear, whose material is only published when the refit is saved."
+  },
+  "Parts.Retarget.Smallclothes.Fallback": {
+    "message": "The new body draws underwear where it has no skin, which could not be brought into this garment, so it keeps its own skin there.",
+    "description": "Body size status: the new body's underwear (drawn where it has no skin) could not be added to the garment, so the garment keeps its own skin there."
+  },
   "Parts.Retarget.AlreadyFits.Fmt": {
     "message": "Nothing to change: where it reaches, {0} is the same shape as the size it was made for.",
     "description": "Status line after Preview when the chosen size is the same shape as the one the piece was made for. {0} = the chosen size's name."
@@ -4603,6 +4611,14 @@
     "message": "Could not save: {0}",
     "description": "Body size status line. {0} is the error message."
   },
+  "Parts.Retarget.Save.NoMaterialSet.Fmt": {
+    "message": "{0} draws the new body's underwear, whose material can only be saved beside an equipment or accessory model.",
+    "description": "Body size save refused: {0} is the model's game path. The refit draws the new body's underwear, whose material must be saved beside an equipment model."
+  },
+  "Parts.Retarget.Save.NoMaterialName.Fmt": {
+    "message": "Every material name {0} could use is taken, so the new body's underwear it draws has no name of its own to be saved under.",
+    "description": "Body size save refused: {0} is the model's game path. Every free material name for the new body's underwear copy is already used."
+  },
   "Parts.Retarget.Undo.Removed.Fmt": {
     "message": "Removed \"{0}\".",
     "description": "Body size status line after Undo. {0} is the option removed."
@@ -4638,6 +4654,10 @@
   "Parts.Retarget.Refuse.LowCoverage.Fmt": {
     "message": "Only {1:P0} of the source {0} body finds its place on the target by texture coordinate, so the two do not share a texture layout. They cannot be refitted onto each other.",
     "description": "Body size: why two bodies cannot be paired. {0} is the body part (chest, legs…), {1:P0} the share that matched — keep the :P0."
+  },
+  "Parts.Retarget.Refuse.NoSkinThere.Fmt": {
+    "message": "Only {1:P0} of the source {0} body finds skin to land on: this {0} option of the target body has no skin over the rest of it and draws something else there, such as modelled underwear, that the refit could not fit it onto. Choose an option of that body that has skin there, or refit onto another body.",
+    "description": "Body size: why two bodies cannot be paired when the target option draws something else (such as modelled underwear) where the source has skin. {0} is the body part (chest, legs…), {1:P0} the share that landed on skin — keep the :P0."
   },
   "Parts.Retarget.Bake.NoPath.Fmt": {
     "message": "the racial deformer has no way from c{0:D4} to c{1:D4}",

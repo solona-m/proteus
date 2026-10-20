@@ -3923,6 +3923,14 @@
     "message": "Nichts zu ändern: Die Haut wird schon so gezeichnet wie die des neuen Körpers.",
     "description": ""
   },
+  "Parts.Retarget.Smallclothes.AfterSave": {
+    "message": "Der neue Körper zeigt dort, wo er keine Haut hat, Unterwäsche, und die Anpassung übernimmt sie: Im Spiel ist sie erst nach dem Speichern zu sehen.",
+    "description": "Body size status: the preview cannot show the new body's underwear, whose material is only published when the refit is saved."
+  },
+  "Parts.Retarget.Smallclothes.Fallback": {
+    "message": "Der neue Körper zeigt dort, wo er keine Haut hat, Unterwäsche, die nicht in dieses Kleidungsstück übernommen werden konnte; es behält dort seine eigene Haut.",
+    "description": "Body size status: the new body's underwear (drawn where it has no skin) could not be added to the garment, so the garment keeps its own skin there."
+  },
   "Parts.Retarget.AlreadyFits.Fmt": {
     "message": "Nichts zu ändern: Wo das Teil hinreicht, hat {0} dieselbe Form wie die Größe, für die es gemacht wurde.",
     "description": ""
@@ -4603,6 +4611,14 @@
     "message": "Speichern fehlgeschlagen: {0}",
     "description": "Body size status line. {0} is the error message."
   },
+  "Parts.Retarget.Save.NoMaterialSet.Fmt": {
+    "message": "{0} zeigt die Unterwäsche des neuen Körpers, deren Material nur neben einem Ausrüstungs- oder Accessoire-Modell gespeichert werden kann.",
+    "description": "Body size save refused: {0} is the model's game path. The refit draws the new body's underwear, whose material must be saved beside an equipment model."
+  },
+  "Parts.Retarget.Save.NoMaterialName.Fmt": {
+    "message": "Alle Materialnamen, die {0} verwenden könnte, sind vergeben, daher hat die Unterwäsche des neuen Körpers keinen eigenen Namen zum Speichern.",
+    "description": "Body size save refused: {0} is the model's game path. Every free material name for the new body's underwear copy is already used."
+  },
   "Parts.Retarget.Undo.Removed.Fmt": {
     "message": "\"{0}\" entfernt.",
     "description": "Body size status line after Undo. {0} is the option removed."
@@ -4638,6 +4654,10 @@
   "Parts.Retarget.Refuse.LowCoverage.Fmt": {
     "message": "Nur {1:P0} des Quell-{0}-Körpers finden über die Texturkoordinaten ihren Platz auf dem Ziel, die beiden teilen also kein Texturlayout. Sie können nicht aufeinander angepasst werden.",
     "description": "Body size: why two bodies cannot be paired. {0} is the body part (chest, legs…), {1:P0} the share that matched — keep the :P0."
+  },
+  "Parts.Retarget.Refuse.NoSkinThere.Fmt": {
+    "message": "Nur {1:P0} des Quell-{0}-Körpers finden Haut, auf der sie landen können: Diese {0}-Option des Zielkörpers hat über dem Rest keine Haut und zeigt dort etwas anderes, etwa modellierte Unterwäsche, auf das die Anpassung ihn nicht setzen konnte. Wähle eine Option dieses Körpers, die dort Haut hat, oder passe auf einen anderen Körper an.",
+    "description": "Body size: why two bodies cannot be paired when the target option draws something else (such as modelled underwear) where the source has skin. {0} is the body part (chest, legs…), {1:P0} the share that landed on skin — keep the :P0."
   },
   "Parts.Retarget.Bake.NoPath.Fmt": {
     "message": "der Rassen-Deformer kennt keinen Weg von c{0:D4} nach c{1:D4}",

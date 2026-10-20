@@ -343,7 +343,8 @@ internal static partial class SizeSetRefit
                 ct.ThrowIfCancellationRequested();
                 group.Save(target.Dir, fromLabel,
                            [new BodyRetargetWriter.Refit(option, plan.Model, to!.Label,
-                                                         outfit != null ? OutfitPartners.LayersOf(root, partner!) : null)],
+                                                         outfit != null ? OutfitPartners.LayersOf(root, partner!) : null,
+                                                         plan.Materials)],
                            sourceOption, notes);
             }
         }

@@ -33,7 +33,8 @@ public sealed partial class AutoRefitWatcher
                                   Func<string, BodyOption?> TargetFor, Stopwatch Clock, PairContext? Pair);
 
     /// <summary>What a shoe or glove becomes: the model saved, what its option says it is, and the line said when it is on.</summary>
-    private sealed record EndsOutput(byte[] Model, string To, string LabelFrom, Func<string, string> Done);
+    private sealed record EndsOutput(byte[] Model, string To, string LabelFrom, Func<string, string> Done,
+                                     IReadOnlyList<BodyRetarget.PublishedMaterial>? Materials = null);
 
     /// <summary>
     /// A shoe or glove: its foot or hand kept exactly, the leg or arm it reaches read on its own and refitted, and a
@@ -195,7 +196,8 @@ public sealed partial class AutoRefitWatcher
         if (output == null) return;
 
         if (await SaveAndWear(r, g, root, group, j.SavePath, savedFor, output.LabelFrom,
-                              new BodyRetargetWriter.Refit(option, output.Model, output.To, layers), cutFrom, j.Route,
+                              new BodyRetargetWriter.Refit(option, output.Model, output.To, layers, output.Materials),
+                              cutFrom, j.Route,
                               item,
                               GameGear(r, j.Redirects, j.OwnRecord),
                               new BodyRetargetWriter.Provenance(source.Dir, source.Option.Rel, targets,
@@ -439,7 +441,7 @@ public sealed partial class AutoRefitWatcher
                               RefitCore.LabelFrom(across ? sourceName : null, [pick.Option.Label]),
                               savedIn => string.Format(Loc.Localize("Chat.AutoRefit.Done.Fmt",
                                   "[Proteus] {0} now fits {1}. Saved as \"{2}\" in {3} and switched on."),
-                                  item, targetLabel, option, savedIn));
+                                  item, targetLabel, option, savedIn), finished.Materials);
     }
 
     private void SayUnsure(string item)

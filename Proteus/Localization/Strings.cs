@@ -3008,6 +3008,14 @@ public sealed class PartsStrings
     public readonly string RetargetSkinAlreadyMatches = Loc.Localize("Parts.Retarget.SkinAlreadyMatches",
         "Nothing to change: its skin is already drawn the way the new body draws its own.");
 
+    /// <summary>The preview draws a material the save publishes; until then the game has no such file.</summary>
+    public readonly string RetargetSmallclothesAfterSave = Loc.Localize("Parts.Retarget.Smallclothes.AfterSave",
+        "The new body draws underwear where it has no skin, and the refit brings it in: it shows in game only once you save.");
+
+    /// <summary>The new body's underwear could not be brought in, so the garment keeps its own skin there.</summary>
+    public readonly string RetargetSmallclothesFallback = Loc.Localize("Parts.Retarget.Smallclothes.Fallback",
+        "The new body draws underwear where it has no skin, which could not be brought into this garment, so it keeps its own skin there.");
+
     /// <summary>{0}: the size chosen to refit onto.</summary>
     public readonly string RetargetAlreadyFitsFmt = Loc.Localize("Parts.Retarget.AlreadyFits.Fmt",
         "Nothing to change: where it reaches, {0} is the same shape as the size it was made for.");

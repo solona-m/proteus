@@ -321,7 +321,7 @@ public sealed partial class AutoRefitWatcher
 
         string labelFrom = RefitCore.LabelFrom(across ? sourceName : null,
                                                covered.Where(sources.ContainsKey).Select(s => sources[s].Option.Label));
-        var refit = new BodyRetargetWriter.Refit(option, plan.Model, string.Join(" + ", labels), layers);
+        var refit = new BodyRetargetWriter.Refit(option, plan.Model, string.Join(" + ", labels), layers, plan.Materials);
         if (await SaveAndWear(r, g, saveRoot, group, r.Worn.GamePath, lead, labelFrom, refit, cutFrom, RacialModelBake.Route.None, item,
                               fromGame: false,
                               new BodyRetargetWriter.Provenance(pickOf.Dir, pickOf.Option.Rel, onto,
