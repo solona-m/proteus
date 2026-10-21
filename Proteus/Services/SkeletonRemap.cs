@@ -30,9 +30,10 @@ internal static class SkeletonRemap
 
     /// <summary>
     /// A YAS bone and the IVCS bone of the same part of the body, where the two skeletons name it differently. Measured
-    /// on Rue+ 2.2.7's yiggle legs, which rig both: the vertices each of a pair carries most of lie on the same side and
-    /// close together (SkeletonRemapLocalTests). YAS's thigh and belly physics bones have no IVCS counterpart any
-    /// installed men's skeleton has, so the region rules take them.
+    /// on Rue+ 2.2.7's yiggle legs, which rig both (SkeletonRemapLocalTests): the weight each of a pair carries centres on
+    /// the same buttock, YAS's 5.5 cm under IVCS's (2026-10-21) — the lower buttock follows IVCS's buttock physics rather
+    /// than the hip. YAS's thigh and belly physics bones have no IVCS counterpart any installed men's skeleton has, so
+    /// their parents take them.
     /// </summary>
     internal static readonly IReadOnlyDictionary<string, string> Counterparts = new Dictionary<string, string>(StringComparer.Ordinal)
     {

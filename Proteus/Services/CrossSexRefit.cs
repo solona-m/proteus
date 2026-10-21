@@ -111,10 +111,13 @@ internal static class CrossSexRefit
     }
 
     /// <summary>
-    /// Whether a refit from <paramref name="drawn"/> for <paramref name="to"/> lifts the cloth under the new breasts:
-    /// not for a men's top made a women's (see <c>BodyRetarget.Plan</c>'s liftUnderbust), every other refit as before.
+    /// Whether a refit from <paramref name="drawn"/> for <paramref name="to"/> lifts the cloth under the new breasts: never
+    /// across the sexes (see <c>BodyRetarget.Plan</c>'s liftUnderbust), every other refit as before. Measured both ways:
+    /// a men's top made a women's folds 8 faces without it, 13 with (Lumberjack); a women's top made a men's 101 without,
+    /// 115 with, and clips no more (Sheer Elegance, 2026-10-21) — a man's chest has no breast, but the lift still seeds
+    /// over every skin face that looks down and forward.
     /// </summary>
-    internal static bool LiftsUnderbust(ushort drawn, ushort to) => !(CrossesSex(drawn, to) && IsMale(drawn) && !IsMale(to));
+    internal static bool LiftsUnderbust(ushort drawn, ushort to) => !CrossesSex(drawn, to);
 
     /// <summary>
     /// The usage error for a CLI <c>--for-race</c> run, or null when it may run. <paramref name="given"/> holds every

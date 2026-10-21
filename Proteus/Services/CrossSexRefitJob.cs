@@ -22,12 +22,13 @@ internal static class CrossSexRefitJob
     /// <param name="Onto">The body mod to refit onto (bodies of <paramref name="To"/>).</param>
     /// <param name="TargetPick">Which of its sizes to make; null makes all.</param>
     /// <param name="Wearer">What the wearer of <paramref name="To"/> is built from (<see cref="OtherRaceWearer.Gather"/>).</param>
+    /// <param name="LiftUnderbust">Overrides <see cref="CrossSexRefit.LiftsUnderbust"/>, for the measurement that decides it.</param>
     internal sealed record Inputs(
         byte[] Garment, string GamePath, ushort To,
         BodySizeCatalog MadeFor, Func<BodyOption, bool>? FromPick,
         BodySizeCatalog Onto, Func<BodyOption, bool>? TargetPick,
         OtherRaceWearer.Inputs Wearer, UVRemapService UvRemap, IPluginLog Log,
-        bool PushOut = true, bool CutHidden = true, bool CarryPiercings = false);
+        bool PushOut = true, bool CutHidden = true, bool CarryPiercings = false, bool? LiftUnderbust = null);
 
     /// <summary>One size made, or refused.</summary>
     /// <param name="Folds">Cloth faces the refit turned over (<see cref="CrossSexRefit.ClothFolded(byte[], BodyRetarget.Planned, Action{string}?)"/>).</param>
@@ -116,7 +117,7 @@ internal static class CrossSexRefitJob
                                          clearBody: i.PushOut, cutHidden: i.CutHidden,
                                          tuckSlot: RefitCore.TuckSlot(i.CutHidden && i.PushOut, slot),
                                          carryPiercings: i.CarryPiercings,
-                                         liftUnderbust: CrossSexRefit.LiftsUnderbust(drawn, i.To),
+                                         liftUnderbust: i.LiftUnderbust ?? CrossSexRefit.LiftsUnderbust(drawn, i.To),
                                          log: line => i.Log.Debug("[Proteus] cross-sex refit: {0}", line),
                                          warn: line => i.Log.Warning("[Proteus] cross-sex refit: {0}", line));
             plan = RefitCore.MatchSkinToBody(plan, sourcePath, targetPath, i.UvRemap, sourceMale, i.Log, targetMale);

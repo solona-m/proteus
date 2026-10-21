@@ -135,13 +135,15 @@ public class CrossSexRefitTests
 
     [Fact]
     [Trait("Plan", "AC-cross-sex-refit-3")]
-    public void Only_a_mens_top_made_womens_skips_the_underbust_lift() // [AC-cross-sex-refit-3]
+    [Trait("Plan", "AC-cross-sex-tops-yas-3")]
+    public void Underbust_lift_follows_the_measurement() // [AC-cross-sex-refit-3] [AC-cross-sex-tops-yas-3]
     {
+        // Measured (CrossSexRefitLocalTests.Underbust_lift_for_a_womans_top_is_measured): off across the sexes both ways.
         Assert.False(CrossSexRefit.LiftsUnderbust(101, 201));
-        Assert.True(CrossSexRefit.LiftsUnderbust(201, 101));
+        Assert.False(CrossSexRefit.LiftsUnderbust(201, 101));
         Assert.True(CrossSexRefit.LiftsUnderbust(101, 301));
         Assert.True(CrossSexRefit.LiftsUnderbust(201, 201));
-        Assert.Contains("liftUnderbust: CrossSexRefit.LiftsUnderbust(drawn, i.To)", Source("Proteus/Services/CrossSexRefitJob.cs"));
+        Assert.Contains("liftUnderbust: i.LiftUnderbust ?? CrossSexRefit.LiftsUnderbust(drawn, i.To)", Source("Proteus/Services/CrossSexRefitJob.cs"));
         Assert.Contains("CrossSexRefit.LiftsUnderbust(bake!.Route.Drawn, bake.Route.To)", Source("Proteus/Gui/BodyRetargetPanel.cs"));
     }
 
