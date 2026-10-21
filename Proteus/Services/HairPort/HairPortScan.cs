@@ -264,9 +264,21 @@ internal static class HairPortScan
             return new Ported(saved, false, plan.Refused.TryGetValue(race, out var why) ? why : "", Stripped: true);
         string warning = plan.Warnings?.TryGetValue(race, out var warned) == true ? warned : "";
         if (warning.Length > 0) host.Log($"c{race:D4} ported in {modDir} — {warning}");
-        if (HairPortPlan.Parse(decision.Source!) is { } source)
-            RememberWarning(modRoot, HairPortPlan.HairPath(race, source.Id), warning);
+        RememberSaved(modRoot, saved, plan.Warnings);
         return new Ported(saved, false, "", Warning: warning);
+    }
+
+    /// <summary>
+    /// Remember, for each port saved, what it warned of — or forget what an earlier port of the same hairstyle did, when
+    /// this one warned of nothing. Every race a save wrote, sharers included; only those: a race already current and
+    /// not written keeps what it had. A port that only took an old skeleton out is no new port, and changes nothing.
+    /// </summary>
+    internal static void RememberSaved(string modRoot, IEnumerable<HairPortWriter.PortWrite> saved,
+                                       IReadOnlyDictionary<ushort, string>? warnings)
+    {
+        foreach (var w in saved)
+            if (!w.Stripped && HairPortPlan.Parse(w.TargetGamePath) is { } at)
+                RememberWarning(modRoot, w.TargetGamePath, warnings?.GetValueOrDefault(at.Race) ?? "");
     }
 
     /// <summary>

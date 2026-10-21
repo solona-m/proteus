@@ -187,10 +187,7 @@ internal sealed class HairPortPanel(Func<string, byte[]?> readGameFile, IPluginL
             ct.ThrowIfCancellationRequested();
             var outcome = HairPortWriter.Save(modRoot, plan.Writes, auto: false);
             // Remembered for the session as an automatic port's is, so the worn line and the list say it again.
-            foreach (var w in outcome.SavedWrites.Where(w => !w.Stripped))
-                if (HairPortPlan.Parse(w.TargetGamePath) is { } at)
-                    HairPortScan.RememberWarning(modRoot, w.TargetGamePath,
-                                                 plan.Warnings?.GetValueOrDefault(at.Race) ?? "");
+            HairPortScan.RememberSaved(modRoot, outcome.SavedWrites, plan.Warnings);
             foreach (var w in outcome.SavedWrites)
                 if (w.Stripped)
                     log.Information("hair port: {0} in {1} / {2} — its old port's skeleton, which another hairstyle of the "
