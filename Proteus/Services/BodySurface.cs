@@ -297,7 +297,8 @@ internal sealed class BodySurface
                     if (avoid != 0 && (sides![ta] == avoid || sides[tb] == avoid || sides[tc] == avoid)) continue;
                     if (!Crosses(origin, direction, pos[ta], pos[tb], pos[tc], out float along, out float u, out float v))
                         continue;
-                    if (!(along < best)) continue;
+                    // Out to the reach itself, as documented; a tie keeps the first found. Never a NaN.
+                    if (!(along <= best) || (found && along == best)) continue;
                     best = along;
                     found = true;
                     ba = ta; bb = tb; bc = tc;

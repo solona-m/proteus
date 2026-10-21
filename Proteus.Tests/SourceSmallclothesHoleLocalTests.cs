@@ -239,13 +239,15 @@ public class SourceSmallclothesHoleLocalTests(ITestOutputHelper output)
     [LocalDataFact(LocalData.GameData, Neolithe, Bibo, MuseRoot)]
     public void Which_bodies_have_no_skin_under_their_underwear()
     {
-        // [EDGE-bra-hole-transfer-4] The game's woman's and man's bodies, and every chest and legs option of Neolithe,
-        // Bibo+ and Muse+, as measured: the game's woman's chest and both its legs, and the SFW and binder options of
-        // Bibo+ and Muse+, stand their underwear over a hole; Neolithe's never do. Only the game's chest is read so (see
-        // SlotPair.SourceIsGameChest) — the rest are pinned here so a change in them is seen.
+        // [EDGE-bra-hole-transfer-4] Every race's own game body, and every chest and legs option of Neolithe, Bibo+ and
+        // Muse+, as measured: of the game's chests the Midlander woman's (c0201) and the Lalafell woman's (c1201); of its
+        // legs five races'; the SFW and binder options of Bibo+ and Muse+; never Neolithe's. Only a game chest is read so
+        // (see SlotPair.SourceIsGameChest) — the Lalafell woman's too, never measured on a garment — and the rest are pinned
+        // here so a change in them is seen.
         var data = Game();
         var holed = new List<string>();
-        foreach (string race in new[] { "0201", "0101" })
+        foreach (string race in new[] { "0101", "0201", "0301", "0401", "0501", "0601", "0701", "0801", "0901", "1001",
+                                        "1101", "1201", "1301", "1401", "1501", "1601", "1701", "1801" })
         {
             var vanilla = VanillaBodyCatalog.Read(race, p => data.GetFile(p)?.Data);
             foreach (string slot in new[] { "_top", "_dwn" })
@@ -260,7 +262,9 @@ public class SourceSmallclothesHoleLocalTests(ITestOutputHelper output)
             if (Holed(path)) holed.Add(name);
         }
         output.WriteLine($"{count} body-mod options read in {clock.ElapsedMilliseconds} ms; holed: {string.Join("; ", holed)}");
-        Assert.Equal(["vanilla c0201 _top", "vanilla c0201 _dwn", "vanilla c0101 _dwn"], holed.Where(h => h.StartsWith("vanilla")));
+        Assert.Equal(["vanilla c0101 _dwn", "vanilla c0201 _top", "vanilla c0201 _dwn", "vanilla c0901 _dwn",
+                      "vanilla c1101 _dwn", "vanilla c1201 _top", "vanilla c1201 _dwn"],
+                     holed.Where(h => h.StartsWith("vanilla")));
         var mods = holed.Where(h => !h.StartsWith("vanilla")).ToList();
         Assert.All(mods, h => Assert.True(h.Contains("sfw") || h.Contains("binder"), h));
         Assert.Equal(7, mods.Count(h => h.StartsWith("Bibo+")));
@@ -275,10 +279,10 @@ public class SourceSmallclothesHoleLocalTests(ITestOutputHelper output)
     }
 
     [LocalDataFact(LocalData.GameData, Bibo, MuseBare)]
-    public void Bodies_with_skin_under_their_underwear_refit_as_before()
+    public void A_body_mods_chest_is_read_as_before_whatever_its_underwear()
     {
-        // [AC-bra-hole-transfer-3][EDGE-bra-hole-transfer-1] A Bibo+ chest as the dress's made-on body onto Muse — its
-        // SFW bra over a hole of its own, and not the game's chest — byte for byte the refit it was.
+        // [AC-bra-hole-transfer-3][EDGE-bra-hole-transfer-1] Bibo+'s first chest, its SFW bra over a hole of its own (see the
+        // survey), as the dress's made-on body onto Muse: not the game's chest, so byte for byte the refit it was.
         var data = Game();
         var log = Substitute.For<Dalamud.Plugin.Services.IPluginLog>();
         var uv = new UVRemapService(log, ".");

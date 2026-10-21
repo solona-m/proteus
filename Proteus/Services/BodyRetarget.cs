@@ -788,7 +788,7 @@ internal static partial class BodyRetarget
                            deep, standoff, liftUnderbust);
         if (solved.SourceSmallclothes > 0)
             log?.Invoke($"source smallclothes: {solved.SourceSmallclothes} points of the old body's underwear, over its "
-                        + "skin's hole, landed on the new body");
+                        + "skin's hole, given the new body's shape");
         if (solved.OpenEdgeFitted > 0)
             log?.Invoke($"fitted: {solved.OpenEdgeFitted} cloth points below an open skin edge read against the body the "
                         + "garment was made on");

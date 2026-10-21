@@ -83,6 +83,42 @@ public class VanillaRefitTests : IDisposable
     }
 
     [Fact]
+    public void The_game_s_chest_is_known_by_its_bytes()
+    {
+        // [AC-bra-hole-transfer-3] Only the game's own chest is read with its bra (BodyRetarget.SmallclothesOverHoles): known
+        // by content, the extract's bytes, for the slot asked — wherever a body mod's file sits.
+        // The game here ships a chest alone, so no other slot was extracted.
+        var asked = new List<string>();
+        var catalog = VanillaBodyCatalog.Read("0201", Game(asked, VanillaBodyCatalog.GamePathOf("0201", "_top")));
+        byte[] top = File.ReadAllBytes(catalog.PathOf(catalog.For("_top", "0201")[0]));
+
+        Assert.True(VanillaBodyCatalog.IsGameModel(top, "_top"));
+        Assert.False(VanillaBodyCatalog.IsGameModel(top, "_dwn"));   // the same bytes, asked for another slot
+        var other = (byte[])top.Clone();
+        other[^1] ^= 0xFF;
+        Assert.False(VanillaBodyCatalog.IsGameModel(other, "_top"));   // a body bent or baked from it is not it
+        Assert.False(VanillaBodyCatalog.IsGameModel(top[..^1], "_top"));
+
+        VanillaBodyCatalog.CleanUp();
+        Assert.False(VanillaBodyCatalog.IsGameModel(top, "_top"));   // a new session reads the game again
+    }
+
+    [Fact]
+    public void A_race_drawn_on_another_s_chest_has_that_chest()
+    {
+        // A Miqo'te woman's chest is the Midlander woman's: the drawn extract is known as the game's chest too, and
+        // extracting the same model again keeps one entry.
+        var asked = new List<string>();
+        var own = VanillaBodyCatalog.Read("0201", Game(asked, EverySlot("0201")));
+        var drawn = VanillaBodyCatalog.Read("0801", Game(asked, EverySlot("0201")), drawn: true);
+        byte[] top = File.ReadAllBytes(drawn.PathOf(drawn.For("_top", "0801")[0]));
+
+        Assert.Equal(File.ReadAllBytes(own.PathOf(own.For("_top", "0201")[0])), top);
+        Assert.True(VanillaBodyCatalog.IsGameModel(top, "_top"));
+        Assert.Equal(1, VanillaBodyCatalog.GameModelCount("_top"));
+    }
+
+    [Fact]
     public void A_race_the_game_has_no_body_for_is_not_a_body()
     {
         var asked = new List<string>();

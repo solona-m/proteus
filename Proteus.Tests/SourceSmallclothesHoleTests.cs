@@ -260,7 +260,7 @@ public class SourceSmallclothesHoleTests
         Assert.Equal(0, covered.SourceSmallclothes);
 
         var report = new BodyRetarget.Report(1, 0, 1, 0, 0, 0.01f, 0f, 0, false, SourceSmallclothes: 117);
-        Assert.Contains("117 old underwear points follow the new body", Proteus.Gui.BodyRetargetPanel.Describe(report, []));
+        Assert.Contains("117 old underwear points given the new body's shape", Proteus.Gui.BodyRetargetPanel.Describe(report, []));
         Assert.DoesNotContain("underwear points", Proteus.Gui.BodyRetargetPanel.Describe(report with { SourceSmallclothes = 0 }, []));
     }
 
@@ -352,8 +352,64 @@ public class SourceSmallclothesHoleTests
         }
         Assert.Equal(0, folded);
 
+        // The garment as written, every pass counted, against its author's winding.
         var garment = Garment();
-        Assert.True(Solve(garment, source, target).Folded <= Solve(garment, source, target, old: true).Folded);
+        Assert.True(FoldedAsWritten(garment, Solve(garment, source, target))
+                    <= FoldedAsWritten(garment, Solve(garment, source, target, old: true)));
+    }
+
+    /// <summary>The garment's triangles turned over against its author's once the solve's moves are applied.</summary>
+    private static int FoldedAsWritten(ModelParts garment, BodyRetarget.Solved solved)
+    {
+        var pos = (float[])garment.Positions.Clone();
+        for (int v = 0; v < pos.Length / 3; v++)
+        {
+            var d = solved.Edit.DeltaAt(v);
+            pos[v * 3] += d.X;
+            pos[v * 3 + 1] += d.Y;
+            pos[v * 3 + 2] += d.Z;
+        }
+        var moved = SkinlessTargetTests.Model(pos, garment.Parts.Select(p => (p.Material, p.Triangles, p.AttributeMask)).ToList(), []);
+        return SkinTuckSheet.FoldedAgainstAuthored(garment, moved, withSkin: true);
+    }
+
+    [Fact]
+    public void Relaxing_a_fold_never_takes_a_point_out_or_keeps_one_that_did_not_land()
+    {
+        // [AC-bra-hole-transfer-2][EDGE-bra-hole-transfer-9] Half the new body sharply ridged (its landings fold and are
+        // relaxed), half fuller than the bra (nothing lands): every bra point left read with the skin lies inward of the
+        // move the skin around it gives — relaxed or not — and no face read is turned over.
+        var source = OldBody();
+        var target = NewBody((x, y) => x < 0.11f
+            ? (MathF.Abs(y - 0.5f) < 0.08f ? 0.02f * MathF.Sin(x * 400f) : 0f)
+            : 0.05f * MathF.Max(0f, 1f - MathF.Abs(y - 0.5f) / 0.15f));
+        var skin = new BodySurface(source, 0.02f);
+        var over = BodyRetarget.SmallclothesOverHoles(source, skin)!;
+        var field = new Vector3?[source.Positions.Length / 3];
+        for (int v = 0; v < (SkinNx + 1) * (SkinNy + 1); v++) field[v] = At(target, v) - At(source, v);
+        var whole = (Vector3?[])field.Clone();
+
+        int count = BodyRetarget.LandSmallclothes(source, skin, whole, over, target);
+
+        Assert.True(count > 0, "nothing landed");
+        Assert.Contains(Enumerable.Range(0, over.Length), v => !over[v] && field[v] == null
+                                                               && source.Parts[1].Triangles.Contains(v));
+        for (int v = 0; v < over.Length; v++)
+        {
+            if (!over[v]) continue;
+            var carried = BodyRetarget.Carried(skin, field, At(source, v));
+            var n = new Vector3(source.Normals[v * 3], source.Normals[v * 3 + 1], source.Normals[v * 3 + 2]);
+            Assert.True(BodyRetarget.Inward(whole[v]!.Value, carried, n), $"bra vertex {v} read, not inward of its carry");
+        }
+        var bra = source.Parts[1].Triangles;
+        for (int t = 0; t + 2 < bra.Length; t += 3)
+        {
+            int a = bra[t], b = bra[t + 1], c = bra[t + 2];
+            if (!over[a] || !over[b] || !over[c]) continue;
+            var n0 = Vector3.Cross(At(source, b) - At(source, a), At(source, c) - At(source, a));
+            Vector3 pa = At(source, a) + whole[a]!.Value, pb = At(source, b) + whole[b]!.Value, pc = At(source, c) + whole[c]!.Value;
+            Assert.True(Vector3.Dot(n0, Vector3.Cross(pb - pa, pc - pa)) > 0f, $"bra triangle {t / 3} read turned over");
+        }
     }
 
     [Fact]

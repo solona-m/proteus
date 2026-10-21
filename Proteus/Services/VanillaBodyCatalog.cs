@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Linq;
 using CheapLoc;
 
 namespace Proteus.Services;
@@ -81,6 +82,13 @@ internal static class VanillaBodyCatalog
             foreach (var (s, b) in models)
                 if (s == slot && b.AsSpan().SequenceEqual(bytes)) return true;
         return false;
+    }
+
+    /// <summary>How many distinct models of the game's body for <paramref name="slot"/> were extracted this session — for
+    /// the tests.</summary>
+    internal static int GameModelCount(string slot)
+    {
+        lock (Gate) return models.Count(m => m.Slot == slot);
     }
 
     /// <summary>Race code to the slots already written out this session, so the game is read once per file.</summary>

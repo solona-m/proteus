@@ -808,6 +808,11 @@ public class VanillaGearRefitLocalTests(ITestOutputHelper output)
         float BreastShare(BodySurface.Hit h)
             => BodyRetarget.EndShareOf(skin, h.A, Mune) * h.U + BodyRetarget.EndShareOf(skin, h.B, Mune) * h.V
                + BodyRetarget.EndShareOf(skin, h.C, Mune) * h.W;
+        // 1 mm, not 0.5, for the Scion Adventurer's top on Neolithe SFW XS alone since build 1349: with the game chest's bra
+        // read, the pass carries one point of it 0.5 mm out over the bust (v747, 6.6 → 7.1 mm) — the pass still takes its
+        // standoff off the chest's skin alone. Tried and dropped: reading the bra there too floated the neckline worse.
+        float outwardSlack = garmentName == Scion && modNeed == Neolithe && rel == "default chest - smallclothes/sfw xs.mdl"
+            ? 0.001f : 0.0005f;
         int moved = 0;
         var wrong = new List<string>();
         foreach (int v in ClothParts(r.Garment).SelectMany(p => p.Triangles).Distinct())
@@ -830,10 +835,7 @@ public class VanillaGearRefitLocalTests(ITestOutputHelper output)
             if (far && loose && Grew(was) > BodyRetarget.FloatGrowMost + 0.001f) why.Add($"where the body grew {Grew(was) * 1000:0.0} mm");
             if (far && landed && ArmShare(h) >= BodyRetarget.TuckArmShare) why.Add($"on the arm ({ArmShare(h):0.00})");
             if (far && own < -0.0005f) why.Add($"authored {own * 1000:0.0} mm inside");
-            // 1 mm since build 1349: with the game chest's bra read, the pass carries one point of the Scion Adventurer's top
-            // on Neolithe SFW XS 0.5 mm out over the bust (v747, 6.6 → 7.1 mm), the old reading of the chest it still takes
-            // its standoff from. Tried and dropped: reading the bra there too floated the neckline worse.
-            if (off > offWas + 0.001f) why.Add($"outward {offWas * 1000:0.0} → {off * 1000:0.0} mm");
+            if (off > offWas + outwardSlack) why.Add($"outward {offWas * 1000:0.0} → {off * 1000:0.0} mm");
             if (off < BodyRetarget.FloatFloor - 0.0005f) why.Add($"ends {off * 1000:0.0} mm off, under the floor");
             if (why.Count > 0) wrong.Add($"v{v} ({was.X:0.000},{was.Y:0.000},{was.Z:0.000}) moved {Vector3.Distance(was, now) * 1000:0.0} mm: {string.Join("; ", why)}");
         }
