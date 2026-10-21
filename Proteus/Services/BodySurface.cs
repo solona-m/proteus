@@ -88,10 +88,21 @@ internal sealed class BodySurface
     public static BodySurface OfSmallclothes(ModelParts body, float cellSize)
         => new(body, cellSize, cloth: false, smallclothes: true, skin: false);
 
+    /// <summary>
+    /// A body's skin and those triangles of its own smallclothes every corner of which <paramref name="over"/> marks: the
+    /// old body as a refit reads it where its underwear stands over a hole in its skin (see
+    /// <c>BodyRetarget.SmallclothesOverHoles</c>). <see cref="SkinVertices"/> then lists the marked corners too.
+    /// </summary>
+    public static BodySurface OfSkinAnd(ModelParts body, float cellSize, bool[] over)
+        => new(body, cellSize, cloth: false, smallclothes: true, over: over);
+
     /// <summary>A body model's own smallclothes: what it draws with the game's smallclothes material, set e0000.</summary>
     public static bool IsSmallclothes(string material) => material.Contains("e0000_", StringComparison.Ordinal);
 
-    private BodySurface(ModelParts body, float cellSize, bool cloth, bool smallclothes = false, bool skin = true)
+    /// <param name="over">With <paramref name="smallclothes"/>, only the smallclothes triangles every corner of which it
+    /// marks; null for all of them.</param>
+    private BodySurface(ModelParts body, float cellSize, bool cloth, bool smallclothes = false, bool skin = true,
+                        bool[]? over = null)
     {
         int vc = body.Positions.Length / 3;
         pos = new Vector3[vc];
@@ -115,6 +126,7 @@ internal sealed class BodySurface
             {
                 int a = part.Triangles[t], b = part.Triangles[t + 1], c = part.Triangles[t + 2];
                 if (a < 0 || b < 0 || c < 0 || a >= vc || b >= vc || c >= vc) continue;
+                if (over != null && !isSkin && !(over[a] && over[b] && over[c])) continue;
                 Add(a, b, c);
                 indexed.Add(a);
                 indexed.Add(b);
@@ -238,6 +250,88 @@ internal sealed class BodySurface
 
         hit = new Hit(ba, bb, bc, bu, bv, bw, landing, n, MathF.Sqrt(best));
         return true;
+    }
+
+    /// <summary>
+    /// The first point of the body along a ray from <paramref name="origin"/> in <paramref name="direction"/> (unit
+    /// length), no further than <paramref name="maxDistance"/>, or false. Either face of a triangle counts.
+    /// </summary>
+    /// <param name="sides">As <see cref="Nearest"/>'s: with <paramref name="avoid"/>, a triangle with any corner on that
+    /// side is never hit.</param>
+    public bool Ray(Vector3 origin, Vector3 direction, float maxDistance, out Hit hit, sbyte[]? sides = null, int avoid = 0)
+    {
+        if (sides == null) avoid = 0;
+        hit = default;
+        if (tris.Count == 0) return false;
+
+        int count = tris.Count / 3;
+        if (stamp.Length < count) stamp = new int[Math.Max(count, stamp.Length * 2)];
+        if (++query == int.MaxValue)
+        {
+            Array.Clear(stamp);
+            query = 1;
+        }
+
+        // Every triangle is filed under each cell its box touches, so one that crosses the ray is filed under a cell the
+        // ray passes through. Sampled at half a cell, a cell the ray only clips at a corner can be stepped over: its
+        // neighbours are taken too.
+        float best = maxDistance;
+        bool found = false;
+        int ba = 0, bb = 0, bc = 0;
+        float bu = 0f, bv = 0f, bw = 0f;
+        int steps = (int)MathF.Ceiling(maxDistance / (cell * 0.5f));
+        var seen = new HashSet<(int, int, int)>();
+        for (int i = 0; i <= steps; i++)
+        {
+            var (cx, cy, cz) = Cell(origin + direction * MathF.Min(maxDistance, i * cell * 0.5f));
+            for (int x = cx - 1; x <= cx + 1; x++)
+            for (int y = cy - 1; y <= cy + 1; y++)
+            for (int z = cz - 1; z <= cz + 1; z++)
+            {
+                if (!seen.Add((x, y, z)) || !cells.TryGetValue((x, y, z), out var bucket)) continue;
+                foreach (int t in bucket)
+                {
+                    if (stamp[t] == query) continue;
+                    stamp[t] = query;
+                    int ta = tris[t * 3], tb = tris[t * 3 + 1], tc = tris[t * 3 + 2];
+                    if (avoid != 0 && (sides![ta] == avoid || sides[tb] == avoid || sides[tc] == avoid)) continue;
+                    if (!Crosses(origin, direction, pos[ta], pos[tb], pos[tc], out float along, out float u, out float v))
+                        continue;
+                    if (!(along < best)) continue;
+                    best = along;
+                    found = true;
+                    ba = ta; bb = tb; bc = tc;
+                    bu = 1f - u - v; bv = u; bw = v;
+                }
+            }
+        }
+
+        if (!found) return false;
+
+        var n = nrm[ba] * bu + nrm[bb] * bv + nrm[bc] * bw;
+        n = n.LengthSquared() > 1e-12f ? Vector3.Normalize(n) : FaceNormal(ba, bb, bc);
+        hit = new Hit(ba, bb, bc, bu, bv, bw, origin + direction * best, n, best);
+        return true;
+    }
+
+    /// <summary>Möller–Trumbore: where a ray crosses a triangle, as the distance along it and the weights of b and c.</summary>
+    private static bool Crosses(Vector3 o, Vector3 d, Vector3 a, Vector3 b, Vector3 c, out float along, out float u, out float v)
+    {
+        along = u = v = 0f;
+        var e1 = b - a;
+        var e2 = c - a;
+        var pv = Vector3.Cross(d, e2);
+        float det = Vector3.Dot(e1, pv);
+        if (MathF.Abs(det) < 1e-12f) return false;
+        float inv = 1f / det;
+        var tv = o - a;
+        u = Vector3.Dot(tv, pv) * inv;
+        if (u < 0f || u > 1f) return false;
+        var qv = Vector3.Cross(tv, e1);
+        v = Vector3.Dot(d, qv) * inv;
+        if (v < 0f || u + v > 1f) return false;
+        along = Vector3.Dot(e2, qv) * inv;
+        return along >= 0f;
     }
 
     /// <summary>The triangle's own normal, for the rare landing where the interpolated vertex normals cancel.</summary>

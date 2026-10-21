@@ -28,30 +28,50 @@ internal static partial class BodyRetarget
         private readonly (BodySurface Surface, IReadOnlyList<Vector3?> Field, IReadOnlyList<Vector3?> Eased, sbyte[]? Sides)[] slots;
         private readonly Dictionary<(int, int, int), List<(Vector3 At, Vector3 Delta)>> snap = [];
 
+        /// <summary>Points of the old bodies' underwear, over a hole in their skin, given a move onto the new body
+        /// (see <see cref="LandSmallclothes"/>); 0 where no old body has such a hole.</summary>
+        public int SmallclothesLanded { get; private init; }
+
         private SourceBody((BodySurface, IReadOnlyList<Vector3?>, IReadOnlyList<Vector3?>, sbyte[]?)[] slots) => this.slots = slots;
 
         public static SourceBody Build(IReadOnlyList<SlotPair> pairs)
         {
             var built = new (BodySurface, IReadOnlyList<Vector3?>, IReadOnlyList<Vector3?>, sbyte[]?)[pairs.Count];
+            var snapFrom = new IReadOnlyList<int>[pairs.Count];
+            int landed = 0;
             for (int i = 0; i < pairs.Count; i++)
             {
                 var src = pairs[i].Correspondence.Source;
-                var surface = new BodySurface(src, BodySurface.CellFor(MeanEdgeOf(src)));
+                float cell = BodySurface.CellFor(MeanEdgeOf(src));
+                var surface = new BodySurface(src, cell);
+                snapFrom[i] = surface.SkinVertices;
                 var whole = Whole(src, pairs[i].Correspondence.Field);
                 // The same reading of the old body the weights take: without the variants its mod does not draw.
                 sbyte[]? sides = pairs[i].SourceModel is { } file && ModelSkinReader.Read(file, null, null) is { } skin
                                  && skin.VertexCount * 3 == src.Positions.Length ? BodySides(skin) : null;
+
+                // Underwear standing over a hole in the old body's skin — the game's bra — is read with the skin and
+                // given a move of its own (see BodyRetarget.SourceWorn). Every other body is read as it always was.
+                if (!Tuned.NoSourceWorn && SmallclothesOverHoles(src, surface) is { } over)
+                {
+                    var filled = new Vector3?[whole.Count];
+                    for (int v = 0; v < filled.Length; v++) filled[v] = whole[v];
+                    landed += LandSmallclothes(src, surface, filled, over, pairs[i].Target);
+                    built[i] = (BodySurface.OfSkinAnd(src, cell, over), filled, Eased(src, filled, over), sides);
+                    continue;
+                }
                 built[i] = (surface, whole, Eased(src, whole), sides);
             }
 
-            var body = new SourceBody(built);
+            var body = new SourceBody(built) { SmallclothesLanded = landed };
 
             // Built in slot order, then ascending vertex, so a tie between two body vertices in one bucket always
-            // resolves the same way and a golden hash of the output is stable.
-            foreach (var (surface, field, _, _) in built)
+            // resolves the same way and a golden hash of the output is stable. Skin only: cloth snapped onto a vertex of
+            // the old body's underwear would sit exactly on the new body's skin, and snapped cloth is never pushed out.
+            for (int i = 0; i < built.Length; i++)
             {
-                var src = surface;
-                foreach (int v in src.SkinVertices)
+                var (src, field, _, _) = built[i];
+                foreach (int v in snapFrom[i])
                 {
                     if (field[v] is not { } d) continue;
                     var at = src.PositionOf(v);
@@ -100,9 +120,11 @@ internal static partial class BodyRetarget
         /// nothing real, because the shape change between two bodies is smooth, and it measurably improves the fit
         /// against an author's own hand-made size.
         /// </summary>
-        internal static IReadOnlyList<Vector3?> Eased(ModelParts body, IReadOnlyList<Vector3?> field)
+        /// <param name="over">With the old body's underwear read over its skin's hole, its corners there: those
+        /// triangles are eased among themselves as the skin is (see <see cref="SmallclothesOverHoles"/>).</param>
+        internal static IReadOnlyList<Vector3?> Eased(ModelParts body, IReadOnlyList<Vector3?> field, bool[]? over = null)
         {
-            var adj = Neighbours(body, field.Count);
+            var adj = Neighbours(body, field.Count, over);
             var eased = new Vector3?[field.Count];
             for (int v = 0; v < field.Count; v++) eased[v] = field[v];
 
@@ -162,14 +184,19 @@ internal static partial class BodyRetarget
             foreach (var (v, d) in fixedUp) field[v] = d;
         }
 
-        /// <summary>Which body vertices share a skin triangle: the only places a displacement may be carried between.</summary>
-        private static List<int>[] Neighbours(ModelParts body, int count)
+        /// <summary>Which body vertices share a skin triangle: the only places a displacement may be carried between.
+        /// With <paramref name="over"/>, the underwear triangles every corner of which it marks too.</summary>
+        private static List<int>[] Neighbours(ModelParts body, int count, bool[]? over = null)
         {
             var adj = new List<int>[count];
             foreach (var part in body.Parts)
             {
-                if (part.Island >= 0 || !SecondSkinWriter.IsBodySkinMaterial(part.Material)) continue;
+                if (part.Island >= 0) continue;
+                bool skin = SecondSkinWriter.IsBodySkinMaterial(part.Material);
+                if (!skin && (over == null || !BodySurface.IsSmallclothes(part.Material))) continue;
                 for (int t = 0; t + 2 < part.Triangles.Length; t += 3)
+                {
+                    if (!skin && !Marked(part.Triangles, t, over!)) continue;
                     for (int k = 0; k < 3; k++)
                     {
                         int a = part.Triangles[t + k], b = part.Triangles[t + (k + 1) % 3];
@@ -177,8 +204,16 @@ internal static partial class BodyRetarget
                         (adj[a] ??= []).Add(b);
                         (adj[b] ??= []).Add(a);
                     }
+                }
             }
             return adj;
+        }
+
+        private static bool Marked(int[] triangles, int t, bool[] over)
+        {
+            int a = triangles[t], b = triangles[t + 1], c = triangles[t + 2];
+            return a >= 0 && b >= 0 && c >= 0 && a < over.Length && b < over.Length && c < over.Length
+                   && over[a] && over[b] && over[c];
         }
 
         /// <summary>Holes filled from their edges, ring by ring — see <see cref="Whole"/>.</summary>

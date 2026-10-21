@@ -1721,6 +1721,7 @@ internal sealed partial class BodyRetargetPanel(PenumbraBridge penumbra, UVRemap
         else if (r.Laid > 0) parts.Add($"{r.Laid:N0} skin points laid");
         if (r.SmallclothesFallback > 0)
             parts.Add($"{r.SmallclothesFallback} kept their own skin: the new body's underwear could not be brought in");
+        if (r.SourceSmallclothes > 0) parts.Add($"{r.SourceSmallclothes:N0} old underwear points follow the new body");
         return string.Join(", ", parts);
     }
 
