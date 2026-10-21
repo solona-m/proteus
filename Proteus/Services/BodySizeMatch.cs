@@ -118,8 +118,11 @@ internal static class BodySizeMatch
     /// and Yiggle sizes are one mesh rigged two ways — the one whose rig covers the most of these leads, so a garment
     /// made for Yiggle reads as Yiggle. Null orders equals by the author's listing alone.</param>
     /// <param name="skinPoints">The garment's <see cref="SkinPoints"/>, when the caller has them already.</param>
+    /// <param name="rigByPath">The bones a body file was rigged to before its bones were moved for another race
+    /// (<see cref="BakedBodyCatalog.RiggedBefore"/>); null, or null for a file, reads the file's own.</param>
     public static Ranking Rank(ModelParts garment, IReadOnlyList<BodyOption> candidates, Func<BodyOption, string> pathOf,
-                               IReadOnlySet<string>? garmentBones = null, List<Vector3>? skinPoints = null)
+                               IReadOnlySet<string>? garmentBones = null, List<Vector3>? skinPoints = null,
+                               Func<string, IReadOnlySet<string>?>? rigByPath = null)
     {
         var probes = skinPoints ?? SkinPoints(garment);
         if (probes.Count == 0) return new Ranking(Confidence.NoBodyMesh, []);
@@ -133,8 +136,12 @@ internal static class BodySizeMatch
         foreach (var group in candidates.GroupBy(o => o.Rel, StringComparer.OrdinalIgnoreCase))
         {
             var option = group.First();
-            var body = Load(pathOf(option));
-            if (body == null || !seenGeometry.Add(body.ContentKey)) continue;
+            string path = pathOf(option);
+            var body = Load(path);
+            // Two bodies one mesh rigged two ways stay two even once their bones were moved onto the same ones.
+            var rigged = rigByPath?.Invoke(path);
+            string distinct = rigged == null ? "" : "|" + string.Join(",", rigged.Order(StringComparer.Ordinal));
+            if (body == null || !seenGeometry.Add(body.ContentKey + distinct)) continue;
 
             var distance = new float[probes.Count];
             var hit = new bool[probes.Count];
@@ -151,7 +158,7 @@ internal static class BodySizeMatch
                 }
             }
             bodies.Add((option, distance, hit));
-            rigOf[option] = body.Bones;
+            rigOf[option] = rigged ?? body.Bones;
         }
 
         if (bodies.Count == 0) return new Ranking(Confidence.Ambiguous, []);

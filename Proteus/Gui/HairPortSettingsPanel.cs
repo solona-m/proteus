@@ -47,6 +47,9 @@ internal sealed class HairPortSettingsPanel(HairPortWatcher watcher, Configurati
         else if (view.Ported && view.ModRoot != null && view.Worn != null)
         {
             ImGui.TextWrapped(WornText(view));
+            if (view.Warning.Length > 0)
+                using (ImRaii.PushColor(ImGuiCol.Text, ProteusStyle.Warn))
+                    ImGui.TextWrapped(view.Warning);
             using (ImRaii.Disabled(view.Busy))
             {
                 if (ImGui.Button(s.Undo)) watcher.Undo();
@@ -98,6 +101,9 @@ internal sealed class HairPortSettingsPanel(HairPortWatcher watcher, Configurati
             ImGui.PushID($"{row.ModDir}|{row.Id}");
             bool can = CanUndo(row, busy || scan.Running);
             if (row.State == HairPortScan.RowState.Refused) ImGui.TextColored(new Vector4(1f, 0.7f, 0.4f, 1f), RowText(row));
+            else if (Warned(row))
+                using (ImRaii.PushColor(ImGuiCol.Text, ProteusStyle.Warn))
+                    ImGui.TextWrapped(RowText(row));
             else ImGui.TextWrapped(RowText(row));
             if (row.State is not (HairPortScan.RowState.Refused or HairPortScan.RowState.Undone))
             {
@@ -164,6 +170,7 @@ internal sealed class HairPortSettingsPanel(HairPortWatcher watcher, Configurati
         var s = Strings.HairPort;
         string state = row.State switch
         {
+            _ when Warned(row) => string.Format(s.StateFittedWarnFmt, row.Message),
             HairPortScan.RowState.Fitted => s.StateFitted,
             HairPortScan.RowState.AlreadyFitted => s.StateAlready,
             HairPortScan.RowState.Remade => s.StateRemade,
@@ -172,6 +179,10 @@ internal sealed class HairPortSettingsPanel(HairPortWatcher watcher, Configurati
         };
         return string.Format(s.RowFmt, row.Id, row.ModName, state);
     }
+
+    /// <summary>A port made with something to look at in game (<see cref="HairPortScan.Row.Message"/>).</summary>
+    internal static bool Warned(HairPortScan.Row row)
+        => row.State is HairPortScan.RowState.Fitted or HairPortScan.RowState.Remade && row.Message.Length > 0;
 
     /// <summary>Whether a row's port can be undone: one there is, while nothing else runs.</summary>
     internal static bool CanUndo(HairPortScan.Row row, bool busy)

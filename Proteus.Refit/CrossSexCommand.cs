@@ -35,8 +35,12 @@ internal static class CrossSexCommand
         var data = new Lumina.GameData(required(opts, "game"));
         byte[]? Game(string path) => data.GetFile(path)?.Data;
         string? skeleton = opts.GetValueOrDefault("skeleton");
+        // The skeleton the garment was rigged to, for where a bone the picked race lacks hangs; the game's by default.
+        string? fromSkeleton = opts.GetValueOrDefault("from-skeleton");
         var wearer = OtherRaceWearer.Gather(to, gamePath, Game,
-            path => skeleton != null && path == OtherRaceWearer.BaseSkeletonPath(to) ? Path.GetFullPath(skeleton) : null,
+            path => skeleton != null && path == OtherRaceWearer.BaseSkeletonPath(to) ? Path.GetFullPath(skeleton)
+                  : fromSkeleton != null && path == OtherRaceWearer.BaseSkeletonPath(drawn) ? Path.GetFullPath(fromSkeleton)
+                  : null,
             _ => null, []);
 
         var madeFor = BodySizeCatalog.Read(required(opts, "from-root"));
@@ -80,10 +84,10 @@ internal static class CrossSexCommand
                 ["label"] = label, ["to"] = size.Target.Rel, ["folds"] = size.Folds,
                 ["coverage"] = size.Landed?.VertexCoverage ?? 0f,
             };
+            // Never refused for its folds: those are in the report, beside it.
             string refusal = size.Refusal.Length > 0 ? size.Refusal
-                           : !size.SaveAllowed ? string.Format(Localization.Strings.Parts.RetargetRefuseCrossSexQualityFmt,
-                                 size.Folds, $"{size.Landed?.VertexCoverage:P0}", CrossSexRefit.MaxFolds,
-                                 $"{CrossSexRefit.MinCoverage:P0}")
+                           : !size.SaveAllowed ? string.Format(Localization.Strings.Parts.RetargetRefuseCrossSexCoverageFmt,
+                                 $"{size.Landed?.VertexCoverage:P0}", $"{CrossSexRefit.MinCoverage:P0}")
                            : "";
             if (refusal.Length > 0) entry["refusal"] = refusal;
             else
@@ -96,14 +100,32 @@ internal static class CrossSexCommand
             sizes.Add(entry);
         }
         string savePath = result.Route.Any ? result.Route.SavePath(gamePath) : gamePath;
+        var moved = result.Moved ?? [];
+        var movedBones = new JsonArray();
+        foreach (var move in moved)
+            movedBones.Add(new JsonObject
+            {
+                ["from"] = move.From, ["to"] = move.To, ["how"] = move.How.ToString().ToLowerInvariant(),
+            });
+        var est = result.Est ?? EstPlan.NotNeeded;
+        string note = $"save each model at {savePath} with an EQDP entry giving c{to:D4} a model of the set";
+        if (est.Outcome == EstOutcome.Carry) note += $", and the EST entry {est.Entry} for c{to:D4}";
         var report = new JsonObject
         {
             ["garment"] = garmentPath, ["race"] = $"{drawn:D4}", ["forRace"] = $"{to:D4}", ["eqdpRace"] = $"{to:D4}",
             ["savePath"] = savePath, ["from"] = result.SourcePath,
-            ["note"] = $"save each model at {savePath} with an EQDP entry giving c{to:D4} a model of the set",
+            ["note"] = note,
+            ["est"] = new JsonObject { ["outcome"] = est.Outcome.ToString(), ["entry"] = est.Entry },
+            ["movedBones"] = movedBones,
             ["sizes"] = sizes,
         };
+        if (skeleton != null)
+            report["needsSkeleton"] = new JsonArray((result.NeedsSkeleton ?? []).Select(b => (JsonNode)b).ToArray());
         if (result.Refusal.Length > 0) report["refusal"] = result.Refusal;
+        // A bone placed by its part of the body or on the hip, not by the skeleton it was rigged to: that skeleton
+        // would place it exactly.
+        if (moved.Any(m => m.How is SkeletonRemap.How.StandIn or SkeletonRemap.How.Fallback))
+            Console.Error.WriteLine("pass --from-skeleton <the skeleton the garment was rigged to> for exact parents");
         Console.WriteLine(report.ToJsonString(new JsonSerializerOptions { WriteIndented = true }));
         return 0;
     }

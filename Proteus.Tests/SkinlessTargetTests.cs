@@ -420,23 +420,101 @@ public class SkinlessTargetTests
 
         Assert.True(Build(source, sourceUv, target, targetUv, out var built, out string refusal, out var m), refusal);
         Assert.Equal(0, Folded(source, built!));
-        Assert.True(m.Unprojected <= UvAtlasCorrespondence.MaxUnprojectedShare * m.Excused);
+        Assert.True(m.Unprojected <= 0.05f * m.Excused);   // a dent: most still land on the boxers
     }
 
     [Fact]
     [Trait("Plan", "EDGE-skinless-target-10")]
     [Trait("Plan", "EDGE-skinless-target-21")]
-    public void Folds_that_remain_are_refused()
+    [Trait("Plan", "AC-cross-sex-tops-yas-7")]
+    [Trait("Plan", "EDGE-cross-sex-tops-yas-20")]
+    public void Folds_that_remain_are_set_aside_not_refused() // [AC-cross-sex-tops-yas-7] [EDGE-cross-sex-tops-yas-20]
     {
         // Boxers whose normals face into the body: every triangle laid on them faces the wrong way, and relaxing toward
-        // the neighbours cannot turn it back. The pair is refused as having no skin there, not accepted inside out.
+        // the neighbours cannot turn it back. Once the pair was refused as having no skin there (EDGE-skinless-target-21),
+        // for the folds or for how many points the relax kept off the body to avoid them; now neither refuses it — the
+        // points are kept off the body, or a fold still touching one leaves it with no landing — and the pair is built
+        // (cross-sex-tops-yas: nothing is refused for folded faces).
         var (source, sourceUv) = Sheet(Skin);
         var (target, targetUv) = Target(Band, Boxers, Standoff, flipBoxers: true);
 
-        Assert.False(Build(source, sourceUv, target, targetUv, out _, out string refusal, out var m));
-        Assert.Contains("finds skin to land on", refusal);
-        Assert.True(m.Excused > 0);
+        Assert.True(Build(source, sourceUv, target, targetUv, out var built, out string refusal, out var m),
+                    $"{refusal} (excused {m.Excused}, set aside {m.FoldedSetAside}, unprojected {m.Unprojected})");
+        Assert.True(m.FoldedSetAside + m.Unprojected > m.Excused / 2, "the folds were not avoided, so the test proves nothing");
+        Assert.Equal(0, Folded(source, built!));
+        Assert.All(Enumerable.Range(0, built!.Field.Count).Where(v => built.Field[v] == null),
+                   v => Assert.True(m.FoldedSetAside > 0));
     }
+
+    /// <summary>A point a fold still touches after the relax is left with no landing and said, never refused over.</summary>
+    [Fact]
+    [Trait("Plan", "AC-cross-sex-tops-yas-7")]
+    [Trait("Plan", "EDGE-cross-sex-tops-yas-20")]
+    public void Set_aside_points_are_said_and_left_unplaced() // [AC-cross-sex-tops-yas-7] [EDGE-cross-sex-tops-yas-20]
+    {
+        string uncovered = System.IO.File.ReadAllText(SourceFile("Proteus/Services/BodyCorrespondence.UvAtlas.Uncovered.cs"));
+        // Found first, then cleared — and nothing of it sets fits false.
+        int find = uncovered.IndexOf("var foldedNodes = new HashSet<int>();", StringComparison.Ordinal);
+        int clear = uncovered.IndexOf("field[v] = null;", find, StringComparison.Ordinal);
+        Assert.True(find > 0 && clear > find);
+        Assert.DoesNotContain("if (ours) fits = false", uncovered);
+        Assert.DoesNotContain("MaxUnprojectedShare", uncovered);
+        Assert.Contains("whose landing turned the skin over were filled from their neighbours", uncovered);
+        Assert.Contains("FoldedSetAside = projection.FoldedSetAside", uncovered);
+    }
+
+    private static string SourceFile(string file)
+    {
+        for (var d = new System.IO.DirectoryInfo(AppContext.BaseDirectory); d != null; d = d.Parent)
+        {
+            var p = System.IO.Path.Combine(d.FullName, file);
+            if (System.IO.File.Exists(p)) return p;
+        }
+        throw new System.IO.FileNotFoundException(file);
+    }
+
+    /// <summary>The set-aside points are found before any is cleared: the same pair, its triangles listed backwards,
+    /// sets the same points aside.</summary>
+    [Fact]
+    [Trait("Plan", "EDGE-cross-sex-tops-yas-20")]
+    public void Set_aside_does_not_depend_on_triangle_order() // [EDGE-cross-sex-tops-yas-20]
+    {
+        var (source, sourceUv) = Sheet(Skin);
+        var (target, targetUv) = Target(Band, Boxers, Standoff, flipBoxers: true);
+        Assert.True(Build(source, sourceUv, target, targetUv, out _, out string refusal, out var forward), refusal);
+
+        var reversed = Reversed(source);
+        Assert.True(Build(reversed, sourceUv, target, targetUv, out _, out refusal, out var backward), refusal);
+        Assert.Equal(forward.FoldedSetAside, backward.FoldedSetAside);
+        Assert.Equal(forward.FoldedTouching, backward.FoldedTouching);
+        Assert.Equal(forward.Unprojected, backward.Unprojected);
+    }
+
+    /// <summary>The same model with each part's triangles in the opposite order (each triangle's own winding kept).</summary>
+    private static ModelParts Reversed(ModelParts model)
+        => new()
+        {
+            Positions = model.Positions, Normals = model.Normals, MeshSpans = model.MeshSpans,
+            AttributeNames = model.AttributeNames, Min = model.Min, Max = model.Max,
+            ShatteredSubmeshes = model.ShatteredSubmeshes,
+            Parts = model.Parts.Select(p =>
+            {
+                int n = p.Triangles.Length / 3;
+                var t = new int[p.Triangles.Length];
+                var o = new int[p.Ordinals.Length];
+                for (int i = 0; i < n; i++)
+                {
+                    Array.Copy(p.Triangles, (n - 1 - i) * 3, t, i * 3, 3);
+                    if (o.Length == n) o[i] = p.Ordinals[n - 1 - i];
+                }
+                return new ModelPart
+                {
+                    Mesh = p.Mesh, Submesh = p.Submesh, Island = p.Island, Label = p.Label, Material = p.Material,
+                    Triangles = t, Ordinals = o.Length == n ? o : p.Ordinals, AttributeMask = p.AttributeMask,
+                    Min = p.Min, Max = p.Max, Toggleable = p.Toggleable,
+                };
+            }).ToList(),
+        };
 
     private static bool Build(ModelParts source, float[] sourceUv, ModelParts target, float[] targetUv,
                               out UvAtlasCorrespondence? built, out string refusal, out UvAtlasCorrespondence.Stats m)

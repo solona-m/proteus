@@ -72,6 +72,8 @@ internal sealed class HairPortPanel(Func<string, byte[]?> readGameFile, IPluginL
     private volatile string progress = "";
     private string result = "";
     private bool resultFailed;
+    /// <summary>The result line holds ports made with something to look at in game.</summary>
+    private bool resultWarn;
     private IReadOnlyDictionary<ushort, string> refused = new Dictionary<ushort, string>();
     private PbdFile? pbd;
 
@@ -147,6 +149,9 @@ internal sealed class HairPortPanel(Func<string, byte[]?> readGameFile, IPluginL
         if (result.Length > 0)
         {
             if (resultFailed) ImGui.TextColored(new Vector4(1f, 0.45f, 0.4f, 1f), result);
+            else if (resultWarn)
+                using (ImRaii.PushColor(ImGuiCol.Text, ProteusStyle.Warn))
+                    ImGui.TextWrapped(result);
             else ImGui.TextWrapped(result);
         }
     }
@@ -216,6 +221,7 @@ internal sealed class HairPortPanel(Func<string, byte[]?> readGameFile, IPluginL
         cancel?.Dispose();
         cancel = null;
         resultFailed = false;
+        resultWarn = false;
         if (task.IsCanceled || task.Exception?.InnerException is OperationCanceledException)
         {
             result = Strings.HairPort.Cancelled;
@@ -241,7 +247,16 @@ internal sealed class HairPortPanel(Func<string, byte[]?> readGameFile, IPluginL
             result = string.Format(Strings.HairPort.RemovedFmt, outcome.Count)
                    + (outcome.Message.Length > 0 ? " " + outcome.Message : "");
         // A strip is saved, but nothing was ported: its race is among the refusals, with why.
-        else if (outcome.SavedWrites.Count(w => !w.Stripped) is > 0 and var ported) result = string.Format(Strings.HairPort.DoneFmt, ported);
+        else if (outcome.SavedWrites.Count(w => !w.Stripped) is > 0 and var ported)
+        {
+            result = string.Format(Strings.HairPort.DoneFmt, ported);
+            // Saved all the same, but worth a look in game: which race, and why.
+            if (plan.Warnings is { Count: > 0 } warnings)
+            {
+                result += "\n" + string.Join("\n", warnings.Select(w => $"c{w.Key:D4}: {w.Value}"));
+                resultWarn = true;
+            }
+        }
         else result = Strings.HairPort.NothingToDo;
         if (outcome.Count > 0) afterChange(modDir);
         Read(modRoot, sourceGamePath);

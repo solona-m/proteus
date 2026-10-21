@@ -188,6 +188,13 @@ internal sealed partial class BodyRetargetPanel
         if (b.FellBack)
             using (ImRaii.PushColor(ImGuiCol.Text, ProteusStyle.Warn))
                 ImGui.TextWrapped(string.Format(ps.RetargetRaceSkeletonFallbackFmt, to));
+        if (b.Moves.Count > 0)
+            using (ImRaii.PushColor(ImGuiCol.Text, ProteusStyle.Warn))
+                ImGui.TextWrapped(string.Format(ps.RetargetRaceBonesMovedFmt, to, b.Moves.Count, SkeletonRemap.Describe(b.Moves)));
+        if (b.NeedsSkeleton.Count > 0)
+            using (ImRaii.PushColor(ImGuiCol.Text, ProteusStyle.Warn))
+                ImGui.TextWrapped(string.Format(ps.RetargetRaceNeedsSkeletonFmt, to, SkeletonMod(b.SkeletonFrom),
+                                                b.NeedsSkeleton.Count, string.Join(", ", b.NeedsSkeleton.Take(12))));
         if (b.LeftOut.Count > 0)
             using (ImRaii.PushColor(ImGuiCol.Text, ProteusStyle.Warn))
                 ImGui.TextWrapped(string.Format(ps.RetargetRaceLeftOutFmt, string.Join("; ", b.LeftOut)));
@@ -198,6 +205,18 @@ internal sealed partial class BodyRetargetPanel
             _ => null,
         };
         if (preview != null) ImGui.TextDisabled(preview);
+    }
+
+    /// <summary>
+    /// The mod a skeleton file comes from, by its folder — the nearest one up from the file with a mod's meta.json — else
+    /// the file's own name.
+    /// </summary>
+    internal static string SkeletonMod(string? file)
+    {
+        if (string.IsNullOrEmpty(file)) return "";
+        for (var dir = Path.GetDirectoryName(file); !string.IsNullOrEmpty(dir); dir = Path.GetDirectoryName(dir))
+            if (File.Exists(Path.Combine(dir, "meta.json"))) return Path.GetFileName(dir);
+        return Path.GetFileName(file);
     }
 
     /// <summary>
@@ -345,7 +364,19 @@ internal sealed partial class BodyRetargetPanel
             var made = OtherRaceWearer.Build(inputs, skin);
             if (made.Wearer is not { } who) return (key, null, made.Refusal);
 
-            var model = route.Into(bytes, who, out string why);
+            // The garment's bones the race lacks, moved onto ones it has before anything bends it; the bodies it was
+            // made on are moved the same way (BakedBodyCatalog).
+            var moves = made.Moves ?? [];
+            byte[] drawnModel = bytes;
+            if (moves.Count > 0)
+            {
+                if (SkeletonRemap.Rename(bytes, moves, out string refusal) is not { } renamed)
+                    return (key, null, SkeletonRemap.RenameRefusal(refusal));
+                drawnModel = renamed;
+                log.Information("[Proteus] retarget: bones moved for c{0:D4}: {1}", route.To, SkeletonRemap.DescribeHow(moves));
+            }
+
+            var model = route.Into(drawnModel, who, out string why);
             if (model == null) return (key, null, why);
             if (ModelPartReader.Read(model) is not { } parts) return (key, null, Strings.Parts.RetargetBakeReadBack);
 
@@ -353,9 +384,12 @@ internal sealed partial class BodyRetargetPanel
             List<string> leftOut = [];
             if (source != null)
             {
+                void LogBody(string line) => log.Information("[Proteus] retarget: {0}", line);
                 bodies = route.Lowered
-                    ? BakedBodyCatalog.Lowered(source, route.Drawn, route.To, who, slots, out leftOut, route.ByAlias)
-                    : BakedBodyCatalog.Of(source, drawnCode, route.To, who, slots, out leftOut, route.ByAlias);
+                    ? BakedBodyCatalog.Lowered(source, route.Drawn, route.To, who, slots, out leftOut, route.ByAlias,
+                                               made.Planner, LogBody)
+                    : BakedBodyCatalog.Of(source, drawnCode, route.To, who, slots, out leftOut, route.ByAlias,
+                                          made.Planner, LogBody);
                 foreach (string f in leftOut) log.Warning("[Proteus] retarget: a made-for body could not be bent: {0}", f);
             }
             if (route.ByAlias)
@@ -375,6 +409,7 @@ internal sealed partial class BodyRetargetPanel
             {
                 Fingerprint = print,
                 Explicit = true, Bodies = bodies, LeftOut = leftOut, Est = made.Est, FellBack = made.FellBack, DrawnPath = drawnPath,
+                Moves = moves, NeedsSkeleton = made.NeedsSkeleton ?? [], SkeletonFrom = inputs.ModdedFrom,
             }, "");
         });
     }

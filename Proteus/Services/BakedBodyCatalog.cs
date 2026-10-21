@@ -27,6 +27,18 @@ internal static class BakedBodyCatalog
 
     private static readonly object Gate = new();
 
+    /// <summary>Each bent body whose bones were moved, by full path: the bones its file was rigged to before.</summary>
+    private static readonly System.Collections.Concurrent.ConcurrentDictionary<string, IReadOnlySet<string>> Rigged =
+        new(StringComparer.OrdinalIgnoreCase);
+
+    /// <summary>
+    /// The bones a bent body was rigged to before its bones were moved for the wearer (<see cref="SkeletonRemap"/>);
+    /// null when none were. Which of Rue's plain and Yiggle sizes — one mesh rigged two ways — a garment was made for is
+    /// read from these, not from the moved names, which can be the same for both.
+    /// </summary>
+    internal static IReadOnlySet<string>? RiggedBefore(string path)
+        => Rigged.TryGetValue(Path.GetFullPath(path), out var bones) ? bones : null;
+
     /// <summary>Throw last session's bodies away. Called once at start-up, beside <see cref="VanillaBodyCatalog.CleanUp"/>.</summary>
     internal static void CleanUp()
     {
@@ -55,20 +67,27 @@ internal static class BakedBodyCatalog
     /// <param name="slots">The slots to bend; the others are never refitted between and cost nothing.</param>
     /// <param name="byAlias">Bend body mods' own bones as the standard bones they stand in for: a refit for the other
     /// sex (see <see cref="RacialModelBake.Route.ByAlias"/>), whose garment is bent the same way.</param>
+    /// <param name="planner">Moves a body's bones the wearer lacks onto ones it has, as the garment's were
+    /// (<see cref="SkeletonRemap"/>): a body rigged to a women's custom skeleton bent for a man.</param>
+    /// <param name="log">Hears each body's moves.</param>
     internal static BodySizeCatalog Of(BodySizeCatalog source, string drawn, ushort to, RacialModelBake.Wearer who,
-                                       IEnumerable<string> slots, out List<string> failed, bool byAlias = false)
+                                       IEnumerable<string> slots, out List<string> failed, bool byAlias = false,
+                                       SkeletonRemap.Planner? planner = null, Action<string>? log = null)
     {
         failed = [];
         if (!ushort.TryParse(drawn, out ushort from)) return new BodySizeCatalog(Dir, []);
 
-        string wearerKey = Key(who) + (byAlias ? "-alias" : "");
+        var how = new BendHow(Key(who) + (byAlias ? "-alias" : ""), byAlias, planner, log);
         var options = new List<BodyOption>();
         var made = new Dictionary<string, string?>(StringComparer.OrdinalIgnoreCase);   // source file -> baked rel
         foreach (string slot in slots)
             foreach (var option in source.For(slot, drawn).Where(o => BodySizeCatalog.RaceOf(o.GamePath) == drawn))
-                Add(options, made, failed, source, option, from, to, who, wearerKey, byAlias);
+                Add(options, made, failed, source, option, from, to, who, how);
         return new BodySizeCatalog(Dir, options);
     }
+
+    /// <summary>How each body is bent: the wearer's key for its file name, by alias or not, and its bones moved or not.</summary>
+    private sealed record BendHow(string WearerKey, bool ByAlias, SkeletonRemap.Planner? Planner, Action<string>? Log);
 
     /// <summary>
     /// <paramref name="source"/>'s bodies bent DOWN into <paramref name="to"/>, a race the drawn one falls through to —
@@ -81,11 +100,12 @@ internal static class BakedBodyCatalog
     /// <remarks>Across the sexes the line is the drawn race alone (<see cref="CrossSexRefit.MadeForLine"/>): a made-for
     /// mod with none of its bodies gives nothing, never the target race's own.</remarks>
     internal static BodySizeCatalog Lowered(BodySizeCatalog source, ushort drawn, ushort to, RacialModelBake.Wearer who,
-                                            IEnumerable<string> slots, out List<string> failed, bool byAlias = false)
+                                            IEnumerable<string> slots, out List<string> failed, bool byAlias = false,
+                                            SkeletonRemap.Planner? planner = null, Action<string>? log = null)
     {
         failed = [];
         var line = CrossSexRefit.MadeForLine(drawn, to);
-        string wearerKey = Key(who) + (byAlias ? "-alias" : "");
+        var how = new BendHow(Key(who) + (byAlias ? "-alias" : ""), byAlias, planner, log);
         var options = new List<BodyOption>();
         var made = new Dictionary<string, string?>(StringComparer.OrdinalIgnoreCase);
         foreach (string slot in slots)
@@ -96,7 +116,7 @@ internal static class BakedBodyCatalog
                 string code = $"{race:D4}";
                 var own = all.Where(o => BodySizeCatalog.RaceOf(o.GamePath) == code).ToList();
                 if (own.Count == 0) continue;
-                foreach (var option in own) Add(options, made, failed, source, option, race, to, who, wearerKey, byAlias);
+                foreach (var option in own) Add(options, made, failed, source, option, race, to, who, how);
                 break;
             }
         }
@@ -105,12 +125,12 @@ internal static class BakedBodyCatalog
 
     private static void Add(List<BodyOption> options, Dictionary<string, string?> made, List<string> failed,
                             BodySizeCatalog source, BodyOption option, ushort from, ushort to, RacialModelBake.Wearer who,
-                            string wearerKey, bool byAlias)
+                            BendHow how)
     {
         string path = source.PathOf(option);
         if (!made.TryGetValue(path, out string? rel))
         {
-            rel = Bend(path, from, to, who, wearerKey, byAlias, out string why);
+            rel = Bend(path, from, to, who, how, out string why);
             made[path] = rel;
             if (rel == null) failed.Add($"{option.FullLabel}: {why}");
         }
@@ -122,8 +142,8 @@ internal static class BakedBodyCatalog
     /// through to it, bent down when it falls through to <paramref name="to"/>, copied when the two are one. The
     /// direction is in the file's name, so a body bent one way is never taken for the same body bent the other.
     /// </summary>
-    private static string? Bend(string path, ushort from, ushort to, RacialModelBake.Wearer who, string wearerKey,
-                                bool byAlias, out string why)
+    private static string? Bend(string path, ushort from, ushort to, RacialModelBake.Wearer who, BendHow how,
+                                out string why)
     {
         why = "";
         byte[] bytes;
@@ -134,11 +154,31 @@ internal static class BakedBodyCatalog
             return null;
         }
 
+        // The body's bones the wearer lacks, moved as the garment's were — bent or not, so the garment and the body it
+        // was made on always name the same bones. The moves are in the file's name.
+        string moved = "";
+        IReadOnlySet<string>? riggedBefore = null;
+        if (how.Planner != null && ModelSkinReader.Read(bytes, null, null) is { } rigged
+            && how.Planner.MovesFor(OtherRaceRefit.Weighted(rigged)) is { Count: > 0 } moves)
+        {
+            if (SkeletonRemap.Rename(bytes, moves, out string refusal) is not { } renamed)
+            {
+                why = refusal;
+                return null;
+            }
+            riggedBefore = new HashSet<string>(SecondSkinWriter.Parse(bytes).BoneNames, StringComparer.Ordinal);
+            bytes = renamed;
+            string said = SkeletonRemap.Describe(moves);
+            moved = "-r" + Hash(System.Text.Encoding.UTF8.GetBytes(said))[..8];
+            how.Log?.Invoke($"made-for body bones moved for c{to:D4} ({Path.GetFileName(path)}): {said}");
+        }
+
         bool down = CrossSexRefit.BendsDown(from, to);
-        Func<string, string>? alias = byAlias ? UvBakeBones.Alias : null;
-        string rel = from == to ? $"{Hash(bytes)}-c{to:D4}.mdl"
-                   : $"{Hash(bytes)}-{wearerKey}-c{from:D4}-{(down ? "down" : "up")}-c{to:D4}.mdl";
+        Func<string, string>? alias = how.ByAlias ? UvBakeBones.Alias : null;
+        string rel = from == to ? $"{Hash(bytes)}{moved}-c{to:D4}.mdl"
+                   : $"{Hash(bytes)}{moved}-{how.WearerKey}-c{from:D4}-{(down ? "down" : "up")}-c{to:D4}.mdl";
         string full = Path.Combine(Dir, rel);
+        if (riggedBefore != null) Rigged[Path.GetFullPath(full)] = riggedBefore;
         lock (Gate)
             if (File.Exists(full)) return rel;
 

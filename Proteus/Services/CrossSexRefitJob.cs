@@ -36,12 +36,18 @@ internal static class CrossSexRefitJob
                                 BodyRetarget.Planned? Saved, byte[]? Preview, int Folds,
                                 UvAtlasCorrespondence.Stats? Landed, string Refusal)
     {
-        /// <summary>Whether the run-time check lets it be saved (<see cref="CrossSexRefit.SaveAllowed"/>).</summary>
-        public bool SaveAllowed => Saved != null && CrossSexRefit.SaveAllowed(Folds, Landed?.VertexCoverage ?? 1f);
+        /// <summary>Whether it may be saved: made, and enough of the body matched (<see cref="CrossSexRefit.CoverageAllowed"/>).
+        /// Never refused for its folds — those are said (<see cref="Folds"/>).</summary>
+        public bool SaveAllowed => Saved != null && CrossSexRefit.CoverageAllowed(Landed?.VertexCoverage ?? 1f);
     }
 
+    /// <param name="Moved">The garment's bones the race lacks, moved onto ones it has (<see cref="SkeletonRemap"/>).</param>
+    /// <param name="Est">What the race needs of the extra-skeleton table.</param>
+    /// <param name="NeedsSkeleton">Bones only the custom skeleton the wearer was read from gives the race.</param>
     internal sealed record Result(string Refusal, RacialModelBake.Route Route, RacialModelBake.Wearer? Wearer,
-                                  byte[]? Baked, BodySizeCatalog? Bent, string? SourcePath, IReadOnlyList<Size> Sizes);
+                                  byte[]? Baked, BodySizeCatalog? Bent, string? SourcePath, IReadOnlyList<Size> Sizes,
+                                  IReadOnlyList<SkeletonRemap.Move>? Moved = null, EstPlan? Est = null,
+                                  IReadOnlyList<string>? NeedsSkeleton = null);
 
     internal static Result Run(Inputs i)
     {
@@ -57,27 +63,40 @@ internal static class CrossSexRefitJob
             return new Result("the garment could not be read", route, null, null, null, null, []);
         var made = OtherRaceWearer.Build(i.Wearer, skin);
         if (made.Wearer is not { } who) return new Result(made.Refusal, route, null, null, null, null, []);
+        var moves = made.Moves ?? [];
+        Result Refused(string why, byte[]? baked = null, BodySizeCatalog? bent = null)
+            => new(why, route, who, baked, bent, null, [], moves, made.Est, made.NeedsSkeleton);
 
-        var baked = route.Into(i.Garment, who, out string why);
+        // The garment's bones the race lacks, moved onto ones it has before anything bends it.
+        byte[] drawnModel = i.Garment;
+        if (moves.Count > 0)
+        {
+            if (SkeletonRemap.Rename(i.Garment, moves, out string refusal) is not { } renamed)
+                return Refused(SkeletonRemap.RenameRefusal(refusal));
+            drawnModel = renamed;
+            i.Log.Information("[Proteus] retarget: bones moved for c{0:D4}: {1}", i.To, SkeletonRemap.DescribeHow(moves));
+        }
+
+        var baked = route.Into(drawnModel, who, out string why);
         if (baked == null || ModelPartReader.Read(baked) is not { } garment)
-            return new Result(why.Length > 0 ? why : "the bent garment could not be read", route, who, null, null, null, []);
+            return Refused(why.Length > 0 ? why : "the bent garment could not be read");
 
+        void LogBody(string line) => i.Log.Information("[Proteus] retarget: {0}", line);
         var bent = route.Lowered
-            ? BakedBodyCatalog.Lowered(i.MadeFor, drawn, i.To, who, [slot], out var failed, byAlias: true)
-            : BakedBodyCatalog.Of(i.MadeFor, $"{drawn:D4}", i.To, who, [slot], out failed, byAlias: true);
+            ? BakedBodyCatalog.Lowered(i.MadeFor, drawn, i.To, who, [slot], out var failed, byAlias: true, made.Planner, LogBody)
+            : BakedBodyCatalog.Of(i.MadeFor, $"{drawn:D4}", i.To, who, [slot], out failed, byAlias: true, made.Planner, LogBody);
         foreach (string f in failed) i.Log.Warning("[Proteus] cross-sex refit: a made-for body could not be bent: {0}", f);
         // Never a guess between sizes: with several and none picked, the refit is refused rather than made from one.
         var bentHere = bent.For(slot);
         var from = i.FromPick != null ? bentHere.FirstOrDefault(i.FromPick) : bentHere.Count == 1 ? bentHere[0] : null;
         if (from == null && i.FromPick == null && bentHere.Count > 1)
-            return new Result($"pick which of {bentHere.Count} made-for sizes the garment was made on", route, who, baked,
-                              bent, null, []);
+            return Refused($"pick which of {bentHere.Count} made-for sizes the garment was made on", baked, bent);
         // The body picked could not be bent: say why, not that another body mod is wanted.
         if (from == null && failed.Count > 0)
-            return new Result(string.Join("; ", failed), route, who, baked, bent, null, []);
+            return Refused(string.Join("; ", failed), baked, bent);
         if (from == null)
-            return new Result(string.Format(Localization.Strings.Parts.RetargetRefuseCrossSexMadeForFmt,
-                                            ModelRace.Describe($"{drawn:D4}")), route, who, baked, bent, null, []);
+            return Refused(string.Format(Localization.Strings.Parts.RetargetRefuseCrossSexMadeForFmt,
+                                         ModelRace.Describe($"{drawn:D4}")), baked, bent);
         string sourcePath = bent.PathOf(from);
 
         var (sourceMale, targetMale) = (CrossSexRefit.IsMale(drawn), CrossSexRefit.IsMale(i.To));
@@ -105,6 +124,6 @@ internal static class CrossSexRefitJob
             var (saved, preview, finishRefusal) = RefitCore.Finish(plan, route, who, targetPath, i.Log);
             sizes.Add(new Size(target, targetPath, plan, saved, preview, folds, landed, finishRefusal));
         }
-        return new Result("", route, who, baked, bent, sourcePath, sizes);
+        return new Result("", route, who, baked, bent, sourcePath, sizes, moves, made.Est, made.NeedsSkeleton);
     }
 }

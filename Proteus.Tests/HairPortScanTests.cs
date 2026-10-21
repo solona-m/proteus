@@ -679,4 +679,44 @@ public class HairPortScanTests
         Assert.Equal(HairPortScan.RowState.Refused, s.Run([5]).Rows.Single().State);
         Assert.Equal(2, s.Host.Lines.Count(l => l.Contains("in Broken not ported")));
     }
+
+    /// <summary>
+    /// A port made with something to look at in game — a bend that turned part of it inside out — is fitted, its row
+    /// says what in the warning colour, and nothing remembers it as a refusal (cross-sex-tops-yas).
+    /// </summary>
+    [Fact]
+    [Trait("Plan", "AC-cross-sex-tops-yas-8")]
+    [Trait("Plan", "EDGE-cross-sex-tops-yas-23")]
+    public void A_warned_port_is_fitted_with_its_warning() // [AC-cross-sex-tops-yas-8] [EDGE-cross-sex-tops-yas-23]
+    {
+        const string warning = "bent onto c1101, 40 of its triangles turn inside out and may show as holes; check it in game";
+        var warned = new HairPortScan.Row(5, "root", "Mod", "Mod", "chara/human/c1101/obj/hair/h0005/model/c1101h0005_hir.mdl",
+                                          HairPortScan.RowState.Fitted, warning);
+        Assert.True(Proteus.Gui.HairPortSettingsPanel.Warned(warned));
+        Assert.Contains(warning, Proteus.Gui.HairPortSettingsPanel.RowText(warned));
+        Assert.Contains("fitted", Proteus.Gui.HairPortSettingsPanel.RowText(warned));
+        Assert.False(Proteus.Gui.HairPortSettingsPanel.Warned(warned with { Message = "" }));
+        Assert.False(Proteus.Gui.HairPortSettingsPanel.Warned(warned with { State = HairPortScan.RowState.Refused }));
+
+        string scan = Source("Proteus/Services/HairPort/HairPortScan.cs");
+        Assert.Contains("MakeRow(host, id, modRoot, target, d.Stale ? RowState.Remade : RowState.Fitted, outcome.Warning)", scan);
+        Assert.Contains("return new Ported(saved, false, \"\", Warning: warning);", scan);   // not a refusal
+        string builder = Source("Proteus/Services/HairPort/HairPortBuilder.cs");
+        Assert.Contains("foreach (var to in refused.Keys) warnings.Remove(to);", builder);
+        string settings = Source("Proteus/Gui/HairPortSettingsPanel.cs");
+        Assert.Contains("if (view.Warning.Length > 0)", settings);
+        Assert.Contains("Warning: ported.Warning", Source("Proteus/Services/HairPort/HairPortWatcher.cs"));
+        string studio = Source("Proteus/Gui/HairPortPanel.cs");
+        Assert.Contains("resultWarn = true;", studio);
+    }
+
+    private static string Source(string file)
+    {
+        for (var d = new DirectoryInfo(AppContext.BaseDirectory); d != null; d = d.Parent)
+        {
+            var p = Path.Combine(d.FullName, file);
+            if (File.Exists(p)) return File.ReadAllText(p);
+        }
+        throw new FileNotFoundException(file);
+    }
 }

@@ -24,8 +24,11 @@ internal static class HairPortBuilder
     /// verdict on the model, the next look may read it.</param>
     /// <param name="EditBlocked">Races refused because the user edited their port since: no verdict on the model
     /// either — reverting the edit lets the next look port it.</param>
+    /// <param name="Warnings">Races ported all the same with something to look at in game — a bend that turned part of
+    /// the hairstyle inside out (<see cref="HairPortBaker.Result.Warning"/>) — with what.</param>
     public sealed record Plan(IReadOnlyList<HairPortWriter.PortWrite> Writes, IReadOnlyDictionary<ushort, string> Refused,
-                              IReadOnlySet<ushort> Current, bool Unreadable = false, IReadOnlySet<ushort>? EditBlocked = null)
+                              IReadOnlySet<ushort> Current, bool Unreadable = false, IReadOnlySet<ushort>? EditBlocked = null,
+                              IReadOnlyDictionary<ushort, string>? Warnings = null)
     {
         /// <summary>Whether a race's refusal is the model's own verdict, which the same model would get again.</summary>
         public bool IsVerdict(ushort race) => !Unreadable && EditBlocked?.Contains(race) != true;
@@ -49,6 +52,7 @@ internal static class HairPortBuilder
         var writes = new List<HairPortWriter.PortWrite>();
         var refused = new Dictionary<ushort, string>();
         var current = new HashSet<ushort>();
+        var warnings = new Dictionary<ushort, string>();
         var wanted = targets.Distinct().ToList();
 
         if (HairPortPlan.Parse(sourceGamePath) is not { } parsed)
@@ -206,6 +210,7 @@ internal static class HairPortBuilder
                 writes.Add(new HairPortWriter.PortWrite(owner, sourceGamePath, rel, HairPortPlan.Sha8(bytes), target,
                                                         result.Model, [.. materials, .. skeletonFiles], result.Millis, est,
                                                         skeletonFrom));
+                if (result.Warning is { } warning) warnings[to] = warning;
             }
             if (why != null)
             {
@@ -234,7 +239,8 @@ internal static class HairPortBuilder
         foreach (var to in refused.Keys)
             writes.AddRange(Strips(modRoot, owners, record, from, to, id, readGame, table));
 
-        return new Plan(writes, refused, current, Unreadable: noVerdict, EditBlocked: editBlocked);
+        foreach (var to in refused.Keys) warnings.Remove(to);
+        return new Plan(writes, refused, current, Unreadable: noVerdict, EditBlocked: editBlocked, Warnings: warnings);
     }
 
     /// <summary>Why a port that needs the game's table of hairstyle skeletons is refused without it.</summary>

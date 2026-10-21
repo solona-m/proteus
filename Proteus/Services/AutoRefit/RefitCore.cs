@@ -671,11 +671,24 @@ internal static partial class RefitCore
             if (back == null)
                 return (null, null, string.Format(Strings.Parts.RetargetBendBackFmt,
                                                   ModelRace.Describe($"{route.Drawn:D4}"), why));
+            SayDuplicateBones(back, log);
             return (plan with { Model = back }, null, "");
         }
         // Without the character to bend it back by, the preview is pushed unbent; the save itself needs no wearer.
         var preview = who != null ? route.Back(plan.Model, who, out _) : null;
-        return (WithBodySkin(plan, targetPaths, log), preview, "");
+        var saved = WithBodySkin(plan, targetPaths, log);
+        SayDuplicateBones(saved.Model, log);
+        return (saved, preview, "");
+    }
+
+    /// <summary>
+    /// A model saved with two bones of one name — a bone moved onto one the race has (<see cref="SkeletonRemap"/>), kept
+    /// as two entries where nothing rebuilt the model — said in the log: the game follows both with that bone.
+    /// </summary>
+    private static void SayDuplicateBones(byte[] model, IPluginLog log)
+    {
+        if (SkeletonRemap.DuplicateBones(model) is { Count: > 0 } twice)
+            log.Information("[Proteus] retarget: saved with duplicate bone names {0}", string.Join(", ", twice));
     }
 
     /// <summary>

@@ -89,6 +89,7 @@ public class SkinlessTargetLocalTests(ITestOutputHelper output)
         Assert.True(m.Unprojected <= 0.01f * m.Excused, $"{m.Unprojected} of {m.Excused} left at the carry");
         Assert.True(m.OnSkin <= 0.1f * m.Excused, $"{m.OnSkin} of {m.Excused} landed on skin");
         Assert.Equal(0, m.FoldedElsewhere);
+        Assert.Equal(0, m.FoldedSetAside);   // [AC-cross-sex-tops-yas-7] Muse+ SFW keeps its numbers
     }
 
     /// <summary>The figures each other Muse+ legs option gave before this change, from NEOBELLY's SFW Small.</summary>

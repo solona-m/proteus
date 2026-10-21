@@ -143,12 +143,13 @@ public class OtherRaceRefitTests
         Assert.True(forHim.Single(c => c.Race == 201).CrossSex);
         Assert.False(forHim.Single(c => c.Race == 301).CrossSex);
 
-        // A women's top is not made a men's (CrossSexRefit's cells), nor offered any race of the other sex but Midlander.
+        // A women's top is offered no race of the other sex but Midlander (cross-sex-tops-yas made a women's top a men's,
+        // where once it was not offered).
         const string womans = "chara/equipment/e6091/model/c0201e6091_top.mdl";
-        var forHer = Offered(womans, target, [Model(womans, "shirt/c0201e6091_top.mdl")]).Select(c => c.Race).ToList();
-        Assert.DoesNotContain((ushort)301, forHer);
-        Assert.DoesNotContain((ushort)101, forHer);
-        Assert.Contains((ushort)401, forHer);
+        var forHer = Offered(womans, target, [Model(womans, "shirt/c0201e6091_top.mdl")]).ToList();
+        Assert.DoesNotContain(forHer, c => c.Race == 301);
+        Assert.True(forHer.Single(c => c.Race == 101).CrossSex);
+        Assert.Contains(forHer, c => c.Race == 401);
     }
 
     [Fact]

@@ -28,7 +28,9 @@ internal static class HairPortScan
     /// <summary>What a check found for one hairstyle of the player's race.</summary>
     /// <param name="ModRoot">The mod the hairstyle is fitted from, or would be.</param>
     /// <param name="TargetGamePath">The player's race's model of the hairstyle.</param>
-    /// <param name="Message">Why it was not fitted, for <see cref="RowState.Refused"/> and <see cref="RowState.Undone"/>.</param>
+    /// <param name="Message">Why it was not fitted, for <see cref="RowState.Refused"/> and <see cref="RowState.Undone"/>;
+    /// for <see cref="RowState.Fitted"/> and <see cref="RowState.Remade"/>, what to look at in game, if anything
+    /// (<see cref="HairPortBaker.Result.Warning"/>).</param>
     public sealed record Row(int Id, string ModRoot, string ModDir, string ModName, string TargetGamePath, RowState State,
                              string Message = "");
 
@@ -175,7 +177,7 @@ internal static class HairPortScan
                     written.AddRange(outcome.Writes.Select(x => x.TargetGamePath));
                     rows.Add(outcome.Stripped
                         ? MakeRow(host, id, modRoot, target, RowState.Refused, outcome.Message)
-                        : MakeRow(host, id, modRoot, target, d.Stale ? RowState.Remade : RowState.Fitted));
+                        : MakeRow(host, id, modRoot, target, d.Stale ? RowState.Remade : RowState.Fitted, outcome.Warning));
                 }
                 else if (outcome.Current) rows.Add(MakeRow(host, id, modRoot, target, RowState.AlreadyFitted));
                 else if (outcome.Message.Length == 0) { /* the author covers the race in a place the player has off */ }
@@ -220,8 +222,10 @@ internal static class HairPortScan
     /// <param name="Stripped">Not ported, but its old port, which could not be made again, was saved without the skeleton
     /// that changed another hairstyle (<see cref="HairPortWriter.PortWrite.Stripped"/>): <paramref name="Writes"/> are
     /// that, and <paramref name="Message"/> says why it was not ported.</param>
+    /// <param name="Warning">Saved, with something to look at in game (<see cref="HairPortBaker.Result.Warning"/>); empty
+    /// when there is nothing. Never a refusal: it is not remembered as one, and the races sharing it are ported too.</param>
     public sealed record Ported(IReadOnlyList<HairPortWriter.PortWrite> Writes, bool Current, string Message,
-                                bool Refusal = false, bool Stripped = false);
+                                bool Refusal = false, bool Stripped = false, string Warning = "");
 
     /// <summary>
     /// Port <paramref name="decision"/>'s source onto <paramref name="race"/> — and every race that would read the same
@@ -257,7 +261,9 @@ internal static class HairPortScan
                   + $"carried from {x.SkeletonFrom})");
         if (saved.All(x => x.Stripped))
             return new Ported(saved, false, plan.Refused.TryGetValue(race, out var why) ? why : "", Stripped: true);
-        return new Ported(saved, false, "");
+        string warning = plan.Warnings?.TryGetValue(race, out var warned) == true ? warned : "";
+        if (warning.Length > 0) host.Log($"c{race:D4} ported in {modDir} — {warning}");
+        return new Ported(saved, false, "", Warning: warning);
     }
 
     /// <summary>

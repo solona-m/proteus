@@ -4395,9 +4395,25 @@
     "message": "성별을 넘을 때는 이 장비를 만든 체형이 {0} 체형이어야 합니다. “제작 체형”에서 만들어진 체형 모드를 고르세요.",
     "description": "{0} is a race such as \"Midlander F\". “Made for” is the body dropdown the garment was made on."
   },
-  "Parts.Retarget.Refuse.CrossSexQuality.Fmt": {
-    "message": "이 성별을 넘는 맞춤은 뒤집힌 면이 {0}개, 체형 대응이 {1}였습니다. Proteus는 뒤집힌 면이 {2}개 이하이고 대응이 {3} 이상인 것만 저장합니다.",
-    "description": "{0} folded faces and {1} the share matched, as found; {2} and {3} the limits. Percentages arrive formatted."
+  "Parts.Retarget.Refuse.CrossSexCoverage.Fmt": {
+    "message": "이 성별을 넘는 맞춤은 바디 맵으로 체형의 {0}만 대응했습니다. Proteus는 대응이 {1} 이상인 것만 저장합니다.",
+    "description": "Why a refit for the other sex is not saved: {0} the share of the body matched, as found; {1} the least that is saved. Percentages arrive formatted."
+  },
+  "Parts.Retarget.Race.CrossSexFolded.Fmt": {
+    "message": "이 성별을 넘는 맞춤에서 천 면 {0:N0}개가 뒤집혔습니다. 뒤집힌 면은 게임에서 구멍으로 보이니 공유하기 전에 그 부분을 확인하세요.",
+    "description": "Said in the warning colour beside a refit for the other sex: {0} is a count of cloth faces turned over."
+  },
+  "Parts.Retarget.Race.BonesMoved.Fmt": {
+    "message": "{0} 스켈레톤에는 이 장비가 쓰는 뼈 {1}개가 없습니다. 그 가중치는 이제 스켈레톤에 있는 가장 가까운 뼈를 따르므로, 그 부분은 따로가 아니라 그 뼈와 함께 움직입니다: {2}",
+    "description": "Warning beside a refit for a picked race: {0} is the race picked; {1} a count of bones; {2} the moves, such as \"ya_shiri_phys_l → iv_shiri_l\" (bone names are not translated)."
+  },
+  "Parts.Retarget.Race.NeedsSkeleton.Fmt": {
+    "message": "{1}의 {0} 스켈레톤은 게임 기본 스켈레톤에 없는 뼈 {2}개를 이 모델에 줍니다({3}). 그 스켈레톤이 없는 사람에게는 그 부분이 어긋나 보입니다.",
+    "description": "Warning beside a refit for a picked race: {0} is the race picked; {1} the mod its skeleton comes from; {2} a count of bones; {3} their names (not translated)."
+  },
+  "Parts.Retarget.Race.RenameFailed.Fmt": {
+    "message": "뼈 이름을 바꿀 수 없었습니다({0})",
+    "description": "Why a refit for a picked race was refused: the garment's bones could not be moved onto the race's; {0} is the technical reason."
   },
   "Parts.Retarget.Refuse.CrossSexLayout.Fmt": {
     "message": "성별을 넘을 때 Proteus는 Bibo+ 또는 게임 레이아웃의 여성 체형과 TBSE 또는 게임 레이아웃의 남성 체형만 대응시킬 수 있습니다. {0} 모델은 {1}과(와) {2}을(를) 씁니다.",
@@ -4412,7 +4428,7 @@
     "description": "Heads the dropdown that picks which race's model a refit is made and saved as."
   },
   "Parts.Retarget.Race.Tip": {
-    "message": "어느 종족용 맞춤인지 고릅니다. 다른 종족은 게임이 구부리는 방식대로 이 모델에서 만든, 그 종족 체형에 맞춰 그 종족이 불러오는 곳에 저장한 자기 모델을 받습니다. 미드랜더 남성의 몸통·다리 장비와 여성의 다리 장비는 다른 성별용으로도 맞출 수 있습니다. 이 모델은 그대로입니다.",
+    "message": "어느 종족용 맞춤인지 고릅니다. 다른 종족은 게임이 구부리는 방식대로 이 모델에서 만든, 그 종족 체형에 맞춰 그 종족이 불러오는 곳에 저장한 자기 모델을 받습니다. 미드랜더의 몸통·다리 장비는 다른 성별용으로도 맞출 수 있습니다. 이 모델은 그대로입니다.",
     "description": "Tooltip of Parts.Retarget.Race.Label."
   },
   "Parts.Retarget.Race.ThisModel.Fmt": {
@@ -5367,9 +5383,13 @@
     "message": "헤어",
     "description": ""
   },
-  "HairPort.Refused.Folded.Fmt": {
-    "message": "c{0:D4}에 맞춰 구부리면 삼각형 {1}개가 뒤집힙니다",
-    "description": ""
+  "HairPort.Folded.Fmt": {
+    "message": "c{0:D4}에 맞춰 구부리면 삼각형 {1}개가 뒤집혀 구멍처럼 보일 수 있습니다. 게임에서 확인하세요",
+    "description": "A hair port saved with a warning: bent onto race {0}, {1} of the hairstyle's triangles turn inside out."
+  },
+  "HairPort.Scan.State.FittedWarn.Fmt": {
+    "message": "맞춤 — {0}",
+    "description": "A hairstyle's state in the list: fitted, with {0} what to look at in game."
   },
   "HairPort.Refused.Declined": {
     "message": "이식이 취소되었으므로 그대로 둡니다",

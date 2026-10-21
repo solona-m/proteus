@@ -186,6 +186,9 @@ internal sealed partial class BodyRetargetPanel(PenumbraBridge penumbra, UVRemap
     /// <summary>One refit per target of the garment's own slot, in the order the targets were ticked.</summary>
     private List<(BodyOption To, BodyRetarget.Planned Planned)>? planned;
 
+    /// <summary>With <see cref="planned"/> made for the other sex, the cloth faces each size turned over; else null.</summary>
+    private IReadOnlyList<int>? plannedCrossSexFolds;
+
     /// <summary>The labels of the "keep shape" pieces <see cref="planned"/> was refitted with, by piece index — how a
     /// piece the refit let go is named (see <see cref="RefitCore.ReleasedWarning"/>).</summary>
     private IReadOnlyList<string> plannedShapeNames = [];
@@ -233,9 +236,11 @@ internal sealed partial class BodyRetargetPanel(PenumbraBridge penumbra, UVRemap
     /// leg is already the size chosen. A plan with a notice is not taken (see <see cref="Takes"/>).</param>
     /// <param name="Quality">A refit for the other sex: its folds and how much of the body matched, said beside the
     /// plan — never as a notice, which would drop the plan it describes.</param>
+    /// <param name="CrossSexFolds">A refit for the other sex: the cloth faces each size turned over, in the order of
+    /// <paramref name="Planned"/> — said in the warning colour beside the size shown (<see cref="CrossSexRefit.FoldLineFor"/>).</param>
     internal sealed record PlanResult(string Key, List<(BodyOption To, BodyRetarget.Planned Planned)>? Planned,
                                       string Error, string Notice = "", IReadOnlyList<string>? ShapeNames = null,
-                                      string Quality = "");
+                                      string Quality = "", IReadOnlyList<int>? CrossSexFolds = null);
 
     /// <summary>Whether a finished plan is the one to preview and save: no error, nothing-to-do notice, and something planned.</summary>
     internal static bool Takes(PlanResult result)
@@ -521,6 +526,16 @@ internal sealed partial class BodyRetargetPanel(PenumbraBridge penumbra, UVRemap
 
         /// <summary>The skeleton the collection gives the race could not be read; the game's was used.</summary>
         public bool FellBack { get; init; }
+
+        /// <summary>With <see cref="Explicit"/>, the garment's bones the race lacks and where they were moved
+        /// (<see cref="SkeletonRemap"/>); the bodies it was made on moved the same way.</summary>
+        public IReadOnlyList<SkeletonRemap.Move> Moves { get; init; } = [];
+
+        /// <summary>With <see cref="Explicit"/>, bones only the collection's custom skeleton gives the race.</summary>
+        public IReadOnlyList<string> NeedsSkeleton { get; init; } = [];
+
+        /// <summary>The mod the race's custom skeleton came from, for <see cref="NeedsSkeleton"/>'s note.</summary>
+        public string? SkeletonFrom { get; init; }
 
         /// <summary>What the option a save goes into gave the bake to read (<see cref="OtherRaceRefit.EstFingerprint"/>);
         /// every option with the same answer makes the same model.</summary>
@@ -1528,9 +1543,18 @@ internal sealed partial class BodyRetargetPanel(PenumbraBridge penumbra, UVRemap
 
         // The counts go to the log (see Describe); only what the user can act on is shown.
         var done = all[showing].Planned;
-        if (done.Report.Folded > 0)
-            using (ImRaii.PushColor(ImGuiCol.Text, ProteusStyle.Warn))
-                ImGui.TextWrapped(string.Format(ps.RetargetFoldedFmt, done.Report.Folded));
+        int clothFolded = plannedCrossSexFolds is { } folds && showing < folds.Count ? folds[showing] : 0;
+        switch (CrossSexRefit.FoldLineFor(plannedCrossSexFolds != null, clothFolded, done.Report.Folded))
+        {
+            case CrossSexRefit.FoldLine.CrossSex:
+                using (ImRaii.PushColor(ImGuiCol.Text, ProteusStyle.Warn))
+                    ImGui.TextWrapped(string.Format(ps.RetargetRaceCrossSexFoldedFmt, clothFolded));
+                break;
+            case CrossSexRefit.FoldLine.Report:
+                using (ImRaii.PushColor(ImGuiCol.Text, ProteusStyle.Warn))
+                    ImGui.TextWrapped(string.Format(ps.RetargetFoldedFmt, done.Report.Folded));
+                break;
+        }
         if (done.Report.Swap is { LostShapes: > 0 } lost)
             using (ImRaii.PushColor(ImGuiCol.Text, ProteusStyle.Warn))
                 ImGui.TextWrapped(string.Format(ps.RetargetSwapShapesFmt, lost.LostShapes));
@@ -1744,7 +1768,9 @@ internal sealed partial class BodyRetargetPanel(PenumbraBridge penumbra, UVRemap
 
         detectTask = Task.Run(() =>
         {
-            // Which of two identical meshes rigged two ways the garment was made for (Rue's plain and Yiggle sizes).
+            // Which of two identical meshes rigged two ways the garment was made for (Rue's plain and Yiggle sizes). A
+            // picked race's bodies may have had the bones it lacks moved, the bones that tell those two apart among
+            // them: they are compared as they were rigged (BakedBodyCatalog.RiggedBefore), with the garment as drawn.
             var garmentBones = new HashSet<string>(SecondSkinWriter.Parse(garmentBytes).BoneNames, StringComparer.Ordinal);
             var rankings = new Dictionary<string, BodySizeMatch.Ranking>(StringComparer.Ordinal);
             KeepEnds.StudioReading? read = null;
@@ -1752,7 +1778,8 @@ internal sealed partial class BodyRetargetPanel(PenumbraBridge penumbra, UVRemap
             {
                 // A kept-end garment's leg or arm is read alone: its heeled foot lies on no body's flat one.
                 if (layout.KeepEnds && slot == layout.Primary) continue;
-                rankings[slot] = BodySizeMatch.Rank(garment, snapshot.For(slot, garmentRace), snapshot.PathOf, garmentBones);
+                rankings[slot] = BodySizeMatch.Rank(garment, snapshot.For(slot, garmentRace), snapshot.PathOf, garmentBones,
+                                                   rigByPath: BakedBodyCatalog.RiggedBefore);
             }
             if (layout.KeepEnds)
             {
@@ -1833,7 +1860,7 @@ internal sealed partial class BodyRetargetPanel(PenumbraBridge penumbra, UVRemap
         bool acrossBodies = fromBodyDir != null || active?.Explicit == true;
         var (male, targetSex) = PairSexes;
         bool? targetMale = targetSex != male ? targetSex : null;
-        // A pick for the other sex: checked before it may be saved (CrossSexRefit.SaveAllowed).
+        // A pick for the other sex: checked before it may be saved (CrossSexRefit.CoverageAllowed).
         bool crossSex = active?.Explicit == true && active.Route.ByAlias;
         string key = Key(ctx);
         var bake = active;
@@ -1920,6 +1947,7 @@ internal sealed partial class BodyRetargetPanel(PenumbraBridge penumbra, UVRemap
 
                 var results = new List<(BodyOption, BodyRetarget.Planned)>();
                 var quality = new List<string>();
+                var crossSexFolds = new List<int>();
 
                 // ── the whole garment, refitted through its own slot ──
                 if (garmentSource == null) return new PlanResult(key, null, string.Format(ps.RetargetNeedFromFmt, garmentName));
@@ -1946,27 +1974,28 @@ internal sealed partial class BodyRetargetPanel(PenumbraBridge penumbra, UVRemap
                     plan = RefitCore.MatchSkinToBody(plan, garmentSource, targetPath, uvRemap, male, log, targetMale);
                     if (crossSex)
                     {
-                        // Measured on every user's garment, not only the ones the gates were: a refit across the sexes
-                        // that comes out far worse is never written into a mod.
+                        // Measured on every user's garment: one matched through too little of the body is never written
+                        // into a mod. Its folds never stop it — they are said, beside the size, as holes in game.
                         int folds = CrossSexRefit.ClothFolded(bytes, plan);
                         double coverage = landed?.VertexCoverage ?? 1.0;
                         log.Information("[Proteus] retarget: across the sexes {0}: {1} cloth faces folded, {2:P1} of the "
                                       + "body matched", option.Label, folds, coverage);
                         string cover = coverage.ToString("P0", System.Globalization.CultureInfo.CurrentCulture);
-                        if (!CrossSexRefit.SaveAllowed(folds, coverage))
+                        if (!CrossSexRefit.CoverageAllowed(coverage))
                         {
-                            string refused = string.Format(ps.RetargetRefuseCrossSexQualityFmt, folds, cover,
-                                CrossSexRefit.MaxFolds,
+                            string refused = string.Format(ps.RetargetRefuseCrossSexCoverageFmt, cover,
                                 CrossSexRefit.MinCoverage.ToString("P0", System.Globalization.CultureInfo.CurrentCulture));
                             return new PlanResult(key, null, targets.Count > 1 ? $"{option.Label}: {refused}" : refused);
                         }
                         string line = string.Format(ps.RetargetRaceCrossSexQualityFmt, folds, cover);
                         quality.Add(targets.Count > 1 ? $"{option.Label}: {line}" : line);
+                        crossSexFolds.Add(folds);
                     }
                     results.Add((option, Baked(plan, targetPath)));
                     Interlocked.Increment(ref planDone);
                 }
-                return new PlanResult(key, results, "", ShapeNames: shapeNames, Quality: string.Join("\n", quality));
+                return new PlanResult(key, results, "", ShapeNames: shapeNames, Quality: string.Join("\n", quality),
+                                      CrossSexFolds: crossSex ? crossSexFolds : null);
             }
             catch (Exception ex)
             {
@@ -2280,6 +2309,7 @@ internal sealed partial class BodyRetargetPanel(PenumbraBridge penumbra, UVRemap
             else if (Takes(pt.Result) && pt.Result.Planned is { } done && pt.Result.Key == Key(ctx))
             {
                 planned = done;
+                plannedCrossSexFolds = pt.Result.CrossSexFolds;
                 plannedShapeNames = pt.Result.ShapeNames ?? [];
                 plannedKey = pt.Result.Key;
                 showing = 0;

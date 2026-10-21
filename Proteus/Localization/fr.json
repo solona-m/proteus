@@ -4395,9 +4395,25 @@
     "message": "Entre les sexes, les corps sur lesquels ce vêtement a été fait doivent être des corps {0}. Choisissez sous « Fait pour le corps » le mod de corps pour lequel il a été fait.",
     "description": "{0} is a race such as \"Midlander F\". “Made for” is the body dropdown the garment was made on."
   },
-  "Parts.Retarget.Refuse.CrossSexQuality.Fmt": {
-    "message": "Ce réajustement entre les sexes compte {0} faces retournées et {1} du corps apparié. Proteus n'en enregistre un qu'avec au plus {2} faces retournées et au moins {3} apparié.",
-    "description": "{0} folded faces and {1} the share matched, as found; {2} and {3} the limits. Percentages arrive formatted."
+  "Parts.Retarget.Refuse.CrossSexCoverage.Fmt": {
+    "message": "Ce réajustement entre les sexes n'a apparié que {0} du corps par les cartes de corps. Proteus n'en enregistre un que s'il apparie au moins {1}.",
+    "description": "Why a refit for the other sex is not saved: {0} the share of the body matched, as found; {1} the least that is saved. Percentages arrive formatted."
+  },
+  "Parts.Retarget.Race.CrossSexFolded.Fmt": {
+    "message": "{0:N0} face(s) de tissu retournée(s) dans ce réajustement entre les sexes. Une face retournée apparaît en jeu comme un trou : vérifie ces endroits avant de le partager.",
+    "description": "Said in the warning colour beside a refit for the other sex: {0} is a count of cloth faces turned over."
+  },
+  "Parts.Retarget.Race.BonesMoved.Fmt": {
+    "message": "Il manque au squelette de {0} {1} os sur lesquels ce vêtement s'appuie. Leur poids suit désormais l'os le plus proche qu'il possède : ces parties bougent avec lui plutôt que d'elles-mêmes : {2}",
+    "description": "Warning beside a refit for a picked race: {0} is the race picked; {1} a count of bones; {2} the moves, such as \"ya_shiri_phys_l → iv_shiri_l\" (bone names are not translated)."
+  },
+  "Parts.Retarget.Race.NeedsSkeleton.Fmt": {
+    "message": "Le squelette de {0} venant de {1} donne à ce modèle {2} os que le squelette du jeu n'a pas ({3}). Quiconque n'a pas ce squelette verra ces parties déformées.",
+    "description": "Warning beside a refit for a picked race: {0} is the race picked; {1} the mod its skeleton comes from; {2} a count of bones; {3} their names (not translated)."
+  },
+  "Parts.Retarget.Race.RenameFailed.Fmt": {
+    "message": "les os n'ont pas pu être renommés ({0})",
+    "description": "Why a refit for a picked race was refused: the garment's bones could not be moved onto the race's; {0} is the technical reason."
   },
   "Parts.Retarget.Refuse.CrossSexLayout.Fmt": {
     "message": "Entre les sexes, Proteus ne peut apparier que des corps de femme en disposition Bibo+ ou du jeu à des corps d'homme en disposition TBSE ou du jeu. Les modèles {0} utilisent {1} et {2}.",
@@ -4412,7 +4428,7 @@
     "description": "Heads the dropdown that picks which race's model a refit is made and saved as."
   },
   "Parts.Retarget.Race.Tip": {
-    "message": "Pour quelle race est le réajustement. Une autre race obtient son propre modèle, fait à partir de celui-ci comme le jeu le plie, réajusté sur le corps de cette race et enregistré là où cette race le charge. Un vêtement de torse ou de jambes d'homme Midlander, ou un vêtement de jambes de femme, peut aussi être réajusté pour l'autre sexe. Ce modèle reste tel quel.",
+    "message": "Pour quelle race est le réajustement. Une autre race obtient son propre modèle, fait à partir de celui-ci comme le jeu le plie, réajusté sur le corps de cette race et enregistré là où cette race le charge. Un vêtement de torse ou de jambes Midlander peut aussi être réajusté pour l'autre sexe. Ce modèle reste tel quel.",
     "description": "Tooltip of Parts.Retarget.Race.Label."
   },
   "Parts.Retarget.Race.ThisModel.Fmt": {
@@ -5367,9 +5383,13 @@
     "message": "Cheveux",
     "description": ""
   },
-  "HairPort.Refused.Folded.Fmt": {
-    "message": "une fois plié sur c{0:D4}, {1} de ses triangles seraient retournés",
-    "description": ""
+  "HairPort.Folded.Fmt": {
+    "message": "une fois plié sur c{0:D4}, {1} de ses triangles sont retournés et peuvent apparaître comme des trous ; vérifie-le en jeu",
+    "description": "A hair port saved with a warning: bent onto race {0}, {1} of the hairstyle's triangles turn inside out."
+  },
+  "HairPort.Scan.State.FittedWarn.Fmt": {
+    "message": "adaptée — {0}",
+    "description": "A hairstyle's state in the list: fitted, with {0} what to look at in game."
   },
   "HairPort.Refused.Declined": {
     "message": "sa transposition a été annulée, il est donc laissé tel quel",

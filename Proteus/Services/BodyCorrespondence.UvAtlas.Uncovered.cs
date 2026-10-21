@@ -40,9 +40,6 @@ internal sealed partial class UvAtlasCorrespondence
     /// undone.</summary>
     private const int FoldRounds = 8;
 
-    /// <summary>The most of the excused points that may keep their carried move instead of landing on the body.</summary>
-    internal const float MaxUnprojectedShare = 0.05f;
-
     /// <summary>How far a point kept at its carried move may be from the body as worn (10 mm).</summary>
     internal const float CarriedOnlyReach = 0.01f;
 
@@ -131,6 +128,7 @@ internal sealed partial class UvAtlasCorrespondence
             Unprojected = projection.Unprojected, OnSkin = projection.OnSkin,
             FoldedElsewhere = projection.FoldedElsewhere,
             FoldedInIslands = projection.FoldedInIslands,
+            FoldedSetAside = projection.FoldedSetAside, FoldedTouching = projection.FoldedTouching,
         };
         if (!projection.Fits) return RefuseNoSkin(what, measured.VertexCoverage, out refusal);
 
@@ -140,6 +138,9 @@ internal sealed partial class UvAtlasCorrespondence
             "them onto its smallclothes" +
             (projection.Unprojected > 0
                  ? $"; {projection.Unprojected:N0} of them kept where the skin put them, so no triangle turns over"
+                 : "") +
+            (projection.FoldedSetAside > 0
+                 ? $"; {projection.FoldedSetAside:N0} whose landing turned the skin over were filled from their neighbours"
                  : "") +
             (result.Disagreed > 0
                  ? $"; {result.Disagreed:N0} whose landing disagreed with the skin around them follow it instead"
@@ -151,14 +152,18 @@ internal sealed partial class UvAtlasCorrespondence
     }
 
     /// <summary>What the projection did, and whether the result may stand.</summary>
+    /// <param name="FoldedSetAside">Moved points whose landing still turned a skin triangle over after the relax: left
+    /// with no landing, filled from their neighbours downstream — never a reason to refuse the pair.</param>
+    /// <param name="FoldedTouching">The skin triangles those folds were.</param>
     private readonly record struct Projection(bool Fits, int Unprojected, int OnSkin, int FoldedElsewhere,
-                                              int FoldedInIslands);
+                                              int FoldedInIslands, int FoldedSetAside = 0, int FoldedTouching = 0);
 
     /// <summary>
     /// Lands each excused point — weld twins together, from their averaged carried move — on the nearest point of the
     /// target as worn, on its own side. A landing that turns a source skin triangle over is relaxed toward its
-    /// neighbours; a fold that still touches a moved point, too many points left off the body, or one of them further
-    /// off it than <see cref="CarriedOnlyReach"/>, and the fit does not stand.
+    /// neighbours; the points a fold still touches after that are left with no landing (filled from their neighbours
+    /// downstream) and counted, as are those the relax kept off the body. One of those further off it than
+    /// <see cref="CarriedOnlyReach"/>, and the fit does not stand — never a fold, nor how many folds kept off it.
     /// </summary>
     private static Projection Project(ModelParts source, ModelParts target, List<int> skin, SkinNodes nodes,
                                       HashSet<int> excused, HashSet<int> setAside, Vector3?[] field, sbyte[] sides,
@@ -291,8 +296,12 @@ internal sealed partial class UvAtlasCorrespondence
             }
         }
 
+        // A fold that still touches a moved point is never a reason to refuse the pair: those points are left with no
+        // landing — every one found first, then cleared, so no fold is judged against a landing already taken away —
+        // and filled from the skin around them downstream, like any other point that landed nowhere.
         bool fits = true;
-        int elsewhere = 0;
+        int elsewhere = 0, touching = 0;
+        var foldedNodes = new HashSet<int>();
         foreach (var (a, b, c) in judged)
         {
             if (!TurnedOver(a, b, c)) continue;
@@ -302,15 +311,29 @@ internal sealed partial class UvAtlasCorrespondence
                 inIslands++;
                 continue;
             }
-            bool ours = excused.Contains(a) || excused.Contains(b) || excused.Contains(c)
-                     || setAside.Contains(a) || setAside.Contains(b) || setAside.Contains(c);
-            if (ours) fits = false;
+            bool ours = false;
+            foreach (int v in new[] { a, b, c })
+                if (excused.Contains(v) || setAside.Contains(v)) { foldedNodes.Add(nodes.NodeOf[v]); ours = true; }
+            if (ours) touching++;
             else elsewhere++;
+        }
+        int foldedSetAside = 0;
+        foreach (int n in foldedNodes)
+        {
+            projected.Remove(n);
+            normalOf.Remove(n);
+            foreach (int v in carriedOf.TryGetValue(n, out var carry) ? carry.Members : nodes.Members[n])
+                if ((excused.Contains(v) || setAside.Contains(v)) && field[v] != null)
+                {
+                    field[v] = null;
+                    foldedSetAside++;
+                }
         }
 
         int unprojected = 0, onSkin = 0;
         foreach (int v in excused)
         {
+            if (field[v] == null) continue;   // set aside above: filled downstream, neither placed nor kept
             if (projected.Contains(nodes.NodeOf[v]))
             {
                 if (onSkinNodes.Contains(nodes.NodeOf[v])) onSkin++;
@@ -319,9 +342,10 @@ internal sealed partial class UvAtlasCorrespondence
             unprojected++;
             if (!worn.Nearest(P(source, v) + field[v]!.Value, CarriedOnlyReach, out _)) fits = false;
         }
-        if (unprojected > MaxUnprojectedShare * excused.Count) fits = false;
+        // How many were kept off the body is counted, never a refusal: a point is kept there only so that no triangle
+        // turns over, and nothing is refused for folds (cross-sex-tops-yas). How far off it is still is (above).
 
-        return new Projection(fits, unprojected, onSkin, elsewhere, inIslands);
+        return new Projection(fits, unprojected, onSkin, elsewhere, inIslands, foldedSetAside, touching);
     }
 
     /// <summary>
