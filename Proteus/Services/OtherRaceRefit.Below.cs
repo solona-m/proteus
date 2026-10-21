@@ -36,7 +36,7 @@ internal static partial class OtherRaceRefit
                                                   ushort drawn, ushort to, Func<string, byte[]?> readGame)
     {
         if (fromDir != VanillaBodyCatalog.Key) return fromCatalog ?? onto;
-        var read = LineDown(drawn, to).Select(r => VanillaBodyCatalog.Read($"{r:D4}", readGame, drawn: false)).ToList();
+        var read = CrossSexRefit.MadeForLine(drawn, to).Select(r => VanillaBodyCatalog.Read($"{r:D4}", readGame, drawn: false)).ToList();
         return new BodySizeCatalog(read.FirstOrDefault()?.ModRoot ?? VanillaBodyCatalog.Dir,
                                    read.SelectMany(c => c.Options).ToList());
     }
@@ -47,18 +47,19 @@ internal static partial class OtherRaceRefit
         /// <summary>That race alone: every other keeps drawing the model it draws now.</summary>
         OnlyPicked,
 
-        /// <summary>That race, and every race of its sex that falls through to it with no model of its own for the
-        /// item: a Midlander model is what they draw.</summary>
+        /// <summary>That race, and every race that falls through to it with no model of its own for the item: a
+        /// Midlander model is what they draw (see <see cref="CrossSexRefit.FallThroughTo"/>).</summary>
         PickedAndFallThrough,
     }
 
+    /// <summary>A lowered refit, or one for the other sex, lands on a shared shape whole families fall through to.</summary>
     internal static WearNote Wears(RacialModelBake.Route route)
-        => route.Lowered ? WearNote.PickedAndFallThrough : WearNote.OnlyPicked;
+        => route.Lowered || route.ByAlias ? WearNote.PickedAndFallThrough : WearNote.OnlyPicked;
 
     /// <summary>
     /// Whether to warn that the races falling through to a lowered refit load no extra skeleton for it: the garment
     /// leans on one, and the entry saved gives it to the picked race alone.
     /// </summary>
     internal static bool WarnsFallThroughBones(RacialModelBake.Route route, EstPlan? est)
-        => route.Lowered && est is { Outcome: EstOutcome.Carry or EstOutcome.Present };
+        => (route.Lowered || route.ByAlias) && est is { Outcome: EstOutcome.Carry or EstOutcome.Present };
 }

@@ -152,7 +152,8 @@ Things worth knowing:
 - **Vanilla gear** can be refitted the same way. It has no mod to save into, so saving makes a new mod with the refit and an **Original** option.
 - Touch up afterwards with the other brushes, like **Pull out**, and use **Move** for rigid pieces. Refit from the author's size nearest the one you want — the size set below does that for you.
 - **Between body mods**, the garment also takes on the new body's bone weights where the two bodies differ, so it moves with the new body's physics. Where they agree, the author's weighting is kept. Skirt chains and other bones of the garment's own are never changed.
-- **The two bodies' skin must share a texture layout**, or use one Proteus can convert (bibo, gen3 and gen2). Men's and women's bodies are never refitted onto each other.
+- **The two bodies' skin must share a texture layout**, or use one Proteus can convert (bibo, gen3 and gen2). Men's and women's bodies are refitted onto each other only through **Refit for**, below.
+- **The other sex** can be picked under **Refit for** too. A Midlander men's chest or legs garment can be refitted for Midlander women, and a Midlander women's legs garment for Midlander men, when the body mod you refit onto has bodies of that sex. Pick the body mod the garment was made for under **Made for body**. The bodies are matched through the bibo↔TBSE body maps, so only women's bodies in the Bibo+ or game layout pair with men's bodies in the TBSE or game layout. Women's tops aren't offered for men yet: flattening a bust onto a chest turns too much of the cloth over. Garments rigged to a women's physics skeleton (YAS) are refused for men, and so is any refit that comes out with too many folded faces. Every race that falls through to the saved model with no model of its own wears it too. The auto refit and the size set never cross the sexes.
 - **Shape keys are lost** when the skin is replaced or the garment moves between body mods. Proteus tells you when that happens.
 - **Remove the last refit** takes a saved size back out of the mod.
 - Only the highest level of detail is refitted, so the old size can show at a great distance.
@@ -362,6 +363,7 @@ Below the rows, **Advanced** holds the settings that apply to the whole mod rath
 |---------|-------------|
 | Force render mode | Pins Skin / Cloth / Animated glow instead of letting the features pick. **Back to auto** releases it. |
 | Overlay gen2/vanilla | Also paints this mod onto vanilla (gen2) skin you're wearing, usually skin that comes with a piece of gear. On by default, and it costs nothing when there's no vanilla skin on you. bibo and gen3/Eve are always painted. Applies to the whole mod, and it's a global setting: design bindings don't capture it. |
+| Overlay on men | Also paints this mod's women's art on men (TBSE or the men's vanilla body), moved into his own layout through the men's body maps, which download the first time they're needed. Nothing is painted on him until they're here. Art made for men is never changed. On by default; applies to the whole mod, and it's a global setting: design bindings don't capture it. |
 | Reset to defaults | Restores this option's colors, glow and mode to the settings Proteus first recorded for the mod. Hold Ctrl to arm it. |
 
 If a mod has no active option there are no colors to show, but **Advanced** still appears so **Overlay gen2/vanilla** stays reachable.

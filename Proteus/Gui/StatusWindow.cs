@@ -809,7 +809,7 @@ public class StatusWindow : Window
             {
                 ImGui.SameLine();
                 if (ImGui.SmallButton(Strings.Band.Retry))
-                    uvMapDl.EnsureMapsAsync();
+                    uvMapDl.RetryFailed();
             }
         }
 
@@ -1493,6 +1493,7 @@ public class StatusWindow : Window
             InertModDiagnosis.InertCause.NothingTicked      => string.Format(ms.InertNothingTickedFmt, r.GroupCount, r.Groups),
             InertModDiagnosis.InertCause.WrongRace          => string.Format(ms.InertWrongRaceFmt, r.Wants, r.Have),
             InertModDiagnosis.InertCause.MaskNeedsShell     => string.Format(ms.InertMaskNeedsShellFmt, r.Groups),
+            InertModDiagnosis.InertCause.AwaitingMenMaps    => ms.InertAwaitingMenMaps,
             _                                               => ms.InertNothingReached,
         };
     }
@@ -2247,6 +2248,21 @@ public class StatusWindow : Window
         bool binding = editRouter.HasOverride(entry.ModDirectory);
         if (ImGui.IsItemHovered())
             ImGui.SetTooltip(cp.BodiesTip + (binding ? cp.BodiesGlobalSuffix : ""));
+
+        bool men = config.OverlaysMenFor(entry.ModDirectory);
+        if (ImGui.Checkbox($"{cp.OverlayMen}##men_{entry.ModDirectory}", ref men))
+        {
+            // On is the absent default, so ticking removes the entry. Under the gate: the composite snapshots this set.
+            lock (config.Gate)
+            {
+                if (men) config.MenOverlayOffMods.Remove(entry.ModDirectory);
+                else config.MenOverlayOffMods.Add(entry.ModDirectory);
+            }
+            config.Save();
+            RecompositeForOverlay(entry, "men-mode");
+        }
+        if (ImGui.IsItemHovered())
+            ImGui.SetTooltip(cp.MenTip + (binding ? cp.BodiesGlobalSuffix : ""));
 
         // Said in the panel, not only on hover: this control writes global config while everything else previews.
         if (binding)

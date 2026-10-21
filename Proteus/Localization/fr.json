@@ -543,6 +543,14 @@
     "message": "\nGlobal — ceci ne fait PAS partie de la liaison que vous modifiez.",
     "description": ""
   },
+  "Colors.Bodies.Men.Label": {
+    "message": "Superposer sur les hommes",
+    "description": "Checkbox label in the colour-table editor window's Advanced section, under \"Overlay gen2/vanilla\". Ticked = this mod's women's art is also painted on men."
+  },
+  "Colors.Bodies.Men.Tip": {
+    "message": "Peint aussi les motifs féminins de ce mod sur les hommes (TBSE ou le corps masculin vanilla),\ntransposés dans sa propre disposition grâce aux cartes de corps masculin.\nLes motifs faits pour les hommes ne sont jamais modifiés.\nS'applique à tout le mod, pas seulement à cette option.",
+    "description": "Tooltip for the checkbox above. \"TBSE\" is a body-mod name - never translated. Contains deliberate line breaks - keep the same number, moving them where your language needs."
+  },
   "Colors.Bodies.Vanilla.Label": {
     "message": "Superposer sur gen2/vanilla",
     "description": "Checkbox label in the colour-table editor window's Advanced section. \"gen2\" is a body-mod name - never translated. Ticked = this mod is also painted onto vanilla skin."
@@ -2331,6 +2339,10 @@
     "message": "Ses masques sont rendus comme de l'équipement, ce qui nécessite un masque pour construire le vêtement — et rien n'est coché dans son groupe « {0} » dans Penumbra.",
     "description": ""
   },
+  "Mods.Inert.AwaitingMenMaps": {
+    "message": "Les motifs de ce mod sont faits pour des corps féminins. Ils seront peints sur vous, dans votre propre disposition, dès que les cartes de corps masculin seront téléchargées (si le téléchargement a échoué, réessayez depuis l'avis des cartes UV).",
+    "description": "Why an enabled mod paints nothing yet: it is women's art on a man, waiting for the men's body maps to download. \"UV maps\" names the notice in the plugin's status window."
+  },
   "Mods.Inert.NothingReached": {
     "message": "Ses options cochées ont bien été résolues, mais aucune n'a atteint une surface chargée par ce personnage.",
     "description": ""
@@ -3656,7 +3668,7 @@
     "description": ""
   },
   "Parts.Retarget.NoBodiesForSex.Fmt": {
-    "message": "{0} n'a pas de corps {1} ; un ajustement ne change pas le sexe.",
+    "message": "{0} n'a pas de corps {1}.",
     "description": ""
   },
   "Parts.Retarget.Male": {
@@ -4359,12 +4371,48 @@
     "message": "le nouveau modèle n'a pas pu être relu",
     "description": "Why a model for the wearer's race could not be made; the {1} of Parts.Retarget.BakeFailed.Fmt. Lower-case, no full stop."
   },
+  "Parts.Retarget.Race.OtherSex.Fmt": {
+    "message": "{0} (réajusté depuis ce modèle {1})",
+    "description": "A \"Refit for\" entry. {0} is a race of the other sex such as \"Midlander M\"; {1} the race of the model open."
+  },
+  "Parts.Retarget.Race.CrossSexNote.Fmt": {
+    "message": "Réajusté entre les sexes : les corps {0} pour lesquels il a été fait sont pliés à la forme de {1}, puis appariés point par point au nouveau corps grâce aux cartes de corps. Vérifiez-le en jeu avant de le partager.",
+    "description": "Warning under a refit for the other sex. {0} is the race of the model open, {1} the race picked. \"body maps\" are the bibo↔TBSE texture maps."
+  },
+  "Parts.Retarget.Race.CrossSexWears.Fmt": {
+    "message": "{0} portera le réajustement enregistré, de même que {1} là où ils n'ont pas de modèle propre pour cette pièce ; {2} garde ce modèle.",
+    "description": "{0} is the race picked; {1} a comma-separated list of races; {2} the race of the model open."
+  },
+  "Parts.Retarget.Race.CrossSexQuality.Fmt": {
+    "message": "{0} faces retournées ; {1} du corps apparié.",
+    "description": "{0} is a count of folded (turned-over) faces; {1} a percentage such as \"97%\"."
+  },
+  "Parts.Retarget.Race.CrossSexHint.Fmt": {
+    "message": "Pour faire une version pour {0}, choisissez-le sous « Ajuster pour ».",
+    "description": "{0} is a race such as \"Midlander M\". “Refit for” is the dropdown's label (Parts.Retarget.Race.Label)."
+  },
+  "Parts.Retarget.Refuse.CrossSexMadeFor.Fmt": {
+    "message": "Entre les sexes, les corps sur lesquels ce vêtement a été fait doivent être des corps {0}. Choisissez sous « Fait pour le corps » le mod de corps pour lequel il a été fait.",
+    "description": "{0} is a race such as \"Midlander F\". “Made for” is the body dropdown the garment was made on."
+  },
+  "Parts.Retarget.Refuse.CrossSexQuality.Fmt": {
+    "message": "Ce réajustement entre les sexes compte {0} faces retournées et {1} du corps apparié. Proteus n'en enregistre un qu'avec au plus {2} faces retournées et au moins {3} apparié.",
+    "description": "{0} folded faces and {1} the share matched, as found; {2} and {3} the limits. Percentages arrive formatted."
+  },
+  "Parts.Retarget.Refuse.CrossSexLayout.Fmt": {
+    "message": "Entre les sexes, Proteus ne peut apparier que des corps de femme en disposition Bibo+ ou du jeu à des corps d'homme en disposition TBSE ou du jeu. Les modèles {0} utilisent {1} et {2}.",
+    "description": "{0} is a slot such as \"_top\"; {1} and {2} texture layout names (bibo, gen3, tbse, male vanilla), never translated. \"Bibo+\" and \"TBSE\" are body-mod names."
+  },
+  "Parts.Retarget.Refuse.MenMapsMissing": {
+    "message": "Les cartes de corps nécessaires à un réajustement entre les sexes ne sont pas encore là. Proteus les télécharge ; réajustez à nouveau une fois qu'elles sont arrivées.",
+    "description": "Said when the bibo↔TBSE texture maps have not been downloaded yet."
+  },
   "Parts.Retarget.Race.Label": {
     "message": "Ajuster pour",
     "description": "Heads the dropdown that picks which race's model a refit is made and saved as."
   },
   "Parts.Retarget.Race.Tip": {
-    "message": "Pour quelle race est l'ajustement. Une autre race du même sexe reçoit son propre modèle, tiré de celui-ci comme le jeu le plie, ajusté au corps de cette race et enregistré là où cette race le charge. Ce modèle reste tel quel.",
+    "message": "Pour quelle race est le réajustement. Une autre race obtient son propre modèle, fait à partir de celui-ci comme le jeu le plie, réajusté sur le corps de cette race et enregistré là où cette race le charge. Un vêtement de torse ou de jambes d'homme Midlander, ou un vêtement de jambes de femme, peut aussi être réajusté pour l'autre sexe. Ce modèle reste tel quel.",
     "description": "Tooltip of Parts.Retarget.Race.Label."
   },
   "Parts.Retarget.Race.ThisModel.Fmt": {

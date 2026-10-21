@@ -53,18 +53,20 @@ internal static class BakedBodyCatalog
     /// </summary>
     /// <param name="drawn">The race the garment is drawn as, whose bodies the source is read for.</param>
     /// <param name="slots">The slots to bend; the others are never refitted between and cost nothing.</param>
+    /// <param name="byAlias">Bend body mods' own bones as the standard bones they stand in for: a refit for the other
+    /// sex (see <see cref="RacialModelBake.Route.ByAlias"/>), whose garment is bent the same way.</param>
     internal static BodySizeCatalog Of(BodySizeCatalog source, string drawn, ushort to, RacialModelBake.Wearer who,
-                                       IEnumerable<string> slots, out List<string> failed)
+                                       IEnumerable<string> slots, out List<string> failed, bool byAlias = false)
     {
         failed = [];
         if (!ushort.TryParse(drawn, out ushort from)) return new BodySizeCatalog(Dir, []);
 
-        string wearerKey = Key(who);
+        string wearerKey = Key(who) + (byAlias ? "-alias" : "");
         var options = new List<BodyOption>();
         var made = new Dictionary<string, string?>(StringComparer.OrdinalIgnoreCase);   // source file -> baked rel
         foreach (string slot in slots)
             foreach (var option in source.For(slot, drawn).Where(o => BodySizeCatalog.RaceOf(o.GamePath) == drawn))
-                Add(options, made, failed, source, option, from, to, who, wearerKey);
+                Add(options, made, failed, source, option, from, to, who, wearerKey, byAlias);
         return new BodySizeCatalog(Dir, options);
     }
 
@@ -76,12 +78,14 @@ internal static class BakedBodyCatalog
     /// TBSE-X's Highlander torso, but its Midlander legs, which a Highlander draws bent. Bent down as the garment is, or
     /// taken as they are when they already are <paramref name="to"/>'s.
     /// </summary>
+    /// <remarks>Across the sexes the line is the drawn race alone (<see cref="CrossSexRefit.MadeForLine"/>): a made-for
+    /// mod with none of its bodies gives nothing, never the target race's own.</remarks>
     internal static BodySizeCatalog Lowered(BodySizeCatalog source, ushort drawn, ushort to, RacialModelBake.Wearer who,
-                                            IEnumerable<string> slots, out List<string> failed)
+                                            IEnumerable<string> slots, out List<string> failed, bool byAlias = false)
     {
         failed = [];
-        var line = OtherRaceRefit.LineDown(drawn, to).ToList();
-        string wearerKey = Key(who);
+        var line = CrossSexRefit.MadeForLine(drawn, to);
+        string wearerKey = Key(who) + (byAlias ? "-alias" : "");
         var options = new List<BodyOption>();
         var made = new Dictionary<string, string?>(StringComparer.OrdinalIgnoreCase);
         foreach (string slot in slots)
@@ -92,7 +96,7 @@ internal static class BakedBodyCatalog
                 string code = $"{race:D4}";
                 var own = all.Where(o => BodySizeCatalog.RaceOf(o.GamePath) == code).ToList();
                 if (own.Count == 0) continue;
-                foreach (var option in own) Add(options, made, failed, source, option, race, to, who, wearerKey);
+                foreach (var option in own) Add(options, made, failed, source, option, race, to, who, wearerKey, byAlias);
                 break;
             }
         }
@@ -101,12 +105,12 @@ internal static class BakedBodyCatalog
 
     private static void Add(List<BodyOption> options, Dictionary<string, string?> made, List<string> failed,
                             BodySizeCatalog source, BodyOption option, ushort from, ushort to, RacialModelBake.Wearer who,
-                            string wearerKey)
+                            string wearerKey, bool byAlias)
     {
         string path = source.PathOf(option);
         if (!made.TryGetValue(path, out string? rel))
         {
-            rel = Bend(path, from, to, who, wearerKey, out string why);
+            rel = Bend(path, from, to, who, wearerKey, byAlias, out string why);
             made[path] = rel;
             if (rel == null) failed.Add($"{option.FullLabel}: {why}");
         }
@@ -119,7 +123,7 @@ internal static class BakedBodyCatalog
     /// direction is in the file's name, so a body bent one way is never taken for the same body bent the other.
     /// </summary>
     private static string? Bend(string path, ushort from, ushort to, RacialModelBake.Wearer who, string wearerKey,
-                                out string why)
+                                bool byAlias, out string why)
     {
         why = "";
         byte[] bytes;
@@ -130,7 +134,8 @@ internal static class BakedBodyCatalog
             return null;
         }
 
-        bool down = from != to && RacialModelBake.SameSexLine(from).Contains(to);
+        bool down = CrossSexRefit.BendsDown(from, to);
+        Func<string, string>? alias = byAlias ? UvBakeBones.Alias : null;
         string rel = from == to ? $"{Hash(bytes)}-c{to:D4}.mdl"
                    : $"{Hash(bytes)}-{wearerKey}-c{from:D4}-{(down ? "down" : "up")}-c{to:D4}.mdl";
         string full = Path.Combine(Dir, rel);
@@ -151,8 +156,8 @@ internal static class BakedBodyCatalog
                                     string.Join(", ", stuck.Take(8)), ModelRace.Describe($"{to:D4}"));
                 return null;
             }
-            baked = down ? RacialModelBake.Unbake(bytes, to, from, who.Pbd, who.ParentOf, out why)
-                         : RacialModelBake.Bake(bytes, from, to, who.Pbd, who.ParentOf, out why);
+            baked = down ? RacialModelBake.Unbake(bytes, to, from, who.Pbd, who.ParentOf, out why, alias)
+                         : RacialModelBake.Bake(bytes, from, to, who.Pbd, who.ParentOf, out why, alias);
             if (baked == null) return null;
         }
         lock (Gate)

@@ -55,13 +55,16 @@ internal static class LocalData
     /// </summary>
     internal const string UvMaps = "<uv transfer maps>";
 
-    /// <summary>The plugin folder whose <c>uvmaps</c> hold real maps, or null.</summary>
-    private static string? UvMapsFolder()
+    /// <summary>The bibo↔TBSE maps, likewise in the repository through Git LFS; <see cref="Path"/> gives the plugin folder.</summary>
+    internal const string TbseUvMaps = "<bibo-tbse transfer maps>";
+
+    /// <summary>The plugin folder whose <c>uvmaps</c> hold a real <paramref name="map"/>, or null.</summary>
+    private static string? UvMapsFolder(string map = "gen3_to_bibo_transfer.tif")
     {
         for (var dir = new DirectoryInfo(AppContext.BaseDirectory); dir != null; dir = dir.Parent)
         {
-            var map = System.IO.Path.Combine(dir.FullName, "Proteus", "uvmaps", "gen3_to_bibo_transfer.tif");
-            if (File.Exists(map)) return IsTiff(map) ? System.IO.Path.Combine(dir.FullName, "Proteus") : null;
+            var path = System.IO.Path.Combine(dir.FullName, "Proteus", "uvmaps", map);
+            if (File.Exists(path)) return IsTiff(path) ? System.IO.Path.Combine(dir.FullName, "Proteus") : null;
         }
         return null;
     }
@@ -105,6 +108,7 @@ internal static class LocalData
     internal static string Path(string need)
     {
         if (need == UvMaps) return UvMapsFolder() ?? "<uv transfer maps not here>";
+        if (need == TbseUvMaps) return UvMapsFolder("bibo_to_tbse_transfer.tif") ?? "<bibo-tbse transfer maps not here>";
         int colon = need.IndexOf(':');
         string variable = colon < 0 ? need : need[..colon];
         string relative = colon < 0 ? "" : need[(colon + 1)..].Replace('/', System.IO.Path.DirectorySeparatorChar);
@@ -121,6 +125,12 @@ internal static class LocalData
             if (need == UvMaps)
             {
                 if (UvMapsFolder() == null) missing.Add("the uv transfer maps are not here (Git LFS not fetched)");
+                continue;
+            }
+            if (need == TbseUvMaps)
+            {
+                if (UvMapsFolder("bibo_to_tbse_transfer.tif") == null)
+                    missing.Add("the bibo-tbse transfer maps are not here (Git LFS not fetched)");
                 continue;
             }
             int colon = need.IndexOf(':');

@@ -543,6 +543,14 @@
     "message": "\nГлобальная настройка — она НЕ входит в привязку, которую вы редактируете.",
     "description": ""
   },
+  "Colors.Bodies.Men.Label": {
+    "message": "Накладывать на мужчин",
+    "description": "Checkbox label in the colour-table editor window's Advanced section, under \"Overlay gen2/vanilla\". Ticked = this mod's women's art is also painted on men."
+  },
+  "Colors.Bodies.Men.Tip": {
+    "message": "Рисует женские узоры этого мода и на мужчинах (TBSE или мужское vanilla-тело),\nперенося их в его собственную раскладку через карты мужского тела.\nУзоры, сделанные для мужчин, никогда не меняются.\nДействует на весь мод, а не только на эту опцию.",
+    "description": "Tooltip for the checkbox above. \"TBSE\" is a body-mod name - never translated. Contains deliberate line breaks - keep the same number, moving them where your language needs."
+  },
   "Colors.Bodies.Vanilla.Label": {
     "message": "Накладывать на gen2/ваниль",
     "description": "Checkbox label in the colour-table editor window's Advanced section. \"gen2\" is a body-mod name - never translated. Ticked = this mod is also painted onto vanilla skin."
@@ -2331,6 +2339,10 @@
     "message": "Его маски отображаются как экипировка, а одежда строится именно из маски — но в группе «{0}» в Penumbra ничего не отмечено.",
     "description": ""
   },
+  "Mods.Inert.AwaitingMenMaps": {
+    "message": "Узоры этого мода сделаны для женских тел. Они будут нарисованы на вас, в вашей собственной раскладке, как только загрузятся карты мужского тела (если загрузка не удалась, повторите её из уведомления о UV-картах).",
+    "description": "Why an enabled mod paints nothing yet: it is women's art on a man, waiting for the men's body maps to download. \"UV maps\" names the notice in the plugin's status window."
+  },
   "Mods.Inert.NothingReached": {
     "message": "Отмеченные параметры обработаны, но ни один из них не достиг поверхности, загруженной этим персонажем.",
     "description": ""
@@ -3656,7 +3668,7 @@
     "description": ""
   },
   "Parts.Retarget.NoBodiesForSex.Fmt": {
-    "message": "У {0} нет тел {1}; подгонка не меняет пол.",
+    "message": "У {0} нет тел {1}.",
     "description": ""
   },
   "Parts.Retarget.Male": {
@@ -4359,12 +4371,48 @@
     "message": "не удалось прочитать новую модель",
     "description": "Why a model for the wearer's race could not be made; the {1} of Parts.Retarget.BakeFailed.Fmt. Lower-case, no full stop."
   },
+  "Parts.Retarget.Race.OtherSex.Fmt": {
+    "message": "{0} (подогнано из этой модели {1})",
+    "description": "A \"Refit for\" entry. {0} is a race of the other sex such as \"Midlander M\"; {1} the race of the model open."
+  },
+  "Parts.Retarget.Race.CrossSexNote.Fmt": {
+    "message": "Подогнано между полами: тела {0}, для которых вещь сделана, изогнуты под форму {1}, затем точка за точкой сопоставлены новому телу через карты тела. Проверьте в игре, прежде чем делиться.",
+    "description": "Warning under a refit for the other sex. {0} is the race of the model open, {1} the race picked. \"body maps\" are the bibo↔TBSE texture maps."
+  },
+  "Parts.Retarget.Race.CrossSexWears.Fmt": {
+    "message": "Сохранённую подгонку будет носить {0}, а также {1} там, где у них нет своей модели для этой вещи; {2} сохраняет эту модель.",
+    "description": "{0} is the race picked; {1} a comma-separated list of races; {2} the race of the model open."
+  },
+  "Parts.Retarget.Race.CrossSexQuality.Fmt": {
+    "message": "Вывернутых граней: {0}; сопоставлено {1} тела.",
+    "description": "{0} is a count of folded (turned-over) faces; {1} a percentage such as \"97%\"."
+  },
+  "Parts.Retarget.Race.CrossSexHint.Fmt": {
+    "message": "Чтобы сделать версию для {0}, выберите его в «Подогнать для».",
+    "description": "{0} is a race such as \"Midlander M\". “Refit for” is the dropdown's label (Parts.Retarget.Race.Label)."
+  },
+  "Parts.Retarget.Refuse.CrossSexMadeFor.Fmt": {
+    "message": "Между полами тела, на которых сделана эта вещь, должны быть телами {0}. Выберите в «Сделано для тела» мод тела, для которого она сделана.",
+    "description": "{0} is a race such as \"Midlander F\". “Made for” is the body dropdown the garment was made on."
+  },
+  "Parts.Retarget.Refuse.CrossSexQuality.Fmt": {
+    "message": "У этой подгонки между полами {0} вывернутых граней и сопоставлено {1} тела. Proteus сохраняет только подгонку, где вывернутых граней не больше {2} и сопоставлено не меньше {3}.",
+    "description": "{0} folded faces and {1} the share matched, as found; {2} and {3} the limits. Percentages arrive formatted."
+  },
+  "Parts.Retarget.Refuse.CrossSexLayout.Fmt": {
+    "message": "Между полами Proteus может сопоставить только женские тела в раскладке Bibo+ или игры с мужскими телами в раскладке TBSE или игры. Модели {0} используют {1} и {2}.",
+    "description": "{0} is a slot such as \"_top\"; {1} and {2} texture layout names (bibo, gen3, tbse, male vanilla), never translated. \"Bibo+\" and \"TBSE\" are body-mod names."
+  },
+  "Parts.Retarget.Refuse.MenMapsMissing": {
+    "message": "Карт тела, нужных для подгонки между полами, ещё нет. Proteus их загружает; подгоните снова, когда они придут.",
+    "description": "Said when the bibo↔TBSE texture maps have not been downloaded yet."
+  },
   "Parts.Retarget.Race.Label": {
     "message": "Подогнать для",
     "description": "Heads the dropdown that picks which race's model a refit is made and saved as."
   },
   "Parts.Retarget.Race.Tip": {
-    "message": "Для какой расы подгонка. Другая раса того же пола получает свою модель, сделанную из этой так, как её изгибает игра, подогнанную под тело этой расы и сохранённую там, где эта раса её загружает. Эта модель остаётся как есть.",
+    "message": "Для какой расы подгонка. Другая раса получает свою модель, сделанную из этой так, как её изгибает игра, подогнанную под тело этой расы и сохранённую там, откуда эта раса её загружает. Мужскую вещь для торса или ног Midlander, а также женскую вещь для ног, можно подогнать и для другого пола. Эта модель остаётся как есть.",
     "description": "Tooltip of Parts.Retarget.Race.Label."
   },
   "Parts.Retarget.Race.ThisModel.Fmt": {

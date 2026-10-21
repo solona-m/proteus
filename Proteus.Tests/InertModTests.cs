@@ -327,4 +327,35 @@ public class InertModTests
         var merged = ResolutionDiagnostic.None.Merge(Diag(penumbraGroups: ["Fabric", "Masks"]));
         Assert.Equal(["Fabric", "Masks"], merged.PenumbraGroups);
     }
+
+    // ── women's art waiting for the men's maps ([womens-overlays-men]) ─────────────────────────
+
+    [Fact]
+    [Trait("Plan", "AC-womens-overlays-men-4")]
+    [Trait("Plan", "EDGE-womens-overlays-men-23")]
+    public void Waiting_for_men_maps_is_its_own_reason() // [AC-womens-overlays-men-4] [EDGE-womens-overlays-men-23]
+    {
+        var r = InertModDiagnosis.Explain(Diag(groups: 1), false, 0, false, true, "bibo · Midlander F", "gen3 · Midlander M",
+                                          true, awaitingMenMaps: true);
+        Assert.Equal(InertModDiagnosis.InertCause.AwaitingMenMaps, r.Cause);
+        Assert.Contains("men's body maps", InertModDiagnosis.EnglishInert(r));
+        // Not waiting: the wrong-race rung as before (a switch-only hold keeps it).
+        Assert.Equal(InertModDiagnosis.InertCause.WrongRace,
+                     Run(Diag(groups: 1), filtered: true, wants: "bibo · Midlander F", have: "gen3 · Midlander M").Cause);
+    }
+
+    [Fact]
+    [Trait("Plan", "EDGE-womens-overlays-men-23")]
+    public void Waiting_rung_sits_after_nothing_ticked_before_wrong_race() // [EDGE-womens-overlays-men-23]
+    {
+        // Nothing ticked still wins: there is nothing to wait for.
+        Assert.Equal(InertModDiagnosis.InertCause.NothingTicked,
+            InertModDiagnosis.Explain(Diag(groups: 1, empty: ["Fabric"]), false, 0, false, false, "", "", true, awaitingMenMaps: true).Cause);
+        // Groups missing still wins.
+        Assert.Equal(InertModDiagnosis.InertCause.GroupsMissing,
+            InertModDiagnosis.Explain(Diag(groups: 1, missing: ["Fabric"]), false, 0, false, false, "", "", true, awaitingMenMaps: true).Cause);
+        // Waiting beats a wrong race and the vague rung.
+        Assert.Equal(InertModDiagnosis.InertCause.AwaitingMenMaps,
+            InertModDiagnosis.Explain(Diag(groups: 1), false, 0, false, false, "", "", false, awaitingMenMaps: true).Cause);
+    }
 }

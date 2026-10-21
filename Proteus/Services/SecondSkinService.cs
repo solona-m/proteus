@@ -683,6 +683,19 @@ public sealed partial class SecondSkinService
     /// <summary>The mirrored vanilla layout, compared the way every other body-type string in here is.</summary>
     private static bool IsGen2(string? uv) => string.Equals(uv, "gen2", StringComparison.OrdinalIgnoreCase);
 
+    /// <summary>The men's layout a part's skin is drawn in on a man (see <see cref="UVRemapService.LayoutOfPartMaterial"/>), or null.</summary>
+    internal static string? PartMenLayout(byte[] model)
+    {
+        try
+        {
+            return SecondSkinWriter.DrawnMaterialNames(model)
+                .Where(n => SecondSkinWriter.SkinMaterialBodyType(n) != null)
+                .Select(n => UVRemapService.LayoutOfPartMaterial(n, wearerIsMan: true))
+                .FirstOrDefault();
+        }
+        catch { return null; }
+    }
+
     internal static string? SkinBodyType(byte[] model)
     {
         try
@@ -694,6 +707,48 @@ public sealed partial class SecondSkinService
         }
         catch { return null; }
     }
+
+    /// <summary>
+    /// The source type a body layer's art is remapped from. A woman's art on a man's shell left in his own space is
+    /// carried into his layout as ART (a <see cref="UVRemapService.MensKey"/>), the shell's vertices untouched, so his
+    /// own layers on the same shell see it exactly as today; every other layer has today's type.
+    /// </summary>
+    /// <param name="menOwnSpace">The shell's space when the man's layout was read; a surface since moved out of it (an
+    /// un-mirror into a woman's asymmetric art's space) takes no men's route.</param>
+    internal static string? BodyLayerSource(OverlayDescriptor d, string? menLayout, bool menUnmirror, string? surfaceUv,
+                                            string? menOwnSpace, Func<OverlayDescriptor, MensRoute?> routeOf)
+    {
+        var legacy = d.SourceBodyType ?? InferOverlayBodyType(d);
+        if (!menUnmirror && menLayout != null && menOwnSpace != null
+            && string.Equals(surfaceUv, menOwnSpace, StringComparison.OrdinalIgnoreCase)
+            && routeOf(d) is { } route)
+            return UVRemapService.MensKey(route, legacy);
+        return legacy;
+    }
+
+    /// <summary>
+    /// The men's layout and the space it was read in, once the shell has (or has not) been un-mirrored: kept when nothing
+    /// was un-mirrored or the men's maps did it, dropped when the shell was un-mirrored the women's way (a layer of his own
+    /// is on it) — the shell has then left his layout, and no woman's layer may be carried into it.
+    /// </summary>
+    internal static (string? Layout, string? OwnSpace) MenAfterUnmirror(string? menLayout, string? spaceBefore, bool unmirror,
+                                                                        bool menUnmirror)
+        => menLayout == null || (unmirror && !menUnmirror) ? (null, null) : (menLayout, spaceBefore);
+
+    /// <summary>
+    /// The space a man's vanilla parts are un-mirrored into for a woman's asymmetric art — only when EVERY body layer of
+    /// the shell is a woman's art taking a men's route (vertices are the whole shell's, and a man's own layer must see
+    /// them as today) — or null.
+    /// </summary>
+    internal static string? MenUnmirrorInto(IReadOnlyList<OverlayDescriptor> bodyLayers, Func<OverlayDescriptor, MensRoute?> routeOf)
+    {
+        if (bodyLayers.Count == 0 || !bodyLayers.All(d => routeOf(d) != null)) return null;
+        var asym = bodyLayers.FirstOrDefault(d => d.AsymmetricArt == true);
+        return asym != null ? routeOf(asym)?.Src : null;
+    }
+
+    /// <summary>The source layout the shell reads off a layer: declared, else the one layout all its paths agree on.</summary>
+    internal static string? ShellLegacySourceOf(OverlayDescriptor d) => d.SourceBodyType ?? InferOverlayBodyType(d);
 
     private static string? InferOverlayBodyType(OverlayDescriptor d)
     {
@@ -728,6 +783,9 @@ public sealed partial class SecondSkinService
     // The filter is part of the key: an index map and a mask can be the same file.
     private readonly ConcurrentDictionary<(string Path, string? Src, string? Dst, int W, int H, ResampleFilter F), byte[]?> remapCache = new();
 
+    /// <summary>Men's routes this build found unavailable and said so; logged once per build each. Cleared with <see cref="remapCache"/>.</summary>
+    private readonly ConcurrentDictionary<MensRoute, byte> mensRoutesLogged = new();
+
     private byte[]? RemapPath(string path, string? srcType, string? dstType, int w, int h,
                               ResampleFilter filter = ResampleFilter.Auto)
     {
@@ -746,6 +804,26 @@ public sealed partial class SecondSkinService
     private byte[]? RemapPathCore(string path, byte[] png, string srcType, string dstType, int w, int h,
                                   ResampleFilter filter = ResampleFilter.Auto)
     {
+        // A woman's layer on a man's shell (ShellSetBuild.UvFor): through the bibo↔TBSE maps, or — a map that would not
+        // load — on today's path with the type it would have had.
+        if (UVRemapService.ParseMensKey(srcType) is { } men)
+        {
+            var sheetSrc = textureLoader.LoadPngAsRgba(path, 4096, 4096, filter);
+            if (sheetSrc != null && uvRemap.ConvertSheet(sheetSrc, 4096, 4096, men.Route.Src, men.Route.Dst) is { } sheet)
+                return TextureLoader.Resample(sheet.Rgba, sheet.W, sheet.H, w, h, filter);
+            // Only a map that failed says anything about the route; an overlay that would not decode does not.
+            if (sheetSrc != null)
+            {
+                uvRemap.MarkRouteMissing(men.Route);
+                if (mensRoutesLogged.TryAdd(men.Route, 0))
+                    log.Information("[Proteus] men's route {0}→{1} unavailable ({2}); drawn in the old layout this once, "
+                                  + "held until the maps load",
+                        men.Route.Src, men.Route.Dst, UVRemapService.MapFilesOf(men.Route));
+            }
+            if (men.Legacy == null || string.Equals(men.Legacy, dstType, StringComparison.OrdinalIgnoreCase)) return png;
+            srcType = men.Legacy;
+        }
+
         // Bring a 4096² intermediate back to (w, h) with the caller's filter, so index maps are never interpolated.
         byte[] ToTarget(byte[] src, int sw, int sh)
             => TextureLoader.Resample(src, sw, sh, w, h, filter);
@@ -950,10 +1028,24 @@ public sealed partial class SecondSkinService
         // The item variant of every drawn gear slot, for the material folder of a worn host not yet in activeMaterials (see VariantFolderFor).
         IReadOnlyList<Interop.EquippedSlotVariants.Slot>? equippedSlotVariants = null,
         // Body slots ("dwn", "glv", "sho") the worn gear's EQP hides: loaded, never drawn, so never cut (see EqpVisibility).
-        IReadOnlySet<string>? hiddenParts = null)
+        IReadOnlySet<string>? hiddenParts = null,
+        // Whether the character wears a man's body in TBSE's layout group, and whether the bibo↔TBSE maps were on disk
+        // when the composite began (see CompositeRun): a woman's layer is carried into his layout only when both hold.
+        bool wearerIsMan = false, bool menMapsReady = false,
+        // Whether a mod's women's art may be painted on a man ("Overlay on men"); null allows every mod.
+        Func<string, bool>? menAllowed = null)
     {
-        return new ShellSetBuild(this, charCode, gearOverlays, outputRoot, bodyType, effectsFolder, equippedPartModels, equippedAccessories, gen2Allowed, invisibleGlassesSet, metModels, enabledBodyShapes, maskShellMods, bareBodyModels, drawnRaceCode, activeMaterials, emperorRingVariant, invisibleGlassesVariant, humanPartModels, contentLayers, allEntries, pristineHumanModels, shellTexSize, equippedSlotVariants, hiddenParts).Run();
+        return new ShellSetBuild(this, charCode, gearOverlays, outputRoot, bodyType, effectsFolder, equippedPartModels, equippedAccessories, gen2Allowed, invisibleGlassesSet, metModels, enabledBodyShapes, maskShellMods, bareBodyModels, drawnRaceCode, activeMaterials, emperorRingVariant, invisibleGlassesVariant, humanPartModels, contentLayers, allEntries, pristineHumanModels, shellTexSize, equippedSlotVariants, hiddenParts)
+        {
+            WearerIsMan = wearerIsMan, MenMapsReady = menMapsReady, MenAllowed = menAllowed,
+        }.Run();
     }
+
+    /// <summary>
+    /// Whether the last <see cref="Build"/> held every one of its layers off a man (women's art he cannot have in his
+    /// layout yet, or switched off): the shell then wants no carrier at all.
+    /// </summary>
+    internal bool LastBuildHeldAll { get; private set; }
 
     private static string Rel(string root, string full) => Path.GetRelativePath(root, full).Replace('/', '\\');
 

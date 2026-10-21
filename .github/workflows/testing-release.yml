@@ -15,11 +15,13 @@ jobs:
       version: ${{ steps.version.outputs.version }}
 
     steps:
+      # No LFS: the only LFS files are the UV transfer maps, which the plugin zip never contains (players download
+      # them from their own release), and pulling ~280 MB of them per run exhausted the repo's LFS bandwidth.
       - uses: actions/checkout@v7
         with:
           submodules: recursive
           fetch-depth: 0
-          lfs: true
+          lfs: false
 
       - name: Download Dalamud
         shell: pwsh

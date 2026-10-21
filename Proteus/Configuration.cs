@@ -436,6 +436,17 @@ public class Configuration : IPluginConfiguration
     public bool OverlaysVanillaFor(string modDir) =>
         !SiblingSynthesis.TryGetValue(modDir, out var m) || m != SiblingSynthesisMode.Off;
 
+    /// <summary>Mods the user switched "Overlay on men" OFF for, keyed by mod directory. Empty by default, so every mod is
+    /// on and a config from before the switch reads as all on — no migration. OrdinalIgnoreCase, which survives
+    /// deserialization (populated in place, like <see cref="AmbientOcclusionDisabledMods"/>).</summary>
+    public HashSet<string> MenOverlayOffMods { get; set; } = new(StringComparer.OrdinalIgnoreCase);
+
+    /// <summary>
+    /// Whether a mod's women's art is painted on a man (in his own layout, through the men's body maps): on unless
+    /// switched off for this mod. Art made for men is never affected.
+    /// </summary>
+    public bool OverlaysMenFor(string modDir) => !MenOverlayOffMods.Contains(modDir);
+
     /// <summary>Per-mod cache of whether it ships body material redirects, keyed by mod directory. Invalidated by
     /// Fingerprint (size + mtime of the mod's manifests); spares the compositor a resource-tree walk.</summary>
     public Dictionary<string, BodyModCacheEntry> KnownBodyMods { get; set; } = new();

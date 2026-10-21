@@ -484,4 +484,19 @@ public class ModMoveMigrationTests
         installed["new"] = "New name";
         Assert.Equal(MoveKind.Normal, Classify("Old", "New", installed));
     }
+
+    [Fact]
+    [Trait("Plan", "AC-womens-overlays-men-5")]
+    [Trait("Plan", "EDGE-womens-overlays-men-19")]
+    public void Men_opt_out_follows_a_moved_mod() // [AC-womens-overlays-men-5] [EDGE-womens-overlays-men-19]
+    {
+        var c = new Configuration();
+        c.MenOverlayOffMods.Add("Old");
+        var set = c.MenOverlayOffMods;
+        Assert.Equal(1, ModMoveMigration.Configuration(c, "Old", "New"));
+        Assert.False(c.OverlaysMenFor("New"));
+        Assert.True(c.OverlaysMenFor("Old"));
+        Assert.Same(set, c.MenOverlayOffMods);
+        Assert.False(c.OverlaysMenFor("NEW"));   // the comparer survives
+    }
 }

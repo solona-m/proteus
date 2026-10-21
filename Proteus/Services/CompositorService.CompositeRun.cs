@@ -38,6 +38,25 @@ public partial class CompositorService
         private HashSet<string> filteredOut = null!;
         private HashSet<string>? wornCharCodes;
         private HashSet<string>? wornHeadCodes;
+        // Whether both bibo↔TBSE maps were on disk when this run began, and whether the character wears a man's body in the
+        // layout TBSE shares (see UVRemapService.WearerIsMan). A woman's art takes a men's route only when both hold.
+        private bool menMapsReady;
+        private bool wearerIsMan;
+        // Men's routes this run found unavailable and said so; logged once per run each.
+        private HashSet<MensRoute> mensRoutesLogged = null!;
+        // The Glamourer-displayed race is not yet in the snapshot this run: women's art is carried by the post-redraw run.
+        private bool raceUnsettled;
+        // The shell build held every one of its layers off this man (see SecondSkinService.LastBuildHeldAll).
+        internal bool shellAllHeld;
+        // "Overlay on men" switched off, snapshotted under the config gate for this run (see OverlaysMenFor).
+        private HashSet<string> menOffMods = null!;
+        // What CarryWomensArtToMen decided: which mods wait for the maps, which gear layers the shell will hold.
+        private WomensArtOnMen.SkinPlan womensPlan = WomensArtOnMen.SkinPlan.Empty;
+        // Mods whose women's art is held off this man (or switched off): they cast no AO on his materials.
+        internal IReadOnlySet<string> menAoExcluded = new HashSet<string>();
+
+        /// <summary>Whether this run paints mod <paramref name="modDir"/>'s women's art on a man ("Overlay on men").</summary>
+        internal bool OverlaysMenFor(string modDir) => !menOffMods.Contains(modDir);
         private HashSet<string> toeCapMods = null!;
         private bool wearingMirroredBody;
         private HashSet<string> unmirrorMods = null!;
@@ -112,6 +131,7 @@ public partial class CompositorService
                 RouteOverlays();
                 FilterLiveMaterials();
                 if (!SynthesiseSiblings()) return;
+                CarryWomensArtToMen();
                 PrepareOutputs();
                 AddBodyMaterials();
                 ResolveMasks();
@@ -275,6 +295,13 @@ public partial class CompositorService
             // them; null until the filter runs, and empty when that half is unknown ("don't know", not "no match").
             wornCharCodes = null;
             wornHeadCodes = null;
+            menMapsReady = compositor.uvRemap.MenMapsPresent();
+            wearerIsMan = false;
+            mensRoutesLogged = [];
+            raceUnsettled = false;
+            shellAllHeld = false;
+            lock (compositor.config.Gate)
+                menOffMods = new HashSet<string>(compositor.config.MenOverlayOffMods, StringComparer.OrdinalIgnoreCase);
 
             // Is a toe cap selected anywhere in the look? A cap belongs to the foot, not the mod, and must be known before
             // promotion because a cap is geometry and needs a shell.
@@ -522,6 +549,7 @@ public partial class CompositorService
                     // Glamourer may display a different race than the draw object uses; if so, its char code is the sole effective one.
                     string? glamCode = compositor._glamourerCharCode;
                     bool glamOverride = glamCode != null && !activeCharCodes.Contains(glamCode);
+                    raceUnsettled = glamOverride;
                     var effectiveCharCodes = glamOverride
                         ? new HashSet<string>(StringComparer.OrdinalIgnoreCase) { glamCode! }
                         : activeCharCodes;
@@ -543,6 +571,7 @@ public partial class CompositorService
                     // set, as Glamourer displays it) and the head's, which are judged separately.
                     wornCharCodes = effectiveCharCodes;
                     wornHeadCodes = wornHead;
+                    wearerIsMan = UVRemapService.WearerIsMan(glamCode, effectiveCharCodes, wornHead);
 
                     // Noted before the removal, which destroys the evidence.
                     void NoteDropped(string key)
@@ -672,6 +701,28 @@ public partial class CompositorService
             return true;
         }
 
+        /// <summary>
+        /// Women's art on a man (see <see cref="WomensArtOnMen"/>): carried onto his live men's-layout body materials when the
+        /// route will carry it into his layout, held off him otherwise. After sibling synthesis, so neither copies the other's
+        /// pairs; before the outputs, AO materials, diagnosis and fingerprint, so all of them see the result.
+        /// </summary>
+        private void CarryWomensArtToMen()
+        {
+            womensPlan = WomensArtOnMen.Plan(byMaterial, allOverlays, gearOverlays, activeMtrl, wearerIsMan, !raceUnsettled,
+                menMapsReady, compositor.config.OverlaysVanillaFor, OverlaysMenFor, compositor.uvRemap.MensRouteAvailable,
+                SecondSkinService.ShellLegacySourceOf);
+            if (womensPlan.MapsWanted) compositor.uvRemap.RequestMenMaps();
+            WomensArtOnMen.Apply(byMaterial, womensPlan);
+            menAoExcluded = womensPlan.HeldMods;
+
+            var summary = WomensArtOnMen.Summary(womensPlan);
+            if (!string.Equals(summary, compositor._lastWomensArtSummary, StringComparison.Ordinal))
+            {
+                compositor._lastWomensArtSummary = summary;
+                if (summary != null) compositor.log.Information(summary);
+            }
+        }
+
         private void PrepareOutputs()
         {
             // Skin materials rewritten to stop naming a shared texture (IsSharedTexturePath); the directory is created on first use.
@@ -723,6 +774,8 @@ public partial class CompositorService
                 var casters = entries
                     .Where(e => (gearOverlays.Any(g => string.Equals(g.Entry.ModDirectory, e.ModDirectory, StringComparison.OrdinalIgnoreCase))
                                  || maskPathsByMod.ContainsKey(e.ModDirectory))
+                                // Held off this man (or switched off for men): it casts nothing on him.
+                                && !menAoExcluded.Contains(e.ModDirectory)
                                 && compositor.config.AmbientOcclusionEnabledFor(e.ModDirectory, e.Metadata?.AmbientOcclusion))
                     .Select(e => (
                         Mod: e.ModDirectory,
@@ -796,7 +849,7 @@ public partial class CompositorService
             // First point at which "contributed nothing" is settled and true (after the sibling pass). Placement is load-bearing.
             compositor.ExplainInertMods(entries, byMaterial, gearOverlays, contentLayers, maskShellMods,
                              maskDescByMod, resolution, filteredOut, wornCharCodes, wornHeadCodes,
-                             activeBodyTypes, allOverlays);
+                             activeBodyTypes, allOverlays, womensPlan.AwaitingMods, womensPlan.HeldGear);
         }
 
         private void SortStacks()
@@ -1183,7 +1236,8 @@ public partial class CompositorService
             // Reconcile the injected host items after the redirect mod is live, so the equip's redraw lands on the shell. Each
             // reconcile is told whether the shell went to its host. "Wanted" includes content packs: it separates a transient
             // failed build (keep the carrier) from nothing wanting a host (remove it).
-            bool hostWanted = gearOverlays.Count > 0 || contentLayers.Count > 0;
+            // A shell whose every layer was held off a man (women's art without the maps, or switched off) wants nothing.
+            bool hostWanted = (gearOverlays.Count > 0 && !shellAllHeld) || contentLayers.Count > 0;
             compositor.RememberHostDecision(hostWanted, shellBuilt, shellOnFacewear,
                                  shellBuilt ? shellCarrierSlots : []);
             compositor.ReconcileInvisibleGlasses(hostWanted, shellBuilt, shellOnFacewear, glassesPreHosted);

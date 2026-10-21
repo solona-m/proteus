@@ -543,6 +543,14 @@
     "message": "\n全局设置——它不属于你正在编辑的绑定。",
     "description": ""
   },
+  "Colors.Bodies.Men.Label": {
+    "message": "叠加到男性身上",
+    "description": "Checkbox label in the colour-table editor window's Advanced section, under \"Overlay gen2/vanilla\". Ticked = this mod's women's art is also painted on men."
+  },
+  "Colors.Bodies.Men.Tip": {
+    "message": "将此模组的女性图案也绘制到男性身上（TBSE 或男性原版身体），\n通过男性身体映射图转换到他自己的布局。\n为男性制作的图案永远不会被改动。\n适用于整个模组，而不仅是此选项。",
+    "description": "Tooltip for the checkbox above. \"TBSE\" is a body-mod name - never translated. Contains deliberate line breaks - keep the same number, moving them where your language needs."
+  },
   "Colors.Bodies.Vanilla.Label": {
     "message": "叠加到 gen2/原版",
     "description": "Checkbox label in the colour-table editor window's Advanced section. \"gen2\" is a body-mod name - never translated. Ticked = this mod is also painted onto vanilla skin."
@@ -2331,6 +2339,10 @@
     "message": "它的遮罩被设置为按装备渲染，而衣物需要用遮罩来构建——但在 Penumbra 中它的“{0}”组里没有勾选任何内容。",
     "description": ""
   },
+  "Mods.Inert.AwaitingMenMaps": {
+    "message": "此模组的图案是为女性身体制作的。男性身体映射图下载完成后，就会以你自己的布局绘制到你身上（如果下载失败，请从 UV 映射图提示处重试）。",
+    "description": "Why an enabled mod paints nothing yet: it is women's art on a man, waiting for the men's body maps to download. \"UV maps\" names the notice in the plugin's status window."
+  },
   "Mods.Inert.NothingReached": {
     "message": "已勾选的选项都已解析，但没有一个抵达此角色已加载的表面。",
     "description": ""
@@ -3656,7 +3668,7 @@
     "description": ""
   },
   "Parts.Retarget.NoBodiesForSex.Fmt": {
-    "message": "{0} 没有 {1} 体型；转换无法改变性别。",
+    "message": "{0}没有{1}身体。",
     "description": ""
   },
   "Parts.Retarget.Male": {
@@ -4359,12 +4371,48 @@
     "message": "无法回读新模型",
     "description": "Why a model for the wearer's race could not be made; the {1} of Parts.Retarget.BakeFailed.Fmt. Lower-case, no full stop."
   },
+  "Parts.Retarget.Race.OtherSex.Fmt": {
+    "message": "{0}（从这个{1}模型调整）",
+    "description": "A \"Refit for\" entry. {0} is a race of the other sex such as \"Midlander M\"; {1} the race of the model open."
+  },
+  "Parts.Retarget.Race.CrossSexNote.Fmt": {
+    "message": "跨性别调整：制作时所用的{0}身体会被弯成{1}的形状，再通过身体映射图与新身体逐点对应。分享前请在游戏中检查。",
+    "description": "Warning under a refit for the other sex. {0} is the race of the model open, {1} the race picked. \"body maps\" are the bibo↔TBSE texture maps."
+  },
+  "Parts.Retarget.Race.CrossSexWears.Fmt": {
+    "message": "保存的调整将由{0}穿着，{1}在没有自己的该物品模型时也会穿着；{2}保留这个模型。",
+    "description": "{0} is the race picked; {1} a comma-separated list of races; {2} the race of the model open."
+  },
+  "Parts.Retarget.Race.CrossSexQuality.Fmt": {
+    "message": "翻转面 {0} 个；身体对应 {1}。",
+    "description": "{0} is a count of folded (turned-over) faces; {1} a percentage such as \"97%\"."
+  },
+  "Parts.Retarget.Race.CrossSexHint.Fmt": {
+    "message": "要为{0}制作版本，请在“转换给种族”中选择它。",
+    "description": "{0} is a race such as \"Midlander M\". “Refit for” is the dropdown's label (Parts.Retarget.Race.Label)."
+  },
+  "Parts.Retarget.Refuse.CrossSexMadeFor.Fmt": {
+    "message": "跨性别时，这件装备制作所用的身体必须是{0}的身体。请在“原适配体型”中选择它所针对的身体模组。",
+    "description": "{0} is a race such as \"Midlander F\". “Made for” is the body dropdown the garment was made on."
+  },
+  "Parts.Retarget.Refuse.CrossSexQuality.Fmt": {
+    "message": "这次跨性别调整有 {0} 个翻转面，身体对应 {1}。Proteus 只保存翻转面不超过 {2} 个且对应至少 {3} 的调整。",
+    "description": "{0} folded faces and {1} the share matched, as found; {2} and {3} the limits. Percentages arrive formatted."
+  },
+  "Parts.Retarget.Refuse.CrossSexLayout.Fmt": {
+    "message": "跨性别时，Proteus 只能把 Bibo+ 或游戏布局的女性身体与 TBSE 或游戏布局的男性身体对应。{0} 模型使用 {1} 和 {2}。",
+    "description": "{0} is a slot such as \"_top\"; {1} and {2} texture layout names (bibo, gen3, tbse, male vanilla), never translated. \"Bibo+\" and \"TBSE\" are body-mod names."
+  },
+  "Parts.Retarget.Refuse.MenMapsMissing": {
+    "message": "跨性别调整所需的身体映射图还没有到。Proteus 正在下载；下载完成后请重新调整。",
+    "description": "Said when the bibo↔TBSE texture maps have not been downloaded yet."
+  },
   "Parts.Retarget.Race.Label": {
     "message": "转换给种族",
     "description": "Heads the dropdown that picks which race's model a refit is made and saved as."
   },
   "Parts.Retarget.Race.Tip": {
-    "message": "转换给哪个种族。选择与服装同性别的其他种族时，会按游戏的弯曲方式从此模型生成专用模型，转换到该种族的体型，并保存到该种族读取的位置。此模型保持不变。",
+    "message": "调整针对哪个种族。其他种族会得到自己的模型：按游戏弯曲的方式由这个模型制作，调整到该种族的身体上，并保存在该种族加载的位置。中原之民男性的上身或腿部装备，以及女性的腿部装备，也可以为另一性别调整。这个模型保持不变。",
     "description": "Tooltip of Parts.Retarget.Race.Label."
   },
   "Parts.Retarget.Race.ThisModel.Fmt": {

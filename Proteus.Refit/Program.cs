@@ -57,6 +57,15 @@ internal static class Program
         Proteus.Refit --measure --garment <model.mdl> --bodies <body.mdl>[;<body.mdl>...]
         Proteus.Refit --measure --garment <model.mdl>     (cloth points within 2 mm rigged apart)
         Proteus.Refit --measure --skin-out --garment <model.mdl>     (the garment's skin standing outside its cloth)
+        Proteus.Refit --bake-uvmaps --game <FFXIV game\sqpack> --bibo-root <Bibo+ folder> --tbse-root <TBSE folder>
+                      --out-dir <dir> [--report-only]
+                      (the bibo<->TBSE transfer maps; a JSON report on stdout, exit 1 when the quality gate fails)
+        Proteus.Refit --garment <model.mdl> --race 0101|0201 --for-race 0201|0101
+                      --from-root <body mod it was made on> --body-root <other sex's body mod>
+                      --from <rel> --to <rel>=<label>[,...] --out-dir <dir>
+                      --game <FFXIV game\sqpack> --uvmaps <Proteus plugin dir> [--skeleton <base .sklb>]
+                      [--slot _top|_dwn] [--set <id>] [--no-push] [--piercings]
+                      (refit for the other sex: men's chest and legs for women, women's legs for men)
         """;
 
     private static int Main(string[] args)
@@ -67,6 +76,9 @@ internal static class Program
         try
         {
             var opts = Parse(args);
+            if (opts.ContainsKey("bake-uvmaps")) return BakeUvMapsCommand.Run(opts, Required);
+            if (opts.ContainsKey("for-race"))
+                return CrossSexCommand.Run(opts, Required, message => throw new UsageException(message), NullLog());
             if (opts.ContainsKey("list")) return List(opts);
             if (opts.ContainsKey("inspect")) return Inspect(opts);
             if (opts.ContainsKey("detect") && opts.ContainsKey("mods-root")) return DetectAcross(opts);
@@ -1288,7 +1300,7 @@ internal static class Program
             if (!args[i].StartsWith("--", StringComparison.Ordinal))
                 throw new UsageException($"Unexpected argument \"{args[i]}\".");
             string key = args[i][2..];
-            opts[key] = key is "list" or "detect" or "finish" or "inspect" or "save" or "measure" or "no-push" or "whole" or "piercings" or "keep-default" or "shares" or "time" or "bands" or "skin-map" or "skin-side" or "off" or "islands" or "face-poke" or "skin-out" ? "" : i + 1 < args.Length ? args[++i] : throw new UsageException($"--{key} needs a value.");
+            opts[key] = key is "list" or "detect" or "finish" or "inspect" or "save" or "measure" or "no-push" or "whole" or "piercings" or "keep-default" or "shares" or "time" or "bands" or "skin-map" or "skin-side" or "off" or "islands" or "face-poke" or "skin-out" or "bake-uvmaps" or "report-only" ? "" : i + 1 < args.Length ? args[++i] : throw new UsageException($"--{key} needs a value.");
         }
         return opts;
     }
@@ -1446,7 +1458,7 @@ internal static class Program
         };
     }
 
-    private sealed class UsageException(string message) : Exception(message);
+    internal sealed class UsageException(string message) : Exception(message);
 }
 
 /// <summary>The body of <c>Program.NullLog</c>. Public and unsealed, as <see cref="DispatchProxy"/> requires.</summary>
