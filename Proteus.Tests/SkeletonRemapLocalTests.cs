@@ -94,6 +94,7 @@ public class SkeletonRemapLocalTests(ITestOutputHelper o)
         }
 
         // A stand-in for a breast or thigh bone keeps the part of the body its first standard ancestor in YAS is in.
+        int checkedStandIns = 0;
         foreach (string bone in yas.Names.Where(b => !b.StartsWith("j_", StringComparison.Ordinal) && !b.StartsWith("n_", StringComparison.Ordinal)))
         {
             if (SkeletonRemap.StandIn(bone) is not { } stand) continue;
@@ -102,6 +103,7 @@ public class SkeletonRemapLocalTests(ITestOutputHelper o)
                 standard = yasParents.GetValueOrDefault(standard);
             o.WriteLine($"{bone}: stand-in {stand}, first standard ancestor {standard}");
             if (standard == null) continue;
+            checkedStandIns++;
             // The stand-in is in the part of the body YAS hangs the bone in, or the part beside it; a breast or thigh
             // bone's in that very part.
             var want = UvBakeBones.RegionOf(standard);
@@ -112,5 +114,6 @@ public class SkeletonRemapLocalTests(ITestOutputHelper o)
                 Assert.True(UvBakeBones.Adjacent(want, got),
                             $"{bone}'s stand-in {stand} ({got}) is far from where YAS hangs it, under {standard} ({want})");
         }
+        Assert.True(checkedStandIns >= 20, $"only {checkedStandIns} stand-ins checked: the YAS skeleton read too few parents");
     }
 }

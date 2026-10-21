@@ -22,7 +22,8 @@ internal static class CrossSexCommand
     {
         string garmentPath = required(opts, "garment");
         string slot = opts.TryGetValue("slot", out var s) ? s : SlotOfFile(garmentPath) ?? "_top";
-        if (CrossSexRefit.ValidateCli(opts.GetValueOrDefault("race"), opts.GetValueOrDefault("for-race"), slot, opts.Keys)
+        if (CrossSexRefit.ValidateCli(opts.GetValueOrDefault("race"), opts.GetValueOrDefault("for-race"), slot, opts.Keys,
+                                       opts.GetValueOrDefault("from-skeleton"))
             is { } error)
         {
             usageError(error);
@@ -37,12 +38,6 @@ internal static class CrossSexCommand
         string? skeleton = opts.GetValueOrDefault("skeleton");
         // The skeleton the garment was rigged to, for where a bone the picked race lacks hangs; the game's by default.
         string? fromSkeleton = opts.GetValueOrDefault("from-skeleton");
-        // A path that is not there would be passed over for the game's skeleton, and the run would then ask for it.
-        if (fromSkeleton != null && !File.Exists(fromSkeleton))
-        {
-            usageError($"--from-skeleton names no file: \"{fromSkeleton}\"");
-            return 2;
-        }
         var wearer = OtherRaceWearer.Gather(to, gamePath, Game,
             path => skeleton != null && path == OtherRaceWearer.BaseSkeletonPath(to) ? Path.GetFullPath(skeleton)
                   : fromSkeleton != null && path == OtherRaceWearer.BaseSkeletonPath(drawn) ? Path.GetFullPath(fromSkeleton)

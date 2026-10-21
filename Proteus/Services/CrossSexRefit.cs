@@ -123,8 +123,14 @@ internal static class CrossSexRefit
     /// The usage error for a CLI <c>--for-race</c> run, or null when it may run. <paramref name="given"/> holds every
     /// option given on the command line.
     /// </summary>
-    internal static string? ValidateCli(string? race, string? forRace, string slot, IReadOnlyCollection<string> given)
+    /// <param name="fromSkeleton">The <c>--from-skeleton</c> file, when given: one that is not there would be passed over
+    /// for the game's skeleton, and the run would then ask for it.</param>
+    /// <param name="exists">Whether a file exists (the disk's, by default).</param>
+    internal static string? ValidateCli(string? race, string? forRace, string slot, IReadOnlyCollection<string> given,
+                                        string? fromSkeleton = null, Func<string, bool>? exists = null)
     {
+        if (fromSkeleton != null && !(exists ?? System.IO.File.Exists)(fromSkeleton))
+            return $"--from-skeleton names no file: \"{fromSkeleton}\"";
         if (!ushort.TryParse(race, out ushort from) || !ushort.TryParse(forRace, out ushort to)
             || !(from is Men or Women && to is Men or Women) || !CrossesSex(from, to))
             return "--for-race crosses the sexes between 0101 and 0201 only";

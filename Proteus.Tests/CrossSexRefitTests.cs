@@ -213,6 +213,11 @@ public class CrossSexRefitTests
                      CrossSexRefit.ValidateCli("0201", "0101", "_glv", ok));
         Assert.Equal("--for-race refits chest (_top) and legs (_dwn) garments only",
                      CrossSexRefit.ValidateCli("0101", "0201", "_sho", ok));
+        // --from-skeleton must name a file there is (the review's decision): checked with the other usage errors.
+        Assert.Equal("--from-skeleton names no file: \"yas.sklb\"",
+                     CrossSexRefit.ValidateCli("0201", "0101", "_top", [.. ok, "from-skeleton"], "yas.sklb", _ => false));
+        Assert.Null(CrossSexRefit.ValidateCli("0201", "0101", "_top", [.. ok, "from-skeleton"], "yas.sklb", _ => true));
+        Assert.Contains("opts.GetValueOrDefault(\"from-skeleton\"))", Source("Proteus.Refit/CrossSexCommand.cs"));
         var route = OtherRaceRefit.Resolve(RacialModelBake.Route.None, 101, 201, Offered(WomansTop));
         Assert.True(route.ByAlias && route.Lowered);
         Assert.Equal("chara/equipment/e6010/model/c0101e6010_top.mdl", route.SavePath(WomansTop));

@@ -563,6 +563,25 @@ public class SkinlessTargetTests
         throw new System.IO.FileNotFoundException(file);
     }
 
+    /// <summary>
+    /// What does still refuse the pair: a point the relax kept off the body more than 10 mm from it
+    /// (<see cref="UvAtlasCorrespondence.CarriedOnlyReach"/>) — a distance, not a fold. Inward-facing boxers far enough out
+    /// to excuse the skin under them leave every point kept off them that far.
+    /// </summary>
+    [Fact]
+    [Trait("Plan", "AC-cross-sex-tops-yas-7")]
+    [Trait("Plan", "EDGE-cross-sex-tops-yas-21")]
+    public void A_point_kept_far_off_the_body_still_refuses() // [AC-cross-sex-tops-yas-7] [EDGE-cross-sex-tops-yas-21]
+    {
+        var (source, sourceUv) = Sheet(Skin);
+        var (target, targetUv) = Target(Band, Boxers, 0.025f, flipBoxers: true);
+        Assert.False(Build(source, sourceUv, target, targetUv, out _, out string refusal, out var m),
+                     $"built: excused {m.Excused}, unprojected {m.Unprojected}, set aside {m.FoldedSetAside}");
+        Assert.Contains("finds skin to land on", refusal);
+        Assert.True(m.Excused > 0, "nothing was excused, so the reach was never asked");
+        Assert.True(m.Unprojected > 0, "refused before the projection, so not by the reach");
+    }
+
     /// <summary>The set-aside points are found before any is cleared: the same pair, its triangles listed backwards,
     /// sets the same points aside.</summary>
     [Fact]
