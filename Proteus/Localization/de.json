@@ -4163,6 +4163,10 @@
     "message": "Deine Änderung konnte nicht gespeichert werden, daher wurde nichts kopiert: {0}",
     "description": ""
   },
+  "Parts.Vanilla.CopyRegistering": {
+    "message": "Deine Bearbeitung wurde gerade in eine neue Mod kopiert, und Penumbra richtet sie noch ein. Versuche es gleich noch einmal.",
+    "description": ""
+  },
   "Parts.Vanilla.NotRefittable": {
     "message": "„Körpergröße“ kann dieses Teil nicht anpassen. Wähle ein anderes Werkzeug, um es zu bearbeiten.",
     "description": ""

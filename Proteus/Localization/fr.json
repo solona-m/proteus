@@ -4163,6 +4163,10 @@
     "message": "Votre modification n'a pas pu être enregistrée, rien n'a donc été copié : {0}",
     "description": ""
   },
+  "Parts.Vanilla.CopyRegistering": {
+    "message": "Votre modification vient d'être copiée dans un nouveau mod, et Penumbra est encore en train de le préparer. Réessayez dans un instant.",
+    "description": ""
+  },
   "Parts.Vanilla.NotRefittable": {
     "message": "« Taille du corps » ne peut pas réajuster cette pièce. Choisissez un autre outil pour la modifier.",
     "description": ""

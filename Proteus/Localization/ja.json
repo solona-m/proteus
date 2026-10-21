@@ -4163,6 +4163,10 @@
     "message": "変更を保存できなかったため、何もコピーされませんでした: {0}",
     "description": ""
   },
+  "Parts.Vanilla.CopyRegistering": {
+    "message": "編集内容を新しいMODにコピーしたところで、Penumbraがまだ準備中です。少し待ってからもう一度お試しください。",
+    "description": ""
+  },
   "Parts.Vanilla.NotRefittable": {
     "message": "「体型サイズ」ではこのパーツを合わせられません。編集するには別のツールを選んでください。",
     "description": ""

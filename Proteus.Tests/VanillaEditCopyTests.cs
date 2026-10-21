@@ -176,6 +176,23 @@ public class VanillaEditCopyTests : IDisposable
     }
 
     [Fact]
+    [Trait("Plan", "EDGE-vanilla-copy-on-edit-8")]
+    [Trait("Plan", "EDGE-vanilla-copy-on-edit-10")]
+    public void A_refused_first_write_in_an_existing_mod_leaves_it_as_it_was()
+    {
+        var root = ExistingMod(Trousers, [7, 7]);
+        var before = PenumbraModMeta.TryReadDefaultData(root)!.Value.Files;
+
+        var outcome = Make(new FakeEnsure(mods), (_, _) => new(false, "Too many switches."));
+
+        Assert.Equal(VanillaEditCopy.Status.WriteRefused, outcome.Status);
+        Assert.Equal("Too many switches.", outcome.Message);
+        Assert.False(File.Exists(FileIn(root, Coat)));
+        Assert.Equal(before, PenumbraModMeta.TryReadDefaultData(root)!.Value.Files);
+        Assert.Equal([7, 7], File.ReadAllBytes(FileIn(root, Trousers)));
+    }
+
+    [Fact]
     [Trait("Plan", "EDGE-vanilla-copy-on-edit-7")]
     public void A_mod_that_cannot_be_made_writes_nothing_and_never_calls_the_write()
     {

@@ -83,11 +83,25 @@ internal static class VanillaEditCopy
             return new(Status.EditedCopyThere, made.Root, made.Dir, false, "");
 
         // Untouched (still the game's bytes) or not there at all: published at the game path, then the edit over it.
+        string file = Path.Combine(made.Root, rel.Replace('/', Path.DirectorySeparatorChar));
+        bool hadFile = File.Exists(file);
+        bool hadRedirect = PenumbraModMeta.TryReadDefaultData(made.Root) is { } before
+                        && before.Files.ContainsKey(rel);
         RefitModService.AddGameModel(made.Root, gamePath, gameBytes);
         var w = firstWrite(made.Root, rel);
-        return w.Ok
-            ? new(Status.Copied, made.Root, made.Dir, false, "")
-            : new(Status.WriteRefused, made.Root, made.Dir, false, w.Message);
+        if (w.Ok) return new(Status.Copied, made.Root, made.Dir, false, "");
+
+        // Refused: the player's mod is put back as it was, without the piece this call added to it.
+        TakeBack(made.Root, rel, file, hadFile, hadRedirect);
+        return new(Status.WriteRefused, "", "", false, w.Message);
+    }
+
+    /// <summary>Remove what <see cref="RefitModService.AddGameModel"/> added to an existing mod, and only that.</summary>
+    private static void TakeBack(string root, string rel, string file, bool hadFile, bool hadRedirect)
+    {
+        if (!hadRedirect && PenumbraModMeta.TryReadDefaultData(root) is { } data && data.Files.Remove(rel))
+            PenumbraModMeta.WriteRedirects(root, Path.GetFileName(root), data.Files, manipulations: data.Manipulations);
+        if (!hadFile && File.Exists(file)) File.Delete(file);
     }
 
     /// <summary>

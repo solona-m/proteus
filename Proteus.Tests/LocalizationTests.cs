@@ -949,7 +949,7 @@ public sealed class LocalizationTests
                  {
                      "Parts.Vanilla.Worn.Tip", "Parts.Vanilla.CopyNote.Fmt", "Parts.Vanilla.Copied.Fmt",
                      "Parts.Vanilla.EditedCopyThere.Fmt", "Parts.Vanilla.ModSwitchedOff.Fmt",
-                     "Parts.Vanilla.CopyRefused.Fmt", "Parts.Vanilla.NotRefittable",
+                     "Parts.Vanilla.CopyRefused.Fmt", "Parts.Vanilla.NotRefittable", "Parts.Vanilla.CopyRegistering",
                  })
         {
             Assert.True(tr.ContainsKey(key), $"{lang} lacks {key}");

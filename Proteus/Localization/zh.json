@@ -4163,6 +4163,10 @@
     "message": "无法保存你的修改，因此未复制任何内容：{0}",
     "description": ""
   },
+  "Parts.Vanilla.CopyRegistering": {
+    "message": "你的编辑刚被复制到新模组中，Penumbra 仍在设置它。请稍后再试一次。",
+    "description": ""
+  },
   "Parts.Vanilla.NotRefittable": {
     "message": "“体型尺寸”无法调整此部件。请选择其他工具来编辑它。",
     "description": ""

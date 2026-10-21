@@ -134,6 +134,31 @@ public class PartsPanelVanillaCopyTests
     }
 
     [Fact]
+    [Trait("Plan", "EDGE-vanilla-copy-on-edit-20")]
+    [Trait("Plan", "EDGE-vanilla-copy-on-edit-13")]
+    public void Switches_wait_while_the_flush_has_just_made_the_copy()
+    {
+        // The flush may have made a copy Penumbra is still registering: the switches are not written into it yet.
+        var commit = Method(Panel, "private void Commit()");
+        int flush = commit.IndexOf("FlushPending()", System.StringComparison.Ordinal);
+        int wait = commit.IndexOf("copyAwaitingEnable != null", System.StringComparison.Ordinal);
+        int write = commit.IndexOf("MeshToggleService.Write(", System.StringComparison.Ordinal);
+        Assert.True(flush >= 0 && flush < wait && wait < write);
+        Assert.Contains("writeError = ps.VanillaCopyRegistering", commit);
+    }
+
+    [Fact]
+    [Trait("Plan", "AC-vanilla-copy-on-edit-10")]
+    public void A_brush_copy_says_the_mod_it_went_into()
+    {
+        var save = Method(Copy, "private void SaveVanillaBrush(");
+        int keep = save.IndexOf("string copied = status", System.StringComparison.Ordinal);
+        int after = save.IndexOf("AfterBrushWritten(", System.StringComparison.Ordinal);
+        int join = save.IndexOf("status = copied + ", System.StringComparison.Ordinal);
+        Assert.True(keep >= 0 && keep < after && after < join);
+    }
+
+    [Fact]
     [Trait("Plan", "AC-vanilla-copy-on-edit-7")]
     [Trait("Plan", "EDGE-vanilla-copy-on-edit-1")]
     [Trait("Plan", "EDGE-vanilla-copy-on-edit-2")]
@@ -232,7 +257,7 @@ public class PartsPanelVanillaCopyTests
         Assert.Contains("brushChangedAt = Environment.TickCount64", Method(Copy, "private void SaveVanillaBrush("));
         var commit = Method(Copy, "private void CommitVanilla(");
         Assert.True(commit.IndexOf("writeError = status", System.StringComparison.Ordinal)
-                    < commit.IndexOf("pending.Clear()", System.StringComparison.Ordinal));
+                    < commit.LastIndexOf("pending.Clear()", System.StringComparison.Ordinal));
     }
 
     [Fact]

@@ -2617,6 +2617,10 @@ public sealed class PartsStrings
     public readonly string VanillaCopyRefusedFmt = Loc.Localize("Parts.Vanilla.CopyRefused.Fmt",
         "Your change could not be saved, so nothing was copied: {0}");
 
+    /// <summary>Under the Write button, when the brush edit saved just before has only now copied the piece into its mod.</summary>
+    public readonly string VanillaCopyRegistering = Loc.Localize("Parts.Vanilla.CopyRegistering",
+        "Your edit was just copied into a new mod, and Penumbra is still setting it up. Try again in a moment.");
+
     /// <summary>Under Body size, for a piece of vanilla gear it has no body slot for (a hat, a ring).</summary>
     public readonly string VanillaNotRefittable = Loc.Localize("Parts.Vanilla.NotRefittable",
         "Body size can't refit this piece. Choose another tool to edit it.");

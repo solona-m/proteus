@@ -3912,6 +3912,14 @@ public sealed partial class PartsPanel
         var ps = Strings.Parts;
         if (parts == null || modelIndex < 0) return;
 
+        // The flush has just copied the game's piece into a mod Penumbra is still registering, and compacting: the
+        // switches wait for it rather than write into files it may be holding. The staged list stays.
+        if (copyAwaitingEnable != null && string.Equals(copyAwaitingEnable, modDir, StringComparison.OrdinalIgnoreCase))
+        {
+            writeError = ps.VanillaCopyRegistering;
+            return;
+        }
+
         var byLabel = parts.Parts.ToDictionary(p => p.Label, StringComparer.Ordinal);
         var plans = pending
             .Select(t => new MeshToggleService.Plan(

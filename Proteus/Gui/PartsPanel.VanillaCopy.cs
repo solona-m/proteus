@@ -62,13 +62,17 @@ public sealed partial class PartsPanel
             {
                 result = MeshVolumeService.Apply(root, rel, gameBytes, solve, writeUntouched: true);
                 return new VanillaEditCopy.FirstWrite(result.Ok, result.Message);
-            }) is not { } copy)
+            }, out bool written) is not { } copy)
         {
+            if (written) { brushChangedAt = -1; return; }   // saved, though the panel could not carry on in the copy
             // Still waiting: retried on the debounce, as a failed save is — deleting a refused mod lets it through.
             brushChangedAt = Environment.TickCount64;
             return;
         }
+        string copied = status ?? "";
         AfterBrushWritten(copy.Root, models[modelIndex].File, result!, refreshGame, reload: !copy.Made);
+        // The save's own line replaced it; the mod the change went into is said too, as Write does.
+        status = copied + "\n" + status;
     }
 
     /// <summary>Switches written on the game's own gear, its first change: copied, with the switches, into its mod.</summary>
@@ -97,9 +101,16 @@ public sealed partial class PartsPanel
                 record = MeshToggleService.ReadRecord(root);
             }
             return new VanillaEditCopy.FirstWrite(result.Ok, result.Message);
-        });
+        }, out bool saved);
         if (copy is not { } c)
         {
+            if (saved)
+            {
+                pending.Clear();
+                writeError = null;
+                ticked.Clear();
+                return;
+            }
             // Shown under the Write button; the pending list stays, so the user can fix it and press again.
             writeError = status;
             return;
@@ -121,8 +132,11 @@ public sealed partial class PartsPanel
     /// Make or find the piece's "— Proteus edit" mod with <paramref name="write"/> as its first change, and carry the
     /// open edit over to it. Null, with the status saying why, when nothing was written.
     /// </summary>
-    private (string Root, bool Made)? CopyVanillaForEdit(VanillaPick piece, Func<string, string, VanillaEditCopy.FirstWrite> write)
+    /// <param name="written">Set when the change was saved although null is returned: the mod had no row to carry on in.</param>
+    private (string Root, bool Made)? CopyVanillaForEdit(VanillaPick piece, Func<string, string, VanillaEditCopy.FirstWrite> write,
+                                                         out bool written)
     {
+        written = false;
         var ps = Strings.Parts;
         if (brushBase == null) return null;
         string modName = VanillaEditCopy.ModName(piece.ItemName);
@@ -163,7 +177,20 @@ public sealed partial class PartsPanel
             return null;
         }
 
-        if (!AdoptCopy(piece, outcome)) return null;
+        if (!AdoptCopy(piece, outcome))
+        {
+            // Written, but the mod lists no row for the panel to carry on in: the change is saved and said to be, the
+            // mod reloaded so it shows, and nothing is retried (a retry would only find its own edit and refuse).
+            written = true;
+            status = string.Format(ps.VanillaCopiedFmt, piece.Label, modName);
+            statusIsError = false;
+            if (!outcome.Made)
+            {
+                compositor.ExpectOwnModEdit(outcome.Dir);
+                penumbra.ReloadModDirectory(outcome.Dir);
+            }
+            return null;
+        }
         if (outcome.Made)
         {
             copyAwaitingEnable = outcome.Dir;

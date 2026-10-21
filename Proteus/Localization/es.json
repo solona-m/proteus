@@ -4163,6 +4163,10 @@
     "message": "No se ha podido guardar tu cambio, así que no se ha copiado nada: {0}",
     "description": ""
   },
+  "Parts.Vanilla.CopyRegistering": {
+    "message": "Tu edición se acaba de copiar a un mod nuevo y Penumbra aún lo está preparando. Vuelve a intentarlo en un momento.",
+    "description": ""
+  },
   "Parts.Vanilla.NotRefittable": {
     "message": "«Talla del cuerpo» no puede reajustar esta pieza. Elige otra herramienta para editarla.",
     "description": ""
