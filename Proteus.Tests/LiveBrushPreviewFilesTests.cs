@@ -239,6 +239,23 @@ public class LiveBrushPreviewFilesTests : IDisposable
     }
 
     [Fact]
+    public void A_private_preview_is_written_as_a_temporary_file()
+    {
+        var path = Path.Combine(tmp, "1-ab-000005.mdl");
+        File.WriteAllBytes(path, [7, 7, 7, 7, 7]);   // a longer leftover under the same name is replaced, not kept
+
+        LiveBrushPreview.WriteTemporary(path, [1, 2, 3]);
+
+        Assert.Equal([1, 2, 3], File.ReadAllBytes(path));
+        Assert.True(File.GetAttributes(path).HasFlag(FileAttributes.Temporary));
+    }
+
+    [Fact]
+    public void A_temporary_file_that_cannot_be_created_throws()
+        => Assert.ThrowsAny<IOException>(() =>
+            LiveBrushPreview.WriteTemporary(Path.Combine(tmp, "missing", "1-ab-000006.mdl"), [1]));
+
+    [Fact]
     [Trait("Plan", "AC-brush-pair-sync-5")]
     public void Preview_names_carry_the_process_and_the_load()
         => Assert.Equal("42-abcd-000007.mdl", LiveBrushPreview.FileName(42, "abcd", 7));

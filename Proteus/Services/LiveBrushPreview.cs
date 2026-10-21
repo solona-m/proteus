@@ -3,8 +3,10 @@ using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
 using System.Linq;
+using System.Runtime.InteropServices;
 using System.Threading.Tasks;
 using Dalamud.Plugin.Services;
+using Microsoft.Win32.SafeHandles;
 using Proteus.Interop;
 
 namespace Proteus.Services;
@@ -119,7 +121,7 @@ internal sealed class LiveBrushPreview(PenumbraBridge penumbra, CompositorServic
         Start(gen, gamePaths, () =>
         {
             Directory.CreateDirectory(Dir);
-            try { File.WriteAllBytes(file, model); }
+            try { WriteTemporary(file, model); }
             catch { TryDelete(file); throw; }   // never leave half a model behind
             return (file, false);
         }, onApplied: null);
@@ -194,6 +196,31 @@ internal sealed class LiveBrushPreview(PenumbraBridge penumbra, CompositorServic
                 if (gen > endedAt) lastShared = (stamp, path);   // not after End took it down
         });
         return sharedDir != null ? PushResult.Shared : PushResult.Private;
+    }
+
+    private const uint GenericWrite = 0x40000000, FileShareRead = 1, CreateAlways = 2, FileAttributeTemporary = 0x100;
+
+    [DllImport("kernel32.dll", CharSet = CharSet.Unicode, SetLastError = true)]
+    private static extern SafeFileHandle CreateFileW(string name, uint access, uint share, IntPtr security,
+                                                     uint disposition, uint flags, IntPtr template);
+
+    /// <summary>
+    /// Write a private preview as a temporary file, which Windows keeps in memory rather than flushing to disk while it
+    /// can. A stroke writes one every <c>PreviewIntervalMs</c> and most are deleted again within seconds. Only set when
+    /// the file is created: .NET cannot ask for it, and setting it afterwards does not reach the open handle.
+    /// </summary>
+    internal static void WriteTemporary(string path, byte[] bytes)
+    {
+        var handle = CreateFileW(path, GenericWrite, FileShareRead, IntPtr.Zero, CreateAlways, FileAttributeTemporary,
+                                 IntPtr.Zero);
+        if (handle.IsInvalid)
+        {
+            int hr = Marshal.GetHRForLastWin32Error();
+            handle.Dispose();
+            throw new IOException($"Could not create \"{path}\"", hr);
+        }
+        using var stream = new FileStream(handle, FileAccess.Write);
+        stream.Write(bytes);
     }
 
     private int NextGeneration()
