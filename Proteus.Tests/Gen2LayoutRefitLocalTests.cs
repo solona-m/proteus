@@ -407,14 +407,16 @@ public class Gen2LayoutRefitLocalTests(ITestOutputHelper output)
     private const string TheBodySeX = LocalData.Mods + ":The Body SE-X IVCS2 V1_1_0";
 
     /// <summary>
-    /// The size set says in its log why it refused a size, not only in its notes: TBSE's SFW legs and TBSE-X's are cut
-    /// differently and do not pair, so legs made on TBSE get no TBSE-X size — and the log names the reason: TBSE-X
-    /// draws smallclothes where TBSE has skin.
+    /// TBSE's SFW legs and TBSE-X's are cut differently: TBSE-X draws smallclothes where TBSE has skin, and 77% of the
+    /// skin lands. Once the size was refused (AC-gen2-legs-refit-7) because three of the points carried onto the
+    /// smallclothes still turned the skin over; nothing is refused for folds any more (cross-sex-tops-yas), so the size
+    /// is made, and the log says how the pair was built — those three filled from their neighbours.
     /// </summary>
     [LocalDataFact(TheBodySe, TheBodySeX)]
     [Trait("Plan", "AC-gen2-legs-refit-7")]
     [Trait("Plan", "AC-skinless-target-4")]
-    public void A_refused_size_is_logged_with_its_reason()
+    [Trait("Plan", "AC-cross-sex-tops-yas-7")]
+    public void A_size_once_refused_for_folds_is_made_and_says_how() // [AC-cross-sex-tops-yas-7]
     {
         string copy = Path.Combine(Path.GetTempPath(), "proteus-sizeset-" + Guid.NewGuid().ToString("N"));
         try
@@ -432,13 +434,13 @@ public class Gen2LayoutRefitLocalTests(ITestOutputHelper output)
                 """);
 
             var (result, log, _) = Run(copy, ["tbse", "tbse-x"], remake: false, bodyMods: [TheBodySe, TheBodySeX]);
-            Assert.Equal(0, result.Made);
-            Assert.NotEmpty(result.Notes);
-            // TBSE-X's SFW legs draw smallclothes where TBSE's have skin, so the reason given is that, not the layout
-            // (skinless-target, 2026-10-20): 77% lands on skin, and the rest cannot be fitted onto them.
+            foreach (string l in log) output.WriteLine(l);
+            Assert.Equal(1, result.Made);
+            // Measured 2026-10-21: 1,884 of 2,434 (77.4%) land; 23 kept off the body; 3 set aside for a fold.
             Assert.Contains(log, l => l.Contains("size set:", StringComparison.Ordinal)
-                                      && l.Contains("refused:", StringComparison.Ordinal)
-                                      && l.Contains("finds skin to land on", StringComparison.Ordinal));
+                                      && l.Contains("follow the skin around them onto its smallclothes", StringComparison.Ordinal)
+                                      && l.Contains("filled from their neighbours", StringComparison.Ordinal));
+            Assert.DoesNotContain(log, l => l.Contains("refused:", StringComparison.Ordinal));
         }
         finally
         {
