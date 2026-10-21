@@ -3197,7 +3197,7 @@ public sealed class PartsStrings
 
     /// <summary>On <see cref="BrushMirror"/>, shown under the brushes and under Move, Rotate and Scale alike.</summary>
     public readonly string MirrorTip = Loc.Localize("Parts.Mirror.Tip",
-        "Work on both sides at once, mirrored across the body's centre. The brushes paint the mirror image too; Move, Rotate and Scale move the matching cloth on the other side the mirrored way. A piece that is its own mirror stays centred.");
+        "Work on both sides at once, mirrored across the body's centre. The brushes paint the mirror image too; Move, Rotate and Scale move the matching cloth on the other side the mirrored way — and, with Move skin too, the matching skin. A piece that is its own mirror stays centred.");
 
     /// <summary>Under Move, Rotate and Scale with Mirror on: {0} selected points matched, of {1}.</summary>
     public readonly string MoveMirrorPairedFmt = Loc.Localize("Parts.Move.Mirror.Paired.Fmt",

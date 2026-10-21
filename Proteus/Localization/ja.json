@@ -2868,7 +2868,7 @@
     "description": ""
   },
   "Parts.Mirror.Tip": {
-    "message": "体の中心を軸に、左右を同時に鏡映しで編集します。ブラシは鏡像側も塗り、移動・回転・拡大縮小は反対側の対応する布を鏡映しで動かします。それ自体が左右対称のパーツは中心に留まります。",
+    "message": "体の中心を軸に、左右を同時に鏡映しで編集します。ブラシは鏡像側も塗り、移動・回転・拡大縮小は反対側の対応する布を鏡映しで動かします（「肌も動かす」がオンなら対応する肌も）。それ自体が左右対称のパーツは中心に留まります。",
     "description": "Tooltip on the Mirror left/right checkbox, shown under the brushes and under Move, Rotate and Scale."
   },
   "Parts.Move.Mirror.Paired.Fmt": {
