@@ -1606,7 +1606,11 @@ public sealed partial class PartsPanel
             .SelectMany(g => g)
             .ToList();
 
-    private void SelectModel(int index)
+    /// <param name="written">
+    /// The bytes the caller has just written to this model's file, if it has. Penumbra compacts a new mod's files the
+    /// moment it adds the mod, holding each one exclusively, so a read straight after can fail while these are known.
+    /// </param>
+    private void SelectModel(int index, byte[]? written = null)
     {
         ResetForNewModel();
         vanilla = null;
@@ -1619,6 +1623,11 @@ public sealed partial class PartsPanel
         try
         {
             bytes = File.ReadAllBytes(Path.Combine(root, models[index].File.Replace('/', Path.DirectorySeparatorChar)));
+        }
+        catch (IOException ex) when (written != null)
+        {
+            log.Debug("[Proteus] parts: {0} is held ({1}); opening the bytes just written", models[index].File, ex.Message);
+            bytes = written;
         }
         catch (Exception ex)
         {
@@ -1706,6 +1715,8 @@ public sealed partial class PartsPanel
         }
 
         RefitModService.Result made;
+        // Whether the mod's copy of the model is the game's bytes as just written, rather than an earlier visit's edit.
+        bool copied;
         try
         {
             // A new mod is filled before Penumbra registers it; one from an earlier visit keeps its edits and only
@@ -1714,10 +1725,15 @@ public sealed partial class PartsPanel
                                     fill: root => RefitModService.AddGameModel(root, item.GamePath, bytes),
                                     description: string.Format(ps.VanillaModDescriptionFmt, item.ItemName),
                                     folder: RefitModService.OwnModsFolder);
-            if (made is { Ok: true, Made: false } && RefitModService.AddGameModel(made.Root, item.GamePath, bytes))
+            copied = made.Made;
+            if (made is { Ok: true, Made: false })
             {
-                compositor.ExpectOwnModEdit(made.Dir);
-                penumbra.ReloadModDirectory(made.Dir);
+                copied = !File.Exists(Path.Combine(made.Root, item.GamePath.Replace('/', Path.DirectorySeparatorChar)));
+                if (RefitModService.AddGameModel(made.Root, item.GamePath, bytes))
+                {
+                    compositor.ExpectOwnModEdit(made.Dir);
+                    penumbra.ReloadModDirectory(made.Dir);
+                }
             }
         }
         catch (Exception ex)
@@ -1737,7 +1753,7 @@ public sealed partial class PartsPanel
         mods = LoadMods();
         SelectMod(made.Dir);
         int index = models.FindIndex(m => string.Equals(m.GamePath, item.GamePath, StringComparison.OrdinalIgnoreCase));
-        if (index >= 0) SelectModel(index);
+        if (index >= 0) SelectModel(index, copied ? bytes : null);
         log.Information("[Proteus] parts: editing {0} in {1}", item.GamePath, made.Dir);
         status = string.Format(ps.VanillaEditingFmt, item.Label, made.Dir);
         statusIsError = false;
