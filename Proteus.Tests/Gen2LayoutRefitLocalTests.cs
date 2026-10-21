@@ -403,6 +403,9 @@ public class Gen2LayoutRefitLocalTests(ITestOutputHelper output)
         }
     }
 
+    /// <summary>Faces left folded by TBSE SFW legs made onto TBSE-X's (measured 2026-10-21).</summary>
+    private const int KnownTbseXFolds = 13;
+
     private const string TheBodySe = LocalData.Mods + ":The Body SE";
     private const string TheBodySeX = LocalData.Mods + ":The Body SE-X IVCS2 V1_1_0";
 
@@ -414,7 +417,6 @@ public class Gen2LayoutRefitLocalTests(ITestOutputHelper output)
     /// </summary>
     [LocalDataFact(TheBodySe, TheBodySeX)]
     [Trait("Plan", "AC-gen2-legs-refit-7")]
-    [Trait("Plan", "AC-skinless-target-4")]
     [Trait("Plan", "AC-cross-sex-tops-yas-7")]
     public void A_size_once_refused_for_folds_is_made_and_says_how() // [AC-cross-sex-tops-yas-7]
     {
@@ -441,6 +443,11 @@ public class Gen2LayoutRefitLocalTests(ITestOutputHelper output)
                                       && l.Contains("follow the skin around them onto its smallclothes", StringComparison.Ordinal)
                                       && l.Contains("filled from their neighbours", StringComparison.Ordinal));
             Assert.DoesNotContain(log, l => l.Contains("refused:", StringComparison.Ordinal));
+            // The made legs' folds, said and bounded by what was measured — never a refusal (the user's decision).
+            var made = log.Single(l => l.Contains("onto TBSE-X (moved up to", StringComparison.Ordinal));
+            int folded = int.Parse(System.Text.RegularExpressions.Regex.Match(made, @"(\d+) folded\)").Groups[1].Value);
+            output.WriteLine($"TBSE-X legs: {folded} folded");
+            Assert.True(folded <= KnownTbseXFolds, $"{folded} faces folded, more than the {KnownTbseXFolds} measured");
         }
         finally
         {
