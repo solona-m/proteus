@@ -255,8 +255,9 @@ public class MirrorMoveLocalTests(ITestOutputHelper output)
     /// turned and stretched, with the falloff on and off. The far side's skin twins must move as the mirror, and the
     /// result may fold and poke no more than doing both sides by hand; with the falloff off, no spikes.
     /// </summary>
-    /// <param name="centreSlivers">Folds allowed beyond the by-hand count: sliver cloth straddling the centre line, which
-    /// Sides pulls apart when a drag goes sideways — each point takes its own side's motion, a known limit of the mirror.</param>
+    /// <param name="centreSlivers">Folds allowed beyond the by-hand count on a Translate with the falloff on: sliver cloth
+    /// straddling the centre line, which Sides pulls apart when a drag goes sideways — each point takes its own side's
+    /// motion, a known limit of the mirror.</param>
     private void RealSkinMirrorsSymmetrically(ModelParts model, string what, int centreSlivers = 0)
     {
         var skinList = SkinVertices(model);
@@ -335,7 +336,9 @@ public class MirrorMoveLocalTests(ITestOutputHelper output)
             Assert.True(report.Paired >= 0.9f * report.Selected, $"{what} {kind}: paired {report.Paired} of {report.Selected}");
             Assert.True(twinned > 0 && mirrored >= 0.9f * twinned, $"{what} {kind}: {mirrored} of {twinned} twins moved as the mirror");
             Assert.Equal(0, spikes);
-            Assert.True(folded <= handFolded + centreSlivers,
+            // The sliver allowance only where it was measured: a sideways move with the falloff on.
+            int allowed = kind == Kind.Translate && adjacent ? centreSlivers : 0;
+            Assert.True(folded <= handFolded + allowed,
                         $"{what} {kind}: {folded} folded, both sides by hand fold {handFolded}");
             Assert.True(worse <= handWorse, $"{what} {kind}: {worse} skin points poked through, both sides by hand {handWorse}");
 

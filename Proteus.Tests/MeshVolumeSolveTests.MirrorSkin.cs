@@ -121,7 +121,7 @@ public partial class MeshVolumeSolveTests
                 AssertNear(Vector3.Transform(At(model.Positions, v), MirrorMotion.Reflect(t)), At(after, v), 1e-6f, $"{kind}: matching skin");
             for (int v = 0; v < twins.Length; v++)
                 if (twins[v] >= 0)
-                    AssertNear(Reflect(At(after, v)), At(after, twins[v]), 1e-5f, $"{kind}: vertex {v} and its twin");
+                    AssertNear(Reflect(At(after, v)), At(after, twins[v]), 1e-6f, $"{kind}: vertex {v} and its twin");
             Assert.True(solve.EndMove());
         }
     }
@@ -171,28 +171,36 @@ public partial class MeshVolumeSolveTests
         Assert.All(clothPairs.Reverse.Keys, m => Assert.False(isSkin[m], $"skin vertex {m} in cloth's matching region"));
     }
 
-    /// <summary>A stocking welded to the leg: cloth's partners and matching region are the same whether skin is picked
-    /// with it or not — neither kind's region is joined to a partner through the other's.</summary>
+    /// <summary>
+    /// A stocking welded to the leg. On the far side its hem is a strip of its own — cloth not joined to the rest of the
+    /// stocking — lying within the selection's mirror image yet nobody's partner, and welded to the leg. Cloth's
+    /// partners and matching region are the same whether skin is picked with it or not: the hem is joined to a partner
+    /// only through the leg's skin, and neither kind's region is joined through the other's.
+    /// </summary>
     [Fact]
     [Trait("Plan", "AC-mirror-skin-move-3")]
     public void WeldedClothPairsTheSameWithSkinSeeds()
     {
         var mesh = new MirrorMesh();
-        var leg = mesh.Grid(Steps(-0.1f, 21), Steps(0f, 11), material: SkinMaterial);
-        var stocking = mesh.Grid(Steps(-0.1f, 21), Steps(0.1f, 11));
+        var leg = mesh.Grid(Steps(-0.1f, 21), Steps(0.004f, 11), material: SkinMaterial);   // z 4..104 mm
+        var right = mesh.Grid(Steps(0.01f, 10), Steps(0.11f, 10));                          // z 110..200 mm
+        var left = mesh.Grid(Steps(-0.1f, 10), Steps(0.11f, 10));
+        var hem = mesh.Grid(Steps(-0.1f, 10), [0.104f, 0.106f]);                             // the far side's hem
         var model = mesh.Build();
-        var welds = Enumerable.Range(0, 21).Select(i => (leg[i, 10], stocking[i, 0]));
+        var welds = Enumerable.Range(0, 10).Select(i => (leg[i, 10], hem[i, 0]));
         var (pairing, isSkin) = PairingOf(model, welds);
         var locked = new bool[isSkin.Length];
         var at = model.Positions;
-        var clothSeeds = Cells(stocking, 14, 16, 0, 4);
+        var clothSeeds = Cells(right, 3, 5, 0, 4);
         var skinSeeds = Cells(leg, 14, 16, 6, 10);
 
         var alone = pairing.Pair(clothSeeds, locked, v => ToVec3(At(at, v)), 0);
         var mixed = pairing.Pair(clothSeeds.Concat(skinSeeds).ToArray(), locked, v => ToVec3(At(at, v)), 0);
+        Assert.Contains(mixed.Partner, e => isSkin[e.Key]);
+        Assert.Contains(mixed.Partner.Values, p => Cells(leg, 4, 6, 10, 10).Contains(p));   // the leg welded to the hem
+        Assert.DoesNotContain(alone.Partner.Values, p => All(hem).Contains(p));
         Assert.Equal(alone.Partner.OrderBy(e => e.Key), mixed.Partner.Where(e => !isSkin[e.Key]).OrderBy(e => e.Key));
         Assert.Equal(alone.Reverse.OrderBy(e => e.Key), mixed.Reverse.Where(e => !isSkin[e.Key]).OrderBy(e => e.Key));
-        Assert.Contains(mixed.Partner, e => isSkin[e.Key]);
     }
 
     [Fact]
@@ -260,14 +268,17 @@ public partial class MeshVolumeSolveTests
         var sel = patch.Concat(All(skin)).ToArray();
         var o = new Vector3(0.002f, 0.004f, 0f);
         var solve = SkinSolve(model);
-        solve.BeginMove(sel, false, 0f, mirror: Mirrored(Kind.Translate, model.Positions, sel));
+        // The gizmo on the left: the right side's own motion is then the mirror image, so "the drag itself" tells.
+        var pivot = BoundsCentre(model.Positions, sel) with { X = -0.05f };
+        solve.BeginMove(sel, false, 0f, mirror: new MoveMirror(Kind.Translate, pivot));
         Assert.Equal(Mode.Sides, solve.DragMirror?.Mode);
         solve.MoveTo(o);
         var after = solve.Positions();
         foreach (int v in All(skin)) AssertNear(At(model.Positions, v) + o, At(after, v), 1e-6f, "unmatched skin");
         foreach (int v in Cells(cloth, 18, 19, 3, 17)) AssertNear(At(model.Positions, v) + o, At(after, v), 1e-4f, "unpicked cloth riding it");
-        foreach (int v in patch) AssertNear(At(model.Positions, v) + o, At(after, v), 1e-4f, "picked cloth");
-        foreach (int v in Cells(cloth, 4, 6, 8, 12)) AssertNear(At(model.Positions, v) + Reflect(o), At(after, v), 1e-6f, "its match");
+        // The picked cloth keeps its mirror: on the right, away from the gizmo, it takes the mirror image; its match the drag.
+        foreach (int v in patch) AssertNear(At(model.Positions, v) + Reflect(o), At(after, v), 1e-6f, "picked cloth");
+        foreach (int v in Cells(cloth, 4, 6, 8, 12)) AssertNear(At(model.Positions, v) + o, At(after, v), 1e-6f, "its match");
     }
 
     // ── what the views and the status line are shown ────────────────────────
@@ -553,20 +564,27 @@ public partial class MeshVolumeSolveTests
         foreach (int v in Cells(body, 4, 6, 8, 12)) AssertNear(At(model.Positions, v) + Reflect(o), At(after, v), 1e-6f, "matching skin");
     }
 
+    /// <summary>
+    /// Skin lifted 6 mm between the vertices of cloth twice as coarse, mirrored: on both sides the skin would stand
+    /// through the cloth's faces, where no cloth vertex rides it, and the guard at release lifts those faces on both.
+    /// </summary>
     [Fact]
     [Trait("Plan", "EDGE-mirror-skin-move-15")]
     public void MirroredSkinMoveGuardsBothSides()
     {
-        var l = Layered(21, 0.001f, centred: true);
-        var picked = l.Model.Parts[1].Triangles.Where(v => At(l.Model.Positions, v).X is > 0.03f and < 0.07f).ToArray();
-        int authored = SkinThrough(l.Model, SkinSolve(l.Model));
+        var l = Layered(21, 0.001f, clothStride: 2, centred: true);
+        int picked = l.SkinAt[15, 11];                                  // x 50 mm, between cloth columns at 40 and 60 mm
         var solve = SkinSolve(l.Model);
-        solve.BeginMove(picked, true, 0.02f, mirror: Mirrored(Kind.Translate, l.Model.Positions, picked));
-        solve.MoveTo(new Vector3(0f, 0.003f, 0f));
+        solve.BeginMove([picked], true, 0.015f, mirror: Mirrored(Kind.Translate, l.Model.Positions, [picked]));
+        Assert.Equal(Mode.Sides, solve.DragMirror?.Mode);
+        solve.MoveTo(new Vector3(0f, 0.006f, 0f));
+        Assert.True(SkinPoke.MadeWorse(l.Model, solve.Positions()) > 0, "the fixture should poke skin through before the guard");
         solve.EndMove();
-        Assert.Equal(0, SkinPoke.MadeWorse(l.Model, solve.Positions()));
-        Assert.True(SkinThrough(l.Model, solve) <= authored);
-        Assert.True(Moved(l.Model, solve.Positions(), l.SkinAt[5, 10]).Y > 0.002f, "the other side should have been lifted too");
+        var after = solve.Positions();
+        Assert.Equal(0.006f, Moved(l.Model, after, l.SkinAt[5, 11]).Y, 1e-6f);
+        Assert.Equal(0, SkinPoke.MadeWorse(l.Model, after));
+        Assert.Equal(0, SkinThrough(l.Model, solve));
+        Assert.Equal(0, Folded(l.Model, after));
     }
 
     /// <summary>

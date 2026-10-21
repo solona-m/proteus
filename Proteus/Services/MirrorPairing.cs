@@ -192,9 +192,10 @@ internal sealed class MirrorPairing
 
     /// <summary>
     /// The matching region of one kind as the far side is meshed: every movable node of that kind whose reflection lands
-    /// among the selection — the node nearest its reflection, of its own kind and material, is a selected node it matches (same
-    /// material, facing the mirrored way). A finer far side gets every node inside the selection's mirror image; a far
-    /// node whose reflection lands nearer unselected cloth is not taken, so the region is no wider than the selection.
+    /// among the selection — the node nearest its reflection, of its own kind and material, is a selected node it
+    /// matches (same material, facing the mirrored way). A finer far side gets every node inside the selection's mirror
+    /// image; a far node whose reflection lands nearer an unselected node of its kind is not taken, so the region is no
+    /// wider than the selection.
     /// Kept only where it is joined, through itself and the partners, to a partner — a frill row or a pleat that
     /// merely lies within reach of the reflection is not the match.
     /// </summary>
@@ -227,7 +228,7 @@ internal sealed class MirrorPairing
                 || p.X > hi.X + pad || p.Y > hi.Y + pad || p.Z > hi.Z + pad)
                 continue;
 
-            // The cloth of m's own material nearest its reflection.
+            // The node of m's own kind and material nearest its reflection.
             var q = Reflect(p);
             var (cx, cy, cz) = CellOf(q);
             int nearest = -1;
