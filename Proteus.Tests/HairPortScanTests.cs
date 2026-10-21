@@ -721,8 +721,12 @@ public class HairPortScanTests
     {
         using var s = new Setup();
         var root = s.DefaultDataMod("Floof", 7);
+        // A stale warning: the port below warns of nothing, and PortOne clears it under the key the scan reads.
+        HairPortScan.RememberWarning(root, Target(7), "stale");
         Assert.Equal(HairPortScan.RowState.Fitted, s.Run([7]).Rows.Single().State);
         s.Reloaded(root, 7);
+        Assert.Equal((HairPortScan.RowState.AlreadyFitted, ""),
+                     (s.Run([7], force: true).Rows.Single().State, s.Run([7], force: true).Rows.Single().Message));
         // What PortOne remembers for a port it made with a warning.
         const string warning = "bent onto c0101, 40 of its triangles turn inside out and may show as holes; check it in game";
         HairPortScan.RememberWarning(root, Target(7), warning);

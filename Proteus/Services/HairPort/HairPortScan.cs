@@ -179,7 +179,8 @@ internal static class HairPortScan
                         ? MakeRow(host, id, modRoot, target, RowState.Refused, outcome.Message)
                         : MakeRow(host, id, modRoot, target, d.Stale ? RowState.Remade : RowState.Fitted, outcome.Warning));
                 }
-                else if (outcome.Current) rows.Add(MakeRow(host, id, modRoot, target, RowState.AlreadyFitted));
+                else if (outcome.Current) rows.Add(MakeRow(host, id, modRoot, target, RowState.AlreadyFitted,
+                                                                   WarningFor(modRoot, target)));
                 else if (outcome.Message.Length == 0) { /* the author covers the race in a place the player has off */ }
                 else
                 {

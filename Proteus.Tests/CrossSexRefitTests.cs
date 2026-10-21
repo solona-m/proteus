@@ -294,6 +294,12 @@ public class CrossSexRefitTests
         var refused = CrossSexRefitReport.Size(thin, "M2", null);
         Assert.Contains("matched only", (string)refused["refusal"]!);
         Assert.Null(refused["file"]);
+        // A size's own refusal comes first, and nothing is written for it.
+        var own = new CrossSexRefitJob.Size(Body("0101", "_top", "M3"), "t3", null, null, null, 0, Landed(0.5f), "pair refused");
+        Assert.Equal("pair refused", CrossSexRefitReport.Refusal(own));
+        var ownEntry = CrossSexRefitReport.Size(own, "M3", "out/M3.mdl");
+        Assert.Equal("pair refused", (string)ownEntry["refusal"]!);
+        Assert.Null(ownEntry["file"]);
 
         var route = new RacialModelBake.Route(201, 101, Down: false, Lowered: true) { ByAlias = true };
         var moves = new List<SkeletonRemap.Move>
