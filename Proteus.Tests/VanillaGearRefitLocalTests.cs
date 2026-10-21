@@ -1160,7 +1160,7 @@ public class VanillaGearRefitLocalTests(ITestOutputHelper output)
     /// nearest skin is an edge the cloth runs on past — the tuck stops its skin where the cloth comes back down onto the
     /// body, and the cloth lies beside that edge, below the plane of its last triangle, 15-25 mm off: under no skin.
     /// </summary>
-    private const float Under = 0.002f;
+    internal const float Under = 0.002f;
 
     /// <summary>
     /// Torso skin, cm², that no cloth of the model covers and the model does not draw: a hole. Covered = a ray from the
@@ -1171,7 +1171,7 @@ public class VanillaGearRefitLocalTests(ITestOutputHelper output)
     /// gloves cover them, and the game's own tops leave them undrawn on its own body too.
     /// </summary>
     /// <param name="bands">Where the area lies: by 10 cm of height, front or back.</param>
-    private static double UncoveredUndrawn(ModelParts m, ModelParts body, SortedDictionary<(float, string), double> bands)
+    internal static double UncoveredUndrawn(ModelParts m, ModelParts body, SortedDictionary<(float, string), double> bands)
     {
         var cloth = new List<(Vector3 A, Vector3 B, Vector3 C)>();
         foreach (var part in ClothParts(m))

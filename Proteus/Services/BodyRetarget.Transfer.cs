@@ -57,7 +57,9 @@ internal static partial class BodyRetarget
                     var filled = new Vector3?[whole.Count];
                     for (int v = 0; v < filled.Length; v++) filled[v] = whole[v];
                     landed += LandSmallclothes(src, surface, filled, over, pairs[i].Target);
-                    built[i] = (BodySurface.OfSkinAnd(src, cell, over), filled, Eased(src, filled, over), sides);
+                    // Eased over the skin alone: the underwear's moves are landings already, and easing them over its
+                    // few, large triangles flattened a fuller breast's dome by 4 mm.
+                    built[i] = (BodySurface.OfSkinAnd(src, cell, over), filled, Eased(src, filled), sides);
                     continue;
                 }
                 built[i] = (surface, whole, Eased(src, whole), sides);
@@ -120,11 +122,9 @@ internal static partial class BodyRetarget
         /// nothing real, because the shape change between two bodies is smooth, and it measurably improves the fit
         /// against an author's own hand-made size.
         /// </summary>
-        /// <param name="over">With the old body's underwear read over its skin's hole, its corners there: those
-        /// triangles are eased among themselves as the skin is (see <see cref="SmallclothesOverHoles"/>).</param>
-        internal static IReadOnlyList<Vector3?> Eased(ModelParts body, IReadOnlyList<Vector3?> field, bool[]? over = null)
+        internal static IReadOnlyList<Vector3?> Eased(ModelParts body, IReadOnlyList<Vector3?> field)
         {
-            var adj = Neighbours(body, field.Count, over);
+            var adj = Neighbours(body, field.Count);
             var eased = new Vector3?[field.Count];
             for (int v = 0; v < field.Count; v++) eased[v] = field[v];
 
@@ -184,19 +184,14 @@ internal static partial class BodyRetarget
             foreach (var (v, d) in fixedUp) field[v] = d;
         }
 
-        /// <summary>Which body vertices share a skin triangle: the only places a displacement may be carried between.
-        /// With <paramref name="over"/>, the underwear triangles every corner of which it marks too.</summary>
-        private static List<int>[] Neighbours(ModelParts body, int count, bool[]? over = null)
+        /// <summary>Which body vertices share a skin triangle: the only places a displacement may be carried between.</summary>
+        private static List<int>[] Neighbours(ModelParts body, int count)
         {
             var adj = new List<int>[count];
             foreach (var part in body.Parts)
             {
-                if (part.Island >= 0) continue;
-                bool skin = SecondSkinWriter.IsBodySkinMaterial(part.Material);
-                if (!skin && (over == null || !BodySurface.IsSmallclothes(part.Material))) continue;
+                if (part.Island >= 0 || !SecondSkinWriter.IsBodySkinMaterial(part.Material)) continue;
                 for (int t = 0; t + 2 < part.Triangles.Length; t += 3)
-                {
-                    if (!skin && !Marked(part.Triangles, t, over!)) continue;
                     for (int k = 0; k < 3; k++)
                     {
                         int a = part.Triangles[t + k], b = part.Triangles[t + (k + 1) % 3];
@@ -204,16 +199,8 @@ internal static partial class BodyRetarget
                         (adj[a] ??= []).Add(b);
                         (adj[b] ??= []).Add(a);
                     }
-                }
             }
             return adj;
-        }
-
-        private static bool Marked(int[] triangles, int t, bool[] over)
-        {
-            int a = triangles[t], b = triangles[t + 1], c = triangles[t + 2];
-            return a >= 0 && b >= 0 && c >= 0 && a < over.Length && b < over.Length && c < over.Length
-                   && over[a] && over[b] && over[c];
         }
 
         /// <summary>Holes filled from their edges, ring by ring — see <see cref="Whole"/>.</summary>
