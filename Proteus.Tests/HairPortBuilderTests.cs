@@ -714,19 +714,30 @@ public partial class HairPortBuilderTests
     [Theory]
     [Trait("Plan", "EDGE-hair-race-port-6")]
     [InlineData("core", 170)]
+    [InlineData("multi-sibling", 170)]
     [InlineData("disagree", null)]
     [InlineData("sibling", null)]
+    [InlineData("none-elsewhere", null)]
+    [InlineData("own-model", null)]
     public void A_source_skeleton_entry_in_another_group_comes_with_the_port(string layout, int? expected)
     {
         object Est(int e) => PenumbraManipulations.EstManipulation("0801", "Hair", Id, e);
-        var models = layout == "sibling"
-            ? ManipGroup("Models", "Single", ("Miqote", new() { [Source] = "long.mdl" }, []), ("Core", new(), [Est(170)]))
-            : ManipGroup("Models", "Multi", ("Miqote", new() { [Source] = "long.mdl" }, []));
+        var models = layout switch
+        {
+            "sibling" => ManipGroup("Models", "Single", ("Miqote", new() { [Source] = "long.mdl" }, []), ("Core", new(), [Est(170)])),
+            "multi-sibling" => ManipGroup("Models", "Multi", ("Miqote", new() { [Source] = "long.mdl" }, []), ("Core", new(), [Est(170)])),
+            _ => ManipGroup("Models", "Multi", ("Miqote", new() { [Source] = "long.mdl" }, [])),
+        };
         var groups = new List<object> { models };
-        if (layout != "sibling") groups.Add(ManipGroup("Core", "Multi", ("Enable", new(), [Est(170)])));
+        if (layout is "core" or "disagree") groups.Add(ManipGroup("Core", "Multi", ("Enable", new(), [Est(170)])));
         if (layout == "disagree") groups.Add(ManipGroup("Extra", "Multi", ("Other", new(), [Est(180)])));
+        // "Physics off" says none: the table decides, not that.
+        if (layout == "none-elsewhere") groups.Add(ManipGroup("Physics", "Multi", ("Off", new(), [Est(0)])));
+        // An alternate cut's entry goes with its own model.
+        if (layout == "own-model") groups.Add(ManipGroup("Alt", "Multi", ("Cut", new() { [Source] = "alt.mdl" }, [Est(170)])));
         using var mod = new Mod(System.Text.Json.JsonSerializer.Serialize(groups));
         mod.Put("long.mdl", HairModel(801, bones: [("j_ex_h0170_ke_b", 1f)]));
+        mod.Put("alt.mdl", HairModel(801, bones: [("j_ex_h0170_ke_b", 1f)]));
 
         Assert.Equal(expected, HairPortPlan.SourceEst(mod.Owner("Models", "Miqote"), null, 801, Id, mod.Owners));
         var plan = HairPortBuilder.Build(mod.Root, Source, [201], Pbd(), PhysicsGame((201, 170, H0170Skeleton)), false);
@@ -737,6 +748,35 @@ public partial class HairPortBuilderTests
             Assert.Equal(e, HairPortPlan.HairEst(mod.Owner("Models", "Miqote"), 201, Id));
         }
         else Assert.True(plan.Refused.ContainsKey(201));
+    }
+
+    /// <summary>The author changes the borrow in the other group alone: the port is out of date, as for its own.</summary>
+    [Fact]
+    [Trait("Plan", "AC-hair-race-port-8")]
+    [Trait("Plan", "EDGE-hair-race-port-6")]
+    public void A_borrow_changed_in_another_group_is_out_of_date()
+    {
+        object Est(int e) => PenumbraManipulations.EstManipulation("0801", "Hair", Id, e);
+        string Groups(int e) => System.Text.Json.JsonSerializer.Serialize(new[]
+        {
+            ManipGroup("Models", "Multi", ("Miqote", new() { [Source] = "long.mdl" }, [])),
+            ManipGroup("Core", "Multi", ("Enable", new(), [Est(e)])),
+        });
+        using var mod = new Mod(Groups(170));
+        mod.Put("long.mdl", HairModel(801, bones: [("j_ex_h0170_ke_b", 1f)]));
+        var game = PhysicsGame((201, 170, H0170Skeleton), (201, 180, H0170Skeleton));
+        Assert.True(HairPortWriter.Save(mod.Root, HairPortBuilder.Build(mod.Root, Source, [201], Pbd(), game, false).Writes, false).Ok);
+        var record = HairPortRecord.Read(mod.Root);
+        var entry = record.Ports.Single();
+        Assert.False(HairPortBuilder.IsOutOfDate(mod.Root, entry, mod.Get("long.mdl"), mod.Owners, record.Ports, game));
+
+        var meta = System.Text.Json.Nodes.JsonNode.Parse(mod.Manifest)!;
+        var core = meta["Groups"]![1]!["Options"]![0]!["Manipulations"]!.AsArray();
+        core.Clear();
+        core.Add(System.Text.Json.JsonSerializer.SerializeToNode(Est(180)));
+        File.WriteAllText(Path.Combine(mod.Root, "meta.json"), meta.ToJsonString());
+        Assert.True(HairPortBuilder.IsOutOfDate(mod.Root, entry, mod.Get("long.mdl"), mod.Owners, record.Ports, game));
+        Assert.Equal(180, Assert.Single(HairPortBuilder.Build(mod.Root, Source, [201], Pbd(), game, false).Writes).Est);
     }
 
     /// <summary>

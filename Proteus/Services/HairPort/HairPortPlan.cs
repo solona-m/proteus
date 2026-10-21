@@ -231,15 +231,20 @@ internal static partial class HairPortPlan
     /// <paramref name="owners"/>, the one entry every other place that can be on with it agrees on: authors put the
     /// entry in a "core files" option of another group as often as beside the model ([SME] Vale: the models in one
     /// group, the h0178 → 127 entry in another). Null when none has one, or they disagree, and the game's table decides.
+    /// Only a hint, so never "none" (0) from elsewhere — a "physics off" option leaves the table to decide — and never a
+    /// place that publishes the source model itself: its entry goes with its own model.
     /// </summary>
     public static int? SourceEst(Owner owner, Owner? defaults, ushort race, int id, IReadOnlyList<Owner>? owners = null)
     {
         if ((HairEst(owner, race, id) ?? (defaults != null ? HairEst(defaults, race, id) : null)) is { } near) return near;
         // A sibling of a pick-one group is never on with the owner.
+        string model = HairPath(race, id);
         var elsewhere = (owners ?? [])
             .Where(o => !o.IsDefault && !Same(o, owner)
-                        && !(string.Equals(o.Group, owner.Group, StringComparison.OrdinalIgnoreCase) && !o.IsMulti))
+                        && !(string.Equals(o.Group, owner.Group, StringComparison.OrdinalIgnoreCase) && !o.IsMulti)
+                        && FileFor(o, model) == null)
             .SelectMany(o => HairEsts(o, race, id))
+            .Where(e => e > 0)
             .Distinct().ToList();
         return elsewhere.Count == 1 ? elsewhere[0] : null;
     }
