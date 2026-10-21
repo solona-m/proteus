@@ -2868,7 +2868,7 @@
     "description": ""
   },
   "Parts.Mirror.Tip": {
-    "message": "Trabaja ambos lados a la vez, reflejados respecto al centro del cuerpo. Los pinceles también pintan la imagen reflejada; Mover, Rotar y Escalar mueven la tela correspondiente del otro lado de forma reflejada. Una pieza que es su propio reflejo se queda centrada.",
+    "message": "Trabaja ambos lados a la vez, reflejados respecto al centro del cuerpo. Los pinceles también pintan la imagen reflejada; Mover, Rotar y Escalar mueven la tela correspondiente del otro lado de forma reflejada y, con «Mover también la piel», también la piel correspondiente. Una pieza que es su propio reflejo se queda centrada.",
     "description": "Tooltip on the Mirror left/right checkbox, shown under the brushes and under Move, Rotate and Scale."
   },
   "Parts.Move.Mirror.Paired.Fmt": {
