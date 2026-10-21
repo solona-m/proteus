@@ -5068,7 +5068,7 @@
     "description": ""
   },
   "SizeSet.Intro": {
-    "message": "下でチェックしたボディの全サイズを、このMOD全体に追加します。各サイズは作者のサイズのうち最も近いものからリフィットし、そのオプション内の衣装の他のパーツも同じサイズから作り、作者のサイズの隣に「Rue S」「YAB Buff L」などとして保存します。MODにすでにあるサイズはそのままです。 女性向けMODにもTBSEとTBSE-Xを追加できます。胴と脚が男性向けに調整され、専用のグループに保存されます。",
+    "message": "下でチェックしたボディの全サイズを、このMOD全体に追加します。各サイズは作者のサイズのうち最も近いものからリフィットし、そのオプション内の衣装の他のパーツも同じサイズから作り、作者のサイズの隣に「Rue S」「YAB Buff L」などとして保存します。MODにすでにあるサイズはそのままです。女性向けMODにもTBSEとTBSE-Xを追加できます。胴と脚が男性向けに調整され、専用のグループに保存されます。",
     "description": ""
   },
   "SizeSet.Yas": {
@@ -5238,6 +5238,10 @@
   "SizeSet.NotMade": {
     "message": "調整で保存できるものが作られませんでした",
     "description": "Why a men's version couldn't be made, after \"couldn't be made:\"."
+  },
+  "SizeSet.RigUnreadable": {
+    "message": "リグを読み取れないため、男性の形に曲げられません",
+    "description": "Why a men's version couldn't be made, after \"couldn't be made:\": the garment's skinning can't be read."
   },
   "SizeSet.NotInstalledTip.Fmt": {
     "message": "{0}はPenumbraにインストールされていません。インストールしてから、この項目を閉じて開き直してください。",

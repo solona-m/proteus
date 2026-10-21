@@ -260,6 +260,68 @@ public class SizeSetCrossSexTests
     }
 
     [Fact]
+    [Trait("Plan", "AC-sizeset-cross-sex-7")]
+    [Trait("Plan", "EDGE-sizeset-cross-sex-11")]
+    public void A_hand_made_refit_for_group_is_never_taken_for_ours() // [AC-sizeset-cross-sex-7] [EDGE-sizeset-cross-sex-11]
+    {
+        // The Body size panel's "Refit for" saved the top for men into its own group, beside a women's refit there.
+        string root = Mod([Top]);
+        Assert.True(BodyRetargetWriter.Save(root, "Body Retarget", Top, "Rue", "Bibo+ — Small",
+                                            [new BodyRetargetWriter.Refit("Rue L", [1, 2, 3], "Rue L")]).Ok);
+        Assert.True(BodyRetargetWriter.Save(root, "Body Retarget", MenTop, "The Body SE", "Bibo+ — Small",
+                                            [new BodyRetargetWriter.Refit("TBSE", [1, 2, 3], "TBSE")]).Ok);
+        var across = SizeSetRefit.AcrossPieces(SizeSetRefit.PiecesOf(root));
+        Assert.Equal(Strings.SizeSet.MensGroup, SizeSetRefit.MensGroupName(root, across));
+
+        // One holding only a men's option of another name (a panel save named after the size) is not ours either.
+        string other = Mod([Top]);
+        Assert.True(BodyRetargetWriter.Save(other, "Body — Top", MenTop, "The Body SE", "Bibo+ — Small",
+                                            [new BodyRetargetWriter.Refit("Midlander M", [1, 2, 3], "TBSE")]).Ok);
+        Assert.Equal(Strings.SizeSet.MensGroup,
+                     SizeSetRefit.MensGroupName(other, SizeSetRefit.AcrossPieces(SizeSetRefit.PiecesOf(other))));
+    }
+
+    [Fact]
+    [Trait("Plan", "AC-sizeset-cross-sex-3")]
+    [Trait("Plan", "EDGE-sizeset-cross-sex-17")]
+    [Trait("Plan", "EDGE-sizeset-cross-sex-18")]
+    public void Legs_follow_the_chests_men_source() // [AC-sizeset-cross-sex-3] [EDGE-sizeset-cross-sex-17] [EDGE-sizeset-cross-sex-18]
+    {
+        string key = SizeSetRefit.LeadKey("Men's body", "0101", "TBSE");
+        var leads = new Dictionary<string, string> { [key] = "Large" };
+        var asked = new List<string>();
+        string? Ready(string option) { asked.Add(option); return option == "Large" ? "legs in Large" : null; }
+
+        // Legs sized with the chest: cut from the option the chest's men's version was.
+        Assert.Equal((SizeSetRefit.LeadOutcome.FromLead, "Large", "legs in Large"),
+                     SizeSetRefit.FromLead(true, leads, key, Ready));
+        // That option's legs can't be crossed: their own nearest.
+        Assert.Equal((SizeSetRefit.LeadOutcome.LeadUnusable, "Small", (string?)null),
+                     SizeSetRefit.FromLead(true, new Dictionary<string, string> { [key] = "Small" }, key, Ready));
+        // The chest made no men's version this run: their own nearest.
+        Assert.Equal(SizeSetRefit.LeadOutcome.NoLead, SizeSetRefit.FromLead(true, new Dictionary<string, string>(), key, Ready).Outcome);
+        // Legs in a group of their own: their own nearest, never asking for the chest's option.
+        asked.Clear();
+        Assert.Equal(SizeSetRefit.LeadOutcome.Own, SizeSetRefit.FromLead(false, leads, key, Ready).Outcome);
+        Assert.Empty(asked);
+        // Their option is still named by the men's body, "TBSE", as the chest's is.
+        Assert.Equal("TBSE", SupportedBodies.OptionName(SizeSetRefit.AcrossTarget("tbse", "_dwn")!.Value.Body,
+                                                        SizeSetRefit.AcrossTarget("tbse", "_dwn")!.Value.Size));
+    }
+
+    [Fact]
+    [Trait("Plan", "AC-sizeset-cross-sex-5")]
+    [Trait("Plan", "EDGE-sizeset-cross-sex-6")]
+    [Trait("Plan", "EDGE-sizeset-cross-sex-20")]
+    [Trait("Plan", "EDGE-sizeset-cross-sex-21")]
+    public void No_source_is_said_with_why() // [AC-sizeset-cross-sex-5] [EDGE-sizeset-cross-sex-6] [EDGE-sizeset-cross-sex-20] [EDGE-sizeset-cross-sex-21]
+    {
+        Assert.Equal(string.Format(Strings.SizeSet.NoSourceForMenFmt, "Top"), SizeSetRefit.NoSourceNote("Top", "TBSE", null));
+        Assert.Equal(string.Format(Strings.SizeSet.RefusedFmt, "Top", "TBSE", "no deformer"),
+                     SizeSetRefit.NoSourceNote("Top", "TBSE", "no deformer"));
+    }
+
+    [Fact]
     [Trait("Plan", "AC-sizeset-cross-sex-3")]
     public void Variants_give_one_mens_version_and_say_which() // [AC-sizeset-cross-sex-3]
     {

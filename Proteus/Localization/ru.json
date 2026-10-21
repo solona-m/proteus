@@ -5239,6 +5239,10 @@
     "message": "подгонка не дала ничего для сохранения",
     "description": "Why a men's version couldn't be made, after \"couldn't be made:\"."
   },
+  "SizeSet.RigUnreadable": {
+    "message": "его риг не читается, поэтому его нельзя согнуть в мужскую форму",
+    "description": "Why a men's version couldn't be made, after \"couldn't be made:\": the garment's skinning can't be read."
+  },
   "SizeSet.NotInstalledTip.Fmt": {
     "message": "{0} не установлено в Penumbra. Установите его, затем закройте и снова откройте этот раздел.",
     "description": ""

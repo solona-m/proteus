@@ -190,13 +190,13 @@ public class SizeSetCrossSexLocalTests(ITestOutputHelper o)
     /// <paramref name="menSkeleton"/> (the game's when null); its notes and warnings printed.</summary>
     private SizeSetRefit.Result RunMen(string root, IReadOnlyList<string> keys, IReadOnlyList<BodyModIndex.Entry> bodies,
                                        bool remake = false, string? menSkeleton = null, Action<string>? progress = null,
-                                       System.Threading.CancellationToken ct = default)
+                                       System.Threading.CancellationToken ct = default, Func<string, byte[]?>? readGame = null)
     {
         var log = Substitute.For<IPluginLog>();
         var across = new SizeSetRefit.AcrossInputs(
             path => menSkeleton != null && path == OtherRaceWearer.BaseSkeletonPath(CrossSexRefit.Men) ? menSkeleton : null);
-        var result = SizeSetRefit.Run(new SizeSetRefit.Request(root, keys, false, remake, bodies, Game, Ends: false,
-                                                               Across: across),
+        var result = SizeSetRefit.Run(new SizeSetRefit.Request(root, keys, false, remake, bodies, readGame ?? Game,
+                                                               Ends: false, Across: across),
                                       Maps(), log, progress ?? (_ => { }), ct);
         o.WriteLine($"made {result.Made}");
         foreach (string note in result.Notes) o.WriteLine("note: " + note);
@@ -323,7 +323,8 @@ public class SizeSetCrossSexLocalTests(ITestOutputHelper o)
         Assert.DoesNotContain(Groups(root), g => g.Name == men);
     }
 
-    public static TheoryData<string?> MenSkeletons => new() { null, CrossSexRefitLocalTests.IvcsMen };
+    /// <summary>The men's skeleton the collection gives: the game's (none), IVCS, or a file that is not there.</summary>
+    public static TheoryData<string> MenSkeletons => new() { "game", "ivcs", "missing" };
 
     [LocalDataTheory(LocalData.GameData, Starlit, Yab, CrossSexRefitLocalTests.Rue, CrossSexRefitLocalTests.Bibo,
                      CrossSexRefitLocalTests.Tbse, CrossSexRefitLocalTests.IvcsMen, LocalData.TbseUvMaps)]
@@ -331,15 +332,34 @@ public class SizeSetCrossSexLocalTests(ITestOutputHelper o)
     [Trait("Plan", "AC-sizeset-cross-sex-8")]
     [Trait("Plan", "EDGE-sizeset-cross-sex-8")]
     [Trait("Plan", "EDGE-sizeset-cross-sex-9")]
-    public void Starlit_gains_mens_versions_with_its_bones_moved(string? skeleton) // [AC-sizeset-cross-sex-8] [EDGE-sizeset-cross-sex-8] [EDGE-sizeset-cross-sex-9]
+    public void Starlit_gains_mens_versions_with_its_bones_moved(string skeleton) // [AC-sizeset-cross-sex-8] [EDGE-sizeset-cross-sex-8] [EDGE-sizeset-cross-sex-9]
     {
         string root = Copy(Starlit);
+        string? from = skeleton switch
+        {
+            "ivcs" => LocalData.Path(CrossSexRefitLocalTests.IvcsMen),
+            "missing" => Path.Combine(root, "no-such-skeleton.sklb"),
+            _ => null,
+        };
         var result = RunMen(root, ["tbse@women"],
                             Installed(Yab, CrossSexRefitLocalTests.Rue, CrossSexRefitLocalTests.Bibo, CrossSexRefitLocalTests.Tbse),
-                            menSkeleton: skeleton == null ? null : LocalData.Path(skeleton));
+                            menSkeleton: from);
         Assert.Equal(1, result.Made);
         // Every size of Starlit is rigged to YAS's own bones: moved onto the men's, and said.
-        Assert.Contains(result.Warnings!, w => w.Contains("\"TBSE\"") && w.Contains("→"));
+        string moved = Assert.Single(result.Warnings!, w => w.Contains("\"TBSE\"") && w.Contains("→"));
+        bool needs = result.Warnings!.Any(w => w.Contains("[IVCS]"));
+        if (skeleton == "ivcs")
+        {
+            // IVCS has the men's own physics bones: the women's are moved onto them, which only IVCS gives.
+            Assert.Contains("→ iv_", moved);
+            Assert.True(needs, "the IVCS-only bones are said");
+        }
+        else
+        {
+            // The game's skeleton (or a collection file that is not there, which falls back to it) has none of them.
+            Assert.DoesNotContain("→ iv_", moved);
+            Assert.False(needs);
+        }
         var piece = SizeSetRefit.PiecesOf(root, Game, includeEnds: false).First(p => p.Slot == "_dwn");
         var options = PenumbraModMeta.TryReadFileOptions(root, Localization.Strings.SizeSet.MensGroup)!;
         Assert.Contains(options.First(x => x.Name == "TBSE").Files.Keys,
@@ -364,6 +384,24 @@ public class SizeSetCrossSexLocalTests(ITestOutputHelper o)
         result = RunMen(other, ["tbse@women"], Installed(CrossSexRefitLocalTests.Tbse));
         Assert.Single(result.Notes, n => n == string.Format(Localization.Strings.SizeSet.UnreadableFmt, top.Label));
         Assert.Equal(before, Groups(other));
+    }
+
+    [LocalDataFact(LocalData.GameData, Sheer, CrossSexRefitLocalTests.Bibo, CrossSexRefitLocalTests.Tbse, LocalData.TbseUvMaps)]
+    [Trait("Plan", "AC-sizeset-cross-sex-5")]
+    [Trait("Plan", "EDGE-sizeset-cross-sex-20")]
+    public void No_mens_wearer_is_said_with_why() // [AC-sizeset-cross-sex-5] [EDGE-sizeset-cross-sex-20]
+    {
+        // The game's racial deformer can't be read: no men's wearer for any size. Said as that, nothing written.
+        string root = Copy(Sheer);
+        var before = Groups(root);
+        var result = RunMen(root, ["tbse@women"], Installed(CrossSexRefitLocalTests.Bibo, CrossSexRefitLocalTests.Tbse),
+                            readGame: path => path == OtherRaceWearer.PbdPath ? null : Game(path));
+        Assert.Equal(0, result.Made);
+        var top = SizeSetRefit.PiecesOf(root, Game, includeEnds: false).First(p => p.GamePath == SheerTop);
+        string note = Assert.Single(result.Notes, n => n.StartsWith(top.Label + ": \"TBSE\"", StringComparison.Ordinal));
+        Assert.Contains("deformer", note);
+        Assert.DoesNotContain(result.Notes, n => n == string.Format(Localization.Strings.SizeSet.NoSourceForMenFmt, top.Label));
+        Assert.Equal(before, Groups(root));
     }
 
     internal static string TbseChestRel =>SupportedBodies.Of("tbse", "_top", false)!.Sizes[0].Rel;

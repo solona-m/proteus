@@ -5068,7 +5068,7 @@
     "description": ""
   },
   "SizeSet.Intro": {
-    "message": "为整个模组添加下方勾选体型的每个尺码。每个尺码都从作者最接近它的尺码重新适配，该选项中套装的其他部件也从同一尺码适配，并以“Rue S”“YAB Buff L”等名称保存在作者的尺码旁边。模组已有的尺码保持不变。 女性模组也可以加入 TBSE 和 TBSE-X：其上身和腿部会为男性调整，并保存在单独的组中。",
+    "message": "为整个模组添加下方勾选体型的每个尺码。每个尺码都从作者最接近它的尺码重新适配，该选项中套装的其他部件也从同一尺码适配，并以“Rue S”“YAB Buff L”等名称保存在作者的尺码旁边。模组已有的尺码保持不变。女性模组也可以加入 TBSE 和 TBSE-X：其上身和腿部会为男性调整，并保存在单独的组中。",
     "description": ""
   },
   "SizeSet.Yas": {
@@ -5238,6 +5238,10 @@
   "SizeSet.NotMade": {
     "message": "调整没有产生可保存的内容",
     "description": "Why a men's version couldn't be made, after \"couldn't be made:\"."
+  },
+  "SizeSet.RigUnreadable": {
+    "message": "无法读取其绑定，因此无法弯成男性形状",
+    "description": "Why a men's version couldn't be made, after \"couldn't be made:\": the garment's skinning can't be read."
   },
   "SizeSet.NotInstalledTip.Fmt": {
     "message": "Penumbra 中未安装 {0}。请安装后关闭并重新打开此部分。",

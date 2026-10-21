@@ -5239,6 +5239,10 @@
     "message": "le réajustement n'a rien produit à enregistrer",
     "description": "Why a men's version couldn't be made, after \"couldn't be made:\"."
   },
+  "SizeSet.RigUnreadable": {
+    "message": "son rig ne peut pas être lu, il ne peut donc pas être plié en forme d'homme",
+    "description": "Why a men's version couldn't be made, after \"couldn't be made:\": the garment's skinning can't be read."
+  },
   "SizeSet.NotInstalledTip.Fmt": {
     "message": "{0} n'est pas installé dans Penumbra. Installez-le, puis fermez et rouvrez cette section.",
     "description": ""

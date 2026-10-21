@@ -5239,6 +5239,10 @@
     "message": "die Anpassung hat nichts zum Speichern ergeben",
     "description": "Why a men's version couldn't be made, after \"couldn't be made:\"."
   },
+  "SizeSet.RigUnreadable": {
+    "message": "seine Gewichtung lässt sich nicht lesen, daher kann es nicht in Männerform gebogen werden",
+    "description": "Why a men's version couldn't be made, after \"couldn't be made:\": the garment's skinning can't be read."
+  },
   "SizeSet.NotInstalledTip.Fmt": {
     "message": "{0} ist in Penumbra nicht installiert. Installiere es und schließe und öffne diesen Abschnitt dann erneut.",
     "description": ""

@@ -52,9 +52,9 @@ internal sealed class SizeSetPanel(PenumbraBridge penumbra, UVRemapService uvRem
     /// and the men's again "for men" when it has women's chest or legs pieces to cross (<see cref="SizeSetRefit.Offered"/>):
     /// ticked apart, so a tick on TBSE kept from a men's mod never writes men's versions into a women's one.
     /// </summary>
-    private List<SizeSetRefit.Piece>? races;
-    private string? racesFor;
-    private Task<List<SizeSetRefit.Piece>>? readingRaces;
+    private List<SizeSetRefit.Piece>? pieces;
+    private string? piecesFor;
+    private Task<List<SizeSetRefit.Piece>>? readingPieces;
 
     /// <summary>When the last look was started, and how soon one that came back with nothing is tried again.</summary>
     private long scanTriedAt;
@@ -96,11 +96,11 @@ internal sealed class SizeSetPanel(PenumbraBridge penumbra, UVRemapService uvRem
             else log.Warning(scan.Exception!, "[Proteus] size set: reading the body mods failed");
         }
 
-        ReadRaces(modRoot, modDir);
+        ReadPieces(modRoot, modDir);
         ImGui.TextWrapped(s.Intro);
         ImGui.Spacing();
-        if (installed == null || races == null) ImGui.TextDisabled(Strings.AutoRefit.FindingBodies);
-        else if (races.Count == 0) ImGui.TextDisabled(s.NoPieces);
+        if (installed == null || pieces == null) ImGui.TextDisabled(Strings.AutoRefit.FindingBodies);
+        else if (pieces.Count == 0) ImGui.TextDisabled(s.NoPieces);
 
         bool busy = running != null;
         using (ImRaii.Disabled(busy))
@@ -151,8 +151,8 @@ internal sealed class SizeSetPanel(PenumbraBridge penumbra, UVRemapService uvRem
             {
                 config.SizeSetEnds = ends;
                 config.Save();
-                // The races offered come from the pieces, and a mod of shoes alone has none without them.
-                racesFor = null;
+                // The bodies offered come from the pieces, and a mod of shoes alone has none without them.
+                piecesFor = null;
             }
             if (ImGui.IsItemHovered()) ImGui.SetTooltip(s.EndsTip);
 
@@ -204,26 +204,26 @@ internal sealed class SizeSetPanel(PenumbraBridge penumbra, UVRemapService uvRem
     }
 
     /// <summary>The bodies for the open mod's pieces; none until they are read.</summary>
-    private IReadOnlyList<SizeSetRefit.Choice> Offered() => races == null ? [] : SizeSetRefit.Offered(races);
+    private IReadOnlyList<SizeSetRefit.Choice> Offered() => pieces == null ? [] : SizeSetRefit.Offered(pieces);
 
-    /// <summary>Read the open mod's races on a worker, once per mod: its manifest, which can be large.</summary>
-    private void ReadRaces(string modRoot, string modDir)
+    /// <summary>Read the open mod's pieces on a worker, once per mod: its manifest, which can be large.</summary>
+    private void ReadPieces(string modRoot, string modDir)
     {
-        if (readingRaces is { IsCompleted: true } done)
+        if (readingPieces is { IsCompleted: true } done)
         {
-            readingRaces = null;
-            if (done.IsCompletedSuccessfully) races = done.Result;
+            readingPieces = null;
+            if (done.IsCompletedSuccessfully) pieces = done.Result;
             else
             {
-                log.Warning(done.Exception!, "[Proteus] size set: reading {0}'s pieces failed", racesFor ?? "");
-                races = [];
+                log.Warning(done.Exception!, "[Proteus] size set: reading {0}'s pieces failed", piecesFor ?? "");
+                pieces = [];
             }
         }
-        if (racesFor == modDir || readingRaces != null) return;
-        racesFor = modDir;
-        races = null;
+        if (piecesFor == modDir || readingPieces != null) return;
+        piecesFor = modDir;
+        pieces = null;
         bool ends = config.SizeSetEnds;
-        readingRaces = Task.Run(() => SizeSetRefit.PiecesOf(modRoot, readGameFile, ends));
+        readingPieces = Task.Run(() => SizeSetRefit.PiecesOf(modRoot, readGameFile, ends));
     }
 
     /// <summary>Find which bodies are installed, on a worker. Framework thread: Penumbra's mod list is asked for here.</summary>

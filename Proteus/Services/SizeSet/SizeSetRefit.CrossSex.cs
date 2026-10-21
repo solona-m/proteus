@@ -127,18 +127,68 @@ internal static partial class SizeSetRefit
     /// <summary>
     /// The group a women's mod's men's versions go into: the one an earlier run saved them into — found by the record,
     /// whatever language named it — else a new one named in the current language.
+    /// <para/>
+    /// Only a group of ours that holds nothing but men's versions counts: every entry of it a men's body's option
+    /// ("TBSE", "TBSE-X") at the c0101 path of one of these pieces. A Body size panel "Refit for" save keeps its own
+    /// group, beside the women's refits there, and the size set never writes into it.
     /// </summary>
     internal static string MensGroupName(string modRoot, IReadOnlyList<Piece> across)
     {
         var saves = across.Select(p => RacialModelBake.WithRace(p.GamePath, CrossSexRefit.Men))
                           .ToHashSet(StringComparer.OrdinalIgnoreCase);
+        var names = SupportedBodies.Choices.Where(c => c.Male)
+                                   .Select(c => AcrossTarget(c.Key, "_top") is { } at ? SupportedBodies.OptionName(at.Body, at.Size) : null)
+                                   .OfType<string>().ToHashSet(StringComparer.OrdinalIgnoreCase);
         var record = BodyRetargetWriter.ReadRecord(modRoot);
+        if (record == null) return Strings.SizeSet.MensGroup;
         var groups = PenumbraModMeta.TryReadGroups(modRoot)?.Select(g => g.Name).ToHashSet(StringComparer.OrdinalIgnoreCase);
-        return (record?.Options ?? []).Where(e => !e.InAuthorGroup && saves.Contains(e.GamePath))
-                                      .Select(e => record!.GroupOf(e))
-                                      .FirstOrDefault(g => g.Length > 0 && (groups?.Contains(g) ?? false))
+        bool OnlyMens(string group)
+            => record.Options.Where(e => string.Equals(record.GroupOf(e), group, StringComparison.OrdinalIgnoreCase))
+                             .All(e => !e.InAuthorGroup && saves.Contains(e.GamePath) && names.Contains(e.Name));
+        return record.Options.Where(e => !e.InAuthorGroup && saves.Contains(e.GamePath))
+                             .Select(e => record.GroupOf(e))
+                             .Distinct(StringComparer.OrdinalIgnoreCase)
+                             .FirstOrDefault(g => g.Length > 0 && (groups?.Contains(g) ?? false) && OnlyMens(g))
                ?? Strings.SizeSet.MensGroup;
     }
+
+    /// <summary>How a legs piece's men's version picks its source (<see cref="FromLead{T}"/>).</summary>
+    internal enum LeadOutcome
+    {
+        /// <summary>Not a follower: its own nearest.</summary>
+        Own,
+        /// <summary>Cut from the option the chest's men's version was.</summary>
+        FromLead,
+        /// <summary>The chest's option could not be read or crossed for it: its own nearest.</summary>
+        LeadUnusable,
+        /// <summary>The chest made no men's version this run to follow: its own nearest.</summary>
+        NoLead,
+    }
+
+    /// <summary>
+    /// Which of the author's sizes legs sized with a chest are cut from for a men's option: the one the chest's men's
+    /// version there was, when it made one and that size can be crossed for the legs too; otherwise none, and the legs
+    /// take their own nearest.
+    /// </summary>
+    /// <param name="leadKey">The option's key (<see cref="LeadKey"/>).</param>
+    /// <param name="prepare">The legs' own size in the chest's option, ready to cross; null when there is none.</param>
+    internal static (LeadOutcome Outcome, string? Option, T? Chosen) FromLead<T>(
+        bool followsChest, IReadOnlyDictionary<string, string> leadSources, string leadKey, Func<string, T?> prepare)
+        where T : class
+    {
+        if (!followsChest) return (LeadOutcome.Own, null, null);
+        if (!leadSources.TryGetValue(leadKey, out var option)) return (LeadOutcome.NoLead, null, null);
+        return prepare(option) is { } chosen ? (LeadOutcome.FromLead, option, chosen) : (LeadOutcome.LeadUnusable, option, null);
+    }
+
+    /// <summary>
+    /// What is said when none of the author's sizes could be crossed: why the men's wearer could not be built, when
+    /// that is what stopped one; else that none was made on a body the maps join to a man's.
+    /// </summary>
+    internal static string NoSourceNote(string piece, string option, string? wearerRefusal)
+        => wearerRefusal != null
+            ? string.Format(Strings.SizeSet.RefusedFmt, piece, option, wearerRefusal)
+            : string.Format(Strings.SizeSet.NoSourceForMenFmt, piece);
 
     /// <summary>
     /// One of the author's sizes made ready to cross: its wearer built, and the body it was made on bent for a man the
@@ -146,6 +196,157 @@ internal static partial class SizeSetRefit
     /// </summary>
     private sealed record Ready(Candidate Candidate, OtherRaceWearer.Inputs Wearer, string? SkeletonFrom,
                                 BodySizeCatalog MadeFor, string BentPath);
+
+    /// <summary>
+    /// The author's sizes of one women's piece as men's versions' sources: which may be crossed (made on a skin the maps
+    /// join to a man's), each made ready once (<see cref="Prepare"/>) — its own wearer, its made-for body bent — and the
+    /// nearest of them to a men's body (<see cref="Nearest"/>).
+    /// </summary>
+    private sealed class MensSources
+    {
+        private readonly Request request;
+        private readonly AcrossInputs inputs;
+        private readonly Piece piece;
+        private readonly Sources sources;
+        private readonly IPluginLog log;
+        private readonly Action<string> note;
+        private readonly IReadOnlyList<PenumbraModMeta.Redirect> redirects;
+        private readonly List<(string Name, System.Text.Json.JsonElement Group)>? groups;
+        private readonly List<object>? defaultManipulations;
+        private readonly Dictionary<string, string?> layouts = new(StringComparer.OrdinalIgnoreCase);
+        private readonly Dictionary<Candidate, Ready?> ready = [];
+        private readonly Dictionary<string, System.Numerics.Vector3[]> probes = new(StringComparer.OrdinalIgnoreCase);
+
+        /// <summary>Made-for bodies bent so far, for the log.</summary>
+        public int Bent { get; private set; }
+
+        /// <summary>Why the last size refused for its wearer could not be crossed: its rig unreadable, or no men's
+        /// wearer for it. What the author is told when no size could be crossed for that reason.</summary>
+        public string? WearerRefusal { get; private set; }
+
+        public MensSources(Request request, AcrossInputs inputs, Piece piece, Sources sources,
+                           IReadOnlyList<PenumbraModMeta.Redirect> redirects, IPluginLog log, Action<string> note)
+        {
+            this.request = request;
+            this.inputs = inputs;
+            this.piece = piece;
+            this.sources = sources;
+            this.redirects = redirects;
+            this.log = log;
+            this.note = note;
+            groups = PenumbraModMeta.TryReadGroups(request.ModRoot);
+            defaultManipulations = PenumbraModMeta.TryReadDefaultData(request.ModRoot)?.Manipulations;
+        }
+
+        private byte[]? ReadGame(string path)
+        {
+            try { return request.ReadGameFile!(path); }
+            catch (Exception e)
+            {
+                // Most paths asked for are only maybe there (an extra skeleton per entry).
+                log.Debug("[Proteus] size set: the game gave nothing for {0}: {1}", path, e.Message);
+                return null;
+            }
+        }
+
+        private string? LayoutOf(Candidate c)
+        {
+            if (layouts.TryGetValue(c.SourcePath, out var known)) return known;
+            string? layout = null;
+            try
+            {
+                if (File.Exists(c.SourcePath) && ModelPartReader.Read(File.ReadAllBytes(c.SourcePath)) is { } body)
+                    layout = BodyCorrespondence.LayoutOf(body);
+            }
+            catch (Exception e) when (e is IOException or UnauthorizedAccessException or InvalidOperationException
+                                           or ArgumentException or IndexOutOfRangeException)
+            {
+                note($"{Path.GetFileName(c.SourcePath)} could not be read ({e.GetType().Name})");
+            }
+            return layouts[c.SourcePath] = layout;
+        }
+
+        /// <summary>
+        /// A size made ready to cross, once: its own wearer — what the option it is cut from carries (an extra skeleton,
+        /// Est entries) is what the men's version loads — and its made-for body bent with that same wearer, as the job
+        /// bends the garment. Null, said in the log, when it may not be crossed.
+        /// </summary>
+        public Ready? Prepare(Candidate c)
+        {
+            if (ready.TryGetValue(c, out var known)) return known;
+            ready[c] = null;
+            if (!AcrossEligible(LayoutOf(c)))
+            {
+                note($"{c.Name}: made on a {LayoutOf(c) ?? "unreadable"} skin, which no map joins to a man's");
+                return null;
+            }
+            string root = request.ModRoot;
+            string? cutFrom = piece.Group != null && c.Option != null ? $"{piece.Group} / {c.Option}" : null;
+            var wearer = OtherRaceWearer.Gather(CrossSexRefit.Men, piece.GamePath, ReadGame, inputs.ResolveCollection,
+                path => OtherRaceRefit.CarriedFile(redirects, cutFrom, path) is { } rel ? ReadModFile(root, rel) : null,
+                OtherRaceRefit.EstEntriesFor(groups, defaultManipulations, cutFrom),
+                (file, e) => log.Warning(e, "[Proteus] size set: could not read {0}", file));
+            if (ModelSkinReader.Read(c.Bytes, null, null) is not { } skin)
+            {
+                WearerRefusal = Strings.SizeSet.RigUnreadable;
+                note($"{c.Name}: its rig could not be read");
+                return null;
+            }
+            var made = OtherRaceWearer.Build(wearer, skin);
+            if (made.Wearer is not { } who)
+            {
+                WearerRefusal = made.Refusal;
+                note($"{c.Name}: no man's wearer: {made.Refusal}");
+                return null;
+            }
+            if (made.FellBack) note("the collection's men's skeleton could not be read; the game's was used");
+            var madeFor = c.Entry.Catalog with { Options = [c.Pick!.Option] };
+            var bentCat = BakedBodyCatalog.Lowered(madeFor, CrossSexRefit.Women, CrossSexRefit.Men, who, [piece.Slot],
+                                                   out var failed, byAlias: true, made.Planner, note);
+            if (bentCat.For(piece.Slot).FirstOrDefault() is not { } bentBody)
+            {
+                note($"{c.Name}: its body could not be bent for a man: {string.Join("; ", failed)}");
+                return null;
+            }
+            Bent++;
+            return ready[c] = new Ready(c, wearer, made.FellBack ? null : wearer.ModdedFrom, madeFor, bentCat.PathOf(bentBody));
+        }
+
+        /// <summary>The legs' own size in the chest's option <paramref name="option"/>, ready to cross; null when it
+        /// gives the legs nothing, or that size may not be crossed.</summary>
+        public Ready? InOption(string option)
+            => piece.Group != null && ResolveOptionFile(redirects, piece.GamePath, piece.Group, option) is { } file
+               && sources.ByFile(option, file) is { } c
+                ? Prepare(c)
+                : null;
+
+        /// <summary>
+        /// The nearest of the sizes that may be crossed to the men's body at <paramref name="targetPath"/>, rigged alike
+        /// (not YAS) first, and the log line saying why; null when none may be. Read between bodies alone: the garment's
+        /// own skin is a women's, and no man's skin is near it.
+        /// </summary>
+        public (Ready Chosen, string Why)? Nearest(string targetPath, string option)
+        {
+            var said = new List<string>();
+            var may = sources.Choices.Select(Prepare).OfType<Ready>().ToList();
+            var alike = RiggedAlike(may, r => r.Candidate.Yas, targetYas: false);
+            foreach (var r in may.Except(alike)) said.Add($"{r.Candidate.Name}: rigged for YAS");
+            var eligible = new List<(Ready, SourceDistance)>();
+            foreach (var r in alike)
+            {
+                var (p90, mean) = BodyDistance(r.BentPath, targetPath, ProbesOf);
+                var d = new SourceDistance(p90, mean, 0f, 0f, r.Candidate.Order);
+                eligible.Add((r, d));
+                said.Add($"{r.Candidate.Name}: {Describe(d)}");
+            }
+            if (eligible.Count == 0) return null;
+            var (chosen, step, gap) = Choose(eligible);
+            return (chosen, $"{option} from {chosen.Candidate.Name} (by {step}, {gap * 1000f:F1} mm ahead; {string.Join("; ", said)})");
+        }
+
+        private System.Numerics.Vector3[] ProbesOf(string path)
+            => probes.TryGetValue(path, out var p) ? p : probes[path] = BodyProbes(path, note);
+    }
 
     private static int RunAcross(Request request, IReadOnlyList<Piece> pieces, UVRemapService? uvRemap, IPluginLog log,
                                  Action<string> progress, List<string> notes, List<string> warnings, CancellationToken ct)
@@ -224,107 +425,13 @@ internal static partial class SizeSetRefit
             notes.Add(string.Format(Strings.SizeSet.UnreadableFmt, piece.Label));
             return 0;
         }
-
-        // ── which of the author's sizes may be crossed: made on a skin the maps join, its body bent for a man ──
         var redirects = PenumbraModMeta.ReadAllRedirects(root);
-        var groups = PenumbraModMeta.TryReadGroups(root);
-        var defaultManipulations = PenumbraModMeta.TryReadDefaultData(root)?.Manipulations;
+        var mens = new MensSources(request, inputs, piece, sources, redirects, log, Note);
         string save = RacialModelBake.WithRace(piece.GamePath, CrossSexRefit.Men);
-        var layouts = new Dictionary<string, string?>(StringComparer.OrdinalIgnoreCase);
-        var ready = new Dictionary<Candidate, Ready?>();
-        int bent = 0;
-        byte[]? ReadGame(string path)
-        {
-            try { return request.ReadGameFile!(path); }
-            catch (Exception e)
-            {
-                // Most paths asked for are only maybe there (an extra skeleton per entry).
-                log.Debug("[Proteus] size set: the game gave nothing for {0}: {1}", path, e.Message);
-                return null;
-            }
-        }
-        string? LayoutOf(Candidate c)
-        {
-            if (layouts.TryGetValue(c.SourcePath, out var known)) return known;
-            string? layout = null;
-            try
-            {
-                if (File.Exists(c.SourcePath) && ModelPartReader.Read(File.ReadAllBytes(c.SourcePath)) is { } body)
-                    layout = BodyCorrespondence.LayoutOf(body);
-            }
-            catch (Exception e) when (e is IOException or UnauthorizedAccessException or InvalidOperationException
-                                           or ArgumentException or IndexOutOfRangeException)
-            {
-                Note($"{Path.GetFileName(c.SourcePath)} could not be read ({e.GetType().Name})");
-            }
-            return layouts[c.SourcePath] = layout;
-        }
-        // Each size its own wearer: what the option it is cut from carries (an extra skeleton, Est entries) is what the
-        // men's version loads, and the bend of its body is made with the same wearer the job bends the garment with.
-        Ready? Prepare(Candidate c)
-        {
-            if (ready.TryGetValue(c, out var known)) return known;
-            ready[c] = null;
-            if (!AcrossEligible(LayoutOf(c)))
-            {
-                Note($"{c.Name}: made on a {LayoutOf(c) ?? "unreadable"} skin, which no map joins to a man's");
-                return null;
-            }
-            string? cutFrom = piece.Group != null && c.Option != null ? $"{piece.Group} / {c.Option}" : null;
-            var wearer = OtherRaceWearer.Gather(CrossSexRefit.Men, piece.GamePath, ReadGame, inputs.ResolveCollection,
-                path => OtherRaceRefit.CarriedFile(redirects, cutFrom, path) is { } rel ? ReadModFile(root, rel) : null,
-                OtherRaceRefit.EstEntriesFor(groups, defaultManipulations, cutFrom),
-                (file, e) => log.Warning(e, "[Proteus] size set: could not read {0}", file));
-            if (ModelSkinReader.Read(c.Bytes, null, null) is not { } skin)
-            {
-                Note($"{c.Name}: its rig could not be read");
-                return null;
-            }
-            var made = OtherRaceWearer.Build(wearer, skin);
-            if (made.Wearer is not { } who)
-            {
-                Note($"{c.Name}: no man's wearer: {made.Refusal}");
-                return null;
-            }
-            if (made.FellBack) Note("the collection's men's skeleton could not be read; the game's was used");
-            var madeFor = c.Entry.Catalog with { Options = [c.Pick!.Option] };
-            var bentCat = BakedBodyCatalog.Lowered(madeFor, CrossSexRefit.Women, CrossSexRefit.Men, who, [piece.Slot],
-                                                   out var failed, byAlias: true, made.Planner, Note);
-            if (bentCat.For(piece.Slot).FirstOrDefault() is not { } bentBody)
-            {
-                Note($"{c.Name}: its body could not be bent for a man: {string.Join("; ", failed)}");
-                return null;
-            }
-            bent++;
-            return ready[c] = new Ready(c, wearer, made.FellBack ? null : wearer.ModdedFrom, madeFor, bentCat.PathOf(bentBody));
-        }
-
-        // The nearest is read between bodies alone: the garment's own skin is a women's, and no man's skin is near it.
-        var probes = new Dictionary<string, System.Numerics.Vector3[]>(StringComparer.OrdinalIgnoreCase);
-        System.Numerics.Vector3[] ProbesOf(string path) => probes.TryGetValue(path, out var p) ? p : probes[path] = BodyProbes(path, Note);
-        (Ready Chosen, string Why)? Nearest(string targetPath, string option)
-        {
-            var said = new List<string>();
-            var may = sources.Choices.Select(c => (c, r: Prepare(c))).Where(x => x.r != null).Select(x => x.r!).ToList();
-            var alike = RiggedAlike(may, r => r.Candidate.Yas, targetYas: false);
-            foreach (var r in may.Except(alike)) said.Add($"{r.Candidate.Name}: rigged for YAS");
-            var eligible = new List<(Ready, SourceDistance)>();
-            foreach (var r in alike)
-            {
-                var (p90, mean) = BodyDistance(r.BentPath, targetPath, ProbesOf);
-                var d = new SourceDistance(p90, mean, 0f, 0f, r.Candidate.Order);
-                eligible.Add((r, d));
-                said.Add($"{r.Candidate.Name}: {Describe(d)}");
-            }
-            if (eligible.Count == 0) return null;
-            var (chosen, step, gap) = Choose(eligible);
-            return (chosen, $"{option} from {chosen.Candidate.Name} (by {step}, {gap * 1000f:F1} mm ahead; {string.Join("; ", said)})");
-        }
 
         BodySizeMatch.NeedNear(sources.Choices.Count + 2 * mensKeys.Count);
         using var group = new SizeGroup(root, piece, groupName, save);
-        int ownSaved = 0;
-        bool anySource = true;
+        int saved = 0;
         foreach (string key in mensKeys)
         {
             ct.ThrowIfCancellationRequested();
@@ -351,23 +458,19 @@ internal static partial class SizeSetRefit
 
             // ── which of the author's sizes: the one the chest's men's version was, else the nearest ──
             string leadKey = LeadKey(groupName, "0101", option);
-            Ready? chosen = null;
-            if (piece.FollowsChest && leadSources.TryGetValue(leadKey, out var leadOption) && piece.Group != null)
+            var (outcome, leadOption, chosen) = FromLead(piece.FollowsChest, leadSources, leadKey, mens.InOption);
+            switch (outcome)
             {
-                var c = ResolveOptionFile(redirects, piece.GamePath, piece.Group, leadOption) is { } file
-                    ? sources.ByFile(leadOption, file)
-                    : null;
-                chosen = c != null ? Prepare(c) : null;
-                Note(chosen != null ? $"{option} from \"{leadOption}\", as the chest's was"
-                                    : $"{option}: not cut from \"{leadOption}\" as the chest's was; the nearest instead");
+                case LeadOutcome.FromLead: Note($"{option} from \"{leadOption}\", as the chest's was"); break;
+                case LeadOutcome.LeadUnusable: Note($"{option}: not cut from \"{leadOption}\" as the chest's was; the nearest instead"); break;
+                case LeadOutcome.NoLead: Note($"{option}: the chest got no men's version from this run to follow; the nearest instead"); break;
             }
-            else if (piece.FollowsChest)
-                Note($"{option}: the chest got no men's version from this run to follow; the nearest instead");
             if (chosen == null)
             {
-                if (Nearest(targetPath, option) is not { } nearest)
+                if (mens.Nearest(targetPath, option) is not { } nearest)
                 {
-                    anySource = false;
+                    // None may be crossed: no other men's body would find one either.
+                    notes.Add(NoSourceNote(piece.Label, option, mens.WearerRefusal));
                     break;
                 }
                 chosen = nearest.Chosen;
@@ -375,16 +478,16 @@ internal static partial class SizeSetRefit
             }
 
             progress(string.Format(Strings.SizeSet.WorkingFmt, piece.Label, option));
-            var started = clock.ElapsedMilliseconds;
-            var c0 = chosen.Candidate;
+            long started = clock.ElapsedMilliseconds;
+            var c = chosen.Candidate;
             var job = CrossSexRefitJob.Run(new CrossSexRefitJob.Inputs(
-                c0.Bytes, piece.GamePath, CrossSexRefit.Men, chosen.MadeFor, null, men,
+                c.Bytes, piece.GamePath, CrossSexRefit.Men, chosen.MadeFor, null, men,
                 o => RefitCore.Normal(o.Rel) == RefitCore.Normal(rel), chosen.Wearer, uvRemap, log,
                 CarryPiercings: request.Piercings));
             var made = job.Sizes.FirstOrDefault();
             var (ok, refusal, said) = Judge(piece.Label, option, job, made, chosen.SkeletonFrom);
             log.Information("[Proteus] size set: {0} for men: {1} in {2} ms (source in {3} ms, {4} bodies bent): {5}",
-                            piece.Label, option, clock.ElapsedMilliseconds - started, started, bent,
+                            piece.Label, option, clock.ElapsedMilliseconds - started, started, mens.Bent,
                             ok ? $"{made!.Folds} folded, {made.Landed?.VertexCoverage:P1} matched" : refusal ?? "");
             if (!ok)
             {
@@ -393,19 +496,19 @@ internal static partial class SizeSetRefit
             }
 
             ct.ThrowIfCancellationRequested();
-            if (!group.Save(target.Dir, RefitCore.LabelFrom(c0.Entry.Name, [c0.Pick!.Option.Label]),
+            if (!group.Save(target.Dir, RefitCore.LabelFrom(c.Entry.Name, [c.Pick!.Option.Label]),
                             [new BodyRetargetWriter.Refit(option, made!.Saved!.Model, onto.Label, Materials: made.Saved.Materials)],
                             sourceOption: null, notes, manipulations: MensManipulations(job.Route, job.Est, save)))
                 continue;
-            ownSaved++;
+            saved++;
             warnings.AddRange(said);
-            if (!piece.FollowsChest && c0.Option != null) leadSources[leadKey] = c0.Option;
-            if (OtherVariants(piece, c0.File, c0.Pick, preferred, readings) is { Count: > 0 })
-                warnings.Add(string.Format(Strings.SizeSet.OneVariantFmt, piece.Label, c0.Name));
+            // The first piece of an outfit to make an option leads it; legs following the chest never do.
+            if (!piece.FollowsChest && c.Option != null) leadSources[leadKey] = c.Option;
+            if (OtherVariants(piece, c.File, c.Pick, preferred, readings) is { Count: > 0 })
+                warnings.Add(string.Format(Strings.SizeSet.OneVariantFmt, piece.Label, c.Name));
         }
-        if (!anySource) notes.Add(string.Format(Strings.SizeSet.NoSourceForMenFmt, piece.Label));
         group.RestoreDefault();
-        return ownSaved;
+        return saved;
     }
 
     /// <summary>

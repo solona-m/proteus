@@ -5239,6 +5239,10 @@
     "message": "맞춤 결과 저장할 것이 없습니다",
     "description": "Why a men's version couldn't be made, after \"couldn't be made:\"."
   },
+  "SizeSet.RigUnreadable": {
+    "message": "리그를 읽을 수 없어 남성 체형으로 굽힐 수 없습니다",
+    "description": "Why a men's version couldn't be made, after \"couldn't be made:\": the garment's skinning can't be read."
+  },
   "SizeSet.NotInstalledTip.Fmt": {
     "message": "{0}이(가) Penumbra에 설치되어 있지 않습니다. 설치한 뒤 이 항목을 닫았다가 다시 여세요.",
     "description": ""

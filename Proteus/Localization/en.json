@@ -5239,6 +5239,10 @@
     "message": "the refit made nothing to save",
     "description": "Why a men's version couldn't be made, after \"couldn't be made:\"."
   },
+  "SizeSet.RigUnreadable": {
+    "message": "its rig can't be read, so it can't be bent to a man's shape",
+    "description": "Why a men's version couldn't be made, after \"couldn't be made:\": the garment's skinning can't be read."
+  },
   "SizeSet.NotInstalledTip.Fmt": {
     "message": "{0} isn't installed in Penumbra. Install it, then close and reopen this section.",
     "description": "Tooltip of a body that can't be ticked because its mod isn't installed. {0} is the body."

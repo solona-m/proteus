@@ -242,6 +242,9 @@ public sealed class SizeSetStrings
         "{0}: men get one version, made from \"{1}\"; the mod's other variants of it stay women's only.");
 
     public readonly string NotMade = Loc.Localize("SizeSet.NotMade", "the refit made nothing to save");
+
+    public readonly string RigUnreadable = Loc.Localize("SizeSet.RigUnreadable",
+        "its rig can't be read, so it can't be bent to a man's shape");
 }
 
 /// <summary>The automatic body refit's section of Settings, and the words it puts in chat.</summary>

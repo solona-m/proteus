@@ -5239,6 +5239,10 @@
     "message": "el reajuste no produjo nada que guardar",
     "description": "Why a men's version couldn't be made, after \"couldn't be made:\"."
   },
+  "SizeSet.RigUnreadable": {
+    "message": "su rig no se puede leer, así que no se puede doblar a forma de hombre",
+    "description": "Why a men's version couldn't be made, after \"couldn't be made:\": the garment's skinning can't be read."
+  },
   "SizeSet.NotInstalledTip.Fmt": {
     "message": "{0} no está instalado en Penumbra. Instálalo y luego cierra y vuelve a abrir esta sección.",
     "description": ""
