@@ -15,8 +15,9 @@ namespace Proteus.Services;
 /// the drawn model at the picked race's path, with its EQDP entry.
 /// <para/>
 /// Only chest and legs garments (<see cref="Supported"/>), and only bodies whose skin layouts the maps join: a woman's
-/// bibo or the game's, a man's TBSE or the game's (<see cref="LayoutsPair"/>). The auto refit and the size set never
-/// cross the sexes: they write into mods with nobody looking.
+/// bibo or the game's, a man's TBSE or the game's (<see cref="LayoutsPair"/>). The auto refit never crosses the sexes:
+/// it writes into mods with nobody looking. The size set does, women's to TBSE and TBSE-X only, when the author ticks
+/// those bodies "for men" (see <c>SizeSetRefit.CrossSex.cs</c>), into a group of their own.
 /// </summary>
 internal static class CrossSexRefit
 {

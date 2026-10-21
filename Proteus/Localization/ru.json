@@ -5068,7 +5068,7 @@
     "description": ""
   },
   "SizeSet.Intro": {
-    "message": "Добавляет во весь этот мод все размеры отмеченных ниже тел. Каждый размер подгоняется с ближайшего к нему размера автора, остальные вещи комплекта в этой опции — с того же размера, и сохраняется рядом с размерами автора как «Rue S», «YAB Buff L» и так далее. Размеры, которые в моде уже есть, не трогаются.",
+    "message": "Добавляет во весь этот мод все размеры отмеченных ниже тел. Каждый размер подгоняется с ближайшего к нему размера автора, остальные вещи комплекта в этой опции — с того же размера, и сохраняется рядом с размерами автора как «Rue S», «YAB Buff L» и так далее. Размеры, которые в моде уже есть, не трогаются. Женский мод тоже может получить TBSE и TBSE-X: его торс и ноги подгоняются для мужчин и сохраняются в отдельной группе.",
     "description": ""
   },
   "SizeSet.Yas": {
@@ -5194,6 +5194,54 @@
   "SizeSet.Working.Fmt": {
     "message": "Подгоняю {0} под {1}...",
     "description": ""
+  },
+  "SizeSet.ForMen.Fmt": {
+    "message": "{0} (для мужчин)",
+    "description": "Checkbox label for a men's body offered for a women's mod. {0} is the body (\"TBSE\")."
+  },
+  "SizeSet.ForMen.Tip.Fmt": {
+    "message": "Женские вещи этого мода для торса и ног получают мужскую версию на {0}: подогнанную для мужчин Midlander через карты тела, которые скачиваются, когда понадобятся впервые, — каждую из того размера автора, чьё тело, согнутое в мужскую форму, ближе всего к его телу. Они сохраняются в отдельной группе «{1}», так что женские размеры остаются как есть. Обувь и перчатки между полами не подгоняются, а вещь, которую автор уже сделал для мужчин, остаётся его.",
+    "description": "Tooltip. {0} is a men's body (\"TBSE\"), {1} the group the men's versions go into."
+  },
+  "SizeSet.MensGroup": {
+    "message": "Мужское тело",
+    "description": "The name of the Penumbra group a women's mod's men's versions are saved into."
+  },
+  "SizeSet.CheckInGame": {
+    "message": "Проверьте в игре:",
+    "description": "Heading over the sizes saved that want a look in game."
+  },
+  "SizeSet.Warning.Fmt": {
+    "message": "{0}, «{1}»: {2}",
+    "description": "One line under \"Check in game\". {0} is the piece, {1} the size, {2} what to look at."
+  },
+  "SizeSet.MenMapsMissing": {
+    "message": "Мужские версии не созданы: нужных карт тела ещё нет. Proteus их скачивает; добавьте размеры снова, когда они загрузятся.",
+    "description": "Why no men's versions were made."
+  },
+  "SizeSet.NoSourceForMen.Fmt": {
+    "message": "{0}: ни один размер автора не сделан на теле, которое Proteus может сопоставить с мужским (Bibo+ или раскладка игры), поэтому мужской версии нет.",
+    "description": "{0} is the piece."
+  },
+  "SizeSet.MensGroupTaken.Fmt": {
+    "message": "В моде уже есть группа автора «{0}», поэтому мужские версии не созданы. Переименуйте эту группу в Penumbra и добавьте размеры снова.",
+    "description": "{0} is the group's name."
+  },
+  "SizeSet.EndsNotForMen": {
+    "message": "Обувь и перчатки не получают мужской версии: между полами подгоняются только вещи для торса и ног.",
+    "description": "Said once when a women's mod's men's versions are made and it has shoes or gloves."
+  },
+  "SizeSet.OneVariant.Fmt": {
+    "message": "{0}: мужчины получают одну версию, сделанную из «{1}»; остальные варианты мода остаются только женскими.",
+    "description": "{0} is the piece, {1} the author's option the men's version was made from."
+  },
+  "SizeSet.NotMade": {
+    "message": "подгонка не дала ничего для сохранения",
+    "description": "Why a men's version couldn't be made, after \"couldn't be made:\"."
+  },
+  "SizeSet.RigUnreadable": {
+    "message": "его риг не читается, поэтому его нельзя согнуть в мужскую форму",
+    "description": "Why a men's version couldn't be made, after \"couldn't be made:\": the garment's skinning can't be read."
   },
   "SizeSet.NotInstalledTip.Fmt": {
     "message": "{0} не установлено в Penumbra. Установите его, затем закройте и снова откройте этот раздел.",
