@@ -343,6 +343,18 @@ internal static partial class OtherRaceRefit
         return Weighted(skin).Where(b => !PbdFile.Lists(chain, b, parentOf)).Order(StringComparer.Ordinal).ToList();
     }
 
+    /// <inheritdoc cref="Unbendable(SkinnedMesh, PbdFile, Func{string, string?}, ushort, ushort)"/>
+    /// <param name="weighted">The bones the garment leans on — after <see cref="SkeletonRemap"/> moved any.</param>
+    internal static List<string> Unbendable(IEnumerable<string> weighted, PbdFile pbd, Func<string, string?> parentOf,
+                                            ushort from, ushort to)
+    {
+        var chain = pbd.Chain(from, to);
+        if (chain.Count == 0) chain = pbd.Chain(to, from);
+        if (chain.Count == 0) return [];
+        return weighted.Distinct(StringComparer.Ordinal).Where(b => !PbdFile.Lists(chain, b, parentOf))
+                       .Order(StringComparer.Ordinal).ToList();
+    }
+
     /// <summary>The bones any vertex actually leans on.</summary>
     internal static IEnumerable<string> Weighted(SkinnedMesh skin)
     {

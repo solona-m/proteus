@@ -474,6 +474,8 @@ public sealed class HairPortStrings
     public readonly string ListFmt = Loc.Localize("HairPort.Scan.List.Fmt", "Hair mods for your race ({0})");
     public readonly string RowFmt = Loc.Localize("HairPort.Scan.Row.Fmt", "Hairstyle {0} — {1}: {2}");
     public readonly string StateFitted = Loc.Localize("HairPort.Scan.State.Fitted", "fitted");
+    /// <summary>{0} is what to look at in game, such as "bent onto c1101, 40 of its triangles turn inside out…".</summary>
+    public readonly string StateFittedWarnFmt = Loc.Localize("HairPort.Scan.State.FittedWarn.Fmt", "fitted — {0}");
     public readonly string StateAlready = Loc.Localize("HairPort.Scan.State.Already", "already fitted");
     public readonly string StateRemade = Loc.Localize("HairPort.Scan.State.Remade", "fitted again (the mod changed)");
     public readonly string StateUndone = Loc.Localize("HairPort.Scan.State.Undone", "undone");
@@ -3093,7 +3095,7 @@ public sealed class PartsStrings
     public readonly string RetargetRaceLabel = Loc.Localize("Parts.Retarget.Race.Label", "Refit for");
 
     public readonly string RetargetRaceTip = Loc.Localize("Parts.Retarget.Race.Tip",
-        "Which race the refit is for. Another race gets its own model, made from this one the way the game bends it, refitted onto that race's body and saved where that race loads it. A Midlander men's chest or legs garment, or a women's legs garment, can also be refitted for the other sex. This model stays as it is.");
+        "Which race the refit is for. Another race gets its own model, made from this one the way the game bends it, refitted onto that race's body and saved where that race loads it. A Midlander chest or legs garment can also be refitted for the other sex. This model stays as it is.");
 
     /// <summary>{0} is a race of the other sex such as "Midlander M"; {1} the race of the model open.</summary>
     public readonly string RetargetRaceOtherSexFmt = Loc.Localize("Parts.Retarget.Race.OtherSex.Fmt",
@@ -3119,9 +3121,21 @@ public sealed class PartsStrings
     public readonly string RetargetRefuseCrossSexMadeForFmt = Loc.Localize("Parts.Retarget.Refuse.CrossSexMadeFor.Fmt",
         "Across the sexes, the bodies this garment was made on have to be {0} bodies. Pick the body mod it was made for under “Made for body”.");
 
-    /// <summary>{0} folded faces and {1} the share matched, as found; {2} and {3} the limits.</summary>
-    public readonly string RetargetRefuseCrossSexQualityFmt = Loc.Localize("Parts.Retarget.Refuse.CrossSexQuality.Fmt",
-        "This refit across the sexes came out with {0} folded faces and {1} of the body matched. Proteus only saves one with at most {2} folded faces and at least {3} matched.");
+    /// <summary>{0} the share of the body matched, as found; {1} the least that is saved.</summary>
+    public readonly string RetargetRefuseCrossSexCoverageFmt = Loc.Localize("Parts.Retarget.Refuse.CrossSexCoverage.Fmt",
+        "This refit across the sexes matched only {0} of the body through the body maps. Proteus only saves one that matches at least {1}.");
+
+    /// <summary>{0} is a count of cloth faces turned over.</summary>
+    public readonly string RetargetRaceCrossSexFoldedFmt = Loc.Localize("Parts.Retarget.Race.CrossSexFolded.Fmt",
+        "{0:N0} cloth face(s) turned over in this refit across the sexes. A turned-over face shows as a hole in game, so check those places before you share it.");
+
+    /// <summary>{0} is the race picked; {1} a count of bones; {2} the moves, such as "ya_shiri_phys_l → iv_shiri_l".</summary>
+    public readonly string RetargetRaceBonesMovedFmt = Loc.Localize("Parts.Retarget.Race.BonesMoved.Fmt",
+        "{0}'s skeleton lacks {1} bone(s) this garment leans on. Their weight now follows the nearest bone it has, so those parts move with it rather than on their own: {2}");
+
+    /// <summary>{0} is the race picked; {1} the mod its skeleton comes from; {2} a count of bones; {3} their names.</summary>
+    public readonly string RetargetRaceNeedsSkeletonFmt = Loc.Localize("Parts.Retarget.Race.NeedsSkeleton.Fmt",
+        "{0}'s skeleton from {1} gives this model {2} bone(s) the game's own skeleton lacks ({3}). Anyone without that skeleton sees those parts pulled out of place.");
 
     /// <summary>{0} is a race such as "Midlander M".</summary>
     public readonly string RetargetRaceThisModelFmt = Loc.Localize("Parts.Retarget.Race.ThisModel.Fmt", "{0} (this model)");
