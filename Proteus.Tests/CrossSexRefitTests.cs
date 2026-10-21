@@ -261,7 +261,7 @@ public class CrossSexRefitTests
         Assert.Equal(CrossSexRefit.FoldLine.Report, CrossSexRefit.FoldLineFor(false, 30, 5));
         Assert.Equal(CrossSexRefit.FoldLine.None, CrossSexRefit.FoldLineFor(true, 0, 0));
         Assert.Equal(CrossSexRefit.FoldLine.None, CrossSexRefit.FoldLineFor(false, 30, 0));
-        string panel = Source("Proteus/Gui/BodyRetargetPanel.cs");
+        string panel = Source("Proteus/Gui/BodyRetargetPanel.CrossSex.cs");
         Assert.Contains("switch (CrossSexRefit.FoldLineFor(plannedCrossSexFolds != null, clothFolded, done.Report.Folded))", panel);
         int at = panel.IndexOf("case CrossSexRefit.FoldLine.CrossSex:", StringComparison.Ordinal);
         Assert.True(at > 0);
@@ -269,6 +269,63 @@ public class CrossSexRefitTests
         Assert.Contains("ProteusStyle.Warn", arm);
         Assert.Contains("ps.RetargetRaceCrossSexFoldedFmt", arm);
         Assert.Contains("hole", Localization.Strings.Parts.RetargetRaceCrossSexFoldedFmt);
+    }
+
+    /// <summary>
+    /// The CLI's report (CrossSexRefitReport): folds and coverage on every size, a refusal only under the coverage floor,
+    /// the bones moved, the EST entry named on Carry, the custom skeleton's bones only with --skeleton.
+    /// </summary>
+    [Fact]
+    [Trait("Plan", "AC-cross-sex-tops-yas-1")]
+    [Trait("Plan", "AC-cross-sex-tops-yas-6")]
+    [Trait("Plan", "EDGE-cross-sex-tops-yas-17")]
+    public void The_cli_report_says_what_to_save() // [AC-cross-sex-tops-yas-1] [AC-cross-sex-tops-yas-6] [EDGE-cross-sex-tops-yas-17]
+    {
+        var plan = (BodyRetarget.Planned)System.Runtime.CompilerServices.RuntimeHelpers.GetUninitializedObject(typeof(BodyRetarget.Planned));
+        UvAtlasCorrespondence.Stats Landed(float c) => default(UvAtlasCorrespondence.Stats) with { VertexCoverage = c };
+        var kept = new CrossSexRefitJob.Size(Body("0101", "_top", "M"), "t", plan, plan, null, 115, Landed(0.99f), "");
+        var thin = new CrossSexRefitJob.Size(Body("0101", "_top", "M2"), "t2", plan, plan, null, 0, Landed(0.8f), "");
+
+        var saved = CrossSexRefitReport.Size(kept, "M", "out/M.mdl");
+        Assert.Equal(115, (int)saved["folds"]!);   // folds said, never a refusal
+        Assert.Equal("out/M.mdl", (string)saved["file"]!);
+        Assert.Null(saved["refusal"]);
+        Assert.Null(CrossSexRefitReport.Refusal(kept));
+        var refused = CrossSexRefitReport.Size(thin, "M2", null);
+        Assert.Contains("matched only", (string)refused["refusal"]!);
+        Assert.Null(refused["file"]);
+
+        var route = new RacialModelBake.Route(201, 101, Down: false, Lowered: true) { ByAlias = true };
+        var moves = new List<SkeletonRemap.Move>
+        {
+            new("ya_shiri_phys_l", "iv_shiri_l", SkeletonRemap.How.Counterpart),
+            new("foo_cape", "j_kosi", SkeletonRemap.How.Fallback),
+        };
+        var result = new CrossSexRefitJob.Result("", route, null, null, null, "made-for.mdl", [kept], moves,
+                                                 new EstPlan(EstOutcome.Carry, 6085), ["iv_shiri_l"]);
+        const string gamePath = "chara/equipment/e6010/model/c0201e6010_top.mdl";
+        var report = CrossSexRefitReport.Report(result, "garment.mdl", gamePath, 201, 101, withSkeleton: true, []);
+        Assert.Equal("chara/equipment/e6010/model/c0101e6010_top.mdl", (string)report["savePath"]!);
+        Assert.EndsWith(", and the EST entry 6085 for c0101", (string)report["note"]!);
+        Assert.Equal("Carry", (string)report["est"]!["outcome"]!);
+        Assert.Equal(6085, (int)report["est"]!["entry"]!);
+        var movedBones = report["movedBones"]!.AsArray();
+        Assert.Equal(2, movedBones.Count);
+        Assert.Equal(("ya_shiri_phys_l", "iv_shiri_l", "counterpart"),
+                     ((string)movedBones[0]!["from"]!, (string)movedBones[0]!["to"]!, (string)movedBones[0]!["how"]!));
+        Assert.Equal("fallback", (string)movedBones[1]!["how"]!);
+        Assert.Equal("iv_shiri_l", (string)report["needsSkeleton"]!.AsArray().Single()!);
+        Assert.Null(report["refusal"]);
+        Assert.True(CrossSexRefitReport.WantsFromSkeleton(moves));
+
+        // No --skeleton, nothing carried, refused early: no needsSkeleton, NotNeeded, the refusal said.
+        var early = CrossSexRefitReport.Report(new CrossSexRefitJob.Result("nope", route, null, null, null, null, []),
+                                               "garment.mdl", gamePath, 201, 101, withSkeleton: false, []);
+        Assert.Null(early["needsSkeleton"]);
+        Assert.Equal("NotNeeded", (string)early["est"]!["outcome"]!);
+        Assert.DoesNotContain("EST entry", (string)early["note"]!);
+        Assert.Equal("nope", (string)early["refusal"]!);
+        Assert.Empty(early["movedBones"]!.AsArray());
     }
 
     [Fact]
@@ -288,9 +345,9 @@ public class CrossSexRefitTests
                                               "HairPort.Refused.Folded", "if (ours) fits = false" })
                 Assert.False(text.Contains(banned, StringComparison.Ordinal), $"{Path.GetFileName(file)} still has {banned}");
         }
-        Assert.Contains("CrossSexRefit.CoverageAllowed(coverage)", Source("Proteus/Gui/BodyRetargetPanel.cs"));
-        Assert.Contains("RetargetRaceCrossSexQualityFmt", Source("Proteus/Gui/BodyRetargetPanel.cs"));
-        Assert.Contains("[\"folds\"] = size.Folds", Source("Proteus.Refit/CrossSexCommand.cs"));
+        Assert.Contains("CrossSexRefit.CoverageAllowed(coverage)", Source("Proteus/Gui/BodyRetargetPanel.CrossSex.cs"));
+        Assert.Contains("RetargetRaceCrossSexQualityFmt", Source("Proteus/Gui/BodyRetargetPanel.CrossSex.cs"));
+        Assert.Contains("[\"folds\"] = size.Folds", Source("Proteus/Services/CrossSexRefitReport.cs"));
     }
 
     [Fact]
@@ -458,7 +515,7 @@ public class CrossSexRefitTests
         // Once folds and coverage; folds are never a reason any more (cross-sex-tops-yas), only coverage.
         Assert.True(CrossSexRefit.CoverageAllowed(0.989));
         Assert.False(CrossSexRefit.CoverageAllowed(CrossSexRefit.MinCoverage - 0.01));
-        Assert.Contains("CrossSexRefit.CoverageAllowed(coverage)", Source("Proteus/Gui/BodyRetargetPanel.cs"));
+        Assert.Contains("CrossSexRefit.CoverageAllowed(coverage)", Source("Proteus/Gui/BodyRetargetPanel.CrossSex.cs"));
     }
 
     [Fact]

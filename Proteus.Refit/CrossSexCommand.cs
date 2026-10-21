@@ -80,53 +80,17 @@ internal static class CrossSexCommand
         foreach (var size in result.Sizes)
         {
             string label = targets[Norm(size.Target.Rel)];
-            var entry = new JsonObject
-            {
-                ["label"] = label, ["to"] = size.Target.Rel, ["folds"] = size.Folds,
-                ["coverage"] = size.Landed?.VertexCoverage ?? 0f,
-            };
-            // Never refused for its folds: those are in the report, beside it.
-            string refusal = size.Refusal.Length > 0 ? size.Refusal
-                           : !size.SaveAllowed ? string.Format(Localization.Strings.Parts.RetargetRefuseCrossSexCoverageFmt,
-                                 $"{size.Landed?.VertexCoverage:P0}", $"{CrossSexRefit.MinCoverage:P0}")
-                           : "";
-            if (refusal.Length > 0) entry["refusal"] = refusal;
-            else
+            string? file = null;
+            if (CrossSexRefitReport.Refusal(size) == null)
             {
                 Directory.CreateDirectory(outDir);
-                string file = Path.Combine(outDir, label + ".mdl");
+                file = Path.Combine(outDir, label + ".mdl");
                 File.WriteAllBytes(file, size.Saved!.Model);
-                entry["file"] = file;
             }
-            sizes.Add(entry);
+            sizes.Add(CrossSexRefitReport.Size(size, label, file));
         }
-        string savePath = result.Route.Any ? result.Route.SavePath(gamePath) : gamePath;
-        var moved = result.Moved ?? [];
-        var movedBones = new JsonArray();
-        foreach (var move in moved)
-            movedBones.Add(new JsonObject
-            {
-                ["from"] = move.From, ["to"] = move.To, ["how"] = move.How.ToString().ToLowerInvariant(),
-            });
-        var est = result.Est ?? EstPlan.NotNeeded;
-        string note = $"save each model at {savePath} with an EQDP entry giving c{to:D4} a model of the set";
-        if (est.Outcome == EstOutcome.Carry) note += $", and the EST entry {est.Entry} for c{to:D4}";
-        var report = new JsonObject
-        {
-            ["garment"] = garmentPath, ["race"] = $"{drawn:D4}", ["forRace"] = $"{to:D4}", ["eqdpRace"] = $"{to:D4}",
-            ["savePath"] = savePath, ["from"] = result.SourcePath,
-            ["note"] = note,
-            ["est"] = new JsonObject { ["outcome"] = est.Outcome.ToString(), ["entry"] = est.Entry },
-            ["movedBones"] = movedBones,
-            ["sizes"] = sizes,
-        };
-        if (skeleton != null)
-            report["needsSkeleton"] = new JsonArray((result.NeedsSkeleton ?? []).Select(b => (JsonNode)b).ToArray());
-        if (result.Refusal.Length > 0) report["refusal"] = result.Refusal;
-        // A bone placed by its part of the body or on the hip, not by the skeleton it was rigged to: that skeleton
-        // would place it exactly.
-        if (moved.Any(m => m.How is SkeletonRemap.How.StandIn or SkeletonRemap.How.Fallback))
-            Console.Error.WriteLine("pass --from-skeleton <the skeleton the garment was rigged to> for exact parents");
+        var report = CrossSexRefitReport.Report(result, garmentPath, gamePath, drawn, to, skeleton != null, sizes);
+        if (CrossSexRefitReport.WantsFromSkeleton(result.Moved)) Console.Error.WriteLine(CrossSexRefitReport.FromSkeletonHint);
         Console.WriteLine(report.ToJsonString(new JsonSerializerOptions { WriteIndented = true }));
         return 0;
     }

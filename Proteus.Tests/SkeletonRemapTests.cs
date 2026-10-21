@@ -90,8 +90,11 @@ public class SkeletonRemapTests
         Assert.Equal(new SkeletonRemap.Move("foo_cape_a", SkeletonRemap.Fallback, SkeletonRemap.How.Fallback), move);
         Assert.Equal("foo_cape_a → j_kosi", SkeletonRemap.Describe([move]));
         Assert.Equal("foo_cape_a → j_kosi (fallback)", SkeletonRemap.DescribeHow([move]));
-        string cli = File.ReadAllText(SourceFile("Proteus.Refit/CrossSexCommand.cs"));
-        Assert.Contains("pass --from-skeleton <the skeleton the garment was rigged to> for exact parents", cli);
+        Assert.True(CrossSexRefitReport.WantsFromSkeleton([move]));
+        Assert.False(CrossSexRefitReport.WantsFromSkeleton([new("ya_shiri_phys_l", "iv_shiri_l", SkeletonRemap.How.Counterpart)]));
+        Assert.Contains("pass --from-skeleton", CrossSexRefitReport.FromSkeletonHint);
+        Assert.Contains("Console.Error.WriteLine(CrossSexRefitReport.FromSkeletonHint)",
+                        File.ReadAllText(SourceFile("Proteus.Refit/CrossSexCommand.cs")));
     }
 
     [Fact]
@@ -231,6 +234,20 @@ public class SkeletonRemapTests
         int at = parsed.Vb;   // the first vertex's x, at the start of stream 0
         moved[at + 3] ^= 0x40;
         Assert.False(SkeletonRemap.Verify(before, moved, YasMoves, out why));
+    }
+
+    /// <summary>A model that already names the moved bone twice has both entries renamed, not refused.</summary>
+    [Fact]
+    [Trait("Plan", "AC-cross-sex-tops-yas-4")]
+    [Trait("Plan", "EDGE-cross-sex-tops-yas-8")]
+    public void A_bone_named_twice_is_renamed_everywhere() // [AC-cross-sex-tops-yas-4] [EDGE-cross-sex-tops-yas-8]
+    {
+        var twice = ModelAttributeWriter.RenameBone(YasSkirt(), "iv_shiri_l", "ya_shiri_phys_l");
+        Assert.Equal(2, SecondSkinWriter.Parse(twice).BoneNames.Count(b => b == "ya_shiri_phys_l"));
+        var after = SkeletonRemap.Rename(twice, YasMoves, out string why);
+        Assert.True(after != null, why);
+        Assert.DoesNotContain("ya_shiri_phys_l", SecondSkinWriter.Parse(after!).BoneNames);
+        Assert.Equal(2, SecondSkinWriter.Parse(after!).BoneNames.Count(b => b == "iv_shiri_l"));
     }
 
     [Fact]

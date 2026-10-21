@@ -637,7 +637,9 @@ public sealed partial class HairPortWatcher : IDisposable
                                      : EarlessRestoreAtEquip(host, modsRoot!, worn, race, file, ref lastKey))
                        ?? new View(worn, Message: decision.Message, EarlessOptions: EarlessHint(modsRoot!, worn, race, file));
             case Decide.Kind.Ported:
-                return new View(worn, decision.ModRoot, Ported: true, PortsInMod: HairPortRecord.Read(decision.ModRoot!).Ports.Count);
+                // A port made earlier this session says again what it warned of (HairPortScan.WarningFor).
+                return new View(worn, decision.ModRoot, Ported: true, PortsInMod: HairPortRecord.Read(decision.ModRoot!).Ports.Count,
+                                Warning: HairPortScan.WarningFor(decision.ModRoot, worn));
         }
 
         // Port (or remake a stale port of) the worn hairstyle from decision.Source in decision.ModRoot.

@@ -160,7 +160,10 @@ internal static class SkeletonRemap
         try
         {
             renamed = model;
-            foreach (var move in moves) renamed = ModelAttributeWriter.RenameBone(renamed, move.From, move.To);
+            // Every entry of the name: RenameBone renames the first, and a model may already name a bone twice.
+            foreach (var move in moves)
+                for (int guard = 0; guard < 64 && Array.IndexOf(SecondSkinWriter.Parse(renamed).BoneNames, move.From) >= 0; guard++)
+                    renamed = ModelAttributeWriter.RenameBone(renamed, move.From, move.To);
         }
         catch (Exception ex) when (ex is ArgumentException or IndexOutOfRangeException or InvalidOperationException)
         {

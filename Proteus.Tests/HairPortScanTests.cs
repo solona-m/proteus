@@ -710,6 +710,37 @@ public class HairPortScanTests
         Assert.Contains("resultWarn = true;", studio);
     }
 
+    /// <summary>
+    /// A warned port is said again for the rest of the session: the next look finds the hairstyle already fitted, and its
+    /// row and the worn line still carry the warning (once lost at the first look after the port).
+    /// </summary>
+    [Fact]
+    [Trait("Plan", "AC-cross-sex-tops-yas-8")]
+    [Trait("Plan", "EDGE-cross-sex-tops-yas-23")]
+    public void A_warned_port_is_said_again_when_found_already_fitted() // [AC-cross-sex-tops-yas-8] [EDGE-cross-sex-tops-yas-23]
+    {
+        using var s = new Setup();
+        var root = s.DefaultDataMod("Floof", 7);
+        Assert.Equal(HairPortScan.RowState.Fitted, s.Run([7]).Rows.Single().State);
+        s.Reloaded(root, 7);
+        // What PortOne remembers for a port it made with a warning.
+        const string warning = "bent onto c0101, 40 of its triangles turn inside out and may show as holes; check it in game";
+        HairPortScan.RememberWarning(root, Target(7), warning);
+
+        var again = s.Run([7], force: true).Rows.Single();
+        Assert.Equal((HairPortScan.RowState.AlreadyFitted, warning), (again.State, again.Message));
+        Assert.True(Proteus.Gui.HairPortSettingsPanel.Warned(again));
+        Assert.Contains(warning, Proteus.Gui.HairPortSettingsPanel.RowText(again));
+        Assert.Contains("Warning: HairPortScan.WarningFor(decision.ModRoot, worn)",
+                        Source("Proteus/Services/HairPort/HairPortWatcher.cs"));
+        Assert.Contains("RememberWarning(modRoot, HairPortPlan.HairPath(race, source.Id), warning);",
+                        Source("Proteus/Services/HairPort/HairPortScan.cs"));
+
+        // Ported again without one, it is forgotten.
+        HairPortScan.RememberWarning(root, Target(7), "");
+        Assert.Equal("", s.Run([7], force: true).Rows.Single().Message);
+    }
+
     private static string Source(string file)
     {
         for (var d = new DirectoryInfo(AppContext.BaseDirectory); d != null; d = d.Parent)

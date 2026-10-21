@@ -201,10 +201,9 @@ public class OtherRaceWearerTests
         Assert.Equal(2, body.Split("if (b.Moves.Count > 0)\n            using (ImRaii.PushColor(ImGuiCol.Text, ProteusStyle.Warn))").Length);
         Assert.Contains("retarget: bones moved for c{0:D4}", race);
         Assert.Contains("retarget: bones moved for c{0:D4}", File.ReadAllText(SourceFile("Proteus/Services/CrossSexRefitJob.cs")));
+        // The CLI's report says the same (CrossSexRefitReport, tested in CrossSexRefitTests).
         string cli = File.ReadAllText(SourceFile("Proteus.Refit/CrossSexCommand.cs"));
-        Assert.Contains("[\"movedBones\"]", cli);
-        Assert.Contains("[\"est\"]", cli);
-        Assert.Contains("report[\"needsSkeleton\"]", cli);
+        Assert.Contains("CrossSexRefitReport.Report(result, garmentPath, gamePath, drawn, to, skeleton != null, sizes)", cli);
     }
 
     private static string SourceFile(string file)

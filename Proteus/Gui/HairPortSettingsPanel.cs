@@ -182,7 +182,8 @@ internal sealed class HairPortSettingsPanel(HairPortWatcher watcher, Configurati
 
     /// <summary>A port made with something to look at in game (<see cref="HairPortScan.Row.Message"/>).</summary>
     internal static bool Warned(HairPortScan.Row row)
-        => row.State is HairPortScan.RowState.Fitted or HairPortScan.RowState.Remade && row.Message.Length > 0;
+        => row.State is HairPortScan.RowState.Fitted or HairPortScan.RowState.Remade or HairPortScan.RowState.AlreadyFitted
+           && row.Message.Length > 0;
 
     /// <summary>Whether a row's port can be undone: one there is, while nothing else runs.</summary>
     internal static bool CanUndo(HairPortScan.Row row, bool busy)

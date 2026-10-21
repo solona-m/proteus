@@ -186,9 +186,6 @@ internal sealed partial class BodyRetargetPanel(PenumbraBridge penumbra, UVRemap
     /// <summary>One refit per target of the garment's own slot, in the order the targets were ticked.</summary>
     private List<(BodyOption To, BodyRetarget.Planned Planned)>? planned;
 
-    /// <summary>With <see cref="planned"/> made for the other sex, the cloth faces each size turned over; else null.</summary>
-    private IReadOnlyList<int>? plannedCrossSexFolds;
-
     /// <summary>The labels of the "keep shape" pieces <see cref="planned"/> was refitted with, by piece index — how a
     /// piece the refit let go is named (see <see cref="RefitCore.ReleasedWarning"/>).</summary>
     private IReadOnlyList<string> plannedShapeNames = [];
@@ -1544,18 +1541,7 @@ internal sealed partial class BodyRetargetPanel(PenumbraBridge penumbra, UVRemap
 
         // The counts go to the log (see Describe); only what the user can act on is shown.
         var done = all[showing].Planned;
-        int clothFolded = plannedCrossSexFolds is { } folds && showing < folds.Count ? folds[showing] : 0;
-        switch (CrossSexRefit.FoldLineFor(plannedCrossSexFolds != null, clothFolded, done.Report.Folded))
-        {
-            case CrossSexRefit.FoldLine.CrossSex:
-                using (ImRaii.PushColor(ImGuiCol.Text, ProteusStyle.Warn))
-                    ImGui.TextWrapped(string.Format(ps.RetargetRaceCrossSexFoldedFmt, clothFolded));
-                break;
-            case CrossSexRefit.FoldLine.Report:
-                using (ImRaii.PushColor(ImGuiCol.Text, ProteusStyle.Warn))
-                    ImGui.TextWrapped(string.Format(ps.RetargetFoldedFmt, done.Report.Folded));
-                break;
-        }
+        DrawFoldLine(done, showing);
         if (done.Report.Swap is { LostShapes: > 0 } lost)
             using (ImRaii.PushColor(ImGuiCol.Text, ProteusStyle.Warn))
                 ImGui.TextWrapped(string.Format(ps.RetargetSwapShapesFmt, lost.LostShapes));
@@ -1973,25 +1959,9 @@ internal sealed partial class BodyRetargetPanel(PenumbraBridge penumbra, UVRemap
                     // Skin the refit kept of the garment's own, drawn in the new body's layout and material — or a
                     // gen2 garment's kept skin shows the wrong skin, and none of the tattoos, on a bibo body.
                     plan = RefitCore.MatchSkinToBody(plan, garmentSource, targetPath, uvRemap, male, log, targetMale);
-                    if (crossSex)
-                    {
-                        // Measured on every user's garment: one matched through too little of the body is never written
-                        // into a mod. Its folds never stop it — they are said, beside the size, as holes in game.
-                        int folds = CrossSexRefit.ClothFolded(bytes, plan);
-                        double coverage = landed?.VertexCoverage ?? 1.0;
-                        log.Information("[Proteus] retarget: across the sexes {0}: {1} cloth faces folded, {2:P1} of the "
-                                      + "body matched", option.Label, folds, coverage);
-                        string cover = coverage.ToString("P0", System.Globalization.CultureInfo.CurrentCulture);
-                        if (!CrossSexRefit.CoverageAllowed(coverage))
-                        {
-                            string refused = string.Format(ps.RetargetRefuseCrossSexCoverageFmt, cover,
-                                CrossSexRefit.MinCoverage.ToString("P0", System.Globalization.CultureInfo.CurrentCulture));
-                            return new PlanResult(key, null, targets.Count > 1 ? $"{option.Label}: {refused}" : refused);
-                        }
-                        string line = string.Format(ps.RetargetRaceCrossSexQualityFmt, folds, cover);
-                        quality.Add(targets.Count > 1 ? $"{option.Label}: {line}" : line);
-                        crossSexFolds.Add(folds);
-                    }
+                    if (crossSex && CrossSexCheck(bytes, plan, landed, option.Label, targets.Count > 1, quality, crossSexFolds)
+                            is { } refused)
+                        return new PlanResult(key, null, refused);
                     results.Add((option, Baked(plan, targetPath)));
                     Interlocked.Increment(ref planDone);
                 }
