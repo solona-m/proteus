@@ -273,6 +273,14 @@ internal sealed partial class BodyRetargetPanel(PenumbraBridge penumbra, UVRemap
     private bool MaleGarment => race != null && BodySizeCatalog.IsMaleRace(race);
 
     /// <summary>
+    /// The sexes of a body pair's two sides: the made-for bodies' and the refit-onto bodies'. Both are the garment's,
+    /// except under a pick for the other sex, whose made-for bodies are bent from the drawn race's — still drawn in its
+    /// layout — and whose targets are the picked race's (see <see cref="CrossSexRefit.Sexes"/>).
+    /// </summary>
+    private (bool Source, bool Target) PairSexes
+        => CrossSexRefit.Sexes(active?.Route ?? default, active?.Explicit == true, MaleGarment);
+
+    /// <summary>
     /// Which set of Body size tips this build shows. Bump it whenever a tip is added, removed or reworded, and everyone
     /// who dismissed the old set sees the popup once more.
     /// </summary>
@@ -832,6 +840,9 @@ internal sealed partial class BodyRetargetPanel(PenumbraBridge penumbra, UVRemap
         string sex = BodySizeCatalog.IsMaleRace(race) ? ps.RetargetMale : ps.RetargetFemale;
         using (ImRaii.PushColor(ImGuiCol.Text, ProteusStyle.Warn))
             ImGui.TextWrapped(string.Format(ps.RetargetNoBodiesForSexFmt, name, sex));
+        // Its bodies are the other sex's: a version for them is made under "Refit for", when one is offered.
+        if (offered.FirstOrDefault(c => c.CrossSex && c.Blocked == OtherRaceRefit.Block.None) is { } other)
+            ImGui.TextWrapped(string.Format(ps.RetargetRaceCrossSexHintFmt, ModelRace.Describe($"{other.Race:D4}")));
     }
 
     /// <summary>A dropdown of the installed body mods. Returns the directory picked this frame, if any.</summary>
@@ -1764,7 +1775,8 @@ internal sealed partial class BodyRetargetPanel(PenumbraBridge penumbra, UVRemap
             return;
         string sourcePath = sources.PathOf(source);
         string name = SlotName(slot);
-        bool male = MaleGarment;
+        var (male, targetSex) = PairSexes;
+        bool? targetMale = targetSex != male ? targetSex : null;
         var masks = MasksFor(slot);
 
         foreach (var target in Targets(slot))
@@ -1777,7 +1789,7 @@ internal sealed partial class BodyRetargetPanel(PenumbraBridge penumbra, UVRemap
             {
                 try
                 {
-                    return Build(sourcePath, targetPath, name, male, masks, out _) ?? "";
+                    return Build(sourcePath, targetPath, name, male, masks, out _, out _, targetMale) ?? "";
                 }
                 catch (Exception ex)
                 {
@@ -1812,7 +1824,10 @@ internal sealed partial class BodyRetargetPanel(PenumbraBridge penumbra, UVRemap
         // A picked race's bent bodies are another rig than the race's own, even within one body mod: the cloth takes the
         // new body's weights, as it does between body mods.
         bool acrossBodies = fromBodyDir != null || active?.Explicit == true;
-        bool male = MaleGarment;
+        var (male, targetSex) = PairSexes;
+        bool? targetMale = targetSex != male ? targetSex : null;
+        // A pick for the other sex: checked before it may be saved (CrossSexRefit.SaveAllowed).
+        bool crossSex = active?.Explicit == true && active.Route.ByAlias;
         string key = Key(ctx);
         var bake = active;
         string? garmentRace = race;
@@ -1849,7 +1864,7 @@ internal sealed partial class BodyRetargetPanel(PenumbraBridge penumbra, UVRemap
                 var shared = new List<BodyRetarget.SlotPair>();
                 foreach (var (slot, sourcePath, targetPath, name, masks) in others)
                 {
-                    if (Build(sourcePath, targetPath, name, male, masks, out var pair) is { } refusal)
+                    if (Build(sourcePath, targetPath, name, male, masks, out var pair, out _, targetMale) is { } refusal)
                         return new PlanResult(key, null, refusal);
                     shared.Add(pair);
                 }
@@ -1897,12 +1912,14 @@ internal sealed partial class BodyRetargetPanel(PenumbraBridge penumbra, UVRemap
                 }
 
                 var results = new List<(BodyOption, BodyRetarget.Planned)>();
+                var quality = new List<string>();
 
                 // ── the whole garment, refitted through its own slot ──
                 if (garmentSource == null) return new PlanResult(key, null, string.Format(ps.RetargetNeedFromFmt, garmentName));
                 foreach (var (option, targetPath) in targets)
                 {
-                    if (Build(garmentSource, targetPath, garmentName, male, limbMasks, out var pair) is { } refusal)
+                    if (Build(garmentSource, targetPath, garmentName, male, limbMasks, out var pair, out var landed,
+                              targetMale) is { } refusal)
                         return new PlanResult(key, null, targets.Count > 1 ? $"{option.Label}: {refusal}" : refusal);
 
                     var pairs = new List<BodyRetarget.SlotPair> { pair };
@@ -1915,14 +1932,34 @@ internal sealed partial class BodyRetargetPanel(PenumbraBridge penumbra, UVRemap
                                                  log: line => log.Debug("[Proteus] body size: {0}", line),
                                                  warn: line => log.Warning("[Proteus] body size: {0}", line),
                                                  tuckSlot: RefitCore.TuckSlot(cut && clear, garmentSlot),
-                                                 carryPiercings: piercings);
+                                                 carryPiercings: piercings,
+                                                 liftUnderbust: !(crossSex && male && !targetSex));
                     // Skin the refit kept of the garment's own, drawn in the new body's layout and material — or a
                     // gen2 garment's kept skin shows the wrong skin, and none of the tattoos, on a bibo body.
-                    plan = RefitCore.MatchSkinToBody(plan, garmentSource, targetPath, uvRemap, male, log);
+                    plan = RefitCore.MatchSkinToBody(plan, garmentSource, targetPath, uvRemap, male, log, targetMale);
+                    if (crossSex)
+                    {
+                        // Measured on every user's garment, not only the ones the gates were: a refit across the sexes
+                        // that comes out far worse is never written into a mod.
+                        int folds = CrossSexRefit.ClothFolded(bytes, plan);
+                        double coverage = landed?.VertexCoverage ?? 1.0;
+                        log.Information("[Proteus] retarget: across the sexes {0}: {1} cloth faces folded, {2:P1} of the "
+                                      + "body matched", option.Label, folds, coverage);
+                        string cover = coverage.ToString("P0", System.Globalization.CultureInfo.CurrentCulture);
+                        if (!CrossSexRefit.SaveAllowed(folds, coverage))
+                        {
+                            string refused = string.Format(ps.RetargetRefuseCrossSexQualityFmt, folds, cover,
+                                CrossSexRefit.MaxFolds,
+                                CrossSexRefit.MinCoverage.ToString("P0", System.Globalization.CultureInfo.CurrentCulture));
+                            return new PlanResult(key, null, targets.Count > 1 ? $"{option.Label}: {refused}" : refused);
+                        }
+                        string line = string.Format(ps.RetargetRaceCrossSexQualityFmt, folds, cover);
+                        quality.Add(targets.Count > 1 ? $"{option.Label}: {line}" : line);
+                    }
                     results.Add((option, Baked(plan, targetPath)));
                     Interlocked.Increment(ref planDone);
                 }
-                return new PlanResult(key, results, "", ShapeNames: shapeNames);
+                return new PlanResult(key, results, "", string.Join("\n", quality), ShapeNames: shapeNames);
             }
             catch (Exception ex)
             {
@@ -1939,10 +1976,13 @@ internal sealed partial class BodyRetargetPanel(PenumbraBridge penumbra, UVRemap
     /// <param name="male">The garment is a man's, and so both bodies are: every option list is filtered to its sex.</param>
     /// <param name="masks">Each body mod's IMC mask for this slot (see <see cref="VariantMask"/>): both bodies are read
     /// without the variant parts their mods do not draw.</param>
+    /// <param name="landed">How the two bodies' skin landed on each other; null for the same mesh.</param>
+    /// <param name="targetMale">The target body's sex under a pick for the other sex (see <see cref="PairSexes"/>).</param>
     private string? Build(string sourcePath, string targetPath, string name, bool male, Masks masks,
-                          out BodyRetarget.SlotPair pair)
-        => BodyRetarget.BuildPair(masks.Slot, sourcePath, targetPath, name, male, masks.Source, masks.Target, uvRemap,
-                                  out pair);
+                          out BodyRetarget.SlotPair pair, out UvAtlasCorrespondence.Stats? landed, bool? targetMale = null)
+        => BodyRetarget.BuildPair(masks.Slot, File.ReadAllBytes(sourcePath), File.ReadAllBytes(targetPath), name, male,
+                                  masks.Source, masks.Target, uvRemap, out pair, out landed,
+                                  BodyRetarget.BodyMaterialReader(targetPath), targetMale);
 
     /// <summary>
     /// The IMC attribute mask a body mod gives its model in <paramref name="slot"/>, under the player's own choice of

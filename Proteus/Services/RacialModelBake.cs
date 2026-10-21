@@ -48,6 +48,19 @@ internal static partial class RacialModelBake
 
         public bool Any => To != 0;
 
+        /// <summary>
+        /// Body mods' own bones are bent as the standard bones they stand in for (<see cref="UvBakeBones.Alias"/>): a
+        /// refit picked for the other sex, whose garment and made-for bodies ride TBSE's earring nodes or Bibo+'s root
+        /// across a bend no game race ever takes. Set by <see cref="OtherRaceRefit.Resolve"/> alone; the automatic route
+        /// bends exactly as before.
+        /// </summary>
+        public bool ByAlias { get; init; }
+
+        /// <summary>Drawn and refitted-for races are of different sexes.</summary>
+        public bool CrossesSex => Any && CrossSexRefit.CrossesSex(Drawn, To);
+
+        private Func<string, string>? IntoAlias => ByAlias ? UvBakeBones.Alias : null;
+
         /// <summary>The garment is bent down into <see cref="To"/>'s shape, for good or only to be refitted there.</summary>
         public bool BendsDown => Down || Lowered;
 
@@ -70,15 +83,18 @@ internal static partial class RacialModelBake
 
         /// <summary>The garment as it is refitted: baked up, or bent down into the race below.</summary>
         public byte[]? Into(byte[] drawnModel, Wearer who, out string refusal)
-            => BendsDown ? Unbake(drawnModel, To, Drawn, who.Pbd, who.ParentOf, out refusal)
-                         : Bake(drawnModel, Drawn, To, who.Pbd, who.ParentOf, out refusal);
+            => BendsDown ? Unbake(drawnModel, To, Drawn, who.Pbd, who.ParentOf, out refusal, IntoAlias)
+                         : Bake(drawnModel, Drawn, To, who.Pbd, who.ParentOf, out refusal, IntoAlias);
 
         /// <summary>
         /// A refit put back into the drawn race's shape. Up or lowered, that is only the preview — pushed onto the drawn
         /// path, the game bends it onto whoever draws that path. Down, it is the model itself, saved and previewed alike.
+        /// <para/>
+        /// An up route's preview is never bent by alias: the game bends it forward again from the drawn path by the bones
+        /// as they are named, and only the exact inverse of that lands it where the game will.
         /// </summary>
         public byte[]? Back(byte[] refitted, Wearer who, out string refusal)
-            => BendsDown ? Bake(refitted, To, Drawn, who.Pbd, who.ParentOf, out refusal)
+            => BendsDown ? Bake(refitted, To, Drawn, who.Pbd, who.ParentOf, out refusal, IntoAlias)
                          : Unbake(refitted, Drawn, To, who.Pbd, who.ParentOf, out refusal);
     }
 
@@ -199,7 +215,7 @@ internal static partial class RacialModelBake
     /// the character without the EQDP entry the saved one comes with.
     /// </summary>
     public static byte[]? Unbake(byte[] mdl, ushort from, ushort to, PbdFile pbd, Func<string, string?> parentOf,
-                                 out string refusal)
+                                 out string refusal, Func<string, string>? alias = null)
     {
         var chain = pbd.Chain(from, to);
         if (chain.Count == 0)
@@ -208,7 +224,7 @@ internal static partial class RacialModelBake
                 "the racial deformer has no way from c{0:D4} to c{1:D4}"), from, to);
             return null;
         }
-        return Transform(mdl, chain, [], parentOf, out refusal);
+        return Transform(mdl, chain, [], parentOf, out refusal, alias);
     }
 
     /// <summary>
