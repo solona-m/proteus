@@ -591,6 +591,11 @@ internal sealed partial class BodyRetargetPanel(PenumbraBridge penumbra, UVRemap
     private BodyRetargetWriter.Record? ownRecord;
     private object? ownRecordFor;
 
+    /// <summary>Whether the garment is the game's own (see <see cref="AutoRefitDecisions.IsGameGear"/>), re-read with
+    /// <see cref="ownRecord"/>: one manifest read per redirect list or worn path.</summary>
+    private bool gameGear;
+    private (object? Redirects, string? Path) gameGearFor;
+
     /// <summary>The races the refit-onto body mod has bodies of, and the catalog they were read off.</summary>
     private HashSet<string> catalogRaces = [];
     private BodySizeCatalog? catalogRacesOf;
@@ -619,6 +624,17 @@ internal sealed partial class BodyRetargetPanel(PenumbraBridge penumbra, UVRemap
         {
             ownRecordFor = given.Redirects;
             ownRecord = BodyRetargetWriter.ReadRecord(given.ModRoot);
+        }
+        if (given.ModRoot == null)
+        {
+            gameGear = true;
+            gameGearFor = default;   // so a mod opened next is always read afresh
+        }
+        else if (!ReferenceEquals(gameGearFor.Redirects, given.Redirects) || gameGearFor.Path != given.GamePath)
+        {
+            gameGearFor = (given.Redirects, given.GamePath);
+            gameGear = AutoRefitDecisions.IsGameGear(given.ModRoot, given.GamePath, given.Redirects, ownRecord,
+                                                     RefitModService.IsMadeByProteus(given.ModRoot));
         }
         automaticRoute = wearer == null
             ? RacialModelBake.Route.None
@@ -1499,8 +1515,14 @@ internal sealed partial class BodyRetargetPanel(PenumbraBridge penumbra, UVRemap
         if (ImGui.IsItemHovered(ImGuiHoveredFlags.AllowWhenDisabled)) ImGui.SetTooltip(ps.RetargetPiercingsTip);
         ImGui.Unindent();
 
-        ImGui.Checkbox(ps.RetargetClearBody, ref clearBody);
-        if (ImGui.IsItemHovered()) ImGui.SetTooltip(ps.RetargetClearBodyTip);
+        // The game's own top is always cleared, as the automatic refit clears it (see RetargetInputs.StudioSkin).
+        var skinRule = SkinRule(inputs);
+        bool clear = clearBody || skinRule.ClearForced;
+        using (ImRaii.Disabled(skinRule.ClearForced))
+            if (ImGui.Checkbox(ps.RetargetClearBody, ref clear) && !skinRule.ClearForced)
+                clearBody = clear;
+        if (ImGui.IsItemHovered(ImGuiHoveredFlags.AllowWhenDisabled))
+            ImGui.SetTooltip(skinRule.ClearForced ? ps.RetargetClearForcedTip : ps.RetargetClearBodyTip);
 
         using (ImRaii.Disabled(busy || !ready))
             if (ImGui.Button(ps.RetargetPreview, FullWidth()))
@@ -1840,7 +1862,10 @@ internal sealed partial class BodyRetargetPanel(PenumbraBridge penumbra, UVRemap
         var shapeLabels = new HashSet<string>(ctx.KeepShape ?? [], StringComparer.Ordinal);
         bool layOnBody = replaceSkin;
         bool cut = cutHidden;
-        bool clear = clearBody;
+        var skinRule = SkinRule(inputs);
+        bool clear = skinRule.ClearBody;
+        // A shoe or glove keeping its foot or hand takes the box as it is: the game-top rule is for whole tops.
+        bool boxClear = clearBody;
         bool piercings = RetargetInputs.CarryPiercings(replaceSkin, carryPiercings);
         // A picked race's bent bodies are another rig than the race's own, even within one body mod: the cloth takes the
         // new body's weights, as it does between body mods.
@@ -1925,7 +1950,7 @@ internal sealed partial class BodyRetargetPanel(PenumbraBridge penumbra, UVRemap
                 {
                     var input = new KeepEnds.StudioPlanInput(
                         garment, bytes, garmentSlot, pieces, sources, snapshot, garmentRace ?? "", male, limbFrom!,
-                        limbTargets, sameBodyMod, fromCloth, layOnBody, acrossBodies, clear, held, shared,
+                        limbTargets, sameBodyMod, fromCloth, layOnBody, acrossBodies, boxClear, held, shared,
                         s => s == primary ? (limbMasks.Source, limbMasks.Target) : (endMasks.Source, endMasks.Target),
                         SlotName, modelRel, shapeNames, piercings);
                     var kept = KeepEnds.StudioPlan(input, Baked, uvRemap, log, () => Interlocked.Increment(ref planDone));
@@ -1947,14 +1972,14 @@ internal sealed partial class BodyRetargetPanel(PenumbraBridge penumbra, UVRemap
                     var pairs = new List<BodyRetarget.SlotPair> { pair };
                     pairs.AddRange(shared);
                     // A top cut and cleared the way the automatic refit treats the game's own: its skin tucked in under
-                    // the cloth the same way.
+                    // the cloth the same way — and the game's own top refitted exactly as the automatic refit does it.
                     var plan = BodyRetarget.Plan(garment, bytes, pairs, garmentSlot, held: held,
                                                  replaceSkin: layOnBody, acrossBodies: acrossBodies,
                                                  clearBody: clear, cutHidden: cut, keepShape: pieces,
                                                  log: line => log.Debug("[Proteus] body size: {0}", line),
                                                  warn: line => log.Warning("[Proteus] body size: {0}", line),
-                                                 tuckSlot: RefitCore.TuckSlot(cut && clear, garmentSlot),
-                                                 carryPiercings: piercings,
+                                                 tuckSlot: skinRule.TuckSlot, deepClear: skinRule.DeepClear,
+                                                 keepStandoff: skinRule.KeepStandoff, carryPiercings: piercings,
                                                  liftUnderbust: !crossSex || CrossSexRefit.LiftsUnderbust(bake!.Route.Drawn, bake.Route.To));
                     // Skin the refit kept of the garment's own, drawn in the new body's layout and material — or a
                     // gen2 garment's kept skin shows the wrong skin, and none of the tattoos, on a bibo body.
@@ -2184,8 +2209,18 @@ internal sealed partial class BodyRetargetPanel(PenumbraBridge penumbra, UVRemap
     /// The "made for" bodies' generation is part of it: the same option names a bent body under a picked race and an
     /// unbent one without, and a plan made against the other must not be shown or saved.</summary>
     private string Key(in RetargetContext ctx)
-        => RetargetInputs.Key(ctx.ModelRel, fromBodyDir, Inputs(ctx), Chosen(ctx), from, to, ctx.Held, ctx.KeepShape,
-                              replaceSkin, cutHidden, clearBody, carryPiercings) + "|g" + madeForGeneration;
+    {
+        var inputs = Inputs(ctx);
+        return RetargetInputs.Key(ctx.ModelRel, fromBodyDir, inputs, Chosen(ctx), from, to, ctx.Held, ctx.KeepShape,
+                                  replaceSkin, cutHidden, clearBody, carryPiercings, SkinRule(inputs).ClearForced)
+               + "|g" + madeForGeneration;
+    }
+
+    /// <summary>The rule for the body under a whole garment's cloth (see <see cref="RetargetInputs.StudioSkin"/>): the
+    /// user's boxes, or the automatic refit's for the game's own top.</summary>
+    private RetargetInputs.StudioSkinRule SkinRule(RetargetInputs.Inputs inputs)
+        => RetargetInputs.StudioSkin(replaceSkin, cutHidden, clearBody, gameGear, inputs.GarmentSlot,
+                                     crossSex: active?.Explicit == true && active.Route.ByAlias);
 
     /// <summary>The framework-thread half: take up whatever finished, and do the parts only this thread may.</summary>
     private void Consume(in RetargetContext ctx)

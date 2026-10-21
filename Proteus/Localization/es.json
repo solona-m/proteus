@@ -3907,6 +3907,10 @@
     "message": "Siempre activado mientras el zapato conserva su propio pie o el guante su propia mano: si no, entrarían con él las piernas o los brazos nuevos enteros.",
     "description": ""
   },
+  "Parts.Retarget.ClearForcedTip": {
+    "message": "Siempre activado para las prendas superiores propias del juego, como en el reajuste automático: el juego hunde su tela en su propio cuerpo, así que siempre se empuja fuera del nuevo.",
+    "description": ""
+  },
   "Parts.Retarget.KeepFeet": {
     "message": "Conservar sus propios pies",
     "description": ""

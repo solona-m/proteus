@@ -3907,6 +3907,10 @@
     "message": "Immer an, solange der Schuh seinen eigenen Fuß oder der Handschuh seine eigene Hand behält: sonst kämen die ganzen neuen Beine oder Arme mit hinein.",
     "description": ""
   },
+  "Parts.Retarget.ClearForcedTip": {
+    "message": "Bei den eigenen Oberteilen des Spiels immer an, wie bei der automatischen Anpassung: Das Spiel versenkt ihren Stoff im eigenen Körper, deshalb wird er immer aus dem neuen herausgeschoben.",
+    "description": ""
+  },
   "Parts.Retarget.KeepFeet": {
     "message": "Eigene Füße behalten",
     "description": ""

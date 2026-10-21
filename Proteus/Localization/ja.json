@@ -3907,6 +3907,10 @@
     "message": "靴が自分の足を、手袋が自分の手を残している間は常にオンです。オフにすると新しい脚や腕が丸ごと入ってしまいます。",
     "description": ""
   },
+  "Parts.Retarget.ClearForcedTip": {
+    "message": "ゲーム本来のトップスでは自動リフィットと同じく常にオンです。ゲームは布を自分の体の中に埋め込んでいるため、新しい体からは常に押し出されます。",
+    "description": ""
+  },
   "Parts.Retarget.KeepFeet": {
     "message": "元の足を残す",
     "description": ""

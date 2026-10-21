@@ -3907,6 +3907,10 @@
     "message": "鞋子保留自己的脚、手套保留自己的手时始终开启：否则整条新腿或新手臂都会跟着放进去。",
     "description": ""
   },
+  "Parts.Retarget.ClearForcedTip": {
+    "message": "游戏自带的上衣始终开启，与自动重新适配一致：游戏把它们的布料埋在自己的身体里，所以总会从新身体中推出来。",
+    "description": ""
+  },
   "Parts.Retarget.KeepFeet": {
     "message": "保留原本的脚",
     "description": ""

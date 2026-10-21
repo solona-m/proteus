@@ -1,6 +1,7 @@
 using System;
 using System.IO;
 using System.Linq;
+using System.Runtime.InteropServices;
 using Proteus.Services;
 using Xunit;
 
@@ -236,6 +237,28 @@ public class LiveBrushPreviewFilesTests : IDisposable
         Assert.False(LiveBrushPreview.IsPreviewFile(@"C:\Penumbra\Proteus\models\x.mdl", managed));
         Assert.False(LiveBrushPreview.IsPreviewFile(@"C:\Penumbra\Proteus\models\upstream\y.mdl", managed));
         Assert.False(LiveBrushPreview.IsPreviewFile(@"C:\Penumbra\Proteus\LivePreview\1-ab-000002.mdl", null));
+    }
+
+    [Fact]
+    public void A_private_preview_is_written_as_a_temporary_file()
+    {
+        var path = Path.Combine(tmp, "1-ab-000005.mdl");
+        File.WriteAllBytes(path, [7, 7, 7, 7, 7]);   // a longer leftover under the same name is replaced, not kept
+
+        LiveBrushPreview.WriteTemporary(path, [1, 2, 3]);
+
+        Assert.Equal([1, 2, 3], File.ReadAllBytes(path));
+        Assert.True(File.GetAttributes(path).HasFlag(FileAttributes.Temporary));
+    }
+
+    [Fact]
+    public void A_temporary_file_that_cannot_be_created_says_why()
+    {
+        var ex = Assert.ThrowsAny<IOException>(() =>
+            LiveBrushPreview.WriteTemporary(Path.Combine(tmp, "missing", "1-ab-000006.mdl"), [1]));
+
+        Assert.Equal(unchecked((int)0x80070003), ex.HResult);   // ERROR_PATH_NOT_FOUND
+        Assert.Contains(Marshal.GetPInvokeErrorMessage(3), ex.Message);
     }
 
     [Fact]

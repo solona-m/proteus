@@ -3907,6 +3907,10 @@
     "message": "신발이 자기 발을, 장갑이 자기 손을 유지하는 동안에는 항상 켜집니다. 그렇지 않으면 새 다리나 팔 전체가 함께 들어갑니다.",
     "description": ""
   },
+  "Parts.Retarget.ClearForcedTip": {
+    "message": "게임 자체 상의에는 자동 리핏과 같이 항상 켜집니다. 게임은 천을 자기 몸 안에 묻어 두므로 새 몸에서는 항상 밖으로 밀어냅니다.",
+    "description": ""
+  },
   "Parts.Retarget.KeepFeet": {
     "message": "원래 발 유지",
     "description": ""
