@@ -224,11 +224,11 @@ public class VanillaEditCopyTests : IDisposable
     }
 
     [Fact]
-    [Trait("Plan", "EDGE-vanilla-copy-on-edit-8")]
-    public void A_refused_first_write_points_a_moved_redirect_back()
+    [Trait("Plan", "AC-vanilla-copy-on-edit-8")]
+    [Trait("Plan", "EDGE-vanilla-copy-on-edit-11")]
+    public void A_piece_the_mod_publishes_from_another_file_is_refused_not_repointed()
     {
-        // The mod publishes the coat from a file of its own elsewhere; AddGameModel points it at the copy, and a
-        // refusal must point it back and remove the copy.
+        // The mod publishes the coat from a file of its own elsewhere: the copy would stop that file being drawn.
         var root = ExistingMod(Trousers, [7, 7]);
         const string theirs = "files/coat.mdl";
         Directory.CreateDirectory(Path.GetDirectoryName(FileIn(root, theirs))!);
@@ -238,8 +238,14 @@ public class VanillaEditCopyTests : IDisposable
         PenumbraModMeta.WriteRedirects(root, Path.GetFileName(root), data.Files, manipulations: data.Manipulations);
         var before = PenumbraModMeta.TryReadDefaultData(root)!.Value.Files;
 
-        Make(new FakeEnsure(mods), (_, _) => new(false, "no"));
+        var ensure = new FakeEnsure(mods);
+        bool wrote = false;
 
+        var outcome = Make(ensure, (_, _) => { wrote = true; return new(true, ""); });
+
+        Assert.Equal(VanillaEditCopy.Status.EditedCopyThere, outcome.Status);
+        Assert.False(wrote);
+        Assert.False(ensure.Called);
         Assert.Equal(before, PenumbraModMeta.TryReadDefaultData(root)!.Value.Files);
         Assert.False(File.Exists(FileIn(root, Coat)));
         Assert.Equal([6, 6], File.ReadAllBytes(FileIn(root, theirs)));

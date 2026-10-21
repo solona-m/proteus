@@ -14,7 +14,8 @@ namespace Proteus.Services;
 /// would race it. A refused write throws out of the fill, and Ensure rolls the folder back.
 /// <para/>
 /// An existing mod is only ever added to. Its copy of this piece is reused only when it is still the game's bytes and
-/// no edit is recorded against it; an edited one, or a mod the player has switched off, is refused, never written over.
+/// no edit is recorded against it; an edited one, one publishing the piece from another file of its own, or a mod the
+/// player has switched off, is refused, never written over.
 /// Pure filesystem apart from the injected calls, so it is testable without the game.
 /// </summary>
 internal static class VanillaEditCopy
@@ -128,10 +129,15 @@ internal static class VanillaEditCopy
     /// <summary>
     /// Whether the mod's copy of the piece carries anything that writing the game's bytes over it would lose: an edit
     /// recorded by the brush or the switches, bytes that are no longer the game's, or a file that cannot be read to
-    /// tell. A piece the mod does not have is not an edit.
+    /// tell. A game path the mod publishes from some other file of its own counts too: re-pointing it at the copy would
+    /// stop drawing that file. A piece the mod does not have is not an edit.
     /// </summary>
     internal static bool HoldsEdit(string root, string rel, byte[] gameBytes)
     {
+        if (PenumbraModMeta.TryReadDefaultData(root) is { } data && data.Files.TryGetValue(rel, out var target)
+            && !string.Equals(target.Replace('\\', '/'), rel, StringComparison.OrdinalIgnoreCase))
+            return true;
+
         string file = Path.Combine(root, rel.Replace('/', Path.DirectorySeparatorChar));
         if (!File.Exists(file)) return false;
         if (MeshVolumeService.IsPatched(root, rel)) return true;
