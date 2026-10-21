@@ -543,6 +543,14 @@
     "message": "\n全局设置——它不属于你正在编辑的绑定。",
     "description": ""
   },
+  "Colors.Bodies.Men.Label": {
+    "message": "叠加到男性身上",
+    "description": "Checkbox label in the colour-table editor window's Advanced section, under \"Overlay gen2/vanilla\". Ticked = this mod's women's art is also painted on men."
+  },
+  "Colors.Bodies.Men.Tip": {
+    "message": "将此模组的女性图案也绘制到男性身上（TBSE 或男性原版身体），\n通过男性身体映射图转换到他自己的布局。\n为男性制作的图案永远不会被改动。\n适用于整个模组，而不仅是此选项。",
+    "description": "Tooltip for the checkbox above. \"TBSE\" is a body-mod name - never translated. Contains deliberate line breaks - keep the same number, moving them where your language needs."
+  },
   "Colors.Bodies.Vanilla.Label": {
     "message": "叠加到 gen2/原版",
     "description": "Checkbox label in the colour-table editor window's Advanced section. \"gen2\" is a body-mod name - never translated. Ticked = this mod is also painted onto vanilla skin."
@@ -2330,6 +2338,10 @@
   "Mods.Inert.MaskNeedsShell.Fmt": {
     "message": "它的遮罩被设置为按装备渲染，而衣物需要用遮罩来构建——但在 Penumbra 中它的“{0}”组里没有勾选任何内容。",
     "description": ""
+  },
+  "Mods.Inert.AwaitingMenMaps": {
+    "message": "此模组的图案是为女性身体制作的。男性身体映射图下载完成后，就会以你自己的布局绘制到你身上（如果下载失败，请从 UV 映射图提示处重试）。",
+    "description": "Why an enabled mod paints nothing yet: it is women's art on a man, waiting for the men's body maps to download. \"UV maps\" names the notice in the plugin's status window."
   },
   "Mods.Inert.NothingReached": {
     "message": "已勾选的选项都已解析，但没有一个抵达此角色已加载的表面。",

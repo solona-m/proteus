@@ -356,6 +356,7 @@ Bajo las filas, **Avanzado** guarda los ajustes que se aplican a todo el mod en 
 |---------|-------------|
 | Forzar modo de representación | Fija Skin / Cloth / Brillo animado en vez de dejar que decidan las funciones. **Volver a automático** lo libera. |
 | Superponer en gen2/vanilla | Pinta este mod también sobre la piel vanilla (gen2) que lleves puesta, normalmente la piel que viene con una pieza de equipo. Activado por defecto, y no cuesta nada cuando no llevas piel vanilla encima. bibo y gen3/Eve se pintan siempre. Se aplica a todo el mod y es un ajuste global: los vínculos de diseño no lo capturan. |
+| Superponer en hombres | Pinta también el arte femenino de este mod en hombres (TBSE o el cuerpo masculino vanilla), trasladado a su propia distribución mediante los mapas de cuerpo masculino, que se descargan la primera vez que hacen falta; hasta entonces no se pinta nada sobre él. El arte hecho para hombres nunca se modifica. Activado por defecto; se aplica a todo el mod y es un ajuste global: los vínculos de diseño no lo capturan. |
 | Restaurar valores predeterminados | Devuelve los colores, el brillo y el modo de esta opción a los ajustes que Proteus registró por primera vez para el mod. Mantén Ctrl para armarlo. |
 
 Si un mod no tiene ninguna opción activa no hay colores que mostrar, pero **Avanzado** sigue apareciendo para que **Superponer en gen2/vanilla** siga estando a mano.

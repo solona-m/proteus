@@ -543,6 +543,14 @@
     "message": "\nグローバル設定です。編集中の紐付けには含まれません。",
     "description": ""
   },
+  "Colors.Bodies.Men.Label": {
+    "message": "男性にも重ねる",
+    "description": "Checkbox label in the colour-table editor window's Advanced section, under \"Overlay gen2/vanilla\". Ticked = this mod's women's art is also painted on men."
+  },
+  "Colors.Bodies.Men.Tip": {
+    "message": "このModの女性用アートを男性（TBSEまたは男性バニラ体型）にも描きます。\n男性用ボディマップで彼自身のレイアウトに変換されます。\n男性用に作られたアートは一切変更されません。\nこのオプションだけでなく、Mod全体に適用されます。",
+    "description": "Tooltip for the checkbox above. \"TBSE\" is a body-mod name - never translated. Contains deliberate line breaks - keep the same number, moving them where your language needs."
+  },
   "Colors.Bodies.Vanilla.Label": {
     "message": "gen2/バニラに重ねる",
     "description": "Checkbox label in the colour-table editor window's Advanced section. \"gen2\" is a body-mod name - never translated. Ticked = this mod is also painted onto vanilla skin."
@@ -2330,6 +2338,10 @@
   "Mods.Inert.MaskNeedsShell.Fmt": {
     "message": "マスクが装備として描画される設定になっています。衣装はマスクから作られるため、Penumbra の「{0}」グループで何も選択されていないと何も作られません。",
     "description": ""
+  },
+  "Mods.Inert.AwaitingMenMaps": {
+    "message": "このModのアートは女性の体向けに作られています。男性用ボディマップのダウンロードが終わり次第、あなた自身のレイアウトで描かれます（ダウンロードに失敗した場合は、UVマップの通知から再試行してください）。",
+    "description": "Why an enabled mod paints nothing yet: it is women's art on a man, waiting for the men's body maps to download. \"UV maps\" names the notice in the plugin's status window."
   },
   "Mods.Inert.NothingReached": {
     "message": "選択したオプションは解決されましたが、このキャラクターが読み込んでいる面には届きませんでした。",

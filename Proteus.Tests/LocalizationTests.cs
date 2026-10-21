@@ -856,4 +856,37 @@ public sealed class LocalizationTests
         Assert.Equal(2, bullets.Count);                       // the brushes', and the move tools'
         Assert.Contains(bullets, b => b.Contains(undo, StringComparison.Ordinal));
     }
+
+    /// <summary>The "Overlay on men" switch and the waiting message are in every language, in its own words.</summary>
+    [Theory]
+    [MemberData(nameof(Translations))]
+    [Trait("Plan", "AC-womens-overlays-men-4")]
+    [Trait("Plan", "AC-womens-overlays-men-5")]
+    public void MenOverlay_strings_are_translated_not_copied(string lang) // [AC-womens-overlays-men-4] [AC-womens-overlays-men-5]
+    {
+        var en = Load(Source);
+        var tr = Load(lang);
+        foreach (string key in new[] { "Colors.Bodies.Men.Label", "Colors.Bodies.Men.Tip", "Mods.Inert.AwaitingMenMaps" })
+        {
+            Assert.True(tr.ContainsKey(key), $"[{lang}] has no {key}");
+            Assert.NotEqual(en[key].Message, tr[key].Message);
+            Assert.Equal(en[key].Message.Count(c => c == '\n'), tr[key].Message.Count(c => c == '\n'));
+        }
+        Assert.Contains("TBSE", tr["Colors.Bodies.Men.Tip"].Message);
+    }
+
+    /// <summary>Every README's Advanced table has an "Overlay on men" row, named as the checkbox is in its language.</summary>
+    [Theory]
+    [MemberData(nameof(AllLocales))]
+    [Trait("Plan", "AC-womens-overlays-men-5")]
+    public void Readme_has_overlay_on_men_row(string lang) // [AC-womens-overlays-men-5]
+    {
+        var dir = new System.IO.DirectoryInfo(AppContext.BaseDirectory);
+        while (dir != null && !System.IO.File.Exists(System.IO.Path.Combine(dir.FullName, "proteus.slnx"))) dir = dir.Parent;
+        Assert.True(dir != null, $"Could not find proteus.slnx above {AppContext.BaseDirectory}.");
+        string readme = System.IO.File.ReadAllText(System.IO.Path.Combine(
+            dir!.FullName, lang == Source ? "README.md" : System.IO.Path.Combine("docs", $"README.{lang}.md")));
+        string label = Load(lang)["Colors.Bodies.Men.Label"].Message;
+        Assert.Contains(readme.Split('\n'), l => l.StartsWith("| " + label + " |", StringComparison.Ordinal) && l.Contains("TBSE"));
+    }
 }

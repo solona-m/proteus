@@ -16,7 +16,8 @@ public sealed partial class SecondSkinService
     {
         private readonly SecondSkinService service;
         private readonly string charCode;
-        private readonly IReadOnlyList<(OverlayEntry Entry, ResolvedOverlay Overlay)> gearOverlays;
+        // Not readonly: HoldWomensLayers takes a woman's layers off a man's shell before any index into it is assigned.
+        private IReadOnlyList<(OverlayEntry Entry, ResolvedOverlay Overlay)> gearOverlays;
         private readonly string outputRoot;
         private string? bodyType;
         private readonly string? effectsFolder;
@@ -149,6 +150,8 @@ public sealed partial class SecondSkinService
         /// <summary>See <see cref="SecondSkinService.Build"/>'s parameters of the same names.</summary>
         internal bool WearerIsMan { get; init; }
         internal bool MenMapsReady { get; init; }
+        /// <summary>Whether a mod's women's art may be painted on a man ("Overlay on men"); null allows every mod.</summary>
+        internal Func<string, bool>? MenAllowed { get; init; }
 
         /// <summary>
         /// The men's layout the shell's body surface is in on a man — TBSE's for <c>_b</c> parts, the men's vanilla for
@@ -172,7 +175,9 @@ public sealed partial class SecondSkinService
             HarvestParts();
             if (!WholeBodyFallback()) return Abandoned();
             ChooseUvSpace();
+            if (!HoldWomensLayers()) return Abandoned();
             UnmirrorBody();
+            if (!HoldWomensLayersAfterUnmirror()) return Abandoned();
             ConvertUvSpace();
             VoteCutCode();
             ResolveSurfaces();
@@ -213,6 +218,7 @@ public sealed partial class SecondSkinService
         private bool Begin()
         {
             service.ResetBuildStats();
+            service.LastBuildHeldAll = false;
             contentIn = contentLayers?.Count ?? 0;
 
             // Per-build, not per-session: only repetition within one build is worth caching.
@@ -655,14 +661,57 @@ public sealed partial class SecondSkinService
         /// </summary>
         private MensRoute? MensRouteOf(OverlayDescriptor d, string? layout)
         {
-            if (UVRemapService.MensRouteFor(d.SourceBodyType, d.SourceBodyType ?? InferOverlayBodyType(d), d.MaterialGamePaths, layout)
+            if (UVRemapService.MensRouteFor(d.SourceBodyType, ShellLegacySourceOf(d), d.MaterialGamePaths, layout)
                 is not { } route) return null;
             if (!MenMapsReady) { service.uvRemap.RequestMenMaps(); return null; }
             return service.uvRemap.MensRouteAvailable(route) ? route : null;
         }
 
+        /// <summary>
+        /// A man's shell keeps a woman's body layer only when the men's maps will carry it into his layout: without them, with
+        /// a map missing, or with the mod's "Overlay on men" off, it is taken off (see <see cref="WomensArtOnMen"/>) — never
+        /// pasted in her layout. False when nothing is left to build.
+        /// </summary>
+        private bool HoldWomensLayers() => HoldWomen(holdEveryRouted: false, menLayout);
+
+        /// <summary>
+        /// The women-way un-mirror (a man's own asymmetric layer over his vanilla parts) moves his shell out of his layout,
+        /// so no woman's layer can be carried into it any more: every one still on the shell is held.
+        /// </summary>
+        private bool HoldWomensLayersAfterUnmirror()
+            => !WearerIsMan || menLayout != null || !menLayoutBeforeUnmirror || HoldWomen(holdEveryRouted: true, menLayoutAtChoice);
+
+        private bool HoldWomen(bool holdEveryRouted, string? layout)
+        {
+            if (!WearerIsMan) return true;
+            var (kept, held) = WomensArtOnMen.HoldShellLayers(gearOverlays, layout, WearerIsMan, MenMapsReady,
+                MenAllowed ?? (_ => true), service.uvRemap.MensRouteAvailable, ShellLegacySourceOf, holdEveryRouted);
+            if (held.Count == 0) return true;
+            if (held.Any(h => h.Verdict == WomensArtOnMen.MenVerdict.AwaitMaps)) service.uvRemap.RequestMenMaps();
+            service.log.Information("[Proteus] second skin: held {0} woman's layer(s) off a man's shell — [{1}] ({2})",
+                held.Count,
+                string.Join(", ", held.Select(h => h.Pair.Entry.ModDirectory).Distinct(StringComparer.OrdinalIgnoreCase)),
+                string.Join(", ", held.Select(h => holdEveryRouted ? "shell un-mirrored out of his layout" : h.Verdict switch
+                {
+                    WomensArtOnMen.MenVerdict.AwaitMaps    => "waiting for the men's maps",
+                    WomensArtOnMen.MenVerdict.OptedOut     => "\"Overlay on men\" off",
+                    WomensArtOnMen.MenVerdict.RouteMissing => "a men's map is missing",
+                    _                                      => h.Verdict.ToString(),
+                }).Distinct()));
+            gearOverlays = kept;
+            if (kept.Count == 0) service.LastBuildHeldAll = true;
+            if (kept.Count == 0 && contentIn == 0) { result = null; return false; }
+            return true;
+        }
+
+        // ChooseUvSpace's men's layout, kept for the re-check after un-mirroring.
+        private string? menLayoutAtChoice;
+        private bool menLayoutBeforeUnmirror;
+
         private void UnmirrorBody()
         {
+            menLayoutAtChoice = menLayout;
+            menLayoutBeforeUnmirror = menLayout != null;
             // ── un-mirroring a vanilla body ───────────────────────────────────────────────────────
             // gen2 is MIRRORED, so asymmetric art cannot be ported down into it; instead the vanilla geometry's two sides are
             // sent to the two halves of the art's own sheet (UvConverter's unmirror). Only for art measured asymmetric
@@ -688,6 +737,9 @@ public sealed partial class SecondSkinService
                 {
                     var d = ov.Descriptor;
                     if (d.AsymmetricArt != true) continue;
+                    // On a man, a woman's layer never chooses the women-way un-mirror: it goes through the men's maps or not at all.
+                    if (WearerIsMan && UVRemapService.MensRouteFor(d.SourceBodyType, ShellLegacySourceOf(d), d.MaterialGamePaths,
+                                                                   menLayout ?? UVRemapService.TbseSpace) != null) continue;
                     // Body surface only here; a face's doubled sheet is un-mirrored by ResolveHumanSurface against its own geometry.
                     if (!d.IsMaskShell && d.MaterialGamePaths.Count > 0
                         && !ShellSurface.KeysFor(d.MaterialGamePaths).Any(k => k.IsBody)) continue;

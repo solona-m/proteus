@@ -108,6 +108,8 @@ public partial class CompositorService
                             Layer          = OverlayLayer.Gear,
                             IsMaskShell    = true,
                             SourceBodyType = seed.Overlay.Descriptor.SourceBodyType,
+                            // On a man, a woman's art's paths, so its mask is carried into his layout (or held) like the art.
+                            MaterialGamePaths = WomensArtOnMen.MaskShellPathsFor(seed.Overlay.Descriptor, run.wearerIsMan),
                             Shader         = md?.Shader,
                             Scroll         = md?.Scroll,
                             ScrollSpeedX   = md?.ScrollSpeedX,
@@ -329,7 +331,8 @@ public partial class CompositorService
                     shellTexSize: gs,
                     equippedSlotVariants: slotVariants,
                     hiddenParts: hiddenParts,
-                    wearerIsMan: run.wearerIsMan, menMapsReady: run.menMapsReady);
+                    wearerIsMan: run.wearerIsMan, menMapsReady: run.menMapsReady, menAllowed: run.OverlaysMenFor);
+                run.shellAllHeld = run.compositor.secondSkin.LastBuildHeldAll;
             }
 
             private void ApplyShells()

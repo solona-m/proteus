@@ -755,6 +755,10 @@ public sealed class ModsStrings
         "Its masks render as gear, which needs a mask to build the garment from — and nothing is ticked " +
         "in its \"{0}\" group in Penumbra.");
 
+    public readonly string InertAwaitingMenMaps = Loc.Localize("Mods.Inert.AwaitingMenMaps",
+        "This mod's art is made for women's bodies. It will be painted on you, in your own layout, once the men's body " +
+        "maps are downloaded (retry from the UV maps notice if the download failed).");
+
     public readonly string InertNothingReached = Loc.Localize("Mods.Inert.NothingReached",
         "Its ticked options resolved, but none of them reached a surface this character has loaded.");
 
@@ -2172,6 +2176,15 @@ public sealed class ColorPanelStrings
         "It is only painted while vanilla skin is actually on your character,\n" +
         "so this costs nothing when there is none.\n\n" +
         "bibo and gen3/Eve are always painted; this only affects vanilla.\n" +
+        "Applies to the whole mod, not just this option.");
+
+    // "TBSE" is a body-mod name and is never translated.
+    public readonly string OverlayMen = Loc.Localize("Colors.Bodies.Men.Label", "Overlay on men");
+
+    public readonly string MenTip = Loc.Localize("Colors.Bodies.Men.Tip",
+        "Also paint this mod's women's art on men (TBSE or the men's vanilla body),\n" +
+        "moved into his layout through the men's body maps.\n" +
+        "Art made for men is never changed.\n" +
         "Applies to the whole mod, not just this option.");
 
     public readonly string BodiesGlobalSuffix = Loc.Localize("Colors.Bodies.GlobalSuffix",

@@ -396,6 +396,8 @@ public partial class CompositorService : IDisposable
     // Glamourer's currently-displayed char code (e.g. "c1801"), updated on the framework thread.
     // Null when Glamourer isn't available or hasn't overridden the race.
     private volatile string? _glamourerCharCode;
+    // The last "women's art on a man" summary logged, so an unchanged one is not repeated every composite.
+    private string? _lastWomensArtSummary;
 
     // The same customization read as the wearer's HEAD code (e.g. "c0801" for a Miqo'te female, whose body
     // code above is "c0201"). Face, hair, tail and ears are published under this one, not the body's.

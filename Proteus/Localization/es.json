@@ -543,6 +543,14 @@
     "message": "\nGlobal: esto NO forma parte del vínculo que estás editando.",
     "description": ""
   },
+  "Colors.Bodies.Men.Label": {
+    "message": "Superponer en hombres",
+    "description": "Checkbox label in the colour-table editor window's Advanced section, under \"Overlay gen2/vanilla\". Ticked = this mod's women's art is also painted on men."
+  },
+  "Colors.Bodies.Men.Tip": {
+    "message": "Pinta también el arte femenino de este mod en hombres (TBSE o el cuerpo masculino vanilla),\ntrasladado a su propia distribución mediante los mapas de cuerpo masculino.\nEl arte hecho para hombres nunca se modifica.\nSe aplica a todo el mod, no solo a esta opción.",
+    "description": "Tooltip for the checkbox above. \"TBSE\" is a body-mod name - never translated. Contains deliberate line breaks - keep the same number, moving them where your language needs."
+  },
   "Colors.Bodies.Vanilla.Label": {
     "message": "Superponer en gen2/vanilla",
     "description": "Checkbox label in the colour-table editor window's Advanced section. \"gen2\" is a body-mod name - never translated. Ticked = this mod is also painted onto vanilla skin."
@@ -2330,6 +2338,10 @@
   "Mods.Inert.MaskNeedsShell.Fmt": {
     "message": "Sus máscaras se renderizan como equipo, y para eso hace falta una máscara con la que construir la prenda; en su grupo «{0}» de Penumbra no hay nada marcado.",
     "description": ""
+  },
+  "Mods.Inert.AwaitingMenMaps": {
+    "message": "El arte de este mod está hecho para cuerpos femeninos. Se pintará sobre ti, en tu propia distribución, en cuanto se descarguen los mapas de cuerpo masculino (si la descarga falla, reinténtalo desde el aviso de los mapas UV).",
+    "description": "Why an enabled mod paints nothing yet: it is women's art on a man, waiting for the men's body maps to download. \"UV maps\" names the notice in the plugin's status window."
   },
   "Mods.Inert.NothingReached": {
     "message": "Sus opciones marcadas se resolvieron, pero ninguna llegó a una superficie que este personaje tenga cargada.",

@@ -362,6 +362,7 @@ Below the rows, **Advanced** holds the settings that apply to the whole mod rath
 |---------|-------------|
 | Force render mode | Pins Skin / Cloth / Animated glow instead of letting the features pick. **Back to auto** releases it. |
 | Overlay gen2/vanilla | Also paints this mod onto vanilla (gen2) skin you're wearing, usually skin that comes with a piece of gear. On by default, and it costs nothing when there's no vanilla skin on you. bibo and gen3/Eve are always painted. Applies to the whole mod, and it's a global setting: design bindings don't capture it. |
+| Overlay on men | Also paints this mod's women's art on men (TBSE or the men's vanilla body), moved into his own layout through the men's body maps, which download the first time they're needed. Nothing is painted on him until they're here. Art made for men is never changed. On by default; applies to the whole mod, and it's a global setting: design bindings don't capture it. |
 | Reset to defaults | Restores this option's colors, glow and mode to the settings Proteus first recorded for the mod. Hold Ctrl to arm it. |
 
 If a mod has no active option there are no colors to show, but **Advanced** still appears so **Overlay gen2/vanilla** stays reachable.

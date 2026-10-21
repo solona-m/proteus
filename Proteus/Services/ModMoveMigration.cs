@@ -107,7 +107,7 @@ internal static class ModMoveMigration
 
     /// <summary>
     /// The settings Proteus keeps per mod folder: the AO/Skindenting choice (and the legacy opt-out), "overlay onto the
-    /// vanilla body", both stack orders, the body-mod classification, and the auto refit's garment-side bookkeeping in
+    /// vanilla body", "overlay on men", both stack orders, the body-mod classification, and the auto refit's garment-side bookkeeping in
     /// every collection. Not the auto refit's body folders: existing refits name the old folder in their records, and
     /// carrying the choice over would have them remade. The caller holds <see cref="Proteus.Configuration.Gate"/> and saves.
     /// </summary>
@@ -118,6 +118,7 @@ internal static class ModMoveMigration
         n += RekeyKey(c.AmbientOcclusionOverrides, oldDir, newDir) ? 1 : 0;
         n += RekeySet(c.AmbientOcclusionDisabledMods, oldDir, newDir) ? 1 : 0;
         n += RekeyKey(c.SiblingSynthesis, oldDir, newDir) ? 1 : 0;
+        n += RekeySet(c.MenOverlayOffMods, oldDir, newDir) ? 1 : 0;
         n += RekeyKey(c.OverlayModStackOrder, oldDir, newDir) ? 1 : 0;
         n += RekeyPrefix(c.OverlayStackOrder, oldDir, newDir, '\u0000');
         n += RekeyKey(c.KnownBodyMods, oldDir, newDir) ? 1 : 0;

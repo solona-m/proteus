@@ -543,6 +543,14 @@
     "message": "\n전역 설정입니다 — 편집 중인 연결에는 포함되지 않습니다.",
     "description": ""
   },
+  "Colors.Bodies.Men.Label": {
+    "message": "남성에게도 덧입히기",
+    "description": "Checkbox label in the colour-table editor window's Advanced section, under \"Overlay gen2/vanilla\". Ticked = this mod's women's art is also painted on men."
+  },
+  "Colors.Bodies.Men.Tip": {
+    "message": "이 모드의 여성용 아트를 남성(TBSE 또는 남성 바닐라 체형)에게도 그립니다.\n남성 체형 맵을 통해 그 캐릭터 자신의 레이아웃으로 옮겨집니다.\n남성용으로 만든 아트는 절대 바뀌지 않습니다.\n이 옵션만이 아니라 모드 전체에 적용됩니다.",
+    "description": "Tooltip for the checkbox above. \"TBSE\" is a body-mod name - never translated. Contains deliberate line breaks - keep the same number, moving them where your language needs."
+  },
   "Colors.Bodies.Vanilla.Label": {
     "message": "gen2/바닐라에 오버레이",
     "description": "Checkbox label in the colour-table editor window's Advanced section. \"gen2\" is a body-mod name - never translated. Ticked = this mod is also painted onto vanilla skin."
@@ -2330,6 +2338,10 @@
   "Mods.Inert.MaskNeedsShell.Fmt": {
     "message": "마스크가 장비로 렌더링되도록 설정되어 있습니다. 의상은 마스크로부터 만들어지는데, Penumbra의 \"{0}\" 그룹에서 선택된 것이 없습니다.",
     "description": ""
+  },
+  "Mods.Inert.AwaitingMenMaps": {
+    "message": "이 모드의 아트는 여성 체형용으로 만들어졌습니다. 남성 체형 맵이 다운로드되는 대로 당신 자신의 레이아웃으로 그려집니다(다운로드에 실패했다면 UV 맵 알림에서 다시 시도하세요).",
+    "description": "Why an enabled mod paints nothing yet: it is women's art on a man, waiting for the men's body maps to download. \"UV maps\" names the notice in the plugin's status window."
   },
   "Mods.Inert.NothingReached": {
     "message": "선택한 옵션은 처리되었지만, 이 캐릭터가 불러온 표면에 도달한 것은 없습니다.",

@@ -78,6 +78,8 @@ public partial class CompositorService
                         // Opt-in: the user's explicit choice, else what the pack declared, else off.
                         aoDeclaredBy.TryGetValue(modDir, out bool? declared);
                         if (!material.run.compositor.config.AmbientOcclusionEnabledFor(modDir, declared)) continue;
+                        // A man's material (dstLayout set only for him): a mod whose women's art is held off him casts nothing.
+                        if (material.dstLayout != null && material.run.menAoExcluded.Contains(modDir)) continue;
                         var (m, g, s) = AoSources(modDir);
                         if (m || g || s) aoQualified[modDir] = m;
                     }

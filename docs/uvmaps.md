@@ -18,9 +18,15 @@ against `UVMapDownloadService`'s pinned lists. A tag's assets never change: a re
 ### What it is for
 
 A woman's overlay that reaches a man is drawn in his own layout instead of a women's one. That means TBSE's layout, or
-the men's vanilla layout, which is the right half of TBSE's sheet. Such overlays are imports that list every race's
-material, saved as bibo or with no saved layout. A man's own art is never moved. Art saved as gen3 or gen2 on a man
-counts as his own. The bibo↔TBSE pair is the only map used for this.
+the men's vanilla layout, which is the right half of TBSE's sheet. Such overlays are saved as bibo or have no saved
+layout and name women's body materials: imports that list every race, and Create-tab packs that list only women's
+races, which are carried onto the man's own body materials. Their gear and mask shells are carried the same way. A
+man's own art is never moved. Art saved as gen3 or gen2 on a man counts as his own. The bibo↔TBSE pair is the only map
+used for this.
+
+Nothing of a woman's art is drawn on a man until the maps are on disk. It is never pasted in her layout. The maps are
+downloaded the first time a man needs them, and the mod says it is waiting meanwhile. Each mod's **Overlay on men**
+switch, on by default, keeps its women's art off men altogether.
 
 ### How it was made
 

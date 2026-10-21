@@ -298,15 +298,11 @@ public partial class CompositorService
         HashSet<string>? wornCharCodes,
         HashSet<string>? wornHeadCodes,
         HashSet<string> activeBodyTypes,
-        List<(OverlayEntry Entry, ResolvedOverlay Overlay)> allOverlays)
+        List<(OverlayEntry Entry, ResolvedOverlay Overlay)> allOverlays,
+        IReadOnlySet<string>? awaitingMenMaps = null,
+        IReadOnlySet<ResolvedOverlay>? heldGear = null)
     {
-        // The four destinations a mod can reach, unioned in one pass. AO top-up materials carry empty lists and contribute no mod.
-        var contributing = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-        foreach (var list in byMaterial.Values)
-            foreach (var (e, _) in list) contributing.Add(e.ModDirectory);
-        foreach (var (e, _) in gearOverlays)  contributing.Add(e.ModDirectory);
-        foreach (var (e, _) in contentLayers) contributing.Add(e.ModDirectory);
-        foreach (var m in maskShellMods)      contributing.Add(m);
+        var contributing = Contributing(byMaterial, gearOverlays, contentLayers, maskShellMods, awaitingMenMaps, heldGear);
 
         var inert = entries.Where(e => !contributing.Contains(e.ModDirectory)).ToList();
         if (inert.Count == 0)
@@ -357,7 +353,8 @@ public partial class CompositorService
 
             var reason = Explain(diag, maskGroup, masksOn, maskGear,
                                  filteredOut.Contains(entry.ModDirectory), wants, have,
-                                 PaintsAnotherBody(mine, mineTypes, wornCharCodes, wornHeadCodes, activeBodyTypes));
+                                 PaintsAnotherBody(mine, mineTypes, wornCharCodes, wornHeadCodes, activeBodyTypes),
+                                 awaitingMenMaps?.Contains(entry.ModDirectory) ?? false);
             next[entry.ModDirectory] = reason;
 
             if (_inertReported.TryAdd(
