@@ -479,7 +479,9 @@ public class OtherRaceWearerTests
     [Fact]
     [Trait("Plan", "AC-refit-race-down-2")]
     [Trait("Plan", "EDGE-refit-race-down-4")]
-    public void A_lowered_wearer_refuses_bones_that_would_not_move()
+    [Trait("Plan", "AC-cross-sex-tops-yas-4")]
+    [Trait("Plan", "EDGE-cross-sex-tops-yas-12")]
+    public void A_lowered_wearer_refuses_bones_that_would_not_move() // [AC-cross-sex-tops-yas-4] [EDGE-cross-sex-tops-yas-12]
     {
         var spine = SyntheticSkeleton.Pbd(101, new Dictionary<ushort, string[]> { [301] = ["j_sebo_c"] });
         var stuck = OtherRaceWearer.Build(Lowering(spine), SyntheticSkeleton.Leaning("j_sebo_c", "j_asi_a_l"));

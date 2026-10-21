@@ -534,8 +534,9 @@ internal sealed partial class BodyRetargetPanel(PenumbraBridge penumbra, UVRemap
         /// <summary>With <see cref="Explicit"/>, bones only the collection's custom skeleton gives the race.</summary>
         public IReadOnlyList<string> NeedsSkeleton { get; init; } = [];
 
-        /// <summary>The mod the race's custom skeleton came from, for <see cref="NeedsSkeleton"/>'s note.</summary>
-        public string? SkeletonFrom { get; init; }
+        /// <summary>The mod folder the race's custom skeleton came from, for <see cref="NeedsSkeleton"/>'s note — worked out once,
+        /// in the bake, not every frame.</summary>
+        public string SkeletonFrom { get; init; } = "";
 
         /// <summary>What the option a save goes into gave the bake to read (<see cref="OtherRaceRefit.EstFingerprint"/>);
         /// every option with the same answer makes the same model.</summary>

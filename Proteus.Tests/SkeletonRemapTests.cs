@@ -353,6 +353,53 @@ public class SkeletonRemapTests
         }
     }
 
+    /// <summary>
+    /// Rue's plain and Yiggle sizes are one mesh rigged two ways; bent for a man, the Yiggle size's YAS bones are moved
+    /// onto the plain size's own, and the two would read as one body. Ranked by the rigs they were made with
+    /// (BakedBodyCatalog.RiggedBefore), both stay, and a garment rigged to YAS reads as Yiggle.
+    /// </summary>
+    [Fact]
+    [Trait("Plan", "AC-cross-sex-tops-yas-9")]
+    public void Renamed_bodies_still_detect_the_yiggle_size() // [AC-cross-sex-tops-yas-9]
+    {
+        byte[] Legs(params (string, float)[] weights)
+            => SyntheticModel.Build([], new SyntheticModel.Mesh(Skin, new SyntheticModel.Sub(0, TrianglesPerIsland: 40, Weights: weights)));
+        string root = Path.Combine(Path.GetTempPath(), $"proteus-rank-{Guid.NewGuid():N}");
+        foreach (string size in new[] { "plain", "yiggle" }) Directory.CreateDirectory(Path.Combine(root, size));
+        try
+        {
+            File.WriteAllBytes(Path.Combine(root, "plain", "c0201e0000_dwn.mdl"), Legs(("j_kosi", 1f)));
+            File.WriteAllBytes(Path.Combine(root, "yiggle", "c0201e0000_dwn.mdl"), Legs(("j_kosi", 0.7f), ("ya_shiri_phys_l", 0.3f)));
+            // The plain size listed first, as Rue lists it: only the rig can put Yiggle ahead.
+            var catalog = new BodySizeCatalog(root,
+            [
+                new BodyOption("Legs", "", "Plain", "plain/c0201e0000_dwn.mdl", "chara/equipment/e0000/model/c0201e0000_dwn.mdl", "_dwn"),
+                new BodyOption("Legs", "", "Yiggle", "yiggle/c0201e0000_dwn.mdl", "chara/equipment/e0000/model/c0201e0000_dwn.mdl", "_dwn"),
+            ]);
+            var tree = SyntheticSkeleton.Human("c0101");
+            var who = new RacialModelBake.Wearer(201, HavokSkeleton(tree), new XivLiveMesh.PbdFile(SyntheticSkeleton.HighlanderPbd()));
+            var planner = new SkeletonRemap.Planner(new HashSet<string>(tree.Bones, StringComparer.Ordinal), _ => null);
+            var bent = BakedBodyCatalog.Of(catalog, "0201", 201, who, ["_dwn"], out var failed, planner: planner);
+            Assert.Empty(failed);
+
+            var garment = Legs(("j_kosi", 0.7f), ("ya_shiri_phys_l", 0.3f));
+            var parts = ModelPartReader.Read(garment)!;
+            var bones = new HashSet<string>(SecondSkinWriter.Parse(garment).BoneNames, StringComparer.Ordinal);
+            var options = bent.For("_dwn");
+
+            // Read by the moved names alone, the two are one body.
+            Assert.Single(BodySizeMatch.Rank(parts, options, bent.PathOf, bones).Scores);
+            var ranked = BodySizeMatch.Rank(parts, options, bent.PathOf, bones, rigByPath: BakedBodyCatalog.RiggedBefore);
+            Assert.Equal(2, ranked.Scores.Count);
+            Assert.Equal("Yiggle", ranked.Best!.Value.Option.Name);
+            Assert.Contains("rigByPath: BakedBodyCatalog.RiggedBefore", File.ReadAllText(SourceFile("Proteus/Gui/BodyRetargetPanel.cs")));
+        }
+        finally
+        {
+            Directory.Delete(root, recursive: true);
+        }
+    }
+
     private static Dictionary<string, string?> HavokSkeleton(SyntheticSkeleton.Tree tree)
         => XivLiveMesh.HavokSkeleton.Read(SyntheticSkeleton.Sklb(tree))!.ParentMap();
 

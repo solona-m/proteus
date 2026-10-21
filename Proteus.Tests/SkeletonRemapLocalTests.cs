@@ -101,9 +101,16 @@ public class SkeletonRemapLocalTests(ITestOutputHelper o)
             while (standard != null && !(standard.StartsWith("j_", StringComparison.Ordinal) || standard.StartsWith("n_", StringComparison.Ordinal)))
                 standard = yasParents.GetValueOrDefault(standard);
             o.WriteLine($"{bone}: stand-in {stand}, first standard ancestor {standard}");
-            if (standard != null && (bone.Contains("mune") || bone.Contains("kyokin") || bone.Contains("daitai")))
-                Assert.True(SkeletonRemap.KeepsItsPart(bone, stand),
-                            $"{bone}'s stand-in {stand} leaves its part of the body (YAS hangs it under {standard})");
+            if (standard == null) continue;
+            // The stand-in is in the part of the body YAS hangs the bone in, or the part beside it; a breast or thigh
+            // bone's in that very part.
+            var want = UvBakeBones.RegionOf(standard);
+            var got = UvBakeBones.RegionOf(stand);
+            if (bone.Contains("mune") || bone.Contains("kyokin") || bone.Contains("daitai"))
+                Assert.True(want == got, $"{bone}'s stand-in {stand} ({got}) is not where YAS hangs it, under {standard} ({want})");
+            else
+                Assert.True(UvBakeBones.Adjacent(want, got),
+                            $"{bone}'s stand-in {stand} ({got}) is far from where YAS hangs it, under {standard} ({want})");
         }
     }
 }

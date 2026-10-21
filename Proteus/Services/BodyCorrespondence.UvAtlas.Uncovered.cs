@@ -300,8 +300,7 @@ internal sealed partial class UvAtlasCorrespondence
         // landing — every one found first, then cleared, so no fold is judged against a landing already taken away —
         // and filled from the skin around them downstream, like any other point that landed nowhere.
         bool fits = true;
-        int elsewhere = 0, touching = 0;
-        var foldedNodes = new HashSet<int>();
+        var stillFolded = new List<(int A, int B, int C)>();
         foreach (var (a, b, c) in judged)
         {
             if (!TurnedOver(a, b, c)) continue;
@@ -311,24 +310,13 @@ internal sealed partial class UvAtlasCorrespondence
                 inIslands++;
                 continue;
             }
-            bool ours = false;
-            foreach (int v in new[] { a, b, c })
-                if (excused.Contains(v) || setAside.Contains(v)) { foldedNodes.Add(nodes.NodeOf[v]); ours = true; }
-            if (ours) touching++;
-            else elsewhere++;
+            stillFolded.Add((a, b, c));
         }
-        int foldedSetAside = 0;
-        foreach (int n in foldedNodes)
-        {
-            projected.Remove(n);
-            normalOf.Remove(n);
-            foreach (int v in carriedOf.TryGetValue(n, out var carry) ? carry.Members : nodes.Members[n])
-                if ((excused.Contains(v) || setAside.Contains(v)) && field[v] != null)
-                {
-                    field[v] = null;
-                    foldedSetAside++;
-                }
-        }
+        var moved = new HashSet<int>(excused);
+        moved.UnionWith(setAside);
+        var (foldedSetAside, touching, elsewhere) = SetAsideFolds(
+            stillFolded, nodes.NodeOf, n => carriedOf.TryGetValue(n, out var carry) ? carry.Members : nodes.Members[n],
+            moved, field, projected, normalOf);
 
         int unprojected = 0, onSkin = 0;
         foreach (int v in excused)
@@ -346,6 +334,45 @@ internal sealed partial class UvAtlasCorrespondence
         // turns over, and nothing is refused for folds (cross-sex-tops-yas). How far off it is still is (above).
 
         return new Projection(fits, unprojected, onSkin, elsewhere, inIslands, foldedSetAside, touching);
+    }
+
+    /// <summary>
+    /// The points a fold still touches after the relax, left with no landing: every node a still-folded triangle's moved
+    /// corner belongs to is found first, then cleared — taken out of <paramref name="projected"/> and
+    /// <paramref name="normalOf"/>, its moved members' fields set to null — so no fold is judged against a landing already
+    /// taken away, and the result does not depend on the order of the triangles. Never a reason to refuse the pair.
+    /// </summary>
+    /// <param name="folded">Skin triangles still turned over (pressed-out islands already left out).</param>
+    /// <param name="membersOf">A node's vertices.</param>
+    /// <param name="moved">The excused and set-aside vertices: those whose field the projection moved.</param>
+    /// <returns>Vertices left with no landing; folded triangles touching a moved point; and those touching none.</returns>
+    internal static (int SetAside, int Touching, int Elsewhere) SetAsideFolds(
+        IEnumerable<(int A, int B, int C)> folded, int[] nodeOf, Func<int, IReadOnlyList<int>> membersOf,
+        IReadOnlySet<int> moved, Vector3?[] field, ISet<int> projected, IDictionary<int, Vector3> normalOf)
+    {
+        int touching = 0, elsewhere = 0;
+        var foldedNodes = new HashSet<int>();
+        foreach (var (a, b, c) in folded)
+        {
+            bool ours = false;
+            foreach (int v in new[] { a, b, c })
+                if (moved.Contains(v)) { foldedNodes.Add(nodeOf[v]); ours = true; }
+            if (ours) touching++;
+            else elsewhere++;
+        }
+        int setAside = 0;
+        foreach (int n in foldedNodes)
+        {
+            projected.Remove(n);
+            normalOf.Remove(n);
+            foreach (int v in membersOf(n))
+                if (moved.Contains(v) && field[v] != null)
+                {
+                    field[v] = null;
+                    setAside++;
+                }
+        }
+        return (setAside, touching, elsewhere);
     }
 
     /// <summary>

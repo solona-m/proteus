@@ -99,6 +99,8 @@ public class SkinlessTargetTests
 
     [Fact]
     [Trait("Plan", "EDGE-skinless-target-2")]
+    [Trait("Plan", "AC-cross-sex-tops-yas-7")]
+    [Trait("Plan", "EDGE-cross-sex-tops-yas-21")]
     public void Boxers_too_far_away_excuse_nothing()
     {
         var (source, sourceUv) = Sheet(Skin);
@@ -112,6 +114,8 @@ public class SkinlessTargetTests
     [Fact]
     [Trait("Plan", "AC-skinless-target-4")]
     [Trait("Plan", "EDGE-skinless-target-4")]
+    [Trait("Plan", "AC-cross-sex-tops-yas-7")]
+    [Trait("Plan", "EDGE-cross-sex-tops-yas-21")]
     public void Too_little_on_skin_says_choose_an_option_with_skin()
     {
         var (source, sourceUv) = Sheet(Skin);
@@ -442,8 +446,94 @@ public class SkinlessTargetTests
                     $"{refusal} (excused {m.Excused}, set aside {m.FoldedSetAside}, unprojected {m.Unprojected})");
         Assert.True(m.FoldedSetAside + m.Unprojected > m.Excused / 2, "the folds were not avoided, so the test proves nothing");
         Assert.Equal(0, Folded(source, built!));
-        Assert.All(Enumerable.Range(0, built!.Field.Count).Where(v => built.Field[v] == null),
-                   v => Assert.True(m.FoldedSetAside > 0));
+        // Here the relax keeps every point off the body and none is left touching a fold; the clearing itself is
+        // Set_aside_clears_every_point_a_fold_touches_whatever_the_order.
+        Assert.Equal(m.FoldedSetAside, Enumerable.Range(0, built!.Field.Count).Count(v => built.Field[v] == null));
+    }
+
+    /// <summary>
+    /// The set-aside step itself: every node a still-folded triangle's moved corner belongs to is found before any is
+    /// cleared, so the counts and the points cleared are the same whatever order the triangles come in — and a fold
+    /// touching no moved point is counted elsewhere, its points kept.
+    /// </summary>
+    [Fact]
+    [Trait("Plan", "AC-cross-sex-tops-yas-7")]
+    [Trait("Plan", "EDGE-cross-sex-tops-yas-20")]
+    public void Set_aside_clears_every_point_a_fold_touches_whatever_the_order() // [AC-cross-sex-tops-yas-7] [EDGE-cross-sex-tops-yas-20]
+    {
+        // Six vertices, one node each but 4 and 5, which are weld twins (node 4). Vertices 0, 1, 4 and 5 were moved.
+        int[] nodeOf = [0, 1, 2, 3, 4, 4];
+        var members = new Dictionary<int, IReadOnlyList<int>> { [0] = [0], [1] = [1], [2] = [2], [3] = [3], [4] = [4, 5] };
+        var moved = new HashSet<int> { 0, 1, 4, 5 };
+        (int, int, int)[] folded = [(0, 2, 3), (1, 0, 2), (4, 2, 3), (2, 3, 2)];
+
+        (int SetAside, int Touching, int Elsewhere, Vector3?[] Field, HashSet<int> Projected) Run(IEnumerable<(int, int, int)> order)
+        {
+            var field = Enumerable.Range(0, 6).Select(_ => (Vector3?)Vector3.UnitZ).ToArray();
+            var projected = new HashSet<int> { 0, 1, 2, 3, 4 };
+            var normals = Enumerable.Range(0, 5).ToDictionary(n => n, _ => Vector3.UnitZ);
+            var (s, t, e) = UvAtlasCorrespondence.SetAsideFolds(order, nodeOf, n => members[n], moved, field, projected, normals);
+            Assert.All(new[] { 0, 1, 4 }, n => Assert.DoesNotContain(n, normals.Keys));
+            return (s, t, e, field, projected);
+        }
+
+        var forward = Run(folded);
+        var backward = Run(folded.Reverse());
+        Assert.Equal(4, forward.SetAside);                 // vertices 0, 1, 4 and its twin 5
+        Assert.Equal(3, forward.Touching);
+        Assert.Equal(1, forward.Elsewhere);                // (2, 3, 2): no moved corner
+        Assert.Equal((forward.SetAside, forward.Touching, forward.Elsewhere), (backward.SetAside, backward.Touching, backward.Elsewhere));
+        Assert.Equal(forward.Field, backward.Field);
+        Assert.Equal([0, 1, 4, 5], Enumerable.Range(0, 6).Where(v => forward.Field[v] == null));
+        Assert.Equal(new HashSet<int> { 2, 3 }, forward.Projected);   // unmoved points keep their landing
+    }
+
+    /// <summary>
+    /// Points set aside for a fold are filled from their neighbours downstream (<c>SourceBody.Whole</c>): what the
+    /// refit then follows turns no skin triangle over and collapses none — the mesh is checked, not only the refusal
+    /// taken away (the user's decision on the review).
+    /// </summary>
+    [Fact]
+    [Trait("Plan", "AC-cross-sex-tops-yas-7")]
+    [Trait("Plan", "EDGE-cross-sex-tops-yas-20")]
+    public void Set_aside_points_filled_from_their_neighbours_leave_no_hole() // [AC-cross-sex-tops-yas-7] [EDGE-cross-sex-tops-yas-20]
+    {
+        var (source, sourceUv) = Sheet(Skin);
+        var (target, targetUv) = Target(Band, Boxers, Standoff, notch: 0.03f);
+        Assert.True(Build(source, sourceUv, target, targetUv, out var built, out string refusal, out var m), refusal);
+        Assert.True(m.Excused > 0);
+
+        // A fold around the moved point in the middle of the seat: every triangle touching it, set aside as the
+        // projection does, then filled as the refit does.
+        var field = built!.Field.ToArray();
+        int count = field.Length;
+        int middle = Enumerable.Range(0, count).Where(v => field[v] != null)
+                               .OrderBy(v => Vector3.Distance(At(source, v), new Vector3(0.11f, 0.5f, 0f))).First();
+        var around = new List<(int, int, int)>();
+        foreach (var part in source.Parts)
+            for (int i = 0; i + 2 < part.Triangles.Length; i += 3)
+                if (part.Triangles[i] == middle || part.Triangles[i + 1] == middle || part.Triangles[i + 2] == middle)
+                    around.Add((part.Triangles[i], part.Triangles[i + 1], part.Triangles[i + 2]));
+        var moved = around.SelectMany(t => new[] { t.Item1, t.Item2, t.Item3 }).ToHashSet();
+        var (setAside, _, _) = UvAtlasCorrespondence.SetAsideFolds(around, Enumerable.Range(0, count).ToArray(),
+            n => [n], moved, field, new HashSet<int>(), new Dictionary<int, Vector3>());
+        Assert.Equal(moved.Count, setAside);
+
+        var filled = BodyRetarget.SourceBody.Whole(source, field);
+        Assert.All(moved, v => Assert.NotNull(filled[v]));
+        int folded = 0, collapsed = 0;
+        foreach (var part in source.Parts)
+            for (int i = 0; i + 2 < part.Triangles.Length; i += 3)
+            {
+                int a = part.Triangles[i], b = part.Triangles[i + 1], c = part.Triangles[i + 2];
+                Vector3 P(int v) => At(source, v) + (filled[v] ?? Vector3.Zero);
+                var before = Vector3.Cross(At(source, b) - At(source, a), At(source, c) - At(source, a));
+                var after = Vector3.Cross(P(b) - P(a), P(c) - P(a));
+                if (before.LengthSquared() > 0f && Vector3.Dot(before, after) <= 0f) folded++;
+                if (before.LengthSquared() > 0f && after.Length() < 1e-9f) collapsed++;
+            }
+        Assert.Equal(0, folded);
+        Assert.Equal(0, collapsed);
     }
 
     /// <summary>A point a fold still touches after the relax is left with no landing and said, never refused over.</summary>

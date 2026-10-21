@@ -193,7 +193,7 @@ internal sealed partial class BodyRetargetPanel
                 ImGui.TextWrapped(string.Format(ps.RetargetRaceBonesMovedFmt, to, b.Moves.Count, SkeletonRemap.Describe(b.Moves)));
         if (b.NeedsSkeleton.Count > 0)
             using (ImRaii.PushColor(ImGuiCol.Text, ProteusStyle.Warn))
-                ImGui.TextWrapped(string.Format(ps.RetargetRaceNeedsSkeletonFmt, to, SkeletonMod(b.SkeletonFrom),
+                ImGui.TextWrapped(string.Format(ps.RetargetRaceNeedsSkeletonFmt, to, b.SkeletonFrom,
                                                 b.NeedsSkeleton.Count, string.Join(", ", b.NeedsSkeleton.Take(12))));
         if (b.LeftOut.Count > 0)
             using (ImRaii.PushColor(ImGuiCol.Text, ProteusStyle.Warn))
@@ -409,7 +409,7 @@ internal sealed partial class BodyRetargetPanel
             {
                 Fingerprint = print,
                 Explicit = true, Bodies = bodies, LeftOut = leftOut, Est = made.Est, FellBack = made.FellBack, DrawnPath = drawnPath,
-                Moves = moves, NeedsSkeleton = made.NeedsSkeleton ?? [], SkeletonFrom = inputs.ModdedFrom,
+                Moves = moves, NeedsSkeleton = made.NeedsSkeleton ?? [], SkeletonFrom = SkeletonMod(inputs.ModdedFrom),
             }, "");
         });
     }
