@@ -1,6 +1,7 @@
 using System;
 using System.IO;
 using System.Linq;
+using System.Runtime.InteropServices;
 using Proteus.Services;
 using Xunit;
 
@@ -251,9 +252,14 @@ public class LiveBrushPreviewFilesTests : IDisposable
     }
 
     [Fact]
-    public void A_temporary_file_that_cannot_be_created_throws()
-        => Assert.ThrowsAny<IOException>(() =>
+    public void A_temporary_file_that_cannot_be_created_says_why()
+    {
+        var ex = Assert.ThrowsAny<IOException>(() =>
             LiveBrushPreview.WriteTemporary(Path.Combine(tmp, "missing", "1-ab-000006.mdl"), [1]));
+
+        Assert.Equal(unchecked((int)0x80070003), ex.HResult);   // ERROR_PATH_NOT_FOUND
+        Assert.Contains(Marshal.GetPInvokeErrorMessage(3), ex.Message);
+    }
 
     [Fact]
     [Trait("Plan", "AC-brush-pair-sync-5")]

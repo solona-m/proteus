@@ -211,13 +211,14 @@ internal sealed class LiveBrushPreview(PenumbraBridge penumbra, CompositorServic
     /// </summary>
     internal static void WriteTemporary(string path, byte[] bytes)
     {
-        var handle = CreateFileW(path, GenericWrite, FileShareRead, IntPtr.Zero, CreateAlways, FileAttributeTemporary,
-                                 IntPtr.Zero);
+        using var handle = CreateFileW(path, GenericWrite, FileShareRead, IntPtr.Zero, CreateAlways,
+                                       FileAttributeTemporary, IntPtr.Zero);
         if (handle.IsInvalid)
         {
-            int hr = Marshal.GetHRForLastWin32Error();
-            handle.Dispose();
-            throw new IOException($"Could not create \"{path}\"", hr);
+            int error = Marshal.GetLastPInvokeError();
+            // The reason in the message: an IOException's log line leaves its HResult out.
+            throw new IOException($"Could not create \"{path}\": {Marshal.GetPInvokeErrorMessage(error)}",
+                                  unchecked((int)0x80070000) | error);
         }
         using var stream = new FileStream(handle, FileAccess.Write);
         stream.Write(bytes);
