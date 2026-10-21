@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using Proteus.Gui;
 using Proteus.Services;
 using Xunit;
 
@@ -92,15 +93,54 @@ public class CrossSexRefitTests
     [Trait("Plan", "AC-cross-sex-refit-1")]
     public void A_c0101_save_also_reaches_lalafell_women() // [AC-cross-sex-refit-1]
     {
-        var men = CrossSexRefit.FallThroughTo(101);
+        // Made from a c0201 model, which the item keeps: women falling through to c0201 stop there and keep it.
+        var men = CrossSexRefit.FallThroughTo(101, drawn: 201);
         Assert.Contains((ushort)1201, men);   // Lalafell F → Lalafell M → Midlander M
         Assert.Contains((ushort)301, men);
-        Assert.Contains((ushort)201, men);    // Midlander F falls through to Midlander M too
+        Assert.DoesNotContain((ushort)201, men);
+        Assert.DoesNotContain((ushort)401, men);   // Highlander F → Midlander F, the model refitted
         Assert.DoesNotContain((ushort)101, men);
-        var women = CrossSexRefit.FallThroughTo(201);
+        // Made from a c0101 model: the women's races reach the c0201 save; men and Lalafell stop at c0101.
+        var women = CrossSexRefit.FallThroughTo(201, drawn: 101);
         Assert.Contains((ushort)401, women);
         Assert.DoesNotContain((ushort)1201, women);
         Assert.DoesNotContain((ushort)301, women);
+    }
+
+    [Fact]
+    [Trait("Plan", "AC-cross-sex-refit-7")]
+    [Trait("Plan", "EDGE-cross-sex-refit-9")]
+    public void Automatic_cross_sex_route_is_unchanged() // [AC-cross-sex-refit-7] [EDGE-cross-sex-refit-9]
+    {
+        // A woman playing in a men's shirt, through the automatic refit's own route: baked up as before, never by alias.
+        var auto = RefitCore.Route(MansTop, 201, r => r == 201, _ => true, [], null);
+        Assert.Equal(new RacialModelBake.Route(101, 201, Down: false), auto);
+        Assert.False(auto.ByAlias);
+    }
+
+    [Fact]
+    [Trait("Plan", "AC-cross-sex-refit-2")]
+    public void A_passing_cross_sex_plan_is_taken_with_its_quality_said() // [AC-cross-sex-refit-2]
+    {
+        // The quality line rides beside the plan: a notice would drop the plan, and nothing could be saved.
+        var planned = new List<(BodyOption, BodyRetarget.Planned)> { (Body("0201", "_top", "Nude - Small"), null!) };
+        Assert.True(BodyRetargetPanel.Takes(new BodyRetargetPanel.PlanResult("k", planned, "", Quality: "8 folded faces")));
+        Assert.False(BodyRetargetPanel.Takes(new BodyRetargetPanel.PlanResult("k", planned, "", Notice: "nothing to do")));
+        Assert.False(BodyRetargetPanel.Takes(new BodyRetargetPanel.PlanResult("k", planned, "refused")));
+        Assert.False(BodyRetargetPanel.Takes(new BodyRetargetPanel.PlanResult("k", [], "")));
+        Assert.Contains("Quality: string.Join(", Source("Proteus/Gui/BodyRetargetPanel.cs"));
+    }
+
+    [Fact]
+    [Trait("Plan", "AC-cross-sex-refit-3")]
+    public void Only_a_mens_top_made_womens_skips_the_underbust_lift() // [AC-cross-sex-refit-3]
+    {
+        Assert.False(CrossSexRefit.LiftsUnderbust(101, 201));
+        Assert.True(CrossSexRefit.LiftsUnderbust(201, 101));
+        Assert.True(CrossSexRefit.LiftsUnderbust(101, 301));
+        Assert.True(CrossSexRefit.LiftsUnderbust(201, 201));
+        Assert.Contains("liftUnderbust: CrossSexRefit.LiftsUnderbust(drawn, i.To)", Source("Proteus/Services/CrossSexRefitJob.cs"));
+        Assert.Contains("CrossSexRefit.LiftsUnderbust(bake!.Route.Drawn, bake.Route.To)", Source("Proteus/Gui/BodyRetargetPanel.cs"));
     }
 
     [Fact]
@@ -261,6 +301,8 @@ public class CrossSexRefitTests
         Assert.StartsWith("--for-race refits", CrossSexRefit.ValidateCli("0101", "0201", "_glv", ok));
         Assert.StartsWith("--for-race needs", CrossSexRefit.ValidateCli("0101", "0201", "_top", ["game", "uvmaps"]));
         Assert.StartsWith("--for-race is not combined", CrossSexRefit.ValidateCli("0101", "0201", "_top", [.. ok, "finish"]));
+        Assert.StartsWith("--for-race is not combined", CrossSexRefit.ValidateCli("0101", "0201", "_top", [.. ok, "whole"]));
+        Assert.StartsWith("--for-race is not combined", CrossSexRefit.ValidateCli("0101", "0201", "_top", [.. ok, "keep-default"]));
     }
 
     [Fact]

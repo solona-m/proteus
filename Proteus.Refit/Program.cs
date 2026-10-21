@@ -62,7 +62,7 @@ internal static class Program
                       (the bibo<->TBSE transfer maps; a JSON report on stdout, exit 1 when the quality gate fails)
         Proteus.Refit --garment <model.mdl> --race 0101|0201 --for-race 0201|0101
                       --from-root <body mod it was made on> --body-root <other sex's body mod>
-                      --from <rel|auto> --to <rel>=<label>[,...] --out-dir <dir>
+                      --from <rel> --to <rel>=<label>[,...] --out-dir <dir>
                       --game <FFXIV game\sqpack> --uvmaps <Proteus plugin dir> [--skeleton <base .sklb>]
                       [--slot _top|_dwn] [--set <id>] [--no-push] [--piercings]
                       (refit for the other sex: men's chest and legs for women, women's legs for men)

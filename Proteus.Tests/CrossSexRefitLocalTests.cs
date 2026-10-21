@@ -30,6 +30,10 @@ public class CrossSexRefitLocalTests(ITestOutputHelper o)
     internal const string IvcsMen = LocalData.Mods
         + ":[IVCS] Illusio Vitae Custom Skeleton Base V1.1 (2)/chara/human/c0101/skeleton/base/b0001/skl_c0101b0001.sklb";
 
+    /// <summary>Cloth faces each shipped cell turns over today (measured 2026-10-20), guarded against growing below the
+    /// gate's own cap.</summary>
+    private const int KnownLumberjackFolds = 8, KnownTwillFolds = 0, KnownSheerLegsFolds = 1;
+
     /// <summary>The Bibo+ legs a women's SFW garment is made on: its smallclothes, matching TBSE's SFW option.</summary>
     private static string BiboSfwLegs => UvBakeInputs.BiboLegs[3].Rel;
 
@@ -126,6 +130,7 @@ public class CrossSexRefitLocalTests(ITestOutputHelper o)
         var (r, s) = Run(inputs);
         int baseline = SameSexFolds(LumberjackShirt, Tbse, UvBakeInputs.TbseChest, TbseX, "0101", male: true);
         RefitGate.Assert(o, r, s, baseline);
+        Assert.True(s.Folds <= KnownLumberjackFolds, $"{s.Folds} folds, more than the {KnownLumberjackFolds} known");
         Assert.False(r.Route.Lowered);
         Assert.True(r.Route.ByAlias);
         Assert.Equal("chara/equipment/e6091/model/c0201e6091_top.mdl", r.Route.SavePath(inputs.GamePath));
@@ -142,6 +147,7 @@ public class CrossSexRefitLocalTests(ITestOutputHelper o)
         var (r, s) = Run(inputs);
         int baseline = SameSexFolds(TwillTbse, Tbse, UvBakeInputs.TbseLegs[0].Rel, TbseX, "0101", male: true);
         RefitGate.Assert(o, r, s, baseline);
+        Assert.True(s.Folds <= KnownTwillFolds, $"{s.Folds} folds, more than the {KnownTwillFolds} known");
         Assert.Equal("chara/equipment/e6269/model/c0201e6269_dwn.mdl", r.Route.SavePath(inputs.GamePath));
     }
 
@@ -156,6 +162,7 @@ public class CrossSexRefitLocalTests(ITestOutputHelper o)
         var (r, s) = Run(inputs);
         int baseline = SameSexFolds(SheerLegs, Bibo, BiboSfwLegs, Rue, "0201", male: false);
         RefitGate.Assert(o, r, s, baseline);
+        Assert.True(s.Folds <= KnownSheerLegsFolds, $"{s.Folds} folds, more than the {KnownSheerLegsFolds} known");
         Assert.True(r.Route.Lowered);
         Assert.Equal("chara/equipment/e6107/model/c0101e6107_dwn.mdl", r.Route.SavePath(inputs.GamePath));
         Assert.NotNull(r.Route.Eqdp(r.Route.SavePath(inputs.GamePath)));

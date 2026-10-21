@@ -88,22 +88,33 @@ internal static class CrossSexRefit
         => women is "bibo" or "gen2" && men is UVRemapService.TbseSpace or UVRemapService.MaleVanillaSpace;
 
     /// <summary>
-    /// The races that wear a model saved at <paramref name="saved"/>'s path for an item with no model of their own:
-    /// every playable race whose fall-through reaches it, in the game's order — a c0101 save also reaches the Lalafell
-    /// women (c1201 → c1101 → c0101), not only men.
+    /// The races besides the picked one that wear a model saved at <paramref name="saved"/>'s path: every playable race
+    /// whose fall-through reaches it before it reaches <paramref name="drawn"/> — the model refitted, which the item has,
+    /// and which stops every chain through it. A c0101 save made from a c0201 model is worn by the men and by the
+    /// Lalafell women (c1201 → c1101 → c0101), not by the women who fall through to c0201.
     /// </summary>
-    internal static IReadOnlyList<ushort> FallThroughTo(ushort saved)
+    internal static IReadOnlyList<ushort> FallThroughTo(ushort saved, ushort drawn)
     {
         var races = new List<ushort>();
         for (int n = 1; n <= ModelRace.Names.Length * 2; n++)
         {
             ushort code = (ushort)(n * 100 + 1);
-            if (code == saved) continue;
+            if (code == saved || code == drawn) continue;
             for (int cur = ModelRace.Fallback(n), guard = 0; cur != 0 && guard < 8; cur = ModelRace.Fallback(cur), guard++)
-                if (cur * 100 + 1 == saved) { races.Add(code); break; }
+            {
+                int at = cur * 100 + 1;
+                if (at == drawn) break;
+                if (at == saved) { races.Add(code); break; }
+            }
         }
         return races;
     }
+
+    /// <summary>
+    /// Whether a refit from <paramref name="drawn"/> for <paramref name="to"/> lifts the cloth under the new breasts:
+    /// not for a men's top made a women's (see <c>BodyRetarget.Plan</c>'s liftUnderbust), every other refit as before.
+    /// </summary>
+    internal static bool LiftsUnderbust(ushort drawn, ushort to) => !(CrossesSex(drawn, to) && IsMale(drawn) && !IsMale(to));
 
     /// <summary>
     /// The usage error for a CLI <c>--for-race</c> run, or null when it may run. <paramref name="given"/> holds every
@@ -118,8 +129,9 @@ internal static class CrossSexRefit
             return "--for-race refits men's chest (_top) and legs (_dwn) garments for women, and women's legs (_dwn) garments for men";
         if (!given.Contains("game") || !given.Contains("uvmaps") || !given.Contains("from-root"))
             return "--for-race needs --game, --uvmaps and --from-root";
-        if (new[] { "legs", "legs-to", "chest-from", "chest-to", "finish", "detect" }.Any(given.Contains))
-            return "--for-race is not combined with --legs, --legs-to, --chest-from, --chest-to, --finish or --detect yet";
+        if (new[] { "legs", "legs-to", "chest-from", "chest-to", "finish", "detect", "whole", "keep-default" }.Any(given.Contains))
+            return "--for-race is not combined with --legs, --legs-to, --chest-from, --chest-to, --finish, --detect, "
+                 + "--whole or --keep-default yet";
         return null;
     }
 

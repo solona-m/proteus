@@ -44,9 +44,22 @@ internal static class CrossSexCommand
         string fromArg = required(opts, "from");
         var targets = required(opts, "to").Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
                                          .Select(t => t.Split('=', 2)).ToDictionary(t => Norm(t[0]), t => t.Length > 1 ? t[1] : t[0]);
+        // The size it was made on, named: across the sexes there is no detecting it against the other sex's bodies, and
+        // a guess would write models from the wrong size.
         var original = madeFor.Options.FirstOrDefault(o => Norm(o.Rel) == Norm(fromArg));
-        Func<BodyOption, bool>? fromPick = fromArg == "auto" || original == null ? null
-            : o => o.Group == original.Group && o.Section == original.Section && o.Name == original.Name;
+        if (original == null)
+        {
+            usageError(fromArg == "auto"
+                ? "--for-race needs --from <rel>: the size the garment was made on (auto is not read across the sexes)"
+                : $"--from names no body of {opts["from-root"]}: \"{fromArg}\"");
+            return 2;
+        }
+        Func<BodyOption, bool> fromPick = o => o.Group == original.Group && o.Section == original.Section && o.Name == original.Name;
+        if (targets.Keys.FirstOrDefault(t => onto.Options.All(o => Norm(o.Rel) != t)) is { } unknown)
+        {
+            usageError($"--to names no body of {opts["body-root"]}: \"{unknown}\"");
+            return 2;
+        }
 
         var uv = new UVRemapService(log, required(opts, "uvmaps"));
         var result = CrossSexRefitJob.Run(new CrossSexRefitJob.Inputs(

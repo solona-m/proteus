@@ -171,7 +171,7 @@ internal sealed partial class BodyRetargetPanel
         if (b.Route.ByAlias)
         {
             // Across the sexes the races wearing it are named: a c0101 save reaches Lalafell women too.
-            var also = CrossSexRefit.FallThroughTo(b.Route.To).Select(r => ModelRace.Describe($"{r:D4}"));
+            var also = CrossSexRefit.FallThroughTo(b.Route.To, b.Route.Drawn).Select(r => ModelRace.Describe($"{r:D4}"));
             ImGui.TextWrapped(string.Format(ps.RetargetRaceCrossSexWearsFmt, to, string.Join(", ", also), drawn));
             using (ImRaii.PushColor(ImGuiCol.Text, ProteusStyle.Warn))
                 ImGui.TextWrapped(string.Format(ps.RetargetRaceCrossSexNoteFmt, drawn, to));

@@ -230,9 +230,16 @@ internal sealed partial class BodyRetargetPanel(PenumbraBridge penumbra, UVRemap
     /// <summary>The body mod the "made for" sizes come from: the other one, or the refit-onto one.</summary>
     private string? SourceDir => fromBodyDir ?? bodyDir;
     /// <param name="Notice">Nothing to do, said plainly rather than as an error: the skin already matches, or the
-    /// leg is already the size chosen.</param>
-    private sealed record PlanResult(string Key, List<(BodyOption To, BodyRetarget.Planned Planned)>? Planned,
-                                     string Error, string Notice = "", IReadOnlyList<string>? ShapeNames = null);
+    /// leg is already the size chosen. A plan with a notice is not taken (see <see cref="Takes"/>).</param>
+    /// <param name="Quality">A refit for the other sex: its folds and how much of the body matched, said beside the
+    /// plan — never as a notice, which would drop the plan it describes.</param>
+    internal sealed record PlanResult(string Key, List<(BodyOption To, BodyRetarget.Planned Planned)>? Planned,
+                                      string Error, string Notice = "", IReadOnlyList<string>? ShapeNames = null,
+                                      string Quality = "");
+
+    /// <summary>Whether a finished plan is the one to preview and save: no error, nothing-to-do notice, and something planned.</summary>
+    internal static bool Takes(PlanResult result)
+        => result.Error.Length == 0 && result.Notice.Length == 0 && result.Planned is { Count: > 0 };
     private sealed record SaveResult(BodyRetargetWriter.Outcome Outcome, BodyRetargetWriter.Record? Record);
 
     // ── caches for things that would otherwise be read every frame ──────────
@@ -1933,7 +1940,7 @@ internal sealed partial class BodyRetargetPanel(PenumbraBridge penumbra, UVRemap
                                                  warn: line => log.Warning("[Proteus] body size: {0}", line),
                                                  tuckSlot: RefitCore.TuckSlot(cut && clear, garmentSlot),
                                                  carryPiercings: piercings,
-                                                 liftUnderbust: !(crossSex && male && !targetSex));
+                                                 liftUnderbust: !crossSex || CrossSexRefit.LiftsUnderbust(bake!.Route.Drawn, bake.Route.To));
                     // Skin the refit kept of the garment's own, drawn in the new body's layout and material — or a
                     // gen2 garment's kept skin shows the wrong skin, and none of the tattoos, on a bibo body.
                     plan = RefitCore.MatchSkinToBody(plan, garmentSource, targetPath, uvRemap, male, log, targetMale);
@@ -1959,7 +1966,7 @@ internal sealed partial class BodyRetargetPanel(PenumbraBridge penumbra, UVRemap
                     results.Add((option, Baked(plan, targetPath)));
                     Interlocked.Increment(ref planDone);
                 }
-                return new PlanResult(key, results, "", string.Join("\n", quality), ShapeNames: shapeNames);
+                return new PlanResult(key, results, "", ShapeNames: shapeNames, Quality: string.Join("\n", quality));
             }
             catch (Exception ex)
             {
@@ -2270,7 +2277,7 @@ internal sealed partial class BodyRetargetPanel(PenumbraBridge penumbra, UVRemap
             if (Faulted(pt, ctx)) { }
             else if (pt.Result.Error.Length > 0) ctx.SetStatus(pt.Result.Error, true);
             else if (pt.Result.Notice.Length > 0) ctx.SetStatus(pt.Result.Notice, false);
-            else if (pt.Result.Planned is { Count: > 0 } done && pt.Result.Key == Key(ctx))
+            else if (Takes(pt.Result) && pt.Result.Planned is { } done && pt.Result.Key == Key(ctx))
             {
                 planned = done;
                 plannedShapeNames = pt.Result.ShapeNames ?? [];
@@ -2278,7 +2285,9 @@ internal sealed partial class BodyRetargetPanel(PenumbraBridge penumbra, UVRemap
                 showing = 0;
                 var first = done[0].Planned;
                 if (!ctx.PushPreview(first.Model)) pendingPreview = first.Model;
-                ctx.SetStatus(SmallclothesNote(done.Select(d => d.Planned)), false);
+                string note = SmallclothesNote(done.Select(d => d.Planned));
+                ctx.SetStatus(pt.Result.Quality.Length == 0 ? note
+                              : note.Length == 0 ? pt.Result.Quality : note + "\n" + pt.Result.Quality, false);
                 foreach (var (to, plan) in done)
                     log.Information("[Proteus] retarget: {0} onto {1}: {2}", ctx.ModelRel, to.Label,
                                     Describe(plan.Report, plannedShapeNames));

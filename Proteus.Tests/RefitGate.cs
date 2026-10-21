@@ -85,11 +85,19 @@ internal static class RefitGate
         int collapsed = 0;
         if (s.Preview is { } preview)
         {
-            var shown = r.Route.Lowered
-                ? ModelPartReader.Read(saved)!
-                : ModelPartReader.Read(RacialModelBake.Bake(preview, r.Route.Drawn, r.Route.To, who.Pbd, who.ParentOf, out _)!)!;
-            if (!r.Route.Lowered) previewOff = MaxOff(savedParts.Positions, shown.Positions);
-            collapsed = RacialRouteLocalTests.Collapsed(savedParts, ModelPartReader.Read(preview)!);
+            var previewParts = ModelPartReader.Read(preview)!;
+            if (r.Route.Lowered)
+            {
+                // Previewed on the drawn path, where the drawn race sees it unbent: the saved model bent back by alias.
+                var bentBack = RacialModelBake.Bake(saved, r.Route.To, r.Route.Drawn, who.Pbd, who.ParentOf, out _, UvBakeBones.Alias);
+                previewOff = bentBack == null ? float.MaxValue : MaxOff(ModelPartReader.Read(bentBack)!.Positions, previewParts.Positions);
+            }
+            else
+            {
+                var shown = RacialModelBake.Bake(preview, r.Route.Drawn, r.Route.To, who.Pbd, who.ParentOf, out _);
+                previewOff = shown == null ? float.MaxValue : MaxOff(savedParts.Positions, ModelPartReader.Read(shown)!.Positions);
+            }
+            collapsed = RacialRouteLocalTests.Collapsed(savedParts, previewParts);
         }
         // The bend's maths: the saved model (in the picked race's shape) to the drawn race's and back, by alias.
         ushort to = r.Route.To, drawn = r.Route.Drawn;

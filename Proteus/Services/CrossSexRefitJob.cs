@@ -18,7 +18,7 @@ internal static class CrossSexRefitJob
     /// <param name="GamePath">Where it is drawn from (its race and slot are read off it).</param>
     /// <param name="To">The other sex's race to refit it for (101 or 201).</param>
     /// <param name="MadeFor">The body mod it was made for (bodies of the drawn race).</param>
-    /// <param name="FromPick">Which of its bodies it was made on; null takes the first.</param>
+    /// <param name="FromPick">Which of its bodies it was made on; null only when it has one there.</param>
     /// <param name="Onto">The body mod to refit onto (bodies of <paramref name="To"/>).</param>
     /// <param name="TargetPick">Which of its sizes to make; null makes all.</param>
     /// <param name="Wearer">What the wearer of <paramref name="To"/> is built from (<see cref="OtherRaceWearer.Gather"/>).</param>
@@ -66,7 +66,12 @@ internal static class CrossSexRefitJob
             ? BakedBodyCatalog.Lowered(i.MadeFor, drawn, i.To, who, [slot], out var failed, byAlias: true)
             : BakedBodyCatalog.Of(i.MadeFor, $"{drawn:D4}", i.To, who, [slot], out failed, byAlias: true);
         foreach (string f in failed) i.Log.Warning("[Proteus] cross-sex refit: a made-for body could not be bent: {0}", f);
-        var from = bent.For(slot).FirstOrDefault(o => i.FromPick?.Invoke(o) ?? true);
+        // Never a guess between sizes: with several and none picked, the refit is refused rather than made from one.
+        var bentHere = bent.For(slot);
+        var from = i.FromPick != null ? bentHere.FirstOrDefault(i.FromPick) : bentHere.Count == 1 ? bentHere[0] : null;
+        if (from == null && i.FromPick == null && bentHere.Count > 1)
+            return new Result($"pick which of {bentHere.Count} made-for sizes the garment was made on", route, who, baked,
+                              bent, null, []);
         if (from == null)
             return new Result(string.Format(Localization.Strings.Parts.RetargetRefuseCrossSexMadeForFmt,
                                             ModelRace.Describe($"{drawn:D4}")), route, who, baked, bent, null, []);
@@ -89,7 +94,7 @@ internal static class CrossSexRefitJob
                                          clearBody: i.PushOut, cutHidden: i.CutHidden,
                                          tuckSlot: RefitCore.TuckSlot(i.CutHidden && i.PushOut, slot),
                                          carryPiercings: i.CarryPiercings,
-                                         liftUnderbust: !CrossSexRefit.IsMale(drawn) || CrossSexRefit.IsMale(i.To),
+                                         liftUnderbust: CrossSexRefit.LiftsUnderbust(drawn, i.To),
                                          log: line => i.Log.Debug("[Proteus] cross-sex refit: {0}", line),
                                          warn: line => i.Log.Warning("[Proteus] cross-sex refit: {0}", line));
             plan = RefitCore.MatchSkinToBody(plan, sourcePath, targetPath, i.UvRemap, sourceMale, i.Log, targetMale);
