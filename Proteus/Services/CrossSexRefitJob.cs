@@ -72,6 +72,9 @@ internal static class CrossSexRefitJob
         if (from == null && i.FromPick == null && bentHere.Count > 1)
             return new Result($"pick which of {bentHere.Count} made-for sizes the garment was made on", route, who, baked,
                               bent, null, []);
+        // The body picked could not be bent: say why, not that another body mod is wanted.
+        if (from == null && failed.Count > 0)
+            return new Result(string.Join("; ", failed), route, who, baked, bent, null, []);
         if (from == null)
             return new Result(string.Format(Localization.Strings.Parts.RetargetRefuseCrossSexMadeForFmt,
                                             ModelRace.Describe($"{drawn:D4}")), route, who, baked, bent, null, []);

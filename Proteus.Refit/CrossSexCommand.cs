@@ -46,18 +46,22 @@ internal static class CrossSexCommand
                                          .Select(t => t.Split('=', 2)).ToDictionary(t => Norm(t[0]), t => t.Length > 1 ? t[1] : t[0]);
         // The size it was made on, named: across the sexes there is no detecting it against the other sex's bodies, and
         // a guess would write models from the wrong size.
-        var original = madeFor.Options.FirstOrDefault(o => Norm(o.Rel) == Norm(fromArg));
+        // Checked against the bodies the job reads: the made-for mod's of the drawn race in this slot, and the target
+        // mod's of the picked race — a body of another slot or race would leave the run with nothing to make.
+        var original = madeFor.For(slot).Where(o => BodySizeCatalog.RaceOf(o.GamePath) == $"{drawn:D4}")
+                              .FirstOrDefault(o => Norm(o.Rel) == Norm(fromArg));
         if (original == null)
         {
             usageError(fromArg == "auto"
                 ? "--for-race needs --from <rel>: the size the garment was made on (auto is not read across the sexes)"
-                : $"--from names no body of {opts["from-root"]}: \"{fromArg}\"");
+                : $"--from names no c{drawn:D4} {slot} body of {opts["from-root"]}: \"{fromArg}\"");
             return 2;
         }
         Func<BodyOption, bool> fromPick = o => o.Group == original.Group && o.Section == original.Section && o.Name == original.Name;
-        if (targets.Keys.FirstOrDefault(t => onto.Options.All(o => Norm(o.Rel) != t)) is { } unknown)
+        var ontoHere = OtherRaceRefit.OnlyRace(onto, to).For(slot);
+        if (targets.Keys.FirstOrDefault(t => ontoHere.All(o => Norm(o.Rel) != t)) is { } unknown)
         {
-            usageError($"--to names no body of {opts["body-root"]}: \"{unknown}\"");
+            usageError($"--to names no c{to:D4} {slot} body of {opts["body-root"]}: \"{unknown}\"");
             return 2;
         }
 
