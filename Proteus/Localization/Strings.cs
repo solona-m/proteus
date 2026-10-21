@@ -2996,6 +2996,10 @@ public sealed class PartsStrings
         "Always on while the shoe keeps its own foot or the glove its own hand: otherwise the whole new legs or arms "
       + "would go in with it.");
 
+    public readonly string RetargetClearForcedTip = Loc.Localize("Parts.Retarget.ClearForcedTip",
+        "Always on for the game's own tops, as the automatic refit does it: the game buries their cloth in its own "
+      + "body, so it is always pushed out of the new one.");
+
     public readonly string RetargetKeepFeet = Loc.Localize("Parts.Retarget.KeepFeet", "Keep its own feet")
                                             + "###partsRetargetKeepEnds";
 

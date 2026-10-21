@@ -3907,6 +3907,10 @@
     "message": "Always on while the shoe keeps its own foot or the glove its own hand: otherwise the whole new legs or arms would go in with it.",
     "description": "Tooltip on the greyed-out 'Remove hidden skin' checkbox in Studio > Body size while a shoe keeps its own foot (or a glove its hand)."
   },
+  "Parts.Retarget.ClearForcedTip": {
+    "message": "Always on for the game's own tops, as the automatic refit does it: the game buries their cloth in its own body, so it is always pushed out of the new one.",
+    "description": "Tooltip on the greyed-out 'Push cloth out of the body' checkbox in Studio > Body size while the garment is one of the game's own tops."
+  },
   "Parts.Retarget.KeepFeet": {
     "message": "Keep its own feet",
     "description": "Checkbox in Studio > Body size, shown for shoes: keep the shoe's own foot exactly and refit only the leg."

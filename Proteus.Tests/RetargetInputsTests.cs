@@ -255,6 +255,65 @@ public class RetargetInputsTests
     }
 
     [Fact]
+    [Trait("Plan", "AC-studio-game-top-3")]
+    [Trait("Plan", "AC-studio-game-top-4")]
+    [Trait("Plan", "EDGE-studio-game-top-1")]
+    [Trait("Plan", "EDGE-studio-game-top-2")]
+    [Trait("Plan", "EDGE-studio-game-top-3")]
+    [Trait("Plan", "EDGE-studio-game-top-5")]
+    [Trait("Plan", "EDGE-studio-game-top-6")]
+    public void Studio_skin_rule_for_game_and_modders_tops()
+    {
+        // [AC-studio-game-top-4] The game's own top with the new body's skin, as the Body size tool opens: the automatic
+        // refit's rule for game gear, the Clear box forced on.
+        var game = AutoRefitDecisions.SkinFor(true);
+        var top = RetargetInputs.StudioSkin(replaceSkin: true, cutHidden: true, clearBody: false, gameGear: true, "_top", crossSex: false);
+        Assert.Equal(new RetargetInputs.StudioSkinRule(ClearForced: true, ClearBody: game.ClearBody,
+                                                       TuckSlot: RefitCore.TuckSlot(game.TuckUnderCloth, "_top"),
+                                                       DeepClear: RefitCore.DeepClearFor(game.DeepClear, "_top"),
+                                                       KeepStandoff: RefitCore.KeepStandoffFor(game.KeepStandoff, "_top")), top);
+
+        // [EDGE-studio-game-top-2] Cut off: still cleared, deep cleared and pulled back, but nothing is tucked.
+        Assert.Equal(new RetargetInputs.StudioSkinRule(true, true, null, true, true),
+                     RetargetInputs.StudioSkin(true, cutHidden: false, clearBody: false, gameGear: true, "_top", false));
+
+        // [AC-studio-game-top-3] A modder's garment, and [EDGE-studio-game-top-5] a "— Proteus edit" copy (a mod), get the
+        // boxes as they always did: the tuck only with cut and clear both ticked, never the deep clear or the standoff.
+        foreach (bool cut in new[] { true, false })
+            foreach (bool clear in new[] { true, false })
+                foreach (string slot in new[] { "_top", "_dwn", "_glv", "_sho" })
+                    Assert.Equal(new RetargetInputs.StudioSkinRule(false, clear, RefitCore.TuckSlot(cut && clear, slot), false, false),
+                                 RetargetInputs.StudioSkin(true, cut, clear, gameGear: false, slot, false));
+
+        // [EDGE-studio-game-top-1] New skin off, [EDGE-studio-game-top-3] the game's legs, shoes or gloves, and
+        // [EDGE-studio-game-top-6] a race of the other sex: the boxes as they are.
+        Assert.Equal(new RetargetInputs.StudioSkinRule(false, false, null, false, false),
+                     RetargetInputs.StudioSkin(replaceSkin: false, true, false, gameGear: true, "_top", false));
+        foreach (string slot in new[] { "_dwn", "_glv", "_sho" })
+            Assert.Equal(new RetargetInputs.StudioSkinRule(false, false, null, false, false),
+                         RetargetInputs.StudioSkin(true, true, false, gameGear: true, slot, false));
+        Assert.Equal(new RetargetInputs.StudioSkinRule(false, false, null, false, false),
+                     RetargetInputs.StudioSkin(true, true, false, gameGear: true, "_top", crossSex: true));
+    }
+
+    [Fact]
+    [Trait("Plan", "AC-studio-game-top-4")]
+    public void A_game_top_rule_changes_the_plan_key()
+    {
+        // [AC-studio-game-top-4] A plan made under the game-top rule is never shown or saved for a garment judged a mod,
+        // nor the other way round.
+        var layout = RetargetInputs.LayoutFor("_top", keepEnds: false, false, false, false);
+        var slots = RetargetInputs.Slots(layout, ["_top"], _ => 2);
+        var from = new Dictionary<string, BodyOption> { ["_top"] = LegsS };
+        var to = new Dictionary<string, List<BodyOption>> { ["_top"] = [LegsM] };
+        var inputs = RetargetInputs.Assemble(layout, slots, from, to, null);
+        string Key(bool gameTop) => RetargetInputs.Key("m", null, inputs, RetargetInputs.Chosen(slots, from, to), from, to, [], [],
+                                                       true, true, false, gameTop: gameTop);
+        Assert.EndsWith("|gametop", Key(true));
+        Assert.DoesNotContain("|gametop", Key(false));
+    }
+
+    [Fact]
     [Trait("Plan", "AC-refit-piercings-option-8")]
     public void Piercings_flag_turns_the_cli_carry_on()
     {
