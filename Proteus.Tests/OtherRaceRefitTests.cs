@@ -128,16 +128,26 @@ public class OtherRaceRefitTests
         Assert.Empty(RetargetInputs.StillOffered(chosen, slot => target.For(slot, "0101")));
     }
 
+    /// <summary>
+    /// The rule this test was written for (AC-refit-other-race-5, "never the other sex") was changed on purpose by
+    /// cross-sex-refit: the other sex is offered between the two Midlander models only, in the cells CrossSexRefit ships.
+    /// </summary>
     [Fact]
     [Trait("Plan", "AC-refit-other-race-5")]
-    public void The_other_sex_is_never_offered()
+    [Trait("Plan", "AC-cross-sex-refit-7")]
+    public void The_other_sex_is_offered_only_between_the_midlander_models() // [AC-cross-sex-refit-7]
     {
         var target = TbseX(Body("0201", "_top", "F"), Body("0401", "_top", "F Highlander"), Body("1401", "_top", "F Au Ra"));
-        Assert.Equal([(ushort)301], Offered(Shirt, target).Select(c => c.Race));
+        var forHim = Offered(Shirt, target);
+        Assert.Equal([(ushort)201, 301], forHim.Select(c => c.Race));
+        Assert.True(forHim.Single(c => c.Race == 201).CrossSex);
+        Assert.False(forHim.Single(c => c.Race == 301).CrossSex);
 
+        // A women's top is not made a men's (CrossSexRefit's cells), nor offered any race of the other sex but Midlander.
         const string womans = "chara/equipment/e6091/model/c0201e6091_top.mdl";
         var forHer = Offered(womans, target, [Model(womans, "shirt/c0201e6091_top.mdl")]).Select(c => c.Race).ToList();
         Assert.DoesNotContain((ushort)301, forHer);
+        Assert.DoesNotContain((ushort)101, forHer);
         Assert.Contains((ushort)401, forHer);
     }
 

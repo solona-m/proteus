@@ -3668,7 +3668,7 @@
     "description": ""
   },
   "Parts.Retarget.NoBodiesForSex.Fmt": {
-    "message": "{0} no tiene cuerpos {1}; un ajuste no puede cambiar el sexo.",
+    "message": "{0} no tiene cuerpos {1}.",
     "description": ""
   },
   "Parts.Retarget.Male": {
@@ -4371,12 +4371,48 @@
     "message": "no se pudo volver a leer el modelo nuevo",
     "description": "Why a model for the wearer's race could not be made; the {1} of Parts.Retarget.BakeFailed.Fmt. Lower-case, no full stop."
   },
+  "Parts.Retarget.Race.OtherSex.Fmt": {
+    "message": "{0} (reajustado desde este modelo {1})",
+    "description": "A \"Refit for\" entry. {0} is a race of the other sex such as \"Midlander M\"; {1} the race of the model open."
+  },
+  "Parts.Retarget.Race.CrossSexNote.Fmt": {
+    "message": "Reajustado entre sexos: los cuerpos {0} para los que se hizo se doblan a la forma de {1} y luego se emparejan punto por punto con el nuevo cuerpo mediante los mapas de cuerpo. Compruébalo en el juego antes de compartirlo.",
+    "description": "Warning under a refit for the other sex. {0} is the race of the model open, {1} the race picked. \"body maps\" are the bibo↔TBSE texture maps."
+  },
+  "Parts.Retarget.Race.CrossSexWears.Fmt": {
+    "message": "{0} llevará el reajuste guardado, y también {1} allí donde no tengan un modelo propio para esta prenda; {2} conserva este modelo.",
+    "description": "{0} is the race picked; {1} a comma-separated list of races; {2} the race of the model open."
+  },
+  "Parts.Retarget.Race.CrossSexQuality.Fmt": {
+    "message": "{0} caras dobladas; {1} del cuerpo emparejado.",
+    "description": "{0} is a count of folded (turned-over) faces; {1} a percentage such as \"97%\"."
+  },
+  "Parts.Retarget.Race.CrossSexHint.Fmt": {
+    "message": "Para hacer una versión para {0}, elígelo en «Ajustar para».",
+    "description": "{0} is a race such as \"Midlander M\". “Refit for” is the dropdown's label (Parts.Retarget.Race.Label)."
+  },
+  "Parts.Retarget.Refuse.CrossSexMadeFor.Fmt": {
+    "message": "Entre sexos, los cuerpos sobre los que se hizo esta prenda tienen que ser cuerpos {0}. Elige en «Cuerpo original» el mod de cuerpo para el que se hizo.",
+    "description": "{0} is a race such as \"Midlander F\". “Made for” is the body dropdown the garment was made on."
+  },
+  "Parts.Retarget.Refuse.CrossSexQuality.Fmt": {
+    "message": "Este reajuste entre sexos salió con {0} caras dobladas y {1} del cuerpo emparejado. Proteus solo guarda uno con como mucho {2} caras dobladas y al menos {3} emparejado.",
+    "description": "{0} folded faces and {1} the share matched, as found; {2} and {3} the limits. Percentages arrive formatted."
+  },
+  "Parts.Retarget.Refuse.CrossSexLayout.Fmt": {
+    "message": "Entre sexos, Proteus solo puede emparejar cuerpos de mujer con la distribución de Bibo+ o del juego con cuerpos de hombre con la distribución de TBSE o del juego. Los modelos {0} usan {1} y {2}.",
+    "description": "{0} is a slot such as \"_top\"; {1} and {2} texture layout names (bibo, gen3, tbse, male vanilla), never translated. \"Bibo+\" and \"TBSE\" are body-mod names."
+  },
+  "Parts.Retarget.Refuse.MenMapsMissing": {
+    "message": "Los mapas de cuerpo que necesita un reajuste entre sexos aún no están aquí. Proteus los está descargando; vuelve a reajustar cuando hayan llegado.",
+    "description": "Said when the bibo↔TBSE texture maps have not been downloaded yet."
+  },
   "Parts.Retarget.Race.Label": {
     "message": "Ajustar para",
     "description": "Heads the dropdown that picks which race's model a refit is made and saved as."
   },
   "Parts.Retarget.Race.Tip": {
-    "message": "Para qué raza es el ajuste. Otra raza del mismo sexo recibe su propio modelo, hecho a partir de este tal como lo dobla el juego, ajustado al cuerpo de esa raza y guardado donde esa raza lo carga. Este modelo queda como está.",
+    "message": "Para qué raza es el reajuste. Otra raza recibe su propio modelo, hecho a partir de este tal como lo dobla el juego, reajustado al cuerpo de esa raza y guardado donde esa raza lo carga. Una prenda de torso o piernas de hombre Midlander, o una prenda de piernas de mujer, también puede reajustarse para el otro sexo. Este modelo se queda como está.",
     "description": "Tooltip of Parts.Retarget.Race.Label."
   },
   "Parts.Retarget.Race.ThisModel.Fmt": {

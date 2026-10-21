@@ -60,6 +60,12 @@ internal static class Program
         Proteus.Refit --bake-uvmaps --game <FFXIV game\sqpack> --bibo-root <Bibo+ folder> --tbse-root <TBSE folder>
                       --out-dir <dir> [--report-only]
                       (the bibo<->TBSE transfer maps; a JSON report on stdout, exit 1 when the quality gate fails)
+        Proteus.Refit --garment <model.mdl> --race 0101|0201 --for-race 0201|0101
+                      --from-root <body mod it was made on> --body-root <other sex's body mod>
+                      --from <rel|auto> --to <rel>=<label>[,...] --out-dir <dir>
+                      --game <FFXIV game\sqpack> --uvmaps <Proteus plugin dir> [--skeleton <base .sklb>]
+                      [--slot _top|_dwn] [--set <id>] [--no-push] [--piercings]
+                      (refit for the other sex: men's chest and legs for women, women's legs for men)
         """;
 
     private static int Main(string[] args)
@@ -71,6 +77,8 @@ internal static class Program
         {
             var opts = Parse(args);
             if (opts.ContainsKey("bake-uvmaps")) return BakeUvMapsCommand.Run(opts, Required);
+            if (opts.ContainsKey("for-race"))
+                return CrossSexCommand.Run(opts, Required, message => throw new UsageException(message), NullLog());
             if (opts.ContainsKey("list")) return List(opts);
             if (opts.ContainsKey("inspect")) return Inspect(opts);
             if (opts.ContainsKey("detect") && opts.ContainsKey("mods-root")) return DetectAcross(opts);
@@ -1450,7 +1458,7 @@ internal static class Program
         };
     }
 
-    private sealed class UsageException(string message) : Exception(message);
+    internal sealed class UsageException(string message) : Exception(message);
 }
 
 /// <summary>The body of <c>Program.NullLog</c>. Public and unsealed, as <see cref="DispatchProxy"/> requires.</summary>

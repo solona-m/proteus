@@ -731,7 +731,7 @@ public sealed class LocalizationTests
         var en = Load(Source);
         var tr = Load(lang);
         var keys = en.Keys.Where(k => k.StartsWith("Parts.Retarget.Race.", StringComparison.Ordinal)).ToList();
-        Assert.Equal(23, keys.Count);
+        Assert.Equal(28, keys.Count);   // 23, and cross-sex-refit's five (OtherSex, CrossSexNote, CrossSexWears, CrossSexQuality, CrossSexHint)
         foreach (string key in keys)
         {
             Assert.True(tr.ContainsKey(key), $"[{lang}] has no {key}");
@@ -888,5 +888,51 @@ public sealed class LocalizationTests
             dir!.FullName, lang == Source ? "README.md" : System.IO.Path.Combine("docs", $"README.{lang}.md")));
         string label = Load(lang)["Colors.Bodies.Men.Label"].Message;
         Assert.Contains(readme.Split('\n'), l => l.StartsWith("| " + label + " |", StringComparison.Ordinal) && l.Contains("TBSE"));
+    }
+
+    /// <summary>The cross-sex refit's strings are in every language, in its own words, with the same placeholders.</summary>
+    [Theory]
+    [MemberData(nameof(Translations))]
+    [Trait("Plan", "AC-cross-sex-refit-9")]
+    public void Cross_sex_strings_exist_and_are_translated_in_every_locale(string lang) // [AC-cross-sex-refit-9]
+    {
+        var en = Load(Source);
+        var tr = Load(lang);
+        foreach (string key in new[]
+                 {
+                     "Parts.Retarget.Race.OtherSex.Fmt", "Parts.Retarget.Race.CrossSexNote.Fmt",
+                     "Parts.Retarget.Race.CrossSexWears.Fmt", "Parts.Retarget.Race.CrossSexQuality.Fmt",
+                     "Parts.Retarget.Race.CrossSexHint.Fmt", "Parts.Retarget.Refuse.CrossSexMadeFor.Fmt",
+                     "Parts.Retarget.Refuse.CrossSexQuality.Fmt", "Parts.Retarget.Refuse.CrossSexLayout.Fmt",
+                     "Parts.Retarget.Refuse.MenMapsMissing", "Parts.Retarget.Race.Tip", "Parts.Retarget.NoBodiesForSex.Fmt",
+                 })
+        {
+            Assert.True(tr.ContainsKey(key), $"[{lang}] has no {key}");
+            Assert.NotEqual(en[key].Message, tr[key].Message);
+            for (int i = 0; i < 4; i++)
+                Assert.Equal(en[key].Message.Contains("{" + i + "}"), tr[key].Message.Contains("{" + i + "}"));
+        }
+        // The hint and refusal name the dropdowns as this language labels them.
+        Assert.Contains(tr["Parts.Retarget.Race.Label"].Message, tr["Parts.Retarget.Race.CrossSexHint.Fmt"].Message);
+        Assert.Contains(tr["Parts.Retarget.FromBody"].Message, tr["Parts.Retarget.Refuse.CrossSexMadeFor.Fmt"].Message);
+    }
+
+    /// <summary>Every README describes the refit for the other sex under its own "Refit for", and none still says it never happens.</summary>
+    [Theory]
+    [MemberData(nameof(AllLocales))]
+    [Trait("Plan", "AC-cross-sex-refit-9")]
+    public void Readme_describes_cross_sex_refit(string lang) // [AC-cross-sex-refit-9]
+    {
+        var dir = new System.IO.DirectoryInfo(AppContext.BaseDirectory);
+        while (dir != null && !System.IO.File.Exists(System.IO.Path.Combine(dir.FullName, "proteus.slnx"))) dir = dir.Parent;
+        Assert.True(dir != null, $"Could not find proteus.slnx above {AppContext.BaseDirectory}.");
+        string readme = System.IO.File.ReadAllText(System.IO.Path.Combine(
+            dir!.FullName, lang == Source ? "README.md" : System.IO.Path.Combine("docs", $"README.{lang}.md")));
+        var strings = Load(lang);
+        string label = "**" + strings["Parts.Retarget.Race.Label"].Message + "**";
+        var lines = readme.Split('\n');
+        Assert.Contains(lines, l => l.StartsWith("- ", StringComparison.Ordinal) && l.Contains(label) && l.Contains("bibo↔TBSE")
+                                    && l.Contains("YAS"));
+        Assert.DoesNotContain("never refitted onto each other", readme);
     }
 }

@@ -24,6 +24,11 @@ races, which are carried onto the man's own body materials. Their gear and mask 
 man's own art is never moved. Art saved as gen3 or gen2 on a man counts as his own. The bibo↔TBSE pair is the only map
 used for this.
 
+The same maps match bodies for a refit across the sexes (Body size → **Refit for**): a women's body in the Bibo+ or game
+layout is matched point by point to a men's body in the TBSE or game layout, one map hop, never through gen3. Measured
+on real garments (`CrossSexRefitLocalTests`): 98–99.5% of the skin lands, 0 astray, p99 shift 27–42 mm. A women's top for
+men is not offered: 115 of Sheer Elegance's 10,436 cloth faces turn over as the bust flattens.
+
 Nothing of a woman's art is drawn on a man until the maps are on disk. It is never pasted in her layout. The maps are
 downloaded the first time a man needs them, and the mod says it is waiting meanwhile. Each mod's **Overlay on men**
 switch, on by default, keeps its women's art off men altogether.

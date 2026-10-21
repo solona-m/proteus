@@ -3668,7 +3668,7 @@
     "description": ""
   },
   "Parts.Retarget.NoBodiesForSex.Fmt": {
-    "message": "{0}には{1}用の体型がありません。リフィットで性別は変えられません。",
+    "message": "{0}には{1}の体がありません。",
     "description": ""
   },
   "Parts.Retarget.Male": {
@@ -4371,12 +4371,48 @@
     "message": "新しいモデルを読み戻せませんでした",
     "description": "Why a model for the wearer's race could not be made; the {1} of Parts.Retarget.BakeFailed.Fmt. Lower-case, no full stop."
   },
+  "Parts.Retarget.Race.OtherSex.Fmt": {
+    "message": "{0}（この{1}モデルから調整）",
+    "description": "A \"Refit for\" entry. {0} is a race of the other sex such as \"Midlander M\"; {1} the race of the model open."
+  },
+  "Parts.Retarget.Race.CrossSexNote.Fmt": {
+    "message": "性別をまたいで調整しました：作られた元の{0}の体を{1}の形に曲げ、ボディマップで新しい体と一点ずつ対応させています。共有する前にゲーム内で確認してください。",
+    "description": "Warning under a refit for the other sex. {0} is the race of the model open, {1} the race picked. \"body maps\" are the bibo↔TBSE texture maps."
+  },
+  "Parts.Retarget.Race.CrossSexWears.Fmt": {
+    "message": "保存した調整は{0}が着用し、このアイテムに自分のモデルがない{1}も着用します。{2}はこのモデルのままです。",
+    "description": "{0} is the race picked; {1} a comma-separated list of races; {2} the race of the model open."
+  },
+  "Parts.Retarget.Race.CrossSexQuality.Fmt": {
+    "message": "裏返った面 {0}、体の対応 {1}。",
+    "description": "{0} is a count of folded (turned-over) faces; {1} a percentage such as \"97%\"."
+  },
+  "Parts.Retarget.Race.CrossSexHint.Fmt": {
+    "message": "{0}用のバージョンを作るには、「リフィット対象の種族」で選んでください。",
+    "description": "{0} is a race such as \"Midlander M\". “Refit for” is the dropdown's label (Parts.Retarget.Race.Label)."
+  },
+  "Parts.Retarget.Refuse.CrossSexMadeFor.Fmt": {
+    "message": "性別をまたぐ場合、この装備が作られた体は{0}の体である必要があります。「元の体型 Mod」で作られたボディModを選んでください。",
+    "description": "{0} is a race such as \"Midlander F\". “Made for” is the body dropdown the garment was made on."
+  },
+  "Parts.Retarget.Refuse.CrossSexQuality.Fmt": {
+    "message": "この性別をまたぐ調整は裏返った面が{0}、体の対応が{1}でした。Proteusが保存するのは、裏返った面が{2}以下かつ対応が{3}以上のものだけです。",
+    "description": "{0} folded faces and {1} the share matched, as found; {2} and {3} the limits. Percentages arrive formatted."
+  },
+  "Parts.Retarget.Refuse.CrossSexLayout.Fmt": {
+    "message": "性別をまたぐ場合、ProteusはBibo+またはゲームのレイアウトの女性の体と、TBSEまたはゲームのレイアウトの男性の体しか対応させられません。{0}のモデルは{1}と{2}を使っています。",
+    "description": "{0} is a slot such as \"_top\"; {1} and {2} texture layout names (bibo, gen3, tbse, male vanilla), never translated. \"Bibo+\" and \"TBSE\" are body-mod names."
+  },
+  "Parts.Retarget.Refuse.MenMapsMissing": {
+    "message": "性別をまたぐ調整に必要なボディマップがまだありません。Proteusがダウンロード中です。届いたらもう一度調整してください。",
+    "description": "Said when the bibo↔TBSE texture maps have not been downloaded yet."
+  },
   "Parts.Retarget.Race.Label": {
     "message": "リフィット対象の種族",
     "description": "Heads the dropdown that picks which race's model a refit is made and saved as."
   },
   "Parts.Retarget.Race.Tip": {
-    "message": "どの種族向けにリフィットするか。衣装と同じ性別の別の種族を選ぶと、このモデルからゲームと同じ方法で曲げた専用モデルを作り、その種族の体型にリフィットして、その種族が読み込む場所に保存します。このモデルはそのまま残ります。",
+    "message": "どの種族向けの調整か。別の種族には、ゲームが曲げるのと同じようにこのモデルから作り、その種族の体に合わせて、その種族が読み込む場所に保存した専用モデルができます。ミッドランダー男性の胴・脚装備と女性の脚装備は、異性向けにも調整できます。このモデルはそのままです。",
     "description": "Tooltip of Parts.Retarget.Race.Label."
   },
   "Parts.Retarget.Race.ThisModel.Fmt": {

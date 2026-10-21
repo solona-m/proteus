@@ -37,15 +37,19 @@ public class CrossSexRefitLocalTests(ITestOutputHelper o)
     // running in parallel. Bends across the sexes carry "-alias" in their names, so they never meet a same-sex bend.
     private readonly IPluginLog log = Substitute.For<IPluginLog>();
 
-    private static byte[] Game(string path) => HavokSkeletonLocalTests.GameFile(path);
+    // One reader for the class: Lumina's index is costly to open, and Gather asks for files that may not exist.
+    private static readonly Lazy<Lumina.GameData> GameData = new(() => new Lumina.GameData(LocalData.Path(LocalData.GameData)));
+
+    private static byte[]? Game(string path) => GameData.Value.GetFile(path)?.Data;
 
     private static UVRemapService Maps() => new(Substitute.For<IPluginLog>(), LocalData.Path(LocalData.TbseUvMaps));
 
-    /// <summary>The wearer the panel builds for <paramref name="to"/> from files: the game's skeleton and deformer, or a modded base.</summary>
-    internal static OtherRaceWearer.Inputs Wearer(ushort to, ushort drawn, string slot, int set, byte[]? moddedBase = null)
-        => new(to, drawn, slot, set, moddedBase, moddedBase != null ? "IVCS" : null,
-               Game(OtherRaceWearer.BaseSkeletonPath(to)), Game(OtherRaceWearer.PbdPath), [],
-               EstTable.Parse(Game("chara/xls/charadb/extra_top.est")), new Dictionary<string, byte[]>());
+    /// <summary>The wearer for <paramref name="to"/> as the panel and the CLI gather it: the game's skeleton, deformer and
+    /// Est tables, or a modded base skeleton from <paramref name="skeletonPath"/>.</summary>
+    internal static OtherRaceWearer.Inputs Wearer(ushort to, string gamePath, string? skeletonPath = null)
+        => OtherRaceWearer.Gather(to, gamePath, Game,
+               path => skeletonPath != null && path == OtherRaceWearer.BaseSkeletonPath(to) ? skeletonPath : null,
+               _ => null, []);
 
     /// <summary>Picks the option of <paramref name="catalog"/> that is the file at <paramref name="rel"/>, bent or not
     /// (bending keeps an option's headings and changes only its file).</summary>
@@ -65,7 +69,7 @@ public class CrossSexRefitLocalTests(ITestOutputHelper o)
     }
 
     private CrossSexRefitJob.Inputs Inputs(string garmentNeed, ushort to, string madeForNeed, string madeForRel,
-                                           string ontoNeed, string ontoRel, int set, byte[]? moddedBase = null)
+                                           string ontoNeed, string ontoRel, string? skeletonPath = null)
     {
         string garmentPath = LocalData.Path(garmentNeed);
         string gamePath = GamePathOf(garmentPath);
@@ -73,7 +77,7 @@ public class CrossSexRefitLocalTests(ITestOutputHelper o)
         var onto = BodySizeCatalog.Read(LocalData.Path(ontoNeed));
         return new CrossSexRefitJob.Inputs(File.ReadAllBytes(garmentPath), gamePath, to, madeFor, IsFile(madeFor, madeForRel),
             onto, IsFile(onto, ontoRel),
-            Wearer(to, ModelSkinReader.RaceOf(gamePath), BodySizeCatalog.SlotOf(gamePath)!, set, moddedBase), Maps(), log);
+            Wearer(to, gamePath, skeletonPath), Maps(), log);
     }
 
     private (CrossSexRefitJob.Result R, CrossSexRefitJob.Size S) Run(CrossSexRefitJob.Inputs inputs)
@@ -118,7 +122,7 @@ public class CrossSexRefitLocalTests(ITestOutputHelper o)
     [Trait("Plan", "EDGE-cross-sex-refit-14")]
     public void Lumberjack_refits_onto_bibo_for_midlander_women() // [AC-cross-sex-refit-2] [AC-cross-sex-refit-3] [AC-cross-sex-refit-5] [EDGE-cross-sex-refit-13] [EDGE-cross-sex-refit-14]
     {
-        var inputs = Inputs(LumberjackShirt, 201, Tbse, UvBakeInputs.TbseChest, Bibo, UvBakeInputs.BiboChest, 6091);
+        var inputs = Inputs(LumberjackShirt, 201, Tbse, UvBakeInputs.TbseChest, Bibo, UvBakeInputs.BiboChest);
         var (r, s) = Run(inputs);
         int baseline = SameSexFolds(LumberjackShirt, Tbse, UvBakeInputs.TbseChest, TbseX, "0101", male: true);
         RefitGate.Assert(o, r, s, baseline);
@@ -134,7 +138,7 @@ public class CrossSexRefitLocalTests(ITestOutputHelper o)
     [Trait("Plan", "AC-cross-sex-refit-5")]
     public void Twill_trousers_refit_onto_bibo_legs() // [AC-cross-sex-refit-2] [AC-cross-sex-refit-4] [AC-cross-sex-refit-5]
     {
-        var inputs = Inputs(TwillTbse, 201, Tbse, UvBakeInputs.TbseLegs[0].Rel, Bibo, UvBakeInputs.BiboLegs[0].Rel, 6269);
+        var inputs = Inputs(TwillTbse, 201, Tbse, UvBakeInputs.TbseLegs[0].Rel, Bibo, UvBakeInputs.BiboLegs[0].Rel);
         var (r, s) = Run(inputs);
         int baseline = SameSexFolds(TwillTbse, Tbse, UvBakeInputs.TbseLegs[0].Rel, TbseX, "0101", male: true);
         RefitGate.Assert(o, r, s, baseline);
@@ -148,7 +152,7 @@ public class CrossSexRefitLocalTests(ITestOutputHelper o)
     [Trait("Plan", "EDGE-cross-sex-refit-13")]
     public void Sheer_elegance_legs_refit_onto_tbse_for_midlander_men() // [AC-cross-sex-refit-1] [AC-cross-sex-refit-4] [AC-cross-sex-refit-5] [EDGE-cross-sex-refit-13]
     {
-        var inputs = Inputs(SheerLegs, 101, Bibo, BiboSfwLegs, Tbse, UvBakeInputs.TbseLegs[0].Rel, 6107);
+        var inputs = Inputs(SheerLegs, 101, Bibo, BiboSfwLegs, Tbse, UvBakeInputs.TbseLegs[0].Rel);
         var (r, s) = Run(inputs);
         int baseline = SameSexFolds(SheerLegs, Bibo, BiboSfwLegs, Rue, "0201", male: false);
         RefitGate.Assert(o, r, s, baseline);
@@ -166,7 +170,7 @@ public class CrossSexRefitLocalTests(ITestOutputHelper o)
     [Trait("Plan", "AC-cross-sex-refit-7")]
     public void A_womans_top_is_not_refitted_for_men() // [AC-cross-sex-refit-7]
     {
-        var r = CrossSexRefitJob.Run(Inputs(SheerTop, 101, Bibo, UvBakeInputs.BiboChest, Tbse, UvBakeInputs.TbseChest, 6010));
+        var r = CrossSexRefitJob.Run(Inputs(SheerTop, 101, Bibo, UvBakeInputs.BiboChest, Tbse, UvBakeInputs.TbseChest));
         Assert.NotEqual("", r.Refusal);
         Assert.Empty(r.Sizes);
         var offered = OtherRaceRefit.Offered("chara/equipment/e6010/model/c0201e6010_top.mdl",
@@ -181,9 +185,9 @@ public class CrossSexRefitLocalTests(ITestOutputHelper o)
     {
         var rue = BodySizeCatalog.Read(LocalData.Path(Rue));
         string legsRel = rue.For("_dwn", "0201").First(b => BodySizeCatalog.RaceOf(b.GamePath) == "0201").Rel;
-        foreach (var skeleton in new[] { null, File.ReadAllBytes(LocalData.Path(IvcsMen)) })
+        foreach (var skeleton in new[] { null, LocalData.Path(IvcsMen) })
         {
-            var r = CrossSexRefitJob.Run(Inputs(Starlit, 101, Rue, legsRel, Tbse, UvBakeInputs.TbseLegs[0].Rel, 6212, skeleton));
+            var r = CrossSexRefitJob.Run(Inputs(Starlit, 101, Rue, legsRel, Tbse, UvBakeInputs.TbseLegs[0].Rel, skeleton));
             o.WriteLine($"{(skeleton == null ? "game" : "IVCS")} skeleton: {r.Refusal}");
             Assert.NotEqual("", r.Refusal);
             Assert.Contains("iv_", r.Refusal);
@@ -235,7 +239,7 @@ public class CrossSexRefitLocalTests(ITestOutputHelper o)
     [Trait("Plan", "AC-cross-sex-refit-8")]
     public void The_job_gives_the_same_model_twice() // [AC-cross-sex-refit-8]
     {
-        var inputs = Inputs(TwillTbse, 201, Tbse, UvBakeInputs.TbseLegs[0].Rel, Bibo, UvBakeInputs.BiboLegs[0].Rel, 6269);
+        var inputs = Inputs(TwillTbse, 201, Tbse, UvBakeInputs.TbseLegs[0].Rel, Bibo, UvBakeInputs.BiboLegs[0].Rel);
         var a = ModelPartReader.Read(CrossSexRefitJob.Run(inputs).Sizes.Single().Saved!.Model)!.Positions;
         var b = ModelPartReader.Read(CrossSexRefitJob.Run(inputs).Sizes.Single().Saved!.Model)!.Positions;
         Assert.Equal(a.Length, b.Length);
