@@ -388,12 +388,13 @@ public class SourceSmallclothesHoleTests
         var field = new Vector3?[source.Positions.Length / 3];
         for (int v = 0; v < (SkinNx + 1) * (SkinNy + 1); v++) field[v] = At(target, v) - At(source, v);
         var whole = (Vector3?[])field.Clone();
+        var before = (bool[])over.Clone();
 
         int count = BodyRetarget.LandSmallclothes(source, skin, whole, over, target);
 
+        // Landed over the ridge, and dropped over the fuller half: read over the hole before, not after.
         Assert.True(count > 0, "nothing landed");
-        Assert.Contains(Enumerable.Range(0, over.Length), v => !over[v] && field[v] == null
-                                                               && source.Parts[1].Triangles.Contains(v));
+        Assert.Contains(Enumerable.Range(0, over.Length), v => before[v] && !over[v]);
         for (int v = 0; v < over.Length; v++)
         {
             if (!over[v]) continue;
