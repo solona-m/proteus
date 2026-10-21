@@ -12,7 +12,6 @@ namespace Proteus.Tests;
 /// sits on the legs. The solver, judging it on the body it was made on, parted the cloth from it all the same, and the
 /// rebuild must swap it too — kept, it drew Lithe's hips on the Neolithe character.
 /// </summary>
-[Collection(GameBodyCollection.Name)]
 public class OldBodyWaistStripLocalTests(ITestOutputHelper output)
 {
     private const string Pants = LocalData.Mods + ":hs-Metro Style-1.0.0-zOJ/files/common/3/c0201e0705_dwn.mdl";

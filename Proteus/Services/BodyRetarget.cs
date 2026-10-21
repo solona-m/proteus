@@ -763,8 +763,8 @@ internal static partial class BodyRetarget
                         + "underwear could not be brought in");
 
         // The solver and the rebuild must agree on which skin meshes go: the solver parts the cloth welded to them, and a
-        // mesh it parted that the rebuild then keeps opens the seam (see Sets.From). Without a hold the two rules agree on
-        // their own; with one, a held ankle ring stays where the old body had it and the rebuild, judging the laid model,
+        // mesh it parted that the rebuild then keeps opens the seam (see Sets.From). Without a hold the two rules agree as long
+        // as the old body's skin lies on the new one once laid (see parted, below); with one, a held ankle ring stays where the old body had it and the rebuild, judging the laid model,
         // could keep a mesh the solver already parted. So the solver's set is handed to the rebuild.
         IReadOnlySet<int>? swapMeshes = SwapSlotSwapped(pairs, replaceSkin, swapSlot)
             ? SwappedSkinMeshes(garment, pairs)
@@ -871,8 +871,8 @@ internal static partial class BodyRetarget
     /// point belongs to, so a pant leg never follows the other leg (see <see cref="SourceBody.TryNearest"/>). Null asks
     /// either side.</param>
     /// <param name="swapSlot">See <see cref="Plan"/>.</param>
-    /// <param name="swapMeshes">With <paramref name="swapSlot"/>, the skin meshes the swap replaces, as
-    /// <see cref="Plan"/> hands them to the rebuild; null works them out here.</param>
+    /// <param name="swapMeshes">The skin meshes the swap replaces (<see cref="PartedSkinMeshes"/>), as <see cref="Plan"/>
+    /// works them out once for both the solve and the rebuild; null works them out here.</param>
     /// <param name="trace">Each stage by name — "transfer", "knit", "layer-knit", "lay", "follow", "push", "unfold",
     /// "relax", "face-settle", "rim-lift", "standoff", "layer-order" — with a copy of every node's move so far, indexed as
     /// <see cref="Sets.NodeOf"/> maps vertices — and "outfit-order" after them when <paramref name="outfit"/> is given.
