@@ -30,7 +30,7 @@ public sealed partial class PartsPanel
 
     /// <summary>The just-copied piece's game path when it is the model open now; null otherwise.</summary>
     private string? CopyNotDrawnOpen()
-        => copyNotDrawnYet != null && modelIndex >= 0 && modelIndex < models.Count
+        => copyNotDrawnYet != null && modelIndex >= 0 && modelIndex < models.Count && !modelUnreadable
            && string.Equals(modDir, copyAwaitingEnable, StringComparison.OrdinalIgnoreCase)
            && SameFile(models[modelIndex].GamePath, copyNotDrawnYet)
             ? copyNotDrawnYet
@@ -179,7 +179,11 @@ public sealed partial class PartsPanel
         }
         catch (Exception ex)
         {
-            log.Warning(ex, "[Proteus] parts: could not copy {0} into a mod", piece.GamePath);
+            // Logged once while it repeats on every retry, as a refusal is.
+            string refusal = $"{piece.GamePath}|{ex.GetType().Name}|{ex.Message}";
+            if (refusal != lastCopyRefusal)
+                log.Warning(ex, "[Proteus] parts: could not copy {0} into a mod", piece.GamePath);
+            lastCopyRefusal = refusal;
             status = string.Format(ps.VanillaCopyRefusedFmt, ex.Message);
             statusIsError = true;
             return null;

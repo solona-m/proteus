@@ -85,22 +85,43 @@ internal static class VanillaEditCopy
         // Untouched (still the game's bytes) or not there at all: published at the game path, then the edit over it.
         string file = Path.Combine(made.Root, rel.Replace('/', Path.DirectorySeparatorChar));
         bool hadFile = File.Exists(file);
-        bool hadRedirect = PenumbraModMeta.TryReadDefaultData(made.Root) is { } before
-                        && before.Files.ContainsKey(rel);
-        RefitModService.AddGameModel(made.Root, gamePath, gameBytes);
-        var w = firstWrite(made.Root, rel);
+        // What the game path was published from before, or null: AddGameModel may point an existing redirect at the
+        // piece's own file, and a refusal must point it back.
+        string? hadTarget = PenumbraModMeta.TryReadDefaultData(made.Root) is { } before
+                         && before.Files.TryGetValue(rel, out var target) ? target : null;
+        FirstWrite w;
+        try
+        {
+            RefitModService.AddGameModel(made.Root, gamePath, gameBytes);
+            w = firstWrite(made.Root, rel);
+        }
+        catch
+        {
+            TakeBack(made.Root, rel, file, hadFile, hadTarget);
+            throw;
+        }
         if (w.Ok) return new(Status.Copied, made.Root, made.Dir, false, "");
 
         // Refused: the player's mod is put back as it was, without the piece this call added to it.
-        TakeBack(made.Root, rel, file, hadFile, hadRedirect);
+        TakeBack(made.Root, rel, file, hadFile, hadTarget);
         return new(Status.WriteRefused, "", "", false, w.Message);
     }
 
-    /// <summary>Remove what <see cref="RefitModService.AddGameModel"/> added to an existing mod, and only that.</summary>
-    private static void TakeBack(string root, string rel, string file, bool hadFile, bool hadRedirect)
+    /// <summary>
+    /// Undo what <see cref="RefitModService.AddGameModel"/> did to an existing mod, and only that: the game path is
+    /// published from <paramref name="hadTarget"/> again (or not at all), and a file that was not there is removed.
+    /// </summary>
+    private static void TakeBack(string root, string rel, string file, bool hadFile, string? hadTarget)
     {
-        if (!hadRedirect && PenumbraModMeta.TryReadDefaultData(root) is { } data && data.Files.Remove(rel))
-            PenumbraModMeta.WriteRedirects(root, Path.GetFileName(root), data.Files, manipulations: data.Manipulations);
+        if (PenumbraModMeta.TryReadDefaultData(root) is { } data)
+        {
+            bool changed = hadTarget == null
+                ? data.Files.Remove(rel)
+                : !(data.Files.TryGetValue(rel, out var now) && now == hadTarget);
+            if (hadTarget != null) data.Files[rel] = hadTarget;
+            if (changed)
+                PenumbraModMeta.WriteRedirects(root, Path.GetFileName(root), data.Files, manipulations: data.Manipulations);
+        }
         if (!hadFile && File.Exists(file)) File.Delete(file);
     }
 

@@ -193,6 +193,72 @@ public class VanillaEditCopyTests : IDisposable
     }
 
     [Fact]
+    [Trait("Plan", "EDGE-vanilla-copy-on-edit-8")]
+    [Trait("Plan", "EDGE-vanilla-copy-on-edit-9")]
+    public void A_refused_first_write_keeps_an_untouched_copy_that_was_there()
+    {
+        var root = ExistingMod(Coat, GameBytes);
+        var before = PenumbraModMeta.TryReadDefaultData(root)!.Value.Files;
+
+        var outcome = Make(new FakeEnsure(mods), (_, _) => new(false, "no"));
+
+        Assert.Equal(VanillaEditCopy.Status.WriteRefused, outcome.Status);
+        Assert.Equal(GameBytes, File.ReadAllBytes(FileIn(root, Coat)));
+        Assert.Equal(before, PenumbraModMeta.TryReadDefaultData(root)!.Value.Files);
+    }
+
+    [Fact]
+    [Trait("Plan", "EDGE-vanilla-copy-on-edit-8")]
+    public void A_refused_first_write_unpublishes_only_what_it_published()
+    {
+        // The file is there but nothing publishes it: the redirect AddGameModel added goes, the file stays.
+        var root = ExistingMod(Trousers, [7, 7]);
+        Directory.CreateDirectory(Path.GetDirectoryName(FileIn(root, Coat))!);
+        File.WriteAllBytes(FileIn(root, Coat), GameBytes);
+        var before = PenumbraModMeta.TryReadDefaultData(root)!.Value.Files;
+
+        Make(new FakeEnsure(mods), (_, _) => new(false, "no"));
+
+        Assert.Equal(before, PenumbraModMeta.TryReadDefaultData(root)!.Value.Files);
+        Assert.Equal(GameBytes, File.ReadAllBytes(FileIn(root, Coat)));
+    }
+
+    [Fact]
+    [Trait("Plan", "EDGE-vanilla-copy-on-edit-8")]
+    public void A_refused_first_write_points_a_moved_redirect_back()
+    {
+        // The mod publishes the coat from a file of its own elsewhere; AddGameModel points it at the copy, and a
+        // refusal must point it back and remove the copy.
+        var root = ExistingMod(Trousers, [7, 7]);
+        const string theirs = "files/coat.mdl";
+        Directory.CreateDirectory(Path.GetDirectoryName(FileIn(root, theirs))!);
+        File.WriteAllBytes(FileIn(root, theirs), [6, 6]);
+        var data = PenumbraModMeta.TryReadDefaultData(root)!.Value;
+        data.Files[Coat] = theirs;
+        PenumbraModMeta.WriteRedirects(root, Path.GetFileName(root), data.Files, manipulations: data.Manipulations);
+        var before = PenumbraModMeta.TryReadDefaultData(root)!.Value.Files;
+
+        Make(new FakeEnsure(mods), (_, _) => new(false, "no"));
+
+        Assert.Equal(before, PenumbraModMeta.TryReadDefaultData(root)!.Value.Files);
+        Assert.False(File.Exists(FileIn(root, Coat)));
+        Assert.Equal([6, 6], File.ReadAllBytes(FileIn(root, theirs)));
+    }
+
+    [Fact]
+    [Trait("Plan", "EDGE-vanilla-copy-on-edit-8")]
+    public void A_first_write_that_throws_also_takes_back_what_was_added()
+    {
+        var root = ExistingMod(Trousers, [7, 7]);
+        var before = PenumbraModMeta.TryReadDefaultData(root)!.Value.Files;
+
+        Assert.Throws<IOException>(() => Make(new FakeEnsure(mods), (_, _) => throw new IOException("held")));
+
+        Assert.Equal(before, PenumbraModMeta.TryReadDefaultData(root)!.Value.Files);
+        Assert.False(File.Exists(FileIn(root, Coat)));
+    }
+
+    [Fact]
     [Trait("Plan", "EDGE-vanilla-copy-on-edit-7")]
     public void A_mod_that_cannot_be_made_writes_nothing_and_never_calls_the_write()
     {
