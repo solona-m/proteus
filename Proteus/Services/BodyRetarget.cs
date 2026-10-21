@@ -769,10 +769,16 @@ internal static partial class BodyRetarget
         IReadOnlySet<int>? swapMeshes = SwapSlotSwapped(pairs, replaceSkin, swapSlot)
             ? SwappedSkinMeshes(garment, pairs)
             : null;
+        // Without a hold the rules can still part ways: the solver judges the skin on the body it was made on, the rebuild
+        // on the new one once laid there, and the old body's legs can reach further up the waist than the new one's. Metro
+        // Style's waist strip from Lithe+ came out 35 mm above where Neolithe's legs stop, 89% on them, so the rebuild kept
+        // the old skin, Lithe's shading and all, while the solver had already parted the cloth from it. So every mesh the
+        // solver parted is swapped too (see Rebuild's parted).
+        var parted = swapMeshes ?? PartedSkinMeshes(garment, pairs, garmentSlot, replaceSkin, swapSlot);
         bool deep = deepClear && clearBody && garmentSlot == "_top" && !Tuned.NoDeepClear;
         bool standoff = keepStandoff && clearBody && garmentSlot == "_top" && !Tuned.NoKeepStandoff;
         var solved = Solve(garment, pairs, garmentSlot, pushOut, held, replaceSkin, clearBody, keepShape,
-                           ModelSkinReader.Read(garmentBytes, null, null), swapSlot, swapMeshes, chestSlot, trace, outfit,
+                           ModelSkinReader.Read(garmentBytes, null, null), swapSlot, parted, chestSlot, trace, outfit,
                            deep, standoff, liftUnderbust);
         if (solved.OpenEdgeFitted > 0)
             log?.Invoke($"fitted: {solved.OpenEdgeFitted} cloth points below an open skin edge read against the body the "
@@ -803,7 +809,7 @@ internal static partial class BodyRetarget
         if (replaceSkin || weights != null)
         {
             var rebuilt = Rebuild(model, pairs, replaceSkin, weights, out var swapped, cutHidden, acrossBodies,
-                                  swapMeshes, tuckSlot, carryPiercings);
+                                  swapMeshes, tuckSlot, carryPiercings, parted);
             if (rebuilt != null)
             {
                 model = rebuilt;

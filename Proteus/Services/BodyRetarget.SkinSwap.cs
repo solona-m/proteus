@@ -120,11 +120,14 @@ internal static partial class BodyRetarget
     /// <param name="carryPiercings">Bring the new body's piercings in with its skin, as its nails always are (see
     /// <see cref="AdornmentsOf"/>). Off, the default, carries none, and the garment's own piercings are left as they were
     /// before build 1147: dropped with the old body's extras across body mods, kept within one.</param>
+    /// <param name="parted">With <paramref name="swapMeshes"/> null, the skin meshes the solver parted the cloth from
+    /// anyway: each is swapped even when, laid, it reaches past the new body's edge — skin of the old body that the new
+    /// one draws in another slot. Every other mesh is judged here as before. Null for none.</param>
     /// <returns>The rebuilt model, or null when there was nothing to change.</returns>
     internal static byte[]? Rebuild(byte[] garment, IReadOnlyList<SlotPair> pairs, bool swapSkin, WeightPlan? weights,
                                     out SwapReport report, bool cutHidden = true, bool acrossBodies = false,
                                     IReadOnlySet<int>? swapMeshes = null, string? tuckSlot = null,
-                                    bool carryPiercings = false)
+                                    bool carryPiercings = false, IReadOnlySet<int>? parted = null)
     {
         report = default;
         var swappable = swapSkin ? pairs.Where(p => p.Swaps).ToList() : [];
@@ -164,7 +167,7 @@ internal static partial class BodyRetarget
                 if (share > bestShare) { bestShare = share; best = s; }
             }
             bool partlyOff = swapMeshes != null ? !swapMeshes.Contains(mesh.Key)
-                           : verts.Count > 0 && onAny < verts.Count * OnBodyShare;
+                           : parted?.Contains(mesh.Key) != true && verts.Count > 0 && onAny < verts.Count * OnBodyShare;
             if (partlyOff)
             {
                 // Some of it is the body's and some is not: the whole mesh stays, since half a mesh cannot be swapped.
