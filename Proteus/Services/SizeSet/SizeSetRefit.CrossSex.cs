@@ -152,6 +152,14 @@ internal static partial class SizeSetRefit
                ?? Strings.SizeSet.MensGroup;
     }
 
+    /// <summary>
+    /// The key a men's option's lead is kept by: the piece's own size group — legs following a chest share it by
+    /// definition — so two outfits of one mod, each sized in its own group, never take each other's chest's size. A
+    /// piece in no group keys by the men's group.
+    /// </summary>
+    internal static string AcrossLeadKey(Piece piece, string mensGroup, string option)
+        => LeadKey(piece.Group ?? mensGroup, "0101", option);
+
     /// <summary>How a legs piece's men's version picks its source (<see cref="FromLead{T}"/>).</summary>
     internal enum LeadOutcome
     {
@@ -457,7 +465,7 @@ internal static partial class SizeSetRefit
             string targetPath = men.PathOf(onto);
 
             // ── which of the author's sizes: the one the chest's men's version was, else the nearest ──
-            string leadKey = LeadKey(groupName, "0101", option);
+            string leadKey = AcrossLeadKey(piece, groupName, option);
             var (outcome, leadOption, chosen) = FromLead(piece.FollowsChest, leadSources, leadKey, mens.InOption);
             switch (outcome)
             {
@@ -503,7 +511,7 @@ internal static partial class SizeSetRefit
             saved++;
             warnings.AddRange(said);
             // The first piece of an outfit to make an option leads it; legs following the chest never do.
-            if (!piece.FollowsChest && c.Option != null) leadSources[leadKey] = c.Option;
+            if (!piece.FollowsChest && c.Option != null) leadSources.TryAdd(leadKey, c.Option);
             if (OtherVariants(piece, c.File, c.Pick, preferred, readings) is { Count: > 0 })
                 warnings.Add(string.Format(Strings.SizeSet.OneVariantFmt, piece.Label, c.Name));
         }

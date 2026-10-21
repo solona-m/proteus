@@ -14,8 +14,18 @@ namespace Proteus.Tests;
 /// A women's mod's men's versions in the size set (sizeset-cross-sex), without game files: what is offered, which
 /// pieces cross, where they go, what is said, and what stops them before anything is read.
 /// </summary>
-public class SizeSetCrossSexTests
+public sealed class SizeSetCrossSexTests : IDisposable
 {
+    /// <summary>The temp mods this test made, deleted after it.</summary>
+    private readonly List<string> made = [];
+
+    public void Dispose()
+    {
+        foreach (string root in made)
+            try { Directory.Delete(root, recursive: true); }
+            catch (IOException) { }
+    }
+
     private const string Top = "chara/equipment/e6000/model/c0201e6000_top.mdl";
     private const string Dwn = "chara/equipment/e6000/model/c0201e6000_dwn.mdl";
     private const string MenTop = "chara/equipment/e6000/model/c0101e6000_top.mdl";
@@ -24,9 +34,10 @@ public class SizeSetCrossSexTests
 
     /// <summary>A mod giving <paramref name="paths"/> in one "Size" group of options S and M, plus
     /// <paramref name="extraGroups"/> (JSON) after it. Only the manifest is written: models are absent.</summary>
-    private static string Mod(string[] paths, string extraGroups = "")
+    private string Mod(string[] paths, string extraGroups = "")
     {
         string root = Path.Combine(Path.GetTempPath(), "proteus-sizeset-men-ci-" + Guid.NewGuid().ToString("N"));
+        made.Add(root);
         Directory.CreateDirectory(root);
         string Files(string option) => string.Join(", ", paths.Select((p, i) => $"\"{p}\": \"{option}\\\\{i}.mdl\""));
         File.WriteAllText(Path.Combine(root, PenumbraModMeta.MetaFile), $$"""
@@ -40,7 +51,7 @@ public class SizeSetCrossSexTests
         return root;
     }
 
-    private static List<SizeSetRefit.Piece> Pieces(params string[] paths) => SizeSetRefit.PiecesOf(Mod(paths));
+    private List<SizeSetRefit.Piece> Pieces(params string[] paths) => SizeSetRefit.PiecesOf(Mod(paths));
 
     [Fact]
     [Trait("Plan", "AC-sizeset-cross-sex-1")]
@@ -307,6 +318,24 @@ public class SizeSetCrossSexTests
         // Their option is still named by the men's body, "TBSE", as the chest's is.
         Assert.Equal("TBSE", SupportedBodies.OptionName(SizeSetRefit.AcrossTarget("tbse", "_dwn")!.Value.Body,
                                                         SizeSetRefit.AcrossTarget("tbse", "_dwn")!.Value.Size));
+    }
+
+    [Fact]
+    [Trait("Plan", "AC-sizeset-cross-sex-3")]
+    [Trait("Plan", "EDGE-sizeset-cross-sex-17")]
+    public void Each_outfit_keeps_its_own_chests_lead() // [AC-sizeset-cross-sex-3] [EDGE-sizeset-cross-sex-17]
+    {
+        // Two outfits, each sized in a group of its own: their men's leads never share a key, so outfit A's legs never
+        // follow the size outfit B's chest was cut from.
+        var aTop = new SizeSetRefit.Piece(Top, "_top", "A size", [("M", "a.mdl")], "Top A", "Body — A", "0201");
+        var aLegs = aTop with { GamePath = Dwn, Slot = "_dwn", Label = "Legs A", FollowsChest = true };
+        var bTop = aTop with { GamePath = "chara/equipment/e6020/model/c0201e6020_top.mdl", Group = "B size", Label = "Top B" };
+        string men = Strings.SizeSet.MensGroup;
+        Assert.Equal(SizeSetRefit.AcrossLeadKey(aTop, men, "TBSE"), SizeSetRefit.AcrossLeadKey(aLegs, men, "TBSE"));
+        Assert.NotEqual(SizeSetRefit.AcrossLeadKey(aTop, men, "TBSE"), SizeSetRefit.AcrossLeadKey(bTop, men, "TBSE"));
+        Assert.NotEqual(SizeSetRefit.AcrossLeadKey(aTop, men, "TBSE"), SizeSetRefit.AcrossLeadKey(aTop, men, "TBSE-X"));
+        // A piece in no group keys by the men's group.
+        Assert.Equal(SizeSetRefit.LeadKey(men, "0101", "TBSE"), SizeSetRefit.AcrossLeadKey(aTop with { Group = null }, men, "TBSE"));
     }
 
     [Fact]

@@ -15,8 +15,18 @@ namespace Proteus.Tests;
 /// A women's mod's men's versions in the size set, against the real files (sizeset-cross-sex): Sheer Elegance's top on
 /// Bibo+, a Rue top, and Starlit's YAS-rigged skirt made men's onto TBSE and TBSE-X. Every run works on a copy.
 /// </summary>
-public class SizeSetCrossSexLocalTests(ITestOutputHelper o)
+public sealed class SizeSetCrossSexLocalTests(ITestOutputHelper o) : IDisposable
 {
+    /// <summary>The mod copies this test made, deleted after it.</summary>
+    private readonly List<string> copies = [];
+
+    public void Dispose()
+    {
+        foreach (string root in copies)
+            try { Directory.Delete(root, recursive: true); }
+            catch (IOException) { }
+    }
+
     internal const string Sheer = LocalData.Mods + ":BiboPlus Sheer Elegance";
     internal const string Starlit = LocalData.Mods + ":[Nini] Starlit Skirt";
     internal const string RueTop = LocalData.Mods + ":[alee] Thursday - Rue+";
@@ -39,9 +49,10 @@ public class SizeSetCrossSexLocalTests(ITestOutputHelper o)
     }
 
     /// <summary>The mod copied to a temp folder (its models, manifest and record).</summary>
-    internal static string Copy(string need)
+    private string Copy(string need)
     {
         string copy = Path.Combine(Path.GetTempPath(), "proteus-sizeset-men-" + Guid.NewGuid().ToString("N"));
+        copies.Add(copy);
         SizeSetRefitTests.CopyModels(LocalData.Path(need), copy);
         return copy;
     }

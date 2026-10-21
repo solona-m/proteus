@@ -131,10 +131,9 @@ internal sealed class SizeSetPanel(PenumbraBridge penumbra, UVRemapService uvRem
                     }
                 }
                 if (missing && ImGui.IsItemHovered(ImGuiHoveredFlags.AllowWhenDisabled))
-                    ImGui.SetTooltip(string.Format(s.NotInstalledTipFmt, label));
+                    ImGui.SetTooltip(string.Format(s.NotInstalledTipFmt, BodyLabel(body)));
                 else if (tip && ImGui.IsItemHovered())
-                    ImGui.SetTooltip(string.Format(s.ForMenTipFmt,
-                                                   SupportedBodies.Choices.First(c => c.Key == body).Label, s.MensGroup));
+                    ImGui.SetTooltip(string.Format(s.ForMenTipFmt, BodyLabel(body), s.MensGroup));
             }
 
             ImGui.Spacing();
@@ -202,6 +201,9 @@ internal sealed class SizeSetPanel(PenumbraBridge penumbra, UVRemapService uvRem
             foreach (string warning in warnings) ImGui.BulletText(warning);
         }
     }
+
+    /// <summary>A body as the table names it ("TBSE"), not as its row does ("TBSE (for men)").</summary>
+    private static string BodyLabel(string body) => SupportedBodies.Choices.First(c => c.Key == body).Label;
 
     /// <summary>The bodies for the open mod's pieces; none until they are read.</summary>
     private IReadOnlyList<SizeSetRefit.Choice> Offered() => pieces == null ? [] : SizeSetRefit.Offered(pieces);
