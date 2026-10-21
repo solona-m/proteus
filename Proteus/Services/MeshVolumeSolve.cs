@@ -1364,8 +1364,8 @@ internal sealed partial class MeshVolumeSolve : IMeshEdit
     /// <param name="alongSurface">Measure the falloff ALONG the surface, through joined polygons only, instead of
     /// straight through space. What a polygon selection wants: the fade follows the garment, and a separate piece that
     /// merely sits nearby — the other cup, a strap over the cloth — takes none of the move.</param>
-    /// <param name="mirror">Mirror the drag across X = 0 onto the matching cloth on the other side — see
-    /// <see cref="PlanMirror"/>. Null for a plain drag.</param>
+    /// <param name="mirror">Mirror the drag across X = 0 onto the matching cloth (and, with <see cref="MoveSkin"/>, skin) on
+    /// the other side — see <see cref="PlanMirror"/>. Null for a plain drag.</param>
     /// <returns>How many nodes the drag will move; 0 when there is nothing it may.</returns>
     public int BeginMove(IEnumerable<int> partVertices, bool adjacent, float falloffRadius, bool alongSurface = false,
                          MoveMirror? mirror = null)
@@ -1415,23 +1415,10 @@ internal sealed partial class MeshVolumeSolve : IMeshEdit
 
         if (mirror)
         {
-            // Skin is never mirrored: the pairing matches cloth only, and skin's reflection would find the cloth lying
-            // on the other side's skin and carry it off that skin. Selected skin moves on its own side, as a piece with
-            // no mirror image does; the cloth selected with it is mirrored as ever.
-            var skinSeeds = skinMoves ? seeds.Where(n => skin[n]).ToHashSet() : null;
-            var clothSeeds = skinSeeds is { Count: > 0 } ? seeds.Where(n => !skin[n]).ToHashSet() : seeds;
-            var centre = pivot ?? SeedCentre(seeds);
-            if (clothSeeds.Count > 0)
-            {
-                plan = PlanMirror(clothSeeds, centre);
-                seeds = plan.Seeds;
-            }
-            else seeds = [];
-            if (skinSeeds is { Count: > 0 })
-            {
-                seeds.UnionWith(skinSeeds);
-                plan?.DirectOnly.UnionWith(skinSeeds);
-            }
+            // Selected skin (with "Move skin too") is mirrored as cloth is: the pairing matches skin with skin and cloth
+            // with cloth, so skin's reflection never finds the cloth lying on the other side's skin.
+            plan = PlanMirror(seeds, pivot ?? SeedCentre(seeds));
+            seeds = plan.Seeds;
         }
 
         foreach (int n in seeds) into[n] = 1f;
@@ -1449,8 +1436,9 @@ internal sealed partial class MeshVolumeSolve : IMeshEdit
         if (skinMoves && follow != null)
         {
             AddMoveRiders(into);
-            // Cloth riding skin that moves on its own side goes that way too, or the two would tear apart — unless the
-            // mirror has it: cloth selected, or matched to the selection, is mirrored as ever.
+            // Cloth riding skin of a piece with no mirror image goes that skin's way, or the two would tear apart — unless
+            // the mirror has it: cloth selected, or matched to the selection, is mirrored as ever. Cloth riding mirrored
+            // skin takes its own side's motion, as that skin does.
             if (plan is { } planned)
                 foreach (int n in into.Keys)
                     if (!skin[n] && !planned.Seeds.Contains(n)

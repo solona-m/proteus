@@ -89,7 +89,7 @@ internal static class HairPortSkeleton
             return new Choice(Route.Own, author, author, 0, Bones(p, p.To, author));
         }
 
-        int? modSource = HairPortPlan.SourceEst(p.Owner, p.Defaults, p.From, p.Id);
+        int? modSource = HairPortPlan.SourceEst(p.Owner, p.Defaults, p.From, p.Id, p.Owners);
         if (modSource is > 0 and var borrowed)
         {
             var fit = Fits(p, extra, borrowed, out var unreadable);

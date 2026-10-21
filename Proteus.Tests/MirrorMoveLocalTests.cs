@@ -210,6 +210,178 @@ public class MirrorMoveLocalTests(ITestOutputHelper output)
         Assert.Equal(Folded(model, model.Positions, plain.Positions()), Folded(model, model.Positions, after));
     }
 
+    private const string Rue = LocalData.Mods + ":hs-Rue+-2.2.7-y0f";
+    private const string ThisOldThing = LocalData.Mods + ":This Old Thing - by Solona";
+    private const string ThisOldThingRueL = ThisOldThing + "/size/rue l/chara/equipment/e6255/model/c0201e6255_top.mdl";
+
+    private static MeshVolumeSolve SkinSolve(ModelParts model)
+    {
+        var solve = new MeshVolumeSolve(model) { MoveSkin = true };
+        Assert.True(solve.AttachFollow(SkinFollow.Bind(solve.FollowInputs)));
+        return solve;
+    }
+
+    private static List<int> SkinVertices(ModelParts m)
+        => m.Parts.Where(p => p.Island < 0 && SecondSkinWriter.IsBodySkinMaterial(p.Material))
+                  .SelectMany(p => p.Triangles).Distinct().ToList();
+
+    /// <summary>The first chest option of a body mod that has skin.</summary>
+    private static ModelParts ModChestWithSkin(string need)
+    {
+        string dir = LocalData.Path(need);
+        foreach (var option in BodySizeCatalog.Read(dir).For("_top", "0201"))
+            if (ModelPartReader.Read(File.ReadAllBytes(Path.Combine(dir, option.Rel))) is { } m && SkinVertices(m).Count > 0) return m;
+        throw new InvalidOperationException($"{need}: no chest option has skin");
+    }
+
+    /// <summary>Moved skin vertices whose skin neighbours all stayed: a spike the mirror left behind.</summary>
+    private static int Spikes(ModelParts model, float[] after, HashSet<int> skin)
+    {
+        var adj = new Dictionary<int, HashSet<int>>();
+        foreach (var part in model.Parts.Where(p => p.Island < 0 && SecondSkinWriter.IsBodySkinMaterial(p.Material)))
+            for (int t = 0; t + 2 < part.Triangles.Length; t += 3)
+                for (int k = 0; k < 3; k++)
+                {
+                    int a = part.Triangles[t + k], b = part.Triangles[t + (k + 1) % 3];
+                    (adj.TryGetValue(a, out var la) ? la : adj[a] = []).Add(b);
+                    (adj.TryGetValue(b, out var lb) ? lb : adj[b] = []).Add(a);
+                }
+        bool Moved(int v) => Vector3.Distance(At(after, v), At(model.Positions, v)) > 1e-5f;
+        return skin.Count(v => Moved(v) && adj.TryGetValue(v, out var n) && n.Count > 0 && n.All(u => !Moved(u)));
+    }
+
+    /// <summary>
+    /// "Move skin too" with Mirror on a real model: skin right of 20 mm in the middle third of its height is moved,
+    /// turned and stretched, with the falloff on and off. The far side's skin twins must move as the mirror, and the
+    /// result may fold and poke no more than doing both sides by hand; with the falloff off, no spikes.
+    /// </summary>
+    /// <param name="centreSlivers">Folds allowed beyond the by-hand count on a Translate with the falloff on: sliver cloth
+    /// straddling the centre line, which Sides pulls apart when a drag goes sideways — each point takes its own side's
+    /// motion, a known limit of the mirror.</param>
+    private void RealSkinMirrorsSymmetrically(ModelParts model, string what, int centreSlivers = 0)
+    {
+        var skinList = SkinVertices(model);
+        var skin = skinList.ToHashSet();
+        float lo = skinList.Min(v => At(model.Positions, v).Y), hi = skinList.Max(v => At(model.Positions, v).Y);
+        bool Band(int v) => At(model.Positions, v).Y is var y && y > lo + (hi - lo) / 3f && y < hi - (hi - lo) / 3f;
+        var seeds = skinList.Where(v => model.Positions[v * 3] > 0.02f && Band(v)).ToArray();
+        var farSeeds = skinList.Where(v => model.Positions[v * 3] < -0.02f && Band(v)).ToArray();
+        Assert.True(seeds.Length > 50, $"{what}: only {seeds.Length} skin vertices right of 20 mm");
+        var twins = MirrorVertices(model.Positions, seeds, skinList);
+        var pivot = seeds.Aggregate(Vector3.Zero, (s, v) => s + At(model.Positions, v)) / seeds.Length;
+        var offset = new Vector3(0.004f, 0.003f, 0.002f);
+        Matrix4x4 TurnOf(Kind kind) => kind == Kind.Rotate
+            ? RotateGizmo.About(pivot, Vector3.UnitY, 0.1f)
+            : PartScaleDrag.Build(pivot, new Vector3(1.1f, 1f, 1.05f));
+        void Drag(MeshVolumeSolve s, Kind kind, bool far)
+        {
+            if (kind == Kind.Translate) s.MoveTo(far ? MirrorMotion.Reflect(offset) : offset);
+            else s.TransformTo(far ? MirrorMotion.Reflect(TurnOf(kind)) : TurnOf(kind));
+        }
+
+        SkinSolve(model).MoveFalloff(seeds, 0.03f, false, mirror: true);   // warm
+        foreach (bool adjacent in new[] { true, false })
+        foreach (var kind in new[] { Kind.Translate, Kind.Rotate, Kind.Scale })
+        {
+            float falloff = adjacent ? 0.03f : 0f;
+            var solve = SkinSolve(model);
+            long t0 = PhaseCounter.Begin();
+            solve.MoveFalloff(seeds, falloff, false, mirror: true);
+            double previewMs = PhaseCounter.MsSince(t0);
+            t0 = PhaseCounter.Begin();
+            Assert.True(solve.BeginMove(seeds, adjacent, falloff, mirror: new MoveMirror(kind, pivot)) > 0);
+            double beginMs = PhaseCounter.MsSince(t0);
+            var report = solve.DragMirror!.Value;
+            Drag(solve, kind, far: false);
+            var during = solve.Positions();
+
+            int twinned = 0, mirrored = 0;
+            foreach (int v in seeds)
+            {
+                if (twins[v] < 0) continue;
+                twinned++;
+                var dv = At(during, v) - At(model.Positions, v);
+                var du = At(during, twins[v]) - At(model.Positions, twins[v]);
+                if (Vector3.Distance(Reflect(dv), du) <= 0.0005f) mirrored++;
+            }
+            int spikes = adjacent ? 0 : Spikes(model, during, skin);
+            t0 = PhaseCounter.Begin();
+            Assert.True(solve.EndMove());
+            double endMs = PhaseCounter.MsSince(t0);
+            var after = solve.Positions();
+
+            // Both sides by hand, Mirror off: this side's drag, and the far side's mirror image dragged on its own.
+            var near = SkinSolve(model);
+            near.BeginMove(seeds, adjacent, falloff);
+            Drag(near, kind, far: false);
+            t0 = PhaseCounter.Begin();
+            near.EndMove();
+            double oneSideEndMs = PhaseCounter.MsSince(t0);
+            var byHand = SkinSolve(model);
+            byHand.BeginMove(farSeeds, adjacent, falloff);
+            Drag(byHand, kind, far: true);
+            byHand.EndMove();
+            int handFolded = Folded(model, model.Positions, near.Positions()) + Folded(model, model.Positions, byHand.Positions());
+            int handWorse = SkinPoke.MadeWorse(model, near.Positions()) + SkinPoke.MadeWorse(model, byHand.Positions());
+            int folded = Folded(model, model.Positions, after);
+            int worse = SkinPoke.MadeWorse(model, after);
+
+            output.WriteLine($"{what} {kind} falloff {falloff * 1000f:F0} mm: {report.Mode}, paired {report.Paired}/{report.Selected} " +
+                             $"({100f * report.Paired / report.Selected:F0} %), held {report.Held}; twins {twinned}, moved as the mirror " +
+                             $"{mirrored} ({(twinned > 0 ? 100f * mirrored / twinned : 0f):F0} %); spikes {spikes}; folded {folded} " +
+                             $"(by hand {handFolded}); poked {worse} (by hand {handWorse}); preview {previewMs:F1} ms, " +
+                             $"begin {beginMs:F1} ms, release {endMs:F1} ms (one side {oneSideEndMs:F1} ms)");
+
+            Assert.Equal(Mode.Sides, report.Mode);
+            Assert.True(report.Paired >= 0.9f * report.Selected, $"{what} {kind}: paired {report.Paired} of {report.Selected}");
+            Assert.True(twinned > 0 && mirrored >= 0.9f * twinned, $"{what} {kind}: {mirrored} of {twinned} twins moved as the mirror");
+            Assert.Equal(0, spikes);
+            // The sliver allowance only where it was measured: a sideways move with the falloff on.
+            int allowed = kind == Kind.Translate && adjacent ? centreSlivers : 0;
+            Assert.True(folded <= handFolded + allowed,
+                        $"{what} {kind}: {folded} folded, both sides by hand fold {handFolded}");
+            Assert.True(worse <= handWorse, $"{what} {kind}: {worse} skin points poked through, both sides by hand {handWorse}");
+
+            solve.Undo();
+            var back = solve.Positions();
+            for (int v = 0; v < model.Positions.Length / 3; v++)
+                Assert.True(Vector3.Distance(At(model.Positions, v), At(back, v)) < 1e-6f, $"{what} {kind}: vertex {v} not undone");
+        }
+    }
+
+    [LocalDataTheory(Neolithe)]
+    [InlineData("default chest - smallclothes/sfw xs.mdl")]
+    [Trait("Plan", "AC-mirror-skin-move-9")]
+    [Trait("Plan", "EDGE-mirror-skin-move-14")]
+    public void Neolithe_body_skin_mirrors(string rel)
+    {
+        var model = ModChest(Neolithe, rel);
+        Assert.True(SkinMovePolicy.IsBodyModel(model));
+        RealSkinMirrorsSymmetrically(model, "Neolithe " + rel);
+    }
+
+    [LocalDataTheory(Bibo)]
+    [InlineData(0)]
+    [Trait("Plan", "AC-mirror-skin-move-9")]
+    public void Bibo_body_skin_mirrors(int _) => RealSkinMirrorsSymmetrically(ModChestWithSkin(Bibo), "Bibo+");
+
+    [LocalDataTheory(Rue)]
+    [InlineData(0)]
+    [Trait("Plan", "AC-mirror-skin-move-9")]
+    public void Rue_body_skin_mirrors(int _) => RealSkinMirrorsSymmetrically(ModChestWithSkin(Rue), "Rue+");
+
+    /// <summary>
+    /// A garment's own skin patch — the top of This Old Thing in its Rue L size — not a body's. A sideways move with the
+    /// falloff folds one 2 mm sliver of cloth straddling the cleavage's centre line that both sides by hand do not:
+    /// accepted as the mirror's known limit at the centre (measured 2026-10-21).
+    /// </summary>
+    [LocalDataTheory(ThisOldThing)]
+    [InlineData(ThisOldThingRueL)]
+    [Trait("Plan", "AC-mirror-skin-move-9")]
+    public void Garment_skin_patch_mirrors(string need)
+        => RealSkinMirrorsSymmetrically(ModelPartReader.Read(File.ReadAllBytes(LocalData.Path(need)))!, "This Old Thing rue l",
+                                        centreSlivers: 1);
+
     public static TheoryData<string> GameTops => new() { "Neo-Ishgardian Top of Maiming", "Scion Adventurer's", "Dirndl's Bodice" };
 
     [LocalDataTheory(LocalData.GameData)]

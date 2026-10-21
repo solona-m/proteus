@@ -2868,7 +2868,7 @@
     "description": ""
   },
   "Parts.Mirror.Tip": {
-    "message": "以身体中心为轴，同时镜像编辑两侧。笔刷也会涂抹镜像侧；移动、旋转和缩放会以镜像方式移动另一侧对应的布料。本身左右对称的部件会保持居中。",
+    "message": "以身体中心为轴，同时镜像编辑两侧。笔刷也会涂抹镜像侧；移动、旋转和缩放会以镜像方式移动另一侧对应的布料（开启“同时移动皮肤”时也包括对应的皮肤）。本身左右对称的部件会保持居中。",
     "description": "Tooltip on the Mirror left/right checkbox, shown under the brushes and under Move, Rotate and Scale."
   },
   "Parts.Move.Mirror.Paired.Fmt": {
