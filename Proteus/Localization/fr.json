@@ -3907,6 +3907,10 @@
     "message": "Toujours actif tant que la chaussure garde son propre pied ou le gant sa propre main : sinon les nouvelles jambes ou les nouveaux bras entiers seraient ajoutés avec.",
     "description": ""
   },
+  "Parts.Retarget.ClearForcedTip": {
+    "message": "Toujours actif pour les hauts du jeu lui-même, comme le fait l'ajustement automatique : le jeu enfonce leur tissu dans son propre corps, il est donc toujours repoussé hors du nouveau.",
+    "description": ""
+  },
   "Parts.Retarget.KeepFeet": {
     "message": "Garder ses propres pieds",
     "description": ""

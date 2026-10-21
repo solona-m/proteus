@@ -1183,15 +1183,17 @@ internal static partial class RefitCore
 
     /// <summary>
     /// Whether a top's cloth buried in a far larger new breast is cleared out of it from deeper than usual (see
-    /// <see cref="BodyRetarget.DeepClearDepth"/>): the game's own top in the automatic refit. Never the Studio's — it
-    /// moves cloth up to 30 mm, and a Studio refit writes into the modder's own mod.
+    /// <see cref="BodyRetarget.DeepClearDepth"/>): the game's own top, in the automatic refit and in the Studio (see
+    /// <see cref="RetargetInputs.StudioSkin"/>), whose refit is written into Proteus's own mod. Never a modder's top in the
+    /// Studio — it moves cloth up to 30 mm, and that refit is written into the modder's own mod.
     /// </summary>
     internal static bool DeepClearFor(bool rule, string garmentSlot) => rule && garmentSlot == "_top";
 
     /// <summary>
     /// Whether a top's cloth the refit carried further off the new chest than its author put it comes back toward the
-    /// author's standoff (see <see cref="BodyRetarget.KeepStandoff"/>): the game's own top in the automatic refit. Never
-    /// the Studio's — it moves a modder's cloth toward the body.
+    /// author's standoff (see <see cref="BodyRetarget.KeepStandoff"/>): the game's own top, in the automatic refit and in
+    /// the Studio (see <see cref="RetargetInputs.StudioSkin"/>). Never a modder's top in the Studio — it moves a modder's
+    /// cloth toward the body.
     /// </summary>
     internal static bool KeepStandoffFor(bool rule, string garmentSlot) => rule && garmentSlot == "_top";
 

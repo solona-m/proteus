@@ -213,6 +213,7 @@ public class AutoRefitSkinRuleTests(ITestOutputHelper output)
 
     [Fact]
     [Trait("Plan", "EDGE-vanilla-refit-cut-skin-8")]
+    [Trait("Plan", "EDGE-studio-game-top-4")]
     public void A_game_items_own_mod_stays_game_gear_however_it_is_refitted_again()
     {
         // What the Body size tool and the every-size refit record when they save into a mod: read off the mod on disk.
