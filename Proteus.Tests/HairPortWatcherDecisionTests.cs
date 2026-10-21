@@ -90,6 +90,32 @@ public class HairPortWatcherDecisionTests
         Assert.True(File.Exists(Path.Combine(s.ModRoot, rel!)));
     }
 
+    /// <summary>
+    /// The worn hairstyle, ported earlier this session with a warning, is found already ported at the next look — and
+    /// the worn line still says the warning (cross-sex-tops-yas). A port made with none clears it: PortOne writes the key
+    /// the look reads.
+    /// </summary>
+    [Fact]
+    [Trait("Plan", "AC-cross-sex-tops-yas-8")]
+    [Trait("Plan", "EDGE-cross-sex-tops-yas-23")]
+    public void A_warned_worn_port_keeps_its_warning_at_the_next_look() // [AC-cross-sex-tops-yas-8] [EDGE-cross-sex-tops-yas-23]
+    {
+        using var s = new Setup();
+        // Stale from before: the port below warns of nothing, so PortOne clears it under the same key.
+        HairPortScan.RememberWarning(s.ModRoot, Worn, "stale");
+        var ported = s.Run();
+        Assert.True(ported.Ported, ported.Message);
+        Assert.Equal("", ported.Warning);
+        s.Reloaded();
+        Assert.Equal("", s.Run().Warning);
+
+        const string warning = "bent onto c0101, 40 of its triangles turn inside out and may show as holes; check it in game";
+        HairPortScan.RememberWarning(s.ModRoot, Worn, warning);
+        var again = s.Run();
+        Assert.True(again.Ported, again.Message);
+        Assert.Equal(warning, again.Warning);
+    }
+
     [Fact]
     [Trait("Plan", "AC-hair-race-port-1")]
     [Trait("Plan", "AC-hair-port-scan-10")]

@@ -63,7 +63,8 @@ internal static partial class BodyRetarget
             return refusal;
 
         pair = new SlotPair(slot, correspondence!, target, targetBytes, sourceBytes, targetHidden,
-                            TargetMaterial: targetMaterial);
+                            TargetMaterial: targetMaterial,
+                            SourceIsGameChest: slot == "_top" && VanillaBodyCatalog.IsGameModel(sourceBytes, slot));
         return null;
     }
 
