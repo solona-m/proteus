@@ -3668,7 +3668,7 @@
     "description": ""
   },
   "Parts.Retarget.NoBodiesForSex.Fmt": {
-    "message": "{0}에는 {1} 체형이 없습니다. 리핏으로 성별을 바꿀 수는 없습니다.",
+    "message": "{0}에는 {1} 체형이 없습니다.",
     "description": ""
   },
   "Parts.Retarget.Male": {
@@ -4371,12 +4371,48 @@
     "message": "새 모델을 다시 읽을 수 없었습니다",
     "description": "Why a model for the wearer's race could not be made; the {1} of Parts.Retarget.BakeFailed.Fmt. Lower-case, no full stop."
   },
+  "Parts.Retarget.Race.OtherSex.Fmt": {
+    "message": "{0} (이 {1} 모델에서 맞춤)",
+    "description": "A \"Refit for\" entry. {0} is a race of the other sex such as \"Midlander M\"; {1} the race of the model open."
+  },
+  "Parts.Retarget.Race.CrossSexNote.Fmt": {
+    "message": "성별을 넘어 맞췄습니다: 원래 만들어진 {0} 체형을 {1}의 형태로 구부린 뒤, 바디 맵으로 새 체형과 점마다 대응시켰습니다. 공유하기 전에 게임에서 확인하세요.",
+    "description": "Warning under a refit for the other sex. {0} is the race of the model open, {1} the race picked. \"body maps\" are the bibo↔TBSE texture maps."
+  },
+  "Parts.Retarget.Race.CrossSexWears.Fmt": {
+    "message": "저장한 맞춤은 {0}이(가) 입고, 이 아이템에 자기 모델이 없는 {1}도 입습니다. {2}은(는) 이 모델을 그대로 씁니다.",
+    "description": "{0} is the race picked; {1} a comma-separated list of races; {2} the race of the model open."
+  },
+  "Parts.Retarget.Race.CrossSexQuality.Fmt": {
+    "message": "뒤집힌 면 {0}개, 체형 대응 {1}.",
+    "description": "{0} is a count of folded (turned-over) faces; {1} a percentage such as \"97%\"."
+  },
+  "Parts.Retarget.Race.CrossSexHint.Fmt": {
+    "message": "{0}용 버전을 만들려면 “리핏 대상 종족”에서 고르세요.",
+    "description": "{0} is a race such as \"Midlander M\". “Refit for” is the dropdown's label (Parts.Retarget.Race.Label)."
+  },
+  "Parts.Retarget.Refuse.CrossSexMadeFor.Fmt": {
+    "message": "성별을 넘을 때는 이 장비를 만든 체형이 {0} 체형이어야 합니다. “제작 체형”에서 만들어진 체형 모드를 고르세요.",
+    "description": "{0} is a race such as \"Midlander F\". “Made for” is the body dropdown the garment was made on."
+  },
+  "Parts.Retarget.Refuse.CrossSexQuality.Fmt": {
+    "message": "이 성별을 넘는 맞춤은 뒤집힌 면이 {0}개, 체형 대응이 {1}였습니다. Proteus는 뒤집힌 면이 {2}개 이하이고 대응이 {3} 이상인 것만 저장합니다.",
+    "description": "{0} folded faces and {1} the share matched, as found; {2} and {3} the limits. Percentages arrive formatted."
+  },
+  "Parts.Retarget.Refuse.CrossSexLayout.Fmt": {
+    "message": "성별을 넘을 때 Proteus는 Bibo+ 또는 게임 레이아웃의 여성 체형과 TBSE 또는 게임 레이아웃의 남성 체형만 대응시킬 수 있습니다. {0} 모델은 {1}과(와) {2}을(를) 씁니다.",
+    "description": "{0} is a slot such as \"_top\"; {1} and {2} texture layout names (bibo, gen3, tbse, male vanilla), never translated. \"Bibo+\" and \"TBSE\" are body-mod names."
+  },
+  "Parts.Retarget.Refuse.MenMapsMissing": {
+    "message": "성별을 넘는 맞춤에 필요한 바디 맵이 아직 없습니다. Proteus가 내려받는 중이니, 도착하면 다시 맞춰 주세요.",
+    "description": "Said when the bibo↔TBSE texture maps have not been downloaded yet."
+  },
   "Parts.Retarget.Race.Label": {
     "message": "리핏 대상 종족",
     "description": "Heads the dropdown that picks which race's model a refit is made and saved as."
   },
   "Parts.Retarget.Race.Tip": {
-    "message": "어느 종족용으로 리핏할지 고릅니다. 의상과 같은 성별의 다른 종족을 고르면, 게임이 휘는 방식 그대로 이 모델에서 전용 모델을 만들어 그 종족의 체형에 리핏하고, 그 종족이 불러오는 위치에 저장합니다. 이 모델은 그대로 남습니다.",
+    "message": "어느 종족용 맞춤인지 고릅니다. 다른 종족은 게임이 구부리는 방식대로 이 모델에서 만든, 그 종족 체형에 맞춰 그 종족이 불러오는 곳에 저장한 자기 모델을 받습니다. 미드랜더 남성의 몸통·다리 장비와 여성의 다리 장비는 다른 성별용으로도 맞출 수 있습니다. 이 모델은 그대로입니다.",
     "description": "Tooltip of Parts.Retarget.Race.Label."
   },
   "Parts.Retarget.Race.ThisModel.Fmt": {

@@ -719,9 +719,12 @@ internal static partial class RefitCore
     /// <param name="sourcePath">The body the garment was made on (its own slot's).</param>
     /// <param name="targetPath">The body it was refitted onto.</param>
     /// <param name="male">The bodies are a man's, whose layouts are named apart (see <c>BodyCorrespondence.LayoutOf</c>).</param>
+    /// <param name="targetMale">The new body's sex when it is not the garment's (a refit for the other sex); null reads
+    /// both as <paramref name="male"/>.</param>
     internal static BodyRetarget.Planned MatchSkinToBody(BodyRetarget.Planned plan, string sourcePath, string targetPath,
-                                                         UVRemapService? uvRemap, bool male, IPluginLog log)
-        => MatchSkinToBody(plan, sourcePath, [targetPath], uvRemap, male, log);
+                                                         UVRemapService? uvRemap, bool male, IPluginLog log,
+                                                         bool? targetMale = null)
+        => MatchSkinToBody(plan, sourcePath, [targetPath], uvRemap, male, log, targetMale);
 
     /// <inheritdoc cref="MatchSkinToBody(BodyRetarget.Planned, string, string, UVRemapService?, bool, IPluginLog)"/>
     /// <param name="targetPaths">Every body the refit went onto, the lead's first — a chest on one body mod and the legs
@@ -729,21 +732,21 @@ internal static partial class RefitCore
     /// drawn the way the lead draws its skin.</param>
     internal static BodyRetarget.Planned MatchSkinToBody(BodyRetarget.Planned plan, string sourcePath,
                                                          IReadOnlyList<string> targetPaths, UVRemapService? uvRemap,
-                                                         bool male, IPluginLog log)
+                                                         bool male, IPluginLog log, bool? targetMale = null)
     {
-        var model = MatchSkinToBody(plan.Model, sourcePath, targetPaths, uvRemap, male, log);
+        var model = MatchSkinToBody(plan.Model, sourcePath, targetPaths, uvRemap, male, log, targetMale);
         return ReferenceEquals(model, plan.Model) ? plan : plan with { Model = model };
     }
 
     /// <inheritdoc cref="MatchSkinToBody(BodyRetarget.Planned, string, string, UVRemapService?, bool, IPluginLog)"/>
     /// <returns>The model with its kept skin redrawn, or the very same array when there was nothing to do.</returns>
     internal static byte[] MatchSkinToBody(byte[] model, string sourcePath, string targetPath, UVRemapService? uvRemap,
-                                           bool male, IPluginLog log)
-        => MatchSkinToBody(model, sourcePath, [targetPath], uvRemap, male, log);
+                                           bool male, IPluginLog log, bool? targetMale = null)
+        => MatchSkinToBody(model, sourcePath, [targetPath], uvRemap, male, log, targetMale);
 
     /// <inheritdoc cref="MatchSkinToBody(BodyRetarget.Planned, string, IReadOnlyList{string}, UVRemapService?, bool, IPluginLog)"/>
     internal static byte[] MatchSkinToBody(byte[] model, string sourcePath, IReadOnlyList<string> targetPaths,
-                                           UVRemapService? uvRemap, bool male, IPluginLog log)
+                                           UVRemapService? uvRemap, bool male, IPluginLog log, bool? targetMale = null)
     {
         var plan = model;
         try
@@ -763,7 +766,7 @@ internal static partial class RefitCore
 
             string? from = ModelPartReader.Read(File.ReadAllBytes(sourcePath)) is { } source
                 ? BodyCorrespondence.LayoutOf(source, male) : null;
-            string? to = ModelPartReader.Read(target) is { } body ? BodyCorrespondence.LayoutOf(body, male) : null;
+            string? to = ModelPartReader.Read(target) is { } body ? BodyCorrespondence.LayoutOf(body, targetMale ?? male) : null;
             if (from == null || to == null)
             {
                 log.Information("[Proteus] retarget: left the garment's own skin {0} as it is — the bodies' layouts are "

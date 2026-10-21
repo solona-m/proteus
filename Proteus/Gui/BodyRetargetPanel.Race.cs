@@ -114,12 +114,12 @@ internal sealed partial class BodyRetargetPanel
         ImGui.TextUnformatted(ps.RetargetRaceLabel);
         if (ImGui.IsItemHovered()) ImGui.SetTooltip(ps.RetargetRaceTip);
         ImGui.SetNextItemWidth(-1);
-        using (var combo = ImRaii.Combo("##retargetRace", EntryLabel(current)))
+        using (var combo = ImRaii.Combo("##retargetRace", EntryLabel(current, drawn)))
             if (combo)
                 foreach (var entry in entries)
                     // The entry already chosen can be clicked again after a refusal: a pick is a new try, with the
                     // skeleton and files read afresh — the refusal may be gone now (a skeleton mod enabled since).
-                    if (ImGui.Selectable(EntryLabel(entry) + "##race" + entry.Race + entry.Kind, entry == current)
+                    if (ImGui.Selectable(EntryLabel(entry, drawn) + "##race" + entry.Race + entry.Kind, entry == current)
                         && (entry != current || refusedTo != 0))
                     {
                         // Nothing picked and the entry shown clicked again: the character's own bake is retried as it
@@ -146,12 +146,15 @@ internal sealed partial class BodyRetargetPanel
         ImGui.Spacing();
     }
 
-    private string EntryLabel(OtherRaceRefit.Entry entry) => entry.Kind switch
+    private string EntryLabel(OtherRaceRefit.Entry entry, ushort drawn) => entry.Kind switch
     {
         OtherRaceRefit.EntryKind.ThisModel => string.Format(Strings.Parts.RetargetRaceThisModelFmt,
                                                             ModelRace.Describe($"{entry.Race:D4}")),
         OtherRaceRefit.EntryKind.AsWorn => string.Format(Strings.Parts.RetargetRaceAsWornFmt,
                                                          ModelRace.Describe($"{automaticRoute.To:D4}")),
+        OtherRaceRefit.EntryKind.OtherSex => string.Format(Strings.Parts.RetargetRaceOtherSexFmt,
+                                                           ModelRace.Describe($"{entry.Race:D4}"),
+                                                           ModelRace.Describe($"{drawn:D4}")),
         _ => ModelRace.Describe($"{entry.Race:D4}"),
     };
 
@@ -165,8 +168,17 @@ internal sealed partial class BodyRetargetPanel
         var ps = Strings.Parts;
         string to = ModelRace.Describe($"{b.Route.To:D4}");
         string drawn = ModelRace.Describe($"{b.Route.Drawn:D4}");
-        ImGui.TextWrapped(string.Format(OtherRaceRefit.Wears(b.Route) == OtherRaceRefit.WearNote.PickedAndFallThrough
-                                            ? ps.RetargetRaceBelowFmt : ps.RetargetRaceOnlyFmt, to, drawn));
+        if (b.Route.ByAlias)
+        {
+            // Across the sexes the races wearing it are named: a c0101 save reaches Lalafell women too.
+            var also = CrossSexRefit.FallThroughTo(b.Route.To, b.Route.Drawn).Select(r => ModelRace.Describe($"{r:D4}"));
+            ImGui.TextWrapped(string.Format(ps.RetargetRaceCrossSexWearsFmt, to, string.Join(", ", also), drawn));
+            using (ImRaii.PushColor(ImGuiCol.Text, ProteusStyle.Warn))
+                ImGui.TextWrapped(string.Format(ps.RetargetRaceCrossSexNoteFmt, drawn, to));
+        }
+        else
+            ImGui.TextWrapped(string.Format(OtherRaceRefit.Wears(b.Route) == OtherRaceRefit.WearNote.PickedAndFallThrough
+                                                ? ps.RetargetRaceBelowFmt : ps.RetargetRaceOnlyFmt, to, drawn));
         ImGui.TextDisabled(string.Format(ps.RetargetRaceSourceBakedFmt, to));
         if (b.Est is { Outcome: EstOutcome.Carry } est)
             ImGui.TextWrapped(string.Format(ps.RetargetRaceEstCarriedFmt, to, drawn, est.Entry));
@@ -320,6 +332,10 @@ internal sealed partial class BodyRetargetPanel
                                      code => VanillaBodyCatalog.Read(code, readGameFile, drawn: true));
         // Only the parts the refit-onto mod has a body of the race for take part (see Onto), so only those are bent.
         var slots = catalog != null ? OtherRaceRefit.OnlyRace(catalog, route.To).SlotsFor($"{route.To:D4}").ToList() : [];
+        string? garmentSlot = BodySizeCatalog.SlotOf(drawnPath);
+        // Across the sexes the bodies are matched through the bibo↔TBSE maps; ask for them now, while the bake runs.
+        bool mapsHere = !route.ByAlias || uvRemap.MenMapsPresent();
+        if (!mapsHere) uvRemap.RequestMenMaps();
 
         bakeTask = Task.Run(() =>
         {
@@ -338,9 +354,19 @@ internal sealed partial class BodyRetargetPanel
             if (source != null)
             {
                 bodies = route.Lowered
-                    ? BakedBodyCatalog.Lowered(source, route.Drawn, route.To, who, slots, out leftOut)
-                    : BakedBodyCatalog.Of(source, drawnCode, route.To, who, slots, out leftOut);
+                    ? BakedBodyCatalog.Lowered(source, route.Drawn, route.To, who, slots, out leftOut, route.ByAlias)
+                    : BakedBodyCatalog.Of(source, drawnCode, route.To, who, slots, out leftOut, route.ByAlias);
                 foreach (string f in leftOut) log.Warning("[Proteus] retarget: a made-for body could not be bent: {0}", f);
+            }
+            if (route.ByAlias)
+            {
+                log.Information("[Proteus] retarget: across the sexes c{0:D4} → c{1:D4}: {2} made-for bodies bent, maps {3}",
+                                route.Drawn, route.To, bodies?.Options.Count ?? 0, mapsHere ? "present" : "requested");
+                // Never the target race's own bodies in their place (CrossSexRefit.MadeForLine): with none of the drawn
+                // race's for the garment's part, there is nothing it was made on to refit from.
+                if (garmentSlot != null && bodies?.For(garmentSlot).Count is null or 0)
+                    return (key, null, string.Format(Strings.Parts.RetargetRefuseCrossSexMadeForFmt,
+                                                     ModelRace.Describe(drawnCode)));
             }
             log.Information("[Proteus] retarget: c{0:D4} wearer from {1}{2}; est {3}; {4} made-for bodies bent in {5} ms",
                             route.To, inputs.ModdedFrom ?? "the game", made.FellBack ? " (unreadable, the game's used)" : "",

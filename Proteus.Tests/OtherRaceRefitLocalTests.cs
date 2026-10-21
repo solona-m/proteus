@@ -316,21 +316,7 @@ public class OtherRaceRefitLocalTests(ITestOutputHelper o)
     /// </summary>
     /// <param name="where">Told of each one, for the log.</param>
     private static int ClothFolded(ModelParts before, ModelParts after, Action<string>? where = null)
-    {
-        int folded = 0;
-        foreach (var part in before.Parts.Where(p => p.Island < 0 && !SecondSkinWriter.IsBodySkinMaterial(p.Material)))
-            for (int t = 0; t + 2 < part.Triangles.Length; t += 3)
-            {
-                int a = part.Triangles[t], b = part.Triangles[t + 1], c = part.Triangles[t + 2];
-                var was = Vector3.Cross(At(before.Positions, b) - At(before.Positions, a), At(before.Positions, c) - At(before.Positions, a));
-                if (was.Length() * 0.5f < 1e-6f) continue;
-                var now = Vector3.Cross(At(after.Positions, b) - At(after.Positions, a), At(after.Positions, c) - At(after.Positions, a));
-                if (Vector3.Dot(was, now) > 0f) continue;
-                folded++;
-                where?.Invoke($"{part.Label}: {was.Length() * 0.5f * 1e6f:F1} mm² at {At(after.Positions, a)}");
-            }
-        return folded;
-    }
+        => CrossSexRefit.ClothFolded(before, after, where);
 
     /// <summary>For each point of <paramref name="from"/>, the distance to the nearest point of <paramref name="to"/>.</summary>
     private static float[] NearestDistances(float[] from, float[] to)

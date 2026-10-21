@@ -736,6 +736,10 @@ internal static partial class BodyRetarget
     /// the Studio. Only with <paramref name="clearBody"/>.</param>
     /// <param name="carryPiercings">With <paramref name="replaceSkin"/>, bring the new body's piercings in with its skin
     /// (see <see cref="Rebuild"/>). Off by default: the user asks for them.</param>
+    /// <param name="liftUnderbust">Lift the cloth under the new breasts off their underside (see LiftUnderbust). Off only
+    /// for a men's top refitted for women (<see cref="CrossSexRefit"/>): a shirt cut for a pec has no cloth under a
+    /// breast to lift, and lifting it turned over faces the face clearing does not (13 folds on the Lumberjack shirt
+    /// onto Bibo+, 8 without; measured 2026-10-20). The face clearing after it still runs.</param>
     public static Planned Plan(ModelParts garment, byte[] garmentBytes, IReadOnlyList<SlotPair> pairs,
                                string? garmentSlot = null, bool pushOut = true, IReadOnlySet<int>? held = null,
                                bool replaceSkin = false, bool acrossBodies = false, bool clearBody = false,
@@ -743,7 +747,7 @@ internal static partial class BodyRetarget
                                string? swapSlot = null, Action<string>? log = null, Action<string>? warn = null,
                                string? chestSlot = null, Action<string, Vec3[]>? trace = null,
                                Outfit? outfit = null, string? tuckSlot = null, bool deepClear = false,
-                               bool keepStandoff = false, bool carryPiercings = false)
+                               bool keepStandoff = false, bool carryPiercings = false, bool liftUnderbust = true)
     {
         // First, before anything reads the new chest: its nipples smoothed where the garment covers more of them than
         // the old body had, so every pass below sees one surface — the one the swap draws.
@@ -769,7 +773,7 @@ internal static partial class BodyRetarget
         bool standoff = keepStandoff && clearBody && garmentSlot == "_top" && !Tuned.NoKeepStandoff;
         var solved = Solve(garment, pairs, garmentSlot, pushOut, held, replaceSkin, clearBody, keepShape,
                            ModelSkinReader.Read(garmentBytes, null, null), swapSlot, swapMeshes, chestSlot, trace, outfit,
-                           deep, standoff);
+                           deep, standoff, liftUnderbust);
         if (solved.OpenEdgeFitted > 0)
             log?.Invoke($"fitted: {solved.OpenEdgeFitted} cloth points below an open skin edge read against the body the "
                         + "garment was made on");
@@ -876,7 +880,7 @@ internal static partial class BodyRetarget
                                  XivLiveMesh.SkinnedMesh? garmentSkin = null, string? swapSlot = null,
                                  IReadOnlySet<int>? swapMeshes = null, string? chestSlot = null,
                                  Action<string, Vec3[]>? trace = null, Outfit? outfit = null, bool deepClear = false,
-                                 bool keepStandoff = false)
+                                 bool keepStandoff = false, bool liftUnderbust = true)
     {
         // With the skin replaced, the garment's OWN slot body is drawn after all — Rebuild embeds that very mesh in the
         // garment, so it is what the cloth ends up lying against. Asking for the swap is not enough: Rebuild only swaps
@@ -972,7 +976,7 @@ internal static partial class BodyRetarget
             // The underside of the breast first, every layer together; then whatever face is still through.
             // Tops only: on legs, skin facing down and forward is the crease under the belly, not a breast. A garment
             // over the chest worn in another slot — a jacket on a necklace — is one too (chestSlot).
-            if (!Tuned.NoUnderbustLift && drawn != null && (chestSlot ?? garmentSlot) == "_top")
+            if (!Tuned.NoUnderbustLift && liftUnderbust && drawn != null && (chestSlot ?? garmentSlot) == "_top")
             {
                 // The breast read off the new chest's own weights: where the swap will draw that chest, or — for a garment
                 // over it, whose chest is drawn beneath it as it is — wherever its pair carries the new chest.

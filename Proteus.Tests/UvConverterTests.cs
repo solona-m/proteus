@@ -234,9 +234,11 @@ public class UvConverterTests
     [Trait("Plan", "AC-tbse-uvmap-9")]
     public void RefitCore_layouts_share_one_sex_flag() // [AC-tbse-uvmap-9]
     {
+        // One flag for both sides, unless a refit for the other sex says the target's (cross-sex-refit): every other
+        // caller leaves targetMale null and reads both bodies as the garment's sex, as before.
         var core = RepoSource("Proteus", "Services", "AutoRefit", "RefitCore.cs");
         Assert.Contains("? BodyCorrespondence.LayoutOf(source, male) : null;", core);
-        Assert.Contains("? BodyCorrespondence.LayoutOf(body, male) : null;", core);
+        Assert.Contains("? BodyCorrespondence.LayoutOf(body, targetMale ?? male) : null;", core);
     }
 
     [Fact]
