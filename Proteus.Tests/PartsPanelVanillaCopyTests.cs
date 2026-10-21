@@ -74,10 +74,26 @@ public class PartsPanelVanillaCopyTests
         var open = Method(Panel, "private void OpenGameGear(");
         Assert.True(open.IndexOf("copyNotDrawnYet", System.StringComparison.Ordinal)
                     < open.IndexOf("OpenVanilla(", System.StringComparison.Ordinal));
-        // Forgotten when another model opens, after the flush that may itself have made a copy.
-        var reset = Method(Panel, "private void ResetForNewModel(");
-        Assert.True(reset.IndexOf("FlushPending()", System.StringComparison.Ordinal)
-                    < reset.IndexOf("copyNotDrawnYet = null", System.StringComparison.Ordinal));
+        Assert.Contains("OpenCopyNotDrawn(item.GamePath)", open);
+        // Kept across opening other models until the copy is drawn, so coming back opens the copy, never the game's
+        // piece (whose next change would be refused against the player's own copy).
+        Assert.DoesNotContain("copyNotDrawnYet", Method(Panel, "private void ResetForNewModel("));
+        Assert.Contains("copyNotDrawnYet = null", Method(Copy, "private void RedrawIfCopyEnabled("));
+        var reopen = Method(Copy, "private void OpenCopyNotDrawn(");
+        Assert.Contains("SelectMod(dir)", reopen);
+        Assert.Contains("SameFile(m.File, gamePath) && SameFile(m.GamePath, gamePath)", reopen);
+        // The live brush stays on the game path only while that copy is the model open.
+        Assert.Contains("string.Equals(modDir, copyAwaitingEnable, StringComparison.OrdinalIgnoreCase)", Copy);
+        Assert.Contains("SameFile(models[modelIndex].GamePath, copyNotDrawnYet)", Copy);
+    }
+
+    [Fact]
+    [Trait("Plan", "EDGE-vanilla-copy-on-edit-11")]
+    public void A_refusal_retried_on_every_save_is_logged_once()
+    {
+        var copy = Method(Copy, "private (string Root, bool Made)? CopyVanillaForEdit(");
+        Assert.Contains("if (refusal != lastCopyRefusal)", copy);
+        Assert.Contains("lastCopyRefusal = null;", copy);
     }
 
     [Fact]
@@ -213,7 +229,7 @@ public class PartsPanelVanillaCopyTests
         Assert.Equal(Path.Combine(@"E:\mods\Coat", "a", "b.mdl"), PartsPanel.ArmedModelFile(null, @"E:\mods\Coat", "a/b.mdl"));
         Assert.Null(PartsPanel.ArmedModelFile(null, null, "a/b.mdl"));
 
-        Assert.Contains("ArmedModelFile(vanilla?.GamePath ?? copyNotDrawnYet, ModRoot(), models[modelIndex].File)", Panel);
+        Assert.Contains("ArmedModelFile(vanilla?.GamePath ?? CopyNotDrawnOpen(), ModRoot(), models[modelIndex].File)", Panel);
     }
 
     [Fact]

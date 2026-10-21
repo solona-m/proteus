@@ -4152,7 +4152,7 @@
     "description": ""
   },
   "Parts.Vanilla.EditedCopyThere.Fmt": {
-    "message": "« {0} » contient déjà une copie modifiée de cette pièce, votre modification n'a donc pas été enregistrée. Activez ce mod dans Penumbra pour continuer à le modifier, ou supprimez-le pour repartir de celle du jeu.",
+    "message": "« {0} » contient déjà une copie modifiée de cette pièce, votre modification n'a donc pas été enregistrée. Pour continuer à modifier cette copie, ouvrez-la ici (avec le mod activé dans Penumbra) ; pour repartir de celle du jeu, supprimez le mod.",
     "description": ""
   },
   "Parts.Vanilla.ModSwitchedOff.Fmt": {

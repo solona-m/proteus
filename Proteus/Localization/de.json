@@ -4152,7 +4152,7 @@
     "description": ""
   },
   "Parts.Vanilla.EditedCopyThere.Fmt": {
-    "message": "„{0}“ enthält bereits eine bearbeitete Kopie dieses Teils, deshalb wurde deine Änderung nicht gespeichert. Schalte diese Mod in Penumbra ein, um sie weiter zu bearbeiten, oder lösche sie, um wieder beim Original des Spiels anzufangen.",
+    "message": "„{0}“ enthält bereits eine bearbeitete Kopie dieses Teils, deshalb wurde deine Änderung nicht gespeichert. Um diese Kopie weiter zu bearbeiten, öffne sie hier (mit in Penumbra eingeschalteter Mod); um wieder beim Original des Spiels anzufangen, lösche die Mod.",
     "description": ""
   },
   "Parts.Vanilla.ModSwitchedOff.Fmt": {

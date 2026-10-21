@@ -622,7 +622,7 @@ public sealed partial class PartsPanel
             bool pickParts = tool == Tool.Navigate;
             bool moving = PartTool;
             if (volume != null && brushBase != null
-                && ArmedModelFile(vanilla?.GamePath ?? copyNotDrawnYet, ModRoot(), models[modelIndex].File) is { } armed)
+                && ArmedModelFile(vanilla?.GamePath ?? CopyNotDrawnOpen(), ModRoot(), models[modelIndex].File) is { } armed)
                 liveBrush.ArmBrush(armed, brushBase, volume, ActiveRadiusMm / 1000f, showWind: tool == Tool.Wind,
                                    mirror: mirrorBrush, partOf: partOfVertexFn,
                                    lockClicked: moving ? moveClickedFn : pickParts ? tickClickedFn : lockClickedFn,
@@ -1652,7 +1652,6 @@ public sealed partial class PartsPanel
         FinishMove();
         FlushPending();
         EndLivePreview(refreshGame: true);
-        copyNotDrawnYet = null;   // after the flush, which may itself have made the copy of the piece being left
         brushChangedAt = -1;
         lastSave = null;
         brushBase = null;
@@ -1700,8 +1699,12 @@ public sealed partial class PartsPanel
     /// </summary>
     private void OpenGameGear(VanillaPick item)
     {
-        // The piece just copied, still drawn from the game until Penumbra switches its mod on: the copy is what is open.
-        if (string.Equals(copyNotDrawnYet, item.GamePath, StringComparison.OrdinalIgnoreCase)) return;
+        // The piece just copied, still drawn from the game until Penumbra switches its mod on: its copy is what opens.
+        if (string.Equals(copyNotDrawnYet, item.GamePath, StringComparison.OrdinalIgnoreCase))
+        {
+            OpenCopyNotDrawn(item.GamePath);
+            return;
+        }
         OpenVanilla(item.GamePath);
     }
 

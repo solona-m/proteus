@@ -4152,7 +4152,7 @@
     "description": ""
   },
   "Parts.Vanilla.EditedCopyThere.Fmt": {
-    "message": "“{0}”中已有此部件的已编辑副本，因此你的修改未保存。要继续编辑，请在 Penumbra 中启用该模组；要从游戏原版重新开始，请将其删除。",
+    "message": "“{0}”中已有此部件的已编辑副本，因此你的修改未保存。要继续编辑该副本，请在此处打开它（并在 Penumbra 中启用该模组）；要从游戏原版重新开始，请删除该模组。",
     "description": ""
   },
   "Parts.Vanilla.ModSwitchedOff.Fmt": {

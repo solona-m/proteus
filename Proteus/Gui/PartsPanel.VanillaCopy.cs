@@ -14,15 +14,39 @@ namespace Proteus.Gui;
 public sealed partial class PartsPanel
 {
     /// <summary>
-    /// The game path of the piece just copied while Penumbra registers and switches on its mod. Until then the
-    /// character still draws it from the game, so the live brush stays on that path, and a click on it is not taken
-    /// for a new piece to open (which would drop the copy now open). Cleared when the redraw for the copy goes out, or
-    /// when another model opens.
+    /// The game path of the piece just copied while Penumbra registers and switches on its mod (<see
+    /// cref="copyAwaitingEnable"/>). Until then the character still draws it from the game, so the live brush stays on
+    /// that path while the copy is open, and a click on it opens the copy rather than the game's piece — even after
+    /// other models were opened in between, or that click would be refused against the player's own copy. Cleared when
+    /// the redraw for the copy goes out.
     /// </summary>
     private string? copyNotDrawnYet;
 
     /// <summary>The copy's mod directory until Penumbra reports it switched on; then the character is redrawn once.</summary>
     private string? copyAwaitingEnable;
+
+    /// <summary>The last refusal logged, so one that repeats on every retry is logged once.</summary>
+    private string? lastCopyRefusal;
+
+    /// <summary>The just-copied piece's game path when it is the model open now; null otherwise.</summary>
+    private string? CopyNotDrawnOpen()
+        => copyNotDrawnYet != null && modelIndex >= 0 && modelIndex < models.Count
+           && string.Equals(modDir, copyAwaitingEnable, StringComparison.OrdinalIgnoreCase)
+           && SameFile(models[modelIndex].GamePath, copyNotDrawnYet)
+            ? copyNotDrawnYet
+            : null;
+
+    /// <summary>
+    /// A click on the just-copied piece while the character still draws it from the game: open its copy, or stay on it
+    /// when it is already open.
+    /// </summary>
+    private void OpenCopyNotDrawn(string gamePath)
+    {
+        if (CopyNotDrawnOpen() != null || copyAwaitingEnable is not { } dir) return;
+        SelectMod(dir);
+        int index = models.FindIndex(m => SameFile(m.File, gamePath) && SameFile(m.GamePath, gamePath));
+        if (index >= 0) SelectModel(index);
+    }
 
     /// <summary>
     /// A brush save on the game's own gear. Nothing to write makes no mod. On teardown nothing is made either: the
@@ -123,8 +147,6 @@ public sealed partial class PartsPanel
         writeError = null;
         ticked.Clear();
         AfterModChange(c.Root, result.Files, c.Made ? (model, record) : null);
-        // Re-opening the copy dropped what only stands until it is drawn.
-        if (c.Made) copyNotDrawnYet = piece.GamePath;
         status = written + "\n" + status;
     }
 
@@ -172,8 +194,12 @@ public sealed partial class PartsPanel
                 _ => string.Format(ps.VanillaCopyRefusedFmt, outcome.Message),
             };
             statusIsError = true;
-            log.Warning("[Proteus] parts: {0} not copied into {1}: {2} {3}", piece.GamePath, modName, outcome.Status,
-                        outcome.Message);
+            // Retried on the debounce for as long as the edit waits, so said in the log once, not every 1.5 s.
+            string refusal = $"{piece.GamePath}|{outcome.Status}|{outcome.Message}";
+            if (refusal != lastCopyRefusal)
+                log.Warning("[Proteus] parts: {0} not copied into {1}: {2} {3}", piece.GamePath, modName, outcome.Status,
+                            outcome.Message);
+            lastCopyRefusal = refusal;
             return null;
         }
 
@@ -200,6 +226,7 @@ public sealed partial class PartsPanel
         {
             compositor.ExpectOwnModEdit(outcome.Dir);
         }
+        lastCopyRefusal = null;
         log.Information("[Proteus] parts: copied {0} into {1} on its first edit", piece.GamePath, outcome.Dir);
         status = string.Format(ps.VanillaCopiedFmt, piece.Label, modName);
         statusIsError = false;

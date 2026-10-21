@@ -4152,7 +4152,7 @@
     "description": "{0} is the item; {1} is the mod it was copied into."
   },
   "Parts.Vanilla.EditedCopyThere.Fmt": {
-    "message": "\"{0}\" already has an edited copy of this piece, so your change was not saved. Switch that mod on in Penumbra to keep editing it, or delete it to start again from the game's own.",
+    "message": "\"{0}\" already has an edited copy of this piece, so your change was not saved. To keep editing that copy, open it here (with the mod switched on in Penumbra); to start again from the game's own, delete the mod.",
     "description": "{0} is the mod's name."
   },
   "Parts.Vanilla.ModSwitchedOff.Fmt": {

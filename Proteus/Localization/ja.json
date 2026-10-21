@@ -4152,7 +4152,7 @@
     "description": ""
   },
   "Parts.Vanilla.EditedCopyThere.Fmt": {
-    "message": "「{0}」にはこのパーツの編集済みコピーがすでにあるため、変更は保存されませんでした。編集を続けるにはPenumbraでそのModをオンにしてください。ゲーム本来の状態からやり直すには削除してください。",
+    "message": "「{0}」にはこのパーツの編集済みコピーがすでにあるため、変更は保存されませんでした。そのコピーの編集を続けるには、ここでそれを開いてください（PenumbraでそのModをオンにした状態で）。ゲーム本来の状態からやり直すには、そのModを削除してください。",
     "description": ""
   },
   "Parts.Vanilla.ModSwitchedOff.Fmt": {

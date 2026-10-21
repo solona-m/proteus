@@ -2605,8 +2605,8 @@ public sealed class PartsStrings
 
     /// <summary>{0} is the mod's name.</summary>
     public readonly string VanillaEditedCopyThereFmt = Loc.Localize("Parts.Vanilla.EditedCopyThere.Fmt",
-        "\"{0}\" already has an edited copy of this piece, so your change was not saved. Switch that mod on in "
-      + "Penumbra to keep editing it, or delete it to start again from the game's own.");
+        "\"{0}\" already has an edited copy of this piece, so your change was not saved. To keep editing that copy, "
+      + "open it here (with the mod switched on in Penumbra); to start again from the game's own, delete the mod.");
 
     /// <summary>{0} is the mod's name.</summary>
     public readonly string VanillaModSwitchedOffFmt = Loc.Localize("Parts.Vanilla.ModSwitchedOff.Fmt",

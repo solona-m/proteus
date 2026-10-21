@@ -4152,7 +4152,7 @@
     "description": ""
   },
   "Parts.Vanilla.EditedCopyThere.Fmt": {
-    "message": "\"{0}\"에 이 부위의 편집된 사본이 이미 있어 변경 내용이 저장되지 않았습니다. 계속 편집하려면 Penumbra에서 그 모드를 켜고, 게임 원본부터 다시 시작하려면 삭제하세요.",
+    "message": "\"{0}\"에 이 부위의 편집된 사본이 이미 있어 변경 내용이 저장되지 않았습니다. 그 사본을 계속 편집하려면 여기에서 여세요(Penumbra에서 그 모드를 켠 상태로). 게임 원본부터 다시 시작하려면 그 모드를 삭제하세요.",
     "description": ""
   },
   "Parts.Vanilla.ModSwitchedOff.Fmt": {

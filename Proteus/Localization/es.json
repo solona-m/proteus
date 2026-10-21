@@ -4152,7 +4152,7 @@
     "description": ""
   },
   "Parts.Vanilla.EditedCopyThere.Fmt": {
-    "message": "«{0}» ya tiene una copia editada de esta pieza, así que tu cambio no se ha guardado. Activa ese mod en Penumbra para seguir editándolo, o bórralo para empezar de nuevo desde la del juego.",
+    "message": "«{0}» ya tiene una copia editada de esta pieza, así que tu cambio no se ha guardado. Para seguir editando esa copia, ábrela aquí (con el mod activado en Penumbra); para empezar de nuevo desde la del juego, borra el mod.",
     "description": ""
   },
   "Parts.Vanilla.ModSwitchedOff.Fmt": {
