@@ -74,7 +74,7 @@ Pick a mod, then one of its models. The tab opens on the chest piece you're wear
 
 The tools are on the left and the chosen tool's settings beside them, with the model's parts behind a button at the top of the settings: click it to open the part list as a column beside them, pushing the model right so it stays in view. Tick **Show model view** for a third column with the model on the right.
 
-**Vanilla gear** you're wearing is listed too, marked *(vanilla)*. The game's own gear has no mod file to edit, so opening it copies it into a new mod, which looks exactly like the original until you change it. Every tool works on that copy. With **Body size** chosen, a vanilla piece opens to be refitted instead, see [Body size](#body-size).
+**Vanilla gear** you're wearing is listed too, marked *(vanilla)*. It opens as it is, under every tool, and nothing is saved until you change it: your first change copies it into a mod of its own named after the item, *<Item> — Proteus edit*, and later changes go there too. Delete that mod in Penumbra and it stays gone; opening the piece again doesn't bring it back. With **Body size** chosen, saving a refit makes a mod of its own instead, see [Body size](#body-size).
 
 The tools:
 

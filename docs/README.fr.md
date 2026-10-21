@@ -75,7 +75,7 @@ Choisissez un mod, puis l'un de ses modèles. L'onglet s'ouvre sur la pièce de 
 
 Les outils sont à gauche et les réglages de l'outil choisi à côté, avec les pièces du modèle derrière un bouton en haut des réglages : un clic ouvre la liste des pièces en colonne à côté, et pousse le modèle vers la droite pour qu'il reste visible. Cochez **Afficher le modèle** pour une troisième colonne avec le modèle à droite.
 
-**L'équipement vanilla** que vous portez est aussi listé, marqué *(vanilla)*. L'équipement d'origine du jeu n'a pas de fichier de mod à modifier, donc l'ouvrir le copie dans un nouveau mod, identique à l'original tant que vous ne le changez pas. Tous les outils fonctionnent sur cette copie. Avec **Taille du corps** choisi, une pièce vanilla s'ouvre plutôt pour être réajustée, voir [Taille de corps](#taille-de-corps).
+**L'équipement vanilla** que vous portez est aussi listé, marqué *(vanilla)*. Il s'ouvre tel quel avec n'importe quel outil, et rien n'est enregistré tant que vous ne le modifiez pas : votre première modification le copie dans un mod à part nommé d'après l'objet, *<Objet> — Proteus edit*, et les modifications suivantes y vont aussi. Supprimez ce mod dans Penumbra et il ne revient pas ; rouvrir la pièce ne le recrée pas. Avec **Taille du corps** choisi, enregistrer un réajustement crée plutôt un mod à part, voir [Taille de corps](#taille-de-corps).
 
 Les outils :
 

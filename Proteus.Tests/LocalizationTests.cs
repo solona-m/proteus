@@ -955,4 +955,61 @@ public sealed class LocalizationTests
             Assert.Contains("partly inside out is still fitted", readme);
         }
     }
+
+    /// <summary>The game's own gear is copied by its first change, not by opening it: every language says so in its
+    /// own words, and nothing is left of the strings for copying on open.</summary>
+    [Theory]
+    [MemberData(nameof(Translations))]
+    [Trait("Plan", "AC-vanilla-copy-on-edit-10")]
+    public void VanillaCopy_strings_are_translated_not_copied(string lang)
+    {
+        var en = Load(Source);
+        var tr = Load(lang);
+        foreach (var key in new[]
+                 {
+                     "Parts.Vanilla.Worn.Tip", "Parts.Vanilla.CopyNote.Fmt", "Parts.Vanilla.Copied.Fmt",
+                     "Parts.Vanilla.EditedCopyThere.Fmt", "Parts.Vanilla.ModSwitchedOff.Fmt",
+                     "Parts.Vanilla.CopyRefused.Fmt", "Parts.Vanilla.NotRefittable", "Parts.Vanilla.CopyRegistering",
+                 })
+        {
+            Assert.True(tr.ContainsKey(key), $"{lang} lacks {key}");
+            Assert.NotEqual(en[key].Message, tr[key].Message);
+        }
+        foreach (var gone in new[] { "Parts.Vanilla.Editing.Fmt", "Parts.Vanilla.EditTool.Tip" })
+        {
+            Assert.False(en.ContainsKey(gone), $"en still has {gone}");
+            Assert.False(tr.ContainsKey(gone), $"{lang} still has {gone}");
+        }
+        Assert.DoesNotContain("Opening it copies it", en["Parts.Vanilla.Worn.Tip"].Message);
+    }
+
+    /// <summary>Each README's vanilla-gear paragraph says it opens as it is and is copied by the first change, into a mod
+    /// named "… — Proteus edit"; none still says opening it copies it.</summary>
+    [Theory]
+    [MemberData(nameof(AllLocales))]
+    [Trait("Plan", "AC-vanilla-copy-on-edit-10")]
+    public void Readme_says_vanilla_gear_is_copied_by_its_first_change(string lang)
+    {
+        var dir = new System.IO.DirectoryInfo(AppContext.BaseDirectory);
+        while (dir != null && !System.IO.File.Exists(System.IO.Path.Combine(dir.FullName, "proteus.slnx"))) dir = dir.Parent;
+        Assert.True(dir != null, $"Could not find proteus.slnx above {AppContext.BaseDirectory}.");
+        string readme = System.IO.File.ReadAllText(System.IO.Path.Combine(
+            dir!.FullName, lang == Source ? "README.md" : System.IO.Path.Combine("docs", $"README.{lang}.md")));
+        string paragraph = readme.Split('\n').Single(l => l.Contains(ReadmeVanillaOpensAsIs[lang].Now));
+        Assert.Contains("— Proteus edit*", paragraph);
+        Assert.DoesNotContain(ReadmeVanillaOpensAsIs[lang].Old, readme);
+    }
+
+    /// <summary>What each README's vanilla-gear paragraph says now, and the phrase it used for copying on open.</summary>
+    private static readonly Dictionary<string, (string Now, string Old)> ReadmeVanillaOpensAsIs = new()
+    {
+        ["en"] = ("nothing is saved until you change it", "so opening it copies it into a new mod"),
+        ["de"] = ("nichts wird gespeichert, bis du etwas änderst", "also wird sie beim Öffnen in einen neuen Mod kopiert"),
+        ["es"] = ("no se guarda nada hasta que lo cambias", "así que al abrirlo se copia en un mod nuevo"),
+        ["fr"] = ("rien n'est enregistré tant que vous ne le modifiez pas", "donc l'ouvrir le copie dans un nouveau mod"),
+        ["ja"] = ("変更するまで何も保存されません", "開くと新しいMODにコピーされます"),
+        ["ko"] = ("바꾸기 전까지는 아무것도 저장되지 않습니다", "열면 새 모드로 복사됩니다"),
+        ["ru"] = ("ничего не сохраняется, пока вы его не измените", "поэтому при открытии оно копируется в новый мод"),
+        ["zh"] = ("在你改动之前不会保存任何内容", "因此打开它会把它复制进一个新模组"),
+    };
 }

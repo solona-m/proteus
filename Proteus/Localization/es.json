@@ -4132,23 +4132,43 @@
     "description": ""
   },
   "Parts.Vanilla.Worn.Tip": {
-    "message": "Puesto pero sin mod. Al abrirlo se copia en un mod nuevo que puedes editar. Con «Talla del cuerpo» seleccionada, se abre para ajustarlo.",
-    "description": ""
-  },
-  "Parts.Vanilla.Editing.Fmt": {
-    "message": "{0} está abierto en el mod \"{1}\", una copia del original del juego que se ve igual hasta que lo cambies.",
+    "message": "Puesto, sin mod. Se abre tal cual y no se guarda nada hasta que lo cambies: tu primer cambio lo copia a un mod propio.",
     "description": ""
   },
   "Parts.Vanilla.ModDescription.Fmt": {
     "message": "{0}, copiado del juego por Proteus para editarlo.",
     "description": ""
   },
-  "Parts.Vanilla.EditTool.Tip": {
-    "message": "El equipo vanilla no tiene archivo de mod, así que elegir esto primero lo copia en un mod nuevo.",
-    "description": ""
-  },
   "Parts.Vanilla.WornSuffix": {
     "message": "(vanilla)",
+    "description": ""
+  },
+  "Parts.Vanilla.CopyNote.Fmt": {
+    "message": "Aún no se ha guardado nada. Tu primer cambio copia esto al mod «{0}».",
+    "description": ""
+  },
+  "Parts.Vanilla.Copied.Fmt": {
+    "message": "{0} se ha copiado al mod «{1}» con tu cambio.",
+    "description": ""
+  },
+  "Parts.Vanilla.EditedCopyThere.Fmt": {
+    "message": "«{0}» ya tiene una copia editada de esta pieza, así que tu cambio no se ha guardado. Para seguir editando esa copia, ábrela aquí (con el mod activado en Penumbra); para empezar de nuevo desde la del juego, borra el mod.",
+    "description": ""
+  },
+  "Parts.Vanilla.ModSwitchedOff.Fmt": {
+    "message": "«{0}» está desactivado, así que tu cambio no se ha guardado en él. Actívalo en Penumbra, o bórralo para empezar de nuevo.",
+    "description": ""
+  },
+  "Parts.Vanilla.CopyRefused.Fmt": {
+    "message": "No se ha podido guardar tu cambio, así que no se ha copiado nada: {0}",
+    "description": ""
+  },
+  "Parts.Vanilla.CopyRegistering": {
+    "message": "Tu edición se acaba de copiar a un mod nuevo y Penumbra aún lo está preparando. Vuelve a intentarlo en un momento.",
+    "description": ""
+  },
+  "Parts.Vanilla.NotRefittable": {
+    "message": "«Talla del cuerpo» no puede reajustar esta pieza. Elige otra herramienta para editarla.",
     "description": ""
   },
   "WhatsNew.HairPort.Head": {
