@@ -79,6 +79,45 @@ public sealed class HairPortModsLocalTests(ITestOutputHelper o)
         Assert.True(rows.Average(r => r.Median) < 0.015, $"ports land {rows.Average(r => r.Median) * 1000:F1} mm from the authors' on average");
     }
 
+    /// <summary>
+    /// Installed hair mods that give the source race its skeleton in an option of another group than the model's ([SME]
+    /// Vale: models in "Models:", the h0178 → 127 entry in "Textures + Core Files"): their ports move with that skeleton,
+    /// and none is refused for bones the target race lacks.
+    /// </summary>
+    [LocalDataFact(LocalData.Mods, LocalData.GameData)]
+    [Trait("Plan", "EDGE-hair-race-port-6")]
+    public void A_skeleton_entry_in_another_group_ports_installed_mods()
+    {
+        var game = HairPortLocalTests.Load();
+        var refused = new List<string>();
+        int ported = 0;
+        foreach (var modRoot in Directory.EnumerateDirectories(LocalData.Path(LocalData.Mods)))
+        {
+            if (HairPortPlan.ReadOwners(modRoot) is not { } owners) continue;
+            var defaults = owners.FirstOrDefault(w => w.IsDefault);
+            foreach (var owner in owners.Where(w => !w.IsCombining))
+                foreach (var (path, rel) in owner.Files)
+                {
+                    if (HairPortPlan.IsPortFile(rel) || HairPortPlan.Parse(path) is not { } at) continue;
+                    if (HairPortPlan.SourceEst(owner, defaults, at.Race, at.Id) != null
+                        || HairPortPlan.SourceEst(owner, defaults, at.Race, at.Id, owners) is not { } est) continue;
+                    var plan = HairPortBuilder.Build(modRoot, path, HairPortPlan.SameGenderRaces(at.Race), game.Pbd, game.File,
+                                                     withSharers: false);
+                    foreach (var w in plan.Writes)
+                        o.WriteLine($"{Path.GetFileName(modRoot)} | {owner.Group} / {owner.Option} | h{at.Id:D4} (skeleton {est})"
+                                    + $" -> {w.TargetGamePath}: entry {w.Est}, carried from {w.SkeletonFrom}");
+                    ported += plan.Writes.Count + plan.Current.Count;
+                    foreach (var (to, why) in plan.Refused)
+                    {
+                        o.WriteLine($"{Path.GetFileName(modRoot)} | h{at.Id:D4} -> c{to:D4} REFUSED {why}");
+                        if (why.Contains("j_ex_", StringComparison.Ordinal)) refused.Add($"{Path.GetFileName(modRoot)} c{to:D4}: {why}");
+                    }
+                }
+        }
+        Assert.True(ported > 0, "no installed hair mod gives its skeleton in another group");
+        Assert.Empty(refused);
+    }
+
     private static Row? Compare(HairPortLocalTests.Game game, string modRoot, IReadOnlyList<HairPortPlan.Owner> owners,
                                 HairPortPlan.Owner owner, int id, ushort from, ushort to, byte[] src, byte[] theirs,
                                 bool lm)

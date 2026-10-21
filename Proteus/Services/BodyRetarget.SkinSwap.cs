@@ -120,11 +120,15 @@ internal static partial class BodyRetarget
     /// <param name="carryPiercings">Bring the new body's piercings in with its skin, as its nails always are (see
     /// <see cref="AdornmentsOf"/>). Off, the default, carries none, and the garment's own piercings are left as they were
     /// before build 1147: dropped with the old body's extras across body mods, kept within one.</param>
+    /// <param name="parted">With <paramref name="swapMeshes"/> null, the skin meshes the solver parted the cloth from
+    /// anyway, judged on the bodies it was made on: each is swapped wherever any of it lies on a new body, even when, laid,
+    /// some of it reaches past that body's edge — skin of the old body that the new one draws in another slot. Every
+    /// other mesh is judged here as before. Null for none.</param>
     /// <returns>The rebuilt model, or null when there was nothing to change.</returns>
     internal static byte[]? Rebuild(byte[] garment, IReadOnlyList<SlotPair> pairs, bool swapSkin, WeightPlan? weights,
                                     out SwapReport report, bool cutHidden = true, bool acrossBodies = false,
                                     IReadOnlySet<int>? swapMeshes = null, string? tuckSlot = null,
-                                    bool carryPiercings = false)
+                                    bool carryPiercings = false, IReadOnlySet<int>? parted = null)
     {
         report = default;
         var swappable = swapSkin ? pairs.Where(p => p.Swaps).ToList() : [];
@@ -154,6 +158,8 @@ internal static partial class BodyRetarget
             // "On" here allows the millimetres a laid point can miss the body by — see OnBody. The Pioneer's Bottoms'
             // waist strip is 38 vertices, and two of its corners landed 6 mm off Rue+'s hip: 94.7% within 2 mm, so the
             // vanilla strip was kept over the new body. The posed foot this guards against stands centimetres off.
+            // Except a mesh the solver parted (parted), already judged whole on the bodies it was made on: the old body's
+            // legs can reach higher up the waist than the new one's, and laid there its top is off the new legs.
             int best = -1;
             float bestShare = 0f;
             int onAny = verts.Count(v => surfaces.Any(s => OnBody(s, At(model, v))));
@@ -164,7 +170,7 @@ internal static partial class BodyRetarget
                 if (share > bestShare) { bestShare = share; best = s; }
             }
             bool partlyOff = swapMeshes != null ? !swapMeshes.Contains(mesh.Key)
-                           : verts.Count > 0 && onAny < verts.Count * OnBodyShare;
+                           : parted?.Contains(mesh.Key) != true && verts.Count > 0 && onAny < verts.Count * OnBodyShare;
             if (partlyOff)
             {
                 // Some of it is the body's and some is not: the whole mesh stays, since half a mesh cannot be swapped.

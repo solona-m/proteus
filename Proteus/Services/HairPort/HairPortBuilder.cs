@@ -272,7 +272,8 @@ internal static class HairPortBuilder
     /// data): then that skeleton is the one the port is checked against, and nothing is carried. The record tells an
     /// entry this port added before — remade, it is carried again — from the author's. The mod's entries only: what the
     /// game's table gives a race without them, and so what a port really moves with, is
-    /// <see cref="HairPortSkeleton.Choose"/>'s.
+    /// <see cref="HairPortSkeleton.Choose"/>'s — which also takes the source's entry from the mod's other groups
+    /// (<see cref="HairPortPlan.SourceEst"/>); this reads the port's place and the default data alone.
     /// </summary>
     /// <returns>The skeleton to check the bones against (0: none the mod names), and the entry to carry (0: none).</returns>
     /// <param name="defaultsOurs">The skeleton a port of ours in the default data carries for the same target (0 for
