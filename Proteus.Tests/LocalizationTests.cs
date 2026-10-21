@@ -731,7 +731,9 @@ public sealed class LocalizationTests
         var en = Load(Source);
         var tr = Load(lang);
         var keys = en.Keys.Where(k => k.StartsWith("Parts.Retarget.Race.", StringComparison.Ordinal)).ToList();
-        Assert.Equal(28, keys.Count);   // 23, and cross-sex-refit's five (OtherSex, CrossSexNote, CrossSexWears, CrossSexQuality, CrossSexHint)
+        // 23, cross-sex-refit's five (OtherSex, CrossSexNote, CrossSexWears, CrossSexQuality, CrossSexHint) and
+        // cross-sex-tops-yas's four (CrossSexFolded, BonesMoved, NeedsSkeleton, RenameFailed)
+        Assert.Equal(32, keys.Count);
         foreach (string key in keys)
         {
             Assert.True(tr.ContainsKey(key), $"[{lang}] has no {key}");
@@ -894,17 +896,24 @@ public sealed class LocalizationTests
     [Theory]
     [MemberData(nameof(Translations))]
     [Trait("Plan", "AC-cross-sex-refit-9")]
-    public void Cross_sex_strings_exist_and_are_translated_in_every_locale(string lang) // [AC-cross-sex-refit-9]
+    [Trait("Plan", "AC-cross-sex-tops-yas-10")]
+    public void Cross_sex_strings_exist_and_are_translated_in_every_locale(string lang) // [AC-cross-sex-refit-9] [AC-cross-sex-tops-yas-10]
     {
         var en = Load(Source);
         var tr = Load(lang);
+        // Nothing is refused for folds any more (cross-sex-tops-yas): the strings that said so are gone.
+        Assert.False(tr.ContainsKey("Parts.Retarget.Refuse.CrossSexQuality.Fmt"));
+        Assert.False(tr.ContainsKey("HairPort.Refused.Folded.Fmt"));
         foreach (string key in new[]
                  {
                      "Parts.Retarget.Race.OtherSex.Fmt", "Parts.Retarget.Race.CrossSexNote.Fmt",
                      "Parts.Retarget.Race.CrossSexWears.Fmt", "Parts.Retarget.Race.CrossSexQuality.Fmt",
                      "Parts.Retarget.Race.CrossSexHint.Fmt", "Parts.Retarget.Refuse.CrossSexMadeFor.Fmt",
-                     "Parts.Retarget.Refuse.CrossSexQuality.Fmt", "Parts.Retarget.Refuse.CrossSexLayout.Fmt",
+                     "Parts.Retarget.Refuse.CrossSexCoverage.Fmt", "Parts.Retarget.Refuse.CrossSexLayout.Fmt",
                      "Parts.Retarget.Refuse.MenMapsMissing", "Parts.Retarget.Race.Tip", "Parts.Retarget.NoBodiesForSex.Fmt",
+                     "Parts.Retarget.Race.CrossSexFolded.Fmt", "Parts.Retarget.Race.BonesMoved.Fmt",
+                     "Parts.Retarget.Race.NeedsSkeleton.Fmt", "Parts.Retarget.Race.RenameFailed.Fmt",
+                     "HairPort.Folded.Fmt", "HairPort.Scan.State.FittedWarn.Fmt",
                  })
         {
             Assert.True(tr.ContainsKey(key), $"[{lang}] has no {key}");
@@ -921,7 +930,8 @@ public sealed class LocalizationTests
     [Theory]
     [MemberData(nameof(AllLocales))]
     [Trait("Plan", "AC-cross-sex-refit-9")]
-    public void Readme_describes_cross_sex_refit(string lang) // [AC-cross-sex-refit-9]
+    [Trait("Plan", "AC-cross-sex-tops-yas-10")]
+    public void Readme_describes_cross_sex_refit(string lang) // [AC-cross-sex-refit-9] [AC-cross-sex-tops-yas-10]
     {
         var dir = new System.IO.DirectoryInfo(AppContext.BaseDirectory);
         while (dir != null && !System.IO.File.Exists(System.IO.Path.Combine(dir.FullName, "proteus.slnx"))) dir = dir.Parent;
@@ -931,8 +941,75 @@ public sealed class LocalizationTests
         var strings = Load(lang);
         string label = "**" + strings["Parts.Retarget.Race.Label"].Message + "**";
         var lines = readme.Split('\n');
-        Assert.Contains(lines, l => l.StartsWith("- ", StringComparison.Ordinal) && l.Contains(label) && l.Contains("bibo↔TBSE")
-                                    && l.Contains("YAS"));
+        Assert.Contains(lines, l => l.StartsWith("- ", StringComparison.Ordinal) && l.Contains(label) && l.Contains("bibo↔TBSE"));
+        // A garment rigged to YAS is refitted for men, its missing bones moved (cross-sex-tops-yas), under its own bullet.
+        Assert.Contains(lines, l => l.StartsWith("- **", StringComparison.Ordinal) && l.Contains(label) && l.Contains("YAS")
+                                    && l.Contains("IVCS") && !l.Contains("bibo↔TBSE"));
         Assert.DoesNotContain("never refitted onto each other", readme);
+        if (lang == Source)
+        {
+            Assert.DoesNotContain("aren't offered for men", readme);
+            Assert.DoesNotContain("refused for men", readme);
+            Assert.DoesNotContain("too many folded faces", readme);
+            Assert.Contains("never refused for folded faces", readme);
+            Assert.Contains("partly inside out is still fitted", readme);
+        }
     }
+
+    /// <summary>The game's own gear is copied by its first change, not by opening it: every language says so in its
+    /// own words, and nothing is left of the strings for copying on open.</summary>
+    [Theory]
+    [MemberData(nameof(Translations))]
+    [Trait("Plan", "AC-vanilla-copy-on-edit-10")]
+    public void VanillaCopy_strings_are_translated_not_copied(string lang)
+    {
+        var en = Load(Source);
+        var tr = Load(lang);
+        foreach (var key in new[]
+                 {
+                     "Parts.Vanilla.Worn.Tip", "Parts.Vanilla.CopyNote.Fmt", "Parts.Vanilla.Copied.Fmt",
+                     "Parts.Vanilla.EditedCopyThere.Fmt", "Parts.Vanilla.ModSwitchedOff.Fmt",
+                     "Parts.Vanilla.CopyRefused.Fmt", "Parts.Vanilla.NotRefittable", "Parts.Vanilla.CopyRegistering",
+                 })
+        {
+            Assert.True(tr.ContainsKey(key), $"{lang} lacks {key}");
+            Assert.NotEqual(en[key].Message, tr[key].Message);
+        }
+        foreach (var gone in new[] { "Parts.Vanilla.Editing.Fmt", "Parts.Vanilla.EditTool.Tip" })
+        {
+            Assert.False(en.ContainsKey(gone), $"en still has {gone}");
+            Assert.False(tr.ContainsKey(gone), $"{lang} still has {gone}");
+        }
+        Assert.DoesNotContain("Opening it copies it", en["Parts.Vanilla.Worn.Tip"].Message);
+    }
+
+    /// <summary>Each README's vanilla-gear paragraph says it opens as it is and is copied by the first change, into a mod
+    /// named "… — Proteus edit"; none still says opening it copies it.</summary>
+    [Theory]
+    [MemberData(nameof(AllLocales))]
+    [Trait("Plan", "AC-vanilla-copy-on-edit-10")]
+    public void Readme_says_vanilla_gear_is_copied_by_its_first_change(string lang)
+    {
+        var dir = new System.IO.DirectoryInfo(AppContext.BaseDirectory);
+        while (dir != null && !System.IO.File.Exists(System.IO.Path.Combine(dir.FullName, "proteus.slnx"))) dir = dir.Parent;
+        Assert.True(dir != null, $"Could not find proteus.slnx above {AppContext.BaseDirectory}.");
+        string readme = System.IO.File.ReadAllText(System.IO.Path.Combine(
+            dir!.FullName, lang == Source ? "README.md" : System.IO.Path.Combine("docs", $"README.{lang}.md")));
+        string paragraph = readme.Split('\n').Single(l => l.Contains(ReadmeVanillaOpensAsIs[lang].Now));
+        Assert.Contains("— Proteus edit*", paragraph);
+        Assert.DoesNotContain(ReadmeVanillaOpensAsIs[lang].Old, readme);
+    }
+
+    /// <summary>What each README's vanilla-gear paragraph says now, and the phrase it used for copying on open.</summary>
+    private static readonly Dictionary<string, (string Now, string Old)> ReadmeVanillaOpensAsIs = new()
+    {
+        ["en"] = ("nothing is saved until you change it", "so opening it copies it into a new mod"),
+        ["de"] = ("nichts wird gespeichert, bis du etwas änderst", "also wird sie beim Öffnen in einen neuen Mod kopiert"),
+        ["es"] = ("no se guarda nada hasta que lo cambias", "así que al abrirlo se copia en un mod nuevo"),
+        ["fr"] = ("rien n'est enregistré tant que vous ne le modifiez pas", "donc l'ouvrir le copie dans un nouveau mod"),
+        ["ja"] = ("変更するまで何も保存されません", "開くと新しいMODにコピーされます"),
+        ["ko"] = ("바꾸기 전까지는 아무것도 저장되지 않습니다", "열면 새 모드로 복사됩니다"),
+        ["ru"] = ("ничего не сохраняется, пока вы его не измените", "поэтому при открытии оно копируется в новый мод"),
+        ["zh"] = ("在你改动之前不会保存任何内容", "因此打开它会把它复制进一个新模组"),
+    };
 }

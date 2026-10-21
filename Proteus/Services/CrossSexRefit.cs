@@ -26,13 +26,13 @@ internal static class CrossSexRefit
     /// The directions and slots that ship: each was measured against the quality gates on a real garment
     /// (CrossSexRefitLocalTests). A cell left out is not offered anywhere.
     /// <para/>
-    /// Not a women's top made a men's: flattening a bust onto a pec turned 115 of Sheer Elegance's 10,436 cloth faces
-    /// over, against 8 for the same top between women's bodies, and nothing in the refit brought it under 100 (measured
-    /// 2026-10-20). A turned-over face is a hole in game.
+    /// A women's top made a men's turns more of its cloth over than any other — flattening a bust onto a pec, Sheer
+    /// Elegance's turned 115 of its 10,436 cloth faces, against 8 between women's bodies (measured 2026-10-20) — and is
+    /// offered all the same: the folds are said, in the warning colour, never a reason to refuse.
     /// </summary>
     private static readonly HashSet<(ushort From, ushort To, string Slot)> Cells =
     [
-        (Women, Men, "_dwn"),
+        (Women, Men, "_top"), (Women, Men, "_dwn"),
         (Men, Women, "_top"), (Men, Women, "_dwn"),
     ];
 
@@ -111,22 +111,31 @@ internal static class CrossSexRefit
     }
 
     /// <summary>
-    /// Whether a refit from <paramref name="drawn"/> for <paramref name="to"/> lifts the cloth under the new breasts:
-    /// not for a men's top made a women's (see <c>BodyRetarget.Plan</c>'s liftUnderbust), every other refit as before.
+    /// Whether a refit from <paramref name="drawn"/> for <paramref name="to"/> lifts the cloth under the new breasts: never
+    /// across the sexes (see <c>BodyRetarget.Plan</c>'s liftUnderbust), every other refit as before. Measured both ways:
+    /// a men's top made a women's folds 8 faces without it, 13 with (Lumberjack); a women's top made a men's 101 without,
+    /// 115 with, and clips no more (Sheer Elegance, 2026-10-21) — a man's chest has no breast, but the lift still seeds
+    /// over every skin face that looks down and forward.
     /// </summary>
-    internal static bool LiftsUnderbust(ushort drawn, ushort to) => !(CrossesSex(drawn, to) && IsMale(drawn) && !IsMale(to));
+    internal static bool LiftsUnderbust(ushort drawn, ushort to) => !CrossesSex(drawn, to);
 
     /// <summary>
     /// The usage error for a CLI <c>--for-race</c> run, or null when it may run. <paramref name="given"/> holds every
     /// option given on the command line.
     /// </summary>
-    internal static string? ValidateCli(string? race, string? forRace, string slot, IReadOnlyCollection<string> given)
+    /// <param name="fromSkeleton">The <c>--from-skeleton</c> file, when given: one that is not there would be passed over
+    /// for the game's skeleton, and the run would then ask for it.</param>
+    /// <param name="exists">Whether a file exists (the disk's, by default).</param>
+    internal static string? ValidateCli(string? race, string? forRace, string slot, IReadOnlyCollection<string> given,
+                                        string? fromSkeleton = null, Func<string, bool>? exists = null)
     {
+        if (fromSkeleton != null && !(exists ?? System.IO.File.Exists)(fromSkeleton))
+            return $"--from-skeleton names no file: \"{fromSkeleton}\"";
         if (!ushort.TryParse(race, out ushort from) || !ushort.TryParse(forRace, out ushort to)
             || !(from is Men or Women && to is Men or Women) || !CrossesSex(from, to))
             return "--for-race crosses the sexes between 0101 and 0201 only";
         if (!Supported(from, to, slot))
-            return "--for-race refits men's chest (_top) and legs (_dwn) garments for women, and women's legs (_dwn) garments for men";
+            return "--for-race refits chest (_top) and legs (_dwn) garments only";
         if (!given.Contains("game") || !given.Contains("uvmaps") || !given.Contains("from-root"))
             return "--for-race needs --game, --uvmaps and --from-root";
         if (new[] { "legs", "legs-to", "chest-from", "chest-to", "finish", "detect", "whole", "keep-default" }.Any(given.Contains))
@@ -136,14 +145,25 @@ internal static class CrossSexRefit
     }
 
     /// <summary>
-    /// The run-time check a cross-sex refit must pass before it may be saved: its cloth folds and how much of the body
-    /// the maps matched. The gates were measured on real garments; this keeps a user's garment that comes out far worse
-    /// from being written into their mod.
+    /// The run-time check a cross-sex refit must pass before it may be saved: how much of the body the maps matched.
+    /// Under it the refit would be read against a body it barely knows. Never its folds: those are said
+    /// (<see cref="FoldLineFor"/>), and the creator decides.
     /// </summary>
-    internal static bool SaveAllowed(int folds, double coverage) => folds <= MaxFolds && coverage >= MinCoverage;
+    internal static bool CoverageAllowed(double coverage) => coverage >= MinCoverage;
 
-    internal const int MaxFolds = 25;
     internal const double MinCoverage = 0.9;
+
+    internal enum FoldLine { None, Report, CrossSex }
+
+    /// <summary>
+    /// Which fold line a refit shows: across the sexes, the cloth faces it turned over (<see cref="ClothFolded(byte[], BodyRetarget.Planned, Action{string}?)"/>),
+    /// said as holes in game; otherwise, or with none of those, the refit's own count of faces left turned over.
+    /// One line, so two different counts never stand together.
+    /// </summary>
+    internal static FoldLine FoldLineFor(bool crossSex, int clothFolded, int reportFolded)
+        => crossSex && clothFolded > 0 ? FoldLine.CrossSex
+         : reportFolded > 0 ? FoldLine.Report
+         : FoldLine.None;
 
     /// <summary>
     /// Cloth faces of 1 mm² or more that a refit turned over: <paramref name="garment"/> as it went in against the same

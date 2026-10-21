@@ -65,11 +65,10 @@ public class SkinlessTargetCensusLocalTests(ITestOutputHelper output)
                         accepted++;
                         output.WriteLine($"ACCEPTED NOW  {name}: {m.VertexCoverage:P1}, excused {m.Excused}, unprojected " +
                                          $"{m.Unprojected}, on skin {m.OnSkin}, folded elsewhere {m.FoldedElsewhere}");
-                        // The runtime's own bound (each such point within CarriedOnlyReach of the body, or refused):
-                        // Elegy's "bjubjue" bottoms onto Bibo+'s SFW undies leave 22 of 2,087 (1.05%), measured
-                        // 2026-10-20, over the 1% Muse+ itself keeps to (0).
-                        Assert.True(m.Unprojected <= UvAtlasCorrespondence.MaxUnprojectedShare * m.Excused,
-                                    $"{name}: {m.Unprojected} of {m.Excused} unprojected");
+                        // Recorded, not judged: how many the relax kept off the body to avoid a fold is no refusal any
+                        // more (cross-sex-tops-yas), only how far off each is (CarriedOnlyReach). Elegy's "bjubjue"
+                        // bottoms onto Bibo+'s SFW undies left 22 of 2,087 (1.05%), measured 2026-10-20.
+                        output.WriteLine($"  set aside {m.FoldedSetAside} ({m.FoldedTouching} folds touching them)");
                         worstUnprojected = MathF.Max(worstUnprojected, (float)m.Unprojected / m.Excused);
                         // Folds the uv landings make by themselves, no corner excused or carried: recorded, not judged
                         // (Tre's Gen A onto Bibo+'s SFW undies: 4). The count path has never looked for them either.

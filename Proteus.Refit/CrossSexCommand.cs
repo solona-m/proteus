@@ -22,7 +22,8 @@ internal static class CrossSexCommand
     {
         string garmentPath = required(opts, "garment");
         string slot = opts.TryGetValue("slot", out var s) ? s : SlotOfFile(garmentPath) ?? "_top";
-        if (CrossSexRefit.ValidateCli(opts.GetValueOrDefault("race"), opts.GetValueOrDefault("for-race"), slot, opts.Keys)
+        if (CrossSexRefit.ValidateCli(opts.GetValueOrDefault("race"), opts.GetValueOrDefault("for-race"), slot, opts.Keys,
+                                       opts.GetValueOrDefault("from-skeleton"))
             is { } error)
         {
             usageError(error);
@@ -35,8 +36,12 @@ internal static class CrossSexCommand
         var data = new Lumina.GameData(required(opts, "game"));
         byte[]? Game(string path) => data.GetFile(path)?.Data;
         string? skeleton = opts.GetValueOrDefault("skeleton");
+        // The skeleton the garment was rigged to, for where a bone the picked race lacks hangs; the game's by default.
+        string? fromSkeleton = opts.GetValueOrDefault("from-skeleton");
         var wearer = OtherRaceWearer.Gather(to, gamePath, Game,
-            path => skeleton != null && path == OtherRaceWearer.BaseSkeletonPath(to) ? Path.GetFullPath(skeleton) : null,
+            path => skeleton != null && path == OtherRaceWearer.BaseSkeletonPath(to) ? Path.GetFullPath(skeleton)
+                  : fromSkeleton != null && path == OtherRaceWearer.BaseSkeletonPath(drawn) ? Path.GetFullPath(fromSkeleton)
+                  : null,
             _ => null, []);
 
         var madeFor = BodySizeCatalog.Read(required(opts, "from-root"));
@@ -75,35 +80,17 @@ internal static class CrossSexCommand
         foreach (var size in result.Sizes)
         {
             string label = targets[Norm(size.Target.Rel)];
-            var entry = new JsonObject
-            {
-                ["label"] = label, ["to"] = size.Target.Rel, ["folds"] = size.Folds,
-                ["coverage"] = size.Landed?.VertexCoverage ?? 0f,
-            };
-            string refusal = size.Refusal.Length > 0 ? size.Refusal
-                           : !size.SaveAllowed ? string.Format(Localization.Strings.Parts.RetargetRefuseCrossSexQualityFmt,
-                                 size.Folds, $"{size.Landed?.VertexCoverage:P0}", CrossSexRefit.MaxFolds,
-                                 $"{CrossSexRefit.MinCoverage:P0}")
-                           : "";
-            if (refusal.Length > 0) entry["refusal"] = refusal;
-            else
+            string? file = null;
+            if (CrossSexRefitReport.Refusal(size) == null)
             {
                 Directory.CreateDirectory(outDir);
-                string file = Path.Combine(outDir, label + ".mdl");
+                file = Path.Combine(outDir, label + ".mdl");
                 File.WriteAllBytes(file, size.Saved!.Model);
-                entry["file"] = file;
             }
-            sizes.Add(entry);
+            sizes.Add(CrossSexRefitReport.Size(size, label, file));
         }
-        string savePath = result.Route.Any ? result.Route.SavePath(gamePath) : gamePath;
-        var report = new JsonObject
-        {
-            ["garment"] = garmentPath, ["race"] = $"{drawn:D4}", ["forRace"] = $"{to:D4}", ["eqdpRace"] = $"{to:D4}",
-            ["savePath"] = savePath, ["from"] = result.SourcePath,
-            ["note"] = $"save each model at {savePath} with an EQDP entry giving c{to:D4} a model of the set",
-            ["sizes"] = sizes,
-        };
-        if (result.Refusal.Length > 0) report["refusal"] = result.Refusal;
+        var report = CrossSexRefitReport.Report(result, garmentPath, gamePath, drawn, to, skeleton != null, sizes);
+        if (CrossSexRefitReport.WantsFromSkeleton(result.Moved)) Console.Error.WriteLine(CrossSexRefitReport.FromSkeletonHint);
         Console.WriteLine(report.ToJsonString(new JsonSerializerOptions { WriteIndented = true }));
         return 0;
     }

@@ -107,7 +107,8 @@ internal static partial class BodyRetarget
     /// onto LavaBod+'s Teardrop that left ~70 cm² of the bodice 4-24 mm inside the breasts — the top of each breast
     /// standing through it, and the neckline's skin, which cannot be drawn over buried cloth, left out. Only where the
     /// body grew: the game buries its tops' cloth 8-15 mm in its own body on purpose, and dragging that out tore the mesh
-    /// (see PushOut). Only for the game's own top in the automatic refit — the Studio writes into a modder's mod.
+    /// (see PushOut). Only for the game's own top, in the automatic refit and the Studio — never a modder's, whose refit
+    /// is written into their own mod.
     /// </summary>
     internal const float DeepClearDepth = PushProbeRange;
 
@@ -735,11 +736,11 @@ internal static partial class BodyRetarget
     /// <see cref="TuckUnderCloth"/>), or null for none: the game's own top in the automatic refit, and a top the Body
     /// size tool refits with the hidden skin cut and the body cleared.</param>
     /// <param name="deepClear">Clear a top's cloth out of the new breast from deeper than <see cref="ClearDepth"/>, where
-    /// the body grew under it (see <see cref="DeepClearDepth"/>): the game's own top in the automatic refit, never the
-    /// Studio. Only with <paramref name="clearBody"/>.</param>
+    /// the body grew under it (see <see cref="DeepClearDepth"/>): the game's own top, in the automatic refit and the
+    /// Studio, never a modder's top. Only with <paramref name="clearBody"/>.</param>
     /// <param name="keepStandoff">Bring a top's cloth the refit carried further off the new chest than its author put it
-    /// back toward the author's standoff (see <see cref="KeepStandoff"/>): the game's own top in the automatic refit, never
-    /// the Studio. Only with <paramref name="clearBody"/>.</param>
+    /// back toward the author's standoff (see <see cref="KeepStandoff"/>): the game's own top, in the automatic refit and
+    /// the Studio, never a modder's top. Only with <paramref name="clearBody"/>.</param>
     /// <param name="carryPiercings">With <paramref name="replaceSkin"/>, bring the new body's piercings in with its skin
     /// (see <see cref="Rebuild"/>). Off by default: the user asks for them.</param>
     /// <param name="liftUnderbust">Lift the cloth under the new breasts off their underside (see LiftUnderbust). Off only

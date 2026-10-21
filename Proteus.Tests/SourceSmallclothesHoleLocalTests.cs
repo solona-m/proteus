@@ -36,8 +36,13 @@ public class SourceSmallclothesHoleLocalTests(ITestOutputHelper output)
     /// <summary>The Studio's whole-garment refit, as <c>BodyRetargetPanel</c> runs it with the screenshot's settings — the
     /// new body's skin, hidden skin removed, cloth pushed out, no piercings — and no other slots or masks, as there were
     /// none: the game's body for the dress's own slot onto <paramref name="target"/>.</summary>
-    private static Studio Refit(Lumina.GameData data, string target, BodyRetarget.Tuning? tuning = null, string garmentPath = Dress)
+    /// <param name="gameGear">The Studio as it runs the game's own top since build 1355: the automatic refit's skin rule —
+    /// the body cleared, the deep clear and the standoff pass (see <see cref="RetargetInputs.StudioSkin"/>). False runs
+    /// it as the reported build did, the boxes as the screenshot shows them.</param>
+    private static Studio Refit(Lumina.GameData data, string target, BodyRetarget.Tuning? tuning = null, string garmentPath = Dress,
+                                bool gameGear = false)
     {
+        var rule = RetargetInputs.StudioSkin(replaceSkin: true, cutHidden: true, clearBody: true, gameGear, "_top", crossSex: false);
         var log = Substitute.For<Dalamud.Plugin.Services.IPluginLog>();
         var uv = new UVRemapService(log, ".");
         var vanilla = VanillaBodyCatalog.Read("0201", p => data.GetFile(p)?.Data);
@@ -51,7 +56,8 @@ public class SourceSmallclothesHoleLocalTests(ITestOutputHelper output)
         var planned = BodyRetarget.WithTuning(tuning ?? new BodyRetarget.Tuning(), () => BodyRetarget.Plan(
             garment, bytes, [pair], "_top", held: new HashSet<int>(), replaceSkin: true, acrossBodies: true,
             clearBody: true, cutHidden: true, keepShape: RefitCore.ShapePieces(garment, RefitCore.DefaultKeepShape(garment)),
-            log: lines.Add, tuckSlot: RefitCore.TuckSlot(true, "_top"), carryPiercings: false, liftUnderbust: true,
+            log: lines.Add, tuckSlot: rule.TuckSlot, deepClear: rule.DeepClear, keepStandoff: rule.KeepStandoff,
+            carryPiercings: false, liftUnderbust: true,
             trace: (stage, delta) =>
             {
                 if (stage == "lay") laid = delta;
@@ -175,6 +181,24 @@ public class SourceSmallclothesHoleLocalTests(ITestOutputHelper output)
         output.WriteLine($"folded {foldedNow} (old {foldedOld}); skin through {throughNow:0.0} cm² (old {throughOld:0.0})");
         Assert.True(foldedNow <= foldedOld, $"folded {foldedNow} against {foldedOld}");
         Assert.True(throughNow <= throughOld + 0.5, $"skin through {throughNow:0.0} cm² against {throughOld:0.0}");
+
+        // And the Studio as it now runs the game's own top, the automatic refit's way: the same, against the same way read
+        // without the bra.
+        var gameOld = Refit(data, muse, Old, gameGear: true);
+        var gameNow = Refit(data, muse, gameGear: true);
+        foreach (float x in new[] { -0.06f, 0.06f })
+            foreach (float y in new[] { 1.24f, 1.26f, 1.28f })
+            {
+                float was = Front(gameOld.Drawn, x, y), is_ = Front(gameNow.Drawn, x, y);
+                output.WriteLine($"  game-gear Studio x {x:+0.00;-0.00} y {y:0.00}: {was * 1000:0} -> {is_ * 1000:0} mm");
+                Assert.True(is_ <= was - 0.008f, $"game-gear Studio at x {x}, y {y}: {is_ * 1000:0} mm against {was * 1000:0}");
+            }
+        double gameThroughNow = VanillaGearRefitLocalTests.SkinThrough(ModelPartReader.Read(gameNow.Drawn)!);
+        double gameThroughOld = VanillaGearRefitLocalTests.SkinThrough(ModelPartReader.Read(gameOld.Drawn)!);
+        output.WriteLine($"game-gear Studio: folded {gameNow.Folded} (old {gameOld.Folded}); skin through {gameThroughNow:0.0} cm² "
+                         + $"(old {gameThroughOld:0.0})");
+        Assert.True(gameNow.Folded <= gameOld.Folded, $"folded {gameNow.Folded} against {gameOld.Folded}");
+        Assert.True(gameThroughNow <= gameThroughOld + 0.5, $"skin through {gameThroughNow:0.0} cm² against {gameThroughOld:0.0}");
     }
 
     public static TheoryData<string, string?> FullerBusts => new()
@@ -314,7 +338,7 @@ public class SourceSmallclothesHoleLocalTests(ITestOutputHelper output)
     };
 
     /// <summary>
-    /// What reading the game chest's bra costs a game top's automatic refit, by measure, as accepted (build 1349). Rue+'s
+    /// What reading the game chest's bra costs a game top's automatic refit, by measure, as accepted (build 1359). Rue+'s
     /// small chest is flatter than the game's bra and the cloth follows it in, 3-5 mm under the bust: the skin "uncovered"
     /// is skin the refit cuts away under that cloth — the nipples' tips (Scion), the midline under the bust (Dirndl) — the
     /// cloth now at or just inside where it would be, drawn over nothing. On Bibo+ one triangle of the Top of Maiming at the

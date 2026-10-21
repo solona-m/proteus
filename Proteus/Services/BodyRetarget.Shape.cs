@@ -62,7 +62,7 @@ internal static partial class BodyRetarget
     /// <param name="NoCrotchEase">Leave cloth between the legs on the legs' weights the reading gave it, as builds before
     /// 1335 did (see <see cref="EaseCrotch"/>).</param>
     /// <param name="NoSourceWorn">Read the old body as its skin alone, its underwear over a hole in that skin left out —
-    /// cloth over the game body's bra then follows the hole's rim — as builds before 1349 did (see
+    /// cloth over the game body's bra then follows the hole's rim — as builds before 1359 did (see
     /// <see cref="SmallclothesOverHoles"/>).</param>
     internal sealed record Tuning(bool NoFollow = false, bool NoOwnSkinWeights = false,
                                   float OwnSkinReach = OwnSkinReachDefault, float CopyReach = CopyReachDefault,

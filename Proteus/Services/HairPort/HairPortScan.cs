@@ -28,7 +28,9 @@ internal static class HairPortScan
     /// <summary>What a check found for one hairstyle of the player's race.</summary>
     /// <param name="ModRoot">The mod the hairstyle is fitted from, or would be.</param>
     /// <param name="TargetGamePath">The player's race's model of the hairstyle.</param>
-    /// <param name="Message">Why it was not fitted, for <see cref="RowState.Refused"/> and <see cref="RowState.Undone"/>.</param>
+    /// <param name="Message">Why it was not fitted, for <see cref="RowState.Refused"/> and <see cref="RowState.Undone"/>;
+    /// for <see cref="RowState.Fitted"/>, <see cref="RowState.Remade"/> and <see cref="RowState.AlreadyFitted"/>, what to
+    /// look at in game, if anything (<see cref="HairPortBaker.Result.Warning"/>; said again all session).</param>
     public sealed record Row(int Id, string ModRoot, string ModDir, string ModName, string TargetGamePath, RowState State,
                              string Message = "");
 
@@ -120,7 +122,7 @@ internal static class HairPortScan
                     todo.Add((id, d, key));
                     continue;
                 case HairPortWatcher.Decide.Kind.Ported:
-                    rows.Add(MakeRow(host, id, d.ModRoot!, target, RowState.AlreadyFitted));
+                    rows.Add(MakeRow(host, id, d.ModRoot!, target, RowState.AlreadyFitted, WarningFor(d.ModRoot, target)));
                     break;
                 case HairPortWatcher.Decide.Kind.None when d.ModRoot != null:
                     rows.Add(MakeRow(host, id, d.ModRoot, target, RowState.Undone, d.Message));
@@ -175,9 +177,10 @@ internal static class HairPortScan
                     written.AddRange(outcome.Writes.Select(x => x.TargetGamePath));
                     rows.Add(outcome.Stripped
                         ? MakeRow(host, id, modRoot, target, RowState.Refused, outcome.Message)
-                        : MakeRow(host, id, modRoot, target, d.Stale ? RowState.Remade : RowState.Fitted));
+                        : MakeRow(host, id, modRoot, target, d.Stale ? RowState.Remade : RowState.Fitted, outcome.Warning));
                 }
-                else if (outcome.Current) rows.Add(MakeRow(host, id, modRoot, target, RowState.AlreadyFitted));
+                else if (outcome.Current) rows.Add(MakeRow(host, id, modRoot, target, RowState.AlreadyFitted,
+                                                                   WarningFor(modRoot, target)));
                 else if (outcome.Message.Length == 0) { /* the author covers the race in a place the player has off */ }
                 else
                 {
@@ -220,8 +223,10 @@ internal static class HairPortScan
     /// <param name="Stripped">Not ported, but its old port, which could not be made again, was saved without the skeleton
     /// that changed another hairstyle (<see cref="HairPortWriter.PortWrite.Stripped"/>): <paramref name="Writes"/> are
     /// that, and <paramref name="Message"/> says why it was not ported.</param>
+    /// <param name="Warning">Saved, with something to look at in game (<see cref="HairPortBaker.Result.Warning"/>); empty
+    /// when there is nothing. Never a refusal: it is not remembered as one, and the races sharing it are ported too.</param>
     public sealed record Ported(IReadOnlyList<HairPortWriter.PortWrite> Writes, bool Current, string Message,
-                                bool Refusal = false, bool Stripped = false);
+                                bool Refusal = false, bool Stripped = false, string Warning = "");
 
     /// <summary>
     /// Port <paramref name="decision"/>'s source onto <paramref name="race"/> — and every race that would read the same
@@ -257,8 +262,44 @@ internal static class HairPortScan
                   + $"carried from {x.SkeletonFrom})");
         if (saved.All(x => x.Stripped))
             return new Ported(saved, false, plan.Refused.TryGetValue(race, out var why) ? why : "", Stripped: true);
-        return new Ported(saved, false, "");
+        string warning = plan.Warnings?.TryGetValue(race, out var warned) == true ? warned : "";
+        if (warning.Length > 0) host.Log($"c{race:D4} ported in {modDir} — {warning}");
+        RememberSaved(modRoot, saved, plan.Warnings);
+        return new Ported(saved, false, "", Warning: warning);
     }
+
+    /// <summary>
+    /// Remember, for each port saved, what it warned of — or forget what an earlier port of the same hairstyle did, when
+    /// this one warned of nothing. Every race a save wrote, sharers included; only those: a race already current and
+    /// not written keeps what it had. A port that only took an old skeleton out is no new port, and changes nothing.
+    /// </summary>
+    internal static void RememberSaved(string modRoot, IEnumerable<HairPortWriter.PortWrite> saved,
+                                       IReadOnlyDictionary<ushort, string>? warnings)
+    {
+        foreach (var w in saved)
+            if (!w.Stripped && HairPortPlan.Parse(w.TargetGamePath) is { } at)
+                RememberWarning(modRoot, w.TargetGamePath, warnings?.GetValueOrDefault(at.Race) ?? "");
+    }
+
+    /// <summary>
+    /// Ports made this session with something to look at in game, by mod and the race's hairstyle path: the next look at
+    /// the hairstyle finds it already ported, and says it again from here. For the session only — never a refusal, never
+    /// saved.
+    /// </summary>
+    private static readonly ConcurrentDictionary<string, string> Warnings = new(StringComparer.OrdinalIgnoreCase);
+
+    private static string WarningKey(string modRoot, string target) => modRoot + "|" + target;
+
+    internal static void RememberWarning(string modRoot, string target, string warning)
+    {
+        if (warning.Length > 0) Warnings[WarningKey(modRoot, target)] = warning;
+        else Warnings.TryRemove(WarningKey(modRoot, target), out _);
+    }
+
+    /// <summary>What a port made this session of <paramref name="target"/> in <paramref name="modRoot"/> warned of; "" for
+    /// none.</summary>
+    internal static string WarningFor(string? modRoot, string target)
+        => modRoot != null && Warnings.TryGetValue(WarningKey(modRoot, target), out var warning) ? warning : "";
 
     /// <summary>
     /// The chat line after a check that fitted hairstyles: which numbers, from which mods (three at most, then how many

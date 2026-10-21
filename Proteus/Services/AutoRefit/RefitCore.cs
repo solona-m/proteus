@@ -671,11 +671,24 @@ internal static partial class RefitCore
             if (back == null)
                 return (null, null, string.Format(Strings.Parts.RetargetBendBackFmt,
                                                   ModelRace.Describe($"{route.Drawn:D4}"), why));
+            SayDuplicateBones(back, log);
             return (plan with { Model = back }, null, "");
         }
         // Without the character to bend it back by, the preview is pushed unbent; the save itself needs no wearer.
         var preview = who != null ? route.Back(plan.Model, who, out _) : null;
-        return (WithBodySkin(plan, targetPaths, log), preview, "");
+        var saved = WithBodySkin(plan, targetPaths, log);
+        SayDuplicateBones(saved.Model, log);
+        return (saved, preview, "");
+    }
+
+    /// <summary>
+    /// A model saved with two bones of one name — a bone moved onto one the race has (<see cref="SkeletonRemap"/>), kept
+    /// as two entries where nothing rebuilt the model — said in the log: the game follows both with that bone.
+    /// </summary>
+    private static void SayDuplicateBones(byte[] model, IPluginLog log)
+    {
+        if (SkeletonRemap.DuplicateBones(model) is { Count: > 0 } twice)
+            log.Information("[Proteus] retarget: saved with duplicate bone names {0}", string.Join(", ", twice));
     }
 
     /// <summary>
@@ -1183,15 +1196,17 @@ internal static partial class RefitCore
 
     /// <summary>
     /// Whether a top's cloth buried in a far larger new breast is cleared out of it from deeper than usual (see
-    /// <see cref="BodyRetarget.DeepClearDepth"/>): the game's own top in the automatic refit. Never the Studio's — it
-    /// moves cloth up to 30 mm, and a Studio refit writes into the modder's own mod.
+    /// <see cref="BodyRetarget.DeepClearDepth"/>): the game's own top, in the automatic refit and in the Studio (see
+    /// <see cref="RetargetInputs.StudioSkin"/>), whose refit is written into Proteus's own mod. Never a modder's top in the
+    /// Studio — it moves cloth up to 30 mm, and that refit is written into the modder's own mod.
     /// </summary>
     internal static bool DeepClearFor(bool rule, string garmentSlot) => rule && garmentSlot == "_top";
 
     /// <summary>
     /// Whether a top's cloth the refit carried further off the new chest than its author put it comes back toward the
-    /// author's standoff (see <see cref="BodyRetarget.KeepStandoff"/>): the game's own top in the automatic refit. Never
-    /// the Studio's — it moves a modder's cloth toward the body.
+    /// author's standoff (see <see cref="BodyRetarget.KeepStandoff"/>): the game's own top, in the automatic refit and in
+    /// the Studio (see <see cref="RetargetInputs.StudioSkin"/>). Never a modder's top in the Studio — it moves a modder's
+    /// cloth toward the body.
     /// </summary>
     internal static bool KeepStandoffFor(bool rule, string garmentSlot) => rule && garmentSlot == "_top";
 

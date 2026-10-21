@@ -3907,6 +3907,10 @@
     "message": "Всегда включено, пока обувь сохраняет свою стопу, а перчатка свою кисть: иначе вместе с ней вошли бы целиком новые ноги или руки.",
     "description": ""
   },
+  "Parts.Retarget.ClearForcedTip": {
+    "message": "Для собственных верхов игры всегда включено, как при автоматической подгонке: игра утапливает их ткань в собственное тело, поэтому из нового она всегда выталкивается.",
+    "description": ""
+  },
   "Parts.Retarget.KeepFeet": {
     "message": "Сохранить свои стопы",
     "description": ""
@@ -4132,23 +4136,43 @@
     "description": ""
   },
   "Parts.Vanilla.Worn.Tip": {
-    "message": "Надето, но не модифицировано. При открытии копируется в новый мод, который можно редактировать. Если выбран «Размер тела», открывается для подгонки.",
-    "description": ""
-  },
-  "Parts.Vanilla.Editing.Fmt": {
-    "message": "{0} открыт в моде «{1}» — это копия оригинала из игры, и она выглядит так же, пока вы её не измените.",
+    "message": "Надето, без мода. Открывается как есть, и ничего не сохраняется, пока вы его не измените: первое изменение копирует его в отдельный мод.",
     "description": ""
   },
   "Parts.Vanilla.ModDescription.Fmt": {
     "message": "{0}, скопировано из игры Proteus для редактирования.",
     "description": ""
   },
-  "Parts.Vanilla.EditTool.Tip": {
-    "message": "У ванильного снаряжения нет файла мода, поэтому выбор этого инструмента сначала копирует его в новый мод.",
-    "description": ""
-  },
   "Parts.Vanilla.WornSuffix": {
     "message": "(оригинал)",
+    "description": ""
+  },
+  "Parts.Vanilla.CopyNote.Fmt": {
+    "message": "Пока ничего не сохранено. Первое изменение скопирует это в мод «{0}».",
+    "description": ""
+  },
+  "Parts.Vanilla.Copied.Fmt": {
+    "message": "{0} скопирован в мод «{1}» вместе с вашим изменением.",
+    "description": ""
+  },
+  "Parts.Vanilla.EditedCopyThere.Fmt": {
+    "message": "В «{0}» уже есть изменённая копия этой вещи, поэтому ваше изменение не сохранено. Чтобы продолжить править эту копию, откройте её здесь (с включённым в Penumbra модом); чтобы начать заново с игровой, удалите мод.",
+    "description": ""
+  },
+  "Parts.Vanilla.ModSwitchedOff.Fmt": {
+    "message": "«{0}» выключен, поэтому ваше изменение в него не сохранено. Включите его в Penumbra или удалите, чтобы начать заново.",
+    "description": ""
+  },
+  "Parts.Vanilla.CopyRefused.Fmt": {
+    "message": "Не удалось сохранить изменение, поэтому ничего не скопировано: {0}",
+    "description": ""
+  },
+  "Parts.Vanilla.CopyRegistering": {
+    "message": "Ваша правка только что скопирована в новый мод, и Penumbra ещё его подготавливает. Попробуйте ещё раз через мгновение.",
+    "description": ""
+  },
+  "Parts.Vanilla.NotRefittable": {
+    "message": "«Размер тела» не может подогнать эту вещь. Выберите другой инструмент, чтобы её редактировать.",
     "description": ""
   },
   "WhatsNew.HairPort.Head": {
@@ -4395,9 +4419,25 @@
     "message": "Между полами тела, на которых сделана эта вещь, должны быть телами {0}. Выберите в «Сделано для тела» мод тела, для которого она сделана.",
     "description": "{0} is a race such as \"Midlander F\". “Made for” is the body dropdown the garment was made on."
   },
-  "Parts.Retarget.Refuse.CrossSexQuality.Fmt": {
-    "message": "У этой подгонки между полами {0} вывернутых граней и сопоставлено {1} тела. Proteus сохраняет только подгонку, где вывернутых граней не больше {2} и сопоставлено не меньше {3}.",
-    "description": "{0} folded faces and {1} the share matched, as found; {2} and {3} the limits. Percentages arrive formatted."
+  "Parts.Retarget.Refuse.CrossSexCoverage.Fmt": {
+    "message": "Эта подгонка между полами сопоставила через карты тела только {0} тела. Proteus сохраняет только подгонку, где сопоставлено не меньше {1}.",
+    "description": "Why a refit for the other sex is not saved: {0} the share of the body matched, as found; {1} the least that is saved. Percentages arrive formatted."
+  },
+  "Parts.Retarget.Race.CrossSexFolded.Fmt": {
+    "message": "При этой подгонке между полами вывернуто граней ткани: {0:N0}. Вывернутая грань в игре выглядит как дыра — проверьте эти места, прежде чем делиться.",
+    "description": "Said in the warning colour beside a refit for the other sex: {0} is a count of cloth faces turned over."
+  },
+  "Parts.Retarget.Race.BonesMoved.Fmt": {
+    "message": "В скелете {0} нет костей, на которые опирается эта вещь: {1}. Их вес теперь следует ближайшей кости, что в нём есть, поэтому эти части двигаются вместе с ней, а не сами по себе: {2}",
+    "description": "Warning beside a refit for a picked race: {0} is the race picked; {1} a count of bones; {2} the moves, such as \"ya_shiri_phys_l → iv_shiri_l\" (bone names are not translated)."
+  },
+  "Parts.Retarget.Race.NeedsSkeleton.Fmt": {
+    "message": "Скелет {0} из {1} даёт этой модели кости, которых нет в скелете игры ({2}: {3}). Без этого скелета эти части будут выглядеть смещёнными.",
+    "description": "Warning beside a refit for a picked race: {0} is the race picked; {1} the mod its skeleton comes from; {2} a count of bones; {3} their names (not translated)."
+  },
+  "Parts.Retarget.Race.RenameFailed.Fmt": {
+    "message": "не удалось переименовать кости ({0})",
+    "description": "Why a refit for a picked race was refused: the garment's bones could not be moved onto the race's; {0} is the technical reason."
   },
   "Parts.Retarget.Refuse.CrossSexLayout.Fmt": {
     "message": "Между полами Proteus может сопоставить только женские тела в раскладке Bibo+ или игры с мужскими телами в раскладке TBSE или игры. Модели {0} используют {1} и {2}.",
@@ -4412,7 +4452,7 @@
     "description": "Heads the dropdown that picks which race's model a refit is made and saved as."
   },
   "Parts.Retarget.Race.Tip": {
-    "message": "Для какой расы подгонка. Другая раса получает свою модель, сделанную из этой так, как её изгибает игра, подогнанную под тело этой расы и сохранённую там, откуда эта раса её загружает. Мужскую вещь для торса или ног Midlander, а также женскую вещь для ног, можно подогнать и для другого пола. Эта модель остаётся как есть.",
+    "message": "Для какой расы подгонка. Другая раса получает свою модель, сделанную из этой так, как её изгибает игра, подогнанную под тело этой расы и сохранённую там, откуда эта раса её загружает. Вещь Midlander для торса или ног можно подогнать и для другого пола. Эта модель остаётся как есть.",
     "description": "Tooltip of Parts.Retarget.Race.Label."
   },
   "Parts.Retarget.Race.ThisModel.Fmt": {
@@ -5367,9 +5407,13 @@
     "message": "Волосы",
     "description": ""
   },
-  "HairPort.Refused.Folded.Fmt": {
-    "message": "при изгибе на c{0:D4} {1} его треугольников вывернутся наизнанку",
-    "description": ""
+  "HairPort.Folded.Fmt": {
+    "message": "при изгибе на c{0:D4} {1} его треугольников выворачиваются наизнанку и могут выглядеть как дыры; проверьте в игре",
+    "description": "A hair port saved with a warning: bent onto race {0}, {1} of the hairstyle's triangles turn inside out."
+  },
+  "HairPort.Scan.State.FittedWarn.Fmt": {
+    "message": "подогнана — {0}",
+    "description": "A hairstyle's state in the list: fitted, with {0} what to look at in game."
   },
   "HairPort.Refused.Declined": {
     "message": "его перенос был отменён, поэтому он оставлен как есть",

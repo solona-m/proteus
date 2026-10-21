@@ -106,13 +106,17 @@ internal sealed partial class UvAtlasCorrespondence : IBodyCorrespondence
     /// judged.</param>
     /// <param name="P99Cover">How far the carried excused points were from the smallclothes, 99th percentile, metres.</param>
     /// <param name="MaxCover">The same, the furthest.</param>
+    /// <param name="FoldedSetAside">Excused or carried vertices whose landing still turned a skin triangle over: left
+    /// with no landing and filled from their neighbours, never refused over.</param>
+    /// <param name="FoldedTouching">The skin triangles those folds were.</param>
     internal readonly record struct Stats(int Landed, int Placeable, int OffSheet, float VertexCoverage,
                                           float RawAreaCoverage, float AreaCoverage, float MaxShift, float P99Shift,
                                           int Carried, int Disagreed, int Unvouched, int Unjudged,
                                           float P99Disagreement, float MaxDisagreement, int Astray = 0, int NoLanding = 0,
                                           int Excused = 0, int Unprojected = 0, int OnSkin = 0,
                                           int FoldedElsewhere = 0, float P99Cover = 0f,
-                                          float MaxCover = 0f, int FoldedInIslands = 0)
+                                          float MaxCover = 0f, int FoldedInIslands = 0, int FoldedSetAside = 0,
+                                          int FoldedTouching = 0)
     {
         /// <summary>Landings the guard set aside.</summary>
         public int Distrusted => Disagreed + Unvouched;

@@ -679,4 +679,125 @@ public class HairPortScanTests
         Assert.Equal(HairPortScan.RowState.Refused, s.Run([5]).Rows.Single().State);
         Assert.Equal(2, s.Host.Lines.Count(l => l.Contains("in Broken not ported")));
     }
+
+    /// <summary>
+    /// A port made with something to look at in game — a bend that turned part of it inside out — is fitted, its row
+    /// says what in the warning colour, and nothing remembers it as a refusal (cross-sex-tops-yas).
+    /// </summary>
+    [Fact]
+    [Trait("Plan", "AC-cross-sex-tops-yas-8")]
+    [Trait("Plan", "EDGE-cross-sex-tops-yas-23")]
+    public void A_warned_port_is_fitted_with_its_warning() // [AC-cross-sex-tops-yas-8] [EDGE-cross-sex-tops-yas-23]
+    {
+        const string warning = "bent onto c1101, 40 of its triangles turn inside out and may show as holes; check it in game";
+        var warned = new HairPortScan.Row(5, "root", "Mod", "Mod", "chara/human/c1101/obj/hair/h0005/model/c1101h0005_hir.mdl",
+                                          HairPortScan.RowState.Fitted, warning);
+        Assert.True(Proteus.Gui.HairPortSettingsPanel.Warned(warned));
+        Assert.Contains(warning, Proteus.Gui.HairPortSettingsPanel.RowText(warned));
+        Assert.Contains("fitted", Proteus.Gui.HairPortSettingsPanel.RowText(warned));
+        Assert.False(Proteus.Gui.HairPortSettingsPanel.Warned(warned with { Message = "" }));
+        Assert.False(Proteus.Gui.HairPortSettingsPanel.Warned(warned with { State = HairPortScan.RowState.Refused }));
+
+        string scan = Source("Proteus/Services/HairPort/HairPortScan.cs");
+        Assert.Contains("MakeRow(host, id, modRoot, target, d.Stale ? RowState.Remade : RowState.Fitted, outcome.Warning)", scan);
+        Assert.Contains("return new Ported(saved, false, \"\", Warning: warning);", scan);   // not a refusal
+        string builder = Source("Proteus/Services/HairPort/HairPortBuilder.cs");
+        Assert.Contains("foreach (var to in refused.Keys) warnings.Remove(to);", builder);
+        string settings = Source("Proteus/Gui/HairPortSettingsPanel.cs");
+        Assert.Contains("if (view.Warning.Length > 0)", settings);
+        Assert.Contains("Warning: ported.Warning", Source("Proteus/Services/HairPort/HairPortWatcher.cs"));
+        string studio = Source("Proteus/Gui/HairPortPanel.cs");
+        Assert.Contains("resultWarn = true;", studio);
+    }
+
+    /// <summary>
+    /// A warned port is said again for the rest of the session: the next look finds the hairstyle already fitted, and its
+    /// row and the worn line still carry the warning (once lost at the first look after the port).
+    /// </summary>
+    [Fact]
+    [Trait("Plan", "AC-cross-sex-tops-yas-8")]
+    [Trait("Plan", "EDGE-cross-sex-tops-yas-23")]
+    public void A_warned_port_is_said_again_when_found_already_fitted() // [AC-cross-sex-tops-yas-8] [EDGE-cross-sex-tops-yas-23]
+    {
+        using var s = new Setup();
+        var root = s.DefaultDataMod("Floof", 7);
+        // A stale warning: the port below warns of nothing, and PortOne clears it under the key the scan reads.
+        HairPortScan.RememberWarning(root, Target(7), "stale");
+        Assert.Equal(HairPortScan.RowState.Fitted, s.Run([7]).Rows.Single().State);
+        s.Reloaded(root, 7);
+        var first = s.Run([7], force: true).Rows.Single();
+        Assert.Equal((HairPortScan.RowState.AlreadyFitted, ""), (first.State, first.Message));
+        // What PortOne remembers for a port it made with a warning.
+        const string warning = "bent onto c0101, 40 of its triangles turn inside out and may show as holes; check it in game";
+        HairPortScan.RememberWarning(root, Target(7), warning);
+
+        var again = s.Run([7], force: true).Rows.Single();
+        Assert.Equal((HairPortScan.RowState.AlreadyFitted, warning), (again.State, again.Message));
+        Assert.True(Proteus.Gui.HairPortSettingsPanel.Warned(again));
+        Assert.Contains(warning, Proteus.Gui.HairPortSettingsPanel.RowText(again));
+        Assert.Contains("Warning: HairPortScan.WarningFor(decision.ModRoot, worn)",
+                        Source("Proteus/Services/HairPort/HairPortWatcher.cs"));
+        Assert.Contains("RememberSaved(modRoot, saved, plan.Warnings);",
+                        Source("Proteus/Services/HairPort/HairPortScan.cs"));
+
+        // Ported again without one, it is forgotten.
+        HairPortScan.RememberWarning(root, Target(7), "");
+        Assert.Equal("", s.Run([7], force: true).Rows.Single().Message);
+    }
+
+    /// <summary>
+    /// Every port a save wrote, sharers included, remembers what it warned of — and one that warned of nothing forgets
+    /// an earlier port's warning; a race not written, or a port that only took an old skeleton out, keeps what it had.
+    /// </summary>
+    [Fact]
+    [Trait("Plan", "AC-cross-sex-tops-yas-8")]
+    [Trait("Plan", "EDGE-cross-sex-tops-yas-23")]
+    public void Saved_ports_remember_their_warnings_sharers_too() // [AC-cross-sex-tops-yas-8] [EDGE-cross-sex-tops-yas-23]
+    {
+        string root = Path.Combine(Path.GetTempPath(), "proteus_warn_" + Path.GetRandomFileName());
+        var owner = new HairPortPlan.Owner("Cut", "Long", "", new Dictionary<string, string>());
+        HairPortWriter.PortWrite Write(ushort race, bool stripped = false)
+            => new(owner, "src", "src.mdl", "00000000", HairPortPlan.HairPath(race, 7), [], [], Stripped: stripped);
+        foreach (ushort race in new ushort[] { 101, 201, 301, 401 })
+            HairPortScan.RememberWarning(root, HairPortPlan.HairPath(race, 7), "stale");
+
+        HairPortScan.RememberSaved(root, [Write(101), Write(201), Write(401, stripped: true)],
+                                   new Dictionary<ushort, string> { [201] = "sharer warned" });
+
+        Assert.Equal("", HairPortScan.WarningFor(root, HairPortPlan.HairPath(101, 7)));             // ported clean: forgotten
+        Assert.Equal("sharer warned", HairPortScan.WarningFor(root, HairPortPlan.HairPath(201, 7))); // a sharer's own
+        Assert.Equal("stale", HairPortScan.WarningFor(root, HairPortPlan.HairPath(301, 7)));        // not written: kept
+        Assert.Equal("stale", HairPortScan.WarningFor(root, HairPortPlan.HairPath(401, 7)));        // only stripped: kept
+        Assert.Contains("HairPortScan.RememberSaved(modRoot, outcome.SavedWrites, plan.Warnings);",
+                        Source("Proteus/Gui/HairPortPanel.cs"));
+    }
+
+    /// <summary>
+    /// A port current in the mod but not yet served (Penumbra has not reloaded it) is found already fitted by the bend
+    /// itself, not by the look — and still says its warning.
+    /// </summary>
+    [Fact]
+    [Trait("Plan", "AC-cross-sex-tops-yas-8")]
+    [Trait("Plan", "EDGE-cross-sex-tops-yas-23")]
+    public void A_warned_port_not_yet_reloaded_says_its_warning() // [AC-cross-sex-tops-yas-8] [EDGE-cross-sex-tops-yas-23]
+    {
+        using var s = new Setup();
+        var root = s.DefaultDataMod("Floof", 7);
+        Assert.Equal(HairPortScan.RowState.Fitted, s.Run([7]).Rows.Single().State);
+        const string warning = "bent onto c0101, 40 of its triangles turn inside out and may show as holes; check it in game";
+        HairPortScan.RememberWarning(root, Target(7), warning);
+
+        var row = s.Run([7], force: true).Rows.Single();   // no Reloaded: the game still serves the Elezen model
+        Assert.Equal((HairPortScan.RowState.AlreadyFitted, warning), (row.State, row.Message));
+    }
+
+    private static string Source(string file)
+    {
+        for (var d = new DirectoryInfo(AppContext.BaseDirectory); d != null; d = d.Parent)
+        {
+            var p = Path.Combine(d.FullName, file);
+            if (File.Exists(p)) return File.ReadAllText(p);
+        }
+        throw new FileNotFoundException(file);
+    }
 }

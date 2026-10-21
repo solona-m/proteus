@@ -3907,6 +3907,10 @@
     "message": "靴が自分の足を、手袋が自分の手を残している間は常にオンです。オフにすると新しい脚や腕が丸ごと入ってしまいます。",
     "description": ""
   },
+  "Parts.Retarget.ClearForcedTip": {
+    "message": "ゲーム本来のトップスでは自動リフィットと同じく常にオンです。ゲームは布を自分の体の中に埋め込んでいるため、新しい体からは常に押し出されます。",
+    "description": ""
+  },
   "Parts.Retarget.KeepFeet": {
     "message": "元の足を残す",
     "description": ""
@@ -4132,23 +4136,43 @@
     "description": ""
   },
   "Parts.Vanilla.Worn.Tip": {
-    "message": "装着中でMod未適用です。開くと編集できる新しいModにコピーされます。「体型サイズ」を選択中はリフィット用に開きます。",
-    "description": ""
-  },
-  "Parts.Vanilla.Editing.Fmt": {
-    "message": "{0} をMod「{1}」で開いています。ゲーム本来のもののコピーなので、変更するまで見た目は同じです。",
+    "message": "装備中（Modなし）。そのままの状態で開き、変更するまで何も保存されません。最初の変更で専用のModにコピーされます。",
     "description": ""
   },
   "Parts.Vanilla.ModDescription.Fmt": {
     "message": "{0}。Proteusが編集用にゲームからコピーしたものです。",
     "description": ""
   },
-  "Parts.Vanilla.EditTool.Tip": {
-    "message": "バニラ装備にはModファイルがないため、これを選ぶとまず新しいModにコピーします。",
-    "description": ""
-  },
   "Parts.Vanilla.WornSuffix": {
     "message": "（バニラ）",
+    "description": ""
+  },
+  "Parts.Vanilla.CopyNote.Fmt": {
+    "message": "まだ何も保存されていません。最初の変更でMod「{0}」にコピーされます。",
+    "description": ""
+  },
+  "Parts.Vanilla.Copied.Fmt": {
+    "message": "{0}を変更と一緒にMod「{1}」にコピーしました。",
+    "description": ""
+  },
+  "Parts.Vanilla.EditedCopyThere.Fmt": {
+    "message": "「{0}」にはこのパーツの編集済みコピーがすでにあるため、変更は保存されませんでした。そのコピーの編集を続けるには、ここでそれを開いてください（PenumbraでそのModをオンにした状態で）。ゲーム本来の状態からやり直すには、そのModを削除してください。",
+    "description": ""
+  },
+  "Parts.Vanilla.ModSwitchedOff.Fmt": {
+    "message": "「{0}」がオフになっているため、変更は保存されませんでした。Penumbraでオンにするか、削除してやり直してください。",
+    "description": ""
+  },
+  "Parts.Vanilla.CopyRefused.Fmt": {
+    "message": "変更を保存できなかったため、何もコピーされませんでした: {0}",
+    "description": ""
+  },
+  "Parts.Vanilla.CopyRegistering": {
+    "message": "編集内容を新しいMODにコピーしたところで、Penumbraがまだ準備中です。少し待ってからもう一度お試しください。",
+    "description": ""
+  },
+  "Parts.Vanilla.NotRefittable": {
+    "message": "「体型サイズ」ではこのパーツを合わせられません。編集するには別のツールを選んでください。",
     "description": ""
   },
   "WhatsNew.HairPort.Head": {
@@ -4395,9 +4419,25 @@
     "message": "性別をまたぐ場合、この装備が作られた体は{0}の体である必要があります。「元の体型 Mod」で作られたボディModを選んでください。",
     "description": "{0} is a race such as \"Midlander F\". “Made for” is the body dropdown the garment was made on."
   },
-  "Parts.Retarget.Refuse.CrossSexQuality.Fmt": {
-    "message": "この性別をまたぐ調整は裏返った面が{0}、体の対応が{1}でした。Proteusが保存するのは、裏返った面が{2}以下かつ対応が{3}以上のものだけです。",
-    "description": "{0} folded faces and {1} the share matched, as found; {2} and {3} the limits. Percentages arrive formatted."
+  "Parts.Retarget.Refuse.CrossSexCoverage.Fmt": {
+    "message": "この性別をまたぐ調整は、ボディマップで体の{0}しか対応しませんでした。Proteusが保存するのは、対応が{1}以上のものだけです。",
+    "description": "Why a refit for the other sex is not saved: {0} the share of the body matched, as found; {1} the least that is saved. Percentages arrive formatted."
+  },
+  "Parts.Retarget.Race.CrossSexFolded.Fmt": {
+    "message": "この性別をまたぐ調整で布の面が{0:N0}個裏返りました。裏返った面はゲーム内で穴に見えるので、共有する前にその場所を確認してください。",
+    "description": "Said in the warning colour beside a refit for the other sex: {0} is a count of cloth faces turned over."
+  },
+  "Parts.Retarget.Race.BonesMoved.Fmt": {
+    "message": "{0}のスケルトンには、この装備が使う骨が{1}本ありません。その重みは今はスケルトンにある最も近い骨に従うので、その部分は単独ではなくその骨と一緒に動きます：{2}",
+    "description": "Warning beside a refit for a picked race: {0} is the race picked; {1} a count of bones; {2} the moves, such as \"ya_shiri_phys_l → iv_shiri_l\" (bone names are not translated)."
+  },
+  "Parts.Retarget.Race.NeedsSkeleton.Fmt": {
+    "message": "{1}の{0}のスケルトンは、ゲーム本来のスケルトンにない骨を{2}本このモデルに与えます（{3}）。そのスケルトンがない人には、その部分がずれて見えます。",
+    "description": "Warning beside a refit for a picked race: {0} is the race picked; {1} the mod its skeleton comes from; {2} a count of bones; {3} their names (not translated)."
+  },
+  "Parts.Retarget.Race.RenameFailed.Fmt": {
+    "message": "骨の名前を変更できませんでした（{0}）",
+    "description": "Why a refit for a picked race was refused: the garment's bones could not be moved onto the race's; {0} is the technical reason."
   },
   "Parts.Retarget.Refuse.CrossSexLayout.Fmt": {
     "message": "性別をまたぐ場合、ProteusはBibo+またはゲームのレイアウトの女性の体と、TBSEまたはゲームのレイアウトの男性の体しか対応させられません。{0}のモデルは{1}と{2}を使っています。",
@@ -4412,7 +4452,7 @@
     "description": "Heads the dropdown that picks which race's model a refit is made and saved as."
   },
   "Parts.Retarget.Race.Tip": {
-    "message": "どの種族向けの調整か。別の種族には、ゲームが曲げるのと同じようにこのモデルから作り、その種族の体に合わせて、その種族が読み込む場所に保存した専用モデルができます。ミッドランダー男性の胴・脚装備と女性の脚装備は、異性向けにも調整できます。このモデルはそのままです。",
+    "message": "どの種族向けの調整か。別の種族には、ゲームが曲げるのと同じようにこのモデルから作り、その種族の体に合わせて、その種族が読み込む場所に保存した専用モデルができます。ミッドランダーの胴・脚装備は、異性向けにも調整できます。このモデルはそのままです。",
     "description": "Tooltip of Parts.Retarget.Race.Label."
   },
   "Parts.Retarget.Race.ThisModel.Fmt": {
@@ -5367,9 +5407,13 @@
     "message": "髪",
     "description": ""
   },
-  "HairPort.Refused.Folded.Fmt": {
-    "message": "c{0:D4} に合わせて曲げると、{1} 個の三角形が裏返ります",
-    "description": ""
+  "HairPort.Folded.Fmt": {
+    "message": "c{0:D4} に合わせて曲げると {1} 個の三角形が裏返り、穴に見えることがあります。ゲーム内で確認してください",
+    "description": "A hair port saved with a warning: bent onto race {0}, {1} of the hairstyle's triangles turn inside out."
+  },
+  "HairPort.Scan.State.FittedWarn.Fmt": {
+    "message": "合わせました — {0}",
+    "description": "A hairstyle's state in the list: fitted, with {0} what to look at in game."
   },
   "HairPort.Refused.Declined": {
     "message": "移植が取り消されたため、そのままにします",

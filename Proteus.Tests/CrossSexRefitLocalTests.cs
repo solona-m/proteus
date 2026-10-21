@@ -12,8 +12,8 @@ namespace Proteus.Tests;
 
 /// <summary>
 /// Refits across the sexes against the real files, gated (the plan's G1–G6 and G5b, see <see cref="RefitGate"/>): a men's
-/// shirt and trousers made women's on Bibo+, a women's leg garment made men's on The Body SE — and the women's top that
-/// cannot be, which is why that cell is not offered.
+/// shirt and trousers made women's on Bibo+, a women's leg garment and a women's top made men's on The Body SE, and a
+/// skirt rigged to YAS's own bones made men's with its bones moved onto the men's skeleton (cross-sex-tops-yas).
 /// </summary>
 public class CrossSexRefitLocalTests(ITestOutputHelper o)
 {
@@ -29,6 +29,11 @@ public class CrossSexRefitLocalTests(ITestOutputHelper o)
     internal const string Starlit = LocalData.Mods + ":[Nini] Starlit Skirt/rue sizes/wc/chara/equipment/e6212/model/c0201e6212_dwn.mdl";
     internal const string IvcsMen = LocalData.Mods
         + ":[IVCS] Illusio Vitae Custom Skeleton Base V1.1 (2)/chara/human/c0101/skeleton/base/b0001/skl_c0101b0001.sklb";
+    internal const string YasSkeleton = LocalData.Mods
+        + ":hs-Rue+-2.2.7-y0f/files/files/yet another skeleton/animation_general usage/chara/human/c0201/skeleton/base/b0001/skl_c0201b0001.sklb";
+
+    /// <summary>The Rue+ legs Starlit's WC size was made on: Yiggle, which rigs YAS's physics bones.</summary>
+    internal const string RueYiggleWc = "yiggle - watermelon crushers - a/";
 
     /// <summary>Cloth faces each shipped cell turns over today (measured 2026-10-20), guarded against growing below the
     /// gate's own cap.</summary>
@@ -50,9 +55,15 @@ public class CrossSexRefitLocalTests(ITestOutputHelper o)
 
     /// <summary>The wearer for <paramref name="to"/> as the panel and the CLI gather it: the game's skeleton, deformer and
     /// Est tables, or a modded base skeleton from <paramref name="skeletonPath"/>.</summary>
-    internal static OtherRaceWearer.Inputs Wearer(ushort to, string gamePath, string? skeletonPath = null)
+    /// <param name="drawnSkeletonPath">The drawn race's base skeleton as the collection gives it (a women's YAS); the
+    /// game's when null.</param>
+    internal static OtherRaceWearer.Inputs Wearer(ushort to, string gamePath, string? skeletonPath = null,
+                                                  string? drawnSkeletonPath = null)
         => OtherRaceWearer.Gather(to, gamePath, Game,
-               path => skeletonPath != null && path == OtherRaceWearer.BaseSkeletonPath(to) ? skeletonPath : null,
+               path => skeletonPath != null && path == OtherRaceWearer.BaseSkeletonPath(to) ? skeletonPath
+                     : drawnSkeletonPath != null && path == OtherRaceWearer.BaseSkeletonPath(ModelSkinReader.RaceOf(gamePath))
+                         ? drawnSkeletonPath
+                     : null,
                _ => null, []);
 
     /// <summary>Picks the option of <paramref name="catalog"/> that is the file at <paramref name="rel"/>, bent or not
@@ -73,7 +84,8 @@ public class CrossSexRefitLocalTests(ITestOutputHelper o)
     }
 
     private CrossSexRefitJob.Inputs Inputs(string garmentNeed, ushort to, string madeForNeed, string madeForRel,
-                                           string ontoNeed, string ontoRel, string? skeletonPath = null)
+                                           string ontoNeed, string ontoRel, string? skeletonPath = null,
+                                           string? drawnSkeletonPath = null)
     {
         string garmentPath = LocalData.Path(garmentNeed);
         string gamePath = GamePathOf(garmentPath);
@@ -81,7 +93,7 @@ public class CrossSexRefitLocalTests(ITestOutputHelper o)
         var onto = BodySizeCatalog.Read(LocalData.Path(ontoNeed));
         return new CrossSexRefitJob.Inputs(File.ReadAllBytes(garmentPath), gamePath, to, madeFor, IsFile(madeFor, madeForRel),
             onto, IsFile(onto, ontoRel),
-            Wearer(to, gamePath, skeletonPath), Maps(), log);
+            Wearer(to, gamePath, skeletonPath, drawnSkeletonPath), Maps(), log);
     }
 
     private (CrossSexRefitJob.Result R, CrossSexRefitJob.Size S) Run(CrossSexRefitJob.Inputs inputs)
@@ -91,7 +103,7 @@ public class CrossSexRefitLocalTests(ITestOutputHelper o)
         var s = Assert.Single(r.Sizes);
         Assert.True(s.Refusal.Length == 0, s.Refusal);
         o.WriteLine(Describe(Path.GetFileName(inputs.GamePath), r, s));
-        Assert.True(s.SaveAllowed, $"the run-time check refuses it: {s.Folds} folds, {s.Landed?.VertexCoverage:P1} matched");
+        Assert.True(s.SaveAllowed, $"the run-time check refuses it: {s.Landed?.VertexCoverage:P1} matched");
         return (r, s);
     }
 
@@ -169,37 +181,136 @@ public class CrossSexRefitLocalTests(ITestOutputHelper o)
     }
 
     /// <summary>
-    /// A women's top made a men's is not offered: flattening a bust onto a pec turns 115 of Sheer Elegance's 10,436 cloth
-    /// faces over (measured 2026-10-20; the same top between women's bodies turns 8, and no pass of the refit brought it
-    /// under 100). The job refuses it, as the panel never offers it.
+    /// A women's top made a men's (cross-sex-tops-yas). Once not offered: flattening a bust onto a pec turns more of the
+    /// cloth over than any other cell (115 of Sheer Elegance's 10,436 faces, measured 2026-10-20). Now offered and saved,
+    /// its folds logged and said, never gated; the fit gates still hold.
     /// </summary>
-    [LocalDataFact(LocalData.GameData, SheerTop, Bibo, Tbse, LocalData.TbseUvMaps)]
+    [LocalDataFact(LocalData.GameData, SheerTop, Bibo, Rue, Tbse, LocalData.TbseUvMaps)]
     [Trait("Plan", "AC-cross-sex-refit-7")]
-    public void A_womans_top_is_not_refitted_for_men() // [AC-cross-sex-refit-7]
+    [Trait("Plan", "AC-cross-sex-tops-yas-1")]
+    [Trait("Plan", "AC-cross-sex-tops-yas-2")]
+    [Trait("Plan", "AC-cross-sex-tops-yas-3")]
+    public void Sheer_elegance_top_refits_onto_tbse_for_midlander_men() // [AC-cross-sex-tops-yas-1] [AC-cross-sex-tops-yas-2] [AC-cross-sex-tops-yas-3]
     {
-        var r = CrossSexRefitJob.Run(Inputs(SheerTop, 101, Bibo, UvBakeInputs.BiboChest, Tbse, UvBakeInputs.TbseChest));
-        Assert.NotEqual("", r.Refusal);
-        Assert.Empty(r.Sizes);
         var offered = OtherRaceRefit.Offered("chara/equipment/e6010/model/c0201e6010_top.mdl",
                                              BodySizeCatalog.Read(LocalData.Path(Tbse)), [], null, isVanilla: false);
-        Assert.DoesNotContain(offered, c => c.Race == 101);
+        Assert.True(Assert.Single(offered, c => c.Race == 101).CrossSex);
+
+        var inputs = Inputs(SheerTop, 101, Bibo, UvBakeInputs.BiboChest, Tbse, UvBakeInputs.TbseChest);
+        var (r, s) = Run(inputs);
+        int baseline = SameSexFolds(SheerTop, Bibo, UvBakeInputs.BiboChest, Rue, "0201", male: false);
+        RefitGate.Assert(o, r, s, baseline, RefitGate.Gates.Inside);
+        Assert.True(r.Route.Lowered);
+        Assert.Equal("chara/equipment/e6010/model/c0101e6010_top.mdl", r.Route.SavePath(inputs.GamePath));
+        Assert.NotNull(r.Route.Eqdp(r.Route.SavePath(inputs.GamePath)));
+        o.WriteLine($"women's top → TBSE: {s.Folds} cloth faces folded (said, not gated)");
     }
 
-    [LocalDataFact(LocalData.GameData, Starlit, Rue, Tbse, IvcsMen, LocalData.TbseUvMaps)]
+    /// <summary>
+    /// The underbust lift for a women's top made a men's, measured both ways inside the pass: kept unless leaving it out
+    /// folds less and clips no more (CrossSexRefit.LiftsUnderbust).
+    /// </summary>
+    [LocalDataFact(LocalData.GameData, SheerTop, Bibo, Tbse, LocalData.TbseUvMaps)]
+    [Trait("Plan", "AC-cross-sex-tops-yas-3")]
+    public void Underbust_lift_for_a_womans_top_is_measured() // [AC-cross-sex-tops-yas-3]
+    {
+        var results = new Dictionary<bool, (int Folds, float Inside)>();
+        foreach (bool lift in new[] { true, false })
+        {
+            var inputs = Inputs(SheerTop, 101, Bibo, UvBakeInputs.BiboChest, Tbse, UvBakeInputs.TbseChest) with { LiftUnderbust = lift };
+            var r = CrossSexRefitJob.Run(inputs);
+            var s = Assert.Single(r.Sizes);
+            var m = RefitGate.Measure(r, s, 0);
+            results[lift] = (s.Folds, m.Inside);
+            o.WriteLine($"lift {lift}: {s.Folds} folds, {m.Inside:P2} inside (made for {m.MadeForInside:P2})");
+        }
+        bool off = results[false].Folds < results[true].Folds && results[false].Inside <= results[true].Inside;
+        Assert.Equal(!off, CrossSexRefit.LiftsUnderbust(201, 101));
+    }
+
+    /// <summary>
+    /// A skirt rigged to YAS's own bones (Rue's WC Yiggle size) made a men's on The Body SE (cross-sex-tops-yas): once
+    /// refused naming the iv_/ya_ bones with either men's skeleton; now each bone the skeleton lacks is moved onto one it
+    /// has — and the Rue bodies it was made on the same way — and the skirt saved leaning on no bone the man lacks.
+    /// </summary>
+    [LocalDataTheory(LocalData.GameData, Starlit, Rue, Tbse, IvcsMen, YasSkeleton, LocalData.TbseUvMaps)]
+    [InlineData(false)]
+    [InlineData(true)]
     [Trait("Plan", "AC-cross-sex-refit-6")]
     [Trait("Plan", "EDGE-cross-sex-refit-4")]
-    public void Starlit_rigged_to_yas_bones_is_refused_for_men_with_either_skeleton() // [AC-cross-sex-refit-6] [EDGE-cross-sex-refit-4]
+    [Trait("Plan", "AC-cross-sex-tops-yas-4")]
+    [Trait("Plan", "AC-cross-sex-tops-yas-5")]
+    [Trait("Plan", "AC-cross-sex-tops-yas-6")]
+    [Trait("Plan", "EDGE-cross-sex-tops-yas-3")]
+    [Trait("Plan", "EDGE-cross-sex-tops-yas-4")]
+    [Trait("Plan", "EDGE-cross-sex-tops-yas-13")]
+    [Trait("Plan", "EDGE-cross-sex-tops-yas-19")]
+    public void Starlit_rigged_to_yas_bones_refits_onto_tbse_legs(bool ivcs) // [AC-cross-sex-tops-yas-4] [AC-cross-sex-tops-yas-5] [AC-cross-sex-tops-yas-6] [EDGE-cross-sex-tops-yas-3] [EDGE-cross-sex-tops-yas-4] [EDGE-cross-sex-tops-yas-13] [EDGE-cross-sex-tops-yas-19]
+    {
+        var inputs = Inputs(Starlit, 101, Rue, RueRel(RueYiggleWc), Tbse, UvBakeInputs.TbseLegs[0].Rel,
+                            ivcs ? LocalData.Path(IvcsMen) : null, LocalData.Path(YasSkeleton));
+        var (r, s) = Run(inputs);
+        var moved = r.Moved ?? [];
+        o.WriteLine($"{(ivcs ? "IVCS" : "game")} skeleton: moved {SkeletonRemap.DescribeHow(moved)}; needs skeleton "
+                  + $"[{string.Join(", ", r.NeedsSkeleton ?? [])}]");
+        Assert.NotEmpty(moved);
+        int baseline = SameSexFolds(Starlit, Rue, RueRel(RueYiggleWc), Rue, "0201", male: false);
+        // G4 at the refit's own floor, the user's decision: Rue's legs onto TBSE's match 90.1% of the skin through the maps
+        // (measured 2026-10-21) — a body pair's property, not the bone moves.
+        RefitGate.Assert(o, r, s, baseline, RefitGate.Gates.Regions, (float)CrossSexRefit.MinCoverage);
+
+        var saved = ModelSkinReader.Read(s.Saved!.Model, null, null)!;
+        Assert.All(OtherRaceRefit.Weighted(saved), b => Assert.True(r.Wearer!.Parents.ContainsKey(b), $"{b} is not the man's"));
+        for (int v = 0; v < saved.VertexCount; v++)
+        {
+            float sum = 0f;
+            for (int k = 0; k < XivLiveMesh.SkinnedMesh.MaxInfluences; k++) sum += saved.BoneWeights[v * 8 + k];
+            Assert.True(MathF.Abs(sum - 1f) <= 1f / 255f + 1e-4f, $"vertex {v} weighs {sum}");
+        }
+        var (mean, mostOnSkin, strangers) = RefitGate.Strangers(r, s);
+        o.WriteLine($"G5c bones: [{string.Join(", ", strangers)}]");
+        o.WriteLine($"G5c: {mean:P2} of near cloth's weight on bones the new body does not rig; {mostOnSkin:P2} at most on the skin");
+        Assert.True(mean <= RefitGate.MaxStrangerMean, $"G5c mean {mean:P2}");
+        Assert.True(mostOnSkin <= RefitGate.MaxStrangerOnSkin, $"G5c on the skin {mostOnSkin:P2}");
+
+        if (ivcs)
+        {
+            // IVCS has the buttock bones: YAS's twin moves onto them, and they stay weighted — named as needing IVCS.
+            Assert.Contains(moved, m => m is { From: "ya_shiri_phys_l", To: "iv_shiri_l", How: SkeletonRemap.How.Counterpart });
+            Assert.DoesNotContain(moved, m => m.From.StartsWith("iv_shiri", StringComparison.Ordinal));
+            Assert.Contains("iv_shiri_l", OtherRaceRefit.Weighted(saved));
+            Assert.Contains("iv_shiri_l", r.NeedsSkeleton ?? []);
+        }
+        else
+        {
+            Assert.Contains(moved, m => m.From == "iv_shiri_l" && m.How == SkeletonRemap.How.Ancestor);
+            Assert.Empty(r.NeedsSkeleton ?? []);
+        }
+    }
+
+    /// <summary>Without the women's custom skeleton in the collection, the moves fall back on each bone's part of the body
+    /// — never breast or thigh onto the hip — and the skirt is still saved.</summary>
+    [LocalDataFact(LocalData.GameData, Starlit, Rue, Tbse, LocalData.TbseUvMaps)]
+    [Trait("Plan", "EDGE-cross-sex-tops-yas-5")]
+    [Trait("Plan", "EDGE-cross-sex-tops-yas-6")]
+    public void Starlit_drawn_with_the_game_s_women_skeleton_still_refits() // [EDGE-cross-sex-tops-yas-5] [EDGE-cross-sex-tops-yas-6]
+    {
+        var inputs = Inputs(Starlit, 101, Rue, RueRel(RueYiggleWc), Tbse, UvBakeInputs.TbseLegs[0].Rel);
+        var (r, s) = Run(inputs);
+        var moved = r.Moved ?? [];
+        o.WriteLine($"moved {SkeletonRemap.DescribeHow(moved)}");
+        Assert.NotEmpty(moved);
+        Assert.Contains(moved, m => m.How is SkeletonRemap.How.StandIn or SkeletonRemap.How.Fallback);
+        Assert.DoesNotContain(moved, m => m.From.Contains("daitai", StringComparison.Ordinal) && m.To == "j_kosi");
+        var m5 = RefitGate.Measure(r, s, 0);
+        Assert.Empty(m5.MissingBones);
+        Assert.Empty(m5.ForeignSkins);
+    }
+
+    private static string RueRel(string folder)
     {
         var rue = BodySizeCatalog.Read(LocalData.Path(Rue));
-        string legsRel = rue.For("_dwn", "0201").First(b => BodySizeCatalog.RaceOf(b.GamePath) == "0201").Rel;
-        foreach (var skeleton in new[] { null, LocalData.Path(IvcsMen) })
-        {
-            var r = CrossSexRefitJob.Run(Inputs(Starlit, 101, Rue, legsRel, Tbse, UvBakeInputs.TbseLegs[0].Rel, skeleton));
-            o.WriteLine($"{(skeleton == null ? "game" : "IVCS")} skeleton: {r.Refusal}");
-            Assert.NotEqual("", r.Refusal);
-            Assert.Contains("iv_", r.Refusal);
-            Assert.Empty(r.Sizes);
-        }
+        return rue.For("_dwn", "0201").First(b => b.Rel.Replace('\\', '/').Contains(folder, StringComparison.OrdinalIgnoreCase)).Rel;
     }
 
     [LocalDataFact(LocalData.GameData, LumberjackMod, Tbse, Bibo)]

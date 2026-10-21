@@ -3907,6 +3907,10 @@
     "message": "鞋子保留自己的脚、手套保留自己的手时始终开启：否则整条新腿或新手臂都会跟着放进去。",
     "description": ""
   },
+  "Parts.Retarget.ClearForcedTip": {
+    "message": "游戏自带的上衣始终开启，与自动重新适配一致：游戏把它们的布料埋在自己的身体里，所以总会从新身体中推出来。",
+    "description": ""
+  },
   "Parts.Retarget.KeepFeet": {
     "message": "保留原本的脚",
     "description": ""
@@ -4132,23 +4136,43 @@
     "description": ""
   },
   "Parts.Vanilla.Worn.Tip": {
-    "message": "当前穿着，未经模组化。打开时会复制到一个可编辑的新模组中。选中「体型尺寸」时则改为打开以进行体型转换。",
-    "description": ""
-  },
-  "Parts.Vanilla.Editing.Fmt": {
-    "message": "{0} 已在模组“{1}”中打开。它是游戏原版的副本，在你修改之前外观不变。",
+    "message": "已穿戴，无模组。按原样打开，在你修改之前不会保存任何内容：第一次修改时会把它复制到专属的模组中。",
     "description": ""
   },
   "Parts.Vanilla.ModDescription.Fmt": {
     "message": "{0}，由 Proteus 从游戏中复制以供编辑。",
     "description": ""
   },
-  "Parts.Vanilla.EditTool.Tip": {
-    "message": "原版装备没有模组文件，因此选择此项会先将其复制到一个新模组中。",
-    "description": ""
-  },
   "Parts.Vanilla.WornSuffix": {
     "message": "（原版）",
+    "description": ""
+  },
+  "Parts.Vanilla.CopyNote.Fmt": {
+    "message": "尚未保存任何内容。第一次修改时会将其复制到模组“{0}”中。",
+    "description": ""
+  },
+  "Parts.Vanilla.Copied.Fmt": {
+    "message": "已将{0}连同你的修改复制到模组“{1}”中。",
+    "description": ""
+  },
+  "Parts.Vanilla.EditedCopyThere.Fmt": {
+    "message": "“{0}”中已有此部件的已编辑副本，因此你的修改未保存。要继续编辑该副本，请在此处打开它（并在 Penumbra 中启用该模组）；要从游戏原版重新开始，请删除该模组。",
+    "description": ""
+  },
+  "Parts.Vanilla.ModSwitchedOff.Fmt": {
+    "message": "“{0}”已关闭，因此你的修改未保存到其中。请在 Penumbra 中启用它，或将其删除后重新开始。",
+    "description": ""
+  },
+  "Parts.Vanilla.CopyRefused.Fmt": {
+    "message": "无法保存你的修改，因此未复制任何内容：{0}",
+    "description": ""
+  },
+  "Parts.Vanilla.CopyRegistering": {
+    "message": "你的编辑刚被复制到新模组中，Penumbra 仍在设置它。请稍后再试一次。",
+    "description": ""
+  },
+  "Parts.Vanilla.NotRefittable": {
+    "message": "“体型尺寸”无法调整此部件。请选择其他工具来编辑它。",
     "description": ""
   },
   "WhatsNew.HairPort.Head": {
@@ -4395,9 +4419,25 @@
     "message": "跨性别时，这件装备制作所用的身体必须是{0}的身体。请在“原适配体型”中选择它所针对的身体模组。",
     "description": "{0} is a race such as \"Midlander F\". “Made for” is the body dropdown the garment was made on."
   },
-  "Parts.Retarget.Refuse.CrossSexQuality.Fmt": {
-    "message": "这次跨性别调整有 {0} 个翻转面，身体对应 {1}。Proteus 只保存翻转面不超过 {2} 个且对应至少 {3} 的调整。",
-    "description": "{0} folded faces and {1} the share matched, as found; {2} and {3} the limits. Percentages arrive formatted."
+  "Parts.Retarget.Refuse.CrossSexCoverage.Fmt": {
+    "message": "这次跨性别调整通过身体映射只对应了身体的 {0}。Proteus 只保存对应至少 {1} 的调整。",
+    "description": "Why a refit for the other sex is not saved: {0} the share of the body matched, as found; {1} the least that is saved. Percentages arrive formatted."
+  },
+  "Parts.Retarget.Race.CrossSexFolded.Fmt": {
+    "message": "这次跨性别调整中有 {0:N0} 个布料面翻转。翻转的面在游戏中会显示为破洞，分享前请检查这些位置。",
+    "description": "Said in the warning colour beside a refit for the other sex: {0} is a count of cloth faces turned over."
+  },
+  "Parts.Retarget.Race.BonesMoved.Fmt": {
+    "message": "{0}的骨骼缺少这件装备依赖的 {1} 根骨骼。它们的权重现在跟随骨骼中最近的一根，因此这些部分会随它移动，而不是独立移动：{2}",
+    "description": "Warning beside a refit for a picked race: {0} is the race picked; {1} a count of bones; {2} the moves, such as \"ya_shiri_phys_l → iv_shiri_l\" (bone names are not translated)."
+  },
+  "Parts.Retarget.Race.NeedsSkeleton.Fmt": {
+    "message": "来自 {1} 的{0}骨骼为这个模型提供了游戏自带骨骼没有的 {2} 根骨骼（{3}）。没有该骨骼的人会看到这些部分错位。",
+    "description": "Warning beside a refit for a picked race: {0} is the race picked; {1} the mod its skeleton comes from; {2} a count of bones; {3} their names (not translated)."
+  },
+  "Parts.Retarget.Race.RenameFailed.Fmt": {
+    "message": "无法重命名骨骼（{0}）",
+    "description": "Why a refit for a picked race was refused: the garment's bones could not be moved onto the race's; {0} is the technical reason."
   },
   "Parts.Retarget.Refuse.CrossSexLayout.Fmt": {
     "message": "跨性别时，Proteus 只能把 Bibo+ 或游戏布局的女性身体与 TBSE 或游戏布局的男性身体对应。{0} 模型使用 {1} 和 {2}。",
@@ -4412,7 +4452,7 @@
     "description": "Heads the dropdown that picks which race's model a refit is made and saved as."
   },
   "Parts.Retarget.Race.Tip": {
-    "message": "调整针对哪个种族。其他种族会得到自己的模型：按游戏弯曲的方式由这个模型制作，调整到该种族的身体上，并保存在该种族加载的位置。中原之民男性的上身或腿部装备，以及女性的腿部装备，也可以为另一性别调整。这个模型保持不变。",
+    "message": "调整针对哪个种族。其他种族会得到自己的模型：按游戏弯曲的方式由这个模型制作，调整到该种族的身体上，并保存在该种族加载的位置。中原之民的上身或腿部装备也可以为另一性别调整。这个模型保持不变。",
     "description": "Tooltip of Parts.Retarget.Race.Label."
   },
   "Parts.Retarget.Race.ThisModel.Fmt": {
@@ -5367,9 +5407,13 @@
     "message": "头发",
     "description": ""
   },
-  "HairPort.Refused.Folded.Fmt": {
-    "message": "弯折到 c{0:D4} 后会有 {1} 个三角形翻面",
-    "description": ""
+  "HairPort.Folded.Fmt": {
+    "message": "弯折到 c{0:D4} 后有 {1} 个三角形翻面，可能显示为破洞；请在游戏中检查",
+    "description": "A hair port saved with a warning: bent onto race {0}, {1} of the hairstyle's triangles turn inside out."
+  },
+  "HairPort.Scan.State.FittedWarn.Fmt": {
+    "message": "已适配 — {0}",
+    "description": "A hairstyle's state in the list: fitted, with {0} what to look at in game."
   },
   "HairPort.Refused.Declined": {
     "message": "其移植已被撤销，因此保持不变",

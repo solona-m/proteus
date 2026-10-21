@@ -3907,6 +3907,10 @@
     "message": "Siempre activado mientras el zapato conserva su propio pie o el guante su propia mano: si no, entrarían con él las piernas o los brazos nuevos enteros.",
     "description": ""
   },
+  "Parts.Retarget.ClearForcedTip": {
+    "message": "Siempre activado para las prendas superiores propias del juego, como en el reajuste automático: el juego hunde su tela en su propio cuerpo, así que siempre se empuja fuera del nuevo.",
+    "description": ""
+  },
   "Parts.Retarget.KeepFeet": {
     "message": "Conservar sus propios pies",
     "description": ""
@@ -4132,23 +4136,43 @@
     "description": ""
   },
   "Parts.Vanilla.Worn.Tip": {
-    "message": "Puesto pero sin mod. Al abrirlo se copia en un mod nuevo que puedes editar. Con «Talla del cuerpo» seleccionada, se abre para ajustarlo.",
-    "description": ""
-  },
-  "Parts.Vanilla.Editing.Fmt": {
-    "message": "{0} está abierto en el mod \"{1}\", una copia del original del juego que se ve igual hasta que lo cambies.",
+    "message": "Puesto, sin mod. Se abre tal cual y no se guarda nada hasta que lo cambies: tu primer cambio lo copia a un mod propio.",
     "description": ""
   },
   "Parts.Vanilla.ModDescription.Fmt": {
     "message": "{0}, copiado del juego por Proteus para editarlo.",
     "description": ""
   },
-  "Parts.Vanilla.EditTool.Tip": {
-    "message": "El equipo vanilla no tiene archivo de mod, así que elegir esto primero lo copia en un mod nuevo.",
-    "description": ""
-  },
   "Parts.Vanilla.WornSuffix": {
     "message": "(vanilla)",
+    "description": ""
+  },
+  "Parts.Vanilla.CopyNote.Fmt": {
+    "message": "Aún no se ha guardado nada. Tu primer cambio copia esto al mod «{0}».",
+    "description": ""
+  },
+  "Parts.Vanilla.Copied.Fmt": {
+    "message": "{0} se ha copiado al mod «{1}» con tu cambio.",
+    "description": ""
+  },
+  "Parts.Vanilla.EditedCopyThere.Fmt": {
+    "message": "«{0}» ya tiene una copia editada de esta pieza, así que tu cambio no se ha guardado. Para seguir editando esa copia, ábrela aquí (con el mod activado en Penumbra); para empezar de nuevo desde la del juego, borra el mod.",
+    "description": ""
+  },
+  "Parts.Vanilla.ModSwitchedOff.Fmt": {
+    "message": "«{0}» está desactivado, así que tu cambio no se ha guardado en él. Actívalo en Penumbra, o bórralo para empezar de nuevo.",
+    "description": ""
+  },
+  "Parts.Vanilla.CopyRefused.Fmt": {
+    "message": "No se ha podido guardar tu cambio, así que no se ha copiado nada: {0}",
+    "description": ""
+  },
+  "Parts.Vanilla.CopyRegistering": {
+    "message": "Tu edición se acaba de copiar a un mod nuevo y Penumbra aún lo está preparando. Vuelve a intentarlo en un momento.",
+    "description": ""
+  },
+  "Parts.Vanilla.NotRefittable": {
+    "message": "«Talla del cuerpo» no puede reajustar esta pieza. Elige otra herramienta para editarla.",
     "description": ""
   },
   "WhatsNew.HairPort.Head": {
@@ -4395,9 +4419,25 @@
     "message": "Entre sexos, los cuerpos sobre los que se hizo esta prenda tienen que ser cuerpos {0}. Elige en «Cuerpo original» el mod de cuerpo para el que se hizo.",
     "description": "{0} is a race such as \"Midlander F\". “Made for” is the body dropdown the garment was made on."
   },
-  "Parts.Retarget.Refuse.CrossSexQuality.Fmt": {
-    "message": "Este reajuste entre sexos salió con {0} caras dobladas y {1} del cuerpo emparejado. Proteus solo guarda uno con como mucho {2} caras dobladas y al menos {3} emparejado.",
-    "description": "{0} folded faces and {1} the share matched, as found; {2} and {3} the limits. Percentages arrive formatted."
+  "Parts.Retarget.Refuse.CrossSexCoverage.Fmt": {
+    "message": "Este reajuste entre sexos solo emparejó {0} del cuerpo a través de los mapas de cuerpo. Proteus solo guarda uno que empareje al menos {1}.",
+    "description": "Why a refit for the other sex is not saved: {0} the share of the body matched, as found; {1} the least that is saved. Percentages arrive formatted."
+  },
+  "Parts.Retarget.Race.CrossSexFolded.Fmt": {
+    "message": "{0:N0} cara(s) de tela quedaron dobladas en este reajuste entre sexos. Una cara doblada se ve como un agujero en el juego, así que revisa esas zonas antes de compartirlo.",
+    "description": "Said in the warning colour beside a refit for the other sex: {0} is a count of cloth faces turned over."
+  },
+  "Parts.Retarget.Race.BonesMoved.Fmt": {
+    "message": "Al esqueleto de {0} le faltan {1} hueso(s) de los que depende esta prenda. Su peso sigue ahora al hueso más cercano que sí tiene, así que esas partes se mueven con él en lugar de por su cuenta: {2}",
+    "description": "Warning beside a refit for a picked race: {0} is the race picked; {1} a count of bones; {2} the moves, such as \"ya_shiri_phys_l → iv_shiri_l\" (bone names are not translated)."
+  },
+  "Parts.Retarget.Race.NeedsSkeleton.Fmt": {
+    "message": "El esqueleto de {0} de {1} da a este modelo {2} hueso(s) que el esqueleto del juego no tiene ({3}). Quien no tenga ese esqueleto verá esas partes descolocadas.",
+    "description": "Warning beside a refit for a picked race: {0} is the race picked; {1} the mod its skeleton comes from; {2} a count of bones; {3} their names (not translated)."
+  },
+  "Parts.Retarget.Race.RenameFailed.Fmt": {
+    "message": "no se pudieron renombrar los huesos ({0})",
+    "description": "Why a refit for a picked race was refused: the garment's bones could not be moved onto the race's; {0} is the technical reason."
   },
   "Parts.Retarget.Refuse.CrossSexLayout.Fmt": {
     "message": "Entre sexos, Proteus solo puede emparejar cuerpos de mujer con la distribución de Bibo+ o del juego con cuerpos de hombre con la distribución de TBSE o del juego. Los modelos {0} usan {1} y {2}.",
@@ -4412,7 +4452,7 @@
     "description": "Heads the dropdown that picks which race's model a refit is made and saved as."
   },
   "Parts.Retarget.Race.Tip": {
-    "message": "Para qué raza es el reajuste. Otra raza recibe su propio modelo, hecho a partir de este tal como lo dobla el juego, reajustado al cuerpo de esa raza y guardado donde esa raza lo carga. Una prenda de torso o piernas de hombre Midlander, o una prenda de piernas de mujer, también puede reajustarse para el otro sexo. Este modelo se queda como está.",
+    "message": "Para qué raza es el reajuste. Otra raza recibe su propio modelo, hecho a partir de este tal como lo dobla el juego, reajustado al cuerpo de esa raza y guardado donde esa raza lo carga. Una prenda de torso o piernas Midlander también puede reajustarse para el otro sexo. Este modelo se queda como está.",
     "description": "Tooltip of Parts.Retarget.Race.Label."
   },
   "Parts.Retarget.Race.ThisModel.Fmt": {
@@ -5367,9 +5407,13 @@
     "message": "Pelo",
     "description": ""
   },
-  "HairPort.Refused.Folded.Fmt": {
-    "message": "al doblarlo sobre c{0:D4}, {1} de sus triángulos quedarían del revés",
-    "description": ""
+  "HairPort.Folded.Fmt": {
+    "message": "al doblarlo sobre c{0:D4}, {1} de sus triángulos quedan del revés y pueden verse como agujeros; revísalo en el juego",
+    "description": "A hair port saved with a warning: bent onto race {0}, {1} of the hairstyle's triangles turn inside out."
+  },
+  "HairPort.Scan.State.FittedWarn.Fmt": {
+    "message": "ajustado — {0}",
+    "description": "A hairstyle's state in the list: fitted, with {0} what to look at in game."
   },
   "HairPort.Refused.Declined": {
     "message": "su portado se deshizo, así que se deja como está",

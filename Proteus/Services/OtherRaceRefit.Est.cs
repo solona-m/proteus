@@ -19,13 +19,15 @@ internal enum EstOutcome
     /// game and has the bones.</summary>
     Carry,
 
-    /// <summary>Bones the new race would not have. The bake is refused over them, naming them (see
-    /// <see cref="OtherRaceWearer.Build"/>).</summary>
+    /// <summary>Bones the new race would not have. They are moved onto bones it has (see <see cref="SkeletonRemap"/> and
+    /// <see cref="OtherRaceWearer.Build"/>), and the extra-skeleton table planned again for what is left.</summary>
     Missing,
 }
 
-/// <param name="Entry">The extra skeleton's entry, with <see cref="EstOutcome.Present"/> or <see cref="EstOutcome.Carry"/>.</param>
-/// <param name="Skeleton">That skeleton, read; its bones join the wearer's so they bend like their parents.</param>
+/// <param name="Entry">The extra skeleton's entry, with <see cref="EstOutcome.Present"/> or <see cref="EstOutcome.Carry"/>;
+/// with <see cref="EstOutcome.Missing"/>, the entry whose skeleton was read but lacked some bones, else 0.</param>
+/// <param name="Skeleton">That skeleton, read; its bones join the wearer's so they bend like their parents. With
+/// <see cref="EstOutcome.Missing"/> only to say which bones it has — never merged, never saved.</param>
 /// <param name="Missing">With <see cref="EstOutcome.Missing"/>, the bones not found.</param>
 internal sealed record EstPlan(EstOutcome Outcome, int Entry = 0, HavokSkeleton? Skeleton = null,
                                IReadOnlyList<string>? Missing = null)
@@ -75,14 +77,14 @@ internal static partial class OtherRaceRefit
             var skeleton = EstTable.SkeletonPath(target, slot, own) is { } at ? skeletonAt(at) : null;
             var lacking = Lacking(skeleton);
             return lacking.Count == 0 ? new EstPlan(EstOutcome.Present, own, skeleton)
-                                      : new EstPlan(EstOutcome.Missing, Missing: lacking);
+                                      : new EstPlan(EstOutcome.Missing, skeleton != null ? own : 0, skeleton, lacking);
         }
         if (EntryOf(drawn) is { } carried and > 0)
         {
             var skeleton = EstTable.SkeletonPath(target, slot, carried) is { } at ? skeletonAt(at) : null;
             var lacking = Lacking(skeleton);
             return lacking.Count == 0 ? new EstPlan(EstOutcome.Carry, carried, skeleton)
-                                      : new EstPlan(EstOutcome.Missing, Missing: lacking);
+                                      : new EstPlan(EstOutcome.Missing, skeleton != null ? carried : 0, skeleton, lacking);
         }
         return new EstPlan(EstOutcome.Missing, Missing: needed);
     }

@@ -24,6 +24,12 @@ public class VanillaGearRefitLocalTests(ITestOutputHelper output)
     private const string Rue = LocalData.Mods + ":hs-Rue+-2.2.7-y0f";
     private const string LavaBod = LocalData.Mods + ":LavaBod+ 2.2";
 
+    private const string Rosaline = LocalData.Mods + ":hs-Rosaline-1.1.2-hM5N";
+
+    /// <summary>[HS] Rosaline (Base)'s "Coconut" smallclothes chest: a very large bust.</summary>
+    private const string Coconut = "files/common/7/c0201e0000_top.mdl";
+
+    private const string Coatee = "Witch's Coatee";
     private const string Maiming = "Neo-Ishgardian Top of Maiming";
     private const string Scion = "Scion Adventurer's";
     private const string Dirndl = "Dirndl's Bodice";
@@ -436,7 +442,7 @@ public class VanillaGearRefitLocalTests(ITestOutputHelper output)
         output.WriteLine($"  without the standoff pass: seen {seenNoPull:0.0} cm²; skin over the upper chest {SkinOver(tucked):0.0} cm² "
                          + $"(without {SkinOver(noPull):0.0})");
         Assert.True(seen <= seenNoPull + 0.5, $"{seen:0.0} cm² seen through against {seenNoPull:0.0} without the pass");
-        // Accepted at 1.0 since build 1349: with the game chest's bra read (see BodyRetarget.SourceWorn) the pass takes 0.9 of
+        // Accepted at 1.0 since build 1359: with the game chest's bra read (see BodyRetarget.SourceWorn) the pass takes 0.9 of
         // 347 cm² off on Almond XS — it still reads the author's standoff off the chest's skin alone, and reading the bra
         // there too was tried and left the neckline floating worse (a point 9.0 mm off against the author's 3.8).
         if (garmentName == Dirndl && modNeed == Neolithe)
@@ -446,7 +452,7 @@ public class VanillaGearRefitLocalTests(ITestOutputHelper output)
         // shows; with it, no more than the game's own top shows. Measured: Neolithe Almond XS 126.9 → 12.1 cm², Rue+ 130.6 →
         // 17.7, against the game's own 80.5. LavaBod+'s Teardrop buries the bodice deeper than the usual clear reaches: the
         // tuck alone closed some of it (231.6 → 162.2), the deep clear the rest (→ 57.2). Every other top is no worse.
-        // The hole as the bodice showed it before any of it was mended — the game chest's bra unread too (build 1349): read,
+        // The hole as the bodice showed it before any of it was mended — the game chest's bra unread too (build 1359): read,
         // the bra alone closes most of it on Almond XS (126.9 → 46.0 cm² untucked), and the metric is proved on the hole.
         if (garmentName == Dirndl && modNeed == Neolithe)
         {
@@ -808,7 +814,7 @@ public class VanillaGearRefitLocalTests(ITestOutputHelper output)
         float BreastShare(BodySurface.Hit h)
             => BodyRetarget.EndShareOf(skin, h.A, Mune) * h.U + BodyRetarget.EndShareOf(skin, h.B, Mune) * h.V
                + BodyRetarget.EndShareOf(skin, h.C, Mune) * h.W;
-        // 1 mm, not 0.5, for the Scion Adventurer's top on Neolithe SFW XS alone since build 1349: with the game chest's bra
+        // 1 mm, not 0.5, for the Scion Adventurer's top on Neolithe SFW XS alone since build 1359: with the game chest's bra
         // read, the pass carries one point of it 0.5 mm out over the bust (v747, 6.6 → 7.1 mm) — the pass still takes its
         // standoff off the chest's skin alone. Tried and dropped: reading the bra there too floated the neckline worse.
         float outwardSlack = garmentName == Scion && modNeed == Neolithe && rel == "default chest - smallclothes/sfw xs.mdl"
@@ -1124,6 +1130,110 @@ public class VanillaGearRefitLocalTests(ITestOutputHelper output)
         output.WriteLine($"  open skin seen from above: {string.Join(", ", spans.Select(s => $"{s.Key} x{s.Value}"))}");
         void Count(string key) => spans[key] = spans.GetValueOrDefault(key) + 1;
     }
+
+    /// <summary>
+    /// The Body size tool refits the game's own top as the automatic refit does (see <see cref="RetargetInputs.StudioSkin"/>).
+    /// Reported on the game's Witch's Coatee refitted from the vanilla body onto [HS] Rosaline (Base)'s Coconut in the
+    /// Studio with its defaults — "Push cloth out of the body" off, so nothing was cleared or tucked — which left the
+    /// bust open beside the lapel tips. The user's run is reproduced exactly as the game logged it (moved up to 46.3 mm,
+    /// 268 snapped, 429 pushed up to 398.46 mm, 13 too far, 1 folded, skin 650 out / 6,310 in, 1,173 reweighted, 33 fitted
+    /// below an open edge), and the see-through it left measured 3.3 cm² against 2.3 for the refit as it is now made.
+    /// </summary>
+    [LocalDataTheory(LocalData.GameData, Rosaline)]
+    [InlineData(Coatee, Coconut)]
+    [Trait("Plan", "AC-studio-game-top-1")]
+    [Trait("Plan", "AC-studio-game-top-2")]
+    public void A_studio_game_top_with_defaults_is_the_automatic_refit(string garmentName, string rel)
+    {
+        var r = Plan(garmentName, Rosaline, rel);
+        BodyRetarget.Planned Studio(bool gameGear)
+        {
+            var rule = RetargetInputs.StudioSkin(replaceSkin: true, cutHidden: true, clearBody: false, gameGear, "_top", crossSex: false);
+            return BodyRetarget.Plan(r.Garment, r.Bytes, [r.Pair], "_top", held: new HashSet<int>(), replaceSkin: true,
+                                     acrossBodies: true, clearBody: rule.ClearBody, cutHidden: true,
+                                     keepShape: RefitCore.ShapePieces(r.Garment, RefitCore.DefaultKeepShape(r.Garment)),
+                                     tuckSlot: rule.TuckSlot, deepClear: rule.DeepClear, keepStandoff: rule.KeepStandoff,
+                                     liftUnderbust: true);
+        }
+
+        // The run as the user made it, before this change: what the game logged, exactly.
+        var user = Studio(gameGear: false).Report;
+        Assert.Equal((268, 429, 13, 1, 650, 6310, 1173, 33),
+                     (user.Snapped, user.Pushed, user.Missed, user.Folded, user.Swap?.Removed, user.Swap?.Added,
+                      user.Swap?.Reweighted, user.OpenEdgeFitted));
+        Assert.Equal(46.3, user.WorstMove * 1000, 1);
+
+        // [AC-studio-game-top-1] Now: the game's top in the Studio is the automatic refit's, byte for byte.
+        var studio = Studio(gameGear: true);
+        Assert.Equal(r.Game.Model, studio.Model);
+
+        // [AC-studio-game-top-2] And it leaves less to see through than the run reported.
+        var culled = Culled(r.Data, r.Garment);
+        var body = ModelPartReader.Read(File.ReadAllBytes(r.Target))!;
+        double before = SeenIntoGarment(ModelPartReader.Read(r.Drawn(Studio(gameGear: false)))!, culled, body);
+        double now = SeenIntoGarment(ModelPartReader.Read(r.Drawn(studio))!, culled, body);
+        output.WriteLine($"seen into the garment: user's run {before:0.0} cm², now {now:0.0}");
+        Assert.True(now <= before, $"{now:0.0} cm² seen into the garment against {before:0.0} before");
+    }
+
+    /// <summary>
+    /// Torso skin of <paramref name="body"/>, cm², that <paramref name="m"/> leaves undrawn and through which a camera sees
+    /// into the garment: for each undrawn front skin triangle within <see cref="SlitNear"/> of the skin the model draws,
+    /// from the views of <see cref="NecklineSeenThrough"/>, nothing <paramref name="m"/> draws stands in front of it, and
+    /// past it, away from the camera, the first face the camera can see is no outer face turned toward it — only a back
+    /// face a material draws, or nothing at all: the inside of the garment, or the void. A slit at the neckline looks so.
+    /// Only beside the drawn skin's edge: further off is a far larger bust the cut took away under a flatter top, seen past
+    /// that top's outline from the side — its shape, not a hole (the Witch's Coatee on Rosaline's Coconut: the breast 63 mm
+    /// in front of the bodice; the game's own top on the vanilla body file, 18 mm).
+    /// </summary>
+    private static double SeenIntoGarment(ModelParts m, IReadOnlyDictionary<string, bool> culled, ModelParts body)
+    {
+        var tris = DrawnTriangles(m, culled);
+        var grid = new TriangleGrid(tris.Select(t => (t.A, t.B, t.C)).ToList());
+        var drawnSkin = new BodySurface(m, 0.01f);
+        var clothY = ClothTriangles(m).SelectMany(t => new[] { t.A.Y, t.B.Y, t.C.Y }).ToList();
+        float low = clothY.Min() + 0.02f, high = clothY.Max() - 0.02f;
+
+        var views = new List<Vector3>();
+        foreach (int elevation in new[] { 0, 20, 40, 60, 75 })
+            foreach (int azimuth in new[] { 0, -25, 25 })
+            {
+                float el = elevation * MathF.PI / 180f, az = azimuth * MathF.PI / 180f;
+                views.Add(new Vector3(MathF.Sin(az) * MathF.Cos(el), MathF.Sin(el), MathF.Cos(az) * MathF.Cos(el)));
+            }
+
+        double area = 0;
+        foreach (var part in body.Parts.Where(p => p.Island < 0 && SecondSkinWriter.IsBodySkinMaterial(p.Material)))
+            for (int t = 0; t + 2 < part.Triangles.Length; t += 3)
+            {
+                int ia = part.Triangles[t], ib = part.Triangles[t + 1], ic = part.Triangles[t + 2];
+                Vector3 a = At(body, ia), b = At(body, ib), c = At(body, ic);
+                var cross = Vector3.Cross(b - a, c - a);
+                if (cross.LengthSquared() < 1e-14f) continue;
+                var centre = (a + b + c) / 3f;
+                if (MathF.Abs(centre.X) > ArmFrom || centre.Z <= 0f || centre.Y < low || centre.Y > high) continue;
+                if (!drawnSkin.Nearest(centre, SlitNear, out var near) || near.Distance <= 0.002f) continue;
+                var normal = Vector3.Normalize(cross);
+                if (Vector3.Dot(normal, NormalAt(body, ia) + NormalAt(body, ib) + NormalAt(body, ic)) < 0) normal = -normal;
+                var origin = centre + normal * 0.001f;
+                foreach (var toCamera in views)
+                {
+                    if (Vector3.Dot(normal, toCamera) <= 0.1f) continue;
+                    bool Seen(int i) => !tris[i].Culled || Vector3.Dot(tris[i].Front, toCamera) > 0f;
+                    if (grid.Along(origin, toCamera, 1f).Any(Seen)) continue;
+                    // Past the missing skin: an outer face turned to the camera is what it sees there — no hole.
+                    if (grid.Nearest(origin, -toCamera, 1f, Seen) is int behind && Vector3.Dot(tris[behind].Front, toCamera) > 0f)
+                        continue;
+                    area += cross.Length() / 2;
+                    break;
+                }
+            }
+        return area * 1e4;
+    }
+
+    /// <summary>How far from the skin a model draws undrawn skin still lies along its edge (25 mm): see
+    /// <see cref="SeenIntoGarment"/>.</summary>
+    private const float SlitNear = 0.025f;
 
     /// <summary>The c0201 body model of the first game item named <paramref name="name"/> worn on the body.</summary>
     internal static byte[] TopOf(Lumina.GameData data, string name)
@@ -1528,6 +1638,17 @@ public class VanillaGearRefitLocalTests(ITestOutputHelper output)
                         if (seen.Add(i) && Hit(o, d, tris[i]) is float t && t <= reach) yield return i;
                 }
             }
+        }
+
+        /// <summary>The nearest triangle the segment from <paramref name="o"/> along <paramref name="d"/> (unit) crosses within
+        /// <paramref name="reach"/> that <paramref name="counts"/> lets through, or null for none.</summary>
+        public int? Nearest(Vector3 o, Vector3 d, float reach, Func<int, bool> counts)
+        {
+            int? best = null;
+            float bestT = float.MaxValue;
+            foreach (int i in Along(o, d, reach))
+                if (Hit(o, d, tris[i]) is float t && t < bestT && counts(i)) { bestT = t; best = i; }
+            return best;
         }
 
         /// <summary>Möller–Trumbore, either face, forward of <paramref name="o"/>.</summary>
