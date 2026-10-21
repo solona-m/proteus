@@ -740,7 +740,7 @@ public partial class MeshVolumeSolveTests
     }
 
     [Fact]
-    [Trait("Plan", "EDGE-studio-move-skin-17")]
+    [Trait("Plan", "mirror-skin-move-brushes")]
     public void MirroredSkinInflateIsSymmetric()
     {
         var l = Layered(21, 0.005f, centred: true);
@@ -994,13 +994,14 @@ public partial class MeshVolumeSolveTests
     }
 
     /// <summary>
-    /// A mirrored Move of skin moves the picked skin on its own side, with the cloth on it, and nothing on the other
-    /// side: skin has no mirror match, and its reflection must not take the cloth lying on the other side's skin.
+    /// A mirrored Move of skin moves the picked skin on its own side and the matching skin on the other as its mirror
+    /// image, each with the cloth riding it; the middle stays. Skin pairs with skin only, so the reflection does not
+    /// take the cloth lying on the other side's skin as its match: that cloth moves only as a rider.
     /// </summary>
     [Fact]
     [Trait("Plan", "AC-studio-move-skin-3")]
-    [Trait("Plan", "EDGE-studio-move-skin-17")]
-    public void AMirroredSkinMoveLeavesTheOtherSideAlone()
+    [Trait("Plan", "AC-mirror-skin-move-1")]
+    public void AMirroredSkinMoveCarriesTheOtherSidesSkin()
     {
         var l = Layered(21, 0.001f, centred: true);
         var solve = SkinSolve(l.Model);
@@ -1008,13 +1009,21 @@ public partial class MeshVolumeSolveTests
         var pivot = At(l.Model.Positions, l.SkinAt[15, 10]);
         Assert.True(solve.BeginMove(picked, adjacent: false, falloffRadius: 0f,
                                     mirror: new MeshVolumeSolve.MoveMirror(MeshVolumeSolve.MoveKind.Translate, pivot)) > 0);
-        solve.MoveTo(new Vector3(0f, 0.005f, 0f));
+        Assert.Equal(MeshVolumeSolve.MirrorMode.Sides, solve.DragMirror?.Mode);
+        Assert.Equal(solve.DragMirror!.Value.Selected, solve.DragMirror!.Value.Paired);
+        var offset = new Vector3(0.002f, 0.005f, 0f);
+        solve.MoveTo(offset);
         solve.EndMove();
 
         var after = solve.Positions();
-        Assert.Equal(0.005f, Moved(l.Model, after, l.SkinAt[15, 10]).Y, 1e-6f);
-        Assert.Equal(0.005f, Moved(l.Model, after, l.ClothAt[15, 10]).Y, 1e-4f);
-        for (int i = 0; i < 7; i++)
+        for (int j = 0; j < 21; j++)
+        {
+            Assert.True(Vector3.Distance(offset, Moved(l.Model, after, l.SkinAt[15, j])) < 1e-6f);
+            Assert.True(Vector3.Distance(MirrorMotion.Reflect(offset), Moved(l.Model, after, l.SkinAt[5, j])) < 1e-6f);
+            Assert.True(Vector3.Distance(offset, Moved(l.Model, after, l.ClothAt[15, j])) < 1e-4f);
+            Assert.True(Vector3.Distance(MirrorMotion.Reflect(offset), Moved(l.Model, after, l.ClothAt[5, j])) < 1e-4f);
+        }
+        for (int i = 8; i <= 12; i++)
         for (int j = 0; j < 21; j++)
         {
             Assert.Equal(Vector3.Zero, Moved(l.Model, after, l.ClothAt[i, j]));
@@ -1049,13 +1058,13 @@ public partial class MeshVolumeSolveTests
     }
 
     /// <summary>
-    /// Skin and cloth picked together, mirrored. The cloth is mirrored as ever — here a strip across the centre, its own
-    /// mirror, which keeps only the drag's symmetric part — while the picked skin, and cloth riding it that was not
-    /// picked, take the drag itself on their own side. The other side's skin stays.
+    /// Skin and cloth picked together, mirrored, the cloth a strip across the centre — its own mirror. The whole drag is
+    /// then centred: the strip, the picked skin, the other side's matching skin and the cloth riding both keep only the
+    /// drag's symmetric part.
     /// </summary>
     [Fact]
     [Trait("Plan", "AC-studio-move-skin-3")]
-    [Trait("Plan", "EDGE-studio-move-skin-17")]
+    [Trait("Plan", "EDGE-mirror-skin-move-4")]
     public void AMirroredMoveOfSkinWithACentredClothStrip()
     {
         var l = Layered(21, 0.001f, centred: true);
@@ -1075,23 +1084,23 @@ public partial class MeshVolumeSolveTests
         solve.EndMove();
 
         var after = solve.Positions();
+        var centred = MirrorMotion.CentredOffset(offset);
         // The strip: the symmetric part, X dropped.
-        Assert.True(Vector3.Distance(MirrorMotion.CentredOffset(offset), Moved(l.Model, after, l.ClothAt[10, 5])) < 1e-5f);
-        // The picked skin, and the cloth riding it that was not picked: the drag itself.
-        Assert.True(Vector3.Distance(offset, Moved(l.Model, after, l.SkinAt[16, 5])) < 1e-5f);
-        Assert.True(Vector3.Distance(offset, Moved(l.Model, after, l.ClothAt[16, 5])) < 1e-4f);
-        // The other side's skin, unpicked, stays.
-        Assert.Equal(Vector3.Zero, Moved(l.Model, after, l.SkinAt[4, 5]));
+        Assert.True(Vector3.Distance(centred, Moved(l.Model, after, l.ClothAt[10, 5])) < 1e-5f);
+        // The picked skin, its match across the centre, and the cloth riding the picked skin: the symmetric part too.
+        Assert.True(Vector3.Distance(centred, Moved(l.Model, after, l.SkinAt[16, 5])) < 1e-5f);
+        Assert.True(Vector3.Distance(centred, Moved(l.Model, after, l.SkinAt[4, 5])) < 1e-5f);
+        Assert.True(Vector3.Distance(centred, Moved(l.Model, after, l.ClothAt[16, 5])) < 1e-4f);
         Assert.Equal(0, Folded(l.Model, after));
     }
 
     /// <summary>
     /// The same, with cloth on one side whose mirror match is on the other: that cloth and its match move as mirror
-    /// images, while the picked skin takes the drag on its own side and the other side's skin stays.
+    /// images, and so do the picked skin and its match.
     /// </summary>
     [Fact]
     [Trait("Plan", "AC-studio-move-skin-3")]
-    [Trait("Plan", "EDGE-studio-move-skin-17")]
+    [Trait("Plan", "AC-mirror-skin-move-1")]
     public void AMirroredMoveOfSkinWithClothOnOneSide()
     {
         var l = Layered(21, 0.001f, centred: true);
@@ -1114,9 +1123,9 @@ public partial class MeshVolumeSolveTests
         // The patch on its own side, and its match across the centre as the mirror image.
         Assert.True(Vector3.Distance(offset, Moved(l.Model, after, l.ClothAt[16, 5])) < 1e-4f);
         Assert.True(Vector3.Distance(MirrorMotion.Reflect(offset), Moved(l.Model, after, l.ClothAt[4, 5])) < 1e-4f);
-        // The picked skin: the drag itself. The other side's skin stays.
+        // The picked skin, and its match as the mirror image.
         Assert.True(Vector3.Distance(offset, Moved(l.Model, after, l.SkinAt[16, 5])) < 1e-5f);
-        Assert.Equal(Vector3.Zero, Moved(l.Model, after, l.SkinAt[4, 5]));
+        Assert.True(Vector3.Distance(MirrorMotion.Reflect(offset), Moved(l.Model, after, l.SkinAt[4, 5])) < 1e-5f);
         Assert.Equal(0, Folded(l.Model, after));
     }
 
@@ -1131,13 +1140,13 @@ public partial class MeshVolumeSolveTests
     }
 
     /// <summary>
-    /// Picked cloth lying on picked skin keeps its mirror: the strip's cloth over the picked skin takes the symmetric
-    /// part like the rest of the strip, not the skin's own drag.
+    /// Picked skin and picked cloth across the centre stay centred: the strip's cloth over the picked skin, that skin,
+    /// and the skin matching it across the centre all take the symmetric part.
     /// </summary>
     [Fact]
     [Trait("Plan", "AC-studio-move-skin-3")]
-    [Trait("Plan", "EDGE-studio-move-skin-17")]
-    public void PickedClothOnPickedSkinKeepsItsMirror()
+    [Trait("Plan", "AC-mirror-skin-move-2")]
+    public void PickedSkinAndClothAcrossTheCentreStayCentred()
     {
         var l = Layered(21, 0.001f, centred: true);
         var solve = SkinSolve(l.Model);
@@ -1152,19 +1161,22 @@ public partial class MeshVolumeSolveTests
         solve.EndMove();
 
         var after = solve.Positions();
-        // ClothAt[12, 5] is strip cloth (X = 20 mm) over picked skin.
-        Assert.True(Vector3.Distance(MirrorMotion.CentredOffset(offset), Moved(l.Model, after, l.ClothAt[12, 5])) < 1e-5f);
-        Assert.True(Vector3.Distance(offset, Moved(l.Model, after, l.SkinAt[12, 5])) < 1e-5f);
+        // ClothAt[12, 5] is strip cloth (X = 20 mm) over picked skin; SkinAt[8, 5] is that skin's match.
+        var centred = MirrorMotion.CentredOffset(offset);
+        Assert.True(Vector3.Distance(centred, Moved(l.Model, after, l.ClothAt[12, 5])) < 1e-5f);
+        Assert.True(Vector3.Distance(centred, Moved(l.Model, after, l.SkinAt[12, 5])) < 1e-5f);
+        Assert.True(Vector3.Distance(centred, Moved(l.Model, after, l.SkinAt[8, 5])) < 1e-5f);
     }
 
     /// <summary>
-    /// A mirrored Rotate about a slanted axis, centred: the picked skin turns by the whole rotation, and its normals turn
-    /// with it — not by the symmetric part the strip keeps, which would be written into the mod as wrong shading.
+    /// A mirrored Rotate about a slanted axis, centred: the picked skin keeps the symmetric part of the turn as the strip
+    /// does, and its normals are that part's — the strip's own, and the mirror image of the matching skin's — never the
+    /// whole turn's.
     /// </summary>
     [Fact]
     [Trait("Plan", "AC-studio-move-skin-3")]
-    [Trait("Plan", "EDGE-studio-move-skin-17")]
-    public void AMirroredRotateTurnsPickedSkinNormalsByTheWholeTurn()
+    [Trait("Plan", "AC-mirror-skin-move-8")]
+    public void AMirroredRotateTurnsSkinNormalsAsItsMirror()
     {
         var l = Layered(21, 0.001f, centred: true);
         var solve = SkinSolve(l.Model);
@@ -1180,13 +1192,14 @@ public partial class MeshVolumeSolveTests
         solve.TransformTo(turn);
         solve.EndMove();
 
-        var expected = Vector3.Normalize(Vector3.TransformNormal(Vector3.UnitY, turn));
-        var n = solve.NormalAt(l.SkinAt[17, 10]);
-        Assert.True(Vector3.Distance(expected, Vector3.Normalize(new Vector3(n.X, n.Y, n.Z))) < 1e-3f,
-                    $"picked skin's normal is {n}, the turn gives {expected}");
-        var s = solve.NormalAt(l.ClothAt[10, 10]);
-        Assert.True(Vector3.Distance(expected, Vector3.Normalize(new Vector3(s.X, s.Y, s.Z))) > 1e-2f,
-                    "the strip should keep only the symmetric part of the turn");
+        var whole = Vector3.Normalize(Vector3.TransformNormal(Vector3.UnitY, turn));
+        var picked = Vector3.Normalize(V(solve.NormalAt(l.SkinAt[17, 10])));
+        var strip = Vector3.Normalize(V(solve.NormalAt(l.ClothAt[10, 10])));
+        var match = Vector3.Normalize(V(solve.NormalAt(l.SkinAt[3, 10])));
+        Assert.True(Vector3.Distance(strip, picked) < 1e-3f, $"picked skin's normal is {picked}, the strip's {strip}");
+        Assert.True(Vector3.Distance(MirrorMotion.Reflect(match), picked) < 1e-3f,
+                    $"picked skin's normal is {picked}, its match's mirrored {MirrorMotion.Reflect(match)}");
+        Assert.True(Vector3.Distance(whole, picked) > 1e-2f, "the picked skin should keep only the symmetric part of the turn");
     }
 
     /// <summary>

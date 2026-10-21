@@ -2856,7 +2856,7 @@
     "description": ""
   },
   "Parts.Mirror.Tip": {
-    "message": "Agit sur les deux côtés à la fois, en miroir par rapport au centre du corps. Les pinceaux peignent aussi l'image miroir ; Déplacer, Pivoter et Échelle déplacent le tissu correspondant de l'autre côté en miroir. Une pièce qui est son propre miroir reste centrée.",
+    "message": "Agit sur les deux côtés à la fois, en miroir par rapport au centre du corps. Les pinceaux peignent aussi l'image miroir ; Déplacer, Pivoter et Échelle déplacent le tissu correspondant de l'autre côté en miroir — et, avec « Déplacer aussi la peau », la peau correspondante. Une pièce qui est son propre miroir reste centrée.",
     "description": "Tooltip on the Mirror left/right checkbox, shown under the brushes and under Move, Rotate and Scale."
   },
   "Parts.Move.Mirror.Paired.Fmt": {

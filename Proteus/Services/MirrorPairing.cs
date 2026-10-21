@@ -1,16 +1,18 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using Vec3 = Proteus.Services.SecondSkinWriter.Vec3;
 
 namespace Proteus.Services;
 
 /// <summary>
-/// Finds, for a mirrored Move, Rotate or Scale, the cloth on the other side of X = 0 that matches a selection: the
-/// node each selected node reflects onto, and the whole matching region however differently that side is meshed.
+/// Finds, for a mirrored Move, Rotate or Scale, what on the other side of X = 0 matches a selection: the node each
+/// selected node reflects onto, and the whole matching region however differently that side is meshed.
 /// <para/>
-/// Skin is never a match: tight cloth sits a millimetre over the body, and the body's own asymmetry would otherwise
-/// make skin the nearest node. Among cloth, the same material facing the mirrored way is preferred, so the jacket
-/// over a bra is not taken for the bra. Authored positions are searched first, so an earlier one-sided edit does not
+/// Each kind matches only its own: cloth matches cloth, and skin (moved with "Move skin too") matches skin. Tight
+/// cloth sits a millimetre over the body, and the body's own asymmetry would otherwise make skin the nearest node to
+/// cloth's reflection, or cloth the nearest to skin's. Among cloth, the same material facing the mirrored way is
+/// preferred, so the jacket over a bra is not taken for the bra. Authored positions are searched first, so an earlier one-sided edit does not
 /// break the pairing; positions as they now stand are the fallback, for a piece the user has since straightened.
 /// </summary>
 internal sealed class MirrorPairing
@@ -26,15 +28,19 @@ internal sealed class MirrorPairing
     private readonly float[] tol;
 
     private readonly float cell;
-    private Dictionary<(int, int, int), List<int>>? authoredGrid;
-    private Dictionary<(int, int, int), List<int>>? currentGrid;
-    private int currentVersion = -1;
+
+    /// <summary>Per kind — [0] cloth, [1] skin — the nodes bucketed by authored position, built when first asked for.</summary>
+    private readonly Dictionary<(int, int, int), List<int>>?[] authoredGrid = new Dictionary<(int, int, int), List<int>>?[2];
+
+    /// <summary>Per kind, the nodes bucketed as they now stand, and the edit that grid reflects.</summary>
+    private readonly Dictionary<(int, int, int), List<int>>?[] currentGrid = new Dictionary<(int, int, int), List<int>>?[2];
+    private readonly int[] currentVersion = [-1, -1];
 
     /// <param name="at">Authored node positions.</param>
     /// <param name="normal">Authored node normals, unit length.</param>
     /// <param name="normalUsable">Whether a node's normal means anything: false where opposite normals were welded
     /// (a double-sided card), which then skips the facing test.</param>
-    /// <param name="skin">Skin nodes, never a match.</param>
+    /// <param name="skin">Skin nodes: they match skin only, and cloth matches cloth only.</param>
     /// <param name="material">A material id per node; −1 for none.</param>
     /// <param name="adj">Node adjacency.</param>
     /// <param name="meanEdge">The mesh's mean edge length.</param>
@@ -80,19 +86,19 @@ internal sealed class MirrorPairing
     {
         var partner = new Dictionary<int, int>();
         var held = new HashSet<int>();
-        authoredGrid ??= BuildGrid(n => at[n]);
 
         foreach (int s in seeds)
         {
-            int p = Best(s, Reflect(at[s]), authoredGrid, n => at[n]);
+            int k = Kind(s);
+            int p = Best(s, Reflect(at[s]), Authored(k), n => at[n]);
             if (p < 0)
             {
-                if (currentGrid == null || currentVersion != editVersion)
+                if (currentGrid[k] == null || currentVersion[k] != editVersion)
                 {
-                    currentGrid = BuildGrid(here);
-                    currentVersion = editVersion;
+                    currentGrid[k] = BuildGrid(here, k);
+                    currentVersion[k] = editVersion;
                 }
-                p = Best(s, Reflect(here(s)), currentGrid, here);
+                p = Best(s, Reflect(here(s)), currentGrid[k]!, here);
             }
             if (p < 0) continue;
             // The best match is the match: a locked one holds, it does not hand over to a worse candidate.
@@ -100,8 +106,23 @@ internal sealed class MirrorPairing
             else partner[s] = p;
         }
 
-        return new Pairs(partner, held, ReverseRegion(seeds, locked, partner));
+        // Each kind's region on its own, so neither widens the other's: cloth welded to skin is not "joined" to a
+        // cloth partner through a skin one.
+        var reverse = new Dictionary<int, int>();
+        for (int k = 0; k < 2; k++)
+        {
+            var ofKind = seeds.Where(s => Kind(s) == k).ToList();
+            if (ofKind.Count == 0) continue;
+            var kindPartner = partner.Where(e => Kind(e.Key) == k).ToDictionary(e => e.Key, e => e.Value);
+            foreach (var (m, s) in ReverseRegion(ofKind, locked, kindPartner, k)) reverse[m] = s;
+        }
+        return new Pairs(partner, held, reverse);
     }
+
+    /// <summary>Node <paramref name="n"/>'s kind: 1 skin, 0 cloth.</summary>
+    private int Kind(int n) => skin[n] ? 1 : 0;
+
+    private Dictionary<(int, int, int), List<int>> Authored(int kind) => authoredGrid[kind] ??= BuildGrid(n => at[n], kind);
 
     private static Vec3 Reflect(Vec3 v) => new(-v.X, v.Y, v.Z);
 
@@ -114,12 +135,13 @@ internal sealed class MirrorPairing
     private (int, int, int) CellOf(Vec3 p)
         => ((int)MathF.Floor(p.X / cell), (int)MathF.Floor(p.Y / cell), (int)MathF.Floor(p.Z / cell));
 
-    private Dictionary<(int, int, int), List<int>> BuildGrid(Func<int, Vec3> pos)
+    /// <summary>The nodes of one kind (<see cref="Kind"/>) bucketed by <paramref name="pos"/>.</summary>
+    private Dictionary<(int, int, int), List<int>> BuildGrid(Func<int, Vec3> pos, int kind)
     {
         var grid = new Dictionary<(int, int, int), List<int>>();
         for (int n = 0; n < at.Length; n++)
         {
-            if (skin[n]) continue;
+            if (Kind(n) != kind) continue;
             var key = CellOf(pos(n));
             if (!grid.TryGetValue(key, out var list)) grid[key] = list = [];
             list.Add(n);
@@ -129,7 +151,7 @@ internal sealed class MirrorPairing
 
     /// <summary>
     /// How well <paramref name="candidate"/> matches <paramref name="seed"/>: 1 for the same material facing the
-    /// mirrored way, 2 for another material facing the mirrored way, 3 for any other cloth.
+    /// mirrored way, 2 for another material facing the mirrored way, 3 for any other node of the seed's own kind.
     /// </summary>
     private int Tier(int seed, int candidate)
     {
@@ -140,7 +162,7 @@ internal sealed class MirrorPairing
         return material[seed] == material[candidate] ? 1 : 2;
     }
 
-    /// <summary>The best cloth node within the seed's tolerance of <paramref name="q"/>, by tier and then distance;
+    /// <summary>The best node of the grid's kind within the seed's tolerance of <paramref name="q"/>, by tier and then distance;
     /// −1 when there is none.</summary>
     private int Best(int seed, Vec3 q, Dictionary<(int, int, int), List<int>> grid, Func<int, Vec3> pos)
     {
@@ -169,14 +191,18 @@ internal sealed class MirrorPairing
     }
 
     /// <summary>
-    /// The matching region as the far side is meshed: every movable cloth node whose reflection lands among the
-    /// selection — the cloth node nearest its reflection, of its own material, is a selected node it matches (same
+    /// The matching region of one kind as the far side is meshed: every movable node of that kind whose reflection lands
+    /// among the selection — the node nearest its reflection, of its own kind and material, is a selected node it matches (same
     /// material, facing the mirrored way). A finer far side gets every node inside the selection's mirror image; a far
     /// node whose reflection lands nearer unselected cloth is not taken, so the region is no wider than the selection.
     /// Kept only where it is joined, through itself and the partners, to a partner — a frill row or a pleat that
     /// merely lies within reach of the reflection is not the match.
     /// </summary>
-    private Dictionary<int, int> ReverseRegion(IReadOnlyCollection<int> seeds, bool[] locked, Dictionary<int, int> partner)
+    /// <param name="seeds">The selected nodes of this kind.</param>
+    /// <param name="partner">Their partners.</param>
+    /// <param name="kind">Cloth (0) or skin (1): <see cref="Kind"/>.</param>
+    private Dictionary<int, int> ReverseRegion(IReadOnlyCollection<int> seeds, bool[] locked, Dictionary<int, int> partner,
+                                               int kind)
     {
         var found = new Dictionary<int, int>();
         if (partner.Count == 0) return found;
@@ -192,10 +218,10 @@ internal sealed class MirrorPairing
         }
 
         float pad = TolCap;
-        var grid = authoredGrid!;
+        var grid = Authored(kind);
         for (int m = 0; m < at.Length; m++)
         {
-            if (skin[m] || locked[m]) continue;
+            if (Kind(m) != kind || locked[m]) continue;
             var p = at[m];
             if (p.X < lo.X - pad || p.Y < lo.Y - pad || p.Z < lo.Z - pad
                 || p.X > hi.X + pad || p.Y > hi.Y + pad || p.Z > hi.Z + pad)

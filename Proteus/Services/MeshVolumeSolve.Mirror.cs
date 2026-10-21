@@ -6,7 +6,8 @@ using Vec3 = Proteus.Services.SecondSkinWriter.Vec3;
 namespace Proteus.Services;
 
 /// <summary>
-/// Move, Rotate and Scale with Mirror on: the drag carried onto the matching cloth across X = 0. Which cloth matches is
+/// Move, Rotate and Scale with Mirror on: the drag carried onto the matching cloth across X = 0 — and the matching skin,
+/// with "Move skin too". What matches is
 /// <see cref="MirrorPairing"/>'s; how the drag is shared out is decided here, once, when the drag begins
 /// (<see cref="PlanMirror"/>), and applied per node every frame (<see cref="MirroredMove"/>).
 /// </summary>
@@ -239,9 +240,7 @@ internal sealed partial class MeshVolumeSolve
             var centred = MirrorMotion.CentredOffset(o);
             foreach (var (n, w) in moveWeights)
             {
-                // Skin moved with "Move skin too", and the cloth riding it, is never mirrored: it takes the drag itself.
-                var s = moveDirectOnly.Contains(n) ? Step(Start(n), false)
-                      : turns ? MirrorMotion.CentredStep(Start(n), linear, movePivot) : centred;
+                var s = turns ? MirrorMotion.CentredStep(Start(n), linear, movePivot) : centred;
                 Place(n, w, s);
                 if (turns) nodeWeight[n] = MathF.Max(nodeWeight[n], w);
             }
@@ -315,8 +314,7 @@ internal sealed partial class MeshVolumeSolve
     {
         switch (moveMode)
         {
-            // Skin (and the cloth riding it) is never mirrored: it took the drag itself.
-            case MirrorMode.Centred: return moveDirectOnly.Contains(n) ? MapDirect : MapCentred;
+            case MirrorMode.Centred: return MapCentred;
             case MirrorMode.Sides:
                 return moveMapId.TryGetValue(n, out int id) ? id : MapNone;
             default: return MapDirect;

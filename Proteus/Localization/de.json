@@ -2856,7 +2856,7 @@
     "description": ""
   },
   "Parts.Mirror.Tip": {
-    "message": "Bearbeitet beide Seiten zugleich, gespiegelt an der Körpermitte. Die Pinsel malen auch das Spiegelbild; Verschieben, Drehen und Skalieren bewegen den passenden Stoff auf der anderen Seite gespiegelt mit. Ein Teil, das sein eigenes Spiegelbild ist, bleibt mittig.",
+    "message": "Bearbeitet beide Seiten zugleich, gespiegelt an der Körpermitte. Die Pinsel malen auch das Spiegelbild; Verschieben, Drehen und Skalieren bewegen den passenden Stoff auf der anderen Seite gespiegelt mit – und mit „Haut mitbewegen“ auch die passende Haut. Ein Teil, das sein eigenes Spiegelbild ist, bleibt mittig.",
     "description": "Tooltip on the Mirror left/right checkbox, shown under the brushes and under Move, Rotate and Scale."
   },
   "Parts.Move.Mirror.Paired.Fmt": {

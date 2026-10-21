@@ -2856,7 +2856,7 @@
     "description": ""
   },
   "Parts.Mirror.Tip": {
-    "message": "몸의 중심을 기준으로 양쪽을 동시에 대칭으로 편집합니다. 브러시는 대칭 쪽도 칠하고, 이동·회전·크기 조절은 반대쪽의 대응하는 천을 대칭으로 움직입니다. 그 자체로 좌우 대칭인 부분은 중앙에 유지됩니다.",
+    "message": "몸의 중심을 기준으로 양쪽을 동시에 대칭으로 편집합니다. 브러시는 대칭 쪽도 칠하고, 이동·회전·크기 조절은 반대쪽의 대응하는 천을 대칭으로 움직입니다('피부도 움직이기'를 켜면 대응하는 피부도 함께). 그 자체로 좌우 대칭인 부분은 중앙에 유지됩니다.",
     "description": "Tooltip on the Mirror left/right checkbox, shown under the brushes and under Move, Rotate and Scale."
   },
   "Parts.Move.Mirror.Paired.Fmt": {
