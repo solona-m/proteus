@@ -2591,20 +2591,39 @@ public sealed class PartsStrings
     public readonly string VanillaWornSuffix = Loc.Localize("Parts.Vanilla.WornSuffix", "(vanilla)");
 
     public readonly string VanillaWornTip = Loc.Localize("Parts.Vanilla.Worn.Tip",
-        "Worn, not modded. Opening it copies it into a new mod you can edit. With Body size selected, it opens "
-      + "to be refitted instead.");
+        "Worn, not modded. It opens as it is, and nothing is saved until you change it: your first change copies it "
+      + "into a mod of its own.");
+
+    /// <summary>Under a piece of vanilla gear, before anything is saved. {0} is the mod's name, e.g.
+    /// "Ala Mhigan Coat of Fending — Proteus edit"; "Proteus edit" stays untranslated, as the mod is named.</summary>
+    public readonly string VanillaCopyNoteFmt = Loc.Localize("Parts.Vanilla.CopyNote.Fmt",
+        "Nothing is saved yet. Your first change copies this into the mod \"{0}\".");
 
     /// <summary>{0} is the item, e.g. "Body — Ala Mhigan Coat of Fending"; {1} is the mod it was copied into.</summary>
-    public readonly string VanillaEditingFmt = Loc.Localize("Parts.Vanilla.Editing.Fmt",
-        "{0} is open in the mod \"{1}\", a copy of the game's own that looks the same until you change it.");
+    public readonly string VanillaCopiedFmt = Loc.Localize("Parts.Vanilla.Copied.Fmt",
+        "{0} was copied into the mod \"{1}\" with your change.");
+
+    /// <summary>{0} is the mod's name.</summary>
+    public readonly string VanillaEditedCopyThereFmt = Loc.Localize("Parts.Vanilla.EditedCopyThere.Fmt",
+        "\"{0}\" already has an edited copy of this piece, so your change was not saved. Switch that mod on in "
+      + "Penumbra to keep editing it, or delete it to start again from the game's own.");
+
+    /// <summary>{0} is the mod's name.</summary>
+    public readonly string VanillaModSwitchedOffFmt = Loc.Localize("Parts.Vanilla.ModSwitchedOff.Fmt",
+        "\"{0}\" is switched off, so your change was not saved into it. Switch it on in Penumbra, or delete it to "
+      + "start again.");
+
+    /// <summary>{0} is the reason, which may arrive in English.</summary>
+    public readonly string VanillaCopyRefusedFmt = Loc.Localize("Parts.Vanilla.CopyRefused.Fmt",
+        "Your change could not be saved, so nothing was copied: {0}");
+
+    /// <summary>Under Body size, for a piece of vanilla gear it has no body slot for (a hat, a ring).</summary>
+    public readonly string VanillaNotRefittable = Loc.Localize("Parts.Vanilla.NotRefittable",
+        "Body size can't refit this piece. Choose another tool to edit it.");
 
     /// <summary>The description of the mod a piece of vanilla gear is copied into. {0} is the item.</summary>
     public readonly string VanillaModDescriptionFmt = Loc.Localize("Parts.Vanilla.ModDescription.Fmt",
         "{0}, copied from the game by Proteus to be edited.");
-
-    /// <summary>Added to a tool's tooltip while a piece of vanilla gear is open for Body size.</summary>
-    public readonly string VanillaEditToolTip = Loc.Localize("Parts.Vanilla.EditTool.Tip",
-        "Vanilla gear has no mod file, so choosing this copies it into a new mod first.");
 
     /// <summary>The header over a piece of vanilla gear, in place of the mod and model pickers.</summary>
     public readonly string VanillaHeader = Loc.Localize("Parts.Vanilla.Header", "Vanilla gear");

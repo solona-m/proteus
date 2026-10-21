@@ -4132,23 +4132,39 @@
     "description": ""
   },
   "Parts.Vanilla.Worn.Tip": {
-    "message": "当前穿着，未经模组化。打开时会复制到一个可编辑的新模组中。选中「体型尺寸」时则改为打开以进行体型转换。",
-    "description": ""
-  },
-  "Parts.Vanilla.Editing.Fmt": {
-    "message": "{0} 已在模组“{1}”中打开。它是游戏原版的副本，在你修改之前外观不变。",
+    "message": "已穿戴，无模组。按原样打开，在你修改之前不会保存任何内容：第一次修改时会把它复制到专属的模组中。",
     "description": ""
   },
   "Parts.Vanilla.ModDescription.Fmt": {
     "message": "{0}，由 Proteus 从游戏中复制以供编辑。",
     "description": ""
   },
-  "Parts.Vanilla.EditTool.Tip": {
-    "message": "原版装备没有模组文件，因此选择此项会先将其复制到一个新模组中。",
-    "description": ""
-  },
   "Parts.Vanilla.WornSuffix": {
     "message": "（原版）",
+    "description": ""
+  },
+  "Parts.Vanilla.CopyNote.Fmt": {
+    "message": "尚未保存任何内容。第一次修改时会将其复制到模组“{0}”中。",
+    "description": ""
+  },
+  "Parts.Vanilla.Copied.Fmt": {
+    "message": "已将{0}连同你的修改复制到模组“{1}”中。",
+    "description": ""
+  },
+  "Parts.Vanilla.EditedCopyThere.Fmt": {
+    "message": "“{0}”中已有此部件的已编辑副本，因此你的修改未保存。要继续编辑，请在 Penumbra 中启用该模组；要从游戏原版重新开始，请将其删除。",
+    "description": ""
+  },
+  "Parts.Vanilla.ModSwitchedOff.Fmt": {
+    "message": "“{0}”已关闭，因此你的修改未保存到其中。请在 Penumbra 中启用它，或将其删除后重新开始。",
+    "description": ""
+  },
+  "Parts.Vanilla.CopyRefused.Fmt": {
+    "message": "无法保存你的修改，因此未复制任何内容：{0}",
+    "description": ""
+  },
+  "Parts.Vanilla.NotRefittable": {
+    "message": "“体型尺寸”无法调整此部件。请选择其他工具来编辑它。",
     "description": ""
   },
   "WhatsNew.HairPort.Head": {

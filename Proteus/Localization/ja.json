@@ -4132,23 +4132,39 @@
     "description": ""
   },
   "Parts.Vanilla.Worn.Tip": {
-    "message": "装着中でMod未適用です。開くと編集できる新しいModにコピーされます。「体型サイズ」を選択中はリフィット用に開きます。",
-    "description": ""
-  },
-  "Parts.Vanilla.Editing.Fmt": {
-    "message": "{0} をMod「{1}」で開いています。ゲーム本来のもののコピーなので、変更するまで見た目は同じです。",
+    "message": "装備中（Modなし）。そのままの状態で開き、変更するまで何も保存されません。最初の変更で専用のModにコピーされます。",
     "description": ""
   },
   "Parts.Vanilla.ModDescription.Fmt": {
     "message": "{0}。Proteusが編集用にゲームからコピーしたものです。",
     "description": ""
   },
-  "Parts.Vanilla.EditTool.Tip": {
-    "message": "バニラ装備にはModファイルがないため、これを選ぶとまず新しいModにコピーします。",
-    "description": ""
-  },
   "Parts.Vanilla.WornSuffix": {
     "message": "（バニラ）",
+    "description": ""
+  },
+  "Parts.Vanilla.CopyNote.Fmt": {
+    "message": "まだ何も保存されていません。最初の変更でMod「{0}」にコピーされます。",
+    "description": ""
+  },
+  "Parts.Vanilla.Copied.Fmt": {
+    "message": "{0}を変更と一緒にMod「{1}」にコピーしました。",
+    "description": ""
+  },
+  "Parts.Vanilla.EditedCopyThere.Fmt": {
+    "message": "「{0}」にはこのパーツの編集済みコピーがすでにあるため、変更は保存されませんでした。編集を続けるにはPenumbraでそのModをオンにしてください。ゲーム本来の状態からやり直すには削除してください。",
+    "description": ""
+  },
+  "Parts.Vanilla.ModSwitchedOff.Fmt": {
+    "message": "「{0}」がオフになっているため、変更は保存されませんでした。Penumbraでオンにするか、削除してやり直してください。",
+    "description": ""
+  },
+  "Parts.Vanilla.CopyRefused.Fmt": {
+    "message": "変更を保存できなかったため、何もコピーされませんでした: {0}",
+    "description": ""
+  },
+  "Parts.Vanilla.NotRefittable": {
+    "message": "「体型サイズ」ではこのパーツを合わせられません。編集するには別のツールを選んでください。",
     "description": ""
   },
   "WhatsNew.HairPort.Head": {

@@ -28,7 +28,7 @@ public class MeshVolumeServiceTests
     /// triangles share their hub and one edge corner. Four points is exactly enough for a closed
     /// tetrahedron, where every edge is used by two faces and therefore nothing is a hole rim.
     /// </summary>
-    private static (byte[] Mdl, MeshVolumeSolve Solve, ModelParts Model) Setup(
+    internal static (byte[] Mdl, MeshVolumeSolve Solve, ModelParts Model) Setup(
         IReadOnlyList<string>? shapes = null, string material = "/mt_test.mtrl")
     {
         var mdl = SyntheticModel.Build(

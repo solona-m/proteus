@@ -75,7 +75,7 @@ Wähle einen Mod, dann eines seiner Modelle. Der Tab öffnet sich auf dem Brustt
 
 Die Werkzeuge liegen links, die Einstellungen des gewählten Werkzeugs daneben, mit den Teilen des Modells hinter einer Schaltfläche ganz oben in den Einstellungen: Ein Klick öffnet die Teileliste als Spalte daneben und schiebt das Modell nach rechts, sodass es sichtbar bleibt. Setze den Haken bei **Modellansicht zeigen** für eine dritte Spalte mit dem Modell rechts.
 
-**Vanilla-Ausrüstung**, die du trägst, wird ebenfalls aufgelistet, markiert mit *(Vanilla)*. Die Ausrüstung des Spiels hat keine Mod-Datei, die sich bearbeiten ließe, also wird sie beim Öffnen in einen neuen Mod kopiert, der genau wie das Original aussieht, bis du etwas änderst. Jedes Werkzeug arbeitet auf dieser Kopie. Ist **Körpergröße** gewählt, öffnet sich ein Vanilla-Teil stattdessen zum Anpassen, siehe [Körpergröße](#körpergröße).
+**Vanilla-Ausrüstung**, die du trägst, wird ebenfalls aufgelistet, markiert mit *(Vanilla)*. Sie öffnet sich mit jedem Werkzeug so, wie sie ist, und nichts wird gespeichert, bis du etwas änderst: Deine erste Änderung kopiert sie in eine eigene Mod, benannt nach dem Gegenstand, *<Gegenstand> — Proteus edit*, und spätere Änderungen landen ebenfalls dort. Löschst du diese Mod in Penumbra, bleibt sie weg; erneutes Öffnen des Teils bringt sie nicht zurück. Ist **Körpergröße** gewählt, legt das Speichern einer Anpassung stattdessen eine eigene Mod an, siehe [Körpergröße](#körpergröße).
 
 Die Werkzeuge:
 

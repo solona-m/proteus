@@ -324,6 +324,15 @@ public sealed class PartViewport : IDisposable, IBrushSurface
         geometryDirty = coloursDirty = true;
     }
 
+    /// <summary>
+    /// The same model under a new key — the game's own gear copied into a mod, say — so the next <see cref="Show"/>
+    /// keeps the view instead of resetting it. Nothing when another model is shown.
+    /// </summary>
+    public void Rekey(string from, string to)
+    {
+        if (renderedKey == from) renderedKey = to;
+    }
+
     /// <summary>Force a repaint of the colours — call when the ticked set changes.</summary>
     public void Recolour() => coloursDirty = true;
 
