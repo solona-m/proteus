@@ -613,7 +613,10 @@ internal sealed partial class BodyRetargetPanel(PenumbraBridge penumbra, UVRemap
             ownRecord = BodyRetargetWriter.ReadRecord(given.ModRoot);
         }
         if (given.ModRoot == null)
+        {
             gameGear = true;
+            gameGearFor = default;   // so a mod opened next is always read afresh
+        }
         else if (!ReferenceEquals(gameGearFor.Redirects, given.Redirects) || gameGearFor.Path != given.GamePath)
         {
             gameGearFor = (given.Redirects, given.GamePath);
@@ -1847,6 +1850,8 @@ internal sealed partial class BodyRetargetPanel(PenumbraBridge penumbra, UVRemap
         bool cut = cutHidden;
         var skinRule = SkinRule(inputs);
         bool clear = skinRule.ClearBody;
+        // A shoe or glove keeping its foot or hand takes the box as it is: the game-top rule is for whole tops.
+        bool boxClear = clearBody;
         bool piercings = RetargetInputs.CarryPiercings(replaceSkin, carryPiercings);
         // A picked race's bent bodies are another rig than the race's own, even within one body mod: the cloth takes the
         // new body's weights, as it does between body mods.
@@ -1931,7 +1936,7 @@ internal sealed partial class BodyRetargetPanel(PenumbraBridge penumbra, UVRemap
                 {
                     var input = new KeepEnds.StudioPlanInput(
                         garment, bytes, garmentSlot, pieces, sources, snapshot, garmentRace ?? "", male, limbFrom!,
-                        limbTargets, sameBodyMod, fromCloth, layOnBody, acrossBodies, clear, held, shared,
+                        limbTargets, sameBodyMod, fromCloth, layOnBody, acrossBodies, boxClear, held, shared,
                         s => s == primary ? (limbMasks.Source, limbMasks.Target) : (endMasks.Source, endMasks.Target),
                         SlotName, modelRel, shapeNames, piercings);
                     var kept = KeepEnds.StudioPlan(input, Baked, uvRemap, log, () => Interlocked.Increment(ref planDone));
