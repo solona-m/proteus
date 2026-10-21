@@ -956,6 +956,57 @@ public sealed class LocalizationTests
         }
     }
 
+    /// <summary>The size set's men's versions speak every language, in its own words, with the same placeholders.</summary>
+    [Theory]
+    [MemberData(nameof(Translations))]
+    [Trait("Plan", "AC-sizeset-cross-sex-9")]
+    public void Size_set_men_strings_exist_and_are_translated_in_every_locale(string lang) // [AC-sizeset-cross-sex-9]
+    {
+        var en = Load(Source);
+        var tr = Load(lang);
+        foreach (string key in new[]
+                 {
+                     "SizeSet.ForMen.Fmt", "SizeSet.ForMen.Tip.Fmt", "SizeSet.MensGroup", "SizeSet.CheckInGame",
+                     "SizeSet.MenMapsMissing", "SizeSet.NoSourceForMen.Fmt", "SizeSet.MensGroupTaken.Fmt",
+                     "SizeSet.EndsNotForMen", "SizeSet.OneVariant.Fmt", "SizeSet.NotMade", "SizeSet.Intro",
+                 })
+        {
+            Assert.True(tr.ContainsKey(key), $"[{lang}] has no {key}");
+            Assert.NotEqual(en[key].Message, tr[key].Message);
+            for (int i = 0; i < 4; i++)
+                Assert.Equal(en[key].Message.Contains("{" + i + "}"), tr[key].Message.Contains("{" + i + "}"));
+        }
+        // Placeholders alone, which may read alike in two languages.
+        Assert.True(tr.ContainsKey("SizeSet.Warning.Fmt"));
+        foreach (string p in new[] { "{0}", "{1}", "{2}" }) Assert.Contains(p, tr["SizeSet.Warning.Fmt"].Message);
+        Assert.Contains("TBSE-X", tr["SizeSet.Intro"].Message);
+    }
+
+    /// <summary>Every README describes the size set's men's versions, by the labels its language shows, and none still
+    /// says a women's mod lists no men's bodies or that the size set never crosses the sexes.</summary>
+    [Theory]
+    [MemberData(nameof(AllLocales))]
+    [Trait("Plan", "AC-sizeset-cross-sex-9")]
+    public void Readme_describes_mens_versions_in_the_size_set(string lang) // [AC-sizeset-cross-sex-9]
+    {
+        var dir = new System.IO.DirectoryInfo(AppContext.BaseDirectory);
+        while (dir != null && !System.IO.File.Exists(System.IO.Path.Combine(dir.FullName, "proteus.slnx"))) dir = dir.Parent;
+        Assert.True(dir != null, $"Could not find proteus.slnx above {AppContext.BaseDirectory}.");
+        string readme = System.IO.File.ReadAllText(System.IO.Path.Combine(
+            dir!.FullName, lang == Source ? "README.md" : System.IO.Path.Combine("docs", $"README.{lang}.md")));
+        var strings = Load(lang);
+        string forMen = "**" + string.Format(strings["SizeSet.ForMen.Fmt"].Message, "TBSE") + "**";
+        string group = "**" + strings["SizeSet.MensGroup"].Message + "**";
+        string check = "**" + strings["SizeSet.CheckInGame"].Message.TrimEnd(':', '：', ' ') + "**";
+        Assert.Contains(readme.Split('\n'), l => l.StartsWith("- ", StringComparison.Ordinal) && l.Contains(forMen)
+                                                 && l.Contains(group) && l.Contains(check) && l.Contains("bibo↔TBSE"));
+        if (lang == Source)
+        {
+            Assert.DoesNotContain("a women's mod doesn't list men's bodies", readme);
+            Assert.DoesNotContain("the size set never cross the sexes", readme);
+        }
+    }
+
     /// <summary>The game's own gear is copied by its first change, not by opening it: every language says so in its
     /// own words, and nothing is left of the strings for copying on open.</summary>
     [Theory]
