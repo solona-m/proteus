@@ -696,6 +696,49 @@ public partial class HairPortBuilderTests
         Assert.Equal(170, Assert.Single(plan.Writes).Est);
     }
 
+    /// <summary>A group of options, each with its files and manipulations.</summary>
+    private static object ManipGroup(string name, string type,
+                                     params (string Name, Dictionary<string, string> Files, object[] Manips)[] options)
+        => new
+        {
+            Name = name, Description = "", Priority = 0, Type = type, DefaultSettings = 0,
+            Options = options.Select(o => new { o.Name, Description = "", o.Files, FileSwaps = new Dictionary<string, string>(),
+                                                 Manipulations = o.Manips }).ToArray(),
+        };
+
+    /// <summary>
+    /// The source race's skeleton entry in an option of ANOTHER group — [SME] Vale's models in "Models:", its h0178 → 127
+    /// entry in "Textures + Core Files" — is the one the source moves with: the port carries it. Two such places that
+    /// disagree, or a sibling of the model's pick-one group, give no entry, and the game's table decides.
+    /// </summary>
+    [Theory]
+    [Trait("Plan", "EDGE-hair-race-port-6")]
+    [InlineData("core", 170)]
+    [InlineData("disagree", null)]
+    [InlineData("sibling", null)]
+    public void A_source_skeleton_entry_in_another_group_comes_with_the_port(string layout, int? expected)
+    {
+        object Est(int e) => PenumbraManipulations.EstManipulation("0801", "Hair", Id, e);
+        var models = layout == "sibling"
+            ? ManipGroup("Models", "Single", ("Miqote", new() { [Source] = "long.mdl" }, []), ("Core", new(), [Est(170)]))
+            : ManipGroup("Models", "Multi", ("Miqote", new() { [Source] = "long.mdl" }, []));
+        var groups = new List<object> { models };
+        if (layout != "sibling") groups.Add(ManipGroup("Core", "Multi", ("Enable", new(), [Est(170)])));
+        if (layout == "disagree") groups.Add(ManipGroup("Extra", "Multi", ("Other", new(), [Est(180)])));
+        using var mod = new Mod(System.Text.Json.JsonSerializer.Serialize(groups));
+        mod.Put("long.mdl", HairModel(801, bones: [("j_ex_h0170_ke_b", 1f)]));
+
+        Assert.Equal(expected, HairPortPlan.SourceEst(mod.Owner("Models", "Miqote"), null, 801, Id, mod.Owners));
+        var plan = HairPortBuilder.Build(mod.Root, Source, [201], Pbd(), PhysicsGame((201, 170, H0170Skeleton)), false);
+        if (expected is { } e)
+        {
+            Assert.Equal(e, Assert.Single(plan.Writes).Est);
+            Assert.True(HairPortWriter.Save(mod.Root, plan.Writes, auto: false).Ok);
+            Assert.Equal(e, HairPortPlan.HairEst(mod.Owner("Models", "Miqote"), 201, Id));
+        }
+        else Assert.True(plan.Refused.ContainsKey(201));
+    }
+
     /// <summary>
     /// The one out-of-date test the builder, the automatic path and Studio share: a port whose model is unchanged but
     /// whose borrowed skeleton changed in the manifest is out of date — seen from the watcher's decision and from
