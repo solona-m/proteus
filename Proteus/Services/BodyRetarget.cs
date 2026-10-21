@@ -228,11 +228,15 @@ internal static partial class BodyRetarget
     /// <see cref="Worn"/> pair. Null when the body mod cannot be read.</param>
     /// <param name="Smallclothes">On a <see cref="Worn"/> slot <see cref="ReadySmallclothes"/> readied: each of the new
     /// body's smallclothes materials, and the name the garment draws it under. Null on every other slot.</param>
+    /// <param name="SourceIsGameChest">The old body is the game's own chest, byte for byte (see
+    /// <see cref="VanillaBodyCatalog.IsGameModel"/>): its bust is its bra, read with its skin (see
+    /// <see cref="SmallclothesOverHoles"/>).</param>
     internal readonly record struct SlotPair(string Slot, IBodyCorrespondence Correspondence, ModelParts Target,
                                              byte[]? TargetModel = null, byte[]? SourceModel = null,
                                              IReadOnlySet<string>? TargetHidden = null, bool ShapeOnly = false,
                                              Func<string, byte[]?>? TargetMaterial = null,
-                                             IReadOnlyDictionary<string, string>? Smallclothes = null)
+                                             IReadOnlyDictionary<string, string>? Smallclothes = null,
+                                             bool SourceIsGameChest = false)
     {
         /// <summary>Whether the swap puts this slot's body skin in: it carries the body's file, and is not
         /// <see cref="ShapeOnly"/>.</summary>

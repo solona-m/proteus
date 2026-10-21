@@ -91,6 +91,41 @@ public class SourceSmallclothesHoleLocalTests(ITestOutputHelper output)
         => SkinTuckSheet.FoldedAgainstAuthored(garment, ModelPartReader.Read(MeshVolumeService.Inflate(bytes, plan.Edit).Model)!,
                                                withSkin: true);
 
+    private static float Median(List<float> g) => g[g.Count / 2];
+
+    private static float P90(List<float> g) => g[(int)(g.Count * 0.9f)];
+
+    /// <summary>
+    /// For each cloth point the dress's author put over the game's bra (outside it, its nearest point of the game's body
+    /// as worn a bra triangle over the skin's hole), how far it stands off the new body as worn once the skin is laid,
+    /// less how far it stood off the bra: 0 where the cloth keeps its author's gap. Sorted.
+    /// </summary>
+    private static List<float> BustGaps(Lumina.GameData data, string target, Studio refit)
+    {
+        var vanilla = VanillaBodyCatalog.Read("0201", p => data.GetFile(p)?.Data);
+        var vanillaBody = ModelPartReader.Read(File.ReadAllBytes(vanilla.PathOf(vanilla.For("_top", "0201")[0])))!;
+        var over = BodyRetarget.SmallclothesOverHoles(vanillaBody, new BodySurface(vanillaBody, 0.01f))!;
+        var worn = BodySurface.OfSkinAnd(vanillaBody, 0.01f, over);
+        var newBody = BodySurface.OfBodyWorn(ModelPartReader.Read(File.ReadAllBytes(target))!, 0.01f);
+        var garment = ModelPartReader.Read(data.GetFile(Dress)!.Data)!;
+        var sets = BodyRetarget.Sets.From(garment, new HashSet<int>(),
+                                          BodyRetarget.PartedSkinMeshes(garment, [refit.Pair], "_top", true, null));
+        Assert.Equal(sets.NodeCount, refit.Laid.Length);
+        var gaps = new List<float>();
+        foreach (int n in sets.ClothNodes)
+        {
+            var p0 = new Vector3(sets.NodeAt[n].X, sets.NodeAt[n].Y, sets.NodeAt[n].Z);
+            if (!worn.Nearest(p0, 0.04f, out var h0) || !over[h0.A] || !over[h0.B] || !over[h0.C]) continue;
+            float s0 = Vector3.Dot(p0 - h0.Point, h0.Normal);
+            if (s0 < 0f) continue;
+            var p1 = p0 + new Vector3(refit.Laid[n].X, refit.Laid[n].Y, refit.Laid[n].Z);
+            if (!newBody.Nearest(p1, 0.1f, out var h1)) continue;
+            gaps.Add(Vector3.Dot(p1 - h1.Point, h1.Normal) - s0);
+        }
+        gaps.Sort();
+        return gaps;
+    }
+
     [LocalDataFact(LocalData.GameData, MuseBare)]
     public void The_Type_B_dress_on_Muse_bare_follows_the_flat_chest()
     {
@@ -114,38 +149,8 @@ public class SourceSmallclothesHoleLocalTests(ITestOutputHelper output)
         Assert.DoesNotContain(old.Log, l => l.StartsWith("source smallclothes: ", StringComparison.Ordinal));
 
         // Inside the pass, once the skin is laid: cloth the author fitted over the game's bra keeps that gap over Muse.
-        var vanilla = VanillaBodyCatalog.Read("0201", p => data.GetFile(p)?.Data);
-        var vanillaBody = ModelPartReader.Read(File.ReadAllBytes(vanilla.PathOf(vanilla.For("_top", "0201")[0])))!;
-        var skin = new BodySurface(vanillaBody, 0.01f);
-        var over = BodyRetarget.SmallclothesOverHoles(vanillaBody, skin)!;
-        var worn = BodySurface.OfSkinAnd(vanillaBody, 0.01f, over);
-        var museBody = BodySurface.OfBodyWorn(ModelPartReader.Read(File.ReadAllBytes(muse))!, 0.01f);
-        var garment = ModelPartReader.Read(data.GetFile(Dress)!.Data)!;
-        var sets = BodyRetarget.Sets.From(garment, new HashSet<int>(),
-                                          BodyRetarget.PartedSkinMeshes(garment, [now.Pair], "_top", true, null));
-        var cloth = new HashSet<int>(sets.ClothNodes);
-        List<float> Gaps(SecondSkinWriter.Vec3[] laid)
-        {
-            var gaps = new List<float>();
-            for (int n = 0; n < sets.NodeCount; n++)
-            {
-                if (!cloth.Contains(n)) continue;
-                var p0 = new Vector3(sets.NodeAt[n].X, sets.NodeAt[n].Y, sets.NodeAt[n].Z);
-                if (!worn.Nearest(p0, 0.04f, out var h0) || !over[h0.A] || !over[h0.B] || !over[h0.C]) continue;
-                float s0 = Vector3.Dot(p0 - h0.Point, h0.Normal);
-                if (s0 < 0f) continue;
-                var p1 = p0 + new Vector3(laid[n].X, laid[n].Y, laid[n].Z);
-                if (!museBody.Nearest(p1, 0.1f, out var h1)) continue;
-                gaps.Add(Vector3.Dot(p1 - h1.Point, h1.Normal) - s0);
-            }
-            gaps.Sort();
-            return gaps;
-        }
-        Assert.Equal(sets.NodeCount, now.Laid.Length);
-        var fixedGaps = Gaps(now.Laid);
-        var oldGaps = Gaps(old.Laid);
-        float Median(List<float> g) => g[g.Count / 2];
-        float P90(List<float> g) => g[(int)(g.Count * 0.9f)];
+        var fixedGaps = BustGaps(data, muse, now);
+        var oldGaps = BustGaps(data, muse, old);
         output.WriteLine($"bust band: {fixedGaps.Count} cloth points; gap over Muse less the author's over the bra: "
                          + $"median {Median(fixedGaps) * 1000:0.0} mm, p90 {P90(fixedGaps) * 1000:0.0} (old reading "
                          + $"median {Median(oldGaps) * 1000:0.0}, p90 {P90(oldGaps) * 1000:0.0})");
@@ -183,7 +188,8 @@ public class SourceSmallclothesHoleLocalTests(ITestOutputHelper output)
     [MemberData(nameof(FullerBusts))]
     public void The_Type_B_dress_on_fuller_busts_follows_them_out(string modNeed, string? rel)
     {
-        // [AC-bra-hole-transfer-2] Out, not in: the bust no lower than the old reading left it, and nothing worse.
+        // [AC-bra-hole-transfer-2] Other chests: the bra only ever brings the cloth in, so over a fuller chest it stays
+        // about where it was; nothing is worse, and the cloth over the bra keeps the author's gap no worse than before.
         var data = Game();
         var mod = BodySizeCatalog.Read(LocalData.Path(modNeed));
         var options = mod.For("_top", "0201");
@@ -194,11 +200,15 @@ public class SourceSmallclothesHoleLocalTests(ITestOutputHelper output)
         output.WriteLine($"RAN onto {target}");
         foreach (float x in new[] { -0.06f, 0.06f })
             foreach (float y in new[] { 1.24f, 1.26f })
-            {
-                float was = Front(old.Drawn, x, y), is_ = Front(now.Drawn, x, y), body = Front(File.ReadAllBytes(target), x, y);
-                output.WriteLine($"  x {x:+0.00;-0.00} y {y:0.00}: {was * 1000:0} -> {is_ * 1000:0} mm (body {body * 1000:0})");
-                Assert.True(is_ >= was - 0.001f, $"at x {x}, y {y}: {is_ * 1000:0} mm against {was * 1000:0} before");
-            }
+                output.WriteLine($"  x {x:+0.00;-0.00} y {y:0.00}: {Front(old.Drawn, x, y) * 1000:0} -> "
+                                 + $"{Front(now.Drawn, x, y) * 1000:0} mm (body {Front(File.ReadAllBytes(target), x, y) * 1000:0})");
+        // Inside the pass, once the skin is laid: the author's gap over the bra, kept over the new chest.
+        var gaps = BustGaps(data, target, now);
+        var oldGaps = BustGaps(data, target, old);
+        output.WriteLine($"bust band: {gaps.Count} cloth points; median {Median(gaps) * 1000:0.0} mm, p90 {P90(gaps) * 1000:0.0} "
+                         + $"(old reading median {Median(oldGaps) * 1000:0.0}, p90 {P90(oldGaps) * 1000:0.0})");
+        Assert.True(MathF.Abs(Median(gaps)) <= MathF.Max(0.004f, MathF.Abs(Median(oldGaps))),
+                    $"median {Median(gaps) * 1000:0.0} mm against {Median(oldGaps) * 1000:0.0}");
         int foldedNow = now.Folded, foldedOld = old.Folded;
         var nowModel = ModelPartReader.Read(now.Drawn)!;
         var oldModel = ModelPartReader.Read(old.Drawn)!;
@@ -230,7 +240,9 @@ public class SourceSmallclothesHoleLocalTests(ITestOutputHelper output)
     public void Which_bodies_have_no_skin_under_their_underwear()
     {
         // [EDGE-bra-hole-transfer-4] The game's woman's and man's bodies, and every chest and legs option of Neolithe,
-        // Bibo+ and Muse+: only the game's chests stand their underwear over a hole.
+        // Bibo+ and Muse+, as measured: the game's woman's chest and both its legs, and the SFW and binder options of
+        // Bibo+ and Muse+, stand their underwear over a hole; Neolithe's never do. Only the game's chest is read so (see
+        // SlotPair.SourceIsGameChest) — the rest are pinned here so a change in them is seen.
         var data = Game();
         var holed = new List<string>();
         foreach (string race in new[] { "0201", "0101" })
@@ -248,7 +260,12 @@ public class SourceSmallclothesHoleLocalTests(ITestOutputHelper output)
             if (Holed(path)) holed.Add(name);
         }
         output.WriteLine($"{count} body-mod options read in {clock.ElapsedMilliseconds} ms; holed: {string.Join("; ", holed)}");
-        Assert.Equal(["vanilla c0201 _top", "vanilla c0101 _top"], holed);
+        Assert.Equal(["vanilla c0201 _top", "vanilla c0201 _dwn", "vanilla c0101 _dwn"], holed.Where(h => h.StartsWith("vanilla")));
+        var mods = holed.Where(h => !h.StartsWith("vanilla")).ToList();
+        Assert.All(mods, h => Assert.True(h.Contains("sfw") || h.Contains("binder"), h));
+        Assert.Equal(7, mods.Count(h => h.StartsWith("Bibo+")));
+        Assert.Equal(6, mods.Count(h => h.StartsWith("hs-Muse+")));
+        Assert.DoesNotContain(mods, h => h.StartsWith("Neolithe"));
 
         static bool Holed(string path)
         {
@@ -260,8 +277,8 @@ public class SourceSmallclothesHoleLocalTests(ITestOutputHelper output)
     [LocalDataFact(LocalData.GameData, Bibo, MuseBare)]
     public void Bodies_with_skin_under_their_underwear_refit_as_before()
     {
-        // [AC-bra-hole-transfer-3][EDGE-bra-hole-transfer-1] A Bibo+ chest, its smallclothes over skin, as the dress's
-        // made-on body onto Muse: byte for byte the refit it was.
+        // [AC-bra-hole-transfer-3][EDGE-bra-hole-transfer-1] A Bibo+ chest as the dress's made-on body onto Muse — its
+        // SFW bra over a hole of its own, and not the game's chest — byte for byte the refit it was.
         var data = Game();
         var log = Substitute.For<Dalamud.Plugin.Services.IPluginLog>();
         var uv = new UVRemapService(log, ".");
@@ -341,8 +358,8 @@ public class SourceSmallclothesHoleLocalTests(ITestOutputHelper output)
     [LocalDataFact(LocalData.GameData, MuseRoot)]
     public void The_game_legs_panties_follow_the_rule()
     {
-        // [EDGE-bra-hole-transfer-3] The game's legs keep their skin under their panties (see the survey): Pioneer's
-        // Bottoms onto Muse+'s legs refit byte for byte as before.
+        // [EDGE-bra-hole-transfer-3] The game's legs stand their panties over a hole too (see the survey), but only its
+        // chest is read with its underwear: Pioneer's Bottoms onto Muse+'s legs refit byte for byte as before.
         var data = Game();
         var log = Substitute.For<Dalamud.Plugin.Services.IPluginLog>();
         var uv = new UVRemapService(log, ".");

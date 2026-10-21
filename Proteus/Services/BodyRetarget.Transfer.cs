@@ -50,15 +50,15 @@ internal static partial class BodyRetarget
                 sbyte[]? sides = pairs[i].SourceModel is { } file && ModelSkinReader.Read(file, null, null) is { } skin
                                  && skin.VertexCount * 3 == src.Positions.Length ? BodySides(skin) : null;
 
-                // Underwear standing over a hole in the old body's skin — the game's bra — is read with the skin and
-                // given a move of its own (see BodyRetarget.SourceWorn). Every other body is read as it always was.
-                if (!Tuned.NoSourceWorn && SmallclothesOverHoles(src, surface) is { } over)
+                // The game's chest has no skin under its bra: the bra is read with the skin and given a move of its own
+                // (see BodyRetarget.SourceWorn). Every other body is read as it always was — Bibo+'s SFW bras, Muse+'s
+                // binders and the game's own legs stand underwear over a hole too, and were never measured.
+                if (pairs[i].SourceIsGameChest && !Tuned.NoSourceWorn && SmallclothesOverHoles(src, surface) is { } over
+                    && Landed(src, surface, whole, over, pairs[i].Target, out var filled, out int count))
                 {
-                    var filled = new Vector3?[whole.Count];
-                    for (int v = 0; v < filled.Length; v++) filled[v] = whole[v];
-                    landed += LandSmallclothes(src, surface, filled, over, pairs[i].Target);
+                    landed += count;
                     // Eased over the skin alone: the underwear's moves are landings already, and easing them over its
-                    // few, large triangles flattened a fuller breast's dome by 4 mm.
+                    // few, large triangles flattened a breast-sized dome by 4 mm (SourceSmallclothesHoleTests).
                     built[i] = (BodySurface.OfSkinAnd(src, cell, over), filled, Eased(src, filled), sides);
                     continue;
                 }
@@ -84,6 +84,17 @@ internal static partial class BodyRetarget
             }
 
             return body;
+        }
+
+        /// <summary>The field with the old body's underwear over its skin's hole landed on the new body (see
+        /// <see cref="LandSmallclothes"/>); false when none of it landed, and the body is read as it always was.</summary>
+        private static bool Landed(ModelParts src, BodySurface skin, IReadOnlyList<Vector3?> whole, bool[] over,
+                                   ModelParts target, out Vector3?[] filled, out int count)
+        {
+            filled = new Vector3?[whole.Count];
+            for (int v = 0; v < filled.Length; v++) filled[v] = whole[v];
+            count = LandSmallclothes(src, skin, filled, over, target);
+            return count > 0;
         }
 
         /// <summary>

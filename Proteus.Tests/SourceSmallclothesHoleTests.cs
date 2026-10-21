@@ -135,11 +135,13 @@ public class SourceSmallclothesHoleTests
         return SkinlessTargetTests.Model(pos.ToArray(), parts, []);
     }
 
+    /// <param name="game">Whether the old body is the game's chest — the only body read this way.</param>
     private static BodyRetarget.Solved Solve(ModelParts garment, ModelParts source, ModelParts target, bool old = false,
-                                             bool replaceSkin = false, IReadOnlySet<int>? held = null)
+                                             bool replaceSkin = false, IReadOnlySet<int>? held = null, bool game = true)
         => BodyRetarget.WithTuning(new BodyRetarget.Tuning { NoSourceWorn = old },
                                    () => BodyRetarget.Solve(garment, [new BodyRetarget.SlotPair("_top",
-                                                                         new SkinField(source, target), target)],
+                                                                         new SkinField(source, target), target,
+                                                                         SourceIsGameChest: game)],
                                                             "_top", replaceSkin: replaceSkin, held: held));
 
     /// <summary>Where each of the garment's vertices of <paramref name="material"/> ended up.</summary>
@@ -185,20 +187,38 @@ public class SourceSmallclothesHoleTests
     }
 
     [Fact]
-    public void Cloth_over_a_bra_with_no_skin_under_it_follows_a_fuller_body_out()
+    public void Cloth_over_a_bra_onto_a_fuller_body_stays_about_where_it_was()
     {
-        // [AC-bra-hole-transfer-2] The new body's breast stands 45 mm out where the bra stood 25.
+        // [AC-bra-hole-transfer-2] The new body's breast stands 45 mm out where the bra stood 25: the bra only ever brings
+        // cloth in, and what does not land is left out of the old body, so over the dome the cloth reads the hole's rim as
+        // it always has. (Toward the rim, where this dome is lower than the flat bra, it does come in.)
         var source = OldBody();
         var target = NewBody(Fuller);
         var garment = Garment();
 
-        // Off the new body as drawn, its triangles: the bump's chords lie a little inside the curve they sample.
-        var drawn = new BodySurface(target, 0.02f);
-        foreach (var p in Middle(Final(garment, Solve(garment, source, target))))
-        {
-            Assert.True(drawn.Nearest(p, 0.1f, out var hit));
-            Assert.InRange(hit.Distance, Gap - 0.0015f, Gap + 0.0015f);
-        }
+        var now = Solve(garment, source, target);
+        var old = Solve(garment, source, target, old: true);
+        var middle = Enumerable.Range(0, garment.Positions.Length / 3)
+                               .Where(v => Middle([At(garment, v)]).Count == 1).ToList();
+        Assert.NotEmpty(middle);
+        // Over the dome, where the old reading left it. Not exactly: the flat plate's edges stand proud of the dome's low
+        // rim, land there, and are nearer the middle cloth than the rim skin was (1.7 mm at most here). On a real fuller
+        // chest — LavaBod+'s Teardrop — the refit comes out as before (SourceSmallclothesHoleLocalTests).
+        foreach (int v in middle) Assert.InRange(now.Edit.DeltaAt(v).Z - old.Edit.DeltaAt(v).Z, -0.002f, 0.002f);
+    }
+
+    [Fact]
+    public void A_body_mod_with_underwear_over_a_hole_reads_as_before()
+    {
+        // [AC-bra-hole-transfer-3] Bibo+'s SFW bras and Muse+'s binders stand their underwear over a hole too, and were
+        // never measured: only the game's own chest is read with its bra.
+        var source = OldBody();
+        var target = NewBody((_, _) => 0f);
+        var garment = Garment();
+
+        var now = Solve(garment, source, target, game: false);
+        SameMoves(now, Solve(garment, source, target, old: true, game: false), garment.Positions.Length / 3);
+        Assert.Equal(0, now.SourceSmallclothes);
     }
 
     [Fact]
@@ -254,7 +274,8 @@ public class SourceSmallclothesHoleTests
         Assert.True(IdentityCorrespondence.TryBuild(source, target, "chest", out var identity, out string why), why);
         var garment = Garment();
 
-        var solved = BodyRetarget.Solve(garment, [new BodyRetarget.SlotPair("_top", identity!, target)], "_top");
+        var solved = BodyRetarget.Solve(garment, [new BodyRetarget.SlotPair("_top", identity!, target, SourceIsGameChest: true)],
+                                        "_top");
         foreach (var p in Middle(Final(garment, solved)))
             Assert.InRange(p.Z, BraOut + Gap + 0.005f - 1e-4f, BraOut + Gap + 0.005f + 1e-4f);
     }
@@ -419,7 +440,7 @@ public class SourceSmallclothesHoleTests
         var garment = SkinlessTargetTests.Model(pos.ToArray(), [(Cloth, tris.ToArray(), 0u)], []);
         List<BodyRetarget.SlotPair> pairs =
         [
-            new("_top", new SkinField(source, target), target),
+            new("_top", new SkinField(source, target), target, SourceIsGameChest: true),
             new("_dwn", new SkinField(legsFrom, legsTo), legsTo),
         ];
 

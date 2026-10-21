@@ -15,6 +15,10 @@ namespace Proteus.Services;
 /// fullest. The bra is read with the skin instead, and each point of it given a move of its own: first the move of the
 /// skin around it, then wherever that lands on the new body as worn — the same carry and landing
 /// <see cref="UvAtlasCorrespondence"/> gives skin the new body draws no skin under.
+/// <para/>
+/// Two limits, both measured: only the game's own chest is read this way (<see cref="SlotPair.SourceIsGameChest"/>) —
+/// other bodies stand underwear over a hole too, and nothing was measured on them — and a landing only ever brings the
+/// cloth in (<see cref="Inward"/>).
 /// </summary>
 internal static partial class BodyRetarget
 {
@@ -82,13 +86,16 @@ internal static partial class BodyRetarget
     /// <summary>
     /// Gives each underwear point over the hole (<paramref name="over"/>) with no move of its own a move: carried by the
     /// skin nearest it, then landed on the new body as worn — the nearest point that faces the way the underwear does,
-    /// else the new body along the underwear's normal — on its own side. A landing that turns the underwear over is
-    /// relaxed toward its neighbours and landed again. Nothing in reach keeps the carried move.
+    /// else the new body along the underwear's normal — on its own side, where that brings it in (see
+    /// <see cref="Inward"/>). A landing that turns the underwear over is relaxed toward its neighbours and landed again.
+    /// A point with nothing in reach, or whose landing is further out, is taken out of <paramref name="over"/>: there the
+    /// old body is read as it always was, its skin alone.
     /// </summary>
     /// <param name="whole">The old body's field, holes filled (<see cref="SourceBody.Whole"/>); written in place.</param>
+    /// <param name="over">Written in place: left marking only the points that landed.</param>
     /// <param name="skin">The old body's skin.</param>
     /// <param name="target">The new body, as the swap will draw it.</param>
-    /// <returns>How many underwear points were given a move.</returns>
+    /// <returns>How many underwear points are read with the skin: landed on the new body, or placed by the correspondence.</returns>
     internal static int LandSmallclothes(ModelParts src, BodySurface skin, Vector3?[] whole, bool[] over, ModelParts target)
     {
         int vc = src.Positions.Length / 3;
@@ -96,11 +103,17 @@ internal static partial class BodyRetarget
         var sides = new sbyte[target.Positions.Length / 3];
         for (int v = 0; v < sides.Length; v++) sides[v] = (sbyte)BraSide(target.Positions[v * 3]);
 
+        // Points the correspondence placed itself (the same mesh, a size of one body) keep that move and are read as
+        // they are.
+        int placed = 0;
+        for (int v = 0; v < vc; v++)
+            if (over[v] && whole[v] != null) placed++;
+
         // Welded by position: a uv seam across the bra is two vertices at one point, and both must land as one.
         var verts = new List<int>();
         for (int v = 0; v < vc; v++)
             if (over[v] && whole[v] == null) verts.Add(v);
-        if (verts.Count == 0) return 0;
+        if (verts.Count == 0) return placed;
         var at = new Vec3[verts.Count];
         for (int i = 0; i < verts.Count; i++) at[i] = ToVec(P(src, verts[i]));
         int[] nodeOf = MeshMath.WeldByPosition(at, out int nodes);
@@ -120,7 +133,7 @@ internal static partial class BodyRetarget
                 sum += new Vector3(src.Normals[m * 3], src.Normals[m * 3 + 1], src.Normals[m * 3 + 2]);
             normal[n] = sum.LengthSquared() > 1e-12f ? Vector3.Normalize(sum) : Vector3.UnitZ;
             carried[n] = Carried(skin, whole, pos[n]);
-            move[n] = Land(worn, sides, pos[n], carried[n], normal[n]) ?? carried[n];
+            move[n] = Inward(Land(worn, sides, pos[n], carried[n], normal[n]), carried[n], normal[n]);
         }
 
         // Ring-1 over the welded underwear, from the triangles read over the hole.
@@ -164,14 +177,25 @@ internal static partial class BodyRetarget
                 var sum = Vector3.Zero;
                 foreach (int m in ring[n]) sum += move[m];
                 var around = sum / ring[n].Count;
-                relaxed.Add((n, land ? Land(worn, sides, pos[n], around, normal[n]) ?? around : around));
+                relaxed.Add((n, land ? Inward(Land(worn, sides, pos[n], around, normal[n]), around, normal[n]) : around));
             }
             foreach (var (n, m) in relaxed) move[n] = m;
         }
 
+        // Only what landed is read with the skin: the rest of the bra is left out, so the cloth over it reads the hole's
+        // rim exactly as it always has.
+        int landed = placed;
         for (int n = 0; n < nodes; n++)
-            foreach (int v in members[n]) whole[v] = move[n];
-        return verts.Count;
+        {
+            bool took = move[n] != carried[n];
+            foreach (int v in members[n])
+            {
+                if (took) whole[v] = move[n];
+                else over[v] = false;
+            }
+            if (took) landed += members[n].Count;
+        }
+        return landed;
     }
 
     /// <summary>The skin's move at its nearest point to <paramref name="p"/>, over the corners that have one.</summary>
@@ -202,6 +226,16 @@ internal static partial class BodyRetarget
         if (inward) return behind.Point - p;
         return null;
     }
+
+    /// <summary>
+    /// The landing where it lies further in than <paramref name="carried"/> along the underwear's normal, else the
+    /// carried move: the old body's bra only ever brings cloth IN to a flatter chest. Taken out to a fuller one, the
+    /// cloth landed where the push-out and the deep clear, tuned on the old reading, then drew more skin through it —
+    /// LavaBod+'s Teardrop under the No.2 Type B Dress, 81 cm² to 161 — and even read at the carried move it was not the
+    /// reading they were tuned on (138), so such points are left out of the old body altogether.
+    /// </summary>
+    private static Vector3 Inward(Vector3? landing, Vector3 carried, Vector3 normal)
+        => landing is { } l && Vector3.Dot(l - carried, normal) < 0f ? l : carried;
 
     private static int BraSide(float x) => x > BraSideBand ? 1 : x < -BraSideBand ? -1 : 0;
 
