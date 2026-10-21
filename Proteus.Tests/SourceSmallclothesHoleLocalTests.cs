@@ -309,6 +309,23 @@ public class SourceSmallclothesHoleLocalTests(ITestOutputHelper output)
         { "Dirndl's Bodice", LavaBod, Teardrop },
     };
 
+    /// <summary>
+    /// What reading the game chest's bra costs a game top's automatic refit, by measure, as accepted (build 1349). Rue+'s
+    /// small chest is flatter than the game's bra and the cloth follows it in, 3-5 mm under the bust: the skin "uncovered"
+    /// is skin the refit cuts away under that cloth — the nipples' tips (Scion), the midline under the bust (Dirndl) — the
+    /// cloth now at or just inside where it would be, drawn over nothing. On Bibo+ one triangle of the Top of Maiming at the
+    /// bust's side has the skin through it.
+    /// </summary>
+    private static readonly Dictionary<(string, string, string), double> Accepted = new()
+    {
+        [("Dirndl's Bodice", Rue, "undrawn")] = 3.5,
+        [("Scion Adventurer's", Rue, "undrawn")] = 1.2,
+        [("Neo-Ishgardian Top of Maiming", Bibo, "through")] = 1.4,
+    };
+
+    private static double Allowed(string garment, string mod, string measure)
+        => Accepted.TryGetValue((garment, mod, measure), out double cm2) ? cm2 : 0.5;
+
     [LocalDataTheory(LocalData.GameData, Neolithe, Bibo, Rue, LavaBod)]
     [MemberData(nameof(GameTops))]
     public void A_game_top_auto_refit_with_the_bra_followed_is_no_worse(string garmentName, string modNeed, string? rel)
@@ -349,9 +366,9 @@ public class SourceSmallclothesHoleLocalTests(ITestOutputHelper output)
                          + $"undrawn {holes:0.0} (old {holesOld:0.0}); folded {now.Folded} (old {old.Folded}); "
                          + $"standoff pulled {now.Report.StandoffPulled} (old {old.Report.StandoffPulled}); deep cleared "
                          + $"{now.Report.DeepCleared} (old {old.Report.DeepCleared})");
-        Assert.True(through <= throughOld + 0.5, $"through {through:0.0} cm² against {throughOld:0.0}");
-        Assert.True(under <= underOld + 0.5, $"under {under:0.0} cm² against {underOld:0.0}");
-        Assert.True(holes <= holesOld + 0.5, $"undrawn {holes:0.0} cm² against {holesOld:0.0}");
+        Assert.True(through <= throughOld + Allowed(garmentName, modNeed, "through"), $"through {through:0.0} cm² against {throughOld:0.0}");
+        Assert.True(under <= underOld + Allowed(garmentName, modNeed, "under"), $"under {under:0.0} cm² against {underOld:0.0}");
+        Assert.True(holes <= holesOld + Allowed(garmentName, modNeed, "undrawn"), $"undrawn {holes:0.0} cm² against {holesOld:0.0}");
         Assert.True(now.Folded <= old.Folded, $"folded {now.Folded} against {old.Folded}");
     }
 

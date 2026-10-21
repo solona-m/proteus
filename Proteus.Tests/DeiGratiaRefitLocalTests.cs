@@ -51,8 +51,9 @@ public class DeiGratiaRefitLocalTests(ITestOutputHelper output)
 
     /// <summary>How much further off the new body cloth near the points taken in, but not taken in itself, may end — accepted
     /// at its measured 6.4 mm (build 1323): the blouse over the upper chest, under the neckline patch, lifts as the bust under
-    /// it comes out.</summary>
-    private const float NearFurtherOff = 0.0065f;
+    /// it comes out. 6.7 since build 1349, which reads the game chest's bra (see BodyRetarget.SourceWorn): with it the bust
+    /// lies inside the blouse from the start (deepest 16.0 mm → -0.8 written, read without the open-edge fit).</summary>
+    private const float NearFurtherOff = 0.0068f;
 
     /// <summary>A refit as one path makes it, with the solve's own nodes and its last stage.</summary>
     private sealed record Refit(BodyRetarget.Planned Plan, ModelParts Laid, BodyRetarget.Sets Sets, Vec3[] Final,
