@@ -290,7 +290,7 @@ public sealed unsafe class LiveBrush(IObjectTable objects, IDataManager data, Pe
 
     /// <summary>
     /// Keep pick mode live for this frame: the next click on a worn garment names its file — a mod's, or for the
-    /// game's own gear its game path, which the Studio copies into a mod of its own to edit.
+    /// game's own gear its game path, which the Studio opens as itself and copies into a mod of its own on its first edit.
     /// </summary>
     public void ArmPick(string penumbraModsRoot, Action<string> picked)
     {

@@ -75,7 +75,7 @@ Elige un mod y luego uno de sus modelos. La pestaña se abre en la pieza de tors
 
 Las herramientas están a la izquierda y los ajustes de la herramienta elegida a su lado, con las piezas del modelo tras un botón en la parte superior de los ajustes: al pulsarlo, la lista de piezas se abre como una columna a su lado y empuja el modelo a la derecha para que siga a la vista. Marca **Mostrar modelo** para tener una tercera columna con el modelo a la derecha.
 
-El **equipo vanilla** que llevas puesto también aparece, marcado como *(vanilla)*. El equipo propio del juego no tiene un archivo de mod que editar, así que al abrirlo se copia en un mod nuevo, que se ve exactamente como el original hasta que lo cambias. Todas las herramientas funcionan sobre esa copia. Con **Talla del cuerpo** elegida, una pieza vanilla se abre para reajustarla, ver [Talla de cuerpo](#talla-de-cuerpo).
+El **equipo vanilla** que llevas puesto también aparece, marcado como *(vanilla)*. Se abre tal cual con cualquier herramienta, y no se guarda nada hasta que lo cambias: tu primer cambio lo copia a un mod propio con el nombre del objeto, *<Objeto> — Proteus edit*, y los cambios posteriores también van ahí. Si borras ese mod en Penumbra, no vuelve; abrir la pieza de nuevo no lo recrea. Con **Talla del cuerpo** elegida, guardar un reajuste crea en su lugar un mod propio, ver [Talla de cuerpo](#talla-de-cuerpo).
 
 Las herramientas:
 

@@ -448,6 +448,7 @@ public sealed partial class PartsPanel
         ConsumeApplySizes();
         // A mod made for a refit is switched on across frames; this is where it finishes and says so.
         if (refitMods.Pump() is { } madeMod) { status = madeMod; statusIsError = false; }
+        RedrawIfCopyEnabled();
         frame.Mark("apply sizes");
 
         // Asked for mid-frame by a refit's save or undo; done here, before anything this frame reads the model.
@@ -620,9 +621,9 @@ public sealed partial class PartsPanel
             // Under Toggle Parts a click on the open garment ticks the part under it; a click on another worn garment opens that one.
             bool pickParts = tool == Tool.Navigate;
             bool moving = PartTool;
-            if (volume != null && brushBase != null && ModRoot() is { } root)
-                liveBrush.ArmBrush(Path.Combine(root, models[modelIndex].File.Replace('/', Path.DirectorySeparatorChar)),
-                                   brushBase, volume, ActiveRadiusMm / 1000f, showWind: tool == Tool.Wind,
+            if (volume != null && brushBase != null
+                && ArmedModelFile(vanilla?.GamePath ?? CopyNotDrawnOpen(), ModRoot(), models[modelIndex].File) is { } armed)
+                liveBrush.ArmBrush(armed, brushBase, volume, ActiveRadiusMm / 1000f, showWind: tool == Tool.Wind,
                                    mirror: mirrorBrush, partOf: partOfVertexFn,
                                    lockClicked: moving ? moveClickedFn : pickParts ? tickClickedFn : lockClickedFn,
                                    pickParts: pickParts,
@@ -896,9 +897,10 @@ public sealed partial class PartsPanel
     }
 
     /// <summary>
-    /// What is open, when it is the game's own gear: which piece, where a save will put it, and what a refit of the
-    /// game's gear costs. Said BEFORE the refit runs, because for the game's own models these are near-certain
-    /// rather than occasional — its gear carries shape keys and lower detail levels that no refit can carry over.
+    /// What is open, when it is the game's own gear: which piece, and where a change will be saved — before anything
+    /// is. Under Body size also what a refit of the game's gear costs, said BEFORE the refit runs, because for the
+    /// game's own models these are near-certain rather than occasional — its gear carries shape keys and lower detail
+    /// levels that no refit can carry over.
     /// </summary>
     private void DrawVanillaHeader(VanillaPick item)
     {
@@ -907,10 +909,12 @@ public sealed partial class PartsPanel
         ImGui.TextColored(ProteusStyle.Accent, ps.VanillaHeader);
         ImGui.PushTextWrapPos(0);
         ImGui.TextUnformatted(string.Format(ps.VanillaOpenFmt, item.Label));
-        ImGui.Spacing();
-        ImGui.TextDisabled(ps.VanillaSaveNote);
-        ImGui.Spacing();
-        ImGui.TextColored(ProteusStyle.Warn, ps.VanillaCaveats);
+        foreach (var (note, warn) in VanillaNotes(tool == Tool.Retarget, item.Refittable, item.ItemName))
+        {
+            ImGui.Spacing();
+            if (warn) ImGui.TextColored(ProteusStyle.Warn, note);
+            else ImGui.TextDisabled(note);
+        }
         ImGui.PopTextWrapPos();
         ImGui.Spacing();
     }
@@ -1606,7 +1610,11 @@ public sealed partial class PartsPanel
             .SelectMany(g => g)
             .ToList();
 
-    private void SelectModel(int index)
+    /// <param name="written">
+    /// The bytes the caller has just written to this model's file, if it has. Penumbra compacts a new mod's files the
+    /// moment it adds the mod, holding each one exclusively, so a read straight after can fail while these are known.
+    /// </param>
+    private void SelectModel(int index, byte[]? written = null)
     {
         ResetForNewModel();
         vanilla = null;
@@ -1619,6 +1627,11 @@ public sealed partial class PartsPanel
         try
         {
             bytes = File.ReadAllBytes(Path.Combine(root, models[index].File.Replace('/', Path.DirectorySeparatorChar)));
+        }
+        catch (IOException ex) when (written != null)
+        {
+            log.Debug("[Proteus] parts: {0} is held ({1}); opening the bytes just written", models[index].File, ex.Message);
+            bytes = written;
         }
         catch (Exception ex)
         {
@@ -1680,71 +1693,23 @@ public sealed partial class PartsPanel
     }
 
     /// <summary>
-    /// Open a piece of the game's own gear, chosen in the picker or clicked on the character. Under Body size a piece
-    /// it can refit opens as itself, and the refit makes its mod when saved; anything else is opened to be edited.
+    /// Open a piece of the game's own gear, chosen in the picker or clicked on the character, as itself under every
+    /// tool. Nothing is written: its "— Proteus edit" mod is made by the first change saved (see
+    /// <see cref="CopyVanillaForEdit"/>), so a click never brings back a mod the player has deleted.
     /// </summary>
     private void OpenGameGear(VanillaPick item)
     {
-        if (tool == Tool.Retarget && item.Refittable) OpenVanilla(item.GamePath);
-        else EditVanilla(item);
+        // The piece just copied, still drawn from the game until Penumbra switches its mod on: its copy is what opens.
+        if (string.Equals(copyNotDrawnYet, item.GamePath, StringComparison.OrdinalIgnoreCase))
+        {
+            OpenCopyNotDrawn(item.GamePath);
+            return;
+        }
+        OpenVanilla(item.GamePath);
     }
 
     /// <summary>
-    /// Open a piece of the game's own gear to be edited: copy its model into a mod of Proteus's own and open that
-    /// copy, where every tool works as it does on anyone's mod. The mod is found again on every later visit, so the
-    /// edits to one item collect in one place, and the copy is the game's own bytes, so it draws exactly as before
-    /// until something is changed.
-    /// </summary>
-    private void EditVanilla(VanillaPick item)
-    {
-        var ps = Strings.Parts;
-        if (textureLoader.LoadRawFile(null, item.GamePath) is not { } bytes)
-        {
-            status = ps.Unreadable;
-            statusIsError = true;
-            return;
-        }
-
-        RefitModService.Result made;
-        try
-        {
-            // A new mod is filled before Penumbra registers it; one from an earlier visit keeps its edits and only
-            // takes this model if it is another of the item's (the trousers of a coat's outfit, another race's).
-            made = refitMods.Ensure(item.ItemName, RefitModService.EditQualifier,
-                                    fill: root => RefitModService.AddGameModel(root, item.GamePath, bytes),
-                                    description: string.Format(ps.VanillaModDescriptionFmt, item.ItemName),
-                                    folder: RefitModService.OwnModsFolder);
-            if (made is { Ok: true, Made: false } && RefitModService.AddGameModel(made.Root, item.GamePath, bytes))
-            {
-                compositor.ExpectOwnModEdit(made.Dir);
-                penumbra.ReloadModDirectory(made.Dir);
-            }
-        }
-        catch (Exception ex)
-        {
-            log.Warning(ex, "[Proteus] parts: could not copy {0} into a mod", item.GamePath);
-            status = ex.Message;
-            statusIsError = true;
-            return;
-        }
-        if (!made.Ok)
-        {
-            status = made.Message;
-            statusIsError = true;
-            return;
-        }
-
-        mods = LoadMods();
-        SelectMod(made.Dir);
-        int index = models.FindIndex(m => string.Equals(m.GamePath, item.GamePath, StringComparison.OrdinalIgnoreCase));
-        if (index >= 0) SelectModel(index);
-        log.Information("[Proteus] parts: editing {0} in {1}", item.GamePath, made.Dir);
-        status = string.Format(ps.VanillaEditingFmt, item.Label, made.Dir);
-        statusIsError = false;
-    }
-
-    /// <summary>
-    /// Open a piece of the game's own gear for Body size to refit. Nothing on disk backs it, so there is no mod and no
+    /// Open a piece of the game's own gear as itself, for any tool. Nothing on disk backs it, so there is no mod and no
     /// redirect list: one synthesised row stands in for the model the rest of the tab reads.
     /// </summary>
     private void OpenVanilla(string gamePath)
@@ -2968,22 +2933,8 @@ public sealed partial class PartsPanel
             using (ProteusStyle.Selected(tool == value))
                 clicked = ImGuiComponents.IconButtonWithText(icon, text, FullWidth());
 
-            // The game's own gear, open for Body size, has no mod file for any other tool to write into: choosing one
-            // copies the piece into a mod of its own first, and opens that.
-            if (vanilla is { } item && value != Tool.Retarget)
-            {
-                if (clicked)
-                {
-                    // Set first, so the model opens under it; put back if the copy failed and the piece is still
-                    // open as itself, which nothing but Body size can draw.
-                    tool = value;
-                    EditVanilla(item);
-                    if (vanilla != null) tool = Tool.Retarget;
-                }
-                if (ImGui.IsItemHovered()) ImGui.SetTooltip(tip + "\n\n" + ps.VanillaEditToolTip);
-                continue;
-            }
-
+            // The game's own gear changes tool like anything else: it is copied into a mod by its first saved change,
+            // never by choosing a tool.
             if (clicked && tool != value)
             {
                 // Before leaving the brush: a save rewrites the whole model, so a pending edit would land on top of a switch.
@@ -3346,6 +3297,12 @@ public sealed partial class PartsPanel
 
     private void SaveBrush(bool refreshGame = true)
     {
+        if (vanilla is { } piece)
+        {
+            SaveVanillaBrush(piece, refreshGame);
+            return;
+        }
+
         if (volume == null || brushBase == null || modelIndex < 0 || modDir == null
             || ModRoot() is not { } root)
         {
@@ -3366,6 +3323,19 @@ public sealed partial class PartsPanel
         // From the bytes the brush was opened on, not the file on disk. Written even when the edit is now empty, so
         // undoing everything also takes the last save back out of the mod.
         var result = MeshVolumeService.Apply(root, rel, brushBase, volume, writeUntouched: true);
+        AfterBrushWritten(root, rel, result, refreshGame, reload: true);
+    }
+
+    /// <summary>
+    /// What follows a brush save's write: the status, the record of what was saved, the wind materials, and then the
+    /// mod reloaded and the character redrawn.
+    /// </summary>
+    /// <param name="reload">False for a mod Penumbra is still registering: there is nothing loaded to reload yet, and
+    /// the redraw waits for it to be switched on (<see cref="RedrawIfCopyEnabled"/>).</param>
+    private void AfterBrushWritten(string root, string rel, MeshVolumeService.Outcome result, bool refreshGame,
+                                   bool reload)
+    {
+        if (volume == null || modDir == null) return;
         statusIsError = !result.Ok;
         if (!result.Ok)
         {
@@ -3425,7 +3395,8 @@ public sealed partial class PartsPanel
             }
         }
 
-        brushSaved = MeshVolumeService.PatchedCount(root);
+        // A mod still being registered holds only this save, and its record is not read back while Penumbra compacts it.
+        brushSaved = reload ? MeshVolumeService.PatchedCount(root) : 1;
 
         // NOT AfterModChange: that rebuilds the solve on the just-saved bytes and loses the undo history.
         // Reload BEFORE the redraw, or the redraw is handed the bytes Penumbra still has in memory.
@@ -3438,6 +3409,15 @@ public sealed partial class PartsPanel
         // An imported piece is never previewed: the composite rebuilds its shell from the file on reload.
         bool previewed = !showModelView && !preview.UnsupportedFor(TargetIsCustomizePart) && !TargetIsContent
                       && materialsChanged == 0 && !wind;
+
+        // A mod still being registered: the preview, if up, already shows the saved file; the rest waits for it to be
+        // switched on, which redraws (RedrawIfCopyEnabled).
+        if (!reload)
+        {
+            if (previewed) previewDirty = true;
+            return;
+        }
+
         if (previewed || (wind && !showModelView)) compositor.ExpectOwnModEdit(modDir);
         penumbra.ReloadModDirectory(modDir);
 
@@ -3631,6 +3611,15 @@ public sealed partial class PartsPanel
             || (!vanillaOpen && (ModRoot() == null || modDir == null)))
         {
             ImGui.TextWrapped(ps.RetargetNoModel);
+            return;
+        }
+
+        // A hat or a ring of the game's own: nothing for a body to size. Said in the header too; nothing is made.
+        if (vanilla is { Refittable: false })
+        {
+            ImGui.PushTextWrapPos(0);
+            ImGui.TextColored(ProteusStyle.Warn, ps.VanillaNotRefittable);
+            ImGui.PopTextWrapPos();
             return;
         }
 
@@ -3924,7 +3913,15 @@ public sealed partial class PartsPanel
         // if that fails the switch is not written.
         if (!FlushPending()) return;
         var ps = Strings.Parts;
-        if (parts == null || modelIndex < 0 || ModRoot() is not { } root) return;
+        if (parts == null || modelIndex < 0) return;
+
+        // The flush has just copied the game's piece into a mod Penumbra is still registering, and compacting: the
+        // switches wait for it rather than write into files it may be holding. The staged list stays.
+        if (copyAwaitingEnable != null && string.Equals(copyAwaitingEnable, modDir, StringComparison.OrdinalIgnoreCase))
+        {
+            writeError = ps.VanillaCopyRegistering;
+            return;
+        }
 
         var byLabel = parts.Parts.ToDictionary(p => p.Label, StringComparer.Ordinal);
         var plans = pending
@@ -3932,6 +3929,14 @@ public sealed partial class PartsPanel
                 t.Name, t.Parts.Where(byLabel.ContainsKey).Select(l => byLabel[l]).ToList()))
             .Where(p => p.Parts.Count > 0)
             .ToList();
+
+        // The game's own gear, with no brush edit before it to have copied it already: the switches are its first change.
+        if (vanilla is { } piece)
+        {
+            CommitVanilla(piece, plans);
+            return;
+        }
+        if (ModRoot() is not { } root) return;
 
         // An imported pack's pieces publish nothing, so its other copies at this game path (another size, say) are
         // offered as siblings from the sidecar rows.
@@ -3982,17 +3987,22 @@ public sealed partial class PartsPanel
     /// renumbers parts.
     /// </summary>
     /// <param name="changedFiles">The model files written, mod-relative; null when not known, which always redraws.</param>
-    private void AfterModChange(string root, IReadOnlyCollection<string>? changedFiles = null)
+    /// <param name="copied">For a mod Penumbra is still registering (<see cref="CommitVanilla"/>): the open model's
+    /// bytes and the switch record as written, read back from those rather than from files Penumbra may be holding.
+    /// Nothing is reloaded or redrawn; switching the mod on does that (<see cref="RedrawIfCopyEnabled"/>).</param>
+    private void AfterModChange(string root, IReadOnlyCollection<string>? changedFiles = null,
+                                (byte[]? Model, MeshToggleRecord? Record)? copied = null)
     {
         // Read before SelectModel, against the redirect list the files were written under.
         bool onlyContent = changedFiles is { Count: > 0 } && changedFiles.All(IsContentOnly);
 
-        existing = MeshToggleService.ReadRecord(root);
-        brushSaved = MeshVolumeService.PatchedCount(root);
+        existing = copied is { } c ? c.Record : MeshToggleService.ReadRecord(root);
+        brushSaved = copied != null ? 0 : MeshVolumeService.PatchedCount(root);
         viewport.Clear();   // so it rebuilds its pickable set against the edited model
         // Down without a redraw: SelectModel's own would run before the reload and draw the mod as Penumbra still has it.
         EndLivePreview(refreshGame: false);
-        if (modelIndex >= 0) SelectModel(modelIndex);
+        if (modelIndex >= 0) SelectModel(modelIndex, copied?.Model);
+        if (copied != null) return;
 
         if (modDir != null) penumbra.ReloadModDirectory(modDir);
         compositor.TriggerRecomposite("parts-written");
