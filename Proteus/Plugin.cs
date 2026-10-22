@@ -25,7 +25,7 @@ public sealed class Plugin : IDalamudPlugin
     [PluginService] public static ITextureProvider TextureProvider { get; private set; } = null!;
 
     /// <summary>Hand-maintained; bump it for in-game testing. <see cref="BuildStamp"/> is the one that can't go stale.</summary>
-    public const int BuildNumber = 1362;
+    public const int BuildNumber = 1364;
 
     /// <summary>
     /// Which set of release notes is current. Raise it when a release has something new to say: the window
@@ -337,6 +337,8 @@ public sealed class Plugin : IDalamudPlugin
         // Before the windows: the Studio tab reads this frame's stroke from it.
         liveBrush.Update();
         windowSystem.Draw();
+        // After the windows, so a control let go this frame is written this frame; unconditionally, as the window may be closed.
+        statusWindow.TickMetadataSaves();
     }
 
     /// <summary>
@@ -496,6 +498,9 @@ public sealed class Plugin : IDalamudPlugin
 
         // A brush stroke still inside its autosave debounce: written, without the reload and redraw.
         try { statusWindow.FlushPendingBrush(); } catch { /* tearing down — never block the unload */ }
+
+        // A colour edit held for the mouse to be let go.
+        try { statusWindow.FlushMetadataSaves(unloading: true); } catch { /* tearing down — never block the unload */ }
 
         CommandManager.RemoveHandler(CommandName);
         PluginInterface.UiBuilder.Draw -= DrawUi;

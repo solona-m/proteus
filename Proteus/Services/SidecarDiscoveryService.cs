@@ -215,7 +215,7 @@ public class SidecarDiscoveryService
             if (settings == null) continue;
             if (enabledOnly && !settings.Value.Enabled) continue;
 
-            var metadata = TryParseMetadata(metaPath);
+            var metadata = ReadForDiscovery(modDir, metaPath);
             if (metadata == null) continue;
 
             CheckStaleEffect(modDir, Path.Combine(modsRoot, modDir), metadata);
@@ -955,41 +955,38 @@ public class SidecarDiscoveryService
     public List<ColorTableRowPreset> GetActiveColorRows(OverlayEntry entry)
         => GetEditableColorRows(entry);
 
-    public void SaveMetadata(OverlayEntry entry)
-    {
-        try
-        {
-            var path = Path.Combine(entry.SidecarRoot, MetadataFile);
-            SnapshotDefaults(entry, path);
+    /// <summary>
+    /// The colour editor's edits waiting to be written; see <see cref="MetadataWriteBehind"/>.
+    /// </summary>
+    private readonly MetadataWriteBehind staged = new();
 
-            // The file owns ContentAttributes: no editor changes it, and the Parts tab rewrites it on disk when it adds a
-            // switch to an imported mod. An entry loaded before that would otherwise save the old list back.
-            if (File.Exists(path) && TryParseMetadata(path) is { } onDisk)
-                entry.Metadata.ContentAttributes = onDisk.ContentAttributes;
+    /// <summary>One metadata write at a time: the editor's flush on the framework thread, IPC saves on their callers'.</summary>
+    private readonly object writeGate = new();
 
-            var json = JsonSerializer.Serialize(entry.Metadata, ProteusJson.MetadataWrite);
-            // AtomicWrite: this is the authored descriptor and nothing can rebuild it. Interactive retry budget, since
-            // callers run on threads the user feels. Synchronous: the editor recomposites straight after and
-            // Discover re-reads this file.
-            PenumbraModMeta.AtomicWrite(path, json, maxRetries: 2);
-        }
-        catch (Exception ex)
-        {
-            log.Warning(ex, "Failed to save Proteus metadata for {0}", entry.ModDirectory);
-        }
-    }
+    /// <summary>Sidecar folders written since <see cref="TakeWrittenRoots"/> last drained them.</summary>
+    private readonly System.Collections.Concurrent.ConcurrentQueue<string> writtenRoots = new();
 
     /// <summary>
-    /// Persist the reinforced-toe density of <paramref name="edited"/>, and nothing else, to the mod's sidecar;
-    /// false, with a warning, when it could not. For edits under a preset or design, where the in-memory metadata
-    /// holds previews: the file is read back and only this field is copied onto it.
+    /// Hold the entry's metadata to be written by the next <see cref="FlushStaged"/> that finds no control held, instead of
+    /// writing it now. A drag changes it every frame; discovery reads what is held, so the live preview still follows.
     /// </summary>
-    public bool SaveToeCapDensity(OverlayEntry entry, IReadOnlyList<OverlayDescriptor> edited)
+    public void StageMetadata(OverlayEntry entry)
+        => staged.Stage(entry.ModDirectory, entry.SidecarRoot,
+                        JsonSerializer.Serialize(entry.Metadata, ProteusJson.MetadataWrite));
+
+    /// <summary>
+    /// Hold the reinforced-toe density of <paramref name="edited"/>, and nothing else, for the next flush. For edits under
+    /// a preset or design, where the in-memory metadata holds previews: the density is copied onto what is held, else onto
+    /// the file read back. False, with a warning, when it could not.
+    /// </summary>
+    public bool StageToeCapDensity(OverlayEntry entry, IReadOnlyList<OverlayDescriptor> edited)
     {
         try
         {
             var path = Path.Combine(entry.SidecarRoot, MetadataFile);
-            var onDisk = File.Exists(path) ? TryParseMetadata(path) : null;
+            var onDisk = staged.Peek(entry.ModDirectory) is { } held
+                ? JsonSerializer.Deserialize<ProteusMetadata>(held.Json, ProteusJson.MetadataRead)
+                : File.Exists(path) ? TryParseMetadata(path) : null;
             if (onDisk == null)
             {
                 log.Warning("[Proteus] reinforced toe not saved for {0}: its metadata could not be read back",
@@ -1011,9 +1008,8 @@ public class SidecarDiscoveryService
                 return false;
             }
 
-            SnapshotDefaults(entry, path);
-            var json = JsonSerializer.Serialize(onDisk, ProteusJson.MetadataWrite);
-            PenumbraModMeta.AtomicWrite(path, json, maxRetries: 2);   // same budget and reason as SaveMetadata
+            staged.Stage(entry.ModDirectory, entry.SidecarRoot,
+                         JsonSerializer.Serialize(onDisk, ProteusJson.MetadataWrite));
             return true;
         }
         catch (Exception ex)
@@ -1024,8 +1020,139 @@ public class SidecarDiscoveryService
     }
 
     /// <summary>
+    /// A mod's metadata as discovery should see it: what the editor holds unwritten, else the file. Null when the file
+    /// is gone, so a deleted mod is never brought back by an edit still held for it.
+    /// </summary>
+    internal ProteusMetadata? ReadForDiscovery(string modDir, string metaPath)
+    {
+        if (!File.Exists(metaPath)) return null;
+        if (staged.Peek(modDir) is not { } held) return TryParseMetadata(metaPath);
+        try
+        {
+            return JsonSerializer.Deserialize<ProteusMetadata>(held.Json, ProteusJson.MetadataRead);
+        }
+        catch (Exception ex)
+        {
+            log.Warning(ex, "Failed to parse held Proteus metadata for {0}", modDir);
+            return TryParseMetadata(metaPath);
+        }
+    }
+
+    /// <summary>
+    /// Write what is held, unless a control is still held (<paramref name="editing"/>). Once a frame, after the windows.
+    /// </summary>
+    public void FlushStaged(bool editing)
+    {
+        foreach (var s in staged.Due(editing, Environment.TickCount64)) WriteStaged(s);
+    }
+
+    /// <summary>
+    /// Write everything held, held control and retry wait or not: the window closing, or the plugin
+    /// <paramref name="unloading"/>, when a write that fails gets no retry.
+    /// </summary>
+    public void FlushAllStaged(bool unloading = false)
+    {
+        foreach (var s in staged.All()) WriteStaged(s, unloading);
+    }
+
+    /// <summary>
+    /// Sidecar folders written since the last call, so the editor can forget what it cached about them (whether "Reset to
+    /// defaults" has a snapshot) on its own thread. A write may land on an IPC caller's thread.
+    /// </summary>
+    public IReadOnlyList<string> TakeWrittenRoots()
+    {
+        if (writtenRoots.IsEmpty) return [];   // asked every frame
+        var roots = new List<string>();
+        while (writtenRoots.TryDequeue(out var r)) roots.Add(r);
+        return roots;
+    }
+
+    /// <summary>A mod renamed in Penumbra: an edit held for it is written into its new folder.</summary>
+    public void FollowStaged(string oldDir, string newDir) => staged.Follow(oldDir, newDir);
+
+    /// <summary>
+    /// Write one held edit as <see cref="SaveMetadata"/> would. A failure keeps it held and tries again a second later;
+    /// warned on the first failure and when it is given up. <paramref name="unloading"/>: no later try is coming, so a
+    /// failure is said to lose the edit.
+    /// </summary>
+    private void WriteStaged(StagedMetadata s, bool unloading = false)
+    {
+        lock (writeGate)
+        {
+            // Superseded or already written while this waited for the gate.
+            if (staged.Peek(s.ModDirectory) is not { } current || current.Version != s.Version) return;
+            try
+            {
+                var path = Path.Combine(s.SidecarRoot, MetadataFile);
+                var metadata = JsonSerializer.Deserialize<ProteusMetadata>(s.Json, ProteusJson.MetadataRead)
+                    ?? throw new InvalidDataException("held metadata is empty");
+                // As in SaveMetadata: the file owns ContentAttributes.
+                if (File.Exists(path) && TryParseMetadata(path) is { } onDisk)
+                    metadata.ContentAttributes = onDisk.ContentAttributes;
+
+                SnapshotDefaults(s.SidecarRoot, s.ModDirectory, path);
+                PenumbraModMeta.AtomicWrite(path, JsonSerializer.Serialize(metadata, ProteusJson.MetadataWrite),
+                                            maxRetries: 2);
+                staged.Complete(s);
+                writtenRoots.Enqueue(s.SidecarRoot);
+            }
+            catch (Exception ex)
+            {
+                if (unloading)
+                {
+                    log.Warning(ex, "[Proteus] colour edits for {0} not saved: the plugin unloaded before they could be written",
+                        s.ModDirectory);
+                    return;
+                }
+                switch (staged.Failed(s, Environment.TickCount64))
+                {
+                    case StagedFailure.GaveUp:
+                        log.Warning(ex, "[Proteus] gave up saving Proteus metadata for {0} after {1} tries",
+                            s.ModDirectory, MetadataWriteBehind.MaxFailures);
+                        break;
+                    case StagedFailure.Retrying when s.Failures == 0:
+                        log.Warning(ex, "[Proteus] could not save Proteus metadata for {0}; trying again", s.ModDirectory);
+                        break;
+                }
+            }
+        }
+    }
+
+    public void SaveMetadata(OverlayEntry entry)
+    {
+        // Whatever the editor holds for this mod goes first, so nothing held is lost and this save is the last word.
+        var held = staged.Peek(entry.ModDirectory);
+        if (held != null) WriteStaged(held);
+
+        lock (writeGate)
+        try
+        {
+            var path = Path.Combine(entry.SidecarRoot, MetadataFile);
+            SnapshotDefaults(entry.SidecarRoot, entry.ModDirectory, path);
+
+            // The file owns ContentAttributes: no editor changes it, and the Parts tab rewrites it on disk when it adds a
+            // switch to an imported mod. An entry loaded before that would otherwise save the old list back.
+            if (File.Exists(path) && TryParseMetadata(path) is { } onDisk)
+                entry.Metadata.ContentAttributes = onDisk.ContentAttributes;
+
+            var json = JsonSerializer.Serialize(entry.Metadata, ProteusJson.MetadataWrite);
+            // AtomicWrite: this is the authored descriptor and nothing can rebuild it. Interactive retry budget, since
+            // callers run on threads the user feels. Synchronous: the editor recomposites straight after and
+            // Discover re-reads this file.
+            PenumbraModMeta.AtomicWrite(path, json, maxRetries: 2);
+            // A held edit whose own write failed above must not be retried over this newer save. One staged since is kept.
+            if (held != null) staged.Complete(held);
+            writtenRoots.Enqueue(entry.SidecarRoot);
+        }
+        catch (Exception ex)
+        {
+            log.Warning(ex, "Failed to save Proteus metadata for {0}", entry.ModDirectory);
+        }
+    }
+
+    /// <summary>
     /// The descriptor in <paramref name="onDisk"/> at the position <paramref name="d"/> occupies in
-    /// <paramref name="inMemory"/>, found by reference. See <see cref="SaveToeCapDensity"/>.
+    /// <paramref name="inMemory"/>, found by reference. See <see cref="StageToeCapDensity"/>.
     /// </summary>
     internal static OverlayDescriptor? TwinOnDisk(ProteusMetadata inMemory, ProteusMetadata onDisk, OverlayDescriptor d)
     {
@@ -1055,18 +1182,18 @@ public class SidecarDiscoveryService
     /// Preserve the mod's settings as they were before Proteus first wrote to them, for "Reset to defaults". Called
     /// before the save overwrites the file. Best-effort: a failed snapshot never stops the save.
     /// </summary>
-    private void SnapshotDefaults(OverlayEntry entry, string metaPath)
+    private void SnapshotDefaults(string sidecarRoot, string modDirectory, string metaPath)
     {
         try
         {
-            var defaults = Path.Combine(entry.SidecarRoot, DefaultsFile);
+            var defaults = Path.Combine(sidecarRoot, DefaultsFile);
             if (File.Exists(defaults) || !File.Exists(metaPath)) return;
             File.Copy(metaPath, defaults);
-            log.Information("[Proteus] captured original settings for {0} -> {1}", entry.ModDirectory, DefaultsFile);
+            log.Information("[Proteus] captured original settings for {0} -> {1}", modDirectory, DefaultsFile);
         }
         catch (Exception ex)
         {
-            log.Warning(ex, "Failed to snapshot original Proteus metadata for {0}", entry.ModDirectory);
+            log.Warning(ex, "Failed to snapshot original Proteus metadata for {0}", modDirectory);
         }
     }
 
