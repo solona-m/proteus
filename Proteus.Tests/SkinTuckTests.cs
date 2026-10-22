@@ -363,7 +363,7 @@ public class SkinTuckTests(ITestOutputHelper output)
         Assert.Equal(tucked, rows.Keys.Any(r => r < 8));
     }
 
-    // ── open skin where the garment's inside would show (build 1358) ──
+    // ── open skin where the garment's inside would show (build 1360) ──
 
     [Fact]
     [Trait("Plan", "AC-coatee-strap-slit-6")]

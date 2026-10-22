@@ -524,8 +524,9 @@ internal static partial class SizeSetRefit
                                              warn: line => log.Warning("[Proteus] size set: {0}", line),
                                              carryPiercings: request.Piercings);
                 plan = RefitCore.MatchSkinToBody(plan, chosen.SourcePath, targetPath, uvRemap, male, log);
-                log.Information("[Proteus] size set: {0} onto {1} (moved up to {2:F1} mm)", piece.Label, option,
-                                plan.Report.WorstMove * 1000f);
+                // Folds are said, never refused (cross-sex-tops-yas).
+                log.Information("[Proteus] size set: {0} onto {1} (moved up to {2:F1} mm, {3} folded)", piece.Label, option,
+                                plan.Report.WorstMove * 1000f, plan.Report.Folded);
                 if (RefitCore.ReleasedLog(plan.Report, chosen.ShapeNames) is { } released)
                     log.Information("[Proteus] size set: {0} {1}: let go of kept piece(s) that would sink moved whole: {2}",
                                     piece.Label, option, released);

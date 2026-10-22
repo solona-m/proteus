@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Linq;
 using CheapLoc;
 
 namespace Proteus.Services;
@@ -51,6 +52,7 @@ internal static class VanillaBodyCatalog
         lock (Gate)
         {
             extracted.Clear();
+            models.Clear();
             try
             {
                 if (Directory.Exists(Dir)) Directory.Delete(Dir, recursive: true);
@@ -63,6 +65,30 @@ internal static class VanillaBodyCatalog
             {
             }
         }
+    }
+
+    /// <summary>The bytes of every model extracted this session, by slot: what <see cref="IsGameModel"/> knows the game's
+    /// body by.</summary>
+    private static readonly List<(string Slot, byte[] Bytes)> models = [];
+
+    /// <summary>
+    /// Whether <paramref name="bytes"/> is, byte for byte, a model of the game's own body for <paramref name="slot"/>
+    /// extracted this session. By content, not by path: a body mod's file can sit anywhere, and only the game's chest
+    /// has no skin under its bra (see <c>BodyRetarget.SmallclothesOverHoles</c>).
+    /// </summary>
+    internal static bool IsGameModel(byte[] bytes, string slot)
+    {
+        lock (Gate)
+            foreach (var (s, b) in models)
+                if (s == slot && b.AsSpan().SequenceEqual(bytes)) return true;
+        return false;
+    }
+
+    /// <summary>How many distinct models of the game's body for <paramref name="slot"/> were extracted this session — for
+    /// the tests.</summary>
+    internal static int GameModelCount(string slot)
+    {
+        lock (Gate) return models.Count(m => m.Slot == slot);
     }
 
     /// <summary>Race code to the slots already written out this session, so the game is read once per file.</summary>
@@ -128,6 +154,7 @@ internal static class VanillaBodyCatalog
             }
 
             options.Add(new BodyOption(GroupName, Section: "", Name: SizeName, rel, gamePath, slot));
+            if (!models.Exists(m => m.Slot == slot && m.Bytes.AsSpan().SequenceEqual(bytes))) models.Add((slot, bytes));
         }
         return options;
     }

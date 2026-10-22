@@ -444,16 +444,23 @@ internal static partial class BodyRetarget
         return list;
     }
 
-    /// <summary>One vertex's influences, by bone name.</summary>
-    private static List<(string Bone, float W)> Influences(XivLiveMesh.SkinnedMesh skin, int v)
+    /// <summary>
+    /// One vertex's influences, by bone name — one entry per name: a model may name two of its bones alike (a bone moved
+    /// onto another for a race that lacks it, see <see cref="SkeletonRemap"/>), and the game adds the two up.
+    /// </summary>
+    internal static List<(string Bone, float W)> Influences(XivLiveMesh.SkinnedMesh skin, int v)
     {
-        var list = new List<(string, float)>(XivLiveMesh.SkinnedMesh.MaxInfluences);
+        var list = new List<(string Bone, float W)>(XivLiveMesh.SkinnedMesh.MaxInfluences);
         for (int k = 0; k < XivLiveMesh.SkinnedMesh.MaxInfluences; k++)
         {
             float w = skin.BoneWeights[v * XivLiveMesh.SkinnedMesh.MaxInfluences + k];
             if (w <= 0f) continue;
             int bone = skin.BoneIndices[v * XivLiveMesh.SkinnedMesh.MaxInfluences + k];
-            if (bone < skin.BoneNames.Length) list.Add((skin.BoneNames[bone], w));
+            if (bone >= skin.BoneNames.Length) continue;
+            string name = skin.BoneNames[bone];
+            int at = list.FindIndex(i => i.Bone == name);
+            if (at >= 0) list[at] = (name, list[at].W + w);
+            else list.Add((name, w));
         }
         return list;
     }

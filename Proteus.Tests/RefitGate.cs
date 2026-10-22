@@ -41,8 +41,19 @@ internal static class RefitGate
                                     float MadeForP95, float Inside, float MadeForInside, float RegionAgreement,
                                     float MadeForRegionAgreement);
 
+    /// <summary>Which gates a case asserts; the rest are only logged. The shipped cells assert all of them.</summary>
+    [Flags]
+    internal enum Gates
+    {
+        None = 0, Folds = 1, Inside = 2, Regions = 4, Standoff = 8,
+        All = Folds | Inside | Regions | Standoff,
+    }
+
     /// <summary>Measure every gate and assert it, logging all of them first so a failure shows the rest.</summary>
-    internal static Measured Assert(ITestOutputHelper o, CrossSexRefitJob.Result r, CrossSexRefitJob.Size s, int baseline)
+    /// <param name="gates">Which of G2, G3, G5b and G6 are asserted (G1, G4 and G5 always are): a refit across the sexes
+    /// is never refused for its folds (cross-sex-tops-yas), so the new cases log G2.</param>
+    internal static Measured Assert(ITestOutputHelper o, CrossSexRefitJob.Result r, CrossSexRefitJob.Size s, int baseline,
+                                    Gates gates = Gates.All, float minCoverage = MinCoverage)
     {
         var m = Measure(r, s, baseline);
         o.WriteLine($"G1 preview {m.PreviewOff * 1000f:F3} mm off, {m.Collapsed} collapsed, round trip {m.RoundTrip * 1000f:F3} mm; "
@@ -56,19 +67,69 @@ internal static class RefitGate
         Xunit.Assert.Equal(0, m.Collapsed);
         Xunit.Assert.True(m.RoundTrip < 5e-4f, $"G1: the bend there and back moves {m.RoundTrip * 1000f:F3} mm");
         int maxFolds = Math.Max(baseline + FoldsOverBaseline, FoldsFloor);
-        Xunit.Assert.True(m.Folds <= maxFolds, $"G2: {m.Folds} cloth faces turned over, more than {maxFolds}");
-        Xunit.Assert.True(m.Inside <= m.MadeForInside + InsideSlack,
-                          $"G3: {m.Inside:P2} of near cloth inside the body, made for {m.MadeForInside:P2}");
-        Xunit.Assert.True(m.Coverage >= MinCoverage, $"G4: coverage {m.Coverage:P1}");
+        if (gates.HasFlag(Gates.Folds))
+            Xunit.Assert.True(m.Folds <= maxFolds, $"G2: {m.Folds} cloth faces turned over, more than {maxFolds}");
+        if (gates.HasFlag(Gates.Inside))
+            Xunit.Assert.True(m.Inside <= m.MadeForInside + InsideSlack,
+                              $"G3: {m.Inside:P2} of near cloth inside the body, made for {m.MadeForInside:P2}");
+        Xunit.Assert.True(m.Coverage >= minCoverage, $"G4: coverage {m.Coverage:P1}");
         Xunit.Assert.Equal(0, m.Astray);
         Xunit.Assert.True(m.P99Shift <= MaxP99Shift, $"G4: p99 shift {m.P99Shift * 1000f:F1} mm");
         Xunit.Assert.Empty(m.ForeignSkins);
         Xunit.Assert.Empty(m.MissingBones);
-        Xunit.Assert.True(m.RegionAgreement >= m.MadeForRegionAgreement - RegionSlack,
-                          $"G5b: regions agree for {m.RegionAgreement:P1}, made for {m.MadeForRegionAgreement:P1}");
-        Xunit.Assert.True(m.StandoffP95 <= m.MadeForP95 + StandoffSlack,
-                          $"G6: standoff p95 {m.StandoffP95 * 1000f:F1} mm, made for {m.MadeForP95 * 1000f:F1} mm");
+        if (gates.HasFlag(Gates.Regions))
+            Xunit.Assert.True(m.RegionAgreement >= m.MadeForRegionAgreement - RegionSlack,
+                              $"G5b: regions agree for {m.RegionAgreement:P1}, made for {m.MadeForRegionAgreement:P1}");
+        if (gates.HasFlag(Gates.Standoff))
+            Xunit.Assert.True(m.StandoffP95 <= m.MadeForP95 + StandoffSlack,
+                              $"G6: standoff p95 {m.StandoffP95 * 1000f:F1} mm, made for {m.MadeForP95 * 1000f:F1} mm");
         return m;
+    }
+
+    /// <summary>G5c: mean share of a cloth vertex's weight on bones the new body does not rig, near the body.</summary>
+    internal const float MaxStrangerMean = 0.02f, MaxStrangerOnSkin = 0.05f;
+
+    /// <summary>
+    /// G5c, for a garment whose bones were moved (cross-sex-tops-yas): over its cloth within <see cref="BodyRetarget.NearBand"/>
+    /// of the new body, the weight on bones the bodies it was made on name but neither the new body nor the garment itself
+    /// rigs — the old body's share left behind where cloth and skin would part when posed. The mean, and the most on any
+    /// vertex within
+    /// <see cref="BodyRetarget.SkinHugFull"/> of the skin.
+    /// </summary>
+    internal static (float Mean, float MostOnSkin, IReadOnlySet<string> Bones) Strangers(CrossSexRefitJob.Result r, CrossSexRefitJob.Size s)
+    {
+        var cloth = ModelSkinReader.Read(s.Saved!.Model, null, null)!;
+        var targetBytes = File.ReadAllBytes(s.TargetPath);
+        var targetBones = OtherRaceRefit.Weighted(ModelSkinReader.Read(targetBytes, null, null)!).ToHashSet(StringComparer.Ordinal);
+        // Not the garment's own bones: a skirt its author rigged to IVCS's buttocks keeps them on a man with IVCS, on
+        // purpose (its physics), as it would on any body that does not rig them.
+        var own = OtherRaceRefit.Weighted(ModelSkinReader.Read(r.Baked!, null, null)!).ToHashSet(StringComparer.Ordinal);
+        var stranger = OtherRaceRefit.Weighted(ModelSkinReader.Read(File.ReadAllBytes(r.SourcePath!), null, null)!)
+                                     .Where(b => !targetBones.Contains(b) && !own.Contains(b)).ToHashSet(StringComparer.Ordinal);
+        var surface = new BodySurface(ModelPartReader.Read(targetBytes)!, 0.01f);
+        float sum = 0f, most = 0f;
+        int near = 0;
+        var seen = new HashSet<int>();
+        for (int t = 0; t < cloth.TriangleCount; t++)
+        {
+            if (SecondSkinWriter.IsBodySkinMaterial(cloth.MaterialNames[cloth.TriangleMaterials[t]])) continue;
+            for (int k = 0; k < 3; k++)
+            {
+                int v = cloth.Triangles[t * 3 + k];
+                if (!seen.Add(v) || !surface.Nearest(cloth.Positions[v], BodyRetarget.NearBand, out var hit)) continue;
+                float w = 0f;
+                for (int i = 0; i < SkinnedMesh.MaxInfluences; i++)
+                {
+                    int at = v * SkinnedMesh.MaxInfluences + i;
+                    if (cloth.BoneWeights[at] > 0f && stranger.Contains(cloth.BoneNames[cloth.BoneIndices[at]]))
+                        w += cloth.BoneWeights[at];
+                }
+                sum += w;
+                near++;
+                if (hit.Distance <= BodyRetarget.SkinHugFull) most = MathF.Max(most, w);
+            }
+        }
+        return (near == 0 ? 0f : sum / near, most, stranger);
     }
 
     internal static Measured Measure(CrossSexRefitJob.Result r, CrossSexRefitJob.Size s, int baseline)

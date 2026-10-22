@@ -64,8 +64,9 @@ internal static class Program
                       --from-root <body mod it was made on> --body-root <other sex's body mod>
                       --from <rel> --to <rel>=<label>[,...] --out-dir <dir>
                       --game <FFXIV game\sqpack> --uvmaps <Proteus plugin dir> [--skeleton <base .sklb>]
+                      [--from-skeleton <drawn race's base .sklb>]
                       [--slot _top|_dwn] [--set <id>] [--no-push] [--piercings]
-                      (refit for the other sex: men's chest and legs for women, women's legs for men)
+                      (refit for the other sex: chest and legs garments, both ways)
         """;
 
     private static int Main(string[] args)

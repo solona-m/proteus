@@ -229,11 +229,15 @@ internal static partial class BodyRetarget
     /// <see cref="Worn"/> pair. Null when the body mod cannot be read.</param>
     /// <param name="Smallclothes">On a <see cref="Worn"/> slot <see cref="ReadySmallclothes"/> readied: each of the new
     /// body's smallclothes materials, and the name the garment draws it under. Null on every other slot.</param>
+    /// <param name="SourceIsGameChest">The old body is the game's own chest, byte for byte (see
+    /// <see cref="VanillaBodyCatalog.IsGameModel"/>): its bust is its bra, read with its skin (see
+    /// <see cref="SmallclothesOverHoles"/>).</param>
     internal readonly record struct SlotPair(string Slot, IBodyCorrespondence Correspondence, ModelParts Target,
                                              byte[]? TargetModel = null, byte[]? SourceModel = null,
                                              IReadOnlySet<string>? TargetHidden = null, bool ShapeOnly = false,
                                              Func<string, byte[]?>? TargetMaterial = null,
-                                             IReadOnlyDictionary<string, string>? Smallclothes = null)
+                                             IReadOnlyDictionary<string, string>? Smallclothes = null,
+                                             bool SourceIsGameChest = false)
     {
         /// <summary>Whether the swap puts this slot's body skin in: it carries the body's file, and is not
         /// <see cref="ShapeOnly"/>.</summary>
@@ -286,13 +290,15 @@ internal static partial class BodyRetarget
     /// authored skin an open edge they lie behind — see <see cref="TargetBody.Fitted"/>.</param>
     /// <param name="SmallclothesFallback">Slots whose new body draws smallclothes in place of skin, which kept the
     /// garment's own skin because those smallclothes could not be brought in — see <see cref="ReadySmallclothes"/>.</param>
+    /// <param name="SourceSmallclothes">Points of the old body's underwear, over a hole in its skin, given the new body's
+    /// shape — see <see cref="SmallclothesOverHoles"/>.</param>
     internal sealed record Report(
         int Nodes, int Snapped, int Transferred, int Missed, int Pushed,
         float WorstMove, float WorstPush, int UnmappedSpares, bool HasOtherLods, int Held = 0, int Laid = 0,
         SwapReport? Swap = null, int Folded = 0, IReadOnlyList<ShapeOutcome>? Shapes = null, int Smoothed = 0,
         int Layered = 0, float LayerResidual = 0f, int DeepCleared = 0, float DeepWorst = 0f,
         IReadOnlyList<int>? DeepAt = null, int StandoffPulled = 0, float StandoffWorst = 0f, int StandoffHeld = 0,
-        int OpenEdgeFitted = 0, int SmallclothesFallback = 0)
+        int OpenEdgeFitted = 0, int SmallclothesFallback = 0, int SourceSmallclothes = 0)
     {
         /// <summary>Share of moved nodes that landed on a body vertex exactly. Low means the author sculpted the
         /// garment's body mesh rather than copying it, and the seam may not come out perfect.</summary>
@@ -318,7 +324,7 @@ internal static partial class BodyRetarget
                                   IReadOnlyList<ShapeOutcome>? Shapes = null, int Layered = 0,
                                   float LayerResidual = 0f, int DeepCleared = 0, float DeepWorst = 0f,
                                   IReadOnlyList<int>? DeepAt = null, int StandoffPulled = 0, float StandoffWorst = 0f,
-                                  int StandoffHeld = 0, int OpenEdgeFitted = 0);
+                                  int StandoffHeld = 0, int OpenEdgeFitted = 0, int SourceSmallclothes = 0);
 
     /// <summary>
     /// The garment split into the two sets the two passes act on.
@@ -787,6 +793,9 @@ internal static partial class BodyRetarget
         var solved = Solve(garment, pairs, garmentSlot, pushOut, held, replaceSkin, clearBody, keepShape,
                            ModelSkinReader.Read(garmentBytes, null, null), swapSlot, parted, chestSlot, trace, outfit,
                            deep, standoff, liftUnderbust);
+        if (solved.SourceSmallclothes > 0)
+            log?.Invoke($"source smallclothes: {solved.SourceSmallclothes} points of the old body's underwear, over its "
+                        + "skin's hole, given the new body's shape");
         if (solved.OpenEdgeFitted > 0)
             log?.Invoke($"fitted: {solved.OpenEdgeFitted} cloth points below an open skin edge read against the body the "
                         + "garment was made on");
@@ -848,7 +857,8 @@ internal static partial class BodyRetarget
                                 written.UnmappedSpares, ModelLodTrimmer.LodCount(model) > 1, solved.Held, solved.Laid,
                                 swap, solved.Folded, solved.Shapes, smoothed, solved.Layered, solved.LayerResidual,
                                 solved.DeepCleared, solved.DeepWorst, solved.DeepAt, solved.StandoffPulled,
-                                solved.StandoffWorst, solved.StandoffHeld, solved.OpenEdgeFitted, smallclothesFallback);
+                                solved.StandoffWorst, solved.StandoffHeld, solved.OpenEdgeFitted, smallclothesFallback,
+                                solved.SourceSmallclothes);
 
         // Only the copies the written model draws: a slot whose skin no mesh of the garment reached adds none.
         var drawnMaterials = new HashSet<string>(SecondSkinWriter.Parse(model).MatNames.Select(m => m.TrimStart('/')),
@@ -1072,7 +1082,8 @@ internal static partial class BodyRetarget
         var edit = new RetargetEdit(garment.MeshSpans, vertDelta, vertNrm);
         return new Solved(edit, CountTrue(snapped), transferred, missed, pushed, worstMove, worstPush, sets.HeldCount,
                           laid, folded, stage.Shapes, outfitLayered, layerResidual, stage.DeepCleared, stage.DeepWorst,
-                          stage.DeepAt, standoffPulled, standoffWorst, standoffHeld, stage.OpenEdgeFitted);
+                          stage.DeepAt, standoffPulled, standoffWorst, standoffHeld, stage.OpenEdgeFitted,
+                          source.SmallclothesLanded);
     }
 
     /// <summary>

@@ -71,9 +71,10 @@ public sealed partial class HairPortWatcher : IDisposable
     /// <param name="Earless">The worn hairstyle is drawn from an earless copy in <paramref name="ModRoot"/>.</param>
     /// <param name="EarlessOptions">The mod's own earless versions of the worn hairstyle, as "Group / Option"
     /// (<see cref="EarlessHairPlan.EarlessOptionHint"/>); null or empty for none.</param>
+    /// <param name="Warning">Ported this session with something to look at in game (<see cref="HairPortBaker.Result.Warning"/>).</param>
     public sealed record View(string? Worn = null, string? ModRoot = null, bool Ported = false, int PortsInMod = 0,
                               bool Busy = false, string Message = "", bool Failed = false, bool Earless = false,
-                              IReadOnlyList<string>? EarlessOptions = null);
+                              IReadOnlyList<string>? EarlessOptions = null, string Warning = "");
 
     private volatile View current = new();
     public View Current => current;
@@ -636,7 +637,9 @@ public sealed partial class HairPortWatcher : IDisposable
                                      : EarlessRestoreAtEquip(host, modsRoot!, worn, race, file, ref lastKey))
                        ?? new View(worn, Message: decision.Message, EarlessOptions: EarlessHint(modsRoot!, worn, race, file));
             case Decide.Kind.Ported:
-                return new View(worn, decision.ModRoot, Ported: true, PortsInMod: HairPortRecord.Read(decision.ModRoot!).Ports.Count);
+                // A port made earlier this session says again what it warned of (HairPortScan.WarningFor).
+                return new View(worn, decision.ModRoot, Ported: true, PortsInMod: HairPortRecord.Read(decision.ModRoot!).Ports.Count,
+                                Warning: HairPortScan.WarningFor(decision.ModRoot, worn));
         }
 
         // Port (or remake a stale port of) the worn hairstyle from decision.Source in decision.ModRoot.
@@ -669,7 +672,8 @@ public sealed partial class HairPortWatcher : IDisposable
         // The mod's other hairstyles for this race are fitted too, as a check of the mod would.
         host.CheckMod(modDir);
         lastKey = null;
-        return new View(worn, modRoot, Ported: true, PortsInMod: HairPortRecord.Read(modRoot).Ports.Count);
+        return new View(worn, modRoot, Ported: true, PortsInMod: HairPortRecord.Read(modRoot).Ports.Count,
+                        Warning: ported.Warning);
     }
 
     /// <summary>Returned for an examination that found nothing changed: the panel keeps what it shows.</summary>

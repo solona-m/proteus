@@ -731,7 +731,9 @@ public sealed class LocalizationTests
         var en = Load(Source);
         var tr = Load(lang);
         var keys = en.Keys.Where(k => k.StartsWith("Parts.Retarget.Race.", StringComparison.Ordinal)).ToList();
-        Assert.Equal(28, keys.Count);   // 23, and cross-sex-refit's five (OtherSex, CrossSexNote, CrossSexWears, CrossSexQuality, CrossSexHint)
+        // 23, cross-sex-refit's five (OtherSex, CrossSexNote, CrossSexWears, CrossSexQuality, CrossSexHint) and
+        // cross-sex-tops-yas's four (CrossSexFolded, BonesMoved, NeedsSkeleton, RenameFailed)
+        Assert.Equal(32, keys.Count);
         foreach (string key in keys)
         {
             Assert.True(tr.ContainsKey(key), $"[{lang}] has no {key}");
@@ -894,17 +896,24 @@ public sealed class LocalizationTests
     [Theory]
     [MemberData(nameof(Translations))]
     [Trait("Plan", "AC-cross-sex-refit-9")]
-    public void Cross_sex_strings_exist_and_are_translated_in_every_locale(string lang) // [AC-cross-sex-refit-9]
+    [Trait("Plan", "AC-cross-sex-tops-yas-10")]
+    public void Cross_sex_strings_exist_and_are_translated_in_every_locale(string lang) // [AC-cross-sex-refit-9] [AC-cross-sex-tops-yas-10]
     {
         var en = Load(Source);
         var tr = Load(lang);
+        // Nothing is refused for folds any more (cross-sex-tops-yas): the strings that said so are gone.
+        Assert.False(tr.ContainsKey("Parts.Retarget.Refuse.CrossSexQuality.Fmt"));
+        Assert.False(tr.ContainsKey("HairPort.Refused.Folded.Fmt"));
         foreach (string key in new[]
                  {
                      "Parts.Retarget.Race.OtherSex.Fmt", "Parts.Retarget.Race.CrossSexNote.Fmt",
                      "Parts.Retarget.Race.CrossSexWears.Fmt", "Parts.Retarget.Race.CrossSexQuality.Fmt",
                      "Parts.Retarget.Race.CrossSexHint.Fmt", "Parts.Retarget.Refuse.CrossSexMadeFor.Fmt",
-                     "Parts.Retarget.Refuse.CrossSexQuality.Fmt", "Parts.Retarget.Refuse.CrossSexLayout.Fmt",
+                     "Parts.Retarget.Refuse.CrossSexCoverage.Fmt", "Parts.Retarget.Refuse.CrossSexLayout.Fmt",
                      "Parts.Retarget.Refuse.MenMapsMissing", "Parts.Retarget.Race.Tip", "Parts.Retarget.NoBodiesForSex.Fmt",
+                     "Parts.Retarget.Race.CrossSexFolded.Fmt", "Parts.Retarget.Race.BonesMoved.Fmt",
+                     "Parts.Retarget.Race.NeedsSkeleton.Fmt", "Parts.Retarget.Race.RenameFailed.Fmt",
+                     "HairPort.Folded.Fmt", "HairPort.Scan.State.FittedWarn.Fmt",
                  })
         {
             Assert.True(tr.ContainsKey(key), $"[{lang}] has no {key}");
@@ -921,7 +930,8 @@ public sealed class LocalizationTests
     [Theory]
     [MemberData(nameof(AllLocales))]
     [Trait("Plan", "AC-cross-sex-refit-9")]
-    public void Readme_describes_cross_sex_refit(string lang) // [AC-cross-sex-refit-9]
+    [Trait("Plan", "AC-cross-sex-tops-yas-10")]
+    public void Readme_describes_cross_sex_refit(string lang) // [AC-cross-sex-refit-9] [AC-cross-sex-tops-yas-10]
     {
         var dir = new System.IO.DirectoryInfo(AppContext.BaseDirectory);
         while (dir != null && !System.IO.File.Exists(System.IO.Path.Combine(dir.FullName, "proteus.slnx"))) dir = dir.Parent;
@@ -931,9 +941,19 @@ public sealed class LocalizationTests
         var strings = Load(lang);
         string label = "**" + strings["Parts.Retarget.Race.Label"].Message + "**";
         var lines = readme.Split('\n');
-        Assert.Contains(lines, l => l.StartsWith("- ", StringComparison.Ordinal) && l.Contains(label) && l.Contains("bibo↔TBSE")
-                                    && l.Contains("YAS"));
+        Assert.Contains(lines, l => l.StartsWith("- ", StringComparison.Ordinal) && l.Contains(label) && l.Contains("bibo↔TBSE"));
+        // A garment rigged to YAS is refitted for men, its missing bones moved (cross-sex-tops-yas), under its own bullet.
+        Assert.Contains(lines, l => l.StartsWith("- **", StringComparison.Ordinal) && l.Contains(label) && l.Contains("YAS")
+                                    && l.Contains("IVCS") && !l.Contains("bibo↔TBSE"));
         Assert.DoesNotContain("never refitted onto each other", readme);
+        if (lang == Source)
+        {
+            Assert.DoesNotContain("aren't offered for men", readme);
+            Assert.DoesNotContain("refused for men", readme);
+            Assert.DoesNotContain("too many folded faces", readme);
+            Assert.Contains("never refused for folded faces", readme);
+            Assert.Contains("partly inside out is still fitted", readme);
+        }
     }
 
     /// <summary>The game's own gear is copied by its first change, not by opening it: every language says so in its
