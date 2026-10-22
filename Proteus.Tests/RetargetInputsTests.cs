@@ -262,38 +262,48 @@ public class RetargetInputsTests
     [Trait("Plan", "EDGE-studio-game-top-3")]
     [Trait("Plan", "EDGE-studio-game-top-5")]
     [Trait("Plan", "EDGE-studio-game-top-6")]
+    [Trait("Plan", "AC-coatee-strap-slit-5")]
+    [Trait("Plan", "EDGE-coatee-strap-slit-12")]
     public void Studio_skin_rule_for_game_and_modders_tops()
     {
         // [AC-studio-game-top-4] The game's own top with the new body's skin, as the Body size tool opens: the automatic
-        // refit's rule for game gear, the Clear box forced on.
+        // refit's rule for game gear, the Clear box forced on — the tuck's open skin where the inside shows included.
         var game = AutoRefitDecisions.SkinFor(true);
         var top = RetargetInputs.StudioSkin(replaceSkin: true, cutHidden: true, clearBody: false, gameGear: true, "_top", crossSex: false);
         Assert.Equal(new RetargetInputs.StudioSkinRule(ClearForced: true, ClearBody: game.ClearBody,
                                                        TuckSlot: RefitCore.TuckSlot(game.TuckUnderCloth, "_top"),
                                                        DeepClear: RefitCore.DeepClearFor(game.DeepClear, "_top"),
-                                                       KeepStandoff: RefitCore.KeepStandoffFor(game.KeepStandoff, "_top")), top);
+                                                       KeepStandoff: RefitCore.KeepStandoffFor(game.KeepStandoff, "_top"),
+                                                       SeeInside: RefitCore.SeeInsideFor(game.SeeInside, "_top")), top);
+        Assert.True(top.SeeInside);
 
-        // [EDGE-studio-game-top-2] Cut off: still cleared, deep cleared and pulled back, but nothing is tucked.
-        Assert.Equal(new RetargetInputs.StudioSkinRule(true, true, null, true, true),
+        // [EDGE-studio-game-top-2] Cut off: still cleared, deep cleared and pulled back, but nothing is tucked — and so
+        // nothing drawn where the inside shows.
+        Assert.Equal(new RetargetInputs.StudioSkinRule(true, true, null, true, true, false),
                      RetargetInputs.StudioSkin(true, cutHidden: false, clearBody: false, gameGear: true, "_top", false));
 
         // [AC-studio-game-top-3] A modder's garment, and [EDGE-studio-game-top-5] a "— Proteus edit" copy (a mod), get the
-        // boxes as they always did: the tuck only with cut and clear both ticked, never the deep clear or the standoff.
+        // boxes as they always did: the tuck only with cut and clear both ticked, never the deep clear or the standoff —
+        // [AC-coatee-strap-slit-5] and never the open skin where the inside shows, tuck or not.
         foreach (bool cut in new[] { true, false })
             foreach (bool clear in new[] { true, false })
                 foreach (string slot in new[] { "_top", "_dwn", "_glv", "_sho" })
-                    Assert.Equal(new RetargetInputs.StudioSkinRule(false, clear, RefitCore.TuckSlot(cut && clear, slot), false, false),
+                    Assert.Equal(new RetargetInputs.StudioSkinRule(false, clear, RefitCore.TuckSlot(cut && clear, slot), false, false, false),
                                  RetargetInputs.StudioSkin(true, cut, clear, gameGear: false, slot, false));
 
         // [EDGE-studio-game-top-1] New skin off, [EDGE-studio-game-top-3] the game's legs, shoes or gloves, and
         // [EDGE-studio-game-top-6] a race of the other sex: the boxes as they are.
-        Assert.Equal(new RetargetInputs.StudioSkinRule(false, false, null, false, false),
+        Assert.Equal(new RetargetInputs.StudioSkinRule(false, false, null, false, false, false),
                      RetargetInputs.StudioSkin(replaceSkin: false, true, false, gameGear: true, "_top", false));
         foreach (string slot in new[] { "_dwn", "_glv", "_sho" })
-            Assert.Equal(new RetargetInputs.StudioSkinRule(false, false, null, false, false),
+            Assert.Equal(new RetargetInputs.StudioSkinRule(false, false, null, false, false, false),
                          RetargetInputs.StudioSkin(true, true, false, gameGear: true, slot, false));
-        Assert.Equal(new RetargetInputs.StudioSkinRule(false, false, null, false, false),
+        Assert.Equal(new RetargetInputs.StudioSkinRule(false, false, null, false, false, false),
                      RetargetInputs.StudioSkin(true, true, false, gameGear: true, "_top", crossSex: true));
+        // A top bent across the sexes with both boxes ticked tucks, as the boxes say, but never draws where the inside shows.
+        var crossed = RetargetInputs.StudioSkin(true, true, true, gameGear: true, "_top", crossSex: true);
+        Assert.Equal("_top", crossed.TuckSlot);
+        Assert.False(crossed.SeeInside);
     }
 
     [Fact]

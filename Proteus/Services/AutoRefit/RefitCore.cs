@@ -1172,7 +1172,7 @@ internal static partial class RefitCore
                                  tuckSlot: TuckSlot(skin.TuckUnderCloth, primary),
                                  deepClear: DeepClearFor(skin.DeepClear, primary),
                                  keepStandoff: KeepStandoffFor(skin.KeepStandoff, primary),
-                                 carryPiercings: carryPiercings);
+                                 carryPiercings: carryPiercings, seeInside: SeeInsideFor(skin.SeeInside, primary));
     }
 
     /// <summary>
@@ -1196,6 +1196,14 @@ internal static partial class RefitCore
     /// cloth toward the body.
     /// </summary>
     internal static bool KeepStandoffFor(bool rule, string garmentSlot) => rule && garmentSlot == "_top";
+
+    /// <summary>
+    /// Whether a top's tuck also draws open skin through which its inside would show (see
+    /// <see cref="BodyRetarget.TuckSeeReach"/>): the game's own top, in the automatic refit and in the Studio (see
+    /// <see cref="RetargetInputs.StudioSkin"/>). Never a modder's top — measured on the game's tops alone, and that refit is
+    /// written into the modder's own mod.
+    /// </summary>
+    internal static bool SeeInsideFor(bool rule, string garmentSlot) => rule && garmentSlot == "_top";
 
     /// <summary>
     /// The automatic refit of a garment worn on an accessory slot — a jacket on a necklace — over the body part(s) its

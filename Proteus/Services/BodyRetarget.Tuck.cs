@@ -42,6 +42,17 @@ internal static partial class BodyRetarget
     /// </summary>
     internal const float TuckSpanShare = 0.5f;
 
+    /// <summary>
+    /// How far into the body the tuck looks for the garment's cloth behind open skin (0.5 m): skin in the open that the
+    /// laid skin does not span is still drawn when the first of this garment's cloth behind it is seen from inside — left
+    /// out, the camera would look through it into the garment, whose inside the game does not draw. Measured on the
+    /// Witch's Coatee: on Neolithe's Almond XS the cut left the skin out at each strap tip on the upper breast, a slit into
+    /// the bodice's back (2.16 cm² from the user's camera, 0 with this); the cloth behind lay 6–431 mm off, 285–346 at the
+    /// 99th percentile over ten bodies and tops. Only within <see cref="TuckBand"/>, and only for the game's own top (see
+    /// <see cref="Rebuild"/>'s seeInside).
+    /// </summary>
+    internal const float TuckSeeReach = 0.5f;
+
     private static readonly string[] ArmBonePrefixes = ["j_ude_", "j_kata_", "n_hkata_", "n_hhiji_", "n_hte_"];
 
     /// <summary>An upper arm, forearm, shoulder or hand bone.</summary>
@@ -67,7 +78,9 @@ internal static partial class BodyRetarget
     /// <para/>
     /// A corner with no cloth over it still qualifies where the garment's laid skin spans it — lands inside its triangles
     /// or on an edge two share, within <see cref="TuckSpanShare"/> of the chord: skin the author drew, over a body that dips
-    /// further below it than the cut's sag allows (the new body's cleavage under the game's coarse chest skin).
+    /// further below it than the cut's sag allows (the new body's cleavage under the game's coarse chest skin). With
+    /// <paramref name="seeInside"/> it also qualifies where the first of the garment's cloth behind it, within
+    /// <see cref="TuckSeeReach"/>, is seen from inside: without it there, the camera looks into the garment.
     /// </summary>
     /// <param name="edges">Which of <paramref name="drawn"/>'s edges two of its triangles share.</param>
     /// <param name="drawn">The garment's own skin, laid onto the new body.</param>
@@ -78,16 +91,19 @@ internal static partial class BodyRetarget
     /// <param name="keptTris">The triangles the cut kept.</param>
     /// <param name="movedAt">Where corners the pull moved stood (see <see cref="PullToEdge"/>).</param>
     /// <param name="baseOf">Each mesh's first vertex in <paramref name="parts"/>.</param>
+    /// <param name="seeInside">Also draw open skin through which the garment's inside would show (see
+    /// <see cref="TuckSeeReach"/>).</param>
     /// <returns>Per mesh, the vertices to draw as well (mesh-local), how many triangles they draw, how many of those have
-    /// a corner in the open, and whether the body's weights could not be read — then nothing is grown.</returns>
-    internal static (Dictionary<int, HashSet<ushort>> Grown, int Triangles, int Opened, bool Unread) TuckUnderCloth(
-        BodySurface drawn, ClothCrossings cloth, byte[] body, ModelParts parts, bool[] covered,
-        IReadOnlyCollection<(int A, int B, int C)> keptTris, IReadOnlySet<Vector3> movedAt,
-        IReadOnlyDictionary<int, int> baseOf, SkinEdges? edges)
+    /// a corner in the open inside the author's skin and none that only the garment's inside let in, how many have such a
+    /// corner, and whether the body's weights could not be read — then nothing is grown.</returns>
+    internal static (Dictionary<int, HashSet<ushort>> Grown, int Triangles, int Opened, int SeenInto, bool Unread)
+        TuckUnderCloth(BodySurface drawn, ClothCrossings cloth, byte[] body, ModelParts parts, bool[] covered,
+                       IReadOnlyCollection<(int A, int B, int C)> keptTris, IReadOnlySet<Vector3> movedAt,
+                       IReadOnlyDictionary<int, int> baseOf, SkinEdges? edges, bool seeInside = false)
     {
         int vc = parts.Positions.Length / 3;
         // Unread weights cannot tell the torso from the arm: nothing is grown, the safe way round.
-        if (ModelSkinReader.Read(body, null, null) is not { } skin || skin.VertexCount != vc) return ([], 0, 0, true);
+        if (ModelSkinReader.Read(body, null, null) is not { } skin || skin.VertexCount != vc) return ([], 0, 0, 0, true);
 
         var pos = new Vec3[vc];
         for (int v = 0; v < vc; v++) pos[v] = ToVec(At(parts, v));
@@ -131,8 +147,10 @@ internal static partial class BodyRetarget
         // Per vertex, not per welded node: at a seam with a hard normal each copy is judged by its own normal, whichever
         // of them is asked first.
         var cornerOk = new bool?[vc];
-        // Corners that qualify only because the garment's laid skin spans them, with no cloth over them.
+        // Corners that qualify only because the garment's laid skin spans them, with no cloth over them; and those that
+        // qualify only because the garment's inside would show through them.
         var openOnly = new bool[vc];
+        var seenOnly = new bool[vc];
         bool CornerOk(int v)
         {
             int n = nodeOf[v];
@@ -149,9 +167,13 @@ internal static partial class BodyRetarget
             if (ok && !(cloth.Over(p, nrm, TuckOver)
                         || (level.LengthSquared() > 1e-6f && cloth.Over(p, Vector3.Normalize(level), TuckOver))))
             {
-                ok = !Tuned.NoOpenSkin && ChordUnder(drawn, hit, edges) is float chord
-                     && hit.Distance <= MathF.Min(TuckBand, TuckSpanShare * chord);
-                openOnly[v] = ok;
+                bool spanned = ChordUnder(drawn, hit, edges) is float chord
+                               && hit.Distance <= MathF.Min(TuckBand, TuckSpanShare * chord);
+                // Last, as the dearest: a walk through the cloth's grid.
+                bool seen = !spanned && seeInside && !Tuned.NoSeeInside && cloth.SeesInside(p, -nrm, TuckSeeReach);
+                ok = !Tuned.NoOpenSkin && (spanned || seen);
+                openOnly[v] = ok && spanned;
+                seenOnly[v] = ok && seen;
             }
             cornerOk[v] = ok;
             return ok;
@@ -227,7 +249,10 @@ internal static partial class BodyRetarget
             foreach (int t in around[n])
                 if (NewlyDrawn(t)) drawnNow.Add(t);
         }
-        int opened = drawnNow.Count(t => openOnly[tris[t].A] || openOnly[tris[t].B] || openOnly[tris[t].C]);
-        return (sets, drawnNow.Count, opened, false);
+        // A triangle with a corner only the garment's inside let in is counted there, never as inside the author's skin.
+        bool Seen(int t) => seenOnly[tris[t].A] || seenOnly[tris[t].B] || seenOnly[tris[t].C];
+        int seenInto = drawnNow.Count(Seen);
+        int opened = drawnNow.Count(t => !Seen(t) && (openOnly[tris[t].A] || openOnly[tris[t].B] || openOnly[tris[t].C]));
+        return (sets, drawnNow.Count, opened, seenInto, false);
     }
 }

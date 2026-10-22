@@ -61,6 +61,8 @@ internal static partial class BodyRetarget
     /// <see cref="TargetBody.Fitted"/>).</param>
     /// <param name="NoCrotchEase">Leave cloth between the legs on the legs' weights the reading gave it, as builds before
     /// 1335 did (see <see cref="EaseCrotch"/>).</param>
+    /// <param name="NoSeeInside">Never tuck the new body's skin in the open where only the garment's inside would show
+    /// through it, as builds before 1358 did (see <see cref="TuckSeeReach"/>).</param>
     internal sealed record Tuning(bool NoFollow = false, bool NoOwnSkinWeights = false,
                                   float OwnSkinReach = OwnSkinReachDefault, float CopyReach = CopyReachDefault,
                                   float CopyTolerance = CopyToleranceDefault, bool NoGiveUp = false,
@@ -72,7 +74,8 @@ internal static partial class BodyRetarget
                                   bool NoNippleSmooth = false, bool NoOutfitOrder = false, bool NoWallPair = false,
                                   bool NoWallCover = false, bool NoRimTurnGuard = false, bool NoSnapPush = false,
                                   bool NoTuck = false, bool NoDeepClear = false, bool NoOpenSkin = false,
-                                  bool NoKeepStandoff = false, bool NoOpenEdgeFit = false, bool NoCrotchEase = false);
+                                  bool NoKeepStandoff = false, bool NoOpenEdgeFit = false, bool NoCrotchEase = false,
+                                  bool NoSeeInside = false);
 
     private static readonly Tuning DefaultTuning = new();
 

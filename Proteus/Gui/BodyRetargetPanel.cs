@@ -1965,7 +1965,8 @@ internal sealed partial class BodyRetargetPanel(PenumbraBridge penumbra, UVRemap
                                                  warn: line => log.Warning("[Proteus] body size: {0}", line),
                                                  tuckSlot: skinRule.TuckSlot, deepClear: skinRule.DeepClear,
                                                  keepStandoff: skinRule.KeepStandoff, carryPiercings: piercings,
-                                                 liftUnderbust: !crossSex || CrossSexRefit.LiftsUnderbust(bake!.Route.Drawn, bake.Route.To));
+                                                 liftUnderbust: !crossSex || CrossSexRefit.LiftsUnderbust(bake!.Route.Drawn, bake.Route.To),
+                                                 seeInside: skinRule.SeeInside);
                     // Skin the refit kept of the garment's own, drawn in the new body's layout and material — or a
                     // gen2 garment's kept skin shows the wrong skin, and none of the tattoos, on a bibo body.
                     plan = RefitCore.MatchSkinToBody(plan, garmentSource, targetPath, uvRemap, male, log, targetMale);

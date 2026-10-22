@@ -341,6 +341,10 @@ public class VanillaGearRefitLocalTests(ITestOutputHelper output)
     [Trait("Plan", "AC-neckline-large-bust-7")]
     [Trait("Plan", "EDGE-neckline-large-bust-20")]
     [Trait("Plan", "AC-neckline-float-4")]
+    [Trait("Plan", "AC-coatee-strap-slit-2")]
+    [Trait("Plan", "AC-coatee-strap-slit-3")]
+    [Trait("Plan", "AC-coatee-strap-slit-4")]
+    [Trait("Plan", "EDGE-coatee-strap-slit-15")]
     public void A_game_top_shows_no_hole_looking_into_its_neckline(string garmentName, string modNeed, string? rel)
     {
         var r = Plan(garmentName, modNeed, rel);
@@ -376,6 +380,12 @@ public class VanillaGearRefitLocalTests(ITestOutputHelper output)
         for (int v = 0; v < body.Positions.Length / 3; v++) bodyVertexAt.TryAdd(Key(At(body, v)), v);
         var gaps = new SortedDictionary<int, int>();
         var laidSkin = LaidSkinTriangles(LaidGarment(r));
+        // The tuck as build 1357 drew it, before the open skin where the garment's inside would show: what the open-skin
+        // check below holds to the game's laid skin. That rule's own skin answers to NewSkinWasAHole instead.
+        var noSee = BodyRetarget.WithTuning(new BodyRetarget.Tuning(NoSeeInside: true),
+            () => RefitCore.PlanRefit(r.Garment, r.Bytes, [r.Pair], "_top", across: true, gameGear: true, out _));
+        var noSeeModel = ModelPartReader.Read(r.Drawn(noSee))!;
+        var oldTuck = NewSkinCorners(deepOnly, noSeeModel).Select(c => Key(c.Item1)).ToHashSet();
         int beyondBand = 0, uncovered = 0, onArm = 0, open = 0;
         foreach (var (p, n) in newCorners)
         {
@@ -385,10 +395,11 @@ public class VanillaGearRefitLocalTests(ITestOutputHelper output)
             // turned-in lip laid off the body — by up to one of the body's triangles.
             if (off > BodyRetarget.TuckBand + BandSlack) beyondBand++;
             var level = new Vector3(n.X, 0f, n.Z);
-            if (Along(cloth, p, n, BodyRetarget.TuckOver) == null
+            if (oldTuck.Contains(Key(p)) && Along(cloth, p, n, BodyRetarget.TuckOver) == null
                 && (level.LengthSquared() < 1e-6f || Along(cloth, p, Vector3.Normalize(level), BodyRetarget.TuckOver) == null))
             {
-                // [AC-neckline-large-bust-7] Open skin: inside the game's laid skin, never past its open edge.
+                // [AC-neckline-large-bust-7] Open skin: inside the game's laid skin, never past its open edge — but for
+                // [AC-coatee-strap-slit-3] the open skin through which the garment's inside would show, held below.
                 if (SpannedByLaidSkin(laidSkin, p, BodyRetarget.TuckBand)) open++;
                 else uncovered++;
             }
@@ -396,6 +407,15 @@ public class VanillaGearRefitLocalTests(ITestOutputHelper output)
                 && BodyRetarget.EndShareOf(skin, bv, BodyRetarget.IsArmBone) >= BodyRetarget.TuckArmShare)
                 onArm++;
         }
+        // [AC-coatee-strap-slit-2][AC-coatee-strap-slit-3][EDGE-coatee-strap-slit-15] The open skin through which the
+        // inside would show: it was a hole, is hidden, or lies under the rim, covers cloth only at a rim, and leaves no more
+        // seen into the garment than before.
+        var torso = TorsoTriangles(body);
+        NewSkinWasAHole(noSeeModel, tucked, culled, torso);
+        double intoBefore = InsideHoleArea(noSeeModel, culled, torso, FrontViews, null);
+        double intoAfter = InsideHoleArea(tucked, culled, torso, FrontViews, null);
+        output.WriteLine($"  seen into the garment, 15 views: {intoBefore:0.00} cm² without the open skin where the inside shows, {intoAfter:0.00} with");
+        Assert.True(intoAfter <= intoBefore + 0.5, $"{intoAfter:0.00} cm² seen into the garment against {intoBefore:0.00}");
         output.WriteLine($"  of them in the open, spanned by the game's laid skin: {open}; opened {r.Game.Report.Swap?.Opened ?? 0} triangles");
         output.WriteLine($"  new corners {newCorners.Count}: by cm from the untucked skin "
                          + string.Join(", ", gaps.Select(g => $"{g.Key}:{g.Value}")));
@@ -1217,17 +1237,475 @@ public class VanillaGearRefitLocalTests(ITestOutputHelper output)
     /// <see cref="SeenIntoGarment"/>.</summary>
     private const float SlitNear = 0.025f;
 
-    /// <summary>The c0201 body model of the first game item named <paramref name="name"/> worn on the body.</summary>
-    internal static byte[] TopOf(Lumina.GameData data, string name)
+    /// <summary>The strap-tip region on Neolithe's Almond XS: one box per strap tip around the inside holes build 1357 left
+    /// there, seen from the user's camera (<see cref="UserViews"/>), 5 mm round — and its area then, cm².</summary>
+    private static readonly (Vector3 Lo, Vector3 Hi)[] AlmondXsStrapTips =
+        [(new(-0.055f, 1.249f, 0.094f), new(-0.029f, 1.268f, 0.111f)), (new(0.029f, 1.249f, 0.094f), new(0.055f, 1.268f, 0.111f))];
+    private const double AlmondXsStrapTipsBefore = 2.16;
+
+    /// <summary>The same for Neolithe's Almond M, chosen the same way before its refit with the rule was measured.</summary>
+    private static readonly (Vector3 Lo, Vector3 Hi)[] AlmondMStrapTips =
+        [(new(-0.050f, 1.252f, 0.106f), new(-0.022f, 1.275f, 0.123f)), (new(0.022f, 1.252f, 0.106f), new(0.050f, 1.275f, 0.123f))];
+    private const double AlmondMStrapTipsBefore = 3.11;
+
+    private const string AlmondM = "extra chest - smallclothes/nsfw almond m.mdl";
+    private const string TheBodySe = LocalData.Mods + ":The Body SE";
+
+    public static TheoryData<string, string, string?, string> StrapTipCases => new()
+    {
+        { Coatee, Neolithe, AlmondXs, "0201" },
+        { Coatee, Neolithe, AlmondM, "0201" },
+        { Coatee, Neolithe, "default chest - smallclothes/nsfw xs.mdl", "0201" },
+        { Coatee, Rosaline, Coconut, "0201" },
+        { Coatee, LavaBod, Teardrop, "0201" },
+        { Coatee, Bibo, null, "0201" },
+        { Coatee, Rue, null, "0201" },
+        { Dirndl, Neolithe, AlmondXs, "0201" },
+        { Maiming, TheBodySe, "common/1/c0101e0000_top.mdl", "0101" },
+    };
+
+    /// <summary>
+    /// The game's Witch's Coatee refitted onto Neolithe's Almond XS (reported: "it deletes skin triangles that are not
+    /// hidden", and confirmed on the renders): build 1357's cut left the skin out at each strap tip on the upper breast,
+    /// a slit into the bodice's back. The tuck now draws open skin through which the garment's inside would show (see
+    /// <see cref="BodyRetarget.TuckSeeReach"/>) — closing those, and making nothing else worse, on every body measured.
+    /// </summary>
+    [LocalDataTheory(LocalData.GameData, Neolithe, Rosaline, LavaBod, Bibo, Rue, TheBodySe)]
+    [MemberData(nameof(StrapTipCases))]
+    [Trait("Plan", "AC-coatee-strap-slit-1")]
+    [Trait("Plan", "AC-coatee-strap-slit-2")]
+    [Trait("Plan", "AC-coatee-strap-slit-3")]
+    [Trait("Plan", "EDGE-coatee-strap-slit-15")]
+    [Trait("Plan", "EDGE-coatee-strap-slit-17")]
+    [Trait("Plan", "EDGE-coatee-strap-slit-19")]
+    public void A_game_tops_strap_tip_slits_are_drawn(string garmentName, string modNeed, string? rel, string race)
+    {
+        var data = new Lumina.GameData(LocalData.Path(LocalData.GameData));
+        var log = Substitute.For<Dalamud.Plugin.Services.IPluginLog>();
+        var uv = new UVRemapService(log, ".");
+        byte[] bytes = TopOf(data, garmentName, race);
+        var garment = ModelPartReader.Read(bytes)!;
+        var vanilla = VanillaBodyCatalog.Read(race, p => data.GetFile(p)?.Data);
+        string source = vanilla.PathOf(vanilla.For("_top", race)[0]);
+        var mod = BodySizeCatalog.Read(LocalData.Path(modNeed));
+        var options = mod.For("_top", race);
+        var option = rel == null ? options[0] : options.First(o => RefitCore.Normal(o.Rel) == RefitCore.Normal(rel));
+        string target = mod.PathOf(option);
+        Assert.Null(BodyRetarget.BuildPair("_top", source, target, "_top", race == "0101", null, null, uv, out var pair));
+        BodyRetarget.Planned Auto() => RefitCore.PlanRefit(garment, bytes, [pair], "_top", across: true, gameGear: true, out _);
+        var before = BodyRetarget.WithTuning(new BodyRetarget.Tuning(NoSeeInside: true), Auto);
+        var after = Auto();
+        byte[] Written(BodyRetarget.Planned p) => RefitCore.MatchSkinToBody(p.Model, source, target, uv, false, log);
+        output.WriteLine($"RAN {garmentName} on {Path.GetFileName(LocalData.Path(modNeed))} / {option.Rel}: swap before "
+                         + $"{before.Report.Swap}, after {after.Report.Swap}");
+
+        var culled = Culled(data, garment);
+        var body = ModelPartReader.Read(File.ReadAllBytes(target))!;
+        var pre = ModelPartReader.Read(Written(before))!;
+        var post = ModelPartReader.Read(Written(after))!;
+        var torso = TorsoTriangles(body);
+
+        // [AC-coatee-strap-slit-1] The user's run, as the game logged it, and its strap tips closed — the Body size tool's
+        // refit of the game's top the same bytes.
+        if (garmentName == Coatee && rel == AlmondXs)
+        {
+            var s = before.Report;
+            Assert.Equal((268, 281, 13, 650, 9861, 1185, 3447, 40),
+                         (s.Snapped, s.Pushed, s.Missed, s.Swap?.Removed, s.Swap?.Added, s.Swap?.Reweighted, s.Swap?.Tucked, s.Swap?.Opened));
+            var rule = RetargetInputs.StudioSkin(true, true, false, gameGear: true, "_top", false);
+            var studio = BodyRetarget.Plan(garment, bytes, [pair], "_top", held: new HashSet<int>(), replaceSkin: true,
+                                           acrossBodies: true, clearBody: rule.ClearBody, cutHidden: true,
+                                           keepShape: RefitCore.ShapePieces(garment, RefitCore.DefaultKeepShape(garment)),
+                                           tuckSlot: rule.TuckSlot, deepClear: rule.DeepClear, keepStandoff: rule.KeepStandoff,
+                                           liftUnderbust: true, seeInside: rule.SeeInside);
+            Assert.Equal(after.Model, studio.Model);
+        }
+        // [AC-coatee-strap-slit-1/2] Inside the strap-tip region, from the user's camera: at most half of what 1357 left.
+        if (garmentName == Coatee && (rel == AlmondXs || rel == AlmondM))
+        {
+            var (box, recorded) = rel == AlmondXs ? (AlmondXsStrapTips, AlmondXsStrapTipsBefore) : (AlmondMStrapTips, AlmondMStrapTipsBefore);
+            double tipsBefore = InsideHoleArea(pre, culled, torso, UserViews, box);
+            double tipsAfter = InsideHoleArea(post, culled, torso, UserViews, box);
+            output.WriteLine($"  strap tips: {tipsBefore:0.00} cm² before, {tipsAfter:0.00} after");
+            Assert.True(Math.Abs(tipsBefore - recorded) <= 0.5, $"the strap tips read {tipsBefore:0.00} cm² before, not {recorded}");
+            Assert.True(tipsAfter <= 0.5 * tipsBefore, $"{tipsAfter:0.00} cm² left at the strap tips of {tipsBefore:0.00}");
+            Assert.True(after.Report.Swap?.SeenInto > 0, $"{after.Report.Swap}");
+        }
+
+        // [AC-coatee-strap-slit-2] Seen into the garment from the 15 views: no worse anywhere.
+        double holesBefore = InsideHoleArea(pre, culled, torso, FrontViews, null);
+        double holesAfter = InsideHoleArea(post, culled, torso, FrontViews, null);
+        output.WriteLine($"  seen into the garment, 15 views: {holesBefore:0.00} cm² before, {holesAfter:0.00} after");
+        Assert.True(holesAfter <= holesBefore + 0.5, $"{holesAfter:0.00} cm² seen into the garment against {holesBefore:0.00}");
+
+        // [AC-coatee-strap-slit-3] What it drew was a hole, hidden, or under the rim; it covers cloth only along a rim.
+        NewSkinWasAHole(pre, post, culled, torso);
+        Assert.Equal(0, SkinTuckSheet.NewSkinAgainstBody(pre, post, body).NotTheBodys);
+        Assert.True(after.Report.Folded <= before.Report.Folded, $"folded {after.Report.Folded} against {before.Report.Folded}");
+        Assert.True(SkinTuckSheet.FoldedAgainstAuthored(garment, SkinTuckSheet.Laid(bytes, after), withSkin: true)
+                    <= SkinTuckSheet.FoldedAgainstAuthored(garment, SkinTuckSheet.Laid(bytes, before), withSkin: true));
+        Assert.NotNull(ModelPartReader.Read(after.Model));
+
+        // [EDGE-coatee-strap-slit-17] The open skin inside the author's own is counted as it always was.
+        if (garmentName == Dirndl)
+            Assert.Equal(before.Report.Swap?.Opened, after.Report.Swap?.Opened);
+    }
+
+    /// <summary>
+    /// [AC-coatee-strap-slit-5] A modder's top in the Body size tool with both boxes ticked tucks, but never draws where the
+    /// garment's inside would show: Dei Gratia on Neolithe's Almond XS comes out as build 1357 made it, byte for byte. Its
+    /// refit draws the same even with the rule forced on (measured), so the contrast is <see cref="SkinTuckTests.Default_is_off"/>'s.
+    /// </summary>
+    [LocalDataFact(LocalData.GameData, Neolithe, LocalData.DeiGratiaPack)]
+    [Trait("Plan", "AC-coatee-strap-slit-5")]
+    [Trait("Plan", "EDGE-coatee-strap-slit-12")]
+    public void A_modders_top_in_the_Studio_is_unchanged()
+    {
+        var data = new Lumina.GameData(LocalData.Path(LocalData.GameData));
+        var log = Substitute.For<Dalamud.Plugin.Services.IPluginLog>();
+        var uv = new UVRemapService(log, ".");
+        byte[] bytes = LocalData.PackEntryEndingWith(LocalData.DeiGratiaPack, "chara/equipment/e9068/model/c0201e9068_top.mdl");
+        var garment = ModelPartReader.Read(bytes)!;
+        var vanilla = VanillaBodyCatalog.Read("0201", p => data.GetFile(p)?.Data);
+        string source = vanilla.PathOf(vanilla.For("_top", "0201")[0]);
+        var mod = BodySizeCatalog.Read(LocalData.Path(Neolithe));
+        var option = mod.For("_top", "0201").First(o => RefitCore.Normal(o.Rel) == RefitCore.Normal(AlmondXs));
+        Assert.Null(BodyRetarget.BuildPair("_top", source, mod.PathOf(option), "_top", false, null, null, uv, out var pair));
+        var rule = RetargetInputs.StudioSkin(true, true, true, gameGear: false, "_top", false);
+        Assert.Equal("_top", rule.TuckSlot);
+        Assert.False(rule.SeeInside);
+        var plan = BodyRetarget.Plan(garment, bytes, [pair], "_top", held: new HashSet<int>(), replaceSkin: true,
+                                     acrossBodies: true, clearBody: rule.ClearBody, cutHidden: true,
+                                     keepShape: RefitCore.ShapePieces(garment, RefitCore.DefaultKeepShape(garment)),
+                                     tuckSlot: rule.TuckSlot, deepClear: rule.DeepClear, keepStandoff: rule.KeepStandoff,
+                                     liftUnderbust: true, seeInside: rule.SeeInside);
+        Assert.Equal("DE0986CCDF1235DA5B5FB12C2054A2CA4E120DFEC544E790FDB38245E451F7ED", SkinTuckSheet.Sha(plan.Model));
+        Assert.Equal(1146, plan.Report.Swap?.Tucked);
+        Assert.Equal(0, plan.Report.Swap?.SeenInto);
+    }
+
+    /// <summary>
+    /// [AC-coatee-strap-slit-3] Every front torso triangle <paramref name="after"/> draws that <paramref name="before"/> did
+    /// not was a hole into the garment before from one of <see cref="WideViews"/>, is seen from none of them it faces now,
+    /// or lay under the rim — cloth within 10 mm in front of it from every view it faces. And the skin it adds covers at
+    /// most 3.0 cm² of cloth seen from outside over the 15 views (measured 0–2.44 with the rule; build 1357's own tuck
+    /// covers 0.43–6.56 against the deep clear alone), all of it within 5 mm of a rim (the user's call on Rue's 0.08 cm²
+    /// at 3–5 mm and Teardrop's two triangles at the bodice's edge).
+    /// </summary>
+    private void NewSkinWasAHole(ModelParts before, ModelParts after, IReadOnlyDictionary<string, bool> culled,
+                                 List<(Vector3 A, Vector3 B, Vector3 C, Vector3 N)> torso)
+    {
+        var drawnBefore = new BodySurface(before, 0.01f);
+        var drawnAfter = new BodySurface(after, 0.01f);
+        var fresh = Enumerable.Range(0, torso.Count)
+                              .Where(k => drawnAfter.Nearest(Mid(torso[k]), 0.002f, out _) && !drawnBefore.Nearest(Mid(torso[k]), 0.002f, out _))
+                              .ToList();
+        var holes = Holes(before, culled, torso, WideViews);
+        var clothBefore = DrawnTriangles(before, culled);
+        var skinBefore = SkinTriangleSet(before);
+        var visible = VisibleTriangles(after, culled, torso, WideViews);
+        int bad = 0;
+        foreach (int k in fresh)
+        {
+            if (IntoTheGarment(k, holes, clothBefore, skinBefore, WideViews, torso)) continue;
+            var faced = WideViews.Where(v => Vector3.Dot(torso[k].N, v.ToCamera) > 0f).ToList();
+            Assert.NotEmpty(faced);
+            if (!visible.Contains(k)) continue;
+            // Under the rim: from every view it is seen from now, the cloth stood within 10 mm in front of it before.
+            var seenFrom = faced.Where(v => VisibleTriangles(after, culled, torso, [v]).Contains(k)).ToList();
+            string Gap((string Name, Vector3 ToCamera) v)
+                => FirstCloth(Mid(torso[k]) + v.ToCamera * 0.001f, v.ToCamera, clothBefore, skinBefore) is { } c
+                    ? $"{v.Name} {Vector3.Distance(Mid(torso[k]), Crossing(Mid(torso[k]), v.ToCamera, clothBefore[c])) * 1000:0} mm"
+                    : $"{v.Name} none";
+            if (seenFrom.All(v => FirstCloth(Mid(torso[k]) + v.ToCamera * 0.001f, v.ToCamera, clothBefore, skinBefore) is { } c
+                                  && Vector3.Distance(Mid(torso[k]), Crossing(Mid(torso[k]), v.ToCamera, clothBefore[c])) <= 0.01f))
+            {
+                output.WriteLine($"    new skin under the rim at {Mid(torso[k])}: seen from {string.Join(", ", seenFrom.Select(Gap))}");
+                continue;
+            }
+            bad++;
+            output.WriteLine($"    new skin seen, not a hole: {Mid(torso[k])}; seen from {string.Join(", ", seenFrom.Select(Gap))}; "
+                             + $"faces {string.Join(", ", faced.Select(Gap))}");
+        }
+        output.WriteLine($"  new torso triangles {fresh.Count}, unexplained {bad}");
+        Assert.Equal(0, bad);
+        var (covered, far) = CoveredCloth(before, after, culled, FrontViews, 5);
+        output.WriteLine($"  new skin over cloth: {covered:0.00} cm², {far:0.00} away from a rim");
+        Assert.True(covered <= 3.0, $"{covered:0.00} cm² of cloth covered by new skin");
+        Assert.Equal(0.0, far);
+    }
+
+    /// <summary>The 15 views of <see cref="NecklineSeenThrough"/>: level to 75° above, ahead and 25° to either side.</summary>
+    private static readonly List<(string Name, Vector3 ToCamera)> FrontViews =
+        [.. from el in new[] { 0, 20, 40, 60, 75 } from az in new[] { 0, -25, 25 } select ($"{el}°/{az}°", ViewAt(el, az))];
+
+    /// <summary>The user's camera (step 0 of coatee-strap-slit): ahead, 12° and 30° above.</summary>
+    private static readonly List<(string Name, Vector3 ToCamera)> UserViews = [("12°", ViewAt(12, 0)), ("30°", ViewAt(30, 0))];
+
+    /// <summary><see cref="FrontViews"/> and behind, to either side and from below: every side a torso triangle faces.</summary>
+    private static readonly List<(string Name, Vector3 ToCamera)> WideViews =
+        [.. FrontViews, ("back", ViewAt(0, 180)), ("back 20°", ViewAt(20, 180)), ("left", ViewAt(0, 90)), ("left 20°", ViewAt(20, 90)),
+         ("right", ViewAt(0, -90)), ("right 20°", ViewAt(20, -90)), ("below", ViewAt(-20, 0))];
+
+    private static Vector3 ViewAt(int elevation, int azimuth)
+    {
+        float el = elevation * MathF.PI / 180f, az = azimuth * MathF.PI / 180f;
+        return new Vector3(MathF.Sin(az) * MathF.Cos(el), MathF.Sin(el), MathF.Cos(az) * MathF.Cos(el));
+    }
+
+    private static Vector3 Mid((Vector3 A, Vector3 B, Vector3 C, Vector3 N) t) => (t.A + t.B + t.C) / 3f;
+
+    private static double AreaOf(List<(Vector3 A, Vector3 B, Vector3 C, Vector3 N)> torso, IEnumerable<int> ks)
+        => ks.Sum(k => Vector3.Cross(torso[k].B - torso[k].A, torso[k].C - torso[k].A).Length() / 2) * 1e4;
+
+    /// <summary>The body's torso skin triangles, front and back, with their outward normals.</summary>
+    private static List<(Vector3 A, Vector3 B, Vector3 C, Vector3 N)> TorsoTriangles(ModelParts body)
+    {
+        var list = new List<(Vector3, Vector3, Vector3, Vector3)>();
+        foreach (var part in body.Parts.Where(q => q.Island < 0 && SecondSkinWriter.IsBodySkinMaterial(q.Material)))
+            for (int k = 0; k + 2 < part.Triangles.Length; k += 3)
+            {
+                int ia = part.Triangles[k], ib = part.Triangles[k + 1], ic = part.Triangles[k + 2];
+                Vector3 a = At(body, ia), b = At(body, ib), c = At(body, ic);
+                var n = Vector3.Cross(b - a, c - a);
+                if (n.LengthSquared() < 1e-14f) continue;
+                if (Vector3.Dot(n, NormalAt(body, ia) + NormalAt(body, ib) + NormalAt(body, ic)) < 0) n = -n;
+                var mid = (a + b + c) / 3f;
+                if (MathF.Abs(mid.X) > ArmFrom || mid.Y < 0.95f || mid.Y > 1.45f) continue;
+                list.Add((a, b, c, Vector3.Normalize(n)));
+            }
+        return list;
+    }
+
+    /// <summary>
+    /// cm² of <paramref name="torso"/> (within <paramref name="region"/> when given) seen into the garment through
+    /// <paramref name="m"/> from some of <paramref name="views"/>: undrawn there, nothing drawn in front (culled as the GPU
+    /// culls, 1 mm pixels), and past it the first cloth face — the body's own skin skipped — seen from inside. Not a bust
+    /// seen against the void past the garment's outline: that is its shape.
+    /// </summary>
+    private static double InsideHoleArea(ModelParts m, IReadOnlyDictionary<string, bool> culled,
+                                         List<(Vector3 A, Vector3 B, Vector3 C, Vector3 N)> torso,
+                                         List<(string Name, Vector3 ToCamera)> views, (Vector3 Lo, Vector3 Hi)[]? region)
+    {
+        var holes = Holes(m, culled, torso, views);
+        var cloth = DrawnTriangles(m, culled);
+        var skin = SkinTriangleSet(m);
+        bool In(int k)
+        {
+            if (region == null) return true;
+            var c = Mid(torso[k]);
+            return region.Any(b => c.X >= b.Lo.X && c.Y >= b.Lo.Y && c.Z >= b.Lo.Z && c.X <= b.Hi.X && c.Y <= b.Hi.Y && c.Z <= b.Hi.Z);
+        }
+        return AreaOf(torso, holes.Keys.Where(k => In(k) && IntoTheGarment(k, holes, cloth, skin, views, torso)));
+    }
+
+    /// <summary>Per torso triangle seen through a hole — a pixel its front covers where the model draws nothing — the
+    /// views it was seen from.</summary>
+    private static Dictionary<int, List<int>> Holes(ModelParts m, IReadOnlyDictionary<string, bool> culled,
+                                                   List<(Vector3 A, Vector3 B, Vector3 C, Vector3 N)> torso,
+                                                   List<(string Name, Vector3 ToCamera)> views)
+    {
+        var drawn = DrawnTriangles(m, culled);
+        var result = new Dictionary<int, List<int>>();
+        for (int vi = 0; vi < views.Count; vi++)
+        {
+            var view = new Raster(views[vi].ToCamera);
+            var depth = view.Depth();
+            foreach (var t in drawn)
+                if (!t.Culled || Vector3.Dot(t.Front, views[vi].ToCamera) > 0f)
+                    view.Fill(t.A, t.B, t.C, (i, z) => { if (z > depth[i]) depth[i] = z; });
+            var at = Enumerable.Repeat(-1, Raster.W * Raster.H).ToArray();
+            var bodyDepth = view.Depth();
+            for (int k = 0; k < torso.Count; k++)
+            {
+                if (Vector3.Dot(torso[k].N, views[vi].ToCamera) <= 0f) continue;
+                int kk = k;
+                view.Fill(torso[k].A, torso[k].B, torso[k].C, (i, z) => { if (z > bodyDepth[i]) { bodyDepth[i] = z; at[i] = kk; } });
+            }
+            for (int i = 0; i < at.Length; i++)
+                if (at[i] >= 0 && depth[i] == float.MinValue)
+                {
+                    if (!result.TryGetValue(at[i], out var l)) result[at[i]] = l = [];
+                    if (l.Count == 0 || l[^1] != vi) l.Add(vi);
+                }
+        }
+        return result;
+    }
+
+    /// <summary>Torso triangle <paramref name="k"/> was seen through a hole, and from one of those views the first cloth
+    /// face past it — the body's own skin skipped — is seen from inside.</summary>
+    private static bool IntoTheGarment(int k, Dictionary<int, List<int>> holes, List<Drawn> cloth,
+                                       HashSet<(Vector3, Vector3, Vector3)> skin, List<(string Name, Vector3 ToCamera)> views,
+                                       List<(Vector3 A, Vector3 B, Vector3 C, Vector3 N)> torso)
+        => holes.TryGetValue(k, out var seenFrom)
+           && seenFrom.Any(vi => FirstCloth(Mid(torso[k]) - views[vi].ToCamera * 0.001f, -views[vi].ToCamera, cloth, skin) is int i
+                                 && Vector3.Dot(cloth[i].Front, views[vi].ToCamera) < 0f);
+
+    /// <summary>Torso triangles that win a pixel in some view they face, against <paramref name="m"/>'s cloth.</summary>
+    private static HashSet<int> VisibleTriangles(ModelParts m, IReadOnlyDictionary<string, bool> culled,
+                                                 List<(Vector3 A, Vector3 B, Vector3 C, Vector3 N)> torso,
+                                                 List<(string Name, Vector3 ToCamera)> views)
+    {
+        var drawn = DrawnTriangles(m, culled);
+        var skin = SkinTriangleSet(m);
+        var seen = new HashSet<int>();
+        foreach (var (_, toCam) in views)
+        {
+            var view = new Raster(toCam);
+            var depth = view.Depth();
+            foreach (var t in drawn)
+                if ((!t.Culled || Vector3.Dot(t.Front, toCam) > 0f) && !skin.Contains((t.A, t.B, t.C)))
+                    view.Fill(t.A, t.B, t.C, (i, z) => { if (z > depth[i]) depth[i] = z; });
+            for (int k = 0; k < torso.Count; k++)
+            {
+                if (Vector3.Dot(torso[k].N, toCam) <= 0f || seen.Contains(k)) continue;
+                bool any = false;
+                view.Fill(torso[k].A, torso[k].B, torso[k].C, (i, z) => { if (z >= depth[i] - 0.0005f) any = true; });
+                if (any) seen.Add(k);
+            }
+        }
+        return seen;
+    }
+
+    /// <summary>cm² of pixels where <paramref name="before"/> shows cloth from outside and <paramref name="after"/> shows
+    /// skin, over <paramref name="views"/>; and how much of it lies more than <paramref name="rim"/> pixels (mm) from any
+    /// pixel <paramref name="before"/> does not show as cloth from outside — off a rim.</summary>
+    private static (double All, double Far) CoveredCloth(ModelParts before, ModelParts after, IReadOnlyDictionary<string, bool> culled,
+                                                        List<(string Name, Vector3 ToCamera)> views, int rim)
+    {
+        var skinBefore = SkinTriangleSet(before);
+        var skinAfter = SkinTriangleSet(after);
+        var trisBefore = DrawnTriangles(before, culled);
+        var trisAfter = DrawnTriangles(after, culled);
+        double all = 0, far = 0;
+        foreach (var (_, toCam) in views)
+        {
+            var view = new Raster(toCam);
+            int[] Top(List<Drawn> tris, HashSet<(Vector3, Vector3, Vector3)> skin)
+            {
+                var depth = view.Depth();
+                var kind = new int[Raster.W * Raster.H];
+                foreach (var t in tris)
+                {
+                    bool front = Vector3.Dot(t.Front, toCam) > 0f;
+                    if (t.Culled && !front) continue;
+                    int k = skin.Contains((t.A, t.B, t.C)) ? 1 : front ? 2 : 3;
+                    view.Fill(t.A, t.B, t.C, (i, z) => { if (z > depth[i]) { depth[i] = z; kind[i] = k; } });
+                }
+                return kind;
+            }
+            var a = Top(trisBefore, skinBefore);
+            var b = Top(trisAfter, skinAfter);
+            for (int y = 0; y < Raster.H; y++)
+            for (int x = 0; x < Raster.W; x++)
+            {
+                int i = y * Raster.W + x;
+                if (a[i] != 2 || b[i] != 1) continue;
+                all++;
+                bool nearRim = false;
+                for (int dy = -rim; dy <= rim && !nearRim; dy++)
+                for (int dx = -rim; dx <= rim && !nearRim; dx++)
+                {
+                    int xx = x + dx, yy = y + dy;
+                    nearRim = xx < 0 || yy < 0 || xx >= Raster.W || yy >= Raster.H || a[yy * Raster.W + xx] != 2;
+                }
+                if (!nearRim) far++;
+            }
+        }
+        return (all / 100.0, far / 100.0);
+    }
+
+    private static HashSet<(Vector3, Vector3, Vector3)> SkinTriangleSet(ModelParts m)
+    {
+        var set = new HashSet<(Vector3, Vector3, Vector3)>();
+        foreach (var part in m.Parts.Where(q => q.Island < 0 && SecondSkinWriter.IsBodySkinMaterial(q.Material)))
+            for (int k = 0; k + 2 < part.Triangles.Length; k += 3)
+                set.Add((At(m, part.Triangles[k]), At(m, part.Triangles[k + 1]), At(m, part.Triangles[k + 2])));
+        return set;
+    }
+
+    /// <summary>The first cloth face (skin skipped) the line from <paramref name="o"/> along <paramref name="d"/> crosses
+    /// within 0.6 m.</summary>
+    private static int? FirstCloth(Vector3 o, Vector3 d, List<Drawn> tris, HashSet<(Vector3, Vector3, Vector3)> skin)
+    {
+        float best = 0.6f;
+        int? first = null;
+        for (int i = 0; i < tris.Count; i++)
+        {
+            if (skin.Contains((tris[i].A, tris[i].B, tris[i].C))) continue;
+            if (Crosses(o, d, tris[i].A, tris[i].B, tris[i].C) is float t && t > 0f && t < best) { best = t; first = i; }
+        }
+        return first;
+    }
+
+    private static float? Crosses(Vector3 o, Vector3 d, Vector3 a, Vector3 b, Vector3 c)
+    {
+        var e1 = b - a; var e2 = c - a;
+        var p = Vector3.Cross(d, e2);
+        float det = Vector3.Dot(e1, p);
+        if (MathF.Abs(det) < 1e-12f) return null;
+        float inv = 1f / det;
+        var s = o - a;
+        float u = Vector3.Dot(s, p) * inv;
+        if (u < 0f || u > 1f) return null;
+        var q = Vector3.Cross(s, e1);
+        float v = Vector3.Dot(d, q) * inv;
+        if (v < 0f || u + v > 1f) return null;
+        return Vector3.Dot(e2, q) * inv;
+    }
+
+    private static Vector3 Crossing(Vector3 o, Vector3 d, Drawn t)
+        => Crosses(o, d, t.A, t.B, t.C) is float s ? o + d * s : o;
+
+    /// <summary>An orthographic view about (0, 1.2, 0) at 1 mm a pixel, 500 by 600, from <c>toCamera</c>.</summary>
+    private sealed class Raster(Vector3 toCamera)
+    {
+        internal const int W = 500, H = 600;
+        private readonly Vector3 right = Vector3.Normalize(Vector3.Cross(Vector3.UnitY, toCamera));
+        private Vector3 Up => Vector3.Cross(toCamera, right);
+
+        internal float[] Depth() => Enumerable.Repeat(float.MinValue, W * H).ToArray();
+
+        private (float X, float Y, float Z) P(Vector3 q)
+        {
+            var d = q - new Vector3(0f, 1.2f, 0f);
+            return (Vector3.Dot(d, right) * 1000f + W / 2f, H / 2f - Vector3.Dot(d, Up) * 1000f, Vector3.Dot(d, toCamera));
+        }
+
+        internal void Fill(Vector3 qa, Vector3 qb, Vector3 qc, Action<int, float> put)
+        {
+            var (a, b, c) = (P(qa), P(qb), P(qc));
+            float area = (b.X - a.X) * (c.Y - a.Y) - (c.X - a.X) * (b.Y - a.Y);
+            if (MathF.Abs(area) < 1e-9f) return;
+            int minX = Math.Max(0, (int)MathF.Floor(MathF.Min(a.X, MathF.Min(b.X, c.X))));
+            int maxX = Math.Min(W - 1, (int)MathF.Ceiling(MathF.Max(a.X, MathF.Max(b.X, c.X))));
+            int minY = Math.Max(0, (int)MathF.Floor(MathF.Min(a.Y, MathF.Min(b.Y, c.Y))));
+            int maxY = Math.Min(H - 1, (int)MathF.Ceiling(MathF.Max(a.Y, MathF.Max(b.Y, c.Y))));
+            for (int py = minY; py <= maxY; py++)
+            for (int px = minX; px <= maxX; px++)
+            {
+                float fx = px + 0.5f, fy = py + 0.5f;
+                float u = ((b.X - fx) * (c.Y - fy) - (c.X - fx) * (b.Y - fy)) / area;
+                float v = ((c.X - fx) * (a.Y - fy) - (a.X - fx) * (c.Y - fy)) / area;
+                float w = 1f - u - v;
+                if (u < 0 || v < 0 || w < 0) continue;
+                put(py * W + px, u * a.Z + v * b.Z + w * c.Z);
+            }
+        }
+    }
+
+    /// <summary>The body model of the first game item named <paramref name="name"/> worn on the body, for
+    /// <paramref name="race"/> (c0201 unless given).</summary>
+    internal static byte[] TopOf(Lumina.GameData data, string name, string race = "0201")
     {
         foreach (var item in data.GetExcelSheet<Item>()!)
         {
             if (item.EquipSlotCategory.RowId != 4 || !item.Name.ExtractText().StartsWith(name, StringComparison.Ordinal))
                 continue;
             int set = (int)(item.ModelMain & 0xFFFF);
-            if (data.GetFile($"chara/equipment/e{set:D4}/model/c0201e{set:D4}_top.mdl") is { } file) return file.Data;
+            if (data.GetFile($"chara/equipment/e{set:D4}/model/c{race}e{set:D4}_top.mdl") is { } file) return file.Data;
         }
-        throw new InvalidOperationException($"no game top named {name}");
+        throw new InvalidOperationException($"no c{race} game top named {name}");
     }
 
     private static Vector3 At(ModelParts m, int v) => new(m.Positions[v * 3], m.Positions[v * 3 + 1], m.Positions[v * 3 + 2]);
