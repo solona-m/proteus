@@ -172,7 +172,7 @@ internal static class SkinTuckSheet
     /// <param name="extra">More cloth, as (first row, last row, height) — a second layer, buried or not.</param>
     /// <param name="back">A back panel behind the body: a cloth sheet over every row at height Z (below the skin), its
     /// outer side away from the body when FacingOut — a garment's back, seen from inside through skin left out — or toward
-    /// it, a lining; tagged with Attr when given. Null, as every fixture before build 1358, for none.</param>
+    /// it, a lining; tagged with Attr when given. Null, as every fixture before build 1360, for none.</param>
     internal static byte[] Top(Func<int, float> clothZ, int clothFrom = 2, string? clothAttr = null, bool withSkin = true,
                                (int From, int To, float Z)? extra = null, int skinFrom = Edge,
                                (float Z, bool FacingOut, string? Attr)? back = null)

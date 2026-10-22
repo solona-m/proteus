@@ -1332,6 +1332,11 @@ public class VanillaGearRefitLocalTests(ITestOutputHelper output)
             var s = as1357.Report;
             Assert.Equal((268, 281, 13, 650, 9861, 1185, 3447, 40),
                          (s.Snapped, s.Pushed, s.Missed, s.Swap?.Removed, s.Swap?.Added, s.Swap?.Reweighted, s.Swap?.Tucked, s.Swap?.Opened));
+        }
+        // The Body size tool's refit of the game's top is the automatic refit's, rule and all — on Almond M, where the rule
+        // draws (on Almond XS, since 1359's reading of the old body's bra, it has nothing left to draw).
+        if (garmentName == Coatee && (rel == AlmondXs || rel == AlmondM))
+        {
             var rule = RetargetInputs.StudioSkin(true, true, false, gameGear: true, "_top", false);
             var studio = BodyRetarget.Plan(garment, bytes, [pair], "_top", held: new HashSet<int>(), replaceSkin: true,
                                            acrossBodies: true, clearBody: rule.ClearBody, cutHidden: true,
@@ -1352,6 +1357,15 @@ public class VanillaGearRefitLocalTests(ITestOutputHelper output)
                              + $"without, {InsideHoleArea(post, culled, torso, UserViews, null) - tipsAfter:0.00} with; seen into {after.Report.Swap?.SeenInto}");
             Assert.True(Math.Abs(tipsUser - recorded) <= 0.5, $"the strap tips read {tipsUser:0.00} cm² in 1357, not {recorded}");
             Assert.True(tipsAfter <= 0.5 * tipsUser, $"{tipsAfter:0.00} cm² left at the strap tips of {tipsUser:0.00}");
+            if (rel == AlmondM)
+            {
+                // The rule's own doing on the code as it is: the tips 1359 leaves open, closed.
+                Assert.True(after.Report.Swap?.SeenInto > 0, $"{after.Report.Swap}");
+                Assert.True(tipsBefore >= 1.0, $"the strap tips read {tipsBefore:0.00} cm² without the rule");
+                Assert.True(tipsAfter <= 0.5 * tipsBefore, $"{tipsAfter:0.00} cm² left at the strap tips of {tipsBefore:0.00}");
+            }
+            else
+                Assert.Equal(0, after.Report.Swap?.SeenInto);   // 1359 left the user's tips nothing open for the rule to draw
         }
 
         // [AC-coatee-strap-slit-2] Seen into the garment from the 15 views: no worse anywhere.
@@ -1404,9 +1418,11 @@ public class VanillaGearRefitLocalTests(ITestOutputHelper output)
         var as1357 = BodyRetarget.WithTuning(new BodyRetarget.Tuning(NoSourceWorn: true), () => Run(rule.SeeInside));
         Assert.Equal("DE0986CCDF1235DA5B5FB12C2054A2CA4E120DFEC544E790FDB38245E451F7ED", SkinTuckSheet.Sha(as1357.Model));
         Assert.Equal(1146, as1357.Report.Swap?.Tucked);
-        // And as it is made now: tucked, never drawn where the inside shows.
+        // And as it is made now, with 1359's reading: test's own bytes (taken at build 1360; the rule is off on this path,
+        // so they are 1359's by construction).
         var plan = Run(rule.SeeInside);
-        Assert.True(plan.Report.Swap?.Tucked > 0, $"{plan.Report.Swap}");
+        Assert.Equal("C19F540BB2A9765EFA77799D36BC22C34E58367BD74088997D8C2523A71D3FC9", SkinTuckSheet.Sha(plan.Model));
+        Assert.Equal(1155, plan.Report.Swap?.Tucked);
         Assert.Equal(0, plan.Report.Swap?.SeenInto);
     }
 
