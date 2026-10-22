@@ -24,19 +24,16 @@ public class EarringBonesLocalTests(ITestOutputHelper o)
     private static readonly Lazy<Lumina.GameData> GameData = new(() => new Lumina.GameData(LocalData.Path(LocalData.GameData)));
 
     /// <summary>Men's legs found naming earring nodes (2026-10-22, every c0101 _dwn under the mods folder but TBSE's).</summary>
-    private static readonly string[] Garments =
-    [
-        LocalData.Mods + ":Rogue - by Solona/anemos chaps/chara/equipment/e0488/model/c0101e0488_dwn.mdl",
-        LocalData.Mods + ":Ruffles - by Solona/gryphonskin pantalettes/chara/equipment/e6010/model/c0101e6010_dwn.mdl",
-        LocalData.Mods + ":Ruffles - by Solona/male bottom/chara/equipment/e6010/model/c0101e6010_dwn.mdl",
-        LocalData.Mods + ":his and hers bathtowels - by solona (1)/default group/chara/equipment/e6019/model/c0101e6019_dwn.mdl",
-    ];
+    private const string MaleBottom = LocalData.Mods + ":Ruffles - by Solona/male bottom/chara/equipment/e6010/model/c0101e6010_dwn.mdl";
+    private const string Towels = LocalData.Mods + ":his and hers bathtowels - by solona (1)/default group/chara/equipment/e6019/model/c0101e6019_dwn.mdl";
+    private static readonly string[] Garments = [Chaps, Pantalettes, MaleBottom, Towels];
 
     private static bool IsEar(string bone) => bone.StartsWith("n_ear_", StringComparison.Ordinal);
 
     [LocalDataFact(LocalData.GameData, CrossSexRefitLocalTests.TwillTbse, TwillTbseX, CrossSexRefitLocalTests.Tbse,
                    CrossSexRefitLocalTests.TbseX, CrossSexRefitLocalTests.Bibo, CrossSexRefitLocalTests.IvcsMen,
-                   LocalData.TbseUvMaps)]
+                   LocalData.TbseUvMaps, Chaps, Pantalettes, MaleBottom, Towels,
+                   Skip = "Step 0 diagnostic (asserts nothing, ~1 min): remove Skip to print the table")]
     public void Earring_nodes_measured()
     {
         var bibo = ModelSkinReader.Read(File.ReadAllBytes(Path.Combine(LocalData.Path(CrossSexRefitLocalTests.Bibo),
@@ -165,8 +162,10 @@ public class EarringBonesLocalTests(ITestOutputHelper o)
 
     /// <summary>
     /// What earring dropping must not touch, byte for byte against the model the job saved before it (recorded on the
-    /// unchanged code, 2026-10-22): men's legs made on TBSE with no earring node of their own, and a men's top.
-    /// Re-record only for a change meant to alter these refits, and say which.
+    /// unchanged code, 2026-10-22, the same twice in one process): men's legs made on TBSE with no earring node of their
+    /// own, and a men's top. They also change with the game's data and the mods' versions (TBSE, Bibo+, Twill,
+    /// Lumberjack): after a patch or an update, re-record on the commit before this change, never on this one. Re-record
+    /// otherwise only for a change meant to alter these refits, and say which.
     /// </summary>
     [LocalDataTheory(LocalData.GameData, CrossSexRefitLocalTests.TwillTbse, CrossSexRefitLocalTests.LumberjackShirt,
                      CrossSexRefitLocalTests.Tbse, CrossSexRefitLocalTests.Bibo, LocalData.TbseUvMaps)]

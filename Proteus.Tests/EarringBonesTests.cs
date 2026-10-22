@@ -340,6 +340,8 @@ public class EarringBonesTests
     [InlineData(101, 201, "_glv", false)]
     [InlineData(0, 201, "_dwn", false)]
     [InlineData(101, 0, "_dwn", false)]
+    [InlineData(101, 9204, "_dwn", false)]  // a non-playable code of even hundreds
+    [InlineData(9101, 201, "_dwn", false)]
     [Trait("Plan", "AC-earring-bones-5")]
     [Trait("Plan", "EDGE-earring-bones-7")]
     [Trait("Plan", "EDGE-earring-bones-8")]
@@ -349,7 +351,7 @@ public class EarringBonesTests
     public void Only_mens_legs_for_women_drop_earrings(int drawn, int to, string slot, bool drops) // [AC-earring-bones-5] [EDGE-earring-bones-7] [EDGE-earring-bones-8] [EDGE-earring-bones-9] [EDGE-earring-bones-11] [EDGE-earring-bones-13]
     {
         Assert.Equal(drops, SkeletonRemap.DropsEarrings((ushort)drawn, (ushort)to, slot));
-        if (drops || drawn == 0 || to == 0 || drawn == to) return;
+        if (drops || !HairPortPlan.Playable((ushort)drawn) || !HairPortPlan.Playable((ushort)to) || drawn == to) return;
         // Built for that route, the garment keeps its earring nodes and its bodies theirs.
         var made = Build(Chaps(), Inputs((ushort)to, (ushort)drawn, slot));
         Assert.Empty(made.Earrings!);

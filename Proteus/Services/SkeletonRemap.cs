@@ -35,7 +35,8 @@ internal static class SkeletonRemap
     /// nodes: men's legs made women's. Pants carry no real earrings — on them the nodes are TBSE's crotch rig.
     /// </summary>
     internal static bool DropsEarrings(ushort drawn, ushort to, string? slot)
-        => drawn != 0 && to != 0 && CrossSexRefit.IsMale(drawn) && !CrossSexRefit.IsMale(to) && slot == "_dwn";
+        => HairPortPlan.Playable(drawn) && HairPortPlan.Playable(to) && CrossSexRefit.IsMale(drawn) && !CrossSexRefit.IsMale(to)
+           && slot == "_dwn";
 
     /// <summary>
     /// The bone an earring node on men's legs is moved onto: the hip. Measured on TBSE's legs and four men's pants rigged
