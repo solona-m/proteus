@@ -10,7 +10,18 @@ namespace Proteus.Services;
 /// own graph, so a composite thread never shares one with the editor.
 /// </summary>
 internal sealed record StagedMetadata(string ModDirectory, string SidecarRoot, string Json, long Version,
-                                      int Failures = 0, long RetryAt = 0);
+                                      int Failures, long RetryAt);
+
+/// <summary>What became of a held edit whose write failed.</summary>
+internal enum StagedFailure
+{
+    /// <summary>Something newer was held meanwhile, or it was moved: the failed one is simply gone.</summary>
+    Superseded,
+    /// <summary>Still held, due again after <see cref="MetadataWriteBehind.RetryDelayMs"/>.</summary>
+    Retrying,
+    /// <summary>The last try: dropped.</summary>
+    GaveUp,
+}
 
 /// <summary>
 /// The colour editor's metadata writes, held while a control is dragged and written once it is let go. Discovery reads
@@ -32,7 +43,7 @@ internal sealed class MetadataWriteBehind
     /// <summary>Hold <paramref name="json"/> as the mod's metadata, replacing anything held, failures included.</summary>
     public void Stage(string modDir, string sidecarRoot, string json)
     {
-        lock (gate) staged[modDir] = new StagedMetadata(modDir, sidecarRoot, json, ++version);
+        lock (gate) staged[modDir] = new StagedMetadata(modDir, sidecarRoot, json, ++version, Failures: 0, RetryAt: 0);
     }
 
     public StagedMetadata? Peek(string modDir)
@@ -62,21 +73,21 @@ internal sealed class MetadataWriteBehind
 
     /// <summary>
     /// The write of <paramref name="failed"/> did not land. Kept, so discovery still reads it, and due again after
-    /// <see cref="RetryDelayMs"/>; true when this was the last try and it has been dropped. A newer stage is left alone.
+    /// <see cref="RetryDelayMs"/> — or dropped, on the last try. A newer stage is left alone.
     /// </summary>
-    public bool Failed(StagedMetadata failed, long now)
+    public StagedFailure Failed(StagedMetadata failed, long now)
     {
         lock (gate)
         {
-            if (!IsCurrent(failed)) return false;
+            if (!IsCurrent(failed)) return StagedFailure.Superseded;
             int failures = failed.Failures + 1;
             if (failures >= MaxFailures)
             {
                 staged.Remove(failed.ModDirectory);
-                return true;
+                return StagedFailure.GaveUp;
             }
             staged[failed.ModDirectory] = failed with { Failures = failures, RetryAt = now + RetryDelayMs };
-            return false;
+            return StagedFailure.Retrying;
         }
     }
 

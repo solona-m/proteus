@@ -7,7 +7,9 @@ namespace Proteus.Tests;
 /// <summary>When the colour editor's held metadata is due to be written, and what survives a write landing late.</summary>
 public class MetadataWriteBehindTests
 {
-    private static readonly string Root = Path.Combine("C:", "mods", "Skin", "Proteus");
+    // Never touched: the store does no IO. Rooted in temp so no test names a local drive.
+    private static readonly string Mods = Path.Combine(Path.GetTempPath(), "proteus-mods");
+    private static readonly string Root = Path.Combine(Mods, "Skin", "Proteus");
 
     [Fact]
     [Trait("Plan", "AC-colorset-save-on-release-1")]
@@ -39,7 +41,7 @@ public class MetadataWriteBehindTests
         store.Complete(writing);
         Assert.Equal("new", store.Peek("Skin")!.Json);
 
-        Assert.False(store.Failed(writing, now: 0));
+        Assert.Equal(StagedFailure.Superseded, store.Failed(writing, now: 0));
         var held = store.Peek("Skin")!;
         Assert.Equal("new", held.Json);
         Assert.Equal(0, held.Failures);
@@ -57,13 +59,13 @@ public class MetadataWriteBehindTests
         for (int i = 1; i < MetadataWriteBehind.MaxFailures; i++)
         {
             var s = Assert.Single(store.Due(false, now));
-            Assert.False(store.Failed(s, now));
+            Assert.Equal(StagedFailure.Retrying, store.Failed(s, now));
             Assert.Empty(store.Due(false, now + MetadataWriteBehind.RetryDelayMs - 1));
             Assert.Equal("x", store.Peek("Skin")!.Json);   // still read by discovery while it waits
             now += MetadataWriteBehind.RetryDelayMs;
         }
 
-        Assert.True(store.Failed(Assert.Single(store.Due(false, now)), now));
+        Assert.Equal(StagedFailure.GaveUp, store.Failed(Assert.Single(store.Due(false, now)), now));
         Assert.Null(store.Peek("Skin"));
     }
 
@@ -80,7 +82,7 @@ public class MetadataWriteBehindTests
         Assert.Null(store.Peek("Skin"));
         var moved = store.Peek("Skin v2")!;
         Assert.Equal("Skin v2", moved.ModDirectory);
-        Assert.Equal(Path.Combine("C:", "mods", "Skin v2", "Proteus"), moved.SidecarRoot);
+        Assert.Equal(Path.Combine(Mods, "Skin v2", "Proteus"), moved.SidecarRoot);
         Assert.Equal("x", moved.Json);
     }
 

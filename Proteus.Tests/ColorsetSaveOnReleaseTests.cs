@@ -18,8 +18,15 @@ namespace Proteus.Tests;
 public class ColorsetSaveOnReleaseTests : IDisposable
 {
     private readonly string mods = Path.Combine(Path.GetTempPath(), "proteus-test-" + Guid.NewGuid().ToString("N"));
-    private readonly SidecarDiscoveryService discovery =
-        new(null!, Substitute.For<IPluginLog>());
+    private readonly IPluginLog log = Substitute.For<IPluginLog>();
+    private readonly SidecarDiscoveryService discovery;
+
+    public ColorsetSaveOnReleaseTests() => discovery = new SidecarDiscoveryService(null!, log);
+
+    /// <summary>Warnings logged whose message contains <paramref name="fragment"/>.</summary>
+    private int Warned(string fragment)
+        => log.ReceivedCalls().Count(c => c.GetMethodInfo().Name == nameof(IPluginLog.Warning)
+                                       && c.GetArguments().OfType<string>().Any(m => m.Contains(fragment)));
 
     public void Dispose()
     {
@@ -194,6 +201,64 @@ public class ColorsetSaveOnReleaseTests : IDisposable
 
     [Fact]
     [Trait("Plan", "AC-colorset-save-on-release-6")]
+    [Trait("Plan", "EDGE-colorset-save-on-release-11")]
+    public void A_held_edit_that_failed_to_write_ahead_of_another_save_is_not_retried_over_it()
+    {
+        // [AC-colorset-save-on-release-6] [EDGE-colorset-save-on-release-11]
+        Mod(Meta("#000000"));
+        // Held against a folder that is not there yet, so its write ahead of the save below fails.
+        var stale = new OverlayEntry("Skin", "Skin", 0, true, Meta("#AAAAAA"), Sidecar("Later"));
+        discovery.StageMetadata(stale);
+
+        discovery.SaveMetadata(new OverlayEntry("Skin", "Skin", 0, true, Meta("#BBBBBB"), Sidecar()));
+        Assert.Equal("#BBBBBB", DiskDiffuse());
+
+        Directory.CreateDirectory(Sidecar("Later"));
+        discovery.FlushAllStaged();
+
+        Assert.False(File.Exists(MetaPath("Later")));
+        Assert.Equal("#BBBBBB", DiskDiffuse());
+    }
+
+    [Fact]
+    [Trait("Plan", "AC-colorset-save-on-release-5")]
+    public void The_toe_density_lands_on_top_of_an_edit_still_held()
+    {
+        // [AC-colorset-save-on-release-5] — the held edit, not the older file, is what the density is copied onto
+        var entry = Mod(Meta("#000000"));
+        Recolour(entry, "#AAAAAA");
+        discovery.StageMetadata(entry);
+        discovery.FlushStaged(editing: true);
+
+        var edited = entry.Metadata.OptionGroups![0].Options[0].Overlays;
+        edited[0].ToeCapDensity = 40;
+        Assert.True(discovery.StageToeCapDensity(entry, edited));
+        discovery.FlushStaged(editing: false);
+
+        var disk = SidecarDiscoveryService.TryReadMetadata(Path.Combine(mods, "Skin"))!;
+        Assert.Equal("#AAAAAA", disk.ColorTableRows![0].SubRowA!.Diffuse);
+        Assert.Equal(40, disk.OptionGroups![0].Options[0].Overlays[0].ToeCapDensity);
+    }
+
+    [Fact]
+    [Trait("Plan", "AC-colorset-save-on-release-6")]
+    [Trait("Plan", "EDGE-colorset-save-on-release-12")]
+    public void A_write_that_fails_as_the_plugin_unloads_says_the_edit_is_lost()
+    {
+        // [AC-colorset-save-on-release-6] [EDGE-colorset-save-on-release-12]
+        var entry = Mod(Meta("#000000"));
+        Recolour(entry, "#404040");
+        discovery.StageMetadata(entry);
+        Directory.Delete(Path.Combine(mods, "Skin"), recursive: true);
+
+        discovery.FlushAllStaged(unloading: true);
+
+        Assert.Equal(1, Warned("not saved"));
+        Assert.Equal(0, Warned("trying again"));
+    }
+
+    [Fact]
+    [Trait("Plan", "AC-colorset-save-on-release-6")]
     [Trait("Plan", "EDGE-colorset-save-on-release-12")]
     public void Closing_or_unloading_writes_what_is_held_even_mid_drag()
     {
@@ -247,12 +312,18 @@ public class ColorsetSaveOnReleaseTests : IDisposable
         Assert.Equal("#000000", DiskDiffuse());
         Assert.Empty(discovery.TakeWrittenRoots());
         Assert.Equal("#EEEEEE", discovery.ReadForDiscovery("Skin", MetaPath())!.ColorTableRows![0].SubRowA!.Diffuse);
+        Assert.Equal(1, Warned("trying again"));
 
         discovery.FlushStaged(editing: false);   // inside the retry wait: not yet
         Assert.Equal("#000000", DiskDiffuse());
 
+        using (new FileStream(MetaPath(), FileMode.Open, FileAccess.Read, FileShare.None))
+            discovery.FlushAllStaged();          // a second failure: not said again
+        Assert.Equal(1, Warned("trying again"));
+
         discovery.FlushAllStaged();
         Assert.Equal("#EEEEEE", DiskDiffuse());
+        Assert.Equal(0, Warned("gave up"));
     }
 
     [Fact]
@@ -306,6 +377,8 @@ public class ColorsetSaveOnReleaseTests : IDisposable
 
         Assert.False(Directory.Exists(Path.Combine(mods, "Skin")));
         Assert.Empty(discovery.TakeWrittenRoots());
+        Assert.Equal(1, Warned("gave up"));
+        Assert.Equal(1, Warned("trying again"));
 
         // Given up: a mod of that name coming back is not written over by it.
         Mod(Meta("#000000"));
@@ -398,7 +471,7 @@ public class ColorsetSaveOnReleaseTests : IDisposable
         // [AC-colorset-save-on-release-7]
         var src = Source(Path.Combine("Gui", "StatusWindow.cs"));
         Assert.Contains("ForgetWrittenDefaults();", Method(src, "public void TickMetadataSaves()"));
-        Assert.Contains("ForgetWrittenDefaults();", Method(src, "public void FlushMetadataSaves()"));
+        Assert.Contains("ForgetWrittenDefaults();", Method(src, "public void FlushMetadataSaves("));
         Assert.Contains("discovery.TakeWrittenRoots()", Method(src, "private void ForgetWrittenDefaults()"));
     }
 
@@ -440,7 +513,7 @@ public class ColorsetSaveOnReleaseTests : IDisposable
                         Method(Source(Path.Combine("Gui", "StatusWindow.cs")), "public override void OnClose()"));
 
         var dispose = Method(Source("Plugin.cs"), "private void DisposeServices()");
-        int flush = dispose.IndexOf("statusWindow.FlushMetadataSaves()", StringComparison.Ordinal);
+        int flush = dispose.IndexOf("statusWindow.FlushMetadataSaves(unloading: true)", StringComparison.Ordinal);
         int unhook = dispose.IndexOf("UiBuilder.Draw -= DrawUi", StringComparison.Ordinal);
         Assert.True(flush >= 0 && unhook > flush);
     }

@@ -411,10 +411,13 @@ public class StatusWindow : Window
         ForgetWrittenDefaults();
     }
 
-    /// <summary>Write all held metadata, held control or not: the window closing, or the plugin unloading.</summary>
-    public void FlushMetadataSaves()
+    /// <summary>
+    /// Write all held metadata, held control or not: the window closing, or the plugin <paramref name="unloading"/>.
+    /// A failed write on close is still retried by <see cref="TickMetadataSaves"/>, which runs with the window shut.
+    /// </summary>
+    public void FlushMetadataSaves(bool unloading = false)
     {
-        discovery.FlushAllStaged();
+        discovery.FlushAllStaged(unloading);
         ForgetWrittenDefaults();
     }
 

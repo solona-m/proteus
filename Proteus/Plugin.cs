@@ -25,7 +25,7 @@ public sealed class Plugin : IDalamudPlugin
     [PluginService] public static ITextureProvider TextureProvider { get; private set; } = null!;
 
     /// <summary>Hand-maintained; bump it for in-game testing. <see cref="BuildStamp"/> is the one that can't go stale.</summary>
-    public const int BuildNumber = 1360;
+    public const int BuildNumber = 1361;
 
     /// <summary>
     /// Which set of release notes is current. Raise it when a release has something new to say: the window
@@ -500,7 +500,7 @@ public sealed class Plugin : IDalamudPlugin
         try { statusWindow.FlushPendingBrush(); } catch { /* tearing down — never block the unload */ }
 
         // A colour edit held for the mouse to be let go.
-        try { statusWindow.FlushMetadataSaves(); } catch { /* tearing down — never block the unload */ }
+        try { statusWindow.FlushMetadataSaves(unloading: true); } catch { /* tearing down — never block the unload */ }
 
         CommandManager.RemoveHandler(CommandName);
         PluginInterface.UiBuilder.Draw -= DrawUi;

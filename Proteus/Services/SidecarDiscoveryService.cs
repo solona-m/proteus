@@ -1046,10 +1046,13 @@ public class SidecarDiscoveryService
         foreach (var s in staged.Due(editing, Environment.TickCount64)) WriteStaged(s);
     }
 
-    /// <summary>Write everything held, held control and retry wait or not: the window closing, or the plugin unloading.</summary>
-    public void FlushAllStaged()
+    /// <summary>
+    /// Write everything held, held control and retry wait or not: the window closing, or the plugin
+    /// <paramref name="unloading"/>, when a write that fails gets no retry.
+    /// </summary>
+    public void FlushAllStaged(bool unloading = false)
     {
-        foreach (var s in staged.All()) WriteStaged(s);
+        foreach (var s in staged.All()) WriteStaged(s, unloading);
     }
 
     /// <summary>
@@ -1068,9 +1071,10 @@ public class SidecarDiscoveryService
 
     /// <summary>
     /// Write one held edit as <see cref="SaveMetadata"/> would. A failure keeps it held and tries again a second later;
-    /// warned on the first failure and when it is given up.
+    /// warned on the first failure and when it is given up. <paramref name="unloading"/>: no later try is coming, so a
+    /// failure is said to lose the edit.
     /// </summary>
-    private void WriteStaged(StagedMetadata s)
+    private void WriteStaged(StagedMetadata s, bool unloading = false)
     {
         lock (writeGate)
         {
@@ -1093,12 +1097,22 @@ public class SidecarDiscoveryService
             }
             catch (Exception ex)
             {
-                bool gaveUp = staged.Failed(s, Environment.TickCount64);
-                if (gaveUp)
-                    log.Warning(ex, "[Proteus] gave up saving Proteus metadata for {0} after {1} tries",
-                        s.ModDirectory, MetadataWriteBehind.MaxFailures);
-                else if (s.Failures == 0)
-                    log.Warning(ex, "[Proteus] could not save Proteus metadata for {0}; trying again", s.ModDirectory);
+                if (unloading)
+                {
+                    log.Warning(ex, "[Proteus] colour edits for {0} not saved: the plugin unloaded before they could be written",
+                        s.ModDirectory);
+                    return;
+                }
+                switch (staged.Failed(s, Environment.TickCount64))
+                {
+                    case StagedFailure.GaveUp:
+                        log.Warning(ex, "[Proteus] gave up saving Proteus metadata for {0} after {1} tries",
+                            s.ModDirectory, MetadataWriteBehind.MaxFailures);
+                        break;
+                    case StagedFailure.Retrying when s.Failures == 0:
+                        log.Warning(ex, "[Proteus] could not save Proteus metadata for {0}; trying again", s.ModDirectory);
+                        break;
+                }
             }
         }
     }
