@@ -166,8 +166,9 @@ internal static class RetargetInputs
     /// <param name="TuckSlot">The slot whose cut skin is tucked in under the cloth (see <see cref="RefitCore.TuckSlot"/>).</param>
     /// <param name="DeepClear">See <see cref="RefitCore.DeepClearFor"/>.</param>
     /// <param name="KeepStandoff">See <see cref="RefitCore.KeepStandoffFor"/>.</param>
+    /// <param name="SeeInside">See <see cref="RefitCore.SeeInsideFor"/>: only with a tuck.</param>
     internal readonly record struct StudioSkinRule(bool ClearForced, bool ClearBody, string? TuckSlot, bool DeepClear,
-                                                   bool KeepStandoff);
+                                                   bool KeepStandoff, bool SeeInside);
 
     /// <summary>
     /// The Body size tool's rule for the body under a whole garment's cloth. A modder's garment gets the user's boxes, as
@@ -186,9 +187,11 @@ internal static class RetargetInputs
         bool forced = gameGear && garmentSlot == "_top" && replaceSkin && !crossSex;
         bool clear = clearBody || forced;
         var game = AutoRefitDecisions.SkinFor(true);
-        return new StudioSkinRule(forced, clear, RefitCore.TuckSlot(cutHidden && clear, garmentSlot),
+        string? tuck = RefitCore.TuckSlot(cutHidden && clear, garmentSlot);
+        return new StudioSkinRule(forced, clear, tuck,
                                   forced && RefitCore.DeepClearFor(game.DeepClear, garmentSlot),
-                                  forced && RefitCore.KeepStandoffFor(game.KeepStandoff, garmentSlot));
+                                  forced && RefitCore.KeepStandoffFor(game.KeepStandoff, garmentSlot),
+                                  forced && tuck != null && RefitCore.SeeInsideFor(game.SeeInside, garmentSlot));
     }
 
     /// <summary>The headless refit's <c>--piercings</c>: the new body's piercings come in only when it is given.</summary>
