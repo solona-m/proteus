@@ -459,6 +459,7 @@ public class SkinTuckTests(ITestOutputHelper output)
         // nothing about rows 6-8's own triangles changes, so rows 7 and below still qualify; they are just not reached.
         var (open, _) = Swap(OpenFrontTop(extra: (9, 10, 0.004f)), Body(), seeInside: true);
         Assert.Contains(7, DrawnRows(open).Keys);
+        Assert.Contains(6, DrawnRows(open).Keys);   // row 7's own corners qualify: the 6-7 triangles are drawn
         var barred = OpenFrontTop(extra: (9, 10, 0.001f));
         var (model, _) = Swap(barred, Body(), seeInside: true);
         Assert.Equal(Swap(barred, Body()).Model, model);
