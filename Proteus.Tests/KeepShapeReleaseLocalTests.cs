@@ -60,7 +60,8 @@ public class KeepShapeReleaseLocalTests
     /// (<see cref="BodyRetarget.TurnOf"/>). pop's refits took 89 such turns, chain links mostly; moved by the old answer they
     /// came out sheared by a median 4.5% (83 of 89 over 1%, up to 168%), by the new one not at all. Measured against
     /// <see cref="BeforeTurnFallback"/>, as the test asserts: folds on the solve's last stage and edges stretched against
-    /// the authored garment no worse; cloth inside the body no worse but on Uranus, 128 -> 133 (<see cref="SunkByTurnFallback"/>).
+    /// the authored garment no worse; cloth inside the body and triangles turned over against the authored garment no
+    /// worse but on Uranus, 128 -> 133 and 468 -> 469 (<see cref="SunkByTurnFallback"/>, <see cref="TurnedByTurnFallback"/>).
     /// </summary>
     private static readonly Dictionary<string, string> Before = new()
     {
@@ -87,6 +88,13 @@ public class KeepShapeReleaseLocalTests
     private static readonly Dictionary<string, int> SunkByTurnFallback = new()
     {
         ["pop > Uranus"] = 5, ["pop > Neolithe XS"] = 0, ["pop > Bibo S"] = 0,
+    };
+
+    /// <summary>The triangles turned over against the authored garment that turning kept pieces truly adds, accepted with
+    /// <see cref="SunkByTurnFallback"/>: pop onto Uranus 468 -> 469.</summary>
+    private static readonly Dictionary<string, int> TurnedByTurnFallback = new()
+    {
+        ["pop > Uranus"] = 1, ["pop > Neolithe XS"] = 0, ["pop > Bibo S"] = 0,
     };
 
     /// <summary>The refits <see cref="BodyRetarget.Tuning.NoOpenEdgeFit"/> changes, as builds before 1323 wrote them,
@@ -315,6 +323,10 @@ public class KeepShapeReleaseLocalTests
                     $"folded {old.Plan.Report.Folded} -> {run.Plan.Report.Folded}");
         int stretchedOld = SkinTuckSheet.ClothStretch(garment, laidOld), stretchedRun = SkinTuckSheet.ClothStretch(garment, laidRun);
         Assert.True(stretchedRun <= stretchedOld, $"stretched {stretchedOld} -> {stretchedRun}");
+        // [AC-open-patch-authored-9] on the refit as it is made now: no more turned over against the authored garment.
+        int turnedOld = SkinTuckSheet.FoldedAgainstAuthored(garment, laidOld);
+        int turnedRun = SkinTuckSheet.FoldedAgainstAuthored(garment, laidRun);
+        Assert.True(turnedRun <= turnedOld + TurnedByTurnFallback[which], $"turned over against the author {turnedOld} -> {turnedRun}");
 
         // And as the refit really runs, smoothing on: still nothing let go.
         var on = Refit(File.ReadAllBytes(LocalData.Path(Pop)), Yab, YabMedium, toNeed, toRel);

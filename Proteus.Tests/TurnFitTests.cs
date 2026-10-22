@@ -176,8 +176,10 @@ public class TurnFitTests
         var rnd = new Random(1365);
         Vec3[] card, bent;
         float[] broken;
+        int tries = 0;
         do
         {
+            if (++tries > 200) Assert.Fail("BestRotation no longer diverges on any card — this test proves nothing");
             card = Card(RandomTurn(rnd));
             var c = Centre(card);
             var t = RandomTurn(rnd);

@@ -1389,8 +1389,10 @@ public class VanillaGearRefitLocalTests(ITestOutputHelper output)
 
     /// <summary>
     /// [AC-coatee-strap-slit-5] A modder's top in the Body size tool with both boxes ticked tucks, but never draws where the
-    /// garment's inside would show: Dei Gratia on Neolithe's Almond XS comes out as build 1357 made it, byte for byte. Its
-    /// refit draws the same even with the rule forced on (measured), so the contrast is <see cref="SkinTuckTests.Default_is_off"/>'s.
+    /// garment's inside would show: Dei Gratia on Neolithe's Almond XS comes out as build 1357 made it, byte for byte, with
+    /// the rules since held off; and as build 1365 makes it, its two kept pieces the polar fit could not turn turned truly
+    /// (<see cref="BodyRetarget.TurnOf"/>), pinned too. Its refit draws the same even with the rule forced on (measured),
+    /// so the contrast is <see cref="SkinTuckTests.Default_is_off"/>'s.
     /// </summary>
     [LocalDataFact(LocalData.GameData, Neolithe, LocalData.DeiGratiaPack)]
     [Trait("Plan", "AC-coatee-strap-slit-5")]
@@ -1432,11 +1434,19 @@ public class VanillaGearRefitLocalTests(ITestOutputHelper output)
         // folds.
         var plan = Run(rule.SeeInside);
         Assert.True(plan.Report.ShapeFallbacks > 0, "Dei Gratia's refit should take quaternion turns, or the pins above say it all");
-        Assert.Equal(0, plan.Report.Swap?.SeenInto);
         string target = mod.PathOf(option);
         int Inside(BodyRetarget.Planned p) => BodySizeMatch.ClothAgainst(ModelPartReader.Read(p.Model)!, target)!.Value.Inside;
-        Assert.True(Inside(plan) <= Inside(as1364), $"inside {Inside(as1364)} -> {Inside(plan)}");
-        Assert.True(plan.Report.Folded <= as1364.Report.Folded, $"folded {as1364.Report.Folded} -> {plan.Report.Folded}");
+        int Stretched(BodyRetarget.Planned p) => SkinTuckSheet.ClothStretch(garment, SkinTuckSheet.Laid(bytes, p));
+        string numbers = $"inside {Inside(as1364)} -> {Inside(plan)}, folded {as1364.Report.Folded} -> {plan.Report.Folded}, "
+                         + $"stretched {Stretched(as1364)} -> {Stretched(plan)}, tucked {plan.Report.Swap?.Tucked}, "
+                         + $"quaternion turns {plan.Report.ShapeFallbacks}, now {SkinTuckSheet.Sha(plan.Model)}";
+        Assert.True(Inside(plan) <= Inside(as1364), numbers);
+        Assert.True(plan.Report.Folded <= as1364.Report.Folded, numbers);
+        Assert.True(Stretched(plan) <= Stretched(as1364), numbers);
+        // Build 1365's bytes: 2 quaternion turns; inside 12 -> 12, folded 0 -> 0, stretched 0 -> 0 against as1364.
+        Assert.True(SkinTuckSheet.Sha(plan.Model) == "58E003E49EFA745BFD07F7F7DCD837DD10EE49376D09A024DB0A833E2707A22E", numbers);
+        Assert.Equal(1155, plan.Report.Swap?.Tucked);
+        Assert.Equal(0, plan.Report.Swap?.SeenInto);
     }
 
     /// <summary>
