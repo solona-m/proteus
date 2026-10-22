@@ -1326,7 +1326,9 @@ public class VanillaGearRefitLocalTests(ITestOutputHelper output)
             var (box, recorded) = rel == AlmondXs ? (AlmondXsStrapTips, AlmondXsStrapTipsBefore) : (AlmondMStrapTips, AlmondMStrapTipsBefore);
             double tipsBefore = InsideHoleArea(pre, culled, torso, UserViews, box);
             double tipsAfter = InsideHoleArea(post, culled, torso, UserViews, box);
-            output.WriteLine($"  strap tips: {tipsBefore:0.00} cm² before, {tipsAfter:0.00} after");
+            output.WriteLine($"  strap tips: {tipsBefore:0.00} cm² before, {tipsAfter:0.00} after; outside them, from the user's "
+                             + $"camera: {InsideHoleArea(pre, culled, torso, UserViews, null) - tipsBefore:0.00} before, "
+                             + $"{InsideHoleArea(post, culled, torso, UserViews, null) - tipsAfter:0.00} after");
             Assert.True(Math.Abs(tipsBefore - recorded) <= 0.5, $"the strap tips read {tipsBefore:0.00} cm² before, not {recorded}");
             Assert.True(tipsAfter <= 0.5 * tipsBefore, $"{tipsAfter:0.00} cm² left at the strap tips of {tipsBefore:0.00}");
             Assert.True(after.Report.Swap?.SeenInto > 0, $"{after.Report.Swap}");
@@ -1387,10 +1389,12 @@ public class VanillaGearRefitLocalTests(ITestOutputHelper output)
     /// <summary>
     /// [AC-coatee-strap-slit-3] Every front torso triangle <paramref name="after"/> draws that <paramref name="before"/> did
     /// not was a hole into the garment before from one of <see cref="WideViews"/>, is seen from none of them it faces now,
-    /// or lay under the rim — cloth within 10 mm in front of it from every view it faces. And the skin it adds covers at
-    /// most 3.0 cm² of cloth seen from outside over the 15 views (measured 0–2.44 with the rule; build 1357's own tuck
-    /// covers 0.43–6.56 against the deep clear alone), all of it within 5 mm of a rim (the user's call on Rue's 0.08 cm²
-    /// at 3–5 mm and Teardrop's two triangles at the bodice's edge).
+    /// or lay under the rim — cloth within 10 mm in front of it before, from every view it is seen from now (the user's
+    /// call: LavaBod+'s Teardrop has two such triangles at the bodice's edge, seen only from below with the cloth 2–5 mm
+    /// in front; from behind and the side, which cannot see them, the cloth is 140–150 mm off). And the skin it adds covers
+    /// at most 3.0 cm² of cloth seen from outside over the 15 views (calibrated on the rule's own output, 0–2.44; build
+    /// 1357's own tuck covers 0.43–6.56 against the deep clear alone), all of it within 5 px (mm) of a rim on each axis —
+    /// a square window, as measured (the user's call on Rue's 0.08 cm² at 3–5 px).
     /// </summary>
     private void NewSkinWasAHole(ModelParts before, ModelParts after, IReadOnlyDictionary<string, bool> culled,
                                  List<(Vector3 A, Vector3 B, Vector3 C, Vector3 N)> torso)

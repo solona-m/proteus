@@ -151,8 +151,7 @@ public class ClothCrossingsTests
             if (brute is not { } b) continue;
             hits++;
             Assert.True(MathF.Abs(b.T - walked!.Value.T) <= 1e-6f, $"ray {n}: walked t {walked.Value.T}, brute {b.T}");
-            if (b.Index != walked.Value.Index)
-                Assert.True(MathF.Abs(b.T - walked.Value.T) <= 1e-6f);   // two faces met at the same point: either is first
+            SameFace(faces, o, d, b, walked.Value, $"ray {n}");
         }
         Assert.True(hits > 300, $"only {hits} rays hit anything");
     }
@@ -186,6 +185,7 @@ public class ClothCrossingsTests
             if (brute is not { } b) continue;
             hits++;
             Assert.True(MathF.Abs(b.T - walked!.Value.T) <= 1e-6f, $"vertex {v}: walked t {walked.Value.T}, brute {b.T}");
+            SameFace(faces, p, -n, b, walked.Value, $"vertex {v}");
         }
         Assert.True(rays > 500 && hits > rays / 2, $"{hits} of {rays} rays hit the Coatee");
     }
@@ -247,6 +247,17 @@ public class ClothCrossingsTests
             for (int t = 0; t + 2 < part.Triangles.Length; t += 3)
                 faces.Add((At(m, part.Triangles[t]), At(m, part.Triangles[t + 1]), At(m, part.Triangles[t + 2])));
         return faces;
+    }
+
+    /// <summary>The walk found the face brute force did — or, where two faces meet the line at the same point, the
+    /// other of them, which the line crosses there too.</summary>
+    private static void SameFace(List<(Vector3 A, Vector3 B, Vector3 C)> faces, Vector3 o, Vector3 d, (int Index, float T) brute,
+                                 (int Index, float T) walked, string what)
+    {
+        if (brute.Index == walked.Index) return;
+        var (a, b, c) = faces[walked.Index];
+        Assert.True(Hits(o, Vector3.Normalize(d), a, b, c, out float t) && MathF.Abs(t - brute.T) <= 1e-6f,
+                    $"{what}: walked face {walked.Index}, brute force face {brute.Index}");
     }
 
     private static (int Index, float T)? BruteFirst(List<(Vector3 A, Vector3 B, Vector3 C)> faces, Vector3 o, Vector3 d, float reach)

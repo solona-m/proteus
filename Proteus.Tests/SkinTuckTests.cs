@@ -322,11 +322,12 @@ public class SkinTuckTests(ITestOutputHelper output)
         var baseOf = body.MeshSpans.ToDictionary(s => s.Mesh, s => s.BaseVertex);
 
         var readable = BodyRetarget.TuckUnderCloth(drawn, cloth, bodyBytes, body, covered, kept, new HashSet<Vector3>(), baseOf,
-                                                   edges);
+                                                   edges, seeInside: false);
         Assert.True(readable.Triangles > 0, "the fixture does not grow with readable weights");
         Assert.False(readable.Unread);
 
-        var unread = BodyRetarget.TuckUnderCloth(drawn, cloth, [], body, covered, kept, new HashSet<Vector3>(), baseOf, edges);
+        var unread = BodyRetarget.TuckUnderCloth(drawn, cloth, [], body, covered, kept, new HashSet<Vector3>(), baseOf, edges,
+                                                 seeInside: false);
         Assert.Empty(unread.Grown);
         Assert.Equal(0, unread.Triangles);
         Assert.True(unread.Unread);
@@ -375,6 +376,8 @@ public class SkinTuckTests(ITestOutputHelper output)
         var (untucked, _) = Swap(OpenFrontTop(), Body(), tuck: false);
         Assert.True(report.Tucked >= 2 * Band, $"{report}");
         Assert.True(DrawnRows(model).Keys.Min() < DrawnRows(untucked).Keys.Min());
+        // Row 5's corners lie exactly the band from the author's edge, and are not drawn: down to row 6.
+        Assert.Equal(6, DrawnRows(model).Keys.Min());
         var read = ModelPartReader.Read(model)!;
         float lowest = read.Parts.Where(p => p.Island < 0 && SecondSkinWriter.IsBodySkinMaterial(p.Material))
                            .SelectMany(p => p.Triangles).Min(v => read.Positions[v * 3 + 1]);
@@ -451,10 +454,13 @@ public class SkinTuckTests(ITestOutputHelper output)
     [Trait("Plan", "EDGE-coatee-strap-slit-9")]
     public void Unconnected_skin_seen_inside_is_not_drawn()
     {
-        // Rows 6-7 have cloth down on them; the open rows below are not reached from the author's edge.
-        var rows = DrawnRows(Swap(OpenFrontTop(extra: (6, 7, 0.001f)), Body(), seeInside: true).Model);
-        Assert.Equal(Band, rows.GetValueOrDefault(8));
-        Assert.DoesNotContain(rows.Keys, r => r < 7);
+        // Rows 8-9, next to the author's edge, have cloth down on them. Rows 6-7 below would be drawn (open, the back seen
+        // from inside, within the band — they are, without the barrier) but are not reached from the kept skin.
+        Assert.Contains(6, DrawnRows(Swap(OpenFrontTop(), Body(), seeInside: true).Model).Keys);
+        var barred = OpenFrontTop(extra: (8, 9, 0.001f));
+        var (model, _) = Swap(barred, Body(), seeInside: true);
+        Assert.Equal(Swap(barred, Body()).Model, model);
+        Assert.DoesNotContain(DrawnRows(model).Keys, r => r < 8);
     }
 
     [Fact]
@@ -536,13 +542,21 @@ public class SkinTuckTests(ITestOutputHelper output)
     [Trait("Plan", "EDGE-coatee-strap-slit-17")]
     public void A_triangle_with_a_corner_only_the_inside_let_in_is_not_counted_as_open()
     {
-        // Every triangle the rule draws here has a corner only it let in, so it is counted there, never in Opened; with the
-        // rule off, the same fixture opens nothing.
+        // Corners 0-1 only the laid skin's span let in, 2-3 only the garment's inside, 4-5 the cloth over them.
+        bool[] open = [true, true, false, false, false, false];
+        bool[] seen = [false, false, true, true, false, false];
+        Assert.Equal((1, 0), BodyRetarget.CountOpen([(0, 1, 4)], open, seen));   // span only: inside the author's skin
+        Assert.Equal((0, 1), BodyRetarget.CountOpen([(2, 3, 4)], open, seen));   // the inside only
+        Assert.Equal((0, 1), BodyRetarget.CountOpen([(0, 2, 4)], open, seen));   // both: where the inside shows, not open
+        Assert.Equal((0, 0), BodyRetarget.CountOpen([(4, 5, 4)], open, seen));   // under the cloth
+        Assert.Equal((1, 2), BodyRetarget.CountOpen([(0, 1, 4), (2, 3, 4), (0, 2, 4), (4, 5, 4)], open, seen));
+
+        // And on the sheet: every triangle the rule draws is counted there; with it off the same fixture opens nothing.
         var (_, on) = Swap(OpenFrontTop(), Body(), seeInside: true);
         var (_, off) = Swap(OpenFrontTop(), Body());
         Assert.Equal(on.Tucked, on.SeenInto);
         Assert.Equal(0, on.Opened);
-        Assert.Equal(off.Opened, 0);
+        Assert.Equal(0, off.Opened);
     }
 
     // ── helpers ──

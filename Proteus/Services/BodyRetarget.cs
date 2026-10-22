@@ -742,8 +742,10 @@ internal static partial class BodyRetarget
     /// breast to lift, and lifting it turned over faces the face clearing does not (13 folds on the Lumberjack shirt
     /// onto Bibo+, 8 without; measured 2026-10-20). The face clearing after it still runs.</param>
     /// <param name="seeInside">With <paramref name="tuckSlot"/>, the tuck also draws open skin through which the garment's
-    /// inside would show (see <see cref="TuckSeeReach"/>): the game's own top, in the automatic refit and the Studio, never
-    /// a modder's top or a top bent across the sexes — measured on the game's tops alone.</param>
+    /// inside would show (see <see cref="TuckSeeReach"/>): the game's own top, in the automatic refit and the Studio —
+    /// measured on the game's tops alone, so never a modder's top, nor a top the user refits for the other sex. A game top
+    /// made only for men, which the automatic refit bakes for a woman wearing it, is still the game's own and gets it, as it
+    /// gets the deep clear and the standoff.</param>
     public static Planned Plan(ModelParts garment, byte[] garmentBytes, IReadOnlyList<SlotPair> pairs,
                                string? garmentSlot = null, bool pushOut = true, IReadOnlySet<int>? held = null,
                                bool replaceSkin = false, bool acrossBodies = false, bool clearBody = false,

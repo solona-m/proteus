@@ -99,7 +99,7 @@ internal static partial class BodyRetarget
     internal static (Dictionary<int, HashSet<ushort>> Grown, int Triangles, int Opened, int SeenInto, bool Unread)
         TuckUnderCloth(BodySurface drawn, ClothCrossings cloth, byte[] body, ModelParts parts, bool[] covered,
                        IReadOnlyCollection<(int A, int B, int C)> keptTris, IReadOnlySet<Vector3> movedAt,
-                       IReadOnlyDictionary<int, int> baseOf, SkinEdges? edges, bool seeInside = false)
+                       IReadOnlyDictionary<int, int> baseOf, SkinEdges? edges, bool seeInside)
     {
         int vc = parts.Positions.Length / 3;
         // Unread weights cannot tell the torso from the arm: nothing is grown, the safe way round.
@@ -170,10 +170,10 @@ internal static partial class BodyRetarget
                 bool spanned = ChordUnder(drawn, hit, edges) is float chord
                                && hit.Distance <= MathF.Min(TuckBand, TuckSpanShare * chord);
                 // Last, as the dearest: a walk through the cloth's grid.
-                bool seen = !spanned && seeInside && !Tuned.NoSeeInside && cloth.SeesInside(p, -nrm, TuckSeeReach);
-                ok = !Tuned.NoOpenSkin && (spanned || seen);
+                bool insideShows = !spanned && seeInside && !Tuned.NoSeeInside && cloth.SeesInside(p, -nrm, TuckSeeReach);
+                ok = !Tuned.NoOpenSkin && (spanned || insideShows);
                 openOnly[v] = ok && spanned;
-                seenOnly[v] = ok && seen;
+                seenOnly[v] = ok && insideShows;
             }
             cornerOk[v] = ok;
             return ok;
@@ -249,10 +249,24 @@ internal static partial class BodyRetarget
             foreach (int t in around[n])
                 if (NewlyDrawn(t)) drawnNow.Add(t);
         }
-        // A triangle with a corner only the garment's inside let in is counted there, never as inside the author's skin.
-        bool Seen(int t) => seenOnly[tris[t].A] || seenOnly[tris[t].B] || seenOnly[tris[t].C];
-        int seenInto = drawnNow.Count(Seen);
-        int opened = drawnNow.Count(t => !Seen(t) && (openOnly[tris[t].A] || openOnly[tris[t].B] || openOnly[tris[t].C]));
+        var (opened, seenInto) = CountOpen(drawnNow.Select(t => tris[t]), openOnly, seenOnly);
         return (sets, drawnNow.Count, opened, seenInto, false);
+    }
+
+    /// <summary>
+    /// Of the triangles a tuck drew, those in the open inside the author's skin — a corner only the laid skin's span let
+    /// in — and those where the garment's inside would show — a corner only that let in. A triangle with both counts in
+    /// the second, never the first: <see cref="SwapReport.Opened"/> keeps meaning skin inside the author's own.
+    /// </summary>
+    internal static (int Opened, int SeenInto) CountOpen(IEnumerable<(int A, int B, int C)> drawn, IReadOnlyList<bool> openOnly,
+                                                         IReadOnlyList<bool> seenOnly)
+    {
+        int opened = 0, seenInto = 0;
+        foreach (var (a, b, c) in drawn)
+        {
+            if (seenOnly[a] || seenOnly[b] || seenOnly[c]) seenInto++;
+            else if (openOnly[a] || openOnly[b] || openOnly[c]) opened++;
+        }
+        return (opened, seenInto);
     }
 }
