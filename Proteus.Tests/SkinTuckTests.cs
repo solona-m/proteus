@@ -454,13 +454,15 @@ public class SkinTuckTests(ITestOutputHelper output)
     [Trait("Plan", "EDGE-coatee-strap-slit-9")]
     public void Unconnected_skin_seen_inside_is_not_drawn()
     {
-        // Rows 8-9, next to the author's edge, have cloth down on them. Rows 6-7 below would be drawn (open, the back seen
-        // from inside, within the band — they are, without the barrier) but are not reached from the kept skin.
-        Assert.Contains(6, DrawnRows(Swap(OpenFrontTop(), Body(), seeInside: true).Model).Keys);
-        var barred = OpenFrontTop(extra: (8, 9, 0.001f));
+        // A sheet of cloth over rows 9-10, next to the author's edge. 4 mm off it leaves room: the skin under it is tucked,
+        // and from it the open rows below are reached and drawn, row 7 among them. 1 mm off it crowds row 9's corners — and
+        // nothing about rows 6-8's own triangles changes, so rows 7 and below still qualify; they are just not reached.
+        var (open, _) = Swap(OpenFrontTop(extra: (9, 10, 0.004f)), Body(), seeInside: true);
+        Assert.Contains(7, DrawnRows(open).Keys);
+        var barred = OpenFrontTop(extra: (9, 10, 0.001f));
         var (model, _) = Swap(barred, Body(), seeInside: true);
         Assert.Equal(Swap(barred, Body()).Model, model);
-        Assert.DoesNotContain(DrawnRows(model).Keys, r => r < 8);
+        Assert.DoesNotContain(DrawnRows(model).Keys, r => r < 9);
     }
 
     [Fact]
