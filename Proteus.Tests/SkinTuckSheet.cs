@@ -170,23 +170,58 @@ internal static class SkinTuckSheet
     /// <param name="clothAttr">Tag the cloth with this attribute (an IMC variant switch, say).</param>
     /// <param name="withSkin">False: a top with no skin of its own.</param>
     /// <param name="extra">More cloth, as (first row, last row, height) — a second layer, buried or not.</param>
+    /// <param name="back">A back panel behind the body: a cloth sheet over every row at height Z (below the skin), its
+    /// outer side away from the body when FacingOut — a garment's back, seen from inside through skin left out — or toward
+    /// it, a lining; tagged with Attr when given. Null, as every fixture before build 1360, for none.</param>
     internal static byte[] Top(Func<int, float> clothZ, int clothFrom = 2, string? clothAttr = null, bool withSkin = true,
-                               (int From, int To, float Z)? extra = null, int skinFrom = Edge)
-        => Top((r, _) => clothZ(r), clothFrom, clothAttr, withSkin, extra, skinFrom);
+                               (int From, int To, float Z)? extra = null, int skinFrom = Edge,
+                               (float Z, bool FacingOut, string? Attr)? back = null)
+        => Top((r, _) => clothZ(r), clothFrom, clothAttr, withSkin, extra, skinFrom, back);
 
-    /// <inheritdoc cref="Top(Func{int, float}, int, string?, bool, (int From, int To, float Z)?, int)"/>
+    /// <inheritdoc cref="Top(Func{int, float}, int, string?, bool, (int From, int To, float Z)?, int, (float Z, bool FacingOut, string? Attr)?)"/>
     /// <param name="clothZ">Each cloth vertex's height off the skin, by row and column.</param>
     internal static byte[] Top(Func<int, int, float> clothZ, int clothFrom = 2, string? clothAttr = null,
-                               bool withSkin = true, (int From, int To, float Z)? extra = null, int skinFrom = Edge)
+                               bool withSkin = true, (int From, int To, float Z)? extra = null, int skinFrom = Edge,
+                               (float Z, bool FacingOut, string? Attr)? back = null)
     {
         var meshes = new List<SyntheticModel.SurfaceMesh>();
+        var attrs = new List<string>();
+        if (clothAttr != null) attrs.Add(clothAttr);
         if (withSkin) meshes.Add(Sheet(Skin, skinFrom, Rows - 1, _ => 0f));
         var cloth = Sheet(Cloth, clothFrom, Rows - 1, clothZ);
         if (clothAttr != null) cloth = cloth with { Submeshes = [(1u, cloth.Submeshes[0].Triangles)] };
         meshes.Add(cloth);
         if (extra is { } layer) meshes.Add(Sheet(Cloth, layer.From, layer.To, _ => layer.Z));
-        return SyntheticModel.BuildSurface(clothAttr != null ? [clothAttr] : [], [.. meshes]);
+        if (back is { } panel)
+        {
+            var sheet = Sheet(Cloth, 0, Rows - 1, _ => panel.Z);
+            int[] tris = sheet.Submeshes[0].Triangles;
+            if (panel.FacingOut)
+            {
+                // Wound and shaded to face -Z, away from the body in front of it.
+                var flipped = new int[tris.Length];
+                for (int t = 0; t + 2 < tris.Length; t += 3) (flipped[t], flipped[t + 1], flipped[t + 2]) = (tris[t], tris[t + 2], tris[t + 1]);
+                tris = flipped;
+                sheet = sheet with { Normals = [.. sheet.Normals.Select(_ => -Vector3.UnitZ)] };
+            }
+            uint mask = 0u;
+            if (panel.Attr != null)
+            {
+                if (!attrs.Contains(panel.Attr)) attrs.Add(panel.Attr);
+                mask = 1u << attrs.IndexOf(panel.Attr);
+            }
+            meshes.Add(sheet with { Submeshes = [(mask, tris)] });
+        }
+        return SyntheticModel.BuildSurface(attrs, [.. meshes]);
     }
+
+    /// <summary>
+    /// The top for the tuck's open skin where the garment's inside would show: its cloth over the author's own skin only,
+    /// the rows below it open — no cloth over them — and a back panel behind the body (see <see cref="Top"/>'s back).
+    /// </summary>
+    internal static byte[] OpenFrontTop(float backZ = -0.1f, bool facingOut = true, string? backAttr = null,
+                                        (int From, int To, float Z)? extra = null)
+        => Top(_ => 0.015f, clothFrom: Edge, extra: extra, back: (backZ, facingOut, backAttr));
 
     /// <summary>The breast's rows: a ridge across the sheet over rows 3-8, rigged to the left breast.</summary>
     internal static bool BreastRow(int row) => row is >= 3 and <= 8;

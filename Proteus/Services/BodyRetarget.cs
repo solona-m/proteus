@@ -747,6 +747,11 @@ internal static partial class BodyRetarget
     /// for a men's top refitted for women (<see cref="CrossSexRefit"/>): a shirt cut for a pec has no cloth under a
     /// breast to lift, and lifting it turned over faces the face clearing does not (13 folds on the Lumberjack shirt
     /// onto Bibo+, 8 without; measured 2026-10-20). The face clearing after it still runs.</param>
+    /// <param name="seeInside">With <paramref name="tuckSlot"/>, the tuck also draws open skin through which the garment's
+    /// inside would show (see <see cref="TuckSeeReach"/>): the game's own top, in the automatic refit and the Studio —
+    /// measured on the game's tops alone, so never a modder's top, nor a top the user refits for the other sex. A game top
+    /// made only for men, which the automatic refit bakes for a woman wearing it, is still the game's own and gets it, as it
+    /// gets the deep clear and the standoff.</param>
     public static Planned Plan(ModelParts garment, byte[] garmentBytes, IReadOnlyList<SlotPair> pairs,
                                string? garmentSlot = null, bool pushOut = true, IReadOnlySet<int>? held = null,
                                bool replaceSkin = false, bool acrossBodies = false, bool clearBody = false,
@@ -754,7 +759,8 @@ internal static partial class BodyRetarget
                                string? swapSlot = null, Action<string>? log = null, Action<string>? warn = null,
                                string? chestSlot = null, Action<string, Vec3[]>? trace = null,
                                Outfit? outfit = null, string? tuckSlot = null, bool deepClear = false,
-                               bool keepStandoff = false, bool carryPiercings = false, bool liftUnderbust = true)
+                               bool keepStandoff = false, bool carryPiercings = false, bool liftUnderbust = true,
+                               bool seeInside = false)
     {
         // First, before anything reads the new chest: its nipples smoothed where the garment covers more of them than
         // the old body had, so every pass below sees one surface — the one the swap draws.
@@ -818,15 +824,18 @@ internal static partial class BodyRetarget
         }
         if (replaceSkin || weights != null)
         {
+            bool see = seeInside && tuckSlot != null && !Tuned.NoSeeInside;
             var rebuilt = Rebuild(model, pairs, replaceSkin, weights, out var swapped, cutHidden, acrossBodies,
-                                  swapMeshes, tuckSlot, carryPiercings, parted);
+                                  swapMeshes, tuckSlot, carryPiercings, parted, see);
             if (rebuilt != null)
             {
                 model = rebuilt;
                 swap = swapped;
                 if (swapped.Tucked > 0)
                     log?.Invoke($"skin tucked: {swapped.Tucked} triangles of the new body under the cloth past the author's edge "
-                                + $"({swapped.Opened} in the open, inside the author's skin)");
+                                + $"({swapped.Opened} in the open, inside the author's skin"
+                                + (see ? $"; {swapped.SeenInto} in the open where the garment's inside would show" : "")
+                                + ")");
                 if (swapped.TuckUnread > 0)
                     log?.Invoke("skin tuck: the new body's weights could not be read, so nothing was tucked under the cloth");
             }

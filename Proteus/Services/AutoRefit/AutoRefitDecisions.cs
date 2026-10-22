@@ -72,9 +72,10 @@ internal static class AutoRefitDecisions
     /// under its cloth (see <see cref="BodyRetarget.TuckUnderCloth"/>), and whether a top's cloth buried in a far larger
     /// new breast is cleared out of it from deeper than usual (see <see cref="BodyRetarget.DeepClearDepth"/>), and whether a
     /// top's cloth the refit carried further off the new chest than its author put it comes back toward the author's
-    /// standoff (see <see cref="BodyRetarget.KeepStandoff"/>).</summary>
+    /// standoff (see <see cref="BodyRetarget.KeepStandoff"/>), and whether the tuck also draws open skin through which the
+    /// top's inside would show (see <see cref="BodyRetarget.TuckSeeReach"/>).</summary>
     internal readonly record struct SkinRule(bool CutHidden, bool ClearBody, bool TuckUnderCloth, bool DeepClear,
-                                             bool KeepStandoff);
+                                             bool KeepStandoff, bool SeeInside);
 
     /// <summary>
     /// The new body's skin goes in whole: nobody is watching an unattended refit to catch the holes an author's cut can
@@ -89,7 +90,7 @@ internal static class AutoRefitDecisions
     /// </summary>
     /// <param name="gameGear">The piece is drawn from the game's own file, not a mod's.</param>
     internal static SkinRule SkinFor(bool gameGear)
-        => gameGear ? new SkinRule(true, true, true, true, true) : new SkinRule(false, false, false, false, false);
+        => gameGear ? new SkinRule(true, true, true, true, true, true) : new SkinRule(false, false, false, false, false, false);
 
     /// <summary>
     /// The piece is the game's own: no mod serves it, or the mod serving it is one Proteus made for a game item — it
