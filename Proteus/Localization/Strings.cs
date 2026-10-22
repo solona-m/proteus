@@ -98,7 +98,8 @@ public sealed class SizeSetStrings
     public readonly string Intro = Loc.Localize("SizeSet.Intro",
         "Adds every size of the bodies ticked below to this whole mod. Each size is refitted from the author's size "
       + "nearest it, the outfit's other pieces in that option from the same size, and saved beside the author's sizes as "
-      + "\"Rue S\", \"YAB Buff L\" and so on. Sizes the mod already has are left alone.");
+      + "\"Rue S\", \"YAB Buff L\" and so on. Sizes the mod already has are left alone. A women's mod can get TBSE and "
+      + "TBSE-X too: its chest and legs are refitted for men and saved in a group of their own.");
 
     public readonly string Ends = Loc.Localize("SizeSet.Ends", "Include shoes and gloves") + "###sizeSetEnds";
 
@@ -200,6 +201,50 @@ public sealed class SizeSetStrings
 
     /// <summary>{0} is the piece, {1} the size.</summary>
     public readonly string WorkingFmt = Loc.Localize("SizeSet.Working.Fmt", "Refitting {0} to {1}...");
+
+    /// <summary>{0} is a men's body ("TBSE").</summary>
+    public readonly string ForMenFmt = Loc.Localize("SizeSet.ForMen.Fmt", "{0} (for men)");
+
+    /// <summary>{0} is a men's body ("TBSE"), {1} the group the men's versions go into.</summary>
+    public readonly string ForMenTipFmt = Loc.Localize("SizeSet.ForMen.Tip.Fmt",
+        "This mod's women's chest and legs pieces get a men's version on {0}: refitted for Midlander men through the body "
+      + "maps, which download the first time they're needed, each from the author's size whose body lies nearest his "
+      + "once bent to a man's shape. They're saved in a group of their own, \"{1}\", so the women's sizes stay as they "
+      + "are. Shoes and gloves aren't refitted across the sexes, and a piece the author already made for men keeps theirs.");
+
+    /// <summary>The group a women's mod's men's versions are saved into.</summary>
+    public readonly string MensGroup = Loc.Localize("SizeSet.MensGroup", "Men's body");
+
+    public readonly string CheckInGame = Loc.Localize("SizeSet.CheckInGame", "Check in game:");
+
+    /// <summary>{0} is the piece, {1} the size, {2} what to look at.</summary>
+    public readonly string WarningFmt = Loc.Localize("SizeSet.Warning.Fmt", "{0}, \"{1}\": {2}");
+
+    public readonly string MenMapsMissing = Loc.Localize("SizeSet.MenMapsMissing",
+        "No men's versions were made: the body maps they need aren't here yet. Proteus is downloading them; add the "
+      + "sizes again once they've arrived.");
+
+    /// <summary>{0} is the piece.</summary>
+    public readonly string NoSourceForMenFmt = Loc.Localize("SizeSet.NoSourceForMen.Fmt",
+        "{0}: none of the author's sizes was made on a body Proteus can match to a man's (Bibo+ or the game's layout), "
+      + "so it got no men's version.");
+
+    /// <summary>{0} is the group's name.</summary>
+    public readonly string MensGroupTakenFmt = Loc.Localize("SizeSet.MensGroupTaken.Fmt",
+        "The mod already has a group of the author's called \"{0}\", so no men's versions were made. Rename that group "
+      + "in Penumbra and add the sizes again.");
+
+    public readonly string EndsNotForMen = Loc.Localize("SizeSet.EndsNotForMen",
+        "Shoes and gloves get no men's version: only chest and legs pieces are refitted across the sexes.");
+
+    /// <summary>{0} is the piece, {1} the author's option the men's version was made from.</summary>
+    public readonly string OneVariantFmt = Loc.Localize("SizeSet.OneVariant.Fmt",
+        "{0}: men get one version, made from \"{1}\"; the mod's other variants of it stay women's only.");
+
+    public readonly string NotMade = Loc.Localize("SizeSet.NotMade", "the refit made nothing to save");
+
+    public readonly string RigUnreadable = Loc.Localize("SizeSet.RigUnreadable",
+        "its rig can't be read, so it can't be bent to a man's shape");
 }
 
 /// <summary>The automatic body refit's section of Settings, and the words it puts in chat.</summary>

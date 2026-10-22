@@ -5068,7 +5068,7 @@
     "description": ""
   },
   "SizeSet.Intro": {
-    "message": "아래에서 체크한 바디의 모든 사이즈를 이 모드 전체에 추가합니다. 각 사이즈는 제작자의 사이즈 중 가장 가까운 것에서 리핏하고, 그 옵션 안의 의상 나머지 파츠도 같은 사이즈에서 만들어, 제작자의 사이즈 옆에 \"Rue S\", \"YAB Buff L\" 등으로 저장합니다. 모드에 이미 있는 사이즈는 그대로 둡니다.",
+    "message": "아래에서 체크한 바디의 모든 사이즈를 이 모드 전체에 추가합니다. 각 사이즈는 제작자의 사이즈 중 가장 가까운 것에서 리핏하고, 그 옵션 안의 의상 나머지 파츠도 같은 사이즈에서 만들어, 제작자의 사이즈 옆에 \"Rue S\", \"YAB Buff L\" 등으로 저장합니다. 모드에 이미 있는 사이즈는 그대로 둡니다. 여성용 모드에도 TBSE와 TBSE-X를 추가할 수 있습니다. 몸통과 다리가 남성용으로 맞춰져 별도의 그룹에 저장됩니다.",
     "description": ""
   },
   "SizeSet.Yas": {
@@ -5194,6 +5194,54 @@
   "SizeSet.Working.Fmt": {
     "message": "{0}을(를) {1}(으)로 리핏하는 중...",
     "description": ""
+  },
+  "SizeSet.ForMen.Fmt": {
+    "message": "{0} (남성용)",
+    "description": "Checkbox label for a men's body offered for a women's mod. {0} is the body (\"TBSE\")."
+  },
+  "SizeSet.ForMen.Tip.Fmt": {
+    "message": "이 모드의 여성용 몸통·다리 파츠에 {0} 남성 버전이 생깁니다. 바디 맵(처음 필요할 때 다운로드됩니다)을 통해 미드랜더 남성용으로 맞추며, 각각 남성 체형으로 굽힌 몸이 그의 몸에 가장 가까운 제작자의 사이즈에서 만듭니다. 별도의 그룹 \"{1}\"에 저장되므로 여성용 사이즈는 그대로입니다. 신발과 장갑은 성별을 넘어 맞추지 않으며, 제작자가 이미 남성용으로 만든 파츠는 그것을 씁니다.",
+    "description": "Tooltip. {0} is a men's body (\"TBSE\"), {1} the group the men's versions go into."
+  },
+  "SizeSet.MensGroup": {
+    "message": "남성 체형",
+    "description": "The name of the Penumbra group a women's mod's men's versions are saved into."
+  },
+  "SizeSet.CheckInGame": {
+    "message": "게임에서 확인:",
+    "description": "Heading over the sizes saved that want a look in game."
+  },
+  "SizeSet.Warning.Fmt": {
+    "message": "{0}, \"{1}\": {2}",
+    "description": "One line under \"Check in game\". {0} is the piece, {1} the size, {2} what to look at."
+  },
+  "SizeSet.MenMapsMissing": {
+    "message": "남성 버전이 만들어지지 않았습니다. 필요한 바디 맵이 아직 없습니다. Proteus가 다운로드 중이니, 도착하면 사이즈를 다시 추가하세요.",
+    "description": "Why no men's versions were made."
+  },
+  "SizeSet.NoSourceForMen.Fmt": {
+    "message": "{0}: 제작자의 사이즈 중 Proteus가 남성 체형에 대응시킬 수 있는 몸(Bibo+ 또는 게임 레이아웃)으로 만든 것이 없어 남성 버전이 없습니다.",
+    "description": "{0} is the piece."
+  },
+  "SizeSet.MensGroupTaken.Fmt": {
+    "message": "이 모드에는 이미 제작자의 \"{0}\" 그룹이 있어 남성 버전이 만들어지지 않았습니다. Penumbra에서 그 그룹의 이름을 바꾼 뒤 사이즈를 다시 추가하세요.",
+    "description": "{0} is the group's name."
+  },
+  "SizeSet.EndsNotForMen": {
+    "message": "신발과 장갑에는 남성 버전이 없습니다. 성별을 넘어 맞추는 것은 몸통과 다리 파츠뿐입니다.",
+    "description": "Said once when a women's mod's men's versions are made and it has shoes or gloves."
+  },
+  "SizeSet.OneVariant.Fmt": {
+    "message": "{0}: 남성은 \"{1}\"에서 만든 한 가지 버전을 받습니다. 모드의 다른 변형은 여성 전용으로 남습니다.",
+    "description": "{0} is the piece, {1} the author's option the men's version was made from."
+  },
+  "SizeSet.NotMade": {
+    "message": "맞춤 결과 저장할 것이 없습니다",
+    "description": "Why a men's version couldn't be made, after \"couldn't be made:\"."
+  },
+  "SizeSet.RigUnreadable": {
+    "message": "리그를 읽을 수 없어 남성 체형으로 굽힐 수 없습니다",
+    "description": "Why a men's version couldn't be made, after \"couldn't be made:\": the garment's skinning can't be read."
   },
   "SizeSet.NotInstalledTip.Fmt": {
     "message": "{0}이(가) Penumbra에 설치되어 있지 않습니다. 설치한 뒤 이 항목을 닫았다가 다시 여세요.",

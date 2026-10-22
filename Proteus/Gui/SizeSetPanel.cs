@@ -48,13 +48,13 @@ internal sealed class SizeSetPanel(PenumbraBridge penumbra, UVRemapService uvRem
     private bool wasOpen;
 
     /// <summary>
-    /// The races the open mod has chest or legs models for (<c>"0201"</c>, <c>"0101"</c>), and the mod they were read
-    /// for; null until read. Only those races' bodies are offered: a woman's outfit is never refitted onto TBSE, so
-    /// offering it there is offering nothing.
+    /// The open mod's pieces, and the mod they were read for; null until read. Only their races' bodies are offered,
+    /// and the men's again "for men" when it has women's chest or legs pieces to cross (<see cref="SizeSetRefit.Offered"/>):
+    /// ticked apart, so a tick on TBSE kept from a men's mod never writes men's versions into a women's one.
     /// </summary>
-    private HashSet<string>? races;
-    private string? racesFor;
-    private Task<HashSet<string>>? readingRaces;
+    private List<SizeSetRefit.Piece>? pieces;
+    private string? piecesFor;
+    private Task<List<SizeSetRefit.Piece>>? readingPieces;
 
     /// <summary>When the last look was started, and how soon one that came back with nothing is tried again.</summary>
     private long scanTriedAt;
@@ -73,6 +73,7 @@ internal sealed class SizeSetPanel(PenumbraBridge penumbra, UVRemapService uvRem
     private string result = "";
     private bool resultFailed;
     private IReadOnlyList<string> notes = [];
+    private IReadOnlyList<string> warnings = [];
 
     /// <param name="modRoot">The open mod's folder.</param>
     /// <param name="modDir">Its folder name, as Penumbra knows it.</param>
@@ -95,28 +96,30 @@ internal sealed class SizeSetPanel(PenumbraBridge penumbra, UVRemapService uvRem
             else log.Warning(scan.Exception!, "[Proteus] size set: reading the body mods failed");
         }
 
-        ReadRaces(modRoot, modDir);
+        ReadPieces(modRoot, modDir);
         ImGui.TextWrapped(s.Intro);
         ImGui.Spacing();
-        if (installed == null || races == null) ImGui.TextDisabled(Strings.AutoRefit.FindingBodies);
-        else if (races.Count == 0) ImGui.TextDisabled(s.NoPieces);
+        if (installed == null || pieces == null) ImGui.TextDisabled(Strings.AutoRefit.FindingBodies);
+        else if (pieces.Count == 0) ImGui.TextDisabled(s.NoPieces);
 
         bool busy = running != null;
         using (ImRaii.Disabled(busy))
         {
-            bool shownAny = false, men = false;
-            foreach (var (key, label, male) in Offered())
+            bool shownAny = false, men = false, forMen = false;
+            foreach (var (key, body, label, male, crosses, tip) in Offered())
             {
-                // Men's bodies below a rule, when a unisex mod offers both.
-                if (male && !men)
+                // Men's bodies below a rule, when a unisex mod offers both; the men's versions of its women's pieces
+                // below another.
+                if ((male && !men) || (crosses && !forMen))
                 {
-                    men = true;
+                    men |= male;
+                    forMen |= crosses;
                     if (shownAny) ImGui.Separator();
                 }
                 shownAny = true;
                 // Not installed: shown, but not choosable. A tick from when it was installed is kept for when it is
                 // again, and left out of the run meanwhile.
-                bool missing = installed != null && !installed.Contains(key);
+                bool missing = installed != null && !installed.Contains(body);
                 bool ticked = !missing && config.SizeSetBodies.Contains(key);
                 using (ImRaii.Disabled(missing || installed == null))
                 {
@@ -128,7 +131,9 @@ internal sealed class SizeSetPanel(PenumbraBridge penumbra, UVRemapService uvRem
                     }
                 }
                 if (missing && ImGui.IsItemHovered(ImGuiHoveredFlags.AllowWhenDisabled))
-                    ImGui.SetTooltip(string.Format(s.NotInstalledTipFmt, label));
+                    ImGui.SetTooltip(string.Format(s.NotInstalledTipFmt, BodyLabel(body)));
+                else if (tip && ImGui.IsItemHovered())
+                    ImGui.SetTooltip(string.Format(s.ForMenTipFmt, BodyLabel(body), s.MensGroup));
             }
 
             ImGui.Spacing();
@@ -145,8 +150,8 @@ internal sealed class SizeSetPanel(PenumbraBridge penumbra, UVRemapService uvRem
             {
                 config.SizeSetEnds = ends;
                 config.Save();
-                // The races offered come from the pieces, and a mod of shoes alone has none without them.
-                racesFor = null;
+                // The bodies offered come from the pieces, and a mod of shoes alone has none without them.
+                piecesFor = null;
             }
             if (ImGui.IsItemHovered()) ImGui.SetTooltip(s.EndsTip);
 
@@ -162,9 +167,10 @@ internal sealed class SizeSetPanel(PenumbraBridge penumbra, UVRemapService uvRem
         }
 
         ImGui.Spacing();
-        // Only what is offered: a tick on TBSE kept from a men's mod does nothing in a women's one.
-        var keys = Offered().Select(c => c.Key)
-                            .Where(k => config.SizeSetBodies.Contains(k) && installed?.Contains(k) == true)
+        // Only what is offered: a tick on TBSE kept from a men's mod does nothing in a women's one, whose men's
+        // versions are ticked apart ("tbse@women").
+        var keys = Offered().Where(c => config.SizeSetBodies.Contains(c.Key) && installed?.Contains(c.Body) == true)
+                            .Select(c => c.Key)
                             .ToList();
         if (busy)
         {
@@ -183,34 +189,43 @@ internal sealed class SizeSetPanel(PenumbraBridge penumbra, UVRemapService uvRem
         if (resultFor != modDir || result.Length == 0) return;
         if (resultFailed) ImGui.TextColored(ProteusStyle.Bad, result);
         else ImGui.TextWrapped(result);
-        if (notes.Count == 0) return;
-        ImGui.TextDisabled(s.LeftOut);
-        foreach (string note in notes) ImGui.BulletText(note);
+        if (notes.Count > 0)
+        {
+            ImGui.TextDisabled(s.LeftOut);
+            foreach (string note in notes) ImGui.BulletText(note);
+        }
+        if (warnings.Count == 0) return;
+        using (ImRaii.PushColor(ImGuiCol.Text, ProteusStyle.Warn))
+        {
+            ImGui.TextUnformatted(s.CheckInGame);
+            foreach (string warning in warnings) ImGui.BulletText(warning);
+        }
     }
 
-    /// <summary>The bodies for the open mod's races; none until they are read.</summary>
-    private IEnumerable<(string Key, string Label, bool Male)> Offered()
-        => races == null ? [] : SupportedBodies.Choices.Where(c => races.Contains(c.Male ? "0101" : "0201"));
+    /// <summary>A body as the table names it ("TBSE"), not as its row does ("TBSE (for men)").</summary>
+    private static string BodyLabel(string body) => SupportedBodies.Choices.First(c => c.Key == body).Label;
 
-    /// <summary>Read the open mod's races on a worker, once per mod: its manifest, which can be large.</summary>
-    private void ReadRaces(string modRoot, string modDir)
+    /// <summary>The bodies for the open mod's pieces; none until they are read.</summary>
+    private IReadOnlyList<SizeSetRefit.Choice> Offered() => pieces == null ? [] : SizeSetRefit.Offered(pieces);
+
+    /// <summary>Read the open mod's pieces on a worker, once per mod: its manifest, which can be large.</summary>
+    private void ReadPieces(string modRoot, string modDir)
     {
-        if (readingRaces is { IsCompleted: true } done)
+        if (readingPieces is { IsCompleted: true } done)
         {
-            readingRaces = null;
-            if (done.IsCompletedSuccessfully) races = done.Result;
+            readingPieces = null;
+            if (done.IsCompletedSuccessfully) pieces = done.Result;
             else
             {
-                log.Warning(done.Exception!, "[Proteus] size set: reading {0}'s pieces failed", racesFor ?? "");
-                races = [];
+                log.Warning(done.Exception!, "[Proteus] size set: reading {0}'s pieces failed", piecesFor ?? "");
+                pieces = [];
             }
         }
-        if (racesFor == modDir || readingRaces != null) return;
-        racesFor = modDir;
-        races = null;
+        if (piecesFor == modDir || readingPieces != null) return;
+        piecesFor = modDir;
+        pieces = null;
         bool ends = config.SizeSetEnds;
-        readingRaces = Task.Run(() => SizeSetRefit.PiecesOf(modRoot, readGameFile, ends).Select(p => p.Race)
-                                                  .ToHashSet(StringComparer.Ordinal));
+        readingPieces = Task.Run(() => SizeSetRefit.PiecesOf(modRoot, readGameFile, ends));
     }
 
     /// <summary>Find which bodies are installed, on a worker. Framework thread: Penumbra's mod list is asked for here.</summary>
@@ -239,9 +254,20 @@ internal sealed class SizeSetPanel(PenumbraBridge penumbra, UVRemapService uvRem
         if (config.SizeSetEnds)
             foreach (string race in keys.Select(k => SupportedBodies.Of(k, "_top", false)?.Race).OfType<string>().Distinct())
                 gameBodies[race] = VanillaBodyCatalog.Read(race, readGameFile);
+        // A women's mod's men's versions are made for the men's skeleton the player's collection gives (IVCS when
+        // installed), asked for here — IPC — once; the game's own when Penumbra gives nothing.
+        SizeSetRefit.AcrossInputs? across = null;
+        if (SizeSetRefit.MensKeys(keys).Count > 0)
+        {
+            var skeletons = new[] { OtherRaceWearer.BaseSkeletonPath(CrossSexRefit.Men),
+                                    OtherRaceWearer.BaseSkeletonPath(CrossSexRefit.Women) };
+            var resolved = penumbra.ResolvePlayerPaths(skeletons);
+            if (resolved == null) log.Information("[Proteus] size set: the collection's skeletons could not be asked for; the game's are used");
+            across = new SizeSetRefit.AcrossInputs(path => resolved?.GetValueOrDefault(path));
+        }
         var request = new SizeSetRefit.Request(modRoot, keys, config.SizeSetYas, remake, [], readGameFile,
                                                config.SizeSetEnds, race => gameBodies.GetValueOrDefault(race),
-                                               config.SizeSetPiercings);
+                                               config.SizeSetPiercings, across);
         cancel = new CancellationTokenSource();
         var ct = cancel.Token;
         runningFor = modDir;
@@ -299,6 +325,7 @@ internal sealed class SizeSetPanel(PenumbraBridge penumbra, UVRemapService uvRem
         string dir = runningFor!;
         resultFor = dir;
         notes = [];
+        warnings = [];
         resultFailed = false;
 
         if (task.IsCanceled || task.Exception?.InnerException is OperationCanceledException)
@@ -316,6 +343,7 @@ internal sealed class SizeSetPanel(PenumbraBridge penumbra, UVRemapService uvRem
 
         var r = task.Result;
         notes = r.Notes;
+        warnings = r.Warnings ?? [];
         result = r.Made > 0 ? string.Format(Strings.SizeSet.DoneFmt, r.Made) : Strings.SizeSet.NothingAdded;
         log.Information("[Proteus] size set: {0} sizes added to {1}; {2} left out", r.Made, dir, r.Notes.Count);
     }
