@@ -292,13 +292,15 @@ internal static partial class BodyRetarget
     /// garment's own skin because those smallclothes could not be brought in — see <see cref="ReadySmallclothes"/>.</param>
     /// <param name="SourceSmallclothes">Points of the old body's underwear, over a hole in its skin, given the new body's
     /// shape — see <see cref="SmallclothesOverHoles"/>.</param>
+    /// <param name="ShapeFallbacks">Turns of kept pieces that the polar fit could not give and Horn's quaternion fit did —
+    /// flat cards, mostly (see <see cref="TurnOf"/>). A piece turned so in both passes counts twice.</param>
     internal sealed record Report(
         int Nodes, int Snapped, int Transferred, int Missed, int Pushed,
         float WorstMove, float WorstPush, int UnmappedSpares, bool HasOtherLods, int Held = 0, int Laid = 0,
         SwapReport? Swap = null, int Folded = 0, IReadOnlyList<ShapeOutcome>? Shapes = null, int Smoothed = 0,
         int Layered = 0, float LayerResidual = 0f, int DeepCleared = 0, float DeepWorst = 0f,
         IReadOnlyList<int>? DeepAt = null, int StandoffPulled = 0, float StandoffWorst = 0f, int StandoffHeld = 0,
-        int OpenEdgeFitted = 0, int SmallclothesFallback = 0, int SourceSmallclothes = 0)
+        int OpenEdgeFitted = 0, int SmallclothesFallback = 0, int SourceSmallclothes = 0, int ShapeFallbacks = 0)
     {
         /// <summary>Share of moved nodes that landed on a body vertex exactly. Low means the author sculpted the
         /// garment's body mesh rather than copying it, and the seam may not come out perfect.</summary>
@@ -319,12 +321,15 @@ internal static partial class BodyRetarget
     /// <param name="Folded">Triangles still facing the wrong way when <see cref="Unfold"/> ran out of rounds — or, when
     /// <see cref="KeepOutfitOrder"/> lifted anything, on the mesh as written after it, every pass counted. Any at all is
     /// worth saying: a folded triangle is a black speck on the garment.</param>
+    /// <param name="ShapeFallbacks">See <see cref="Report.ShapeFallbacks"/>: the final stage's, the rerun's when a piece
+    /// was let go.</param>
     internal sealed record Solved(RetargetEdit Edit, int Snapped, int Transferred, int Missed, int Pushed,
                                   float WorstMove, float WorstPush, int Held = 0, int Laid = 0, int Folded = 0,
                                   IReadOnlyList<ShapeOutcome>? Shapes = null, int Layered = 0,
                                   float LayerResidual = 0f, int DeepCleared = 0, float DeepWorst = 0f,
                                   IReadOnlyList<int>? DeepAt = null, int StandoffPulled = 0, float StandoffWorst = 0f,
-                                  int StandoffHeld = 0, int OpenEdgeFitted = 0, int SourceSmallclothes = 0);
+                                  int StandoffHeld = 0, int OpenEdgeFitted = 0, int SourceSmallclothes = 0,
+                                  int ShapeFallbacks = 0);
 
     /// <summary>
     /// The garment split into the two sets the two passes act on.
@@ -793,6 +798,9 @@ internal static partial class BodyRetarget
         var solved = Solve(garment, pairs, garmentSlot, pushOut, held, replaceSkin, clearBody, keepShape,
                            ModelSkinReader.Read(garmentBytes, null, null), swapSlot, parted, chestSlot, trace, outfit,
                            deep, standoff, liftUnderbust);
+        if (solved.ShapeFallbacks > 0)
+            log?.Invoke($"keep shape: {solved.ShapeFallbacks} turns of kept pieces too flat for the usual fit, made by the "
+                        + "quaternion fit");
         if (solved.SourceSmallclothes > 0)
             log?.Invoke($"source smallclothes: {solved.SourceSmallclothes} points of the old body's underwear, over its "
                         + "skin's hole, given the new body's shape");
@@ -858,7 +866,7 @@ internal static partial class BodyRetarget
                                 swap, solved.Folded, solved.Shapes, smoothed, solved.Layered, solved.LayerResidual,
                                 solved.DeepCleared, solved.DeepWorst, solved.DeepAt, solved.StandoffPulled,
                                 solved.StandoffWorst, solved.StandoffHeld, solved.OpenEdgeFitted, smallclothesFallback,
-                                solved.SourceSmallclothes);
+                                solved.SourceSmallclothes, solved.ShapeFallbacks);
 
         // Only the copies the written model draws: a slot whose skin no mesh of the garment reached adds none.
         var drawnMaterials = new HashSet<string>(SecondSkinWriter.Parse(model).MatNames.Select(m => m.TrimStart('/')),
@@ -1083,7 +1091,7 @@ internal static partial class BodyRetarget
         return new Solved(edit, CountTrue(snapped), transferred, missed, pushed, worstMove, worstPush, sets.HeldCount,
                           laid, folded, stage.Shapes, outfitLayered, layerResidual, stage.DeepCleared, stage.DeepWorst,
                           stage.DeepAt, standoffPulled, standoffWorst, standoffHeld, stage.OpenEdgeFitted,
-                          source.SmallclothesLanded);
+                          source.SmallclothesLanded, stage.Fallbacks);
     }
 
     /// <summary>
@@ -1111,9 +1119,10 @@ internal static partial class BodyRetarget
     /// <param name="DeepAt">A garment vertex of each of them.</param>
     /// <param name="OpenEdgeFitted">Nodes the push-out took in by the made-on body's reading; see
     /// <see cref="TargetBody.Fitted"/>.</param>
+    /// <param name="Fallbacks">Turns of kept pieces made by Horn's fit, both passes; see <see cref="TurnOf"/>.</param>
     private sealed record ShapeStage(int Pushed, float WorstPush, TargetBody? Drawn, FaceCheck? FaceCheck,
                                      float[]? PushedBy, ShapeOutcome[]? Shapes, int DeepCleared = 0, float DeepWorst = 0f,
-                                     IReadOnlyList<int>? DeepAt = null, int OpenEdgeFitted = 0);
+                                     IReadOnlyList<int>? DeepAt = null, int OpenEdgeFitted = 0, int Fallbacks = 0);
 
     /// <summary>
     /// The kept pieces moved whole, the push-out, and the pieces whole again around where the push put them — then each
@@ -1131,8 +1140,11 @@ internal static partial class BodyRetarget
         // the transfer's smooth answer, and kept after the push (see KeepShape).
         var scales = new float[keepShape?.Count ?? 0];
         Array.Fill(scales, float.NaN);
-        if (keeping) KeepShape(sets, keepShape!, nodeDelta, scales);
-        if (before == null) return new ShapeStage(0, 0f, null, null, null, keeping ? new ShapeOutcome[keepShape!.Count] : null);
+        int fallbacks = 0;
+        if (keeping) KeepShape(sets, keepShape!, nodeDelta, scales, out fallbacks);
+        if (before == null)
+            return new ShapeStage(0, 0f, null, null, null, keeping ? new ShapeOutcome[keepShape!.Count] : null,
+                                  Fallbacks: fallbacks);
 
         // The swapped-in body is what the cloth is pushed against. Measured on a sheer corset refitted Bibo+ to
         // Neolithe: pushed against the garment's transferred skin, 326 cup vertices came out buried up to 3.4 mm
@@ -1178,11 +1190,12 @@ internal static partial class BodyRetarget
             var placed = new bool[keepShape!.Count];
             var owner = new int[sets.NodeCount];
             Array.Fill(owner, -1);
-            KeepShape(sets, keepShape, nodeDelta, scales, placed, owner);
+            KeepShape(sets, keepShape, nodeDelta, scales, out int again, placed, owner);
+            fallbacks += again;
             shapes = JudgeShapes(sets, placed, owner, bent, nodeDelta, SignedOff(after), SignedOff(before));
         }
         return new ShapeStage(pushed, worstPush, after, faceCheck, pushedBy, shapes, deepNodes.Count, deepWorst, deepAt,
-                              openEdgeFitted);
+                              openEdgeFitted, fallbacks);
     }
 
     /// <summary>

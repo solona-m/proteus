@@ -66,6 +66,8 @@ internal static partial class BodyRetarget
     /// <see cref="SmallclothesOverHoles"/>).</param>
     /// <param name="NoSeeInside">Never tuck the new body's skin in the open where only the garment's inside would show
     /// through it, as builds before 1360 did (see <see cref="TuckSeeReach"/>).</param>
+    /// <param name="NoTurnFallback">Take the polar fit's answer for every kept piece, a rotation or not, as builds before
+    /// 1365 did (see <see cref="TurnOf"/>).</param>
     internal sealed record Tuning(bool NoFollow = false, bool NoOwnSkinWeights = false,
                                   float OwnSkinReach = OwnSkinReachDefault, float CopyReach = CopyReachDefault,
                                   float CopyTolerance = CopyToleranceDefault, bool NoGiveUp = false,
@@ -78,7 +80,7 @@ internal static partial class BodyRetarget
                                   bool NoWallCover = false, bool NoRimTurnGuard = false, bool NoSnapPush = false,
                                   bool NoTuck = false, bool NoDeepClear = false, bool NoOpenSkin = false,
                                   bool NoKeepStandoff = false, bool NoOpenEdgeFit = false, bool NoCrotchEase = false,
-                                  bool NoSourceWorn = false, bool NoSeeInside = false);
+                                  bool NoSourceWorn = false, bool NoSeeInside = false, bool NoTurnFallback = false);
 
     private static readonly Tuning DefaultTuning = new();
 
@@ -339,27 +341,50 @@ internal static partial class BodyRetarget
     }
 
     /// <summary>
+    /// The turn that carries a kept piece's points about <paramref name="cFrom"/> onto where the refit sent them about
+    /// <paramref name="cTo"/>: the polar fit's (<see cref="SecondSkinWriter.BestRotation"/>) where it is a rotation, and
+    /// Horn's quaternion fit (<see cref="TurnFit.HornTurn"/>) where it is not — a flat piece's, mostly, on which the polar
+    /// fit diverges (see <see cref="TurnFit.TurnTolerance"/>). A piece whose polar answer is a rotation comes out exactly as
+    /// it always did.
+    /// </summary>
+    /// <param name="fellBack">Set when Horn's fit was taken.</param>
+    internal static float[] TurnOf(IReadOnlyList<Vec3> from, IReadOnlyList<Vec3> to, Vector3 cFrom, Vector3 cTo,
+                                   out bool fellBack)
+    {
+        var r = SecondSkinWriter.BestRotation(from, to, ToVec(cFrom), ToVec(cTo));
+        fellBack = !Tuned.NoTurnFallback && !TurnFit.IsTurn(r);
+        return fellBack ? TurnFit.HornTurn(from, to, cFrom, cTo) : r;
+    }
+
+    /// <summary>
     /// Move each hard piece as ONE piece: the turn, shift and uniform scale that best carry its points where the refit
     /// sent them, in place of the refit's point-by-point answer.
     /// <para/>
     /// Each point of a garment follows the body under it on its own, which is right for cloth and wrong for metal: the
     /// underwire ring of "pop" follows the underbust of a smaller body point by point and comes out 18% shorter than it
     /// is wide, bent by up to 8 mm; its chain links came out anywhere from 0.88 to 1.5 times their size.
+    /// <para/>
+    /// The turn is always a true rotation (<see cref="TurnOf"/>), so the scale fitted with it is the piece's own and is
+    /// safe to keep for the second pass. Before build 1365 a flat card's turn could be a matrix with entries in the
+    /// millions, the scale fitted to it as much as 177, and kept, it threw Virtu Dancer's cards metres off Tre; pop's chain
+    /// links, turned by such answers, came out sheared by a median 4.5%.
     /// </summary>
     /// <param name="pieces">The vertices of each piece to keep, one set per piece.</param>
     /// <param name="scales">Each piece's scale, by index. NaN on the way in means work it out, and it is written back;
     /// a number is used as it is. The push-out moves points by millimetres, which across a 3 mm chain link reads as a
     /// scale of 0.8 or 1.3; so the scale is taken once, from the transfer's smooth answer, and kept after the push.</param>
+    /// <param name="fallbacks">How many pieces were turned by Horn's fit (see <see cref="TurnOf"/>).</param>
     /// <param name="placed">When given, set for each piece that was moved whole.</param>
     /// <param name="owner">When given, each node's piece index: the LAST piece that placed it, which is where it ends up
     /// — a node two pieces share is put by the later one.</param>
     /// <returns>How many pieces were moved whole.</returns>
     private static int KeepShape(Sets sets, IReadOnlyList<IReadOnlyCollection<int>> pieces, Vec3[] nodeDelta,
-                                 float[] scales, bool[]? placed = null, int[]? owner = null)
+                                 float[] scales, out int fallbacks, bool[]? placed = null, int[]? owner = null)
     {
         var mayMove = new bool[sets.NodeCount];
         foreach (int n in sets.AllNodes) mayMove[n] = true;
 
+        fallbacks = 0;
         int kept = 0;
         var seen = new HashSet<int>();
         for (int k = 0; k < pieces.Count; k++)
@@ -390,13 +415,16 @@ internal static partial class BodyRetarget
             cFrom /= nodes.Count;
             cTo /= nodes.Count;
 
-            var r = SecondSkinWriter.BestRotation(from, to, ToVec(cFrom), ToVec(cTo));
+            var r = TurnOf(from, to, cFrom, cTo, out bool fellBack);
+            if (fellBack) fallbacks++;
             Vector3 Turn(Vector3 q) => new(r[0] * q.X + r[1] * q.Y + r[2] * q.Z,
                                            r[3] * q.X + r[4] * q.Y + r[5] * q.Z,
                                            r[6] * q.X + r[7] * q.Y + r[8] * q.Z);
             float det = r[0] * (r[4] * r[8] - r[5] * r[7]) - r[1] * (r[3] * r[8] - r[5] * r[6])
                       + r[2] * (r[3] * r[7] - r[4] * r[6]);
-            if (det < 0.5f) continue;   // a reflection, or no answer: a piece too flat to say how it turned
+            // A reflection, or no answer: a piece too flat to say how it turned. Only the polar fit's answer under
+            // Tuning.NoTurnFallback can be one; Horn's never is.
+            if (det < 0.5f) continue;
 
             // The uniform scale that best explains the spread of the refit's answer about the turned piece.
             float s = scales[k];
