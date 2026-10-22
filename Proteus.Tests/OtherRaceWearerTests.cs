@@ -167,7 +167,7 @@ public class OtherRaceWearerTests
         var garment = SyntheticModel.Build(["j_kosi"], new SyntheticModel.Mesh("mt_c0101e6091_top_a.mtrl", new SyntheticModel.Sub(0)));
         Assert.Same(garment, SkeletonRemap.Rename(garment, [], out _));
         string job = File.ReadAllText(SourceFile("Proteus/Services/CrossSexRefitJob.cs"));
-        Assert.Contains("if (moves.Count > 0)", job);
+        Assert.Contains("if (made.Renames is { Count: > 0 } renames)", job);
         Assert.Contains("byte[] drawnModel = i.Garment;", job);
         string panel = File.ReadAllText(SourceFile("Proteus/Gui/BodyRetargetPanel.Race.cs"));
         Assert.Contains("byte[] drawnModel = bytes;", panel);

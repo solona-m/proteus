@@ -18,13 +18,38 @@ namespace Proteus.Services;
 /// nearest ancestor in the drawn race's skeleton the wearer has; else the standard bone of its part of the body
 /// (<see cref="StandIn"/>); else the hip (<see cref="Fallback"/>). A breast or thigh bone never lands outside its own
 /// part of the body (<see cref="KeepsItsPart"/>): an ancestor that would put it on the hip is passed over.
+/// <para/>
+/// One exception to "never a bone the wearer has": TBSE's earring nodes on men's legs refitted for women
+/// (<see cref="DropsEarrings"/>). Every skeleton has them, hung under the ear, so the crotch they are weighted to would
+/// follow her head; they are moved onto the hip (<see cref="EarringTarget"/>).
 /// </summary>
 internal static class SkeletonRemap
 {
     /// <summary>The bone every human skeleton has, for a bone nothing else knows.</summary>
     internal const string Fallback = "j_kosi";
 
-    internal enum How { Counterpart, Ancestor, StandIn, Fallback }
+    internal enum How { Counterpart, Ancestor, StandIn, Fallback, Earring }
+
+    /// <summary>
+    /// Whether a garment drawn as <paramref name="drawn"/> refitted for <paramref name="to"/> is saved without earring
+    /// nodes: men's legs made women's. Pants carry no real earrings — on them the nodes are TBSE's crotch rig.
+    /// </summary>
+    internal static bool DropsEarrings(ushort drawn, ushort to, string? slot)
+        => drawn != 0 && to != 0 && CrossSexRefit.IsMale(drawn) && !CrossSexRefit.IsMale(to) && slot == "_dwn";
+
+    /// <summary>
+    /// The bone an earring node on men's legs is moved onto: the hip. Measured on TBSE's legs and four men's pants rigged
+    /// to them (EarringBonesLocalTests, 2026-10-22): the weight sits on the crotch, at most 3–15% of a vertex, beside
+    /// <c>j_kosi</c> 76–100% of the time, where Bibo+ weights the same skin mostly to <c>j_kosi</c> too. The node's
+    /// <c>_l</c>/<c>_r</c> says nothing of the leg its weight is on, and its parent is the ear — so never a thigh, never
+    /// its parent.
+    /// </summary>
+    internal static string EarringTarget(string bone) => Fallback;
+
+    /// <summary>A move onto <see cref="EarringTarget"/> for each earring node among <paramref name="bones"/>.</summary>
+    internal static IReadOnlyList<Move> EarringMoves(IEnumerable<string> bones)
+        => bones.Where(UvBakeBones.IsEarringNode).Distinct(StringComparer.Ordinal).Order(StringComparer.Ordinal)
+                .Select(b => new Move(b, EarringTarget(b), How.Earring)).ToList();
 
     internal sealed record Move(string From, string To, How How);
 
@@ -91,37 +116,45 @@ internal static class SkeletonRemap
     }
 
     /// <summary>Plans the moves for one wearer: its bones, and the parents the drawn race's skeleton gives a bone.</summary>
-    internal sealed class Planner(IReadOnlySet<string> wearerBones, Func<string, string?> drawnParentOf)
+    /// <param name="dropEarrings">Earring nodes are moved too, though the wearer has them, and nothing is moved onto
+    /// one (<see cref="DropsEarrings"/>).</param>
+    internal sealed class Planner(IReadOnlySet<string> wearerBones, Func<string, string?> drawnParentOf,
+                                  bool dropEarrings = false)
     {
         internal IReadOnlySet<string> WearerBones => wearerBones;
 
-        /// <summary>A move for each of <paramref name="bones"/> the wearer lacks; none for those it has.</summary>
+        /// <summary>A move for each of <paramref name="bones"/> the wearer lacks; none for those it has. Dropping
+        /// earrings, the earring nodes' moves come first.</summary>
         internal IReadOnlyList<Move> MovesFor(IEnumerable<string> bones)
         {
-            var moves = new List<Move>();
-            foreach (string bone in bones.Distinct(StringComparer.Ordinal).Order(StringComparer.Ordinal))
-                if (!wearerBones.Contains(bone)) moves.Add(MoveFor(bone));
+            var distinct = bones.Distinct(StringComparer.Ordinal).Order(StringComparer.Ordinal).ToList();
+            var moves = dropEarrings ? EarringMoves(distinct).ToList() : [];
+            foreach (string bone in distinct)
+                if (!wearerBones.Contains(bone) && !(dropEarrings && UvBakeBones.IsEarringNode(bone))) moves.Add(MoveFor(bone));
             return moves;
         }
 
+        private bool Lands(string bone) => wearerBones.Contains(bone) && !(dropEarrings && UvBakeBones.IsEarringNode(bone));
+
         private Move MoveFor(string bone)
         {
-            if (Counterparts.TryGetValue(bone, out var twin) && wearerBones.Contains(twin) && KeepsItsPart(bone, twin))
+            if (Counterparts.TryGetValue(bone, out var twin) && Lands(twin) && KeepsItsPart(bone, twin))
                 return new Move(bone, twin, How.Counterpart);
 
-            // Up the drawn skeleton to the first bone the wearer has — or has the counterpart of. One that would take a
-            // breast or thigh bone out of its part of the body ends the walk: everything above it is further away still.
+            // Up the drawn skeleton to the first bone the wearer has — or has the counterpart of — passing earring nodes
+            // being dropped. One that would take a breast or thigh bone out of its part of the body ends the walk:
+            // everything above it is further away still.
             var seen = new HashSet<string>(StringComparer.Ordinal) { bone };
             for (string? at = drawnParentOf(bone); at != null && seen.Add(at) && seen.Count <= 256; at = drawnParentOf(at))
             {
-                string? hit = wearerBones.Contains(at) ? at
-                            : Counterparts.TryGetValue(at, out var other) && wearerBones.Contains(other) ? other : null;
+                string? hit = Lands(at) ? at
+                            : Counterparts.TryGetValue(at, out var other) && Lands(other) ? other : null;
                 if (hit == null) continue;
                 if (KeepsItsPart(bone, hit)) return new Move(bone, hit, How.Ancestor);
                 break;
             }
 
-            if (StandIn(bone) is { } stand && wearerBones.Contains(stand) && KeepsItsPart(bone, stand))
+            if (StandIn(bone) is { } stand && Lands(stand) && KeepsItsPart(bone, stand))
                 return new Move(bone, stand, How.StandIn);
             return new Move(bone, Fallback, How.Fallback);
         }

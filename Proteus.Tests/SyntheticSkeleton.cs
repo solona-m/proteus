@@ -184,6 +184,10 @@ internal static class SyntheticSkeleton
     /// under it, each with a deformer that moves the bones named up by <paramref name="lift"/> metres.
     /// </summary>
     internal static byte[] Pbd(ushort root, IReadOnlyDictionary<ushort, string[]> children, float lift = 0.01f)
+        => Pbd(root, children, _ => lift);
+
+    /// <summary>As the other overload, each bone lifted by its own amount — so a bone bent as another can be told from it.</summary>
+    internal static byte[] Pbd(ushort root, IReadOnlyDictionary<ushort, string[]> children, Func<string, float> lift)
     {
         var races = new List<ushort> { root };
         races.AddRange(children.Keys);
@@ -223,7 +227,7 @@ internal static class SyntheticSkeleton
     }
 
     /// <summary>One deformer: bone count, name offsets, padding to four, a 3×4 matrix each, then the names.</summary>
-    private static byte[] Deformer(string[] bones, float lift)
+    private static byte[] Deformer(string[] bones, Func<string, float> lift)
     {
         int n = bones.Length;
         int matrices = 4 + n * 2 + n * 2 % 4;
@@ -242,7 +246,7 @@ internal static class SyntheticSkeleton
         foreach (int o in nameOffsets) d.AddRange(BitConverter.GetBytes((short)o));
         while (d.Count < matrices) d.Add(0);
         for (int i = 0; i < n; i++)
-            foreach (float f in new[] { 1f, 0f, 0f, 0f, 0f, 1f, 0f, lift, 0f, 0f, 1f, 0f })
+            foreach (float f in new[] { 1f, 0f, 0f, 0f, 0f, 1f, 0f, lift(bones[i]), 0f, 0f, 1f, 0f })
                 d.AddRange(BitConverter.GetBytes(f));
         d.AddRange(nameBytes);
         return d.ToArray();
