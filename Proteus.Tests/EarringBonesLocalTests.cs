@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Numerics;
+using NSubstitute;
 using Proteus.Services;
 using XivLiveMesh;
 using Xunit;
@@ -169,8 +170,10 @@ public class EarringBonesLocalTests(ITestOutputHelper o)
     /// </summary>
     [LocalDataTheory(LocalData.GameData, CrossSexRefitLocalTests.TwillTbse, CrossSexRefitLocalTests.LumberjackShirt,
                      CrossSexRefitLocalTests.Tbse, CrossSexRefitLocalTests.Bibo, LocalData.TbseUvMaps)]
-    [InlineData("twill / tbse sfw", CrossSexRefitLocalTests.TwillTbse, "")]
-    [InlineData("lumberjack / tbse chest", CrossSexRefitLocalTests.LumberjackShirt, "")]
+    [InlineData("twill / tbse sfw", CrossSexRefitLocalTests.TwillTbse,
+                "55D970FCC3520DFB505C32652B810DDDF38CAA7594522505320FD04917FE2CE4")]
+    [InlineData("lumberjack / tbse chest", CrossSexRefitLocalTests.LumberjackShirt,
+                "9370663CE7EC6B3CF44F77C4DE2AF2AA52E82B0865A54D7040C014A875EAC921")]
     [Trait("Plan", "AC-earring-bones-5")]
     [Trait("Plan", "EDGE-earring-bones-3")]
     [Trait("Plan", "EDGE-earring-bones-9")]
