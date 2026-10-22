@@ -2537,7 +2537,8 @@ public class StatusWindow : Window
         if (from != null) live.AddRange(from);
     }
 
-    // Whether each mod has a defaults snapshot, cached because it is a filesystem stat per draw; invalidated on our own SaveMetadata.
+    // Whether each mod has a defaults snapshot, cached because it is a filesystem stat per draw; invalidated for every sidecar
+    // a metadata write lands in (ForgetWrittenDefaults), on this thread.
     private readonly Dictionary<string, bool> _hasDefaultsCache = new(StringComparer.OrdinalIgnoreCase);
 
     private void InvalidateDefaultsCache(OverlayEntry entry) => InvalidateDefaultsCache(entry.SidecarRoot);

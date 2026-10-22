@@ -1059,8 +1059,9 @@ public class SidecarDiscoveryService
     /// Sidecar folders written since the last call, so the editor can forget what it cached about them (whether "Reset to
     /// defaults" has a snapshot) on its own thread. A write may land on an IPC caller's thread.
     /// </summary>
-    public List<string> TakeWrittenRoots()
+    public IReadOnlyList<string> TakeWrittenRoots()
     {
+        if (writtenRoots.IsEmpty) return [];   // asked every frame
         var roots = new List<string>();
         while (writtenRoots.TryDequeue(out var r)) roots.Add(r);
         return roots;

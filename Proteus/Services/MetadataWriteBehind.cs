@@ -55,7 +55,7 @@ internal sealed class MetadataWriteBehind
     public IReadOnlyList<StagedMetadata> Due(bool editing, long now)
     {
         if (editing) return [];
-        lock (gate) return staged.Values.Where(s => s.RetryAt <= now).ToList();
+        lock (gate) return staged.Count == 0 ? [] : staged.Values.Where(s => s.RetryAt <= now).ToList();   // asked every frame
     }
 
     /// <summary>Everything held, retry or not: for a close or an unload, which will not get another chance.</summary>
