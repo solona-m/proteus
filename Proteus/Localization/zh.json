@@ -5068,7 +5068,7 @@
     "description": ""
   },
   "SizeSet.Intro": {
-    "message": "为整个模组添加下方勾选体型的每个尺码。每个尺码都从作者最接近它的尺码重新适配，该选项中套装的其他部件也从同一尺码适配，并以“Rue S”“YAB Buff L”等名称保存在作者的尺码旁边。模组已有的尺码保持不变。",
+    "message": "为整个模组添加下方勾选体型的每个尺码。每个尺码都从作者最接近它的尺码重新适配，该选项中套装的其他部件也从同一尺码适配，并以“Rue S”“YAB Buff L”等名称保存在作者的尺码旁边。模组已有的尺码保持不变。女性模组也可以加入 TBSE 和 TBSE-X：其上身和腿部会为男性调整，并保存在单独的组中。",
     "description": ""
   },
   "SizeSet.Yas": {
@@ -5194,6 +5194,54 @@
   "SizeSet.Working.Fmt": {
     "message": "正在将 {0} 适配为 {1}……",
     "description": ""
+  },
+  "SizeSet.ForMen.Fmt": {
+    "message": "{0}（男性用）",
+    "description": "Checkbox label for a men's body offered for a women's mod. {0} is the body (\"TBSE\")."
+  },
+  "SizeSet.ForMen.Tip.Fmt": {
+    "message": "此模组的女性上身和腿部部件会在 {0} 上获得男性版本：通过身体映射（首次需要时下载）为中原之民男性调整，每件都取自作者的某个尺码——其身体弯成男性形状后最接近他的身体。它们保存在单独的组“{1}”中，因此女性尺码保持不变。鞋子和手套不跨性别调整，作者已为男性制作的部件保留作者的版本。",
+    "description": "Tooltip. {0} is a men's body (\"TBSE\"), {1} the group the men's versions go into."
+  },
+  "SizeSet.MensGroup": {
+    "message": "男性身体",
+    "description": "The name of the Penumbra group a women's mod's men's versions are saved into."
+  },
+  "SizeSet.CheckInGame": {
+    "message": "请在游戏中检查：",
+    "description": "Heading over the sizes saved that want a look in game."
+  },
+  "SizeSet.Warning.Fmt": {
+    "message": "{0}，“{1}”：{2}",
+    "description": "One line under \"Check in game\". {0} is the piece, {1} the size, {2} what to look at."
+  },
+  "SizeSet.MenMapsMissing": {
+    "message": "未制作男性版本：所需的身体映射尚未就绪。Proteus 正在下载；下载完成后请再次添加尺码。",
+    "description": "Why no men's versions were made."
+  },
+  "SizeSet.NoSourceForMen.Fmt": {
+    "message": "{0}：作者的尺码都不是在 Proteus 能与男性身体对应的身体（Bibo+ 或游戏的布局）上制作的，因此没有男性版本。",
+    "description": "{0} is the piece."
+  },
+  "SizeSet.MensGroupTaken.Fmt": {
+    "message": "此模组已有作者的“{0}”组，因此未制作男性版本。请在 Penumbra 中重命名该组，然后再次添加尺码。",
+    "description": "{0} is the group's name."
+  },
+  "SizeSet.EndsNotForMen": {
+    "message": "鞋子和手套没有男性版本：只有上身和腿部部件会跨性别调整。",
+    "description": "Said once when a women's mod's men's versions are made and it has shoes or gloves."
+  },
+  "SizeSet.OneVariant.Fmt": {
+    "message": "{0}：男性只得到一个版本，由“{1}”制作；模组的其他变体仍只供女性使用。",
+    "description": "{0} is the piece, {1} the author's option the men's version was made from."
+  },
+  "SizeSet.NotMade": {
+    "message": "调整没有产生可保存的内容",
+    "description": "Why a men's version couldn't be made, after \"couldn't be made:\"."
+  },
+  "SizeSet.RigUnreadable": {
+    "message": "无法读取其绑定，因此无法弯成男性形状",
+    "description": "Why a men's version couldn't be made, after \"couldn't be made:\": the garment's skinning can't be read."
   },
   "SizeSet.NotInstalledTip.Fmt": {
     "message": "Penumbra 中未安装 {0}。请安装后关闭并重新打开此部分。",

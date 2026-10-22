@@ -5068,7 +5068,7 @@
     "description": ""
   },
   "SizeSet.Intro": {
-    "message": "Fügt dem ganzen Mod jede Größe der unten angehakten Körper hinzu. Jede Größe wird von der ihr nächsten Größe des Autors aus angepasst, die übrigen Teile des Outfits in dieser Option von derselben Größe, und neben den Größen des Autors als „Rue S“, „YAB Buff L“ usw. gespeichert. Größen, die der Mod schon hat, bleiben unberührt.",
+    "message": "Fügt dem ganzen Mod jede Größe der unten angehakten Körper hinzu. Jede Größe wird von der ihr nächsten Größe des Autors aus angepasst, die übrigen Teile des Outfits in dieser Option von derselben Größe, und neben den Größen des Autors als „Rue S“, „YAB Buff L“ usw. gespeichert. Größen, die der Mod schon hat, bleiben unberührt. Ein Frauen-Mod kann auch TBSE und TBSE-X bekommen: Oberteil und Hose werden für Männer angepasst und in einer eigenen Gruppe gespeichert.",
     "description": ""
   },
   "SizeSet.Yas": {
@@ -5194,6 +5194,54 @@
   "SizeSet.Working.Fmt": {
     "message": "Passe {0} an {1} an …",
     "description": ""
+  },
+  "SizeSet.ForMen.Fmt": {
+    "message": "{0} (für Männer)",
+    "description": "Checkbox label for a men's body offered for a women's mod. {0} is the body (\"TBSE\")."
+  },
+  "SizeSet.ForMen.Tip.Fmt": {
+    "message": "Die Oberteile und Hosen dieses Mods für Frauen bekommen eine Männerversion auf {0}: über die Körperkarten, die beim ersten Bedarf heruntergeladen werden, für Midlander-Männer angepasst, jeweils von der Größe des Autors, deren Körper – in Männerform gebogen – seinem am nächsten liegt. Sie werden in einer eigenen Gruppe „{1}“ gespeichert, die Frauengrößen bleiben also, wie sie sind. Schuhe und Handschuhe werden nicht über die Geschlechter angepasst, und ein Teil, das der Autor schon für Männer gemacht hat, behält seins.",
+    "description": "Tooltip. {0} is a men's body (\"TBSE\"), {1} the group the men's versions go into."
+  },
+  "SizeSet.MensGroup": {
+    "message": "Männerkörper",
+    "description": "The name of the Penumbra group a women's mod's men's versions are saved into."
+  },
+  "SizeSet.CheckInGame": {
+    "message": "Im Spiel prüfen:",
+    "description": "Heading over the sizes saved that want a look in game."
+  },
+  "SizeSet.Warning.Fmt": {
+    "message": "{0}, „{1}“: {2}",
+    "description": "One line under \"Check in game\". {0} is the piece, {1} the size, {2} what to look at."
+  },
+  "SizeSet.MenMapsMissing": {
+    "message": "Es wurden keine Männerversionen erstellt: Die nötigen Körperkarten sind noch nicht da. Proteus lädt sie herunter; füge die Größen erneut hinzu, sobald sie da sind.",
+    "description": "Why no men's versions were made."
+  },
+  "SizeSet.NoSourceForMen.Fmt": {
+    "message": "{0}: Keine Größe des Autors wurde auf einem Körper gemacht, den Proteus einem Männerkörper zuordnen kann (Bibo+ oder das Layout des Spiels), daher gibt es keine Männerversion.",
+    "description": "{0} is the piece."
+  },
+  "SizeSet.MensGroupTaken.Fmt": {
+    "message": "Der Mod hat schon eine Gruppe des Autors namens „{0}“, daher wurden keine Männerversionen erstellt. Benenne diese Gruppe in Penumbra um und füge die Größen erneut hinzu.",
+    "description": "{0} is the group's name."
+  },
+  "SizeSet.EndsNotForMen": {
+    "message": "Schuhe und Handschuhe bekommen keine Männerversion: Nur Oberteile und Hosen werden über die Geschlechter angepasst.",
+    "description": "Said once when a women's mod's men's versions are made and it has shoes or gloves."
+  },
+  "SizeSet.OneVariant.Fmt": {
+    "message": "{0}: Männer bekommen eine Version, aus „{1}“ gemacht; die anderen Varianten des Mods davon bleiben nur für Frauen.",
+    "description": "{0} is the piece, {1} the author's option the men's version was made from."
+  },
+  "SizeSet.NotMade": {
+    "message": "die Anpassung hat nichts zum Speichern ergeben",
+    "description": "Why a men's version couldn't be made, after \"couldn't be made:\"."
+  },
+  "SizeSet.RigUnreadable": {
+    "message": "seine Gewichtung lässt sich nicht lesen, daher kann es nicht in Männerform gebogen werden",
+    "description": "Why a men's version couldn't be made, after \"couldn't be made:\": the garment's skinning can't be read."
   },
   "SizeSet.NotInstalledTip.Fmt": {
     "message": "{0} ist in Penumbra nicht installiert. Installiere es und schließe und öffne diesen Abschnitt dann erneut.",

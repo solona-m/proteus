@@ -5068,7 +5068,7 @@
     "description": ""
   },
   "SizeSet.Intro": {
-    "message": "Añade a todo este mod cada talla de los cuerpos marcados abajo. Cada talla se reajusta desde la talla del autor más cercana a ella, las demás piezas del conjunto en esa opción desde la misma talla, y se guarda junto a las tallas del autor como «Rue S», «YAB Buff L», etc. Las tallas que el mod ya tiene no se tocan.",
+    "message": "Añade a todo este mod cada talla de los cuerpos marcados abajo. Cada talla se reajusta desde la talla del autor más cercana a ella, las demás piezas del conjunto en esa opción desde la misma talla, y se guarda junto a las tallas del autor como «Rue S», «YAB Buff L», etc. Las tallas que el mod ya tiene no se tocan. Un mod de mujer también puede recibir TBSE y TBSE-X: su torso y sus piernas se reajustan para hombres y se guardan en un grupo propio.",
     "description": ""
   },
   "SizeSet.Yas": {
@@ -5194,6 +5194,54 @@
   "SizeSet.Working.Fmt": {
     "message": "Reajustando {0} a {1}...",
     "description": ""
+  },
+  "SizeSet.ForMen.Fmt": {
+    "message": "{0} (para hombres)",
+    "description": "Checkbox label for a men's body offered for a women's mod. {0} is the body (\"TBSE\")."
+  },
+  "SizeSet.ForMen.Tip.Fmt": {
+    "message": "Las piezas de torso y piernas de mujer de este mod reciben una versión de hombre en {0}: reajustadas para hombres Midlander a través de los mapas de cuerpo, que se descargan la primera vez que hacen falta, cada una desde la talla del autor cuyo cuerpo, doblado a forma de hombre, queda más cerca del suyo. Se guardan en un grupo propio, «{1}», así que las tallas de mujer quedan como están. Los zapatos y guantes no se reajustan entre sexos, y una pieza que el autor ya hizo para hombres conserva la suya.",
+    "description": "Tooltip. {0} is a men's body (\"TBSE\"), {1} the group the men's versions go into."
+  },
+  "SizeSet.MensGroup": {
+    "message": "Cuerpo de hombre",
+    "description": "The name of the Penumbra group a women's mod's men's versions are saved into."
+  },
+  "SizeSet.CheckInGame": {
+    "message": "Revisar en el juego:",
+    "description": "Heading over the sizes saved that want a look in game."
+  },
+  "SizeSet.Warning.Fmt": {
+    "message": "{0}, «{1}»: {2}",
+    "description": "One line under \"Check in game\". {0} is the piece, {1} the size, {2} what to look at."
+  },
+  "SizeSet.MenMapsMissing": {
+    "message": "No se hicieron versiones de hombre: los mapas de cuerpo que necesitan aún no están. Proteus los está descargando; añade las tallas de nuevo cuando hayan llegado.",
+    "description": "Why no men's versions were made."
+  },
+  "SizeSet.NoSourceForMen.Fmt": {
+    "message": "{0}: ninguna talla del autor se hizo sobre un cuerpo que Proteus pueda emparejar con uno de hombre (Bibo+ o la disposición del juego), así que no tiene versión de hombre.",
+    "description": "{0} is the piece."
+  },
+  "SizeSet.MensGroupTaken.Fmt": {
+    "message": "El mod ya tiene un grupo del autor llamado «{0}», así que no se hicieron versiones de hombre. Cambia el nombre de ese grupo en Penumbra y añade las tallas de nuevo.",
+    "description": "{0} is the group's name."
+  },
+  "SizeSet.EndsNotForMen": {
+    "message": "Los zapatos y guantes no reciben versión de hombre: solo las piezas de torso y piernas se reajustan entre sexos.",
+    "description": "Said once when a women's mod's men's versions are made and it has shoes or gloves."
+  },
+  "SizeSet.OneVariant.Fmt": {
+    "message": "{0}: los hombres reciben una versión, hecha desde «{1}»; las demás variantes del mod quedan solo para mujeres.",
+    "description": "{0} is the piece, {1} the author's option the men's version was made from."
+  },
+  "SizeSet.NotMade": {
+    "message": "el reajuste no produjo nada que guardar",
+    "description": "Why a men's version couldn't be made, after \"couldn't be made:\"."
+  },
+  "SizeSet.RigUnreadable": {
+    "message": "su rig no se puede leer, así que no se puede doblar a forma de hombre",
+    "description": "Why a men's version couldn't be made, after \"couldn't be made:\": the garment's skinning can't be read."
   },
   "SizeSet.NotInstalledTip.Fmt": {
     "message": "{0} no está instalado en Penumbra. Instálalo y luego cierra y vuelve a abrir esta sección.",

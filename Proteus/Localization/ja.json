@@ -5068,7 +5068,7 @@
     "description": ""
   },
   "SizeSet.Intro": {
-    "message": "下でチェックしたボディの全サイズを、このMOD全体に追加します。各サイズは作者のサイズのうち最も近いものからリフィットし、そのオプション内の衣装の他のパーツも同じサイズから作り、作者のサイズの隣に「Rue S」「YAB Buff L」などとして保存します。MODにすでにあるサイズはそのままです。",
+    "message": "下でチェックしたボディの全サイズを、このMOD全体に追加します。各サイズは作者のサイズのうち最も近いものからリフィットし、そのオプション内の衣装の他のパーツも同じサイズから作り、作者のサイズの隣に「Rue S」「YAB Buff L」などとして保存します。MODにすでにあるサイズはそのままです。女性向けMODにもTBSEとTBSE-Xを追加できます。胴と脚が男性向けに調整され、専用のグループに保存されます。",
     "description": ""
   },
   "SizeSet.Yas": {
@@ -5194,6 +5194,54 @@
   "SizeSet.Working.Fmt": {
     "message": "{0}を{1}にリフィット中...",
     "description": ""
+  },
+  "SizeSet.ForMen.Fmt": {
+    "message": "{0}（男性向け）",
+    "description": "Checkbox label for a men's body offered for a women's mod. {0} is the body (\"TBSE\")."
+  },
+  "SizeSet.ForMen.Tip.Fmt": {
+    "message": "このMODの女性用の胴・脚パーツに{0}の男性版を作ります。ボディマップ（初めて必要になったときにダウンロードされます）を通してミッドランダー男性向けに調整し、それぞれ男性の形に曲げた体が彼の体に最も近い作者のサイズから作ります。専用のグループ「{1}」に保存されるので、女性用サイズはそのままです。靴と手袋は性別をまたいで調整されず、作者がすでに男性用に作ったパーツはそれが使われます。",
+    "description": "Tooltip. {0} is a men's body (\"TBSE\"), {1} the group the men's versions go into."
+  },
+  "SizeSet.MensGroup": {
+    "message": "男性の体",
+    "description": "The name of the Penumbra group a women's mod's men's versions are saved into."
+  },
+  "SizeSet.CheckInGame": {
+    "message": "ゲーム内で確認：",
+    "description": "Heading over the sizes saved that want a look in game."
+  },
+  "SizeSet.Warning.Fmt": {
+    "message": "{0}、「{1}」：{2}",
+    "description": "One line under \"Check in game\". {0} is the piece, {1} the size, {2} what to look at."
+  },
+  "SizeSet.MenMapsMissing": {
+    "message": "男性版は作られませんでした。必要なボディマップがまだありません。Proteusがダウンロード中です。届いたらもう一度サイズを追加してください。",
+    "description": "Why no men's versions were made."
+  },
+  "SizeSet.NoSourceForMen.Fmt": {
+    "message": "{0}：作者のサイズはどれも、Proteusが男性の体に対応づけられる体（Bibo+またはゲームのレイアウト）で作られていないため、男性版はありません。",
+    "description": "{0} is the piece."
+  },
+  "SizeSet.MensGroupTaken.Fmt": {
+    "message": "このMODにはすでに作者の「{0}」というグループがあるため、男性版は作られませんでした。Penumbraでそのグループの名前を変えてから、もう一度サイズを追加してください。",
+    "description": "{0} is the group's name."
+  },
+  "SizeSet.EndsNotForMen": {
+    "message": "靴と手袋には男性版がありません。性別をまたいで調整されるのは胴と脚のパーツだけです。",
+    "description": "Said once when a women's mod's men's versions are made and it has shoes or gloves."
+  },
+  "SizeSet.OneVariant.Fmt": {
+    "message": "{0}：男性版は「{1}」から作った1種類です。MODのほかのバリエーションは女性専用のままです。",
+    "description": "{0} is the piece, {1} the author's option the men's version was made from."
+  },
+  "SizeSet.NotMade": {
+    "message": "調整で保存できるものが作られませんでした",
+    "description": "Why a men's version couldn't be made, after \"couldn't be made:\"."
+  },
+  "SizeSet.RigUnreadable": {
+    "message": "リグを読み取れないため、男性の形に曲げられません",
+    "description": "Why a men's version couldn't be made, after \"couldn't be made:\": the garment's skinning can't be read."
   },
   "SizeSet.NotInstalledTip.Fmt": {
     "message": "{0}はPenumbraにインストールされていません。インストールしてから、この項目を閉じて開き直してください。",
