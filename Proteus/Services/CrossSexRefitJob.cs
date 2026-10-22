@@ -45,10 +45,12 @@ internal static class CrossSexRefitJob
     /// <param name="Moved">The garment's bones the race lacks, moved onto ones it has (<see cref="SkeletonRemap"/>).</param>
     /// <param name="Est">What the race needs of the extra-skeleton table.</param>
     /// <param name="NeedsSkeleton">Bones only the custom skeleton the wearer was read from gives the race.</param>
+    /// <param name="Earrings">The garment's earring nodes moved onto the hip (<see cref="SkeletonRemap.DropsEarrings"/>).</param>
     internal sealed record Result(string Refusal, RacialModelBake.Route Route, RacialModelBake.Wearer? Wearer,
                                   byte[]? Baked, BodySizeCatalog? Bent, string? SourcePath, IReadOnlyList<Size> Sizes,
                                   IReadOnlyList<SkeletonRemap.Move>? Moved = null, EstPlan? Est = null,
-                                  IReadOnlyList<string>? NeedsSkeleton = null);
+                                  IReadOnlyList<string>? NeedsSkeleton = null,
+                                  IReadOnlyList<SkeletonRemap.Move>? Earrings = null);
 
     internal static Result Run(Inputs i)
     {
@@ -65,17 +67,21 @@ internal static class CrossSexRefitJob
         var made = OtherRaceWearer.Build(i.Wearer, skin);
         if (made.Wearer is not { } who) return new Result(made.Refusal, route, null, null, null, null, []);
         var moves = made.Moves ?? [];
+        var earrings = made.Earrings ?? [];
         Result Refused(string why, byte[]? baked = null, BodySizeCatalog? bent = null)
-            => new(why, route, who, baked, bent, null, [], moves, made.Est, made.NeedsSkeleton);
+            => new(why, route, who, baked, bent, null, [], moves, made.Est, made.NeedsSkeleton, earrings);
 
-        // The garment's bones the race lacks, moved onto ones it has before anything bends it.
+        // The garment's earring nodes and the bones the race lacks, moved onto ones it has before anything bends it.
         byte[] drawnModel = i.Garment;
-        if (moves.Count > 0)
+        if (made.Renames is { Count: > 0 } renames)
         {
-            if (SkeletonRemap.Rename(i.Garment, moves, out string refusal) is not { } renamed)
+            if (SkeletonRemap.Rename(i.Garment, renames, out string refusal) is not { } renamed)
                 return Refused(SkeletonRemap.RenameRefusal(refusal));
             drawnModel = renamed;
-            i.Log.Information("[Proteus] retarget: bones moved for c{0:D4}: {1}", i.To, SkeletonRemap.DescribeHow(moves));
+            if (earrings.Count > 0)
+                i.Log.Information("[Proteus] retarget: earring bones moved for c{0:D4}: {1}", i.To, SkeletonRemap.DescribeHow(earrings));
+            if (moves.Count > 0)
+                i.Log.Information("[Proteus] retarget: bones moved for c{0:D4}: {1}", i.To, SkeletonRemap.DescribeHow(moves));
         }
 
         var baked = route.Into(drawnModel, who, out string why);
@@ -125,6 +131,6 @@ internal static class CrossSexRefitJob
             var (saved, preview, finishRefusal) = RefitCore.Finish(plan, route, who, targetPath, i.Log);
             sizes.Add(new Size(target, targetPath, plan, saved, preview, folds, landed, finishRefusal));
         }
-        return new Result("", route, who, baked, bent, sourcePath, sizes, moves, made.Est, made.NeedsSkeleton);
+        return new Result("", route, who, baked, bent, sourcePath, sizes, moves, made.Est, made.NeedsSkeleton, earrings);
     }
 }

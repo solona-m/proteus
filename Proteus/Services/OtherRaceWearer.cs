@@ -109,9 +109,16 @@ internal static class OtherRaceWearer
     /// <param name="Planner">Plans the same moves for the bodies the garment was made on.</param>
     /// <param name="NeedsSkeleton">Bones the garment leans on, after the moves, that only the collection's custom
     /// skeleton gives the race: anyone without it sees those parts pulled out of place.</param>
+    /// <param name="Earrings">The garment's earring nodes moved onto the hip (<see cref="SkeletonRemap.DropsEarrings"/>)
+    /// — bones the race has, so never among <paramref name="Moves"/>.</param>
     internal sealed record Made(RacialModelBake.Wearer? Wearer, EstPlan Est, bool FellBack, string Refusal,
                                 IReadOnlyList<string> Unbendable, IReadOnlyList<SkeletonRemap.Move>? Moves = null,
-                                SkeletonRemap.Planner? Planner = null, IReadOnlyList<string>? NeedsSkeleton = null);
+                                SkeletonRemap.Planner? Planner = null, IReadOnlyList<string>? NeedsSkeleton = null,
+                                IReadOnlyList<SkeletonRemap.Move>? Earrings = null)
+    {
+        /// <summary>Every rename the garment takes before the bake: its earring nodes, then the bones the race lacks.</summary>
+        internal IReadOnlyList<SkeletonRemap.Move> Renames => [.. Earrings ?? [], .. Moves ?? []];
+    }
 
     /// <summary>
     /// The wearer for a garment: the base skeleton (the collection's, else the game's), joined by whatever extra skeleton
@@ -152,7 +159,13 @@ internal static class OtherRaceWearer
             => OtherRaceRefit.PlanEst(inputs.Race, inputs.Drawn, inputs.Slot, inputs.Set, bones, baseBones,
                                       inputs.ModEst, inputs.GameEst, EstSkeleton);
 
+        // Men's legs made women's lose their earring nodes first — every entry of the bone table, weighted or not — so
+        // nothing below plans for them.
+        var earrings = SkeletonRemap.DropsEarrings(inputs.Drawn, inputs.Race, inputs.Slot)
+            ? SkeletonRemap.EarringMoves(garment.BoneNames) : [];
+        bool dropEarrings = earrings.Count > 0;
         var weighted = OtherRaceRefit.Weighted(garment).ToList();
+        if (dropEarrings) weighted = SkeletonRemap.Apply(weighted, earrings).ToList();
         var est = PlanFor(weighted);
         IReadOnlyList<SkeletonRemap.Move> moves = [];
         if (est.Outcome == EstOutcome.Missing)
@@ -161,7 +174,7 @@ internal static class OtherRaceWearer
             // base's, or one the extra skeleton found for the item brings — and the table planned again for the rest.
             var have = new HashSet<string>(baseBones, StringComparer.Ordinal);
             if (est.Skeleton != null) have.UnionWith(est.Skeleton.Names);
-            moves = new SkeletonRemap.Planner(have, drawnParentOf).MovesFor(est.Missing ?? []);
+            moves = new SkeletonRemap.Planner(have, drawnParentOf, dropEarrings).MovesFor(est.Missing ?? []);
             weighted = SkeletonRemap.Apply(weighted, moves).ToList();
             est = PlanFor(weighted);
         }
@@ -182,10 +195,12 @@ internal static class OtherRaceWearer
                     ? Loc.Localize("Parts.Retarget.Race.OneBone", "a bone the garment leans on")
                     : string.Format(Loc.Localize("Parts.Retarget.Race.ManyBones.Fmt", "{0} bones the garment leans on"),
                                     unbendable.Count),
-                ModelRace.Describe($"{inputs.Race:D4}"), string.Join(", ", unbendable.Take(12))), unbendable, moves);
-        var planner = new SkeletonRemap.Planner(parents.Keys.ToHashSet(StringComparer.Ordinal), drawnParentOf);
+                ModelRace.Describe($"{inputs.Race:D4}"), string.Join(", ", unbendable.Take(12))), unbendable, moves,
+                Earrings: earrings);
+        // The bodies it was made on drop theirs only when the garment had some: one without keeps its bodies as they are.
+        var planner = new SkeletonRemap.Planner(parents.Keys.ToHashSet(StringComparer.Ordinal), drawnParentOf, dropEarrings);
         return new Made(wearer, est, fellBack, "", [], moves, planner,
-                        NeedsSkeleton(inputs, fellBack, baseBones, est, weighted));
+                        NeedsSkeleton(inputs, fellBack, baseBones, est, weighted), earrings);
     }
 
     /// <summary>

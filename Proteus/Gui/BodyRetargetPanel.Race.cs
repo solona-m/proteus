@@ -364,16 +364,20 @@ internal sealed partial class BodyRetargetPanel
             var made = OtherRaceWearer.Build(inputs, skin);
             if (made.Wearer is not { } who) return (key, null, made.Refusal);
 
-            // The garment's bones the race lacks, moved onto ones it has before anything bends it; the bodies it was
-            // made on are moved the same way (BakedBodyCatalog).
+            // The garment's earring nodes and the bones the race lacks, moved onto ones it has before anything bends it;
+            // the bodies it was made on are moved the same way (BakedBodyCatalog).
             var moves = made.Moves ?? [];
+            var earrings = made.Earrings ?? [];
             byte[] drawnModel = bytes;
-            if (moves.Count > 0)
+            if (made.Renames is { Count: > 0 } renames)
             {
-                if (SkeletonRemap.Rename(bytes, moves, out string refusal) is not { } renamed)
+                if (SkeletonRemap.Rename(bytes, renames, out string refusal) is not { } renamed)
                     return (key, null, SkeletonRemap.RenameRefusal(refusal));
                 drawnModel = renamed;
-                log.Information("[Proteus] retarget: bones moved for c{0:D4}: {1}", route.To, SkeletonRemap.DescribeHow(moves));
+                if (earrings.Count > 0)
+                    log.Information("[Proteus] retarget: earring bones moved for c{0:D4}: {1}", route.To, SkeletonRemap.DescribeHow(earrings));
+                if (moves.Count > 0)
+                    log.Information("[Proteus] retarget: bones moved for c{0:D4}: {1}", route.To, SkeletonRemap.DescribeHow(moves));
             }
 
             var model = route.Into(drawnModel, who, out string why);

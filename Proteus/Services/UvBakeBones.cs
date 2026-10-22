@@ -32,10 +32,16 @@ internal static class UvBakeBones
     /// <summary>The bone <paramref name="bone"/> is bent as: itself, unless it is a body mod's own.</summary>
     internal static string Alias(string bone) => Override(bone) ?? bone;
 
+    /// <summary>
+    /// An earring node — <c>n_ear_a_l</c>, <c>n_ear_b_r</c>, … — hung under the ear in every human skeleton. A men's
+    /// garment refitted for women's legs is saved without them (<see cref="SkeletonRemap.DropsEarrings"/>).
+    /// </summary>
+    internal static bool IsEarringNode(string bone) => bone.StartsWith("n_ear_", StringComparison.Ordinal);
+
     /// <summary>The standard bone a body mod's own bone stands in for, or null when it is not one.</summary>
     internal static string? Override(string bone)
     {
-        if (bone.StartsWith("n_ear_", StringComparison.Ordinal)) return "j_kosi";
+        if (IsEarringNode(bone)) return "j_kosi";
         if (bone is "n_root" || bone.StartsWith("heels_offset", StringComparison.Ordinal)) return "j_kosi";
         if (bone.StartsWith("iv_daitai_phys_l", StringComparison.Ordinal)) return "j_asi_a_l";
         if (bone.StartsWith("iv_daitai_phys_r", StringComparison.Ordinal)) return "j_asi_a_r";

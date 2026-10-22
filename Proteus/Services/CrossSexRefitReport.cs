@@ -41,7 +41,7 @@ internal static class CrossSexRefitReport
     {
         string savePath = result.Route.Any ? result.Route.SavePath(gamePath) : gamePath;
         var movedBones = new JsonArray();
-        foreach (var move in result.Moved ?? [])
+        foreach (var move in (result.Moved ?? []).Concat(result.Earrings ?? []))
             movedBones.Add(new JsonObject
             {
                 ["from"] = move.From, ["to"] = move.To, ["how"] = move.How.ToString().ToLowerInvariant(),
