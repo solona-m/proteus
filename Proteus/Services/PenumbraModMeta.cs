@@ -231,8 +231,10 @@ internal static class PenumbraModMeta
     {
         string p = Path.TrimEndingDirectorySeparator(Path.GetFullPath(path));
         string r = Path.TrimEndingDirectorySeparator(Path.GetFullPath(root));
+        // A drive or share root keeps its separator ("E:\"): everything on it starts with that, not with "E:\\".
+        string prefix = r.EndsWith(Path.DirectorySeparatorChar) ? r : r + Path.DirectorySeparatorChar;
         return string.Equals(p, r, StringComparison.OrdinalIgnoreCase)
-            || p.StartsWith(r + Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase);
+            || p.StartsWith(prefix, StringComparison.OrdinalIgnoreCase);
     }
 
     /// <summary>

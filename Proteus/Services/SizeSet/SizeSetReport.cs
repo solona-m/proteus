@@ -22,7 +22,7 @@ internal static class SizeSetReport
                 ["piece"] = s.Piece, ["gamePath"] = s.GamePath, ["slot"] = s.Slot, ["group"] = s.Group,
                 ["option"] = s.Option, ["body"] = s.Body, ["bodyMod"] = s.BodyMod, ["yas"] = s.Yas, ["men"] = s.Men,
                 ["status"] = s.Status.ToString().ToLowerInvariant(), ["reasonCode"] = s.ReasonCode, ["reason"] = s.Reason,
-                ["from"] = s.From,
+                ["from"] = s.From, ["cutFrom"] = s.CutFrom,
                 ["folded"] = m?.Folded, ["unmatched"] = m?.Unmatched, ["worstMoveMm"] = Round(m?.WorstMoveMm),
                 ["worstPushMm"] = Round(m?.WorstPushMm), ["pushed"] = m?.Pushed, ["snapRate"] = Round(m?.SnapRate, 3),
                 ["shapeFallbacks"] = m?.ShapeFallbacks, ["coverage"] = Round(m?.Coverage, 3),

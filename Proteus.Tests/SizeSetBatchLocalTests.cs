@@ -308,7 +308,7 @@ public class SizeSetBatchLocalTests(ThisOldThingRun tot, ITestOutputHelper outpu
         var sizes = Sizes(r).ToList();
         var made = sizes.Where(s => (string)s["status"]! == "made").ToList();
         Assert.Equal(made.Count, (int)r["made"]!);
-        Assert.All(sizes, s => Assert.Equal(23, s.AsObject().Count));
+        Assert.All(sizes, s => Assert.Equal(24, s.AsObject().Count));
         foreach (var s in made)
             foreach (string key in new[] { "folded", "unmatched", "worstMoveMm", "worstPushMm", "pushed", "snapRate", "shapeFallbacks", "seconds" })
                 Assert.NotNull(s[key]);
@@ -335,16 +335,16 @@ public class SizeSetBatchLocalTests(ThisOldThingRun tot, ITestOutputHelper outpu
         {
             var entry = record.Options.Single(e => e.Name == (string)s["option"]! && e.GamePath == (string)s["gamePath"]!);
             var saved = ModelPartReader.Read(File.ReadAllBytes(BodySizeCatalog.ResolveCaseInsensitive(tot.CliCopy, entry.File)))!;
-            // The author's sizes whose cloth pairs with the saved model's, vertex for vertex (as --measure --source pairs
-            // them): the one it was cut from is among them, and gives the count.
-            var counts = redirects.Where(r => r.GamePath == entry.GamePath
-                                              && !RefitCore.Normal(r.File).StartsWith("body retarget/", StringComparison.Ordinal))
-                                  .Select(r => Folded(ModelPartReader.Read(File.ReadAllBytes(
-                                                   BodySizeCatalog.ResolveCaseInsensitive(tot.CliCopy, r.File)))!, saved))
-                                  .Where(n => n != null).Select(n => n!.Value).ToList();
-            Assert.True(counts.Count > 0, $"{entry.Name}: no size of the author's has cloth that pairs with the saved model's");
-            output.WriteLine($"{entry.Name}: report {s["folded"]}, counted {string.Join("/", counts)}");
-            Assert.Contains((int)s["folded"]!, counts);
+            // The author's size it was cut from, by the option the report names, paired vertex for vertex with the saved
+            // cloth (as --measure --source pairs them).
+            string cutFrom = (string)s["cutFrom"]!;
+            var source = redirects.Single(r => r.GamePath == entry.GamePath
+                                               && r.Source.EndsWith(" / " + cutFrom, StringComparison.Ordinal));
+            int? counted = Folded(ModelPartReader.Read(File.ReadAllBytes(
+                                      BodySizeCatalog.ResolveCaseInsensitive(tot.CliCopy, source.File)))!, saved);
+            Assert.True(counted != null, $"{entry.Name}: the cloth of \"{cutFrom}\" does not pair with the saved model's");
+            output.WriteLine($"{entry.Name} from {cutFrom}: report {s["folded"]}, counted {counted}");
+            Assert.Equal(counted!.Value, (int)s["folded"]!);
             checkedSizes++;
         }
         Assert.True(checkedSizes > 0);
@@ -428,7 +428,7 @@ public class SizeSetBatchLocalTests(ThisOldThingRun tot, ITestOutputHelper outpu
             Assert.DoesNotContain(":\\\\", text);
             Assert.DoesNotContain(":/", text.Replace("https:/", "").Replace("http:/", ""));
             Assert.DoesNotContain(modsRoot.Replace("\\", "\\\\"), text, StringComparison.OrdinalIgnoreCase);
-            // The user name as a word: a user called "solon" is not found in "Solona".
+            // The user name as a word, not inside a longer one (an author name may contain it).
             Assert.DoesNotMatch(new System.Text.RegularExpressions.Regex(
                 $@"(?i)(?<![a-z0-9]){System.Text.RegularExpressions.Regex.Escape(Environment.UserName)}(?![a-z0-9])"), text);
         }
@@ -698,11 +698,11 @@ public class SizeSetBatchLocalTests(ThisOldThingRun tot, ITestOutputHelper outpu
                 Assert.Contains(option.Files.Keys, k => k.Contains("c0101", StringComparison.Ordinal));
                 Assert.NotEmpty(option.Manipulations ?? []);
             }
-            // Folds are said, never refused.
+            // Folds are said, never refused: Sheer's TBSE version folds (about 122), and is made all the same.
             var folded = made.Where(s => s.Measures!.Folded > 0).ToList();
-            output.WriteLine($"men's sizes with folds: {folded.Count}");
-            Assert.All(folded, s => Assert.Equal(SizeSetRefit.SizeStatus.Made, s.Status));
-            if (folded.Count > 0) Assert.NotEmpty(runLog.Warnings);
+            output.WriteLine($"men's sizes with folds: {string.Join(", ", folded.Select(s => $"{s.Option} {s.Measures!.Folded}"))}");
+            Assert.Contains(folded, s => s.Body == "tbse");
+            Assert.Contains(runLog.Warnings, w => w.Contains("TBSE", StringComparison.Ordinal));
         }
         finally { SizeSetBatchData.Delete(copy); }
     }
@@ -736,6 +736,33 @@ public class SizeSetBatchLocalTests(ThisOldThingRun tot, ITestOutputHelper outpu
             Assert.Contains(runLog.Sizes, s => s.Body == "tbse" && s.ReasonCode is SizeSetRefit.Codes.AuthorsOwn
                                                                                    or SizeSetRefit.Codes.MadeOnIt);
             Assert.Equal(["TBSE", "TBSE-X"], SizeSetBatchData.Shape(copy).Single(g => g.Group == "Size").Options);
+        }
+        finally { SizeSetBatchData.Delete(copy); }
+    }
+
+    /// <summary>
+    /// A women's top none of whose sizes can be crossed — here because the game gives no men's skeleton to build a
+    /// man's wearer from: no men's version is cut for TBSE, nor for TBSE-X after it, and each men's body is said so,
+    /// not only the first.
+    /// </summary>
+    [LocalDataFact(SizeSetBatchData.ThisOldThing, SizeSetBatchData.Neolithe, SizeSetBatchData.Tbse, SizeSetBatchData.TbseX,
+                   LocalData.TbseUvMaps, LocalData.UvMaps)]
+    [Trait("Plan", "EDGE-headless-size-set-30")]
+    public void Every_mens_key_gets_an_outcome_when_none_can_be_crossed() // [EDGE-headless-size-set-30]
+    {
+        string copy = SizeSetBatchData.CopyOf(SizeSetBatchData.ThisOldThing);
+        try
+        {
+            var (_, runLog) = SizeSetBatchData.Batch(copy, [], men: true,
+                                                     [SizeSetBatchData.Neolithe, SizeSetBatchData.Tbse, SizeSetBatchData.TbseX],
+                                                     readGame: _ => null);
+            foreach (var s in runLog.Sizes) output.WriteLine($"{s.Piece} {s.Option} {s.Body} {s.Status} {s.ReasonCode} {s.Reason}");
+            var mens = runLog.Sizes.Where(s => s.Men).ToList();
+            Assert.Equal(["TBSE", "TBSE-X"], mens.Select(s => s.Option));
+            Assert.All(mens, s => Assert.Equal((SizeSetRefit.SizeStatus.Skipped, SizeSetRefit.Codes.NoSourceMen),
+                                               (s.Status, s.ReasonCode)));
+            Assert.Equal([SizeSetBatchData.Folder(SizeSetBatchData.Tbse), SizeSetBatchData.Folder(SizeSetBatchData.TbseX)],
+                         mens.Select(s => s.BodyMod));
         }
         finally { SizeSetBatchData.Delete(copy); }
     }

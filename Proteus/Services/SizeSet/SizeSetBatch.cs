@@ -108,11 +108,28 @@ internal static class SizeSetBatch
 
     /// <summary>
     /// Make every size. Long: minutes per piece. Fills <paramref name="runLog"/> as it goes, so a run stopped by
-    /// <paramref name="ct"/> still tells what it saved; the stop is reported, not thrown.
+    /// <paramref name="ct"/>, or by an error nothing below caught, still tells what it saved; neither is thrown.
     /// </summary>
     internal static Outcome Run(Inputs inputs, SizeSetRefit.RunLog runLog, Action<string> progress, CancellationToken ct)
     {
         var total = Stopwatch.StartNew();
+        try
+        {
+            return RunCore(inputs, runLog, progress, ct, total);
+        }
+        catch (Exception e) when (e is not OperationCanceledException and not OutOfMemoryException)
+        {
+            // Still an outcome: what was saved before it stopped stands in runLog, and the batch must be able to sort
+            // this mod. Said as "unexpected", with the exception, which the log has in full.
+            inputs.Log.Error(e, "[Proteus] size set: {0} stopped", inputs.ModRoot);
+            return new Outcome(inputs.Keys, "unexpected", $"{e.GetType().Name}: {e.Message}", null, false, [], [],
+                               total.Elapsed.TotalSeconds, 0, 0);
+        }
+    }
+
+    private static Outcome RunCore(Inputs inputs, SizeSetRefit.RunLog runLog, Action<string> progress, CancellationToken ct,
+                                   Stopwatch total)
+    {
         string root = inputs.ModRoot;
         Outcome Refused(string code, string why, IReadOnlyList<string>? keys = null)
             => new(keys ?? [], code, why, null, false, [], [], total.Elapsed.TotalSeconds, 0, 0);

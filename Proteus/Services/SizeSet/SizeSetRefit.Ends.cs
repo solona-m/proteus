@@ -204,8 +204,9 @@ internal static partial class SizeSetRefit
             {
                 ct.ThrowIfCancellationRequested();
                 var clock = System.Diagnostics.Stopwatch.StartNew();
-                void Out(SizeStatus status, string? code, string? reason, string? from = null, Measures? measures = null)
-                    => runLog.Add(piece, status, code, reason, group.Name, option, key, target!.Dir, body!.Yas, from: from,
+                void Out(SizeStatus status, string? code, string? reason, string? from = null, Measures? measures = null,
+                         string? cutFrom = null)
+                    => runLog.Add(piece, status, code, reason, group.Name, option, key, target!.Dir, body!.Yas, from: from, cutFrom: cutFrom,
                                   measures: measures, seconds: status == SizeStatus.Made ? clock.Elapsed.TotalSeconds : null);
                 if (group.AlreadyThere(option, request.Remake))
                 {
@@ -309,9 +310,9 @@ internal static partial class SizeSetRefit
                     ct.ThrowIfCancellationRequested();
                     if (group.Save(target.Dir, fromLabel, [new BodyRetargetWriter.Refit(option, model, KeepEnds.SkinOnlyLabel)],
                                    sourceOption, notes))
-                        Out(SizeStatus.Made, null, null, fromLabel, Measures.SkinOnlyEnd);
+                        Out(SizeStatus.Made, null, null, fromLabel, Measures.SkinOnlyEnd, sourceOption);
                     else
-                        Out(SizeStatus.Skipped, Codes.SaveFailed, notes[^1]);
+                        Out(SizeStatus.Failed, Codes.SaveFailed, notes[^1]);
                     continue;
                 }
 
@@ -379,9 +380,9 @@ internal static partial class SizeSetRefit
                                                              outfit != null ? OutfitPartners.LayersOf(root, partner!) : null,
                                                              plan.Materials)],
                                sourceOption, notes))
-                    Out(SizeStatus.Made, null, null, fromLabel, Measures.Of(plan, folded));
+                    Out(SizeStatus.Made, null, null, fromLabel, Measures.Of(plan, folded), sourceOption);
                 else
-                    Out(SizeStatus.Skipped, Codes.SaveFailed, notes[^1]);
+                    Out(SizeStatus.Failed, Codes.SaveFailed, notes[^1]);
             }
         }
         group.RestoreDefault();

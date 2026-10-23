@@ -156,7 +156,7 @@ public class SizeSetBatchTests : IDisposable
         var sizes = report["sizes"]!.AsArray();
         Assert.Equal(["made", "refused", "skipped", "failed", "made"], sizes.Select(s => (string)s!["status"]!));
         string[] keys = ["piece", "gamePath", "slot", "group", "option", "body", "bodyMod", "yas", "men", "status", "reasonCode",
-                         "reason", "from", "folded", "unmatched", "worstMoveMm", "worstPushMm", "pushed", "snapRate",
+                         "reason", "from", "cutFrom", "folded", "unmatched", "worstMoveMm", "worstPushMm", "pushed", "snapRate",
                          "shapeFallbacks", "coverage", "skinOnly", "seconds"];
         Assert.All(sizes, s => Assert.Equal(keys, s!.AsObject().Select(p => p.Key)));
         var made = sizes[0]!;
@@ -230,7 +230,7 @@ public class SizeSetBatchTests : IDisposable
 
     [Theory]
     [Trait("Plan", "AC-headless-size-set-8")]
-    [Trait("Plan", "EDGE-headless-size-set-2")]
+    [Trait("Plan", "EDGE-headless-size-set-28")]
     [InlineData("""{ "FileVersion": 4, "Name": """, "manifest-unreadable")]
     [InlineData("""{ "FileVersion": 2, "Name": "Ancient" }""", "version-too-old")]
     public void Unreadable_or_too_old_manifest_is_refused_with_a_report(string meta, string code) // [AC-headless-size-set-8]
@@ -400,6 +400,111 @@ public class SizeSetBatchTests : IDisposable
         runLog.Add(top, SizeSetRefit.SizeStatus.Skipped, SizeSetRefit.Codes.AlreadyThere, "there", "Size", "Rue M", "rue");
         Assert.Equal(2, runLog.Made);
         Assert.Single(runLog.Sizes.Where(s => s.Status == SizeSetRefit.SizeStatus.Made).Select(s => s.Option).Distinct());
+    }
+
+    /// <summary>A mod of one shoe, its model absent: a piece only when shoes and gloves are sized.</summary>
+    private string ShoeMod()
+    {
+        string root = Path.Combine(work, "shoe-" + Guid.NewGuid().ToString("N")[..8]);
+        Directory.CreateDirectory(root);
+        File.WriteAllText(Path.Combine(root, PenumbraModMeta.MetaFile), """
+            { "FileVersion": 4, "Name": "Shoe", "Groups": [],
+              "DefaultData": { "Files": { "chara/equipment/e6219/model/c0201e6219_sho.mdl": "sho.mdl" }, "FileSwaps": {}, "Manipulations": [] } }
+            """);
+        return root;
+    }
+
+    [Fact]
+    [Trait("Plan", "EDGE-headless-size-set-23")]
+    public void No_ends_through_the_command_leaves_shoes_out() // [EDGE-headless-size-set-23]
+    {
+        var (exit, stdout, stderr) = Cli(Args(ShoeMod(), "rue"));
+        Assert.True(exit == 0, stderr);
+        var report = JsonNode.Parse(stdout)!;
+        Assert.True((bool)report["ends"]!);
+        Assert.Contains(report["sizes"]!.AsArray(), s => (string?)s!["slot"] == "_sho");
+
+        (exit, stdout, stderr) = Cli(Args(ShoeMod(), "rue", "--no-ends"));
+        Assert.True(exit == 0, stderr);
+        report = JsonNode.Parse(stdout)!;
+        Assert.False((bool)report["ends"]!);
+        var only = Assert.Single(report["sizes"]!.AsArray());
+        Assert.Equal("no-pieces", (string)only!["reasonCode"]!);
+    }
+
+    [Fact]
+    [Trait("Plan", "EDGE-headless-size-set-28")]
+    public void A_bad_v3_pack_is_refused_through_the_command() // [EDGE-headless-size-set-28]
+    {
+        string mod = Path.Combine(work, "bad-v3");
+        Directory.CreateDirectory(mod);
+        File.WriteAllText(Path.Combine(mod, PenumbraModMeta.MetaFile), """{ "FileVersion": 3, "Name": "Old" }""");
+        File.WriteAllText(Path.Combine(mod, PenumbraModMeta.LegacyDefaultMod), """
+            { "Version": 0, "Files": { "chara/equipment/e6000/model/c0201e6000_top.mdl": "top.mdl" }, "FileSwaps": {}, "Manipulations": [] }
+            """);
+        File.WriteAllText(Path.Combine(mod, "group_001_size.json"), "{ not json");
+        string before = Snapshot(mod);
+        var (exit, stdout, _) = Cli(Args(mod, "rue"));
+        Assert.Equal(1, exit);
+        var report = JsonNode.Parse(stdout)!;
+        Assert.Equal("migration-failed", (string)report["refusalCode"]!);
+        Assert.Equal(before, Snapshot(mod));
+    }
+
+    [Fact]
+    [Trait("Plan", "AC-headless-size-set-5")]
+    public void An_unexpected_error_still_gives_an_outcome() // [AC-headless-size-set-5]
+    {
+        var log = Substitute.For<Dalamud.Plugin.Services.IPluginLog>();
+        var runLog = new SizeSetRefit.RunLog();
+        var outcome = SizeSetBatch.Run(new SizeSetBatch.Inputs(HairMod(), modsRoot, ["rue"], false, true, _ => null, null, log),
+                                       runLog, _ => throw new InvalidOperationException("the disk went away"),
+                                       CancellationToken.None);
+        Assert.Equal("unexpected", outcome.RefusalCode);
+        Assert.Contains("the disk went away", outcome.Refusal);
+        Assert.Equal(1, RefitCli::Proteus.Refit.SizeSetCommand.ExitCode(outcome));
+        var report = SizeSetReport.Build("mod", 1, outcome, runLog, men: false, ends: true);
+        Assert.Equal("unexpected", (string)report["refusalCode"]!);
+    }
+
+    [Theory]
+    [Trait("Plan", "EDGE-headless-size-set-18")]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void A_piece_that_throws_is_failed_with_its_path_and_the_run_goes_on(bool men) // [EDGE-headless-size-set-18]
+    {
+        string mod = WomensTopMod();
+        var log = Substitute.For<Dalamud.Plugin.Services.IPluginLog>();
+        string pluginDir = Path.Combine(work, "p-throw");
+        Directory.CreateDirectory(Path.Combine(pluginDir, "uvmaps"));
+        foreach (string name in UvMapFiles.MenMaps)
+            File.WriteAllBytes(Path.Combine(pluginDir, "uvmaps", name), [(byte)'I', (byte)'I', 42, 0]);
+        var runLog = new SizeSetRefit.RunLog();
+        // The progress line every piece opens with throws: as a piece that fails partway, inside the run's own catch.
+        SizeSetRefit.Run(new SizeSetRefit.Request(mod, men ? ["tbse@women"] : ["rue"], Yas: true, Remake: false, [],
+                                                  ReadGameFile: _ => null,
+                                                  Across: men ? new SizeSetRefit.AcrossInputs(_ => null) : null),
+                         runLog, new UVRemapService(log, pluginDir), log,
+                         _ => throw new IOException("read failed"), CancellationToken.None);
+        var failed = runLog.Sizes.Where(s => s.Status == SizeSetRefit.SizeStatus.Failed).ToList();
+        Assert.Equal(2, failed.Count);   // the top and the legs, each once
+        Assert.All(failed, s => Assert.Equal((SizeSetRefit.Codes.PieceFailed, men), (s.ReasonCode, s.Men)));
+        Assert.All(failed, s => Assert.Contains(men ? "c0101e6000" : "c0201e6000", s.GamePath));
+        Assert.All(failed, s => Assert.Contains("read failed", s.Reason));
+    }
+
+    [Fact]
+    [Trait("Plan", "AC-headless-size-set-6")]
+    public void The_report_is_never_written_into_the_mod_or_the_mod_folder() // [AC-headless-size-set-6]
+    {
+        string mod = HairMod();
+        foreach (string at in new[] { Path.Combine(mod, "report.json"), Path.Combine(modsRoot, "report.json") })
+        {
+            var (exit, _, stderr) = Cli(Args(mod, "all", "--report", at));
+            Assert.Equal(2, exit);
+            Assert.Contains("--report", stderr);
+            Assert.False(File.Exists(at));
+        }
     }
 
     /// <summary>A women's top in a mod, its model absent: the men's versions are asked for but can never be made here.</summary>

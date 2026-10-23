@@ -28,19 +28,28 @@ internal static class SizeSetCommand
         var keys = SizeSetBatch.ParseKeys(required(opts, "bodies"), out var keyError)
                    ?? throw new Program.UsageException(keyError!);
         if (SizeSetBatch.Validate(modRoot, modsRoot, game, skeleton) is { } error) throw new Program.UsageException(error);
+        // The report names this machine's folders: never inside the mod that ships, nor among the installed mods.
+        if (opts.TryGetValue("report", out var reportAt)
+            && (PenumbraModMeta.IsAtOrUnder(reportAt, modRoot) || PenumbraModMeta.IsAtOrUnder(reportAt, modsRoot)))
+            throw new Program.UsageException($"--report {reportAt} is inside the mod or the mod folder: write it elsewhere");
         if (UvMapFiles.Missing(pluginDir, men) is { Count: > 0 } missing)
             throw new Program.UsageException($"--uvmaps {pluginDir}: missing or not a real map (a Git LFS pointer?): "
                                            + string.Join(", ", missing));
 
+        var log = ConsoleLog.To(stderr);
         // Opened at the first read: a mod with nothing to size never needs it.
         var data = new Lazy<Lumina.GameData>(() => new Lumina.GameData(game));
         byte[]? ReadGame(string path)
         {
             var opened = data.Value;   // a game folder Lumina cannot open fails the run, said as itself
             try { return opened.GetFile(path)?.Data; }
-            catch (Exception e) when (e is not OutOfMemoryException) { return null; }   // a path the game does not have
+            catch (Exception e) when (e is not OutOfMemoryException)
+            {
+                // Most paths asked for are only maybe there; a file there that cannot be read is said.
+                log.Warning(e, "[Proteus] size set: the game's {0} could not be read", path);
+                return null;
+            }
         }
-        var log = ConsoleLog.To(stderr);
         var uvRemap = new UVRemapService(log, pluginDir);
         using var cancel = new CancellationTokenSource();
         // Stopped: the sizes saved so far stand and are reported; the process waits for the size being made.

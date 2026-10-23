@@ -388,8 +388,9 @@ internal static partial class SizeSetRefit
                 string option = SupportedBodies.OptionName(body, size);
                 string leadKey = LeadKey(group.Name, race, option);
                 var clock = System.Diagnostics.Stopwatch.StartNew();
-                void Out(SizeStatus status, string? code, string? reason, string? from = null, Measures? measures = null)
-                    => runLog.Add(piece, status, code, reason, group.Name, option, key, target!.Dir, body!.Yas, from: from,
+                void Out(SizeStatus status, string? code, string? reason, string? from = null, Measures? measures = null,
+                         string? cutFrom = null)
+                    => runLog.Add(piece, status, code, reason, group.Name, option, key, target!.Dir, body!.Yas, from: from, cutFrom: cutFrom,
                                   measures: measures, seconds: status == SizeStatus.Made ? clock.Elapsed.TotalSeconds : null);
                 void NoteOut(string note, string code)
                 {
@@ -613,10 +614,10 @@ internal static partial class SizeSetRefit
                                 [new BodyRetargetWriter.Refit(option, plan.Model, toLabel, Materials: plan.Materials)], sourceOption,
                                 notes, sourceFilesWin: request.Remake && lead))
                 {
-                    Out(SizeStatus.Skipped, Codes.SaveFailed, notes[^1]);
+                    Out(SizeStatus.Failed, Codes.SaveFailed, notes[^1]);
                     continue;
                 }
-                Out(SizeStatus.Made, null, null, fromLabel, Measures.Of(plan, folded));
+                Out(SizeStatus.Made, null, null, fromLabel, Measures.Of(plan, folded), sourceOption);
                 if (lead && sourceOption != null)
                     leadSources[leadKey] = sourceOption;
             }
@@ -709,7 +710,8 @@ internal static partial class SizeSetRefit
         internal string? FromOf(string option) => fromHere.GetValueOrDefault(option);
 
         /// <summary>
-        /// Save sizes — chests and legs one per size, each naming the size it was cut from. False, noted, on failure.
+        /// Save sizes — chests and legs one per size, each naming the size it was cut from. False, noted, on failure:
+        /// the note is always the last of <paramref name="notes"/>, which is what the caller records the failure by.
         /// </summary>
         /// <param name="sourceFilesWin">Made again from another of the author's options: that option's files replace
         /// the ones carried from the old (see <see cref="BodyRetargetWriter.Save"/>).</param>

@@ -202,6 +202,19 @@ public class MigrateWorkCopyTests : IDisposable
         Assert.Contains("Größe – 大", File.ReadAllText(Path.Combine(root, PenumbraModMeta.MetaFile)));
     }
 
+    [Theory]
+    [Trait("Plan", "AC-headless-size-set-10")]
+    [InlineData(@"E:\SomeMod", @"E:\", true)]
+    [InlineData(@"E:\", @"E:\", true)]
+    [InlineData(@"E:\Penumbra\Mod", @"E:\Penumbra", true)]
+    [InlineData(@"e:\penumbra", @"E:\Penumbra\", true)]
+    [InlineData(@"E:\PenumbraOther\Mod", @"E:\Penumbra", false)]
+    [InlineData(@"F:\SomeMod", @"E:\", false)]
+    [InlineData(@"\\server\share\Mods\A", @"\\server\share", true)]
+    [InlineData(@"\\server\shared\A", @"\\server\share", false)]
+    public void A_path_is_at_or_under_a_root_drives_and_shares_included(string path, string root, bool under) // [AC-headless-size-set-10]
+        => Assert.Equal(under, PenumbraModMeta.IsAtOrUnder(path, root));
+
     [Fact]
     public void A_v4_folder_is_left_alone()
     {

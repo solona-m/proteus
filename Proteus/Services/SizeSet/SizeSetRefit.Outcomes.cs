@@ -30,11 +30,12 @@ internal static partial class SizeSetRefit
     /// <param name="Body">The size table's key ("rue", "tbse").</param>
     /// <param name="BodyMod">The body mod's folder it was refitted onto.</param>
     /// <param name="ReasonCode">Why it was not made, for a script; <see cref="Reason"/> says it for a person.</param>
-    /// <param name="From">What it was cut from.</param>
+    /// <param name="From">The body and size it was cut from ("Neolithe M").</param>
+    /// <param name="CutFrom">The author's option it was cut from: which of the mod's own models the refit read.</param>
     internal sealed record SizeOutcome(string Piece, string GamePath, string Slot, string? Group, string? Option,
                                        string? Body, string? BodyMod, bool Yas, bool Men, SizeStatus Status,
                                        string? ReasonCode, string? Reason, string? From = null, Measures? Measures = null,
-                                       double? Seconds = null);
+                                       double? Seconds = null, string? CutFrom = null);
 
     /// <summary>
     /// Everything a run says: its notes and warnings, as the panel shows them, and every size's outcome. Made by the
@@ -52,9 +53,9 @@ internal static partial class SizeSetRefit
         internal void Add(Piece piece, SizeStatus status, string? code, string? reason, string? group = null,
                           string? option = null, string? body = null, string? bodyMod = null, bool yas = false,
                           bool men = false, string? from = null, Measures? measures = null, double? seconds = null,
-                          string? gamePath = null)
+                          string? gamePath = null, string? cutFrom = null)
             => Sizes.Add(new SizeOutcome(piece.Label, gamePath ?? piece.GamePath, piece.Slot, group, option, body, bodyMod,
-                                         yas, men, status, code, reason, from, measures, seconds));
+                                         yas, men, status, code, reason, from, measures, seconds, cutFrom));
 
         /// <summary>A note the author reads, kept as the size's reason too.</summary>
         internal void Note(string note, Piece piece, SizeStatus status, string code, string? group = null,

@@ -476,9 +476,9 @@ internal static partial class SizeSetRefit
             string option = SupportedBodies.OptionName(body, size);
             var sizeClock = Stopwatch.StartNew();
             void Out(SizeStatus status, string? code, string? reason, string? bodyMod, string? from = null,
-                     Measures? measures = null)
+                     Measures? measures = null, string? cutFrom = null)
                 => runLog.Add(piece, status, code, reason, group.Name, option, key, bodyMod, yas: false, men: true,
-                              from: from, measures: measures,
+                              from: from, cutFrom: cutFrom, measures: measures,
                               seconds: status == SizeStatus.Made ? sizeClock.Elapsed.TotalSeconds : null, gamePath: save);
             if (SupportedBodies.Find(body, request.Bodies) is not { } target)
             {
@@ -557,12 +557,13 @@ internal static partial class SizeSetRefit
                             [new BodyRetargetWriter.Refit(option, made!.Saved!.Model, onto.Label, Materials: made.Saved.Materials)],
                             sourceOption: null, notes, manipulations: MensManipulations(job.Route, job.Est, save)))
             {
-                Out(SizeStatus.Skipped, Codes.SaveFailed, notes[^1], target.Dir);
+                Out(SizeStatus.Failed, Codes.SaveFailed, notes[^1], target.Dir);
                 continue;
             }
             Out(SizeStatus.Made, null, null, target.Dir, fromLabel,
                 made.Plan is { } p ? Measures.Of(p, made.Folds, made.Landed?.VertexCoverage)
-                                   : new Measures(made.Folds, null, null, null, null, null, null, made.Landed?.VertexCoverage));
+                                   : new Measures(made.Folds, null, null, null, null, null, null, made.Landed?.VertexCoverage),
+                c.Option);
             saved++;
             warnings.AddRange(said);
             // The first piece of an outfit to make an option leads it; legs following the chest never do.
