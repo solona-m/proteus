@@ -55,19 +55,22 @@ public class MigrateWorkCopyTests : IDisposable
 
     [Fact]
     [Trait("Plan", "EDGE-headless-size-set-2")]
-    public void Group_files_fold_in_index_order() // [EDGE-headless-size-set-2]
+    public void Group_files_fold_in_the_order_Penumbra_loads_them() // [EDGE-headless-size-set-2]
     {
+        // By file name, as the folder lists them: Penumbra renumbers only FileVersion 1 mods, so an unpadded number or
+        // no number at all sorts by its name, not its value.
         string root = Mod(V3Meta, ("group_002_b.json", Group("b")), ("group_010_c.json", Group("c")),
-                          ("group_1_a.json", Group("a")), (PenumbraModMeta.LegacyDefaultMod, """{ "Version": 0, "Files": {} }"""));
+                          ("group_1_a.json", Group("a")), ("group_extra.json", Group("x")),
+                          (PenumbraModMeta.LegacyDefaultMod, """{ "Version": 0, "Files": {} }"""));
         var outcome = PenumbraModMeta.MigrateWorkCopy(root, modsRoot)!;
 
-        Assert.Equal((3, 3), (outcome.FromVersion, outcome.Groups));
+        Assert.Equal((3, 4), (outcome.FromVersion, outcome.Groups));
         Assert.Empty(outcome.Leftover);
         var meta = Manifest(root);
         Assert.Equal(4, (int)meta["FileVersion"]!);
-        Assert.Equal(["a", "b", "c"], meta["Groups"]!.AsArray().Select(g => (string)g!["Name"]!));
+        Assert.Equal(["b", "c", "a", "x"], meta["Groups"]!.AsArray().Select(g => (string)g!["Name"]!));
         // Each group kept key for key, but the v3 Version Penumbra drops.
-        var a = meta["Groups"]![0]!.AsObject();
+        var a = meta["Groups"]![2]!.AsObject();
         Assert.False(a.ContainsKey("Version"));
         Assert.Equal(["Name", "Description", "Priority", "Type", "DefaultSettings", "Options"], a.Select(p => p.Key));
         // The manifest's own keys stay, the mod's Version among them.
@@ -116,21 +119,34 @@ public class MigrateWorkCopyTests : IDisposable
 
     [Theory]
     [Trait("Plan", "EDGE-headless-size-set-28")]
-    [InlineData("group")]
-    [InlineData("default")]
-    [InlineData("version")]
-    public void Bad_v3_input_refuses_and_leaves_the_copy(string what) // [EDGE-headless-size-set-28]
+    [InlineData("group", "migration-failed")]
+    [InlineData("default", "migration-failed")]
+    [InlineData("version", "version-too-old")]
+    [InlineData("manifest", "manifest-unreadable")]
+    public void Bad_v3_input_refuses_and_leaves_the_copy(string what, string code) // [EDGE-headless-size-set-28]
     {
         string root = what switch
         {
             "group" => Mod(V3Meta, ("group_001_a.json", "{ not json"), ("group_002_b.json", Group("b"))),
             "default" => Mod(V3Meta, ("group_001_a.json", Group("a")), (PenumbraModMeta.LegacyDefaultMod, "[1, 2")),
-            _ => Mod("""{ "FileVersion": 2, "Name": "Ancient" }""", ("group_001_a.json", Group("a"))),
+            "version" => Mod("""{ "FileVersion": 2, "Name": "Ancient" }""", ("group_001_a.json", Group("a"))),
+            _ => Mod("""{ "FileVersion": 3, "Name": """, ("group_001_a.json", Group("a"))),
         };
         string before = Snapshot(root);
         var refused = Assert.Throws<PenumbraModMeta.MigrationRefusedException>(() => PenumbraModMeta.MigrateWorkCopy(root, modsRoot));
-        Assert.Equal(what == "version" ? "version-too-old" : "migration-failed", refused.Code);
+        Assert.Equal(code, refused.Code);
         Assert.Equal(before, Snapshot(root));
+    }
+
+    [Fact]
+    [Trait("Plan", "EDGE-headless-size-set-27")]
+    public void FileSwaps_wins_over_the_old_Swaps_when_both_are_there() // [EDGE-headless-size-set-27]
+    {
+        string root = Mod(V3Meta, (PenumbraModMeta.LegacyDefaultMod, """
+            { "Version": 0, "Files": {}, "FileSwaps": { "chara/a.mdl": "chara/new.mdl" }, "Swaps": { "chara/a.mdl": "chara/old.mdl" } }
+            """));
+        PenumbraModMeta.MigrateWorkCopy(root, modsRoot);
+        Assert.Equal("chara/new.mdl", (string)Manifest(root)["DefaultData"]!["FileSwaps"]!["chara/a.mdl"]!);
     }
 
     [Fact]

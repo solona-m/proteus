@@ -138,13 +138,11 @@ internal static class PenumbraModMeta
         public string Code { get; } = code;
     }
 
-    private static readonly System.Text.RegularExpressions.Regex GroupFile =
-        new(@"^group_(\d+)_", System.Text.RegularExpressions.RegexOptions.IgnoreCase);
-
     /// <summary>
     /// Convert a copy of a v3 mod — the user's own pack, unpacked into a work folder Penumbra never sees — to
     /// <see cref="SingleFileVersion"/> in place, so it can be edited: every <c>group_*.json</c> folded into <c>Groups</c>
-    /// in the order Penumbra loads them (the number in the file name, then the name), and <c>default_mod.json</c> into
+    /// in the order Penumbra loads them — by file name, as the folder lists them, so "group_010_" after "group_002_" and
+    /// "group_1_a" after both (Penumbra renumbers only FileVersion 1 mods) — and <c>default_mod.json</c> into
     /// <c>DefaultData</c>, its swaps under either name. Each group is kept key for key but its v3 <c>Version</c>, which
     /// Penumbra drops too; every other key of the manifest is kept. Everything is read before anything is written, and
     /// the manifest is written once; only then are the v3 files deleted.
@@ -169,9 +167,7 @@ internal static class PenumbraModMeta
         // ── read everything first ──
         var groupFiles = Directory.GetFiles(modRoot, "group_*.json")
                                   .Select(f => (Path: f, Name: Path.GetFileName(f)))
-                                  .OrderBy(f => GroupFile.Match(f.Name) is { Success: true } m
-                                                && int.TryParse(m.Groups[1].Value, out int i) ? i : int.MaxValue)
-                                  .ThenBy(f => f.Name, StringComparer.OrdinalIgnoreCase)
+                                  .OrderBy(f => f.Name, StringComparer.OrdinalIgnoreCase)
                                   .ToList();
         var groups = new System.Text.Json.Nodes.JsonArray();
         foreach (var (path, name) in groupFiles)

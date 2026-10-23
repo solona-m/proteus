@@ -32,6 +32,8 @@ internal static class SizeSetCommand
         if (opts.TryGetValue("report", out var reportAt)
             && (PenumbraModMeta.IsAtOrUnder(reportAt, modRoot) || PenumbraModMeta.IsAtOrUnder(reportAt, modsRoot)))
             throw new Program.UsageException($"--report {reportAt} is inside the mod or the mod folder: write it elsewhere");
+        if (reportAt != null && Path.GetDirectoryName(Path.GetFullPath(reportAt)) is { } reportDir && !Directory.Exists(reportDir))
+            throw new Program.UsageException($"--report {reportAt}: the folder {reportDir} does not exist");
         if (UvMapFiles.Missing(pluginDir, men) is { Count: > 0 } missing)
             throw new Program.UsageException($"--uvmaps {pluginDir}: missing or not a real map (a Git LFS pointer?): "
                                            + string.Join(", ", missing));

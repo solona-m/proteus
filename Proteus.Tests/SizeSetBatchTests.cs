@@ -505,6 +505,10 @@ public class SizeSetBatchTests : IDisposable
             Assert.Contains("--report", stderr);
             Assert.False(File.Exists(at));
         }
+        // A folder that is not there is said before the run, not after it has made its sizes.
+        var (missingExit, _, missingErr) = Cli(Args(mod, "all", "--report", Path.Combine(work, "nope", "report.json")));
+        Assert.Equal(2, missingExit);
+        Assert.Contains("does not exist", missingErr);
     }
 
     /// <summary>A women's top in a mod, its model absent: the men's versions are asked for but can never be made here.</summary>

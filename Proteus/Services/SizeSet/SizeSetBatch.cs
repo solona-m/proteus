@@ -132,7 +132,7 @@ internal static class SizeSetBatch
     {
         string root = inputs.ModRoot;
         Outcome Refused(string code, string why, IReadOnlyList<string>? keys = null)
-            => new(keys ?? [], code, why, null, false, [], [], total.Elapsed.TotalSeconds, 0, 0);
+            => new(keys ?? inputs.Keys, code, why, null, false, [], [], total.Elapsed.TotalSeconds, 0, 0);
         if (!PenumbraModMeta.HasReadableManifest(root))
             return Refused("manifest-unreadable", $"{PenumbraModMeta.MetaFile} could not be read");
         if (PenumbraModMeta.ReadFileVersion(root) is var version && version < PenumbraModMeta.LegacyFileVersion)
