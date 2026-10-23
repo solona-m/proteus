@@ -12,7 +12,7 @@ namespace Proteus.Services;
 /// using pre-baked 16-bit RGBA TIFF transfer maps from LooseTextureCompilerCore (MIT).
 /// Maps are loaded lazily on first use and cached for the plugin lifetime.
 /// </summary>
-public class UVRemapService
+public partial class UVRemapService
 {
     private readonly IPluginLog log;
     private readonly string mapsDir;

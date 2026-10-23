@@ -31,11 +31,14 @@ internal static class OtherRaceWearer
     /// <param name="ModdedFrom">That file, for the log.</param>
     /// <param name="ModEst">The Est entries the garment's option and the mod's default data set.</param>
     /// <param name="EstSkeletons">Extra skeletons by game path, from the mod's own files or the game's.</param>
+    /// <param name="DrawnSkeletons">The drawn race's skeletons, base first (the collection's, else the game's), then
+    /// its extra skeleton for the item: the parents a bone the new race lacks is moved up through
+    /// (<see cref="SkeletonRemap"/>). None when they could not be read.</param>
     internal sealed record Inputs(
         ushort Race, ushort Drawn, string Slot, int Set,
         byte[]? ModdedBase, string? ModdedFrom, byte[]? GameBase, byte[]? Pbd,
         IReadOnlyList<EstTable.ModEntry> ModEst, IReadOnlyDictionary<(int Set, ushort Race), int>? GameEst,
-        IReadOnlyDictionary<string, byte[]> EstSkeletons);
+        IReadOnlyDictionary<string, byte[]> EstSkeletons, IReadOnlyList<byte[]>? DrawnSkeletons = null);
 
     /// <summary>
     /// What the bake for <paramref name="race"/> of a garment drawn at <paramref name="drawnPath"/> reads: the race's base
@@ -56,17 +59,9 @@ internal static class OtherRaceWearer
         int set = PenumbraManipulations.ParseSetId(drawnPath, 'e') ?? 0;
 
         string basePath = BaseSkeletonPath(race);
-        byte[]? modded = null;
         string? moddedFrom = resolveCollection(basePath);
-        if (moddedFrom != null && System.IO.Path.IsPathRooted(moddedFrom) && System.IO.File.Exists(moddedFrom))
-        {
-            try { modded = System.IO.File.ReadAllBytes(moddedFrom); }
-            catch (Exception ex) when (ex is System.IO.IOException or UnauthorizedAccessException)
-            {
-                warn?.Invoke(moddedFrom, ex);
-            }
-        }
-        else moddedFrom = null;
+        byte[]? modded = ReadCollectionFile(moddedFrom, warn);
+        if (modded == null) moddedFrom = null;
 
         var gameEst = EstTable.GamePath(slot) is { } table ? EstTable.Parse(readGame(table)) : null;
         var entries = modEst.Where(e => e.Set == set).Select(e => e.Entry).ToList();
@@ -78,20 +73,58 @@ internal static class OtherRaceWearer
             if (EstTable.SkeletonPath(race, slot, entry) is { } path && (modFile(path) ?? readGame(path)) is { } bytes)
                 skeletons[path] = bytes;
 
+        // The drawn race's own skeletons, for where a bone the new race lacks hangs: the collection's base (a women's
+        // custom skeleton is where her garment's own bones come from), else the game's, then her extra skeleton.
+        var drawnSkeletons = new List<byte[]>();
+        string drawnBase = BaseSkeletonPath(drawn);
+        if ((ReadCollectionFile(resolveCollection(drawnBase), warn) ?? readGame(drawnBase)) is { } drawnBytes)
+            drawnSkeletons.Add(drawnBytes);
+        var drawnEntries = modEst.Where(e => e.Set == set && e.Race == drawn).Select(e => e.Entry).ToList();
+        if (gameEst != null && gameEst.TryGetValue((set, drawn), out int drawnEntry)) drawnEntries.Add(drawnEntry);
+        foreach (int entry in drawnEntries.Where(e => e > 0).Distinct())
+            if (EstTable.SkeletonPath(drawn, slot, entry) is { } path && (modFile(path) ?? readGame(path)) is { } bytes)
+                drawnSkeletons.Add(bytes);
+
         return new Inputs(race, drawn, slot, set, modded, moddedFrom, readGame(basePath), readGame(PbdPath), modEst,
-                          gameEst, skeletons);
+                          gameEst, skeletons, drawnSkeletons);
+    }
+
+    /// <summary>A file the collection loads for a game path, when that is a file on disk; null otherwise.</summary>
+    private static byte[]? ReadCollectionFile(string? path, Action<string, Exception>? warn)
+    {
+        if (path == null || !System.IO.Path.IsPathRooted(path) || !System.IO.File.Exists(path)) return null;
+        try { return System.IO.File.ReadAllBytes(path); }
+        catch (Exception ex) when (ex is System.IO.IOException or UnauthorizedAccessException)
+        {
+            warn?.Invoke(path, ex);
+            return null;
+        }
     }
 
     /// <param name="Wearer">Who to bake for; null when the bake is refused.</param>
     /// <param name="FellBack">The collection's skeleton could not be read, and the game's was used.</param>
     /// <param name="Refusal">Why there is no wearer, worded for the user.</param>
+    /// <param name="Moves">The garment's bones the race lacks, and the bones they are moved onto
+    /// (<see cref="SkeletonRemap.Rename"/> before the bake).</param>
+    /// <param name="Planner">Plans the same moves for the bodies the garment was made on.</param>
+    /// <param name="NeedsSkeleton">Bones the garment leans on, after the moves, that only the collection's custom
+    /// skeleton gives the race: anyone without it sees those parts pulled out of place.</param>
+    /// <param name="Earrings">The garment's earring nodes moved onto the hip (<see cref="SkeletonRemap.DropsEarrings"/>)
+    /// — bones the race has, so never among <paramref name="Moves"/>.</param>
     internal sealed record Made(RacialModelBake.Wearer? Wearer, EstPlan Est, bool FellBack, string Refusal,
-                                IReadOnlyList<string> Unbendable);
+                                IReadOnlyList<string> Unbendable, IReadOnlyList<SkeletonRemap.Move>? Moves = null,
+                                SkeletonRemap.Planner? Planner = null, IReadOnlyList<string>? NeedsSkeleton = null,
+                                IReadOnlyList<SkeletonRemap.Move>? Earrings = null)
+    {
+        /// <summary>Every rename the garment takes before the bake: its earring nodes, then the bones the race lacks.</summary>
+        internal IReadOnlyList<SkeletonRemap.Move> Renames => [.. Earrings ?? [], .. Moves ?? []];
+    }
 
     /// <summary>
     /// The wearer for a garment: the base skeleton (the collection's, else the game's), joined by whatever extra skeleton
-    /// the race loads for the item, and the game's deformer. Refused — never baked half-way — when a bone the garment
-    /// leans on would not move: no deformer entry for it or any ancestor the skeletons give it.
+    /// the race loads for the item, and the game's deformer. A bone the garment leans on that neither skeleton has is
+    /// moved onto one they have (<see cref="SkeletonRemap"/>), never refused. Refused — never baked half-way — when a bone
+    /// the skeletons do have would not move: no deformer entry for it or any ancestor they give it.
     /// </summary>
     internal static Made Build(Inputs inputs, SkinnedMesh garment)
     {
@@ -118,30 +151,85 @@ internal static class OtherRaceWearer
                 "{0}'s skeleton could not be read"), ModelRace.Describe($"{inputs.Race:D4}")), []);
 
         var parents = skeleton.ParentMap();
-        var est = OtherRaceRefit.PlanEst(inputs.Race, inputs.Drawn, inputs.Slot, inputs.Set,
-                                         OtherRaceRefit.Weighted(garment), parents.Keys.ToHashSet(StringComparer.Ordinal),
-                                         inputs.ModEst, inputs.GameEst,
-                                         path => inputs.EstSkeletons.TryGetValue(path, out var bytes)
-                                                     ? HavokSkeleton.Read(bytes) : null);
+        var baseBones = parents.Keys.ToHashSet(StringComparer.Ordinal);
+        var drawnParentOf = DrawnParents(inputs.DrawnSkeletons);
+        HavokSkeleton? EstSkeleton(string path)
+            => inputs.EstSkeletons.TryGetValue(path, out var bytes) ? HavokSkeleton.Read(bytes) : null;
+        EstPlan PlanFor(IEnumerable<string> bones)
+            => OtherRaceRefit.PlanEst(inputs.Race, inputs.Drawn, inputs.Slot, inputs.Set, bones, baseBones,
+                                      inputs.ModEst, inputs.GameEst, EstSkeleton);
+
+        // Men's legs made women's lose their earring nodes first — every entry of the bone table, weighted or not — so
+        // nothing below plans for them.
+        var earrings = SkeletonRemap.DropsEarrings(inputs.Drawn, inputs.Race, inputs.Slot)
+            ? SkeletonRemap.EarringMoves(garment.BoneNames) : [];
+        bool dropEarrings = earrings.Count > 0;
+        var weighted = OtherRaceRefit.Weighted(garment).ToList();
+        if (dropEarrings) weighted = SkeletonRemap.Apply(weighted, earrings).ToList();
+        var est = PlanFor(weighted);
+        IReadOnlyList<SkeletonRemap.Move> moves = [];
+        if (est.Outcome == EstOutcome.Missing)
+        {
+            // The game would load no bone to draw these with: each is moved onto one the race's skeletons have — the
+            // base's, or one the extra skeleton found for the item brings — and the table planned again for the rest.
+            var have = new HashSet<string>(baseBones, StringComparer.Ordinal);
+            if (est.Skeleton != null) have.UnionWith(est.Skeleton.Names);
+            moves = new SkeletonRemap.Planner(have, drawnParentOf, dropEarrings).MovesFor(est.Missing ?? []);
+            weighted = SkeletonRemap.Apply(weighted, moves).ToList();
+            est = PlanFor(weighted);
+        }
         // An extra skeleton's bones hang off the base one's, as the game attaches it; the base keeps its own parents.
-        if (est.Skeleton != null)
+        if (est.Outcome != EstOutcome.Missing && est.Skeleton != null)
             foreach (var (bone, parent) in est.Skeleton.ParentMap())
                 parents.TryAdd(bone, parent);
 
         var wearer = new RacialModelBake.Wearer(inputs.Race, parents, pbd);
-        // Bones the race's skeletons do not have are refused whether or not the deformer happens to list them: the bake
-        // might bend them, but the game would load no bone to draw them with, and no entry would be saved to give it one.
+        // Still missing after the moves cannot happen — every move lands on a bone the skeletons have — but if it did,
+        // the bake is refused naming them rather than made with bones the game would not draw.
         var unbendable = est.Outcome == EstOutcome.Missing
             ? (est.Missing ?? []).ToList()
-            : OtherRaceRefit.Unbendable(garment, pbd, wearer.ParentOf, inputs.Drawn, inputs.Race);
+            : OtherRaceRefit.Unbendable(weighted, pbd, wearer.ParentOf, inputs.Drawn, inputs.Race);
         if (unbendable.Count > 0)
             return new Made(null, est, fellBack, string.Format(Loc.Localize("Parts.Retarget.Race.Unbendable.Fmt",
                 "{0} would not move with {1}'s skeleton: {2}"), unbendable.Count == 1
                     ? Loc.Localize("Parts.Retarget.Race.OneBone", "a bone the garment leans on")
                     : string.Format(Loc.Localize("Parts.Retarget.Race.ManyBones.Fmt", "{0} bones the garment leans on"),
                                     unbendable.Count),
-                ModelRace.Describe($"{inputs.Race:D4}"), string.Join(", ", unbendable.Take(12))), unbendable);
-        return new Made(wearer, est, fellBack, "", []);
+                ModelRace.Describe($"{inputs.Race:D4}"), string.Join(", ", unbendable.Take(12))), unbendable, moves,
+                Earrings: earrings);
+        // The bodies it was made on drop theirs only when the garment had some: one without keeps its bodies as they are.
+        var planner = new SkeletonRemap.Planner(parents.Keys.ToHashSet(StringComparer.Ordinal), drawnParentOf, dropEarrings);
+        return new Made(wearer, est, fellBack, "", [], moves, planner,
+                        NeedsSkeleton(inputs, fellBack, baseBones, est, weighted), earrings);
+    }
+
+    /// <summary>
+    /// The parents the drawn race's skeletons give a bone: its base first, then its extra skeleton's — null for a bone
+    /// none of them has.
+    /// </summary>
+    internal static Func<string, string?> DrawnParents(IReadOnlyList<byte[]>? skeletons)
+    {
+        var parents = new Dictionary<string, string?>(StringComparer.Ordinal);
+        foreach (var bytes in skeletons ?? [])
+            if (HavokSkeleton.Read(bytes) is { } skeleton)
+                foreach (var (bone, parent) in skeleton.ParentMap())
+                    parents.TryAdd(bone, parent);
+        return bone => parents.TryGetValue(bone, out var parent) ? parent : null;
+    }
+
+    /// <summary>
+    /// The bones the garment leans on, after the moves, that only the collection's custom skeleton gives the race —
+    /// neither the game's base skeleton nor the extra skeleton the item loads has them.
+    /// </summary>
+    private static IReadOnlyList<string> NeedsSkeleton(Inputs inputs, bool fellBack, IReadOnlySet<string> baseBones,
+                                                       EstPlan est, IEnumerable<string> weighted)
+    {
+        if (inputs.ModdedBase == null || fellBack || inputs.GameBase == null) return [];
+        if (HavokSkeleton.Read(inputs.GameBase) is not { } game) return [];
+        var gameBones = game.Names.ToHashSet(StringComparer.Ordinal);
+        return weighted.Where(b => baseBones.Contains(b) && !gameBones.Contains(b)
+                                   && !(est.Skeleton?.Names.Contains(b) ?? false))
+                       .Order(StringComparer.Ordinal).ToList();
     }
 
     /// <summary>

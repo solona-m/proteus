@@ -25,7 +25,7 @@ public sealed class Plugin : IDalamudPlugin
     [PluginService] public static ITextureProvider TextureProvider { get; private set; } = null!;
 
     /// <summary>Hand-maintained; bump it for in-game testing. <see cref="BuildStamp"/> is the one that can't go stale.</summary>
-    public const int BuildNumber = 1323;
+    public const int BuildNumber = 1367;
 
     /// <summary>
     /// Which set of release notes is current. Raise it when a release has something new to say: the window
@@ -52,6 +52,7 @@ public sealed class Plugin : IDalamudPlugin
     private readonly SidecarDiscoveryService discovery;
     private readonly UVRemapService uvRemap;
     private readonly UVMapDownloadService uvMapDl;
+    private readonly UvMapsCoordinator uvMaps;
     private readonly DefaultEffectsDownloadService effectsDl;
     private readonly CompositorService compositor;
     private volatile bool _disposed;
@@ -70,6 +71,7 @@ public sealed class Plugin : IDalamudPlugin
     private readonly HatCompatWatcher hatCompat;
     private readonly HairPortWatcher hairPort;
     private readonly AutoRefitWatcher autoRefit;
+    private readonly ModMoveService modMoves;
     private readonly Gui.ProteusFonts fonts;
     private readonly Localization.LocSetup loc;
     private readonly ColorTableHighlighter highlighter;
@@ -129,14 +131,11 @@ public sealed class Plugin : IDalamudPlugin
         uvMapDl = new UVMapDownloadService(log, dataDir, assemblyDir);
         compositor = new CompositorService(penumbra, glamourer, discovery, textureLoader, config, log, uvRemap);
 
-        if (!uvMapDl.MapsPresent())
-        {
-            uvMapDl.EnsureMapsAsync(onComplete: () =>
-            {
-                if (!_disposed && config.PluginEnabled && penumbra.IsAvailable)
-                    compositor.TriggerRecomposite("uvmaps-downloaded");
-            });
-        }
+        // Subscribed before the first download starts, so its arrival is never missed.
+        uvMaps = new UvMapsCoordinator(uvRemap, uvMapDl,
+            () => !_disposed && config.PluginEnabled && penumbra.IsAvailable,
+            () => compositor.TriggerRecomposite("uvmaps-downloaded"));
+        uvMapDl.EnsureMapsAsync();
         designBindings = new DesignBindingService(penumbra, glamourer, discovery, compositor, config, pluginInterface, framework, log);
         // Told to the bridge too: GetDesign's on-disk fallback must read the same folder as the watcher.
         glamourer.DesignsDirectoryOverride = config.GlamourerDesignDirOverride;
@@ -229,10 +228,14 @@ public sealed class Plugin : IDalamudPlugin
                                          path => textureLoader.LoadRawFile(null, path), config, log, dataDir);
         partsPanel.UseBodyIndex(autoRefit.Index);
 
+        // A mod renamed in Penumbra: every owner of per-mod state follows it, in one fixed order.
+        modMoves = new ModMoveService(penumbra, config, presets, designBindings, compositor, hatCompat, hairPort,
+                                      autoRefit, log);
+
         statusWindow = new StatusWindow(compositor, discovery, penumbra, config, designBindings,
             presets, editRouter, uvMapDl, uvRemap,
             modCreation, onionImport, contentImport, luminisImport, emissiveImport, eyeImport, modExport,
-            textureLoader, partsPanel, hatCompat, hairPort, autoRefit,
+            textureLoader, partsPanel, hatCompat, hairPort, autoRefit, modMoves,
             new LogExportService(capture, compositor, penumbra, config, dataDir));
 
         liveMesh = new Gui.LiveMeshOverlay(ObjectTable, DataManager, penumbra, ChatGui, log);
@@ -334,6 +337,8 @@ public sealed class Plugin : IDalamudPlugin
         // Before the windows: the Studio tab reads this frame's stroke from it.
         liveBrush.Update();
         windowSystem.Draw();
+        // After the windows, so a control let go this frame is written this frame; unconditionally, as the window may be closed.
+        statusWindow.TickMetadataSaves();
     }
 
     /// <summary>
@@ -494,6 +499,9 @@ public sealed class Plugin : IDalamudPlugin
         // A brush stroke still inside its autosave debounce: written, without the reload and redraw.
         try { statusWindow.FlushPendingBrush(); } catch { /* tearing down — never block the unload */ }
 
+        // A colour edit held for the mouse to be let go.
+        try { statusWindow.FlushMetadataSaves(unloading: true); } catch { /* tearing down — never block the unload */ }
+
         CommandManager.RemoveHandler(CommandName);
         PluginInterface.UiBuilder.Draw -= DrawUi;
         PluginInterface.UiBuilder.OpenMainUi -= OpenMainUi;
@@ -520,9 +528,11 @@ public sealed class Plugin : IDalamudPlugin
         fonts.Dispose();
         ipcProvider.Dispose();
         designWatcher.Dispose();
+        modMoves.Dispose();   // before every service it calls
         designBindings.PresetsSuperseded -= presets.ClearAllApplied;
         presets.Dispose();
         designBindings.Dispose();
+        uvMaps.Dispose();      // before the downloads: no recomposite after this
         uvMapDl.Dispose();
         effectsDl.Dispose();
         autoRefit.Dispose();   // before the compositor and the bridges, whose events it unsubscribes from

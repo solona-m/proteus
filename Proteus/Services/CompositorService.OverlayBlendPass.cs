@@ -78,6 +78,7 @@ public partial class CompositorService
                         else if (desc.MaterialGamePaths.Any(p => UVRemapService.InferBodyType(p) == "gen3"))
                             srcBodyType = "gen3";
                     }
+                    srcBodyType = material.SourceHere(desc, srcBodyType);
                     rows = BuildRowDict(resolved.ColorTableRows);
                     rows.TryGetValue(15, out var row16);
                     row16A = row16?.A ?? new ColorTableSubRow();
@@ -332,9 +333,13 @@ public partial class CompositorService
                     // ── UV-seam bleed removal ─────────────────────────────────
                     // Only for coverage that was cross-UV converted; native overlays are verbatim. Decided on final coverage and dropped
                     // from covSrc and diffuseOv so channels stay consistent. Skip gen2: a right-half crop has no transfer-map seams.
-                    if (srcBodyType != null && material.dstBodyType != null
-                        && !string.Equals(srcBodyType, material.dstBodyType, StringComparison.OrdinalIgnoreCase)
-                        && !string.Equals(material.dstBodyType, "gen2", StringComparison.OrdinalIgnoreCase))
+                    // A men's route drops by the map it ends on (bibo→TBSE); onto the men's vanilla half, a crop, nothing.
+                    var (seamSrc, seamDst) = UVRemapService.ParseMensKey(srcBodyType) is { } men
+                        ? (men.Route.Dst == UVRemapService.TbseSpace ? ("bibo", UVRemapService.TbseSpace) : (null, null))
+                        : (srcBodyType, material.dstBodyType);
+                    if (seamSrc != null && seamDst != null
+                        && !string.Equals(seamSrc, seamDst, StringComparison.OrdinalIgnoreCase)
+                        && !string.Equals(seamDst, "gen2", StringComparison.OrdinalIgnoreCase))
                     {
                         // The drop is applied to covSrc, which feeds every channel, so it is decided on the overlay's own
                         // silhouette channel rather than any one gated channel.
@@ -342,7 +347,7 @@ public partial class CompositorService
                         // Timed separately: ComputeSeamDropMask's summed-area table is not in uvRemap.RemapStats.
                         var tSeamDrop = PhaseCounter.Begin();
                         var dropMask = decision != null
-                            ? material.run.compositor.uvRemap.ComputeSeamDropMask(decision, covW, covH, srcBodyType, material.dstBodyType)
+                            ? material.run.compositor.uvRemap.ComputeSeamDropMask(decision, covW, covH, seamSrc, seamDst)
                             : null;
                         material.run.compositor.blendSeamDropStats.Stop(tSeamDrop);
                         if (dropMask != null)

@@ -41,6 +41,10 @@ internal static class LocalData
     /// skin, its chest skin cut away under the blouse — only an upper-chest patch left, its open edge above the bust.</summary>
     internal const string DeiGratiaPack = ModPacks + ":Dei Gratia v1.0.1.pmp";
 
+    /// <summary>"[YAS] Muse+": a Bibo-layout body whose SFW legs options model boxers (<c>mt_c0201e0000_dwn_b.mtrl</c>,
+    /// a sheet of their own) where the hips, butt and crotch skin would be — that skin is cut away under them.</summary>
+    internal const string MusePack = ModPacks + ":[YAS] Muse+.pmp";
+
     /// <summary>Bijeon's "Frost Veil Plus+": an invisible a0002 bracelet whose whole look is an item effect, in the v3 layout.</summary>
     internal const string FrostVeilPack = ModPacks + ":Frost Veil Plus+.pmp";
 
@@ -51,13 +55,16 @@ internal static class LocalData
     /// </summary>
     internal const string UvMaps = "<uv transfer maps>";
 
-    /// <summary>The plugin folder whose <c>uvmaps</c> hold real maps, or null.</summary>
-    private static string? UvMapsFolder()
+    /// <summary>The bibo↔TBSE maps, likewise in the repository through Git LFS; <see cref="Path"/> gives the plugin folder.</summary>
+    internal const string TbseUvMaps = "<bibo-tbse transfer maps>";
+
+    /// <summary>The plugin folder whose <c>uvmaps</c> hold a real <paramref name="map"/>, or null.</summary>
+    private static string? UvMapsFolder(string map = "gen3_to_bibo_transfer.tif")
     {
         for (var dir = new DirectoryInfo(AppContext.BaseDirectory); dir != null; dir = dir.Parent)
         {
-            var map = System.IO.Path.Combine(dir.FullName, "Proteus", "uvmaps", "gen3_to_bibo_transfer.tif");
-            if (File.Exists(map)) return IsTiff(map) ? System.IO.Path.Combine(dir.FullName, "Proteus") : null;
+            var path = System.IO.Path.Combine(dir.FullName, "Proteus", "uvmaps", map);
+            if (File.Exists(path)) return IsTiff(path) ? System.IO.Path.Combine(dir.FullName, "Proteus") : null;
         }
         return null;
     }
@@ -101,6 +108,7 @@ internal static class LocalData
     internal static string Path(string need)
     {
         if (need == UvMaps) return UvMapsFolder() ?? "<uv transfer maps not here>";
+        if (need == TbseUvMaps) return UvMapsFolder("bibo_to_tbse_transfer.tif") ?? "<bibo-tbse transfer maps not here>";
         int colon = need.IndexOf(':');
         string variable = colon < 0 ? need : need[..colon];
         string relative = colon < 0 ? "" : need[(colon + 1)..].Replace('/', System.IO.Path.DirectorySeparatorChar);
@@ -117,6 +125,12 @@ internal static class LocalData
             if (need == UvMaps)
             {
                 if (UvMapsFolder() == null) missing.Add("the uv transfer maps are not here (Git LFS not fetched)");
+                continue;
+            }
+            if (need == TbseUvMaps)
+            {
+                if (UvMapsFolder("bibo_to_tbse_transfer.tif") == null)
+                    missing.Add("the bibo-tbse transfer maps are not here (Git LFS not fetched)");
                 continue;
             }
             int colon = need.IndexOf(':');

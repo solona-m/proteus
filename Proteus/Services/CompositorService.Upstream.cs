@@ -115,8 +115,9 @@ public partial class CompositorService
 
             // Our own folder is not a conflict and must never reach the owner set, or TryRaisePriorityAbove raises us above
             // ourselves forever. It means Penumbra still serves an earlier manifest's file; the next reload settles it.
-            if (string.Equals(ModFolderOf(disk), SidecarDiscoveryService.ManagedModDir,
-                              StringComparison.OrdinalIgnoreCase))
+            if (ModFolderOf(disk) is { } servedBy
+                && (string.Equals(servedBy, SidecarDiscoveryService.ManagedModDir, StringComparison.OrdinalIgnoreCase)
+                    || IsManagedAlias(servedBy)))
             {
                 selfServed.Add(gamePath);
                 log.Warning("[Proteus] redirect not yet current: {0} resolves to {1} — our own mod, but not "
@@ -297,15 +298,11 @@ public partial class CompositorService
         HashSet<string>? wornCharCodes,
         HashSet<string>? wornHeadCodes,
         HashSet<string> activeBodyTypes,
-        List<(OverlayEntry Entry, ResolvedOverlay Overlay)> allOverlays)
+        List<(OverlayEntry Entry, ResolvedOverlay Overlay)> allOverlays,
+        IReadOnlySet<string>? awaitingMenMaps = null,
+        IReadOnlySet<ResolvedOverlay>? heldGear = null)
     {
-        // The four destinations a mod can reach, unioned in one pass. AO top-up materials carry empty lists and contribute no mod.
-        var contributing = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-        foreach (var list in byMaterial.Values)
-            foreach (var (e, _) in list) contributing.Add(e.ModDirectory);
-        foreach (var (e, _) in gearOverlays)  contributing.Add(e.ModDirectory);
-        foreach (var (e, _) in contentLayers) contributing.Add(e.ModDirectory);
-        foreach (var m in maskShellMods)      contributing.Add(m);
+        var contributing = Contributing(byMaterial, gearOverlays, contentLayers, maskShellMods, awaitingMenMaps, heldGear);
 
         var inert = entries.Where(e => !contributing.Contains(e.ModDirectory)).ToList();
         if (inert.Count == 0)
@@ -356,7 +353,8 @@ public partial class CompositorService
 
             var reason = Explain(diag, maskGroup, masksOn, maskGear,
                                  filteredOut.Contains(entry.ModDirectory), wants, have,
-                                 PaintsAnotherBody(mine, mineTypes, wornCharCodes, wornHeadCodes, activeBodyTypes));
+                                 PaintsAnotherBody(mine, mineTypes, wornCharCodes, wornHeadCodes, activeBodyTypes),
+                                 awaitingMenMaps?.Contains(entry.ModDirectory) ?? false);
             next[entry.ModDirectory] = reason;
 
             if (_inertReported.TryAdd(
@@ -365,7 +363,7 @@ public partial class CompositorService
                     entry.ModDirectory, EnglishInert(reason));
         }
 
-        _inertMods = next;
+        _inertMods = Ledgered(next);
     }
 
     /// <summary>
@@ -383,9 +381,11 @@ public partial class CompositorService
     /// The mod folder a file on disk belongs to (the name the user can search for in Penumbra). Null when the file isn't
     /// under the mod directory; the caller should then show the full path.
     /// </summary>
-    private string? ModFolderOf(string? diskPath)
+    private string? ModFolderOf(string? diskPath) => ModFolderOf(diskPath, modsRoot);
+
+    /// <summary><see cref="ModFolderOf(string?)"/> against a given mods root.</summary>
+    internal static string? ModFolderOf(string? diskPath, string? root)
     {
-        var root = modsRoot;
         if (string.IsNullOrEmpty(diskPath) || string.IsNullOrEmpty(root)
             || !diskPath.StartsWith(root, StringComparison.OrdinalIgnoreCase))
             return null;

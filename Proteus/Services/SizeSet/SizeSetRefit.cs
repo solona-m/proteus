@@ -44,14 +44,21 @@ internal static partial class SizeSetRefit
     /// legs are never read off it.</param>
     /// <param name="Piercings">Bring each new body's piercings in with its skin (see <see cref="BodyRetarget.Rebuild"/>):
     /// <see cref="Configuration.SizeSetPiercings"/>. Off by default; nails come in either way.</param>
+    /// <param name="Across">What a women's piece's men's versions read from the player's collection (see
+    /// <c>SizeSetRefit.CrossSex.cs</c>), asked for on the framework thread; null makes none, whatever is ticked.</param>
     internal sealed record Request(string ModRoot, IReadOnlyList<string> Keys, bool Yas, bool Remake,
                                    IReadOnlyList<BodyModIndex.Entry> Bodies, Func<string, byte[]?>? ReadGameFile = null,
                                    bool Ends = true, Func<string, BodySizeCatalog?>? GameBody = null,
-                                   bool Piercings = false);
+                                   bool Piercings = false, AcrossInputs? Across = null);
+
+    /// <param name="ResolveCollection">The file the player's collection loads for a game path (a skeleton): a path on
+    /// disk when a mod replaces it, anything else for the game's own (see <see cref="OtherRaceWearer.Gather"/>).</param>
+    internal sealed record AcrossInputs(Func<string, string?> ResolveCollection);
 
     /// <param name="Made">Sizes saved.</param>
     /// <param name="Notes">Every size left out, and why — for the author to read.</param>
-    internal sealed record Result(int Made, IReadOnlyList<string> Notes);
+    /// <param name="Warnings">Sizes saved that want a look in game: a men's version's folds and moved bones.</param>
+    internal sealed record Result(int Made, IReadOnlyList<string> Notes, IReadOnlyList<string>? Warnings = null);
 
     /// <summary>
     /// A chest or legs model of some outfit for a Midlander woman or man — the races the table's bodies are, and the ones
@@ -225,7 +232,11 @@ internal static partial class SizeSetRefit
                 notes.Add(string.Format(Strings.SizeSet.PieceFailedFmt, piece.Label, e.Message));
             }
         }
-        return new Result(made, notes);
+        // The women's chest and legs pieces' men's versions, after every piece's own sizes.
+        var warnings = new List<string>();
+        made += RunAcross(request, pieces, uvRemap, log, progress, notes, warnings, ct);
+        return new Result(made, notes.Distinct(StringComparer.Ordinal).ToList(),
+                          warnings.Distinct(StringComparer.Ordinal).ToList());
     }
 
     /// <summary>
@@ -256,7 +267,8 @@ internal static partial class SizeSetRefit
         string sizeSlot = piece.FollowsChest ? "_top" : piece.Slot;
 
         // A man's piece with only women's bodies ticked, or the other way about, has nothing to go to: not read at all,
-        // and nothing to say — a unisex mod asked for Rue sizes is not missing anything for its men's models.
+        // and nothing to say — a unisex mod asked for Rue sizes is not missing anything for its men's models. A women's
+        // piece's men's versions are ticked apart ("tbse@women") and made by RunAcross.
         if (!request.Keys.Any(k => ForRace(k, sizeSlot, race))) return 0;
 
         // ── what it was made on: every one of the author's sizes whose body can be read ──
@@ -524,8 +536,9 @@ internal static partial class SizeSetRefit
                                              warn: line => log.Warning("[Proteus] size set: {0}", line),
                                              carryPiercings: request.Piercings);
                 plan = RefitCore.MatchSkinToBody(plan, chosen.SourcePath, targetPath, uvRemap, male, log);
-                log.Information("[Proteus] size set: {0} onto {1} (moved up to {2:F1} mm)", piece.Label, option,
-                                plan.Report.WorstMove * 1000f);
+                // Folds are said, never refused (cross-sex-tops-yas).
+                log.Information("[Proteus] size set: {0} onto {1} (moved up to {2:F1} mm, {3} folded)", piece.Label, option,
+                                plan.Report.WorstMove * 1000f, plan.Report.Folded);
                 if (RefitCore.ReleasedLog(plan.Report, chosen.ShapeNames) is { } released)
                     log.Information("[Proteus] size set: {0} {1}: let go of kept piece(s) that would sink moved whole: {2}",
                                     piece.Label, option, released);
@@ -537,7 +550,7 @@ internal static partial class SizeSetRefit
                 ct.ThrowIfCancellationRequested();
                 bool lead = !piece.FollowsChest && !leadSources.ContainsKey(leadKey);
                 if (group.Save(target.Dir, RefitCore.LabelFrom(across ? chosen.Entry.Name : null, [chosen.Pick.Option.Label]),
-                               [new BodyRetargetWriter.Refit(option, plan.Model, toLabel)], sourceOption, notes,
+                               [new BodyRetargetWriter.Refit(option, plan.Model, toLabel, Materials: plan.Materials)], sourceOption, notes,
                                sourceFilesWin: request.Remake && lead)
                     && lead && sourceOption != null)
                     leadSources[leadKey] = sourceOption;
@@ -573,6 +586,7 @@ internal static partial class SizeSetRefit
     {
         private readonly string root;
         private readonly Piece piece;
+        private readonly string gamePath;
         private readonly HashSet<string> existing;
         private readonly HashSet<string> ours;
         private readonly HashSet<string> doneHere;
@@ -585,12 +599,16 @@ internal static partial class SizeSetRefit
         internal IReadOnlySet<string> Ours => ours;
         internal int Saved { get; private set; }
 
-        internal SizeGroup(string root, Piece piece)
+        /// <param name="name">The group, when not the piece's own: the men's group a women's piece's men's versions go
+        /// into (see <c>SizeSetRefit.CrossSex.cs</c>).</param>
+        /// <param name="gamePath">Where its sizes are saved, when not where the piece is drawn: c0101 for those.</param>
+        internal SizeGroup(string root, Piece piece, string? name = null, string? gamePath = null)
         {
             this.root = root;
             this.piece = piece;
+            this.gamePath = gamePath ?? piece.GamePath;
             var record = BodyRetargetWriter.ReadRecord(root);
-            Name = piece.Group ?? piece.GroupName;
+            Name = name ?? piece.Group ?? piece.GroupName;
             existing = (PenumbraModMeta.TryReadFileOptions(root, Name) ?? []).Select(o => o.Name)
                                                                             .ToHashSet(StringComparer.OrdinalIgnoreCase);
             var inGroup = (record?.Options ?? []).Where(e => string.Equals(record!.GroupOf(e), Name,
@@ -598,10 +616,10 @@ internal static partial class SizeSetRefit
             ours = inGroup.Select(e => e.Name).ToHashSet(StringComparer.OrdinalIgnoreCase);
             // Which of ours already carry a refit of THIS model. An option of ours without one is one the outfit's other
             // piece made — "Rue S" saved for the chest, still wearing the author's legs — and this piece's refit goes into it.
-            doneHere = inGroup.Where(e => string.Equals(e.GamePath, piece.GamePath, StringComparison.OrdinalIgnoreCase))
+            doneHere = inGroup.Where(e => string.Equals(e.GamePath, this.gamePath, StringComparison.OrdinalIgnoreCase))
                               .Select(e => e.Name).ToHashSet(StringComparer.OrdinalIgnoreCase);
             fromHere = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
-            foreach (var e in inGroup.Where(e => string.Equals(e.GamePath, piece.GamePath, StringComparison.OrdinalIgnoreCase)))
+            foreach (var e in inGroup.Where(e => string.Equals(e.GamePath, this.gamePath, StringComparison.OrdinalIgnoreCase)))
                 fromHere[e.Name] = e.From;
             // A group of our own is rewritten whole by every save, which selects the size saved last by default: a fresh
             // install, or a pack exported from here, would then draw "Bibo L" instead of the author's model. Its default
@@ -630,11 +648,12 @@ internal static partial class SizeSetRefit
         /// </summary>
         /// <param name="sourceFilesWin">Made again from another of the author's options: that option's files replace
         /// the ones carried from the old (see <see cref="BodyRetargetWriter.Save"/>).</param>
+        /// <param name="manipulations">Metadata the sizes carry: the EQDP (and Est) entries a men's version needs.</param>
         internal bool Save(string targetDir, string from, List<BodyRetargetWriter.Refit> refits, string? sourceOption,
-                           List<string> notes, bool sourceFilesWin = false)
+                           List<string> notes, bool sourceFilesWin = false, IReadOnlyList<object>? manipulations = null)
         {
-            var outcome = BodyRetargetWriter.Save(root, Name, piece.GamePath, targetDir, from, refits,
-                                                  piece.Group != null ? sourceOption : null,
+            var outcome = BodyRetargetWriter.Save(root, Name, gamePath, targetDir, from, refits,
+                                                  piece.Group != null ? sourceOption : null, manipulations,
                                                   fromGame: RefitCore.IsGameGear(root, piece.GamePath),
                                                   sourceFilesWin: sourceFilesWin);
             if (!outcome.Ok)

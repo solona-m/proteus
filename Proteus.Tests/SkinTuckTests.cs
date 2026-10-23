@@ -18,10 +18,11 @@ public class SkinTuckTests(ITestOutputHelper output)
 {
     private (byte[] Model, BodyRetarget.SwapReport Report) Swap(byte[] top, byte[] body, bool tuck = true,
                                                                string slot = "_top", IReadOnlySet<string>? hidden = null,
-                                                               bool carryPiercings = false)
+                                                               bool carryPiercings = false, bool seeInside = false)
     {
         var model = BodyRetarget.SwapSkin(top, [Resized(body, slot, hidden)], out var report,
-                                          tuckSlot: tuck ? "_top" : null, carryPiercings: carryPiercings)!;
+                                          tuckSlot: tuck ? "_top" : null, carryPiercings: carryPiercings,
+                                          seeInside: seeInside)!;
         Assert.NotNull(model);
         output.WriteLine($"{(tuck ? "tuck" : "no tuck")}: {report}; rows {string.Join(", ", DrawnRows(model).Select(r => $"{r.Key}:{r.Value}"))}");
         return (model, report);
@@ -321,11 +322,12 @@ public class SkinTuckTests(ITestOutputHelper output)
         var baseOf = body.MeshSpans.ToDictionary(s => s.Mesh, s => s.BaseVertex);
 
         var readable = BodyRetarget.TuckUnderCloth(drawn, cloth, bodyBytes, body, covered, kept, new HashSet<Vector3>(), baseOf,
-                                                   edges);
+                                                   edges, seeInside: false);
         Assert.True(readable.Triangles > 0, "the fixture does not grow with readable weights");
         Assert.False(readable.Unread);
 
-        var unread = BodyRetarget.TuckUnderCloth(drawn, cloth, [], body, covered, kept, new HashSet<Vector3>(), baseOf, edges);
+        var unread = BodyRetarget.TuckUnderCloth(drawn, cloth, [], body, covered, kept, new HashSet<Vector3>(), baseOf, edges,
+                                                 seeInside: false);
         Assert.Empty(unread.Grown);
         Assert.Equal(0, unread.Triangles);
         Assert.True(unread.Unread);
@@ -359,6 +361,205 @@ public class SkinTuckTests(ITestOutputHelper output)
         // Rows 0-8 carry that share on the shoulder, the rest on the spine.
         var rows = DrawnRows(Swap(LooseTop(looseFrom: 4), Body(arm: r => r <= 8, armShare: share, armBone: "j_kata_l")).Model);
         Assert.Equal(tucked, rows.Keys.Any(r => r < 8));
+    }
+
+    // ── open skin where the garment's inside would show (build 1360) ──
+
+    [Fact]
+    [Trait("Plan", "AC-coatee-strap-slit-6")]
+    [Trait("Plan", "EDGE-coatee-strap-slit-4")]
+    public void Open_skin_where_the_inside_would_show_is_drawn_to_the_band()
+    {
+        // No cloth over the rows below the author's edge, the garment's back behind the body: through skin left out there
+        // the camera sees the back from inside. Drawn down to the band from the author's edge, and no further.
+        var (model, report) = Swap(OpenFrontTop(), Body(), seeInside: true);
+        var (untucked, _) = Swap(OpenFrontTop(), Body(), tuck: false);
+        Assert.True(report.Tucked >= 2 * Band, $"{report}");
+        Assert.True(DrawnRows(model).Keys.Min() < DrawnRows(untucked).Keys.Min());
+        // Row 5's corners lie exactly the band from the author's edge, and are not drawn: down to row 6.
+        Assert.Equal(6, DrawnRows(model).Keys.Min());
+        var read = ModelPartReader.Read(model)!;
+        float lowest = read.Parts.Where(p => p.Island < 0 && SecondSkinWriter.IsBodySkinMaterial(p.Material))
+                           .SelectMany(p => p.Triangles).Min(v => read.Positions[v * 3 + 1]);
+        Assert.True(lowest >= Y(Edge) - BodyRetarget.TuckBand - 1e-4f, $"skin drawn down to y {lowest}");
+
+        // [AC-coatee-strap-slit-6] Counted apart from the open skin inside the author's own, never in it.
+        Assert.True(report.SeenInto > 0, $"{report}");
+        Assert.Equal(0, report.Opened);
+        Assert.True(report.Opened + report.SeenInto <= report.Tucked);
+        var off = BodyRetarget.WithTuning(new BodyRetarget.Tuning(NoSeeInside: true),
+                                          () => BodyRetarget.SwapSkin(OpenFrontTop(), [Resized(Body())], out var r, tuckSlot: "_top",
+                                                                      seeInside: true) is { } m ? (m, r) : default);
+        Assert.Equal(0, off.r.SeenInto);
+    }
+
+    [Fact]
+    [Trait("Plan", "AC-coatee-strap-slit-4")]
+    [Trait("Plan", "EDGE-coatee-strap-slit-1")]
+    public void Nothing_is_drawn_where_no_cloth_of_the_garment_lies_behind()
+        => Assert.Equal(0, Swap(Top(_ => 0.015f, clothFrom: Edge), Body(), seeInside: true).Report.Tucked);
+
+    [Fact]
+    [Trait("Plan", "EDGE-coatee-strap-slit-2")]
+    public void Open_skin_over_cloth_seen_from_outside_is_not_drawn()
+        => Assert.Equal(0, Swap(OpenFrontTop(facingOut: false), Body(), seeInside: true).Report.Tucked);
+
+    [Fact]
+    [Trait("Plan", "EDGE-coatee-strap-slit-3")]
+    public void A_back_panel_beyond_reach_draws_nothing_new()
+        => Assert.Equal(0, Swap(OpenFrontTop(backZ: -BodyRetarget.TuckSeeReach - 0.05f), Body(), seeInside: true).Report.Tucked);
+
+    [Fact]
+    [Trait("Plan", "EDGE-coatee-strap-slit-5")]
+    public void Open_skin_seen_inside_is_not_drawn_where_cloth_crowds()
+    {
+        // Cloth 1 mm over the skin across the open rows: nothing there is open, nothing is drawn — with or without.
+        var top = OpenFrontTop(extra: (0, Edge - 1, 0.001f));
+        Assert.Equal(Swap(top, Body()).Model, Swap(top, Body(), seeInside: true).Model);
+        Assert.Equal(0, Swap(top, Body(), seeInside: true).Report.Tucked);
+    }
+
+    [Fact]
+    [Trait("Plan", "EDGE-coatee-strap-slit-6")]
+    public void Arm_skin_seen_inside_is_not_drawn()
+    {
+        var rows = DrawnRows(Swap(OpenFrontTop(), Body(arm: r => r <= 8), seeInside: true).Model);
+        Assert.DoesNotContain(rows.Keys, r => r < 8);
+    }
+
+    [Fact]
+    [Trait("Plan", "EDGE-coatee-strap-slit-7")]
+    public void Pulled_corners_are_left_to_the_pull_when_the_inside_shows()
+    {
+        // As Pulled_corners_are_left_to_the_pull, with the garment's back behind and the rule on.
+        var top = Top((r, c) => c <= 3 ? 0.001f : 0.015f, clothFrom: 5, back: (-0.1f, true, null));
+        var body = Body(splitAt: 9);
+        var (untucked, _) = Swap(top, body, tuck: false);
+        var (model, report) = Swap(top, body, seeInside: true);
+        Assert.True(report.Tucked > 0);
+        var bodyAt = KeysOf(ModelPartReader.Read(body)!, all: true);
+        var before = KeysOf(ModelPartReader.Read(untucked)!);
+        var moved = before.Where(k => !bodyAt.Contains(k)).ToHashSet();
+        Assert.NotEmpty(moved);
+        foreach (var tri in NewTriangles(untucked, model))
+            Assert.DoesNotContain(tri, moved.Contains);
+    }
+
+    [Fact]
+    [Trait("Plan", "EDGE-coatee-strap-slit-8")]
+    public void A_variant_back_panel_does_not_count()
+        => Assert.Equal(0, Swap(OpenFrontTop(backAttr: "atr_tv_a"), Body(), seeInside: true).Report.Tucked);
+
+    [Fact]
+    [Trait("Plan", "EDGE-coatee-strap-slit-9")]
+    public void Unconnected_skin_seen_inside_is_not_drawn()
+    {
+        // A sheet of cloth over rows 9-10, next to the author's edge. 4 mm off it leaves room: the skin under it is tucked,
+        // and from it the open rows below are reached and drawn, row 7 among them. 1 mm off it crowds row 9's corners — and
+        // nothing about rows 6-8's own triangles changes, so rows 7 and below still qualify; they are just not reached.
+        var (open, _) = Swap(OpenFrontTop(extra: (9, 10, 0.004f)), Body(), seeInside: true);
+        Assert.Contains(7, DrawnRows(open).Keys);
+        Assert.Contains(6, DrawnRows(open).Keys);   // row 7's own corners qualify: the 6-7 triangles are drawn
+        var barred = OpenFrontTop(extra: (9, 10, 0.001f));
+        var (model, _) = Swap(barred, Body(), seeInside: true);
+        Assert.Equal(Swap(barred, Body()).Model, model);
+        Assert.DoesNotContain(DrawnRows(model).Keys, r => r < 9);
+    }
+
+    [Fact]
+    [Trait("Plan", "EDGE-coatee-strap-slit-11")]
+    public void No_open_skin_excludes_seeing_inside()
+    {
+        var noOpen = new BodyRetarget.Tuning(NoOpenSkin: true);
+        byte[]? Run(bool see) => BodyRetarget.WithTuning(noOpen,
+            () => BodyRetarget.SwapSkin(OpenFrontTop(), [Resized(Body())], out _, tuckSlot: "_top", seeInside: see));
+        Assert.Equal(Run(false), Run(true));
+    }
+
+    [Fact]
+    [Trait("Plan", "AC-coatee-strap-slit-5")]
+    [Trait("Plan", "EDGE-coatee-strap-slit-12")]
+    public void Default_is_off()
+    {
+        // The fixture is sensitive: with the rule on it draws more. Off — by default, or by the knob — it is as before.
+        var on = Swap(OpenFrontTop(), Body(), seeInside: true).Model;
+        var byDefault = BodyRetarget.SwapSkin(OpenFrontTop(), [Resized(Body())], out _, tuckSlot: "_top");
+        var knob = BodyRetarget.WithTuning(new BodyRetarget.Tuning(NoSeeInside: true),
+            () => RefitCore.PlanRefit(ModelPartReader.Read(OpenFrontTop())!, OpenFrontTop(), [Resized(Body())], "_top",
+                                      across: true, gameGear: true, out _));
+        var gamePlan = RefitCore.PlanRefit(ModelPartReader.Read(OpenFrontTop())!, OpenFrontTop(), [Resized(Body())], "_top",
+                                           across: true, gameGear: true, out _);
+        Assert.NotEqual(byDefault, on);
+        Assert.Equal(0, knob.Report.Swap?.SeenInto ?? 0);
+        Assert.True(gamePlan.Report.Swap?.SeenInto > 0, $"{gamePlan.Report.Swap}");
+        // A modder's garment through the automatic refit: no tuck, nothing drawn where the inside shows.
+        var mod = RefitCore.PlanRefit(ModelPartReader.Read(OpenFrontTop())!, OpenFrontTop(), [Resized(Body())], "_top",
+                                      across: true, gameGear: false, out _);
+        Assert.True(mod.Report.Swap is { Tucked: 0, SeenInto: 0 }, $"{mod.Report.Swap}");
+    }
+
+    [Fact]
+    [Trait("Plan", "AC-coatee-strap-slit-6")]
+    [Trait("Plan", "EDGE-coatee-strap-slit-20")]
+    public void The_log_says_where_the_inside_would_show_only_with_the_rule()
+    {
+        var bytes = OpenFrontTop();
+        var garment = ModelPartReader.Read(bytes)!;
+        var on = new List<string>();
+        RefitCore.PlanRefit(garment, bytes, [Resized(Body())], "_top", across: true, gameGear: true, out _, log: on.Add);
+        var line = Assert.Single(on, l => l.StartsWith("skin tucked: ", StringComparison.Ordinal));
+        Assert.Matches(@"^skin tucked: \d+ triangles of the new body under the cloth past the author's edge \(\d+ in the open, "
+                       + @"inside the author's skin; \d+ in the open where the garment's inside would show\)$", line);
+
+        // Off, the line is build 1357's, word for word.
+        var loose = LooseTop(looseFrom: 7);
+        var off = new List<string>();
+        BodyRetarget.WithTuning(new BodyRetarget.Tuning(NoSeeInside: true),
+            () => RefitCore.PlanRefit(ModelPartReader.Read(loose)!, loose, [Resized(Body())], "_top", across: true,
+                                      gameGear: true, out _, log: off.Add));
+        var plain = Assert.Single(off, l => l.StartsWith("skin tucked: ", StringComparison.Ordinal));
+        Assert.Matches(@"^skin tucked: \d+ triangles of the new body under the cloth past the author's edge \(\d+ in the open, "
+                       + @"inside the author's skin\)$", plain);
+    }
+
+    [Fact]
+    [Trait("Plan", "EDGE-coatee-strap-slit-13")]
+    public void Seeing_inside_is_deterministic()
+    {
+        Assert.Equal(Swap(OpenFrontTop(), Body(), seeInside: true).Model, Swap(OpenFrontTop(), Body(), seeInside: true).Model);
+        Assert.Equal(DrawnRows(Swap(OpenFrontTop(), Body(halvesAt: 8), seeInside: true).Model),
+                     DrawnRows(Swap(OpenFrontTop(), Body(halvesAt: 8, reversed: true), seeInside: true).Model));
+    }
+
+    [Fact]
+    [Trait("Plan", "EDGE-coatee-strap-slit-16")]
+    public void Existing_fixtures_are_unchanged()
+    {
+        // Hashes taken before the back panel was added to the builder (build 1357's fixtures).
+        Assert.Equal("4A362692BD210BDC6438901A70283D3E7B6AEC09C6FDF0E57BAC78CB008806EA", Sha(LooseTop(looseFrom: 7)));
+        Assert.Equal("A6A24138B1AE266ACE8D92A1C1E246E91A06097C9783A01DA52456FC731CBAC8", Sha(Top(_ => 0.015f, clothFrom: Edge)));
+        Assert.Equal("FFA83A0B19CB570F98BB6D567AA759FC787C79A24BDB66C5B5E8429C07656640", Sha(Body()));
+    }
+
+    [Fact]
+    [Trait("Plan", "EDGE-coatee-strap-slit-17")]
+    public void A_triangle_with_a_corner_only_the_inside_let_in_is_not_counted_as_open()
+    {
+        // Corners 0-1 only the laid skin's span let in, 2-3 only the garment's inside, 4-5 the cloth over them.
+        bool[] open = [true, true, false, false, false, false];
+        bool[] seen = [false, false, true, true, false, false];
+        Assert.Equal((1, 0), BodyRetarget.CountOpen([(0, 1, 4)], open, seen));   // span only: inside the author's skin
+        Assert.Equal((0, 1), BodyRetarget.CountOpen([(2, 3, 4)], open, seen));   // the inside only
+        Assert.Equal((0, 1), BodyRetarget.CountOpen([(0, 2, 4)], open, seen));   // both: where the inside shows, not open
+        Assert.Equal((0, 0), BodyRetarget.CountOpen([(4, 5, 4)], open, seen));   // under the cloth
+        Assert.Equal((1, 2), BodyRetarget.CountOpen([(0, 1, 4), (2, 3, 4), (0, 2, 4), (4, 5, 4)], open, seen));
+
+        // And on the sheet: every triangle the rule draws is counted there; with it off the same fixture opens nothing.
+        var (_, on) = Swap(OpenFrontTop(), Body(), seeInside: true);
+        var (_, off) = Swap(OpenFrontTop(), Body());
+        Assert.Equal(on.Tucked, on.SeenInto);
+        Assert.Equal(0, on.Opened);
+        Assert.Equal(0, off.Opened);
     }
 
     // ── helpers ──

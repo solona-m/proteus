@@ -89,34 +89,22 @@ public sealed class ModCreationService
 
     /// <summary>
     /// <see cref="MaterialTargetsFor"/> with the catalogue passed in, so it can be exercised offline. The picked path
-    /// always comes first, and only races in its <see cref="SkinLayoutGroup"/> are added.
+    /// always comes first, and only races in its <see cref="SkinLayouts.GroupOf(string)"/> group are added.
     /// </summary>
     internal static IReadOnlyList<string> ExpandToAllRaces(string materialTarget, Func<string, IReadOnlyList<string>> forSuffix)
     {
         var picked = BodySkinMaterial.Match(materialTarget);
-        if (!picked.Success || SkinLayoutGroup(picked.Groups["race"].Value) is not { } group) return [materialTarget];
+        if (!picked.Success || SkinLayouts.GroupOf(picked.Groups["race"].Value) is not { } group) return [materialTarget];
 
         var all = new List<string> { materialTarget };
         foreach (var path in forSuffix(picked.Groups["suffix"].Value))
         {
             var m = BodySkinMaterial.Match(path);
-            if (!m.Success || SkinLayoutGroup(m.Groups["race"].Value) != group) continue;
+            if (!m.Success || SkinLayouts.GroupOf(m.Groups["race"].Value) != group) continue;
             if (!all.Contains(path, StringComparer.OrdinalIgnoreCase)) all.Add(path);
         }
         return all;
     }
-
-    /// <summary>
-    /// Which races' bodies share a skin UV layout, by the race code's first two digits: every female body shares one
-    /// (Hrothgar included), every male body another. Null for a body with its own layout that shares with no one:
-    /// Lalafell of either sex (11, 12) and male Hrothgar (15).
-    /// </summary>
-    private static char? SkinLayoutGroup(string race) => int.Parse(race) switch
-    {
-        11 or 12 or 15 => null,
-        var r when r % 2 == 0 => 'F',
-        _ => 'M',
-    };
 
     /// <summary>
     /// The player's currently-loaded body skin material, or null when nothing is detected (player not drawn yet).
@@ -224,7 +212,9 @@ public sealed class ModCreationService
     /// Whether a resolved disk path is a file Proteus itself published into the managed mod. A cheap prefix test;
     /// an unanswerable path reads as not ours.
     /// </summary>
-    private bool IsOwnOutput(string? diskPath) => IsOwnOutputUnder(diskPath, penumbra.GetModDirectory());
+    private bool IsOwnOutput(string? diskPath)
+        => IsOwnOutputUnder(diskPath, penumbra.GetModDirectory())
+        || compositor.IsUnderManagedAlias(diskPath);   // a renamed copy of the managed mod, still on
 
     /// <summary>
     /// <see cref="IsOwnOutput"/> against a given mods root. A live brush preview shared in the managed mod is the

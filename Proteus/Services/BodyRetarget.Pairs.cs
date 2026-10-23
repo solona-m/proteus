@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using System.IO;
 using Proteus.Localization;
@@ -21,14 +22,36 @@ internal static partial class BodyRetarget
     /// when every part is drawn.</param>
     /// <param name="targetMask">The same, for the target body.</param>
     /// <param name="uvRemap">Only needed when the two bodies use different texture layouts.</param>
+    /// <param name="targetMale">The target body's sex when it is not the garment's: a refit for the other sex (see
+    /// <see cref="CrossSexRefit"/>). Null reads both as <paramref name="male"/>.</param>
     internal static string? BuildPair(string slot, string sourcePath, string targetPath, string name, bool male,
                                       ushort? sourceMask, ushort? targetMask, UVRemapService? uvRemap,
-                                      out SlotPair pair)
+                                      out SlotPair pair, bool? targetMale = null)
     {
+        return BuildPair(slot, File.ReadAllBytes(sourcePath), File.ReadAllBytes(targetPath), name, male, sourceMask,
+                         targetMask, uvRemap, out pair, BodyMaterialReader(targetPath), targetMale);
+    }
+
+    /// <inheritdoc cref="BuildPair(string, string, string, string, bool, ushort?, ushort?, UVRemapService?, out SlotPair)"/>
+    /// <param name="targetMaterial">Reads the target body mod's materials (see <see cref="SlotPair.TargetMaterial"/>);
+    /// null when there is no mod to read them from.</param>
+    internal static string? BuildPair(string slot, byte[] sourceBytes, byte[] targetBytes, string name, bool male,
+                                      ushort? sourceMask, ushort? targetMask, UVRemapService? uvRemap,
+                                      out SlotPair pair, Func<string, byte[]?>? targetMaterial = null,
+                                      bool? targetMale = null)
+        => BuildPair(slot, sourceBytes, targetBytes, name, male, sourceMask, targetMask, uvRemap, out pair, out _,
+                     targetMaterial, targetMale);
+
+    /// <inheritdoc cref="BuildPair(string, byte[], byte[], string, bool, ushort?, ushort?, UVRemapService?, out SlotPair, Func{string, byte[]}?, bool?)"/>
+    /// <param name="stats">How the two bodies' skin landed on each other; null for the same mesh.</param>
+    internal static string? BuildPair(string slot, byte[] sourceBytes, byte[] targetBytes, string name, bool male,
+                                      ushort? sourceMask, ushort? targetMask, UVRemapService? uvRemap,
+                                      out SlotPair pair, out UvAtlasCorrespondence.Stats? stats,
+                                      Func<string, byte[]?>? targetMaterial = null, bool? targetMale = null)
+    {
+        stats = null;
         pair = default;
 
-        var sourceBytes = File.ReadAllBytes(sourcePath);
-        var targetBytes = File.ReadAllBytes(targetPath);
         var source = ModelPartReader.Read(sourceBytes);
         var target = ModelPartReader.Read(targetBytes);
         if (source == null || target == null) return string.Format(Strings.Parts.RetargetUnreadableFmt, name);
@@ -36,10 +59,12 @@ internal static partial class BodyRetarget
         target = Drawn(target, slot, targetMask, out var targetHidden);
 
         if (!BodyCorrespondence.TryBuild(source, Uv(sourceBytes), target, Uv(targetBytes), name,
-                                         out var correspondence, out string refusal, uvRemap, male))
+                                         out var correspondence, out string refusal, out stats, uvRemap, male, targetMale))
             return refusal;
 
-        pair = new SlotPair(slot, correspondence!, target, targetBytes, sourceBytes, targetHidden);
+        pair = new SlotPair(slot, correspondence!, target, targetBytes, sourceBytes, targetHidden,
+                            TargetMaterial: targetMaterial,
+                            SourceIsGameChest: slot == "_top" && VanillaBodyCatalog.IsGameModel(sourceBytes, slot));
         return null;
     }
 

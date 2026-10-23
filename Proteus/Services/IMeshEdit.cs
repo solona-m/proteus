@@ -9,9 +9,9 @@ namespace Proteus.Services;
 /// <para/>
 /// Extracted so that a pass whose rules are the OPPOSITE of the brush's can be written from nothing rather than as a
 /// mode inside <see cref="MeshVolumeSolve"/>. The body retarget is that pass: it must move the garment's own embedded
-/// body-skin mesh, which the brush must never move (<c>MeshVolumeSolve.Settle</c> zeroes every skin node's delta, and
-/// eight brush-stroke methods skip skin outright). A flag threaded through nine sites, eight of them in code the
-/// retarget never runs, is the mistake that <c>UnfoldTriangles</c> already taught this codebase once.
+/// body-skin mesh by rules of its own. The brush holds skin still unless the user asks for "Move skin too", and then by
+/// one rule (<c>MeshVolumeSolve.Held</c>) captured once per operation — not a flag threaded through every site, the
+/// mistake that <c>UnfoldTriangles</c> already taught this codebase once.
 /// </summary>
 internal interface IMeshEdit
 {

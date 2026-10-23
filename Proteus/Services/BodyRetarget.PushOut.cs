@@ -101,12 +101,17 @@ internal static partial class BodyRetarget
                     madeEdges.Add(new(() => SkinEdges.OfWorn(source), System.Threading.LazyThreadSafetyMode.ExecutionAndPublication));
                     continue;
                 }
-                var model = before ? pair.Correspondence.Source : pair.Target;
-                var body = new BodySurface(model, BodySurface.CellFor(MeanEdgeOf(model)));
+                // As worn on a pair whose new body draws smallclothes in place of skin, before and after alike: a top's
+                // hem stays out of Muse+'s boxers, and is judged as authored against the old body's own smallclothes.
+                var body = before ? pair.SourceSurface() : pair.TargetSurface();
                 if (body.IsEmpty) continue;
                 surfaces.Add(body);
                 witnessed.Add(!(garmentSlot == "_dwn" && pair.Slot == "_top"));
-                edges.Add(EdgesOf(model));
+                var slot = pair;
+                edges.Add(slot.Worn
+                              ? new(() => before ? slot.SourceEdges() : slot.TargetEdges(),
+                                    System.Threading.LazyThreadSafetyMode.ExecutionAndPublication)
+                              : EdgesOf(before ? pair.Correspondence.Source : pair.Target));
             }
 
             if (garmentSkin != null)
@@ -1116,7 +1121,7 @@ internal static partial class BodyRetarget
                     int b = skin.BoneIndices[v * XivLiveMesh.SkinnedMesh.MaxInfluences + k];
                     if (x > 0f && b < skin.BoneNames.Length && isBone(skin.BoneNames[b])) share[v] += x;
                 }
-            bodies.Add((new BodySurface(pair.Target, BodySurface.CellFor(MeanEdgeOf(pair.Target))), share));
+            bodies.Add((pair.TargetSurface(), share));
         }
         if (bodies.Count == 0) return null;
         return p =>

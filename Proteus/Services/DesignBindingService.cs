@@ -2653,6 +2653,31 @@ public class DesignBindingService : IDisposable
         });
     }
 
+    /// <summary>
+    /// The mod was renamed in Penumbra: every binding's record of it, the live design override, and the temporary
+    /// holds and guards on it follow it. Framework thread, like the holds it touches.
+    /// </summary>
+    public void MoveMod(string oldDir, string newDir)
+    {
+        int records;
+        lock (gate)
+        {
+            records = ModMoveMigration.Bindings(store, oldDir, newDir);
+            if (records > 0) SaveDeferred();
+        }
+
+        bool look = overrides.RenameMod(oldDir, newDir);
+        bool held = ModMoveMigration.MoveHeld(heldTemporary, oldDir, newDir);
+        ModMoveMigration.RekeySet(temporaryGuardMods, oldDir, newDir);
+        ModMoveMigration.RekeyKey(temporaryGuardClears, oldDir, newDir);
+        ModMoveMigration.RekeySet(postLoadSweepBound, oldDir, newDir);
+        ModMoveMigration.RekeySet(postLoadSweepProteus, oldDir, newDir);
+
+        if (records > 0 || look || held)
+            log.Information("[Proteus] design-binding: {0} renamed to {1} — {2} binding record(s) follow it{3}{4}",
+                oldDir, newDir, records, look ? ", live override moved" : "", held ? ", temporary hold moved" : "");
+    }
+
     private void Save()
     {
         try

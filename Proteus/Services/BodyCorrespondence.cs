@@ -15,7 +15,9 @@ namespace Proteus.Services;
 /// genuinely no way to say which point is which. Two layouts a transfer map or the gen2 affine converts between are
 /// mapped through it; a mirrored layout's body (gen2) is judged there by how much of its skin's surface lands — counting
 /// only the landings the skin around them agrees with — and the skin its target's layout has no place for follows the
-/// skin around it.
+/// skin around it. A body option that draws underwear where the other body has skin — Muse+'s SFW legs model boxers
+/// with the skin cut away under them — is in one layout too: the skin with no place there follows the skin around it
+/// onto that underwear, and the rest of the refit reads the target as it is worn.
 /// <para/>
 /// This replaced a guard that refused any pair that was not the same mesh. That was the wrong kind of answer: the pair
 /// that first hit it was two Neolithe chests with identical structure and 98.8% of their uvs in common, and every
@@ -30,11 +32,26 @@ internal static class BodyCorrespondence
     /// <param name="male">Both bodies are men's — known from the models' game paths, which the caller has (see
     /// <see cref="BodySizeCatalog.For(string, string?)"/>, which never offers a body of the other sex). Never from the
     /// skin material: a body mod may name a woman's skin <c>mt_c0101b0001_bibo</c> (Tre does), since the game swaps
-    /// the race code for the wearer's own.</param>
+    /// the race code for the wearer's own. With <paramref name="targetMale"/>, the source's sex alone.</param>
+    /// <param name="targetMale">The target body's sex, when it is not the source's: a refit for the other sex (see
+    /// <see cref="CrossSexRefit"/>). Null — every caller but that one — reads both as <paramref name="male"/>.</param>
     public static bool TryBuild(ModelParts source, float[] sourceUv, ModelParts target, float[] targetUv, string what,
                                 out IBodyCorrespondence? correspondence, out string refusal,
-                                UVRemapService? uvRemap = null, bool male = false)
+                                UVRemapService? uvRemap = null, bool male = false, bool? targetMale = null)
+        => TryBuild(source, sourceUv, target, targetUv, what, out correspondence, out refusal, out _, uvRemap, male, targetMale);
+
+    /// <summary>As above, also giving how the atlas landed (null for an identity match).</summary>
+    internal static bool TryBuild(ModelParts source, float[] sourceUv, ModelParts target, float[] targetUv, string what,
+                                  out IBodyCorrespondence? correspondence, out string refusal,
+                                  out UvAtlasCorrespondence.Stats? stats,
+                                  UVRemapService? uvRemap = null, bool male = false, bool? targetMale = null)
     {
+        stats = null;
+        bool tMale = targetMale ?? male;
+        if (male != tMale)
+            return TryBuildAcrossSexes(source, sourceUv, target, targetUv, what, out correspondence, out refusal,
+                                       out stats, uvRemap, male, tMale);
+
         // A body may store its uvs a whole tile away from another's — Bibo+'s legs run -0.67..-0.02 where Neolithe's
         // run 0.02..0.98. The sheet repeats, so both draw the same texture, but compared literally they have nothing in
         // common: the pair was refused as two layouts, which is what sent a stocking to be refitted on the feet alone.
@@ -82,13 +99,64 @@ internal static class BodyCorrespondence
         }
 
         if (UvAtlasCorrespondence.TryBuild(source, sourceUv, target, targetUv, what, out var atlas, out refusal, convert,
-                                           onSheet, byArea))
+                                           onSheet, byArea, sameLayout: from != null && from == to))
         {
             correspondence = atlas;
             return true;
         }
 
         correspondence = null;
+        return false;
+    }
+
+    /// <summary>
+    /// A women's body and a men's matched for a refit across the sexes: always through the bibo↔TBSE maps, one hop, and
+    /// never as the same mesh — a body mod's two sexes can share a topology without sharing a shape, and an identity
+    /// match would carry the garment across untouched.
+    /// </summary>
+    private static bool TryBuildAcrossSexes(ModelParts source, float[] sourceUv, ModelParts target, float[] targetUv,
+                                            string what, out IBodyCorrespondence? correspondence, out string refusal,
+                                            out UvAtlasCorrespondence.Stats? stats, UVRemapService? uvRemap,
+                                            bool sourceMale, bool targetMale)
+    {
+        correspondence = null;
+        stats = null;
+        sourceUv = SameTile(sourceUv);
+        targetUv = SameTile(targetUv);
+        string? from = LayoutOf(source, sourceMale), to = LayoutOf(target, targetMale);
+        string? women = sourceMale ? to : from, men = sourceMale ? from : to;
+        if (from == null || to == null || women == null || men == null || !CrossSexRefit.LayoutsPair(women, men))
+        {
+            refusal = string.Format(Loc.Localize("Parts.Retarget.Refuse.CrossSexLayout.Fmt",
+                          "Across the sexes, Proteus can only match women's bodies in the Bibo+ or game layout to men's " +
+                          "bodies in the TBSE or game layout. The {0} models use {1} and {2}."),
+                          what, from ?? "?", to ?? "?");
+            return false;
+        }
+
+        var convert = uvRemap?.UvConverter(from, to, unmirror: true, fold: true);
+        if (convert == null)
+        {
+            // On disk but unreadable is a map that failed, not one still to come.
+            refusal = uvRemap?.MenMapsPresent() == true
+                ? string.Format(Loc.Localize("Parts.Retarget.Refuse.NoLayoutMap.Fmt",
+                      "The {0} models use different texture layouts ({1} and {2}), and Proteus has no map " +
+                      "between them, so there is no way to tell which point of one body is which point of the " +
+                      "other."), what, from, to)
+                : Loc.Localize("Parts.Retarget.Refuse.MenMapsMissing",
+                      "The body maps a refit across the sexes needs aren't here yet. Proteus is downloading them; " +
+                      "refit again once they've arrived.");
+            return false;
+        }
+        var onSheet = uvRemap!.UvConverter(from, to, unmirror: true, fold: true, reach: OnSheetReach);
+
+        if (UvAtlasCorrespondence.TryBuild(source, sourceUv, target, targetUv, what, out var atlas, out refusal,
+                                           out var measured, convert, onSheet, byArea: false, sameLayout: false))
+        {
+            correspondence = atlas;
+            stats = measured;
+            return true;
+        }
         return false;
     }
 

@@ -27,7 +27,8 @@ namespace Proteus.Refit;
 /// to one legs option of the target mod for every size (<c>--legs-to</c>).
 /// <para/>
 /// Writes <c>&lt;out-dir&gt;/&lt;label&gt;.mdl</c> for each target and one JSON report on stdout. A refused size is in the
-/// report with its reason and no file; the exit code is non-zero only when nothing could run at all.
+/// report with its reason and no file (under <c>refusal</c>, as every refused size is); the exit code is non-zero only
+/// when nothing could run at all.
 /// </summary>
 internal static class Program
 {
@@ -56,6 +57,16 @@ internal static class Program
         Proteus.Refit --measure --garment <model.mdl> --bodies <body.mdl>[;<body.mdl>...]
         Proteus.Refit --measure --garment <model.mdl>     (cloth points within 2 mm rigged apart)
         Proteus.Refit --measure --skin-out --garment <model.mdl>     (the garment's skin standing outside its cloth)
+        Proteus.Refit --bake-uvmaps --game <FFXIV game\sqpack> --bibo-root <Bibo+ folder> --tbse-root <TBSE folder>
+                      --out-dir <dir> [--report-only]
+                      (the bibo<->TBSE transfer maps; a JSON report on stdout, exit 1 when the quality gate fails)
+        Proteus.Refit --garment <model.mdl> --race 0101|0201 --for-race 0201|0101
+                      --from-root <body mod it was made on> --body-root <other sex's body mod>
+                      --from <rel> --to <rel>=<label>[,...] --out-dir <dir>
+                      --game <FFXIV game\sqpack> --uvmaps <Proteus plugin dir> [--skeleton <base .sklb>]
+                      [--from-skeleton <drawn race's base .sklb>]
+                      [--slot _top|_dwn] [--set <id>] [--no-push] [--piercings]
+                      (refit for the other sex: chest and legs garments, both ways)
         """;
 
     private static int Main(string[] args)
@@ -66,6 +77,9 @@ internal static class Program
         try
         {
             var opts = Parse(args);
+            if (opts.ContainsKey("bake-uvmaps")) return BakeUvMapsCommand.Run(opts, Required);
+            if (opts.ContainsKey("for-race"))
+                return CrossSexCommand.Run(opts, Required, message => throw new UsageException(message), NullLog());
             if (opts.ContainsKey("list")) return List(opts);
             if (opts.ContainsKey("inspect")) return Inspect(opts);
             if (opts.ContainsKey("detect") && opts.ContainsKey("mods-root")) return DetectAcross(opts);
@@ -1152,6 +1166,7 @@ internal static class Program
                     "NoNippleSmooth" => tuning with { NoNippleSmooth = true },
                     "NoSnapPush" => tuning with { NoSnapPush = true },
                     "NoOpenEdgeFit" => tuning with { NoOpenEdgeFit = true },
+                    "NoCrotchEase" => tuning with { NoCrotchEase = true },
                     _ => throw new UsageException($"Unknown --tune knob \"{knob}\"."),
                 };
             // The passes that explain themselves, on stderr: stdout is the JSON report.
@@ -1160,8 +1175,22 @@ internal static class Program
                 replaceSkin: true, acrossBodies: acrossBodies, cutHidden: !opts.ContainsKey("whole"),
                 keepShape: keepShape, log: line => Console.Error.WriteLine($"{label}: {line}"),
                 carryPiercings: RetargetInputs.CliCarryPiercings(opts)));
-            string written = Path.Combine(outDir, label + ".mdl");
-            File.WriteAllBytes(written, planned.Model);
+            // A model that draws the new body's underwear needs that material published beside it, under the garment's
+            // name for it, by a mod: a lone .mdl here would draw it with a material the game cannot find.
+            if (planned.Materials is { Count: > 0 } materials)
+            {
+                sizes.Add(new
+                {
+                    label, to = option.Rel,
+                    refusal = "this refit brings in the new body's underwear (" +
+                              string.Join(", ", materials.Select(m => m.From)) +
+                              "), whose material has to be saved into the mod beside the model; the command line " +
+                              "cannot do that — refit it in the Studio",
+                });
+                continue;
+            }
+            string writtenPath = Path.Combine(outDir, label + ".mdl");
+            File.WriteAllBytes(writtenPath, planned.Model);
 
             var r = planned.Report;
             sizes.Add(new
@@ -1172,7 +1201,7 @@ internal static class Program
                 legsNote,
                 chestTo,
                 chestNote,
-                written,
+                written = writtenPath,
                 report = new
                 {
                     nodes = r.Nodes, snapped = r.Snapped, transferred = r.Transferred, missed = r.Missed,
@@ -1201,6 +1230,8 @@ internal static class Program
             sizes,
         };
         Console.WriteLine(JsonSerializer.Serialize(result, new JsonSerializerOptions { WriteIndented = true }));
+        // Refused sizes are in the report, as they always were: ModPacker reads them there and treats any non-zero exit
+        // as the tool failing, so a size list all of whose sizes were refused is still a run that worked.
         return 0;
     }
 
@@ -1270,7 +1301,7 @@ internal static class Program
             if (!args[i].StartsWith("--", StringComparison.Ordinal))
                 throw new UsageException($"Unexpected argument \"{args[i]}\".");
             string key = args[i][2..];
-            opts[key] = key is "list" or "detect" or "finish" or "inspect" or "save" or "measure" or "no-push" or "whole" or "piercings" or "keep-default" or "shares" or "time" or "bands" or "skin-map" or "skin-side" or "off" or "islands" or "face-poke" or "skin-out" ? "" : i + 1 < args.Length ? args[++i] : throw new UsageException($"--{key} needs a value.");
+            opts[key] = key is "list" or "detect" or "finish" or "inspect" or "save" or "measure" or "no-push" or "whole" or "piercings" or "keep-default" or "shares" or "time" or "bands" or "skin-map" or "skin-side" or "off" or "islands" or "face-poke" or "skin-out" or "bake-uvmaps" or "report-only" ? "" : i + 1 < args.Length ? args[++i] : throw new UsageException($"--{key} needs a value.");
         }
         return opts;
     }
@@ -1428,7 +1459,7 @@ internal static class Program
         };
     }
 
-    private sealed class UsageException(string message) : Exception(message);
+    internal sealed class UsageException(string message) : Exception(message);
 }
 
 /// <summary>The body of <c>Program.NullLog</c>. Public and unsealed, as <see cref="DispatchProxy"/> requires.</summary>

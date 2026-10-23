@@ -240,6 +240,19 @@ public class Configuration : IPluginConfiguration
     public bool HairPortFullScanDone { get; set; }
 
     /// <summary>
+    /// When a Miqo'te wears a hair mod whose hairstyle has cat ears, point the mod's redirect at an earless copy of it
+    /// (<c>HairPortWatcher</c>, <c>EarlessHairWriter</c>); turning it off points every one back. Off by default; a
+    /// missing property reads off, so no migration. Works with <see cref="AutoHairPort"/> on or off.
+    /// </summary>
+    public bool EarlessMiqoteHair { get; set; }
+
+    /// <summary>
+    /// <see cref="EarlessMiqoteHair"/> was turned off and the pass putting the ears back on every mod has not finished
+    /// yet: kept across a restart, so a pass Penumbra was not there for, or that was busy, still runs.
+    /// </summary>
+    public bool EarlessRestorePending { get; set; }
+
+    /// <summary>
     /// Fit a hairstyle whose author already gave it hat support too, discarding theirs (<c>shp_hib</c> and
     /// <c>atr_kam</c>) for Proteus's own. Off by default: an author's hand-made press is usually the better one.
     /// Switching it off in Settings > Hair puts the author's version back, from the backup, on every hairstyle it
@@ -422,6 +435,17 @@ public class Configuration : IPluginConfiguration
     /// </summary>
     public bool OverlaysVanillaFor(string modDir) =>
         !SiblingSynthesis.TryGetValue(modDir, out var m) || m != SiblingSynthesisMode.Off;
+
+    /// <summary>Mods the user switched "Overlay on men" OFF for, keyed by mod directory. Empty by default, so every mod is
+    /// on and a config from before the switch reads as all on — no migration. OrdinalIgnoreCase, which survives
+    /// deserialization (populated in place, like <see cref="AmbientOcclusionDisabledMods"/>).</summary>
+    public HashSet<string> MenOverlayOffMods { get; set; } = new(StringComparer.OrdinalIgnoreCase);
+
+    /// <summary>
+    /// Whether a mod's women's art is painted on a man (in his own layout, through the men's body maps): on unless
+    /// switched off for this mod. Art made for men is never affected.
+    /// </summary>
+    public bool OverlaysMenFor(string modDir) => !MenOverlayOffMods.Contains(modDir);
 
     /// <summary>Per-mod cache of whether it ships body material redirects, keyed by mod directory. Invalidated by
     /// Fingerprint (size + mtime of the mod's manifests); spares the compositor a resource-tree walk.</summary>

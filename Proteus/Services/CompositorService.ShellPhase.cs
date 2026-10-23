@@ -46,7 +46,7 @@ public partial class CompositorService
                 }
 
                 run.compositor._channelContributions = run.nextChannelContributions;
-                run.compositor._skinGlowTargets      = run.nextSkinGlowTargets;
+                run.compositor._skinGlowTargets      = run.compositor.Ledgered(run.nextSkinGlowTargets);
 
                 // ── Second skin: one gear shell per Layer:Gear overlay ────────────
                 // Built from the body model the character is currently drawing (resolved live through Penumbra).
@@ -108,6 +108,8 @@ public partial class CompositorService
                             Layer          = OverlayLayer.Gear,
                             IsMaskShell    = true,
                             SourceBodyType = seed.Overlay.Descriptor.SourceBodyType,
+                            // On a man, a woman's art's paths, so its mask is carried into his layout (or held) like the art.
+                            MaterialGamePaths = WomensArtOnMen.MaskShellPathsFor(seed.Overlay.Descriptor, run.wearerIsMan),
                             Shader         = md?.Shader,
                             Scroll         = md?.Scroll,
                             ScrollSpeedX   = md?.ScrollSpeedX,
@@ -328,7 +330,9 @@ public partial class CompositorService
                     // The size the prefetch above warmed at — see `gs`.
                     shellTexSize: gs,
                     equippedSlotVariants: slotVariants,
-                    hiddenParts: hiddenParts);
+                    hiddenParts: hiddenParts,
+                    wearerIsMan: run.wearerIsMan, menMapsReady: run.menMapsReady, menAllowed: run.OverlaysMenFor);
+                run.shellAllHeld = run.compositor.secondSkin.LastBuildHeldAll;
             }
 
             private void ApplyShells()

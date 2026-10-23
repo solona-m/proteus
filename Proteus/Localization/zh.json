@@ -543,6 +543,14 @@
     "message": "\n全局设置——它不属于你正在编辑的绑定。",
     "description": ""
   },
+  "Colors.Bodies.Men.Label": {
+    "message": "叠加到男性身上",
+    "description": "Checkbox label in the colour-table editor window's Advanced section, under \"Overlay gen2/vanilla\". Ticked = this mod's women's art is also painted on men."
+  },
+  "Colors.Bodies.Men.Tip": {
+    "message": "将此模组的女性图案也绘制到男性身上（TBSE 或男性原版身体），\n通过男性身体映射图转换到他自己的布局。\n为男性制作的图案永远不会被改动。\n适用于整个模组，而不仅是此选项。",
+    "description": "Tooltip for the checkbox above. \"TBSE\" is a body-mod name - never translated. Contains deliberate line breaks - keep the same number, moving them where your language needs."
+  },
   "Colors.Bodies.Vanilla.Label": {
     "message": "叠加到 gen2/原版",
     "description": "Checkbox label in the colour-table editor window's Advanced section. \"gen2\" is a body-mod name - never translated. Ticked = this mod is also painted onto vanilla skin."
@@ -2331,6 +2339,10 @@
     "message": "它的遮罩被设置为按装备渲染，而衣物需要用遮罩来构建——但在 Penumbra 中它的“{0}”组里没有勾选任何内容。",
     "description": ""
   },
+  "Mods.Inert.AwaitingMenMaps": {
+    "message": "此模组的图案是为女性身体制作的。男性身体映射图下载完成后，就会以你自己的布局绘制到你身上（如果下载失败，请从 UV 映射图提示处重试）。",
+    "description": "Why an enabled mod paints nothing yet: it is women's art on a man, waiting for the men's body maps to download. \"UV maps\" names the notice in the plugin's status window."
+  },
   "Mods.Inert.NothingReached": {
     "message": "已勾选的选项都已解析，但没有一个抵达此角色已加载的表面。",
     "description": ""
@@ -2623,8 +2635,8 @@
     "message": "移动后的部件仍跟随原本的骨骼，离骨骼太远时在某些姿势下可能会弯曲异常。",
     "description": ""
   },
-  "Parts.Move.SkinTip": {
-    "message": "皮肤无法移动。",
+  "Parts.Move.SkinOff.Tip": {
+    "message": "打开“同时移动皮肤”即可移动皮肤。",
     "description": ""
   },
   "Parts.Move.LockedTip": {
@@ -2855,8 +2867,48 @@
     "message": "左右镜像",
     "description": ""
   },
-  "Parts.Brush.Mirror.Tip": {
-    "message": "以身体中心为轴，同时镜像涂抹两侧。",
+  "Parts.Mirror.Tip": {
+    "message": "以身体中心为轴，同时镜像编辑两侧。笔刷也会涂抹镜像侧；移动、旋转和缩放会以镜像方式移动另一侧对应的布料（开启“同时移动皮肤”时也包括对应的皮肤）。本身左右对称的部件会保持居中。",
+    "description": "Tooltip on the Mirror left/right checkbox, shown under the brushes and under Move, Rotate and Scale."
+  },
+  "Parts.Move.Mirror.Paired.Fmt": {
+    "message": "镜像：所选 {1:N0} 个点中有 {0:N0} 个在另一侧有对应点。",
+    "description": "{0} is how many selected points matched a point on the other side; {1} is how many points are selected."
+  },
+  "Parts.Move.Mirror.Held.Fmt": {
+    "message": "其中 {0:N0} 个对应点已锁定，保持不动。",
+    "description": "{0} is how many of the matching points are locked."
+  },
+  "Parts.Move.Mirror.None": {
+    "message": "镜像：另一侧没有与此选择对应的部分，因此只移动这一侧。",
+    "description": "Shown under Move, Rotate and Scale with Mirror on when nothing matched."
+  },
+  "Parts.Move.Mirror.Centred": {
+    "message": "镜像：此选择本身左右对称，因此作为一个整体移动并保持居中。横向移动和横向旋转会被忽略。",
+    "description": "Shown under Move, Rotate and Scale with Mirror on when the selection crosses the centre and mirrors itself."
+  },
+  "Parts.SkinMoves": {
+    "message": "同时移动皮肤",
+    "description": ""
+  },
+  "Parts.SkinMoves.Tip": {
+    "message": "让笔刷以及移动、旋转、缩放除了衣物之外也能移动身体的皮肤。贴在皮肤上的衣物（约 3 厘米以内）会随皮肤一起移动，身体不会穿出来；更远的衣物保持不动。关闭时，皮肤完全停留在作者放置的位置。\n\n笔刷会让这个部件与下一个部件相接处的皮肤边缘保持不动。在那里用移动、旋转或缩放移动皮肤，可能会在腰部、手腕或颈部留下缝隙。\n\n体型尺寸和自动适配会用新体型的皮肤替换装备的皮肤，因此雕塑过的皮肤在适配后不会保留。",
+    "description": ""
+  },
+  "Parts.SkinMoves.NotThisBrush.Tip": {
+    "message": "搭桥和风笔刷只作用于衣物；其下的皮肤保持不动。",
+    "description": ""
+  },
+  "Parts.SkinMoves.Preparing": {
+    "message": "正在准备皮肤…",
+    "description": ""
+  },
+  "Parts.SkinMoves.BodyModel.Warn": {
+    "message": "这是一个体型。为它制作的装备是按它的精确形状识别的，雕塑之后，体型尺寸和自动适配可能无法再判断这些装备是为哪个体型制作的。",
+    "description": ""
+  },
+  "Parts.SkinMoves.Failed": {
+    "message": "无法准备皮肤，因此皮肤保持不动。原因见日志。",
     "description": ""
   },
   "Parts.Brush.Lock.Hint": {
@@ -2875,8 +2927,8 @@
     "message": "全部解锁",
     "description": ""
   },
-  "Parts.Brush.Lock.Skin.Tip": {
-    "message": "皮肤永远不会移动。",
+  "Parts.Brush.Lock.SkinOff.Tip": {
+    "message": "“同时移动皮肤”关闭时，皮肤保持不动。",
     "description": ""
   },
   "MeshVolume.Apply.Nothing": {
@@ -3616,7 +3668,7 @@
     "description": ""
   },
   "Parts.Retarget.NoBodiesForSex.Fmt": {
-    "message": "{0} 没有 {1} 体型；转换无法改变性别。",
+    "message": "{0}没有{1}身体。",
     "description": ""
   },
   "Parts.Retarget.Male": {
@@ -3722,6 +3774,10 @@
   "Parts.Retarget.ShapedDown.Fmt": {
     "message": "没有 {0} 身体可供转换，因此 {0} 模型会像游戏那样变形为 {1} 体型进行转换，再保存回 {0}。",
     "description": ""
+  },
+  "Parts.Retarget.Lowered.Fmt": {
+    "message": "根据 {0} 模型生成 {1} 模型，按游戏在两者之间的弯曲方式弯成 {1} 体型。保存时会添加游戏所需的元数据。",
+    "description": "{0} is the race of the model open, {1} the race picked below it."
   },
   "Parts.Retarget.Bake.BendBack.Fmt": {
     "message": "无法将转换结果变形回 {0} 体型（{1}）",
@@ -3851,6 +3907,10 @@
     "message": "鞋子保留自己的脚、手套保留自己的手时始终开启：否则整条新腿或新手臂都会跟着放进去。",
     "description": ""
   },
+  "Parts.Retarget.ClearForcedTip": {
+    "message": "游戏自带的上衣始终开启，与自动重新适配一致：游戏把它们的布料埋在自己的身体里，所以总会从新身体中推出来。",
+    "description": ""
+  },
   "Parts.Retarget.KeepFeet": {
     "message": "保留原本的脚",
     "description": ""
@@ -3878,6 +3938,14 @@
   "Parts.Retarget.SkinAlreadyMatches": {
     "message": "无需更改：它的皮肤已经按新身体的方式绘制。",
     "description": ""
+  },
+  "Parts.Retarget.Smallclothes.AfterSave": {
+    "message": "新身体在没有皮肤的地方绘制了内衣，重新适配会将其带入：只有保存后才会在游戏中显示。",
+    "description": "Body size status: the preview cannot show the new body's underwear, whose material is only published when the refit is saved."
+  },
+  "Parts.Retarget.Smallclothes.Fallback": {
+    "message": "新身体在没有皮肤的地方绘制了内衣，但无法带入这件服装，因此该处保留服装自身的皮肤。",
+    "description": "Body size status: the new body's underwear (drawn where it has no skin) could not be added to the garment, so the garment keeps its own skin there."
   },
   "Parts.Retarget.AlreadyFits.Fmt": {
     "message": "无需更改：在它覆盖的地方，{0} 与它原本制作时的尺码形状相同。",
@@ -4068,23 +4136,43 @@
     "description": ""
   },
   "Parts.Vanilla.Worn.Tip": {
-    "message": "当前穿着，未经模组化。打开时会复制到一个可编辑的新模组中。选中「体型尺寸」时则改为打开以进行体型转换。",
-    "description": ""
-  },
-  "Parts.Vanilla.Editing.Fmt": {
-    "message": "{0} 已在模组“{1}”中打开。它是游戏原版的副本，在你修改之前外观不变。",
+    "message": "已穿戴，无模组。按原样打开，在你修改之前不会保存任何内容：第一次修改时会把它复制到专属的模组中。",
     "description": ""
   },
   "Parts.Vanilla.ModDescription.Fmt": {
     "message": "{0}，由 Proteus 从游戏中复制以供编辑。",
     "description": ""
   },
-  "Parts.Vanilla.EditTool.Tip": {
-    "message": "原版装备没有模组文件，因此选择此项会先将其复制到一个新模组中。",
-    "description": ""
-  },
   "Parts.Vanilla.WornSuffix": {
     "message": "（原版）",
+    "description": ""
+  },
+  "Parts.Vanilla.CopyNote.Fmt": {
+    "message": "尚未保存任何内容。第一次修改时会将其复制到模组“{0}”中。",
+    "description": ""
+  },
+  "Parts.Vanilla.Copied.Fmt": {
+    "message": "已将{0}连同你的修改复制到模组“{1}”中。",
+    "description": ""
+  },
+  "Parts.Vanilla.EditedCopyThere.Fmt": {
+    "message": "“{0}”中已有此部件的已编辑副本，因此你的修改未保存。要继续编辑该副本，请在此处打开它（并在 Penumbra 中启用该模组）；要从游戏原版重新开始，请删除该模组。",
+    "description": ""
+  },
+  "Parts.Vanilla.ModSwitchedOff.Fmt": {
+    "message": "“{0}”已关闭，因此你的修改未保存到其中。请在 Penumbra 中启用它，或将其删除后重新开始。",
+    "description": ""
+  },
+  "Parts.Vanilla.CopyRefused.Fmt": {
+    "message": "无法保存你的修改，因此未复制任何内容：{0}",
+    "description": ""
+  },
+  "Parts.Vanilla.CopyRegistering": {
+    "message": "你的编辑刚被复制到新模组中，Penumbra 仍在设置它。请稍后再试一次。",
+    "description": ""
+  },
+  "Parts.Vanilla.NotRefittable": {
+    "message": "“体型尺寸”无法调整此部件。请选择其他工具来编辑它。",
     "description": ""
   },
   "WhatsNew.HairPort.Head": {
@@ -4307,12 +4395,64 @@
     "message": "无法回读新模型",
     "description": "Why a model for the wearer's race could not be made; the {1} of Parts.Retarget.BakeFailed.Fmt. Lower-case, no full stop."
   },
+  "Parts.Retarget.Race.OtherSex.Fmt": {
+    "message": "{0}（从这个{1}模型调整）",
+    "description": "A \"Refit for\" entry. {0} is a race of the other sex such as \"Midlander M\"; {1} the race of the model open."
+  },
+  "Parts.Retarget.Race.CrossSexNote.Fmt": {
+    "message": "跨性别调整：制作时所用的{0}身体会被弯成{1}的形状，再通过身体映射图与新身体逐点对应。分享前请在游戏中检查。",
+    "description": "Warning under a refit for the other sex. {0} is the race of the model open, {1} the race picked. \"body maps\" are the bibo↔TBSE texture maps."
+  },
+  "Parts.Retarget.Race.CrossSexWears.Fmt": {
+    "message": "保存的调整将由{0}穿着，{1}在没有自己的该物品模型时也会穿着；{2}保留这个模型。",
+    "description": "{0} is the race picked; {1} a comma-separated list of races; {2} the race of the model open."
+  },
+  "Parts.Retarget.Race.CrossSexQuality.Fmt": {
+    "message": "翻转面 {0} 个；身体对应 {1}。",
+    "description": "{0} is a count of folded (turned-over) faces; {1} a percentage such as \"97%\"."
+  },
+  "Parts.Retarget.Race.CrossSexHint.Fmt": {
+    "message": "要为{0}制作版本，请在“转换给种族”中选择它。",
+    "description": "{0} is a race such as \"Midlander M\". “Refit for” is the dropdown's label (Parts.Retarget.Race.Label)."
+  },
+  "Parts.Retarget.Refuse.CrossSexMadeFor.Fmt": {
+    "message": "跨性别时，这件装备制作所用的身体必须是{0}的身体。请在“原适配体型”中选择它所针对的身体模组。",
+    "description": "{0} is a race such as \"Midlander F\". “Made for” is the body dropdown the garment was made on."
+  },
+  "Parts.Retarget.Refuse.CrossSexCoverage.Fmt": {
+    "message": "这次跨性别调整通过身体映射只对应了身体的 {0}。Proteus 只保存对应至少 {1} 的调整。",
+    "description": "Why a refit for the other sex is not saved: {0} the share of the body matched, as found; {1} the least that is saved. Percentages arrive formatted."
+  },
+  "Parts.Retarget.Race.CrossSexFolded.Fmt": {
+    "message": "这次跨性别调整中有 {0:N0} 个布料面翻转。翻转的面在游戏中会显示为破洞，分享前请检查这些位置。",
+    "description": "Said in the warning colour beside a refit for the other sex: {0} is a count of cloth faces turned over."
+  },
+  "Parts.Retarget.Race.BonesMoved.Fmt": {
+    "message": "{0}的骨骼缺少这件装备依赖的 {1} 根骨骼。它们的权重现在跟随骨骼中最近的一根，因此这些部分会随它移动，而不是独立移动：{2}",
+    "description": "Warning beside a refit for a picked race: {0} is the race picked; {1} a count of bones; {2} the moves, such as \"ya_shiri_phys_l → iv_shiri_l\" (bone names are not translated)."
+  },
+  "Parts.Retarget.Race.NeedsSkeleton.Fmt": {
+    "message": "来自 {1} 的{0}骨骼为这个模型提供了游戏自带骨骼没有的 {2} 根骨骼（{3}）。没有该骨骼的人会看到这些部分错位。",
+    "description": "Warning beside a refit for a picked race: {0} is the race picked; {1} the mod its skeleton comes from; {2} a count of bones; {3} their names (not translated)."
+  },
+  "Parts.Retarget.Race.RenameFailed.Fmt": {
+    "message": "无法重命名骨骼（{0}）",
+    "description": "Why a refit for a picked race was refused: the garment's bones could not be moved onto the race's; {0} is the technical reason."
+  },
+  "Parts.Retarget.Refuse.CrossSexLayout.Fmt": {
+    "message": "跨性别时，Proteus 只能把 Bibo+ 或游戏布局的女性身体与 TBSE 或游戏布局的男性身体对应。{0} 模型使用 {1} 和 {2}。",
+    "description": "{0} is a slot such as \"_top\"; {1} and {2} texture layout names (bibo, gen3, tbse, male vanilla), never translated. \"Bibo+\" and \"TBSE\" are body-mod names."
+  },
+  "Parts.Retarget.Refuse.MenMapsMissing": {
+    "message": "跨性别调整所需的身体映射图还没有到。Proteus 正在下载；下载完成后请重新调整。",
+    "description": "Said when the bibo↔TBSE texture maps have not been downloaded yet."
+  },
   "Parts.Retarget.Race.Label": {
     "message": "转换给种族",
     "description": "Heads the dropdown that picks which race's model a refit is made and saved as."
   },
   "Parts.Retarget.Race.Tip": {
-    "message": "转换给哪个种族。选择与服装同性别的其他种族时，会按游戏的弯曲方式从此模型生成专用模型，转换到该种族的体型，并保存到该种族读取的位置。其他种族仍使用此模型。",
+    "message": "调整针对哪个种族。其他种族会得到自己的模型：按游戏弯曲的方式由这个模型制作，调整到该种族的身体上，并保存在该种族加载的位置。中原之民的上身或腿部装备也可以为另一性别调整。这个模型保持不变。",
     "description": "Tooltip of Parts.Retarget.Race.Label."
   },
   "Parts.Retarget.Race.ThisModel.Fmt": {
@@ -4338,6 +4478,14 @@
   "Parts.Retarget.Race.Only.Fmt": {
     "message": "只有{0}会穿保存的转换结果；{1}仍使用此模型。",
     "description": "{0} is the race picked, {1} the race of the model open."
+  },
+  "Parts.Retarget.Race.Below.Fmt": {
+    "message": "{0}会穿保存的转换结果，此装备没有自身模型的同性别种族也会穿；{1}仍使用此模型。",
+    "description": "{0} is the race picked, {1} the race of the model open; said for a race the open one falls back to."
+  },
+  "Parts.Retarget.Race.BelowExtraBones.Fmt": {
+    "message": "此服装使用额外骨骼。只有{0}获得对应的额外骨架，因此穿此转换结果的其他种族身上这些骨骼不会动。",
+    "description": "{0} is the race picked."
   },
   "Parts.Retarget.Race.SourceBaked.Fmt": {
     "message": "原本适配的体型也会以同样方式弯曲为{0}，因此贴合方式与之前一样。",
@@ -4543,9 +4691,21 @@
     "message": "此模组仍是 Penumbra 的旧文件夹格式，Proteus 不会编辑它。请先在 Penumbra 中启用一次让其升级，然后再回来。",
     "description": "Body size status line: the mod is in Penumbra's pre-v3 folder format."
   },
+  "Parts.Retarget.Save.ModGone.Fmt": {
+    "message": "“{0}”已不在 Penumbra 的模组中：它在那里被重命名或删除了。未保存任何内容。",
+    "description": "Body size status line when the mod's folder is gone. {0} is the mod's folder name."
+  },
   "Parts.Retarget.Save.Failed.Fmt": {
     "message": "无法保存：{0}",
     "description": "Body size status line. {0} is the error message."
+  },
+  "Parts.Retarget.Save.NoMaterialSet.Fmt": {
+    "message": "{0} 绘制了新身体的内衣，其材质只能保存在装备或饰品模型旁边。",
+    "description": "Body size save refused: {0} is the model's game path. The refit draws the new body's underwear, whose material must be saved beside an equipment model."
+  },
+  "Parts.Retarget.Save.NoMaterialName.Fmt": {
+    "message": "{0} 可用的材质名称均已被占用，因此新身体的内衣没有可用于保存的专属名称。",
+    "description": "Body size save refused: {0} is the model's game path. Every free material name for the new body's underwear copy is already used."
   },
   "Parts.Retarget.Undo.Removed.Fmt": {
     "message": "已移除“{0}”。",
@@ -4582,6 +4742,10 @@
   "Parts.Retarget.Refuse.LowCoverage.Fmt": {
     "message": "源{0}体型只有 {1:P0} 能通过贴图坐标在目标上找到位置，因此二者不共享贴图布局，无法相互转换。",
     "description": "Body size: why two bodies cannot be paired. {0} is the body part (chest, legs…), {1:P0} the share that matched — keep the :P0."
+  },
+  "Parts.Retarget.Refuse.NoSkinThere.Fmt": {
+    "message": "源{0}身体只有 {1:P0} 能落到皮肤上：目标身体的这个{0}选项在其余部分没有皮肤，而是绘制了别的东西（例如建模的内衣），重新适配无法贴合上去。请选择该身体在此处有皮肤的选项，或改为适配到其他身体。",
+    "description": "Body size: why two bodies cannot be paired when the target option draws something else (such as modelled underwear) where the source has skin. {0} is the body part (chest, legs…), {1:P0} the share that landed on skin — keep the :P0."
   },
   "Parts.Retarget.Bake.NoPath.Fmt": {
     "message": "种族变形器没有从 c{0:D4} 到 c{1:D4} 的路径",
@@ -4904,7 +5068,7 @@
     "description": ""
   },
   "SizeSet.Intro": {
-    "message": "为整个模组添加下方勾选体型的每个尺码。每个尺码都从作者最接近它的尺码重新适配，该选项中套装的其他部件也从同一尺码适配，并以“Rue S”“YAB Buff L”等名称保存在作者的尺码旁边。模组已有的尺码保持不变。",
+    "message": "为整个模组添加下方勾选体型的每个尺码。每个尺码都从作者最接近它的尺码重新适配，该选项中套装的其他部件也从同一尺码适配，并以“Rue S”“YAB Buff L”等名称保存在作者的尺码旁边。模组已有的尺码保持不变。女性模组也可以加入 TBSE 和 TBSE-X：其上身和腿部会为男性调整，并保存在单独的组中。",
     "description": ""
   },
   "SizeSet.Yas": {
@@ -5030,6 +5194,54 @@
   "SizeSet.Working.Fmt": {
     "message": "正在将 {0} 适配为 {1}……",
     "description": ""
+  },
+  "SizeSet.ForMen.Fmt": {
+    "message": "{0}（男性用）",
+    "description": "Checkbox label for a men's body offered for a women's mod. {0} is the body (\"TBSE\")."
+  },
+  "SizeSet.ForMen.Tip.Fmt": {
+    "message": "此模组的女性上身和腿部部件会在 {0} 上获得男性版本：通过身体映射（首次需要时下载）为中原之民男性调整，每件都取自作者的某个尺码——其身体弯成男性形状后最接近他的身体。它们保存在单独的组“{1}”中，因此女性尺码保持不变。鞋子和手套不跨性别调整，作者已为男性制作的部件保留作者的版本。",
+    "description": "Tooltip. {0} is a men's body (\"TBSE\"), {1} the group the men's versions go into."
+  },
+  "SizeSet.MensGroup": {
+    "message": "男性身体",
+    "description": "The name of the Penumbra group a women's mod's men's versions are saved into."
+  },
+  "SizeSet.CheckInGame": {
+    "message": "请在游戏中检查：",
+    "description": "Heading over the sizes saved that want a look in game."
+  },
+  "SizeSet.Warning.Fmt": {
+    "message": "{0}，“{1}”：{2}",
+    "description": "One line under \"Check in game\". {0} is the piece, {1} the size, {2} what to look at."
+  },
+  "SizeSet.MenMapsMissing": {
+    "message": "未制作男性版本：所需的身体映射尚未就绪。Proteus 正在下载；下载完成后请再次添加尺码。",
+    "description": "Why no men's versions were made."
+  },
+  "SizeSet.NoSourceForMen.Fmt": {
+    "message": "{0}：作者的尺码都不是在 Proteus 能与男性身体对应的身体（Bibo+ 或游戏的布局）上制作的，因此没有男性版本。",
+    "description": "{0} is the piece."
+  },
+  "SizeSet.MensGroupTaken.Fmt": {
+    "message": "此模组已有作者的“{0}”组，因此未制作男性版本。请在 Penumbra 中重命名该组，然后再次添加尺码。",
+    "description": "{0} is the group's name."
+  },
+  "SizeSet.EndsNotForMen": {
+    "message": "鞋子和手套没有男性版本：只有上身和腿部部件会跨性别调整。",
+    "description": "Said once when a women's mod's men's versions are made and it has shoes or gloves."
+  },
+  "SizeSet.OneVariant.Fmt": {
+    "message": "{0}：男性只得到一个版本，由“{1}”制作；模组的其他变体仍只供女性使用。",
+    "description": "{0} is the piece, {1} the author's option the men's version was made from."
+  },
+  "SizeSet.NotMade": {
+    "message": "调整没有产生可保存的内容",
+    "description": "Why a men's version couldn't be made, after \"couldn't be made:\"."
+  },
+  "SizeSet.RigUnreadable": {
+    "message": "无法读取其绑定，因此无法弯成男性形状",
+    "description": "Why a men's version couldn't be made, after \"couldn't be made:\": the garment's skinning can't be read."
   },
   "SizeSet.NotInstalledTip.Fmt": {
     "message": "Penumbra 中未安装 {0}。请安装后关闭并重新打开此部分。",
@@ -5243,9 +5455,13 @@
     "message": "头发",
     "description": ""
   },
-  "HairPort.Refused.Folded.Fmt": {
-    "message": "弯折到 c{0:D4} 后会有 {1} 个三角形翻面",
-    "description": ""
+  "HairPort.Folded.Fmt": {
+    "message": "弯折到 c{0:D4} 后有 {1} 个三角形翻面，可能显示为破洞；请在游戏中检查",
+    "description": "A hair port saved with a warning: bent onto race {0}, {1} of the hairstyle's triangles turn inside out."
+  },
+  "HairPort.Scan.State.FittedWarn.Fmt": {
+    "message": "已适配 — {0}",
+    "description": "A hairstyle's state in the list: fitted, with {0} what to look at in game."
   },
   "HairPort.Refused.Declined": {
     "message": "其移植已被撤销，因此保持不变",
@@ -5353,6 +5569,54 @@
   },
   "HairPort.Scan.UndoChecked.Confirm.Fmt": {
     "message": "再次点击以永久撤销 {0} 个发型",
+    "description": ""
+  },
+  "HairPort.Earless.Label": {
+    "message": "移除猫魅族头发 Mod 的耳朵",
+    "description": ""
+  },
+  "HairPort.Earless.Tip": {
+    "message": "适用于猫魅族：当你佩戴的头发 Mod 的发型带有猫耳时，Proteus 会制作一份\n无耳副本，并让该 Mod 的选项指向这份副本。作者自己的文件从不改动。\n\n这会改动 Mod 本身，因此所有启用该 Mod 显示的角色——在每个合集中，以及你\n分享给的任何人——都不会带耳朵。关闭此项会把耳朵放回 Proteus 改动过的每个\nMod。无论是否开启为其他种族适配头发 Mod 都可使用。",
+    "description": ""
+  },
+  "HairPort.Settings.Earless.Fmt": {
+    "message": "{1} 中的发型 {0} 显示为无耳——适用于所有启用此 Mod 显示的角色，在每个合集中。关闭此设置会把耳朵放回。",
+    "description": ""
+  },
+  "HairPort.Settings.EarlessOptionHint.Fmt": {
+    "message": "此 Mod 自带无耳选项：{0}",
+    "description": ""
+  },
+  "HairPort.Earless.Chat": {
+    "message": "[Proteus] 已移除此发型的猫耳：Proteus 已让其 Mod 指向一份无耳副本，因此所有启用此 Mod 显示的角色（在每个合集中）现在都不带耳朵。要放回耳朵，请在 /proteus > 设置 > 头发 中关闭“移除猫魅族头发 Mod 的耳朵”。",
+    "description": ""
+  },
+  "HairPort.Earless.RestoreBlocked.Fmt": {
+    "message": "[Proteus] 无法在 {0} 中放回耳朵：{1}",
+    "description": ""
+  },
+  "HairPort.Earless.Restored.Fmt": {
+    "message": "已为 {0} 个发型放回耳朵。",
+    "description": ""
+  },
+  "HairPort.Earless.Refused.AuthorMissing.Fmt": {
+    "message": "作者的文件 {0} 不见了，因此保留了无耳副本",
+    "description": ""
+  },
+  "HairPort.Earless.Refused.Changed": {
+    "message": "Proteus 处理期间 Mod 发生了变化，因此未写入任何内容",
+    "description": ""
+  },
+  "HairPort.Earless.Refused.Leftover": {
+    "message": "未能移除它的全部耳朵",
+    "description": ""
+  },
+  "HairPort.Earless.Refused.RecordUnreadable": {
+    "message": "无法读取 Proteus 对此 Mod 无耳发型的记录（Proteus/earlesshair.json），因此未做任何更改。",
+    "description": ""
+  },
+  "HairPort.Earless.Refused.Outside.Fmt": {
+    "message": "{0} 不是该 Mod 无耳文件夹内的路径，因此未写入任何内容",
     "description": ""
   }
 }

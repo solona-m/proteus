@@ -230,9 +230,18 @@ internal sealed partial class BodyRetargetPanel(PenumbraBridge penumbra, UVRemap
     /// <summary>The body mod the "made for" sizes come from: the other one, or the refit-onto one.</summary>
     private string? SourceDir => fromBodyDir ?? bodyDir;
     /// <param name="Notice">Nothing to do, said plainly rather than as an error: the skin already matches, or the
-    /// leg is already the size chosen.</param>
-    private sealed record PlanResult(string Key, List<(BodyOption To, BodyRetarget.Planned Planned)>? Planned,
-                                     string Error, string Notice = "", IReadOnlyList<string>? ShapeNames = null);
+    /// leg is already the size chosen. A plan with a notice is not taken (see <see cref="Takes"/>).</param>
+    /// <param name="Quality">A refit for the other sex: its folds and how much of the body matched, said beside the
+    /// plan — never as a notice, which would drop the plan it describes.</param>
+    /// <param name="CrossSexFolds">A refit for the other sex: the cloth faces each size turned over, in the order of
+    /// <paramref name="Planned"/> — said in the warning colour beside the size shown (<see cref="CrossSexRefit.FoldLineFor"/>).</param>
+    internal sealed record PlanResult(string Key, List<(BodyOption To, BodyRetarget.Planned Planned)>? Planned,
+                                      string Error, string Notice = "", IReadOnlyList<string>? ShapeNames = null,
+                                      string Quality = "", IReadOnlyList<int>? CrossSexFolds = null);
+
+    /// <summary>Whether a finished plan is the one to preview and save: no error, nothing-to-do notice, and something planned.</summary>
+    internal static bool Takes(PlanResult result)
+        => result.Error.Length == 0 && result.Notice.Length == 0 && result.Planned is { Count: > 0 };
     private sealed record SaveResult(BodyRetargetWriter.Outcome Outcome, BodyRetargetWriter.Record? Record);
 
     // ── caches for things that would otherwise be read every frame ──────────
@@ -271,6 +280,14 @@ internal sealed partial class BodyRetargetPanel(PenumbraBridge penumbra, UVRemap
 
     /// <summary>The open garment is a man's — and so, by the filtering, is every body it is refitted between.</summary>
     private bool MaleGarment => race != null && BodySizeCatalog.IsMaleRace(race);
+
+    /// <summary>
+    /// The sexes of a body pair's two sides: the made-for bodies' and the refit-onto bodies'. Both are the garment's,
+    /// except under a pick for the other sex, whose made-for bodies are bent from the drawn race's — still drawn in its
+    /// layout — and whose targets are the picked race's (see <see cref="CrossSexRefit.Sexes"/>).
+    /// </summary>
+    private (bool Source, bool Target) PairSexes
+        => CrossSexRefit.Sexes(active?.Route ?? default, active?.Explicit == true, MaleGarment);
 
     /// <summary>
     /// Which set of Body size tips this build shows. Bump it whenever a tip is added, removed or reworded, and everyone
@@ -507,6 +524,17 @@ internal sealed partial class BodyRetargetPanel(PenumbraBridge penumbra, UVRemap
         /// <summary>The skeleton the collection gives the race could not be read; the game's was used.</summary>
         public bool FellBack { get; init; }
 
+        /// <summary>With <see cref="Explicit"/>, the garment's bones the race lacks and where they were moved
+        /// (<see cref="SkeletonRemap"/>); the bodies it was made on moved the same way.</summary>
+        public IReadOnlyList<SkeletonRemap.Move> Moves { get; init; } = [];
+
+        /// <summary>With <see cref="Explicit"/>, bones only the collection's custom skeleton gives the race.</summary>
+        public IReadOnlyList<string> NeedsSkeleton { get; init; } = [];
+
+        /// <summary>The mod folder the race's custom skeleton came from, for <see cref="NeedsSkeleton"/>'s note — worked out once,
+        /// in the bake, not every frame.</summary>
+        public string SkeletonFrom { get; init; } = "";
+
         /// <summary>What the option a save goes into gave the bake to read (<see cref="OtherRaceRefit.EstFingerprint"/>);
         /// every option with the same answer makes the same model.</summary>
         public string Fingerprint { get; init; } = "";
@@ -563,6 +591,11 @@ internal sealed partial class BodyRetargetPanel(PenumbraBridge penumbra, UVRemap
     private BodyRetargetWriter.Record? ownRecord;
     private object? ownRecordFor;
 
+    /// <summary>Whether the garment is the game's own (see <see cref="AutoRefitDecisions.IsGameGear"/>), re-read with
+    /// <see cref="ownRecord"/>: one manifest read per redirect list or worn path.</summary>
+    private bool gameGear;
+    private (object? Redirects, string? Path) gameGearFor;
+
     /// <summary>The races the refit-onto body mod has bodies of, and the catalog they were read off.</summary>
     private HashSet<string> catalogRaces = [];
     private BodySizeCatalog? catalogRacesOf;
@@ -592,6 +625,17 @@ internal sealed partial class BodyRetargetPanel(PenumbraBridge penumbra, UVRemap
             ownRecordFor = given.Redirects;
             ownRecord = BodyRetargetWriter.ReadRecord(given.ModRoot);
         }
+        if (given.ModRoot == null)
+        {
+            gameGear = true;
+            gameGearFor = default;   // so a mod opened next is always read afresh
+        }
+        else if (!ReferenceEquals(gameGearFor.Redirects, given.Redirects) || gameGearFor.Path != given.GamePath)
+        {
+            gameGearFor = (given.Redirects, given.GamePath);
+            gameGear = AutoRefitDecisions.IsGameGear(given.ModRoot, given.GamePath, given.Redirects, ownRecord,
+                                                     RefitModService.IsMadeByProteus(given.ModRoot));
+        }
         automaticRoute = wearer == null
             ? RacialModelBake.Route.None
             : RefitCore.Route(given.GamePath, wearer.Race, HasBodies, code => HasBodies(code) && SourceHasBodies(code),
@@ -604,7 +648,7 @@ internal sealed partial class BodyRetargetPanel(PenumbraBridge penumbra, UVRemap
         // is made with another wearer, and bends the bodies of the "made for" mod with it, so those are in it too.
         // And what the option a save goes into gives it to read: a change of where to save that changes what will load
         // makes the model again; one that changes nothing does not.
-        string key = given.ModelRel + "|" + (route.Down ? "v" : "^") + route.To
+        string key = given.ModelRel + "|" + route.Tag + route.To
                    + (picked ? "|x|" + (fromBodyDir ?? bodyDir) + "|" + BakeFingerprint(given) : "");
         if (!route.Any || bakeRefusalFor == key)
         {
@@ -700,7 +744,8 @@ internal sealed partial class BodyRetargetPanel(PenumbraBridge penumbra, UVRemap
         {
             baked = made;
             if (made.Explicit) OnRaceBaked(made);
-            log.Information("[Proteus] retarget: {0} {1} from c{2:D4} to c{3:D4}", made.Route.Down ? "shaped" : "baked",
+            log.Information("[Proteus] retarget: {0} {1} from c{2:D4} to c{3:D4}",
+                            made.Route.Down ? "shaped" : made.Route.Lowered ? "lowered" : "baked",
                             made.SavePath, made.Route.Drawn, made.Route.To);
         }
         else
@@ -755,7 +800,10 @@ internal sealed partial class BodyRetargetPanel(PenumbraBridge penumbra, UVRemap
         var ps = Strings.Parts;
         if (active is { } b)
         {
-            ImGui.TextWrapped(string.Format(b.Route.Down ? ps.RetargetShapedDownFmt : ps.RetargetBakedFmt,
+            // Lowered, the race below usually has a model of the game's already (Midlanders wear the game's shirt):
+            // the note says one is made, not that none exists.
+            ImGui.TextWrapped(string.Format(b.Route.Down ? ps.RetargetShapedDownFmt
+                                            : b.Route.Lowered ? ps.RetargetLoweredFmt : ps.RetargetBakedFmt,
                                             ModelRace.Describe($"{b.Route.Drawn:D4}"),
                                             ModelRace.Describe($"{b.Route.To:D4}")));
             DrawRaceNotes(b);
@@ -828,6 +876,9 @@ internal sealed partial class BodyRetargetPanel(PenumbraBridge penumbra, UVRemap
         string sex = BodySizeCatalog.IsMaleRace(race) ? ps.RetargetMale : ps.RetargetFemale;
         using (ImRaii.PushColor(ImGuiCol.Text, ProteusStyle.Warn))
             ImGui.TextWrapped(string.Format(ps.RetargetNoBodiesForSexFmt, name, sex));
+        // Its bodies are the other sex's: a version for them is made under "Refit for", when one is offered.
+        if (offered.FirstOrDefault(c => c.CrossSex && c.Blocked == OtherRaceRefit.Block.None) is { } other)
+            ImGui.TextWrapped(string.Format(ps.RetargetRaceCrossSexHintFmt, ModelRace.Describe($"{other.Race:D4}")));
     }
 
     /// <summary>A dropdown of the installed body mods. Returns the directory picked this frame, if any.</summary>
@@ -1464,8 +1515,14 @@ internal sealed partial class BodyRetargetPanel(PenumbraBridge penumbra, UVRemap
         if (ImGui.IsItemHovered(ImGuiHoveredFlags.AllowWhenDisabled)) ImGui.SetTooltip(ps.RetargetPiercingsTip);
         ImGui.Unindent();
 
-        ImGui.Checkbox(ps.RetargetClearBody, ref clearBody);
-        if (ImGui.IsItemHovered()) ImGui.SetTooltip(ps.RetargetClearBodyTip);
+        // The game's own top is always cleared, as the automatic refit clears it (see RetargetInputs.StudioSkin).
+        var skinRule = SkinRule(inputs);
+        bool clear = clearBody || skinRule.ClearForced;
+        using (ImRaii.Disabled(skinRule.ClearForced))
+            if (ImGui.Checkbox(ps.RetargetClearBody, ref clear) && !skinRule.ClearForced)
+                clearBody = clear;
+        if (ImGui.IsItemHovered(ImGuiHoveredFlags.AllowWhenDisabled))
+            ImGui.SetTooltip(skinRule.ClearForced ? ps.RetargetClearForcedTip : ps.RetargetClearBodyTip);
 
         using (ImRaii.Disabled(busy || !ready))
             if (ImGui.Button(ps.RetargetPreview, FullWidth()))
@@ -1506,9 +1563,7 @@ internal sealed partial class BodyRetargetPanel(PenumbraBridge penumbra, UVRemap
 
         // The counts go to the log (see Describe); only what the user can act on is shown.
         var done = all[showing].Planned;
-        if (done.Report.Folded > 0)
-            using (ImRaii.PushColor(ImGuiCol.Text, ProteusStyle.Warn))
-                ImGui.TextWrapped(string.Format(ps.RetargetFoldedFmt, done.Report.Folded));
+        DrawFoldLine(done, showing);
         if (done.Report.Swap is { LostShapes: > 0 } lost)
             using (ImRaii.PushColor(ImGuiCol.Text, ProteusStyle.Warn))
                 ImGui.TextWrapped(string.Format(ps.RetargetSwapShapesFmt, lost.LostShapes));
@@ -1661,8 +1716,20 @@ internal sealed partial class BodyRetargetPanel(PenumbraBridge penumbra, UVRemap
             ImGui.SetTooltip(ps.BrushRevertArmTip);
     }
 
+    /// <summary>
+    /// What the status line says once a refit is previewed, where the new body draws underwear in place of skin: that it
+    /// could not be brought in, or that it shows only after saving — the preview pushes the model alone, and the copy
+    /// of its material the save publishes is not in game yet. Empty for every other refit.
+    /// </summary>
+    internal static string SmallclothesNote(IEnumerable<BodyRetarget.Planned> plans)
+    {
+        var all = plans.ToList();
+        if (all.Any(p => p.Report.SmallclothesFallback > 0)) return Strings.Parts.RetargetSmallclothesFallback;
+        return all.Any(p => p.Materials is { Count: > 0 }) ? Strings.Parts.RetargetSmallclothesAfterSave : "";
+    }
+
     /// <summary>A refit's counts, for the log. Not localized: it is read when diagnosing, not by the player.</summary>
-    private static string Describe(BodyRetarget.Report r, IReadOnlyList<string> shapeNames)
+    internal static string Describe(BodyRetarget.Report r, IReadOnlyList<string> shapeNames)
     {
         var parts = new List<string> { $"moved up to {r.WorstMove * 1000f:F1} mm" };
         if (RefitCore.ReleasedLog(r, shapeNames) is { } released) parts.Add($"let go of kept piece(s) {released}");
@@ -1680,10 +1747,14 @@ internal sealed partial class BodyRetargetPanel(PenumbraBridge penumbra, UVRemap
             if (swap.Posed > 0) parts.Add($"{swap.Posed} posed skin mesh(es) kept");
             if (swap.ExtrasDropped > 0) parts.Add($"{swap.ExtrasDropped:N0} extras tris dropped");
             if (swap.Adorned > 0) parts.Add($"{swap.Adorned:N0} nail/piercing tris carried");
+            if (swap.Smallclothes > 0) parts.Add($"{swap.Smallclothes:N0} smallclothes tris brought in");
             if (swap.Unplaced > 0) parts.Add($"{swap.Unplaced:N0} weights unplaced");
             if (swap.LostShapes > 0) parts.Add($"{swap.LostShapes} shape key(s) lost");
         }
         else if (r.Laid > 0) parts.Add($"{r.Laid:N0} skin points laid");
+        if (r.SmallclothesFallback > 0)
+            parts.Add($"{r.SmallclothesFallback} kept their own skin: the new body's underwear could not be brought in");
+        if (r.SourceSmallclothes > 0) parts.Add($"{r.SourceSmallclothes:N0} old underwear points given the new body's shape");
         return string.Join(", ", parts);
     }
 
@@ -1707,7 +1778,9 @@ internal sealed partial class BodyRetargetPanel(PenumbraBridge penumbra, UVRemap
 
         detectTask = Task.Run(() =>
         {
-            // Which of two identical meshes rigged two ways the garment was made for (Rue's plain and Yiggle sizes).
+            // Which of two identical meshes rigged two ways the garment was made for (Rue's plain and Yiggle sizes). A
+            // picked race's bodies may have had the bones it lacks moved, the bones that tell those two apart among
+            // them: they are compared as they were rigged (BakedBodyCatalog.RiggedBefore), with the garment as drawn.
             var garmentBones = new HashSet<string>(SecondSkinWriter.Parse(garmentBytes).BoneNames, StringComparer.Ordinal);
             var rankings = new Dictionary<string, BodySizeMatch.Ranking>(StringComparer.Ordinal);
             KeepEnds.StudioReading? read = null;
@@ -1715,7 +1788,8 @@ internal sealed partial class BodyRetargetPanel(PenumbraBridge penumbra, UVRemap
             {
                 // A kept-end garment's leg or arm is read alone: its heeled foot lies on no body's flat one.
                 if (layout.KeepEnds && slot == layout.Primary) continue;
-                rankings[slot] = BodySizeMatch.Rank(garment, snapshot.For(slot, garmentRace), snapshot.PathOf, garmentBones);
+                rankings[slot] = BodySizeMatch.Rank(garment, snapshot.For(slot, garmentRace), snapshot.PathOf, garmentBones,
+                                                   rigByPath: BakedBodyCatalog.RiggedBefore);
             }
             if (layout.KeepEnds)
             {
@@ -1745,7 +1819,8 @@ internal sealed partial class BodyRetargetPanel(PenumbraBridge penumbra, UVRemap
             return;
         string sourcePath = sources.PathOf(source);
         string name = SlotName(slot);
-        bool male = MaleGarment;
+        var (male, targetSex) = PairSexes;
+        bool? targetMale = targetSex != male ? targetSex : null;
         var masks = MasksFor(slot);
 
         foreach (var target in Targets(slot))
@@ -1758,7 +1833,7 @@ internal sealed partial class BodyRetargetPanel(PenumbraBridge penumbra, UVRemap
             {
                 try
                 {
-                    return Build(sourcePath, targetPath, name, male, masks, out _) ?? "";
+                    return Build(sourcePath, targetPath, name, male, masks, out _, out _, targetMale) ?? "";
                 }
                 catch (Exception ex)
                 {
@@ -1788,12 +1863,18 @@ internal sealed partial class BodyRetargetPanel(PenumbraBridge penumbra, UVRemap
         var shapeLabels = new HashSet<string>(ctx.KeepShape ?? [], StringComparer.Ordinal);
         bool layOnBody = replaceSkin;
         bool cut = cutHidden;
-        bool clear = clearBody;
+        var skinRule = SkinRule(inputs);
+        bool clear = skinRule.ClearBody;
+        // A shoe or glove keeping its foot or hand takes the box as it is: the game-top rule is for whole tops.
+        bool boxClear = clearBody;
         bool piercings = RetargetInputs.CarryPiercings(replaceSkin, carryPiercings);
         // A picked race's bent bodies are another rig than the race's own, even within one body mod: the cloth takes the
         // new body's weights, as it does between body mods.
         bool acrossBodies = fromBodyDir != null || active?.Explicit == true;
-        bool male = MaleGarment;
+        var (male, targetSex) = PairSexes;
+        bool? targetMale = targetSex != male ? targetSex : null;
+        // A pick for the other sex: checked before it may be saved (CrossSexRefit.CoverageAllowed).
+        bool crossSex = active?.Explicit == true && active.Route.ByAlias;
         string key = Key(ctx);
         var bake = active;
         string? garmentRace = race;
@@ -1830,7 +1911,7 @@ internal sealed partial class BodyRetargetPanel(PenumbraBridge penumbra, UVRemap
                 var shared = new List<BodyRetarget.SlotPair>();
                 foreach (var (slot, sourcePath, targetPath, name, masks) in others)
                 {
-                    if (Build(sourcePath, targetPath, name, male, masks, out var pair) is { } refusal)
+                    if (Build(sourcePath, targetPath, name, male, masks, out var pair, out _, targetMale) is { } refusal)
                         return new PlanResult(key, null, refusal);
                     shared.Add(pair);
                 }
@@ -1870,7 +1951,7 @@ internal sealed partial class BodyRetargetPanel(PenumbraBridge penumbra, UVRemap
                 {
                     var input = new KeepEnds.StudioPlanInput(
                         garment, bytes, garmentSlot, pieces, sources, snapshot, garmentRace ?? "", male, limbFrom!,
-                        limbTargets, sameBodyMod, fromCloth, layOnBody, acrossBodies, clear, held, shared,
+                        limbTargets, sameBodyMod, fromCloth, layOnBody, acrossBodies, boxClear, held, shared,
                         s => s == primary ? (limbMasks.Source, limbMasks.Target) : (endMasks.Source, endMasks.Target),
                         SlotName, modelRel, shapeNames, piercings);
                     var kept = KeepEnds.StudioPlan(input, Baked, uvRemap, log, () => Interlocked.Increment(ref planDone));
@@ -1878,32 +1959,41 @@ internal sealed partial class BodyRetargetPanel(PenumbraBridge penumbra, UVRemap
                 }
 
                 var results = new List<(BodyOption, BodyRetarget.Planned)>();
+                var quality = new List<string>();
+                var crossSexFolds = new List<int>();
 
                 // ── the whole garment, refitted through its own slot ──
                 if (garmentSource == null) return new PlanResult(key, null, string.Format(ps.RetargetNeedFromFmt, garmentName));
                 foreach (var (option, targetPath) in targets)
                 {
-                    if (Build(garmentSource, targetPath, garmentName, male, limbMasks, out var pair) is { } refusal)
+                    if (Build(garmentSource, targetPath, garmentName, male, limbMasks, out var pair, out var landed,
+                              targetMale) is { } refusal)
                         return new PlanResult(key, null, targets.Count > 1 ? $"{option.Label}: {refusal}" : refusal);
 
                     var pairs = new List<BodyRetarget.SlotPair> { pair };
                     pairs.AddRange(shared);
                     // A top cut and cleared the way the automatic refit treats the game's own: its skin tucked in under
-                    // the cloth the same way.
+                    // the cloth the same way — and the game's own top refitted exactly as the automatic refit does it.
                     var plan = BodyRetarget.Plan(garment, bytes, pairs, garmentSlot, held: held,
                                                  replaceSkin: layOnBody, acrossBodies: acrossBodies,
                                                  clearBody: clear, cutHidden: cut, keepShape: pieces,
                                                  log: line => log.Debug("[Proteus] body size: {0}", line),
                                                  warn: line => log.Warning("[Proteus] body size: {0}", line),
-                                                 tuckSlot: RefitCore.TuckSlot(cut && clear, garmentSlot),
-                                                 carryPiercings: piercings);
+                                                 tuckSlot: skinRule.TuckSlot, deepClear: skinRule.DeepClear,
+                                                 keepStandoff: skinRule.KeepStandoff, carryPiercings: piercings,
+                                                 liftUnderbust: !crossSex || CrossSexRefit.LiftsUnderbust(bake!.Route.Drawn, bake.Route.To),
+                                                 seeInside: skinRule.SeeInside);
                     // Skin the refit kept of the garment's own, drawn in the new body's layout and material — or a
                     // gen2 garment's kept skin shows the wrong skin, and none of the tattoos, on a bibo body.
-                    plan = RefitCore.MatchSkinToBody(plan, garmentSource, targetPath, uvRemap, male, log);
+                    plan = RefitCore.MatchSkinToBody(plan, garmentSource, targetPath, uvRemap, male, log, targetMale);
+                    if (crossSex && CrossSexCheck(bytes, plan, landed, option.Label, targets.Count > 1, quality, crossSexFolds)
+                            is { } refused)
+                        return new PlanResult(key, null, refused);
                     results.Add((option, Baked(plan, targetPath)));
                     Interlocked.Increment(ref planDone);
                 }
-                return new PlanResult(key, results, "", ShapeNames: shapeNames);
+                return new PlanResult(key, results, "", ShapeNames: shapeNames, Quality: string.Join("\n", quality),
+                                      CrossSexFolds: crossSex ? crossSexFolds : null);
             }
             catch (Exception ex)
             {
@@ -1920,10 +2010,13 @@ internal sealed partial class BodyRetargetPanel(PenumbraBridge penumbra, UVRemap
     /// <param name="male">The garment is a man's, and so both bodies are: every option list is filtered to its sex.</param>
     /// <param name="masks">Each body mod's IMC mask for this slot (see <see cref="VariantMask"/>): both bodies are read
     /// without the variant parts their mods do not draw.</param>
+    /// <param name="landed">How the two bodies' skin landed on each other; null for the same mesh.</param>
+    /// <param name="targetMale">The target body's sex under a pick for the other sex (see <see cref="PairSexes"/>).</param>
     private string? Build(string sourcePath, string targetPath, string name, bool male, Masks masks,
-                          out BodyRetarget.SlotPair pair)
-        => BodyRetarget.BuildPair(masks.Slot, sourcePath, targetPath, name, male, masks.Source, masks.Target, uvRemap,
-                                  out pair);
+                          out BodyRetarget.SlotPair pair, out UvAtlasCorrespondence.Stats? landed, bool? targetMale = null)
+        => BodyRetarget.BuildPair(masks.Slot, File.ReadAllBytes(sourcePath), File.ReadAllBytes(targetPath), name, male,
+                                  masks.Source, masks.Target, uvRemap, out pair, out landed,
+                                  BodyRetarget.BodyMaterialReader(targetPath), targetMale);
 
     /// <summary>
     /// The IMC attribute mask a body mod gives its model in <paramref name="slot"/>, under the player's own choice of
@@ -2003,9 +2096,11 @@ internal sealed partial class BodyRetargetPanel(PenumbraBridge penumbra, UVRemap
             madeModFor = null;   // it exists now, and the lookup above was told it did not
         }
         string group = Destination();
-        // A bake is saved under the wearer's race, beside the drawn model rather than over it — which men, and every
-        // other race falling through to it, go on wearing — with the EQDP entry that makes the game load it. A garment
-        // bent down is saved over the drawn model, bent back up, and needs none.
+        // A bake is saved under the new race, beside the drawn model rather than over it, with the EQDP entry that makes
+        // the game load it. Up, the drawn race and every other race falling through to it go on wearing the drawn
+        // model; lowered (a Highlander model made a Midlander's), the drawn race does, and the races falling through to
+        // the new one wear the refit unless they have a model of their own. A garment bent down only to be refitted is
+        // saved over the drawn model, bent back up, and needs none.
         string path = SavePath(ctx);
         List<object>? manipulations = active?.Route.Eqdp(path) is { } eqdp ? [eqdp] : null;
         // A race picked in "Refit for" loads no extra skeleton for the item unless it is told to: the drawn race's,
@@ -2028,7 +2123,7 @@ internal sealed partial class BodyRetargetPanel(PenumbraBridge penumbra, UVRemap
             // Two sizes can carry the same label under different headings; each still needs an option of its own.
             string option = OptionName(ctx, target);
             for (int n = 2; !used.Add(option); n++) option = $"{OptionName(ctx, target)} ({n})";
-            refits.Add(new BodyRetargetWriter.Refit(option, plan.Model, ToLabel(ctx, target)));
+            refits.Add(new BodyRetargetWriter.Refit(option, plan.Model, ToLabel(ctx, target), Materials: plan.Materials));
         }
 
         // What to switch on once it is written. A refit appended to a group the AUTHOR already ships lands beside
@@ -2116,8 +2211,18 @@ internal sealed partial class BodyRetargetPanel(PenumbraBridge penumbra, UVRemap
     /// The "made for" bodies' generation is part of it: the same option names a bent body under a picked race and an
     /// unbent one without, and a plan made against the other must not be shown or saved.</summary>
     private string Key(in RetargetContext ctx)
-        => RetargetInputs.Key(ctx.ModelRel, fromBodyDir, Inputs(ctx), Chosen(ctx), from, to, ctx.Held, ctx.KeepShape,
-                              replaceSkin, cutHidden, clearBody, carryPiercings) + "|g" + madeForGeneration;
+    {
+        var inputs = Inputs(ctx);
+        return RetargetInputs.Key(ctx.ModelRel, fromBodyDir, inputs, Chosen(ctx), from, to, ctx.Held, ctx.KeepShape,
+                                  replaceSkin, cutHidden, clearBody, carryPiercings, SkinRule(inputs).ClearForced)
+               + "|g" + madeForGeneration;
+    }
+
+    /// <summary>The rule for the body under a whole garment's cloth (see <see cref="RetargetInputs.StudioSkin"/>): the
+    /// user's boxes, or the automatic refit's for the game's own top.</summary>
+    private RetargetInputs.StudioSkinRule SkinRule(RetargetInputs.Inputs inputs)
+        => RetargetInputs.StudioSkin(replaceSkin, cutHidden, clearBody, gameGear, inputs.GarmentSlot,
+                                     crossSex: active?.Explicit == true && active.Route.ByAlias);
 
     /// <summary>The framework-thread half: take up whatever finished, and do the parts only this thread may.</summary>
     private void Consume(in RetargetContext ctx)
@@ -2209,15 +2314,18 @@ internal sealed partial class BodyRetargetPanel(PenumbraBridge penumbra, UVRemap
             if (Faulted(pt, ctx)) { }
             else if (pt.Result.Error.Length > 0) ctx.SetStatus(pt.Result.Error, true);
             else if (pt.Result.Notice.Length > 0) ctx.SetStatus(pt.Result.Notice, false);
-            else if (pt.Result.Planned is { Count: > 0 } done && pt.Result.Key == Key(ctx))
+            else if (Takes(pt.Result) && pt.Result.Planned is { } done && pt.Result.Key == Key(ctx))
             {
                 planned = done;
+                plannedCrossSexFolds = pt.Result.CrossSexFolds;
                 plannedShapeNames = pt.Result.ShapeNames ?? [];
                 plannedKey = pt.Result.Key;
                 showing = 0;
                 var first = done[0].Planned;
                 if (!ctx.PushPreview(first.Model)) pendingPreview = first.Model;
-                ctx.SetStatus("", false);
+                string note = SmallclothesNote(done.Select(d => d.Planned));
+                ctx.SetStatus(pt.Result.Quality.Length == 0 ? note
+                              : note.Length == 0 ? pt.Result.Quality : note + "\n" + pt.Result.Quality, false);
                 foreach (var (to, plan) in done)
                     log.Information("[Proteus] retarget: {0} onto {1}: {2}", ctx.ModelRel, to.Label,
                                     Describe(plan.Report, plannedShapeNames));

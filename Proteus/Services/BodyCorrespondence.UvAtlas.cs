@@ -51,15 +51,19 @@ internal sealed partial class UvAtlasCorrespondence : IBodyCorrespondence
 
     private readonly string description;
 
-    private UvAtlasCorrespondence(ModelParts source, IReadOnlyList<Vector3?> field, string what, Stats measured)
+    private UvAtlasCorrespondence(ModelParts source, IReadOnlyList<Vector3?> field, string what, Stats measured,
+                                  bool targetWorn = false)
     {
         Source = source;
         Field = field;
         description = what;
         Measured = measured;
+        TargetWorn = targetWorn;
     }
 
     public ModelParts Source { get; }
+
+    public bool TargetWorn { get; }
 
     public IReadOnlyList<Vector3?> Field { get; }
 
@@ -88,10 +92,31 @@ internal sealed partial class UvAtlasCorrespondence : IBodyCorrespondence
     /// <param name="P99Disagreement">How far the kept landings disagree with their neighbours, 99th percentile, as a
     /// share of what is allowed.</param>
     /// <param name="MaxDisagreement">The same, the largest.</param>
+    /// <param name="Astray">Skin vertices whose uv landed, but further than <see cref="MaxShift"/> away.</param>
+    /// <param name="NoLanding">Skin vertices whose uv landed on no target skin at all, with those beside them that only
+    /// snapped onto the rim of the gap (see <see cref="Uncovered"/>); 0 off that path.</param>
+    /// <param name="Excused">Of those, the vertices the target's smallclothes lie under: carried, then projected onto
+    /// them, and not counted against the coverage.</param>
+    /// <param name="Unprojected">Excused vertices kept where the carry put them, so no triangle turns over.</param>
+    /// <param name="OnSkin">Excused vertices whose projection landed on the target's skin rather than its smallclothes.</param>
+    /// <param name="FoldedElsewhere">Source skin triangles turned over by the landings alone, none of their corners
+    /// excused or carried: recorded, not judged.</param>
+    /// <param name="FoldedInIslands">Source skin triangles turned over where the skin was pressed onto the smallclothes
+    /// by its shape alone — islands that landed nowhere, and skin the smallclothes bridge (a cleft): recorded, not
+    /// judged.</param>
+    /// <param name="P99Cover">How far the carried excused points were from the smallclothes, 99th percentile, metres.</param>
+    /// <param name="MaxCover">The same, the furthest.</param>
+    /// <param name="FoldedSetAside">Excused or carried vertices whose landing still turned a skin triangle over: left
+    /// with no landing and filled from their neighbours, never refused over.</param>
+    /// <param name="FoldedTouching">The skin triangles those folds were.</param>
     internal readonly record struct Stats(int Landed, int Placeable, int OffSheet, float VertexCoverage,
                                           float RawAreaCoverage, float AreaCoverage, float MaxShift, float P99Shift,
                                           int Carried, int Disagreed, int Unvouched, int Unjudged,
-                                          float P99Disagreement, float MaxDisagreement)
+                                          float P99Disagreement, float MaxDisagreement, int Astray = 0, int NoLanding = 0,
+                                          int Excused = 0, int Unprojected = 0, int OnSkin = 0,
+                                          int FoldedElsewhere = 0, float P99Cover = 0f,
+                                          float MaxCover = 0f, int FoldedInIslands = 0, int FoldedSetAside = 0,
+                                          int FoldedTouching = 0)
     {
         /// <summary>Landings the guard set aside.</summary>
         public int Distrusted => Disagreed + Unvouched;
@@ -110,19 +135,24 @@ internal sealed partial class UvAtlasCorrespondence : IBodyCorrespondence
     /// NSFW crotch is 60% of its legs' vertices and lands on no Bibo+ triangle, so by count only 44% of the legs land —
     /// though 93% of their SURFACE does. A pair the count refuses is then judged by surface instead, and what missed
     /// follows the skin around it. Off for every other pair, which is judged by count alone, as it always was.</param>
+    /// <param name="sameLayout">Both bodies' skin is known to be drawn in one layout (see
+    /// <see cref="BodyCorrespondence.LayoutOf"/>). Only then may a pair the count refuses be judged by what the target
+    /// draws in place of skin (<see cref="Uncovered"/>): with a layout unknown, missing skin and a different layout look
+    /// the same.</param>
     public static bool TryBuild(ModelParts source, float[] sourceUv, ModelParts target, float[] targetUv, string what,
                                 out UvAtlasCorrespondence? correspondence, out string refusal,
                                 UVRemapService.UvConversion? convert = null, UVRemapService.UvConversion? onSheet = null,
-                                bool byArea = false)
+                                bool byArea = false, bool sameLayout = false)
         => TryBuild(source, sourceUv, target, targetUv, what, out correspondence, out refusal, out _, convert, onSheet,
-                    byArea);
+                    byArea, sameLayout);
 
-    /// <inheritdoc cref="TryBuild(ModelParts, float[], ModelParts, float[], string, out UvAtlasCorrespondence?, out string, UVRemapService.UvConversion?, UVRemapService.UvConversion?, bool)"/>
+    /// <inheritdoc cref="TryBuild(ModelParts, float[], ModelParts, float[], string, out UvAtlasCorrespondence?, out string, UVRemapService.UvConversion?, UVRemapService.UvConversion?, bool, bool)"/>
     /// <param name="measured">How the skin landed, refused or not; default when it was never measured.</param>
     internal static bool TryBuild(ModelParts source, float[] sourceUv, ModelParts target, float[] targetUv, string what,
                                   out UvAtlasCorrespondence? correspondence, out string refusal, out Stats measured,
                                   UVRemapService.UvConversion? convert = null,
-                                  UVRemapService.UvConversion? onSheet = null, bool byArea = false)
+                                  UVRemapService.UvConversion? onSheet = null, bool byArea = false,
+                                  bool sameLayout = false)
     {
         correspondence = null;
         measured = default;
@@ -154,6 +184,11 @@ internal sealed partial class UvAtlasCorrespondence : IBodyCorrespondence
             return false;
         }
 
+        // How each miss missed, for a target that draws something else where the source has skin (see Uncovered).
+        var noLanding = new HashSet<int>();
+        var nearLanded = new HashSet<int>();
+        int astray = 0;
+
         int landed = 0;
         foreach (int v in skin)
         {
@@ -169,10 +204,19 @@ internal sealed partial class UvAtlasCorrespondence : IBodyCorrespondence
                 if (convert(onTile.X, onTile.Y, p.X >= 0f ? 1 : -1) is not { } moved) continue;
                 uv = new Vector2(moved.U, moved.V);
             }
-            if (!atlas.Land(uv, p, out var q)) continue;
-            if (Vector3.Distance(p, q) > MaxShift) continue;
+            if (!atlas.Land(uv, p, out var q, out bool near))
+            {
+                noLanding.Add(v);
+                continue;
+            }
+            if (Vector3.Distance(p, q) > MaxShift)
+            {
+                astray++;
+                continue;
+            }
             field[v] = q - p;
             landed++;
+            if (near) nearLanded.Add(v);
         }
 
         int placeable = skin.Count - offSheet.Count;
@@ -187,6 +231,11 @@ internal sealed partial class UvAtlasCorrespondence : IBodyCorrespondence
         var carry = offSheet;
         if (coverage < MinCoverage)
         {
+            // One layout, but the target draws something other than skin where much of the source has it.
+            if (!byArea && sameLayout && convert == null)
+                return Uncovered(source, target, what, skin, field, noLanding, nearLanded, astray, measured,
+                                 out correspondence, out refusal, out measured);
+
             if (!byArea || rawArea < MinCoverage)
                 return Refuse(what, byArea ? rawArea : coverage, out refusal);
 
@@ -228,6 +277,18 @@ internal sealed partial class UvAtlasCorrespondence : IBodyCorrespondence
         refusal = string.Format(Loc.Localize("Parts.Retarget.Refuse.LowCoverage.Fmt",
                       "Only {1:P0} of the source {0} body finds its place on the target by texture coordinate, " +
                       "so the two do not share a texture layout. They cannot be refitted onto each other."),
+                      what, coverage);
+        return false;
+    }
+
+    /// <summary>The refusal for a target option that draws something else, not skin, over much of the source's skin.</summary>
+    private static bool RefuseNoSkin(string what, float coverage, out string refusal)
+    {
+        refusal = string.Format(Loc.Localize("Parts.Retarget.Refuse.NoSkinThere.Fmt",
+                      "Only {1:P0} of the source {0} body finds skin to land on: this {0} option of the target body has " +
+                      "no skin over the rest of it and draws something else there, such as modelled underwear, that " +
+                      "the refit could not fit it onto. Choose an option of that body that has skin there, or refit " +
+                      "onto another body."),
                       what, coverage);
         return false;
     }
@@ -485,9 +546,12 @@ internal sealed partial class UvAtlasCorrespondence : IBodyCorrespondence
         /// The point of the target body at <paramref name="at"/> in uv. <paramref name="near"/> is where the point sits
         /// on the source body, which breaks ties between mirrored landings and seam-straddling triangles.
         /// </summary>
-        public bool Land(Vector2 at, Vector3 near, out Vector3 landing)
+        /// <param name="nearOnly">Landed only in the second pass: the uv lies in a gap, within <see cref="NearUv"/> of a
+        /// triangle's edge.</param>
+        public bool Land(Vector2 at, Vector3 near, out Vector3 landing, out bool nearOnly)
         {
             landing = default;
+            nearOnly = false;
             float bestScore = float.MaxValue;
             bool found = false;
             int side = Side(near.X);
@@ -519,6 +583,7 @@ internal sealed partial class UvAtlasCorrespondence : IBodyCorrespondence
                             bestScore = score;
                             landing = q;
                             found = true;
+                            nearOnly = pass == 1;
                         }
                     }
                 }

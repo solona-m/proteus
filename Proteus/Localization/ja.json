@@ -543,6 +543,14 @@
     "message": "\nグローバル設定です。編集中の紐付けには含まれません。",
     "description": ""
   },
+  "Colors.Bodies.Men.Label": {
+    "message": "男性にも重ねる",
+    "description": "Checkbox label in the colour-table editor window's Advanced section, under \"Overlay gen2/vanilla\". Ticked = this mod's women's art is also painted on men."
+  },
+  "Colors.Bodies.Men.Tip": {
+    "message": "このModの女性用アートを男性（TBSEまたは男性バニラ体型）にも描きます。\n男性用ボディマップで彼自身のレイアウトに変換されます。\n男性用に作られたアートは一切変更されません。\nこのオプションだけでなく、Mod全体に適用されます。",
+    "description": "Tooltip for the checkbox above. \"TBSE\" is a body-mod name - never translated. Contains deliberate line breaks - keep the same number, moving them where your language needs."
+  },
   "Colors.Bodies.Vanilla.Label": {
     "message": "gen2/バニラに重ねる",
     "description": "Checkbox label in the colour-table editor window's Advanced section. \"gen2\" is a body-mod name - never translated. Ticked = this mod is also painted onto vanilla skin."
@@ -2331,6 +2339,10 @@
     "message": "マスクが装備として描画される設定になっています。衣装はマスクから作られるため、Penumbra の「{0}」グループで何も選択されていないと何も作られません。",
     "description": ""
   },
+  "Mods.Inert.AwaitingMenMaps": {
+    "message": "このModのアートは女性の体向けに作られています。男性用ボディマップのダウンロードが終わり次第、あなた自身のレイアウトで描かれます（ダウンロードに失敗した場合は、UVマップの通知から再試行してください）。",
+    "description": "Why an enabled mod paints nothing yet: it is women's art on a man, waiting for the men's body maps to download. \"UV maps\" names the notice in the plugin's status window."
+  },
   "Mods.Inert.NothingReached": {
     "message": "選択したオプションは解決されましたが、このキャラクターが読み込んでいる面には届きませんでした。",
     "description": ""
@@ -2623,8 +2635,8 @@
     "message": "移動したパーツは元のボーンに従うため、ボーンから大きく離すとポーズによって不自然に曲がることがあります。",
     "description": ""
   },
-  "Parts.Move.SkinTip": {
-    "message": "肌は移動できません。",
+  "Parts.Move.SkinOff.Tip": {
+    "message": "肌を動かすには「肌も動かす」をオンにしてください。",
     "description": ""
   },
   "Parts.Move.LockedTip": {
@@ -2855,8 +2867,48 @@
     "message": "左右対称",
     "description": ""
   },
-  "Parts.Brush.Mirror.Tip": {
-    "message": "体の中心を軸に、左右を同時に鏡映しで塗ります。",
+  "Parts.Mirror.Tip": {
+    "message": "体の中心を軸に、左右を同時に鏡映しで編集します。ブラシは鏡像側も塗り、移動・回転・拡大縮小は反対側の対応する布を鏡映しで動かします（「肌も動かす」がオンなら対応する肌も）。それ自体が左右対称のパーツは中心に留まります。",
+    "description": "Tooltip on the Mirror left/right checkbox, shown under the brushes and under Move, Rotate and Scale."
+  },
+  "Parts.Move.Mirror.Paired.Fmt": {
+    "message": "左右対称: 選択した {1:N0} 点のうち {0:N0} 点に反対側の対応点があります。",
+    "description": "{0} is how many selected points matched a point on the other side; {1} is how many points are selected."
+  },
+  "Parts.Move.Mirror.Held.Fmt": {
+    "message": "対応点のうち {0:N0} 点はロックされているため動きません。",
+    "description": "{0} is how many of the matching points are locked."
+  },
+  "Parts.Move.Mirror.None": {
+    "message": "左右対称: 反対側にこの選択に対応するものがないため、こちら側だけが動きます。",
+    "description": "Shown under Move, Rotate and Scale with Mirror on when nothing matched."
+  },
+  "Parts.Move.Mirror.Centred": {
+    "message": "左右対称: この選択はそれ自体が左右対称なので、一つのまとまりとして動き、中心に留まります。横方向の移動と横向きの回転は除かれます。",
+    "description": "Shown under Move, Rotate and Scale with Mirror on when the selection crosses the centre and mirrors itself."
+  },
+  "Parts.SkinMoves": {
+    "message": "肌も動かす",
+    "description": ""
+  },
+  "Parts.SkinMoves.Tip": {
+    "message": "ブラシと移動・回転・拡大縮小で、服だけでなく体の肌も動かせるようにします。肌の上にある服（約3 cm以内）は肌と一緒に動くので、体が突き抜けません。それより離れた服はそのままです。オフのときは、肌は作者が置いた位置から動きません。\n\nブラシは、このパーツが次のパーツとつながる肌の縁をその場に残します。そこで移動・回転・拡大縮小を使って肌を動かすと、腰・手首・首にすき間ができることがあります。\n\n体型サイズと自動調整は、装備の肌を新しい体の肌に置き換えるため、形を整えた肌は調整後には残りません。",
+    "description": ""
+  },
+  "Parts.SkinMoves.NotThisBrush.Tip": {
+    "message": "橋渡しと風のブラシは服にだけ作用し、その下の肌は動きません。",
+    "description": ""
+  },
+  "Parts.SkinMoves.Preparing": {
+    "message": "肌を準備しています…",
+    "description": ""
+  },
+  "Parts.SkinMoves.BodyModel.Warn": {
+    "message": "これは体です。この体向けの装備は体の正確な形で判別されるため、形を変えると、体型サイズと自動調整がどの体向けに作られた装備か分からなくなることがあります。",
+    "description": ""
+  },
+  "Parts.SkinMoves.Failed": {
+    "message": "肌を準備できなかったため、肌は動きません。理由はログに記録されています。",
     "description": ""
   },
   "Parts.Brush.Lock.Hint": {
@@ -2875,8 +2927,8 @@
     "message": "すべてロック解除",
     "description": ""
   },
-  "Parts.Brush.Lock.Skin.Tip": {
-    "message": "肌は動きません。",
+  "Parts.Brush.Lock.SkinOff.Tip": {
+    "message": "「肌も動かす」がオフの間、肌は動きません。",
     "description": ""
   },
   "MeshVolume.Apply.Nothing": {
@@ -3616,7 +3668,7 @@
     "description": ""
   },
   "Parts.Retarget.NoBodiesForSex.Fmt": {
-    "message": "{0}には{1}用の体型がありません。リフィットで性別は変えられません。",
+    "message": "{0}には{1}の体がありません。",
     "description": ""
   },
   "Parts.Retarget.Male": {
@@ -3722,6 +3774,10 @@
   "Parts.Retarget.ShapedDown.Fmt": {
     "message": "{0}のボディがないため、{0}モデルはゲームと同じ方法で{1}の体型に変形してリフィットし、{0}として保存し直します。",
     "description": ""
+  },
+  "Parts.Retarget.Lowered.Fmt": {
+    "message": "{0}モデルから{1}モデルを作り、ゲームが両者の間で曲げるのと同じ方法で{1}の体型に曲げます。保存するとゲームに必要なメタデータが追加されます。",
+    "description": "{0} is the race of the model open, {1} the race picked below it."
   },
   "Parts.Retarget.Bake.BendBack.Fmt": {
     "message": "リフィットを{0}の体型に戻せませんでした（{1}）",
@@ -3851,6 +3907,10 @@
     "message": "靴が自分の足を、手袋が自分の手を残している間は常にオンです。オフにすると新しい脚や腕が丸ごと入ってしまいます。",
     "description": ""
   },
+  "Parts.Retarget.ClearForcedTip": {
+    "message": "ゲーム本来のトップスでは自動リフィットと同じく常にオンです。ゲームは布を自分の体の中に埋め込んでいるため、新しい体からは常に押し出されます。",
+    "description": ""
+  },
   "Parts.Retarget.KeepFeet": {
     "message": "元の足を残す",
     "description": ""
@@ -3878,6 +3938,14 @@
   "Parts.Retarget.SkinAlreadyMatches": {
     "message": "変更はありません。肌はすでに新しいボディと同じように描かれています。",
     "description": ""
+  },
+  "Parts.Retarget.Smallclothes.AfterSave": {
+    "message": "新しい体は肌のない部分に下着を描いており、変換はそれを取り込みます。ゲーム内で表示されるのは保存した後です。",
+    "description": "Body size status: the preview cannot show the new body's underwear, whose material is only published when the refit is saved."
+  },
+  "Parts.Retarget.Smallclothes.Fallback": {
+    "message": "新しい体は肌のない部分に下着を描いていますが、この装備に取り込めなかったため、その部分は装備自身の肌のままです。",
+    "description": "Body size status: the new body's underwear (drawn where it has no skin) could not be added to the garment, so the garment keeps its own skin there."
   },
   "Parts.Retarget.AlreadyFits.Fmt": {
     "message": "変更はありません。この装備が届く範囲では、{0} は作られた元のサイズと同じ形です。",
@@ -4068,23 +4136,43 @@
     "description": ""
   },
   "Parts.Vanilla.Worn.Tip": {
-    "message": "装着中でMod未適用です。開くと編集できる新しいModにコピーされます。「体型サイズ」を選択中はリフィット用に開きます。",
-    "description": ""
-  },
-  "Parts.Vanilla.Editing.Fmt": {
-    "message": "{0} をMod「{1}」で開いています。ゲーム本来のもののコピーなので、変更するまで見た目は同じです。",
+    "message": "装備中（Modなし）。そのままの状態で開き、変更するまで何も保存されません。最初の変更で専用のModにコピーされます。",
     "description": ""
   },
   "Parts.Vanilla.ModDescription.Fmt": {
     "message": "{0}。Proteusが編集用にゲームからコピーしたものです。",
     "description": ""
   },
-  "Parts.Vanilla.EditTool.Tip": {
-    "message": "バニラ装備にはModファイルがないため、これを選ぶとまず新しいModにコピーします。",
-    "description": ""
-  },
   "Parts.Vanilla.WornSuffix": {
     "message": "（バニラ）",
+    "description": ""
+  },
+  "Parts.Vanilla.CopyNote.Fmt": {
+    "message": "まだ何も保存されていません。最初の変更でMod「{0}」にコピーされます。",
+    "description": ""
+  },
+  "Parts.Vanilla.Copied.Fmt": {
+    "message": "{0}を変更と一緒にMod「{1}」にコピーしました。",
+    "description": ""
+  },
+  "Parts.Vanilla.EditedCopyThere.Fmt": {
+    "message": "「{0}」にはこのパーツの編集済みコピーがすでにあるため、変更は保存されませんでした。そのコピーの編集を続けるには、ここでそれを開いてください（PenumbraでそのModをオンにした状態で）。ゲーム本来の状態からやり直すには、そのModを削除してください。",
+    "description": ""
+  },
+  "Parts.Vanilla.ModSwitchedOff.Fmt": {
+    "message": "「{0}」がオフになっているため、変更は保存されませんでした。Penumbraでオンにするか、削除してやり直してください。",
+    "description": ""
+  },
+  "Parts.Vanilla.CopyRefused.Fmt": {
+    "message": "変更を保存できなかったため、何もコピーされませんでした: {0}",
+    "description": ""
+  },
+  "Parts.Vanilla.CopyRegistering": {
+    "message": "編集内容を新しいMODにコピーしたところで、Penumbraがまだ準備中です。少し待ってからもう一度お試しください。",
+    "description": ""
+  },
+  "Parts.Vanilla.NotRefittable": {
+    "message": "「体型サイズ」ではこのパーツを合わせられません。編集するには別のツールを選んでください。",
     "description": ""
   },
   "WhatsNew.HairPort.Head": {
@@ -4307,12 +4395,64 @@
     "message": "新しいモデルを読み戻せませんでした",
     "description": "Why a model for the wearer's race could not be made; the {1} of Parts.Retarget.BakeFailed.Fmt. Lower-case, no full stop."
   },
+  "Parts.Retarget.Race.OtherSex.Fmt": {
+    "message": "{0}（この{1}モデルから調整）",
+    "description": "A \"Refit for\" entry. {0} is a race of the other sex such as \"Midlander M\"; {1} the race of the model open."
+  },
+  "Parts.Retarget.Race.CrossSexNote.Fmt": {
+    "message": "性別をまたいで調整しました：作られた元の{0}の体を{1}の形に曲げ、ボディマップで新しい体と一点ずつ対応させています。共有する前にゲーム内で確認してください。",
+    "description": "Warning under a refit for the other sex. {0} is the race of the model open, {1} the race picked. \"body maps\" are the bibo↔TBSE texture maps."
+  },
+  "Parts.Retarget.Race.CrossSexWears.Fmt": {
+    "message": "保存した調整は{0}が着用し、このアイテムに自分のモデルがない{1}も着用します。{2}はこのモデルのままです。",
+    "description": "{0} is the race picked; {1} a comma-separated list of races; {2} the race of the model open."
+  },
+  "Parts.Retarget.Race.CrossSexQuality.Fmt": {
+    "message": "裏返った面 {0}、体の対応 {1}。",
+    "description": "{0} is a count of folded (turned-over) faces; {1} a percentage such as \"97%\"."
+  },
+  "Parts.Retarget.Race.CrossSexHint.Fmt": {
+    "message": "{0}用のバージョンを作るには、「リフィット対象の種族」で選んでください。",
+    "description": "{0} is a race such as \"Midlander M\". “Refit for” is the dropdown's label (Parts.Retarget.Race.Label)."
+  },
+  "Parts.Retarget.Refuse.CrossSexMadeFor.Fmt": {
+    "message": "性別をまたぐ場合、この装備が作られた体は{0}の体である必要があります。「元の体型 Mod」で作られたボディModを選んでください。",
+    "description": "{0} is a race such as \"Midlander F\". “Made for” is the body dropdown the garment was made on."
+  },
+  "Parts.Retarget.Refuse.CrossSexCoverage.Fmt": {
+    "message": "この性別をまたぐ調整は、ボディマップで体の{0}しか対応しませんでした。Proteusが保存するのは、対応が{1}以上のものだけです。",
+    "description": "Why a refit for the other sex is not saved: {0} the share of the body matched, as found; {1} the least that is saved. Percentages arrive formatted."
+  },
+  "Parts.Retarget.Race.CrossSexFolded.Fmt": {
+    "message": "この性別をまたぐ調整で布の面が{0:N0}個裏返りました。裏返った面はゲーム内で穴に見えるので、共有する前にその場所を確認してください。",
+    "description": "Said in the warning colour beside a refit for the other sex: {0} is a count of cloth faces turned over."
+  },
+  "Parts.Retarget.Race.BonesMoved.Fmt": {
+    "message": "{0}のスケルトンには、この装備が使う骨が{1}本ありません。その重みは今はスケルトンにある最も近い骨に従うので、その部分は単独ではなくその骨と一緒に動きます：{2}",
+    "description": "Warning beside a refit for a picked race: {0} is the race picked; {1} a count of bones; {2} the moves, such as \"ya_shiri_phys_l → iv_shiri_l\" (bone names are not translated)."
+  },
+  "Parts.Retarget.Race.NeedsSkeleton.Fmt": {
+    "message": "{1}の{0}のスケルトンは、ゲーム本来のスケルトンにない骨を{2}本このモデルに与えます（{3}）。そのスケルトンがない人には、その部分がずれて見えます。",
+    "description": "Warning beside a refit for a picked race: {0} is the race picked; {1} the mod its skeleton comes from; {2} a count of bones; {3} their names (not translated)."
+  },
+  "Parts.Retarget.Race.RenameFailed.Fmt": {
+    "message": "骨の名前を変更できませんでした（{0}）",
+    "description": "Why a refit for a picked race was refused: the garment's bones could not be moved onto the race's; {0} is the technical reason."
+  },
+  "Parts.Retarget.Refuse.CrossSexLayout.Fmt": {
+    "message": "性別をまたぐ場合、ProteusはBibo+またはゲームのレイアウトの女性の体と、TBSEまたはゲームのレイアウトの男性の体しか対応させられません。{0}のモデルは{1}と{2}を使っています。",
+    "description": "{0} is a slot such as \"_top\"; {1} and {2} texture layout names (bibo, gen3, tbse, male vanilla), never translated. \"Bibo+\" and \"TBSE\" are body-mod names."
+  },
+  "Parts.Retarget.Refuse.MenMapsMissing": {
+    "message": "性別をまたぐ調整に必要なボディマップがまだありません。Proteusがダウンロード中です。届いたらもう一度調整してください。",
+    "description": "Said when the bibo↔TBSE texture maps have not been downloaded yet."
+  },
   "Parts.Retarget.Race.Label": {
     "message": "リフィット対象の種族",
     "description": "Heads the dropdown that picks which race's model a refit is made and saved as."
   },
   "Parts.Retarget.Race.Tip": {
-    "message": "どの種族向けにリフィットするか。衣装と同じ性別の別の種族を選ぶと、このモデルからゲームと同じ方法で曲げた専用モデルを作り、その種族の体型にリフィットして、その種族が読み込む場所に保存します。他の種族はこのモデルのままです。",
+    "message": "どの種族向けの調整か。別の種族には、ゲームが曲げるのと同じようにこのモデルから作り、その種族の体に合わせて、その種族が読み込む場所に保存した専用モデルができます。ミッドランダーの胴・脚装備は、異性向けにも調整できます。このモデルはそのままです。",
     "description": "Tooltip of Parts.Retarget.Race.Label."
   },
   "Parts.Retarget.Race.ThisModel.Fmt": {
@@ -4338,6 +4478,14 @@
   "Parts.Retarget.Race.Only.Fmt": {
     "message": "保存したリフィットを着るのは{0}だけです。{1}はこのモデルのままです。",
     "description": "{0} is the race picked, {1} the race of the model open."
+  },
+  "Parts.Retarget.Race.Below.Fmt": {
+    "message": "保存したリフィットは{0}が着ます。この装備に専用モデルを持たない同じ性別の種族も同様です。{1}はこのモデルのままです。",
+    "description": "{0} is the race picked, {1} the race of the model open; said for a race the open one falls back to."
+  },
+  "Parts.Retarget.Race.BelowExtraBones.Fmt": {
+    "message": "この衣装は追加ボーンを使います。追加スケルトンが与えられるのは{0}だけなので、このリフィットを着る他の種族ではそのボーンは動きません。",
+    "description": "{0} is the race picked."
   },
   "Parts.Retarget.Race.SourceBaked.Fmt": {
     "message": "作成元の体型も同じ方法で{0}に曲げるので、元と同じように体に沿います。",
@@ -4543,9 +4691,21 @@
     "message": "この Mod はまだ Penumbra の旧フォルダー形式で、Proteus は編集しません。Penumbra で一度有効にしてアップグレードさせてから、戻ってきてください。",
     "description": "Body size status line: the mod is in Penumbra's pre-v3 folder format."
   },
+  "Parts.Retarget.Save.ModGone.Fmt": {
+    "message": "「{0}」はPenumbraのModにもうありません。Penumbraで名前が変更されたか削除されました。何も保存されていません。",
+    "description": "Body size status line when the mod's folder is gone. {0} is the mod's folder name."
+  },
   "Parts.Retarget.Save.Failed.Fmt": {
     "message": "保存できませんでした：{0}",
     "description": "Body size status line. {0} is the error message."
+  },
+  "Parts.Retarget.Save.NoMaterialSet.Fmt": {
+    "message": "{0} は新しい体の下着を描いていますが、その素材は装備またはアクセサリーのモデルの横にしか保存できません。",
+    "description": "Body size save refused: {0} is the model's game path. The refit draws the new body's underwear, whose material must be saved beside an equipment model."
+  },
+  "Parts.Retarget.Save.NoMaterialName.Fmt": {
+    "message": "{0} が使える素材名はすべて使用済みのため、新しい体の下着を保存する固有の名前がありません。",
+    "description": "Body size save refused: {0} is the model's game path. Every free material name for the new body's underwear copy is already used."
   },
   "Parts.Retarget.Undo.Removed.Fmt": {
     "message": "「{0}」を削除しました。",
@@ -4582,6 +4742,10 @@
   "Parts.Retarget.Refuse.LowCoverage.Fmt": {
     "message": "変換元の{0}の体のうち、テクスチャ座標で変換先に位置が見つかるのは {1:P0} だけです。両者はテクスチャレイアウトを共有していないため、相互に変換できません。",
     "description": "Body size: why two bodies cannot be paired. {0} is the body part (chest, legs…), {1:P0} the share that matched — keep the :P0."
+  },
+  "Parts.Retarget.Refuse.NoSkinThere.Fmt": {
+    "message": "変換元の{0}の体のうち、着地できる肌が見つかるのは {1:P0} だけです。変換先の体のこの{0}オプションには残りの部分に肌がなく、代わりにモデリングされた下着などが描かれていて、そこに合わせることができませんでした。その部分に肌があるこの体のオプションを選ぶか、別の体に変換してください。",
+    "description": "Body size: why two bodies cannot be paired when the target option draws something else (such as modelled underwear) where the source has skin. {0} is the body part (chest, legs…), {1:P0} the share that landed on skin — keep the :P0."
   },
   "Parts.Retarget.Bake.NoPath.Fmt": {
     "message": "種族デフォーマーに c{0:D4} から c{1:D4} への経路がありません",
@@ -4904,7 +5068,7 @@
     "description": ""
   },
   "SizeSet.Intro": {
-    "message": "下でチェックしたボディの全サイズを、このMOD全体に追加します。各サイズは作者のサイズのうち最も近いものからリフィットし、そのオプション内の衣装の他のパーツも同じサイズから作り、作者のサイズの隣に「Rue S」「YAB Buff L」などとして保存します。MODにすでにあるサイズはそのままです。",
+    "message": "下でチェックしたボディの全サイズを、このMOD全体に追加します。各サイズは作者のサイズのうち最も近いものからリフィットし、そのオプション内の衣装の他のパーツも同じサイズから作り、作者のサイズの隣に「Rue S」「YAB Buff L」などとして保存します。MODにすでにあるサイズはそのままです。女性向けMODにもTBSEとTBSE-Xを追加できます。胴と脚が男性向けに調整され、専用のグループに保存されます。",
     "description": ""
   },
   "SizeSet.Yas": {
@@ -5030,6 +5194,54 @@
   "SizeSet.Working.Fmt": {
     "message": "{0}を{1}にリフィット中...",
     "description": ""
+  },
+  "SizeSet.ForMen.Fmt": {
+    "message": "{0}（男性向け）",
+    "description": "Checkbox label for a men's body offered for a women's mod. {0} is the body (\"TBSE\")."
+  },
+  "SizeSet.ForMen.Tip.Fmt": {
+    "message": "このMODの女性用の胴・脚パーツに{0}の男性版を作ります。ボディマップ（初めて必要になったときにダウンロードされます）を通してミッドランダー男性向けに調整し、それぞれ男性の形に曲げた体が彼の体に最も近い作者のサイズから作ります。専用のグループ「{1}」に保存されるので、女性用サイズはそのままです。靴と手袋は性別をまたいで調整されず、作者がすでに男性用に作ったパーツはそれが使われます。",
+    "description": "Tooltip. {0} is a men's body (\"TBSE\"), {1} the group the men's versions go into."
+  },
+  "SizeSet.MensGroup": {
+    "message": "男性の体",
+    "description": "The name of the Penumbra group a women's mod's men's versions are saved into."
+  },
+  "SizeSet.CheckInGame": {
+    "message": "ゲーム内で確認：",
+    "description": "Heading over the sizes saved that want a look in game."
+  },
+  "SizeSet.Warning.Fmt": {
+    "message": "{0}、「{1}」：{2}",
+    "description": "One line under \"Check in game\". {0} is the piece, {1} the size, {2} what to look at."
+  },
+  "SizeSet.MenMapsMissing": {
+    "message": "男性版は作られませんでした。必要なボディマップがまだありません。Proteusがダウンロード中です。届いたらもう一度サイズを追加してください。",
+    "description": "Why no men's versions were made."
+  },
+  "SizeSet.NoSourceForMen.Fmt": {
+    "message": "{0}：作者のサイズはどれも、Proteusが男性の体に対応づけられる体（Bibo+またはゲームのレイアウト）で作られていないため、男性版はありません。",
+    "description": "{0} is the piece."
+  },
+  "SizeSet.MensGroupTaken.Fmt": {
+    "message": "このMODにはすでに作者の「{0}」というグループがあるため、男性版は作られませんでした。Penumbraでそのグループの名前を変えてから、もう一度サイズを追加してください。",
+    "description": "{0} is the group's name."
+  },
+  "SizeSet.EndsNotForMen": {
+    "message": "靴と手袋には男性版がありません。性別をまたいで調整されるのは胴と脚のパーツだけです。",
+    "description": "Said once when a women's mod's men's versions are made and it has shoes or gloves."
+  },
+  "SizeSet.OneVariant.Fmt": {
+    "message": "{0}：男性版は「{1}」から作った1種類です。MODのほかのバリエーションは女性専用のままです。",
+    "description": "{0} is the piece, {1} the author's option the men's version was made from."
+  },
+  "SizeSet.NotMade": {
+    "message": "調整で保存できるものが作られませんでした",
+    "description": "Why a men's version couldn't be made, after \"couldn't be made:\"."
+  },
+  "SizeSet.RigUnreadable": {
+    "message": "リグを読み取れないため、男性の形に曲げられません",
+    "description": "Why a men's version couldn't be made, after \"couldn't be made:\": the garment's skinning can't be read."
   },
   "SizeSet.NotInstalledTip.Fmt": {
     "message": "{0}はPenumbraにインストールされていません。インストールしてから、この項目を閉じて開き直してください。",
@@ -5243,9 +5455,13 @@
     "message": "髪",
     "description": ""
   },
-  "HairPort.Refused.Folded.Fmt": {
-    "message": "c{0:D4} に合わせて曲げると、{1} 個の三角形が裏返ります",
-    "description": ""
+  "HairPort.Folded.Fmt": {
+    "message": "c{0:D4} に合わせて曲げると {1} 個の三角形が裏返り、穴に見えることがあります。ゲーム内で確認してください",
+    "description": "A hair port saved with a warning: bent onto race {0}, {1} of the hairstyle's triangles turn inside out."
+  },
+  "HairPort.Scan.State.FittedWarn.Fmt": {
+    "message": "合わせました — {0}",
+    "description": "A hairstyle's state in the list: fitted, with {0} what to look at in game."
   },
   "HairPort.Refused.Declined": {
     "message": "移植が取り消されたため、そのままにします",
@@ -5353,6 +5569,54 @@
   },
   "HairPort.Scan.UndoChecked.Confirm.Fmt": {
     "message": "もう一度クリックすると髪型 {0} 件を元に戻します（以後自動では合わせません）",
+    "description": ""
+  },
+  "HairPort.Earless.Label": {
+    "message": "ミコッテの髪Modから耳を取る",
+    "description": ""
+  },
+  "HairPort.Earless.Tip": {
+    "message": "ミコッテ向け：猫耳のある髪型の髪Modを身に着けると、Proteus が耳のない\nコピーを作り、Modのオプションをそのコピーに向けます。作者のファイルは一切\n変更しません。\n\nMod自体を変更するため、そのModを有効にして表示されるすべてのキャラクター\n（すべてのコレクション、共有相手も含む）は耳がなくなります。オフにすると、\nProteus が変更したすべてのModに耳を戻します。別の種族向けの髪Modの調整が\nオンでもオフでも動作します。",
+    "description": ""
+  },
+  "HairPort.Settings.Earless.Fmt": {
+    "message": "{1} の髪型 {0} は耳なしで表示されています。このModを有効にして表示されるすべてのキャラクター（すべてのコレクション）が対象です。設定をオフにすると元に戻ります。",
+    "description": ""
+  },
+  "HairPort.Settings.EarlessOptionHint.Fmt": {
+    "message": "このModには独自の耳なしオプションがあります：{0}",
+    "description": ""
+  },
+  "HairPort.Earless.Chat": {
+    "message": "[Proteus] この髪型の猫耳を取りました。Proteus がModを耳なしのコピーに向けたため、このModを有効にして表示されるすべてのキャラクター（すべてのコレクション）は耳がなくなっています。耳を戻すには /proteus > 設定 > 髪 で「ミコッテの髪Modから耳を取る」をオフにしてください。",
+    "description": ""
+  },
+  "HairPort.Earless.RestoreBlocked.Fmt": {
+    "message": "[Proteus] {0} の耳を戻せませんでした：{1}",
+    "description": ""
+  },
+  "HairPort.Earless.Restored.Fmt": {
+    "message": "{0} 個の髪型に耳を戻しました。",
+    "description": ""
+  },
+  "HairPort.Earless.Refused.AuthorMissing.Fmt": {
+    "message": "作者のファイル {0} が見つからないため、耳なしのコピーを残しました",
+    "description": ""
+  },
+  "HairPort.Earless.Refused.Changed": {
+    "message": "Proteus の作業中にModが変更されたため、何も書き込みませんでした",
+    "description": ""
+  },
+  "HairPort.Earless.Refused.Leftover": {
+    "message": "耳をすべて取り除くことができませんでした",
+    "description": ""
+  },
+  "HairPort.Earless.Refused.RecordUnreadable": {
+    "message": "このModの耳なし髪型の Proteus の記録（Proteus/earlesshair.json）を読み込めなかったため、何も変更しませんでした。",
+    "description": ""
+  },
+  "HairPort.Earless.Refused.Outside.Fmt": {
+    "message": "{0} はModの耳なしフォルダー内のパスではないため、何も書き込みませんでした",
     "description": ""
   }
 }

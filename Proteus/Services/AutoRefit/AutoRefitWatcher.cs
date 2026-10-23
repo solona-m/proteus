@@ -128,6 +128,9 @@ public sealed partial class AutoRefitWatcher : IDisposable
     private CancellationTokenSource? running;
     private string? runningSlot;
 
+    /// <summary>The mod the running refit is for, by folder; guarded by <see cref="queueGate"/> like the slot.</summary>
+    private string? runningModDir;
+
     /// <summary>The racial deformer, read once.</summary>
     private XivLiveMesh.PbdFile? pbd;
     private bool pbdTried;
@@ -679,9 +682,45 @@ public sealed partial class AutoRefitWatcher : IDisposable
         });
     }
 
+    /// <summary>
+    /// A mod renamed in Penumbra. What is queued or running for it is dropped — a refit in flight would write into the
+    /// folder that is gone — and those slots are looked at again; the last look's other slots of it name the new folder,
+    /// so a renamed piece already refitted is not taken for one newly put on. Framework thread, called by
+    /// <see cref="ModMoveService"/>.
+    /// </summary>
+    public void OnModMoved(string oldDir, string newDir)
+    {
+        List<string> slots;
+        lock (queueGate)
+        {
+            slots = queue.Where(kv => RequestTargets(kv.Value.Worn.ModDir, oldDir)).Select(kv => kv.Key).ToList();
+            if (runningSlot != null && RequestTargets(runningModDir, oldDir)) slots.Add(runningSlot);
+        }
+        if (slots.Count > 0)
+        {
+            CancelSlots(slots);
+            log.Information("[Proteus] auto refit: {0} was renamed to {1} — what was queued for it ({2}) is looked at again",
+                            oldDir, newDir, string.Join(", ", slots));
+            RequestWalkIn(EquipSettleMs);
+        }
+        lastSeen = ModMoveMigration.MoveWorn(lastSeen, oldDir, newDir);
+        RequestIndexIn(IndexDebounceMs);
+    }
+
+    /// <summary>Whether a queued or running request for <paramref name="requestModDir"/> is for the renamed mod.</summary>
+    internal static bool RequestTargets(string? requestModDir, string oldDir) => ModMoveMigration.Same(requestModDir, oldDir);
+
     /// <summary>Read what each body slot draws, and queue the pieces that are new since the last look.</summary>
     private void Walk()
     {
+        // A rename not handled yet: what is worn names the new folder and the last look the old one, so every renamed
+        // piece would look newly put on. Look once it is handled.
+        if (penumbra.MovePending)
+        {
+            RequestWalkIn(BlankRetryMs);
+            return;
+        }
+
         var models = penumbra.GetActivePlayerModelPaths();
         if (!DrawnModelPaths.HasBodySlotModel(models))
         {
@@ -905,6 +944,7 @@ public sealed partial class AutoRefitWatcher : IDisposable
                         queue.Remove(next);
                         cts = running = new CancellationTokenSource();
                         runningSlot = next;
+                        runningModDir = request.Worn.ModDir;
                         drained = false;
                         compositor.HoldRedraws(holdKey, HoldLeaseMs, HoldCapMs);
                     }
@@ -1469,7 +1509,8 @@ public sealed partial class AutoRefitWatcher : IDisposable
         string labelFrom = RefitCore.LabelFrom(across ? sourceName : null,
                                                new[] { pick.Option.Label }.Concat(kept.Select(k => k.From.Label)));
         var refit = new BodyRetargetWriter.Refit(option, plan.Model, string.Join(" + ",
-                                                     new[] { target.Label }.Concat(kept.Select(k => k.To.Label))));
+                                                     new[] { target.Label }.Concat(kept.Select(k => k.To.Label))),
+                                                 Materials: plan.Materials);
         var recorded = TargetsOf(primary, target, kept, chestBeneathTo);
         var recordedOn = recorded.Keys.ToDictionary(k => k, k => k == RefitCore.ChestBeneathKey ? chestDir : OnDir(k),
                                                     StringComparer.Ordinal);

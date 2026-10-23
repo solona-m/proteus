@@ -52,6 +52,31 @@ public class ConfigurationMigrationTests
     }
 
     [Fact]
+    [Trait("Plan", "AC-earless-miqote-hair-1")]
+    public void Earless_defaults_off_and_missing_property_reads_off()
+    {
+        var fresh = new Configuration();
+        Assert.False(fresh.EarlessMiqoteHair);
+        Assert.False(fresh.EarlessRestorePending);
+        var old = Newtonsoft.Json.JsonConvert.DeserializeObject<Configuration>(
+            $$"""{"Version":{{Configuration.CurrentVersion}},"AutoHairPort":true}""")!;
+        old.Migrate();
+        Assert.False(old.EarlessMiqoteHair);
+        Assert.False(old.EarlessRestorePending);
+        Assert.Equal(Configuration.CurrentVersion, old.Version);
+    }
+
+    [Fact]
+    [Trait("Plan", "AC-earless-miqote-hair-1")]
+    public void Earless_round_trips()
+    {
+        var json = Newtonsoft.Json.JsonConvert.SerializeObject(new Configuration { EarlessMiqoteHair = true, EarlessRestorePending = true });
+        var back = Newtonsoft.Json.JsonConvert.DeserializeObject<Configuration>(json)!;
+        Assert.True(back.EarlessMiqoteHair);
+        Assert.True(back.EarlessRestorePending);
+    }
+
+    [Fact]
     [Trait("Plan", "AC-refit-piercings-option-4")]
     [Trait("Plan", "AC-refit-piercings-option-5")]
     [Trait("Plan", "EDGE-refit-piercings-option-10")]
@@ -160,5 +185,32 @@ public class ConfigurationMigrationTests
         config.Migrate();
 
         Assert.False(config.HideRedundantMeshes);
+    }
+
+    [Fact]
+    [Trait("Plan", "AC-womens-overlays-men-5")]
+    [Trait("Plan", "EDGE-womens-overlays-men-19")]
+    public void Old_config_without_men_opt_out_overlays_men() // [AC-womens-overlays-men-5] [EDGE-womens-overlays-men-19]
+    {
+        var old = Newtonsoft.Json.JsonConvert.DeserializeObject<Configuration>(
+            $$$"""{"Version":{{{Configuration.CurrentVersion}}},"SiblingSynthesis":{"Stockings":0}}""")!;
+        Assert.Empty(old.MenOverlayOffMods);
+        Assert.True(old.OverlaysMenFor("Stockings"));
+        old.Migrate();
+        Assert.Equal(Configuration.CurrentVersion, old.Version);
+        Assert.True(new Configuration().OverlaysMenFor("Anything"));
+    }
+
+    [Fact]
+    [Trait("Plan", "AC-womens-overlays-men-5")]
+    [Trait("Plan", "EDGE-womens-overlays-men-19")]
+    public void Men_opt_out_round_trips_case_insensitively() // [AC-womens-overlays-men-5] [EDGE-womens-overlays-men-19]
+    {
+        var c = new Configuration();
+        c.MenOverlayOffMods.Add("Solona's Stockings - for Proteus");
+        var back = Newtonsoft.Json.JsonConvert.DeserializeObject<Configuration>(Newtonsoft.Json.JsonConvert.SerializeObject(c))!;
+        Assert.False(back.OverlaysMenFor("solona's stockings - FOR proteus"));
+        Assert.True(back.OverlaysMenFor("Another Mod"));
+        Assert.Single(back.MenOverlayOffMods);
     }
 }

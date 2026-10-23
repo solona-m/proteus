@@ -96,6 +96,7 @@ public class AutoRefitSkinRuleTests(ITestOutputHelper output)
     [Trait("Plan", "EDGE-vanilla-refit-cut-skin-3")]
     [Trait("Plan", "AC-neckline-float-6")]
     [Trait("Plan", "EDGE-neckline-float-14")]
+    [Trait("Plan", "AC-coatee-strap-slit-5")]
     public void Only_the_games_own_garment_is_game_gear_and_only_it_is_cut_and_cleared()
     {
         // The game's own file: no mod root. A mod serving the game's model — a recolour, a "— Proteus edit" copy — serves
@@ -109,11 +110,15 @@ public class AutoRefitSkinRuleTests(ITestOutputHelper output)
                                                  Refitted("Body — Neolithe/neolithe m.mdl"), madeByProteus: false));
 
         Assert.Equal(new AutoRefitDecisions.SkinRule(CutHidden: true, ClearBody: true, TuckUnderCloth: true, DeepClear: true,
-                                                     KeepStandoff: true),
+                                                     KeepStandoff: true, SeeInside: true),
                      AutoRefitDecisions.SkinFor(true));
         Assert.Equal(new AutoRefitDecisions.SkinRule(CutHidden: false, ClearBody: false, TuckUnderCloth: false, DeepClear: false,
-                                                     KeepStandoff: false),
+                                                     KeepStandoff: false, SeeInside: false),
                      AutoRefitDecisions.SkinFor(false));
+        // [AC-coatee-strap-slit-5] The tuck's open skin where the garment's inside would show: a top only.
+        Assert.True(RefitCore.SeeInsideFor(true, "_top"));
+        Assert.False(RefitCore.SeeInsideFor(true, "_dwn"));
+        Assert.False(RefitCore.SeeInsideFor(false, "_top"));
         Assert.True(RefitCore.DeepClearFor(true, "_top"));
         Assert.False(RefitCore.DeepClearFor(true, "_dwn"));
         Assert.False(RefitCore.DeepClearFor(false, "_top"));
@@ -213,6 +218,7 @@ public class AutoRefitSkinRuleTests(ITestOutputHelper output)
 
     [Fact]
     [Trait("Plan", "EDGE-vanilla-refit-cut-skin-8")]
+    [Trait("Plan", "EDGE-studio-game-top-4")]
     public void A_game_items_own_mod_stays_game_gear_however_it_is_refitted_again()
     {
         // What the Body size tool and the every-size refit record when they save into a mod: read off the mod on disk.

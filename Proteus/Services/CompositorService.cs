@@ -396,6 +396,8 @@ public partial class CompositorService : IDisposable
     // Glamourer's currently-displayed char code (e.g. "c1801"), updated on the framework thread.
     // Null when Glamourer isn't available or hasn't overridden the race.
     private volatile string? _glamourerCharCode;
+    // The last "women's art on a man" summary logged, so an unchanged one is not repeated every composite.
+    private string? _lastWomensArtSummary;
 
     // The same customization read as the wearer's HEAD code (e.g. "c0801" for a Miqo'te female, whose body
     // code above is "c0201"). Face, hair, tail and ears are published under this one, not the body's.
@@ -412,7 +414,15 @@ public partial class CompositorService : IDisposable
     private const int UnsettledRaceMemoMs = 60_000;
 
     public CompositorResult? LastResult { get; private set; }
-    public List<OverlayEntry> LastDiscovered { get; private set; } = [];
+    /// <summary>
+    /// The Proteus mods found last, for the UI and IPC. Every write is remapped through the recent renames (see
+    /// <see cref="_moveLedger"/>), so a list read before a rename never brings the old folder back.
+    /// </summary>
+    public List<OverlayEntry> LastDiscovered
+    {
+        get => Volatile.Read(ref _lastDiscovered);
+        private set => Volatile.Write(ref _lastDiscovered, Ledgered(value));
+    }
     public event Action? ResultChanged;
 
     // Guards for EnsureDiscovered's background probe: one at a time, and not more often than this.

@@ -55,6 +55,16 @@ public class PolygonSelectionTests
     }
 
     [Fact]
+    [Trait("Plan", "AC-studio-move-skin-3")]
+    public void PolygonSelection_offers_skin_only_when_asked()
+    {
+        var m = Model();
+        var polys = new PolygonSelection(m, includeSkin: true);
+        Assert.All(Keys(m, Skin, 0), k => Assert.True(polys.Contains(k)));
+        Assert.All(Keys(m, Cloth, 0), k => Assert.True(polys.Contains(k)));
+    }
+
+    [Fact]
     public void Growing_spreads_along_joined_polygons_and_not_to_a_separate_piece()
     {
         var m = Model();

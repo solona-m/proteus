@@ -202,4 +202,51 @@ public class UvConverterTests
         // Without the flag the other half stays unmapped, which is what keeps a shell's asymmetric art asymmetric.
         Assert.Null(uv.UvConverter("bibo", "gen2", unmirror: true)!(0.25f, 0.4f, -1));
     }
+
+    private static string RepoSource(params string[] parts)
+    {
+        for (var d = new System.IO.DirectoryInfo(System.AppContext.BaseDirectory); d != null; d = d.Parent)
+        {
+            var p = System.IO.Path.Combine([d.FullName, .. parts]);
+            if (System.IO.File.Exists(p)) return System.IO.File.ReadAllText(p);
+        }
+        throw new System.IO.FileNotFoundException(System.IO.Path.Combine(parts));
+    }
+
+    /// <summary>
+    /// Refit between a woman's body and a man's stays refused with the bibo↔TBSE maps installed: the guard that pairs only
+    /// same-sex layouts is unchanged, so a converter that now exists for bibo↔tbse is never asked for by a refit.
+    /// </summary>
+    [LocalDataFact(LocalData.TbseUvMaps)]
+    [Trait("Plan", "AC-tbse-uvmap-9")]
+    public void Cross_sex_refit_still_refused_with_tbse_maps_present() // [AC-tbse-uvmap-9]
+    {
+        var withMaps = new UVRemapService(Substitute.For<IPluginLog>(), LocalData.Path(LocalData.TbseUvMaps));
+        Assert.NotNull(withMaps.UvConverter("bibo", UVRemapService.TbseSpace));   // the maps are here...
+        var guard = RepoSource("Proteus", "Services", "BodyCorrespondence.cs");
+        Assert.Contains("bool mapped = IsMaleLayout(from) == IsMaleLayout(to)\n"
+                        + "                       && (!IsMaleLayout(from) || (IsAffineMale(from) && IsAffineMale(to)));",
+                        guard.Replace("\r\n", "\n"));   // ...and the refit still only pairs same-sex layouts
+    }
+
+    /// <summary>RefitCore's own-skin conversion reads both bodies' layouts with ONE sex flag, so it never pairs a man's with a woman's.</summary>
+    [Fact]
+    [Trait("Plan", "AC-tbse-uvmap-9")]
+    public void RefitCore_layouts_share_one_sex_flag() // [AC-tbse-uvmap-9]
+    {
+        // One flag for both sides, unless a refit for the other sex says the target's (cross-sex-refit): every other
+        // caller leaves targetMale null and reads both bodies as the garment's sex, as before.
+        var core = RepoSource("Proteus", "Services", "AutoRefit", "RefitCore.cs");
+        Assert.Contains("? BodyCorrespondence.LayoutOf(source, male) : null;", core);
+        Assert.Contains("? BodyCorrespondence.LayoutOf(body, targetMale ?? male) : null;", core);
+    }
+
+    [Fact]
+    [Trait("Plan", "EDGE-tbse-uvmap-11")]
+    public void UvConverter_never_chains_gen3_to_tbse() // [EDGE-tbse-uvmap-11]
+    {
+        // No gen3_to_tbse file exists, and the converter refit uses never goes looking through bibo for one.
+        Assert.Null(Service().UvConverter("gen3", UVRemapService.TbseSpace));
+        Assert.Null(Service().UvConverter(UVRemapService.TbseSpace, "gen3"));
+    }
 }

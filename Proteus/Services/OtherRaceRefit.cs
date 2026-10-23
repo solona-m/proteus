@@ -16,6 +16,9 @@ namespace Proteus.Services;
 /// drawn model as before.
 /// <para/>
 /// Decided by the creator, not by who is logged in: a mod author makes the Highlander version while playing anyone.
+/// <para/>
+/// And for the other sex, between the two Midlander models only (see <see cref="CrossSexRefit"/>): a women's top made
+/// a men's, bent the same way and matched to the men's body through the bibo↔TBSE maps.
 /// </summary>
 internal static partial class OtherRaceRefit
 {
@@ -24,8 +27,8 @@ internal static partial class OtherRaceRefit
     {
         None,
 
-        /// <summary>The mod already has its own model for that race (or for one between it and the drawn race): that
-        /// one is the model to refit, and baking over it would replace the author's work.</summary>
+        /// <summary>The mod already has its own model for that race (or, above the drawn race, for one between the two):
+        /// that one is the model to refit, and baking over it would replace the author's work.</summary>
         OwnModel,
     }
 
@@ -41,15 +44,23 @@ internal static partial class OtherRaceRefit
     /// <summary>One race offered beside the drawn one.</summary>
     /// <param name="Race">Its code, as the game numbers it (301 for c0301).</param>
     /// <param name="OwnModelPath">With <see cref="Block.OwnModel"/>, the game path of the author's model.</param>
-    internal sealed record Candidate(ushort Race, Block Blocked, string? OwnModelPath = null);
+    /// <param name="Below">A race the drawn one falls through to (Midlander for a Highlander model), not one that falls
+    /// through to it: the garment is bent down into it, and kept there (see <see cref="RacialModelBake.Route.Lowered"/>).</param>
+    /// <param name="CrossSex">The race is of the other sex (see <see cref="CrossSexRefit"/>).</param>
+    internal sealed record Candidate(ushort Race, Block Blocked, string? OwnModelPath = null, bool Below = false,
+                                     bool CrossSex = false);
 
     /// <summary>
     /// The races to offer for a garment drawn at <paramref name="gamePath"/>: each of its sex that the refit-onto body
-    /// mod has a body of in the garment's own slot, and that falls through to the drawn race — so a model baked for it
-    /// replaces exactly what that race draws now, and nothing else.
+    /// mod has a body of in the garment's own slot, and that is on one fall-through line with the drawn race.
     /// <para/>
-    /// Never the other sex, never a race "below" the drawn one (a Highlander model is not bent back to a Midlander's),
-    /// and never the game's own gear, whose racial models work differently.
+    /// Above it — a race that falls through to the drawn one — a model baked for it replaces exactly what that race
+    /// draws now, and nothing else. Below it — a race the drawn one falls through to, Midlander for a Highlander-only
+    /// mod — the model made for it is what that race draws, and so is every race of its sex without a model of its own.
+    /// <para/>
+    /// Never a race on another line (Elezen from Highlander), and never the game's own gear, whose racial models work
+    /// differently. The other sex only where <see cref="CrossSexRefit.Offerable"/> says so: Midlander M and F, for chest
+    /// and legs garments.
     /// </summary>
     /// <param name="redirects">The garment mod's redirects, to find a model the author already made for a race.</param>
     /// <param name="ownRecord">The garment mod's refit record: a model this tool saved is not the author's.</param>
@@ -65,17 +76,22 @@ internal static partial class OtherRaceRefit
         foreach (string code in RefitCore.RacesOf(target).Order(StringComparer.Ordinal))
         {
             if (!ushort.TryParse(code, out ushort race) || race % 100 != 1 || race == drawn) continue;
-            if (BodySizeCatalog.IsMaleRace(code) != BodySizeCatalog.IsMaleRace($"{drawn:D4}")) continue;
-            var line = RacialModelBake.SameSexLine(race).ToList();
-            if (!line.Contains(drawn)) continue;
+            bool cross = BodySizeCatalog.IsMaleRace(code) != BodySizeCatalog.IsMaleRace($"{drawn:D4}");
+            if (cross && !CrossSexRefit.Offerable(drawn, race, slot)) continue;
+            var line = cross ? [] : RacialModelBake.SameSexLine(race).ToList();
+            bool below = cross ? CrossSexRefit.Below(drawn, race) : !line.Contains(drawn);
+            if (!cross && below && !RacialModelBake.SameSexLine(drawn).Contains(race)) continue;
             if (!target.For(slot).Any(o => BodySizeCatalog.RaceOf(o.GamePath) == code)) continue;
 
-            // The race itself, then every race it falls through to before the drawn one: a model the author made for
-            // any of them is what that race draws now.
-            string? own = line.TakeWhile(r => r != drawn).Prepend(race)
-                              .Select(r => RacialModelBake.WithRace(gamePath, r))
-                              .FirstOrDefault(p => BodyRetargetWriter.AuthorProvides(authored, ownRecord, p));
-            result.Add(own != null ? new Candidate(race, Block.OwnModel, own) : new Candidate(race, Block.None));
+            // Above: the race itself, then every race it falls through to before the drawn one — a model the author made
+            // for any of them is what that race draws now. Below: the race's own alone. A race between keeps drawing
+            // the author's model of it whatever is saved further down.
+            // Across the sexes the race's own alone: the races between belong to the other line.
+            IEnumerable<ushort> asked = below || cross ? [race] : line.TakeWhile(r => r != drawn).Prepend(race);
+            string? own = asked.Select(r => RacialModelBake.WithRace(gamePath, r))
+                               .FirstOrDefault(p => BodyRetargetWriter.AuthorProvides(authored, ownRecord, p));
+            result.Add(own != null ? new Candidate(race, Block.OwnModel, own, below, cross)
+                                   : new Candidate(race, Block.None, null, below, cross));
         }
         return result;
     }
@@ -186,17 +202,21 @@ internal static partial class OtherRaceRefit
 
     /// <summary>
     /// The route the garment takes: the one the wearer's race decides (<paramref name="automatic"/>) until a race is
-    /// picked, a bake up into the picked race once one is — or none, refitted as drawn, when the drawn race itself is
-    /// picked. A pick no longer offered (another body mod chosen since) or blocked falls back to the automatic route.
+    /// picked, a bake up into the picked race — or down into it, for a race below — once one is; or none, refitted as
+    /// drawn, when the drawn race itself is picked. A pick no longer offered (another body mod chosen since) or blocked
+    /// falls back to the automatic route.
+    /// <para/>
+    /// The drawn race picked keeps a down route the character's race decides: that is how the model is refitted for her
+    /// "as it is" when the body mod has no bodies of her race, and refitting it as drawn would find none to refit onto.
     /// </summary>
     /// <param name="chosen">The picked race, or 0 for none.</param>
     internal static RacialModelBake.Route Resolve(RacialModelBake.Route automatic, ushort chosen, ushort drawn,
                                                   IReadOnlyList<Candidate> offered)
     {
         if (chosen == 0) return automatic;
-        if (chosen == drawn) return RacialModelBake.Route.None;
-        return offered.FirstOrDefault(c => c.Race == chosen) is { Blocked: Block.None }
-            ? new RacialModelBake.Route(drawn, chosen, Down: false)
+        if (chosen == drawn) return automatic.Down ? automatic : RacialModelBake.Route.None;
+        return offered.FirstOrDefault(c => c.Race == chosen) is { Blocked: Block.None } c
+            ? new RacialModelBake.Route(drawn, chosen, Down: false, Lowered: c.Below) { ByAlias = c.CrossSex }
             : automatic;
     }
 
@@ -227,6 +247,9 @@ internal static partial class OtherRaceRefit
 
         /// <summary>Another race of the garment's sex.</summary>
         Other,
+
+        /// <summary>A race of the other sex, refitted from this model (see <see cref="CrossSexRefit"/>).</summary>
+        OtherSex,
     }
 
     /// <summary>
@@ -237,10 +260,13 @@ internal static partial class OtherRaceRefit
                                                        IReadOnlyList<Candidate> offered)
     {
         var entries = new List<Entry>();
-        if (automatic.Any && automatic.To != drawn && offered.All(c => c.Race != automatic.To))
+        // Kept beside an explicit entry for the same race when the automatic route crosses the sexes: "as worn" bends a
+        // men's garment for the woman playing, the explicit one refits it onto a women's body mod — two models.
+        if (automatic.Any && automatic.To != drawn
+            && (offered.All(c => c.Race != automatic.To) || automatic.CrossesSex))
             entries.Add(new Entry(0, EntryKind.AsWorn));
         entries.Add(new Entry(drawn, EntryKind.ThisModel));
-        entries.AddRange(offered.Select(c => new Entry(c.Race, EntryKind.Other, c)));
+        entries.AddRange(offered.Select(c => new Entry(c.Race, c.CrossSex ? EntryKind.OtherSex : EntryKind.Other, c)));
         return entries;
     }
 
@@ -304,13 +330,29 @@ internal static partial class OtherRaceRefit
     /// The bones a garment leans on that a bake from <paramref name="from"/> to <paramref name="to"/> could not move:
     /// neither the deformer nor any ancestor the skeleton gives the bone lists them, so their vertices would stay where
     /// the drawn race has them while the rest of the garment moved — torn off it. A bake with any is refused.
+    /// <para/>
+    /// Either way along the line: bent down (Highlander to Midlander), the bones are the ones the deformer chain from
+    /// <paramref name="to"/> up to <paramref name="from"/> lists, which the bend inverts.
     /// </summary>
     internal static List<string> Unbendable(SkinnedMesh skin, PbdFile pbd, Func<string, string?> parentOf, ushort from,
                                             ushort to)
     {
         var chain = pbd.Chain(from, to);
+        if (chain.Count == 0) chain = pbd.Chain(to, from);
         if (chain.Count == 0) return [];   // no bend at all: refused on its own, with its own reason
         return Weighted(skin).Where(b => !PbdFile.Lists(chain, b, parentOf)).Order(StringComparer.Ordinal).ToList();
+    }
+
+    /// <inheritdoc cref="Unbendable(SkinnedMesh, PbdFile, Func{string, string?}, ushort, ushort)"/>
+    /// <param name="weighted">The bones the garment leans on — after <see cref="SkeletonRemap"/> moved any.</param>
+    internal static List<string> Unbendable(IEnumerable<string> weighted, PbdFile pbd, Func<string, string?> parentOf,
+                                            ushort from, ushort to)
+    {
+        var chain = pbd.Chain(from, to);
+        if (chain.Count == 0) chain = pbd.Chain(to, from);
+        if (chain.Count == 0) return [];
+        return weighted.Distinct(StringComparer.Ordinal).Where(b => !PbdFile.Lists(chain, b, parentOf))
+                       .Order(StringComparer.Ordinal).ToList();
     }
 
     /// <summary>The bones any vertex actually leans on.</summary>

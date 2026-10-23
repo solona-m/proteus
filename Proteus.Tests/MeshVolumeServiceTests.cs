@@ -28,8 +28,8 @@ public class MeshVolumeServiceTests
     /// triangles share their hub and one edge corner. Four points is exactly enough for a closed
     /// tetrahedron, where every edge is used by two faces and therefore nothing is a hole rim.
     /// </summary>
-    private static (byte[] Mdl, MeshVolumeSolve Solve, ModelParts Model) Setup(
-        IReadOnlyList<string>? shapes = null)
+    internal static (byte[] Mdl, MeshVolumeSolve Solve, ModelParts Model) Setup(
+        IReadOnlyList<string>? shapes = null, string material = "/mt_test.mtrl")
     {
         var mdl = SyntheticModel.Build(
             [],
@@ -57,7 +57,7 @@ public class MeshVolumeServiceTests
             [
                 new ModelPart
                 {
-                    Mesh = 0, Submesh = 0, Island = -1, Label = "1.1", Material = "/mt_test.mtrl",
+                    Mesh = 0, Submesh = 0, Island = -1, Label = "1.1", Material = material,
                     Triangles = tetra, Ordinals = [0, 1, 2, 3], AttributeMask = 0, Toggleable = true,
                     Min = Vector3.Zero, Max = Vector3.One,
                 },
@@ -264,6 +264,63 @@ public class MeshVolumeServiceTests
         // Once, not twice: the fixture's shape names vertex 0 for both roles.
         float expected = PositionY(mdl, 0) + solve.DeltaAt(0).Y;
         Assert.Equal(expected, PositionY(written.Model, 0), 1e-6f);
+    }
+
+    /// <summary>
+    /// Skin moved with "Move skin too" is written like cloth — its spare carried once, by its base — through the same
+    /// writer the brush always used.
+    /// </summary>
+    [Fact]
+    [Trait("Plan", "AC-studio-move-skin-7")]
+    [Trait("Plan", "EDGE-studio-move-skin-12")]
+    public void InflateWritesMovedSkinAndItsSpare()
+    {
+        var (mdl, solve, model) = Setup(["shp_test"], "/mt_c0201b0001_bibo.mtrl");
+        solve.MoveSkin = true;
+        Assert.True(solve.AttachFollow(SkinFollow.Bind(solve.FollowInputs)));
+
+        var centre = new Vector3(model.Positions[0], model.Positions[1], model.Positions[2]);
+        Assert.True(solve.Paint(centre, 10f, 0.002f) > 0);
+        solve.EndStroke();
+        Assert.True(solve.SkinEdited);
+
+        var written = MeshVolumeService.Inflate(mdl, solve);
+        Assert.Equal(0, written.UnmappedSpares);
+        for (int v = 0; v < 6; v++)
+            Assert.Equal(PositionY(mdl, v) + solve.DeltaAt(v).Y, PositionY(written.Model, v), 1e-6f);
+        Assert.True(solve.DeltaAt(0).Y > 0f);
+    }
+
+    /// <summary>A skin move saved into a mod is backed up first, and "Undo saved changes" puts the author's file back.</summary>
+    [Fact]
+    [Trait("Plan", "AC-studio-move-skin-7")]
+    public void ApplyBacksUpAndRevertRestoresAfterASkinMove()
+    {
+        var (mdl, solve, model) = Setup(material: "/mt_c0201b0001_bibo.mtrl");
+        solve.MoveSkin = true;
+        solve.AttachFollow(SkinFollow.Bind(solve.FollowInputs));
+        Assert.True(solve.BeginMove(model.Parts[0].Triangles, adjacent: false, falloffRadius: 0f) > 0);
+        solve.MoveTo(new Vector3(0f, 0.01f, 0f));
+        solve.EndMove();
+
+        var root = Path.Combine(Path.GetTempPath(), "proteus-skinmove-" + Guid.NewGuid().ToString("N"));
+        try
+        {
+            const string rel = "chara/equipment/e0001/model/c0201e0001_top.mdl";
+            var file = Path.Combine(root, rel.Replace('/', Path.DirectorySeparatorChar));
+            Directory.CreateDirectory(Path.GetDirectoryName(file)!);
+            File.WriteAllBytes(file, mdl);
+
+            Assert.True(MeshVolumeService.Apply(root, rel, mdl, solve).Ok);
+            Assert.Equal(PositionY(mdl, 0) + 0.01f, PositionY(File.ReadAllBytes(file), 0), 1e-5f);
+
+            Assert.True(MeshVolumeService.Revert(root).Ok);
+            Assert.Equal(mdl, File.ReadAllBytes(file));
+        }
+        finally
+        {
+            if (Directory.Exists(root)) Directory.Delete(root, recursive: true);
+        }
     }
 
     // ── shape spares named by several index slots ───────────────────────────────────────────────────────────────

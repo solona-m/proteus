@@ -645,8 +645,9 @@ internal static partial class RefitCore
     /// <summary>
     /// A refit of a routed garment, made ready to save: up, its kept skin drawn with the body's material
     /// (<see cref="WithBodySkin"/>), and the preview bent back into the drawn race from the model BEFORE that rename —
-    /// the preview goes on the drawn race's path, where the garment's own material is the one that loads. Down, bent
-    /// forward into the drawn race, which is both what is saved and what is previewed.
+    /// the preview goes on the drawn race's path, where the garment's own material is the one that loads. A lowered
+    /// route (a Highlander model made a Midlander's) is finished the same way: saved in the race below, previewed bent
+    /// back up. Down, bent forward into the drawn race, which is both what is saved and what is previewed.
     /// </summary>
     /// <returns>The plan to save; the preview to push on the drawn path, null for the plan's own model; and why, when
     /// the plan is null, it could not be bent back. A down refit never comes back in the shared shape: saved at the
@@ -670,11 +671,24 @@ internal static partial class RefitCore
             if (back == null)
                 return (null, null, string.Format(Strings.Parts.RetargetBendBackFmt,
                                                   ModelRace.Describe($"{route.Drawn:D4}"), why));
+            SayDuplicateBones(back, log);
             return (plan with { Model = back }, null, "");
         }
         // Without the character to bend it back by, the preview is pushed unbent; the save itself needs no wearer.
         var preview = who != null ? route.Back(plan.Model, who, out _) : null;
-        return (WithBodySkin(plan, targetPaths, log), preview, "");
+        var saved = WithBodySkin(plan, targetPaths, log);
+        SayDuplicateBones(saved.Model, log);
+        return (saved, preview, "");
+    }
+
+    /// <summary>
+    /// A model saved with two bones of one name — a bone moved onto one the race has (<see cref="SkeletonRemap"/>), kept
+    /// as two entries where nothing rebuilt the model — said in the log: the game follows both with that bone.
+    /// </summary>
+    private static void SayDuplicateBones(byte[] model, IPluginLog log)
+    {
+        if (SkeletonRemap.DuplicateBones(model) is { Count: > 0 } twice)
+            log.Information("[Proteus] retarget: saved with duplicate bone names {0}", string.Join(", ", twice));
     }
 
     /// <summary>
@@ -718,9 +732,12 @@ internal static partial class RefitCore
     /// <param name="sourcePath">The body the garment was made on (its own slot's).</param>
     /// <param name="targetPath">The body it was refitted onto.</param>
     /// <param name="male">The bodies are a man's, whose layouts are named apart (see <c>BodyCorrespondence.LayoutOf</c>).</param>
+    /// <param name="targetMale">The new body's sex when it is not the garment's (a refit for the other sex); null reads
+    /// both as <paramref name="male"/>.</param>
     internal static BodyRetarget.Planned MatchSkinToBody(BodyRetarget.Planned plan, string sourcePath, string targetPath,
-                                                         UVRemapService? uvRemap, bool male, IPluginLog log)
-        => MatchSkinToBody(plan, sourcePath, [targetPath], uvRemap, male, log);
+                                                         UVRemapService? uvRemap, bool male, IPluginLog log,
+                                                         bool? targetMale = null)
+        => MatchSkinToBody(plan, sourcePath, [targetPath], uvRemap, male, log, targetMale);
 
     /// <inheritdoc cref="MatchSkinToBody(BodyRetarget.Planned, string, string, UVRemapService?, bool, IPluginLog)"/>
     /// <param name="targetPaths">Every body the refit went onto, the lead's first — a chest on one body mod and the legs
@@ -728,21 +745,21 @@ internal static partial class RefitCore
     /// drawn the way the lead draws its skin.</param>
     internal static BodyRetarget.Planned MatchSkinToBody(BodyRetarget.Planned plan, string sourcePath,
                                                          IReadOnlyList<string> targetPaths, UVRemapService? uvRemap,
-                                                         bool male, IPluginLog log)
+                                                         bool male, IPluginLog log, bool? targetMale = null)
     {
-        var model = MatchSkinToBody(plan.Model, sourcePath, targetPaths, uvRemap, male, log);
+        var model = MatchSkinToBody(plan.Model, sourcePath, targetPaths, uvRemap, male, log, targetMale);
         return ReferenceEquals(model, plan.Model) ? plan : plan with { Model = model };
     }
 
     /// <inheritdoc cref="MatchSkinToBody(BodyRetarget.Planned, string, string, UVRemapService?, bool, IPluginLog)"/>
     /// <returns>The model with its kept skin redrawn, or the very same array when there was nothing to do.</returns>
     internal static byte[] MatchSkinToBody(byte[] model, string sourcePath, string targetPath, UVRemapService? uvRemap,
-                                           bool male, IPluginLog log)
-        => MatchSkinToBody(model, sourcePath, [targetPath], uvRemap, male, log);
+                                           bool male, IPluginLog log, bool? targetMale = null)
+        => MatchSkinToBody(model, sourcePath, [targetPath], uvRemap, male, log, targetMale);
 
     /// <inheritdoc cref="MatchSkinToBody(BodyRetarget.Planned, string, IReadOnlyList{string}, UVRemapService?, bool, IPluginLog)"/>
     internal static byte[] MatchSkinToBody(byte[] model, string sourcePath, IReadOnlyList<string> targetPaths,
-                                           UVRemapService? uvRemap, bool male, IPluginLog log)
+                                           UVRemapService? uvRemap, bool male, IPluginLog log, bool? targetMale = null)
     {
         var plan = model;
         try
@@ -762,7 +779,7 @@ internal static partial class RefitCore
 
             string? from = ModelPartReader.Read(File.ReadAllBytes(sourcePath)) is { } source
                 ? BodyCorrespondence.LayoutOf(source, male) : null;
-            string? to = ModelPartReader.Read(target) is { } body ? BodyCorrespondence.LayoutOf(body, male) : null;
+            string? to = ModelPartReader.Read(target) is { } body ? BodyCorrespondence.LayoutOf(body, targetMale ?? male) : null;
             if (from == null || to == null)
             {
                 log.Information("[Proteus] retarget: left the garment's own skin {0} as it is — the bodies' layouts are "
@@ -1168,7 +1185,7 @@ internal static partial class RefitCore
                                  tuckSlot: TuckSlot(skin.TuckUnderCloth, primary),
                                  deepClear: DeepClearFor(skin.DeepClear, primary),
                                  keepStandoff: KeepStandoffFor(skin.KeepStandoff, primary),
-                                 carryPiercings: carryPiercings);
+                                 carryPiercings: carryPiercings, seeInside: SeeInsideFor(skin.SeeInside, primary));
     }
 
     /// <summary>
@@ -1179,17 +1196,27 @@ internal static partial class RefitCore
 
     /// <summary>
     /// Whether a top's cloth buried in a far larger new breast is cleared out of it from deeper than usual (see
-    /// <see cref="BodyRetarget.DeepClearDepth"/>): the game's own top in the automatic refit. Never the Studio's — it
-    /// moves cloth up to 30 mm, and a Studio refit writes into the modder's own mod.
+    /// <see cref="BodyRetarget.DeepClearDepth"/>): the game's own top, in the automatic refit and in the Studio (see
+    /// <see cref="RetargetInputs.StudioSkin"/>), whose refit is written into Proteus's own mod. Never a modder's top in the
+    /// Studio — it moves cloth up to 30 mm, and that refit is written into the modder's own mod.
     /// </summary>
     internal static bool DeepClearFor(bool rule, string garmentSlot) => rule && garmentSlot == "_top";
 
     /// <summary>
     /// Whether a top's cloth the refit carried further off the new chest than its author put it comes back toward the
-    /// author's standoff (see <see cref="BodyRetarget.KeepStandoff"/>): the game's own top in the automatic refit. Never
-    /// the Studio's — it moves a modder's cloth toward the body.
+    /// author's standoff (see <see cref="BodyRetarget.KeepStandoff"/>): the game's own top, in the automatic refit and in
+    /// the Studio (see <see cref="RetargetInputs.StudioSkin"/>). Never a modder's top in the Studio — it moves a modder's
+    /// cloth toward the body.
     /// </summary>
     internal static bool KeepStandoffFor(bool rule, string garmentSlot) => rule && garmentSlot == "_top";
+
+    /// <summary>
+    /// Whether a top's tuck also draws open skin through which its inside would show (see
+    /// <see cref="BodyRetarget.TuckSeeReach"/>): the game's own top, in the automatic refit and in the Studio (see
+    /// <see cref="RetargetInputs.StudioSkin"/>). Never a modder's top — measured on the game's tops alone, and that refit is
+    /// written into the modder's own mod.
+    /// </summary>
+    internal static bool SeeInsideFor(bool rule, string garmentSlot) => rule && garmentSlot == "_top";
 
     /// <summary>
     /// The automatic refit of a garment worn on an accessory slot — a jacket on a necklace — over the body part(s) its

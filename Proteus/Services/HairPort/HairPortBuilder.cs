@@ -24,8 +24,11 @@ internal static class HairPortBuilder
     /// verdict on the model, the next look may read it.</param>
     /// <param name="EditBlocked">Races refused because the user edited their port since: no verdict on the model
     /// either — reverting the edit lets the next look port it.</param>
+    /// <param name="Warnings">Races ported all the same with something to look at in game — a bend that turned part of
+    /// the hairstyle inside out (<see cref="HairPortBaker.Result.Warning"/>) — with what.</param>
     public sealed record Plan(IReadOnlyList<HairPortWriter.PortWrite> Writes, IReadOnlyDictionary<ushort, string> Refused,
-                              IReadOnlySet<ushort> Current, bool Unreadable = false, IReadOnlySet<ushort>? EditBlocked = null)
+                              IReadOnlySet<ushort> Current, bool Unreadable = false, IReadOnlySet<ushort>? EditBlocked = null,
+                              IReadOnlyDictionary<ushort, string>? Warnings = null)
     {
         /// <summary>Whether a race's refusal is the model's own verdict, which the same model would get again.</summary>
         public bool IsVerdict(ushort race) => !Unreadable && EditBlocked?.Contains(race) != true;
@@ -49,6 +52,7 @@ internal static class HairPortBuilder
         var writes = new List<HairPortWriter.PortWrite>();
         var refused = new Dictionary<ushort, string>();
         var current = new HashSet<ushort>();
+        var warnings = new Dictionary<ushort, string>();
         var wanted = targets.Distinct().ToList();
 
         if (HairPortPlan.Parse(sourceGamePath) is not { } parsed)
@@ -60,11 +64,36 @@ internal static class HairPortBuilder
         if (HairPortPlan.ReadOwners(modRoot) is not { } owners)
             return new Plan(writes, wanted.ToDictionary(t => t, _ => HairPortWriter.Unreadable), current, Unreadable: true);
 
-        // Each place that publishes the hairstyle from the author's own file.
+        // Each place that publishes the hairstyle from the author's own file — or from an earless copy of it, which is
+        // ported from the author's file it was made from: a Miqo'te's ears come out of a port to a race without them
+        // anyway, and the port then never goes out of date for the earless setting being switched.
         var serving = owners.Where(o => HairPortPlan.FileFor(o, sourceGamePath) is { } rel && !HairPortPlan.IsPortFile(rel))
                             .ToList();
         if (serving.FirstOrDefault(o => o.IsCombining) is { } combining)
             return new Plan(writes, wanted.ToDictionary(t => t, _ => HairPortWriter.Combining(combining.Group)), current);
+        var sourceOf = new Dictionary<HairPortPlan.Owner, string>(ReferenceEqualityComparer.Instance);
+        if (serving.Any(o => EarlessHairPlan.IsEarlessFile(HairPortPlan.FileFor(o, sourceGamePath)!)))
+        {
+            var earless = EarlessHairRecord.Read(modRoot);
+            if (earless.Unreadable)
+                return new Plan(writes, wanted.ToDictionary(t => t, _ => EarlessHairRecord.UnreadableMessage), current, Unreadable: true);
+            var exists = EarlessHairPlan.Exists(modRoot);
+            string? missing = null;
+            foreach (var o in serving)
+            {
+                var rel = HairPortPlan.FileFor(o, sourceGamePath)!;
+                if (EarlessHairPlan.AuthorFileFor(earless, o, sourceGamePath, rel, exists) is { } author && exists(author))
+                    sourceOf[o] = author;
+                else missing = EarlessHairBuilder.AuthorMissing(EarlessHairPlan.AuthorOfCopy(rel));
+            }
+            // A copy whose author's file is gone has nothing to port from: that place gets no port — a verdict, since the
+            // same mod would get it again.
+            serving.RemoveAll(o => !sourceOf.ContainsKey(o));
+            if (serving.Count == 0 && missing != null)
+                return new Plan(writes, wanted.ToDictionary(t => t, _ => missing), current);
+        }
+        else
+            foreach (var o in serving) sourceOf[o] = HairPortPlan.FileFor(o, sourceGamePath)!;
         if (serving.Count == 0)
             return new Plan(writes, wanted.ToDictionary(t => t, _ => Loc.Localize("HairPort.Refused.NotInMod",
                 "the mod does not publish that hairstyle")), current);
@@ -73,7 +102,7 @@ internal static class HairPortBuilder
         var record = HairPortRecord.Read(modRoot);
         if (record.Unreadable)
             return new Plan(writes, wanted.ToDictionary(t => t, _ => HairPortRecord.UnreadableMessage), current, Unreadable: true);
-        var sources = serving.Select(o => HairPortPlan.FileFor(o, sourceGamePath)!).Distinct(StringComparer.OrdinalIgnoreCase)
+        var sources = serving.Select(o => sourceOf[o]).Distinct(StringComparer.OrdinalIgnoreCase)
                              .ToDictionary(rel => rel, rel => ReadMod(modRoot, rel), StringComparer.OrdinalIgnoreCase);
         if (sources.Values.Any(b => b == null))
             return new Plan(writes, wanted.ToDictionary(t => t, _ => Loc.Localize("Parts.Retarget.Bake.Unreadable",
@@ -138,7 +167,7 @@ internal static class HairPortBuilder
             int slot = 0;
             foreach (var owner in serving)
             {
-                string rel = HairPortPlan.FileFor(owner, sourceGamePath)!;
+                string rel = sourceOf[owner];
                 var bytes = sources[rel]!;
                 var was = record.Ports.FirstOrDefault(e => HairPortPlan.Same(e.Owner, owner)
                     && e.TargetGamePath.Equals(target, StringComparison.OrdinalIgnoreCase));
@@ -181,6 +210,7 @@ internal static class HairPortBuilder
                 writes.Add(new HairPortWriter.PortWrite(owner, sourceGamePath, rel, HairPortPlan.Sha8(bytes), target,
                                                         result.Model, [.. materials, .. skeletonFiles], result.Millis, est,
                                                         skeletonFrom));
+                if (result.Warning is { } warning) warnings[to] = warning;
             }
             if (why != null)
             {
@@ -209,7 +239,8 @@ internal static class HairPortBuilder
         foreach (var to in refused.Keys)
             writes.AddRange(Strips(modRoot, owners, record, from, to, id, readGame, table));
 
-        return new Plan(writes, refused, current, Unreadable: noVerdict, EditBlocked: editBlocked);
+        foreach (var to in refused.Keys) warnings.Remove(to);
+        return new Plan(writes, refused, current, Unreadable: noVerdict, EditBlocked: editBlocked, Warnings: warnings);
     }
 
     /// <summary>Why a port that needs the game's table of hairstyle skeletons is refused without it.</summary>
@@ -247,7 +278,8 @@ internal static class HairPortBuilder
     /// data): then that skeleton is the one the port is checked against, and nothing is carried. The record tells an
     /// entry this port added before — remade, it is carried again — from the author's. The mod's entries only: what the
     /// game's table gives a race without them, and so what a port really moves with, is
-    /// <see cref="HairPortSkeleton.Choose"/>'s.
+    /// <see cref="HairPortSkeleton.Choose"/>'s — which also takes the source's entry from the mod's other groups
+    /// (<see cref="HairPortPlan.SourceEst"/>); this reads the port's place and the default data alone.
     /// </summary>
     /// <returns>The skeleton to check the bones against (0: none the mod names), and the entry to carry (0: none).</returns>
     /// <param name="defaultsOurs">The skeleton a port of ours in the default data carries for the same target (0 for

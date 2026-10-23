@@ -37,7 +37,8 @@ internal static class HairPortBaker
     /// </summary>
     public const float GapMargin = 0.014f;
 
-    /// <summary>The share of a hairstyle's triangles a port may turn inside out; see <see cref="Folded"/>.</summary>
+    /// <summary>The share of a hairstyle's triangles a port may turn inside out before it is saved with a warning; see
+    /// <see cref="Folded"/>. Taken of its LOD0 triangles, the hidden fur's included. Never a refusal.</summary>
     public const float FoldedShare = 0.005f;
 
     /// <summary>How deep under the scalp a vertex must be before it counts as sunk into the head, in metres: the scalp
@@ -56,8 +57,11 @@ internal static class HairPortBaker
     /// <param name="Sunk">Share of the port's cranium vertices sunk into the target's head (see <see cref="SunkLimit"/>).</param>
     /// <param name="GapShift">How far its typical distance from the scalp moved against the source's, in metres.</param>
     /// <param name="FurHidden">Triangles of ear fur taken out, for a Miqo'te hairstyle going to another race.</param>
+    /// <param name="Folded">Drawn triangles the bend turned inside out.</param>
+    /// <param name="Warning">Said beside the port when more than <see cref="FoldedShare"/> of it turned inside out: it
+    /// is saved all the same, for the player to look at in game. Null otherwise.</param>
     public sealed record Result(byte[] Model, IReadOnlyList<(string From, string To)> Renamed, float Sunk,
-                                float GapShift, int FurHidden, long Millis);
+                                float GapShift, int FurHidden, long Millis, int Folded = 0, string? Warning = null);
 
     /// <summary>
     /// Where each bone sits in a hairstyle's skeleton, for the deformer: a bone it does not list takes its nearest
@@ -141,6 +145,8 @@ internal static class HairPortBaker
         var model = (byte[])source.Clone();
         int furHidden = 0;
         if (HasEars(from) && !HasEars(to)) furHidden = HideEars(model, src);
+        // What the bend is judged against: the hairstyle as it will be drawn, its fur already gone.
+        var shown = ModelPartReader.Read(model);
 
         model = RacialModelBake.Port(model, from, to, pbd, ParentOf, out refusal)!;
         if (model == null) return null;
@@ -161,13 +167,18 @@ internal static class HairPortBaker
 
         // A bend that turns the surface inside out draws its back face. A few strand-tip slivers do turn on the bigger
         // bends (2 to 6 of thousands, on the game's own Lalafell and Hrothgar hairstyles), unseen on hair that is drawn
-        // from both sides; more than that is a hairstyle the bend does not suit.
-        if (ModelPartReader.Read(source) is { } a && ModelPartReader.Read(model) is { } b
-            && Folded(a, b) is var folded && folded > FoldedShare * a.Parts.Where(p => p.Island == -1).Sum(p => p.TriangleCount))
+        // from both sides; more than that is said, never refused — the player looks at it in game. The fur is not
+        // counted: a Lalafell's deformer has ear bones of its own and turns a Miqo'te's fur over (Loosened Bun: 24
+        // triangles), but it is not drawn.
+        int folded = 0;
+        string? warning = null;
+        if (shown is { } a && ModelPartReader.Read(model) is { } b)
         {
-            refusal = string.Format(Loc.Localize("HairPort.Refused.Folded.Fmt",
-                "bent onto c{0:D4}, {1} of its triangles would turn inside out"), to, folded);
-            return null;
+            folded = Folded(a, b);
+            if (folded > FoldedShare * a.Parts.Where(p => p.Island == -1).Sum(p => p.TriangleCount))
+                warning = string.Format(Loc.Localize("HairPort.Folded.Fmt",
+                    "bent onto c{0:D4}, {1} of its triangles turn inside out and may show as holes; check it in game"),
+                    to, folded);
         }
 
         var before = Measure(source, sourceHead);
@@ -188,7 +199,7 @@ internal static class HairPortBaker
             return null;
         }
 
-        return new Result(model, renamed, after.Value.Sunk, shift, furHidden, clock.ElapsedMilliseconds);
+        return new Result(model, renamed, after.Value.Sunk, shift, furHidden, clock.ElapsedMilliseconds, folded, warning);
     }
 
     /// <summary>
@@ -228,8 +239,9 @@ internal static class HairPortBaker
     /// <summary>
     /// Take the ears out of a Miqo'te hairstyle, in place: every triangle with a corner on the fur or the ear's own skin
     /// (<see cref="HatCompatSolve.ReadEarGeometry"/>) collapses, so nothing is drawn where the target has no ears.
+    /// Also how a Miqo'te's own hairstyle is made earless (<see cref="EarlessHair.Make"/>).
     /// </summary>
-    private static int HideEars(byte[] model, SecondSkinWriter.Source src)
+    internal static int HideEars(byte[] model, SecondSkinWriter.Source src)
     {
         var meshes = HatCompatSolve.ReadLod0Meshes(model);
         var ears = HatCompatSolve.ReadEarGeometry(model, src, meshes);

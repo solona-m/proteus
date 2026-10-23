@@ -543,6 +543,14 @@
     "message": "\nGlobal — ceci ne fait PAS partie de la liaison que vous modifiez.",
     "description": ""
   },
+  "Colors.Bodies.Men.Label": {
+    "message": "Superposer sur les hommes",
+    "description": "Checkbox label in the colour-table editor window's Advanced section, under \"Overlay gen2/vanilla\". Ticked = this mod's women's art is also painted on men."
+  },
+  "Colors.Bodies.Men.Tip": {
+    "message": "Peint aussi les motifs féminins de ce mod sur les hommes (TBSE ou le corps masculin vanilla),\ntransposés dans sa propre disposition grâce aux cartes de corps masculin.\nLes motifs faits pour les hommes ne sont jamais modifiés.\nS'applique à tout le mod, pas seulement à cette option.",
+    "description": "Tooltip for the checkbox above. \"TBSE\" is a body-mod name - never translated. Contains deliberate line breaks - keep the same number, moving them where your language needs."
+  },
   "Colors.Bodies.Vanilla.Label": {
     "message": "Superposer sur gen2/vanilla",
     "description": "Checkbox label in the colour-table editor window's Advanced section. \"gen2\" is a body-mod name - never translated. Ticked = this mod is also painted onto vanilla skin."
@@ -2331,6 +2339,10 @@
     "message": "Ses masques sont rendus comme de l'équipement, ce qui nécessite un masque pour construire le vêtement — et rien n'est coché dans son groupe « {0} » dans Penumbra.",
     "description": ""
   },
+  "Mods.Inert.AwaitingMenMaps": {
+    "message": "Les motifs de ce mod sont faits pour des corps féminins. Ils seront peints sur vous, dans votre propre disposition, dès que les cartes de corps masculin seront téléchargées (si le téléchargement a échoué, réessayez depuis l'avis des cartes UV).",
+    "description": "Why an enabled mod paints nothing yet: it is women's art on a man, waiting for the men's body maps to download. \"UV maps\" names the notice in the plugin's status window."
+  },
   "Mods.Inert.NothingReached": {
     "message": "Ses options cochées ont bien été résolues, mais aucune n'a atteint une surface chargée par ce personnage.",
     "description": ""
@@ -2623,8 +2635,8 @@
     "message": "Une pièce déplacée suit toujours les os pour lesquels elle a été faite ; trop loin d'eux, elle peut se plier bizarrement dans certaines poses.",
     "description": ""
   },
-  "Parts.Move.SkinTip": {
-    "message": "La peau ne peut pas être déplacée.",
+  "Parts.Move.SkinOff.Tip": {
+    "message": "Activez « Déplacer aussi la peau » pour déplacer la peau.",
     "description": ""
   },
   "Parts.Move.LockedTip": {
@@ -2855,8 +2867,48 @@
     "message": "Miroir gauche/droite",
     "description": ""
   },
-  "Parts.Brush.Mirror.Tip": {
-    "message": "Peint les deux côtés à la fois, en miroir par rapport au centre du corps.",
+  "Parts.Mirror.Tip": {
+    "message": "Agit sur les deux côtés à la fois, en miroir par rapport au centre du corps. Les pinceaux peignent aussi l'image miroir ; Déplacer, Pivoter et Échelle déplacent le tissu correspondant de l'autre côté en miroir — et, avec « Déplacer aussi la peau », la peau correspondante. Une pièce qui est son propre miroir reste centrée.",
+    "description": "Tooltip on the Mirror left/right checkbox, shown under the brushes and under Move, Rotate and Scale."
+  },
+  "Parts.Move.Mirror.Paired.Fmt": {
+    "message": "Miroir : {0:N0} des {1:N0} points sélectionnés ont un correspondant de l'autre côté.",
+    "description": "{0} is how many selected points matched a point on the other side; {1} is how many points are selected."
+  },
+  "Parts.Move.Mirror.Held.Fmt": {
+    "message": "{0:N0} des points correspondants sont verrouillés et restent en place.",
+    "description": "{0} is how many of the matching points are locked."
+  },
+  "Parts.Move.Mirror.None": {
+    "message": "Miroir : rien de l'autre côté ne correspond à cette sélection, seul ce côté bouge.",
+    "description": "Shown under Move, Rotate and Scale with Mirror on when nothing matched."
+  },
+  "Parts.Move.Mirror.Centred": {
+    "message": "Miroir : cette sélection est son propre miroir, elle bouge d'un seul bloc et reste centrée. Les déplacements et rotations latéraux sont ignorés.",
+    "description": "Shown under Move, Rotate and Scale with Mirror on when the selection crosses the centre and mirrors itself."
+  },
+  "Parts.SkinMoves": {
+    "message": "Déplacer aussi la peau",
+    "description": ""
+  },
+  "Parts.SkinMoves.Tip": {
+    "message": "Permet aux pinceaux et à Déplacer, Pivoter et Échelle de déplacer la peau du corps en plus des vêtements. Les vêtements posés sur la peau (à environ 3 cm ou moins) bougent avec elle pour que le corps ne passe pas au travers ; les vêtements plus éloignés restent en place. Désactivé, la peau reste exactement là où l'auteur l'a mise.\n\nLes pinceaux laissent en place les bords de la peau, là où cette pièce rejoint la suivante. Y déplacer la peau avec Déplacer, Pivoter ou Échelle peut ouvrir un trou à la taille, aux poignets ou au cou.\n\nTaille du corps et l'ajustement automatique remplacent la peau d'un vêtement par celle du nouveau corps : une peau sculptée ne survit donc pas à un ajustement.",
+    "description": ""
+  },
+  "Parts.SkinMoves.NotThisBrush.Tip": {
+    "message": "Les pinceaux Pont et Vent n'agissent que sur les vêtements ; la peau reste immobile dessous.",
+    "description": ""
+  },
+  "Parts.SkinMoves.Preparing": {
+    "message": "Préparation de la peau…",
+    "description": ""
+  },
+  "Parts.SkinMoves.BodyModel.Warn": {
+    "message": "Ceci est un corps. Les vêtements faits pour lui sont reconnus à sa forme exacte : après l'avoir sculpté, Taille du corps et l'ajustement automatique risquent de ne plus savoir pour quel corps ils ont été faits.",
+    "description": ""
+  },
+  "Parts.SkinMoves.Failed": {
+    "message": "La peau n'a pas pu être préparée, elle reste donc immobile. Le journal indique pourquoi.",
     "description": ""
   },
   "Parts.Brush.Lock.Hint": {
@@ -2875,8 +2927,8 @@
     "message": "Tout déverrouiller",
     "description": ""
   },
-  "Parts.Brush.Lock.Skin.Tip": {
-    "message": "La peau ne bouge jamais.",
+  "Parts.Brush.Lock.SkinOff.Tip": {
+    "message": "La peau reste immobile tant que « Déplacer aussi la peau » est désactivé.",
     "description": ""
   },
   "MeshVolume.Apply.Nothing": {
@@ -3616,7 +3668,7 @@
     "description": ""
   },
   "Parts.Retarget.NoBodiesForSex.Fmt": {
-    "message": "{0} n'a pas de corps {1} ; un ajustement ne change pas le sexe.",
+    "message": "{0} n'a pas de corps {1}.",
     "description": ""
   },
   "Parts.Retarget.Male": {
@@ -3722,6 +3774,10 @@
   "Parts.Retarget.ShapedDown.Fmt": {
     "message": "Il n'y a pas de corps {0} entre lesquels ajuster, donc le modèle {0} est ajusté dans la forme {1}, comme le jeu le déforme, puis réenregistré en {0}.",
     "description": ""
+  },
+  "Parts.Retarget.Lowered.Fmt": {
+    "message": "Un modèle {1} est créé à partir du modèle {0}, plié à la forme {1} comme le jeu plie entre les deux. Enregistrer ajoute les métadonnées nécessaires au jeu.",
+    "description": "{0} is the race of the model open, {1} the race picked below it."
   },
   "Parts.Retarget.Bake.BendBack.Fmt": {
     "message": "l'ajustement n'a pas pu être ramené à la forme {0} ({1})",
@@ -3851,6 +3907,10 @@
     "message": "Toujours actif tant que la chaussure garde son propre pied ou le gant sa propre main : sinon les nouvelles jambes ou les nouveaux bras entiers seraient ajoutés avec.",
     "description": ""
   },
+  "Parts.Retarget.ClearForcedTip": {
+    "message": "Toujours actif pour les hauts du jeu lui-même, comme le fait l'ajustement automatique : le jeu enfonce leur tissu dans son propre corps, il est donc toujours repoussé hors du nouveau.",
+    "description": ""
+  },
   "Parts.Retarget.KeepFeet": {
     "message": "Garder ses propres pieds",
     "description": ""
@@ -3878,6 +3938,14 @@
   "Parts.Retarget.SkinAlreadyMatches": {
     "message": "Rien à changer : sa peau est déjà dessinée comme celle du nouveau corps.",
     "description": ""
+  },
+  "Parts.Retarget.Smallclothes.AfterSave": {
+    "message": "Le nouveau corps dessine des sous-vêtements là où il n'a pas de peau, et l'ajustement les reprend : ils n'apparaîtront en jeu qu'une fois enregistré.",
+    "description": "Body size status: the preview cannot show the new body's underwear, whose material is only published when the refit is saved."
+  },
+  "Parts.Retarget.Smallclothes.Fallback": {
+    "message": "Le nouveau corps dessine des sous-vêtements là où il n'a pas de peau, qui n'ont pas pu être repris dans ce vêtement : il garde donc sa propre peau à cet endroit.",
+    "description": "Body size status: the new body's underwear (drawn where it has no skin) could not be added to the garment, so the garment keeps its own skin there."
   },
   "Parts.Retarget.AlreadyFits.Fmt": {
     "message": "Rien à changer : là où la pièce arrive, {0} a la même forme que la taille pour laquelle elle a été faite.",
@@ -4068,23 +4136,43 @@
     "description": ""
   },
   "Parts.Vanilla.Worn.Tip": {
-    "message": "Porté, non moddé. L'ouvrir le copie dans un nouveau mod que vous pouvez modifier. Avec l'outil « Taille du corps » sélectionné, il s'ouvre pour être ajusté.",
-    "description": ""
-  },
-  "Parts.Vanilla.Editing.Fmt": {
-    "message": "{0} est ouvert dans le mod « {1} », une copie de l'original du jeu, identique tant que vous ne le modifiez pas.",
+    "message": "Porté, sans mod. Il s'ouvre tel quel, et rien n'est enregistré tant que vous ne le modifiez pas : votre première modification le copie dans un mod à part.",
     "description": ""
   },
   "Parts.Vanilla.ModDescription.Fmt": {
     "message": "{0}, copié depuis le jeu par Proteus pour être modifié.",
     "description": ""
   },
-  "Parts.Vanilla.EditTool.Tip": {
-    "message": "L'équipement vanilla n'a pas de fichier de mod : choisir ceci le copie d'abord dans un nouveau mod.",
-    "description": ""
-  },
   "Parts.Vanilla.WornSuffix": {
     "message": "(vanilla)",
+    "description": ""
+  },
+  "Parts.Vanilla.CopyNote.Fmt": {
+    "message": "Rien n'est encore enregistré. Votre première modification copie ceci dans le mod « {0} ».",
+    "description": ""
+  },
+  "Parts.Vanilla.Copied.Fmt": {
+    "message": "{0} a été copié dans le mod « {1} » avec votre modification.",
+    "description": ""
+  },
+  "Parts.Vanilla.EditedCopyThere.Fmt": {
+    "message": "« {0} » contient déjà une copie modifiée de cette pièce, votre modification n'a donc pas été enregistrée. Pour continuer à modifier cette copie, ouvrez-la ici (avec le mod activé dans Penumbra) ; pour repartir de celle du jeu, supprimez le mod.",
+    "description": ""
+  },
+  "Parts.Vanilla.ModSwitchedOff.Fmt": {
+    "message": "« {0} » est désactivé, votre modification n'y a donc pas été enregistrée. Activez-le dans Penumbra, ou supprimez-le pour recommencer.",
+    "description": ""
+  },
+  "Parts.Vanilla.CopyRefused.Fmt": {
+    "message": "Votre modification n'a pas pu être enregistrée, rien n'a donc été copié : {0}",
+    "description": ""
+  },
+  "Parts.Vanilla.CopyRegistering": {
+    "message": "Votre modification vient d'être copiée dans un nouveau mod, et Penumbra est encore en train de le préparer. Réessayez dans un instant.",
+    "description": ""
+  },
+  "Parts.Vanilla.NotRefittable": {
+    "message": "« Taille du corps » ne peut pas réajuster cette pièce. Choisissez un autre outil pour la modifier.",
     "description": ""
   },
   "WhatsNew.HairPort.Head": {
@@ -4307,12 +4395,64 @@
     "message": "le nouveau modèle n'a pas pu être relu",
     "description": "Why a model for the wearer's race could not be made; the {1} of Parts.Retarget.BakeFailed.Fmt. Lower-case, no full stop."
   },
+  "Parts.Retarget.Race.OtherSex.Fmt": {
+    "message": "{0} (réajusté depuis ce modèle {1})",
+    "description": "A \"Refit for\" entry. {0} is a race of the other sex such as \"Midlander M\"; {1} the race of the model open."
+  },
+  "Parts.Retarget.Race.CrossSexNote.Fmt": {
+    "message": "Réajusté entre les sexes : les corps {0} pour lesquels il a été fait sont pliés à la forme de {1}, puis appariés point par point au nouveau corps grâce aux cartes de corps. Vérifiez-le en jeu avant de le partager.",
+    "description": "Warning under a refit for the other sex. {0} is the race of the model open, {1} the race picked. \"body maps\" are the bibo↔TBSE texture maps."
+  },
+  "Parts.Retarget.Race.CrossSexWears.Fmt": {
+    "message": "{0} portera le réajustement enregistré, de même que {1} là où ils n'ont pas de modèle propre pour cette pièce ; {2} garde ce modèle.",
+    "description": "{0} is the race picked; {1} a comma-separated list of races; {2} the race of the model open."
+  },
+  "Parts.Retarget.Race.CrossSexQuality.Fmt": {
+    "message": "{0} faces retournées ; {1} du corps apparié.",
+    "description": "{0} is a count of folded (turned-over) faces; {1} a percentage such as \"97%\"."
+  },
+  "Parts.Retarget.Race.CrossSexHint.Fmt": {
+    "message": "Pour faire une version pour {0}, choisissez-le sous « Ajuster pour ».",
+    "description": "{0} is a race such as \"Midlander M\". “Refit for” is the dropdown's label (Parts.Retarget.Race.Label)."
+  },
+  "Parts.Retarget.Refuse.CrossSexMadeFor.Fmt": {
+    "message": "Entre les sexes, les corps sur lesquels ce vêtement a été fait doivent être des corps {0}. Choisissez sous « Fait pour le corps » le mod de corps pour lequel il a été fait.",
+    "description": "{0} is a race such as \"Midlander F\". “Made for” is the body dropdown the garment was made on."
+  },
+  "Parts.Retarget.Refuse.CrossSexCoverage.Fmt": {
+    "message": "Ce réajustement entre les sexes n'a apparié que {0} du corps par les cartes de corps. Proteus n'en enregistre un que s'il apparie au moins {1}.",
+    "description": "Why a refit for the other sex is not saved: {0} the share of the body matched, as found; {1} the least that is saved. Percentages arrive formatted."
+  },
+  "Parts.Retarget.Race.CrossSexFolded.Fmt": {
+    "message": "{0:N0} face(s) de tissu retournée(s) dans ce réajustement entre les sexes. Une face retournée apparaît en jeu comme un trou : vérifie ces endroits avant de le partager.",
+    "description": "Said in the warning colour beside a refit for the other sex: {0} is a count of cloth faces turned over."
+  },
+  "Parts.Retarget.Race.BonesMoved.Fmt": {
+    "message": "Il manque au squelette de {0} {1} os sur lesquels ce vêtement s'appuie. Leur poids suit désormais l'os le plus proche qu'il possède : ces parties bougent avec lui plutôt que d'elles-mêmes : {2}",
+    "description": "Warning beside a refit for a picked race: {0} is the race picked; {1} a count of bones; {2} the moves, such as \"ya_shiri_phys_l → iv_shiri_l\" (bone names are not translated)."
+  },
+  "Parts.Retarget.Race.NeedsSkeleton.Fmt": {
+    "message": "Le squelette de {0} venant de {1} donne à ce modèle {2} os que le squelette du jeu n'a pas ({3}). Quiconque n'a pas ce squelette verra ces parties déformées.",
+    "description": "Warning beside a refit for a picked race: {0} is the race picked; {1} the mod its skeleton comes from; {2} a count of bones; {3} their names (not translated)."
+  },
+  "Parts.Retarget.Race.RenameFailed.Fmt": {
+    "message": "les os n'ont pas pu être renommés ({0})",
+    "description": "Why a refit for a picked race was refused: the garment's bones could not be moved onto the race's; {0} is the technical reason."
+  },
+  "Parts.Retarget.Refuse.CrossSexLayout.Fmt": {
+    "message": "Entre les sexes, Proteus ne peut apparier que des corps de femme en disposition Bibo+ ou du jeu à des corps d'homme en disposition TBSE ou du jeu. Les modèles {0} utilisent {1} et {2}.",
+    "description": "{0} is a slot such as \"_top\"; {1} and {2} texture layout names (bibo, gen3, tbse, male vanilla), never translated. \"Bibo+\" and \"TBSE\" are body-mod names."
+  },
+  "Parts.Retarget.Refuse.MenMapsMissing": {
+    "message": "Les cartes de corps nécessaires à un réajustement entre les sexes ne sont pas encore là. Proteus les télécharge ; réajustez à nouveau une fois qu'elles sont arrivées.",
+    "description": "Said when the bibo↔TBSE texture maps have not been downloaded yet."
+  },
   "Parts.Retarget.Race.Label": {
     "message": "Ajuster pour",
     "description": "Heads the dropdown that picks which race's model a refit is made and saved as."
   },
   "Parts.Retarget.Race.Tip": {
-    "message": "Pour quelle race est l'ajustement. Une autre race du même sexe reçoit son propre modèle, tiré de celui-ci comme le jeu le plie, ajusté au corps de cette race et enregistré là où cette race le charge. Tous les autres gardent ce modèle.",
+    "message": "Pour quelle race est le réajustement. Une autre race obtient son propre modèle, fait à partir de celui-ci comme le jeu le plie, réajusté sur le corps de cette race et enregistré là où cette race le charge. Un vêtement de torse ou de jambes Midlander peut aussi être réajusté pour l'autre sexe. Ce modèle reste tel quel.",
     "description": "Tooltip of Parts.Retarget.Race.Label."
   },
   "Parts.Retarget.Race.ThisModel.Fmt": {
@@ -4338,6 +4478,14 @@
   "Parts.Retarget.Race.Only.Fmt": {
     "message": "Seul {0} portera l'ajustement enregistré ; {1} garde ce modèle.",
     "description": "{0} is the race picked, {1} the race of the model open."
+  },
+  "Parts.Retarget.Race.Below.Fmt": {
+    "message": "{0} portera l'ajustement enregistré, ainsi que toute race de ce sexe sans modèle propre pour cette pièce ; {1} garde ce modèle.",
+    "description": "{0} is the race picked, {1} the race of the model open; said for a race the open one falls back to."
+  },
+  "Parts.Retarget.Race.BelowExtraBones.Fmt": {
+    "message": "Ce vêtement utilise des os supplémentaires. Seul {0} reçoit le squelette supplémentaire pour eux, donc sur les autres races qui portent cet ajustement, ces os ne bougeront pas.",
+    "description": "{0} is the race picked."
   },
   "Parts.Retarget.Race.SourceBaked.Fmt": {
     "message": "Les corps pour lesquels il a été fait sont pliés vers {0} de la même façon, il repose donc sur eux comme avant.",
@@ -4543,9 +4691,21 @@
     "message": "Ce mod est encore dans l'ancien format de dossier de Penumbra, que Proteus ne modifie pas. Activez-le une fois dans Penumbra pour qu'il le mette à niveau, puis revenez.",
     "description": "Body size status line: the mod is in Penumbra's pre-v3 folder format."
   },
+  "Parts.Retarget.Save.ModGone.Fmt": {
+    "message": "« {0} » ne figure plus dans les mods de Penumbra : il y a été renommé ou supprimé. Rien n'a été enregistré.",
+    "description": "Body size status line when the mod's folder is gone. {0} is the mod's folder name."
+  },
   "Parts.Retarget.Save.Failed.Fmt": {
     "message": "Impossible d'enregistrer : {0}",
     "description": "Body size status line. {0} is the error message."
+  },
+  "Parts.Retarget.Save.NoMaterialSet.Fmt": {
+    "message": "{0} dessine les sous-vêtements du nouveau corps, dont le matériau ne peut être enregistré qu'à côté d'un modèle d'équipement ou d'accessoire.",
+    "description": "Body size save refused: {0} is the model's game path. The refit draws the new body's underwear, whose material must be saved beside an equipment model."
+  },
+  "Parts.Retarget.Save.NoMaterialName.Fmt": {
+    "message": "Tous les noms de matériau que {0} pourrait utiliser sont pris : les sous-vêtements du nouveau corps n'ont pas de nom propre sous lequel être enregistrés.",
+    "description": "Body size save refused: {0} is the model's game path. Every free material name for the new body's underwear copy is already used."
   },
   "Parts.Retarget.Undo.Removed.Fmt": {
     "message": "« {0} » supprimé.",
@@ -4582,6 +4742,10 @@
   "Parts.Retarget.Refuse.LowCoverage.Fmt": {
     "message": "Seuls {1:P0} du corps de {0} source trouvent leur place sur la cible par coordonnée de texture : les deux ne partagent pas de disposition de texture et ne peuvent pas être ajustés l'un sur l'autre.",
     "description": "Body size: why two bodies cannot be paired. {0} is the body part (chest, legs…), {1:P0} the share that matched — keep the :P0."
+  },
+  "Parts.Retarget.Refuse.NoSkinThere.Fmt": {
+    "message": "Seuls {1:P0} du corps {0} source trouvent de la peau où se poser : cette option {0} du corps cible n'a pas de peau sur le reste et y dessine autre chose, comme des sous-vêtements modélisés, sur quoi l'ajustement n'a pas pu le poser. Choisissez une option de ce corps qui a de la peau à cet endroit, ou ajustez sur un autre corps.",
+    "description": "Body size: why two bodies cannot be paired when the target option draws something else (such as modelled underwear) where the source has skin. {0} is the body part (chest, legs…), {1:P0} the share that landed on skin — keep the :P0."
   },
   "Parts.Retarget.Bake.NoPath.Fmt": {
     "message": "le déformeur racial n'a aucun chemin de c{0:D4} à c{1:D4}",
@@ -4904,7 +5068,7 @@
     "description": ""
   },
   "SizeSet.Intro": {
-    "message": "Ajoute à tout ce mod chaque taille des corps cochés ci-dessous. Chaque taille est réajustée à partir de la taille de l'auteur la plus proche, les autres pièces de la tenue dans cette option à partir de la même taille, et enregistrée à côté des tailles de l'auteur sous « Rue S », « YAB Buff L », etc. Les tailles que le mod possède déjà ne sont pas touchées.",
+    "message": "Ajoute à tout ce mod chaque taille des corps cochés ci-dessous. Chaque taille est réajustée à partir de la taille de l'auteur la plus proche, les autres pièces de la tenue dans cette option à partir de la même taille, et enregistrée à côté des tailles de l'auteur sous « Rue S », « YAB Buff L », etc. Les tailles que le mod possède déjà ne sont pas touchées. Un mod pour femmes peut aussi recevoir TBSE et TBSE-X : son torse et ses jambes sont réajustés pour les hommes et enregistrés dans un groupe à part.",
     "description": ""
   },
   "SizeSet.Yas": {
@@ -5030,6 +5194,54 @@
   "SizeSet.Working.Fmt": {
     "message": "Réajustement de {0} en {1}...",
     "description": ""
+  },
+  "SizeSet.ForMen.Fmt": {
+    "message": "{0} (pour hommes)",
+    "description": "Checkbox label for a men's body offered for a women's mod. {0} is the body (\"TBSE\")."
+  },
+  "SizeSet.ForMen.Tip.Fmt": {
+    "message": "Les pièces de torse et de jambes pour femmes de ce mod reçoivent une version pour hommes sur {0} : réajustées pour les hommes Midlander par les cartes de corps, téléchargées la première fois qu'il en faut, chacune depuis la taille de l'auteur dont le corps, plié en forme d'homme, est le plus proche du sien. Elles sont enregistrées dans un groupe à part, « {1} », donc les tailles pour femmes restent telles quelles. Les chaussures et les gants ne sont pas réajustés entre les sexes, et une pièce que l'auteur a déjà faite pour hommes garde la sienne.",
+    "description": "Tooltip. {0} is a men's body (\"TBSE\"), {1} the group the men's versions go into."
+  },
+  "SizeSet.MensGroup": {
+    "message": "Corps d'homme",
+    "description": "The name of the Penumbra group a women's mod's men's versions are saved into."
+  },
+  "SizeSet.CheckInGame": {
+    "message": "À vérifier en jeu :",
+    "description": "Heading over the sizes saved that want a look in game."
+  },
+  "SizeSet.Warning.Fmt": {
+    "message": "{0}, « {1} » : {2}",
+    "description": "One line under \"Check in game\". {0} is the piece, {1} the size, {2} what to look at."
+  },
+  "SizeSet.MenMapsMissing": {
+    "message": "Aucune version pour hommes n'a été faite : les cartes de corps nécessaires ne sont pas encore là. Proteus les télécharge ; ajoutez de nouveau les tailles une fois arrivées.",
+    "description": "Why no men's versions were made."
+  },
+  "SizeSet.NoSourceForMen.Fmt": {
+    "message": "{0} : aucune taille de l'auteur n'a été faite sur un corps que Proteus sait apparier à celui d'un homme (Bibo+ ou la disposition du jeu), il n'a donc pas de version pour hommes.",
+    "description": "{0} is the piece."
+  },
+  "SizeSet.MensGroupTaken.Fmt": {
+    "message": "Le mod a déjà un groupe de l'auteur nommé « {0} », donc aucune version pour hommes n'a été faite. Renommez ce groupe dans Penumbra et ajoutez de nouveau les tailles.",
+    "description": "{0} is the group's name."
+  },
+  "SizeSet.EndsNotForMen": {
+    "message": "Les chaussures et les gants n'ont pas de version pour hommes : seules les pièces de torse et de jambes sont réajustées entre les sexes.",
+    "description": "Said once when a women's mod's men's versions are made and it has shoes or gloves."
+  },
+  "SizeSet.OneVariant.Fmt": {
+    "message": "{0} : les hommes ont une version, faite depuis « {1} » ; les autres variantes du mod restent pour femmes seulement.",
+    "description": "{0} is the piece, {1} the author's option the men's version was made from."
+  },
+  "SizeSet.NotMade": {
+    "message": "le réajustement n'a rien produit à enregistrer",
+    "description": "Why a men's version couldn't be made, after \"couldn't be made:\"."
+  },
+  "SizeSet.RigUnreadable": {
+    "message": "son rig ne peut pas être lu, il ne peut donc pas être plié en forme d'homme",
+    "description": "Why a men's version couldn't be made, after \"couldn't be made:\": the garment's skinning can't be read."
   },
   "SizeSet.NotInstalledTip.Fmt": {
     "message": "{0} n'est pas installé dans Penumbra. Installez-le, puis fermez et rouvrez cette section.",
@@ -5243,9 +5455,13 @@
     "message": "Cheveux",
     "description": ""
   },
-  "HairPort.Refused.Folded.Fmt": {
-    "message": "une fois plié sur c{0:D4}, {1} de ses triangles seraient retournés",
-    "description": ""
+  "HairPort.Folded.Fmt": {
+    "message": "une fois plié sur c{0:D4}, {1} de ses triangles sont retournés et peuvent apparaître comme des trous ; vérifie-le en jeu",
+    "description": "A hair port saved with a warning: bent onto race {0}, {1} of the hairstyle's triangles turn inside out."
+  },
+  "HairPort.Scan.State.FittedWarn.Fmt": {
+    "message": "adaptée — {0}",
+    "description": "A hairstyle's state in the list: fitted, with {0} what to look at in game."
   },
   "HairPort.Refused.Declined": {
     "message": "sa transposition a été annulée, il est donc laissé tel quel",
@@ -5353,6 +5569,54 @@
   },
   "HairPort.Scan.UndoChecked.Confirm.Fmt": {
     "message": "Cliquez de nouveau pour annuler définitivement {0} coiffure(s)",
+    "description": ""
+  },
+  "HairPort.Earless.Label": {
+    "message": "Retirer les oreilles des mods de cheveux miqo'te",
+    "description": ""
+  },
+  "HairPort.Earless.Tip": {
+    "message": "Pour une Miqo'te : quand vous portez un mod de cheveux dont la coiffure a des\noreilles de chat, Proteus en fait une copie sans oreilles et fait pointer l'option\ndu mod vers cette copie. Les fichiers de l'auteur ne sont jamais modifiés.\n\nCela modifie le mod lui-même : tout personnage affiché avec ce mod actif — dans\ntoutes les collections, et chez toute personne avec qui vous le partagez — n'a\nplus d'oreilles avec. Désactiver cette option remet les oreilles dans chaque mod\nmodifié par Proteus. Fonctionne avec ou sans l'adaptation des mods de cheveux\nfaits pour une autre race.",
+    "description": ""
+  },
+  "HairPort.Settings.Earless.Fmt": {
+    "message": "La coiffure {0} de {1} est affichée sans ses oreilles — pour tout personnage affiché avec ce mod actif, dans toutes les collections. Désactiver l'option les remet.",
+    "description": ""
+  },
+  "HairPort.Settings.EarlessOptionHint.Fmt": {
+    "message": "Ce mod a sa propre option sans oreilles : {0}",
+    "description": ""
+  },
+  "HairPort.Earless.Chat": {
+    "message": "[Proteus] Les oreilles de chat de cette coiffure sont retirées : Proteus a fait pointer son mod vers une copie sans oreilles, donc tout personnage affiché avec ce mod actif, dans toutes les collections, n'a plus d'oreilles avec. Désactivez « Retirer les oreilles des mods de cheveux miqo'te » dans /proteus > Paramètres > Cheveux pour les remettre.",
+    "description": ""
+  },
+  "HairPort.Earless.RestoreBlocked.Fmt": {
+    "message": "[Proteus] Les oreilles n'ont pas pu être remises dans {0} : {1}",
+    "description": ""
+  },
+  "HairPort.Earless.Restored.Fmt": {
+    "message": "Oreilles remises sur {0} coiffure(s).",
+    "description": ""
+  },
+  "HairPort.Earless.Refused.AuthorMissing.Fmt": {
+    "message": "le fichier de l'auteur {0} est introuvable, la copie sans oreilles a donc été gardée",
+    "description": ""
+  },
+  "HairPort.Earless.Refused.Changed": {
+    "message": "le mod a changé pendant que Proteus travaillait dessus, rien n'a donc été écrit",
+    "description": ""
+  },
+  "HairPort.Earless.Refused.Leftover": {
+    "message": "toutes ses oreilles n'ont pas pu être retirées",
+    "description": ""
+  },
+  "HairPort.Earless.Refused.RecordUnreadable": {
+    "message": "Le registre de Proteus des coiffures sans oreilles de ce mod (Proteus/earlesshair.json) n'a pas pu être lu, rien n'a donc été modifié.",
+    "description": ""
+  },
+  "HairPort.Earless.Refused.Outside.Fmt": {
+    "message": "{0} n'est pas un chemin dans le dossier sans oreilles du mod, rien n'a donc été écrit",
     "description": ""
   }
 }

@@ -160,6 +160,40 @@ internal static class RetargetInputs
     /// skin in, and its piercings with it.</summary>
     internal static bool CarryPiercings(bool replaceSkin, bool carryPiercings) => replaceSkin && carryPiercings;
 
+    /// <summary>How the Body size tool's whole-garment refit treats the body under the cloth (see <see cref="StudioSkin"/>).</summary>
+    /// <param name="ClearForced">"Push cloth out of the body" is on whatever the box says, and the box shows it greyed.</param>
+    /// <param name="ClearBody">Push the cloth clear of the body (see <see cref="BodyRetarget.Plan"/>).</param>
+    /// <param name="TuckSlot">The slot whose cut skin is tucked in under the cloth (see <see cref="RefitCore.TuckSlot"/>).</param>
+    /// <param name="DeepClear">See <see cref="RefitCore.DeepClearFor"/>.</param>
+    /// <param name="KeepStandoff">See <see cref="RefitCore.KeepStandoffFor"/>.</param>
+    /// <param name="SeeInside">See <see cref="RefitCore.SeeInsideFor"/>: only with a tuck.</param>
+    internal readonly record struct StudioSkinRule(bool ClearForced, bool ClearBody, string? TuckSlot, bool DeepClear,
+                                                   bool KeepStandoff, bool SeeInside);
+
+    /// <summary>
+    /// The Body size tool's rule for the body under a whole garment's cloth. A modder's garment gets the user's boxes, as
+    /// it always has: cloth tucked under the skin is often the author's intent, and the refit is written into their mod.
+    /// The game's own top, with the new body's skin brought in, gets the automatic refit's rule for game gear
+    /// (<see cref="AutoRefitDecisions.SkinFor"/>) whatever the "Push cloth out of the body" box says: the game buries its
+    /// tops' cloth in its own body on purpose, and the refit is written into Proteus's own mod. Left to the box's default,
+    /// the game's Witch's Coatee on Rosaline's Coconut was neither cleared nor tucked, and the bust stood open under its
+    /// lapels. A top bent across the sexes keeps the boxes: nothing of this was measured there.
+    /// </summary>
+    /// <param name="gameGear">The garment is the game's own (see <see cref="AutoRefitDecisions.IsGameGear"/>).</param>
+    /// <param name="crossSex">The user picked a race of the other sex (see <see cref="CrossSexRefit"/>).</param>
+    internal static StudioSkinRule StudioSkin(bool replaceSkin, bool cutHidden, bool clearBody, bool gameGear,
+                                              string garmentSlot, bool crossSex)
+    {
+        bool forced = gameGear && garmentSlot == "_top" && replaceSkin && !crossSex;
+        bool clear = clearBody || forced;
+        var game = AutoRefitDecisions.SkinFor(true);
+        string? tuck = RefitCore.TuckSlot(cutHidden && clear, garmentSlot);
+        return new StudioSkinRule(forced, clear, tuck,
+                                  forced && RefitCore.DeepClearFor(game.DeepClear, garmentSlot),
+                                  forced && RefitCore.KeepStandoffFor(game.KeepStandoff, garmentSlot),
+                                  forced && tuck != null && RefitCore.SeeInsideFor(game.SeeInside, garmentSlot));
+    }
+
     /// <summary>The headless refit's <c>--piercings</c>: the new body's piercings come in only when it is given.</summary>
     internal static bool CliCarryPiercings(IReadOnlyDictionary<string, string> opts) => opts.ContainsKey("piercings");
 
@@ -168,11 +202,13 @@ internal static class RetargetInputs
     /// A plan whose key no longer matches is stale. The piercings choice counts only where it changes the plan (see
     /// <see cref="CarryPiercings"/>): never on a skin-only redraw, which swaps nothing.
     /// </summary>
+    /// <param name="gameTop">The game's own top's rule applies (see <see cref="StudioSkinRule.ClearForced"/>): a plan made
+    /// under it is never shown or saved for the garment judged a mod's, nor the other way round.</param>
     internal static string Key(string modelRel, string? fromBodyDir, Inputs inputs, IReadOnlyList<string> chosen,
                                IReadOnlyDictionary<string, BodyOption> from,
                                IReadOnlyDictionary<string, List<BodyOption>> to, IEnumerable<string> held,
                                IEnumerable<string>? keepShape, bool replaceSkin, bool cutHidden, bool clearBody,
-                               bool carryPiercings = false)
+                               bool carryPiercings = false, bool gameTop = false)
         => modelRel + "|from:" + (fromBodyDir ?? "") + "|"
          + string.Join("|", chosen.Select(s => $"{s}:{from[s].Rel}>{string.Join(",", to[s].Select(t => t.Rel))}"))
          + "|held:" + string.Join(",", held.OrderBy(h => h, StringComparer.Ordinal))
@@ -184,5 +220,6 @@ internal static class RetargetInputs
          + (CarryPiercings(replaceSkin, carryPiercings) && !inputs.SkinOnly ? "|pierce" : "")
          + (inputs.SkinOnly && inputs.EndSlot != null && from.TryGetValue(inputs.EndSlot, out var own)
                 ? "|skin:" + own.Rel + ">" + string.Join(",", inputs.PrimaryTargets.Select(t => t.Rel))
-                : "");
+                : "")
+         + (gameTop ? "|gametop" : "");
 }

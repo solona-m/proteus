@@ -19,14 +19,14 @@ public class KeepShapeReleaseTests
     private const string SkinMaterial = "/mt_c0201b0001_bibo.mtrl";
     private const string ClothMaterial = "/mt_c0201e6255_top_a.mtrl";
 
-    private const float Half = 0.20f;
-    private const float DomeRadius = 0.04f;
+    internal const float Half = 0.20f;
+    internal const float DomeRadius = 0.04f;
 
     /// <summary>A dome tall enough that a 6 cm plate moved whole sinks well past the threshold.</summary>
-    private const float TallDome = 0.020f;
+    internal const float TallDome = 0.020f;
 
     /// <summary>A dome low enough that the same plate, moved whole, stays within the threshold.</summary>
-    private const float LowDome = 0.004f;
+    internal const float LowDome = 0.004f;
 
     // ── the pieces that sink are let go ───────────────────────────────────────────────────────────────────
 
@@ -309,7 +309,7 @@ public class KeepShapeReleaseTests
 
     // ── the fixture ──────────────────────────────────────────────────────────────────────────────────────
 
-    private static BodyRetarget.Solved Solve(ModelParts garment, float dome, IReadOnlyList<IReadOnlyCollection<int>>? keep,
+    internal static BodyRetarget.Solved Solve(ModelParts garment, float dome, IReadOnlyList<IReadOnlyCollection<int>>? keep,
                                              bool pushOut = true, bool clearBody = false, IReadOnlySet<int>? held = null,
                                              float radius = DomeRadius)
     {
@@ -320,9 +320,9 @@ public class KeepShapeReleaseTests
                                   held: held, clearBody: clearBody, keepShape: keep);
     }
 
-    private static int[] AllVertices(ModelParts m) => Enumerable.Range(0, m.Positions.Length / 3).ToArray();
+    internal static int[] AllVertices(ModelParts m) => Enumerable.Range(0, m.Positions.Length / 3).ToArray();
 
-    private static void AssertSameDeltas(BodyRetarget.Solved expected, BodyRetarget.Solved actual, ModelParts garment)
+    internal static void AssertSameDeltas(BodyRetarget.Solved expected, BodyRetarget.Solved actual, ModelParts garment)
     {
         for (int v = 0; v < garment.Positions.Length / 3; v++)
         {
@@ -334,7 +334,7 @@ public class KeepShapeReleaseTests
     }
 
     /// <summary>Moved whole: every pairwise distance scaled by the one factor.</summary>
-    private static void AssertMovedWhole(ModelParts garment, BodyRetarget.Solved solved, int[] piece)
+    internal static void AssertMovedWhole(ModelParts garment, BodyRetarget.Solved solved, int[] piece)
     {
         Vector3 Before(int v) => new(garment.Positions[v * 3], garment.Positions[v * 3 + 1], garment.Positions[v * 3 + 2]);
         Vector3 After(int v)
@@ -393,7 +393,7 @@ public class KeepShapeReleaseTests
     /// of <paramref name="dome"/> at its centre. The same vertex order whatever the dome, so an identity correspondence
     /// carries one onto another.
     /// </summary>
-    private static ModelParts Box(float dome, float radius = DomeRadius)
+    internal static ModelParts Box(float dome, float radius = DomeRadius)
     {
         const int n = 80;
         var pos = new List<float>();
@@ -442,7 +442,7 @@ public class KeepShapeReleaseTests
     /// A square cloth slab <paramref name="size"/> across, centred on <paramref name="centre"/> (x, y): its underside
     /// <paramref name="off"/> over the box's flat +Z face facing down, its top <see cref="Thick"/> above that facing up.
     /// </summary>
-    private static ModelParts Plate(Vector3 centre, float size, float off, float step = 0.005f)
+    internal static ModelParts Plate(Vector3 centre, float size, float off, float step = 0.005f)
     {
         int n = (int)MathF.Round(size / step);
         int layer = (n + 1) * (n + 1);
@@ -471,14 +471,14 @@ public class KeepShapeReleaseTests
     }
 
     /// <summary>Two cloth models as one, the second's vertices after the first's.</summary>
-    private static ModelParts Merge(ModelParts a, ModelParts b)
+    internal static ModelParts Merge(ModelParts a, ModelParts b)
     {
         int na = a.Positions.Length / 3;
         return Build([.. a.Positions, .. b.Positions], [.. a.Normals, .. b.Normals],
                      [.. a.Parts[0].Triangles, .. b.Parts[0].Triangles.Select(t => t + na)], ClothMaterial);
     }
 
-    private static ModelParts Build(float[] pos, float[] nrm, int[] tris, string material)
+    internal static ModelParts Build(float[] pos, float[] nrm, int[] tris, string material)
     {
         int vc = pos.Length / 3;
         var min = new Vector3(float.MaxValue);

@@ -543,6 +543,14 @@
     "message": "\n전역 설정입니다 — 편집 중인 연결에는 포함되지 않습니다.",
     "description": ""
   },
+  "Colors.Bodies.Men.Label": {
+    "message": "남성에게도 덧입히기",
+    "description": "Checkbox label in the colour-table editor window's Advanced section, under \"Overlay gen2/vanilla\". Ticked = this mod's women's art is also painted on men."
+  },
+  "Colors.Bodies.Men.Tip": {
+    "message": "이 모드의 여성용 아트를 남성(TBSE 또는 남성 바닐라 체형)에게도 그립니다.\n남성 체형 맵을 통해 그 캐릭터 자신의 레이아웃으로 옮겨집니다.\n남성용으로 만든 아트는 절대 바뀌지 않습니다.\n이 옵션만이 아니라 모드 전체에 적용됩니다.",
+    "description": "Tooltip for the checkbox above. \"TBSE\" is a body-mod name - never translated. Contains deliberate line breaks - keep the same number, moving them where your language needs."
+  },
   "Colors.Bodies.Vanilla.Label": {
     "message": "gen2/바닐라에 오버레이",
     "description": "Checkbox label in the colour-table editor window's Advanced section. \"gen2\" is a body-mod name - never translated. Ticked = this mod is also painted onto vanilla skin."
@@ -2331,6 +2339,10 @@
     "message": "마스크가 장비로 렌더링되도록 설정되어 있습니다. 의상은 마스크로부터 만들어지는데, Penumbra의 \"{0}\" 그룹에서 선택된 것이 없습니다.",
     "description": ""
   },
+  "Mods.Inert.AwaitingMenMaps": {
+    "message": "이 모드의 아트는 여성 체형용으로 만들어졌습니다. 남성 체형 맵이 다운로드되는 대로 당신 자신의 레이아웃으로 그려집니다(다운로드에 실패했다면 UV 맵 알림에서 다시 시도하세요).",
+    "description": "Why an enabled mod paints nothing yet: it is women's art on a man, waiting for the men's body maps to download. \"UV maps\" names the notice in the plugin's status window."
+  },
   "Mods.Inert.NothingReached": {
     "message": "선택한 옵션은 처리되었지만, 이 캐릭터가 불러온 표면에 도달한 것은 없습니다.",
     "description": ""
@@ -2623,8 +2635,8 @@
     "message": "이동한 파츠는 원래 본을 계속 따르므로, 본에서 멀리 옮기면 포즈에 따라 이상하게 휠 수 있습니다.",
     "description": ""
   },
-  "Parts.Move.SkinTip": {
-    "message": "피부는 이동할 수 없습니다.",
+  "Parts.Move.SkinOff.Tip": {
+    "message": "피부를 움직이려면 \"피부도 움직이기\"를 켜세요.",
     "description": ""
   },
   "Parts.Move.LockedTip": {
@@ -2855,8 +2867,48 @@
     "message": "좌우 대칭",
     "description": ""
   },
-  "Parts.Brush.Mirror.Tip": {
-    "message": "몸의 중심을 기준으로 양쪽을 동시에 대칭으로 칠합니다.",
+  "Parts.Mirror.Tip": {
+    "message": "몸의 중심을 기준으로 양쪽을 동시에 대칭으로 편집합니다. 브러시는 대칭 쪽도 칠하고, 이동·회전·크기 조절은 반대쪽의 대응하는 천을 대칭으로 움직입니다('피부도 움직이기'를 켜면 대응하는 피부도 함께). 그 자체로 좌우 대칭인 부분은 중앙에 유지됩니다.",
+    "description": "Tooltip on the Mirror left/right checkbox, shown under the brushes and under Move, Rotate and Scale."
+  },
+  "Parts.Move.Mirror.Paired.Fmt": {
+    "message": "좌우 대칭: 선택한 {1:N0}개 점 중 {0:N0}개가 반대쪽에 대응점이 있습니다.",
+    "description": "{0} is how many selected points matched a point on the other side; {1} is how many points are selected."
+  },
+  "Parts.Move.Mirror.Held.Fmt": {
+    "message": "대응점 중 {0:N0}개는 잠겨 있어 움직이지 않습니다.",
+    "description": "{0} is how many of the matching points are locked."
+  },
+  "Parts.Move.Mirror.None": {
+    "message": "좌우 대칭: 반대쪽에 이 선택과 대응하는 것이 없어 이쪽만 움직입니다.",
+    "description": "Shown under Move, Rotate and Scale with Mirror on when nothing matched."
+  },
+  "Parts.Move.Mirror.Centred": {
+    "message": "좌우 대칭: 이 선택은 그 자체로 좌우 대칭이라 한 덩어리로 움직이며 중앙에 유지됩니다. 옆으로의 이동과 회전은 제외됩니다.",
+    "description": "Shown under Move, Rotate and Scale with Mirror on when the selection crosses the centre and mirrors itself."
+  },
+  "Parts.SkinMoves": {
+    "message": "피부도 움직이기",
+    "description": ""
+  },
+  "Parts.SkinMoves.Tip": {
+    "message": "브러시와 이동·회전·크기 조절로 옷뿐 아니라 몸의 피부도 움직일 수 있게 합니다. 피부 위에 놓인 옷(약 3 cm 이내)은 피부와 함께 움직여 몸이 뚫고 나오지 않으며, 그보다 먼 옷은 그대로 있습니다. 끄면 피부는 제작자가 둔 자리에 그대로 있습니다.\n\n브러시는 이 부위가 다음 부위와 만나는 피부 가장자리를 제자리에 둡니다. 그곳의 피부를 이동·회전·크기 조절로 움직이면 허리, 손목, 목에 틈이 생길 수 있습니다.\n\n체형 크기와 자동 맞춤은 장비의 피부를 새 체형의 피부로 바꾸므로, 다듬은 피부는 맞춤 후에 남지 않습니다.",
+    "description": ""
+  },
+  "Parts.SkinMoves.NotThisBrush.Tip": {
+    "message": "다리 놓기와 바람 브러시는 옷에만 작용하며, 그 아래 피부는 움직이지 않습니다.",
+    "description": ""
+  },
+  "Parts.SkinMoves.Preparing": {
+    "message": "피부를 준비하는 중…",
+    "description": ""
+  },
+  "Parts.SkinMoves.BodyModel.Warn": {
+    "message": "이것은 체형입니다. 이 체형용 장비는 체형의 정확한 모양으로 알아보므로, 다듬은 뒤에는 체형 크기와 자동 맞춤이 어느 체형용 장비인지 알지 못할 수 있습니다.",
+    "description": ""
+  },
+  "Parts.SkinMoves.Failed": {
+    "message": "피부를 준비하지 못해 피부는 움직이지 않습니다. 이유는 로그에 있습니다.",
     "description": ""
   },
   "Parts.Brush.Lock.Hint": {
@@ -2875,8 +2927,8 @@
     "message": "모두 잠금 해제",
     "description": ""
   },
-  "Parts.Brush.Lock.Skin.Tip": {
-    "message": "피부는 움직이지 않습니다.",
+  "Parts.Brush.Lock.SkinOff.Tip": {
+    "message": "\"피부도 움직이기\"가 꺼져 있는 동안 피부는 움직이지 않습니다.",
     "description": ""
   },
   "MeshVolume.Apply.Nothing": {
@@ -3616,7 +3668,7 @@
     "description": ""
   },
   "Parts.Retarget.NoBodiesForSex.Fmt": {
-    "message": "{0}에는 {1} 체형이 없습니다. 리핏으로 성별을 바꿀 수는 없습니다.",
+    "message": "{0}에는 {1} 체형이 없습니다.",
     "description": ""
   },
   "Parts.Retarget.Male": {
@@ -3722,6 +3774,10 @@
   "Parts.Retarget.ShapedDown.Fmt": {
     "message": "{0} 바디가 없어서 {0} 모델을 게임이 변형하는 방식대로 {1} 체형에서 리핏한 뒤 다시 {0}(으)로 저장합니다.",
     "description": ""
+  },
+  "Parts.Retarget.Lowered.Fmt": {
+    "message": "{0} 모델로 {1} 모델을 만들어, 게임이 둘 사이를 휘는 방식 그대로 {1} 체형으로 휩니다. 저장하면 게임에 필요한 메타데이터가 추가됩니다.",
+    "description": "{0} is the race of the model open, {1} the race picked below it."
   },
   "Parts.Retarget.Bake.BendBack.Fmt": {
     "message": "리핏을 {0} 체형으로 되돌리지 못했습니다({1})",
@@ -3851,6 +3907,10 @@
     "message": "신발이 자기 발을, 장갑이 자기 손을 유지하는 동안에는 항상 켜집니다. 그렇지 않으면 새 다리나 팔 전체가 함께 들어갑니다.",
     "description": ""
   },
+  "Parts.Retarget.ClearForcedTip": {
+    "message": "게임 자체 상의에는 자동 리핏과 같이 항상 켜집니다. 게임은 천을 자기 몸 안에 묻어 두므로 새 몸에서는 항상 밖으로 밀어냅니다.",
+    "description": ""
+  },
   "Parts.Retarget.KeepFeet": {
     "message": "원래 발 유지",
     "description": ""
@@ -3878,6 +3938,14 @@
   "Parts.Retarget.SkinAlreadyMatches": {
     "message": "바꿀 것이 없습니다. 피부가 이미 새 바디처럼 그려지고 있습니다.",
     "description": ""
+  },
+  "Parts.Retarget.Smallclothes.AfterSave": {
+    "message": "새 바디는 피부가 없는 곳에 속옷을 그리며, 리핏이 이를 가져옵니다. 게임에서는 저장한 뒤에만 보입니다.",
+    "description": "Body size status: the preview cannot show the new body's underwear, whose material is only published when the refit is saved."
+  },
+  "Parts.Retarget.Smallclothes.Fallback": {
+    "message": "새 바디는 피부가 없는 곳에 속옷을 그리지만 이 의상에 가져올 수 없어서, 그 부분은 의상 자체의 피부를 유지합니다.",
+    "description": "Body size status: the new body's underwear (drawn where it has no skin) could not be added to the garment, so the garment keeps its own skin there."
   },
   "Parts.Retarget.AlreadyFits.Fmt": {
     "message": "바꿀 것이 없습니다. 이 장비가 닿는 곳에서 {0}은(는) 원래 만들어진 사이즈와 모양이 같습니다.",
@@ -4068,23 +4136,43 @@
     "description": ""
   },
   "Parts.Vanilla.Worn.Tip": {
-    "message": "착용 중이지만 모드가 아닙니다. 열면 편집할 수 있는 새 모드로 복사됩니다. '체형 크기'를 선택한 상태에서는 리핏용으로 열립니다.",
-    "description": ""
-  },
-  "Parts.Vanilla.Editing.Fmt": {
-    "message": "{0}이(가) 모드 \"{1}\"에서 열려 있습니다. 게임 원본의 사본이라 변경하기 전까지는 똑같이 보입니다.",
+    "message": "착용 중, 모드 없음. 그대로 열리며 변경하기 전까지는 아무것도 저장되지 않습니다. 첫 변경 시 전용 모드로 복사됩니다.",
     "description": ""
   },
   "Parts.Vanilla.ModDescription.Fmt": {
     "message": "{0}, 편집을 위해 Proteus가 게임에서 복사함.",
     "description": ""
   },
-  "Parts.Vanilla.EditTool.Tip": {
-    "message": "바닐라 장비에는 모드 파일이 없으므로, 이것을 선택하면 먼저 새 모드로 복사합니다.",
-    "description": ""
-  },
   "Parts.Vanilla.WornSuffix": {
     "message": "(바닐라)",
+    "description": ""
+  },
+  "Parts.Vanilla.CopyNote.Fmt": {
+    "message": "아직 아무것도 저장되지 않았습니다. 첫 변경 시 이 항목이 모드 \"{0}\"(으)로 복사됩니다.",
+    "description": ""
+  },
+  "Parts.Vanilla.Copied.Fmt": {
+    "message": "{0}을(를) 변경 내용과 함께 모드 \"{1}\"(으)로 복사했습니다.",
+    "description": ""
+  },
+  "Parts.Vanilla.EditedCopyThere.Fmt": {
+    "message": "\"{0}\"에 이 부위의 편집된 사본이 이미 있어 변경 내용이 저장되지 않았습니다. 그 사본을 계속 편집하려면 여기에서 여세요(Penumbra에서 그 모드를 켠 상태로). 게임 원본부터 다시 시작하려면 그 모드를 삭제하세요.",
+    "description": ""
+  },
+  "Parts.Vanilla.ModSwitchedOff.Fmt": {
+    "message": "\"{0}\"이(가) 꺼져 있어 변경 내용이 저장되지 않았습니다. Penumbra에서 켜거나, 삭제하고 다시 시작하세요.",
+    "description": ""
+  },
+  "Parts.Vanilla.CopyRefused.Fmt": {
+    "message": "변경 내용을 저장할 수 없어 아무것도 복사되지 않았습니다: {0}",
+    "description": ""
+  },
+  "Parts.Vanilla.CopyRegistering": {
+    "message": "편집 내용이 방금 새 모드로 복사되었고, Penumbra가 아직 준비 중입니다. 잠시 후 다시 시도하세요.",
+    "description": ""
+  },
+  "Parts.Vanilla.NotRefittable": {
+    "message": "체형 크기로는 이 부위를 맞출 수 없습니다. 편집하려면 다른 도구를 선택하세요.",
     "description": ""
   },
   "WhatsNew.HairPort.Head": {
@@ -4307,12 +4395,64 @@
     "message": "새 모델을 다시 읽을 수 없었습니다",
     "description": "Why a model for the wearer's race could not be made; the {1} of Parts.Retarget.BakeFailed.Fmt. Lower-case, no full stop."
   },
+  "Parts.Retarget.Race.OtherSex.Fmt": {
+    "message": "{0} (이 {1} 모델에서 맞춤)",
+    "description": "A \"Refit for\" entry. {0} is a race of the other sex such as \"Midlander M\"; {1} the race of the model open."
+  },
+  "Parts.Retarget.Race.CrossSexNote.Fmt": {
+    "message": "성별을 넘어 맞췄습니다: 원래 만들어진 {0} 체형을 {1}의 형태로 구부린 뒤, 바디 맵으로 새 체형과 점마다 대응시켰습니다. 공유하기 전에 게임에서 확인하세요.",
+    "description": "Warning under a refit for the other sex. {0} is the race of the model open, {1} the race picked. \"body maps\" are the bibo↔TBSE texture maps."
+  },
+  "Parts.Retarget.Race.CrossSexWears.Fmt": {
+    "message": "저장한 맞춤은 {0}이(가) 입고, 이 아이템에 자기 모델이 없는 {1}도 입습니다. {2}은(는) 이 모델을 그대로 씁니다.",
+    "description": "{0} is the race picked; {1} a comma-separated list of races; {2} the race of the model open."
+  },
+  "Parts.Retarget.Race.CrossSexQuality.Fmt": {
+    "message": "뒤집힌 면 {0}개, 체형 대응 {1}.",
+    "description": "{0} is a count of folded (turned-over) faces; {1} a percentage such as \"97%\"."
+  },
+  "Parts.Retarget.Race.CrossSexHint.Fmt": {
+    "message": "{0}용 버전을 만들려면 “리핏 대상 종족”에서 고르세요.",
+    "description": "{0} is a race such as \"Midlander M\". “Refit for” is the dropdown's label (Parts.Retarget.Race.Label)."
+  },
+  "Parts.Retarget.Refuse.CrossSexMadeFor.Fmt": {
+    "message": "성별을 넘을 때는 이 장비를 만든 체형이 {0} 체형이어야 합니다. “제작 체형”에서 만들어진 체형 모드를 고르세요.",
+    "description": "{0} is a race such as \"Midlander F\". “Made for” is the body dropdown the garment was made on."
+  },
+  "Parts.Retarget.Refuse.CrossSexCoverage.Fmt": {
+    "message": "이 성별을 넘는 맞춤은 바디 맵으로 체형의 {0}만 대응했습니다. Proteus는 대응이 {1} 이상인 것만 저장합니다.",
+    "description": "Why a refit for the other sex is not saved: {0} the share of the body matched, as found; {1} the least that is saved. Percentages arrive formatted."
+  },
+  "Parts.Retarget.Race.CrossSexFolded.Fmt": {
+    "message": "이 성별을 넘는 맞춤에서 천 면 {0:N0}개가 뒤집혔습니다. 뒤집힌 면은 게임에서 구멍으로 보이니 공유하기 전에 그 부분을 확인하세요.",
+    "description": "Said in the warning colour beside a refit for the other sex: {0} is a count of cloth faces turned over."
+  },
+  "Parts.Retarget.Race.BonesMoved.Fmt": {
+    "message": "{0} 스켈레톤에는 이 장비가 쓰는 뼈 {1}개가 없습니다. 그 가중치는 이제 스켈레톤에 있는 가장 가까운 뼈를 따르므로, 그 부분은 따로가 아니라 그 뼈와 함께 움직입니다: {2}",
+    "description": "Warning beside a refit for a picked race: {0} is the race picked; {1} a count of bones; {2} the moves, such as \"ya_shiri_phys_l → iv_shiri_l\" (bone names are not translated)."
+  },
+  "Parts.Retarget.Race.NeedsSkeleton.Fmt": {
+    "message": "{1}의 {0} 스켈레톤은 게임 기본 스켈레톤에 없는 뼈 {2}개를 이 모델에 줍니다({3}). 그 스켈레톤이 없는 사람에게는 그 부분이 어긋나 보입니다.",
+    "description": "Warning beside a refit for a picked race: {0} is the race picked; {1} the mod its skeleton comes from; {2} a count of bones; {3} their names (not translated)."
+  },
+  "Parts.Retarget.Race.RenameFailed.Fmt": {
+    "message": "뼈 이름을 바꿀 수 없었습니다({0})",
+    "description": "Why a refit for a picked race was refused: the garment's bones could not be moved onto the race's; {0} is the technical reason."
+  },
+  "Parts.Retarget.Refuse.CrossSexLayout.Fmt": {
+    "message": "성별을 넘을 때 Proteus는 Bibo+ 또는 게임 레이아웃의 여성 체형과 TBSE 또는 게임 레이아웃의 남성 체형만 대응시킬 수 있습니다. {0} 모델은 {1}과(와) {2}을(를) 씁니다.",
+    "description": "{0} is a slot such as \"_top\"; {1} and {2} texture layout names (bibo, gen3, tbse, male vanilla), never translated. \"Bibo+\" and \"TBSE\" are body-mod names."
+  },
+  "Parts.Retarget.Refuse.MenMapsMissing": {
+    "message": "성별을 넘는 맞춤에 필요한 바디 맵이 아직 없습니다. Proteus가 내려받는 중이니, 도착하면 다시 맞춰 주세요.",
+    "description": "Said when the bibo↔TBSE texture maps have not been downloaded yet."
+  },
   "Parts.Retarget.Race.Label": {
     "message": "리핏 대상 종족",
     "description": "Heads the dropdown that picks which race's model a refit is made and saved as."
   },
   "Parts.Retarget.Race.Tip": {
-    "message": "어느 종족용으로 리핏할지 고릅니다. 의상과 같은 성별의 다른 종족을 고르면, 게임이 휘는 방식 그대로 이 모델에서 전용 모델을 만들어 그 종족의 체형에 리핏하고, 그 종족이 불러오는 위치에 저장합니다. 다른 종족은 이 모델을 그대로 씁니다.",
+    "message": "어느 종족용 맞춤인지 고릅니다. 다른 종족은 게임이 구부리는 방식대로 이 모델에서 만든, 그 종족 체형에 맞춰 그 종족이 불러오는 곳에 저장한 자기 모델을 받습니다. 미드랜더의 몸통·다리 장비는 다른 성별용으로도 맞출 수 있습니다. 이 모델은 그대로입니다.",
     "description": "Tooltip of Parts.Retarget.Race.Label."
   },
   "Parts.Retarget.Race.ThisModel.Fmt": {
@@ -4338,6 +4478,14 @@
   "Parts.Retarget.Race.Only.Fmt": {
     "message": "저장한 리핏은 {0}만 입습니다. {1}은(는) 이 모델을 그대로 씁니다.",
     "description": "{0} is the race picked, {1} the race of the model open."
+  },
+  "Parts.Retarget.Race.Below.Fmt": {
+    "message": "저장한 리핏은 {0}이(가) 입으며, 이 장비의 자체 모델이 없는 같은 성별의 모든 종족도 입습니다. {1}은(는) 이 모델을 그대로 씁니다.",
+    "description": "{0} is the race picked, {1} the race of the model open; said for a race the open one falls back to."
+  },
+  "Parts.Retarget.Race.BelowExtraBones.Fmt": {
+    "message": "이 의상은 추가 본을 사용합니다. 추가 스켈레톤은 {0}에게만 주어지므로, 이 리핏을 입는 다른 종족에서는 그 본이 움직이지 않습니다.",
+    "description": "{0} is the race picked."
   },
   "Parts.Retarget.Race.SourceBaked.Fmt": {
     "message": "원래 맞춰진 체형도 같은 방식으로 {0}에 맞게 휘므로, 전과 똑같이 몸에 맞습니다.",
@@ -4543,9 +4691,21 @@
     "message": "이 모드는 아직 Penumbra의 이전 폴더 형식이라 Proteus가 편집하지 않습니다. Penumbra에서 한 번 활성화해 업그레이드한 다음 다시 오세요.",
     "description": "Body size status line: the mod is in Penumbra's pre-v3 folder format."
   },
+  "Parts.Retarget.Save.ModGone.Fmt": {
+    "message": "\"{0}\"이(가) 더 이상 Penumbra 모드에 없습니다. Penumbra에서 이름이 바뀌었거나 삭제되었습니다. 아무것도 저장하지 않았습니다.",
+    "description": "Body size status line when the mod's folder is gone. {0} is the mod's folder name."
+  },
   "Parts.Retarget.Save.Failed.Fmt": {
     "message": "저장하지 못했습니다: {0}",
     "description": "Body size status line. {0} is the error message."
+  },
+  "Parts.Retarget.Save.NoMaterialSet.Fmt": {
+    "message": "{0}은(는) 새 바디의 속옷을 그리지만, 그 재질은 장비나 액세서리 모델 옆에만 저장할 수 있습니다.",
+    "description": "Body size save refused: {0} is the model's game path. The refit draws the new body's underwear, whose material must be saved beside an equipment model."
+  },
+  "Parts.Retarget.Save.NoMaterialName.Fmt": {
+    "message": "{0}이(가) 쓸 수 있는 재질 이름이 모두 사용 중이어서, 새 바디의 속옷을 저장할 고유한 이름이 없습니다.",
+    "description": "Body size save refused: {0} is the model's game path. Every free material name for the new body's underwear copy is already used."
   },
   "Parts.Retarget.Undo.Removed.Fmt": {
     "message": "\"{0}\"을(를) 제거했습니다.",
@@ -4582,6 +4742,10 @@
   "Parts.Retarget.Refuse.LowCoverage.Fmt": {
     "message": "원본 {0} 체형 중 텍스처 좌표로 대상에서 자리를 찾는 부분은 {1:P0}뿐이므로, 둘은 텍스처 레이아웃을 공유하지 않습니다. 서로 변환할 수 없습니다.",
     "description": "Body size: why two bodies cannot be paired. {0} is the body part (chest, legs…), {1:P0} the share that matched — keep the :P0."
+  },
+  "Parts.Retarget.Refuse.NoSkinThere.Fmt": {
+    "message": "원본 {0} 바디 중 착지할 피부를 찾은 부분은 {1:P0}뿐입니다. 대상 바디의 이 {0} 옵션은 나머지 부분에 피부가 없고 모델링된 속옷 같은 다른 것을 그리고 있어, 리핏이 그 위에 맞출 수 없었습니다. 그 부분에 피부가 있는 바디 옵션을 고르거나 다른 바디로 리핏하세요.",
+    "description": "Body size: why two bodies cannot be paired when the target option draws something else (such as modelled underwear) where the source has skin. {0} is the body part (chest, legs…), {1:P0} the share that landed on skin — keep the :P0."
   },
   "Parts.Retarget.Bake.NoPath.Fmt": {
     "message": "종족 디포머에 c{0:D4}에서 c{1:D4}로 가는 경로가 없습니다",
@@ -4904,7 +5068,7 @@
     "description": ""
   },
   "SizeSet.Intro": {
-    "message": "아래에서 체크한 바디의 모든 사이즈를 이 모드 전체에 추가합니다. 각 사이즈는 제작자의 사이즈 중 가장 가까운 것에서 리핏하고, 그 옵션 안의 의상 나머지 파츠도 같은 사이즈에서 만들어, 제작자의 사이즈 옆에 \"Rue S\", \"YAB Buff L\" 등으로 저장합니다. 모드에 이미 있는 사이즈는 그대로 둡니다.",
+    "message": "아래에서 체크한 바디의 모든 사이즈를 이 모드 전체에 추가합니다. 각 사이즈는 제작자의 사이즈 중 가장 가까운 것에서 리핏하고, 그 옵션 안의 의상 나머지 파츠도 같은 사이즈에서 만들어, 제작자의 사이즈 옆에 \"Rue S\", \"YAB Buff L\" 등으로 저장합니다. 모드에 이미 있는 사이즈는 그대로 둡니다. 여성용 모드에도 TBSE와 TBSE-X를 추가할 수 있습니다. 몸통과 다리가 남성용으로 맞춰져 별도의 그룹에 저장됩니다.",
     "description": ""
   },
   "SizeSet.Yas": {
@@ -5030,6 +5194,54 @@
   "SizeSet.Working.Fmt": {
     "message": "{0}을(를) {1}(으)로 리핏하는 중...",
     "description": ""
+  },
+  "SizeSet.ForMen.Fmt": {
+    "message": "{0} (남성용)",
+    "description": "Checkbox label for a men's body offered for a women's mod. {0} is the body (\"TBSE\")."
+  },
+  "SizeSet.ForMen.Tip.Fmt": {
+    "message": "이 모드의 여성용 몸통·다리 파츠에 {0} 남성 버전이 생깁니다. 바디 맵(처음 필요할 때 다운로드됩니다)을 통해 미드랜더 남성용으로 맞추며, 각각 남성 체형으로 굽힌 몸이 그의 몸에 가장 가까운 제작자의 사이즈에서 만듭니다. 별도의 그룹 \"{1}\"에 저장되므로 여성용 사이즈는 그대로입니다. 신발과 장갑은 성별을 넘어 맞추지 않으며, 제작자가 이미 남성용으로 만든 파츠는 그것을 씁니다.",
+    "description": "Tooltip. {0} is a men's body (\"TBSE\"), {1} the group the men's versions go into."
+  },
+  "SizeSet.MensGroup": {
+    "message": "남성 체형",
+    "description": "The name of the Penumbra group a women's mod's men's versions are saved into."
+  },
+  "SizeSet.CheckInGame": {
+    "message": "게임에서 확인:",
+    "description": "Heading over the sizes saved that want a look in game."
+  },
+  "SizeSet.Warning.Fmt": {
+    "message": "{0}, \"{1}\": {2}",
+    "description": "One line under \"Check in game\". {0} is the piece, {1} the size, {2} what to look at."
+  },
+  "SizeSet.MenMapsMissing": {
+    "message": "남성 버전이 만들어지지 않았습니다. 필요한 바디 맵이 아직 없습니다. Proteus가 다운로드 중이니, 도착하면 사이즈를 다시 추가하세요.",
+    "description": "Why no men's versions were made."
+  },
+  "SizeSet.NoSourceForMen.Fmt": {
+    "message": "{0}: 제작자의 사이즈 중 Proteus가 남성 체형에 대응시킬 수 있는 몸(Bibo+ 또는 게임 레이아웃)으로 만든 것이 없어 남성 버전이 없습니다.",
+    "description": "{0} is the piece."
+  },
+  "SizeSet.MensGroupTaken.Fmt": {
+    "message": "이 모드에는 이미 제작자의 \"{0}\" 그룹이 있어 남성 버전이 만들어지지 않았습니다. Penumbra에서 그 그룹의 이름을 바꾼 뒤 사이즈를 다시 추가하세요.",
+    "description": "{0} is the group's name."
+  },
+  "SizeSet.EndsNotForMen": {
+    "message": "신발과 장갑에는 남성 버전이 없습니다. 성별을 넘어 맞추는 것은 몸통과 다리 파츠뿐입니다.",
+    "description": "Said once when a women's mod's men's versions are made and it has shoes or gloves."
+  },
+  "SizeSet.OneVariant.Fmt": {
+    "message": "{0}: 남성은 \"{1}\"에서 만든 한 가지 버전을 받습니다. 모드의 다른 변형은 여성 전용으로 남습니다.",
+    "description": "{0} is the piece, {1} the author's option the men's version was made from."
+  },
+  "SizeSet.NotMade": {
+    "message": "맞춤 결과 저장할 것이 없습니다",
+    "description": "Why a men's version couldn't be made, after \"couldn't be made:\"."
+  },
+  "SizeSet.RigUnreadable": {
+    "message": "리그를 읽을 수 없어 남성 체형으로 굽힐 수 없습니다",
+    "description": "Why a men's version couldn't be made, after \"couldn't be made:\": the garment's skinning can't be read."
   },
   "SizeSet.NotInstalledTip.Fmt": {
     "message": "{0}이(가) Penumbra에 설치되어 있지 않습니다. 설치한 뒤 이 항목을 닫았다가 다시 여세요.",
@@ -5243,9 +5455,13 @@
     "message": "헤어",
     "description": ""
   },
-  "HairPort.Refused.Folded.Fmt": {
-    "message": "c{0:D4}에 맞춰 구부리면 삼각형 {1}개가 뒤집힙니다",
-    "description": ""
+  "HairPort.Folded.Fmt": {
+    "message": "c{0:D4}에 맞춰 구부리면 삼각형 {1}개가 뒤집혀 구멍처럼 보일 수 있습니다. 게임에서 확인하세요",
+    "description": "A hair port saved with a warning: bent onto race {0}, {1} of the hairstyle's triangles turn inside out."
+  },
+  "HairPort.Scan.State.FittedWarn.Fmt": {
+    "message": "맞춤 — {0}",
+    "description": "A hairstyle's state in the list: fitted, with {0} what to look at in game."
   },
   "HairPort.Refused.Declined": {
     "message": "이식이 취소되었으므로 그대로 둡니다",
@@ -5353,6 +5569,54 @@
   },
   "HairPort.Scan.UndoChecked.Confirm.Fmt": {
     "message": "한 번 더 누르면 헤어스타일 {0}개를 되돌립니다 (다시 자동으로 맞추지 않음)",
+    "description": ""
+  },
+  "HairPort.Earless.Label": {
+    "message": "미코테 헤어 모드에서 귀 제거",
+    "description": ""
+  },
+  "HairPort.Earless.Tip": {
+    "message": "미코테용: 고양이 귀가 있는 헤어스타일의 헤어 모드를 착용하면, Proteus가\n귀 없는 사본을 만들고 모드의 옵션이 그 사본을 가리키게 합니다. 제작자의\n파일은 절대 변경하지 않습니다.\n\n모드 자체를 바꾸므로, 그 모드를 켠 채로 표시되는 모든 캐릭터(모든 컬렉션,\n공유한 상대 포함)는 귀가 없어집니다. 끄면 Proteus가 바꾼 모든 모드에 귀를\n되돌립니다. 다른 종족용 헤어 모드 맞추기를 켜든 끄든 작동합니다.",
+    "description": ""
+  },
+  "HairPort.Settings.Earless.Fmt": {
+    "message": "{1}의 헤어스타일 {0}은(는) 귀 없이 표시됩니다. 이 모드를 켠 채로 표시되는 모든 캐릭터(모든 컬렉션)에 적용됩니다. 설정을 끄면 되돌아옵니다.",
+    "description": ""
+  },
+  "HairPort.Settings.EarlessOptionHint.Fmt": {
+    "message": "이 모드에는 자체 귀 없는 옵션이 있습니다: {0}",
+    "description": ""
+  },
+  "HairPort.Earless.Chat": {
+    "message": "[Proteus] 이 헤어스타일의 고양이 귀를 제거했습니다. Proteus가 모드를 귀 없는 사본으로 바꿨으므로, 이 모드를 켠 채로 표시되는 모든 캐릭터(모든 컬렉션)는 이제 귀가 없습니다. 귀를 되돌리려면 /proteus > 설정 > 헤어 에서 \"미코테 헤어 모드에서 귀 제거\"를 끄세요.",
+    "description": ""
+  },
+  "HairPort.Earless.RestoreBlocked.Fmt": {
+    "message": "[Proteus] {0}에 귀를 되돌리지 못했습니다: {1}",
+    "description": ""
+  },
+  "HairPort.Earless.Restored.Fmt": {
+    "message": "헤어스타일 {0}개에 귀를 되돌렸습니다.",
+    "description": ""
+  },
+  "HairPort.Earless.Refused.AuthorMissing.Fmt": {
+    "message": "제작자의 파일 {0}이(가) 없어 귀 없는 사본을 유지했습니다",
+    "description": ""
+  },
+  "HairPort.Earless.Refused.Changed": {
+    "message": "Proteus가 작업하는 동안 모드가 바뀌어 아무것도 기록하지 않았습니다",
+    "description": ""
+  },
+  "HairPort.Earless.Refused.Leftover": {
+    "message": "귀를 모두 제거하지 못했습니다",
+    "description": ""
+  },
+  "HairPort.Earless.Refused.RecordUnreadable": {
+    "message": "이 모드의 귀 없는 헤어스타일에 대한 Proteus 기록(Proteus/earlesshair.json)을 읽을 수 없어 아무것도 변경하지 않았습니다.",
+    "description": ""
+  },
+  "HairPort.Earless.Refused.Outside.Fmt": {
+    "message": "{0}은(는) 모드의 귀 없는 폴더 안의 경로가 아니어서 아무것도 기록하지 않았습니다",
     "description": ""
   }
 }

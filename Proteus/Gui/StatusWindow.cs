@@ -104,6 +104,21 @@ public class StatusWindow : Window
     /// <summary>Mod whose colour editor window is open, or null. A window rather than a popup, so it survives clicks into the game.</summary>
     private string? _colorWindowMod;
 
+    /// <summary>
+    /// A mod renamed in Penumbra: everything this window holds by its folder follows it — the open colour editor and its
+    /// scope, a drag in progress, the Export tab's selection and the Studio's open mod. Framework thread.
+    /// </summary>
+    private void FollowMove(string oldDir, string newDir)
+    {
+        discovery.FollowStaged(oldDir, newDir);   // an edit not yet written goes into the new folder
+        _colorWindowMod = ModMoveMigration.Follow(_colorWindowMod, oldDir, newDir);
+        ModMoveMigration.RekeyKey(_colorEditorSel, oldDir, newDir);
+        _groupOrderCache.Remove(oldDir);
+        if (_stackDragSrc is { } drag && ModMoveMigration.Same(drag.Mod, oldDir)) _stackDragSrc = null;
+        exportTab.FollowMove(oldDir, newDir);
+        parts.FollowMove(oldDir, newDir);
+    }
+
     /// <summary>Open the colour editor for a mod, or close it when it is already open for that mod.</summary>
     internal void ToggleColorWindow(string modDirectory)
         => _colorWindowMod = _colorWindowMod == modDirectory ? null : modDirectory;
@@ -150,6 +165,7 @@ public class StatusWindow : Window
         HatCompatWatcher hatCompatWatcher,
         HairPortWatcher hairPortWatcher,
         AutoRefitWatcher autoRefitWatcher,
+        ModMoveService modMoves,
         LogExportService logExport)
         // "###ProteusStatus" is the stable window id; the title shows the assembly version, not the dev BuildNumber.
         : base($"Proteus  v{typeof(Plugin).Assembly.GetName().Version}###ProteusStatus", ImGuiWindowFlags.AlwaysAutoResize)
@@ -186,6 +202,9 @@ public class StatusWindow : Window
                                       new AutoRefitPanel(autoRefitWatcher, penumbra, config), logExport);
 
         SizeConstraints = AutoFitConstraints;
+
+        // Never unsubscribed: the service is built just before this window and disposed with it, at unload.
+        modMoves.Moved += FollowMove;
 
         TitleBarButtons.Add(new TitleBarButton
         {
@@ -380,9 +399,37 @@ public class StatusWindow : Window
         config.Save();
     }
 
+    /// <summary>
+    /// Write the colour editor's held metadata once no control is held: a drag edits it every frame, the file is written
+    /// when the mouse is let go. ImGui's context is shared with other plugins, so one of theirs held also waits — harmless,
+    /// since discovery reads what is held and close and unload flush regardless. Every frame, after the windows, from the
+    /// plugin: a closed window is not drawn. Then forgets the defaults it cached for anything written, on this thread.
+    /// </summary>
+    public void TickMetadataSaves()
+    {
+        discovery.FlushStaged(editing: ImGui.IsAnyItemActive());
+        ForgetWrittenDefaults();
+    }
+
+    /// <summary>
+    /// Write all held metadata, held control or not: the window closing, or the plugin <paramref name="unloading"/>.
+    /// A failed write on close is still retried by <see cref="TickMetadataSaves"/>, which runs with the window shut.
+    /// </summary>
+    public void FlushMetadataSaves(bool unloading = false)
+    {
+        discovery.FlushAllStaged(unloading);
+        ForgetWrittenDefaults();
+    }
+
+    private void ForgetWrittenDefaults()
+    {
+        foreach (var root in discovery.TakeWrittenRoots()) InvalidateDefaultsCache(root);
+    }
+
     public override void OnClose()
     {
         FlushPendingSize();
+        FlushMetadataSaves();
         // The brush's autosave only runs while the Toggles tab draws, so flush it on close; the live preview comes down with it.
         parts.Leave();
     }
@@ -629,6 +676,7 @@ public class StatusWindow : Window
         // No colour editor open means no highlight glow.
         if (_colorWindowMod == null) { ColorTableEditor.Highlighter?.Clear(); return; }
 
+        compositor.RefreshDisplayNames();   // the editor's title names the mod
         var entry = compositor.LastDiscovered.FirstOrDefault(e => e.ModDirectory == _colorWindowMod);
         if (entry == null) { _colorWindowMod = null; ColorTableEditor.Highlighter?.Clear(); return; }
 
@@ -790,7 +838,7 @@ public class StatusWindow : Window
             {
                 ImGui.SameLine();
                 if (ImGui.SmallButton(Strings.Band.Retry))
-                    uvMapDl.EnsureMapsAsync();
+                    uvMapDl.RetryFailed();
             }
         }
 
@@ -1163,8 +1211,8 @@ public class StatusWindow : Window
         {
             if (changed) StoreContentRows(entry, mtrl, DesignBindingService.CopyRows(rows));
             if (glowChanged) StoreContentGlow(entry, mtrl, glow.Clone());
-            discovery.SaveMetadata(entry);
-            InvalidateDefaultsCache(entry);
+            // Written once the control is let go — see TickMetadataSaves.
+            discovery.StageMetadata(entry);
             // Content pieces never touch skin textures, so the skin fingerprint is authoritative.
             RecompositeForOverlay(entry, "content-colors-change", ColorEditDebounceMs,
                 skinFingerprintAuthoritative: true);
@@ -1474,6 +1522,7 @@ public class StatusWindow : Window
             InertModDiagnosis.InertCause.NothingTicked      => string.Format(ms.InertNothingTickedFmt, r.GroupCount, r.Groups),
             InertModDiagnosis.InertCause.WrongRace          => string.Format(ms.InertWrongRaceFmt, r.Wants, r.Have),
             InertModDiagnosis.InertCause.MaskNeedsShell     => string.Format(ms.InertMaskNeedsShellFmt, r.Groups),
+            InertModDiagnosis.InertCause.AwaitingMenMaps    => ms.InertAwaitingMenMaps,
             _                                               => ms.InertNothingReached,
         };
     }
@@ -1661,10 +1710,11 @@ public class StatusWindow : Window
             // Not on a reset: `rows` predates the restore and would undo it.
             if (!overrideActive && !resetSimple)
                 entry.Metadata.ColorTableRows = rows;   // may be the list we created for an empty mod
-            if (!overrideActive || resetSimple) { discovery.SaveMetadata(entry); InvalidateDefaultsCache(entry); }
+            // Written once the control is let go — see TickMetadataSaves.
+            if (!overrideActive || resetSimple) discovery.StageMetadata(entry);
             // Under a preset, save the reinforced toe alone; a full save would make every preview edit permanent.
             else if ((simpleOverlays.FirstOrDefault()?.ToeCapDensity ?? 0) != toeDensityBeforeSimple)
-                discovery.SaveToeCapDensity(entry, simpleOverlays);
+                discovery.StageToeCapDensity(entry, simpleOverlays);
             // Discrete footer/mode changes recomposite promptly; colour-row drags use the debounce.
             if (footerChangedSimple || modeChangedSimple) RecompositeForOverlay(entry, "mode-change");
             // Rows only, so skin reuse may apply: a change that moves a skin texel still shows in the skin fingerprint.
@@ -2072,8 +2122,7 @@ public class StatusWindow : Window
             {
                 entry.Metadata.MaskColorTableRows = maskRows;
                 if (maskFooterChanged || maskModeChanged) entry.Metadata.MaskDescriptor = maskDesc;
-                discovery.SaveMetadata(entry);
-                InvalidateDefaultsCache(entry);
+                discovery.StageMetadata(entry);   // written once the control is let go — see TickMetadataSaves
             }
             if (maskFooterChanged || maskModeChanged) RecompositeForOverlay(entry, "mask-mode-change");
             // Rows only: hashed in the fingerprint's `maskrow:` block, so the skin-reuse gate can be trusted.
@@ -2195,10 +2244,11 @@ public class StatusWindow : Window
             // NOT on a reset — see the simple-mod path: the reset already rewrote activeOpt in place.
             if (!overrideActive && !resetOpt)
                 activeOpt.ColorTableRows = editRows;
-            if (!overrideActive || resetOpt) { discovery.SaveMetadata(entry); InvalidateDefaultsCache(entry); }
+            // Written once the control is let go — see TickMetadataSaves.
+            if (!overrideActive || resetOpt) discovery.StageMetadata(entry);
             // Under a preset, save the reinforced toe alone, as on the simple-mod path.
             else if ((activeOpt.Overlays.FirstOrDefault()?.ToeCapDensity ?? 0) != toeDensityBefore)
-                discovery.SaveToeCapDensity(entry, activeOpt.Overlays);
+                discovery.StageToeCapDensity(entry, activeOpt.Overlays);
             // Discrete footer/mode changes recomposite promptly; colour-row drags use the debounce.
             if (footerChanged || modeChanged) RecompositeForOverlay(entry, "mode-change");
             // Rows only — see the simple-mod path above.
@@ -2228,6 +2278,21 @@ public class StatusWindow : Window
         bool binding = editRouter.HasOverride(entry.ModDirectory);
         if (ImGui.IsItemHovered())
             ImGui.SetTooltip(cp.BodiesTip + (binding ? cp.BodiesGlobalSuffix : ""));
+
+        bool men = config.OverlaysMenFor(entry.ModDirectory);
+        if (ImGui.Checkbox($"{cp.OverlayMen}##men_{entry.ModDirectory}", ref men))
+        {
+            // On is the absent default, so ticking removes the entry. Under the gate: the composite snapshots this set.
+            lock (config.Gate)
+            {
+                if (men) config.MenOverlayOffMods.Remove(entry.ModDirectory);
+                else config.MenOverlayOffMods.Add(entry.ModDirectory);
+            }
+            config.Save();
+            RecompositeForOverlay(entry, "men-mode");
+        }
+        if (ImGui.IsItemHovered())
+            ImGui.SetTooltip(cp.MenTip + (binding ? cp.BodiesGlobalSuffix : ""));
 
         // Said in the panel, not only on hover: this control writes global config while everything else previews.
         if (binding)
@@ -2472,10 +2537,13 @@ public class StatusWindow : Window
         if (from != null) live.AddRange(from);
     }
 
-    // Whether each mod has a defaults snapshot, cached because it is a filesystem stat per draw; invalidated on our own SaveMetadata.
+    // Whether each mod has a defaults snapshot, cached because it is a filesystem stat per draw; invalidated for every sidecar
+    // a metadata write lands in (ForgetWrittenDefaults), on this thread.
     private readonly Dictionary<string, bool> _hasDefaultsCache = new(StringComparer.OrdinalIgnoreCase);
 
-    private void InvalidateDefaultsCache(OverlayEntry entry) => _hasDefaultsCache.Remove(entry.SidecarRoot);
+    private void InvalidateDefaultsCache(OverlayEntry entry) => InvalidateDefaultsCache(entry.SidecarRoot);
+
+    private void InvalidateDefaultsCache(string sidecarRoot) => _hasDefaultsCache.Remove(sidecarRoot);
 
     /// <summary>
     /// Recomposite because something changed on this overlay mod, only if the mod is enabled: a disabled mod paints nothing.

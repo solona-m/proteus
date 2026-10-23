@@ -23,9 +23,16 @@ public class OtherRaceWearerTests
     private static OtherRaceWearer.Inputs Inputs(byte[]? modded = null, byte[]? game = null, byte[]? pbd = null,
                                                  IReadOnlyList<EstTable.ModEntry>? modEst = null,
                                                  IReadOnlyDictionary<(int, ushort), int>? gameEst = null,
-                                                 IReadOnlyDictionary<string, byte[]>? skeletons = null)
+                                                 IReadOnlyDictionary<string, byte[]>? skeletons = null,
+                                                 IReadOnlyList<byte[]>? drawn = null)
         => new(301, 101, "_top", 6091, modded, modded != null ? "ivcs.sklb" : null, game ?? SyntheticSkeleton.Sklb(Game301),
-               pbd ?? SyntheticSkeleton.HighlanderPbd(), modEst ?? [], gameEst, skeletons ?? new Dictionary<string, byte[]>());
+               pbd ?? SyntheticSkeleton.HighlanderPbd(), modEst ?? [], gameEst, skeletons ?? new Dictionary<string, byte[]>(),
+               drawn);
+
+    /// <summary>The drawn race's (c0101's) skeleton with IVCS's own bones on it.</summary>
+    private static readonly SyntheticSkeleton.Tree Ivcs101 = SyntheticSkeleton.Human("c0101", ("iv_ochi_l", "j_kosi"),
+                                                                                      ("j_ex_top_a_l", "j_sebo_c"),
+                                                                                      ("j_ex_top_b_l", "j_sebo_c"));
 
     // ── the wearer ──────────────────────────────────────────────────────────
 
@@ -75,43 +82,138 @@ public class OtherRaceWearerTests
 
     /// <summary>
     /// A custom skeleton's bone is moved with its parent: IVCS's own bones bend like the spine they hang from. Without
-    /// that skeleton — the mod not enabled — the same bone has nothing to follow, and the bake is refused naming it.
+    /// that skeleton — the mod not enabled — the same bone has nothing to follow. Once the bake was refused naming it
+    /// (EDGE-refit-other-race-23); now it is moved onto its nearest ancestor the race has (cross-sex-tops-yas).
     /// </summary>
     [Fact]
     [Trait("Plan", "EDGE-refit-other-race-23")]
-    public void A_bone_with_nothing_to_follow_refuses_the_bake_by_name()
+    [Trait("Plan", "AC-cross-sex-tops-yas-4")]
+    public void A_bone_with_nothing_to_follow_is_moved_not_refused() // [AC-cross-sex-tops-yas-4]
     {
         var garment = SyntheticSkeleton.Leaning("j_kosi", "iv_ochi_l");
         var ivcs = OtherRaceWearer.Build(Inputs(modded: SyntheticSkeleton.Sklb(Ivcs301, 5)), garment);
         Assert.True(ivcs.Wearer != null, ivcs.Refusal);
         Assert.Equal("j_kosi", ivcs.Wearer!.ParentOf("iv_ochi_l"));
+        Assert.Empty(ivcs.Moves ?? []);
 
-        var game = OtherRaceWearer.Build(Inputs(), garment);
-        Assert.Null(game.Wearer);
-        Assert.Equal(["iv_ochi_l"], game.Unbendable);
-        Assert.Contains("iv_ochi_l", game.Refusal);
-        Assert.Equal(EstOutcome.Missing, game.Est.Outcome);
+        var game = OtherRaceWearer.Build(Inputs(drawn: [SyntheticSkeleton.Sklb(Ivcs101)]), garment);
+        Assert.True(game.Wearer != null, game.Refusal);
+        var move = Assert.Single(game.Moves!);
+        Assert.Equal(new SkeletonRemap.Move("iv_ochi_l", "j_kosi", SkeletonRemap.How.Ancestor), move);
+        Assert.Equal(EstOutcome.NotNeeded, game.Est.Outcome);
+        Assert.Empty(game.Unbendable);
     }
 
     /// <summary>
-    /// An extra bone the new race's skeletons lack refuses the bake even where the deformer lists that bone itself, so
-    /// would bend it: the game would load no bone to draw it with.
+    /// An extra bone the new race's skeletons lack once refused the bake even where the deformer lists that bone itself
+    /// (AC-refit-other-race-8): the game would load no bone to draw it with. Now it is moved onto the bone it hangs from
+    /// in the drawn race's skeleton, which the race has (cross-sex-tops-yas).
     /// </summary>
     [Fact]
     [Trait("Plan", "AC-refit-other-race-8")]
     [Trait("Plan", "EDGE-refit-other-race-20")]
-    public void A_missing_extra_bone_the_deformer_lists_still_refuses()
+    [Trait("Plan", "AC-cross-sex-tops-yas-4")]
+    public void A_missing_extra_bone_is_moved_to_its_parent() // [AC-cross-sex-tops-yas-4]
     {
         var pbd = SyntheticSkeleton.Pbd(101, new Dictionary<ushort, string[]>
         {
             [301] = [.. SyntheticSkeleton.Listed, "j_ex_top_a_l"],
         });
-        var made = OtherRaceWearer.Build(Inputs(pbd: pbd, gameEst: new Dictionary<(int, ushort), int> { [(6091, 101)] = 6085 }),
+        var made = OtherRaceWearer.Build(Inputs(pbd: pbd, gameEst: new Dictionary<(int, ushort), int> { [(6091, 101)] = 6085 },
+                                                drawn: [SyntheticSkeleton.Sklb(Ivcs101)]),
                                          SyntheticSkeleton.Leaning("j_kosi", "j_ex_top_a_l"));
-        Assert.Null(made.Wearer);
-        Assert.Equal(EstOutcome.Missing, made.Est.Outcome);
-        Assert.Equal(["j_ex_top_a_l"], made.Unbendable);
-        Assert.Contains("j_ex_top_a_l", made.Refusal);
+        Assert.True(made.Wearer != null, made.Refusal);
+        Assert.Equal(new SkeletonRemap.Move("j_ex_top_a_l", "j_sebo_c", SkeletonRemap.How.Ancestor), Assert.Single(made.Moves!));
+        Assert.Equal(EstOutcome.NotNeeded, made.Est.Outcome);
+    }
+
+    /// <summary>
+    /// An extra skeleton the item loads that has some of the garment's extra bones: those are carried with its entry, as
+    /// before; only the rest are moved.
+    /// </summary>
+    [Fact]
+    [Trait("Plan", "AC-cross-sex-tops-yas-4")]
+    [Trait("Plan", "EDGE-cross-sex-tops-yas-11")]
+    public void An_extra_skeleton_s_bones_are_carried_and_only_the_rest_move() // [AC-cross-sex-tops-yas-4] [EDGE-cross-sex-tops-yas-11]
+    {
+        var half = new SyntheticSkeleton.Tree("half", ["n_root", "j_ex_top_a_l"], [-1, 0]);
+        var pbd = SyntheticSkeleton.Pbd(101, new Dictionary<ushort, string[]>
+        {
+            [301] = [.. SyntheticSkeleton.Listed, "j_ex_top_a_l"],
+        });
+        var made = OtherRaceWearer.Build(
+            Inputs(pbd: pbd, gameEst: new Dictionary<(int, ushort), int> { [(6091, 101)] = 6085 },
+                   skeletons: new Dictionary<string, byte[]> { [EstTable.SkeletonPath(301, "_top", 6085)!] = SyntheticSkeleton.Sklb(half) },
+                   drawn: [SyntheticSkeleton.Sklb(Ivcs101)]),
+            SyntheticSkeleton.Leaning("j_kosi", "j_ex_top_a_l", "j_ex_top_b_l"));
+        Assert.True(made.Wearer != null, made.Refusal);
+        Assert.Equal(EstOutcome.Carry, made.Est.Outcome);
+        Assert.Equal(6085, made.Est.Entry);
+        var move = Assert.Single(made.Moves!);
+        Assert.Equal("j_ex_top_b_l", move.From);
+        Assert.Equal("j_sebo_c", move.To);
+        Assert.Equal("n_root", made.Wearer!.ParentOf("j_ex_top_a_l"));
+    }
+
+    /// <summary>A garment that leans on no bone the race lacks has no moves: the bake takes it as it came.</summary>
+    [Fact]
+    [Trait("Plan", "AC-cross-sex-tops-yas-9")]
+    [Trait("Plan", "EDGE-cross-sex-tops-yas-14")]
+    public void A_garment_with_no_missing_bones_is_baked_as_it_came() // [AC-cross-sex-tops-yas-9] [EDGE-cross-sex-tops-yas-14]
+    {
+        var made = OtherRaceWearer.Build(Inputs(), SyntheticSkeleton.Leaning("j_kosi", "j_sebo_c", "j_kao"));
+        Assert.True(made.Wearer != null, made.Refusal);
+        Assert.Empty(made.Moves!);
+        var garment = SyntheticModel.Build(["j_kosi"], new SyntheticModel.Mesh("mt_c0101e6091_top_a.mtrl", new SyntheticModel.Sub(0)));
+        Assert.Same(garment, SkeletonRemap.Rename(garment, [], out _));
+        string job = File.ReadAllText(SourceFile("Proteus/Services/CrossSexRefitJob.cs"));
+        Assert.Contains("if (made.Renames is { Count: > 0 } renames)", job);
+        Assert.Contains("byte[] drawnModel = i.Garment;", job);
+        string panel = File.ReadAllText(SourceFile("Proteus/Gui/BodyRetargetPanel.Race.cs"));
+        Assert.Contains("byte[] drawnModel = bytes;", panel);
+    }
+
+    /// <summary>
+    /// Moves and bones only a custom skeleton gives the race are said: the panel's notes, the job's log, the CLI's report.
+    /// </summary>
+    [Fact]
+    [Trait("Plan", "AC-cross-sex-tops-yas-6")]
+    [Trait("Plan", "EDGE-cross-sex-tops-yas-19")]
+    public void Moved_bones_and_custom_skeleton_bones_are_said() // [AC-cross-sex-tops-yas-6] [EDGE-cross-sex-tops-yas-19]
+    {
+        var garment = SyntheticSkeleton.Leaning("j_kosi", "iv_ochi_l", "ya_ochi_phys_l");
+        var drawn = SyntheticSkeleton.Human("c0101", ("iv_ochi_l", "j_kosi"), ("ya_ochi_phys_l", "iv_ochi_l"));
+        var ivcs = OtherRaceWearer.Build(Inputs(modded: SyntheticSkeleton.Sklb(Ivcs301, 5), drawn: [SyntheticSkeleton.Sklb(drawn)]),
+                                         garment);
+        Assert.True(ivcs.Wearer != null, ivcs.Refusal);
+        Assert.Equal(new SkeletonRemap.Move("ya_ochi_phys_l", "iv_ochi_l", SkeletonRemap.How.Ancestor), Assert.Single(ivcs.Moves!));
+        Assert.Equal(["iv_ochi_l"], ivcs.NeedsSkeleton);
+        Assert.Equal("ya_ochi_phys_l → iv_ochi_l", SkeletonRemap.Describe(ivcs.Moves!));
+
+        var game = OtherRaceWearer.Build(Inputs(drawn: [SyntheticSkeleton.Sklb(drawn)]), garment);
+        Assert.Empty(game.NeedsSkeleton!);
+
+        string race = File.ReadAllText(SourceFile("Proteus/Gui/BodyRetargetPanel.Race.cs"));
+        int notes = race.IndexOf("private void DrawRaceNotes(Baked b)", StringComparison.Ordinal);
+        string body = race[notes..race.IndexOf("internal static string SkeletonMod", notes, StringComparison.Ordinal)];
+        Assert.Contains("ps.RetargetRaceBonesMovedFmt", body);
+        Assert.Contains("ps.RetargetRaceNeedsSkeletonFmt", body);
+        Assert.Equal(2, body.Split("if (b.Moves.Count > 0)\n            using (ImRaii.PushColor(ImGuiCol.Text, ProteusStyle.Warn))").Length);
+        Assert.Contains("retarget: bones moved for c{0:D4}", race);
+        Assert.Contains("retarget: bones moved for c{0:D4}", File.ReadAllText(SourceFile("Proteus/Services/CrossSexRefitJob.cs")));
+        // The CLI's report says the same (CrossSexRefitReport, tested in CrossSexRefitTests).
+        string cli = File.ReadAllText(SourceFile("Proteus.Refit/CrossSexCommand.cs"));
+        Assert.Contains("CrossSexRefitReport.Report(result, garmentPath, gamePath, drawn, to, skeleton != null, sizes)", cli);
+    }
+
+    private static string SourceFile(string file)
+    {
+        for (var d = new DirectoryInfo(AppContext.BaseDirectory); d != null; d = d.Parent)
+        {
+            var p = Path.Combine(d.FullName, file);
+            if (File.Exists(p)) return p;
+        }
+        throw new FileNotFoundException(file);
     }
 
     /// <summary>The deformer is the game's own: a posing mod's in the creator's collection is never asked for.</summary>
@@ -125,7 +227,9 @@ public class OtherRaceWearerTests
                          : p == OtherRaceWearer.BaseSkeletonPath(301) ? SyntheticSkeleton.Sklb(Game301) : null,
             resolveCollection: p => { asked.Add(p); return null; },
             modFile: _ => null, modEst: []);
-        Assert.Equal([OtherRaceWearer.BaseSkeletonPath(301)], asked);
+        // The collection is asked for base skeletons alone: the race's, and the drawn race's (where a bone the race lacks
+        // hangs) — never the deformer.
+        Assert.Equal([OtherRaceWearer.BaseSkeletonPath(301), OtherRaceWearer.BaseSkeletonPath(101)], asked);
         Assert.NotNull(inputs.Pbd);
         Assert.Null(inputs.ModdedBase);
         Assert.Equal(101, inputs.Drawn);
@@ -355,6 +459,183 @@ public class OtherRaceWearerTests
         Assert.Same(stale, OtherRaceRefit.MadeFor(null, null, stale, "0101", GameBody));
         Assert.Single(asked);
         try { Directory.Delete(dir, true); } catch (IOException) { }
+    }
+
+    // ── down to a race the drawn one falls through to (refit-race-down) ────
+
+    private static readonly SyntheticSkeleton.Tree Game101 = SyntheticSkeleton.Human("c0101");
+
+    private static OtherRaceWearer.Inputs Lowering(byte[] pbd, IReadOnlyList<EstTable.ModEntry>? modEst = null,
+                                                   IReadOnlyDictionary<(int, ushort), int>? gameEst = null,
+                                                   IReadOnlyDictionary<string, byte[]>? skeletons = null)
+        => new(101, 301, "_top", 6091, null, null, SyntheticSkeleton.Sklb(Game101), pbd, modEst ?? [], gameEst,
+               skeletons ?? new Dictionary<string, byte[]>());
+
+    /// <summary>
+    /// Bent down, a bone the deformer chain from Midlander up to Highlander cannot move is refused by name, as it is going
+    /// up — the chain runs the other way, and was once found empty, which let every bone through.
+    /// </summary>
+    [Fact]
+    [Trait("Plan", "AC-refit-race-down-2")]
+    [Trait("Plan", "EDGE-refit-race-down-4")]
+    [Trait("Plan", "AC-cross-sex-tops-yas-4")]
+    [Trait("Plan", "EDGE-cross-sex-tops-yas-12")]
+    public void A_lowered_wearer_refuses_bones_that_would_not_move() // [AC-cross-sex-tops-yas-4] [EDGE-cross-sex-tops-yas-12]
+    {
+        var spine = SyntheticSkeleton.Pbd(101, new Dictionary<ushort, string[]> { [301] = ["j_sebo_c"] });
+        var stuck = OtherRaceWearer.Build(Lowering(spine), SyntheticSkeleton.Leaning("j_sebo_c", "j_asi_a_l"));
+        Assert.Null(stuck.Wearer);
+        Assert.Equal(["j_asi_a_l"], stuck.Unbendable);
+        Assert.Empty(stuck.Moves ?? []);   // a bone the race has but the deformer cannot move is not moved (cross-sex-tops-yas)
+        Assert.Contains("j_asi_a_l", stuck.Refusal);
+        Assert.Contains(ModelRace.Describe("0101"), stuck.Refusal);
+
+        // A bone hung below one the deformer lists bends with it.
+        var bends = OtherRaceWearer.Build(Lowering(spine), SyntheticSkeleton.Leaning("j_sebo_c", "j_kao"));
+        Assert.True(bends.Wearer != null, bends.Refusal);
+        Assert.Equal(101, bends.Wearer!.Race);
+    }
+
+    [Fact]
+    [Trait("Plan", "AC-refit-race-down-8")]
+    [Trait("Plan", "EDGE-refit-race-down-10")]
+    public void A_lowered_garment_s_extra_skeleton_is_planned_for_the_picked_race()
+    {
+        string[] weighted = ["j_kosi", "j_ex_top_a_l"];
+        var bones = Game101.Bones.ToHashSet();
+        HavokSkeleton? At(string path, string want) => path == want ? HavokSkeleton.Read(SyntheticSkeleton.Sklb(Tails)) : null;
+
+        // Midlander's own entry: used as it is.
+        var present = OtherRaceRefit.PlanEst(101, 301, "_top", 6091, weighted, bones, [],
+            new Dictionary<(int, ushort), int> { [(6091, 101)] = 7000, [(6091, 301)] = 6085 },
+            p => At(p, TailsPath(101, 7000)));
+        Assert.Equal((EstOutcome.Present, 7000), (present.Outcome, present.Entry));
+
+        // Only Highlander's: carried when Midlander's skeleton for it exists.
+        var highlanderOnly = new Dictionary<(int, ushort), int> { [(6091, 301)] = 6085 };
+        var carry = OtherRaceRefit.PlanEst(101, 301, "_top", 6091, weighted, bones, [], highlanderOnly,
+                                           p => At(p, TailsPath(101, 6085)));
+        Assert.Equal((EstOutcome.Carry, 6085), (carry.Outcome, carry.Entry));
+        var missing = OtherRaceRefit.PlanEst(101, 301, "_top", 6091, weighted, bones, [], highlanderOnly, _ => null);
+        Assert.Equal(EstOutcome.Missing, missing.Outcome);
+        Assert.Equal(["j_ex_top_a_l"], missing.Missing);
+    }
+
+    private static BodyOption Option(string name, string rel, string race, string slot = "_top")
+        => new("Chest", "", name, rel, $"chara/equipment/e0000/model/c{race}e0000{slot}.mdl", slot);
+
+    [Fact]
+    [Trait("Plan", "AC-refit-race-down-2")]
+    [Trait("Plan", "EDGE-refit-race-down-12")]
+    public void The_made_for_bodies_are_bent_down_and_filed_under_the_picked_race()
+    {
+        string dir = Path.Combine(Path.GetTempPath(), $"proteus-test-made-for-{Guid.NewGuid():N}");
+        try
+        {
+            Directory.CreateDirectory(dir);
+            File.WriteAllBytes(Path.Combine(dir, "small.mdl"), SyntheticChest.Body(0.01f, 0.01f));
+            File.WriteAllBytes(Path.Combine(dir, "large.mdl"), SyntheticChest.Body(0.03f, 0.03f));
+            var source = new BodySizeCatalog(dir, [Option("Small", "small.mdl", "0301"), Option("Large", "large.mdl", "0301")]);
+            var pbd = new PbdFile(SyntheticSkeleton.Pbd(101, new Dictionary<ushort, string[]> { [301] = ["j_sebo_c", "j_mune_l", "j_mune_r"] }, lift: 0.02f));
+            var who = new RacialModelBake.Wearer(101, new Dictionary<string, string?>(), pbd);
+
+            var bent = BakedBodyCatalog.Lowered(source, 301, 101, who, ["_top"], out var failed);
+            Assert.Empty(failed);
+            Assert.Equal(["Small", "Large"], bent.For("_top", "0101").Select(o => o.Name));
+            Assert.All(bent.Options, o => Assert.Equal("chara/equipment/e0000/model/c0101e0000_top.mdl", o.GamePath));
+
+            // Each moved down by the deformer's lift; the same file twice is bent once.
+            var before = ModelPartReader.Read(File.ReadAllBytes(Path.Combine(dir, "small.mdl")))!;
+            var after = ModelPartReader.Read(File.ReadAllBytes(bent.PathOf(bent.Options[0])))!;
+            Assert.Equal(-0.02f, after.Positions[1] - before.Positions[1], 4);
+            var again = BakedBodyCatalog.Lowered(source, 301, 101, who, ["_top"], out _);
+            Assert.Equal(bent.Options.Select(o => o.Rel), again.Options.Select(o => o.Rel));
+
+            // The same bytes bent up, as a Midlander body for a Highlander pick, are another file.
+            var asMidlander = new BodySizeCatalog(dir, [Option("Small", "small.mdl", "0101")]);
+            var up = BakedBodyCatalog.Of(asMidlander, "0101", 301, who, ["_top"], out failed);
+            Assert.Empty(failed);
+            Assert.NotEqual(bent.Options[0].Rel, Assert.Single(up.Options).Rel);
+            Assert.NotEqual(File.ReadAllBytes(bent.PathOf(bent.Options[0])), File.ReadAllBytes(up.PathOf(up.Options[0])));
+        }
+        finally
+        {
+            try { Directory.Delete(dir, true); } catch (IOException) { }
+        }
+    }
+
+    /// <summary>
+    /// TBSE-X has a Highlander torso but Midlander legs only, which a Highlander draws bent: the legs are the body the
+    /// garment's legs were cut against as he wears them, so bent down they are just themselves — taken byte for byte.
+    /// </summary>
+    [Fact]
+    [Trait("Plan", "EDGE-refit-race-down-2")]
+    public void A_slot_without_a_drawn_race_body_uses_the_nearest_on_the_line()
+    {
+        string dir = Path.Combine(Path.GetTempPath(), $"proteus-test-made-for-{Guid.NewGuid():N}");
+        try
+        {
+            Directory.CreateDirectory(dir);
+            File.WriteAllBytes(Path.Combine(dir, "top.mdl"), SyntheticChest.Body(0.01f, 0.01f));
+            File.WriteAllBytes(Path.Combine(dir, "mid.mdl"), SyntheticChest.Body(0.02f, 0.02f));
+            File.WriteAllBytes(Path.Combine(dir, "legs.mdl"), SyntheticChest.Body(0.03f, 0.03f));
+            var source = new BodySizeCatalog(dir, [
+                Option("Highlander", "top.mdl", "0301"),
+                Option("Midlander", "mid.mdl", "0101"),   // the drawn race has its own torso: this one is not used
+                Option("Legs", "legs.mdl", "0101", "_dwn"),
+            ]);
+            var pbd = new PbdFile(SyntheticSkeleton.Pbd(101, new Dictionary<ushort, string[]> { [301] = ["j_sebo_c", "j_mune_l", "j_mune_r"] }));
+            var who = new RacialModelBake.Wearer(101, new Dictionary<string, string?>(), pbd);
+
+            var bent = BakedBodyCatalog.Lowered(source, 301, 101, who, ["_top", "_dwn"], out var failed);
+            Assert.Empty(failed);
+            Assert.Equal("Highlander", Assert.Single(bent.For("_top", "0101")).Name);
+            var legs = Assert.Single(bent.For("_dwn", "0101"));
+            Assert.Equal("chara/equipment/e0000/model/c0101e0000_dwn.mdl", legs.GamePath);
+            Assert.Equal(File.ReadAllBytes(Path.Combine(dir, "legs.mdl")), File.ReadAllBytes(bent.PathOf(legs)));
+            Assert.NotEqual(File.ReadAllBytes(Path.Combine(dir, "top.mdl")),
+                            File.ReadAllBytes(bent.PathOf(bent.For("_top", "0101")[0])));
+        }
+        finally
+        {
+            try { Directory.Delete(dir, true); } catch (IOException) { }
+        }
+    }
+
+    /// <summary>A made-for mod, or none, is used as it is; the game is not read. (The game's own side is read race by
+    /// race in <c>OtherRaceRefitLocalTests</c>, against the real data: its body cache is the whole run's.)</summary>
+    [Fact]
+    [Trait("Plan", "EDGE-refit-race-down-3")]
+    public void A_made_for_mod_below_is_used_as_it_is()
+    {
+        var asked = new List<string>();
+        byte[]? Read(string path) { asked.Add(path); return null; }
+        var mod = new BodySizeCatalog("mod", []);
+        Assert.Same(mod, OtherRaceRefit.MadeForBelow("SomeBody", mod, null, 301, 101, Read));
+        Assert.Same(mod, OtherRaceRefit.MadeForBelow(null, null, mod, 301, 101, Read));
+        Assert.Empty(asked);
+    }
+
+    [Fact]
+    [Trait("Plan", "EDGE-refit-race-down-4")]
+    public void A_made_for_body_that_would_not_bend_down_is_left_out()
+    {
+        string dir = Path.Combine(Path.GetTempPath(), $"proteus-test-made-for-{Guid.NewGuid():N}");
+        try
+        {
+            Directory.CreateDirectory(dir);
+            File.WriteAllBytes(Path.Combine(dir, "body.mdl"), SyntheticChest.Body(0.02f, 0.02f));
+            var source = new BodySizeCatalog(dir, [Option("M", "body.mdl", "0301")]);
+            var pbd = new PbdFile(SyntheticSkeleton.Pbd(101, new Dictionary<ushort, string[]> { [301] = ["j_sebo_c"] }));
+            var bent = BakedBodyCatalog.Lowered(source, 301, 101, new RacialModelBake.Wearer(101, new Dictionary<string, string?>(), pbd),
+                                                ["_top"], out var leftOut);
+            Assert.Empty(bent.Options);
+            Assert.Contains("j_mune_l", Assert.Single(leftOut));
+        }
+        finally
+        {
+            try { Directory.Delete(dir, true); } catch (IOException) { }
+        }
     }
 
     [Fact]

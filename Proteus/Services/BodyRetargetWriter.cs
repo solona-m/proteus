@@ -4,6 +4,7 @@ using System.IO;
 using System.Linq;
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using System.Text.RegularExpressions;
 using CheapLoc;
 
 namespace Proteus.Services;
@@ -215,8 +216,11 @@ internal static class BodyRetargetWriter
     /// <summary>One refitted size to save: the option it becomes, its model, and the size it was refitted onto.</summary>
     /// <param name="Layers">The other piece of its outfit it was kept outside (see <see cref="Entry.Layers"/>); null
     /// for none.</param>
+    /// <param name="Materials">Material files the model draws that the option must publish beside it — the new body's
+    /// smallclothes (see <see cref="BodyRetarget.ReadySmallclothes"/>); null for none.</param>
     internal readonly record struct Refit(string Option, byte[] Model, string To,
-                                          IReadOnlyDictionary<string, string>? Layers = null);
+                                          IReadOnlyDictionary<string, string>? Layers = null,
+                                          IReadOnlyList<BodyRetarget.PublishedMaterial>? Materials = null);
 
     /// <summary>
     /// Write <paramref name="model"/> into the mod as <paramref name="optionName"/> of <paramref name="groupName"/>,
@@ -341,6 +345,14 @@ internal static class BodyRetargetWriter
                 if (refits.Count == 0)
                     return new Outcome(false, groupName, "", Loc.Localize("Parts.Retarget.Save.Nothing", "Nothing to save."));
 
+                // The mod renamed or deleted in Penumbra since the refit began: writing would recreate its old folder,
+                // which Penumbra no longer knows.
+                if (!Directory.Exists(modRoot))
+                    return new Outcome(false, groupName, names, string.Format(
+                        Loc.Localize("Parts.Retarget.Save.ModGone.Fmt",
+                            "\"{0}\" is no longer in Penumbra's mods: it was renamed or deleted there. Nothing was saved."),
+                        Path.GetFileName(modRoot)));
+
                 bool author = IsAuthorGroup(modRoot, groupName);
                 var options = PenumbraModMeta.TryReadFileOptions(modRoot, groupName) ?? [];
 
@@ -406,10 +418,28 @@ internal static class BodyRetargetWriter
                 var notes = new List<string>();
 
                 var written = new List<(Refit Refit, string Rel)>();
-                foreach (var refit in refits)
+                // Per refit, the material files it publishes beside its model: game path -> file in the mod.
+                var materialFiles = new Dictionary<string, Dictionary<string, string>>(StringComparer.OrdinalIgnoreCase);
+                var redirects = refits.Any(r => r.Materials is { Count: > 0 }) ? PenumbraModMeta.ReadAllRedirects(modRoot) : [];
+                // Material copies an earlier save of an option published for its model, which this save replaces: their
+                // files go once the manifest no longer names them, as undo's do.
+                var stale = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+                void DropStale()
                 {
+                    if (stale.Count == 0) return;
+                    var published = Published(modRoot);
+                    foreach (string rel in stale)
+                        if (Deletable(rel, published))
+                            DeleteQuietly(Path.Combine(modRoot, rel.Replace('/', Path.DirectorySeparatorChar)));
+                }
+                foreach (var refit0 in refits)
+                {
+                    var refit = refit0;
                     // The folder this option already uses, so a second slot saved into it lands beside the first.
                     string folder = FolderOf(options, refit.Option) ?? Sanitise(refit.Option);
+                    if (refit.Materials is { Count: > 0 })
+                        (refit, materialFiles[refit.Option]) = WriteMaterials(modRoot, groupName, gamePath, refit,
+                                                                              folder, redirects, claimed, bodyMod);
                     string rel = Free(claimed, folder, TailOf(gamePath));
                     claimed.Add(rel.Replace('\\', '/'));   // and two refits in one batch cannot collide either
                     string full = Path.Combine(modRoot, rel);
@@ -432,9 +462,17 @@ internal static class BodyRetargetWriter
                     // then its _dwn leaves one option that covers both. Both writers replace an option outright.
                     var existing = options.FirstOrDefault(o => string.Equals(o.Name, refit.Option,
                                                                              StringComparison.OrdinalIgnoreCase));
+                    // The materials this save publishes beside its model; one an earlier save of the option published
+                    // is not carried — this save says afresh which the model draws, and under what names.
+                    if (materialFiles.TryGetValue(refit.Option, out var own))
+                        foreach (var (path, at) in own) files[path] = at;
                     if (existing.Files != null)
                         foreach (var (path, at) in existing.Files)
-                            if (!files.ContainsKey(path)) files[path] = at;
+                        {
+                            if (files.ContainsKey(path)) continue;
+                            if (IsPublishedMaterial(gamePath, path, at)) stale.Add(at);
+                            else files[path] = at;
+                        }
 
                     // And everything ELSE the option this was refitted from carried — its material, its textures, the
                     // other races' models. Most mods keep those in the default files or a required option and give a
@@ -513,6 +551,7 @@ internal static class BodyRetargetWriter
                     PenumbraModMeta.AddFileOptions(modRoot, groupName, written.Select(w => OptionFor(w.Refit, w.Rel))
                                                                               .ToList());
                     LogNotes();
+                    DropStale();
                     foreach (var (refit, rel) in written)
                     {
                         WriteRecord(modRoot, groupName, true, refit.Option, gamePath, rel, bodyMod, from, refit.To, auto,
@@ -552,6 +591,7 @@ internal static class BodyRetargetWriter
                 PenumbraModMeta.WriteFileOptionGroup(modRoot, Position(modRoot, groupName), groupName, priority, final,
                                                      final.Count - 1);
                 LogNotes();
+                DropStale();
 
                 foreach (var (refit, rel) in written)
                 {
@@ -924,6 +964,117 @@ internal static class BodyRetargetWriter
     /// </summary>
     internal static string TailOf(string gamePath)
         => gamePath.Replace('/', Path.DirectorySeparatorChar);
+
+    /// <summary>A model's game path's set folder: <c>chara/equipment/e6144/</c> of <c>.../e6144/model/c0201e6144_dwn.mdl</c>.</summary>
+    private static readonly Regex SetFolder = new(@"^(chara/(?:equipment|accessory)/[ea]\d{4}/)model/",
+                                                  RegexOptions.CultureInvariant | RegexOptions.IgnoreCase);
+
+    /// <summary>A material the refit published beside a model (see <see cref="WriteMaterials"/>): one of ours, in a
+    /// variant folder of the model's own set.</summary>
+    private static readonly Regex VariantMaterial = new(@"^(chara/(?:equipment|accessory)/[ea]\d{4}/)material/v(\d{4})/([^/]+\.mtrl)$",
+                                                        RegexOptions.CultureInvariant | RegexOptions.IgnoreCase);
+
+    /// <summary>
+    /// Whether an option's earlier redirect of <paramref name="path"/> is a material a refit of THIS model published —
+    /// ours, in its set's material folders, named for its slot — and so is replaced by what this save publishes rather
+    /// than carried. Another slot's saved into the same option is kept.
+    /// </summary>
+    private static bool IsPublishedMaterial(string modelGamePath, string path, string at)
+    {
+        if (!Ours(at)) return false;
+        var set = SetFolder.Match(modelGamePath.Replace('\\', '/'));
+        var mat = VariantMaterial.Match(path.Replace('\\', '/'));
+        if (!set.Success || !mat.Success
+            || !string.Equals(set.Groups[1].Value, mat.Groups[1].Value, StringComparison.OrdinalIgnoreCase)) return false;
+        // c0201e6144_dwn -> e6144_dwn: any race's, since a racial bake draws a material of another race than the model's.
+        string model = Path.GetFileNameWithoutExtension(modelGamePath);
+        string setSlot = model.Length > 5 ? model[5..] : model;
+        return Regex.IsMatch(mat.Groups[3].Value, @"^mt_c\d{4}" + Regex.Escape(setSlot) + "_",
+                             RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
+    }
+
+    /// <summary>
+    /// Writes the materials a refit's model draws that it must publish (see <see cref="Refit.Materials"/>) into the
+    /// option's own folder, and says where each goes in game: every variant folder of the model's set the mod publishes
+    /// materials in — the variants the garment is drawn in — or v0001 when it publishes none. Named for the model it is
+    /// saved beside, with the first letter from z down that nothing else there publishes, and the model renamed to
+    /// match. A save that cannot publish it — no equipment set, every letter taken — fails rather than write a model
+    /// that draws a material nothing publishes, which the game does not draw at all.
+    /// </summary>
+    /// <returns>The refit, its model renamed where a name was taken, and the game path of each file to its place.</returns>
+    private static (Refit Refit, Dictionary<string, string> Files) WriteMaterials(
+        string modRoot, string groupName, string gamePath, Refit refit, string folder,
+        IReadOnlyList<PenumbraModMeta.Redirect> redirects, HashSet<string> claimed, string bodyMod)
+    {
+        var files = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        var set = SetFolder.Match(gamePath.Replace('\\', '/'));
+        // A model that draws a material nothing publishes is not drawn at all in game: never save one.
+        if (!set.Success)
+            throw new InvalidDataException(string.Format(Loc.Localize("Parts.Retarget.Save.NoMaterialSet.Fmt",
+                "{0} draws the new body's underwear, whose material can only be saved beside an equipment or accessory " +
+                "model."), gamePath));
+        string materials = set.Groups[1].Value + "material/";
+
+        string replacing = $"{groupName} / {refit.Option}";
+        var variants = new SortedSet<string>(StringComparer.OrdinalIgnoreCase);
+        var taken = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var r in redirects)
+        {
+            var m = VariantMaterial.Match(r.GamePath.Replace('\\', '/'));
+            if (!m.Success || !string.Equals(m.Groups[1].Value, set.Groups[1].Value, StringComparison.OrdinalIgnoreCase))
+                continue;
+            variants.Add("v" + m.Groups[2].Value);
+            // Every name but this option's own copies for THIS model, which this save replaces: another slot's saved
+            // into the same option is still drawn by that slot's model.
+            if (!string.Equals(r.Source, replacing, StringComparison.OrdinalIgnoreCase)
+                || !IsPublishedMaterial(gamePath, r.GamePath, r.File))
+                taken.Add(m.Groups[3].Value);
+        }
+        if (variants.Count == 0)
+        {
+            variants.Add("v0001");
+            Plugin.Log?.Information("[Proteus] refit: {0} publishes no material of its own set; the new body's " +
+                                    "smallclothes material goes in v0001 alone", gamePath);
+        }
+
+        byte[] model = refit.Model;
+        // The model's materials. Each copy's own placeholder is set aside only while that copy is named: the placeholders
+        // of copies still to come are names the model draws, and renaming onto one would make two materials one.
+        var names = new HashSet<string>(SecondSkinWriter.Parse(model).MatNames.Select(n => n.TrimStart('/')),
+                                        StringComparer.OrdinalIgnoreCase);
+        // Named for the model it is saved beside — its race, set and slot — so a later save of the same model, and only
+        // of that model, recognises it as its own (see IsPublishedMaterial).
+        string stem = "mt_" + Path.GetFileNameWithoutExtension(gamePath) + "_";
+        var published = new List<BodyRetarget.PublishedMaterial>();
+        foreach (var material in refit.Materials ?? [])
+        {
+            names.Remove(material.Name);
+            string? name = null;
+            for (char c = 'z'; c >= 'a' && name == null; c--)
+                if (!taken.Contains(stem + c + ".mtrl") && !names.Contains(stem + c + ".mtrl")) name = stem + c + ".mtrl";
+            if (name == null)
+                throw new InvalidDataException(string.Format(Loc.Localize("Parts.Retarget.Save.NoMaterialName.Fmt",
+                    "Every material name {0} could use is taken, so the new body's underwear it draws has no name of its " +
+                    "own to be saved under."), gamePath));
+            if (!string.Equals(name, material.Name, StringComparison.OrdinalIgnoreCase))
+                model = ModelAttributeWriter.RenameMaterial(model, "/" + material.Name, "/" + name);
+            names.Add(name);
+            taken.Add(name);
+
+            string rel = Free(claimed, folder, TailOf(materials + variants.Min + "/" + name));
+            claimed.Add(rel.Replace('\\', '/'));
+            string full = Path.Combine(modRoot, rel);
+            Directory.CreateDirectory(Path.GetDirectoryName(full)!);
+            PenumbraModMeta.AtomicWrite(full, material.Bytes);
+            foreach (string v in variants) files[materials + v + "/" + name] = rel.Replace('\\', '/');
+            published.Add(material with { Name = name });
+            Plugin.Log?.Information("[Proteus] refit: smallclothes material {0} from {1} ({2}) sha256 {3} published at " +
+                                    "{4} folders", name, bodyMod, material.From,
+                                    Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(material.Bytes))[..8],
+                                    variants.Count);
+        }
+        return (refit with { Model = model, Materials = published }, files);
+    }
 
     /// <summary>
     /// An option name as a folder name. Never empty, so two options cannot collide on "".

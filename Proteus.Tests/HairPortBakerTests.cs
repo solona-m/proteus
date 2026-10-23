@@ -156,18 +156,98 @@ public class HairPortBakerTests
     /// <summary>A bend that turns the surface inside out — here a mirror — is refused, not saved.</summary>
     [Fact]
     [Trait("Plan", "AC-hair-race-port-2")]
-    public void A_port_that_turns_triangles_inside_out_is_refused()
+    [Trait("Plan", "AC-cross-sex-tops-yas-8")]
+    [Trait("Plan", "EDGE-cross-sex-tops-yas-22")]
+    public void A_port_that_turns_triangles_inside_out_is_saved_with_a_warning() // [AC-cross-sex-tops-yas-8] [EDGE-cross-sex-tops-yas-22]
+    {
+        // Once refused (AC-hair-race-port-2); now saved, and said (cross-sex-tops-yas: nothing is refused for folds).
+        var mirror = Matrix4x4.CreateScale(-1f, 1f, 1f);
+        var pbd = new XivLiveMesh.PbdFile(BuildPbd(
+        [
+            (101, ushort.MaxValue, new() { ["j_kao"] = Matrix4x4.Identity }),
+            (201, 101, new() { ["j_kao"] = Matrix4x4.Identity }),
+            (801, 201, new() { ["j_kao"] = Matrix4x4.CreateTranslation(Offset(801)) }),
+            (1101, 101, new() { ["j_kao"] = Matrix4x4.CreateTranslation(Offset(1101)) }),
+            (1201, 1101, new() { ["j_kao"] = mirror }),
+        ]));
+        var result = HairPortBaker.Prepare(HairModel(801), 801, 1201, Id, pbd, NoExtra, HeadModel(801), HeadModel(1201),
+                                           out var why);
+        Assert.True(result != null, why);
+        Assert.True(result!.Folded > 0);
+        Assert.NotNull(result.Warning);
+        Assert.Contains("inside out", result.Warning);
+    }
+
+    [Fact]
+    [Trait("Plan", "AC-cross-sex-tops-yas-8")]
+    [Trait("Plan", "EDGE-cross-sex-tops-yas-22")]
+    public void Few_folds_give_no_warning() // [AC-cross-sex-tops-yas-8] [EDGE-cross-sex-tops-yas-22]
+    {
+        var result = Port(HairModel(801), 801, 201, out var why);
+        Assert.True(result != null, why);
+        Assert.Null(result!.Warning);
+        Assert.Equal(0, result.Folded);
+    }
+
+    /// <summary>
+    /// A target whose deformer has ear bones of its own turns a Miqo'te's fur over — a Lalafell's does — but the fur is
+    /// taken out of the port, so it is not counted against it.
+    /// </summary>
+    [Fact]
+    [Trait("Plan", "EDGE-hair-race-port-4")]
+    public void Fur_the_bend_turns_over_is_not_counted()
     {
         var mirror = Matrix4x4.CreateScale(-1f, 1f, 1f);
         var pbd = new XivLiveMesh.PbdFile(BuildPbd(
         [
             (101, ushort.MaxValue, new() { ["j_kao"] = Matrix4x4.Identity }),
             (201, 101, new() { ["j_kao"] = Matrix4x4.Identity }),
-            (801, 201, new() { ["j_kao"] = mirror }),
+            (801, 201, new() { ["j_kao"] = Matrix4x4.CreateTranslation(Offset(801)) }),
+            (1101, 101, new() { ["j_kao"] = Matrix4x4.CreateTranslation(Offset(1101)) }),
+            (1201, 1101, new() { ["j_kao"] = Matrix4x4.Identity, ["j_mimi_l"] = mirror }),
         ]));
-        var result = HairPortBaker.Prepare(HairModel(801), 801, 201, Id, pbd, NoExtra, HeadModel(801), HeadModel(201),
-                                           out var why);
-        Assert.Null(result);
-        Assert.Contains("inside out", why);
+        var ear = Sphere("/mt_c0801h0130_hir_a.mtrl", Head + Offset(801) + new Vector3(0.07f, 0.08f, 0f), 0.02f,
+                         [("j_mimi_l", 1f)], rings: 4, segments: 6);
+        var hair = HairModel(801, extra: ear);
+        // Counted, the turned fur alone would be over the limit.
+        var a = ModelPartReader.Read(hair)!;
+        var bent = RacialModelBake.Port(hair, 801, 1201, pbd, HairPortBaker.ParentOf, out var bendWhy);
+        Assert.True(bent != null, bendWhy);
+        Assert.True(HairPortBaker.Folded(a, ModelPartReader.Read(bent!)!)
+                    > HairPortBaker.FoldedShare * a.Parts.Where(p => p.Island == -1).Sum(p => p.TriangleCount),
+                    "the bend no longer turns the fur over");
+
+        var result = HairPortBaker.Prepare(hair, 801, 1201, Id, pbd, NoExtra, HeadModel(801), HeadModel(1201), out var why);
+        Assert.True(result != null, why);
+        Assert.True(result!.FurHidden > 0);
+    }
+
+    /// <summary>With the fur taken out, the hair that is drawn still counts: turned over, it is warned of (once refused).</summary>
+    [Fact]
+    [Trait("Plan", "EDGE-hair-race-port-4")]
+    [Trait("Plan", "AC-cross-sex-tops-yas-8")]
+    [Trait("Plan", "EDGE-cross-sex-tops-yas-22")]
+    public void Drawn_hair_the_bend_turns_over_is_warned_beside_hidden_fur() // [AC-cross-sex-tops-yas-8] [EDGE-cross-sex-tops-yas-22]
+    {
+        var mirror = Matrix4x4.CreateScale(-1f, 1f, 1f);
+        var pbd = new XivLiveMesh.PbdFile(BuildPbd(
+        [
+            (101, ushort.MaxValue, new() { ["j_kao"] = Matrix4x4.Identity }),
+            (201, 101, new() { ["j_kao"] = Matrix4x4.Identity }),
+            (801, 201, new() { ["j_kao"] = Matrix4x4.CreateTranslation(Offset(801)) }),
+            (1101, 101, new() { ["j_kao"] = Matrix4x4.CreateTranslation(Offset(1101)) }),
+            (1201, 1101, new() { ["j_kao"] = mirror, ["j_mimi_l"] = mirror }),
+        ]));
+        var ear = Sphere("/mt_c0801h0130_hir_a.mtrl", Head + Offset(801) + new Vector3(0.07f, 0.08f, 0f), 0.02f,
+                         [("j_mimi_l", 1f)], rings: 4, segments: 6);
+        var hair = HairModel(801, extra: ear);
+        // The same model with the head not mirrored ports, its fur hidden, with no warning: the warning below is the
+        // drawn hair's.
+        Assert.True(Port(hair, 801, 201, out _)!.FurHidden > 0);
+        Assert.Null(Port(hair, 801, 201, out _)!.Warning);
+
+        var result = HairPortBaker.Prepare(hair, 801, 1201, Id, pbd, NoExtra, HeadModel(801), HeadModel(1201), out var why);
+        Assert.True(result != null, why);
+        Assert.Contains("inside out", result!.Warning);
     }
 }

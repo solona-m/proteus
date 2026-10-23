@@ -222,8 +222,8 @@ public sealed class HairPortLocalTests(ITestOutputHelper o)
                 if (folded > 0) o.WriteLine($"h{id:D4} c{from:D4}->c{to:D4}: {folded} of {triangles} turned");
                 Assert.True(collapsed == 0, $"h{id:D4} c{from:D4}->c{to:D4}: {collapsed} collapsed");
 
-                // Over the limit, the fit check refuses the port. Hrothgar heads are the furthest from everyone's, and
-                // there that is the check working; elsewhere it must stay rare.
+                // Over the limit, the port is saved with a warning (cross-sex-tops-yas: never refused for folds).
+                // Hrothgar heads are the furthest from everyone's, and there that is expected; elsewhere it stays rare.
                 if (folded > HairPortBaker.FoldedShare * triangles)
                 {
                     if (from / 100 is 15 or 16 || to / 100 is 15 or 16) hrothgarOver++;
@@ -231,10 +231,44 @@ public sealed class HairPortLocalTests(ITestOutputHelper o)
                 }
                 bent++;
             }
-        o.WriteLine($"{bent} bends checked; over the fold limit, so refused: {hrothgarOver} Hrothgar, " +
+        o.WriteLine($"{bent} bends checked; over the fold limit, so warned: {hrothgarOver} Hrothgar, " +
                     $"{over.Count} others [{string.Join("; ", over)}]");
         Assert.True(bent > 150);
         Assert.True(over.Count * 50 <= bent, $"{over.Count} of {bent} bends turn too much inside out: {string.Join("; ", over)}");
+    }
+
+    /// <summary>
+    /// Every shared hairstyle bend over the fold limit is saved with a warning, never refused for its folds — refused, if
+    /// at all, only by the fit check, which never speaks of turning inside out (cross-sex-tops-yas).
+    /// </summary>
+    [LocalDataFact(LocalData.GameData)]
+    [Trait("Plan", "AC-cross-sex-tops-yas-8")]
+    [Trait("Plan", "EDGE-cross-sex-tops-yas-22")]
+    public void Over_the_fold_limit_a_port_is_saved_with_a_warning() // [AC-cross-sex-tops-yas-8] [EDGE-cross-sex-tops-yas-22]
+    {
+        var game = Load();
+        int warned = 0, refused = 0, quiet = 0;
+        foreach (var (from, to) in Pairs)
+            foreach (int id in Ids)
+            {
+                if (game.File(HairPath(from, id)) is not { } src || game.File(HairPath(to, id)) == null) continue;
+                var result = HairPortBaker.Prepare(src, from, to, id, game.Pbd, game.ExtraBones(to, id), game.Head(from),
+                                                   game.Head(to), out var why);
+                if (result == null)
+                {
+                    Assert.DoesNotContain("inside out", why);
+                    refused++;
+                    continue;
+                }
+                var a = ModelPartReader.Read(src)!;
+                int triangles = a.Parts.Where(p => p.Island == -1).Sum(p => p.TriangleCount);
+                bool over = result.Folded > HairPortBaker.FoldedShare * triangles;
+                Assert.Equal(over, result.Warning != null);
+                if (over) { warned++; Assert.Contains("inside out", result.Warning); }
+                else quiet++;
+            }
+        o.WriteLine($"{warned} saved with a warning, {quiet} without, {refused} refused by the fit check");
+        Assert.True(warned + quiet > 150);
     }
 
     /// <summary>The Miqo'te ear fur and its skin are taken out of a port to a race without ears, on the game's own hair.</summary>
@@ -254,6 +288,25 @@ public sealed class HairPortLocalTests(ITestOutputHelper o)
             if (result.FurHidden > 0) withFur++;
         }
         o.WriteLine($"{withFur} of the Miqo'te hairstyles carried fur");
+    }
+
+    /// <summary>
+    /// The reported pack (Loosened Bun) is a mashup of the game's Miqo'te h0194 and h0195, and like them was refused
+    /// for a Lalafell: its fur, turned over by the Lalafell's own ear bones, was counted though it is taken out.
+    /// </summary>
+    [LocalDataFact(LocalData.GameData)]
+    [Trait("Plan", "EDGE-hair-race-port-4")]
+    public void Miqote_hair_with_fur_ports_to_a_lalafell()
+    {
+        var game = Load();
+        foreach (int id in new[] { 194, 195 })
+        {
+            var src = game.File(HairPath(801, id))!;
+            var result = HairPortBaker.Prepare(src, 801, 1201, id, game.Pbd, game.ExtraBones(1201, id), game.Head(801),
+                                               game.Head(1201), out var why);
+            Assert.True(result != null, $"h{id:D4}: {why}");
+            Assert.True(result!.FurHidden > 0, $"h{id:D4} no longer carries fur");
+        }
     }
 
     /// <summary>A port keeps every shape key, LOD and mesh of the game's own hairstyles that carry them.</summary>

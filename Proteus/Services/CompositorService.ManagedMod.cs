@@ -289,7 +289,7 @@ public partial class CompositorService
     /// </summary>
     private bool IsOwnOutput(string? diskPath)
     {
-        if (IsOwnOutputCore(diskPath, managedModDir) is { } own) return own;
+        if (IsOwnOutputCore(diskPath, managedModDir, ModsRootAliases()) is { } own) return own;
 
         log.Warning("[Proteus] could not tell whether \"{0}\" is our own output — treating it as ours "
                   + "rather than risk compositing onto a previous composite", diskPath ?? "(null)");
@@ -304,6 +304,58 @@ public partial class CompositorService
     {
         if (string.IsNullOrWhiteSpace(diskPath) || string.IsNullOrWhiteSpace(managedModDir)) return null;
         return ManagedModPaths.IsPublishedOutput(diskPath, managedModDir);
+    }
+
+    /// <summary>
+    /// <see cref="IsOwnOutputCore(string?, string?)"/>, also counting anything inside a renamed copy of the managed mod
+    /// (<paramref name="aliasDirs"/>, full folder paths) as ours: it serves an earlier composite, and reading it as a
+    /// base would composite onto that composite.
+    /// </summary>
+    internal static bool? IsOwnOutputCore(string? diskPath, string? managedModDir, IReadOnlyCollection<string> aliasDirs)
+    {
+        if (IsOwnOutputCore(diskPath, managedModDir) is not { } own) return null;
+        if (own || aliasDirs.Count == 0) return own;
+        return aliasDirs.Any(dir => diskPath!.StartsWith(dir.TrimEnd('/', '\\') + Path.DirectorySeparatorChar,
+                                                          StringComparison.OrdinalIgnoreCase)
+                                    || diskPath.StartsWith(dir.TrimEnd('/', '\\') + Path.AltDirectorySeparatorChar,
+                                                           StringComparison.OrdinalIgnoreCase));
+    }
+
+    /// <summary>
+    /// Renamed copies of the managed mod still switched on somewhere, by folder name. Set while a renamed copy's
+    /// replacement is being built (see <see cref="ModMoveService"/>); cleared once the copy is switched off.
+    /// </summary>
+    private volatile string[] _managedAliases = [];
+
+    internal bool IsManagedAlias(string folder)
+        => _managedAliases.Any(a => string.Equals(a, folder, StringComparison.OrdinalIgnoreCase));
+
+    /// <summary>
+    /// Treat <paramref name="folder"/> as Proteus's own output until <see cref="RemoveManagedAlias"/>. The upstream
+    /// memo is kept: while the copy is on it masks every base, and the memo is the only record of the real ones.
+    /// </summary>
+    internal void AddManagedAlias(string folder)
+    {
+        lock (_aliasLock)
+            if (!IsManagedAlias(folder)) _managedAliases = [.. _managedAliases, folder];
+    }
+
+    /// <summary>Stop treating <paramref name="folder"/> as ours: its copy is switched off, so nothing resolves into it.</summary>
+    internal void RemoveManagedAlias(string folder)
+    {
+        lock (_aliasLock)
+            _managedAliases = _managedAliases.Where(a => !string.Equals(a, folder, StringComparison.OrdinalIgnoreCase)).ToArray();
+        InvalidateUpstreamCache($"managed alias {folder} gone");
+    }
+
+    private readonly object _aliasLock = new();
+
+    private IReadOnlyCollection<string> ModsRootAliases()
+    {
+        var aliases = _managedAliases;
+        return aliases.Length == 0 || string.IsNullOrEmpty(modsRoot)
+            ? []
+            : aliases.Select(a => Path.Combine(modsRoot, a)).ToArray();
     }
 
     /// <summary>The managed mod's folder; null while Penumbra's mod root is unknown.</summary>

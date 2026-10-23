@@ -98,7 +98,8 @@ public sealed class SizeSetStrings
     public readonly string Intro = Loc.Localize("SizeSet.Intro",
         "Adds every size of the bodies ticked below to this whole mod. Each size is refitted from the author's size "
       + "nearest it, the outfit's other pieces in that option from the same size, and saved beside the author's sizes as "
-      + "\"Rue S\", \"YAB Buff L\" and so on. Sizes the mod already has are left alone.");
+      + "\"Rue S\", \"YAB Buff L\" and so on. Sizes the mod already has are left alone. A women's mod can get TBSE and "
+      + "TBSE-X too: its chest and legs are refitted for men and saved in a group of their own.");
 
     public readonly string Ends = Loc.Localize("SizeSet.Ends", "Include shoes and gloves") + "###sizeSetEnds";
 
@@ -200,6 +201,50 @@ public sealed class SizeSetStrings
 
     /// <summary>{0} is the piece, {1} the size.</summary>
     public readonly string WorkingFmt = Loc.Localize("SizeSet.Working.Fmt", "Refitting {0} to {1}...");
+
+    /// <summary>{0} is a men's body ("TBSE").</summary>
+    public readonly string ForMenFmt = Loc.Localize("SizeSet.ForMen.Fmt", "{0} (for men)");
+
+    /// <summary>{0} is a men's body ("TBSE"), {1} the group the men's versions go into.</summary>
+    public readonly string ForMenTipFmt = Loc.Localize("SizeSet.ForMen.Tip.Fmt",
+        "This mod's women's chest and legs pieces get a men's version on {0}: refitted for Midlander men through the body "
+      + "maps, which download the first time they're needed, each from the author's size whose body lies nearest his "
+      + "once bent to a man's shape. They're saved in a group of their own, \"{1}\", so the women's sizes stay as they "
+      + "are. Shoes and gloves aren't refitted across the sexes, and a piece the author already made for men keeps theirs.");
+
+    /// <summary>The group a women's mod's men's versions are saved into.</summary>
+    public readonly string MensGroup = Loc.Localize("SizeSet.MensGroup", "Men's body");
+
+    public readonly string CheckInGame = Loc.Localize("SizeSet.CheckInGame", "Check in game:");
+
+    /// <summary>{0} is the piece, {1} the size, {2} what to look at.</summary>
+    public readonly string WarningFmt = Loc.Localize("SizeSet.Warning.Fmt", "{0}, \"{1}\": {2}");
+
+    public readonly string MenMapsMissing = Loc.Localize("SizeSet.MenMapsMissing",
+        "No men's versions were made: the body maps they need aren't here yet. Proteus is downloading them; add the "
+      + "sizes again once they've arrived.");
+
+    /// <summary>{0} is the piece.</summary>
+    public readonly string NoSourceForMenFmt = Loc.Localize("SizeSet.NoSourceForMen.Fmt",
+        "{0}: none of the author's sizes was made on a body Proteus can match to a man's (Bibo+ or the game's layout), "
+      + "so it got no men's version.");
+
+    /// <summary>{0} is the group's name.</summary>
+    public readonly string MensGroupTakenFmt = Loc.Localize("SizeSet.MensGroupTaken.Fmt",
+        "The mod already has a group of the author's called \"{0}\", so no men's versions were made. Rename that group "
+      + "in Penumbra and add the sizes again.");
+
+    public readonly string EndsNotForMen = Loc.Localize("SizeSet.EndsNotForMen",
+        "Shoes and gloves get no men's version: only chest and legs pieces are refitted across the sexes.");
+
+    /// <summary>{0} is the piece, {1} the author's option the men's version was made from.</summary>
+    public readonly string OneVariantFmt = Loc.Localize("SizeSet.OneVariant.Fmt",
+        "{0}: men get one version, made from \"{1}\"; the mod's other variants of it stay women's only.");
+
+    public readonly string NotMade = Loc.Localize("SizeSet.NotMade", "the refit made nothing to save");
+
+    public readonly string RigUnreadable = Loc.Localize("SizeSet.RigUnreadable",
+        "its rig can't be read, so it can't be bent to a man's shape");
 }
 
 /// <summary>The automatic body refit's section of Settings, and the words it puts in chat.</summary>
@@ -439,6 +484,26 @@ public sealed class HairPortStrings
 
     public readonly string Working = Loc.Localize("HairPort.Working", "Working…");
 
+    // ── Earless Miqo'te hair ─────────────────────────────────────────────────────────────────────────
+    public readonly string Earless = Loc.Localize(
+        "HairPort.Earless.Label", "Take the ears off Miqo'te hair mods") + "###hairEarless";
+
+    public readonly string EarlessTip = Loc.Localize("HairPort.Earless.Tip",
+        "For a Miqo'te: when you wear a hair mod whose hairstyle has cat ears, Proteus\n" +
+        "makes an earless copy of it and points the mod's option at that copy. The\n" +
+        "author's own files are never changed.\n\n" +
+        "This changes the mod itself, so every character drawn with that mod on — in\n" +
+        "every collection, and anyone you share it with — has no ears with it. Turning\n" +
+        "this off puts the ears back in every mod Proteus changed. Works with or without\n" +
+        "fitting hair mods made for another race.");
+
+    public readonly string EarlessFmt = Loc.Localize("HairPort.Settings.Earless.Fmt",
+        "Hairstyle {0} from {1} is drawn without its ears — for every character drawn with this mod on, in every " +
+        "collection. Turning the setting off puts them back.");
+
+    public readonly string EarlessOptionHintFmt = Loc.Localize("HairPort.Settings.EarlessOptionHint.Fmt",
+        "This mod has its own earless option: {0}");
+
     // ── Check of every hair mod ──────────────────────────────────────────────────────────────────────
     public readonly string CheckingStart = Loc.Localize("HairPort.Scan.Starting", "Checking your hair mods…");
     public readonly string CheckingFmt = Loc.Localize("HairPort.Scan.Checking.Fmt", "Checking your hair mods… {0} of {1}");
@@ -454,6 +519,8 @@ public sealed class HairPortStrings
     public readonly string ListFmt = Loc.Localize("HairPort.Scan.List.Fmt", "Hair mods for your race ({0})");
     public readonly string RowFmt = Loc.Localize("HairPort.Scan.Row.Fmt", "Hairstyle {0} — {1}: {2}");
     public readonly string StateFitted = Loc.Localize("HairPort.Scan.State.Fitted", "fitted");
+    /// <summary>{0} is what to look at in game, such as "bent onto c1101, 40 of its triangles turn inside out…".</summary>
+    public readonly string StateFittedWarnFmt = Loc.Localize("HairPort.Scan.State.FittedWarn.Fmt", "fitted — {0}");
     public readonly string StateAlready = Loc.Localize("HairPort.Scan.State.Already", "already fitted");
     public readonly string StateRemade = Loc.Localize("HairPort.Scan.State.Remade", "fitted again (the mod changed)");
     public readonly string StateUndone = Loc.Localize("HairPort.Scan.State.Undone", "undone");
@@ -734,6 +801,10 @@ public sealed class ModsStrings
     public readonly string InertMaskNeedsShellFmt = Loc.Localize("Mods.Inert.MaskNeedsShell.Fmt",
         "Its masks render as gear, which needs a mask to build the garment from — and nothing is ticked " +
         "in its \"{0}\" group in Penumbra.");
+
+    public readonly string InertAwaitingMenMaps = Loc.Localize("Mods.Inert.AwaitingMenMaps",
+        "This mod's art is made for women's bodies. It will be painted on you, in your own layout, once the men's body " +
+        "maps are downloaded (retry from the UV maps notice if the download failed).");
 
     public readonly string InertNothingReached = Loc.Localize("Mods.Inert.NothingReached",
         "Its ticked options resolved, but none of them reached a surface this character has loaded.");
@@ -2154,6 +2225,15 @@ public sealed class ColorPanelStrings
         "bibo and gen3/Eve are always painted; this only affects vanilla.\n" +
         "Applies to the whole mod, not just this option.");
 
+    // "TBSE" is a body-mod name and is never translated.
+    public readonly string OverlayMen = Loc.Localize("Colors.Bodies.Men.Label", "Overlay on men");
+
+    public readonly string MenTip = Loc.Localize("Colors.Bodies.Men.Tip",
+        "Also paint this mod's women's art on men (TBSE or the men's vanilla body),\n" +
+        "moved into his layout through the men's body maps.\n" +
+        "Art made for men is never changed.\n" +
+        "Applies to the whole mod, not just this option.");
+
     public readonly string BodiesGlobalSuffix = Loc.Localize("Colors.Bodies.GlobalSuffix",
         "\nGlobal — this one is NOT part of the binding you're editing.");
 
@@ -2426,7 +2506,7 @@ public sealed class PartsStrings
     public readonly string MoveBonesNote = Loc.Localize("Parts.Move.BonesNote",
         "A moved part still follows the bones it was made for, so a part moved far from them can bend oddly in poses.");
 
-    public readonly string MoveSkinTip = Loc.Localize("Parts.Move.SkinTip", "Skin can't be moved.");
+    public readonly string MoveSkinTip = Loc.Localize("Parts.Move.SkinOff.Tip", "Turn on “Move skin too” to move skin.");
 
     public readonly string MoveLockedTip = Loc.Localize("Parts.Move.LockedTip",
         "This part is locked. Tick the box beside it to move it.");
@@ -2558,20 +2638,43 @@ public sealed class PartsStrings
     public readonly string VanillaWornSuffix = Loc.Localize("Parts.Vanilla.WornSuffix", "(vanilla)");
 
     public readonly string VanillaWornTip = Loc.Localize("Parts.Vanilla.Worn.Tip",
-        "Worn, not modded. Opening it copies it into a new mod you can edit. With Body size selected, it opens "
-      + "to be refitted instead.");
+        "Worn, not modded. It opens as it is, and nothing is saved until you change it: your first change copies it "
+      + "into a mod of its own.");
+
+    /// <summary>Under a piece of vanilla gear, before anything is saved. {0} is the mod's name, e.g.
+    /// "Ala Mhigan Coat of Fending — Proteus edit"; "Proteus edit" stays untranslated, as the mod is named.</summary>
+    public readonly string VanillaCopyNoteFmt = Loc.Localize("Parts.Vanilla.CopyNote.Fmt",
+        "Nothing is saved yet. Your first change copies this into the mod \"{0}\".");
 
     /// <summary>{0} is the item, e.g. "Body — Ala Mhigan Coat of Fending"; {1} is the mod it was copied into.</summary>
-    public readonly string VanillaEditingFmt = Loc.Localize("Parts.Vanilla.Editing.Fmt",
-        "{0} is open in the mod \"{1}\", a copy of the game's own that looks the same until you change it.");
+    public readonly string VanillaCopiedFmt = Loc.Localize("Parts.Vanilla.Copied.Fmt",
+        "{0} was copied into the mod \"{1}\" with your change.");
+
+    /// <summary>{0} is the mod's name.</summary>
+    public readonly string VanillaEditedCopyThereFmt = Loc.Localize("Parts.Vanilla.EditedCopyThere.Fmt",
+        "\"{0}\" already has an edited copy of this piece, so your change was not saved. To keep editing that copy, "
+      + "open it here (with the mod switched on in Penumbra); to start again from the game's own, delete the mod.");
+
+    /// <summary>{0} is the mod's name.</summary>
+    public readonly string VanillaModSwitchedOffFmt = Loc.Localize("Parts.Vanilla.ModSwitchedOff.Fmt",
+        "\"{0}\" is switched off, so your change was not saved into it. Switch it on in Penumbra, or delete it to "
+      + "start again.");
+
+    /// <summary>{0} is the reason, which may arrive in English.</summary>
+    public readonly string VanillaCopyRefusedFmt = Loc.Localize("Parts.Vanilla.CopyRefused.Fmt",
+        "Your change could not be saved, so nothing was copied: {0}");
+
+    /// <summary>Under the Write button, when the brush edit saved just before has only now copied the piece into its mod.</summary>
+    public readonly string VanillaCopyRegistering = Loc.Localize("Parts.Vanilla.CopyRegistering",
+        "Your edit was just copied into a new mod, and Penumbra is still setting it up. Try again in a moment.");
+
+    /// <summary>Under Body size, for a piece of vanilla gear it has no body slot for (a hat, a ring).</summary>
+    public readonly string VanillaNotRefittable = Loc.Localize("Parts.Vanilla.NotRefittable",
+        "Body size can't refit this piece. Choose another tool to edit it.");
 
     /// <summary>The description of the mod a piece of vanilla gear is copied into. {0} is the item.</summary>
     public readonly string VanillaModDescriptionFmt = Loc.Localize("Parts.Vanilla.ModDescription.Fmt",
         "{0}, copied from the game by Proteus to be edited.");
-
-    /// <summary>Added to a tool's tooltip while a piece of vanilla gear is open for Body size.</summary>
-    public readonly string VanillaEditToolTip = Loc.Localize("Parts.Vanilla.EditTool.Tip",
-        "Vanilla gear has no mod file, so choosing this copies it into a new mod first.");
 
     /// <summary>The header over a piece of vanilla gear, in place of the mod and model pickers.</summary>
     public readonly string VanillaHeader = Loc.Localize("Parts.Vanilla.Header", "Vanilla gear");
@@ -2755,7 +2858,7 @@ public sealed class PartsStrings
 
     /// <summary>{0} is a body mod's name; {1} is <see cref="RetargetMale"/> or <see cref="RetargetFemale"/>.</summary>
     public readonly string RetargetNoBodiesForSexFmt = Loc.Localize("Parts.Retarget.NoBodiesForSex.Fmt",
-        "{0} has no {1} bodies; a refit can't change sex.");
+        "{0} has no {1} bodies.");
 
     public readonly string RetargetMale = Loc.Localize("Parts.Retarget.Male", "male");
 
@@ -2963,6 +3066,10 @@ public sealed class PartsStrings
         "Always on while the shoe keeps its own foot or the glove its own hand: otherwise the whole new legs or arms "
       + "would go in with it.");
 
+    public readonly string RetargetClearForcedTip = Loc.Localize("Parts.Retarget.ClearForcedTip",
+        "Always on for the game's own tops, as the automatic refit does it: the game buries their cloth in its own "
+      + "body, so it is always pushed out of the new one.");
+
     public readonly string RetargetKeepFeet = Loc.Localize("Parts.Retarget.KeepFeet", "Keep its own feet")
                                             + "###partsRetargetKeepEnds";
 
@@ -2987,6 +3094,14 @@ public sealed class PartsStrings
 
     public readonly string RetargetSkinAlreadyMatches = Loc.Localize("Parts.Retarget.SkinAlreadyMatches",
         "Nothing to change: its skin is already drawn the way the new body draws its own.");
+
+    /// <summary>The preview draws a material the save publishes; until then the game has no such file.</summary>
+    public readonly string RetargetSmallclothesAfterSave = Loc.Localize("Parts.Retarget.Smallclothes.AfterSave",
+        "The new body draws underwear where it has no skin, and the refit brings it in: it shows in game only once you save.");
+
+    /// <summary>The new body's underwear could not be brought in, so the garment keeps its own skin there.</summary>
+    public readonly string RetargetSmallclothesFallback = Loc.Localize("Parts.Retarget.Smallclothes.Fallback",
+        "The new body draws underwear where it has no skin, which could not be brought into this garment, so it keeps its own skin there.");
 
     /// <summary>{0}: the size chosen to refit onto.</summary>
     public readonly string RetargetAlreadyFitsFmt = Loc.Localize("Parts.Retarget.AlreadyFits.Fmt",
@@ -3027,6 +3142,10 @@ public sealed class PartsStrings
 
     public readonly string RetargetShaping = Loc.Localize("Parts.Retarget.Shaping", "Bending the model into the shape the bodies are made for…");
 
+    /// <summary>{0} is the race of the model open, {1} the race picked below it.</summary>
+    public readonly string RetargetLoweredFmt = Loc.Localize("Parts.Retarget.Lowered.Fmt",
+        "A {1} model is made from the {0} model, bent into the {1} shape the way the game bends between them. Saving adds the metadata the game needs.");
+
     public readonly string RetargetShapedDownFmt = Loc.Localize("Parts.Retarget.ShapedDown.Fmt",
         "There are no {0} bodies to refit between, so the {0} model is refitted in the {1} shape, the way the game bends it, and saved back as {0}.");
 
@@ -3048,7 +3167,47 @@ public sealed class PartsStrings
     public readonly string RetargetRaceLabel = Loc.Localize("Parts.Retarget.Race.Label", "Refit for");
 
     public readonly string RetargetRaceTip = Loc.Localize("Parts.Retarget.Race.Tip",
-        "Which race the refit is for. Another race of the garment's sex gets its own model, made from this one the way the game bends it, refitted onto that race's body and saved where that race loads it. Everyone else keeps this model.");
+        "Which race the refit is for. Another race gets its own model, made from this one the way the game bends it, refitted onto that race's body and saved where that race loads it. A Midlander chest or legs garment can also be refitted for the other sex. This model stays as it is.");
+
+    /// <summary>{0} is a race of the other sex such as "Midlander M"; {1} the race of the model open.</summary>
+    public readonly string RetargetRaceOtherSexFmt = Loc.Localize("Parts.Retarget.Race.OtherSex.Fmt",
+        "{0} (refitted from this {1} model)");
+
+    /// <summary>{0} is the race of the model open, {1} the race picked (the other sex).</summary>
+    public readonly string RetargetRaceCrossSexNoteFmt = Loc.Localize("Parts.Retarget.Race.CrossSexNote.Fmt",
+        "Refitted across the sexes: the {0} bodies it was made for are bent to {1}'s shape, then matched to the new body point by point through the body maps. Check it in game before you share it.");
+
+    /// <summary>{0} is the race picked; {1} the races that also wear it, comma-separated; {2} the race of the model open.</summary>
+    public readonly string RetargetRaceCrossSexWearsFmt = Loc.Localize("Parts.Retarget.Race.CrossSexWears.Fmt",
+        "{0} will wear the saved refit, and so will {1} wherever they have no model of their own for this item; {2} keeps this model.");
+
+    /// <summary>{0} is a count of folded faces; {1} a share such as "97%".</summary>
+    public readonly string RetargetRaceCrossSexQualityFmt = Loc.Localize("Parts.Retarget.Race.CrossSexQuality.Fmt",
+        "{0} folded faces; {1} of the body matched.");
+
+    /// <summary>{0} is a race of the other sex such as "Midlander M".</summary>
+    public readonly string RetargetRaceCrossSexHintFmt = Loc.Localize("Parts.Retarget.Race.CrossSexHint.Fmt",
+        "To make a version for {0}, pick it under “Refit for”.");
+
+    /// <summary>{0} is the race of the model open, such as "Midlander F".</summary>
+    public readonly string RetargetRefuseCrossSexMadeForFmt = Loc.Localize("Parts.Retarget.Refuse.CrossSexMadeFor.Fmt",
+        "Across the sexes, the bodies this garment was made on have to be {0} bodies. Pick the body mod it was made for under “Made for body”.");
+
+    /// <summary>{0} the share of the body matched, as found; {1} the least that is saved.</summary>
+    public readonly string RetargetRefuseCrossSexCoverageFmt = Loc.Localize("Parts.Retarget.Refuse.CrossSexCoverage.Fmt",
+        "This refit across the sexes matched only {0} of the body through the body maps. Proteus only saves one that matches at least {1}.");
+
+    /// <summary>{0} is a count of cloth faces turned over.</summary>
+    public readonly string RetargetRaceCrossSexFoldedFmt = Loc.Localize("Parts.Retarget.Race.CrossSexFolded.Fmt",
+        "{0:N0} cloth face(s) turned over in this refit across the sexes. A turned-over face shows as a hole in game, so check those places before you share it.");
+
+    /// <summary>{0} is the race picked; {1} a count of bones; {2} the moves, such as "ya_shiri_phys_l → iv_shiri_l".</summary>
+    public readonly string RetargetRaceBonesMovedFmt = Loc.Localize("Parts.Retarget.Race.BonesMoved.Fmt",
+        "{0}'s skeleton lacks {1} bone(s) this garment leans on. Their weight now follows the nearest bone it has, so those parts move with it rather than on their own: {2}");
+
+    /// <summary>{0} is the race picked; {1} the mod its skeleton comes from; {2} a count of bones; {3} their names.</summary>
+    public readonly string RetargetRaceNeedsSkeletonFmt = Loc.Localize("Parts.Retarget.Race.NeedsSkeleton.Fmt",
+        "{0}'s skeleton from {1} gives this model {2} bone(s) the game's own skeleton lacks ({3}). Anyone without that skeleton sees those parts pulled out of place.");
 
     /// <summary>{0} is a race such as "Midlander M".</summary>
     public readonly string RetargetRaceThisModelFmt = Loc.Localize("Parts.Retarget.Race.ThisModel.Fmt", "{0} (this model)");
@@ -3072,6 +3231,14 @@ public sealed class PartsStrings
     /// <summary>{0} is the race picked, {1} the race of the model open.</summary>
     public readonly string RetargetRaceOnlyFmt = Loc.Localize("Parts.Retarget.Race.Only.Fmt",
         "Only {0} will wear the saved refit; {1} keeps this model.");
+
+    /// <summary>{0} is the race picked, {1} the race of the model open; said for a race the open one falls back to.</summary>
+    public readonly string RetargetRaceBelowFmt = Loc.Localize("Parts.Retarget.Race.Below.Fmt",
+        "{0} will wear the saved refit, and so will every race of that sex with no model of its own for this item; {1} keeps this model.");
+
+    /// <summary>{0} is the race picked.</summary>
+    public readonly string RetargetRaceBelowExtraBonesFmt = Loc.Localize("Parts.Retarget.Race.BelowExtraBones.Fmt",
+        "This garment uses extra bones. Only {0} is given the extra skeleton for them, so on the other races that wear this refit those bones won't move.");
 
     /// <summary>{0} is the race picked.</summary>
     public readonly string RetargetRaceSourceBakedFmt = Loc.Localize("Parts.Retarget.Race.SourceBaked.Fmt",
@@ -3114,8 +3281,46 @@ public sealed class PartsStrings
     public readonly string BrushMirror = Loc.Localize("Parts.Brush.Mirror", "Mirror left/right")
                                        + "###partsBrushMirror";
 
-    public readonly string BrushMirrorTip = Loc.Localize("Parts.Brush.Mirror.Tip",
-        "Paint both sides at once, mirrored across the body's centre.");
+    /// <summary>On <see cref="BrushMirror"/>, shown under the brushes and under Move, Rotate and Scale alike.</summary>
+    public readonly string MirrorTip = Loc.Localize("Parts.Mirror.Tip",
+        "Work on both sides at once, mirrored across the body's centre. The brushes paint the mirror image too; Move, Rotate and Scale move the matching cloth on the other side the mirrored way — and, with Move skin too, the matching skin. A piece that is its own mirror stays centred.");
+
+    /// <summary>Under Move, Rotate and Scale with Mirror on: {0} selected points matched, of {1}.</summary>
+    public readonly string MoveMirrorPairedFmt = Loc.Localize("Parts.Move.Mirror.Paired.Fmt",
+        "Mirror: {0:N0} of {1:N0} selected points have a match on the other side.");
+
+    /// <summary>Added under <see cref="MoveMirrorPairedFmt"/>: {0} of the matches are locked.</summary>
+    public readonly string MoveMirrorHeldFmt = Loc.Localize("Parts.Move.Mirror.Held.Fmt",
+        "{0:N0} of the matching points are locked and stay put.");
+
+    public readonly string MoveMirrorNone = Loc.Localize("Parts.Move.Mirror.None",
+        "Mirror: nothing on the other side matches this selection, so only this side moves.");
+
+    public readonly string MoveMirrorCentred = Loc.Localize("Parts.Move.Mirror.Centred",
+        "Mirror: this selection is its own mirror, so it moves as one piece and stays centred. Sideways moves and sideways turns are left out.");
+
+    public readonly string SkinMoves = Loc.Localize("Parts.SkinMoves", "Move skin too") + "###partsSkinMoves";
+
+    public readonly string SkinMovesTip = Loc.Localize("Parts.SkinMoves.Tip",
+        "Lets the brushes and Move, Rotate and Scale move the body's skin as well as the clothes. Clothes lying on the "
+        + "skin (within about 3 cm) move with it so the body doesn't poke through; clothes further out stay put. Off, "
+        + "the skin stays exactly where the author put it.\n\n"
+        + "The brushes leave the skin's edges in place where this piece meets the next. Moving skin there with Move, "
+        + "Rotate or Scale can open a gap at the waist, wrists or neck.\n\n"
+        + "Body size and the automatic refit replace a garment's skin with the new body's, so a sculpted skin does not "
+        + "survive a refit.");
+
+    public readonly string SkinMovesNotThisBrushTip = Loc.Localize("Parts.SkinMoves.NotThisBrush.Tip",
+        "The bridge and wind brushes work on clothes only; the skin stays still under them.");
+
+    public readonly string SkinMovesPreparing = Loc.Localize("Parts.SkinMoves.Preparing", "Getting the skin ready…");
+
+    public readonly string SkinMovesBodyModelWarn = Loc.Localize("Parts.SkinMoves.BodyModel.Warn",
+        "This is a body. Garments made for it are recognised by its exact shape, so after sculpting it Body size and "
+        + "the automatic refit may no longer know which body they were made for.");
+
+    public readonly string SkinMovesFailed = Loc.Localize("Parts.SkinMoves.Failed",
+        "The skin could not be got ready, so it stays still. The log says why.");
 
     /// <summary>Added under every brush tool's tooltip.</summary>
     public readonly string BrushLockHint = Loc.Localize("Parts.Brush.Lock.Hint",
@@ -3132,8 +3337,8 @@ public sealed class PartsStrings
     public readonly string BrushUnlockAll = Loc.Localize("Parts.Brush.Lock.UnlockAll", "Unlock all")
                                           + "###partsBrushUnlockAll";
 
-    public readonly string BrushLockSkinTip = Loc.Localize("Parts.Brush.Lock.Skin.Tip",
-        "Skin never moves.");
+    public readonly string BrushLockSkinTip = Loc.Localize("Parts.Brush.Lock.SkinOff.Tip",
+        "Skin stays still while “Move skin too” is off.");
 
     /// <summary>{0} is how many model files were put back.</summary>
     public readonly string BrushRevertedFmt = Loc.Localize("Parts.Brush.Reverted.Fmt",
