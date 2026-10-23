@@ -97,13 +97,16 @@ internal static class SupportedBodies
     private const string BiboChest = "breasts - small clothes/nude - {0}/chara/equipment/e0000/model/c0201e0000_top.mdl";
     private const string BiboLegs = "bottoms - small clothes/type a - {0}/chara/equipment/e0000/model/c0201e0000_dwn.mdl";
 
-    // Rosaline's Medium and Large chests, and the Vagina A legs under its "Hip Dips" heading (the user's choice; the
-    // same name is listed again under "Round Hips", common/21). Its folders are numbered like Tre's YAS release —
-    // files/common/5 is both Rosaline's Medium chest and YAS Tre's Large one — so Find tells them apart by name.
-    private static readonly Dictionary<string, string> RosalineChest = new()
-    {
-        ["M"] = "files/common/5/c0201e0000_top.mdl", ["L"] = "files/common/6/c0201e0000_top.mdl",
-    };
+    // Rosaline's Medium, Large and Coconut chests, in that order — the order their options are added in — and the
+    // Vagina A legs under its "Hip Dips" heading (the user's choice; the same name is listed again under "Round Hips",
+    // common/21), worn under every one. Its folders are numbered like Tre's YAS release — files/common/5 is both
+    // Rosaline's Medium chest and YAS Tre's Large one — so Find tells them apart by name.
+    private static readonly (string Name, string Rel)[] RosalineChest =
+    [
+        ("M", "files/common/5/c0201e0000_top.mdl"),
+        ("L", "files/common/6/c0201e0000_top.mdl"),
+        ("Coconut", "files/common/7/c0201e0000_top.mdl"),
+    ];
     private const string RosalineLegs = "files/common/13/c0201e0000_dwn.mdl";
 
     // The men's bodies: one chest each (Midlander, which Miqo'te, Au Ra, Elezen and Viera men share) and their SFW legs.
@@ -141,7 +144,7 @@ internal static class SupportedBodies
         Chests("tre", "Tre", false, s => TreChest[s], s => TreLegs[s]),
         Chests("tre", "Tre", true, s => TreYasChest[s], s => TreYasLegs[s]),
         new("rosaline", "Rosaline", "_top", false,
-            RosalineChest.Select(c => new Size(c.Key, c.Value, RosalineLegs)).ToList()),
+            RosalineChest.Select(c => new Size(c.Name, c.Rel, RosalineLegs)).ToList()),
 
         // ── legs garments: sized the way legs mods name them — Rue and YAB by their hips, Tre by its two sizes ──
         new("neolithe", "Neolithe", "_dwn", false,

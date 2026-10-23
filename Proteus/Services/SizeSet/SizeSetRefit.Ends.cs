@@ -62,10 +62,11 @@ internal static partial class SizeSetRefit
     }
 
     private static int RunEndsPiece(Request request, Piece piece, UVRemapService? uvRemap, IPluginLog log,
-                                    Action<string> progress, List<string> notes,
+                                    Action<string> progress, RunLog runLog,
                                     Dictionary<string, AutoRefitDecisions.Pick?> readings,
                                     Dictionary<string, string> leadSources, CancellationToken ct)
     {
+        var notes = runLog.Notes;
         string root = request.ModRoot;
         string race = piece.Race;
         bool male = BodySizeCatalog.IsMaleRace(race);
@@ -75,10 +76,15 @@ internal static partial class SizeSetRefit
         string sizeSlot = gloves || piece.FollowsChest ? "_top" : "_dwn";
         bool follows = piece.FollowsChest || piece.FollowsLegs;
 
-        if (!request.Keys.Any(k => ForRace(k, sizeSlot, race))) return 0;
+        if (!request.Keys.Any(k => ForRace(k, sizeSlot, race)))
+        {
+            runLog.Add(piece, SizeStatus.Skipped, Codes.NoBodyForRace, "none of the bodies asked for is of its race");
+            return 0;
+        }
         if (piece.Unpaired)
         {
-            notes.Add(string.Format(Strings.SizeSet.UnpairedFmt, piece.Label));
+            runLog.Note(string.Format(Strings.SizeSet.UnpairedFmt, piece.Label), piece, SizeStatus.Skipped, Codes.Unpaired,
+                        piece.Group);
             return 0;
         }
 
@@ -87,7 +93,7 @@ internal static partial class SizeSetRefit
         var mods = request.Bodies.Select(b => (b.Dir, b.Catalog)).ToList();
         if (mods.Count == 0)
         {
-            notes.Add(Strings.SizeSet.NoBodies);
+            runLog.Note(Strings.SizeSet.NoBodies, piece, SizeStatus.Skipped, Codes.NoBodies);
             return 0;
         }
         using var nearness = BodySizeMatch.BeginReading();
@@ -162,8 +168,9 @@ internal static partial class SizeSetRefit
         }
         if (primary is not { } src)
         {
-            notes.Add(string.Format(anyRead ? Strings.SizeSet.UnreadableFmt : Strings.SizeSet.EndsUnreadableFmt,
-                                    piece.Label));
+            runLog.Note(string.Format(anyRead ? Strings.SizeSet.UnreadableFmt : Strings.SizeSet.EndsUnreadableFmt,
+                                      piece.Label), piece, SizeStatus.Skipped,
+                        anyRead ? Codes.Unreadable : Codes.EndsUnreadable, piece.Group ?? piece.GroupName);
             return 0;
         }
 
@@ -185,7 +192,9 @@ internal static partial class SizeSetRefit
         {
             ct.ThrowIfCancellationRequested();
             if (!ForRace(key, sizeSlot, race)) continue;
-            var (body, target) = BodyFor(key, sizeSlot, yas, request.Bodies, sourceEntry, notes, piece.Label);
+            var (body, target, missing) = BodyFor(key, sizeSlot, yas, request.Bodies, sourceEntry, notes, piece.Label);
+            if (missing != null)
+                runLog.Add(piece, SizeStatus.Skipped, Codes.NotInstalled, missing, group.Name, body: key, yas: yas);
             if (body == null || target == null) continue;
             var targetCat = target.Catalog;
             ushort? targetMask(string slot) => RefitCore.MaskOf(target.Dir, targetCat, slot, null);
@@ -194,9 +203,14 @@ internal static partial class SizeSetRefit
             foreach (var (option, size, fixedRel) in EndTargets(body, piece, gloves, skinOnly, follows, primaryAcross, pick))
             {
                 ct.ThrowIfCancellationRequested();
+                var clock = System.Diagnostics.Stopwatch.StartNew();
+                void Out(SizeStatus status, string? code, string? reason, string? from = null, Measures? measures = null)
+                    => runLog.Add(piece, status, code, reason, group.Name, option, key, target!.Dir, body!.Yas, from: from,
+                                  measures: measures, seconds: status == SizeStatus.Made ? clock.Elapsed.TotalSeconds : null);
                 if (group.AlreadyThere(option, request.Remake))
                 {
                     log.Information("[Proteus] size set: {0}: \"{1}\" already there", piece.Label, option);
+                    AlreadyOut(group, option, (code, why) => Out(SizeStatus.Skipped, code, why));
                     continue;
                 }
                 // A follower only joins a size what it follows made: one made here alone would wear the author's
@@ -204,6 +218,7 @@ internal static partial class SizeSetRefit
                 if (follows && !group.Ours.Contains(option))
                 {
                     log.Information("[Proteus] size set: {0}: no \"{1}\" to join", piece.Label, option);
+                    Out(SizeStatus.Skipped, Codes.NoChestOption, $"no \"{option}\" to join");
                     continue;
                 }
 
@@ -229,9 +244,11 @@ internal static partial class SizeSetRefit
                     {
                         Note($"{option} left out: {why}");
                         // "Left as it was" only of a refit an earlier run made there; one never made says to make it.
-                        notes.Add(string.Format(request.Remake && group.Carries(option) ? Strings.SizeSet.EndNoLeadSourceRemakeFmt
-                                                                                        : Strings.SizeSet.EndNoLeadSourceFmt,
-                                                piece.Label, option));
+                        string said = string.Format(request.Remake && group.Carries(option) ? Strings.SizeSet.EndNoLeadSourceRemakeFmt
+                                                                                            : Strings.SizeSet.EndNoLeadSourceFmt,
+                                                    piece.Label, option);
+                        notes.Add(said);
+                        Out(SizeStatus.Skipped, Codes.EndNoLead, said);
                         continue;
                     }
                     (from, sourceOption) = (led!, leadOption);
@@ -257,6 +274,7 @@ internal static partial class SizeSetRefit
                 if (limbRel == null && !skinOnly)
                 {
                     log.Information("[Proteus] size set: {0}: {1} has no legs of its own", piece.Label, option);
+                    Out(SizeStatus.Skipped, Codes.NoOwnLegs, "no legs of its own: keeps the author's");
                     continue;
                 }
 
@@ -264,7 +282,9 @@ internal static partial class SizeSetRefit
                 if (limbRel != null && OptionByFile(targetCat.For(limb, race), limbRel) is { } found) to = found;
                 if (!skinOnly && to == null)
                 {
-                    notes.Add(string.Format(Strings.SizeSet.NoSuchSizeFmt, piece.Label, option, target.Name));
+                    string said = string.Format(Strings.SizeSet.NoSuchSizeFmt, piece.Label, option, target.Name);
+                    notes.Add(said);
+                    Out(SizeStatus.Skipped, Codes.NoSuchSize, said);
                     continue;
                 }
 
@@ -273,34 +293,45 @@ internal static partial class SizeSetRefit
                 if (skinOnly)
                 {
                     // Its shape is the author's at every size: only its skin, drawn the way this body draws its own.
-                    if (AutoRefitDecisions.Companion(targetCat.For(piece.Slot, race), to, null) is not { } end) continue;
+                    if (AutoRefitDecisions.Companion(targetCat.For(piece.Slot, race), to, null) is not { } end)
+                    {
+                        Out(SizeStatus.Skipped, Codes.NoEnd, $"{target.Name} has no {SlotName(piece.Slot)} to draw its skin by");
+                        continue;
+                    }
                     var model = RefitCore.MatchSkinToBody(from.Bytes, sourcePath, targetCat.PathOf(end), uvRemap, male, log);
                     if (ReferenceEquals(model, from.Bytes))
                     {
                         log.Information("[Proteus] size set: {0}: its skin already matches {1}", piece.Label, option);
+                        Out(SizeStatus.Skipped, Codes.SameSkin, "its skin already matches");
                         continue;
                     }
                     log.Information("[Proteus] size set: {0}: skin drawn like {1}", piece.Label, option);
                     ct.ThrowIfCancellationRequested();
-                    group.Save(target.Dir, fromLabel, [new BodyRetargetWriter.Refit(option, model, KeepEnds.SkinOnlyLabel)],
-                               sourceOption, notes);
+                    if (group.Save(target.Dir, fromLabel, [new BodyRetargetWriter.Refit(option, model, KeepEnds.SkinOnlyLabel)],
+                                   sourceOption, notes))
+                        Out(SizeStatus.Made, null, null, fromLabel, Measures.SkinOnlyEnd);
+                    else
+                        Out(SizeStatus.Skipped, Codes.SaveFailed, notes[^1]);
                     continue;
                 }
 
                 if (AutoRefitDecisions.SameFile(fromPick.Dir, fromPick.Option, target.Dir, to!))
                 {
                     log.Information("[Proteus] size set: {0}: {1} is the size it was made on", piece.Label, option);
+                    Out(SizeStatus.Skipped, Codes.MadeOnIt, "the size it was made on");
                     continue;
                 }
                 if (!across && KeepEnds.SameShape(from.Reading.LimbView, fromPick.Option, to!, sourceCat, from.Bones, fromPick.FromCloth))
                 {
                     log.Information("[Proteus] size set: {0}: {1} is the same shape as the size it was made on",
                                     piece.Label, option);
+                    Out(SizeStatus.Skipped, Codes.MadeOnIt, "the same shape as the size it was made on");
                     continue;
                 }
                 if (AuthorHas(authorSizes, targetCat, to!, limb, race) is { } theirs)
                 {
                     log.Information("[Proteus] size set: {0}: {1} is the author's own \"{2}\"", piece.Label, option, theirs);
+                    Out(SizeStatus.Skipped, Codes.AuthorsOwn, $"the author's own \"{theirs}\"");
                     continue;
                 }
 
@@ -314,6 +345,7 @@ internal static partial class SizeSetRefit
                                         out var limbPair, out var endPair) is { } refusal)
                 {
                     notes.Add(string.Format(Strings.SizeSet.RefusedFmt, piece.Label, option, refusal));
+                    Out(SizeStatus.Refused, Codes.RefusedPair, refusal);
                     continue;
                 }
                 // Kept outside its chest or legs piece's refit in this very option, made before it in the run.
@@ -341,11 +373,15 @@ internal static partial class SizeSetRefit
                 // One save per size, as a chest's: each names the size it was cut from.
                 // Stopped while this size was made: it is not saved — Stop keeps what was saved before it.
                 ct.ThrowIfCancellationRequested();
-                group.Save(target.Dir, fromLabel,
-                           [new BodyRetargetWriter.Refit(option, plan.Model, to!.Label,
-                                                         outfit != null ? OutfitPartners.LayersOf(root, partner!) : null,
-                                                         plan.Materials)],
-                           sourceOption, notes);
+                int folded = CrossSexRefit.ClothFolded(from.Bytes, plan);
+                if (group.Save(target.Dir, fromLabel,
+                               [new BodyRetargetWriter.Refit(option, plan.Model, to!.Label,
+                                                             outfit != null ? OutfitPartners.LayersOf(root, partner!) : null,
+                                                             plan.Materials)],
+                               sourceOption, notes))
+                    Out(SizeStatus.Made, null, null, fromLabel, Measures.Of(plan, folded));
+                else
+                    Out(SizeStatus.Skipped, Codes.SaveFailed, notes[^1]);
             }
         }
         group.RestoreDefault();

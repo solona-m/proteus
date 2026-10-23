@@ -1680,7 +1680,8 @@ public class SizeSetRefitTests(ITestOutputHelper output)
     /// so with both installed each must still be found in its own mod, chest and legs.
     /// </summary>
     [LocalDataFact(Rosaline, TreYas)]
-    public void Rosaline_and_YAS_Tre_are_told_apart()
+    [Trait("Plan", "EDGE-headless-size-set-10")]
+    public void Rosaline_and_YAS_Tre_are_told_apart() // [EDGE-headless-size-set-10]
     {
         string modsRoot = LocalData.Path(LocalData.Mods);
         var mods = new[] { Rosaline, TreYas }.Select(n => Path.GetFileName(LocalData.Path(n))).ToDictionary(d => d, d => d);
@@ -1695,16 +1696,20 @@ public class SizeSetRefitTests(ITestOutputHelper output)
         }
         Assert.True(SupportedBodies.Installed("rosaline", bodies));
 
-        // Its sizes are the table's: M and L tops onto the Hip Dips Vagina A legs, and that one legs size.
+        // Its sizes are the table's: M, L and Coconut tops onto the Hip Dips Vagina A legs, and that one legs size.
         var tops = SupportedBodies.Of("rosaline", "_top", false)!;
-        Assert.Equal(["Rosaline M", "Rosaline L"], tops.Sizes.Select(s => SupportedBodies.OptionName(tops, s)));
+        Assert.Equal(["Rosaline M", "Rosaline L", "Rosaline Coconut"], tops.Sizes.Select(s => SupportedBodies.OptionName(tops, s)));
+        // Coconut too is found in Rosaline, not YAS Tre, which numbers a folder 7 as well.
+        var catalog = bodies.Single(b => b.Dir == Path.GetFileName(LocalData.Path(Rosaline))).Catalog;
+        Assert.Contains(catalog.For("_top"), o => RefitCore.Normal(o.Rel) == RefitCore.Normal(tops.Sizes[2].Rel));
         var legs = SupportedBodies.Of("rosaline", "_dwn", false)!;
         Assert.Equal(["Rosaline"], legs.Sizes.Select(s => SupportedBodies.OptionName(legs, s)));
     }
 
-    /// <summary>This Old Thing, made on Neolithe, gains Rosaline M and L — its chest and hips pair with Neolithe's.</summary>
+    /// <summary>This Old Thing, made on Neolithe, gains Rosaline M, L and Coconut — its chest and hips pair with Neolithe's.</summary>
     [LocalDataFact(ThisOldThing, Neolithe, Rosaline)]
-    public void A_Neolithe_top_gains_Rosaline_M_and_L()
+    [Trait("Plan", "AC-headless-size-set-7")]
+    public void A_Neolithe_top_gains_Rosaline_M_L_and_Coconut() // [AC-headless-size-set-7]
     {
         string copy = Path.Combine(Path.GetTempPath(), "proteus-sizeset-" + Guid.NewGuid().ToString("N"));
         try
@@ -1712,8 +1717,8 @@ public class SizeSetRefitTests(ITestOutputHelper output)
             CopyModels(LocalData.Path(ThisOldThing), copy);
             var before = Options(copy);
             var (result, _) = RunOn(copy, ["rosaline"], Neolithe, Rosaline);
-            Assert.Equal(["Rosaline M", "Rosaline L"], Options(copy).Except(before));
-            Assert.Equal(2, result.Made);
+            Assert.Equal(["Rosaline M", "Rosaline L", "Rosaline Coconut"], Options(copy).Except(before));
+            Assert.Equal(3, result.Made);
         }
         finally
         {
