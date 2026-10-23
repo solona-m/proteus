@@ -250,10 +250,7 @@ internal sealed class SizeSetPanel(PenumbraBridge penumbra, UVRemapService uvRem
 
         // The game's own body, which a shoe or glove may have been made on, read here: the game's data is read on this
         // thread, and a read that failed on the worker would leave the automatic refit without the game's body too.
-        var gameBodies = new Dictionary<string, BodySizeCatalog>(StringComparer.Ordinal);
-        if (config.SizeSetEnds)
-            foreach (string race in keys.Select(k => SupportedBodies.Of(k, "_top", false)?.Race).OfType<string>().Distinct())
-                gameBodies[race] = VanillaBodyCatalog.Read(race, readGameFile);
+        var gameBodies = SizeSetRefit.GameBodies(keys, readGameFile, config.SizeSetEnds);
         // A women's mod's men's versions are made for the men's skeleton the player's collection gives (IVCS when
         // installed), asked for here — IPC — once; the game's own when Penumbra gives nothing.
         SizeSetRefit.AcrossInputs? across = null;
