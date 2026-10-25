@@ -5283,8 +5283,8 @@
     "message": "种族变形器不知道如何移动 {0}",
     "description": ""
   },
-  "HairPort.Fit.Fmt": {
-    "message": "它无法贴合 c{0:D4} 的头部：{1:P0} 陷入头骨，且与头皮的距离和原版相差 {2:F0} mm；请在游戏中检查",
+  "HairPort.Refused.Fit.Fmt": {
+    "message": "它无法贴合 c{0:D4} 的头部：{1:P0} 陷入头骨，且与头皮的距离和原版相差 {2:F0} mm",
     "description": ""
   },
   "HairPort.Refused.NotHair": {

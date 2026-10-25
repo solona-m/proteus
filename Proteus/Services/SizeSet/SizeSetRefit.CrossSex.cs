@@ -357,37 +357,18 @@ internal static partial class SizeSetRefit
     }
 
     private static int RunAcross(Request request, IReadOnlyList<Piece> pieces, UVRemapService? uvRemap, IPluginLog log,
-                                 Action<string> progress, RunLog runLog, CancellationToken ct)
+                                 Action<string> progress, List<string> notes, List<string> warnings, CancellationToken ct)
     {
-        var notes = runLog.Notes;
         var mensKeys = MensKeys(request.Keys);
         if (request.Across is not { } inputs || mensKeys.Count == 0) return 0;
+        if (request.Ends && pieces.Any(p => p.Race == "0201" && IsEnd(p.Slot))) notes.Add(Strings.SizeSet.EndsNotForMen);
         var across = AcrossPieces(pieces);
-        if (request.Ends && pieces.Any(p => p.Race == "0201" && IsEnd(p.Slot)))
-        {
-            notes.Add(Strings.SizeSet.EndsNotForMen);
-            foreach (var end in pieces.Where(p => p.Race == "0201" && IsEnd(p.Slot)))
-                foreach (string key in mensKeys)
-                    runLog.Add(end, SizeStatus.Skipped, Codes.EndsNotForMen, Strings.SizeSet.EndsNotForMen, body: key,
-                               men: true);
-        }
         if (across.Count == 0) return 0;
 
-        // Every piece and men's body, when none is made at all.
-        void NoneMade(string code, string reason, string? group)
-        {
-            foreach (var piece in across)
-                foreach (string key in mensKeys)
-                    runLog.Add(piece, SizeStatus.Skipped, code, reason, group,
-                               AcrossTarget(key, piece.Slot) is { } at ? SupportedBodies.OptionName(at.Body, at.Size) : null,
-                               key, men: true, gamePath: RacialModelBake.WithRace(piece.GamePath, CrossSexRefit.Men));
-        }
         string groupName = MensGroupName(request.ModRoot, across);
         if (BodyRetargetWriter.IsAuthorGroup(request.ModRoot, groupName))
         {
-            string said = string.Format(Strings.SizeSet.MensGroupTakenFmt, groupName);
-            notes.Add(said);
-            NoneMade(Codes.MenGroupTaken, said, groupName);
+            notes.Add(string.Format(Strings.SizeSet.MensGroupTakenFmt, groupName));
             return 0;
         }
         // Without the maps no body is matched across the sexes: one note, nothing bent or written.
@@ -395,14 +376,12 @@ internal static partial class SizeSetRefit
         {
             uvRemap?.RequestMenMaps();
             notes.Add(Strings.SizeSet.MenMapsMissing);
-            NoneMade(Codes.MenMapsMissing, Strings.SizeSet.MenMapsMissing, groupName);
             log.Information("[Proteus] size set: no men's versions: the body maps are not here yet");
             return 0;
         }
         if (request.ReadGameFile == null)
         {
             log.Information("[Proteus] size set: no men's versions: the game's data is not readable here");
-            NoneMade(Codes.NoGameData, "the game's data is not readable here", groupName);
             return 0;
         }
 
@@ -414,7 +393,7 @@ internal static partial class SizeSetRefit
             ct.ThrowIfCancellationRequested();
             try
             {
-                made += RunAcrossPiece(request, inputs, piece, groupName, mensKeys, uvRemap, log, progress, runLog,
+                made += RunAcrossPiece(request, inputs, piece, groupName, mensKeys, uvRemap, log, progress, notes, warnings,
                                        readings, leadSources, ct);
             }
             catch (OperationCanceledException)
@@ -424,9 +403,7 @@ internal static partial class SizeSetRefit
             catch (Exception e)
             {
                 log.Error(e, "[Proteus] size set: {0} for men failed", piece.GamePath);
-                runLog.Note(string.Format(Strings.SizeSet.PieceFailedFmt, piece.Label, e.Message), piece, SizeStatus.Failed,
-                            Codes.PieceFailed, groupName, men: true,
-                            gamePath: RacialModelBake.WithRace(piece.GamePath, CrossSexRefit.Men));
+                notes.Add(string.Format(Strings.SizeSet.PieceFailedFmt, piece.Label, e.Message));
             }
         }
         return made;
@@ -434,21 +411,17 @@ internal static partial class SizeSetRefit
 
     private static int RunAcrossPiece(Request request, AcrossInputs inputs, Piece piece, string groupName,
                                       IReadOnlyList<string> mensKeys, UVRemapService uvRemap, IPluginLog log,
-                                      Action<string> progress, RunLog runLog,
+                                      Action<string> progress, List<string> notes, List<string> warnings,
                                       Dictionary<string, AutoRefitDecisions.Pick?> readings,
                                       Dictionary<string, string> leadSources, CancellationToken ct)
     {
-        var notes = runLog.Notes;
-        var warnings = runLog.Warnings;
         string root = request.ModRoot;
-        string save = RacialModelBake.WithRace(piece.GamePath, CrossSexRefit.Men);
         void Note(string note) => log.Information("[Proteus] size set: {0} for men: {1}", piece.Label, note);
         progress(string.Format(Strings.SizeSet.ReadingFmt, piece.Label));
         var mods = request.Bodies.Select(b => (b.Dir, b.Catalog)).ToList();
         if (mods.Count == 0)
         {
-            runLog.Note(Strings.SizeSet.NoBodies, piece, SizeStatus.Skipped, Codes.NoBodies, groupName, men: true,
-                        gamePath: save);
+            notes.Add(Strings.SizeSet.NoBodies);
             return 0;
         }
         var clock = Stopwatch.StartNew();
@@ -457,48 +430,36 @@ internal static partial class SizeSetRefit
         var sources = new Sources(request, piece, preferred, mods, readings, Note, ct);
         if (sources.Primary == null)
         {
-            runLog.Note(string.Format(Strings.SizeSet.UnreadableFmt, piece.Label), piece, SizeStatus.Skipped,
-                        Codes.Unreadable, groupName, men: true, gamePath: save);
+            notes.Add(string.Format(Strings.SizeSet.UnreadableFmt, piece.Label));
             return 0;
         }
         var redirects = PenumbraModMeta.ReadAllRedirects(root);
         var mens = new MensSources(request, inputs, piece, sources, redirects, log, Note);
+        string save = RacialModelBake.WithRace(piece.GamePath, CrossSexRefit.Men);
 
         BodySizeMatch.NeedNear(sources.Choices.Count + 2 * mensKeys.Count);
         using var group = new SizeGroup(root, piece, groupName, save);
         int saved = 0;
-        for (int k = 0; k < mensKeys.Count; k++)
+        foreach (string key in mensKeys)
         {
-            string key = mensKeys[k];
             ct.ThrowIfCancellationRequested();
             if (AcrossTarget(key, piece.Slot) is not { } at) continue;
             var (body, size, rel) = at;
             string option = SupportedBodies.OptionName(body, size);
-            var sizeClock = Stopwatch.StartNew();
-            void Out(SizeStatus status, string? code, string? reason, string? bodyMod, string? from = null,
-                     Measures? measures = null, string? cutFrom = null)
-                => runLog.Add(piece, status, code, reason, group.Name, option, key, bodyMod, yas: false, men: true,
-                              from: from, cutFrom: cutFrom, measures: measures,
-                              seconds: status == SizeStatus.Made ? sizeClock.Elapsed.TotalSeconds : null, gamePath: save);
             if (SupportedBodies.Find(body, request.Bodies) is not { } target)
             {
-                string left = string.Format(Strings.SizeSet.NotInstalledFmt, piece.Label, body.Label);
-                notes.Add(left);
-                Out(SizeStatus.Skipped, Codes.NotInstalled, left, null);
+                notes.Add(string.Format(Strings.SizeSet.NotInstalledFmt, piece.Label, body.Label));
                 continue;
             }
             if (group.AlreadyThere(option, request.Remake))
             {
                 log.Information("[Proteus] size set: {0} for men: \"{1}\" already there", piece.Label, option);
-                AlreadyOut(group, option, (code, why) => Out(SizeStatus.Skipped, code, why, target.Dir));
                 continue;
             }
             var men = OtherRaceRefit.OnlyRace(target.Catalog, CrossSexRefit.Men);
             if (OptionByFile(men.For(piece.Slot), rel) is not { } onto)
             {
-                string left = string.Format(Strings.SizeSet.NoSuchSizeFmt, piece.Label, option, target.Name);
-                notes.Add(left);
-                Out(SizeStatus.Skipped, Codes.NoSuchSize, left, target.Dir);
+                notes.Add(string.Format(Strings.SizeSet.NoSuchSizeFmt, piece.Label, option, target.Name));
                 continue;
             }
             string targetPath = men.PathOf(onto);
@@ -517,15 +478,7 @@ internal static partial class SizeSetRefit
                 if (mens.Nearest(targetPath, option) is not { } nearest)
                 {
                     // None may be crossed: no other men's body would find one either.
-                    string left = NoSourceNote(piece.Label, option, mens.WearerRefusal);
-                    notes.Add(left);
-                    Out(SizeStatus.Skipped, Codes.NoSourceMen, left, target.Dir);
-                    // Nor for the men's bodies after it: each is said so.
-                    foreach (string rest in mensKeys.Skip(k + 1))
-                        if (AcrossTarget(rest, piece.Slot) is { } restAt)
-                            runLog.Add(piece, SizeStatus.Skipped, Codes.NoSourceMen, left, group.Name,
-                                       SupportedBodies.OptionName(restAt.Body, restAt.Size), rest,
-                                       SupportedBodies.Find(restAt.Body, request.Bodies)?.Dir, men: true, gamePath: save);
+                    notes.Add(NoSourceNote(piece.Label, option, mens.WearerRefusal));
                     break;
                 }
                 chosen = nearest.Chosen;
@@ -547,23 +500,14 @@ internal static partial class SizeSetRefit
             if (!ok)
             {
                 notes.Add(refusal!);
-                Out(SizeStatus.Refused, Codes.RefusedMen, refusal, target.Dir);
                 continue;
             }
 
             ct.ThrowIfCancellationRequested();
-            string fromLabel = RefitCore.LabelFrom(c.Entry.Name, [c.Pick!.Option.Label]);
-            if (!group.Save(target.Dir, fromLabel,
+            if (!group.Save(target.Dir, RefitCore.LabelFrom(c.Entry.Name, [c.Pick!.Option.Label]),
                             [new BodyRetargetWriter.Refit(option, made!.Saved!.Model, onto.Label, Materials: made.Saved.Materials)],
                             sourceOption: null, notes, manipulations: MensManipulations(job.Route, job.Est, save)))
-            {
-                Out(SizeStatus.Failed, Codes.SaveFailed, notes[^1], target.Dir);
                 continue;
-            }
-            Out(SizeStatus.Made, null, null, target.Dir, fromLabel,
-                made.Plan is { } p ? Measures.Of(p, made.Folds, made.Landed?.VertexCoverage)
-                                   : new Measures(made.Folds, null, null, null, null, null, null, made.Landed?.VertexCoverage),
-                c.Option);
             saved++;
             warnings.AddRange(said);
             // The first piece of an outfit to make an option leads it; legs following the chest never do.

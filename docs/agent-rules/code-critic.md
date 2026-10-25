@@ -41,10 +41,7 @@ code keys match `en.json`).
 - **Never author Penumbra v3.** Writes go through `PenumbraModMeta` at
   `SingleFileVersion` (4); a v3 folder is refused (`IsLegacyFolder` /
   `LegacyFolderException`), never written or upgraded in place. Otherwise the
-  mod is half-migrated and Penumbra misreads it. `FAIL`. Diff-scoped. The one
-  exception: `PenumbraModMeta.MigrateWorkCopy`, which converts a work copy
-  outside Penumbra's mod folder whole, for the headless size set; it refuses
-  anything under that folder.
+  mod is half-migrated and Penumbra misreads it. `FAIL`. Diff-scoped.
 - **Append option groups, never insert or reorder them.** Penumbra keeps a
   user's settings by group *position*, so inserting a group shifts every
   later group's saved selection onto the wrong group. `FAIL`. Diff-scoped.

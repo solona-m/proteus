@@ -70,7 +70,19 @@ internal static class LocalData
     }
 
     /// <summary>Whether a file opens as a TIFF; an LFS pointer begins "version https://…".</summary>
-    private static bool IsTiff(string path) => Proteus.Services.UvMapFiles.IsMap(path);
+    private static bool IsTiff(string path)
+    {
+        try
+        {
+            using var s = File.OpenRead(path);
+            Span<byte> magic = stackalloc byte[4];
+            if (s.Read(magic) < 4) return false;
+            return (magic[0] == (byte)'I' && magic[1] == (byte)'I' && magic[2] == 42 && magic[3] == 0)
+                || (magic[0] == (byte)'M' && magic[1] == (byte)'M' && magic[2] == 0 && magic[3] == 42);
+        }
+        catch (IOException) { return false; }
+        catch (UnauthorizedAccessException) { return false; }
+    }
 
     /// <summary>
     /// The one entry of a .pmp whose path ends in <paramref name="suffix"/>. By ending, so folder names a pack spells in

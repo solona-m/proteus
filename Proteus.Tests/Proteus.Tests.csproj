@@ -72,9 +72,6 @@
 
   <ItemGroup>
     <ProjectReference Include="..\Proteus\Proteus.csproj" />
-    <!-- The headless CLI, driven through Program.Dispatch by the size set's command tests. Aliased: its namespace,
-         Proteus.Refit, would otherwise hide the Refit the tests already name. -->
-    <ProjectReference Include="..\Proteus.Refit\Proteus.Refit.csproj" Aliases="RefitCli" />
   </ItemGroup>
 
   <!-- Real .mtrl used by MtrlParseTests to check the parser against the actual file format rather than

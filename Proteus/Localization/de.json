@@ -5283,8 +5283,8 @@
     "message": "der Volks-Deformer weiß nicht, wie er {0} bewegen soll",
     "description": ""
   },
-  "HairPort.Fit.Fmt": {
-    "message": "sie sitzt nicht auf dem Kopf von c{0:D4}: {1:P0} davon sinken in den Schädel ein, und ihr Abstand zur Kopfhaut weicht um {2:F0} mm vom Original ab; prüfe es im Spiel",
+  "HairPort.Refused.Fit.Fmt": {
+    "message": "sie sitzt nicht auf dem Kopf von c{0:D4}: {1:P0} davon sinken in den Schädel ein, und ihr Abstand zur Kopfhaut weicht um {2:F0} mm vom Original ab",
     "description": ""
   },
   "HairPort.Refused.NotHair": {

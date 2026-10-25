@@ -45,10 +45,6 @@
   </ItemGroup>
 
   <ItemGroup>
-    <InternalsVisibleTo Include="Proteus.Tests" />
-  </ItemGroup>
-
-  <ItemGroup>
     <ProjectReference Include="..\Proteus\Proteus.csproj" />
   </ItemGroup>
 

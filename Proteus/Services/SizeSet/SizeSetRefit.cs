@@ -199,25 +199,13 @@ internal static partial class SizeSetRefit
     internal static Result Run(Request request, UVRemapService? uvRemap, IPluginLog log, Action<string> progress,
                                CancellationToken ct)
     {
-        var runLog = new RunLog();
-        int made = Run(request, runLog, uvRemap, log, progress, ct);
-        return new Result(made, runLog.Notes.Distinct(StringComparer.Ordinal).ToList(),
-                          runLog.Warnings.Distinct(StringComparer.Ordinal).ToList());
-    }
-
-    /// <inheritdoc cref="Run(Request, UVRemapService?, IPluginLog, Action{string}, CancellationToken)"/>
-    /// <param name="runLog">Filled as the run goes: what it says, and every size's outcome — kept when it is stopped.</param>
-    /// <returns>Models saved, as <see cref="Result.Made"/> counts them.</returns>
-    internal static int Run(Request request, RunLog runLog, UVRemapService? uvRemap, IPluginLog log, Action<string> progress,
-                            CancellationToken ct)
-    {
-        var notes = runLog.Notes;
+        var notes = new List<string>();
         int made = 0;
         var pieces = PiecesOf(request.ModRoot, request.ReadGameFile, request.Ends);
         if (pieces.Count == 0)
         {
-            NoPieces(runLog);
-            return 0;
+            notes.Add(Strings.SizeSet.NoPieces);
+            return new Result(0, notes);
         }
 
         // What each author's file was read as this run, so a glove sized by the top beside it in its option reads that
@@ -231,8 +219,8 @@ internal static partial class SizeSetRefit
             ct.ThrowIfCancellationRequested();
             try
             {
-                made += IsEnd(piece.Slot) ? RunEndsPiece(request, piece, uvRemap, log, progress, runLog, readings, leadSources, ct)
-                                          : RunPiece(request, piece, uvRemap, log, progress, runLog, readings, leadSources, ct);
+                made += IsEnd(piece.Slot) ? RunEndsPiece(request, piece, uvRemap, log, progress, notes, readings, leadSources, ct)
+                                          : RunPiece(request, piece, uvRemap, log, progress, notes, readings, leadSources, ct);
             }
             catch (OperationCanceledException)
             {
@@ -241,28 +229,14 @@ internal static partial class SizeSetRefit
             catch (Exception e)
             {
                 log.Error(e, "[Proteus] size set: {0} failed", piece.GamePath);
-                runLog.Note(string.Format(Strings.SizeSet.PieceFailedFmt, piece.Label, e.Message), piece, SizeStatus.Failed,
-                            Codes.PieceFailed, piece.Group ?? piece.GroupName);
+                notes.Add(string.Format(Strings.SizeSet.PieceFailedFmt, piece.Label, e.Message));
             }
         }
         // The women's chest and legs pieces' men's versions, after every piece's own sizes.
-        made += RunAcross(request, pieces, uvRemap, log, progress, runLog, ct);
-        return made;
-    }
-
-    /// <summary>
-    /// The game's own body for each race of the ticked bodies, which a shoe or glove may have been made on (see
-    /// <see cref="Request.GameBody"/>); none when shoes and gloves are left out. Reads the game's data: the panel calls it
-    /// on the framework thread.
-    /// </summary>
-    internal static Dictionary<string, BodySizeCatalog> GameBodies(IEnumerable<string> keys, Func<string, byte[]?> readGameFile,
-                                                                  bool ends)
-    {
-        var gameBodies = new Dictionary<string, BodySizeCatalog>(StringComparer.Ordinal);
-        if (ends)
-            foreach (string race in keys.Select(k => SupportedBodies.Of(k, "_top", false)?.Race).OfType<string>().Distinct())
-                gameBodies[race] = VanillaBodyCatalog.Read(race, readGameFile);
-        return gameBodies;
+        var warnings = new List<string>();
+        made += RunAcross(request, pieces, uvRemap, log, progress, notes, warnings, ct);
+        return new Result(made, notes.Distinct(StringComparer.Ordinal).ToList(),
+                          warnings.Distinct(StringComparer.Ordinal).ToList());
     }
 
     /// <summary>
@@ -282,11 +256,10 @@ internal static partial class SizeSetRefit
                        .FirstOrDefault(d => d != null) ?? fallback;
 
     private static int RunPiece(Request request, Piece piece, UVRemapService? uvRemap, IPluginLog log,
-                                Action<string> progress, RunLog runLog,
+                                Action<string> progress, List<string> notes,
                                 Dictionary<string, AutoRefitDecisions.Pick?> readings,
                                 Dictionary<string, string> leadSources, CancellationToken ct)
     {
-        var notes = runLog.Notes;
         string root = request.ModRoot;
         string race = piece.Race;
         bool male = BodySizeCatalog.IsMaleRace(race);
@@ -296,18 +269,14 @@ internal static partial class SizeSetRefit
         // A man's piece with only women's bodies ticked, or the other way about, has nothing to go to: not read at all,
         // and nothing to say — a unisex mod asked for Rue sizes is not missing anything for its men's models. A women's
         // piece's men's versions are ticked apart ("tbse@women") and made by RunAcross.
-        if (!request.Keys.Any(k => ForRace(k, sizeSlot, race)))
-        {
-            runLog.Add(piece, SizeStatus.Skipped, Codes.NoBodyForRace, "none of the bodies asked for is of its race");
-            return 0;
-        }
+        if (!request.Keys.Any(k => ForRace(k, sizeSlot, race))) return 0;
 
         // ── what it was made on: every one of the author's sizes whose body can be read ──
         progress(string.Format(Strings.SizeSet.ReadingFmt, piece.Label));
         var mods = request.Bodies.Select(b => (b.Dir, b.Catalog)).ToList();
         if (mods.Count == 0)
         {
-            runLog.Note(Strings.SizeSet.NoBodies, piece, SizeStatus.Skipped, Codes.NoBodies);
+            notes.Add(Strings.SizeSet.NoBodies);
             return 0;
         }
         string preferred = Preferred(request, sizeSlot, race, mods[0].Dir);
@@ -318,8 +287,7 @@ internal static partial class SizeSetRefit
         var sources = new Sources(request, piece, preferred, mods, readings, Note, ct);
         if (sources.Primary is not { } primary)
         {
-            runLog.Note(string.Format(Strings.SizeSet.UnreadableFmt, piece.Label), piece, SizeStatus.Skipped,
-                        Codes.Unreadable, piece.Group ?? piece.GroupName);
+            notes.Add(string.Format(Strings.SizeSet.UnreadableFmt, piece.Label));
             return 0;
         }
         var sourceEntry = primary.Entry;
@@ -371,9 +339,7 @@ internal static partial class SizeSetRefit
         {
             ct.ThrowIfCancellationRequested();
             if (!ForRace(key, sizeSlot, race)) continue;
-            var (body, target, missing) = BodyFor(key, sizeSlot, yas, request.Bodies, sourceEntry, notes, piece.Label);
-            if (missing != null)
-                runLog.Add(piece, SizeStatus.Skipped, Codes.NotInstalled, missing, group.Name, body: key, yas: yas);
+            var (body, target) = BodyFor(key, sizeSlot, yas, request.Bodies, sourceEntry, notes, piece.Label);
             if (body == null || target == null) continue;
             var targetCat = target.Catalog;
             bool Across(Candidate c) => !string.Equals(target.Dir, c.Pick!.Dir, StringComparison.OrdinalIgnoreCase);
@@ -387,16 +353,6 @@ internal static partial class SizeSetRefit
                 ct.ThrowIfCancellationRequested();
                 string option = SupportedBodies.OptionName(body, size);
                 string leadKey = LeadKey(group.Name, race, option);
-                var clock = System.Diagnostics.Stopwatch.StartNew();
-                void Out(SizeStatus status, string? code, string? reason, string? from = null, Measures? measures = null,
-                         string? cutFrom = null)
-                    => runLog.Add(piece, status, code, reason, group.Name, option, key, target!.Dir, body!.Yas, from: from, cutFrom: cutFrom,
-                                  measures: measures, seconds: status == SizeStatus.Made ? clock.Elapsed.TotalSeconds : null);
-                void NoteOut(string note, string code)
-                {
-                    notes.Add(note);
-                    Out(SizeStatus.Skipped, code, note);
-                }
                 // Where a candidate goes for this size. Legs following the chest go onto the legs that size's chest is
                 // worn with — across body mods the table's, within one the candidate's own family's; a size with none
                 // (Neolithe XS keeps the Small hips) has nowhere to go from it.
@@ -434,7 +390,6 @@ internal static partial class SizeSetRefit
                 if (group.AlreadyThere(option, request.Remake))
                 {
                     log.Information("[Proteus] size set: {0}: \"{1}\" already there", piece.Label, option);
-                    AlreadyOut(group, option, (code, why) => Out(SizeStatus.Skipped, code, why));
                     // An option an earlier run cut from the size this one would choose still leads its outfit: the shoes
                     // and gloves joining it now follow that size. One cut otherwise — from the author's first size, by an
                     // earlier version — leads nothing, and they are left out until it is made again.
@@ -451,7 +406,6 @@ internal static partial class SizeSetRefit
                 if (piece.FollowsChest && !group.Ours.Contains(option))
                 {
                     log.Information("[Proteus] size set: {0}: no \"{1}\" of the chest's to join", piece.Label, option);
-                    Out(SizeStatus.Skipped, Codes.NoChestOption, $"no \"{option}\" of the chest's to join");
                     continue;
                 }
                 // A size the author ships is skipped before any source is measured for it — where it is one size for
@@ -460,13 +414,12 @@ internal static partial class SizeSetRefit
                 {
                     if (OptionByFile(targetCat.For(piece.Slot), size.Rel) is not { } fixedTo)
                     {
-                        NoteOut(string.Format(Strings.SizeSet.NoSuchSizeFmt, piece.Label, option, target.Name), Codes.NoSuchSize);
+                        notes.Add(string.Format(Strings.SizeSet.NoSuchSizeFmt, piece.Label, option, target.Name));
                         continue;
                     }
                     if (AuthorHas(authorSizes, targetCat, fixedTo, piece.Slot, race) is { } own)
                     {
                         log.Information("[Proteus] size set: {0}: {1} is the author's own \"{2}\"", piece.Label, option, own);
-                        Out(SizeStatus.Skipped, Codes.AuthorsOwn, $"the author's own \"{own}\"");
                         continue;
                     }
                 }
@@ -484,7 +437,6 @@ internal static partial class SizeSetRefit
                     {
                         // The author's own model there already fits this size, and the chest's option carries it.
                         log.Information("[Proteus] size set: {0}: {1} is the size it was made on", piece.Label, option);
-                        Out(SizeStatus.Skipped, Codes.MadeOnIt, "the size it was made on");
                         continue;
                     }
                     if (why == null)
@@ -500,7 +452,6 @@ internal static partial class SizeSetRefit
                     if (sources.Choices.All(c => WhyNot(c) == MadeOnIt))
                     {
                         log.Information("[Proteus] size set: {0}: {1} is the size it was made on", piece.Label, option);
-                        Out(SizeStatus.Skipped, Codes.MadeOnIt, "the size it was made on");
                         continue;
                     }
                     // Legs following the chest with nowhere to go from any size: a size with no legs of its own keeps
@@ -508,19 +459,12 @@ internal static partial class SizeSetRefit
                     if (piece.FollowsChest && sources.Choices.All(c => ToOf(c) == null))
                     {
                         if (sources.Choices.Any(c => TargetRel(true, Across(c), size, c.Pick!.Option.Rel) != null))
-                            NoteOut(string.Format(Strings.SizeSet.NoSuchSizeFmt, piece.Label, option, target.Name), Codes.NoSuchSize);
+                            notes.Add(string.Format(Strings.SizeSet.NoSuchSizeFmt, piece.Label, option, target.Name));
                         else
-                        {
                             log.Information("[Proteus] size set: {0}: {1} has no legs of its own", piece.Label, option);
-                            Out(SizeStatus.Skipped, Codes.NoOwnLegs, "no legs of its own: keeps the author's");
-                        }
                         continue;
                     }
-                    if (Nearest() is not { } nearest)
-                    {
-                        Out(SizeStatus.Skipped, Codes.NoSource, "none of the author's sizes goes onto it");
-                        continue;
-                    }
+                    if (Nearest() is not { } nearest) continue;
                     (chosen, sourceOption) = (nearest.Chosen, nearest.Chosen.Option);
                     Note(nearest.Why);
                 }
@@ -528,7 +472,6 @@ internal static partial class SizeSetRefit
                 if (piece.FollowsChest && AuthorHas(authorSizes, targetCat, to, piece.Slot, race) is { } theirs)
                 {
                     log.Information("[Proteus] size set: {0}: {1} is the author's own \"{2}\"", piece.Label, option, theirs);
-                    Out(SizeStatus.Skipped, Codes.AuthorsOwn, $"the author's own \"{theirs}\"");
                     continue;
                 }
 
@@ -541,7 +484,6 @@ internal static partial class SizeSetRefit
                                            uvRemap, out var pair) is { } refusal)
                 {
                     notes.Add(string.Format(Strings.SizeSet.RefusedFmt, piece.Label, option, refusal));
-                    Out(SizeStatus.Refused, Codes.RefusedPair, refusal);
                     log.Information("[Proteus] size set: {0} {1}: refused: {2}", piece.Label, option, refusal);
                     continue;
                 }
@@ -607,18 +549,10 @@ internal static partial class SizeSetRefit
                 // Stopped while this size was made: it is not saved — Stop keeps what was saved before it.
                 ct.ThrowIfCancellationRequested();
                 bool lead = !piece.FollowsChest && !leadSources.ContainsKey(leadKey);
-                string fromLabel = RefitCore.LabelFrom(across ? chosen.Entry.Name : null, [chosen.Pick.Option.Label]);
-                // The one fold count every size reports: cloth faces turned over on the plan saved.
-                int folded = CrossSexRefit.ClothFolded(chosen.Bytes, plan);
-                if (!group.Save(target.Dir, fromLabel,
-                                [new BodyRetargetWriter.Refit(option, plan.Model, toLabel, Materials: plan.Materials)], sourceOption,
-                                notes, sourceFilesWin: request.Remake && lead))
-                {
-                    Out(SizeStatus.Failed, Codes.SaveFailed, notes[^1]);
-                    continue;
-                }
-                Out(SizeStatus.Made, null, null, fromLabel, Measures.Of(plan, folded), sourceOption);
-                if (lead && sourceOption != null)
+                if (group.Save(target.Dir, RefitCore.LabelFrom(across ? chosen.Entry.Name : null, [chosen.Pick.Option.Label]),
+                               [new BodyRetargetWriter.Refit(option, plan.Model, toLabel, Materials: plan.Materials)], sourceOption, notes,
+                               sourceFilesWin: request.Remake && lead)
+                    && lead && sourceOption != null)
                     leadSources[leadKey] = sourceOption;
             }
         }
@@ -710,8 +644,7 @@ internal static partial class SizeSetRefit
         internal string? FromOf(string option) => fromHere.GetValueOrDefault(option);
 
         /// <summary>
-        /// Save sizes — chests and legs one per size, each naming the size it was cut from. False, noted, on failure:
-        /// the note is always the last of <paramref name="notes"/>, which is what the caller records the failure by.
+        /// Save sizes — chests and legs one per size, each naming the size it was cut from. False, noted, on failure.
         /// </summary>
         /// <param name="sourceFilesWin">Made again from another of the author's options: that option's files replace
         /// the ones carried from the old (see <see cref="BodyRetargetWriter.Save"/>).</param>
@@ -763,16 +696,6 @@ internal static partial class SizeSetRefit
         }
     }
 
-    /// <summary>
-    /// Says why a size that is already in the mod was left: an option of the author's by that name is their own size;
-    /// one of ours was made by an earlier run.
-    /// </summary>
-    private static void AlreadyOut(SizeGroup group, string option, Action<string, string> outcome)
-    {
-        if (group.Ours.Contains(option)) outcome(Codes.AlreadyThere, $"\"{option}\" is already in the mod, made by an earlier run");
-        else outcome(Codes.AuthorsOwn, $"the author's own \"{option}\"");
-    }
-
     /// <summary>Whether a ticked body has sizes for a piece of this slot and race.</summary>
     private static bool ForRace(string key, string slot, string race)
         => SupportedBodies.Of(key, slot, false) is { } plain ? plain.Race == race
@@ -786,26 +709,23 @@ internal static partial class SizeSetRefit
     /// takes its sizes from that same install — a second copy of the pack must not be refitted onto from the first.
     /// </summary>
     /// <param name="source">The body mod the piece was made on; null for the game's own body, which is no family's.</param>
-    /// <returns>The body and its mod; or, with neither, the note saying it is not installed (null when the table has
-    /// nothing for the slot).</returns>
-    private static (SupportedBodies.Body? Body, BodyModIndex.Entry? Mod, string? Missing) BodyFor(string key, string slot,
-        bool yas, IReadOnlyList<BodyModIndex.Entry> installed, BodyModIndex.Entry? source, List<string> notes, string piece)
+    private static (SupportedBodies.Body? Body, BodyModIndex.Entry? Mod) BodyFor(string key, string slot, bool yas,
+        IReadOnlyList<BodyModIndex.Entry> installed, BodyModIndex.Entry? source, List<string> notes, string piece)
     {
         var plain = SupportedBodies.Of(key, slot, false);
         var yasBody = SupportedBodies.Of(key, slot, true);
-        if (plain == null && yasBody == null) return (null, null, null);   // YAB Buff has no legs of its own: nothing to say
+        if (plain == null && yasBody == null) return (null, null);   // YAB Buff has no legs of its own: nothing to say
 
         var order = yas ? new[] { yasBody, plain } : [plain, yasBody];
         foreach (var body in order.OfType<SupportedBodies.Body>())
         {
-            if (body.Family && source != null && SupportedBodies.Find(body, [source]) != null) return (body, source, null);
-            if (SupportedBodies.Find(body, installed) is { } mod) return (body, mod, null);
+            if (body.Family && source != null && SupportedBodies.Find(body, [source]) != null) return (body, source);
+            if (SupportedBodies.Find(body, installed) is { } mod) return (body, mod);
         }
 
         string label = (plain ?? yasBody)!.Label;
-        string note = string.Format(Strings.SizeSet.NotInstalledFmt, piece, label);
-        notes.Add(note);
-        return (null, null, note);
+        notes.Add(string.Format(Strings.SizeSet.NotInstalledFmt, piece, label));
+        return (null, null);
     }
 
     /// <summary>The author's sizes of a piece with the probe points their body skin is read by, read once.</summary>

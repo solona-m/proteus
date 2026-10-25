@@ -67,31 +67,16 @@ internal static class Program
                       [--from-skeleton <drawn race's base .sklb>]
                       [--slot _top|_dwn] [--set <id>] [--no-push] [--piercings]
                       (refit for the other sex: chest and legs garments, both ways)
-        Proteus.Refit --size-set <unpacked mod folder> --bodies <key>[,<key>...]|all
-                      --mods-root <Penumbra mod folder> --game <FFXIV game\sqpack> --uvmaps <Proteus plugin dir>
-                      [--men] [--no-ends] [--skeleton <men's base .sklb>] [--report <file.json>]
-                      keys: neolithe, bibo, rue, yab, yab-buff, tre, rosaline, tbse, tbse-x ("all" = every women's body)
-                      (the Studio's "Every size for other bodies" on a work copy outside the mod folder; a v3 mod is
-                       converted to v4 in place first. The bodies are the mod folder's; the mod itself never is one.
-                       The JSON report on stdout is local output: it names folders on this machine.)
         """;
 
     private static int Main(string[] args)
     {
         // Loc.Localize returns "#key" for an assembly that was never set up, and refusals are worded through it.
         Loc.SetupWithFallbacks(typeof(Proteus.Plugin).Assembly);
-        using var temp = TempFolders.Isolate();
-        return Dispatch(args, Console.Out, Console.Error);
-    }
 
-    /// <summary>Run one command. Tests call this with their own writers; only <see cref="Main"/> isolates the temp folders.</summary>
-    internal static int Dispatch(string[] args, TextWriter stdout, TextWriter stderr)
-    {
         try
         {
             var opts = Parse(args);
-            // First: --measure also takes --bodies.
-            if (opts.ContainsKey("size-set")) return SizeSetCommand.Run(opts, Required, stdout, stderr);
             if (opts.ContainsKey("bake-uvmaps")) return BakeUvMapsCommand.Run(opts, Required);
             if (opts.ContainsKey("for-race"))
                 return CrossSexCommand.Run(opts, Required, message => throw new UsageException(message), NullLog());
@@ -114,13 +99,13 @@ internal static class Program
         }
         catch (UsageException ex)
         {
-            stderr.WriteLine(ex.Message);
-            stderr.WriteLine(Usage);
+            Console.Error.WriteLine(ex.Message);
+            Console.Error.WriteLine(Usage);
             return 2;
         }
         catch (Exception ex)
         {
-            stderr.WriteLine(ex.ToString());
+            Console.Error.WriteLine(ex.ToString());
             return 1;
         }
     }
@@ -1316,7 +1301,7 @@ internal static class Program
             if (!args[i].StartsWith("--", StringComparison.Ordinal))
                 throw new UsageException($"Unexpected argument \"{args[i]}\".");
             string key = args[i][2..];
-            opts[key] = key is "list" or "detect" or "finish" or "inspect" or "save" or "measure" or "no-push" or "whole" or "piercings" or "keep-default" or "shares" or "time" or "bands" or "skin-map" or "skin-side" or "off" or "islands" or "face-poke" or "skin-out" or "bake-uvmaps" or "report-only" or "men" or "no-ends" ? "" : i + 1 < args.Length ? args[++i] : throw new UsageException($"--{key} needs a value.");
+            opts[key] = key is "list" or "detect" or "finish" or "inspect" or "save" or "measure" or "no-push" or "whole" or "piercings" or "keep-default" or "shares" or "time" or "bands" or "skin-map" or "skin-side" or "off" or "islands" or "face-poke" or "skin-out" or "bake-uvmaps" or "report-only" ? "" : i + 1 < args.Length ? args[++i] : throw new UsageException($"--{key} needs a value.");
         }
         return opts;
     }

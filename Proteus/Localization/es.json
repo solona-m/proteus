@@ -5283,8 +5283,8 @@
     "message": "el deformador racial no sabe cómo mover {0}",
     "description": ""
   },
-  "HairPort.Fit.Fmt": {
-    "message": "no se asienta en la cabeza de c{0:D4}: el {1:P0} se hunde en el cráneo, y su distancia al cuero cabelludo difiere {2:F0} mm de la del original; revísalo en el juego",
+  "HairPort.Refused.Fit.Fmt": {
+    "message": "no se asienta en la cabeza de c{0:D4}: el {1:P0} se hunde en el cráneo, y su distancia al cuero cabelludo difiere {2:F0} mm de la del original",
     "description": ""
   },
   "HairPort.Refused.NotHair": {

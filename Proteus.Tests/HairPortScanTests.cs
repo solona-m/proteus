@@ -294,8 +294,8 @@ public class HairPortScanTests
     {
         using var s = new Setup();
         var root = s.DefaultDataMod("Floof", 7);
-        // A bone the racial deformer cannot place: the bend refuses it.
-        Setup.Put(root, "default group/h0007.mdl", HairModelOf(Elezen, 7, bones: [("j_unknown_bone", 1f)]));
+        // A target head a third larger than the hair: the port would sink into it.
+        s.Host.Game = GameOf(Races, Ids, new Dictionary<string, byte[]> { [HairPortPlan.HeadPaths(Me).First()] = HeadModel(Me, 0.13f) });
 
         Assert.Equal(HairPortScan.RowState.Refused, s.Run([7]).Rows.Single().State);
         s.Host.GameReads = 0;

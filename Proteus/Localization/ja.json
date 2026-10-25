@@ -5283,8 +5283,8 @@
     "message": "種族デフォーマーが {0} の動かし方を知りません",
     "description": ""
   },
-  "HairPort.Fit.Fmt": {
-    "message": "c{0:D4} の頭に収まりません。{1:P0} が頭蓋骨に沈み込み、頭皮からの距離が元より {2:F0} mm ずれています。ゲーム内で確認してください",
+  "HairPort.Refused.Fit.Fmt": {
+    "message": "c{0:D4} の頭に収まりません。{1:P0} が頭蓋骨に沈み込み、頭皮からの距離が元より {2:F0} mm ずれています",
     "description": ""
   },
   "HairPort.Refused.NotHair": {

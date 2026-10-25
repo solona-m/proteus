@@ -287,7 +287,7 @@ La sección **Pelo** adapta los mods de pelo a ti de dos maneras: lleva el pelo 
 - La sección muestra la comprobación mientras avanza, con **Cancelar**, y lista cada peinado que adaptó. Cada uno tiene su propio **Deshacer**, y **Deshacer todo lo que ajustó esta comprobación** los revierte todos (haz clic dos veces). Un peinado deshecho no vuelve a adaptarse por sí solo.
 - Solo para tu propia raza, desde razas del mismo sexo. Una raza que solo te estás probando no se adapta: Proteus espera a que la hayas mantenido 30 segundos.
 - El pelo con físicas conserva sus físicas. Cuando al esqueleto de tu raza le faltan los huesos con los que se mueve un peinado, la adaptación trae consigo el esqueleto y las físicas de la raza de origen para ese peinado.
-- Un peinado que no quedaría bien en tu cabeza (se hunde en ella o se separa de ella) se ajusta igualmente, y Proteus dice cuál, para que lo revises en el juego.
+- Un peinado que no quedaría bien en tu cabeza se deja como está, y la lista dice por qué.
 - Un peinado que el doblado deja en parte del revés se ajusta igualmente, y Proteus dice cuál, para que lo revises en el juego.
 - Para cubrir todas las razas a la vez, abre un modelo de pelo en el **Estudio** y usa **Portar a todas las razas**.
 

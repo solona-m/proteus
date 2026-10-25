@@ -272,20 +272,19 @@ public class HairPortWatcherDecisionTests
 
     [Fact]
     [Trait("Plan", "EDGE-hair-race-port-30")]
-    public void A_port_that_does_not_fit_is_saved_with_a_warning()
+    public void Fit_refusal_writes_nothing()
     {
-        // Once refused, writing nothing (EDGE-hair-race-port-30); now saved, and said.
         using var s = new Setup();
-        // A target head a third larger than the hair: the port sinks into it.
+        // A target head a third larger than the hair: the port would sink into it.
         var game = Game(Races, new Dictionary<string, byte[]> { [HairPortPlan.HeadPaths(201).First()] = HeadModel(201, 0.13f) });
         var host = new BigHead(s.ModsRoot, game);
         foreach (var (k, v) in s.Host.Files) host.Files[k] = v;
         string? key = null;
         var view = HairPortWatcher.Run(host, Worn, ref key);
-        Assert.True(view.Ported);
-        Assert.False(view.Failed);
-        Assert.Contains("sinks into the skull", view.Warning);
-        Assert.True(Directory.Exists(Path.Combine(s.ModRoot, HairPortPlan.Folder)));
+        Assert.False(view.Ported);
+        Assert.True(view.Failed);
+        Assert.Empty(host.Calls);
+        Assert.False(Directory.Exists(Path.Combine(s.ModRoot, HairPortPlan.Folder)));
     }
 
     private sealed class BigHead(string modsRoot, Func<string, byte[]?> game) : HairPortWatcher.IHost

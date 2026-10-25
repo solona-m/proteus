@@ -191,9 +191,9 @@ internal static class HairPortFixtures
 
     /// <summary>A race's model of hairstyle <paramref name="id"/>: the same cap, its material named for that race and id.
     /// <paramref name="radius"/> changes the bytes without moving it off the head.</summary>
-    public static byte[] HairModelOf(ushort race, int id, float radius = 0.1f, (string Bone, float W)[]? bones = null)
+    public static byte[] HairModelOf(ushort race, int id, float radius = 0.1f)
         => SyntheticModel.BuildSurface([],
-            [Sphere($"/mt_c{race:D4}h{id:D4}_hir_a.mtrl", Head + Offset(race), radius, bones ?? [("j_kao", 1f)], minY: -0.2f)]);
+            [Sphere($"/mt_c{race:D4}h{id:D4}_hir_a.mtrl", Head + Offset(race), radius, [("j_kao", 1f)], minY: -0.2f)]);
 
     /// <summary>The game's own files for several hairstyles: each race's face, its model of each id, and the material
     /// that model names — which a port copies when the mod has none of its own.</summary>
