@@ -181,16 +181,7 @@ public partial class BodyRetargetTests
         Assert.Equal(plain, delta);
 
         // And beside a face that does sink beyond reach, a sheet away from it is relaxed exactly as without the guard.
-        float[] pos =
-        [
-            -0.15f, -0.15f, 0.203f, 0.15f, -0.15f, 0.203f, 0f, 0.15f, 0.203f,
-            0.16f, 0.16f, 0.203f, 0.19f, 0.16f, 0.203f, 0.175f, 0.19f, 0.203f,
-        ];
-        float[] nrm = [0, 0, 1, 0, 0, 1, 0, 0, 1, 0, 0, 1, 0, 0, 1, 0, 0, 1];
-        var garment = Build(pos, nrm, [0, 1, 2, 3, 4, 5], ClothMaterial);
-        var (twoCheck, two, twoSets) = FaceSetup(garment, Cube(0.20f, SkinMaterial), Bumped(0.0089f));
-        two[twoSets.NodeOf[2]] = new Vec3(0f, 0f, 0.012f);
-        two[twoSets.NodeOf[5]] = new Vec3(0f, 0f, 0.004f);
+        var (twoCheck, two, twoSets) = TwoSheets();
         var plainTwo = (Vec3[])two.Clone();
         BodyRetarget.Relax(twoSets, plainTwo, OffFlat);
         BodyRetarget.Relax(twoSets, two, OffFlat, faces: twoCheck);
@@ -201,6 +192,88 @@ public partial class BodyRetargetTests
             Assert.NotEqual(default, plainTwo[n]);
             Assert.Equal(plainTwo[n], two[n]);
         }
+    }
+
+    /// <summary>The sinking sheet of <see cref="Relax_never_lays_a_face_onto_skin_through_its_middle"/> and a sheet out by
+    /// its corner, a corner of its own out of line, clear of any skin.</summary>
+    private static (BodyRetarget.FaceCheck Check, Vec3[] Delta, BodyRetarget.Sets Sets) TwoSheets()
+    {
+        float[] pos =
+        [
+            -0.15f, -0.15f, 0.203f, 0.15f, -0.15f, 0.203f, 0f, 0.15f, 0.203f,
+            0.16f, 0.16f, 0.203f, 0.19f, 0.16f, 0.203f, 0.175f, 0.19f, 0.203f,
+        ];
+        float[] nrm = [0, 0, 1, 0, 0, 1, 0, 0, 1, 0, 0, 1, 0, 0, 1, 0, 0, 1];
+        var garment = Build(pos, nrm, [0, 1, 2, 3, 4, 5], ClothMaterial);
+        var (check, delta, sets) = FaceSetup(garment, Cube(0.20f, SkinMaterial), Bumped(0.0089f));
+        delta[sets.NodeOf[2]] = new Vec3(0f, 0f, 0.012f);
+        delta[sets.NodeOf[5]] = new Vec3(0f, 0f, 0.004f);
+        return (check, delta, sets);
+    }
+
+    [Theory]
+    [InlineData(1)]
+    [InlineData(BodyRetarget.RelaxTakeBackPasses)]
+    [Trait("Plan", "EDGE-relax-sink-guard-12")]
+    public void Relax_takes_the_round_back_whole_at_the_pass_cap(int passCap)
+    {
+        // The first round sinks the near sheet beyond reach and is taken back for its corners. With room for the passes
+        // that follow, the far sheet's round stands; with a single pass the cascade cannot be followed, and every node of
+        // the round — the far sheet's too — goes back to where it began it.
+        var (check, delta, sets) = TwoSheets();
+        var start = (Vec3[])delta.Clone();
+        BodyRetarget.Relax(sets, delta, OffFlat, faces: check, passCap: passCap, rounds: 1);
+        Assert.Equal(start[sets.NodeOf[2]], delta[sets.NodeOf[2]]);
+        if (passCap == 1)
+            Assert.Equal(start, delta);
+        else
+            Assert.NotEqual(start[sets.NodeOf[5]], delta[sets.NodeOf[5]]);
+    }
+
+    [Fact]
+    [Trait("Plan", "EDGE-relax-sink-guard-5")]
+    public void Relax_guard_never_judges_a_face_with_a_skin_corner()
+    {
+        // The sinking sheet with corner C welded to a skin triangle: C is the skin's and stays; A and B, 15 mm out, come
+        // down toward it and lay the face 1.4 mm onto the bump — beyond reach, every corner clear. Not cloth, not judged.
+        float[] pos =
+        [
+            -0.15f, -0.15f, 0.203f, 0.15f, -0.15f, 0.203f, 0f, 0.15f, 0.203f,
+            0f, 0.15f, 0.203f, 0.02f, 0.15f, 0.203f, 0f, 0.17f, 0.203f,
+        ];
+        float[] nrm = [0, 0, 1, 0, 0, 1, 0, 0, 1, 0, 0, 1, 0, 0, 1, 0, 0, 1];
+        var cloth = Build(pos, nrm, [0, 1, 2], ClothMaterial);
+        var garment = new ModelParts
+        {
+            Positions = pos,
+            Normals = nrm,
+            MeshSpans = [new MeshSpan(0, 0, 6)],
+            Parts =
+            [
+                cloth.Parts[0],
+                new ModelPart
+                {
+                    Mesh = 0, Submesh = 1, Island = -1, Label = "0.1", Material = SkinMaterial, Triangles = [3, 4, 5],
+                    Ordinals = [0], AttributeMask = 0, Min = new Vector3(0f, 0.15f, 0.203f), Max = new Vector3(0.02f, 0.17f, 0.203f),
+                    Toggleable = true,
+                },
+            ],
+            AttributeNames = [],
+            Min = new Vector3(-0.15f, -0.15f, 0.203f),
+            Max = new Vector3(0.15f, 0.17f, 0.203f),
+            ShatteredSubmeshes = new Dictionary<string, int>(),
+        };
+        var (check, delta, sets) = FaceSetup(garment, Cube(0.20f, SkinMaterial), Bumped(0.0089f));
+        Assert.Contains(sets.SkinNodes, n => n == sets.NodeOf[2]);
+        int face = Enumerable.Range(0, check.Tris.Count).Single(t => check.TrisOf[sets.NodeOf[0]].Contains(t));
+        Assert.False(check.IsCloth[face]);
+        delta[sets.NodeOf[0]] = new Vec3(0f, 0f, 0.012f);
+        delta[sets.NodeOf[1]] = new Vec3(0f, 0f, 0.012f);
+        var plain = (Vec3[])delta.Clone();
+        BodyRetarget.Relax(sets, plain, OffFlat);
+        Assert.True(check.Depth(face, plain) > BeyondReach, $"{check.Depth(face, plain) * 1000:0.00} mm through");
+        BodyRetarget.Relax(sets, delta, OffFlat, faces: check);
+        Assert.Equal(plain, delta);
     }
 
     [Fact]

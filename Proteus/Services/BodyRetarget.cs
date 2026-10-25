@@ -1829,7 +1829,8 @@ internal static partial class BodyRetarget
 
             if (faces != null)
             {
-                Guarded(faces, standsOff!, nodeDelta, next, was, passCap);
+                // A round taken back whole leaves the next starting where this one did: it would only do the same.
+                if (Guarded(faces, standsOff!, nodeDelta, next, was, passCap)) break;
                 foreach (var n in next.Keys)
                     if (!was.TryGetValue(n, out var back) || !back.Equals(nodeDelta[n])) moved[n] = true;
                 continue;
@@ -1862,8 +1863,8 @@ internal static partial class BodyRetarget
         // The round applied, then taken back for the corners of every triangle it turns over, or lays onto the skin deeper
         // than the face clearing lifts while its corners all stand clear, by the face check's own triangles: each pass
         // looks again at the triangles around the corners the one before put back, which can sink or fold a neighbour,
-        // and a cascade the passes cannot follow takes the round back whole.
-        static void Guarded(FaceCheck faces, bool[] standsOff, Vec3[] nodeDelta, Dictionary<int, Vec3> next,
+        // and a cascade the passes cannot follow takes the round back whole — which it returns.
+        static bool Guarded(FaceCheck faces, bool[] standsOff, Vec3[] nodeDelta, Dictionary<int, Vec3> next,
                             Dictionary<int, Vec3> was, int passCap)
         {
             var foldWas = new bool[faces.Tris.Count];
@@ -1893,11 +1894,11 @@ internal static partial class BodyRetarget
                             reverted.Add(n);
                         }
                 }
-                if (reverted.Count == 0) return;
+                if (reverted.Count == 0) return false;
                 if (pass >= passCap)
                 {
                     foreach (var (n, back) in was) nodeDelta[n] = back;
-                    return;
+                    return true;
                 }
                 check = reverted.SelectMany(n => faces.TrisOf[n]).Distinct().ToList();
             }
