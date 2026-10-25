@@ -214,6 +214,13 @@ public sealed class SupplyChainTests
 
     private static readonly string[] BranchEvents = ["push", "pull_request", "pull_request_target"];
 
+    /// <summary>
+    /// Events that never follow a push: run by hand or on a timer. Every other event that is not a
+    /// branch event (workflow_run, check_suite, create, release, …) counts as running on any branch —
+    /// workflow_run in particular fires straight after CodeQL on every push to test.
+    /// </summary>
+    private static readonly string[] NeverOnPush = ["workflow_dispatch", "schedule"];
+
     private static int Indent(string line) => line.Length - line.TrimStart().Length;
 
     private static string Unquote(string s) => s.Trim().Trim('"', '\'');
@@ -230,8 +237,9 @@ public sealed class SupplyChainTests
     /// Whether a workflow runs for a push or pull request on <paramref name="branch"/>. It does unless
     /// every branch event is filtered away from it: a <c>branches</c> list with nothing matching, a
     /// <c>branches-ignore</c> that covers it, or only tag filters (a tag push is not a branch push).
-    /// Shorthand <c>on: push</c> / <c>on: [push, …]</c> and an unfiltered event all match; <c>paths</c>
-    /// filters do not exclude, since any push could touch those paths.
+    /// Shorthand <c>on: push</c> / <c>on: [push, …]</c> / <c>- push</c> and an unfiltered event all
+    /// match; <c>paths</c> filters do not exclude, since any push could touch those paths. Any event
+    /// outside <see cref="BranchEvents"/> and <see cref="NeverOnPush"/> matches too.
     /// </summary>
     internal static bool TriggersOnBranch(IReadOnlyList<string> workflowLines, string branch)
     {
@@ -243,7 +251,7 @@ public sealed class SupplyChainTests
         if (inline.Length > 0)
         {
             if (inline.StartsWith('{')) return true;  // flow mapping: not modelled, so assume the worst
-            return FlowItems(inline).Any(e => BranchEvents.Contains(e));
+            return FlowItems(inline).Any(e => !NeverOnPush.Contains(e));
         }
 
         // The block under on: — every following line indented deeper than column 0.
@@ -260,8 +268,15 @@ public sealed class SupplyChainTests
         for (var i = 0; i < block.Count; i++)
         {
             if (Indent(block[i]) != eventIndent) continue;
-            var m = Regex.Match(block[i].Trim(), @"^([\w-]+):\s*(.*)$");
-            if (!m.Success || !BranchEvents.Contains(m.Groups[1].Value)) continue;
+            var item = block[i].Trim();
+            if (item.StartsWith('-'))  // block sequence of event names: each one unfiltered
+            {
+                if (!NeverOnPush.Contains(Unquote(item[1..]))) return true;
+                continue;
+            }
+            var m = Regex.Match(item, @"^([\w-]+):\s*(.*)$");
+            if (!m.Success || NeverOnPush.Contains(m.Groups[1].Value)) continue;
+            if (!BranchEvents.Contains(m.Groups[1].Value)) return true;
             if (m.Groups[2].Value.Trim().Length > 0) return true;  // inline mapping: not modelled
 
             var body = new List<string>();
@@ -546,6 +561,13 @@ public sealed class SupplyChainTests
         Assert.True(writes.SequenceEqual(new[] { "security-events: write" }),
             "codeql.yml may write security events and nothing else; it runs on every push to test.\n  " +
             string.Join("\n  ", writes));
+
+        // Explicitly read-only at the top, not just silent: the repo's default token permission is a
+        // setting that can change without any diff here.
+        var lines = NonCommentLines(CodeQlLines()).Select(l => l.TrimEnd()).ToList();
+        var top = lines.FindIndex(l => l == "permissions:");
+        Assert.True(top >= 0 && top + 1 < lines.Count && lines[top + 1].Trim() == "contents: read",
+            "codeql.yml must declare a top-level permissions: block with contents: read.");
     }
 
     private static readonly string[] Publishing = ["upload-artifact", "action-gh-release", "gh release", "git push", "wrangler"];
@@ -671,8 +693,9 @@ public sealed class SupplyChainTests
             "Pushing test is the end of every feature, so only the read-only CodeQL workflow may run on it. " +
             "Workflows that do: " + string.Join(", ", onTest.Select(Path.GetFileName)));
 
+        // secrets.: anything holding a token can publish by hand (curl, gh api) without a release step.
         foreach (var file in onTest)
-            foreach (var p in Publishing.Append("contents: write"))
+            foreach (var p in Publishing.Append("contents: write").Append("secrets."))
                 Assert.False(ContainsOutsideComments(ReadLines(file), p),
                     $"{Rel(file)} runs on a push to test and contains \"{p}\".");
     }
@@ -828,6 +851,13 @@ public sealed class SupplyChainTests
     [InlineData("on:\n  schedule:\n    - cron: '0 0 * * 1'", false)]
     [InlineData("on:\n  push:\n    paths:\n      - 'worker/**'", true)]
     [InlineData("on:\n  push:\n    branches: [ main ]  # test later", false)]
+    [InlineData("on:\n  - push", true)]
+    [InlineData("on:\n  - workflow_dispatch", false)]
+    [InlineData("on: workflow_run", true)]
+    [InlineData("on: [workflow_dispatch, schedule]", false)]
+    [InlineData("on:\n  workflow_run:\n    workflows: [CodeQL]\n    types: [completed]", true)]
+    [InlineData("on:\n  release:\n    types: [published]", true)]
+    [InlineData("on:\n  workflow_dispatch:\n  push:\n    tags: ['v*']", false)]
     public void TriggersOnBranch_Classifies(string workflow, bool matches) =>
         Assert.Equal(matches, TriggersOnBranch(workflow.Split('\n'), "test"));
 
