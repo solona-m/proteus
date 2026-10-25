@@ -247,11 +247,15 @@ public partial class CompositorService
                 compositor.ReconcileInvisibleGlasses(gearWanted: false, shellBuilt: false, hostedOnFacewear: false);
                 compositor.ReconcileEmperorRing(gearWanted: false, shellBuilt: false, carrierSlots: []);
 
-                // userRequested, as in SetEnabled(false): the output is already withdrawn, so a suppressed redraw strands the
-                // character. Only reachable with auto redraw off from a forced composite.
-                compositor.ReloadAndRedraw("composite: no enabled mods", userRequested: true);
+                // Penumbra serves the withdrawal at once; the character is reloaded only with auto redraw on, as after any
+                // other publish. With it off this branch is reached by a forced composite (a Penumbra toggle) or by the
+                // exempt equipment-change trigger while a shell stood, and the old look stays until something redraws
+                // the character. _needFullRedraw stays set for the next reload Proteus starts. Carrier removal above and
+                // the owed-redraw watchdog may still redraw: neither is this reload.
+                compositor.ReloadAndRedraw("composite: no enabled mods");
                 timeline.Mark("publish+reload");
-                compositor.LogRefreshTimeline(timeline, "no enabled mods");
+                compositor.LogRefreshTimeline(timeline,
+                    compositor.config.AutoRedraw ? "no enabled mods" : "no enabled mods (redraw withheld)");
                 compositor.LastResult = new CompositorResult { Success = true, TexturesPatched = 0, OverlayModsUsed = 0, Epoch = epoch };
                 compositor.ResultChanged?.Invoke();
                 return false;
@@ -1200,7 +1204,7 @@ public partial class CompositorService
 
         private void Publish()
         {
-            // Read before the reload: ReloadAndRedraw consumes the flag.
+            // For the log's reload kind. Nothing clears the flag on a redraw; only the next composite's commit reassigns it.
             reloadKind = !compositor.config.AutoRedraw ? "withheld" : compositor._needFullRedraw ? "full redraw" : "in-place";
 
             // Publish only: nothing is deleted in this composite; superseded output is collected at the top of the next one

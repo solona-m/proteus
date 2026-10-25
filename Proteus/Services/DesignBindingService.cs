@@ -1066,7 +1066,8 @@ public class DesignBindingService : IDisposable
     /// be read after Proteus's own holds were released.
     /// <list type="bullet">
     /// <item>Bound non-Proteus mods are held in their recorded state; enabled ones are raised together above every
-    /// other enabled mod (<see cref="ComputePriorityOffset"/>).</item>
+    /// other enabled mod (<see cref="ComputePriorityOffset"/>), kept in order below the Proteus output mod
+    /// (<see cref="HeldPriorities"/>).</item>
     /// <item>Bound Proteus mods get their recorded state written permanently, where it differs.</item>
     /// <item>Unbound Proteus mods are switched off, except <paramref name="heldProteus"/>; Glamourer's temporary
     /// settings are cleared from every Proteus mod written, or they would mask the write.</item>
@@ -1117,8 +1118,9 @@ public class DesignBindingService : IDisposable
         var offset = ComputePriorityOffset(others.Where(m => m.Enabled).Select(m => m.Priority).ToList(), rivals);
 
         // A mod the design keeps off draws nothing, so its priority isn't raised.
+        var raised = HeldPriorities(others.Where(m => m.Enabled).Select(m => m.Priority).ToList(), offset, ceiling);
         var hold = others
-            .Select(m => new TemporaryHold(m, m.Enabled ? HeldPriority(m.Priority, offset, ceiling) : m.Priority))
+            .Select(m => new TemporaryHold(m, m.Enabled ? raised[m.Priority] : m.Priority))
             .ToList();
 
         // ── Proteus mods, written permanently, diffed against the collection ──
@@ -1151,20 +1153,29 @@ public class DesignBindingService : IDisposable
         => a.Count == b.Count && a.ToHashSet(StringComparer.Ordinal).SetEquals(b);
 
     /// <summary>
+    /// The priority each enabled held mod is held at, keyed by its recorded priority: recorded plus the shared
+    /// offset, kept strictly below the Proteus output mod. Where that ceiling cuts in, the mods it would pass are
+    /// stepped down one apiece from just under it, so they keep the order they had in the snapshot instead of
+    /// tying each other there. Mods recorded at one priority stay tied, as they were. With too little room between
+    /// the other mods and the ceiling, the lowest are pushed down among them: the design's own order wins.
+    /// </summary>
+    internal static Dictionary<int, int> HeldPriorities(IReadOnlyList<int> recorded, int offset, int? ceiling)
+    {
+        var held  = new Dictionary<int, int>();
+        var limit = ceiling is { } c ? (long)c - 1 : long.MaxValue;
+        foreach (var p in recorded.Distinct().OrderByDescending(p => p))
+        {
+            var slot = Math.Clamp(Math.Min((long)p + offset, limit), int.MinValue, int.MaxValue);
+            held[p] = (int)slot;
+            limit   = slot - 1;
+        }
+        return held;
+    }
+
+    /// <summary>
     /// How far every enabled held mod's priority must rise so the lowest sits strictly above the highest other
     /// enabled mod (at equal priority Penumbra's order is unstable). One offset for all keeps their relative order.
     /// </summary>
-    /// <summary>
-    /// A held mod's priority: recorded plus the shared offset, kept strictly below the Proteus output mod (the
-    /// design's top mods may then tie each other there).
-    /// </summary>
-    internal static int HeldPriority(int recorded, int offset, int? ceiling)
-    {
-        var raised = (long)recorded + offset;
-        if (ceiling is { } c) raised = Math.Min(raised, (long)c - 1);
-        return (int)Math.Clamp(raised, int.MinValue, int.MaxValue);
-    }
-
     internal static int ComputePriorityOffset(IReadOnlyList<int> bound, IReadOnlyList<int> rivals)
     {
         if (bound.Count == 0 || rivals.Count == 0) return 0;
