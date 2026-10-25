@@ -91,7 +91,7 @@ public partial class CompositorService
     {
         var ec = penumbra.ReloadModDirectory(SidecarDiscoveryService.ManagedModDir);
         log.Debug("[Proteus] ReloadMod -> {0}", ec);
-        if (redraw && (config.AutoRedraw || userRequested))
+        if (redraw && RedrawHold.AutoRedrawAllows(config.AutoRedraw, userRequested))
         {
             // Give Penumbra's async reload time to process before the refresh re-requests textures.
             Thread.Sleep(300);
@@ -283,14 +283,15 @@ public partial class CompositorService
     }
 
     /// <param name="userRequested">
-    /// The reload is the action the user asked for (e.g. switching Proteus off), so auto redraw does not gate it.
+    /// The reload is an explicit user action whose point is the reload (switching Proteus off), so auto redraw does not
+    /// gate it. Never for a composite's own publish, which a Penumbra toggle can start.
     /// </param>
     /// <param name="cause">Why, for the reload's line in the log.</param>
     private void RefreshPlayerTextures(string cause, bool userRequested = false)
     {
         // The chokepoint every self-initiated reload goes through, so the auto-redraw check is enforced here as well as at
         // call sites (which also skip other reload-dependent work).
-        if (!config.AutoRedraw && !userRequested)
+        if (!RedrawHold.AutoRedrawAllows(config.AutoRedraw, userRequested))
         {
             log.Debug("[Proteus] Player reload skipped — auto redraw is off.");
             return;

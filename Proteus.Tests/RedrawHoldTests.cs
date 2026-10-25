@@ -150,12 +150,27 @@ public class RedrawHoldTests
 
     [Fact]
     [Trait("Plan", "AC-fewer-redraws-2")]
+    [Trait("Plan", "AC-auto-redraw-off-empty-4")]
+    [Trait("Plan", "EDGE-auto-redraw-off-empty-6")]
     public void An_owed_redraw_makes_a_publish_a_full_redraw()
     {
         Assert.False(RedrawHold.FullRedrawFor(needFullRedraw: false, useInPlace: true, owed: false));
         Assert.True(RedrawHold.FullRedrawFor(false, true, owed: true));
         Assert.True(RedrawHold.FullRedrawFor(true, true, false));
         Assert.True(RedrawHold.FullRedrawFor(false, useInPlace: false, false));
+    }
+
+    [Fact]
+    [Trait("Plan", "AC-auto-redraw-off-empty-1")]
+    [Trait("Plan", "AC-auto-redraw-off-empty-2")]
+    [Trait("Plan", "AC-auto-redraw-off-empty-3")]
+    [Trait("Plan", "EDGE-auto-redraw-off-empty-7")]
+    public void Auto_redraw_gates_a_self_initiated_reload_but_not_a_user_requested_one()
+    {
+        Assert.False(RedrawHold.AutoRedrawAllows(autoRedraw: false, userRequested: false));
+        Assert.True(RedrawHold.AutoRedrawAllows(false, userRequested: true));   // switching Proteus off
+        Assert.True(RedrawHold.AutoRedrawAllows(autoRedraw: true, false));
+        Assert.True(RedrawHold.AutoRedrawAllows(true, true));
     }
 
     [Fact]
