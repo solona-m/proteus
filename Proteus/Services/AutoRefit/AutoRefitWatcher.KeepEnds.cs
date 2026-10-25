@@ -347,10 +347,11 @@ public sealed partial class AutoRefitWatcher
         string sourceName = skin.Own.Dir == VanillaBodyCatalog.Key ? Strings.Parts.RetargetFromVanilla
                           : j.State.Find(skin.Own.Dir)?.Name ?? skin.Own.Dir;
         string option = j.Pair?.Plan.Option ?? KeepEnds.SkinOnlyOption(endBody.Name);
+        // Localized here, not in the lambda: Loc.Localize finds the plugin by its caller, which an inlined lambda hides.
+        string fmt = Loc.Localize("Chat.AutoRefit.SkinOnly.Fmt",
+            "[Proteus] {0} keeps its own shape; its skin is now drawn like {1}'s. Saved as \"{2}\" in {3} and switched on.");
         return new EndsOutput(model, KeepEnds.SkinOnlyLabel, RefitCore.LabelFrom(sourceName, [skin.Own.Option.Label]),
-                              savedIn => string.Format(Loc.Localize("Chat.AutoRefit.SkinOnly.Fmt",
-                                  "[Proteus] {0} keeps its own shape; its skin is now drawn like {1}'s. Saved as \"{2}\" in "
-                                + "{3} and switched on."), j.Item, endBody.Name, option, savedIn));
+                              savedIn => string.Format(fmt, j.Item, endBody.Name, option, savedIn));
     }
 
     /// <summary>
@@ -437,11 +438,11 @@ public sealed partial class AutoRefitWatcher
                                     item, bentBack));
             return null;
         }
+        string fmt = Loc.Localize("Chat.AutoRefit.Done.Fmt",
+            "[Proteus] {0} now fits {1}. Saved as \"{2}\" in {3} and switched on.");
         return new EndsOutput(finished.Model, refit.Target.Label,
                               RefitCore.LabelFrom(across ? sourceName : null, [pick.Option.Label]),
-                              savedIn => string.Format(Loc.Localize("Chat.AutoRefit.Done.Fmt",
-                                  "[Proteus] {0} now fits {1}. Saved as \"{2}\" in {3} and switched on."),
-                                  item, targetLabel, option, savedIn), finished.Materials);
+                              savedIn => string.Format(fmt, item, targetLabel, option, savedIn), finished.Materials);
     }
 
     private void SayUnsure(string item)

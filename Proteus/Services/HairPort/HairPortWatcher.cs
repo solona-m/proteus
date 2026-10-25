@@ -792,16 +792,18 @@ public sealed partial class HairPortWatcher : IDisposable
     private void Announce(string? line)
     {
         if (disposed) return;
+        // Localized here, not in the lambda: Loc.Localize finds the plugin by its caller, which an inlined lambda hides.
+        string text = line ?? CheapLoc.Loc.Localize("Chat.HairPort",
+            "[Proteus] This hairstyle's mod was made for another race, so Proteus has fitted it to yours and "
+          + "added that to the mod — everyone drawn with this mod on now sees it. You can undo that, or turn "
+          + "the feature off, under /proteus > Settings > Hair.");
         _ = Plugin.Framework.RunOnFrameworkThread(() =>
         {
             try
             {
                 if (disposed) return;
                 Plugin.ChatGui.Print(new Dalamud.Game.Text.SeStringHandling.SeStringBuilder()
-                    .AddUiForeground(line ?? CheapLoc.Loc.Localize("Chat.HairPort",
-                        "[Proteus] This hairstyle's mod was made for another race, so Proteus has fitted it to yours and "
-                      + "added that to the mod — everyone drawn with this mod on now sees it. You can undo that, or turn "
-                      + "the feature off, under /proteus > Settings > Hair."), 45)
+                    .AddUiForeground(text, 45)
                     .Build());
             }
             catch (Exception ex) { log.Warning(ex, "hair port: could not announce the port in chat"); }

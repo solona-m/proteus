@@ -2375,10 +2375,10 @@ public sealed partial class AutoRefitWatcher : IDisposable
     private void FlushSummary()
     {
         if (finished.Count == 0) return;
+        // Localized here, not in the lambda: inlined into System.Linq, Loc.Localize would not find the plugin.
+        string fmt = Loc.Localize("Chat.AutoRefit.Summary.Fmt", "[Proteus] Refitted to {0}: {1}.");
         var byBody = finished.GroupBy(f => f.Body, StringComparer.Ordinal)
-                             .Select(g => string.Format(Loc.Localize("Chat.AutoRefit.Summary.Fmt",
-                                                            "[Proteus] Refitted to {0}: {1}."),
-                                                        g.Key, string.Join(", ", g.Select(f => f.Item).Distinct())));
+                             .Select(g => string.Format(fmt, g.Key, string.Join(", ", g.Select(f => f.Item).Distinct())));
         finished.Clear();
         Chat(string.Join(" ", byBody), problem: false);
     }

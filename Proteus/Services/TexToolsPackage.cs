@@ -256,6 +256,8 @@ public static class TexToolsPackage
         Buffer.BlockCopy(slice, (int)headerSize, output, 0, (int)texHeaderLength);
         int written = (int)texHeaderLength;
 
+        // Localized here, not in the lambda: Loc.Localize finds the plugin by its caller, which an inlined lambda hides.
+        string blockSize = Loc.Localize("Import.Luminis.Tex.BlockSize", "A texture block did not decompress to its stated size.");
         WalkBlocks((from, length, stored, decompressed) =>
         {
             if (stored)
@@ -275,7 +277,7 @@ public static class TexToolsPackage
                 filled += got;
             }
             if (filled != decompressed)
-                throw new InvalidDataException(Loc.Localize("Import.Luminis.Tex.BlockSize", "A texture block did not decompress to its stated size."));
+                throw new InvalidDataException(blockSize);
             written += filled;
         });
 

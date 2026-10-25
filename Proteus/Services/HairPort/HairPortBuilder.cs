@@ -55,15 +55,19 @@ internal static class HairPortBuilder
         var current = new HashSet<ushort>();
         var warnings = new Dictionary<ushort, string>();
         var wanted = targets.Distinct().ToList();
+        // One reason for every target, worked out here and not in the lambda: Loc.Localize finds the plugin by its
+        // caller, and once the JIT inlines a lambda into System.Linq that caller is Linq — the player reads
+        // "#HairPort.Refused.NotInMod" instead of the sentence.
+        Dictionary<ushort, string> All(string why) => wanted.ToDictionary(t => t, _ => why);
 
         if (HairPortPlan.Parse(sourceGamePath) is not { } parsed)
-            return new Plan(writes, wanted.ToDictionary(t => t, _ => Loc.Localize("HairPort.Refused.NotHair",
+            return new Plan(writes, All(Loc.Localize("HairPort.Refused.NotHair",
                 "it is not a hairstyle model")), current);
         var (from, id) = parsed;
         if (PenumbraModMeta.IsLegacyFolder(modRoot))
-            return new Plan(writes, wanted.ToDictionary(t => t, _ => new PenumbraModMeta.LegacyFolderException(Path.GetFileName(modRoot)).Message), current);
+            return new Plan(writes, All(new PenumbraModMeta.LegacyFolderException(Path.GetFileName(modRoot)).Message), current);
         if (HairPortPlan.ReadOwners(modRoot) is not { } owners)
-            return new Plan(writes, wanted.ToDictionary(t => t, _ => HairPortWriter.Unreadable), current, Unreadable: true);
+            return new Plan(writes, All(HairPortWriter.Unreadable), current, Unreadable: true);
 
         // Each place that publishes the hairstyle from the author's own file — or from an earless copy of it, which is
         // ported from the author's file it was made from: a Miqo'te's ears come out of a port to a race without them
@@ -71,13 +75,13 @@ internal static class HairPortBuilder
         var serving = owners.Where(o => HairPortPlan.FileFor(o, sourceGamePath) is { } rel && !HairPortPlan.IsPortFile(rel))
                             .ToList();
         if (serving.FirstOrDefault(o => o.IsCombining) is { } combining)
-            return new Plan(writes, wanted.ToDictionary(t => t, _ => HairPortWriter.Combining(combining.Group)), current);
+            return new Plan(writes, All(HairPortWriter.Combining(combining.Group)), current);
         var sourceOf = new Dictionary<HairPortPlan.Owner, string>(ReferenceEqualityComparer.Instance);
         if (serving.Any(o => EarlessHairPlan.IsEarlessFile(HairPortPlan.FileFor(o, sourceGamePath)!)))
         {
             var earless = EarlessHairRecord.Read(modRoot);
             if (earless.Unreadable)
-                return new Plan(writes, wanted.ToDictionary(t => t, _ => EarlessHairRecord.UnreadableMessage), current, Unreadable: true);
+                return new Plan(writes, All(EarlessHairRecord.UnreadableMessage), current, Unreadable: true);
             var exists = EarlessHairPlan.Exists(modRoot);
             string? missing = null;
             foreach (var o in serving)
@@ -91,22 +95,22 @@ internal static class HairPortBuilder
             // same mod would get it again.
             serving.RemoveAll(o => !sourceOf.ContainsKey(o));
             if (serving.Count == 0 && missing != null)
-                return new Plan(writes, wanted.ToDictionary(t => t, _ => missing), current);
+                return new Plan(writes, All(missing), current);
         }
         else
             foreach (var o in serving) sourceOf[o] = HairPortPlan.FileFor(o, sourceGamePath)!;
         if (serving.Count == 0)
-            return new Plan(writes, wanted.ToDictionary(t => t, _ => Loc.Localize("HairPort.Refused.NotInMod",
+            return new Plan(writes, All(Loc.Localize("HairPort.Refused.NotInMod",
                 "the mod does not publish that hairstyle")), current);
 
         var authored = HairPortPlan.AuthoredRaces(owners, id).ToHashSet();
         var record = HairPortRecord.Read(modRoot);
         if (record.Unreadable)
-            return new Plan(writes, wanted.ToDictionary(t => t, _ => HairPortRecord.UnreadableMessage), current, Unreadable: true);
+            return new Plan(writes, All(HairPortRecord.UnreadableMessage), current, Unreadable: true);
         var sources = serving.Select(o => sourceOf[o]).Distinct(StringComparer.OrdinalIgnoreCase)
                              .ToDictionary(rel => rel, rel => ReadMod(modRoot, rel), StringComparer.OrdinalIgnoreCase);
         if (sources.Values.Any(b => b == null))
-            return new Plan(writes, wanted.ToDictionary(t => t, _ => Loc.Localize("Parts.Retarget.Bake.Unreadable",
+            return new Plan(writes, All(Loc.Localize("Parts.Retarget.Bake.Unreadable",
                 "the model could not be read")), current, Unreadable: true);
 
         // Which races a target's materials drag along: every race reading the same material file.
