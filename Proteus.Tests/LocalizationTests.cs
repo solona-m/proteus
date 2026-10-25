@@ -657,6 +657,30 @@ public sealed class LocalizationTests
     }
 
     /// <summary>
+    /// <c>Loc.Localize</c> finds the plugin's table by <c>Assembly.GetCallingAssembly()</c>. A lambda handed to LINQ is
+    /// fine at first, but once the JIT inlines it into <c>System.Linq</c> (tiered PGO devirtualizes the delegate) the
+    /// calling assembly is Linq's and the player reads <c>"#HairPort.Refused.NotInMod"</c> — on every hair port the
+    /// Studio refused, live, while every test passed. So no lambda calls it: the string is localized in the enclosing
+    /// method and the lambda captures it.
+    /// </summary>
+    [Fact]
+    public void NoLambdaCallsLocalize()
+    {
+        using var asm = AssemblyDefinition.ReadAssembly(ProteusAssembly.Location);
+        var inLambdas = new List<string>();
+        foreach (var type in asm.MainModule.GetTypes())
+        foreach (var method in type.Methods.Where(m => m.HasBody && m.Name.Contains(">b__", StringComparison.Ordinal)))
+        foreach (var ins in method.Body.Instructions)
+            if (ins.OpCode == OpCodes.Call && ins.Operand is MethodReference mr
+                && mr.DeclaringType.FullName == "CheapLoc.Loc" && mr.Name == "Localize"
+                && ins.Previous?.Previous?.Operand is string key)
+                inLambdas.Add($"  {type.FullName}.{method.Name}: {key}");
+        Assert.True(inLambdas.Count == 0,
+            "Loc.Localize called inside a lambda; localize in the enclosing method and capture the string:\n"
+            + string.Join("\n", inLambdas));
+    }
+
+    /// <summary>
     /// The <c>.Fmt</c> suffix is load-bearing, not decorative: it is how a translator knows a string
     /// carries arguments that must survive into their language.
     /// </summary>

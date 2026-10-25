@@ -105,6 +105,20 @@ internal static partial class HairPortPlan
     public static bool IsPortFile(string rel)
         => rel.Replace('\\', '/').StartsWith(Folder + "/", StringComparison.OrdinalIgnoreCase);
 
+    /// <summary>
+    /// The author's hairstyle a game path stands for: itself when the mod publishes it from a file of its own, or —
+    /// when only a port of ours publishes it — the hairstyle that port was made from. Studio opens whichever model the
+    /// player picked, a port included, and a port is never a source: ported again, every race would be refused as
+    /// "the mod does not publish that hairstyle".
+    /// </summary>
+    public static string AuthorSource(IReadOnlyList<Owner> owners, HairPortRecord record, string gamePath)
+    {
+        if (owners.Any(o => FileFor(o, gamePath) is { } rel && !IsPortFile(rel))) return gamePath;
+        string want = gamePath.Replace('\\', '/');
+        return record.Ports.FirstOrDefault(e => e.TargetGamePath.Replace('\\', '/').Equals(want, StringComparison.OrdinalIgnoreCase))
+                   ?.SourceGamePath ?? gamePath;
+    }
+
     /// <summary>One place in a mod that publishes files: the default data (empty group), or one option.</summary>
     /// <param name="Group">"" for the mod's default data.</param>
     /// <param name="Type">The group's type ("Single", "Multi", "Combining", …); "" for the default data.</param>

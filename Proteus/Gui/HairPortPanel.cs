@@ -63,8 +63,11 @@ internal sealed class HairPortPanel(Func<string, byte[]?> readGameFile, IPluginL
         => rows.Where(r => r.State is State.Open or State.Stale).Select(r => r.Race);
 
     private string? openKey;
-    private Task<List<Row>>? reading;
+    private Task<(string Source, List<Row> Rows)>? reading;
     private List<Row>? rows;
+    /// <summary>The author's hairstyle the open one stands for (<see cref="HairPortPlan.AuthorSource"/>): what is ported
+    /// and undone. Set with <see cref="rows"/>.</summary>
+    private string source = "";
     private readonly HashSet<ushort> ticked = [];
     /// <summary>A port or a removal in flight; <c>Removed</c> says which, for what the result line says.</summary>
     private Task<(HairPortBuilder.Plan Plan, HairPortWriter.Outcome Outcome, bool Removed)>? running;
@@ -79,7 +82,8 @@ internal sealed class HairPortPanel(Func<string, byte[]?> readGameFile, IPluginL
 
     /// <param name="modRoot">The open mod's folder.</param>
     /// <param name="modDir">Its folder name, as Penumbra knows it.</param>
-    /// <param name="sourceGamePath">The open hairstyle's game path.</param>
+    /// <param name="sourceGamePath">The open hairstyle's game path; a port of ours stands for the hairstyle it was made
+    /// from.</param>
     /// <param name="afterChange">The mod's files changed: reload it in Penumbra and redraw. Framework thread.</param>
     public void Draw(string modRoot, string modDir, string sourceGamePath, Action<string> afterChange)
     {
@@ -97,7 +101,7 @@ internal sealed class HairPortPanel(Func<string, byte[]?> readGameFile, IPluginL
         if (reading is { IsCompleted: true } r)
         {
             reading = null;
-            rows = r.IsCompletedSuccessfully ? r.Result : [];
+            (source, rows) = r.IsCompletedSuccessfully ? r.Result : (sourceGamePath, []);
             ticked.Clear();
             ticked.UnionWith(DefaultTicks(rows));
         }
@@ -141,10 +145,10 @@ internal sealed class HairPortPanel(Func<string, byte[]?> readGameFile, IPluginL
         }
 
         using (ImRaii.Disabled(ticked.Count == 0))
-            if (ImGui.Button(s.Port, new Vector2(-1, 0))) Start(modRoot, modDir, sourceGamePath, afterChange);
+            if (ImGui.Button(s.Port, new Vector2(-1, 0))) Start(modRoot, modDir, source, afterChange);
 
         if (rows.Any(row => row.State is State.Ported or State.Stale))
-            if (ImGui.Button(s.Remove)) Remove(modRoot, sourceGamePath);
+            if (ImGui.Button(s.Remove)) Remove(modRoot, source);
 
         if (result.Length > 0)
         {
@@ -162,9 +166,11 @@ internal sealed class HairPortPanel(Func<string, byte[]?> readGameFile, IPluginL
         {
             var owners = HairPortPlan.ReadOwners(modRoot) ?? [];
             var record = HairPortRecord.Read(modRoot);
-            var id = HairPortPlan.Parse(sourceGamePath)!.Value.Id;
-            return Rows(sourceGamePath, owners, record, race => readGameFile(HairPortPlan.HairPath(race, id)) != null,
-                        OutOfDate(modRoot, owners, record, readGameFile));
+            // A port of ours opened: the rows, the port and the undo are the author's hairstyle's it was made from.
+            var source = HairPortPlan.AuthorSource(owners, record, sourceGamePath);
+            var id = HairPortPlan.Parse(source)!.Value.Id;
+            return (source, Rows(source, owners, record, race => readGameFile(HairPortPlan.HairPath(race, id)) != null,
+                                 OutOfDate(modRoot, owners, record, readGameFile)));
         });
     }
 

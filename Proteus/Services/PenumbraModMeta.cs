@@ -1097,15 +1097,18 @@ internal static class PenumbraModMeta
             return;
         }
 
+        // Localized here, not in the lambda: Loc.Localize finds the plugin by its caller, which an inlined lambda hides.
+        string combiningFmt = CheapLoc.Loc.Localize("Service.ModMeta.Combining.Fmt",
+            "\"{0}\" is a combining group, whose files Proteus does not edit.");
+        string noOptionFmt = CheapLoc.Loc.Localize("Service.ModMeta.NoOption.Fmt",
+            "The group \"{0}\" has no option called \"{1}\".");
         EditGroup(modRoot, groupName, (group, list) =>
         {
             if (group["Containers"] is System.Text.Json.Nodes.JsonArray)
-                throw new InvalidOperationException(string.Format(CheapLoc.Loc.Localize("Service.ModMeta.Combining.Fmt",
-                    "\"{0}\" is a combining group, whose files Proteus does not edit."), groupName));
+                throw new InvalidOperationException(string.Format(combiningFmt, groupName));
             int at = IndexOfOption(list, optionName);
             if (at < 0 || list[at] is not System.Text.Json.Nodes.JsonObject option)
-                throw new InvalidOperationException(string.Format(CheapLoc.Loc.Localize("Service.ModMeta.NoOption.Fmt",
-                    "The group \"{0}\" has no option called \"{1}\"."), groupName, optionName));
+                throw new InvalidOperationException(string.Format(noOptionFmt, groupName, optionName));
             if (option["Files"] is not System.Text.Json.Nodes.JsonObject files) option["Files"] = files = [];
             var manips = option["Manipulations"] as System.Text.Json.Nodes.JsonArray;
             bool had = manips != null;
