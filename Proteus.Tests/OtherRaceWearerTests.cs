@@ -193,7 +193,8 @@ public class OtherRaceWearerTests
         var game = OtherRaceWearer.Build(Inputs(drawn: [SyntheticSkeleton.Sklb(drawn)]), garment);
         Assert.Empty(game.NeedsSkeleton!);
 
-        string race = File.ReadAllText(SourceFile("Proteus/Gui/BodyRetargetPanel.Race.cs"));
+        // CI's Windows checkout turns the source into CRLF; the two-line match below is written with \n.
+        string race = File.ReadAllText(SourceFile("Proteus/Gui/BodyRetargetPanel.Race.cs")).Replace("\r\n", "\n");
         int notes = race.IndexOf("private void DrawRaceNotes(Baked b)", StringComparison.Ordinal);
         string body = race[notes..race.IndexOf("internal static string SkeletonMod", notes, StringComparison.Ordinal)];
         Assert.Contains("ps.RetargetRaceBonesMovedFmt", body);
