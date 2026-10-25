@@ -1079,6 +1079,34 @@ internal static partial class BodyRetarget
     internal static Func<Vector3, bool>? BreastTest(SlotPair pair)
         => RegionTest([pair], bone => bone.Contains("mune", StringComparison.Ordinal), BreastWeight);
 
+    /// <summary>
+    /// Whether a chest in <paramref name="pairs"/> has a breast: any of its vertices weighted at least
+    /// <see cref="BreastWeight"/> to the breast bones, as <see cref="BreastTest"/> reads them. The Body SE's men's chest has
+    /// none at all. A chest whose file cannot be read, or reads as another mesh than the pair's, counts as having one.
+    /// </summary>
+    internal static bool BreastInPlay(IReadOnlyList<SlotPair> pairs)
+    {
+        foreach (var pair in pairs)
+        {
+            if (pair.Slot != "_top" || pair.TargetModel == null) continue;
+            if (ModelSkinReader.Read(pair.TargetModel, null, null) is not { } skin
+                || skin.VertexCount * 3 != pair.Target.Positions.Length) return true;
+            for (int v = 0; v < skin.VertexCount; v++)
+            {
+                float share = 0f;
+                for (int k = 0; k < XivLiveMesh.SkinnedMesh.MaxInfluences; k++)
+                {
+                    float x = skin.BoneWeights[v * XivLiveMesh.SkinnedMesh.MaxInfluences + k];
+                    int b = skin.BoneIndices[v * XivLiveMesh.SkinnedMesh.MaxInfluences + k];
+                    if (x > 0f && b < skin.BoneNames.Length && skin.BoneNames[b].Contains("mune", StringComparison.Ordinal))
+                        share += x;
+                }
+                if (share >= BreastWeight) return true;
+            }
+        }
+        return false;
+    }
+
     /// <summary>How far off the hip and upper thigh <see cref="LiftUnderbust"/> holds the cloth (3 mm).</summary>
     /// <remarks>
     /// The breast's 1 mm was not enough here: the hip bends with the leg, and on "Sirius" refitted onto YAB+ Large the

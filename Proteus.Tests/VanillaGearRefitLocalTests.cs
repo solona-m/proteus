@@ -17,7 +17,7 @@ namespace Proteus.Tests;
 /// inside it — and draws no chest skin there, so the new body's skin put in whole showed through the cloth under the bust
 /// and on the belly. Needs the game's data and the body mods named.
 /// </summary>
-public class VanillaGearRefitLocalTests(ITestOutputHelper output)
+public partial class VanillaGearRefitLocalTests(ITestOutputHelper output)
 {
     private const string Neolithe = LocalData.Mods + ":Neolithe [ALL IN ONE]";
     private const string Bibo = LocalData.Mods + ":Bibo+";
@@ -1169,11 +1169,10 @@ public class VanillaGearRefitLocalTests(ITestOutputHelper output)
         BodyRetarget.Planned Studio(bool gameGear)
         {
             var rule = RetargetInputs.StudioSkin(replaceSkin: true, cutHidden: true, clearBody: false, gameGear, "_top", crossSex: false);
-            return BodyRetarget.Plan(r.Garment, r.Bytes, [r.Pair], "_top", held: new HashSet<int>(), replaceSkin: true,
-                                     acrossBodies: true, clearBody: rule.ClearBody, cutHidden: true,
-                                     keepShape: RefitCore.ShapePieces(r.Garment, RefitCore.DefaultKeepShape(r.Garment)),
-                                     tuckSlot: rule.TuckSlot, deepClear: rule.DeepClear, keepStandoff: rule.KeepStandoff,
-                                     liftUnderbust: true);
+            return RetargetInputs.StudioPlan(r.Garment, r.Bytes, [r.Pair], "_top", new HashSet<int>(), layOnBody: true,
+                                             acrossBodies: true, rule, cut: true,
+                                             RefitCore.ShapePieces(r.Garment, RefitCore.DefaultKeepShape(r.Garment)),
+                                             carryPiercings: false, liftUnderbust: true);
         }
 
         // The run as the user made it, before this change: what the game logged, exactly.
@@ -1338,11 +1337,10 @@ public class VanillaGearRefitLocalTests(ITestOutputHelper output)
         if (garmentName == Coatee && (rel == AlmondXs || rel == AlmondM))
         {
             var rule = RetargetInputs.StudioSkin(true, true, false, gameGear: true, "_top", false);
-            var studio = BodyRetarget.Plan(garment, bytes, [pair], "_top", held: new HashSet<int>(), replaceSkin: true,
-                                           acrossBodies: true, clearBody: rule.ClearBody, cutHidden: true,
-                                           keepShape: RefitCore.ShapePieces(garment, RefitCore.DefaultKeepShape(garment)),
-                                           tuckSlot: rule.TuckSlot, deepClear: rule.DeepClear, keepStandoff: rule.KeepStandoff,
-                                           liftUnderbust: true, seeInside: rule.SeeInside);
+            var studio = RetargetInputs.StudioPlan(garment, bytes, [pair], "_top", new HashSet<int>(), layOnBody: true,
+                                                   acrossBodies: true, rule, cut: true,
+                                                   RefitCore.ShapePieces(garment, RefitCore.DefaultKeepShape(garment)),
+                                                   carryPiercings: false, liftUnderbust: true);
             Assert.Equal(after.Model, studio.Model);
         }
         // [AC-coatee-strap-slit-1/2] Inside the strap-tip region, from the user's camera: at most half of what 1357 left.
@@ -1724,8 +1722,9 @@ public class VanillaGearRefitLocalTests(ITestOutputHelper output)
     private static Vector3 Crossing(Vector3 o, Vector3 d, Drawn t)
         => Crosses(o, d, t.A, t.B, t.C) is float s ? o + d * s : o;
 
-    /// <summary>An orthographic view about (0, 1.2, 0) at 1 mm a pixel, 500 by 600, from <c>toCamera</c>.</summary>
-    private sealed class Raster(Vector3 toCamera)
+    /// <summary>An orthographic view about (0, <c>centreY</c>, 0) — 1.2 m unless given — at 1 mm a pixel, 500 by 600, from
+    /// <c>toCamera</c>.</summary>
+    private sealed class Raster(Vector3 toCamera, float centreY = 1.2f)
     {
         internal const int W = 500, H = 600;
         private readonly Vector3 right = Vector3.Normalize(Vector3.Cross(Vector3.UnitY, toCamera));
@@ -1735,8 +1734,16 @@ public class VanillaGearRefitLocalTests(ITestOutputHelper output)
 
         private (float X, float Y, float Z) P(Vector3 q)
         {
-            var d = q - new Vector3(0f, 1.2f, 0f);
+            var d = q - new Vector3(0f, centreY, 0f);
             return (Vector3.Dot(d, right) * 1000f + W / 2f, H / 2f - Vector3.Dot(d, Up) * 1000f, Vector3.Dot(d, toCamera));
+        }
+
+        /// <summary>Where in the world the fragment at <paramref name="pixel"/>'s centre lies, <paramref name="z"/> toward the
+        /// camera — the inverse of what <see cref="Fill"/> puts.</summary>
+        internal Vector3 At(int pixel, float z)
+        {
+            float x = pixel % W + 0.5f, y = pixel / W + 0.5f;
+            return new Vector3(0f, centreY, 0f) + right * ((x - W / 2f) / 1000f) + Up * ((H / 2f - y) / 1000f) + toCamera * z;
         }
 
         internal void Fill(Vector3 qa, Vector3 qb, Vector3 qc, Action<int, float> put)

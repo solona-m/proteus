@@ -13,21 +13,23 @@ namespace Proteus.Tests;
 /// the planned model on <c>test</c> 054b7d3 (each value taken from two separate test runs that agreed). Equality of two
 /// runs in one process proves nothing about a change to the shared cut; these do.
 /// </summary>
+[Trait("Plan", "EDGE-relax-sink-guard-15")]
 public class SkinTuckGoldenTests(ITestOutputHelper output)
 {
     private static readonly HashSet<int> NoneHeld = [];
 
-    /// <summary>A game top as it was before the neckline tuck and the deep clear (and the game chest's bra read).</summary>
+    /// <summary>A game top as it was before the neckline tuck and the deep clear (and the game chest's bra read, and the
+    /// relax guard).</summary>
     private static readonly BodyRetarget.Tuning Before = new(NoTuck: true, NoDeepClear: true, NoKeepStandoff: true,
-                                                            NoSourceWorn: true);
+                                                            NoSourceWorn: true, NoRelaxSinkGuard: true);
 
     /// <summary>A game top with the tuck as change (a) made it: no deep clear, no open skin.</summary>
     private static readonly BodyRetarget.Tuning TuckOnly = new(NoDeepClear: true, NoOpenSkin: true, NoKeepStandoff: true,
-                                                              NoSourceWorn: true);
+                                                              NoSourceWorn: true, NoRelaxSinkGuard: true);
 
-    /// <summary>A game top as it was before the standoff pass: everything else on but the game chest's bra read, which
-    /// came after.</summary>
-    private static readonly BodyRetarget.Tuning NoPull = new(NoKeepStandoff: true, NoSourceWorn: true);
+    /// <summary>A game top as it was before the standoff pass: everything else on but the game chest's bra read and the
+    /// relax guard, which came after.</summary>
+    private static readonly BodyRetarget.Tuning NoPull = new(NoKeepStandoff: true, NoSourceWorn: true, NoRelaxSinkGuard: true);
 
     private string Pinned(byte[] model, string expected)
     {
