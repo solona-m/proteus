@@ -279,6 +279,12 @@ internal sealed class RedrawHold
         => needFullRedraw || !useInPlace || owed;
 
     /// <summary>
+    /// Whether a reload of the character may happen: one Proteus starts itself only with Auto redraw on; one the user
+    /// asked for (switching Proteus off) always.
+    /// </summary>
+    internal static bool AutoRedrawAllows(bool autoRedraw, bool userRequested) => autoRedraw || userRequested;
+
+    /// <summary>
     /// Whether a composite reloads the character before sampling, to load a body mod's materials: as before, except
     /// in a release's own composite once its redraw has been seen — that redraw already loaded them.
     /// </summary>
