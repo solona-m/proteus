@@ -254,12 +254,13 @@ public sealed class SupplyChainTests
             return FlowItems(inline).Any(e => !NeverOnPush.Contains(e));
         }
 
-        // The block under on: — every following line indented deeper than column 0.
+        // The block under on: — every following line indented deeper than column 0, plus a YAML
+        // indentless sequence (`- push` at column 0), which is still the value of on:.
         var block = new List<string>();
         for (var i = on + 1; i < lines.Count; i++)
         {
             if (lines[i].Trim().Length == 0) continue;
-            if (Indent(lines[i]) == 0) break;
+            if (Indent(lines[i]) == 0 && !lines[i].StartsWith('-')) break;
             block.Add(lines[i]);
         }
         if (block.Count == 0) return false;
@@ -274,8 +275,9 @@ public sealed class SupplyChainTests
                 if (!NeverOnPush.Contains(Unquote(item[1..]))) return true;
                 continue;
             }
-            var m = Regex.Match(item, @"^([\w-]+):\s*(.*)$");
-            if (!m.Success || NeverOnPush.Contains(m.Groups[1].Value)) continue;
+            var m = KeyLine.Match(item);
+            if (!m.Success) return true;  // an event line this reader cannot parse: assume the worst
+            if (NeverOnPush.Contains(m.Groups[1].Value)) continue;
             if (!BranchEvents.Contains(m.Groups[1].Value)) return true;
             if (m.Groups[2].Value.Trim().Length > 0) return true;  // inline mapping: not modelled
 
@@ -286,6 +288,9 @@ public sealed class SupplyChainTests
         return false;
     }
 
+    /// <summary>A mapping key, bare or quoted, and its inline value.</summary>
+    private static readonly Regex KeyLine = new(@"^[""']?([\w-]+)[""']?:\s*(.*)$");
+
     private static bool EventMatches(List<string> body, string branch)
     {
         var filters = new Dictionary<string, List<string>>();
@@ -294,14 +299,17 @@ public sealed class SupplyChainTests
             var keyIndent = Indent(body[0]);
             for (var i = 0; i < body.Count; i++)
             {
-                if (Indent(body[i]) != keyIndent) continue;
-                var m = Regex.Match(body[i].Trim(), @"^([\w-]+):\s*(.*)$");
+                if (Indent(body[i]) != keyIndent || body[i].TrimStart().StartsWith('-')) continue;
+                var m = KeyLine.Match(body[i].Trim());
                 if (!m.Success) continue;
 
+                // Items sit deeper than the key, or at its own indent (an indentless sequence).
                 var items = m.Groups[2].Value.Trim().Length > 0 ? FlowItems(m.Groups[2].Value) : [];
-                for (var j = i + 1; j < body.Count && Indent(body[j]) > keyIndent; j++)
+                for (var j = i + 1; j < body.Count; j++)
                 {
                     var item = body[j].Trim();
+                    var deeper = Indent(body[j]) > keyIndent;
+                    if (!deeper && !(Indent(body[j]) == keyIndent && item.StartsWith('-'))) break;
                     if (item.StartsWith('-')) items.Add(Unquote(item[1..]));
                 }
                 filters[m.Groups[1].Value] = items;
@@ -852,6 +860,11 @@ public sealed class SupplyChainTests
     [InlineData("on:\n  push:\n    paths:\n      - 'worker/**'", true)]
     [InlineData("on:\n  push:\n    branches: [ main ]  # test later", false)]
     [InlineData("on:\n  - push", true)]
+    [InlineData("on:\n- push\njobs:", true)]
+    [InlineData("on:\n  push:\n    branches:\n    - test", true)]
+    [InlineData("on:\n  push:\n    branches:\n    - main\n    paths:\n    - 'x/**'", false)]
+    [InlineData("on:\n  'push':", true)]
+    [InlineData("on:\n  \"push\":\n    branches: [main]", false)]
     [InlineData("on:\n  - workflow_dispatch", false)]
     [InlineData("on: workflow_run", true)]
     [InlineData("on: [workflow_dispatch, schedule]", false)]
