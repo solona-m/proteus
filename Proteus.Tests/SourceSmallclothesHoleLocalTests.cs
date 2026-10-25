@@ -57,7 +57,7 @@ public class SourceSmallclothesHoleLocalTests(ITestOutputHelper output)
             garment, bytes, [pair], "_top", held: new HashSet<int>(), replaceSkin: true, acrossBodies: true,
             clearBody: true, cutHidden: true, keepShape: RefitCore.ShapePieces(garment, RefitCore.DefaultKeepShape(garment)),
             log: lines.Add, tuckSlot: rule.TuckSlot, deepClear: rule.DeepClear, keepStandoff: rule.KeepStandoff,
-            carryPiercings: false, liftUnderbust: true,
+            carryPiercings: false, liftUnderbust: true, relaxSinkGuard: rule.RelaxSinkGuard,
             trace: (stage, delta) =>
             {
                 if (stage == "lay") laid = delta;

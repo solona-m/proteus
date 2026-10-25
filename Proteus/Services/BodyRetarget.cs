@@ -757,6 +757,9 @@ internal static partial class BodyRetarget
     /// measured on the game's tops alone, so never a modder's top, nor a top the user refits for the other sex. A game top
     /// made only for men, which the automatic refit bakes for a woman wearing it, is still the game's own and gets it, as it
     /// gets the deep clear and the standoff.</param>
+    /// <param name="relaxSinkGuard">Keep a relax round from laying a cloth face onto skin that comes through its middle (see
+    /// <see cref="RelaxSinkTolerance"/>): the game's own gear, in the automatic refit and the Studio, never a modder's
+    /// garment. Only with <paramref name="clearBody"/>.</param>
     public static Planned Plan(ModelParts garment, byte[] garmentBytes, IReadOnlyList<SlotPair> pairs,
                                string? garmentSlot = null, bool pushOut = true, IReadOnlySet<int>? held = null,
                                bool replaceSkin = false, bool acrossBodies = false, bool clearBody = false,
@@ -765,7 +768,7 @@ internal static partial class BodyRetarget
                                string? chestSlot = null, Action<string, Vec3[]>? trace = null,
                                Outfit? outfit = null, string? tuckSlot = null, bool deepClear = false,
                                bool keepStandoff = false, bool carryPiercings = false, bool liftUnderbust = true,
-                               bool seeInside = false)
+                               bool seeInside = false, bool relaxSinkGuard = false)
     {
         // First, before anything reads the new chest: its nipples smoothed where the garment covers more of them than
         // the old body had, so every pass below sees one surface — the one the swap draws.
@@ -797,7 +800,7 @@ internal static partial class BodyRetarget
         bool standoff = keepStandoff && clearBody && garmentSlot == "_top" && !Tuned.NoKeepStandoff;
         var solved = Solve(garment, pairs, garmentSlot, pushOut, held, replaceSkin, clearBody, keepShape,
                            ModelSkinReader.Read(garmentBytes, null, null), swapSlot, parted, chestSlot, trace, outfit,
-                           deep, standoff, liftUnderbust);
+                           deep, standoff, liftUnderbust, relaxSinkGuard);
         if (solved.ShapeFallbacks > 0)
             log?.Invoke($"keep shape: {solved.ShapeFallbacks} turns of kept pieces too flat for the usual fit, made by the "
                         + "quaternion fit");
@@ -914,7 +917,7 @@ internal static partial class BodyRetarget
                                  XivLiveMesh.SkinnedMesh? garmentSkin = null, string? swapSlot = null,
                                  IReadOnlySet<int>? swapMeshes = null, string? chestSlot = null,
                                  Action<string, Vec3[]>? trace = null, Outfit? outfit = null, bool deepClear = false,
-                                 bool keepStandoff = false, bool liftUnderbust = true)
+                                 bool keepStandoff = false, bool liftUnderbust = true, bool relaxSinkGuard = false)
     {
         // With the skin replaced, the garment's OWN slot body is drawn after all — Rebuild embeds that very mesh in the
         // garment, so it is what the cloth ends up lying against. Asking for the swap is not enough: Rebuild only swaps
@@ -1002,7 +1005,9 @@ internal static partial class BodyRetarget
         }
 
         // Movement out of line with its neighbours evened out, snapped cloth included — see Relax.
-        if (drawn != null && !Tuned.NoRelax) Relax(sets, nodeDelta, SignedOff(drawn), stay, layers);
+        // The game's own gear, its faces guarded too: see Relax.
+        if (drawn != null && !Tuned.NoRelax)
+            Relax(sets, nodeDelta, SignedOff(drawn), stay, layers, GuardsRelax(relaxSinkGuard, clearBody, pairs) ? faceCheck : null);
         Stage("relax");
 
         if (faceCheck != null && pushedBy != null && !Tuned.NoFaceSettle)
@@ -1319,7 +1324,7 @@ internal static partial class BodyRetarget
 
     /// <summary>How far outside <paramref name="drawn"/> a point is, along the normal of the skin it is deepest in;
     /// past <see cref="PushProbeRange"/> it counts as clear.</summary>
-    private static Func<Vector3, float> SignedOff(TargetBody drawn)
+    internal static Func<Vector3, float> SignedOff(TargetBody drawn)
         => p => drawn.Deepest(p, PushProbeRange, out var hit) ? Vector3.Dot(p - hit.Point, hit.Normal) : float.PositiveInfinity;
 
     /// <summary>
@@ -1700,6 +1705,45 @@ internal static partial class BodyRetarget
     /// <summary>How far each <see cref="Relax"/> round takes a node toward its neighbours' movement (half way).</summary>
     internal const float RelaxRate = 0.5f;
 
+    /// <summary>How much deeper the drawn skin may come through a cloth triangle in a <see cref="Relax"/> round before the
+    /// round is taken back for its corners (0.1 mm, as <see cref="SettleTolerance"/>).</summary>
+    internal const float RelaxSinkTolerance = 1e-4f;
+
+    /// <summary>How many passes of <see cref="Relax"/>'s take-back follow one round's cascade — a corner put back sinking
+    /// or turning over a triangle beside it — before the round is taken back whole.</summary>
+    internal const int RelaxTakeBackPasses = 8;
+
+    /// <summary>
+    /// How far off the drawn skin every corner of a face must stand for <see cref="Relax"/> to hold it from sinking (2 mm,
+    /// <see cref="ClearFaceDeepest"/>): the body up through the middle of a face whose corners are all clear of it. The
+    /// game's Ruby Cotton Gilet on The Body SE had its patch's corners 3.1 mm off and more even after the relax laid it
+    /// down. Cloth lying on the skin — the game's tops over a woman's bust — is left to the passes after the relax: held
+    /// back there, the unevenness it kept came out as folds and as skin slivers at the Witch's Coatee's collar on
+    /// Neolithe's Almond M.
+    /// </summary>
+    internal const float RelaxGuardStandoff = ClearFaceDeepest;
+
+
+    /// <summary>Per node, whether it stands at least <see cref="RelaxGuardStandoff"/> off the drawn skin where
+    /// <paramref name="nodeDelta"/> puts it: what <see cref="Relax"/> reads as it begins.</summary>
+    internal static bool[] StandsOff(Sets sets, Vec3[] nodeDelta, Func<Vector3, float> signedOff)
+    {
+        var off = new bool[sets.NodeCount];
+        for (int n = 0; n < off.Length; n++) off[n] = signedOff(Placed(sets, nodeDelta, n)) >= RelaxGuardStandoff;
+        return off;
+    }
+
+    /// <summary>
+    /// Whether <see cref="Relax"/> guards the cloth's faces (see <see cref="RelaxSinkTolerance"/>): the game's own gear's
+    /// flag, only with the body cleared, and only where no chest in <paramref name="pairs"/> — the solve's own — has a
+    /// breast (<see cref="BreastInPlay"/>), unless <see cref="Tuning.NoRelaxSinkGuard"/>. Over a breast the passes built for
+    /// the bust act on the relaxed cloth, and held back there the game's Witch's Coatee came out a little worse on every
+    /// woman's body measured — more skin seen, two slivers at its collar — though the faces held were the gilet's kind.
+    /// The Body SE's men's chest carries no breast weight at all.
+    /// </summary>
+    internal static bool GuardsRelax(bool relaxSinkGuard, bool clearBody, IReadOnlyList<SlotPair> pairs)
+        => relaxSinkGuard && clearBody && !Tuned.NoRelaxSinkGuard && !BreastInPlay(pairs);
+
     /// <summary>
     /// Even out the cloth's movement where it is out of line with its neighbours: each cloth node moving more than
     /// <see cref="RelaxThreshold"/> differently from its neighbours' average is taken part way toward it, a few rounds.
@@ -1714,21 +1758,41 @@ internal static partial class BodyRetarget
     /// A node never comes closer to the drawn skin than <see cref="Clearance"/> (or than it already is, where that is
     /// less), and a round that turns a triangle over is taken back for that triangle's corners. Runs after the fold relax and before the underbust lift and <see cref="ClearFaces"/>,
     /// which have the last word on clearance.
+    /// <para/>
+    /// Given <paramref name="faces"/>, a round is also taken back for the corners of every cloth triangle whose corners all
+    /// stood <see cref="RelaxGuardStandoff"/> off the skin as the relax began, that it lays more than
+    /// <see cref="RelaxSinkTolerance"/> deeper onto the skin coming through its middle, and deeper than the face clearing
+    /// after it would lift it, were it a face it lifts (<see cref="ClearFaceDeepest"/>). Keeping the corners clear is not enough on coarse cloth:
+    /// the game's Ruby Cotton Gilet onto The Body SE had its corners pulled in up to 8.8 mm, every one still 3 mm off the
+    /// skin, and the rounder chest came up through the faces between them. Cloth lying on the skin is left as it was —
+    /// held back there, the game's tops over a woman's bust came out with folds and skin slivers — and so is a shallow
+    /// sink. The game's own gear only (see <see cref="GuardsRelax"/>): a modder's garment is relaxed as it always was.
     /// </summary>
+    /// <param name="faces">The push-out's face test, to guard the faces by; null leaves them to the vertex rule alone.</param>
+    /// <param name="passCap">How many passes follow a round's take-back before it is taken back whole (see
+    /// <see cref="RelaxTakeBackPasses"/>).</param>
     /// <param name="signedOff">How far a point is outside the drawn skin (negative inside); null when there is none.</param>
     /// <param name="stay">Nodes it may not move — the hard pieces.</param>
     /// <returns>How many nodes it moved.</returns>
     /// <param name="layers">Each node's partners on other sheets (see <see cref="LayerPartners"/>), which count among its
     /// neighbours by their weight: relaxed toward its own sheet alone, a sheet laid over another is evened out along
     /// itself and drifts from the one under it. Null for none.</param>
+    /// <param name="rounds">How many rounds (<see cref="RelaxRounds"/>); a test steps through them one at a time.</param>
+    /// <param name="standsOff">Which nodes stood clear of the skin as the relax began (see <see cref="StandsOff"/>): read
+    /// once, so a corner the relax itself pulls in never takes its face out of the guard. Null reads it here; a test
+    /// stepping through the rounds hands the same one to each.</param>
     internal static int Relax(Sets sets, Vec3[] nodeDelta, Func<Vector3, float>? signedOff, bool[]? stay = null,
-                              List<(int Node, float W)>?[]? layers = null)
+                              List<(int Node, float W)>?[]? layers = null, FaceCheck? faces = null,
+                              int passCap = RelaxTakeBackPasses, int rounds = RelaxRounds, bool[]? standsOff = null)
     {
         var isSkin = new bool[sets.NodeCount];
         foreach (int n in sets.SkinNodes) isSkin[n] = true;
         var moved = new bool[sets.NodeCount];
 
-        for (int round = 0; round < RelaxRounds; round++)
+        if (faces != null && signedOff == null)
+            throw new ArgumentException("guarding the faces needs the skin's distance", nameof(signedOff));
+        if (faces != null) standsOff ??= StandsOff(sets, nodeDelta, signedOff!);
+        for (int round = 0; round < rounds; round++)
         {
             var was = new Dictionary<int, Vec3>();
             var next = new Dictionary<int, Vec3>();
@@ -1763,6 +1827,15 @@ internal static partial class BodyRetarget
             }
             if (next.Count == 0) break;
 
+            if (faces != null)
+            {
+                // A round taken back whole leaves the next starting where this one did: it would only do the same.
+                if (Guarded(faces, standsOff!, nodeDelta, next, was, passCap)) break;
+                foreach (var n in next.Keys)
+                    if (!was.TryGetValue(n, out var back) || !back.Equals(nodeDelta[n])) moved[n] = true;
+                continue;
+            }
+
             // Folds the round would make before it is applied, so its triangles can be taken back.
             var before = new bool[sets.Tris.Length / 3];
             for (int t = 0; t < before.Length; t++) before[t] = TriTurnedOver(sets, nodeDelta, t);
@@ -1786,6 +1859,61 @@ internal static partial class BodyRetarget
                 if (!was.TryGetValue(n, out var back) || !back.Equals(nodeDelta[n])) moved[n] = true;
         }
         return moved.Count(m => m);
+
+        // The round applied, then taken back for the corners of every triangle it turns over, or lays onto the skin deeper
+        // than the face clearing lifts while its corners all stand clear, by the face check's own triangles: each pass
+        // looks again at the triangles around the corners the one before put back, which can sink or fold a neighbour,
+        // and a cascade the passes cannot follow takes the round back whole — which it returns.
+        static bool Guarded(FaceCheck faces, bool[] standsOff, Vec3[] nodeDelta, Dictionary<int, Vec3> next,
+                            Dictionary<int, Vec3> was, int passCap)
+        {
+            var foldWas = new bool[faces.Tris.Count];
+            for (int t = 0; t < foldWas.Length; t++) foldWas[t] = faces.TurnedOver(t, nodeDelta);
+            var depthWas = new Dictionary<int, float>();
+            foreach (int n in next.Keys)
+                foreach (int t in faces.TrisOf[n])
+                    if (faces.IsCloth[t] && !depthWas.ContainsKey(t)) depthWas[t] = faces.Depth(t, nodeDelta);
+            foreach (var (n, d) in next)
+            {
+                was[n] = nodeDelta[n];
+                nodeDelta[n] = d;
+            }
+
+            IEnumerable<int> check = Enumerable.Range(0, faces.Tris.Count);
+            for (int pass = 1; ; pass++)
+            {
+                var reverted = new HashSet<int>();
+                foreach (int t in check)
+                {
+                    if (!Sinks(t) && (foldWas[t] || !faces.TurnedOver(t, nodeDelta))) continue;
+                    var (a, b, c) = faces.Tris[t];
+                    foreach (int n in new[] { a, b, c })
+                        if (was.TryGetValue(n, out var back) && !back.Equals(nodeDelta[n]))
+                        {
+                            nodeDelta[n] = back;
+                            reverted.Add(n);
+                        }
+                }
+                if (reverted.Count == 0) return false;
+                if (pass >= passCap)
+                {
+                    foreach (var (n, back) in was) nodeDelta[n] = back;
+                    return true;
+                }
+                check = reverted.SelectMany(n => faces.TrisOf[n]).Distinct().ToList();
+            }
+
+            // Deeper by more than the tolerance, deeper than the face clearing lifts any face, and every corner standing
+            // clear as the relax began: the body up through the middle of a face whose corners were off it.
+            bool Sinks(int t)
+            {
+                if (!depthWas.TryGetValue(t, out float d0)) return false;
+                var (a, b, c) = faces.Tris[t];
+                if (!standsOff[a] || !standsOff[b] || !standsOff[c]) return false;
+                float d1 = faces.Depth(t, nodeDelta);
+                return d1 > d0 + RelaxSinkTolerance && d1 + Clearance > ClearFaceDeepest;
+            }
+        }
 
         // Facing the other way from how the author drew it.
         static bool TriTurnedOver(Sets sets, Vec3[] nodeDelta, int t)

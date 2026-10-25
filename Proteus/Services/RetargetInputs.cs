@@ -167,8 +167,10 @@ internal static class RetargetInputs
     /// <param name="DeepClear">See <see cref="RefitCore.DeepClearFor"/>.</param>
     /// <param name="KeepStandoff">See <see cref="RefitCore.KeepStandoffFor"/>.</param>
     /// <param name="SeeInside">See <see cref="RefitCore.SeeInsideFor"/>: only with a tuck.</param>
+    /// <param name="RelaxSinkGuard">See <see cref="BodyRetarget.RelaxSinkTolerance"/>: the game's own top or legs with the
+    /// new body's skin, as the automatic refit has it — in effect only with the body cleared.</param>
     internal readonly record struct StudioSkinRule(bool ClearForced, bool ClearBody, string? TuckSlot, bool DeepClear,
-                                                   bool KeepStandoff, bool SeeInside);
+                                                   bool KeepStandoff, bool SeeInside, bool RelaxSinkGuard);
 
     /// <summary>
     /// The Body size tool's rule for the body under a whole garment's cloth. A modder's garment gets the user's boxes, as
@@ -188,11 +190,34 @@ internal static class RetargetInputs
         bool clear = clearBody || forced;
         var game = AutoRefitDecisions.SkinFor(true);
         string? tuck = RefitCore.TuckSlot(cutHidden && clear, garmentSlot);
+        // The relax guard follows the automatic refit, which plans the game's tops and legs (its gloves and shoes keep
+        // their ends): with the box ticked the Studio's game legs are the automatic refit's, argument for argument.
+        bool guard = gameGear && replaceSkin && !crossSex && (garmentSlot is "_top" or "_dwn") && game.RelaxSinkGuard;
         return new StudioSkinRule(forced, clear, tuck,
                                   forced && RefitCore.DeepClearFor(game.DeepClear, garmentSlot),
                                   forced && RefitCore.KeepStandoffFor(game.KeepStandoff, garmentSlot),
-                                  forced && tuck != null && RefitCore.SeeInsideFor(game.SeeInside, garmentSlot));
+                                  forced && tuck != null && RefitCore.SeeInsideFor(game.SeeInside, garmentSlot), guard);
     }
+
+    /// <summary>
+    /// The Body size tool's refit of a whole garment through its own slot, under <paramref name="rule"/>: the call the
+    /// panel makes, here so the tests that hold the Studio to the automatic refit make exactly that call.
+    /// </summary>
+    /// <param name="layOnBody">Replace the garment's skin with the new body's (see <see cref="BodyRetarget.Plan"/>).</param>
+    /// <param name="cut">Leave out the new body's skin where the author deleted theirs.</param>
+    /// <param name="pieces">Pieces moved whole (see <see cref="BodyRetarget.KeepShape"/>).</param>
+    /// <param name="carryPiercings">See <see cref="CarryPiercings"/>.</param>
+    /// <param name="liftUnderbust">See <see cref="BodyRetarget.Plan"/>.</param>
+    internal static BodyRetarget.Planned StudioPlan(ModelParts garment, byte[] bytes, IReadOnlyList<BodyRetarget.SlotPair> pairs,
+                                                    string garmentSlot, IReadOnlySet<int>? held, bool layOnBody,
+                                                    bool acrossBodies, StudioSkinRule rule, bool cut,
+                                                    IReadOnlyList<IReadOnlyCollection<int>>? pieces, bool carryPiercings,
+                                                    bool liftUnderbust, Action<string>? log = null, Action<string>? warn = null)
+        => BodyRetarget.Plan(garment, bytes, pairs, garmentSlot, held: held, replaceSkin: layOnBody,
+                             acrossBodies: acrossBodies, clearBody: rule.ClearBody, cutHidden: cut, keepShape: pieces,
+                             log: log, warn: warn, tuckSlot: rule.TuckSlot, deepClear: rule.DeepClear,
+                             keepStandoff: rule.KeepStandoff, carryPiercings: carryPiercings,
+                             liftUnderbust: liftUnderbust, seeInside: rule.SeeInside, relaxSinkGuard: rule.RelaxSinkGuard);
 
     /// <summary>The headless refit's <c>--piercings</c>: the new body's piercings come in only when it is given.</summary>
     internal static bool CliCarryPiercings(IReadOnlyDictionary<string, string> opts) => opts.ContainsKey("piercings");
