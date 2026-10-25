@@ -54,13 +54,37 @@ public class HairPortBakerTests
 
     [Fact]
     [Trait("Plan", "EDGE-hair-race-port-30")]
-    public void A_port_that_sinks_into_the_head_is_refused()
+    public void A_port_that_sinks_into_the_head_is_saved_with_a_warning()
     {
+        // Once refused (EDGE-hair-race-port-30); now saved, and said, as the folds are.
         // The target's head is a third larger than the hair: the hair lies inside it.
         var result = Port(HairModel(801), 801, 201, out var why, targetHead: HeadModel(201, 0.13f));
-        Assert.Null(result);
-        Assert.Contains("c0201", why);
-        Assert.Contains("%", why);
+        Assert.True(result != null, why);
+        Assert.True(result!.Sunk > HairPortBaker.SunkLimit);
+        Assert.Contains("c0201", result.Warning);
+        Assert.Contains("%", result.Warning);
+        Assert.DoesNotContain("inside out", result.Warning);
+    }
+
+    /// <summary>A port that both sinks and turns over says both.</summary>
+    [Fact]
+    [Trait("Plan", "EDGE-hair-race-port-30")]
+    public void A_port_that_sinks_and_folds_says_both()
+    {
+        var mirror = Matrix4x4.CreateScale(-1f, 1f, 1f);
+        var pbd = new XivLiveMesh.PbdFile(BuildPbd(
+        [
+            (101, ushort.MaxValue, new() { ["j_kao"] = Matrix4x4.Identity }),
+            (201, 101, new() { ["j_kao"] = Matrix4x4.Identity }),
+            (801, 201, new() { ["j_kao"] = Matrix4x4.CreateTranslation(Offset(801)) }),
+            (1101, 101, new() { ["j_kao"] = Matrix4x4.CreateTranslation(Offset(1101)) }),
+            (1201, 1101, new() { ["j_kao"] = mirror }),
+        ]));
+        var result = HairPortBaker.Prepare(HairModel(801), 801, 1201, Id, pbd, NoExtra, HeadModel(801),
+                                           HeadModel(1201, 0.13f), out var why);
+        Assert.True(result != null, why);
+        Assert.Contains("sinks into the skull", result!.Warning);
+        Assert.Contains("inside out", result.Warning);
     }
 
     [Fact]
