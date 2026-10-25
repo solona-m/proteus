@@ -287,7 +287,7 @@ La section **Cheveux** adapte les mods de cheveux à votre personnage de deux fa
 - La section affiche la vérification pendant qu'elle se déroule, avec **Annuler**, et liste chaque coiffure adaptée. Chacune a son propre bouton **Annuler**, et **Annuler tout ce que cette vérification a adapté** les rétablit toutes (cliquez deux fois). Une coiffure annulée n'est pas adaptée de nouveau d'elle-même.
 - Uniquement pour votre propre race, à partir de races du même sexe. Une race que vous ne faites qu'essayer n'est pas adaptée : Proteus attend que vous l'ayez gardée 30 secondes.
 - Les cheveux à physique gardent leur physique. Quand le squelette de votre race n'a pas les os avec lesquels une coiffure bouge, le portage apporte le squelette et la physique de la race d'origine pour cette coiffure.
-- Une coiffure qui ne tomberait pas correctement sur votre tête est laissée telle quelle, et la liste en indique la raison.
+- Une coiffure qui ne tomberait pas correctement sur votre tête (elle s'y enfonce ou s'en écarte) est tout de même adaptée, et Proteus dit laquelle, pour que vous la vérifiiez en jeu.
 - Une coiffure que la courbure retourne en partie est tout de même adaptée, et Proteus dit laquelle, pour que vous la vérifiiez en jeu.
 - Pour couvrir toutes les races d'un coup, ouvrez un modèle de cheveux dans le **Studio** et utilisez **Transposer à toutes les races**.
 

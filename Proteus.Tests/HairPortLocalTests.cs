@@ -124,7 +124,8 @@ public sealed class HairPortLocalTests(ITestOutputHelper o)
         Assert.True(refused.Count * 20 <= ports + refused.Count, string.Join("\n", refused));
     }
 
-    /// <summary>A hairstyle that has not been bent at all sits nowhere near a distant race's head, and is refused.</summary>
+    /// <summary>A hairstyle that has not been bent at all sits nowhere near a distant race's head, and fails the fit
+    /// check (which warns, never refuses).</summary>
     [LocalDataTheory(LocalData.GameData)]
     [InlineData((ushort)1201, (ushort)201)]   // a Lalafell's, far below a Midlander's head
     [InlineData((ushort)201, (ushort)1201)]   // a Midlander's, far above a Lalafell's

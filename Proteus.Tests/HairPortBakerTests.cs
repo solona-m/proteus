@@ -66,6 +66,18 @@ public class HairPortBakerTests
         Assert.DoesNotContain("inside out", result.Warning);
     }
 
+    /// <summary>The other half of the fit check: on a smaller head the hair sinks into nothing but stands off it.</summary>
+    [Fact]
+    [Trait("Plan", "EDGE-hair-race-port-30")]
+    public void A_port_that_stands_off_the_head_is_saved_with_a_warning()
+    {
+        var result = Port(HairModel(801), 801, 201, out var why, targetHead: HeadModel(201, 0.07f));
+        Assert.True(result != null, why);
+        Assert.True(result!.Sunk <= HairPortBaker.SunkLimit, $"sunk {result.Sunk:P0}");
+        Assert.True(MathF.Abs(result.GapShift) > HairPortBaker.GapMargin, $"gap shift {result.GapShift}");
+        Assert.Contains("c0201", result.Warning);
+    }
+
     /// <summary>A port that both sinks and turns over says both.</summary>
     [Fact]
     [Trait("Plan", "EDGE-hair-race-port-30")]

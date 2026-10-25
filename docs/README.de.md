@@ -287,7 +287,7 @@ Der Abschnitt **Haare** passt Haar-Mods auf zwei Arten an dich an: Haar, das fü
 - Der Abschnitt zeigt die laufende Prüfung mit **Abbrechen** an und listet jede Frisur auf, die sie angepasst hat. Jede hat ihr eigenes **Rückgängig**, und **Alles rückgängig machen, was diese Prüfung angepasst hat** nimmt alle zurück (zweimal klicken). Eine rückgängig gemachte Frisur wird nicht von selbst erneut angepasst.
 - Nur für dein eigenes Volk, und nur von Völkern desselben Geschlechts. Ein Volk, das du nur ausprobierst, wird nicht angepasst: Proteus wartet, bis du es 30 Sekunden lang behalten hast.
 - Physik-Haar behält seine Physik. Fehlen dem Skelett deines Volkes die Knochen, mit denen sich eine Frisur bewegt, bringt die Übertragung für diese Frisur das Skelett und die Physik des Ausgangsvolkes mit.
-- Eine Frisur, die nicht richtig auf deinem Kopf sitzen würde, bleibt unangetastet, und die Liste sagt, warum.
+- Eine Frisur, die nicht richtig auf deinem Kopf sitzen würde (sie sinkt in ihn ein oder steht von ihm ab), wird trotzdem angepasst, und Proteus sagt, welche, damit du sie im Spiel prüfen kannst.
 - Eine Frisur, die die Biegung teilweise nach innen stülpt, wird trotzdem angepasst, und Proteus sagt, welche, damit du sie im Spiel prüfen kannst.
 - Um alle Völker auf einmal abzudecken, öffne ein Haarmodell im **Studio** und nutze **Auf alle Völker übertragen**.
 
