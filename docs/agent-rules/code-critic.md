@@ -32,7 +32,8 @@ them by hand.
 
 Build-enforced: the localization rule (`Proteus.Tests/LocalizationTests.cs`:
 keys, placeholders and format specifiers match English across every locale,
-code keys match `en.json`).
+code keys match `en.json`) and the supply-chain rule
+(`Proteus.Tests/SupplyChainTests.cs`).
 
 ## Rules
 
@@ -94,6 +95,16 @@ code keys match `en.json`).
   build crashes on CPUs without it. `FAIL` if a diff adds it. Diff-scoped,
   `Proteus/native/`.
 
+### Supply chain
+
+- **NuGet versions are plain and match the lock file; actions are pinned to a
+  commit SHA with a `# vX.Y.Z` comment.** A floating (`2.*`) or ranged
+  PackageReference, a `uses:` on a tag or branch, or a `packages.lock.json`
+  `resolved`/`contentHash` change in a diff that only pins versions is
+  `FAIL`: a tag or a float can change the code a release builds without any
+  diff here. Only the read-only `codeql.yml` may run on a push to `test`.
+  Build-enforced by `SupplyChainTests`. Repo-wide.
+
 ### Commits
 
 - **No real name and no Claude attribution in commits**; the author is
@@ -132,4 +143,5 @@ Tag items "(if applicable)" when they only apply to certain diffs.
 - [ ] New strings localized in all 8 locale files, translated; LocalizationTests not weakened (if applicable)
 - [ ] No local paths in tests; real data via LocalData + [LocalDataFact] (if applicable)
 - [ ] Native shim not built with /arch:AVX2 (if applicable)
+- [ ] NuGet versions plain and matching the lock file; actions SHA-pinned; SupplyChainTests not weakened (if applicable)
 - [ ] Commits authored as Solona, no real name, no Claude attribution
