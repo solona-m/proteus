@@ -111,6 +111,15 @@ public class HairPortPlanTests
         // The author's own hairstyle, and a path no port of ours made, are themselves.
         Assert.Equal(Miqote, HairPortPlan.AuthorSource(owners, record, Miqote));
         Assert.Equal(Midlander, HairPortPlan.AuthorSource(owners, new HairPortRecord(), Midlander));
+        // Two ports of one target, from the author's race in two options: the file opened says which.
+        const string Elezen = "chara/human/c0601/obj/hair/h0130/model/c0601h0130_hir.mdl";
+        var two = new HairPortRecord();
+        two.Ports.Add(new HairPortRecord.Entry { SourceGamePath = Miqote, TargetGamePath = Midlander, File = "Hair Ports/A/m.mdl" });
+        two.Ports.Add(new HairPortRecord.Entry { SourceGamePath = Elezen, TargetGamePath = Midlander, File = "Hair Ports/B/m.mdl" });
+        Assert.Equal(Elezen, HairPortPlan.AuthorSource(owners, two, Midlander, "Hair Ports\\B\\m.mdl"));
+        Assert.Equal(Miqote, HairPortPlan.AuthorSource(owners, two, Midlander, "Hair Ports/A/m.mdl"));
+        Assert.Equal(Miqote, HairPortPlan.AuthorSource(owners, two, Midlander));
+
         // The author publishing the path from a file of their own wins over a port recorded for it.
         owners.Add(O("Style", "Own", "Single", (Midlander, "mid.mdl")));
         Assert.Equal(Midlander, HairPortPlan.AuthorSource(owners, record, Midlander));

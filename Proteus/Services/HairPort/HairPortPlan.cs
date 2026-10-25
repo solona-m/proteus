@@ -111,12 +111,20 @@ internal static partial class HairPortPlan
     /// player picked, a port included, and a port is never a source: ported again, every race would be refused as
     /// "the mod does not publish that hairstyle".
     /// </summary>
-    public static string AuthorSource(IReadOnlyList<Owner> owners, HairPortRecord record, string gamePath)
+    /// <param name="openFile">The mod-relative file opened, which tells apart ports of one target made from different
+    /// sources (the author's race A in one option and race B in another, both ported to C). Without it, or when no
+    /// port is that file, the first port of the target recorded.</param>
+    public static string AuthorSource(IReadOnlyList<Owner> owners, HairPortRecord record, string gamePath,
+                                      string? openFile = null)
     {
         if (owners.Any(o => FileFor(o, gamePath) is { } rel && !IsPortFile(rel))) return gamePath;
         string want = gamePath.Replace('\\', '/');
-        return record.Ports.FirstOrDefault(e => e.TargetGamePath.Replace('\\', '/').Equals(want, StringComparison.OrdinalIgnoreCase))
-                   ?.SourceGamePath ?? gamePath;
+        var ports = record.Ports.Where(e => e.TargetGamePath.Replace('\\', '/').Equals(want, StringComparison.OrdinalIgnoreCase))
+                                .ToList();
+        var exact = openFile == null ? null
+                  : ports.FirstOrDefault(e => HairPortRecord.Rel(e.File).TrimStart('/').Equals(
+                        HairPortRecord.Rel(openFile).TrimStart('/'), StringComparison.OrdinalIgnoreCase));
+        return (exact ?? ports.FirstOrDefault())?.SourceGamePath ?? gamePath;
     }
 
     /// <summary>One place in a mod that publishes files: the default data (empty group), or one option.</summary>

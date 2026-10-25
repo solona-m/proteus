@@ -669,7 +669,9 @@ public sealed class LocalizationTests
         using var asm = AssemblyDefinition.ReadAssembly(ProteusAssembly.Location);
         var inLambdas = new List<string>();
         foreach (var type in asm.MainModule.GetTypes())
-        foreach (var method in type.Methods.Where(m => m.HasBody && m.Name.Contains(">b__", StringComparison.Ordinal)))
+        // A lambda's own method, or — for an async lambda — the state machine its body is compiled into.
+        foreach (var method in type.Methods.Where(m => m.HasBody && (m.Name.Contains(">b__", StringComparison.Ordinal)
+                                                                     || type.FullName.Contains(">b__", StringComparison.Ordinal))))
         foreach (var ins in method.Body.Instructions)
             if (ins.OpCode == OpCodes.Call && ins.Operand is MethodReference mr
                 && mr.DeclaringType.FullName == "CheapLoc.Loc" && mr.Name == "Localize"
