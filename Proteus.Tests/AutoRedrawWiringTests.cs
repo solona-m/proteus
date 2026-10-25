@@ -67,7 +67,7 @@ public class AutoRedrawWiringTests
     {
         var publish = Source("Services/CompositorService.Publish.cs");
         const string gate = "RedrawHold.AutoRedrawAllows(config.AutoRedraw, userRequested)";
-        var reload = Method(publish, "void ReloadAndRedraw(");
+        var reload = Method(publish, "bool ReloadAndRedraw(");
         Assert.Contains(gate, reload);
         // The withdrawal reaches Penumbra whatever the setting; only the redraw is gated.
         int dir = reload.IndexOf("ReloadModDirectory(", System.StringComparison.Ordinal);

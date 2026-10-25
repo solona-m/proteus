@@ -741,4 +741,10 @@ internal static class AutoRefitDecisions
         }
         return changed;
     }
+
+    /// <summary>
+    /// Whether an undo redraws: only when it touched a mod (removed a size, deleted a mod, or failed trying) or switched a
+    /// group back. The redraw shows the undo's result; an undo that found nothing has none.
+    /// </summary>
+    internal static bool UndoRedraws(int modsTouched, int groupsSwitchedBack) => modsTouched > 0 || groupsSwitchedBack > 0;
 }

@@ -217,15 +217,18 @@ public partial class CompositorService
 
             if (entries.Count == 0)
             {
+                // A shell hosted on an accessory (a rewritten skin material, or anything on the head) needs a full redraw to
+                // go away. This early return skips the normal end-of-method reset, hence doing it explicitly.
+                bool withdrawing = compositor._secondSkinActive || compositor._lastSkinMaterialRedirects.Count > 0
+                                || compositor._lastHeadRedirects.Count > 0;
+                if (withdrawing) compositor._needFullRedraw = true;
+
                 var empty = new Dictionary<string, string>();
-                compositor.WriteManagedModJson(empty);
+                // Whether the empty output was already drawn is read under the same lock as this write.
+                var (stamp, alreadyDrawn) = compositor.WriteManagedModJson(empty);
                 // Recorded so the history reflects reality: once this empty manifest ages out, everything becomes collectable.
                 compositor.RecordPublish(empty);
 
-                // A shell hosted on an accessory (a rewritten skin material, or anything on the head) needs a full redraw to
-                // go away. This early return skips the normal end-of-method reset, hence doing it explicitly.
-                if (compositor._secondSkinActive || compositor._lastSkinMaterialRedirects.Count > 0
-                    || compositor._lastHeadRedirects.Count > 0) compositor._needFullRedraw = true;
                 compositor._secondSkinActive = false;
                 compositor._lastShellHostPaths = new(StringComparer.OrdinalIgnoreCase);
                 compositor._lastSkinMaterialRedirects = new(StringComparer.OrdinalIgnoreCase);
@@ -252,10 +255,15 @@ public partial class CompositorService
                 // exempt equipment-change trigger while a shell stood, and the old look stays until something redraws
                 // the character. _needFullRedraw stays set for the next reload Proteus starts. Carrier removal above and
                 // the owed-redraw watchdog may still redraw: neither is this reload.
-                compositor.ReloadAndRedraw("composite: no enabled mods");
-                timeline.Mark("publish+reload");
+                // Once the empty output has been drawn, an idle trigger (an equip, a body mod) has nothing to show: only
+                // Penumbra's re-read runs, unless something is being withdrawn now.
+                bool redrawsCharacter = RedrawHold.EmptyPublishRedraws(alreadyDrawn, withdrawing);
+                if (compositor.ReloadAndRedraw("composite: no enabled mods", redraw: redrawsCharacter) || !redrawsCharacter)
+                    compositor.MarkEmptyOutputDrawn(stamp);
+                timeline.Mark(redrawsCharacter ? "publish+reload" : "publish");
                 compositor.LogRefreshTimeline(timeline,
-                    compositor.config.AutoRedraw ? "no enabled mods" : "no enabled mods (redraw withheld)");
+                    !redrawsCharacter ? "no enabled mods (already drawn)"
+                    : compositor.config.AutoRedraw ? "no enabled mods" : "no enabled mods (redraw withheld)");
                 compositor.LastResult = new CompositorResult { Success = true, TexturesPatched = 0, OverlayModsUsed = 0, Epoch = epoch };
                 compositor.ResultChanged?.Invoke();
                 return false;

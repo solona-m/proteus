@@ -470,7 +470,9 @@ public sealed partial class AutoRefitWatcher : IDisposable
                     foreach (var (piece, _) in authorGroups) pref.Declined.Add(piece.Key);
 
                     config.Save();
-                    compositor.RedrawForChangedModel("auto refit undone");
+                    // The redraw only shows what the undo changed: nothing undone, nothing to show.
+                    if (AutoRefitDecisions.UndoRedraws(results.Count, keys.Count))
+                        compositor.RedrawForChangedModel("auto refit undone");
                     return count;
                 });
 

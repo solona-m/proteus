@@ -87,7 +87,8 @@ public partial class CompositorService
     }
 
     /// <param name="userRequested">See <see cref="RefreshPlayerTextures"/>: the redraw is the action, so auto redraw does not gate it.</param>
-    private void ReloadAndRedraw(string cause, bool redraw = true, bool userRequested = false)
+    /// <returns>Whether the character reload was handed off; Penumbra re-reads the managed mod either way.</returns>
+    private bool ReloadAndRedraw(string cause, bool redraw = true, bool userRequested = false)
     {
         var ec = penumbra.ReloadModDirectory(SidecarDiscoveryService.ManagedModDir);
         log.Debug("[Proteus] ReloadMod -> {0}", ec);
@@ -96,6 +97,38 @@ public partial class CompositorService
             // Give Penumbra's async reload time to process before the refresh re-requests textures.
             Thread.Sleep(300);
             RefreshPlayerTextures(cause, userRequested);
+            return true;
+        }
+        return false;
+    }
+
+    /// <summary>
+    /// The live manifest is empty and the character has been reloaded since it went live, so an idle "no enabled mods"
+    /// composite has nothing to show. Starts false on every load. Changed only under <see cref="_manifestLock"/>: every
+    /// manifest write clears it (<see cref="WriteManagedModJson"/>), and only <see cref="MarkEmptyOutputDrawn"/> sets it.
+    /// </summary>
+    private volatile bool _emptyOutputDrawn;
+
+    /// <summary>Counts manifest writes and forgets, under <see cref="_manifestLock"/>, so a stale mark is refused.</summary>
+    private long _manifestWrites;
+
+    /// <summary>
+    /// Record that the empty manifest written as <paramref name="stamp"/> is drawn, unless anything has written the
+    /// manifest (or forgotten the flag) since: an older run finishing after a newer publish must not mark it.
+    /// </summary>
+    private void MarkEmptyOutputDrawn(long stamp)
+    {
+        lock (_manifestLock)
+            if (_manifestWrites == stamp) _emptyOutputDrawn = true;
+    }
+
+    /// <summary>A user refresh must reload the character even when idle: forget the flag and refuse any mark in flight.</summary>
+    private void ForgetEmptyOutputDrawn()
+    {
+        lock (_manifestLock)
+        {
+            _manifestWrites++;
+            _emptyOutputDrawn = false;
         }
     }
 

@@ -338,13 +338,15 @@ public partial class CompositorService
                         // Two agreeing readings: publish, so the corrective recomposite uses them (dirty stays false).
                         _activeMtrlSnapshot = snapshot;
                         _activeMtrlSnapshotDirty = false;
+                        _activeMtrlSnapshotRewalk = false;
                         config.CachedActiveMaterialPaths = snapshot.ToList();
                     }
                     else
                     {
-                        // Still moving at the cap, or incoherent: still worth a corrective composite, but mark dirty rather than publish an
-                        // unverified read, and let the preamble's settle establish the truth.
-                        _activeMtrlSnapshotDirty = true;
+                        // Still moving at the cap, or incoherent: still worth a corrective composite, but ask for a fresh
+                        // walk rather than publish an unverified read; the trigger's settle walk re-reads it. Not dirty: no
+                        // body mod changed, and this publish already reloaded the character, so a preamble reload is waste.
+                        _activeMtrlSnapshotRewalk = true;
                     }
                     if (confirmed && settledShapes != null) _bodyShapeSnapshot = settledShapes;
                     TriggerRecomposite("post-settle-correction", force: false);
