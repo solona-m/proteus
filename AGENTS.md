@@ -70,7 +70,7 @@ documented by that workflow's own tooling (e.g. its installed plugin).
 ## Commands
 
 - `dotnet build Proteus/Proteus.csproj -c Release` — build
-- `dotnet build Proteus.Refit/Proteus.Refit.csproj -c Release` — build the headless refit CLI (not built by the tests; run it whenever `Proteus.Refit/` changes)
+- `dotnet build Proteus.Refit/Proteus.Refit.csproj -c Release` — build the headless refit CLI (the tests build it too, for its `--size-set` tests; still run it whenever `Proteus.Refit/` changes)
 - `dotnet test Proteus.Tests/Proteus.Tests.csproj -c Release` — run all tests
 - `dotnet test Proteus.Tests/Proteus.Tests.csproj -c Release` — all checks incl. tests (also `npm test --prefix worker` when `worker/` changes)
 - run: bump `Plugin.BuildNumber`, build, copy `Proteus/bin/Release/win-x64/` to `E:\repos\Proteus\Proteus\bin\release\win-x64` — the game dev-loads it (no app URL; verification is in game)
@@ -88,7 +88,7 @@ Proteus/                 the Dalamud plugin
   Models/                sidecar metadata, colour tables, presets
   Localization/          Strings.cs + en.json and 7 translations
   native/                proteus_bcn.dll BCn compression shim (built WITHOUT /arch:AVX2)
-Proteus.Refit/           headless refit CLI (bodies by file path)
+Proteus.Refit/           headless refit CLI (bodies by file path; --size-set sizes a whole unpacked mod)
 Proteus.Tests/           xunit tests; user data only via LocalData + [LocalDataFact]
 XivLiveMesh/             CPU skinning / picking for the live brush
 worker/                  Cloudflare worker that edge-caches release assets

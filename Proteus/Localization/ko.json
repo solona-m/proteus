@@ -5283,8 +5283,8 @@
     "message": "종족 디포머가 {0}을(를) 움직이는 방법을 모릅니다",
     "description": ""
   },
-  "HairPort.Refused.Fit.Fmt": {
-    "message": "c{0:D4}의 머리에 맞지 않습니다. {1:P0}가 두개골 안으로 파묻히고, 두피와의 거리가 원본과 {2:F0} mm 차이 납니다",
+  "HairPort.Fit.Fmt": {
+    "message": "c{0:D4}의 머리에 맞지 않습니다. {1:P0}가 두개골 안으로 파묻히고, 두피와의 거리가 원본과 {2:F0} mm 차이 납니다. 게임에서 확인하세요",
     "description": ""
   },
   "HairPort.Refused.NotHair": {
