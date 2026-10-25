@@ -1066,7 +1066,8 @@ public class DesignBindingService : IDisposable
     /// be read after Proteus's own holds were released.
     /// <list type="bullet">
     /// <item>Bound non-Proteus mods are held in their recorded state; enabled ones are raised together above every
-    /// other enabled mod (<see cref="ComputePriorityOffset"/>).</item>
+    /// other enabled mod (<see cref="ComputePriorityOffset"/>), kept in order below the Proteus output mod
+    /// (<see cref="HeldPriorities"/>).</item>
     /// <item>Bound Proteus mods get their recorded state written permanently, where it differs.</item>
     /// <item>Unbound Proteus mods are switched off, except <paramref name="heldProteus"/>; Glamourer's temporary
     /// settings are cleared from every Proteus mod written, or they would mask the write.</item>
@@ -1164,8 +1165,8 @@ public class DesignBindingService : IDisposable
         var limit = ceiling is { } c ? (long)c - 1 : long.MaxValue;
         foreach (var p in recorded.Distinct().OrderByDescending(p => p))
         {
-            var slot = Math.Min((long)p + offset, limit);
-            held[p] = (int)Math.Clamp(slot, int.MinValue, int.MaxValue);
+            var slot = Math.Clamp(Math.Min((long)p + offset, limit), int.MinValue, int.MaxValue);
+            held[p] = (int)slot;
             limit   = slot - 1;
         }
         return held;
