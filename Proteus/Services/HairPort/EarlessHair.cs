@@ -136,11 +136,11 @@ internal static class EarlessHair
         // Every shape key too: a body slider must not open a collapsed ear again.
         if (DrawnFur(model, shapes: true) > 0)
         {
-            refusal = Loc.Localize("HairPort.Earless.Refused.Leftover", "not all of its ears could be taken out");
+            refusal = ProteusLoc.Localize("HairPort.Earless.Refused.Leftover", "not all of its ears could be taken out");
             return null;
         }
         return new Result(model, hidden, trimmed, trimmed ? "" : trimRefusal);
     }
 
-    private static string Unreadable => Loc.Localize("Parts.Retarget.Bake.Unreadable", "the model could not be read");
+    private static string Unreadable => ProteusLoc.Localize("Parts.Retarget.Bake.Unreadable", "the model could not be read");
 }

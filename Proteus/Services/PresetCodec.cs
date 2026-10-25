@@ -62,7 +62,7 @@ public static class PresetCodec
         }
         catch (Exception ex)
         {
-            return PresetDecodeResult.Fail(string.Format(Loc.Localize("Presets.Error.Unreadable.Fmt",
+            return PresetDecodeResult.Fail(string.Format(ProteusLoc.Localize("Presets.Error.Unreadable.Fmt",
                 "Couldn't read that file: {0}"), ex.Message));
         }
     }
@@ -83,17 +83,17 @@ public static class PresetCodec
 
     public static PresetDecodeResult FromShareCode(string? code)
     {
-        if (string.IsNullOrWhiteSpace(code)) return PresetDecodeResult.Fail(Loc.Localize("Presets.Error.NothingToPaste", "Nothing to paste."));
+        if (string.IsNullOrWhiteSpace(code)) return PresetDecodeResult.Fail(ProteusLoc.Localize("Presets.Error.NothingToPaste", "Nothing to paste."));
 
         byte[] raw;
         // Chat clients wrap long strings, and a pasted code routinely arrives with newlines or stray
         // spaces in it. Strip whitespace rather than making the wearer clean it up by hand.
         try { raw = Convert.FromBase64String(Strip(code)); }
-        catch (FormatException) { return PresetDecodeResult.Fail(Loc.Localize("Presets.Error.NotACode", "That doesn't look like a Proteus preset code.")); }
+        catch (FormatException) { return PresetDecodeResult.Fail(ProteusLoc.Localize("Presets.Error.NotACode", "That doesn't look like a Proteus preset code.")); }
 
-        if (raw.Length < 2) return PresetDecodeResult.Fail(Loc.Localize("Presets.Error.NotACode", "That doesn't look like a Proteus preset code."));
+        if (raw.Length < 2) return PresetDecodeResult.Fail(ProteusLoc.Localize("Presets.Error.NotACode", "That doesn't look like a Proteus preset code."));
         if (raw[0] != Version)
-            return PresetDecodeResult.Fail(string.Format(Loc.Localize("Presets.Error.Version.Fmt",
+            return PresetDecodeResult.Fail(string.Format(ProteusLoc.Localize("Presets.Error.Version.Fmt",
                 "This code is version {0}; this version of Proteus understands {1}. Update Proteus."), raw[0], Version));
 
         try
@@ -106,7 +106,7 @@ public static class PresetCodec
         }
         catch (Exception)
         {
-            return PresetDecodeResult.Fail(Loc.Localize("Presets.Error.NotACode", "That doesn't look like a Proteus preset code."));
+            return PresetDecodeResult.Fail(ProteusLoc.Localize("Presets.Error.NotACode", "That doesn't look like a Proteus preset code."));
         }
     }
 
@@ -139,8 +139,8 @@ public static class PresetCodec
     /// </summary>
     private static PresetDecodeResult Validate(ModPreset? preset)
     {
-        if (preset == null) return PresetDecodeResult.Fail(Loc.Localize("Presets.Error.NotAPreset", "That file doesn't contain a Proteus preset."));
-        if (string.IsNullOrWhiteSpace(preset.Name)) preset.Name = Loc.Localize("Presets.ImportedName", "Imported preset");
+        if (preset == null) return PresetDecodeResult.Fail(ProteusLoc.Localize("Presets.Error.NotAPreset", "That file doesn't contain a Proteus preset."));
+        if (string.IsNullOrWhiteSpace(preset.Name)) preset.Name = ProteusLoc.Localize("Presets.ImportedName", "Imported preset");
 
         var hasSomething = preset.Options.Count > 0
                         || preset.StackOrder.Count > 0
@@ -149,7 +149,7 @@ public static class PresetCodec
                         || preset.Gear.Top != null || preset.Gear.Mask != null
                         || preset.Gear.Content != null || preset.Gear.Options != null
                         || preset.Gear.Materials != null;
-        if (!hasSomething) return PresetDecodeResult.Fail(Loc.Localize("Presets.Error.Empty", "That preset is empty."));
+        if (!hasSomething) return PresetDecodeResult.Fail(ProteusLoc.Localize("Presets.Error.Empty", "That preset is empty."));
 
         preset.Id     = Guid.NewGuid();
         preset.Source = PresetSource.User;

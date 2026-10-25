@@ -985,7 +985,7 @@ public sealed partial class AutoRefitWatcher : IDisposable
                 catch (Exception ex)
                 {
                     log.Error(ex, "[Proteus] auto refit: {0} failed", request.Worn.GamePath);
-                    Fail(request, string.Format(Loc.Localize("Chat.AutoRefit.Failed.Fmt",
+                    Fail(request, string.Format(ProteusLoc.Localize("Chat.AutoRefit.Failed.Fmt",
                                                     "[Proteus] Couldn't refit {0}: {1}"),
                                                 Path.GetFileName(request.Worn.GamePath), ex.Message));
                 }
@@ -1201,7 +1201,7 @@ public sealed partial class AutoRefitWatcher : IDisposable
         };
         if (!chosen)
         {
-            Say(string.Format(Loc.Localize("Chat.AutoRefit.NoSizeChosen.Fmt",
+            Say(string.Format(ProteusLoc.Localize("Chat.AutoRefit.NoSizeChosen.Fmt",
                     "[Proteus] No {0} size is chosen for {1}, so {2} was left as it is. Choose one under /proteus > "
                   + "Settings."), SlotName(leadSlot), lead.Name, item), problem: true);
             return;
@@ -1244,7 +1244,7 @@ public sealed partial class AutoRefitWatcher : IDisposable
 
         if (ModelPartReader.Read(bytes) is not { } garment)
         {
-            Fail(r, string.Format(Loc.Localize("Chat.AutoRefit.Failed.Fmt", "[Proteus] Couldn't refit {0}: {1}"), item,
+            Fail(r, string.Format(ProteusLoc.Localize("Chat.AutoRefit.Failed.Fmt", "[Proteus] Couldn't refit {0}: {1}"), item,
                                Strings.Parts.Unreadable));
             return;
         }
@@ -1293,7 +1293,7 @@ public sealed partial class AutoRefitWatcher : IDisposable
 
         if (TargetFor(primary) is not { } target)
         {
-            Say(string.Format(Loc.Localize("Chat.AutoRefit.NoSizeForRace.Fmt",
+            Say(string.Format(ProteusLoc.Localize("Chat.AutoRefit.NoSizeForRace.Fmt",
                     "[Proteus] {0} has no {1} size for {2}, so {3} was left as it is."),
                     lead.Name, SlotName(primary), ModelRace.Describe(race), item), problem: true);
             return;
@@ -1325,21 +1325,21 @@ public sealed partial class AutoRefitWatcher : IDisposable
 
         if (source is not { } pick)
         {
-            Say(string.Format(Loc.Localize("Chat.AutoRefit.Unsure.Fmt",
+            Say(string.Format(ProteusLoc.Localize("Chat.AutoRefit.Unsure.Fmt",
                     "[Proteus] Couldn't tell which body {0} was made for, so it was left as it is. You can refit it by "
                   + "hand with the Studio's Body size tool."), item), problem: true);
             return;
         }
         if (pick.Confidence == Confidence.NoBodyMesh)
         {
-            Say(string.Format(Loc.Localize("Chat.AutoRefit.NoBodyMesh.Fmt",
+            Say(string.Format(ProteusLoc.Localize("Chat.AutoRefit.NoBodyMesh.Fmt",
                     "[Proteus] {0} carries no body skin to read its size from, so it was left as it is. You can refit "
                   + "it by hand with the Studio's Body size tool."), item), problem: true);
             return;
         }
         if (!AutoRefitDecisions.Proceed(pick.Confidence))
         {
-            Say(string.Format(Loc.Localize("Chat.AutoRefit.Unsure.Fmt",
+            Say(string.Format(ProteusLoc.Localize("Chat.AutoRefit.Unsure.Fmt",
                     "[Proteus] Couldn't tell which body {0} was made for, so it was left as it is. You can refit it by "
                   + "hand with the Studio's Body size tool."), item), problem: true);
             return;
@@ -1445,7 +1445,7 @@ public sealed partial class AutoRefitWatcher : IDisposable
 
         // ── the refit ──
         string targetLabel = lead.Name + " — " + target.Label;
-        Say(string.Format(Loc.Localize("Chat.AutoRefit.Start.Fmt",
+        Say(string.Format(ProteusLoc.Localize("Chat.AutoRefit.Start.Fmt",
                 "[Proteus] Refitting {0} from {1} to {2}. It will be switched on when it is done."),
                 item, sourceName + " — " + pick.Option.Label, targetLabel));
         current = current with { Message = string.Format(Strings.AutoRefit.WorkingFmt, item), Failed = false };
@@ -1454,7 +1454,7 @@ public sealed partial class AutoRefitWatcher : IDisposable
         if (BodyRetarget.BuildPair(primary, sourcePath, targetPath, SlotName(primary), male, SourceMask(primary),
                                    TargetMask(primary), uvRemap, out var primaryPair) is { } refusal)
         {
-            Fail(r, string.Format(Loc.Localize("Chat.AutoRefit.Failed.Fmt", "[Proteus] Couldn't refit {0}: {1}"), item,
+            Fail(r, string.Format(ProteusLoc.Localize("Chat.AutoRefit.Failed.Fmt", "[Proteus] Couldn't refit {0}: {1}"), item,
                                refusal));
             return;
         }
@@ -1499,7 +1499,7 @@ public sealed partial class AutoRefitWatcher : IDisposable
         var (finished, _, bentBack) = RefitCore.Finish(plan, route, g.Wearer, targetPaths, log);
         if (finished == null)
         {
-            Fail(r, string.Format(Loc.Localize("Chat.AutoRefit.Failed.Fmt", "[Proteus] Couldn't refit {0}: {1}"), item,
+            Fail(r, string.Format(ProteusLoc.Localize("Chat.AutoRefit.Failed.Fmt", "[Proteus] Couldn't refit {0}: {1}"), item,
                                bentBack));
             return;
         }
@@ -1526,16 +1526,16 @@ public sealed partial class AutoRefitWatcher : IDisposable
             log.Information("[Proteus] auto refit: {0}: let go of kept piece(s) that would sink moved whole: {1}", item,
                             released);
 
-        string done = string.Format(Loc.Localize("Chat.AutoRefit.Done.Fmt",
+        string done = string.Format(ProteusLoc.Localize("Chat.AutoRefit.Done.Fmt",
                 "[Proteus] {0} now fits {1}. Saved as \"{2}\" in {3} and switched on."),
                 item, targetLabel, option, SavedIn(g, savedRoot, lead));
         var keptOn = parts.KeptOnLead.Where(s => kept.Any(k => k.Slot == s)).Select(SlotName).ToList();
         if (keptOn.Count > 0)
-            done += " " + string.Format(Loc.Localize("Chat.AutoRefit.MixedKept.Fmt",
+            done += " " + string.Format(ProteusLoc.Localize("Chat.AutoRefit.MixedKept.Fmt",
                         "It was made on {0}, so its {1} went onto {0} with it rather than onto the body chosen for the "
                       + "{1}."), lead.Name, string.Join(", ", keptOn));
         if (dropped.Count > 0)
-            done += " " + string.Format(Loc.Localize("Chat.AutoRefit.PartsLeftOut.Fmt",
+            done += " " + string.Format(ProteusLoc.Localize("Chat.AutoRefit.PartsLeftOut.Fmt",
                         "These parts could not be refitted with it and kept their size: {0}."),
                         string.Join(", ", dropped));
         Say(done);
@@ -1620,12 +1620,12 @@ public sealed partial class AutoRefitWatcher : IDisposable
         }
         if (await Apply(r, r.ModRoot, sizeGroup, authored, wornSize, false, ct, authorSize: true) is { } offAuthor)
         {
-            Fail(r, string.Format(Loc.Localize("Chat.AutoRefit.Failed.Fmt", "[Proteus] Couldn't refit {0}: {1}"),
+            Fail(r, string.Format(ProteusLoc.Localize("Chat.AutoRefit.Failed.Fmt", "[Proteus] Couldn't refit {0}: {1}"),
                                   item, offAuthor));
             return true;
         }
         Outcome(r, onTarget: true, OnTarget(targetMod, target));
-        Say(string.Format(Loc.Localize("Chat.AutoRefit.Author.Fmt",
+        Say(string.Format(ProteusLoc.Localize("Chat.AutoRefit.Author.Fmt",
                 "[Proteus] {0} already comes in {1}; its own \"{2}\" is switched on."),
                 item, targetMod.Name + " — " + target.Label, authored));
         Finished(item, targetMod.Name);
@@ -1751,12 +1751,12 @@ public sealed partial class AutoRefitWatcher : IDisposable
 
         if (await Apply(r, root, group, option, cutFrom, r.ModRoot == null, ct) is { } offExisting)
         {
-            Fail(r, string.Format(Loc.Localize("Chat.AutoRefit.Failed.Fmt", "[Proteus] Couldn't refit {0}: {1}"),
+            Fail(r, string.Format(ProteusLoc.Localize("Chat.AutoRefit.Failed.Fmt", "[Proteus] Couldn't refit {0}: {1}"),
                                   item, offExisting));
             return true;
         }
         Outcome(r, onTarget: true, source, RecordedFile(root, group, option, savePath));
-        Say(string.Format(Loc.Localize("Chat.AutoRefit.Existing.Fmt",
+        Say(string.Format(ProteusLoc.Localize("Chat.AutoRefit.Existing.Fmt",
                 "[Proteus] {0} was already refitted to {1}; that size is switched on."), item, option));
         Finished(item, body);
         return true;
@@ -1782,7 +1782,7 @@ public sealed partial class AutoRefitWatcher : IDisposable
                                                                     folder: RefitModService.OwnModsFolder));
             if (!made.Ok)
             {
-                Fail(r, string.Format(Loc.Localize("Chat.AutoRefit.Failed.Fmt", "[Proteus] Couldn't refit {0}: {1}"), item,
+                Fail(r, string.Format(ProteusLoc.Localize("Chat.AutoRefit.Failed.Fmt", "[Proteus] Couldn't refit {0}: {1}"), item,
                                    made.Message));
                 return null;
             }
@@ -1794,7 +1794,7 @@ public sealed partial class AutoRefitWatcher : IDisposable
                                               manipulations, auto: true, fromGame: fromGame, provenance: provenance);
         if (!outcome.Ok)
         {
-            Fail(r, string.Format(Loc.Localize("Chat.AutoRefit.Failed.Fmt", "[Proteus] Couldn't refit {0}: {1}"), item,
+            Fail(r, string.Format(ProteusLoc.Localize("Chat.AutoRefit.Failed.Fmt", "[Proteus] Couldn't refit {0}: {1}"), item,
                                outcome.Message));
             return null;
         }
@@ -1802,7 +1802,7 @@ public sealed partial class AutoRefitWatcher : IDisposable
         if (await Apply(r, root, group, refit.Option, cutFrom, isVanilla, CancellationToken.None) is { } off)
         {
             // Saved, so the size is there to pick by hand; but it is not on, and must not be reported as worn.
-            Fail(r, string.Format(Loc.Localize("Chat.AutoRefit.Failed.Fmt", "[Proteus] Couldn't refit {0}: {1}"), item,
+            Fail(r, string.Format(ProteusLoc.Localize("Chat.AutoRefit.Failed.Fmt", "[Proteus] Couldn't refit {0}: {1}"), item,
                                   off));
             return null;
         }
@@ -2375,8 +2375,7 @@ public sealed partial class AutoRefitWatcher : IDisposable
     private void FlushSummary()
     {
         if (finished.Count == 0) return;
-        // Localized here, not in the lambda: inlined into System.Linq, Loc.Localize would not find the plugin.
-        string fmt = Loc.Localize("Chat.AutoRefit.Summary.Fmt", "[Proteus] Refitted to {0}: {1}.");
+        string fmt = ProteusLoc.Localize("Chat.AutoRefit.Summary.Fmt", "[Proteus] Refitted to {0}: {1}.");
         var byBody = finished.GroupBy(f => f.Body, StringComparer.Ordinal)
                              .Select(g => string.Format(fmt, g.Key, string.Join(", ", g.Select(f => f.Item).Distinct())));
         finished.Clear();

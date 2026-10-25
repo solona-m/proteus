@@ -100,7 +100,7 @@ internal static class HairPortWriter
                 var owner = owners.FirstOrDefault(o => HairPortPlan.Same(o, w.Into));
                 // A strip of a port whose option is gone: the option took the port with it, nothing is left to strip.
                 if (owner == null && w.Stripped) continue;
-                if (owner == null) return new Outcome(false, string.Format(Loc.Localize("HairPort.Refused.NoOption.Fmt",
+                if (owner == null) return new Outcome(false, string.Format(ProteusLoc.Localize("HairPort.Refused.NoOption.Fmt",
                     "the option \"{0}\" is no longer in the mod"), Describe(w.Into)), 0);
                 if (owner.IsCombining) return new Outcome(false, Combining(owner.Group), 0);
 
@@ -276,7 +276,7 @@ internal static class HairPortWriter
     }
 
     private static string Covered(string gamePath)
-        => string.Format(Loc.Localize("HairPort.Refused.Covered.Fmt", "the mod already publishes {0} there"), gamePath);
+        => string.Format(ProteusLoc.Localize("HairPort.Refused.Covered.Fmt", "the mod already publishes {0} there"), gamePath);
 
     /// <summary>Whether <paramref name="gamePath"/> is the skeleton, or its physics, <paramref name="w"/> carries for its
     /// race's hairstyle (<see cref="PortWrite.SkeletonFrom"/>) — at the slot its entry points to.</summary>
@@ -310,7 +310,7 @@ internal static class HairPortWriter
             if (record.Unreadable) return new Outcome(false, HairPortRecord.UnreadableMessage, 0);
             var picked = record.Ports.Where(which).ToList();
             if (picked.Count == 0)
-                return new Outcome(false, Loc.Localize("HairPort.Undo.Nothing", "There are no hair ports here to undo."), 0);
+                return new Outcome(false, ProteusLoc.Localize("HairPort.Undo.Nothing", "There are no hair ports here to undo."), 0);
 
             // Set by set, each all or nothing: a set with one port the user edited since stays whole, or the port kept
             // would lose the material the others take out with them. The other sets still go.
@@ -409,8 +409,8 @@ internal static class HairPortWriter
     {
         foreach (var (subdir, name) in new[]
                  {
-                     (MeshToggleService.BackupSubdir, Loc.Localize("MeshVolume.Feature.Toggles", "part switches")),
-                     (MeshVolumeService.BackupSubdir, Loc.Localize("MeshVolume.Feature.Brush", "the brush")),
+                     (MeshToggleService.BackupSubdir, ProteusLoc.Localize("MeshVolume.Feature.Toggles", "part switches")),
+                     (MeshVolumeService.BackupSubdir, ProteusLoc.Localize("MeshVolume.Feature.Brush", "the brush")),
                  })
             if (File.Exists(Path.Combine(modRoot, SidecarDiscoveryService.SidecarSubdir, subdir, NativeRel(rel))))
                 return name;
@@ -452,12 +452,12 @@ internal static class HairPortWriter
     private static string NativeRel(string rel) => rel.Replace('/', Path.DirectorySeparatorChar).Replace('\\', Path.DirectorySeparatorChar);
 
     internal static string Describe(HairPortPlan.Owner owner)
-        => owner.IsDefault ? Loc.Localize("HairPort.DefaultData", "the mod's default files") : $"{owner.Group} / {owner.Option}";
+        => owner.IsDefault ? ProteusLoc.Localize("HairPort.DefaultData", "the mod's default files") : $"{owner.Group} / {owner.Option}";
 
     internal static string Combining(string group)
-        => string.Format(Loc.Localize("HairPort.Refused.Combining.Fmt",
+        => string.Format(ProteusLoc.Localize("HairPort.Refused.Combining.Fmt",
             "the hairstyle is in \"{0}\", a combining group, which Proteus does not edit"), group);
 
     internal static string Unreadable
-        => Loc.Localize("HairPort.Refused.Unreadable", "the mod's manifest could not be read");
+        => ProteusLoc.Localize("HairPort.Refused.Unreadable", "the mod's manifest could not be read");
 }

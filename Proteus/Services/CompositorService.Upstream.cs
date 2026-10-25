@@ -153,7 +153,7 @@ public partial class CompositorService
         // One line for all unclaimed paths, not one per path.
         if (unclaimed.Count > 0 && _reportedRedirectLosses.TryAdd("\0unclaimed", "1"))
         {
-            var msg = string.Format(Loc.Localize("Chat.UnclaimedRedirects.Fmt",
+            var msg = string.Format(ProteusLoc.Localize("Chat.UnclaimedRedirects.Fmt",
                 "[Proteus] {0} of the files Proteus publishes aren't reaching the game — they resolve to "
                 + "nothing at all, which usually means the \"Proteus\" mod is disabled in your current "
                 + "Penumbra collection. Check it is enabled there."), unclaimed.Count);

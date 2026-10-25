@@ -225,7 +225,7 @@ public sealed partial class EmissiveSkinImportService
                 Path.Combine(root, SidecarDiscoveryService.SidecarSubdir, "metadata.json"),
                 JsonSerializer.Serialize(metadata, ProteusJson.MetadataWrite));
 
-            var imported = string.Format(Loc.Localize("Import.Emissive.Description.Fmt",
+            var imported = string.Format(ProteusLoc.Localize("Import.Emissive.Description.Fmt",
                 "Imported from the emissive skin pack \"{0}\"."), Path.GetFileName(preview.SourcePath));
             var description = string.IsNullOrWhiteSpace(preview.Description)
                 ? imported

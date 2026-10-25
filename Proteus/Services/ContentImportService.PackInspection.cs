@@ -96,7 +96,7 @@ public sealed partial class ContentImportService
                     // Silent for an Imc group: its options are show/hide toggles the composite honours
                     // (see ContentAttributeGroup).
                     if (!string.Equals(group.Type, "Imc", StringComparison.OrdinalIgnoreCase))
-                        warnings.Add(string.Format(Loc.Localize("ContentImport.Warn.GroupType.Fmt",
+                        warnings.Add(string.Format(ProteusLoc.Localize("ContentImport.Warn.GroupType.Fmt",
                             "Group \"{0}\" is a {1} group, which Proteus can't place — its options are left "
                           + "alone."),
                             group.Name, group.Type));
@@ -275,7 +275,7 @@ public sealed partial class ContentImportService
             if (gateGroup != null) GateEveryGarment();
 
             if (units.Count == 0)
-                warnings.Add(Loc.Localize("ContentImport.Warn.NoModels",
+                warnings.Add(ProteusLoc.Localize("ContentImport.Warn.NoModels",
                     "No option in this pack redirects a model, so there is no geometry for Proteus to append. "
                   + "Install it in Penumbra instead."));
         }
@@ -290,7 +290,7 @@ public sealed partial class ContentImportService
                 .Distinct(StringComparer.OrdinalIgnoreCase)
                 .ToList();
             if (raceCodes.Count > 0 && raceCodes.All(c => !ModelRace.IsSharedShape(c)))
-                warnings.Add(string.Format(Loc.Localize("ContentImport.Warn.RaceOnly.Fmt",
+                warnings.Add(string.Format(ProteusLoc.Localize("ContentImport.Warn.RaceOnly.Fmt",
                     "This pack's models are built for {0}. Proteus does not resize geometry between races, so "
                   + "its pieces will only appear on a character of that race."),
                     ModelRace.DescribeAll(raceCodes)));
@@ -298,7 +298,7 @@ public sealed partial class ContentImportService
             // Said because the absence is invisible: a self-gating pack gets no checkboxes of ours, so a piece it
             // does not gate has no switch.
             if (selfDriven)
-                warnings.Add(Loc.Localize("ContentImport.Warn.SelfDriven",
+                warnings.Add(ProteusLoc.Localize("ContentImport.Warn.SelfDriven",
                     "This pack switches its own pieces on and off, so Proteus adds no checkboxes of its own — "
                   + "use the pack's. Any piece it does not switch is worn whenever the mod is enabled."));
 

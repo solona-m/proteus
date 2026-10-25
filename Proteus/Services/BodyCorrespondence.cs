@@ -82,7 +82,7 @@ internal static class BodyCorrespondence
             if (convert == null)
             {
                 correspondence = null;
-                refusal = string.Format(Loc.Localize("Parts.Retarget.Refuse.NoLayoutMap.Fmt",
+                refusal = string.Format(ProteusLoc.Localize("Parts.Retarget.Refuse.NoLayoutMap.Fmt",
                               "The {0} models use different texture layouts ({1} and {2}), and Proteus has no map " +
                               "between them, so there is no way to tell which point of one body is which point of the " +
                               "other."), what, from, to);
@@ -127,7 +127,7 @@ internal static class BodyCorrespondence
         string? women = sourceMale ? to : from, men = sourceMale ? from : to;
         if (from == null || to == null || women == null || men == null || !CrossSexRefit.LayoutsPair(women, men))
         {
-            refusal = string.Format(Loc.Localize("Parts.Retarget.Refuse.CrossSexLayout.Fmt",
+            refusal = string.Format(ProteusLoc.Localize("Parts.Retarget.Refuse.CrossSexLayout.Fmt",
                           "Across the sexes, Proteus can only match women's bodies in the Bibo+ or game layout to men's " +
                           "bodies in the TBSE or game layout. The {0} models use {1} and {2}."),
                           what, from ?? "?", to ?? "?");
@@ -139,11 +139,11 @@ internal static class BodyCorrespondence
         {
             // On disk but unreadable is a map that failed, not one still to come.
             refusal = uvRemap?.MenMapsPresent() == true
-                ? string.Format(Loc.Localize("Parts.Retarget.Refuse.NoLayoutMap.Fmt",
+                ? string.Format(ProteusLoc.Localize("Parts.Retarget.Refuse.NoLayoutMap.Fmt",
                       "The {0} models use different texture layouts ({1} and {2}), and Proteus has no map " +
                       "between them, so there is no way to tell which point of one body is which point of the " +
                       "other."), what, from, to)
-                : Loc.Localize("Parts.Retarget.Refuse.MenMapsMissing",
+                : ProteusLoc.Localize("Parts.Retarget.Refuse.MenMapsMissing",
                       "The body maps a refit across the sexes needs aren't here yet. Proteus is downloading them; " +
                       "refit again once they've arrived.");
             return false;

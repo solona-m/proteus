@@ -54,7 +54,7 @@ internal static class PenumbraModMeta
     /// than a no-op, so a write that cannot happen is never mistaken for success.
     /// </summary>
     public sealed class LegacyFolderException(string modRoot)
-        : InvalidOperationException(string.Format(CheapLoc.Loc.Localize("Service.ModMeta.LegacyFolder.Fmt",
+        : InvalidOperationException(string.Format(ProteusLoc.Localize("Service.ModMeta.LegacyFolder.Fmt",
             "{0} is a pre-v{1} Penumbra mod folder, which Proteus does not write to."), modRoot, SingleFileVersion));
 
     /// <summary>
@@ -532,7 +532,7 @@ internal static class PenumbraModMeta
     /// overwriting with a fresh manifest would lose the mod.
     /// </summary>
     public sealed class ManifestInUseException(string path, Exception inner)
-        : IOException(string.Format(CheapLoc.Loc.Localize("Service.ModMeta.InUse.Fmt",
+        : IOException(string.Format(ProteusLoc.Localize("Service.ModMeta.InUse.Fmt",
             "{0} is in use by another program and could not be read, so it was not rewritten."), path), inner);
 
     /// <summary>How many times a held manifest is re-read, backing off from 50 ms (about 1.5 s, matching
@@ -1076,7 +1076,7 @@ internal static class PenumbraModMeta
             var manifest = ReadManifestForWrite(modRoot);
             // Never a manifest made up from nothing: this edits somebody else's mod.
             if (manifest.Count == 0)
-                throw new InvalidOperationException(string.Format(CheapLoc.Loc.Localize("Service.ModMeta.Unreadable.Fmt",
+                throw new InvalidOperationException(string.Format(ProteusLoc.Localize("Service.ModMeta.Unreadable.Fmt",
                     "The manifest of {0} could not be read, so it was not changed."), modRoot));
             var dd = manifest.TryGetValue("DefaultData", out var d) && d.ValueKind == JsonValueKind.Object
                 ? System.Text.Json.Nodes.JsonNode.Parse(d.GetRawText())!.AsObject()
@@ -1097,10 +1097,9 @@ internal static class PenumbraModMeta
             return;
         }
 
-        // Localized here, not in the lambda: Loc.Localize finds the plugin by its caller, which an inlined lambda hides.
-        string combiningFmt = CheapLoc.Loc.Localize("Service.ModMeta.Combining.Fmt",
+        string combiningFmt = ProteusLoc.Localize("Service.ModMeta.Combining.Fmt",
             "\"{0}\" is a combining group, whose files Proteus does not edit.");
-        string noOptionFmt = CheapLoc.Loc.Localize("Service.ModMeta.NoOption.Fmt",
+        string noOptionFmt = ProteusLoc.Localize("Service.ModMeta.NoOption.Fmt",
             "The group \"{0}\" has no option called \"{1}\".");
         EditGroup(modRoot, groupName, (group, list) =>
         {
@@ -1173,7 +1172,7 @@ internal static class PenumbraModMeta
                 i++;
             }
         if (index < 0) throw new InvalidOperationException(string.Format(
-            CheapLoc.Loc.Localize("Service.ModMeta.NoGroup.Fmt", "This mod has no group called \"{0}\"."), groupName));
+            ProteusLoc.Localize("Service.ModMeta.NoGroup.Fmt", "This mod has no group called \"{0}\"."), groupName));
 
         var group = System.Text.Json.Nodes.JsonNode.Parse(found.GetRawText())!.AsObject();
         if (group["Options"] is not System.Text.Json.Nodes.JsonArray list)

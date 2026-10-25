@@ -81,7 +81,7 @@ internal static class MeshVolumeService
     {
         rel = Rel(rel);
         if (!solve.Dirty && !writeUntouched)
-            return new Outcome(false, Loc.Localize("MeshVolume.Apply.Nothing",
+            return new Outcome(false, ProteusLoc.Localize("MeshVolume.Apply.Nothing",
                 "Nothing has been painted, so there is nothing to save."), 0);
 
         Written written;
@@ -89,12 +89,12 @@ internal static class MeshVolumeService
         catch (ModelAttributeWriter.ModelEditException ex)
         {
             // Nothing is on disk yet, which is the whole point of editing in memory first.
-            return new Outcome(false, string.Format(Loc.Localize("MeshVolume.Apply.EditFailed.Fmt",
+            return new Outcome(false, string.Format(ProteusLoc.Localize("MeshVolume.Apply.EditFailed.Fmt",
                 "{0} could not be edited: {1}. Nothing has been written."), rel, ex.Message), 0);
         }
         catch (Exception ex)
         {
-            return new Outcome(false, string.Format(Loc.Localize("MeshVolume.Apply.EditFailed.Fmt",
+            return new Outcome(false, string.Format(ProteusLoc.Localize("MeshVolume.Apply.EditFailed.Fmt",
                 "{0} could not be edited: {1}. Nothing has been written."), rel, ex.Message), 0);
         }
 
@@ -116,7 +116,7 @@ internal static class MeshVolumeService
         catch (Exception ex)
         {
             return new Outcome(false, string.Format(
-                Loc.Localize("MeshVolume.Apply.Failed.Fmt", "Writing failed: {0}"), ex.Message), 0);
+                ProteusLoc.Localize("MeshVolume.Apply.Failed.Fmt", "Writing failed: {0}"), ex.Message), 0);
         }
 
         return new Outcome(true, "", 1, written.UnmappedSpares, written.WindChannel?.MeshesRefused ?? 0);
@@ -138,7 +138,7 @@ internal static class MeshVolumeService
         catch (Exception ex)
         {
             throw new ModelAttributeWriter.ModelEditException(string.Format(
-                Loc.Localize("Service.ModelEdit.Unreadable.Fmt", "this model could not be read ({0})"), ex.Message));
+                ProteusLoc.Localize("Service.ModelEdit.Unreadable.Fmt", "this model could not be read ({0})"), ex.Message));
         }
 
         // A face's neck morph table is NOT refused. It is a handful of per-bone adjustments (position, normal,
@@ -147,7 +147,7 @@ internal static class MeshVolumeService
         // find the bounding boxes. Faces are sculpted with small brushes.
 
         if (src.ModelBBoxAt <= 0 || src.ModelBBoxAt + 4 * BBoxSize > mdl.Length)
-            throw new ModelAttributeWriter.ModelEditException(Loc.Localize("Service.ModelEdit.BoundingBoxes",
+            throw new ModelAttributeWriter.ModelEditException(ProteusLoc.Localize("Service.ModelEdit.BoundingBoxes",
                 "this model's bounding boxes are not where the format says they are"));
 
         var o = (byte[])mdl.Clone();
@@ -186,7 +186,7 @@ internal static class MeshVolumeService
             // the model nowhere, which is the worst kind of bug to go looking for.
             if (Array.IndexOf(ModelAttributeWriter.PositionTypes, pe.Type) < 0)
                 throw new ModelAttributeWriter.ModelEditException(string.Format(
-                    Loc.Localize("Service.ModelEdit.PositionFormat.Fmt",
+                    ProteusLoc.Localize("Service.ModelEdit.PositionFormat.Fmt",
                         "mesh {0} stores its positions in a format this cannot write (type {1})"), span.Mesh, pe.Type));
 
             WriteSpan(o, src, mo, span, pe, nrmEl, solve, spares);
@@ -574,12 +574,12 @@ internal static class MeshVolumeService
     {
         var record = ReadRecord(modRoot);
         if (record == null || record.Files.Count == 0)
-            return new Outcome(false, Loc.Localize("MeshVolume.Revert.Nothing",
+            return new Outcome(false, ProteusLoc.Localize("MeshVolume.Revert.Nothing",
                 "The brush has not changed anything in this mod."), 0);
 
         foreach (var rel in record.Files)
             if (ModelBackupOrder.LaterFeature(modRoot, BackupSubdir, rel) is { } other)
-                return new Outcome(false, string.Format(Loc.Localize("MeshVolume.Revert.Blocked.Fmt",
+                return new Outcome(false, string.Format(ProteusLoc.Localize("MeshVolume.Revert.Blocked.Fmt",
                     "Undo {0} first: it was applied to the same model after the brush was, so putting the "
                   + "brush back now would also undo it."), other), 0);
 
@@ -601,7 +601,7 @@ internal static class MeshVolumeService
         }
 
         if (restored == 0)
-            return new Outcome(false, Loc.Localize("MeshVolume.Revert.NoBackups",
+            return new Outcome(false, ProteusLoc.Localize("MeshVolume.Revert.NoBackups",
                 "None of the original models could be found to restore."), 0);
 
         // The record goes only when it has nothing left to describe, and the backups go LAST — a throw

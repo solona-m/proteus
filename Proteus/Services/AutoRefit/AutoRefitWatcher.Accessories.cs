@@ -77,7 +77,7 @@ public sealed partial class AutoRefitWatcher
 
         if (ModelPartReader.Read(bytes) is not { } garment)
         {
-            Fail(r, string.Format(Loc.Localize("Chat.AutoRefit.Failed.Fmt", "[Proteus] Couldn't refit {0}: {1}"), item,
+            Fail(r, string.Format(ProteusLoc.Localize("Chat.AutoRefit.Failed.Fmt", "[Proteus] Couldn't refit {0}: {1}"), item,
                                   Strings.Parts.Unreadable));
             return;
         }
@@ -95,7 +95,7 @@ public sealed partial class AutoRefitWatcher
                       + "chest: {3}, the legs: {4})", item, cover.Chest, cover.Legs, SizedWith("_top"), SizedWith("_dwn"));
         if (covered.Count == 0)
         {
-            Say(string.Format(Loc.Localize("Chat.AutoRefit.Accessory.Jewellery.Fmt",
+            Say(string.Format(ProteusLoc.Localize("Chat.AutoRefit.Accessory.Jewellery.Fmt",
                     "[Proteus] {0} doesn't cover the body, so it was left as it is."), item));
             return;
         }
@@ -105,7 +105,7 @@ public sealed partial class AutoRefitWatcher
             if (targets.MissingDir(unsized.Slot) is { } gone) SayBodyMissing(r, gone, unsized.Slot, item, targets);
             else if (unsized.Why == AccessoryCover.NoSize.ForRace) SayNoSizeForRace(targets.NameOf(unsized.Slot), unsized.Slot, race, item);
             else
-                Say(string.Format(Loc.Localize("Chat.AutoRefit.NoSizeChosen.Fmt",
+                Say(string.Format(ProteusLoc.Localize("Chat.AutoRefit.NoSizeChosen.Fmt",
                         "[Proteus] No {0} size is chosen for {1}, so {2} was left as it is. Choose one under /proteus > "
                       + "Settings."), SlotName(unsized.Slot), targets.NameOf(unsized.Slot), item), problem: true);
             return;
@@ -155,7 +155,7 @@ public sealed partial class AutoRefitWatcher
                                 lead.Name, target.Label);
                 return;
             case AccessoryCover.AuthorGate.LeftToAuthor:
-                Say(string.Format(Loc.Localize("Chat.AutoRefit.Accessory.AuthorSizes.Fmt",
+                Say(string.Format(ProteusLoc.Localize("Chat.AutoRefit.Accessory.AuthorSizes.Fmt",
                         "[Proteus] {0} already comes in its author's own sizes for bodies (\"{1}\" is on); pick another "
                       + "in Penumbra. It was left as it is."), item, authors));
                 return;
@@ -181,10 +181,10 @@ public sealed partial class AutoRefitWatcher
         {
             log.Information("[Proteus] auto refit: {0} {1} as {2}: no source ({3})", item, r.Slot, primary, refused);
             Say(refused is AccessoryCover.Refusal.Unsure or AccessoryCover.Refusal.OffBody
-                    ? string.Format(Loc.Localize("Chat.AutoRefit.Unsure.Fmt",
+                    ? string.Format(ProteusLoc.Localize("Chat.AutoRefit.Unsure.Fmt",
                           "[Proteus] Couldn't tell which body {0} was made for, so it was left as it is. You can refit it "
                         + "by hand with the Studio's Body size tool."), item)
-                    : string.Format(Loc.Localize("Chat.AutoRefit.Accessory.Beneath.Fmt",
+                    : string.Format(ProteusLoc.Localize("Chat.AutoRefit.Accessory.Beneath.Fmt",
                           "[Proteus] {0} was left as it is: it has no {1} piece of its own to read its size from, and the "
                         + "{1} worn under it is the game's own, isn't on {2}, or was refitted before this version — put "
                         + "it on again or use \"Refit what I'm wearing now\"."), item, SlotName(primary), lead.Name),
@@ -242,7 +242,7 @@ public sealed partial class AutoRefitWatcher
             shared && Existing(saveRoot!, group, proposed, r.Worn.GamePath));
         if (sharedOption is not { } option)
         {
-            Say(string.Format(Loc.Localize("Chat.AutoRefit.Accessory.Shared.Fmt",
+            Say(string.Format(ProteusLoc.Localize("Chat.AutoRefit.Accessory.Shared.Fmt",
                     "[Proteus] {0} is sized together with the mod's other pieces, so it is refitted with them: once "
                   + "they are refitted to {1}, use \"Refit what I'm wearing now\". It was left as it is for now."),
                     item, lead.Name), problem: true);
@@ -276,7 +276,7 @@ public sealed partial class AutoRefitWatcher
         // ── the refit ──
         string sourceName = NameIn(state, pickOf.Dir);
         string targetLabel = RefitCore.OptionName(onBodies);
-        Say(string.Format(Loc.Localize("Chat.AutoRefit.Start.Fmt",
+        Say(string.Format(ProteusLoc.Localize("Chat.AutoRefit.Start.Fmt",
                 "[Proteus] Refitting {0} from {1} to {2}. It will be switched on when it is done."),
                 item, sourceName + " — " + pickOf.Option.Label, targetLabel));
         current = current with { Message = string.Format(Strings.AutoRefit.WorkingFmt, item), Failed = false };
@@ -295,7 +295,7 @@ public sealed partial class AutoRefitWatcher
             {
                 if (slot == primary)
                 {
-                    Fail(r, string.Format(Loc.Localize("Chat.AutoRefit.Failed.Fmt", "[Proteus] Couldn't refit {0}: {1}"),
+                    Fail(r, string.Format(ProteusLoc.Localize("Chat.AutoRefit.Failed.Fmt", "[Proteus] Couldn't refit {0}: {1}"),
                                           item, refusal));
                     return;
                 }
@@ -335,11 +335,11 @@ public sealed partial class AutoRefitWatcher
             log.Information("[Proteus] auto refit: {0}: let go of kept piece(s) that would sink moved whole: {1}", item,
                             released);
 
-        string done = string.Format(Loc.Localize("Chat.AutoRefit.Done.Fmt",
+        string done = string.Format(ProteusLoc.Localize("Chat.AutoRefit.Done.Fmt",
                 "[Proteus] {0} now fits {1}. Saved as \"{2}\" in {3} and switched on."),
                 item, targetLabel, option, SavedIn(g, savedRoot, lead));
         if (leftOut.Count > 0)
-            done += " " + string.Format(Loc.Localize("Chat.AutoRefit.PartsLeftOut.Fmt",
+            done += " " + string.Format(ProteusLoc.Localize("Chat.AutoRefit.PartsLeftOut.Fmt",
                         "These parts could not be refitted with it and kept their size: {0}."), string.Join(", ", leftOut));
         Say(done);
         Finished(item, lead.Name);
@@ -415,10 +415,10 @@ public sealed partial class AutoRefitWatcher
         bool oneBody = AutoRefitDecisions.Slots.Select(targets.DirOf).Where(d => d.Length > 0)
                                        .Distinct(StringComparer.OrdinalIgnoreCase).Count() <= 1;
         string missing = oneBody
-            ? string.Format(Loc.Localize("Chat.AutoRefit.BodyMissing.Fmt",
+            ? string.Format(ProteusLoc.Localize("Chat.AutoRefit.BodyMissing.Fmt",
                   "[Proteus] The body chosen for automatic refits in this collection, \"{0}\", isn't installed, "
                 + "so nothing is being refitted. Choose another under /proteus > Settings."), dir)
-            : string.Format(Loc.Localize("Chat.AutoRefit.PartBodyMissing.Fmt",
+            : string.Format(ProteusLoc.Localize("Chat.AutoRefit.PartBodyMissing.Fmt",
                   "[Proteus] The {0} body chosen for automatic refits in this collection, \"{1}\", isn't installed, so "
                 + "{2} wasn't refitted onto it. Choose another under /proteus > Settings."), SlotName(slot), dir, item);
         Say(missing, problem: true);
@@ -427,7 +427,7 @@ public sealed partial class AutoRefitWatcher
 
     /// <summary>The body chosen has no size of <paramref name="slot"/> at <paramref name="race"/>: said.</summary>
     private void SayNoSizeForRace(string bodyName, string slot, string race, string item)
-        => Say(string.Format(Loc.Localize("Chat.AutoRefit.NoSizeForRace.Fmt",
+        => Say(string.Format(ProteusLoc.Localize("Chat.AutoRefit.NoSizeForRace.Fmt",
                    "[Proteus] {0} has no {1} size for {2}, so {3} was left as it is."),
                    bodyName, SlotName(slot), ModelRace.Describe(race), item), problem: true);
 

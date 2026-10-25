@@ -307,13 +307,12 @@ internal static class HairPortScan
     /// </summary>
     public static string SummaryLine(IReadOnlyList<Row> fitted)
     {
-        // Localized here, not in the lambda: inlined into System.Linq, Loc.Localize would not find the plugin.
-        string entryFmt = Loc.Localize("HairPort.Scan.Entry.Fmt", "hairstyle {0} ({1})");
+        string entryFmt = ProteusLoc.Localize("HairPort.Scan.Entry.Fmt", "hairstyle {0} ({1})");
         var named = fitted.Take(3).Select(r => string.Format(entryFmt, r.Id, r.ModName));
         string list = string.Join(", ", named);
         if (fitted.Count > 3)
-            list += string.Format(Loc.Localize("HairPort.Scan.More.Fmt", " and {0} more"), fitted.Count - 3);
-        return string.Format(Loc.Localize("Chat.HairPortScan.Fmt",
+            list += string.Format(ProteusLoc.Localize("HairPort.Scan.More.Fmt", " and {0} more"), fitted.Count - 3);
+        return string.Format(ProteusLoc.Localize("Chat.HairPortScan.Fmt",
             "[Proteus] Fitted to your race: {0}. To wear one, choose that hairstyle number for your character. Undo it, "
           + "or turn this off, under /proteus > Settings > Hair."), list);
     }

@@ -61,7 +61,7 @@ internal static class EarlessHairBuilder
             if (!made.TryGetValue(author, out var m))
             {
                 if (HairPortBuilder.ReadMod(modRoot, author) is not { } bytes)
-                    return new Plan([], 0, Loc.Localize("Parts.Retarget.Bake.Unreadable", "the model could not be read"),
+                    return new Plan([], 0, ProteusLoc.Localize("Parts.Retarget.Bake.Unreadable", "the model could not be read"),
                                     Unreadable: true);
                 var result = EarlessHair.Make(bytes, out var why);
                 if (result == null && why.Length > 0) return new Plan([], 0, why);
@@ -101,6 +101,6 @@ internal static class EarlessHairBuilder
     }
 
     internal static string AuthorMissing(string rel)
-        => string.Format(Loc.Localize("HairPort.Earless.Refused.AuthorMissing.Fmt",
+        => string.Format(ProteusLoc.Localize("HairPort.Earless.Refused.AuthorMissing.Fmt",
             "the author's file {0} is missing, so the earless copy was kept"), rel);
 }

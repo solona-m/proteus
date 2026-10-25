@@ -201,7 +201,7 @@ internal static partial class RacialModelBake
         var chain = pbd.Chain(from, to);
         if (chain.Count == 0)
         {
-            refusal = string.Format(Loc.Localize("Parts.Retarget.Bake.NoPath.Fmt",
+            refusal = string.Format(ProteusLoc.Localize("Parts.Retarget.Bake.NoPath.Fmt",
                 "the racial deformer has no way from c{0:D4} to c{1:D4}"), from, to);
             return null;
         }
@@ -220,7 +220,7 @@ internal static partial class RacialModelBake
         var chain = pbd.Chain(from, to);
         if (chain.Count == 0)
         {
-            refusal = string.Format(Loc.Localize("Parts.Retarget.Bake.NoPath.Fmt",
+            refusal = string.Format(ProteusLoc.Localize("Parts.Retarget.Bake.NoPath.Fmt",
                 "the racial deformer has no way from c{0:D4} to c{1:D4}"), from, to);
             return null;
         }
@@ -241,7 +241,7 @@ internal static partial class RacialModelBake
         var up = root == to ? [] : pbd.Chain(root, to);
         if (from == to || root == 0 || (root != from && down.Count == 0) || (root != to && up.Count == 0))
         {
-            refusal = string.Format(Loc.Localize("Parts.Retarget.Bake.NoPath.Fmt",
+            refusal = string.Format(ProteusLoc.Localize("Parts.Retarget.Bake.NoPath.Fmt",
                 "the racial deformer has no way from c{0:D4} to c{1:D4}"), from, to);
             return null;
         }
@@ -275,7 +275,7 @@ internal static partial class RacialModelBake
         var skin = ModelSkinReader.Read(mdl, null, null);
         if (parts == null || skin == null)
         {
-            refusal = Loc.Localize("Parts.Retarget.Bake.Unreadable", "the model could not be read");
+            refusal = ProteusLoc.Localize("Parts.Retarget.Bake.Unreadable", "the model could not be read");
             return null;
         }
 
@@ -284,7 +284,7 @@ internal static partial class RacialModelBake
         int count = parts.Positions.Length / 3;
         if (skin.VertexCount != count)
         {
-            refusal = string.Format(Loc.Localize("Parts.Retarget.Bake.WeightMismatch.Fmt",
+            refusal = string.Format(ProteusLoc.Localize("Parts.Retarget.Bake.WeightMismatch.Fmt",
                 "the model's vertices could not be matched to their weights ({0} against {1})"), count, skin.VertexCount);
             return null;
         }

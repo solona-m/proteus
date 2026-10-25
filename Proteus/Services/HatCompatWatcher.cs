@@ -402,8 +402,7 @@ public sealed class HatCompatWatcher : IDisposable
         current = view with { Busy = true };
         var target = view.Target;
         var proposal = view.Proposal;
-        // Localized here, not in the lambda: Loc.Localize finds the plugin by its caller, which an inlined lambda hides.
-        string failedFmt = CheapLoc.Loc.Localize("HatCompat.Apply.Failed.Fmt", "Writing failed: {0}");
+        string failedFmt = ProteusLoc.Localize("HatCompat.Apply.Failed.Fmt", "Writing failed: {0}");
         Task.Run(() =>
         {
             // automatic: false, since the user pressed the button; no chat notice.
@@ -524,9 +523,8 @@ public sealed class HatCompatWatcher : IDisposable
     private void Announce()
     {
         // Onto the framework thread for chat. The catch is INSIDE the lambda, since the returned task (which
-        // would capture the exception) is discarded. The line is localized out here: Loc.Localize finds the plugin by
-        // its caller, which an inlined lambda hides.
-        string text = CheapLoc.Loc.Localize("Chat.HatCompat",
+        // would capture the exception) is discarded.
+        string text = ProteusLoc.Localize("Chat.HatCompat",
             "[Proteus] Proteus has made this hairstyle fit under hats. You can undo that, or "
           + "turn the feature off, under /proteus > Settings > Hair.");
         _ = Plugin.Framework.RunOnFrameworkThread(() =>
@@ -689,8 +687,7 @@ public sealed class HatCompatWatcher : IDisposable
         if (Interlocked.CompareExchange(ref busy, 1, 0) != 0) return;
         current = view with { Busy = true };
         var target = view.Target;
-        // Localized here, not in the lambda: Loc.Localize finds the plugin by its caller, which an inlined lambda hides.
-        string failedFmt = CheapLoc.Loc.Localize("HatCompat.Revert.Failed.Fmt", "Undo failed: {0}");
+        string failedFmt = ProteusLoc.Localize("HatCompat.Revert.Failed.Fmt", "Undo failed: {0}");
         Task.Run(() =>
         {
             try

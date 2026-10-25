@@ -55,13 +55,10 @@ internal static class HairPortBuilder
         var current = new HashSet<ushort>();
         var warnings = new Dictionary<ushort, string>();
         var wanted = targets.Distinct().ToList();
-        // One reason for every target, worked out here and not in the lambda: Loc.Localize finds the plugin by its
-        // caller, and once the JIT inlines a lambda into System.Linq that caller is Linq — the player reads
-        // "#HairPort.Refused.NotInMod" instead of the sentence.
         Dictionary<ushort, string> All(string why) => wanted.ToDictionary(t => t, _ => why);
 
         if (HairPortPlan.Parse(sourceGamePath) is not { } parsed)
-            return new Plan(writes, All(Loc.Localize("HairPort.Refused.NotHair",
+            return new Plan(writes, All(ProteusLoc.Localize("HairPort.Refused.NotHair",
                 "it is not a hairstyle model")), current);
         var (from, id) = parsed;
         if (PenumbraModMeta.IsLegacyFolder(modRoot))
@@ -100,7 +97,7 @@ internal static class HairPortBuilder
         else
             foreach (var o in serving) sourceOf[o] = HairPortPlan.FileFor(o, sourceGamePath)!;
         if (serving.Count == 0)
-            return new Plan(writes, All(Loc.Localize("HairPort.Refused.NotInMod",
+            return new Plan(writes, All(ProteusLoc.Localize("HairPort.Refused.NotInMod",
                 "the mod does not publish that hairstyle")), current);
 
         var authored = HairPortPlan.AuthoredRaces(owners, id).ToHashSet();
@@ -110,7 +107,7 @@ internal static class HairPortBuilder
         var sources = serving.Select(o => sourceOf[o]).Distinct(StringComparer.OrdinalIgnoreCase)
                              .ToDictionary(rel => rel, rel => ReadMod(modRoot, rel), StringComparer.OrdinalIgnoreCase);
         if (sources.Values.Any(b => b == null))
-            return new Plan(writes, All(Loc.Localize("Parts.Retarget.Bake.Unreadable",
+            return new Plan(writes, All(ProteusLoc.Localize("Parts.Retarget.Bake.Unreadable",
                 "the model could not be read")), current, Unreadable: true);
 
         // Which races a target's materials drag along: every race reading the same material file.
@@ -135,7 +132,7 @@ internal static class HairPortBuilder
             progress?.Invoke(done++, wanted.Count);
             if (to == from || to / 100 % 2 != from / 100 % 2 || !HairPortPlan.Playable(to))
             {
-                refused[to] = Loc.Localize("HairPort.Refused.Gender", "hairstyles are only ported between races of one sex");
+                refused[to] = ProteusLoc.Localize("HairPort.Refused.Gender", "hairstyles are only ported between races of one sex");
                 continue;
             }
             if (authored.Contains(to)) continue;   // the author made one: never overwritten
@@ -143,12 +140,12 @@ internal static class HairPortBuilder
             // An undone port is not made again by itself — not even as another race's sharer. Asked for by hand, it is.
             if (withSharers && record.Declined.Contains(HairPortPlan.DeclineKey(target)))
             {
-                refused[to] = Loc.Localize("HairPort.Refused.Declined", "its port was undone, so it is left alone");
+                refused[to] = ProteusLoc.Localize("HairPort.Refused.Declined", "its port was undone, so it is left alone");
                 continue;
             }
             if (readGame(target) == null)
             {
-                refused[to] = string.Format(Loc.Localize("HairPort.Refused.NoStyle.Fmt",
+                refused[to] = string.Format(ProteusLoc.Localize("HairPort.Refused.NoStyle.Fmt",
                     "c{0:D4} cannot choose hairstyle {1}"), to, id);
                 continue;
             }
@@ -157,7 +154,7 @@ internal static class HairPortBuilder
                                                                    && !Ported(record, HairPortPlan.HairPath(s, id))).ToList();
             if (stranded.Count > 0)
             {
-                refused[to] = string.Format(Loc.Localize("HairPort.Refused.SharedMaterial.Fmt",
+                refused[to] = string.Format(ProteusLoc.Localize("HairPort.Refused.SharedMaterial.Fmt",
                     "its material is the one {0} read for their own hairstyle {1} — port to them too"),
                     string.Join(", ", stranded.Select(s => $"c{s:D4}")), id);
                 continue;
@@ -235,7 +232,7 @@ internal static class HairPortBuilder
                     writes.RemoveAll(w => w.TargetGamePath.Equals(HairPortPlan.HairPath(s, id), StringComparison.OrdinalIgnoreCase));
                     // Refused for another's edit, it is no verdict on the model either.
                     if (editBlocked.Contains(to)) editBlocked.Add(s);
-                    refused[s] = string.Format(Loc.Localize("HairPort.Refused.SharerRefused.Fmt",
+                    refused[s] = string.Format(ProteusLoc.Localize("HairPort.Refused.SharerRefused.Fmt",
                         "it shares its material with c{0:D4}, which could not be ported: {1}"), to, refused[to]);
                 }
 
@@ -250,7 +247,7 @@ internal static class HairPortBuilder
 
     /// <summary>Why a port that needs the game's table of hairstyle skeletons is refused without it.</summary>
     internal static string NoSkeletonTable
-        => Loc.Localize("HairPort.Refused.NoSkeletonTable", "the game's table of hairstyle skeletons could not be read");
+        => ProteusLoc.Localize("HairPort.Refused.NoSkeletonTable", "the game's table of hairstyle skeletons could not be read");
 
     /// <summary>
     /// For a race that could not be ported again: each port of it that carries a skeleton to a slot another hairstyle of
@@ -412,7 +409,7 @@ internal static class HairPortBuilder
 
             if (Carry(modRoot, owners, owner, s, t, readGame).Write is not { } write)
             {
-                missing = string.Format(Loc.Localize("HairPort.Refused.NoMaterial.Fmt",
+                missing = string.Format(ProteusLoc.Localize("HairPort.Refused.NoMaterial.Fmt",
                     "its material {0} could not be found"), s);
                 return result;
             }
