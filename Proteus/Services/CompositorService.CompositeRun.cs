@@ -227,7 +227,7 @@ public partial class CompositorService
                 // Whether the empty output was already drawn is read under the same lock as this write.
                 var (stamp, alreadyDrawn) = compositor.WriteManagedModJson(empty);
                 // Recorded so the history reflects reality: once this empty manifest ages out, everything becomes collectable.
-                compositor.RecordPublish(empty);
+                var previous = compositor.RecordPublish(empty);
 
                 compositor._secondSkinActive = false;
                 compositor._lastShellHostPaths = new(StringComparer.OrdinalIgnoreCase);
@@ -258,7 +258,10 @@ public partial class CompositorService
                 // Once the empty output has been drawn, an idle trigger (an equip, a body mod) has nothing to show: only
                 // Penumbra's re-read runs, unless something is being withdrawn now.
                 bool redrawsCharacter = RedrawHold.EmptyPublishRedraws(alreadyDrawn, withdrawing);
-                if (compositor.ReloadAndRedraw("composite: no enabled mods", redraw: redrawsCharacter) || !redrawsCharacter)
+                bool reloaded = compositor.ReloadAndRedraw("composite: no enabled mods", redraw: redrawsCharacter);
+                // Marked only when the publish before this one was empty too: Penumbra's reload is asynchronous, and a
+                // withdrawal's redraw can still render the old output. The next idle trigger reloads once more and marks.
+                if ((reloaded || !redrawsCharacter) && previous is { Count: 0 })
                     compositor.MarkEmptyOutputDrawn(stamp);
                 timeline.Mark(redrawsCharacter ? "publish+reload" : "publish");
                 compositor.LogRefreshTimeline(timeline,

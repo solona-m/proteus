@@ -71,8 +71,13 @@ public class IdleRedrawWiringTests
         var reload = Method(Publish(), "private bool ReloadAndRedraw(");
         int gate = At(reload, "RedrawHold.AutoRedrawAllows(config.AutoRedraw, userRequested)");
         Assert.True(At(reload, "ReloadModDirectory(") < gate);
-        int yes = At(reload, "return true;");
-        Assert.True(gate < yes && yes > At(reload, "RefreshPlayerTextures("));
+        // A withheld reload must answer false, or it would mark the empty output drawn (EDGE-1).
+        var gated = Method(reload[reload.LastIndexOf("if (", gate, System.StringComparison.Ordinal)..], "if (");
+        Assert.Single(Regex.Matches(reload, Regex.Escape("return true;")));
+        Assert.True(At(gated, "RefreshPlayerTextures(") < At(gated, "return true;"));
+        var after = reload[(reload.IndexOf(gated, System.StringComparison.Ordinal) + gated.Length)..];
+        Assert.Contains("return false;", after);
+        Assert.DoesNotContain("return true;", after);
     }
 
     [Fact]
@@ -115,11 +120,14 @@ public class IdleRedrawWiringTests
         var mark = Method(Publish(), "private void MarkEmptyOutputDrawn(");
         Assert.True(At(mark, "lock (_manifestLock)") < At(mark, "_manifestWrites == stamp"));
 
-        // The branch marks with its own write's stamp, and only when the character reload ran or was not needed.
+        // The branch marks with its own write's stamp, only when the character reload ran or was not needed, and only
+        // over a publish that was already empty (a withdrawal's redraw can render the old output).
         var body = Discover();
         var reloadCall = Assert.Single(Calls(body, "ReloadAndRedraw"));
-        Assert.Contains($"if (compositor.{reloadCall} || !redrawsCharacter)", body);
-        Assert.True(At(body, "compositor.MarkEmptyOutputDrawn(stamp)") > At(body, reloadCall));
+        Assert.Contains($"bool reloaded = compositor.{reloadCall};", body);
+        Assert.Contains("var previous = compositor.RecordPublish(empty);", body);
+        Assert.Matches(@"if \(\(reloaded \|\| !redrawsCharacter\) && previous is \{ Count: 0 \}\)\s*compositor\.MarkEmptyOutputDrawn\(stamp\);", body);
+        Assert.Single(Regex.Matches(body, Regex.Escape("MarkEmptyOutputDrawn(")));
     }
 
     [Fact]
@@ -183,9 +191,9 @@ public class IdleRedrawWiringTests
     public void KeepDirty_skips_saving_an_unchanged_snapshot()
     {
         var body = Method(Trigger(), "public void TriggerRecomposite(");
-        var guard = Regex.Match(body, @"if \([^\n]*Preamble\.KeepDirty[^\n]*SetEquals\([^\n]*\)\s*\{");
-        Assert.True(guard.Success, "no KeepDirty/SetEquals guard");
-        var guarded = Method(body[guard.Index..], "if (");
+        // Exact text, so the polarity is pinned: only an unchanged walk under KeepDirty skips the save.
+        const string guard = "if (!(preamble == RedrawHold.Preamble.KeepDirty && previous != null && fresh.SetEquals(previous)))";
+        var guarded = Method(body[At(body, guard)..], "if (");
         Assert.Contains("CachedActiveMaterialPaths", guarded);
         Assert.Contains("config.Save();", guarded);
     }
