@@ -26,7 +26,7 @@ public class SizeSetSourceTests(ITestOutputHelper output)
     internal const string HeartHalter = LocalData.Mods + ":Heart Halter - by Solona";
     internal const string Cutout = LocalData.Mods + ":Cutout - by Solona";
     internal const string Abyss = LocalData.Mods + ":Abyss - by Solona";
-    private const string Geometric = LocalData.Mods + ":Geometric - by Solona";
+    internal const string Geometric = LocalData.Mods + ":Geometric - by Solona";
     internal const string BeMine = LocalData.Mods + ":Be Mine - by Solona";
     internal const string FishetStarlight = LocalData.Mods + ":Fishet Starlight - by Solona";
 
@@ -585,7 +585,7 @@ public class SizeSetSourceTests(ITestOutputHelper output)
     }
 
     /// <summary>A flat square of skin in the XY plane, <paramref name="size"/> metres across, cut into a grid.</summary>
-    private static byte[] SkinSheet(float size, int cells)
+    internal static byte[] SkinSheet(float size, int cells)
     {
         var pos = new List<System.Numerics.Vector3>();
         var uv = new List<System.Numerics.Vector2>();

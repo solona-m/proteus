@@ -27,11 +27,20 @@ internal static partial class SizeSetRefit
     internal const int MostCandidates = 24;
 
     /// <summary>
+    /// How much further, in millimetres, one of the author's sizes' skin may lie from the body it was read as made on than
+    /// the best-fitting size's does, and still be a source. Luxe's "Uranus", read as Lithe Almond Large on a weak share of
+    /// its skin, lies far off that body while its sisters sit on theirs; cut from it, Rue M came out a Rue L.
+    /// </summary>
+    internal const float MisfitMm = 12f;
+
+    /// <summary>
     /// How far one of the author's sizes lies from a new size, in metres, by the keys <see cref="Choose{T}"/> takes in
     /// turn. Body: between the body the size was made on and the new size's, both ways (one way reads a bust that slid
-    /// along the other's surface as near). Skin: the garment's own skin to the new body, all its points.
+    /// along the other's surface as near). Skin: the garment's own skin to the new body, all its points. Own skin: the
+    /// garment's skin to the body it was read as made on (<see cref="OwnSkinFit"/>); null when unknown.
     /// </summary>
-    internal readonly record struct SourceDistance(float BodyP90, float BodyMean, float SkinP90, float SkinMean, int Order);
+    internal readonly record struct SourceDistance(float BodyP90, float BodyMean, float SkinP90, float SkinMean, int Order,
+                                                   float? OwnSkinP90 = null);
 
     /// <summary>
     /// The 90th percentile (nearest rank) of a reading; <see cref="SourceCap"/> when there is none to take — a body
@@ -71,6 +80,16 @@ internal static partial class SizeSetRefit
     }
 
     /// <summary>
+    /// How far a garment's own skin points lie from the body it was read as made on, at the 90th percentile; null when
+    /// there is nothing to tell by — no skin, or a body that could not be read — never <see cref="SourceCap"/>, so a size
+    /// is not passed over for what could not be measured.
+    /// </summary>
+    internal static float? OwnSkinFit(Vector3[] skinProbes, string sourcePath)
+        => skinProbes.Length > 0 && BodySizeMatch.Near(skinProbes, sourcePath, out _, out _, SourceCap) is { Length: > 0 } d
+            ? P90(d)
+            : null;
+
+    /// <summary>
     /// A body's probe points: <see cref="BodySizeMatch.NearProbePoints"/> of its skin. Empty when unreadable — every
     /// distance to it then counts as <see cref="SourceCap"/> — said through <paramref name="note"/>.
     /// </summary>
@@ -103,17 +122,57 @@ internal static partial class SizeSetRefit
          : SupportedBodies.FamilyLegs(sourceRel, size.Name);
 
     /// <summary>
-    /// The nearest of <paramref name="items"/>: at each key in turn — body 90th percentile, body mean, skin 90th
-    /// percentile, skin mean, then the author's order — the nearest is found and only those within reach of it go on,
-    /// <see cref="TieMm"/> on a percentile and nothing on a mean. A filter at each step, never a sort: "within half a
-    /// millimetre" does not chain, and a comparer built on it is inconsistent.
+    /// The nearest of <paramref name="items"/>. First, the sizes whose own skin lies more than <see cref="MisfitMm"/>
+    /// further from the body they were read as than the best-fitting one's (<see cref="Misfits{T}"/>) are passed over:
+    /// read as the wrong body, their body distance says nothing. Then at each key in turn — body 90th percentile, body
+    /// mean, skin 90th percentile, skin mean, then the author's order — the nearest is found and only those within reach of
+    /// it go on, <see cref="TieMm"/> on a percentile and nothing on a mean. A filter at each step, never a sort: "within
+    /// half a millimetre" does not chain, and a comparer built on it is inconsistent.
     /// </summary>
     /// <returns>The one chosen, the key that decided it, and by how much it beat the nearest of the rest there (metres;
-    /// 0 when the author's order decided).</returns>
+    /// 0 when the author's order decided). "skin fit" only when passing the misfits over changed the choice; its gap is
+    /// how much better the chosen one's own skin sits than the nearest misfit's.</returns>
     internal static (T Chosen, string Step, float Gap) Choose<T>(IReadOnlyList<(T Item, SourceDistance D)> items)
     {
         if (items.Count == 0) throw new ArgumentException("nothing to choose from", nameof(items));
-        var left = Enumerable.Range(0, items.Count).ToList();
+        var all = Enumerable.Range(0, items.Count).ToList();
+        var asBefore = ChooseAmong(items, all);
+        var misfits = Misfits(items);
+        if (misfits.Count == 0) return Result(asBefore);
+        var kept = ChooseAmong(items, all.Where(i => !misfits.Contains(i)).ToList());
+        if (kept.Index == asBefore.Index) return Result(asBefore);
+        // One whose own fit is unknown is kept, never judged: chosen, it is said by the key that chose it.
+        if (items[kept.Index].D.OwnSkinP90 == null) return Result(kept);
+        float gap = misfits.Min(i => items[i].D.OwnSkinP90!.Value) - items[kept.Index].D.OwnSkinP90!.Value;
+        return (items[kept.Index].Item, "skin fit", gap);
+
+        (T, string, float) Result((int Index, string Step, float Gap) r) => (items[r.Index].Item, r.Step, r.Gap);
+    }
+
+    /// <summary>
+    /// The indices of <paramref name="items"/> whose own skin lies more than <see cref="MisfitMm"/> further from the body
+    /// they were read as than the best-fitting one's. Measured against the best, never chained; one whose fit is unknown is
+    /// neither judged nor the best; none when fewer than two are known.
+    /// </summary>
+    internal static HashSet<int> Misfits<T>(IReadOnlyList<(T Item, SourceDistance D)> items)
+    {
+        var known = Enumerable.Range(0, items.Count).Where(i => items[i].D.OwnSkinP90 != null).ToList();
+        if (known.Count < 2) return [];
+        float best = known.Min(i => items[i].D.OwnSkinP90!.Value);
+        return known.Where(i => items[i].D.OwnSkinP90!.Value > best + MisfitMm / 1000f).ToHashSet();
+    }
+
+    /// <summary>
+    /// Whether an option read as the same size as an earlier one is kept beside it: when the earlier one's own skin lies
+    /// more than <see cref="MisfitMm"/> further from that body than the later one's — the earlier is passed over, and the
+    /// later one is the size it should have been.
+    /// </summary>
+    internal static bool KeepsBoth(float? earlier, float? later)
+        => earlier is { } e && later is { } l && e > l + MisfitMm / 1000f;
+
+    private static (int Index, string Step, float Gap) ChooseAmong<T>(IReadOnlyList<(T Item, SourceDistance D)> items,
+                                                                     List<int> left)
+    {
         var steps = new (string Name, Func<SourceDistance, float> Key, float Tie)[]
         {
             ("body", d => d.BodyP90, TieMm / 1000f),
@@ -129,12 +188,11 @@ internal static partial class SizeSetRefit
             {
                 int won = near[0];
                 float gap = left.Count > 1 ? left.Where(i => i != won).Min(i => key(items[i].D)) - key(items[won].D) : 0f;
-                return (items[won].Item, name, gap);
+                return (won, name, gap);
             }
             left = near;
         }
-        int first = left.MinBy(i => items[i].D.Order);
-        return (items[first].Item, "author order", 0f);
+        return (left.MinBy(i => items[i].D.Order), "author order", 0f);
     }
 
     /// <summary>The key followers find their lead's choice by: an option is one size per race of its group.</summary>
@@ -201,6 +259,18 @@ internal static partial class SizeSetRefit
 
         private Vector3[]? skinProbes;
         public Vector3[] SkinProbes => skinProbes ??= BodySizeMatch.NearProbePoints(BodySizeMatch.SkinPoints(Garment));
+
+        private bool ownFitRead;
+        private float? ownFit;
+        /// <summary>How far its skin lies from the body it was read as made on (<see cref="OwnSkinFit"/>), read once.</summary>
+        public float? OwnFit
+        {
+            get
+            {
+                if (!ownFitRead) (ownFit, ownFitRead) = (OwnSkinFit(SkinProbes, SourcePath), true);
+                return ownFit;
+            }
+        }
 
         private List<IReadOnlyCollection<int>>? shape;
         private List<string> shapeNames = [];
@@ -271,9 +341,12 @@ internal static partial class SizeSetRefit
                     continue;
                 }
                 // Read as the very size another already was, rigged alike: it would only tie with it, and lose on the
-                // author's order. Rigged otherwise, it is kept: a target rigged like it chooses among those alone.
-                if (Choices.Any(o => o.Yas == c.Yas && string.Equals(o.Pick!.Dir, c.Pick!.Dir, StringComparison.OrdinalIgnoreCase)
-                                     && RefitCore.Normal(o.Pick.Option.Rel) == RefitCore.Normal(c.Pick.Option.Rel)))
+                // author's order. Rigged otherwise, it is kept: a target rigged like it chooses among those alone. So is
+                // one that sits on that body where the other does not (KeepsBoth): the other is passed over.
+                if (Choices.FirstOrDefault(o => o.Yas == c.Yas
+                                                && string.Equals(o.Pick!.Dir, c.Pick!.Dir, StringComparison.OrdinalIgnoreCase)
+                                                && RefitCore.Normal(o.Pick.Option.Rel) == RefitCore.Normal(c.Pick.Option.Rel))
+                        is { } same && !KeepsBoth(same.OwnFit, c.OwnFit))
                 {
                     note($"{c.Name} reads as the same size as another of the author's; not measured apart");
                     continue;
@@ -329,6 +402,8 @@ internal static partial class SizeSetRefit
     }
 
     /// <summary>How a candidate's distance reads in the log, in millimetres.</summary>
-    internal static string Describe(SourceDistance d)
-        => $"body {d.BodyP90 * 1000f:F1} mm (mean {d.BodyMean * 1000f:F1}), skin {d.SkinP90 * 1000f:F1} mm (mean {d.SkinMean * 1000f:F1})";
+    internal static string Describe(SourceDistance d, bool passedOver = false)
+        => $"body {d.BodyP90 * 1000f:F1} mm (mean {d.BodyMean * 1000f:F1}), skin {d.SkinP90 * 1000f:F1} mm (mean {d.SkinMean * 1000f:F1})"
+           + (d.OwnSkinP90 is { } own ? $", own body {own * 1000f:F1} mm" : "")
+           + (passedOver ? ", passed over: its skin is off the body it was read as" : "");
 }

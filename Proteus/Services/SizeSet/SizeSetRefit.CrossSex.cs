@@ -343,10 +343,11 @@ internal static partial class SizeSetRefit
             foreach (var r in alike)
             {
                 var (p90, mean) = BodyDistance(r.BentPath, targetPath, ProbesOf);
-                var d = new SourceDistance(p90, mean, 0f, 0f, r.Candidate.Order);
-                eligible.Add((r, d));
-                said.Add($"{r.Candidate.Name}: {Describe(d)}");
+                eligible.Add((r, new SourceDistance(p90, mean, 0f, 0f, r.Candidate.Order, r.Candidate.OwnFit)));
             }
+            var misfits = Misfits(eligible);
+            for (int i = 0; i < eligible.Count; i++)
+                said.Add($"{eligible[i].Item1.Candidate.Name}: {Describe(eligible[i].Item2, misfits.Contains(i))}");
             if (eligible.Count == 0) return null;
             var (chosen, step, gap) = Choose(eligible);
             return (chosen, $"{option} from {chosen.Candidate.Name} (by {step}, {gap * 1000f:F1} mm ahead; {string.Join("; ", said)})");
