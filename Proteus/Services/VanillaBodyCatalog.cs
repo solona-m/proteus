@@ -28,7 +28,7 @@ internal static class VanillaBodyCatalog
     internal const string Key = "::vanilla";
 
     /// <summary>The group every option is filed under, so the picker can say where these came from.</summary>
-    internal static string GroupName => Loc.Localize("Parts.Retarget.Size.VanillaGroup", "Vanilla");
+    internal static string GroupName => ProteusLoc.Localize("Parts.Retarget.Size.VanillaGroup", "Vanilla");
 
     /// <summary>
     /// Where the extracts live. Deliberately NOT under Penumbra's mods root: these stand for what the game draws with
@@ -209,7 +209,7 @@ internal static class VanillaBodyCatalog
     }
 
     /// <summary>What the one size is called. A body mod's sizes are named by its author; vanilla has just the one.</summary>
-    private static string SizeName => Loc.Localize("Parts.Retarget.Size.VanillaBody", "The vanilla body");
+    private static string SizeName => ProteusLoc.Localize("Parts.Retarget.Size.VanillaBody", "The vanilla body");
 
     private static readonly string[] Slots = ["_top", "_dwn", "_glv", "_sho"];
 }

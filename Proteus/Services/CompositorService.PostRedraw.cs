@@ -192,7 +192,7 @@ public partial class CompositorService
                 if (string.Equals(_redrawWithheldNoticeKey, probeKey, StringComparison.Ordinal)) return;
                 _redrawWithheldNoticeKey = probeKey;
 
-                var needsRedraw = Loc.Localize("Chat.ShellNeedsRedraw",
+                var needsRedraw = ProteusLoc.Localize("Chat.ShellNeedsRedraw",
                     "[Proteus] Your second skin changed, but auto redraw is off, so your character is still "
                     + "wearing the previous version. Zone or use Penumbra's Redraw button to see it.");
                 _ = Plugin.Framework.RunOnFrameworkThread(
@@ -216,7 +216,7 @@ public partial class CompositorService
                           + "before it), or the game is still drawing the previous shell model",
                     missing.Count, expected.Materials.Count, string.Join(", ", missing));
 
-                var failed = Loc.Localize("Chat.ShellMaterialFailed",
+                var failed = ProteusLoc.Localize("Chat.ShellMaterialFailed",
                     "[Proteus] Part of your second skin isn't being drawn. The rest of it is on your character, so "
                     + "either a texture that piece needs is missing, or the game is still holding the previous "
                     + "version. Try \"Recomposite now\" first, then unequipping and re-equipping the accessory it "
@@ -233,7 +233,7 @@ public partial class CompositorService
                 missing.Count, expected.Materials.Count, string.Join(", ", missing),
                 siblings.Count == 0 ? "(none — the host loads no material of its own)" : string.Join(", ", siblings));
 
-            var msg = Loc.Localize("Chat.ShellNotDrawing",
+            var msg = ProteusLoc.Localize("Chat.ShellNotDrawing",
                 "[Proteus] Your second skin was built but the game isn't drawing it. The accessory "
                 + "it rides on is equipped, yet the character isn't loading Proteus' version. Try "
                 + "unequipping and re-equipping that accessory, or pick a different one.");

@@ -55,7 +55,7 @@ internal static class EarlessHairWriter
             foreach (var w in writes)
             {
                 if (owners.FirstOrDefault(o => HairPortPlan.Same(o, w.Into)) is not { } owner)
-                    return new Outcome(false, string.Format(Loc.Localize("HairPort.Refused.NoOption.Fmt",
+                    return new Outcome(false, string.Format(ProteusLoc.Localize("HairPort.Refused.NoOption.Fmt",
                         "the option \"{0}\" is no longer in the mod"), HairPortWriter.Describe(w.Into)), 0);
                 if (owner.IsCombining) return new Outcome(false, HairPortWriter.Combining(owner.Group), 0);
                 // Planned against a manifest that has changed since: planned again on the next look.
@@ -230,7 +230,7 @@ internal static class EarlessHairWriter
         // Only ever inside the copies' folder: a manifest path that climbs out of it fails the save, which rolls back.
         var folder = Path.GetFullPath(Path.Combine(modRoot, EarlessHairPlan.Folder)) + Path.DirectorySeparatorChar;
         if (!Path.GetFullPath(path).StartsWith(folder, StringComparison.OrdinalIgnoreCase))
-            throw new IOException(string.Format(Loc.Localize("HairPort.Earless.Refused.Outside.Fmt",
+            throw new IOException(string.Format(ProteusLoc.Localize("HairPort.Earless.Refused.Outside.Fmt",
                 "{0} is not a path inside the mod's earless folder, so nothing was written"), rel));
         if (!File.Exists(path)) created.Add(rel);
         Directory.CreateDirectory(Path.GetDirectoryName(path)!);
@@ -243,6 +243,6 @@ internal static class EarlessHairWriter
     private static string Native(string modRoot, string rel)
         => Path.Combine(modRoot, rel.Replace('/', Path.DirectorySeparatorChar).Replace('\\', Path.DirectorySeparatorChar));
 
-    private static string Changed => Loc.Localize("HairPort.Earless.Refused.Changed",
+    private static string Changed => ProteusLoc.Localize("HairPort.Earless.Refused.Changed",
         "the mod changed while Proteus was working on it, so nothing was written");
 }

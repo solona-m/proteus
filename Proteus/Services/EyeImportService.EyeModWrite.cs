@@ -163,7 +163,7 @@ public sealed partial class EyeImportService
                             [
                                 new OverlayOption
                                 {
-                                    Name = Loc.Localize("Import.Eye.Option.Glow", "Animated glow"),
+                                    Name = ProteusLoc.Localize("Import.Eye.Option.Glow", "Animated glow"),
                                     Overlays = [descriptor],
                                     // On the option, never at the top level: top-level rows are inherited by
                                     // every option that declares none, and any emissive makes HasCloth true.
@@ -192,7 +192,7 @@ public sealed partial class EyeImportService
                 glow = true;
             }
 
-            var description = string.Format(Loc.Localize("Import.Eye.Description.Fmt",
+            var description = string.Format(ProteusLoc.Localize("Import.Eye.Description.Fmt",
                 "Imported from the eye texture pack \"{0}\"."), Path.GetFileName(preview.SourcePath));
             PenumbraModMeta.AtomicWrite(
                 Path.Combine(root, PenumbraModMeta.MetaFile),
@@ -209,7 +209,7 @@ public sealed partial class EyeImportService
             if (glow)
                 PenumbraModMeta.WriteMultiSelectGroup(
                     root, 0, GroupName,
-                    [Loc.Localize("Import.Eye.Option.Glow", "Animated glow")],
+                    [ProteusLoc.Localize("Import.Eye.Option.Glow", "Animated glow")],
                     defaultSettings: 1);
 
             return (written, glow);

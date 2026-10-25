@@ -101,7 +101,7 @@ public sealed partial class LuminisImportService
                 var first = paths[0];
                 if (!first.EndsWith(".tex", StringComparison.OrdinalIgnoreCase))
                 {
-                    plans.Add(Skip(Loc.Localize("Import.Luminis.Skip.NotATexture",
+                    plans.Add(Skip(ProteusLoc.Localize("Import.Luminis.Skip.NotATexture",
                         "it isn't a texture — Atramentum Luminis only carries those.")));
                     continue;
                 }
@@ -109,7 +109,7 @@ public sealed partial class LuminisImportService
                 var token = TokenOf(first);
                 if (token == null)
                 {
-                    plans.Add(Skip(string.Format(Loc.Localize("Import.Luminis.Skip.GamePath.Fmt",
+                    plans.Add(Skip(string.Format(ProteusLoc.Localize("Import.Luminis.Skip.GamePath.Fmt",
                         "\"{0}\" is a real game path, so this is an ordinary TexTools mod rather than an "
                       + "Atramentum Luminis pack. Install it in Penumbra instead."), first)));
                     continue;
@@ -119,7 +119,7 @@ public sealed partial class LuminisImportService
                 var (bodyType, suffix, fromWearer) = ResolveBody(token, wearerType, wearerSuffix);
                 if (suffix == null)
                 {
-                    plans.Add(Skip(string.Format(Loc.Localize("Import.Luminis.Skip.UnknownBody.Fmt",
+                    plans.Add(Skip(string.Format(ProteusLoc.Localize("Import.Luminis.Skip.UnknownBody.Fmt",
                         "Proteus doesn't know the body \"{0}\", and can't ask your character which one they "
                       + "are wearing until they're drawn. Load in and reopen this pack."), token)));
                     continue;
@@ -128,19 +128,19 @@ public sealed partial class LuminisImportService
                 // ── does it actually carry a glow mask? ──
                 if (!payloads.TryGetValue(offset, out var payload))
                 {
-                    plans.Add(Skip(Loc.Localize("Import.Luminis.Skip.Missing",
+                    plans.Add(Skip(ProteusLoc.Localize("Import.Luminis.Skip.Missing",
                         "the modpack's data blob doesn't contain it.")));
                     continue;
                 }
                 if (payload.Error != null)
                 {
-                    plans.Add(Skip(string.Format(Loc.Localize("Import.Luminis.Skip.Unreadable.Fmt",
+                    plans.Add(Skip(string.Format(ProteusLoc.Localize("Import.Luminis.Skip.Unreadable.Fmt",
                         "it couldn't be read: {0}"), payload.Error)));
                     continue;
                 }
                 if (!payload.IsTexture)
                 {
-                    plans.Add(Skip(string.Format(Loc.Localize("Import.Luminis.Skip.NotTextureData.Fmt",
+                    plans.Add(Skip(string.Format(ProteusLoc.Localize("Import.Luminis.Skip.NotTextureData.Fmt",
                         "it is a model or material (SqPack type {0}), not a texture."), payload.Type)));
                     continue;
                 }
@@ -148,21 +148,21 @@ public sealed partial class LuminisImportService
                 var measured = measure(payload.Tex!, first);
                 if (measured is not { } m)
                 {
-                    plans.Add(Skip(Loc.Localize("Import.Luminis.Skip.Undecodable",
+                    plans.Add(Skip(ProteusLoc.Localize("Import.Luminis.Skip.Undecodable",
                         "its pixels couldn't be decoded.")));
                     continue;
                 }
 
                 if (m.Glow < MinGlowFraction)
                 {
-                    plans.Add(Skip(Loc.Localize("Import.Luminis.Skip.NoGlow",
+                    plans.Add(Skip(ProteusLoc.Localize("Import.Luminis.Skip.NoGlow",
                         "its alpha channel is flat, so it carries no glow. Atramentum Luminis puts the glow "
                       + "there, and a texture without one is an ordinary skin rather than a glowing tattoo.")));
                     continue;
                 }
 
                 if (m.Glow > SuspiciousGlowFraction)
-                    warnings.Add(string.Format(Loc.Localize("Import.Luminis.Warn.MostlyGlow.Fmt",
+                    warnings.Add(string.Format(ProteusLoc.Localize("Import.Luminis.Warn.MostlyGlow.Fmt",
                         "\"{0}\" glows across {1:P0} of the body. That is legal, but it usually means the "
                       + "texture has no real alpha channel — check the result before wearing it out."),
                         first, m.Glow));
@@ -172,7 +172,7 @@ public sealed partial class LuminisImportService
             }
 
             if (plans.Count == 0 || plans.All(p => !p.Import))
-                warnings.Add(Loc.Localize("Import.Luminis.Warn.NothingImportable",
+                warnings.Add(ProteusLoc.Localize("Import.Luminis.Warn.NothingImportable",
                     "Nothing in this pack can be imported — see the reasons above."));
         }
 
@@ -181,7 +181,7 @@ public sealed partial class LuminisImportService
             // Said once, not per texture: the fallback is a guess about which body the art was painted for,
             // and a guess repeated eight times reads as eight problems.
             if (plans.Any(p => p.Import && p.FromWearer))
-                warnings.Add(string.Format(Loc.Localize("Import.Luminis.Warn.FromWearer.Fmt",
+                warnings.Add(string.Format(ProteusLoc.Localize("Import.Luminis.Warn.FromWearer.Fmt",
                     "Proteus doesn't know this pack's body layout, so it will paint the art onto the body "
                   + "you're wearing ({0}) exactly as it is, with no resizing. If the pack was painted for a "
                   + "different body it will look wrong — change the body target below if you know better."),

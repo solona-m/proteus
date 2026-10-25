@@ -224,7 +224,7 @@ public class UVMapDownloadService : IDisposable
             // language mid-download leaves this one pill in the old language until the next progress tick.
             // Accepted deliberately — the alternative is storing a key plus boxed args and formatting at draw
             // time, which is real machinery for a string that is replaced within seconds.
-            set.Status = Loc.Localize("Service.UVMaps.Downloading", "Downloading UV maps...");
+            set.Status = ProteusLoc.Localize("Service.UVMaps.Downloading", "Downloading UV maps...");
         }
         Task.Run(() => DownloadAll(set), cts.Token);
     }
@@ -261,7 +261,7 @@ public class UVMapDownloadService : IDisposable
                 var done = completed + current;
                 if (done < nextReport) return;
                 var status = string.Format(
-                    Loc.Localize("Service.UVMaps.Progress.Fmt", "Downloading UV maps... ({0} MB / {1} MB)"),
+                    ProteusLoc.Localize("Service.UVMaps.Progress.Fmt", "Downloading UV maps... ({0} MB / {1} MB)"),
                     done / (1024 * 1024), totalExpected / (1024 * 1024));
                 lock (gate) set.Status = status;
                 nextReport = done + 5L * 1024 * 1024;
@@ -281,13 +281,13 @@ public class UVMapDownloadService : IDisposable
                     Fail(set, r.Failure switch
                     {
                         FetchFailure.Http => string.Format(
-                            Loc.Localize("Service.UVMaps.HttpFailed.Fmt", "Download failed: HTTP {0} for {1}"),
+                            ProteusLoc.Localize("Service.UVMaps.HttpFailed.Fmt", "Download failed: HTTP {0} for {1}"),
                             r.StatusCode, file.Name),
                         FetchFailure.TooSmall => string.Format(
-                            Loc.Localize("Service.UVMaps.TooSmall.Fmt",
+                            ProteusLoc.Localize("Service.UVMaps.TooSmall.Fmt",
                                 "Download too small ({0} bytes) for {1} — possible LFS pointer"), r.Bytes, file.Name),
                         _ => string.Format(
-                            Loc.Localize("Service.UVMaps.Error.Fmt", "Download error: {0}"), r.Detail),
+                            ProteusLoc.Localize("Service.UVMaps.Error.Fmt", "Download error: {0}"), r.Detail),
                     });
                     return;
                 }
@@ -314,7 +314,7 @@ public class UVMapDownloadService : IDisposable
         }
         catch (Exception ex)
         {
-            Fail(set, string.Format(Loc.Localize("Service.UVMaps.Error.Fmt", "Download error: {0}"), ex.Message));
+            Fail(set, string.Format(ProteusLoc.Localize("Service.UVMaps.Error.Fmt", "Download error: {0}"), ex.Message));
         }
     }
 

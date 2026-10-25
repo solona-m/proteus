@@ -78,7 +78,7 @@ public sealed partial class ContentImportService
     {
         if (unit.Effect is not { } e || !unit.Import) yield break;
         if (e.Sources.All(s => !pack.Entries.ContainsKey(PenumbraPackage.Normalize(s.File))))
-            yield return string.Format(Loc.Localize("ContentImport.Warn.EffectFileMissing.Fmt",
+            yield return string.Format(ProteusLoc.Localize("ContentImport.Warn.EffectFileMissing.Fmt",
                 "\"{0}\" has an animated effect, but its file ({1}) is not in the pack, so it cannot be shown."),
                 unit.Label, e.Sources[0].File);
     }

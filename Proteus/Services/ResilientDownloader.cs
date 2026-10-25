@@ -74,7 +74,7 @@ public sealed class ResilientDownloader(IPluginLog log, HttpMessageHandler? hand
         var tmp = destPath + ".tmp";
         var rng = new Random();
         var last = new FetchResult(false, FetchFailure.Transport, 0, 0,
-                                   Loc.Localize("Service.Download.NoSources", "no sources configured"));
+                                   ProteusLoc.Localize("Service.Download.NoSources", "no sources configured"));
 
         // No wait after the last attempt: it would only delay the failure.
         async Task MaybeBackoff(int attempt, System.Net.Http.Headers.RetryConditionHeaderValue? retryAfter)
@@ -140,7 +140,7 @@ public sealed class ResilientDownloader(IPluginLog log, HttpMessageHandler? hand
                                 hasher.GetHashAndReset();
                                 TryDelete(tmp);
                                 last = new FetchResult(false, FetchFailure.Transport, 0, 0, string.Format(
-                                    Loc.Localize("Service.Download.BadRange.Fmt", "{0}: 206 starting at {1}, expected {2}"),
+                                    ProteusLoc.Localize("Service.Download.BadRange.Fmt", "{0}: 206 starting at {1}, expected {2}"),
                                     fileName, from?.ToString() ?? "?", haveBytes));
                                 await MaybeBackoff(attempt, null);
                                 continue;
@@ -168,7 +168,7 @@ public sealed class ResilientDownloader(IPluginLog log, HttpMessageHandler? hand
                         var detail = $"checksum mismatch for {fileName} ({got} bytes, sha256 {actualSha[..16]}…)";
                         log.Warning("[Proteus] {0} <{1}>", detail, url);
                         last = new FetchResult(false, FetchFailure.Transport, 0, got, string.Format(
-                            Loc.Localize("Service.Download.Checksum.Fmt", "checksum mismatch for {0} ({1} bytes, sha256 {2}…)"),
+                            ProteusLoc.Localize("Service.Download.Checksum.Fmt", "checksum mismatch for {0} ({1} bytes, sha256 {2}…)"),
                             fileName, got, actualSha[..16]));
                         await MaybeBackoff(attempt, null);
                         continue;

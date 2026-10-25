@@ -264,7 +264,7 @@ public sealed partial class EmissiveSkinImportService
                 LuminisImportService.ResolveBody(token!, wearerType, wearerSuffix);
             if (suffix == null)
             {
-                plans.Add(Skip(string.Format(Loc.Localize("Import.Emissive.Skip.UnknownBody.Fmt",
+                plans.Add(Skip(string.Format(ProteusLoc.Localize("Import.Emissive.Skip.UnknownBody.Fmt",
                     "Proteus doesn't know the body \"{0}\", and can't ask your character which one they "
                   + "are wearing until they're drawn. Load in and reopen this pack."), token)));
                 continue;
@@ -273,7 +273,7 @@ public sealed partial class EmissiveSkinImportService
             // ── does it actually carry a mask? ──
             if (!payloads.TryGetValue(entry, out var bytes))
             {
-                plans.Add(Skip(string.Format(Loc.Localize("Import.Emissive.Skip.Missing.Fmt",
+                plans.Add(Skip(string.Format(ProteusLoc.Localize("Import.Emissive.Skip.Missing.Fmt",
                     "the pack's manifest names it but the archive doesn't contain \"{0}\"."), entry)));
                 continue;
             }
@@ -281,14 +281,14 @@ public sealed partial class EmissiveSkinImportService
             var measured = measure(bytes, first);
             if (measured is not { } m)
             {
-                plans.Add(Skip(Loc.Localize("Import.Emissive.Skip.Undecodable",
+                plans.Add(Skip(ProteusLoc.Localize("Import.Emissive.Skip.Undecodable",
                     "its pixels couldn't be decoded.")));
                 continue;
             }
 
             if (m.Width < MinArtSize || m.Height < MinArtSize)
             {
-                plans.Add(Skip(string.Format(Loc.Localize("Import.Emissive.Skip.TooSmall.Fmt",
+                plans.Add(Skip(string.Format(ProteusLoc.Localize("Import.Emissive.Skip.TooSmall.Fmt",
                     "it is only {0}×{1}, which is a shader's effect or palette map rather than art painted "
                   + "on a body."), m.Width, m.Height)));
                 continue;
@@ -296,14 +296,14 @@ public sealed partial class EmissiveSkinImportService
 
             if (m.Glow < MinGlowFraction)
             {
-                plans.Add(Skip(Loc.Localize("Import.Emissive.Skip.NoGlow",
+                plans.Add(Skip(ProteusLoc.Localize("Import.Emissive.Skip.NoGlow",
                     "its alpha channel is empty, so it marks nothing as glowing. An emissive map puts the "
                   + "shape of the glow there, and one without a shape is not a tattoo.")));
                 continue;
             }
 
             if (m.Glow > SuspiciousGlowFraction)
-                warnings.Add(string.Format(Loc.Localize("Import.Emissive.Warn.MostlyGlow.Fmt",
+                warnings.Add(string.Format(ProteusLoc.Localize("Import.Emissive.Warn.MostlyGlow.Fmt",
                     "\"{0}\" glows across {1:P0} of the body. That is legal, but it usually means the "
                   + "texture has no real alpha channel — check the result before wearing it out."),
                     first, m.Glow));
@@ -313,12 +313,12 @@ public sealed partial class EmissiveSkinImportService
         }
 
         if (plans.Count == 0 || plans.All(p => !p.Import))
-            warnings.Add(Loc.Localize("Import.Emissive.Warn.NothingImportable",
+            warnings.Add(ProteusLoc.Localize("Import.Emissive.Warn.NothingImportable",
                 "Nothing in this pack can be imported — see the reasons above."));
 
         // Said once, not per texture.
         if (plans.Any(p => p.Import && p.FromWearer))
-            warnings.Add(string.Format(Loc.Localize("Import.Emissive.Warn.FromWearer.Fmt",
+            warnings.Add(string.Format(ProteusLoc.Localize("Import.Emissive.Warn.FromWearer.Fmt",
                 "Proteus doesn't know this pack's body layout, so it will paint the art onto the body "
               + "you're wearing ({0}) exactly as it is, with no resizing. If the pack was painted for a "
               + "different body it will look wrong — change the body target below if you know better."),
@@ -361,9 +361,9 @@ public sealed partial class EmissiveSkinImportService
     /// </summary>
     internal static string GlowOptionName(TexturePlan plan, bool qualified)
         => qualified
-            ? string.Format(Loc.Localize("Import.Emissive.Option.GlowFor.Fmt", "Glow tattoo — {0}"),
+            ? string.Format(ProteusLoc.Localize("Import.Emissive.Option.GlowFor.Fmt", "Glow tattoo — {0}"),
                             plan.Token ?? plan.Stem)
-            : Loc.Localize("Import.Emissive.Option.Glow", "Glow tattoo");
+            : ProteusLoc.Localize("Import.Emissive.Option.Glow", "Glow tattoo");
 
     // ── Import ───────────────────────────────────────────────────────────────
 
@@ -407,30 +407,30 @@ public sealed partial class EmissiveSkinImportService
         PreparedImport Fail(string why) => new(false, why, null, null, [], 0, 0);
 
         if (string.IsNullOrWhiteSpace(modName))
-            return Fail(Loc.Localize("Import.NeedName", "Enter a mod name."));
+            return Fail(ProteusLoc.Localize("Import.NeedName", "Enter a mod name."));
         if (!preview.AnyImportable)
-            return Fail(Loc.Localize("Import.Emissive.Fail.NothingUsable",
+            return Fail(ProteusLoc.Localize("Import.Emissive.Fail.NothingUsable",
                 "Nothing in this pack can be imported."));
         if (!PenumbraPackage.Exists(preview.SourcePath))
-            return Fail(string.Format(Loc.Localize("Import.Emissive.Fail.Gone.Fmt",
+            return Fail(string.Format(ProteusLoc.Localize("Import.Emissive.Fail.Gone.Fmt",
                 "The pack is no longer there: {0}"), preview.SourcePath));
 
         var dirName = ModCreationService.Sanitize(modName);
         if (dirName == null)
-            return Fail(Loc.Localize("Import.Emissive.Fail.BadName",
+            return Fail(ProteusLoc.Localize("Import.Emissive.Fail.BadName",
                 "That mod name has no usable characters — use letters or numbers."));
         if (string.Equals(dirName, SidecarDiscoveryService.ManagedModDir, StringComparison.OrdinalIgnoreCase))
-            return Fail(Loc.Localize("Import.Emissive.Fail.Reserved",
+            return Fail(ProteusLoc.Localize("Import.Emissive.Fail.Reserved",
                 "\"Proteus\" is reserved — choose a different mod name."));
 
         var modsRoot = penumbra.GetModDirectory();
         if (string.IsNullOrEmpty(modsRoot))
-            return Fail(Loc.Localize("Import.Emissive.Fail.NoModDir",
+            return Fail(ProteusLoc.Localize("Import.Emissive.Fail.NoModDir",
                 "Penumbra's mod directory isn't available."));
 
         var root = Path.Combine(modsRoot, dirName);
         if (Directory.Exists(root))
-            return Fail(string.Format(Loc.Localize("Import.Emissive.Fail.Exists.Fmt",
+            return Fail(string.Format(ProteusLoc.Localize("Import.Emissive.Fail.Exists.Fmt",
                 "A mod folder named \"{0}\" already exists."), dirName));
 
         var materials = MaterialsFor(preview, suffixOverride);
@@ -445,7 +445,7 @@ public sealed partial class EmissiveSkinImportService
         {
             log.Error(ex, "[Proteus] emissive-skin import failed for {0}", dirName);
             try { if (Directory.Exists(root)) Directory.Delete(root, true); } catch { /* best effort */ }
-            return Fail(string.Format(Loc.Localize("Import.Emissive.Fail.Write.Fmt",
+            return Fail(string.Format(ProteusLoc.Localize("Import.Emissive.Fail.Write.Fmt",
                 "Failed to write the mod: {0}"), ex.Message));
         }
 
@@ -454,7 +454,7 @@ public sealed partial class EmissiveSkinImportService
         if (imported == 0)
         {
             try { Directory.Delete(root, true); } catch { /* best effort */ }
-            return Fail(Loc.Localize("Import.Emissive.Fail.NoneWritten",
+            return Fail(ProteusLoc.Localize("Import.Emissive.Fail.NoneWritten",
                 "None of this pack's textures could be read on the second pass, so nothing was written."));
         }
         return new(true, "", dirName, preview, written.DefaultOn, imported,
@@ -557,7 +557,7 @@ public sealed partial class EmissiveSkinImportService
             var modsRoot = penumbra.GetModDirectory();
             if (!string.IsNullOrEmpty(modsRoot))
                 try { Directory.Delete(Path.Combine(modsRoot, dirName), true); } catch { /* best effort */ }
-            return new(false, false, string.Format(Loc.Localize("Service.RegisterFailed.Fmt",
+            return new(false, false, string.Format(ProteusLoc.Localize("Service.RegisterFailed.Fmt",
                 "Wrote the mod, but Penumbra couldn't register it ({0}). Rescan mods in Penumbra."), ec));
         }
 
@@ -652,16 +652,16 @@ public sealed partial class EmissiveSkinImportService
             quiet ? " [quiet: plugin unloading]" : "");
 
         var tail = prepared.Skipped > 0
-            ? string.Format(Loc.Localize("Import.Result.SkippedTail.Fmt", " (skipped: {0})"), prepared.Skipped)
+            ? string.Format(ProteusLoc.Localize("Import.Result.SkippedTail.Fmt", " (skipped: {0})"), prepared.Skipped)
             : "";
 
         if (selectionFailed)
-            return new(true, true, string.Format(Loc.Localize("Import.Emissive.Result.NoSelection.Fmt",
+            return new(true, true, string.Format(ProteusLoc.Localize("Import.Emissive.Result.NoSelection.Fmt",
                 "Imported \"{0}\" — textures: {1}{2}, but Proteus couldn't switch it on for you. Tick it "
               + "under \"{3}\" in Penumbra, or nothing will paint."),
                 dirName, prepared.Imported, tail, GroupName));
 
-        return new(true, false, string.Format(Loc.Localize("Import.Emissive.Result.Ok.Fmt",
+        return new(true, false, string.Format(ProteusLoc.Localize("Import.Emissive.Result.Ok.Fmt",
             "Imported \"{0}\" — textures: {1}{2}. The glow is on and needs no shader mod. Recolour or dim "
           + "it in Colors, or switch it off under \"{3}\" in Penumbra."),
             dirName, prepared.Imported, tail, GroupName));

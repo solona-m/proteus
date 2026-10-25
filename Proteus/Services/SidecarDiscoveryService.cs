@@ -270,7 +270,7 @@ public class SidecarDiscoveryService
                 {
                     log.Warning("[Proteus] {0}: \"{1}\" was imported before item effects were carried — its effect "
                               + "still sits on the vanilla item; re-import the pack", modDir, piece);
-                    notice = string.Format(CheapLoc.Loc.Localize("Content.StaleEffectImport.Fmt",
+                    notice = string.Format(ProteusLoc.Localize("Content.StaleEffectImport.Fmt",
                         "\"{0}\" has an animated effect that this import left on the vanilla item, so it only plays "
                       + "when that item is worn. Delete this mod and import the pack again to wear the effect "
                       + "without it."), piece);

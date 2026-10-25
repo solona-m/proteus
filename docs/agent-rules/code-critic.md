@@ -74,7 +74,8 @@ code keys match `en.json`).
 
 ### Localization
 
-- **Every user-facing string goes through `Strings`/`Loc.Localize` with a
+- **Every user-facing string goes through `Strings`/`ProteusLoc.Localize` (never
+  CheapLoc's own `Loc.Localize`, which can return `"#key"` once inlined) with a
   literal key and is added to `en.json` and all 7 translations** (de, es, fr,
   ja, ko, ru, zh) — translated, not an English copy. An English copy passes the
   tests but ships untranslated. Build-enforced for keys/placeholders; English

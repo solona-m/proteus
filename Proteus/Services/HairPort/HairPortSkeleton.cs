@@ -150,7 +150,7 @@ internal static class HairPortSkeleton
 
     /// <summary>No verdict: the mod's own skeleton file <paramref name="rel"/> could not be read — the next look may.</summary>
     private static Choice Unreadable(string rel)
-        => new(Route.Unknown, 0, 0, 0, new HashSet<string>(), string.Format(CheapLoc.Loc.Localize(
+        => new(Route.Unknown, 0, 0, 0, new HashSet<string>(), string.Format(ProteusLoc.Localize(
             "HairPort.Refused.SkeletonUnreadable.Fmt", "the mod's skeleton {0} could not be read"), rel));
 
     /// <summary>The author's file the port's place — else the default data — publishes at <paramref name="gamePath"/>:

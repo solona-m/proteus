@@ -185,8 +185,6 @@ internal sealed class HairPortPanel(Func<string, byte[]?> readGameFile, IPluginL
         var ct = cancel.Token;
         progress = string.Format(Strings.HairPort.PortingFmt, 0, targets.Count);
         result = "";
-        // Read out here, not in the lambda: NoPbd localizes, and Loc.Localize finds the plugin by its caller, which an
-        // inlined lambda hides.
         string noPbd = HairPortWatcher.NoPbd;
         running = Task.Run(() =>
         {

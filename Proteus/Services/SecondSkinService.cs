@@ -479,7 +479,7 @@ public sealed partial class SecondSkinService
         if (string.Equals(_lastClaimedCarriers, key, StringComparison.Ordinal)) return;
         _lastClaimedCarriers = key;
 
-        var msg = string.Format(Loc.Localize("Chat.CarrierClaimed.Fmt",
+        var msg = string.Format(ProteusLoc.Localize("Chat.CarrierClaimed.Fmt",
             "[Proteus] \"{0}\" puts its own model on an Emperor's New accessory ({1}), so Proteus left that "
           + "slot alone rather than replacing it. Free a different ring or bracelet slot if you want Proteus "
           + "to have one to build on."), string.Join("\", \"", owners), string.Join(", ", slots));

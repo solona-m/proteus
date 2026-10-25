@@ -27,7 +27,7 @@ internal sealed class HairPortRecord
     [JsonIgnore] public bool Unreadable { get; private set; }
 
     /// <summary>Why a write refuses an <see cref="Unreadable"/> record.</summary>
-    public static string UnreadableMessage => CheapLoc.Loc.Localize("HairPort.Refused.RecordUnreadable",
+    public static string UnreadableMessage => ProteusLoc.Localize("HairPort.Refused.RecordUnreadable",
         "Proteus's record of this mod's hair ports (Proteus/hairport.json) could not be read, so nothing was changed.");
 
     /// <summary>One port: one model published from one place in the mod, with the materials it needed.</summary>

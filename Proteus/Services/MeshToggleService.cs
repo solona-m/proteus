@@ -141,7 +141,7 @@ internal sealed class MeshToggleService
         int? wornVariant = null)
     {
         if (toggles.Count == 0)
-            return new Outcome(false, Loc.Localize("Parts.Write.Nothing", "No switches to write."), 0, []);
+            return new Outcome(false, ProteusLoc.Localize("Parts.Write.Nothing", "No switches to write."), 0, []);
 
         // Checked here too: PenumbraModMeta throws on a pre-v4 folder, which mid-Apply would land after models
         // were written.
@@ -150,7 +150,7 @@ internal sealed class MeshToggleService
 
         if (ContentSlot.Parse(model.GamePath) is not { } slot
             || ContentSlot.SetIdOf(slot.SetTag) is not { } setId)
-            return new Outcome(false, string.Format(Loc.Localize("Parts.Write.NotAnItem.Fmt",
+            return new Outcome(false, string.Format(ProteusLoc.Localize("Parts.Write.NotAnItem.Fmt",
                 "{0} is not a character model path, so there is no item to attach a switch to."),
                 model.GamePath), 0, []);
 
@@ -158,7 +158,7 @@ internal sealed class MeshToggleService
         if (equipSlot == null
             || AttributeSlotLetter(slot.Label) is not { } slotLetter
             || ImcEntrySource.ImcPathFor(model.GamePath) == null)
-            return new Outcome(false, string.Format(Loc.Localize("Parts.Write.NotGear.Fmt",
+            return new Outcome(false, string.Format(ProteusLoc.Localize("Parts.Write.NotGear.Fmt",
                 "Switches can only be added to equipment and accessories, and this is {0}."),
                 slot.Label), 0, []);
 
@@ -174,7 +174,7 @@ internal sealed class MeshToggleService
         // A repeated name would overwrite the letter the first switch is remembered by, orphaning its attribute.
         if (toggles.Select(t => t.Name).Concat(item?.Toggles.Keys ?? Enumerable.Empty<string>())
                 .GroupBy(n => n, StringComparer.OrdinalIgnoreCase).FirstOrDefault(g => g.Count() > 1) is { } dup)
-            return new Outcome(false, string.Format(Loc.Localize("Parts.Write.DuplicateName.Fmt",
+            return new Outcome(false, string.Format(ProteusLoc.Localize("Parts.Write.DuplicateName.Fmt",
                 "This item already has a switch called \"{0}\". Give the new one a different name."),
                 dup.Key), 0, []);
 
@@ -183,13 +183,13 @@ internal sealed class MeshToggleService
         if (adopt is { } target
             && AuthorOptionNames(target.Group, item) is var authorNames
             && toggles.Select(t => t.Name).FirstOrDefault(authorNames.Contains) is { } taken)
-            return new Outcome(false, string.Format(Loc.Localize("Parts.Write.AuthorOptionName.Fmt",
+            return new Outcome(false, string.Format(ProteusLoc.Localize("Parts.Write.AuthorOptionName.Fmt",
                 "This mod's own \"{0}\" group already has an option called \"{1}\". Give the new switch a "
               + "different name."), target.Name, taken), 0, []);
 
         // Two switches cannot both claim one submesh when one takes it whole.
         if (OverlappingClaim(toggles) is { } clash)
-            return new Outcome(false, string.Format(Loc.Localize("Parts.Write.Overlap.Fmt",
+            return new Outcome(false, string.Format(ProteusLoc.Localize("Parts.Write.Overlap.Fmt",
                 "\"{0}\" and \"{1}\" both claim part {2}. One of them takes the whole part, so they cannot "
               + "be separate switches."), clash.A, clash.B, clash.Part), 0, []);
 
@@ -208,7 +208,7 @@ internal sealed class MeshToggleService
         }
 
         if (free.Count < toggles.Count)
-            return new Outcome(false, string.Format(Loc.Localize("Parts.Write.NoRoom.Fmt",
+            return new Outcome(false, string.Format(ProteusLoc.Localize("Parts.Write.NoRoom.Fmt",
                 "This model has {0} switch slot(s) left and {1} were asked for."),
                 free.Count, toggles.Count), 0, []);
 
@@ -220,7 +220,7 @@ internal sealed class MeshToggleService
                  ?? ImcEntrySource.FromMod(modRoot, setId, equipSlot)
                  ?? ImcEntrySource.FromGame(readGameFile, model.GamePath, variant);
         if (entry is not { } baseEntry)
-            return new Outcome(false, Loc.Localize("Parts.Write.NoImc",
+            return new Outcome(false, ProteusLoc.Localize("Parts.Write.NoImc",
                 "Could not read this item's IMC entry, and guessing it would change which material the item "
               + "loads. Nothing has been written."), 0, []);
 
@@ -250,13 +250,13 @@ internal sealed class MeshToggleService
             catch (ModelAttributeWriter.ModelEditException ex)
             {
                 // Nothing is on disk yet, so a refusal leaves the mod untouched.
-                return new Outcome(false, string.Format(Loc.Localize("Parts.Write.EditFailed.Fmt",
+                return new Outcome(false, string.Format(ProteusLoc.Localize("Parts.Write.EditFailed.Fmt",
                     "{0} could not be edited: {1}. Nothing has been written."), rel, ex.Message), 0, []);
             }
         }
 
         if (patched.Count == 0)
-            return new Outcome(false, Loc.Localize("Parts.Write.NoFiles",
+            return new Outcome(false, ProteusLoc.Localize("Parts.Write.NoFiles",
                 "None of this item's model files could be edited."), 0, skipped);
 
         // ── from here on the mod is being changed ───────────────────────────
@@ -289,7 +289,7 @@ internal sealed class MeshToggleService
         catch (Exception ex)
         {
             return new Outcome(false, string.Format(
-                Loc.Localize("Parts.Write.Failed.Fmt", "Writing failed: {0}"), ex.Message), 0, skipped);
+                ProteusLoc.Localize("Parts.Write.Failed.Fmt", "Writing failed: {0}"), ex.Message), 0, skipped);
         }
 
         return new Outcome(true, "", patched.Count, skipped, item.GroupName, [.. patched.Keys]);
@@ -527,7 +527,7 @@ internal sealed class MeshToggleService
     {
         var record = ReadRecord(modRoot);
         if (record == null || record.Items.Count == 0)
-            return new Outcome(false, Loc.Localize("Parts.Revert.Nothing",
+            return new Outcome(false, ProteusLoc.Localize("Parts.Revert.Nothing",
                 "This mod has no Proteus switches to remove."), 0, []);
 
         // Refused while a feature that edited the same model LATER holds its own backup; see ModelBackupOrder.
@@ -572,7 +572,7 @@ internal sealed class MeshToggleService
         {
             // The models are back but the groups remain; every backup is still in place to retry from.
             return new Outcome(false, string.Format(
-                Loc.Localize("Parts.Revert.Failed.Fmt",
+                ProteusLoc.Localize("Parts.Revert.Failed.Fmt",
                     "The models were restored, but the option group could not be removed: {0}"),
                 ex.Message), restoredFrom.Count, skipped, Files: restored);
         }
@@ -604,7 +604,7 @@ internal sealed class MeshToggleService
         // Edited in place, so every field this build does not know about survives.
         var path = Path.Combine(modRoot, SidecarDiscoveryService.SidecarSubdir, SidecarDiscoveryService.MetadataFile);
         if (System.Text.Json.Nodes.JsonNode.Parse(File.ReadAllText(path)) is not System.Text.Json.Nodes.JsonObject root)
-            throw new InvalidDataException(string.Format(Loc.Localize("Parts.Write.NotJsonObject.Fmt",
+            throw new InvalidDataException(string.Format(ProteusLoc.Localize("Parts.Write.NotJsonObject.Fmt",
                 "{0} is not a JSON object."), path));
 
         // Whatever spelling the file uses: it is read case-insensitively.

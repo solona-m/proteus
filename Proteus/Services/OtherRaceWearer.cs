@@ -130,7 +130,7 @@ internal static class OtherRaceWearer
     {
         var none = EstPlan.NotNeeded;
         if (inputs.Pbd is not { Length: > 0 } pbdBytes)
-            return new Made(null, none, false, Loc.Localize("Parts.Retarget.Race.NoDeformer",
+            return new Made(null, none, false, ProteusLoc.Localize("Parts.Retarget.Race.NoDeformer",
                 "the game's racial deformer could not be read"), []);
         PbdFile pbd;
         try { pbd = new PbdFile(pbdBytes); }
@@ -139,7 +139,7 @@ internal static class OtherRaceWearer
         {
             // The reader indexes the bytes as it goes; a file it cannot read fails with one of these. The cause goes
             // with the refusal, which the panel logs.
-            return new Made(null, none, false, Loc.Localize("Parts.Retarget.Race.NoDeformer",
+            return new Made(null, none, false, ProteusLoc.Localize("Parts.Retarget.Race.NoDeformer",
                 "the game's racial deformer could not be read") + $" ({ex.GetType().Name}: {ex.Message})", []);
         }
 
@@ -147,7 +147,7 @@ internal static class OtherRaceWearer
         bool fellBack = inputs.ModdedBase != null && skeleton == null;
         skeleton ??= inputs.GameBase != null ? HavokSkeleton.Read(inputs.GameBase) : null;
         if (skeleton == null)
-            return new Made(null, none, fellBack, string.Format(Loc.Localize("Parts.Retarget.Race.NoSkeleton.Fmt",
+            return new Made(null, none, fellBack, string.Format(ProteusLoc.Localize("Parts.Retarget.Race.NoSkeleton.Fmt",
                 "{0}'s skeleton could not be read"), ModelRace.Describe($"{inputs.Race:D4}")), []);
 
         var parents = skeleton.ParentMap();
@@ -190,10 +190,10 @@ internal static class OtherRaceWearer
             ? (est.Missing ?? []).ToList()
             : OtherRaceRefit.Unbendable(weighted, pbd, wearer.ParentOf, inputs.Drawn, inputs.Race);
         if (unbendable.Count > 0)
-            return new Made(null, est, fellBack, string.Format(Loc.Localize("Parts.Retarget.Race.Unbendable.Fmt",
+            return new Made(null, est, fellBack, string.Format(ProteusLoc.Localize("Parts.Retarget.Race.Unbendable.Fmt",
                 "{0} would not move with {1}'s skeleton: {2}"), unbendable.Count == 1
-                    ? Loc.Localize("Parts.Retarget.Race.OneBone", "a bone the garment leans on")
-                    : string.Format(Loc.Localize("Parts.Retarget.Race.ManyBones.Fmt", "{0} bones the garment leans on"),
+                    ? ProteusLoc.Localize("Parts.Retarget.Race.OneBone", "a bone the garment leans on")
+                    : string.Format(ProteusLoc.Localize("Parts.Retarget.Race.ManyBones.Fmt", "{0} bones the garment leans on"),
                                     unbendable.Count),
                 ModelRace.Describe($"{inputs.Race:D4}"), string.Join(", ", unbendable.Take(12))), unbendable, moves,
                 Earrings: earrings);

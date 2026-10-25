@@ -204,7 +204,7 @@ public sealed partial class ContentImportService
 
         PiecePlan Unreadable(string why)
             => new(gamePath, entry, bindings, unbound, 0, 0,
-                   string.Format(Loc.Localize("ContentImport.Problem.Unreadable.Fmt",
+                   string.Format(ProteusLoc.Localize("ContentImport.Problem.Unreadable.Fmt",
                        "not a readable model ({0})"), why));
 
         if (model == null) return Unreadable(entry);
@@ -225,7 +225,7 @@ public sealed partial class ContentImportService
         var used = ContentPieceResolver.UsedMaterialNames(model, declared);
         if (used.Count == 0)
             return new PiecePlan(gamePath, entry, bindings, unbound, 0, 0,
-                Loc.Localize("ContentImport.Problem.NoGeometry", "no geometry — every mesh in it is empty"));
+                ProteusLoc.Localize("ContentImport.Problem.NoGeometry", "no geometry — every mesh in it is empty"));
 
         int meshes = 0, vertices = 0;
         // The extent of everything bound, to tell an invisible placeholder (one point) from real geometry.
@@ -267,14 +267,14 @@ public sealed partial class ContentImportService
             // Only a body-only model binds nothing deliberately; a model naming no drawn material is faulty.
             bodyOnly = unbound.Count == 0 && skinOnly.Count > 0;
             problem = unbound.Count == 0 && skinOnly.Count == 0
-                ? Loc.Localize("ContentImport.Problem.NoMeshes",
+                ? ProteusLoc.Localize("ContentImport.Problem.NoMeshes",
                     "it draws no meshes, so there is nothing to append.")
                 : !bodyOnly
-                ? string.Format(Loc.Localize("ContentImport.Problem.Unbound.Fmt",
+                ? string.Format(ProteusLoc.Localize("ContentImport.Problem.Unbound.Fmt",
                     "its mesh names {0}, which this pack does not ship. Rebind the mesh to one of the pack's "
                   + "own materials and re-export."), string.Join(", ", unbound))
                 // Every mesh in it is the body: not a fault, so it says what it is.
-                : string.Format(Loc.Localize("ContentImport.Problem.BodyOnly.Fmt",
+                : string.Format(ProteusLoc.Localize("ContentImport.Problem.BodyOnly.Fmt",
                     "every mesh in it is the wearer's own body ({0}), so there is nothing to add."),
                     string.Join(", ", skinOnly));
         }
@@ -334,10 +334,10 @@ public sealed partial class ContentImportService
 
         var dir = Path.GetFileName(Path.TrimEndingDirectorySeparator(preview.SourcePath));
         if (string.Equals(dir, SidecarDiscoveryService.ManagedModDir, StringComparison.OrdinalIgnoreCase))
-            return Loc.Localize("ContentImport.Fail.ManagedMod",
+            return ProteusLoc.Localize("ContentImport.Fail.ManagedMod",
                 "That is Proteus's own managed mod — it cannot be imported.");
         if (preview.InstallOnly)
-            return Loc.Localize("ContentImport.Fail.AlreadyProteus",
+            return ProteusLoc.Localize("ContentImport.Fail.AlreadyProteus",
                 "This mod is already a Proteus mod — there is nothing to import.");
         return null;
     }
@@ -354,31 +354,31 @@ public sealed partial class ContentImportService
         PreparedImport Fail(string why) => new(false, why, null, null, 0, 0);
 
         if (string.IsNullOrWhiteSpace(modName))
-            return Fail(Loc.Localize("Import.NeedName", "Enter a mod name."));
+            return Fail(ProteusLoc.Localize("Import.NeedName", "Enter a mod name."));
         // CanImport, not AnyImportable: a ready-made Proteus mod has no units and is still importable.
         if (!preview.CanImport)
-            return Fail(Loc.Localize("ContentImport.Fail.NothingUsable", "Nothing in this pack can be imported."));
+            return Fail(ProteusLoc.Localize("ContentImport.Fail.NothingUsable", "Nothing in this pack can be imported."));
         if (!PenumbraPackage.Exists(preview.SourcePath))
-            return Fail(string.Format(Loc.Localize("ContentImport.Fail.Gone.Fmt",
+            return Fail(string.Format(ProteusLoc.Localize("ContentImport.Fail.Gone.Fmt",
                 "The pack is no longer there: {0}"), preview.SourcePath));
         if (RefuseInstalledSource(preview) is { } refused)
             return Fail(refused);
 
         var dirName = ModCreationService.Sanitize(modName);
         if (dirName == null)
-            return Fail(Loc.Localize("ContentImport.Fail.BadName",
+            return Fail(ProteusLoc.Localize("ContentImport.Fail.BadName",
                 "That mod name has no usable characters — use letters or numbers."));
         if (string.Equals(dirName, SidecarDiscoveryService.ManagedModDir, StringComparison.OrdinalIgnoreCase))
-            return Fail(Loc.Localize("ContentImport.Fail.Reserved",
+            return Fail(ProteusLoc.Localize("ContentImport.Fail.Reserved",
                 "\"Proteus\" is reserved — choose a different mod name."));
 
         var modsRoot = penumbra.GetModDirectory();
         if (string.IsNullOrEmpty(modsRoot))
-            return Fail(Loc.Localize("ContentImport.Fail.NoModDir", "Penumbra's mod directory isn't available."));
+            return Fail(ProteusLoc.Localize("ContentImport.Fail.NoModDir", "Penumbra's mod directory isn't available."));
 
         var root = Path.Combine(modsRoot, dirName);
         if (Directory.Exists(root))
-            return Fail(string.Format(Loc.Localize("ContentImport.Fail.Exists.Fmt",
+            return Fail(string.Format(ProteusLoc.Localize("ContentImport.Fail.Exists.Fmt",
                 "A mod folder named \"{0}\" already exists."), dirName));
 
         try
@@ -389,7 +389,7 @@ public sealed partial class ContentImportService
         {
             log.Error(ex, "[Proteus] content import failed for {0}", dirName);
             try { if (Directory.Exists(root)) Directory.Delete(root, true); } catch { /* best effort */ }
-            return Fail(string.Format(Loc.Localize("ContentImport.Fail.Write.Fmt",
+            return Fail(string.Format(ProteusLoc.Localize("ContentImport.Fail.Write.Fmt",
                 "Failed to write the mod: {0}"), ex.Message));
         }
 
@@ -988,7 +988,7 @@ public sealed partial class ContentImportService
         if (!NeedsPieceGroup(preview) || preview.Pack.FileVersion >= PenumbraModMeta.SingleFileVersion)
             return null;
         if (OnFramework(onPool, penumbra.GetModDirectory) is not { Length: > 0 } modsRoot)
-            return new(false, false, Loc.Localize("ContentImport.Fail.NoModDir", "Penumbra's mod directory isn't available."));
+            return new(false, false, ProteusLoc.Localize("ContentImport.Fail.NoModDir", "Penumbra's mod directory isn't available."));
 
         var root = Path.Combine(modsRoot, dirName);
         if (PenumbraModMeta.IsLegacyFolder(root))
@@ -998,7 +998,7 @@ public sealed partial class ContentImportService
             log.Warning("[Proteus] imported {0}: Penumbra added the mod but left it in the pre-v4 layout, so its "
                       + "piece group could not be written — removing it again", dirName);
             UndoRegistration(root, dirName, onPool);
-            return new(false, false, string.Format(Loc.Localize("ContentImport.Fail.NotUpgraded.Fmt",
+            return new(false, false, string.Format(ProteusLoc.Localize("ContentImport.Fail.NotUpgraded.Fmt",
                 "Penumbra did not upgrade \"{0}\" from its older format, so its pieces could not be made "
                 + "switchable. The import was undone; try importing the pack again."), dirName));
         }
@@ -1013,7 +1013,7 @@ public sealed partial class ContentImportService
             log.Error(ex, "[Proteus] imported {0}: could not write its piece group after Penumbra upgraded it — "
                         + "removing it again", dirName);
             UndoRegistration(root, dirName, onPool);
-            return new(false, false, string.Format(Loc.Localize("ContentImport.Fail.PieceGroup.Fmt",
+            return new(false, false, string.Format(ProteusLoc.Localize("ContentImport.Fail.PieceGroup.Fmt",
                 "Could not add the piece switches to \"{0}\": {1} The import was undone; try importing the "
                 + "pack again."), dirName, ex.Message));
         }
@@ -1071,7 +1071,7 @@ public sealed partial class ContentImportService
             var modsRoot = penumbra.GetModDirectory();
             if (!string.IsNullOrEmpty(modsRoot))
                 try { Directory.Delete(Path.Combine(modsRoot, dirName), true); } catch { /* best effort */ }
-            return new(false, false, string.Format(Loc.Localize("Service.RegisterFailed.Fmt",
+            return new(false, false, string.Format(ProteusLoc.Localize("Service.RegisterFailed.Fmt",
                 "Wrote the mod, but Penumbra couldn't register it ({0}). Rescan mods in Penumbra."), ec));
         }
 
@@ -1120,7 +1120,7 @@ public sealed partial class ContentImportService
         {
             var ex = p.Write.Exception!.GetBaseException();
             log.Error(ex, "[Proteus] imported {0}: writing its piece group failed", p.Prepared.DirName!);
-            return new(false, false, string.Format(Loc.Localize("ContentImport.Fail.PieceGroup.Fmt",
+            return new(false, false, string.Format(ProteusLoc.Localize("ContentImport.Fail.PieceGroup.Fmt",
                 "Could not add the piece switches to \"{0}\": {1} The import was undone; try importing the "
                 + "pack again."), p.Prepared.DirName!, ex.Message));
         }
@@ -1193,7 +1193,7 @@ public sealed partial class ContentImportService
             quiet ? " [quiet: plugin unloading]" : "");
 
         var tail = prepared.Skipped > 0
-            ? string.Format(Loc.Localize("ContentImport.Result.SkippedTail.Fmt", " (skipped: {0})"), prepared.Skipped)
+            ? string.Format(ProteusLoc.Localize("ContentImport.Result.SkippedTail.Fmt", " (skipped: {0})"), prepared.Skipped)
             : "";
 
         // Amber is for a problem: only a piece that came out wrong (FaultyUnits), not skipped body meshes or
@@ -1202,18 +1202,18 @@ public sealed partial class ContentImportService
 
         // Installed rather than converted: no pieces to count. See ImportPreview.InstallOnly.
         if (preview.InstallOnly)
-            return new(true, false, string.Format(Loc.Localize("ContentImport.Result.Installed.Fmt",
+            return new(true, false, string.Format(ProteusLoc.Localize("ContentImport.Result.Installed.Fmt",
                 "Installed \"{0}\". It was already a Proteus mod, so it went in exactly as its author "
               + "built it — enabled and opened in Penumbra, where its options are chosen."),
                 dirName));
 
         if (preview.PieceGroupName is { } gate)
-            return new(true, warn, string.Format(Loc.Localize("ContentImport.Result.Pieces.Fmt",
+            return new(true, warn, string.Format(ProteusLoc.Localize("ContentImport.Result.Pieces.Fmt",
                 "Imported \"{0}\" — pieces: {1}{2}. They arrive switched OFF: tick the ones you want "
               + "under \"{3}\" in Penumbra, which is now open on this mod."),
                 dirName, prepared.Pieces, tail, gate));
 
-        return new(true, warn, string.Format(Loc.Localize("ContentImport.Result.Ok.Fmt",
+        return new(true, warn, string.Format(ProteusLoc.Localize("ContentImport.Result.Ok.Fmt",
             "Imported \"{0}\" — pieces: {1}{2}. Enabled it and opened it in Penumbra. Its options are chosen "
           + "in Penumbra, and every one you select is worn at once."),
             dirName, prepared.Pieces, tail));
