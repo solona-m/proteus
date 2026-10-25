@@ -118,7 +118,7 @@ expanding here.
 - `Proteus/Interop/` — unsafe struct offsets and IPC threading (Penumbra events fire on the caller's thread)
 - `Proteus/Configuration.cs` migrations — a mistake loses user settings
 - `LogAnonymizer.cs` / `LogExportService.cs` — character names must not leak into exported logs
-- `worker/` and `.github/workflows/` — live release distribution
+- `worker/`, `.github/workflows/` and `.github/dependabot.yml` — live release distribution; actions stay SHA-pinned (`SupplyChainTests`)
 
 ## Review & Planning Guidance
 
