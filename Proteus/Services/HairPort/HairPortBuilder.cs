@@ -24,8 +24,9 @@ internal static class HairPortBuilder
     /// verdict on the model, the next look may read it.</param>
     /// <param name="EditBlocked">Races refused because the user edited their port since: no verdict on the model
     /// either — reverting the edit lets the next look port it.</param>
-    /// <param name="Warnings">Races ported all the same with something to look at in game — a bend that turned part of
-    /// the hairstyle inside out (<see cref="HairPortBaker.Result.Warning"/>) — with what.</param>
+    /// <param name="Warnings">Races ported all the same with something to look at in game — a port that does not sit on
+    /// the race's head, or a bend that turned part of the hairstyle inside out
+    /// (<see cref="HairPortBaker.Result.Warning"/>) — with what.</param>
     public sealed record Plan(IReadOnlyList<HairPortWriter.PortWrite> Writes, IReadOnlyDictionary<ushort, string> Refused,
                               IReadOnlySet<ushort> Current, bool Unreadable = false, IReadOnlySet<ushort>? EditBlocked = null,
                               IReadOnlyDictionary<ushort, string>? Warnings = null)

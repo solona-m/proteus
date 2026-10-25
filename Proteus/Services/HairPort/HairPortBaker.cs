@@ -58,8 +58,9 @@ internal static class HairPortBaker
     /// <param name="GapShift">How far its typical distance from the scalp moved against the source's, in metres.</param>
     /// <param name="FurHidden">Triangles of ear fur taken out, for a Miqo'te hairstyle going to another race.</param>
     /// <param name="Folded">Drawn triangles the bend turned inside out.</param>
-    /// <param name="Warning">Said beside the port when more than <see cref="FoldedShare"/> of it turned inside out: it
-    /// is saved all the same, for the player to look at in game. Null otherwise.</param>
+    /// <param name="Warning">Said beside the port when it does not sit on the target's head (over <see cref="SunkLimit"/>
+    /// or <see cref="GapMargin"/>), or more than <see cref="FoldedShare"/> of it turned inside out: it is saved all the
+    /// same, for the player to look at in game. Null otherwise.</param>
     public sealed record Result(byte[] Model, IReadOnlyList<(string From, string To)> Renamed, float Sunk,
                                 float GapShift, int FurHidden, long Millis, int Folded = 0, string? Warning = null);
 
@@ -89,7 +90,8 @@ internal static class HairPortBaker
 
     /// <summary>
     /// The port of <paramref name="source"/>, a <paramref name="from"/> model of hairstyle <paramref name="hairId"/>, for
-    /// <paramref name="to"/>. Null, with the reason, when it cannot be made or does not sit on the target's head.
+    /// <paramref name="to"/>. Null, with the reason, when it cannot be made; one that does not sit on the target's head
+    /// is made all the same, with a warning.
     /// </summary>
     /// <param name="targetExtraBones">The hairstyle-skeleton bones (<c>j_ex_…</c>) the target race's own model of this
     /// hairstyle names — the ones its skeleton has. Empty when the game ships no such model.</param>
@@ -189,14 +191,15 @@ internal static class HairPortBaker
             return null;
         }
         // Two-sided: sunk into the skull, or standing off it further (or nearer) than the source does on its own head.
+        // Said, never refused, as the folds are: the player looks at it in game.
         float shift = after.Value.Gap - before.Value.Gap;
         if (after.Value.Sunk > SunkLimit || MathF.Abs(shift) > GapMargin)
         {
-            refusal = string.Format(Loc.Localize("HairPort.Refused.Fit.Fmt",
+            var fit = string.Format(Loc.Localize("HairPort.Fit.Fmt",
                     "it does not sit on c{0:D4}'s head: {1:P0} of it sinks into the skull, and its distance from the " +
-                    "scalp is {2:F0} mm off the original's"),
+                    "scalp is {2:F0} mm off the original's; check it in game"),
                 to, after.Value.Sunk, MathF.Abs(shift) * 1000f);
-            return null;
+            warning = warning == null ? fit : fit + "; " + warning;
         }
 
         return new Result(model, renamed, after.Value.Sunk, shift, furHidden, clock.ElapsedMilliseconds, folded, warning);
