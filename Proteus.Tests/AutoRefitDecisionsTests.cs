@@ -600,4 +600,16 @@ public class AutoRefitDecisionsTests
             AutoRefitDecisions.AbandonDetail(now, garmentDir: null, garment: null,
                 new PenumbraBridge.ModSettingsSnapshot(true, 5, [], false, false)));
     }
+
+    [Fact]
+    [Trait("Plan", "AC-no-idle-redraws-6")]
+    [Trait("Plan", "EDGE-no-idle-redraws-18")]
+    [Trait("Plan", "EDGE-no-idle-redraws-19")]
+    public void An_undo_redraws_only_when_it_changed_something()
+    {
+        Assert.False(AutoRefitDecisions.UndoRedraws(modsTouched: 0, groupsSwitchedBack: 0));
+        Assert.True(AutoRefitDecisions.UndoRedraws(1, 0));   // a size removed, a mod deleted, or a failure
+        Assert.True(AutoRefitDecisions.UndoRedraws(0, 1));   // only an author's size switched back
+        Assert.True(AutoRefitDecisions.UndoRedraws(2, 3));
+    }
 }

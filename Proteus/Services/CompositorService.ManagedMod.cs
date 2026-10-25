@@ -234,16 +234,28 @@ public partial class CompositorService
     /// from FileVersion 4, default_mod.json before). <paramref name="manipulations"/> carries metadata edits, e.g. the
     /// EQDP entry a second-skin host needs to load the character's own race/gender model.
     /// </summary>
-    private void WriteManagedModJson(IDictionary<string, string> redirects, IReadOnlyList<object>? manipulations = null)
+    /// <returns>
+    /// This write's place in the order of manifest writes, and whether the empty output was drawn just before it (see
+    /// <see cref="_emptyOutputDrawn"/>), both read under the lock the write holds. Every write clears that flag.
+    /// </returns>
+    private ManifestWrite WriteManagedModJson(IDictionary<string, string> redirects, IReadOnlyList<object>? manipulations = null)
     {
         var files = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
         foreach (var (gamePath, relPath) in redirects)
             files[gamePath] = relPath;
 
         lock (_manifestLock)
+        {
+            bool wasDrawn = _emptyOutputDrawn;
             PenumbraModMeta.WriteRedirects(
                 managedModDir, SidecarDiscoveryService.ManagedModDir, files, swaps: null, manipulations: manipulations);
+            _emptyOutputDrawn = false;
+            return new ManifestWrite(++_manifestWrites, wasDrawn);
+        }
     }
+
+    /// <summary>See <see cref="WriteManagedModJson"/>.</summary>
+    internal readonly record struct ManifestWrite(long Stamp, bool WasDrawn);
 
     /// <summary>
     /// Serialises every write to the managed mod's manifest, and lets <see cref="PrimeUpstreamCache"/> hold a

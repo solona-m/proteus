@@ -174,6 +174,46 @@ public class RedrawHoldTests
     }
 
     [Fact]
+    [Trait("Plan", "AC-no-idle-redraws-1")]
+    [Trait("Plan", "AC-no-idle-redraws-2")]
+    [Trait("Plan", "EDGE-no-idle-redraws-3")]
+    public void The_empty_publish_redraws_only_when_something_may_still_be_drawn()
+    {
+        Assert.False(RedrawHold.EmptyPublishRedraws(emptyAlreadyDrawn: true, withdrawing: false));
+        Assert.True(RedrawHold.EmptyPublishRedraws(false, false));   // not drawn yet: the first after load, or after a publish
+        Assert.True(RedrawHold.EmptyPublishRedraws(true, withdrawing: true));
+        Assert.True(RedrawHold.EmptyPublishRedraws(false, true));
+    }
+
+    [Fact]
+    [Trait("Plan", "AC-no-idle-redraws-3")]
+    [Trait("Plan", "AC-no-idle-redraws-4")]
+    [Trait("Plan", "EDGE-no-idle-redraws-12")]
+    [Trait("Plan", "EDGE-no-idle-redraws-13")]
+    [Trait("Plan", "EDGE-no-idle-redraws-14")]
+    public void The_preamble_reloads_only_with_an_overlay_enabled_and_asks_last()
+    {
+        int asked = 0;
+        System.Func<bool> overlay = () => { asked++; return true; };
+        System.Func<bool> none = () => { asked++; return false; };
+
+        Assert.Equal(RedrawHold.Preamble.Reload, RedrawHold.PlanPreamble(true, true, true, false, overlay));
+        Assert.Equal(RedrawHold.Preamble.KeepDirty, RedrawHold.PlanPreamble(true, true, true, false, none));
+        Assert.Equal(2, asked);
+
+        asked = 0;
+        Assert.Equal(RedrawHold.Preamble.None, RedrawHold.PlanPreamble(wasDirty: false, true, true, false, overlay));
+        Assert.Equal(RedrawHold.Preamble.None, RedrawHold.PlanPreamble(true, autoRedraw: false, true, false, overlay));
+        Assert.Equal(RedrawHold.Preamble.None, RedrawHold.PlanPreamble(true, true, bodyKeyUnchanged: false, false, overlay));
+        Assert.Equal(RedrawHold.Preamble.None, RedrawHold.PlanPreamble(true, true, true, releaseTokenValid: true, overlay));
+        Assert.Equal(0, asked);   // discovery is paid only when a reload would otherwise happen
+
+        // The old answer, for callers that do not ask about overlays.
+        Assert.True(RedrawHold.PreambleReload(true, true, true, false));
+        Assert.False(RedrawHold.PreambleReload(true, true, true, true));
+    }
+
+    [Fact]
     [Trait("Plan", "AC-fewer-redraws-4")]
     [Trait("Plan", "EDGE-fewer-redraws-1")]
     [Trait("Plan", "EDGE-fewer-redraws-2")]
