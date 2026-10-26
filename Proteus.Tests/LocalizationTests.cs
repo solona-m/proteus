@@ -608,7 +608,7 @@ public sealed class LocalizationTests
         foreach (var ins in method.Body.Instructions)
         {
             if (ins.OpCode != OpCodes.Call || ins.Operand is not MethodReference mr) continue;
-            if (mr.DeclaringType.FullName != "CheapLoc.Loc" || mr.Name != "Localize") continue;
+            if (mr.DeclaringType.FullName != "Proteus.ProteusLoc" || mr.Name != "Localize") continue;
 
             var fallback = ins.Previous;
             var key      = fallback?.Previous;
@@ -626,7 +626,7 @@ public sealed class LocalizationTests
         // of ldstr is invisible to the exporter and can never be translated — an interpolated $"..." most
         // of all. "a" + "b" is folded by the compiler into one ldstr and is fine.
         Assert.True(nonLiteral.Count == 0,
-            "Loc.Localize called with a non-literal key or fallback. Use string.Format on a literal " +
+            "ProteusLoc.Localize called with a non-literal key or fallback. Use string.Format on a literal " +
             "template instead of an interpolated string:\n" + string.Join("\n", nonLiteral.Distinct()));
 
         var en = Load(Source);
@@ -647,13 +647,39 @@ public sealed class LocalizationTests
         }
 
         Assert.True(stale.Count == 0,
-            $"{stale.Count} key(s) in en.json are no longer used by any Loc.Localize call. Remove them " +
+            $"{stale.Count} key(s) in en.json are no longer used by any ProteusLoc.Localize call. Remove them " +
             $"from all 8 locale files:\n  " + string.Join("\n  ", stale));
 
         foreach (var (key, fallbackText) in found)
             Assert.True(en[key].Message == fallbackText,
                 $"en.json disagrees with the fallback compiled into the code for \"{key}\".\n" +
                 $"  code: {fallbackText}\n  json: {en[key].Message}");
+    }
+
+    /// <summary>
+    /// CheapLoc's two-argument <c>Loc.Localize</c> finds the plugin's table by <c>Assembly.GetCallingAssembly()</c>:
+    /// once the JIT inlined a lambda that called it into <c>System.Linq</c>, the calling assembly was Linq's and players
+    /// read <c>"#HairPort.Refused.NotInMod"</c> while every test passed. Every lookup goes through
+    /// <see cref="Proteus.ProteusLoc"/>, which passes the plugin's assembly; nothing else may call CheapLoc's.
+    /// </summary>
+    [Fact]
+    public void OnlyProteusLocCallsCheapLoc()
+    {
+        using var asm = AssemblyDefinition.ReadAssembly(ProteusAssembly.Location);
+        var direct = new List<string>();
+        int wrapped = 0;
+        foreach (var type in asm.MainModule.GetTypes())
+        foreach (var method in type.Methods.Where(m => m.HasBody))
+        foreach (var ins in method.Body.Instructions)
+        {
+            if (ins.OpCode != OpCodes.Call || ins.Operand is not MethodReference mr || mr.Name != "Localize") continue;
+            if (mr.DeclaringType.FullName == "Proteus.ProteusLoc") wrapped++;
+            else if (mr.DeclaringType.FullName == "CheapLoc.Loc" && type.FullName != "Proteus.ProteusLoc")
+                direct.Add($"  {type.FullName}.{method.Name}");
+        }
+        Assert.True(direct.Count == 0,
+            "CheapLoc.Loc.Localize called directly; call ProteusLoc.Localize instead:\n" + string.Join("\n", direct.Distinct()));
+        Assert.True(wrapped > 1000, $"only {wrapped} calls to ProteusLoc.Localize were found: the scan no longer sees them");
     }
 
     /// <summary>

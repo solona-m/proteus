@@ -25,7 +25,7 @@ internal sealed class EarlessHairRecord
     /// <summary>The record file is there but could not be read: nothing may be saved over it or restored from it.</summary>
     [JsonIgnore] public bool Unreadable { get; private set; }
 
-    public static string UnreadableMessage => CheapLoc.Loc.Localize("HairPort.Earless.Refused.RecordUnreadable",
+    public static string UnreadableMessage => ProteusLoc.Localize("HairPort.Earless.Refused.RecordUnreadable",
         "Proteus's record of this mod's earless hairstyles (Proteus/earlesshair.json) could not be read, so nothing was changed.");
 
     /// <summary>One redirect pointed at an earless copy, in one place of the mod.</summary>

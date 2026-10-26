@@ -358,7 +358,7 @@ internal static partial class SizeSetRefit
             if (!bodyDistances.TryGetValue((c.SourcePath, targetPath), out var body))
                 bodyDistances[(c.SourcePath, targetPath)] = body = BodyDistance(c.SourcePath, targetPath, ProbesOf);
             var skin = SkinDistance(c.SkinProbes, targetPath);
-            return new SourceDistance(body.P90, body.Mean, skin.P90, skin.Mean, c.Order);
+            return new SourceDistance(body.P90, body.Mean, skin.P90, skin.Mean, c.Order, c.OwnFit);
         }
 
         // ── where the sizes go ──
@@ -416,12 +416,10 @@ internal static partial class SizeSetRefit
                         else may.Add(c);
                     var alike = RiggedAlike(may, c => c.Yas, body.Yas);
                     foreach (var c in may.Except(alike)) said.Add($"{c.Name}: {(c.Yas ? "rigged for YAS" : "not rigged for YAS")}");
-                    foreach (var c in alike)
-                    {
-                        var d = Measure(c, targetCat.PathOf(ToOf(c)!));
-                        eligible.Add((c, d));
-                        said.Add($"{c.Name}: {Describe(d)}");
-                    }
+                    foreach (var c in alike) eligible.Add((c, Measure(c, targetCat.PathOf(ToOf(c)!))));
+                    var misfits = Misfits(eligible);
+                    for (int i = 0; i < eligible.Count; i++)
+                        said.Add($"{eligible[i].Item1.Name}: {Describe(eligible[i].Item2, misfits.Contains(i))}");
                     if (eligible.Count == 0)
                     {
                         Note($"{option}: none of the author's sizes goes onto it ({string.Join("; ", said)})");

@@ -24,6 +24,8 @@ public partial class CompositorService
     public void RefreshAndRecomposite(bool full = false)
     {
         InvalidateUpstreamCache(full ? "manual-full" : "manual");
+        // The user's fix for "not drawn" reloads the character even with no overlay mod enabled.
+        ForgetEmptyOutputDrawn();
         if (full)
         {
             _lastCompositeFingerprint = null;
@@ -62,6 +64,7 @@ public partial class CompositorService
             if (keepUpstreams)
             {
                 _lastCompositeFingerprint = null;
+                ForgetEmptyOutputDrawn();
                 TriggerRecomposite("managed-rebuild", 0);
             }
             else
@@ -89,6 +92,7 @@ public partial class CompositorService
         _lastCompositeFingerprint = null;
         // Re-derive which file each base path resolves to, not just re-decode the remembered one.
         InvalidateUpstreamCache("clear-texture-cache");
+        ForgetEmptyOutputDrawn();
         TriggerRecomposite("clear-texture-cache", 0);
         return dropped;
     }
@@ -240,8 +244,8 @@ public partial class CompositorService
             }
 
             // Some mods change active materials without a redraw, so refresh the snapshot when cold or flagged dirty
-            // (not on every mask/colour toggle).
-            if (_activeMtrlSnapshot == null || _activeMtrlSnapshotDirty)
+            // (not on every mask/colour toggle), or a post-settle correction asked for a fresh walk.
+            if (_activeMtrlSnapshot == null || _activeMtrlSnapshotDirty || _activeMtrlSnapshotRewalk)
             {
                 bool wasDirty = _activeMtrlSnapshotDirty;
                 log.Debug("[Proteus] Refreshing active-material snapshot (cold={0}, dirty={1})",
@@ -254,10 +258,17 @@ public partial class CompositorService
                 // A body mod changed but its materials load only on reload: force the reload up front and wait for the body
                 // types to change, so we composite once. Skipped with auto redraw off (it is a redraw);
                 // SchedulePostRedrawBodyTypeCheck is the backstop.
-                // A batch's release redraw has already done this reload for its own composite.
-                if (fresh != null && RedrawHold.PreambleReload(wasDirty, config.AutoRedraw,
+                // A batch's release redraw has already done this reload for its own composite. With no overlay mod enabled
+                // there is nothing to composite: the snapshot stays dirty for the first composite that has one.
+                var preamble = RedrawHold.Preamble.None;
+                if (fresh != null)
+                    preamble = RedrawHold.PlanPreamble(wasDirty, config.AutoRedraw,
                         string.Equals(BodyTypeKey(fresh), _lastCompositedBodyType, StringComparison.OrdinalIgnoreCase),
-                        wasDirty && ReleaseTokenValid(releaseToken)))
+                        wasDirty && ReleaseTokenValid(releaseToken),
+                        () => discovery.DiscoverEnabled().Count > 0);
+                if (preamble == RedrawHold.Preamble.KeepDirty)
+                    log.Debug("[Proteus] body mod changed but no overlay mod is enabled — no reload; materials stay owed");
+                if (preamble == RedrawHold.Preamble.Reload)
                 {
                     var beforeKey = _lastCompositedBodyType;
                     RefreshPlayerTextures("body mod changed: load its materials before compositing"); // reload the character so the new body's materials load
@@ -279,12 +290,18 @@ public partial class CompositorService
                 // Empty is a mid-teardown walk; keep the previous snapshot and the dirty flag so the next composite retries.
                 if (fresh is { Count: > 0 })
                 {
+                    var previous = _activeMtrlSnapshot;
                     _activeMtrlSnapshot = fresh;
-                    _activeMtrlSnapshotDirty = false;
-                    // A new list swapped in whole, under the config's gate like every off-thread change; the save
-                    // itself is written on the framework thread (see ConfigSaveScheduler).
-                    lock (config.Gate) config.CachedActiveMaterialPaths = fresh.ToList();
-                    config.Save();
+                    if (preamble != RedrawHold.Preamble.KeepDirty) _activeMtrlSnapshotDirty = false;
+                    _activeMtrlSnapshotRewalk = false;
+                    // Kept dirty, every idle trigger walks again: an unchanged walk is not worth a config write.
+                    if (!(preamble == RedrawHold.Preamble.KeepDirty && previous != null && fresh.SetEquals(previous)))
+                    {
+                        // A new list swapped in whole, under the config's gate like every off-thread change; the save
+                        // itself is written on the framework thread (see ConfigSaveScheduler).
+                        lock (config.Gate) config.CachedActiveMaterialPaths = fresh.ToList();
+                        config.Save();
+                    }
                 }
             }
             Recomposite(token, force, skinFingerprintAuthoritative,

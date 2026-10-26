@@ -1185,7 +1185,8 @@ internal static partial class RefitCore
                                  tuckSlot: TuckSlot(skin.TuckUnderCloth, primary),
                                  deepClear: DeepClearFor(skin.DeepClear, primary),
                                  keepStandoff: KeepStandoffFor(skin.KeepStandoff, primary),
-                                 carryPiercings: carryPiercings, seeInside: SeeInsideFor(skin.SeeInside, primary));
+                                 carryPiercings: carryPiercings, seeInside: SeeInsideFor(skin.SeeInside, primary),
+                                 relaxSinkGuard: skin.RelaxSinkGuard);
     }
 
     /// <summary>

@@ -402,6 +402,7 @@ public sealed class HatCompatWatcher : IDisposable
         current = view with { Busy = true };
         var target = view.Target;
         var proposal = view.Proposal;
+        string failedFmt = ProteusLoc.Localize("HatCompat.Apply.Failed.Fmt", "Writing failed: {0}");
         Task.Run(() =>
         {
             // automatic: false, since the user pressed the button; no chat notice.
@@ -411,8 +412,7 @@ public sealed class HatCompatWatcher : IDisposable
                 log.Error(ex, "hat compat: applying to {0} failed", target.Rel);
                 current = current with
                 {
-                    Message = string.Format(CheapLoc.Loc.Localize("HatCompat.Apply.Failed.Fmt", "Writing failed: {0}"),
-                                            ex.Message),
+                    Message = string.Format(failedFmt, ex.Message),
                     Failed = true,
                 };
             }
@@ -524,6 +524,9 @@ public sealed class HatCompatWatcher : IDisposable
     {
         // Onto the framework thread for chat. The catch is INSIDE the lambda, since the returned task (which
         // would capture the exception) is discarded.
+        string text = ProteusLoc.Localize("Chat.HatCompat",
+            "[Proteus] Proteus has made this hairstyle fit under hats. You can undo that, or "
+          + "turn the feature off, under /proteus > Settings > Hair.");
         _ = Plugin.Framework.RunOnFrameworkThread(() =>
         {
             try
@@ -531,10 +534,7 @@ public sealed class HatCompatWatcher : IDisposable
                 // The plugin may have been torn down before this frame came.
                 if (disposed) return;
                 Plugin.ChatGui.Print(new Dalamud.Game.Text.SeStringHandling.SeStringBuilder()
-                    .AddUiForeground(
-                        CheapLoc.Loc.Localize("Chat.HatCompat",
-                            "[Proteus] Proteus has made this hairstyle fit under hats. You can undo that, or "
-                          + "turn the feature off, under /proteus > Settings > Hair."), 45)
+                    .AddUiForeground(text, 45)
                     .Build());
             }
             catch (Exception ex) { log.Warning(ex, "hat compat: could not announce the fit in chat"); }
@@ -687,6 +687,7 @@ public sealed class HatCompatWatcher : IDisposable
         if (Interlocked.CompareExchange(ref busy, 1, 0) != 0) return;
         current = view with { Busy = true };
         var target = view.Target;
+        string failedFmt = ProteusLoc.Localize("HatCompat.Revert.Failed.Fmt", "Undo failed: {0}");
         Task.Run(() =>
         {
             try
@@ -706,8 +707,7 @@ public sealed class HatCompatWatcher : IDisposable
                 log.Error(ex, "hat compat: reverting {0} failed", target.ModRoot);
                 current = current with
                 {
-                    Message = string.Format(CheapLoc.Loc.Localize("HatCompat.Revert.Failed.Fmt", "Undo failed: {0}"),
-                                            ex.Message),
+                    Message = string.Format(failedFmt, ex.Message),
                     Failed = true,
                 };
             }

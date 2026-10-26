@@ -150,12 +150,67 @@ public class RedrawHoldTests
 
     [Fact]
     [Trait("Plan", "AC-fewer-redraws-2")]
+    [Trait("Plan", "AC-auto-redraw-off-empty-4")]
+    [Trait("Plan", "EDGE-auto-redraw-off-empty-6")]
     public void An_owed_redraw_makes_a_publish_a_full_redraw()
     {
         Assert.False(RedrawHold.FullRedrawFor(needFullRedraw: false, useInPlace: true, owed: false));
         Assert.True(RedrawHold.FullRedrawFor(false, true, owed: true));
         Assert.True(RedrawHold.FullRedrawFor(true, true, false));
         Assert.True(RedrawHold.FullRedrawFor(false, useInPlace: false, false));
+    }
+
+    [Fact]
+    [Trait("Plan", "AC-auto-redraw-off-empty-1")]
+    [Trait("Plan", "AC-auto-redraw-off-empty-2")]
+    [Trait("Plan", "AC-auto-redraw-off-empty-3")]
+    [Trait("Plan", "EDGE-auto-redraw-off-empty-7")]
+    public void Auto_redraw_gates_a_self_initiated_reload_but_not_a_user_requested_one()
+    {
+        Assert.False(RedrawHold.AutoRedrawAllows(autoRedraw: false, userRequested: false));
+        Assert.True(RedrawHold.AutoRedrawAllows(false, userRequested: true));   // switching Proteus off
+        Assert.True(RedrawHold.AutoRedrawAllows(autoRedraw: true, false));
+        Assert.True(RedrawHold.AutoRedrawAllows(true, true));
+    }
+
+    [Fact]
+    [Trait("Plan", "AC-no-idle-redraws-1")]
+    [Trait("Plan", "AC-no-idle-redraws-2")]
+    [Trait("Plan", "EDGE-no-idle-redraws-3")]
+    public void The_empty_publish_redraws_only_when_something_may_still_be_drawn()
+    {
+        Assert.False(RedrawHold.EmptyPublishRedraws(emptyAlreadyDrawn: true, withdrawing: false));
+        Assert.True(RedrawHold.EmptyPublishRedraws(false, false));   // not drawn yet: the first after load, or after a publish
+        Assert.True(RedrawHold.EmptyPublishRedraws(true, withdrawing: true));
+        Assert.True(RedrawHold.EmptyPublishRedraws(false, true));
+    }
+
+    [Fact]
+    [Trait("Plan", "AC-no-idle-redraws-3")]
+    [Trait("Plan", "AC-no-idle-redraws-4")]
+    [Trait("Plan", "EDGE-no-idle-redraws-12")]
+    [Trait("Plan", "EDGE-no-idle-redraws-13")]
+    [Trait("Plan", "EDGE-no-idle-redraws-14")]
+    public void The_preamble_reloads_only_with_an_overlay_enabled_and_asks_last()
+    {
+        int asked = 0;
+        System.Func<bool> overlay = () => { asked++; return true; };
+        System.Func<bool> none = () => { asked++; return false; };
+
+        Assert.Equal(RedrawHold.Preamble.Reload, RedrawHold.PlanPreamble(true, true, true, false, overlay));
+        Assert.Equal(RedrawHold.Preamble.KeepDirty, RedrawHold.PlanPreamble(true, true, true, false, none));
+        Assert.Equal(2, asked);
+
+        asked = 0;
+        Assert.Equal(RedrawHold.Preamble.None, RedrawHold.PlanPreamble(wasDirty: false, true, true, false, overlay));
+        Assert.Equal(RedrawHold.Preamble.None, RedrawHold.PlanPreamble(true, autoRedraw: false, true, false, overlay));
+        Assert.Equal(RedrawHold.Preamble.None, RedrawHold.PlanPreamble(true, true, bodyKeyUnchanged: false, false, overlay));
+        Assert.Equal(RedrawHold.Preamble.None, RedrawHold.PlanPreamble(true, true, true, releaseTokenValid: true, overlay));
+        Assert.Equal(0, asked);   // discovery is paid only when a reload would otherwise happen
+
+        // The old answer, for callers that do not ask about overlays.
+        Assert.True(RedrawHold.PreambleReload(true, true, true, false));
+        Assert.False(RedrawHold.PreambleReload(true, true, true, true));
     }
 
     [Fact]

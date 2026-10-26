@@ -6,6 +6,11 @@ on:
   pull_request:
     branches: [ main ]
 
+# It only checks out, downloads Dalamud and runs the tests: read is all it needs, whatever the repo's
+# default token permission is set to.
+permissions:
+  contents: read
+
 jobs:
   test:
     runs-on: windows-latest

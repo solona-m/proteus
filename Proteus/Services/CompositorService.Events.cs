@@ -482,6 +482,7 @@ public partial class CompositorService
         {
             _activeMtrlSnapshot = snapshot;
             _activeMtrlSnapshotDirty = false;
+            _activeMtrlSnapshotRewalk = false;
             // In-memory only; persisted by TriggerRecomposite's next config.Save().
             config.CachedActiveMaterialPaths = snapshot.ToList();
 

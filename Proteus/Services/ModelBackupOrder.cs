@@ -25,9 +25,9 @@ internal static class ModelBackupOrder
     /// <summary>Every feature that backs a model up before editing it, by backup folder and display name.</summary>
     private static IEnumerable<(string Subdir, string Name)> Features()
     {
-        yield return (MeshToggleService.BackupSubdir, Loc.Localize("MeshVolume.Feature.Toggles", "part switches"));
-        yield return (HatCompatService.BackupSubdir, Loc.Localize("MeshVolume.Feature.HatCompat", "hat fitting"));
-        yield return (MeshVolumeService.BackupSubdir, Loc.Localize("MeshVolume.Feature.Brush", "the brush"));
+        yield return (MeshToggleService.BackupSubdir, ProteusLoc.Localize("MeshVolume.Feature.Toggles", "part switches"));
+        yield return (HatCompatService.BackupSubdir, ProteusLoc.Localize("MeshVolume.Feature.HatCompat", "hat fitting"));
+        yield return (MeshVolumeService.BackupSubdir, ProteusLoc.Localize("MeshVolume.Feature.Brush", "the brush"));
     }
 
     /// <summary>
@@ -49,7 +49,7 @@ internal static class ModelBackupOrder
 
     /// <summary>The refusal a revert returns when <see cref="LaterFeature"/> names something.</summary>
     public static string BlockedMessage(string later)
-        => string.Format(Loc.Localize("ModelBackups.Blocked.Fmt",
+        => string.Format(ProteusLoc.Localize("ModelBackups.Blocked.Fmt",
             "Undo {0} first: it changed the same model after this did, so undoing this now would also undo it."),
             later);
 

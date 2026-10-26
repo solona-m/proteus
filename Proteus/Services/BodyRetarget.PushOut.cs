@@ -1077,7 +1077,43 @@ internal static partial class BodyRetarget
     /// pair carries no body file to read.
     /// </summary>
     internal static Func<Vector3, bool>? BreastTest(SlotPair pair)
-        => RegionTest([pair], bone => bone.Contains("mune", StringComparison.Ordinal), BreastWeight);
+        => RegionTest([pair], IsBreastBone, BreastWeight);
+
+    /// <summary>
+    /// Whether a chest in <paramref name="pairs"/> has a breast: any of its vertices weighted at least
+    /// <see cref="BreastWeight"/> to the breast bones, as <see cref="BreastTest"/> reads them. The Body SE's men's chest has
+    /// none at all. A chest whose file cannot be read, or reads as another mesh than the pair's, counts as having one.
+    /// </summary>
+    internal static bool BreastInPlay(IReadOnlyList<SlotPair> pairs)
+    {
+        foreach (var pair in pairs)
+        {
+            if (pair.Slot != "_top" || pair.TargetModel == null) continue;
+            if (ModelSkinReader.Read(pair.TargetModel, null, null) is not { } skin
+                || skin.VertexCount * 3 != pair.Target.Positions.Length) return true;
+            if (Array.Exists(BoneShares(skin, IsBreastBone), share => share >= BreastWeight)) return true;
+        }
+        return false;
+    }
+
+    /// <summary>The breast bones, as <see cref="BreastTest"/> and <see cref="BreastInPlay"/> read them: <c>j_mune_*</c>,
+    /// YAS's <c>iv_c_mune_*</c>.</summary>
+    private static bool IsBreastBone(string bone) => bone.Contains("mune", StringComparison.Ordinal);
+
+    /// <summary>Per vertex of <paramref name="skin"/>, the share of its weight on the bones <paramref name="isBone"/>
+    /// picks.</summary>
+    private static float[] BoneShares(XivLiveMesh.SkinnedMesh skin, Func<string, bool> isBone)
+    {
+        var share = new float[skin.VertexCount];
+        for (int v = 0; v < skin.VertexCount; v++)
+            for (int k = 0; k < XivLiveMesh.SkinnedMesh.MaxInfluences; k++)
+            {
+                float x = skin.BoneWeights[v * XivLiveMesh.SkinnedMesh.MaxInfluences + k];
+                int b = skin.BoneIndices[v * XivLiveMesh.SkinnedMesh.MaxInfluences + k];
+                if (x > 0f && b < skin.BoneNames.Length && isBone(skin.BoneNames[b])) share[v] += x;
+            }
+        return share;
+    }
 
     /// <summary>How far off the hip and upper thigh <see cref="LiftUnderbust"/> holds the cloth (3 mm).</summary>
     /// <remarks>
@@ -1113,15 +1149,7 @@ internal static partial class BodyRetarget
         {
             if (pair.TargetModel == null || ModelSkinReader.Read(pair.TargetModel, null, null) is not { } skin
                 || skin.VertexCount * 3 != pair.Target.Positions.Length) continue;
-            var share = new float[skin.VertexCount];
-            for (int v = 0; v < skin.VertexCount; v++)
-                for (int k = 0; k < XivLiveMesh.SkinnedMesh.MaxInfluences; k++)
-                {
-                    float x = skin.BoneWeights[v * XivLiveMesh.SkinnedMesh.MaxInfluences + k];
-                    int b = skin.BoneIndices[v * XivLiveMesh.SkinnedMesh.MaxInfluences + k];
-                    if (x > 0f && b < skin.BoneNames.Length && isBone(skin.BoneNames[b])) share[v] += x;
-                }
-            bodies.Add((pair.TargetSurface(), share));
+            bodies.Add((pair.TargetSurface(), BoneShares(skin, isBone)));
         }
         if (bodies.Count == 0) return null;
         return p =>

@@ -14,7 +14,7 @@ namespace Proteus.Tests;
 /// across, and every constant this feature has — a 40 mm near band, a 30 mm push probe, a 0.1 mm snap — is sized for a
 /// character. A metre-wide triangle makes all of them degenerate and the tests would pass for the wrong reason.
 /// </summary>
-public class BodyRetargetTests
+public partial class BodyRetargetTests
 {
     private const string SkinMaterial = "/mt_c0201b0001_bibo.mtrl";
     private const string ClothMaterial = "/mt_c0201e6255_top_a.mtrl";

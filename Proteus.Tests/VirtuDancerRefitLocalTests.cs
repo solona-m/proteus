@@ -68,7 +68,7 @@ public class VirtuDancerRefitLocalTests(ITestOutputHelper output)
                     tuckSlot: RefitCore.TuckSlot(skin.TuckUnderCloth, slot),
                     deepClear: RefitCore.DeepClearFor(skin.DeepClear, slot),
                     keepStandoff: RefitCore.KeepStandoffFor(skin.KeepStandoff, slot),
-                    seeInside: RefitCore.SeeInsideFor(skin.SeeInside, slot));
+                    seeInside: RefitCore.SeeInsideFor(skin.SeeInside, slot), relaxSinkGuard: skin.RelaxSinkGuard);
                 return new Run(plan, RefitCore.MatchSkinToBody(plan.Model, source, target, uv, false, log), garment, lines,
                                Unticked, target);
             });

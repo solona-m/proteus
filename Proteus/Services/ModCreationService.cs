@@ -445,43 +445,43 @@ public sealed class ModCreationService
         materialTarget = (materialTarget ?? "").Trim();
 
         if (string.IsNullOrWhiteSpace(modName))
-            return new(false, Loc.Localize("Create.Error.NoName", "Enter a mod name."));
+            return new(false, ProteusLoc.Localize("Create.Error.NoName", "Enter a mod name."));
         if (string.IsNullOrWhiteSpace(materialTarget))
-            return new(false, Loc.Localize("Create.Error.NoMaterial", "Enter a material target."));
+            return new(false, ProteusLoc.Localize("Create.Error.NoMaterial", "Enter a material target."));
 
         // The label is translated, since it appears inside a translated message.
         var cs = Localization.Strings.Create;
         var sources = new (string label, string? src)[]
             { (cs.SlotDiffuse, diffuseSrc), (cs.SlotMask, maskSrc), (cs.SlotNormal, normalSrc), (cs.SlotIndex, indexSrc) };
         if (!sources.Any(s => !string.IsNullOrWhiteSpace(s.src)))
-            return new(false, Loc.Localize("Create.Error.NoTexture",
+            return new(false, ProteusLoc.Localize("Create.Error.NoTexture",
                 "Pick at least one texture (diffuse, mask, normal or index)."));
         foreach (var (label, src) in sources)
             if (!string.IsNullOrWhiteSpace(src) && !File.Exists(src))
                 return new(false, string.Format(
-                    Loc.Localize("Create.Error.MissingFile.Fmt", "The {0} file no longer exists: {1}"), label, src));
+                    ProteusLoc.Localize("Create.Error.MissingFile.Fmt", "The {0} file no longer exists: {1}"), label, src));
 
         // A glow's colour comes from the art, so there has to be art.
         if (glow != GlowStyle.None && string.IsNullOrWhiteSpace(diffuseSrc))
-            return new(false, Loc.Localize("Create.Error.GlowNeedsDiffuse",
+            return new(false, ProteusLoc.Localize("Create.Error.GlowNeedsDiffuse",
                 "A glowing overlay takes its colour from the art, so it needs a diffuse texture."));
 
         var dirName = Sanitize(modName);
         if (dirName == null)
-            return new(false, Loc.Localize("Create.Error.UnusableName",
+            return new(false, ProteusLoc.Localize("Create.Error.UnusableName",
                 "That mod name has no usable characters — use letters or numbers."));
         if (string.Equals(dirName, SidecarDiscoveryService.ManagedModDir, StringComparison.OrdinalIgnoreCase))
-            return new(false, Loc.Localize("Create.Error.ReservedName",
+            return new(false, ProteusLoc.Localize("Create.Error.ReservedName",
                 "\"Proteus\" is reserved — choose a different mod name."));
 
         var modsRoot = penumbra.GetModDirectory();
         if (string.IsNullOrEmpty(modsRoot))
-            return new(false, Loc.Localize("Service.NoPenumbraDir", "Penumbra's mod directory isn't available."));
+            return new(false, ProteusLoc.Localize("Service.NoPenumbraDir", "Penumbra's mod directory isn't available."));
 
         var root = Path.Combine(modsRoot, dirName);
         if (Directory.Exists(root))
             return new(false, string.Format(
-                Loc.Localize("Create.Error.FolderExists.Fmt", "A mod folder named \"{0}\" already exists."), dirName));
+                ProteusLoc.Localize("Create.Error.FolderExists.Fmt", "A mod folder named \"{0}\" already exists."), dirName));
 
         // Both glow styles decode the art here so WriteMod stays service-free. A failed decode is reported.
         byte[]? scrollRgba = null;
@@ -490,7 +490,7 @@ public sealed class ModCreationService
         if (glow != GlowStyle.None)
         {
             if (textureLoader.LoadImageAsRgba(diffuseSrc!) is not { } src)
-                return new(false, string.Format(Loc.Localize("Create.Error.GlowDecodeFailed.Fmt",
+                return new(false, string.Format(ProteusLoc.Localize("Create.Error.GlowDecodeFailed.Fmt",
                     "Couldn't read {0} to build the glow. Try a PNG."), Path.GetFileName(diffuseSrc)));
 
             if (glow == GlowStyle.DarkOnly)
@@ -515,7 +515,7 @@ public sealed class ModCreationService
             log.Error(ex, "[Proteus] create mod failed for {0}", dirName);
             try { if (Directory.Exists(root)) Directory.Delete(root, true); } catch { /* best effort */ }
             return new(false, string.Format(
-                Loc.Localize("Create.Error.WriteFailed.Fmt", "Failed to write the mod: {0}"), ex.Message));
+                ProteusLoc.Localize("Create.Error.WriteFailed.Fmt", "Failed to write the mod: {0}"), ex.Message));
         }
 
         var ec = penumbra.AddModDirectory(dirName);
@@ -524,7 +524,7 @@ public sealed class ModCreationService
             log.Warning("[Proteus] AddMod({0}) -> {1}", dirName, ec);
             // Roll the folder back so the name is free to retry.
             try { Directory.Delete(root, true); } catch { /* best effort */ }
-            return new(false, string.Format(Loc.Localize("Service.RegisterFailed.Fmt",
+            return new(false, string.Format(ProteusLoc.Localize("Service.RegisterFailed.Fmt",
                 "Wrote the mod, but Penumbra couldn't register it ({0}). Rescan mods in Penumbra."), ec));
         }
 
@@ -534,7 +534,7 @@ public sealed class ModCreationService
 
         _pending = new Pending(dirName, modName, materialTarget, Environment.TickCount64 + ActivateTimeoutMs);
         _nextAttempt = 0;
-        return Pump() ?? new(true, string.Format(Loc.Localize("Create.Registering.Fmt",
+        return Pump() ?? new(true, string.Format(ProteusLoc.Localize("Create.Registering.Fmt",
             "Created \"{0}\" — waiting for Penumbra to finish loading it…"), modName));
     }
 
@@ -599,9 +599,9 @@ public sealed class ModCreationService
         log.Information("[Proteus] created mod {0} ({1}), enabled={2}", p.DirName, p.MaterialTarget, enabled);
 
         return enabled
-            ? new(true, string.Format(Loc.Localize("Create.Ok.Fmt",
+            ? new(true, string.Format(ProteusLoc.Localize("Create.Ok.Fmt",
                 "Created \"{0}\", enabled it, and opened it in Penumbra."), p.ModName))
-            : new(false, string.Format(Loc.Localize("Create.Ok.NotEnabled.Fmt",
+            : new(false, string.Format(ProteusLoc.Localize("Create.Ok.NotEnabled.Fmt",
                 "Created \"{0}\" and opened it in Penumbra, but couldn't switch it on — enable it there."),
                 p.ModName));
     }
@@ -701,7 +701,7 @@ public sealed class ModCreationService
         // PenumbraModMeta refuses to write into a folder without one (it reads as pre-v4).
         PenumbraModMeta.AtomicWrite(
             Path.Combine(root, PenumbraModMeta.MetaFile),
-            PenumbraModMeta.NewMetaJson(modName, author, Loc.Localize("Create.Description", "Created for Proteus.")));
+            PenumbraModMeta.NewMetaJson(modName, author, ProteusLoc.Localize("Create.Description", "Created for Proteus.")));
 
         // A no-op self-swap so Penumbra does not flag the empty default option as "changes nothing". See DummySwapPath.
         PenumbraModMeta.WriteRedirects(

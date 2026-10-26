@@ -65,7 +65,7 @@ internal sealed class RefitModService(PenumbraBridge penumbra, CompositorService
         var data = PenumbraModMeta.TryReadDefaultData(root)
                 ?? (PenumbraModMeta.HasReadableManifest(root)
                         ? (new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase), new List<object>())
-                        : throw new InvalidDataException(string.Format(Loc.Localize("Refit.Error.RedirectsUnreadable.Fmt",
+                        : throw new InvalidDataException(string.Format(ProteusLoc.Localize("Refit.Error.RedirectsUnreadable.Fmt",
                             "Could not read the redirects of {0}."), root)));
         if (data.Files.TryGetValue(rel, out var at) && string.Equals(at.Replace('\\', '/'), rel, StringComparison.OrdinalIgnoreCase))
             return changed;
@@ -135,7 +135,7 @@ internal sealed class RefitModService(PenumbraBridge penumbra, CompositorService
                            string? folder = null)
     {
         if (penumbra.GetModDirectory() is not { Length: > 0 } modsRoot)
-            return new(false, "", "", Loc.Localize("Service.NoPenumbraDir", "Penumbra's mod directory isn't available."));
+            return new(false, "", "", ProteusLoc.Localize("Service.NoPenumbraDir", "Penumbra's mod directory isn't available."));
 
         if (Find(modsRoot, itemName, bodyName) is { } already)
             return new(true, already, Path.GetFileName(already), "");
@@ -154,14 +154,14 @@ internal sealed class RefitModService(PenumbraBridge penumbra, CompositorService
             modName = candidate;
         }
         if (dirName == null || modName == null)
-            return new(false, "", "", string.Format(Loc.Localize("Refit.Error.NoName.Fmt",
+            return new(false, "", "", string.Format(ProteusLoc.Localize("Refit.Error.NoName.Fmt",
                 "Couldn't find a free mod name for \"{0}\"."), want));
 
         string root = Path.Combine(modsRoot, dirName);
         try
         {
             Directory.CreateDirectory(root);
-            WriteScaffold(root, modName, description ?? string.Format(Loc.Localize("Refit.Mod.Description.Fmt",
+            WriteScaffold(root, modName, description ?? string.Format(ProteusLoc.Localize("Refit.Mod.Description.Fmt",
                 "{0}, refitted by Proteus."), itemName));
             fill?.Invoke(root);
         }
@@ -169,7 +169,7 @@ internal sealed class RefitModService(PenumbraBridge penumbra, CompositorService
         {
             log.Error(ex, "[Proteus] refit mod write failed for {0}", dirName);
             try { if (Directory.Exists(root)) Directory.Delete(root, true); } catch { /* best effort */ }
-            return new(false, "", "", string.Format(Loc.Localize("Create.Error.WriteFailed.Fmt",
+            return new(false, "", "", string.Format(ProteusLoc.Localize("Create.Error.WriteFailed.Fmt",
                 "Failed to write the mod: {0}"), ex.Message));
         }
 
@@ -180,7 +180,7 @@ internal sealed class RefitModService(PenumbraBridge penumbra, CompositorService
             log.Warning("[Proteus] AddMod({0}) -> {1}", dirName, ec);
             // Roll the folder back so the name is free to retry.
             try { Directory.Delete(root, true); } catch { /* best effort */ }
-            return new(false, "", "", string.Format(Loc.Localize("Service.RegisterFailed.Fmt",
+            return new(false, "", "", string.Format(ProteusLoc.Localize("Service.RegisterFailed.Fmt",
                 "Wrote the mod, but Penumbra couldn't register it ({0}). Rescan mods in Penumbra."), ec));
         }
 
@@ -249,8 +249,8 @@ internal sealed class RefitModService(PenumbraBridge penumbra, CompositorService
         if (enabled) compositor.TriggerRecomposite("refit-mod-created", deferWhileHeld: ownedByAutoRefit);
         log.Information("[Proteus] refit mod {0} enabled={1}", p.DirName, enabled);
         return enabled
-            ? string.Format(Loc.Localize("Refit.Mod.Enabled.Fmt", "Made \"{0}\" and switched it on."), p.ModName)
-            : string.Format(Loc.Localize("Refit.Mod.NotEnabled.Fmt",
+            ? string.Format(ProteusLoc.Localize("Refit.Mod.Enabled.Fmt", "Made \"{0}\" and switched it on."), p.ModName)
+            : string.Format(ProteusLoc.Localize("Refit.Mod.NotEnabled.Fmt",
                 "Made \"{0}\", but couldn't switch it on — enable it in Penumbra."), p.ModName);
     }
 
@@ -302,7 +302,7 @@ internal sealed class RefitModService(PenumbraBridge penumbra, CompositorService
     /// strands nothing; a '/' would nest it.
     /// </summary>
     internal static string OwnModsFolder
-        => Loc.Localize("Refit.Mod.Folder", "Proteus Upscales").Replace('/', '-').Trim();
+        => ProteusLoc.Localize("Refit.Mod.Folder", "Proteus Upscales").Replace('/', '-').Trim();
 
     /// <summary>The path Penumbra files a mod at: the folder, then the mod's name.</summary>
     internal static string? ListPath(string? folder, string modName)

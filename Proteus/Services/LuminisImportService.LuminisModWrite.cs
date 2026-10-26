@@ -232,10 +232,10 @@ public sealed partial class LuminisImportService
                 Path.Combine(root, SidecarDiscoveryService.SidecarSubdir, "metadata.json"), metaJson);
 
             var description = string.IsNullOrWhiteSpace(preview.Description)
-                ? string.Format(Loc.Localize("Import.Luminis.Description.Fmt",
+                ? string.Format(ProteusLoc.Localize("Import.Luminis.Description.Fmt",
                     "Imported from the Atramentum Luminis pack \"{0}\"."),
                     Path.GetFileName(preview.SourcePath))
-                : preview.Description + "\n\n" + string.Format(Loc.Localize("Import.Luminis.Description.Fmt",
+                : preview.Description + "\n\n" + string.Format(ProteusLoc.Localize("Import.Luminis.Description.Fmt",
                     "Imported from the Atramentum Luminis pack \"{0}\"."),
                     Path.GetFileName(preview.SourcePath));
 

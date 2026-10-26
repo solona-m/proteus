@@ -3626,7 +3626,7 @@ public sealed partial class PartsPanel
         // A hairstyle has no body to be sized for: its Body size tool ports it to the other races instead.
         if (!vanillaOpen && HairPortPanel.Shows(models[modelIndex].GamePath))
         {
-            hairPort.Draw(ModRoot()!, modDir!, models[modelIndex].GamePath, changed =>
+            hairPort.Draw(ModRoot()!, modDir!, models[modelIndex].GamePath, models[modelIndex].File, changed =>
             {
                 compositor.ExpectOwnModEdit(changed);
                 penumbra.ReloadModDirectory(changed);

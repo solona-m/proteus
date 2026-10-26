@@ -105,6 +105,28 @@ internal static partial class HairPortPlan
     public static bool IsPortFile(string rel)
         => rel.Replace('\\', '/').StartsWith(Folder + "/", StringComparison.OrdinalIgnoreCase);
 
+    /// <summary>
+    /// The author's hairstyle a game path stands for: itself when the mod publishes it from a file of its own, or —
+    /// when only a port of ours publishes it — the hairstyle that port was made from. Studio opens whichever model the
+    /// player picked, a port included, and a port is never a source: ported again, every race would be refused as
+    /// "the mod does not publish that hairstyle".
+    /// </summary>
+    /// <param name="openFile">The mod-relative file opened, which tells apart ports of one target made from different
+    /// sources (the author's race A in one option and race B in another, both ported to C). Without it, or when no
+    /// port is that file, the first port of the target recorded.</param>
+    public static string AuthorSource(IReadOnlyList<Owner> owners, HairPortRecord record, string gamePath,
+                                      string? openFile = null)
+    {
+        if (owners.Any(o => FileFor(o, gamePath) is { } rel && !IsPortFile(rel))) return gamePath;
+        string want = gamePath.Replace('\\', '/');
+        var ports = record.Ports.Where(e => e.TargetGamePath.Replace('\\', '/').Equals(want, StringComparison.OrdinalIgnoreCase))
+                                .ToList();
+        var exact = openFile == null ? null
+                  : ports.FirstOrDefault(e => HairPortRecord.Rel(e.File).TrimStart('/').Equals(
+                        HairPortRecord.Rel(openFile).TrimStart('/'), StringComparison.OrdinalIgnoreCase));
+        return (exact ?? ports.FirstOrDefault())?.SourceGamePath ?? gamePath;
+    }
+
     /// <summary>One place in a mod that publishes files: the default data (empty group), or one option.</summary>
     /// <param name="Group">"" for the mod's default data.</param>
     /// <param name="Type">The group's type ("Single", "Multi", "Combining", …); "" for the default data.</param>

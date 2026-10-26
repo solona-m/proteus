@@ -105,7 +105,7 @@ internal static class HairPortBaker
         refusal = "";
         if (sourceHead == null || targetHead == null)
         {
-            refusal = Loc.Localize("HairPort.Refused.NoHead", "the game's head model to fit it to could not be read");
+            refusal = ProteusLoc.Localize("HairPort.Refused.NoHead", "the game's head model to fit it to could not be read");
             return null;
         }
 
@@ -114,7 +114,7 @@ internal static class HairPortBaker
         catch (Exception) { src = null!; }
         if (src == null || ModelSkinReader.Read(source, null, null) is not { } skin)
         {
-            refusal = Loc.Localize("Parts.Retarget.Bake.Unreadable", "the model could not be read");
+            refusal = ProteusLoc.Localize("Parts.Retarget.Bake.Unreadable", "the model could not be read");
             return null;
         }
 
@@ -124,7 +124,7 @@ internal static class HairPortBaker
             .ToList();
         if (missing.Count > 0)
         {
-            refusal = string.Format(Loc.Localize("HairPort.Refused.Bones.Fmt",
+            refusal = string.Format(ProteusLoc.Localize("HairPort.Refused.Bones.Fmt",
                 "it moves with bones c{0:D4} does not have for this hairstyle ({1})"), to, string.Join(", ", missing));
             return null;
         }
@@ -139,7 +139,7 @@ internal static class HairPortBaker
             .ToList();
         if (unknown.Count > 0 && (PbdFile.Lists(down, HeadBone, ParentOf) || PbdFile.Lists(up, HeadBone, ParentOf)))
         {
-            refusal = string.Format(Loc.Localize("HairPort.Refused.Unknown.Fmt",
+            refusal = string.Format(ProteusLoc.Localize("HairPort.Refused.Unknown.Fmt",
                 "the racial deformer does not know how to move {0}"), string.Join(", ", unknown));
             return null;
         }
@@ -178,7 +178,7 @@ internal static class HairPortBaker
         {
             folded = Folded(a, b);
             if (folded > FoldedShare * a.Parts.Where(p => p.Island == -1).Sum(p => p.TriangleCount))
-                warning = string.Format(Loc.Localize("HairPort.Folded.Fmt",
+                warning = string.Format(ProteusLoc.Localize("HairPort.Folded.Fmt",
                     "bent onto c{0:D4}, {1} of its triangles turn inside out and may show as holes; check it in game"),
                     to, folded);
         }
@@ -187,7 +187,7 @@ internal static class HairPortBaker
         var after = Measure(model, targetHead);
         if (before == null || after == null)
         {
-            refusal = Loc.Localize("HairPort.Refused.NoHead", "the game's head model to fit it to could not be read");
+            refusal = ProteusLoc.Localize("HairPort.Refused.NoHead", "the game's head model to fit it to could not be read");
             return null;
         }
         // Two-sided: sunk into the skull, or standing off it further (or nearer) than the source does on its own head.
@@ -195,7 +195,7 @@ internal static class HairPortBaker
         float shift = after.Value.Gap - before.Value.Gap;
         if (after.Value.Sunk > SunkLimit || MathF.Abs(shift) > GapMargin)
         {
-            var fit = string.Format(Loc.Localize("HairPort.Fit.Fmt",
+            var fit = string.Format(ProteusLoc.Localize("HairPort.Fit.Fmt",
                     "it does not sit on c{0:D4}'s head: {1:P0} of it sinks into the skull, and its distance from the " +
                     "scalp is {2:F0} mm off the original's; check it in game"),
                 to, after.Value.Sunk, MathF.Abs(shift) * 1000f);

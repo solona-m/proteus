@@ -1974,15 +1974,11 @@ internal sealed partial class BodyRetargetPanel(PenumbraBridge penumbra, UVRemap
                     pairs.AddRange(shared);
                     // A top cut and cleared the way the automatic refit treats the game's own: its skin tucked in under
                     // the cloth the same way — and the game's own top refitted exactly as the automatic refit does it.
-                    var plan = BodyRetarget.Plan(garment, bytes, pairs, garmentSlot, held: held,
-                                                 replaceSkin: layOnBody, acrossBodies: acrossBodies,
-                                                 clearBody: clear, cutHidden: cut, keepShape: pieces,
-                                                 log: line => log.Debug("[Proteus] body size: {0}", line),
-                                                 warn: line => log.Warning("[Proteus] body size: {0}", line),
-                                                 tuckSlot: skinRule.TuckSlot, deepClear: skinRule.DeepClear,
-                                                 keepStandoff: skinRule.KeepStandoff, carryPiercings: piercings,
-                                                 liftUnderbust: !crossSex || CrossSexRefit.LiftsUnderbust(bake!.Route.Drawn, bake.Route.To),
-                                                 seeInside: skinRule.SeeInside);
+                    var plan = RetargetInputs.StudioPlan(garment, bytes, pairs, garmentSlot, held, layOnBody, acrossBodies,
+                                                         skinRule, cut, pieces, piercings,
+                                                         liftUnderbust: !crossSex || CrossSexRefit.LiftsUnderbust(bake!.Route.Drawn, bake.Route.To),
+                                                         log: line => log.Debug("[Proteus] body size: {0}", line),
+                                                         warn: line => log.Warning("[Proteus] body size: {0}", line));
                     // Skin the refit kept of the garment's own, drawn in the new body's layout and material — or a
                     // gen2 garment's kept skin shows the wrong skin, and none of the tattoos, on a bibo body.
                     plan = RefitCore.MatchSkinToBody(plan, garmentSource, targetPath, uvRemap, male, log, targetMale);

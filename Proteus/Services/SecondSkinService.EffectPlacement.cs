@@ -125,7 +125,7 @@ public sealed partial class SecondSkinService
         private void ReportDroppedEffects(List<string> drops)
         {
             if (!EffectHostPlanner.ShouldSay(ref service._lastEffectDrops, drops)) return;
-            var msg = string.Format(Loc.Localize("Chat.EffectUnplaced.Fmt",
+            var msg = string.Format(ProteusLoc.Localize("Chat.EffectUnplaced.Fmt",
                 "[Proteus] The animated effect of \"{0}\" is not shown: it needs a free accessory slot for its "
               + "invisible carrier. Free a ring, bracelet or necklace slot."),
                 string.Join(", ", service._lastEffectDrops!.Split('\n')));

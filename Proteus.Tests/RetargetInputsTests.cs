@@ -264,46 +264,64 @@ public class RetargetInputsTests
     [Trait("Plan", "EDGE-studio-game-top-6")]
     [Trait("Plan", "AC-coatee-strap-slit-5")]
     [Trait("Plan", "EDGE-coatee-strap-slit-12")]
+    [Trait("Plan", "AC-relax-sink-guard-2")]
+    [Trait("Plan", "AC-relax-sink-guard-3")]
+    [Trait("Plan", "EDGE-relax-sink-guard-14")]
     public void Studio_skin_rule_for_game_and_modders_tops()
     {
         // [AC-studio-game-top-4] The game's own top with the new body's skin, as the Body size tool opens: the automatic
-        // refit's rule for game gear, the Clear box forced on — the tuck's open skin where the inside shows included.
+        // refit's rule for game gear, the Clear box forced on — the tuck's open skin where the inside shows included, and
+        // [AC-relax-sink-guard-2] the relax guard.
         var game = AutoRefitDecisions.SkinFor(true);
         var top = RetargetInputs.StudioSkin(replaceSkin: true, cutHidden: true, clearBody: false, gameGear: true, "_top", crossSex: false);
         Assert.Equal(new RetargetInputs.StudioSkinRule(ClearForced: true, ClearBody: game.ClearBody,
                                                        TuckSlot: RefitCore.TuckSlot(game.TuckUnderCloth, "_top"),
                                                        DeepClear: RefitCore.DeepClearFor(game.DeepClear, "_top"),
                                                        KeepStandoff: RefitCore.KeepStandoffFor(game.KeepStandoff, "_top"),
-                                                       SeeInside: RefitCore.SeeInsideFor(game.SeeInside, "_top")), top);
+                                                       SeeInside: RefitCore.SeeInsideFor(game.SeeInside, "_top"),
+                                                       RelaxSinkGuard: game.RelaxSinkGuard), top);
         Assert.True(top.SeeInside);
+        Assert.True(top.RelaxSinkGuard);
 
         // [EDGE-studio-game-top-2] Cut off: still cleared, deep cleared and pulled back, but nothing is tucked — and so
         // nothing drawn where the inside shows.
-        Assert.Equal(new RetargetInputs.StudioSkinRule(true, true, null, true, true, false),
+        Assert.Equal(new RetargetInputs.StudioSkinRule(true, true, null, true, true, false, true),
                      RetargetInputs.StudioSkin(true, cutHidden: false, clearBody: false, gameGear: true, "_top", false));
 
         // [AC-studio-game-top-3] A modder's garment, and [EDGE-studio-game-top-5] a "— Proteus edit" copy (a mod), get the
         // boxes as they always did: the tuck only with cut and clear both ticked, never the deep clear or the standoff —
-        // [AC-coatee-strap-slit-5] and never the open skin where the inside shows, tuck or not.
+        // [AC-coatee-strap-slit-5] and never the open skin where the inside shows, tuck or not, nor [AC-relax-sink-guard-3]
+        // the relax guard.
         foreach (bool cut in new[] { true, false })
             foreach (bool clear in new[] { true, false })
                 foreach (string slot in new[] { "_top", "_dwn", "_glv", "_sho" })
-                    Assert.Equal(new RetargetInputs.StudioSkinRule(false, clear, RefitCore.TuckSlot(cut && clear, slot), false, false, false),
+                    Assert.Equal(new RetargetInputs.StudioSkinRule(false, clear, RefitCore.TuckSlot(cut && clear, slot), false, false, false, false),
                                  RetargetInputs.StudioSkin(true, cut, clear, gameGear: false, slot, false));
 
         // [EDGE-studio-game-top-1] New skin off, [EDGE-studio-game-top-3] the game's legs, shoes or gloves, and
-        // [EDGE-studio-game-top-6] a race of the other sex: the boxes as they are.
-        Assert.Equal(new RetargetInputs.StudioSkinRule(false, false, null, false, false, false),
+        // [EDGE-studio-game-top-6] a race of the other sex: the boxes as they are — [EDGE-relax-sink-guard-14] the relax
+        // guard only on the game's legs with the new skin, as the automatic refit has it (in effect with the box ticked).
+        Assert.Equal(new RetargetInputs.StudioSkinRule(false, false, null, false, false, false, false),
                      RetargetInputs.StudioSkin(replaceSkin: false, true, false, gameGear: true, "_top", false));
-        foreach (string slot in new[] { "_dwn", "_glv", "_sho" })
-            Assert.Equal(new RetargetInputs.StudioSkinRule(false, false, null, false, false, false),
+        Assert.Equal(new RetargetInputs.StudioSkinRule(false, false, null, false, false, false, true),
+                     RetargetInputs.StudioSkin(true, true, false, gameGear: true, "_dwn", false));
+        Assert.Equal(new RetargetInputs.StudioSkinRule(false, true, null, false, false, false, true),
+                     RetargetInputs.StudioSkin(true, true, true, gameGear: true, "_dwn", false));
+        Assert.False(RetargetInputs.StudioSkin(false, true, true, gameGear: true, "_dwn", false).RelaxSinkGuard);
+        Assert.False(RetargetInputs.StudioSkin(true, true, true, gameGear: true, "_dwn", crossSex: true).RelaxSinkGuard);
+        foreach (string slot in new[] { "_glv", "_sho" })
+        {
+            Assert.Equal(new RetargetInputs.StudioSkinRule(false, false, null, false, false, false, false),
                          RetargetInputs.StudioSkin(true, true, false, gameGear: true, slot, false));
-        Assert.Equal(new RetargetInputs.StudioSkinRule(false, false, null, false, false, false),
+            Assert.False(RetargetInputs.StudioSkin(true, true, true, gameGear: true, slot, false).RelaxSinkGuard);
+        }
+        Assert.Equal(new RetargetInputs.StudioSkinRule(false, false, null, false, false, false, false),
                      RetargetInputs.StudioSkin(true, true, false, gameGear: true, "_top", crossSex: true));
         // A top bent across the sexes with both boxes ticked tucks, as the boxes say, but never draws where the inside shows.
         var crossed = RetargetInputs.StudioSkin(true, true, true, gameGear: true, "_top", crossSex: true);
         Assert.Equal("_top", crossed.TuckSlot);
         Assert.False(crossed.SeeInside);
+        Assert.False(crossed.RelaxSinkGuard);
     }
 
     [Fact]

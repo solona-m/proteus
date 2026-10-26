@@ -25,7 +25,7 @@ public sealed class Plugin : IDalamudPlugin
     [PluginService] public static ITextureProvider TextureProvider { get; private set; } = null!;
 
     /// <summary>Hand-maintained; bump it for in-game testing. <see cref="BuildStamp"/> is the one that can't go stale.</summary>
-    public const int BuildNumber = 1369;
+    public const int BuildNumber = 1378;
 
     /// <summary>
     /// Which set of release notes is current. Raise it when a release has something new to say: the window
@@ -254,7 +254,7 @@ public sealed class Plugin : IDalamudPlugin
         commandManager.AddHandler(CommandName, new Dalamud.Game.Command.CommandInfo(OnCommand)
         {
             // Read once, at registration: Dalamud caches the help line, so it keeps the load-time language.
-            HelpMessage = Loc.Localize("Command.Help",
+            HelpMessage = ProteusLoc.Localize("Command.Help",
                 "Toggle the Proteus overlay compositor status window. \"/proteus config\" opens it on Settings,\n"
               + "\"/proteus refresh\" recomposites now, and \"/proteus refresh full\" rebuilds everything first."),
         });
@@ -270,7 +270,7 @@ public sealed class Plugin : IDalamudPlugin
             compositor.TriggerRecomposite("startup");
 
         log.Information("Proteus loaded. Penumbra={0} [build: equipped-model second-skin]", penumbra.IsAvailable);
-        ChatGui.Print(string.Format(Loc.Localize("Chat.Loaded.Fmt", "[Proteus] loaded — build #{0} ({1})"),
+        ChatGui.Print(string.Format(ProteusLoc.Localize("Chat.Loaded.Fmt", "[Proteus] loaded — build #{0} ({1})"),
                                     BuildNumber, BuildStamp));
 
         SuggestMirrorRepo(pluginInterface);
@@ -307,7 +307,7 @@ public sealed class Plugin : IDalamudPlugin
         // No count of remaining reminders: plural agreement across machine-translated locales is not worth it.
         ChatGui.Print(new Dalamud.Game.Text.SeStringHandling.SeStringBuilder()
             .AddUiForeground(
-                Loc.Localize("Chat.MirrorRepo",
+                ProteusLoc.Localize("Chat.MirrorRepo",
                     "[Proteus] You installed from the old plugin repo URL. Switching it to " +
                     "https://dl.solona.info/repo.json under /xlplugins > Experimental makes updates " +
                     "faster and takes load off GitHub. Your install keeps working either way. " +
@@ -454,8 +454,8 @@ public sealed class Plugin : IDalamudPlugin
             partsPanel.Refresh();
             if (silent) return;
             ChatGui.Print("[Proteus] " + (full
-                ? Loc.Localize("Command.Refreshing.Full", "Rebuilding everything and recompositing. This takes longer than a plain refresh.")
-                : Loc.Localize("Command.Refreshing", "Recompositing now.")));
+                ? ProteusLoc.Localize("Command.Refreshing.Full", "Rebuilding everything and recompositing. This takes longer than a plain refresh.")
+                : ProteusLoc.Localize("Command.Refreshing", "Recompositing now.")));
             return;
         }
 

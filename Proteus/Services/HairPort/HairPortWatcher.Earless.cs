@@ -283,15 +283,15 @@ public sealed partial class HairPortWatcher
         return hint.Count > 0 ? hint : null;
     }
 
-    internal static string ChatLine => Loc.Localize("HairPort.Earless.Chat",
+    internal static string ChatLine => ProteusLoc.Localize("HairPort.Earless.Chat",
         "[Proteus] This hairstyle's cat ears are taken off: Proteus pointed its mod at an earless copy, so every character "
       + "drawn with this mod on, in every collection, has no ears with it now. Turn off \"Take the ears off Miqo'te hair "
       + "mods\" under /proteus > Settings > Hair to put them back.");
 
-    internal static string RestoreBlockedFmt => Loc.Localize("HairPort.Earless.RestoreBlocked.Fmt",
+    internal static string RestoreBlockedFmt => ProteusLoc.Localize("HairPort.Earless.RestoreBlocked.Fmt",
         "[Proteus] The ears could not be put back in {0}: {1}");
 
-    internal static string RestoredFmt => Loc.Localize("HairPort.Earless.Restored.Fmt", "Ears put back on {0} hairstyle(s).");
+    internal static string RestoredFmt => ProteusLoc.Localize("HairPort.Earless.Restored.Fmt", "Ears put back on {0} hairstyle(s).");
 
     /// <summary>A wait that doubles each time it is asked for again, from 5 s up to 5 minutes, until reset.</summary>
     internal sealed class Backoff

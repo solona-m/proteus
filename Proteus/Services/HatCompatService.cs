@@ -311,7 +311,7 @@ public static class HatCompatService
         rel = Rel(rel);
         if (ReadRecord(modRoot)?.Files.Contains(rel, StringComparer.OrdinalIgnoreCase) != true)
         {
-            message = Loc.Localize("HatCompat.Revert.Nothing", "This mod has no Proteus hat-compatibility edits to undo.");
+            message = ProteusLoc.Localize("HatCompat.Revert.Nothing", "This mod has no Proteus hat-compatibility edits to undo.");
             return Undone.Nothing;
         }
 
@@ -384,18 +384,18 @@ public static class HatCompatService
     {
         // Before the AlreadyCompatible check: without a skull nothing can be judged at all.
         if (proposal.Unmeasurable)
-            return new Outcome(false, Loc.Localize("HatCompat.Apply.NoHead",
+            return new Outcome(false, ProteusLoc.Localize("HatCompat.Apply.NoHead",
                 "Proteus could not read your character's head, so it has not changed this hairstyle."), 0);
 
         if (proposal.AlreadyCompatible)
-            return new Outcome(false, Loc.Localize("HatCompat.Apply.Already",
+            return new Outcome(false, ProteusLoc.Localize("HatCompat.Apply.Already",
                 "This hairstyle already has a hat shape of its own."), 0);
         // The geometry under the hat is dropped, which costs no shape values. Tagged in one pass so a submesh
         // claimed twice is cut once.
         var tag = (extra ?? []).Concat(proposal.Solve.Cut).ToList();
 
         if (proposal.Solve.Moved.Count == 0 && tag.Count == 0)
-            return new Outcome(false, Loc.Localize("HatCompat.Apply.Nothing",
+            return new Outcome(false, ProteusLoc.Localize("HatCompat.Apply.Nothing",
                 "There is nothing to change: no hair stands proud of the scalp and no part needs hiding."), 0);
 
         byte[] patched;
@@ -425,7 +425,7 @@ public static class HatCompatService
             if (proposal.TookOver)
             {
                 if (tag.Count == 0)
-                    return new Outcome(false, Loc.Localize("HatCompat.Apply.Nothing",
+                    return new Outcome(false, ProteusLoc.Localize("HatCompat.Apply.Nothing",
                         "There is nothing to change: no hair stands proud of the scalp and no part needs "
                       + "hiding."), 0);
             }
@@ -438,7 +438,7 @@ public static class HatCompatService
         catch (ModelAttributeWriter.ModelEditException ex)
         {
             // Nothing is on disk yet.
-            return new Outcome(false, string.Format(Loc.Localize("HatCompat.Apply.EditFailed.Fmt",
+            return new Outcome(false, string.Format(ProteusLoc.Localize("HatCompat.Apply.EditFailed.Fmt",
                 "{0} could not be edited: {1}. Nothing has been written."), proposal.Rel, ex.Message), 0);
         }
 
@@ -460,7 +460,7 @@ public static class HatCompatService
         catch (Exception ex)
         {
             return new Outcome(false, string.Format(
-                Loc.Localize("HatCompat.Apply.Failed.Fmt", "Writing failed: {0}"), ex.Message), 0);
+                ProteusLoc.Localize("HatCompat.Apply.Failed.Fmt", "Writing failed: {0}"), ex.Message), 0);
         }
 
         return new Outcome(true, "", 1, unaddressable);
@@ -475,7 +475,7 @@ public static class HatCompatService
     {
         var record = ReadRecord(modRoot);
         if (record == null || record.Files.Count == 0)
-            return new Outcome(false, Loc.Localize("HatCompat.Revert.Nothing",
+            return new Outcome(false, ProteusLoc.Localize("HatCompat.Revert.Nothing",
                 "This mod has no Proteus hat-compatibility edits to undo."), 0);
 
         var target = only != null ? Rel(only) : null;
@@ -483,7 +483,7 @@ public static class HatCompatService
             .Where(f => target == null || f.Equals(target, StringComparison.OrdinalIgnoreCase))
             .ToList();
         if (wanted.Count == 0)
-            return new Outcome(false, Loc.Localize("HatCompat.Revert.Nothing",
+            return new Outcome(false, ProteusLoc.Localize("HatCompat.Revert.Nothing",
                 "This mod has no Proteus hat-compatibility edits to undo."), 0);
 
         // Refused before anything is restored, while a feature that edited the same model LATER still holds
@@ -511,7 +511,7 @@ public static class HatCompatService
         }
 
         if (restoredFrom.Count == 0)
-            return new Outcome(false, Loc.Localize("HatCompat.Revert.NoBackups",
+            return new Outcome(false, ProteusLoc.Localize("HatCompat.Revert.NoBackups",
                 "None of the original models could be found to restore."), 0);
 
         // The record is deleted only when empty; otherwise rewritten to keep naming the remaining backups.
@@ -545,7 +545,7 @@ public static class HatCompatService
     {
         var files = ReadRecord(modRoot)?.Files.ToList() ?? [];
         if (files.Count == 0)
-            return new WholeUndo(false, 0, 0, Loc.Localize("HatCompat.Revert.Nothing",
+            return new WholeUndo(false, 0, 0, ProteusLoc.Localize("HatCompat.Revert.Nothing",
                 "This mod has no Proteus hat-compatibility edits to undo."));
 
         foreach (var rel in files)

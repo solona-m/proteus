@@ -92,6 +92,39 @@ public class HairPortPlanTests
         Assert.Equal(expected, HairPortPlan.CanPortInto(owners, into, Midlander));
     }
 
+    /// <summary>
+    /// Studio opened on a port of ours (LM Orlina's c1601h0102, Startide's c0201h0008 on the user's install): porting it
+    /// again refused every race as "the mod does not publish that hairstyle". It stands for the author's hairstyle.
+    /// </summary>
+    [Fact]
+    public void A_port_opened_stands_for_the_hairstyle_it_was_made_from()
+    {
+        var owners = new List<HairPortPlan.Owner>
+        {
+            O("", "", "", (Miqote, "default group/miqo.mdl"), (Midlander, "Hair Ports/Default/" + Midlander)),
+        };
+        var record = new HairPortRecord();
+        record.Ports.Add(new HairPortRecord.Entry { SourceGamePath = Miqote, TargetGamePath = Midlander });
+
+        Assert.Equal(Miqote, HairPortPlan.AuthorSource(owners, record, Midlander));
+        Assert.Equal(Miqote, HairPortPlan.AuthorSource(owners, record, Midlander.Replace('/', '\\').ToUpperInvariant()));
+        // The author's own hairstyle, and a path no port of ours made, are themselves.
+        Assert.Equal(Miqote, HairPortPlan.AuthorSource(owners, record, Miqote));
+        Assert.Equal(Midlander, HairPortPlan.AuthorSource(owners, new HairPortRecord(), Midlander));
+        // Two ports of one target, from the author's race in two options: the file opened says which.
+        const string Elezen = "chara/human/c0601/obj/hair/h0130/model/c0601h0130_hir.mdl";
+        var two = new HairPortRecord();
+        two.Ports.Add(new HairPortRecord.Entry { SourceGamePath = Miqote, TargetGamePath = Midlander, File = "Hair Ports/A/m.mdl" });
+        two.Ports.Add(new HairPortRecord.Entry { SourceGamePath = Elezen, TargetGamePath = Midlander, File = "Hair Ports/B/m.mdl" });
+        Assert.Equal(Elezen, HairPortPlan.AuthorSource(owners, two, Midlander, "Hair Ports\\B\\m.mdl"));
+        Assert.Equal(Miqote, HairPortPlan.AuthorSource(owners, two, Midlander, "Hair Ports/A/m.mdl"));
+        Assert.Equal(Miqote, HairPortPlan.AuthorSource(owners, two, Midlander));
+
+        // The author publishing the path from a file of their own wins over a port recorded for it.
+        owners.Add(O("Style", "Own", "Single", (Midlander, "mid.mdl")));
+        Assert.Equal(Midlander, HairPortPlan.AuthorSource(owners, record, Midlander));
+    }
+
     [Fact]
     [Trait("Plan", "AC-hair-race-port-8")]
     public void Changed_source_or_newer_version_is_stale()

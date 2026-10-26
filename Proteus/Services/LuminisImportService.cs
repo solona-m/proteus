@@ -268,14 +268,14 @@ public sealed partial class LuminisImportService
     /// </summary>
     internal static string GlowOptionName(TexturePlan plan, bool qualified)
         => qualified
-            ? string.Format(Loc.Localize("Import.Luminis.Option.GlowOf.Fmt", "{0} — glow"), plan.Stem)
-            : Loc.Localize("Import.Luminis.Option.Glow", "Glow tattoo");
+            ? string.Format(ProteusLoc.Localize("Import.Luminis.Option.GlowOf.Fmt", "{0} — glow"), plan.Stem)
+            : ProteusLoc.Localize("Import.Luminis.Option.Glow", "Glow tattoo");
 
     /// <summary>The option that puts the author's own body texture on underneath.</summary>
     internal static string SkinOptionName(TexturePlan plan, bool qualified)
         => qualified
-            ? string.Format(Loc.Localize("Import.Luminis.Option.SkinOf.Fmt", "{0} — author's skin"), plan.Stem)
-            : Loc.Localize("Import.Luminis.Option.Skin", "Author's skin");
+            ? string.Format(ProteusLoc.Localize("Import.Luminis.Option.SkinOf.Fmt", "{0} — author's skin"), plan.Stem)
+            : ProteusLoc.Localize("Import.Luminis.Option.Skin", "Author's skin");
 
     // ── Import ───────────────────────────────────────────────────────────────
 
@@ -319,30 +319,30 @@ public sealed partial class LuminisImportService
         PreparedImport Fail(string why) => new(false, why, null, null, [], 0, 0);
 
         if (string.IsNullOrWhiteSpace(modName))
-            return Fail(Loc.Localize("Import.NeedName", "Enter a mod name."));
+            return Fail(ProteusLoc.Localize("Import.NeedName", "Enter a mod name."));
         if (!preview.AnyImportable)
-            return Fail(Loc.Localize("Import.Luminis.Fail.NothingUsable",
+            return Fail(ProteusLoc.Localize("Import.Luminis.Fail.NothingUsable",
                 "Nothing in this pack can be imported."));
         if (!File.Exists(preview.SourcePath))
-            return Fail(string.Format(Loc.Localize("Import.Luminis.Fail.Gone.Fmt",
+            return Fail(string.Format(ProteusLoc.Localize("Import.Luminis.Fail.Gone.Fmt",
                 "The pack is no longer there: {0}"), preview.SourcePath));
 
         var dirName = ModCreationService.Sanitize(modName);
         if (dirName == null)
-            return Fail(Loc.Localize("Import.Luminis.Fail.BadName",
+            return Fail(ProteusLoc.Localize("Import.Luminis.Fail.BadName",
                 "That mod name has no usable characters — use letters or numbers."));
         if (string.Equals(dirName, SidecarDiscoveryService.ManagedModDir, StringComparison.OrdinalIgnoreCase))
-            return Fail(Loc.Localize("Import.Luminis.Fail.Reserved",
+            return Fail(ProteusLoc.Localize("Import.Luminis.Fail.Reserved",
                 "\"Proteus\" is reserved — choose a different mod name."));
 
         var modsRoot = penumbra.GetModDirectory();
         if (string.IsNullOrEmpty(modsRoot))
-            return Fail(Loc.Localize("Import.Luminis.Fail.NoModDir",
+            return Fail(ProteusLoc.Localize("Import.Luminis.Fail.NoModDir",
                 "Penumbra's mod directory isn't available."));
 
         var root = Path.Combine(modsRoot, dirName);
         if (Directory.Exists(root))
-            return Fail(string.Format(Loc.Localize("Import.Luminis.Fail.Exists.Fmt",
+            return Fail(string.Format(ProteusLoc.Localize("Import.Luminis.Fail.Exists.Fmt",
                 "A mod folder named \"{0}\" already exists."), dirName));
 
         var materials = MaterialsFor(preview, suffixOverride);
@@ -357,7 +357,7 @@ public sealed partial class LuminisImportService
         {
             log.Error(ex, "[Proteus] luminis import failed for {0}", dirName);
             try { if (Directory.Exists(root)) Directory.Delete(root, true); } catch { /* best effort */ }
-            return Fail(string.Format(Loc.Localize("Import.Luminis.Fail.Write.Fmt",
+            return Fail(string.Format(ProteusLoc.Localize("Import.Luminis.Fail.Write.Fmt",
                 "Failed to write the mod: {0}"), ex.Message));
         }
 
@@ -366,7 +366,7 @@ public sealed partial class LuminisImportService
         if (imported == 0)
         {
             try { Directory.Delete(root, true); } catch { /* best effort */ }
-            return Fail(Loc.Localize("Import.Luminis.Fail.NoneWritten",
+            return Fail(ProteusLoc.Localize("Import.Luminis.Fail.NoneWritten",
                 "None of this pack's textures could be read on the second pass, so nothing was written."));
         }
         return new(true, "", dirName, preview, written.DefaultOn, imported,
@@ -476,7 +476,7 @@ public sealed partial class LuminisImportService
             var modsRoot = penumbra.GetModDirectory();
             if (!string.IsNullOrEmpty(modsRoot))
                 try { Directory.Delete(Path.Combine(modsRoot, dirName), true); } catch { /* best effort */ }
-            return new(false, false, string.Format(Loc.Localize("Service.RegisterFailed.Fmt",
+            return new(false, false, string.Format(ProteusLoc.Localize("Service.RegisterFailed.Fmt",
                 "Wrote the mod, but Penumbra couldn't register it ({0}). Rescan mods in Penumbra."), ec));
         }
 
@@ -574,16 +574,16 @@ public sealed partial class LuminisImportService
             Path.GetFileName(prepared.Preview!.SourcePath), dirName, prepared.Imported, prepared.Skipped);
 
         var tail = prepared.Skipped > 0
-            ? string.Format(Loc.Localize("Import.Result.SkippedTail.Fmt", " (skipped: {0})"), prepared.Skipped)
+            ? string.Format(ProteusLoc.Localize("Import.Result.SkippedTail.Fmt", " (skipped: {0})"), prepared.Skipped)
             : "";
 
         if (selectionFailed)
-            return new(true, true, string.Format(Loc.Localize("Import.Luminis.Result.NoSelection.Fmt",
+            return new(true, true, string.Format(ProteusLoc.Localize("Import.Luminis.Result.NoSelection.Fmt",
                 "Imported \"{0}\" — textures: {1}{2}, but Proteus couldn't switch it on for you. "
               + "Tick it under \"{3}\" in Penumbra, or nothing will paint."),
                 dirName, prepared.Imported, tail, GroupName));
 
-        return new(true, false, string.Format(Loc.Localize("Import.Luminis.Result.Ok.Fmt",
+        return new(true, false, string.Format(ProteusLoc.Localize("Import.Luminis.Result.Ok.Fmt",
             "Imported \"{0}\" — textures: {1}{2}. The glow and the author's own body texture are both on; "
           + "untick the body under \"{3}\" in Penumbra if you want the glow by itself."),
             dirName, prepared.Imported, tail, GroupName));

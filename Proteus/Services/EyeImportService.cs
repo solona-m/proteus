@@ -266,20 +266,20 @@ public sealed partial class EyeImportService
         {
             if (f.Slot is not { } slot)
             {
-                plans.Add(new FilePlan(f, Loc.Localize("Import.Eye.Skip.Unknown",
+                plans.Add(new FilePlan(f, ProteusLoc.Localize("Import.Eye.Skip.Unknown",
                     "its name doesn't end in a texture kind Proteus knows (base, mask or norm).")));
                 continue;
             }
             if (!eyes)
             {
-                plans.Add(new FilePlan(f, Loc.Localize("Import.Eye.Skip.NotEyes",
+                plans.Add(new FilePlan(f, ProteusLoc.Localize("Import.Eye.Skip.NotEyes",
                     "this archive's names don't identify it as an eye pack, and Proteus won't point loose "
                   + "textures at your irises on a guess.")));
                 continue;
             }
             if (!claimed.Add(slot))
             {
-                plans.Add(new FilePlan(f, string.Format(Loc.Localize("Import.Eye.Skip.Duplicate.Fmt",
+                plans.Add(new FilePlan(f, string.Format(ProteusLoc.Localize("Import.Eye.Skip.Duplicate.Fmt",
                     "another file in this archive is already the {0} texture."), Strings.Eye.SlotName(slot))));
                 continue;
             }
@@ -292,30 +292,30 @@ public sealed partial class EyeImportService
         float? glow = fractions?.Falloff;
 
         if (!plans.Any(p => p.Import))
-            warnings.Add(Loc.Localize("Import.Eye.Warn.NothingImportable",
+            warnings.Add(ProteusLoc.Localize("Import.Eye.Warn.NothingImportable",
                 "Nothing in this archive can be imported — see the reasons above."));
         else if (mask == null)
-            warnings.Add(Loc.Localize("Import.Eye.Warn.NoMask",
+            warnings.Add(ProteusLoc.Localize("Import.Eye.Warn.NoMask",
                 "This pack ships no mask texture, so there is no shape for the animation to fill. The eye "
               + "textures are still imported; only the glow is left out."));
         else if (glow == null)
-            warnings.Add(Loc.Localize("Import.Eye.Warn.MaskUnreadable",
+            warnings.Add(ProteusLoc.Localize("Import.Eye.Warn.MaskUnreadable",
                 "The mask texture couldn't be decoded, so Proteus can't tell what should glow. The eye "
               + "textures are still imported; only the glow is left out."));
         else if (glow < MinGlowFraction)
-            warnings.Add(Loc.Localize("Import.Eye.Warn.NoGlowRegion",
+            warnings.Add(ProteusLoc.Localize("Import.Eye.Warn.NoGlowRegion",
                 "The mask's red channel is empty, so nothing in this pack is marked as glowing. That "
               + "channel is where the game reads the limbal ring from, and where a glowing eye mod puts "
               + "its shape. The eye textures are still imported; only the glow is left out."));
 
         if (irisMaterials.Count == 0 && plans.Any(p => p.Import))
-            warnings.Add(Loc.Localize("Import.Eye.Warn.NoIrisMaterials",
+            warnings.Add(ProteusLoc.Localize("Import.Eye.Warn.NoIrisMaterials",
                 "Proteus couldn't read the game's face list, so it has no iris material to put the glow "
               + "on. The eye textures are still imported; only the glow is left out."));
 
         // The face is baked in (a shell is cut per face), so a guessed one has to be said.
         if (!faceFromWearer && plans.Any(p => p.Import) && irisMaterials.Count > 0)
-            warnings.Add(string.Format(Loc.Localize("Import.Eye.Warn.FaceGuessed.Fmt",
+            warnings.Add(string.Format(ProteusLoc.Localize("Import.Eye.Warn.FaceGuessed.Fmt",
                 "Your character isn't drawn, so the glow is being cut for face {0}. If you wear a "
               + "different face, import this again once you're in game."), faceId));
 
@@ -384,30 +384,30 @@ public sealed partial class EyeImportService
         PreparedImport Fail(string why) => new(false, why, null, null, false, 0, 0);
 
         if (string.IsNullOrWhiteSpace(modName))
-            return Fail(Loc.Localize("Import.NeedName", "Enter a mod name."));
+            return Fail(ProteusLoc.Localize("Import.NeedName", "Enter a mod name."));
         if (!preview.AnyImportable)
-            return Fail(Loc.Localize("Import.Eye.Fail.NothingUsable",
+            return Fail(ProteusLoc.Localize("Import.Eye.Fail.NothingUsable",
                 "Nothing in this archive can be imported."));
         if (!File.Exists(preview.SourcePath))
-            return Fail(string.Format(Loc.Localize("Import.Eye.Fail.Gone.Fmt",
+            return Fail(string.Format(ProteusLoc.Localize("Import.Eye.Fail.Gone.Fmt",
                 "The archive is no longer there: {0}"), preview.SourcePath));
 
         var dirName = ModCreationService.Sanitize(modName);
         if (dirName == null)
-            return Fail(Loc.Localize("Import.Eye.Fail.BadName",
+            return Fail(ProteusLoc.Localize("Import.Eye.Fail.BadName",
                 "That mod name has no usable characters — use letters or numbers."));
         if (string.Equals(dirName, SidecarDiscoveryService.ManagedModDir, StringComparison.OrdinalIgnoreCase))
-            return Fail(Loc.Localize("Import.Eye.Fail.Reserved",
+            return Fail(ProteusLoc.Localize("Import.Eye.Fail.Reserved",
                 "\"Proteus\" is reserved — choose a different mod name."));
 
         var modsRoot = penumbra.GetModDirectory();
         if (string.IsNullOrEmpty(modsRoot))
-            return Fail(Loc.Localize("Import.Eye.Fail.NoModDir",
+            return Fail(ProteusLoc.Localize("Import.Eye.Fail.NoModDir",
                 "Penumbra's mod directory isn't available."));
 
         var root = Path.Combine(modsRoot, dirName);
         if (Directory.Exists(root))
-            return Fail(string.Format(Loc.Localize("Import.Eye.Fail.Exists.Fmt",
+            return Fail(string.Format(ProteusLoc.Localize("Import.Eye.Fail.Exists.Fmt",
                 "A mod folder named \"{0}\" already exists."), dirName));
 
         bool glow;
@@ -421,14 +421,14 @@ public sealed partial class EyeImportService
         {
             log.Error(ex, "[Proteus] eye import failed for {0}", dirName);
             try { if (Directory.Exists(root)) Directory.Delete(root, true); } catch { /* best effort */ }
-            return Fail(string.Format(Loc.Localize("Import.Eye.Fail.Write.Fmt",
+            return Fail(string.Format(ProteusLoc.Localize("Import.Eye.Fail.Write.Fmt",
                 "Failed to write the mod: {0}"), ex.Message));
         }
 
         if (written == 0)
         {
             try { Directory.Delete(root, true); } catch { /* best effort */ }
-            return Fail(Loc.Localize("Import.Eye.Fail.NoneWritten",
+            return Fail(ProteusLoc.Localize("Import.Eye.Fail.NoneWritten",
                 "None of this archive's textures could be read, so nothing was written."));
         }
 
@@ -501,7 +501,7 @@ public sealed partial class EyeImportService
             var modsRoot = penumbra.GetModDirectory();
             if (!string.IsNullOrEmpty(modsRoot))
                 try { Directory.Delete(Path.Combine(modsRoot, dirName), true); } catch { /* best effort */ }
-            return new(false, false, string.Format(Loc.Localize("Service.RegisterFailed.Fmt",
+            return new(false, false, string.Format(ProteusLoc.Localize("Service.RegisterFailed.Fmt",
                 "Wrote the mod, but Penumbra couldn't register it ({0}). Rescan mods in Penumbra."), ec));
         }
 
@@ -576,16 +576,16 @@ public sealed partial class EyeImportService
             quiet ? " [quiet: plugin unloading]" : "");
 
         if (!enabled)
-            return new(true, true, string.Format(Loc.Localize("Import.Eye.Result.NotEnabled.Fmt",
+            return new(true, true, string.Format(ProteusLoc.Localize("Import.Eye.Result.NotEnabled.Fmt",
                 "Imported \"{0}\" — textures: {1}. Penumbra hasn't switched it on yet; tick it in "
               + "Penumbra's mod list."), dirName, prepared.Imported));
 
         if (!prepared.Glow)
-            return new(true, true, string.Format(Loc.Localize("Import.Eye.Result.NoGlow.Fmt",
+            return new(true, true, string.Format(ProteusLoc.Localize("Import.Eye.Result.NoGlow.Fmt",
                 "Imported \"{0}\" — textures: {1}, but with no animated glow. See the reasons above; the "
               + "eyes themselves are in and working."), dirName, prepared.Imported));
 
-        return new(true, false, string.Format(Loc.Localize("Import.Eye.Result.Ok.Fmt",
+        return new(true, false, string.Format(ProteusLoc.Localize("Import.Eye.Result.Ok.Fmt",
             "Imported \"{0}\" — textures: {1}, with an animated glow on the shape the mask marks out. "
           + "Tune it in Colors, or switch it off under \"{2}\" in Penumbra."),
             dirName, prepared.Imported, GroupName));

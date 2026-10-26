@@ -1,0 +1,86 @@
+name: Dependabot auto-merge
+
+# Builds and tests every Dependabot PR into test, then merges it if the update is a minor or patch
+# version. Majors and submodule bumps (Glamourer, Penumbra.Api: no semver, and an IPC change needs an
+# in-game check) are left open for a person. Nothing here releases anything: a merge into test is not
+# a release, and the merge itself, made with the workflow token, starts no other workflow.
+#
+# pull_request, not pull_request_target, and every job gated on the PR's author being Dependabot. Only the
+# merge job can write, and it runs no action at all — just gh from the runner image. That matters because
+# on a pull_request the workflow runs as the PR has it, and Dependabot's github-actions PRs rewrite the
+# uses: lines here: an action in the writing job would run whatever version the PR picked, with the write
+# token. fetch-metadata therefore runs in its own read-only job. The merge names the commit that was
+# tested, and a newer push to the PR cancels the older run.
+
+on:
+  pull_request:
+    branches: [ test ]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: dependabot-automerge-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    if: github.event.pull_request.user.login == 'dependabot[bot]'
+    runs-on: windows-latest
+    steps:
+      # Full history: Directory.Build.props stamps the version from the commit count. No LFS, as in the
+      # release workflows: only the UV maps live there and no test reads them.
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          submodules: recursive
+          fetch-depth: 0
+          lfs: false
+
+      - name: Download Dalamud
+        shell: pwsh
+        run: |
+          Invoke-WebRequest 'https://goatcorp.github.io/dalamud-distrib/stg/latest.zip' -OutFile dalamud.zip
+          Expand-Archive dalamud.zip -DestinationPath dalamud_dist
+          "DALAMUD_HOME=$env:GITHUB_WORKSPACE\dalamud_dist" | Out-File -Append $env:GITHUB_ENV
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
+        with:
+          dotnet-version: '10.x'
+
+      # The canonical run-all-tests command (AGENTS.md). SupplyChainTests is in it, so a NuGet bump that
+      # leaves packages.lock.json stale fails here and is never merged.
+      - name: Test
+        run: dotnet test Proteus.Tests/Proteus.Tests.csproj -c Release
+
+  meta:
+    if: github.event.pull_request.user.login == 'dependabot[bot]'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: read
+    outputs:
+      update-type: ${{ steps.meta.outputs.update-type }}
+      package-ecosystem: ${{ steps.meta.outputs.package-ecosystem }}
+    steps:
+      - name: Read the update
+        id: meta
+        uses: dependabot/fetch-metadata@25dd0e34f4fe68f24cc83900b1fe3fe149efef98 # v3.1.0
+
+  # Only an explicit minor or patch merges: a major, or a grouped PR holding one, never matches. Submodule
+  # bumps (Glamourer, Penumbra.Api) are excluded by name as well as by their lack of a semver update type:
+  # an IPC change needs an in-game check.
+  merge:
+    needs: [ test, meta ]
+    if: github.event.pull_request.user.login == 'dependabot[bot]' && contains(fromJSON('["version-update:semver-minor", "version-update:semver-patch"]'), needs.meta.outputs.update-type) && needs.meta.outputs.package-ecosystem != 'submodules' && !startsWith(github.head_ref, 'dependabot/submodules/')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
+    steps:
+      - name: Merge the tested commit
+        env:
+          PR_URL: ${{ github.event.pull_request.html_url }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          GH_TOKEN: ${{ github.token }}
+        run: gh pr merge "$PR_URL" --merge --match-head-commit "$HEAD_SHA"
