@@ -322,7 +322,6 @@ public sealed class SupplyChainTests
         return true;
     }
 
-
     // ---------------------------------------------------------------------------------------------
     // Repo scanning
     // ---------------------------------------------------------------------------------------------
@@ -476,7 +475,6 @@ public sealed class SupplyChainTests
         Assert.True(Value(DependabotEntries()["gitsubmodule"], "open-pull-requests-limit") == "1",
             "Glamourer tracks its testing branch and each IPC bump needs checking in game: keep the " +
             "gitsubmodule entry at open-pull-requests-limit: 1.");
-
 
     // ---------------------------------------------------------------------------------------------
     // CodeQL
