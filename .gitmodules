@@ -6,3 +6,7 @@
 	path = Glamourer
 	url = https://github.com/Ottermandias/Glamourer.git
 	branch = testing
+[submodule "Luna"]
+	path = Luna
+	url = https://github.com/Ottermandias/Luna.git
+	branch = main

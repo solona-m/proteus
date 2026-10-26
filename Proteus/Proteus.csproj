@@ -162,6 +162,10 @@
 
   <ItemGroup>
     <ProjectReference Include="..\Penumbra.Api\Penumbra.Api.csproj" />
+    <!-- Penumbra.Api's IPC subscribers (EventSubscriber, FuncSubscriber, …) live in Luna since 5.19 and it
+         references Luna privately, so a consumer references it itself — as Penumbra and Glamourer do. Luna is
+         the commit Penumbra.Api was built against. -->
+    <ProjectReference Include="..\Luna\Luna\Luna.csproj" />
     <ProjectReference Include="..\Glamourer\Glamourer.Api\Glamourer.Api.csproj" />
     <!-- Posing worn models on the live character; shared with other plugins, AGPL-3.0-or-later. -->
     <ProjectReference Include="..\XivLiveMesh\XivLiveMesh.csproj" />
