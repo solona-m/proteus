@@ -4,25 +4,12 @@
 # `test` is next merged into `main`. After that merge, check Insights -> Dependency graph -> Dependabot
 # that each ecosystem's update job succeeded.
 #
-# Dependabot PRs get no CI build (test.yml runs on main only), and their commits are authored by
-# dependabot[bot], which the repo's commit rule (authored by Solona) does not allow. So a Dependabot PR
-# is never merged as-is. Re-apply it instead, one git command per call, in its own worktree on a
-# feature branch off test (after git submodule update --init --recursive there):
-#   1. git fetch origin <dependabot-branch>
-#   2. git diff --name-only test...FETCH_HEAD
-#   3. Files (nuget, npm, github-actions): git checkout FETCH_HEAD -- <path>, once per listed path.
-#      That takes Dependabot's whole file; if test has newer edits to it, edit the version by hand.
-#   4. Submodules (Glamourer, Penumbra.Api): read the new SHA from git diff test...FETCH_HEAD -- <submodule>,
-#      then git -C <submodule> fetch, git -C <submodule> checkout <new sha>, git add <submodule>.
-#      (git checkout FETCH_HEAD -- <submodule> moves the gitlink but leaves the submodule's files stale.)
-#   5. git diff --cached must show only the expected change (a Subproject commit pair for a submodule).
-#      Commit it as a new commit authored by Solona.
-#   6. Bump Plugin.BuildNumber as its own commit, build Release and copy to the game path (Rule 5). A
-#      NuGet bump regenerates Proteus/packages.lock.json there; commit that too.
-#   7. Targeted tests (SupplyChainTests plus the area touched), a code-critic review, merge locally into
-#      test, push.
-#   8. The push does not close the PR (its commits never reach test). Dependabot closes it as superseded
-#      on its next run, or close it by hand.
+# Dependabot PRs are reviewed and merged on GitHub as they are, under Dependabot's own authorship.
+# They get no CI build (test.yml runs on main only), so build a NuGet or submodule bump locally and try
+# it in game before merging — a submodule bump can change the IPC API. Bump Plugin.BuildNumber for that
+# local try only; don't commit it. Dependabot normally updates Proteus/packages.lock.json itself; if a
+# PR leaves it stale, SupplyChainTests fails, so close the PR and make the bump by hand on a feature
+# branch instead. Merging on GitHub moves origin/test: pull before the next local merge into test.
 #
 # Security-update PRs (Settings -> Code security) stay off: GitHub always opens them against main.
 

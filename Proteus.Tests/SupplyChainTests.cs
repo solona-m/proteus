@@ -322,15 +322,6 @@ public sealed class SupplyChainTests
         return true;
     }
 
-    /// <summary>
-    /// A spaced shell pipe or redirect (<c>|</c>, <c>||</c>, <c>&gt;</c>, <c>&gt;&gt;</c>) — the forms the
-    /// one-command-per-call rule forbids. Placeholders like <c>&lt;path&gt;</c> and prose arrows
-    /// (<c>-&gt;</c>) are not whitespace-delimited, so they pass. An unspaced <c>a|b</c> also passes:
-    /// a known limitation, accepted for documentation written by hand.
-    /// </summary>
-    internal static bool HasShellPipeOrRedirect(string line) =>
-        Regex.IsMatch(line, @"(?:^|\s)(\|\||\||>>|>)(?:\s|$)");
-
     // ---------------------------------------------------------------------------------------------
     // Repo scanning
     // ---------------------------------------------------------------------------------------------
@@ -484,30 +475,6 @@ public sealed class SupplyChainTests
         Assert.True(Value(DependabotEntries()["gitsubmodule"], "open-pull-requests-limit") == "1",
             "Glamourer tracks its testing branch and each IPC bump needs checking in game: keep the " +
             "gitsubmodule entry at open-pull-requests-limit: 1.");
-
-    // [AC-security-scans-1] [EDGE-security-scans-17]
-    [Fact]
-    public void Dependabot_HeaderDocumentsSolonaAuthoredReapply()
-    {
-        var header = ReadLines(DependabotPath)
-            .TakeWhile(l => l.Trim().Length == 0 || l.TrimStart().StartsWith('#'))
-            .Where(l => l.TrimStart().StartsWith('#'))
-            .Select(l => l.TrimStart()[1..])
-            .ToList();
-        var text = string.Join("\n", header);
-
-        foreach (var needle in new[] { "git diff --name-only", "git checkout FETCH_HEAD --", "git -C", "git add",
-                     "git diff --cached", "Subproject commit", "Solona", "BuildNumber", "code-critic", "superseded" })
-            Assert.True(text.Contains(needle, StringComparison.Ordinal),
-                $"dependabot.yml's header no longer mentions \"{needle}\". It documents how a Dependabot " +
-                "PR reaches test: re-applied as a Solona-authored commit, never merged as-is, because " +
-                "its own commits are authored by dependabot[bot].");
-
-        var piped = header.Where(HasShellPipeOrRedirect).ToArray();
-        Assert.True(piped.Length == 0,
-            "dependabot.yml's header documents a pipe or redirect, which the one-command-per-call rule " +
-            "forbids:\n  " + string.Join("\n  ", piped));
-    }
 
     // ---------------------------------------------------------------------------------------------
     // CodeQL
@@ -873,19 +840,4 @@ public sealed class SupplyChainTests
     [InlineData("on:\n  workflow_dispatch:\n  push:\n    tags: ['v*']", false)]
     public void TriggersOnBranch_Classifies(string workflow, bool matches) =>
         Assert.Equal(matches, TriggersOnBranch(workflow.Split('\n'), "test"));
-
-    // [EDGE-security-scans-17]
-    [Theory]
-    [InlineData("git checkout FETCH_HEAD -- <path>", false)]
-    [InlineData("git -C <submodule> checkout <new sha>", false)]
-    [InlineData("merge test -> main", false)]
-    [InlineData("git diff x | git apply", true)]
-    [InlineData("git diff x > a.patch", true)]
-    [InlineData("echo a >> b", true)]
-    [InlineData("git diff x |", true)]
-    [InlineData("| git apply", true)]
-    // Known limitation: an unspaced pipe is not caught. The rule's spaced forms are what it guards.
-    [InlineData("git diff x|git apply", false)]
-    public void HasShellPipeOrRedirect_Classifies(string line, bool found) =>
-        Assert.Equal(found, HasShellPipeOrRedirect(line));
 }
