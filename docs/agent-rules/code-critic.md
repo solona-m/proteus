@@ -102,7 +102,8 @@ code keys match `en.json`) and the supply-chain rule
   PackageReference, a `uses:` on a tag or branch, or a `packages.lock.json`
   `resolved`/`contentHash` change in a diff that only pins versions is
   `FAIL`: a tag or a float can change the code a release builds without any
-  diff here. Only the read-only `codeql.yml` may run on a push to `test`.
+  diff here. Only the read-only `codeql.yml`, and `dependabot-automerge.yml`
+  on Dependabot's own PRs, may run on a push or PR to `test`.
   Build-enforced by `SupplyChainTests`. Repo-wide.
 
 ### Commits

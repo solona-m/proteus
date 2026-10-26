@@ -4,12 +4,13 @@
 # `test` is next merged into `main`. After that merge, check Insights -> Dependency graph -> Dependabot
 # that each ecosystem's update job succeeded.
 #
-# Dependabot PRs are reviewed and merged on GitHub as they are, under Dependabot's own authorship.
-# They get no CI build (test.yml runs on main only), so build a NuGet or submodule bump locally and try
-# it in game before merging — a submodule bump can change the IPC API. Bump Plugin.BuildNumber for that
-# local try only; don't commit it. Dependabot normally updates Proteus/packages.lock.json itself; if a
-# PR leaves it stale, SupplyChainTests fails, so close the PR and make the bump by hand on a feature
-# branch instead. Merging on GitHub moves origin/test: pull before the next local merge into test.
+# Dependabot PRs merge under Dependabot's own authorship. workflows/dependabot-automerge.yml builds and
+# tests each one and merges it into test if it is a minor or patch update. Majors and submodule bumps
+# stay open for a person: build those locally and try them in game before merging — a submodule bump can
+# change the IPC API. Bump Plugin.BuildNumber for that local try only; don't commit it. A NuGet PR that
+# leaves Proteus/packages.lock.json stale fails SupplyChainTests and is never merged: close it and make
+# the bump by hand on a feature branch. Every merge on GitHub moves origin/test: pull before the next
+# local merge into test.
 #
 # Security-update PRs (Settings -> Code security) stay off: GitHub always opens them against main.
 

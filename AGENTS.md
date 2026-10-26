@@ -43,7 +43,8 @@ responsibility.
    commit — no unresolved critical issues. Any commit made after the review
    requires a re-review. There is no pre-push hook; never `git push` or open a
    PR unless the user asks. Dependabot and contributor PRs are the exception:
-   they are reviewed and merged on GitHub (see `.github/dependabot.yml`).
+   they are merged on GitHub — Dependabot's minor/patch ones automatically once
+   CI passes (see `.github/dependabot.yml`), so pull `test` before merging into it.
 
 5. **Every build meant for the game is loadable there.** Bump
    `Plugin.BuildNumber`, build Release, and copy the output to

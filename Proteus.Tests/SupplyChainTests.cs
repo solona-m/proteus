@@ -664,15 +664,42 @@ public sealed class SupplyChainTests
     public void Workflows_PushToTestTriggersOnlyReadOnlyWorkflows()
     {
         var onTest = WorkflowFiles().Where(f => TriggersOnBranch(ReadLines(f), "test")).ToArray();
-        Assert.True(onTest.Select(Path.GetFileName).SequenceEqual(new[] { "codeql.yml" }),
-            "Pushing test is the end of every feature, so only the read-only CodeQL workflow may run on it. " +
-            "Workflows that do: " + string.Join(", ", onTest.Select(Path.GetFileName)));
+        Assert.True(onTest.Select(Path.GetFileName).SequenceEqual(new[] { "codeql.yml", "dependabot-automerge.yml" }),
+            "Pushing test is the end of every feature, so only the read-only CodeQL workflow (and the auto-merge " +
+            "of Dependabot's PRs into test) may run on it. Workflows that do: " +
+            string.Join(", ", onTest.Select(Path.GetFileName)));
 
-        // secrets.: anything holding a token can publish by hand (curl, gh api) without a release step.
+        // secrets.: anything holding a token can publish by hand (curl, gh api) without a release step. The
+        // auto-merge alone may write — the merge is its whole job — and is checked on its own below.
         foreach (var file in onTest)
-            foreach (var p in Publishing.Append("contents: write").Append("secrets."))
+            foreach (var p in Publishing.Append("secrets.")
+                         .Concat(Path.GetFileName(file) == "dependabot-automerge.yml" ? [] : new[] { "contents: write" }))
                 Assert.False(ContainsOutsideComments(ReadLines(file), p),
                     $"{Rel(file)} runs on a push to test and contains \"{p}\".");
+    }
+
+    /// <summary>
+    /// The auto-merge writes to test, so it is held to what makes that safe: it runs only on PRs (never a push,
+    /// never pull_request_target, which would hand PR code a writing token), every job only for Dependabot's
+    /// own PRs, and it merges only a minor or patch update, the normal way.
+    /// </summary>
+    [Fact]
+    public void Workflows_AutoMergeTakesOnlyDependabotMinorAndPatchUpdates()
+    {
+        var path = Path.Combine(WorkflowsDir, "dependabot-automerge.yml");
+        Assert.True(File.Exists(path), ".github/workflows/dependabot-automerge.yml is missing.");
+        var lines = NonCommentLines(ReadLines(path)).ToList();
+
+        Assert.DoesNotContain(lines, l => Regex.IsMatch(l, @"^\s*push:") || l.Contains("pull_request_target"));
+        var jobs = lines.Count(l => Regex.IsMatch(l, @"^\s*runs-on:"));
+        var gated = lines.Count(l => l.Trim() == "if: github.event.pull_request.user.login == 'dependabot[bot]'");
+        Assert.True(jobs > 0 && gated == jobs,
+            $"Every job in dependabot-automerge.yml must run only for Dependabot's PRs ({gated} of {jobs} are gated).");
+
+        Assert.Contains(lines, l => l.Contains("\"version-update:semver-minor\"") && l.Contains("\"version-update:semver-patch\""));
+        Assert.DoesNotContain(lines, l => l.Contains("semver-major"));
+        Assert.Contains(lines, l => l.Contains("gh pr merge") && !l.Contains("--admin"));
+        Assert.Contains(lines, l => l.Contains("dotnet test Proteus.Tests/Proteus.Tests.csproj"));
     }
 
     // [EDGE-security-scans-14]

@@ -1,0 +1,68 @@
+name: Dependabot auto-merge
+
+# Builds and tests every Dependabot PR into test, then merges it if the update is a minor or patch
+# version. Majors and submodule bumps (Glamourer, Penumbra.Api: no semver, and an IPC change needs an
+# in-game check) are left open for a person. Nothing here releases anything: a merge into test is not
+# a release, and the merge itself, made with the workflow token, starts no other workflow.
+#
+# pull_request, not pull_request_target: the PR's code runs with a token scoped to this workflow, and
+# only the merge job — which runs no PR code — can write. Every job is gated on the PR's author being
+# Dependabot, so other PRs into test run nothing here.
+
+on:
+  pull_request:
+    branches: [ test ]
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    if: github.event.pull_request.user.login == 'dependabot[bot]'
+    runs-on: windows-latest
+    steps:
+      # Full history: Directory.Build.props stamps the version from the commit count. No LFS, as in the
+      # release workflows: only the UV maps live there and no test reads them.
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          submodules: recursive
+          fetch-depth: 0
+          lfs: false
+
+      - name: Download Dalamud
+        shell: pwsh
+        run: |
+          Invoke-WebRequest 'https://goatcorp.github.io/dalamud-distrib/stg/latest.zip' -OutFile dalamud.zip
+          Expand-Archive dalamud.zip -DestinationPath dalamud_dist
+          "DALAMUD_HOME=$env:GITHUB_WORKSPACE\dalamud_dist" | Out-File -Append $env:GITHUB_ENV
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
+        with:
+          dotnet-version: '10.x'
+
+      # The canonical run-all-tests command (AGENTS.md). SupplyChainTests is in it, so a NuGet bump that
+      # leaves packages.lock.json stale fails here and is never merged.
+      - name: Test
+        run: dotnet test Proteus.Tests/Proteus.Tests.csproj -c Release
+
+  merge:
+    needs: test
+    if: github.event.pull_request.user.login == 'dependabot[bot]'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
+    steps:
+      - name: Read the update
+        id: meta
+        uses: dependabot/fetch-metadata@25dd0e34f4fe68f24cc83900b1fe3fe149efef98 # v3.1.0
+
+      # Only an explicit minor or patch merges. A submodule bump has no semver update type, so it never
+      # matches; neither does a major, nor a grouped PR holding one.
+      - name: Merge a minor or patch update
+        if: contains(fromJSON('["version-update:semver-minor", "version-update:semver-patch"]'), steps.meta.outputs.update-type)
+        env:
+          PR_URL: ${{ github.event.pull_request.html_url }}
+          GH_TOKEN: ${{ github.token }}
+        run: gh pr merge "$PR_URL" --merge

@@ -120,9 +120,18 @@ export function githubSlug(text) {
   return text.toLowerCase().replace(/[^\p{L}\p{M}\p{N}\p{Pc} -]/gu, '').replace(/ /g, '-');
 }
 
+/**
+ * Tags dropped until none are left. One pass is enough for marked's own output — its text never holds a
+ * bare `<` — but a single pass over `<<b>b>` would leave `<b>` behind, so it repeats to a fixed point.
+ */
+const stripTags = (html) => {
+  let prev;
+  do { prev = html; html = html.replace(/<[^>]*>/g, ''); } while (html !== prev);
+  return html;
+};
+
 /** A heading's visible text, from its rendered inline HTML: tags dropped, the entities marked emits decoded. */
-const headingText = (html) => html
-  .replace(/<[^>]*>/g, '')
+const headingText = (html) => stripTags(html)
   .replace(/&quot;/g, '"').replace(/&#39;/g, "'").replace(/&lt;/g, '<').replace(/&gt;/g, '>')
   .replace(/&amp;/g, '&')
   .trim();
