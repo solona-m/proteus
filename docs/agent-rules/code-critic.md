@@ -104,7 +104,9 @@ code keys match `en.json`) and the supply-chain rule
 ### Commits
 
 - **No real name and no Claude attribution in commits**; the author is
-  Solona. `FAIL`. Diff-scoped (commits on the branch).
+  Solona. `FAIL`. Diff-scoped (commits on the branch). Covers commits made by
+  Solona or an agent only: Dependabot's and other contributors' PR commits keep
+  their own authors and are merged as they are.
 
 ## Privacy anchors
 
@@ -140,4 +142,4 @@ Tag items "(if applicable)" when they only apply to certain diffs.
 - [ ] No local paths in tests; real data via LocalData + [LocalDataFact] (if applicable)
 - [ ] Native shim not built with /arch:AVX2 (if applicable)
 - [ ] NuGet versions plain and matching the lock file; actions SHA-pinned; SupplyChainTests not weakened (if applicable)
-- [ ] Commits authored as Solona, no real name, no Claude attribution
+- [ ] Our commits authored as Solona, no real name, no Claude attribution (bot and contributor commits keep their own authors)
