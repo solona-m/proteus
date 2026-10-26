@@ -293,7 +293,7 @@ The **Hair** section fits hair mods to you in two ways: hair made for another ra
 - The section shows the check as it runs, with **Cancel**, and lists every hairstyle it fitted. Each has its own **Undo**, and **Undo everything this check fitted** takes them all back (click it twice). An undone hairstyle isn't fitted again by itself.
 - Only for your own race, from races of the same sex. A race you're only trying on isn't fitted: Proteus waits until you've kept it for 30 seconds.
 - Physics hair keeps its physics. When your race's skeleton lacks the bones a hairstyle moves with, the port brings the source race's skeleton and physics along for that hairstyle.
-- A hairstyle that wouldn't sit right on your head is left alone, and the list says why.
+- A hairstyle that wouldn't sit right on your head (it sinks into it, or stands off it) is still fitted, and Proteus says which, so you can check it in game.
 - A hairstyle the bend turns partly inside out is still fitted, and Proteus says which, so you can check it in game.
 - To cover every race at once, open a hair model in the **Studio** and use **Port to all races**.
 

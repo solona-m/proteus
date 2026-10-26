@@ -5283,8 +5283,8 @@
     "message": "le déformeur racial ne sait pas comment déplacer {0}",
     "description": ""
   },
-  "HairPort.Refused.Fit.Fmt": {
-    "message": "elle ne tient pas sur la tête de c{0:D4} : {1:P0} s'enfonce dans le crâne, et sa distance au cuir chevelu s'écarte de {2:F0} mm de celle de l'original",
+  "HairPort.Fit.Fmt": {
+    "message": "elle ne tient pas sur la tête de c{0:D4} : {1:P0} s'enfonce dans le crâne, et sa distance au cuir chevelu s'écarte de {2:F0} mm de celle de l'original ; vérifie-le en jeu",
     "description": ""
   },
   "HairPort.Refused.NotHair": {

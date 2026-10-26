@@ -12,7 +12,8 @@ namespace Proteus.Services;
 /// array (array order = priority, lower = higher) and the <c>DefaultData</c> object.
 /// Reads fall back to the v3 layout (per-group files, <c>default_mod.json</c>). Writes are v4 only: Proteus never
 /// authors v3 and never edits a v3 folder (see <see cref="IsLegacyFolder"/> and <see cref="LegacyFolderException"/>);
-/// a current Penumbra migrates such a folder on load.
+/// a current Penumbra migrates such a folder on load. The one exception is a work copy outside Penumbra's mod folder,
+/// converted whole by <see cref="MigrateWorkCopy"/> before the headless size set edits it.
 /// </summary>
 internal static class PenumbraModMeta
 {
@@ -122,6 +123,114 @@ internal static class PenumbraModMeta
         // WriteDefaultData stamps SingleFileVersion and preserves unowned keys; CleanLegacyFiles drops default_mod.json.
         WriteDefaultData(modRoot, name, manifest, files, swaps, manips);
         CleanLegacyFiles(modRoot);
+    }
+
+    /// <summary>What <see cref="MigrateWorkCopy"/> converted.</summary>
+    /// <param name="FromVersion">The FileVersion it had.</param>
+    /// <param name="Groups">Group files folded into the manifest.</param>
+    /// <param name="Leftover">v3 files left behind because they could not be deleted; the manifest no longer reads them.</param>
+    internal sealed record MigrationOutcome(int FromVersion, int Groups, IReadOnlyList<string> Leftover);
+
+    /// <summary>Thrown when <see cref="MigrateWorkCopy"/> will not convert a folder; nothing in it was written.</summary>
+    /// <param name="code">"forbidden-root", "manifest-unreadable", "version-too-old" or "migration-failed".</param>
+    internal sealed class MigrationRefusedException(string code, string message) : InvalidOperationException(message)
+    {
+        public string Code { get; } = code;
+    }
+
+    /// <summary>
+    /// Convert a copy of a v3 mod — the user's own pack, unpacked into a work folder Penumbra never sees — to
+    /// <see cref="SingleFileVersion"/> in place, so it can be edited: every <c>group_*.json</c> folded into <c>Groups</c>
+    /// in the order Penumbra loads them — by file name, as the folder lists them, so "group_010_" after "group_002_" and
+    /// "group_1_a" after both (Penumbra renumbers only FileVersion 1 mods) — and <c>default_mod.json</c> into
+    /// <c>DefaultData</c>, its swaps under either name. Each group is kept key for key but its v3 <c>Version</c>, which
+    /// Penumbra drops too; every other key of the manifest is kept. Everything is read before anything is written, and
+    /// the manifest is written once; only then are the v3 files deleted.
+    /// <para/>
+    /// Never on an installed mod: a folder at or under <paramref name="forbiddenRoot"/> (Penumbra's mod folder) is
+    /// refused, and that rule (<see cref="IsLegacyFolder"/>) stands for every other caller — this is the one way a v3
+    /// folder is ever written.
+    /// </summary>
+    /// <returns>What was converted; null for a folder already at <see cref="SingleFileVersion"/>.</returns>
+    /// <exception cref="MigrationRefusedException">Refused, with the folder untouched.</exception>
+    internal static MigrationOutcome? MigrateWorkCopy(string modRoot, string forbiddenRoot)
+    {
+        if (IsAtOrUnder(modRoot, forbiddenRoot))
+            throw new MigrationRefusedException("forbidden-root", $"{modRoot} is inside {forbiddenRoot}: only a work copy is converted");
+        var manifest = ReadManifest(modRoot, out bool readable, waitIfHeld: true, throwIfHeld: true);
+        if (!readable) throw new MigrationRefusedException("manifest-unreadable", $"{MetaFile} could not be read");
+        int from = FileVersionOf(manifest);
+        if (from >= SingleFileVersion) return null;
+        if (from < LegacyFileVersion)
+            throw new MigrationRefusedException("version-too-old", $"FileVersion {from} is older than {LegacyFileVersion}");
+
+        // ── read everything first ──
+        var groupFiles = Directory.GetFiles(modRoot, "group_*.json")
+                                  .Select(f => (Path: f, Name: Path.GetFileName(f)))
+                                  .OrderBy(f => f.Name, StringComparer.OrdinalIgnoreCase)
+                                  .ToList();
+        var groups = new System.Text.Json.Nodes.JsonArray();
+        foreach (var (path, name) in groupFiles)
+        {
+            if (ParseObject(path) is not { } group)
+                throw new MigrationRefusedException("migration-failed", $"{name} is not a group");
+            group.Remove("Version");
+            groups.Add(group);
+        }
+        var defaultData = new System.Text.Json.Nodes.JsonObject
+        {
+            ["Files"] = new System.Text.Json.Nodes.JsonObject(),
+            ["FileSwaps"] = new System.Text.Json.Nodes.JsonObject(),
+            ["Manipulations"] = new System.Text.Json.Nodes.JsonArray(),
+        };
+        string legacy = Path.Combine(modRoot, LegacyDefaultMod);
+        if (File.Exists(legacy))
+        {
+            if (ParseObject(legacy) is not { } old)
+                throw new MigrationRefusedException("migration-failed", $"{LegacyDefaultMod} could not be read");
+            if (old["Files"] is System.Text.Json.Nodes.JsonObject files) defaultData["Files"] = files.DeepClone();
+            if ((old["FileSwaps"] ?? old["Swaps"]) is System.Text.Json.Nodes.JsonObject swaps)
+                defaultData["FileSwaps"] = swaps.DeepClone();
+            if (old["Manipulations"] is System.Text.Json.Nodes.JsonArray manipulations)
+                defaultData["Manipulations"] = manipulations.DeepClone();
+        }
+
+        // ── one write ──
+        var root = new System.Text.Json.Nodes.JsonObject { ["FileVersion"] = SingleFileVersion };
+        root["Identifier"] = manifest.TryGetValue("Identifier", out var id) && id.ValueKind == JsonValueKind.String
+            ? id.GetString()
+            : Guid.NewGuid().ToString();
+        foreach (var (key, value) in manifest)
+            if (key is not ("FileVersion" or "Identifier" or "Groups" or "DefaultData"))
+                root[key] = System.Text.Json.Nodes.JsonNode.Parse(value.GetRawText());
+        root["Groups"] = groups;
+        root["DefaultData"] = defaultData;
+        AtomicWrite(Path.Combine(modRoot, MetaFile), root.ToJsonString(WriteOptions));
+
+        // ── only then the v3 files ──
+        var leftover = new List<string>();
+        foreach (string path in groupFiles.Select(f => f.Path).Append(legacy).Where(File.Exists))
+            try { File.Delete(path); }
+            catch (Exception e) when (e is IOException or UnauthorizedAccessException) { leftover.Add(Path.GetFileName(path)); }
+        SweepAtomicTemps(modRoot);
+        return new MigrationOutcome(from, groupFiles.Count, leftover);
+    }
+
+    private static System.Text.Json.Nodes.JsonObject? ParseObject(string path)
+    {
+        try { return System.Text.Json.Nodes.JsonNode.Parse(ReadSharedText(path, ReadRetries)) as System.Text.Json.Nodes.JsonObject; }
+        catch (Exception e) when (e is JsonException or IOException or UnauthorizedAccessException) { return null; }
+    }
+
+    /// <summary>Whether <paramref name="path"/> is <paramref name="root"/> or inside it, ignoring case.</summary>
+    internal static bool IsAtOrUnder(string path, string root)
+    {
+        string p = Path.TrimEndingDirectorySeparator(Path.GetFullPath(path));
+        string r = Path.TrimEndingDirectorySeparator(Path.GetFullPath(root));
+        // A drive or share root keeps its separator ("E:\"): everything on it starts with that, not with "E:\\".
+        string prefix = r.EndsWith(Path.DirectorySeparatorChar) ? r : r + Path.DirectorySeparatorChar;
+        return string.Equals(p, r, StringComparison.OrdinalIgnoreCase)
+            || p.StartsWith(prefix, StringComparison.OrdinalIgnoreCase);
     }
 
     /// <summary>

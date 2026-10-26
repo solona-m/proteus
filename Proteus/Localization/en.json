@@ -5283,9 +5283,9 @@
     "message": "the racial deformer does not know how to move {0}",
     "description": "Reason (lowercase sentence fragment) why a hairstyle could not be ported to another race; shown after a race or file name and a colon. {0} is a bone or part name."
   },
-  "HairPort.Refused.Fit.Fmt": {
-    "message": "it does not sit on c{0:D4}'s head: {1:P0} of it sinks into the skull, and its distance from the scalp is {2:F0} mm off the original's",
-    "description": "Reason (lowercase sentence fragment) why a hairstyle could not be ported to another race; shown after a race or file name and a colon. {0} race code number, {1} fraction sunk into the skull, {2} millimetres."
+  "HairPort.Fit.Fmt": {
+    "message": "it does not sit on c{0:D4}'s head: {1:P0} of it sinks into the skull, and its distance from the scalp is {2:F0} mm off the original's; check it in game",
+    "description": "A hair port saved with a warning (lowercase sentence fragment): ported to another race, it does not sit on that race's head; shown after a race or file name and a colon. {0} race code number, {1} fraction sunk into the skull, {2} millimetres."
   },
   "HairPort.Refused.NotHair": {
     "message": "it is not a hairstyle model",
