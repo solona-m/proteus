@@ -42,7 +42,8 @@ responsibility.
    into `test` locally only after a passing `code-critic` review of the current
    commit — no unresolved critical issues. Any commit made after the review
    requires a re-review. There is no pre-push hook; never `git push` or open a
-   PR unless the user asks.
+   PR unless the user asks. Dependabot and contributor PRs are the exception:
+   they are reviewed and merged on GitHub (see `.github/dependabot.yml`).
 
 5. **Every build meant for the game is loadable there.** Bump
    `Plugin.BuildNumber`, build Release, and copy the output to
