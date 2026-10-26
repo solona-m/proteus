@@ -1,0 +1,79 @@
+# Dependabot version updates. Every PR targets `test`, never `main` (the release branch).
+#
+# GitHub reads this file from the DEFAULT branch only, which is `main`: nothing here takes effect until
+# `test` is next merged into `main`. After that merge, check Insights -> Dependency graph -> Dependabot
+# that each ecosystem's update job succeeded.
+#
+# Dependabot PRs get no CI build (test.yml runs on main only), and their commits are authored by
+# dependabot[bot], which the repo's commit rule (authored by Solona) does not allow. So a Dependabot PR
+# is never merged as-is. Re-apply it instead, one git command per call, in its own worktree on a
+# feature branch off test (after git submodule update --init --recursive there):
+#   1. git fetch origin <dependabot-branch>
+#   2. git diff --name-only test...FETCH_HEAD
+#   3. Files (nuget, npm, github-actions): git checkout FETCH_HEAD -- <path>, once per listed path.
+#      That takes Dependabot's whole file; if test has newer edits to it, edit the version by hand.
+#   4. Submodules (Glamourer, Penumbra.Api): read the new SHA from git diff test...FETCH_HEAD -- <submodule>,
+#      then git -C <submodule> fetch, git -C <submodule> checkout <new sha>, git add <submodule>.
+#      (git checkout FETCH_HEAD -- <submodule> moves the gitlink but leaves the submodule's files stale.)
+#   5. git diff --cached must show only the expected change (a Subproject commit pair for a submodule).
+#      Commit it as a new commit authored by Solona.
+#   6. Bump Plugin.BuildNumber as its own commit, build Release and copy to the game path (Rule 5). A
+#      NuGet bump regenerates Proteus/packages.lock.json there; commit that too.
+#   7. Targeted tests (SupplyChainTests plus the area touched), a code-critic review, merge locally into
+#      test, push.
+#   8. The push does not close the PR (its commits never reach test). Dependabot closes it as superseded
+#      on its next run, or close it by hand.
+#
+# Security-update PRs (Settings -> Code security) stay off: GitHub always opens them against main.
+
+version: 2
+updates:
+  - package-ecosystem: nuget
+    # Each repo-owned project, listed explicitly: the solution also lists the submodule projects, and
+    # omits Proteus.Tests and Proteus.Refit.
+    directories:
+      - "/Proteus"
+      - "/Proteus.Refit"
+      - "/Proteus.Tests"
+      - "/XivLiveMesh"
+    target-branch: "test"
+    schedule:
+      interval: weekly
+    ignore:
+      # The Dalamud SDK (global.json) is tied to DalamudApiLevel and is bumped by hand with the game;
+      # the other two are injected by that SDK and versioned with it.
+      - dependency-name: "Dalamud.NET.Sdk"
+      - dependency-name: "DalamudPackager"
+      - dependency-name: "DotNet.ReproducibleBuilds"
+    groups:
+      nuget-minor-patch:
+        update-types: [ minor, patch ]
+
+  - package-ecosystem: npm
+    directory: "/worker"
+    target-branch: "test"
+    schedule:
+      interval: weekly
+    # worker/ deliberately has no lockfile, so a PR that only raises a ^ floor changes nothing at deploy
+    # time. increase-if-necessary proposes only versions outside the range, i.e. majors.
+    versioning-strategy: increase-if-necessary
+    groups:
+      npm-minor-patch:
+        update-types: [ minor, patch ]
+
+  - package-ecosystem: github-actions
+    directory: "/"
+    target-branch: "test"
+    schedule:
+      interval: weekly
+    groups:
+      actions-minor-patch:
+        update-types: [ minor, patch ]
+
+  - package-ecosystem: gitsubmodule
+    directory: "/"
+    target-branch: "test"
+    schedule:
+      interval: weekly
+    # Glamourer tracks its testing branch and each IPC bump needs checking in game: one open PR at a time.
+    open-pull-requests-limit: 1

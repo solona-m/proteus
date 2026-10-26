@@ -4,7 +4,7 @@
     "net10.0-windows7.0": {
       "BCnEncoder.Net": {
         "type": "Direct",
-        "requested": "[2.*, )",
+        "requested": "[2.3.0, )",
         "resolved": "2.3.0",
         "contentHash": "DJhHJiBJKXUXxlkkrv74ckzJb3wYxqIAZHjXD9G76kpsD0YyJOmqtNufHWEuJe0eH0tB1tCZn80/3JV2UVP7yQ==",
         "dependencies": {
@@ -19,7 +19,7 @@
       },
       "CommunityToolkit.HighPerformance": {
         "type": "Direct",
-        "requested": "[8.*, )",
+        "requested": "[8.4.2, )",
         "resolved": "8.4.2",
         "contentHash": "2hmtrrU18x6NL3mbuAqwy0KpnoEEJOuK6sH5RKQfD/jHijn2pqvqBUC7WGy9dgNBL9BDA7eOC0kirsNPMp2f4Q=="
       },
@@ -37,7 +37,7 @@
       },
       "StbImageSharp": {
         "type": "Direct",
-        "requested": "[2.*, )",
+        "requested": "[2.30.16, )",
         "resolved": "2.30.16",
         "contentHash": "qg1i+NHihXVKLKYacGKrauhSQIGL31eBWcTC4Vc7jnGmBFj87LkRuCdXB5aDZisWMRnB6x2mcfwYXQxMWEG/lw=="
       },
