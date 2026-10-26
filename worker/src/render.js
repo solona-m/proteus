@@ -121,10 +121,11 @@ export function githubSlug(text) {
 }
 
 /**
- * Tags dropped until none are left. One pass is enough for marked's own output — its text never holds a
- * bare `<` — but a single pass over `<<b>b>` would leave `<b>` behind, so it repeats to a fixed point.
+ * Tags dropped until none are left. One pass of this pattern already leaves no `<…>` behind (each match runs
+ * from the first `<` to the next `>`), but repeating to a fixed point makes that hold by construction rather
+ * than by that argument — and is the form CodeQL's js/incomplete-multi-character-sanitization accepts.
  */
-const stripTags = (html) => {
+export const stripTags = (html) => {
   let prev;
   do { prev = html; html = html.replace(/<[^>]*>/g, ''); } while (html !== prev);
   return html;

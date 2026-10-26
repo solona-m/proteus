@@ -27,6 +27,9 @@ updates:
     target-branch: "test"
     schedule:
       interval: weekly
+    # A version is proposed only once it has been public for 3 days: most hijacked releases are pulled by then.
+    cooldown:
+      default-days: 3
     ignore:
       # The Dalamud SDK (global.json) is tied to DalamudApiLevel and is bumped by hand with the game;
       # the other two are injected by that SDK and versioned with it.
@@ -42,6 +45,9 @@ updates:
     target-branch: "test"
     schedule:
       interval: weekly
+    # A version is proposed only once it has been public for 3 days: most hijacked releases are pulled by then.
+    cooldown:
+      default-days: 3
     # worker/ deliberately has no lockfile, so a PR that only raises a ^ floor changes nothing at deploy
     # time. increase-if-necessary proposes only versions outside the range, i.e. majors.
     versioning-strategy: increase-if-necessary
@@ -54,6 +60,9 @@ updates:
     target-branch: "test"
     schedule:
       interval: weekly
+    # A version is proposed only once it has been public for 3 days: most hijacked releases are pulled by then.
+    cooldown:
+      default-days: 3
     groups:
       actions-minor-patch:
         update-types: [ minor, patch ]
@@ -63,5 +72,8 @@ updates:
     target-branch: "test"
     schedule:
       interval: weekly
+    # A version is proposed only once it has been public for 3 days: most hijacked releases are pulled by then.
+    cooldown:
+      default-days: 3
     # Glamourer tracks its testing branch and each IPC bump needs checking in game: one open PR at a time.
     open-pull-requests-limit: 1

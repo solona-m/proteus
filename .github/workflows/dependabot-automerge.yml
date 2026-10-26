@@ -5,9 +5,12 @@ name: Dependabot auto-merge
 # in-game check) are left open for a person. Nothing here releases anything: a merge into test is not
 # a release, and the merge itself, made with the workflow token, starts no other workflow.
 #
-# pull_request, not pull_request_target: the PR's code runs with a token scoped to this workflow, and
-# only the merge job — which runs no PR code — can write. Every job is gated on the PR's author being
-# Dependabot, so other PRs into test run nothing here.
+# pull_request, not pull_request_target, and every job gated on the PR's author being Dependabot. Only the
+# merge job can write, and it runs no action at all — just gh from the runner image. That matters because
+# on a pull_request the workflow runs as the PR has it, and Dependabot's github-actions PRs rewrite the
+# uses: lines here: an action in the writing job would run whatever version the PR picked, with the write
+# token. fetch-metadata therefore runs in its own read-only job. The merge names the commit that was
+# tested, and a newer push to the PR cancels the older run.
 
 on:
   pull_request:
@@ -15,6 +18,10 @@ on:
 
 permissions:
   contents: read
+
+concurrency:
+  group: dependabot-automerge-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
 
 jobs:
   test:
@@ -46,23 +53,34 @@ jobs:
       - name: Test
         run: dotnet test Proteus.Tests/Proteus.Tests.csproj -c Release
 
-  merge:
-    needs: test
+  meta:
     if: github.event.pull_request.user.login == 'dependabot[bot]'
     runs-on: ubuntu-latest
     permissions:
-      contents: write
-      pull-requests: write
+      contents: read
+      pull-requests: read
+    outputs:
+      update-type: ${{ steps.meta.outputs.update-type }}
+      package-ecosystem: ${{ steps.meta.outputs.package-ecosystem }}
     steps:
       - name: Read the update
         id: meta
         uses: dependabot/fetch-metadata@25dd0e34f4fe68f24cc83900b1fe3fe149efef98 # v3.1.0
 
-      # Only an explicit minor or patch merges. A submodule bump has no semver update type, so it never
-      # matches; neither does a major, nor a grouped PR holding one.
-      - name: Merge a minor or patch update
-        if: contains(fromJSON('["version-update:semver-minor", "version-update:semver-patch"]'), steps.meta.outputs.update-type)
+  # Only an explicit minor or patch merges: a major, or a grouped PR holding one, never matches. Submodule
+  # bumps (Glamourer, Penumbra.Api) are excluded by name as well as by their lack of a semver update type:
+  # an IPC change needs an in-game check.
+  merge:
+    needs: [ test, meta ]
+    if: github.event.pull_request.user.login == 'dependabot[bot]' && contains(fromJSON('["version-update:semver-minor", "version-update:semver-patch"]'), needs.meta.outputs.update-type) && needs.meta.outputs.package-ecosystem != 'submodules' && !startsWith(github.head_ref, 'dependabot/submodules/')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
+    steps:
+      - name: Merge the tested commit
         env:
           PR_URL: ${{ github.event.pull_request.html_url }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
           GH_TOKEN: ${{ github.token }}
-        run: gh pr merge "$PR_URL" --merge
+        run: gh pr merge "$PR_URL" --merge --match-head-commit "$HEAD_SHA"
