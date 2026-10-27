@@ -4411,6 +4411,14 @@
     "message": "뒤집힌 면 {0}개, 체형 대응 {1}.",
     "description": "{0} is a count of folded (turned-over) faces; {1} a percentage such as \"97%\"."
   },
+  "Parts.Retarget.Race.ReplacesGame.Fmt": {
+    "message": "게임에는 이 아이템의 {0} 모델이 따로 있습니다. 저장하면 새 모드가 켜져 있는 동안, 게임의 {0} 모델을 입은 것으로 보이는 모든 캐릭터에서 이 리핏이 그 모델을 대신합니다. 게임 모델로 되돌리려면 그 모드에서 “Original”을 고르거나 모드를 끄세요.",
+    "description": "Warning under “Refit for” for the game's own gear. {0} is the race picked, such as \"Midlander M\". “Original” is the literal name of the option Proteus writes into the new mod; keep it in English."
+  },
+  "Parts.Retarget.Race.CharacterKeepsGame.Fmt": {
+    "message": "내 캐릭터는 {0}이고, 게임에는 이 아이템의 {0} 모델이 따로 있습니다. 이 리핏은 내 캐릭터에게는 보이지 않습니다.",
+    "description": "Warning for the game's own gear refitted for another race. {0} is the race of the character playing, such as \"Highlander M\"."
+  },
   "Parts.Retarget.Race.CrossSexHint.Fmt": {
     "message": "{0}용 버전을 만들려면 “리핏 대상 종족”에서 고르세요.",
     "description": "{0} is a race such as \"Midlander M\". “Refit for” is the dropdown's label (Parts.Retarget.Race.Label)."

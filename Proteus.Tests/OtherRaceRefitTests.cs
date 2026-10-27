@@ -402,7 +402,8 @@ public class OtherRaceRefitTests
     [Fact]
     [Trait("Plan", "EDGE-refit-other-race-4")]
     [Trait("Plan", "EDGE-refit-other-race-8")]
-    public void No_row_where_no_other_race_has_a_body_nor_for_the_game_s_gear()
+    [Trait("Plan", "AC-vanilla-cross-sex-legs-6")]
+    public void No_row_where_no_other_race_has_a_body_nor_for_the_game_s_gear() // [AC-vanilla-cross-sex-legs-6]
     {
         Assert.Empty(Offered("chara/equipment/e6091/model/c0101e6091_dwn.mdl", TbseX()));
         Assert.Empty(OtherRaceRefit.Offered(Shirt, TbseX(), OnlyMidlander, null, isVanilla: true));
@@ -591,7 +592,8 @@ public class OtherRaceRefitTests
 
     [Fact]
     [Trait("Plan", "EDGE-refit-race-down-14")]
-    public void No_row_below_for_the_game_s_gear()
+    [Trait("Plan", "AC-vanilla-cross-sex-legs-6")]
+    public void No_row_below_for_the_game_s_gear() // [AC-vanilla-cross-sex-legs-6]
         => Assert.Empty(OtherRaceRefit.Offered(HighlanderShirt, TbseX(), OnlyHighlander, null, isVanilla: true));
 
     [Fact]
@@ -686,4 +688,159 @@ public class OtherRaceRefitTests
         var entries = OtherRaceRefit.PickerEntries(automatic, 101, offered);
         Assert.Equal(OtherRaceRefit.EntryKind.ThisModel, OtherRaceRefit.Current(entries, 0, automatic, 101).Kind);
     }
+
+    // ── the game's own women's legs made men's (vanilla-cross-sex-legs) ─────
+
+    private const string Pantaloons = "chara/equipment/e6224/model/c0201e6224_dwn.mdl";
+    private const string MensPantaloons = "chara/equipment/e6224/model/c0101e6224_dwn.mdl";
+
+    private static readonly RacialModelBake.Route Across101 = new(201, 101, Down: false, Lowered: true) { ByAlias = true };
+
+    private static IReadOnlyList<OtherRaceRefit.Candidate> Game(string path, BodySizeCatalog target,
+                                                                Func<string, bool>? gameHas = null)
+        => OtherRaceRefit.Offered(path, target, [], null, isVanilla: true, gameHas);
+
+    [Fact]
+    [Trait("Plan", "AC-vanilla-cross-sex-legs-1")]
+    public void Vanilla_womens_legs_are_offered_midlander_men_on_tbse() // [AC-vanilla-cross-sex-legs-1]
+    {
+        var offered = Game(Pantaloons, TbseX());
+        var men = Assert.Single(offered);
+        Assert.Equal(101, men.Race);
+        Assert.True(men.CrossSex);
+        Assert.True(men.Below);
+        Assert.Equal(OtherRaceRefit.Block.None, men.Blocked);
+
+        var entries = OtherRaceRefit.PickerEntries(RacialModelBake.Route.None, 201, offered);
+        Assert.Contains(entries, e => e.Race == 201 && e.Kind == OtherRaceRefit.EntryKind.ThisModel);
+        Assert.Contains(entries, e => e.Race == 101 && e.Kind == OtherRaceRefit.EntryKind.OtherSex);
+        Assert.Equal(Across101, OtherRaceRefit.Resolve(RacialModelBake.Route.None, 101, 201, offered));
+        Assert.True(OtherRaceRefit.InForce(101, 201, offered));
+    }
+
+    [Fact]
+    [Trait("Plan", "AC-vanilla-cross-sex-legs-2")]
+    public void The_no_bodies_hint_names_midlander_men_for_vanilla_legs() // [AC-vanilla-cross-sex-legs-2]
+    {
+        var hint = OtherRaceRefit.CrossSexHint(Game(Pantaloons, TbseX()));
+        Assert.Equal((ushort)101, hint?.Race);
+        Assert.Null(OtherRaceRefit.CrossSexHint([]));
+        Assert.Contains("Midlander", string.Format(Localization.Strings.Parts.RetargetRaceCrossSexHintFmt,
+                                                   ModelRace.Describe($"{hint!.Race:D4}")));
+    }
+
+    [Fact]
+    [Trait("Plan", "AC-vanilla-cross-sex-legs-4")]
+    public void A_vanilla_cross_sex_pick_saves_at_the_c0101_path() // [AC-vanilla-cross-sex-legs-4]
+    {
+        var route = OtherRaceRefit.Resolve(RacialModelBake.Route.None, 101, 201, Game(Pantaloons, TbseX()));
+        Assert.Equal(MensPantaloons, route.SavePath(Pantaloons));
+        Assert.NotNull(route.Eqdp(route.SavePath(Pantaloons)));
+        Assert.EndsWith($"({ModelRace.Describe("0101")})", OtherRaceRefit.OptionName("The Body SE — SFW", 101));
+    }
+
+    [Fact]
+    [Trait("Plan", "AC-vanilla-cross-sex-legs-5")]
+    public void A_vanilla_pick_says_it_replaces_the_game_model() // [AC-vanilla-cross-sex-legs-5]
+    {
+        var offered = Game(Pantaloons, TbseX(), p => p == MensPantaloons);
+        Assert.Equal(MensPantaloons, Assert.Single(offered).GameModelPath);
+        Assert.Equal(MensPantaloons, OtherRaceRefit.ReplacesGame(101, offered)?.GameModelPath);
+        Assert.Null(OtherRaceRefit.ReplacesGame(0, offered));
+        Assert.Null(OtherRaceRefit.ReplacesGame(201, offered));
+    }
+
+    [Fact]
+    [Trait("Plan", "AC-vanilla-cross-sex-legs-8")]
+    [Trait("Plan", "EDGE-vanilla-cross-sex-legs-16")]
+    public void A_man_whose_race_keeps_the_game_model_is_warned() // [AC-vanilla-cross-sex-legs-8] [EDGE-vanilla-cross-sex-legs-16]
+    {
+        IReadOnlyList<ushort> wearers = [701, 1101];
+        Assert.True(OtherRaceRefit.MissesCharacter(301, Across101, wearers));
+        Assert.False(OtherRaceRefit.MissesCharacter(101, Across101, wearers));
+        Assert.False(OtherRaceRefit.MissesCharacter(701, Across101, wearers));
+        Assert.False(OtherRaceRefit.MissesCharacter(201, Across101, wearers));
+        Assert.False(OtherRaceRefit.MissesCharacter(801, Across101, wearers));
+        Assert.False(OtherRaceRefit.MissesCharacter(0, Across101, wearers));
+    }
+
+    [Fact]
+    [Trait("Plan", "EDGE-vanilla-cross-sex-legs-1")]
+    public void Vanilla_womens_top_is_not_offered() // [EDGE-vanilla-cross-sex-legs-1]
+    {
+        var offered = Game("chara/equipment/e6224/model/c0201e6224_top.mdl", TbseX());
+        Assert.Empty(offered);
+        Assert.Null(OtherRaceRefit.CrossSexHint(offered));
+    }
+
+    [Fact]
+    [Trait("Plan", "EDGE-vanilla-cross-sex-legs-2")]
+    public void Vanilla_mens_legs_are_not_offered_women() // [EDGE-vanilla-cross-sex-legs-2]
+        => Assert.Empty(Game(MensPantaloons, new BodySizeCatalog("root", [Body("0201", "_dwn", "Bibo")])));
+
+    [Theory]
+    [InlineData("1401")]
+    [InlineData("0401")]
+    [Trait("Plan", "EDGE-vanilla-cross-sex-legs-3")]
+    public void Other_womens_race_vanilla_legs_are_not_offered(string race) // [EDGE-vanilla-cross-sex-legs-3]
+        => Assert.Empty(Game($"chara/equipment/e6224/model/c{race}e6224_dwn.mdl", TbseX()));
+
+    [Fact]
+    [Trait("Plan", "EDGE-vanilla-cross-sex-legs-4")]
+    public void Vanilla_legs_never_get_a_same_sex_race() // [EDGE-vanilla-cross-sex-legs-4]
+        => Assert.Equal([101], Game(Pantaloons, TbseX(Body("0401", "_dwn", "F Highlander"))).Select(c => (int)c.Race));
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    [Trait("Plan", "EDGE-vanilla-cross-sex-legs-5")]
+    public void No_game_model_no_replace_note(bool asked) // [EDGE-vanilla-cross-sex-legs-5]
+    {
+        var offered = Game(Pantaloons, TbseX(), asked ? _ => false : null);
+        Assert.Null(Assert.Single(offered).GameModelPath);
+        Assert.Null(OtherRaceRefit.ReplacesGame(101, offered));
+    }
+
+    [Fact]
+    [Trait("Plan", "EDGE-vanilla-cross-sex-legs-6")]
+    public void No_mens_legs_no_vanilla_offer() // [EDGE-vanilla-cross-sex-legs-6]
+        => Assert.Empty(Game(Pantaloons, new BodySizeCatalog("root", [Body("0101", "_top", "M")])));
+
+    [Fact]
+    [Trait("Plan", "EDGE-vanilla-cross-sex-legs-10")]
+    public void A_vanilla_pick_falls_back_when_the_body_mod_has_no_men() // [EDGE-vanilla-cross-sex-legs-10]
+    {
+        var offered = Game(Pantaloons, new BodySizeCatalog("root", [Body("0201", "_dwn", "Bibo")]), _ => true);
+        Assert.Empty(offered);
+        Assert.Equal(RacialModelBake.Route.None, OtherRaceRefit.Resolve(RacialModelBake.Route.None, 101, 201, offered));
+        Assert.Null(OtherRaceRefit.ReplacesGame(101, offered));
+    }
+
+    [Fact]
+    [Trait("Plan", "EDGE-vanilla-cross-sex-legs-13")]
+    public void The_preview_on_a_woman_says_it_is_bent_onto_her() // [EDGE-vanilla-cross-sex-legs-13]
+        => Assert.Equal(OtherRaceRefit.PreviewNote.OtherRace, OtherRaceRefit.NoteFor(true, 201, 101));
+
+    [Fact]
+    [Trait("Plan", "EDGE-vanilla-cross-sex-legs-14")]
+    public void Modded_offers_are_unchanged() // [EDGE-vanilla-cross-sex-legs-14]
+    {
+        foreach (var (path, target, redirects) in new[]
+                 {
+                     (Shirt, TbseX(), OnlyMidlander),
+                     (HighlanderShirt, TbseX(Body("0201", "_top", "F")), OnlyHighlander),
+                     (Pantaloons, TbseX(), Array.Empty<PenumbraModMeta.Redirect>()),
+                 })
+        {
+            var before = OtherRaceRefit.Offered(path, target, redirects, null, isVanilla: false);
+            var asked = OtherRaceRefit.Offered(path, target, redirects, null, isVanilla: false, _ => true);
+            Assert.Equal(before, asked);
+            Assert.All(asked, c => Assert.Null(c.GameModelPath));
+        }
+    }
+
+    [Fact]
+    [Trait("Plan", "EDGE-vanilla-cross-sex-legs-15")]
+    public void A_man_with_the_womens_model_open_sees_the_not_drawn_note() // [EDGE-vanilla-cross-sex-legs-15]
+        => Assert.Equal(OtherRaceRefit.PreviewNote.NotDrawn, OtherRaceRefit.NoteFor(false, 101, 101));
 }

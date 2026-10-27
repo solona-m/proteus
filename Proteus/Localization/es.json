@@ -4411,6 +4411,14 @@
     "message": "{0} caras dobladas; {1} del cuerpo emparejado.",
     "description": "{0} is a count of folded (turned-over) faces; {1} a percentage such as \"97%\"."
   },
+  "Parts.Retarget.Race.ReplacesGame.Fmt": {
+    "message": "El juego tiene su propio modelo {0} de este objeto. Una vez guardado, este ajuste lo sustituye para todos los que veas llevando el modelo {0} del juego mientras el nuevo mod esté activado. Elige «Original» en ese mod, o desactívalo, para recuperar el del juego.",
+    "description": "Warning under “Refit for” for the game's own gear. {0} is the race picked, such as \"Midlander M\". “Original” is the literal name of the option Proteus writes into the new mod; keep it in English."
+  },
+  "Parts.Retarget.Race.CharacterKeepsGame.Fmt": {
+    "message": "Tu personaje es {0}, y el juego tiene su propio modelo {0} de este objeto: este ajuste no se verá en tu personaje.",
+    "description": "Warning for the game's own gear refitted for another race. {0} is the race of the character playing, such as \"Highlander M\"."
+  },
   "Parts.Retarget.Race.CrossSexHint.Fmt": {
     "message": "Para hacer una versión para {0}, elígelo en «Ajustar para».",
     "description": "{0} is a race such as \"Midlander M\". “Refit for” is the dropdown's label (Parts.Retarget.Race.Label)."

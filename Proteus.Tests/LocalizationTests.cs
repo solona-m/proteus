@@ -752,14 +752,16 @@ public sealed class LocalizationTests
     [Trait("Plan", "AC-refit-other-race-1")]
     [Trait("Plan", "AC-refit-other-race-9")]
     [Trait("Plan", "AC-refit-race-down-9")]
-    public void RefitOtherRace_strings_are_translated_not_copied(string lang)
+    [Trait("Plan", "AC-vanilla-cross-sex-legs-7")]
+    public void RefitOtherRace_strings_are_translated_not_copied(string lang) // [AC-vanilla-cross-sex-legs-7]
     {
         var en = Load(Source);
         var tr = Load(lang);
         var keys = en.Keys.Where(k => k.StartsWith("Parts.Retarget.Race.", StringComparison.Ordinal)).ToList();
-        // 23, cross-sex-refit's five (OtherSex, CrossSexNote, CrossSexWears, CrossSexQuality, CrossSexHint) and
-        // cross-sex-tops-yas's four (CrossSexFolded, BonesMoved, NeedsSkeleton, RenameFailed)
-        Assert.Equal(32, keys.Count);
+        // 23, cross-sex-refit's five (OtherSex, CrossSexNote, CrossSexWears, CrossSexQuality, CrossSexHint),
+        // cross-sex-tops-yas's four (CrossSexFolded, BonesMoved, NeedsSkeleton, RenameFailed) and
+        // vanilla-cross-sex-legs's two (ReplacesGame, CharacterKeepsGame)
+        Assert.Equal(34, keys.Count);
         foreach (string key in keys)
         {
             Assert.True(tr.ContainsKey(key), $"[{lang}] has no {key}");
@@ -923,7 +925,8 @@ public sealed class LocalizationTests
     [MemberData(nameof(Translations))]
     [Trait("Plan", "AC-cross-sex-refit-9")]
     [Trait("Plan", "AC-cross-sex-tops-yas-10")]
-    public void Cross_sex_strings_exist_and_are_translated_in_every_locale(string lang) // [AC-cross-sex-refit-9] [AC-cross-sex-tops-yas-10]
+    [Trait("Plan", "AC-vanilla-cross-sex-legs-7")]
+    public void Cross_sex_strings_exist_and_are_translated_in_every_locale(string lang) // [AC-cross-sex-refit-9] [AC-cross-sex-tops-yas-10] [AC-vanilla-cross-sex-legs-7]
     {
         var en = Load(Source);
         var tr = Load(lang);
@@ -940,6 +943,7 @@ public sealed class LocalizationTests
                      "Parts.Retarget.Race.CrossSexFolded.Fmt", "Parts.Retarget.Race.BonesMoved.Fmt",
                      "Parts.Retarget.Race.NeedsSkeleton.Fmt", "Parts.Retarget.Race.RenameFailed.Fmt",
                      "HairPort.Folded.Fmt", "HairPort.Scan.State.FittedWarn.Fmt",
+                     "Parts.Retarget.Race.ReplacesGame.Fmt", "Parts.Retarget.Race.CharacterKeepsGame.Fmt",
                  })
         {
             Assert.True(tr.ContainsKey(key), $"[{lang}] has no {key}");
@@ -980,6 +984,51 @@ public sealed class LocalizationTests
             Assert.Contains("never refused for folded faces", readme);
             Assert.Contains("partly inside out is still fitted", readme);
         }
+    }
+
+    /// <summary>The game's own model replaced, and the character who keeps it: one race, the option named as written.</summary>
+    [Theory]
+    [MemberData(nameof(AllLocales))]
+    [Trait("Plan", "AC-vanilla-cross-sex-legs-5")]
+    public void ReplacesGame_and_CharacterKeepsGame_format_with_a_race(string lang) // [AC-vanilla-cross-sex-legs-5]
+    {
+        var strings = Load(lang);
+        foreach (string key in new[] { "Parts.Retarget.Race.ReplacesGame.Fmt", "Parts.Retarget.Race.CharacterKeepsGame.Fmt" })
+        {
+            string message = strings[key].Message;
+            Assert.Contains("{0}", message);
+            Assert.DoesNotContain("{1}", message);
+            Assert.Contains("Midlander M", string.Format(message, "Midlander M"));
+        }
+        Assert.Contains("Original", strings["Parts.Retarget.Race.ReplacesGame.Fmt"].Message);
+        if (lang == Source)
+        {
+            Assert.Equal("The game has its own {0} model of this item. Once saved, this refit replaces it for everyone you see "
+                         + "wearing the game's {0} model while the new mod is on. Choose “Original” in that mod, or turn it off, "
+                         + "to bring the game's back.", strings["Parts.Retarget.Race.ReplacesGame.Fmt"].Message);
+            Assert.Equal("Your character is {0}, and the game has a {0} model of this item of its own: this refit won't show "
+                         + "on your character.", strings["Parts.Retarget.Race.CharacterKeepsGame.Fmt"].Message);
+        }
+    }
+
+    /// <summary>Every README's cross-sex bullet says the game's own women's legs are refitted for men from its body.</summary>
+    [Theory]
+    [MemberData(nameof(AllLocales))]
+    [Trait("Plan", "AC-vanilla-cross-sex-legs-7")]
+    public void Readme_says_game_womens_legs_refit_for_men(string lang) // [AC-vanilla-cross-sex-legs-7]
+    {
+        var dir = new System.IO.DirectoryInfo(AppContext.BaseDirectory);
+        while (dir != null && !System.IO.File.Exists(System.IO.Path.Combine(dir.FullName, "proteus.slnx"))) dir = dir.Parent;
+        Assert.True(dir != null, $"Could not find proteus.slnx above {AppContext.BaseDirectory}.");
+        string readme = System.IO.File.ReadAllText(System.IO.Path.Combine(
+            dir!.FullName, lang == Source ? "README.md" : System.IO.Path.Combine("docs", $"README.{lang}.md")));
+        var strings = Load(lang);
+        string label = "**" + strings["Parts.Retarget.Race.Label"].Message + "**";
+        string vanilla = "**" + strings["Parts.Retarget.FromVanilla"].Message + "**";
+        string bullet = readme.Split('\n').Single(l => l.StartsWith("- ", StringComparison.Ordinal) && l.Contains(label)
+                                                       && l.Contains("bibo↔TBSE"));
+        Assert.Contains(vanilla, bullet);
+        if (lang == Source) Assert.Contains("women's legs only", bullet);
     }
 
     /// <summary>The size set's men's versions speak every language, in its own words, with the same placeholders.</summary>

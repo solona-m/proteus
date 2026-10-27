@@ -18,6 +18,9 @@ namespace Proteus.Services;
 /// bibo or the game's, a man's TBSE or the game's (<see cref="LayoutsPair"/>). The auto refit never crosses the sexes:
 /// it writes into mods with nobody looking. The size set does, women's to TBSE and TBSE-X only, when the author ticks
 /// those bodies "for men" (see <c>SizeSetRefit.CrossSex.cs</c>), into a group of their own.
+/// <para/>
+/// The game's own gear crosses the sexes in fewer cells (<see cref="OfferableForGame"/>): women's legs made men's, from
+/// the game's women's body, measured on the game's own garments (CrossSexRefitVanillaLocalTests).
 /// </summary>
 internal static class CrossSexRefit
 {
@@ -25,7 +28,8 @@ internal static class CrossSexRefit
 
     /// <summary>
     /// The directions and slots that ship: each was measured against the quality gates on a real garment
-    /// (CrossSexRefitLocalTests). A cell left out is not offered anywhere.
+    /// (CrossSexRefitLocalTests). A cell left out is not offered anywhere; the game's own gear is offered fewer still
+    /// (<see cref="GameCells"/>).
     /// <para/>
     /// A women's top made a men's turns more of its cloth over than any other — flattening a bust onto a pec, Sheer
     /// Elegance's turned 115 of its 10,436 cloth faces, against 8 between women's bodies (measured 2026-10-20) — and is
@@ -48,6 +52,18 @@ internal static class CrossSexRefit
     /// <summary>Whether the other-sex race <paramref name="race"/> is offered for a garment drawn as <paramref name="drawn"/>.</summary>
     internal static bool Offerable(ushort drawn, ushort race, string? slot)
         => CrossesSex(drawn, race) && Supported(drawn, race, slot);
+
+    /// <summary>
+    /// The cells the game's own gear is offered in: women's legs made men's, alone. Each cell is measured on real
+    /// garments before it ships, and the game's tops and its men's garments made women's have not been — its garments are
+    /// weighted against the game's bodies, not a body mod's, and fit the other way round.
+    /// </summary>
+    private static readonly HashSet<(ushort From, ushort To, string Slot)> GameCells = [(Women, Men, "_dwn")];
+
+    /// <summary>Whether the other-sex race <paramref name="race"/> is offered for the game's own garment drawn as
+    /// <paramref name="drawn"/>: <see cref="Offerable"/>, in the narrower <see cref="GameCells"/>.</summary>
+    internal static bool OfferableForGame(ushort drawn, ushort race, string? slot)
+        => Offerable(drawn, race, slot) && GameCells.Contains((drawn, race, slot!.ToLowerInvariant()));
 
     /// <summary>Women's→men's: the picked race is one the drawn race falls through to (c0201 → c0101).</summary>
     internal static bool Below(ushort drawn, ushort race)
@@ -94,18 +110,23 @@ internal static class CrossSexRefit
     /// and which stops every chain through it. A c0101 save made from a c0201 model is worn by the men and by the
     /// Lalafell women (c1201 → c1101 → c0101), not by the women who fall through to c0201.
     /// </summary>
-    internal static IReadOnlyList<ushort> FallThroughTo(ushort saved, ushort drawn)
+    /// <param name="hasOwn">Whether a race has a model of its own of the item, for the game's gear, which ships many:
+    /// a race that has one — or passes one on its way down — draws that, not the save. Asked of each race and those
+    /// between it and <paramref name="saved"/>, never of <paramref name="saved"/> itself: the save is the model there.
+    /// Null for a mod's garment, whose other races' models stop the chain the same way they always have.</param>
+    internal static IReadOnlyList<ushort> FallThroughTo(ushort saved, ushort drawn, Func<ushort, bool>? hasOwn = null)
     {
         var races = new List<ushort>();
         for (int n = 1; n <= ModelRace.Names.Length * 2; n++)
         {
             ushort code = (ushort)(n * 100 + 1);
-            if (code == saved || code == drawn) continue;
+            if (code == saved || code == drawn || hasOwn?.Invoke(code) == true) continue;
             for (int cur = ModelRace.Fallback(n), guard = 0; cur != 0 && guard < 8; cur = ModelRace.Fallback(cur), guard++)
             {
                 int at = cur * 100 + 1;
                 if (at == drawn) break;
                 if (at == saved) { races.Add(code); break; }
+                if (hasOwn?.Invoke((ushort)at) == true) break;
             }
         }
         return races;
