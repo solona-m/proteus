@@ -494,7 +494,8 @@ public sealed partial class ContentImportService
 
     /// <summary>
     /// Every multi-select group in the copied pack comes in with nothing ticked, so an imported mod contributes only
-    /// what the user asks for. Single groups (which always have a selection), Imc and Combining groups are untouched.
+    /// what the user asks for — except what <see cref="KeptGroupDefaults"/> keeps. Single groups (which always have a
+    /// selection), Imc and Combining groups are untouched.
     /// </summary>
     private static void ClearMultiSelectDefaults(
         string root, ImportPreview preview, IPluginLog? log)
@@ -503,7 +504,7 @@ public sealed partial class ContentImportService
                           + "the mod puts pieces on the character before anyone asks for them";
 
         var pack = preview.Pack;
-        var keepOn = GatedGroupDefaults(preview);
+        var keepOn = KeptGroupDefaults(preview);
         void Clear(JsonObject group) => ClearGroupDefault(group, keepOn);
 
         if (pack.FileVersion >= PenumbraModMeta.SingleFileVersion)
@@ -588,6 +589,68 @@ public sealed partial class ContentImportService
         }
         return option.Swaps.All(Inside)
             && option.Manipulations.All(m => m.SetId is { } id && sets.Contains(id));
+    }
+
+    /// <summary>
+    /// Whether an option only switches parts of imported garments: it carries at least one <c>Imc</c> edit, every one of
+    /// them names an imported piece's item, it redirects no model, and everything else it does stays inside those
+    /// pieces' sets (<see cref="OnlyItsOwnPieces"/>) — a same-set <c>Eqp</c> beside the <c>Imc</c> is fine, another set's
+    /// edit or a global one is not. Such an option touches nothing the user did not import.
+    /// </summary>
+    internal static bool IsImcToggleOnly(PenumbraPackage.PackOption option, ImportPreview preview)
+    {
+        if (option.Imc.Count == 0
+            || option.Files.Keys.Any(p => p.EndsWith(".mdl", StringComparison.OrdinalIgnoreCase)))
+            return false;
+
+        var imported = preview.Units.Where(u => u.Import).ToList();
+        var carrying = new List<PieceUnit>();
+        foreach (var m in option.Imc)
+        {
+            char kind = string.Equals(m.ObjectType, "Equipment", StringComparison.OrdinalIgnoreCase) ? 'e'
+                      : string.Equals(m.ObjectType, "Accessory", StringComparison.OrdinalIgnoreCase) ? 'a' : '\0';
+            var label = ContentSlot.LabelForEquipSlot(m.EquipSlot);
+            var units = imported.Where(u => label != null
+                && string.Equals(u.Slot.Label, label, StringComparison.Ordinal)
+                && u.Slot.SetTag.Length > 1 && u.Slot.SetTag[0] == kind
+                && ContentSlot.SetIdOf(u.Slot.SetTag) == m.PrimaryId).ToList();
+            if (units.Count == 0) return false;
+            carrying.AddRange(units);
+        }
+        return OnlyItsOwnPieces(option, carrying.Distinct().ToList());
+    }
+
+    /// <summary>An option that does nothing at all: no files, swaps or manipulations — a toggle's "Show" side.</summary>
+    internal static bool IsEmptyOption(PenumbraPackage.PackOption option)
+        => option.Files.Count == 0 && option.Swaps.Count == 0 && option.Manipulations.Count == 0;
+
+    /// <summary>
+    /// Multi groups' default ticks on options that only switch imported parts (<see cref="IsImcToggleOnly"/>), as group
+    /// name → bitmask. Kept, since they are the pack's own choice of which parts show and touch nothing else.
+    /// </summary>
+    internal static IReadOnlyDictionary<string, int> ImcToggleDefaults(ImportPreview preview)
+    {
+        var result = new Dictionary<string, int>(StringComparer.Ordinal);
+        if (preview.InstallOnly) return result;
+        foreach (var group in preview.Pack.Groups)
+        {
+            if (!string.Equals(group.Type, "Multi", StringComparison.OrdinalIgnoreCase)) continue;
+            int mask = 0;
+            for (int i = 0; i < group.Options.Count && i < 32; i++)
+                if ((group.DefaultSettings & (1ul << i)) != 0 && IsImcToggleOnly(group.Options[i], preview))
+                    mask |= 1 << i;
+            if (mask != 0) result[group.Name] = mask;
+        }
+        return result;
+    }
+
+    /// <summary>The Multi defaults an import keeps: <see cref="GatedGroupDefaults"/> and <see cref="ImcToggleDefaults"/> together.</summary>
+    internal static IReadOnlyDictionary<string, int> KeptGroupDefaults(ImportPreview preview)
+    {
+        var result = new Dictionary<string, int>(GatedGroupDefaults(preview), StringComparer.Ordinal);
+        foreach (var (name, mask) in ImcToggleDefaults(preview))
+            result[name] = (result.TryGetValue(name, out var have) ? have : 0) | mask;
+        return result;
     }
 
     /// <summary>Zero one group's default selection, if it is a multi-select, unless <paramref name="keepOn"/> names it.</summary>
@@ -1136,30 +1199,80 @@ public sealed partial class ContentImportService
     /// settings by folder name and hands them to the next mod added under it, so re-importing into a name used before
     /// would otherwise inherit the old import's ticks, not these defaults: gated options left off, so each piece
     /// needed its author option ticked as well as its switch.
+    /// <para/>
+    /// <paramref name="sourceSelection"/> is the installed mod this import copies, as the user set it: its choices for
+    /// options that only switch imported parts (<see cref="IsImcToggleOnly"/>) replace the pack's defaults, in Multi
+    /// groups and in Single groups made only of such options and empty ones. A group it does not mention keeps the
+    /// defaults. Every name is emitted as the PACK spells it, and an unknown one is dropped: Penumbra matches options
+    /// exactly and rejects a whole group over one name it does not know.
     /// </summary>
-    internal static Dictionary<string, List<string>> ImportSelection(ImportPreview preview)
+    internal static Dictionary<string, List<string>> ImportSelection(
+        ImportPreview preview, IReadOnlyDictionary<string, List<string>>? sourceSelection = null)
     {
         var result = new Dictionary<string, List<string>>(StringComparer.Ordinal);
         if (preview.InstallOnly) return result;   // the author's own defaults, untouched
 
-        var keepOn = GatedGroupDefaults(preview);
+        var keepOn = KeptGroupDefaults(preview);
+        var gated = GatedGroupDefaults(preview);
         foreach (var group in preview.Pack.Groups)
         {
+            var source = SourceChoice(sourceSelection, group.Name);
+            if (string.Equals(group.Type, "Single", StringComparison.OrdinalIgnoreCase))
+            {
+                if (source is { Count: > 0 }
+                    && group.Options.All(o => IsEmptyOption(o) || IsImcToggleOnly(o, preview))
+                    && group.Options.Any(o => IsImcToggleOnly(o, preview))
+                    && group.Options.FirstOrDefault(o => string.Equals(o.Name, source[0], StringComparison.OrdinalIgnoreCase))
+                        is { } picked)
+                    result[group.Name] = [picked.Name];
+                continue;
+            }
             if (!string.Equals(group.Type, "Multi", StringComparison.OrdinalIgnoreCase)) continue;
-            result[group.Name] = keepOn.TryGetValue(group.Name, out var mask)
-                ? [.. group.Options.Where((_, i) => i < 32 && (mask & (1 << i)) != 0).Select(o => o.Name)]
-                : [];
+
+            int mask = keepOn.TryGetValue(group.Name, out var kept) ? kept : 0;
+            if (source != null)
+            {
+                mask = gated.TryGetValue(group.Name, out var g) ? g : 0;
+                for (int i = 0; i < group.Options.Count && i < 32; i++)
+                    if (source.Contains(group.Options[i].Name, StringComparer.OrdinalIgnoreCase)
+                        && IsImcToggleOnly(group.Options[i], preview))
+                        mask |= 1 << i;
+            }
+            result[group.Name] = [.. group.Options.Where((_, i) => i < 32 && (mask & (1 << i)) != 0).Select(o => o.Name)];
         }
         if (NeedsPieceGroup(preview)) result[preview.PieceGroupName!] = [];
         return result;
     }
 
-    private void ApplyImportSelection(Guid collectionId, string dirName, ImportPreview preview)
+    /// <summary>The source's choice for one group, matched by name case-insensitively as Penumbra matches groups; null when it has none.</summary>
+    private static List<string>? SourceChoice(IReadOnlyDictionary<string, List<string>>? selection, string group)
+    {
+        if (selection == null) return null;
+        foreach (var (name, options) in selection)
+            if (string.Equals(name, group, StringComparison.OrdinalIgnoreCase)) return options;
+        return null;
+    }
+
+    /// <summary>
+    /// The folder name of an installed mod being imported, when it sits directly in Penumbra's mod directory; null for a
+    /// <c>.pmp</c> or a folder elsewhere, whose settings Penumbra does not hold.
+    /// </summary>
+    internal static string? InstalledSourceDir(string sourcePath, bool isFolder, string? modsRoot)
+    {
+        if (!isFolder || string.IsNullOrEmpty(modsRoot) || string.IsNullOrEmpty(sourcePath)) return null;
+        var source = Path.TrimEndingDirectorySeparator(Path.GetFullPath(sourcePath));
+        var root = Path.TrimEndingDirectorySeparator(Path.GetFullPath(modsRoot));
+        return string.Equals(Path.GetDirectoryName(source), root, StringComparison.OrdinalIgnoreCase)
+            ? Path.GetFileName(source) : null;
+    }
+
+    private void ApplyImportSelection(Guid collectionId, string dirName, ImportPreview preview,
+                                      IReadOnlyDictionary<string, List<string>>? sourceSelection)
     {
         // One batch: each write raises ModSettingChanged, which would otherwise force a recomposite per group, each
         // cancelling the last. Finish triggers the one recomposite the import needs.
         using var batch = compositor.SuppressModSettingEvents();
-        foreach (var (group, options) in ImportSelection(preview))
+        foreach (var (group, options) in ImportSelection(preview, sourceSelection))
         {
             var ec = penumbra.SetModOption(collectionId, dirName, group, options);
             if (ec is not (PenumbraApiEc.Success or PenumbraApiEc.NothingChanged))
@@ -1177,7 +1290,17 @@ public sealed partial class ContentImportService
         if (collId.HasValue)
         {
             penumbra.SetModEnabled(collId.Value, dirName, true);
-            ApplyImportSelection(collId.Value, dirName, preview);
+
+            // An installed mod carries the part toggles the user already chose on it. Their own settings, not a
+            // Glamourer design's temporary ones, which would otherwise be written into the new mod for good.
+            IReadOnlyDictionary<string, List<string>>? sourceSelection = null;
+            if (!preview.InstallOnly
+                && InstalledSourceDir(preview.SourcePath, PenumbraPackage.IsFolder(preview.SourcePath),
+                                      penumbra.GetModDirectory()) is { } sourceDir
+                && penumbra.GetCollectionModSettings(collId.Value, ignoreTemporary: true) is { } settings
+                && settings.TryGetValue(sourceDir, out var source))
+                sourceSelection = source.Options;
+            ApplyImportSelection(collId.Value, dirName, preview, sourceSelection);
         }
         else
             log.Warning("[Proteus] imported {0}: no player collection — enable it manually", dirName);
