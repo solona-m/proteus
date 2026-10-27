@@ -306,6 +306,8 @@ public class ContentImcEditsTests
         var single = ContentImcEdits.From(Pack(null,
             GrpP("S", "Single", 0, 0, 1, Opt("a", Imc(1)), Opt("b", Imc(2)))))!;
         Assert.Equal("b", single.Active(Body, null)!.Option);
+        // A Single group always has a choice: reported with none, its default stands rather than every option off.
+        Assert.Equal("b", single.Active(Body, Sel("S"))!.Option);
 
         var multi = ContentImcEdits.From(Pack(null,
             GrpP("M", "Multi", 0, 0, 0b10, Opt("a", Imc(1)), Opt("b", Imc(2)))))!;
@@ -508,7 +510,7 @@ public class ContentImcEditsTests
         var src = SourceText.Read("Proteus/Services/SecondSkinService.ContentResolution.cs");
         int at = src.IndexOf("ContentImcNotices.FirstGameEntryHint(modRoot)", StringComparison.Ordinal);
         Assert.True(at >= 0);
-        Assert.Contains("vis.Why == \"game entry\"", src[Math.Max(0, at - 400)..at]);
+        Assert.Contains("vis.Source == ImcMaskSource.GameEntry", src[Math.Max(0, at - 400)..at]);
     }
 
     /// <summary>[EDGE-imported-imc-toggles-26] TexTools writes variants from 0; variant 1 governs, not the default set.</summary>

@@ -177,7 +177,7 @@ public sealed partial class SecondSkinService
                     build.service.log.Information("[Proteus] content: {0} — {1} hides [{2}] ({3})",
                         cEntry.ModDirectory, modelRel, string.Join(", ", hidden), vis.Why ?? "");
                     // A mod imported before option toggles were honoured arrived with them switched off; say which to tick.
-                    if (vis.Why == "game entry" && ContentImcEdits.ItemOf(modelRel) is { } hiddenItem
+                    if (vis.Source == ImcMaskSource.GameEntry && ContentImcEdits.ItemOf(modelRel) is { } hiddenItem
                         && ImcEdits(cEntry.ModDirectory, modRoot) is { } shown
                         && shown.OptionsThatShow(hiddenItem, hidden) is { Count: > 0 } ticks
                         && ContentImcNotices.FirstGameEntryHint(modRoot))
@@ -356,11 +356,21 @@ public sealed partial class SecondSkinService
                 var (edits, error) = ContentImcEdits.ReadInstalled(modRoot);
                 if (error != null)
                 {
+                    // The file's own fault reads as one line; anything else keeps its stack, since it is a bug here.
+                    bool badFile = error is System.IO.IOException or System.IO.InvalidDataException
+                        or System.Text.Json.JsonException or UnauthorizedAccessException;
                     if (ContentImcNotices.FirstReadFailure(modRoot))
-                        build.service.log.Warning("[Proteus] content: {0} — its manifest could not be read ({1}), so its "
-                                    + "option part toggles are not applied", modDir, error);
+                    {
+                        if (badFile)
+                            build.service.log.Warning("[Proteus] content: {0} — its manifest could not be read ({1}), so "
+                                        + "its option part toggles are not applied", modDir, error.Message);
+                        else
+                            build.service.log.Warning(error, "[Proteus] content: {0} — reading its option part toggles "
+                                        + "failed, so they are not applied", modDir);
+                    }
                     else
-                        build.service.log.Debug("[Proteus] content: {0} — manifest still unreadable ({1})", modDir, error);
+                        build.service.log.Debug("[Proteus] content: {0} — option part toggles still unreadable ({1})",
+                            modDir, error.Message);
                 }
                 else
                     build.service.log.Debug("[Proteus] content: {0} — option part toggles read in {1:F1} ms ({2})",

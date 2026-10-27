@@ -79,12 +79,14 @@ internal sealed class ContentImcEdits
 
     /// <summary>
     /// <see cref="From"/> over an installed mod's manifest (<see cref="PenumbraPackage.ReadInstalledManifest"/>). Never
-    /// throws: a manifest that cannot be read comes back as <c>Error</c>.
+    /// throws: the composite must go on without one mod's toggles. A manifest that cannot be read, or anything else
+    /// that goes wrong reading it, comes back as <c>Error</c> — the exception itself, so a fault here is logged as one
+    /// rather than passing for a bad file.
     /// </summary>
-    internal static (ContentImcEdits? Edits, string? Error) ReadInstalled(string modRoot)
+    internal static (ContentImcEdits? Edits, Exception? Error) ReadInstalled(string modRoot)
     {
         try { return (From(PenumbraPackage.ReadInstalledManifest(modRoot)), null); }
-        catch (Exception ex) { return (null, ex.Message); }
+        catch (Exception ex) { return (null, ex); }
     }
 
     /// <summary>Whether any option or default data writes an entry for this item.</summary>
@@ -214,13 +216,31 @@ internal static class ContentImcNotices
     internal static bool FirstGameEntryHint(string modRoot) => GameEntryHints.TryAdd(modRoot, 0);
 }
 
+/// <summary>Where a content model's IMC mask came from.</summary>
+internal enum ImcMaskSource
+{
+    /// <summary>Not decided here: no toggle speaks for the model.</summary>
+    None,
+    /// <summary>One of the pack's <c>Imc</c>-type groups (<see cref="ContentAttributeGroup"/>).</summary>
+    ImcGroup,
+    /// <summary>An <c>Imc</c> edit inside a selected Single/Multi option.</summary>
+    Option,
+    /// <summary>The pack's default data.</summary>
+    DefaultData,
+    /// <summary>No edit is active: the game's own entry for the item.</summary>
+    GameEntry,
+    /// <summary>No edit is active and the game's entry could not be read: every part shown.</summary>
+    AllParts,
+}
+
 /// <summary>
 /// How one content model's IMC-toggled parts are drawn. <see cref="Hidden"/> is dropped; <see cref="OwnAttributes"/>
 /// emits survivors untagged; <see cref="DropVariantAttributes"/> takes only the variant tags off — see
-/// <see cref="ContentGeometry"/>. <see cref="Why"/> says where the mask came from, for the log.
+/// <see cref="ContentGeometry"/>. <see cref="Source"/> says where the mask came from; <see cref="Why"/> spells it
+/// out for the log.
 /// </summary>
 internal readonly record struct ContentVisibility(
-    IReadOnlySet<string>? Hidden, bool OwnAttributes, bool DropVariantAttributes, string? Why);
+    IReadOnlySet<string>? Hidden, bool OwnAttributes, bool DropVariantAttributes, ImcMaskSource Source, string? Why);
 
 /// <summary>Which of a content model's toggled parts are drawn, from the pack's IMC groups or its option edits.</summary>
 internal static class ContentImcVisibility
@@ -241,32 +261,35 @@ internal static class ContentImcVisibility
         if (ContentPieceResolver.GovernsModel(attributeGroups, modelRel))
             return new ContentVisibility(
                 ContentPieceResolver.HiddenAttributes(attributeGroups, modelRel, attrNames, selected),
-                OwnAttributes: true, DropVariantAttributes: false, Why: "imc group");
+                OwnAttributes: true, DropVariantAttributes: false, ImcMaskSource.ImcGroup, Why: "imc group");
 
         if (edits == null || ContentImcEdits.ItemOf(modelRel) is not { } item || !edits.Names(item)
             || ContentSlot.VariantLetter(item.SlotLabel) is not { } letter)
             return default;
 
         ushort mask;
+        ImcMaskSource source;
         string why;
         if (edits.Active(item, selected) is { } hit)
         {
             mask = hit.Mask;
-            why = hit.Group == null ? "default data" : $"option {hit.Group}/{hit.Option}";
+            (source, why) = hit.Group == null
+                ? (ImcMaskSource.DefaultData, "default data")
+                : (ImcMaskSource.Option, $"option {hit.Group}/{hit.Option}");
         }
         else if (vanillaMask(item, edits.GoverningVariant(item)) is { } vanilla)
         {
             mask = vanilla;
-            why = "game entry";
+            (source, why) = (ImcMaskSource.GameEntry, "game entry");
         }
         else
         {
             mask = 0x3FF;
-            why = "all parts";
+            (source, why) = (ImcMaskSource.AllParts, "all parts");
         }
 
         var hidden = ContentImcEdits.HiddenVariants(attrNames, letter, mask);
         return new ContentVisibility(hidden.Count > 0 ? hidden : null,
-            OwnAttributes: false, DropVariantAttributes: true, Why: why);
+            OwnAttributes: false, DropVariantAttributes: true, source, why);
     }
 }

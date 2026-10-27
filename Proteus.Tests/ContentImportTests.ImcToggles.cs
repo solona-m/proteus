@@ -25,6 +25,10 @@ public partial class ContentImportTests
         "{\"Type\":\"Imc\",\"Manipulation\":{\"Entry\":{\"MaterialId\":1,\"AttributeMask\":0},\"ObjectType\":\"Equipment\","
       + "\"PrimaryId\":42,\"Variant\":1,\"EquipSlot\":\"Body\"}}";
 
+    private const string AccessoryImcSameNumber =
+        "{\"Type\":\"Imc\",\"Manipulation\":{\"Entry\":{\"MaterialId\":1,\"AttributeMask\":0},\"ObjectType\":\"Accessory\","
+      + "\"PrimaryId\":6100,\"Variant\":1,\"EquipSlot\":\"Wrists\"}}";
+
     private static JsonArray WrittenGroups(string root)
         => JsonNode.Parse(File.ReadAllText(Path.Combine(root, "meta.json")))!["Groups"]!.AsArray();
 
@@ -202,6 +206,7 @@ public partial class ContentImportTests
     [InlineData(OtherSetEqp)]
     [InlineData(GlobalRsp)]
     [InlineData(OtherItemImc)]
+    [InlineData(AccessoryImcSameNumber)]
     public void An_imc_option_with_other_set_or_global_content_is_cleared_and_not_copied(string extra)
     {
         var dir = TempDir();
@@ -214,6 +219,43 @@ public partial class ContentImportTests
 
             Assert.Equal(0, WrittenDefault(root, "Parts"));
             Assert.Empty(ContentImportService.ImportSelection(preview, Source(("Parts", ["Belt"])))["Parts"]);
+        }
+        finally { Directory.Delete(dir, true); }
+    }
+
+    /// <summary>
+    /// [EDGE-imported-imc-toggles-13] An option that carries a piece's own model is a piece option, not a toggle, even
+    /// with a same-set Imc edit beside it: its tick would put the piece on before anyone asked.
+    /// </summary>
+    [Fact]
+    public void A_piece_option_with_an_imc_edit_is_not_a_toggle()
+    {
+        var dir = TempDir();
+        try
+        {
+            var model = SyntheticModel.Build(["atr_tv_a"], new SyntheticModel.Mesh("/mt_top.mtrl", new SyntheticModel.Sub(1)));
+            var manifest = """
+            {
+              "FileVersion": 4, "Name": "Dress", "Author": "A",
+              "DefaultData": { "Files": { "chara/equipment/e6025/material/v0001/mt_top.mtrl": "top.mtrl" } },
+              "Groups": [
+                { "Name": "G", "Type": "Multi", "DefaultSettings": 1, "Options": [
+                  { "Name": "Dress", "Files": { "chara/equipment/e6025/model/c0201e6025_top.mdl": "top.mdl" },
+                    "Manipulations": [ { "Type": "Imc", "Manipulation": {
+                      "Entry": { "MaterialId": 1, "AttributeMask": 1022 }, "ObjectType": "Equipment",
+                      "PrimaryId": 6025, "Variant": 1, "EquipSlot": "Body" } } ] } ] }
+              ]
+            }
+            """;
+            var pmp = WritePack(dir, manifest, new[] { ("top.mtrl", new byte[64]), ("top.mdl", model) });
+            var preview = ContentImportService.Inspect(pmp);
+            Assert.True(preview.AnyImportable);
+            var root = Path.Combine(dir, "mod");
+            ContentImportService.WriteMod(root, "Dress", "A", preview);
+
+            Assert.Equal(0, WrittenDefault(root, "G"));
+            Assert.False(ContentImportService.ImcToggleDefaults(preview).ContainsKey("G"));
+            Assert.Empty(ContentImportService.ImportSelection(preview, Source(("G", ["Dress"])))["G"]);
         }
         finally { Directory.Delete(dir, true); }
     }
