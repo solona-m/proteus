@@ -429,6 +429,151 @@ internal static class SkinTuckSheet
                                        .Any(t => In(p.Triangles[t * 3]) && In(p.Triangles[t * 3 + 1]) && In(p.Triangles[t * 3 + 2])));
     }
 
+    /// <summary>Where <see cref="ReachingDress"/>'s chest and legs meet: both bodies have this row.</summary>
+    internal const int Waist = 7;
+
+    /// <summary>The author's edge on <see cref="ReachingDress"/>'s legs: the dress's skin there runs from
+    /// <see cref="Waist"/> down to this row, and the rows below are the legs the author did not draw.</summary>
+    internal const int Hem = 2;
+
+    /// <summary>How far in front of the legs <see cref="ReachingDress"/>'s facing sheet stands (9.5 mm): past the plain
+    /// cut's sag under its 45 mm chord (8.9 mm), so the legs under it are cut, and nearer than the author's edge a row
+    /// (10 mm) away, so that is where they land.</summary>
+    internal const float FacingOff = 0.0095f;
+
+    /// <summary>The columns of <see cref="ReachingDress"/>'s coarse legs skin.</summary>
+    private static readonly int[] HemColumns = [0, 2, 4, 6, 8];
+
+    /// <summary>
+    /// A dress whose ONE skin mesh lies mostly on the chest and reaches onto the legs, as LINXX's Codeine does: the chest
+    /// body is the sheet's rows <see cref="Waist"/> and up, the legs body rows 0 to <see cref="Waist"/>, sharing that row.
+    /// The dress's skin is the chest rows exactly, and over the legs a coarse span — rows <see cref="Waist"/> and
+    /// <see cref="Hem"/> at <see cref="HemColumns"/>, triangles 50 mm tall — ending at the author's edge, the
+    /// <see cref="Hem"/> row's five corners on the legs alone (over <see cref="BodyRetarget.SpanShare"/> of the mesh). Cloth
+    /// lies 15 mm off the chest rows from 8 up, and nowhere over the legs. The legs body dips under the coarse span.
+    /// Swapped with <c>cutHidden</c> off the legs are cut all the same — the dress only reaches onto them — and the plain cut
+    /// takes the dip: further under the span's chord than its sag allows.
+    /// </summary>
+    /// <param name="dip">How far the legs dip under the span (negative: bulge), over rows <paramref name="dipRows"/> and
+    /// columns 3-5.</param>
+    /// <param name="dipRows">The dip's rows; 4-5 when null.</param>
+    /// <param name="facingSheet">A second sheet of the legs body over rows -2 to <see cref="Hem"/>, <see cref="FacingOff"/> in front of the
+    /// first and facing it — the other thigh — with the dress's coarse skin lying on it too: the rows below the author's
+    /// edge then have that skin nearer than the edge.</param>
+    /// <param name="patch">A patch of cloth over the dip at this height; null for none.</param>
+    /// <param name="hideDip">Put the dip's rows in a variant the body mod does not draw (atr_tv_b).</param>
+    /// <param name="ringInDip">A piercing ring in the middle of the dip.</param>
+    /// <param name="island">The dip at <paramref name="dip"/> over rows 4-5, columns 3-5, ringed by a dip three times as
+    /// deep over rows 3-6, columns 2-6: a spanned island the kept skin cannot reach.</param>
+    /// <param name="middlePatch">A small cloth triangle 1 mm over the middle of one dip triangle and over none of its
+    /// corners.</param>
+    /// <param name="flatNormals">Give the legs' vertices no normal of their own, as some files do.</param>
+    /// <param name="shadedNormals">Give the legs' vertices their own surface's normals. Otherwise they face +Z, the way the
+    /// dress's skin does: the sheet is too coarse to dip past the cut's sag (a 10 mm grid, 9 mm) with walls under the
+    /// <see cref="BodyRetarget.CutOpenSkinFacing"/> guard's 26°, where Codeine's fold on Muse+ faced its laid skin at
+    /// 0.99-1.00 — so its shaded normals would be a wall's, not a fold's.</param>
+    internal static (byte[] Garment, byte[] Chest, byte[] Legs) ReachingDress(
+        float dip = 0.015f, (int From, int To)? dipRows = null, bool facingSheet = false, float? patch = null,
+        bool hideDip = false, bool ringInDip = false, bool island = false, bool middlePatch = false,
+        bool flatNormals = false, bool shadedNormals = false)
+    {
+        var (from, to) = dipRows ?? (4, 5);
+        float Legs(int r, int c)
+        {
+            if (island && r is >= 3 and <= 6 && c is >= 2 and <= 6)
+                return r is 4 or 5 && c is >= 3 and <= 5 ? -dip : -3f * dip;
+            return r >= from && r <= to && c is >= 3 and <= 5 ? -dip : 0f;
+        }
+
+        // The chest: rows Waist and up, flat.
+        byte[] chest = SyntheticModel.BuildSurface([], Sheet(Skin, Waist, Rows - 1, _ => 0f));
+
+        // The legs: rows 0..Waist with the dip, facing the dress's skin (or shaded, or with no normals at all).
+        var legsMeshes = new List<SyntheticModel.SurfaceMesh>();
+        var attrs = new List<string>();
+        var legSheet = Sheet(Skin, 0, Waist, Legs, shaped: shadedNormals);
+        if (flatNormals) legSheet = legSheet with { Normals = [.. legSheet.Normals.Select(_ => Vector3.Zero)] };
+        if (hideDip)
+        {
+            attrs.Add("atr_tv_b");
+            legSheet = legSheet with
+            {
+                Submeshes = [(0u, [.. Grid(0, from, 0), .. Grid(to + 1, Waist, 0)]), (1u, Grid(from, to + 1, 0))],
+            };
+        }
+        legsMeshes.Add(legSheet);
+        if (facingSheet)
+        {
+            // The other thigh: in front, wound and shaded to face back at the first.
+            // From two rows below the legs' last, so the deleted rows land inside its span, not on its edge.
+            var other = Sheet(Skin, -2, Hem, _ => FacingOff);
+            int[] tris = other.Submeshes[0].Triangles;
+            var flipped = new int[tris.Length];
+            for (int t = 0; t + 2 < tris.Length; t += 3) (flipped[t], flipped[t + 1], flipped[t + 2]) = (tris[t], tris[t + 2], tris[t + 1]);
+            legsMeshes.Add(other with { Normals = [.. other.Normals.Select(_ => -Vector3.UnitZ)], Submeshes = [(0u, flipped)] });
+        }
+        if (ringInDip)
+        {
+            var centre = new Vector3(0f, Bottom + (from + to) / 2f * Step, -dip + 0.0005f);
+            var ring = new List<Vector3> { centre };
+            for (int k = 0; k < 6; k++)
+            {
+                float a = k * MathF.Tau / 6;
+                ring.Add(centre + new Vector3(MathF.Cos(a), MathF.Sin(a), 0f) * 0.003f);
+            }
+            var ringTris = new List<int>();
+            for (int k = 0; k < 6; k++) ringTris.AddRange([0, 1 + k, 1 + (k + 1) % 6]);
+            legsMeshes.Add(new SyntheticModel.SurfaceMesh(Piercing, [.. ring], [.. ring.Select(_ => Vector3.UnitZ)],
+                                                          [.. ring.Select(_ => Vector2.Zero)],
+                                                          [.. ring.Select(_ => ((string, float)[]?)[("j_sebo_c", 1f)])],
+                                                          [(0u, [.. ringTris])]));
+        }
+        byte[] legs = SyntheticModel.BuildSurface(attrs, [.. legsMeshes]);
+
+        // The dress's one skin mesh: the chest rows exactly, then the coarse span down to the hem.
+        var fine = Sheet(Skin, Waist, Rows - 1, _ => 0f);
+        var pos = new List<Vector3>(fine.Positions);
+        var tri = new List<int>(fine.Submeshes[0].Triangles);
+        void Coarse(int top, int bottom, float z, bool facing)
+        {
+            int baseTop = pos.Count;
+            foreach (int c in HemColumns) pos.Add(new Vector3(X(c), Y(top), z));
+            int baseBottom = pos.Count;
+            foreach (int c in HemColumns) pos.Add(new Vector3(X(c), Y(bottom), z));
+            for (int k = 0; k + 1 < HemColumns.Length; k++)
+            {
+                int a = baseBottom + k, b = baseBottom + k + 1, d = baseTop + k, e = baseTop + k + 1;
+                if (facing) tri.AddRange([a, e, b, a, d, e]);
+                else tri.AddRange([a, b, e, a, e, d]);
+            }
+        }
+        Coarse(Waist, Hem, 0f, facing: false);
+        int facingFrom = pos.Count;
+        if (facingSheet) Coarse(Hem, -2, FacingOff, facing: true);
+        var normals = pos.Select((_, i) => facingSheet && i >= facingFrom ? -Vector3.UnitZ : Vector3.UnitZ).ToArray();
+        var skin = new SyntheticModel.SurfaceMesh(Skin, [.. pos], normals, [.. pos.Select(_ => Vector2.Zero)],
+                                                  [.. pos.Select(_ => ((string, float)[]?)[("j_sebo_c", 1f)])],
+                                                  [(0u, [.. tri])]);
+        var meshes = new List<SyntheticModel.SurfaceMesh> { skin, Sheet(Cloth, Waist + 1, Rows - 1, _ => 0.015f) };
+        if (patch is float z)
+        {
+            var p = new[] { from - 0.5f, to + 1.5f }.SelectMany(r => new[] { 2, 6 }.Select(c => new Vector3(X(c), Bottom + r * Step, z))).ToArray();
+            meshes.Add(new SyntheticModel.SurfaceMesh(Cloth, p, [.. p.Select(_ => Vector3.UnitZ)], [.. p.Select(_ => Vector2.Zero)],
+                                                      [.. p.Select(_ => ((string, float)[]?)[("j_sebo_c", 1f)])],
+                                                      [(0u, [0, 1, 3, 0, 3, 2])]));
+        }
+        if (middlePatch)
+        {
+            // Over the middle of the dip triangle (row from, columns 3-4, the grid's lower one), off its corners.
+            var m = new Vector3((X(3) + X(4) + X(4)) / 3f, (Y(from) + Y(from) + Y(from + 1)) / 3f, -dip + 0.001f);
+            Vector3[] p = [m + new Vector3(-0.002f, -0.001f, 0f), m + new Vector3(0.002f, -0.001f, 0f), m + new Vector3(0f, 0.002f, 0f)];
+            meshes.Add(new SyntheticModel.SurfaceMesh(Cloth, p, [.. p.Select(_ => Vector3.UnitZ)], [.. p.Select(_ => Vector2.Zero)],
+                                                      [.. p.Select(_ => ((string, float)[]?)[("j_sebo_c", 1f)])],
+                                                      [(0u, [0, 1, 2])]));
+        }
+        return (SyntheticModel.BuildSurface([], [.. meshes]), chest, legs);
+    }
+
     /// <summary>The loose sheet: cloth 15 mm off over the rows from <paramref name="looseFrom"/> up, 1 mm off below.</summary>
     internal static byte[] LooseTop(int looseFrom = 7) => Top(r => r >= looseFrom ? 0.015f : 0.001f);
 

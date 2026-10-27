@@ -1833,7 +1833,8 @@ public partial class VanillaGearRefitLocalTests(ITestOutputHelper output)
     /// gloves cover them, and the game's own tops leave them undrawn on its own body too.
     /// </summary>
     /// <param name="bands">Where the area lies: by 10 cm of height, front or back.</param>
-    internal static double UncoveredUndrawn(ModelParts m, ModelParts body, SortedDictionary<(float, string), double> bands)
+    internal static double UncoveredUndrawn(ModelParts m, ModelParts body, SortedDictionary<(float, string), double> bands,
+                                            float armFrom = ArmFrom)
     {
         var cloth = new List<(Vector3 A, Vector3 B, Vector3 C)>();
         foreach (var part in ClothParts(m))
@@ -1867,7 +1868,7 @@ public partial class VanillaGearRefitLocalTests(ITestOutputHelper output)
                 var cross = Vector3.Cross(b - a, c - a);
                 if (cross.LengthSquared() < 1e-14f) continue;
                 var centre = (a + b + c) / 3f;
-                if (MathF.Abs(centre.X) > ArmFrom) continue;
+                if (MathF.Abs(centre.X) > armFrom) continue;
                 var normal = Vector3.Normalize(cross);
                 var level = new Vector3(normal.X, 0f, normal.Z);
                 if (drawn.Nearest(centre, 0.002f, out _) || Covered(centre, normal)
