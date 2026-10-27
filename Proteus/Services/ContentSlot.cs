@@ -115,6 +115,24 @@ public static class ContentSlot
         };
     }
 
+    /// <summary>
+    /// The letter an IMC variant tag names this slot by (<c>atr_sv_a</c> is the feet's), or null for a slot the IMC
+    /// mask does not cover. The same table as the Parts tab's and the body refit's.
+    /// </summary>
+    public static char? VariantLetter(string label) => label switch
+    {
+        "Head" => 'm',
+        "Body" => 't',
+        "Hands" => 'g',
+        "Legs" => 'd',
+        "Feet" => 's',
+        "Earrings" => 'e',
+        "Necklace" => 'n',
+        "Bracelets" => 'w',
+        "Right ring" or "Left ring" => 'r',
+        _ => null,
+    };
+
     /// <summary>The numeric set id out of a set tag ("e6085" → 6085), or null.</summary>
     public static int? SetIdOf(string setTag)
         => setTag.Length > 1 && int.TryParse(setTag[1..], out var n) ? n : null;

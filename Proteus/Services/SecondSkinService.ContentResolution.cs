@@ -24,6 +24,8 @@ public sealed partial class SecondSkinService
             private Dictionary<string, string> unwearable = null!;
             private List<(string ModDir, string Group, string Option, string Reason)> refusals = null!;
             private Dictionary<string, IReadOnlyDictionary<string, List<string>>?> selectionCache = null!;
+            private Dictionary<string, ContentImcEdits?> imcEditsCache = null!;
+            private Dictionary<(ImcItem Item, int Variant), ushort?> vanillaMaskCache = null!;
 
             public ContentResolution(ShellSetBuild build)
             {
@@ -73,6 +75,11 @@ public sealed partial class SecondSkinService
                 // toggle at the pack's default. Marshalled onto the framework thread, since it reads Penumbra's collection state.
                 selectionCache = build.modSelections = new Dictionary<string, IReadOnlyDictionary<string, List<string>>?>(
                     StringComparer.OrdinalIgnoreCase);
+
+                // A mod's option/default IMC edits, read off its manifest once per mod per build (see ImcEdits), and the
+                // game's own IMC masks they fall back to. Nothing is kept across builds, so an edited manifest is seen next time.
+                imcEditsCache = new Dictionary<string, ContentImcEdits?>(StringComparer.OrdinalIgnoreCase);
+                vanillaMaskCache = new Dictionary<(ImcItem Item, int Variant), ushort?>();
             }
 
             private void ResolveUnits()
@@ -154,19 +161,29 @@ public sealed partial class SecondSkinService
                 }
 
                 // The pack's own hide-toggles, applied by DROPPING geometry: these meshes move onto a host accessory, so the
-                // game would read the wrong item's IMC mask. See ContentAttributeGroup.
-                IReadOnlySet<string>? hidden = null;
-                // Whether this pack's IMC toggles govern this model. When they do, Proteus drops what the mask hides and strips
-                // the tags from what survives (see ContentGeometry.OwnAttributes).
-                bool ownAttributes = false;
-                if (cEntry.Metadata.ContentAttributes is { Count: > 0 } attrGroups)
+                // game would read the wrong item's IMC mask. From its Imc groups (ContentAttributeGroup) or, failing those,
+                // the IMC edits inside its ordinary options and default data (ContentImcEdits).
+                // The manifest is only read for a model that has variant parts to toggle.
+                var imcEdits = parsedModel.Attrs.Any(SecondSkinWriter.IsVariantAttribute)
+                    ? ImcEdits(cEntry.ModDirectory, modRoot) : null;
+                var vis = ContentImcVisibility.For(cEntry.Metadata.ContentAttributes, imcEdits,
+                    modelRel, parsedModel.Attrs,
+                    cEntry.Metadata.ContentAttributes is { Count: > 0 } || imcEdits != null
+                        ? ModSelection(cEntry.ModDirectory) : null,
+                    VanillaMask);
+                var hidden = vis.Hidden;
+                if (hidden is { Count: > 0 })
                 {
-                    hidden = HiddenAttributes(attrGroups, modelRel, parsedModel.Attrs,
-                        ModSelection(cEntry.ModDirectory));
-                    ownAttributes = GovernsModel(attrGroups, modelRel);
-                    if (hidden is { Count: > 0 })
-                        build.service.log.Information("[Proteus] content: {0} — {1} hides [{2}]",
-                            cEntry.ModDirectory, modelRel, string.Join(", ", hidden));
+                    build.service.log.Information("[Proteus] content: {0} — {1} hides [{2}] ({3})",
+                        cEntry.ModDirectory, modelRel, string.Join(", ", hidden), vis.Why ?? "");
+                    // A mod imported before option toggles were honoured arrived with them switched off; say which to tick.
+                    if (vis.Why == "game entry" && ContentImcEdits.ItemOf(modelRel) is { } hiddenItem
+                        && ImcEdits(cEntry.ModDirectory, modRoot) is { } shown
+                        && shown.OptionsThatShow(hiddenItem, hidden) is { Count: > 0 } ticks
+                        && ContentImcNotices.FirstGameEntryHint(modRoot))
+                        build.service.log.Information("[Proteus] content: {0} — {1}: [{2}] are hidden by the game's own "
+                                      + "entry; ticking {3} in Penumbra shows them again",
+                            cEntry.ModDirectory, modelRel, string.Join(", ", hidden), string.Join(" or ", ticks));
                 }
 
                 // The extra skeleton this piece's "ex" bones live in, NOTED here and written once the piece is known to have
@@ -272,7 +289,8 @@ public sealed partial class SecondSkinService
                             MirrorUv1: glow != null,
                             // The pack's own hide toggles, baked in — see ContentGeometry.HiddenAttributes.
                             HiddenAttributes: hidden,
-                            OwnAttributes: ownAttributes));
+                            OwnAttributes: vis.OwnAttributes,
+                            DropVariantAttributes: vis.DropVariantAttributes));
 
                     // Every option this material serves, compared case-insensitively.
                     if (!unit.Owners.Any(o =>
@@ -324,6 +342,48 @@ public sealed partial class SecondSkinService
                         .ToLookup(r => PenumbraPackage.Normalize(r.GamePath), r => r.File,
                                   StringComparer.OrdinalIgnoreCase);
                 return [.. shipped[PenumbraPackage.Normalize(gamePath)]];
+            }
+
+            /// <summary>
+            /// The IMC part toggles <paramref name="modRoot"/>'s ordinary options and default data carry (see
+            /// <see cref="ContentImcEdits"/>), read once per mod per build. An unreadable manifest is warned about once a
+            /// session and leaves the mod as it was before these were honoured.
+            /// </summary>
+            private ContentImcEdits? ImcEdits(string modDir, string modRoot)
+            {
+                if (imcEditsCache.TryGetValue(modRoot, out var known)) return known;
+                long started = PhaseCounter.Begin();
+                var (edits, error) = ContentImcEdits.ReadInstalled(modRoot);
+                if (error != null)
+                {
+                    if (ContentImcNotices.FirstReadFailure(modRoot))
+                        build.service.log.Warning("[Proteus] content: {0} — its manifest could not be read ({1}), so its "
+                                    + "option part toggles are not applied", modDir, error);
+                    else
+                        build.service.log.Debug("[Proteus] content: {0} — manifest still unreadable ({1})", modDir, error);
+                }
+                else
+                    build.service.log.Debug("[Proteus] content: {0} — option part toggles read in {1:F1} ms ({2})",
+                        modDir, PhaseCounter.MsSince(started), edits == null ? "none" : "some");
+                return imcEditsCache[modRoot] = edits;
+            }
+
+            /// <summary>The game's own IMC attribute mask for one variant of an item, or null when it cannot be read.</summary>
+            private ushort? VanillaMask(ImcItem item, int variant)
+            {
+                if (vanillaMaskCache.TryGetValue((item, variant), out var known)) return known;
+                ushort? mask = null;
+                try
+                {
+                    mask = ImcEntrySource.FromGame(p => Plugin.DataManager.GetFile(p)?.Data, item.SetTag, item.SlotLabel,
+                                                   variant)?.AttributeMask;
+                }
+                catch (Exception ex)
+                {
+                    build.service.log.Debug("[Proteus] content: the game's IMC entry for {0} {1} could not be read ({2})",
+                        item.SetTag, item.SlotLabel, ex.Message);
+                }
+                return vanillaMaskCache[(item, variant)] = mask;
             }
 
             private IReadOnlyDictionary<string, List<string>>? ModSelection(string modDir)

@@ -48,6 +48,10 @@ internal static class LocalData
     /// <summary>Bijeon's "Frost Veil Plus+": an invisible a0002 bracelet whose whole look is an item effect, in the v3 layout.</summary>
     internal const string FrostVeilPack = ModPacks + ":Frost Veil Plus+.pmp";
 
+    /// <summary>"BWM - Spike Heels with stockings - no strap", installed: an e0666 Feet piece whose "Stocking Toggle"
+    /// Single group switches <c>atr_sv_a</c> by an <c>Imc</c> edit (On 1023, Off 1022) beside a same-set <c>Eqp</c>.</summary>
+    internal const string ImcToggleMod = Mods + ":BWM - Spike Heels with stockings - no strap";
+
     /// <summary>
     /// The uv transfer maps, which live in the repository (<c>Proteus/uvmaps</c>) but through Git LFS, so a checkout
     /// may hold only their pointers. Not a variable: found by walking up from the test binaries. <see cref="Path"/> gives
