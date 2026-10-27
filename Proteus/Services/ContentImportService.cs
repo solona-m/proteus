@@ -1219,7 +1219,7 @@ public sealed partial class ContentImportService
 
         var keepOn = KeptGroupDefaults(preview);
         var gated = GatedGroupDefaults(preview);
-        foreach (var (group, shadowed, _) in GroupsWithShadowing(preview.Pack))
+        foreach (var (group, shadowed) in GroupsWithShadowing(preview.Pack))
         {
             var source = SourceChoice(sourceSelection, group.Name);
             if (string.Equals(group.Type, "Imc", StringComparison.OrdinalIgnoreCase))
@@ -1229,12 +1229,7 @@ public sealed partial class ContentImportService
             }
             if (string.Equals(group.Type, "Single", StringComparison.OrdinalIgnoreCase))
             {
-                if (source is { Count: > 0 }
-                    && group.Options.All(o => IsEmptyOption(o) || IsImcToggleOnly(o, preview))
-                    && group.Options.Any(o => IsImcToggleOnly(o, preview))
-                    && group.Options.FirstOrDefault(o => string.Equals(o.Name, source[0], StringComparison.OrdinalIgnoreCase))
-                        is { } picked)
-                    result[group.Name] = [picked.Name];
+                if (SingleChoice(group, source, preview) is { } picked) result[group.Name] = picked;
                 continue;
             }
             if (!string.Equals(group.Type, "Multi", StringComparison.OrdinalIgnoreCase)) continue;
@@ -1253,6 +1248,18 @@ public sealed partial class ContentImportService
         if (NeedsPieceGroup(preview)) result[preview.PieceGroupName!] = [];
         return result;
     }
+
+    /// <summary>
+    /// What the import writes for a Single group: the source's choice, when every option only switches imported parts or
+    /// does nothing and at least one switches; null leaves the group at its manifest default.
+    /// </summary>
+    private static List<string>? SingleChoice(PenumbraPackage.PackGroup group, List<string>? source, ImportPreview preview)
+        => source is { Count: > 0 }
+        && group.Options.All(o => IsEmptyOption(o) || IsImcToggleOnly(o, preview))
+        && group.Options.Any(o => IsImcToggleOnly(o, preview))
+        && group.Options.FirstOrDefault(o => string.Equals(o.Name, source[0], StringComparison.OrdinalIgnoreCase))
+            is { } picked
+            ? [picked.Name] : null;
 
     /// <summary>The source's choice for one group, matched by name case-insensitively as Penumbra matches groups; null when it has none.</summary>
     private static List<string>? SourceChoice(IReadOnlyDictionary<string, List<string>>? selection, string group)
@@ -1286,24 +1293,13 @@ public sealed partial class ContentImportService
     internal static List<string> ImcGroupDefaults(PenumbraPackage.PackGroup group)
         => [.. group.Options.Where((_, i) => i < 64 && (group.DefaultSettings & (1ul << i)) != 0).Select(o => o.Name)];
 
-    /// <summary>
-    /// Each pack group, whether an earlier one already has its name — the one Penumbra addresses by it — and whether a
-    /// later one the import writes does (a Single or Multi; a later Imc one is never written), whose write then lands on
-    /// this group.
-    /// </summary>
-    private static IEnumerable<(PenumbraPackage.PackGroup Group, bool Shadowed, bool Overwritten)> GroupsWithShadowing(
+    /// <summary>Each pack group, and whether an earlier one already has its name — the one Penumbra addresses by it.</summary>
+    private static IEnumerable<(PenumbraPackage.PackGroup Group, bool Shadowed)> GroupsWithShadowing(
         PenumbraPackage.Contents pack)
     {
         var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-        for (int i = 0; i < pack.Groups.Count; i++)
-        {
-            var group = pack.Groups[i];
-            bool later = pack.Groups.Skip(i + 1)
-                .Any(g => string.Equals(g.Name, group.Name, StringComparison.OrdinalIgnoreCase)
-                       && (string.Equals(g.Type, "Single", StringComparison.OrdinalIgnoreCase)
-                        || string.Equals(g.Type, "Multi", StringComparison.OrdinalIgnoreCase)));
-            yield return (group, !seen.Add(group.Name), later);
-        }
+        foreach (var group in pack.Groups)
+            yield return (group, !seen.Add(group.Name));
     }
 
     /// <summary>
@@ -1332,10 +1328,20 @@ public sealed partial class ContentImportService
     {
         var result = new List<(string, string)>();
         if (preview.InstallOnly || sourceSelection == null) return result;
-        foreach (var (group, shadowed, overwritten) in GroupsWithShadowing(preview.Pack))
+        var groups = preview.Pack.Groups;
+        int at = -1;
+        foreach (var (group, shadowed) in GroupsWithShadowing(preview.Pack))
         {
+            at++;
             if (!string.Equals(group.Type, "Imc", StringComparison.OrdinalIgnoreCase)
                 || SourceChoice(sourceSelection, group.Name) is not { } source) continue;
+            // Overwritten only by a later group of its name that ImportSelection really writes: every Multi, and a
+            // Single only on the same terms as there. A later Imc duplicate is never written.
+            bool overwritten = groups.Skip(at + 1).Any(g =>
+                string.Equals(g.Name, group.Name, StringComparison.OrdinalIgnoreCase)
+                && (string.Equals(g.Type, "Multi", StringComparison.OrdinalIgnoreCase)
+                    || (string.Equals(g.Type, "Single", StringComparison.OrdinalIgnoreCase)
+                        && SingleChoice(g, SourceChoice(sourceSelection, g.Name), preview) != null)));
             if (ImcDecision(group, shadowed, overwritten, source).Reason is { } reason)
                 result.Add((group.Name, reason));
         }
@@ -1369,8 +1375,7 @@ public sealed partial class ContentImportService
                     dirName, group, string.Join(", ", options), ec);
         }
         foreach (var (group, reason) in UncopiedImcChoices(preview, sourceSelection))
-            log.Information("[Proteus] imported {0}: IMC group \"{1}\" starts at the pack's default, not the original's "
-                          + "choice — {2}", dirName, group, reason);
+            log.Information("[Proteus] imported {0}: IMC group \"{1}\" does not start at the original's choice — {2}", dirName, group, reason);
     }
 
     /// <summary>Everything after the add and the piece group: enable, open Penumbra, recomposite, report.</summary>

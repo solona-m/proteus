@@ -65,7 +65,8 @@ public partial class ContentImportTests
 
     /// <summary>
     /// [AC-imc-group-choices-2] The copied choice hides, through the composite's own reading, exactly the parts the
-    /// pack's masks give it: the group's default entry with each ticked option XORed in.
+    /// pack's masks give it: the group's default entry with each ticked option XORed in. With no ticks the source
+    /// names no choice at all, so the pack's own defaults are what is written and checked.
     /// </summary>
     [Theory]
     [InlineData(0ul)]
@@ -79,7 +80,8 @@ public partial class ContentImportTests
         using var pack = ImcGroupPack(imcDefaultSettings: defaults);
         var folder = Installed(pack.Path, dir);
         var preview = ContentImportService.Inspect(folder);
-        var selection = ContentImportService.ImportSelection(preview, Source(("Toggles", ticked)));
+        var selection = ContentImportService.ImportSelection(preview,
+            ticked.Length == 0 ? null : Source(("Toggles", ticked)));
 
         var g = PenumbraPackage.Read(folder).Groups.Single(x => x.Type == "Imc");
         int mask = g.DefaultAttributeMask;
@@ -130,7 +132,6 @@ public partial class ContentImportTests
 
         Assert.Equal(["atr_dv_b Hide"], ContentImportService.ImportSelection(pmp)["Toggles"]);
         Assert.Equal(["atr_dv_b Hide"], ContentImportService.ImportSelection(folder)["Toggles"]);
-        Assert.Equal(["atr_dv_b Hide"], ContentImportService.ImportSelection(folder, null)["Toggles"]);
         Assert.Empty(ContentImportService.UncopiedImcChoices(folder, null));
 
         var root = Path.Combine(dir, "out");
@@ -256,15 +257,24 @@ public partial class ContentImportTests
         Assert.DoesNotContain("TOGGLES", selection.Keys, StringComparer.Ordinal);
     });
 
-    /// <summary>[EDGE-imc-group-choices-7] A later Single or Multi group of the same name overwrites the copied choice: the log says so.</summary>
-    [Fact]
-    public void A_later_group_overwriting_the_choice_is_reported() => InDir(dir =>
+    /// <summary>
+    /// [EDGE-imc-group-choices-7] A later group of the same name is reported as overwriting the copied choice only when
+    /// the import really writes it: a Multi always is; this Single, whose one option does nothing, never is.
+    /// </summary>
+    [Theory]
+    [InlineData("Multi", true)]
+    [InlineData("Single", false)]
+    public void A_later_group_overwriting_the_choice_is_reported_only_when_written(string type, bool written)
+        => InDir(dir =>
     {
-        using var pack = ImcGroupPack(trailingGroup: ("toggles", "Multi"));
+        using var pack = ImcGroupPack(trailingGroup: ("toggles", type));
         var preview = InstalledPreview(pack, dir);
         var source = Source(("Toggles", ["atr_dv_a Hide"]));
-        Assert.Contains(ContentImportService.UncopiedImcChoices(preview, source),
-            u => u.Group == "Toggles" && u.Reason.Contains("later group"));
+
+        var selection = ContentImportService.ImportSelection(preview, source);
+        Assert.Equal(written, selection.ContainsKey("toggles"));
+        Assert.Equal(written, ContentImportService.UncopiedImcChoices(preview, source)
+            .Any(u => u.Group == "Toggles" && u.Reason.Contains("later group")));
     });
 
     /// <summary>[EDGE-imc-group-choices-7] The piece group never takes an Imc group's name.</summary>
@@ -277,8 +287,8 @@ public partial class ContentImportTests
             Source((ContentImportService.PieceGroup, ["atr_dv_a Hide"])));
 
         Assert.Equal(["atr_dv_a Hide"], selection[ContentImportService.PieceGroup]);
-        if (preview.PieceGroupName is { } piece)
-            Assert.DoesNotContain(preview.Pack.Groups, g => string.Equals(g.Name, piece, StringComparison.OrdinalIgnoreCase));
+        var piece = Assert.IsType<string>(preview.PieceGroupName);
+        Assert.DoesNotContain(preview.Pack.Groups, g => string.Equals(g.Name, piece, StringComparison.OrdinalIgnoreCase));
     });
 
     /// <summary>[EDGE-imc-group-choices-8] A v3 installed folder's Imc group is copied the same as a v4 one's.</summary>
