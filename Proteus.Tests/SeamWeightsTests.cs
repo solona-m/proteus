@@ -202,7 +202,7 @@ public class SeamWeightsTests(ITestOutputHelper output)
 
     [Fact]
     [Trait("Plan", "EDGE-seam-weights-8")]
-    public void Near_points_within_the_roots_reach_are_one_seam_and_a_far_end_is_not()
+    public void Near_points_within_reach_of_each_other_are_one_seam_and_a_far_end_is_not()
     {
         var mdl = Row([0f, 2e-4f, 4e-4f, 8e-4f], [Kosi, Kosi, Kosi, Kosi]);
         var result = Empty(mdl);
@@ -215,12 +215,12 @@ public class SeamWeightsTests(ITestOutputHelper output)
         Assert.NotEqual(c, outcome.ClassOf[At(3)]);
         Assert.Equal(0f, D(result[At(0)]!, result[At(2)]!));
         Assert.Equal(3, outcome.LargestClass);
-        Assert.True(outcome.LargestDiameter <= 2 * BodyRetarget.SeamReach);
+        Assert.True(Widest(mdl, outcome) <= BodyRetarget.SeamReach + 1e-7f, $"a class {Widest(mdl, outcome) * 1e6:0} µm wide");
     }
 
     [Fact]
     [Trait("Plan", "EDGE-seam-weights-9")]
-    public void A_class_never_takes_weights_further_than_its_roots()
+    public void A_class_never_holds_weights_further_apart_than_the_cap()
     {
         (string, float)[] W(float s) => [("j_kosi", 1f - s), ("j_sebo_a", s)];
         // Each a little over 0.01 from the last (summed 0.03 per step of 0.015): the second is 0.03 from the root.
@@ -336,7 +336,7 @@ public class SeamWeightsTests(ITestOutputHelper output)
 
         var outcome = Run(mdl, result);
 
-        Assert.True(outcome.LargestDiameter <= 2 * BodyRetarget.SeamReach);
+        Assert.True(Widest(mdl, outcome) <= BodyRetarget.SeamReach + 1e-7f, $"a class {Widest(mdl, outcome) * 1e6:0} µm wide");
         Assert.True(outcome.LargestClass <= 2, $"a class of {outcome.LargestClass}");
         for (int t = 0; t < tris.Count; t += 3)
             for (int k = 0; k < 3; k++)
@@ -541,13 +541,106 @@ public class SeamWeightsTests(ITestOutputHelper output)
     [Trait("Plan", "EDGE-seam-weights-16")]
     public void Within_one_body_mod_a_split_seam_is_closed_too()
     {
-        // Within one body mod nothing smooths, and the ring measured 0.000 apart without the rule at build 1382: this
-        // guards that the rule runs there and leaves agreeing seams as one, not that it repairs a split.
-        var (garment, ring) = HipSeam();
-        var without = Plan(garment, seams: false, acrossBodies: false);
-        var with = Plan(garment, acrossBodies: false);
-        output.WriteLine($"within one body mod, without the rule: worst ring pair {ring.Max(r => D(Of(without, garment, r.A), Of(without, garment, r.B))):F3}");
-        Assert.All(ring, r => Assert.Equal(0f, D(Of(with, garment, r.A), Of(with, garment, r.B))));
+        // Within one body mod, two slots whose rigs both change, a seam between them: each copy nearest a different body
+        // reads a different new bone.
+        var left = FlatPair("_top", Flat(-0.03f, -0.001f, Kosi), Flat(-0.03f, -0.001f, [("j_sebo_a", 1f)]));
+        var right = FlatPair("_glv", Flat(0.001f, 0.03f, Kosi), Flat(0.001f, 0.03f, [("j_sebo_b", 1f)]));
+        var garment = SeamBetween(Kosi, Kosi);
+        BodyRetarget.WeightPlan Run(bool seams) => BodyRetarget.WithTuning(new BodyRetarget.Tuning(NoSeamWeights: !seams),
+            () => BodyRetarget.PlanWeights(garment, [left, right], acrossBodies: false, before: garment))!;
+
+        var without = Run(false);
+        float apart = D(Of(without, garment, At(0)), Of(without, garment, At(1)));
+        Assert.True(apart > 0.5f, $"the copies read only {apart:F3} apart without the rule");
+        var with = Run(true);
+        Assert.Equal(0f, D(Of(with, garment, At(0)), Of(with, garment, At(1))));
+    }
+
+    /// <summary>A seam's two copies 0.4 mm apart across x = 0, 5 mm out from <see cref="Flat"/> bodies either side.</summary>
+    private static byte[] SeamBetween((string Bone, float W)[] left, (string Bone, float W)[] right)
+    {
+        var p = new Vector3(-2e-4f, 1f, 0.005f);
+        return SyntheticModel.BuildSurface([], Points(Cloth, [p, p + new Vector3(4e-4f, 0f, 0f)], [left, right]));
+    }
+
+    [Fact]
+    [Trait("Plan", "AC-seam-weights-5")]
+    [Trait("Plan", "EDGE-seam-weights-11")]
+    public void Through_the_plan_a_seam_never_carries_more_to_the_other_side_than_its_author_gave()
+    {
+        // Rigged 60/40 and 60.4/39.6 (a byte apart): one place. The body on the left turns to the right breast, the body on
+        // the right to the left; averaged, the left copy would carry half to its right where its author gave 0.4.
+        (string, float)[] a = [("j_mune_l", 0.60f), ("j_mune_r", 0.40f)], b = [("j_mune_l", 0.604f), ("j_mune_r", 0.396f)];
+        var left = FlatPair("_top", Flat(-0.03f, -0.001f, a), Flat(-0.03f, -0.001f, [("j_mune_l", 0.3f), ("j_mune_r", 0.7f)]));
+        var right = FlatPair("_glv", Flat(0.001f, 0.03f, b), Flat(0.001f, 0.03f, [("j_mune_l", 0.7f), ("j_mune_r", 0.3f)]));
+        var garment = SeamBetween(a, b);
+        float[]? clamped = null;
+        BodyRetarget.PushTrace.Value = (k, v) => { if (k == "seam-clamped") clamped = v; };
+        BodyRetarget.WeightPlan plan;
+        try { plan = BodyRetarget.PlanWeights(garment, [left, right], acrossBodies: true, before: garment)!; }
+        finally { BodyRetarget.PushTrace.Value = null; }
+        var written = SyntheticCrotch.Weights(Rebuild(garment, [left, right], plan));
+        foreach (var (v, authored) in new[] { (At(0), a), (At(1), b) })
+        {
+            float right0 = written[v].Where(i => i.Bone == "j_mune_r").Sum(i => i.W);
+            Assert.True(right0 <= authored.Single(i => i.Item1 == "j_mune_r").Item2 + 1f / 255f,
+                        $"vertex {v} carries {right0:F3} to the right");
+        }
+        Assert.NotNull(clamped);
+        Assert.Equal(1f, clamped![At(0)]);
+    }
+
+    [Fact]
+    [Trait("Plan", "AC-seam-weights-5")]
+    [Trait("Plan", "EDGE-seam-weights-11")]
+    public void Through_the_plan_a_seam_never_carries_more_leg_than_its_author_gave()
+    {
+        // Rigged 9.8% and 10.2% to the thigh (a byte apart): one place, but only the second counts as rigged to the legs
+        // (LegShare), so only the first is held off them. The body on the right gives its copy most of the thigh.
+        (string, float)[] a = [("j_kosi", 0.902f), ("j_asi_a_l", 0.098f)], b = [("j_kosi", 0.898f), ("j_asi_a_l", 0.102f)];
+        var left = FlatPair("_top", Flat(-0.03f, -0.001f, a), Flat(-0.03f, -0.001f, Kosi));
+        var right = FlatPair("_glv", Flat(0.001f, 0.03f, b), Flat(0.001f, 0.03f, [("j_kosi", 0.4f), ("j_asi_a_l", 0.6f)]));
+        var garment = SeamBetween(a, b);
+        var plan = BodyRetarget.PlanWeights(garment, [left, right], acrossBodies: true, before: garment)!;
+        var without = BodyRetarget.WithTuning(new BodyRetarget.Tuning(NoSeamWeights: true),
+            () => BodyRetarget.PlanWeights(garment, [left, right], acrossBodies: true, before: garment))!;
+        float Legs(BodyRetarget.WeightPlan p, int v) => SyntheticCrotch.Legs(Of(p, garment, v));
+        Assert.True(Legs(without, At(1)) > 0.2f, $"the right copy read only {Legs(without, At(1)):F3} of the thigh");
+        var written = SyntheticCrotch.Weights(Rebuild(garment, [left, right], plan));
+        float legs = SyntheticCrotch.Legs(written[At(0)]);
+        Assert.True(legs <= 0.098f + 1f / 255f, $"the copy held off the legs carries {legs:F3} of the thigh");
+    }
+
+    private static byte[] Rebuild(byte[] garment, BodyRetarget.SlotPair[] pairs, BodyRetarget.WeightPlan plan)
+    {
+        var rebuilt = BodyRetarget.Rebuild(garment, pairs, swapSkin: false, plan, out _);
+        Assert.NotNull(rebuilt);
+        return rebuilt!;
+    }
+
+    /// <summary>
+    /// [EDGE-seam-weights-15] A refit pinned as it was before the seam weights, against the same refit with them: every
+    /// position and normal the same, so the rule moved weights alone.
+    /// </summary>
+    internal static void SameGeometry(byte[] pinned, byte[] now)
+    {
+        var a = ModelPartReader.Read(pinned)!;
+        var b = ModelPartReader.Read(now)!;
+        Assert.Equal(a.Positions, b.Positions);
+        Assert.Equal(a.Normals, b.Normals);
+    }
+
+    /// <summary>The widest class: the largest distance between two members of one, as authored.</summary>
+    private static float Widest(byte[] mdl, BodyRetarget.SeamOutcome outcome)
+    {
+        var at = SyntheticCrotch.Positions(mdl);
+        float widest = 0f;
+        foreach (var members in Enumerable.Range(0, outcome.ClassOf.Length).Where(v => outcome.ClassOf[v] >= 0)
+                                          .GroupBy(v => outcome.ClassOf[v]))
+            foreach (int a in members)
+                foreach (int b in members)
+                    widest = MathF.Max(widest, Vector3.Distance(at[a], at[b]));
+        return widest;
     }
 
     // ── a rig-kept slot beside one whose rig changes ─────────────────────────────────────────────────────────

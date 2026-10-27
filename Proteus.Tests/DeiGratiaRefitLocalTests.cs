@@ -412,10 +412,13 @@ public class DeiGratiaRefitLocalTests(ITestOutputHelper output)
 
     /// <summary>
     /// Pairs of the authored garment's cloth vertices from <paramref name="near"/> to <paramref name="far"/> apart that
-    /// share neither a triangle edge nor a neighbour — one place split in two, not neighbours along a surface. Counted
-    /// apart: such pairs that ARE joined so (neighbours, left out by definition).
+    /// share no triangle edge — one place split in two, not neighbours along a surface. Counted apart: pairs that do share
+    /// an edge (left out), and in <paramref name="neighbourOnly"/> those of the list that share a neighbour but no edge,
+    /// which the pass leaves out as a surface's neighbours too (a quad's opposite corners).
     /// </summary>
-    private static List<Place> Places(byte[] garment, float near, float far, out int joined)
+    private static List<Place> Places(byte[] garment, float near, float far, out int joined) => Places(garment, near, far, out joined, out _);
+
+    private static List<Place> Places(byte[] garment, float near, float far, out int joined, out List<Place> neighbourOnly)
     {
         var model = ModelPartReader.Read(garment)!;
         var authored = CrotchWeights(garment);
@@ -433,6 +436,7 @@ public class DeiGratiaRefitLocalTests(ITestOutputHelper output)
         var verts = next.Keys.OrderBy(v => v).ToList();
         Vector3 P(int v) => new(model.Positions[v * 3], model.Positions[v * 3 + 1], model.Positions[v * 3 + 2]);
         var list = new List<Place>();
+        neighbourOnly = [];
         joined = 0;
         for (int x = 0; x < verts.Count; x++)
             for (int y = x + 1; y < verts.Count; y++)
@@ -440,8 +444,10 @@ public class DeiGratiaRefitLocalTests(ITestOutputHelper output)
                 int a = verts[x], b = verts[y];
                 float apart = Vector3.Distance(P(a), P(b));
                 if (apart < near || apart > far) continue;
-                if (next[a].Contains(b) || next[a].Overlaps(next[b])) { joined++; continue; }
-                list.Add(new Place(a, b, apart, D(authored[a], authored[b])));
+                if (next[a].Contains(b)) { joined++; continue; }
+                var place = new Place(a, b, apart, D(authored[a], authored[b]));
+                if (next[a].Overlaps(next[b])) neighbourOnly.Add(place);
+                else list.Add(place);
             }
         return list;
     }
@@ -486,7 +492,7 @@ public class DeiGratiaRefitLocalTests(ITestOutputHelper output)
     {
         var i = Read(modNeed, rel);
         var on = Plan(i, path);
-        var places = Places(i.Bytes, 0f, BodyRetarget.SeamReach, out int joined);
+        var places = Places(i.Bytes, 0f, BodyRetarget.SeamReach, out int joined, out var neighbourOnly);
         var written = Written(i.Bytes, on.Plan.Model);
         int vc = ModelPartReader.Read(i.Bytes)!.Positions.Length / 3;
         Assert.True(on.Seams.ContainsKey("seam-class"), "the plan traced no seam classes");
@@ -525,7 +531,13 @@ public class DeiGratiaRefitLocalTests(ITestOutputHelper output)
                          + $"the class limits {limited} worst {worstLimited:F3}; weighted apart by the author {apartByAuthor}); "
                          + $"edge-joined pairs within reach {joined}; classes averaged {stats[0]}, reverted {stats[1]}, kept-shape "
                          + $"{stats[2]}, largest {stats[3]} members / {stats[4] * 1e6:0} µm; split 0.5-0.8 mm {splitBeyond}");
-        if (modNeed == Bibo) Assert.Equal(0, splitBeyond);
+        // Pairs sharing a neighbour but no edge: the pass takes them for neighbours along a surface. For the record, how
+        // many and how far apart they are written against their authored weights.
+        var neighbourSplit = neighbourOnly.Where(p => D(written[p.A], written[p.B]) > p.Authored + 0.02f).ToList();
+        output.WriteLine($"  sharing a neighbour but no edge: {neighbourOnly.Count}, written more than 0.02 further apart than "
+                         + $"authored {neighbourSplit.Count}"
+                         + (neighbourSplit.Count > 0 ? $", worst {neighbourSplit.Max(p => D(written[p.A], written[p.B])):F3}" : ""));
+        Assert.Equal(0, splitBeyond);
 
         if (modNeed == Bibo)
         {

@@ -1396,6 +1396,7 @@ public partial class VanillaGearRefitLocalTests(ITestOutputHelper output)
     [Trait("Plan", "AC-coatee-strap-slit-5")]
     [Trait("Plan", "EDGE-coatee-strap-slit-12")]
     [Trait("Plan", "AC-keep-shape-flat-card-3")]
+    [Trait("Plan", "EDGE-seam-weights-15")]
     public void A_modders_top_in_the_Studio_is_unchanged()
     {
         var data = new Lumina.GameData(LocalData.Path(LocalData.GameData));
@@ -1433,9 +1434,7 @@ public partial class VanillaGearRefitLocalTests(ITestOutputHelper output)
         // and nothing else moves — still nothing drawn where the inside would show, and no more cloth in the body, no more
         // folds. Before 1382's seam weights, which write weights alone: as it is made now, every position and normal the same.
         var plan = BodyRetarget.WithTuning(new BodyRetarget.Tuning(NoSeamWeights: true), () => Run(rule.SeeInside));
-        var now = ModelPartReader.Read(Run(rule.SeeInside).Model)!;
-        Assert.Equal(ModelPartReader.Read(plan.Model)!.Positions, now.Positions);
-        Assert.Equal(ModelPartReader.Read(plan.Model)!.Normals, now.Normals);
+        SeamWeightsTests.SameGeometry(plan.Model, Run(rule.SeeInside).Model);   // [EDGE-seam-weights-15]
         Assert.True(plan.Report.ShapeFallbacks > 0, "Dei Gratia's refit should take quaternion turns, or the pins above say it all");
         string target = mod.PathOf(option);
         int Inside(BodyRetarget.Planned p) => BodySizeMatch.ClothAgainst(ModelPartReader.Read(p.Model)!, target)!.Value.Inside;

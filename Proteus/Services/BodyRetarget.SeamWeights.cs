@@ -123,6 +123,7 @@ internal static partial class BodyRetarget
             => authored.TryGetValue(v, out var a) ? a : authored[v] = Influences(own, v);
 
         var meshOf = new int[vc];
+        Array.Fill(meshOf, -1);
         foreach (var span in model.MeshSpans)
             for (int i = 0; i < span.Count && span.BaseVertex + i < vc; i++) meshOf[span.BaseVertex + i] = span.Mesh;
 
@@ -143,6 +144,8 @@ internal static partial class BodyRetarget
                         if (u > v && Partners(v, u)) pairs.Add((Vector3.Distance(At(v), At(u)), v, u));
         }
         pairs.Sort();
+        var partnered = new HashSet<(int, int)>(pairs.Select(p => (p.A, p.B)));
+        bool Paired(int a, int b) => partnered.Contains((Math.Min(a, b), Math.Max(a, b)));
 
         // Two classes join only when every vertex of one is a partner of every vertex of the other: no class is wider than
         // the reach, drifts in weight, or holds two neighbours along a surface.
@@ -151,7 +154,7 @@ internal static partial class BodyRetarget
         {
             var ga = groupOf.TryGetValue(a, out var x0) ? x0 : [a];
             var gb = groupOf.TryGetValue(b, out var y0) ? y0 : [b];
-            if (ReferenceEquals(ga, gb) || !ga.All(m => gb.All(n => Partners(m, n)))) continue;
+            if (ReferenceEquals(ga, gb) || !ga.All(m => gb.All(n => Paired(m, n)))) continue;
             ga.AddRange(gb);
             foreach (int m in ga) groupOf[m] = ga;
         }
@@ -160,7 +163,6 @@ internal static partial class BodyRetarget
         float diameter = 0f;
         foreach (var members in groupOf.Values.Distinct().Select(g => g.OrderBy(m => m).ToList()).OrderBy(g => g[0]))
         {
-
             int id = kinds.Count;
             foreach (int m in members) classOf[m] = id;
             largest = Math.Max(largest, members.Count);

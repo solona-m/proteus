@@ -502,6 +502,7 @@ public partial class VanillaGearRefitLocalTests
     /// </summary>
     [LocalDataFact(LocalData.GameData, TheBodySe)]
     [Trait("Plan", "AC-relax-sink-guard-3")]
+    [Trait("Plan", "EDGE-seam-weights-15")]
     public void A_mod_garment_refit_ignores_the_relax_guard()
     {
         var g = GiletOnTbse();
@@ -516,6 +517,9 @@ public partial class VanillaGearRefitLocalTests
         output.WriteLine($"mod garment {mod}, accessory {accessory}");
         Assert.Equal(GiletMod1373, mod);
         Assert.Equal(GiletAccessory1373, accessory);
+        // [EDGE-seam-weights-15] With the seam weights: the same refits, weights apart.
+        SeamWeightsTests.SameGeometry(BodyRetarget.WithTuning(asBuilt, Mod).Model, Mod().Model);
+        SeamWeightsTests.SameGeometry(BodyRetarget.WithTuning(asBuilt, Accessory).Model, Accessory().Model);
         Assert.Equal(mod, SkinTuckSheet.Sha(BodyRetarget.WithTuning(off, Mod).Model));
         Assert.Equal(accessory, SkinTuckSheet.Sha(BodyRetarget.WithTuning(off, Accessory).Model));
     }
