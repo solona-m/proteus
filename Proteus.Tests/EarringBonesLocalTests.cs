@@ -186,7 +186,9 @@ public class EarringBonesLocalTests(ITestOutputHelper o)
             var onto = BodySizeCatalog.Read(LocalData.Path(CrossSexRefitLocalTests.Bibo));
             inputs = inputs with { TargetPick = CrossSexRefitLocalTests.IsFile(onto, UvBakeInputs.BiboChest) };
         }
-        var r = CrossSexRefitJob.Run(inputs);
+        // Before 1382's seam weights, as these were recorded (measured at 1382: 2 and 6,730 vertices on 7 and 931 seams took
+        // one weighting, the most any moved 0.015).
+        var r = BodyRetarget.WithTuning(new BodyRetarget.Tuning(NoSeamWeights: true), () => CrossSexRefitJob.Run(inputs));
         Assert.Empty(r.Earrings ?? []);
         string got = Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(Assert.Single(r.Sizes).Saved!.Model));
         o.WriteLine($"{what}: {got}");

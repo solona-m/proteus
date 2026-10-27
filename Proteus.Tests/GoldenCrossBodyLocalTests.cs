@@ -76,10 +76,13 @@ public class GoldenCrossBodyLocalTests(ITestOutputHelper output)
             }
             Assert.Null(BodyRetarget.BuildPair("_dwn", source, targetPath, "_dwn", false, null, null, null, out var pair));
 
-            var plan = path == "studio"
+            // As it was recorded: a seam's split vertices weighted each on its own, as builds before 1382 did. Measured on
+            // these refits at 1382: 136-137 vertices on 55-59 seams took one weighting, the most any moved 0.150, positions
+            // untouched (the seam rule writes weights alone); judged in SeamWeightsTests.
+            var plan = BodyRetarget.WithTuning(new BodyRetarget.Tuning(NoSeamWeights: true), () => path == "studio"
                 ? BodyRetarget.Plan(garment, bytes, [pair], "_dwn", held: new HashSet<int>(), replaceSkin: true,
                                     acrossBodies: true, cutHidden: true)
-                : RefitCore.PlanRefit(garment, bytes, [pair], "_dwn", across: true, gameGear: false, out _);
+                : RefitCore.PlanRefit(garment, bytes, [pair], "_dwn", across: true, gameGear: false, out _));
             return (Convert.ToHexString(SHA256.HashData(plan.Model)), plan.Report.Pushed);
         }
         finally

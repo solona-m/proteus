@@ -129,7 +129,9 @@ public class KeepShapeReleaseLocalTests
 
     /// <summary>One refit as <c>Proteus.Refit --keep-default</c> runs it, the default ticks less <paramref name="untick"/>.
     /// The new body's piercings carried, as every refit did when <see cref="Before"/> was pinned, unless
-    /// <paramref name="carryPiercings"/> says otherwise.</summary>
+    /// <paramref name="carryPiercings"/> says otherwise. A seam's split vertices weighted each on its own, as builds before
+    /// 1382 did (<see cref="BodyRetarget.Tuning.NoSeamWeights"/>): every hash here was taken before that rule, which
+    /// SeamWeightsTests and DeiGratiaRefitLocalTests judge.</summary>
     private static Run Refit(byte[] bytes, string fromNeed, string fromRel, string toNeed, string toRel,
                              bool noRelease = false, string? untick = null, bool noNippleSmooth = false,
                              bool beforeSnapPush = false, bool carryPiercings = true, bool noOpenEdgeFit = false,
@@ -149,7 +151,8 @@ public class KeepShapeReleaseLocalTests
         var plan = BodyRetarget.WithTuning(new BodyRetarget.Tuning(NoRelease: noRelease, NoNippleSmooth: noNippleSmooth,
                                                                        NoSnapPush: beforeSnapPush,
                                                                        NoOpenEdgeFit: noOpenEdgeFit,
-                                                                       NoTurnFallback: noTurnFallback), () => BodyRetarget.Plan(
+                                                                       NoTurnFallback: noTurnFallback,
+                                                                       NoSeamWeights: true), () => BodyRetarget.Plan(
             garment, bytes, [pair], "_top", replaceSkin: true, acrossBodies: across, keepShape: pieces,
             carryPiercings: carryPiercings));
         return new Run(plan, names);
