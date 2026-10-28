@@ -1205,6 +1205,11 @@ public sealed partial class ContentImportService
     /// groups and in Single groups made only of such options and empty ones. A group it does not mention keeps the
     /// defaults. Every name is emitted as the PACK spells it, and an unknown one is dropped: Penumbra matches options
     /// exactly and rejects a whole group over one name it does not know.
+    /// <para/>
+    /// Every <c>Imc</c> group is written too, since the import keeps them all: at the source's choice when it has a
+    /// usable one, else at the pack's own defaults, so a reused folder name's stale ticks never survive. One unknown
+    /// name gives the defaults, not part of the choice — the options XOR into one mask nobody chose. A group sharing
+    /// an earlier group's name is never written: Penumbra would apply it to that one (<see cref="UncopiedImcChoices"/>).
     /// </summary>
     internal static Dictionary<string, List<string>> ImportSelection(
         ImportPreview preview, IReadOnlyDictionary<string, List<string>>? sourceSelection = null)
@@ -1214,17 +1219,17 @@ public sealed partial class ContentImportService
 
         var keepOn = KeptGroupDefaults(preview);
         var gated = GatedGroupDefaults(preview);
-        foreach (var group in preview.Pack.Groups)
+        foreach (var (group, shadowed) in GroupsWithShadowing(preview.Pack))
         {
             var source = SourceChoice(sourceSelection, group.Name);
+            if (string.Equals(group.Type, "Imc", StringComparison.OrdinalIgnoreCase))
+            {
+                if (ImcDecision(group, shadowed, false, source).Write is { } write) result[group.Name] = write;
+                continue;
+            }
             if (string.Equals(group.Type, "Single", StringComparison.OrdinalIgnoreCase))
             {
-                if (source is { Count: > 0 }
-                    && group.Options.All(o => IsEmptyOption(o) || IsImcToggleOnly(o, preview))
-                    && group.Options.Any(o => IsImcToggleOnly(o, preview))
-                    && group.Options.FirstOrDefault(o => string.Equals(o.Name, source[0], StringComparison.OrdinalIgnoreCase))
-                        is { } picked)
-                    result[group.Name] = [picked.Name];
+                if (SingleChoice(group, source, preview) is { } picked) result[group.Name] = picked;
                 continue;
             }
             if (!string.Equals(group.Type, "Multi", StringComparison.OrdinalIgnoreCase)) continue;
@@ -1244,6 +1249,18 @@ public sealed partial class ContentImportService
         return result;
     }
 
+    /// <summary>
+    /// What the import writes for a Single group: the source's choice, when every option only switches imported parts or
+    /// does nothing and at least one switches; null leaves the group at its manifest default.
+    /// </summary>
+    private static List<string>? SingleChoice(PenumbraPackage.PackGroup group, List<string>? source, ImportPreview preview)
+        => source is { Count: > 0 }
+        && group.Options.All(o => IsEmptyOption(o) || IsImcToggleOnly(o, preview))
+        && group.Options.Any(o => IsImcToggleOnly(o, preview))
+        && group.Options.FirstOrDefault(o => string.Equals(o.Name, source[0], StringComparison.OrdinalIgnoreCase))
+            is { } picked
+            ? [picked.Name] : null;
+
     /// <summary>The source's choice for one group, matched by name case-insensitively as Penumbra matches groups; null when it has none.</summary>
     private static List<string>? SourceChoice(IReadOnlyDictionary<string, List<string>>? selection, string group)
     {
@@ -1251,6 +1268,84 @@ public sealed partial class ContentImportService
         foreach (var (name, options) in selection)
             if (string.Equals(name, group, StringComparison.OrdinalIgnoreCase)) return options;
         return null;
+    }
+
+    /// <summary>
+    /// The source's ticks for one <c>Imc</c> group, as the pack spells them and in its option order; null when the source
+    /// has no choice for it, or names an option the group lacks (the first such name in <paramref name="unknown"/>).
+    /// </summary>
+    internal static List<string>? ImcGroupChoice(PenumbraPackage.PackGroup group, IReadOnlyList<string>? source,
+                                                 out string? unknown)
+    {
+        unknown = null;
+        if (source == null) return null;
+        var ticked = new HashSet<int>();
+        foreach (var name in source)
+        {
+            int at = group.Options.ToList().FindIndex(o => string.Equals(o.Name, name, StringComparison.OrdinalIgnoreCase));
+            if (at < 0) { unknown = name; return null; }
+            ticked.Add(at);
+        }
+        return [.. group.Options.Where((_, i) => ticked.Contains(i)).Select(o => o.Name)];
+    }
+
+    /// <summary>The options a group's <c>DefaultSettings</c> ticks, in pack order; bits past its options are ignored, as Penumbra does.</summary>
+    internal static List<string> ImcGroupDefaults(PenumbraPackage.PackGroup group)
+        => [.. group.Options.Where((_, i) => i < 64 && (group.DefaultSettings & (1ul << i)) != 0).Select(o => o.Name)];
+
+    /// <summary>Each pack group, and whether an earlier one already has its name — the one Penumbra addresses by it.</summary>
+    private static IEnumerable<(PenumbraPackage.PackGroup Group, bool Shadowed)> GroupsWithShadowing(
+        PenumbraPackage.Contents pack)
+    {
+        var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var group in pack.Groups)
+            yield return (group, !seen.Add(group.Name));
+    }
+
+    /// <summary>
+    /// What the import writes for one <c>Imc</c> group (null: nothing), and why the source's choice is not what lands
+    /// (null: it is, or the source made none). The one place both <see cref="ImportSelection"/> and the log decide it.
+    /// </summary>
+    private static (List<string>? Write, string? Reason) ImcDecision(
+        PenumbraPackage.PackGroup group, bool shadowed, bool overwritten, List<string>? source)
+    {
+        if (shadowed)
+            return (null, source == null ? null
+                : "an earlier group has the same name, so Penumbra would apply the choice to that group");
+        var choice = ImcGroupChoice(group, source, out var unknown);
+        if (choice == null)
+            return (ImcGroupDefaults(group), unknown == null ? null
+                : $"the original ticks \"{unknown}\", which this pack's group does not have");
+        return (choice, overwritten ? "a later group of the same name overwrites it" : null);
+    }
+
+    /// <summary>
+    /// The <c>Imc</c> groups the source mentions whose choice the import does not copy, and why, for the import's log:
+    /// a name the pack's group lacks, or another group of the same name taking or overwriting the write.
+    /// </summary>
+    internal static IReadOnlyList<(string Group, string Reason)> UncopiedImcChoices(
+        ImportPreview preview, IReadOnlyDictionary<string, List<string>>? sourceSelection)
+    {
+        var result = new List<(string, string)>();
+        if (preview.InstallOnly || sourceSelection == null) return result;
+        var groups = preview.Pack.Groups;
+        int at = -1;
+        foreach (var (group, shadowed) in GroupsWithShadowing(preview.Pack))
+        {
+            at++;
+            if (!string.Equals(group.Type, "Imc", StringComparison.OrdinalIgnoreCase)
+                || SourceChoice(sourceSelection, group.Name) is not { } source) continue;
+            // Overwritten only by a later group of its name that ImportSelection really writes: every Multi, and a
+            // Single only on the same terms as there. A later Imc duplicate is never written.
+            bool overwritten = groups.Skip(at + 1).Any(g =>
+                string.Equals(g.Name, group.Name, StringComparison.OrdinalIgnoreCase)
+                && (string.Equals(g.Type, "Multi", StringComparison.OrdinalIgnoreCase)
+                    || (string.Equals(g.Type, "Single", StringComparison.OrdinalIgnoreCase)
+                        && SingleChoice(g, SourceChoice(sourceSelection, g.Name), preview) != null)));
+            if (ImcDecision(group, shadowed, overwritten, source).Reason is { } reason)
+                result.Add((group.Name, reason));
+        }
+        return result;
     }
 
     /// <summary>
@@ -1279,6 +1374,8 @@ public sealed partial class ContentImportService
                 log.Warning("[Proteus] imported {0}: could not set group \"{1}\" to [{2}] ({3})",
                     dirName, group, string.Join(", ", options), ec);
         }
+        foreach (var (group, reason) in UncopiedImcChoices(preview, sourceSelection))
+            log.Information("[Proteus] imported {0}: IMC group \"{1}\" does not start at the original's choice — {2}", dirName, group, reason);
     }
 
     /// <summary>Everything after the add and the piece group: enable, open Penumbra, recomposite, report.</summary>
