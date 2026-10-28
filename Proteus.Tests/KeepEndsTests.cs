@@ -888,13 +888,14 @@ public class KeepEndsTests
 
     /// <summary>
     /// The automatic refit's plan, byte for byte as it was before the Studio came to share it: recorded from the code
-    /// before the shared core was lifted out of it, so the lifting cannot have changed what the watcher writes.
+    /// before the shared core was lifted out of it, so the lifting cannot have changed what the watcher writes. With the
+    /// cut as it was then: 1386's keeps a triangle whose middle the author's skin covers in the open.
     /// </summary>
     [Fact]
     [Trait("Plan", "AC-keep-ends-studio-10")]
     public void Automatic_keep_ends_plan_is_unchanged()   // [AC-keep-ends-studio-10]
     {
-        var (withFeet, legsOnly) = AutomaticPlans();
+        var (withFeet, legsOnly) = BodyRetarget.WithTuning(new BodyRetarget.Tuning(NoCutInside: true), AutomaticPlans);
         Assert.Equal("54513857BC98FE4A14E87E3B9D7EF82C75A69063768CC3DD14A1DDFF62B86CCE", Hash(withFeet.Model));
         Assert.Equal("1398DC77C9E775E242310F71BB027817162C177C71B7ECA11F7873C9781DBBB6", Hash(legsOnly.Model));
     }

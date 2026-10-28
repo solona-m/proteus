@@ -75,7 +75,7 @@ internal static partial class BodyRetarget
     /// <param name="NoCutOpenSkin">Cut a slot the garment only reaches onto wherever its laid skin misses the new body,
     /// even in the open inside the author's own skin, as builds before 1384 did (see <see cref="GrowSpannedOpenSkin"/>).</param>
     /// <param name="NoCutInside">Cut a body triangle none of whose corners the author's skin covers, even where it covers
-    /// the triangle's middle, as builds before 1386 did (see <see cref="CoversInside"/>).</param>
+    /// the triangle's middle in the open, as builds before 1386 did (see <see cref="OpenInside"/>).</param>
     /// <param name="CutOpenSkinUnderCloth">Measuring only: let <see cref="GrowSpannedOpenSkin"/> keep spanned skin with
     /// cloth over it too, so long as none crowds it.</param>
     /// <param name="CutOpenSkinAnyFacing">Measuring only: let <see cref="GrowSpannedOpenSkin"/> keep skin whose laid skin
