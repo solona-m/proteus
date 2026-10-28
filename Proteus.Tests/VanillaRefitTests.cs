@@ -2,6 +2,9 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Runtime.CompilerServices;
+using System.Threading;
+using System.Threading.Tasks;
 using Proteus.Services;
 using Xunit;
 
@@ -199,6 +202,220 @@ public class VanillaRefitTests : IDisposable
         Assert.Single(catalog.For("_top", "0201"));
         Assert.Single(catalog.For("_top", "0401"));    // another women's race falls back
         Assert.Empty(catalog.For("_top", "0101"));     // a man's does not
+    }
+
+    // ── one body for every reader, "no body" only for the reader that said so ──────────────────────
+
+    /// <summary>The game's data as an object, so the same reader can be handed over as a method group.</summary>
+    private sealed class CountingGame(params string[] has)
+    {
+        public readonly List<string> Asked = [];
+        public byte[]? File(string path) => Game(Asked, has)(path);
+    }
+
+    [Fact]
+    [Trait("Plan", "AC-game-body-reader-cache-1")]
+    public void A_reader_that_finds_no_body_does_not_hide_it_from_one_that_does() // [AC-game-body-reader-cache-1]
+    {
+        // A test's stub reads nothing; the game's own reader, asking after it in the same process, still gets the body.
+        Assert.False(VanillaBodyCatalog.Read("0201", _ => null).IsBody);
+
+        var asked = new List<string>();
+        var catalog = VanillaBodyCatalog.Read("0201", Game(asked, EverySlot("0201")));
+
+        Assert.True(catalog.IsBody);
+        Assert.Equal(["_top", "_dwn", "_glv", "_sho"], catalog.Slots);
+        Assert.All(catalog.Options, o => Assert.True(File.Exists(catalog.PathOf(o)), catalog.PathOf(o)));
+        Assert.True(VanillaBodyCatalog.IsGameModel(File.ReadAllBytes(catalog.PathOf(catalog.For("_top", "0201")[0])), "_top"));
+    }
+
+    [Fact]
+    [Trait("Plan", "AC-game-body-reader-cache-2")]
+    [Trait("Plan", "EDGE-game-body-reader-cache-8")]
+    public void A_body_read_once_is_every_reader_s_without_reading_again() // [AC-game-body-reader-cache-2] [EDGE-game-body-reader-cache-8]
+    {
+        // The plugin hands the catalog three readers of one game; the body is still extracted once.
+        List<string> askedA = [], askedB = [];
+        var readerA = Game(askedA, EverySlot("0201"));
+        var readerB = Game(askedB, EverySlot("0201"));
+        Assert.False(ReferenceEquals(readerA, readerB));
+
+        var a = VanillaBodyCatalog.Read("0201", readerA);
+        var b = VanillaBodyCatalog.Read("0201", readerB);
+
+        Assert.Equal(4, askedA.Count);
+        Assert.Empty(askedB);
+        Assert.Equal(a.Options.Select(a.PathOf), b.Options.Select(b.PathOf));
+    }
+
+    [Fact]
+    [Trait("Plan", "AC-game-body-reader-cache-3")]
+    [Trait("Plan", "EDGE-game-body-reader-cache-4")]
+    public void A_race_with_no_body_is_asked_of_the_game_once_a_reader() // [AC-game-body-reader-cache-3] [EDGE-game-body-reader-cache-4]
+    {
+        // The Studio asks every frame whether a racial piece's race has a body of its own; the answer is read once.
+        var asked = new List<string>();
+        var read = Game(asked, EverySlot("0201"));
+
+        for (int i = 0; i < 3; i++) Assert.False(VanillaBodyCatalog.Read("0801", read).IsBody);
+        Assert.Equal(4, asked.Count);
+
+        // Its own "no body" says nothing of the body the game draws for it.
+        Assert.True(VanillaBodyCatalog.Read("0801", read, drawn: true).IsBody);
+        Assert.True(asked.Count > 4);
+    }
+
+    [Fact]
+    [Trait("Plan", "EDGE-game-body-reader-cache-1")]
+    public void A_stub_that_draws_no_body_does_not_hide_the_drawn_body() // [EDGE-game-body-reader-cache-1]
+    {
+        Assert.False(VanillaBodyCatalog.Read("0801", _ => null, drawn: true).IsBody);
+
+        var asked = new List<string>();
+        var catalog = VanillaBodyCatalog.Read("0801", Game(asked, EverySlot("0201")), drawn: true);
+
+        Assert.Equal(["_top", "_dwn", "_glv", "_sho"], catalog.Slots);
+        Assert.All(catalog.Options, o => Assert.Equal("0801", BodySizeCatalog.RaceOf(o.GamePath)));
+    }
+
+    [Fact]
+    [Trait("Plan", "EDGE-game-body-reader-cache-2")]
+    public void A_reader_after_the_body_is_extracted_rewrites_nothing() // [EDGE-game-body-reader-cache-2]
+    {
+        var asked = new List<string>();
+        var body = VanillaBodyCatalog.Read("0201", Game(asked, EverySlot("0201")));
+        var before = body.Options.Select(body.PathOf)
+                         .ToDictionary(p => p, p => (Bytes: File.ReadAllBytes(p), Written: File.GetLastWriteTimeUtc(p)));
+
+        var stubAsked = new List<string>();
+        var stub = VanillaBodyCatalog.Read("0201", p => { stubAsked.Add(p); return null; });
+
+        Assert.True(stub.IsBody);
+        Assert.Empty(stubAsked);
+        foreach (var (path, was) in before)
+        {
+            Assert.Equal(was.Bytes, File.ReadAllBytes(path));
+            Assert.Equal(was.Written, File.GetLastWriteTimeUtc(path));
+        }
+    }
+
+    [Fact]
+    [Trait("Plan", "EDGE-game-body-reader-cache-3")]
+    public void A_reader_that_throws_does_not_hide_the_body() // [EDGE-game-body-reader-cache-3]
+    {
+        Assert.False(VanillaBodyCatalog.Read("0201", _ => throw new IOException("no game here")).IsBody);
+
+        var asked = new List<string>();
+        var catalog = VanillaBodyCatalog.Read("0201", Game(asked, EverySlot("0201")));
+
+        Assert.True(catalog.IsBody);
+        Assert.Equal(4, catalog.Slots.Count());
+    }
+
+    [Fact]
+    [Trait("Plan", "EDGE-game-body-reader-cache-5")]
+    public void A_new_session_asks_a_reader_that_found_nothing_again() // [EDGE-game-body-reader-cache-5]
+    {
+        var asked = new List<string>();
+        var read = Game(asked, EverySlot("0201"));
+
+        VanillaBodyCatalog.Read("0801", read);
+        Assert.Equal(4, asked.Count);
+
+        VanillaBodyCatalog.CleanUp();
+        VanillaBodyCatalog.Read("0801", read);
+        Assert.Equal(8, asked.Count);
+    }
+
+    [Fact]
+    [Trait("Plan", "EDGE-game-body-reader-cache-6")]
+    public void Readers_racing_for_one_race_extract_it_once() // [EDGE-game-body-reader-cache-6]
+    {
+        int reads = 0;
+        var bodies = new BodySizeCatalog[8];
+        Parallel.For(0, bodies.Length, i =>
+        {
+            var serve = Game([], EverySlot("0201"));
+            bodies[i] = VanillaBodyCatalog.Read("0201", p => { Interlocked.Increment(ref reads); return serve(p); });
+        });
+
+        Assert.Equal(4, reads);
+        Assert.All(bodies, b => Assert.True(b.IsBody));
+    }
+
+    [Fact]
+    [Trait("Plan", "EDGE-game-body-reader-cache-7")]
+    public void A_partial_body_is_a_body_for_every_reader() // [EDGE-game-body-reader-cache-7]
+    {
+        List<string> askedA = [], askedB = [];
+        var a = VanillaBodyCatalog.Read("0201", Game(askedA, VanillaBodyCatalog.GamePathOf("0201", "_top"),
+                                                             VanillaBodyCatalog.GamePathOf("0201", "_dwn")));
+        var b = VanillaBodyCatalog.Read("0201", Game(askedB, EverySlot("0201")));
+
+        Assert.Equal(["_top", "_dwn"], a.Slots);
+        Assert.Equal(["_top", "_dwn"], b.Slots);
+        Assert.Empty(askedB);
+    }
+
+    [Fact]
+    [Trait("Plan", "EDGE-game-body-reader-cache-9")]
+    public void The_same_reader_in_another_delegate_is_not_asked_again() // [EDGE-game-body-reader-cache-9]
+    {
+        // Each method-group conversion is a new delegate over the same object and method: the same reader.
+        var game = new CountingGame(EverySlot("0201"));
+        VanillaBodyCatalog.Read("0801", game.File);
+        VanillaBodyCatalog.Read("0801", game.File);
+        Assert.Equal(4, game.Asked.Count);
+
+        // A lambda evaluated twice over one closure is the same reader too. It captures only `game`, declared at method
+        // scope, so both evaluations share one closure.
+        VanillaBodyCatalog.CleanUp();
+        for (int i = 0; i < 2; i++) VanillaBodyCatalog.Read("0801", p => game.File(p));
+        Assert.Equal(8, game.Asked.Count);
+    }
+
+    [Fact]
+    [Trait("Plan", "EDGE-game-body-reader-cache-10")]
+    public void A_reader_built_afresh_each_call_is_a_new_reader() // [EDGE-game-body-reader-cache-10]
+    {
+        // What Read's doc warns against: a wrapper whose closure is new on every call reads the game every call.
+        var game = new CountingGame(EverySlot("0201"));
+        BodySizeCatalog Ask()
+        {
+            var g = game;   // the lambda captures this local, so each call makes a new closure
+            return VanillaBodyCatalog.Read("0801", p => g.File(p));
+        }
+
+        Ask();
+        Ask();
+        Assert.Equal(8, game.Asked.Count);
+    }
+
+    [Fact]
+    [Trait("Plan", "EDGE-game-body-reader-cache-11")]
+    public void A_reader_that_found_nothing_is_not_kept_alive_by_the_catalog() // [EDGE-game-body-reader-cache-11]
+    {
+        // A real-data test's reader holds a whole Lumina.GameData; remembering that it found nothing must not pin it.
+        var weak = AskWithAReaderNothingElseHolds();
+        GC.Collect();
+        GC.WaitForPendingFinalizers();
+        GC.Collect();
+
+        Assert.False(weak.IsAlive);
+    }
+
+    [MethodImpl(MethodImplOptions.NoInlining)]
+    private static WeakReference AskWithAReaderNothingElseHolds()
+    {
+        // A fresh heap object, held only by the reader's closure: nothing but the catalog could keep it alive.
+        var sentinel = new object();
+        int asked = 0;
+        Func<string, byte[]?> read = _ => { asked++; return sentinel.GetHashCode() < 0 ? [] : null; };
+
+        Assert.False(VanillaBodyCatalog.Read("0801", read).IsBody);
+        Assert.False(VanillaBodyCatalog.Read("0801", read).IsBody);
+        Assert.Equal(4, asked);   // the second answer came from the record, so there was one to let go of
+        return new WeakReference(sentinel);
     }
 
     // ── naming the mod a refit goes into ───────────────────────────────────────────────────────────
