@@ -3779,6 +3779,10 @@
     "message": "Из модели {0} делается модель {1}, изогнутая в форму {1} так, как игра изгибает между ними. Сохранение добавит метаданные, нужные игре.",
     "description": "{0} is the race of the model open, {1} the race picked below it."
   },
+  "Parts.Retarget.Bake.ForeignSkin.Fmt": {
+    "message": "кожа всё ещё рисовалась бы материалом {0}, который новое тело не использует, а игра может упасть, загружая материал кожи, которого нет",
+    "description": "{0} is the skin material names, as the model writes them."
+  },
   "Parts.Retarget.Bake.BendBack.Fmt": {
     "message": "подгонку не удалось вернуть в форму {0} ({1})",
     "description": ""

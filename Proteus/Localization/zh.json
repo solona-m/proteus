@@ -3779,6 +3779,10 @@
     "message": "根据 {0} 模型生成 {1} 模型，按游戏在两者之间的弯曲方式弯成 {1} 体型。保存时会添加游戏所需的元数据。",
     "description": "{0} is the race of the model open, {1} the race picked below it."
   },
+  "Parts.Retarget.Bake.ForeignSkin.Fmt": {
+    "message": "皮肤仍会使用 {0} 绘制，这是新身体不使用的皮肤材质，游戏在加载找不到的皮肤材质时可能会崩溃",
+    "description": "{0} is the skin material names, as the model writes them."
+  },
   "Parts.Retarget.Bake.BendBack.Fmt": {
     "message": "无法将转换结果变形回 {0} 体型（{1}）",
     "description": ""

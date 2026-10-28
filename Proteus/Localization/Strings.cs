@@ -3152,6 +3152,10 @@ public sealed class PartsStrings
     public readonly string RetargetBendBackFmt = ProteusLoc.Localize("Parts.Retarget.Bake.BendBack.Fmt",
         "the refit could not be bent back into the {0} shape ({1})");
 
+    /// <summary>A reason like <see cref="RetargetBendBackFmt"/>; {0} is the skin material names, as the model writes them.</summary>
+    public readonly string RetargetForeignSkinFmt = ProteusLoc.Localize("Parts.Retarget.Bake.ForeignSkin.Fmt",
+        "it would still draw skin with {0}, a skin material the new body does not use, and the game can crash loading a skin material it cannot find");
+
     /// <summary>A reason in the {1} of <see cref="RetargetBendBackFmt"/>.</summary>
     public readonly string RetargetBakeNoWearer = ProteusLoc.Localize("Parts.Retarget.Bake.NoWearer",
         "your character could not be read");

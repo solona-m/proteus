@@ -3779,6 +3779,10 @@
     "message": "Aus dem {0}-Modell wird ein {1}-Modell gemacht, in die {1}-Form gebogen, so wie das Spiel zwischen beiden biegt. Beim Speichern werden die Metadaten hinzugefügt, die das Spiel braucht.",
     "description": "{0} is the race of the model open, {1} the race picked below it."
   },
+  "Parts.Retarget.Bake.ForeignSkin.Fmt": {
+    "message": "sie würde die Haut weiter mit {0} zeichnen, einem Hautmaterial, das der neue Körper nicht verwendet, und das Spiel kann abstürzen, wenn es ein Hautmaterial nicht findet",
+    "description": "{0} is the skin material names, as the model writes them."
+  },
   "Parts.Retarget.Bake.BendBack.Fmt": {
     "message": "die Anpassung konnte nicht in die {0}-Form zurückgebracht werden ({1})",
     "description": ""

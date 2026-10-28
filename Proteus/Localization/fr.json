@@ -3779,6 +3779,10 @@
     "message": "Un modèle {1} est créé à partir du modèle {0}, plié à la forme {1} comme le jeu plie entre les deux. Enregistrer ajoute les métadonnées nécessaires au jeu.",
     "description": "{0} is the race of the model open, {1} the race picked below it."
   },
+  "Parts.Retarget.Bake.ForeignSkin.Fmt": {
+    "message": "elle dessinerait encore la peau avec {0}, un matériau de peau que le nouveau corps n'utilise pas, et le jeu peut planter en chargeant un matériau de peau introuvable",
+    "description": "{0} is the skin material names, as the model writes them."
+  },
   "Parts.Retarget.Bake.BendBack.Fmt": {
     "message": "l'ajustement n'a pas pu être ramené à la forme {0} ({1})",
     "description": ""
