@@ -13,6 +13,7 @@ namespace Proteus.Tests;
 /// the two halves of the doubled (<see cref="UVRemapService.FaceSplitSpace"/>) sheet. Real vanilla faces from the
 /// game data, when an install is present.
 /// </summary>
+[Trait("Speed", "Slow")]
 public class FaceShellUnmirrorTests(ITestOutputHelper o)
 {
     private static UVRemapService.UvConversion Convert()

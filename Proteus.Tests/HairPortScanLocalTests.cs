@@ -15,6 +15,7 @@ namespace Proteus.Tests;
 /// and why others are refused, how long the bends take — and, on copies of a few mods, the whole check saved, with the
 /// saved ports read back.
 /// </summary>
+[Trait("Speed", "Slow")]
 public sealed class HairPortScanLocalTests(ITestOutputHelper o)
 {
     private const ushort Me = 201;

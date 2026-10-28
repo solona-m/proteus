@@ -73,6 +73,7 @@ public class SizeSetSkinMisfitTests(ITestOutputHelper output)
                    SizeSetSourceTests.StarlightBikini, SizeSetSourceTests.CallersSwimwear, SizeSetSourceTests.ButterflyCorset,
                    SizeSetSourceTests.HeartHalter, SizeSetSourceTests.Cutout, SizeSetSourceTests.Geometric)]
     [Trait("Plan", "EDGE-sizeset-skin-misfit-15")]
+    [Trait("Speed", "Slow")]
     public void Own_skin_fit_separates_misread_sizes() // [EDGE-sizeset-skin-misfit-15]
     {
         var bodies = SizeSetBatch.ScanBodies(LocalData.Path(LocalData.Mods));
@@ -318,6 +319,7 @@ public class SizeSetSkinMisfitTests(ITestOutputHelper output)
     [Trait("Plan", "EDGE-sizeset-skin-misfit-11")]
     [Trait("Plan", "EDGE-sizeset-skin-misfit-12")]
     [Trait("Plan", "EDGE-sizeset-skin-misfit-13")]
+    [Trait("Speed", "Slow")]
     public void Luxe_sizes_pass_over_the_misread_Uranus()
         // [AC-sizeset-skin-misfit-1] [AC-sizeset-skin-misfit-2] [AC-sizeset-skin-misfit-3] [AC-sizeset-skin-misfit-7]
         // [EDGE-sizeset-skin-misfit-11] [EDGE-sizeset-skin-misfit-12] [EDGE-sizeset-skin-misfit-13]
@@ -384,6 +386,7 @@ public class SizeSetSkinMisfitTests(ITestOutputHelper output)
 
     [LocalDataFact(LocalData.Mods, Darling, LocalData.UvMaps)]
     [Trait("Plan", "AC-sizeset-skin-misfit-4")]
+    [Trait("Speed", "Slow")]
     public void Darling_legs_pass_over_Nymph() // [AC-sizeset-skin-misfit-4]
     {
         string copy = SizeSetBatchData.CopyOf(Darling);
@@ -405,6 +408,7 @@ public class SizeSetSkinMisfitTests(ITestOutputHelper output)
 
     [LocalDataFact(LocalData.Mods, Darling, LocalData.GameData, LocalData.TbseUvMaps, SizeSetBatchData.Tbse)]
     [Trait("Plan", "AC-sizeset-skin-misfit-6")]
+    [Trait("Speed", "Slow")]
     public void Darling_mens_versions_pass_over_Nymph() // [AC-sizeset-skin-misfit-6]
     {
         string copy = SizeSetBatchData.CopyOf(Darling);
@@ -430,6 +434,7 @@ public class SizeSetSkinMisfitTests(ITestOutputHelper output)
     [LocalDataFact(LocalData.Mods, CatsuitPack, LocalData.UvMaps)]
     [Trait("Plan", "AC-sizeset-skin-misfit-5")]
     [Trait("Plan", "EDGE-sizeset-skin-misfit-2")]
+    [Trait("Speed", "Slow")]
     public void A_capped_skin_garment_passes_over_none() // [AC-sizeset-skin-misfit-5] [EDGE-sizeset-skin-misfit-2]
     {
         string copy = Unpacked(CatsuitPack);

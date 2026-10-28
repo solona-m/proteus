@@ -15,6 +15,7 @@ namespace Proteus.Tests;
 /// A women's mod's men's versions in the size set, against the real files (sizeset-cross-sex): Sheer Elegance's top on
 /// Bibo+, a Rue top, and Starlit's YAS-rigged skirt made men's onto TBSE and TBSE-X. Every run works on a copy.
 /// </summary>
+[Trait("Speed", "Slow")]
 public sealed class SizeSetCrossSexLocalTests(ITestOutputHelper o) : IDisposable
 {
     /// <summary>The mod copies this test made, deleted after it.</summary>

@@ -126,6 +126,7 @@ public class CrotchWeightsLocalTests(ITestOutputHelper output)
     /// between bodies; Rue as the new body is the swimsuit's, below.</remarks>
     [LocalDataTheory(Sylvie, Bibo, FixPubes, Rue, Neolithe)]
     [MemberData(nameof(Targets))]
+    [Trait("Speed", "Slow")]
     public void Sylvie_panties_onto_Neolithe_and_Bibo(string panties, string body, string label)
     {
         // [AC-crotch-leg-weights-9]
@@ -158,6 +159,7 @@ public class CrotchWeightsLocalTests(ITestOutputHelper output)
     [LocalDataTheory(Sylvie, Bibo, FixPubes, Rue, Neolithe)]
     [InlineData(Neolithe, "DEFAULT · Gen A Large")]
     [InlineData(Bibo, "Type A - Large")]
+    [Trait("Speed", "Slow")]
     public void Full_back_briefs_are_not_vetoed_on_the_largest_sizes(string body, string label)
     {
         // [AC-crotch-leg-weights-9] [EDGE-crotch-leg-weights-22]
@@ -202,6 +204,7 @@ public class CrotchWeightsLocalTests(ITestOutputHelper output)
     }
 
     [LocalDataFact(Scarlet, Bibo, FixPubes, Rue, Neolithe)]
+    [Trait("Speed", "Slow")]
     public void Pants_unchanged()
     {
         // [AC-crotch-leg-weights-9] [AC-crotch-leg-weights-3] Pants down the legs onto Rue and Neolithe: the crotch seam
@@ -233,6 +236,7 @@ public class CrotchWeightsLocalTests(ITestOutputHelper output)
     [LocalDataTheory(Swimsuit, Bibo, FixPubes, Rue, Neolithe)]
     [InlineData("None · Watermelon Crushers - A")]
     [InlineData("None · Watermelon Crushers - B")]
+    [Trait("Speed", "Slow")]
     public void Competition_swimsuit_crotch_eased(string legs)
     {
         // [AC-crotch-leg-weights-6] [AC-crotch-leg-weights-9] The Neolithe M size onto Rue, its top and the legs it

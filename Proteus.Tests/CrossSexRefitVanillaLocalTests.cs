@@ -103,6 +103,7 @@ public class CrossSexRefitVanillaLocalTests(ITestOutputHelper o)
     [InlineData(TbseX, "erect l cut", false)]
     [InlineData(TbseX, "erect l cut", true)]
     [Trait("Plan", "AC-vanilla-cross-sex-legs-3")]
+    [Trait("Speed", "Slow")]
     public void Fuath_pantaloons_refit_from_the_vanilla_body_onto_tbse_for_men(string onto, string folder, bool pushOut) // [AC-vanilla-cross-sex-legs-3]
     {
         var inputs = Inputs(onto, folder, pushOut);
@@ -121,6 +122,7 @@ public class CrossSexRefitVanillaLocalTests(ITestOutputHelper o)
     /// <summary>TBSE-X's SFW legs draw too little skin to match the game's women's body: refused, as the panel says.</summary>
     [LocalDataFact(LocalData.GameData, TbseX, IvcsMen, LocalData.TbseUvMaps)]
     [Trait("Plan", "EDGE-vanilla-cross-sex-legs-9")]
+    [Trait("Speed", "Slow")]
     public void Tbse_x_sfw_legs_match_too_little_and_are_not_saved() // [EDGE-vanilla-cross-sex-legs-9]
     {
         var s = Assert.Single(CrossSexRefitJob.Run(Inputs(TbseX, "sfw", false)).Sizes);

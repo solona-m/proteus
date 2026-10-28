@@ -11,6 +11,7 @@ namespace Proteus.Tests;
 /// The skeleton reader on real files: the game's own (tagfile version 3) and the custom skeletons mods ship (version 5,
 /// written by Havok 2014 tools), every one in the mod folder — and none of them, cut short anywhere, throws.
 /// </summary>
+[Trait("Speed", "Slow")]
 public class HavokSkeletonLocalTests(ITestOutputHelper output)
 {
     private const string Ivcs = LocalData.Mods + ":[IVCS] Illusio Vitae Custom Skeleton Base V1.1 (2)";

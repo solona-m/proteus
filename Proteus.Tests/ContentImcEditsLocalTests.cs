@@ -50,6 +50,7 @@ public class ContentImcEditsLocalTests
 
     /// <summary>[AC-imported-imc-toggles-4] The set-and-slot reading of the game's IMC file agrees with the model-path one.</summary>
     [LocalDataFact(LocalData.GameData)]
+    [Trait("Speed", "Slow")]
     public void FromGame_by_set_and_slot_reads_a_real_entry()
     {
         var game = new GameData(LocalData.Path(LocalData.GameData));

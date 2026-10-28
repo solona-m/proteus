@@ -14,6 +14,7 @@ namespace Proteus.Tests;
 /// (e0367), whose arm bands, underwires and chain links are the metal Keep shape is for. Skipped where they are not
 /// installed. Each refit is the one <c>Proteus.Refit --keep-default</c> runs, with the Studio's default ticks.
 /// </summary>
+[Trait("Speed", "Slow")]
 public class KeepShapeReleaseLocalTests
 {
     private const string AshPack = LocalData.ModPacks + ":Ash by Succubi RueYab ML WC (Model Only).pmp";

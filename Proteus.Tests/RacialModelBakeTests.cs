@@ -90,6 +90,7 @@ public class RacialModelBakeTests(ITestOutputHelper o)
     /// character — puts it on a woman in the rest pose.
     /// </summary>
     [LocalDataFact(LocalData.GameData)]
+    [Trait("Speed", "Slow")]
     public void The_bake_matches_the_bend_the_game_draws()
     {
         var (model, pbd, path) = Load();
@@ -126,6 +127,7 @@ public class RacialModelBakeTests(ITestOutputHelper o)
     }
 
     [LocalDataFact(LocalData.GameData)]
+    [Trait("Speed", "Slow")]
     public void Unbaking_a_bake_gives_the_original_back()
     {
         var (model, pbd, _) = Load();
@@ -204,6 +206,7 @@ public class RacialModelBakeTests(ITestOutputHelper o)
     /// <summary>A port between races on one line is exactly the bake or unbake along it.</summary>
     [LocalDataFact(LocalData.GameData)]
     [Trait("Plan", "EDGE-hair-race-port-25")]
+    [Trait("Speed", "Slow")]
     public void Port_down_or_up_the_line_equals_bake_or_unbake()
     {
         var (model, pbd, _) = Load();
@@ -224,6 +227,7 @@ public class RacialModelBakeTests(ITestOutputHelper o)
     /// <summary>Across lines, a port is an unbake to the race both fall to and a bake from there, in one pass.</summary>
     [LocalDataFact(LocalData.GameData)]
     [Trait("Plan", "EDGE-hair-race-port-25")]
+    [Trait("Speed", "Slow")]
     public void Port_through_common_ancestor_equals_unbake_then_bake()
     {
         var (model, pbd, _) = Load();

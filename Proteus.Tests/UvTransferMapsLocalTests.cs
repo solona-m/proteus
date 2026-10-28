@@ -18,6 +18,7 @@ public sealed class TbseBakeFixture
 }
 
 /// <summary>The committed bibo↔TBSE maps: made from the inputs they say, and as good as the gate demands.</summary>
+[Trait("Speed", "Slow")]
 public class UvTransferMapsLocalTests(TbseBakeFixture bake, ITestOutputHelper output) : IClassFixture<TbseBakeFixture>
 {
     private const string Bibo = UvTransferBakeLocalTests.Bibo;

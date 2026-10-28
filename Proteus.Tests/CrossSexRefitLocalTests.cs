@@ -136,6 +136,7 @@ public class CrossSexRefitLocalTests(ITestOutputHelper o)
     [Trait("Plan", "AC-cross-sex-refit-5")]
     [Trait("Plan", "EDGE-cross-sex-refit-13")]
     [Trait("Plan", "EDGE-cross-sex-refit-14")]
+    [Trait("Speed", "Slow")]
     public void Lumberjack_refits_onto_bibo_for_midlander_women() // [AC-cross-sex-refit-2] [AC-cross-sex-refit-3] [AC-cross-sex-refit-5] [EDGE-cross-sex-refit-13] [EDGE-cross-sex-refit-14]
     {
         var inputs = Inputs(LumberjackShirt, 201, Tbse, UvBakeInputs.TbseChest, Bibo, UvBakeInputs.BiboChest);
@@ -153,6 +154,7 @@ public class CrossSexRefitLocalTests(ITestOutputHelper o)
     [Trait("Plan", "AC-cross-sex-refit-2")]
     [Trait("Plan", "AC-cross-sex-refit-4")]
     [Trait("Plan", "AC-cross-sex-refit-5")]
+    [Trait("Speed", "Slow")]
     public void Twill_trousers_refit_onto_bibo_legs() // [AC-cross-sex-refit-2] [AC-cross-sex-refit-4] [AC-cross-sex-refit-5]
     {
         var inputs = Inputs(TwillTbse, 201, Tbse, UvBakeInputs.TbseLegs[0].Rel, Bibo, UvBakeInputs.BiboLegs[0].Rel);
@@ -168,6 +170,7 @@ public class CrossSexRefitLocalTests(ITestOutputHelper o)
     [Trait("Plan", "AC-cross-sex-refit-4")]
     [Trait("Plan", "AC-cross-sex-refit-5")]
     [Trait("Plan", "EDGE-cross-sex-refit-13")]
+    [Trait("Speed", "Slow")]
     public void Sheer_elegance_legs_refit_onto_tbse_for_midlander_men() // [AC-cross-sex-refit-1] [AC-cross-sex-refit-4] [AC-cross-sex-refit-5] [EDGE-cross-sex-refit-13]
     {
         var inputs = Inputs(SheerLegs, 101, Bibo, BiboSfwLegs, Tbse, UvBakeInputs.TbseLegs[0].Rel);
@@ -190,6 +193,7 @@ public class CrossSexRefitLocalTests(ITestOutputHelper o)
     [Trait("Plan", "AC-cross-sex-tops-yas-1")]
     [Trait("Plan", "AC-cross-sex-tops-yas-2")]
     [Trait("Plan", "AC-cross-sex-tops-yas-3")]
+    [Trait("Speed", "Slow")]
     public void Sheer_elegance_top_refits_onto_tbse_for_midlander_men() // [AC-cross-sex-tops-yas-1] [AC-cross-sex-tops-yas-2] [AC-cross-sex-tops-yas-3]
     {
         var offered = OtherRaceRefit.Offered("chara/equipment/e6010/model/c0201e6010_top.mdl",
@@ -212,6 +216,7 @@ public class CrossSexRefitLocalTests(ITestOutputHelper o)
     /// </summary>
     [LocalDataFact(LocalData.GameData, SheerTop, Bibo, Tbse, LocalData.TbseUvMaps)]
     [Trait("Plan", "AC-cross-sex-tops-yas-3")]
+    [Trait("Speed", "Slow")]
     public void Underbust_lift_for_a_womans_top_is_measured() // [AC-cross-sex-tops-yas-3]
     {
         var results = new Dictionary<bool, (int Folds, float Inside)>();
@@ -245,6 +250,7 @@ public class CrossSexRefitLocalTests(ITestOutputHelper o)
     [Trait("Plan", "EDGE-cross-sex-tops-yas-4")]
     [Trait("Plan", "EDGE-cross-sex-tops-yas-13")]
     [Trait("Plan", "EDGE-cross-sex-tops-yas-19")]
+    [Trait("Speed", "Slow")]
     public void Starlit_rigged_to_yas_bones_refits_onto_tbse_legs(bool ivcs) // [AC-cross-sex-tops-yas-4] [AC-cross-sex-tops-yas-5] [AC-cross-sex-tops-yas-6] [EDGE-cross-sex-tops-yas-3] [EDGE-cross-sex-tops-yas-4] [EDGE-cross-sex-tops-yas-13] [EDGE-cross-sex-tops-yas-19]
     {
         var inputs = Inputs(Starlit, 101, Rue, RueRel(RueYiggleWc), Tbse, UvBakeInputs.TbseLegs[0].Rel,
@@ -293,6 +299,7 @@ public class CrossSexRefitLocalTests(ITestOutputHelper o)
     [LocalDataFact(LocalData.GameData, Starlit, Rue, Tbse, LocalData.TbseUvMaps)]
     [Trait("Plan", "EDGE-cross-sex-tops-yas-5")]
     [Trait("Plan", "EDGE-cross-sex-tops-yas-6")]
+    [Trait("Speed", "Slow")]
     public void Starlit_drawn_with_the_game_s_women_skeleton_still_refits() // [EDGE-cross-sex-tops-yas-5] [EDGE-cross-sex-tops-yas-6]
     {
         var inputs = Inputs(Starlit, 101, Rue, RueRel(RueYiggleWc), Tbse, UvBakeInputs.TbseLegs[0].Rel);
@@ -335,6 +342,7 @@ public class CrossSexRefitLocalTests(ITestOutputHelper o)
     [LocalDataFact(Bibo, Tbse, LocalData.TbseUvMaps)]
     [Trait("Plan", "AC-cross-sex-refit-6")]
     [Trait("Plan", "EDGE-cross-sex-refit-3")]
+    [Trait("Speed", "Slow")]
     public void Real_bodies_pair_across_sexes_only_through_the_maps() // [AC-cross-sex-refit-6] [EDGE-cross-sex-refit-3]
     {
         string bibo = Path.Combine(LocalData.Path(Bibo), UvBakeInputs.BiboChest);
@@ -355,6 +363,7 @@ public class CrossSexRefitLocalTests(ITestOutputHelper o)
 
     [LocalDataFact(LocalData.GameData, TwillTbse, Tbse, Bibo, LocalData.TbseUvMaps)]
     [Trait("Plan", "AC-cross-sex-refit-8")]
+    [Trait("Speed", "Slow")]
     public void The_job_gives_the_same_model_twice() // [AC-cross-sex-refit-8]
     {
         var inputs = Inputs(TwillTbse, 201, Tbse, UvBakeInputs.TbseLegs[0].Rel, Bibo, UvBakeInputs.BiboLegs[0].Rel);

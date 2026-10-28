@@ -469,6 +469,7 @@ public class SeamWeightsTests(ITestOutputHelper output)
 
     [Fact]
     [Trait("Plan", "AC-seam-weights-3")]
+    [Trait("Speed", "Slow")]
     public void The_seam_rule_changes_weights_only()
     {
         var (garment, ring) = HipSeam();

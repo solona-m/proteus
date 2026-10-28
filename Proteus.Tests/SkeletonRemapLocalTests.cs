@@ -14,6 +14,7 @@ namespace Proteus.Tests;
 /// The bone moves measured against the real skeletons (cross-sex-tops-yas): Rue+'s YAS for women, IVCS's and the game's
 /// for men, and the Rue+ Yiggle legs, which rig a YAS bone and its IVCS twin both.
 /// </summary>
+[Trait("Speed", "Slow")]
 public class SkeletonRemapLocalTests(ITestOutputHelper o)
 {
     private const string IvcsWomen = LocalData.Mods

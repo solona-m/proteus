@@ -116,6 +116,7 @@ public class EarringBonesLocalTests(ITestOutputHelper o)
     [Trait("Plan", "AC-earring-bones-2")]
     [Trait("Plan", "AC-earring-bones-3")]
     [Trait("Plan", "AC-earring-bones-4")]
+    [Trait("Speed", "Slow")]
     public void Tbse_rigged_pants_refit_for_women_lose_their_earrings(string garment) // [AC-earring-bones-1] [AC-earring-bones-2] [AC-earring-bones-3] [AC-earring-bones-4]
     {
         var log = NSubstitute.Substitute.For<Dalamud.Plugin.Services.IPluginLog>();
@@ -177,6 +178,7 @@ public class EarringBonesLocalTests(ITestOutputHelper o)
     [Trait("Plan", "EDGE-earring-bones-3")]
     [Trait("Plan", "EDGE-earring-bones-9")]
     [Trait("Plan", "EDGE-seam-weights-15")]
+    [Trait("Speed", "Slow")]
     public void Outputs_without_earrings_are_byte_identical(string what, string garment, string sha) // [AC-earring-bones-5] [EDGE-earring-bones-3] [EDGE-earring-bones-9]
     {
         bool legs = garment.EndsWith("_dwn.mdl", StringComparison.Ordinal);

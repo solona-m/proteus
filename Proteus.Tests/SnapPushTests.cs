@@ -50,6 +50,7 @@ public class SnapPushTests(ITestOutputHelper output)
 
     [Fact]
     [Trait("Plan", "AC-snap-push-1")]
+    [Trait("Speed", "Slow")]
     public void Skin_copy_cloth_onto_a_finer_body_has_no_skin_through_it()
     {
         var (garment, pair) = CoarseToFine();
@@ -66,6 +67,7 @@ public class SnapPushTests(ITestOutputHelper output)
 
     [Fact]
     [Trait("Plan", "AC-snap-push-1")]
+    [Trait("Speed", "Slow")]
     public void The_snap_itself_is_untouched()
     {
         var (garment, pair) = CoarseToFine();
@@ -76,6 +78,7 @@ public class SnapPushTests(ITestOutputHelper output)
     [Fact]
     [Trait("Plan", "AC-snap-push-2")]
     [Trait("Plan", "EDGE-snap-push-1")]
+    [Trait("Speed", "Slow")]
     public void Between_sizes_of_one_body_the_model_is_byte_identical()
     {
         // Prouder nipples on the target: the nipple smoothing runs and wraps the identity correspondence, which the gate
@@ -117,6 +120,7 @@ public class SnapPushTests(ITestOutputHelper output)
 
     [Fact]
     [Trait("Plan", "EDGE-snap-push-3")]
+    [Trait("Speed", "Slow")]
     public void Clearing_the_body_leaves_snapped_cloth_as_before()
     {
         var (garment, pair) = CoarseToFine();
@@ -127,6 +131,7 @@ public class SnapPushTests(ITestOutputHelper output)
 
     [Fact]
     [Trait("Plan", "EDGE-snap-push-4")]
+    [Trait("Speed", "Slow")]
     public void Snapped_cloth_the_author_tucked_under_the_skin_stays_and_pins_nothing()
     {
         // One panel: its left half a hair INSIDE its own skin (still snapping), its right half 0.3 mm off it — not

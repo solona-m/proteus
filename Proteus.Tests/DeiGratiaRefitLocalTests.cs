@@ -19,6 +19,7 @@ namespace Proteus.Tests;
 /// against the game's body it was made on, as worn — its bra with its skin — it lies on it (see
 /// <see cref="BodyRetarget.TargetBody.Fitted"/>). Needs the game's data, the pack and the body mods named.
 /// </summary>
+[Trait("Speed", "Slow")]
 public class DeiGratiaRefitLocalTests(ITestOutputHelper output)
 {
     private const string Bibo = LocalData.Mods + ":Bibo+";

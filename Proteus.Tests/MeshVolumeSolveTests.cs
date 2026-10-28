@@ -325,6 +325,7 @@ public partial class MeshVolumeSolveTests
     /// author already had clipping is held where it was rather than pushed out.
     /// </summary>
     [Fact]
+    [Trait("Speed", "Slow")]
     public void RelaxKeepsClothAboveSkinTheModelCarries()
     {
         var (model, clothStart, n) = DomeOverSkin(withSkin: true);

@@ -18,6 +18,7 @@ namespace Proteus.Tests;
 /// refitted onto LavaBod+ Yiggle Teardrop — before the feature, 10 cloth faces at nipple height had skin up to 6.5 mm
 /// through their middles.
 /// </summary>
+[Trait("Speed", "Slow")]
 public class RefitNippleSmoothLocalTests(ITestOutputHelper output)
 {
     private const string Zayne = LocalData.ModPacks + ":Catch 22 - Zayne Fem.pmp";

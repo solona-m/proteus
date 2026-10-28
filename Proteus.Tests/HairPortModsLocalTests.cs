@@ -14,6 +14,7 @@ namespace Proteus.Tests;
 /// a hairstyle for Midlanders AND for other races of the same sex, the Midlander model is ported to each of those races
 /// and compared with the author's own model for it.
 /// </summary>
+[Trait("Speed", "Slow")]
 public sealed class HairPortModsLocalTests(ITestOutputHelper o)
 {
     /// <param name="AsIsP90">The same measure for the source left unbent: how far the author's own race models differ

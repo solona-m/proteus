@@ -15,6 +15,7 @@ namespace Proteus.Tests;
 /// skin hug, which rig cloth on the skin as the new skin outright, are for refits across body mods: on the Starlit Skirt
 /// they took up to 0.21 of the thighs' weight off 13,588 skirt vertices, so the legs came through it when posed.
 /// </summary>
+[Trait("Speed", "Slow")]
 public class WithinBodyRigChangeRefitTests(ITestOutputHelper output)
 {
     private const string Rue = LocalData.Mods + ":hs-Rue+-2.2.7-y0f";

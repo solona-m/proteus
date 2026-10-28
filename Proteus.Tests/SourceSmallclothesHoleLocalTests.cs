@@ -16,6 +16,7 @@ namespace Proteus.Tests;
 /// — the bust is the bra — and the refit read the old body as its skin alone, so the cloth over the bust followed the
 /// hole's rim. Needs the game's data and the body mods installed.
 /// </summary>
+[Trait("Speed", "Slow")]
 public class SourceSmallclothesHoleLocalTests(ITestOutputHelper output)
 {
     private const string MuseRoot = LocalData.Mods + ":hs-Muse+-3.2.2-LbM";

@@ -377,6 +377,7 @@ public class SkeletonRemapTests
     /// </summary>
     [Fact]
     [Trait("Plan", "AC-cross-sex-tops-yas-9")]
+    [Trait("Speed", "Slow")]
     public void Renamed_bodies_still_detect_the_yiggle_size() // [AC-cross-sex-tops-yas-9]
     {
         byte[] Legs(params (string, float)[] weights)
