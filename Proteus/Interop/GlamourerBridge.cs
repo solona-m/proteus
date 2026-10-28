@@ -5,8 +5,8 @@ using System.Threading;
 using Dalamud.Plugin;
 using Dalamud.Plugin.Services;
 using Glamourer.Api.Enums;
-using Glamourer.Api.Helpers;
 using Glamourer.Api.IpcSubscribers;
+using Luna;
 using Newtonsoft.Json.Linq;
 
 namespace Proteus.Interop;
