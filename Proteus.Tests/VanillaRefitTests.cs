@@ -303,7 +303,11 @@ public class VanillaRefitTests : IDisposable
     [Trait("Plan", "EDGE-game-body-reader-cache-3")]
     public void A_reader_that_throws_does_not_hide_the_body() // [EDGE-game-body-reader-cache-3]
     {
-        Assert.False(VanillaBodyCatalog.Read("0201", _ => throw new IOException("no game here")).IsBody);
+        int thrown = 0;
+        Func<string, byte[]?> broken = _ => { thrown++; throw new IOException("no game here"); };
+        Assert.False(VanillaBodyCatalog.Read("0201", broken).IsBody);
+        Assert.False(VanillaBodyCatalog.Read("0201", broken).IsBody);
+        Assert.Equal(4, thrown);   // its "no body" is recorded for it, like any reader's
 
         var asked = new List<string>();
         var catalog = VanillaBodyCatalog.Read("0201", Game(asked, EverySlot("0201")));
@@ -402,6 +406,38 @@ public class VanillaRefitTests : IDisposable
         GC.Collect();
 
         Assert.False(weak.IsAlive);
+
+        // The record it left behind is forgotten as the race is next asked, and does not answer for anyone else.
+        var game = new CountingGame(EverySlot("0201"));
+        Assert.False(VanillaBodyCatalog.Read("0801", game.File).IsBody);
+        Assert.Equal(4, game.Asked.Count);
+    }
+
+    private static int staticAsked;
+
+    private static byte[]? NoGame(string path)
+    {
+        staticAsked++;
+        return null;
+    }
+
+    [Fact]
+    [Trait("Plan", "AC-game-body-reader-cache-3")]
+    public void A_static_reader_that_found_nothing_is_remembered_for_the_session() // [AC-game-body-reader-cache-3]
+    {
+        // A static method has no target for the record to lose: it is the same reader every time, whatever is collected.
+        staticAsked = 0;
+        Func<string, byte[]?> first = NoGame;
+        Assert.Null(first.Target);
+
+        VanillaBodyCatalog.Read("0801", NoGame);
+        VanillaBodyCatalog.Read("0801", NoGame);
+        GC.Collect();
+        GC.WaitForPendingFinalizers();
+        GC.Collect();
+        VanillaBodyCatalog.Read("0801", NoGame);
+
+        Assert.Equal(4, staticAsked);
     }
 
     [MethodImpl(MethodImplOptions.NoInlining)]
