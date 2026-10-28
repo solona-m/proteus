@@ -760,6 +760,9 @@ internal static partial class BodyRetarget
     /// <param name="relaxSinkGuard">Keep a relax round from laying a cloth face onto skin that comes through its middle (see
     /// <see cref="RelaxSinkTolerance"/>): the game's own gear, in the automatic refit and the Studio, never a modder's
     /// garment. Only with <paramref name="clearBody"/>.</param>
+    /// <param name="openSkin">On a slot the garment only reaches onto, cut with <paramref name="cutHidden"/> off, draw the
+    /// skin that cut leaves out in the open inside the author's own skin (see <see cref="GrowSpannedOpenSkin"/>): the
+    /// automatic refit, never the Studio, whose refit is written into the modder's own mod.</param>
     public static Planned Plan(ModelParts garment, byte[] garmentBytes, IReadOnlyList<SlotPair> pairs,
                                string? garmentSlot = null, bool pushOut = true, IReadOnlySet<int>? held = null,
                                bool replaceSkin = false, bool acrossBodies = false, bool clearBody = false,
@@ -768,7 +771,7 @@ internal static partial class BodyRetarget
                                string? chestSlot = null, Action<string, Vec3[]>? trace = null,
                                Outfit? outfit = null, string? tuckSlot = null, bool deepClear = false,
                                bool keepStandoff = false, bool carryPiercings = false, bool liftUnderbust = true,
-                               bool seeInside = false, bool relaxSinkGuard = false)
+                               bool seeInside = false, bool relaxSinkGuard = false, bool openSkin = false)
     {
         // First, before anything reads the new chest: its nipples smoothed where the garment covers more of them than
         // the old body had, so every pass below sees one surface — the one the swap draws.
@@ -837,11 +840,14 @@ internal static partial class BodyRetarget
         {
             bool see = seeInside && tuckSlot != null && !Tuned.NoSeeInside;
             var rebuilt = Rebuild(model, pairs, replaceSkin, weights, out var swapped, cutHidden, acrossBodies,
-                                  swapMeshes, tuckSlot, carryPiercings, parted, see);
+                                  swapMeshes, tuckSlot, carryPiercings, parted, see, openSkin);
             if (rebuilt != null)
             {
                 model = rebuilt;
                 swap = swapped;
+                if (swapped.Spanned > 0)
+                    log?.Invoke($"skin kept in the open: {swapped.Spanned} triangles of the new body inside the author's skin, "
+                                + "past the cut's reach");
                 if (swapped.Tucked > 0)
                     log?.Invoke($"skin tucked: {swapped.Tucked} triangles of the new body under the cloth past the author's edge "
                                 + $"({swapped.Opened} in the open, inside the author's skin"

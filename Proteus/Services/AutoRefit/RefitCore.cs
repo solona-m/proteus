@@ -1186,7 +1186,7 @@ internal static partial class RefitCore
                                  deepClear: DeepClearFor(skin.DeepClear, primary),
                                  keepStandoff: KeepStandoffFor(skin.KeepStandoff, primary),
                                  carryPiercings: carryPiercings, seeInside: SeeInsideFor(skin.SeeInside, primary),
-                                 relaxSinkGuard: skin.RelaxSinkGuard);
+                                 relaxSinkGuard: skin.RelaxSinkGuard, openSkin: true);
     }
 
     /// <summary>

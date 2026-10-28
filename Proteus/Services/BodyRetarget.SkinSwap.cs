@@ -71,11 +71,13 @@ internal static partial class BodyRetarget
     /// in place of skin (see <see cref="ReadySmallclothes"/>), before the cut.</param>
     /// <param name="SeenInto">Of <paramref name="Tucked"/>, triangles drawn in the open where the garment's inside would
     /// otherwise show (see <see cref="TuckSeeReach"/>); none of them is counted in <paramref name="Opened"/>.</param>
+    /// <param name="Spanned">Of <paramref name="Added"/>, triangles a slot the garment only reaches onto drew in the open
+    /// inside the author's own skin, which the cut had left out (see <see cref="GrowSpannedOpenSkin"/>).</param>
     internal readonly record struct SwapReport(int Removed, int Added, int Kept, int LostShapes,
                                                int Reweighted = 0, int Trimmed = 0, int ExtrasDropped = 0,
                                                int Unplaced = 0, int Posed = 0, int Cut = 0, int Slotted = 0,
                                                int Adorned = 0, int Tucked = 0, int TuckUnread = 0, int Opened = 0,
-                                               int Smallclothes = 0, int SeenInto = 0);
+                                               int Smallclothes = 0, int SeenInto = 0, int Spanned = 0);
 
     /// <summary>
     /// Swap the garment's skin for the new body's, one body slot at a time: every skin mesh of the garment that belongs
@@ -135,7 +137,7 @@ internal static partial class BodyRetarget
                                     out SwapReport report, bool cutHidden = true, bool acrossBodies = false,
                                     IReadOnlySet<int>? swapMeshes = null, string? tuckSlot = null,
                                     bool carryPiercings = false, IReadOnlySet<int>? parted = null,
-                                    bool seeInside = false)
+                                    bool seeInside = false, bool openSkin = false)
     {
         report = default;
         var swappable = swapSkin ? pairs.Where(p => p.Swaps).ToList() : [];
@@ -249,7 +251,8 @@ internal static partial class BodyRetarget
         // back through the jacket — so the body mod's skin only draws where the garment's skin drew. Unless the user
         // turned that off, and the body goes in whole.
         // A slot the garment only REACHES onto is cut whatever the setting: whole, a long top's hips would bring the
-        // entire legs body down to the ankles into the top's model, drawing through whatever pants are worn.
+        // entire legs body down to the ankles into the top's model, drawing through whatever pants are worn. But in the
+        // automatic refit (openSkin) not where the author's own skin spans the body (see GrowSpannedOpenSkin).
         var alwaysCut = new HashSet<int>(reachedOnto.Except(mostOf));
         bool anyCut = cutHidden || alwaysCut.Count > 0;
         var drawn = anyCut ? new BodySurface(model, BodySurface.CellFor(MeanEdgeOf(model))) : null;
@@ -260,21 +263,25 @@ internal static partial class BodyRetarget
         var authorCuts = new Dictionary<int, Dictionary<int, HashSet<ushort>>?>();
         // Each slot's body as it goes in: its own model, or one whose skin was pulled back to the author's edge.
         var bodyOf = new Dictionary<int, byte[]>();
-        int cutTris = 0, keptTris = 0, tuckedTris = 0, tuckUnreadSlots = 0, openedTris = 0, seenIntoTris = 0;
+        int cutTris = 0, keptTris = 0, tuckedTris = 0, tuckUnreadSlots = 0, openedTris = 0, seenIntoTris = 0, spannedTris = 0;
         foreach (int s in claimedBy)
         {
-            int these = 0, gone = 0, tucked = 0, opened = 0, seenInto = 0;
+            int these = 0, gone = 0, tucked = 0, opened = 0, seenInto = 0, spanned = 0;
             byte[]? pulled = null;
             Dictionary<int, HashSet<ushort>>? authorCut = null;
             bool tuckUnread = false;
             bool cutThis = cutHidden || alwaysCut.Contains(s);
             bool tuck = cutThis && tuckSlot != null && swappable[s].Slot == tuckSlot && !Tuned.NoTuck;
+            // Cut only because the garment reaches onto it, the hidden-skin cut off: no author's cut is being carried
+            // here, so skin the cut leaves out in the open inside the author's skin is drawn (see GrowSpannedOpenSkin).
+            bool open = openSkin && alwaysCut.Contains(s) && !cutHidden && !tuck;
             cuts[s] = !cutThis || drawn == null || drawn.IsEmpty ? null : CutLike(drawn, drawnEdges!, cloth,
                                                                       swappable[s].TargetModel!, swappable[s].TargetHidden,
                                                                       tuck, out these, out gone, out pulled, out tucked,
                                                                       out authorCut, out tuckUnread, out opened,
-                                                                      out seenInto, seeInside,
-                                                                      smallclothes: swappable[s].Smallclothes != null);
+                                                                      out seenInto, out spanned, seeInside,
+                                                                      smallclothes: swappable[s].Smallclothes != null,
+                                                                      openSkin: open);
             authorCuts[s] = authorCut ?? cuts[s];
             bodyOf[s] = pulled ?? swappable[s].TargetModel!;
             keptTris += cuts[s] == null ? SkinTriangles(swappable[s].Target) : these;
@@ -282,6 +289,7 @@ internal static partial class BodyRetarget
             tuckedTris += tucked;
             openedTris += opened;
             seenIntoTris += seenInto;
+            spannedTris += spanned;
             if (tuckUnread) tuckUnreadSlots++;
         }
 
@@ -366,7 +374,7 @@ internal static partial class BodyRetarget
         report = new SwapReport(removed, keptTris, kept, SecondSkinWriter.Parse(garment).Shapes.Count,
                                 weights?.Reweighted ?? 0, weights?.Trimmed ?? 0, extras, reskinned.Dropped, posed,
                                 cutTris, reskinned.Trimmed, adorned, tuckedTris, tuckUnreadSlots, openedTris,
-                                smallclothesTris, seenIntoTris);
+                                smallclothesTris, seenIntoTris, spannedTris);
         return rebuilt;
     }
 
@@ -394,15 +402,20 @@ internal static partial class BodyRetarget
     /// <param name="seenInto">Of <paramref name="tucked"/>, triangles drawn in the open where the garment's inside would
     /// show (see <see cref="TuckSeeReach"/>).</param>
     /// <param name="seeInside">Let the tuck draw those (see <see cref="Rebuild"/>).</param>
+    /// <param name="openSkin">Draw the skin the cut left out in the open inside the author's own skin (see
+    /// <see cref="GrowSpannedOpenSkin"/>): a slot the garment only reaches onto. Never with <paramref name="tuck"/>.</param>
+    /// <param name="spanned">Triangles <paramref name="openSkin"/> drew, counted in <paramref name="kept"/>; the cut before
+    /// it is then <paramref name="authorCut"/>.</param>
     private static Dictionary<int, HashSet<ushort>>? CutLike(BodySurface drawn, SkinEdges edges, ClothCrossings cloth,
                                                              byte[] body, IReadOnlySet<string>? hidden, bool tuck,
                                                              out int kept, out int cut, out byte[]? pulled,
                                                              out int tucked,
                                                              out Dictionary<int, HashSet<ushort>>? authorCut,
                                                              out bool tuckUnread, out int opened, out int seenInto,
-                                                             bool seeInside, bool smallclothes = false)
+                                                             out int spanned, bool seeInside, bool smallclothes = false,
+                                                             bool openSkin = false)
     {
-        kept = cut = tucked = opened = seenInto = 0;
+        kept = cut = tucked = opened = seenInto = spanned = 0;
         pulled = null;
         authorCut = null;
         tuckUnread = false;
@@ -447,6 +460,25 @@ internal static partial class BodyRetarget
         if (cut == 0) { kept = 0; return null; }   // nothing cut: the body goes in whole, as before
         if (smallclothes) CutSmallclothes(drawn, edges, parts, baseOf, sets);
         pulled = PullToEdge(drawn, edges, cloth, body, parts, drawnCorners, keptTris, out var movedAt);
+        if (openSkin && !tuck && !Tuned.NoCutOpenSkin)
+        {
+            // Never on a slot the tuck runs on: the tuck draws open skin by its own rule, and its snapshot of the author's
+            // cut below would take this skin for the author's.
+            var (spannedSets, spannedTris) = GrowSpannedOpenSkin(drawn, edges, cloth, parts, covered, keptTris, movedAt,
+                                                                 baseOf);
+            if (spannedTris > 0)
+            {
+                authorCut = sets.ToDictionary(e => e.Key, e => new HashSet<ushort>(e.Value));
+                foreach (var (mesh, local) in spannedSets)
+                {
+                    if (!sets.TryGetValue(mesh, out var set)) sets[mesh] = set = [];
+                    set.UnionWith(local);
+                }
+                spanned = spannedTris;
+                kept += spannedTris;
+                cut -= spannedTris;
+            }
+        }
         if (!tuck) return sets;
 
         var (grown, added, open, seen, unread) = TuckUnderCloth(drawn, cloth, body, parts, covered, keptTris, movedAt,
