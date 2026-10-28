@@ -3779,6 +3779,10 @@
     "message": "{0} 모델로 {1} 모델을 만들어, 게임이 둘 사이를 휘는 방식 그대로 {1} 체형으로 휩니다. 저장하면 게임에 필요한 메타데이터가 추가됩니다.",
     "description": "{0} is the race of the model open, {1} the race picked below it."
   },
+  "Parts.Retarget.Bake.ForeignSkin.Fmt": {
+    "message": "피부가 여전히 {0}(으)로 그려집니다. 새 바디가 쓰지 않는 피부 머티리얼이며, 찾을 수 없는 피부 머티리얼을 불러오면 게임이 충돌할 수 있습니다",
+    "description": "{0} is the skin material names, as the model writes them."
+  },
   "Parts.Retarget.Bake.BendBack.Fmt": {
     "message": "리핏을 {0} 체형으로 되돌리지 못했습니다({1})",
     "description": ""

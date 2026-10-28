@@ -3779,6 +3779,10 @@
     "message": "{0}モデルから{1}モデルを作り、ゲームが両者の間で曲げるのと同じ方法で{1}の体型に曲げます。保存するとゲームに必要なメタデータが追加されます。",
     "description": "{0} is the race of the model open, {1} the race picked below it."
   },
+  "Parts.Retarget.Bake.ForeignSkin.Fmt": {
+    "message": "肌がまだ {0} で描かれます。新しいボディが使わない肌マテリアルで、見つからない肌マテリアルを読み込むとゲームがクラッシュすることがあります",
+    "description": "{0} is the skin material names, as the model writes them."
+  },
   "Parts.Retarget.Bake.BendBack.Fmt": {
     "message": "リフィットを{0}の体型に戻せませんでした（{1}）",
     "description": ""

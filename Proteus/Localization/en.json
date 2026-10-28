@@ -3779,6 +3779,10 @@
     "message": "A {1} model is made from the {0} model, bent into the {1} shape the way the game bends between them. Saving adds the metadata the game needs.",
     "description": "{0} is the race of the model open, {1} the race picked below it."
   },
+  "Parts.Retarget.Bake.ForeignSkin.Fmt": {
+    "message": "it would still draw skin with {0}, a skin material the new body does not use, and the game can crash loading a skin material it cannot find",
+    "description": "{0} is the skin material names, as the model writes them."
+  },
   "Parts.Retarget.Bake.BendBack.Fmt": {
     "message": "the refit could not be bent back into the {0} shape ({1})",
     "description": ""
