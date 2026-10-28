@@ -37,9 +37,9 @@ internal static partial class BodyRetarget
     /// How far under the garment's laid skin, as a share of the chord it spans there (see <see cref="ChordUnder"/>), the
     /// new body may dip in the open — no cloth over it — and still be drawn (a half). The author drew skin across it, so
     /// the body belongs there; the cut keeps it only within <see cref="CutSagShare"/>, except where the automatic refit
-    /// draws it back on a slot the garment only reaches onto (see <see cref="GrowSpannedOpenSkin"/>). Measured in game: Dirndl's Bodice on Neolithe's Almond XS left
-    /// the cleavage open, its vertices 8-11 mm under a 27 mm chord (0.30-0.39) of the game's coarse chest skin, a hole
-    /// straight through to the bodice's inside.
+    /// draws it back on a slot the garment only reaches onto (see <see cref="GrowSpannedOpenSkin"/>). Measured in game:
+    /// Dirndl's Bodice on Neolithe's Almond XS left the cleavage open, its vertices 8-11 mm under a 27 mm chord
+    /// (0.30-0.39) of the game's coarse chest skin, a hole straight through to the bodice's inside.
     /// </summary>
     internal const float TuckSpanShare = 0.5f;
 
