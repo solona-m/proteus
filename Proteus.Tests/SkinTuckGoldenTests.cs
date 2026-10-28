@@ -19,9 +19,9 @@ public class SkinTuckGoldenTests(ITestOutputHelper output)
     private static readonly HashSet<int> NoneHeld = [];
 
     /// <summary>A game top as it was before the neckline tuck and the deep clear (and the game chest's bra read, and the
-    /// relax guard).</summary>
+    /// relax guard, and the cut that keeps a triangle the author's skin covers only inside).</summary>
     private static readonly BodyRetarget.Tuning Before = new(NoTuck: true, NoDeepClear: true, NoKeepStandoff: true,
-                                                            NoSourceWorn: true, NoRelaxSinkGuard: true);
+                                                            NoSourceWorn: true, NoRelaxSinkGuard: true, NoCutInside: true);
 
     /// <summary>A game top with the tuck as change (a) made it: no deep clear, no open skin.</summary>
     private static readonly BodyRetarget.Tuning TuckOnly = new(NoDeepClear: true, NoOpenSkin: true, NoKeepStandoff: true,
