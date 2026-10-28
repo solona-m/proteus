@@ -70,6 +70,8 @@ internal static partial class BodyRetarget
     /// 1365 did (see <see cref="TurnOf"/>).</param>
     /// <param name="NoRelaxSinkGuard">Let <see cref="Relax"/> lay a cloth face's middle onto skin that comes through it, as
     /// builds before 1374 did (see <see cref="RelaxSinkTolerance"/>).</param>
+    /// <param name="NoSeamWeights">Let a seam's split vertices take their new weights each on its own, as builds before
+    /// 1382 did (see <see cref="KeepSeamsTogether"/>).</param>
     internal sealed record Tuning(bool NoFollow = false, bool NoOwnSkinWeights = false,
                                   float OwnSkinReach = OwnSkinReachDefault, float CopyReach = CopyReachDefault,
                                   float CopyTolerance = CopyToleranceDefault, bool NoGiveUp = false,
@@ -83,7 +85,7 @@ internal static partial class BodyRetarget
                                   bool NoTuck = false, bool NoDeepClear = false, bool NoOpenSkin = false,
                                   bool NoKeepStandoff = false, bool NoOpenEdgeFit = false, bool NoCrotchEase = false,
                                   bool NoSourceWorn = false, bool NoSeeInside = false, bool NoTurnFallback = false,
-                                  bool NoRelaxSinkGuard = false);
+                                  bool NoRelaxSinkGuard = false, bool NoSeamWeights = false);
 
     private static readonly Tuning DefaultTuning = new();
 

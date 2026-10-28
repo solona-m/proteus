@@ -301,9 +301,36 @@ internal static partial class BodyRetarget
             if (cut) trimmed++;
         }
 
-        // Last, after the smoothing and the layer averaging, which can carry a little of one leg across the crotch.
+        // A seam's split vertices on one weighting, before the limits below, which then hold each to its own.
+        var seams = tuned.NoSeamWeights ? null : KeepSeamsTogether(model, own, wasAt, result, held, keepShape);
+        reweighted += seams?.Net ?? 0;
+        var trace = PushTrace.Value;
+        var beforeKeeps = trace != null && seams != null ? ((string Bone, float W)[]?[])result.Clone() : null;
+
+        // Last, after the smoothing, the layer averaging and the seam weights, which can carry a little of one leg across
+        // the crotch.
         KeepToSide(own, result, bodyBones);
         KeepOffLegs(model, own, result, legFill);
+
+        if (trace != null && seams != null)
+        {
+            var clamped = new float[vc];
+            var classOf = new float[vc];
+            var skipped = new float[vc];
+            for (int v = 0; v < vc; v++)
+            {
+                int c = seams.ClassOf[v];
+                classOf[v] = c;
+                if (c < 0) continue;
+                if (seams.Kinds[c] == SeamKind.KeepShape) skipped[v] = 1f;
+                if (seams.Kinds[c] == SeamKind.Averaged && !ReferenceEquals(beforeKeeps![v], result[v])) clamped[v] = 1f;
+            }
+            trace("seam-stats", [seams.Averaged, seams.Reverted, seams.SkippedKeepShape, seams.LargestClass,
+                                 seams.LargestDiameter]);
+            trace("seam-clamped", clamped);
+            trace("seam-class", classOf);
+            trace("seam-skipped", skipped);
+        }
 
         // Per mesh, in each mesh's own vertex numbering, which is what the writer walks.
         var perMesh = new Dictionary<int, (string Bone, float W)[]?[]>();
@@ -734,7 +761,8 @@ internal static partial class BodyRetarget
     /// together", and a refit has to keep that.
     /// <para/>
     /// Other meshes only: within one mesh, vertices under 5 mm apart are neighbours along the same surface, and
-    /// averaging them would smear the gradient the lookup gives it.
+    /// averaging them would smear the gradient the lookup gives it. A seam's split vertices within one mesh are
+    /// <see cref="KeepSeamsTogether"/>'s.
     /// </summary>
     /// <param name="result">New weights per vertex, null where the author's stand. Updated in place.</param>
     /// <returns>Vertices given weights that had none before — kept by the lookup, moved to match a partner.</returns>
