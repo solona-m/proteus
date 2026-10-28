@@ -18,6 +18,7 @@ public sealed class TbseBakeFixture
 }
 
 /// <summary>The committed bibo↔TBSE maps: made from the inputs they say, and as good as the gate demands.</summary>
+[Trait("Speed", "Slow")]
 public class UvTransferMapsLocalTests(TbseBakeFixture bake, ITestOutputHelper output) : IClassFixture<TbseBakeFixture>
 {
     private const string Bibo = UvTransferBakeLocalTests.Bibo;
@@ -31,7 +32,6 @@ public class UvTransferMapsLocalTests(TbseBakeFixture bake, ITestOutputHelper ou
 
     [LocalDataFact(LocalData.GameData, Bibo, Tbse, LocalData.UvMaps)]
     [Trait("Plan", "AC-tbse-uvmap-1")]
-    [Trait("Speed", "Slow")]
     public void Rebake_reproduces_committed_maps() // [AC-tbse-uvmap-1]
     {
         Assert.True(bake.Output.Passed, string.Join("; ", bake.Output.Failures));
@@ -68,7 +68,6 @@ public class UvTransferMapsLocalTests(TbseBakeFixture bake, ITestOutputHelper ou
 
     [LocalDataFact(LocalData.GameData, Bibo, Tbse)]
     [Trait("Plan", "AC-tbse-uvmap-2")]
-    [Trait("Speed", "Slow")]
     public void Landmarks_land_on_each_other() // [AC-tbse-uvmap-2]
     {
         foreach (var map in new[] { UvTransferBakeJob.BiboToTbse, UvTransferBakeJob.TbseToBibo })
@@ -103,7 +102,6 @@ public class UvTransferMapsLocalTests(TbseBakeFixture bake, ITestOutputHelper ou
     /// </summary>
     [LocalDataFact(LocalData.GameData, Bibo, Rue, Tbse, TbseX)]
     [Trait("Plan", "AC-tbse-uvmap-2")]
-    [Trait("Speed", "Slow")]
     public void Same_layout_bodies_bake_to_identity() // [AC-tbse-uvmap-2]
     {
         const int size = 2048;   // a 4096 bound halves: p50 ≤ 4 px at 4096 is ≤ 2 px here
@@ -147,7 +145,6 @@ public class UvTransferMapsLocalTests(TbseBakeFixture bake, ITestOutputHelper ou
 
     [LocalDataFact(LocalData.GameData, Bibo, Tbse, LocalData.UvMaps)]
     [Trait("Plan", "AC-tbse-uvmap-4")]
-    [Trait("Speed", "Slow")]
     public void Sternum_dot_lands_on_male_vanilla_sternum() // [AC-tbse-uvmap-4]
     {
         // A dot at Bibo+'s sternum, carried into men's vanilla space (the right half of TBSE's sheet), lands where
@@ -164,7 +161,6 @@ public class UvTransferMapsLocalTests(TbseBakeFixture bake, ITestOutputHelper ou
 
     [LocalDataFact(LocalData.GameData, Bibo, Tbse, LocalData.UvMaps)]
     [Trait("Plan", "AC-tbse-uvmap-2")]
-    [Trait("Speed", "Slow")]
     public void Sternum_dot_on_bibo_lands_on_tbse_sternum() // [AC-tbse-uvmap-2]
     {
         var uv = new UVRemapService(Substitute.For<Dalamud.Plugin.Services.IPluginLog>(), LocalData.Path(LocalData.UvMaps));

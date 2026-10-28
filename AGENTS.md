@@ -106,8 +106,12 @@ real game or mod files read them via `LocalData` and are marked
 iterating run only targeted `--filter` tests. Before every push run the quick
 suite (`--filter "Speed!=Slow"`); the full suite runs only before a release
 tag. A test that takes 5 s or more gets `[Trait("Speed", "Slow")]` (on the
-class when all of it is slow) — unless it guards a binary game-file writer,
-which stays in the quick suite. The worker has its own `npm test` in `worker/`.
+class when all of it is slow; a class fixture's setup counts against its
+class) — unless it is one of the Sensitive Areas writers' own tests or a
+build-enforced rule test (`LocalizationTests`, `SupplyChainTests`), which stay
+in the quick suite. Golden baselines (`GoldenTests`, `GoldenCrossBodyLocalTests`,
+`SkinTuckGoldenTests`) run with the release. The worker has its own `npm test`
+in `worker/`.
 
 ## Sensitive Areas — the security surface
 
