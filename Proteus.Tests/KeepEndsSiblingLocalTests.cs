@@ -13,6 +13,7 @@ namespace Proteus.Tests;
 /// (<see cref="SiblingPiece"/>) instead of by how its loose cloth sits, against the installed mods. Skipped where they
 /// are not installed. Measured on the refit's own model, inside the pass.
 /// </summary>
+[Trait("Speed", "Slow")]
 public class KeepEndsSiblingLocalTests(ITestOutputHelper output)
 {
     private const string Geometric = LocalData.Mods + ":Geometric - by Solona";

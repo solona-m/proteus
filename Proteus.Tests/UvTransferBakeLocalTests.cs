@@ -8,6 +8,7 @@ using Xunit.Abstractions;
 namespace Proteus.Tests;
 
 /// <summary>The bibo↔TBSE bake run on the real Bibo+ and TBSE files and the game's deformer.</summary>
+[Trait("Speed", "Slow")]
 public class UvTransferBakeLocalTests(ITestOutputHelper output)
 {
     internal const string Bibo = LocalData.Mods + ":Bibo+";
@@ -40,6 +41,7 @@ public class UvTransferBakeLocalTests(ITestOutputHelper output)
 }
 
 /// <summary>The shipped bibo↔gen3 maps measured by the same round-trip yardstick, for comparison.</summary>
+[Trait("Speed", "Slow")]
 public class UvTransferBaselineLocalTests(ITestOutputHelper output)
 {
     internal static UvTransferBake.Result ReadMap(string path)

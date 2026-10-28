@@ -78,6 +78,7 @@ public class OtherRaceRefitLocalTests(ITestOutputHelper o)
     [Trait("Plan", "AC-refit-other-race-2")]
     [Trait("Plan", "AC-refit-other-race-3")]
     [Trait("Plan", "AC-refit-other-race-10")]
+    [Trait("Speed", "Slow")]
     public void A_highlander_refit_has_no_new_folds_in_the_saved_model_or_the_preview()
     {
         var log = Substitute.For<Dalamud.Plugin.Services.IPluginLog>();
@@ -143,6 +144,7 @@ public class OtherRaceRefitLocalTests(ITestOutputHelper o)
     /// </summary>
     [LocalDataFact(LocalData.GameData, Lumberjack, Tbse, IvcsHighlander)]
     [Trait("Plan", "AC-refit-other-race-2")]
+    [Trait("Speed", "Slow")]
     public void Tbse_s_own_highlander_body_against_its_midlander_body_bent_is_logged()
     {
         var made = HighlanderWearer(ShirtBytes());
@@ -212,6 +214,7 @@ public class OtherRaceRefitLocalTests(ITestOutputHelper o)
     [LocalDataFact(LocalData.GameData, Lumberjack, Tbse, TbseX)]
     [Trait("Plan", "AC-refit-race-down-10")]
     [Trait("Plan", "AC-refit-race-down-2")]
+    [Trait("Speed", "Slow")]
     public void A_midlander_refit_of_the_highlander_shirt_has_no_new_folds()
     {
         var log = Substitute.For<Dalamud.Plugin.Services.IPluginLog>();
@@ -298,6 +301,7 @@ public class OtherRaceRefitLocalTests(ITestOutputHelper o)
     /// </summary>
     [LocalDataFact(LocalData.GameData)]
     [Trait("Plan", "EDGE-refit-race-down-3")]
+    [Trait("Speed", "Slow")]
     public void A_game_made_for_side_below_is_each_race_s_own_body()
     {
         var data = new Lumina.GameData(LocalData.Path(LocalData.GameData));

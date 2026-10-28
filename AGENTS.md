@@ -73,8 +73,8 @@ documented by that workflow's own tooling (e.g. its installed plugin).
 
 - `dotnet build Proteus/Proteus.csproj -c Release` — build
 - `dotnet build Proteus.Refit/Proteus.Refit.csproj -c Release` — build the headless refit CLI (the tests build it too, for its `--size-set` tests; still run it whenever `Proteus.Refit/` changes)
-- `dotnet test Proteus.Tests/Proteus.Tests.csproj -c Release` — run all tests
-- `dotnet test Proteus.Tests/Proteus.Tests.csproj -c Release` — all checks incl. tests (also `npm test --prefix worker` when `worker/` changes)
+- `dotnet test Proteus.Tests/Proteus.Tests.csproj -c Release` — run all tests (the full suite: before a release tag only)
+- `dotnet test Proteus.Tests/Proteus.Tests.csproj -c Release --filter "Speed!=Slow"` — the quick suite: before every push (also `npm test --prefix worker` when `worker/` changes)
 - run: bump `Plugin.BuildNumber`, build, copy `Proteus/bin/Release/win-x64/` to `E:\repos\Proteus\Proteus\bin\release\win-x64` — the game dev-loads it (no app URL; verification is in game)
 - stop: none — unload the plugin in game via `/xlplugins`
 - single test: `dotnet test Proteus.Tests/Proteus.Tests.csproj -c Release --filter "FullyQualifiedName~BodyRetargetTests"`
@@ -103,8 +103,11 @@ xunit + NSubstitute in `Proteus.Tests/`, one `*Tests.cs` per unit; synthetic
 fixtures (`SyntheticModel`, `SyntheticPack`, …) and `Fixtures/`. Tests that need
 real game or mod files read them via `LocalData` and are marked
 `[LocalDataFact]` so they skip on CI — never hard-code a local path. While
-iterating run only targeted `--filter` tests; run the full suite once, before
-merging into `test`. The worker has its own `npm test` in `worker/`.
+iterating run only targeted `--filter` tests. Before every push run the quick
+suite (`--filter "Speed!=Slow"`); the full suite runs only before a release
+tag. A test that takes 5 s or more gets `[Trait("Speed", "Slow")]` (on the
+class when all of it is slow) — unless it guards a binary game-file writer,
+which stays in the quick suite. The worker has its own `npm test` in `worker/`.
 
 ## Sensitive Areas — the security surface
 

@@ -13,6 +13,7 @@ namespace Proteus.Tests;
 /// Where a garment reaches onto a slot it does not lead, no more of the bodies' skin is left out in the open and no more
 /// comes through the cloth; where it reaches onto none, the refit is the one it was, byte for byte.
 /// </summary>
+[Trait("Speed", "Slow")]
 public class CutOpenSkinOtherModsLocalTests(ITestOutputHelper output)
 {
     private const string Dresses = LocalData.Mods + ":I Just Really Like Sweater Dresses, OK - by Solona";

@@ -16,6 +16,7 @@ namespace Proteus.Tests;
 /// <see cref="BodyRetarget.GrowSpannedOpenSkin"/>). Measured on the skin the written file draws, against each body as
 /// its mod draws it.
 /// </summary>
+[Trait("Speed", "Slow")]
 public class CodeineDressHolesLocalTests(ITestOutputHelper output)
 {
     private const string Main = LocalData.ModPacks + ":[LINXX] Codeine.pmp";

@@ -16,6 +16,7 @@ namespace Proteus.Tests;
 /// detected as the automatic refit detects it, on both refit paths: the automatic refit (the whole new skin) and the
 /// Studio's Body size (hidden skin cut).
 /// </summary>
+[Trait("Speed", "Slow")]
 public class LaurelTightsRegressionLocalTests(ITestOutputHelper output)
 {
     private const string Laurel = LocalData.Mods + ":[Jaque] Laurel Attire [July 2025]";

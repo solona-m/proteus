@@ -444,6 +444,7 @@ public class SkinTuckGoldenTests(ITestOutputHelper output)
     [LocalDataFact(LocalData.GameData, Neolithe)]
     [Trait("Plan", "AC-neckline-skin-tuck-3")]
     [Trait("Plan", "AC-open-patch-authored-4")]
+    [Trait("Speed", "Slow")]
     public void A_modders_cut_on_Neolithe_plans_as_before()
     {
         var (bytes, source, target, pair, _) = Setup("Neo-Ishgardian Top of Maiming", "neobelly chest - smallclothes/sfw m.mdl");
@@ -468,6 +469,7 @@ public class SkinTuckGoldenTests(ITestOutputHelper output)
     [LocalDataFact(LocalData.GameData, Neolithe)]
     [Trait("Plan", "AC-open-patch-authored-9")]
     [Trait("Plan", "EDGE-seam-weights-15")]
+    [Trait("Speed", "Slow")]
     public void A_modders_cut_on_Neolithe_plans_as_fitted()
     {
         var (bytes, source, target, pair, _) = Setup("Neo-Ishgardian Top of Maiming", "neobelly chest - smallclothes/sfw m.mdl");
@@ -488,6 +490,7 @@ public class SkinTuckGoldenTests(ITestOutputHelper output)
 
     [LocalDataFact(LocalData.GameData, Neolithe)]
     [Trait("Plan", "AC-neckline-skin-tuck-3")]
+    [Trait("Speed", "Slow")]
     public void The_Dirndl_game_refit_without_the_tuck_plans_as_before()
     {
         var (bytes, source, target, pair, uv) = Setup("Dirndl's Bodice", "extra chest - smallclothes/nsfw almond xs.mdl");

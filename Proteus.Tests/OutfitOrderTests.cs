@@ -215,6 +215,7 @@ public class OutfitOrderTests
     [Fact]
     [Trait("Plan", "EDGE-outfit-fit-6")]
     [Trait("Plan", "AC-outfit-fit-2")]
+    [Trait("Speed", "Slow")]
     public void No_outfit_or_NoOutfitOrder_leaves_the_refit_as_it_was()
     {
         var jacket = Sheets(ClothMaterial, 21, 0.003f);
@@ -235,6 +236,7 @@ public class OutfitOrderTests
 
     [Fact]
     [Trait("Plan", "EDGE-outfit-fit-7")]
+    [Trait("Speed", "Slow")]
     public void Two_layers_of_the_piece_keep_their_order_under_the_lift()
     {
         // A lining 3 mm and a shell 4 mm off the skin, both over the bra: lifted, the shell stays 1 mm outside the lining.

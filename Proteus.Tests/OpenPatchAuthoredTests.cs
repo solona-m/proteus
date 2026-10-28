@@ -218,6 +218,7 @@ public class OpenPatchAuthoredTests
 
     [Fact]
     [Trait("Plan", "AC-open-patch-authored-4")]
+    [Trait("Speed", "Slow")]
     public void The_sheet_goldens_take_in_no_point()
     {
         var cases = new List<(byte[] Top, BodyRetarget.SlotPair Pair)>

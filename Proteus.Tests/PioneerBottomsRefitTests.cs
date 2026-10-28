@@ -15,6 +15,7 @@ namespace Proteus.Tests;
 /// laid onto Rue+ two corners missed the hip by 6 mm (on Neolithe four, by 2-6 mm), and the swap read the strip as a
 /// posed piece of the garment's own and kept it. Bibo+ laid every corner and swapped.
 /// </summary>
+[Trait("Speed", "Slow")]
 public class PioneerBottomsRefitTests(ITestOutputHelper output)
 {
     private const string Bottoms = "chara/equipment/e0689/model/c0201e0689_dwn.mdl";

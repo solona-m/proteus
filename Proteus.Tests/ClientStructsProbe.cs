@@ -26,6 +26,7 @@ public class ClientStructsProbe(ITestOutputHelper o)
     }
 
     [Fact]
+    [Trait("Speed", "Slow")]
     public void ListModelMembers()
     {
         var types = AllClientStructTypes().ToList();

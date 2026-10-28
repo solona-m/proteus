@@ -755,6 +755,7 @@ public class KeepEndsTests
 
     [Fact]
     [Trait("Plan", "EDGE-keep-hand-foot-skin-11")]
+    [Trait("Speed", "Slow")]
     public void Legs_of_one_shape_within_a_body_mod_already_fit()
     {
         // Read as one size and aimed at another of the same body mod, whose legs are the same where the shoe is: the
@@ -789,6 +790,7 @@ public class KeepEndsTests
     }
 
     [Fact]
+    [Trait("Speed", "Slow")]
     public void Two_sizes_of_one_mesh_that_part_where_the_piece_is_are_two_shapes()
     {
         // YAB's Watermelon and Skull Crushers legs: one mesh, fuller thighs. However close the garment scores to both,
@@ -826,6 +828,7 @@ public class KeepEndsTests
     }
 
     [Fact]
+    [Trait("Speed", "Slow")]
     public void Sizes_the_cloth_scores_alike_are_still_two_shapes_where_the_bodies_part()
     {
         // Read by its cloth, a piece scores both sizes alike: its cloth band sits over legs that are the same in both.
@@ -1148,6 +1151,7 @@ public class KeepEndsTests
 
     [Fact]
     [Trait("Plan", "AC-keep-ends-studio-3")]
+    [Trait("Speed", "Slow")]
     public void Studio_limb_prefills_the_best_guess_from_one_ranking()   // [AC-keep-ends-studio-3]
     {
         InBodies(dir =>
@@ -1172,6 +1176,7 @@ public class KeepEndsTests
 
     [Fact]
     [Trait("Plan", "EDGE-keep-ends-studio-25")]
+    [Trait("Speed", "Slow")]
     public void Studio_limb_ambiguous_still_prefills_and_no_skin_does_not()   // [EDGE-keep-ends-studio-25]
     {
         InBodies(dir =>

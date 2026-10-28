@@ -15,6 +15,7 @@ namespace Proteus.Tests;
 /// A women's mod's men's versions in the size set, against the real files (sizeset-cross-sex): Sheer Elegance's top on
 /// Bibo+, a Rue top, and Starlit's YAS-rigged skirt made men's onto TBSE and TBSE-X. Every run works on a copy.
 /// </summary>
+[Trait("Speed", "Slow")]
 public sealed class SizeSetCrossSexLocalTests(ITestOutputHelper o) : IDisposable
 {
     /// <summary>The mod copies this test made, deleted after it.</summary>
@@ -159,6 +160,7 @@ public sealed class SizeSetCrossSexLocalTests(ITestOutputHelper o) : IDisposable
     [LocalDataFact(LocalData.GameData, Sheer, CrossSexRefitLocalTests.Bibo, CrossSexRefitLocalTests.Tbse,
                    CrossSexRefitLocalTests.TbseX, LocalData.TbseUvMaps)]
     [Trait("Plan", "AC-sizeset-cross-sex-3")]
+    [Trait("Speed", "Slow")]
     public void Sources_for_men_are_measured_sheer() // [AC-sizeset-cross-sex-3]
     {
         var women = Installed(CrossSexRefitLocalTests.Bibo);
@@ -171,6 +173,7 @@ public sealed class SizeSetCrossSexLocalTests(ITestOutputHelper o) : IDisposable
     [LocalDataFact(LocalData.GameData, RueTop, Yab, CrossSexRefitLocalTests.Rue, CrossSexRefitLocalTests.Bibo,
                    CrossSexRefitLocalTests.Tbse, LocalData.TbseUvMaps)]
     [Trait("Plan", "AC-sizeset-cross-sex-3")]
+    [Trait("Speed", "Slow")]
     public void Sources_for_men_are_measured_rue_top() // [AC-sizeset-cross-sex-3]
     {
         var women = Installed(Yab, CrossSexRefitLocalTests.Rue, CrossSexRefitLocalTests.Bibo);
@@ -188,6 +191,7 @@ public sealed class SizeSetCrossSexLocalTests(ITestOutputHelper o) : IDisposable
     [LocalDataFact(LocalData.GameData, Starlit, Yab, CrossSexRefitLocalTests.Rue, CrossSexRefitLocalTests.Bibo,
                    CrossSexRefitLocalTests.Tbse, LocalData.TbseUvMaps)]
     [Trait("Plan", "AC-sizeset-cross-sex-3")]
+    [Trait("Speed", "Slow")]
     public void Sources_for_men_are_measured_starlit_legs() // [AC-sizeset-cross-sex-3]
     {
         var women = Installed(Yab, CrossSexRefitLocalTests.Rue, CrossSexRefitLocalTests.Bibo);
@@ -235,6 +239,7 @@ public sealed class SizeSetCrossSexLocalTests(ITestOutputHelper o) : IDisposable
     [Trait("Plan", "EDGE-sizeset-cross-sex-19")]
     [Trait("Plan", "EDGE-sizeset-cross-sex-24")]
     [Trait("Plan", "EDGE-sizeset-cross-sex-3")]
+    [Trait("Speed", "Slow")]
     public void Sheer_elegance_gains_mens_versions() // [AC-sizeset-cross-sex-2] [AC-sizeset-cross-sex-4] [EDGE-sizeset-cross-sex-19] [EDGE-sizeset-cross-sex-24] [EDGE-sizeset-cross-sex-3]
     {
         string root = Copy(Sheer);
@@ -288,6 +293,7 @@ public sealed class SizeSetCrossSexLocalTests(ITestOutputHelper o) : IDisposable
 
     [LocalDataFact(LocalData.GameData, Sheer, CrossSexRefitLocalTests.Bibo, CrossSexRefitLocalTests.Tbse, LocalData.TbseUvMaps)]
     [Trait("Plan", "AC-sizeset-cross-sex-4")]
+    [Trait("Speed", "Slow")]
     public void The_size_sets_mens_model_is_the_jobs() // [AC-sizeset-cross-sex-4]
     {
         string root = Copy(Sheer);
@@ -306,6 +312,7 @@ public sealed class SizeSetCrossSexLocalTests(ITestOutputHelper o) : IDisposable
     [Trait("Plan", "AC-sizeset-cross-sex-7")]
     [Trait("Plan", "EDGE-sizeset-cross-sex-12")]
     [Trait("Plan", "EDGE-sizeset-cross-sex-13")]
+    [Trait("Speed", "Slow")]
     public void Mens_versions_rerun_remake_cancel_and_undo() // [AC-sizeset-cross-sex-7] [EDGE-sizeset-cross-sex-12] [EDGE-sizeset-cross-sex-13]
     {
         string root = Copy(Sheer);
@@ -343,6 +350,7 @@ public sealed class SizeSetCrossSexLocalTests(ITestOutputHelper o) : IDisposable
     [Trait("Plan", "AC-sizeset-cross-sex-8")]
     [Trait("Plan", "EDGE-sizeset-cross-sex-8")]
     [Trait("Plan", "EDGE-sizeset-cross-sex-9")]
+    [Trait("Speed", "Slow")]
     public void Starlit_gains_mens_versions_with_its_bones_moved(string skeleton) // [AC-sizeset-cross-sex-8] [EDGE-sizeset-cross-sex-8] [EDGE-sizeset-cross-sex-9]
     {
         string root = Copy(Starlit);
@@ -380,6 +388,7 @@ public sealed class SizeSetCrossSexLocalTests(ITestOutputHelper o) : IDisposable
     [LocalDataFact(LocalData.GameData, Sheer, CrossSexRefitLocalTests.Bibo, CrossSexRefitLocalTests.Tbse, LocalData.TbseUvMaps)]
     [Trait("Plan", "EDGE-sizeset-cross-sex-22")]
     [Trait("Plan", "EDGE-sizeset-cross-sex-23")]
+    [Trait("Speed", "Slow")]
     public void Unreadable_and_missing_bodies_are_said_once() // [EDGE-sizeset-cross-sex-22] [EDGE-sizeset-cross-sex-23]
     {
         // TBSE-X not installed: said once per piece, and TBSE still made.

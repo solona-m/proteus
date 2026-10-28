@@ -383,6 +383,7 @@ public class SizeSetSourceTests(ITestOutputHelper output)
     [Trait("Plan", "AC-bulk-nearest-source-1")]
     [Trait("Plan", "AC-bulk-nearest-source-5")]
     [Trait("Plan", "EDGE-bulk-nearest-source-6")]
+    [Trait("Speed", "Slow")]
     public void Yab_sizes_each_cut_their_own_Rue_size()
     {
         const string top = "chara/equipment/e6030/model/c0201e6030_top.mdl";
@@ -463,6 +464,7 @@ public class SizeSetSourceTests(ITestOutputHelper output)
     [LocalDataFact(Yab, Rue, StarlightBikini)]
     [Trait("Plan", "AC-bulk-nearest-source-3")]
     [Trait("Plan", "EDGE-bulk-nearest-source-10")]
+    [Trait("Speed", "Slow")]
     public void Legs_following_a_chest_take_the_chests_option_through_the_manifest()
     {
         const string top = "chara/equipment/e0194/model/c0201e0194_top.mdl";
@@ -515,6 +517,7 @@ public class SizeSetSourceTests(ITestOutputHelper output)
     [LocalDataFact(Yab, Rue, Neolithe, Abyss)]
     [Trait("Plan", "AC-bulk-nearest-source-2")]
     [Trait("Plan", "EDGE-bulk-nearest-source-29")]
+    [Trait("Speed", "Slow")]
     public void Mixed_body_sizes_pick_the_nearest_per_Rue_size()
     {
         string copy = CopyWithout(Abyss, "Size", "Rue Small", "Rue Medium", "Rue Large");
@@ -541,6 +544,7 @@ public class SizeSetSourceTests(ITestOutputHelper output)
     /// </summary>
     [LocalDataFact(Yab, Rue, Neolithe, ButterflyCorset)]
     [Trait("Plan", "EDGE-bulk-nearest-source-27")]
+    [Trait("Speed", "Slow")]
     public void A_covered_bust_garment_is_chosen_by_its_body()
     {
         string copy = CopyWithout(ButterflyCorset, "Size", "Rue S", "Rue M", "Rue L");
@@ -563,6 +567,7 @@ public class SizeSetSourceTests(ITestOutputHelper output)
     /// </summary>
     [LocalDataFact(Yab, Rue, BeMine)]
     [Trait("Plan", "EDGE-bulk-nearest-source-1")]
+    [Trait("Speed", "Slow")]
     public void Identical_author_sizes_tie_to_author_order()
     {
         string copy = CopyWithout(BeMine, "Size", "XSmall", "Small", "Medium", "Large", "XLarge",
@@ -616,6 +621,7 @@ public class SizeSetSourceTests(ITestOutputHelper output)
     [LocalDataFact(Yab, Rue, Neolithe, Bibo, IvcsBibo, StarlightBikini, CallersSwimwear, ButterflyCorset, HeartHalter,
                    Cutout, Abyss, Geometric)]
     [Trait("Plan", "AC-bulk-nearest-source-2")]
+    [Trait("Speed", "Slow")]
     public void Body_key_chooses_the_size_the_refit_moves_least()
     {
         var log = Substitute.For<Dalamud.Plugin.Services.IPluginLog>();

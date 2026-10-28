@@ -664,6 +664,7 @@ public class MeshVolumeServiceTests
     /// so every shape keeps its own offset from the base.
     /// </summary>
     [LocalDataFact(PlugModel)]
+    [Trait("Speed", "Slow")]
     public void Real_shape_keyed_model_keeps_every_shape_offset()   // [EDGE-spare-carry-append-worn-9]
     {
         var mdl = System.IO.File.ReadAllBytes(LocalData.Path(PlugModel));

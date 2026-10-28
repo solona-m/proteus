@@ -13,6 +13,7 @@ namespace Proteus.Tests;
 /// Hair ports measured against the game's own files. The game ships every shared hairstyle (101+) once per race, so
 /// the target race's own model of the same hairstyle is the answer a port should land on.
 /// </summary>
+[Trait("Speed", "Slow")]
 public sealed class HairPortLocalTests(ITestOutputHelper o)
 {
     internal static readonly (ushort From, ushort To)[] Pairs =

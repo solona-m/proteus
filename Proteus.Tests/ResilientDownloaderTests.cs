@@ -110,6 +110,7 @@ public sealed class ResilientDownloaderTests : IDisposable
     }
 
     [Fact]
+    [Trait("Speed", "Slow")]
     public async Task RetryAfterATruncatedBody_DoesNotDoubleCountProgress()
     {
         // The throttle signature: a short body with a 200 on it. The checksum rejects it, the file is

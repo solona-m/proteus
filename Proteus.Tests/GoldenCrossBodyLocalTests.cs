@@ -15,6 +15,7 @@ namespace Proteus.Tests;
 /// target has skin wherever the source has), so they must come out exactly as they did before it. Recorded 2026-10-20
 /// on test cf0fa3d (build 1324), before any of that change was made.
 /// </summary>
+[Trait("Speed", "Slow")]
 public class GoldenCrossBodyLocalTests(ITestOutputHelper output)
 {
     private const string Laurel = LocalData.Mods + ":[Jaque] Laurel Attire [July 2025]";

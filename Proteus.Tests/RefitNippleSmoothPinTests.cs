@@ -97,6 +97,7 @@ public class RefitNippleSmoothPinTests(ITestOutputHelper output)
     [Theory]
     [MemberData(nameof(Pinned))]
     [Trait("Plan", "AC-refit-nipple-smooth-9")]
+    [Trait("Speed", "Slow")]
     public void Refit_matches_the_pre_feature_output(string fixture, string pinned)
     {
         var plan = BodyRetarget.WithTuning(new BodyRetarget.Tuning(NoNippleSmooth: true), () => Refit(fixture));

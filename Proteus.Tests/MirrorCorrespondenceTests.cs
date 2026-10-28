@@ -100,6 +100,7 @@ public class MirrorCorrespondenceTests
     }
 
     [Fact]
+    [Trait("Speed", "Slow")]
     public void Bibos_two_halves_are_a_reflection_not_a_translate()
     {
         var path = FindMap();
@@ -126,6 +127,7 @@ public class MirrorCorrespondenceTests
     }
 
     [Fact]
+    [Trait("Speed", "Slow")]
     public void The_two_halves_carry_the_same_island_area()
     {
         var path = FindMap();

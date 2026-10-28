@@ -88,6 +88,7 @@ public class NavelBridgeLocalTests(ITestOutputHelper o)
     [InlineData("Neolithe")]
     [InlineData("Bibo+")]
     [InlineData("Rue+")]
+    [Trait("Speed", "Slow")]
     public void A_full_build_with_the_navel_tick_alone_fills_it(string body)
     {
         var diag = new List<string>();
@@ -113,6 +114,7 @@ public class NavelBridgeLocalTests(ITestOutputHelper o)
     [InlineData("Neolithe")]
     [InlineData("Bibo+")]
     [InlineData("Rue+")]
+    [Trait("Speed", "Slow")]
     public void The_written_navel_is_flush(string body)
     {
         var parts = Parts(body);
@@ -201,6 +203,7 @@ public class NavelBridgeLocalTests(ITestOutputHelper o)
     [InlineData("Neolithe")]
     [InlineData("Bibo+")]
     [InlineData("Rue+")]
+    [Trait("Speed", "Slow")]
     public void The_join_does_not_move_with_the_navel_tick_alone(string body)
     {
         var models = PartsOf(body).Select(File.ReadAllBytes).ToList();
@@ -234,6 +237,7 @@ public class NavelBridgeLocalTests(ITestOutputHelper o)
     [LocalDataFact(Neo)]
     [Trait("Plan", "AC-navel-bridge-6")]
     [Trait("Plan", "EDGE-navel-bridge-15")]
+    [Trait("Speed", "Slow")]
     public void Stacked_layers_share_one_navel_solve()
     {
         var models = PartsOf("Neolithe").Select(File.ReadAllBytes).ToList();
@@ -258,6 +262,7 @@ public class NavelBridgeLocalTests(ITestOutputHelper o)
     [Trait("Plan", "EDGE-navel-bridge-17")]
     [InlineData("Neolithe")]
     [InlineData("Bibo+")]
+    [Trait("Speed", "Slow")]
     public void The_cleavage_and_the_navel_are_both_spanned(string body)
     {
         var diag = new List<string>();
@@ -278,6 +283,7 @@ public class NavelBridgeLocalTests(ITestOutputHelper o)
     [InlineData("c0201")]
     [InlineData("c0901")]
     [InlineData("c1101")]
+    [Trait("Speed", "Slow")]
     public void The_game_bodies_fill_nothing_false(string race)
     {
         var data = new Lumina.GameData(LocalData.Path(LocalData.GameData));

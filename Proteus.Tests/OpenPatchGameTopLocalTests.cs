@@ -18,6 +18,7 @@ namespace Proteus.Tests;
 /// points are taken in. The game-gear refit never takes the rule (it clears the body), so it is the yardstick for what
 /// refitting these tops already turns over and stretches. Needs the game's data and the body mods named.
 /// </summary>
+[Trait("Speed", "Slow")]
 public class OpenPatchGameTopLocalTests(ITestOutputHelper output)
 {
     private const string Neolithe = LocalData.Mods + ":Neolithe [ALL IN ONE]";

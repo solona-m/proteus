@@ -79,6 +79,7 @@ public class RefitNippleSmoothTests(ITestOutputHelper output)
     [Fact]
     [Trait("Plan", "AC-refit-nipple-smooth-2")]
     [Trait("Plan", "EDGE-refit-nipple-smooth-19")]
+    [Trait("Speed", "Slow")]
     public void Flat_source_nippled_target_is_smoothed_to_flat()
     {
         var lines = new List<string>();
@@ -105,6 +106,7 @@ public class RefitNippleSmoothTests(ITestOutputHelper output)
     [InlineData("equal nipples")]
     [Trait("Plan", "AC-refit-nipple-smooth-3")]
     [Trait("Plan", "EDGE-refit-nipple-smooth-20")]
+    [Trait("Speed", "Slow")]
     public void Equal_or_prouder_source_changes_nothing(string fixture)
     {
         Assert.Equal(PinnedHash(fixture), Hash(On(fixture).Model));
@@ -131,6 +133,7 @@ public class RefitNippleSmoothTests(ITestOutputHelper output)
     [Fact]
     [Trait("Plan", "AC-refit-nipple-smooth-3")]
     [Trait("Plan", "EDGE-refit-nipple-smooth-26")]
+    [Trait("Speed", "Slow")]
     public void Finish_with_the_same_body_is_a_no_op()
     {
         var lines = new List<string>();
@@ -164,6 +167,7 @@ public class RefitNippleSmoothTests(ITestOutputHelper output)
     [Fact]
     [Trait("Plan", "AC-refit-nipple-smooth-4")]
     [Trait("Plan", "EDGE-refit-nipple-smooth-4")]
+    [Trait("Speed", "Slow")]
     public void Uncovered_nipple_keeps_the_body_s_exact_shape()
     {
         var one = new List<string>();
@@ -199,6 +203,7 @@ public class RefitNippleSmoothTests(ITestOutputHelper output)
     /// <summary>[AC-refit-nipple-smooth-5] The body files handed to the refit come out of it byte for byte.</summary>
     [Fact]
     [Trait("Plan", "AC-refit-nipple-smooth-5")]
+    [Trait("Speed", "Slow")]
     public void Plan_never_writes_into_the_body_s_bytes()
     {
         var pair = Pair(Body(0f, 0f), Body(Nipple, Nipple));
@@ -216,6 +221,7 @@ public class RefitNippleSmoothTests(ITestOutputHelper output)
     /// as one level of detail.</summary>
     [Fact]
     [Trait("Plan", "AC-refit-nipple-smooth-6")]
+    [Trait("Speed", "Slow")]
     public void Only_moved_skin_is_reshaded_and_nothing_folds()
     {
         var garmentBytes = Garment(0f, 0f, BothCups);
@@ -285,6 +291,7 @@ public class RefitNippleSmoothTests(ITestOutputHelper output)
     [Fact]
     [Trait("Plan", "AC-refit-nipple-smooth-9")]
     [Trait("Plan", "EDGE-refit-nipple-smooth-16")]
+    [Trait("Speed", "Slow")]
     public void Only_the_chest_pair_is_smoothed()
     {
         Assert.Equal(PinnedHash("legs slot"), Hash(On("legs slot").Model));
@@ -310,6 +317,7 @@ public class RefitNippleSmoothTests(ITestOutputHelper output)
     [Fact]
     [Trait("Plan", "AC-refit-nipple-smooth-9")]
     [Trait("Plan", "EDGE-refit-nipple-smooth-2")]
+    [Trait("Speed", "Slow")]
     public void Body_without_bust_bones_is_unchanged()
     {
         Assert.Equal(PinnedHash("no bust bones"), Hash(On("no bust bones").Model));
@@ -321,6 +329,7 @@ public class RefitNippleSmoothTests(ITestOutputHelper output)
     [Fact]
     [Trait("Plan", "AC-refit-nipple-smooth-9")]
     [Trait("Plan", "EDGE-refit-nipple-smooth-1")]
+    [Trait("Speed", "Slow")]
     public void Pair_without_a_body_file_is_left_alone()
     {
         var garment = ModelPartReader.Read(Garment(0f, 0f, BothCups))!;
@@ -336,6 +345,7 @@ public class RefitNippleSmoothTests(ITestOutputHelper output)
     /// the front, the control, is not.</summary>
     [Fact]
     [Trait("Plan", "EDGE-refit-nipple-smooth-3")]
+    [Trait("Speed", "Slow")]
     public void Cloth_off_the_bust_changes_nothing()
     {
         Assert.Equal(PinnedHash("cloth behind"), Hash(On("cloth behind").Model));
@@ -345,6 +355,7 @@ public class RefitNippleSmoothTests(ITestOutputHelper output)
     /// <summary>[EDGE-refit-nipple-smooth-22] Cloth too small to seed the region smooths nothing, and says why.</summary>
     [Fact]
     [Trait("Plan", "EDGE-refit-nipple-smooth-22")]
+    [Trait("Speed", "Slow")]
     public void Too_little_coverage_smooths_nothing()
     {
         var tip = Tip(false);
@@ -524,6 +535,7 @@ public class RefitNippleSmoothTests(ITestOutputHelper output)
     /// is not cloth: with nothing else over the chest, the refit is as it was.</summary>
     [Fact]
     [Trait("Plan", "EDGE-refit-nipple-smooth-12")]
+    [Trait("Speed", "Slow")]
     public void Skin_copy_under_a_custom_material_is_not_cover()
         => Assert.Equal(PinnedHash("skin copy"), Hash(On("skin copy").Model));
 
@@ -548,6 +560,7 @@ public class RefitNippleSmoothTests(ITestOutputHelper output)
     /// it covers the nipple. Judged by distance alone (no uvs) it would read as a copy of the skin, and cover nothing.</summary>
     [Fact]
     [Trait("Plan", "EDGE-refit-nipple-smooth-12")]
+    [Trait("Speed", "Slow")]
     public void Latex_painted_on_with_its_own_layout_is_cover()
     {
         var bytes = Garment(0f, 0f, BothCups, off: 0.0005f);
@@ -574,6 +587,7 @@ public class RefitNippleSmoothTests(ITestOutputHelper output)
     [InlineData(0.0032f, false)]
     [InlineData(0.003f, true)]
     [Trait("Plan", "AC-refit-nipple-smooth-3")]
+    [Trait("Speed", "Slow")]
     public void Excess_either_side_of_the_floor(float source, bool smooths)
     {
         var bytes = Garment(source, source, BothCups);
@@ -615,6 +629,7 @@ public class RefitNippleSmoothTests(ITestOutputHelper output)
     /// <summary>[EDGE-refit-nipple-smooth-13] Cloth behind a variant tag covers: which option is drawn is the wearer's.</summary>
     [Fact]
     [Trait("Plan", "EDGE-refit-nipple-smooth-13")]
+    [Trait("Speed", "Slow")]
     public void Variant_tagged_panels_follow_the_cover_rule()
     {
         var plan = On("variant cloth");
@@ -745,6 +760,7 @@ public class RefitNippleSmoothTests(ITestOutputHelper output)
     /// position, and keeps its author's normals.</summary>
     [Fact]
     [Trait("Plan", "EDGE-refit-nipple-smooth-18")]
+    [Trait("Speed", "Slow")]
     public void Garment_skin_follows_positions_but_keeps_its_normals_without_a_swap()
     {
         var lines = new List<string>();

@@ -216,6 +216,7 @@ public class KeepShapeFlatCardTests
 
     [Fact]
     [Trait("Plan", "AC-keep-shape-flat-card-3")]
+    [Trait("Speed", "Slow")]
     public void Well_posed_pieces_are_bit_identical()
     {
         var plate = Plate(Vector3.Zero, 0.06f, 0.001f);
@@ -265,6 +266,7 @@ public class KeepShapeFlatCardTests
 
     [Fact]
     [Trait("Plan", "AC-keep-shape-flat-card-4")]
+    [Trait("Speed", "Slow")]
     public void The_fallback_count_is_reported()
     {
         var card = Card(Tilt);

@@ -12,6 +12,7 @@ public partial class EarlessHairTests
     /// earless in every shape.</summary>
     [LocalDataFact(LocalData.GameData)]
     [Trait("Plan", "EDGE-earless-miqote-hair-17")]
+    [Trait("Speed", "Slow")]
     public void A_real_multi_lod_hair_is_cut_to_lod0()
     {
         var data = new Lumina.GameData(LocalData.Path(LocalData.GameData));
