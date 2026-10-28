@@ -445,12 +445,19 @@ internal static partial class BodyRetarget
             for (int t = 0; t + 2 < part.Triangles.Length; t += 3)
             {
                 int a = part.Triangles[t], b = part.Triangles[t + 1], c = part.Triangles[t + 2];
-                if (!covered[a] && !covered[b] && !covered[c]) { cut++; continue; }
+                // A body triangle wider than the author's skin across it: the game's women's legs draw a 10 mm band of
+                // skin between the Antiquated Aoidos' Tights' straps, and laid onto The Body SE's 20 mm thigh triangles
+                // every corner of one fell under a strap — cut, with its middle in the open between them. Cut only when
+                // nothing of it the author drew is found: no corner, no edge's middle, not its own middle.
+                bool inside = !covered[a] && !covered[b] && !covered[c] && !Tuned.NoCutInside
+                           && CoversInside(drawn, edges, parts, a, b, c);
+                if (!covered[a] && !covered[b] && !covered[c] && !inside) { cut++; continue; }
                 kept++;
-                // The emit loop reads MESH-LOCAL indices, which is what the file stores.
-                Keep(set, a, bv);
-                Keep(set, b, bv);
-                Keep(set, c, bv);
+                // The emit loop reads MESH-LOCAL indices, which is what the file stores. A triangle kept for its inside
+                // has no corner the author drew, and the writer draws a triangle only for a corner in the set.
+                Keep(set, a, bv, inside);
+                Keep(set, b, bv, inside);
+                Keep(set, c, bv, inside);
                 drawnCorners.Add(a);
                 drawnCorners.Add(b);
                 drawnCorners.Add(c);
@@ -498,10 +505,21 @@ internal static partial class BodyRetarget
         cut -= added;
         return sets;
 
-        void Keep(HashSet<ushort> set, int v, int bv)
+        void Keep(HashSet<ushort> set, int v, int bv, bool always)
         {
-            if (covered[v] && v - bv is >= 0 and <= ushort.MaxValue) set.Add((ushort)(v - bv));
+            if ((covered[v] || always) && v - bv is >= 0 and <= ushort.MaxValue) set.Add((ushort)(v - bv));
         }
+    }
+
+    /// <summary>
+    /// Whether the garment's laid skin draws over the inside of a body triangle none of whose corners it covers: its
+    /// middle, or the middle of an edge (see <see cref="CutLike"/>).
+    /// </summary>
+    private static bool CoversInside(BodySurface drawn, SkinEdges edges, ModelParts parts, int a, int b, int c)
+    {
+        Vector3 pa = At(parts, a), pb = At(parts, b), pc = At(parts, c);
+        return Covers(drawn, (pa + pb + pc) / 3f, edges) || Covers(drawn, (pa + pb) * 0.5f, edges)
+            || Covers(drawn, (pb + pc) * 0.5f, edges) || Covers(drawn, (pc + pa) * 0.5f, edges);
     }
 
     /// <summary>

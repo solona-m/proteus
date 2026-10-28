@@ -171,12 +171,15 @@ internal static class RefitGate
                      : RacialModelBake.Bake(there, drawn, to, who.Pbd, who.ParentOf, out _, UvBakeBones.Alias);
         float roundTrip = back == null ? float.MaxValue : MaxOff(savedParts.Positions, ModelPartReader.Read(back)!.Positions);
 
-        // G5: skin drawn with the new body's materials; every bone leaned on is the wearer's.
+        // G5: skin drawn with the new body's materials; every bone leaned on is the wearer's, or the new body's own — a body
+        // that rigs its skin to physics bones (TBSE-X's IVCS iv_*_phys) comes with the skeleton that has them, whatever
+        // base skeleton file the wearer was read from.
         var targetBytes = File.ReadAllBytes(s.TargetPath);
         var targetSkins = SecondSkinWriter.Parse(targetBytes).MatNames.Where(SecondSkinWriter.IsBodySkinMaterial).ToHashSet();
         var foreign = SecondSkinWriter.Parse(saved).MatNames
                                       .Where(m => SecondSkinWriter.IsBodySkinMaterial(m) && !targetSkins.Contains(m)).ToList();
-        var missing = OtherRaceRefit.Weighted(savedSkin).Where(b => !who.Parents.ContainsKey(b)).ToList();
+        var bodyOwn = OtherRaceRefit.Weighted(ModelSkinReader.Read(targetBytes, null, null)!).ToHashSet(StringComparer.Ordinal);
+        var missing = OtherRaceRefit.Weighted(savedSkin).Where(b => !who.Parents.ContainsKey(b) && !bodyOwn.Contains(b)).ToList();
 
         // G3, G6, G5b on the cloth near the body, against the new body; the baseline against the made-for body bent.
         var target = ModelPartReader.Read(targetBytes)!;

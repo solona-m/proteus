@@ -3189,6 +3189,14 @@ public sealed class PartsStrings
     public readonly string RetargetRaceCrossSexHintFmt = ProteusLoc.Localize("Parts.Retarget.Race.CrossSexHint.Fmt",
         "To make a version for {0}, pick it under “Refit for”.");
 
+    /// <summary>{0} is the race picked under "Refit for", such as "Midlander M", for the game's own gear.</summary>
+    public readonly string RetargetRaceReplacesGameFmt = ProteusLoc.Localize("Parts.Retarget.Race.ReplacesGame.Fmt",
+        "The game has its own {0} model of this item. Once saved, this refit replaces it for everyone you see wearing the game's {0} model while the new mod is on. Choose “Original” in that mod, or turn it off, to bring the game's back.");
+
+    /// <summary>{0} is the race of the character playing, such as "Highlander M".</summary>
+    public readonly string RetargetRaceCharacterKeepsGameFmt = ProteusLoc.Localize("Parts.Retarget.Race.CharacterKeepsGame.Fmt",
+        "Your character is {0}, and the game has a {0} model of this item of its own: this refit won't show on your character.");
+
     /// <summary>{0} is the race of the model open, such as "Midlander F".</summary>
     public readonly string RetargetRefuseCrossSexMadeForFmt = ProteusLoc.Localize("Parts.Retarget.Refuse.CrossSexMadeFor.Fmt",
         "Across the sexes, the bodies this garment was made on have to be {0} bodies. Pick the body mod it was made for under “Made for body”.");

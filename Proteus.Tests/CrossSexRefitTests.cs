@@ -532,4 +532,82 @@ public class CrossSexRefitTests
         Assert.DoesNotContain("can't change sex", en);
         Assert.Contains("\"Parts.Retarget.Race.CrossSexHint.Fmt\"", en);
     }
+
+    // ── the game's own women's legs made men's (vanilla-cross-sex-legs) ─────
+
+    [Fact]
+    [Trait("Plan", "AC-vanilla-cross-sex-legs-6")]
+    public void Only_womens_legs_cross_for_the_game_s_gear() // [AC-vanilla-cross-sex-legs-6]
+    {
+        Assert.True(CrossSexRefit.OfferableForGame(201, 101, "_dwn"));
+        Assert.True(CrossSexRefit.OfferableForGame(201, 101, "_DWN"));
+        Assert.False(CrossSexRefit.OfferableForGame(201, 101, "_top"));
+        Assert.False(CrossSexRefit.OfferableForGame(101, 201, "_dwn"));
+        Assert.False(CrossSexRefit.OfferableForGame(101, 201, "_top"));
+        Assert.False(CrossSexRefit.OfferableForGame(201, 101, "_glv"));
+        Assert.False(CrossSexRefit.OfferableForGame(1401, 101, "_dwn"));
+        Assert.False(CrossSexRefit.OfferableForGame(201, 101, null));
+        // A mod's garments keep every cell they had.
+        Assert.True(CrossSexRefit.Offerable(201, 101, "_top"));
+        Assert.True(CrossSexRefit.Offerable(201, 101, "_dwn"));
+        Assert.True(CrossSexRefit.Offerable(101, 201, "_top"));
+        Assert.True(CrossSexRefit.Offerable(101, 201, "_dwn"));
+    }
+
+    [Fact]
+    [Trait("Plan", "AC-vanilla-cross-sex-legs-8")]
+    public void Vanilla_wearers_are_the_races_that_draw_the_c0101_model() // [AC-vanilla-cross-sex-legs-8]
+    {
+        var all = CrossSexRefit.FallThroughTo(101, 201);
+        Assert.Equal(all, CrossSexRefit.FallThroughTo(101, 201, null));
+
+        // Highlander M has the game's model; Lalafell M too, so Lalafell F stops there on her way down.
+        var some = CrossSexRefit.FallThroughTo(101, 201, r => r is 301 or 1101);
+        Assert.DoesNotContain((ushort)301, some);
+        Assert.DoesNotContain((ushort)1101, some);
+        Assert.DoesNotContain((ushort)1201, some);
+        Assert.Contains((ushort)701, some);
+
+        // The game's Midlander M model is the one replaced, never a reason to empty the list.
+        var midlander = CrossSexRefit.FallThroughTo(101, 201, r => r == 101);
+        Assert.NotEmpty(midlander);
+        Assert.Contains((ushort)701, midlander);
+        Assert.Equal(all, midlander);
+
+        // Roegadyn M has the game's model: Hrothgar M, who falls through Roegadyn, draws that too.
+        var roe = CrossSexRefit.FallThroughTo(101, 201, r => r == 901);
+        Assert.DoesNotContain((ushort)901, roe);
+        Assert.DoesNotContain((ushort)1501, roe);
+    }
+
+    [Fact]
+    [Trait("Plan", "EDGE-vanilla-cross-sex-legs-11")]
+    public void A_c0101_save_from_c0201_is_worn_by_lalafell_women_too_for_modded_gear() // [EDGE-vanilla-cross-sex-legs-11]
+    {
+        var men = CrossSexRefit.FallThroughTo(101, 201);
+        Assert.Contains((ushort)1201, men);
+        Assert.Contains((ushort)1101, men);
+        Assert.DoesNotContain((ushort)201, men);
+        Assert.DoesNotContain((ushort)801, men);
+    }
+
+    [Fact]
+    [Trait("Plan", "EDGE-vanilla-cross-sex-legs-7")]
+    public void Vanilla_made_for_below_reads_the_womens_own_body() // [EDGE-vanilla-cross-sex-legs-7]
+    {
+        // MadeForBelow reads the game's body for each race of this line alone (VanillaBodyCatalog.Read, drawn: false) —
+        // not through a reader here: the catalog keeps what it read for the whole test process. The real read is
+        // checked in CrossSexRefitVanillaLocalTests.
+        Assert.Equal([(ushort)201], CrossSexRefit.MadeForLine(201, 101));
+        Assert.Contains("CrossSexRefit.MadeForLine(drawn, to).Select(r => VanillaBodyCatalog.Read($\"{r:D4}\", readGame, drawn: false))",
+                        Source("Proteus/Services/OtherRaceRefit.Below.cs"));
+    }
+
+    [Fact]
+    [Trait("Plan", "EDGE-vanilla-cross-sex-legs-9")]
+    public void Coverage_under_ninety_percent_is_not_saved() // [EDGE-vanilla-cross-sex-legs-9]
+    {
+        Assert.False(CrossSexRefit.CoverageAllowed(0.89));
+        Assert.True(CrossSexRefit.CoverageAllowed(0.9));
+    }
 }

@@ -32,8 +32,11 @@ namespace Proteus.Gui;
 /// Reads a game path out of the GAME'S own data, past whatever a mod would redirect it to. The game's body is read
 /// through it, which is the "made for" side of every refit of the game's own gear.
 /// </param>
+/// <param name="gameFileExists">Whether the GAME'S own data ships a file at a game path, past any mod — whether the game
+/// has its own model of the game's gear for a race (<see cref="OtherRaceRefit.Candidate.GameModelPath"/>).</param>
 internal sealed partial class BodyRetargetPanel(PenumbraBridge penumbra, UVRemapService uvRemap,
-                                        Func<string, byte[]?> readGameFile, Configuration config, IPluginLog log)
+                                        Func<string, byte[]?> readGameFile, Configuration config, IPluginLog log,
+                                        Func<string, bool> gameFileExists)
 {
     /// <summary>What the Studio tab lends this tool for the frame: the open model, and the things only it can do.</summary>
     /// <param name="Redirects">The open mod's redirects, already read by the tab. Used to spot a group of the author's
@@ -273,6 +276,7 @@ internal sealed partial class BodyRetargetPanel(PenumbraBridge penumbra, UVRemap
         endsUnreadable = false;
         studio = null;
         lastLayout = null;
+        gameHas.Clear();
     }
 
     /// <summary>The race the open garment is made for (<c>"0101"</c>), which every option list is filtered to.</summary>
@@ -547,6 +551,13 @@ internal sealed partial class BodyRetargetPanel(PenumbraBridge penumbra, UVRemap
 
         /// <summary>What the live preview shows of it, worked out once it lands.</summary>
         public OtherRaceRefit.PreviewNote Preview { get; set; }
+
+        /// <summary>Made from the game's own gear, not a mod's.</summary>
+        public bool IsVanilla { get; init; }
+
+        /// <summary>Across the sexes, the races besides the picked one that wear the save (<see cref="CrossSexRefit.FallThroughTo"/>),
+        /// worked out once it lands.</summary>
+        public IReadOnlyList<ushort> Wearers { get; set; } = [];
     }
 
     /// <summary>The last bake made, whether or not it applies to what is open now — see <see cref="active"/>.</summary>
@@ -877,7 +888,7 @@ internal sealed partial class BodyRetargetPanel(PenumbraBridge penumbra, UVRemap
         using (ImRaii.PushColor(ImGuiCol.Text, ProteusStyle.Warn))
             ImGui.TextWrapped(string.Format(ps.RetargetNoBodiesForSexFmt, name, sex));
         // Its bodies are the other sex's: a version for them is made under "Refit for", when one is offered.
-        if (offered.FirstOrDefault(c => c.CrossSex && c.Blocked == OtherRaceRefit.Block.None) is { } other)
+        if (OtherRaceRefit.CrossSexHint(offered) is { } other)
             ImGui.TextWrapped(string.Format(ps.RetargetRaceCrossSexHintFmt, ModelRace.Describe($"{other.Race:D4}")));
     }
 

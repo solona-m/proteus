@@ -93,8 +93,17 @@ internal sealed partial class BodyRetargetPanel
         if (offeredFor == key) return offered;
         offeredFor = key;
         offered = OtherRaceRefit.Offered(ctx.GamePath, catalog, ctx.Redirects, ctx.ModRoot != null ? ownRecord : null,
-                                         ctx.IsVanilla);
+                                         ctx.IsVanilla, ctx.IsVanilla ? GameHas : null);
         return offered;
+    }
+
+    /// <summary>Whether the game's own data ships a file at a game path, asked once per path and garment.</summary>
+    private readonly Dictionary<string, bool> gameHas = new(StringComparer.OrdinalIgnoreCase);
+
+    private bool GameHas(string gamePath)
+    {
+        if (!gameHas.TryGetValue(gamePath, out bool has)) gameHas[gamePath] = has = gameFileExists(gamePath);
+        return has;
     }
 
     /// <summary>
@@ -143,6 +152,18 @@ internal sealed partial class BodyRetargetPanel
                 && ImGui.Button(string.Format(ps.RetargetRaceOpenModelFmt, name), FullWidth()))
                 open();
         }
+
+        // The game's gear picked for a race the game has its own model of: the save takes that model's place while its mod
+        // is on — said from the pick on, before anything is saved, with the game's model a click away.
+        if (OtherRaceRefit.ReplacesGame(chosen, list) is { GameModelPath: { } gameModel } game)
+        {
+            string name = ModelRace.Describe($"{game.Race:D4}");
+            using (ImRaii.PushColor(ImGuiCol.Text, ProteusStyle.Warn))
+                ImGui.TextWrapped(string.Format(ps.RetargetRaceReplacesGameFmt, name));
+            if (ctx.OpenModelAt?.Invoke(gameModel) is { } open
+                && ImGui.Button(string.Format(ps.RetargetRaceOpenModelFmt, name) + "##game", FullWidth()))
+                open();
+        }
         ImGui.Spacing();
     }
 
@@ -171,10 +192,17 @@ internal sealed partial class BodyRetargetPanel
         if (b.Route.ByAlias)
         {
             // Across the sexes the races wearing it are named: a c0101 save reaches Lalafell women too.
-            var also = CrossSexRefit.FallThroughTo(b.Route.To, b.Route.Drawn).Select(r => ModelRace.Describe($"{r:D4}"));
+            var also = b.Wearers.Select(r => ModelRace.Describe($"{r:D4}"));
             ImGui.TextWrapped(string.Format(ps.RetargetRaceCrossSexWearsFmt, to, string.Join(", ", also), drawn));
             using (ImRaii.PushColor(ImGuiCol.Text, ProteusStyle.Warn))
                 ImGui.TextWrapped(string.Format(ps.RetargetRaceCrossSexNoteFmt, drawn, to));
+            // The game's gear: a man whose race has the game's own model of it keeps drawing that, not the save.
+            ushort character = wearer?.Race ?? 0;
+            if (b.IsVanilla && b.DrawnPath != null && OtherRaceRefit.MissesCharacter(character, b.Route, b.Wearers)
+                && GameHas(RacialModelBake.WithRace(b.DrawnPath, character)))
+                using (ImRaii.PushColor(ImGuiCol.Text, ProteusStyle.Warn))
+                    ImGui.TextWrapped(string.Format(ps.RetargetRaceCharacterKeepsGameFmt,
+                                                    ModelRace.Describe($"{character:D4}")));
         }
         else
             ImGui.TextWrapped(string.Format(OtherRaceRefit.Wears(b.Route) == OtherRaceRefit.WearNote.PickedAndFallThrough
@@ -339,6 +367,7 @@ internal sealed partial class BodyRetargetPanel
         var bytes = given.GarmentBytes;
         string savePath = route.SavePath(given.GamePath);
         string drawnPath = given.GamePath;
+        bool vanilla = given.IsVanilla;
         string? cutFrom = BakeCutFrom(given);
         string print = BakeFingerprint(given);
         var inputs = RaceInputs(given, route.To, cutFrom);
@@ -413,6 +442,7 @@ internal sealed partial class BodyRetargetPanel
             {
                 Fingerprint = print,
                 Explicit = true, Bodies = bodies, LeftOut = leftOut, Est = made.Est, FellBack = made.FellBack, DrawnPath = drawnPath,
+                IsVanilla = vanilla,
                 Moves = moves, NeedsSkeleton = made.NeedsSkeleton ?? [], SkeletonFrom = SkeletonMod(inputs.ModdedFrom),
             }, "");
         });
@@ -426,6 +456,11 @@ internal sealed partial class BodyRetargetPanel
     {
         ushort live = wearer?.Race ?? 0;
         bool draws = made.DrawnPath != null && penumbra.GetActivePlayerModelPaths()?.Contains(made.DrawnPath) == true;
+        // Across the sexes, who wears the save: for the game's gear only the races with no model of the item of their own
+        // on the way down — the game ships many, where a mod's other races fall through as they always have.
+        if (made.Route.ByAlias && made.DrawnPath is { } drawnPath)
+            made.Wearers = CrossSexRefit.FallThroughTo(made.Route.To, made.Route.Drawn,
+                made.IsVanilla ? r => GameHas(RacialModelBake.WithRace(drawnPath, r)) : null);
         made.Preview = OtherRaceRefit.NoteFor(draws, live, made.Route.To);
 
         if (wearer is { } character && character.Race == made.Route.To)

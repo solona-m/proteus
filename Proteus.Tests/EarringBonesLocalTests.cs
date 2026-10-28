@@ -188,14 +188,16 @@ public class EarringBonesLocalTests(ITestOutputHelper o)
             inputs = inputs with { TargetPick = CrossSexRefitLocalTests.IsFile(onto, UvBakeInputs.BiboChest) };
         }
         // Before 1382's seam weights, as these were recorded (measured at 1382: 2 and 6,730 vertices on 7 and 931 seams took
-        // one weighting, the most any moved 0.015).
-        var r = BodyRetarget.WithTuning(new BodyRetarget.Tuning(NoSeamWeights: true), () => CrossSexRefitJob.Run(inputs));
+        // one weighting, the most any moved 0.015), and 1386's cut that keeps a triangle the author's skin covers inside.
+        var r = BodyRetarget.WithTuning(new BodyRetarget.Tuning(NoSeamWeights: true, NoCutInside: true),
+                                        () => CrossSexRefitJob.Run(inputs));
         Assert.Empty(r.Earrings ?? []);
         string got = Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(Assert.Single(r.Sizes).Saved!.Model));
         o.WriteLine($"{what}: {got}");
         Assert.Equal(sha, got);
         // [EDGE-seam-weights-15] With 1382's seam weights: the same refit, weights apart.
-        SeamWeightsTests.SameGeometry(r.Sizes.Single().Saved!.Model, Assert.Single(CrossSexRefitJob.Run(inputs).Sizes).Saved!.Model);
+        SeamWeightsTests.SameGeometry(r.Sizes.Single().Saved!.Model, Assert.Single(BodyRetarget.WithTuning(
+            new BodyRetarget.Tuning(NoCutInside: true), () => CrossSexRefitJob.Run(inputs)).Sizes).Saved!.Model);
     }
 
     /// <summary>Per earring node: how many vertices it weights, how much, where (height, side), the bones beside it,
