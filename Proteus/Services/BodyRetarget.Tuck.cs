@@ -36,8 +36,8 @@ internal static partial class BodyRetarget
     /// <summary>
     /// How far under the garment's laid skin, as a share of the chord it spans there (see <see cref="ChordUnder"/>), the
     /// new body may dip in the open — no cloth over it — and still be drawn (a half). The author drew skin across it, so
-    /// the body belongs there; the cut keeps it only within <see cref="CutSagShare"/>, but on a slot the garment only
-    /// reaches onto (see <see cref="GrowSpannedOpenSkin"/>). Measured in game: Dirndl's Bodice on Neolithe's Almond XS left
+    /// the body belongs there; the cut keeps it only within <see cref="CutSagShare"/>, but in the automatic refit on a slot
+    /// the garment only reaches onto (see <see cref="GrowSpannedOpenSkin"/>). Measured in game: Dirndl's Bodice on Neolithe's Almond XS left
     /// the cleavage open, its vertices 8-11 mm under a 27 mm chord (0.30-0.39) of the game's coarse chest skin, a hole
     /// straight through to the bodice's inside.
     /// </summary>
@@ -112,6 +112,8 @@ internal static partial class BodyRetarget
         // Unread weights cannot tell the torso from the arm: nothing is grown, the safe way round.
         if (ModelSkinReader.Read(body, null, null) is not { } skin || skin.VertexCount != vc) return ([], 0, 0, 0, true);
 
+        // The walk below — welding, per-node triangles, the face-sum normal, the triangle and vertex tests, the mesh-local
+        // mapping — is GrowSpannedOpenSkin's too, with weights: a fix to one is a fix to the other.
         var pos = new Vec3[vc];
         for (int v = 0; v < vc; v++) pos[v] = ToVec(At(parts, v));
         var nodeOf = MeshMath.WeldByPosition(pos, out int nodes);

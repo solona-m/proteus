@@ -12,8 +12,10 @@ internal static partial class BodyRetarget
     /// <see cref="GrowSpannedOpenSkin"/> to draw the body there: the cosine between the laid skin's normal and the body's
     /// (0.9, about 26°). Below it the landing is on another sheet of skin — the other thigh, the inside of an arm, the
     /// underside of a breast — and the author's cut stands. Just under what the reported hole measured: the 68 spanned
-    /// vertices of Codeine's slits on Muse+ "Defined" faced the laid skin at 0.99-1.00. The laid skin carries its author's
-    /// normals (the refit never moves them), which is why the margin is set from a real garment, not from a sheet.
+    /// vertices of Codeine's slits on Muse+ "Defined" faced the laid skin at 0.99-1.00. The laid skin's normal is the
+    /// author's, interpolated across the triangle the body lands in (<see cref="BodySurface.Hit.Normal"/>), not that
+    /// triangle's face: the refit never moves the author's normals, they are what the skin is shaded by, and the coarse
+    /// span's face can lean where its shading does not — so the margin is set from a real garment, not from a sheet.
     /// </summary>
     internal const float CutOpenSkinFacing = 0.9f;
 
@@ -63,6 +65,7 @@ internal static partial class BodyRetarget
         IReadOnlyDictionary<int, int> baseOf)
     {
         int vc = parts.Positions.Length / 3;
+        // TuckUnderCloth's walk without its weights: a fix to one is a fix to the other.
         var pos = new Vec3[vc];
         for (int v = 0; v < vc; v++) pos[v] = ToVec(At(parts, v));
         var nodeOf = MeshMath.WeldByPosition(pos, out int nodes);

@@ -55,9 +55,10 @@ public class CutOpenSkinOtherModsLocalTests(ITestOutputHelper output)
         foreach (var (body, legs) in new[] { (Muse, defined), (ownBody, 0) })
         {
             string what = $"{Path.GetFileName(LocalData.Path(mod))} {slot} -> {Path.GetFileName(LocalData.Path(body))}";
+            // No body the garment was made on read with confidence: the automatic refit leaves it alone, pass or not.
             if (CodeineDressHolesLocalTests.Refit(bytes, body, 0, legs, slot) == null)
             {
-                output.WriteLine($"{what}: not read");
+                output.WriteLine($"{what}: not read — the automatic refit does not refit it");
                 continue;
             }
             var (now, before) = CodeineDressHolesLocalTests.NoWorse(output, what, bytes, body, 0, legs, slot);

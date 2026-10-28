@@ -472,10 +472,14 @@ internal static class SkinTuckSheet
     /// dress's skin does: the sheet is too coarse to dip past the cut's sag (a 10 mm grid, 9 mm) with walls under the
     /// <see cref="BodyRetarget.CutOpenSkinFacing"/> guard's 26°, where Codeine's fold on Muse+ faced its laid skin at
     /// 0.99-1.00 — so its shaded normals would be a wall's, not a fold's.</param>
+    /// <param name="arm">Rig the legs wholly to the upper arm (j_ude_a_l), as an arm a garment reaches onto is.</param>
+    /// <param name="loose">A second patch of the legs' skin over the dip's rows and columns 3-5, at the dip's depth,
+    /// moved this far along X: at 0 its vertices are the dip's own and weld to them; at half a step they weld to nothing,
+    /// a spanned island no kept skin touches.</param>
     internal static (byte[] Garment, byte[] Chest, byte[] Legs) ReachingDress(
         float dip = 0.015f, (int From, int To)? dipRows = null, bool facingSheet = false, float? patch = null,
         bool hideDip = false, bool ringInDip = false, bool island = false, bool middlePatch = false,
-        bool flatNormals = false, bool shadedNormals = false)
+        bool flatNormals = false, bool shadedNormals = false, bool arm = false, float? loose = null)
     {
         var (from, to) = dipRows ?? (4, 5);
         float Legs(int r, int c)
@@ -491,7 +495,7 @@ internal static class SkinTuckSheet
         // The legs: rows 0..Waist with the dip, facing the dress's skin (or shaded, or with no normals at all).
         var legsMeshes = new List<SyntheticModel.SurfaceMesh>();
         var attrs = new List<string>();
-        var legSheet = Sheet(Skin, 0, Waist, Legs, shaped: shadedNormals);
+        var legSheet = Sheet(Skin, 0, Waist, Legs, arm: arm ? _ => true : null, shaped: shadedNormals);
         if (flatNormals) legSheet = legSheet with { Normals = [.. legSheet.Normals.Select(_ => Vector3.Zero)] };
         if (hideDip)
         {
@@ -502,6 +506,23 @@ internal static class SkinTuckSheet
             };
         }
         legsMeshes.Add(legSheet);
+        if (loose is float dx)
+        {
+            var at = new List<Vector3>();
+            for (int r = from; r <= to; r++)
+                for (int c = 3; c <= 5; c++) at.Add(new Vector3(X(c) + dx, Y(r), -dip));
+            var looseTris = new List<int>();
+            for (int r = 0; r < to - from; r++)
+                for (int c = 0; c < 2; c++)
+                {
+                    int a = r * 3 + c, b = a + 1, d = a + 3, e = d + 1;
+                    looseTris.AddRange([a, b, e, a, e, d]);
+                }
+            legsMeshes.Add(new SyntheticModel.SurfaceMesh(Skin, [.. at], [.. at.Select(_ => Vector3.UnitZ)],
+                                                          [.. at.Select(_ => Vector2.Zero)],
+                                                          [.. at.Select(_ => ((string, float)[]?)[("j_sebo_c", 1f)])],
+                                                          [(0u, [.. looseTris])]));
+        }
         if (facingSheet)
         {
             // The other thigh: in front, wound and shaded to face back at the first.

@@ -460,9 +460,10 @@ internal static partial class BodyRetarget
         if (cut == 0) { kept = 0; return null; }   // nothing cut: the body goes in whole, as before
         if (smallclothes) CutSmallclothes(drawn, edges, parts, baseOf, sets);
         pulled = PullToEdge(drawn, edges, cloth, body, parts, drawnCorners, keptTris, out var movedAt);
-        if (openSkin && !Tuned.NoCutOpenSkin)
+        if (openSkin && !tuck && !Tuned.NoCutOpenSkin)
         {
-            // Never on a slot the tuck runs on (see Rebuild): the tuck draws open skin by its own rule.
+            // Never on a slot the tuck runs on: the tuck draws open skin by its own rule, and its snapshot of the author's
+            // cut below would take this skin for the author's.
             var (spannedSets, spannedTris) = GrowSpannedOpenSkin(drawn, edges, cloth, parts, covered, keptTris, movedAt,
                                                                  baseOf);
             if (spannedTris > 0)

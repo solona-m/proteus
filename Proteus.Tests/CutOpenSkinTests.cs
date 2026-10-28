@@ -120,6 +120,20 @@ public class CutOpenSkinTests
     }
 
     [Fact]
+    [Trait("Plan", "EDGE-cut-open-skin-4")]
+    public void A_spanned_patch_no_kept_skin_touches_is_not_reached()
+    {
+        // The same patch of skin at the dip's depth, under the dress's span: welded to the dip it is drawn with it — its
+        // corners qualify — and half a step aside, touching nothing the cut kept, it is not: only the walk keeps it out.
+        int plain = Swap(ReachingDress()).Report.Spanned;
+        var welded = Swap(ReachingDress(loose: 0f));
+        var loose = Swap(ReachingDress(loose: Step / 2f));
+        SwappedAndCut(Swap(ReachingDress(loose: Step / 2f), Before));
+        Assert.True(welded.Report.Spanned > plain, $"the welded patch is not drawn: {welded.Report.Spanned} against {plain}");
+        Assert.Equal(plain, loose.Report.Spanned);
+    }
+
+    [Fact]
     [Trait("Plan", "EDGE-cut-open-skin-1")]
     public void A_dip_past_half_the_chord_is_still_cut()
     {
@@ -161,10 +175,15 @@ public class CutOpenSkinTests
     [Trait("Plan", "EDGE-cut-open-skin-6")]
     public void An_arm_dip_on_a_reached_onto_slot_is_kept()
     {
-        // No arm guard, so no weights are read: a dip is drawn however the body is rigged. The dress's legs are a
-        // stand-in for an arm a garment reaches onto; the pass never asks which bone a vertex is on.
-        var dress = ReachingDress();
-        Assert.True(DrawsDip(Swap(dress).Model));
+        // No arm guard, so no weights are read: a dip is drawn however the body is rigged — here wholly on the upper arm,
+        // which the tuck's arm guard would refuse (see BodyRetarget.TuckArmShare).
+        var dress = ReachingDress(arm: true);
+        var before = Swap(dress, Before);
+        var now = Swap(dress);
+        SwappedAndCut(before);
+        Assert.False(DrawsDip(before.Model));
+        Assert.True(DrawsDip(now.Model));
+        Assert.Equal(Swap(ReachingDress()).Report.Spanned, now.Report.Spanned);
     }
 
     [Fact]

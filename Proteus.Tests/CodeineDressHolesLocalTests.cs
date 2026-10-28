@@ -161,8 +161,11 @@ public class CodeineDressHolesLocalTests(ITestOutputHelper output)
         if (body == Muse) return distinct;
         var picked = new SortedSet<int> { distinct[0], distinct[distinct.Count / 2], distinct[^1] };
         if (body == Neolithe)
-            picked.Add(options.FindIndex(o => o.Label == "NEOBELLY · Gen C Small"));
-        picked.Remove(-1);
+        {
+            int neobelly = options.FindIndex(o => o.Label == "NEOBELLY · Gen C Small");
+            Assert.True(neobelly >= 0, "Neolithe has no NEOBELLY · Gen C Small legs");
+            picked.Add(neobelly);
+        }
         return picked;
     }
 
@@ -204,13 +207,9 @@ public class CodeineDressHolesLocalTests(ITestOutputHelper output)
     public void Codeine_upscales_are_no_worse(string pack, string entry)
     {
         byte[] bytes = LocalData.PackEntryEndingWith(Upscales + "/" + pack, entry);
+        // Every upscale is read on every body (NoWorse asserts it): Codeine's skin names its body.
         foreach (string body in new[] { Bibo, Neolithe, Rue, Yab, Tre, LavaBod, Muse, Rosaline })
         {
-            if (Refit(bytes, body) == null)
-            {
-                output.WriteLine($"{pack} {entry} -> {body}: not read");
-                continue;
-            }
             int legs = body == Muse ? LegsIndex(Muse, "Defined - Gen A") : 0;
             NoWorse(output, $"{pack} {entry.Split("/chara/")[0]} -> {Path.GetFileName(LocalData.Path(body))}", bytes, body, 0, legs);
         }
