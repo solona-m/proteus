@@ -25,7 +25,7 @@ public sealed class Plugin : IDalamudPlugin
     [PluginService] public static ITextureProvider TextureProvider { get; private set; } = null!;
 
     /// <summary>Hand-maintained; bump it for in-game testing. <see cref="BuildStamp"/> is the one that can't go stale.</summary>
-    public const int BuildNumber = 1389;
+    public const int BuildNumber = 1391;
 
     /// <summary>
     /// Which set of release notes is current. Raise it when a release has something new to say: the window
@@ -106,6 +106,7 @@ public sealed class Plugin : IDalamudPlugin
                                                    a => _ = framework.RunOnTick(a, TimeSpan.FromMilliseconds(250)),
                                                    log));
 
+        Interop.LunaLog.Attach(log);
         penumbra = new PenumbraBridge(pluginInterface, log);
         glamourer = new GlamourerBridge(pluginInterface, ObjectTable, log);
         textureLoader = new TextureLoader(DataManager, log)
@@ -541,6 +542,7 @@ public sealed class Plugin : IDalamudPlugin
         compositor.Dispose();
         glamourer.Dispose();
         penumbra.Dispose();
+        Interop.LunaLog.Detach();
         loc.Dispose();   // last: unhooks LanguageChanged, which anything above could still be drawing under
     }
 }
