@@ -447,10 +447,11 @@ internal static partial class BodyRetarget
                 int a = part.Triangles[t], b = part.Triangles[t + 1], c = part.Triangles[t + 2];
                 // A body triangle wider than the author's skin across it: the game's women's legs draw a 10 mm band of
                 // skin between the Antiquated Aoidos' Tights' straps, and laid onto The Body SE's 20 mm thigh triangles
-                // every corner of one fell under a strap — cut, with its middle in the open between them. Cut only when
-                // nothing of it the author drew is found: no corner, no edge's middle, not its own middle.
+                // every corner of one fell under a strap — cut, with its middle in the open between them. Kept when
+                // its middle or an edge's lies on the author's skin with no cloth crowding it there: under cloth (the
+                // Pioneer's Bottoms' coarse hem) the triangle and the ones around its corners came through the hem.
                 bool inside = !covered[a] && !covered[b] && !covered[c] && !Tuned.NoCutInside
-                           && CoversInside(drawn, edges, parts, a, b, c);
+                           && OpenInside(drawn, edges, cloth, parts, a, b, c);
                 if (!covered[a] && !covered[b] && !covered[c] && !inside) { cut++; continue; }
                 kept++;
                 // The emit loop reads MESH-LOCAL indices, which is what the file stores. A triangle kept for its inside
@@ -512,15 +513,22 @@ internal static partial class BodyRetarget
     }
 
     /// <summary>
-    /// Whether the garment's laid skin draws over the inside of a body triangle none of whose corners it covers: its
-    /// middle, or the middle of an edge (see <see cref="CutLike"/>).
+    /// Whether the garment's laid skin draws, in the open, over the inside of a body triangle none of whose corners it
+    /// covers: its middle, or the middle of an edge, on the author's skin with no cloth crowding it (see
+    /// <see cref="CutLike"/>).
     /// </summary>
-    private static bool CoversInside(BodySurface drawn, SkinEdges edges, ModelParts parts, int a, int b, int c)
+    private static bool OpenInside(BodySurface drawn, SkinEdges edges, ClothCrossings cloth, ModelParts parts,
+                                   int a, int b, int c)
     {
         Vector3 pa = At(parts, a), pb = At(parts, b), pc = At(parts, c);
-        return Covers(drawn, (pa + pb + pc) / 3f, edges) || Covers(drawn, (pa + pb) * 0.5f, edges)
-            || Covers(drawn, (pb + pc) * 0.5f, edges) || Covers(drawn, (pc + pa) * 0.5f, edges);
+        var normal = NormalAt(parts, a) + NormalAt(parts, b) + NormalAt(parts, c);
+        bool Open(Vector3 p) => Covers(drawn, p, edges) && !cloth.Crowds(p, normal);
+        return Open((pa + pb + pc) / 3f) || Open((pa + pb) * 0.5f) || Open((pb + pc) * 0.5f) || Open((pc + pa) * 0.5f);
     }
+
+    private static Vector3 NormalAt(ModelParts m, int v)
+        => v * 3 + 2 < m.Normals.Length ? new Vector3(m.Normals[v * 3], m.Normals[v * 3 + 1], m.Normals[v * 3 + 2])
+                                        : Vector3.Zero;
 
     /// <summary>
     /// The author's cut, carried onto the new body's smallclothes as onto its skin: they draw where the garment's skin
