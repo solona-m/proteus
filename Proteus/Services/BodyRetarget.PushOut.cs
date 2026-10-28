@@ -333,7 +333,9 @@ internal static partial class BodyRetarget
     /// <summary>For tests: <see cref="PushOut"/>'s need per node as each of its steps leaves it — "need-direct" (each
     /// node's own), "need-faces" (with the faces the skin comes through), "need-spread", "need-slope", "need-guarded" (after
     /// the fold guard) — and "settled", how far the settle then moved each node. A copy each time; per
-    /// logical call, as <see cref="Tuned"/>; null for every refit.</summary>
+    /// logical call, as <see cref="Tuned"/>; null for every refit. <see cref="PlanWeights"/>'s seam keys are not per node:
+    /// "seam-clamped", "seam-class" and "seam-skipped" are per VERTEX, "seam-stats" a vector of counts (see
+    /// <see cref="KeepSeamsTogether"/>).</summary>
     internal static readonly System.Threading.AsyncLocal<Action<string, float[]>?> PushTrace = new();
 
 

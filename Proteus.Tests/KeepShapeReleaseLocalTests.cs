@@ -129,11 +129,13 @@ public class KeepShapeReleaseLocalTests
 
     /// <summary>One refit as <c>Proteus.Refit --keep-default</c> runs it, the default ticks less <paramref name="untick"/>.
     /// The new body's piercings carried, as every refit did when <see cref="Before"/> was pinned, unless
-    /// <paramref name="carryPiercings"/> says otherwise.</summary>
+    /// <paramref name="carryPiercings"/> says otherwise. A seam's split vertices weighted each on its own, as builds before
+    /// 1382 did (<see cref="BodyRetarget.Tuning.NoSeamWeights"/>): every hash here was taken before that rule, which
+    /// SeamWeightsTests and DeiGratiaRefitLocalTests judge.</summary>
     private static Run Refit(byte[] bytes, string fromNeed, string fromRel, string toNeed, string toRel,
                              bool noRelease = false, string? untick = null, bool noNippleSmooth = false,
                              bool beforeSnapPush = false, bool carryPiercings = true, bool noOpenEdgeFit = false,
-                             bool noTurnFallback = false)
+                             bool noTurnFallback = false, bool seams = false)
     {
         var garment = ModelPartReader.Read(bytes)!;
         string fromRoot = LocalData.Path(fromNeed), toRoot = LocalData.Path(toNeed);
@@ -149,7 +151,8 @@ public class KeepShapeReleaseLocalTests
         var plan = BodyRetarget.WithTuning(new BodyRetarget.Tuning(NoRelease: noRelease, NoNippleSmooth: noNippleSmooth,
                                                                        NoSnapPush: beforeSnapPush,
                                                                        NoOpenEdgeFit: noOpenEdgeFit,
-                                                                       NoTurnFallback: noTurnFallback), () => BodyRetarget.Plan(
+                                                                       NoTurnFallback: noTurnFallback,
+                                                                       NoSeamWeights: !seams), () => BodyRetarget.Plan(
             garment, bytes, [pair], "_top", replaceSkin: true, acrossBodies: across, keepShape: pieces,
             carryPiercings: carryPiercings));
         return new Run(plan, names);
@@ -167,6 +170,7 @@ public class KeepShapeReleaseLocalTests
     [Trait("Plan", "AC-keep-shape-release-2")]
     [Trait("Plan", "AC-keep-shape-release-3")]
     [Trait("Plan", "AC-keep-shape-release-9")]
+    [Trait("Plan", "EDGE-seam-weights-15")]
     public void Ash_cover_bends_with_Uranus()
     {
         var bytes = Ash("Rue L");
@@ -178,6 +182,10 @@ public class KeepShapeReleaseLocalTests
         Assert.True(wholeCover.Sink > 0.005f, $"moved whole the cover should sink past 5 mm, not {wholeCover.Sink * 1000:F2}");
         Assert.True(wholeCover.Share * 893 > 100, $"only {wholeCover.Share * 893:F0} of the cover's points sank");
         Assert.Equal(Before["ash Rue L > Uranus"], whole.Hash);
+        // [EDGE-seam-weights-15] With 1382's seam weights (measured: 13,550 vertices on 4,577 seams took one weighting, the
+        // most any moved 0.048): the same refit, weights apart.
+        SeamWeightsTests.SameGeometry(whole.Plan.Model, Refit(bytes, Rue, YiggleLarge, Uranus, UranusRue, noRelease: true,
+                                                              seams: true).Plan.Model);
 
         var released = Refit(bytes, Rue, YiggleLarge, Uranus, UranusRue);
         var unticked = Refit(bytes, Rue, YiggleLarge, Uranus, UranusRue, untick: Cover);
@@ -276,6 +284,7 @@ public class KeepShapeReleaseLocalTests
     [Trait("Plan", "AC-open-patch-authored-4")]
     [Trait("Plan", "AC-open-patch-authored-9")]
     [Trait("Plan", "AC-keep-shape-flat-card-3")]
+    [Trait("Plan", "EDGE-seam-weights-15")]
     public void Pop_hard_pieces_stay_kept(string which)
     {
         var (toNeed, toRel) = which switch
@@ -294,6 +303,10 @@ public class KeepShapeReleaseLocalTests
         Assert.NotEmpty(kept);
         Assert.DoesNotContain(kept, p => p.Released);
         Assert.True(Before[which] == run.Hash, $"refit is now {run.Hash}");
+        // [EDGE-seam-weights-15] With 1382's seam weights (measured: ~865 vertices on ~383 seams took one weighting, the most
+        // any moved 0.095): the same refit, weights apart.
+        SeamWeightsTests.SameGeometry(run.Plan.Model, Refit(File.ReadAllBytes(LocalData.Path(Pop)), Yab, YabMedium, toNeed, toRel,
+                                                            noNippleSmooth: true, seams: true).Plan.Model);
 
         // [AC-open-patch-authored-4] Without the made-on body's reading, the refit is the one before it; [-9] and with it,
         // no worse: no more cloth inside the new body, no more folds, nothing more stretched, and no more turned over than
