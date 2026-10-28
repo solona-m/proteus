@@ -142,4 +142,47 @@ public class ImcManipulationTests
         }
         finally { if (System.IO.Directory.Exists(dir)) System.IO.Directory.Delete(dir, true); }
     }
+
+    /// <summary>
+    /// [AC-imported-imc-toggles-4] The game's entry for an item named by set and slot is the one its model path names,
+    /// for equipment and accessories, and a variant outside the file reads the default set.
+    /// </summary>
+    [Fact]
+    public void FromGame_by_set_and_slot_matches_the_model_path_overload()
+    {
+        // Two variants, five slots each, after the default set; every entry's mask is unique to where it sits.
+        static byte[] Imc()
+        {
+            var b = new byte[4 + 3 * 5 * 6];
+            System.BitConverter.GetBytes((ushort)2).CopyTo(b, 0);
+            System.BitConverter.GetBytes((ushort)31).CopyTo(b, 2);
+            for (int set = 0; set < 3; set++)
+                for (int part = 0; part < 5; part++)
+                    System.BitConverter.GetBytes((ushort)(set * 10 + part + 1)).CopyTo(b, 4 + (set * 5 + part) * 6 + 2);
+            return b;
+        }
+        var files = new System.Collections.Generic.Dictionary<string, byte[]>
+        {
+            ["chara/equipment/e0666/e0666.imc"] = Imc(),
+            ["chara/accessory/a0053/a0053.imc"] = Imc(),
+        };
+        byte[]? Read(string p) => files.TryGetValue(p, out var b) ? b : null;
+
+        foreach (var (model, tag, label) in new[]
+                 {
+                     ("chara/equipment/e0666/model/c0201e0666_sho.mdl", "e0666", "Feet"),
+                     ("chara/equipment/e0666/model/c0201e0666_top.mdl", "e0666", "Body"),
+                     ("chara/accessory/a0053/model/c0201a0053_rir.mdl", "a0053", "Right ring"),
+                 })
+            foreach (var variant in new[] { 0, 1, 2, 7 })
+            {
+                var byPath = ImcEntrySource.FromGame(Read, model, variant);
+                Assert.NotNull(byPath);
+                Assert.Equal(byPath, ImcEntrySource.FromGame(Read, tag, label, variant));
+            }
+
+        Assert.Equal((ushort)15, ImcEntrySource.FromGame(Read, "e0666", "Feet", 1)!.Value.AttributeMask);
+        Assert.Equal((ushort)5, ImcEntrySource.FromGame(Read, "e0666", "Feet", 7)!.Value.AttributeMask);
+        Assert.Null(ImcEntrySource.FromGame(Read, "h0001", "Hair", 1));
+    }
 }

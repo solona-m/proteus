@@ -290,6 +290,23 @@ public class CutOpenSkinTests
     }
 
     [Fact]
+    [Trait("Plan", "AC-cut-open-skin-1")]
+    [Trait("Plan", "AC-cut-open-skin-5")]
+    public void The_automatic_refit_asks_for_the_pass_for_mod_gear_only()
+    {
+        // The automatic refit's own entry point: a mod's dress draws the dip, the game's own gear (its hidden-skin cut on)
+        // does not — so the pass is on in the watcher's refit, not just in Plan when asked.
+        var dress = ReachingDress();
+        var garment = ModelPartReader.Read(dress.Garment)!;
+        var pairs = new[] { Resized(dress.Chest, "_top"), Resized(dress.Legs, "_dwn") };
+        var mod = RefitCore.PlanRefit(garment, dress.Garment, pairs, "_top", across: true, gameGear: false, out _);
+        var game = RefitCore.PlanRefit(garment, dress.Garment, pairs, "_top", across: true, gameGear: true, out _);
+        Assert.True(mod.Report.Swap?.Spanned > 0, $"the automatic refit left the dip out: {mod.Report.Swap}");
+        Assert.True(DrawsDip(mod.Model));
+        Assert.Equal(0, game.Report.Swap?.Spanned ?? 0);
+    }
+
+    [Fact]
     [Trait("Plan", "EDGE-cut-open-skin-13")]
     public void The_open_skin_is_deterministic()
     {

@@ -120,7 +120,7 @@ public class CodeineDressHolesLocalTests(ITestOutputHelper output)
         return (now, before);
     }
 
-    private static int LegsIndex(string body, string label)
+    internal static int LegsIndex(string body, string label)
     {
         int index = Body(body).Catalog.For("_dwn", Race).ToList().FindIndex(o => o.Label == label);
         Assert.True(index >= 0, $"{label} is not a legs option of {body}");
@@ -190,7 +190,10 @@ public class CodeineDressHolesLocalTests(ITestOutputHelper output)
         output.WriteLine($"{clock.ElapsedMilliseconds / 1000} s");
     }
 
-    /// <summary>The upscales' dresses, by pack under <see cref="Upscales"/> and the ending of the entry.</summary>
+    /// <summary>The upscales' dresses, by pack under <see cref="Upscales"/> and the ending of the entry: a sample, one or two
+    /// sizes of each pack made for a body installed here (each is refitted onto eight bodies, about a minute apiece), not
+    /// every entry. Left out: Bimbo+ and Citrus+, made for bodies not among them, and the Rue Medium Yiggle Fix, a
+    /// variant of the Rue M pack swept here.</summary>
     public static TheoryData<string, string> UpscaleDresses => new()
     {
         { "Codeine [YAB].pmp", "full outfit - yab wc/medium/chara/equipment/e6169/model/c0201e6169_top.mdl" },

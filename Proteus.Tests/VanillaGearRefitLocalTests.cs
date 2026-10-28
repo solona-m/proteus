@@ -1396,6 +1396,7 @@ public partial class VanillaGearRefitLocalTests(ITestOutputHelper output)
     [Trait("Plan", "AC-coatee-strap-slit-5")]
     [Trait("Plan", "EDGE-coatee-strap-slit-12")]
     [Trait("Plan", "AC-keep-shape-flat-card-3")]
+    [Trait("Plan", "EDGE-seam-weights-15")]
     public void A_modders_top_in_the_Studio_is_unchanged()
     {
         var data = new Lumina.GameData(LocalData.Path(LocalData.GameData));
@@ -1415,22 +1416,25 @@ public partial class VanillaGearRefitLocalTests(ITestOutputHelper output)
             replaceSkin: true, acrossBodies: true, clearBody: rule.ClearBody, cutHidden: true,
             keepShape: RefitCore.ShapePieces(garment, RefitCore.DefaultKeepShape(garment)), tuckSlot: rule.TuckSlot,
             deepClear: rule.DeepClear, keepStandoff: rule.KeepStandoff, liftUnderbust: true, seeInside: seeInside);
-        // Build 1357's bytes, read before 1359's reading of the old body's underwear (NoSourceWorn) and before 1365's
-        // quaternion turn of kept pieces (NoTurnFallback), as they were.
-        var as1357 = BodyRetarget.WithTuning(new BodyRetarget.Tuning(NoSourceWorn: true, NoTurnFallback: true),
+        // Build 1357's bytes, read before 1359's reading of the old body's underwear (NoSourceWorn), before 1365's
+        // quaternion turn of kept pieces (NoTurnFallback) and before 1382's seam weights (NoSeamWeights), as they were.
+        var as1357 = BodyRetarget.WithTuning(new BodyRetarget.Tuning(NoSourceWorn: true, NoTurnFallback: true,
+                                                                     NoSeamWeights: true),
                                              () => Run(rule.SeeInside));
         Assert.Equal("DE0986CCDF1235DA5B5FB12C2054A2CA4E120DFEC544E790FDB38245E451F7ED", SkinTuckSheet.Sha(as1357.Model));
         Assert.Equal(1146, as1357.Report.Swap?.Tucked);
         // With 1359's reading: test's own bytes (taken at build 1360; the rule is off on this path, so they are 1359's by
         // construction), as builds before 1365 turned kept pieces.
-        var as1364 = BodyRetarget.WithTuning(new BodyRetarget.Tuning(NoTurnFallback: true), () => Run(rule.SeeInside));
+        var as1364 = BodyRetarget.WithTuning(new BodyRetarget.Tuning(NoTurnFallback: true, NoSeamWeights: true),
+                                             () => Run(rule.SeeInside));
         Assert.Equal("C19F540BB2A9765EFA77799D36BC22C34E58367BD74088997D8C2523A71D3FC9", SkinTuckSheet.Sha(as1364.Model));
         Assert.Equal(1155, as1364.Report.Swap?.Tucked);
         Assert.Equal(0, as1364.Report.Swap?.SeenInto);
-        // [AC-keep-shape-flat-card-3] And as it is made now: the kept pieces the polar fit could not turn are turned truly,
+        // [AC-keep-shape-flat-card-3] And as 1365 made it: the kept pieces the polar fit could not turn are turned truly,
         // and nothing else moves — still nothing drawn where the inside would show, and no more cloth in the body, no more
-        // folds.
-        var plan = Run(rule.SeeInside);
+        // folds. Before 1382's seam weights, which write weights alone: as it is made now, every position and normal the same.
+        var plan = BodyRetarget.WithTuning(new BodyRetarget.Tuning(NoSeamWeights: true), () => Run(rule.SeeInside));
+        SeamWeightsTests.SameGeometry(plan.Model, Run(rule.SeeInside).Model);   // [EDGE-seam-weights-15]
         Assert.True(plan.Report.ShapeFallbacks > 0, "Dei Gratia's refit should take quaternion turns, or the pins above say it all");
         string target = mod.PathOf(option);
         int Inside(BodyRetarget.Planned p) => BodySizeMatch.ClothAgainst(ModelPartReader.Read(p.Model)!, target)!.Value.Inside;

@@ -70,8 +70,10 @@ internal static partial class BodyRetarget
     /// 1365 did (see <see cref="TurnOf"/>).</param>
     /// <param name="NoRelaxSinkGuard">Let <see cref="Relax"/> lay a cloth face's middle onto skin that comes through it, as
     /// builds before 1374 did (see <see cref="RelaxSinkTolerance"/>).</param>
+    /// <param name="NoSeamWeights">Let a seam's split vertices take their new weights each on its own, as builds before
+    /// 1382 did (see <see cref="KeepSeamsTogether"/>).</param>
     /// <param name="NoCutOpenSkin">Cut a slot the garment only reaches onto wherever its laid skin misses the new body,
-    /// even in the open inside the author's own skin, as builds before 1382 did (see <see cref="GrowSpannedOpenSkin"/>).</param>
+    /// even in the open inside the author's own skin, as builds before 1383 did (see <see cref="GrowSpannedOpenSkin"/>).</param>
     /// <param name="CutOpenSkinUnderCloth">Measuring only: let <see cref="GrowSpannedOpenSkin"/> keep spanned skin with
     /// cloth over it too, so long as none crowds it.</param>
     /// <param name="CutOpenSkinAnyFacing">Measuring only: let <see cref="GrowSpannedOpenSkin"/> keep skin whose laid skin
@@ -89,8 +91,9 @@ internal static partial class BodyRetarget
                                   bool NoTuck = false, bool NoDeepClear = false, bool NoOpenSkin = false,
                                   bool NoKeepStandoff = false, bool NoOpenEdgeFit = false, bool NoCrotchEase = false,
                                   bool NoSourceWorn = false, bool NoSeeInside = false, bool NoTurnFallback = false,
-                                  bool NoRelaxSinkGuard = false, bool NoCutOpenSkin = false,
-                                  bool CutOpenSkinUnderCloth = false, bool CutOpenSkinAnyFacing = false);
+                                  bool NoRelaxSinkGuard = false, bool NoSeamWeights = false,
+                                  bool NoCutOpenSkin = false, bool CutOpenSkinUnderCloth = false,
+                                  bool CutOpenSkinAnyFacing = false);
 
     private static readonly Tuning DefaultTuning = new();
 

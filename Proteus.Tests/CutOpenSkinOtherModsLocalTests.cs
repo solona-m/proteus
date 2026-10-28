@@ -51,7 +51,7 @@ public class CutOpenSkinOtherModsLocalTests(ITestOutputHelper output)
     public void Other_garments_are_no_worse(string mod, string model, string slot, string ownBody)
     {
         byte[] bytes = Read(mod, model);
-        int defined = Body(Muse).For("_dwn", "0201").ToList().FindIndex(o => o.Label == "Defined - Gen A");
+        int defined = CodeineDressHolesLocalTests.LegsIndex(Muse, "Defined - Gen A");
         foreach (var (body, legs) in new[] { (Muse, defined), (ownBody, 0) })
         {
             string what = $"{Path.GetFileName(LocalData.Path(mod))} {slot} -> {Path.GetFileName(LocalData.Path(body))}";
@@ -66,6 +66,4 @@ public class CutOpenSkinOtherModsLocalTests(ITestOutputHelper output)
             if (now.Swap?.Spanned is null or 0) Assert.Equal(before.Model, now.Model);
         }
     }
-
-    private static BodySizeCatalog Body(string need) => BodySizeCatalog.Read(LocalData.Path(need));
 }
