@@ -72,5 +72,5 @@ updates:
     target-branch: "test"
     schedule:
       interval: weekly
-    # No cooldown: submodules follow branches, not releases, and never auto-merge. Glamourer tracks its testing branch and each IPC bump needs checking in game: one open PR at a time.
+    # No cooldown: submodules follow branches, not releases, and never auto-merge. Glamourer tracks its stable branch (its newest commit, which can be ahead of the last release) and each IPC bump needs checking in game: one open PR at a time.
     open-pull-requests-limit: 1
