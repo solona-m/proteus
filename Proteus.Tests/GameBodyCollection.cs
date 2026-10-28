@@ -12,6 +12,10 @@ namespace Proteus.Tests;
 /// Tests that only read the real game's body do not belong here: <c>Read</c> takes the catalog's lock, so they run in
 /// parallel with each other. Putting them here cost 20 minutes of a 25-minute suite. <c>GameBodyCollectionTests</c>
 /// holds the membership to <c>VanillaRefitTests</c>.
+/// <para/>
+/// Nor do stubs that find nothing — a reader that returns null or throws: the catalog shares a body any reader found,
+/// but believes "no body" only of the reader that said so. What still has to run here is a test that clears, deletes or
+/// moves the catalog's folder, or that serves synthetic body bytes through a reader.
 /// </summary>
 [CollectionDefinition(Name, DisableParallelization = true)]
 public sealed class GameBodyCollection
