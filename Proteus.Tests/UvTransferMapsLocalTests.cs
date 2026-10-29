@@ -176,17 +176,234 @@ public class UvTransferMapsLocalTests(TbseBakeFixture bake, ITestOutputHelper ou
     /// <summary>Each body's sternum landmark, as a uv on its own sheet.</summary>
     private static (System.Numerics.Vector2 Bibo, System.Numerics.Vector2 Tbse) Sternums()
     {
-        var inputs = UvTransferBakeLocalTests.Inputs();
-        var data = new XivLiveMesh.PbdFile(inputs.Pbd);
-        var skel = XivLiveMesh.HavokSkeleton.Read(inputs.Skeleton)!.ParentMap();
-        string? Parent(string b) => skel.TryGetValue(b, out var p) ? p : b == "j_kosi" ? null : "j_kosi";
-        var bibo = new BakeBody([UvBakeInputs.Part(inputs.Bibo[UvBakeInputs.BiboChest])!]);
-        var tbse = new BakeBody([UvBakeInputs.Part(UvBakeInputs.Bend(inputs.Tbse[UvBakeInputs.TbseChest], data, Parent))!]);
+        var (bibo, tbse) = Chests();
         System.Numerics.Vector2 At(BakeBody body)
         {
             var (t, bary) = UvTransferQuality.Landmarks(body)["sternum"];
             return body.At(t, bary.X, bary.Y, bary.Z).Uv;
         }
         return (At(bibo), At(tbse));
+    }
+
+    /// <summary>The two chests the maps were baked from: Bibo+'s, and TBSE's bent to a woman's proportions.</summary>
+    private static (BakeBody Bibo, BakeBody Tbse) Chests()
+    {
+        var inputs = UvTransferBakeLocalTests.Inputs();
+        var data = new XivLiveMesh.PbdFile(inputs.Pbd);
+        var skel = XivLiveMesh.HavokSkeleton.Read(inputs.Skeleton)!.ParentMap();
+        string? Parent(string b) => skel.TryGetValue(b, out var p) ? p : b == "j_kosi" ? null : "j_kosi";
+        var bibo = new BakeBody([UvBakeInputs.Part(inputs.Bibo[UvBakeInputs.BiboChest])!]);
+        var tbse = new BakeBody([UvBakeInputs.Part(UvBakeInputs.Bend(inputs.Tbse[UvBakeInputs.TbseChest], data, Parent))!]);
+        return (bibo, tbse);
+    }
+
+    /// <summary>Each chest's nipples (left, then right), found the way the bake finds them.</summary>
+    private static (UvBakeNipples.Nipple L, UvBakeNipples.Nipple R) NipplesOf(BakeBody body)
+    {
+        var (found, failure) = UvBakeNipples.Find(body);
+        Assert.True(found != null, failure);
+        return found!.Value;
+    }
+
+    /// <summary>
+    /// A 6 px dot painted at <paramref name="uv"/> on a 4096² sheet in layout <paramref name="src"/>, carried into
+    /// <paramref name="dst"/> the way the compositor carries art (<see cref="UVRemapService.ConvertSheet"/>), and found
+    /// there: the alpha-weighted centroid, as a uv of the destination sheet. Null when none of it arrives.
+    /// </summary>
+    private static System.Numerics.Vector2? OverlayDot(UVRemapService uv, System.Numerics.Vector2 at, string src, string dst)
+    {
+        const int S = 4096, Radius = 6;
+        var rgba = new byte[S * S * 4];
+        int cx = (int)MathF.Round(at.X * (S - 1)), cy = (int)MathF.Round(at.Y * (S - 1));
+        for (int y = cy - Radius; y <= cy + Radius; y++)
+            for (int x = cx - Radius; x <= cx + Radius; x++)
+            {
+                if (x < 0 || y < 0 || x >= S || y >= S || (x - cx) * (x - cx) + (y - cy) * (y - cy) > Radius * Radius) continue;
+                int i = (y * S + x) * 4;
+                rgba[i] = rgba[i + 1] = rgba[i + 2] = rgba[i + 3] = 255;
+            }
+        var sheet = uv.ConvertSheet(rgba, S, S, src, dst);
+        Assert.NotNull(sheet);
+        var (img, w, h) = sheet!.Value;
+        double sx = 0, sy = 0, sa = 0;
+        for (int y = 0; y < h; y++)
+            for (int x = 0; x < w; x++)
+            {
+                int a = img[(y * w + x) * 4 + 3];
+                if (a == 0) continue;
+                sx += x * a; sy += y * a; sa += a;
+            }
+        return sa == 0 ? null : new System.Numerics.Vector2((float)(sx / sa / (w - 1)), (float)(sy / sa / (h - 1)));
+    }
+
+    /// <summary>The point of <paramref name="body"/>'s surface its sheet draws at <paramref name="uv"/>, or null off its skin.</summary>
+    private static System.Numerics.Vector3? PointAt(BakeBody body, UvTransferBake.Raster raster, System.Numerics.Vector2 uv)
+    {
+        int x = (int)MathF.Round(Math.Clamp(uv.X, 0, 1) * (raster.Size - 1));
+        int y = (int)MathF.Round(Math.Clamp(uv.Y, 0, 1) * (raster.Size - 1));
+        for (int r = 0; r <= 4; r++)
+            for (int dy = -r; dy <= r; dy++)
+                for (int dx = -r; dx <= r; dx++)
+                {
+                    int xx = x + dx, yy = y + dy;
+                    if (xx < 0 || yy < 0 || xx >= raster.Size || yy >= raster.Size) continue;
+                    int i = yy * raster.Size + xx, t = raster.Owner[i];
+                    if (t < 0) continue;
+                    return body.At(t, raster.BaryU[i], raster.BaryV[i], 1 - raster.BaryU[i] - raster.BaryV[i]).Pos;
+                }
+        return null;
+    }
+
+    private UVRemapService Maps() => new(Substitute.For<Dalamud.Plugin.Services.IPluginLog>(), LocalData.Path(LocalData.UvMaps));
+
+    /// <summary>
+    /// Where a dot on one chest's nipples lands on the other's, per side: how far from that chest's own nipple on its
+    /// sheet (px at 4096) and how far above it on the body (mm; negative is below). <paramref name="landedUv"/> gives
+    /// the landing uv on <paramref name="to"/>'s sheet for a uv on <paramref name="from"/>'s.
+    /// </summary>
+    private List<(string Side, float Px, float DyMm)> NippleLandings(BakeBody from, BakeBody to,
+                                                                    Func<System.Numerics.Vector2, int, System.Numerics.Vector2?> landedUv)
+    {
+        var mine = NipplesOf(from);
+        var theirs = NipplesOf(to);
+        var raster = UvTransferBake.Rasterize(to, 4096);
+        var result = new List<(string, float, float)>();
+        foreach (var (side, a, b, k) in new[] { ("L", mine.L, theirs.L, 0), ("R", mine.R, theirs.R, 1) })
+        {
+            var got = landedUv(a.Uv, k);
+            Assert.True(got != null, $"nipple {side}: nothing arrived");
+            float px = (got!.Value - b.Uv).Length() * 4096f;
+            float dy = PointAt(to, raster, got.Value) is { } p ? (p.Y - b.Pos.Y) * 1000f : float.NaN;
+            output.WriteLine($"nipple {side}: {a.Uv} -> {got.Value}, own nipple {b.Uv} ({b.Pos}): {px:F1} px, {dy:+0.0;-0.0} mm up");
+            result.Add((side, px, dy));
+        }
+        return result;
+    }
+
+    /// <summary>
+    /// Overlay map <c>bibo_to_tbse</c>: a dot on Bibo+'s nipple, in a woman's overlay carried onto a man in TBSE's layout,
+    /// lands on TBSE's nipple.
+    /// </summary>
+    [LocalDataFact(LocalData.GameData, Bibo, Tbse, LocalData.UvMaps)]
+    [Trait("Plan", "AC-uvmap-nipples-1")]
+    public void OverlayMap_nipple_dot_lands_on_tbse_nipple() // [AC-uvmap-nipples-1]
+    {
+        var uv = Maps();
+        var (bibo, tbse) = Chests();
+        foreach (var (side, px, _) in NippleLandings(bibo, tbse, (at, _) => OverlayDot(uv, at, "bibo", UVRemapService.TbseSpace)))
+            Assert.True(px <= UvTransferQuality.Gate.NippleDotPx, $"nipple {side} {px:F1} px");
+    }
+
+    /// <summary>
+    /// Overlay map <c>bibo_to_tbse</c>, the chest from collarbone to under-bust at the nipple's x, and the sternum: where
+    /// a dot on Bibo+ lands on TBSE, against TBSE's own point there (mm up; negative is below). The nipple row compares
+    /// with TBSE's nipple; the others with TBSE's point at the same height measured between pelvis and neck.
+    /// </summary>
+    [LocalDataFact(LocalData.GameData, Bibo, Tbse, LocalData.UvMaps)]
+    [Trait("Plan", "AC-uvmap-nipples-1")]
+    public void OverlayMap_chest_profile_bibo_to_tbse() // [AC-uvmap-nipples-1] [EDGE-uvmap-nipples-24]
+    {
+        var uv = Maps();
+        var (bibo, tbse) = Chests();
+        var rows = ChestProfile(bibo, tbse, at => OverlayDot(uv, at, "bibo", UVRemapService.TbseSpace));
+        foreach (var (row, dy) in rows)
+            if (row.StartsWith("nipple")) Assert.True(MathF.Abs(dy) <= UvTransferQuality.Gate.NippleDotPx / 4.2f, $"{row} {dy:F1} mm");
+    }
+
+    /// <summary>
+    /// The chest profile of one map: per row, a point of <paramref name="from"/> carried by <paramref name="landedUv"/>
+    /// onto <paramref name="to"/>'s sheet and found on its surface, less <paramref name="to"/>'s own point for that row.
+    /// </summary>
+    private List<(string Row, float DyMm)> ChestProfile(BakeBody from, BakeBody to, Func<System.Numerics.Vector2, System.Numerics.Vector2?> landedUv)
+    {
+        var raster = UvTransferBake.Rasterize(to, 4096);
+        var fa = UvTransferQuality.Frame.Of(from);
+        var ta = UvTransferQuality.Frame.Of(to);
+        var na = NipplesOf(from);
+        var nb = NipplesOf(to);
+        var rows = new List<(string, float)>();
+        void Row(string name, (System.Numerics.Vector3 Pos, System.Numerics.Vector2 Uv)? a, System.Numerics.Vector3? want)
+        {
+            if (a == null || want == null) { output.WriteLine($"{name}: no point"); return; }
+            var got = landedUv(a.Value.Uv);
+            var p = got == null ? null : PointAt(to, raster, got.Value);
+            if (p == null) { output.WriteLine($"{name}: nothing landed"); return; }
+            float dy = (p.Value.Y - want.Value.Y) * 1000f;
+            output.WriteLine($"{name}: from {a.Value.Pos} lands at {p.Value}, want {want.Value}: {dy:+0.0;-0.0} mm up");
+            rows.Add((name, dy));
+        }
+        float Height(UvTransferQuality.Frame f, float y) => (y - f.PelvisY) / f.Span;
+        float Y(UvTransferQuality.Frame f, float h) => f.PelvisY + h * f.Span;
+        foreach (var (side, sx, a, b) in new[] { ("L", 1f, na.L, nb.L), ("R", -1f, na.R, nb.R) })
+        {
+            Row("nipple" + side, (a.Pos, a.Uv), b.Pos);
+            foreach (var (row, bone) in new[] { ("clavicle", "j_sako_" + side.ToLowerInvariant()), ("underBust", "j_sebo_b") })
+            {
+                if (BoneY(from, bone) is not { } y) { output.WriteLine($"{row}{side}: no {bone}"); continue; }
+                var src = FrontPoint(from, a.Pos.X, y);
+                var dst = FrontPoint(to, b.Pos.X, Y(ta, Height(fa, y)));
+                Row(row + side, src, dst?.Pos);
+            }
+        }
+        if (BoneY(from, "j_sebo_c") is { } sy)
+            Row("sternum", FrontPoint(from, 0f, sy), FrontPoint(to, 0f, Y(ta, Height(fa, sy)))?.Pos);
+        return rows;
+    }
+
+    /// <summary>The height of the skin <paramref name="bone"/> carries most of, or null.</summary>
+    private static float? BoneY(BakeBody body, string bone)
+    {
+        float sum = 0;
+        int n = 0;
+        for (int v = 0; v < body.P.Length; v++)
+        {
+            string? top = null;
+            float best = 0f;
+            foreach (var (b, w) in body.Weights[v]) if (w > best) { best = w; top = b; }
+            if (top == bone) { sum += body.P[v].Y; n++; }
+        }
+        return n == 0 ? null : sum / n;
+    }
+
+    /// <summary>The front of <paramref name="body"/> at (<paramref name="x"/>, <paramref name="y"/>): the foremost vertex within 1 cm.</summary>
+    private static (System.Numerics.Vector3 Pos, System.Numerics.Vector2 Uv)? FrontPoint(BakeBody body, float x, float y)
+    {
+        (System.Numerics.Vector3, System.Numerics.Vector2)? best = null;
+        float bestZ = float.MinValue;
+        for (int t = 0; t < body.TriangleCount; t++)
+            for (int k = 0; k < 3; k++)
+            {
+                var p = body.P[body.Tri[t * 3 + k]];
+                if (MathF.Abs(p.X - x) > 0.01f || MathF.Abs(p.Y - y) > 0.01f || p.Z <= bestZ) continue;
+                bestZ = p.Z;
+                best = (p, body.Uv[t * 3 + k]);
+            }
+        return best;
+    }
+
+    /// <summary>Art map back, <c>tbse_to_bibo</c>: a dot on TBSE's nipple carried to bibo lands on Bibo+'s nipple.</summary>
+    [LocalDataFact(LocalData.GameData, Bibo, Tbse, LocalData.UvMaps)]
+    [Trait("Plan", "AC-uvmap-nipples-3")]
+    public void ArtBackMap_nipple_dot_on_tbse_lands_on_bibo_nipple() // [AC-uvmap-nipples-3]
+    {
+        var uv = Maps();
+        var (bibo, tbse) = Chests();
+        foreach (var (side, px, _) in NippleLandings(tbse, bibo, (at, _) => OverlayDot(uv, at, UVRemapService.TbseSpace, "bibo")))
+            Assert.True(px <= UvTransferQuality.Gate.NippleDotPx, $"nipple {side} {px:F1} px");
+    }
+
+    /// <summary>
+    /// Refit map <c>tbse_to_bibo</c> (read by <see cref="UVRemapService.UvConverter"/> bibo→tbse, the body match of a
+    /// refit across the sexes): Bibo+'s nipple is matched to TBSE's.
+    /// </summary>
+    [LocalDataFact(LocalData.GameData, Bibo, Tbse, LocalData.UvMaps)]
+    [Trait("Plan", "AC-uvmap-nipples-9")]
+    public void RefitMap_nipple_point_lands_on_tbse_nipple() // [AC-uvmap-nipples-9]
+    {
+        var conv = Maps().UvConverter("bibo", UVRemapService.TbseSpace)!;
+        var (bibo, tbse) = Chests();
+        foreach (var (side, px, _) in NippleLandings(bibo, tbse,
+                     (at, k) => conv(at.X, at.Y, k) is { } c ? new System.Numerics.Vector2(c.U, c.V) : null))
+            Assert.True(px <= UvTransferQuality.Gate.NippleDotPx, $"nipple {side} {px:F1} px");
     }
 }

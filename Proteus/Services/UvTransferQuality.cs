@@ -42,6 +42,9 @@ internal static class UvTransferQuality
 
         /// <summary>How far, in px at 4096, a dot on one body's sternum may land from the other's (6.5 mm measured; 27 px).</summary>
         public const float SternumDotPx = 30f;
+
+        /// <summary>How far, in px at 4096, a dot on one body's nipple may land from the other's (about 3 mm).</summary>
+        public const float NippleDotPx = 12f;
     }
 
     /// <summary>The named places on the torso and legs the gate checks, by name.</summary>
