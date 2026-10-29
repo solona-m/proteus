@@ -83,10 +83,18 @@ internal static class SkeletonRemap
             || bone.Contains("koumon", StringComparison.Ordinal))
             return "j_kosi";
         if (bone.StartsWith("iv_asi_", StringComparison.Ordinal)) return Sided("j_asi_e", "j_kosi");
+        // IVCS's third finger joints, which a man's game skeleton lacks: the same finger's last joint the game has. A
+        // women's glove made a men's carries them, and the hip their fallback would be takes the fingertips with it.
+        if (FingerJoint.Match(bone) is { Success: true } finger)
+            return $"j_{finger.Groups[1].Value}_b_{finger.Groups[2].Value}";
         if (bone.StartsWith("j_ex_top", StringComparison.Ordinal)) return "j_sebo_c";
         if (bone.StartsWith("j_ex_met", StringComparison.Ordinal)) return "j_kao";
         return null;
     }
+
+    /// <summary>An IVCS finger joint past the game's own two: thumb, index, middle, ring or little finger, and side.</summary>
+    private static readonly System.Text.RegularExpressions.Regex FingerJoint =
+        new(@"^iv_(oya|hito|naka|kusu|ko)_[c-z]_(l|r)$", System.Text.RegularExpressions.RegexOptions.Compiled);
 
     private static bool IsBreast(string bone)
         => bone.Contains("mune", StringComparison.Ordinal) || bone.Contains("kyokin", StringComparison.Ordinal);
