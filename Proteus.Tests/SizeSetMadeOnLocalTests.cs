@@ -113,6 +113,8 @@ public class SizeSetMadeOnLocalTests(ITestOutputHelper output, ObliqueRun obliqu
                                                   && (why.Contains(coverage, StringComparison.Ordinal)
                                                       || why.Contains("by texture coordinate", StringComparison.Ordinal))),
                                               $"{s.Status} {s.ReasonCode}: {s.Reason}"));
+            // And said under Left out.
+            Assert.All(legs.Where(s => s.Status == SizeStatus.Refused), s => Assert.Contains(s.Reason, oblique.First.Notes));
         }
         Assert.All(oblique.First.Sizes.Where(s => s.Status != SizeStatus.Made), s => Assert.False(string.IsNullOrEmpty(s.Reason)));
 

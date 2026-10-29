@@ -254,7 +254,7 @@ internal static partial class SizeSetRefit
     /// over all its skin points, <see cref="OwnSkinFit"/>) and still be read on it: a coarse guard against a plainly wrong
     /// body, not a measure of which size. Oblique's plain sizes lie 2.7–3.1 mm off Bibo+'s, their legs 0.5; its XLarge
     /// Tummy, 12.5 mm off, is refused. It catches no body of a woman's shape: Oblique on Neolithe lies 2.7–4.2 mm off
-    /// (8 of 10 tops taken), on Rosaline 5.8–9.1 (3 tops; its legs are all unclear). The author's choice is taken as said.
+    /// (9 of 10 tops taken), on Rosaline 5.8–9.1 (3 tops; its legs are all unclear). The author's choice is taken as said.
     /// </summary>
     internal const float MadeOnMaxOff = 0.010f;
 
@@ -343,6 +343,8 @@ internal static partial class SizeSetRefit
         if (madeOn == null) return (string.Format(s.UnreadableMadeOnFmt, piece), Codes.Unreadable);
         string name = madeOnName ?? madeOn;
         if (missing) return (string.Format(s.MadeOnMissingFmt, piece, name), Codes.NotMadeOn);
+        // None read on it at all: its files could not be read, which is no reason to doubt the body chosen.
+        if (fits.Count == 0) return (string.Format(s.UnreadableFmt, piece), Codes.Unreadable);
         if (fits.Count > 0 && fits.All(f => f == MadeOnFit.Unclear))
             return (string.Format(s.MadeOnUnclearFmt, piece, name), Codes.NotMadeOn);
         return (string.Format(s.NotMadeOnFmt, piece, name), Codes.NotMadeOn);

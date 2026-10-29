@@ -69,6 +69,9 @@ public class SizeSetMadeOnTests
                      SizeSetRefit.UnreadableNote("Body", "The Body SE", "TBSE", false, [SizeSetRefit.MadeOnFit.NoSizes]));
         Assert.Equal((string.Format(s.MadeOnMissingFmt, "Body", "gone"), Codes.NotMadeOn),
                      SizeSetRefit.UnreadableNote("Body", "gone", null, true, []));
+        // Nothing read on it at all: its files could not be read, and the body chosen is not blamed.
+        Assert.Equal((string.Format(s.UnreadableFmt, "Body"), Codes.Unreadable),
+                     SizeSetRefit.UnreadableNote("Body", "Bibo+", "Bibo+", false, []));
         // Without "Made on": couldn't tell, and where to say it.
         Assert.Equal((string.Format(s.UnreadableMadeOnFmt, "Body"), Codes.Unreadable),
                      SizeSetRefit.UnreadableNote("Body", null, null, false, []));

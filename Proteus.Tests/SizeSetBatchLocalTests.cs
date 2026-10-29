@@ -41,7 +41,7 @@ internal static class SizeSetBatchData
     internal static string UnpackedPack(string pack)
     {
         string copy = NewCopy();
-        System.IO.Compression.ZipFile.ExtractToDirectory(LocalData.Path(pack), copy);
+        ZipFile.ExtractToDirectory(LocalData.Path(pack), copy);
         return copy;
     }
 
@@ -836,7 +836,6 @@ public class SizeSetBatchLocalTests(ThisOldThingRun tot, ITestOutputHelper outpu
     }
 
     // ── v3 ──
-
 
     [LocalDataFact(SizeSetBatchData.ScarletPack, SizeSetBatchData.Neolithe, SizeSetBatchData.Bibo, LocalData.UvMaps)]
     [Trait("Plan", "AC-headless-size-set-10")]
