@@ -142,7 +142,7 @@ are on disk. Release note:
 | | SHA-256 |
 |---|---|
 | `bibo_to_tbse_transfer.tif` v3 (11 834 120 bytes) | `559efe148403b12c168f20b41dd614952708933f4404fedc98c7ab79a6a36ca1` |
-| `tbse_to_bibo_transfer.tif` v3 (13 027 942 bytes) | `4c53853ed1777d1f02f6f82f8fdd0f0bbc0d82f78d1d7cbfb408d45f73a3f3ae` |
+| `tbse_to_bibo_transfer.tif` v3 (13 027 942 bytes) | `820fd4c1cb38930698a12daba7bd624ddc43a5e417d53436b34a165d14a6f227` |
 | `bibo_to_tbse_transfer.tif` v2 (11 798 374 bytes) | `1ad198ed137abf5882ee0e38b3b91d7eb01771af35f7be2cd4eaf41d975e32a0` |
 | `tbse_to_bibo_transfer.tif` v2 (12 911 330 bytes) | `701964922589185c3ed4d4b1af824f84bf0c2dd4552488a8e7383a08ce345c23` |
 | TBSE `common/1/c0101e0000_top.mdl` | `20bab704895ec6fa32914495dafa77708d5b89b0a9e6abf1d3043656bab1d8d0` |

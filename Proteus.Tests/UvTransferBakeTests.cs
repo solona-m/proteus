@@ -520,10 +520,12 @@ public class UvTransferBakeTests
     [Trait("Plan", "EDGE-uvmap-nipples-6")]
     public void Finder_passes_over_an_overhang_rim_and_a_cleavage_bump() // [EDGE-uvmap-nipples-6]
     {
-        // Taller than the nipples: a bump on each breast's downward rim, and one back by the cleavage. Neither is a nipple.
+        // Taller than the nipples: a bump on each breast's downward rim (facing down: MinFacing passes over it), and one
+        // on the flat chest above, facing straight ahead but 4 cm behind the breasts' front (FrontDepth passes over it).
+        // Neither is a nipple.
         var body = Chest((x, y) => Breasts(x, y)
                                    + Bump(x, y, 0.08f, 1.205f, 0.006f, 0.006f) + Bump(x, y, -0.08f, 1.205f, 0.006f, 0.006f)
-                                   + Bump(x, y, 0.03f, 1.24f, 0.006f, 0.006f) + Bump(x, y, -0.03f, 1.24f, 0.006f, 0.006f));
+                                   + Bump(x, y, 0.035f, 1.31f, 0.006f, 0.006f) + Bump(x, y, -0.035f, 1.31f, 0.006f, 0.006f));
         var (found, failure) = UvBakeNipples.Find(body);
         Assert.True(found != null, failure);
         Assert.InRange(found!.Value.L.Pos.X, 0.075f, 0.085f);
@@ -542,13 +544,50 @@ public class UvTransferBakeTests
         bool Drawn(int i) => i % size is >= 16 and < 48 && i / size is >= 16 and < 48;
         var drawn = Enumerable.Range(0, size * size).Select(Drawn).ToArray();
         var inverse = Map(size, (x, y) => Drawn(y * size + x) ? (x / 63f * 0.5f + 0.02f, y / 63f * 0.5f) : (x / 63f * 0.5f, y / 63f * 0.5f));
-        var eased = UvTransferBake.Feather(inverse, drawn, plain, band);
+        var (eased, unblended) = UvTransferBake.Feather(inverse, drawn, plain, band);
+        Assert.Equal(0, unblended);
         int edge = 32 * size + 16, inner = 32 * size + 32, next = 32 * size + 15;
         float Px(ushort a, ushort b) => MathF.Abs(a - b) / 65535f * 63;
         Assert.True(Px(inverse.R[edge], inverse.R[next]) > 1.5f);
         Assert.True(Px(eased.R[edge], eased.R[next]) < 0.75f, $"{Px(eased.R[edge], eased.R[next])} px at the edge");
         Assert.Equal(inverse.R[inner], eased.R[inner]);
         for (int i = 0; i < size * size; i++) if (!drawn[i]) Assert.Equal(inverse.R[i], eased.R[i]);
+    }
+
+    [Fact]
+    [Trait("Plan", "AC-uvmap-nipples-9")]
+    [Trait("Plan", "EDGE-uvmap-nipples-46")]
+    public void Feather_across_two_islands_stays_on_the_inverse_s_and_counts_what_it_cannot_ease() // [AC-uvmap-nipples-9] [EDGE-uvmap-nipples-46]
+    {
+        // A source of two islands side by side on the body: x −0.1..0 drawn at u 0–0.4, x 0..0.1 at u 0.6–1.
+        BakeBody.Part Strip(float x0, float u0)
+        {
+            var p = Sheet(8, scale: 0.1f, uvScale: 0.4f, uvX0: u0);
+            var pos = (float[])p.Positions.Clone();
+            for (int v = 0; v < pos.Length; v += 3) pos[v] += x0 + 0.05f;
+            return p with { Positions = pos };
+        }
+        var src = new BakeBody([Strip(-0.1f, 0f), Strip(0f, 0.6f)]);
+        const int size = 64, band = 8;
+        // The plain map lands on the left island, the inverse on the right one, over the middle it drew.
+        var plain = Map(size, (x, y) => (0.4f * x / 63f, 0.4f * y / 63f));
+        bool Drawn(int i) => i % size is >= 16 and < 48 && i / size is >= 16 and < 48;
+        var drawn = Enumerable.Range(0, size * size).Select(Drawn).ToArray();
+        var inverse = Map(size, (x, y) => Drawn(y * size + x) ? (0.6f + 0.4f * x / 63f, 0.4f * y / 63f) : (0.4f * x / 63f, 0.4f * y / 63f));
+        var (eased, unblended) = UvTransferBake.Feather(inverse, drawn, plain, band, src, UvTransferBake.Rasterize(src, 256), new TriangleBvh(src));
+        Assert.Equal(0, unblended);
+        int row = 32 * size;
+        for (int x = 16; x < 16 + band; x++)
+        {
+            Assert.True(eased.R[row + x] / 65535f >= 0.6f - 1e-3f, $"({x}) left the inverse's island: u {eased.R[row + x] / 65535f}");
+            Assert.True(eased.R[row + x + 1] >= eased.R[row + x], $"({x}) not easing steadily inward");
+        }
+        Assert.Equal(inverse.R[row + 32], eased.R[row + 32]);
+
+        // A texel in the band whose inverse lands off the skin (the gutter between the islands) cannot be eased: counted.
+        var off = inverse with { R = (ushort[])inverse.R.Clone(), G = (ushort[])inverse.G.Clone() };
+        off.R[row + 17] = UvTransferBake.Quantize(0.5f);
+        Assert.Equal(1, UvTransferBake.Feather(off, drawn, plain, band, src, UvTransferBake.Rasterize(src, 256), new TriangleBvh(src)).Unblended);
     }
 
     [Fact]

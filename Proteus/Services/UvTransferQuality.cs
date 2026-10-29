@@ -152,7 +152,7 @@ internal static class UvTransferQuality
         /// body in metres when measured there, else on its sheet in px.
         /// </summary>
         public double EdgeJumpP99, EdgeJumpMax, PlainEdgeJumpP99, PlainEdgeJumpMax;
-        public long EdgePairs;
+        public long EdgePairs, EdgeOffSkin, PlainEdgeOffSkin;
         public bool EdgeOnBody;
         /// <summary>How much more than the plain map's this map's distortion may be (<see cref="Gate.StretchMargin"/>, or 1 for the inverse).</summary>
         public double Margin = Gate.StretchMargin;
@@ -324,7 +324,11 @@ internal static class UvTransferQuality
                     return onSource(m.R[i], m.G[i]) is { } a && onSource(m.R[j], m.G[j]) is { } b ? Vector3.Distance(a, b) : null;
                 }
                 if (onSource == null && (Math.Abs(plain.R[i] - plain.R[j]) > Seam || Math.Abs(plain.G[i] - plain.G[j]) > Seam)) continue;
-                if (Jump(warped) is not { } jw || Jump(plain) is not { } jp) continue;
+                double? jwn = Jump(warped), jpn = Jump(plain);
+                // A neighbour landing off the source's skin cannot be measured: counted, for each map, rather than passed over.
+                if (jwn == null) s.EdgeOffSkin++;
+                if (jpn == null) s.PlainEdgeOffSkin++;
+                if (jwn is not { } jw || jpn is not { } jp) continue;
                 if (jw > s.EdgeJumpMax) { s.EdgeJumpMax = jw; s.EdgeJumpAt = i; }
                 jumpW.Add(jw);
                 jumpP.Add(jp);
@@ -573,6 +577,8 @@ internal static class UvTransferQuality
             if (s.ChangedOutside > 0) miss.Add($"{mapName}: the chest field changed {s.ChangedOutside} texels outside its reach");
             // A correction that folds nowhere can still tear where it ends: neighbours either side of its edge land no
             // further apart than the plain map's do there (a pixel's leeway where those are next to nothing).
+            if (s.EdgeOffSkin > s.PlainEdgeOffSkin)
+                miss.Add($"{mapName}: {s.EdgeOffSkin} pairs at the correction's edge land off the skin, the plain map {s.PlainEdgeOffSkin}");
             double leeway = s.EdgeOnBody ? Gate.EdgeLeewayM : 1;
             string unit = s.EdgeOnBody ? "m" : "px";
             if (!(s.EdgeJumpP99 <= Gate.StretchMargin * Math.Max(s.PlainEdgeJumpP99, leeway)))

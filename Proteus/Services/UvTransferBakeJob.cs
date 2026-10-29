@@ -78,6 +78,7 @@ internal static class UvTransferBakeJob
         var bToA = bToAPlain;
         Func<int, bool> onAsChest = _ => false;
         bool[] drawn = [];
+        long unblended = 0;
         if (fieldAtoB != null)
         {
             // Only the front of B's chest is inverted: the field's reach wraps round the flanks, where B's side and back
@@ -107,8 +108,10 @@ internal static class UvTransferBakeJob
             (bToA, drawn) = UvTransferBake.InvertInto(aToB, Reach, bToAPlain, OnAsChest);
             // Where the inverse meets the plain map the two disagree by what the plain pair always did (some mm): eased
             // into it over a band inside the edge, on the body, rather than met in a step.
-            bToA = UvTransferBake.Feather(bToA, drawn, bToAPlain, FeatherTexels(size),
-                                          bSrc, UvTransferBake.Rasterize(bSrc, Math.Min(size, 2048)), bBvh);
+            (bToA, unblended) = UvTransferBake.Feather(bToA, drawn, bToAPlain, FeatherTexels(size),
+                                                       bSrc, UvTransferBake.Rasterize(bSrc, Math.Min(size, 2048)), bBvh);
+            // Each texel the easing could not reach keeps the inverse's whole step against its eased neighbours.
+            if (unblended > 0) failures.Add($"{bToAName}: {unblended} texels by the inverse's edge could not be eased into the plain map");
         }
 
         int lookup = Math.Min(size, 2048);
@@ -400,7 +403,7 @@ internal static class UvTransferBakeJob
         JsonNode? stretch = f.Stretch is not { } w ? null : new JsonObject
         {
             ["measured"] = w.Measured, ["changedInside"] = w.ChangedInside, ["changedOutside"] = w.ChangedOutside,
-            ["edge"] = new JsonObject { ["pairs"] = w.EdgePairs, ["p99"] = Num(w.EdgeJumpP99), ["max"] = Num(w.EdgeJumpMax), ["maxAt"] = w.EdgeJumpAt < 0 ? null : new JsonArray(w.EdgeJumpAt % map.Size, w.EdgeJumpAt / map.Size),
+            ["edge"] = new JsonObject { ["pairs"] = w.EdgePairs, ["offSkin"] = w.EdgeOffSkin, ["plainOffSkin"] = w.PlainEdgeOffSkin, ["p99"] = Num(w.EdgeJumpP99), ["max"] = Num(w.EdgeJumpMax), ["maxAt"] = w.EdgeJumpAt < 0 ? null : new JsonArray(w.EdgeJumpAt % map.Size, w.EdgeJumpAt / map.Size),
                                         ["plainP99"] = Num(w.PlainEdgeJumpP99), ["plainMax"] = Num(w.PlainEdgeJumpMax) },
             ["area"] = new JsonObject { ["p50"] = Num(w.AreaP50), ["p99"] = Num(w.AreaP99), ["p999"] = Num(w.AreaP999), ["max"] = Num(w.AreaMax), ["plainP99"] = Num(w.PlainAreaP99), ["predicted"] = Num(w.PredictedArea) },
             ["aniso"] = new JsonObject { ["p50"] = Num(w.AnisoP50), ["p99"] = Num(w.AnisoP99), ["p999"] = Num(w.AnisoP999), ["max"] = Num(w.AnisoMax), ["plainP99"] = Num(w.PlainAnisoP99), ["predicted"] = Num(w.PredictedAniso) },

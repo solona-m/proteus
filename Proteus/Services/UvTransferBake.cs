@@ -602,12 +602,14 @@ internal static class UvTransferBake
     /// <paramref name="inverse"/>, eased into <paramref name="plain"/> over the <paramref name="band"/> texels inside the
     /// edge of what it <paramref name="drawn"/>: two maps that disagree meet in a step, so near the edge each texel takes
     /// a coordinate between the two (by smoothstep of its distance in from the edge). Where both lie on one island of
-    /// the source's sheet the blend is taken on the sheet, which is one on the body. Where they lie on two, it is taken on
-    /// the <paramref name="src"/> body — between the points the two land on — and read back on the inverse's own island,
-    /// so it stays whole there and meets the plain map's island at a seam of the same skin.
+    /// the <paramref name="src"/> body's sheet the blend is taken on the sheet, which is one on the body. Where they lie on
+    /// two, it is taken on the body — between the points the two land on — and read back on the inverse's own island, so
+    /// it stays whole there and meets the plain map's island at a seam of the same skin. Without the source body, one
+    /// island is told by nearness on the sheet. Returns the map and how many texels in the band could not be eased (a
+    /// landing off the source's skin, or no skin of the island near the blended point): each would be a step.
     /// </summary>
-    internal static Result Feather(Result inverse, bool[] drawn, Result plain, int band,
-                                   BakeBody? src = null, Raster? srcRaster = null, TriangleBvh? srcBvh = null)
+    internal static (Result Map, long Unblended) Feather(Result inverse, bool[] drawn, Result plain, int band,
+                                                         BakeBody? src = null, Raster? srcRaster = null, TriangleBvh? srcBvh = null)
     {
         int[]? island = src == null ? null : UvTransferQuality.Islands(src);
         int size = inverse.Size;
@@ -639,27 +641,42 @@ internal static class UvTransferBake
         const int Seam = 65536 / 32;
         var r = (ushort[])inverse.R.Clone();
         var g = (ushort[])inverse.G.Clone();
+        long unblended = 0;
+        bool known = src != null && srcRaster != null && srcBvh != null && island != null;
         for (int i = 0; i < r.Length; i++)
         {
             if (!drawn[i] || d[i] >= band || !plain.Valid[i]) continue;
             float s = Math.Clamp(d[i] / band, 0f, 1f);
             s = s * s * (3 - 2 * s);
-            if (Math.Abs(inverse.R[i] - plain.R[i]) <= Seam && Math.Abs(inverse.G[i] - plain.G[i]) <= Seam)
+            (Vector3 Pos, int Tri)? a = null, b = null;
+            bool oneIsland;
+            if (known)
+            {
+                a = Landed(inverse.R[i], inverse.G[i]);
+                b = Landed(plain.R[i], plain.G[i]);
+                if (a == null || b == null) { unblended++; continue; }
+                oneIsland = island![a.Value.Tri] == island[b.Value.Tri];
+            }
+            else oneIsland = Math.Abs(inverse.R[i] - plain.R[i]) <= Seam && Math.Abs(inverse.G[i] - plain.G[i]) <= Seam;
+            if (oneIsland)
             {
                 r[i] = (ushort)MathF.Round(plain.R[i] + (inverse.R[i] - plain.R[i]) * s);
                 g[i] = (ushort)MathF.Round(plain.G[i] + (inverse.G[i] - plain.G[i]) * s);
                 continue;
             }
-            if (src == null || srcRaster == null || srcBvh == null || island == null) continue;
-            if (Landed(inverse.R[i], inverse.G[i]) is not { } a || Landed(plain.R[i], plain.G[i]) is not { } b) continue;
-            int own = island[a.Tri];
-            var p = Vector3.Lerp(b.Pos, a.Pos, s);
-            if (!srcBvh.Closest(p, Reach, t => island[t] == own, out int ct, out float cu, out float cv, out float cw, out _)) continue;
-            var uv = src.At(ct, cu, cv, cw).Uv;
+            if (!known) { unblended++; continue; }
+            int own = island![a!.Value.Tri];
+            var p = Vector3.Lerp(b!.Value.Pos, a.Value.Pos, s);
+            if (!srcBvh!.Closest(p, Reach, t => island[t] == own, out int ct, out float cu, out float cv, out float cw, out _))
+            {
+                unblended++;
+                continue;
+            }
+            var uv = src!.At(ct, cu, cv, cw).Uv;
             r[i] = Quantize(uv.X);
             g[i] = Quantize(uv.Y);
         }
-        return inverse with { R = r, G = g };
+        return (inverse with { R = r, G = g }, unblended);
 
         (Vector3 Pos, int Tri)? Landed(ushort ru, ushort gv)
         {

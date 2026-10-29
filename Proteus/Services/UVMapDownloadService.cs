@@ -46,7 +46,7 @@ public class UVMapDownloadService : IDisposable
     internal static readonly MapFile[] MenMaps =
     [
         new(UVRemapService.BiboToTbseFile, "uvmaps-v3", 11834120L, "559efe148403b12c168f20b41dd614952708933f4404fedc98c7ab79a6a36ca1"),
-        new(UVRemapService.TbseToBiboFile, "uvmaps-v3", 13027942L, "4c53853ed1777d1f02f6f82f8fdd0f0bbc0d82f78d1d7cbfb408d45f73a3f3ae"),
+        new(UVRemapService.TbseToBiboFile, "uvmaps-v3", 13027942L, "820fd4c1cb38930698a12daba7bd624ddc43a5e417d53436b34a165d14a6f227"),
     ];
 
     /// <summary>How long a failed background upgrade of the men's pair waits before it is tried again.</summary>
