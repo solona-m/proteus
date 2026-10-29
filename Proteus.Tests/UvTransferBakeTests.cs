@@ -168,7 +168,14 @@ public class UvTransferBakeTests
         var f = new UvTransferQuality.Figures { DestCoverage = 0.5, FoldShare = 0.5, RoundTripGross = 0.5, RoundTripModerate = 0.5 };
         f.Regions["sternum"] = new UvTransferQuality.RegionFigures { Owned = 10, Valid = 1, Measured = 10, Folds = 9 };
         f.LandmarksMm["sternum"] = 99f;
-        f.LandmarksMm["underBustL"] = 31f;   // accepted up to 32 mm
+        f.LandmarksMm["underBustL"] = 31f;      // the crease: bounded by the plain map's 30.2 rounded up, 31
+        f.PlainLandmarksMm["underBustL"] = 30.2f;
+        f.LandmarksMm["underBustR"] = 16f;      // no plain figure: the torso's 15 mm
+        f.LandmarksMm["underBustOldL"] = 99f;   // the old point, reported only
+        f.LandmarksMm["nippleL"] = 40f;         // nipples by how far across the skin, not how far apart
+        f.LandmarksTangentMm["nippleL"] = 2f;
+        f.LandmarksMm["nippleR"] = 2f;
+        f.LandmarksTangentMm["nippleR"] = 3.5f;
         var miss = UvTransferQuality.Check("m", f);
         Assert.Contains(miss, m => m.Contains("coverage 50"));
         Assert.Contains(miss, m => m.Contains("folds 50"));
@@ -176,6 +183,178 @@ public class UvTransferBakeTests
         Assert.Contains(miss, m => m.Contains("sternum coverage"));
         Assert.Contains(miss, m => m.Contains("landmark sternum"));
         Assert.DoesNotContain(miss, m => m.Contains("underBustL"));
+        Assert.Contains(miss, m => m.Contains("landmark underBustR off by 16.0 mm > 15 mm"));
+        Assert.DoesNotContain(miss, m => m.Contains("underBustOld"));
+        Assert.DoesNotContain(miss, m => m.Contains("nippleL"));
+        Assert.Contains(miss, m => m.Contains("nippleR off by 3.5 mm across the skin"));
+    }
+
+    [Fact]
+    [Trait("Plan", "AC-uvmap-nipples-4")]
+    public void Gate_names_chest_distortion_and_changes_outside_reach() // [AC-uvmap-nipples-4] [EDGE-uvmap-nipples-27]
+    {
+        var f = new UvTransferQuality.Figures { DestCoverage = 1 };
+        f.Stretch = new UvTransferQuality.StretchFigures { AreaP99 = 2.4, PlainAreaP99 = 2.0, AnisoP99 = 2.6, PlainAnisoP99 = 2.0, ChangedOutside = 0 };
+        var miss = UvTransferQuality.Check("m", f);   // area 1.2 × the plain map's passes; anisotropy 1.3 × does not
+        Assert.DoesNotContain(miss, m => m.Contains("area p99"));
+        Assert.Contains(miss, m => m.Contains("anisotropy p99 2.60"));
+        f.Stretch.ChangedOutside = 3;
+        Assert.Contains(UvTransferQuality.Check("m", f), m => m.Contains("changed 3 texels outside its reach"));
+    }
+
+    /// <summary>
+    /// A front-facing torso panel, 36 cm wide from 1.00 m to 1.45 m high, every 5 mm: its lower half weighted to the
+    /// middle spine and its upper half to the upper spine (both Torso), its depth <paramref name="z"/>(x, y).
+    /// </summary>
+    internal static BakeBody Chest(Func<float, float, float> z, float step = 0.005f)
+    {
+        int nx = (int)MathF.Round(0.36f / step), ny = (int)MathF.Round(0.45f / step);
+        var pos = new List<float>();
+        var uv = new List<float>();
+        var nrm = new List<float>();
+        var w = new List<(string, float)[]>();
+        for (int j = 0; j <= ny; j++)
+            for (int i = 0; i <= nx; i++)
+            {
+                float x = -0.18f + i * step, y = 1.0f + j * step;
+                pos.AddRange([x, y, z(x, y)]);
+                uv.AddRange([(float)i / nx, (float)j / ny]);
+                float dzdx = (z(x + 1e-3f, y) - z(x - 1e-3f, y)) / 2e-3f, dzdy = (z(x, y + 1e-3f) - z(x, y - 1e-3f)) / 2e-3f;
+                var n = System.Numerics.Vector3.Normalize(new System.Numerics.Vector3(-dzdx, -dzdy, 1));
+                nrm.AddRange([n.X, n.Y, n.Z]);
+                w.Add([(y < 1.225f ? "j_sebo_b" : "j_sebo_c", 1f)]);
+            }
+        var tri = new List<int>();
+        for (int j = 0; j < ny; j++)
+            for (int i = 0; i < nx; i++)
+            {
+                int a = j * (nx + 1) + i, b = a + 1, c = a + nx + 1, d = c + 1;
+                tri.AddRange([a, b, c, b, d, c]);
+            }
+        return new BakeBody([new BakeBody.Part(pos.ToArray(), uv.ToArray(), tri.ToArray(), w.ToArray(), nrm.ToArray())]);
+    }
+
+    private static float Bump(float x, float y, float cx, float cy, float height, float sigma)
+        => height * MathF.Exp(-((x - cx) * (x - cx) + (y - cy) * (y - cy)) / (2 * sigma * sigma));
+
+    /// <summary>A breast on each side, a nipple at each apex: the half-ellipsoid ends at a fold 4 cm under the apex.</summary>
+    private static float Breasts(float x, float y, float apexY = 1.24f, float nippleDy = 0f)
+    {
+        float z = 0;
+        foreach (float cx in new[] { 0.08f, -0.08f })
+        {
+            float r2 = MathF.Pow((x - cx) / 0.055f, 2) + MathF.Pow((y - apexY) / 0.04f, 2);
+            if (r2 < 1) z = MathF.Max(z, 0.04f * MathF.Sqrt(1 - r2));
+            z += Bump(x, y, cx, apexY + nippleDy, 0.004f, 0.006f);
+        }
+        return z;
+    }
+
+    [Fact]
+    [Trait("Plan", "EDGE-uvmap-nipples-1")]
+    public void Nipple_finder_finds_bump_apex_and_none_without_a_bump() // [EDGE-uvmap-nipples-1]
+    {
+        var (found, failure) = UvBakeNipples.Find(Chest((x, y) => Breasts(x, y)));
+        Assert.True(found != null, failure);
+        Assert.InRange(found!.Value.L.Pos.X, 0.075f, 0.085f);
+        Assert.InRange(found.Value.L.Pos.Y, 1.235f, 1.245f);
+        Assert.InRange(found.Value.R.Pos.X, -0.085f, -0.075f);
+
+        var (none, why) = UvBakeNipples.Find(Chest((_, _) => 0f));
+        Assert.Null(none);
+        Assert.Contains("no nipple", why);
+    }
+
+    [Fact]
+    [Trait("Plan", "EDGE-uvmap-nipples-2")]
+    public void Asymmetric_nipples_are_refused() // [EDGE-uvmap-nipples-2]
+    {
+        // The right nipple 2 cm higher than the left.
+        var body = Chest((x, y) => Bump(x, y, 0.08f, 1.24f, 0.004f, 0.006f) + Bump(x, y, -0.08f, 1.26f, 0.004f, 0.006f));
+        var (found, why) = UvBakeNipples.Find(body);
+        Assert.Null(found);
+        Assert.Contains("asymmetric", why);
+    }
+
+    [Fact]
+    [Trait("Plan", "EDGE-uvmap-nipples-35")]
+    public void Crease_finds_the_fold_under_a_breast_and_refuses_a_flat_chest() // [EDGE-uvmap-nipples-35]
+    {
+        var breasts = Chest((x, y) => Breasts(x, y));
+        var nipple = UvBakeNipples.Find(breasts).Found!.Value.L;
+        var (crease, failure) = UvBakeNipples.Crease(breasts, nipple);
+        Assert.True(crease != null, failure);
+        Assert.InRange(crease!.Value.Pos.Y, 1.19f, 1.21f);   // the fold, 4 cm under the apex
+        Assert.True(crease.Value.SlopeChange >= UvBakeNipples.MinSlopeChange);
+
+        // A flat chest with only a nipple: nothing turns.
+        var flat = Chest((x, y) => Bump(x, y, 0.08f, 1.24f, 0.004f, 0.006f) + Bump(x, y, -0.08f, 1.24f, 0.004f, 0.006f));
+        var (none, why) = UvBakeNipples.Crease(flat, UvBakeNipples.Find(flat).Found!.Value.L);
+        Assert.Null(none);
+        Assert.Contains("no under-bust crease", why);
+    }
+
+    [Fact]
+    [Trait("Plan", "AC-uvmap-nipples-4")]
+    public void Field_solver_and_conditioning() // [AC-uvmap-nipples-4] [EDGE-uvmap-nipples-43]
+    {
+        double[,] a = { { 4, 1, 0 }, { 1, 3, 1 }, { 0, 1, 2 } };
+        double[,] b = { { 1, 0 }, { 2, 1 }, { 3, -1 } };
+        var x = ChestField.Solve(a, b)!;
+        for (int r = 0; r < 3; r++)
+            for (int k = 0; k < 2; k++)
+            {
+                double s = 0;
+                for (int c = 0; c < 3; c++) s += a[r, c] * x[c, k];
+                Assert.Equal(b[r, k], s, 9);
+            }
+        Assert.Null(ChestField.Solve(new double[,] { { 1, 2 }, { 2, 4 } }, new double[,] { { 1 }, { 2 } }));
+
+        Assert.Equal(1.0, ChestField.ConditionNumber(new double[,] { { 2, 0 }, { 0, 2 } }), 9);
+        Assert.Equal(100.0, ChestField.ConditionNumber(new double[,] { { 100, 0 }, { 0, 1 } }), 6);
+        // Two near-coincident bumps: the system the ridge is there for.
+        double p = ChestField.Phi(0.00001);
+        Assert.True(ChestField.ConditionNumber(new double[,] { { 1, p }, { p, 1 } }) > ChestField.MaxCondition);
+        Assert.Equal(0.0, ChestField.Phi(1.0));
+        Assert.Equal(1.0, ChestField.Phi(0.0));
+    }
+
+    [Fact]
+    [Trait("Plan", "AC-uvmap-nipples-9")]
+    public void Inverse_redraws_only_what_the_forward_map_reaches() // [AC-uvmap-nipples-9]
+    {
+        // A forward map that shifts the sheet a quarter right: its inverse shifts it back, where it reaches.
+        const int size = 64;
+        var r = new ushort[size * size];
+        var g = new ushort[size * size];
+        var ok = new bool[size * size];
+        for (int y = 0; y < size; y++)
+            for (int x = 0; x < size; x++)
+            {
+                int i = y * size + x;
+                if (x >= size * 3 / 4) continue;
+                r[i] = UvTransferBake.Quantize((x + size / 4f) / (size - 1));
+                g[i] = UvTransferBake.Quantize((float)y / (size - 1));
+                ok[i] = true;
+            }
+        var forward = new UvTransferBake.Result(r, g, ok, size, new UvTransferBake.Stats());
+        var back = new UvTransferBake.Result(new ushort[size * size], new ushort[size * size], new bool[size * size], size, new UvTransferBake.Stats());
+        var owner = Enumerable.Repeat(0, size * size).ToArray();
+        var raster = new UvTransferBake.Raster(owner, new float[size * size], new float[size * size], size, 0, []);
+        // Only the forward texels in the top half reach.
+        var (inv, drawn) = UvTransferBake.InvertInto(forward, i => i / size < size / 2, back, raster);
+        int count = 0;
+        for (int y = 0; y < size; y++)
+            for (int x = 0; x < size; x++)
+            {
+                int i = y * size + x;
+                if (!drawn[i]) { Assert.False(inv.Valid[i]); continue; }
+                count++;
+                Assert.True(y < size / 2);
+                Assert.InRange(inv.R[i] / 65535f * (size - 1) - (x - size / 4f), -0.01f, 0.01f);
+                Assert.InRange(inv.G[i] / 65535f * (size - 1) - y, -0.01f, 0.01f);
+            }
+        Assert.True(count > size * size / 4);
     }
 }
 
