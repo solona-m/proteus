@@ -63,7 +63,9 @@ public class SkeletonRemapTests
     /// </summary>
     [Fact]
     [Trait("Plan", "AC-mens-ends-crotch-2")]
-    public void A_finger_joint_the_skeleton_lacks_stands_in_on_its_finger() // [AC-mens-ends-crotch-2]
+    [Trait("Plan", "AC-mens-ends-crotch-9")]
+    [Trait("Plan", "EDGE-mens-ends-crotch-39")]
+    public void A_finger_joint_the_skeleton_lacks_stands_in_on_its_finger() // [AC-mens-ends-crotch-2] [AC-mens-ends-crotch-9] [EDGE-mens-ends-crotch-39]
     {
         var wearer = Bones("j_kosi", "j_te_l", "j_te_r", "j_hito_b_l", "j_oya_b_r", "j_naka_b_l", "j_kusu_b_r", "j_ko_b_l",
                            "j_asi_e_l");

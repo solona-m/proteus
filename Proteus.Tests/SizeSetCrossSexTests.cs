@@ -139,18 +139,18 @@ public sealed class SizeSetCrossSexTests : IDisposable
         var noMaps = Directory.CreateTempSubdirectory("proteus-nomaps-");
         try
         {
-        SizeSetRefit.Run(new SizeSetRefit.Request(root, ["tbse@women"], false, false, [],
-                                                  Across: new SizeSetRefit.AcrossInputs(_ => null)),
-                         runLog, new UVRemapService(log, noMaps.FullName), log, _ => { }, default);
-        Assert.Single(runLog.Notes, n => n == Strings.SizeSet.MenMapsMissing);
-        Assert.Contains(runLog.Sizes, s => s.Men && s.Slot == "_sho" && s.ReasonCode == SizeSetRefit.Codes.MenMapsMissing
-                                            && s.Option == "TBSE");
+            SizeSetRefit.Run(new SizeSetRefit.Request(root, ["tbse@women"], false, false, [],
+                                                      Across: new SizeSetRefit.AcrossInputs(_ => null)),
+                             runLog, new UVRemapService(log, noMaps.FullName), log, _ => { }, default);
+            Assert.Single(runLog.Notes, n => n == Strings.SizeSet.MenMapsMissing);
+            Assert.Contains(runLog.Sizes, s => s.Men && s.Slot == "_sho" && s.ReasonCode == SizeSetRefit.Codes.MenMapsMissing
+                                                && s.Option == "TBSE");
 
-        var off = new SizeSetRefit.RunLog();
-        SizeSetRefit.Run(new SizeSetRefit.Request(root, ["tbse@women"], false, false, [], Ends: false,
-                                                  Across: new SizeSetRefit.AcrossInputs(_ => null)),
-                         off, new UVRemapService(log, noMaps.FullName), log, _ => { }, default);
-        Assert.DoesNotContain(off.Sizes, s => s.Slot == "_sho");
+            var off = new SizeSetRefit.RunLog();
+            SizeSetRefit.Run(new SizeSetRefit.Request(root, ["tbse@women"], false, false, [], Ends: false,
+                                                      Across: new SizeSetRefit.AcrossInputs(_ => null)),
+                             off, new UVRemapService(log, noMaps.FullName), log, _ => { }, default);
+            Assert.DoesNotContain(off.Sizes, s => s.Slot == "_sho");
         }
         finally { noMaps.Delete(true); }
     }
@@ -278,6 +278,35 @@ public sealed class SizeSetCrossSexTests : IDisposable
         Assert.Contains(string.Format(Strings.SizeSet.MensGroupTakenFmt, "Men's body"), result.Notes);
         Assert.DoesNotContain(Strings.SizeSet.MenMapsMissing, result.Notes);
         Assert.Equal(before, File.ReadAllText(Path.Combine(root, PenumbraModMeta.MetaFile)));
+    }
+
+    /// <summary>
+    /// Without the game's data a women's shoe gets no men's version, left out with that code like the chest beside it.
+    /// (With the data but no game women's body read, a skinless shoe with nothing else to read it on is left out as having
+    /// no source: a recorded deviation from the plan's NoGameData there.)
+    /// </summary>
+    [Fact]
+    [Trait("Plan", "AC-mens-ends-crotch-5")]
+    [Trait("Plan", "EDGE-mens-ends-crotch-4")]
+    public void Ends_without_game_data_are_left_out() // [AC-mens-ends-crotch-5] [EDGE-mens-ends-crotch-4]
+    {
+        string root = Mod([Top, Sho]);
+        var noMaps = Directory.CreateTempSubdirectory("proteus-maps-");
+        try
+        {
+            var log = Substitute.For<IPluginLog>();
+            // Maps on disk (never read: the run stops at the missing game data first).
+            var dir = noMaps.CreateSubdirectory("uvmaps").FullName;
+            File.WriteAllBytes(Path.Combine(dir, UVRemapService.BiboToTbseFile), [1]);
+            File.WriteAllBytes(Path.Combine(dir, UVRemapService.TbseToBiboFile), [1]);
+            var maps = new UVRemapService(log, noMaps.FullName);
+            var runLog = new SizeSetRefit.RunLog();
+            SizeSetRefit.Run(new SizeSetRefit.Request(root, ["tbse@women"], false, false, [], ReadGameFile: null,
+                                                      Across: new SizeSetRefit.AcrossInputs(_ => null)),
+                             runLog, maps, log, _ => { }, default);
+            Assert.Contains(runLog.Sizes, s => s.Men && s.Slot == "_sho" && s.ReasonCode == SizeSetRefit.Codes.NoGameData);
+        }
+        finally { noMaps.Delete(true); }
     }
 
     /// <summary>An author's group named like ours stops the shoes' men's versions too, said with its code; nothing written.</summary>
