@@ -171,13 +171,14 @@ public class BodyRetargetWriterTests : IDisposable
         ]);
         Assert.True(outcome.Ok, outcome.Message);
 
-        // The earlier L is replaced where the batch says, not kept alongside it; the batch keeps its order.
+        // The earlier L is replaced where it stands, not kept alongside it: Penumbra keeps a group's choice by option
+        // position, so moving it would switch what a player wears. The new sizes follow in the batch's order.
         var options = PenumbraModMeta.TryReadFileOptions(root, Group)!;
-        Assert.Equal([BodyRetargetWriter.OriginalOption, "Neolithe SFW XS", "Neolithe SFW S", "Neolithe SFW L"],
+        Assert.Equal([BodyRetargetWriter.OriginalOption, "Neolithe SFW L", "Neolithe SFW XS", "Neolithe SFW S"],
                      options.Select(o => o.Name));
-        Assert.Equal([2], File.ReadAllBytes(Path.Combine(root, options[1].Files[GamePath])));
-        Assert.Equal([3], File.ReadAllBytes(Path.Combine(root, options[2].Files[GamePath])));
-        Assert.Equal([4], File.ReadAllBytes(Path.Combine(root, options[3].Files[GamePath])));
+        Assert.Equal([4], File.ReadAllBytes(Path.Combine(root, options[1].Files[GamePath])));
+        Assert.Equal([2], File.ReadAllBytes(Path.Combine(root, options[2].Files[GamePath])));
+        Assert.Equal([3], File.ReadAllBytes(Path.Combine(root, options[3].Files[GamePath])));
 
         var record = BodyRetargetWriter.ReadRecord(root)!;
         Assert.Equal(["SFW XS", "SFW S", "SFW L"], record.Options.Select(e => e.To));
