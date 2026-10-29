@@ -3615,6 +3615,14 @@
     "message": "分组“{0}”也会替换此模型；新分组优先。",
     "description": ""
   },
+  "Parts.Retarget.Clash.Outranked.Fmt": {
+    "message": "分组“{0}”也会替换此模型，并且在 Penumbra 中优先于“{1}”，因此只要“{0}”开启，保存在那里的转换结果就不会显示。请改为保存到新分组。",
+    "description": "{0} is another group of the mod that replaces the same model; {1} is the group the refit is to be saved into."
+  },
+  "Parts.Retarget.Clash.OptionOutranked.Fmt": {
+    "message": "“{1}”中的选项“{0}”也会替换此模型，并且在该分组中先于转换结果生效，因此只要勾选了“{0}”，转换结果就不会显示。请在 Penumbra 中取消勾选，或改为保存到新分组。",
+    "description": "{0} is another option of the multi-choice group {1} that replaces the same model."
+  },
   "Parts.Retarget.ClearBody": {
     "message": "将布料推出体外",
     "description": ""
@@ -4475,9 +4483,9 @@
     "message": "{0}（按你的角色穿着）",
     "description": "An entry of the Refit for list; {0} is a race such as \"Midlander F\": the race the logged-in character would get it as."
   },
-  "Parts.Retarget.Race.OwnModel.Fmt": {
-    "message": "此模组已有自己的{0}模型。请改为转换那个模型。",
-    "description": "{0} is a race such as \"Highlander M\" the mod already ships a model of."
+  "Parts.Retarget.Race.OwnModelReplaced.Fmt": {
+    "message": "此模组已有{0}所穿的专属模型。保存到此模组的{0}转换结果在开启时会取代它。如果那个模型是作者自己的作品，请打开它并改为转换那个模型。",
+    "description": "{0} is a race such as \"Midlander M\" the mod already ships a model for (or one that race falls through to)."
   },
   "Parts.Retarget.Race.OpenModel.Fmt": {
     "message": "打开{0}模型",

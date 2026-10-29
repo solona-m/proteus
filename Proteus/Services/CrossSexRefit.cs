@@ -110,10 +110,10 @@ internal static class CrossSexRefit
     /// and which stops every chain through it. A c0101 save made from a c0201 model is worn by the men and by the
     /// Lalafell women (c1201 → c1101 → c0101), not by the women who fall through to c0201.
     /// </summary>
-    /// <param name="hasOwn">Whether a race has a model of its own of the item, for the game's gear, which ships many:
-    /// a race that has one — or passes one on its way down — draws that, not the save. Asked of each race and those
-    /// between it and <paramref name="saved"/>, never of <paramref name="saved"/> itself: the save is the model there.
-    /// Null for a mod's garment, whose other races' models stop the chain the same way they always have.</param>
+    /// <param name="hasOwn">Whether a race has a model of its own of the item (<see cref="OwnModels"/>): a race that has
+    /// one — or passes one on its way down — draws that, not the save. Asked of each race and those between it and
+    /// <paramref name="saved"/>, never of <paramref name="saved"/> itself: the save is the model there. Null: none
+    /// has.</param>
     internal static IReadOnlyList<ushort> FallThroughTo(ushort saved, ushort drawn, Func<ushort, bool>? hasOwn = null)
     {
         var races = new List<ushort>();
@@ -130,6 +130,25 @@ internal static class CrossSexRefit
             }
         }
         return races;
+    }
+
+    /// <summary>
+    /// Which races have a model of their own of the garment drawn at <paramref name="drawnPath"/>, for
+    /// <see cref="FallThroughTo"/>: one the garment's mod publishes at that race's path — a refit saved there earlier as
+    /// much as the author's, since either is what the race draws — or one the game ships there. A mod's garment sits on a
+    /// game item, so a race the game has a model of draws that one just as it would the mod's.
+    /// </summary>
+    /// <param name="redirects">The garment mod's redirects; null for the game's own gear.</param>
+    /// <param name="gameHas">Whether the game's own data ships a file at a game path; null: none asked.</param>
+    internal static Func<ushort, bool> OwnModels(string drawnPath, IEnumerable<PenumbraModMeta.Redirect>? redirects,
+                                                 Func<string, bool>? gameHas)
+    {
+        var published = (redirects ?? []).Select(r => r.GamePath).ToHashSet(StringComparer.OrdinalIgnoreCase);
+        return race =>
+        {
+            string path = RacialModelBake.WithRace(drawnPath, race);
+            return published.Contains(path) || gameHas?.Invoke(path) == true;
+        };
     }
 
     /// <summary>

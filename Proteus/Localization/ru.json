@@ -3615,6 +3615,14 @@
     "message": "Группа «{0}» тоже заменяет эту модель; новая группа имеет приоритет.",
     "description": ""
   },
+  "Parts.Retarget.Clash.Outranked.Fmt": {
+    "message": "Группа «{0}» тоже заменяет эту модель и в Penumbra идёт раньше «{1}», поэтому сохранённая туда подгонка не будет видна, пока «{0}» включена. Сохраните её в новую группу.",
+    "description": "{0} is another group of the mod that replaces the same model; {1} is the group the refit is to be saved into."
+  },
+  "Parts.Retarget.Clash.OptionOutranked.Fmt": {
+    "message": "Вариант «{0}» группы «{1}» тоже заменяет эту модель и в этой группе идёт раньше подгонки, поэтому подгонка не будет видна, пока «{0}» отмечен. Снимите отметку в Penumbra или сохраните её в новую группу.",
+    "description": "{0} is another option of the multi-choice group {1} that replaces the same model."
+  },
   "Parts.Retarget.ClearBody": {
     "message": "Вытолкнуть ткань из тела",
     "description": ""
@@ -4475,9 +4483,9 @@
     "message": "{0} (как носит ваш персонаж)",
     "description": "An entry of the Refit for list; {0} is a race such as \"Midlander F\": the race the logged-in character would get it as."
   },
-  "Parts.Retarget.Race.OwnModel.Fmt": {
-    "message": "В этом моде уже есть своя модель {0}. Подгоните лучше её.",
-    "description": "{0} is a race such as \"Highlander M\" the mod already ships a model of."
+  "Parts.Retarget.Race.OwnModelReplaced.Fmt": {
+    "message": "В этом моде уже есть своя модель, которую носят {0}. Подгонка для {0}, сохранённая в этот мод, заменяет её, пока она включена. Если эта модель — работа автора, откройте её и подгоните лучше её.",
+    "description": "{0} is a race such as \"Midlander M\" the mod already ships a model for (or one that race falls through to)."
   },
   "Parts.Retarget.Race.OpenModel.Fmt": {
     "message": "Открыть модель {0}",

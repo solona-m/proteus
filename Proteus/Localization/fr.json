@@ -3615,6 +3615,14 @@
     "message": "Le groupe « {0} » remplace aussi ce modèle ; le nouveau groupe l'emporte.",
     "description": ""
   },
+  "Parts.Retarget.Clash.Outranked.Fmt": {
+    "message": "Le groupe « {0} » remplace aussi ce modèle et passe avant « {1} » dans Penumbra : un ajustement enregistré là ne s'affichera pas tant que « {0} » est activé. Enregistrez-le plutôt dans un nouveau groupe.",
+    "description": "{0} is another group of the mod that replaces the same model; {1} is the group the refit is to be saved into."
+  },
+  "Parts.Retarget.Clash.OptionOutranked.Fmt": {
+    "message": "L'option « {0} » de « {1} » remplace aussi ce modèle et passe avant l'ajustement dans ce groupe : l'ajustement ne s'affichera pas tant que « {0} » est cochée. Décochez-la dans Penumbra, ou enregistrez-le plutôt dans un nouveau groupe.",
+    "description": "{0} is another option of the multi-choice group {1} that replaces the same model."
+  },
   "Parts.Retarget.ClearBody": {
     "message": "Sortir le tissu du corps",
     "description": ""
@@ -4475,9 +4483,9 @@
     "message": "{0} (tel que votre personnage le porte)",
     "description": "An entry of the Refit for list; {0} is a race such as \"Midlander F\": the race the logged-in character would get it as."
   },
-  "Parts.Retarget.Race.OwnModel.Fmt": {
-    "message": "Ce mod a déjà son propre modèle {0}. Ajustez plutôt celui-là.",
-    "description": "{0} is a race such as \"Highlander M\" the mod already ships a model of."
+  "Parts.Retarget.Race.OwnModelReplaced.Fmt": {
+    "message": "Ce mod a déjà son propre modèle que porte {0}. Un ajustement pour {0} enregistré dans ce mod prend sa place tant qu'il est activé. Si ce modèle est le travail de l'auteur, ouvrez-le et ajustez plutôt celui-là.",
+    "description": "{0} is a race such as \"Midlander M\" the mod already ships a model for (or one that race falls through to)."
   },
   "Parts.Retarget.Race.OpenModel.Fmt": {
     "message": "Ouvrir le modèle {0}",
