@@ -58,6 +58,24 @@ public class SizeSetEndsMenTests
     }
 
     /// <summary>
+    /// The body a skinless shoe's or glove's cloth sits on: the nearest, but within half a millimetre of it the one listed
+    /// first — the body preferred is listed first. None when it sits on none.
+    /// </summary>
+    [Fact]
+    [Trait("Plan", "EDGE-mens-ends-crotch-20")]
+    public void The_nearest_body_by_cloth_keeps_the_preferred_on_a_tie() // [EDGE-mens-ends-crotch-20]
+    {
+        const float tie = SizeSetRefit.EndClothTie;
+        Assert.Equal(-1, SizeSetRefit.NearestByCloth([null, null], tie));
+        Assert.Equal(1, SizeSetRefit.NearestByCloth([null, 0.003f], tie));
+        // A clear win, then a tie: within half a millimetre the first listed keeps it.
+        Assert.Equal(1, SizeSetRefit.NearestByCloth([0.004f, 0.002f], tie));
+        Assert.Equal(0, SizeSetRefit.NearestByCloth([0.0024f, 0.002f], tie));
+        // Against the nearest, not the one before: 3.0, 2.6 and 2.4 mm go to the 2.6, listed before the 2.4.
+        Assert.Equal(1, SizeSetRefit.NearestByCloth([0.003f, 0.0026f, 0.0024f], tie));
+    }
+
+    /// <summary>
     /// Studio's "Refit for" and the CLI's --for-race (the job's <see cref="CrossSexRefitJob.Run"/>) still refuse a shoe or
     /// glove before reading anything; only the size set's <see cref="CrossSexRefitJob.RunEnd"/> takes one, and only a
     /// women's one made a men's.

@@ -280,6 +280,55 @@ public sealed class SizeSetCrossSexTests : IDisposable
         Assert.Equal(before, File.ReadAllText(Path.Combine(root, PenumbraModMeta.MetaFile)));
     }
 
+    /// <summary>An author's group named like ours stops the shoes' men's versions too, said with its code; nothing written.</summary>
+    [Fact]
+    [Trait("Plan", "EDGE-mens-ends-crotch-13")]
+    public void Mens_group_taken_covers_ends() // [EDGE-mens-ends-crotch-13]
+    {
+        string root = Mod([Top, Sho], """
+            , { "Version": 0, "Name": "Men's body", "Type": "Single", "Priority": 0, "DefaultSettings": 0, "Options": [
+                { "Name": "Off", "Files": {} } ] }
+            """);
+        string before = File.ReadAllText(Path.Combine(root, PenumbraModMeta.MetaFile));
+        var log = Substitute.For<IPluginLog>();
+        var runLog = new SizeSetRefit.RunLog();
+        SizeSetRefit.Run(new SizeSetRefit.Request(root, ["tbse@women"], false, false, [],
+                                                  Across: new SizeSetRefit.AcrossInputs(_ => null)),
+                         runLog, new UVRemapService(log, "."), log, _ => { }, default);
+        Assert.Contains(runLog.Sizes, s => s.Men && s.Slot == "_sho" && s.ReasonCode == SizeSetRefit.Codes.MenGroupTaken);
+        Assert.Equal(before, File.ReadAllText(Path.Combine(root, PenumbraModMeta.MetaFile)));
+    }
+
+    /// <summary>
+    /// A men's group an earlier run gave a shoe as well as the top stays ours when shoes and gloves are left out next
+    /// time: a group holding a men's path of no piece read would otherwise look like someone else's, and a second group
+    /// would claim the same paths.
+    /// </summary>
+    [Fact]
+    [Trait("Plan", "EDGE-mens-ends-crotch-9")]
+    public void Ends_off_after_an_ends_run_keeps_the_mens_group() // [EDGE-mens-ends-crotch-9]
+    {
+        string root = Mod([Top, Sho]);
+        const string menSho = "chara/equipment/e6000/model/c0101e6000_sho.mdl";
+        Assert.True(BodyRetargetWriter.Save(root, "Männerkörper", MenTop, "The Body SE", "Bibo+ — Small",
+                                            [new BodyRetargetWriter.Refit("TBSE", [1, 2, 3], "TBSE")]).Ok);
+        Assert.True(BodyRetargetWriter.Save(root, "Männerkörper", menSho, "The Body SE", "Bibo+ — Small",
+                                            [new BodyRetargetWriter.Refit("TBSE", [4, 5, 6], "TBSE")]).Ok);
+        // The chest alone does not account for the shoe the group holds: read so, it is not ours.
+        Assert.Equal(Strings.SizeSet.MensGroup,
+                     SizeSetRefit.MensGroupName(root, SizeSetRefit.AcrossPieces(SizeSetRefit.PiecesOf(root, includeEnds: false))));
+
+        var log = Substitute.For<IPluginLog>();
+        var runLog = new SizeSetRefit.RunLog();
+        SizeSetRefit.Run(new SizeSetRefit.Request(root, ["tbse@women"], false, false, [], _ => null, Ends: false,
+                                                  Across: new SizeSetRefit.AcrossInputs(_ => null)),
+                         runLog, new UVRemapService(log, "."), log, _ => { }, default);
+        Assert.DoesNotContain(runLog.Sizes, s => s.ReasonCode == SizeSetRefit.Codes.MenGroupTaken);
+        Assert.All(runLog.Sizes.Where(s => s.Men), s => Assert.Equal("Männerkörper", s.Group));
+        Assert.Contains(PenumbraModMeta.TryReadFileOptions(root, "Männerkörper")!.Single(o => o.Name == "TBSE").Files.Keys,
+                        k => string.Equals(k, menSho, StringComparison.OrdinalIgnoreCase));
+    }
+
     [Fact]
     [Trait("Plan", "AC-sizeset-cross-sex-7")]
     public void A_language_change_reuses_our_mens_group() // [AC-sizeset-cross-sex-7]

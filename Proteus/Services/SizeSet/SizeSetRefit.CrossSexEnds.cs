@@ -24,9 +24,24 @@ internal static partial class SizeSetRefit
     /// </summary>
     internal const float EndClothGapWarn = 0.005f;
 
-    /// <summary>How much nearer than another a body's cloth reading must be to win over it (0.5 mm): closer than that,
-    /// the body listed first — the one preferred — keeps it.</summary>
+    /// <summary>How near the nearest a body's cloth reading may be and still win for being listed first (0.5 mm) — see
+    /// <see cref="NearestByCloth"/>.</summary>
     internal const float EndClothTie = 0.0005f;
+
+    /// <summary>
+    /// Which body a shoe's or glove's cloth sits on, by its gap to each (null for one it does not sit on): the first listed
+    /// — the body preferred comes first — whose gap is within <paramref name="tie"/> of the nearest. -1 when it sits on
+    /// none.
+    /// </summary>
+    internal static int NearestByCloth(IReadOnlyList<float?> gaps, float tie)
+    {
+        float nearest = float.PositiveInfinity;
+        foreach (float? g in gaps)
+            if (g is { } v && v < nearest) nearest = v;
+        for (int i = 0; i < gaps.Count; i++)
+            if (gaps[i] is { } v && v <= nearest + tie) return i;
+        return -1;
+    }
 
     /// <summary>Which body a women's shoe or glove is made a men's from — see <see cref="EndMadeFor"/>.</summary>
     internal enum EndMadeForChoice
@@ -311,11 +326,11 @@ internal static partial class SizeSetRefit
         var madeOnCloth = madeOn != null ? ClothOn(madeOn.Catalog) : null;
         (BodyModIndex.Entry Entry, BodyOption Option, float Gap)? byCloth = null;
         if (found.Route is KeepEnds.Route.NoSkin or KeepEnds.Route.SkinOnly && madeOnCloth == null)
-            // The body its cloth sits nearest; within half a millimetre of another, the one listed first (the body
-            // preferred) keeps it.
-            foreach (var mod in women)
-                if (ClothOn(mod.Catalog) is { } on && (byCloth == null || on.Gap < byCloth.Value.Gap - EndClothTie))
-                    byCloth = (mod, on.Option, on.Gap);
+        {
+            var readings = women.Select(mod => ClothOn(mod.Catalog)).ToList();
+            if (NearestByCloth(readings.Select(r => r?.Gap).ToList(), EndClothTie) is var best and >= 0)
+                byCloth = (women[best], readings[best]!.Value.Option, readings[best]!.Value.Gap);
+        }
 
         var choice = EndMadeFor(found.Route, readLayout, madeOnCloth != null, byCloth != null, game != null);
         note($"{option ?? "its file"}: route {KeepEnds.Letter(found.Route)}, made a men's from {choice}");
