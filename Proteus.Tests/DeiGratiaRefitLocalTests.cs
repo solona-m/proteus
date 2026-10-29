@@ -19,6 +19,7 @@ namespace Proteus.Tests;
 /// against the game's body it was made on, as worn — its bra with its skin — it lies on it (see
 /// <see cref="BodyRetarget.TargetBody.Fitted"/>). Needs the game's data, the pack and the body mods named.
 /// </summary>
+[Trait("Speed", "Slow")]
 public class DeiGratiaRefitLocalTests(ITestOutputHelper output)
 {
     private const string Bibo = LocalData.Mods + ":Bibo+";
@@ -58,7 +59,7 @@ public class DeiGratiaRefitLocalTests(ITestOutputHelper output)
 
     /// <summary>A refit as one path makes it, with the solve's own nodes and its last stage.</summary>
     private sealed record Refit(BodyRetarget.Planned Plan, ModelParts Laid, BodyRetarget.Sets Sets, Vec3[] Final,
-                                bool[] Fitted, List<string> Log);
+                                bool[] Fitted, List<string> Log, Dictionary<string, float[]> Seams);
 
     private sealed record Inputs(byte[] Bytes, ModelParts Garment, BodyRetarget.SlotPair Pair, string Source, string Target,
                                  UVRemapService Uv, Dalamud.Plugin.Services.IPluginLog PluginLog, Lumina.GameData Data,
@@ -97,10 +98,15 @@ public class DeiGratiaRefitLocalTests(ITestOutputHelper output)
         Vec3[]? final = null;
         float[]? fitted = null;
         var log = new List<string>();
+        var seams = new Dictionary<string, float[]>(StringComparer.Ordinal);
         void Trace(string stage, Vec3[] d) => final = d;
         BodyRetarget.Planned Run()
         {
-            BodyRetarget.PushTrace.Value = (key, values) => { if (key == "fitted") fitted = values; };
+            BodyRetarget.PushTrace.Value = (key, values) =>
+            {
+                if (key == "fitted") fitted = values;
+                else if (key.StartsWith("seam-", StringComparison.Ordinal)) seams[key] = values;
+            };
             try
             {
                 if (path == "auto")
@@ -134,7 +140,7 @@ public class DeiGratiaRefitLocalTests(ITestOutputHelper output)
         // The last push-out's: a kept piece let go runs it a second time.
         var taken = fitted is { } f ? Array.ConvertAll(f, x => x > 0f) : new bool[sets.NodeCount];
         Assert.Equal(sets.NodeCount, taken.Length);
-        return new Refit(planned, SkinTuckSheet.Laid(i.Bytes, planned), sets, final, taken, log);
+        return new Refit(planned, SkinTuckSheet.Laid(i.Bytes, planned), sets, final, taken, log, seams);
     }
 
     /// <summary>The game-gear refit of the same top onto the same body, laid: the yardstick for what refitting the game's
@@ -387,5 +393,196 @@ public class DeiGratiaRefitLocalTests(ITestOutputHelper output)
                                                           tuckSlot: "_top");
         Assert.Equal(SkinTuckSheet.Sha(BodyRetarget.WithTuning(Before, Game).Model), SkinTuckSheet.Sha(Game().Model));
         Assert.Equal(SkinTuckSheet.Sha(BodyRetarget.WithTuning(Before, Clear).Model), SkinTuckSheet.Sha(Clear().Model));
+    }
+
+    // ── the waist seam: one place of the blouse split in two submeshes, weighted as one ────────────────────
+
+    private static readonly BodyRetarget.Tuning NoSeams = new(NoSeamWeights: true);
+
+    /// <summary>Two cloth vertices of the authored garment, their distance and how far apart the author weighted them.</summary>
+    private sealed record Place(int A, int B, float Apart, float Authored);
+
+    /// <summary>Summed difference between two weightings, by bone.</summary>
+    private static float D(List<(string Bone, float W)> a, List<(string Bone, float W)> b)
+    {
+        var d = new Dictionary<string, float>(StringComparer.Ordinal);
+        foreach (var (bone, w) in a) d[bone] = d.GetValueOrDefault(bone) + w;
+        foreach (var (bone, w) in b) d[bone] = d.GetValueOrDefault(bone) - w;
+        return d.Values.Sum(MathF.Abs);
+    }
+
+    /// <summary>
+    /// Pairs of the authored garment's cloth vertices from <paramref name="near"/> to <paramref name="far"/> apart that
+    /// share no triangle edge — one place split in two, not neighbours along a surface. Counted apart: pairs that do share
+    /// an edge (left out), and in <paramref name="neighbourOnly"/> those of the list that share a neighbour but no edge,
+    /// which the pass leaves out as a surface's neighbours too (a quad's opposite corners).
+    /// </summary>
+    private static List<Place> Places(byte[] garment, float near, float far, out int joined) => Places(garment, near, far, out joined, out _);
+
+    private static List<Place> Places(byte[] garment, float near, float far, out int joined, out List<Place> neighbourOnly)
+    {
+        var model = ModelPartReader.Read(garment)!;
+        var authored = CrotchWeights(garment);
+        var cloth = model.Parts.Where(p => p.Island < 0 && !SecondSkinWriter.IsBodySkinMaterial(p.Material)).ToList();
+        var next = new Dictionary<int, HashSet<int>>();
+        foreach (var part in cloth)
+            for (int t = 0; t + 2 < part.Triangles.Length; t += 3)
+                for (int k = 0; k < 3; k++)
+                {
+                    int a = part.Triangles[t + k], b = part.Triangles[t + (k + 1) % 3];
+                    if (a == b) continue;
+                    (next.TryGetValue(a, out var na) ? na : next[a] = []).Add(b);
+                    (next.TryGetValue(b, out var nb) ? nb : next[b] = []).Add(a);
+                }
+        var verts = next.Keys.OrderBy(v => v).ToList();
+        Vector3 P(int v) => new(model.Positions[v * 3], model.Positions[v * 3 + 1], model.Positions[v * 3 + 2]);
+        var list = new List<Place>();
+        neighbourOnly = [];
+        joined = 0;
+        for (int x = 0; x < verts.Count; x++)
+            for (int y = x + 1; y < verts.Count; y++)
+            {
+                int a = verts[x], b = verts[y];
+                float apart = Vector3.Distance(P(a), P(b));
+                if (apart < near || apart > far) continue;
+                if (next[a].Contains(b)) { joined++; continue; }
+                var place = new Place(a, b, apart, D(authored[a], authored[b]));
+                if (next[a].Overlaps(next[b])) neighbourOnly.Add(place);
+                else list.Add(place);
+            }
+        return list;
+    }
+
+    private static List<(string Bone, float W)>[] CrotchWeights(byte[] mdl) => SyntheticCrotch.Weights(mdl);
+
+    /// <summary>The written model's weights, by the AUTHORED garment's vertex: cloth matched in order (the skin swap
+    /// renumbers the skin, never the cloth's order).</summary>
+    private static Dictionary<int, List<(string Bone, float W)>> Written(byte[] authoredBytes, byte[] written)
+    {
+        static List<int> Cloth(ModelParts m) => m.Parts.Where(p => p.Island < 0 && !SecondSkinWriter.IsBodySkinMaterial(p.Material))
+                                                 .SelectMany(p => p.Triangles).Distinct().OrderBy(v => v).ToList();
+        var a = Cloth(ModelPartReader.Read(authoredBytes)!);
+        var b = Cloth(ModelPartReader.Read(written)!);
+        Assert.Equal(a.Count, b.Count);
+        var w = CrotchWeights(written);
+        return Enumerable.Range(0, a.Count).ToDictionary(k => a[k], k => w[b[k]]);
+    }
+
+    /// <summary>On the blouse's waist, where the seam was reported.</summary>
+    private static bool OnWaist(ModelParts model, int v)
+        => model.Positions[v * 3 + 1] is >= 1.05f and <= 1.10f
+           && model.Parts.Any(p => p.Island < 0 && p.Mesh == 0 && p.Material.EndsWith(Blouse, StringComparison.Ordinal)
+                                   && p.Triangles.Contains(v));
+
+    public static TheoryData<string, string, string> SeamBodies => new()
+    {
+        { Bibo, NudeM, "auto" }, { Bibo, NudeM, "studio" },
+        { Rue, SmallclothesM, "auto" }, { Rue, SmallclothesM, "studio" },
+        { Yab, SmallclothesM, "auto" }, { Yab, SmallclothesM, "studio" },
+        { Neolithe, NeolitheSfwM, "auto" }, { Neolithe, NeolitheSfwM, "studio" },
+    };
+
+    [LocalDataTheory(LocalData.GameData, Bibo, Rue, Yab, Neolithe, LocalData.DeiGratiaPack)]
+    [MemberData(nameof(SeamBodies))]
+    [Trait("Plan", "AC-seam-weights-1a")]
+    [Trait("Plan", "AC-seam-weights-1b")]
+    [Trait("Plan", "AC-seam-weights-2")]
+    [Trait("Plan", "AC-seam-weights-7")]
+    [Trait("Plan", "EDGE-seam-weights-19")]
+    public void Dei_Gratia_keeps_its_seams_weighted_as_one(string modNeed, string rel, string path)
+    {
+        var i = Read(modNeed, rel);
+        var on = Plan(i, path);
+        var places = Places(i.Bytes, 0f, BodyRetarget.SeamReach, out int joined, out var neighbourOnly);
+        var written = Written(i.Bytes, on.Plan.Model);
+        int vc = ModelPartReader.Read(i.Bytes)!.Positions.Length / 3;
+        Assert.True(on.Seams.ContainsKey("seam-class"), "the plan traced no seam classes");
+        float[] classOf = on.Seams["seam-class"], clamped = on.Seams["seam-clamped"], skipped = on.Seams["seam-skipped"];
+        Assert.Equal(vc, classOf.Length);
+
+        int same = 0, keptShape = 0, near = 0, clampedPairs = 0, limited = 0, apartByAuthor = 0;
+        float worstClamped = 0f, worstLimited = 0f;
+        foreach (var p in places)
+        {
+            float now = D(written[p.A], written[p.B]);
+            if (p.Authored == 0f)
+            {
+                same++;
+                if (skipped[p.A] > 0f || skipped[p.B] > 0f) { keptShape++; continue; }
+                // [AC-seam-weights-1a] Weighted as one by the author: written as one.
+                Assert.True(now == 0f, $"vertices {p.A}/{p.B}, {p.Apart * 1e6:0} µm apart, written {now:F3} apart");
+            }
+            else if (p.Authored <= BodyRetarget.LayerSameWeights)
+            {
+                near++;
+                if (now <= p.Authored + 1e-6f) continue;
+                // [AC-seam-weights-1b] The exemptions, counted.
+                if (clamped[p.A] > 0f || clamped[p.B] > 0f) { clampedPairs++; worstClamped = MathF.Max(worstClamped, now); continue; }
+                if (classOf[p.A] != classOf[p.B]) { limited++; worstLimited = MathF.Max(worstLimited, now); continue; }
+                Assert.Fail($"vertices {p.A}/{p.B}, authored {p.Authored:F3} apart, written {now:F3}");
+            }
+            else apartByAuthor++;
+        }
+        var stats = on.Seams["seam-stats"];
+        // [EDGE-seam-weights-19] Beyond the reach and short of the first neighbours, nothing splits.
+        var beyond = Places(i.Bytes, BodyRetarget.SeamReach, 0.0008f, out _);
+        int splitBeyond = beyond.Count(p => D(written[p.A], written[p.B]) > p.Authored + 0.02f);
+        output.WriteLine($"{Path.GetFileName(LocalData.Path(modNeed))} {path}: same-place pairs {places.Count} (identical {same}, "
+                         + $"kept-shape skipped {keptShape}; within 0.02 {near}, clamped {clampedPairs} worst {worstClamped:F3}, split by "
+                         + $"the class limits {limited} worst {worstLimited:F3}; weighted apart by the author {apartByAuthor}); "
+                         + $"edge-joined pairs within reach {joined}; classes averaged {stats[0]}, reverted {stats[1]}, kept-shape "
+                         + $"{stats[2]}, largest {stats[3]} members / {stats[4] * 1e6:0} µm; split 0.5-0.8 mm {splitBeyond}");
+        // Pairs sharing a neighbour but no edge: the pass takes them for neighbours along a surface. For the record, how
+        // many and how far apart they are written against their authored weights.
+        var neighbourSplit = neighbourOnly.Where(p => D(written[p.A], written[p.B]) > p.Authored + 0.02f).ToList();
+        output.WriteLine($"  sharing a neighbour but no edge: {neighbourOnly.Count}, written more than 0.02 further apart than "
+                         + $"authored {neighbourSplit.Count}"
+                         + (neighbourSplit.Count > 0 ? $", worst {neighbourSplit.Max(p => D(written[p.A], written[p.B])):F3}" : ""));
+        Assert.Equal(0, splitBeyond);
+
+        if (modNeed == Bibo)
+        {
+            // The reported seam is there without the rule. Measured at build 1381 (vanilla -> Bibo+ Nude M, both paths):
+            // 20 split pairs on the blouse's waist, 5 more than 0.2 apart.
+            var off = Plan(i, path, NoSeams);
+            var model = ModelPartReader.Read(i.Bytes)!;
+            var was = Written(i.Bytes, off.Plan.Model);
+            var split = places.Where(p => OnWaist(model, p.A) && D(was[p.A], was[p.B]) > p.Authored + 0.02f)
+                              .Select(p => D(was[p.A], was[p.B])).ToList();
+            output.WriteLine($"  without the rule: {split.Count} waist pairs split, {split.Count(d => d > 0.2f)} over 0.2");
+            Assert.True(split.Count >= 18, $"only {split.Count} waist pairs split without the rule");
+            Assert.True(split.Count(d => d > 0.2f) >= 4);
+        }
+
+        // [AC-seam-weights-7] The same refit twice is the same file.
+        Assert.Equal(SkinTuckSheet.Sha(on.Plan.Model), SkinTuckSheet.Sha(Plan(i, path).Plan.Model));
+    }
+
+    [LocalDataTheory(LocalData.GameData, Bibo, LocalData.DeiGratiaPack)]
+    [MemberData(nameof(Paths))]
+    [Trait("Plan", "AC-seam-weights-3")]
+    public void Dei_Gratia_seam_rule_moves_nothing(string path)
+    {
+        var i = Read(Bibo, NudeM);
+        var with = ModelPartReader.Read(Plan(i, path).Plan.Model)!;
+        var without = ModelPartReader.Read(Plan(i, path, NoSeams).Plan.Model)!;
+        Assert.Equal(without.Positions, with.Positions);
+        Assert.Equal(without.Normals, with.Normals);
+    }
+
+    [LocalDataTheory(LocalData.GameData, Bibo, LocalData.DeiGratiaPack)]
+    [MemberData(nameof(Paths))]
+    [Trait("Plan", "EDGE-seam-weights-20")]
+    public void Dei_Gratia_waist_seam_is_outside_the_kept_pieces(string path)
+    {
+        var i = Read(Bibo, NudeM);
+        var off = Plan(i, path, NoSeams);
+        var was = Written(i.Bytes, off.Plan.Model);
+        var split = Places(i.Bytes, 0f, BodyRetarget.SeamReach, out _)
+                    .Where(p => D(was[p.A], was[p.B]) > p.Authored + 0.02f).ToList();
+        var kept = RefitCore.ShapePieces(i.Garment, RefitCore.DefaultKeepShape(i.Garment))?.SelectMany(k => k).ToHashSet() ?? [];
+        output.WriteLine($"{path}: {split.Count} split pairs without the rule; default kept-shape vertices {kept.Count}");
+        Assert.NotEmpty(split);
+        Assert.DoesNotContain(split, p => kept.Contains(p.A) || kept.Contains(p.B));
     }
 }

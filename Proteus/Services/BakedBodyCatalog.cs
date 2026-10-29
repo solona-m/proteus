@@ -191,7 +191,7 @@ internal static class BakedBodyCatalog
             if (ModelSkinReader.Read(bytes, null, null) is { } skin
                 && OtherRaceRefit.Unbendable(skin, who.Pbd, who.ParentOf, from, to) is { Count: > 0 } stuck)
             {
-                why = string.Format(Loc.Localize("Parts.Retarget.Race.BodyBones.Fmt",
+                why = string.Format(ProteusLoc.Localize("Parts.Retarget.Race.BodyBones.Fmt",
                                                  "its bones {0} would not move with {1}'s skeleton"),
                                     string.Join(", ", stuck.Take(8)), ModelRace.Describe($"{to:D4}"));
                 return null;

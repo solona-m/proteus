@@ -15,6 +15,7 @@ namespace Proteus.Tests;
 /// the refit between bodies as it stands, the engine unchanged; and the one case that refit cannot do. Measured inside
 /// the pass, against the same dress refitted onto one body.
 /// </summary>
+[Trait("Speed", "Slow")]
 public class MultiBodyRefitLocalTests(ITestOutputHelper output)
 {
     private const string Dresses = LocalData.Mods + ":I Just Really Like Sweater Dresses, OK - by Solona";

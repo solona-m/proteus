@@ -169,6 +169,7 @@ public class LiveMeshTests(ITestOutputHelper o)
     /// chain whose pelvis matrix is not the identity. Skipped without a local game install.
     /// </summary>
     [LocalDataFact(LocalData.GameData)]
+    [Trait("Speed", "Slow")]
     public void TheGamesRacialDeformerParsesAndChains()
     {
         var data = new Lumina.GameData(LocalData.Path(LocalData.GameData));

@@ -9,7 +9,7 @@
  * Run with `npm test` from worker/. No network, no wrangler, no account needed.
  */
 import worker, { pickLanguage } from '../src/index.js';
-import { renderMarkdown } from '../src/render.js';
+import { renderMarkdown, stripTags } from '../src/render.js';
 
 let fetched = [];
 let fetchOpts = [];
@@ -627,6 +627,17 @@ console.log('heading ids:');
   ]) {
     if (html.includes(needle)) { pass++; console.log(`  ok   heading id ${label}`); }
     else { fail++; console.log(`  FAIL heading id ${label}: expected ${needle}`); }
+  }
+  // Nested and broken tags leave no tag behind.
+  for (const [input, want] of [
+    ['x <<b>b> y', 'x b> y'],
+    ['<scr<script>ipt>a', 'ipt>a'],
+    ['<b><i>bold</i></b>', 'bold'],
+    ['plain', 'plain'],
+  ]) {
+    const got = stripTags(input);
+    if (got === want && !/<[^>]*>/.test(got)) { pass++; console.log(`  ok   stripTags ${JSON.stringify(input)}`); }
+    else { fail++; console.log(`  FAIL stripTags ${JSON.stringify(input)}: got ${JSON.stringify(got)}, want ${JSON.stringify(want)}`); }
   }
 }
 

@@ -36,11 +36,18 @@ internal static partial class BodyRetarget
     /// <summary>
     /// How far under the garment's laid skin, as a share of the chord it spans there (see <see cref="ChordUnder"/>), the
     /// new body may dip in the open — no cloth over it — and still be drawn (a half). The author drew skin across it, so
-    /// the body belongs there; the cut keeps it only within <see cref="CutSagShare"/>. Measured in game: Dirndl's Bodice on
-    /// Neolithe's Almond XS left the cleavage open, its vertices 8-11 mm under a 27 mm chord (0.30-0.39) of the game's
-    /// coarse chest skin, a hole straight through to the bodice's inside.
+    /// the body belongs there; the cut keeps it only within <see cref="CutSagShare"/>, except where the automatic refit
+    /// draws it back on a slot the garment only reaches onto (see <see cref="GrowSpannedOpenSkin"/>). Measured in game:
+    /// Dirndl's Bodice on Neolithe's Almond XS left the cleavage open, its vertices 8-11 mm under a 27 mm chord
+    /// (0.30-0.39) of the game's coarse chest skin, a hole straight through to the bodice's inside.
     /// </summary>
     internal const float TuckSpanShare = 0.5f;
+
+    /// <summary>Whether a landing on the garment's laid skin is one it spans (see <see cref="TuckSpanShare"/>): inside one of
+    /// its triangles or on an edge two share, no further off — either side — than that share of the chord there, and
+    /// within <see cref="TuckBand"/>. An edge one triangle uses, or a corner, is where the author stopped drawing.</summary>
+    internal static bool Spans(BodySurface drawn, BodySurface.Hit hit, SkinEdges? edges)
+        => ChordUnder(drawn, hit, edges) is float chord && hit.Distance <= MathF.Min(TuckBand, TuckSpanShare * chord);
 
     /// <summary>
     /// How far into the body the tuck looks for the garment's cloth behind open skin (0.5 m): skin in the open that the
@@ -105,6 +112,8 @@ internal static partial class BodyRetarget
         // Unread weights cannot tell the torso from the arm: nothing is grown, the safe way round.
         if (ModelSkinReader.Read(body, null, null) is not { } skin || skin.VertexCount != vc) return ([], 0, 0, 0, true);
 
+        // The walk below — welding, per-node triangles, the face-sum normal, the triangle and vertex tests, the mesh-local
+        // mapping — is GrowSpannedOpenSkin's too, with weights: a fix to one is a fix to the other.
         var pos = new Vec3[vc];
         for (int v = 0; v < vc; v++) pos[v] = ToVec(At(parts, v));
         var nodeOf = MeshMath.WeldByPosition(pos, out int nodes);
@@ -167,8 +176,7 @@ internal static partial class BodyRetarget
             if (ok && !(cloth.Over(p, nrm, TuckOver)
                         || (level.LengthSquared() > 1e-6f && cloth.Over(p, Vector3.Normalize(level), TuckOver))))
             {
-                bool spanned = ChordUnder(drawn, hit, edges) is float chord
-                               && hit.Distance <= MathF.Min(TuckBand, TuckSpanShare * chord);
+                bool spanned = Spans(drawn, hit, edges);
                 // Last, as the dearest: a walk through the cloth's grid.
                 bool insideShows = !spanned && seeInside && !Tuned.NoSeeInside && cloth.SeesInside(p, -nrm, TuckSeeReach);
                 ok = !Tuned.NoOpenSkin && (spanned || insideShows);

@@ -3615,6 +3615,14 @@
     "message": "El grupo «{0}» también sustituye este modelo; el grupo nuevo tiene prioridad.",
     "description": ""
   },
+  "Parts.Retarget.Clash.Outranked.Fmt": {
+    "message": "El grupo «{0}» también sustituye este modelo y tiene prioridad sobre «{1}» en Penumbra, así que un ajuste guardado ahí no se verá mientras «{0}» esté activado. Guárdalo en un grupo nuevo.",
+    "description": "{0} is another group of the mod that replaces the same model; {1} is the group the refit is to be saved into."
+  },
+  "Parts.Retarget.Clash.OptionOutranked.Fmt": {
+    "message": "La opción «{0}» de «{1}» también sustituye este modelo y va antes que el ajuste en ese grupo, así que el ajuste no se verá mientras «{0}» esté marcada. Desmárcala en Penumbra o guárdalo en un grupo nuevo.",
+    "description": "{0} is another option of the multi-choice group {1} that replaces the same model."
+  },
   "Parts.Retarget.ClearBody": {
     "message": "Sacar la tela del cuerpo",
     "description": ""
@@ -3778,6 +3786,10 @@
   "Parts.Retarget.Lowered.Fmt": {
     "message": "Se crea un modelo {1} a partir del modelo {0}, doblado a la forma {1} tal como el juego dobla entre ambos. Guardar añade los metadatos que necesita el juego.",
     "description": "{0} is the race of the model open, {1} the race picked below it."
+  },
+  "Parts.Retarget.Bake.ForeignSkin.Fmt": {
+    "message": "seguiría dibujando la piel con {0}, un material de piel que el nuevo cuerpo no usa, y el juego puede cerrarse al cargar un material de piel que no encuentra",
+    "description": "{0} is the skin material names, as the model writes them."
   },
   "Parts.Retarget.Bake.BendBack.Fmt": {
     "message": "el ajuste no se pudo devolver a la forma {0} ({1})",
@@ -4411,6 +4423,14 @@
     "message": "{0} caras dobladas; {1} del cuerpo emparejado.",
     "description": "{0} is a count of folded (turned-over) faces; {1} a percentage such as \"97%\"."
   },
+  "Parts.Retarget.Race.ReplacesGame.Fmt": {
+    "message": "El juego tiene su propio modelo {0} de este objeto. Una vez guardado, este ajuste lo sustituye para todos los que veas llevando el modelo {0} del juego mientras el nuevo mod esté activado. Elige «Original» en ese mod, o desactívalo, para recuperar el del juego.",
+    "description": "Warning under “Refit for” for the game's own gear. {0} is the race picked, such as \"Midlander M\". “Original” is the literal name of the option Proteus writes into the new mod; keep it in English."
+  },
+  "Parts.Retarget.Race.CharacterKeepsGame.Fmt": {
+    "message": "Tu personaje es {0}, y el juego tiene su propio modelo {0} de este objeto: este ajuste no se verá en tu personaje.",
+    "description": "Warning for the game's own gear refitted for another race. {0} is the race of the character playing, such as \"Highlander M\"."
+  },
   "Parts.Retarget.Race.CrossSexHint.Fmt": {
     "message": "Para hacer una versión para {0}, elígelo en «Ajustar para».",
     "description": "{0} is a race such as \"Midlander M\". “Refit for” is the dropdown's label (Parts.Retarget.Race.Label)."
@@ -4463,9 +4483,9 @@
     "message": "{0} (como lo lleva tu personaje)",
     "description": "An entry of the Refit for list; {0} is a race such as \"Midlander F\": the race the logged-in character would get it as."
   },
-  "Parts.Retarget.Race.OwnModel.Fmt": {
-    "message": "Este mod ya tiene su propio modelo {0}. Ajusta ese en su lugar.",
-    "description": "{0} is a race such as \"Highlander M\" the mod already ships a model of."
+  "Parts.Retarget.Race.OwnModelReplaced.Fmt": {
+    "message": "Este mod ya tiene un modelo propio que lleva {0}. Un ajuste para {0} guardado en este mod ocupa su lugar mientras esté activado. Si ese modelo es obra del autor, ábrelo y ajusta ese en su lugar.",
+    "description": "{0} is a race such as \"Midlander M\" the mod already ships a model for (or one that race falls through to)."
   },
   "Parts.Retarget.Race.OpenModel.Fmt": {
     "message": "Abrir el modelo {0}",
@@ -5135,6 +5155,46 @@
     "message": "No se añadió ninguna talla: el mod ya tiene todas las tallas de los cuerpos marcados.",
     "description": ""
   },
+  "SizeSet.NothingAdded.SeeLeftOut": {
+    "message": "No se añadieron tallas. El motivo aparece abajo, en «Omitidas».",
+    "description": ""
+  },
+  "SizeSet.NothingAdded.SeeLog": {
+    "message": "No se añadieron tallas. El registro de Dalamud (/xllog) indica el motivo de cada talla.",
+    "description": ""
+  },
+  "SizeSet.MadeOn": {
+    "message": "Hecho para",
+    "description": ""
+  },
+  "SizeSet.MadeOn.Auto": {
+    "message": "Detectarlo",
+    "description": ""
+  },
+  "SizeSet.MadeOn.Tip": {
+    "message": "El mod de cuerpo para el que se hicieron el torso y las piernas de este mod. Solo se usa para las tallas que Proteus no puede identificar por sí mismo, como un mod hecho para una versión antigua de un cuerpo (por ejemplo, Bibo+ antes de Dawntrail). Déjalo en «Detectarlo» salvo que Proteus diga que no pudo saberlo.",
+    "description": ""
+  },
+  "SizeSet.UnreadableMadeOn.Fmt": {
+    "message": "{0}: no se pudo saber para qué cuerpo se hizo, así que no se hicieron tallas de ella. Si lo sabes, elígelo en «Hecho para» y vuelve a añadir las tallas.",
+    "description": ""
+  },
+  "SizeSet.NotMadeOn.Fmt": {
+    "message": "{0}: ninguna de sus tallas encaja en {1}, así que no se hicieron tallas de ella. Revisa el cuerpo elegido en «Hecho para».",
+    "description": ""
+  },
+  "SizeSet.MadeOnMissing.Fmt": {
+    "message": "{0}: {1}, elegido en «Hecho para», no está instalado, así que no se hicieron tallas de ella.",
+    "description": ""
+  },
+  "SizeSet.MadeOnUnclear.Fmt": {
+    "message": "{0}: en {1} no se pueden distinguir sus tallas, así que no se hicieron tallas de ella.",
+    "description": ""
+  },
+  "SizeSet.MadeOnOtherBody.Fmt": {
+    "message": "{0}: «{1}» se identificó como hecha para {2}, no para {3}, elegido en «Hecho para», y sus tallas se hicieron como hechas para {2}.",
+    "description": ""
+  },
   "SizeSet.LeftOut": {
     "message": "Omitidas:",
     "description": ""
@@ -5283,8 +5343,8 @@
     "message": "el deformador racial no sabe cómo mover {0}",
     "description": ""
   },
-  "HairPort.Refused.Fit.Fmt": {
-    "message": "no se asienta en la cabeza de c{0:D4}: el {1:P0} se hunde en el cráneo, y su distancia al cuero cabelludo difiere {2:F0} mm de la del original",
+  "HairPort.Fit.Fmt": {
+    "message": "no se asienta en la cabeza de c{0:D4}: el {1:P0} se hunde en el cráneo, y su distancia al cuero cabelludo difiere {2:F0} mm de la del original; revísalo en el juego",
     "description": ""
   },
   "HairPort.Refused.NotHair": {

@@ -87,15 +87,48 @@ public partial class CompositorService
     }
 
     /// <param name="userRequested">See <see cref="RefreshPlayerTextures"/>: the redraw is the action, so auto redraw does not gate it.</param>
-    private void ReloadAndRedraw(string cause, bool redraw = true, bool userRequested = false)
+    /// <returns>Whether the character reload was handed off; Penumbra re-reads the managed mod either way.</returns>
+    private bool ReloadAndRedraw(string cause, bool redraw = true, bool userRequested = false)
     {
         var ec = penumbra.ReloadModDirectory(SidecarDiscoveryService.ManagedModDir);
         log.Debug("[Proteus] ReloadMod -> {0}", ec);
-        if (redraw && (config.AutoRedraw || userRequested))
+        if (redraw && RedrawHold.AutoRedrawAllows(config.AutoRedraw, userRequested))
         {
             // Give Penumbra's async reload time to process before the refresh re-requests textures.
             Thread.Sleep(300);
             RefreshPlayerTextures(cause, userRequested);
+            return true;
+        }
+        return false;
+    }
+
+    /// <summary>
+    /// The live manifest is empty and the character has been reloaded since it went live, so an idle "no enabled mods"
+    /// composite has nothing to show. Starts false on every load. Changed only under <see cref="_manifestLock"/>: every
+    /// manifest write clears it (<see cref="WriteManagedModJson"/>), and only <see cref="MarkEmptyOutputDrawn"/> sets it.
+    /// </summary>
+    private volatile bool _emptyOutputDrawn;
+
+    /// <summary>Counts manifest writes and forgets, under <see cref="_manifestLock"/>, so a stale mark is refused.</summary>
+    private long _manifestWrites;
+
+    /// <summary>
+    /// Record that the empty manifest written as <paramref name="stamp"/> is drawn, unless anything has written the
+    /// manifest (or forgotten the flag) since: an older run finishing after a newer publish must not mark it.
+    /// </summary>
+    private void MarkEmptyOutputDrawn(long stamp)
+    {
+        lock (_manifestLock)
+            if (_manifestWrites == stamp) _emptyOutputDrawn = true;
+    }
+
+    /// <summary>A user refresh must reload the character even when idle: forget the flag and refuse any mark in flight.</summary>
+    private void ForgetEmptyOutputDrawn()
+    {
+        lock (_manifestLock)
+        {
+            _manifestWrites++;
+            _emptyOutputDrawn = false;
         }
     }
 
@@ -283,14 +316,15 @@ public partial class CompositorService
     }
 
     /// <param name="userRequested">
-    /// The reload is the action the user asked for (e.g. switching Proteus off), so auto redraw does not gate it.
+    /// The reload is an explicit user action whose point is the reload (switching Proteus off), so auto redraw does not
+    /// gate it. Never for a composite's own publish, which a Penumbra toggle can start.
     /// </param>
     /// <param name="cause">Why, for the reload's line in the log.</param>
     private void RefreshPlayerTextures(string cause, bool userRequested = false)
     {
         // The chokepoint every self-initiated reload goes through, so the auto-redraw check is enforced here as well as at
         // call sites (which also skip other reload-dependent work).
-        if (!config.AutoRedraw && !userRequested)
+        if (!RedrawHold.AutoRedrawAllows(config.AutoRedraw, userRequested))
         {
             log.Debug("[Proteus] Player reload skipped — auto redraw is off.");
             return;

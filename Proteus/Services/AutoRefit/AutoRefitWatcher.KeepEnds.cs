@@ -79,7 +79,7 @@ public sealed partial class AutoRefitWatcher
         switch (decision)
         {
             case KeepEnds.LeftAsIs { Why: KeepEnds.Route.NoSkin }:
-                Say(string.Format(Loc.Localize("Chat.AutoRefit.NoBodyMesh.Fmt",
+                Say(string.Format(ProteusLoc.Localize("Chat.AutoRefit.NoBodyMesh.Fmt",
                         "[Proteus] {0} carries no body skin to read its size from, so it was left as it is. You can refit "
                       + "it by hand with the Studio's Body size tool."), item), problem: true);
                 return;
@@ -99,7 +99,7 @@ public sealed partial class AutoRefitWatcher
                           feet ? "feet" : "hands");
                 return;
             case KeepEnds.NoSize noSize:
-                Say(string.Format(Loc.Localize("Chat.AutoRefit.NoSizeForRace.Fmt",
+                Say(string.Format(ProteusLoc.Localize("Chat.AutoRefit.NoSizeForRace.Fmt",
                         "[Proteus] {0} has no {1} size for {2}, so {3} was left as it is."),
                         j.Targets.NameOf(noSize.Slot), SlotName(noSize.Slot), ModelRace.Describe(j.Race), item),
                     problem: true);
@@ -125,9 +125,9 @@ public sealed partial class AutoRefitWatcher
             {
                 // Said neutrally: the skin may already be drawn like the new body's, or its layout may not convert.
                 Say(string.Format(feet
-                        ? Loc.Localize("Chat.AutoRefit.KeepsFeet.Fmt",
+                        ? ProteusLoc.Localize("Chat.AutoRefit.KeepsFeet.Fmt",
                               "[Proteus] {0} doesn't reach the legs, so it keeps its own shape and its skin was left as it is.")
-                        : Loc.Localize("Chat.AutoRefit.KeepsHands.Fmt",
+                        : ProteusLoc.Localize("Chat.AutoRefit.KeepsHands.Fmt",
                               "[Proteus] {0} doesn't reach the arms, so it keeps its own shape and its skin was left as it is."),
                         item));
                 return;
@@ -336,7 +336,7 @@ public sealed partial class AutoRefitWatcher
                                                            targetPath, log);
             if (finished == null)
             {
-                Fail(j.R, string.Format(Loc.Localize("Chat.AutoRefit.Failed.Fmt", "[Proteus] Couldn't refit {0}: {1}"),
+                Fail(j.R, string.Format(ProteusLoc.Localize("Chat.AutoRefit.Failed.Fmt", "[Proteus] Couldn't refit {0}: {1}"),
                                         j.Item, bentBack));
                 refused = true;
                 return null;
@@ -347,10 +347,10 @@ public sealed partial class AutoRefitWatcher
         string sourceName = skin.Own.Dir == VanillaBodyCatalog.Key ? Strings.Parts.RetargetFromVanilla
                           : j.State.Find(skin.Own.Dir)?.Name ?? skin.Own.Dir;
         string option = j.Pair?.Plan.Option ?? KeepEnds.SkinOnlyOption(endBody.Name);
+        string fmt = ProteusLoc.Localize("Chat.AutoRefit.SkinOnly.Fmt",
+            "[Proteus] {0} keeps its own shape; its skin is now drawn like {1}'s. Saved as \"{2}\" in {3} and switched on.");
         return new EndsOutput(model, KeepEnds.SkinOnlyLabel, RefitCore.LabelFrom(sourceName, [skin.Own.Option.Label]),
-                              savedIn => string.Format(Loc.Localize("Chat.AutoRefit.SkinOnly.Fmt",
-                                  "[Proteus] {0} keeps its own shape; its skin is now drawn like {1}'s. Saved as \"{2}\" in "
-                                + "{3} and switched on."), j.Item, endBody.Name, option, savedIn));
+                              savedIn => string.Format(fmt, j.Item, endBody.Name, option, savedIn));
     }
 
     /// <summary>
@@ -373,7 +373,7 @@ public sealed partial class AutoRefitWatcher
         // Between body mods by the legs or arms alone: the feet or hands ride along for their shape, on their own body.
         bool across = !string.Equals(pick.Dir, lead.Dir, StringComparison.OrdinalIgnoreCase);
         string targetLabel = lead.Name + " — " + refit.Target.Label;
-        Say(string.Format(Loc.Localize("Chat.AutoRefit.Start.Fmt",
+        Say(string.Format(ProteusLoc.Localize("Chat.AutoRefit.Start.Fmt",
                 "[Proteus] Refitting {0} from {1} to {2}. It will be switched on when it is done."),
                 item, sourceName + " — " + pick.Option.Label, targetLabel));
         current = current with { Message = string.Format(Strings.AutoRefit.WorkingFmt, item), Failed = false };
@@ -398,7 +398,7 @@ public sealed partial class AutoRefitWatcher
                                                        item, feet ? "feet" : "hands", why),
                                 out var limbPair, out var endPair) is { } refusal)
         {
-            Fail(j.R, string.Format(Loc.Localize("Chat.AutoRefit.Failed.Fmt", "[Proteus] Couldn't refit {0}: {1}"),
+            Fail(j.R, string.Format(ProteusLoc.Localize("Chat.AutoRefit.Failed.Fmt", "[Proteus] Couldn't refit {0}: {1}"),
                                     item, refusal));
             return null;
         }
@@ -433,19 +433,19 @@ public sealed partial class AutoRefitWatcher
         var (finished, _, bentBack) = RefitCore.Finish(plan, j.Route, g.Wearer, targetPath, log);
         if (finished == null)
         {
-            Fail(j.R, string.Format(Loc.Localize("Chat.AutoRefit.Failed.Fmt", "[Proteus] Couldn't refit {0}: {1}"),
+            Fail(j.R, string.Format(ProteusLoc.Localize("Chat.AutoRefit.Failed.Fmt", "[Proteus] Couldn't refit {0}: {1}"),
                                     item, bentBack));
             return null;
         }
+        string fmt = ProteusLoc.Localize("Chat.AutoRefit.Done.Fmt",
+            "[Proteus] {0} now fits {1}. Saved as \"{2}\" in {3} and switched on.");
         return new EndsOutput(finished.Model, refit.Target.Label,
                               RefitCore.LabelFrom(across ? sourceName : null, [pick.Option.Label]),
-                              savedIn => string.Format(Loc.Localize("Chat.AutoRefit.Done.Fmt",
-                                  "[Proteus] {0} now fits {1}. Saved as \"{2}\" in {3} and switched on."),
-                                  item, targetLabel, option, savedIn), finished.Materials);
+                              savedIn => string.Format(fmt, item, targetLabel, option, savedIn), finished.Materials);
     }
 
     private void SayUnsure(string item)
-        => Say(string.Format(Loc.Localize("Chat.AutoRefit.Unsure.Fmt",
+        => Say(string.Format(ProteusLoc.Localize("Chat.AutoRefit.Unsure.Fmt",
                    "[Proteus] Couldn't tell which body {0} was made for, so it was left as it is. You can refit it by "
                  + "hand with the Studio's Body size tool."), item), problem: true);
 }

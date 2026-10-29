@@ -15,6 +15,7 @@ namespace Proteus.Tests;
 /// target has skin wherever the source has), so they must come out exactly as they did before it. Recorded 2026-10-20
 /// on test cf0fa3d (build 1324), before any of that change was made.
 /// </summary>
+[Trait("Speed", "Slow")]
 public class GoldenCrossBodyLocalTests(ITestOutputHelper output)
 {
     private const string Laurel = LocalData.Mods + ":[Jaque] Laurel Attire [July 2025]";
@@ -43,16 +44,19 @@ public class GoldenCrossBodyLocalTests(ITestOutputHelper output)
     [LocalDataTheory(Laurel, Neolithe, Bibo, LocalData.MusePack)]
     [MemberData(nameof(Cases))]
     [Trait("Plan", "AC-skinless-target-5")]
+    [Trait("Plan", "EDGE-seam-weights-15")]
     public void A_cross_body_refit_onto_a_body_with_skin_is_as_it_was(string target, string path)
     {
-        var (sha, pushed) = Refit(target, path);
+        var (sha, pushed, model) = Refit(target, path);
         output.WriteLine($"[\"{target} / {path}\"] = (\"{sha}\", {pushed}),");
         var (wantSha, wantPushed) = Recorded[$"{target} / {path}"];
         Assert.Equal(wantSha, sha);
         Assert.Equal(wantPushed, pushed);
+        // [EDGE-seam-weights-15] With 1382's seam weights: the same refit, weights apart.
+        SeamWeightsTests.SameGeometry(model, Refit(target, path, seams: true).Model);
     }
 
-    private static (string Sha, int Pushed) Refit(string target, string path)
+    private static (string Sha, int Pushed, byte[] Model) Refit(string target, string path, bool seams = false)
     {
         var bodies = new[] { Neolithe }
             .Select(b => (Dir: Path.GetFileName(LocalData.Path(b)), Catalog: BodySizeCatalog.Read(LocalData.Path(b)))).ToList();
@@ -76,11 +80,14 @@ public class GoldenCrossBodyLocalTests(ITestOutputHelper output)
             }
             Assert.Null(BodyRetarget.BuildPair("_dwn", source, targetPath, "_dwn", false, null, null, null, out var pair));
 
-            var plan = path == "studio"
+            // As it was recorded: a seam's split vertices weighted each on its own, as builds before 1382 did. Measured on
+            // these refits at 1382: 136-137 vertices on 55-59 seams took one weighting, the most any moved 0.150, positions
+            // untouched (the seam rule writes weights alone); judged in SeamWeightsTests.
+            var plan = BodyRetarget.WithTuning(new BodyRetarget.Tuning(NoSeamWeights: !seams), () => path == "studio"
                 ? BodyRetarget.Plan(garment, bytes, [pair], "_dwn", held: new HashSet<int>(), replaceSkin: true,
                                     acrossBodies: true, cutHidden: true)
-                : RefitCore.PlanRefit(garment, bytes, [pair], "_dwn", across: true, gameGear: false, out _);
-            return (Convert.ToHexString(SHA256.HashData(plan.Model)), plan.Report.Pushed);
+                : RefitCore.PlanRefit(garment, bytes, [pair], "_dwn", across: true, gameGear: false, out _));
+            return (Convert.ToHexString(SHA256.HashData(plan.Model)), plan.Report.Pushed, plan.Model);
         }
         finally
         {

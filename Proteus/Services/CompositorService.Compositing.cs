@@ -276,10 +276,10 @@ public partial class CompositorService
 
         // Two whole phrases rather than an inline "(s)", which is the only form that translates.
         var names = outranked == 1
-            ? string.Format(Loc.Localize("Chat.PriorityRaised.One.Fmt", "\"{0}\""), highestOwner)
-            : string.Format(Loc.Localize("Chat.PriorityRaised.Many.Fmt", "\"{0}\" and {1} more"),
+            ? string.Format(ProteusLoc.Localize("Chat.PriorityRaised.One.Fmt", "\"{0}\""), highestOwner)
+            : string.Format(ProteusLoc.Localize("Chat.PriorityRaised.Many.Fmt", "\"{0}\" and {1} more"),
                 highestOwner, outranked - 1);
-        var msg = string.Format(Loc.Localize("Chat.PriorityRaised.Fmt",
+        var msg = string.Format(ProteusLoc.Localize("Chat.PriorityRaised.Fmt",
             "[Proteus] {0} was overriding the skin textures Proteus composites your overlays into, so they "
             + "could not show up. Raised Proteus' Penumbra priority to {1} to fix it. (Turn off "
             + "\"Auto-raise mod priority\" in Proteus' settings if you'd rather it didn't.)"), names, target);
@@ -313,7 +313,7 @@ public partial class CompositorService
         _reportedRedirectLosses[gamePath] = owner;
 
         // The file name alone fits a chat line; the log line above carries the full path.
-        var msg = string.Format(Loc.Localize("Chat.RedirectLost.Fmt",
+        var msg = string.Format(ProteusLoc.Localize("Chat.RedirectLost.Fmt",
             "[Proteus] \"{0}\" overrides {1}, which Proteus composites your overlays into — so they will "
             + "not show up. Fix: in Penumbra, raise the \"Proteus\" mod's priority above \"{0}\"."),
             owner, Path.GetFileName(gamePath));
@@ -345,7 +345,7 @@ public partial class CompositorService
         // Chat only when a glow is being lost, the visible symptom.
         if (!HasEmissiveRow(rows)) return;
 
-        var msg = string.Format(Loc.Localize("Chat.NoShellSurface.Fmt",
+        var msg = string.Format(ProteusLoc.Localize("Chat.NoShellSurface.Fmt",
             "[Proteus] \"{0}\" sets Glow on an overlay Proteus cannot build a layer for. Glow needs a layer "
             + "over the mesh, and that only works on your own skin — body, face, hair, tail or ears — not "
             + "on gear, accessories or weapons."), entry.ModName);

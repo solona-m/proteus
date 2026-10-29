@@ -54,7 +54,7 @@ internal static class PenumbraModMeta
     /// than a no-op, so a write that cannot happen is never mistaken for success.
     /// </summary>
     public sealed class LegacyFolderException(string modRoot)
-        : InvalidOperationException(string.Format(CheapLoc.Loc.Localize("Service.ModMeta.LegacyFolder.Fmt",
+        : InvalidOperationException(string.Format(ProteusLoc.Localize("Service.ModMeta.LegacyFolder.Fmt",
             "{0} is a pre-v{1} Penumbra mod folder, which Proteus does not write to."), modRoot, SingleFileVersion));
 
     /// <summary>
@@ -257,6 +257,28 @@ internal static class PenumbraModMeta
             return result;
         }
         catch { return null; /* missing or malformed — fall back to v3 */ }
+    }
+
+    /// <summary>
+    /// Every element of the mod's v4 <c>Groups</c> array, in array order, nameless ones included — the positions
+    /// Penumbra breaks a priority tie by (see <see cref="BodyRetargetWriter.Outranking"/>), which
+    /// <see cref="TryReadGroups"/>' named list would shift. Read only. Null when there is no v4 <c>Groups</c> array.
+    /// </summary>
+    public static List<JsonElement>? TryReadRawGroups(string modRoot)
+    {
+        try
+        {
+            var path = Path.Combine(modRoot, MetaFile);
+            if (!File.Exists(path)) return null;
+
+            using var doc = JsonDocument.Parse(File.ReadAllText(path));
+            if (!doc.RootElement.TryGetProperty("Groups", out var groups)
+                || groups.ValueKind != JsonValueKind.Array)
+                return null;
+            // Clone: the JsonDocument is disposed when this method returns.
+            return groups.EnumerateArray().Select(g => g.Clone()).ToList();
+        }
+        catch { return null; }
     }
 
     /// <summary>
@@ -532,7 +554,7 @@ internal static class PenumbraModMeta
     /// overwriting with a fresh manifest would lose the mod.
     /// </summary>
     public sealed class ManifestInUseException(string path, Exception inner)
-        : IOException(string.Format(CheapLoc.Loc.Localize("Service.ModMeta.InUse.Fmt",
+        : IOException(string.Format(ProteusLoc.Localize("Service.ModMeta.InUse.Fmt",
             "{0} is in use by another program and could not be read, so it was not rewritten."), path), inner);
 
     /// <summary>How many times a held manifest is re-read, backing off from 50 ms (about 1.5 s, matching
@@ -1076,7 +1098,7 @@ internal static class PenumbraModMeta
             var manifest = ReadManifestForWrite(modRoot);
             // Never a manifest made up from nothing: this edits somebody else's mod.
             if (manifest.Count == 0)
-                throw new InvalidOperationException(string.Format(CheapLoc.Loc.Localize("Service.ModMeta.Unreadable.Fmt",
+                throw new InvalidOperationException(string.Format(ProteusLoc.Localize("Service.ModMeta.Unreadable.Fmt",
                     "The manifest of {0} could not be read, so it was not changed."), modRoot));
             var dd = manifest.TryGetValue("DefaultData", out var d) && d.ValueKind == JsonValueKind.Object
                 ? System.Text.Json.Nodes.JsonNode.Parse(d.GetRawText())!.AsObject()
@@ -1097,15 +1119,17 @@ internal static class PenumbraModMeta
             return;
         }
 
+        string combiningFmt = ProteusLoc.Localize("Service.ModMeta.Combining.Fmt",
+            "\"{0}\" is a combining group, whose files Proteus does not edit.");
+        string noOptionFmt = ProteusLoc.Localize("Service.ModMeta.NoOption.Fmt",
+            "The group \"{0}\" has no option called \"{1}\".");
         EditGroup(modRoot, groupName, (group, list) =>
         {
             if (group["Containers"] is System.Text.Json.Nodes.JsonArray)
-                throw new InvalidOperationException(string.Format(CheapLoc.Loc.Localize("Service.ModMeta.Combining.Fmt",
-                    "\"{0}\" is a combining group, whose files Proteus does not edit."), groupName));
+                throw new InvalidOperationException(string.Format(combiningFmt, groupName));
             int at = IndexOfOption(list, optionName);
             if (at < 0 || list[at] is not System.Text.Json.Nodes.JsonObject option)
-                throw new InvalidOperationException(string.Format(CheapLoc.Loc.Localize("Service.ModMeta.NoOption.Fmt",
-                    "The group \"{0}\" has no option called \"{1}\"."), groupName, optionName));
+                throw new InvalidOperationException(string.Format(noOptionFmt, groupName, optionName));
             if (option["Files"] is not System.Text.Json.Nodes.JsonObject files) option["Files"] = files = [];
             var manips = option["Manipulations"] as System.Text.Json.Nodes.JsonArray;
             bool had = manips != null;
@@ -1170,7 +1194,7 @@ internal static class PenumbraModMeta
                 i++;
             }
         if (index < 0) throw new InvalidOperationException(string.Format(
-            CheapLoc.Loc.Localize("Service.ModMeta.NoGroup.Fmt", "This mod has no group called \"{0}\"."), groupName));
+            ProteusLoc.Localize("Service.ModMeta.NoGroup.Fmt", "This mod has no group called \"{0}\"."), groupName));
 
         var group = System.Text.Json.Nodes.JsonNode.Parse(found.GetRawText())!.AsObject();
         if (group["Options"] is not System.Text.Json.Nodes.JsonArray list)

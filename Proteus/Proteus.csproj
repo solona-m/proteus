@@ -74,12 +74,15 @@
     <Reference Include="CheapLoc" Private="false" />
   </ItemGroup>
 
+  <!-- Plain versions, never floats (2.*) or ranges: each must equal what packages.lock.json resolves, so
+       a bump is a reviewable one-line diff (Dependabot proposes them). Deliberately not bracketed [x]
+       either — that is exact-only and blocks a transitive lift. Guarded by SupplyChainTests. -->
   <ItemGroup>
-    <PackageReference Include="StbImageSharp" Version="2.*" />
+    <PackageReference Include="StbImageSharp" Version="2.30.16" />
     <PackageReference Include="StbImageWriteSharp" Version="1.16.7" />
     <PackageReference Include="BitMiracle.LibTiff.NET" Version="2.4.660" />
-    <PackageReference Include="BCnEncoder.Net" Version="2.*" />
-    <PackageReference Include="CommunityToolkit.HighPerformance" Version="8.*" />
+    <PackageReference Include="BCnEncoder.Net" Version="2.3.0" />
+    <PackageReference Include="CommunityToolkit.HighPerformance" Version="8.4.2" />
   </ItemGroup>
 
   <ItemGroup>
@@ -159,6 +162,11 @@
 
   <ItemGroup>
     <ProjectReference Include="..\Penumbra.Api\Penumbra.Api.csproj" />
+    <!-- Penumbra.Api's IPC subscribers (EventSubscriber, FuncSubscriber, …) live in Luna since 5.19 and it
+         references Luna privately, so a consumer references it itself — as Penumbra and Glamourer do. Glamourer.Api
+         uses Luna's too, built against Glamourer's own Luna submodule: keep this Luna on the commit Glamourer pins,
+         so the one Luna.dll shipped is the one both APIs were built against. -->
+    <ProjectReference Include="..\Luna\Luna\Luna.csproj" />
     <ProjectReference Include="..\Glamourer\Glamourer.Api\Glamourer.Api.csproj" />
     <!-- Posing worn models on the live character; shared with other plugins, AGPL-3.0-or-later. -->
     <ProjectReference Include="..\XivLiveMesh\XivLiveMesh.csproj" />

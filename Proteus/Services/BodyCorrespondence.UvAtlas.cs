@@ -159,7 +159,7 @@ internal sealed partial class UvAtlasCorrespondence : IBodyCorrespondence
         int svc = source.Positions.Length / 3, tvc = target.Positions.Length / 3;
         if (sourceUv.Length != svc * 2 || targetUv.Length != tvc * 2)
         {
-            refusal = string.Format(Loc.Localize("Parts.Retarget.Refuse.UvUnreadable.Fmt",
+            refusal = string.Format(ProteusLoc.Localize("Parts.Retarget.Refuse.UvUnreadable.Fmt",
                           "The {0} models' texture coordinates could not be read, so there is no way to tell which " +
                           "point of one body is which point of the other."), what);
             return false;
@@ -168,7 +168,7 @@ internal sealed partial class UvAtlasCorrespondence : IBodyCorrespondence
         var atlas = new Atlas(target, targetUv);
         if (atlas.IsEmpty)
         {
-            refusal = string.Format(Loc.Localize("Parts.Retarget.Refuse.NoTargetSkin.Fmt",
+            refusal = string.Format(ProteusLoc.Localize("Parts.Retarget.Refuse.NoTargetSkin.Fmt",
                           "The target {0} model has no body skin to land on."), what);
             return false;
         }
@@ -178,7 +178,7 @@ internal sealed partial class UvAtlasCorrespondence : IBodyCorrespondence
         var offSheet = onSheet != null ? OffSheet(source, sourceUv, skin, onSheet) : [];
         if (offSheet.Count * 2 > skin.Count)
         {
-            refusal = string.Format(Loc.Localize("Parts.Retarget.Refuse.OffSheet.Fmt",
+            refusal = string.Format(ProteusLoc.Localize("Parts.Retarget.Refuse.OffSheet.Fmt",
                           "Most of the source {0} body is drawn outside its texture layout, so there is no way to " +
                           "tell which point of one body is which point of the other."), what);
             return false;
@@ -274,7 +274,7 @@ internal sealed partial class UvAtlasCorrespondence : IBodyCorrespondence
 
     private static bool Refuse(string what, float coverage, out string refusal)
     {
-        refusal = string.Format(Loc.Localize("Parts.Retarget.Refuse.LowCoverage.Fmt",
+        refusal = string.Format(ProteusLoc.Localize("Parts.Retarget.Refuse.LowCoverage.Fmt",
                       "Only {1:P0} of the source {0} body finds its place on the target by texture coordinate, " +
                       "so the two do not share a texture layout. They cannot be refitted onto each other."),
                       what, coverage);
@@ -284,7 +284,7 @@ internal sealed partial class UvAtlasCorrespondence : IBodyCorrespondence
     /// <summary>The refusal for a target option that draws something else, not skin, over much of the source's skin.</summary>
     private static bool RefuseNoSkin(string what, float coverage, out string refusal)
     {
-        refusal = string.Format(Loc.Localize("Parts.Retarget.Refuse.NoSkinThere.Fmt",
+        refusal = string.Format(ProteusLoc.Localize("Parts.Retarget.Refuse.NoSkinThere.Fmt",
                       "Only {1:P0} of the source {0} body finds skin to land on: this {0} option of the target body has " +
                       "no skin over the rest of it and draws something else there, such as modelled underwear, that " +
                       "the refit could not fit it onto. Choose an option of that body that has skin there, or refit " +

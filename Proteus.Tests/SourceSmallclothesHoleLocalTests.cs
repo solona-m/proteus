@@ -16,6 +16,7 @@ namespace Proteus.Tests;
 /// — the bust is the bra — and the refit read the old body as its skin alone, so the cloth over the bust followed the
 /// hole's rim. Needs the game's data and the body mods installed.
 /// </summary>
+[Trait("Speed", "Slow")]
 public class SourceSmallclothesHoleLocalTests(ITestOutputHelper output)
 {
     private const string MuseRoot = LocalData.Mods + ":hs-Muse+-3.2.2-LbM";
@@ -57,7 +58,7 @@ public class SourceSmallclothesHoleLocalTests(ITestOutputHelper output)
             garment, bytes, [pair], "_top", held: new HashSet<int>(), replaceSkin: true, acrossBodies: true,
             clearBody: true, cutHidden: true, keepShape: RefitCore.ShapePieces(garment, RefitCore.DefaultKeepShape(garment)),
             log: lines.Add, tuckSlot: rule.TuckSlot, deepClear: rule.DeepClear, keepStandoff: rule.KeepStandoff,
-            carryPiercings: false, liftUnderbust: true,
+            carryPiercings: false, liftUnderbust: true, relaxSinkGuard: rule.RelaxSinkGuard,
             trace: (stage, delta) =>
             {
                 if (stage == "lay") laid = delta;

@@ -367,7 +367,7 @@ public sealed partial class PartsPanel
         this.liveBrush = liveBrush;
         preview = new LiveBrushPreview(penumbra, compositor, log);
         retarget = new BodyRetargetPanel(penumbra, uvRemap, path => textureLoader.LoadRawFile(null, path),
-                                         config, log);
+                                         config, log, GameFileExists);
         sizeSet = new SizeSetPanel(penumbra, uvRemap, path => textureLoader.LoadRawFile(null, path), config, log);
         hairPort = new HairPortPanel(path => textureLoader.LoadRawFile(null, path), log);
         refitMods = new RefitModService(penumbra, compositor, log);
@@ -464,6 +464,14 @@ public sealed partial class PartsPanel
         {
             openModelPending = null;
             if (toOpen < models.Count && toOpen != modelIndex) SelectModel(toOpen);
+        }
+
+        // The game's own model of another race, asked for by Body size for the game's gear; opened here for the same reason.
+        if (openGamePathPending is { } gamePathToOpen)
+        {
+            openGamePathPending = null;
+            itemNames ??= ItemNames.Lookup(Plugin.DataManager, log);
+            if (VanillaPick.From(gamePathToOpen, itemNames) is { } gameItem) OpenGameGear(gameItem);
         }
 
         ImGui.Spacing();
@@ -1391,6 +1399,16 @@ public sealed partial class PartsPanel
 
     /// <summary>A model Body size asked to open; <see cref="Draw"/> opens it at the top of the next frame.</summary>
     private int? openModelPending;
+
+    /// <summary>A game path of the game's own gear Body size asked to open; <see cref="Draw"/> opens it next frame.</summary>
+    private string? openGamePathPending;
+
+    /// <summary>Whether the game's own data ships a file at a game path, past any mod.</summary>
+    private static bool GameFileExists(string gamePath)
+    {
+        try { return Plugin.DataManager.FileExists(gamePath); }
+        catch (Exception) { return false; }
+    }
 
     /// <summary>
     /// The row of <paramref name="models"/> that publishes <paramref name="gamePath"/> — the one in the open row's own
@@ -3626,7 +3644,7 @@ public sealed partial class PartsPanel
         // A hairstyle has no body to be sized for: its Body size tool ports it to the other races instead.
         if (!vanillaOpen && HairPortPanel.Shows(models[modelIndex].GamePath))
         {
-            hairPort.Draw(ModRoot()!, modDir!, models[modelIndex].GamePath, changed =>
+            hairPort.Draw(ModRoot()!, modDir!, models[modelIndex].GamePath, models[modelIndex].File, changed =>
             {
                 compositor.ExpectOwnModEdit(changed);
                 penumbra.ReloadModDirectory(changed);
@@ -3669,7 +3687,7 @@ public sealed partial class PartsPanel
             SaveMod: (bodyName, create) => RefitModFor(bodyName, create),
             KeepShape: RetargetShapes,
             Wearer: RetargetWearer,
-            OpenModelAt: vanillaOpen ? null : path =>
+            OpenModelAt: vanillaOpen ? path => () => openGamePathPending = path : path =>
                 SiblingModelIndex(models, models[modelIndex], path) is var at and >= 0
                     ? () => openModelPending = at
                     : null,

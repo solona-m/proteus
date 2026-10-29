@@ -15,6 +15,7 @@ namespace Proteus.Tests;
 /// author's garment onto another body the author made a size for, with the size set's parameters, against the author's
 /// own size — and the same garment across body mods, against its own folds and cloth inside.
 /// </summary>
+[Trait("Speed", "Slow")]
 public class SkirtHipsRegressionLocalTests(ITestOutputHelper output)
 {
     private const string Geometric = LocalData.Mods + ":Geometric - by Solona";

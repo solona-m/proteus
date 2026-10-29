@@ -213,6 +213,95 @@ internal static class BodyRetargetWriter
         return clashes;
     }
 
+    /// <summary>What may keep a refit saved into an author's group from showing: another group (<see cref="Option"/>
+    /// null), or another option of the destination itself.</summary>
+    internal readonly record struct Rival(string Group, string? Option);
+
+    /// <summary>
+    /// What in the mod comes before a refit saved into the author's group <paramref name="destination"/> for
+    /// <paramref name="gamePath"/>, by Penumbra's own order — each of which, while it is on, is what the game draws there
+    /// instead. Read only.
+    /// <para/>
+    /// Penumbra gives a path to the first container that claims it (<c>SubMod.AddContainerTo</c>: files, then file
+    /// swaps, each with <c>TryAdd</c>), walking the groups by priority, highest first, a tie going to the LATER one in the
+    /// array (<c>Mod.GetData</c>), and the default files last. Inside a multi-choice group, the ticked options by priority,
+    /// a tie going to the EARLIER one (<c>MultiModGroup.AddData</c>) — and the refit's option, appended with none, is 0
+    /// and last. A combining group gives one container of several (<c>CombiningModGroup.AddData</c>), so any of them
+    /// counts. Conditions and metadata entries are not looked at.
+    /// <para/>
+    /// A new group, or one of ours, is given a priority above every group when saved, and is not asked about here: <see cref="ClashingGroups(IEnumerable{PenumbraModMeta.Redirect}, string, string)"/>
+    /// says what it outranks.
+    /// </summary>
+    /// <param name="groups">The mod's raw <c>Groups</c> array (<see cref="PenumbraModMeta.TryReadRawGroups"/>); null:
+    /// unknown, and nothing is claimed.</param>
+    /// <param name="cutFrom">The destination's option the refit is cut from, which the save unticks; null for none.</param>
+    /// <param name="saving">The options the save writes: a size saved before is the refit itself, never its rival.</param>
+    internal static List<Rival> Outranking(IReadOnlyList<JsonElement>? groups, string gamePath, string destination,
+                                           string? cutFrom, IReadOnlyCollection<string>? saving = null)
+    {
+        var rivals = new List<Rival>();
+        if (groups == null) return rivals;
+        int at = -1;
+        for (int i = 0; i < groups.Count && at < 0; i++)
+            if (string.Equals(NameOf(groups[i]), destination, StringComparison.OrdinalIgnoreCase)) at = i;
+        if (at < 0) return rivals;
+        int priority = PriorityOf(groups[at]);
+
+        for (int i = 0; i < groups.Count; i++)
+        {
+            if (i == at) continue;
+            var g = groups[i];
+            if (string.Equals(TypeOf(g), "Imc", StringComparison.OrdinalIgnoreCase)) continue;
+            int p = PriorityOf(g);
+            if ((p > priority || (p == priority && i > at)) && Containers(g).Any(c => Claims(c, gamePath)))
+                rivals.Add(new Rival(NameOf(g) ?? "", null));
+        }
+
+        // One choice of a single-choice group is on at a time, and the refit's is the one the save ticks. In a list the
+        // refit's option is 0, and appended last — or, saved before, replaced where it stands, and a sibling after it at
+        // 0 comes after it.
+        if (string.Equals(TypeOf(groups[at]), "Multi", StringComparison.OrdinalIgnoreCase)
+            && groups[at].TryGetProperty("Options", out var options) && options.ValueKind == JsonValueKind.Array)
+        {
+            var list = options.EnumerateArray().ToList();
+            bool Saving(string? name) => name != null && saving?.Contains(name, StringComparer.OrdinalIgnoreCase) == true;
+            int refitAt = list.FindIndex(o => Saving(NameOf(o)));
+            if (refitAt < 0) refitAt = list.Count;
+            for (int i = 0; i < list.Count; i++)
+            {
+                string? name = NameOf(list[i]);
+                if (name == null || Saving(name) || string.Equals(name, cutFrom, StringComparison.OrdinalIgnoreCase)) continue;
+                int p = PriorityOf(list[i]);
+                if ((p > 0 || (p == 0 && i < refitAt)) && Claims(list[i], gamePath)) rivals.Add(new Rival(destination, name));
+            }
+        }
+        return rivals;
+
+        static string? NameOf(JsonElement e)
+            => e.TryGetProperty("Name", out var n) && n.ValueKind == JsonValueKind.String ? n.GetString() : null;
+        static string? TypeOf(JsonElement e)
+            => e.TryGetProperty("Type", out var t) && t.ValueKind == JsonValueKind.String ? t.GetString() : null;
+        static int PriorityOf(JsonElement e)
+            => e.TryGetProperty("Priority", out var p) && p.ValueKind == JsonValueKind.Number && p.TryGetInt32(out int v)
+                ? v : 0;
+        static IEnumerable<JsonElement> Containers(JsonElement g)
+        {
+            foreach (string list in new[] { "Options", "Containers" })
+                if (g.TryGetProperty(list, out var items) && items.ValueKind == JsonValueKind.Array)
+                    foreach (var c in items.EnumerateArray())
+                        yield return c;
+        }
+        static bool Claims(JsonElement container, string path)
+        {
+            foreach (string map in new[] { "Files", "FileSwaps" })
+                if (container.TryGetProperty(map, out var m) && m.ValueKind == JsonValueKind.Object
+                    && m.EnumerateObject().Any(f => string.Equals(f.Name.Replace('\\', '/'), path,
+                                                                  StringComparison.OrdinalIgnoreCase)))
+                    return true;
+            return false;
+        }
+    }
+
     /// <summary>One refitted size to save: the option it becomes, its model, and the size it was refitted onto.</summary>
     /// <param name="Layers">The other piece of its outfit it was kept outside (see <see cref="Entry.Layers"/>); null
     /// for none.</param>
@@ -343,13 +432,13 @@ internal static class BodyRetargetWriter
             try
             {
                 if (refits.Count == 0)
-                    return new Outcome(false, groupName, "", Loc.Localize("Parts.Retarget.Save.Nothing", "Nothing to save."));
+                    return new Outcome(false, groupName, "", ProteusLoc.Localize("Parts.Retarget.Save.Nothing", "Nothing to save."));
 
                 // The mod renamed or deleted in Penumbra since the refit began: writing would recreate its old folder,
                 // which Penumbra no longer knows.
                 if (!Directory.Exists(modRoot))
                     return new Outcome(false, groupName, names, string.Format(
-                        Loc.Localize("Parts.Retarget.Save.ModGone.Fmt",
+                        ProteusLoc.Localize("Parts.Retarget.Save.ModGone.Fmt",
                             "\"{0}\" is no longer in Penumbra's mods: it was renamed or deleted there. Nothing was saved."),
                         Path.GetFileName(modRoot)));
 
@@ -369,7 +458,7 @@ internal static class BodyRetargetWriter
                                                                                              StringComparison.OrdinalIgnoreCase)));
                     if (taken.Option != null)
                         return new Outcome(false, groupName, names, string.Format(
-                                           Loc.Localize("Parts.Retarget.Save.OptionTaken.Fmt",
+                                           ProteusLoc.Localize("Parts.Retarget.Save.OptionTaken.Fmt",
                                                "\"{0}\" already has an option called \"{1}\" of its own. " +
                                                "Save the refit to another group."),
                                            groupName, taken.Option));
@@ -560,10 +649,10 @@ internal static class BodyRetargetWriter
                         if (auto) RecordCarried(modRoot, groupName, refit.Option, fromOption, FilesFor(refit, rel));
                     }
                     return new Outcome(true, groupName, names, refits.Count == 1
-                        ? string.Format(Loc.Localize("Parts.Retarget.Save.AddedOneToAuthor.Fmt",
+                        ? string.Format(ProteusLoc.Localize("Parts.Retarget.Save.AddedOneToAuthor.Fmt",
                               "Saved as \"{0}\" in the \"{1}\" group. Choose it there in Penumbra to wear it."),
                               refits[0].Option, groupName)
-                        : string.Format(Loc.Localize("Parts.Retarget.Save.AddedManyToAuthor.Fmt",
+                        : string.Format(ProteusLoc.Localize("Parts.Retarget.Save.AddedManyToAuthor.Fmt",
                               "Saved {0} sizes in the \"{1}\" group. Choose it there in Penumbra to wear it."),
                               refits.Count, groupName), Noted());
                 }
@@ -605,25 +694,25 @@ internal static class BodyRetargetWriter
                 }
 
                 return new Outcome(true, groupName, names, refits.Count == 1
-                    ? string.Format(Loc.Localize("Parts.Retarget.Save.AddedOne.Fmt",
+                    ? string.Format(ProteusLoc.Localize("Parts.Retarget.Save.AddedOne.Fmt",
                           "Saved as \"{0}\" in the \"{1}\" group. Penumbra only picks a default for a mod it is " +
                           "adding for the first time, so choose the option there to see it."),
                           refits[0].Option, groupName)
-                    : string.Format(Loc.Localize("Parts.Retarget.Save.AddedMany.Fmt",
+                    : string.Format(ProteusLoc.Localize("Parts.Retarget.Save.AddedMany.Fmt",
                           "Saved {0} sizes in the \"{1}\" group. Penumbra only picks a default for a mod it is " +
                           "adding for the first time, so choose the option there to see it."),
                           refits.Count, groupName), Noted());
             }
             catch (PenumbraModMeta.LegacyFolderException)
             {
-                return new Outcome(false, groupName, names, Loc.Localize("Parts.Retarget.Save.Legacy",
+                return new Outcome(false, groupName, names, ProteusLoc.Localize("Parts.Retarget.Save.Legacy",
                                    "This mod is still in Penumbra's old folder format, which Proteus will not edit. " +
                                    "Enable it in Penumbra once so Penumbra upgrades it, then come back."));
             }
             catch (Exception e)
             {
                 return new Outcome(false, groupName, names, string.Format(
-                    Loc.Localize("Parts.Retarget.Save.Failed.Fmt", "Could not save: {0}"), e.Message));
+                    ProteusLoc.Localize("Parts.Retarget.Save.Failed.Fmt", "Could not save: {0}"), e.Message));
             }
         }
     }
@@ -707,7 +796,7 @@ internal static class BodyRetargetWriter
     private static string Norm(string rel) => rel.Replace('\\', '/').Trim('/');
 
     private static string Removed(string optionName)
-        => string.Format(Loc.Localize("Parts.Retarget.Undo.Removed.Fmt", "Removed \"{0}\"."), optionName);
+        => string.Format(ProteusLoc.Localize("Parts.Retarget.Undo.Removed.Fmt", "Removed \"{0}\"."), optionName);
 
     /// <summary>
     /// Remove one retargeted option. From a group Proteus made, the whole group goes once only
@@ -738,7 +827,7 @@ internal static class BodyRetargetWriter
 
                 var options = PenumbraModMeta.TryReadFileOptions(modRoot, groupName);
                 if (options == null)
-                    return new Outcome(false, groupName, optionName, Loc.Localize("Parts.Retarget.Undo.NoGroup",
+                    return new Outcome(false, groupName, optionName, ProteusLoc.Localize("Parts.Retarget.Undo.NoGroup",
                                        "There is no retarget group in this mod."));
 
                 var going = options.FirstOrDefault(o => string.Equals(o.Name, optionName,
@@ -780,14 +869,14 @@ internal static class BodyRetargetWriter
             }
             catch (PenumbraModMeta.LegacyFolderException)
             {
-                return new Outcome(false, groupName, optionName, Loc.Localize("Parts.Retarget.Undo.Legacy",
+                return new Outcome(false, groupName, optionName, ProteusLoc.Localize("Parts.Retarget.Undo.Legacy",
                                    "This mod is in Penumbra's old folder format. Enable it in Penumbra once, then " +
                                    "come back."));
             }
             catch (Exception e)
             {
                 return new Outcome(false, groupName, optionName, string.Format(
-                    Loc.Localize("Parts.Retarget.Undo.Failed.Fmt", "Could not undo: {0}"), e.Message));
+                    ProteusLoc.Localize("Parts.Retarget.Undo.Failed.Fmt", "Could not undo: {0}"), e.Message));
             }
         }
     }
@@ -1013,7 +1102,7 @@ internal static class BodyRetargetWriter
         var set = SetFolder.Match(gamePath.Replace('\\', '/'));
         // A model that draws a material nothing publishes is not drawn at all in game: never save one.
         if (!set.Success)
-            throw new InvalidDataException(string.Format(Loc.Localize("Parts.Retarget.Save.NoMaterialSet.Fmt",
+            throw new InvalidDataException(string.Format(ProteusLoc.Localize("Parts.Retarget.Save.NoMaterialSet.Fmt",
                 "{0} draws the new body's underwear, whose material can only be saved beside an equipment or accessory " +
                 "model."), gamePath));
         string materials = set.Groups[1].Value + "material/";
@@ -1056,7 +1145,7 @@ internal static class BodyRetargetWriter
             for (char c = 'z'; c >= 'a' && name == null; c--)
                 if (!taken.Contains(stem + c + ".mtrl") && !names.Contains(stem + c + ".mtrl")) name = stem + c + ".mtrl";
             if (name == null)
-                throw new InvalidDataException(string.Format(Loc.Localize("Parts.Retarget.Save.NoMaterialName.Fmt",
+                throw new InvalidDataException(string.Format(ProteusLoc.Localize("Parts.Retarget.Save.NoMaterialName.Fmt",
                     "Every material name {0} could use is taken, so the new body's underwear it draws has no name of its " +
                     "own to be saved under."), gamePath));
             if (!string.Equals(name, material.Name, StringComparison.OrdinalIgnoreCase))

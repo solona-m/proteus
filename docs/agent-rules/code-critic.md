@@ -32,7 +32,8 @@ them by hand.
 
 Build-enforced: the localization rule (`Proteus.Tests/LocalizationTests.cs`:
 keys, placeholders and format specifiers match English across every locale,
-code keys match `en.json`).
+code keys match `en.json`) and the supply-chain rule
+(`Proteus.Tests/SupplyChainTests.cs`).
 
 ## Rules
 
@@ -74,7 +75,8 @@ code keys match `en.json`).
 
 ### Localization
 
-- **Every user-facing string goes through `Strings`/`Loc.Localize` with a
+- **Every user-facing string goes through `Strings`/`ProteusLoc.Localize` (never
+  CheapLoc's own `Loc.Localize`, which can return `"#key"` once inlined) with a
   literal key and is added to `en.json` and all 7 translations** (de, es, fr,
   ja, ko, ru, zh) — translated, not an English copy. An English copy passes the
   tests but ships untranslated. Build-enforced for keys/placeholders; English
@@ -93,10 +95,23 @@ code keys match `en.json`).
   build crashes on CPUs without it. `FAIL` if a diff adds it. Diff-scoped,
   `Proteus/native/`.
 
+### Supply chain
+
+- **NuGet versions are plain and match the lock file; actions are pinned to a
+  commit SHA with a `# vX.Y.Z` comment.** A floating (`2.*`) or ranged
+  PackageReference, a `uses:` on a tag or branch, or a `packages.lock.json`
+  `resolved`/`contentHash` change in a diff that only pins versions is
+  `FAIL`: a tag or a float can change the code a release builds without any
+  diff here. Only the read-only `codeql.yml`, and `dependabot-automerge.yml`
+  on Dependabot's own PRs, may run on a push or PR to `test`.
+  Build-enforced by `SupplyChainTests`. Repo-wide.
+
 ### Commits
 
 - **No real name and no Claude attribution in commits**; the author is
-  Solona. `FAIL`. Diff-scoped (commits on the branch).
+  Solona. `FAIL`. Diff-scoped (commits on the branch). Covers commits made by
+  Solona or an agent only: Dependabot's and other contributors' PR commits keep
+  their own authors and are merged as they are.
 
 ## Privacy anchors
 
@@ -131,4 +146,5 @@ Tag items "(if applicable)" when they only apply to certain diffs.
 - [ ] New strings localized in all 8 locale files, translated; LocalizationTests not weakened (if applicable)
 - [ ] No local paths in tests; real data via LocalData + [LocalDataFact] (if applicable)
 - [ ] Native shim not built with /arch:AVX2 (if applicable)
-- [ ] Commits authored as Solona, no real name, no Claude attribution
+- [ ] NuGet versions plain and matching the lock file; actions SHA-pinned; SupplyChainTests not weakened (if applicable)
+- [ ] Our commits authored as Solona, no real name, no Claude attribution (bot and contributor commits keep their own authors)

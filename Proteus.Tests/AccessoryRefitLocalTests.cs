@@ -13,6 +13,7 @@ namespace Proteus.Tests;
 /// with its top in each "Top Size" option, and real jewellery. Skipped where they are not installed. Everything measured
 /// on the refit's own model, inside the pass — never on an export.
 /// </summary>
+[Trait("Speed", "Slow")]
 public class AccessoryRefitLocalTests(ITestOutputHelper output)
 {
     private const string Scarlet = LocalData.Mods + ":Scarlet - by Solona";

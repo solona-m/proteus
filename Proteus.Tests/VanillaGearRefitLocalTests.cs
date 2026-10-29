@@ -17,7 +17,8 @@ namespace Proteus.Tests;
 /// inside it — and draws no chest skin there, so the new body's skin put in whole showed through the cloth under the bust
 /// and on the belly. Needs the game's data and the body mods named.
 /// </summary>
-public class VanillaGearRefitLocalTests(ITestOutputHelper output)
+[Trait("Speed", "Slow")]
+public partial class VanillaGearRefitLocalTests(ITestOutputHelper output)
 {
     private const string Neolithe = LocalData.Mods + ":Neolithe [ALL IN ONE]";
     private const string Bibo = LocalData.Mods + ":Bibo+";
@@ -1169,11 +1170,10 @@ public class VanillaGearRefitLocalTests(ITestOutputHelper output)
         BodyRetarget.Planned Studio(bool gameGear)
         {
             var rule = RetargetInputs.StudioSkin(replaceSkin: true, cutHidden: true, clearBody: false, gameGear, "_top", crossSex: false);
-            return BodyRetarget.Plan(r.Garment, r.Bytes, [r.Pair], "_top", held: new HashSet<int>(), replaceSkin: true,
-                                     acrossBodies: true, clearBody: rule.ClearBody, cutHidden: true,
-                                     keepShape: RefitCore.ShapePieces(r.Garment, RefitCore.DefaultKeepShape(r.Garment)),
-                                     tuckSlot: rule.TuckSlot, deepClear: rule.DeepClear, keepStandoff: rule.KeepStandoff,
-                                     liftUnderbust: true);
+            return RetargetInputs.StudioPlan(r.Garment, r.Bytes, [r.Pair], "_top", new HashSet<int>(), layOnBody: true,
+                                             acrossBodies: true, rule, cut: true,
+                                             RefitCore.ShapePieces(r.Garment, RefitCore.DefaultKeepShape(r.Garment)),
+                                             carryPiercings: false, liftUnderbust: true);
         }
 
         // The run as the user made it, before this change: what the game logged, exactly.
@@ -1338,11 +1338,10 @@ public class VanillaGearRefitLocalTests(ITestOutputHelper output)
         if (garmentName == Coatee && (rel == AlmondXs || rel == AlmondM))
         {
             var rule = RetargetInputs.StudioSkin(true, true, false, gameGear: true, "_top", false);
-            var studio = BodyRetarget.Plan(garment, bytes, [pair], "_top", held: new HashSet<int>(), replaceSkin: true,
-                                           acrossBodies: true, clearBody: rule.ClearBody, cutHidden: true,
-                                           keepShape: RefitCore.ShapePieces(garment, RefitCore.DefaultKeepShape(garment)),
-                                           tuckSlot: rule.TuckSlot, deepClear: rule.DeepClear, keepStandoff: rule.KeepStandoff,
-                                           liftUnderbust: true, seeInside: rule.SeeInside);
+            var studio = RetargetInputs.StudioPlan(garment, bytes, [pair], "_top", new HashSet<int>(), layOnBody: true,
+                                                   acrossBodies: true, rule, cut: true,
+                                                   RefitCore.ShapePieces(garment, RefitCore.DefaultKeepShape(garment)),
+                                                   carryPiercings: false, liftUnderbust: true);
             Assert.Equal(after.Model, studio.Model);
         }
         // [AC-coatee-strap-slit-1/2] Inside the strap-tip region, from the user's camera: at most half of what 1357 left.
@@ -1398,6 +1397,7 @@ public class VanillaGearRefitLocalTests(ITestOutputHelper output)
     [Trait("Plan", "AC-coatee-strap-slit-5")]
     [Trait("Plan", "EDGE-coatee-strap-slit-12")]
     [Trait("Plan", "AC-keep-shape-flat-card-3")]
+    [Trait("Plan", "EDGE-seam-weights-15")]
     public void A_modders_top_in_the_Studio_is_unchanged()
     {
         var data = new Lumina.GameData(LocalData.Path(LocalData.GameData));
@@ -1417,22 +1417,25 @@ public class VanillaGearRefitLocalTests(ITestOutputHelper output)
             replaceSkin: true, acrossBodies: true, clearBody: rule.ClearBody, cutHidden: true,
             keepShape: RefitCore.ShapePieces(garment, RefitCore.DefaultKeepShape(garment)), tuckSlot: rule.TuckSlot,
             deepClear: rule.DeepClear, keepStandoff: rule.KeepStandoff, liftUnderbust: true, seeInside: seeInside);
-        // Build 1357's bytes, read before 1359's reading of the old body's underwear (NoSourceWorn) and before 1365's
-        // quaternion turn of kept pieces (NoTurnFallback), as they were.
-        var as1357 = BodyRetarget.WithTuning(new BodyRetarget.Tuning(NoSourceWorn: true, NoTurnFallback: true),
+        // Build 1357's bytes, read before 1359's reading of the old body's underwear (NoSourceWorn), before 1365's
+        // quaternion turn of kept pieces (NoTurnFallback) and before 1382's seam weights (NoSeamWeights), as they were.
+        var as1357 = BodyRetarget.WithTuning(new BodyRetarget.Tuning(NoSourceWorn: true, NoTurnFallback: true,
+                                                                     NoSeamWeights: true),
                                              () => Run(rule.SeeInside));
         Assert.Equal("DE0986CCDF1235DA5B5FB12C2054A2CA4E120DFEC544E790FDB38245E451F7ED", SkinTuckSheet.Sha(as1357.Model));
         Assert.Equal(1146, as1357.Report.Swap?.Tucked);
         // With 1359's reading: test's own bytes (taken at build 1360; the rule is off on this path, so they are 1359's by
         // construction), as builds before 1365 turned kept pieces.
-        var as1364 = BodyRetarget.WithTuning(new BodyRetarget.Tuning(NoTurnFallback: true), () => Run(rule.SeeInside));
+        var as1364 = BodyRetarget.WithTuning(new BodyRetarget.Tuning(NoTurnFallback: true, NoSeamWeights: true),
+                                             () => Run(rule.SeeInside));
         Assert.Equal("C19F540BB2A9765EFA77799D36BC22C34E58367BD74088997D8C2523A71D3FC9", SkinTuckSheet.Sha(as1364.Model));
         Assert.Equal(1155, as1364.Report.Swap?.Tucked);
         Assert.Equal(0, as1364.Report.Swap?.SeenInto);
-        // [AC-keep-shape-flat-card-3] And as it is made now: the kept pieces the polar fit could not turn are turned truly,
+        // [AC-keep-shape-flat-card-3] And as 1365 made it: the kept pieces the polar fit could not turn are turned truly,
         // and nothing else moves — still nothing drawn where the inside would show, and no more cloth in the body, no more
-        // folds.
-        var plan = Run(rule.SeeInside);
+        // folds. Before 1382's seam weights, which write weights alone: as it is made now, every position and normal the same.
+        var plan = BodyRetarget.WithTuning(new BodyRetarget.Tuning(NoSeamWeights: true), () => Run(rule.SeeInside));
+        SeamWeightsTests.SameGeometry(plan.Model, Run(rule.SeeInside).Model);   // [EDGE-seam-weights-15]
         Assert.True(plan.Report.ShapeFallbacks > 0, "Dei Gratia's refit should take quaternion turns, or the pins above say it all");
         string target = mod.PathOf(option);
         int Inside(BodyRetarget.Planned p) => BodySizeMatch.ClothAgainst(ModelPartReader.Read(p.Model)!, target)!.Value.Inside;
@@ -1724,8 +1727,9 @@ public class VanillaGearRefitLocalTests(ITestOutputHelper output)
     private static Vector3 Crossing(Vector3 o, Vector3 d, Drawn t)
         => Crosses(o, d, t.A, t.B, t.C) is float s ? o + d * s : o;
 
-    /// <summary>An orthographic view about (0, 1.2, 0) at 1 mm a pixel, 500 by 600, from <c>toCamera</c>.</summary>
-    private sealed class Raster(Vector3 toCamera)
+    /// <summary>An orthographic view about (0, <c>centreY</c>, 0) — 1.2 m unless given — at 1 mm a pixel, 500 by 600, from
+    /// <c>toCamera</c>.</summary>
+    private sealed class Raster(Vector3 toCamera, float centreY = 1.2f)
     {
         internal const int W = 500, H = 600;
         private readonly Vector3 right = Vector3.Normalize(Vector3.Cross(Vector3.UnitY, toCamera));
@@ -1735,8 +1739,16 @@ public class VanillaGearRefitLocalTests(ITestOutputHelper output)
 
         private (float X, float Y, float Z) P(Vector3 q)
         {
-            var d = q - new Vector3(0f, 1.2f, 0f);
+            var d = q - new Vector3(0f, centreY, 0f);
             return (Vector3.Dot(d, right) * 1000f + W / 2f, H / 2f - Vector3.Dot(d, Up) * 1000f, Vector3.Dot(d, toCamera));
+        }
+
+        /// <summary>Where in the world the fragment at <paramref name="pixel"/>'s centre lies, <paramref name="z"/> toward the
+        /// camera — the inverse of what <see cref="Fill"/> puts.</summary>
+        internal Vector3 At(int pixel, float z)
+        {
+            float x = pixel % W + 0.5f, y = pixel / W + 0.5f;
+            return new Vector3(0f, centreY, 0f) + right * ((x - W / 2f) / 1000f) + Up * ((H / 2f - y) / 1000f) + toCamera * z;
         }
 
         internal void Fill(Vector3 qa, Vector3 qb, Vector3 qc, Action<int, float> put)
@@ -1826,7 +1838,8 @@ public class VanillaGearRefitLocalTests(ITestOutputHelper output)
     /// gloves cover them, and the game's own tops leave them undrawn on its own body too.
     /// </summary>
     /// <param name="bands">Where the area lies: by 10 cm of height, front or back.</param>
-    internal static double UncoveredUndrawn(ModelParts m, ModelParts body, SortedDictionary<(float, string), double> bands)
+    internal static double UncoveredUndrawn(ModelParts m, ModelParts body, SortedDictionary<(float, string), double> bands,
+                                            float armFrom = ArmFrom)
     {
         var cloth = new List<(Vector3 A, Vector3 B, Vector3 C)>();
         foreach (var part in ClothParts(m))
@@ -1860,7 +1873,7 @@ public class VanillaGearRefitLocalTests(ITestOutputHelper output)
                 var cross = Vector3.Cross(b - a, c - a);
                 if (cross.LengthSquared() < 1e-14f) continue;
                 var centre = (a + b + c) / 3f;
-                if (MathF.Abs(centre.X) > ArmFrom) continue;
+                if (MathF.Abs(centre.X) > armFrom) continue;
                 var normal = Vector3.Normalize(cross);
                 var level = new Vector3(normal.X, 0f, normal.Z);
                 if (drawn.Nearest(centre, 0.002f, out _) || Covered(centre, normal)

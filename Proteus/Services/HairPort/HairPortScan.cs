@@ -218,8 +218,8 @@ internal static class HairPortScan
     }
 
     /// <summary>What one port came to: the writes saved; or none, with the race already ported, or why not.</summary>
-    /// <param name="Refusal">Why not is the port's own verdict on the model — it does not fit, needs bones the race lacks
-    /// — which the same model will get again; not a save that failed, an error, or a file that could not be read.</param>
+    /// <param name="Refusal">Why not is the port's own verdict on the model — it needs bones the race lacks, or the
+    /// deformer cannot move them — which the same model will get again; not a save that failed, an error, or a file that could not be read.</param>
     /// <param name="Stripped">Not ported, but its old port, which could not be made again, was saved without the skeleton
     /// that changed another hairstyle (<see cref="HairPortWriter.PortWrite.Stripped"/>): <paramref name="Writes"/> are
     /// that, and <paramref name="Message"/> says why it was not ported.</param>
@@ -307,12 +307,12 @@ internal static class HairPortScan
     /// </summary>
     public static string SummaryLine(IReadOnlyList<Row> fitted)
     {
-        var named = fitted.Take(3).Select(r => string.Format(Loc.Localize("HairPort.Scan.Entry.Fmt", "hairstyle {0} ({1})"),
-                                                             r.Id, r.ModName));
+        string entryFmt = ProteusLoc.Localize("HairPort.Scan.Entry.Fmt", "hairstyle {0} ({1})");
+        var named = fitted.Take(3).Select(r => string.Format(entryFmt, r.Id, r.ModName));
         string list = string.Join(", ", named);
         if (fitted.Count > 3)
-            list += string.Format(Loc.Localize("HairPort.Scan.More.Fmt", " and {0} more"), fitted.Count - 3);
-        return string.Format(Loc.Localize("Chat.HairPortScan.Fmt",
+            list += string.Format(ProteusLoc.Localize("HairPort.Scan.More.Fmt", " and {0} more"), fitted.Count - 3);
+        return string.Format(ProteusLoc.Localize("Chat.HairPortScan.Fmt",
             "[Proteus] Fitted to your race: {0}. To wear one, choose that hairstyle number for your character. Undo it, "
           + "or turn this off, under /proteus > Settings > Hair."), list);
     }

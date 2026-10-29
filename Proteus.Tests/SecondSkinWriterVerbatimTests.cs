@@ -430,6 +430,81 @@ public class SecondSkinWriterVerbatimTests(Xunit.Abstractions.ITestOutputHelper 
     }
 
     /// <summary>
+    /// [AC-imported-imc-toggles-1] [EDGE-imported-imc-toggles-17] [EDGE-imported-imc-toggles-24]
+    /// [EDGE-imported-imc-toggles-36] A pack's option IMC toggle drops the part its mask hides and takes every variant
+    /// tag off the rest — this slot's and another's — so the host's mask cannot judge them; a tag the game drives from
+    /// what else is worn (<c>atr_ude</c>) stays. With nothing hidden the tags still go.
+    /// </summary>
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public void A_mask_hidden_variant_part_is_dropped_and_other_tags_survive(bool hideB)
+    {
+        string[] attrs = ["atr_tv_a", "atr_tv_b", "atr_dv_a", "atr_ude"];
+        var content = SyntheticModel.Build(attrs,
+            new SyntheticModel.Mesh("/mt_pack.mtrl",
+                new SyntheticModel.Sub(1u << 0), new SyntheticModel.Sub(1u << 1),
+                new SyntheticModel.Sub(1u << 2), new SyntheticModel.Sub(1u << 3)));
+
+        var built = SecondSkinWriter.Build(
+            Array.Empty<SecondSkinWriter.SourceSpec>(),
+            [new SecondSkinLayer
+            {
+                MaterialName = "/mt_c0201a0053_rir_a.mtrl",
+                Geometry =
+                [
+                    new ContentGeometry(content, _ => true,
+                        HiddenAttributes: hideB ? new HashSet<string>(StringComparer.Ordinal) { "atr_tv_b" } : null,
+                        DropVariantAttributes: true),
+                ],
+            }],
+            null, out _);
+        Validate(built);
+
+        var names = AttributeNames(built);
+        Assert.DoesNotContain(names, SecondSkinWriter.IsVariantAttribute);
+        Assert.Contains("atr_ude", names);
+
+        // Only drawn submeshes count: a dropped one may keep its slot, empty, so the tables keep their shape.
+        var t = Tables.Of(built);
+        var drawn = Enumerable.Range(0, t.SubmeshCount(built))
+            .Where(i => BitConverter.ToUInt32(built, t.SubStart + i * 16 + 4) > 0)
+            .Select(i => BitConverter.ToUInt32(built, t.SubStart + i * 16 + 8))
+            .ToList();
+        uint ude = 1u << names.IndexOf("atr_ude");
+        // tv_a, (tv_b,) and dv_a drawn untagged; atr_ude's submesh still carries its tag.
+        Assert.Equal(hideB ? 3 : 4, drawn.Count);
+        Assert.Equal(hideB ? 2 : 3, drawn.Count(m => m == 0));
+        Assert.Single(drawn, m => m == ude);
+    }
+
+    /// <summary>
+    /// [EDGE-imported-imc-toggles-23] An option mask that hides every part on a host is reported as the user's
+    /// toggle, as an Imc group's is.
+    /// </summary>
+    [Fact]
+    public void Hiding_every_variant_part_reports_the_toggle()
+    {
+        var content = SyntheticModel.Build(["atr_tv_a"],
+            new SyntheticModel.Mesh("/mt_pack.mtrl", new SyntheticModel.Sub(1u << 0)));
+
+        var ex = Assert.Throws<EmptyShellException>(() => SecondSkinWriter.Build(
+            Array.Empty<SecondSkinWriter.SourceSpec>(),
+            [new SecondSkinLayer
+            {
+                MaterialName = "/mt_c0201a0053_rir_a.mtrl",
+                Geometry =
+                [
+                    new ContentGeometry(content, _ => true,
+                        HiddenAttributes: new HashSet<string>(StringComparer.Ordinal) { "atr_tv_a" },
+                        DropVariantAttributes: true),
+                ],
+            }],
+            null, out _));
+        Assert.True(ex.ByToggle);
+    }
+
+    /// <summary>
     /// A host carrying nothing but hidden geometry fails in a way the caller can tell apart from a fault —
     /// switching off the only piece on a carrier is the user getting what they asked for, not a broken
     /// build, and it used to arrive as "no geometry survived coverage trimming".

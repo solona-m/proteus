@@ -38,20 +38,35 @@ public class UVMapDownloadService : IDisposable
         new("gen3_to_bibo_transfer.tif", "uvmaps-v1", 134217960L, "1ec0280896cdd9b496dd5f76691ebbdbf1309229256f9126df5ee155bedbb946"),
     ];
 
-    /// <summary>The bibo↔TBSE pair (see docs/uvmaps.md), fetched the first time a man needs it.</summary>
+    /// <summary>
+    /// The bibo↔TBSE pair (see docs/uvmaps.md), fetched the first time a man needs it. Unlike the first set it is held
+    /// to its pinned size: an install with an older revision (v2, whose nipples fall 3 cm low) is brought up to this
+    /// one in the background (<see cref="StartUpgradeIfStale"/>) and swapped in whole at the next start.
+    /// </summary>
     internal static readonly MapFile[] MenMaps =
     [
-        new(UVRemapService.BiboToTbseFile, "uvmaps-v2", 11798374L, "1ad198ed137abf5882ee0e38b3b91d7eb01771af35f7be2cd4eaf41d975e32a0"),
-        new(UVRemapService.TbseToBiboFile, "uvmaps-v2", 12911330L, "701964922589185c3ed4d4b1af824f84bf0c2dd4552488a8e7383a08ce345c23"),
+        new(UVRemapService.BiboToTbseFile, "uvmaps-v3", 11834120L, "559efe148403b12c168f20b41dd614952708933f4404fedc98c7ab79a6a36ca1"),
+        new(UVRemapService.TbseToBiboFile, "uvmaps-v3", 13027942L, "820fd4c1cb38930698a12daba7bd624ddc43a5e417d53436b34a165d14a6f227"),
     ];
+
+    /// <summary>How long a failed background upgrade of the men's pair waits before it is tried again.</summary>
+    internal static readonly TimeSpan UpgradeRetry = TimeSpan.FromHours(24);
+
+    /// <summary>The file that says when the men's pair last failed to upgrade: one ISO-8601 UTC time.</summary>
+    internal const string UpgradeFailedMarker = "men-upgrade.failed";
 
     /// <summary>Fetches one file: the seam tests replace; <see cref="ResilientDownloader.FetchAsync"/> otherwise.</summary>
     internal delegate Task<FetchResult> Fetch(string[] baseUrls, string fileName, long expectedBytes, string expectedSha,
                                               string destPath, Action<long>? onProgress, CancellationToken ct);
 
-    private sealed class MapSet(MapFile[] files)
+    /// <param name="exactSize">
+    /// Whether a file on disk counts as this set's only at its pinned size. The men's pair is; the first set is not
+    /// (see <see cref="MigrateFromAssemblyDir"/>: an older revision there is worth more than 256 MB fetched again).
+    /// </param>
+    private sealed class MapSet(MapFile[] files, bool exactSize)
     {
         public readonly MapFile[] Files = files;
+        public readonly bool ExactSize = exactSize;
         public UVMapDownloadState State = UVMapDownloadState.Idle;
         public string Status = string.Empty;
     }
@@ -62,9 +77,10 @@ public class UVMapDownloadService : IDisposable
     private readonly string mapsDir;
     private readonly List<string> legacyMapsDirs;
     private readonly CancellationTokenSource cts = new();
-    private readonly MapSet core = new(CoreMaps);
-    private readonly MapSet men = new(MenMaps);
+    private readonly MapSet core = new(CoreMaps, exactSize: false);
+    private readonly MapSet men = new(MenMaps, exactSize: true);
     private readonly object gate = new();
+    private readonly Func<DateTime> utcNow;
     private int menAutoAttempted;
 
     /// <summary>
@@ -111,17 +127,101 @@ public class UVMapDownloadService : IDisposable
     public UVMapDownloadService(IPluginLog log, string dataDir, string? assemblyDir = null)
         : this(log, dataDir, assemblyDir, null) { }
 
-    internal UVMapDownloadService(IPluginLog log, string dataDir, string? assemblyDir, Fetch? fetch)
+    /// <remarks>
+    /// Finishes any swap of the men's pair a crash cut short, then swaps in a staged pair: here, before the plugin
+    /// builds anything that reads a map, so no map is open or cached while its file is replaced.
+    /// </remarks>
+    internal UVMapDownloadService(IPluginLog log, string dataDir, string? assemblyDir, Fetch? fetch, Func<DateTime>? utcNow = null)
     {
         this.log = log;
         if (fetch == null) downloader = new ResilientDownloader(log);
         this.fetch = fetch ?? downloader!.FetchAsync;
+        this.utcNow = utcNow ?? (() => DateTime.UtcNow);
         mapsDir = Path.Combine(dataDir, "uvmaps");
         legacyMapsDirs = ProteusAssets.LegacyAssetDirs(assemblyDir, "uvmaps");
+        RecoverInterruptedSwap();
+        SwapInStagedMenMaps();
     }
 
+    private string PathOf(MapFile f) => Path.Combine(mapsDir, f.Name);
+    private string StagedOf(MapFile f) => PathOf(f) + ".staged";
+    private string PrevOf(MapFile f) => PathOf(f) + ".prev";
+    private static bool AtPin(string path, MapFile f) => new FileInfo(path) is { Exists: true } fi && fi.Length == f.Bytes;
+
+    /// <summary>A file of <paramref name="set"/> on disk that will do: any non-empty one, or for the men's pair one at its pinned size.</summary>
+    private bool Done(MapSet set, MapFile f)
+        => set.ExactSize ? AtPin(PathOf(f), f) : new FileInfo(PathOf(f)) is { Exists: true, Length: > 0 };
+
+    /// <summary>Whether every file of <paramref name="set"/> is on disk and usable — of whatever revision.</summary>
     private bool Present(MapSet set)
-        => set.Files.All(f => new FileInfo(Path.Combine(mapsDir, f.Name)) is { Exists: true, Length: > 0 });
+        => set.Files.All(f => new FileInfo(PathOf(f)) is { Exists: true, Length: > 0 });
+
+    /// <summary>
+    /// A swap of the men's pair a crash cut short, finished: a file whose final is missing is rolled forward from its
+    /// staged copy when the other is already the current revision, else back from its <c>.prev</c>; once both finals
+    /// are here, the <c>.prev</c> files go. A roll-back may leave one current and one old — the next upgrade, which
+    /// fetches only what is not current, makes them whole.
+    /// </summary>
+    private void RecoverInterruptedSwap()
+    {
+        try
+        {
+            foreach (var f in MenMaps)
+            {
+                if (File.Exists(PathOf(f))) continue;
+                bool othersCurrent = MenMaps.Where(o => o != f).All(o => AtPin(PathOf(o), o));
+                if (AtPin(StagedOf(f), f) && othersCurrent) File.Move(StagedOf(f), PathOf(f));
+                else if (File.Exists(PrevOf(f))) File.Move(PrevOf(f), PathOf(f));
+                else continue;
+                log.Information("[Proteus] Recovered {0} after an interrupted UV map swap.", f.Name);
+            }
+            if (MenMaps.All(f => File.Exists(PathOf(f))))
+                foreach (var f in MenMaps) TryDelete(PrevOf(f));
+        }
+        catch (Exception ex)
+        {
+            log.Warning(ex, "[Proteus] Could not recover an interrupted UV map swap");
+        }
+    }
+
+    /// <summary>
+    /// The staged men's files moved into place — only when every file of the pair is then the current revision
+    /// (staged at its pin, or already final at it), so the pair is never left half new and half old. Staged files of
+    /// an older pin are dropped. A failure puts back what it moved; the next start's recovery finishes the rest.
+    /// </summary>
+    private void SwapInStagedMenMaps()
+    {
+        var moved = new List<MapFile>();
+        try
+        {
+            foreach (var f in MenMaps)
+                if (File.Exists(StagedOf(f)) && !AtPin(StagedOf(f), f)) TryDelete(StagedOf(f));
+            var staged = MenMaps.Where(f => AtPin(StagedOf(f), f)).ToList();
+            if (staged.Count == 0 || !MenMaps.All(f => AtPin(StagedOf(f), f) || AtPin(PathOf(f), f))) return;
+            foreach (var f in staged)
+            {
+                if (File.Exists(PathOf(f))) File.Move(PathOf(f), PrevOf(f), overwrite: true);
+                moved.Add(f);
+                File.Move(StagedOf(f), PathOf(f));
+            }
+            foreach (var f in staged) TryDelete(PrevOf(f));
+            log.Information("[Proteus] Swapped in the upgraded UV maps ({0}).", string.Join(", ", staged.Select(f => f.Name)));
+        }
+        catch (Exception ex)
+        {
+            log.Warning(ex, "[Proteus] Could not swap in the upgraded UV maps; keeping the old ones");
+            foreach (var f in moved)
+            {
+                try
+                {
+                    if (!File.Exists(PrevOf(f))) continue;
+                    if (File.Exists(PathOf(f))) File.Move(PathOf(f), StagedOf(f), overwrite: true);
+                    File.Move(PrevOf(f), PathOf(f));
+                }
+                catch (Exception inner) { log.Warning(inner, "[Proteus] Could not put back {0}", f.Name); }
+            }
+        }
+    }
 
     /// <summary>Whether the bibo↔gen3 pair is here. The bibo↔TBSE pair is not asked: it is not every install's.</summary>
     public bool MapsPresent()
@@ -185,12 +285,80 @@ public class UVMapDownloadService : IDisposable
     /// <summary>Downloads the bibo↔gen3 pair when it is not here. <see cref="MapsArrived"/> follows a download.</summary>
     public void EnsureMapsAsync()
     {
+        StartUpgradeIfStale();
         if (MapsPresent())
         {
             lock (gate) core.State = UVMapDownloadState.Done;
             return;
         }
         Start(core);
+    }
+
+    /// <summary>
+    /// When both men's files are here but not both the pinned revision, the ones that are neither current nor already
+    /// staged are fetched beside them as <c>.staged</c>, out of sight: no pill, no <see cref="MapsArrived"/>, the old
+    /// pair drawing meanwhile, the new one swapped in at the next start. A failure keeps the old pair, says so in the
+    /// log and is not tried again for <see cref="UpgradeRetry"/>. A lone file is no upgrade: the on-demand download
+    /// fetches what is missing or not current straight to its place.
+    /// </summary>
+    internal Task? StartUpgradeIfStale()
+    {
+        if (!MenMaps.All(f => File.Exists(PathOf(f))) || MenMaps.All(f => AtPin(PathOf(f), f))) return null;
+        if (FailedRecently()) return null;
+        // The pair is usable as it is: the on-demand download has nothing to do this session.
+        if (Interlocked.Exchange(ref menAutoAttempted, 1) != 0) return null;
+        return Task.Run(UpgradeMenMaps, cts.Token);
+    }
+
+    private async Task UpgradeMenMaps()
+    {
+        try
+        {
+            foreach (var f in MenMaps)
+            {
+                if (AtPin(PathOf(f), f) || AtPin(StagedOf(f), f)) continue;
+                var r = await fetch(ProteusAssets.BaseUrls(f.Tag), f.Name, f.Bytes, f.Sha256, StagedOf(f), null, cts.Token);
+                if (!r.Ok)
+                {
+                    log.Warning("[Proteus] Could not upgrade {0} ({1}); keeping the maps on disk, trying again in a day.",
+                                f.Name, r.Detail ?? r.Failure.ToString());
+                    MarkUpgradeFailed();
+                    return;
+                }
+            }
+            TryDelete(Path.Combine(mapsDir, UpgradeFailedMarker));
+            log.Information("[Proteus] Upgraded UV maps fetched; they take over at the next start.");
+        }
+        catch (OperationCanceledException) { }
+        catch (Exception ex)
+        {
+            log.Warning(ex, "[Proteus] Could not upgrade the men's UV maps; keeping the maps on disk, trying again in a day.");
+            MarkUpgradeFailed();
+        }
+    }
+
+    private void MarkUpgradeFailed()
+    {
+        try { File.WriteAllText(Path.Combine(mapsDir, UpgradeFailedMarker), utcNow().ToString("O")); }
+        catch (Exception ex) { log.Warning(ex, "[Proteus] Could not note the failed UV map upgrade"); }
+    }
+
+    /// <summary>Whether the last upgrade failed less than <see cref="UpgradeRetry"/> ago. A marker that will not read, or from the future, is none.</summary>
+    private bool FailedRecently()
+    {
+        try
+        {
+            var path = Path.Combine(mapsDir, UpgradeFailedMarker);
+            if (!File.Exists(path)) return false;
+            if (!DateTime.TryParse(File.ReadAllText(path).Trim(), null, System.Globalization.DateTimeStyles.RoundtripKind, out var at)) return false;
+            var age = utcNow() - at.ToUniversalTime();
+            return age >= TimeSpan.Zero && age < UpgradeRetry;
+        }
+        catch (Exception ex)
+        {
+            log.Warning(ex, "[Proteus] Could not read when the UV map upgrade last failed; trying it");
+            return false;
+        }
     }
 
     /// <summary>
@@ -224,7 +392,7 @@ public class UVMapDownloadService : IDisposable
             // language mid-download leaves this one pill in the old language until the next progress tick.
             // Accepted deliberately — the alternative is storing a key plus boxed args and formatting at draw
             // time, which is real machinery for a string that is replaced within seconds.
-            set.Status = Loc.Localize("Service.UVMaps.Downloading", "Downloading UV maps...");
+            set.Status = ProteusLoc.Localize("Service.UVMaps.Downloading", "Downloading UV maps...");
         }
         Task.Run(() => DownloadAll(set), cts.Token);
     }
@@ -242,8 +410,7 @@ public class UVMapDownloadService : IDisposable
             long totalExpected = 0;
             foreach (var file in set.Files)
             {
-                var dest = Path.Combine(mapsDir, file.Name);
-                if (File.Exists(dest) && new FileInfo(dest).Length > 0) continue;
+                if (Done(set, file)) continue;
                 totalExpected += file.Bytes;
             }
             if (totalExpected <= 0) totalExpected = 1;   // guard the division in the progress line
@@ -261,7 +428,7 @@ public class UVMapDownloadService : IDisposable
                 var done = completed + current;
                 if (done < nextReport) return;
                 var status = string.Format(
-                    Loc.Localize("Service.UVMaps.Progress.Fmt", "Downloading UV maps... ({0} MB / {1} MB)"),
+                    ProteusLoc.Localize("Service.UVMaps.Progress.Fmt", "Downloading UV maps... ({0} MB / {1} MB)"),
                     done / (1024 * 1024), totalExpected / (1024 * 1024));
                 lock (gate) set.Status = status;
                 nextReport = done + 5L * 1024 * 1024;
@@ -269,8 +436,8 @@ public class UVMapDownloadService : IDisposable
 
             foreach (var file in set.Files)
             {
-                var dest = Path.Combine(mapsDir, file.Name);
-                if (File.Exists(dest) && new FileInfo(dest).Length > 0)
+                var dest = PathOf(file);
+                if (Done(set, file))
                     continue;
 
                 current = 0;
@@ -281,13 +448,13 @@ public class UVMapDownloadService : IDisposable
                     Fail(set, r.Failure switch
                     {
                         FetchFailure.Http => string.Format(
-                            Loc.Localize("Service.UVMaps.HttpFailed.Fmt", "Download failed: HTTP {0} for {1}"),
+                            ProteusLoc.Localize("Service.UVMaps.HttpFailed.Fmt", "Download failed: HTTP {0} for {1}"),
                             r.StatusCode, file.Name),
                         FetchFailure.TooSmall => string.Format(
-                            Loc.Localize("Service.UVMaps.TooSmall.Fmt",
+                            ProteusLoc.Localize("Service.UVMaps.TooSmall.Fmt",
                                 "Download too small ({0} bytes) for {1} — possible LFS pointer"), r.Bytes, file.Name),
                         _ => string.Format(
-                            Loc.Localize("Service.UVMaps.Error.Fmt", "Download error: {0}"), r.Detail),
+                            ProteusLoc.Localize("Service.UVMaps.Error.Fmt", "Download error: {0}"), r.Detail),
                     });
                     return;
                 }
@@ -314,7 +481,7 @@ public class UVMapDownloadService : IDisposable
         }
         catch (Exception ex)
         {
-            Fail(set, string.Format(Loc.Localize("Service.UVMaps.Error.Fmt", "Download error: {0}"), ex.Message));
+            Fail(set, string.Format(ProteusLoc.Localize("Service.UVMaps.Error.Fmt", "Download error: {0}"), ex.Message));
         }
     }
 

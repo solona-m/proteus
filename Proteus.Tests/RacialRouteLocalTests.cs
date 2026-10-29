@@ -15,6 +15,7 @@ namespace Proteus.Tests;
 /// Racial-only gear — Au Ra's Auri Pantalettes, which the game ships for Au Ra alone — refitted through the shared
 /// Midlander shape, against the game's own files and a body mod's.
 /// </summary>
+[Trait("Speed", "Slow")]
 public class RacialRouteLocalTests(ITestOutputHelper o)
 {
     private const string Bibo = LocalData.Mods + ":Bibo+";

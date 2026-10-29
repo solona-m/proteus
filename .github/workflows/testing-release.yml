@@ -17,7 +17,7 @@ jobs:
     steps:
       # No LFS: the only LFS files are the UV transfer maps, which the plugin zip never contains (players download
       # them from their own release), and pulling ~280 MB of them per run exhausted the repo's LFS bandwidth.
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           submodules: recursive
           fetch-depth: 0
@@ -31,7 +31,7 @@ jobs:
           "DALAMUD_HOME=$env:GITHUB_WORKSPACE\dalamud_dist" | Out-File -Append $env:GITHUB_ENV
 
       - name: Setup .NET
-        uses: actions/setup-dotnet@v6
+        uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
         with:
           dotnet-version: '10.x'
 
@@ -85,7 +85,7 @@ jobs:
       # Marked prerelease so it never becomes /releases/latest — the stable
       # DownloadLinkInstall keeps resolving to the last non-prerelease build.
       - name: Create prerelease
-        uses: softprops/action-gh-release@v3
+        uses: softprops/action-gh-release@efb35369e0ad2afab669f228072c1b0d510eae64 # v3.0.3
         with:
           files: latest.zip
           prerelease: true

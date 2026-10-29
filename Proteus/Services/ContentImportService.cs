@@ -204,7 +204,7 @@ public sealed partial class ContentImportService
 
         PiecePlan Unreadable(string why)
             => new(gamePath, entry, bindings, unbound, 0, 0,
-                   string.Format(Loc.Localize("ContentImport.Problem.Unreadable.Fmt",
+                   string.Format(ProteusLoc.Localize("ContentImport.Problem.Unreadable.Fmt",
                        "not a readable model ({0})"), why));
 
         if (model == null) return Unreadable(entry);
@@ -225,7 +225,7 @@ public sealed partial class ContentImportService
         var used = ContentPieceResolver.UsedMaterialNames(model, declared);
         if (used.Count == 0)
             return new PiecePlan(gamePath, entry, bindings, unbound, 0, 0,
-                Loc.Localize("ContentImport.Problem.NoGeometry", "no geometry — every mesh in it is empty"));
+                ProteusLoc.Localize("ContentImport.Problem.NoGeometry", "no geometry — every mesh in it is empty"));
 
         int meshes = 0, vertices = 0;
         // The extent of everything bound, to tell an invisible placeholder (one point) from real geometry.
@@ -267,14 +267,14 @@ public sealed partial class ContentImportService
             // Only a body-only model binds nothing deliberately; a model naming no drawn material is faulty.
             bodyOnly = unbound.Count == 0 && skinOnly.Count > 0;
             problem = unbound.Count == 0 && skinOnly.Count == 0
-                ? Loc.Localize("ContentImport.Problem.NoMeshes",
+                ? ProteusLoc.Localize("ContentImport.Problem.NoMeshes",
                     "it draws no meshes, so there is nothing to append.")
                 : !bodyOnly
-                ? string.Format(Loc.Localize("ContentImport.Problem.Unbound.Fmt",
+                ? string.Format(ProteusLoc.Localize("ContentImport.Problem.Unbound.Fmt",
                     "its mesh names {0}, which this pack does not ship. Rebind the mesh to one of the pack's "
                   + "own materials and re-export."), string.Join(", ", unbound))
                 // Every mesh in it is the body: not a fault, so it says what it is.
-                : string.Format(Loc.Localize("ContentImport.Problem.BodyOnly.Fmt",
+                : string.Format(ProteusLoc.Localize("ContentImport.Problem.BodyOnly.Fmt",
                     "every mesh in it is the wearer's own body ({0}), so there is nothing to add."),
                     string.Join(", ", skinOnly));
         }
@@ -334,10 +334,10 @@ public sealed partial class ContentImportService
 
         var dir = Path.GetFileName(Path.TrimEndingDirectorySeparator(preview.SourcePath));
         if (string.Equals(dir, SidecarDiscoveryService.ManagedModDir, StringComparison.OrdinalIgnoreCase))
-            return Loc.Localize("ContentImport.Fail.ManagedMod",
+            return ProteusLoc.Localize("ContentImport.Fail.ManagedMod",
                 "That is Proteus's own managed mod — it cannot be imported.");
         if (preview.InstallOnly)
-            return Loc.Localize("ContentImport.Fail.AlreadyProteus",
+            return ProteusLoc.Localize("ContentImport.Fail.AlreadyProteus",
                 "This mod is already a Proteus mod — there is nothing to import.");
         return null;
     }
@@ -354,31 +354,31 @@ public sealed partial class ContentImportService
         PreparedImport Fail(string why) => new(false, why, null, null, 0, 0);
 
         if (string.IsNullOrWhiteSpace(modName))
-            return Fail(Loc.Localize("Import.NeedName", "Enter a mod name."));
+            return Fail(ProteusLoc.Localize("Import.NeedName", "Enter a mod name."));
         // CanImport, not AnyImportable: a ready-made Proteus mod has no units and is still importable.
         if (!preview.CanImport)
-            return Fail(Loc.Localize("ContentImport.Fail.NothingUsable", "Nothing in this pack can be imported."));
+            return Fail(ProteusLoc.Localize("ContentImport.Fail.NothingUsable", "Nothing in this pack can be imported."));
         if (!PenumbraPackage.Exists(preview.SourcePath))
-            return Fail(string.Format(Loc.Localize("ContentImport.Fail.Gone.Fmt",
+            return Fail(string.Format(ProteusLoc.Localize("ContentImport.Fail.Gone.Fmt",
                 "The pack is no longer there: {0}"), preview.SourcePath));
         if (RefuseInstalledSource(preview) is { } refused)
             return Fail(refused);
 
         var dirName = ModCreationService.Sanitize(modName);
         if (dirName == null)
-            return Fail(Loc.Localize("ContentImport.Fail.BadName",
+            return Fail(ProteusLoc.Localize("ContentImport.Fail.BadName",
                 "That mod name has no usable characters — use letters or numbers."));
         if (string.Equals(dirName, SidecarDiscoveryService.ManagedModDir, StringComparison.OrdinalIgnoreCase))
-            return Fail(Loc.Localize("ContentImport.Fail.Reserved",
+            return Fail(ProteusLoc.Localize("ContentImport.Fail.Reserved",
                 "\"Proteus\" is reserved — choose a different mod name."));
 
         var modsRoot = penumbra.GetModDirectory();
         if (string.IsNullOrEmpty(modsRoot))
-            return Fail(Loc.Localize("ContentImport.Fail.NoModDir", "Penumbra's mod directory isn't available."));
+            return Fail(ProteusLoc.Localize("ContentImport.Fail.NoModDir", "Penumbra's mod directory isn't available."));
 
         var root = Path.Combine(modsRoot, dirName);
         if (Directory.Exists(root))
-            return Fail(string.Format(Loc.Localize("ContentImport.Fail.Exists.Fmt",
+            return Fail(string.Format(ProteusLoc.Localize("ContentImport.Fail.Exists.Fmt",
                 "A mod folder named \"{0}\" already exists."), dirName));
 
         try
@@ -389,7 +389,7 @@ public sealed partial class ContentImportService
         {
             log.Error(ex, "[Proteus] content import failed for {0}", dirName);
             try { if (Directory.Exists(root)) Directory.Delete(root, true); } catch { /* best effort */ }
-            return Fail(string.Format(Loc.Localize("ContentImport.Fail.Write.Fmt",
+            return Fail(string.Format(ProteusLoc.Localize("ContentImport.Fail.Write.Fmt",
                 "Failed to write the mod: {0}"), ex.Message));
         }
 
@@ -494,7 +494,8 @@ public sealed partial class ContentImportService
 
     /// <summary>
     /// Every multi-select group in the copied pack comes in with nothing ticked, so an imported mod contributes only
-    /// what the user asks for. Single groups (which always have a selection), Imc and Combining groups are untouched.
+    /// what the user asks for — except what <see cref="KeptGroupDefaults"/> keeps. Single groups (which always have a
+    /// selection), Imc and Combining groups are untouched.
     /// </summary>
     private static void ClearMultiSelectDefaults(
         string root, ImportPreview preview, IPluginLog? log)
@@ -503,7 +504,7 @@ public sealed partial class ContentImportService
                           + "the mod puts pieces on the character before anyone asks for them";
 
         var pack = preview.Pack;
-        var keepOn = GatedGroupDefaults(preview);
+        var keepOn = KeptGroupDefaults(preview);
         void Clear(JsonObject group) => ClearGroupDefault(group, keepOn);
 
         if (pack.FileVersion >= PenumbraModMeta.SingleFileVersion)
@@ -588,6 +589,68 @@ public sealed partial class ContentImportService
         }
         return option.Swaps.All(Inside)
             && option.Manipulations.All(m => m.SetId is { } id && sets.Contains(id));
+    }
+
+    /// <summary>
+    /// Whether an option only switches parts of imported garments: it carries at least one <c>Imc</c> edit, every one of
+    /// them names an imported piece's item, it redirects no model, and everything else it does stays inside those
+    /// pieces' sets (<see cref="OnlyItsOwnPieces"/>) — a same-set <c>Eqp</c> beside the <c>Imc</c> is fine, another set's
+    /// edit or a global one is not. Such an option touches nothing the user did not import.
+    /// </summary>
+    internal static bool IsImcToggleOnly(PenumbraPackage.PackOption option, ImportPreview preview)
+    {
+        if (option.Imc.Count == 0
+            || option.Files.Keys.Any(p => p.EndsWith(".mdl", StringComparison.OrdinalIgnoreCase)))
+            return false;
+
+        var imported = preview.Units.Where(u => u.Import).ToList();
+        var carrying = new List<PieceUnit>();
+        foreach (var m in option.Imc)
+        {
+            char kind = string.Equals(m.ObjectType, "Equipment", StringComparison.OrdinalIgnoreCase) ? 'e'
+                      : string.Equals(m.ObjectType, "Accessory", StringComparison.OrdinalIgnoreCase) ? 'a' : '\0';
+            var label = ContentSlot.LabelForEquipSlot(m.EquipSlot);
+            var units = imported.Where(u => label != null
+                && string.Equals(u.Slot.Label, label, StringComparison.Ordinal)
+                && u.Slot.SetTag.Length > 1 && u.Slot.SetTag[0] == kind
+                && ContentSlot.SetIdOf(u.Slot.SetTag) == m.PrimaryId).ToList();
+            if (units.Count == 0) return false;
+            carrying.AddRange(units);
+        }
+        return OnlyItsOwnPieces(option, carrying.Distinct().ToList());
+    }
+
+    /// <summary>An option that does nothing at all: no files, swaps or manipulations — a toggle's "Show" side.</summary>
+    internal static bool IsEmptyOption(PenumbraPackage.PackOption option)
+        => option.Files.Count == 0 && option.Swaps.Count == 0 && option.Manipulations.Count == 0;
+
+    /// <summary>
+    /// Multi groups' default ticks on options that only switch imported parts (<see cref="IsImcToggleOnly"/>), as group
+    /// name → bitmask. Kept, since they are the pack's own choice of which parts show and touch nothing else.
+    /// </summary>
+    internal static IReadOnlyDictionary<string, int> ImcToggleDefaults(ImportPreview preview)
+    {
+        var result = new Dictionary<string, int>(StringComparer.Ordinal);
+        if (preview.InstallOnly) return result;
+        foreach (var group in preview.Pack.Groups)
+        {
+            if (!string.Equals(group.Type, "Multi", StringComparison.OrdinalIgnoreCase)) continue;
+            int mask = 0;
+            for (int i = 0; i < group.Options.Count && i < 32; i++)
+                if ((group.DefaultSettings & (1ul << i)) != 0 && IsImcToggleOnly(group.Options[i], preview))
+                    mask |= 1 << i;
+            if (mask != 0) result[group.Name] = mask;
+        }
+        return result;
+    }
+
+    /// <summary>The Multi defaults an import keeps: <see cref="GatedGroupDefaults"/> and <see cref="ImcToggleDefaults"/> together.</summary>
+    internal static IReadOnlyDictionary<string, int> KeptGroupDefaults(ImportPreview preview)
+    {
+        var result = new Dictionary<string, int>(GatedGroupDefaults(preview), StringComparer.Ordinal);
+        foreach (var (name, mask) in ImcToggleDefaults(preview))
+            result[name] = (result.TryGetValue(name, out var have) ? have : 0) | mask;
+        return result;
     }
 
     /// <summary>Zero one group's default selection, if it is a multi-select, unless <paramref name="keepOn"/> names it.</summary>
@@ -988,7 +1051,7 @@ public sealed partial class ContentImportService
         if (!NeedsPieceGroup(preview) || preview.Pack.FileVersion >= PenumbraModMeta.SingleFileVersion)
             return null;
         if (OnFramework(onPool, penumbra.GetModDirectory) is not { Length: > 0 } modsRoot)
-            return new(false, false, Loc.Localize("ContentImport.Fail.NoModDir", "Penumbra's mod directory isn't available."));
+            return new(false, false, ProteusLoc.Localize("ContentImport.Fail.NoModDir", "Penumbra's mod directory isn't available."));
 
         var root = Path.Combine(modsRoot, dirName);
         if (PenumbraModMeta.IsLegacyFolder(root))
@@ -998,7 +1061,7 @@ public sealed partial class ContentImportService
             log.Warning("[Proteus] imported {0}: Penumbra added the mod but left it in the pre-v4 layout, so its "
                       + "piece group could not be written — removing it again", dirName);
             UndoRegistration(root, dirName, onPool);
-            return new(false, false, string.Format(Loc.Localize("ContentImport.Fail.NotUpgraded.Fmt",
+            return new(false, false, string.Format(ProteusLoc.Localize("ContentImport.Fail.NotUpgraded.Fmt",
                 "Penumbra did not upgrade \"{0}\" from its older format, so its pieces could not be made "
                 + "switchable. The import was undone; try importing the pack again."), dirName));
         }
@@ -1013,7 +1076,7 @@ public sealed partial class ContentImportService
             log.Error(ex, "[Proteus] imported {0}: could not write its piece group after Penumbra upgraded it — "
                         + "removing it again", dirName);
             UndoRegistration(root, dirName, onPool);
-            return new(false, false, string.Format(Loc.Localize("ContentImport.Fail.PieceGroup.Fmt",
+            return new(false, false, string.Format(ProteusLoc.Localize("ContentImport.Fail.PieceGroup.Fmt",
                 "Could not add the piece switches to \"{0}\": {1} The import was undone; try importing the "
                 + "pack again."), dirName, ex.Message));
         }
@@ -1071,7 +1134,7 @@ public sealed partial class ContentImportService
             var modsRoot = penumbra.GetModDirectory();
             if (!string.IsNullOrEmpty(modsRoot))
                 try { Directory.Delete(Path.Combine(modsRoot, dirName), true); } catch { /* best effort */ }
-            return new(false, false, string.Format(Loc.Localize("Service.RegisterFailed.Fmt",
+            return new(false, false, string.Format(ProteusLoc.Localize("Service.RegisterFailed.Fmt",
                 "Wrote the mod, but Penumbra couldn't register it ({0}). Rescan mods in Penumbra."), ec));
         }
 
@@ -1120,7 +1183,7 @@ public sealed partial class ContentImportService
         {
             var ex = p.Write.Exception!.GetBaseException();
             log.Error(ex, "[Proteus] imported {0}: writing its piece group failed", p.Prepared.DirName!);
-            return new(false, false, string.Format(Loc.Localize("ContentImport.Fail.PieceGroup.Fmt",
+            return new(false, false, string.Format(ProteusLoc.Localize("ContentImport.Fail.PieceGroup.Fmt",
                 "Could not add the piece switches to \"{0}\": {1} The import was undone; try importing the "
                 + "pack again."), p.Prepared.DirName!, ex.Message));
         }
@@ -1136,36 +1199,183 @@ public sealed partial class ContentImportService
     /// settings by folder name and hands them to the next mod added under it, so re-importing into a name used before
     /// would otherwise inherit the old import's ticks, not these defaults: gated options left off, so each piece
     /// needed its author option ticked as well as its switch.
+    /// <para/>
+    /// <paramref name="sourceSelection"/> is the installed mod this import copies, as the user set it: its choices for
+    /// options that only switch imported parts (<see cref="IsImcToggleOnly"/>) replace the pack's defaults, in Multi
+    /// groups and in Single groups made only of such options and empty ones. A group it does not mention keeps the
+    /// defaults. Every name is emitted as the PACK spells it, and an unknown one is dropped: Penumbra matches options
+    /// exactly and rejects a whole group over one name it does not know.
+    /// <para/>
+    /// Every <c>Imc</c> group is written too, since the import keeps them all: at the source's choice when it has a
+    /// usable one, else at the pack's own defaults, so a reused folder name's stale ticks never survive. One unknown
+    /// name gives the defaults, not part of the choice — the options XOR into one mask nobody chose. A group sharing
+    /// an earlier group's name is never written: Penumbra would apply it to that one (<see cref="UncopiedImcChoices"/>).
     /// </summary>
-    internal static Dictionary<string, List<string>> ImportSelection(ImportPreview preview)
+    internal static Dictionary<string, List<string>> ImportSelection(
+        ImportPreview preview, IReadOnlyDictionary<string, List<string>>? sourceSelection = null)
     {
         var result = new Dictionary<string, List<string>>(StringComparer.Ordinal);
         if (preview.InstallOnly) return result;   // the author's own defaults, untouched
 
-        var keepOn = GatedGroupDefaults(preview);
-        foreach (var group in preview.Pack.Groups)
+        var keepOn = KeptGroupDefaults(preview);
+        var gated = GatedGroupDefaults(preview);
+        foreach (var (group, shadowed) in GroupsWithShadowing(preview.Pack))
         {
+            var source = SourceChoice(sourceSelection, group.Name);
+            if (string.Equals(group.Type, "Imc", StringComparison.OrdinalIgnoreCase))
+            {
+                if (ImcDecision(group, shadowed, false, source).Write is { } write) result[group.Name] = write;
+                continue;
+            }
+            if (string.Equals(group.Type, "Single", StringComparison.OrdinalIgnoreCase))
+            {
+                if (SingleChoice(group, source, preview) is { } picked) result[group.Name] = picked;
+                continue;
+            }
             if (!string.Equals(group.Type, "Multi", StringComparison.OrdinalIgnoreCase)) continue;
-            result[group.Name] = keepOn.TryGetValue(group.Name, out var mask)
-                ? [.. group.Options.Where((_, i) => i < 32 && (mask & (1 << i)) != 0).Select(o => o.Name)]
-                : [];
+
+            int mask = keepOn.TryGetValue(group.Name, out var kept) ? kept : 0;
+            if (source != null)
+            {
+                mask = gated.TryGetValue(group.Name, out var g) ? g : 0;
+                for (int i = 0; i < group.Options.Count && i < 32; i++)
+                    if (source.Contains(group.Options[i].Name, StringComparer.OrdinalIgnoreCase)
+                        && IsImcToggleOnly(group.Options[i], preview))
+                        mask |= 1 << i;
+            }
+            result[group.Name] = [.. group.Options.Where((_, i) => i < 32 && (mask & (1 << i)) != 0).Select(o => o.Name)];
         }
         if (NeedsPieceGroup(preview)) result[preview.PieceGroupName!] = [];
         return result;
     }
 
-    private void ApplyImportSelection(Guid collectionId, string dirName, ImportPreview preview)
+    /// <summary>
+    /// What the import writes for a Single group: the source's choice, when every option only switches imported parts or
+    /// does nothing and at least one switches; null leaves the group at its manifest default.
+    /// </summary>
+    private static List<string>? SingleChoice(PenumbraPackage.PackGroup group, List<string>? source, ImportPreview preview)
+        => source is { Count: > 0 }
+        && group.Options.All(o => IsEmptyOption(o) || IsImcToggleOnly(o, preview))
+        && group.Options.Any(o => IsImcToggleOnly(o, preview))
+        && group.Options.FirstOrDefault(o => string.Equals(o.Name, source[0], StringComparison.OrdinalIgnoreCase))
+            is { } picked
+            ? [picked.Name] : null;
+
+    /// <summary>The source's choice for one group, matched by name case-insensitively as Penumbra matches groups; null when it has none.</summary>
+    private static List<string>? SourceChoice(IReadOnlyDictionary<string, List<string>>? selection, string group)
+    {
+        if (selection == null) return null;
+        foreach (var (name, options) in selection)
+            if (string.Equals(name, group, StringComparison.OrdinalIgnoreCase)) return options;
+        return null;
+    }
+
+    /// <summary>
+    /// The source's ticks for one <c>Imc</c> group, as the pack spells them and in its option order; null when the source
+    /// has no choice for it, or names an option the group lacks (the first such name in <paramref name="unknown"/>).
+    /// </summary>
+    internal static List<string>? ImcGroupChoice(PenumbraPackage.PackGroup group, IReadOnlyList<string>? source,
+                                                 out string? unknown)
+    {
+        unknown = null;
+        if (source == null) return null;
+        var ticked = new HashSet<int>();
+        foreach (var name in source)
+        {
+            int at = group.Options.ToList().FindIndex(o => string.Equals(o.Name, name, StringComparison.OrdinalIgnoreCase));
+            if (at < 0) { unknown = name; return null; }
+            ticked.Add(at);
+        }
+        return [.. group.Options.Where((_, i) => ticked.Contains(i)).Select(o => o.Name)];
+    }
+
+    /// <summary>The options a group's <c>DefaultSettings</c> ticks, in pack order; bits past its options are ignored, as Penumbra does.</summary>
+    internal static List<string> ImcGroupDefaults(PenumbraPackage.PackGroup group)
+        => [.. group.Options.Where((_, i) => i < 64 && (group.DefaultSettings & (1ul << i)) != 0).Select(o => o.Name)];
+
+    /// <summary>Each pack group, and whether an earlier one already has its name — the one Penumbra addresses by it.</summary>
+    private static IEnumerable<(PenumbraPackage.PackGroup Group, bool Shadowed)> GroupsWithShadowing(
+        PenumbraPackage.Contents pack)
+    {
+        var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var group in pack.Groups)
+            yield return (group, !seen.Add(group.Name));
+    }
+
+    /// <summary>
+    /// What the import writes for one <c>Imc</c> group (null: nothing), and why the source's choice is not what lands
+    /// (null: it is, or the source made none). The one place both <see cref="ImportSelection"/> and the log decide it.
+    /// </summary>
+    private static (List<string>? Write, string? Reason) ImcDecision(
+        PenumbraPackage.PackGroup group, bool shadowed, bool overwritten, List<string>? source)
+    {
+        if (shadowed)
+            return (null, source == null ? null
+                : "an earlier group has the same name, so Penumbra would apply the choice to that group");
+        var choice = ImcGroupChoice(group, source, out var unknown);
+        if (choice == null)
+            return (ImcGroupDefaults(group), unknown == null ? null
+                : $"the original ticks \"{unknown}\", which this pack's group does not have");
+        return (choice, overwritten ? "a later group of the same name overwrites it" : null);
+    }
+
+    /// <summary>
+    /// The <c>Imc</c> groups the source mentions whose choice the import does not copy, and why, for the import's log:
+    /// a name the pack's group lacks, or another group of the same name taking or overwriting the write.
+    /// </summary>
+    internal static IReadOnlyList<(string Group, string Reason)> UncopiedImcChoices(
+        ImportPreview preview, IReadOnlyDictionary<string, List<string>>? sourceSelection)
+    {
+        var result = new List<(string, string)>();
+        if (preview.InstallOnly || sourceSelection == null) return result;
+        var groups = preview.Pack.Groups;
+        int at = -1;
+        foreach (var (group, shadowed) in GroupsWithShadowing(preview.Pack))
+        {
+            at++;
+            if (!string.Equals(group.Type, "Imc", StringComparison.OrdinalIgnoreCase)
+                || SourceChoice(sourceSelection, group.Name) is not { } source) continue;
+            // Overwritten only by a later group of its name that ImportSelection really writes: every Multi, and a
+            // Single only on the same terms as there. A later Imc duplicate is never written.
+            bool overwritten = groups.Skip(at + 1).Any(g =>
+                string.Equals(g.Name, group.Name, StringComparison.OrdinalIgnoreCase)
+                && (string.Equals(g.Type, "Multi", StringComparison.OrdinalIgnoreCase)
+                    || (string.Equals(g.Type, "Single", StringComparison.OrdinalIgnoreCase)
+                        && SingleChoice(g, SourceChoice(sourceSelection, g.Name), preview) != null)));
+            if (ImcDecision(group, shadowed, overwritten, source).Reason is { } reason)
+                result.Add((group.Name, reason));
+        }
+        return result;
+    }
+
+    /// <summary>
+    /// The folder name of an installed mod being imported, when it sits directly in Penumbra's mod directory; null for a
+    /// <c>.pmp</c> or a folder elsewhere, whose settings Penumbra does not hold.
+    /// </summary>
+    internal static string? InstalledSourceDir(string sourcePath, bool isFolder, string? modsRoot)
+    {
+        if (!isFolder || string.IsNullOrEmpty(modsRoot) || string.IsNullOrEmpty(sourcePath)) return null;
+        var source = Path.TrimEndingDirectorySeparator(Path.GetFullPath(sourcePath));
+        var root = Path.TrimEndingDirectorySeparator(Path.GetFullPath(modsRoot));
+        return string.Equals(Path.GetDirectoryName(source), root, StringComparison.OrdinalIgnoreCase)
+            ? Path.GetFileName(source) : null;
+    }
+
+    private void ApplyImportSelection(Guid collectionId, string dirName, ImportPreview preview,
+                                      IReadOnlyDictionary<string, List<string>>? sourceSelection)
     {
         // One batch: each write raises ModSettingChanged, which would otherwise force a recomposite per group, each
         // cancelling the last. Finish triggers the one recomposite the import needs.
         using var batch = compositor.SuppressModSettingEvents();
-        foreach (var (group, options) in ImportSelection(preview))
+        foreach (var (group, options) in ImportSelection(preview, sourceSelection))
         {
             var ec = penumbra.SetModOption(collectionId, dirName, group, options);
             if (ec is not (PenumbraApiEc.Success or PenumbraApiEc.NothingChanged))
                 log.Warning("[Proteus] imported {0}: could not set group \"{1}\" to [{2}] ({3})",
                     dirName, group, string.Join(", ", options), ec);
         }
+        foreach (var (group, reason) in UncopiedImcChoices(preview, sourceSelection))
+            log.Information("[Proteus] imported {0}: IMC group \"{1}\" does not start at the original's choice — {2}", dirName, group, reason);
     }
 
     /// <summary>Everything after the add and the piece group: enable, open Penumbra, recomposite, report.</summary>
@@ -1177,7 +1387,17 @@ public sealed partial class ContentImportService
         if (collId.HasValue)
         {
             penumbra.SetModEnabled(collId.Value, dirName, true);
-            ApplyImportSelection(collId.Value, dirName, preview);
+
+            // An installed mod carries the part toggles the user already chose on it. Their own settings, not a
+            // Glamourer design's temporary ones, which would otherwise be written into the new mod for good.
+            IReadOnlyDictionary<string, List<string>>? sourceSelection = null;
+            if (!preview.InstallOnly
+                && InstalledSourceDir(preview.SourcePath, PenumbraPackage.IsFolder(preview.SourcePath),
+                                      penumbra.GetModDirectory()) is { } sourceDir
+                && penumbra.GetCollectionModSettings(collId.Value, ignoreTemporary: true) is { } settings
+                && settings.TryGetValue(sourceDir, out var source))
+                sourceSelection = source.Options;
+            ApplyImportSelection(collId.Value, dirName, preview, sourceSelection);
         }
         else
             log.Warning("[Proteus] imported {0}: no player collection — enable it manually", dirName);
@@ -1193,7 +1413,7 @@ public sealed partial class ContentImportService
             quiet ? " [quiet: plugin unloading]" : "");
 
         var tail = prepared.Skipped > 0
-            ? string.Format(Loc.Localize("ContentImport.Result.SkippedTail.Fmt", " (skipped: {0})"), prepared.Skipped)
+            ? string.Format(ProteusLoc.Localize("ContentImport.Result.SkippedTail.Fmt", " (skipped: {0})"), prepared.Skipped)
             : "";
 
         // Amber is for a problem: only a piece that came out wrong (FaultyUnits), not skipped body meshes or
@@ -1202,18 +1422,18 @@ public sealed partial class ContentImportService
 
         // Installed rather than converted: no pieces to count. See ImportPreview.InstallOnly.
         if (preview.InstallOnly)
-            return new(true, false, string.Format(Loc.Localize("ContentImport.Result.Installed.Fmt",
+            return new(true, false, string.Format(ProteusLoc.Localize("ContentImport.Result.Installed.Fmt",
                 "Installed \"{0}\". It was already a Proteus mod, so it went in exactly as its author "
               + "built it — enabled and opened in Penumbra, where its options are chosen."),
                 dirName));
 
         if (preview.PieceGroupName is { } gate)
-            return new(true, warn, string.Format(Loc.Localize("ContentImport.Result.Pieces.Fmt",
+            return new(true, warn, string.Format(ProteusLoc.Localize("ContentImport.Result.Pieces.Fmt",
                 "Imported \"{0}\" — pieces: {1}{2}. They arrive switched OFF: tick the ones you want "
               + "under \"{3}\" in Penumbra, which is now open on this mod."),
                 dirName, prepared.Pieces, tail, gate));
 
-        return new(true, warn, string.Format(Loc.Localize("ContentImport.Result.Ok.Fmt",
+        return new(true, warn, string.Format(ProteusLoc.Localize("ContentImport.Result.Ok.Fmt",
             "Imported \"{0}\" — pieces: {1}{2}. Enabled it and opened it in Penumbra. Its options are chosen "
           + "in Penumbra, and every one you select is worn at once."),
             dirName, prepared.Pieces, tail));

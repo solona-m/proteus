@@ -110,6 +110,9 @@ public sealed class ResilientDownloaderTests : IDisposable
     }
 
     [Fact]
+    [Trait("Speed", "Slow")]
+    // [EDGE-uvmap-nipples-9] A leftover partial of an older map revision hashes wrong at its end the same way: discarded and fetched again.
+    [Trait("Plan", "EDGE-uvmap-nipples-9")]
     public async Task RetryAfterATruncatedBody_DoesNotDoubleCountProgress()
     {
         // The throttle signature: a short body with a 200 on it. The checksum rejects it, the file is

@@ -30,19 +30,24 @@ internal static class SizeSetBatch
     /// <param name="MensSkeleton">A men's base skeleton file the men's versions are made for; null for the game's own.</param>
     /// <param name="ModDirs">The folders under <paramref name="ModsRoot"/> to look for bodies in; null for all of them.
     /// For tests.</param>
+    /// <param name="MadeOn">The body mod's folder under <paramref name="ModsRoot"/> the chest and legs were made on, for the
+    /// sizes the automatic reading cannot place (<see cref="SizeSetRefit.Request.MadeOn"/>); null for none.</param>
     internal sealed record Inputs(string ModRoot, string ModsRoot, IReadOnlyList<string> Keys, bool Men, bool Ends,
                                   Func<string, byte[]?> ReadGameFile, UVRemapService? UvRemap, IPluginLog Log,
-                                  string? MensSkeleton = null, IReadOnlyCollection<string>? ModDirs = null);
+                                  string? MensSkeleton = null, IReadOnlyCollection<string>? ModDirs = null,
+                                  string? MadeOn = null);
 
     /// <summary>A body file the run found for a key, by its folder; null when none is installed.</summary>
     internal sealed record BodyMod(string Key, string Slot, bool Yas, string? Folder);
 
     /// <summary>What a run did, beside its <see cref="SizeSetRefit.RunLog"/>.</summary>
-    /// <param name="RefusalCode">Set when nothing ran: "manifest-unreadable", "version-too-old" or "migration-failed".</param>
+    /// <param name="RefusalCode">Set when nothing ran: "manifest-unreadable", "version-too-old", "migration-failed" or
+    /// "made-on-not-a-body".</param>
+    /// <param name="MadeOn">The body mod's folder chosen as "Made on", or null.</param>
     internal sealed record Outcome(IReadOnlyList<string> Keys, string? RefusalCode, string? Refusal,
                                    PenumbraModMeta.MigrationOutcome? Migrated, bool Cancelled,
                                    IReadOnlyList<BodyMod> BodyMods, IReadOnlyList<string> MissingBodies,
-                                   double Seconds, double ScanSeconds, double MigrateSeconds);
+                                   double Seconds, double ScanSeconds, double MigrateSeconds, string? MadeOn = null);
 
     /// <summary>The women's bodies, by key, in the table's order: what "all" means.</summary>
     internal static IReadOnlyList<string> WomensKeys
@@ -70,6 +75,37 @@ internal static class SizeSetBatch
             return null;
         }
         return SupportedBodies.Choices.Select(c => c.Key).Where(asked.Contains).ToList();
+    }
+
+    /// <summary>
+    /// The "Made on" body as the run takes it: a folder name under <paramref name="modsRoot"/>, or a full path directly
+    /// under it reduced to its name. Null, with why, for a path anywhere else or a folder that is not there.
+    /// </summary>
+    internal static string? MadeOnFolder(string madeOn, string modsRoot, out string? error)
+    {
+        error = null;
+        string name = madeOn.TrimEnd('\\', '/');
+        if (Path.IsPathRooted(name))
+        {
+            // Resolved first: "…\Bibo+\." or "…\x\..\Bibo+" name the folder they resolve to.
+            string full = Path.GetFullPath(name).TrimEnd('\\', '/');
+            string parent = Path.GetDirectoryName(full) ?? "";
+            if (!string.Equals(parent.TrimEnd('\\', '/'), Path.GetFullPath(modsRoot).TrimEnd('\\', '/'),
+                               StringComparison.OrdinalIgnoreCase))
+            {
+                error = $"--made-on {madeOn} is not a folder under --mods-root";
+                return null;
+            }
+            name = Path.GetFileName(full);
+        }
+        // A name is one folder: never the mod folder itself, its parent, or a folder further down.
+        if (name.Length == 0 || name is "." or ".." || name.IndexOfAny(['\\', '/']) >= 0
+            || !Directory.Exists(Path.Combine(modsRoot, name)))
+        {
+            error = $"--made-on {madeOn}: no such folder under --mods-root";
+            return null;
+        }
+        return name;
     }
 
     /// <summary>Why a run cannot start, or null. Nothing is read beyond what the check needs and nothing is written.</summary>
@@ -132,7 +168,7 @@ internal static class SizeSetBatch
     {
         string root = inputs.ModRoot;
         Outcome Refused(string code, string why, IReadOnlyList<string>? keys = null)
-            => new(keys ?? inputs.Keys, code, why, null, false, [], [], total.Elapsed.TotalSeconds, 0, 0);
+            => new(keys ?? inputs.Keys, code, why, null, false, [], [], total.Elapsed.TotalSeconds, 0, 0, inputs.MadeOn);
         if (!PenumbraModMeta.HasReadableManifest(root))
             return Refused("manifest-unreadable", $"{PenumbraModMeta.MetaFile} could not be read");
         if (PenumbraModMeta.ReadFileVersion(root) is var version && version < PenumbraModMeta.LegacyFileVersion)
@@ -141,8 +177,14 @@ internal static class SizeSetBatch
         // ── the bodies: every folder under the mod folder, by name, read as the panel's index reads them ──
         progress("Finding the bodies");
         var scan = Stopwatch.StartNew();
-        var bodies = ScanBodies(inputs.ModsRoot, inputs.ModDirs);
+        IReadOnlyCollection<string>? dirs = inputs.ModDirs != null && inputs.MadeOn != null
+            ? [.. inputs.ModDirs, inputs.MadeOn]
+            : inputs.ModDirs;
+        var bodies = ScanBodies(inputs.ModsRoot, dirs);
         double scanSeconds = scan.Elapsed.TotalSeconds;
+        // A "Made on" that is no body mod is a mistake in the command, said before anything is converted or read.
+        if (inputs.MadeOn is { } madeOn && !bodies.Any(b => string.Equals(b.Dir, madeOn, StringComparison.OrdinalIgnoreCase)))
+            return Refused("made-on-not-a-body", $"--made-on {madeOn} is not a body mod");
 
         // ── the pieces, read off the mod as it is: v3 reads too ──
         var pieces = SizeSetRefit.PiecesOf(root, inputs.ReadGameFile, inputs.Ends);
@@ -154,7 +196,8 @@ internal static class SizeSetBatch
         {
             // Nothing to size: said as the panel says it, and the mod left exactly as it was — not even converted.
             SizeSetRefit.NoPieces(runLog);
-            return new Outcome(keys, null, null, null, false, bodyMods, missing, total.Elapsed.TotalSeconds, scanSeconds, 0);
+            return new Outcome(keys, null, null, null, false, bodyMods, missing, total.Elapsed.TotalSeconds, scanSeconds, 0,
+                               inputs.MadeOn);
         }
 
         // ── a v3 work copy becomes v4, now that there is something to write ──
@@ -184,7 +227,7 @@ internal static class SizeSetBatch
             cancelled = true;
         }
         return new Outcome(keys, null, null, migrated, cancelled, bodyMods, missing, total.Elapsed.TotalSeconds,
-                           scanSeconds, migrateSeconds);
+                           scanSeconds, migrateSeconds, inputs.MadeOn);
     }
 
     private static SizeSetRefit.Request Request(Inputs inputs, IReadOnlyList<string> keys, IReadOnlyList<BodyModIndex.Entry> bodies)
@@ -197,7 +240,8 @@ internal static class SizeSetBatch
                                                     ? inputs.MensSkeleton : null)
             : null;
         return new SizeSetRefit.Request(inputs.ModRoot, keys, Yas: true, Remake: false, bodies, inputs.ReadGameFile,
-                                        inputs.Ends, race => gameBodies.GetValueOrDefault(race), Piercings: false, across);
+                                        inputs.Ends, race => gameBodies.GetValueOrDefault(race), Piercings: false, across,
+                                        inputs.MadeOn);
     }
 
     /// <summary>

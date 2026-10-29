@@ -704,6 +704,43 @@ public class DesignBindingTests
     }
 
     [Fact]
+    public void PlanRestore_SqueezedUnderTheProteusOutputMod_KeepsTheSnapshotOrder()
+    {
+        // Recorded 10..50 raised by +871 would run to 921; everything from Hat up passes Proteus at 900. The
+        // squeezed mods are stepped down from 899 rather than all landing on it, so none of them tie.
+        var effective = new Dictionary<string, PenumbraBridge.ModSettingsSnapshot>
+        {
+            ["Proteus"] = On(900),
+            ["Rival"]   = On(880),
+        };
+
+        var plan = DesignBindingService.PlanRestore(
+            [Bound("Dress", true, 10), Bound("Shoes", true, 30), Bound("Hat", true, 40), Bound("Gloves", true, 45),
+             Bound("Belt", true, 50), Bound("Ring", true, 45)],
+            Set("Proteus", "Rival", "Dress", "Shoes", "Hat", "Gloves", "Belt", "Ring"),
+            effective, effective, Set(), Set());
+
+        var holds = plan.Hold.ToDictionary(h => h.Recorded.ModDirectory, h => h.Priority);
+        Assert.Equal(899, holds["Belt"]);
+        Assert.Equal(898, holds["Gloves"]);
+        Assert.Equal(898, holds["Ring"]);    // recorded tied with Gloves, held tied with it
+        Assert.Equal(897, holds["Hat"]);
+        Assert.Equal(896, holds["Shoes"]);   // 901 squeezed under Hat
+        Assert.Equal(881, holds["Dress"]);   // under the ceiling as raised: untouched
+    }
+
+    [Fact]
+    public void HeldPriorities_NoRoomAboveTheOthers_KeepsTheOrderBelowTheCeiling()
+        // Proteus at 900 with a rival at 899: there is no slot above the rival, so order wins over beating it.
+        => Assert.Equal(new Dictionary<int, int> { [10] = 897, [20] = 898, [30] = 899 },
+            DesignBindingService.HeldPriorities([10, 20, 30], 890, 900));
+
+    [Fact]
+    public void HeldPriorities_NoCeiling_JustAddsTheOffset()
+        => Assert.Equal(new Dictionary<int, int> { [10] = 31, [20] = 41 },
+            DesignBindingService.HeldPriorities([20, 10, 20], 21, null));
+
+    [Fact]
     public void PlanRestore_ProteusMods_AreWrittenPermanently_AtTheirRecordedPriority()
     {
         var permanent = new Dictionary<string, PenumbraBridge.ModSettingsSnapshot>

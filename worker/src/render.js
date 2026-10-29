@@ -120,9 +120,19 @@ export function githubSlug(text) {
   return text.toLowerCase().replace(/[^\p{L}\p{M}\p{N}\p{Pc} -]/gu, '').replace(/ /g, '-');
 }
 
+/**
+ * Tags dropped until none are left. One pass of this pattern already leaves no `<…>` behind (each match runs
+ * from the first `<` to the next `>`), but repeating to a fixed point makes that hold by construction rather
+ * than by that argument — and is the form CodeQL's js/incomplete-multi-character-sanitization accepts.
+ */
+export const stripTags = (html) => {
+  let prev;
+  do { prev = html; html = html.replace(/<[^>]*>/g, ''); } while (html !== prev);
+  return html;
+};
+
 /** A heading's visible text, from its rendered inline HTML: tags dropped, the entities marked emits decoded. */
-const headingText = (html) => html
-  .replace(/<[^>]*>/g, '')
+const headingText = (html) => stripTags(html)
   .replace(/&quot;/g, '"').replace(/&#39;/g, "'").replace(/&lt;/g, '<').replace(/&gt;/g, '>')
   .replace(/&amp;/g, '&')
   .trim();

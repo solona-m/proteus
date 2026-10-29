@@ -1,0 +1,75 @@
+name: CodeQL
+
+# Report-only code scanning: results land under Security -> Code scanning and nothing else happens.
+# This is the one workflow a push to `test` starts, so it must stay unable to publish — no release, no
+# upload, no push, no deploy, and no write permission beyond security-events (SupplyChainTests guards
+# all of that). Findings are triaged by hand; none of them fail a build or block a merge.
+
+on:
+  push:
+    branches: [ main, test ]
+  pull_request:
+    branches: [ main, test ]
+  # Weekly, so new queries catch old code. GitHub only runs schedules from the default branch (main).
+  schedule:
+    - cron: '23 4 * * 1'
+
+permissions:
+  contents: read
+
+jobs:
+  analyze:
+    name: Analyze (${{ matrix.language }})
+    runs-on: ${{ matrix.os }}
+    permissions:
+      security-events: write
+      contents: read
+      actions: read
+      packages: read
+
+    strategy:
+      # The C/C++ leg needs Visual Studio's C++ tools on the runner image; if that ever breaks, the other
+      # three languages must still upload.
+      fail-fast: false
+      matrix:
+        include:
+          # C# with no build: needs neither the Dalamud download nor a warning-free build, so a red build
+          # never hides a scan. The trade is less precise dataflow through Dalamud's unresolved types.
+          - language: csharp
+            build-mode: none
+            os: ubuntu-latest
+          - language: javascript-typescript
+            build-mode: none
+            os: ubuntu-latest
+          - language: actions
+            build-mode: none
+            os: ubuntu-latest
+          # The native BCn shim, traced through its own build.bat — the canonical build, baseline x64,
+          # never /arch:AVX2. If this leg fails on the runner, fall back to build-mode: none on ubuntu.
+          - language: c-cpp
+            build-mode: manual
+            os: windows-latest
+
+    steps:
+      # No submodules: Glamourer and Penumbra.Api are someone else's code and their findings are not
+      # actionable here.
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Initialize CodeQL
+        uses: github/codeql-action/init@9b3254085494b55a0f7c4c2b3d2d52cc712ce370 # v4.39.1
+        with:
+          languages: ${{ matrix.language }}
+          build-mode: ${{ matrix.build-mode }}
+
+      # build.bat copies the DLL it builds over the tracked Proteus/native/proteus_bcn.dll in this
+      # workspace. That copy is thrown away with the runner: analyze is the only step after this one, and
+      # nothing here ever uploads, commits or releases what is on disk.
+      - name: Build the native shim
+        if: matrix.build-mode == 'manual'
+        shell: cmd
+        run: call Proteus\native\src\build.bat
+
+      - name: Analyze
+        uses: github/codeql-action/analyze@9b3254085494b55a0f7c4c2b3d2d52cc712ce370 # v4.39.1
+        with:
+          category: /language:${{ matrix.language }}

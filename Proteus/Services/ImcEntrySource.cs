@@ -227,7 +227,25 @@ internal static class ImcEntrySource
     {
         if (ImcPathFor(modelGamePath) is not { } path) return null;
         if (ContentSlot.Parse(modelGamePath) is not { } parsed) return null;
+        return FromImc(readGameFile, path, parsed.Label, variant);
+    }
 
+    /// <summary>
+    /// <see cref="FromGame(Func{string, byte[]?}, string, int)"/> for an item named by set and slot rather than by a
+    /// model path: <paramref name="setTag"/> is "e0666" or "a0053", <paramref name="slotLabel"/> a
+    /// <see cref="ContentSlot"/> label.
+    /// </summary>
+    public static ImcEntry? FromGame(Func<string, byte[]?> readGameFile, string setTag, string slotLabel, int variant)
+    {
+        var kind = setTag.Length > 1 ? char.ToLowerInvariant(setTag[0]) : '\0';
+        var folder = kind == 'e' ? "equipment" : kind == 'a' ? "accessory" : null;
+        if (folder == null) return null;
+        var tag = setTag.ToLowerInvariant();
+        return FromImc(readGameFile, $"chara/{folder}/{tag}/{tag}.imc", slotLabel, variant);
+    }
+
+    private static ImcEntry? FromImc(Func<string, byte[]?> readGameFile, string path, string slotLabel, int variant)
+    {
         var bytes = readGameFile(path);
         if (bytes == null || bytes.Length < 4) return null;
 
@@ -235,7 +253,7 @@ internal static class ImcEntrySource
         // Only the five-slot layout.
         if (BitConverter.ToUInt16(bytes, 2) != SetType) return null;
 
-        int part = SlotIndexOf(parsed.Label);
+        int part = SlotIndexOf(slotLabel);
         if (part < 0) return null;
 
         // Anything outside the declared variants falls back to the default set, which sits at index 0.

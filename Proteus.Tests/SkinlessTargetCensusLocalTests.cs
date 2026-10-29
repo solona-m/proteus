@@ -16,6 +16,7 @@ namespace Proteus.Tests;
 /// where the source missed — the follow-up the rule leaves for later. The lists are for the PR; each pair it accepts
 /// must meet the projection's limits.
 /// </summary>
+[Trait("Speed", "Slow")]
 public class SkinlessTargetCensusLocalTests(ITestOutputHelper output)
 {
     [LocalDataFact(LocalData.Mods)]

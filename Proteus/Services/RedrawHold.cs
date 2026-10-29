@@ -279,11 +279,34 @@ internal sealed class RedrawHold
         => needFullRedraw || !useInPlace || owed;
 
     /// <summary>
-    /// Whether a composite reloads the character before sampling, to load a body mod's materials: as before, except
-    /// in a release's own composite once its redraw has been seen — that redraw already loaded them.
+    /// Whether a reload of the character may happen: one Proteus starts itself only with Auto redraw on; one the user
+    /// asked for (switching Proteus off) always.
     /// </summary>
+    internal static bool AutoRedrawAllows(bool autoRedraw, bool userRequested) => autoRedraw || userRequested;
+
+    /// <summary>
+    /// Whether the "no enabled mods" composite reloads the character: unless the empty output is already drawn and
+    /// nothing is being withdrawn now. Penumbra re-reads the managed mod either way.
+    /// </summary>
+    internal static bool EmptyPublishRedraws(bool emptyAlreadyDrawn, bool withdrawing) => withdrawing || !emptyAlreadyDrawn;
+
+    /// <summary>What a composite does before sampling about a body mod's materials (see <see cref="PlanPreamble"/>).</summary>
+    internal enum Preamble { None, Reload, KeepDirty }
+
+    /// <summary>
+    /// Whether a composite reloads the character before sampling, to load a body mod's materials: as before, except in a
+    /// release's own composite once its redraw has been seen — that redraw already loaded them — and with no overlay mod
+    /// enabled, when there is nothing to composite: the snapshot is then kept dirty for the first composite that has one.
+    /// <paramref name="anyOverlayEnabled"/> is asked last, and only when a reload would otherwise happen.
+    /// </summary>
+    internal static Preamble PlanPreamble(bool wasDirty, bool autoRedraw, bool bodyKeyUnchanged, bool releaseTokenValid,
+                                          Func<bool> anyOverlayEnabled)
+        => !(wasDirty && autoRedraw && bodyKeyUnchanged && !releaseTokenValid) ? Preamble.None
+         : anyOverlayEnabled() ? Preamble.Reload : Preamble.KeepDirty;
+
+    /// <summary><see cref="PlanPreamble"/> with an overlay mod taken as enabled.</summary>
     internal static bool PreambleReload(bool wasDirty, bool autoRedraw, bool bodyKeyUnchanged, bool releaseTokenValid)
-        => wasDirty && autoRedraw && bodyKeyUnchanged && !releaseTokenValid;
+        => PlanPreamble(wasDirty, autoRedraw, bodyKeyUnchanged, releaseTokenValid, () => true) == Preamble.Reload;
 
     /// <summary>A draining batch lets its key go once its own evaluations are done, or after <paramref name="capMs"/>.</summary>
     internal static bool ReleaseAfterWait(bool evaluationsPending, long waitedMs, int capMs)

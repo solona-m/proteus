@@ -286,5 +286,5 @@ internal static class SkeletonRemap
 
     /// <summary>Why a refit whose bones could not be renamed was refused (<see cref="Rename"/>).</summary>
     internal static string RenameRefusal(string why)
-        => string.Format(CheapLoc.Loc.Localize("Parts.Retarget.Race.RenameFailed.Fmt", "the bones could not be renamed ({0})"), why);
+        => string.Format(ProteusLoc.Localize("Parts.Retarget.Race.RenameFailed.Fmt", "the bones could not be renamed ({0})"), why);
 }

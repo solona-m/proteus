@@ -7,6 +7,7 @@ namespace Proteus.Tests;
 /// Every playable race has a vanilla body to refit its gear from, in all four slots — though most ship none of their
 /// own and the game draws a Midlander's, a Roegadyn man's or a Lalafell man's.
 /// </summary>
+[Trait("Speed", "Slow")]
 public class VanillaBodyRaceLocalTests
 {
     [LocalDataTheory(LocalData.GameData)]

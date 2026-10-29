@@ -16,6 +16,7 @@ namespace Proteus.Tests;
 /// top with a bibo skin patch, a top in its Rue and Neolithe sizes, a Neolithe chest, and a long dress for the cost.
 /// Measured inside the solve — never on an exported model.
 /// </summary>
+[Trait("Speed", "Slow")]
 public class SkinMoveLocalTests(ITestOutputHelper output)
 {
     private const string ThisOldThing = LocalData.Mods + ":This Old Thing - by Solona";
@@ -123,6 +124,7 @@ public class SkinMoveLocalTests(ITestOutputHelper output)
 
     [LocalDataFact(LocalData.ShiftPack)]
     [Trait("Plan", "AC-studio-move-skin-4")]
+    [Trait("Speed", "Slow")]
     public void ShiftStockingsRideAMovedFoot()
         => Sculpt(Read(LocalData.PackEntryEndingWith(LocalData.ShiftPack, "e6219_sho.mdl")), "Shift shoe");
 
@@ -144,11 +146,13 @@ public class SkinMoveLocalTests(ITestOutputHelper output)
     [Trait("Plan", "AC-studio-move-skin-2")]
     [Trait("Plan", "AC-studio-move-skin-4")]
     [Trait("Plan", "AC-studio-move-skin-9")]
+    [Trait("Speed", "Slow")]
     public void ThisOldThingRueAndNeolitheTopsSculpt(string need)
         => Sculpt(ReadFile(need), need.Split("/size/")[1].Split('/')[0]);
 
     [LocalDataFact(ThisOldThing)]
     [Trait("Plan", "AC-studio-move-skin-8")]
+    [Trait("Speed", "Slow")]
     public void RueMToRueLTransferKeepsTheWaist()
     {
         var source = ReadFile(RueM);
@@ -168,6 +172,7 @@ public class SkinMoveLocalTests(ITestOutputHelper output)
     [LocalDataFact(NeolitheChest)]
     [Trait("Plan", "AC-studio-move-skin-11")]
     [Trait("Plan", "EDGE-studio-move-skin-4")]
+    [Trait("Speed", "Slow")]
     public void NeolitheChestIsABodyAndSculpts()
     {
         var model = ReadFile(NeolitheChest);
@@ -197,6 +202,7 @@ public class SkinMoveLocalTests(ITestOutputHelper output)
     [LocalDataFact(ThisOldThing, Rue, Bibo, Yab, Neolithe)]
     [Trait("Plan", "AC-studio-move-skin-11")]
     [Trait("Plan", "EDGE-studio-move-skin-28")]
+    [Trait("Speed", "Slow")]
     public void SculptedGarmentStillRanksItsBodyFirst()
     {
         var model = ReadFile(RueL);
@@ -234,6 +240,7 @@ public class SkinMoveLocalTests(ITestOutputHelper output)
     [InlineData(Dress)]
     [InlineData(RueL)]
     [Trait("Plan", "EDGE-studio-move-skin-13")]
+    [Trait("Speed", "Slow")]
     public void MeasureBindingAndDabCost(string need)
     {
         var model = ReadFile(need);

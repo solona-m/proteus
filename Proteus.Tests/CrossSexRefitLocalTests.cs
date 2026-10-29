@@ -136,7 +136,10 @@ public class CrossSexRefitLocalTests(ITestOutputHelper o)
     [Trait("Plan", "AC-cross-sex-refit-5")]
     [Trait("Plan", "EDGE-cross-sex-refit-13")]
     [Trait("Plan", "EDGE-cross-sex-refit-14")]
-    public void Lumberjack_refits_onto_bibo_for_midlander_women() // [AC-cross-sex-refit-2] [AC-cross-sex-refit-3] [AC-cross-sex-refit-5] [EDGE-cross-sex-refit-13] [EDGE-cross-sex-refit-14]
+    [Trait("Speed", "Slow")]
+    [Trait("Plan", "EDGE-uvmap-nipples-48")]
+    [Trait("Plan", "AC-uvmap-nipples-8")]
+    public void Lumberjack_refits_onto_bibo_for_midlander_women() // [AC-cross-sex-refit-2] [AC-cross-sex-refit-3] [AC-cross-sex-refit-5] [EDGE-cross-sex-refit-13] [EDGE-cross-sex-refit-14] [EDGE-uvmap-nipples-48] [AC-uvmap-nipples-8]
     {
         var inputs = Inputs(LumberjackShirt, 201, Tbse, UvBakeInputs.TbseChest, Bibo, UvBakeInputs.BiboChest);
         var (r, s) = Run(inputs);
@@ -153,6 +156,7 @@ public class CrossSexRefitLocalTests(ITestOutputHelper o)
     [Trait("Plan", "AC-cross-sex-refit-2")]
     [Trait("Plan", "AC-cross-sex-refit-4")]
     [Trait("Plan", "AC-cross-sex-refit-5")]
+    [Trait("Speed", "Slow")]
     public void Twill_trousers_refit_onto_bibo_legs() // [AC-cross-sex-refit-2] [AC-cross-sex-refit-4] [AC-cross-sex-refit-5]
     {
         var inputs = Inputs(TwillTbse, 201, Tbse, UvBakeInputs.TbseLegs[0].Rel, Bibo, UvBakeInputs.BiboLegs[0].Rel);
@@ -168,6 +172,7 @@ public class CrossSexRefitLocalTests(ITestOutputHelper o)
     [Trait("Plan", "AC-cross-sex-refit-4")]
     [Trait("Plan", "AC-cross-sex-refit-5")]
     [Trait("Plan", "EDGE-cross-sex-refit-13")]
+    [Trait("Speed", "Slow")]
     public void Sheer_elegance_legs_refit_onto_tbse_for_midlander_men() // [AC-cross-sex-refit-1] [AC-cross-sex-refit-4] [AC-cross-sex-refit-5] [EDGE-cross-sex-refit-13]
     {
         var inputs = Inputs(SheerLegs, 101, Bibo, BiboSfwLegs, Tbse, UvBakeInputs.TbseLegs[0].Rel);
@@ -190,6 +195,7 @@ public class CrossSexRefitLocalTests(ITestOutputHelper o)
     [Trait("Plan", "AC-cross-sex-tops-yas-1")]
     [Trait("Plan", "AC-cross-sex-tops-yas-2")]
     [Trait("Plan", "AC-cross-sex-tops-yas-3")]
+    [Trait("Speed", "Slow")]
     public void Sheer_elegance_top_refits_onto_tbse_for_midlander_men() // [AC-cross-sex-tops-yas-1] [AC-cross-sex-tops-yas-2] [AC-cross-sex-tops-yas-3]
     {
         var offered = OtherRaceRefit.Offered("chara/equipment/e6010/model/c0201e6010_top.mdl",
@@ -207,11 +213,67 @@ public class CrossSexRefitLocalTests(ITestOutputHelper o)
     }
 
     /// <summary>
+    /// Refit map <c>tbse_to_bibo</c>: a women's top made a men's puts the cloth over Bibo+'s nipples at TBSE's nipple
+    /// height — per side, the cloth within 2.5 cm of Bibo+'s nipple, its mean height on the saved model against TBSE's
+    /// nipple. Each side within half of what the v2 maps left (<see cref="SheerBustV2Mm"/>, measured 2026-10-28).
+    /// </summary>
+    [LocalDataFact(LocalData.GameData, SheerTop, Bibo, Tbse, LocalData.TbseUvMaps)]
+    [Trait("Plan", "AC-uvmap-nipples-10")]
+    [Trait("Speed", "Slow")]
+    public void RefitMap_sheer_elegance_bust_lands_at_tbse_nipple_height() // [AC-uvmap-nipples-10] [EDGE-uvmap-nipples-31] [AC-uvmap-nipples-8]
+    {
+        var inputs = Inputs(SheerTop, 101, Bibo, UvBakeInputs.BiboChest, Tbse, UvBakeInputs.TbseChest);
+        var (_, s) = Run(inputs);
+        // The cloth before and after, paired by uv: the refit moves cloth and keeps its uvs, while the skin it carries is
+        // the new body's own.
+        static bool Cloth(string m) => !SecondSkinWriter.IsBodySkinMaterial(m);
+        Assert.True(SecondSkinWriter.TryReadLod0Geometry(inputs.Garment, out var bp, out var bu, out _, keepMaterial: Cloth));
+        Assert.True(SecondSkinWriter.TryReadLod0Geometry(s.Saved!.Model, out var ap, out var au, out _, keepMaterial: Cloth));
+        static (int, int) Key(float[] uv, int v) => ((int)MathF.Round(uv[v * 2] * 65536f), (int)MathF.Round(uv[v * 2 + 1] * 65536f));
+        var afterAt = new Dictionary<(int, int), System.Numerics.Vector3>();
+        for (int v = 0; v < ap.Length / 3; v++) afterAt.TryAdd(Key(au, v), new(ap[v * 3], ap[v * 3 + 1], ap[v * 3 + 2]));
+
+        var bibo = new BakeBody([UvBakeInputs.Part(File.ReadAllBytes(Path.Combine(LocalData.Path(Bibo), UvBakeInputs.BiboChest)))!]);
+        var tbse = new BakeBody([UvBakeInputs.Part(File.ReadAllBytes(Path.Combine(LocalData.Path(Tbse), UvBakeInputs.TbseChest)))!]);
+        var (bl, br) = UvBakeNipples.Find(bibo).Found!.Value;
+        var (tl, tr) = UvBakeNipples.Find(tbse).Found!.Value;
+        var misses = new List<string>();
+        foreach (var (side, b, t, v2) in new[] { ("L", bl, tl, SheerBustV2Mm[0]), ("R", br, tr, SheerBustV2Mm[1]) })
+        {
+            var heights = new List<float>();
+            for (int v = 0; v < bp.Length / 3; v++)
+            {
+                var p = new System.Numerics.Vector3(bp[v * 3], bp[v * 3 + 1], bp[v * 3 + 2]);
+                if (System.Numerics.Vector3.Distance(p, b.Pos) > 0.025f || p.Z < b.Pos.Z - 0.01f) continue;
+                if (afterAt.TryGetValue(Key(bu, v), out var q)) heights.Add(q.Y - t.Pos.Y);
+            }
+            Assert.NotEmpty(heights);
+            float dy = heights.Average() * 1000f;
+            o.WriteLine($"{side}: {heights.Count} cloth vertices over Bibo+'s nipple land {dy:+0.0;-0.0} mm from TBSE's nipple height "
+                        + $"(v2 {v2:+0.0;-0.0} mm, bound {MathF.Abs(v2) / 2:F1} mm)");
+            if (!(MathF.Abs(dy) <= MathF.Abs(v2) / 2)) misses.Add($"{side} {dy:F1} mm");
+        }
+        // Across the sexes the folds are said, not gated (cross-sex-tops-yas): set beside the v2 maps' for the record.
+        o.WriteLine($"{s.Folds} cloth faces turned over (v2 {SheerTopFoldsV2})");
+        Assert.True(misses.Count == 0, string.Join("; ", misses));
+    }
+
+    /// <summary>
+    /// The cloth faces the Sheer Elegance top refit for TBSE turned over with the v2 maps (2026-10-28): 101. The v3 maps
+    /// turn 143, the bust now over his nipples rather than under them — said, not gated, as every fold across the sexes is.
+    /// </summary>
+    private const int SheerTopFoldsV2 = 101;
+
+    /// <summary>What the v2 maps left of <see cref="RefitMap_sheer_elegance_bust_lands_at_tbse_nipple_height"/>, left and right (mm).</summary>
+    private static readonly float[] SheerBustV2Mm = [-29.1f, -29.1f];
+
+    /// <summary>
     /// The underbust lift for a women's top made a men's, measured both ways inside the pass: kept unless leaving it out
     /// folds less and clips no more (CrossSexRefit.LiftsUnderbust).
     /// </summary>
     [LocalDataFact(LocalData.GameData, SheerTop, Bibo, Tbse, LocalData.TbseUvMaps)]
     [Trait("Plan", "AC-cross-sex-tops-yas-3")]
+    [Trait("Speed", "Slow")]
     public void Underbust_lift_for_a_womans_top_is_measured() // [AC-cross-sex-tops-yas-3]
     {
         var results = new Dictionary<bool, (int Folds, float Inside)>();
@@ -245,6 +307,7 @@ public class CrossSexRefitLocalTests(ITestOutputHelper o)
     [Trait("Plan", "EDGE-cross-sex-tops-yas-4")]
     [Trait("Plan", "EDGE-cross-sex-tops-yas-13")]
     [Trait("Plan", "EDGE-cross-sex-tops-yas-19")]
+    [Trait("Speed", "Slow")]
     public void Starlit_rigged_to_yas_bones_refits_onto_tbse_legs(bool ivcs) // [AC-cross-sex-tops-yas-4] [AC-cross-sex-tops-yas-5] [AC-cross-sex-tops-yas-6] [EDGE-cross-sex-tops-yas-3] [EDGE-cross-sex-tops-yas-4] [EDGE-cross-sex-tops-yas-13] [EDGE-cross-sex-tops-yas-19]
     {
         var inputs = Inputs(Starlit, 101, Rue, RueRel(RueYiggleWc), Tbse, UvBakeInputs.TbseLegs[0].Rel,
@@ -293,6 +356,7 @@ public class CrossSexRefitLocalTests(ITestOutputHelper o)
     [LocalDataFact(LocalData.GameData, Starlit, Rue, Tbse, LocalData.TbseUvMaps)]
     [Trait("Plan", "EDGE-cross-sex-tops-yas-5")]
     [Trait("Plan", "EDGE-cross-sex-tops-yas-6")]
+    [Trait("Speed", "Slow")]
     public void Starlit_drawn_with_the_game_s_women_skeleton_still_refits() // [EDGE-cross-sex-tops-yas-5] [EDGE-cross-sex-tops-yas-6]
     {
         var inputs = Inputs(Starlit, 101, Rue, RueRel(RueYiggleWc), Tbse, UvBakeInputs.TbseLegs[0].Rel);
@@ -313,21 +377,92 @@ public class CrossSexRefitLocalTests(ITestOutputHelper o)
         return rue.For("_dwn", "0201").First(b => b.Rel.Replace('\\', '/').Contains(folder, StringComparison.OrdinalIgnoreCase)).Rel;
     }
 
+    /// <summary>
+    /// The rule this test was written for (EDGE-cross-sex-refit-1, pointed at and refused) was changed on purpose by
+    /// own-model-overwrite: the author's women's shirt is said, and the pick is in force.
+    /// </summary>
     [LocalDataFact(LocalData.GameData, LumberjackMod, Tbse, Bibo)]
     [Trait("Plan", "EDGE-cross-sex-refit-1")]
-    public void The_authors_own_women_shirt_is_pointed_at() // [EDGE-cross-sex-refit-1]
+    [Trait("Plan", "AC-own-model-overwrite-1")]
+    public void The_authors_own_women_shirt_is_warned_and_refitted_over() // [EDGE-cross-sex-refit-1]
     {
         const string shirt = "chara/equipment/e6091/model/c0101e6091_top.mdl";
         var redirects = PenumbraModMeta.ReadAllRedirects(LocalData.Path(LumberjackMod));
         var bibo = BodySizeCatalog.Read(LocalData.Path(Bibo));
-        var women = Assert.Single(OtherRaceRefit.Offered(shirt, bibo, redirects, null, false), c => c.Race == 201);
+        var offered = OtherRaceRefit.Offered(shirt, bibo, redirects, null, false);
+        var women = Assert.Single(offered, c => c.Race == 201);
         Assert.True(women.CrossSex);
-        Assert.Equal(OtherRaceRefit.Block.OwnModel, women.Blocked);
         Assert.Equal("chara/equipment/e6091/model/c0201e6091_top.mdl", women.OwnModelPath);
+        Assert.True(OtherRaceRefit.InForce(201, 101, offered));
 
         var menOnly = redirects.Where(x => !x.GamePath.Contains("c0201", StringComparison.Ordinal)).ToList();
-        Assert.Equal(OtherRaceRefit.Block.None,
-                     Assert.Single(OtherRaceRefit.Offered(shirt, bibo, menOnly, null, false), c => c.Race == 201).Blocked);
+        Assert.Null(Assert.Single(OtherRaceRefit.Offered(shirt, bibo, menOnly, null, false), c => c.Race == 201).OwnModelPath);
+    }
+
+    internal const string ThornPrincess = LocalData.Mods + ":Thorn Princess - by Solona";
+    private const string ThornWomansTop = "chara/equipment/e0391/model/c0201e0391_top.mdl";
+    private const string ThornMensTop = "chara/equipment/e0391/model/c0101e0391_top.mdl";
+
+    /// <summary>
+    /// The report: Thorn Princess's women's top refitted for Midlander men on TBSE, over the c0101 copy of a game piece
+    /// its "The Body of the Silver Wolf" group ships — offered, in force, and saved into "Size" it is what Penumbra serves.
+    /// </summary>
+    [LocalDataFact(ThornPrincess, Tbse)]
+    [Trait("Plan", "AC-own-model-overwrite-1")]
+    public void Thorn_princess_womens_top_is_refitted_for_midlander_men_over_its_c0101_copy() // [AC-own-model-overwrite-1]
+    {
+        string root = LocalData.Path(ThornPrincess);
+        var redirects = PenumbraModMeta.ReadAllRedirects(root);
+        var tbse = BodySizeCatalog.Read(LocalData.Path(Tbse));
+        var offered = OtherRaceRefit.Offered(ThornWomansTop, tbse, redirects, null, false);
+        var men = Assert.Single(offered, c => c.Race == 101);
+        Assert.Equal(ThornMensTop, men.OwnModelPath);
+        Assert.True(OtherRaceRefit.InForce(101, 201, offered));
+        var route = OtherRaceRefit.Resolve(RacialModelBake.Route.None, 101, 201, offered);
+        Assert.True(route.ByAlias && route.Lowered);
+        Assert.Equal(ThornMensTop, route.SavePath(ThornWomansTop));
+
+        Assert.Empty(BodyRetargetWriter.Outranking(PenumbraModMeta.TryReadRawGroups(root), ThornMensTop, "Size", "Small"));
+
+        // A copy of the manifest with a refit option added to "Size" at c0101: with it ticked, that is what is served.
+        string temp = Path.Combine(Path.GetTempPath(), "proteus-thorn-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(temp);
+        try
+        {
+            var meta = System.Text.Json.Nodes.JsonNode.Parse(File.ReadAllText(Path.Combine(root, "meta.json")))!;
+            var size = meta["Groups"]!.AsArray().First(g => (string?)g!["Name"] == "Size")!;
+            size["Options"]!.AsArray().Add(new System.Text.Json.Nodes.JsonObject
+            {
+                ["Name"] = "TBSE (Midlander M)",
+                ["Files"] = new System.Text.Json.Nodes.JsonObject { [ThornMensTop] = "Body Retarget/refit.mdl" },
+            });
+            File.WriteAllText(Path.Combine(temp, "meta.json"), meta.ToJsonString());
+            var ticked = new Dictionary<string, IReadOnlyCollection<string>>
+            {
+                ["The Body of the Silver Wolf"] = ["Everything"],
+                ["Size"] = ["TBSE (Midlander M)"],
+            };
+            Assert.Equal("Body Retarget/refit.mdl", PenumbraPrecedence.Winner(temp, ThornMensTop, ticked));
+            ticked["Size"] = ["Small"];
+            Assert.NotEqual("Body Retarget/refit.mdl", PenumbraPrecedence.Winner(temp, ThornMensTop, ticked));
+        }
+        finally { Directory.Delete(temp, true); }
+    }
+
+    /// <summary>The "also worn by" line for Thorn Princess's men's save: never a race the mod ships a top of its own
+    /// for, nor one that falls through to one.</summary>
+    [LocalDataFact(LocalData.GameData, ThornPrincess)]
+    [Trait("Plan", "AC-own-model-overwrite-8")]
+    public void Thorn_princess_s_mens_save_is_not_said_to_be_worn_by_races_with_their_own_model() // [AC-own-model-overwrite-8]
+    {
+        var redirects = PenumbraModMeta.ReadAllRedirects(LocalData.Path(ThornPrincess));
+        var game = new Lumina.GameData(LocalData.Path(LocalData.GameData));
+        var worn = CrossSexRefit.FallThroughTo(101, 201, CrossSexRefit.OwnModels(ThornWomansTop, redirects,
+                                                                                   game.FileExists));
+        o.WriteLine("worn by: " + string.Join(", ", worn.Select(r => $"c{r:D4}")));
+        foreach (ushort race in new ushort[] { 301, 901, 1101, 1201, 1501 })
+            Assert.DoesNotContain(race, worn);
+        Assert.All(worn, r => Assert.Contains(r, new ushort[] { 501, 701, 1301, 1701 }));
     }
 
     /// <summary>Bibo+ and TBSE pair through the maps, and not without them. (The gen3 refusal is synthetic, in
@@ -335,6 +470,7 @@ public class CrossSexRefitLocalTests(ITestOutputHelper o)
     [LocalDataFact(Bibo, Tbse, LocalData.TbseUvMaps)]
     [Trait("Plan", "AC-cross-sex-refit-6")]
     [Trait("Plan", "EDGE-cross-sex-refit-3")]
+    [Trait("Speed", "Slow")]
     public void Real_bodies_pair_across_sexes_only_through_the_maps() // [AC-cross-sex-refit-6] [EDGE-cross-sex-refit-3]
     {
         string bibo = Path.Combine(LocalData.Path(Bibo), UvBakeInputs.BiboChest);
@@ -355,6 +491,7 @@ public class CrossSexRefitLocalTests(ITestOutputHelper o)
 
     [LocalDataFact(LocalData.GameData, TwillTbse, Tbse, Bibo, LocalData.TbseUvMaps)]
     [Trait("Plan", "AC-cross-sex-refit-8")]
+    [Trait("Speed", "Slow")]
     public void The_job_gives_the_same_model_twice() // [AC-cross-sex-refit-8]
     {
         var inputs = Inputs(TwillTbse, 201, Tbse, UvBakeInputs.TbseLegs[0].Rel, Bibo, UvBakeInputs.BiboLegs[0].Rel);

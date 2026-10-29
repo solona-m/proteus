@@ -33,6 +33,17 @@ internal static class SizeSetBatchData
     internal const string HellForLeather = LocalData.Mods + ":Hell for Leather - by Solona";
     internal const string Heartthrob = LocalData.Mods + ":Heartthrob - by Solona";
     internal const string ScarletPack = LocalData.ModPacks + ":Scarlet - by Solona.pmp";
+    /// <summary>Oblique as it shipped, v3: made on Bibo+ before Dawntrail, so no installed body reads its skin. The
+    /// installed copy has sizes added since; tests never read it.</summary>
+    internal const string ObliquePack = LocalData.ModPacks + ":Oblique v1.0.0.pmp";
+
+    /// <summary>A pack unpacked into a work folder of its own.</summary>
+    internal static string UnpackedPack(string pack)
+    {
+        string copy = NewCopy();
+        ZipFile.ExtractToDirectory(LocalData.Path(pack), copy);
+        return copy;
+    }
 
     internal static string Folder(string need) => Path.GetFileName(LocalData.Path(need));
 
@@ -79,14 +90,14 @@ internal static class SizeSetBatchData
     internal static (SizeSetBatch.Outcome Outcome, SizeSetRefit.RunLog Log) Batch(
         string copy, IReadOnlyList<string> keys, bool men, string[] bodyMods, bool ends = true, string? uvmaps = null,
         Func<string, byte[]?>? readGame = null, Action<string>? progress = null, CancellationToken ct = default,
-        string? modsRoot = null)
+        string? modsRoot = null, string? madeOn = null, Dalamud.Plugin.Services.IPluginLog? log = null)
     {
-        var log = Substitute.For<Dalamud.Plugin.Services.IPluginLog>();
+        log ??= Substitute.For<Dalamud.Plugin.Services.IPluginLog>();
         var runLog = new SizeSetRefit.RunLog();
         var outcome = SizeSetBatch.Run(
             new SizeSetBatch.Inputs(copy, modsRoot ?? LocalData.Path(LocalData.Mods), keys, men, ends, readGame ?? (_ => null),
                                     new UVRemapService(log, uvmaps ?? LocalData.Path(LocalData.UvMaps)), log,
-                                    ModDirs: modsRoot == null ? bodyMods.Select(Folder).ToList() : bodyMods),
+                                    ModDirs: modsRoot == null ? bodyMods.Select(Folder).ToList() : bodyMods, MadeOn: madeOn),
             runLog, progress ?? (_ => { }), ct);
         return (outcome, runLog);
     }
@@ -510,6 +521,7 @@ public class SizeSetBatchLocalTests(ThisOldThingRun tot, ITestOutputHelper outpu
 
     [LocalDataFact(SizeSetBatchData.ThisOldThing, SizeSetBatchData.Neolithe, SizeSetBatchData.Rue, LocalData.UvMaps)]
     [Trait("Plan", "EDGE-headless-size-set-7")]
+    [Trait("Speed", "Slow")]
     public void Missing_body_is_reported_and_the_rest_made() // [EDGE-headless-size-set-7]
     {
         string copy = SizeSetBatchData.CopyOf(SizeSetBatchData.ThisOldThing);
@@ -528,6 +540,7 @@ public class SizeSetBatchLocalTests(ThisOldThingRun tot, ITestOutputHelper outpu
 
     [LocalDataFact(SizeSetBatchData.ThisOldThing, SizeSetBatchData.Neolithe, SizeSetBatchData.TreYas, LocalData.UvMaps)]
     [Trait("Plan", "EDGE-headless-size-set-8")]
+    [Trait("Speed", "Slow")]
     public void Tre_is_made_from_its_YAS_release_when_plain_is_absent() // [EDGE-headless-size-set-8]
     {
         string copy = SizeSetBatchData.CopyOf(SizeSetBatchData.ThisOldThing);
@@ -547,6 +560,7 @@ public class SizeSetBatchLocalTests(ThisOldThingRun tot, ITestOutputHelper outpu
     /// </summary>
     [LocalDataFact(SizeSetBatchData.ThisOldThing, SizeSetBatchData.Neolithe, SizeSetBatchData.Rosaline, LocalData.UvMaps)]
     [Trait("Plan", "EDGE-headless-size-set-11")]
+    [Trait("Speed", "Slow")]
     public void Refused_size_is_reported_and_the_rest_made() // [EDGE-headless-size-set-11]
     {
         string copy = SizeSetBatchData.CopyOf(SizeSetBatchData.ThisOldThing);
@@ -578,6 +592,7 @@ public class SizeSetBatchLocalTests(ThisOldThingRun tot, ITestOutputHelper outpu
 
     [LocalDataFact(SizeSetBatchData.ThisOldThing, SizeSetBatchData.Neolithe, SizeSetBatchData.Rue, LocalData.UvMaps)]
     [Trait("Plan", "EDGE-headless-size-set-18")]
+    [Trait("Speed", "Slow")]
     public void A_throwing_piece_is_failed_and_others_run() // [EDGE-headless-size-set-18]
     {
         string copy = SizeSetBatchData.CopyOf(SizeSetBatchData.ThisOldThing);
@@ -608,6 +623,7 @@ public class SizeSetBatchLocalTests(ThisOldThingRun tot, ITestOutputHelper outpu
 
     [LocalDataFact(SizeSetBatchData.ThisOldThing, SizeSetBatchData.Neolithe, SizeSetBatchData.Bibo, LocalData.UvMaps)]
     [Trait("Plan", "EDGE-headless-size-set-19")]
+    [Trait("Speed", "Slow")]
     public void Cancelled_run_lists_saved_sizes() // [EDGE-headless-size-set-19]
     {
         string copy = SizeSetBatchData.CopyOf(SizeSetBatchData.ThisOldThing);
@@ -637,6 +653,7 @@ public class SizeSetBatchLocalTests(ThisOldThingRun tot, ITestOutputHelper outpu
     [LocalDataFact(SizeSetBatchData.ThisOldThing, SizeSetBatchData.Neolithe, SizeSetBatchData.Rue, LocalData.UvMaps)]
     [Trait("Plan", "AC-headless-size-set-4")]
     [Trait("Plan", "EDGE-headless-size-set-17")]
+    [Trait("Speed", "Slow")]
     public void Cli_new_group_starts_with_Original_as_default() // [AC-headless-size-set-4] [EDGE-headless-size-set-17]
     {
         // This Old Thing's M top, alone in the default files: no size group of the author's.
@@ -671,6 +688,7 @@ public class SizeSetBatchLocalTests(ThisOldThingRun tot, ITestOutputHelper outpu
                    LocalData.GameData, LocalData.TbseUvMaps, LocalData.UvMaps)]
     [Trait("Plan", "AC-headless-size-set-3")]
     [Trait("Plan", "EDGE-headless-size-set-12")]
+    [Trait("Speed", "Slow")]
     public void Cli_men_appends_a_mens_group_for_a_womens_mod() // [AC-headless-size-set-3] [EDGE-headless-size-set-12]
     {
         string copy = SizeSetBatchData.CopyOf(SizeSetBatchData.Sheer);
@@ -714,6 +732,7 @@ public class SizeSetBatchLocalTests(ThisOldThingRun tot, ITestOutputHelper outpu
     [LocalDataFact(SizeSetBatchData.Tbse, SizeSetBatchData.TbseX, LocalData.GameData, LocalData.TbseUvMaps, LocalData.UvMaps)]
     [Trait("Plan", "AC-headless-size-set-3")]
     [Trait("Plan", "EDGE-headless-size-set-16")]
+    [Trait("Speed", "Slow")]
     public void Cli_men_sizes_a_mens_piece_directly() // [AC-headless-size-set-3] [EDGE-headless-size-set-16]
     {
         string copy = SizeSetBatchData.NewCopy();
@@ -748,6 +767,7 @@ public class SizeSetBatchLocalTests(ThisOldThingRun tot, ITestOutputHelper outpu
     [LocalDataFact(SizeSetBatchData.ThisOldThing, SizeSetBatchData.Neolithe, SizeSetBatchData.Tbse, SizeSetBatchData.TbseX,
                    LocalData.TbseUvMaps, LocalData.UvMaps)]
     [Trait("Plan", "EDGE-headless-size-set-30")]
+    [Trait("Speed", "Slow")]
     public void Every_mens_key_gets_an_outcome_when_none_can_be_crossed() // [EDGE-headless-size-set-30]
     {
         string copy = SizeSetBatchData.CopyOf(SizeSetBatchData.ThisOldThing);
@@ -792,6 +812,7 @@ public class SizeSetBatchLocalTests(ThisOldThingRun tot, ITestOutputHelper outpu
 
     [LocalDataFact(LocalData.GameData, SizeSetBatchData.HellForLeather)]
     [Trait("Plan", "EDGE-headless-size-set-22")]
+    [Trait("Speed", "Slow")]
     public void Game_models_shipped_by_TexTools_get_no_mens_sizes() // [EDGE-headless-size-set-22]
     {
         var pieces = SizeSetRefit.PiecesOf(LocalData.Path(SizeSetBatchData.HellForLeather), SizeSetBatchData.Game());
@@ -816,21 +837,14 @@ public class SizeSetBatchLocalTests(ThisOldThingRun tot, ITestOutputHelper outpu
 
     // ── v3 ──
 
-    /// <summary>Scarlet's pack, v3, unpacked into a work folder.</summary>
-    private static string Unpacked(string pack)
-    {
-        string copy = SizeSetBatchData.NewCopy();
-        ZipFile.ExtractToDirectory(LocalData.Path(pack), copy);
-        return copy;
-    }
-
     [LocalDataFact(SizeSetBatchData.ScarletPack, SizeSetBatchData.Neolithe, SizeSetBatchData.Bibo, LocalData.UvMaps)]
     [Trait("Plan", "AC-headless-size-set-10")]
     [Trait("Plan", "AC-headless-size-set-4")]
     [Trait("Plan", "EDGE-headless-size-set-21")]
+    [Trait("Speed", "Slow")]
     public void V3_pack_is_converted_then_sized() // [AC-headless-size-set-10] [AC-headless-size-set-4] [EDGE-headless-size-set-21]
     {
-        string copy = Unpacked(SizeSetBatchData.ScarletPack);
+        string copy = SizeSetBatchData.UnpackedPack(SizeSetBatchData.ScarletPack);
         try
         {
             Assert.True(PenumbraModMeta.IsLegacyFolder(copy));
@@ -844,7 +858,7 @@ public class SizeSetBatchLocalTests(ThisOldThingRun tot, ITestOutputHelper outpu
             Assert.Contains(runLog.Sizes, s => s.Body == "bibo" && s.Status == SizeSetRefit.SizeStatus.Made);
 
             // Only appended to, against the groups the conversion wrote: re-read from a fresh conversion of the pack.
-            string fresh = Unpacked(SizeSetBatchData.ScarletPack);
+            string fresh = SizeSetBatchData.UnpackedPack(SizeSetBatchData.ScarletPack);
             try
             {
                 PenumbraModMeta.MigrateWorkCopy(fresh, LocalData.Path(LocalData.Mods));

@@ -55,6 +55,7 @@ public class HatCompatEarSkinLocalTests(ITestOutputHelper output)
     [Trait("Plan", "AC-miqote-ear-skin-1")]
     [Trait("Plan", "AC-miqote-ear-skin-2")]
     [Trait("Plan", "EDGE-miqote-ear-skin-2")]
+    [Trait("Speed", "Slow")]
     public void UmbrasEarKeepsItsSkinUnderAHatAndIsNeverPressed()
     {
         var r = Solve(Author(UmbraMod, UmbraRel));
@@ -79,6 +80,7 @@ public class HatCompatEarSkinLocalTests(ITestOutputHelper output)
     /// <summary>Two options of one hair pack serving the same hairstyle get the same rule.</summary>
     [LocalDataFact(LocalData.GameData, PowerMod)]
     [Trait("Plan", "EDGE-miqote-ear-skin-7")]
+    [Trait("Speed", "Slow")]
     public void EverySiblingOptionGetsTheSameEarRule()
     {
         foreach (var rel in new[] { PowerLong, PowerShort })
@@ -189,6 +191,7 @@ public class HatCompatEarSkinLocalTests(ITestOutputHelper output)
     [LocalDataFact(LocalData.GameData, LocalData.Mods)]
     [Trait("Plan", "AC-miqote-ear-skin-3")]
     [Trait("Plan", "AC-miqote-ear-skin-4")]
+    [Trait("Speed", "Slow")]
     public void NoMiqoteHairstyleGainsPokeThroughOutsideItsEar()
     {
         string mods = LocalData.Path(LocalData.Mods);

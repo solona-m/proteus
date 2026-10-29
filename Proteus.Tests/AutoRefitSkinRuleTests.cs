@@ -97,6 +97,8 @@ public class AutoRefitSkinRuleTests(ITestOutputHelper output)
     [Trait("Plan", "AC-neckline-float-6")]
     [Trait("Plan", "EDGE-neckline-float-14")]
     [Trait("Plan", "AC-coatee-strap-slit-5")]
+    [Trait("Plan", "AC-relax-sink-guard-2")]
+    [Trait("Plan", "AC-relax-sink-guard-3")]
     public void Only_the_games_own_garment_is_game_gear_and_only_it_is_cut_and_cleared()
     {
         // The game's own file: no mod root. A mod serving the game's model — a recolour, a "— Proteus edit" copy — serves
@@ -110,10 +112,10 @@ public class AutoRefitSkinRuleTests(ITestOutputHelper output)
                                                  Refitted("Body — Neolithe/neolithe m.mdl"), madeByProteus: false));
 
         Assert.Equal(new AutoRefitDecisions.SkinRule(CutHidden: true, ClearBody: true, TuckUnderCloth: true, DeepClear: true,
-                                                     KeepStandoff: true, SeeInside: true),
+                                                     KeepStandoff: true, SeeInside: true, RelaxSinkGuard: true),
                      AutoRefitDecisions.SkinFor(true));
         Assert.Equal(new AutoRefitDecisions.SkinRule(CutHidden: false, ClearBody: false, TuckUnderCloth: false, DeepClear: false,
-                                                     KeepStandoff: false, SeeInside: false),
+                                                     KeepStandoff: false, SeeInside: false, RelaxSinkGuard: false),
                      AutoRefitDecisions.SkinFor(false));
         // [AC-coatee-strap-slit-5] The tuck's open skin where the garment's inside would show: a top only.
         Assert.True(RefitCore.SeeInsideFor(true, "_top"));

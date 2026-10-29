@@ -56,7 +56,7 @@ public sealed class ModExportService
     public ExportResult Export(OverlayEntry entry, string targetPath)
     {
         if (string.IsNullOrWhiteSpace(targetPath))
-            return new(false, Loc.Localize("Export.Error.NoPath", "Pick somewhere to save the file."));
+            return new(false, ProteusLoc.Localize("Export.Error.NoPath", "Pick somewhere to save the file."));
 
         // A typed name may lack the extension, which Penumbra needs.
         if (!targetPath.EndsWith(Extension, StringComparison.OrdinalIgnoreCase))
@@ -64,18 +64,18 @@ public sealed class ModExportService
 
         var modsRoot = penumbra.GetModDirectory();
         if (string.IsNullOrEmpty(modsRoot))
-            return new(false, Loc.Localize("Service.NoPenumbraDir", "Penumbra's mod directory isn't available."));
+            return new(false, ProteusLoc.Localize("Service.NoPenumbraDir", "Penumbra's mod directory isn't available."));
 
         var modRoot = Path.Combine(modsRoot, entry.ModDirectory);
         if (!Directory.Exists(modRoot))
             return new(false, string.Format(
-                Loc.Localize("Export.Error.FolderGone.Fmt", "The mod folder is gone: {0}"), modRoot));
+                ProteusLoc.Localize("Export.Error.FolderGone.Fmt", "The mod folder is gone: {0}"), modRoot));
 
         try
         {
             var count = WritePmp(modRoot, targetPath);
             if (count == 0)
-                return new(false, Loc.Localize("Export.Error.EmptyFolder",
+                return new(false, ProteusLoc.Localize("Export.Error.EmptyFolder",
                     "That mod folder is empty — there's nothing to export."));
 
             var size = new FileInfo(targetPath).Length / 1024f / 1024f;
@@ -83,14 +83,14 @@ public sealed class ModExportService
                 entry.ModDirectory, targetPath, count, size);
             // The count is labelled ("files: {1}") rather than inflected, so it translates.
             return new(true, string.Format(
-                Loc.Localize("Export.Ok.Fmt", "Exported \"{0}\" — files: {1}, {2} MB.\n{3}"),
+                ProteusLoc.Localize("Export.Ok.Fmt", "Exported \"{0}\" — files: {1}, {2} MB.\n{3}"),
                 entry.ModName, count, size.ToString("0.#"), targetPath));
         }
         catch (Exception ex)
         {
             log.Error(ex, "[Proteus] export failed for {0}", entry.ModDirectory);
             return new(false, string.Format(
-                Loc.Localize("Export.Error.WriteFailed.Fmt", "Couldn't write the file: {0}"), ex.Message));
+                ProteusLoc.Localize("Export.Error.WriteFailed.Fmt", "Couldn't write the file: {0}"), ex.Message));
         }
     }
 

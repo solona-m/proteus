@@ -1410,7 +1410,7 @@ public sealed partial class SecondSkinService
                 else if (service._lastUnhostedContent != meshUnhosted)
                 {
                     service._lastUnhostedContent = meshUnhosted;
-                    var msg = string.Format(Loc.Localize("Chat.ContentUnplaced.Fmt",
+                    var msg = string.Format(ProteusLoc.Localize("Chat.ContentUnplaced.Fmt",
                         "[Proteus] {0} mesh piece(s) from your mods could not be placed — your accessories are "
                       + "out of material slots. Equip another ring / bracelet / necklace, or turn off a layer."),
                         meshUnhosted);
@@ -1441,7 +1441,7 @@ public sealed partial class SecondSkinService
                 if (!string.Equals(service._lastUnhostedSurfaces, keys, StringComparison.Ordinal))
                 {
                     service._lastUnhostedSurfaces = keys;
-                    var msg = string.Format(Loc.Localize("Chat.UnhostedLayers.Fmt",
+                    var msg = string.Format(ProteusLoc.Localize("Chat.UnhostedLayers.Fmt",
                         "[Proteus] Some layers on your {1} could not be placed (layers: {0}). Those must not be "
                       + "race-deformed, so they need a slot Proteus can replace outright: free a ring slot "
                       + "(either hand) or your facewear slot and they will appear."), unhostedLayers.Count, keys);
@@ -1475,7 +1475,7 @@ public sealed partial class SecondSkinService
                     if (!string.Equals(service._lastUnresolvedSurfaces, keys, StringComparison.Ordinal))
                     {
                         service._lastUnresolvedSurfaces = keys;
-                        var msg = string.Format(Loc.Localize("Chat.UnresolvedSurfaces.Fmt",
+                        var msg = string.Format(ProteusLoc.Localize("Chat.UnresolvedSurfaces.Fmt",
                             "[Proteus] Some layers on your {1} were skipped (layers: {0}) — your character isn't "
                           + "drawing that part, so there was nothing to cut them from. Check the Surface set on "
                           + "those overlays matches the face or part you are actually wearing."),
@@ -1497,7 +1497,7 @@ public sealed partial class SecondSkinService
                 if (service._lastOverBudgetLayers != totalLayers)
                 {
                     service._lastOverBudgetLayers = totalLayers;
-                    var msg = string.Format(Loc.Localize("Chat.OverBudget.Fmt",
+                    var msg = string.Format(ProteusLoc.Localize("Chat.OverBudget.Fmt",
                         "[Proteus] This look has {0} layers ({1} Mask, {2} Cloth), but only {3} fit across your "
                       + "accessories (Proteus' invisible fallback ring already included). Turn off some layers, "
                       + "or equip another pair of glasses / ring / bracelet / necklace so the rest fit."),

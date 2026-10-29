@@ -24,6 +24,7 @@ public sealed class TimingCollection
 
 /// <summary>What carrying a woman's overlay onto a man costs (see WomensArtOnMen): the route, timed against its budget.</summary>
 [Collection(TimingCollection.Name)]
+[Trait("Speed", "Slow")]
 public class MensRouteTimingTests(ITestOutputHelper output)
 {
     [LocalDataFact(LocalData.TbseUvMaps)]

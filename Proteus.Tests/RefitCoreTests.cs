@@ -87,6 +87,7 @@ public class RefitCoreTests
     }
 
     [Fact]
+    [Trait("Plan", "EDGE-own-model-overwrite-10")]
     public void A_mans_garment_is_baked_for_a_woman_unless_the_author_made_hers()
     {
         const string mans = "chara/equipment/e6255/model/c0101e6255_top.mdl";

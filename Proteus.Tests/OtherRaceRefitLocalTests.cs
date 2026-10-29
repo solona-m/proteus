@@ -54,20 +54,23 @@ public class OtherRaceRefitLocalTests(ITestOutputHelper o)
     [Trait("Plan", "AC-refit-other-race-1")]
     [Trait("Plan", "AC-refit-other-race-6")]
     [Trait("Plan", "EDGE-refit-other-race-11")]
-    public void Tbse_x_offers_highlander_and_the_lumberjack_points_at_its_own_model()
+    [Trait("Plan", "AC-own-model-overwrite-2")]
+    public void Tbse_x_offers_highlander_and_the_lumberjack_warns_about_its_own_model()
     {
         var target = BodySizeCatalog.Read(LocalData.Path(TbseX));
         var redirects = PenumbraModMeta.ReadAllRedirects(LocalData.Path(Lumberjack));
 
+        // Its own Highlander shirt is said, and the pick is baked all the same (own-model-overwrite).
         var offered = OtherRaceRefit.Offered(Shirt, target, redirects, null, isVanilla: false);
         var highlander = Assert.Single(offered);
         Assert.Equal(301, highlander.Race);
-        Assert.Equal(OtherRaceRefit.Block.OwnModel, highlander.Blocked);
         Assert.Equal("chara/equipment/e6091/model/c0301e6091_top.mdl", highlander.OwnModelPath);
+        Assert.Equal(new RacialModelBake.Route(101, 301, Down: false),
+                     OtherRaceRefit.Resolve(RacialModelBake.Route.None, 301, 101, offered));
 
-        // A mod that ships only the Midlander model: Highlander is bakeable.
+        // A mod that ships only the Midlander model: nothing to say.
         var onlyMidlander = redirects.Where(r => !r.GamePath.Contains("c0301", StringComparison.Ordinal)).ToList();
-        Assert.Equal(OtherRaceRefit.Block.None, Assert.Single(OtherRaceRefit.Offered(Shirt, target, onlyMidlander, null, false)).Blocked);
+        Assert.Null(Assert.Single(OtherRaceRefit.Offered(Shirt, target, onlyMidlander, null, false)).OwnModelPath);
     }
 
     /// <summary>
@@ -78,6 +81,7 @@ public class OtherRaceRefitLocalTests(ITestOutputHelper o)
     [Trait("Plan", "AC-refit-other-race-2")]
     [Trait("Plan", "AC-refit-other-race-3")]
     [Trait("Plan", "AC-refit-other-race-10")]
+    [Trait("Speed", "Slow")]
     public void A_highlander_refit_has_no_new_folds_in_the_saved_model_or_the_preview()
     {
         var log = Substitute.For<Dalamud.Plugin.Services.IPluginLog>();
@@ -143,6 +147,7 @@ public class OtherRaceRefitLocalTests(ITestOutputHelper o)
     /// </summary>
     [LocalDataFact(LocalData.GameData, Lumberjack, Tbse, IvcsHighlander)]
     [Trait("Plan", "AC-refit-other-race-2")]
+    [Trait("Speed", "Slow")]
     public void Tbse_s_own_highlander_body_against_its_midlander_body_bent_is_logged()
     {
         var made = HighlanderWearer(ShirtBytes());
@@ -192,15 +197,17 @@ public class OtherRaceRefitLocalTests(ITestOutputHelper o)
         var target = BodySizeCatalog.Read(LocalData.Path(TbseX));
         var redirects = PenumbraModMeta.ReadAllRedirects(LocalData.Path(Lumberjack));
 
-        // The Lumberjack ships its own Midlander shirt: that is the one to refit.
+        // The Lumberjack ships its own Midlander shirt: said, and lowered over all the same (own-model-overwrite).
         var own = Assert.Single(OtherRaceRefit.Offered(HighlanderShirt, target, redirects, null, isVanilla: false));
-        Assert.Equal((101, OtherRaceRefit.Block.OwnModel, true), (own.Race, own.Blocked, own.Below));
+        Assert.Equal((101, true), (own.Race, own.Below));
         Assert.Equal(Shirt, own.OwnModelPath);
+        Assert.Equal(new RacialModelBake.Route(301, 101, Down: false, Lowered: true),
+                     OtherRaceRefit.Resolve(RacialModelBake.Route.None, 101, 301, [own]));
 
-        // A mod that ships only the Highlander shirt: Midlander is offered, free.
+        // A mod that ships only the Highlander shirt: Midlander is offered, with nothing to say.
         var onlyHighlander = redirects.Where(r => !r.GamePath.Contains("c0101", StringComparison.Ordinal)).ToList();
         var free = Assert.Single(OtherRaceRefit.Offered(HighlanderShirt, target, onlyHighlander, null, false));
-        Assert.Equal((101, OtherRaceRefit.Block.None), (free.Race, free.Blocked));
+        Assert.Equal((101, (string?)null), (free.Race, free.OwnModelPath));
     }
 
     /// <summary>
@@ -212,6 +219,7 @@ public class OtherRaceRefitLocalTests(ITestOutputHelper o)
     [LocalDataFact(LocalData.GameData, Lumberjack, Tbse, TbseX)]
     [Trait("Plan", "AC-refit-race-down-10")]
     [Trait("Plan", "AC-refit-race-down-2")]
+    [Trait("Speed", "Slow")]
     public void A_midlander_refit_of_the_highlander_shirt_has_no_new_folds()
     {
         var log = Substitute.For<Dalamud.Plugin.Services.IPluginLog>();
@@ -298,6 +306,7 @@ public class OtherRaceRefitLocalTests(ITestOutputHelper o)
     /// </summary>
     [LocalDataFact(LocalData.GameData)]
     [Trait("Plan", "EDGE-refit-race-down-3")]
+    [Trait("Speed", "Slow")]
     public void A_game_made_for_side_below_is_each_race_s_own_body()
     {
         var data = new Lumina.GameData(LocalData.Path(LocalData.GameData));

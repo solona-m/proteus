@@ -16,6 +16,7 @@ namespace Proteus.Tests;
 /// metres off YAS Tre: the polar turn fit diverged on their flat ornament cards, and the scale fitted to the broken turn
 /// was kept for the second pass (see <see cref="TurnFit.TurnTolerance"/>).
 /// </summary>
+[Trait("Speed", "Slow")]
 public class VirtuDancerRefitLocalTests(ITestOutputHelper output)
 {
     private const string Tre = LocalData.Mods + ":hs-[YAS] Tre-5.5.3-8xB";
@@ -68,7 +69,7 @@ public class VirtuDancerRefitLocalTests(ITestOutputHelper output)
                     tuckSlot: RefitCore.TuckSlot(skin.TuckUnderCloth, slot),
                     deepClear: RefitCore.DeepClearFor(skin.DeepClear, slot),
                     keepStandoff: RefitCore.KeepStandoffFor(skin.KeepStandoff, slot),
-                    seeInside: RefitCore.SeeInsideFor(skin.SeeInside, slot));
+                    seeInside: RefitCore.SeeInsideFor(skin.SeeInside, slot), relaxSinkGuard: skin.RelaxSinkGuard);
                 return new Run(plan, RefitCore.MatchSkinToBody(plan.Model, source, target, uv, false, log), garment, lines,
                                Unticked, target);
             });

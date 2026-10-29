@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Reflection;
 using CheapLoc;
 
 namespace Proteus.Services;
@@ -28,7 +29,7 @@ internal static class VanillaBodyCatalog
     internal const string Key = "::vanilla";
 
     /// <summary>The group every option is filed under, so the picker can say where these came from.</summary>
-    internal static string GroupName => Loc.Localize("Parts.Retarget.Size.VanillaGroup", "Vanilla");
+    internal static string GroupName => ProteusLoc.Localize("Parts.Retarget.Size.VanillaGroup", "Vanilla");
 
     /// <summary>
     /// Where the extracts live. Deliberately NOT under Penumbra's mods root: these stand for what the game draws with
@@ -52,6 +53,7 @@ internal static class VanillaBodyCatalog
         lock (Gate)
         {
             extracted.Clear();
+            emptyFor.Clear();
             models.Clear();
             try
             {
@@ -91,14 +93,53 @@ internal static class VanillaBodyCatalog
         lock (Gate) return models.Count(m => m.Slot == slot);
     }
 
-    /// <summary>Race code to the slots already written out this session, so the game is read once per file.</summary>
+    /// <summary>
+    /// Race code to the slots already written out this session, so the game is read once per file. Only bodies are
+    /// kept here: a body, once read, is the game's for whoever asks, since every reader of the game reads the same bytes.
+    /// </summary>
     private static readonly Dictionary<string, List<BodyOption>> extracted = new(StringComparer.OrdinalIgnoreCase);
+
+    /// <summary>
+    /// Race code to the readers that found no body for it this session, each of which is not asked again. "No body" is
+    /// believed only of the reader that said so: a test's stub that reads nothing must not hide the body from the game's
+    /// own reader asking after it in the same process. A reader is its target and method, as <see cref="Delegate.Equals"/>
+    /// compares them (none is multicast), and the target is held weakly, so a reader's game data is not kept alive here.
+    /// </summary>
+    private static readonly Dictionary<string, List<(WeakReference<object>? Target, MethodInfo Method)>> emptyFor =
+        new(StringComparer.OrdinalIgnoreCase);
+
+    /// <summary>
+    /// Whether <paramref name="read"/> is one of <paramref name="readers"/>, forgetting those whose target is gone. A static
+    /// reader has no target to lose and is kept.
+    /// </summary>
+    private static bool SaidNoBody(List<(WeakReference<object>? Target, MethodInfo Method)> readers, Func<string, byte[]?> read)
+    {
+        bool found = false;
+        for (int i = readers.Count - 1; i >= 0; i--)
+        {
+            var (target, method) = readers[i];
+            object? alive = null;
+            if (target is not null && !target.TryGetTarget(out alive))
+            {
+                readers.RemoveAt(i);
+                continue;
+            }
+            if (method == read.Method && ReferenceEquals(alive, read.Target)) found = true;
+        }
+        return found;
+    }
 
     /// <summary>
     /// The game's body for one race code (<c>"0201"</c>), extracting it on first use.
     /// </summary>
     /// <param name="race">The body's race code, as <see cref="BodySizeCatalog.RaceOf"/> reads it off a game path.</param>
-    /// <param name="read">Reads a game path out of the game's own data — <c>TextureLoader.LoadRawFile(null, path)</c>.</param>
+    /// <param name="read">
+    /// Reads a game path out of the game's own data — <c>TextureLoader.LoadRawFile(null, path)</c>. Pass one long-lived
+    /// reader, a field or a method group over a long-lived object: a wrapper whose closure is new on every call is a new
+    /// reader every time, and for a race with no body of its own it reads the game again on every call — every frame,
+    /// for the Studio's checks. A reader is known by its target object and method: a closure that later reads other data
+    /// is still the same reader, and a method group over a struct, boxed afresh, is a new one each time.
+    /// </param>
     /// <param name="drawn">
     /// The body the game DRAWS for the race, following its fallback chain when it ships none of its own (see
     /// <see cref="Chain"/>) — what a "made for" list wants. Off, only the race's own body: what the racial route and the
@@ -106,17 +147,27 @@ internal static class VanillaBodyCatalog
     /// </param>
     /// <returns>
     /// A catalog over the extract folder, empty when the game has no body for that race. An empty one answers
-    /// <see cref="BodySizeCatalog.IsBody"/> false, which is what the picker checks.
+    /// <see cref="BodySizeCatalog.IsBody"/> false, which is what the picker checks. A body any reader extracted is
+    /// returned to every reader; "no body" only to the readers that found none.
     /// </returns>
     internal static BodySizeCatalog Read(string race, Func<string, byte[]?> read, bool drawn = false)
     {
         lock (Gate)
         {
             string key = drawn ? race + "~drawn" : race;
-            if (!extracted.TryGetValue(key, out var options))
+            if (extracted.TryGetValue(key, out var options)) return new BodySizeCatalog(Dir, options);
+            if (emptyFor.TryGetValue(key, out var readers) && SaidNoBody(readers, read)) return new BodySizeCatalog(Dir, []);
+
+            options = Extract(race, read, drawn);
+            if (options.Count > 0)
             {
-                options = Extract(race, read, drawn);
                 extracted[key] = options;
+                emptyFor.Remove(key);
+            }
+            else
+            {
+                if (readers is null) emptyFor[key] = readers = [];
+                readers.Add((read.Target is { } target ? new WeakReference<object>(target) : null, read.Method));
             }
             return new BodySizeCatalog(Dir, options);
         }
@@ -209,7 +260,7 @@ internal static class VanillaBodyCatalog
     }
 
     /// <summary>What the one size is called. A body mod's sizes are named by its author; vanilla has just the one.</summary>
-    private static string SizeName => Loc.Localize("Parts.Retarget.Size.VanillaBody", "The vanilla body");
+    private static string SizeName => ProteusLoc.Localize("Parts.Retarget.Size.VanillaBody", "The vanilla body");
 
     private static readonly string[] Slots = ["_top", "_dwn", "_glv", "_sho"];
 }

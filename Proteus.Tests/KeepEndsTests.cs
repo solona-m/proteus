@@ -755,6 +755,7 @@ public class KeepEndsTests
 
     [Fact]
     [Trait("Plan", "EDGE-keep-hand-foot-skin-11")]
+    [Trait("Speed", "Slow")]
     public void Legs_of_one_shape_within_a_body_mod_already_fit()
     {
         // Read as one size and aimed at another of the same body mod, whose legs are the same where the shoe is: the
@@ -789,6 +790,7 @@ public class KeepEndsTests
     }
 
     [Fact]
+    [Trait("Speed", "Slow")]
     public void Two_sizes_of_one_mesh_that_part_where_the_piece_is_are_two_shapes()
     {
         // YAB's Watermelon and Skull Crushers legs: one mesh, fuller thighs. However close the garment scores to both,
@@ -826,6 +828,7 @@ public class KeepEndsTests
     }
 
     [Fact]
+    [Trait("Speed", "Slow")]
     public void Sizes_the_cloth_scores_alike_are_still_two_shapes_where_the_bodies_part()
     {
         // Read by its cloth, a piece scores both sizes alike: its cloth band sits over legs that are the same in both.
@@ -888,13 +891,14 @@ public class KeepEndsTests
 
     /// <summary>
     /// The automatic refit's plan, byte for byte as it was before the Studio came to share it: recorded from the code
-    /// before the shared core was lifted out of it, so the lifting cannot have changed what the watcher writes.
+    /// before the shared core was lifted out of it, so the lifting cannot have changed what the watcher writes. With the
+    /// cut as it was then: 1386's keeps a triangle whose middle the author's skin covers in the open.
     /// </summary>
     [Fact]
     [Trait("Plan", "AC-keep-ends-studio-10")]
     public void Automatic_keep_ends_plan_is_unchanged()   // [AC-keep-ends-studio-10]
     {
-        var (withFeet, legsOnly) = AutomaticPlans();
+        var (withFeet, legsOnly) = BodyRetarget.WithTuning(new BodyRetarget.Tuning(NoCutInside: true), AutomaticPlans);
         Assert.Equal("54513857BC98FE4A14E87E3B9D7EF82C75A69063768CC3DD14A1DDFF62B86CCE", Hash(withFeet.Model));
         Assert.Equal("1398DC77C9E775E242310F71BB027817162C177C71B7ECA11F7873C9781DBBB6", Hash(legsOnly.Model));
     }
@@ -1147,6 +1151,7 @@ public class KeepEndsTests
 
     [Fact]
     [Trait("Plan", "AC-keep-ends-studio-3")]
+    [Trait("Speed", "Slow")]
     public void Studio_limb_prefills_the_best_guess_from_one_ranking()   // [AC-keep-ends-studio-3]
     {
         InBodies(dir =>
@@ -1171,6 +1176,7 @@ public class KeepEndsTests
 
     [Fact]
     [Trait("Plan", "EDGE-keep-ends-studio-25")]
+    [Trait("Speed", "Slow")]
     public void Studio_limb_ambiguous_still_prefills_and_no_skin_does_not()   // [EDGE-keep-ends-studio-25]
     {
         InBodies(dir =>

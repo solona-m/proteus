@@ -15,6 +15,7 @@ namespace Proteus.Tests;
 /// jacket on a bracelet slot over its top; Heartthrob's shoes over its pants. Measured on the refit's own models, inside
 /// the pass, body-relatively: per 5 mm cell of the target chest, the bra's highest cloth against the jacket's lowest.
 /// </summary>
+[Trait("Speed", "Slow")]
 public class OutfitOrderLocalTests(ITestOutputHelper output)
 {
     private const string Geometric = LocalData.Mods + ":Geometric - by Solona";

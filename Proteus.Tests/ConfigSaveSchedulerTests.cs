@@ -98,6 +98,7 @@ public class ConfigSaveSchedulerTests
     // [AC-config-save-race-2]
     [Fact]
     [Trait("Plan", "AC-config-save-race-2")]
+    [Trait("Speed", "Slow")]
     public void Concurrent_changes_never_break_the_save()
     {
         var config = new Configuration();

@@ -173,10 +173,10 @@ internal sealed record BodySizeCatalog(string ModRoot, IReadOnlyList<BodyOption>
     /// shown, so this only has to say WHERE in the mod it came from — and "no option" is the honest answer.
     /// </summary>
     // Display text only: a size is remembered by its file (Configuration.RetargetTargets), never by name.
-    internal static string DefaultGroupName => Loc.Localize("Parts.Retarget.Size.NoOptionsGroup", "No options");
+    internal static string DefaultGroupName => ProteusLoc.Localize("Parts.Retarget.Size.NoOptionsGroup", "No options");
 
     /// <inheritdoc cref="DefaultGroupName"/>
-    internal static string DefaultSizeName => Loc.Localize("Parts.Retarget.Size.ModOwnBody", "The mod's own body");
+    internal static string DefaultSizeName => ProteusLoc.Localize("Parts.Retarget.Size.ModOwnBody", "The mod's own body");
 
     private static readonly System.Text.RegularExpressions.Regex BodyModelPath = new(
         @"^chara/equipment/e0000/model/c\d{4}e0000_(top|dwn|glv|sho)\.mdl$",

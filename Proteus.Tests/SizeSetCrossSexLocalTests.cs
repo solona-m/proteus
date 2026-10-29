@@ -15,6 +15,7 @@ namespace Proteus.Tests;
 /// A women's mod's men's versions in the size set, against the real files (sizeset-cross-sex): Sheer Elegance's top on
 /// Bibo+, a Rue top, and Starlit's YAS-rigged skirt made men's onto TBSE and TBSE-X. Every run works on a copy.
 /// </summary>
+[Trait("Speed", "Slow")]
 public sealed class SizeSetCrossSexLocalTests(ITestOutputHelper o) : IDisposable
 {
     /// <summary>The mod copies this test made, deleted after it.</summary>
@@ -414,11 +415,11 @@ public sealed class SizeSetCrossSexLocalTests(ITestOutputHelper o) : IDisposable
         Assert.Single(result.Notes, n => n == string.Format(Localization.Strings.SizeSet.NotInstalledFmt, top.Label, "TBSE-X"));
         Assert.True(result.Made >= 1);
 
-        // No women's body its sizes read as made on: said once, nothing written.
+        // No women's body its sizes read as made on: said once, with where to choose it, nothing written.
         string other = Copy(Sheer);
         var before = Groups(other);
         result = RunMen(other, ["tbse@women"], Installed(CrossSexRefitLocalTests.Tbse));
-        Assert.Single(result.Notes, n => n == string.Format(Localization.Strings.SizeSet.UnreadableFmt, top.Label));
+        Assert.Single(result.Notes, n => n == string.Format(Localization.Strings.SizeSet.UnreadableMadeOnFmt, top.Label));
         Assert.Equal(before, Groups(other));
     }
 

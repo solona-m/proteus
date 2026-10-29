@@ -3615,6 +3615,14 @@
     "message": "Группа «{0}» тоже заменяет эту модель; новая группа имеет приоритет.",
     "description": ""
   },
+  "Parts.Retarget.Clash.Outranked.Fmt": {
+    "message": "Группа «{0}» тоже заменяет эту модель и в Penumbra идёт раньше «{1}», поэтому сохранённая туда подгонка не будет видна, пока «{0}» включена. Сохраните её в новую группу.",
+    "description": "{0} is another group of the mod that replaces the same model; {1} is the group the refit is to be saved into."
+  },
+  "Parts.Retarget.Clash.OptionOutranked.Fmt": {
+    "message": "Вариант «{0}» группы «{1}» тоже заменяет эту модель и в этой группе идёт раньше подгонки, поэтому подгонка не будет видна, пока «{0}» отмечен. Снимите отметку в Penumbra или сохраните её в новую группу.",
+    "description": "{0} is another option of the multi-choice group {1} that replaces the same model."
+  },
   "Parts.Retarget.ClearBody": {
     "message": "Вытолкнуть ткань из тела",
     "description": ""
@@ -3778,6 +3786,10 @@
   "Parts.Retarget.Lowered.Fmt": {
     "message": "Из модели {0} делается модель {1}, изогнутая в форму {1} так, как игра изгибает между ними. Сохранение добавит метаданные, нужные игре.",
     "description": "{0} is the race of the model open, {1} the race picked below it."
+  },
+  "Parts.Retarget.Bake.ForeignSkin.Fmt": {
+    "message": "кожа всё ещё рисовалась бы материалом {0}, который новое тело не использует, а игра может упасть, загружая материал кожи, которого нет",
+    "description": "{0} is the skin material names, as the model writes them."
   },
   "Parts.Retarget.Bake.BendBack.Fmt": {
     "message": "подгонку не удалось вернуть в форму {0} ({1})",
@@ -4411,6 +4423,14 @@
     "message": "Вывернутых граней: {0}; сопоставлено {1} тела.",
     "description": "{0} is a count of folded (turned-over) faces; {1} a percentage such as \"97%\"."
   },
+  "Parts.Retarget.Race.ReplacesGame.Fmt": {
+    "message": "В игре есть собственная модель этого предмета для {0}. После сохранения эта подгонка заменяет её для всех, кого вы видите в игровой модели {0}, пока новый мод включён. Выберите «Original» в этом моде или выключите его, чтобы вернуть игровую.",
+    "description": "Warning under “Refit for” for the game's own gear. {0} is the race picked, such as \"Midlander M\". “Original” is the literal name of the option Proteus writes into the new mod; keep it in English."
+  },
+  "Parts.Retarget.Race.CharacterKeepsGame.Fmt": {
+    "message": "Ваш персонаж — {0}, а в игре есть собственная модель этого предмета для {0}: эта подгонка не будет видна на вашем персонаже.",
+    "description": "Warning for the game's own gear refitted for another race. {0} is the race of the character playing, such as \"Highlander M\"."
+  },
   "Parts.Retarget.Race.CrossSexHint.Fmt": {
     "message": "Чтобы сделать версию для {0}, выберите его в «Подогнать для».",
     "description": "{0} is a race such as \"Midlander M\". “Refit for” is the dropdown's label (Parts.Retarget.Race.Label)."
@@ -4463,9 +4483,9 @@
     "message": "{0} (как носит ваш персонаж)",
     "description": "An entry of the Refit for list; {0} is a race such as \"Midlander F\": the race the logged-in character would get it as."
   },
-  "Parts.Retarget.Race.OwnModel.Fmt": {
-    "message": "В этом моде уже есть своя модель {0}. Подгоните лучше её.",
-    "description": "{0} is a race such as \"Highlander M\" the mod already ships a model of."
+  "Parts.Retarget.Race.OwnModelReplaced.Fmt": {
+    "message": "В этом моде уже есть своя модель, которую носят {0}. Подгонка для {0}, сохранённая в этот мод, заменяет её, пока она включена. Если эта модель — работа автора, откройте её и подгоните лучше её.",
+    "description": "{0} is a race such as \"Midlander M\" the mod already ships a model for (or one that race falls through to)."
   },
   "Parts.Retarget.Race.OpenModel.Fmt": {
     "message": "Открыть модель {0}",
@@ -5135,6 +5155,46 @@
     "message": "Размеры не добавлены: в моде уже есть все размеры отмеченных тел.",
     "description": ""
   },
+  "SizeSet.NothingAdded.SeeLeftOut": {
+    "message": "Размеры не добавлены. Причина указана ниже, в разделе «Пропущено».",
+    "description": ""
+  },
+  "SizeSet.NothingAdded.SeeLog": {
+    "message": "Размеры не добавлены. Причину для каждого размера можно найти в журнале Dalamud (/xllog).",
+    "description": ""
+  },
+  "SizeSet.MadeOn": {
+    "message": "Сделано под",
+    "description": ""
+  },
+  "SizeSet.MadeOn.Auto": {
+    "message": "Определить автоматически",
+    "description": ""
+  },
+  "SizeSet.MadeOn.Tip": {
+    "message": "Мод тела, под который сделаны торс и ноги этого мода. Используется только для размеров, которые Proteus не может определить сам, например для мода, сделанного под старую версию тела (скажем, Bibo+ до Dawntrail). Оставьте «Определить автоматически», если Proteus не сообщил, что не смог определить тело.",
+    "description": ""
+  },
+  "SizeSet.UnreadableMadeOn.Fmt": {
+    "message": "{0}: не удалось определить, под какое тело она сделана, поэтому размеры из неё не созданы. Если вы знаете, выберите тело в «Сделано под» и снова добавьте размеры.",
+    "description": ""
+  },
+  "SizeSet.NotMadeOn.Fmt": {
+    "message": "{0}: ни один её размер не подходит к {1}, поэтому размеры из неё не созданы. Проверьте тело, выбранное в «Сделано под».",
+    "description": ""
+  },
+  "SizeSet.MadeOnMissing.Fmt": {
+    "message": "{0}: {1}, выбранное в «Сделано под», не установлено, поэтому размеры из неё не созданы.",
+    "description": ""
+  },
+  "SizeSet.MadeOnUnclear.Fmt": {
+    "message": "{0}: на {1} её размеры не различить, поэтому размеры из неё не созданы.",
+    "description": ""
+  },
+  "SizeSet.MadeOnOtherBody.Fmt": {
+    "message": "{0}: «{1}» определено как сделанное под {2}, а не под {3}, выбранное в «Сделано под», и его размеры созданы как для {2}.",
+    "description": ""
+  },
   "SizeSet.LeftOut": {
     "message": "Пропущено:",
     "description": ""
@@ -5283,8 +5343,8 @@
     "message": "расовый деформер не знает, как двигать {0}",
     "description": ""
   },
-  "HairPort.Refused.Fit.Fmt": {
-    "message": "она не садится на голову c{0:D4}: {1:P0} уходит в череп, а расстояние до кожи головы отличается от оригинала на {2:F0} мм",
+  "HairPort.Fit.Fmt": {
+    "message": "она не садится на голову c{0:D4}: {1:P0} уходит в череп, а расстояние до кожи головы отличается от оригинала на {2:F0} мм; проверьте в игре",
     "description": ""
   },
   "HairPort.Refused.NotHair": {

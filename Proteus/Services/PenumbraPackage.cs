@@ -31,13 +31,15 @@ public static class PenumbraPackage
     /// </param>
     /// <param name="Swaps">The game paths this option's <c>FileSwaps</c> replace.</param>
     /// <param name="Manipulations">Every metadata manipulation, of any type, reduced to what it touches.</param>
+    /// <param name="Priority">A Multi option's own priority: higher applies first, so its edits win.</param>
     public sealed record PackOption(
         string Name, string? Description, IReadOnlyDictionary<string, string> Files,
         IReadOnlyList<string> Attributes, ushort AttributeMask = 0,
         IReadOnlyList<PackEst>? Est = null,
         IReadOnlyList<string>? Swaps = null,
         IReadOnlyList<PackManipulation>? Manipulations = null,
-        IReadOnlyList<PackImc>? Imc = null)
+        IReadOnlyList<PackImc>? Imc = null,
+        int Priority = 0)
     {
         /// <summary>Never null, so callers can enumerate without a guard.</summary>
         public IReadOnlyList<PackEst> Est { get; init; } = Est ?? [];
@@ -89,9 +91,13 @@ public static class PenumbraPackage
     /// For an <c>Imc</c> group: the attribute bits set when no option is selected; each selected option clears
     /// its own bits.
     /// </param>
+    /// <param name="Priority">The group's priority: higher applies first, so its edits win.</param>
+    /// <param name="DefaultSettings">What the group selects until the user chooses: a Single group's option index, a
+    /// Multi group's bitmask of options.</param>
     public sealed record PackGroup(
         string Name, string Type, int Index, IReadOnlyList<PackOption> Options, string? Entry,
-        int ImcSetId = -1, string? ImcSlot = null, ushort DefaultAttributeMask = 0);
+        int ImcSetId = -1, string? ImcSlot = null, ushort DefaultAttributeMask = 0,
+        int Priority = 0, ulong DefaultSettings = 0);
 
     /// <summary>A parsed pack.</summary>
     /// <param name="Entries">Every archive entry, normalised, with its uncompressed size.</param>
@@ -135,14 +141,37 @@ public static class PenumbraPackage
             var name = Normalize(raw);
             // Entries are extracted by name, so a traversal entry rejects the whole pack.
             if (System.IO.Path.IsPathRooted(name) || name.Split('/').Any(IsTraversal))
-                throw new InvalidDataException(string.Format(Loc.Localize("Import.Pack.UnsafeEntry.Fmt", "The pack contains an unsafe entry path: {0}"), raw));
+                throw new InvalidDataException(string.Format(ProteusLoc.Localize("Import.Pack.UnsafeEntry.Fmt", "The pack contains an unsafe entry path: {0}"), raw));
             entries[name] = length;
         }
 
+        return ReadManifests(zip, pmpPath, entries, entries.Keys.Where(IsLegacyGroupFile));
+    }
+
+    /// <summary>
+    /// An installed mod's manifests alone, parsed as <see cref="Read"/> parses them — the groups in the same order —
+    /// without listing the folder: <see cref="Contents.Entries"/> is empty. What the composite reads per build, where a
+    /// large mod's entry table would cost a stat per file. Throws <see cref="InvalidDataException"/> like <see cref="Read"/>.
+    /// </summary>
+    internal static Contents ReadInstalledManifest(string modRoot)
+    {
+        using var folder = new FolderSource(modRoot);
+        var legacyGroups = Directory.Exists(modRoot)
+            ? Directory.EnumerateFiles(modRoot, "group_*.json", SearchOption.TopDirectoryOnly)
+                .Select(System.IO.Path.GetFileName).OfType<string>().ToList()
+            : [];
+        return ReadManifests(folder, modRoot, new Dictionary<string, long>(StringComparer.OrdinalIgnoreCase),
+                             legacyGroups);
+    }
+
+    /// <summary>The manifest half of <see cref="Read"/>: <paramref name="legacyGroups"/> names the v3 group files.</summary>
+    private static Contents ReadManifests(
+        Source zip, string pmpPath, Dictionary<string, long> entries, IEnumerable<string> legacyGroups)
+    {
         var manifestNode = ReadNode(zip, ManifestEntry)
-            ?? throw new InvalidDataException(Loc.Localize("Import.Pack.Penumbra.NoMeta", "Not a Penumbra pack — it has no meta.json."));
+            ?? throw new InvalidDataException(ProteusLoc.Localize("Import.Pack.Penumbra.NoMeta", "Not a Penumbra pack — it has no meta.json."));
         if (manifestNode is not JsonObject manifest)
-            throw new InvalidDataException(Loc.Localize("Import.Pack.MetaNotObject", "The pack's meta.json is not an object."));
+            throw new InvalidDataException(ProteusLoc.Localize("Import.Pack.MetaNotObject", "The pack's meta.json is not an object."));
 
         int fileVersion = Int(manifest, "FileVersion") ?? PenumbraModMeta.LegacyFileVersion;
 
@@ -174,8 +203,7 @@ public static class PenumbraPackage
             }
 
             // v3 group files, ordered by the number in their name: that number is the group's priority.
-            foreach (var entry in entries.Keys.Where(IsLegacyGroupFile)
-                         .OrderBy(k => k, StringComparer.OrdinalIgnoreCase))
+            foreach (var entry in legacyGroups.OrderBy(k => k, StringComparer.OrdinalIgnoreCase))
             {
                 if (ReadNode(zip, entry) is not JsonObject g) continue;
                 groups.Add(ReadGroup(g, LegacyGroupNumber(entry) ?? groups.Count, entry));
@@ -291,7 +319,7 @@ public static class PenumbraPackage
         {
             var rel = Normalize(raw);
             if (System.IO.Path.IsPathRooted(rel) || rel.Split('/').Any(IsTraversal))
-                throw new InvalidDataException(string.Format(Loc.Localize("Import.Pack.UnsafeEntry.Fmt", "The pack contains an unsafe entry path: {0}"), raw));
+                throw new InvalidDataException(string.Format(ProteusLoc.Localize("Import.Pack.UnsafeEntry.Fmt", "The pack contains an unsafe entry path: {0}"), raw));
             var dest = System.IO.Path.Combine(root, rel.Replace('/', System.IO.Path.DirectorySeparatorChar));
             Directory.CreateDirectory(System.IO.Path.GetDirectoryName(dest)!);
             src.CopyTo(raw, dest);
@@ -402,7 +430,8 @@ public static class PenumbraPackage
                 ReadEst(oo, est);
                 options.Add(new PackOption(
                     Str(oo, "Name") ?? string.Empty, Str(oo, "Description"), files, attrs,
-                    Mask(oo, "AttributeMask"), est, ReadSwaps(oo), ReadManipulations(oo), ReadImc(oo)));
+                    Mask(oo, "AttributeMask"), est, ReadSwaps(oo), ReadManipulations(oo), ReadImc(oo),
+                    Int(oo, "Priority") ?? 0));
             }
 
         // An Imc group's edit lives on the group; read only for that kind.
@@ -428,7 +457,9 @@ public static class PenumbraPackage
             entry,
             setId,
             slot,
-            defaultMask);
+            defaultMask,
+            Int(g, "Priority") ?? 0,
+            g["DefaultSettings"] is JsonValue ds && ds.TryGetValue<ulong>(out var bits) ? bits : 0);
     }
 
     /// <summary>One IMC attribute mask field, clamped to the ten bits the format actually carries.</summary>

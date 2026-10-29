@@ -42,7 +42,9 @@ responsibility.
    into `test` locally only after a passing `code-critic` review of the current
    commit — no unresolved critical issues. Any commit made after the review
    requires a re-review. There is no pre-push hook; never `git push` or open a
-   PR unless the user asks.
+   PR unless the user asks. Dependabot and contributor PRs are the exception:
+   they are merged on GitHub — Dependabot's minor/patch ones automatically once
+   CI passes (see `.github/dependabot.yml`), so pull `test` before merging into it.
 
 5. **Every build meant for the game is loadable there.** Bump
    `Plugin.BuildNumber`, build Release, and copy the output to
@@ -71,8 +73,8 @@ documented by that workflow's own tooling (e.g. its installed plugin).
 
 - `dotnet build Proteus/Proteus.csproj -c Release` — build
 - `dotnet build Proteus.Refit/Proteus.Refit.csproj -c Release` — build the headless refit CLI (the tests build it too, for its `--size-set` tests; still run it whenever `Proteus.Refit/` changes)
-- `dotnet test Proteus.Tests/Proteus.Tests.csproj -c Release` — run all tests
-- `dotnet test Proteus.Tests/Proteus.Tests.csproj -c Release` — all checks incl. tests (also `npm test --prefix worker` when `worker/` changes)
+- `dotnet test Proteus.Tests/Proteus.Tests.csproj -c Release` — run all tests (the full suite: before a release tag only)
+- `dotnet test Proteus.Tests/Proteus.Tests.csproj -c Release --filter "Speed!=Slow"` — the quick suite: before every push (also `npm test --prefix worker` when `worker/` changes)
 - run: bump `Plugin.BuildNumber`, build, copy `Proteus/bin/Release/win-x64/` to `E:\repos\Proteus\Proteus\bin\release\win-x64` — the game dev-loads it (no app URL; verification is in game)
 - stop: none — unload the plugin in game via `/xlplugins`
 - single test: `dotnet test Proteus.Tests/Proteus.Tests.csproj -c Release --filter "FullyQualifiedName~BodyRetargetTests"`
@@ -101,8 +103,15 @@ xunit + NSubstitute in `Proteus.Tests/`, one `*Tests.cs` per unit; synthetic
 fixtures (`SyntheticModel`, `SyntheticPack`, …) and `Fixtures/`. Tests that need
 real game or mod files read them via `LocalData` and are marked
 `[LocalDataFact]` so they skip on CI — never hard-code a local path. While
-iterating run only targeted `--filter` tests; run the full suite once, before
-merging into `test`. The worker has its own `npm test` in `worker/`.
+iterating run only targeted `--filter` tests. Before every push run the quick
+suite (`--filter "Speed!=Slow"`); the full suite runs only before a release
+tag. A test that takes 5 s or more gets `[Trait("Speed", "Slow")]` (on the
+class when all of it is slow; a class fixture's setup counts against its
+class) — unless it is one of the Sensitive Areas writers' own tests or a
+build-enforced rule test (`LocalizationTests`, `SupplyChainTests`), which stay
+in the quick suite. Golden baselines (`GoldenTests`, `GoldenCrossBodyLocalTests`,
+`SkinTuckGoldenTests`) run with the release. The worker has its own `npm test`
+in `worker/`.
 
 ## Sensitive Areas — the security surface
 
@@ -118,7 +127,7 @@ expanding here.
 - `Proteus/Interop/` — unsafe struct offsets and IPC threading (Penumbra events fire on the caller's thread)
 - `Proteus/Configuration.cs` migrations — a mistake loses user settings
 - `LogAnonymizer.cs` / `LogExportService.cs` — character names must not leak into exported logs
-- `worker/` and `.github/workflows/` — live release distribution
+- `worker/`, `.github/workflows/` and `.github/dependabot.yml` — live release distribution; actions stay SHA-pinned (`SupplyChainTests`)
 
 ## Review & Planning Guidance
 

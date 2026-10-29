@@ -46,10 +46,13 @@ internal static partial class SizeSetRefit
     /// <see cref="Configuration.SizeSetPiercings"/>. Off by default; nails come in either way.</param>
     /// <param name="Across">What a women's piece's men's versions read from the player's collection (see
     /// <c>SizeSetRefit.CrossSex.cs</c>), asked for on the framework thread; null makes none, whatever is ticked.</param>
+    /// <param name="MadeOn">The body mod's folder the author says the chest and legs were made on, for the sizes the
+    /// automatic reading cannot place (see <c>SizeSetRefit.Source.cs</c>); null reads every size automatically. Never
+    /// for shoes and gloves.</param>
     internal sealed record Request(string ModRoot, IReadOnlyList<string> Keys, bool Yas, bool Remake,
                                    IReadOnlyList<BodyModIndex.Entry> Bodies, Func<string, byte[]?>? ReadGameFile = null,
                                    bool Ends = true, Func<string, BodySizeCatalog?>? GameBody = null,
-                                   bool Piercings = false, AcrossInputs? Across = null);
+                                   bool Piercings = false, AcrossInputs? Across = null, string? MadeOn = null);
 
     /// <param name="ResolveCollection">The file the player's collection loads for a game path (a skeleton): a path on
     /// disk when a mod replaces it, anything else for the game's own (see <see cref="OtherRaceWearer.Gather"/>).</param>
@@ -58,7 +61,58 @@ internal static partial class SizeSetRefit
     /// <param name="Made">Sizes saved.</param>
     /// <param name="Notes">Every size left out, and why — for the author to read.</param>
     /// <param name="Warnings">Sizes saved that want a look in game: a men's version's folds and moved bones.</param>
-    internal sealed record Result(int Made, IReadOnlyList<string> Notes, IReadOnlyList<string>? Warnings = null);
+    /// <param name="Summary">What the result line says (<see cref="ResultLine"/>).</param>
+    internal sealed record Result(int Made, IReadOnlyList<string> Notes, IReadOnlyList<string>? Warnings = null,
+                                  Summary Summary = Summary.Added);
+
+    /// <summary>What came of a run, as its result line says it.</summary>
+    internal enum Summary
+    {
+        /// <summary>Sizes were added.</summary>
+        Added,
+        /// <summary>None, and none was wanted: every size is already in the mod, or nothing was there to make.</summary>
+        HadEverySize,
+        /// <summary>None, and "Left out" says why.</summary>
+        SeeLeftOut,
+        /// <summary>None, and only the log says why.</summary>
+        SeeLog,
+    }
+
+    /// <summary>The outcomes that leave nothing to do: the size is in the mod already, or there is none to make.</summary>
+    private static readonly HashSet<string> NothingToDo = new(StringComparer.Ordinal)
+    {
+        Codes.AlreadyThere, Codes.AuthorsOwn, Codes.MadeOnIt, Codes.NoOwnLegs, Codes.NoBodyForRace,
+        Codes.EndsNotForMen, Codes.SameSkin, Codes.NoEnd,
+    };
+
+    /// <summary>
+    /// What a run came to. Nothing made is "the mod already has every size" only when every outcome left nothing to do —
+    /// never because nothing was noted: a size with no source is an outcome with no note. Legs with no chest option to
+    /// join count as nothing to do when every chest outcome for that option is the author's own or already there.
+    /// </summary>
+    internal static Summary Summarize(RunLog log, int made)
+    {
+        if (made > 0) return Summary.Added;
+        bool Nothing(SizeOutcome o)
+        {
+            if (o.ReasonCode is { } code && NothingToDo.Contains(code)) return true;
+            if (o.ReasonCode != Codes.NoChestOption) return false;
+            var chests = log.Sizes.Where(c => c.Slot == "_top" && string.Equals(c.Group, o.Group, StringComparison.OrdinalIgnoreCase)
+                                              && string.Equals(c.Option, o.Option, StringComparison.OrdinalIgnoreCase)).ToList();
+            return chests.Count > 0 && chests.All(c => c.ReasonCode is Codes.AuthorsOwn or Codes.AlreadyThere);
+        }
+        if (log.Sizes.Count > 0 && log.Sizes.All(Nothing)) return Summary.HadEverySize;
+        return log.Notes.Count > 0 ? Summary.SeeLeftOut : Summary.SeeLog;
+    }
+
+    /// <summary>The panel's result line for a run.</summary>
+    internal static string ResultLine(Result result) => result.Summary switch
+    {
+        Summary.Added => string.Format(Strings.SizeSet.DoneFmt, result.Made),
+        Summary.HadEverySize => Strings.SizeSet.NothingAdded,
+        Summary.SeeLeftOut => Strings.SizeSet.NothingAddedSeeLeftOut,
+        _ => Strings.SizeSet.NothingAddedSeeLog,
+    };
 
     /// <summary>
     /// A chest or legs model of some outfit for a Midlander woman or man — the races the table's bodies are, and the ones
@@ -202,7 +256,7 @@ internal static partial class SizeSetRefit
         var runLog = new RunLog();
         int made = Run(request, runLog, uvRemap, log, progress, ct);
         return new Result(made, runLog.Notes.Distinct(StringComparer.Ordinal).ToList(),
-                          runLog.Warnings.Distinct(StringComparer.Ordinal).ToList());
+                          runLog.Warnings.Distinct(StringComparer.Ordinal).ToList(), Summarize(runLog, made));
     }
 
     /// <inheritdoc cref="Run(Request, UVRemapService?, IPluginLog, Action{string}, CancellationToken)"/>
@@ -223,6 +277,8 @@ internal static partial class SizeSetRefit
         // What each author's file was read as this run, so a glove sized by the top beside it in its option reads that
         // top once — the reading the top's own sizes were cut from.
         var readings = new Dictionary<string, AutoRefitDecisions.Pick?>(StringComparer.Ordinal);
+        // And what the ones it could not place were read as on the "Made on" body.
+        var madeOnReadings = new Dictionary<string, SourceReading>(StringComparer.Ordinal);
         // Which of the author's sizes each option of a group was cut from, by the piece that made it first — the chest,
         // pieces running chests first — so the legs, shoes and gloves joining it are cut from that same size.
         var leadSources = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
@@ -232,7 +288,8 @@ internal static partial class SizeSetRefit
             try
             {
                 made += IsEnd(piece.Slot) ? RunEndsPiece(request, piece, uvRemap, log, progress, runLog, readings, leadSources, ct)
-                                          : RunPiece(request, piece, uvRemap, log, progress, runLog, readings, leadSources, ct);
+                                          : RunPiece(request, piece, uvRemap, log, progress, runLog, readings, madeOnReadings,
+                                                     leadSources, ct);
             }
             catch (OperationCanceledException)
             {
@@ -267,10 +324,12 @@ internal static partial class SizeSetRefit
 
     /// <summary>
     /// How a reading of an author's file is kept for the run: by the file, the slot and race it is read in, and the body
-    /// preferred on a tie — everything <see cref="RefitCore.DetectSource"/> answers by.
+    /// preferred on a tie — everything <see cref="RefitCore.DetectSource"/> answers by — and, for a reading on the body
+    /// chosen under "Made on", that body.
     /// </summary>
-    internal static string ReadingKey(string file, string slot, string race, string preferred)
-        => RefitCore.Normal(file) + "|" + slot + "|" + race + "|" + preferred.ToLowerInvariant();
+    internal static string ReadingKey(string file, string slot, string race, string preferred, string? madeOn = null)
+        => RefitCore.Normal(file) + "|" + slot + "|" + race + "|" + preferred.ToLowerInvariant()
+           + (madeOn != null ? "|made on " + madeOn.ToLowerInvariant() : "");
 
     /// <summary>The body mod a size set prefers on a tie, for a piece sized from <paramref name="sizeSlot"/>'s table: the
     /// first ticked key's body at the piece's race, else the first installed.</summary>
@@ -284,6 +343,7 @@ internal static partial class SizeSetRefit
     private static int RunPiece(Request request, Piece piece, UVRemapService? uvRemap, IPluginLog log,
                                 Action<string> progress, RunLog runLog,
                                 Dictionary<string, AutoRefitDecisions.Pick?> readings,
+                                Dictionary<string, SourceReading> madeOnReadings,
                                 Dictionary<string, string> leadSources, CancellationToken ct)
     {
         var notes = runLog.Notes;
@@ -315,11 +375,12 @@ internal static partial class SizeSetRefit
         // Per piece, not per run: a reading open for the whole run would keep every body it touched for minutes.
         using var reading = BodySizeMatch.BeginReading();
 
-        var sources = new Sources(request, piece, preferred, mods, readings, Note, ct);
+        var sources = new Sources(request, piece, preferred, mods, readings, madeOnReadings, Note, ct);
         if (sources.Primary is not { } primary)
         {
-            runLog.Note(string.Format(Strings.SizeSet.UnreadableFmt, piece.Label), piece, SizeStatus.Skipped,
-                        Codes.Unreadable, piece.Group ?? piece.GroupName);
+            var (unread, code) = UnreadableNote(piece.Label, request.MadeOn, sources.MadeOnName, sources.MadeOnMissing,
+                                                sources.Fits);
+            runLog.Note(unread, piece, SizeStatus.Skipped, code, piece.Group ?? piece.GroupName);
             return 0;
         }
         var sourceEntry = primary.Entry;
@@ -358,7 +419,15 @@ internal static partial class SizeSetRefit
             if (!bodyDistances.TryGetValue((c.SourcePath, targetPath), out var body))
                 bodyDistances[(c.SourcePath, targetPath)] = body = BodyDistance(c.SourcePath, targetPath, ProbesOf);
             var skin = SkinDistance(c.SkinProbes, targetPath);
-            return new SourceDistance(body.P90, body.Mean, skin.P90, skin.Mean, c.Order);
+            return c.Distance(body.P90, body.Mean, skin.P90, skin.Mean);
+        }
+        // A size cut from one read on another body than "Made on" says, said once per option under "Check in game".
+        var warnedOtherBody = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        void WarnOtherBody(Candidate c)
+        {
+            if (c.OtherBody && warnedOtherBody.Add(c.Name))
+                runLog.Warnings.Add(string.Format(Strings.SizeSet.MadeOnOtherBodyFmt, piece.Label, c.Name, c.Entry.Name,
+                                                  sources.MadeOnName ?? request.MadeOn));
         }
 
         // ── where the sizes go ──
@@ -416,18 +485,16 @@ internal static partial class SizeSetRefit
                         else may.Add(c);
                     var alike = RiggedAlike(may, c => c.Yas, body.Yas);
                     foreach (var c in may.Except(alike)) said.Add($"{c.Name}: {(c.Yas ? "rigged for YAS" : "not rigged for YAS")}");
-                    foreach (var c in alike)
-                    {
-                        var d = Measure(c, targetCat.PathOf(ToOf(c)!));
-                        eligible.Add((c, d));
-                        said.Add($"{c.Name}: {Describe(d)}");
-                    }
+                    foreach (var c in alike) eligible.Add((c, Measure(c, targetCat.PathOf(ToOf(c)!))));
                     if (eligible.Count == 0)
                     {
                         Note($"{option}: none of the author's sizes goes onto it ({string.Join("; ", said)})");
                         return null;
                     }
-                    var (chosen, step, gap) = Choose(eligible);
+                    var (chosen, step, gap, misfits) = ChooseWithMisfits(eligible);
+                    for (int i = 0; i < eligible.Count; i++)
+                        said.Add($"{eligible[i].Item1.Name}: {Describe(eligible[i].Item2, misfits.Contains(i))}");
+                    if (LoneMadeOn(eligible, chosen) is { } lone) said.Add(lone);
                     return (chosen, $"{option} from {chosen.Name} (by {step}, {gap * 1000f:F1} mm ahead; {string.Join("; ", said)})");
                 }
 
@@ -618,6 +685,7 @@ internal static partial class SizeSetRefit
                     continue;
                 }
                 Out(SizeStatus.Made, null, null, fromLabel, Measures.Of(plan, folded), sourceOption);
+                WarnOtherBody(chosen);
                 if (lead && sourceOption != null)
                     leadSources[leadKey] = sourceOption;
             }

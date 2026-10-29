@@ -13,6 +13,7 @@ namespace Proteus.Tests;
 /// Hair ports measured against the game's own files. The game ships every shared hairstyle (101+) once per race, so
 /// the target race's own model of the same hairstyle is the answer a port should land on.
 /// </summary>
+[Trait("Speed", "Slow")]
 public sealed class HairPortLocalTests(ITestOutputHelper o)
 {
     internal static readonly (ushort From, ushort To)[] Pairs =
@@ -53,7 +54,8 @@ public sealed class HairPortLocalTests(ITestOutputHelper o)
     }
 
     /// <summary>
-    /// Every shared hairstyle of every pair ports, and the fit check passes it — while the game's OWN copy of that
+    /// Every shared hairstyle of every pair ports, and the fit check passes it (one that fails is saved with a warning,
+    /// never refused) — while the game's OWN copy of that
     /// hairstyle on the target race, which the check must also accept, stays inside the same limits. The margins are
     /// calibrated from what this prints.
     /// </summary>
@@ -86,32 +88,45 @@ public sealed class HairPortLocalTests(ITestOutputHelper o)
                     worstGameSunk = MathF.Max(worstGameSunk, g.Sunk);
                     worstGameShift = MathF.Max(worstGameShift, MathF.Abs(g.Gap - s.Gap));
                 }
-                if (result != null)
+                // A port that fails the fit check is saved with a warning, never refused; "refused" here counts those,
+                // and anything refused for what cannot be made.
+                if (result == null)
+                {
+                    Assert.DoesNotContain("sinks into the skull", why);
+                    if (from / 100 is 15 or 16 || to / 100 is 15 or 16) hrothgarRefused++;
+                    else refused.Add($"h{id:D4} c{from:D4}->c{to:D4}: {why}");
+                    o.WriteLine($"h{id:D4} c{from:D4}->c{to:D4}: REFUSED {why}");
+                    continue;
+                }
+                bool fits = result.Sunk <= HairPortBaker.SunkLimit && MathF.Abs(result.GapShift) <= HairPortBaker.GapMargin;
+                Assert.Equal(!fits, result.Warning?.Contains("sinks into the skull") == true);
+                if (fits)
                 {
                     ports++;
                     worstPortSunk = MathF.Max(worstPortSunk, result.Sunk);
                     worstPortShift = MathF.Max(worstPortShift, MathF.Abs(result.GapShift));
                 }
                 else if (from / 100 is 15 or 16 || to / 100 is 15 or 16) hrothgarRefused++;
-                else refused.Add($"h{id:D4} c{from:D4}->c{to:D4}: {why}");
+                else refused.Add($"h{id:D4} c{from:D4}->c{to:D4}: {result.Warning}");
                 o.WriteLine($"h{id:D4} c{from:D4}->c{to:D4}: game sunk {g.Sunk:P0} shift {(g.Gap - s.Gap) * 1000:F0} mm; " +
-                            (result == null ? $"REFUSED {why}"
-                                            : $"port sunk {result.Sunk:P0} shift {result.GapShift * 1000:F0} mm, {result.Millis} ms"));
+                            (fits ? $"port sunk {result.Sunk:P0} shift {result.GapShift * 1000:F0} mm, {result.Millis} ms"
+                                  : $"WARNED {result.Warning}"));
             }
         }
         o.WriteLine($"game's own copies: worst sunk {worstGameSunk:P0}, worst shift {worstGameShift * 1000:F0} mm");
-        // Hrothgar heads are the furthest from everyone's: refusing a port there is the check working, not failing.
-        o.WriteLine($"Hrothgar ports refused: {hrothgarRefused}");
-        o.WriteLine($"ports: {ports} made, {refused.Count} refused; worst sunk {worstPortSunk:P0}, worst shift {worstPortShift * 1000:F0} mm");
+        // Hrothgar heads are the furthest from everyone's: a fit warning there is the check working, not failing.
+        o.WriteLine($"Hrothgar ports warned of their fit: {hrothgarRefused}");
+        o.WriteLine($"ports: {ports} fit, {refused.Count} warned of their fit; worst sunk {worstPortSunk:P0}, worst shift {worstPortShift * 1000:F0} mm");
 
-        // The check accepts what the game itself ships, and refuses almost none of the ports.
+        // The check accepts what the game itself ships, and warns of almost none of the ports.
         Assert.True(worstGameSunk <= HairPortBaker.SunkLimit, $"the game's own copies sink {worstGameSunk:P0}");
         Assert.True(worstGameShift <= HairPortBaker.GapMargin, $"the game's own copies shift {worstGameShift * 1000:F0} mm");
         Assert.True(ports > 100, $"only {ports} ports were made");
         Assert.True(refused.Count * 20 <= ports + refused.Count, string.Join("\n", refused));
     }
 
-    /// <summary>A hairstyle that has not been bent at all sits nowhere near a distant race's head, and is refused.</summary>
+    /// <summary>A hairstyle that has not been bent at all sits nowhere near a distant race's head, and fails the fit
+    /// check (which warns, never refuses).</summary>
     [LocalDataTheory(LocalData.GameData)]
     [InlineData((ushort)1201, (ushort)201)]   // a Lalafell's, far below a Midlander's head
     [InlineData((ushort)201, (ushort)1201)]   // a Midlander's, far above a Lalafell's
@@ -238,8 +253,8 @@ public sealed class HairPortLocalTests(ITestOutputHelper o)
     }
 
     /// <summary>
-    /// Every shared hairstyle bend over the fold limit is saved with a warning, never refused for its folds — refused, if
-    /// at all, only by the fit check, which never speaks of turning inside out (cross-sex-tops-yas).
+    /// Every shared hairstyle bend over the fold limit is saved with a warning that speaks of turning inside out, never
+    /// refused for its folds (cross-sex-tops-yas) or its fit, which is only warned of.
     /// </summary>
     [LocalDataFact(LocalData.GameData)]
     [Trait("Plan", "AC-cross-sex-tops-yas-8")]
@@ -247,7 +262,7 @@ public sealed class HairPortLocalTests(ITestOutputHelper o)
     public void Over_the_fold_limit_a_port_is_saved_with_a_warning() // [AC-cross-sex-tops-yas-8] [EDGE-cross-sex-tops-yas-22]
     {
         var game = Load();
-        int warned = 0, refused = 0, quiet = 0;
+        int warned = 0, quiet = 0;
         foreach (var (from, to) in Pairs)
             foreach (int id in Ids)
             {
@@ -256,18 +271,19 @@ public sealed class HairPortLocalTests(ITestOutputHelper o)
                                                    game.Head(to), out var why);
                 if (result == null)
                 {
+                    // Refused only for what cannot be made: bones the target lacks, never folds or fit.
                     Assert.DoesNotContain("inside out", why);
-                    refused++;
+                    Assert.DoesNotContain("sinks into the skull", why);
                     continue;
                 }
                 var a = ModelPartReader.Read(src)!;
                 int triangles = a.Parts.Where(p => p.Island == -1).Sum(p => p.TriangleCount);
                 bool over = result.Folded > HairPortBaker.FoldedShare * triangles;
-                Assert.Equal(over, result.Warning != null);
-                if (over) { warned++; Assert.Contains("inside out", result.Warning); }
+                Assert.Equal(over, result.Warning?.Contains("inside out") == true);
+                if (over) warned++;
                 else quiet++;
             }
-        o.WriteLine($"{warned} saved with a warning, {quiet} without, {refused} refused by the fit check");
+        o.WriteLine($"{warned} saved with a fold warning, {quiet} without");
         Assert.True(warned + quiet > 150);
     }
 

@@ -138,6 +138,8 @@ public partial class CompositorService : IDisposable
     // Set when a body mod or the player collection changes — anything that could make _activeMtrlSnapshot
     // wrong without a redraw. The resource-tree walk is only paid for when this is set or the snapshot is cold.
     private volatile bool _activeMtrlSnapshotDirty;
+    // The snapshot needs a fresh walk, but no body mod changed: nothing to reload (a post-settle correction).
+    private volatile bool _activeMtrlSnapshotRewalk;
     // Every game path the last composite read as a base (PrimeUpstreamCache's return value): a mod that
     // redirects none of these cannot change our output. Not _upstreamByGamePath, which is emptied on
     // every settings change. Set and hash share one immutable record so they can never disagree.
