@@ -294,6 +294,55 @@ public class UvTransferMapsLocalTests(TbseBakeFixture bake, ITestOutputHelper ou
             Assert.True(px <= UvTransferQuality.Gate.NippleDotPx, $"nipple {side} {px:F1} px");
     }
 
+    private const string BiboSkin = Bibo + "/Midlander, Elezen, Miqo - SKIN DETAIL/Detailed/chara/bibo_mid_base.tex";
+    private const string TbseSkin = Tbse + "/p1/step 2- midlander, elezen, miqo'te/type 0/chara/human/c0101/obj/body/b0001/texture/c0101b0001_b_d.tex";
+
+    /// <summary>
+    /// The nipple the finder takes from each mesh is where that body's own skin texture paints its areola: within
+    /// 8 texture px (16 at 4096) of the centroid of the areola's dark pixels, each side in its own half of the sheet.
+    /// Both diffuses are 2048² and draw the whole sheet (TBSE's <c>_b_d</c> is the doubled one), so a uv is uv × 2048.
+    /// </summary>
+    [LocalDataFact(LocalData.GameData, Bibo, Tbse, BiboSkin, TbseSkin)]
+    [Trait("Plan", "EDGE-uvmap-nipples-23")]
+    public void Nipple_uv_matches_areola_in_skin_diffuse() // [EDGE-uvmap-nipples-23]
+    {
+        var loader = new TextureLoader(Substitute.For<Dalamud.Plugin.Services.IDataManager>(), Substitute.For<Dalamud.Plugin.Services.IPluginLog>());
+        var (bibo, tbse) = Chests();
+        foreach (var (name, body, skin) in new[] { ("Bibo+", bibo, BiboSkin), ("TBSE", tbse, TbseSkin) })
+        {
+            var tex = loader.LoadTexAsRgba(LocalData.Path(skin));
+            Assert.NotNull(tex);
+            var (rgba, w, h) = tex!.Value;
+            Assert.Equal(2048, w);
+            Assert.Equal(2048, h);
+            var (l, r) = NipplesOf(body);
+            Assert.True(l.Uv.X >= 0.5f && r.Uv.X < 0.5f, $"{name}: the left nipple belongs on the right half");
+            foreach (var (side, n) in new[] { ("L", l), ("R", r) })
+            {
+                const int Window = 40;   // about 2 cm each way
+                int cx = (int)MathF.Round(n.Uv.X * w), cy = (int)MathF.Round(n.Uv.Y * h);
+                var lum = new List<(int X, int Y, float L)>();
+                for (int y = cy - Window; y <= cy + Window; y++)
+                    for (int x = cx - Window; x <= cx + Window; x++)
+                    {
+                        if (x < 0 || y < 0 || x >= w || y >= h) continue;
+                        int i = (y * w + x) * 4;
+                        lum.Add((x, y, 0.299f * rgba[i] + 0.587f * rgba[i + 1] + 0.114f * rgba[i + 2]));
+                    }
+                var sorted = lum.Select(p => p.L).OrderBy(v => v).ToList();
+                float median = sorted[sorted.Count / 2], dark = sorted[0] + (median - sorted[0]) * 0.5f;
+                double sx = 0, sy = 0, sn = 0;
+                foreach (var (x, y, lv) in lum)
+                    if (lv < dark) { sx += x; sy += y; sn++; }
+                Assert.True(sn > 0, $"{name} {side}: no areola");
+                float off = MathF.Sqrt(MathF.Pow((float)(sx / sn) - n.Uv.X * w, 2) + MathF.Pow((float)(sy / sn) - n.Uv.Y * h, 2));
+                output.WriteLine($"{name} {side}: nipple at ({n.Uv.X * w:F1}, {n.Uv.Y * h:F1}), areola at ({sx / sn:F1}, {sy / sn:F1}) "
+                                 + $"of {sn} px: {off:F1} texture px");
+                Assert.InRange(off, 0f, 8f);
+            }
+        }
+    }
+
     /// <summary>
     /// Overlay map <c>bibo_to_tbse</c>, the chest from collarbone to under-bust at the nipple's x, and the sternum: where
     /// a dot on Bibo+ lands on TBSE, against TBSE's own point there (mm up; negative is below). The nipple row compares
