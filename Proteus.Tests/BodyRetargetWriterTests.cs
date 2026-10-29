@@ -1370,6 +1370,13 @@ public class BodyRetargetWriterTests : IDisposable
         Assert.Empty(BodyRetargetWriter.Outranking(RawGroups(), MensTop, "Items", "Shirt", ["TBSE M"]));
         Assert.Equal("Body Retarget/refit.mdl",
                      PenumbraPrecedence.Winner(root, MensTop, Ticks(("Items", ["Choker", "TBSE M", "Undershirt"]))));
+        // A sibling with a priority above the refit's 0 comes first wherever it stands, even after it.
+        Manifest(null, GroupOf("Items", "Multi", 0, Option("Shirt", files: Files((WomensTop, "shirt.mdl"))),
+            Option("TBSE M", files: Files((MensTop, "Body Retarget/refit.mdl"))), Option("Cape", 2, Files((MensTop, "cape.mdl")))));
+        Assert.Equal([new BodyRetargetWriter.Rival("Items", "Cape")],
+                     BodyRetargetWriter.Outranking(RawGroups(), MensTop, "Items", "Shirt", ["TBSE M"]));
+        Assert.Equal("cape.mdl", PenumbraPrecedence.Winner(root, MensTop, Ticks(("Items", ["TBSE M", "Cape"]))));
+
         // Back to the refit appended last, for what is worn below.
         Manifest(null, GroupOf("Items", "Multi", 0, [.. Items(), Option("TBSE M", files: Files((MensTop, "Body Retarget/refit.mdl")))]));
         var ticked = RefitCore.SelectionFor(true, "TBSE M", ["Choker", "Shirt", "Undershirt", "Cape"], "Shirt");
