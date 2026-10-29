@@ -99,4 +99,52 @@ internal static class UvBakeNipples
             return (null, $"nipples asymmetric: {apart * 1000:F1} mm apart mirrored > {Symmetry * 1000:F0} mm");
         return ((l.Value, r.Value), null);
     }
+
+    /// <summary>One side's under-bust crease: the front of the body where the breast's underside turns into the chest wall.</summary>
+    internal readonly record struct Fold(int Tri, Vector3 Bary, Vector3 Pos, float SlopeChange);
+
+    /// <summary>How sharply the front must turn toward vertical for a crease to be one (dz/dy, smoothed over three bins).</summary>
+    internal const float MinSlopeChange = 0.3f;
+
+    private const float Bin = 0.005f;
+
+    /// <summary>
+    /// The under-bust crease below <paramref name="nipple"/>: the body's front profile at the nipple's x, every 5 mm from
+    /// 1 cm to 12 cm below it (the foremost Torso skin a ray from the front meets there); the crease is where the
+    /// profile's slope dz/dy falls most, the underside of the breast giving way to the chest wall, and the point is the
+    /// front just below it. Null, with why, when nothing turns by <see cref="MinSlopeChange"/>.
+    /// </summary>
+    internal static (Fold? Found, string? Failure) Crease(BakeBody body, Nipple nipple, TriangleBvh? bvh = null)
+    {
+        const int Bins = 23;   // 1 cm to 12 cm below
+        bvh ??= new TriangleBvh(body);
+        var front = new float[Bins];
+        var at = new (int Tri, Vector3 Bary)[Bins];
+        for (int b = 0; b < Bins; b++)
+        {
+            // From well in front, so the nearest hit either way is the foremost skin.
+            var origin = new Vector3(nipple.Pos.X, nipple.Pos.Y - 0.01f - b * Bin, 0.5f);
+            if (!bvh.Ray(origin, -Vector3.UnitZ, 0.5f, t => body.TriRegion[t] == Region.Torso,
+                         out int tri, out float u, out float v, out float w, out _))
+                return (null, $"no front skin {10 + b * 5} mm below the nipple at x {nipple.Pos.X * 1000:F0} mm");
+            front[b] = body.At(tri, u, v, w).Pos.Z;
+            at[b] = (tri, new Vector3(u, v, w));
+        }
+
+        // Slope between neighbouring bands going down: how fast the front falls back per metre of height.
+        var slope = new float[Bins - 1];
+        for (int b = 0; b + 1 < Bins; b++) slope[b] = (front[b] - front[b + 1]) / Bin;
+        int bestB = -1;
+        float bestChange = float.MinValue;
+        for (int b = 1; b + 2 < slope.Length; b++)
+        {
+            float above = (slope[b - 1] + slope[b]) * 0.5f, under = (slope[b + 1] + slope[b + 2]) * 0.5f;
+            float change = above - under;
+            if (change > bestChange) { bestChange = change; bestB = b + 1; }
+        }
+        if (bestB < 0 || bestChange < MinSlopeChange)
+            return (null, $"no under-bust crease: the front turns by {Math.Max(bestChange, 0):F2} < {MinSlopeChange:F1}");
+        var (crease, bary) = at[bestB];
+        return (new Fold(crease, bary, body.At(crease, bary.X, bary.Y, bary.Z).Pos, bestChange), null);
+    }
 }

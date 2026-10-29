@@ -294,6 +294,27 @@ public class UvTransferMapsLocalTests(TbseBakeFixture bake, ITestOutputHelper ou
             Assert.True(px <= UvTransferQuality.Gate.NippleDotPx, $"nipple {side} {px:F1} px");
     }
 
+    /// <summary>Both chests have an under-bust crease below each nipple, mirrored; printed with the old under-bust point.</summary>
+    [LocalDataFact(LocalData.GameData, Bibo, Tbse)]
+    [Trait("Plan", "EDGE-uvmap-nipples-35")]
+    public void Creases_found_on_bibo_and_bent_tbse() // [EDGE-uvmap-nipples-35] [EDGE-uvmap-nipples-38]
+    {
+        var (bibo, tbse) = Chests();
+        foreach (var (name, body) in new[] { ("Bibo+", bibo), ("TBSE", tbse) })
+        {
+            var (l, r) = NipplesOf(body);
+            var (cl, fl) = UvBakeNipples.Crease(body, l);
+            var (cr, fr) = UvBakeNipples.Crease(body, r);
+            Assert.True(cl != null, $"{name} L: {fl}");
+            Assert.True(cr != null, $"{name} R: {fr}");
+            var old = UvTransferQuality.Landmarks(body)["underBustL"];
+            output.WriteLine($"{name}: nipple y {l.Pos.Y:F4}; crease L {cl!.Value.Pos} (turn {cl.Value.SlopeChange:F2}), "
+                             + $"R {cr!.Value.Pos} (turn {cr.Value.SlopeChange:F2}); old under-bust {body.At(old.Tri, old.Bary.X, old.Bary.Y, old.Bary.Z).Pos}");
+            var mirror = new System.Numerics.Vector3(-cr.Value.Pos.X, cr.Value.Pos.Y, cr.Value.Pos.Z);
+            Assert.InRange(System.Numerics.Vector3.Distance(cl.Value.Pos, mirror), 0f, UvBakeNipples.Symmetry);
+        }
+    }
+
     private const string BiboSkin = Bibo + "/Midlander, Elezen, Miqo - SKIN DETAIL/Detailed/chara/bibo_mid_base.tex";
     private const string TbseSkin = Tbse + "/p1/step 2- midlander, elezen, miqo'te/type 0/chara/human/c0101/obj/body/b0001/texture/c0101b0001_b_d.tex";
 
