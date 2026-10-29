@@ -272,4 +272,303 @@ internal static partial class BodyRetarget
         }
         return hi;
     }
+
+    /// <summary>How much longer or shorter than authored a cloth edge may be and still count as coherent when the region
+    /// grows (3 times, a third) — see <see cref="CrotchRegion"/>.</summary>
+    internal const float RegionStretch = 3f;
+
+    /// <summary>Coherent rings the region grows past before it stops — see <see cref="CrotchRegion"/>.</summary>
+    internal const int RegionCoherentRings = 2;
+
+    /// <summary>
+    /// The cloth whose movement the crotch re-solve replaces: the movable corners of folded cloth triangles in the field,
+    /// grown ring by ring while the ring's triangles still hold a fold or an edge stretched past
+    /// <see cref="RegionStretch"/> or crushed under its inverse, until <see cref="RegionCoherentRings"/> coherent rings
+    /// have been taken, and never past the field. Empty when the field holds no fold.
+    /// </summary>
+    /// <param name="movable">Nodes the re-solve may move: cloth, not held, not kept whole, not an authored lining.</param>
+    /// <param name="reachedEdge">Whether it stopped at the field's edge with its boundary still incoherent.</param>
+    internal static bool[] CrotchRegion(Sets sets, Vec3[] nodeDelta, CrotchAnchor anchor, bool[] movable,
+                                        out bool reachedEdge)
+    {
+        reachedEdge = false;
+        var cloth = new bool[sets.NodeCount];
+        foreach (int n in sets.ClothNodes) cloth[n] = true;
+        Vector3 At(int n) => ToVector(sets.NodeAt[n]) + ToVector(nodeDelta[n]);
+        var trisOf = new List<(int A, int B, int C)>[sets.NodeCount];
+        var tris = new List<(int A, int B, int C)>();
+        for (int t = 0; t + 2 < sets.Tris.Length; t += 3)
+        {
+            int va = sets.Tris[t], vb = sets.Tris[t + 1], vc = sets.Tris[t + 2];
+            if (va < 0 || vb < 0 || vc < 0
+                || va >= sets.NodeOf.Length || vb >= sets.NodeOf.Length || vc >= sets.NodeOf.Length) continue;
+            int a = sets.NodeOf[va], b = sets.NodeOf[vb], c = sets.NodeOf[vc];
+            if (a == b || b == c || c == a || !cloth[a] || !cloth[b] || !cloth[c]) continue;
+            if (Vector3.Cross(ToVector(sets.NodeAt[b]) - ToVector(sets.NodeAt[a]),
+                              ToVector(sets.NodeAt[c]) - ToVector(sets.NodeAt[a])).Length() * 0.5f < DrapeMinArea) continue;
+            var tri = (a, b, c);
+            tris.Add(tri);
+            foreach (int n in new[] { a, b, c }) (trisOf[n] ??= []).Add(tri);
+        }
+        bool Turned((int A, int B, int C) t)
+        {
+            var n0 = Vector3.Cross(ToVector(sets.NodeAt[t.B]) - ToVector(sets.NodeAt[t.A]),
+                                   ToVector(sets.NodeAt[t.C]) - ToVector(sets.NodeAt[t.A]));
+            var pa = At(t.A);
+            return Vector3.Dot(n0, Vector3.Cross(At(t.B) - pa, At(t.C) - pa)) < 0f;
+        }
+        bool EdgeOff(int a, int b)
+        {
+            float was = Vector3.Distance(ToVector(sets.NodeAt[a]), ToVector(sets.NodeAt[b]));
+            if (was < 1e-5f) return false;
+            float r = Vector3.Distance(At(a), At(b)) / was;
+            return r > RegionStretch || r < 1f / RegionStretch;
+        }
+        bool Incoherent((int A, int B, int C) t) => Turned(t) || EdgeOff(t.A, t.B) || EdgeOff(t.B, t.C) || EdgeOff(t.C, t.A);
+
+        var region = new bool[sets.NodeCount];
+        var frontier = new List<int>();
+        foreach (var t in tris)
+        {
+            if (!Turned(t) || !InCrotchField(anchor, (At(t.A) + At(t.B) + At(t.C)) / 3f)) continue;
+            foreach (int n in new[] { t.A, t.B, t.C })
+                if (movable[n] && !region[n]) { region[n] = true; frontier.Add(n); }
+        }
+        int coherent = 0;
+        while (frontier.Count > 0 && coherent < RegionCoherentRings)
+        {
+            var next = new List<int>();
+            bool incoherent = false;
+            foreach (int n in frontier)
+                foreach (int m in sets.Adj[n])
+                {
+                    if (region[m] || !movable[m]) continue;
+                    if (!InCrotchField(anchor, At(m)))
+                    {
+                        if (trisOf[n]?.Any(Incoherent) == true) reachedEdge = true;
+                        continue;
+                    }
+                    region[m] = true;
+                    next.Add(m);
+                }
+            foreach (int n in next)
+                if (trisOf[n]?.Any(Incoherent) == true) { incoherent = true; break; }
+            coherent = incoherent ? 0 : coherent + 1;
+            frontier = next;
+        }
+        return region;
+    }
+
+    /// <summary>
+    /// The region's movement replaced by the smoothest movement its fixed surroundings allow: the Laplace equation over
+    /// <paramref name="region"/> (uniform weights over each node's neighbours), every other node's movement fixed, solved
+    /// per component by conjugate gradient. A component with no fixed neighbour has nothing to fill from and is left as it
+    /// was. The authored shape, carried by a smooth offset, turns no face over while the offset's gradient stays small.
+    /// </summary>
+    /// <param name="converged">Whether every component's solve converged to <paramref name="tolerance"/>.</param>
+    /// <param name="unanchored">Nodes in components with no fixed neighbour, left as they were.</param>
+    internal static void HarmonicFill(Sets sets, Vec3[] nodeDelta, bool[] region, out bool converged, out int unanchored,
+                                      float tolerance = 1e-6f, int maxIterations = 2000)
+    {
+        converged = true;
+        unanchored = 0;
+        var index = new int[sets.NodeCount];
+        Array.Fill(index, -1);
+        var seen = new bool[sets.NodeCount];
+        for (int start = 0; start < sets.NodeCount; start++)
+        {
+            if (!region[start] || seen[start]) continue;
+            // One component of the region, and whether anything fixed borders it.
+            var comp = new List<int>();
+            var stack = new Stack<int>();
+            stack.Push(start);
+            seen[start] = true;
+            bool anchored = false;
+            while (stack.Count > 0)
+            {
+                int n = stack.Pop();
+                comp.Add(n);
+                foreach (int m in sets.Adj[n])
+                {
+                    if (!region[m]) { anchored = true; continue; }
+                    if (!seen[m]) { seen[m] = true; stack.Push(m); }
+                }
+            }
+            if (!anchored)
+            {
+                unanchored += comp.Count;
+                continue;
+            }
+            for (int i = 0; i < comp.Count; i++) index[comp[i]] = i;
+            // A x = b, A the degree on the diagonal less the neighbours inside, b the fixed neighbours' movement; per axis.
+            int count = comp.Count;
+            for (int axis = 0; axis < 3; axis++)
+            {
+                float Get(Vec3 v) => axis == 0 ? v.X : axis == 1 ? v.Y : v.Z;
+                var x = new double[count];
+                var b = new double[count];
+                for (int i = 0; i < count; i++)
+                {
+                    x[i] = Get(nodeDelta[comp[i]]);
+                    foreach (int m in sets.Adj[comp[i]])
+                        if (!region[m]) b[i] += Get(nodeDelta[m]);
+                }
+                void Apply(double[] v, double[] into)
+                {
+                    for (int i = 0; i < count; i++)
+                    {
+                        int n = comp[i];
+                        double sum = sets.Adj[n].Count * v[i];
+                        foreach (int m in sets.Adj[n])
+                            if (region[m]) sum -= v[index[m]];
+                        into[i] = sum;
+                    }
+                }
+                var r = new double[count];
+                var ax = new double[count];
+                Apply(x, ax);
+                for (int i = 0; i < count; i++) r[i] = b[i] - ax[i];
+                var d = (double[])r.Clone();
+                var ad = new double[count];
+                double rr = r.Sum(v => v * v);
+                bool done = Math.Sqrt(rr) <= tolerance;
+                for (int it = 0; it < maxIterations && !done; it++)
+                {
+                    Apply(d, ad);
+                    double dad = 0;
+                    for (int i = 0; i < count; i++) dad += d[i] * ad[i];
+                    if (dad <= 0) break;
+                    double alpha = rr / dad;
+                    for (int i = 0; i < count; i++) { x[i] += alpha * d[i]; r[i] -= alpha * ad[i]; }
+                    double next = r.Sum(v => v * v);
+                    if (Math.Sqrt(next) <= tolerance) { done = true; break; }
+                    double beta = next / rr;
+                    rr = next;
+                    for (int i = 0; i < count; i++) d[i] = r[i] + beta * d[i];
+                }
+                if (!done) converged = false;
+                for (int i = 0; i < count; i++)
+                {
+                    var v = nodeDelta[comp[i]];
+                    float f = (float)x[i];
+                    nodeDelta[comp[i]] = axis == 0 ? new Vec3(f, v.Y, v.Z) : axis == 1 ? new Vec3(v.X, f, v.Z) : new Vec3(v.X, v.Y, f);
+                }
+            }
+            foreach (int n in comp) index[n] = -1;
+        }
+    }
+
+    /// <summary>
+    /// The region's movement made as smooth as its fixed surroundings allow to second order: the sum over the region and
+    /// the ring about it of the squared umbrella Laplacian of the movement, least — so the fixed cloth sets both the
+    /// movement and its slope at the region's edge, and the offset bends rather than kinks there. Solved per component by
+    /// conjugate gradient on the normal equations. A component with no fixed neighbour is left as it was.
+    /// </summary>
+    internal static void BiharmonicFill(Sets sets, Vec3[] nodeDelta, bool[] region, out bool converged, out int unanchored,
+                                        float tolerance = 1e-7f, int maxIterations = 4000)
+    {
+        converged = true;
+        unanchored = 0;
+        var index = new int[sets.NodeCount];
+        Array.Fill(index, -1);
+        var seen = new bool[sets.NodeCount];
+        for (int start = 0; start < sets.NodeCount; start++)
+        {
+            if (!region[start] || seen[start]) continue;
+            var comp = new List<int>();
+            var stack = new Stack<int>();
+            stack.Push(start);
+            seen[start] = true;
+            bool anchored = false;
+            while (stack.Count > 0)
+            {
+                int n = stack.Pop();
+                comp.Add(n);
+                foreach (int m in sets.Adj[n])
+                {
+                    if (!region[m]) { anchored = true; continue; }
+                    if (!seen[m]) { seen[m] = true; stack.Push(m); }
+                }
+            }
+            if (!anchored)
+            {
+                unanchored += comp.Count;
+                continue;
+            }
+            for (int i = 0; i < comp.Count; i++) index[comp[i]] = i;
+            // The rows: the component and every node beside it, whose Laplacian the component's movement reaches.
+            var rows = new List<int>(comp);
+            var inRows = new HashSet<int>(comp);
+            foreach (int n in comp)
+                foreach (int m in sets.Adj[n])
+                    if (inRows.Add(m)) rows.Add(m);
+            int count = comp.Count;
+            for (int axis = 0; axis < 3; axis++)
+            {
+                float Get(Vec3 v) => axis == 0 ? v.X : axis == 1 ? v.Y : v.Z;
+                // M x: each row's Laplacian of the movement, the fixed part included; Mt r: its transpose on the unknowns.
+                double[] Lap(double[] x, bool withFixed)
+                {
+                    var l = new double[rows.Count];
+                    for (int k = 0; k < rows.Count; k++)
+                    {
+                        int n = rows[k];
+                        double self = index[n] >= 0 ? x[index[n]] : withFixed ? Get(nodeDelta[n]) : 0;
+                        double sum = sets.Adj[n].Count * self;
+                        foreach (int m in sets.Adj[n])
+                            sum -= index[m] >= 0 ? x[index[m]] : withFixed ? Get(nodeDelta[m]) : 0;
+                        l[k] = sum;
+                    }
+                    return l;
+                }
+                double[] LapT(double[] l)
+                {
+                    var g = new double[count];
+                    for (int k = 0; k < rows.Count; k++)
+                    {
+                        int n = rows[k];
+                        if (index[n] >= 0) g[index[n]] += sets.Adj[n].Count * l[k];
+                        foreach (int m in sets.Adj[n])
+                            if (index[m] >= 0) g[index[m]] -= l[k];
+                    }
+                    return g;
+                }
+                var x = new double[count];
+                for (int i = 0; i < count; i++) x[i] = Get(nodeDelta[comp[i]]);
+                // Minimise |Lap(x) + c|², c the fixed part: (Mt M) x = −Mt c.
+                var c = Lap(new double[count], true);
+                var b = LapT(c);
+                for (int i = 0; i < count; i++) b[i] = -b[i];
+                double[] A(double[] v) => LapT(Lap(v, false));
+                var ax = A(x);
+                var r = new double[count];
+                for (int i = 0; i < count; i++) r[i] = b[i] - ax[i];
+                var d = (double[])r.Clone();
+                double rr = r.Sum(v => v * v);
+                bool done = Math.Sqrt(rr) <= tolerance;
+                for (int it = 0; it < maxIterations && !done; it++)
+                {
+                    var ad = A(d);
+                    double dad = 0;
+                    for (int i = 0; i < count; i++) dad += d[i] * ad[i];
+                    if (dad <= 0) break;
+                    double alpha = rr / dad;
+                    for (int i = 0; i < count; i++) { x[i] += alpha * d[i]; r[i] -= alpha * ad[i]; }
+                    double next = r.Sum(v => v * v);
+                    if (Math.Sqrt(next) <= tolerance) { done = true; break; }
+                    double beta = next / rr;
+                    rr = next;
+                    for (int i = 0; i < count; i++) d[i] = r[i] + beta * d[i];
+                }
+                if (!done) converged = false;
+                for (int i = 0; i < count; i++)
+                {
+                    var v = nodeDelta[comp[i]];
+                    float f = (float)x[i];
+                    nodeDelta[comp[i]] = axis == 0 ? new Vec3(f, v.Y, v.Z) : axis == 1 ? new Vec3(v.X, f, v.Z) : new Vec3(v.X, v.Y, f);
+                }
+            }
+            foreach (int n in comp) index[n] = -1;
+        }
+    }
 }

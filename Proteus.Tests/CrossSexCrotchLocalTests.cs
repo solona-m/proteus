@@ -197,4 +197,92 @@ public class CrossSexCrotchLocalTests(ITestOutputHelper o)
         return new Measured(fin, fout, Inside(stages[^1].Sets, final, field, skin), Stretch(stages[^1].Sets, final, field),
                             bendIn, s.Folds);
     }
+
+    /// <summary>The worst crush of a cloth edge in the field: its shortest length against authored.</summary>
+    internal static float Crush(BodyRetarget.Sets sets, Vec3[] delta, Field f)
+    {
+        var cloth = ClothOf(sets);
+        float worst = 1f;
+        for (int n = 0; n < sets.NodeCount; n++)
+        {
+            if (!cloth[n] || !f.Holds(At(sets, delta, n))) continue;
+            foreach (int m in sets.Adj[n])
+            {
+                if (!cloth[m]) continue;
+                float was = Vector3.Distance(V(sets.NodeAt[n]), V(sets.NodeAt[m]));
+                if (was < 1e-5f) continue;
+                worst = MathF.Min(worst, Vector3.Distance(At(sets, delta, n), At(sets, delta, m)) / was);
+            }
+        }
+        return worst;
+    }
+
+    /// <summary>
+    /// Phase 0b, M1: the crotch re-solve's fill alone, on the drape-off solve's last stage. The region (folded field cloth,
+    /// grown while incoherent) re-filled by the smoothest movement its surroundings allow: field folds, the worst stretch
+    /// and crush, the worst move, and whether the fill converged. Go: no field fold, stretch at most 3×, crush at least ⅓.
+    /// </summary>
+    [LocalDataFact(LocalData.GameData, CrossSexNudeLegsLocalTests.StormblessedLegs, CrossSexNudeLegsLocalTests.LavaBod,
+                   CrossSexRefitLocalTests.Tbse, LocalData.TbseUvMaps)]
+    [Trait("Plan", "AC-mens-ends-crotch-7")]
+    [Trait("Plan", "AC-mens-ends-crotch-8")]
+    public void Resolve_fill_proven_before_built() // [AC-mens-ends-crotch-7] [AC-mens-ends-crotch-8]
+    {
+        var bytes = File.ReadAllBytes(TbsePath(1));
+        var anchor = BodyRetarget.FindCrotch([(ModelPartReader.Read(bytes)!, ModelSkinReader.Read(bytes, null, null)!)])!.Value;
+        var field = new Field(anchor.MidX, anchor.Y, anchor.Scale);
+
+        BodyRetarget.Sets? sets = null;
+        Vec3[]? before = null;
+        BodyRetarget.StageTrace.Value = (name, s, delta) => { if (name == "layer-order") (sets, before) = (s, delta); };
+        try
+        {
+            CrossSexRefitJob.Run(CrossSexNudeLegsLocalTests.JobInputs(CrossSexNudeLegsLocalTests.StormblessedLegs,
+                                                                     CrossSexNudeLegsLocalTests.LavaBod, 1,
+                                                                     Substitute.For<IPluginLog>()) with { DrapeCrotch = false });
+        }
+        finally { BodyRetarget.StageTrace.Value = null; }
+        Assert.NotNull(sets);
+
+        var movable = ClothOf(sets!);
+        var region = BodyRetarget.CrotchRegion(sets!, before!, anchor, movable, out bool reachedEdge);
+        var after = (Vec3[])before!.Clone();
+        BodyRetarget.HarmonicFill(sets!, after, region, out bool converged, out int unanchored);
+        var bih = (Vec3[])before!.Clone();
+        BodyRetarget.BiharmonicFill(sets!, bih, region, out bool bihConverged, out _);
+        var (bihIn, bihOut) = Folds(sets!, bih, field);
+        o.WriteLine($"M1 biharmonic: converged {bihConverged}; folds in field {bihIn}, out {bihOut}; stretch {Stretch(sets!, bih, field):F2}x; crush {Crush(sets!, bih, field):F2}");
+        float worstMove = 0f;
+        for (int n = 0; n < after.Length; n++) worstMove = MathF.Max(worstMove, Vector3.Distance(V(after[n]), V(before[n])));
+        var (inB, outB) = Folds(sets!, before, field);
+        var (inA, outA) = Folds(sets!, after, field);
+        o.WriteLine($"M1: region {region.Count(r => r)} nodes{(reachedEdge ? ", reached the field's edge" : "")}; " +
+                    $"converged {converged}, unanchored {unanchored}");
+        o.WriteLine($"M1: folds in field {inB} -> {inA}, out {outB} -> {outA}; stretch {Stretch(sets!, before, field):F2}x -> " +
+                    $"{Stretch(sets!, after, field):F2}x; crush {Crush(sets!, before, field):F2} -> {Crush(sets!, after, field):F2}; " +
+                    $"worst move {worstMove * 1000f:F1} mm");
+        // Where the folds left are: every corner in the region, or along its edge with fixed cloth.
+        int inside = 0, edge = 0, layered = 0;
+        var cloth = ClothOf(sets!);
+        for (int t = 0; t + 2 < sets!.Tris.Length; t += 3)
+        {
+            int a = sets.NodeOf[sets.Tris[t]], b = sets.NodeOf[sets.Tris[t + 1]], c = sets.NodeOf[sets.Tris[t + 2]];
+            if (a == b || b == c || c == a || !cloth[a] || !cloth[b] || !cloth[c]) continue;
+            var n0 = Vector3.Cross(V(sets.NodeAt[b]) - V(sets.NodeAt[a]), V(sets.NodeAt[c]) - V(sets.NodeAt[a]));
+            if (n0.Length() * 0.5f < 1e-6f) continue;
+            var pa = At(sets, after, a);
+            if (Vector3.Dot(n0, Vector3.Cross(At(sets, after, b) - pa, At(sets, after, c) - pa)) >= 0f) continue;
+            if (!field.Holds((pa + At(sets, after, b) + At(sets, after, c)) / 3f)) continue;
+            if (region[a] && region[b] && region[c]) inside++; else edge++;
+            float shortest = MathF.Min(Vector3.Distance(V(sets.NodeAt[a]), V(sets.NodeAt[b])),
+                                       MathF.Min(Vector3.Distance(V(sets.NodeAt[b]), V(sets.NodeAt[c])),
+                                                 Vector3.Distance(V(sets.NodeAt[c]), V(sets.NodeAt[a]))));
+            if (shortest < 0.0005f) layered++;
+        }
+        o.WriteLine($"M1: folds left: {inside} inside the region, {edge} along its edge; {layered} with an authored edge under 0.5 mm");
+        Assert.True(converged);
+        Assert.Equal(0, inA);
+        Assert.True(Stretch(sets!, after, field) <= BodyRetarget.RegionStretch, "stretch");
+        Assert.True(Crush(sets!, after, field) >= 1f / BodyRetarget.RegionStretch, "crush");
+    }
 }
