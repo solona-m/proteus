@@ -8,13 +8,17 @@ namespace Proteus.Services;
 
 /// <summary>
 /// The chest correction of one map: a smooth displacement of the destination body's points, made before each is cast
-/// onto the source, so its nipples and under-bust creases land on the source's while the rest of the chest stays
-/// where the plain projection puts it. Without it a woman's breast, standing forward and lower than a man's chest,
-/// takes a ray from his nipple above hers: her nipple art lands about 3 cm under his.
+/// onto the source, so its nipples land on the source's while the rest of the chest stays where the plain projection
+/// puts it. Without it a woman's breast, standing forward and lower than a man's chest, takes a ray from his nipple
+/// above hers: her nipple art lands about 3 cm under his.
 /// <para/>
-/// The field is a sum of Wendland C2 bumps, one per site, weighted so that each target site moves by its solved offset
-/// and each pin by nothing; faded to exactly zero a little above the clavicle row and below the lower pin row. Only the
-/// ray's origin moves: normals, regions and <see cref="UvTransferBake.Land"/>'s rules are the plain bake's.
+/// The field is a sum of Wendland C2 bumps, one per site, weighted so that each nipple moves by its solved offset and
+/// each pin by nothing; faded to nothing inside the clavicle row and the lower pin row. Only the ray's origin moves:
+/// normals, regions and <see cref="UvTransferBake.Land"/>'s rules are the plain bake's.
+/// <para/>
+/// The under-bust creases are not targets, only where the lower row is found: matching crease to crease as well pulls
+/// a man's shirt refit for a woman into the fold under her breast (49 faces turned over on the lumberjack shirt, against
+/// 8), where nipples alone leave it as it hung (8) and still bring the crease nearer than the plain projection does.
 /// </summary>
 internal sealed class ChestField
 {
@@ -137,8 +141,10 @@ internal sealed class ChestField
             return (null, $"the destination's nipples stand {standout * 1000:F0} mm before the source's: cast the other way and invert");
         var destBvh = new TriangleBvh(dest);
 
-        // Targets: each destination point and the source point it must land on.
+        // Targets: each destination nipple and the source nipple it must land on. The creases, each with the source's,
+        // only place the lower row.
         var targets = new List<(string Name, int Tri, Vector3 Bary, Vector3 Pos, Vector3 Want)>();
+        var creases = new List<(string Name, int Tri, Vector3 Bary, Vector3 Pos, Vector3 Want)>();
         foreach (var (side, d, s) in new[] { ("L", dn.Value.L, sn.Value.L), ("R", dn.Value.R, sn.Value.R) })
         {
             targets.Add(("nipple" + side, d.Tri, d.Bary, d.Pos, s.Pos));
@@ -146,7 +152,7 @@ internal sealed class ChestField
             if (dc == null) return (null, $"destination {side}: {dcf}");
             var (sc, scf) = UvBakeNipples.Crease(src, s, srcBvh);
             if (sc == null) return (null, $"source {side}: {scf}");
-            targets.Add(("crease" + side, dc.Value.Tri, dc.Value.Bary, dc.Value.Pos, sc.Value.Pos));
+            creases.Add(("crease" + side, dc.Value.Tri, dc.Value.Bary, dc.Value.Pos, sc.Value.Pos));
         }
 
         // Pins: the sternum, the clavicle row over each nipple, each flank at nipple height, a row across the chest
@@ -170,7 +176,7 @@ internal sealed class ChestField
         // plain projection has caught up with the source — the chest wall from crease to row lands on a stretch of the
         // source between half and twice its length — so the field can fall to nothing there without folding.
         float yLow = float.MaxValue;
-        foreach (var crease in targets.Where(t => t.Name.StartsWith("crease", StringComparison.Ordinal)))
+        foreach (var crease in creases)
         {
             float? found = null;
             for (float below = LowerRow; below <= MaxLowerRow + 1e-4f; below += 0.005f)
@@ -295,7 +301,7 @@ internal sealed class ChestField
             if (mm == 0f) continue;
             c.MaxMm = Math.Max(c.MaxMm, mm);
             if (dest.VertexRegion[v] != Region.Torso) c.MaxOffTorsoMm = Math.Max(c.MaxOffTorsoMm, mm);
-            // Against the targets' offsets blended by nearness, so the turn between a nipple's and a crease's is not one.
+            // Against the targets' offsets blended by nearness, so the turn between the two nipples' is not one.
             var blend = Vector3.Zero;
             foreach (var t in targets) blend += t.Offset * (float)Phi(Vector3.Distance(t.Centre, p) / Radius);
             if (blend.LengthSquared() > 1e-12f)
@@ -351,7 +357,7 @@ internal sealed class ChestField
 
     /// <summary>
     /// The stretch the anatomy asks of this field: down each nipple's line, the bands between the clavicle row, the
-    /// nipple, the crease and the lower row, and across between the nipples — each the source length between its two
+    /// nipple and the lower row, and across between the nipples — each the source length between its two
     /// ends as the field lands them over the length as the plain projection does. Area is the worst band's vertical
     /// times the horizontal (or its inverse), anisotropy the worst ratio of the two.
     /// </summary>
@@ -376,9 +382,8 @@ internal sealed class ChestField
         foreach (var side in new[] { "L", "R" })
         {
             var nipple = Sites.First(s => s.Name == "nipple" + side).Centre;
-            var crease = Sites.First(s => s.Name == "crease" + side).Centre;
             var clav = Sites.First(s => s.Name == "clavicle" + side).Centre;
-            var ends = new[] { clav.Y, nipple.Y, crease.Y, YLow + 0.001f }.Select(y => Ends(nipple.X, y)).ToList();
+            var ends = new[] { clav.Y, nipple.Y, YLow + 0.001f }.Select(y => Ends(nipple.X, y)).ToList();
             if (ends.Any(e => e == null)) return (double.PositiveInfinity, double.PositiveInfinity);
             for (int k = 0; k + 1 < ends.Count; k++) vertical.Add(Ratio(ends[k]!.Value, ends[k + 1]!.Value));
             nipples[side] = ends[1]!.Value;
