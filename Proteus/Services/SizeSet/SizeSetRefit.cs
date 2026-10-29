@@ -47,8 +47,9 @@ internal static partial class SizeSetRefit
     /// <param name="Across">What a women's piece's men's versions read from the player's collection (see
     /// <c>SizeSetRefit.CrossSex.cs</c>), asked for on the framework thread; null makes none, whatever is ticked.</param>
     /// <param name="MadeOn">The body mod's folder the author says the chest and legs were made on, for the sizes the
-    /// automatic reading cannot place (see <c>SizeSetRefit.Source.cs</c>); null reads every size automatically. Never
-    /// for shoes and gloves.</param>
+    /// automatic reading cannot place (see <c>SizeSetRefit.Source.cs</c>); null reads every size automatically. A shoe's
+    /// or glove's own sizes never read it; a skinless women's one made a men's is read there first, when its cloth sits
+    /// on it (see <c>SizeSetRefit.CrossSexEnds.cs</c>).</param>
     internal sealed record Request(string ModRoot, IReadOnlyList<string> Keys, bool Yas, bool Remake,
                                    IReadOnlyList<BodyModIndex.Entry> Bodies, Func<string, byte[]?>? ReadGameFile = null,
                                    bool Ends = true, Func<string, BodySizeCatalog?>? GameBody = null,

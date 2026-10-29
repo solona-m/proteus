@@ -68,8 +68,11 @@ public class CrossSexEndsLocalTests(ITestOutputHelper o)
             var (r, s) = StormblessedEnd(slot);
             Assert.True(s.SaveAllowed, $"{slot}: {s.Refusal} {s.Landed?.VertexCoverage:P1}");
             Assert.Equal(0, s.Folds);
-            Assert.Equal(RacialModelBake.WithRace(r.Route.SavePath($"chara/equipment/e0633/model/c0201e0633{slot}.mdl"), 101),
-                         $"chara/equipment/e0633/model/c0101e0633{slot}.mdl");
+            // The finger joints the man's skeleton lacks follow their own fingers, never the hip.
+            if (slot == "_glv")
+                Assert.Contains(r.Moved ?? [], m => m.From == "iv_hito_c_l" && m.To == "j_hito_b_l");
+            Assert.DoesNotContain(r.Moved ?? [], m => m.From.StartsWith("iv_hito_", StringComparison.Ordinal)
+                                                       && m.To == SkeletonRemap.Fallback);
         }
     }
 

@@ -232,7 +232,8 @@ public class CrossSexNudeLegsLocalTests(ITestOutputHelper o)
     [Trait("Plan", "EDGE-cross-sex-area-coverage-10")]
     [Trait("Plan", "EDGE-cross-sex-area-coverage-15")]
     [Trait("Speed", "Slow")]
-    public void Stormblessed_legs_through_the_job() // [AC-cross-sex-area-coverage-2] [AC-cross-sex-area-coverage-5] [AC-cross-sex-area-coverage-6] [EDGE-cross-sex-area-coverage-10] [EDGE-cross-sex-area-coverage-15]
+    [Trait("Plan", "AC-mens-ends-crotch-10")]
+    public void Stormblessed_legs_through_the_job() // [AC-mens-ends-crotch-10] [AC-cross-sex-area-coverage-2] [AC-cross-sex-area-coverage-5] [AC-cross-sex-area-coverage-6] [EDGE-cross-sex-area-coverage-10] [EDGE-cross-sex-area-coverage-15]
     {
         var log = Substitute.For<IPluginLog>();
         var (missed, folds) = SameSex(StormblessedLegs, LavaBod, UvBakeInputs.BiboLegs[0].Rel);
@@ -260,6 +261,10 @@ public class CrossSexNudeLegsLocalTests(ITestOutputHelper o)
         RefitGate.Assert(o, r, s, 0, RefitGate.Gates.None, minCoverage: 0.9f);
         Assert.True(s.Folds <= KnownStormblessedLegsFolds, $"{s.Folds} folds, more than the {KnownStormblessedLegsFolds} known");
         Assert.True(s.Plan!.Report.Missed <= KnownStormblessedLegsMissed, $"{s.Plan.Report.Missed} cloth points missed");
+        // [AC-mens-ends-crotch-10] The worst push is how far a pushed point moved from where the push-out found it: 30.2 mm
+        // measured 2026-10-29, where the settle's summed pushes once reported 259.4.
+        o.WriteLine($"worst push {s.Plan.Report.WorstPush * 1000f:F1} mm, worst move {s.Plan.Report.WorstMove * 1000f:F1} mm");
+        Assert.InRange(s.Plan.Report.WorstPush, 0.001f, 0.05f);
         // No women's body material left named: the game loads every one, and a men's body has none of them — the legs
         // came out invisible with "_bibopube" and "_betterpube" left behind by the pubic hair the refit dropped.
         Assert.DoesNotContain(SecondSkinWriter.MaterialNames(s.Saved!.Model), n => n.Contains("c0201b", StringComparison.Ordinal));

@@ -1072,16 +1072,17 @@ internal static partial class BodyRetarget
         Stage("layer-order");
 
         // The worst push as the report says it: how far a pushed point now lies from where the push-out found it — the
-        // passes after it, which smooth and settle the pushed cloth, included. The
-        // passes add their pushes up as they go (pushedBy, which caps them), and an oscillating settle summed 8 mm over
-        // 44 rounds into a "worst push" of 259 mm on a point that moved 45 (Stormblessed's bottoms on TBSE Gen A).
+        // passes after it, which smooth and settle the pushed cloth, included. The passes add their pushes up as they go
+        // (pushedBy, which caps them), and an oscillating settle summed into a "worst push" of 259 mm where no pushed point
+        // ended more than 30 mm from where the push-out found it (Stormblessed's bottoms on TBSE Gen A, 2026-10-29).
         if (stage.PushStart is { } pushStart && pushedBy != null)
         {
             worstPush = 0f;
             for (int n = 0; n < sets.NodeCount; n++)
-                if (pushedBy[n] > 0f)
-                    worstPush = MathF.Max(worstPush, Len(new Vec3(nodeDelta[n].X - pushStart[n].X, nodeDelta[n].Y - pushStart[n].Y,
-                                                                  nodeDelta[n].Z - pushStart[n].Z)));
+                if (pushedBy[n] > 0f
+                    && Len(new Vec3(nodeDelta[n].X - pushStart[n].X, nodeDelta[n].Y - pushStart[n].Y,
+                                    nodeDelta[n].Z - pushStart[n].Z)) is var moved && float.IsFinite(moved))
+                    worstPush = MathF.Max(worstPush, moved);
         }
 
         // And outside the other piece of its outfit, which is already drawn as it is — see KeepOutfitOrder. After the

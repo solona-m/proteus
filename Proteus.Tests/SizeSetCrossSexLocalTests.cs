@@ -615,6 +615,9 @@ public sealed class SizeSetCrossSexLocalTests(ITestOutputHelper o) : IDisposable
         }
         Assert.Contains("Feet", manips);
         Assert.Contains("Hands", manips);
+        // The boots have no skin and no installed body's legs their cloth sits on: made on the game's own body, and said.
+        Assert.Contains(runLog.Warnings, w => w == string.Format(Localization.Strings.SizeSet.EndFromGameBodyFmt,
+                                                                 across.First(p => p.Slot == "_sho").Label, "TBSE"));
 
         var now = Groups(root).Where(g => g.Name != men).ToList();
         Assert.Equal(authors.Select(g => g.Name), now.Select(g => g.Name));

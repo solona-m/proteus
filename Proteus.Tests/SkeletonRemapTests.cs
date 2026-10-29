@@ -73,6 +73,7 @@ public class SkeletonRemapTests
         Assert.Equal("j_naka_b_l", Only(planner, "iv_naka_c_l").To);
         Assert.Equal("j_kusu_b_r", Only(planner, "iv_kusu_c_r").To);
         Assert.Equal("j_ko_b_l", Only(planner, "iv_ko_c_l").To);
+        Assert.Equal("j_ko_b_l", Only(planner, "iv_ko_d_l").To);
         Assert.Equal("j_asi_e_l", Only(planner, "iv_asi_ko_a_l").To);
         // Not a finger joint past the game's: no stand-in.
         Assert.Null(SkeletonRemap.StandIn("iv_hito_l"));

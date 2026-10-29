@@ -24,6 +24,10 @@ internal static partial class SizeSetRefit
     /// </summary>
     internal const float EndClothGapWarn = 0.005f;
 
+    /// <summary>How much nearer than another a body's cloth reading must be to win over it (0.5 mm): closer than that,
+    /// the body listed first — the one preferred — keeps it.</summary>
+    internal const float EndClothTie = 0.0005f;
+
     /// <summary>Which body a women's shoe or glove is made a men's from — see <see cref="EndMadeFor"/>.</summary>
     internal enum EndMadeForChoice
     {
@@ -48,7 +52,8 @@ internal static partial class SizeSetRefit
     /// women's body.
     /// </summary>
     /// <param name="route">How <see cref="KeepEnds.Find"/> read it.</param>
-    /// <param name="layout">The layout of the body its skin was read on; null for none.</param>
+    /// <param name="layout">The layout of the body its skin was read on; null for none (a foot or hand alone may read
+    /// none, and is then taken as skinless).</param>
     /// <param name="madeOnFits">The "Made on" body is set, installed, pairs with a man's, and its cloth sits there.</param>
     /// <param name="clothFits">An installed women's body that pairs with a man's has its cloth sitting on it.</param>
     /// <param name="gameBody">The game's own women's body can be read.</param>
@@ -58,7 +63,7 @@ internal static partial class SizeSetRefit
         {
             KeepEnds.Route.Skin or KeepEnds.Route.Cloth or KeepEnds.Route.Sibling
                 => AcrossEligible(layout) ? EndMadeForChoice.Read : EndMadeForChoice.NoSource,
-            KeepEnds.Route.SkinOnly when !AcrossEligible(layout) => EndMadeForChoice.NoSource,
+            KeepEnds.Route.SkinOnly when layout != null && !AcrossEligible(layout) => EndMadeForChoice.NoSource,
             KeepEnds.Route.SkinOnly or KeepEnds.Route.NoSkin
                 => madeOnFits ? EndMadeForChoice.MadeOn
                  : clothFits ? EndMadeForChoice.Cloth
@@ -110,7 +115,7 @@ internal static partial class SizeSetRefit
 
         // The author's file for an option, read: by the lead's option when it follows one, else the first that reads.
         var sources = new Dictionary<string, MensEndSource?>(StringComparer.Ordinal);
-        string? unreadable = null;
+        (string Reason, string Code)? unreadable = null;
         MensEndSource? Read(string? option, string file)
         {
             string key = RefitCore.Normal(file);
@@ -192,9 +197,10 @@ internal static partial class SizeSetRefit
             }
             if (src == null)
             {
-                string left = unreadable ?? string.Format(Strings.SizeSet.EndsUnreadableFmt, piece.Label);
+                var (left, code) = unreadable ?? (string.Format(Strings.SizeSet.EndsUnreadableFmt, piece.Label),
+                                                  Codes.EndsUnreadable);
                 notes.Add(left);
-                Out(SizeStatus.Skipped, unreadable != null ? Codes.NoSourceMen : Codes.EndsUnreadable, left, target.Dir);
+                Out(SizeStatus.Skipped, code, left, target.Dir);
                 continue;
             }
 
@@ -250,7 +256,8 @@ internal static partial class SizeSetRefit
     /// </summary>
     private static MensEndSource? MadeFrom(Request request, Piece piece, string? option, byte[] bytes, ModelParts garment,
                                           KeepEnds.Reading reading, IReadOnlyList<BodyModIndex.Entry> women,
-                                          BodySizeCatalog? game, Action<string> note, out string? refused)
+                                          BodySizeCatalog? game, Action<string> note,
+                                          out (string Reason, string Code)? refused)
     {
         refused = null;
         string limb = reading.Limb;
@@ -304,8 +311,10 @@ internal static partial class SizeSetRefit
         var madeOnCloth = madeOn != null ? ClothOn(madeOn.Catalog) : null;
         (BodyModIndex.Entry Entry, BodyOption Option, float Gap)? byCloth = null;
         if (found.Route is KeepEnds.Route.NoSkin or KeepEnds.Route.SkinOnly && madeOnCloth == null)
+            // The body its cloth sits nearest; within half a millimetre of another, the one listed first (the body
+            // preferred) keeps it.
             foreach (var mod in women)
-                if (ClothOn(mod.Catalog) is { } on && (byCloth == null || on.Gap < byCloth.Value.Gap))
+                if (ClothOn(mod.Catalog) is { } on && (byCloth == null || on.Gap < byCloth.Value.Gap - EndClothTie))
                     byCloth = (mod, on.Option, on.Gap);
 
         var choice = EndMadeFor(found.Route, readLayout, madeOnCloth != null, byCloth != null, game != null);
@@ -337,10 +346,10 @@ internal static partial class SizeSetRefit
                 return new MensEndSource(option, bytes, reading, game, null, choice, gameName,
                                          gameLimb != null ? RefitCore.LabelFrom(gameName, [gameLimb.Label]) : gameName, null);
             case EndMadeForChoice.NoSource:
-                refused = string.Format(Strings.SizeSet.NoSourceForMenFmt, piece.Label);
+                refused = (string.Format(Strings.SizeSet.NoSourceForMenFmt, piece.Label), Codes.NoSourceMen);
                 return null;
             default:
-                refused = string.Format(Strings.SizeSet.UnreadableFmt, piece.Label);
+                refused = (string.Format(Strings.SizeSet.UnreadableFmt, piece.Label), Codes.Unreadable);
                 return null;
         }
     }

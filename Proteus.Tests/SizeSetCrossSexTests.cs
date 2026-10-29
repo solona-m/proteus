@@ -107,10 +107,14 @@ public sealed class SizeSetCrossSexTests : IDisposable
     [Fact]
     [Trait("Plan", "AC-sizeset-cross-sex-6")]
     [Trait("Plan", "EDGE-sizeset-cross-sex-2")]
-    public void A_womans_piece_with_its_own_mens_model_is_not_crossed() // [AC-sizeset-cross-sex-6] [EDGE-sizeset-cross-sex-2]
+    [Trait("Plan", "AC-mens-ends-crotch-3")]
+    public void A_womans_piece_with_its_own_mens_model_is_not_crossed() // [AC-sizeset-cross-sex-6] [EDGE-sizeset-cross-sex-2] [AC-mens-ends-crotch-3]
     {
         Assert.Empty(SizeSetRefit.AcrossPieces(Pieces(Top, MenTop)));
         Assert.DoesNotContain(SizeSetRefit.Offered(Pieces(Top, MenTop)), c => c.ForMen);
+        // A women's shoe beside the men's one the author made: the men's keeps its own, and the women's is not crossed.
+        const string menSho = "chara/equipment/e6000/model/c0101e6000_sho.mdl";
+        Assert.DoesNotContain(SizeSetRefit.AcrossPieces(Pieces(Sho, menSho)), p => p.Slot == "_sho");
     }
 
     /// <summary>
@@ -132,10 +136,12 @@ public sealed class SizeSetCrossSexTests : IDisposable
         string root = Mod([Top, Sho]);
         var log = Substitute.For<IPluginLog>();
         var runLog = new SizeSetRefit.RunLog();
+        var noMaps = Directory.CreateTempSubdirectory("proteus-nomaps-");
+        try
+        {
         SizeSetRefit.Run(new SizeSetRefit.Request(root, ["tbse@women"], false, false, [],
                                                   Across: new SizeSetRefit.AcrossInputs(_ => null)),
-                         runLog, new UVRemapService(log, Directory.CreateTempSubdirectory("proteus-nomaps-").FullName),
-                         log, _ => { }, default);
+                         runLog, new UVRemapService(log, noMaps.FullName), log, _ => { }, default);
         Assert.Single(runLog.Notes, n => n == Strings.SizeSet.MenMapsMissing);
         Assert.Contains(runLog.Sizes, s => s.Men && s.Slot == "_sho" && s.ReasonCode == SizeSetRefit.Codes.MenMapsMissing
                                             && s.Option == "TBSE");
@@ -143,9 +149,10 @@ public sealed class SizeSetCrossSexTests : IDisposable
         var off = new SizeSetRefit.RunLog();
         SizeSetRefit.Run(new SizeSetRefit.Request(root, ["tbse@women"], false, false, [], Ends: false,
                                                   Across: new SizeSetRefit.AcrossInputs(_ => null)),
-                         off, new UVRemapService(log, Directory.CreateTempSubdirectory("proteus-nomaps-").FullName),
-                         log, _ => { }, default);
+                         off, new UVRemapService(log, noMaps.FullName), log, _ => { }, default);
         Assert.DoesNotContain(off.Sizes, s => s.Slot == "_sho");
+        }
+        finally { noMaps.Delete(true); }
     }
 
     [Fact]
