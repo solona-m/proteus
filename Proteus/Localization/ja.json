@@ -5155,6 +5155,46 @@
     "message": "追加したサイズはありません。MODにはチェックしたボディの全サイズがすでにあります。",
     "description": ""
   },
+  "SizeSet.NothingAdded.SeeLeftOut": {
+    "message": "サイズは追加されませんでした。理由は下の「作成しなかったもの」にあります。",
+    "description": ""
+  },
+  "SizeSet.NothingAdded.SeeLog": {
+    "message": "サイズは追加されませんでした。各サイズの理由はDalamudのログ（/xllog）にあります。",
+    "description": ""
+  },
+  "SizeSet.MadeOn": {
+    "message": "元のボディ",
+    "description": ""
+  },
+  "SizeSet.MadeOn.Auto": {
+    "message": "自動で判別",
+    "description": ""
+  },
+  "SizeSet.MadeOn.Tip": {
+    "message": "このModの胴と脚が作られたボディMod。Proteusが自分で判別できないサイズにだけ使います。たとえば、古いリリースのボディ（Dawntrail以前のBibo+など）で作られたModです。Proteusが判別できなかったと表示しない限り、「自動で判別」のままにしてください。",
+    "description": ""
+  },
+  "SizeSet.UnreadableMadeOn.Fmt": {
+    "message": "{0}：どのボディ用に作られたか判別できなかったため、サイズを作りませんでした。わかる場合は「元のボディ」で選び、もう一度サイズを追加してください。",
+    "description": ""
+  },
+  "SizeSet.NotMadeOn.Fmt": {
+    "message": "{0}：どのサイズも{1}に合わないため、サイズを作りませんでした。「元のボディ」で選んだボディを確認してください。",
+    "description": ""
+  },
+  "SizeSet.MadeOnMissing.Fmt": {
+    "message": "{0}：「元のボディ」で選んだ{1}がインストールされていないため、サイズを作りませんでした。",
+    "description": ""
+  },
+  "SizeSet.MadeOnUnclear.Fmt": {
+    "message": "{0}：{1}ではサイズを見分けられないため、サイズを作りませんでした。",
+    "description": ""
+  },
+  "SizeSet.MadeOnOtherBody.Fmt": {
+    "message": "{0}：「{1}」は「元のボディ」で選んだ{3}ではなく{2}用と判別されたため、そのサイズは{2}用として作りました。",
+    "description": ""
+  },
   "SizeSet.LeftOut": {
     "message": "作成しなかったもの：",
     "description": ""

@@ -343,13 +343,13 @@ internal static partial class SizeSetRefit
             foreach (var r in alike)
             {
                 var (p90, mean) = BodyDistance(r.BentPath, targetPath, ProbesOf);
-                eligible.Add((r, new SourceDistance(p90, mean, 0f, 0f, r.Candidate.Order, r.Candidate.OwnFit)));
+                eligible.Add((r, r.Candidate.Distance(p90, mean, 0f, 0f)));
             }
-            var misfits = Misfits(eligible);
+            if (eligible.Count == 0) return null;
+            var (chosen, step, gap, misfits) = ChooseWithMisfits(eligible);
             for (int i = 0; i < eligible.Count; i++)
                 said.Add($"{eligible[i].Item1.Candidate.Name}: {Describe(eligible[i].Item2, misfits.Contains(i))}");
-            if (eligible.Count == 0) return null;
-            var (chosen, step, gap) = Choose(eligible);
+            if (LoneMadeOn(eligible, chosen) is { } lone) said.Add(lone);
             return (chosen, $"{option} from {chosen.Candidate.Name} (by {step}, {gap * 1000f:F1} mm ahead; {string.Join("; ", said)})");
         }
 
@@ -409,6 +409,7 @@ internal static partial class SizeSetRefit
 
         int made = 0;
         var readings = new Dictionary<string, AutoRefitDecisions.Pick?>(StringComparer.Ordinal);
+        var madeOnReadings = new Dictionary<string, SourceReading>(StringComparer.Ordinal);
         var leadSources = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
         foreach (var piece in across)
         {
@@ -416,7 +417,7 @@ internal static partial class SizeSetRefit
             try
             {
                 made += RunAcrossPiece(request, inputs, piece, groupName, mensKeys, uvRemap, log, progress, runLog,
-                                       readings, leadSources, ct);
+                                       readings, madeOnReadings, leadSources, ct);
             }
             catch (OperationCanceledException)
             {
@@ -437,6 +438,7 @@ internal static partial class SizeSetRefit
                                       IReadOnlyList<string> mensKeys, UVRemapService uvRemap, IPluginLog log,
                                       Action<string> progress, RunLog runLog,
                                       Dictionary<string, AutoRefitDecisions.Pick?> readings,
+                                      Dictionary<string, SourceReading> madeOnReadings,
                                       Dictionary<string, string> leadSources, CancellationToken ct)
     {
         var notes = runLog.Notes;
@@ -455,11 +457,12 @@ internal static partial class SizeSetRefit
         var clock = Stopwatch.StartNew();
         using var reading = BodySizeMatch.BeginReading();
         string preferred = mods[0].Dir;
-        var sources = new Sources(request, piece, preferred, mods, readings, Note, ct);
+        var sources = new Sources(request, piece, preferred, mods, readings, madeOnReadings, Note, ct);
         if (sources.Primary == null)
         {
-            runLog.Note(string.Format(Strings.SizeSet.UnreadableFmt, piece.Label), piece, SizeStatus.Skipped,
-                        Codes.Unreadable, groupName, men: true, gamePath: save);
+            var (unread, code) = UnreadableNote(piece.Label, request.MadeOn, sources.MadeOnName, sources.MadeOnMissing,
+                                                sources.Fits);
+            runLog.Note(unread, piece, SizeStatus.Skipped, code, groupName, men: true, gamePath: save);
             return 0;
         }
         var redirects = PenumbraModMeta.ReadAllRedirects(root);
@@ -567,9 +570,12 @@ internal static partial class SizeSetRefit
                 c.Option);
             saved++;
             warnings.AddRange(said);
+            if (c.OtherBody)
+                warnings.Add(string.Format(Strings.SizeSet.MadeOnOtherBodyFmt, piece.Label, c.Name, c.Entry.Name,
+                                           sources.MadeOnName ?? request.MadeOn));
             // The first piece of an outfit to make an option leads it; legs following the chest never do.
             if (!piece.FollowsChest && c.Option != null) leadSources.TryAdd(leadKey, c.Option);
-            if (OtherVariants(piece, c.File, c.Pick, preferred, readings) is { Count: > 0 })
+            if (OtherVariants(piece, c.File, c.Pick, preferred, readings, madeOnReadings, request.MadeOn) is { Count: > 0 })
                 warnings.Add(string.Format(Strings.SizeSet.OneVariantFmt, piece.Label, c.Name));
         }
         group.RestoreDefault();
@@ -596,14 +602,28 @@ internal static partial class SizeSetRefit
     /// one size (Sheer Elegance's "SFW" and "NSFW"), where a men's body has one size: men get the one it was cut from.
     /// </summary>
     /// <param name="readings">What each of the author's files was read as this run (see <see cref="ReadingKey"/>).</param>
+    /// <param name="madeOnReadings">What the ones those could not place were read as on the <paramref name="madeOn"/>
+    /// body.</param>
     internal static List<string> OtherVariants(Piece piece, string chosenFile, AutoRefitDecisions.Pick chosen,
-                                               string preferred, IReadOnlyDictionary<string, AutoRefitDecisions.Pick?> readings)
-        => piece.Options.Where(o => o.Option != null && RefitCore.Normal(o.File) != RefitCore.Normal(chosenFile)
-                                    && readings.TryGetValue(ReadingKey(o.File, piece.Slot, piece.Race, preferred), out var p)
-                                    && p != null
-                                    && string.Equals(p.Dir, chosen.Dir, StringComparison.OrdinalIgnoreCase)
-                                    && RefitCore.Normal(p.Option.Rel) == RefitCore.Normal(chosen.Option.Rel))
-                        .Select(o => o.Option!).ToList();
+                                               string preferred, IReadOnlyDictionary<string, AutoRefitDecisions.Pick?> readings,
+                                               IReadOnlyDictionary<string, SourceReading>? madeOnReadings = null,
+                                               string? madeOn = null)
+    {
+        AutoRefitDecisions.Pick? ReadAs(string file)
+        {
+            readings.TryGetValue(ReadingKey(file, piece.Slot, piece.Race, preferred), out var p);
+            if (p != null && AutoRefitDecisions.Proceed(p.Confidence)) return p;
+            return madeOn != null && madeOnReadings != null
+                   && madeOnReadings.TryGetValue(ReadingKey(file, piece.Slot, piece.Race, preferred, madeOn), out var r)
+                ? r.Pick
+                : p;
+        }
+        return piece.Options.Where(o => o.Option != null && RefitCore.Normal(o.File) != RefitCore.Normal(chosenFile)
+                                        && ReadAs(o.File) is { } p
+                                        && string.Equals(p.Dir, chosen.Dir, StringComparison.OrdinalIgnoreCase)
+                                        && RefitCore.Normal(p.Option.Rel) == RefitCore.Normal(chosen.Option.Rel))
+                            .Select(o => o.Option!).ToList();
+    }
 
     private static byte[]? ReadModFile(string root, string rel)
     {

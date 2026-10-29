@@ -5155,6 +5155,46 @@
     "message": "Aucune taille ajoutée : le mod a déjà toutes les tailles des corps cochés.",
     "description": ""
   },
+  "SizeSet.NothingAdded.SeeLeftOut": {
+    "message": "Aucune taille n'a été ajoutée. La raison est indiquée plus bas, sous « Laissées de côté ».",
+    "description": ""
+  },
+  "SizeSet.NothingAdded.SeeLog": {
+    "message": "Aucune taille n'a été ajoutée. Le journal de Dalamud (/xllog) en donne la raison pour chaque taille.",
+    "description": ""
+  },
+  "SizeSet.MadeOn": {
+    "message": "Fait pour",
+    "description": ""
+  },
+  "SizeSet.MadeOn.Auto": {
+    "message": "Détecter",
+    "description": ""
+  },
+  "SizeSet.MadeOn.Tip": {
+    "message": "Le mod de corps pour lequel le torse et les jambes de ce mod ont été faits. Utilisé seulement pour les tailles que Proteus ne sait pas reconnaître lui-même, comme un mod fait pour une ancienne version d'un corps (Bibo+ d'avant Dawntrail, par exemple). Laissez « Détecter » sauf si Proteus indique qu'il n'a pas pu le savoir.",
+    "description": ""
+  },
+  "SizeSet.UnreadableMadeOn.Fmt": {
+    "message": "{0} : impossible de savoir pour quel corps il a été fait, donc aucune taille n'en a été faite. Si vous le savez, choisissez-le sous « Fait pour » et ajoutez de nouveau les tailles.",
+    "description": ""
+  },
+  "SizeSet.NotMadeOn.Fmt": {
+    "message": "{0} : aucune de ses tailles ne va sur {1}, donc aucune taille n'en a été faite. Vérifiez le corps choisi sous « Fait pour ».",
+    "description": ""
+  },
+  "SizeSet.MadeOnMissing.Fmt": {
+    "message": "{0} : {1}, choisi sous « Fait pour », n'est pas installé, donc aucune taille n'en a été faite.",
+    "description": ""
+  },
+  "SizeSet.MadeOnUnclear.Fmt": {
+    "message": "{0} : sur {1}, ses tailles ne se distinguent pas, donc aucune taille n'en a été faite.",
+    "description": ""
+  },
+  "SizeSet.MadeOnOtherBody.Fmt": {
+    "message": "{0} : « {1} » a été reconnu comme fait pour {2}, et non pour {3} choisi sous « Fait pour », et ses tailles ont été faites comme pour {2}.",
+    "description": ""
+  },
   "SizeSet.LeftOut": {
     "message": "Laissées de côté :",
     "description": ""

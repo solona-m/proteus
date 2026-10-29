@@ -35,6 +35,7 @@ internal static class SizeSetReport
             ["build"] = build,
             ["bodies"] = new JsonArray(outcome.Keys.Select(k => (JsonNode?)JsonValue.Create(k)).ToArray()),
             ["men"] = men, ["yas"] = true, ["ends"] = ends,
+            ["madeOn"] = outcome.MadeOn,
             ["refusal"] = outcome.Refusal, ["refusalCode"] = outcome.RefusalCode,
             ["migrated"] = outcome.Migrated is { } mig
                 ? new JsonObject
