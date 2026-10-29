@@ -256,6 +256,24 @@ public class BodyRetargetWriterTests : IDisposable
     }
 
     [Fact]
+    [Trait("Plan", "EDGE-cross-sex-area-coverage-8")]
+    public void An_option_saved_again_keeps_its_place() // [EDGE-cross-sex-area-coverage-8]
+    {
+        // Penumbra keeps a group's choice by option POSITION. The men's legs saved into "TBSE" after the top had made
+        // TBSE and TBSE-X moved TBSE to the end, and a player wearing TBSE was switched to TBSE-X.
+        const string legs = "chara/equipment/e6255/model/c0101e6255_dwn.mdl";
+        BodyRetargetWriter.Save(root, Group, "TBSE", GamePath, [1], "TBSE", "Bibo M", "SFW");
+        BodyRetargetWriter.Save(root, Group, "TBSE-X", GamePath, [2], "TBSE-X", "Bibo M", "SFW");
+        Assert.True(BodyRetargetWriter.Save(root, Group, "TBSE", legs, [3], "TBSE", "Bibo M", "Gen A").Ok);
+
+        var options = PenumbraModMeta.TryReadFileOptions(root, Group)!;
+        Assert.Equal([BodyRetargetWriter.OriginalOption, "TBSE", "TBSE-X"], options.Select(o => o.Name));
+        Assert.Contains(GamePath, options[1].Files.Keys);
+        Assert.Contains(legs, options[1].Files.Keys);
+        Assert.Equal("TBSE", PenumbraModMeta.SingleDefault(root, Group));
+    }
+
+    [Fact]
     public void Undo_removes_the_option_its_file_and_finally_the_group()
     {
         BodyRetargetWriter.Save(root, Group, "Neolithe SFW L", GamePath, [1], "Neolithe", "SFW M", "SFW L");

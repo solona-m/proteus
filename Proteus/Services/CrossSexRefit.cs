@@ -154,6 +154,52 @@ internal static class CrossSexRefit
 
     internal const double MinCoverage = 0.9;
 
+    /// <summary>
+    /// Whether a men's legs refit is fitted to the body's nude smallclothes instead of the SFW ones asked for: only when the
+    /// SFW legs match too little of the women's body (<see cref="CoverageAllowed(double)"/>) and the nude ones enough. A
+    /// women's body made nude carries crotch skin the SFW legs have no place for — they draw underwear there — and the
+    /// count of it outweighs the rest: LavaBod+ 2.2's legs match 89% of TBSE's SFW legs, 99.6% of its Gen A. Legs that
+    /// match the SFW ones enough keep them, so nothing saved before changes.
+    /// </summary>
+    internal static bool TakesNude(UvAtlasCorrespondence.Stats? asked, UvAtlasCorrespondence.Stats? nude)
+        => asked is { } a && !CoverageAllowed(a.VertexCoverage) && nude is { } n && CoverageAllowed(n.VertexCoverage);
+
+    /// <summary>
+    /// How many of a men's version's skin triangles are the nude smallclothes' own — further than half a millimetre from
+    /// the SFW legs at <paramref name="sfwPath"/> anywhere — so the log can say how much nude skin a garment fitted to them
+    /// shows where its cloth does not hide it. 0 when either model cannot be read.
+    /// </summary>
+    internal static int NudeSkinShown(byte[]? saved, string sfwPath)
+    {
+        try
+        {
+            if (saved == null || ModelPartReader.Read(saved) is not { } model
+                || ModelPartReader.Read(System.IO.File.ReadAllBytes(sfwPath)) is not { } sfw)
+                return 0;
+            var surface = new BodySurface(sfw, BodySurface.CellFor(0.01f));
+            bool Off(int v)
+                => !surface.Nearest(new System.Numerics.Vector3(model.Positions[v * 3], model.Positions[v * 3 + 1],
+                                                                model.Positions[v * 3 + 2]), NudeSkinReach, out _);
+            int shown = 0;
+            foreach (var part in model.Parts)
+            {
+                if (part.Island >= 0 || !SecondSkinWriter.IsBodySkinMaterial(part.Material)) continue;
+                for (int t = 0; t + 2 < part.Triangles.Length; t += 3)
+                    if (Off(part.Triangles[t]) || Off(part.Triangles[t + 1]) || Off(part.Triangles[t + 2])) shown++;
+            }
+            return shown;
+        }
+        catch (Exception e) when (e is System.IO.IOException or UnauthorizedAccessException or InvalidOperationException
+                                       or ArgumentException or IndexOutOfRangeException)
+        {
+            return 0;
+        }
+    }
+
+    /// <summary>How far a skin vertex may lie from the SFW legs and still be theirs: TBSE's SFW skin lies on its Gen A
+    /// skin to the micrometre (measured), so only the crotch the SFW legs lack is further.</summary>
+    private const float NudeSkinReach = 0.0005f;
+
     internal enum FoldLine { None, Report, CrossSex }
 
     /// <summary>
