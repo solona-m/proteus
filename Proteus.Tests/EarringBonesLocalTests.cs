@@ -167,15 +167,14 @@ public class EarringBonesLocalTests(ITestOutputHelper o)
     /// own, and a men's top. They also change with the game's data and the mods' versions (TBSE, Bibo+, Twill,
     /// Lumberjack): after a patch or an update, re-record on the commit before this change, never on this one. Re-record
     /// otherwise only for a change meant to alter these refits, and say which: the lumberjack at 1392, when the v3
-    /// bibo↔TBSE maps (uvmaps-v3) brought each map's nipples onto the other body's; again at 1396, when the men's skin
-    /// material its dropped skin mesh drew left the material table with it (the table now names only what is drawn).
+    /// bibo↔TBSE maps (uvmaps-v3) brought each map's nipples onto the other body's.
     /// </summary>
     [LocalDataTheory(LocalData.GameData, CrossSexRefitLocalTests.TwillTbse, CrossSexRefitLocalTests.LumberjackShirt,
                      CrossSexRefitLocalTests.Tbse, CrossSexRefitLocalTests.Bibo, LocalData.TbseUvMaps)]
     [InlineData("twill / tbse sfw", CrossSexRefitLocalTests.TwillTbse,
                 "55D970FCC3520DFB505C32652B810DDDF38CAA7594522505320FD04917FE2CE4")]
     [InlineData("lumberjack / tbse chest", CrossSexRefitLocalTests.LumberjackShirt,
-                "A0A627BE99E5588044973A139C493D7DFA5E1FE1E9B746E33C327625ABDA02A2")]   // re-recorded at 1396: an unused skin material left the table
+                "6DC8F280A856F62F3735B28AFA13E8ED929D26E22504E21D301059BACF53E36C")]   // re-recorded at 1392: the v3 bibo↔TBSE maps move the nipple
     [Trait("Plan", "AC-earring-bones-5")]
     [Trait("Plan", "EDGE-earring-bones-3")]
     [Trait("Plan", "EDGE-earring-bones-9")]

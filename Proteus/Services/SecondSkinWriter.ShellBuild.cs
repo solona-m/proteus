@@ -130,6 +130,10 @@ public static partial class SecondSkinWriter
         /// <c>dropHostMesh</c>.</summary>
         private readonly Func<int, bool>? dropHostMesh;
 
+        /// <summary>Host material names that may leave the table with the meshes left out — see <c>Build</c>'s
+        /// <c>dropHostMaterial</c>.</summary>
+        private readonly Func<string, bool>? dropHostMaterial;
+
         /// <summary>New skinning for host meshes — see <c>Build</c>'s <c>hostReskin</c>.</summary>
         private readonly Func<int, (string Bone, float W)[]?[]?>? hostReskin;
 
@@ -144,10 +148,12 @@ public static partial class SecondSkinWriter
         private readonly ReskinReport? reskinReport;
 
         public ShellBuild(IReadOnlyList<SourceSpec> sources, IReadOnlyList<SecondSkinLayer> layers, byte[]? baseModel, Action<string>? diag, IReadOnlyList<AuthoredCapSet>? authoredCaps, PushSweep? pushSweep, BuildTimings? timings, Func<int, bool>? dropHostMesh = null, Func<int, (string Bone, float W)[]?[]?>? hostReskin = null,
-                          IReadOnlyList<byte[]>? boneDonors = null, ReskinReport? reskinReport = null)
+                          IReadOnlyList<byte[]>? boneDonors = null, ReskinReport? reskinReport = null,
+                          Func<string, bool>? dropHostMaterial = null)
         {
             this.reskinReport = reskinReport;
             this.dropHostMesh = dropHostMesh;
+            this.dropHostMaterial = dropHostMaterial;
             this.hostReskin = hostReskin;
             this.boneDonors = boneDonors ?? [];
             this.sources = sources;
@@ -547,12 +553,13 @@ public static partial class SecondSkinWriter
                 geomSrcs.Add(gs);
             }
 
-            // A material only meshes left out drew goes with them. The game loads every name in the table whether a mesh
-            // draws it or not, and one it cannot find hides the whole model: a women's garment's pubic hair, dropped on
-            // its way to a man, left "_bibopube" behind, which no men's body has — the men's legs were invisible.
+            // A material the caller lets go (dropHostMaterial) that only meshes left out drew goes with them. The game
+            // loads every name in the table whether a mesh draws it or not, and one it cannot find hides the whole model:
+            // a women's garment's pubic hair, dropped on its way to a man, left "_bibopube" behind, which no men's body
+            // has — the men's legs were invisible. Any other name stays, as it always has.
             hostMatNames = baseSrc?.MatNames ?? [];
             hostMatMap = null;
-            if (baseSrc != null && dropHostMesh != null)
+            if (baseSrc != null && dropHostMesh != null && dropHostMaterial != null)
             {
                 var kept = new HashSet<int>();
                 var gone = new HashSet<int>();
@@ -560,6 +567,7 @@ public static partial class SecondSkinWriter
                 for (int m = baseSrc.Lod0MeshIndex; m < bEnd && m < baseSrc.MeshCount; m++)
                     (dropHostMesh(m) ? gone : kept).Add(BitConverter.ToUInt16(baseSrc.S, baseSrc.MeshStart + m * 36 + 8));
                 gone.ExceptWith(kept);
+                gone.RemoveWhere(i => i >= baseSrc.MatNames.Count || !dropHostMaterial(baseSrc.MatNames[i]));
                 if (gone.Count > 0)
                 {
                     hostMatMap = new ushort[baseSrc.MatNames.Count];
@@ -706,7 +714,8 @@ public static partial class SecondSkinWriter
             tLayers = PhaseCounter.Begin();
 
             // Host pre-pass: the ring/bracelet's own LOD0 meshes, verbatim and unfiltered, at their authored
-            // material indices (0..baseMatCount-1) — so the accessory still renders under the appended shell.
+            // material indices (0..baseMatCount-1) — or, when meshes left out took materials with them, those indices
+            // moved down through hostMatMap — so the accessory still renders under the appended shell.
             if (baseSrc != null)
             {
                 int bEnd = baseSrc.Lod0MeshIndex + baseSrc.Lod0MeshCount;
@@ -976,8 +985,8 @@ public static partial class SecondSkinWriter
             return outMask;
         }
 
-        // Emit one source mesh into the merged model. preserve=true: exact byte copy, every triangle, authored
-        // material index (host and cap). preserve=false: BuildVerbatim's push/colour/uv1 rewrites, coverage-trimmed.
+        // Emit one source mesh into the merged model. preserve=true: exact byte copy, every triangle, the material
+        // index it is given (the authored one, or the host's moved down by hostMatMap). preserve=false: BuildVerbatim's push/colour/uv1 rewrites, coverage-trimmed.
         // `cov` null keeps all triangles. Each mesh writes its own submesh bone map windows (RebuildBoneMap).
         private void EmitMesh(Source src, int m, ushort materialIndex, float push, bool preserve,
                       SecondSkinLayer? cov,

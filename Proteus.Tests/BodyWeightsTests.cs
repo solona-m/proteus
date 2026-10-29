@@ -757,6 +757,34 @@ public class BodyWeightsTests
     }
 
     /// <summary>
+    /// The old body's pubic hair and piercings dropped across body mods, their materials declared before and between the
+    /// cloth's: the names leave the table and each cloth mesh still draws its own material, moved down to its new index.
+    /// </summary>
+    [Fact]
+    public void Dropped_extras_take_their_material_names_and_the_cloth_keeps_its_own()
+    {
+        const string Pubes = "/mt_c0201b0001_bibopube.mtrl";
+        const string Lace = "/mt_c0201e6255_top_b.mtrl";
+        byte[] bytes = SyntheticModel.Build([],
+            new SyntheticModel.Mesh(Pubes, new SyntheticModel.Sub(0, TrianglesPerIsland: 2, Weights: [("j_kosi", 1f)])),
+            new SyntheticModel.Mesh(Cloth, new SyntheticModel.Sub(0, TrianglesPerIsland: 3, Weights: [("j_kosi", 1f)])),
+            new SyntheticModel.Mesh(Piercings, new SyntheticModel.Sub(0, TrianglesPerIsland: 2, Weights: [("j_kosi", 1f)])),
+            new SyntheticModel.Mesh(Lace, new SyntheticModel.Sub(0, TrianglesPerIsland: 4, Weights: [("j_kosi", 1f)])));
+        Assert.Equal([Pubes, Cloth, Piercings, Lace], SecondSkinWriter.MaterialNames(bytes));
+        var pairs = new[] { Pair(Body(("j_kosi", 1f)), Body(("j_kosi", 0.8f), ("iv_omanko", 0.2f))) };
+
+        var plan = BodyRetarget.Plan(ModelPartReader.Read(bytes)!, bytes, pairs, "_top", pushOut: false,
+                                     replaceSkin: false, acrossBodies: true);
+
+        Assert.Equal([Cloth, Lace], SecondSkinWriter.MaterialNames(plan.Model));
+        // Each kept mesh by its triangles: the 3-triangle cloth still draws Cloth, the 4-triangle lace Lace.
+        var meshes = ModelPartReader.Read(plan.Model)!.Parts.Where(p => p.Island < 0).GroupBy(p => p.Mesh)
+                                    .Select(g => (g.First().Material, Tris: g.Sum(p => p.Triangles.Length / 3)))
+                                    .OrderBy(m => m.Tris).ToList();
+        Assert.Equal([(Cloth, 3), (Lace, 4)], meshes);
+    }
+
+    /// <summary>
     /// A top with its own chest skin and its own two-triangle ring, refitted onto a body that rigs genital bones the old
     /// one does not (so the cloth is reweighted) and draws a one-triangle ring of its own.
     /// </summary>

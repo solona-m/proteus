@@ -79,6 +79,9 @@ public static partial class SecondSkinWriter
     /// </summary>
     /// <param name="dropHostMesh">Host meshes left out entirely, by their index in the host file — the whole mesh,
     /// not some of its triangles. Null keeps every host mesh.</param>
+    /// <param name="dropHostMaterial">Host material names that leave the material table when only meshes left out by
+    /// <paramref name="dropHostMesh"/> drew them; the kept meshes' indices move down to match. Null keeps every name —
+    /// the game loads them all, so a name the wearer's body has no file for hides the model.</param>
     /// <param name="hostReskin">New skinning for a host mesh, by its index in the host file: per vertex of that mesh,
     /// the influences it takes (null leaves the vertex as it was), at most eight. Null leaves every host mesh's
     /// skinning alone.</param>
@@ -89,10 +92,10 @@ public static partial class SecondSkinWriter
         IReadOnlyList<AuthoredCapSet>? authoredCaps = null, PushSweep? pushSweep = null,
         BuildTimings? timings = null, Func<int, bool>? dropHostMesh = null,
         Func<int, (string Bone, float W)[]?[]?>? hostReskin = null, IReadOnlyList<byte[]>? boneDonors = null,
-        ReskinReport? reskinReport = null)
+        ReskinReport? reskinReport = null, Func<string, bool>? dropHostMaterial = null)
     {
         return new ShellBuild(sources, layers, baseModel, diag, authoredCaps, pushSweep, timings, dropHostMesh,
-                              hostReskin, boneDonors, reskinReport)
+                              hostReskin, boneDonors, reskinReport, dropHostMaterial)
             .Run(out stats);
     }
 
