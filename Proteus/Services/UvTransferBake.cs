@@ -549,8 +549,11 @@ internal static class UvTransferBake
         return default;
     }
 
-    /// <summary>The map from <paramref name="src"/>'s sheet to <paramref name="dest"/>'s: indexed by a destination pixel.</summary>
-    internal static Result Bake(BakeBody dest, BakeBody src, int size, Raster? destRaster = null)
+    /// <summary>
+    /// The map from <paramref name="src"/>'s sheet to <paramref name="dest"/>'s: indexed by a destination pixel. With a
+    /// <paramref name="field"/>, each destination point is moved by it before it is cast (its normal and region kept).
+    /// </summary>
+    internal static Result Bake(BakeBody dest, BakeBody src, int size, Raster? destRaster = null, ChestField? field = null)
     {
         var raster = destRaster ?? Rasterize(dest, size);
         var bvh = new TriangleBvh(src);
@@ -569,6 +572,7 @@ internal static class UvTransferBake
                 local[0]++;
                 float u = raster.BaryU[i], v = raster.BaryV[i], w = 1f - u - v;
                 var pos = dest.At(t, u, v, w).Pos;
+                if (field != null) pos = field.Apply(pos);
                 var nrm = dest.SmoothAt(t, u, v, w);
                 var region = dest.RegionAt(t, u, v, w);
                 var land = Land(bvh, src, pos, nrm, region);

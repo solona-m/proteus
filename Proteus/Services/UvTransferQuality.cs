@@ -45,6 +45,19 @@ internal static class UvTransferQuality
 
         /// <summary>How far, in px at 4096, a dot on one body's nipple may land from the other's (about 3 mm).</summary>
         public const float NippleDotPx = 12f;
+
+        /// <summary>
+        /// How far ACROSS the skin a nipple may land from the other body's (3 mm). Not the full distance: a breast stands
+        /// centimetres before a man's chest, which is the bodies' shape, not the map's placement.
+        /// </summary>
+        public const float NippleTangentMm = 3f;
+
+        // The chest field (ChestField), checked before any map is baked with it: no triangle of the destination squeezed
+        // under a fifth of its area or turned over; pins held to 0.1 mm; arm and neck skin moved no more than 3 mm; no
+        // point moved further than 1.05 × the largest offset or more than 1 mm against it; the sternum and the clavicle
+        // row held within 2 mm; each target's landing within 0.5 mm of where it must be.
+        public const float FieldJacobianMin = 0.2f, FieldPinMm = 0.1f, FieldOffTorsoMm = 3f, FieldOvershoot = 1.05f,
+                           FieldReverseMm = 1f, FieldStillMm = 2f, FieldResidualMm = 0.5f;
     }
 
     /// <summary>The named places on the torso and legs the gate checks, by name.</summary>

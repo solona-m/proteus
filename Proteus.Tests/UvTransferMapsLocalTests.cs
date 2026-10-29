@@ -315,6 +315,32 @@ public class UvTransferMapsLocalTests(TbseBakeFixture bake, ITestOutputHelper ou
         }
     }
 
+    /// <summary>
+    /// Each map's chest field, built on the real chests: it lands nipples and creases where they must go, and passes
+    /// every construction check — no fold, pins held, nothing off the torso moved, no overshoot.
+    /// </summary>
+    [LocalDataFact(LocalData.GameData, Bibo, Tbse)]
+    [Trait("Plan", "AC-uvmap-nipples-4")]
+    public void Chest_fields_pass_construction_checks() // [AC-uvmap-nipples-4] [EDGE-uvmap-nipples-3] [EDGE-uvmap-nipples-4] [EDGE-uvmap-nipples-39]
+    {
+        var (bibo, tbse) = Chests();
+        var misses = new List<string>();
+        foreach (var (map, dest, src) in new[] { (UvTransferBakeJob.BiboToTbse, tbse, bibo), (UvTransferBakeJob.TbseToBibo, bibo, tbse) })
+        {
+            var (field, failure) = ChestField.Build(dest, src, new TriangleBvh(src));
+            Assert.True(field != null, $"{map}: {failure}");
+            foreach (var s in field!.Sites)
+                output.WriteLine($"{map} {s.Name}{(s.Pin ? " (pin)" : "")} at {s.Centre}: {s.Offset * 1000f} mm");
+            var c = field.Measure(dest);
+            output.WriteLine($"{map}: yLow {field.YLow:F4} yClav {field.YClav:F4} cond {field.Condition:E2}{(field.Ridged ? " ridged" : "")} "
+                             + $"iterations {field.Iterations} residual {string.Join(", ", field.ResidualMm.Select(r => $"{r.Key} {r.Value:F2}"))}");
+            output.WriteLine($"{map}: min J {c.MinJacobian:F3} ({c.FoldedTriangles} under), pin {c.MaxPinMm:F3} mm, off-torso {c.MaxOffTorsoMm:F2} mm, "
+                             + $"max {c.MaxMm:F1} mm, reverse {c.MaxReverseMm:F2} mm at {c.ReverseAt}, still {c.MaxStillMm:F2} mm");
+            misses.AddRange(field.Check(c).Select(m => $"{map}: {m}"));
+        }
+        Assert.True(misses.Count == 0, string.Join("; ", misses));
+    }
+
     private const string BiboSkin = Bibo + "/Midlander, Elezen, Miqo - SKIN DETAIL/Detailed/chara/bibo_mid_base.tex";
     private const string TbseSkin = Tbse + "/p1/step 2- midlander, elezen, miqo'te/type 0/chara/human/c0101/obj/body/b0001/texture/c0101b0001_b_d.tex";
 
