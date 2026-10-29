@@ -821,9 +821,10 @@ public class SizeSetBatchLocalTests(ThisOldThingRun tot, ITestOutputHelper outpu
         Assert.DoesNotContain(pieces, p => p.Race == "0101" && p.Slot is "_top" or "_dwn");
         var keys = SizeSetBatch.RunKeys(pieces, ["bibo"], men: true);
         Assert.Contains("tbse@women", keys);
-        // The men's versions are of its women's chest and legs only.
+        // The men's versions are of its women's chest, legs and shoes; not its gloves, whose men's model the author made
+        // (mens-ends-crotch: shoes and gloves cross too, and the author's own men's piece still keeps theirs).
         Assert.All(SizeSetRefit.AcrossPieces(pieces), p => Assert.Equal("0201", p.Race));
-        Assert.Equal(["_top", "_dwn"], SizeSetRefit.AcrossPieces(pieces).Select(p => p.Slot));
+        Assert.Equal(["_top", "_dwn", "_sho"], SizeSetRefit.AcrossPieces(pieces).Select(p => p.Slot));
     }
 
     [LocalDataFact(SizeSetBatchData.Heartthrob)]
