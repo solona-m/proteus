@@ -260,6 +260,9 @@ public class CrossSexNudeLegsLocalTests(ITestOutputHelper o)
         RefitGate.Assert(o, r, s, 0, RefitGate.Gates.None, minCoverage: 0.9f);
         Assert.True(s.Folds <= KnownStormblessedLegsFolds, $"{s.Folds} folds, more than the {KnownStormblessedLegsFolds} known");
         Assert.True(s.Plan!.Report.Missed <= KnownStormblessedLegsMissed, $"{s.Plan.Report.Missed} cloth points missed");
+        // No women's body material left named: the game loads every one, and a men's body has none of them — the legs
+        // came out invisible with "_bibopube" and "_betterpube" left behind by the pubic hair the refit dropped.
+        Assert.DoesNotContain(SecondSkinWriter.MaterialNames(s.Saved!.Model), n => n.Contains("c0201b", StringComparison.Ordinal));
         // The bent made-for body leaves nothing unplaced on Gen A once Whole has filled it in.
         Assert.Equal(0, Measure(r.SourcePath!, TbsePath(1), out var bentRefused)!.After);
         Assert.Null(bentRefused);

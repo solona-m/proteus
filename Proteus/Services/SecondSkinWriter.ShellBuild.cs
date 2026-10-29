@@ -61,6 +61,12 @@ public static partial class SecondSkinWriter
         private List<Source> geomSrcs = null!;
         private Dictionary<byte[], Source> geomByModel = null!;
         private int baseMatCount;
+        /// <summary>The host's material names this build writes, in its order: all of them, but for those only meshes
+        /// left out (<c>dropHostMesh</c>) drew.</summary>
+        private List<string> hostMatNames = null!;
+        /// <summary>Each host material index's place in <see cref="hostMatNames"/>, when some were left out; null when
+        /// none were.</summary>
+        private ushort[]? hostMatMap;
         private List<string> boneNames = null!;
         private Dictionary<string, ushort> boneIndex = null!;
         private List<byte[]> boneBBox = null!;
@@ -124,6 +130,10 @@ public static partial class SecondSkinWriter
         /// <c>dropHostMesh</c>.</summary>
         private readonly Func<int, bool>? dropHostMesh;
 
+        /// <summary>Host material names that may leave the table with the meshes left out — see <c>Build</c>'s
+        /// <c>dropHostMaterial</c>.</summary>
+        private readonly Func<string, bool>? dropHostMaterial;
+
         /// <summary>New skinning for host meshes — see <c>Build</c>'s <c>hostReskin</c>.</summary>
         private readonly Func<int, (string Bone, float W)[]?[]?>? hostReskin;
 
@@ -138,10 +148,12 @@ public static partial class SecondSkinWriter
         private readonly ReskinReport? reskinReport;
 
         public ShellBuild(IReadOnlyList<SourceSpec> sources, IReadOnlyList<SecondSkinLayer> layers, byte[]? baseModel, Action<string>? diag, IReadOnlyList<AuthoredCapSet>? authoredCaps, PushSweep? pushSweep, BuildTimings? timings, Func<int, bool>? dropHostMesh = null, Func<int, (string Bone, float W)[]?[]?>? hostReskin = null,
-                          IReadOnlyList<byte[]>? boneDonors = null, ReskinReport? reskinReport = null)
+                          IReadOnlyList<byte[]>? boneDonors = null, ReskinReport? reskinReport = null,
+                          Func<string, bool>? dropHostMaterial = null)
         {
             this.reskinReport = reskinReport;
             this.dropHostMesh = dropHostMesh;
+            this.dropHostMaterial = dropHostMaterial;
             this.hostReskin = hostReskin;
             this.boneDonors = boneDonors ?? [];
             this.sources = sources;
@@ -541,7 +553,34 @@ public static partial class SecondSkinWriter
                 geomSrcs.Add(gs);
             }
 
-            baseMatCount = baseSrc?.MatNames.Count ?? 0;
+            // A material the caller lets go (dropHostMaterial) that only meshes left out drew goes with them. The game
+            // loads every name in the table whether a mesh draws it or not, and one it cannot find hides the whole model:
+            // a women's garment's pubic hair, dropped on its way to a man, left "_bibopube" behind, which no men's body
+            // has — the men's legs were invisible. Any other name stays, as it always has.
+            hostMatNames = baseSrc?.MatNames ?? [];
+            hostMatMap = null;
+            if (baseSrc != null && dropHostMesh != null && dropHostMaterial != null)
+            {
+                var kept = new HashSet<int>();
+                var gone = new HashSet<int>();
+                int bEnd = baseSrc.Lod0MeshIndex + baseSrc.Lod0MeshCount;
+                for (int m = baseSrc.Lod0MeshIndex; m < bEnd && m < baseSrc.MeshCount; m++)
+                    (dropHostMesh(m) ? gone : kept).Add(BitConverter.ToUInt16(baseSrc.S, baseSrc.MeshStart + m * 36 + 8));
+                gone.ExceptWith(kept);
+                gone.RemoveWhere(i => i >= baseSrc.MatNames.Count || !dropHostMaterial(baseSrc.MatNames[i]));
+                if (gone.Count > 0)
+                {
+                    hostMatMap = new ushort[baseSrc.MatNames.Count];
+                    hostMatNames = [];
+                    for (int i = 0; i < baseSrc.MatNames.Count; i++)
+                    {
+                        if (gone.Contains(i)) continue;
+                        hostMatMap[i] = (ushort)hostMatNames.Count;
+                        hostMatNames.Add(baseSrc.MatNames[i]);
+                    }
+                }
+            }
+            baseMatCount = hostMatNames.Count;
             if (baseMatCount + layers.Count > MaxMaterials)
                 throw new InvalidOperationException(
                     $"host has {baseMatCount} materials + {layers.Count} layers > {MaxMaterials} max");
@@ -675,7 +714,8 @@ public static partial class SecondSkinWriter
             tLayers = PhaseCounter.Begin();
 
             // Host pre-pass: the ring/bracelet's own LOD0 meshes, verbatim and unfiltered, at their authored
-            // material indices (0..baseMatCount-1) — so the accessory still renders under the appended shell.
+            // material indices (0..baseMatCount-1) — or, when meshes left out took materials with them, those indices
+            // moved down through hostMatMap — so the accessory still renders under the appended shell.
             if (baseSrc != null)
             {
                 int bEnd = baseSrc.Lod0MeshIndex + baseSrc.Lod0MeshCount;
@@ -685,6 +725,7 @@ public static partial class SecondSkinWriter
                     ushort srcMat = BitConverter.ToUInt16(baseSrc.S, bmo + 8);
                     // A whole mesh left out when asked: a garment whose skin is being replaced loses that skin.
                     if (dropHostMesh != null && dropHostMesh(m)) continue;
+                    if (hostMatMap != null && srcMat < hostMatMap.Length) srcMat = hostMatMap[srcMat];
                     EmitMesh(baseSrc, m, srcMat, 0f, preserve: true, cov: null,
                              reskin: hostReskin?.Invoke(m));
                 }
@@ -755,10 +796,10 @@ public static partial class SecondSkinWriter
             }
 
             matStrOff = new List<uint>();
-            // Host materials FIRST (indices 0..baseMatCount-1, referenced verbatim by the host's own meshes),
-            // then the appended shell layer materials.
+            // Host materials FIRST (indices 0..baseMatCount-1, referenced by the host's own meshes — through hostMatMap
+            // when some were left out), then the appended shell layer materials.
             if (baseSrc != null)
-                foreach (var name in baseSrc.MatNames)
+                foreach (var name in hostMatNames)
                 {
                     matStrOff.Add((uint)strMs.Position);
                     strMs.Write(Encoding.ASCII.GetBytes(name));
@@ -944,8 +985,8 @@ public static partial class SecondSkinWriter
             return outMask;
         }
 
-        // Emit one source mesh into the merged model. preserve=true: exact byte copy, every triangle, authored
-        // material index (host and cap). preserve=false: BuildVerbatim's push/colour/uv1 rewrites, coverage-trimmed.
+        // Emit one source mesh into the merged model. preserve=true: exact byte copy, every triangle, the material
+        // index it is given (the authored one, or the host's moved down by hostMatMap). preserve=false: BuildVerbatim's push/colour/uv1 rewrites, coverage-trimmed.
         // `cov` null keeps all triangles. Each mesh writes its own submesh bone map windows (RebuildBoneMap).
         private void EmitMesh(Source src, int m, ushort materialIndex, float push, bool preserve,
                       SecondSkinLayer? cov,

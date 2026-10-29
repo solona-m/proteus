@@ -368,6 +368,9 @@ internal static partial class BodyRetarget
         var reskinned = new SecondSkinWriter.ReskinReport();
         var rebuilt = SecondSkinWriter.Build(Array.Empty<SecondSkinWriter.SourceSpec>(), layers, garment, out _,
                                              dropHostMesh: dropped.Contains,
+                                             // The old body's extras' names go with them: the new body may have no file
+                                             // for "_bibopube", and one the game cannot load hides the whole model.
+                                             dropHostMaterial: IsBodyExtraMaterial,
                                              hostReskin: weights == null ? null : weights.For,
                                              boneDonors: weights?.Donors, reskinReport: reskinned);
 
