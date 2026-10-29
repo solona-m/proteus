@@ -137,7 +137,9 @@ public class CrossSexRefitLocalTests(ITestOutputHelper o)
     [Trait("Plan", "EDGE-cross-sex-refit-13")]
     [Trait("Plan", "EDGE-cross-sex-refit-14")]
     [Trait("Speed", "Slow")]
-    public void Lumberjack_refits_onto_bibo_for_midlander_women() // [AC-cross-sex-refit-2] [AC-cross-sex-refit-3] [AC-cross-sex-refit-5] [EDGE-cross-sex-refit-13] [EDGE-cross-sex-refit-14]
+    [Trait("Plan", "EDGE-uvmap-nipples-48")]
+    [Trait("Plan", "AC-uvmap-nipples-8")]
+    public void Lumberjack_refits_onto_bibo_for_midlander_women() // [AC-cross-sex-refit-2] [AC-cross-sex-refit-3] [AC-cross-sex-refit-5] [EDGE-cross-sex-refit-13] [EDGE-cross-sex-refit-14] [EDGE-uvmap-nipples-48] [AC-uvmap-nipples-8]
     {
         var inputs = Inputs(LumberjackShirt, 201, Tbse, UvBakeInputs.TbseChest, Bibo, UvBakeInputs.BiboChest);
         var (r, s) = Run(inputs);
@@ -209,6 +211,61 @@ public class CrossSexRefitLocalTests(ITestOutputHelper o)
         Assert.NotNull(r.Route.Eqdp(r.Route.SavePath(inputs.GamePath)));
         o.WriteLine($"women's top → TBSE: {s.Folds} cloth faces folded (said, not gated)");
     }
+
+    /// <summary>
+    /// Refit map <c>tbse_to_bibo</c>: a women's top made a men's puts the cloth over Bibo+'s nipples at TBSE's nipple
+    /// height — per side, the cloth within 2.5 cm of Bibo+'s nipple, its mean height on the saved model against TBSE's
+    /// nipple. Each side within half of what the v2 maps left (<see cref="SheerBustV2Mm"/>, measured 2026-10-28).
+    /// </summary>
+    [LocalDataFact(LocalData.GameData, SheerTop, Bibo, Tbse, LocalData.TbseUvMaps)]
+    [Trait("Plan", "AC-uvmap-nipples-10")]
+    [Trait("Speed", "Slow")]
+    public void RefitMap_sheer_elegance_bust_lands_at_tbse_nipple_height() // [AC-uvmap-nipples-10] [EDGE-uvmap-nipples-31] [AC-uvmap-nipples-8]
+    {
+        var inputs = Inputs(SheerTop, 101, Bibo, UvBakeInputs.BiboChest, Tbse, UvBakeInputs.TbseChest);
+        var (_, s) = Run(inputs);
+        // The cloth before and after, paired by uv: the refit moves cloth and keeps its uvs, while the skin it carries is
+        // the new body's own.
+        static bool Cloth(string m) => !SecondSkinWriter.IsBodySkinMaterial(m);
+        Assert.True(SecondSkinWriter.TryReadLod0Geometry(inputs.Garment, out var bp, out var bu, out _, keepMaterial: Cloth));
+        Assert.True(SecondSkinWriter.TryReadLod0Geometry(s.Saved!.Model, out var ap, out var au, out _, keepMaterial: Cloth));
+        static (int, int) Key(float[] uv, int v) => ((int)MathF.Round(uv[v * 2] * 65536f), (int)MathF.Round(uv[v * 2 + 1] * 65536f));
+        var afterAt = new Dictionary<(int, int), System.Numerics.Vector3>();
+        for (int v = 0; v < ap.Length / 3; v++) afterAt.TryAdd(Key(au, v), new(ap[v * 3], ap[v * 3 + 1], ap[v * 3 + 2]));
+
+        var bibo = new BakeBody([UvBakeInputs.Part(File.ReadAllBytes(Path.Combine(LocalData.Path(Bibo), UvBakeInputs.BiboChest)))!]);
+        var tbse = new BakeBody([UvBakeInputs.Part(File.ReadAllBytes(Path.Combine(LocalData.Path(Tbse), UvBakeInputs.TbseChest)))!]);
+        var (bl, br) = UvBakeNipples.Find(bibo).Found!.Value;
+        var (tl, tr) = UvBakeNipples.Find(tbse).Found!.Value;
+        var misses = new List<string>();
+        foreach (var (side, b, t, v2) in new[] { ("L", bl, tl, SheerBustV2Mm[0]), ("R", br, tr, SheerBustV2Mm[1]) })
+        {
+            var heights = new List<float>();
+            for (int v = 0; v < bp.Length / 3; v++)
+            {
+                var p = new System.Numerics.Vector3(bp[v * 3], bp[v * 3 + 1], bp[v * 3 + 2]);
+                if (System.Numerics.Vector3.Distance(p, b.Pos) > 0.025f || p.Z < b.Pos.Z - 0.01f) continue;
+                if (afterAt.TryGetValue(Key(bu, v), out var q)) heights.Add(q.Y - t.Pos.Y);
+            }
+            Assert.NotEmpty(heights);
+            float dy = heights.Average() * 1000f;
+            o.WriteLine($"{side}: {heights.Count} cloth vertices over Bibo+'s nipple land {dy:+0.0;-0.0} mm from TBSE's nipple height "
+                        + $"(v2 {v2:+0.0;-0.0} mm, bound {MathF.Abs(v2) / 2:F1} mm)");
+            if (!(MathF.Abs(dy) <= MathF.Abs(v2) / 2)) misses.Add($"{side} {dy:F1} mm");
+        }
+        // Across the sexes the folds are said, not gated (cross-sex-tops-yas): set beside the v2 maps' for the record.
+        o.WriteLine($"{s.Folds} cloth faces turned over (v2 {SheerTopFoldsV2})");
+        Assert.True(misses.Count == 0, string.Join("; ", misses));
+    }
+
+    /// <summary>
+    /// The cloth faces the Sheer Elegance top refit for TBSE turned over with the v2 maps (2026-10-28): 101. The v3 maps
+    /// turn 143, the bust now over his nipples rather than under them — said, not gated, as every fold across the sexes is.
+    /// </summary>
+    private const int SheerTopFoldsV2 = 101;
+
+    /// <summary>What the v2 maps left of <see cref="RefitMap_sheer_elegance_bust_lands_at_tbse_nipple_height"/>, left and right (mm).</summary>
+    private static readonly float[] SheerBustV2Mm = [-29.1f, -29.1f];
 
     /// <summary>
     /// The underbust lift for a women's top made a men's, measured both ways inside the pass: kept unless leaving it out
