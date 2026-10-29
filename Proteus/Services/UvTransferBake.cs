@@ -599,6 +599,78 @@ internal static class UvTransferBake
     internal static ushort Quantize(float c) => (ushort)MathF.Round(Math.Clamp(c, 0f, 1f) * 65535f);
 
     /// <summary>
+    /// <paramref name="inverse"/>, eased into <paramref name="plain"/> over the <paramref name="band"/> texels inside the
+    /// edge of what it <paramref name="drawn"/>: two maps that disagree meet in a step, so near the edge each texel takes
+    /// a coordinate between the two (by smoothstep of its distance in from the edge). Where both lie on one island of
+    /// the source's sheet the blend is taken on the sheet, which is one on the body. Where they lie on two, it is taken on
+    /// the <paramref name="src"/> body — between the points the two land on — and read back on the inverse's own island,
+    /// so it stays whole there and meets the plain map's island at a seam of the same skin.
+    /// </summary>
+    internal static Result Feather(Result inverse, bool[] drawn, Result plain, int band,
+                                   BakeBody? src = null, Raster? srcRaster = null, TriangleBvh? srcBvh = null)
+    {
+        int[]? island = src == null ? null : UvTransferQuality.Islands(src);
+        int size = inverse.Size;
+        // Chamfer distance, in texels, from the nearest texel not drawn: two passes, 1 across and √2 diagonally.
+        var d = new float[size * size];
+        for (int i = 0; i < d.Length; i++) d[i] = drawn[i] ? float.MaxValue : 0f;
+        const float Diag = 1.41421356f;
+        for (int y = 0; y < size; y++)
+            for (int x = 0; x < size; x++)
+            {
+                int i = y * size + x;
+                if (d[i] == 0) continue;
+                if (x > 0) d[i] = Math.Min(d[i], d[i - 1] + 1);
+                if (y > 0) d[i] = Math.Min(d[i], d[i - size] + 1);
+                if (x > 0 && y > 0) d[i] = Math.Min(d[i], d[i - size - 1] + Diag);
+                if (x + 1 < size && y > 0) d[i] = Math.Min(d[i], d[i - size + 1] + Diag);
+            }
+        for (int y = size - 1; y >= 0; y--)
+            for (int x = size - 1; x >= 0; x--)
+            {
+                int i = y * size + x;
+                if (d[i] == 0) continue;
+                if (x + 1 < size) d[i] = Math.Min(d[i], d[i + 1] + 1);
+                if (y + 1 < size) d[i] = Math.Min(d[i], d[i + size] + 1);
+                if (x + 1 < size && y + 1 < size) d[i] = Math.Min(d[i], d[i + size + 1] + Diag);
+                if (x > 0 && y + 1 < size) d[i] = Math.Min(d[i], d[i + size - 1] + Diag);
+            }
+
+        const int Seam = 65536 / 32;
+        var r = (ushort[])inverse.R.Clone();
+        var g = (ushort[])inverse.G.Clone();
+        for (int i = 0; i < r.Length; i++)
+        {
+            if (!drawn[i] || d[i] >= band || !plain.Valid[i]) continue;
+            float s = Math.Clamp(d[i] / band, 0f, 1f);
+            s = s * s * (3 - 2 * s);
+            if (Math.Abs(inverse.R[i] - plain.R[i]) <= Seam && Math.Abs(inverse.G[i] - plain.G[i]) <= Seam)
+            {
+                r[i] = (ushort)MathF.Round(plain.R[i] + (inverse.R[i] - plain.R[i]) * s);
+                g[i] = (ushort)MathF.Round(plain.G[i] + (inverse.G[i] - plain.G[i]) * s);
+                continue;
+            }
+            if (src == null || srcRaster == null || srcBvh == null || island == null) continue;
+            if (Landed(inverse.R[i], inverse.G[i]) is not { } a || Landed(plain.R[i], plain.G[i]) is not { } b) continue;
+            int own = island[a.Tri];
+            var p = Vector3.Lerp(b.Pos, a.Pos, s);
+            if (!srcBvh.Closest(p, Reach, t => island[t] == own, out int ct, out float cu, out float cv, out float cw, out _)) continue;
+            var uv = src.At(ct, cu, cv, cw).Uv;
+            r[i] = Quantize(uv.X);
+            g[i] = Quantize(uv.Y);
+        }
+        return inverse with { R = r, G = g };
+
+        (Vector3 Pos, int Tri)? Landed(ushort ru, ushort gv)
+        {
+            int sx = (int)MathF.Round(ru / 65535f * (srcRaster!.Size - 1)), sy = (int)MathF.Round(gv / 65535f * (srcRaster.Size - 1));
+            int si = sy * srcRaster.Size + sx, st = srcRaster.Owner[si];
+            if (st < 0) return null;
+            return (src!.At(st, srcRaster.BaryU[si], srcRaster.BaryV[si], 1 - srcRaster.BaryU[si] - srcRaster.BaryV[si]).Pos, st);
+        }
+    }
+
+    /// <summary>
     /// <paramref name="back"/> with the texels <paramref name="forward"/> reaches replaced by its inverse: every cell
     /// of <paramref name="forward"/>'s grid whose four texels <paramref name="reach"/> allows (and no seam splits) is
     /// drawn as two triangles into <paramref name="back"/>'s sheet at the coordinates it stores, carrying its own

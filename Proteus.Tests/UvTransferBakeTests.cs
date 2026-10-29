@@ -506,6 +506,69 @@ public class UvTransferBakeTests
     }
 
     [Fact]
+    [Trait("Plan", "EDGE-uvmap-nipples-4")]
+    public void A_target_in_the_fade_is_refused() // [EDGE-uvmap-nipples-4]
+    {
+        // The field is whole from 2 cm over the lower row to 2 cm under the clavicle row; a nipple outside that is refused.
+        Assert.True(ChestField.ClearOfFade(1.25f, 1.10f, 1.33f));
+        Assert.False(ChestField.ClearOfFade(1.115f, 1.10f, 1.33f));
+        Assert.False(ChestField.ClearOfFade(1.32f, 1.10f, 1.33f));
+        Assert.True(ChestField.ClearOfFade(1.12f, 1.10f, 1.33f));
+    }
+
+    [Fact]
+    [Trait("Plan", "EDGE-uvmap-nipples-6")]
+    public void Finder_passes_over_an_overhang_rim_and_a_cleavage_bump() // [EDGE-uvmap-nipples-6]
+    {
+        // Taller than the nipples: a bump on each breast's downward rim, and one back by the cleavage. Neither is a nipple.
+        var body = Chest((x, y) => Breasts(x, y)
+                                   + Bump(x, y, 0.08f, 1.205f, 0.006f, 0.006f) + Bump(x, y, -0.08f, 1.205f, 0.006f, 0.006f)
+                                   + Bump(x, y, 0.03f, 1.24f, 0.006f, 0.006f) + Bump(x, y, -0.03f, 1.24f, 0.006f, 0.006f));
+        var (found, failure) = UvBakeNipples.Find(body);
+        Assert.True(found != null, failure);
+        Assert.InRange(found!.Value.L.Pos.X, 0.075f, 0.085f);
+        Assert.InRange(found.Value.L.Pos.Y, 1.235f, 1.245f);
+    }
+
+    [Fact]
+    [Trait("Plan", "AC-uvmap-nipples-9")]
+    [Trait("Plan", "EDGE-uvmap-nipples-46")]
+    public void Feather_eases_the_inverse_into_the_plain_map() // [AC-uvmap-nipples-9] [EDGE-uvmap-nipples-46]
+    {
+        // The inverse is the plain map moved a fiftieth of the sheet right where it drew (the middle): eased in, the step
+        // at its edge is gone, and from the band in, it is the inverse's.
+        const int size = 64, band = 8;
+        var plain = Map(size, (x, y) => (x / 63f * 0.5f, y / 63f * 0.5f));
+        bool Drawn(int i) => i % size is >= 16 and < 48 && i / size is >= 16 and < 48;
+        var drawn = Enumerable.Range(0, size * size).Select(Drawn).ToArray();
+        var inverse = Map(size, (x, y) => Drawn(y * size + x) ? (x / 63f * 0.5f + 0.02f, y / 63f * 0.5f) : (x / 63f * 0.5f, y / 63f * 0.5f));
+        var eased = UvTransferBake.Feather(inverse, drawn, plain, band);
+        int edge = 32 * size + 16, inner = 32 * size + 32, next = 32 * size + 15;
+        float Px(ushort a, ushort b) => MathF.Abs(a - b) / 65535f * 63;
+        Assert.True(Px(inverse.R[edge], inverse.R[next]) > 1.5f);
+        Assert.True(Px(eased.R[edge], eased.R[next]) < 0.75f, $"{Px(eased.R[edge], eased.R[next])} px at the edge");
+        Assert.Equal(inverse.R[inner], eased.R[inner]);
+        for (int i = 0; i < size * size; i++) if (!drawn[i]) Assert.Equal(inverse.R[i], eased.R[i]);
+    }
+
+    [Fact]
+    [Trait("Plan", "AC-uvmap-nipples-4")]
+    [Trait("Plan", "AC-uvmap-nipples-9")]
+    public void Bake_pair_with_a_chest_field_inverts_and_feathers_without_a_tear() // [AC-uvmap-nipples-4] [AC-uvmap-nipples-9]
+    {
+        // A woman's torso (A) and a man's (B), at 256: the man's map through his field, hers its inverse on the chest.
+        var woman = Torso(WomansChest);
+        var man = Torso(MansChest);
+        var pair = UvTransferBakeJob.BakePair(woman, woman, man, man, 256, chestFields: true, "a_to_b", "b_to_a");
+        Assert.NotNull(pair.AtoBField);
+        Assert.DoesNotContain(pair.Failures, f => f.Contains("chest field") || f.Contains("tears") || f.Contains("outside its reach")
+                                                 || f.Contains("distortion"));
+        Assert.NotNull(pair.BtoAFigures.Stretch);
+        Assert.True(pair.BtoAFigures.Stretch!.EdgeOnBody);
+        Assert.True(pair.BtoAFigures.Stretch.ChangedInside > 0, "the inverse redrew nothing");
+    }
+
+    [Fact]
     [Trait("Plan", "EDGE-uvmap-nipples-47")]
     public void No_lower_row_is_refused() // [EDGE-uvmap-nipples-47]
     {

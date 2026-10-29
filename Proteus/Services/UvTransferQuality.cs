@@ -62,6 +62,9 @@ internal static class UvTransferQuality
         // cap under the anatomy's own need would forbid the correspondence asked for.
         public const double StretchMargin = 1.25;
 
+        /// <summary>How far apart on the body neighbours at the edge of a correction may land where the plain map's land together (2 mm).</summary>
+        public const double EdgeLeewayM = 0.002;
+
         public const float FieldJacobianMin = 0.2f, FieldPinMm = 0.1f, FieldOffTorsoMm = 3f, FieldOvershoot = 1.05f,
                            FieldReverseMm = 1f, FieldStillMm = 2f, FieldResidualMm = 0.5f;
     }
@@ -144,9 +147,13 @@ internal static class UvTransferQuality
     {
         public double AreaP50, AreaP99, AreaP999, AreaMax, AnisoP50, AnisoP99, AnisoP999, AnisoMax;
         public double PredictedArea, PredictedAniso, PlainAreaP99, PlainAnisoP99;
-        /// <summary>At the edge of the reach, how far apart neighbours either side land (source px), with the correction and without.</summary>
+        /// <summary>
+        /// At the edge of the correction, how far apart neighbours either side land, with it and without: on the source
+        /// body in metres when measured there, else on its sheet in px.
+        /// </summary>
         public double EdgeJumpP99, EdgeJumpMax, PlainEdgeJumpP99, PlainEdgeJumpMax;
         public long EdgePairs;
+        public bool EdgeOnBody;
         /// <summary>How much more than the plain map's this map's distortion may be (<see cref="Gate.StretchMargin"/>, or 1 for the inverse).</summary>
         public double Margin = Gate.StretchMargin;
         /// <summary>The texel (inside the reach) of the largest jump at its edge, or -1.</summary>
@@ -155,7 +162,7 @@ internal static class UvTransferQuality
     }
 
     /// <summary>The destination's triangles grouped into uv islands: triangles sharing a vertex.</summary>
-    private static int[] Islands(BakeBody body)
+    internal static int[] Islands(BakeBody body)
     {
         var parent = new int[body.P.Length];
         for (int i = 0; i < parent.Length; i++) parent[i] = i;
@@ -255,10 +262,18 @@ internal static class UvTransferQuality
             return field.InSupport(dest.At(t, raster.BaryU[i], raster.BaryV[i], 1 - raster.BaryU[i] - raster.BaryV[i]).Pos);
         });
 
-    /// <summary>The same, where <paramref name="reach"/> says which destination texels the correction may change.</summary>
+    /// <summary>
+    /// The same, where <paramref name="reach"/> says which destination texels the correction may change, and
+    /// <paramref name="edge"/> (that reach when not given) which it did change: its edge is where a tear would be.
+    /// </summary>
+    /// <param name="onSource">Where on the source body a stored coordinate lands, so a jump at the edge is measured on
+    /// the body (metres): two islands of the source's sheet meeting there are a seam, not a tear. Without it, on the
+    /// sheet (px at this size).</param>
     internal static StretchFigures WarpStretch(UvTransferBake.Result warped, UvTransferBake.Result plain,
-                                               UvTransferBake.Raster raster, Func<int, bool> reach)
+                                               UvTransferBake.Raster raster, Func<int, bool> reach, Func<int, bool>? edge = null,
+                                               Func<ushort, ushort, Vector3?>? onSource = null)
     {
+        edge ??= reach;
         int size = warped.Size;
         const int Seam = 65536 / 32;
         var s = new StretchFigures();
@@ -297,21 +312,26 @@ internal static class UvTransferQuality
         var jumpP = new List<double>();
         for (int i = 0; i < raster.Owner.Length; i++)
         {
-            if (raster.Owner[i] < 0 || !reach(i)) continue;
+            if (raster.Owner[i] < 0 || !edge(i)) continue;
             int x = i % size, y = i / size;
             foreach (int j in new[] { x + 1 < size ? i + 1 : -1, x > 0 ? i - 1 : -1, y + 1 < size ? i + size : -1, y > 0 ? i - size : -1 })
             {
-                if (j < 0 || raster.Owner[j] < 0 || reach(j)) continue;
+                if (j < 0 || raster.Owner[j] < 0 || edge(j)) continue;
                 if (!warped.Valid[i] || !warped.Valid[j] || !plain.Valid[i] || !plain.Valid[j]) continue;
-                double Jump(UvTransferBake.Result m) => Math.Sqrt(Math.Pow(m.R[i] - m.R[j], 2) + Math.Pow(m.G[i] - m.G[j], 2)) * (size - 1) / 65535.0;
-                if (Math.Abs(plain.R[i] - plain.R[j]) > Seam || Math.Abs(plain.G[i] - plain.G[j]) > Seam) continue;
-                double jw = Jump(warped);
+                double? Jump(UvTransferBake.Result m)
+                {
+                    if (onSource == null) return Math.Sqrt(Math.Pow(m.R[i] - m.R[j], 2) + Math.Pow(m.G[i] - m.G[j], 2)) * (size - 1) / 65535.0;
+                    return onSource(m.R[i], m.G[i]) is { } a && onSource(m.R[j], m.G[j]) is { } b ? Vector3.Distance(a, b) : null;
+                }
+                if (onSource == null && (Math.Abs(plain.R[i] - plain.R[j]) > Seam || Math.Abs(plain.G[i] - plain.G[j]) > Seam)) continue;
+                if (Jump(warped) is not { } jw || Jump(plain) is not { } jp) continue;
                 if (jw > s.EdgeJumpMax) { s.EdgeJumpMax = jw; s.EdgeJumpAt = i; }
                 jumpW.Add(jw);
-                jumpP.Add(Jump(plain));
+                jumpP.Add(jp);
             }
         }
         s.EdgePairs = jumpW.Count;
+        s.EdgeOnBody = onSource != null;
 
         s.Measured = areaW.Count;
         double P(List<double> v, double q) => v.Count == 0 ? double.NaN : v[Math.Min(v.Count - 1, (int)(v.Count * q))];
@@ -481,6 +501,17 @@ internal static class UvTransferQuality
         return errors;
     }
 
+    /// <summary>Where on <paramref name="src"/>'s surface the stored coordinate (<paramref name="r"/>, <paramref name="g"/>) lands, or null off its skin.</summary>
+    internal static Vector3? OnSource(ushort r, ushort g, BakeBody src, UvTransferBake.Raster srcRaster)
+    {
+        int sx = (int)MathF.Round(r / 65535f * (srcRaster.Size - 1));
+        int sy = (int)MathF.Round(g / 65535f * (srcRaster.Size - 1));
+        int st = srcRaster.Owner[sy * srcRaster.Size + sx];
+        if (st < 0) return null;
+        int si = sy * srcRaster.Size + sx;
+        return src.At(st, srcRaster.BaryU[si], srcRaster.BaryV[si], 1 - srcRaster.BaryU[si] - srcRaster.BaryV[si]).Pos;
+    }
+
     /// <summary>Where on <paramref name="src"/>'s surface map pixel <paramref name="i"/> lands, or null off its sheet.</summary>
     private static Vector3? SourcePoint(UvTransferBake.Result map, int i, BakeBody src, UvTransferBake.Raster srcRaster)
     {
@@ -542,10 +573,12 @@ internal static class UvTransferQuality
             if (s.ChangedOutside > 0) miss.Add($"{mapName}: the chest field changed {s.ChangedOutside} texels outside its reach");
             // A correction that folds nowhere can still tear where it ends: neighbours either side of its edge land no
             // further apart than the plain map's do there (a pixel's leeway where those are next to nothing).
-            if (!(s.EdgeJumpP99 <= Gate.StretchMargin * Math.Max(s.PlainEdgeJumpP99, 1)))
-                miss.Add($"{mapName}: the chest correction tears at its edge: p99 {s.EdgeJumpP99:F1} px, the plain map {s.PlainEdgeJumpP99:F1}");
-            if (!(s.EdgeJumpMax <= Gate.StretchMargin * Math.Max(s.PlainEdgeJumpMax, 1)))
-                miss.Add($"{mapName}: the chest correction tears at its edge: {s.EdgeJumpMax:F1} px at most, the plain map {s.PlainEdgeJumpMax:F1}");
+            double leeway = s.EdgeOnBody ? Gate.EdgeLeewayM : 1;
+            string unit = s.EdgeOnBody ? "m" : "px";
+            if (!(s.EdgeJumpP99 <= Gate.StretchMargin * Math.Max(s.PlainEdgeJumpP99, leeway)))
+                miss.Add($"{mapName}: the chest correction tears at its edge: p99 {s.EdgeJumpP99:G3} {unit}, the plain map {s.PlainEdgeJumpP99:G3}");
+            if (!(s.EdgeJumpMax <= Gate.StretchMargin * Math.Max(s.PlainEdgeJumpMax, leeway)))
+                miss.Add($"{mapName}: the chest correction tears at its edge: {s.EdgeJumpMax:G3} {unit} at most, the plain map {s.PlainEdgeJumpMax:G3}");
         }
         return miss;
     }

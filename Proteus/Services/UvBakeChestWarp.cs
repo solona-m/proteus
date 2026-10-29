@@ -206,7 +206,7 @@ internal sealed class ChestField
         // A target in the fade would be moved by less than its offset: the solve would chase it, and the overshoot check,
         // measured against that offset, would not see the field it took.
         foreach (var t in targets)
-            if (t.Pos.Y < yLow + Fade || t.Pos.Y > yClav - Fade)
+            if (!ClearOfFade(t.Pos.Y, yLow, yClav))
                 return (null, $"{t.Name} at {t.Pos.Y:F3} m lies in the field's fade ({yLow + Fade:F3}–{yClav - Fade:F3} m clear)");
 
         int nt = targets.Count, n = nt + pins.Count;
@@ -413,6 +413,9 @@ internal sealed class ChestField
         }
         return null;
     }
+
+    /// <summary>Whether height <paramref name="y"/> lies where the field is whole, clear of its fades above <paramref name="yLow"/> and under <paramref name="yClav"/>.</summary>
+    internal static bool ClearOfFade(float y, float yLow, float yClav) => y >= yLow + Fade && y <= yClav - Fade;
 
     /// <summary>The foremost Torso skin at (<paramref name="x"/>, <paramref name="y"/>): a ray from well in front.</summary>
     internal static Vector3? Front(BakeBody body, TriangleBvh bvh, float x, float y) => FrontHit(body, bvh, x, y)?.Pos;

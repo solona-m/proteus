@@ -29,6 +29,9 @@ internal static class UvTransferBakeJob
         public bool Passed => Failures.Count == 0;
     }
 
+    /// <summary>How many texels inside its edge the refit map's inverse is eased into the plain map: about 2 cm of skin at 4096.</summary>
+    internal static int FeatherTexels(int size) => Math.Max(2, 80 * size / 4096);
+
     /// <summary>No map: what a pair holds when a chest field could not be made and nothing was baked.</summary>
     private static readonly UvTransferBake.Result None = new([], [], [], 0, new UvTransferBake.Stats());
 
@@ -74,6 +77,7 @@ internal static class UvTransferBakeJob
         var bToAPlain = MirrorFill(UvTransferBake.Bake(aDest, bSrc, size, aRaster));
         var bToA = bToAPlain;
         Func<int, bool> onAsChest = _ => false;
+        bool[] drawn = [];
         if (fieldAtoB != null)
         {
             // Only the front of B's chest is inverted: the field's reach wraps round the flanks, where B's side and back
@@ -83,7 +87,8 @@ internal static class UvTransferBakeJob
                 int t = bRaster.Owner[i];
                 if (t < 0) return false;
                 float u = bRaster.BaryU[i], v = bRaster.BaryV[i];
-                return bDest.SmoothAt(t, u, v, 1 - u - v).Z > ChestField.MinFrontZ && fieldAtoB.InSupport(bDest.At(t, u, v, 1 - u - v).Pos);
+                return bDest.TriRegion[t] == UvBakeBones.Region.Torso && bDest.SmoothAt(t, u, v, 1 - u - v).Z > ChestField.MinFrontZ
+                       && fieldAtoB.InSupport(bDest.At(t, u, v, 1 - u - v).Pos);
             }
             // And drawn only onto A's chest, found apart from the drawing: not facing back — a breast's underside faces
             // down and takes B's chest — within the field's band and its bumps' reach of a site.
@@ -94,11 +99,16 @@ internal static class UvTransferBakeJob
                 if (t < 0) return false;
                 float u = aRaster.BaryU[i], v = aRaster.BaryV[i];
                 var p = aDest.At(t, u, v, 1 - u - v).Pos;
-                return aDest.SmoothAt(t, u, v, 1 - u - v).Z > -ChestField.MinFrontZ && p.Y > fieldAtoB.YLow && p.Y < fieldAtoB.YClav
+                return aDest.TriRegion[t] == UvBakeBones.Region.Torso && aDest.SmoothAt(t, u, v, 1 - u - v).Z > -ChestField.MinFrontZ
+                       && p.Y > fieldAtoB.YLow && p.Y < fieldAtoB.YClav
                        && fieldAtoB.Sites.Any(site => System.Numerics.Vector3.Distance(site.Centre, p) < far);
             }
             onAsChest = OnAsChest;
-            bToA = UvTransferBake.InvertInto(aToB, Reach, bToAPlain, OnAsChest).Map;
+            (bToA, drawn) = UvTransferBake.InvertInto(aToB, Reach, bToAPlain, OnAsChest);
+            // Where the inverse meets the plain map the two disagree by what the plain pair always did (some mm): eased
+            // into it over a band inside the edge, on the body, rather than met in a step.
+            bToA = UvTransferBake.Feather(bToA, drawn, bToAPlain, FeatherTexels(size),
+                                          bSrc, UvTransferBake.Rasterize(bSrc, Math.Min(size, 2048)), bBvh);
         }
 
         int lookup = Math.Min(size, 2048);
@@ -117,10 +127,17 @@ internal static class UvTransferBakeJob
         {
             var plain = MirrorFill(UvTransferBake.Bake(bDest, aSrc, size, bRaster));
             fAtoB.PlainLandmarksMm = UvTransferQuality.LandmarkErrors(plain, bDest, aSrc, aSrcRaster);
-            fAtoB.Stretch = UvTransferQuality.WarpStretch(aToB, plain, bRaster, bDest, fieldAtoB);
+            fAtoB.Stretch = UvTransferQuality.WarpStretch(aToB, plain, bRaster, i =>
+            {
+                int t = bRaster.Owner[i];
+                return fieldAtoB.InSupport(bDest.At(t, bRaster.BaryU[i], bRaster.BaryV[i], 1 - bRaster.BaryU[i] - bRaster.BaryV[i]).Pos);
+            }, null, (r, g) => UvTransferQuality.OnSource(r, g, aSrc, aSrcRaster));
             (fAtoB.Stretch.PredictedArea, fAtoB.Stretch.PredictedAniso) = fieldAtoB.Predict(bDest, aSrc, aBvh);
             fBtoA.PlainLandmarksMm = UvTransferQuality.LandmarkErrors(bToAPlain, aDest, bSrc, bSrcRaster);
-            fBtoA.Stretch = UvTransferQuality.WarpStretch(bToA, bToAPlain, aRaster, onAsChest);
+            // Distortion over the chest it may draw on; the tear test at the edge of what it did draw, where the
+            // inverse meets the plain map.
+            fBtoA.Stretch = UvTransferQuality.WarpStretch(bToA, bToAPlain, aRaster, onAsChest, i => drawn[i],
+                                                          (r, g) => UvTransferQuality.OnSource(r, g, bSrc, bSrcRaster));
             fBtoA.Stretch.Margin = 1;   // the inverse straightens what the plain map squeezed: it may be no worse there
 
             (fBtoA.Stretch.PredictedArea, fBtoA.Stretch.PredictedAniso) = (double.NaN, double.NaN);

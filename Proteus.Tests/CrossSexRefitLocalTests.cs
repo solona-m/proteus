@@ -260,7 +260,7 @@ public class CrossSexRefitLocalTests(ITestOutputHelper o)
 
     /// <summary>
     /// The cloth faces the Sheer Elegance top refit for TBSE turned over with the v2 maps (2026-10-28): 101. The v3 maps
-    /// turn 124, the bust now over his nipples rather than under them — said, not gated, as every fold across the sexes is.
+    /// turn 143, the bust now over his nipples rather than under them — said, not gated, as every fold across the sexes is.
     /// </summary>
     private const int SheerTopFoldsV2 = 101;
 

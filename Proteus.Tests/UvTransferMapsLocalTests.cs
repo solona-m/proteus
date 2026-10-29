@@ -42,6 +42,19 @@ public class UvTransferMapsLocalTests(TbseBakeFixture bake, ITestOutputHelper ou
         Assert.Equal(File.ReadAllBytes(Committed(UvTransferBakeJob.TbseToBibo)), bake.Output.TbseToBiboBytes);
     }
 
+    /// <summary>A bake that misses its gate still reports what it measured: at 256 the maps are too coarse to pass.</summary>
+    [LocalDataFact(LocalData.GameData, Bibo, Tbse)]
+    [Trait("Plan", "AC-uvmap-nipples-5")]
+    public void A_gate_miss_with_a_field_still_reports_its_figures() // [AC-uvmap-nipples-5]
+    {
+        var r = UvTransferBakeJob.Run(UvTransferBakeLocalTests.Inputs(), 256);
+        Assert.NotNull(r.Report["chestField"]![UvTransferBakeJob.BiboToTbse]);
+        if (r.Passed) return;
+        Assert.NotNull(r.Report["stats"]);
+        Assert.Null(r.BiboToTbseBytes);
+        output.WriteLine(string.Join("; ", r.Failures));
+    }
+
     [LocalDataFact(LocalData.GameData, Bibo, Tbse)]
     [Trait("Plan", "AC-tbse-uvmap-1")]
     public void Job_writes_both_maps_and_full_report() // [AC-tbse-uvmap-1]

@@ -96,11 +96,13 @@ the nipples 29.1 mm under his.
   no overshoot or push the wrong way, the nipples clear of the fade.
 - `tbse_to_bibo` is, on the chest, that map's inverse (`UvTransferBake.InvertInto`): cast from Bibo+'s breast onto a flat
   chest, by ray or by nearness, the rays cross and the map folds (61% / 33% of the nipple disc). Only the front of TBSE's
-  chest is inverted (the field's reach wraps round the flanks, where TBSE's side islands land on Bibo+'s front too and
-  tore the map), and only onto Bibo+'s chest, found apart from the drawing: not facing back (a breast's underside takes
-  TBSE's chest), within the field's band and reach. Elsewhere it is v2's, texel for texel. The pair then agrees with
-  itself on the chest; neighbours either side of the inverse's edge land as close as v2's do (p99 1.78 px, v2 1.72; at
-  most 2.95, v2 2.95).
+  torso is inverted (the field's reach wraps round the flanks, where TBSE's side islands land on Bibo+'s front too), and
+  only onto Bibo+'s torso, found apart from the drawing: not facing back (a breast's underside takes TBSE's chest),
+  within the field's band and reach. Elsewhere it is v2's, texel for texel. Where the inverse meets v2's map the two
+  disagree by what the v2 pair always did (a step of up to 9 mm on TBSE's body), so it is eased into v2's over 2 cm
+  inside its edge (`UvTransferBake.Feather`): on the sheet where both point into one of TBSE's uv islands, on the body —
+  read back on the inverse's island — where they point into two. Measured on TBSE's body, neighbours either side of that
+  edge land p99 1.9 mm apart (v2 1.4), at most 3.2 (v2 2.8): gated at 1.25 × v2's, never under 2 mm.
 - Only the nipples are matched. Matching the under-bust creases as well pulled a man's shirt refit for a woman into the
   fold under her breast (the lumberjack shirt: 49 faces turned over, against 8). The upper chest keeps v2's offset; the
   sternum dot lands 27.0 px from TBSE's, as with v2.
@@ -115,16 +117,17 @@ the nipples 29.1 mm under his.
 | TBSE art back on bibo | | 3.2–3.6 px (v2 123) |
 | Crease (v2) | 35 mm (51) | 43 mm (50) |
 | Nipple disc (3 cm): coverage / folds | 100% / 0.01% | 100% / 0.08% |
-| Chest distortion p99 where corrected, area / anisotropy (v2 there) | 4.28 / 5.64 (3.52 / 4.69) | 5.40 / 11.54 (5.71 / 12.75) |
-| Folds, round trip gross | 1.09%, 2.0% | 0.98%, 1.47% |
-| Sheer Elegance top for TBSE: cloth over the nipples; cloth faces turned over | | +5.9 / +5.6 mm (v2 −29.1); 124 (v2 101) |
+| Chest distortion p99 where corrected, area / anisotropy (v2 there) | 4.28 / 5.64 (3.52 / 4.69) | 9.74 / 16.25 (10.67 / 22.51) |
+| At the correction's edge, neighbours apart on the body: p99 / max (v2) | 0.95 / 1.3 mm (same) | 1.9 / 3.2 mm (1.4 / 2.8) |
+| Folds, round trip gross | 1.09%, 2.0% | 0.96%, 1.47% |
+| Sheer Elegance top for TBSE: cloth over the nipples; cloth faces turned over | | +5.9 / +5.6 mm (v2 −29.1); 143 (v2 101) |
 
 The chest's distortion is gated against v2's own there: v2 is no yardstick of what is right on the chest (it squeezed a
 man's under-bust onto a sliver of the breast), so each map is measured on its own and the two compared. The overlay map
 may be 1.25 × v2's, and is about 22% over it (p99), the price of bringing a breast's nipple onto a flat chest; the
 inverse may be no worse than v2's at all, and is under it. A refit across the sexes says its folds and is not refused
-for them: the Sheer Elegance top turns 23 more faces over than with v2, its bust now over his nipples instead of 3 cm
-under them.
+for them: the Sheer Elegance top turns 42 more faces over than with v2 (143 against 101; 122–151 at earlier builds),
+its bust now over his nipples instead of 3 cm under them.
 
 **Refit again.** A garment refit across the sexes keeps the fit it was saved with. Women's tops refit for men before
 v3 keep the old fit at the bust: refit them again. Men's art from women's overlays updates by itself once the new maps
@@ -139,7 +142,7 @@ are on disk. Release note:
 | | SHA-256 |
 |---|---|
 | `bibo_to_tbse_transfer.tif` v3 (11 834 120 bytes) | `559efe148403b12c168f20b41dd614952708933f4404fedc98c7ab79a6a36ca1` |
-| `tbse_to_bibo_transfer.tif` v3 (13 050 430 bytes) | `9e88f7f429e135b39e9f77086ae9df07cf4de39d9ba5240876536b17514b6960` |
+| `tbse_to_bibo_transfer.tif` v3 (13 027 942 bytes) | `4c53853ed1777d1f02f6f82f8fdd0f0bbc0d82f78d1d7cbfb408d45f73a3f3ae` |
 | `bibo_to_tbse_transfer.tif` v2 (11 798 374 bytes) | `1ad198ed137abf5882ee0e38b3b91d7eb01771af35f7be2cd4eaf41d975e32a0` |
 | `tbse_to_bibo_transfer.tif` v2 (12 911 330 bytes) | `701964922589185c3ed4d4b1af824f84bf0c2dd4552488a8e7383a08ce345c23` |
 | TBSE `common/1/c0101e0000_top.mdl` | `20bab704895ec6fa32914495dafa77708d5b89b0a9e6abf1d3043656bab1d8d0` |
