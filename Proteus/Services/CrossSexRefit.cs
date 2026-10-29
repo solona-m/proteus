@@ -229,8 +229,8 @@ internal static class CrossSexRefit
             }
             return shown;
         }
-        catch (Exception e) when (e is System.IO.IOException or UnauthorizedAccessException or InvalidOperationException
-                                       or ArgumentException or IndexOutOfRangeException)
+        catch (Exception e) when (e is System.IO.IOException or System.IO.InvalidDataException or UnauthorizedAccessException
+                                       or InvalidOperationException or ArgumentException)
         {
             return null;
         }

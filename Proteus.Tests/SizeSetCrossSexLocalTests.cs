@@ -229,6 +229,38 @@ public sealed class SizeSetCrossSexLocalTests(ITestOutputHelper o) : IDisposable
               .Select(a => string.Format((string)a[0]!, (object?[])(a[1] ?? Array.Empty<object>())))
               .ToList();
 
+    /// <summary>
+    /// Takes every men's version of <paramref name="gamePaths"/> out of <paramref name="option"/> in the copy at
+    /// <paramref name="root"/> — its manifest entry and its record — so a run starts from a known state whatever the
+    /// installed mod has been given since.
+    /// </summary>
+    private static void Without(string root, string group, string option, params string[] gamePaths)
+    {
+        bool Ours(string? path) => gamePaths.Any(p => string.Equals(p, path, StringComparison.OrdinalIgnoreCase));
+        var manifests = new[] { Path.Combine(root, "meta.json") }.Concat(Directory.GetFiles(root, "group_*.json"));
+        foreach (string file in manifests)
+        {
+            var json = System.Text.Json.Nodes.JsonNode.Parse(File.ReadAllText(file))!.AsObject();
+            var groups = json["Groups"] is System.Text.Json.Nodes.JsonArray list ? list.OfType<System.Text.Json.Nodes.JsonObject>()
+                       : (string?)json["Name"] == group ? [json] : [];
+            bool changed = false;
+            foreach (var g in groups.Where(g => (string?)g["Name"] == group))
+                foreach (var o in (g["Options"] as System.Text.Json.Nodes.JsonArray ?? []).OfType<System.Text.Json.Nodes.JsonObject>()
+                                                                                        .Where(o => (string?)o["Name"] == option))
+                    if (o["Files"] is System.Text.Json.Nodes.JsonObject files)
+                        foreach (string key in files.Select(f => f.Key).Where(Ours).ToList()) { files.Remove(key); changed = true; }
+            if (changed) File.WriteAllText(file, json.ToJsonString(new System.Text.Json.JsonSerializerOptions { WriteIndented = true }));
+        }
+        string record = Path.Combine(root, "Proteus", "bodyretarget.json");
+        if (!File.Exists(record)) return;
+        var rec = System.Text.Json.Nodes.JsonNode.Parse(File.ReadAllText(record))!.AsObject();
+        if (rec["Options"] is not System.Text.Json.Nodes.JsonArray entries) return;
+        foreach (var e in entries.OfType<System.Text.Json.Nodes.JsonObject>()
+                                 .Where(e => (string?)e["Name"] == option && Ours((string?)e["GamePath"])).ToList())
+            entries.Remove(e);
+        File.WriteAllText(record, rec.ToJsonString(new System.Text.Json.JsonSerializerOptions { WriteIndented = true }));
+    }
+
     private static List<(string Name, string Json)> Groups(string root)
         => (PenumbraModMeta.TryReadGroups(root) ?? []).Select(g => (g.Name, g.Group.GetRawText())).ToList();
 
@@ -473,6 +505,14 @@ public sealed class SizeSetCrossSexLocalTests(ITestOutputHelper o) : IDisposable
         var legs = SizeSetRefit.AcrossPieces(SizeSetRefit.PiecesOf(root, Game, includeEnds: false))
                                .First(p => p.Slot == "_dwn" && p.GamePath.Contains("e0633", StringComparison.Ordinal));
         string legsMen = RacialModelBake.WithRace(legs.GamePath, CrossSexRefit.Men);
+        // The state this is about: "TBSE" already carries the men's top, made by an earlier run, and not yet the legs.
+        Without(root, men, "TBSE", legs.GamePath, legsMen);
+        var top = SizeSetRefit.AcrossPieces(SizeSetRefit.PiecesOf(root, Game, includeEnds: false))
+                              .First(p => p.Slot == "_top" && p.GamePath.Contains("e0633", StringComparison.Ordinal));
+        Assert.True((PenumbraModMeta.TryReadFileOptions(root, men) ?? []).Any(x => x.Name == "TBSE" && x.Files.Keys
+                        .Any(k => string.Equals(k, RacialModelBake.WithRace(top.GamePath, CrossSexRefit.Men),
+                                                StringComparison.OrdinalIgnoreCase))),
+                    "the installed mod's \"TBSE\" no longer carries the men's top this test starts from");
         var authors = Groups(root).Where(g => g.Name != men).ToList();
         var bodies = Installed(CrossSexNudeLegsLocalTests.LavaBod, CrossSexRefitLocalTests.Tbse);
         var log = Substitute.For<IPluginLog>();
@@ -484,6 +524,10 @@ public sealed class SizeSetCrossSexLocalTests(ITestOutputHelper o) : IDisposable
         var outcome = Assert.Single(runLog.Sizes, s => s.Men && s.Piece == legs.Label && s.Option == "TBSE");
         Assert.Equal(SizeSetRefit.SizeStatus.Made, outcome.Status);
         Assert.True(outcome.Measures?.Coverage >= 0.9, $"{outcome.Measures?.Coverage} matched");
+        // Into the option that carries the top, the top not made again.
+        var topOutcome = Assert.Single(runLog.Sizes, s => s.Men && s.Piece == top.Label && s.Option == "TBSE");
+        Assert.Equal(SizeSetRefit.SizeStatus.Skipped, topOutcome.Status);
+        Assert.Equal(SizeSetRefit.Codes.AlreadyThere, topOutcome.ReasonCode);
         Assert.Equal(men, Groups(root)[^1].Name);
         var option = PenumbraModMeta.TryReadFileOptions(root, men)!.First(x => x.Name == "TBSE");
         Assert.Contains(option.Files.Keys, k => string.Equals(k, legsMen, StringComparison.OrdinalIgnoreCase));

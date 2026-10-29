@@ -285,6 +285,30 @@ public class CrossSexNudeLegsLocalTests(ITestOutputHelper o)
                      (direct.Saved.Materials ?? []).Select(m => (m.Name, Convert.ToHexString(m.Bytes))));
     }
 
+    [LocalDataFact(LocalData.GameData, StormblessedLegs, LavaBod, CrossSexRefitLocalTests.Tbse, LocalData.TbseUvMaps)]
+    [Trait("Plan", "EDGE-cross-sex-area-coverage-3")]
+    [Trait("Speed", "Slow")]
+    public void Nude_legs_that_match_too_little_leave_the_sfw_refusal_standing() // [EDGE-cross-sex-area-coverage-3]
+    {
+        // The "nude" legs offered are the SFW ones again: they build, and match the same 89% — so nothing is swapped, and
+        // the SFW result is refused with its own share.
+        var log = Substitute.For<IPluginLog>();
+        var onto = BodySizeCatalog.Read(LocalData.Path(CrossSexRefitLocalTests.Tbse));
+        var sfwOption = onto.Options.First(b => RefitCore.Normal(b.Rel) == RefitCore.Normal(UvBakeInputs.TbseLegs[0].Rel));
+        int asked = 0;
+        var s = CrossSexRefitJob.Run(JobInputs(StormblessedLegs, LavaBod, 0, log) with
+        {
+            Nude = _ => { asked++; return sfwOption; },
+        }).Sizes.Single();
+        Assert.Equal(1, asked);
+        Assert.Null(s.Asked);
+        Assert.Null(s.AskedLanded);
+        Assert.Equal(sfwOption.Label, s.Target.Label);
+        Assert.False(s.SaveAllowed);
+        Assert.True(s.Landed!.Value.VertexCoverage < 0.9f);
+        Assert.Contains($"{s.Landed!.Value.VertexCoverage:P0}", CrossSexRefitReport.Refusal(s));
+    }
+
     [LocalDataFact(LocalData.GameData, StormblessedLegs, LavaBod, CrossSexRefitLocalTests.Tbse)]
     [Trait("Plan", "EDGE-cross-sex-area-coverage-4")]
     public void A_pair_the_match_refuses_never_tries_the_nude_legs() // [EDGE-cross-sex-area-coverage-4]
@@ -294,12 +318,12 @@ public class CrossSexNudeLegsLocalTests(ITestOutputHelper o)
         var log = Substitute.For<IPluginLog>();
         var inputs = JobInputs(StormblessedLegs, LavaBod, 0, log) with
         {
-            UvRemap = new UVRemapService(Substitute.For<IPluginLog>(), "."),
+            UvRemap = new UVRemapService(Substitute.For<IPluginLog>(), Directory.CreateTempSubdirectory("proteus-nomaps-").FullName),
             Nude = _ => { asked++; return null; },
         };
         var s = CrossSexRefitJob.Run(inputs).Sizes.Single();
         Assert.Equal(0, asked);
-        Assert.False(s.SaveAllowed && s.Refusal.Length == 0);
+        Assert.NotNull(CrossSexRefitReport.Refusal(s));
         Assert.Contains("body maps", CrossSexRefitReport.Refusal(s));
         Assert.Null(s.Asked);
     }
