@@ -384,7 +384,7 @@ public class CrossSexRefitLocalTests(ITestOutputHelper o)
     [LocalDataFact(LocalData.GameData, LumberjackMod, Tbse, Bibo)]
     [Trait("Plan", "EDGE-cross-sex-refit-1")]
     [Trait("Plan", "AC-own-model-overwrite-1")]
-    public void The_authors_own_women_shirt_is_pointed_at() // [EDGE-cross-sex-refit-1]
+    public void The_authors_own_women_shirt_is_warned_and_refitted_over() // [EDGE-cross-sex-refit-1]
     {
         const string shirt = "chara/equipment/e6091/model/c0101e6091_top.mdl";
         var redirects = PenumbraModMeta.ReadAllRedirects(LocalData.Path(LumberjackMod));

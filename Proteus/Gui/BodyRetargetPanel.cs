@@ -1641,12 +1641,13 @@ internal sealed partial class BodyRetargetPanel(PenumbraBridge penumbra, UVRemap
         // A group of our own outranks every other for the file, and says which it competes with. Added to the author's
         // group, a size keeps that group's place: for the drawn race one more choice beside the others, but a save for
         // another race may land where another group of the author's — or another ticked option of a list — comes first.
+        // Saved into a mod of our own, the author's groups are not the destination's: nothing of theirs to ask about.
         string destination = Destination();
         if (saveTo == null || own.Contains(destination))
             foreach (string clash in BodyRetargetWriter.ClashingGroups(ctx.Redirects, SavePath(ctx), destination))
                 using (ImRaii.PushColor(ImGuiCol.Text, ProteusStyle.Warn))
                     ImGui.TextWrapped(string.Format(ps.RetargetClashFmt, clash));
-        else
+        else if (!toNewMod)
             foreach (var rival in BodyRetargetWriter.Outranking(RawGroups(ctx), SavePath(ctx), destination,
                                                                 BodyRetargetWriter.OptionOfFile(ctx.Redirects, ctx.ModelRel, destination)))
                 using (ImRaii.PushColor(ImGuiCol.Text, ProteusStyle.Warn))

@@ -1126,10 +1126,6 @@ public class BodyRetargetWriterTests : IDisposable
         Assert.DoesNotContain(refit.Manipulations?.Cast<JsonElement>() ?? [], m => m.GetProperty("Type").GetString() == "Eqdp");
     }
 
-    /// <summary>
-    /// Lay out author groups in this order, each a one-option group with nothing in it — except any group of ours
-    /// already present, which is kept exactly as it is and simply placed where the list says.
-    /// </summary>
     // ── own-model-overwrite: a save over the author's model for another race ─────────────────────────────────────────
 
     private const string MensTop = "chara/equipment/e0391/model/c0101e0391_top.mdl";
@@ -1406,6 +1402,10 @@ public class BodyRetargetWriterTests : IDisposable
         Assert.Equal("r.mdl", PenumbraPrecedence.Winner(root, MensTop, Ticks(("Size", ["Refit"]))));
     }
 
+    /// <summary>
+    /// Lay out author groups in this order, each a one-option group with nothing in it — except any group of ours
+    /// already present, which is kept exactly as it is and simply placed where the list says.
+    /// </summary>
     private void WriteAuthorGroups(params string[] names)
     {
         var ours = PenumbraModMeta.TryReadFileOptions(root, Group);

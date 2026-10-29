@@ -729,10 +729,23 @@ public class OtherRaceRefitTests
     [Trait("Plan", "EDGE-own-model-overwrite-18")]
     public void A_file_swap_author_model_is_a_documented_limit()
     {
-        // Redirects are files: a swap is never one, so none at c0301 here.
-        var offered = Offered(Shirt, TbseX(), OnlyMidlander);
-        Assert.Null(OtherRaceRefit.OwnModelOf(301, offered));
-        Assert.True(OtherRaceRefit.InForce(301, 101, offered));
+        // A mod whose Highlander shirt is a swap onto a game piece, read through the real reader.
+        string root = System.IO.Path.Combine(System.IO.Path.GetTempPath(), "proteus-swap-" + Guid.NewGuid().ToString("N"));
+        System.IO.Directory.CreateDirectory(root);
+        try
+        {
+            var meta = System.Text.Json.Nodes.JsonNode.Parse(PenumbraModMeta.NewMetaJson("Swap", "Someone", ""))!.AsObject();
+            meta["Groups"] = System.Text.Json.Nodes.JsonNode.Parse(
+                "[{\"Name\":\"Shirt\",\"Type\":\"Single\",\"Priority\":0,\"Options\":[{\"Name\":\"Everything\","
+              + $"\"Files\":{{\"{Shirt}\":\"shirt/c0101.mdl\"}},"
+              + $"\"FileSwaps\":{{\"{HighlanderShirt}\":\"chara/equipment/e0100/model/c0301e0100_top.mdl\"}}}}]}}]");
+            System.IO.File.WriteAllText(System.IO.Path.Combine(root, PenumbraModMeta.MetaFile), meta.ToJsonString());
+
+            var offered = Offered(Shirt, TbseX(), PenumbraModMeta.ReadAllRedirects(root));
+            Assert.Null(OtherRaceRefit.OwnModelOf(301, offered));
+            Assert.True(OtherRaceRefit.InForce(301, 101, offered));
+        }
+        finally { System.IO.Directory.Delete(root, true); }
     }
 
     [Fact]
