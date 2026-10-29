@@ -2991,6 +2991,14 @@ public sealed class PartsStrings
     public readonly string RetargetClashFmt = ProteusLoc.Localize("Parts.Retarget.Clash.Fmt",
         "Group \"{0}\" also replaces this model; the new group wins over it.");
 
+    /// <summary>{0} is another group of the mod that replaces the same model; {1} is the group the refit is to be saved into.</summary>
+    public readonly string RetargetClashOutrankedFmt = ProteusLoc.Localize("Parts.Retarget.Clash.Outranked.Fmt",
+        "Group \"{0}\" also replaces this model and outranks \"{1}\" in Penumbra, so a refit saved there won't show while \"{0}\" is on. Save it to a new group instead.");
+
+    /// <summary>{0} is another option of the multi-choice group {1} that replaces the same model.</summary>
+    public readonly string RetargetClashOptionOutrankedFmt = ProteusLoc.Localize("Parts.Retarget.Clash.OptionOutranked.Fmt",
+        "Option \"{0}\" of \"{1}\" also replaces this model and comes before the refit in that group, so the refit won't show while \"{0}\" is ticked. Untick it in Penumbra, or save to a new group instead.");
+
     public readonly string RetargetSave = ProteusLoc.Localize("Parts.Retarget.Save", "Save as a new option")
                                         + "###partsRetargetSave";
 
@@ -3228,9 +3236,9 @@ public sealed class PartsStrings
     public readonly string RetargetRaceAsWornFmt = ProteusLoc.Localize("Parts.Retarget.Race.AsWorn.Fmt",
         "{0} (as your character wears it)");
 
-    /// <summary>{0} is a race such as "Highlander M".</summary>
-    public readonly string RetargetRaceOwnModelFmt = ProteusLoc.Localize("Parts.Retarget.Race.OwnModel.Fmt",
-        "This mod already has its own {0} model. Refit that one instead.");
+    /// <summary>{0} is a race such as "Midlander M" the mod already ships a model for (or one that race falls through to).</summary>
+    public readonly string RetargetRaceOwnModelReplacedFmt = ProteusLoc.Localize("Parts.Retarget.Race.OwnModelReplaced.Fmt",
+        "This mod already has a model of its own that {0} wears. A refit for {0} saved into this mod takes its place while it is on. If that model is the author's own work, open it and refit it instead.");
 
     /// <summary>A button; {0} is a race such as "Highlander M".</summary>
     public readonly string RetargetRaceOpenModelFmt = ProteusLoc.Localize("Parts.Retarget.Race.OpenModel.Fmt",

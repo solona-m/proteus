@@ -377,21 +377,92 @@ public class CrossSexRefitLocalTests(ITestOutputHelper o)
         return rue.For("_dwn", "0201").First(b => b.Rel.Replace('\\', '/').Contains(folder, StringComparison.OrdinalIgnoreCase)).Rel;
     }
 
+    /// <summary>
+    /// The rule this test was written for (EDGE-cross-sex-refit-1, pointed at and refused) was changed on purpose by
+    /// own-model-overwrite: the author's women's shirt is said, and the pick is in force.
+    /// </summary>
     [LocalDataFact(LocalData.GameData, LumberjackMod, Tbse, Bibo)]
     [Trait("Plan", "EDGE-cross-sex-refit-1")]
-    public void The_authors_own_women_shirt_is_pointed_at() // [EDGE-cross-sex-refit-1]
+    [Trait("Plan", "AC-own-model-overwrite-1")]
+    public void The_authors_own_women_shirt_is_warned_and_refitted_over() // [EDGE-cross-sex-refit-1]
     {
         const string shirt = "chara/equipment/e6091/model/c0101e6091_top.mdl";
         var redirects = PenumbraModMeta.ReadAllRedirects(LocalData.Path(LumberjackMod));
         var bibo = BodySizeCatalog.Read(LocalData.Path(Bibo));
-        var women = Assert.Single(OtherRaceRefit.Offered(shirt, bibo, redirects, null, false), c => c.Race == 201);
+        var offered = OtherRaceRefit.Offered(shirt, bibo, redirects, null, false);
+        var women = Assert.Single(offered, c => c.Race == 201);
         Assert.True(women.CrossSex);
-        Assert.Equal(OtherRaceRefit.Block.OwnModel, women.Blocked);
         Assert.Equal("chara/equipment/e6091/model/c0201e6091_top.mdl", women.OwnModelPath);
+        Assert.True(OtherRaceRefit.InForce(201, 101, offered));
 
         var menOnly = redirects.Where(x => !x.GamePath.Contains("c0201", StringComparison.Ordinal)).ToList();
-        Assert.Equal(OtherRaceRefit.Block.None,
-                     Assert.Single(OtherRaceRefit.Offered(shirt, bibo, menOnly, null, false), c => c.Race == 201).Blocked);
+        Assert.Null(Assert.Single(OtherRaceRefit.Offered(shirt, bibo, menOnly, null, false), c => c.Race == 201).OwnModelPath);
+    }
+
+    internal const string ThornPrincess = LocalData.Mods + ":Thorn Princess - by Solona";
+    private const string ThornWomansTop = "chara/equipment/e0391/model/c0201e0391_top.mdl";
+    private const string ThornMensTop = "chara/equipment/e0391/model/c0101e0391_top.mdl";
+
+    /// <summary>
+    /// The report: Thorn Princess's women's top refitted for Midlander men on TBSE, over the c0101 copy of a game piece
+    /// its "The Body of the Silver Wolf" group ships — offered, in force, and saved into "Size" it is what Penumbra serves.
+    /// </summary>
+    [LocalDataFact(ThornPrincess, Tbse)]
+    [Trait("Plan", "AC-own-model-overwrite-1")]
+    public void Thorn_princess_womens_top_is_refitted_for_midlander_men_over_its_c0101_copy() // [AC-own-model-overwrite-1]
+    {
+        string root = LocalData.Path(ThornPrincess);
+        var redirects = PenumbraModMeta.ReadAllRedirects(root);
+        var tbse = BodySizeCatalog.Read(LocalData.Path(Tbse));
+        var offered = OtherRaceRefit.Offered(ThornWomansTop, tbse, redirects, null, false);
+        var men = Assert.Single(offered, c => c.Race == 101);
+        Assert.Equal(ThornMensTop, men.OwnModelPath);
+        Assert.True(OtherRaceRefit.InForce(101, 201, offered));
+        var route = OtherRaceRefit.Resolve(RacialModelBake.Route.None, 101, 201, offered);
+        Assert.True(route.ByAlias && route.Lowered);
+        Assert.Equal(ThornMensTop, route.SavePath(ThornWomansTop));
+
+        Assert.Empty(BodyRetargetWriter.Outranking(PenumbraModMeta.TryReadRawGroups(root), ThornMensTop, "Size", "Small"));
+
+        // A copy of the manifest with a refit option added to "Size" at c0101: with it ticked, that is what is served.
+        string temp = Path.Combine(Path.GetTempPath(), "proteus-thorn-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(temp);
+        try
+        {
+            var meta = System.Text.Json.Nodes.JsonNode.Parse(File.ReadAllText(Path.Combine(root, "meta.json")))!;
+            var size = meta["Groups"]!.AsArray().First(g => (string?)g!["Name"] == "Size")!;
+            size["Options"]!.AsArray().Add(new System.Text.Json.Nodes.JsonObject
+            {
+                ["Name"] = "TBSE (Midlander M)",
+                ["Files"] = new System.Text.Json.Nodes.JsonObject { [ThornMensTop] = "Body Retarget/refit.mdl" },
+            });
+            File.WriteAllText(Path.Combine(temp, "meta.json"), meta.ToJsonString());
+            var ticked = new Dictionary<string, IReadOnlyCollection<string>>
+            {
+                ["The Body of the Silver Wolf"] = ["Everything"],
+                ["Size"] = ["TBSE (Midlander M)"],
+            };
+            Assert.Equal("Body Retarget/refit.mdl", PenumbraPrecedence.Winner(temp, ThornMensTop, ticked));
+            ticked["Size"] = ["Small"];
+            Assert.NotEqual("Body Retarget/refit.mdl", PenumbraPrecedence.Winner(temp, ThornMensTop, ticked));
+        }
+        finally { Directory.Delete(temp, true); }
+    }
+
+    /// <summary>The "also worn by" line for Thorn Princess's men's save: never a race the mod ships a top of its own
+    /// for, nor one that falls through to one.</summary>
+    [LocalDataFact(LocalData.GameData, ThornPrincess)]
+    [Trait("Plan", "AC-own-model-overwrite-8")]
+    public void Thorn_princess_s_mens_save_is_not_said_to_be_worn_by_races_with_their_own_model() // [AC-own-model-overwrite-8]
+    {
+        var redirects = PenumbraModMeta.ReadAllRedirects(LocalData.Path(ThornPrincess));
+        var game = new Lumina.GameData(LocalData.Path(LocalData.GameData));
+        var worn = CrossSexRefit.FallThroughTo(101, 201, CrossSexRefit.OwnModels(ThornWomansTop, redirects,
+                                                                                   game.FileExists));
+        o.WriteLine("worn by: " + string.Join(", ", worn.Select(r => $"c{r:D4}")));
+        foreach (ushort race in new ushort[] { 301, 901, 1101, 1201, 1501 })
+            Assert.DoesNotContain(race, worn);
+        Assert.All(worn, r => Assert.Contains(r, new ushort[] { 501, 701, 1301, 1701 }));
     }
 
     /// <summary>Bibo+ and TBSE pair through the maps, and not without them. (The gen3 refusal is synthetic, in

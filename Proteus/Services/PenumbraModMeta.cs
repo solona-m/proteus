@@ -260,6 +260,28 @@ internal static class PenumbraModMeta
     }
 
     /// <summary>
+    /// Every element of the mod's v4 <c>Groups</c> array, in array order, nameless ones included — the positions
+    /// Penumbra breaks a priority tie by (see <see cref="BodyRetargetWriter.Outranking"/>), which
+    /// <see cref="TryReadGroups"/>' named list would shift. Read only. Null when there is no v4 <c>Groups</c> array.
+    /// </summary>
+    public static List<JsonElement>? TryReadRawGroups(string modRoot)
+    {
+        try
+        {
+            var path = Path.Combine(modRoot, MetaFile);
+            if (!File.Exists(path)) return null;
+
+            using var doc = JsonDocument.Parse(File.ReadAllText(path));
+            if (!doc.RootElement.TryGetProperty("Groups", out var groups)
+                || groups.ValueKind != JsonValueKind.Array)
+                return null;
+            // Clone: the JsonDocument is disposed when this method returns.
+            return groups.EnumerateArray().Select(g => g.Clone()).ToList();
+        }
+        catch { return null; }
+    }
+
+    /// <summary>
     /// The mod's always-applied redirects and metadata edits as on disk, in either format — the inverse of
     /// <see cref="WriteRedirects"/>. Null when missing or unparseable, which means "unknown", never "empty".
     /// Manipulations are boxed <see cref="JsonElement"/>s so a read→write cycle preserves them verbatim.

@@ -34,7 +34,7 @@ public class CrossSexRefitTests
 
     private static UVRemapService NoMaps() => new(NSubstitute.Substitute.For<Dalamud.Plugin.Services.IPluginLog>(), ".");
 
-    private static string Source(string file) => File.ReadAllText(SourcePath(file));
+    internal static string Source(string file) => File.ReadAllText(SourcePath(file));
 
     private static string SourcePath(string file)
     {
@@ -205,7 +205,7 @@ public class CrossSexRefitTests
         var men = Assert.Single(Offered(WomansTop), c => c.Race == 101);
         Assert.True(men.CrossSex);
         Assert.True(men.Below);
-        Assert.Equal(OtherRaceRefit.Block.None, men.Blocked);
+        Assert.Null(men.OwnModelPath);
         Assert.True(CrossSexRefit.Supported(201, 101, "_top"));
         string[] ok = ["game", "uvmaps", "from-root"];
         Assert.Null(CrossSexRefit.ValidateCli("0201", "0101", "_top", ok));
@@ -223,17 +223,69 @@ public class CrossSexRefitTests
         Assert.Equal("chara/equipment/e6010/model/c0101e6010_top.mdl", route.SavePath(WomansTop));
     }
 
+    /// <summary>
+    /// The rule this test was written for (EDGE-cross-sex-tops-yas-16, the author's men's top pointed at, nothing made)
+    /// was changed on purpose by own-model-overwrite: it is said, and the men's version is made over it.
+    /// </summary>
     [Fact]
     [Trait("Plan", "AC-cross-sex-tops-yas-2")]
     [Trait("Plan", "EDGE-cross-sex-tops-yas-16")]
-    public void The_authors_own_mens_top_is_pointed_at_for_a_womans_top() // [AC-cross-sex-tops-yas-2] [EDGE-cross-sex-tops-yas-16]
+    [Trait("Plan", "AC-own-model-overwrite-1")]
+    public void The_authors_own_mens_top_is_warned_and_refitted_over() // [AC-own-model-overwrite-1]
     {
         const string mens = "chara/equipment/e6010/model/c0101e6010_top.mdl";
         var offered = OtherRaceRefit.Offered(WomansTop, Both(),
             [new PenumbraModMeta.Redirect(WomansTop, "x.mdl", "G / O"), new PenumbraModMeta.Redirect(mens, "m.mdl", "G / O")],
             null, false);
         var men = Assert.Single(offered, c => c.Race == 101);
-        Assert.Equal(OtherRaceRefit.Block.OwnModel, men.Blocked);
+        Assert.Equal(mens, men.OwnModelPath);
+        Assert.True(OtherRaceRefit.InForce(101, 201, offered));
+        var route = OtherRaceRefit.Resolve(RacialModelBake.Route.None, 101, 201, offered);
+        Assert.True(route.ByAlias && route.Lowered);
+        Assert.Equal(mens, route.SavePath(WomansTop));
+    }
+
+    [Fact]
+    [Trait("Plan", "AC-own-model-overwrite-5")]
+    public void The_save_row_warns_when_an_author_group_is_outranked() // [AC-own-model-overwrite-5]
+    {
+        Assert.Contains("BodyRetargetWriter.Outranking(", Source("Proteus/Gui/BodyRetargetPanel.cs"));
+        var ps = Proteus.Localization.Strings.Parts;
+        Assert.Contains("\"Body\"", string.Format(ps.RetargetClashOutrankedFmt, "Body", "Size"));
+        Assert.Contains("\"Size\"", string.Format(ps.RetargetClashOutrankedFmt, "Body", "Size"));
+        Assert.Contains("\"Undershirt\"", string.Format(ps.RetargetClashOptionOutrankedFmt, "Undershirt", "Items"));
+        Assert.Contains("\"Items\"", string.Format(ps.RetargetClashOptionOutrankedFmt, "Undershirt", "Items"));
+    }
+
+    [Fact]
+    [Trait("Plan", "AC-own-model-overwrite-8")]
+    public void OwnModels_stops_the_chain_at_a_mod_redirect_ours_included() // [AC-own-model-overwrite-8]
+    {
+        // A refit saved earlier counts the same as the author's: either is what that race draws.
+        var redirects = new[] { new PenumbraModMeta.Redirect("chara/equipment/e6010/model/c0301e6010_top.mdl",
+                                                             "Body Retarget/h.mdl", "Body — x / Large") };
+        var has = CrossSexRefit.OwnModels(WomansTop, redirects, null);
+        Assert.True(has(301));
+        Assert.False(has(901));
+        Assert.True(CrossSexRefit.OwnModels(WomansTop, null, p => p.Contains("c0901"))(901));
+        Assert.False(CrossSexRefit.OwnModels(WomansTop, null, null)(901));
+    }
+
+    [Fact]
+    [Trait("Plan", "EDGE-own-model-overwrite-17")]
+    public void Wearers_leave_out_races_with_their_own_model() // [EDGE-own-model-overwrite-17]
+    {
+        string At(int race) => $"chara/equipment/e6010/model/c{race:D4}e6010_top.mdl";
+        var redirects = new[] { 301, 901, 1101 }.Select(r => new PenumbraModMeta.Redirect(At(r), $"m/{r}.mdl", "Body / All"));
+        var worn = CrossSexRefit.FallThroughTo(101, 201, CrossSexRefit.OwnModels(WomansTop, redirects, null));
+        foreach (ushort race in new ushort[] { 301, 901, 1101, 1201, 1501 })
+            Assert.DoesNotContain(race, worn);
+        Assert.NotEmpty(worn);
+
+        // The game's gear (no redirects) gets what it always got.
+        Func<string, bool> game = p => p.Contains("c0301") || p.Contains("c1101");
+        Assert.Equal(CrossSexRefit.FallThroughTo(101, 201, r => game(RacialModelBake.WithRace(WomansTop, r))),
+                     CrossSexRefit.FallThroughTo(101, 201, CrossSexRefit.OwnModels(WomansTop, null, game)));
     }
 
     [Fact]
@@ -499,7 +551,7 @@ public class CrossSexRefitTests
     public void A_body_mod_of_both_sexes_refits_across_itself() // [EDGE-cross-sex-refit-17]
     {
         var both = Both();
-        Assert.Contains(Offered(MansTop, both), c => c.Race == 201 && c.Blocked == OtherRaceRefit.Block.None);
+        Assert.Contains(Offered(MansTop, both), c => c.Race == 201 && c.OwnModelPath == null);
         Assert.Same(both, OtherRaceRefit.MadeFor(null, null, both, "0101", _ => throw new InvalidOperationException()));
     }
 

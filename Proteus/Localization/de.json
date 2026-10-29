@@ -3615,6 +3615,14 @@
     "message": "Gruppe \"{0}\" ersetzt dieses Modell ebenfalls; die neue Gruppe gewinnt.",
     "description": ""
   },
+  "Parts.Retarget.Clash.Outranked.Fmt": {
+    "message": "Gruppe \"{0}\" ersetzt dieses Modell ebenfalls und hat in Penumbra Vorrang vor \"{1}\"; eine dort gespeicherte Anpassung ist nicht zu sehen, solange \"{0}\" aktiv ist. Speichere sie stattdessen in einer neuen Gruppe.",
+    "description": "{0} is another group of the mod that replaces the same model; {1} is the group the refit is to be saved into."
+  },
+  "Parts.Retarget.Clash.OptionOutranked.Fmt": {
+    "message": "Option \"{0}\" von \"{1}\" ersetzt dieses Modell ebenfalls und kommt in dieser Gruppe vor der Anpassung; die Anpassung ist nicht zu sehen, solange \"{0}\" angehakt ist. Hake sie in Penumbra ab oder speichere stattdessen in einer neuen Gruppe.",
+    "description": "{0} is another option of the multi-choice group {1} that replaces the same model."
+  },
   "Parts.Retarget.ClearBody": {
     "message": "Stoff aus dem Körper drücken",
     "description": ""
@@ -4475,9 +4483,9 @@
     "message": "{0} (wie dein Charakter es trägt)",
     "description": "An entry of the Refit for list; {0} is a race such as \"Midlander F\": the race the logged-in character would get it as."
   },
-  "Parts.Retarget.Race.OwnModel.Fmt": {
-    "message": "Diese Mod hat bereits ein eigenes {0}-Modell. Passe stattdessen dieses an.",
-    "description": "{0} is a race such as \"Highlander M\" the mod already ships a model of."
+  "Parts.Retarget.Race.OwnModelReplaced.Fmt": {
+    "message": "Diese Mod hat bereits ein eigenes Modell, das {0} trägt. Eine in diese Mod gespeicherte Anpassung für {0} tritt an seine Stelle, solange sie aktiv ist. Ist dieses Modell die eigene Arbeit des Autors, öffne es und passe stattdessen dieses an.",
+    "description": "{0} is a race such as \"Midlander M\" the mod already ships a model for (or one that race falls through to)."
   },
   "Parts.Retarget.Race.OpenModel.Fmt": {
     "message": "{0}-Modell öffnen",

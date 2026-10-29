@@ -142,12 +142,13 @@ internal sealed partial class BodyRetargetPanel
                                         entry.Race == 0 ? "the character" : $"c{entry.Race:D4}");
                     }
 
-        // A race the mod already has a model of: that model is the one to refit, and it is a click away.
-        if (list.FirstOrDefault(c => c.Race == chosen && c.Blocked == OtherRaceRefit.Block.OwnModel) is { } own)
+        // A race the mod already has a model of: refitted all the same — it may be no more than a copy of the game's —
+        // but said, since a save into the mod takes its place, with that model a click away for refitting it instead.
+        if (OtherRaceRefit.OwnModelOf(chosen, list) is { } own)
         {
             string name = ModelRace.Describe($"{own.Race:D4}");
             using (ImRaii.PushColor(ImGuiCol.Text, ProteusStyle.Warn))
-                ImGui.TextWrapped(string.Format(ps.RetargetRaceOwnModelFmt, name));
+                ImGui.TextWrapped(string.Format(ps.RetargetRaceOwnModelReplacedFmt, name));
             if (own.OwnModelPath != null && ctx.OpenModelAt?.Invoke(own.OwnModelPath) is { } open
                 && ImGui.Button(string.Format(ps.RetargetRaceOpenModelFmt, name), FullWidth()))
                 open();
@@ -452,15 +453,17 @@ internal sealed partial class BodyRetargetPanel
     /// A bake for a picked race has landed: say how the preview relates to what that race will see, and when the
     /// character IS that race, how the skeleton read from the file compares with the live one.
     /// </summary>
-    private void OnRaceBaked(Baked made)
+    /// <param name="redirects">The garment mod's redirects: a race the mod has a model of draws that, not the save.</param>
+    private void OnRaceBaked(Baked made, IEnumerable<PenumbraModMeta.Redirect> redirects)
     {
         ushort live = wearer?.Race ?? 0;
         bool draws = made.DrawnPath != null && penumbra.GetActivePlayerModelPaths()?.Contains(made.DrawnPath) == true;
-        // Across the sexes, who wears the save: for the game's gear only the races with no model of the item of their own
-        // on the way down — the game ships many, where a mod's other races fall through as they always have.
+        // Across the sexes, who wears the save: only the races with no model of the item of their own on the way down —
+        // one the game ships, or for a mod's garment one the mod publishes (Thorn Princess has its Highlander,
+        // Roegadyn and Lalafell men's, and those races keep them).
         if (made.Route.ByAlias && made.DrawnPath is { } drawnPath)
             made.Wearers = CrossSexRefit.FallThroughTo(made.Route.To, made.Route.Drawn,
-                made.IsVanilla ? r => GameHas(RacialModelBake.WithRace(drawnPath, r)) : null);
+                CrossSexRefit.OwnModels(drawnPath, made.IsVanilla ? null : redirects, GameHas));
         made.Preview = OtherRaceRefit.NoteFor(draws, live, made.Route.To);
 
         if (wearer is { } character && character.Race == made.Route.To)

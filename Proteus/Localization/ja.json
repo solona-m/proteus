@@ -3615,6 +3615,14 @@
     "message": "グループ「{0}」もこのモデルを置き換えます。新しいグループが優先されます。",
     "description": ""
   },
+  "Parts.Retarget.Clash.Outranked.Fmt": {
+    "message": "グループ「{0}」もこのモデルを置き換え、Penumbra では「{1}」より優先されます。そこに保存したリフィットは「{0}」がオンの間は表示されません。新しいグループに保存してください。",
+    "description": "{0} is another group of the mod that replaces the same model; {1} is the group the refit is to be saved into."
+  },
+  "Parts.Retarget.Clash.OptionOutranked.Fmt": {
+    "message": "「{1}」のオプション「{0}」もこのモデルを置き換え、そのグループ内でリフィットより先に適用されます。「{0}」にチェックが入っている間、リフィットは表示されません。Penumbra でチェックを外すか、新しいグループに保存してください。",
+    "description": "{0} is another option of the multi-choice group {1} that replaces the same model."
+  },
   "Parts.Retarget.ClearBody": {
     "message": "体から布を押し出す",
     "description": ""
@@ -4475,9 +4483,9 @@
     "message": "{0}（キャラクターが着る形）",
     "description": "An entry of the Refit for list; {0} is a race such as \"Midlander F\": the race the logged-in character would get it as."
   },
-  "Parts.Retarget.Race.OwnModel.Fmt": {
-    "message": "この Mod にはすでに専用の{0}モデルがあります。そちらをリフィットしてください。",
-    "description": "{0} is a race such as \"Highlander M\" the mod already ships a model of."
+  "Parts.Retarget.Race.OwnModelReplaced.Fmt": {
+    "message": "この Mod には{0}が着る専用のモデルがすでにあります。この Mod に保存した{0}用のリフィットは、オンの間そのモデルの代わりになります。そのモデルが作者自身の作品なら、そちらを開いてリフィットしてください。",
+    "description": "{0} is a race such as \"Midlander M\" the mod already ships a model for (or one that race falls through to)."
   },
   "Parts.Retarget.Race.OpenModel.Fmt": {
     "message": "{0}モデルを開く",
