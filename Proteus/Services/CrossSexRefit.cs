@@ -161,6 +161,13 @@ internal static class CrossSexRefit
     internal static bool LiftsUnderbust(ushort drawn, ushort to) => !CrossesSex(drawn, to);
 
     /// <summary>
+    /// Whether a refit from <paramref name="drawn"/> for <paramref name="to"/> drapes the cloth over the crotch (see
+    /// <c>BodyRetarget.DrapeCrotch</c>): a women's garment made a men's only, whose new body's genitals face every way.
+    /// Every other refit — men's made women's, and within a sex — is left exactly as before.
+    /// </summary>
+    internal static bool DrapesCrotch(ushort drawn, ushort to) => CrossesSex(drawn, to) && IsMale(to);
+
+    /// <summary>
     /// The usage error for a CLI <c>--for-race</c> run, or null when it may run. <paramref name="given"/> holds every
     /// option given on the command line.
     /// </summary>

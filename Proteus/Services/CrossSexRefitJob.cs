@@ -23,6 +23,8 @@ internal static class CrossSexRefitJob
     /// <param name="TargetPick">Which of its sizes to make; null makes all.</param>
     /// <param name="Wearer">What the wearer of <paramref name="To"/> is built from (<see cref="OtherRaceWearer.Gather"/>).</param>
     /// <param name="LiftUnderbust">Overrides <see cref="CrossSexRefit.LiftsUnderbust"/>, for the measurement that decides it.</param>
+    /// <param name="DrapeCrotch">Overrides <see cref="CrossSexRefit.DrapesCrotch"/>, so a measurement can compare the drape
+    /// on and off.</param>
     /// <param name="Nude">For a target, the same body's nude smallclothes, fitted instead when the target matches too little
     /// of the made-for body and they enough (<see cref="CrossSexRefit.TakesNude"/>). The size set's only: null fits every
     /// target as it was picked.</param>
@@ -32,7 +34,7 @@ internal static class CrossSexRefitJob
         BodySizeCatalog Onto, Func<BodyOption, bool>? TargetPick,
         OtherRaceWearer.Inputs Wearer, UVRemapService UvRemap, IPluginLog Log,
         bool PushOut = true, bool CutHidden = true, bool CarryPiercings = false, bool? LiftUnderbust = null,
-        Func<BodyOption, BodyOption?>? Nude = null);
+        Func<BodyOption, BodyOption?>? Nude = null, bool? DrapeCrotch = null);
 
     /// <summary>One size made, or refused.</summary>
     /// <param name="Target">The body it was fitted to: the one picked, or its nude smallclothes (<see cref="Asked"/>).</param>
@@ -155,6 +157,7 @@ internal static class CrossSexRefitJob
                                          tuckSlot: RefitCore.TuckSlot(i.CutHidden && i.PushOut, slot),
                                          carryPiercings: i.CarryPiercings,
                                          liftUnderbust: i.LiftUnderbust ?? CrossSexRefit.LiftsUnderbust(drawn, i.To),
+                                         drapeCrotch: i.DrapeCrotch ?? CrossSexRefit.DrapesCrotch(drawn, i.To),
                                          log: line => i.Log.Debug("[Proteus] cross-sex refit: {0}", line),
                                          warn: line => i.Log.Warning("[Proteus] cross-sex refit: {0}", line));
             plan = RefitCore.MatchSkinToBody(plan, sourcePath, targetPath, i.UvRemap, sourceMale, i.Log, targetMale);

@@ -94,7 +94,7 @@ public class BehaviourPinLocalTests(ITestOutputHelper o)
     {
         var log = Substitute.For<IPluginLog>();
         var inputs = CrossSexNudeLegsLocalTests.JobInputs(CrossSexNudeLegsLocalTests.StormblessedLegs,
-                                                          CrossSexNudeLegsLocalTests.LavaBod, 1, log);
+                                                          CrossSexNudeLegsLocalTests.LavaBod, 1, log) with { DrapeCrotch = false };
         Check("stormblessed legs", StormblessedLegsPin, Hash(CrossSexRefitJob.Run(inputs)));
     }
 

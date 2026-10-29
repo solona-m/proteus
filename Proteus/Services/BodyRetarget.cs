@@ -300,7 +300,8 @@ internal static partial class BodyRetarget
         SwapReport? Swap = null, int Folded = 0, IReadOnlyList<ShapeOutcome>? Shapes = null, int Smoothed = 0,
         int Layered = 0, float LayerResidual = 0f, int DeepCleared = 0, float DeepWorst = 0f,
         IReadOnlyList<int>? DeepAt = null, int StandoffPulled = 0, float StandoffWorst = 0f, int StandoffHeld = 0,
-        int OpenEdgeFitted = 0, int SmallclothesFallback = 0, int SourceSmallclothes = 0, int ShapeFallbacks = 0)
+        int OpenEdgeFitted = 0, int SmallclothesFallback = 0, int SourceSmallclothes = 0, int ShapeFallbacks = 0,
+        int Draped = 0)
     {
         /// <summary>Share of moved nodes that landed on a body vertex exactly. Low means the author sculpted the
         /// garment's body mesh rather than copying it, and the seam may not come out perfect.</summary>
@@ -329,7 +330,7 @@ internal static partial class BodyRetarget
                                   float LayerResidual = 0f, int DeepCleared = 0, float DeepWorst = 0f,
                                   IReadOnlyList<int>? DeepAt = null, int StandoffPulled = 0, float StandoffWorst = 0f,
                                   int StandoffHeld = 0, int OpenEdgeFitted = 0, int SourceSmallclothes = 0,
-                                  int ShapeFallbacks = 0);
+                                  int ShapeFallbacks = 0, int Draped = 0);
 
     /// <summary>
     /// The garment split into the two sets the two passes act on.
@@ -771,7 +772,8 @@ internal static partial class BodyRetarget
                                string? chestSlot = null, Action<string, Vec3[]>? trace = null,
                                Outfit? outfit = null, string? tuckSlot = null, bool deepClear = false,
                                bool keepStandoff = false, bool carryPiercings = false, bool liftUnderbust = true,
-                               bool seeInside = false, bool relaxSinkGuard = false, bool openSkin = false)
+                               bool seeInside = false, bool relaxSinkGuard = false, bool openSkin = false,
+                               bool drapeCrotch = false)
     {
         // First, before anything reads the new chest: its nipples smoothed where the garment covers more of them than
         // the old body had, so every pass below sees one surface — the one the swap draws.
@@ -803,7 +805,7 @@ internal static partial class BodyRetarget
         bool standoff = keepStandoff && clearBody && garmentSlot == "_top" && !Tuned.NoKeepStandoff;
         var solved = Solve(garment, pairs, garmentSlot, pushOut, held, replaceSkin, clearBody, keepShape,
                            ModelSkinReader.Read(garmentBytes, null, null), swapSlot, parted, chestSlot, trace, outfit,
-                           deep, standoff, liftUnderbust, relaxSinkGuard);
+                           deep, standoff, liftUnderbust, relaxSinkGuard, drapeCrotch);
         if (solved.ShapeFallbacks > 0)
             log?.Invoke($"keep shape: {solved.ShapeFallbacks} turns of kept pieces too flat for the usual fit, made by the "
                         + "quaternion fit");
@@ -813,6 +815,8 @@ internal static partial class BodyRetarget
         if (solved.OpenEdgeFitted > 0)
             log?.Invoke($"fitted: {solved.OpenEdgeFitted} cloth points below an open skin edge read against the body the "
                         + "garment was made on");
+        if (solved.Draped > 0)
+            log?.Invoke($"crotch drape: {solved.Draped} cloth points over the crotch eased out of the body along the cloth");
         if (solved.DeepCleared > 0)
             log?.Invoke($"cloth cleared deep: {solved.DeepCleared} points out of the new breast, up to {solved.DeepWorst * 1000f:0.0} mm");
         if (solved.StandoffPulled > 0)
@@ -875,7 +879,7 @@ internal static partial class BodyRetarget
                                 swap, solved.Folded, solved.Shapes, smoothed, solved.Layered, solved.LayerResidual,
                                 solved.DeepCleared, solved.DeepWorst, solved.DeepAt, solved.StandoffPulled,
                                 solved.StandoffWorst, solved.StandoffHeld, solved.OpenEdgeFitted, smallclothesFallback,
-                                solved.SourceSmallclothes, solved.ShapeFallbacks);
+                                solved.SourceSmallclothes, solved.ShapeFallbacks, solved.Draped);
 
         // Only the copies the written model draws: a slot whose skin no mesh of the garment reached adds none.
         var drawnMaterials = new HashSet<string>(SecondSkinWriter.Parse(model).MatNames.Select(m => m.TrimStart('/')),
@@ -923,7 +927,8 @@ internal static partial class BodyRetarget
                                  XivLiveMesh.SkinnedMesh? garmentSkin = null, string? swapSlot = null,
                                  IReadOnlySet<int>? swapMeshes = null, string? chestSlot = null,
                                  Action<string, Vec3[]>? trace = null, Outfit? outfit = null, bool deepClear = false,
-                                 bool keepStandoff = false, bool liftUnderbust = true, bool relaxSinkGuard = false)
+                                 bool keepStandoff = false, bool liftUnderbust = true, bool relaxSinkGuard = false,
+                                 bool drapeCrotch = false)
     {
         // With the skin replaced, the garment's OWN slot body is drawn after all — Rebuild embeds that very mesh in the
         // garment, so it is what the cloth ends up lying against. Asking for the swap is not enough: Rebuild only swaps
@@ -942,7 +947,12 @@ internal static partial class BodyRetarget
 
         var nodeDelta = new Vec3[sets.NodeCount];
         var snapped = new bool[sets.NodeCount];
-        void Stage(string name) => trace?.Invoke(name, (Vec3[])nodeDelta.Clone());
+        var stageTrace = StageTrace.Value;
+        void Stage(string name)
+        {
+            trace?.Invoke(name, (Vec3[])nodeDelta.Clone());
+            stageTrace?.Invoke(name, sets, (Vec3[])nodeDelta.Clone());
+        }
 
         Transfer(sets, sets.AllNodes, source, nodeDelta, snapped, out int transferred, out int missed,
                  garmentSkin != null ? NodeSides(sets, garmentSkin, BodyBonesOf(pairs)) : null);
@@ -1071,6 +1081,26 @@ internal static partial class BodyRetarget
         if (covered != null) KeepLayerOrder(sets, covered, nodeDelta, stay, layered!, drawn);
         Stage("layer-order");
 
+        // Cloth turned over a man's crotch, mended — see DrapeCrotch. Past the layer order, which turned more of it over
+        // (measured on Stormblessed's bottoms on TBSE Gen A: 61 folded before it, 75 after); so the NaN guard and the
+        // layer order run again after it, and the folds are counted on what is written. The stage is traced only when
+        // asked for, so every other refit's trace is as it was.
+        var draped = DrapeOutcome.None;
+        if (drapeCrotch)
+        {
+            if (!Tuned.NoDrape && drawn != null && CrotchOfTargets(pairs) is { } anchor)
+                draped = DrapeCrotch(sets, nodeDelta, drawn, anchor, stay, snapped);
+            if (draped.Patch > 0)
+            {
+                for (int n = 0; n < sets.NodeCount; n++)
+                    if (!float.IsFinite(nodeDelta[n].X) || !float.IsFinite(nodeDelta[n].Y) || !float.IsFinite(nodeDelta[n].Z))
+                        nodeDelta[n] = default;
+                if (covered != null) KeepLayerOrder(sets, covered, nodeDelta, stay, layered!, drawn);
+                folded = FoldedTriangles(sets, nodeDelta);
+            }
+            Stage("drape");
+        }
+
         // And outside the other piece of its outfit, which is already drawn as it is — see KeepOutfitOrder. After the
         // garment's own layers, which it puts back in order itself, so nothing moves either piece after it.
         int outfitLayered = 0;
@@ -1102,7 +1132,7 @@ internal static partial class BodyRetarget
         return new Solved(edit, CountTrue(snapped), transferred, missed, pushed, worstMove, worstPush, sets.HeldCount,
                           laid, folded, stage.Shapes, outfitLayered, layerResidual, stage.DeepCleared, stage.DeepWorst,
                           stage.DeepAt, standoffPulled, standoffWorst, standoffHeld, stage.OpenEdgeFitted,
-                          source.SmallclothesLanded, stage.Fallbacks);
+                          source.SmallclothesLanded, stage.Fallbacks, draped.Patch);
     }
 
     /// <summary>
