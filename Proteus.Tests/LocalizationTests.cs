@@ -1113,7 +1113,7 @@ public sealed class LocalizationTests
                  {
                      "SizeSet.ForMen.Fmt", "SizeSet.ForMen.Tip.Fmt", "SizeSet.MensGroup", "SizeSet.CheckInGame",
                      "SizeSet.MenMapsMissing", "SizeSet.NoSourceForMen.Fmt", "SizeSet.MensGroupTaken.Fmt",
-                     "SizeSet.EndsNotForMen", "SizeSet.OneVariant.Fmt", "SizeSet.NotMade", "SizeSet.RigUnreadable", "SizeSet.Intro",
+                     "SizeSet.EndFromGameBody.Fmt", "SizeSet.EndClothGap.Fmt", "SizeSet.OneVariant.Fmt", "SizeSet.NotMade", "SizeSet.RigUnreadable", "SizeSet.Intro",
                  })
         {
             Assert.True(tr.ContainsKey(key), $"[{lang}] has no {key}");

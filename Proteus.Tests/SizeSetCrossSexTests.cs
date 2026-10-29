@@ -56,7 +56,8 @@ public sealed class SizeSetCrossSexTests : IDisposable
     [Fact]
     [Trait("Plan", "AC-sizeset-cross-sex-1")]
     [Trait("Plan", "EDGE-sizeset-cross-sex-15")]
-    public void Mens_bodies_are_offered_for_a_womans_chest_or_legs() // [AC-sizeset-cross-sex-1] [EDGE-sizeset-cross-sex-15]
+    [Trait("Plan", "EDGE-mens-ends-crotch-10")]
+    public void Mens_bodies_are_offered_for_a_womans_chest_or_legs() // [AC-sizeset-cross-sex-1] [EDGE-sizeset-cross-sex-15] [EDGE-mens-ends-crotch-10]
     {
         var offered = SizeSetRefit.Offered(Pieces(Top, Dwn));
         Assert.Contains(offered, c => c.Key == "rue" && !c.Male);
@@ -67,8 +68,8 @@ public sealed class SizeSetCrossSexTests : IDisposable
         Assert.True(tbse.Male && tbse.ForMen && tbse.AcrossTip);
         Assert.Contains(offered, c => c.Key == "tbse-x@women" && c.Label.Contains("TBSE-X"));
 
-        // Women's shoes and gloves alone: no men's body at all.
-        Assert.DoesNotContain(SizeSetRefit.Offered(Pieces(Sho, Glv)), c => c.Male);
+        // Women's shoes and gloves alone get men's versions too (mens-ends-crotch).
+        Assert.Contains(SizeSetRefit.Offered(Pieces(Sho, Glv)), c => c.Key == "tbse@women");
     }
 
     [Fact]
@@ -106,27 +107,52 @@ public sealed class SizeSetCrossSexTests : IDisposable
     [Fact]
     [Trait("Plan", "AC-sizeset-cross-sex-6")]
     [Trait("Plan", "EDGE-sizeset-cross-sex-2")]
-    public void A_womans_piece_with_its_own_mens_model_is_not_crossed() // [AC-sizeset-cross-sex-6] [EDGE-sizeset-cross-sex-2]
+    [Trait("Plan", "AC-mens-ends-crotch-3")]
+    public void A_womans_piece_with_its_own_mens_model_is_not_crossed() // [AC-sizeset-cross-sex-6] [EDGE-sizeset-cross-sex-2] [AC-mens-ends-crotch-3]
     {
         Assert.Empty(SizeSetRefit.AcrossPieces(Pieces(Top, MenTop)));
         Assert.DoesNotContain(SizeSetRefit.Offered(Pieces(Top, MenTop)), c => c.ForMen);
+        // A women's shoe beside the men's one the author made: the men's keeps its own, and the women's is not crossed.
+        const string menSho = "chara/equipment/e6000/model/c0101e6000_sho.mdl";
+        Assert.DoesNotContain(SizeSetRefit.AcrossPieces(Pieces(Sho, menSho)), p => p.Slot == "_sho");
     }
 
+    /// <summary>
+    /// A women's mod's chest, legs, shoes and gloves all get men's versions (mens-ends-crotch); the old "shoes and gloves
+    /// get none" line is gone. Without the maps, one note covers the shoes too, and they are left out with its code;
+    /// with shoes and gloves unticked, nothing is said of them.
+    /// </summary>
     [Fact]
-    [Trait("Plan", "AC-sizeset-cross-sex-6")]
-    [Trait("Plan", "EDGE-sizeset-cross-sex-14")]
-    public void Only_womens_chest_and_legs_cross() // [AC-sizeset-cross-sex-6] [EDGE-sizeset-cross-sex-14]
+    [Trait("Plan", "AC-mens-ends-crotch-5")]
+    [Trait("Plan", "EDGE-mens-ends-crotch-5")]
+    [Trait("Plan", "EDGE-mens-ends-crotch-9")]
+    public void Ends_cross_and_say_why_not() // [AC-mens-ends-crotch-5] [EDGE-mens-ends-crotch-5] [EDGE-mens-ends-crotch-9]
     {
         var across = SizeSetRefit.AcrossPieces(Pieces(Top, Dwn, Sho, Glv));
-        Assert.Equal(["_top", "_dwn"], across.Select(p => p.Slot));
+        Assert.Equal(["_top", "_dwn", "_sho", "_glv"], across.Select(p => p.Slot));
+        Assert.Null(typeof(Localization.Strings).Assembly.GetType("Proteus.Localization.SizeSetStrings")
+                        ?.GetField("EndsNotForMen"));
 
-        // Ticked for men with shoes in the mod: one note that they get none, said before anything is read.
         string root = Mod([Top, Sho]);
         var log = Substitute.For<IPluginLog>();
-        var result = SizeSetRefit.Run(new SizeSetRefit.Request(root, ["tbse@women"], false, false, [],
-                                                               Across: new SizeSetRefit.AcrossInputs(_ => null)),
-                                      new UVRemapService(log, "."), log, _ => { }, default);
-        Assert.Single(result.Notes, n => n == Strings.SizeSet.EndsNotForMen);
+        var runLog = new SizeSetRefit.RunLog();
+        var noMaps = Directory.CreateTempSubdirectory("proteus-nomaps-");
+        try
+        {
+            SizeSetRefit.Run(new SizeSetRefit.Request(root, ["tbse@women"], false, false, [],
+                                                      Across: new SizeSetRefit.AcrossInputs(_ => null)),
+                             runLog, new UVRemapService(log, noMaps.FullName), log, _ => { }, default);
+            Assert.Single(runLog.Notes, n => n == Strings.SizeSet.MenMapsMissing);
+            Assert.Contains(runLog.Sizes, s => s.Men && s.Slot == "_sho" && s.ReasonCode == SizeSetRefit.Codes.MenMapsMissing
+                                                && s.Option == "TBSE");
+
+            var off = new SizeSetRefit.RunLog();
+            SizeSetRefit.Run(new SizeSetRefit.Request(root, ["tbse@women"], false, false, [], Ends: false,
+                                                      Across: new SizeSetRefit.AcrossInputs(_ => null)),
+                             off, new UVRemapService(log, noMaps.FullName), log, _ => { }, default);
+            Assert.DoesNotContain(off.Sizes, s => s.Slot == "_sho");
+        }
+        finally { noMaps.Delete(true); }
     }
 
     [Fact]
@@ -252,6 +278,84 @@ public sealed class SizeSetCrossSexTests : IDisposable
         Assert.Contains(string.Format(Strings.SizeSet.MensGroupTakenFmt, "Men's body"), result.Notes);
         Assert.DoesNotContain(Strings.SizeSet.MenMapsMissing, result.Notes);
         Assert.Equal(before, File.ReadAllText(Path.Combine(root, PenumbraModMeta.MetaFile)));
+    }
+
+    /// <summary>
+    /// Without the game's data a women's shoe gets no men's version, left out with that code like the chest beside it.
+    /// (With the data but no game women's body read, a skinless shoe with nothing else to read it on is left out as having
+    /// no source: a recorded deviation from the plan's NoGameData there.)
+    /// </summary>
+    [Fact]
+    [Trait("Plan", "AC-mens-ends-crotch-5")]
+    [Trait("Plan", "EDGE-mens-ends-crotch-4")]
+    public void Ends_without_game_data_are_left_out() // [AC-mens-ends-crotch-5] [EDGE-mens-ends-crotch-4]
+    {
+        string root = Mod([Top, Sho]);
+        var noMaps = Directory.CreateTempSubdirectory("proteus-maps-");
+        try
+        {
+            var log = Substitute.For<IPluginLog>();
+            // Maps on disk (never read: the run stops at the missing game data first).
+            var dir = noMaps.CreateSubdirectory("uvmaps").FullName;
+            File.WriteAllBytes(Path.Combine(dir, UVRemapService.BiboToTbseFile), [1]);
+            File.WriteAllBytes(Path.Combine(dir, UVRemapService.TbseToBiboFile), [1]);
+            var maps = new UVRemapService(log, noMaps.FullName);
+            var runLog = new SizeSetRefit.RunLog();
+            SizeSetRefit.Run(new SizeSetRefit.Request(root, ["tbse@women"], false, false, [], ReadGameFile: null,
+                                                      Across: new SizeSetRefit.AcrossInputs(_ => null)),
+                             runLog, maps, log, _ => { }, default);
+            Assert.Contains(runLog.Sizes, s => s.Men && s.Slot == "_sho" && s.ReasonCode == SizeSetRefit.Codes.NoGameData);
+        }
+        finally { noMaps.Delete(true); }
+    }
+
+    /// <summary>An author's group named like ours stops the shoes' men's versions too, said with its code; nothing written.</summary>
+    [Fact]
+    [Trait("Plan", "EDGE-mens-ends-crotch-13")]
+    public void Mens_group_taken_covers_ends() // [EDGE-mens-ends-crotch-13]
+    {
+        string root = Mod([Top, Sho], """
+            , { "Version": 0, "Name": "Men's body", "Type": "Single", "Priority": 0, "DefaultSettings": 0, "Options": [
+                { "Name": "Off", "Files": {} } ] }
+            """);
+        string before = File.ReadAllText(Path.Combine(root, PenumbraModMeta.MetaFile));
+        var log = Substitute.For<IPluginLog>();
+        var runLog = new SizeSetRefit.RunLog();
+        SizeSetRefit.Run(new SizeSetRefit.Request(root, ["tbse@women"], false, false, [],
+                                                  Across: new SizeSetRefit.AcrossInputs(_ => null)),
+                         runLog, new UVRemapService(log, "."), log, _ => { }, default);
+        Assert.Contains(runLog.Sizes, s => s.Men && s.Slot == "_sho" && s.ReasonCode == SizeSetRefit.Codes.MenGroupTaken);
+        Assert.Equal(before, File.ReadAllText(Path.Combine(root, PenumbraModMeta.MetaFile)));
+    }
+
+    /// <summary>
+    /// A men's group an earlier run gave a shoe as well as the top stays ours when shoes and gloves are left out next
+    /// time: a group holding a men's path of no piece read would otherwise look like someone else's, and a second group
+    /// would claim the same paths.
+    /// </summary>
+    [Fact]
+    [Trait("Plan", "EDGE-mens-ends-crotch-9")]
+    public void Ends_off_after_an_ends_run_keeps_the_mens_group() // [EDGE-mens-ends-crotch-9]
+    {
+        string root = Mod([Top, Sho]);
+        const string menSho = "chara/equipment/e6000/model/c0101e6000_sho.mdl";
+        Assert.True(BodyRetargetWriter.Save(root, "Männerkörper", MenTop, "The Body SE", "Bibo+ — Small",
+                                            [new BodyRetargetWriter.Refit("TBSE", [1, 2, 3], "TBSE")]).Ok);
+        Assert.True(BodyRetargetWriter.Save(root, "Männerkörper", menSho, "The Body SE", "Bibo+ — Small",
+                                            [new BodyRetargetWriter.Refit("TBSE", [4, 5, 6], "TBSE")]).Ok);
+        // The chest alone does not account for the shoe the group holds: read so, it is not ours.
+        Assert.Equal(Strings.SizeSet.MensGroup,
+                     SizeSetRefit.MensGroupName(root, SizeSetRefit.AcrossPieces(SizeSetRefit.PiecesOf(root, includeEnds: false))));
+
+        var log = Substitute.For<IPluginLog>();
+        var runLog = new SizeSetRefit.RunLog();
+        SizeSetRefit.Run(new SizeSetRefit.Request(root, ["tbse@women"], false, false, [], _ => null, Ends: false,
+                                                  Across: new SizeSetRefit.AcrossInputs(_ => null)),
+                         runLog, new UVRemapService(log, "."), log, _ => { }, default);
+        Assert.DoesNotContain(runLog.Sizes, s => s.ReasonCode == SizeSetRefit.Codes.MenGroupTaken);
+        Assert.All(runLog.Sizes.Where(s => s.Men), s => Assert.Equal("Männerkörper", s.Group));
+        Assert.Contains(PenumbraModMeta.TryReadFileOptions(root, "Männerkörper")!.Single(o => o.Name == "TBSE").Files.Keys,
+                        k => string.Equals(k, menSho, StringComparison.OrdinalIgnoreCase));
     }
 
     [Fact]

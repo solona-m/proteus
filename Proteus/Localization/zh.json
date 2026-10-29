@@ -5287,9 +5287,13 @@
     "message": "此模组已有作者的“{0}”组，因此未制作男性版本。请在 Penumbra 中重命名该组，然后再次添加尺码。",
     "description": "{0} is the group's name."
   },
-  "SizeSet.EndsNotForMen": {
-    "message": "鞋子和手套没有男性版本：只有上身和腿部部件会跨性别调整。",
-    "description": "Said once when a women's mod's men's versions are made and it has shoes or gloves."
+  "SizeSet.EndFromGameBody.Fmt": {
+    "message": "{0}，“{1}”：腿或手臂上没有可读取体型的皮肤，因此按游戏自带体型制作来调整。",
+    "description": "Check in game: a women's shoe or glove made a men's with no skin to read a body off. {0} is the piece, {1} the men's option."
+  },
+  "SizeSet.EndClothGap.Fmt": {
+    "message": "{0}，“{1}”：布料离{3}的腿或手臂平均约 {2:F0} 毫米，所以读取到的体型可能不是它原本制作时用的体型。",
+    "description": "Check in game: a women's shoe or glove made a men's whose cloth sits far off the leg or arm it was read on. {0} is the piece, {1} the men's option, {2} millimetres, {3} the body."
   },
   "SizeSet.OneVariant.Fmt": {
     "message": "{0}：男性只得到一个版本，由“{1}”制作；模组的其他变体仍只供女性使用。",

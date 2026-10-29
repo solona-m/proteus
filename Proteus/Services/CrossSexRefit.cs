@@ -54,6 +54,14 @@ internal static class CrossSexRefit
         => CrossesSex(drawn, race) && Supported(drawn, race, slot);
 
     /// <summary>
+    /// Whether a shoe or glove drawn as <paramref name="drawn"/> is made a <paramref name="race"/> one by the size set: a
+    /// women's made a men's, its leg or arm refitted through the body maps (<see cref="CrossSexRefitJob.RunEnd"/>). Not
+    /// in <see cref="Cells"/>: Studio's "Refit for", the CLI's --for-race and the automatic refit do not offer them.
+    /// </summary>
+    internal static bool EndsCross(ushort drawn, ushort race, string? slot)
+        => drawn == Women && race == Men && slot?.ToLowerInvariant() is "_sho" or "_glv";
+
+    /// <summary>
     /// The cells the game's own gear is offered in: women's legs made men's, alone. Each cell is measured on real
     /// garments before it ships, and the game's tops and its men's garments made women's have not been — its garments are
     /// weighted against the game's bodies, not a body mod's, and fit the other way round.

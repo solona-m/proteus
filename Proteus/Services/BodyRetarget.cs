@@ -1071,6 +1071,20 @@ internal static partial class BodyRetarget
         if (covered != null) KeepLayerOrder(sets, covered, nodeDelta, stay, layered!, drawn);
         Stage("layer-order");
 
+        // The worst push as the report says it: how far a pushed point now lies from where the push-out found it — the
+        // passes after it, which smooth and settle the pushed cloth, included. The passes add their pushes up as they go
+        // (pushedBy, which caps them), and an oscillating settle summed into a "worst push" of 259 mm where no pushed point
+        // ended more than 30 mm from where the push-out found it (Stormblessed's bottoms on TBSE Gen A, 2026-10-29).
+        if (stage.PushStart is { } pushStart && pushedBy != null)
+        {
+            worstPush = 0f;
+            for (int n = 0; n < sets.NodeCount; n++)
+                if (pushedBy[n] > 0f
+                    && Len(new Vec3(nodeDelta[n].X - pushStart[n].X, nodeDelta[n].Y - pushStart[n].Y,
+                                    nodeDelta[n].Z - pushStart[n].Z)) is var moved && float.IsFinite(moved))
+                    worstPush = MathF.Max(worstPush, moved);
+        }
+
         // And outside the other piece of its outfit, which is already drawn as it is — see KeepOutfitOrder. After the
         // garment's own layers, which it puts back in order itself, so nothing moves either piece after it.
         int outfitLayered = 0;
@@ -1131,9 +1145,12 @@ internal static partial class BodyRetarget
     /// <param name="OpenEdgeFitted">Nodes the push-out took in by the made-on body's reading; see
     /// <see cref="TargetBody.Fitted"/>.</param>
     /// <param name="Fallbacks">Turns of kept pieces made by Horn's fit, both passes; see <see cref="TurnOf"/>.</param>
+    /// <param name="PushStart">Every node where the push-out found it, the kept pieces already moved whole: what the
+    /// report's worst push is measured from.</param>
     private sealed record ShapeStage(int Pushed, float WorstPush, TargetBody? Drawn, FaceCheck? FaceCheck,
                                      float[]? PushedBy, ShapeOutcome[]? Shapes, int DeepCleared = 0, float DeepWorst = 0f,
-                                     IReadOnlyList<int>? DeepAt = null, int OpenEdgeFitted = 0, int Fallbacks = 0);
+                                     IReadOnlyList<int>? DeepAt = null, int OpenEdgeFitted = 0, int Fallbacks = 0,
+                                     Vec3[]? PushStart = null);
 
     /// <summary>
     /// The kept pieces moved whole, the push-out, and the pieces whole again around where the push put them — then each
@@ -1181,6 +1198,8 @@ internal static partial class BodyRetarget
         foreach (int n in sets.ClothNodes)
             if (!snapped[n] || pushSnapped) pushable.Add(n);
 
+        // Where the push-out found each point: the report's worst push is measured from here (see Solve).
+        var pushStart = (Vec3[])nodeDelta.Clone();
         int pushed = PushOut(sets, pushable, before, after, nodeDelta, clearBody, out float worstPush,
                              out var faceCheck, out var pushedBy, pushSnapped ? snapped : null, deep,
                              out var deepNodes, out float deepWorst, out int openEdgeFitted);
@@ -1206,7 +1225,7 @@ internal static partial class BodyRetarget
             shapes = JudgeShapes(sets, placed, owner, bent, nodeDelta, SignedOff(after), SignedOff(before));
         }
         return new ShapeStage(pushed, worstPush, after, faceCheck, pushedBy, shapes, deepNodes.Count, deepWorst, deepAt,
-                              openEdgeFitted, fallbacks);
+                              openEdgeFitted, fallbacks, pushStart);
     }
 
     /// <summary>
