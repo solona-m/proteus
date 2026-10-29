@@ -43,8 +43,7 @@ public class CrossSexEndsLocalTests(ITestOutputHelper o)
         string limbRel = slot == "_sho" ? UvBakeInputs.TbseLegs[0].Rel : UvBakeInputs.TbseChest;
         var log = Substitute.For<IPluginLog>();
         var r = CrossSexRefitJob.RunEnd(new CrossSexRefitJob.Inputs(File.ReadAllBytes(path), gamePath, 101, madeFor, null,
-            onto, CrossSexRefitLocalTests.IsFile(onto, limbRel), CrossSexRefitLocalTests.Wearer(101, gamePath), Maps(), log,
-            DrapeCrotch: true));
+            onto, CrossSexRefitLocalTests.IsFile(onto, limbRel), CrossSexRefitLocalTests.Wearer(101, gamePath), Maps(), log));
         foreach (var call in log.ReceivedCalls().Where(c => c.GetMethodInfo().Name == "Information"))
         {
             var a = call.GetArguments();
@@ -53,23 +52,22 @@ public class CrossSexEndsLocalTests(ITestOutputHelper o)
         Assert.True(r.Refusal.Length == 0, r.Refusal);
         var s = Assert.Single(r.Sizes);
         o.WriteLine($"{slot}: refusal \"{s.Refusal}\", {s.Landed?.VertexCoverage:P1} matched, {s.Folds} folded, " +
-                    $"moved up to {s.Plan?.Report.WorstMove * 1000f:F1} mm, draped {s.Plan?.Report.Draped}");
+                    $"moved up to {s.Plan?.Report.WorstMove * 1000f:F1} mm");
         return (r, s);
     }
 
-    /// <summary>Stormblessed's women's boots and gloves made men's on TBSE: saved, enough matched, never draped (the drape is
-    /// legs' alone, whatever the inputs ask).</summary>
+    /// <summary>Stormblessed's women's boots and gloves made men's on TBSE: saved at the men's path, enough matched, and no
+    /// cloth face turned over (the gloves' IVCS finger joints stand in on their own fingers, not the hip).</summary>
     [LocalDataFact(LocalData.GameData, SizeSetCrossSexLocalTests.Stormblessed, CrossSexRefitLocalTests.Tbse, LocalData.TbseUvMaps)]
     [Trait("Plan", "AC-mens-ends-crotch-1")]
     [Trait("Plan", "AC-mens-ends-crotch-2")]
-    [Trait("Plan", "EDGE-mens-ends-crotch-25")]
-    public void Stormblessed_ends_through_the_job() // [AC-mens-ends-crotch-1] [AC-mens-ends-crotch-2] [EDGE-mens-ends-crotch-25]
+    public void Stormblessed_ends_through_the_job() // [AC-mens-ends-crotch-1] [AC-mens-ends-crotch-2]
     {
         foreach (string slot in new[] { "_sho", "_glv" })
         {
             var (r, s) = StormblessedEnd(slot);
             Assert.True(s.SaveAllowed, $"{slot}: {s.Refusal} {s.Landed?.VertexCoverage:P1}");
-            Assert.Equal(0, s.Plan!.Report.Draped);
+            Assert.Equal(0, s.Folds);
             Assert.Equal(RacialModelBake.WithRace(r.Route.SavePath($"chara/equipment/e0633/model/c0201e0633{slot}.mdl"), 101),
                          $"chara/equipment/e0633/model/c0101e0633{slot}.mdl");
         }

@@ -338,11 +338,6 @@ internal static partial class BodyRetarget
     /// <see cref="KeepSeamsTogether"/>).</summary>
     internal static readonly System.Threading.AsyncLocal<Action<string, float[]>?> PushTrace = new();
 
-    /// <summary>For tests: each stage of <see cref="Solve"/> as its <c>trace</c> sees it, with the node sets it ran on, so
-    /// a caller that never sees the garment the solve was given (the cross-sex job bends it first) can still read the
-    /// nodes back. A copy each time; per logical call; null for every refit.</summary>
-    internal static readonly System.Threading.AsyncLocal<Action<string, Sets, Vec3[]>?> StageTrace = new();
-
 
     /// <summary>How far apart a thick shell's two walls may be to be paired (3 mm) — see <see cref="FaceCheck.WallPartner"/>.
     /// Geometric's skirt: exactly 2 mm.</summary>

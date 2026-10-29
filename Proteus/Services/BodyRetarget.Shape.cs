@@ -80,8 +80,6 @@ internal static partial class BodyRetarget
     /// cloth over it too, so long as none crowds it.</param>
     /// <param name="CutOpenSkinAnyFacing">Measuring only: let <see cref="GrowSpannedOpenSkin"/> keep skin whose laid skin
     /// faces another way (see <see cref="CutOpenSkinFacing"/>).</param>
-    /// <param name="NoDrape">Leave cloth folded over a man's crotch as the passes before left it, even where the caller
-    /// asks for the drape, as builds before 1398 did (see <see cref="DrapeCrotch"/>).</param>
     internal sealed record Tuning(bool NoFollow = false, bool NoOwnSkinWeights = false,
                                   float OwnSkinReach = OwnSkinReachDefault, float CopyReach = CopyReachDefault,
                                   float CopyTolerance = CopyToleranceDefault, bool NoGiveUp = false,
@@ -97,8 +95,7 @@ internal static partial class BodyRetarget
                                   bool NoSourceWorn = false, bool NoSeeInside = false, bool NoTurnFallback = false,
                                   bool NoRelaxSinkGuard = false, bool NoSeamWeights = false,
                                   bool NoCutOpenSkin = false, bool CutOpenSkinUnderCloth = false,
-                                  bool CutOpenSkinAnyFacing = false, bool NoCutInside = false,
-                                  bool NoDrape = false);
+                                  bool CutOpenSkinAnyFacing = false, bool NoCutInside = false);
 
     private static readonly Tuning DefaultTuning = new();
 

@@ -15,8 +15,8 @@ namespace Proteus.Tests;
 
 /// <summary>
 /// What this change must leave alone, byte for byte (mens-ends-crotch, AC-9): pinned on the unchanged code of test 3ab1c98
-/// (build 1397), before the drape, the net worst push or men's shoes and gloves existed. A men's top made women's, a
-/// women's top made men's, women's legs made men's with no drape, and a same-sex size set with shoes. A pin is never
+/// (build 1397), before the net worst push or men's shoes and gloves existed. A men's top made women's, a
+/// women's top made men's, women's legs made men's, and a same-sex size set with shoes. A pin is never
 /// re-captured to make it pass: the one legitimate re-capture is on a newer test head's own unchanged code, in a scratch
 /// worktree, as a commit of its own naming the upstream change that moved it.
 /// </summary>
@@ -86,15 +86,15 @@ public class BehaviourPinLocalTests(ITestOutputHelper o)
                  Hash(CrossSexRefitJob.Run(Inputs(CrossSexRefitLocalTests.SheerTop, 101, CrossSexRefitLocalTests.Bibo,
                                                   UvBakeInputs.BiboChest, CrossSexRefitLocalTests.Tbse, UvBakeInputs.TbseChest))));
 
-    /// <summary>Women's legs made men's with the drape off: today's output, the reference the drape is measured from.</summary>
+    /// <summary>Women's legs made men's (Stormblessed's bottoms on TBSE Gen A): today's output.</summary>
     [LocalDataFact(LocalData.GameData, CrossSexNudeLegsLocalTests.StormblessedLegs, CrossSexNudeLegsLocalTests.LavaBod,
                    CrossSexRefitLocalTests.Tbse, LocalData.TbseUvMaps)]
     [Trait("Plan", "AC-mens-ends-crotch-9")]
-    public void Stormblessed_legs_without_the_drape_are_unchanged() // [AC-mens-ends-crotch-9]
+    public void Stormblessed_legs_made_mens_are_unchanged() // [AC-mens-ends-crotch-9]
     {
         var log = Substitute.For<IPluginLog>();
         var inputs = CrossSexNudeLegsLocalTests.JobInputs(CrossSexNudeLegsLocalTests.StormblessedLegs,
-                                                          CrossSexNudeLegsLocalTests.LavaBod, 1, log) with { DrapeCrotch = false };
+                                                          CrossSexNudeLegsLocalTests.LavaBod, 1, log);
         Check("stormblessed legs", StormblessedLegsPin, Hash(CrossSexRefitJob.Run(inputs)));
     }
 
