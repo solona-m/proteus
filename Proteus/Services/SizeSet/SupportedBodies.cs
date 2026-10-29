@@ -21,7 +21,9 @@ internal static class SupportedBodies
     /// whose option is the body's name alone.</param>
     /// <param name="Rel">The model of the garment's own slot, relative to the body mod.</param>
     /// <param name="LegsRel">For a chest garment, the legs its hem moves onto, in the same body mod; null for none.</param>
-    internal sealed record Size(string Name, string Rel, string? LegsRel);
+    /// <param name="NudeRel">For a men's legs size, the same body's nude smallclothes legs: fitted instead when the SFW
+    /// ones match too little of a women's body made nude (see <see cref="CrossSexRefit.TakesNude"/>); null for none.</param>
+    internal sealed record Size(string Name, string Rel, string? LegsRel, string? NudeRel = null);
 
     /// <summary>One body's sizes for one slot.</summary>
     /// <param name="Key">What the author ticks; the same for a body's plain and YAS sizes.</param>
@@ -110,9 +112,12 @@ internal static class SupportedBodies
     private const string RosalineLegs = "files/common/13/c0201e0000_dwn.mdl";
 
     // The men's bodies: one chest each (Midlander, which Miqo'te, Au Ra, Elezen and Viera men share) and their SFW legs.
-    // Neither has chest sizes; TBSE-X's many legs are crotches, not sizes, and only SFW is offered.
+    // Neither has chest sizes; TBSE-X's many legs are crotches, not sizes, and only SFW is offered. Women's legs made on a
+    // nude body (LavaBod+, Bibo+'s Types) have crotch skin TBSE's SFW legs draw underwear over: those are fitted to its
+    // Gen A legs instead, saved under the same "TBSE" option. TBSE-X's legs are another layout, refused before that.
     private const string TbseChest = "common/1/c0101e0000_top.mdl";
     private const string TbseLegs = "p2/step 6- smallclothes options/sfw/chara/equipment/e0000/model/c0101e0000_dwn.mdl";
+    private const string TbseNudeLegs = "p2/step 6- smallclothes options/gen a/chara/equipment/e0000/model/c0101e0000_dwn.mdl";
     private const string TbseXChest =
         "p1/torso/m midlander miqo'te au'ra elezen viera/chara/equipment/e0000/model/c0101e0000_top.mdl";
     private const string TbseXLegs = "p1/legs (smallclothes legs)/sfw/chara/equipment/e0000/model/c0101e0000_dwn.mdl";
@@ -164,7 +169,7 @@ internal static class SupportedBodies
 
         // ── men's ──
         new("tbse", "TBSE", "_top", false, [new Size("", TbseChest, TbseLegs)], Race: "0101"),
-        new("tbse", "TBSE", "_dwn", false, [new Size("", TbseLegs, null)], Race: "0101"),
+        new("tbse", "TBSE", "_dwn", false, [new Size("", TbseLegs, null, TbseNudeLegs)], Race: "0101"),
         new("tbse-x", "TBSE-X", "_top", false, [new Size("", TbseXChest, TbseXLegs)], Race: "0101"),
         new("tbse-x", "TBSE-X", "_dwn", false, [new Size("", TbseXLegs, null)], Race: "0101"),
     ];

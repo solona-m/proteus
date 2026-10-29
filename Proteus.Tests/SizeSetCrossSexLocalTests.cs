@@ -202,24 +202,72 @@ public sealed class SizeSetCrossSexLocalTests(ITestOutputHelper o) : IDisposable
     /// <paramref name="menSkeleton"/> (the game's when null); its notes and warnings printed.</summary>
     private SizeSetRefit.Result RunMen(string root, IReadOnlyList<string> keys, IReadOnlyList<BodyModIndex.Entry> bodies,
                                        bool remake = false, string? menSkeleton = null, Action<string>? progress = null,
-                                       System.Threading.CancellationToken ct = default, Func<string, byte[]?>? readGame = null)
+                                       System.Threading.CancellationToken ct = default, Func<string, byte[]?>? readGame = null,
+                                       IPluginLog? log = null, SizeSetRefit.RunLog? runLog = null)
     {
-        var log = Substitute.For<IPluginLog>();
+        log ??= Substitute.For<IPluginLog>();
+        runLog ??= new SizeSetRefit.RunLog();
         var across = new SizeSetRefit.AcrossInputs(
             path => menSkeleton != null && path == OtherRaceWearer.BaseSkeletonPath(CrossSexRefit.Men) ? menSkeleton : null);
-        var result = SizeSetRefit.Run(new SizeSetRefit.Request(root, keys, false, remake, bodies, readGame ?? Game,
-                                                               Ends: false, Across: across),
-                                      Maps(), log, progress ?? (_ => { }), ct);
+        int made = SizeSetRefit.Run(new SizeSetRefit.Request(root, keys, false, remake, bodies, readGame ?? Game,
+                                                             Ends: false, Across: across),
+                                    runLog, Maps(), log, progress ?? (_ => { }), ct);
+        var result = new SizeSetRefit.Result(made, runLog.Notes.Distinct(StringComparer.Ordinal).ToList(),
+                                             runLog.Warnings.Distinct(StringComparer.Ordinal).ToList(),
+                                             SizeSetRefit.Summarize(runLog, made));
         o.WriteLine($"made {result.Made}");
         foreach (string note in result.Notes) o.WriteLine("note: " + note);
         foreach (string warning in result.Warnings ?? []) o.WriteLine("check: " + warning);
         return result;
     }
 
+    /// <summary>What a substitute log was told at Information, formatted.</summary>
+    private static List<string> Said(IPluginLog log)
+        => log.ReceivedCalls().Where(c => c.GetMethodInfo().Name == nameof(IPluginLog.Information))
+              .Select(c => c.GetArguments())
+              .Where(a => a.Length == 2 && a[0] is string)
+              .Select(a => string.Format((string)a[0]!, (object?[])(a[1] ?? Array.Empty<object>())))
+              .ToList();
+
+    /// <summary>
+    /// Takes every men's version of <paramref name="gamePaths"/> out of <paramref name="option"/> in the copy at
+    /// <paramref name="root"/> — its manifest entry and its record — so a run starts from a known state whatever the
+    /// installed mod has been given since.
+    /// </summary>
+    private static void Without(string root, string group, string option, params string[] gamePaths)
+    {
+        bool Ours(string? path) => gamePaths.Any(p => string.Equals(p, path, StringComparison.OrdinalIgnoreCase));
+        var manifests = new[] { Path.Combine(root, "meta.json") }.Concat(Directory.GetFiles(root, "group_*.json"));
+        foreach (string file in manifests)
+        {
+            var json = System.Text.Json.Nodes.JsonNode.Parse(File.ReadAllText(file))!.AsObject();
+            var groups = json["Groups"] is System.Text.Json.Nodes.JsonArray list ? list.OfType<System.Text.Json.Nodes.JsonObject>()
+                       : (string?)json["Name"] == group ? [json] : [];
+            bool changed = false;
+            foreach (var g in groups.Where(g => (string?)g["Name"] == group))
+                foreach (var o in (g["Options"] as System.Text.Json.Nodes.JsonArray ?? []).OfType<System.Text.Json.Nodes.JsonObject>()
+                                                                                        .Where(o => (string?)o["Name"] == option))
+                    if (o["Files"] is System.Text.Json.Nodes.JsonObject files)
+                        foreach (string key in files.Select(f => f.Key).Where(Ours).ToList()) { files.Remove(key); changed = true; }
+            if (changed) File.WriteAllText(file, json.ToJsonString(new System.Text.Json.JsonSerializerOptions { WriteIndented = true }));
+        }
+        string record = Path.Combine(root, "Proteus", "bodyretarget.json");
+        if (!File.Exists(record)) return;
+        var rec = System.Text.Json.Nodes.JsonNode.Parse(File.ReadAllText(record))!.AsObject();
+        if (rec["Options"] is not System.Text.Json.Nodes.JsonArray entries) return;
+        foreach (var e in entries.OfType<System.Text.Json.Nodes.JsonObject>()
+                                 .Where(e => (string?)e["Name"] == option && Ours((string?)e["GamePath"])).ToList())
+            entries.Remove(e);
+        File.WriteAllText(record, rec.ToJsonString(new System.Text.Json.JsonSerializerOptions { WriteIndented = true }));
+    }
+
     private static List<(string Name, string Json)> Groups(string root)
         => (PenumbraModMeta.TryReadGroups(root) ?? []).Select(g => (g.Name, g.Group.GetRawText())).ToList();
 
     private static string SheerTop => "chara/equipment/e6010/model/c0201e6010_top.mdl";
+
+    /// <summary>The author's option Sheer's men's legs are cut from (read 2026-10-29).</summary>
+    private const string SheerLegsCutFrom = "SFW- Opaque";
     private static string SheerMenTop => RacialModelBake.WithRace(SheerTop, CrossSexRefit.Men);
 
     private static float[] PositionsAt(string root, string group, string option, string gamePath)
@@ -236,7 +284,10 @@ public sealed class SizeSetCrossSexLocalTests(ITestOutputHelper o) : IDisposable
     [Trait("Plan", "EDGE-sizeset-cross-sex-19")]
     [Trait("Plan", "EDGE-sizeset-cross-sex-24")]
     [Trait("Plan", "EDGE-sizeset-cross-sex-3")]
-    public void Sheer_elegance_gains_mens_versions() // [AC-sizeset-cross-sex-2] [AC-sizeset-cross-sex-4] [EDGE-sizeset-cross-sex-19] [EDGE-sizeset-cross-sex-24] [EDGE-sizeset-cross-sex-3]
+    [Trait("Plan", "AC-cross-sex-area-coverage-3")]
+    [Trait("Plan", "AC-cross-sex-area-coverage-7")]
+    [Trait("Plan", "EDGE-cross-sex-area-coverage-6")]
+    public void Sheer_elegance_gains_mens_versions() // [AC-sizeset-cross-sex-2] [AC-sizeset-cross-sex-4] [EDGE-sizeset-cross-sex-19] [EDGE-sizeset-cross-sex-24] [EDGE-sizeset-cross-sex-3] [AC-cross-sex-area-coverage-3] [AC-cross-sex-area-coverage-7] [EDGE-cross-sex-area-coverage-6]
     {
         string root = Copy(Sheer);
         var across = SizeSetRefit.AcrossPieces(SizeSetRefit.PiecesOf(root, Game, includeEnds: false));
@@ -247,13 +298,20 @@ public sealed class SizeSetCrossSexLocalTests(ITestOutputHelper o) : IDisposable
         var legs = Assert.Single(across, p => p.Slot == "_dwn");
         var before = Groups(root);
 
+        var runLog = new SizeSetRefit.RunLog();
         var result = RunMen(root, ["tbse@women", "tbse-x@women"],
-                            Installed(CrossSexRefitLocalTests.Bibo, CrossSexRefitLocalTests.Tbse, CrossSexRefitLocalTests.TbseX));
-        // The top on both. The legs match too little of TBSE's legs (88% of the body, measured 2026-10-21) and share no
-        // layout with TBSE-X's: left out, saying why, never written.
-        Assert.Equal(2, result.Made);
-        Assert.Contains(result.Notes, n => n.StartsWith(legs.Label + ": \"TBSE\"", StringComparison.Ordinal));
+                            Installed(CrossSexRefitLocalTests.Bibo, CrossSexRefitLocalTests.Tbse, CrossSexRefitLocalTests.TbseX),
+                            runLog: runLog);
+        var legsMade = Assert.Single(runLog.Sizes, s => s.Men && s.Slot == "_dwn" && s.Status == SizeSetRefit.SizeStatus.Made);
+        o.WriteLine($"legs cut from {legsMade.CutFrom}");
+        Assert.Equal(SheerLegsCutFrom, legsMade.CutFrom);
+        // The top on both. The legs are made on Bibo+'s nude Type A, whose crotch TBSE's SFW legs have no place for (88.3%
+        // of the body, measured 2026-10-24): fitted to TBSE's Gen A legs instead (98.7%). They share no layout with
+        // TBSE-X's: left out there, saying why, never written.
+        Assert.Equal(3, result.Made);
+        Assert.DoesNotContain(result.Notes, n => n.StartsWith(legs.Label + ": \"TBSE\"", StringComparison.Ordinal));
         Assert.Contains(result.Notes, n => n.StartsWith(legs.Label + ": \"TBSE-X\"", StringComparison.Ordinal));
+        string legsMen = RacialModelBake.WithRace(legs.GamePath, CrossSexRefit.Men);
         across = [across.First(p => p.GamePath == SheerTop)];
 
         // One group appended after every other, the author's groups byte for byte as they were.
@@ -274,8 +332,8 @@ public sealed class SizeSetCrossSexLocalTests(ITestOutputHelper o) : IDisposable
             // Only the men's paths and the materials it publishes: nothing at a women's path.
             Assert.DoesNotContain(option.Files.Keys, k => k.Contains("/c0201", StringComparison.OrdinalIgnoreCase)
                                                           && k.EndsWith(".mdl", StringComparison.OrdinalIgnoreCase));
-            Assert.DoesNotContain(option.Files.Keys, k => string.Equals(k, RacialModelBake.WithRace(legs.GamePath, CrossSexRefit.Men),
-                                                                        StringComparison.OrdinalIgnoreCase));
+            bool hasLegs = option.Files.Keys.Any(k => string.Equals(k, legsMen, StringComparison.OrdinalIgnoreCase));
+            Assert.Equal(option.Name == "TBSE", hasLegs);
             string meta = System.Text.Json.JsonSerializer.Serialize(option.Manipulations);
             Assert.Contains("Eqdp", meta);
         }
@@ -344,7 +402,11 @@ public sealed class SizeSetCrossSexLocalTests(ITestOutputHelper o) : IDisposable
     [Trait("Plan", "AC-sizeset-cross-sex-8")]
     [Trait("Plan", "EDGE-sizeset-cross-sex-8")]
     [Trait("Plan", "EDGE-sizeset-cross-sex-9")]
-    public void Starlit_gains_mens_versions_with_its_bones_moved(string skeleton) // [AC-sizeset-cross-sex-8] [EDGE-sizeset-cross-sex-8] [EDGE-sizeset-cross-sex-9]
+    [Trait("Plan", "AC-cross-sex-area-coverage-4")]
+    [Trait("Plan", "AC-cross-sex-area-coverage-7")]
+    [Trait("Plan", "EDGE-cross-sex-area-coverage-16")]
+    [Trait("Plan", "EDGE-cross-sex-area-coverage-14")]
+    public void Starlit_gains_mens_versions_with_its_bones_moved(string skeleton) // [AC-sizeset-cross-sex-8] [EDGE-sizeset-cross-sex-8] [EDGE-sizeset-cross-sex-9] [AC-cross-sex-area-coverage-4] [AC-cross-sex-area-coverage-7] [EDGE-cross-sex-area-coverage-16] [EDGE-cross-sex-area-coverage-14]
     {
         string root = Copy(Starlit);
         string? from = skeleton switch
@@ -353,10 +415,17 @@ public sealed class SizeSetCrossSexLocalTests(ITestOutputHelper o) : IDisposable
             "missing" => Path.Combine(root, "no-such-skeleton.sklb"),
             _ => null,
         };
+        var log = Substitute.For<IPluginLog>();
         var result = RunMen(root, ["tbse@women"],
                             Installed(Yab, CrossSexRefitLocalTests.Rue, CrossSexRefitLocalTests.Bibo, CrossSexRefitLocalTests.Tbse),
-                            menSkeleton: from);
+                            menSkeleton: from, log: log);
         Assert.Equal(1, result.Made);
+        // Made on Rue+'s nude legs, yet matching TBSE's SFW legs enough (90.1%): kept on them, as before.
+        Assert.DoesNotContain(Said(log), l => l.Contains("the SFW legs matched", StringComparison.Ordinal));
+        var sfw = BodySizeCatalog.Read(LocalData.Path(CrossSexRefitLocalTests.Tbse)).Options
+                                 .First(b => RefitCore.Normal(b.Rel) == RefitCore.Normal(UvBakeInputs.TbseLegs[0].Rel));
+        Assert.Contains(BodyRetargetWriter.ReadRecord(root)!.Options,
+                        e => e.Name == "TBSE" && e.GamePath.EndsWith("_dwn.mdl", StringComparison.OrdinalIgnoreCase) && e.To == sfw.Label);
         // Every size of Starlit is rigged to YAS's own bones: moved onto the men's, and said.
         string moved = Assert.Single(result.Warnings!, w => w.Contains("\"TBSE\"") && w.Contains("→"));
         bool needs = result.Warnings!.Any(w => w.Contains("[IVCS]"));
@@ -419,4 +488,70 @@ public sealed class SizeSetCrossSexLocalTests(ITestOutputHelper o) : IDisposable
     internal static string TbseChestRel =>SupportedBodies.Of("tbse", "_top", false)!.Sizes[0].Rel;
     internal static string TbseXChestRel => SupportedBodies.Of("tbse-x", "_top", false)!.Sizes[0].Rel;
     internal static string TbseLegsRel => SupportedBodies.Of("tbse", "_dwn", false)!.Sizes[0].Rel;
+
+    internal const string Stormblessed = LocalData.Mods + ":Stormblessed - by Solona";
+
+    [LocalDataFact(LocalData.GameData, Stormblessed, CrossSexNudeLegsLocalTests.LavaBod, CrossSexRefitLocalTests.Tbse,
+                   LocalData.TbseUvMaps)]
+    [Trait("Plan", "AC-cross-sex-area-coverage-1")]
+    [Trait("Plan", "AC-cross-sex-area-coverage-8")]
+    [Trait("Plan", "EDGE-cross-sex-area-coverage-8")]
+    [Trait("Plan", "EDGE-cross-sex-area-coverage-14")]
+    [Trait("Plan", "EDGE-cross-sex-area-coverage-17")]
+    public void Stormblessed_gains_mens_legs() // [AC-cross-sex-area-coverage-1] [AC-cross-sex-area-coverage-8] [EDGE-cross-sex-area-coverage-8] [EDGE-cross-sex-area-coverage-14] [EDGE-cross-sex-area-coverage-17]
+    {
+        string root = Copy(Stormblessed);
+        string men = Localization.Strings.SizeSet.MensGroup;
+        var legs = SizeSetRefit.AcrossPieces(SizeSetRefit.PiecesOf(root, Game, includeEnds: false))
+                               .First(p => p.Slot == "_dwn" && p.GamePath.Contains("e0633", StringComparison.Ordinal));
+        string legsMen = RacialModelBake.WithRace(legs.GamePath, CrossSexRefit.Men);
+        // The state this is about: "TBSE" already carries the men's top, made by an earlier run, and not yet the legs.
+        Without(root, men, "TBSE", legs.GamePath, legsMen);
+        var top = SizeSetRefit.AcrossPieces(SizeSetRefit.PiecesOf(root, Game, includeEnds: false))
+                              .First(p => p.Slot == "_top" && p.GamePath.Contains("e0633", StringComparison.Ordinal));
+        Assert.True((PenumbraModMeta.TryReadFileOptions(root, men) ?? []).Any(x => x.Name == "TBSE" && x.Files.Keys
+                        .Any(k => string.Equals(k, RacialModelBake.WithRace(top.GamePath, CrossSexRefit.Men),
+                                                StringComparison.OrdinalIgnoreCase))),
+                    "the installed mod's \"TBSE\" no longer carries the men's top this test starts from");
+        var authors = Groups(root).Where(g => g.Name != men).ToList();
+        var bodies = Installed(CrossSexNudeLegsLocalTests.LavaBod, CrossSexRefitLocalTests.Tbse);
+        var log = Substitute.For<IPluginLog>();
+        var runLog = new SizeSetRefit.RunLog();
+
+        var result = RunMen(root, ["tbse@women"], bodies, log: log, runLog: runLog);
+        Assert.DoesNotContain(result.Notes, n => n.StartsWith(legs.Label + ": \"TBSE\"", StringComparison.Ordinal));
+        // The report says made, with the share of the legs it was fitted to.
+        var outcome = Assert.Single(runLog.Sizes, s => s.Men && s.Piece == legs.Label && s.Option == "TBSE");
+        Assert.Equal(SizeSetRefit.SizeStatus.Made, outcome.Status);
+        Assert.True(outcome.Measures?.Coverage >= 0.9, $"{outcome.Measures?.Coverage} matched");
+        // Into the option that carries the top, the top not made again.
+        var topOutcome = Assert.Single(runLog.Sizes, s => s.Men && s.Piece == top.Label && s.Option == "TBSE");
+        Assert.Equal(SizeSetRefit.SizeStatus.Skipped, topOutcome.Status);
+        Assert.Equal(SizeSetRefit.Codes.AlreadyThere, topOutcome.ReasonCode);
+        Assert.Equal(men, Groups(root)[^1].Name);
+        var option = PenumbraModMeta.TryReadFileOptions(root, men)!.First(x => x.Name == "TBSE");
+        Assert.Contains(option.Files.Keys, k => string.Equals(k, legsMen, StringComparison.OrdinalIgnoreCase));
+        Assert.Contains("Eqdp", System.Text.Json.JsonSerializer.Serialize(option.Manipulations));
+        foreach (string file in option.Files.Values)
+            Assert.True(File.Exists(BodySizeCatalog.ResolveCaseInsensitive(root, file)), $"{file} is not in the mod");
+
+        // Fitted to TBSE's Gen A legs, said so, and the record names them.
+        var genA = BodySizeCatalog.Read(LocalData.Path(CrossSexRefitLocalTests.Tbse)).Options
+                                  .First(b => RefitCore.Normal(b.Rel) == RefitCore.Normal(UvBakeInputs.TbseLegs[1].Rel));
+        var said = Said(log);
+        foreach (string line in said.Where(l => l.Contains("for men", StringComparison.Ordinal))) o.WriteLine(line);
+        Assert.Contains(said, l => l.Contains(legs.Label, StringComparison.Ordinal) && l.Contains("on " + genA.Label, StringComparison.Ordinal)
+                                   && l.Contains("the SFW legs matched", StringComparison.Ordinal));
+        Assert.Contains(BodyRetargetWriter.ReadRecord(root)!.Options,
+                        e => e.Name == "TBSE" && string.Equals(e.GamePath, legsMen, StringComparison.OrdinalIgnoreCase) && e.To == genA.Label);
+
+        // The author's groups as they were (by value: Penumbra had indented this copy with tabs); again, nothing to make.
+        var now = Groups(root).Where(g => g.Name != men).ToList();
+        Assert.Equal(authors.Select(g => g.Name), now.Select(g => g.Name));
+        for (int i = 0; i < authors.Count; i++)
+            Assert.True(System.Text.Json.Nodes.JsonNode.DeepEquals(System.Text.Json.Nodes.JsonNode.Parse(authors[i].Json),
+                                                                   System.Text.Json.Nodes.JsonNode.Parse(now[i].Json)),
+                        $"\"{authors[i].Name}\" changed");
+        Assert.Equal(0, RunMen(root, ["tbse@women"], bodies).Made);
+    }
 }

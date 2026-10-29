@@ -405,4 +405,41 @@ public sealed class SizeSetCrossSexTests : IDisposable
         Assert.Empty(result.Warnings!);
         Assert.Equal(before, File.ReadAllText(Path.Combine(root, PenumbraModMeta.MetaFile)));
     }
+
+    [Fact]
+    [Trait("Plan", "AC-cross-sex-area-coverage-2")]
+    [Trait("Plan", "EDGE-cross-sex-area-coverage-6")]
+    [Trait("Plan", "EDGE-cross-sex-area-coverage-11")]
+    [Trait("Plan", "EDGE-cross-sex-area-coverage-12")]
+    public void Tbse_legs_name_their_nude_smallclothes() // [AC-cross-sex-area-coverage-2] [EDGE-cross-sex-area-coverage-6] [EDGE-cross-sex-area-coverage-11] [EDGE-cross-sex-area-coverage-12]
+    {
+        var legs = SupportedBodies.Of("tbse", "_dwn", false)!;
+        var size = Assert.Single(legs.Sizes);
+        Assert.Equal(RefitCore.Normal(UvBakeInputs.TbseLegs[0].Rel), RefitCore.Normal(size.Rel));
+        Assert.Equal(RefitCore.Normal(UvBakeInputs.TbseLegs[1].Rel), RefitCore.Normal(size.NudeRel!));
+        Assert.Equal("TBSE", SupportedBodies.OptionName(legs, size));
+        foreach (var (key, label, male) in SupportedBodies.Choices)
+            foreach (string slot in new[] { "_top", "_dwn" })
+                foreach (bool yas in new[] { false, true })
+                    if (SupportedBodies.Of(key, slot, yas) is { } body && !(key == "tbse" && slot == "_dwn"))
+                        Assert.All(body.Sizes, s => Assert.Null(s.NudeRel));
+    }
+
+    [Fact]
+    [Trait("Plan", "EDGE-cross-sex-area-coverage-5")]
+    public void The_nude_option_is_found_by_its_file() // [EDGE-cross-sex-area-coverage-5]
+    {
+        static BodyOption Legs(string name, string rel)
+            => new("Smallclothes", "", name, rel, "chara/equipment/e0000/model/c0101e0000_dwn.mdl", "_dwn");
+        var sfw = Legs("SFW", UvBakeInputs.TbseLegs[0].Rel);
+        var genA = Legs("Gen A", UvBakeInputs.TbseLegs[1].Rel);
+        var size = SupportedBodies.Of("tbse", "_dwn", false)!.Sizes[0];
+        var log = Substitute.For<IPluginLog>();
+        static int Told(IPluginLog l) => l.ReceivedCalls().Count(c => c.GetMethodInfo().Name == nameof(IPluginLog.Information));
+        Assert.Same(genA, SizeSetRefit.NudeFor([sfw, genA], size, log)!(sfw));
+        Assert.Equal(0, Told(log));
+        Assert.Null(SizeSetRefit.NudeFor([sfw], size, log)!(sfw));
+        Assert.Equal(1, Told(log));
+        Assert.Null(SizeSetRefit.NudeFor([sfw, genA], SupportedBodies.Of("tbse-x", "_dwn", false)!.Sizes[0], log));
+    }
 }

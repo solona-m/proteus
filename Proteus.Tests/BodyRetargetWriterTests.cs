@@ -171,13 +171,16 @@ public class BodyRetargetWriterTests : IDisposable
         ]);
         Assert.True(outcome.Ok, outcome.Message);
 
-        // The earlier L is replaced where the batch says, not kept alongside it; the batch keeps its order.
+        // The earlier L is replaced where it stands, not kept alongside it: Penumbra keeps a group's choice by option
+        // position, so moving it would switch what a player wears. The new sizes follow in the batch's order.
         var options = PenumbraModMeta.TryReadFileOptions(root, Group)!;
-        Assert.Equal([BodyRetargetWriter.OriginalOption, "Neolithe SFW XS", "Neolithe SFW S", "Neolithe SFW L"],
+        Assert.Equal([BodyRetargetWriter.OriginalOption, "Neolithe SFW L", "Neolithe SFW XS", "Neolithe SFW S"],
                      options.Select(o => o.Name));
-        Assert.Equal([2], File.ReadAllBytes(Path.Combine(root, options[1].Files[GamePath])));
-        Assert.Equal([3], File.ReadAllBytes(Path.Combine(root, options[2].Files[GamePath])));
-        Assert.Equal([4], File.ReadAllBytes(Path.Combine(root, options[3].Files[GamePath])));
+        Assert.Equal([4], File.ReadAllBytes(Path.Combine(root, options[1].Files[GamePath])));
+        Assert.Equal([2], File.ReadAllBytes(Path.Combine(root, options[2].Files[GamePath])));
+        Assert.Equal([3], File.ReadAllBytes(Path.Combine(root, options[3].Files[GamePath])));
+        // Selected: the size saved last, wherever it stands.
+        Assert.Equal("Neolithe SFW L", PenumbraModMeta.SingleDefault(root, Group));
 
         var record = BodyRetargetWriter.ReadRecord(root)!;
         Assert.Equal(["SFW XS", "SFW S", "SFW L"], record.Options.Select(e => e.To));
@@ -253,6 +256,24 @@ public class BodyRetargetWriterTests : IDisposable
 
         BodyRetargetWriter.Undo(root, Group, "Neolithe SFW XS");
         Assert.Equal(["Items", "Top Size", Group, "Later"], GroupNames());
+    }
+
+    [Fact]
+    [Trait("Plan", "EDGE-cross-sex-area-coverage-8")]
+    public void An_option_saved_again_keeps_its_place() // [EDGE-cross-sex-area-coverage-8]
+    {
+        // Penumbra keeps a group's choice by option POSITION. The men's legs saved into "TBSE" after the top had made
+        // TBSE and TBSE-X moved TBSE to the end, and a player wearing TBSE was switched to TBSE-X.
+        const string legs = "chara/equipment/e6255/model/c0101e6255_dwn.mdl";
+        BodyRetargetWriter.Save(root, Group, "TBSE", GamePath, [1], "TBSE", "Bibo M", "SFW");
+        BodyRetargetWriter.Save(root, Group, "TBSE-X", GamePath, [2], "TBSE-X", "Bibo M", "SFW");
+        Assert.True(BodyRetargetWriter.Save(root, Group, "TBSE", legs, [3], "TBSE", "Bibo M", "Gen A").Ok);
+
+        var options = PenumbraModMeta.TryReadFileOptions(root, Group)!;
+        Assert.Equal([BodyRetargetWriter.OriginalOption, "TBSE", "TBSE-X"], options.Select(o => o.Name));
+        Assert.Contains(GamePath, options[1].Files.Keys);
+        Assert.Contains(legs, options[1].Files.Keys);
+        Assert.Equal("TBSE", PenumbraModMeta.SingleDefault(root, Group));
     }
 
     [Fact]

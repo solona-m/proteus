@@ -542,12 +542,13 @@ internal static partial class SizeSetRefit
             var job = CrossSexRefitJob.Run(new CrossSexRefitJob.Inputs(
                 c.Bytes, piece.GamePath, CrossSexRefit.Men, chosen.MadeFor, null, men,
                 o => RefitCore.Normal(o.Rel) == RefitCore.Normal(rel), chosen.Wearer, uvRemap, log,
-                CarryPiercings: request.Piercings));
+                CarryPiercings: request.Piercings, Nude: NudeFor(men.For(piece.Slot), size, log)));
             var made = job.Sizes.FirstOrDefault();
             var (ok, refusal, said) = Judge(piece.Label, option, job, made, chosen.SkeletonFrom);
             log.Information("[Proteus] size set: {0} for men: {1} in {2} ms (source in {3} ms, {4} bodies bent): {5}",
                             piece.Label, option, clock.ElapsedMilliseconds - started, started, mens.Bent,
-                            ok ? $"{made!.Folds} folded, {made.Landed?.VertexCoverage:P1} matched" : refusal ?? "");
+                            ok ? $"{made!.Folds} folded, {made.Landed?.VertexCoverage:P1} matched" + NudeSaid(made, targetPath)
+                               : refusal ?? "");
             if (!ok)
             {
                 notes.Add(refusal!);
@@ -558,7 +559,8 @@ internal static partial class SizeSetRefit
             ct.ThrowIfCancellationRequested();
             string fromLabel = RefitCore.LabelFrom(c.Entry.Name, [c.Pick!.Option.Label]);
             if (!group.Save(target.Dir, fromLabel,
-                            [new BodyRetargetWriter.Refit(option, made!.Saved!.Model, onto.Label, Materials: made.Saved.Materials)],
+                            [new BodyRetargetWriter.Refit(option, made!.Saved!.Model, made.Target.Label,
+                                                          Materials: made.Saved.Materials)],
                             sourceOption: null, notes, manipulations: MensManipulations(job.Route, job.Est, save)))
             {
                 Out(SizeStatus.Failed, Codes.SaveFailed, notes[^1], target.Dir);
@@ -581,6 +583,32 @@ internal static partial class SizeSetRefit
         group.RestoreDefault();
         return saved;
     }
+
+    /// <summary>
+    /// For a men's size, its body's nude smallclothes among <paramref name="men"/> (<see cref="SupportedBodies.Size.NudeRel"/>),
+    /// tried by the job when the SFW ones match too little; null for a size that has none. A body installed without them
+    /// gives nothing, and says so when asked.
+    /// </summary>
+    internal static Func<BodyOption, BodyOption?>? NudeFor(IReadOnlyList<BodyOption> men, SupportedBodies.Size size,
+                                                            IPluginLog log)
+    {
+        if (size.NudeRel is not { } rel) return null;
+        return asked =>
+        {
+            var nude = OptionByFile(men, rel);
+            if (nude == null)
+                log.Information("[Proteus] size set: {0} has no nude smallclothes legs at {1}; its SFW ones only",
+                                asked.Label, rel);
+            return nude;
+        };
+    }
+
+    /// <summary>What the log says of a men's version fitted to its body's nude smallclothes instead: onto which, what the
+    /// SFW ones matched, and how many of the nude ones' own skin triangles the garment shows. "" for any other.</summary>
+    private static string NudeSaid(CrossSexRefitJob.Size made, string askedPath)
+        => made.Asked == null ? ""
+         : $" on {made.Target.Label} (the SFW legs matched {made.AskedLanded?.VertexCoverage:P1}; " +
+           $"{CrossSexRefit.NudeSkinShown(made.Saved?.Model, askedPath)?.ToString() ?? "unknown"} of its own skin triangles shown)";
 
     /// <summary>
     /// What a men's version saved at <paramref name="save"/> carries: the EQDP entry that makes the game load a model

@@ -658,27 +658,30 @@ internal static class BodyRetargetWriter
                 }
 
                 // Rebuilt from what is there, so saving more sizes grows the group instead of replacing it, and
-                // saving the same size twice replaces just that option.
-                bool Saving(string name) => refits.Any(r => string.Equals(r.Option, name,
-                                                                         StringComparison.OrdinalIgnoreCase));
-                var kept = options.Where(o => !Saving(o.Name)
-                                           && !string.Equals(o.Name, OriginalOption, StringComparison.OrdinalIgnoreCase))
-                                  .ToList();
-
+                // saving the same size twice replaces just that option — where it stands. Penumbra keeps a group's
+                // choice by option POSITION: an option saved again moved to the end, and a player wearing "TBSE" of
+                // "Original, TBSE, TBSE-X" was switched to TBSE-X when the legs were saved into TBSE after the top.
                 var final = new List<PenumbraModMeta.FileOption>
                 {
                     new(OriginalOption, new Dictionary<string, string>()),
                 };
-                final.AddRange(kept);
-
+                foreach (var o in options)
+                {
+                    if (string.Equals(o.Name, OriginalOption, StringComparison.OrdinalIgnoreCase)) continue;
+                    int again = written.FindIndex(w => string.Equals(w.Refit.Option, o.Name, StringComparison.OrdinalIgnoreCase));
+                    final.Add(again >= 0 ? OptionFor(written[again].Refit, written[again].Rel) : o);
+                }
                 foreach (var (refit, rel) in written)
-                    final.Add(OptionFor(refit, rel));
+                    if (!options.Any(o => string.Equals(o.Name, refit.Option, StringComparison.OrdinalIgnoreCase)))
+                        final.Add(OptionFor(refit, rel));
+                // Selected by default: the size saved last, as before.
+                int chosen = final.FindIndex(o => string.Equals(o.Name, written[^1].Refit.Option, StringComparison.OrdinalIgnoreCase));
 
                 // A priority above every other group, which is what decides a game path two groups both claim. The
                 // POSITION is left alone: see Position.
                 int priority = Math.Max(PenumbraModMeta.MaxGroupPriority(modRoot) + 1, 1);
                 PenumbraModMeta.WriteFileOptionGroup(modRoot, Position(modRoot, groupName), groupName, priority, final,
-                                                     final.Count - 1);
+                                                     chosen);
                 LogNotes();
                 DropStale();
 

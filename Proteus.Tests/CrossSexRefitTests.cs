@@ -585,6 +585,54 @@ public class CrossSexRefitTests
         Assert.Contains("\"Parts.Retarget.Race.CrossSexHint.Fmt\"", en);
     }
 
+    [Fact]
+    [Trait("Plan", "AC-cross-sex-area-coverage-2")]
+    [Trait("Plan", "AC-cross-sex-area-coverage-4")]
+    [Trait("Plan", "AC-cross-sex-area-coverage-5")]
+    [Trait("Plan", "EDGE-cross-sex-area-coverage-1")]
+    [Trait("Plan", "EDGE-cross-sex-area-coverage-2")]
+    [Trait("Plan", "EDGE-cross-sex-area-coverage-3")]
+    [Trait("Plan", "EDGE-cross-sex-area-coverage-7")]
+    public void Nude_smallclothes_only_when_sfw_matches_too_little() // [AC-cross-sex-area-coverage-2] [AC-cross-sex-area-coverage-4] [AC-cross-sex-area-coverage-5] [EDGE-cross-sex-area-coverage-1] [EDGE-cross-sex-area-coverage-2] [EDGE-cross-sex-area-coverage-3] [EDGE-cross-sex-area-coverage-7]
+    {
+        static UvAtlasCorrespondence.Stats L(float c) => default(UvAtlasCorrespondence.Stats) with { VertexCoverage = c };
+        Assert.True(CrossSexRefit.TakesNude(L(0.8926f), L(0.9955f)));   // LavaBod+ onto TBSE's SFW, then Gen A
+        Assert.False(CrossSexRefit.TakesNude(L(0.9811f), L(0.9834f)));  // Bibo+ SFW Undies: SFW kept though Gen A is higher
+        Assert.False(CrossSexRefit.TakesNude(L(0.88f), L(0.89f)));      // both short: SFW's refusal stands
+        Assert.False(CrossSexRefit.TakesNude(L(0.9001f), L(0.99f)));
+        Assert.True(CrossSexRefit.TakesNude(L(0.8999f), L(0.9001f)));
+        Assert.False(CrossSexRefit.TakesNude(L(0.85f), L(0.8999f)));
+        Assert.False(CrossSexRefit.TakesNude(null, L(0.99f)));
+        Assert.False(CrossSexRefit.TakesNude(L(0.85f), null));
+    }
+
+    [Fact]
+    [Trait("Plan", "AC-cross-sex-area-coverage-5")]
+    public void The_save_check_stays_by_count() // [AC-cross-sex-area-coverage-5]
+    {
+        Assert.Equal(0.9, CrossSexRefit.MinCoverage);
+        // A float coverage of exactly 0.9 widens to just under it, and is refused today; that is left as it is.
+        Assert.False(CrossSexRefit.CoverageAllowed(0.9f));
+        var plan = (BodyRetarget.Planned)System.Runtime.CompilerServices.RuntimeHelpers.GetUninitializedObject(typeof(BodyRetarget.Planned));
+        var dense = default(UvAtlasCorrespondence.Stats) with { VertexCoverage = 0.89f, AreaCoverage = 0.99f };
+        Assert.False(new CrossSexRefitJob.Size(Body("0101", "_dwn", "SFW"), "t", plan, plan, null, 0, dense, "").SaveAllowed);
+        var nude = default(UvAtlasCorrespondence.Stats) with { VertexCoverage = 0.995f };
+        Assert.True(new CrossSexRefitJob.Size(Body("0101", "_dwn", "Gen A"), "t", plan, plan, null, 0, nude, "",
+                                              Asked: Body("0101", "_dwn", "SFW"), AskedLanded: dense).SaveAllowed);
+        Assert.Contains("CoverageAllowed(Landed?.VertexCoverage", Source("Proteus/Services/CrossSexRefitJob.cs"));
+    }
+
+    [Fact]
+    [Trait("Plan", "AC-cross-sex-area-coverage-6")]
+    [Trait("Plan", "EDGE-cross-sex-area-coverage-10")]
+    public void The_cli_fits_the_legs_it_was_given() // [AC-cross-sex-area-coverage-6] [EDGE-cross-sex-area-coverage-10]
+    {
+        Assert.DoesNotContain("Nude:", Source("Proteus.Refit/CrossSexCommand.cs"));
+        var nude = typeof(CrossSexRefitJob.Inputs).GetConstructors().Single().GetParameters().Single(p => p.Name == "Nude");
+        Assert.True(nude.HasDefaultValue);
+        Assert.Null(nude.DefaultValue);
+    }
+
     // ── the game's own women's legs made men's (vanilla-cross-sex-legs) ─────
 
     [Fact]
