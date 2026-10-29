@@ -785,6 +785,35 @@ public class BodyWeightsTests
     }
 
     /// <summary>
+    /// An extras material a kept mesh still draws stays named: only the mesh left out goes, and the one kept still draws
+    /// it. Every mesh of it left out, the name goes too.
+    /// </summary>
+    [Fact]
+    public void An_extras_material_a_kept_mesh_still_draws_stays_named()
+    {
+        byte[] host = SyntheticModel.Build([],
+            new SyntheticModel.Mesh(Piercings, new SyntheticModel.Sub(0, TrianglesPerIsland: 2, Weights: [("j_kosi", 1f)])),
+            new SyntheticModel.Mesh(Cloth, new SyntheticModel.Sub(0, TrianglesPerIsland: 3, Weights: [("j_kosi", 1f)])),
+            new SyntheticModel.Mesh(Piercings, new SyntheticModel.Sub(0, TrianglesPerIsland: 4, Weights: [("j_kosi", 1f)])));
+        Assert.Equal([Piercings, Cloth], SecondSkinWriter.MaterialNames(host));
+
+        var one = SecondSkinWriter.Build([], [], host, out _, dropHostMesh: m => m == 0,
+                                         dropHostMaterial: BodyRetarget.IsBodyExtraMaterial);
+        Assert.Equal([Piercings, Cloth], SecondSkinWriter.MaterialNames(one));
+        Assert.Equal([(Cloth, 3), (Piercings, 4)], Meshes(one));
+
+        var both = SecondSkinWriter.Build([], [], host, out _, dropHostMesh: m => m != 1,
+                                          dropHostMaterial: BodyRetarget.IsBodyExtraMaterial);
+        Assert.Equal([Cloth], SecondSkinWriter.MaterialNames(both));
+        Assert.Equal([(Cloth, 3)], Meshes(both));
+
+        static List<(string, int)> Meshes(byte[] model)
+            => ModelPartReader.Read(model)!.Parts.Where(p => p.Island < 0).GroupBy(p => p.Mesh)
+                              .Select(g => (g.First().Material, g.Sum(p => p.Triangles.Length / 3)))
+                              .OrderBy(m => m.Item2).ToList();
+    }
+
+    /// <summary>
     /// A top with its own chest skin and its own two-triangle ring, refitted onto a body that rigs genital bones the old
     /// one does not (so the cloth is reweighted) and draws a one-triangle ring of its own.
     /// </summary>
