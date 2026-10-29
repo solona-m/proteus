@@ -50,13 +50,17 @@ internal static partial class SizeSetRefit
     }
 
     /// <summary>
-    /// The women's chest and legs pieces that get men's versions: Midlander women's (<see cref="CrossSexRefit.Supported"/>),
-    /// and only those the author made no men's model of — that one is sized onto the men's bodies as it is.
+    /// The women's pieces that get men's versions: Midlander women's chest and legs (<see cref="CrossSexRefit.Supported"/>)
+    /// and shoes and gloves (<see cref="CrossSexRefit.EndsCross"/>), and only those the author made no men's model of —
+    /// that one is sized onto the men's bodies as it is. A men's model that is only the game's own is no piece at all
+    /// (<see cref="PiecesOf"/>), so it stops nothing.
     /// </summary>
     internal static IReadOnlyList<Piece> AcrossPieces(IReadOnlyList<Piece> pieces)
     {
         var paths = pieces.Select(p => p.GamePath).ToHashSet(StringComparer.OrdinalIgnoreCase);
-        return pieces.Where(p => p.Race == "0201" && CrossSexRefit.Supported(CrossSexRefit.Women, CrossSexRefit.Men, p.Slot)
+        return pieces.Where(p => p.Race == "0201"
+                                 && (CrossSexRefit.Supported(CrossSexRefit.Women, CrossSexRefit.Men, p.Slot)
+                                     || CrossSexRefit.EndsCross(CrossSexRefit.Women, CrossSexRefit.Men, p.Slot))
                                  && !paths.Contains(RacialModelBake.WithRace(p.GamePath, CrossSexRefit.Men)))
                      .ToList();
     }
@@ -364,14 +368,6 @@ internal static partial class SizeSetRefit
         var mensKeys = MensKeys(request.Keys);
         if (request.Across is not { } inputs || mensKeys.Count == 0) return 0;
         var across = AcrossPieces(pieces);
-        if (request.Ends && pieces.Any(p => p.Race == "0201" && IsEnd(p.Slot)))
-        {
-            notes.Add(Strings.SizeSet.EndsNotForMen);
-            foreach (var end in pieces.Where(p => p.Race == "0201" && IsEnd(p.Slot)))
-                foreach (string key in mensKeys)
-                    runLog.Add(end, SizeStatus.Skipped, Codes.EndsNotForMen, Strings.SizeSet.EndsNotForMen, body: key,
-                               men: true);
-        }
         if (across.Count == 0) return 0;
 
         // Every piece and men's body, when none is made at all.
@@ -380,10 +376,16 @@ internal static partial class SizeSetRefit
             foreach (var piece in across)
                 foreach (string key in mensKeys)
                     runLog.Add(piece, SizeStatus.Skipped, code, reason, group,
-                               AcrossTarget(key, piece.Slot) is { } at ? SupportedBodies.OptionName(at.Body, at.Size) : null,
+                               (IsEnd(piece.Slot) ? AcrossEndTarget(key, piece.Slot) : AcrossTarget(key, piece.Slot)) is { } at
+                                   ? SupportedBodies.OptionName(at.Body, at.Size) : null,
                                key, men: true, gamePath: RacialModelBake.WithRace(piece.GamePath, CrossSexRefit.Men));
         }
-        string groupName = MensGroupName(request.ModRoot, across);
+        // Every women's piece the group may hold, shoes and gloves too whether or not they are made this time: a group an
+        // earlier run put men's shoes in is still ours when they are left out now.
+        var mayHold = request.Ends || request.ReadGameFile == null
+            ? across
+            : AcrossPieces(PiecesOf(request.ModRoot, request.ReadGameFile, includeEnds: true));
+        string groupName = MensGroupName(request.ModRoot, mayHold);
         if (BodyRetargetWriter.IsAuthorGroup(request.ModRoot, groupName))
         {
             string said = string.Format(Strings.SizeSet.MensGroupTakenFmt, groupName);
@@ -416,8 +418,11 @@ internal static partial class SizeSetRefit
             ct.ThrowIfCancellationRequested();
             try
             {
-                made += RunAcrossPiece(request, inputs, piece, groupName, mensKeys, uvRemap, log, progress, runLog,
-                                       readings, madeOnReadings, leadSources, ct);
+                made += IsEnd(piece.Slot)
+                    ? RunAcrossEnd(request, inputs, piece, groupName, mensKeys, uvRemap, log, progress, runLog,
+                                   leadSources, ct)
+                    : RunAcrossPiece(request, inputs, piece, groupName, mensKeys, uvRemap, log, progress, runLog,
+                                     readings, madeOnReadings, leadSources, ct);
             }
             catch (OperationCanceledException)
             {

@@ -5287,9 +5287,13 @@
     "message": "이 모드에는 이미 제작자의 \"{0}\" 그룹이 있어 남성 버전이 만들어지지 않았습니다. Penumbra에서 그 그룹의 이름을 바꾼 뒤 사이즈를 다시 추가하세요.",
     "description": "{0} is the group's name."
   },
-  "SizeSet.EndsNotForMen": {
-    "message": "신발과 장갑에는 남성 버전이 없습니다. 성별을 넘어 맞추는 것은 몸통과 다리 파츠뿐입니다.",
-    "description": "Said once when a women's mod's men's versions are made and it has shoes or gloves."
+  "SizeSet.EndFromGameBody.Fmt": {
+    "message": "{0}, \"{1}\": 다리나 팔에 체형을 읽을 피부가 없어서 게임 기본 체형으로 만든 것으로 보고 맞췄습니다.",
+    "description": "Check in game: a women's shoe or glove made a men's with no skin to read a body off. {0} is the piece, {1} the men's option."
+  },
+  "SizeSet.EndClothGap.Fmt": {
+    "message": "{0}, \"{1}\": 천이 {3}의 다리나 팔에서 최대 {2:F0} mm 떨어져 있습니다. 읽어 낸 체형이 실제로 만든 체형과 다를 수 있습니다.",
+    "description": "Check in game: a women's shoe or glove made a men's whose cloth sits far off the leg or arm it was read on. {0} is the piece, {1} the men's option, {2} millimetres, {3} the body."
   },
   "SizeSet.OneVariant.Fmt": {
     "message": "{0}: 남성은 \"{1}\"에서 만든 한 가지 버전을 받습니다. 모드의 다른 변형은 여성 전용으로 남습니다.",

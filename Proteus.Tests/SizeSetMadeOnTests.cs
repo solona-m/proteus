@@ -229,11 +229,9 @@ public class SizeSetMadeOnTests
         refused.Notes.Add("refused");
         Assert.Equal(SizeSetRefit.Summary.SeeLeftOut, S(refused, 0));
 
-        // Shoes and gloves get no men's versions: nothing to do, and the note still shown.
-        var ends = Log(("_top", "TBSE", SizeStatus.Skipped, Codes.AlreadyThere), ("_sho", null, SizeStatus.Skipped, Codes.EndsNotForMen));
-        ends.Notes.Add(Strings.SizeSet.EndsNotForMen);
+        // A men's shoe already there beside a men's top already there: nothing to do.
+        var ends = Log(("_top", "TBSE", SizeStatus.Skipped, Codes.AlreadyThere), ("_sho", "TBSE", SizeStatus.Skipped, Codes.AlreadyThere));
         Assert.Equal(SizeSetRefit.Summary.HadEverySize, S(ends, 0));
-        Assert.Contains(Strings.SizeSet.EndsNotForMen, ends.Notes);
 
         var unreadable = Log(("_top", null, SizeStatus.Skipped, Codes.Unreadable));
         unreadable.Notes.Add("unreadable");

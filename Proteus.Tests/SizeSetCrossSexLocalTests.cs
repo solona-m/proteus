@@ -554,4 +554,70 @@ public sealed class SizeSetCrossSexLocalTests(ITestOutputHelper o) : IDisposable
                         $"\"{authors[i].Name}\" changed");
         Assert.Equal(0, RunMen(root, ["tbse@women"], bodies).Made);
     }
+
+    /// <summary>
+    /// Stormblessed as the user has it: its men's group's "TBSE" already holding the men's top and legs, the boots and
+    /// gloves the author packed for men only the game's own. Sized for men again with shoes and gloves on and no remake:
+    /// the women's boots and gloves get men's versions in "TBSE", with their EQDP entries, and the top and legs are left
+    /// as they are (mens-ends-crotch).
+    /// </summary>
+    [LocalDataFact(LocalData.GameData, Stormblessed, CrossSexNudeLegsLocalTests.LavaBod, CrossSexRefitLocalTests.Tbse,
+                   LocalData.TbseUvMaps)]
+    [Trait("Plan", "AC-mens-ends-crotch-1")]
+    [Trait("Plan", "AC-mens-ends-crotch-2")]
+    [Trait("Plan", "AC-mens-ends-crotch-3")]
+    [Trait("Plan", "AC-mens-ends-crotch-4")]
+    [Trait("Plan", "EDGE-mens-ends-crotch-1")]
+    [Trait("Plan", "EDGE-mens-ends-crotch-23")]
+    public void Stormblessed_gains_mens_boots_and_gloves() // [AC-mens-ends-crotch-1] [AC-mens-ends-crotch-2] [AC-mens-ends-crotch-3] [AC-mens-ends-crotch-4] [EDGE-mens-ends-crotch-1] [EDGE-mens-ends-crotch-23]
+    {
+        string root = Copy(Stormblessed);
+        string men = Localization.Strings.SizeSet.MensGroup;
+        var pieces = SizeSetRefit.PiecesOf(root, Game, includeEnds: true);
+        Assert.DoesNotContain(pieces, p => p.GamePath.Contains("/c0101e0633_", StringComparison.Ordinal) && p.Slot is "_sho" or "_glv");
+        var across = SizeSetRefit.AcrossPieces(pieces);
+        Assert.Contains(across, p => p.Slot == "_sho");
+        Assert.Contains(across, p => p.Slot == "_glv");
+        var authors = Groups(root).Where(g => g.Name != men).ToList();
+
+        var bodies = Installed(CrossSexNudeLegsLocalTests.LavaBod, CrossSexRefitLocalTests.Tbse);
+        string[] keys = ["tbse@women"];
+        var gameBodies = SizeSetRefit.GameBodies(keys, Game, ends: true);
+        var log = Substitute.For<IPluginLog>();
+        var runLog = new SizeSetRefit.RunLog();
+        int made = SizeSetRefit.Run(new SizeSetRefit.Request(root, keys, false, false, bodies, Game, Ends: true,
+                                                             race => gameBodies.GetValueOrDefault(race),
+                                                             Across: new SizeSetRefit.AcrossInputs(_ => null)),
+                                    runLog, Maps(), log, _ => { }, default);
+        foreach (var line in Said(log).Where(l => l.Contains("for men", StringComparison.Ordinal))) o.WriteLine(line);
+        foreach (var w in runLog.Warnings) o.WriteLine("check: " + w);
+        foreach (var n in runLog.Notes) o.WriteLine("note: " + n);
+
+        Assert.Equal(2, made);
+        foreach (string slot in new[] { "_sho", "_glv" })
+        {
+            var outcome = Assert.Single(runLog.Sizes, s => s.Men && s.Slot == slot && s.Option == "TBSE");
+            Assert.Equal(SizeSetRefit.SizeStatus.Made, outcome.Status);
+            Assert.True(outcome.Measures?.Coverage >= 0.9, $"{slot}: {outcome.Measures?.Coverage}");
+        }
+        foreach (string slot in new[] { "_top", "_dwn" })
+            Assert.Equal(SizeSetRefit.Codes.AlreadyThere,
+                         Assert.Single(runLog.Sizes, s => s.Men && s.Slot == slot && s.Option == "TBSE").ReasonCode);
+
+        var option = PenumbraModMeta.TryReadFileOptions(root, men)!.First(x => x.Name == "TBSE");
+        string manips = System.Text.Json.JsonSerializer.Serialize(option.Manipulations);
+        foreach (string slot in new[] { "_sho", "_glv" })
+        {
+            string path = $"chara/equipment/e0633/model/c0101e0633{slot}.mdl";
+            Assert.Contains(option.Files.Keys, k => string.Equals(k, path, StringComparison.OrdinalIgnoreCase));
+            Assert.True(File.Exists(BodySizeCatalog.ResolveCaseInsensitive(root, option.Files.First(
+                f => string.Equals(f.Key, path, StringComparison.OrdinalIgnoreCase)).Value)));
+        }
+        Assert.Contains("Feet", manips);
+        Assert.Contains("Hands", manips);
+
+        var now = Groups(root).Where(g => g.Name != men).ToList();
+        Assert.Equal(authors.Select(g => g.Name), now.Select(g => g.Name));
+        Assert.Equal(men, Groups(root)[^1].Name);
+    }
 }

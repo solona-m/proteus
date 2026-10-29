@@ -5287,9 +5287,13 @@
     "message": "このMODにはすでに作者の「{0}」というグループがあるため、男性版は作られませんでした。Penumbraでそのグループの名前を変えてから、もう一度サイズを追加してください。",
     "description": "{0} is the group's name."
   },
-  "SizeSet.EndsNotForMen": {
-    "message": "靴と手袋には男性版がありません。性別をまたいで調整されるのは胴と脚のパーツだけです。",
-    "description": "Said once when a women's mod's men's versions are made and it has shoes or gloves."
+  "SizeSet.EndFromGameBody.Fmt": {
+    "message": "{0}「{1}」：脚または腕に体を読み取れる肌がないため、ゲーム本来の体で作られたものとして調整しました。",
+    "description": "Check in game: a women's shoe or glove made a men's with no skin to read a body off. {0} is the piece, {1} the men's option."
+  },
+  "SizeSet.EndClothGap.Fmt": {
+    "message": "{0}「{1}」：布が{3}の脚または腕から最大{2:F0} mm離れています。読み取った体は、作られた体と違うかもしれません。",
+    "description": "Check in game: a women's shoe or glove made a men's whose cloth sits far off the leg or arm it was read on. {0} is the piece, {1} the men's option, {2} millimetres, {3} the body."
   },
   "SizeSet.OneVariant.Fmt": {
     "message": "{0}：男性版は「{1}」から作った1種類です。MODのほかのバリエーションは女性専用のままです。",

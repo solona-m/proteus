@@ -5287,9 +5287,13 @@
     "message": "Der Mod hat schon eine Gruppe des Autors namens „{0}“, daher wurden keine Männerversionen erstellt. Benenne diese Gruppe in Penumbra um und füge die Größen erneut hinzu.",
     "description": "{0} is the group's name."
   },
-  "SizeSet.EndsNotForMen": {
-    "message": "Schuhe und Handschuhe bekommen keine Männerversion: Nur Oberteile und Hosen werden über die Geschlechter angepasst.",
-    "description": "Said once when a women's mod's men's versions are made and it has shoes or gloves."
+  "SizeSet.EndFromGameBody.Fmt": {
+    "message": "{0}, \"{1}\": Bein oder Arm hat keine Haut, an der sich ein Körper ablesen lässt, daher wurde es angepasst, als wäre es auf dem Körper des Spiels gemacht.",
+    "description": "Check in game: a women's shoe or glove made a men's with no skin to read a body off. {0} is the piece, {1} the men's option."
+  },
+  "SizeSet.EndClothGap.Fmt": {
+    "message": "{0}, \"{1}\": Der Stoff liegt bis zu {2:F0} mm neben Bein oder Arm von {3}, der abgelesene Körper ist also vielleicht nicht der, auf dem es gemacht wurde.",
+    "description": "Check in game: a women's shoe or glove made a men's whose cloth sits far off the leg or arm it was read on. {0} is the piece, {1} the men's option, {2} millimetres, {3} the body."
   },
   "SizeSet.OneVariant.Fmt": {
     "message": "{0}: Männer bekommen eine Version, aus „{1}“ gemacht; die anderen Varianten des Mods davon bleiben nur für Frauen.",

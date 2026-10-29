@@ -100,7 +100,6 @@ internal static partial class SizeSetRefit
         internal const string MenGroupTaken = "men-group-taken";
         internal const string MenMapsMissing = "men-maps-missing";
         internal const string NoGameData = "no-game-data";
-        internal const string EndsNotForMen = "ends-not-for-men";
         internal const string SameSkin = "same-skin";
         internal const string NoEnd = "no-end";
         internal const string SaveFailed = "save-failed";

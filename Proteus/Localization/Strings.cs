@@ -270,8 +270,14 @@ public sealed class SizeSetStrings
         "The mod already has a group of the author's called \"{0}\", so no men's versions were made. Rename that group "
       + "in Penumbra and add the sizes again.");
 
-    public readonly string EndsNotForMen = ProteusLoc.Localize("SizeSet.EndsNotForMen",
-        "Shoes and gloves get no men's version: only chest and legs pieces are refitted across the sexes.");
+    /// <summary>{0} is the piece, {1} the men's option.</summary>
+    public readonly string EndFromGameBodyFmt = ProteusLoc.Localize("SizeSet.EndFromGameBody.Fmt",
+        "{0}, \"{1}\": its leg or arm has no skin to read a body off, so it was refit as made on the game's own body.");
+
+    /// <summary>{0} is the piece, {1} the men's option, {2} millimetres, {3} the body.</summary>
+    public readonly string EndClothGapFmt = ProteusLoc.Localize("SizeSet.EndClothGap.Fmt",
+        "{0}, \"{1}\": its cloth sits up to {2:F0} mm off {3}'s leg or arm, so the body it was read on may not be the "
+      + "one it was made on.");
 
     /// <summary>{0} is the piece, {1} the author's option the men's version was made from.</summary>
     public readonly string OneVariantFmt = ProteusLoc.Localize("SizeSet.OneVariant.Fmt",
