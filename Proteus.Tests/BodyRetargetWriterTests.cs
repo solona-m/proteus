@@ -1358,7 +1358,19 @@ public class BodyRetargetWriterTests : IDisposable
         Assert.Equal([new BodyRetargetWriter.Rival("Items", "Undershirt")],
                      BodyRetargetWriter.Outranking(RawGroups(), MensTop, "Items", "Shirt"));
 
-        // Saved: the refit's option appended last.
+        // Saved: the refit's option appended last — and never its own rival when the panel asks again, or a save of the
+        // same size again replaces it.
+        Manifest(null, GroupOf("Items", "Multi", 0, [.. Items(), Option("TBSE M", files: Files((MensTop, "Body Retarget/refit.mdl")))]));
+        Assert.Equal([new BodyRetargetWriter.Rival("Items", "Undershirt")],
+                     BodyRetargetWriter.Outranking(RawGroups(), MensTop, "Items", "Shirt", ["TBSE M"]));
+
+        // Saved before, between the shirt and the undershirt: re-saved in place, it comes before the undershirt.
+        Manifest(null, GroupOf("Items", "Multi", 0, Option("Choker"), Option("Shirt", files: Files((WomensTop, "shirt.mdl"))),
+            Option("TBSE M", files: Files((MensTop, "Body Retarget/refit.mdl"))), Option("Undershirt", 0, Files((MensTop, "under.mdl")))));
+        Assert.Empty(BodyRetargetWriter.Outranking(RawGroups(), MensTop, "Items", "Shirt", ["TBSE M"]));
+        Assert.Equal("Body Retarget/refit.mdl",
+                     PenumbraPrecedence.Winner(root, MensTop, Ticks(("Items", ["Choker", "TBSE M", "Undershirt"]))));
+        // Back to the refit appended last, for what is worn below.
         Manifest(null, GroupOf("Items", "Multi", 0, [.. Items(), Option("TBSE M", files: Files((MensTop, "Body Retarget/refit.mdl")))]));
         var ticked = RefitCore.SelectionFor(true, "TBSE M", ["Choker", "Shirt", "Undershirt", "Cape"], "Shirt");
         Assert.Equal("under.mdl", PenumbraPrecedence.Winner(root, MensTop, Ticks(("Items", [.. ticked]))));

@@ -235,8 +235,9 @@ internal static class BodyRetargetWriter
     /// <param name="groups">The mod's raw <c>Groups</c> array (<see cref="PenumbraModMeta.TryReadRawGroups"/>); null:
     /// unknown, and nothing is claimed.</param>
     /// <param name="cutFrom">The destination's option the refit is cut from, which the save unticks; null for none.</param>
+    /// <param name="saving">The options the save writes: a size saved before is the refit itself, never its rival.</param>
     internal static List<Rival> Outranking(IReadOnlyList<JsonElement>? groups, string gamePath, string destination,
-                                           string? cutFrom)
+                                           string? cutFrom, IReadOnlyCollection<string>? saving = null)
     {
         var rivals = new List<Rival>();
         if (groups == null) return rivals;
@@ -256,15 +257,24 @@ internal static class BodyRetargetWriter
                 rivals.Add(new Rival(NameOf(g) ?? "", null));
         }
 
-        // One choice of a single-choice group is on at a time, and the refit's is the one the save ticks.
+        // One choice of a single-choice group is on at a time, and the refit's is the one the save ticks. In a list the
+        // refit's option is 0, and appended last — or, saved before, replaced where it stands, and a sibling after it at
+        // 0 comes after it.
         if (string.Equals(TypeOf(groups[at]), "Multi", StringComparison.OrdinalIgnoreCase)
             && groups[at].TryGetProperty("Options", out var options) && options.ValueKind == JsonValueKind.Array)
-            foreach (var o in options.EnumerateArray())
+        {
+            var list = options.EnumerateArray().ToList();
+            bool Saving(string? name) => name != null && saving?.Contains(name, StringComparer.OrdinalIgnoreCase) == true;
+            int refitAt = list.FindIndex(o => Saving(NameOf(o)));
+            if (refitAt < 0) refitAt = list.Count;
+            for (int i = 0; i < list.Count; i++)
             {
-                string? name = NameOf(o);
-                if (name == null || string.Equals(name, cutFrom, StringComparison.OrdinalIgnoreCase)) continue;
-                if (PriorityOf(o) >= 0 && Claims(o, gamePath)) rivals.Add(new Rival(destination, name));
+                string? name = NameOf(list[i]);
+                if (name == null || Saving(name) || string.Equals(name, cutFrom, StringComparison.OrdinalIgnoreCase)) continue;
+                int p = PriorityOf(list[i]);
+                if ((p > 0 || (p == 0 && i < refitAt)) && Claims(list[i], gamePath)) rivals.Add(new Rival(destination, name));
             }
+        }
         return rivals;
 
         static string? NameOf(JsonElement e)

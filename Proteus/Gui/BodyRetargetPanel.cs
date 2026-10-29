@@ -1648,12 +1648,18 @@ internal sealed partial class BodyRetargetPanel(PenumbraBridge penumbra, UVRemap
                 using (ImRaii.PushColor(ImGuiCol.Text, ProteusStyle.Warn))
                     ImGui.TextWrapped(string.Format(ps.RetargetClashFmt, clash));
         else if (!toNewMod)
+        {
+            // The options this save writes are its own, whether new or already there from a save before.
+            var given = ctx;
+            var saving = (planned ?? []).Select(p => OptionName(given, p.To)).ToList();
             foreach (var rival in BodyRetargetWriter.Outranking(RawGroups(ctx), SavePath(ctx), destination,
-                                                                BodyRetargetWriter.OptionOfFile(ctx.Redirects, ctx.ModelRel, destination)))
+                                                                BodyRetargetWriter.OptionOfFile(ctx.Redirects, ctx.ModelRel, destination),
+                                                                saving))
                 using (ImRaii.PushColor(ImGuiCol.Text, ProteusStyle.Warn))
                     ImGui.TextWrapped(rival.Option == null
                                           ? string.Format(ps.RetargetClashOutrankedFmt, rival.Group, destination)
                                           : string.Format(ps.RetargetClashOptionOutrankedFmt, rival.Option, destination));
+        }
     }
 
     /// <summary>The garment mod's raw groups (<see cref="PenumbraModMeta.TryReadRawGroups"/>), read again only when its
