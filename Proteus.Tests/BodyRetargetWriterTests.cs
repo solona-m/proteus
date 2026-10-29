@@ -179,6 +179,8 @@ public class BodyRetargetWriterTests : IDisposable
         Assert.Equal([4], File.ReadAllBytes(Path.Combine(root, options[1].Files[GamePath])));
         Assert.Equal([2], File.ReadAllBytes(Path.Combine(root, options[2].Files[GamePath])));
         Assert.Equal([3], File.ReadAllBytes(Path.Combine(root, options[3].Files[GamePath])));
+        // Selected: the size saved last, wherever it stands.
+        Assert.Equal("Neolithe SFW L", PenumbraModMeta.SingleDefault(root, Group));
 
         var record = BodyRetargetWriter.ReadRecord(root)!;
         Assert.Equal(["SFW XS", "SFW S", "SFW L"], record.Options.Select(e => e.To));

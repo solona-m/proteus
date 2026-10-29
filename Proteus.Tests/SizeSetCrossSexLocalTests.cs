@@ -203,14 +203,18 @@ public sealed class SizeSetCrossSexLocalTests(ITestOutputHelper o) : IDisposable
     private SizeSetRefit.Result RunMen(string root, IReadOnlyList<string> keys, IReadOnlyList<BodyModIndex.Entry> bodies,
                                        bool remake = false, string? menSkeleton = null, Action<string>? progress = null,
                                        System.Threading.CancellationToken ct = default, Func<string, byte[]?>? readGame = null,
-                                       IPluginLog? log = null)
+                                       IPluginLog? log = null, SizeSetRefit.RunLog? runLog = null)
     {
         log ??= Substitute.For<IPluginLog>();
+        runLog ??= new SizeSetRefit.RunLog();
         var across = new SizeSetRefit.AcrossInputs(
             path => menSkeleton != null && path == OtherRaceWearer.BaseSkeletonPath(CrossSexRefit.Men) ? menSkeleton : null);
-        var result = SizeSetRefit.Run(new SizeSetRefit.Request(root, keys, false, remake, bodies, readGame ?? Game,
-                                                               Ends: false, Across: across),
-                                      Maps(), log, progress ?? (_ => { }), ct);
+        int made = SizeSetRefit.Run(new SizeSetRefit.Request(root, keys, false, remake, bodies, readGame ?? Game,
+                                                             Ends: false, Across: across),
+                                    runLog, Maps(), log, progress ?? (_ => { }), ct);
+        var result = new SizeSetRefit.Result(made, runLog.Notes.Distinct(StringComparer.Ordinal).ToList(),
+                                             runLog.Warnings.Distinct(StringComparer.Ordinal).ToList(),
+                                             SizeSetRefit.Summarize(runLog, made));
         o.WriteLine($"made {result.Made}");
         foreach (string note in result.Notes) o.WriteLine("note: " + note);
         foreach (string warning in result.Warnings ?? []) o.WriteLine("check: " + warning);
@@ -229,6 +233,9 @@ public sealed class SizeSetCrossSexLocalTests(ITestOutputHelper o) : IDisposable
         => (PenumbraModMeta.TryReadGroups(root) ?? []).Select(g => (g.Name, g.Group.GetRawText())).ToList();
 
     private static string SheerTop => "chara/equipment/e6010/model/c0201e6010_top.mdl";
+
+    /// <summary>The author's option Sheer's men's legs are cut from (read 2026-10-29).</summary>
+    private const string SheerLegsCutFrom = "SFW- Opaque";
     private static string SheerMenTop => RacialModelBake.WithRace(SheerTop, CrossSexRefit.Men);
 
     private static float[] PositionsAt(string root, string group, string option, string gamePath)
@@ -259,8 +266,13 @@ public sealed class SizeSetCrossSexLocalTests(ITestOutputHelper o) : IDisposable
         var legs = Assert.Single(across, p => p.Slot == "_dwn");
         var before = Groups(root);
 
+        var runLog = new SizeSetRefit.RunLog();
         var result = RunMen(root, ["tbse@women", "tbse-x@women"],
-                            Installed(CrossSexRefitLocalTests.Bibo, CrossSexRefitLocalTests.Tbse, CrossSexRefitLocalTests.TbseX));
+                            Installed(CrossSexRefitLocalTests.Bibo, CrossSexRefitLocalTests.Tbse, CrossSexRefitLocalTests.TbseX),
+                            runLog: runLog);
+        var legsMade = Assert.Single(runLog.Sizes, s => s.Men && s.Slot == "_dwn" && s.Status == SizeSetRefit.SizeStatus.Made);
+        o.WriteLine($"legs cut from {legsMade.CutFrom}");
+        Assert.Equal(SheerLegsCutFrom, legsMade.CutFrom);
         // The top on both. The legs are made on Bibo+'s nude Type A, whose crotch TBSE's SFW legs have no place for (88.3%
         // of the body, measured 2026-10-24): fitted to TBSE's Gen A legs instead (98.7%). They share no layout with
         // TBSE-X's: left out there, saying why, never written.
@@ -452,10 +464,9 @@ public sealed class SizeSetCrossSexLocalTests(ITestOutputHelper o) : IDisposable
     [Trait("Plan", "AC-cross-sex-area-coverage-1")]
     [Trait("Plan", "AC-cross-sex-area-coverage-8")]
     [Trait("Plan", "EDGE-cross-sex-area-coverage-8")]
-    [Trait("Plan", "EDGE-cross-sex-area-coverage-9")]
     [Trait("Plan", "EDGE-cross-sex-area-coverage-14")]
     [Trait("Plan", "EDGE-cross-sex-area-coverage-17")]
-    public void Stormblessed_gains_mens_legs() // [AC-cross-sex-area-coverage-1] [AC-cross-sex-area-coverage-8] [EDGE-cross-sex-area-coverage-8] [EDGE-cross-sex-area-coverage-9] [EDGE-cross-sex-area-coverage-14] [EDGE-cross-sex-area-coverage-17]
+    public void Stormblessed_gains_mens_legs() // [AC-cross-sex-area-coverage-1] [AC-cross-sex-area-coverage-8] [EDGE-cross-sex-area-coverage-8] [EDGE-cross-sex-area-coverage-14] [EDGE-cross-sex-area-coverage-17]
     {
         string root = Copy(Stormblessed);
         string men = Localization.Strings.SizeSet.MensGroup;
@@ -465,9 +476,15 @@ public sealed class SizeSetCrossSexLocalTests(ITestOutputHelper o) : IDisposable
         var authors = Groups(root).Where(g => g.Name != men).ToList();
         var bodies = Installed(CrossSexNudeLegsLocalTests.LavaBod, CrossSexRefitLocalTests.Tbse);
         var log = Substitute.For<IPluginLog>();
+        var runLog = new SizeSetRefit.RunLog();
 
-        var result = RunMen(root, ["tbse@women"], bodies, log: log);
+        var result = RunMen(root, ["tbse@women"], bodies, log: log, runLog: runLog);
         Assert.DoesNotContain(result.Notes, n => n.StartsWith(legs.Label + ": \"TBSE\"", StringComparison.Ordinal));
+        // The report says made, with the share of the legs it was fitted to.
+        var outcome = Assert.Single(runLog.Sizes, s => s.Men && s.Piece == legs.Label && s.Option == "TBSE");
+        Assert.Equal(SizeSetRefit.SizeStatus.Made, outcome.Status);
+        Assert.True(outcome.Measures?.Coverage >= 0.9, $"{outcome.Measures?.Coverage} matched");
+        Assert.Equal(men, Groups(root)[^1].Name);
         var option = PenumbraModMeta.TryReadFileOptions(root, men)!.First(x => x.Name == "TBSE");
         Assert.Contains(option.Files.Keys, k => string.Equals(k, legsMen, StringComparison.OrdinalIgnoreCase));
         Assert.Contains("Eqdp", System.Text.Json.JsonSerializer.Serialize(option.Manipulations));

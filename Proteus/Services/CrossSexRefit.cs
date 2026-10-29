@@ -207,15 +207,15 @@ internal static class CrossSexRefit
     /// <summary>
     /// How many of a men's version's skin triangles are the nude smallclothes' own — further than half a millimetre from
     /// the SFW legs at <paramref name="sfwPath"/> anywhere — so the log can say how much nude skin a garment fitted to them
-    /// shows where its cloth does not hide it. 0 when either model cannot be read.
+    /// shows where its cloth does not hide it. Null when either model cannot be read, so "unknown" is never said as none.
     /// </summary>
-    internal static int NudeSkinShown(byte[]? saved, string sfwPath)
+    internal static int? NudeSkinShown(byte[]? saved, string sfwPath)
     {
         try
         {
             if (saved == null || ModelPartReader.Read(saved) is not { } model
                 || ModelPartReader.Read(System.IO.File.ReadAllBytes(sfwPath)) is not { } sfw)
-                return 0;
+                return null;
             var surface = new BodySurface(sfw, BodySurface.CellFor(0.01f));
             bool Off(int v)
                 => !surface.Nearest(new System.Numerics.Vector3(model.Positions[v * 3], model.Positions[v * 3 + 1],
@@ -232,7 +232,7 @@ internal static class CrossSexRefit
         catch (Exception e) when (e is System.IO.IOException or UnauthorizedAccessException or InvalidOperationException
                                        or ArgumentException or IndexOutOfRangeException)
         {
-            return 0;
+            return null;
         }
     }
 

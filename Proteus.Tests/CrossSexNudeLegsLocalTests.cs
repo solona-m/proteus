@@ -81,6 +81,7 @@ public class CrossSexNudeLegsLocalTests(ITestOutputHelper o)
     [Trait("Plan", "AC-cross-sex-area-coverage-2")]
     [Trait("Plan", "EDGE-cross-sex-area-coverage-2")]
     [Trait("Plan", "EDGE-cross-sex-area-coverage-15")]
+    [Trait("Speed", "Slow")]
     public void Nude_legs_reach_tbse_gen_a() // [AC-cross-sex-area-coverage-2] [EDGE-cross-sex-area-coverage-2] [EDGE-cross-sex-area-coverage-15]
     {
         var lava = LegsOf(LavaBod).ToList();
@@ -100,6 +101,7 @@ public class CrossSexNudeLegsLocalTests(ITestOutputHelper o)
     [Trait("Plan", "AC-cross-sex-area-coverage-4")]
     [Trait("Plan", "EDGE-cross-sex-area-coverage-1")]
     [Trait("Plan", "EDGE-cross-sex-area-coverage-16")]
+    [Trait("Speed", "Slow")]
     public void Sfw_made_and_rue_legs_keep_tbse_sfw() // [AC-cross-sex-area-coverage-4] [EDGE-cross-sex-area-coverage-1] [EDGE-cross-sex-area-coverage-16]
     {
         var kept = new[] { ("Bibo+ SFW Undies", Path.Combine(LocalData.Path(CrossSexRefitLocalTests.Bibo), UvBakeInputs.BiboLegs[3].Rel)) }
@@ -229,6 +231,7 @@ public class CrossSexNudeLegsLocalTests(ITestOutputHelper o)
     [Trait("Plan", "AC-cross-sex-area-coverage-6")]
     [Trait("Plan", "EDGE-cross-sex-area-coverage-10")]
     [Trait("Plan", "EDGE-cross-sex-area-coverage-15")]
+    [Trait("Speed", "Slow")]
     public void Stormblessed_legs_through_the_job() // [AC-cross-sex-area-coverage-2] [AC-cross-sex-area-coverage-5] [AC-cross-sex-area-coverage-6] [EDGE-cross-sex-area-coverage-10] [EDGE-cross-sex-area-coverage-15]
     {
         var log = Substitute.For<IPluginLog>();
@@ -257,7 +260,18 @@ public class CrossSexNudeLegsLocalTests(ITestOutputHelper o)
         RefitGate.Assert(o, r, s, 0, RefitGate.Gates.None, minCoverage: 0.9f);
         Assert.True(s.Folds <= KnownStormblessedLegsFolds, $"{s.Folds} folds, more than the {KnownStormblessedLegsFolds} known");
         Assert.True(s.Plan!.Report.Missed <= KnownStormblessedLegsMissed, $"{s.Plan.Report.Missed} cloth points missed");
-        o.WriteLine($"Gen A: {CrossSexRefit.NudeSkinShown(s.Saved!.Model, TbsePath(0))} of its own skin triangles shown");
+        // The bent made-for body leaves nothing unplaced on Gen A once Whole has filled it in.
+        Assert.Equal(0, Measure(r.SourcePath!, TbsePath(1), out var bentRefused)!.After);
+        Assert.Null(bentRefused);
+        var entry = CrossSexRefitReport.Size(s, "TBSE", "legs.mdl");
+        Assert.Null(entry["refusal"]);
+        Assert.Equal("legs.mdl", (string?)entry["file"]);
+        // Its nude crotch shows, counted against the SFW legs; the SFW legs show none of it, and an unread model is unknown.
+        int? shown = CrossSexRefit.NudeSkinShown(s.Saved!.Model, TbsePath(0));
+        o.WriteLine($"Gen A: {shown} of its own skin triangles shown");
+        Assert.True(shown > 0, $"{shown} nude skin triangles shown");
+        Assert.Equal(0, CrossSexRefit.NudeSkinShown(File.ReadAllBytes(TbsePath(0)), TbsePath(0)));
+        Assert.Null(CrossSexRefit.NudeSkinShown(null, TbsePath(0)));
 
         // Gen A picked outright: the very same model and materials.
         var direct = CrossSexRefitJob.Run(JobInputs(StormblessedLegs, LavaBod, 1, log)).Sizes.Single();
@@ -269,6 +283,25 @@ public class CrossSexNudeLegsLocalTests(ITestOutputHelper o)
         for (int i = 0; i < a.Length; i++) Assert.True(MathF.Abs(a[i] - b[i]) <= 1e-5f, $"position {i / 3} differs");
         Assert.Equal((s.Saved.Materials ?? []).Select(m => (m.Name, Convert.ToHexString(m.Bytes))),
                      (direct.Saved.Materials ?? []).Select(m => (m.Name, Convert.ToHexString(m.Bytes))));
+    }
+
+    [LocalDataFact(LocalData.GameData, StormblessedLegs, LavaBod, CrossSexRefitLocalTests.Tbse)]
+    [Trait("Plan", "EDGE-cross-sex-area-coverage-4")]
+    public void A_pair_the_match_refuses_never_tries_the_nude_legs() // [EDGE-cross-sex-area-coverage-4]
+    {
+        // No body maps: the SFW pair is refused in the match itself, before any share is measured.
+        int asked = 0;
+        var log = Substitute.For<IPluginLog>();
+        var inputs = JobInputs(StormblessedLegs, LavaBod, 0, log) with
+        {
+            UvRemap = new UVRemapService(Substitute.For<IPluginLog>(), "."),
+            Nude = _ => { asked++; return null; },
+        };
+        var s = CrossSexRefitJob.Run(inputs).Sizes.Single();
+        Assert.Equal(0, asked);
+        Assert.False(s.SaveAllowed && s.Refusal.Length == 0);
+        Assert.Contains("body maps", CrossSexRefitReport.Refusal(s));
+        Assert.Null(s.Asked);
     }
 
     [LocalDataFact(LocalData.GameData, CrossSexRefitLocalTests.SheerLegs, CrossSexRefitLocalTests.Bibo,

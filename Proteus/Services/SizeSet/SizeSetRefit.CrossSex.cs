@@ -608,7 +608,7 @@ internal static partial class SizeSetRefit
     private static string NudeSaid(CrossSexRefitJob.Size made, string askedPath)
         => made.Asked == null ? ""
          : $" on {made.Target.Label} (the SFW legs matched {made.AskedLanded?.VertexCoverage:P1}; " +
-           $"{CrossSexRefit.NudeSkinShown(made.Saved?.Model, askedPath)} of its own skin triangles shown)";
+           $"{CrossSexRefit.NudeSkinShown(made.Saved?.Model, askedPath)?.ToString() ?? "unknown"} of its own skin triangles shown)";
 
     /// <summary>
     /// What a men's version saved at <paramref name="save"/> carries: the EQDP entry that makes the game load a model
