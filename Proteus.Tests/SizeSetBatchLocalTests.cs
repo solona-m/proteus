@@ -837,13 +837,6 @@ public class SizeSetBatchLocalTests(ThisOldThingRun tot, ITestOutputHelper outpu
 
     // ── v3 ──
 
-    /// <summary>Scarlet's pack, v3, unpacked into a work folder.</summary>
-    private static string Unpacked(string pack)
-    {
-        string copy = SizeSetBatchData.NewCopy();
-        ZipFile.ExtractToDirectory(LocalData.Path(pack), copy);
-        return copy;
-    }
 
     [LocalDataFact(SizeSetBatchData.ScarletPack, SizeSetBatchData.Neolithe, SizeSetBatchData.Bibo, LocalData.UvMaps)]
     [Trait("Plan", "AC-headless-size-set-10")]
@@ -852,7 +845,7 @@ public class SizeSetBatchLocalTests(ThisOldThingRun tot, ITestOutputHelper outpu
     [Trait("Speed", "Slow")]
     public void V3_pack_is_converted_then_sized() // [AC-headless-size-set-10] [AC-headless-size-set-4] [EDGE-headless-size-set-21]
     {
-        string copy = Unpacked(SizeSetBatchData.ScarletPack);
+        string copy = SizeSetBatchData.UnpackedPack(SizeSetBatchData.ScarletPack);
         try
         {
             Assert.True(PenumbraModMeta.IsLegacyFolder(copy));
@@ -866,7 +859,7 @@ public class SizeSetBatchLocalTests(ThisOldThingRun tot, ITestOutputHelper outpu
             Assert.Contains(runLog.Sizes, s => s.Body == "bibo" && s.Status == SizeSetRefit.SizeStatus.Made);
 
             // Only appended to, against the groups the conversion wrote: re-read from a fresh conversion of the pack.
-            string fresh = Unpacked(SizeSetBatchData.ScarletPack);
+            string fresh = SizeSetBatchData.UnpackedPack(SizeSetBatchData.ScarletPack);
             try
             {
                 PenumbraModMeta.MigrateWorkCopy(fresh, LocalData.Path(LocalData.Mods));

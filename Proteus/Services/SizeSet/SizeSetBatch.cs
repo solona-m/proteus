@@ -87,16 +87,20 @@ internal static class SizeSetBatch
         string name = madeOn.TrimEnd('\\', '/');
         if (Path.IsPathRooted(name))
         {
-            string parent = Path.GetDirectoryName(Path.GetFullPath(name)) ?? "";
+            // Resolved first: "…\Bibo+\." or "…\x\..\Bibo+" name the folder they resolve to.
+            string full = Path.GetFullPath(name).TrimEnd('\\', '/');
+            string parent = Path.GetDirectoryName(full) ?? "";
             if (!string.Equals(parent.TrimEnd('\\', '/'), Path.GetFullPath(modsRoot).TrimEnd('\\', '/'),
                                StringComparison.OrdinalIgnoreCase))
             {
                 error = $"--made-on {madeOn} is not a folder under --mods-root";
                 return null;
             }
-            name = Path.GetFileName(name);
+            name = Path.GetFileName(full);
         }
-        if (name.Length == 0 || !Directory.Exists(Path.Combine(modsRoot, name)))
+        // A name is one folder: never the mod folder itself, its parent, or a folder further down.
+        if (name.Length == 0 || name is "." or ".." || name.IndexOfAny(['\\', '/']) >= 0
+            || !Directory.Exists(Path.Combine(modsRoot, name)))
         {
             error = $"--made-on {madeOn}: no such folder under --mods-root";
             return null;

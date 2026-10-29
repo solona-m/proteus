@@ -98,6 +98,22 @@ public class SizeSetMadeOnLocalTests(ITestOutputHelper output, ObliqueRun obliqu
         // Legs: every body whose table has legs (YAB Buff has none).
         foreach (string key in WomensKeys.Where(k => SupportedBodies.Of(k, "_dwn", false) != null))
             Assert.True(Made(ObliqueLegs, key), $"no {key} legs made");
+        // The men's legs: made, or refused by the refit across the sexes with its reason — never left unsaid. Oblique's
+        // are refused (the body maps match 88% of TBSE's legs, and TBSE-X's lay out apart).
+        foreach (string key in new[] { "tbse", "tbse-x" })
+        {
+            string mens = RacialModelBake.WithRace(ObliqueLegs, CrossSexRefit.Men);
+            var legs = oblique.First.Sizes.Where(s => s.Men && s.Body == key
+                                                      && s.GamePath.Equals(mens, StringComparison.OrdinalIgnoreCase)).ToList();
+            Assert.True(legs.Count > 0, $"no {key} legs outcome for men");
+            // Refused only by those two gates — the body maps' coverage, or the legs' texture layout — never otherwise.
+            string coverage = Strings.Parts.RetargetRefuseCrossSexCoverageFmt.Split('{')[0];
+            Assert.All(legs, s => Assert.True(s.Status == SizeStatus.Made
+                                              || (s.ReasonCode == SizeSetRefit.Codes.RefusedMen && s.Reason is { } why
+                                                  && (why.Contains(coverage, StringComparison.Ordinal)
+                                                      || why.Contains("by texture coordinate", StringComparison.Ordinal))),
+                                              $"{s.Status} {s.ReasonCode}: {s.Reason}"));
+        }
         Assert.All(oblique.First.Sizes.Where(s => s.Status != SizeStatus.Made), s => Assert.False(string.IsNullOrEmpty(s.Reason)));
 
         // Named by their bodies, only added after the author's.
@@ -199,6 +215,17 @@ public class SizeSetMadeOnLocalTests(ITestOutputHelper output, ObliqueRun obliqu
                 Assert.Contains(string.Format(Strings.SizeSet.UnreadableMadeOnFmt, piece.Label), log.Notes);
             Assert.Equal(SizeSetRefit.Summary.SeeLeftOut, SizeSetRefit.Summarize(log, log.Made));
             Assert.Equal(before, File.ReadAllBytes(Path.Combine(copy, PenumbraModMeta.MetaFile)));
+
+            // After a run with "Made on": the sizes it made are no sources, and a run without it touches nothing.
+            var withMadeOn = Data.Batch(copy, ["rue"], men: false, [Data.Bibo, Data.Rue], readGame: readGame,
+                                        madeOn: Data.Folder(Data.Bibo)).Log;
+            Assert.True(withMadeOn.Made > 0);
+            byte[] made = File.ReadAllBytes(Path.Combine(copy, PenumbraModMeta.MetaFile));
+            var (_, after) = Data.Batch(copy, ["rue"], men: false, [Data.Bibo, Data.Rue], readGame: readGame);
+            Assert.Equal(0, after.Made);
+            foreach (var piece in SizeSetRefit.PiecesOf(copy, readGame))
+                Assert.Contains(string.Format(Strings.SizeSet.UnreadableMadeOnFmt, piece.Label), after.Notes);
+            Assert.Equal(made, File.ReadAllBytes(Path.Combine(copy, PenumbraModMeta.MetaFile)));
         }
         finally { Data.Delete(copy); }
     }
@@ -259,26 +286,46 @@ public class SizeSetMadeOnLocalTests(ITestOutputHelper output, ObliqueRun obliqu
     [Trait("Speed", "Slow")]
     public void Oblique_made_on_a_wrong_body_is_as_measured() // [AC-size-set-made-on-7] [EDGE-size-set-made-on-2]
     {
-        SizeSetRefit.RunLog Run(string madeOn)
+        // Each of the author's sizes read on the body: how many were taken, and how many not, per piece.
+        (SizeSetRefit.RunLog Log, (int Taken, int Not) Top, (int Taken, int Not) Legs) Run(string madeOn)
         {
             string copy = MigratedOblique();
             try
             {
+                var said = new StringWriter();
                 var log = Data.Batch(copy, ["rue"], men: false, [Data.Neolithe, Data.Rosaline, Data.Rue], readGame: Data.Game(),
-                                     madeOn: Data.Folder(madeOn)).Log;
+                                     madeOn: Data.Folder(madeOn), log: RefitCli::Proteus.Refit.ConsoleLog.To(said)).Log;
                 Print(log);
-                return log;
+                // The reading of each size, once: not a choice's "only size read on" line, nor a cached answer.
+                var lines = said.ToString().Split('\n')
+                                .Where(l => l.Contains(" read on ", StringComparison.Ordinal)
+                                            && !l.Contains("only size read on", StringComparison.Ordinal)
+                                            && !l.Contains("read on the Made on body before", StringComparison.Ordinal))
+                                .ToList();
+                (int, int) Count(string piece)
+                {
+                    var of = lines.Where(l => l.Contains("size set: " + piece, StringComparison.Ordinal)).ToList();
+                    int not = of.Count(l => l.Contains("; not taken", StringComparison.Ordinal));
+                    return (of.Count - not, not);
+                }
+                return (log, Count("Body"), Count("Legs"));
             }
             finally { Data.Delete(copy); }
         }
         bool Made(SizeSetRefit.RunLog log, string gamePath)
             => log.Sizes.Any(s => s.Status == SizeStatus.Made && s.GamePath.Equals(gamePath, StringComparison.OrdinalIgnoreCase));
 
-        var neolithe = Run(Data.Neolithe);
+        // As measured: on Neolithe 9 of Oblique's 10 tops are taken (XLarge Tummy unclear), and its Small legs and Small
+        // Tummy legs; on Rosaline 3 tops, and no legs at all.
+        var (neolithe, neoTop, neoLegs) = Run(Data.Neolithe);
+        Assert.Equal((9, 1), neoTop);
+        Assert.Equal((2, 4), neoLegs);
         Assert.True(Made(neolithe, ObliqueTop));
         Assert.True(Made(neolithe, ObliqueLegs));
 
-        var rosaline = Run(Data.Rosaline);
+        var (rosaline, rosTop, rosLegs) = Run(Data.Rosaline);
+        Assert.Equal((3, 7), rosTop);
+        Assert.Equal((0, 6), rosLegs);
         Assert.True(Made(rosaline, ObliqueTop));
         Assert.False(Made(rosaline, ObliqueLegs));
         string name = SizeSetBatch.ScanBodies(LocalData.Path(LocalData.Mods), [Data.Folder(Data.Rosaline)])[0].Name;
@@ -374,11 +421,11 @@ public class SizeSetMadeOnLocalTests(ITestOutputHelper output, ObliqueRun obliqu
         try
         {
             var stdout = new StringWriter();
-            int exit = RefitCli::Proteus.Refit.Program.Dispatch(CliArgs(copy, modsRoot, "Bibo+"), stdout, TextWriter.Null);
+            int exit = RefitCli::Proteus.Refit.Program.Dispatch(CliArgs(copy, modsRoot, Data.Folder(Data.Bibo)), stdout, TextWriter.Null);
             var report = JsonNode.Parse(stdout.ToString())!;
             output.WriteLine(stdout.ToString()[..Math.Min(4000, stdout.ToString().Length)]);
             Assert.Equal(0, exit);
-            Assert.Equal("Bibo+", (string?)report["madeOn"]);
+            Assert.Equal(Data.Folder(Data.Bibo), (string?)report["madeOn"]);
             Assert.True((int)report["made"]! > 0);
             Assert.Equal(3, (int)report["migrated"]!["fromVersion"]!);
 
@@ -401,11 +448,19 @@ public class SizeSetMadeOnLocalTests(ITestOutputHelper output, ObliqueRun obliqu
         string modsRoot = Data.ModsRootWith(Data.Bibo);
         try
         {
-            Assert.Equal("Bibo+", SizeSetBatch.MadeOnFolder(Path.Combine(modsRoot, "Bibo+"), modsRoot, out var error));
+            Assert.Equal(Data.Folder(Data.Bibo), SizeSetBatch.MadeOnFolder(Path.Combine(modsRoot, Data.Folder(Data.Bibo)), modsRoot, out var error));
             Assert.Null(error);
-            Assert.Equal("Bibo+", SizeSetBatch.MadeOnFolder("Bibo+", modsRoot, out _));
+            Assert.Equal(Data.Folder(Data.Bibo), SizeSetBatch.MadeOnFolder(Data.Folder(Data.Bibo), modsRoot, out _));
             Assert.Null(SizeSetBatch.MadeOnFolder(LocalData.Path(Data.Bibo), modsRoot, out error));
             Assert.Contains("is not a folder under --mods-root", error);
+            // One folder by name: never the mod folder itself, its parent, or one further down.
+            foreach (string notOne in new[] { ".", "..", Data.Folder(Data.Bibo) + "/files", Path.Combine(modsRoot, ".") })
+            {
+                Assert.Null(SizeSetBatch.MadeOnFolder(notOne, modsRoot, out error));
+                Assert.NotNull(error);
+            }
+            Assert.Equal(Data.Folder(Data.Bibo),
+                         SizeSetBatch.MadeOnFolder(Path.Combine(modsRoot, Data.Folder(Data.Bibo), "."), modsRoot, out _));
 
             string copy = Data.UnpackedPack(Data.ObliquePack);
             try
@@ -514,7 +569,8 @@ public class SizeSetMadeOnLocalTests(ITestOutputHelper output, ObliqueRun obliqu
         finally { Data.Delete(probe); }
         Assert.Contains(autoReadings, r => r.Key.EndsWith("|Rue M", StringComparison.Ordinal) && r.Value.Dir == Data.Folder(Data.Rue));
 
-        (SizeSetRefit.RunLog Log, string Said) Run(string? madeOn)
+        // A run on a fresh copy, and a second one on the same copy after it.
+        (SizeSetRefit.RunLog Log, string Said, SizeSetRefit.RunLog Again) Run(string? madeOn)
         {
             string copy = Data.CopyOf(Data.ThisOldThing);
             try
@@ -522,7 +578,10 @@ public class SizeSetMadeOnLocalTests(ITestOutputHelper output, ObliqueRun obliqu
                 var said = new StringWriter();
                 var log = Data.Batch(copy, ["neolithe", "rue", "bibo"], men: false, bodies, readGame: readGame, madeOn: madeOn,
                                      log: RefitCli::Proteus.Refit.ConsoleLog.To(said)).Log;
-                return (log, said.ToString());
+                var again = madeOn == null
+                    ? new SizeSetRefit.RunLog()
+                    : Data.Batch(copy, ["neolithe", "rue", "bibo"], men: false, bodies, readGame: readGame, madeOn: madeOn).Log;
+                return (log, said.ToString(), again);
             }
             finally { Data.Delete(copy); }
         }
@@ -531,10 +590,10 @@ public class SizeSetMadeOnLocalTests(ITestOutputHelper output, ObliqueRun obliqu
 
         // Any "Made on" reads every size as before, none of them on the body chosen: only what cannot be read falls back.
         // The inexact ones read on another body than the one chosen are said, once per option a size was cut from.
-        var (plain, _) = Run(null);
+        var (plain, _, _) = Run(null);
         foreach (string madeOn in new[] { Data.Neolithe, Data.Bibo })
         {
-            var (run, said) = Run(Data.Folder(madeOn));
+            var (run, said, again) = Run(Data.Folder(madeOn));
             Assert.Equal(Outcomes(plain), Outcomes(run));
             Assert.DoesNotContain(" read on ", said, StringComparison.Ordinal);
             string name = installed.First(b => b.Dir == Data.Folder(madeOn)).Name;
@@ -546,7 +605,12 @@ public class SizeSetMadeOnLocalTests(ITestOutputHelper output, ObliqueRun obliqu
                                     .Select(s => (s.Piece, s.CutFrom!)).Distinct().ToList();
             var warned = run.Warnings.Where(w => w.Contains("\"Made on\"", StringComparison.Ordinal)).ToList();
             output.WriteLine($"{name}: {expected.Count} expected\n{string.Join("\n", warned)}");
+            // Rue M reads Likely on Rue+: under any other "Made on", the sizes cut from it are said.
+            Assert.NotEmpty(expected);
             Assert.Equal(expected.Count, warned.Count);
+            // Nothing made the second time, and so nothing said.
+            Assert.Equal(0, again.Made);
+            Assert.DoesNotContain(again.Warnings, w => w.Contains("\"Made on\"", StringComparison.Ordinal));
             Assert.All(warned, w => Assert.Contains(name, w));
             Assert.All(expected, e => Assert.Contains(warned, w => w.StartsWith(e.Piece + ":", StringComparison.Ordinal)
                                                                    && w.Contains($"\"{e.Item2}\"", StringComparison.Ordinal)));
