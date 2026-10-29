@@ -129,6 +129,8 @@ public sealed class Plugin : IDalamudPlugin
         discovery.SeedDefaultEffects();
         effectsDl.EnsureAsync(onProgress: () => { if (!_disposed) discovery.SeedDefaultEffects(); });
         uvRemap = new UVRemapService(log, dataDir);
+        // Nothing may read a UV map before this: the download service swaps an upgraded men's pair into place as it is
+        // made, and a map read (or cached) first would be the old one, or a file mid-move.
         uvMapDl = new UVMapDownloadService(log, dataDir, assemblyDir);
         compositor = new CompositorService(penumbra, glamourer, discovery, textureLoader, config, log, uvRemap);
 
