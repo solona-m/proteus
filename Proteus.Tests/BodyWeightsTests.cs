@@ -746,6 +746,14 @@ public class BodyWeightsTests
         Assert.Equal(!acrossBodies, materials.Contains(Pubes));
         Assert.Equal(!acrossBodies, materials.Contains(Piercings));
         Assert.Contains(Cloth, materials);
+
+        // Their names go with them: the game loads every material the model names, and one the new body has no file
+        // for hides the whole model. The meshes kept still draw what they drew.
+        var table = SecondSkinWriter.MaterialNames(plan.Model);
+        Assert.Equal(!acrossBodies, table.Contains(Pubes));
+        Assert.Equal(!acrossBodies, table.Contains(Piercings));
+        Assert.Equal(table.Count, table.Distinct().Count());
+        Assert.Equal(materials.Order(), SecondSkinWriter.DrawnMaterialNames(plan.Model).Order());
     }
 
     /// <summary>

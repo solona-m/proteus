@@ -61,6 +61,12 @@ public static partial class SecondSkinWriter
         private List<Source> geomSrcs = null!;
         private Dictionary<byte[], Source> geomByModel = null!;
         private int baseMatCount;
+        /// <summary>The host's material names this build writes, in its order: all of them, but for those only meshes
+        /// left out (<c>dropHostMesh</c>) drew.</summary>
+        private List<string> hostMatNames = null!;
+        /// <summary>Each host material index's place in <see cref="hostMatNames"/>, when some were left out; null when
+        /// none were.</summary>
+        private ushort[]? hostMatMap;
         private List<string> boneNames = null!;
         private Dictionary<string, ushort> boneIndex = null!;
         private List<byte[]> boneBBox = null!;
@@ -541,7 +547,32 @@ public static partial class SecondSkinWriter
                 geomSrcs.Add(gs);
             }
 
-            baseMatCount = baseSrc?.MatNames.Count ?? 0;
+            // A material only meshes left out drew goes with them. The game loads every name in the table whether a mesh
+            // draws it or not, and one it cannot find hides the whole model: a women's garment's pubic hair, dropped on
+            // its way to a man, left "_bibopube" behind, which no men's body has — the men's legs were invisible.
+            hostMatNames = baseSrc?.MatNames ?? [];
+            hostMatMap = null;
+            if (baseSrc != null && dropHostMesh != null)
+            {
+                var kept = new HashSet<int>();
+                var gone = new HashSet<int>();
+                int bEnd = baseSrc.Lod0MeshIndex + baseSrc.Lod0MeshCount;
+                for (int m = baseSrc.Lod0MeshIndex; m < bEnd && m < baseSrc.MeshCount; m++)
+                    (dropHostMesh(m) ? gone : kept).Add(BitConverter.ToUInt16(baseSrc.S, baseSrc.MeshStart + m * 36 + 8));
+                gone.ExceptWith(kept);
+                if (gone.Count > 0)
+                {
+                    hostMatMap = new ushort[baseSrc.MatNames.Count];
+                    hostMatNames = [];
+                    for (int i = 0; i < baseSrc.MatNames.Count; i++)
+                    {
+                        if (gone.Contains(i)) continue;
+                        hostMatMap[i] = (ushort)hostMatNames.Count;
+                        hostMatNames.Add(baseSrc.MatNames[i]);
+                    }
+                }
+            }
+            baseMatCount = hostMatNames.Count;
             if (baseMatCount + layers.Count > MaxMaterials)
                 throw new InvalidOperationException(
                     $"host has {baseMatCount} materials + {layers.Count} layers > {MaxMaterials} max");
@@ -685,6 +716,7 @@ public static partial class SecondSkinWriter
                     ushort srcMat = BitConverter.ToUInt16(baseSrc.S, bmo + 8);
                     // A whole mesh left out when asked: a garment whose skin is being replaced loses that skin.
                     if (dropHostMesh != null && dropHostMesh(m)) continue;
+                    if (hostMatMap != null && srcMat < hostMatMap.Length) srcMat = hostMatMap[srcMat];
                     EmitMesh(baseSrc, m, srcMat, 0f, preserve: true, cov: null,
                              reskin: hostReskin?.Invoke(m));
                 }
@@ -755,10 +787,10 @@ public static partial class SecondSkinWriter
             }
 
             matStrOff = new List<uint>();
-            // Host materials FIRST (indices 0..baseMatCount-1, referenced verbatim by the host's own meshes),
-            // then the appended shell layer materials.
+            // Host materials FIRST (indices 0..baseMatCount-1, referenced by the host's own meshes — through hostMatMap
+            // when some were left out), then the appended shell layer materials.
             if (baseSrc != null)
-                foreach (var name in baseSrc.MatNames)
+                foreach (var name in hostMatNames)
                 {
                     matStrOff.Add((uint)strMs.Position);
                     strMs.Write(Encoding.ASCII.GetBytes(name));
