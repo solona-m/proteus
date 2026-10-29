@@ -103,6 +103,17 @@ internal sealed class ChestField
 
     public Vector3 Apply(Vector3 p) => p + Displacement(p);
 
+    /// <summary>
+    /// How far forward of the source's the destination's nipples may stand (1 cm). A field is cast from a flat chest
+    /// onto a breast; cast from a breast onto a flat chest, along the breast's own turning normals or by nearness, its
+    /// rays cross and the map folds — that map is the other one's inverse (<see cref="UvTransferBake.InvertInto"/>).
+    /// </summary>
+    internal const float MaxStandout = 0.01f;
+
+    /// <summary>Where the destination point <paramref name="p"/> lands on <paramref name="src"/>: moved by the field, then cast.</summary>
+    public UvTransferBake.Landing Land(TriangleBvh bvh, BakeBody src, Vector3 p, Vector3 n, Region region)
+        => UvTransferBake.Land(bvh, src, Apply(p), n, region);
+
     /// <summary>Whether the field can move <paramref name="p"/> at all: within its band and within reach of a site.</summary>
     public bool InSupport(Vector3 p)
     {
@@ -121,6 +132,9 @@ internal sealed class ChestField
         if (dn == null) return (null, "destination: " + df);
         var (sn, sf) = UvBakeNipples.Find(src);
         if (sn == null) return (null, "source: " + sf);
+        float standout = (dn.Value.L.Pos.Z + dn.Value.R.Pos.Z - sn.Value.L.Pos.Z - sn.Value.R.Pos.Z) / 2;
+        if (standout > MaxStandout)
+            return (null, $"the destination's nipples stand {standout * 1000:F0} mm before the source's: cast the other way and invert");
         var destBvh = new TriangleBvh(dest);
 
         // Targets: each destination point and the source point it must land on.
@@ -209,6 +223,7 @@ internal sealed class ChestField
 
         var normals = targets.Select(t => dest.SmoothAt(t.Tri, t.Bary.X, t.Bary.Y, t.Bary.Z)).ToArray();
         var regions = targets.Select(t => dest.RegionAt(t.Tri, t.Bary.X, t.Bary.Y, t.Bary.Z)).ToArray();
+        // A ray decides only where across the skin a point lands: the offsets are solved across it.
         Vector3 Across(Vector3 d, Vector3 nrm) => d - nrm * Vector3.Dot(d, nrm);
         Vector3? Landed(Vector3 from, int k)
         {
@@ -332,6 +347,46 @@ internal sealed class ChestField
         if (c.MaxStillMm > UvTransferQuality.Gate.FieldStillMm) miss.Add($"chest field moves the sternum or clavicle row {c.MaxStillMm:F1} mm");
         if (Condition > MaxCondition) miss.Add($"chest field system ill-conditioned even ridged: {Condition:E1}");
         return miss;
+    }
+
+    /// <summary>
+    /// The stretch the anatomy asks of this field: down each nipple's line, the bands between the clavicle row, the
+    /// nipple, the crease and the lower row, and across between the nipples — each the source length between its two
+    /// ends as the field lands them over the length as the plain projection does. Area is the worst band's vertical
+    /// times the horizontal (or its inverse), anisotropy the worst ratio of the two.
+    /// </summary>
+    internal (double Area, double Aniso) Predict(BakeBody dest, BakeBody src, TriangleBvh srcBvh)
+    {
+        var destBvh = new TriangleBvh(dest);
+        (Vector3 Plain, Vector3 Field)? Ends(float x, float y)
+        {
+            if (FrontHit(dest, destBvh, x, y) is not { } hit) return null;
+            var n = dest.SmoothAt(hit.Tri, hit.U, hit.V, hit.W);
+            var region = dest.RegionAt(hit.Tri, hit.U, hit.V, hit.W);
+            var a = UvTransferBake.Land(srcBvh, src, hit.Pos, n, region);
+            var b = Land(srcBvh, src, hit.Pos, n, region);
+            if (!a.Found || !b.Found) return null;
+            return (src.At(a.Tri, a.U, a.V, a.W).Pos, src.At(b.Tri, b.U, b.V, b.W).Pos);
+        }
+        double Ratio((Vector3 Plain, Vector3 Field) p, (Vector3 Plain, Vector3 Field) q)
+            => Vector3.Distance(p.Field, q.Field) / Math.Max(Vector3.Distance(p.Plain, q.Plain), 1e-6f);
+
+        var nipples = new Dictionary<string, (Vector3 Plain, Vector3 Field)>();
+        var vertical = new List<double>();
+        foreach (var side in new[] { "L", "R" })
+        {
+            var nipple = Sites.First(s => s.Name == "nipple" + side).Centre;
+            var crease = Sites.First(s => s.Name == "crease" + side).Centre;
+            var clav = Sites.First(s => s.Name == "clavicle" + side).Centre;
+            var ends = new[] { clav.Y, nipple.Y, crease.Y, YLow + 0.001f }.Select(y => Ends(nipple.X, y)).ToList();
+            if (ends.Any(e => e == null)) return (double.PositiveInfinity, double.PositiveInfinity);
+            for (int k = 0; k + 1 < ends.Count; k++) vertical.Add(Ratio(ends[k]!.Value, ends[k + 1]!.Value));
+            nipples[side] = ends[1]!.Value;
+        }
+        double h = Ratio(nipples["L"], nipples["R"]);
+        double area = vertical.Max(s => Math.Max(s * h, 1 / (s * h)));
+        double aniso = vertical.Max(s => Math.Max(s / h, h / s));
+        return (area, aniso);
     }
 
     /// <summary>The foremost Torso skin at (<paramref name="x"/>, <paramref name="y"/>): a ray from well in front.</summary>

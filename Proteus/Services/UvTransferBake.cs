@@ -551,7 +551,7 @@ internal static class UvTransferBake
 
     /// <summary>
     /// The map from <paramref name="src"/>'s sheet to <paramref name="dest"/>'s: indexed by a destination pixel. With a
-    /// <paramref name="field"/>, each destination point is moved by it before it is cast (its normal and region kept).
+    /// <paramref name="field"/>, each destination point is landed by it (<see cref="ChestField.Land"/>).
     /// </summary>
     internal static Result Bake(BakeBody dest, BakeBody src, int size, Raster? destRaster = null, ChestField? field = null)
     {
@@ -572,10 +572,9 @@ internal static class UvTransferBake
                 local[0]++;
                 float u = raster.BaryU[i], v = raster.BaryV[i], w = 1f - u - v;
                 var pos = dest.At(t, u, v, w).Pos;
-                if (field != null) pos = field.Apply(pos);
                 var nrm = dest.SmoothAt(t, u, v, w);
                 var region = dest.RegionAt(t, u, v, w);
-                var land = Land(bvh, src, pos, nrm, region);
+                var land = field != null ? field.Land(bvh, src, pos, nrm, region) : Land(bvh, src, pos, nrm, region);
                 if (!land.Found) { local[4]++; continue; }
                 var uv = src.At(land.Tri, land.U, land.V, land.W).Uv;
                 if (land.ByRay) local[1]++; else local[2]++;
@@ -598,4 +597,64 @@ internal static class UvTransferBake
     }
 
     internal static ushort Quantize(float c) => (ushort)MathF.Round(Math.Clamp(c, 0f, 1f) * 65535f);
+
+    /// <summary>
+    /// <paramref name="back"/> with the texels <paramref name="forward"/> reaches replaced by its inverse: every cell
+    /// of <paramref name="forward"/>'s grid whose four texels <paramref name="reach"/> allows (and no seam splits) is
+    /// drawn as two triangles into <paramref name="back"/>'s sheet at the coordinates it stores, carrying its own
+    /// coordinates, onto texels <paramref name="backRaster"/> has skin for. The first cell to draw a texel keeps it.
+    /// Both maps are <paramref name="forward"/>'s size. Returns the new map and which texels it drew.
+    /// </summary>
+    internal static (Result Map, bool[] Drawn) InvertInto(Result forward, Func<int, bool> reach, Result back, Raster backRaster)
+    {
+        int size = forward.Size;
+        const int Seam = 65536 / 32;
+        var r = (ushort[])back.R.Clone();
+        var g = (ushort[])back.G.Clone();
+        var valid = (bool[])back.Valid.Clone();
+        var drawn = new bool[size * size];
+        var ok = new bool[size * size];
+        for (int i = 0; i < ok.Length; i++) ok[i] = forward.Valid[i] && reach(i);
+        float scale = (size - 1) / 65535f;
+
+        void Triangle(int a, int b, int c)
+        {
+            float ax = forward.R[a] * scale, ay = forward.G[a] * scale;
+            float bx = forward.R[b] * scale, by = forward.G[b] * scale;
+            float cx = forward.R[c] * scale, cy = forward.G[c] * scale;
+            float det = (bx - ax) * (cy - ay) - (cx - ax) * (by - ay);
+            if (MathF.Abs(det) < 1e-9f) return;
+            int x0 = Math.Max(0, (int)MathF.Ceiling(Math.Min(ax, Math.Min(bx, cx)))), x1 = Math.Min(size - 1, (int)MathF.Floor(Math.Max(ax, Math.Max(bx, cx))));
+            int y0 = Math.Max(0, (int)MathF.Ceiling(Math.Min(ay, Math.Min(by, cy)))), y1 = Math.Min(size - 1, (int)MathF.Floor(Math.Max(ay, Math.Max(by, cy))));
+            for (int py = y0; py <= y1; py++)
+                for (int px = x0; px <= x1; px++)
+                {
+                    int q = py * size + px;
+                    if (drawn[q] || backRaster.Owner[q] < 0) continue;
+                    float l1 = ((px - ax) * (cy - ay) - (cx - ax) * (py - ay)) / det;
+                    float l2 = ((bx - ax) * (py - ay) - (px - ax) * (by - ay)) / det;
+                    float l0 = 1 - l1 - l2;
+                    const float Eps = -1e-4f;
+                    if (l0 < Eps || l1 < Eps || l2 < Eps) continue;
+                    float u = (l0 * (a % size) + l1 * (b % size) + l2 * (c % size)) / (size - 1);
+                    float v = (l0 * (a / size) + l1 * (b / size) + l2 * (c / size)) / (size - 1);
+                    r[q] = Quantize(u);
+                    g[q] = Quantize(v);
+                    valid[q] = true;
+                    drawn[q] = true;
+                }
+        }
+        bool Joined(int a, int b) => Math.Abs(forward.R[a] - forward.R[b]) <= Seam && Math.Abs(forward.G[a] - forward.G[b]) <= Seam;
+
+        for (int y = 0; y + 1 < size; y++)
+            for (int x = 0; x + 1 < size; x++)
+            {
+                int i00 = y * size + x, i10 = i00 + 1, i01 = i00 + size, i11 = i01 + 1;
+                if (!ok[i00] || !ok[i10] || !ok[i01] || !ok[i11]) continue;
+                if (!Joined(i00, i10) || !Joined(i00, i01) || !Joined(i00, i11) || !Joined(i10, i01)) continue;
+                Triangle(i00, i10, i11);
+                Triangle(i00, i11, i01);
+            }
+        return (back with { R = r, G = g, Valid = valid }, drawn);
+    }
 }

@@ -29,22 +29,63 @@ internal static class UvTransferBakeJob
         public bool Passed => Failures.Count == 0;
     }
 
-    /// <summary>Both maps of a pair, their figures and the gate's misses.</summary>
+    /// <summary>No map: what a pair holds when a chest field could not be made and nothing was baked.</summary>
+    private static readonly UvTransferBake.Result None = new([], [], [], 0, new UvTransferBake.Stats());
+
+    /// <summary>Both maps of a pair, their figures, each map's chest field and checks, and the gate's misses.</summary>
     internal sealed record Pair(UvTransferBake.Result AtoB, UvTransferBake.Result BtoA,
                                 UvTransferQuality.Figures AtoBFigures, UvTransferQuality.Figures BtoAFigures,
-                                List<string> Failures);
+                                List<string> Failures,
+                                ChestField? AtoBField = null, ChestField? BtoAField = null,
+                                ChestField.Checks? AtoBChecks = null, ChestField.Checks? BtoAChecks = null);
 
     /// <summary>
     /// The map pair between bodies <paramref name="aDest"/>/<paramref name="aSrc"/> and <paramref name="bDest"/>/<paramref name="bSrc"/>
     /// — each body as a destination (every option) and as a source (one) — measured. <c>AtoB</c> is indexed by a B
-    /// pixel and stores the A coordinate, as <c>a_to_b_transfer.tif</c> is.
+    /// pixel and stores the A coordinate, as <c>a_to_b_transfer.tif</c> is. With <paramref name="chestFields"/>, each
+    /// map is baked through its <see cref="ChestField"/> and measured against the plain bake as well.
     /// </summary>
-    internal static Pair BakePair(BakeBody aDest, BakeBody aSrc, BakeBody bDest, BakeBody bSrc, int size)
+    internal static Pair BakePair(BakeBody aDest, BakeBody aSrc, BakeBody bDest, BakeBody bSrc, int size,
+                                  bool chestFields = false, string aToBName = "a_to_b", string bToAName = "b_to_a")
     {
+        var failures = new List<string>();
         var bRaster = UvTransferBake.Rasterize(bDest, size);
         var aRaster = UvTransferBake.Rasterize(aDest, size);
-        var aToB = MirrorFill(UvTransferBake.Bake(bDest, aSrc, size, bRaster));
-        var bToA = MirrorFill(UvTransferBake.Bake(aDest, bSrc, size, aRaster));
+        var aBvh = new TriangleBvh(aSrc);
+        var bBvh = new TriangleBvh(bSrc);
+
+        (ChestField? Field, ChestField.Checks? Checks) Field(string name, BakeBody dest, BakeBody src, TriangleBvh srcBvh)
+        {
+            if (!chestFields) return (null, null);
+            var (field, failure) = ChestField.Build(dest, src, srcBvh);
+            if (field == null) { failures.Add($"{name}: chest field: {failure}"); return (null, null); }
+            var checks = field.Measure(dest);
+            failures.AddRange(field.Check(checks).Select(m => $"{name}: {m}"));
+            return (field, checks);
+        }
+        // A is the body with the breast. Its map onto B is cast from B's flat chest, through B's chest field; B's map
+        // onto A is, where that field reaches, that map's inverse — a breast cast onto a flat chest crosses its own
+        // rays, by ray or by nearness — and the plain bake elsewhere. The pair then agrees with itself on the chest.
+        var (fieldAtoB, checksAtoB) = Field(aToBName, bDest, aSrc, aBvh);
+        ChestField? fieldBtoA = null;
+        ChestField.Checks? checksBtoA = null;
+        if (chestFields && fieldAtoB == null)
+            return new Pair(None, None, new UvTransferQuality.Figures(), new UvTransferQuality.Figures(), failures,
+                            fieldAtoB, fieldBtoA, checksAtoB, checksBtoA);
+
+        var aToB = MirrorFill(UvTransferBake.Bake(bDest, aSrc, size, bRaster, fieldAtoB));
+        var bToAPlain = MirrorFill(UvTransferBake.Bake(aDest, bSrc, size, aRaster));
+        var bToA = bToAPlain;
+        bool[]? inverted = null;
+        if (fieldAtoB != null)
+        {
+            bool Reach(int i)
+            {
+                int t = bRaster.Owner[i];
+                return t >= 0 && fieldAtoB.InSupport(bDest.At(t, bRaster.BaryU[i], bRaster.BaryV[i], 1 - bRaster.BaryU[i] - bRaster.BaryV[i]).Pos);
+            }
+            (bToA, inverted) = UvTransferBake.InvertInto(aToB, Reach, bToAPlain, aRaster);
+        }
 
         int lookup = Math.Min(size, 2048);
         var aSrcRaster = UvTransferBake.Rasterize(aSrc, lookup);
@@ -55,8 +96,21 @@ internal static class UvTransferBakeJob
         (fBtoA.RoundTripModerate, fBtoA.RoundTripGross) = UvTransferQuality.RoundTrip(bToA, aToB);
         fAtoB.LandmarksMm = UvTransferQuality.LandmarkErrors(aToB, bDest, aSrc, aSrcRaster, fAtoB.LandmarksTangentMm);
         fBtoA.LandmarksMm = UvTransferQuality.LandmarkErrors(bToA, aDest, bSrc, bSrcRaster, fBtoA.LandmarksTangentMm);
-        var failures = UvTransferQuality.Check("a_to_b", fAtoB).Concat(UvTransferQuality.Check("b_to_a", fBtoA)).ToList();
-        return new Pair(aToB, bToA, fAtoB, fBtoA, failures);
+
+        // The plain bake beside each field's: what the field may not change, how much it stretches what it does, and
+        // where the plain projection puts the crease (its bound).
+        if (fieldAtoB != null)
+        {
+            var plain = MirrorFill(UvTransferBake.Bake(bDest, aSrc, size, bRaster));
+            fAtoB.PlainLandmarksMm = UvTransferQuality.LandmarkErrors(plain, bDest, aSrc, aSrcRaster);
+            fAtoB.Stretch = UvTransferQuality.WarpStretch(aToB, plain, bRaster, bDest, fieldAtoB);
+            (fAtoB.Stretch.PredictedArea, fAtoB.Stretch.PredictedAniso) = fieldAtoB.Predict(bDest, aSrc, aBvh);
+            fBtoA.PlainLandmarksMm = UvTransferQuality.LandmarkErrors(bToAPlain, aDest, bSrc, bSrcRaster);
+            fBtoA.Stretch = UvTransferQuality.WarpStretch(bToA, bToAPlain, aRaster, i => inverted![i]);
+            (fBtoA.Stretch.PredictedArea, fBtoA.Stretch.PredictedAniso) = (double.NaN, double.NaN);
+        }
+        failures.AddRange(UvTransferQuality.Check(aToBName, fAtoB).Concat(UvTransferQuality.Check(bToAName, fBtoA)));
+        return new Pair(aToB, bToA, fAtoB, fBtoA, failures, fieldAtoB, fieldBtoA, checksAtoB, checksBtoA);
     }
 
     /// <summary>
@@ -156,8 +210,19 @@ internal static class UvTransferBakeJob
             }
 
             // bibo is A, tbse is B: a_to_b = bibo_to_tbse, indexed by a TBSE pixel, storing the bibo coordinate.
-            var pair = BakePair(biboDest, biboSrc, tbseDest, tbseSrc, size);
-            failures.AddRange(pair.Failures.Select(f => f.Replace("a_to_b", "bibo_to_tbse").Replace("b_to_a", "tbse_to_bibo")));
+            var pair = BakePair(biboDest, biboSrc, tbseDest, tbseSrc, size, chestFields: true, BiboToTbse, TbseToBibo);
+            failures.AddRange(pair.Failures);
+            report["chestField"] = new JsonObject
+            {
+                [BiboToTbse] = Describe(pair.AtoBField, pair.AtoBChecks),
+                [TbseToBibo] = Describe(pair.BtoAField, pair.BtoAChecks),
+            };
+            if (failures.Count > 0 && (pair.AtoBField == null || pair.BtoAField == null))
+            {
+                report["gate"] = new JsonObject { ["passed"] = false, ["failures"] = new JsonArray(failures.Select(f => (JsonNode)f).ToArray()) };
+                report["elapsedMs"] = sw.ElapsedMilliseconds;
+                return new Output(null, null, report, failures);
+            }
             report["stats"] = new JsonObject
             {
                 [BiboToTbse] = Stats(pair.AtoB, pair.AtoBFigures),
@@ -253,6 +318,31 @@ internal static class UvTransferBakeJob
         return either == 0 ? 0 : (double)both / either;
     }
 
+    /// <summary>A map's chest field for the report: its sites and offsets, its band, conditioning and checks.</summary>
+    private static JsonNode? Describe(ChestField? field, ChestField.Checks? c)
+    {
+        if (field == null || c == null) return null;
+        var sites = new JsonObject();
+        foreach (var s in field.Sites)
+            sites[s.Name] = new JsonObject
+            {
+                ["pin"] = s.Pin,
+                ["at"] = new JsonArray(Math.Round(s.Centre.X, 4), Math.Round(s.Centre.Y, 4), Math.Round(s.Centre.Z, 4)),
+                ["offsetMm"] = new JsonArray(Math.Round(s.Offset.X * 1000, 1), Math.Round(s.Offset.Y * 1000, 1), Math.Round(s.Offset.Z * 1000, 1)),
+            };
+        var residual = new JsonObject();
+        foreach (var (name, mm) in field.ResidualMm.OrderBy(r => r.Key, StringComparer.Ordinal)) residual[name] = Math.Round(mm, 2);
+        return new JsonObject
+        {
+            ["radius"] = ChestField.Radius, ["yLow"] = Math.Round(field.YLow, 4), ["yClavicle"] = Math.Round(field.YClav, 4),
+            ["condition"] = Num(field.Condition), ["ridged"] = field.Ridged, ["iterations"] = field.Iterations,
+            ["residualMm"] = residual, ["sites"] = sites,
+            ["minJacobian"] = Math.Round(c.MinJacobian, 3), ["maxPinMm"] = Math.Round(c.MaxPinMm, 3),
+            ["maxOffTorsoMm"] = Math.Round(c.MaxOffTorsoMm, 2), ["maxMm"] = Math.Round(c.MaxMm, 1),
+            ["maxReverseMm"] = Math.Round(c.MaxReverseMm, 2), ["maxStillMm"] = Math.Round(c.MaxStillMm, 2),
+        };
+    }
+
     /// <summary>A figure for the report: JSON has no NaN, so a figure that could not be measured is null.</summary>
     private static JsonNode? Num(double v) => double.IsNaN(v) || double.IsInfinity(v) ? null : JsonValue.Create(v);
 
@@ -267,9 +357,23 @@ internal static class UvTransferBakeJob
         var tangent = new JsonObject();
         foreach (var (name, mm) in f.LandmarksTangentMm.OrderBy(k => k.Key, StringComparer.Ordinal))
             tangent[name] = float.IsNaN(mm) ? null : Math.Round(mm, 1);
+        var plain = new JsonObject();
+        foreach (var (name, mm) in f.PlainLandmarksMm.OrderBy(k => k.Key, StringComparer.Ordinal))
+            plain[name] = float.IsNaN(mm) ? null : Math.Round(mm, 1);
+        var bounds = new JsonObject();
+        foreach (var name in f.LandmarksMm.Keys.OrderBy(k => k, StringComparer.Ordinal))
+            if (!name.StartsWith("nipple", StringComparison.Ordinal) && !name.StartsWith("underBustOld", StringComparison.Ordinal))
+                bounds[name] = UvTransferQuality.LandmarkLimitMm(name, f);
+        JsonNode? stretch = f.Stretch is not { } w ? null : new JsonObject
+        {
+            ["measured"] = w.Measured, ["changedInside"] = w.ChangedInside, ["changedOutside"] = w.ChangedOutside,
+            ["area"] = new JsonObject { ["p50"] = Num(w.AreaP50), ["p99"] = Num(w.AreaP99), ["p999"] = Num(w.AreaP999), ["max"] = Num(w.AreaMax), ["plainP99"] = Num(w.PlainAreaP99), ["predicted"] = Num(w.PredictedArea) },
+            ["aniso"] = new JsonObject { ["p50"] = Num(w.AnisoP50), ["p99"] = Num(w.AnisoP99), ["p999"] = Num(w.AnisoP999), ["max"] = Num(w.AnisoMax), ["plainP99"] = Num(w.PlainAnisoP99), ["predicted"] = Num(w.PredictedAniso) },
+        };
         var s = map.Stats;
         return new JsonObject
         {
+            ["plainLandmarksMm"] = plain, ["landmarkBoundsMm"] = bounds, ["warpStretch"] = stretch,
             ["validPixels"] = s.ValidPixels, ["destCoverage"] = s.DestCoverage, ["rayHits"] = s.RayHits,
             ["closestFallbacks"] = s.ClosestFallbacks, ["regionAdjacentHits"] = s.RegionAdjacentHits,
             ["unreached"] = s.Unreached, ["overlapTexels"] = s.OverlapPixels,

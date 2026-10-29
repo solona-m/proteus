@@ -70,14 +70,22 @@ public class UvTransferMapsLocalTests(TbseBakeFixture bake, ITestOutputHelper ou
     [Trait("Plan", "AC-tbse-uvmap-2")]
     public void Landmarks_land_on_each_other() // [AC-tbse-uvmap-2]
     {
+        // Nipples by how far across the skin they land; the old under-bust point (at Bibo+'s nipple height) reported
+        // only; every other landmark, the crease among them, within the bound the report gives it.
         foreach (var map in new[] { UvTransferBakeJob.BiboToTbse, UvTransferBakeJob.TbseToBibo })
             foreach (var (name, mm) in Stats(map)["landmarksMm"]!.AsObject())
             {
                 Assert.NotNull(mm);
-                float limit = UvTransferQuality.Gate.AcceptedLandmarkMm.TryGetValue(name, out var accepted) ? accepted
-                            : (name.StartsWith("fingertip") || name.StartsWith("toe") ? UvTransferQuality.Gate.TipLandmark
-                                                                                      : UvTransferQuality.Gate.TorsoLandmark) * 1000f;
-                Assert.True((double)mm! <= limit, $"{map} {name} off by {mm} mm");
+                output.WriteLine($"{map} {name}: {mm} mm, across the skin {Stats(map)["landmarksAcrossSkinMm"]![name]} mm");
+                if (name.StartsWith("underBustOld", StringComparison.Ordinal)) continue;
+                if (name.StartsWith("nipple", StringComparison.Ordinal))
+                {
+                    double across = (double)Stats(map)["landmarksAcrossSkinMm"]![name]!;
+                    Assert.True(across <= UvTransferQuality.Gate.NippleTangentMm, $"{map} {name} off by {across} mm across the skin");
+                    continue;
+                }
+                double limit = Stats(map)["landmarkBoundsMm"]![name]!.GetValue<float>();
+                Assert.True((double)mm! <= limit, $"{map} {name} off by {mm} mm > {limit}");
             }
     }
 
@@ -307,7 +315,7 @@ public class UvTransferMapsLocalTests(TbseBakeFixture bake, ITestOutputHelper ou
             var (cr, fr) = UvBakeNipples.Crease(body, r);
             Assert.True(cl != null, $"{name} L: {fl}");
             Assert.True(cr != null, $"{name} R: {fr}");
-            var old = UvTransferQuality.Landmarks(body)["underBustL"];
+            var old = UvTransferQuality.Landmarks(body)["underBustOldL"];
             output.WriteLine($"{name}: nipple y {l.Pos.Y:F4}; crease L {cl!.Value.Pos} (turn {cl.Value.SlopeChange:F2}), "
                              + $"R {cr!.Value.Pos} (turn {cr.Value.SlopeChange:F2}); old under-bust {body.At(old.Tri, old.Bary.X, old.Bary.Y, old.Bary.Z).Pos}");
             var mirror = new System.Numerics.Vector3(-cr.Value.Pos.X, cr.Value.Pos.Y, cr.Value.Pos.Z);
@@ -316,16 +324,20 @@ public class UvTransferMapsLocalTests(TbseBakeFixture bake, ITestOutputHelper ou
     }
 
     /// <summary>
-    /// Each map's chest field, built on the real chests: it lands nipples and creases where they must go, and passes
-    /// every construction check — no fold, pins held, nothing off the torso moved, no overshoot.
+    /// The overlay map's chest field, built on the real chests: it lands nipples and creases where they must go, and
+    /// passes every construction check — no fold, pins held, nothing off the torso moved, no overshoot. The refit map
+    /// is that map's inverse on the chest: a field cast from Bibo+'s breast onto TBSE's flat chest is refused by name.
     /// </summary>
     [LocalDataFact(LocalData.GameData, Bibo, Tbse)]
     [Trait("Plan", "AC-uvmap-nipples-4")]
     public void Chest_fields_pass_construction_checks() // [AC-uvmap-nipples-4] [EDGE-uvmap-nipples-3] [EDGE-uvmap-nipples-4] [EDGE-uvmap-nipples-39]
     {
         var (bibo, tbse) = Chests();
+        var (refused, why) = ChestField.Build(bibo, tbse, new TriangleBvh(tbse));
+        Assert.Null(refused);
+        Assert.Contains("cast the other way", why);
         var misses = new List<string>();
-        foreach (var (map, dest, src) in new[] { (UvTransferBakeJob.BiboToTbse, tbse, bibo), (UvTransferBakeJob.TbseToBibo, bibo, tbse) })
+        foreach (var (map, dest, src) in new[] { (UvTransferBakeJob.BiboToTbse, tbse, bibo) })
         {
             var (field, failure) = ChestField.Build(dest, src, new TriangleBvh(src));
             Assert.True(field != null, $"{map}: {failure}");
@@ -475,6 +487,48 @@ public class UvTransferMapsLocalTests(TbseBakeFixture bake, ITestOutputHelper ou
                 best = (p, body.Uv[t * 3 + k]);
             }
         return best;
+    }
+
+    /// <summary>
+    /// Overlay map <c>bibo_to_tbse</c>, onto a man in men's vanilla layout (the right half of TBSE's sheet, 2048 wide):
+    /// the dot on Bibo+'s left nipple lands on that layout's nipple, TBSE's left nipple moved onto the half.
+    /// </summary>
+    [LocalDataFact(LocalData.GameData, Bibo, Tbse, LocalData.UvMaps)]
+    [Trait("Plan", "AC-uvmap-nipples-2")]
+    public void OverlayMap_nipple_dot_lands_on_male_vanilla_nipple() // [AC-uvmap-nipples-2] [EDGE-uvmap-nipples-7]
+    {
+        var uv = Maps();
+        var (bibo, tbse) = Chests();
+        var (biboL, _) = NipplesOf(bibo);
+        var (tbseL, _) = NipplesOf(tbse);
+        var got = OverlayDot(uv, biboL.Uv, "bibo", UVRemapService.MaleVanillaSpace);
+        Assert.NotNull(got);
+        var want = new System.Numerics.Vector2((tbseL.Uv.X - 0.5f) * 2f, tbseL.Uv.Y);
+        float px = MathF.Sqrt(MathF.Pow((got!.Value.X - want.X) * 2048f, 2) + MathF.Pow((got.Value.Y - want.Y) * 4096f, 2));
+        output.WriteLine($"bibo nipple L {biboL.Uv} -> men's vanilla {got.Value}, its nipple {want}: {px:F1} px");
+        Assert.InRange(px, 0f, UvTransferQuality.Gate.NippleDotPx);
+    }
+
+    /// <summary>
+    /// Refit map <c>tbse_to_bibo</c> into men's vanilla (folded): Bibo+'s nipple is matched to that layout's nipple.
+    /// </summary>
+    [LocalDataFact(LocalData.GameData, Bibo, Tbse, LocalData.UvMaps)]
+    [Trait("Plan", "AC-uvmap-nipples-9")]
+    public void RefitMap_nipple_point_lands_on_male_vanilla_nipple() // [AC-uvmap-nipples-9] [EDGE-uvmap-nipples-7]
+    {
+        var conv = Maps().UvConverter("bibo", UVRemapService.MaleVanillaSpace, fold: true)!;
+        var (bibo, tbse) = Chests();
+        var (biboL, biboR) = NipplesOf(bibo);
+        var (tbseL, _) = NipplesOf(tbse);
+        foreach (var (side, n, k) in new[] { ("L", biboL, 0), ("R", biboR, 1) })
+        {
+            var got = conv(n.Uv.X, n.Uv.Y, k);
+            Assert.NotNull(got);
+            float wantU = (tbseL.Uv.X - 0.5f) * 2f;   // both sides fold onto the one half
+            float px = MathF.Sqrt(MathF.Pow((got!.Value.U - wantU) * 2048f, 2) + MathF.Pow((got.Value.V - tbseL.Uv.Y) * 4096f, 2));
+            output.WriteLine($"bibo nipple {side} {n.Uv} -> men's vanilla ({got.Value.U}, {got.Value.V}), its nipple ({wantU}, {tbseL.Uv.Y}): {px:F1} px");
+            Assert.InRange(px, 0f, UvTransferQuality.Gate.NippleDotPx);
+        }
     }
 
     /// <summary>Art map back, <c>tbse_to_bibo</c>: a dot on TBSE's nipple carried to bibo lands on Bibo+'s nipple.</summary>
