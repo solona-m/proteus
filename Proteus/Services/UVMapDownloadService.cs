@@ -46,7 +46,7 @@ public class UVMapDownloadService : IDisposable
     internal static readonly MapFile[] MenMaps =
     [
         new(UVRemapService.BiboToTbseFile, "uvmaps-v3", 11834120L, "559efe148403b12c168f20b41dd614952708933f4404fedc98c7ab79a6a36ca1"),
-        new(UVRemapService.TbseToBiboFile, "uvmaps-v3", 13197824L, "2840ff2318ffc58107c40858e390edd3f5375cc4cbc7e527be616a8b23a4af2b"),
+        new(UVRemapService.TbseToBiboFile, "uvmaps-v3", 13050430L, "9e88f7f429e135b39e9f77086ae9df07cf4de39d9ba5240876536b17514b6960"),
     ];
 
     /// <summary>How long a failed background upgrade of the men's pair waits before it is tried again.</summary>
@@ -354,7 +354,11 @@ public class UVMapDownloadService : IDisposable
             var age = utcNow() - at.ToUniversalTime();
             return age >= TimeSpan.Zero && age < UpgradeRetry;
         }
-        catch { return false; }
+        catch (Exception ex)
+        {
+            log.Warning(ex, "[Proteus] Could not read when the UV map upgrade last failed; trying it");
+            return false;
+        }
     }
 
     /// <summary>

@@ -32,7 +32,10 @@ public class UvTransferMapsLocalTests(TbseBakeFixture bake, ITestOutputHelper ou
 
     [LocalDataFact(LocalData.GameData, Bibo, Tbse, LocalData.UvMaps)]
     [Trait("Plan", "AC-tbse-uvmap-1")]
-    public void Rebake_reproduces_committed_maps() // [AC-tbse-uvmap-1]
+    [Trait("Plan", "EDGE-uvmap-nipples-15")]
+    [Trait("Plan", "EDGE-uvmap-nipples-26")]
+    [Trait("Plan", "AC-uvmap-nipples-5")]
+    public void Rebake_reproduces_committed_maps() // [AC-tbse-uvmap-1] [EDGE-uvmap-nipples-15] [EDGE-uvmap-nipples-26] [AC-uvmap-nipples-5]
     {
         Assert.True(bake.Output.Passed, string.Join("; ", bake.Output.Failures));
         Assert.Equal(File.ReadAllBytes(Committed(UvTransferBakeJob.BiboToTbse)), bake.Output.BiboToTbseBytes);
@@ -110,7 +113,8 @@ public class UvTransferMapsLocalTests(TbseBakeFixture bake, ITestOutputHelper ou
     /// </summary>
     [LocalDataFact(LocalData.GameData, Bibo, Rue, Tbse, TbseX)]
     [Trait("Plan", "AC-tbse-uvmap-2")]
-    public void Same_layout_bodies_bake_to_identity() // [AC-tbse-uvmap-2]
+    [Trait("Plan", "EDGE-uvmap-nipples-14")]
+    public void Same_layout_bodies_bake_to_identity() // [AC-tbse-uvmap-2] [EDGE-uvmap-nipples-14]
     {
         const int size = 2048;   // a 4096 bound halves: p50 ≤ 4 px at 4096 is ≤ 2 px here
         var bibo = UvBakeInputs.Read(LocalData.Path(Bibo), [UvBakeInputs.BiboChest, UvBakeInputs.BiboLegs[0].Rel]);
@@ -179,6 +183,8 @@ public class UvTransferMapsLocalTests(TbseBakeFixture bake, ITestOutputHelper ou
         float px = (new System.Numerics.Vector2(got!.Value.U, got.Value.V) - tbseSternum).Length() * 4096f;
         output.WriteLine($"bibo sternum {biboSternum} -> {got.Value}, TBSE sternum {tbseSternum}: {px:F1} px");
         Assert.InRange(px, 0f, UvTransferQuality.Gate.SternumDotPx);
+        // [AC-uvmap-nipples-4] The chest field leaves the sternum where the v2 maps had it: 27.0 px (half a px of leeway).
+        Assert.InRange(px, 0f, 27.5f);
     }
 
     /// <summary>Each body's sternum landmark, as a uv on its own sheet.</summary>
@@ -305,7 +311,8 @@ public class UvTransferMapsLocalTests(TbseBakeFixture bake, ITestOutputHelper ou
     /// <summary>Both chests have an under-bust crease below each nipple, mirrored; printed with the old under-bust point.</summary>
     [LocalDataFact(LocalData.GameData, Bibo, Tbse)]
     [Trait("Plan", "EDGE-uvmap-nipples-35")]
-    public void Creases_found_on_bibo_and_bent_tbse() // [EDGE-uvmap-nipples-35] [EDGE-uvmap-nipples-38]
+    [Trait("Plan", "EDGE-uvmap-nipples-18")]
+    public void Creases_found_on_bibo_and_bent_tbse() // [EDGE-uvmap-nipples-35] [EDGE-uvmap-nipples-38] [EDGE-uvmap-nipples-18]
     {
         var (bibo, tbse) = Chests();
         foreach (var (name, body) in new[] { ("Bibo+", bibo), ("TBSE", tbse) })
@@ -330,7 +337,13 @@ public class UvTransferMapsLocalTests(TbseBakeFixture bake, ITestOutputHelper ou
     /// </summary>
     [LocalDataFact(LocalData.GameData, Bibo, Tbse)]
     [Trait("Plan", "AC-uvmap-nipples-4")]
-    public void Chest_fields_pass_construction_checks() // [AC-uvmap-nipples-4] [EDGE-uvmap-nipples-3] [EDGE-uvmap-nipples-4] [EDGE-uvmap-nipples-39]
+    [Trait("Plan", "EDGE-uvmap-nipples-36")]
+    [Trait("Plan", "EDGE-uvmap-nipples-37")]
+    [Trait("Plan", "EDGE-uvmap-nipples-40")]
+    [Trait("Plan", "EDGE-uvmap-nipples-41")]
+    [Trait("Plan", "EDGE-uvmap-nipples-42")]
+    [Trait("Plan", "EDGE-uvmap-nipples-45")]
+    public void Chest_fields_pass_construction_checks() // [AC-uvmap-nipples-4] [EDGE-uvmap-nipples-3] [EDGE-uvmap-nipples-4] [EDGE-uvmap-nipples-39] [EDGE-uvmap-nipples-36] [EDGE-uvmap-nipples-37] [EDGE-uvmap-nipples-40] [EDGE-uvmap-nipples-41] [EDGE-uvmap-nipples-42] [EDGE-uvmap-nipples-45]
     {
         var (bibo, tbse) = Chests();
         var (refused, why) = ChestField.Build(bibo, tbse, new TriangleBvh(tbse));
@@ -350,6 +363,48 @@ public class UvTransferMapsLocalTests(TbseBakeFixture bake, ITestOutputHelper ou
                              + $"max {c.MaxMm:F1} mm, reverse {c.MaxReverseMm:F2} mm at {c.ReverseAt}, still {c.MaxStillMm:F2} mm");
             misses.AddRange(field.Check(c).Select(m => $"{map}: {m}"));
         }
+        Assert.True(misses.Count == 0, string.Join("; ", misses));
+    }
+
+    /// <summary>
+    /// The nipple the finder takes is the layout's, not one body's shape: every Bibo+ chest size puts it within
+    /// <see cref="UvTransferQuality.Gate.NippleDotPx"/> (at 4096) of the Small chest's uv, and TBSE's Highlander chest
+    /// within it of its Midlander one. (Measured 2026-10-28: Medium 7.2, Large 1.8, X-Large 10.3 — X-Large's modelled
+    /// nipple sits 5 mm from where the shared skin draws its areola.) Rue+ (bibo layout) and TBSE-X (TBSE layout) are
+    /// reported beside them, not gated.
+    /// </summary>
+    [LocalDataFact(LocalData.GameData, Bibo, Tbse, Rue, TbseX)]
+    [Trait("Plan", "EDGE-uvmap-nipples-6")]
+    [Trait("Plan", "EDGE-uvmap-nipples-25")]
+    public void Nipple_uv_is_the_layout_s() // [EDGE-uvmap-nipples-6] [EDGE-uvmap-nipples-25]
+    {
+        System.Numerics.Vector2 UvL(string root, string rel)
+        {
+            var body = new BakeBody([UvBakeInputs.Part(File.ReadAllBytes(Path.Combine(LocalData.Path(root), rel)))!]);
+            return NipplesOf(body).L.Uv;
+        }
+        var misses = new List<string>();
+        void Against(string name, System.Numerics.Vector2 got, System.Numerics.Vector2 want, bool gated)
+        {
+            float px = (got - want).Length() * 4096f;
+            output.WriteLine($"{name}: nipple uv {got}, {px:F1} px from {want}{(gated ? "" : " (reported)")}");
+            if (gated && px > UvTransferQuality.Gate.NippleDotPx) misses.Add($"{name} {px:F1} px");
+        }
+        var small = UvL(Bibo, UvBakeInputs.BiboChest);
+        foreach (var size in UvBakeInputs.BiboChestSizes)
+        {
+            var body = new BakeBody([UvBakeInputs.Part(File.ReadAllBytes(Path.Combine(LocalData.Path(Bibo), UvBakeInputs.BiboChestOf(size))))!]);
+            var n = NipplesOf(body).L;
+            // Where on this chest the Small chest's nipple uv is drawn, beside the bump found on it.
+            var raster = UvTransferBake.Rasterize(body, 4096);
+            var at = PointAt(body, raster, small);
+            output.WriteLine($"Bibo+ {size}: bump at {n.Pos} (height {n.Height * 1000:F2} mm); Small's nipple uv drawn at {at}");
+            Against("Bibo+ " + size, n.Uv, small, true);
+        }
+        var mid = UvL(Tbse, UvBakeInputs.TbseChest);
+        Against("TBSE Highlander", UvL(Tbse, UvBakeInputs.TbseHighlanderChest), mid, true);
+        Against("Rue+ Small", UvL(Rue, "files/chest - smallclothes/small/chara/equipment/e0000/model/c0201e0000_top.mdl"), small, false);
+        Against("TBSE-X", UvL(TbseX, "p1/torso/m midlander miqo'te au'ra elezen viera/chara/equipment/e0000/model/c0101e0000_top.mdl"), mid, false);
         Assert.True(misses.Count == 0, string.Join("; ", misses));
     }
 

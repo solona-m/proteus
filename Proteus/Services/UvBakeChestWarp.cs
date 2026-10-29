@@ -114,6 +114,9 @@ internal sealed class ChestField
     /// </summary>
     internal const float MaxStandout = 0.01f;
 
+    /// <summary>How squarely skin must face forward (smoothed normal z) to be the front of the chest the inverse redraws.</summary>
+    internal const float MinFrontZ = 0.3f;
+
     /// <summary>Where the destination point <paramref name="p"/> lands on <paramref name="src"/>: moved by the field, then cast.</summary>
     public UvTransferBake.Landing Land(TriangleBvh bvh, BakeBody src, Vector3 p, Vector3 n, Region region)
         => UvTransferBake.Land(bvh, src, Apply(p), n, region);
@@ -127,7 +130,7 @@ internal sealed class ChestField
     }
 
     /// <summary>
-    /// The field that lands <paramref name="dest"/>'s nipples and creases on <paramref name="src"/>'s, or why none
+    /// The field that lands <paramref name="dest"/>'s nipples on <paramref name="src"/>'s, or why none
     /// could be made. Deterministic: sites in a fixed order, a fixed number of iterations at most.
     /// </summary>
     internal static (ChestField? Field, string? Failure) Build(BakeBody dest, BakeBody src, TriangleBvh srcBvh)
@@ -178,19 +181,9 @@ internal sealed class ChestField
         float yLow = float.MaxValue;
         foreach (var crease in creases)
         {
-            float? found = null;
-            for (float below = LowerRow; below <= MaxLowerRow + 1e-4f; below += 0.005f)
-            {
-                float y = crease.Pos.Y - below;
-                if (FrontHit(dest, destBvh, crease.Pos.X, y) is not { } hit) continue;
-                var land = UvTransferBake.Land(srcBvh, src, hit.Pos, dest.SmoothAt(hit.Tri, hit.U, hit.V, hit.W),
-                                               dest.RegionAt(hit.Tri, hit.U, hit.V, hit.W));
-                if (!land.Found) continue;
-                float ratio = (crease.Want.Y - src.At(land.Tri, land.U, land.V, land.W).Pos.Y) / below;
-                if (ratio is >= 0.5f and <= 2f) { found = y; break; }
-            }
-            if (found == null) return (null, $"no lower row under {crease.Name}: the projection has not caught up {MaxLowerRow * 100:F0} cm down");
-            yLow = Math.Min(yLow, found.Value);
+            if (LowerRowUnder(dest, destBvh, src, srcBvh, crease.Pos, crease.Want) is not { } found)
+                return (null, $"no lower row under {crease.Name}: the projection has not caught up {MaxLowerRow * 100:F0} cm down");
+            yLow = Math.Min(yLow, found);
         }
         // Across the front, and out to each flank: the waist there is too narrow for a fixed outer x.
         foreach (float x in new[] { 0f, 0.04f, -0.04f, 0.08f, -0.08f })
@@ -210,6 +203,11 @@ internal sealed class ChestField
             foreach (var t in targets)
                 if (Vector3.Distance(pos, t.Pos) < PinClearance)
                     return (null, $"pin {name} too near {t.Name} ({Vector3.Distance(pos, t.Pos) * 1000:F1} mm)");
+        // A target in the fade would be moved by less than its offset: the solve would chase it, and the overshoot check,
+        // measured against that offset, would not see the field it took.
+        foreach (var t in targets)
+            if (t.Pos.Y < yLow + Fade || t.Pos.Y > yClav - Fade)
+                return (null, $"{t.Name} at {t.Pos.Y:F3} m lies in the field's fade ({yLow + Fade:F3}–{yClav - Fade:F3} m clear)");
 
         int nt = targets.Count, n = nt + pins.Count;
         var all = targets.Select(t => t.Pos).Concat(pins.Select(p => p.Pos)).ToArray();
@@ -392,6 +390,28 @@ internal sealed class ChestField
         double area = vertical.Max(s => Math.Max(s * h, 1 / (s * h)));
         double aniso = vertical.Max(s => Math.Max(s / h, h / s));
         return (area, aniso);
+    }
+
+    /// <summary>
+    /// Under the destination crease <paramref name="crease"/> (whose source crease is <paramref name="want"/>), the first
+    /// height from <see cref="LowerRow"/> to <see cref="MaxLowerRow"/> down, every 5 mm, where the front's plain landing
+    /// has caught up: the source from crease to landing between half and twice as long as the destination's. Null when
+    /// none has.
+    /// </summary>
+    internal static float? LowerRowUnder(BakeBody dest, TriangleBvh destBvh, BakeBody src, TriangleBvh srcBvh,
+                                         Vector3 crease, Vector3 want)
+    {
+        for (float below = LowerRow; below <= MaxLowerRow + 1e-4f; below += 0.005f)
+        {
+            float y = crease.Y - below;
+            if (FrontHit(dest, destBvh, crease.X, y) is not { } hit) continue;
+            var land = UvTransferBake.Land(srcBvh, src, hit.Pos, dest.SmoothAt(hit.Tri, hit.U, hit.V, hit.W),
+                                           dest.RegionAt(hit.Tri, hit.U, hit.V, hit.W));
+            if (!land.Found) continue;
+            float ratio = (want.Y - src.At(land.Tri, land.U, land.V, land.W).Pos.Y) / below;
+            if (ratio is >= 0.5f and <= 2f) return y;
+        }
+        return null;
     }
 
     /// <summary>The foremost Torso skin at (<paramref name="x"/>, <paramref name="y"/>): a ray from well in front.</summary>

@@ -602,10 +602,10 @@ internal static class UvTransferBake
     /// <paramref name="back"/> with the texels <paramref name="forward"/> reaches replaced by its inverse: every cell
     /// of <paramref name="forward"/>'s grid whose four texels <paramref name="reach"/> allows (and no seam splits) is
     /// drawn as two triangles into <paramref name="back"/>'s sheet at the coordinates it stores, carrying its own
-    /// coordinates, onto texels <paramref name="backRaster"/> has skin for. The first cell to draw a texel keeps it.
+    /// coordinates, onto the texels <paramref name="onto"/> allows. The first cell to draw a texel keeps it.
     /// Both maps are <paramref name="forward"/>'s size. Returns the new map and which texels it drew.
     /// </summary>
-    internal static (Result Map, bool[] Drawn) InvertInto(Result forward, Func<int, bool> reach, Result back, Raster backRaster)
+    internal static (Result Map, bool[] Drawn) InvertInto(Result forward, Func<int, bool> reach, Result back, Func<int, bool> onto)
     {
         int size = forward.Size;
         const int Seam = 65536 / 32;
@@ -630,7 +630,7 @@ internal static class UvTransferBake
                 for (int px = x0; px <= x1; px++)
                 {
                     int q = py * size + px;
-                    if (drawn[q] || backRaster.Owner[q] < 0) continue;
+                    if (drawn[q] || !onto(q)) continue;
                     float l1 = ((px - ax) * (cy - ay) - (cx - ax) * (py - ay)) / det;
                     float l2 = ((bx - ax) * (py - ay) - (px - ax) * (by - ay)) / det;
                     float l0 = 1 - l1 - l2;

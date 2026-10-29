@@ -144,6 +144,13 @@ internal static class UvTransferQuality
     {
         public double AreaP50, AreaP99, AreaP999, AreaMax, AnisoP50, AnisoP99, AnisoP999, AnisoMax;
         public double PredictedArea, PredictedAniso, PlainAreaP99, PlainAnisoP99;
+        /// <summary>At the edge of the reach, how far apart neighbours either side land (source px), with the correction and without.</summary>
+        public double EdgeJumpP99, EdgeJumpMax, PlainEdgeJumpP99, PlainEdgeJumpMax;
+        public long EdgePairs;
+        /// <summary>How much more than the plain map's this map's distortion may be (<see cref="Gate.StretchMargin"/>, or 1 for the inverse).</summary>
+        public double Margin = Gate.StretchMargin;
+        /// <summary>The texel (inside the reach) of the largest jump at its edge, or -1.</summary>
+        public int EdgeJumpAt = -1;
         public long Measured, ChangedInside, ChangedOutside;
     }
 
@@ -283,9 +290,33 @@ internal static class UvTransferQuality
                 anisos.Add(Ratio(j));
             }
         }
+        // The edge of the reach: neighbours one side in and one out, how far apart they land (source px at this size),
+        // with the correction and without. A correction that does not fold can still tear there; a seam of the plain
+        // map's own is a seam, not a tear, and is left out.
+        var jumpW = new List<double>();
+        var jumpP = new List<double>();
+        for (int i = 0; i < raster.Owner.Length; i++)
+        {
+            if (raster.Owner[i] < 0 || !reach(i)) continue;
+            int x = i % size, y = i / size;
+            foreach (int j in new[] { x + 1 < size ? i + 1 : -1, x > 0 ? i - 1 : -1, y + 1 < size ? i + size : -1, y > 0 ? i - size : -1 })
+            {
+                if (j < 0 || raster.Owner[j] < 0 || reach(j)) continue;
+                if (!warped.Valid[i] || !warped.Valid[j] || !plain.Valid[i] || !plain.Valid[j]) continue;
+                double Jump(UvTransferBake.Result m) => Math.Sqrt(Math.Pow(m.R[i] - m.R[j], 2) + Math.Pow(m.G[i] - m.G[j], 2)) * (size - 1) / 65535.0;
+                if (Math.Abs(plain.R[i] - plain.R[j]) > Seam || Math.Abs(plain.G[i] - plain.G[j]) > Seam) continue;
+                double jw = Jump(warped);
+                if (jw > s.EdgeJumpMax) { s.EdgeJumpMax = jw; s.EdgeJumpAt = i; }
+                jumpW.Add(jw);
+                jumpP.Add(Jump(plain));
+            }
+        }
+        s.EdgePairs = jumpW.Count;
+
         s.Measured = areaW.Count;
         double P(List<double> v, double q) => v.Count == 0 ? double.NaN : v[Math.Min(v.Count - 1, (int)(v.Count * q))];
-        foreach (var v in new[] { areaW, anisoW, areaP, anisoP }) v.Sort();
+        foreach (var v in new[] { areaW, anisoW, areaP, anisoP, jumpW, jumpP }) v.Sort();
+        (s.EdgeJumpP99, s.PlainEdgeJumpP99, s.PlainEdgeJumpMax) = (P(jumpW, 0.99), P(jumpP, 0.99), jumpP.Count == 0 ? 0 : jumpP[^1]);
         (s.AreaP50, s.AreaP99, s.AreaP999, s.AreaMax) = (P(areaW, 0.5), P(areaW, 0.99), P(areaW, 0.999), areaW.Count == 0 ? double.NaN : areaW[^1]);
         (s.AnisoP50, s.AnisoP99, s.AnisoP999, s.AnisoMax) = (P(anisoW, 0.5), P(anisoW, 0.99), P(anisoW, 0.999), anisoW.Count == 0 ? double.NaN : anisoW[^1]);
         (s.PlainAreaP99, s.PlainAnisoP99) = (P(areaP, 0.99), P(anisoP, 0.99));
@@ -504,11 +535,17 @@ internal static class UvTransferQuality
         }
         if (f.Stretch is { } s)
         {
-            if (!(s.AreaP99 <= s.PlainAreaP99 * Gate.StretchMargin))
-                miss.Add($"{mapName}: chest distortion area p99 {s.AreaP99:F2} > {Gate.StretchMargin} × the plain map's {s.PlainAreaP99:F2} there");
-            if (!(s.AnisoP99 <= s.PlainAnisoP99 * Gate.StretchMargin))
-                miss.Add($"{mapName}: chest distortion anisotropy p99 {s.AnisoP99:F2} > {Gate.StretchMargin} × the plain map's {s.PlainAnisoP99:F2} there");
+            if (!(s.AreaP99 <= s.PlainAreaP99 * s.Margin))
+                miss.Add($"{mapName}: chest distortion area p99 {s.AreaP99:F2} > {s.Margin} × the plain map's {s.PlainAreaP99:F2} there");
+            if (!(s.AnisoP99 <= s.PlainAnisoP99 * s.Margin))
+                miss.Add($"{mapName}: chest distortion anisotropy p99 {s.AnisoP99:F2} > {s.Margin} × the plain map's {s.PlainAnisoP99:F2} there");
             if (s.ChangedOutside > 0) miss.Add($"{mapName}: the chest field changed {s.ChangedOutside} texels outside its reach");
+            // A correction that folds nowhere can still tear where it ends: neighbours either side of its edge land no
+            // further apart than the plain map's do there (a pixel's leeway where those are next to nothing).
+            if (!(s.EdgeJumpP99 <= Gate.StretchMargin * Math.Max(s.PlainEdgeJumpP99, 1)))
+                miss.Add($"{mapName}: the chest correction tears at its edge: p99 {s.EdgeJumpP99:F1} px, the plain map {s.PlainEdgeJumpP99:F1}");
+            if (!(s.EdgeJumpMax <= Gate.StretchMargin * Math.Max(s.PlainEdgeJumpMax, 1)))
+                miss.Add($"{mapName}: the chest correction tears at its edge: {s.EdgeJumpMax:F1} px at most, the plain map {s.PlainEdgeJumpMax:F1}");
         }
         return miss;
     }

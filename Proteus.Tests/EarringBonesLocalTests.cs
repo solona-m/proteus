@@ -174,7 +174,7 @@ public class EarringBonesLocalTests(ITestOutputHelper o)
     [InlineData("twill / tbse sfw", CrossSexRefitLocalTests.TwillTbse,
                 "55D970FCC3520DFB505C32652B810DDDF38CAA7594522505320FD04917FE2CE4")]
     [InlineData("lumberjack / tbse chest", CrossSexRefitLocalTests.LumberjackShirt,
-                "8A86B0E32DE7F26F82CDAD1088C9710E7A709F27F676860FC65C5E865670476C")]   // re-recorded at 1392: the v3 bibo↔TBSE maps move the nipple
+                "6DC8F280A856F62F3735B28AFA13E8ED929D26E22504E21D301059BACF53E36C")]   // re-recorded at 1392: the v3 bibo↔TBSE maps move the nipple
     [Trait("Plan", "AC-earring-bones-5")]
     [Trait("Plan", "EDGE-earring-bones-3")]
     [Trait("Plan", "EDGE-earring-bones-9")]

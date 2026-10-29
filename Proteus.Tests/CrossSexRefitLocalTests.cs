@@ -137,7 +137,9 @@ public class CrossSexRefitLocalTests(ITestOutputHelper o)
     [Trait("Plan", "EDGE-cross-sex-refit-13")]
     [Trait("Plan", "EDGE-cross-sex-refit-14")]
     [Trait("Speed", "Slow")]
-    public void Lumberjack_refits_onto_bibo_for_midlander_women() // [AC-cross-sex-refit-2] [AC-cross-sex-refit-3] [AC-cross-sex-refit-5] [EDGE-cross-sex-refit-13] [EDGE-cross-sex-refit-14]
+    [Trait("Plan", "EDGE-uvmap-nipples-48")]
+    [Trait("Plan", "AC-uvmap-nipples-8")]
+    public void Lumberjack_refits_onto_bibo_for_midlander_women() // [AC-cross-sex-refit-2] [AC-cross-sex-refit-3] [AC-cross-sex-refit-5] [EDGE-cross-sex-refit-13] [EDGE-cross-sex-refit-14] [EDGE-uvmap-nipples-48] [AC-uvmap-nipples-8]
     {
         var inputs = Inputs(LumberjackShirt, 201, Tbse, UvBakeInputs.TbseChest, Bibo, UvBakeInputs.BiboChest);
         var (r, s) = Run(inputs);
@@ -218,7 +220,7 @@ public class CrossSexRefitLocalTests(ITestOutputHelper o)
     [LocalDataFact(LocalData.GameData, SheerTop, Bibo, Tbse, LocalData.TbseUvMaps)]
     [Trait("Plan", "AC-uvmap-nipples-10")]
     [Trait("Speed", "Slow")]
-    public void RefitMap_sheer_elegance_bust_lands_at_tbse_nipple_height() // [AC-uvmap-nipples-10] [EDGE-uvmap-nipples-31]
+    public void RefitMap_sheer_elegance_bust_lands_at_tbse_nipple_height() // [AC-uvmap-nipples-10] [EDGE-uvmap-nipples-31] [AC-uvmap-nipples-8]
     {
         var inputs = Inputs(SheerTop, 101, Bibo, UvBakeInputs.BiboChest, Tbse, UvBakeInputs.TbseChest);
         var (_, s) = Run(inputs);
@@ -251,8 +253,16 @@ public class CrossSexRefitLocalTests(ITestOutputHelper o)
                         + $"(v2 {v2:+0.0;-0.0} mm, bound {MathF.Abs(v2) / 2:F1} mm)");
             if (!(MathF.Abs(dy) <= MathF.Abs(v2) / 2)) misses.Add($"{side} {dy:F1} mm");
         }
+        // Across the sexes the folds are said, not gated (cross-sex-tops-yas): set beside the v2 maps' for the record.
+        o.WriteLine($"{s.Folds} cloth faces turned over (v2 {SheerTopFoldsV2})");
         Assert.True(misses.Count == 0, string.Join("; ", misses));
     }
+
+    /// <summary>
+    /// The cloth faces the Sheer Elegance top refit for TBSE turned over with the v2 maps (2026-10-28): 101. The v3 maps
+    /// turn 124, the bust now over his nipples rather than under them — said, not gated, as every fold across the sexes is.
+    /// </summary>
+    private const int SheerTopFoldsV2 = 101;
 
     /// <summary>What the v2 maps left of <see cref="RefitMap_sheer_elegance_bust_lands_at_tbse_nipple_height"/>, left and right (mm).</summary>
     private static readonly float[] SheerBustV2Mm = [-29.1f, -29.1f];

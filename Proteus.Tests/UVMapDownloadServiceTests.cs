@@ -317,6 +317,45 @@ public class UVMapDownloadServiceTests : IDisposable
     }
 
     [Fact]
+    [Trait("Plan", "EDGE-uvmap-nipples-10")]
+    public async Task A_cancelled_upgrade_leaves_no_marker_and_a_throwing_one_does() // [EDGE-uvmap-nipples-10]
+    {
+        Have(UVMapDownloadService.CoreMaps);
+        HaveAt(A.Name, V2Bytes[0]); HaveAt(B.Name, V2Bytes[1]);
+        // Stopped mid-fetch (the plugin unloading): not a failure, so tried again at the next start.
+        gate = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var dl = Service();
+        var task = dl.StartUpgradeIfStale()!;
+        dl.Dispose();
+        gate.SetResult();
+        await task.ContinueWith(_ => { });
+        Assert.False(File.Exists(MapPath(UVMapDownloadService.UpgradeFailedMarker)));
+
+        // A fetch that throws rather than failing: the old pair stays, and the day's wait begins.
+        gate = null;
+        var log = Substitute.For<IPluginLog>();
+        using var throwing = new UVMapDownloadService(log, dataDir, null,
+            (_, _, _, _, _, _, _) => throw new IOException("disk full"), () => now);
+        await throwing.StartUpgradeIfStale()!.ContinueWith(_ => { });
+        Assert.True(File.Exists(MapPath(UVMapDownloadService.UpgradeFailedMarker)));
+        Assert.Equal(V2Bytes[0], Length(A.Name));
+    }
+
+    [Fact]
+    [Trait("Plan", "EDGE-uvmap-nipples-28")]
+    public void Constructor_restores_both_finals_when_a_crash_left_neither() // [EDGE-uvmap-nipples-28]
+    {
+        // A crash while a failed swap was putting things back: both finals gone, both old ones beside them.
+        HaveAt(A.Name + ".prev", V2Bytes[0]); HaveAt(B.Name + ".prev", V2Bytes[1]);
+        HaveAt(A.Name + ".staged", A.Bytes); HaveAt(B.Name + ".staged", B.Bytes);
+        using (Service()) { }
+        // Rolled back, then swapped whole: a pair, never a half.
+        Assert.Equal(A.Bytes, Length(A.Name));
+        Assert.Equal(B.Bytes, Length(B.Name));
+        Assert.Empty(Directory.GetFiles(Path.Combine(dataDir, "uvmaps"), "*.prev"));
+    }
+
+    [Fact]
     [Trait("Plan", "EDGE-uvmap-nipples-16")]
     public void Pinned_v3_sizes_differ_from_v2_sizes() // [EDGE-uvmap-nipples-16]
     {

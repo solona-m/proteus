@@ -25,6 +25,15 @@ internal static class UvBakeNipples
     /// <summary>How far a bump must stand out of its skin to be a nipple at all (0.5 mm).</summary>
     internal const float MinHeight = 0.0005f;
 
+    /// <summary>
+    /// How squarely the skin must face forward (its smoothed normal's z) to hold a nipple: on a large breast the rim
+    /// of its overhang, facing down, stands out of the skin around it as much as a nipple does.
+    /// </summary>
+    internal const float MinFacing = 0.7f;
+
+    /// <summary>How far behind the foremost skin of its side a nipple may sit (2 cm): a large breast has bumps by the cleavage too.</summary>
+    internal const float FrontDepth = 0.02f;
+
     /// <summary>The chest's search window, sideways: off the sternum, inside the arm.</summary>
     private const float MinX = 0.03f, MaxX = 0.16f;
 
@@ -58,17 +67,23 @@ internal static class UvBakeNipples
             if (p.Y >= lo - Reach && p.Y <= hi + Reach && ax >= MinX - Reach && ax <= MaxX + Reach) near.Add(v);
         }
 
+        bool InWindow(Vector3 p, float sx) => p.X * sx >= MinX && p.X * sx <= MaxX && p.Y >= lo && p.Y <= hi;
+
         Nipple? Side(float sx)
         {
+            // The front of the chest on this side: a nipple is on it, not back by the cleavage or under the breast.
+            float front = float.MinValue;
+            foreach (int v in near)
+                if (InWindow(body.P[v], sx) && body.VertexRegion[v] == Region.Torso) front = MathF.Max(front, body.P[v].Z);
             int bestV = -1;
             float bestH = float.MinValue;
             foreach (int v in near)
             {
                 var p = body.P[v];
-                if (p.X * sx < MinX || p.X * sx > MaxX || p.Y < lo || p.Y > hi) continue;
+                if (!InWindow(p, sx) || p.Z < front - FrontDepth) continue;
                 if (body.VertexRegion[v] != Region.Torso) continue;
                 var n = body.Smooth[v];
-                if (n.Z <= 0.3f) continue;
+                if (n.Z <= MinFacing) continue;
                 var sum = Vector3.Zero;
                 int count = 0;
                 foreach (int u in near)

@@ -36,8 +36,7 @@ internal static class UvTransferBakeJob
     internal sealed record Pair(UvTransferBake.Result AtoB, UvTransferBake.Result BtoA,
                                 UvTransferQuality.Figures AtoBFigures, UvTransferQuality.Figures BtoAFigures,
                                 List<string> Failures,
-                                ChestField? AtoBField = null, ChestField? BtoAField = null,
-                                ChestField.Checks? AtoBChecks = null, ChestField.Checks? BtoAChecks = null);
+                                ChestField? AtoBField = null, ChestField.Checks? AtoBChecks = null);
 
     /// <summary>
     /// The map pair between bodies <paramref name="aDest"/>/<paramref name="aSrc"/> and <paramref name="bDest"/>/<paramref name="bSrc"/>
@@ -67,24 +66,39 @@ internal static class UvTransferBakeJob
         // onto A is, where that field reaches, that map's inverse — a breast cast onto a flat chest crosses its own
         // rays, by ray or by nearness — and the plain bake elsewhere. The pair then agrees with itself on the chest.
         var (fieldAtoB, checksAtoB) = Field(aToBName, bDest, aSrc, aBvh);
-        ChestField? fieldBtoA = null;
-        ChestField.Checks? checksBtoA = null;
         if (chestFields && fieldAtoB == null)
             return new Pair(None, None, new UvTransferQuality.Figures(), new UvTransferQuality.Figures(), failures,
-                            fieldAtoB, fieldBtoA, checksAtoB, checksBtoA);
+                            fieldAtoB, checksAtoB);
 
         var aToB = MirrorFill(UvTransferBake.Bake(bDest, aSrc, size, bRaster, fieldAtoB));
         var bToAPlain = MirrorFill(UvTransferBake.Bake(aDest, bSrc, size, aRaster));
         var bToA = bToAPlain;
-        bool[]? inverted = null;
+        Func<int, bool> onAsChest = _ => false;
         if (fieldAtoB != null)
         {
+            // Only the front of B's chest is inverted: the field's reach wraps round the flanks, where B's side and back
+            // islands land on A's front too and would draw over it.
             bool Reach(int i)
             {
                 int t = bRaster.Owner[i];
-                return t >= 0 && fieldAtoB.InSupport(bDest.At(t, bRaster.BaryU[i], bRaster.BaryV[i], 1 - bRaster.BaryU[i] - bRaster.BaryV[i]).Pos);
+                if (t < 0) return false;
+                float u = bRaster.BaryU[i], v = bRaster.BaryV[i];
+                return bDest.SmoothAt(t, u, v, 1 - u - v).Z > ChestField.MinFrontZ && fieldAtoB.InSupport(bDest.At(t, u, v, 1 - u - v).Pos);
             }
-            (bToA, inverted) = UvTransferBake.InvertInto(aToB, Reach, bToAPlain, aRaster);
+            // And drawn only onto A's chest, found apart from the drawing: not facing back — a breast's underside faces
+            // down and takes B's chest — within the field's band and its bumps' reach of a site.
+            float far = ChestField.Radius + fieldAtoB.Sites.Max(site => site.Offset.Length());
+            bool OnAsChest(int i)
+            {
+                int t = aRaster.Owner[i];
+                if (t < 0) return false;
+                float u = aRaster.BaryU[i], v = aRaster.BaryV[i];
+                var p = aDest.At(t, u, v, 1 - u - v).Pos;
+                return aDest.SmoothAt(t, u, v, 1 - u - v).Z > -ChestField.MinFrontZ && p.Y > fieldAtoB.YLow && p.Y < fieldAtoB.YClav
+                       && fieldAtoB.Sites.Any(site => System.Numerics.Vector3.Distance(site.Centre, p) < far);
+            }
+            onAsChest = OnAsChest;
+            bToA = UvTransferBake.InvertInto(aToB, Reach, bToAPlain, OnAsChest).Map;
         }
 
         int lookup = Math.Min(size, 2048);
@@ -106,11 +120,13 @@ internal static class UvTransferBakeJob
             fAtoB.Stretch = UvTransferQuality.WarpStretch(aToB, plain, bRaster, bDest, fieldAtoB);
             (fAtoB.Stretch.PredictedArea, fAtoB.Stretch.PredictedAniso) = fieldAtoB.Predict(bDest, aSrc, aBvh);
             fBtoA.PlainLandmarksMm = UvTransferQuality.LandmarkErrors(bToAPlain, aDest, bSrc, bSrcRaster);
-            fBtoA.Stretch = UvTransferQuality.WarpStretch(bToA, bToAPlain, aRaster, i => inverted![i]);
+            fBtoA.Stretch = UvTransferQuality.WarpStretch(bToA, bToAPlain, aRaster, onAsChest);
+            fBtoA.Stretch.Margin = 1;   // the inverse straightens what the plain map squeezed: it may be no worse there
+
             (fBtoA.Stretch.PredictedArea, fBtoA.Stretch.PredictedAniso) = (double.NaN, double.NaN);
         }
         failures.AddRange(UvTransferQuality.Check(aToBName, fAtoB).Concat(UvTransferQuality.Check(bToAName, fBtoA)));
-        return new Pair(aToB, bToA, fAtoB, fBtoA, failures, fieldAtoB, fieldBtoA, checksAtoB, checksBtoA);
+        return new Pair(aToB, bToA, fAtoB, fBtoA, failures, fieldAtoB, checksAtoB);
     }
 
     /// <summary>
@@ -215,9 +231,9 @@ internal static class UvTransferBakeJob
             report["chestField"] = new JsonObject
             {
                 [BiboToTbse] = Describe(pair.AtoBField, pair.AtoBChecks),
-                [TbseToBibo] = Describe(pair.BtoAField, pair.BtoAChecks),
+                [TbseToBibo] = "the inverse of " + BiboToTbse + " where its field reaches",
             };
-            if (failures.Count > 0 && (pair.AtoBField == null || pair.BtoAField == null))
+            if (failures.Count > 0 && pair.AtoBField == null)
             {
                 report["gate"] = new JsonObject { ["passed"] = false, ["failures"] = new JsonArray(failures.Select(f => (JsonNode)f).ToArray()) };
                 report["elapsedMs"] = sw.ElapsedMilliseconds;
@@ -367,6 +383,8 @@ internal static class UvTransferBakeJob
         JsonNode? stretch = f.Stretch is not { } w ? null : new JsonObject
         {
             ["measured"] = w.Measured, ["changedInside"] = w.ChangedInside, ["changedOutside"] = w.ChangedOutside,
+            ["edge"] = new JsonObject { ["pairs"] = w.EdgePairs, ["p99"] = Num(w.EdgeJumpP99), ["max"] = Num(w.EdgeJumpMax), ["maxAt"] = w.EdgeJumpAt < 0 ? null : new JsonArray(w.EdgeJumpAt % map.Size, w.EdgeJumpAt / map.Size),
+                                        ["plainP99"] = Num(w.PlainEdgeJumpP99), ["plainMax"] = Num(w.PlainEdgeJumpMax) },
             ["area"] = new JsonObject { ["p50"] = Num(w.AreaP50), ["p99"] = Num(w.AreaP99), ["p999"] = Num(w.AreaP999), ["max"] = Num(w.AreaMax), ["plainP99"] = Num(w.PlainAreaP99), ["predicted"] = Num(w.PredictedArea) },
             ["aniso"] = new JsonObject { ["p50"] = Num(w.AnisoP50), ["p99"] = Num(w.AnisoP99), ["p999"] = Num(w.AnisoP999), ["max"] = Num(w.AnisoMax), ["plainP99"] = Num(w.PlainAnisoP99), ["predicted"] = Num(w.PredictedAniso) },
         };
