@@ -276,8 +276,8 @@ public sealed class SizeSetStrings
 
     /// <summary>{0} is the piece, {1} the men's option, {2} millimetres, {3} the body.</summary>
     public readonly string EndClothGapFmt = ProteusLoc.Localize("SizeSet.EndClothGap.Fmt",
-        "{0}, \"{1}\": its cloth sits up to {2:F0} mm off {3}'s leg or arm, so the body it was read on may not be the "
-      + "one it was made on.");
+        "{0}, \"{1}\": its cloth sits about {2:F0} mm off {3}'s leg or arm on average, so the body it was read on may "
+      + "not be the one it was made on.");
 
     /// <summary>{0} is the piece, {1} the author's option the men's version was made from.</summary>
     public readonly string OneVariantFmt = ProteusLoc.Localize("SizeSet.OneVariant.Fmt",

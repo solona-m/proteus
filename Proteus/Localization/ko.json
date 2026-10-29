@@ -5292,7 +5292,7 @@
     "description": "Check in game: a women's shoe or glove made a men's with no skin to read a body off. {0} is the piece, {1} the men's option."
   },
   "SizeSet.EndClothGap.Fmt": {
-    "message": "{0}, \"{1}\": 천이 {3}의 다리나 팔에서 최대 {2:F0} mm 떨어져 있습니다. 읽어 낸 체형이 실제로 만든 체형과 다를 수 있습니다.",
+    "message": "{0}, \"{1}\": 천이 {3}의 다리나 팔에서 평균 약 {2:F0} mm 떨어져 있습니다. 읽어 낸 체형이 실제로 만든 체형과 다를 수 있습니다.",
     "description": "Check in game: a women's shoe or glove made a men's whose cloth sits far off the leg or arm it was read on. {0} is the piece, {1} the men's option, {2} millimetres, {3} the body."
   },
   "SizeSet.OneVariant.Fmt": {

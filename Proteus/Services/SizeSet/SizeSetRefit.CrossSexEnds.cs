@@ -16,11 +16,13 @@ namespace Proteus.Services;
 internal static partial class SizeSetRefit
 {
     /// <summary>
-    /// How far a skinless shoe's or glove's cloth may sit off the leg or arm it was read on before Check in game says the
-    /// body may not be the one it was made on (8 mm). The test project's <c>RefitGate.StandoffSlack</c>, the slack it
-    /// allows a refit's standoff against the made-for body's, is the same 8 mm.
+    /// How far, on average, a skinless shoe's or glove's cloth may sit off the leg or arm it was read on before Check in
+    /// game says the body may not be the one it was made on (5 mm). Measured as the mean gap (<see
+    /// cref="BodySizeMatch.ClothAgainst"/>), which runs under the worst points: the test project's
+    /// <c>RefitGate.StandoffSlack</c>, the 8 mm it allows a refit's standoff against the made-for body's, taken down for
+    /// a mean.
     /// </summary>
-    internal const float EndClothGapWarn = 0.008f;
+    internal const float EndClothGapWarn = 0.005f;
 
     /// <summary>Which body a women's shoe or glove is made a men's from — see <see cref="EndMadeFor"/>.</summary>
     internal enum EndMadeForChoice

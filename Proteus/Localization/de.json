@@ -5292,7 +5292,7 @@
     "description": "Check in game: a women's shoe or glove made a men's with no skin to read a body off. {0} is the piece, {1} the men's option."
   },
   "SizeSet.EndClothGap.Fmt": {
-    "message": "{0}, \"{1}\": Der Stoff liegt bis zu {2:F0} mm neben Bein oder Arm von {3}, der abgelesene Körper ist also vielleicht nicht der, auf dem es gemacht wurde.",
+    "message": "{0}, \"{1}\": Der Stoff liegt im Schnitt etwa {2:F0} mm neben Bein oder Arm von {3}, der abgelesene Körper ist also vielleicht nicht der, auf dem es gemacht wurde.",
     "description": "Check in game: a women's shoe or glove made a men's whose cloth sits far off the leg or arm it was read on. {0} is the piece, {1} the men's option, {2} millimetres, {3} the body."
   },
   "SizeSet.OneVariant.Fmt": {
