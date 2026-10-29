@@ -5155,6 +5155,46 @@
     "message": "没有添加尺码：模组已经拥有所勾选体型的全部尺码。",
     "description": ""
   },
+  "SizeSet.NothingAdded.SeeLeftOut": {
+    "message": "没有添加任何尺码。原因见下方“未制作”。",
+    "description": ""
+  },
+  "SizeSet.NothingAdded.SeeLog": {
+    "message": "没有添加任何尺码。每个尺码的原因见 Dalamud 日志（/xllog）。",
+    "description": ""
+  },
+  "SizeSet.MadeOn": {
+    "message": "制作所用体型",
+    "description": ""
+  },
+  "SizeSet.MadeOn.Auto": {
+    "message": "自动判断",
+    "description": ""
+  },
+  "SizeSet.MadeOn.Tip": {
+    "message": "此模组的上衣和腿部所基于的体型模组。只用于 Proteus 自己无法判断的尺码，例如基于旧版体型（比如 Dawntrail 之前的 Bibo+）制作的模组。除非 Proteus 提示无法判断，否则请保持“自动判断”。",
+    "description": ""
+  },
+  "SizeSet.UnreadableMadeOn.Fmt": {
+    "message": "{0}：无法判断它是为哪个体型制作的，因此没有制作它的尺码。如果你知道，请在“制作所用体型”中选择它，然后重新添加尺码。",
+    "description": ""
+  },
+  "SizeSet.NotMadeOn.Fmt": {
+    "message": "{0}：它的尺码都不贴合 {1}，因此没有制作它的尺码。请检查“制作所用体型”中选择的体型。",
+    "description": ""
+  },
+  "SizeSet.MadeOnMissing.Fmt": {
+    "message": "{0}：在“制作所用体型”中选择的 {1} 未安装，因此没有制作它的尺码。",
+    "description": ""
+  },
+  "SizeSet.MadeOnUnclear.Fmt": {
+    "message": "{0}：在 {1} 上无法区分它的尺码，因此没有制作它的尺码。",
+    "description": ""
+  },
+  "SizeSet.MadeOnOtherBody.Fmt": {
+    "message": "{0}：“{1}”被判断为基于 {2} 制作，而不是“制作所用体型”中选择的 {3}，因此它的尺码按基于 {2} 制作。",
+    "description": ""
+  },
   "SizeSet.LeftOut": {
     "message": "未制作：",
     "description": ""

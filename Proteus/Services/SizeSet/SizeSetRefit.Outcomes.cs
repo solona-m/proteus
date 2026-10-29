@@ -90,6 +90,7 @@ internal static partial class SizeSetRefit
         internal const string NoSource = "no-source";
         internal const string NoSourceMen = "no-source-men";
         internal const string Unreadable = "unreadable";
+        internal const string NotMadeOn = "not-made-on";
         internal const string EndsUnreadable = "ends-unreadable";
         internal const string Unpaired = "unpaired";
         internal const string EndNoLead = "end-no-lead";

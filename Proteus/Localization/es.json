@@ -5155,6 +5155,46 @@
     "message": "No se añadió ninguna talla: el mod ya tiene todas las tallas de los cuerpos marcados.",
     "description": ""
   },
+  "SizeSet.NothingAdded.SeeLeftOut": {
+    "message": "No se añadieron tallas. El motivo aparece abajo, en «Omitidas».",
+    "description": ""
+  },
+  "SizeSet.NothingAdded.SeeLog": {
+    "message": "No se añadieron tallas. El registro de Dalamud (/xllog) indica el motivo de cada talla.",
+    "description": ""
+  },
+  "SizeSet.MadeOn": {
+    "message": "Hecho para",
+    "description": ""
+  },
+  "SizeSet.MadeOn.Auto": {
+    "message": "Detectarlo",
+    "description": ""
+  },
+  "SizeSet.MadeOn.Tip": {
+    "message": "El mod de cuerpo para el que se hicieron el torso y las piernas de este mod. Solo se usa para las tallas que Proteus no puede identificar por sí mismo, como un mod hecho para una versión antigua de un cuerpo (por ejemplo, Bibo+ antes de Dawntrail). Déjalo en «Detectarlo» salvo que Proteus diga que no pudo saberlo.",
+    "description": ""
+  },
+  "SizeSet.UnreadableMadeOn.Fmt": {
+    "message": "{0}: no se pudo saber para qué cuerpo se hizo, así que no se hicieron tallas de ella. Si lo sabes, elígelo en «Hecho para» y vuelve a añadir las tallas.",
+    "description": ""
+  },
+  "SizeSet.NotMadeOn.Fmt": {
+    "message": "{0}: ninguna de sus tallas encaja en {1}, así que no se hicieron tallas de ella. Revisa el cuerpo elegido en «Hecho para».",
+    "description": ""
+  },
+  "SizeSet.MadeOnMissing.Fmt": {
+    "message": "{0}: {1}, elegido en «Hecho para», no está instalado, así que no se hicieron tallas de ella.",
+    "description": ""
+  },
+  "SizeSet.MadeOnUnclear.Fmt": {
+    "message": "{0}: en {1} no se pueden distinguir sus tallas, así que no se hicieron tallas de ella.",
+    "description": ""
+  },
+  "SizeSet.MadeOnOtherBody.Fmt": {
+    "message": "{0}: «{1}» se identificó como hecha para {2}, no para {3}, elegido en «Hecho para», y sus tallas se hicieron como hechas para {2}.",
+    "description": ""
+  },
   "SizeSet.LeftOut": {
     "message": "Omitidas:",
     "description": ""

@@ -150,6 +150,42 @@ public sealed class SizeSetStrings
     public readonly string NothingAdded = ProteusLoc.Localize("SizeSet.NothingAdded",
         "No sizes were added: the mod already has every size of the bodies ticked.");
 
+    public readonly string NothingAddedSeeLeftOut = ProteusLoc.Localize("SizeSet.NothingAdded.SeeLeftOut",
+        "No sizes were added. Why is listed under \"Left out\" below.");
+
+    public readonly string NothingAddedSeeLog = ProteusLoc.Localize("SizeSet.NothingAdded.SeeLog",
+        "No sizes were added. The Dalamud log (/xllog) says why for each size.");
+
+    public readonly string MadeOn = ProteusLoc.Localize("SizeSet.MadeOn", "Made on") + "###sizeSetMadeOn";
+
+    public readonly string MadeOnAuto = ProteusLoc.Localize("SizeSet.MadeOn.Auto", "Find it for me");
+
+    public readonly string MadeOnTip = ProteusLoc.Localize("SizeSet.MadeOn.Tip",
+        "The body mod this mod's chest and legs were made on. Used only for sizes Proteus can't read itself, such as a "
+      + "mod made on an older release of a body (Bibo+ before Dawntrail, say). Leave it as Find it for me unless Proteus "
+      + "says it couldn't tell.");
+
+    /// <summary>{0} is the piece.</summary>
+    public readonly string UnreadableMadeOnFmt = ProteusLoc.Localize("SizeSet.UnreadableMadeOn.Fmt",
+        "{0}: couldn't tell which body it was made on, so no sizes were made of it. If you know, choose it under "
+      + "\"Made on\" and add the sizes again.");
+
+    /// <summary>{0} is the piece, {1} the body chosen under "Made on".</summary>
+    public readonly string NotMadeOnFmt = ProteusLoc.Localize("SizeSet.NotMadeOn.Fmt",
+        "{0}: none of its sizes sits on {1}, so no sizes were made of it. Check the body chosen under \"Made on\".");
+
+    /// <summary>{0} is the piece, {1} the body chosen under "Made on".</summary>
+    public readonly string MadeOnMissingFmt = ProteusLoc.Localize("SizeSet.MadeOnMissing.Fmt",
+        "{0}: {1}, chosen under \"Made on\", isn't installed, so no sizes were made of it.");
+
+    /// <summary>{0} is the piece, {1} the body chosen under "Made on".</summary>
+    public readonly string MadeOnUnclearFmt = ProteusLoc.Localize("SizeSet.MadeOnUnclear.Fmt",
+        "{0}: on {1}, its sizes can't be told apart, so no sizes were made of it.");
+
+    /// <summary>{0} is the piece, {1} the author's size, {2} the body it was read on, {3} the body chosen under "Made on".</summary>
+    public readonly string MadeOnOtherBodyFmt = ProteusLoc.Localize("SizeSet.MadeOnOtherBody.Fmt",
+        "{0}: \"{1}\" was read as made on {2}, not on {3} chosen under \"Made on\", and its sizes were cut as made on {2}.");
+
     public readonly string LeftOut = ProteusLoc.Localize("SizeSet.LeftOut", "Left out:");
 
     public readonly string FailedFmt = ProteusLoc.Localize("SizeSet.Failed.Fmt", "Couldn't add the sizes: {0}");

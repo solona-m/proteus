@@ -390,11 +390,11 @@ public sealed class SizeSetCrossSexLocalTests(ITestOutputHelper o) : IDisposable
         Assert.Single(result.Notes, n => n == string.Format(Localization.Strings.SizeSet.NotInstalledFmt, top.Label, "TBSE-X"));
         Assert.True(result.Made >= 1);
 
-        // No women's body its sizes read as made on: said once, nothing written.
+        // No women's body its sizes read as made on: said once, with where to choose it, nothing written.
         string other = Copy(Sheer);
         var before = Groups(other);
         result = RunMen(other, ["tbse@women"], Installed(CrossSexRefitLocalTests.Tbse));
-        Assert.Single(result.Notes, n => n == string.Format(Localization.Strings.SizeSet.UnreadableFmt, top.Label));
+        Assert.Single(result.Notes, n => n == string.Format(Localization.Strings.SizeSet.UnreadableMadeOnFmt, top.Label));
         Assert.Equal(before, Groups(other));
     }
 

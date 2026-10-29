@@ -5155,6 +5155,46 @@
     "message": "Keine Größen hinzugefügt: Der Mod hat bereits jede Größe der angehakten Körper.",
     "description": ""
   },
+  "SizeSet.NothingAdded.SeeLeftOut": {
+    "message": "Keine Größen hinzugefügt. Warum, steht unten unter „Ausgelassen“.",
+    "description": ""
+  },
+  "SizeSet.NothingAdded.SeeLog": {
+    "message": "Keine Größen hinzugefügt. Das Dalamud-Log (/xllog) nennt für jede Größe den Grund.",
+    "description": ""
+  },
+  "SizeSet.MadeOn": {
+    "message": "Gemacht für",
+    "description": ""
+  },
+  "SizeSet.MadeOn.Auto": {
+    "message": "Selbst erkennen",
+    "description": ""
+  },
+  "SizeSet.MadeOn.Tip": {
+    "message": "Der Körper-Mod, für den Brust und Beine dieses Mods gemacht wurden. Wird nur für Größen verwendet, die Proteus nicht selbst erkennen kann, etwa bei einem Mod für eine ältere Version eines Körpers (zum Beispiel Bibo+ vor Dawntrail). Lass es auf „Selbst erkennen“, außer Proteus meldet, dass es den Körper nicht erkennen konnte.",
+    "description": ""
+  },
+  "SizeSet.UnreadableMadeOn.Fmt": {
+    "message": "{0}: Es ließ sich nicht erkennen, für welchen Körper es gemacht wurde, daher wurden keine Größen davon erstellt. Wenn du es weißt, wähle den Körper unter „Gemacht für“ und füge die Größen erneut hinzu.",
+    "description": ""
+  },
+  "SizeSet.NotMadeOn.Fmt": {
+    "message": "{0}: Keine seiner Größen sitzt auf {1}, daher wurden keine Größen davon erstellt. Prüfe den unter „Gemacht für“ gewählten Körper.",
+    "description": ""
+  },
+  "SizeSet.MadeOnMissing.Fmt": {
+    "message": "{0}: {1}, unter „Gemacht für“ gewählt, ist nicht installiert, daher wurden keine Größen davon erstellt.",
+    "description": ""
+  },
+  "SizeSet.MadeOnUnclear.Fmt": {
+    "message": "{0}: Auf {1} lassen sich seine Größen nicht unterscheiden, daher wurden keine Größen davon erstellt.",
+    "description": ""
+  },
+  "SizeSet.MadeOnOtherBody.Fmt": {
+    "message": "{0}: „{1}“ wurde als für {2} gemacht erkannt, nicht für das unter „Gemacht für“ gewählte {3}, und seine Größen wurden als für {2} gemacht erstellt.",
+    "description": ""
+  },
   "SizeSet.LeftOut": {
     "message": "Ausgelassen:",
     "description": ""

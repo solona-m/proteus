@@ -33,6 +33,17 @@ internal static class SizeSetBatchData
     internal const string HellForLeather = LocalData.Mods + ":Hell for Leather - by Solona";
     internal const string Heartthrob = LocalData.Mods + ":Heartthrob - by Solona";
     internal const string ScarletPack = LocalData.ModPacks + ":Scarlet - by Solona.pmp";
+    /// <summary>Oblique as it shipped, v3: made on Bibo+ before Dawntrail, so no installed body reads its skin. The
+    /// installed copy has sizes added since; tests never read it.</summary>
+    internal const string ObliquePack = LocalData.ModPacks + ":Oblique v1.0.0.pmp";
+
+    /// <summary>A pack unpacked into a work folder of its own.</summary>
+    internal static string UnpackedPack(string pack)
+    {
+        string copy = NewCopy();
+        ZipFile.ExtractToDirectory(LocalData.Path(pack), copy);
+        return copy;
+    }
 
     internal static string Folder(string need) => Path.GetFileName(LocalData.Path(need));
 
@@ -79,14 +90,14 @@ internal static class SizeSetBatchData
     internal static (SizeSetBatch.Outcome Outcome, SizeSetRefit.RunLog Log) Batch(
         string copy, IReadOnlyList<string> keys, bool men, string[] bodyMods, bool ends = true, string? uvmaps = null,
         Func<string, byte[]?>? readGame = null, Action<string>? progress = null, CancellationToken ct = default,
-        string? modsRoot = null)
+        string? modsRoot = null, string? madeOn = null, Dalamud.Plugin.Services.IPluginLog? log = null)
     {
-        var log = Substitute.For<Dalamud.Plugin.Services.IPluginLog>();
+        log ??= Substitute.For<Dalamud.Plugin.Services.IPluginLog>();
         var runLog = new SizeSetRefit.RunLog();
         var outcome = SizeSetBatch.Run(
             new SizeSetBatch.Inputs(copy, modsRoot ?? LocalData.Path(LocalData.Mods), keys, men, ends, readGame ?? (_ => null),
                                     new UVRemapService(log, uvmaps ?? LocalData.Path(LocalData.UvMaps)), log,
-                                    ModDirs: modsRoot == null ? bodyMods.Select(Folder).ToList() : bodyMods),
+                                    ModDirs: modsRoot == null ? bodyMods.Select(Folder).ToList() : bodyMods, MadeOn: madeOn),
             runLog, progress ?? (_ => { }), ct);
         return (outcome, runLog);
     }
@@ -826,14 +837,6 @@ public class SizeSetBatchLocalTests(ThisOldThingRun tot, ITestOutputHelper outpu
 
     // ── v3 ──
 
-    /// <summary>Scarlet's pack, v3, unpacked into a work folder.</summary>
-    private static string Unpacked(string pack)
-    {
-        string copy = SizeSetBatchData.NewCopy();
-        ZipFile.ExtractToDirectory(LocalData.Path(pack), copy);
-        return copy;
-    }
-
     [LocalDataFact(SizeSetBatchData.ScarletPack, SizeSetBatchData.Neolithe, SizeSetBatchData.Bibo, LocalData.UvMaps)]
     [Trait("Plan", "AC-headless-size-set-10")]
     [Trait("Plan", "AC-headless-size-set-4")]
@@ -841,7 +844,7 @@ public class SizeSetBatchLocalTests(ThisOldThingRun tot, ITestOutputHelper outpu
     [Trait("Speed", "Slow")]
     public void V3_pack_is_converted_then_sized() // [AC-headless-size-set-10] [AC-headless-size-set-4] [EDGE-headless-size-set-21]
     {
-        string copy = Unpacked(SizeSetBatchData.ScarletPack);
+        string copy = SizeSetBatchData.UnpackedPack(SizeSetBatchData.ScarletPack);
         try
         {
             Assert.True(PenumbraModMeta.IsLegacyFolder(copy));
@@ -855,7 +858,7 @@ public class SizeSetBatchLocalTests(ThisOldThingRun tot, ITestOutputHelper outpu
             Assert.Contains(runLog.Sizes, s => s.Body == "bibo" && s.Status == SizeSetRefit.SizeStatus.Made);
 
             // Only appended to, against the groups the conversion wrote: re-read from a fresh conversion of the pack.
-            string fresh = Unpacked(SizeSetBatchData.ScarletPack);
+            string fresh = SizeSetBatchData.UnpackedPack(SizeSetBatchData.ScarletPack);
             try
             {
                 PenumbraModMeta.MigrateWorkCopy(fresh, LocalData.Path(LocalData.Mods));
