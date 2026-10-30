@@ -53,7 +53,8 @@ internal static partial class SizeSetRefit
     /// The women's pieces that get men's versions: Midlander women's chest and legs (<see cref="CrossSexRefit.Supported"/>)
     /// and shoes and gloves (<see cref="CrossSexRefit.EndsCross"/>), and only those the author made no men's model of —
     /// that one is sized onto the men's bodies as it is. A men's model that is only the game's own is no piece at all
-    /// (<see cref="PiecesOf"/>), so it stops nothing.
+    /// (<see cref="PiecesOf"/>), so it stops nothing — nor a copy of it TexTools packed beside the author's women's design,
+    /// an older version of the game's model as often as not.
     /// </summary>
     internal static IReadOnlyList<Piece> AcrossPieces(IReadOnlyList<Piece> pieces)
     {

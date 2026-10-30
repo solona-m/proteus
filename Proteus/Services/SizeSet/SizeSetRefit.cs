@@ -161,16 +161,24 @@ internal static partial class SizeSetRefit
     /// Nor is the game's own model shipped at its own path. Mods built in TexTools carry the other races' models of an
     /// item they only changed for one — Hell for Leather, a women's outfit, gives Midlander men the game's own Anemos
     /// gambison, re-saved — and taking that for a men's piece offered TBSE sizes of a garment its author never made.
+    /// <para/>
+    /// Nor a copy of it, beside the author's design for the other sex: the copies TexTools packed before Dawntrail are of
+    /// the game's older models, and re-saved with more vertices, so they are not the game's own vertex for vertex — BOObies
+    /// gave Midlander men the game's halter that way, and its women's design was never made a men's (see
+    /// <see cref="WithoutRacialCopies"/>).
     /// </summary>
     /// <param name="readGameFile">The game's own copy of a game path; null takes every model as the author's.</param>
     /// <param name="includeEnds">Shoes and gloves too (see <see cref="Request.Ends"/>).</param>
-    internal static List<Piece> PiecesOf(string modRoot, Func<string, byte[]?>? readGameFile = null, bool includeEnds = true)
+    /// <param name="droppedCopy">Told each game path left out as the game's own model or a copy of it, for the log.</param>
+    internal static List<Piece> PiecesOf(string modRoot, Func<string, byte[]?>? readGameFile = null, bool includeEnds = true,
+                                         Action<string>? droppedCopy = null)
     {
         var redirects = PenumbraModMeta.ReadAllRedirects(modRoot);
         var record = BodyRetargetWriter.ReadRecord(modRoot);
         var ourFiles = (record?.Options ?? []).Select(e => RefitCore.Normal(e.File)).ToHashSet(StringComparer.Ordinal);
         var single = RefitCore.SingleGroups(modRoot);
         var pieces = new List<Piece>();
+        var models = readGameFile != null ? new Models(modRoot, readGameFile) : null;
 
         foreach (var byPath in redirects.Where(r => PiecePath.IsMatch(r.GamePath)
                                                     && (includeEnds || !IsEnd(BodySizeCatalog.SlotOf(r.GamePath)!)))
@@ -200,11 +208,16 @@ internal static partial class SizeSetRefit
                 options.Add((option, r.File));
             }
             if (options.Count == 0) continue;
-            if (readGameFile != null && AllTheGamesOwn(modRoot, gamePath, options, readGameFile)) continue;
+            if (models != null && AllTheGamesOwn(gamePath, options, models))
+            {
+                droppedCopy?.Invoke(gamePath);
+                continue;
+            }
             pieces.Add(new Piece(gamePath, slot, group, options, Gui.PartsPanel.SlotOf(authors[0]),
                                  string.Format(Strings.Parts.RetargetGroupFmt, Gui.PartsPanel.ModelLabel(authors[0])),
                                  BodySizeCatalog.RaceOf(gamePath)!));
         }
+        if (models != null) pieces = WithoutRacialCopies(pieces, redirects, ourFiles, models, droppedCopy);
 
         // Legs sized in the same group as a chest of their race follow the chest's sizes, and a shoe or glove follows the
         // chest — or, a shoe, the legs — it is sized with. Chests first, then legs, then shoes and gloves, so the options a
@@ -227,26 +240,151 @@ internal static partial class SizeSetRefit
     /// <summary>
     /// Whether every model a mod gives <paramref name="gamePath"/> is the game's own one there: the same vertices in the
     /// same places. Not the same bytes — TexTools re-saves what it ships, 68 bytes longer — and stopping at the first
-    /// model that differs, so an author's piece costs one extra read.
+    /// model that differs, so an author's piece costs one extra read. A model that cannot be read is not the game's.
     /// </summary>
-    private static bool AllTheGamesOwn(string modRoot, string gamePath, IReadOnlyList<(string? Option, string File)> options,
-                                       Func<string, byte[]?> readGameFile)
+    private static bool AllTheGamesOwn(string gamePath, IReadOnlyList<(string? Option, string File)> options, Models models)
     {
-        float[]? game;
-        try { game = readGameFile(gamePath) is { } bytes ? ModelPartReader.Read(bytes)?.Positions : null; }
-        catch (Exception) { return false; }
+        var game = models.Games(gamePath);
         if (game == null) return false;   // a new item: nothing of the game's to be
 
         foreach (var (_, file) in options)
         {
-            string path = BodySizeCatalog.ResolveCaseInsensitive(modRoot, file);
-            if (!File.Exists(path)) return false;
-            var mine = ModelPartReader.Read(File.ReadAllBytes(path))?.Positions;
+            var mine = models.Mine(file);
             if (mine == null || mine.Length != game.Length) return false;
             for (int i = 0; i < mine.Length; i++)
                 if (MathF.Abs(mine[i] - game[i]) > 1e-5f) return false;
         }
         return true;
+    }
+
+    /// <summary>The same item and slot for any race: the item, the race and the slot.</summary>
+    private static readonly Regex RacialPath = new(@"^chara/equipment/e(\d{4})/model/c(\d{4})e\1_(top|dwn|sho|glv)\.mdl$",
+                                                   RegexOptions.IgnoreCase | RegexOptions.Compiled);
+
+    /// <summary>
+    /// <paramref name="pieces"/> without the copies TexTools packed of the game's own model. A Midlander piece P goes when:
+    /// <list type="number">
+    /// <item>every model its options give is a copy of the game's model at P (<see cref="GameModelCopy.IsCopy"/>: 95% of
+    /// the vertices, both ways);</item>
+    /// <item>the other sex's model of the item is a piece too, and the author's own (<see cref="GameModelCopy.IsAuthors"/>,
+    /// or no game model there). One that cannot be read counts as the author's, on purpose: P must still be a copy, beside
+    /// a racial copy, and one model;</item>
+    /// <item>the mod gives the item and slot to another race too, from a file of the author's, and one of those is a copy
+    /// of the game's model for its race — the racial copies TexTools packs for every race the author did not change;</item>
+    /// <item>P's options all give one model: a copy is one, an author's fits come one per body.</item>
+    /// </list>
+    /// Judged against the pieces as given, so the order does not matter. A men's fit edited from the game's model is kept:
+    /// such a mod ships no racial copies (Twill Trousers), or its other races are the author's own fits (a body mod's
+    /// hands, 58.6% the game's).
+    /// </summary>
+    private static List<Piece> WithoutRacialCopies(List<Piece> pieces, List<PenumbraModMeta.Redirect> redirects,
+                                                   HashSet<string> ourFiles, Models models, Action<string>? droppedCopy)
+    {
+        bool Ours(string file)
+            => ourFiles.Contains(RefitCore.Normal(file))
+               || RefitCore.Normal(file).StartsWith(BodyRetargetWriter.Subfolder.ToLowerInvariant() + "/", StringComparison.Ordinal);
+
+        bool IsRacialCopy(Piece piece)
+        {
+            string other = RacialModelBake.WithRace(piece.GamePath, piece.Race == "0101" ? CrossSexRefit.Women : CrossSexRefit.Men);
+            var sibling = pieces.FirstOrDefault(s => string.Equals(s.GamePath, other, StringComparison.OrdinalIgnoreCase));
+            if (sibling == null) return false;
+
+            // One model: the options' files are one, or the same bytes.
+            var files = piece.Options.Select(o => o.File).DistinctBy(RefitCore.Normal).ToList();
+            if (files.Count > 1 && files.Skip(1).Any(f => !models.SameBytes(files[0], f))) return false;
+
+            if (models.Games(piece.GamePath) is not { } game) return false;
+            if (files.Any(f => models.Mine(f) is not { } mine || !GameModelCopy.IsCopy(mine, game))) return false;
+
+            var p = RacialPath.Match(piece.GamePath);
+            if (!p.Success) return false;
+            bool racialCopy = redirects.Any(r => RacialPath.Match(r.GamePath) is { Success: true } m
+                                                 && m.Groups[1].Value == p.Groups[1].Value
+                                                 && string.Equals(m.Groups[3].Value, p.Groups[3].Value, StringComparison.OrdinalIgnoreCase)
+                                                 && m.Groups[2].Value is not ("0101" or "0201")
+                                                 && !Ours(r.File)
+                                                 && models.Games(r.GamePath.ToLowerInvariant()) is { } theirs
+                                                 && models.Mine(r.File) is { } copy
+                                                 && GameModelCopy.IsCopy(copy, theirs));
+            if (!racialCopy) return false;
+
+            var theirGame = models.Games(sibling.GamePath);
+            return theirGame == null
+                   || sibling.Options.Any(o => models.Mine(o.File) is not { } mine || GameModelCopy.IsAuthors(mine, theirGame));
+        }
+
+        var copies = pieces.Where(IsRacialCopy).ToList();
+        foreach (var copy in copies) droppedCopy?.Invoke(copy.GamePath);
+        return copies.Count == 0 ? pieces : pieces.Where(p => !copies.Contains(p)).ToList();
+    }
+
+    /// <summary>
+    /// The models <see cref="PiecesOf"/> compares, each read once: the mod's by file, the game's by game path. Any model
+    /// that cannot be read — missing, malformed, or its read throwing — is null.
+    /// </summary>
+    private sealed class Models(string modRoot, Func<string, byte[]?> readGameFile)
+    {
+        private readonly Dictionary<string, float[]?> mods = new(StringComparer.Ordinal);
+        private readonly Dictionary<string, float[]?> games = new(StringComparer.Ordinal);
+
+        internal float[]? Mine(string file)
+        {
+            string key = RefitCore.Normal(file);
+            if (!mods.TryGetValue(key, out var positions))
+                mods[key] = positions = Positions(() => Bytes(file));
+            return positions;
+        }
+
+        internal float[]? Games(string gamePath)
+        {
+            string key = gamePath.ToLowerInvariant();
+            if (!games.TryGetValue(key, out var positions))
+                games[key] = positions = Positions(() => readGameFile(gamePath));
+            return positions;
+        }
+
+        /// <summary>Whether two of the mod's files hold the same bytes; unreadable is not.</summary>
+        internal bool SameBytes(string a, string b)
+            => Length(a) is { } la && la == Length(b) && Bytes(a) is { } x && Bytes(b) is { } y && x.AsSpan().SequenceEqual(y);
+
+        private long? Length(string file)
+        {
+            try
+            {
+                var info = new FileInfo(BodySizeCatalog.ResolveCaseInsensitive(modRoot, file));
+                return info.Exists ? info.Length : null;
+            }
+            catch (Exception)
+            {
+                return null;
+            }
+        }
+
+        private byte[]? Bytes(string file)
+        {
+            try
+            {
+                string path = BodySizeCatalog.ResolveCaseInsensitive(modRoot, file);
+                return File.Exists(path) ? File.ReadAllBytes(path) : null;
+            }
+            catch (Exception)
+            {
+                return null;
+            }
+        }
+
+        private static float[]? Positions(Func<byte[]?> read)
+        {
+            try
+            {
+                return read() is { } bytes ? ModelPartReader.Read(bytes)?.Positions : null;
+            }
+            catch (Exception)
+            {
+                return null;
+            }
+        }
     }
 
     /// <summary>Make every size. Worker thread; minutes for a mod of several pieces.</summary>
@@ -268,7 +406,8 @@ internal static partial class SizeSetRefit
     {
         var notes = runLog.Notes;
         int made = 0;
-        var pieces = PiecesOf(request.ModRoot, request.ReadGameFile, request.Ends);
+        var pieces = PiecesOf(request.ModRoot, request.ReadGameFile, request.Ends,
+                              path => log.Debug("[Proteus] size set: {0} is the game's own model or a copy of it, not a piece", path));
         if (pieces.Count == 0)
         {
             NoPieces(runLog);

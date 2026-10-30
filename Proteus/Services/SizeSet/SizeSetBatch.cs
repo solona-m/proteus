@@ -187,14 +187,18 @@ internal static class SizeSetBatch
             return Refused("made-on-not-a-body", $"--made-on {madeOn} is not a body mod");
 
         // ── the pieces, read off the mod as it is: v3 reads too ──
-        var pieces = SizeSetRefit.PiecesOf(root, inputs.ReadGameFile, inputs.Ends);
+        var dropped = new List<string>();
+        var pieces = SizeSetRefit.PiecesOf(root, inputs.ReadGameFile, inputs.Ends, dropped.Add);
         var keys = RunKeys(pieces, inputs.Keys, inputs.Men);
         var bodyKeys = keys.Select(k => k.Replace(SizeSetRefit.AcrossSuffix, "", StringComparison.Ordinal)).Distinct().ToList();
         var bodyMods = BodyModsOf(bodyKeys, bodies);
         var missing = bodyKeys.Where(k => !SupportedBodies.Installed(k, bodies)).ToList();
         if (pieces.Count == 0)
         {
-            // Nothing to size: said as the panel says it, and the mod left exactly as it was — not even converted.
+            // Nothing to size: said as the panel says it, and the mod left exactly as it was — not even converted. The run
+            // that logs what was left out as the game's never comes, so it is logged here.
+            foreach (string path in dropped)
+                inputs.Log.Debug("[Proteus] size set: {0} is the game's own model or a copy of it, not a piece", path);
             SizeSetRefit.NoPieces(runLog);
             return new Outcome(keys, null, null, null, false, bodyMods, missing, total.Elapsed.TotalSeconds, scanSeconds, 0,
                                inputs.MadeOn);
