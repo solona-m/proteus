@@ -218,7 +218,8 @@ internal static partial class BodyRetarget
     /// <see cref="PlanWeights"/>). Null when only the geometry is wanted.</param>
     /// <param name="SourceModel">The source body's file: which bones the OLD body rigs, so a weight rewrite knows which
     /// of the garment's bones are body bones. Null when only the geometry is wanted.</param>
-    /// <param name="TargetHidden">The target body's variant tags its mod does not draw (see <see cref="UndrawnVariants"/>).
+    /// <param name="TargetHidden">The target body's tags its mod does not draw: undrawn IMC variants (see
+    /// <see cref="UndrawnVariants"/>) and custom attributes its options switch off (see <see cref="BodyAtrSwitches"/>).
     /// <paramref name="Target"/> is already without those parts; this carries the same choice to the swap, which copies
     /// the body's skin out of <paramref name="TargetModel"/>. Null when every part is drawn.</param>
     /// <param name="ShapeOnly">The slot is here for its shape alone — where its body sits, and what its skin weights
@@ -229,6 +230,9 @@ internal static partial class BodyRetarget
     /// <see cref="Worn"/> pair. Null when the body mod cannot be read.</param>
     /// <param name="Smallclothes">On a <see cref="Worn"/> slot <see cref="ReadySmallclothes"/> readied: each of the new
     /// body's smallclothes materials, and the name the garment draws it under. Null on every other slot.</param>
+    /// <param name="TargetSwitched">The drawn tags of the new body its mod's options switch (<see cref="BodyDraw.Switched"/>):
+    /// dropped from the skin and smallclothes the swap brings in, which would vanish when the user picks another option —
+    /// the garment's skin is the only skin under a worn top. Null when its options switch nothing.</param>
     /// <param name="SourceIsGameChest">The old body is the game's own chest, byte for byte (see
     /// <see cref="VanillaBodyCatalog.IsGameModel"/>): its bust is its bra, read with its skin (see
     /// <see cref="SmallclothesOverHoles"/>).</param>
@@ -237,7 +241,8 @@ internal static partial class BodyRetarget
                                              IReadOnlySet<string>? TargetHidden = null, bool ShapeOnly = false,
                                              Func<string, byte[]?>? TargetMaterial = null,
                                              IReadOnlyDictionary<string, string>? Smallclothes = null,
-                                             bool SourceIsGameChest = false)
+                                             bool SourceIsGameChest = false,
+                                             IReadOnlySet<string>? TargetSwitched = null)
     {
         /// <summary>Whether the swap puts this slot's body skin in: it carries the body's file, and is not
         /// <see cref="ShapeOnly"/>.</summary>

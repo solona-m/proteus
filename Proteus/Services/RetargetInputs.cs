@@ -232,6 +232,10 @@ internal static class RetargetInputs
                              keepStandoff: rule.KeepStandoff, carryPiercings: carryPiercings,
                              liftUnderbust: liftUnderbust, seeInside: rule.SeeInside, relaxSinkGuard: rule.RelaxSinkGuard);
 
+    /// <summary>The size a kept-end refit takes as chosen in the body mod's options (see <see cref="BodyRetarget.BodyDraw.Onto"/>):
+    /// the one target when there is one; with several they share the slot's selection, so none is.</summary>
+    internal static BodyOption? OverlayFor(IReadOnlyList<BodyOption> limbTargets) => limbTargets.Count == 1 ? limbTargets[0] : null;
+
     /// <summary>The headless refit's <c>--piercings</c>: the new body's piercings come in only when it is given.</summary>
     internal static bool CliCarryPiercings(IReadOnlyDictionary<string, string> opts) => opts.ContainsKey("piercings");
 

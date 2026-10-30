@@ -1999,7 +1999,7 @@ internal sealed partial class BodyRetargetPanel(PenumbraBridge penumbra, UVRemap
             {
                 try
                 {
-                    return Build(sourcePath, targetPath, name, male, masks, out _, out _, targetMale) ?? "";
+                    return Build(sourcePath, targetPath, name, male, masks, target, out _, out _, targetMale) ?? "";
                 }
                 catch (Exception ex)
                 {
@@ -2021,7 +2021,7 @@ internal sealed partial class BodyRetargetPanel(PenumbraBridge penumbra, UVRemap
         var targets = inputs.PrimaryTargets.Select(t => (Option: t, Path: snapshot.PathOf(t))).ToList();
         var others = inputs.Shared.Select(s => (Slot: s.Slot, Source: sources.PathOf(s.From),
                                                 Target: snapshot.PathOf(s.To), Name: SlotName(s.Slot),
-                                                Masks: MasksFor(s.Slot)))
+                                                Masks: MasksFor(s.Slot), To: s.To))
                                   .ToList();
         var garment = ctx.Garment;
         var bytes = ctx.GarmentBytes;
@@ -2049,7 +2049,7 @@ internal sealed partial class BodyRetargetPanel(PenumbraBridge penumbra, UVRemap
 
         // What only this thread may read (IPC): each slot's IMC masks, and the feet or hands being worn.
         var limbMasks = MasksFor(primary);
-        var endMasks = inputs.EndSlot != null ? MasksFor(inputs.EndSlot) : default;
+        var endMasks = inputs.EndSlot != null ? MasksFor(inputs.EndSlot) : null;
         BodyOption? skinTarget = inputs.SkinOnly
             ? AutoRefitDecisions.Companion(snapshot.For(inputs.EndSlot!, race), inputs.PrimaryTargets.FirstOrDefault(),
                                            WornOption(snapshot, inputs.EndSlot!))
@@ -2075,9 +2075,10 @@ internal sealed partial class BodyRetargetPanel(PenumbraBridge penumbra, UVRemap
             {
                 // The other slots are the same pair for every size, so each is built once and shared.
                 var shared = new List<BodyRetarget.SlotPair>();
-                foreach (var (slot, sourcePath, targetPath, name, masks) in others)
+                foreach (var (slot, sourcePath, targetPath, name, masks, to) in others)
                 {
-                    if (Build(sourcePath, targetPath, name, male, masks, out var pair, out _, targetMale) is { } refusal)
+                    if (Build(sourcePath, targetPath, name, male, masks, to, out var pair, out _, targetMale, report: true)
+                            is { } refusal)
                         return new PlanResult(key, null, refusal);
                     shared.Add(pair);
                 }
@@ -2118,7 +2119,9 @@ internal sealed partial class BodyRetargetPanel(PenumbraBridge penumbra, UVRemap
                     var input = new KeepEnds.StudioPlanInput(
                         garment, bytes, garmentSlot, pieces, sources, snapshot, garmentRace ?? "", male, limbFrom!,
                         limbTargets, sameBodyMod, fromCloth, layOnBody, acrossBodies, boxClear, held, shared,
-                        s => s == primary ? (limbMasks.Source, limbMasks.Target) : (endMasks.Source, endMasks.Target),
+                        // The size refitted onto counts as chosen only when there is one: several share the slot's.
+                        s => s == primary ? (limbMasks.Source, limbMasks.Target(RetargetInputs.OverlayFor(limbTargets)))
+                                          : (endMasks?.Source, endMasks?.Target(null)),
                         SlotName, modelRel, shapeNames, piercings);
                     var kept = KeepEnds.StudioPlan(input, Baked, uvRemap, log, () => Interlocked.Increment(ref planDone));
                     return new PlanResult(key, kept.Planned, kept.Error, kept.Notice, kept.ShapeNames);
@@ -2132,8 +2135,8 @@ internal sealed partial class BodyRetargetPanel(PenumbraBridge penumbra, UVRemap
                 if (garmentSource == null) return new PlanResult(key, null, string.Format(ps.RetargetNeedFromFmt, garmentName));
                 foreach (var (option, targetPath) in targets)
                 {
-                    if (Build(garmentSource, targetPath, garmentName, male, limbMasks, out var pair, out var landed,
-                              targetMale) is { } refusal)
+                    if (Build(garmentSource, targetPath, garmentName, male, limbMasks, option, out var pair, out var landed,
+                              targetMale, report: true) is { } refusal)
                         return new PlanResult(key, null, targets.Count > 1 ? $"{option.Label}: {refusal}" : refusal);
 
                     var pairs = new List<BodyRetarget.SlotPair> { pair };
@@ -2170,38 +2173,76 @@ internal sealed partial class BodyRetargetPanel(PenumbraBridge penumbra, UVRemap
     /// user. Worker thread only.
     /// </summary>
     /// <param name="male">The garment is a man's, and so both bodies are: every option list is filtered to its sex.</param>
-    /// <param name="masks">Each body mod's IMC mask for this slot (see <see cref="VariantMask"/>): both bodies are read
-    /// without the variant parts their mods do not draw.</param>
+    /// <param name="masks">What each body mod draws of this slot (see <see cref="Masks"/>): both bodies are read without
+    /// the variant parts their mods do not draw, and the new one without the alternatives its options switch off.</param>
+    /// <param name="onto">The size refitted onto, taken as chosen in its own group of the body mod's options.</param>
     /// <param name="landed">How the two bodies' skin landed on each other; null for the same mesh.</param>
     /// <param name="targetMale">The target body's sex under a pick for the other sex (see <see cref="PairSexes"/>).</param>
-    private string? Build(string sourcePath, string targetPath, string name, bool male, Masks masks,
-                          out BodyRetarget.SlotPair pair, out UvAtlasCorrespondence.Stats? landed, bool? targetMale = null)
-        => BodyRetarget.BuildPair(masks.Slot, File.ReadAllBytes(sourcePath), File.ReadAllBytes(targetPath), name, male,
-                                  masks.Source, masks.Target, uvRemap, out pair, out landed,
-                                  BodyRetarget.BodyMaterialReader(targetPath), targetMale);
-
-    /// <summary>
-    /// The IMC attribute mask a body mod gives its model in <paramref name="slot"/>, under the player's own choice of
-    /// its options — which of the body's variant parts the game draws (see <see cref="BodyRetarget.UndrawnVariants"/>).
-    /// Null when the mod has no say, the game's own bodies included: every part is then taken as drawn. IPC, so the
-    /// framework thread only.
-    /// </summary>
-    private ushort? VariantMask(string? dir, BodySizeCatalog? mod, string slot)
+    /// <param name="report">Log what the new body's options switch: for a plan, not for every check of a pick.</param>
+    private string? Build(string sourcePath, string targetPath, string name, bool male, Masks masks, BodyOption? onto,
+                          out BodyRetarget.SlotPair pair, out UvAtlasCorrespondence.Stats? landed, bool? targetMale = null,
+                          bool report = false)
     {
-        if (dir == null || dir == VanillaBodyCatalog.Key || mod == null) return null;
-        var selected = penumbra.GetPlayerCollectionId() is { } collection
-            ? penumbra.GetModSettings(collection, dir)?.Options
-            : null;
-        return RefitCore.MaskOf(dir, mod, slot, selected);
+        var target = masks.Target(onto);
+        string? refusal = BodyRetarget.BuildPair(masks.Slot, File.ReadAllBytes(sourcePath), File.ReadAllBytes(targetPath),
+                                                 name, male, masks.Source, target, uvRemap, out pair, out landed,
+                                                 BodyRetarget.BodyMaterialReader(targetPath), targetMale);
+        if (report && refusal == null && target is { AtrOff.Count: > 0 }
+            && pair.TargetHidden?.Where(target.AtrOff.Contains).Order(StringComparer.Ordinal).ToList() is { Count: > 0 } off)
+            log.Information("[Proteus] retarget: {0} {1} onto \"{2}\": draws {3}; switched off {4}", masks.Mod,
+                            masks.Slot, onto?.Label ?? "",
+                            string.Join(", ", (pair.TargetSwitched ?? new HashSet<string>()).Order(StringComparer.Ordinal)),
+                            string.Join(", ", off));
+        return refusal;
     }
 
-    /// <summary>One slot's two IMC masks, read on the framework thread for a worker to use.</summary>
-    private readonly record struct Masks(string Slot, ushort? Source, ushort? Target);
+    /// <summary>
+    /// The player's own choice of a body mod's options, as Penumbra reports it; null for the game's own bodies or no
+    /// mod. IPC, so the framework thread only.
+    /// </summary>
+    private IReadOnlyDictionary<string, List<string>>? SelectedOf(string? dir, BodySizeCatalog? mod)
+    {
+        if (dir == null || dir == VanillaBodyCatalog.Key || mod == null) return null;
+        return penumbra.GetPlayerCollectionId() is { } collection
+            ? penumbra.GetModSettings(collection, dir)?.Options
+            : null;
+    }
+
+    /// <summary>
+    /// What each body mod draws of one slot (see <see cref="RefitCore.MaskOf"/>): the player's choice of its options read
+    /// on the framework thread, the mod's manifest read on the worker the first time it is asked, once for the slot.
+    /// </summary>
+    private sealed class Masks(string slot, string mod, Func<BodyRetarget.BodyDraw?> source,
+                               Func<BodyRetarget.BodyDraw?> target)
+    {
+        /// <summary>The new body mod's folder, for the log: read with the rest on the framework thread.</summary>
+        public string Mod => mod;
+
+        private readonly Lazy<BodyRetarget.BodyDraw?> sourceDraw = new(source);
+        private readonly Lazy<BodyRetarget.BodyDraw?> targetDraw = new(target);
+
+        public string Slot => slot;
+
+        /// <summary>The body the garment was made on.</summary>
+        public BodyRetarget.BodyDraw? Source => sourceDraw.Value;
+
+        /// <summary>The new body, with the size refitted onto taken as chosen (see <see cref="BodyRetarget.BodyDraw.Onto"/>).</summary>
+        public BodyRetarget.BodyDraw? Target(BodyOption? onto) => targetDraw.Value?.Onto(onto);
+    }
 
     // The made-for mod's own catalog, not a bent copy of it: the mask is read from the mod's manifest, and a bent body
-    // keeps the parts it was made with.
+    // keeps the parts it was made with. The new body is judged by the race its sizes are listed for.
     private Masks MasksFor(string slot)
-        => new(slot, VariantMask(SourceDir, fromCatalog ?? catalog, slot), VariantMask(bodyDir, catalog, slot));
+    {
+        string? sourceDir = SourceDir, targetDir = bodyDir;
+        var sourceMod = fromCatalog ?? catalog;
+        var targetMod = catalog;
+        var sourceSelected = SelectedOf(sourceDir, sourceMod);
+        var targetSelected = SelectedOf(targetDir, targetMod);
+        ushort? targetRace = RefitCore.RaceNumber(race);
+        return new Masks(slot, Path.GetFileName(targetDir ?? ""), () => RefitCore.MaskOf(sourceDir, sourceMod, slot, sourceSelected),
+                         () => RefitCore.MaskOf(targetDir, targetMod, slot, targetSelected, targetRace));
+    }
 
     /// <summary>
     /// The mod this garment's refits live in, or null when there is none yet.

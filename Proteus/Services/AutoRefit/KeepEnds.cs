@@ -380,10 +380,10 @@ internal static partial class KeepEnds
     /// fine without the feet's shape riding along.
     /// </summary>
     /// <param name="endFrom">The source body's feet or hands file; null, with <paramref name="endTo"/>, for none.</param>
-    /// <param name="mask">Each body mod's IMC mask by slot, source then target (see <see cref="RefitCore.MaskOf"/>).</param>
+    /// <param name="mask">What each body mod draws by slot, source then target (see <see cref="RefitCore.MaskOf"/>).</param>
     /// <returns>Null when the limb's pair was built; otherwise why not, worded for the user.</returns>
     internal static string? BuildPairs(Reading reading, string limbFrom, string limbTo, string? endFrom, string? endTo,
-                                       bool male, Func<string, (ushort? Source, ushort? Target)> mask,
+                                       bool male, Func<string, (BodyRetarget.BodyDraw? Source, BodyRetarget.BodyDraw? Target)> mask,
                                        Func<string, string> slotName, UVRemapService? uvRemap, Action<string>? endRefused,
                                        out BodyRetarget.SlotPair limb, out BodyRetarget.SlotPair? end)
     {

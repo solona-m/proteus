@@ -335,9 +335,12 @@ internal static partial class BodyRetarget
             // be judged against the garment's IMC mask (a Neolithe body carries eight, atr_tv_a..h). Dropping the tag
             // draws the part always, so the variants the body mod leaves off are left out first: two alternatives of
             // one piece would otherwise both be drawn, the larger showing through the cloth fitted to the other.
+            // The tags the body mod's own options switch go too (SlotPair.TargetSwitched): the skin is fitted to the
+            // alternative drawn now, and kept tagged it would vanish — a hole under the top — once another is picked.
             Geometry = [new ContentGeometry(bodyOf[s], SecondSkinWriter.IsBodySkinMaterial,
                                             HiddenAttributes: swappable[s].TargetHidden,
-                                            DropVariantAttributes: true, DrawOnly: cuts[s])],
+                                            DropVariantAttributes: true, DrawOnly: cuts[s],
+                                            DropAttributes: swappable[s].TargetSwitched)],
         }).ToList();
         // The new body's smallclothes, where it draws them in place of skin: each a layer of its own, under the garment's
         // own name for the copy of its material the save publishes (see ReadySmallclothes), cut as its skin is.
@@ -350,12 +353,16 @@ internal static partial class BodyRetarget
                     MaterialName = garmentMaterial,
                     Geometry = [new ContentGeometry(bodyOf[s], m => string.Equals(m, bodyMaterial, StringComparison.Ordinal),
                                                     HiddenAttributes: swappable[s].TargetHidden,
-                                                    DropVariantAttributes: true, DrawOnly: cuts[s])],
+                                                    DropVariantAttributes: true, DrawOnly: cuts[s],
+                                                    DropAttributes: swappable[s].TargetSwitched)],
                 });
                 smallclothesTris += swappable[s].Target.Parts
                     .Where(p => p.Island < 0 && string.Equals(p.Material, bodyMaterial, StringComparison.Ordinal))
                     .Sum(p => p.Triangles.Length / 3);
             }
+        // Nails and piercings keep the body mod's switched tags: they follow its choice, and one that vanishes leaves no
+        // hole. In game the garment's slot and set judge them, not the body's — entries only for the body's own slot or
+        // set 0 may not reach them.
         foreach (var (s, materials) in adornMaterials.OrderBy(a => a.Key))
             foreach (string material in materials)
                 layers.Add(new SecondSkinLayer
@@ -393,7 +400,8 @@ internal static partial class BodyRetarget
     /// <param name="kept">Triangles of the body's skin that survive the cut.</param>
     /// <param name="cut">Triangles left out.</param>
     /// <param name="edges">Which of <paramref name="drawn"/>'s edges two of its triangles share — see <see cref="Covers"/>.</param>
-    /// <param name="hidden">The body's variant tags its mod does not draw; their parts are neither kept nor counted.</param>
+    /// <param name="hidden">The body's tags its mod does not draw — IMC variants and custom attributes its options switch
+    /// off (<see cref="SlotPair.TargetHidden"/>); their parts are neither kept nor counted.</param>
     /// <param name="pulled">The body with its kept skin pulled back to the author's edge (see <see cref="PullToEdge"/>),
     /// or null when nothing needed pulling.</param>
     /// <param name="cloth">The garment's cloth, which decides which of the kept skin needs pulling back.</param>

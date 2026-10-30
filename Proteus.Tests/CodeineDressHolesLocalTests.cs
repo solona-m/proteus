@@ -72,7 +72,7 @@ public class CodeineDressHolesLocalTests(ITestOutputHelper output)
         var from = bodies.First(b => b.Dir == pick.Dir).Catalog;
         var others = AutoRefitWatcher.OtherParts(garment, slot, Race, pick, from,
                                                  (_, options) => BodySizeMatch.Rank(garment, options, from.PathOf, bones));
-        ushort? Mask(string dir, BodySizeCatalog mod, string s) => RefitCore.MaskOf(dir, mod, s, null);
+        BodyRetarget.BodyDraw? Mask(string dir, BodySizeCatalog mod, string s) => RefitCore.MaskOf(dir, mod, s, null);
 
         // The garment's own slot first, the lead; then each other part it reaches, onto the same body.
         var pairs = new List<BodyRetarget.SlotPair>();

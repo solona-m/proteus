@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Numerics;
 using Vec3 = Proteus.Services.SecondSkinWriter.Vec3;
 
@@ -1093,7 +1094,18 @@ internal static partial class BodyRetarget
             if (pair.Slot != "_top" || pair.TargetModel == null) continue;
             if (ModelSkinReader.Read(pair.TargetModel, null, null) is not { } skin
                 || skin.VertexCount * 3 != pair.Target.Positions.Length) return true;
-            if (Array.Exists(BoneShares(skin, IsBreastBone), share => share >= BreastWeight)) return true;
+            var shares = BoneShares(skin, IsBreastBone);
+            // As before unless the body mod's Atr options hid a part (BodyAtrSwitches): an undrawn IMC variant was always
+            // read with the rest.
+            if (pair.TargetHidden?.Any(n => n.StartsWith("atrx_", StringComparison.Ordinal)) != true)
+            {
+                if (Array.Exists(shares, share => share >= BreastWeight)) return true;
+                continue;
+            }
+            // Only the parts its mod draws: NIRÆ's "As flat as earth" leaves eight breasted chests in the file, undrawn.
+            foreach (var part in pair.Target.Parts)
+                foreach (int v in part.Triangles)
+                    if (v < shares.Length && shares[v] >= BreastWeight) return true;
         }
         return false;
     }

@@ -182,6 +182,17 @@ public static partial class SecondSkinWriter
         return bits;
     }
 
+    /// <summary>The bits of this model's submesh attribute masks that name one of <paramref name="names"/>; none for
+    /// null or empty.</summary>
+    internal static uint NamedBits(Source src, IReadOnlySet<string>? names)
+    {
+        uint bits = 0;
+        if (names is not { Count: > 0 }) return bits;
+        for (int i = 0; i < 32 && i < src.AttrNames.Length; i++)
+            if (names.Contains(src.AttrNames[i])) bits |= 1u << i;
+        return bits;
+    }
+
     /// <summary>
     /// Are these two submeshes alternatives — each tagged with a variant the other does not carry, so an IMC
     /// option decides which one is drawn? One whose variants are a SUBSET of the other's is not: that is a

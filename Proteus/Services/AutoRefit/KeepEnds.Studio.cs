@@ -104,7 +104,7 @@ internal static partial class KeepEnds
         BodyOption LimbFrom, IReadOnlyList<BodyOption> LimbTargets,
         bool SameBodyMod, bool FromCloth, bool ReplaceSkin, bool Across, bool ClearBody,
         IReadOnlySet<int>? Held, IReadOnlyList<BodyRetarget.SlotPair>? Shared,
-        Func<string, (ushort? Source, ushort? Target)> Masks, Func<string, string> SlotName, string ModelRel,
+        Func<string, (BodyRetarget.BodyDraw? Source, BodyRetarget.BodyDraw? Target)> Masks, Func<string, string> SlotName, string ModelRel,
         IReadOnlyList<string>? PieceNames = null, bool CarryPiercings = false);
 
     /// <summary>

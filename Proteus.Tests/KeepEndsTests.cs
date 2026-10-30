@@ -925,7 +925,7 @@ public class KeepEndsTests
         return path;
     }
 
-    private static (ushort?, ushort?) NoMask(string _) => (null, null);
+    private static (BodyRetarget.BodyDraw?, BodyRetarget.BodyDraw?) NoMask(string _) => (null, null);
 
     [Fact]
     [Trait("Plan", "AC-keep-ends-studio-10")]

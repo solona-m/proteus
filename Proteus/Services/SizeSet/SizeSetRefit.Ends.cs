@@ -197,7 +197,11 @@ internal static partial class SizeSetRefit
                 runLog.Add(piece, SizeStatus.Skipped, Codes.NotInstalled, missing, group.Name, body: key, yas: yas);
             if (body == null || target == null) continue;
             var targetCat = target.Catalog;
-            ushort? targetMask(string slot) => RefitCore.MaskOf(target.Dir, targetCat, slot, null);
+            // Read once per slot for the body; the size refitted onto is taken as chosen per target below.
+            var targetMasks = new Dictionary<string, BodyRetarget.BodyDraw?>(StringComparer.Ordinal);
+            BodyRetarget.BodyDraw? targetMask(string slot)
+                => targetMasks.TryGetValue(slot, out var have) ? have
+                 : targetMasks[slot] = RefitCore.MaskOf(target.Dir, targetCat, slot, null, RefitCore.RaceNumber(race));
             bool primaryAcross = !string.Equals(target.Dir, pick.Dir, StringComparison.OrdinalIgnoreCase);
 
             foreach (var (option, size, fixedRel) in EndTargets(body, piece, gloves, skinOnly, follows, primaryAcross, pick))
@@ -262,7 +266,7 @@ internal static partial class SizeSetRefit
                 string sourceName = fromEntry?.Name ?? Strings.Parts.RetargetFromVanilla;
                 string sourcePath = sourceCat.PathOf(fromPick.Option);
                 bool across = !string.Equals(target.Dir, fromPick.Dir, StringComparison.OrdinalIgnoreCase);
-                ushort? sourceMask(string slot) => RefitCore.MaskOf(fromPick.Dir, sourceCat, slot, null);
+                BodyRetarget.BodyDraw? sourceMask(string slot) => RefitCore.MaskOf(fromPick.Dir, sourceCat, slot, null);
                 // A shoe following a chest goes onto the legs that size's chest is worn with: the table's across body
                 // mods, the source's own family's within one.
                 string? limbRel = size == null ? fixedRel
@@ -340,7 +344,7 @@ internal static partial class SizeSetRefit
                 if (KeepEnds.BuildPairs(from.Reading, sourcePath, targetCat.PathOf(to!),
                                         endFrom == null ? null : sourceCat.PathOf(endFrom),
                                         endTo == null ? null : targetCat.PathOf(endTo), male,
-                                        s => (sourceMask(s), targetMask(s)), SlotName, uvRemap,
+                                        s => (sourceMask(s), targetMask(s)?.Onto(s == limb ? to : endTo)), SlotName, uvRemap,
                                         why => log.Information("[Proteus] size set: {0} {1} without the end's shape: {2}",
                                                                piece.Label, option, why),
                                         out var limbPair, out var endPair) is { } refusal)
