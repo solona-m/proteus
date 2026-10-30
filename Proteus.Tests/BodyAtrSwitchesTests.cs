@@ -411,16 +411,21 @@ public class BodyAtrSwitchesTests
         string Opt(string name, string file, string attr) =>
             $"{{\"Name\":\"{name}\",\"Files\":{{\"chara/equipment/e0000/model/c0201e0000_top.mdl\":\"{file}\"}},"
             + $"\"Manipulations\":[{Atr("atrx_p", attr == "atrx_p")},{Atr("atrx_q", attr == "atrx_q")}]}}";
-        string meta = Meta([], "{\"Name\":\"Size\",\"Type\":\"Single\",\"Priority\":0,\"DefaultSettings\":0,\"Options\":["
+        // The default is the second "SFW M" (draws q), so the overlay is seen whenever it picks the first.
+        string Sized(string group) => Meta([], "{\"Name\":\"" + group + "\",\"Type\":\"Single\",\"Priority\":0,\"DefaultSettings\":1,\"Options\":["
                                + Opt("SFW M", @"files\\p.mdl", "atrx_p") + "," + Opt("SFW M", @"files\\q.mdl", "atrx_q") + "]}");
-        var byFile = new BodyOption("Size", "Q", "SFW M", "Files/Q.mdl", "chara/equipment/e0000/model/c0201e0000_top.mdl", "_top");
-        Assert.Equal(["atrx_p"], Off(Resolve(meta, onto: byFile)));
-        // No file match: the first of the name.
+        string meta = Sized("Size");
+        var byFile = new BodyOption("Size", "P", "SFW M", "Files/P.mdl", "chara/equipment/e0000/model/c0201e0000_top.mdl", "_top");
+        Assert.Equal(["atrx_p"], Off(Resolve(meta)));                        // the default: q drawn
+        Assert.Equal(["atrx_q"], Off(Resolve(meta, onto: byFile)));          // p, by its file
+        Assert.Equal(["atrx_p"], Off(Resolve(meta, onto: byFile with { Rel = "files/q.mdl" })));
+        // No file match: the first of the name, p.
         Assert.Equal(["atrx_q"], Off(Resolve(meta, onto: byFile with { Rel = "files/other.mdl" })));
         // No name match: no overlay, the default stands.
-        Assert.Equal(["atrx_q"], Off(Resolve(meta, onto: byFile with { Name = "SFW L" })));
-        // The "no options" group a catalog gives a mod without any: no overlay.
-        Assert.Equal(["atrx_q"], Off(Resolve(meta, onto: byFile with { Group = BodySizeCatalog.DefaultGroupName })));
+        Assert.Equal(["atrx_p"], Off(Resolve(meta, onto: byFile with { Name = "SFW L" })));
+        // The "no options" group a catalog gives a mod without any: never overlaid, even on a group of that name.
+        string pseudo = Sized(BodySizeCatalog.DefaultGroupName);
+        Assert.Equal(["atrx_p"], Off(Resolve(pseudo, onto: byFile with { Group = BodySizeCatalog.DefaultGroupName })));
 
         // Multi: the option refitted onto is added to the ticked ones.
         string multi = Meta([], Group("Extras", "Multi", 0b01, 0, Option("A", Atr("atrx_a", false)), Option("B", Atr("atrx_b", false))));

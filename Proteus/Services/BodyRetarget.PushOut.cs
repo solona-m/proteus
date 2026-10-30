@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Numerics;
 using Vec3 = Proteus.Services.SecondSkinWriter.Vec3;
 
@@ -1094,7 +1095,9 @@ internal static partial class BodyRetarget
             if (ModelSkinReader.Read(pair.TargetModel, null, null) is not { } skin
                 || skin.VertexCount * 3 != pair.Target.Positions.Length) return true;
             var shares = BoneShares(skin, IsBreastBone);
-            if (pair.TargetHidden is not { Count: > 0 })
+            // As before unless the body mod's Atr options hid a part (BodyAtrSwitches): an undrawn IMC variant was always
+            // read with the rest.
+            if (pair.TargetHidden?.Any(n => n.StartsWith("atrx_", StringComparison.Ordinal)) != true)
             {
                 if (Array.Exists(shares, share => share >= BreastWeight)) return true;
                 continue;

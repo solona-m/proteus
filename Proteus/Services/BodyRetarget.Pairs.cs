@@ -60,8 +60,10 @@ internal static partial class BodyRetarget
         // the reader's choice of the body mod's options cannot say. The target as the options draw it.
         source = Drawn(source, slot, sourceMask, atr: false, out _, out _);
         target = Drawn(target, slot, targetMask, atr: true, out var targetHidden, out var targetSwitched);
-        if (!target.Parts.Any(p => p.Island < 0 && SecondSkinWriter.IsBodySkinMaterial(p.Material)))
-            return string.Format(Strings.Parts.RetargetUnreadableFmt, name);   // its options draw none of its skin
+        // Its options draw none of its skin. Asked only when they hid something: every other body goes on as before.
+        if (targetMask is { AtrOff.Count: > 0 } && targetHidden?.Overlaps(targetMask.AtrOff) == true
+            && !target.Parts.Any(p => p.Island < 0 && SecondSkinWriter.IsBodySkinMaterial(p.Material)))
+            return string.Format(Strings.Parts.RetargetUnreadableFmt, name);
 
         if (!BodyCorrespondence.TryBuild(source, Uv(sourceBytes), target, Uv(targetBytes), name,
                                          out var correspondence, out string refusal, out stats, uvRemap, male, targetMale))

@@ -2187,11 +2187,12 @@ internal sealed partial class BodyRetargetPanel(PenumbraBridge penumbra, UVRemap
         string? refusal = BodyRetarget.BuildPair(masks.Slot, File.ReadAllBytes(sourcePath), File.ReadAllBytes(targetPath),
                                                  name, male, masks.Source, target, uvRemap, out pair, out landed,
                                                  BodyRetarget.BodyMaterialReader(targetPath), targetMale);
-        if (report && target is { AtrOff.Count: > 0 })
-            log.Information("[Proteus] retarget: {0} {1} onto \"{2}\": draws {3}; switched off {4}",
-                            Path.GetFileName(bodyDir ?? ""), masks.Slot, onto?.Label ?? "",
+        if (report && refusal == null && target is { AtrOff.Count: > 0 }
+            && pair.TargetHidden?.Where(target.AtrOff.Contains).Order(StringComparer.Ordinal).ToList() is { Count: > 0 } off)
+            log.Information("[Proteus] retarget: {0} {1} onto \"{2}\": draws {3}; switched off {4}", masks.Mod,
+                            masks.Slot, onto?.Label ?? "",
                             string.Join(", ", (pair.TargetSwitched ?? new HashSet<string>()).Order(StringComparer.Ordinal)),
-                            string.Join(", ", target.AtrOff.Order(StringComparer.Ordinal)));
+                            string.Join(", ", off));
         return refusal;
     }
 
@@ -2211,8 +2212,12 @@ internal sealed partial class BodyRetargetPanel(PenumbraBridge penumbra, UVRemap
     /// What each body mod draws of one slot (see <see cref="RefitCore.MaskOf"/>): the player's choice of its options read
     /// on the framework thread, the mod's manifest read on the worker the first time it is asked, once for the slot.
     /// </summary>
-    private sealed class Masks(string slot, Func<BodyRetarget.BodyDraw?> source, Func<BodyRetarget.BodyDraw?> target)
+    private sealed class Masks(string slot, string mod, Func<BodyRetarget.BodyDraw?> source,
+                               Func<BodyRetarget.BodyDraw?> target)
     {
+        /// <summary>The new body mod's folder, for the log: read with the rest on the framework thread.</summary>
+        public string Mod => mod;
+
         private readonly Lazy<BodyRetarget.BodyDraw?> sourceDraw = new(source);
         private readonly Lazy<BodyRetarget.BodyDraw?> targetDraw = new(target);
 
@@ -2235,7 +2240,7 @@ internal sealed partial class BodyRetargetPanel(PenumbraBridge penumbra, UVRemap
         var sourceSelected = SelectedOf(sourceDir, sourceMod);
         var targetSelected = SelectedOf(targetDir, targetMod);
         ushort? targetRace = RefitCore.RaceNumber(race);
-        return new Masks(slot, () => RefitCore.MaskOf(sourceDir, sourceMod, slot, sourceSelected),
+        return new Masks(slot, Path.GetFileName(targetDir ?? ""), () => RefitCore.MaskOf(sourceDir, sourceMod, slot, sourceSelected),
                          () => RefitCore.MaskOf(targetDir, targetMod, slot, targetSelected, targetRace));
     }
 

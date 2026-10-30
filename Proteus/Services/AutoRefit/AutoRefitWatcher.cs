@@ -1402,11 +1402,12 @@ public sealed partial class AutoRefitWatcher : IDisposable
         // What the new body's options switched, for the log: the chest a refit onto NIRÆ was fitted to.
         void Drawn(string slot, BodyOption onto, BodyRetarget.BodyDraw? draw, BodyRetarget.SlotPair pair)
         {
-            if (draw is { AtrOff.Count: > 0 })
+            if (draw is { AtrOff.Count: > 0 }
+                && pair.TargetHidden?.Where(draw.AtrOff.Contains).Order(StringComparer.Ordinal).ToList() is { Count: > 0 } off)
                 log.Information("[Proteus] auto refit: {0} {1} onto \"{2}\": draws {3}; switched off {4}", item, slot,
                                 onto.Label,
                                 string.Join(", ", (pair.TargetSwitched ?? new HashSet<string>()).Order(StringComparer.Ordinal)),
-                                string.Join(", ", draw.AtrOff.Order(StringComparer.Ordinal)));
+                                string.Join(", ", off));
         }
 
         // ── where it goes ──

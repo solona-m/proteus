@@ -643,22 +643,23 @@ public static partial class SecondSkinWriter
                 if (all is { Count: > 0 }) namedDropped[src] = all;
             }
 
+            IEnumerable<string> Wanted(Source src)
+                => (ownedOnly.Contains(src) ? []
+                    : variantDropped.Contains(src) ? src.AttrNames.Where(n => !IsVariantAttribute(n))
+                    : src.AttrNames)
+                   .Where(n => !namedDropped.TryGetValue(src, out var dropped) || !dropped.Contains(n));
+
             attrNames = new List<string>();
             attrIndex = new Dictionary<string, int>(StringComparer.Ordinal);
             foreach (var src in boneSources)
-                foreach (var name in (ownedOnly.Contains(src) ? []
-                                   : variantDropped.Contains(src) ? src.AttrNames.Where(n => !IsVariantAttribute(n))
-                                   : src.AttrNames)
-                                   .Where(n => !namedDropped.TryGetValue(src, out var dropped) || !dropped.Contains(n)))
+                foreach (var name in Wanted(src))
                 {
                     if (attrIndex.ContainsKey(name) || attrNames.Count >= 32) continue;
                     attrIndex[name] = attrNames.Count;
                     attrNames.Add(name);
                 }
-            // Counted over the same sources the union was built from, or untagged sources report names as dropped.
-            attrOverflow = boneSources.Where(s => !ownedOnly.Contains(s))
-                .SelectMany(s => s.AttrNames).Distinct(StringComparer.Ordinal)
-                .Count() - attrNames.Count;
+            // Counted over the same names the union was built from: a name dropped on purpose did not overflow.
+            attrOverflow = boneSources.SelectMany(Wanted).Distinct(StringComparer.Ordinal).Count() - attrNames.Count;
         }
 
         private void AllocateOutput()
