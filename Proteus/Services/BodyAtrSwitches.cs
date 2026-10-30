@@ -77,6 +77,16 @@ internal static class BodyAtrSwitches
         }
     }
 
+    /// <summary>
+    /// Whether the mod at <paramref name="modRoot"/> switches body attributes with its options — one model carrying
+    /// several shapes, like NIRÆ's nine chests. Never throws; false when its manifest cannot be read.
+    /// </summary>
+    internal static bool SwitchesShapes(string modRoot)
+    {
+        if (Manifest(modRoot) is not { } manifest) return false;
+        return BodySlots.Any(slot => Resolve(new Query(manifest, slot, null, null)) is { Switched.Count: > 0 });
+    }
+
     private sealed record Owner(IReadOnlyList<PenumbraPackage.PackAtr> Entries, bool Judgeable);
 
     private static Result? ResolveOrThrow(Query q, BodyOption? onto)
