@@ -201,4 +201,13 @@ public class RayNiraeAtrRefitLocalTests(ITestOutputHelper output)
         // Hips the options switch, though no model of NIRÆ's carries them.
         Assert.Contains(legs.AtrSwitched, a => a.StartsWith("atrx_cb_hips_", StringComparison.Ordinal));
     }
+
+    [LocalDataFact(Nirae)]
+    public void Of_the_installed_bodies_only_NIRAE_is_never_read_as_a_source()
+    {
+        var bodies = SizeSetBatch.ScanBodies(LocalData.Path(LocalData.Mods));
+        var left = bodies.Where(b => BodyAtrSwitches.SwitchesShapes(b.Catalog.ModRoot)).Select(b => b.Name).ToList();
+        output.WriteLine("left out: " + string.Join(", ", left));
+        Assert.Equal(["NIRÆ body"], left);
+    }
 }

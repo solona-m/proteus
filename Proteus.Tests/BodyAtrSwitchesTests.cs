@@ -415,6 +415,18 @@ public class BodyAtrSwitchesTests
     }
 
     [Fact]
+    public void A_mod_that_switches_body_attributes_switches_shapes()
+    {
+        using (var chests = new Mod(Meta([], Chests()))) Assert.True(BodyAtrSwitches.SwitchesShapes(chests.Root));
+        using (var hats = new Mod(Meta([], Group("Hat", "Single", 0, 0, Option("Off", Atr("atrx_hat", false, "Head"))))))
+            Assert.False(BodyAtrSwitches.SwitchesShapes(hats.Root));
+        using (var plain = new Mod(Meta([], Group("Size", "Single", 0, 0, Option("M")))))
+            Assert.False(BodyAtrSwitches.SwitchesShapes(plain.Root));
+        string none = Path.Combine(Path.GetTempPath(), "proteus-atr-none-" + Guid.NewGuid().ToString("N"));
+        Assert.False(BodyAtrSwitches.SwitchesShapes(none));
+    }
+
+    [Fact]
     [Trait("Plan", "EDGE-body-atr-switches-17")]
     public void An_edited_manifest_is_read_again_and_parallel_reads_agree()
     {

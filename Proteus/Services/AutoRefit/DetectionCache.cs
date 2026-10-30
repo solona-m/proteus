@@ -51,9 +51,10 @@ internal sealed class DetectionCache(string path, IPluginLog log)
     /// <summary>
     /// Which way of reading a garment the entries were made by. Raised whenever detection changes its answers, so a
     /// reading the old way made is never reused: 2 reads a garment no body matches exactly by nearness, where 1 took an
-    /// ancestor body's sliver of shared vertices (a YAB top, read as Bibo+). Old entries age out by use.
+    /// ancestor body's sliver of shared vertices (a YAB top, read as Bibo+); 3 never reads one as a body that switches
+    /// its shapes by option (NIRÆ). Old entries age out by use.
     /// </summary>
-    internal const int Reading = 2;
+    internal const int Reading = 3;
 
     /// <summary>
     /// What <see cref="KeyOf"/>'s <c>bodies</c> is made of, in one short string: the installed set's version, the body
