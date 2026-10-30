@@ -18,10 +18,13 @@ internal static partial class BodyRetarget
     /// </summary>
     /// <param name="name">The slot's name, for the refusal.</param>
     /// <param name="male">The garment is a man's, and so both bodies are.</param>
-    /// <param name="sourceMask">The source body mod's IMC mask for <paramref name="slot"/> (see
-    /// <see cref="ImcEntrySource.MaskFor"/>): the body is read without the variant parts its mod does not draw. Null
-    /// when every part is drawn.</param>
-    /// <param name="targetMask">The same, for the target body.</param>
+    /// <param name="sourceMask">What the source body mod draws of <paramref name="slot"/> (see
+    /// <see cref="RefitCore.MaskOf"/>): the body is read without the IMC variant parts its mod does not draw — its
+    /// <c>Atr</c> switches are not applied, since which alternative the author made the garment on the reader's options
+    /// cannot say. Null when every part is drawn.</param>
+    /// <param name="targetMask">What the target body mod draws: read without its undrawn IMC variants and the
+    /// alternatives its <c>Atr</c> options switch off (see <see cref="BodyDraw.Hidden"/>), the size refitted onto taken as
+    /// chosen by the caller (<see cref="BodyDraw.Onto"/>).</param>
     /// <param name="uvRemap">Only needed when the two bodies use different texture layouts.</param>
     /// <param name="targetMale">The target body's sex when it is not the garment's: a refit for the other sex (see
     /// <see cref="CrossSexRefit"/>). Null reads both as <paramref name="male"/>.</param>
@@ -33,7 +36,7 @@ internal static partial class BodyRetarget
                          targetMask, uvRemap, out pair, BodyMaterialReader(targetPath), targetMale);
     }
 
-    /// <inheritdoc cref="BuildPair(string, string, string, string, bool, ushort?, ushort?, UVRemapService?, out SlotPair)"/>
+    /// <inheritdoc cref="BuildPair(string, string, string, string, bool, BodyDraw?, BodyDraw?, UVRemapService?, out SlotPair, bool?)"/>
     /// <param name="targetMaterial">Reads the target body mod's materials (see <see cref="SlotPair.TargetMaterial"/>);
     /// null when there is no mod to read them from.</param>
     internal static string? BuildPair(string slot, byte[] sourceBytes, byte[] targetBytes, string name, bool male,
@@ -43,7 +46,7 @@ internal static partial class BodyRetarget
         => BuildPair(slot, sourceBytes, targetBytes, name, male, sourceMask, targetMask, uvRemap, out pair, out _,
                      targetMaterial, targetMale);
 
-    /// <inheritdoc cref="BuildPair(string, byte[], byte[], string, bool, ushort?, ushort?, UVRemapService?, out SlotPair, Func{string, byte[]}?, bool?)"/>
+    /// <inheritdoc cref="BuildPair(string, byte[], byte[], string, bool, BodyDraw?, BodyDraw?, UVRemapService?, out SlotPair, Func{string, byte[]}?, bool?)"/>
     /// <param name="stats">How the two bodies' skin landed on each other; null for the same mesh.</param>
     internal static string? BuildPair(string slot, byte[] sourceBytes, byte[] targetBytes, string name, bool male,
                                       BodyDraw? sourceMask, BodyDraw? targetMask, UVRemapService? uvRemap,

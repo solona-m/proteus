@@ -2120,7 +2120,7 @@ internal sealed partial class BodyRetargetPanel(PenumbraBridge penumbra, UVRemap
                         garment, bytes, garmentSlot, pieces, sources, snapshot, garmentRace ?? "", male, limbFrom!,
                         limbTargets, sameBodyMod, fromCloth, layOnBody, acrossBodies, boxClear, held, shared,
                         // The size refitted onto counts as chosen only when there is one: several share the slot's.
-                        s => s == primary ? (limbMasks.Source, limbMasks.Target(limbTargets.Count == 1 ? limbTargets[0] : null))
+                        s => s == primary ? (limbMasks.Source, limbMasks.Target(RetargetInputs.OverlayFor(limbTargets)))
                                           : (endMasks?.Source, endMasks?.Target(null)),
                         SlotName, modelRel, shapeNames, piercings);
                     var kept = KeepEnds.StudioPlan(input, Baked, uvRemap, log, () => Interlocked.Increment(ref planDone));

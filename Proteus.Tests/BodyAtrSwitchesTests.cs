@@ -296,6 +296,42 @@ public class BodyAtrSwitchesTests
         Assert.Empty(Off(Resolve(Meta([], Group("G", "Single", 0, 0, Option("O", Atr("atrx_x", false)))), race: 104)));
     }
 
+    [Theory]
+    [Trait("Plan", "EDGE-body-atr-switches-7")]
+    [InlineData("0201", (ushort)201)]
+    [InlineData("0801", (ushort)801)]
+    [InlineData("c0201", null)]
+    [InlineData("", null)]
+    [InlineData(null, null)]
+    [InlineData("-201", null)]
+    public void RaceNumber_reads_a_model_race_code(string? code, ushort? expected)
+        => Assert.Equal(expected, RefitCore.RaceNumber(code));
+
+    [Fact]
+    [Trait("Plan", "AC-body-atr-switches-6")]
+    public void The_cli_judges_race_limited_entries_by_its_race()
+    {
+        // A switch limited to Midlander women: the CLI's "0201" judges it, as RefitCore.MaskOf does with 201.
+        using var mod = new Mod(Meta([], Group("G", "Single", 0, 0,
+                                               Option("O", Atr("atrx_x", false, "Body", "\"GenderRaceCondition\":201")))));
+        var catalog = BodySizeCatalog.Read(mod.Root);
+        var cli = RefitCli::Proteus.Refit.Program.MaskOf(catalog, "_top", "0201");
+        Assert.Equal(["atrx_x"], cli!.AtrOff);
+        Assert.Equal(RefitCore.MaskOf(mod.Root, catalog, "_top", null, 201), cli);
+    }
+
+    [Theory]
+    [Trait("Plan", "EDGE-body-atr-switches-22")]
+    [InlineData(1, true)]
+    [InlineData(2, false)]
+    [InlineData(0, false)]
+    public void A_kept_end_refit_takes_its_size_as_chosen_only_when_it_is_the_one(int targets, bool overlaid)
+    {
+        var options = Enumerable.Range(0, targets).Select(i => new BodyOption("Size", "", $"S{i}", $"{i}.mdl", "g.mdl", "_sho"))
+                                .ToList();
+        Assert.Equal(overlaid ? options[0] : null, RetargetInputs.OverlayFor(options));
+    }
+
     [Fact]
     [Trait("Plan", "EDGE-body-atr-switches-8")]
     public void Non_atrx_names_are_ignored()

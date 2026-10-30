@@ -253,6 +253,10 @@ public partial class BodyRetargetTests
         string unreadable = string.Format(Strings.Parts.RetargetUnreadableFmt, "chest");
         Assert.NotEqual(unreadable, BodyRetarget.BuildPair("_top", variants, variants, "chest", false, null,
                                                            new BodyRetarget.BodyDraw(0b01, None, None), null, out _));
+        // An IMC mask hiding the skin under a body mod whose Atr switches name nothing here: as before, not the refusal.
+        Assert.NotEqual(unreadable, BodyRetarget.BuildPair("_top", variants, variants, "chest", false, null,
+                                                           new BodyRetarget.BodyDraw(0b01, Names("atrx_elsewhere"),
+                                                                                     Names("atrx_elsewhere")), null, out _));
         var skin = SkinOnly();
         Assert.Null(BodyRetarget.BuildPair("_top", skin, skin, "chest", false, null,
                                            new BodyRetarget.BodyDraw(null, Names("atrx_elsewhere"), Names("atrx_elsewhere")),
