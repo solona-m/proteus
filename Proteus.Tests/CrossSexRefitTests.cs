@@ -560,8 +560,8 @@ public class CrossSexRefitTests
     public void Shared_pairs_are_built_with_the_sides_sexes() // [EDGE-cross-sex-refit-15]
     {
         string panel = Source("Proteus/Gui/BodyRetargetPanel.cs");
-        Assert.Contains("if (Build(sourcePath, targetPath, name, male, masks, out var pair, out _, targetMale) is { } refusal)", panel);
-        Assert.Contains("return Build(sourcePath, targetPath, name, male, masks, out _, out _, targetMale) ?? \"\";", panel);
+        Assert.Contains("if (Build(sourcePath, targetPath, name, male, masks, to, out var pair, out _, targetMale, report: true)", panel);
+        Assert.Contains("return Build(sourcePath, targetPath, name, male, masks, target, out _, out _, targetMale) ?? \"\";", panel);
         Assert.Contains("plan = RefitCore.MatchSkinToBody(plan, garmentSource, targetPath, uvRemap, male, log, targetMale);", panel);
     }
 
