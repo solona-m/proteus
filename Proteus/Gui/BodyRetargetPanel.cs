@@ -277,6 +277,7 @@ internal sealed partial class BodyRetargetPanel(PenumbraBridge penumbra, UVRemap
         studio = null;
         lastLayout = null;
         gameHas.Clear();
+        candidateFor = null;
     }
 
     /// <summary>The race the open garment is made for (<c>"0101"</c>), which every option list is filtered to.</summary>
@@ -425,24 +426,37 @@ internal sealed partial class BodyRetargetPanel(PenumbraBridge penumbra, UVRemap
         // goes — the body mod, then the size.
         DrawSourceBodyPicker();
         DrawNoBodiesFor(SourceCatalog, SourceDir);
-        bool ready = Onto is { IsBody: true } onto && onto.SlotsFor(race).Any();
-        List<string> slots = [];
-        if (ready)
+
+        // Whether there are rows to draw: the body mod sizes this garment's own part — or, for a shoe or glove keeping
+        // its ends, the leg or arm it is refitted by. A body mod without it is said so, never stood in for by another
+        // part: a leg piece shown the chest's sizes would be refitted as a top.
+        bool hasBodies = Onto is { IsBody: true } onto && onto.SlotsFor(race).Any();
+        RetargetInputs.Layout? layout = null;
+        string? missing = null;
+        if (hasBodies)
         {
             // The rows changed — the box toggled, a body without legs chosen, or the rig turned out unreadable: what was
-            // detected, preset and remembered was for the old rows. The old choices are kept, only not offered.
-            var layout = Layout(ctx);
-            if (RetargetInputs.Flips(lastLayout, layout))
+            // detected, preset and remembered was for the old rows. The old choices are kept, only not offered. Ahead of
+            // the check below, so a flip into a part the body mod has no sizes of still takes a shown refit down; after
+            // the "made for" picker, so a pick there that changes the rows is seen in the same frame.
+            layout = Layout(ctx);
+            if (RetargetInputs.Flips(lastLayout, layout.Value))
             {
                 wornFor = null;
                 appliedFor = null;
                 detectedFor = null;
                 studio = null;
                 DropPlan(ctx);
-                StartValidate(layout.Primary);
+                StartValidate(layout.Value.Primary);
             }
             lastLayout = layout;
-
+            missing = RetargetInputs.MissingSlot(Onto!.SlotsFor(race), layout.Value);
+        }
+        bool ready = hasBodies && missing == null;
+        if (layout is { } shown) DrawSourceMissing(shown);
+        List<string> slots = [];
+        if (ready)
+        {
             // A different model opened under the same body: the old detection was about the old model.
             if (detectedFor != ctx.ModelRel && detectTask == null) StartDetect(ctx);
 
@@ -465,9 +479,26 @@ internal sealed partial class BodyRetargetPanel(PenumbraBridge penumbra, UVRemap
         }
 
         ImGui.Separator();
+        string? bodyBefore = bodyDir;
         DrawBodyPicker(ctx);
+        // A body picked this frame: everything above was decided for the old one. The next frame decides afresh.
+        if (bodyDir != bodyBefore)
+        {
+            DrawSaved(ctx);
+            return;
+        }
         DrawRacePicker(ctx);
         if (fromBodyDir != null) DrawNoBodiesFor(catalog, bodyDir);
+        if (missing != null)
+        {
+            // The box first: unticked, it is what made the feet or hands the missing part, and it stays in reach.
+            DrawKeepEnds(ctx);
+            using (ImRaii.PushColor(ImGuiCol.Text, ProteusStyle.Warn))
+                ImGui.TextWrapped(string.Format(ps.RetargetNoSlotInBodyFmt, BodyName(bodyDir), SlotName(missing)));
+            DrawWornBodyButton(ctx, missing);
+            DrawSaved(ctx);
+            return;
+        }
         if (!ready)
         {
             ImGui.TextWrapped(bodies == null ? ps.RetargetFindingBodies : ps.RetargetPickBody);
@@ -835,19 +866,118 @@ internal sealed partial class BodyRetargetPanel(PenumbraBridge penumbra, UVRemap
     {
         var ps = Strings.Parts;
         ImGui.TextUnformatted(ps.RetargetToBody);
-        if (DrawBodyCombo("##retargetBody", bodyDir, ref bodyFilter) is { } dir)
+        if (DrawBodyCombo("##retargetBody", bodyDir, ref bodyFilter) is { } dir) PickOntoBody(ctx, dir);
+    }
+
+    /// <summary>
+    /// Refit onto <paramref name="dir"/>, as the user chose — from the dropdown, or the "Use …" button that offers the
+    /// body mod worn for a part the current one has no sizes of. One path, so the two never drift apart: both are
+    /// remembered, and both forget the old body's sizes when it is another mod.
+    /// </summary>
+    private void PickOntoBody(in RetargetContext ctx, string dir)
+    {
+        // A refit shown on the character was planned against the old body; with it gone nothing could save it.
+        DropPlan(ctx);
+        bodyDir = dir;
+        RememberBody(dir);
+        config.Save();
+        catalog = BodyRoot(dir) is { } root ? BodySizeCatalog.Read(root) : null;
+        if (StudioBodyChoice.SourceAfterPick(fromBodyDir, dir) == null)
         {
-            bodyDir = dir;
-            RememberBody(dir);
-            config.Save();
-            catalog = BodyRoot(dir) is { } root ? BodySizeCatalog.Read(root) : null;
-            if (fromBodyDir == dir)
-            {
-                fromBodyDir = null;
-                fromCatalog = null;
-            }
-            Clear();
+            fromBodyDir = null;
+            fromCatalog = null;
         }
+        Clear();
+    }
+
+    /// <summary>
+    /// Say so when the "made for" body mod the user picked has no sizes for the part the garment is laid out by: its
+    /// list would be empty, and nothing else would say why. Not for the game's own body, which is chosen for the game's
+    /// gear, not by the user, and is the right source for it whatever it lacks.
+    /// </summary>
+    private void DrawSourceMissing(RetargetInputs.Layout layout)
+    {
+        var src = SourceCatalog is { IsBody: true } c && race != null ? c.SlotsFor(race).ToList() : null;
+        if (StudioBodyChoice.SourceMissing(fromBodyDir, src, layout) is not { } missing) return;
+        using (ImRaii.PushColor(ImGuiCol.Text, ProteusStyle.Warn))
+            ImGui.TextWrapped(string.Format(Strings.Parts.RetargetNoSlotInBodyFmt, BodyName(SourceDir), SlotName(missing)));
+    }
+
+    // ── the body mod worn for a part the chosen one has no sizes of ─────────
+
+    /// <summary>
+    /// Body mods read for <see cref="DrawWornBodyButton"/>, by folder; null for one that cannot be read or is no body.
+    /// For the session, until the next scan of the installed body mods.
+    /// </summary>
+    private readonly Dictionary<string, BodySizeCatalog?> catalogCache = new(StringComparer.OrdinalIgnoreCase);
+
+    /// <summary>The question <see cref="candidate"/> answers (<see cref="StudioBodyChoice.Key"/>).</summary>
+    private string? candidateFor;
+    private StudioBodyChoice.Candidate candidate;
+
+    /// <summary>
+    /// Offer, in one click, the body mod the character wears for the part the chosen one has no sizes of. Only offered:
+    /// taking it is a pick like any in the dropdown.
+    /// <para/>
+    /// Worked out once per question, on this thread as every other body pick is: at most two resolves, which are IPC and
+    /// must be made here, and two manifest reads — no models — cached by folder.
+    /// </summary>
+    private void DrawWornBodyButton(in RetargetContext ctx, string missing)
+    {
+        string? own = BodySizeCatalog.SlotOf(ctx.GamePath);
+        string key = StudioBodyChoice.Key(ctx.ModelRel, race, bodyDir, SourceDir, keepEnds);
+        if (candidateFor != key)
+        {
+            var found = StudioBodyChoice.WornCandidate(own, bodyDir, bodies != null, WornBodyDir,
+                                                       dir => CachedCatalog(dir) is { } c ? OfferedBy(c) : null,
+                                                       dir => LimbUsableAfter(dir, own));
+            if (!found.Known) return;
+            candidateFor = key;
+            candidate = found;
+            log.Information("[Proteus] retarget: {0} has no {1} sizes for c{2}; body mod worn there: {3}",
+                            bodyDir ?? "(none)", missing, race ?? "????", found.Dir ?? "none");
+        }
+        if (candidate.Dir is not { } dir) return;
+
+        if (ImGui.Button(string.Format(Strings.Parts.RetargetUseWornBodyFmt, BodyName(dir)) + "###retargetUseWornBody"))
+        {
+            log.Information("[Proteus] retarget: refit onto {0}, the body mod worn for {1}", dir, own ?? missing);
+            PickOntoBody(ctx, dir);
+            return;
+        }
+        if (ImGui.IsItemHovered()) ImGui.SetTooltip(Strings.Parts.RetargetUseWornBodyTip);
+    }
+
+    private BodySizeCatalog? CachedCatalog(string dir)
+    {
+        if (catalogCache.TryGetValue(dir, out var cached)) return cached;
+        BodySizeCatalog? read = null;
+        try
+        {
+            if (BodyRoot(dir) is { } root && BodySizeCatalog.Read(root) is { IsBody: true } c) read = c;
+        }
+        catch (Exception ex)
+        {
+            log.Warning(ex, "[Proteus] retarget: could not read the body mod {0}", dir);
+        }
+        return catalogCache[dir] = read;
+    }
+
+    /// <summary>The parts a body mod has sizes for at this garment's race, filtered as <see cref="Onto"/> is.</summary>
+    private IReadOnlyCollection<string> OfferedBy(BodySizeCatalog c)
+        => (active is { Explicit: true } b ? OtherRaceRefit.OnlyRace(c, b.Route.To) : c).SlotsFor(race).ToList();
+
+    /// <summary>
+    /// Whether a shoe or glove would keep its ends with <paramref name="dir"/> picked to refit onto: the box is ticked,
+    /// the rig can be read, and the "made for" side then has the leg or arm. That side is the picked mod itself when it
+    /// becomes a refit between its own sizes — read off it, not off bodies made from the current one — else the one
+    /// refitted from now.
+    /// </summary>
+    private bool LimbUsableAfter(string dir, string? own)
+    {
+        return StudioBodyChoice.LimbUsable(own, keepEnds, endsUnreadable, fromBodyDir, dir,
+                                           picked => CachedCatalog(picked) is { } c ? OfferedBy(c) : null,
+                                           () => (active?.Bodies ?? fromCatalog) is { } src ? src.SlotsFor(race).ToList() : null);
     }
 
     /// <summary>
@@ -1045,21 +1175,20 @@ internal sealed partial class BodyRetargetPanel(PenumbraBridge penumbra, UVRemap
         if (wornBodyTried || bodies == null) return;
         wornBodyTried = true;
 
-        string? modsRoot = penumbra.GetModDirectory();
-        if (modsRoot == null) return;
-        string slot = BodySizeCatalog.SlotOf(ctx.GamePath) ?? "_top";
-        string wornRace = race ?? "0201";
-        if (penumbra.ResolvePlayer($"chara/equipment/e0000/model/c{wornRace}e0000{slot}.mdl") is not { } resolved) return;
+        if (WornBodyDir(BodySizeCatalog.SlotOf(ctx.GamePath) ?? "_top") is not { } dir
+            || penumbra.GetModDirectory() is not { } modsRoot) return;
+        bodyDir = dir;
+        catalog = BodySizeCatalog.Read(Path.Combine(modsRoot, dir));
+    }
 
-        string full = Path.GetFullPath(resolved);
-        foreach (string dir in bodies.Keys)
-        {
-            string root = Path.GetFullPath(Path.Combine(modsRoot, dir)) + Path.DirectorySeparatorChar;
-            if (!full.StartsWith(root, StringComparison.OrdinalIgnoreCase)) continue;
-            bodyDir = dir;
-            catalog = BodySizeCatalog.Read(Path.Combine(modsRoot, dir));
-            return;
-        }
+    /// <summary>The installed body mod the character's body model for <paramref name="slot"/> comes from, or null.</summary>
+    private string? WornBodyDir(string slot)
+    {
+        if (bodies == null || penumbra.GetModDirectory() is not { } modsRoot) return null;
+        string wornRace = race ?? "0201";
+        if (penumbra.ResolvePlayer($"chara/equipment/e0000/model/c{wornRace}e0000{slot}.mdl") is not { } resolved)
+            return null;
+        return StudioBodyChoice.ModOwning(Path.GetFullPath(resolved), modsRoot, bodies.Keys);
     }
 
     /// <summary>
@@ -1145,7 +1274,7 @@ internal sealed partial class BodyRetargetPanel(PenumbraBridge penumbra, UVRemap
     /// </summary>
     private void RememberBody(string dir)
     {
-        if (!string.Equals(dir, config.RetargetBodyDir, StringComparison.OrdinalIgnoreCase))
+        if (RememberedTargets.ForgetsOnRepoint(config.RetargetBodyDir, dir))
             config.RetargetTargets.Clear();
         config.RetargetBodyDir = dir;
     }
@@ -1201,11 +1330,7 @@ internal sealed partial class BodyRetargetPanel(PenumbraBridge penumbra, UVRemap
 
     /// <summary>The slot this garment is worn in, which is the one its cloth was cut against, and the one it is planned as.</summary>
     private string WornSlot(in RetargetContext ctx)
-    {
-        var slots = Onto!.SlotsFor(race).ToList();
-        string? own = BodySizeCatalog.SlotOf(ctx.GamePath);
-        return own != null && slots.Contains(own) ? own : slots.FirstOrDefault() ?? "_top";
-    }
+        => RetargetInputs.GarmentSlot(BodySizeCatalog.SlotOf(ctx.GamePath), Onto!.SlotsFor(race));
 
     /// <summary>How the tool is laid out for this garment now (see <see cref="RetargetInputs.LayoutFor"/>).</summary>
     private RetargetInputs.Layout Layout(in RetargetContext ctx)
@@ -2269,7 +2394,13 @@ internal sealed partial class BodyRetargetPanel(PenumbraBridge penumbra, UVRemap
         if (bodiesTask is { IsCompleted: true } bt)
         {
             bodiesTask = null;
-            if (bt.IsCompletedSuccessfully) bodies = bt.Result;
+            if (bt.IsCompletedSuccessfully)
+            {
+                bodies = bt.Result;
+                // A body mod installed, enabled or changed since: what was read of them, and offered, is read again.
+                catalogCache.Clear();
+                candidateFor = null;
+            }
             else log.Warning(bt.Exception, "[Proteus] retarget: finding body mods failed");
         }
 

@@ -5682,5 +5682,17 @@
   "HairPort.Earless.Refused.Outside.Fmt": {
     "message": "{0} — не путь внутри папки мода для копий без ушей, поэтому ничего не записано",
     "description": ""
+  },
+  "Parts.Retarget.NoSlotInBody.Fmt": {
+    "message": "У {0} нет размеров для этой части ({1}). Выберите мод тела, в котором они есть.",
+    "description": ""
+  },
+  "Parts.Retarget.UseWornBody.Fmt": {
+    "message": "Взять {0}",
+    "description": ""
+  },
+  "Parts.Retarget.UseWornBody.Tip": {
+    "message": "Подогнать под мод тела, который надет для этой части. То же, что выбрать его в «Подогнать под тело».",
+    "description": ""
   }
 }

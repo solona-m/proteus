@@ -5682,5 +5682,17 @@
   "HairPort.Earless.Refused.Outside.Fmt": {
     "message": "{0} 不是该 Mod 无耳文件夹内的路径，因此未写入任何内容",
     "description": ""
+  },
+  "Parts.Retarget.NoSlotInBody.Fmt": {
+    "message": "{0} 没有这个部位（{1}）的尺寸。请选择有这些尺寸的体型模组。",
+    "description": ""
+  },
+  "Parts.Retarget.UseWornBody.Fmt": {
+    "message": "使用 {0}",
+    "description": ""
+  },
+  "Parts.Retarget.UseWornBody.Tip": {
+    "message": "转换到你这个部位正在穿的体型模组。与在“转换到体型”中选择它相同。",
+    "description": ""
   }
 }

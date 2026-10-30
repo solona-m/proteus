@@ -5682,5 +5682,17 @@
   "HairPort.Earless.Refused.Outside.Fmt": {
     "message": "{0} n'est pas un chemin dans le dossier sans oreilles du mod, rien n'a donc été écrit",
     "description": ""
+  },
+  "Parts.Retarget.NoSlotInBody.Fmt": {
+    "message": "{0} n'a pas de tailles pour cette partie ({1}). Choisis un mod de corps qui en a.",
+    "description": ""
+  },
+  "Parts.Retarget.UseWornBody.Fmt": {
+    "message": "Utiliser {0}",
+    "description": ""
+  },
+  "Parts.Retarget.UseWornBody.Tip": {
+    "message": "Ajuster vers le mod de corps que tu portes pour cette partie. Comme le choisir sous « Ajuster vers le corps ».",
+    "description": ""
   }
 }
