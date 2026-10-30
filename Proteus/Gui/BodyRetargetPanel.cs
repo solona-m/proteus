@@ -422,6 +422,11 @@ internal sealed partial class BodyRetargetPanel(PenumbraBridge penumbra, UVRemap
         // after it would silently reverse that.
         ApplyRemembered(ctx);
 
+        // Top to bottom as the refit reads: where the garment comes from — its body mod, then its size — and where it
+        // goes — the body mod, then the size.
+        DrawSourceBodyPicker();
+        DrawNoBodiesFor(SourceCatalog, SourceDir);
+
         // Whether there are rows to draw: the body mod sizes this garment's own part — or, for a shoe or glove keeping
         // its ends, the leg or arm it is refitted by. A body mod without it is said so, never stood in for by another
         // part: a leg piece shown the chest's sizes would be refitted as a top.
@@ -432,7 +437,8 @@ internal sealed partial class BodyRetargetPanel(PenumbraBridge penumbra, UVRemap
         {
             // The rows changed — the box toggled, a body without legs chosen, or the rig turned out unreadable: what was
             // detected, preset and remembered was for the old rows. The old choices are kept, only not offered. Ahead of
-            // the check below, so a flip into a part the body mod has no sizes of still takes a shown refit down.
+            // the check below, so a flip into a part the body mod has no sizes of still takes a shown refit down; after
+            // the "made for" picker, so a pick there that changes the rows is seen in the same frame.
             layout = Layout(ctx);
             if (RetargetInputs.Flips(lastLayout, layout.Value))
             {
@@ -447,11 +453,6 @@ internal sealed partial class BodyRetargetPanel(PenumbraBridge penumbra, UVRemap
             missing = RetargetInputs.MissingSlot(Onto!.SlotsFor(race), layout.Value);
         }
         bool ready = hasBodies && missing == null;
-
-        // Top to bottom as the refit reads: where the garment comes from — its body mod, then its size — and where it
-        // goes — the body mod, then the size.
-        DrawSourceBodyPicker();
-        DrawNoBodiesFor(SourceCatalog, SourceDir);
         if (layout is { } shown) DrawSourceMissing(shown);
         List<string> slots = [];
         if (ready)
@@ -478,7 +479,14 @@ internal sealed partial class BodyRetargetPanel(PenumbraBridge penumbra, UVRemap
         }
 
         ImGui.Separator();
+        string? bodyBefore = bodyDir;
         DrawBodyPicker(ctx);
+        // A body picked this frame: everything above was decided for the old one. The next frame decides afresh.
+        if (bodyDir != bodyBefore)
+        {
+            DrawSaved(ctx);
+            return;
+        }
         DrawRacePicker(ctx);
         if (fromBodyDir != null) DrawNoBodiesFor(catalog, bodyDir);
         if (missing != null)
@@ -889,10 +897,8 @@ internal sealed partial class BodyRetargetPanel(PenumbraBridge penumbra, UVRemap
     /// </summary>
     private void DrawSourceMissing(RetargetInputs.Layout layout)
     {
-        if (fromBodyDir == null || fromBodyDir == VanillaBodyCatalog.Key) return;
-        if (SourceCatalog is not { IsBody: true } src || race == null) return;
-        var parts = src.SlotsFor(race).ToList();
-        if (parts.Count == 0 || RetargetInputs.MissingSlot(parts, layout) is not { } missing) return;
+        var src = SourceCatalog is { IsBody: true } c && race != null ? c.SlotsFor(race).ToList() : null;
+        if (StudioBodyChoice.SourceMissing(fromBodyDir, src, layout) is not { } missing) return;
         using (ImRaii.PushColor(ImGuiCol.Text, ProteusStyle.Warn))
             ImGui.TextWrapped(string.Format(Strings.Parts.RetargetNoSlotInBodyFmt, BodyName(SourceDir), SlotName(missing)));
     }
@@ -969,11 +975,9 @@ internal sealed partial class BodyRetargetPanel(PenumbraBridge penumbra, UVRemap
     /// </summary>
     private bool LimbUsableAfter(string dir, string? own)
     {
-        string? limb = own != null ? AutoRefitDecisions.LimbOf(own) : null;
-        if (!keepEnds || endsUnreadable || limb == null) return false;
-        if (StudioBodyChoice.SourceAfterPick(fromBodyDir, dir) != null)
-            return (active?.Bodies ?? fromCatalog)?.For(limb, race).Count > 0;
-        return CachedCatalog(dir) is { } picked && OfferedBy(picked).Contains(limb);
+        return StudioBodyChoice.LimbUsable(own, keepEnds, endsUnreadable, fromBodyDir, dir,
+                                           picked => CachedCatalog(picked) is { } c ? OfferedBy(c) : null,
+                                           () => (active?.Bodies ?? fromCatalog) is { } src ? src.SlotsFor(race).ToList() : null);
     }
 
     /// <summary>

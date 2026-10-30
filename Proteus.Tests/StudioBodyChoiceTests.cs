@@ -190,4 +190,43 @@ public class StudioBodyChoiceTests
         Assert.NotEqual(StudioBodyChoice.Key("m", "0201", "A", null, true), StudioBodyChoice.Key("m", "0201", "A", null, false));
         Assert.NotEqual(StudioBodyChoice.Key("m", "0201", "A", null, true), StudioBodyChoice.Key("m", "0201", "A", "S", true));
     }
+
+    [Fact]
+    [Trait("Plan", "EDGE-studio-slot-body-18")]
+    public void Ends_are_kept_after_a_pick_only_when_the_made_for_side_has_the_limb()   // [EDGE-studio-slot-body-18]
+    {
+        IReadOnlyCollection<string>? Picked(string dir) => dir == "B" ? ["_dwn"] : null;
+        IReadOnlyCollection<string>? NoLegs() => ["_top"];
+        IReadOnlyCollection<string>? Legs() => ["_top", "_dwn"];
+
+        // No separate "made for" body: the pick refits between its own sizes, so its own legs are what count — not the
+        // bodies in use now, which may be bent from the old body and have none.
+        Assert.True(StudioBodyChoice.LimbUsable("_sho", true, false, null, "B", Picked, NoLegs));
+        // The "made for" body is the one picked: the same.
+        Assert.True(StudioBodyChoice.LimbUsable("_sho", true, false, "b", "B", Picked, NoLegs));
+        // Another "made for" body stays: its legs count.
+        Assert.False(StudioBodyChoice.LimbUsable("_sho", true, false, "S", "B", Picked, NoLegs));
+        Assert.True(StudioBodyChoice.LimbUsable("_sho", true, false, "S", "B", Picked, Legs));
+
+        // The box unticked, an unreadable rig, or no shoe or glove at all: never.
+        Assert.False(StudioBodyChoice.LimbUsable("_sho", false, false, null, "B", Picked, Legs));
+        Assert.False(StudioBodyChoice.LimbUsable("_sho", true, true, null, "B", Picked, Legs));
+        Assert.False(StudioBodyChoice.LimbUsable("_dwn", true, false, null, "B", Picked, Legs));
+        Assert.False(StudioBodyChoice.LimbUsable(null, true, false, null, "B", Picked, Legs));
+    }
+
+    [Fact]
+    [Trait("Plan", "AC-studio-slot-body-6")]
+    public void Made_for_warning_is_for_a_picked_body_mod_without_the_part()   // [AC-studio-slot-body-6]
+    {
+        var legs = RetargetInputs.LayoutFor("_dwn", true, false, false, false);
+        Assert.Equal("_dwn", StudioBodyChoice.SourceMissing("S", ["_top"], legs));
+        Assert.Null(StudioBodyChoice.SourceMissing("S", ["_top", "_dwn"], legs));
+
+        // Not picked (it follows the refit-onto body), the game's own body, no body, or the other sex's only.
+        Assert.Null(StudioBodyChoice.SourceMissing(null, ["_top"], legs));
+        Assert.Null(StudioBodyChoice.SourceMissing(VanillaBodyCatalog.Key, ["_top"], legs));
+        Assert.Null(StudioBodyChoice.SourceMissing("S", null, legs));
+        Assert.Null(StudioBodyChoice.SourceMissing("S", [], legs));
+    }
 }

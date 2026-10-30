@@ -91,4 +91,36 @@ internal static class StudioBodyChoice
     /// </summary>
     internal static string? SourceAfterPick(string? fromBodyDir, string pickedDir)
         => string.Equals(fromBodyDir, pickedDir, StringComparison.OrdinalIgnoreCase) ? null : fromBodyDir;
+
+    /// <summary>
+    /// Whether a shoe or glove keeps its ends once <paramref name="pickedDir"/> is picked to refit onto: the box is
+    /// ticked, its rig can be read, and the "made for" side then has the leg or arm. That side is the picked mod itself
+    /// when the pick makes it a refit between its own sizes — read off it, not off bodies made from the current one —
+    /// else the one refitted from now.
+    /// </summary>
+    /// <param name="pickedOffers">The parts a body mod has sizes for at this race, or null when it cannot be read.</param>
+    /// <param name="sourceOffers">The same, for the "made for" bodies in use now.</param>
+    internal static bool LimbUsable(string? own, bool keepEnds, bool endsUnreadable, string? fromBodyDir, string pickedDir,
+                                    Func<string, IReadOnlyCollection<string>?> pickedOffers,
+                                    Func<IReadOnlyCollection<string>?> sourceOffers)
+    {
+        if (own == null || AutoRefitDecisions.LimbOf(own) is not { } limb || !keepEnds || endsUnreadable) return false;
+        var side = SourceAfterPick(fromBodyDir, pickedDir) == null ? pickedOffers(pickedDir) : sourceOffers();
+        return side?.Contains(limb) == true;
+    }
+
+    /// <summary>
+    /// The part the "made for" body mod the user picked has no sizes of, which the panel says under its picker; null
+    /// when it has them, when none was picked, or for the game's own body — chosen for the game's gear, not by the user,
+    /// and the right source for it whatever it lacks.
+    /// </summary>
+    /// <param name="sourceOffers">The parts the "made for" body mod has sizes for at this race; null when it is no body.
+    /// Empty — bodies of the other sex only — is said elsewhere.</param>
+    internal static string? SourceMissing(string? fromBodyDir, IReadOnlyCollection<string>? sourceOffers,
+                                          RetargetInputs.Layout layout)
+    {
+        if (fromBodyDir == null || fromBodyDir == VanillaBodyCatalog.Key) return null;
+        if (sourceOffers is not { Count: > 0 }) return null;
+        return RetargetInputs.MissingSlot(sourceOffers, layout);
+    }
 }
