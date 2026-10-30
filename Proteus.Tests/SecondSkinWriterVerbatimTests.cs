@@ -545,6 +545,36 @@ public class SecondSkinWriterVerbatimTests(Xunit.Abstractions.ITestOutputHelper 
     }
 
     /// <summary>
+    /// [AC-body-atr-switches-7] Names dropped on purpose — variant tags, a body mod's switched tags — never report as past
+    /// the 32 a mask can address; a real overflow still does.
+    /// </summary>
+    [Fact]
+    [Trait("Plan", "AC-body-atr-switches-7")]
+    public void Names_dropped_on_purpose_are_not_reported_as_overflow()
+    {
+        List<string> Diagnostics(byte[] content, params ContentGeometry[] geometry)
+        {
+            var lines = new List<string>();
+            SecondSkinWriter.Build(Array.Empty<SecondSkinWriter.SourceSpec>(),
+                                   [new SecondSkinLayer { MaterialName = "/mt_c0201a0053_rir_a.mtrl", Geometry = [.. geometry] }],
+                                   null, out _, diag: lines.Add);
+            return lines;
+        }
+
+        var tagged = SyntheticModel.Build(["atr_tv_a", "atrx_a", "atr_ude"],
+            new SyntheticModel.Mesh("/mt_pack.mtrl", new SyntheticModel.Sub(0b111)));
+        Assert.DoesNotContain(Diagnostics(tagged, new ContentGeometry(tagged, _ => true, DropVariantAttributes: true,
+                                                                      DropAttributes: new HashSet<string> { "atrx_a" })),
+                              l => l.StartsWith("ATTRIBUTES:", StringComparison.Ordinal));
+
+        string[] many = Enumerable.Range(0, 33).Select(i => $"atrx_n{i:D2}").ToArray();
+        var crowded = SyntheticModel.Build(many,
+            new SyntheticModel.Mesh("/mt_pack.mtrl", new SyntheticModel.Sub(1)));
+        Assert.Contains(Diagnostics(crowded, new ContentGeometry(crowded, _ => true)),
+                        l => l.StartsWith("ATTRIBUTES:", StringComparison.Ordinal));
+    }
+
+    /// <summary>
     /// [EDGE-imported-imc-toggles-23] An option mask that hides every part on a host is reported as the user's
     /// toggle, as an Imc group's is.
     /// </summary>

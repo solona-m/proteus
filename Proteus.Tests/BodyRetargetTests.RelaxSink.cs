@@ -499,6 +499,13 @@ public partial class BodyRetargetTests
         var body = FlatAndBreasted();
         Assert.True(BodyRetarget.BreastInPlay([Narrowed("_top", body, null, null)]));
         Assert.True(BodyRetarget.BreastInPlay([Narrowed("_top", body, None, null)]));
+
+        // Only an undrawn IMC variant is breasted: read with the rest, as it always was.
+        var variants = SyntheticModel.Build(["atr_tv_a", "atr_tv_b"],
+            new SyntheticModel.Mesh(SkinMaterial,
+                new SyntheticModel.Sub(0b01, TrianglesPerIsland: 4, Weights: [("j_sebo_c", 1f)]),
+                new SyntheticModel.Sub(0b10, TrianglesPerIsland: 4, OffsetZ: 0.03f, Weights: [("j_mune_l", 1f)])));
+        Assert.True(BodyRetarget.BreastInPlay([Narrowed("_top", variants, Names("atr_tv_b"), null)]));
     }
 
     /// <summary>A chest pair over the cube whose body file is not a model.</summary>

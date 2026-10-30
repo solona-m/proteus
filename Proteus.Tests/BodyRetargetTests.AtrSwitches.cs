@@ -242,6 +242,24 @@ public partial class BodyRetargetTests
     }
 
     [Fact]
+    [Trait("Plan", "AC-body-atr-switches-7")]
+    public void The_no_skin_refusal_is_only_for_atr_hidden_skin()
+    {
+        // [AC-body-atr-switches-7] An IMC mask that leaves no skin drawn goes on as it always did; so does an Atr
+        // switch naming nothing on this model.
+        var variants = SyntheticModel.Build(["atr_tv_a", "atr_tv_b"],
+            new SyntheticModel.Mesh(ClothMaterial, new SyntheticModel.Sub(0b01, TrianglesPerIsland: 3)),
+            new SyntheticModel.Mesh(SkinMaterial, new SyntheticModel.Sub(0b10, TrianglesPerIsland: 3, OffsetZ: 0.01f)));
+        string unreadable = string.Format(Strings.Parts.RetargetUnreadableFmt, "chest");
+        Assert.NotEqual(unreadable, BodyRetarget.BuildPair("_top", variants, variants, "chest", false, null,
+                                                           new BodyRetarget.BodyDraw(0b01, None, None), null, out _));
+        var skin = SkinOnly();
+        Assert.Null(BodyRetarget.BuildPair("_top", skin, skin, "chest", false, null,
+                                           new BodyRetarget.BodyDraw(null, Names("atrx_elsewhere"), Names("atrx_elsewhere")),
+                                           null, out _));
+    }
+
+    [Fact]
     [Trait("Plan", "EDGE-body-atr-switches-15")]
     public void A_switched_off_piercing_stays_out_and_a_switched_on_one_keeps_its_tag()
     {
