@@ -928,7 +928,12 @@ internal static partial class RefitCore
     {
         // A body that switches its shapes by option (NIRÆ) is never a source: read as every shape at once, one of them
         // lies near almost any garment's skin, and garments made on other bodies were taken for it.
-        mods = mods.Where(m => !BodyAtrSwitches.SwitchesShapes(m.Catalog.ModRoot)).ToList();
+        var switching = mods.Where(m => BodyAtrSwitches.SwitchesShapes(m.Catalog.ModRoot)).Select(m => m.Dir).ToList();
+        if (switching.Count > 0)
+        {
+            note?.Invoke($"left out as sources, switching their shapes by option: {string.Join(", ", switching)}");
+            mods = mods.Where(m => !switching.Contains(m.Dir)).ToList();
+        }
         using var reading = BodySizeMatch.BeginReading();
         var skinPoints = BodySizeMatch.SkinPoints(garment);
         var probes = BodySizeMatch.ProbeKeys(skinPoints);

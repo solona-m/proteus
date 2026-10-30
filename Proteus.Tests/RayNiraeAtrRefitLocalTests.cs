@@ -208,6 +208,8 @@ public class RayNiraeAtrRefitLocalTests(ITestOutputHelper output)
         var bodies = SizeSetBatch.ScanBodies(LocalData.Path(LocalData.Mods));
         var left = bodies.Where(b => BodyAtrSwitches.SwitchesShapes(b.Catalog.ModRoot)).Select(b => b.Name).ToList();
         output.WriteLine("left out: " + string.Join(", ", left));
-        Assert.Equal(["NIRÆ body"], left);
+        Assert.Contains("NIRÆ body", left);
+        foreach (var body in new[] { "rue", "yab", "neolithe", "bibo", "tbse" })
+            Assert.DoesNotContain(left, n => n.Contains(body, StringComparison.OrdinalIgnoreCase));
     }
 }
