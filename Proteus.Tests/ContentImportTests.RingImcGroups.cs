@@ -10,8 +10,9 @@ namespace Proteus.Tests;
 public partial class ContentImportTests
 {
     /// <summary>
-    /// [AC-imc-group-piece-slot-3] Import → sidecar → visibility: the pieces record their ring, and each ring's
-    /// <c>Imc</c> group decides its own piece alone although both models sit in the archive off a game path.
+    /// [AC-imc-group-piece-slot-3] [EDGE-imc-group-piece-slot-9] Import → sidecar → visibility: the pieces record their
+    /// ring, and each ring's <c>Imc</c> group decides its own piece alone although both models sit in the archive off a
+    /// game path and bind one shared material.
     /// </summary>
     [Fact]
     public void An_imported_two_ring_pack_judges_each_piece_by_its_own_rings_group()

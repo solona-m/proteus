@@ -62,7 +62,7 @@ public class ContentPieceSlotTests
                                          IReadOnlyList<string> attrs, IReadOnlyDictionary<string, List<string>>? sel)
         => ContentImcVisibility.For(groups, null, model, slot, attrs, sel, (_, _) => null);
 
-    /// <summary>[AC-imc-group-piece-slot-1] [EDGE-imc-group-piece-slot-9] The right-ring piece follows the right-ring group alone.</summary>
+    /// <summary>[AC-imc-group-piece-slot-1] The right-ring piece follows the right-ring group alone.</summary>
     [Fact]
     public void A_right_ring_piece_stored_off_a_game_path_is_judged_only_by_the_right_ring_group()
     {
@@ -313,7 +313,10 @@ public class ContentPieceSlotTests
         Assert.True(ContentImcNotices.FirstSlotDisagreement(b));
     }
 
-    /// <summary>[AC-imc-group-piece-slot-3] The composite hands the piece's recorded slot to the visibility rule.</summary>
+    /// <summary>
+    /// [AC-imc-group-piece-slot-3] [EDGE-imc-group-piece-slot-9] The composite hands the piece's recorded slot to the
+    /// visibility rule — never anything read off its material, which both rings share.
+    /// </summary>
     [Fact]
     public void Wiring_content_resolution_passes_the_pieces_slot_to_the_visibility_rule()
     {
