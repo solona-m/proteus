@@ -214,6 +214,15 @@ internal static class ContentImcNotices
 
     /// <summary>True the first time this session a mod's parts are hidden by the game's own entry.</summary>
     internal static bool FirstGameEntryHint(string modRoot) => GameEntryHints.TryAdd(modRoot, 0);
+
+    private static readonly ConcurrentDictionary<string, byte> SlotDisagreements = new(StringComparer.OrdinalIgnoreCase);
+    private static readonly ConcurrentDictionary<string, byte> UntrustedSlots = new(StringComparer.OrdinalIgnoreCase);
+
+    /// <summary>True the first time this session a mod's piece is named for one slot and was imported as another.</summary>
+    internal static bool FirstSlotDisagreement(string modRoot) => SlotDisagreements.TryAdd(modRoot, 0);
+
+    /// <summary>True the first time this session a mod's piece has no usable recorded slot for its toggle groups to go by.</summary>
+    internal static bool FirstUntrustedSlot(string modRoot) => UntrustedSlots.TryAdd(modRoot, 0);
 }
 
 /// <summary>Where a content model's IMC mask came from.</summary>
@@ -250,18 +259,28 @@ internal static class ContentImcVisibility
     /// Else, a model whose item the pack's option or default edits name takes the active edit's mask, else the game's
     /// own entry (<paramref name="vanillaMask"/>, asked for the governing variant), else every part shown; its own
     /// slot's variant parts are hidden by that mask and every variant tag is dropped, so the host's mask cannot judge
-    /// them again. Anything else is left alone.
+    /// them again. A piece stored off a game path whose recorded slot (<paramref name="pieceSlot"/>) no group names shows
+    /// every part with its variant tags dropped: its item cannot be named, so no edit can speak for it either.
+    /// Anything else is left alone.
     /// </summary>
     internal static ContentVisibility For(
         IReadOnlyList<ContentAttributeGroup>? attributeGroups, ContentImcEdits? edits,
-        string modelRel, IReadOnlyList<string> attrNames,
+        string modelRel, string? pieceSlot, IReadOnlyList<string> attrNames,
         IReadOnlyDictionary<string, List<string>>? selected,
         Func<ImcItem, int, ushort?> vanillaMask)
     {
-        if (ContentPieceResolver.GovernsModel(attributeGroups, modelRel))
+        var governing = ContentPieceResolver.GoverningGroups(attributeGroups, modelRel, pieceSlot);
+        if (governing.Count > 0)
             return new ContentVisibility(
-                ContentPieceResolver.HiddenAttributes(attributeGroups, modelRel, attrNames, selected),
-                OwnAttributes: true, DropVariantAttributes: false, ImcMaskSource.ImcGroup, Why: "imc group");
+                ContentPieceResolver.HiddenAttributes(governing, modelRel, pieceSlot, attrNames, selected),
+                OwnAttributes: true, DropVariantAttributes: false, ImcMaskSource.ImcGroup,
+                Why: "imc group " + string.Join(", ", governing.Select(g => g.Group)));
+
+        // No group speaks for it only because its recorded slot told them apart: the other slots' masks are not its own.
+        if (ContentPieceResolver.HasSlottedGroup(attributeGroups) && ContentSlot.Parse(modelRel) == null
+            && ContentSlot.EquipLabel(pieceSlot) is { } label)
+            return new ContentVisibility(null, OwnAttributes: false, DropVariantAttributes: true,
+                ImcMaskSource.AllParts, Why: $"all parts (no imc group for {label})");
 
         if (edits == null || ContentImcEdits.ItemOf(modelRel) is not { } item || !edits.Names(item)
             || ContentSlot.VariantLetter(item.SlotLabel) is not { } letter)

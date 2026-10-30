@@ -89,6 +89,19 @@ public static class ContentSlot
     };
 
     /// <summary>
+    /// One of the ten equipment labels ("Body", "Right ring") in its canonical casing, or null for anything else —
+    /// a character part, a raw suffix, free text. What a piece's recorded slot is trusted as.
+    /// </summary>
+    public static string? EquipLabel(string? label)
+    {
+        if (string.IsNullOrWhiteSpace(label)) return null;
+        foreach (var s in Slots)
+            if (s.Category > 0 && string.Equals(s.Label, label, StringComparison.OrdinalIgnoreCase))
+                return s.Label;
+        return null;
+    }
+
+    /// <summary>
     /// A <see cref="Slot.Label"/> translated for display. The label itself stays English: it is matched against
     /// <see cref="LabelForEquipSlot"/> and written into the option names of imported packs.
     /// </summary>

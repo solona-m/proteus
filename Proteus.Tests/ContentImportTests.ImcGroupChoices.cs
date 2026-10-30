@@ -89,7 +89,7 @@ public partial class ContentImportTests
         var expected = DwnAttrs.Where(a => (mask & (1 << (a[^1] - 'a'))) == 0).Order();
 
         var actual = ContentPieceResolver.HiddenAttributes(
-            ContentImportService.BuildSidecar(preview, "x", "y").ContentAttributes, DwnModel, DwnAttrs, selection);
+            ContentImportService.BuildSidecar(preview, "x", "y").ContentAttributes, DwnModel, null, DwnAttrs, selection);
         Assert.Equal(expected, (actual ?? new HashSet<string>()).Order());
     });
 

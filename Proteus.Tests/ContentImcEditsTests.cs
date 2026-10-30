@@ -54,8 +54,8 @@ public class ContentImcEditsTests
 
     private static ContentVisibility For(ContentImcEdits? edits, IReadOnlyDictionary<string, List<string>>? selected,
                                          ushort? vanilla = null, IReadOnlyList<ContentAttributeGroup>? groups = null,
-                                         string model = Top, IReadOnlyList<string>? attrs = null)
-        => ContentImcVisibility.For(groups, edits, model, attrs ?? Attrs, selected, (_, _) => vanilla);
+                                         string model = Top, IReadOnlyList<string>? attrs = null, string? pieceSlot = null)
+        => ContentImcVisibility.For(groups, edits, model, pieceSlot, attrs ?? Attrs, selected, (_, _) => vanilla);
 
     /// <summary>The one-group Single "Belt" toggle: On draws both body parts, Off leaves part B off.</summary>
     private static ContentImcEdits BeltToggle()
@@ -151,7 +151,7 @@ public class ContentImcEditsTests
     {
         var edits = ContentImcEdits.From(Pack(null, Grp("M", "Multi", 0, Opt("a", Imc(0x3FF, variant: 3)))))!;
         int asked = -1;
-        var v = ContentImcVisibility.For(null, edits, Top, Attrs, Sel("M"), (_, variant) => { asked = variant; return 1; });
+        var v = ContentImcVisibility.For(null, edits, Top, null, Attrs, Sel("M"), (_, variant) => { asked = variant; return 1; });
         Assert.Equal(edits.GoverningVariant(Body), asked);
         Assert.Equal(3, asked);
         Assert.Equal(["atr_tv_b"], v.Hidden!.Order());
@@ -211,8 +211,8 @@ public class ContentImcEditsTests
                                     Sel("Toggles", "Panty Strap Hide", "Pockets Hide") })
             foreach (var edits in new[] { null, options })
             {
-                var v = ContentImcVisibility.For(groups, edits, Mid, attrs, sel, (_, _) => 0);
-                var legacy = ContentPieceResolver.HiddenAttributes(groups, Mid, attrs, sel);
+                var v = ContentImcVisibility.For(groups, edits, Mid, null, attrs, sel, (_, _) => 0);
+                var legacy = ContentPieceResolver.HiddenAttributes(groups, Mid, null, attrs, sel);
                 Assert.Equal(legacy?.Order(), v.Hidden?.Order());
                 Assert.True(v.OwnAttributes);
                 Assert.False(v.DropVariantAttributes);

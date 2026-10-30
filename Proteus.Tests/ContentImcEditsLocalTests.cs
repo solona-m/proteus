@@ -41,9 +41,9 @@ public class ContentImcEditsLocalTests
 
         var attrs = SecondSkinWriter.AttributeNames(File.ReadAllBytes(model)).ToList();
         Assert.Contains("atr_sv_a", attrs);
-        var off = ContentImcVisibility.For(null, edits, modelRel, attrs, sel("Off"), (_, _) => null);
+        var off = ContentImcVisibility.For(null, edits, modelRel, null, attrs, sel("Off"), (_, _) => null);
         Assert.Equal(["atr_sv_a"], off.Hidden!.Order());
-        var on = ContentImcVisibility.For(null, edits, modelRel, attrs, sel("On"), (_, _) => null);
+        var on = ContentImcVisibility.For(null, edits, modelRel, null, attrs, sel("On"), (_, _) => null);
         Assert.Null(on.Hidden);
         Assert.True(on.DropVariantAttributes);
     }
@@ -67,5 +67,78 @@ public class ContentImcEditsLocalTests
             Assert.NotNull(byPath);
             Assert.Equal(byPath, ImcEntrySource.FromGame(Read, tag, label, 1));
         }
+    }
+
+    /// <summary>
+    /// [AC-imc-group-piece-slot-1] [AC-imc-group-piece-slot-2] [AC-imc-group-piece-slot-4] The import from Nao's report,
+    /// on its real sidecar and models: with the slot unread it gives exactly her log's hidden parts, and read, each
+    /// ring's selection reaches only its own piece.
+    /// </summary>
+    [LocalDataFact(LocalData.NeolitheRingMod)]
+    public void Nao_s_real_ring_import_shows_each_rings_selection_on_its_own_piece()
+    {
+        var root = LocalData.Path(LocalData.NeolitheRingMod);
+        var meta = SidecarDiscoveryService.TryReadMetadata(root);
+        Assert.NotNull(meta);
+
+        const string ChestModel = "chest/neolithe nsfw hazelnut s.mdl";
+        const string LegsModel = "legs/neolithe gen b small.mdl";
+        var pieces = meta!.ContentGroups!.SelectMany(g => g.Options).SelectMany(o => o.Pieces).ToList();
+        Assert.Equal("Right ring", pieces.First(p => p.ModelFor("0201") == ChestModel).Slot);
+        Assert.Equal("Left ring", pieces.First(p => p.ModelFor("0201") == LegsModel).Slot);
+
+        var groups = meta.ContentAttributes!;
+        var chestGroup = Assert.Single(groups, g => g.Group == "Chest piercings" && g.Slot == "RFinger");
+        var legsGroup = Assert.Single(groups, g => g.Group == "Legs piercings" && g.Slot == "LFinger");
+
+        string[] Parts(int n) => [.. Enumerable.Range(0, n).Select(i => $"atr_rv_{(char)('a' + i)}")];
+        var chestAttrs = SecondSkinWriter.AttributeNames(File.ReadAllBytes(Path.Combine(root, ChestModel))).ToList();
+        var legsAttrs = SecondSkinWriter.AttributeNames(File.ReadAllBytes(Path.Combine(root, LegsModel))).ToList();
+        Assert.Equal(Parts(8).Concat(["atr_hij", "atr_nek", "atr_ude"]).Order(StringComparer.Ordinal),
+            chestAttrs.Order(StringComparer.Ordinal));
+        Assert.Equal(Parts(7).Concat(["atr_hiz", "atr_sne"]).Order(StringComparer.Ordinal),
+            legsAttrs.Order(StringComparer.Ordinal));
+
+        // Every option of both groups ticked, named in full so neither group's defaults (81, 1) can stand in.
+        var allOptionsOfBothImcGroups = new Dictionary<string, List<string>>
+        {
+            [chestGroup.Group] = [.. chestGroup.Options.Keys],
+            [legsGroup.Group] = [.. legsGroup.Options.Keys],
+        };
+        string[] Hidden(string model, string? slot, IReadOnlyList<string> attrs,
+                        IReadOnlyList<ContentAttributeGroup> gs, IReadOnlyDictionary<string, List<string>> sel)
+            => [.. (ContentPieceResolver.HiddenAttributes(gs, model, slot, attrs, sel) ?? new HashSet<string>()).Order()];
+
+        // (a) The slot unread: Nao's log, verbatim.
+        Assert.Equal(["atr_rv_a", "atr_rv_b", "atr_rv_c", "atr_rv_d", "atr_rv_h"],
+            Hidden(ChestModel, null, chestAttrs, groups, allOptionsOfBothImcGroups));
+        Assert.Equal(["atr_rv_a", "atr_rv_b", "atr_rv_c", "atr_rv_d"],
+            Hidden(LegsModel, null, legsAttrs, groups, allOptionsOfBothImcGroups));
+
+        // (b) Read: everything on the chest shows; the legs lose only the bits their own ring never shows.
+        Assert.Empty(Hidden(ChestModel, "Right ring", chestAttrs, groups, allOptionsOfBothImcGroups));
+        Assert.Equal(["atr_rv_a", "atr_rv_b", "atr_rv_c", "atr_rv_d"],
+            Hidden(LegsModel, "Left ring", legsAttrs, groups, allOptionsOfBothImcGroups));
+
+        // (c) A partial selection: each piece exactly as its own group alone decides.
+        var collarAndChestDermalsWithHipDermals = new Dictionary<string, List<string>>
+        {
+            [chestGroup.Group] = ["Collar bones dermals", "Chest dermals"],
+            [legsGroup.Group] = ["Hips dermals"],
+        };
+        var chest = Hidden(ChestModel, "Right ring", chestAttrs, groups, collarAndChestDermalsWithHipDermals);
+        Assert.Equal(["atr_rv_c", "atr_rv_d", "atr_rv_e", "atr_rv_f", "atr_rv_g", "atr_rv_h"], chest);
+        Assert.Equal(Hidden(ChestModel, "Right ring", chestAttrs, [chestGroup], collarAndChestDermalsWithHipDermals), chest);
+        var legs = Hidden(LegsModel, "Left ring", legsAttrs, groups, collarAndChestDermalsWithHipDermals);
+        Assert.Equal(["atr_rv_a", "atr_rv_b", "atr_rv_c", "atr_rv_d", "atr_rv_f", "atr_rv_g"], legs);
+        Assert.Equal(Hidden(LegsModel, "Left ring", legsAttrs, [legsGroup], collarAndChestDermalsWithHipDermals), legs);
+
+        // (d) The log names each piece's own group; (e) and has nothing to warn about.
+        Assert.Equal("imc group Chest piercings", ContentImcVisibility.For(groups, null, ChestModel, "Right ring",
+            chestAttrs, allOptionsOfBothImcGroups, (_, _) => null).Why);
+        Assert.Equal("imc group Legs piercings", ContentImcVisibility.For(groups, null, LegsModel, "Left ring",
+            legsAttrs, allOptionsOfBothImcGroups, (_, _) => null).Why);
+        Assert.Equal(PieceSlotNotice.None, ContentPieceResolver.SlotNotice(groups, ChestModel, "Right ring"));
+        Assert.Equal(PieceSlotNotice.None, ContentPieceResolver.SlotNotice(groups, LegsModel, "Left ring"));
     }
 }
