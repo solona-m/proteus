@@ -11,7 +11,8 @@ namespace Proteus.Tests;
 /// <summary>
 /// Who runs alone in <see cref="GameBodyCollection"/>: the one class that clears and fakes the game's body, and nobody
 /// else. A reader added to it puts the whole real-data suite back in single file (that was 20 of 25 minutes); a writer
-/// left out of it clears the game's body under a reader running beside it.
+/// left out of it clears the game's body under a reader running beside it. A stub reader that finds nothing is neither:
+/// the catalog believes its "no body" of it alone, so it runs beside the rest.
 /// </summary>
 public class GameBodyCollectionTests
 {

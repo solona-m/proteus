@@ -370,6 +370,191 @@ internal sealed class SyntheticPack : IDisposable
         return new SyntheticPack(path);
     }
 
+    /// <summary>
+    /// One option of <see cref="ImcInOptions"/>. <paramref name="Mask"/> null is an empty option (a toggle's "Show"
+    /// side); otherwise it writes one <c>Imc</c> entry per variant in <paramref name="Variants"/> (default just 1) with
+    /// that mask, plus a same-set <c>Eqp</c> as real TexTools-converted toggles carry. <paramref name="Extra"/> is raw
+    /// manipulation JSON appended as is.
+    /// </summary>
+    internal sealed record ImcOption(string Name, int? Mask, int Priority = 0, int[]? Variants = null,
+                                     string? Extra = null, int? VariantOneMask = null);
+
+    /// <summary>An <see cref="ImcOption"/>, named so a group's option list needs no target-typed <c>new</c>.</summary>
+    internal static ImcOption O(string name, int? mask, int Priority = 0, int[]? Variants = null, string? Extra = null,
+                                int? VariantOneMask = null)
+        => new(name, mask, Priority, Variants, Extra, VariantOneMask);
+
+    /// <summary>One Single or Multi group of <see cref="ImcInOptions"/>.</summary>
+    internal sealed record ImcGroup(string Name, string Type, int Priority, ulong DefaultSettings,
+                                    params ImcOption[] Options);
+
+    /// <summary>The set <see cref="ImcInOptions"/>' Body piece is on.</summary>
+    internal const int ImcSet = 6100;
+
+    /// <summary>
+    /// A pack whose Body piece (<c>e6100</c>) is switched by <c>Imc</c> edits inside ordinary Single/Multi options and
+    /// default data — the shape Penumbra's TexTools import produces, files under <c>Group/Option/chara/...</c> entries.
+    /// The model has one mesh each for <c>atr_tv_a</c>, <c>atr_tv_b</c>, <c>atr_dv_a</c> and <c>atr_ude</c>.
+    /// </summary>
+    /// <param name="defaultMask">An <c>Imc</c> entry in default data, or none.</param>
+    /// <param name="legacy">Write the v3 layout: <c>default_mod.json</c> plus one <c>group_NNN_*.json</c> per group.</param>
+    internal static SyntheticPack ImcInOptions(IReadOnlyList<ImcGroup> groups, int? defaultMask = null,
+                                               bool legacy = false)
+    {
+        string[] attrs = ["atr_tv_a", "atr_tv_b", "atr_dv_a", "atr_ude"];
+        var meshes = attrs
+            .Select((_, i) => new SyntheticModel.Mesh($"/mt_c0201e{ImcSet}_top_{(char)('a' + i)}.mtrl",
+                                                      new SyntheticModel.Sub(1u << i)))
+            .ToArray();
+        var model = SyntheticModel.Build(attrs, meshes);
+
+        string modelPath = $"chara/equipment/e{ImcSet}/model/c0201e{ImcSet}_top.mdl";
+        var files = new List<(string GamePath, string Entry)> { (modelPath, "base/" + modelPath) };
+        foreach (var mesh in meshes)
+        {
+            var gp = $"chara/equipment/e{ImcSet}/material/v0001{mesh.Material}";
+            files.Add((gp, "base/" + gp));
+        }
+
+        static string Imc(int variant, int mask) =>
+            "{\"Type\":\"Imc\",\"Manipulation\":{\"Entry\":{\"MaterialId\":1,\"DecalId\":0,\"VfxId\":0,"
+          + "\"MaterialAnimationId\":0,\"AttributeAndSound\":" + mask + ",\"AttributeMask\":" + mask
+          + ",\"SoundId\":0},\"ObjectType\":\"Equipment\",\"PrimaryId\":" + ImcSet + ",\"SecondaryId\":0,"
+          + "\"Variant\":" + variant + ",\"EquipSlot\":\"Body\",\"BodySlot\":\"Unknown\"}}";
+        const string Eqp = "{\"Type\":\"Eqp\",\"Manipulation\":{\"Entry\":12884901888,\"SetId\":" + "6100"
+                         + ",\"Slot\":\"Body\"}}";
+
+        string Option(ImcOption o)
+        {
+            var manips = new List<string>();
+            if (o.Mask is { } mask)
+            {
+                foreach (var v in o.Variants ?? [1])
+                    manips.Add(Imc(v, v == 1 && o.VariantOneMask is { } one ? one : mask));
+                manips.Add(Eqp);
+            }
+            if (o.Extra != null) manips.Add(o.Extra);
+            return "{\"Name\":" + Quote(o.Name) + ",\"Description\":\"\",\"Priority\":" + o.Priority
+                 + ",\"Files\":{},\"FileSwaps\":{},\"Manipulations\":[" + string.Join(",", manips) + "]}";
+        }
+
+        string Group(ImcGroup g, int index) =>
+            "{\"Version\":0,\"Name\":" + Quote(g.Name) + ",\"Description\":\"\",\"Priority\":" + g.Priority
+          + ",\"Type\":" + Quote(g.Type) + ",\"DefaultSettings\":" + g.DefaultSettings
+          + ",\"Options\":[" + string.Join(",", g.Options.Select(Option)) + "]}";
+
+        string defaultData = "{\"Files\":{"
+            + string.Join(",", files.Select(f => $"{Quote(f.GamePath)}:{Quote(f.Entry)}"))
+            + "},\"FileSwaps\":{},\"Manipulations\":["
+            + (defaultMask is { } dm ? Imc(1, dm) : "") + "]}";
+
+        var path = System.IO.Path.Combine(System.IO.Path.GetTempPath(),
+            "proteus-synth-" + Guid.NewGuid().ToString("N") + ".pmp");
+        using (var zip = ZipFile.Open(path, ZipArchiveMode.Create))
+        {
+            if (legacy)
+            {
+                Write(zip, "meta.json", Encoding.UTF8.GetBytes(
+                    "{\"FileVersion\":3,\"Name\":\"Synthetic\",\"Author\":\"Tests\",\"Description\":\"\"}"));
+                Write(zip, "default_mod.json", Encoding.UTF8.GetBytes(defaultData));
+                for (int i = 0; i < groups.Count; i++)
+                    Write(zip, $"group_{i + 1:D3}_{groups[i].Name.ToLowerInvariant().Replace(' ', '_')}.json",
+                          Encoding.UTF8.GetBytes(Group(groups[i], i)));
+            }
+            else
+            {
+                Write(zip, "meta.json", Encoding.UTF8.GetBytes(
+                    "{\"FileVersion\":4,\"Name\":\"Synthetic\",\"Author\":\"Tests\",\"Description\":\"\","
+                  + "\"DefaultData\":" + defaultData + ",\"Groups\":["
+                  + string.Join(",", groups.Select(Group)) + "]}"));
+            }
+            Write(zip, "base/" + modelPath, model);
+            foreach (var f in files.Skip(1)) Write(zip, f.Entry, [0]);
+        }
+        return new SyntheticPack(path);
+    }
+
+    /// <summary>
+    /// <see cref="ImcToggled"/>'s Denim Shorts shape (set 6058 Legs, <c>atr_dv_a</c>/<c>atr_dv_b</c>, options
+    /// "atr_dv_a Hide"/"atr_dv_b Hide"), with what an installed-mod import has to tell apart around its <c>Imc</c> group.
+    /// <c>ImcToggled</c> ends in a <c>params</c> array, so these could not be added to it.
+    /// </summary>
+    /// <param name="imcDefaultSettings">The Imc group's <c>DefaultSettings</c> bitmask.</param>
+    /// <param name="disableOption">Append Penumbra's "Disable" option and let the group be disabled.</param>
+    /// <param name="otherItemGroup">A second Imc group after the first, for an item nobody imports (e0042 Body).</param>
+    /// <param name="leadingGroup">A group of this name and type before the Imc group, with one empty option "A".</param>
+    /// <param name="legacy">Write the v3 layout: <c>default_mod.json</c> plus one <c>group_NNN_*.json</c> per group.</param>
+    internal static SyntheticPack ImcGroupPack(
+        string groupName = "Toggles", ulong imcDefaultSettings = 0, bool disableOption = false,
+        string? otherItemGroup = null, (string Name, string Type)? leadingGroup = null, bool legacy = false,
+        (string Name, string Type)? trailingGroup = null)
+    {
+        string[] attributes = ["atr_dv_a", "atr_dv_b"];
+        var meshes = attributes
+            .Select((_, i) => new SyntheticModel.Mesh($"/mt_c0101e6058_dwn_{(char)('a' + i)}.mtrl",
+                                                      new SyntheticModel.Sub(1u << i)))
+            .ToArray();
+        var model = SyntheticModel.Build(attributes, meshes);
+
+        const string ModelEntry = "model.mdl";
+        var files = new List<(string GamePath, string Entry)> { ("chara/equipment/e6058/model/c0101e6058_dwn.mdl", ModelEntry) };
+        foreach (var mesh in meshes)
+        {
+            var leaf = mesh.Material.TrimStart('/');
+            files.Add(($"chara/equipment/e6058/material/v0001/{leaf}", leaf));
+        }
+
+        static string Identifier(int set, string slot)
+            => "\"Identifier\":{\"ObjectType\":\"Equipment\",\"PrimaryId\":" + set + ",\"Variant\":1,\"EquipSlot\":"
+             + Quote(slot) + "},\"DefaultEntry\":{\"MaterialId\":1,\"DecalId\":0,\"VfxId\":0,"
+             + "\"MaterialAnimationId\":0,\"AttributeMask\":3,\"SoundId\":0}";
+
+        string Plain((string Name, string Type) g)
+            => "{\"Type\":" + Quote(g.Type) + ",\"Name\":" + Quote(g.Name) + ",\"DefaultSettings\":0,"
+             + (g.Type == "Imc" ? Identifier(42, "Body") + "," : "")
+             + (g.Type == "Combining" ? "\"Containers\":[{}]," : "")
+             + "\"Options\":[{\"Name\":\"A\"}]}";
+
+        var groups = new List<string>();
+        if (leadingGroup is { } lead) groups.Add(Plain(lead));
+
+        var options = attributes.Select((a, i) => "{\"Name\":" + Quote(a + " Hide") + ",\"AttributeMask\":" + (1 << i) + "}")
+            .ToList();
+        if (disableOption) options.Add("{\"Name\":\"Disable\",\"AttributeMask\":0,\"IsDisableSubMod\":true}");
+        groups.Add("{\"Type\":\"Imc\",\"Name\":" + Quote(groupName) + ",\"DefaultSettings\":" + imcDefaultSettings + ","
+                 + (disableOption ? "\"CanBeDisabled\":true," : "") + Identifier(6058, "Legs") + ","
+                 + "\"Options\":[" + string.Join(",", options) + "]}");
+
+        if (otherItemGroup != null)
+            groups.Add("{\"Type\":\"Imc\",\"Name\":" + Quote(otherItemGroup) + ",\"DefaultSettings\":0,"
+                     + Identifier(42, "Body") + ",\"Options\":[{\"Name\":\"Hide A\",\"AttributeMask\":1}]}");
+        if (trailingGroup is { } trail) groups.Add(Plain(trail));
+
+        string defaultData = "{\"Files\":{" + string.Join(",", files.Select(f => $"{Quote(f.GamePath)}:{Quote(f.Entry)}"))
+                           + "},\"FileSwaps\":{},\"Manipulations\":[]}";
+
+        var path = System.IO.Path.Combine(System.IO.Path.GetTempPath(),
+            "proteus-synth-" + Guid.NewGuid().ToString("N") + ".pmp");
+        using (var zip = ZipFile.Open(path, ZipArchiveMode.Create))
+        {
+            if (legacy)
+            {
+                Write(zip, "meta.json", Encoding.UTF8.GetBytes(
+                    "{\"FileVersion\":3,\"Name\":\"Synthetic\",\"Author\":\"Tests\",\"Description\":\"\"}"));
+                Write(zip, "default_mod.json", Encoding.UTF8.GetBytes(defaultData));
+                for (int i = 0; i < groups.Count; i++)
+                    Write(zip, $"group_{i + 1:D3}_g{i}.json", Encoding.UTF8.GetBytes(groups[i]));
+            }
+            else
+                Write(zip, "meta.json", Encoding.UTF8.GetBytes(
+                    "{\"FileVersion\":4,\"Name\":\"Synthetic\",\"Author\":\"Tests\",\"Description\":\"\","
+                  + "\"DefaultData\":" + defaultData + ",\"Groups\":[" + string.Join(",", groups) + "]}"));
+            Write(zip, ModelEntry, model);
+            foreach (var mesh in meshes) Write(zip, mesh.Material.TrimStart('/'), [0]);
+        }
+        return new SyntheticPack(path);
+    }
+
     private static void Write(ZipArchive zip, string name, byte[] bytes)
     {
         using var st = zip.CreateEntry(name).Open();

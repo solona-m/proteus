@@ -302,4 +302,51 @@ public class RacialRouteTests
         }
         finally { System.IO.File.Delete(body); }
     }
+
+    /// <summary>
+    /// A refit for another race or sex is never saved naming a skin material the new body does not use: the game renames
+    /// it after the wearer's race, and a male Viera crashed drawing women's legs that still named Bibo+'s _bibo
+    /// (mt_c1701b0001_bibo.mtrl). Here the new body draws its skin with a material whose name Proteus does not read as
+    /// skin, so the garment's _bibo cannot be renamed to it — and the save is refused, saying why.
+    /// </summary>
+    [Fact]
+    public void A_refit_still_naming_skin_the_new_body_does_not_use_is_refused()
+    {
+        var route = new RacialModelBake.Route(201, 101, Down: false, Lowered: true) { ByAlias = true };
+        var log = NSubstitute.Substitute.For<Dalamud.Plugin.Services.IPluginLog>();
+        byte[] garment = SyntheticChest.Body(0.02f, 0.02f);
+        string body = System.IO.Path.Combine(System.IO.Path.GetTempPath(), $"proteus-test-body-{Guid.NewGuid():N}.mdl");
+        System.IO.File.WriteAllBytes(body, ModelAttributeWriter.RenameMaterial(SyntheticChest.Body(0.01f, 0.01f),
+                                                                                 SyntheticChest.Skin, "/mt_c0101b0001_own.mtrl"));
+        try
+        {
+            var (saved, preview, refusal) = RefitCore.Finish(KeepEnds.SkinOnlyPlanned(garment), route, null, body, log);
+            Assert.Null(saved);
+            Assert.Null(preview);
+            Assert.Contains(SyntheticChest.Skin, refusal);
+            Assert.Equal([SyntheticChest.Skin], RefitCore.ForeignSkin(garment, [body]));
+        }
+        finally { System.IO.File.Delete(body); }
+    }
+
+    /// <summary>The same refit onto a body that draws _b: the garment's _bibo is renamed to it, and it saves.</summary>
+    [Fact]
+    public void A_refit_onto_a_body_whose_skin_is_read_saves_with_that_skin()
+    {
+        const string bodySkin = "/mt_c0101b0001_b.mtrl";
+        var route = new RacialModelBake.Route(201, 101, Down: false, Lowered: true) { ByAlias = true };
+        var log = NSubstitute.Substitute.For<Dalamud.Plugin.Services.IPluginLog>();
+        string body = System.IO.Path.Combine(System.IO.Path.GetTempPath(), $"proteus-test-body-{Guid.NewGuid():N}.mdl");
+        System.IO.File.WriteAllBytes(body, ModelAttributeWriter.RenameMaterial(SyntheticChest.Body(0.01f, 0.01f),
+                                                                                 SyntheticChest.Skin, bodySkin));
+        try
+        {
+            var (saved, _, refusal) = RefitCore.Finish(KeepEnds.SkinOnlyPlanned(SyntheticChest.Body(0.02f, 0.02f)), route,
+                                                       null, body, log);
+            Assert.True(saved != null, refusal);
+            Assert.Equal([bodySkin], SecondSkinWriter.Parse(saved!.Model).MatNames.Where(SecondSkinWriter.IsBodySkinMaterial));
+            Assert.Empty(RefitCore.ForeignSkin(saved.Model, [body]));
+        }
+        finally { System.IO.File.Delete(body); }
+    }
 }

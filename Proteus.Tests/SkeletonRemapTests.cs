@@ -56,6 +56,31 @@ public class SkeletonRemapTests
         Assert.Equal(new SkeletonRemap.Move("ya_shiri_phys_l", "j_kosi", SkeletonRemap.How.Ancestor), Only(game, "ya_shiri_phys_l"));
     }
 
+    /// <summary>
+    /// A women's glove made a men's: IVCS's third finger joints, which the game's men's skeleton lacks and whose parents it
+    /// does not know, stand in on the same finger's last joint the game has — never the hip, which took the fingertips
+    /// with it (Stormblessed's gloves, 2026-10-29). A toe's joint still goes to the foot.
+    /// </summary>
+    [Fact]
+    [Trait("Plan", "AC-mens-ends-crotch-2")]
+    [Trait("Plan", "AC-mens-ends-crotch-9")]
+    [Trait("Plan", "EDGE-mens-ends-crotch-39")]
+    public void A_finger_joint_the_skeleton_lacks_stands_in_on_its_finger() // [AC-mens-ends-crotch-2] [AC-mens-ends-crotch-9] [EDGE-mens-ends-crotch-39]
+    {
+        var wearer = Bones("j_kosi", "j_te_l", "j_te_r", "j_hito_b_l", "j_oya_b_r", "j_naka_b_l", "j_kusu_b_r", "j_ko_b_l",
+                           "j_asi_e_l");
+        var planner = new SkeletonRemap.Planner(wearer, _ => null);
+        Assert.Equal(new SkeletonRemap.Move("iv_hito_c_l", "j_hito_b_l", SkeletonRemap.How.StandIn), Only(planner, "iv_hito_c_l"));
+        Assert.Equal("j_oya_b_r", Only(planner, "iv_oya_c_r").To);
+        Assert.Equal("j_naka_b_l", Only(planner, "iv_naka_c_l").To);
+        Assert.Equal("j_kusu_b_r", Only(planner, "iv_kusu_c_r").To);
+        Assert.Equal("j_ko_b_l", Only(planner, "iv_ko_c_l").To);
+        Assert.Equal("j_ko_b_l", Only(planner, "iv_ko_d_l").To);
+        Assert.Equal("j_asi_e_l", Only(planner, "iv_asi_ko_a_l").To);
+        // Not a finger joint past the game's: no stand-in.
+        Assert.Null(SkeletonRemap.StandIn("iv_hito_l"));
+    }
+
     [Fact]
     [Trait("Plan", "AC-cross-sex-tops-yas-4")]
     [Trait("Plan", "EDGE-cross-sex-tops-yas-5")]
@@ -377,6 +402,7 @@ public class SkeletonRemapTests
     /// </summary>
     [Fact]
     [Trait("Plan", "AC-cross-sex-tops-yas-9")]
+    [Trait("Speed", "Slow")]
     public void Renamed_bodies_still_detect_the_yiggle_size() // [AC-cross-sex-tops-yas-9]
     {
         byte[] Legs(params (string, float)[] weights)

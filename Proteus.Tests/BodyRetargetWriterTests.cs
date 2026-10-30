@@ -171,13 +171,16 @@ public class BodyRetargetWriterTests : IDisposable
         ]);
         Assert.True(outcome.Ok, outcome.Message);
 
-        // The earlier L is replaced where the batch says, not kept alongside it; the batch keeps its order.
+        // The earlier L is replaced where it stands, not kept alongside it: Penumbra keeps a group's choice by option
+        // position, so moving it would switch what a player wears. The new sizes follow in the batch's order.
         var options = PenumbraModMeta.TryReadFileOptions(root, Group)!;
-        Assert.Equal([BodyRetargetWriter.OriginalOption, "Neolithe SFW XS", "Neolithe SFW S", "Neolithe SFW L"],
+        Assert.Equal([BodyRetargetWriter.OriginalOption, "Neolithe SFW L", "Neolithe SFW XS", "Neolithe SFW S"],
                      options.Select(o => o.Name));
-        Assert.Equal([2], File.ReadAllBytes(Path.Combine(root, options[1].Files[GamePath])));
-        Assert.Equal([3], File.ReadAllBytes(Path.Combine(root, options[2].Files[GamePath])));
-        Assert.Equal([4], File.ReadAllBytes(Path.Combine(root, options[3].Files[GamePath])));
+        Assert.Equal([4], File.ReadAllBytes(Path.Combine(root, options[1].Files[GamePath])));
+        Assert.Equal([2], File.ReadAllBytes(Path.Combine(root, options[2].Files[GamePath])));
+        Assert.Equal([3], File.ReadAllBytes(Path.Combine(root, options[3].Files[GamePath])));
+        // Selected: the size saved last, wherever it stands.
+        Assert.Equal("Neolithe SFW L", PenumbraModMeta.SingleDefault(root, Group));
 
         var record = BodyRetargetWriter.ReadRecord(root)!;
         Assert.Equal(["SFW XS", "SFW S", "SFW L"], record.Options.Select(e => e.To));
@@ -253,6 +256,24 @@ public class BodyRetargetWriterTests : IDisposable
 
         BodyRetargetWriter.Undo(root, Group, "Neolithe SFW XS");
         Assert.Equal(["Items", "Top Size", Group, "Later"], GroupNames());
+    }
+
+    [Fact]
+    [Trait("Plan", "EDGE-cross-sex-area-coverage-8")]
+    public void An_option_saved_again_keeps_its_place() // [EDGE-cross-sex-area-coverage-8]
+    {
+        // Penumbra keeps a group's choice by option POSITION. The men's legs saved into "TBSE" after the top had made
+        // TBSE and TBSE-X moved TBSE to the end, and a player wearing TBSE was switched to TBSE-X.
+        const string legs = "chara/equipment/e6255/model/c0101e6255_dwn.mdl";
+        BodyRetargetWriter.Save(root, Group, "TBSE", GamePath, [1], "TBSE", "Bibo M", "SFW");
+        BodyRetargetWriter.Save(root, Group, "TBSE-X", GamePath, [2], "TBSE-X", "Bibo M", "SFW");
+        Assert.True(BodyRetargetWriter.Save(root, Group, "TBSE", legs, [3], "TBSE", "Bibo M", "Gen A").Ok);
+
+        var options = PenumbraModMeta.TryReadFileOptions(root, Group)!;
+        Assert.Equal([BodyRetargetWriter.OriginalOption, "TBSE", "TBSE-X"], options.Select(o => o.Name));
+        Assert.Contains(GamePath, options[1].Files.Keys);
+        Assert.Contains(legs, options[1].Files.Keys);
+        Assert.Equal("TBSE", PenumbraModMeta.SingleDefault(root, Group));
     }
 
     [Fact]
@@ -1124,6 +1145,301 @@ public class BodyRetargetWriterTests : IDisposable
         var refit = PenumbraModMeta.TryReadFileOptions(root, Lumberjack)!.Single(o => o.Name == "TBSE-X — M");
         Assert.False(refit.Files.ContainsKey(HighlanderShirt));
         Assert.DoesNotContain(refit.Manipulations?.Cast<JsonElement>() ?? [], m => m.GetProperty("Type").GetString() == "Eqdp");
+    }
+
+    // ── own-model-overwrite: a save over the author's model for another race ─────────────────────────────────────────
+
+    private const string MensTop = "chara/equipment/e0391/model/c0101e0391_top.mdl";
+    private const string WomensTop = "chara/equipment/e0391/model/c0201e0391_top.mdl";
+
+    private static System.Text.Json.Nodes.JsonObject Files(params (string Path, string File)[] files)
+    {
+        var o = new System.Text.Json.Nodes.JsonObject();
+        foreach (var (path, file) in files) o[path] = file;
+        return o;
+    }
+
+    private static System.Text.Json.Nodes.JsonObject Option(string name, int? priority = null,
+                                                            System.Text.Json.Nodes.JsonObject? files = null,
+                                                            System.Text.Json.Nodes.JsonObject? swaps = null)
+    {
+        var o = new System.Text.Json.Nodes.JsonObject { ["Name"] = name, ["Files"] = files ?? [] };
+        if (priority != null) o["Priority"] = priority;
+        if (swaps != null) o["FileSwaps"] = swaps;
+        return o;
+    }
+
+    private static System.Text.Json.Nodes.JsonObject GroupOf(string? name, string type, int priority,
+                                                             params System.Text.Json.Nodes.JsonObject[] options)
+    {
+        var g = new System.Text.Json.Nodes.JsonObject { ["Type"] = type, ["Priority"] = priority, ["DefaultSettings"] = 0 };
+        if (name != null) g["Name"] = name;
+        g["Options"] = new System.Text.Json.Nodes.JsonArray(options.Select(o => (System.Text.Json.Nodes.JsonNode)o).ToArray());
+        return g;
+    }
+
+    /// <summary>The mod's manifest with these groups (and default files), as Penumbra lays it out.</summary>
+    private void Manifest(System.Text.Json.Nodes.JsonObject? defaults, params System.Text.Json.Nodes.JsonObject[] groups)
+    {
+        string path = Path.Combine(root, PenumbraModMeta.MetaFile);
+        var meta = System.Text.Json.Nodes.JsonNode.Parse(File.ReadAllText(path))!.AsObject();
+        meta["Groups"] = new System.Text.Json.Nodes.JsonArray(groups.Select(g => (System.Text.Json.Nodes.JsonNode)g).ToArray());
+        meta["DefaultData"] = new System.Text.Json.Nodes.JsonObject { ["Files"] = defaults ?? [] };
+        File.WriteAllText(path, meta.ToJsonString());
+        Directory.CreateDirectory(Path.Combine(root, "body"));
+        File.WriteAllBytes(Path.Combine(root, "body", "c0101.mdl"), [9, 9, 9]);
+    }
+
+    /// <summary>Thorn Princess's layout: the men's top a copy in a multi-choice body group at priority 1, the women's
+    /// sizes in a single-choice "Size" group at priority 4.</summary>
+    private void ThornLayout()
+        => Manifest(null,
+            GroupOf("Body", "Multi", 1, Option("Everything", files: Files((MensTop, "body/c0101.mdl")))),
+            GroupOf("Size", "Single", 4, Option("Small", files: Files((WomensTop, "size/small.mdl"))),
+                                         Option("Large", files: Files((WomensTop, "size/large.mdl")))));
+
+    private Dictionary<string, IReadOnlyCollection<string>> Ticks(params (string Group, string[] Options)[] ticks)
+        => ticks.ToDictionary(t => t.Group, t => (IReadOnlyCollection<string>)t.Options);
+
+    private string? RefitFile(string group, string option)
+        => (PenumbraModMeta.TryReadFileOptions(root, group) ?? []).Where(o => o.Name == option)
+                          .Select(o => o.Files.GetValueOrDefault(MensTop)?.Replace('\\', '/')).SingleOrDefault();
+
+    private List<JsonElement> RawGroups() => PenumbraModMeta.TryReadRawGroups(root)!;
+
+    [Fact]
+    [Trait("Plan", "AC-own-model-overwrite-4")]
+    public void A_cross_sex_save_into_the_author_s_size_group_is_what_penumbra_serves()
+    {
+        ThornLayout();
+        var bodyBefore = Read("Body").GetRawText();
+
+        var saved = BodyRetargetWriter.Save(root, "Size", MensTop, "The Body SE", "Small", [new BodyRetargetWriter.Refit("TBSE M", [1, 2], "M")],
+                                            fromOption: "Small");
+        Assert.True(saved.Ok, saved.Message);
+        string refit = RefitFile("Size", "TBSE M")!;
+        Assert.NotNull(refit);
+
+        var on = RefitCore.SelectionFor(false, "TBSE M", ["Small"], "Small");
+        Assert.Equal(refit, PenumbraPrecedence.Winner(root, MensTop, Ticks(("Body", ["Everything"]), ("Size", [.. on]))));
+        Assert.Equal("body/c0101.mdl", PenumbraPrecedence.Winner(root, MensTop, Ticks(("Body", ["Everything"]), ("Size", ["Small"]))));
+        Assert.True(Same(JsonDocument.Parse(bodyBefore).RootElement, Read("Body")));
+        Assert.Equal(4, PriorityOf("Size"));
+        Assert.Equal(["Body", "Size"], GroupNames());
+        Assert.Empty(BodyRetargetWriter.Outranking(RawGroups(), MensTop, "Size", "Small"));
+    }
+
+    [Fact]
+    [Trait("Plan", "AC-own-model-overwrite-4")]
+    public void A_new_group_save_is_what_penumbra_serves_over_an_author_model()
+    {
+        ThornLayout();
+        var saved = BodyRetargetWriter.Save(root, Group, "TBSE M", MensTop, [1, 2], "The Body SE", "Small", "M");
+        Assert.True(saved.Ok, saved.Message);
+        Assert.Equal(["Body", "Size", Group], GroupNames());
+        string refit = RefitFile(Group, "TBSE M")!;
+        var worn = Ticks(("Body", ["Everything"]), ("Size", ["Small"]), (Group, ["TBSE M"]));
+        Assert.Equal(refit, PenumbraPrecedence.Winner(root, MensTop, worn));
+        worn[Group] = [BodyRetargetWriter.OriginalOption];
+        Assert.Equal("body/c0101.mdl", PenumbraPrecedence.Winner(root, MensTop, worn));
+    }
+
+    [Fact]
+    [Trait("Plan", "AC-own-model-overwrite-4")]
+    public void Winner_follows_penumbra_s_order()
+    {
+        // Higher group priority wins; on a tie the later group.
+        Manifest(Files((MensTop, "default.mdl")),
+            GroupOf("A", "Single", 2, Option("a", files: Files((MensTop, "a.mdl")))),
+            GroupOf("B", "Single", 1, Option("b", files: Files((MensTop, "b.mdl")))),
+            GroupOf("C", "Single", 2, Option("c", files: Files((MensTop, "c.mdl")))));
+        Assert.Equal("c.mdl", PenumbraPrecedence.Winner(root, MensTop, Ticks(("A", ["a"]), ("B", ["b"]), ("C", ["c"]))));
+        Assert.Equal("a.mdl", PenumbraPrecedence.Winner(root, MensTop, Ticks(("A", ["a"]), ("B", ["b"]))));
+        Assert.Equal("default.mdl", PenumbraPrecedence.Winner(root, MensTop, Ticks()));
+
+        // In a multi-choice group the earlier option on a tie, the higher option priority first; files before swaps.
+        Manifest(null,
+            GroupOf("M", "Multi", 0, Option("x", files: Files((MensTop, "x.mdl"))), Option("y", files: Files((MensTop, "y.mdl"))),
+                                     Option("z", 5, swaps: Files((MensTop, "z-swap.mdl")))));
+        Assert.Equal("x.mdl", PenumbraPrecedence.Winner(root, MensTop, Ticks(("M", ["x", "y"]))));
+        Assert.Equal("z-swap.mdl", PenumbraPrecedence.Winner(root, MensTop, Ticks(("M", ["x", "z"]))));
+
+        // A combining group: the container numbered by the ticked bits.
+        Manifest(null, Combining("K", 0, 3, (5, MensTop, "five.mdl")));
+        Assert.Equal("five.mdl", PenumbraPrecedence.Winner(root, MensTop, Ticks(("K", ["o0", "o2"]))));
+        Assert.Null(PenumbraPrecedence.Winner(root, MensTop, Ticks(("K", ["o0"]))));
+    }
+
+    /// <summary>A combining group of <paramref name="options"/> options, every container empty but the one named.</summary>
+    private static System.Text.Json.Nodes.JsonObject Combining(string name, int priority, int options,
+                                                               (int Index, string Path, string File) at)
+    {
+        var g = GroupOf(name, "Combining", priority, Enumerable.Range(0, options).Select(i => Option($"o{i}")).ToArray());
+        g["Containers"] = new System.Text.Json.Nodes.JsonArray(Enumerable.Range(0, 1 << options).Select(i =>
+            (System.Text.Json.Nodes.JsonNode)new System.Text.Json.Nodes.JsonObject
+            {
+                ["Files"] = i == at.Index ? Files((at.Path, at.File)) : new System.Text.Json.Nodes.JsonObject(),
+            }).ToArray());
+        return g;
+    }
+
+    [Fact]
+    [Trait("Plan", "AC-own-model-overwrite-5")]
+    public void Outranking_names_a_higher_priority_group()
+    {
+        Manifest(null,
+            GroupOf("Size", "Single", 0, Option("Small", files: Files((WomensTop, "s.mdl"))), Option("Refit", files: Files((MensTop, "r.mdl")))),
+            GroupOf("Body", "Multi", 7, Option("Everything", files: Files((MensTop, "body/c0101.mdl")))));
+        Assert.Equal([new BodyRetargetWriter.Rival("Body", null)], BodyRetargetWriter.Outranking(RawGroups(), MensTop, "Size", "Small"));
+        Assert.Equal("body/c0101.mdl", PenumbraPrecedence.Winner(root, MensTop, Ticks(("Size", ["Refit"]), ("Body", ["Everything"]))));
+    }
+
+    [Fact]
+    [Trait("Plan", "EDGE-own-model-overwrite-5")]
+    public void Outranking_ignores_default_data()
+    {
+        Manifest(Files((MensTop, "body/c0101.mdl")),
+            GroupOf("Size", "Single", 0, Option("Small", files: Files((WomensTop, "s.mdl"))), Option("Refit", files: Files((MensTop, "r.mdl")))));
+        Assert.Empty(BodyRetargetWriter.Outranking(RawGroups(), MensTop, "Size", "Small"));
+        Assert.Equal("r.mdl", PenumbraPrecedence.Winner(root, MensTop, Ticks(("Size", ["Refit"]))));
+    }
+
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    [Trait("Plan", "EDGE-own-model-overwrite-6")]
+    public void Outranking_breaks_a_group_tie_by_later_position(bool rivalLater)
+    {
+        var size = GroupOf("Size", "Single", 3, Option("Small", files: Files((WomensTop, "s.mdl"))), Option("Refit", files: Files((MensTop, "r.mdl"))));
+        var body = GroupOf("Body", "Multi", 3, Option("Everything", files: Files((MensTop, "body/c0101.mdl"))));
+        if (rivalLater) Manifest(null, size, body); else Manifest(null, body, size);
+        var rivals = BodyRetargetWriter.Outranking(RawGroups(), MensTop, "Size", "Small");
+        string? served = PenumbraPrecedence.Winner(root, MensTop, Ticks(("Size", ["Refit"]), ("Body", ["Everything"])));
+        if (rivalLater)
+        {
+            Assert.Equal([new BodyRetargetWriter.Rival("Body", null)], rivals);
+            Assert.Equal("body/c0101.mdl", served);
+        }
+        else
+        {
+            Assert.Empty(rivals);
+            Assert.Equal("r.mdl", served);
+        }
+    }
+
+    [Fact]
+    [Trait("Plan", "EDGE-own-model-overwrite-7")]
+    public void Outranking_never_counts_a_single_destination_s_own_options()
+    {
+        Manifest(null, GroupOf("Size", "Single", 0, Option("Small", files: Files((WomensTop, "s.mdl"))),
+                                                    Option("Men", files: Files((MensTop, "m.mdl")))));
+        Assert.Empty(BodyRetargetWriter.Outranking(RawGroups(), MensTop, "Size", "Small"));
+    }
+
+    [Fact]
+    [Trait("Plan", "EDGE-own-model-overwrite-8")]
+    public void Outranking_is_empty_for_a_group_not_in_the_manifest()
+    {
+        ThornLayout();
+        Assert.Empty(BodyRetargetWriter.Outranking(RawGroups(), MensTop, "Nowhere", null));
+    }
+
+    [Fact]
+    [Trait("Plan", "EDGE-own-model-overwrite-9")]
+    public void Outranking_is_empty_without_a_manifest()
+    {
+        Assert.Empty(BodyRetargetWriter.Outranking(null, MensTop, "Size", null));
+        Assert.Null(PenumbraModMeta.TryReadRawGroups(Path.Combine(root, "no such mod")));
+    }
+
+    [Fact]
+    [Trait("Plan", "EDGE-own-model-overwrite-12")]
+    public void Undo_of_a_save_over_the_author_s_model_leaves_it_untouched()
+    {
+        ThornLayout();
+        BodyRetargetWriter.Save(root, "Size", MensTop, "The Body SE", "Small", [new BodyRetargetWriter.Refit("TBSE M", [1, 2], "M")],
+                                fromOption: "Small");
+        Assert.Equal(["Body", "Size"], GroupNames());
+        Assert.True(BodyRetargetWriter.Undo(root, "Size", "TBSE M").Ok);
+        Assert.Equal(["Body", "Size"], GroupNames());
+        Assert.Equal(["Small", "Large"], PenumbraModMeta.TryReadFileOptions(root, "Size")!.Select(o => o.Name));
+        Assert.Equal([9, 9, 9], File.ReadAllBytes(Path.Combine(root, "body", "c0101.mdl")));
+        Assert.Equal("body/c0101.mdl", PenumbraPrecedence.Winner(root, MensTop, Ticks(("Body", ["Everything"]), ("Size", ["Small"]))));
+    }
+
+    [Fact]
+    [Trait("Plan", "EDGE-own-model-overwrite-13")]
+    public void Outranking_reports_a_ticked_sibling_of_a_multi_destination()
+    {
+        // An outfit ticked in one "Items" list: the refit, appended with no priority, comes after every sibling at 0 or more.
+        System.Text.Json.Nodes.JsonObject[] Items() =>
+            [Option("Choker"), Option("Shirt", files: Files((WomensTop, "shirt.mdl"))),
+             Option("Undershirt", 0, Files((MensTop, "under.mdl"))), Option("Cape", -1, Files((MensTop, "cape.mdl")))];
+        Manifest(null, GroupOf("Items", "Multi", 0, Items()));
+        Assert.Equal([new BodyRetargetWriter.Rival("Items", "Undershirt")],
+                     BodyRetargetWriter.Outranking(RawGroups(), MensTop, "Items", "Shirt"));
+
+        // Saved: the refit's option appended last — and never its own rival when the panel asks again, or a save of the
+        // same size again replaces it.
+        Manifest(null, GroupOf("Items", "Multi", 0, [.. Items(), Option("TBSE M", files: Files((MensTop, "Body Retarget/refit.mdl")))]));
+        Assert.Equal([new BodyRetargetWriter.Rival("Items", "Undershirt")],
+                     BodyRetargetWriter.Outranking(RawGroups(), MensTop, "Items", "Shirt", ["TBSE M"]));
+
+        // Saved before, between the shirt and the undershirt: re-saved in place, it comes before the undershirt.
+        Manifest(null, GroupOf("Items", "Multi", 0, Option("Choker"), Option("Shirt", files: Files((WomensTop, "shirt.mdl"))),
+            Option("TBSE M", files: Files((MensTop, "Body Retarget/refit.mdl"))), Option("Undershirt", 0, Files((MensTop, "under.mdl")))));
+        Assert.Empty(BodyRetargetWriter.Outranking(RawGroups(), MensTop, "Items", "Shirt", ["TBSE M"]));
+        Assert.Equal("Body Retarget/refit.mdl",
+                     PenumbraPrecedence.Winner(root, MensTop, Ticks(("Items", ["Choker", "TBSE M", "Undershirt"]))));
+        // A sibling with a priority above the refit's 0 comes first wherever it stands, even after it.
+        Manifest(null, GroupOf("Items", "Multi", 0, Option("Shirt", files: Files((WomensTop, "shirt.mdl"))),
+            Option("TBSE M", files: Files((MensTop, "Body Retarget/refit.mdl"))), Option("Cape", 2, Files((MensTop, "cape.mdl")))));
+        Assert.Equal([new BodyRetargetWriter.Rival("Items", "Cape")],
+                     BodyRetargetWriter.Outranking(RawGroups(), MensTop, "Items", "Shirt", ["TBSE M"]));
+        Assert.Equal("cape.mdl", PenumbraPrecedence.Winner(root, MensTop, Ticks(("Items", ["TBSE M", "Cape"]))));
+
+        // Back to the refit appended last, for what is worn below.
+        Manifest(null, GroupOf("Items", "Multi", 0, [.. Items(), Option("TBSE M", files: Files((MensTop, "Body Retarget/refit.mdl")))]));
+        var ticked = RefitCore.SelectionFor(true, "TBSE M", ["Choker", "Shirt", "Undershirt", "Cape"], "Shirt");
+        Assert.Equal("under.mdl", PenumbraPrecedence.Winner(root, MensTop, Ticks(("Items", [.. ticked]))));
+        Assert.Equal("Body Retarget/refit.mdl",
+                     PenumbraPrecedence.Winner(root, MensTop, Ticks(("Items", [.. ticked.Where(o => o != "Undershirt")]))));
+    }
+
+    [Fact]
+    [Trait("Plan", "EDGE-own-model-overwrite-14")]
+    public void Outranking_takes_positions_from_the_raw_groups_array()
+    {
+        // A nameless group at 0: Size is at 1 and Body at 2 in the raw array, so Body is the later of the tie.
+        Manifest(null, GroupOf(null, "Single", 3, Option("x")),
+            GroupOf("Size", "Single", 3, Option("Small", files: Files((WomensTop, "s.mdl"))), Option("Refit", files: Files((MensTop, "r.mdl")))),
+            GroupOf("Body", "Multi", 3, Option("Everything", files: Files((MensTop, "body/c0101.mdl")))));
+        Assert.Equal([new BodyRetargetWriter.Rival("Body", null)], BodyRetargetWriter.Outranking(RawGroups(), MensTop, "Size", "Small"));
+        Assert.Equal("body/c0101.mdl", PenumbraPrecedence.Winner(root, MensTop, Ticks(("Size", ["Refit"]), ("Body", ["Everything"]))));
+    }
+
+    [Fact]
+    [Trait("Plan", "EDGE-own-model-overwrite-15")]
+    public void Outranking_counts_a_file_swap()
+    {
+        Manifest(null,
+            GroupOf("Size", "Single", 0, Option("Small", files: Files((WomensTop, "s.mdl"))), Option("Refit", files: Files((MensTop, "r.mdl")))),
+            GroupOf("Vanilla men", "Single", 2, Option("On", swaps: Files((MensTop, "chara/equipment/e0100/model/c0101e0100_top.mdl")))));
+        Assert.Equal([new BodyRetargetWriter.Rival("Vanilla men", null)], BodyRetargetWriter.Outranking(RawGroups(), MensTop, "Size", "Small"));
+        Assert.Equal("chara/equipment/e0100/model/c0101e0100_top.mdl",
+                     PenumbraPrecedence.Winner(root, MensTop, Ticks(("Size", ["Refit"]), ("Vanilla men", ["On"]))));
+    }
+
+    [Fact]
+    [Trait("Plan", "EDGE-own-model-overwrite-16")]
+    public void Outranking_counts_a_combining_container()
+    {
+        Manifest(null,
+            GroupOf("Size", "Single", 0, Option("Small", files: Files((WomensTop, "s.mdl"))), Option("Refit", files: Files((MensTop, "r.mdl")))),
+            Combining("Pieces", 2, 2, (1, MensTop, "body/c0101.mdl")));
+        Assert.Equal([new BodyRetargetWriter.Rival("Pieces", null)], BodyRetargetWriter.Outranking(RawGroups(), MensTop, "Size", "Small"));
+        Assert.Equal("body/c0101.mdl", PenumbraPrecedence.Winner(root, MensTop, Ticks(("Size", ["Refit"]), ("Pieces", ["o0"]))));
+        Assert.Equal("r.mdl", PenumbraPrecedence.Winner(root, MensTop, Ticks(("Size", ["Refit"]))));
     }
 
     /// <summary>

@@ -57,6 +57,7 @@ public class SkinlessTargetMeasureLocalTests(ITestOutputHelper output)
 
     [LocalDataTheory(Neolithe, LocalData.MusePack)]
     [MemberData(nameof(Pairs))]
+    [Trait("Speed", "Slow")]
     public void Neolithe_SFW_legs_onto_Muse_SFW_measure_within_the_thresholds(string neolithe, string muse)
     {
         var (built, refusal, m, _) = Measure(neolithe, muse);

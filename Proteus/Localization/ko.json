@@ -3615,6 +3615,14 @@
     "message": "그룹 \"{0}\"도 이 모델을 대체하지만, 새 그룹이 우선합니다.",
     "description": ""
   },
+  "Parts.Retarget.Clash.Outranked.Fmt": {
+    "message": "그룹 \"{0}\"도 이 모델을 대체하며 Penumbra에서 \"{1}\"보다 우선합니다. 따라서 그곳에 저장한 리핏은 \"{0}\"이(가) 켜져 있는 동안 보이지 않습니다. 새 그룹에 저장하세요.",
+    "description": "{0} is another group of the mod that replaces the same model; {1} is the group the refit is to be saved into."
+  },
+  "Parts.Retarget.Clash.OptionOutranked.Fmt": {
+    "message": "\"{1}\"의 옵션 \"{0}\"도 이 모델을 대체하며 그 그룹에서 리핏보다 먼저 적용됩니다. 따라서 \"{0}\"이(가) 체크되어 있는 동안 리핏이 보이지 않습니다. Penumbra에서 체크를 해제하거나 새 그룹에 저장하세요.",
+    "description": "{0} is another option of the multi-choice group {1} that replaces the same model."
+  },
   "Parts.Retarget.ClearBody": {
     "message": "몸 밖으로 천 밀어내기",
     "description": ""
@@ -3778,6 +3786,10 @@
   "Parts.Retarget.Lowered.Fmt": {
     "message": "{0} 모델로 {1} 모델을 만들어, 게임이 둘 사이를 휘는 방식 그대로 {1} 체형으로 휩니다. 저장하면 게임에 필요한 메타데이터가 추가됩니다.",
     "description": "{0} is the race of the model open, {1} the race picked below it."
+  },
+  "Parts.Retarget.Bake.ForeignSkin.Fmt": {
+    "message": "피부가 여전히 {0}(으)로 그려집니다. 새 바디가 쓰지 않는 피부 머티리얼이며, 찾을 수 없는 피부 머티리얼을 불러오면 게임이 충돌할 수 있습니다",
+    "description": "{0} is the skin material names, as the model writes them."
   },
   "Parts.Retarget.Bake.BendBack.Fmt": {
     "message": "리핏을 {0} 체형으로 되돌리지 못했습니다({1})",
@@ -4411,6 +4423,14 @@
     "message": "뒤집힌 면 {0}개, 체형 대응 {1}.",
     "description": "{0} is a count of folded (turned-over) faces; {1} a percentage such as \"97%\"."
   },
+  "Parts.Retarget.Race.ReplacesGame.Fmt": {
+    "message": "게임에는 이 아이템의 {0} 모델이 따로 있습니다. 저장하면 새 모드가 켜져 있는 동안, 게임의 {0} 모델을 입은 것으로 보이는 모든 캐릭터에서 이 리핏이 그 모델을 대신합니다. 게임 모델로 되돌리려면 그 모드에서 “Original”을 고르거나 모드를 끄세요.",
+    "description": "Warning under “Refit for” for the game's own gear. {0} is the race picked, such as \"Midlander M\". “Original” is the literal name of the option Proteus writes into the new mod; keep it in English."
+  },
+  "Parts.Retarget.Race.CharacterKeepsGame.Fmt": {
+    "message": "내 캐릭터는 {0}이고, 게임에는 이 아이템의 {0} 모델이 따로 있습니다. 이 리핏은 내 캐릭터에게는 보이지 않습니다.",
+    "description": "Warning for the game's own gear refitted for another race. {0} is the race of the character playing, such as \"Highlander M\"."
+  },
   "Parts.Retarget.Race.CrossSexHint.Fmt": {
     "message": "{0}용 버전을 만들려면 “리핏 대상 종족”에서 고르세요.",
     "description": "{0} is a race such as \"Midlander M\". “Refit for” is the dropdown's label (Parts.Retarget.Race.Label)."
@@ -4463,9 +4483,9 @@
     "message": "{0} (캐릭터가 입는 형태)",
     "description": "An entry of the Refit for list; {0} is a race such as \"Midlander F\": the race the logged-in character would get it as."
   },
-  "Parts.Retarget.Race.OwnModel.Fmt": {
-    "message": "이 모드에는 이미 전용 {0} 모델이 있습니다. 그 모델을 리핏하세요.",
-    "description": "{0} is a race such as \"Highlander M\" the mod already ships a model of."
+  "Parts.Retarget.Race.OwnModelReplaced.Fmt": {
+    "message": "이 모드에는 이미 {0}이(가) 입는 자체 모델이 있습니다. 이 모드에 저장한 {0}용 리핏은 켜져 있는 동안 그 모델을 대신합니다. 그 모델이 작가의 작업물이라면 그 모델을 열어 리핏하세요.",
+    "description": "{0} is a race such as \"Midlander M\" the mod already ships a model for (or one that race falls through to)."
   },
   "Parts.Retarget.Race.OpenModel.Fmt": {
     "message": "{0} 모델 열기",
@@ -5135,6 +5155,46 @@
     "message": "추가된 사이즈가 없습니다. 모드에 체크한 바디의 모든 사이즈가 이미 있습니다.",
     "description": ""
   },
+  "SizeSet.NothingAdded.SeeLeftOut": {
+    "message": "사이즈를 추가하지 않았습니다. 이유는 아래 \"만들지 않은 것\"에 있습니다.",
+    "description": ""
+  },
+  "SizeSet.NothingAdded.SeeLog": {
+    "message": "사이즈를 추가하지 않았습니다. 각 사이즈의 이유는 Dalamud 로그(/xllog)에 있습니다.",
+    "description": ""
+  },
+  "SizeSet.MadeOn": {
+    "message": "원본 바디",
+    "description": ""
+  },
+  "SizeSet.MadeOn.Auto": {
+    "message": "자동으로 찾기",
+    "description": ""
+  },
+  "SizeSet.MadeOn.Tip": {
+    "message": "이 모드의 상의와 하의를 만든 바디 모드입니다. Proteus가 스스로 알아볼 수 없는 사이즈에만 쓰입니다. 예를 들어 오래된 릴리스의 바디(Dawntrail 이전의 Bibo+ 등)로 만든 모드가 그렇습니다. Proteus가 알 수 없었다고 하지 않는 한 \"자동으로 찾기\"로 두세요.",
+    "description": ""
+  },
+  "SizeSet.UnreadableMadeOn.Fmt": {
+    "message": "{0}: 어떤 바디로 만들어졌는지 알 수 없어 사이즈를 만들지 않았습니다. 알고 있다면 \"원본 바디\"에서 고른 뒤 사이즈를 다시 추가하세요.",
+    "description": ""
+  },
+  "SizeSet.NotMadeOn.Fmt": {
+    "message": "{0}: 어느 사이즈도 {1}에 맞지 않아 사이즈를 만들지 않았습니다. \"원본 바디\"에서 고른 바디를 확인하세요.",
+    "description": ""
+  },
+  "SizeSet.MadeOnMissing.Fmt": {
+    "message": "{0}: \"원본 바디\"에서 고른 {1}이(가) 설치되어 있지 않아 사이즈를 만들지 않았습니다.",
+    "description": ""
+  },
+  "SizeSet.MadeOnUnclear.Fmt": {
+    "message": "{0}: {1}에서는 사이즈를 구별할 수 없어 사이즈를 만들지 않았습니다.",
+    "description": ""
+  },
+  "SizeSet.MadeOnOtherBody.Fmt": {
+    "message": "{0}: \"{1}\"은(는) \"원본 바디\"에서 고른 {3}이(가) 아니라 {2}용으로 읽혀, 그 사이즈를 {2}용으로 만들었습니다.",
+    "description": ""
+  },
   "SizeSet.LeftOut": {
     "message": "만들지 않은 것:",
     "description": ""
@@ -5227,9 +5287,13 @@
     "message": "이 모드에는 이미 제작자의 \"{0}\" 그룹이 있어 남성 버전이 만들어지지 않았습니다. Penumbra에서 그 그룹의 이름을 바꾼 뒤 사이즈를 다시 추가하세요.",
     "description": "{0} is the group's name."
   },
-  "SizeSet.EndsNotForMen": {
-    "message": "신발과 장갑에는 남성 버전이 없습니다. 성별을 넘어 맞추는 것은 몸통과 다리 파츠뿐입니다.",
-    "description": "Said once when a women's mod's men's versions are made and it has shoes or gloves."
+  "SizeSet.EndFromGameBody.Fmt": {
+    "message": "{0}, \"{1}\": 다리나 팔에 체형을 읽을 피부가 없어서 게임 기본 체형으로 만든 것으로 보고 맞췄습니다.",
+    "description": "Check in game: a women's shoe or glove made a men's with no skin to read a body off. {0} is the piece, {1} the men's option."
+  },
+  "SizeSet.EndClothGap.Fmt": {
+    "message": "{0}, \"{1}\": 천이 {3}의 다리나 팔에서 평균 약 {2:F0} mm 떨어져 있습니다. 읽어 낸 체형이 실제로 만든 체형과 다를 수 있습니다.",
+    "description": "Check in game: a women's shoe or glove made a men's whose cloth sits far off the leg or arm it was read on. {0} is the piece, {1} the men's option, {2} millimetres, {3} the body."
   },
   "SizeSet.OneVariant.Fmt": {
     "message": "{0}: 남성은 \"{1}\"에서 만든 한 가지 버전을 받습니다. 모드의 다른 변형은 여성 전용으로 남습니다.",

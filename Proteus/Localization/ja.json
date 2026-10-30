@@ -3615,6 +3615,14 @@
     "message": "グループ「{0}」もこのモデルを置き換えます。新しいグループが優先されます。",
     "description": ""
   },
+  "Parts.Retarget.Clash.Outranked.Fmt": {
+    "message": "グループ「{0}」もこのモデルを置き換え、Penumbra では「{1}」より優先されます。そこに保存したリフィットは「{0}」がオンの間は表示されません。新しいグループに保存してください。",
+    "description": "{0} is another group of the mod that replaces the same model; {1} is the group the refit is to be saved into."
+  },
+  "Parts.Retarget.Clash.OptionOutranked.Fmt": {
+    "message": "「{1}」のオプション「{0}」もこのモデルを置き換え、そのグループ内でリフィットより先に適用されます。「{0}」にチェックが入っている間、リフィットは表示されません。Penumbra でチェックを外すか、新しいグループに保存してください。",
+    "description": "{0} is another option of the multi-choice group {1} that replaces the same model."
+  },
   "Parts.Retarget.ClearBody": {
     "message": "体から布を押し出す",
     "description": ""
@@ -3778,6 +3786,10 @@
   "Parts.Retarget.Lowered.Fmt": {
     "message": "{0}モデルから{1}モデルを作り、ゲームが両者の間で曲げるのと同じ方法で{1}の体型に曲げます。保存するとゲームに必要なメタデータが追加されます。",
     "description": "{0} is the race of the model open, {1} the race picked below it."
+  },
+  "Parts.Retarget.Bake.ForeignSkin.Fmt": {
+    "message": "肌がまだ {0} で描かれます。新しいボディが使わない肌マテリアルで、見つからない肌マテリアルを読み込むとゲームがクラッシュすることがあります",
+    "description": "{0} is the skin material names, as the model writes them."
   },
   "Parts.Retarget.Bake.BendBack.Fmt": {
     "message": "リフィットを{0}の体型に戻せませんでした（{1}）",
@@ -4411,6 +4423,14 @@
     "message": "裏返った面 {0}、体の対応 {1}。",
     "description": "{0} is a count of folded (turned-over) faces; {1} a percentage such as \"97%\"."
   },
+  "Parts.Retarget.Race.ReplacesGame.Fmt": {
+    "message": "ゲームにはこのアイテムの{0}用モデルがあります。保存すると、新しいModがオンの間、ゲームの{0}用モデルを着ている人はすべて、このリフィットに置き換わって見えます。ゲームのモデルに戻すには、そのModで「Original」を選ぶか、Modをオフにしてください。",
+    "description": "Warning under “Refit for” for the game's own gear. {0} is the race picked, such as \"Midlander M\". “Original” is the literal name of the option Proteus writes into the new mod; keep it in English."
+  },
+  "Parts.Retarget.Race.CharacterKeepsGame.Fmt": {
+    "message": "あなたのキャラクターは{0}で、ゲームにはこのアイテムの{0}用モデルがあります。このリフィットはあなたのキャラクターには表示されません。",
+    "description": "Warning for the game's own gear refitted for another race. {0} is the race of the character playing, such as \"Highlander M\"."
+  },
   "Parts.Retarget.Race.CrossSexHint.Fmt": {
     "message": "{0}用のバージョンを作るには、「リフィット対象の種族」で選んでください。",
     "description": "{0} is a race such as \"Midlander M\". “Refit for” is the dropdown's label (Parts.Retarget.Race.Label)."
@@ -4463,9 +4483,9 @@
     "message": "{0}（キャラクターが着る形）",
     "description": "An entry of the Refit for list; {0} is a race such as \"Midlander F\": the race the logged-in character would get it as."
   },
-  "Parts.Retarget.Race.OwnModel.Fmt": {
-    "message": "この Mod にはすでに専用の{0}モデルがあります。そちらをリフィットしてください。",
-    "description": "{0} is a race such as \"Highlander M\" the mod already ships a model of."
+  "Parts.Retarget.Race.OwnModelReplaced.Fmt": {
+    "message": "この Mod には{0}が着る専用のモデルがすでにあります。この Mod に保存した{0}用のリフィットは、オンの間そのモデルの代わりになります。そのモデルが作者自身の作品なら、そちらを開いてリフィットしてください。",
+    "description": "{0} is a race such as \"Midlander M\" the mod already ships a model for (or one that race falls through to)."
   },
   "Parts.Retarget.Race.OpenModel.Fmt": {
     "message": "{0}モデルを開く",
@@ -5135,6 +5155,46 @@
     "message": "追加したサイズはありません。MODにはチェックしたボディの全サイズがすでにあります。",
     "description": ""
   },
+  "SizeSet.NothingAdded.SeeLeftOut": {
+    "message": "サイズは追加されませんでした。理由は下の「作成しなかったもの」にあります。",
+    "description": ""
+  },
+  "SizeSet.NothingAdded.SeeLog": {
+    "message": "サイズは追加されませんでした。各サイズの理由はDalamudのログ（/xllog）にあります。",
+    "description": ""
+  },
+  "SizeSet.MadeOn": {
+    "message": "元のボディ",
+    "description": ""
+  },
+  "SizeSet.MadeOn.Auto": {
+    "message": "自動で判別",
+    "description": ""
+  },
+  "SizeSet.MadeOn.Tip": {
+    "message": "このModの胴と脚が作られたボディMod。Proteusが自分で判別できないサイズにだけ使います。たとえば、古いリリースのボディ（Dawntrail以前のBibo+など）で作られたModです。Proteusが判別できなかったと表示しない限り、「自動で判別」のままにしてください。",
+    "description": ""
+  },
+  "SizeSet.UnreadableMadeOn.Fmt": {
+    "message": "{0}：どのボディ用に作られたか判別できなかったため、サイズを作りませんでした。わかる場合は「元のボディ」で選び、もう一度サイズを追加してください。",
+    "description": ""
+  },
+  "SizeSet.NotMadeOn.Fmt": {
+    "message": "{0}：どのサイズも{1}に合わないため、サイズを作りませんでした。「元のボディ」で選んだボディを確認してください。",
+    "description": ""
+  },
+  "SizeSet.MadeOnMissing.Fmt": {
+    "message": "{0}：「元のボディ」で選んだ{1}がインストールされていないため、サイズを作りませんでした。",
+    "description": ""
+  },
+  "SizeSet.MadeOnUnclear.Fmt": {
+    "message": "{0}：{1}ではサイズを見分けられないため、サイズを作りませんでした。",
+    "description": ""
+  },
+  "SizeSet.MadeOnOtherBody.Fmt": {
+    "message": "{0}：「{1}」は「元のボディ」で選んだ{3}ではなく{2}用と判別されたため、そのサイズは{2}用として作りました。",
+    "description": ""
+  },
   "SizeSet.LeftOut": {
     "message": "作成しなかったもの：",
     "description": ""
@@ -5227,9 +5287,13 @@
     "message": "このMODにはすでに作者の「{0}」というグループがあるため、男性版は作られませんでした。Penumbraでそのグループの名前を変えてから、もう一度サイズを追加してください。",
     "description": "{0} is the group's name."
   },
-  "SizeSet.EndsNotForMen": {
-    "message": "靴と手袋には男性版がありません。性別をまたいで調整されるのは胴と脚のパーツだけです。",
-    "description": "Said once when a women's mod's men's versions are made and it has shoes or gloves."
+  "SizeSet.EndFromGameBody.Fmt": {
+    "message": "{0}「{1}」：脚または腕に体を読み取れる肌がないため、ゲーム本来の体で作られたものとして調整しました。",
+    "description": "Check in game: a women's shoe or glove made a men's with no skin to read a body off. {0} is the piece, {1} the men's option."
+  },
+  "SizeSet.EndClothGap.Fmt": {
+    "message": "{0}「{1}」：布が{3}の脚または腕から平均で約{2:F0} mm離れています。読み取った体は、作られた体と違うかもしれません。",
+    "description": "Check in game: a women's shoe or glove made a men's whose cloth sits far off the leg or arm it was read on. {0} is the piece, {1} the men's option, {2} millimetres, {3} the body."
   },
   "SizeSet.OneVariant.Fmt": {
     "message": "{0}：男性版は「{1}」から作った1種類です。MODのほかのバリエーションは女性専用のままです。",

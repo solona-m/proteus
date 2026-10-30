@@ -32,8 +32,11 @@ namespace Proteus.Gui;
 /// Reads a game path out of the GAME'S own data, past whatever a mod would redirect it to. The game's body is read
 /// through it, which is the "made for" side of every refit of the game's own gear.
 /// </param>
+/// <param name="gameFileExists">Whether the GAME'S own data ships a file at a game path, past any mod — whether the game
+/// has its own model of the game's gear for a race (<see cref="OtherRaceRefit.Candidate.GameModelPath"/>).</param>
 internal sealed partial class BodyRetargetPanel(PenumbraBridge penumbra, UVRemapService uvRemap,
-                                        Func<string, byte[]?> readGameFile, Configuration config, IPluginLog log)
+                                        Func<string, byte[]?> readGameFile, Configuration config, IPluginLog log,
+                                        Func<string, bool> gameFileExists)
 {
     /// <summary>What the Studio tab lends this tool for the frame: the open model, and the things only it can do.</summary>
     /// <param name="Redirects">The open mod's redirects, already read by the tab. Used to spot a group of the author's
@@ -273,6 +276,7 @@ internal sealed partial class BodyRetargetPanel(PenumbraBridge penumbra, UVRemap
         endsUnreadable = false;
         studio = null;
         lastLayout = null;
+        gameHas.Clear();
     }
 
     /// <summary>The race the open garment is made for (<c>"0101"</c>), which every option list is filtered to.</summary>
@@ -547,6 +551,13 @@ internal sealed partial class BodyRetargetPanel(PenumbraBridge penumbra, UVRemap
 
         /// <summary>What the live preview shows of it, worked out once it lands.</summary>
         public OtherRaceRefit.PreviewNote Preview { get; set; }
+
+        /// <summary>Made from the game's own gear, not a mod's.</summary>
+        public bool IsVanilla { get; init; }
+
+        /// <summary>Across the sexes, the races besides the picked one that wear the save (<see cref="CrossSexRefit.FallThroughTo"/>),
+        /// worked out once it lands.</summary>
+        public IReadOnlyList<ushort> Wearers { get; set; } = [];
     }
 
     /// <summary>The last bake made, whether or not it applies to what is open now — see <see cref="active"/>.</summary>
@@ -610,7 +621,7 @@ internal sealed partial class BodyRetargetPanel(PenumbraBridge penumbra, UVRemap
         baking = false;
         active = null;
         refusedTo = 0;
-        ConsumeBake();
+        ConsumeBake(given);
 
         // Retried each frame while there is no character to read, which is the only time it answers null.
         if (wearerFor != given.ModelRel || wearer == null)
@@ -729,7 +740,7 @@ internal sealed partial class BodyRetargetPanel(PenumbraBridge penumbra, UVRemap
         });
     }
 
-    private void ConsumeBake()
+    private void ConsumeBake(in RetargetContext given)
     {
         if (bakeTask is not { IsCompleted: true } task) return;
         bakeTask = null;
@@ -743,7 +754,7 @@ internal sealed partial class BodyRetargetPanel(PenumbraBridge penumbra, UVRemap
         if (made != null)
         {
             baked = made;
-            if (made.Explicit) OnRaceBaked(made);
+            if (made.Explicit) OnRaceBaked(made, given.Redirects);
             log.Information("[Proteus] retarget: {0} {1} from c{2:D4} to c{3:D4}",
                             made.Route.Down ? "shaped" : made.Route.Lowered ? "lowered" : "baked",
                             made.SavePath, made.Route.Drawn, made.Route.To);
@@ -877,7 +888,7 @@ internal sealed partial class BodyRetargetPanel(PenumbraBridge penumbra, UVRemap
         using (ImRaii.PushColor(ImGuiCol.Text, ProteusStyle.Warn))
             ImGui.TextWrapped(string.Format(ps.RetargetNoBodiesForSexFmt, name, sex));
         // Its bodies are the other sex's: a version for them is made under "Refit for", when one is offered.
-        if (offered.FirstOrDefault(c => c.CrossSex && c.Blocked == OtherRaceRefit.Block.None) is { } other)
+        if (OtherRaceRefit.CrossSexHint(offered) is { } other)
             ImGui.TextWrapped(string.Format(ps.RetargetRaceCrossSexHintFmt, ModelRace.Describe($"{other.Race:D4}")));
     }
 
@@ -1491,10 +1502,9 @@ internal sealed partial class BodyRetargetPanel(PenumbraBridge penumbra, UVRemap
         var inputs = Inputs(ctx);
         bool refused = Chosen(ctx).Any(s => Targets(s).Any(t => refusals.ContainsKey(PairKey(s, t))));
         bool targetHasEnd = inputs.EndSlot != null && Onto?.For(inputs.EndSlot, race).Count > 0;
-        // A race picked that the mod has its own model of: the refit below would be of this model, under a pick that
-        // says otherwise, so none is made or saved until another race is picked or that model is opened.
-        bool pickBlocked = OtherRaceRefit.Blocked(ChosenRace(ctx), Offered(ctx));
-        bool ready = RetargetInputs.Ready(inputs, from, targetHasEnd, refused) && !pickBlocked;
+        // A race picked that the mod has its own model of is refitted all the same: the pick says so, with that model a
+        // click away (DrawRacePicker), and a refit saved into the mod takes its place only while it is on.
+        bool ready = RetargetInputs.Ready(inputs, from, targetHasEnd, refused);
 
         if (detectTask != null) ImGui.TextUnformatted(ps.RetargetChecking);
 
@@ -1529,7 +1539,7 @@ internal sealed partial class BodyRetargetPanel(PenumbraBridge penumbra, UVRemap
                 StartPlan(ctx);
 
         // A greyed-out button says why, or the user is left guessing which of several dropdowns is holding it.
-        if (!busy && !ready && !pickBlocked)
+        if (!busy && !ready)
         {
             string why = inputs.SkinOnly ? string.Format(ps.RetargetNeedFromFmt, SlotName(inputs.EndSlot!))
                        : !from.ContainsKey(primary) ? string.Format(ps.RetargetNeedFromFmt, SlotName(primary))
@@ -1588,7 +1598,7 @@ internal sealed partial class BodyRetargetPanel(PenumbraBridge penumbra, UVRemap
         ImGui.Spacing();
         DrawSaveTo(ctx);
 
-        using (ImRaii.Disabled(busy || pickBlocked || Destination().Length == 0))
+        using (ImRaii.Disabled(busy || Destination().Length == 0))
             if (ImGui.Button(all.Count > 1 ? string.Format(ps.RetargetSaveManyFmt, all.Count) : ps.RetargetSave,
                              FullWidth()))
                 StartSave(ctx);
@@ -1628,14 +1638,45 @@ internal sealed partial class BodyRetargetPanel(PenumbraBridge penumbra, UVRemap
             ImGui.InputText("##retargetGroup", ref groupName, 128);
         }
 
-        // Only a group of our own competes with the author's for the file. Added to the author's group, a size is one
-        // more choice beside the others, and there is nothing to outrank.
+        // A group of our own outranks every other for the file, and says which it competes with. Added to the author's
+        // group, a size keeps that group's place: for the drawn race one more choice beside the others, but a save for
+        // another race may land where another group of the author's — or another ticked option of a list — comes first.
+        // Saved into a mod of our own, the author's groups are not the destination's: nothing of theirs to ask about.
         string destination = Destination();
         if (saveTo == null || own.Contains(destination))
             foreach (string clash in BodyRetargetWriter.ClashingGroups(ctx.Redirects, SavePath(ctx), destination))
                 using (ImRaii.PushColor(ImGuiCol.Text, ProteusStyle.Warn))
                     ImGui.TextWrapped(string.Format(ps.RetargetClashFmt, clash));
+        else if (!toNewMod)
+        {
+            // The options this save writes are its own, whether new or already there from a save before.
+            var given = ctx;
+            var saving = (planned ?? []).Select(p => OptionName(given, p.To)).ToList();
+            foreach (var rival in BodyRetargetWriter.Outranking(RawGroups(ctx), SavePath(ctx), destination,
+                                                                BodyRetargetWriter.OptionOfFile(ctx.Redirects, ctx.ModelRel, destination),
+                                                                saving))
+                using (ImRaii.PushColor(ImGuiCol.Text, ProteusStyle.Warn))
+                    ImGui.TextWrapped(rival.Option == null
+                                          ? string.Format(ps.RetargetClashOutrankedFmt, rival.Group, destination)
+                                          : string.Format(ps.RetargetClashOptionOutrankedFmt, rival.Option, destination));
+        }
     }
+
+    /// <summary>The garment mod's raw groups (<see cref="PenumbraModMeta.TryReadRawGroups"/>), read again only when its
+    /// redirects are — never per frame. Null for the game's gear.</summary>
+    private IReadOnlyList<System.Text.Json.JsonElement>? RawGroups(in RetargetContext ctx)
+    {
+        if (ctx.ModRoot == null) return null;
+        if (!ReferenceEquals(rawGroupsFor, ctx.Redirects))
+        {
+            rawGroupsFor = ctx.Redirects;
+            rawGroups = PenumbraModMeta.TryReadRawGroups(ctx.ModRoot);
+        }
+        return rawGroups;
+    }
+
+    private IReadOnlyList<System.Text.Json.JsonElement>? rawGroups;
+    private object? rawGroupsFor;
 
     /// <summary>
     /// Which MOD the refit is written into, when the garment came out of one.

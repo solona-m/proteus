@@ -401,6 +401,7 @@ public class IslandBlurTests
     /// show up rather than hide behind a lucky schedule.
     /// </summary>
     [Fact]
+    [Trait("Speed", "Slow")]
     public void BlurWithinIslands_ManyIslands_IsDeterministicUnderParallelism()
     {
         const int w = 256, h = 256, radius = 5;

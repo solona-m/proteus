@@ -50,13 +50,17 @@ internal static partial class SizeSetRefit
     }
 
     /// <summary>
-    /// The women's chest and legs pieces that get men's versions: Midlander women's (<see cref="CrossSexRefit.Supported"/>),
-    /// and only those the author made no men's model of — that one is sized onto the men's bodies as it is.
+    /// The women's pieces that get men's versions: Midlander women's chest and legs (<see cref="CrossSexRefit.Supported"/>)
+    /// and shoes and gloves (<see cref="CrossSexRefit.EndsCross"/>), and only those the author made no men's model of —
+    /// that one is sized onto the men's bodies as it is. A men's model that is only the game's own is no piece at all
+    /// (<see cref="PiecesOf"/>), so it stops nothing.
     /// </summary>
     internal static IReadOnlyList<Piece> AcrossPieces(IReadOnlyList<Piece> pieces)
     {
         var paths = pieces.Select(p => p.GamePath).ToHashSet(StringComparer.OrdinalIgnoreCase);
-        return pieces.Where(p => p.Race == "0201" && CrossSexRefit.Supported(CrossSexRefit.Women, CrossSexRefit.Men, p.Slot)
+        return pieces.Where(p => p.Race == "0201"
+                                 && (CrossSexRefit.Supported(CrossSexRefit.Women, CrossSexRefit.Men, p.Slot)
+                                     || CrossSexRefit.EndsCross(CrossSexRefit.Women, CrossSexRefit.Men, p.Slot))
                                  && !paths.Contains(RacialModelBake.WithRace(p.GamePath, CrossSexRefit.Men)))
                      .ToList();
     }
@@ -343,13 +347,13 @@ internal static partial class SizeSetRefit
             foreach (var r in alike)
             {
                 var (p90, mean) = BodyDistance(r.BentPath, targetPath, ProbesOf);
-                eligible.Add((r, new SourceDistance(p90, mean, 0f, 0f, r.Candidate.Order, r.Candidate.OwnFit)));
+                eligible.Add((r, r.Candidate.Distance(p90, mean, 0f, 0f)));
             }
-            var misfits = Misfits(eligible);
+            if (eligible.Count == 0) return null;
+            var (chosen, step, gap, misfits) = ChooseWithMisfits(eligible);
             for (int i = 0; i < eligible.Count; i++)
                 said.Add($"{eligible[i].Item1.Candidate.Name}: {Describe(eligible[i].Item2, misfits.Contains(i))}");
-            if (eligible.Count == 0) return null;
-            var (chosen, step, gap) = Choose(eligible);
+            if (LoneMadeOn(eligible, chosen) is { } lone) said.Add(lone);
             return (chosen, $"{option} from {chosen.Candidate.Name} (by {step}, {gap * 1000f:F1} mm ahead; {string.Join("; ", said)})");
         }
 
@@ -364,14 +368,6 @@ internal static partial class SizeSetRefit
         var mensKeys = MensKeys(request.Keys);
         if (request.Across is not { } inputs || mensKeys.Count == 0) return 0;
         var across = AcrossPieces(pieces);
-        if (request.Ends && pieces.Any(p => p.Race == "0201" && IsEnd(p.Slot)))
-        {
-            notes.Add(Strings.SizeSet.EndsNotForMen);
-            foreach (var end in pieces.Where(p => p.Race == "0201" && IsEnd(p.Slot)))
-                foreach (string key in mensKeys)
-                    runLog.Add(end, SizeStatus.Skipped, Codes.EndsNotForMen, Strings.SizeSet.EndsNotForMen, body: key,
-                               men: true);
-        }
         if (across.Count == 0) return 0;
 
         // Every piece and men's body, when none is made at all.
@@ -380,10 +376,16 @@ internal static partial class SizeSetRefit
             foreach (var piece in across)
                 foreach (string key in mensKeys)
                     runLog.Add(piece, SizeStatus.Skipped, code, reason, group,
-                               AcrossTarget(key, piece.Slot) is { } at ? SupportedBodies.OptionName(at.Body, at.Size) : null,
+                               (IsEnd(piece.Slot) ? AcrossEndTarget(key, piece.Slot) : AcrossTarget(key, piece.Slot)) is { } at
+                                   ? SupportedBodies.OptionName(at.Body, at.Size) : null,
                                key, men: true, gamePath: RacialModelBake.WithRace(piece.GamePath, CrossSexRefit.Men));
         }
-        string groupName = MensGroupName(request.ModRoot, across);
+        // Every women's piece the group may hold, shoes and gloves too whether or not they are made this time: a group an
+        // earlier run put men's shoes in is still ours when they are left out now.
+        var mayHold = request.Ends || request.ReadGameFile == null
+            ? across
+            : AcrossPieces(PiecesOf(request.ModRoot, request.ReadGameFile, includeEnds: true));
+        string groupName = MensGroupName(request.ModRoot, mayHold);
         if (BodyRetargetWriter.IsAuthorGroup(request.ModRoot, groupName))
         {
             string said = string.Format(Strings.SizeSet.MensGroupTakenFmt, groupName);
@@ -409,14 +411,18 @@ internal static partial class SizeSetRefit
 
         int made = 0;
         var readings = new Dictionary<string, AutoRefitDecisions.Pick?>(StringComparer.Ordinal);
+        var madeOnReadings = new Dictionary<string, SourceReading>(StringComparer.Ordinal);
         var leadSources = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
         foreach (var piece in across)
         {
             ct.ThrowIfCancellationRequested();
             try
             {
-                made += RunAcrossPiece(request, inputs, piece, groupName, mensKeys, uvRemap, log, progress, runLog,
-                                       readings, leadSources, ct);
+                made += IsEnd(piece.Slot)
+                    ? RunAcrossEnd(request, inputs, piece, groupName, mensKeys, uvRemap, log, progress, runLog,
+                                   leadSources, ct)
+                    : RunAcrossPiece(request, inputs, piece, groupName, mensKeys, uvRemap, log, progress, runLog,
+                                     readings, madeOnReadings, leadSources, ct);
             }
             catch (OperationCanceledException)
             {
@@ -437,6 +443,7 @@ internal static partial class SizeSetRefit
                                       IReadOnlyList<string> mensKeys, UVRemapService uvRemap, IPluginLog log,
                                       Action<string> progress, RunLog runLog,
                                       Dictionary<string, AutoRefitDecisions.Pick?> readings,
+                                      Dictionary<string, SourceReading> madeOnReadings,
                                       Dictionary<string, string> leadSources, CancellationToken ct)
     {
         var notes = runLog.Notes;
@@ -455,11 +462,12 @@ internal static partial class SizeSetRefit
         var clock = Stopwatch.StartNew();
         using var reading = BodySizeMatch.BeginReading();
         string preferred = mods[0].Dir;
-        var sources = new Sources(request, piece, preferred, mods, readings, Note, ct);
+        var sources = new Sources(request, piece, preferred, mods, readings, madeOnReadings, Note, ct);
         if (sources.Primary == null)
         {
-            runLog.Note(string.Format(Strings.SizeSet.UnreadableFmt, piece.Label), piece, SizeStatus.Skipped,
-                        Codes.Unreadable, groupName, men: true, gamePath: save);
+            var (unread, code) = UnreadableNote(piece.Label, request.MadeOn, sources.MadeOnName, sources.MadeOnMissing,
+                                                sources.Fits);
+            runLog.Note(unread, piece, SizeStatus.Skipped, code, groupName, men: true, gamePath: save);
             return 0;
         }
         var redirects = PenumbraModMeta.ReadAllRedirects(root);
@@ -539,12 +547,13 @@ internal static partial class SizeSetRefit
             var job = CrossSexRefitJob.Run(new CrossSexRefitJob.Inputs(
                 c.Bytes, piece.GamePath, CrossSexRefit.Men, chosen.MadeFor, null, men,
                 o => RefitCore.Normal(o.Rel) == RefitCore.Normal(rel), chosen.Wearer, uvRemap, log,
-                CarryPiercings: request.Piercings));
+                CarryPiercings: request.Piercings, Nude: NudeFor(men.For(piece.Slot), size, log)));
             var made = job.Sizes.FirstOrDefault();
             var (ok, refusal, said) = Judge(piece.Label, option, job, made, chosen.SkeletonFrom);
             log.Information("[Proteus] size set: {0} for men: {1} in {2} ms (source in {3} ms, {4} bodies bent): {5}",
                             piece.Label, option, clock.ElapsedMilliseconds - started, started, mens.Bent,
-                            ok ? $"{made!.Folds} folded, {made.Landed?.VertexCoverage:P1} matched" : refusal ?? "");
+                            ok ? $"{made!.Folds} folded, {made.Landed?.VertexCoverage:P1} matched" + NudeSaid(made, targetPath)
+                               : refusal ?? "");
             if (!ok)
             {
                 notes.Add(refusal!);
@@ -555,7 +564,8 @@ internal static partial class SizeSetRefit
             ct.ThrowIfCancellationRequested();
             string fromLabel = RefitCore.LabelFrom(c.Entry.Name, [c.Pick!.Option.Label]);
             if (!group.Save(target.Dir, fromLabel,
-                            [new BodyRetargetWriter.Refit(option, made!.Saved!.Model, onto.Label, Materials: made.Saved.Materials)],
+                            [new BodyRetargetWriter.Refit(option, made!.Saved!.Model, made.Target.Label,
+                                                          Materials: made.Saved.Materials)],
                             sourceOption: null, notes, manipulations: MensManipulations(job.Route, job.Est, save)))
             {
                 Out(SizeStatus.Failed, Codes.SaveFailed, notes[^1], target.Dir);
@@ -567,14 +577,43 @@ internal static partial class SizeSetRefit
                 c.Option);
             saved++;
             warnings.AddRange(said);
+            if (c.OtherBody)
+                warnings.Add(string.Format(Strings.SizeSet.MadeOnOtherBodyFmt, piece.Label, c.Name, c.Entry.Name,
+                                           sources.MadeOnName ?? request.MadeOn));
             // The first piece of an outfit to make an option leads it; legs following the chest never do.
             if (!piece.FollowsChest && c.Option != null) leadSources.TryAdd(leadKey, c.Option);
-            if (OtherVariants(piece, c.File, c.Pick, preferred, readings) is { Count: > 0 })
+            if (OtherVariants(piece, c.File, c.Pick, preferred, readings, madeOnReadings, request.MadeOn) is { Count: > 0 })
                 warnings.Add(string.Format(Strings.SizeSet.OneVariantFmt, piece.Label, c.Name));
         }
         group.RestoreDefault();
         return saved;
     }
+
+    /// <summary>
+    /// For a men's size, its body's nude smallclothes among <paramref name="men"/> (<see cref="SupportedBodies.Size.NudeRel"/>),
+    /// tried by the job when the SFW ones match too little; null for a size that has none. A body installed without them
+    /// gives nothing, and says so when asked.
+    /// </summary>
+    internal static Func<BodyOption, BodyOption?>? NudeFor(IReadOnlyList<BodyOption> men, SupportedBodies.Size size,
+                                                            IPluginLog log)
+    {
+        if (size.NudeRel is not { } rel) return null;
+        return asked =>
+        {
+            var nude = OptionByFile(men, rel);
+            if (nude == null)
+                log.Information("[Proteus] size set: {0} has no nude smallclothes legs at {1}; its SFW ones only",
+                                asked.Label, rel);
+            return nude;
+        };
+    }
+
+    /// <summary>What the log says of a men's version fitted to its body's nude smallclothes instead: onto which, what the
+    /// SFW ones matched, and how many of the nude ones' own skin triangles the garment shows. "" for any other.</summary>
+    private static string NudeSaid(CrossSexRefitJob.Size made, string askedPath)
+        => made.Asked == null ? ""
+         : $" on {made.Target.Label} (the SFW legs matched {made.AskedLanded?.VertexCoverage:P1}; " +
+           $"{CrossSexRefit.NudeSkinShown(made.Saved?.Model, askedPath)?.ToString() ?? "unknown"} of its own skin triangles shown)";
 
     /// <summary>
     /// What a men's version saved at <paramref name="save"/> carries: the EQDP entry that makes the game load a model
@@ -596,14 +635,28 @@ internal static partial class SizeSetRefit
     /// one size (Sheer Elegance's "SFW" and "NSFW"), where a men's body has one size: men get the one it was cut from.
     /// </summary>
     /// <param name="readings">What each of the author's files was read as this run (see <see cref="ReadingKey"/>).</param>
+    /// <param name="madeOnReadings">What the ones those could not place were read as on the <paramref name="madeOn"/>
+    /// body.</param>
     internal static List<string> OtherVariants(Piece piece, string chosenFile, AutoRefitDecisions.Pick chosen,
-                                               string preferred, IReadOnlyDictionary<string, AutoRefitDecisions.Pick?> readings)
-        => piece.Options.Where(o => o.Option != null && RefitCore.Normal(o.File) != RefitCore.Normal(chosenFile)
-                                    && readings.TryGetValue(ReadingKey(o.File, piece.Slot, piece.Race, preferred), out var p)
-                                    && p != null
-                                    && string.Equals(p.Dir, chosen.Dir, StringComparison.OrdinalIgnoreCase)
-                                    && RefitCore.Normal(p.Option.Rel) == RefitCore.Normal(chosen.Option.Rel))
-                        .Select(o => o.Option!).ToList();
+                                               string preferred, IReadOnlyDictionary<string, AutoRefitDecisions.Pick?> readings,
+                                               IReadOnlyDictionary<string, SourceReading>? madeOnReadings = null,
+                                               string? madeOn = null)
+    {
+        AutoRefitDecisions.Pick? ReadAs(string file)
+        {
+            readings.TryGetValue(ReadingKey(file, piece.Slot, piece.Race, preferred), out var p);
+            if (p != null && AutoRefitDecisions.Proceed(p.Confidence)) return p;
+            return madeOn != null && madeOnReadings != null
+                   && madeOnReadings.TryGetValue(ReadingKey(file, piece.Slot, piece.Race, preferred, madeOn), out var r)
+                ? r.Pick
+                : p;
+        }
+        return piece.Options.Where(o => o.Option != null && RefitCore.Normal(o.File) != RefitCore.Normal(chosenFile)
+                                        && ReadAs(o.File) is { } p
+                                        && string.Equals(p.Dir, chosen.Dir, StringComparison.OrdinalIgnoreCase)
+                                        && RefitCore.Normal(p.Option.Rel) == RefitCore.Normal(chosen.Option.Rel))
+                            .Select(o => o.Option!).ToList();
+    }
 
     private static byte[]? ReadModFile(string root, string rel)
     {

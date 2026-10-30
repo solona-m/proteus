@@ -213,6 +213,95 @@ internal static class BodyRetargetWriter
         return clashes;
     }
 
+    /// <summary>What may keep a refit saved into an author's group from showing: another group (<see cref="Option"/>
+    /// null), or another option of the destination itself.</summary>
+    internal readonly record struct Rival(string Group, string? Option);
+
+    /// <summary>
+    /// What in the mod comes before a refit saved into the author's group <paramref name="destination"/> for
+    /// <paramref name="gamePath"/>, by Penumbra's own order — each of which, while it is on, is what the game draws there
+    /// instead. Read only.
+    /// <para/>
+    /// Penumbra gives a path to the first container that claims it (<c>SubMod.AddContainerTo</c>: files, then file
+    /// swaps, each with <c>TryAdd</c>), walking the groups by priority, highest first, a tie going to the LATER one in the
+    /// array (<c>Mod.GetData</c>), and the default files last. Inside a multi-choice group, the ticked options by priority,
+    /// a tie going to the EARLIER one (<c>MultiModGroup.AddData</c>) — and the refit's option, appended with none, is 0
+    /// and last. A combining group gives one container of several (<c>CombiningModGroup.AddData</c>), so any of them
+    /// counts. Conditions and metadata entries are not looked at.
+    /// <para/>
+    /// A new group, or one of ours, is given a priority above every group when saved, and is not asked about here: <see cref="ClashingGroups(IEnumerable{PenumbraModMeta.Redirect}, string, string)"/>
+    /// says what it outranks.
+    /// </summary>
+    /// <param name="groups">The mod's raw <c>Groups</c> array (<see cref="PenumbraModMeta.TryReadRawGroups"/>); null:
+    /// unknown, and nothing is claimed.</param>
+    /// <param name="cutFrom">The destination's option the refit is cut from, which the save unticks; null for none.</param>
+    /// <param name="saving">The options the save writes: a size saved before is the refit itself, never its rival.</param>
+    internal static List<Rival> Outranking(IReadOnlyList<JsonElement>? groups, string gamePath, string destination,
+                                           string? cutFrom, IReadOnlyCollection<string>? saving = null)
+    {
+        var rivals = new List<Rival>();
+        if (groups == null) return rivals;
+        int at = -1;
+        for (int i = 0; i < groups.Count && at < 0; i++)
+            if (string.Equals(NameOf(groups[i]), destination, StringComparison.OrdinalIgnoreCase)) at = i;
+        if (at < 0) return rivals;
+        int priority = PriorityOf(groups[at]);
+
+        for (int i = 0; i < groups.Count; i++)
+        {
+            if (i == at) continue;
+            var g = groups[i];
+            if (string.Equals(TypeOf(g), "Imc", StringComparison.OrdinalIgnoreCase)) continue;
+            int p = PriorityOf(g);
+            if ((p > priority || (p == priority && i > at)) && Containers(g).Any(c => Claims(c, gamePath)))
+                rivals.Add(new Rival(NameOf(g) ?? "", null));
+        }
+
+        // One choice of a single-choice group is on at a time, and the refit's is the one the save ticks. In a list the
+        // refit's option is 0, and appended last — or, saved before, replaced where it stands, and a sibling after it at
+        // 0 comes after it.
+        if (string.Equals(TypeOf(groups[at]), "Multi", StringComparison.OrdinalIgnoreCase)
+            && groups[at].TryGetProperty("Options", out var options) && options.ValueKind == JsonValueKind.Array)
+        {
+            var list = options.EnumerateArray().ToList();
+            bool Saving(string? name) => name != null && saving?.Contains(name, StringComparer.OrdinalIgnoreCase) == true;
+            int refitAt = list.FindIndex(o => Saving(NameOf(o)));
+            if (refitAt < 0) refitAt = list.Count;
+            for (int i = 0; i < list.Count; i++)
+            {
+                string? name = NameOf(list[i]);
+                if (name == null || Saving(name) || string.Equals(name, cutFrom, StringComparison.OrdinalIgnoreCase)) continue;
+                int p = PriorityOf(list[i]);
+                if ((p > 0 || (p == 0 && i < refitAt)) && Claims(list[i], gamePath)) rivals.Add(new Rival(destination, name));
+            }
+        }
+        return rivals;
+
+        static string? NameOf(JsonElement e)
+            => e.TryGetProperty("Name", out var n) && n.ValueKind == JsonValueKind.String ? n.GetString() : null;
+        static string? TypeOf(JsonElement e)
+            => e.TryGetProperty("Type", out var t) && t.ValueKind == JsonValueKind.String ? t.GetString() : null;
+        static int PriorityOf(JsonElement e)
+            => e.TryGetProperty("Priority", out var p) && p.ValueKind == JsonValueKind.Number && p.TryGetInt32(out int v)
+                ? v : 0;
+        static IEnumerable<JsonElement> Containers(JsonElement g)
+        {
+            foreach (string list in new[] { "Options", "Containers" })
+                if (g.TryGetProperty(list, out var items) && items.ValueKind == JsonValueKind.Array)
+                    foreach (var c in items.EnumerateArray())
+                        yield return c;
+        }
+        static bool Claims(JsonElement container, string path)
+        {
+            foreach (string map in new[] { "Files", "FileSwaps" })
+                if (container.TryGetProperty(map, out var m) && m.ValueKind == JsonValueKind.Object
+                    && m.EnumerateObject().Any(f => string.Equals(f.Name.Replace('\\', '/'), path,
+                                                                  StringComparison.OrdinalIgnoreCase)))
+                    return true;
+            return false;
+        }
+    }
+
     /// <summary>One refitted size to save: the option it becomes, its model, and the size it was refitted onto.</summary>
     /// <param name="Layers">The other piece of its outfit it was kept outside (see <see cref="Entry.Layers"/>); null
     /// for none.</param>
@@ -569,27 +658,30 @@ internal static class BodyRetargetWriter
                 }
 
                 // Rebuilt from what is there, so saving more sizes grows the group instead of replacing it, and
-                // saving the same size twice replaces just that option.
-                bool Saving(string name) => refits.Any(r => string.Equals(r.Option, name,
-                                                                         StringComparison.OrdinalIgnoreCase));
-                var kept = options.Where(o => !Saving(o.Name)
-                                           && !string.Equals(o.Name, OriginalOption, StringComparison.OrdinalIgnoreCase))
-                                  .ToList();
-
+                // saving the same size twice replaces just that option — where it stands. Penumbra keeps a group's
+                // choice by option POSITION: an option saved again moved to the end, and a player wearing "TBSE" of
+                // "Original, TBSE, TBSE-X" was switched to TBSE-X when the legs were saved into TBSE after the top.
                 var final = new List<PenumbraModMeta.FileOption>
                 {
                     new(OriginalOption, new Dictionary<string, string>()),
                 };
-                final.AddRange(kept);
-
+                foreach (var o in options)
+                {
+                    if (string.Equals(o.Name, OriginalOption, StringComparison.OrdinalIgnoreCase)) continue;
+                    int again = written.FindIndex(w => string.Equals(w.Refit.Option, o.Name, StringComparison.OrdinalIgnoreCase));
+                    final.Add(again >= 0 ? OptionFor(written[again].Refit, written[again].Rel) : o);
+                }
                 foreach (var (refit, rel) in written)
-                    final.Add(OptionFor(refit, rel));
+                    if (!options.Any(o => string.Equals(o.Name, refit.Option, StringComparison.OrdinalIgnoreCase)))
+                        final.Add(OptionFor(refit, rel));
+                // Selected by default: the size saved last, as before.
+                int chosen = final.FindIndex(o => string.Equals(o.Name, written[^1].Refit.Option, StringComparison.OrdinalIgnoreCase));
 
                 // A priority above every other group, which is what decides a game path two groups both claim. The
                 // POSITION is left alone: see Position.
                 int priority = Math.Max(PenumbraModMeta.MaxGroupPriority(modRoot) + 1, 1);
                 PenumbraModMeta.WriteFileOptionGroup(modRoot, Position(modRoot, groupName), groupName, priority, final,
-                                                     final.Count - 1);
+                                                     chosen);
                 LogNotes();
                 DropStale();
 

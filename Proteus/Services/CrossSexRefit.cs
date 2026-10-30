@@ -18,6 +18,9 @@ namespace Proteus.Services;
 /// bibo or the game's, a man's TBSE or the game's (<see cref="LayoutsPair"/>). The auto refit never crosses the sexes:
 /// it writes into mods with nobody looking. The size set does, women's to TBSE and TBSE-X only, when the author ticks
 /// those bodies "for men" (see <c>SizeSetRefit.CrossSex.cs</c>), into a group of their own.
+/// <para/>
+/// The game's own gear crosses the sexes in fewer cells (<see cref="OfferableForGame"/>): women's legs made men's, from
+/// the game's women's body, measured on the game's own garments (CrossSexRefitVanillaLocalTests).
 /// </summary>
 internal static class CrossSexRefit
 {
@@ -25,7 +28,8 @@ internal static class CrossSexRefit
 
     /// <summary>
     /// The directions and slots that ship: each was measured against the quality gates on a real garment
-    /// (CrossSexRefitLocalTests). A cell left out is not offered anywhere.
+    /// (CrossSexRefitLocalTests). A cell left out is not offered anywhere; the game's own gear is offered fewer still
+    /// (<see cref="GameCells"/>).
     /// <para/>
     /// A women's top made a men's turns more of its cloth over than any other — flattening a bust onto a pec, Sheer
     /// Elegance's turned 115 of its 10,436 cloth faces, against 8 between women's bodies (measured 2026-10-20) — and is
@@ -48,6 +52,26 @@ internal static class CrossSexRefit
     /// <summary>Whether the other-sex race <paramref name="race"/> is offered for a garment drawn as <paramref name="drawn"/>.</summary>
     internal static bool Offerable(ushort drawn, ushort race, string? slot)
         => CrossesSex(drawn, race) && Supported(drawn, race, slot);
+
+    /// <summary>
+    /// Whether a shoe or glove drawn as <paramref name="drawn"/> is made a <paramref name="race"/> one by the size set: a
+    /// women's made a men's, its leg or arm refitted through the body maps (<see cref="CrossSexRefitJob.RunEnd"/>). Not
+    /// in <see cref="Cells"/>: Studio's "Refit for", the CLI's --for-race and the automatic refit do not offer them.
+    /// </summary>
+    internal static bool EndsCross(ushort drawn, ushort race, string? slot)
+        => drawn == Women && race == Men && slot?.ToLowerInvariant() is "_sho" or "_glv";
+
+    /// <summary>
+    /// The cells the game's own gear is offered in: women's legs made men's, alone. Each cell is measured on real
+    /// garments before it ships, and the game's tops and its men's garments made women's have not been — its garments are
+    /// weighted against the game's bodies, not a body mod's, and fit the other way round.
+    /// </summary>
+    private static readonly HashSet<(ushort From, ushort To, string Slot)> GameCells = [(Women, Men, "_dwn")];
+
+    /// <summary>Whether the other-sex race <paramref name="race"/> is offered for the game's own garment drawn as
+    /// <paramref name="drawn"/>: <see cref="Offerable"/>, in the narrower <see cref="GameCells"/>.</summary>
+    internal static bool OfferableForGame(ushort drawn, ushort race, string? slot)
+        => Offerable(drawn, race, slot) && GameCells.Contains((drawn, race, slot!.ToLowerInvariant()));
 
     /// <summary>Women's→men's: the picked race is one the drawn race falls through to (c0201 → c0101).</summary>
     internal static bool Below(ushort drawn, ushort race)
@@ -94,21 +118,45 @@ internal static class CrossSexRefit
     /// and which stops every chain through it. A c0101 save made from a c0201 model is worn by the men and by the
     /// Lalafell women (c1201 → c1101 → c0101), not by the women who fall through to c0201.
     /// </summary>
-    internal static IReadOnlyList<ushort> FallThroughTo(ushort saved, ushort drawn)
+    /// <param name="hasOwn">Whether a race has a model of its own of the item (<see cref="OwnModels"/>): a race that has
+    /// one — or passes one on its way down — draws that, not the save. Asked of each race and those between it and
+    /// <paramref name="saved"/>, never of <paramref name="saved"/> itself: the save is the model there. Null: none
+    /// has.</param>
+    internal static IReadOnlyList<ushort> FallThroughTo(ushort saved, ushort drawn, Func<ushort, bool>? hasOwn = null)
     {
         var races = new List<ushort>();
         for (int n = 1; n <= ModelRace.Names.Length * 2; n++)
         {
             ushort code = (ushort)(n * 100 + 1);
-            if (code == saved || code == drawn) continue;
+            if (code == saved || code == drawn || hasOwn?.Invoke(code) == true) continue;
             for (int cur = ModelRace.Fallback(n), guard = 0; cur != 0 && guard < 8; cur = ModelRace.Fallback(cur), guard++)
             {
                 int at = cur * 100 + 1;
                 if (at == drawn) break;
                 if (at == saved) { races.Add(code); break; }
+                if (hasOwn?.Invoke((ushort)at) == true) break;
             }
         }
         return races;
+    }
+
+    /// <summary>
+    /// Which races have a model of their own of the garment drawn at <paramref name="drawnPath"/>, for
+    /// <see cref="FallThroughTo"/>: one the garment's mod publishes at that race's path — a refit saved there earlier as
+    /// much as the author's, since either is what the race draws — or one the game ships there. A mod's garment sits on a
+    /// game item, so a race the game has a model of draws that one just as it would the mod's.
+    /// </summary>
+    /// <param name="redirects">The garment mod's redirects; null for the game's own gear.</param>
+    /// <param name="gameHas">Whether the game's own data ships a file at a game path; null: none asked.</param>
+    internal static Func<ushort, bool> OwnModels(string drawnPath, IEnumerable<PenumbraModMeta.Redirect>? redirects,
+                                                 Func<string, bool>? gameHas)
+    {
+        var published = (redirects ?? []).Select(r => r.GamePath).ToHashSet(StringComparer.OrdinalIgnoreCase);
+        return race =>
+        {
+            string path = RacialModelBake.WithRace(drawnPath, race);
+            return published.Contains(path) || gameHas?.Invoke(path) == true;
+        };
     }
 
     /// <summary>
@@ -153,6 +201,52 @@ internal static class CrossSexRefit
     internal static bool CoverageAllowed(double coverage) => coverage >= MinCoverage;
 
     internal const double MinCoverage = 0.9;
+
+    /// <summary>
+    /// Whether a men's legs refit is fitted to the body's nude smallclothes instead of the SFW ones asked for: only when the
+    /// SFW legs match too little of the women's body (<see cref="CoverageAllowed(double)"/>) and the nude ones enough. A
+    /// women's body made nude carries crotch skin the SFW legs have no place for — they draw underwear there — and the
+    /// count of it outweighs the rest: LavaBod+ 2.2's legs match 89% of TBSE's SFW legs, 99.6% of its Gen A. Legs that
+    /// match the SFW ones enough keep them, so nothing saved before changes.
+    /// </summary>
+    internal static bool TakesNude(UvAtlasCorrespondence.Stats? asked, UvAtlasCorrespondence.Stats? nude)
+        => asked is { } a && !CoverageAllowed(a.VertexCoverage) && nude is { } n && CoverageAllowed(n.VertexCoverage);
+
+    /// <summary>
+    /// How many of a men's version's skin triangles are the nude smallclothes' own — further than half a millimetre from
+    /// the SFW legs at <paramref name="sfwPath"/> anywhere — so the log can say how much nude skin a garment fitted to them
+    /// shows where its cloth does not hide it. Null when either model cannot be read, so "unknown" is never said as none.
+    /// </summary>
+    internal static int? NudeSkinShown(byte[]? saved, string sfwPath)
+    {
+        try
+        {
+            if (saved == null || ModelPartReader.Read(saved) is not { } model
+                || ModelPartReader.Read(System.IO.File.ReadAllBytes(sfwPath)) is not { } sfw)
+                return null;
+            var surface = new BodySurface(sfw, BodySurface.CellFor(0.01f));
+            bool Off(int v)
+                => !surface.Nearest(new System.Numerics.Vector3(model.Positions[v * 3], model.Positions[v * 3 + 1],
+                                                                model.Positions[v * 3 + 2]), NudeSkinReach, out _);
+            int shown = 0;
+            foreach (var part in model.Parts)
+            {
+                if (part.Island >= 0 || !SecondSkinWriter.IsBodySkinMaterial(part.Material)) continue;
+                for (int t = 0; t + 2 < part.Triangles.Length; t += 3)
+                    if (Off(part.Triangles[t]) || Off(part.Triangles[t + 1]) || Off(part.Triangles[t + 2])) shown++;
+            }
+            return shown;
+        }
+        catch (Exception e) when (e is System.IO.IOException or System.IO.InvalidDataException or UnauthorizedAccessException
+                                       or InvalidOperationException or ArgumentException)
+        {
+            return null;
+        }
+    }
+
+    /// <summary>How far a skin vertex may lie from the SFW legs and still be theirs: TBSE's SFW skin lies on its Gen A
+    /// skin to the micrometre (measured), so only the crotch the SFW legs lack is further.</summary>
+    private const float NudeSkinReach = 0.0005f;
 
     internal enum FoldLine { None, Report, CrossSex }
 

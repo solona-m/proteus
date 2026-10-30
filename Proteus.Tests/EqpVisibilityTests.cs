@@ -89,6 +89,7 @@ public class EqpVisibilityTests
     /// The real table, with Sirius's override: legs hidden, hands and feet still drawn (the shoes render in game).
     /// </summary>
     [LocalDataFact(LocalData.GameData)]
+    [Trait("Speed", "Slow")]
     public void Sirius_over_the_real_table_hides_only_the_legs()
     {
         var data = new Lumina.GameData(LocalData.Path(LocalData.GameData));

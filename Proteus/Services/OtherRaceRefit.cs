@@ -22,16 +22,6 @@ namespace Proteus.Services;
 /// </summary>
 internal static partial class OtherRaceRefit
 {
-    /// <summary>Why a race the body mod has bodies of is not baked for.</summary>
-    internal enum Block
-    {
-        None,
-
-        /// <summary>The mod already has its own model for that race (or, above the drawn race, for one between the two):
-        /// that one is the model to refit, and baking over it would replace the author's work.</summary>
-        OwnModel,
-    }
-
     /// <summary>
     /// The race picked in "Refit for", and the model it was picked for: another model opened starts from none. Never
     /// remembered past that — the next garment's races are its own question.
@@ -43,12 +33,17 @@ internal static partial class OtherRaceRefit
 
     /// <summary>One race offered beside the drawn one.</summary>
     /// <param name="Race">Its code, as the game numbers it (301 for c0301).</param>
-    /// <param name="OwnModelPath">With <see cref="Block.OwnModel"/>, the game path of the author's model.</param>
+    /// <param name="OwnModelPath">The game path of a model the mod already has of its own that the race wears — its own,
+    /// or, above the drawn race, one between the two — or null. Never a reason not to refit: the user cannot be told
+    /// from here whether it is the author's work or a copy of the game's, and a refit saved into the mod takes its place
+    /// only while it is on. Said, with that model a click away.</param>
     /// <param name="Below">A race the drawn one falls through to (Midlander for a Highlander model), not one that falls
     /// through to it: the garment is bent down into it, and kept there (see <see cref="RacialModelBake.Route.Lowered"/>).</param>
     /// <param name="CrossSex">The race is of the other sex (see <see cref="CrossSexRefit"/>).</param>
-    internal sealed record Candidate(ushort Race, Block Blocked, string? OwnModelPath = null, bool Below = false,
-                                     bool CrossSex = false);
+    /// <param name="GameModelPath">For the game's own gear, the game path of the game's own model of the race, which a
+    /// save takes the place of while its mod is on; null otherwise.</param>
+    internal sealed record Candidate(ushort Race, string? OwnModelPath = null, bool Below = false,
+                                     bool CrossSex = false, string? GameModelPath = null);
 
     /// <summary>
     /// The races to offer for a garment drawn at <paramref name="gamePath"/>: each of its sex that the refit-onto body
@@ -58,18 +53,22 @@ internal static partial class OtherRaceRefit
     /// draws now, and nothing else. Below it — a race the drawn one falls through to, Midlander for a Highlander-only
     /// mod — the model made for it is what that race draws, and so is every race of its sex without a model of its own.
     /// <para/>
-    /// Never a race on another line (Elezen from Highlander), and never the game's own gear, whose racial models work
-    /// differently. The other sex only where <see cref="CrossSexRefit.Offerable"/> says so: Midlander M and F, for chest
-    /// and legs garments.
+    /// Never a race on another line (Elezen from Highlander). The other sex only where <see cref="CrossSexRefit.Offerable"/>
+    /// says so: Midlander M and F, for chest and legs garments. The game's own gear, whose racial models work differently,
+    /// only across the sexes and only where <see cref="CrossSexRefit.OfferableForGame"/> says so, with the game's own
+    /// model of the race named in <see cref="Candidate.GameModelPath"/>: it is not the author's, so it never blocks.
     /// </summary>
     /// <param name="redirects">The garment mod's redirects, to find a model the author already made for a race.</param>
     /// <param name="ownRecord">The garment mod's refit record: a model this tool saved is not the author's.</param>
+    /// <param name="gameHas">For the game's own gear: whether the game's own data ships a file at a game path — never a
+    /// path as a collection resolves it, which would find a refit saved there. Null: none named.</param>
     internal static IReadOnlyList<Candidate> Offered(string gamePath, BodySizeCatalog? target,
                                                      IEnumerable<PenumbraModMeta.Redirect> redirects,
-                                                     BodyRetargetWriter.Record? ownRecord, bool isVanilla)
+                                                     BodyRetargetWriter.Record? ownRecord, bool isVanilla,
+                                                     Func<string, bool>? gameHas = null)
     {
         ushort drawn = ModelSkinReader.RaceOf(gamePath);
-        if (isVanilla || drawn == 0 || target == null || BodySizeCatalog.SlotOf(gamePath) is not { } slot) return [];
+        if (drawn == 0 || target == null || BodySizeCatalog.SlotOf(gamePath) is not { } slot) return [];
 
         var authored = redirects as IReadOnlyCollection<PenumbraModMeta.Redirect> ?? redirects.ToList();
         var result = new List<Candidate>();
@@ -78,10 +77,18 @@ internal static partial class OtherRaceRefit
             if (!ushort.TryParse(code, out ushort race) || race % 100 != 1 || race == drawn) continue;
             bool cross = BodySizeCatalog.IsMaleRace(code) != BodySizeCatalog.IsMaleRace($"{drawn:D4}");
             if (cross && !CrossSexRefit.Offerable(drawn, race, slot)) continue;
+            if (isVanilla && !(cross && CrossSexRefit.OfferableForGame(drawn, race, slot))) continue;
             var line = cross ? [] : RacialModelBake.SameSexLine(race).ToList();
             bool below = cross ? CrossSexRefit.Below(drawn, race) : !line.Contains(drawn);
             if (!cross && below && !RacialModelBake.SameSexLine(drawn).Contains(race)) continue;
             if (!target.For(slot).Any(o => BodySizeCatalog.RaceOf(o.GamePath) == code)) continue;
+
+            if (isVanilla)
+            {
+                string mine = RacialModelBake.WithRace(gamePath, race);
+                result.Add(new Candidate(race, null, below, cross, gameHas?.Invoke(mine) == true ? mine : null));
+                continue;
+            }
 
             // Above: the race itself, then every race it falls through to before the drawn one — a model the author made
             // for any of them is what that race draws now. Below: the race's own alone. A race between keeps drawing
@@ -90,8 +97,7 @@ internal static partial class OtherRaceRefit
             IEnumerable<ushort> asked = below || cross ? [race] : line.TakeWhile(r => r != drawn).Prepend(race);
             string? own = asked.Select(r => RacialModelBake.WithRace(gamePath, r))
                                .FirstOrDefault(p => BodyRetargetWriter.AuthorProvides(authored, ownRecord, p));
-            result.Add(own != null ? new Candidate(race, Block.OwnModel, own, below, cross)
-                                   : new Candidate(race, Block.None, null, below, cross));
+            result.Add(new Candidate(race, own, below, cross));
         }
         return result;
     }
@@ -203,8 +209,8 @@ internal static partial class OtherRaceRefit
     /// <summary>
     /// The route the garment takes: the one the wearer's race decides (<paramref name="automatic"/>) until a race is
     /// picked, a bake up into the picked race — or down into it, for a race below — once one is; or none, refitted as
-    /// drawn, when the drawn race itself is picked. A pick no longer offered (another body mod chosen since) or blocked
-    /// falls back to the automatic route.
+    /// drawn, when the drawn race itself is picked. A pick no longer offered (another body mod chosen since) falls back
+    /// to the automatic route.
     /// <para/>
     /// The drawn race picked keeps a down route the character's race decides: that is how the model is refitted for her
     /// "as it is" when the body mod has no bodies of her race, and refitting it as drawn would find none to refit onto.
@@ -215,7 +221,7 @@ internal static partial class OtherRaceRefit
     {
         if (chosen == 0) return automatic;
         if (chosen == drawn) return automatic.Down ? automatic : RacialModelBake.Route.None;
-        return offered.FirstOrDefault(c => c.Race == chosen) is { Blocked: Block.None } c
+        return offered.FirstOrDefault(c => c.Race == chosen) is { } c
             ? new RacialModelBake.Route(drawn, chosen, Down: false, Lowered: c.Below) { ByAlias = c.CrossSex }
             : automatic;
     }
@@ -225,11 +231,35 @@ internal static partial class OtherRaceRefit
     /// against bent bodies — rather than the automatic route, even where the two reach the same race.
     /// </summary>
     internal static bool InForce(ushort chosen, ushort drawn, IReadOnlyList<Candidate> offered)
-        => chosen != 0 && chosen != drawn && offered.Any(c => c.Race == chosen && c.Blocked == Block.None);
+        => chosen != 0 && chosen != drawn && offered.Any(c => c.Race == chosen);
 
-    /// <summary>The picked race is one the mod has its own model of: nothing may be refitted or saved under the pick.</summary>
-    internal static bool Blocked(ushort chosen, IReadOnlyList<Candidate> offered)
-        => chosen != 0 && offered.Any(c => c.Race == chosen && c.Blocked != Block.None);
+    /// <summary>
+    /// The picked race's candidate when the mod already has a model of its own that race wears
+    /// (<see cref="Candidate.OwnModelPath"/>) — said under the pick, never refused; null otherwise.
+    /// </summary>
+    internal static Candidate? OwnModelOf(ushort chosen, IReadOnlyList<Candidate> offered)
+        => chosen == 0 ? null : offered.FirstOrDefault(c => c.Race == chosen && c.OwnModelPath != null);
+
+    /// <summary>The race of the other sex the no-bodies warning points at under "Refit for", or null for none.</summary>
+    internal static Candidate? CrossSexHint(IReadOnlyList<Candidate> offered)
+        => offered.FirstOrDefault(c => c.CrossSex);
+
+    /// <summary>
+    /// The picked race's candidate when the game ships its own model of it — the game's gear, whose save takes that
+    /// model's place while its mod is on, said before anything is saved; null otherwise.
+    /// </summary>
+    internal static Candidate? ReplacesGame(ushort chosen, IReadOnlyList<Candidate> offered)
+        => chosen == 0 ? null
+         : offered.FirstOrDefault(c => c.Race == chosen && c.GameModelPath != null);
+
+    /// <summary>
+    /// Whether the character playing will not see a save for <paramref name="route"/>'s race: one of that race's sex, not
+    /// that race, and not among the races that wear it (<see cref="CrossSexRefit.FallThroughTo"/>) — a man whose race has
+    /// the game's own model of the item.
+    /// </summary>
+    internal static bool MissesCharacter(ushort characterRace, RacialModelBake.Route route, IReadOnlyList<ushort> wearers)
+        => characterRace != 0 && route.To != 0 && CrossSexRefit.IsMale(characterRace) == CrossSexRefit.IsMale(route.To)
+           && characterRace != route.To && !wearers.Contains(characterRace);
 
     /// <summary>One entry of the "Refit for" list.</summary>
     /// <param name="Race">What picking it chooses; 0 for the automatic route.</param>

@@ -158,6 +158,7 @@ public class ClothCrossingsTests
 
     [LocalDataFact(LocalData.GameData, LocalData.Mods + ":Neolithe [ALL IN ONE]")]
     [Trait("Plan", "EDGE-coatee-strap-slit-14")]
+    [Trait("Speed", "Slow")]
     public void Grid_walk_matches_brute_force_on_the_Coatee()
     {
         // The game's Witch's Coatee as it ships, and a ray into the body from every torso vertex of Neolithe's Almond XS.

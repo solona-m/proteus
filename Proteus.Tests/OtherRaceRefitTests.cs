@@ -52,7 +52,7 @@ public class OtherRaceRefitTests
         var offered = Offered(Shirt, target);
         var only = Assert.Single(offered);
         Assert.Equal(301, only.Race);
-        Assert.Equal(OtherRaceRefit.Block.None, only.Blocked);
+        Assert.Null(only.OwnModelPath);
 
         var automatic = wearer == 0 ? RacialModelBake.Route.None
             : RefitCore.Route(Shirt, (ushort)wearer, c => RefitCore.RacesOf(target).Contains($"{c:D4}"),
@@ -152,17 +152,48 @@ public class OtherRaceRefitTests
         Assert.Contains(forHer, c => c.Race == 401);
     }
 
+    /// <summary>
+    /// The rule this test was written for (AC-refit-other-race-6, "pointed at, not baked") was changed on purpose by
+    /// own-model-overwrite: the mod's own model is said, and the pick is baked all the same.
+    /// </summary>
     [Fact]
     [Trait("Plan", "AC-refit-other-race-6")]
-    public void A_race_the_mod_already_has_a_model_of_is_pointed_at_not_baked()
+    [Trait("Plan", "AC-own-model-overwrite-2")]
+    public void A_race_the_mod_already_has_a_model_of_is_warned_and_baked()
     {
         var redirects = new[] { Model(Shirt, "shirt/c0101e6091_top.mdl"), Model(HighlanderShirt, "shirt/c0301e6091_top.mdl") };
         var offered = Offered(Shirt, TbseX(), redirects);
         var own = Assert.Single(offered);
-        Assert.Equal(OtherRaceRefit.Block.OwnModel, own.Blocked);
         Assert.Equal(HighlanderShirt, own.OwnModelPath);
-        // Picked anyway, it bakes nothing: the route stays as it was.
-        Assert.Equal(RacialModelBake.Route.None, OtherRaceRefit.Resolve(RacialModelBake.Route.None, 301, 101, offered));
+        Assert.Equal(Up301, OtherRaceRefit.Resolve(RacialModelBake.Route.None, 301, 101, offered));
+    }
+
+    [Fact]
+    [Trait("Plan", "AC-own-model-overwrite-1")]
+    public void Nothing_greys_out_preview_or_save_for_a_race_the_mod_has_a_model_of()
+    {
+        const System.Reflection.BindingFlags any = System.Reflection.BindingFlags.Static | System.Reflection.BindingFlags.Public
+                                                 | System.Reflection.BindingFlags.NonPublic;
+        Assert.Null(typeof(OtherRaceRefit).GetMethod("Blocked", any));
+        Assert.Null(typeof(OtherRaceRefit).GetNestedType("Block", any));
+        Assert.DoesNotContain("pickBlocked", CrossSexRefitTests.Source("Proteus/Gui/BodyRetargetPanel.cs"));
+    }
+
+    [Fact]
+    [Trait("Plan", "AC-own-model-overwrite-3")]
+    public void OwnModelOf_names_the_picked_race_s_author_model()
+    {
+        var own = Offered(Shirt, TbseX(), [Model(Shirt, "s/mid.mdl"), Model(HighlanderShirt, "s/high.mdl")]);
+        Assert.Equal(HighlanderShirt, OtherRaceRefit.OwnModelOf(301, own)?.OwnModelPath);
+        Assert.Null(OtherRaceRefit.OwnModelOf(0, own));
+        Assert.Null(OtherRaceRefit.OwnModelOf(101, own));
+        Assert.Null(OtherRaceRefit.OwnModelOf(301, Offered(Shirt, TbseX())));
+
+        string said = string.Format(Proteus.Localization.Strings.Parts.RetargetRaceOwnModelReplacedFmt, "Midlander M");
+        Assert.Equal(2, said.Split("Midlander M").Length - 1);
+        Assert.Equal("This mod already has a model of its own that Midlander M wears. A refit for Midlander M saved into "
+                   + "this mod takes its place while it is on. If that model is the author's own work, open it and refit "
+                   + "it instead.", said);
     }
 
     [Theory]
@@ -195,27 +226,26 @@ public class OtherRaceRefitTests
     // ── edge cases ──────────────────────────────────────────────────────────
 
     /// <summary>
-    /// A pick is in force only for an offered race the mod has no model of. Picked anyway where the mod has its own,
-    /// nothing may be refitted under it — even where the character's own route reaches that race.
+    /// A pick is in force for every offered race, the mod's own model of it or not (own-model-overwrite changed this on
+    /// purpose: it was in force only without one) — and never for none, or for the drawn race.
     /// </summary>
     [Fact]
     [Trait("Plan", "AC-refit-other-race-6")]
     [Trait("Plan", "EDGE-refit-other-race-13")]
-    public void A_pick_is_in_force_only_for_an_offered_race_without_the_mod_s_own_model()
+    [Trait("Plan", "AC-own-model-overwrite-2")]
+    public void A_pick_is_in_force_for_every_offered_race()
     {
         var free = Offered(Shirt, TbseX());
         Assert.True(OtherRaceRefit.InForce(301, 101, free));
-        Assert.False(OtherRaceRefit.Blocked(301, free));
         Assert.False(OtherRaceRefit.InForce(0, 101, free));
         Assert.False(OtherRaceRefit.InForce(101, 101, free));   // the drawn race: as drawn, no bake
 
         var own = Offered(Shirt, TbseX(), [Model(Shirt, "s/mid.mdl"), Model(HighlanderShirt, "s/high.mdl")]);
-        Assert.False(OtherRaceRefit.InForce(301, 101, own));
-        Assert.True(OtherRaceRefit.Blocked(301, own));
-        // A Highlander man playing reaches c0301 by himself; the pick still is not in force, and blocks.
+        Assert.True(OtherRaceRefit.InForce(301, 101, own));
+        Assert.False(OtherRaceRefit.InForce(0, 101, own));
+        // A Highlander man playing reaches c0301 by himself; the pick gives the same route.
         var his = new RacialModelBake.Route(101, 301, Down: false);
         Assert.Equal(his, OtherRaceRefit.Resolve(his, 301, 101, own));
-        Assert.False(OtherRaceRefit.InForce(301, 101, own));
     }
 
     /// <summary>
@@ -402,7 +432,8 @@ public class OtherRaceRefitTests
     [Fact]
     [Trait("Plan", "EDGE-refit-other-race-4")]
     [Trait("Plan", "EDGE-refit-other-race-8")]
-    public void No_row_where_no_other_race_has_a_body_nor_for_the_game_s_gear()
+    [Trait("Plan", "AC-vanilla-cross-sex-legs-6")]
+    public void No_row_where_no_other_race_has_a_body_nor_for_the_game_s_gear() // [AC-vanilla-cross-sex-legs-6]
     {
         Assert.Empty(Offered("chara/equipment/e6091/model/c0101e6091_dwn.mdl", TbseX()));
         Assert.Empty(OtherRaceRefit.Offered(Shirt, TbseX(), OnlyMidlander, null, isVanilla: true));
@@ -436,7 +467,7 @@ public class OtherRaceRefitTests
         var target = TbseX(Body("0201", "_top", "F"));
         var offered = Offered(HighlanderShirt, target, OnlyHighlander);
         var only = Assert.Single(offered);   // never Midlander F
-        Assert.Equal((101, OtherRaceRefit.Block.None, true), (only.Race, only.Blocked, only.Below));
+        Assert.Equal((101, (string?)null, true), (only.Race, only.OwnModelPath, only.Below));
 
         var races = RefitCore.RacesOf(target);
         var automatic = wearer == 0 ? RacialModelBake.Route.None
@@ -483,21 +514,25 @@ public class OtherRaceRefitTests
         Assert.Contains("Midlander M", made);
     }
 
+    /// <summary>
+    /// The rule this test was written for (AC-refit-race-down-5, the author's Midlander model blocks) was changed on
+    /// purpose by own-model-overwrite: it is said, and the lowered pick is in force.
+    /// </summary>
     [Fact]
     [Trait("Plan", "AC-refit-race-down-5")]
     [Trait("Plan", "EDGE-refit-race-down-5")]
-    public void A_midlander_model_the_author_made_blocks_and_ours_does_not()
+    [Trait("Plan", "EDGE-own-model-overwrite-3")]
+    public void A_midlander_model_the_author_made_is_warned_and_ours_is_not()
     {
         var authors = new[] { Model(HighlanderShirt, "s/c0301.mdl"), Model(Shirt, "s/c0101.mdl") };
         var own = Assert.Single(Offered(HighlanderShirt, TbseX(), authors));
-        Assert.Equal(OtherRaceRefit.Block.OwnModel, own.Blocked);
         Assert.Equal(Shirt, own.OwnModelPath);
-        Assert.True(OtherRaceRefit.Blocked(101, [own]));
-        Assert.Equal(RacialModelBake.Route.None, OtherRaceRefit.Resolve(RacialModelBake.Route.None, 101, 301, [own]));
+        Assert.Equal(Lowered101, OtherRaceRefit.Resolve(RacialModelBake.Route.None, 101, 301, [own]));
+        Assert.True(OtherRaceRefit.InForce(101, 301, [own]));
 
         var ours = new BodyRetargetWriter.Record { Options = [new BodyRetargetWriter.Entry { File = "Body Retarget/m.mdl" }] };
         var saved = new[] { Model(HighlanderShirt, "s/c0301.mdl"), Model(Shirt, "Body Retarget/m.mdl") };
-        Assert.Equal(OtherRaceRefit.Block.None, Assert.Single(Offered(HighlanderShirt, TbseX(), saved, ours)).Blocked);
+        Assert.Null(Assert.Single(Offered(HighlanderShirt, TbseX(), saved, ours)).OwnModelPath);
     }
 
     [Theory]
@@ -555,15 +590,17 @@ public class OtherRaceRefitTests
 
     [Fact]
     [Trait("Plan", "EDGE-refit-race-down-6")]
+    [Trait("Plan", "EDGE-own-model-overwrite-2")]
     public void A_model_between_the_drawn_race_and_the_pick_does_not_block_it()
     {
         var target = TbseX(Body("0901", "_top", "M Roegadyn"), Body("1501", "_top", "M Hrothgar"));
         const string hrothgar = "chara/equipment/e6091/model/c1501e6091_top.mdl";
         const string roegadyn = "chara/equipment/e6091/model/c0901e6091_top.mdl";
         var offered = Offered(hrothgar, target, [Model(hrothgar, "h.mdl"), Model(roegadyn, "r.mdl")]);
-        Assert.Equal(OtherRaceRefit.Block.None, offered.Single(c => c.Race == 101).Blocked);
-        var roe = offered.Single(c => c.Race == 901);
-        Assert.Equal((OtherRaceRefit.Block.OwnModel, roegadyn), (roe.Blocked, roe.OwnModelPath));
+        Assert.Null(offered.Single(c => c.Race == 101).OwnModelPath);
+        Assert.True(OtherRaceRefit.InForce(101, 1501, offered));
+        Assert.Equal(roegadyn, offered.Single(c => c.Race == 901).OwnModelPath);
+        Assert.True(OtherRaceRefit.InForce(901, 1501, offered));
     }
 
     [Fact]
@@ -591,7 +628,8 @@ public class OtherRaceRefitTests
 
     [Fact]
     [Trait("Plan", "EDGE-refit-race-down-14")]
-    public void No_row_below_for_the_game_s_gear()
+    [Trait("Plan", "AC-vanilla-cross-sex-legs-6")]
+    public void No_row_below_for_the_game_s_gear() // [AC-vanilla-cross-sex-legs-6]
         => Assert.Empty(OtherRaceRefit.Offered(HighlanderShirt, TbseX(), OnlyHighlander, null, isVanilla: true));
 
     [Fact]
@@ -626,11 +664,14 @@ public class OtherRaceRefitTests
 
     [Fact]
     [Trait("Plan", "EDGE-refit-other-race-7")]
+    [Trait("Plan", "EDGE-own-model-overwrite-1")]
     public void A_refit_this_tool_saved_for_the_race_is_not_the_author_s()
     {
         var ours = new BodyRetargetWriter.Record { Options = [new BodyRetargetWriter.Entry { File = "Body Retarget/a.mdl" }] };
         var redirects = new[] { Model(Shirt, "shirt/c0101e6091_top.mdl"), Model(HighlanderShirt, "Body Retarget/a.mdl") };
-        Assert.Equal(OtherRaceRefit.Block.None, Assert.Single(Offered(Shirt, TbseX(), redirects, ours)).Blocked);
+        var offered = Offered(Shirt, TbseX(), redirects, ours);
+        Assert.Null(Assert.Single(offered).OwnModelPath);
+        Assert.Null(OtherRaceRefit.OwnModelOf(301, offered));
     }
 
     [Fact]
@@ -645,15 +686,66 @@ public class OtherRaceRefitTests
 
     [Fact]
     [Trait("Plan", "EDGE-refit-other-race-10")]
-    public void A_race_between_the_pick_and_the_drawn_one_the_author_made_is_pointed_at()
+    [Trait("Plan", "EDGE-own-model-overwrite-2")]
+    public void A_race_between_the_pick_and_the_drawn_one_the_author_made_is_warned_not_blocked()
     {
         // Hrothgar men fall through to Roegadyn men before Midlanders: the author's Roegadyn model is what they draw.
+        // EDGE-refit-other-race-10 pointed at it and refused; own-model-overwrite changed that on purpose.
         var target = TbseX(Body("1501", "_top", "M Hrothgar"));
         const string roegadyn = "chara/equipment/e6091/model/c0901e6091_top.mdl";
         var redirects = new[] { Model(Shirt, "s/c0101.mdl"), Model(roegadyn, "s/c0901.mdl") };
-        var hrothgar = Offered(Shirt, target, redirects).Single(c => c.Race == 1501);
-        Assert.Equal(OtherRaceRefit.Block.OwnModel, hrothgar.Blocked);
-        Assert.Equal(roegadyn, hrothgar.OwnModelPath);
+        var offered = Offered(Shirt, target, redirects);
+        Assert.Equal(roegadyn, offered.Single(c => c.Race == 1501).OwnModelPath);
+        Assert.True(OtherRaceRefit.InForce(1501, 101, offered));
+        Assert.Equal(new RacialModelBake.Route(101, 1501, false),
+                     OtherRaceRefit.Resolve(RacialModelBake.Route.None, 1501, 101, offered));
+    }
+
+    [Fact]
+    [Trait("Plan", "EDGE-own-model-overwrite-4")]
+    public void Game_gear_never_has_an_own_model()
+    {
+        const string womans = "chara/equipment/e0258/model/c0201e0258_dwn.mdl";
+        var offered = OtherRaceRefit.Offered(womans, TbseX(), [], null, isVanilla: true, gameHas: _ => true);
+        Assert.NotEmpty(offered);
+        Assert.All(offered, c => Assert.Null(c.OwnModelPath));
+        Assert.All(offered, c => Assert.Null(OtherRaceRefit.OwnModelOf(c.Race, offered)));
+        Assert.Equal((ushort?)101, OtherRaceRefit.ReplacesGame(101, offered)?.Race);
+    }
+
+    [Fact]
+    [Trait("Plan", "EDGE-own-model-overwrite-11")]
+    public void The_cross_sex_hint_names_a_race_the_mod_has_a_model_of()
+    {
+        const string womans = "chara/equipment/e6091/model/c0201e6091_top.mdl";
+        var offered = Offered(womans, TbseX(), [Model(womans, "w.mdl"), Model(Shirt, "m.mdl")]);
+        Assert.Equal((ushort?)101, OtherRaceRefit.CrossSexHint(offered)?.Race);
+        Assert.Equal(Shirt, OtherRaceRefit.CrossSexHint(offered)?.OwnModelPath);
+    }
+
+    /// <summary>A model swapped in for the race (FileSwaps) is not seen as the mod's own: a documented limit. The pick is
+    /// in force all the same.</summary>
+    [Fact]
+    [Trait("Plan", "EDGE-own-model-overwrite-18")]
+    public void A_file_swap_author_model_is_a_documented_limit()
+    {
+        // A mod whose Highlander shirt is a swap onto a game piece, read through the real reader.
+        string root = System.IO.Path.Combine(System.IO.Path.GetTempPath(), "proteus-swap-" + Guid.NewGuid().ToString("N"));
+        System.IO.Directory.CreateDirectory(root);
+        try
+        {
+            var meta = System.Text.Json.Nodes.JsonNode.Parse(PenumbraModMeta.NewMetaJson("Swap", "Someone", ""))!.AsObject();
+            meta["Groups"] = System.Text.Json.Nodes.JsonNode.Parse(
+                "[{\"Name\":\"Shirt\",\"Type\":\"Single\",\"Priority\":0,\"Options\":[{\"Name\":\"Everything\","
+              + $"\"Files\":{{\"{Shirt}\":\"shirt/c0101.mdl\"}},"
+              + $"\"FileSwaps\":{{\"{HighlanderShirt}\":\"chara/equipment/e0100/model/c0301e0100_top.mdl\"}}}}]}}]");
+            System.IO.File.WriteAllText(System.IO.Path.Combine(root, PenumbraModMeta.MetaFile), meta.ToJsonString());
+
+            var offered = Offered(Shirt, TbseX(), PenumbraModMeta.ReadAllRedirects(root));
+            Assert.Null(OtherRaceRefit.OwnModelOf(301, offered));
+            Assert.True(OtherRaceRefit.InForce(301, 101, offered));
+        }
+        finally { System.IO.Directory.Delete(root, true); }
     }
 
     [Fact]
@@ -686,4 +778,159 @@ public class OtherRaceRefitTests
         var entries = OtherRaceRefit.PickerEntries(automatic, 101, offered);
         Assert.Equal(OtherRaceRefit.EntryKind.ThisModel, OtherRaceRefit.Current(entries, 0, automatic, 101).Kind);
     }
+
+    // ── the game's own women's legs made men's (vanilla-cross-sex-legs) ─────
+
+    private const string Pantaloons = "chara/equipment/e6224/model/c0201e6224_dwn.mdl";
+    private const string MensPantaloons = "chara/equipment/e6224/model/c0101e6224_dwn.mdl";
+
+    private static readonly RacialModelBake.Route Across101 = new(201, 101, Down: false, Lowered: true) { ByAlias = true };
+
+    private static IReadOnlyList<OtherRaceRefit.Candidate> Game(string path, BodySizeCatalog target,
+                                                                Func<string, bool>? gameHas = null)
+        => OtherRaceRefit.Offered(path, target, [], null, isVanilla: true, gameHas);
+
+    [Fact]
+    [Trait("Plan", "AC-vanilla-cross-sex-legs-1")]
+    public void Vanilla_womens_legs_are_offered_midlander_men_on_tbse() // [AC-vanilla-cross-sex-legs-1]
+    {
+        var offered = Game(Pantaloons, TbseX());
+        var men = Assert.Single(offered);
+        Assert.Equal(101, men.Race);
+        Assert.True(men.CrossSex);
+        Assert.True(men.Below);
+        Assert.Null(men.OwnModelPath);
+
+        var entries = OtherRaceRefit.PickerEntries(RacialModelBake.Route.None, 201, offered);
+        Assert.Contains(entries, e => e.Race == 201 && e.Kind == OtherRaceRefit.EntryKind.ThisModel);
+        Assert.Contains(entries, e => e.Race == 101 && e.Kind == OtherRaceRefit.EntryKind.OtherSex);
+        Assert.Equal(Across101, OtherRaceRefit.Resolve(RacialModelBake.Route.None, 101, 201, offered));
+        Assert.True(OtherRaceRefit.InForce(101, 201, offered));
+    }
+
+    [Fact]
+    [Trait("Plan", "AC-vanilla-cross-sex-legs-2")]
+    public void The_no_bodies_hint_names_midlander_men_for_vanilla_legs() // [AC-vanilla-cross-sex-legs-2]
+    {
+        var hint = OtherRaceRefit.CrossSexHint(Game(Pantaloons, TbseX()));
+        Assert.Equal((ushort)101, hint?.Race);
+        Assert.Null(OtherRaceRefit.CrossSexHint([]));
+        Assert.Contains("Midlander", string.Format(Localization.Strings.Parts.RetargetRaceCrossSexHintFmt,
+                                                   ModelRace.Describe($"{hint!.Race:D4}")));
+    }
+
+    [Fact]
+    [Trait("Plan", "AC-vanilla-cross-sex-legs-4")]
+    public void A_vanilla_cross_sex_pick_saves_at_the_c0101_path() // [AC-vanilla-cross-sex-legs-4]
+    {
+        var route = OtherRaceRefit.Resolve(RacialModelBake.Route.None, 101, 201, Game(Pantaloons, TbseX()));
+        Assert.Equal(MensPantaloons, route.SavePath(Pantaloons));
+        Assert.NotNull(route.Eqdp(route.SavePath(Pantaloons)));
+        Assert.EndsWith($"({ModelRace.Describe("0101")})", OtherRaceRefit.OptionName("The Body SE — SFW", 101));
+    }
+
+    [Fact]
+    [Trait("Plan", "AC-vanilla-cross-sex-legs-5")]
+    public void A_vanilla_pick_says_it_replaces_the_game_model() // [AC-vanilla-cross-sex-legs-5]
+    {
+        var offered = Game(Pantaloons, TbseX(), p => p == MensPantaloons);
+        Assert.Equal(MensPantaloons, Assert.Single(offered).GameModelPath);
+        Assert.Equal(MensPantaloons, OtherRaceRefit.ReplacesGame(101, offered)?.GameModelPath);
+        Assert.Null(OtherRaceRefit.ReplacesGame(0, offered));
+        Assert.Null(OtherRaceRefit.ReplacesGame(201, offered));
+    }
+
+    [Fact]
+    [Trait("Plan", "AC-vanilla-cross-sex-legs-8")]
+    [Trait("Plan", "EDGE-vanilla-cross-sex-legs-16")]
+    public void A_man_whose_race_keeps_the_game_model_is_warned() // [AC-vanilla-cross-sex-legs-8] [EDGE-vanilla-cross-sex-legs-16]
+    {
+        IReadOnlyList<ushort> wearers = [701, 1101];
+        Assert.True(OtherRaceRefit.MissesCharacter(301, Across101, wearers));
+        Assert.False(OtherRaceRefit.MissesCharacter(101, Across101, wearers));
+        Assert.False(OtherRaceRefit.MissesCharacter(701, Across101, wearers));
+        Assert.False(OtherRaceRefit.MissesCharacter(201, Across101, wearers));
+        Assert.False(OtherRaceRefit.MissesCharacter(801, Across101, wearers));
+        Assert.False(OtherRaceRefit.MissesCharacter(0, Across101, wearers));
+    }
+
+    [Fact]
+    [Trait("Plan", "EDGE-vanilla-cross-sex-legs-1")]
+    public void Vanilla_womens_top_is_not_offered() // [EDGE-vanilla-cross-sex-legs-1]
+    {
+        var offered = Game("chara/equipment/e6224/model/c0201e6224_top.mdl", TbseX());
+        Assert.Empty(offered);
+        Assert.Null(OtherRaceRefit.CrossSexHint(offered));
+    }
+
+    [Fact]
+    [Trait("Plan", "EDGE-vanilla-cross-sex-legs-2")]
+    public void Vanilla_mens_legs_are_not_offered_women() // [EDGE-vanilla-cross-sex-legs-2]
+        => Assert.Empty(Game(MensPantaloons, new BodySizeCatalog("root", [Body("0201", "_dwn", "Bibo")])));
+
+    [Theory]
+    [InlineData("1401")]
+    [InlineData("0401")]
+    [Trait("Plan", "EDGE-vanilla-cross-sex-legs-3")]
+    public void Other_womens_race_vanilla_legs_are_not_offered(string race) // [EDGE-vanilla-cross-sex-legs-3]
+        => Assert.Empty(Game($"chara/equipment/e6224/model/c{race}e6224_dwn.mdl", TbseX()));
+
+    [Fact]
+    [Trait("Plan", "EDGE-vanilla-cross-sex-legs-4")]
+    public void Vanilla_legs_never_get_a_same_sex_race() // [EDGE-vanilla-cross-sex-legs-4]
+        => Assert.Equal([101], Game(Pantaloons, TbseX(Body("0401", "_dwn", "F Highlander"))).Select(c => (int)c.Race));
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    [Trait("Plan", "EDGE-vanilla-cross-sex-legs-5")]
+    public void No_game_model_no_replace_note(bool asked) // [EDGE-vanilla-cross-sex-legs-5]
+    {
+        var offered = Game(Pantaloons, TbseX(), asked ? _ => false : null);
+        Assert.Null(Assert.Single(offered).GameModelPath);
+        Assert.Null(OtherRaceRefit.ReplacesGame(101, offered));
+    }
+
+    [Fact]
+    [Trait("Plan", "EDGE-vanilla-cross-sex-legs-6")]
+    public void No_mens_legs_no_vanilla_offer() // [EDGE-vanilla-cross-sex-legs-6]
+        => Assert.Empty(Game(Pantaloons, new BodySizeCatalog("root", [Body("0101", "_top", "M")])));
+
+    [Fact]
+    [Trait("Plan", "EDGE-vanilla-cross-sex-legs-10")]
+    public void A_vanilla_pick_falls_back_when_the_body_mod_has_no_men() // [EDGE-vanilla-cross-sex-legs-10]
+    {
+        var offered = Game(Pantaloons, new BodySizeCatalog("root", [Body("0201", "_dwn", "Bibo")]), _ => true);
+        Assert.Empty(offered);
+        Assert.Equal(RacialModelBake.Route.None, OtherRaceRefit.Resolve(RacialModelBake.Route.None, 101, 201, offered));
+        Assert.Null(OtherRaceRefit.ReplacesGame(101, offered));
+    }
+
+    [Fact]
+    [Trait("Plan", "EDGE-vanilla-cross-sex-legs-13")]
+    public void The_preview_on_a_woman_says_it_is_bent_onto_her() // [EDGE-vanilla-cross-sex-legs-13]
+        => Assert.Equal(OtherRaceRefit.PreviewNote.OtherRace, OtherRaceRefit.NoteFor(true, 201, 101));
+
+    [Fact]
+    [Trait("Plan", "EDGE-vanilla-cross-sex-legs-14")]
+    public void Modded_offers_are_unchanged() // [EDGE-vanilla-cross-sex-legs-14]
+    {
+        foreach (var (path, target, redirects) in new[]
+                 {
+                     (Shirt, TbseX(), OnlyMidlander),
+                     (HighlanderShirt, TbseX(Body("0201", "_top", "F")), OnlyHighlander),
+                     (Pantaloons, TbseX(), Array.Empty<PenumbraModMeta.Redirect>()),
+                 })
+        {
+            var before = OtherRaceRefit.Offered(path, target, redirects, null, isVanilla: false);
+            var asked = OtherRaceRefit.Offered(path, target, redirects, null, isVanilla: false, _ => true);
+            Assert.Equal(before, asked);
+            Assert.All(asked, c => Assert.Null(c.GameModelPath));
+        }
+    }
+
+    [Fact]
+    [Trait("Plan", "EDGE-vanilla-cross-sex-legs-15")]
+    public void A_man_with_the_womens_model_open_sees_the_not_drawn_note() // [EDGE-vanilla-cross-sex-legs-15]
+        => Assert.Equal(OtherRaceRefit.PreviewNote.NotDrawn, OtherRaceRefit.NoteFor(false, 101, 101));
 }

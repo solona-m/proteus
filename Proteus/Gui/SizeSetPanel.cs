@@ -44,8 +44,12 @@ internal sealed class SizeSetPanel(PenumbraBridge penumbra, UVRemapService uvRem
     /// with the section open shows once it is closed and opened again.
     /// </summary>
     private HashSet<string>? installed;
-    private Task<HashSet<string>>? scanning;
+    private Task<(HashSet<string> Installed, List<(string Dir, string Name)> Bodies)>? scanning;
     private bool wasOpen;
+
+    /// <summary>The installed body mods, as the last look found them: what "Made on" offers.</summary>
+    private List<(string Dir, string Name)> bodyMods = [];
+    private readonly SizeSetMadeOn madeOn = new();
 
     /// <summary>
     /// The open mod's pieces, and the mod they were read for; null until read. Only their races' bodies are offered,
@@ -92,10 +96,15 @@ internal sealed class SizeSetPanel(PenumbraBridge penumbra, UVRemapService uvRem
         if (scanning is { IsCompleted: true } scan)
         {
             scanning = null;
-            if (scan.IsCompletedSuccessfully) installed = scan.Result;
+            if (scan.IsCompletedSuccessfully)
+            {
+                (installed, bodyMods) = scan.Result;
+                madeOn.Prune(bodyMods.Select(b => b.Dir));
+            }
             else log.Warning(scan.Exception!, "[Proteus] size set: reading the body mods failed");
         }
 
+        madeOn.Open(modDir);
         ReadPieces(modRoot, modDir);
         ImGui.TextWrapped(s.Intro);
         ImGui.Spacing();
@@ -105,6 +114,7 @@ internal sealed class SizeSetPanel(PenumbraBridge penumbra, UVRemapService uvRem
         bool busy = running != null;
         using (ImRaii.Disabled(busy))
         {
+            DrawMadeOn(modDir);
             bool shownAny = false, men = false, forMen = false;
             foreach (var (key, body, label, male, crosses, tip) in Offered())
             {
@@ -202,6 +212,25 @@ internal sealed class SizeSetPanel(PenumbraBridge penumbra, UVRemapService uvRem
         }
     }
 
+    /// <summary>"Made on": find it automatically, or the body mod the author says the chest and legs were made on.</summary>
+    private void DrawMadeOn(string modDir)
+    {
+        var s = Strings.SizeSet;
+        var choices = SizeSetMadeOn.Choices(bodyMods, modDir);
+        string shown = madeOn.Dir is { } dir ? choices.FirstOrDefault(c => c.Dir == dir).Name ?? dir : s.MadeOnAuto;
+        ImGui.SetNextItemWidth(ImGui.GetContentRegionAvail().X * 0.6f);
+        using (var combo = ImRaii.Combo(s.MadeOn, shown))
+        {
+            if (combo)
+            {
+                if (ImGui.Selectable(s.MadeOnAuto + "###sizeSetMadeOnAuto", madeOn.Dir == null)) madeOn.Choose(null);
+                foreach (var (choice, name) in choices)
+                    if (ImGui.Selectable(name + "###sizeSetMadeOn_" + choice, madeOn.Dir == choice)) madeOn.Choose(choice);
+            }
+        }
+        if (ImGui.IsItemHovered()) ImGui.SetTooltip(s.MadeOnTip);
+    }
+
     /// <summary>A body as the table names it ("TBSE"), not as its row does ("TBSE (for men)").</summary>
     private static string BodyLabel(string body) => SupportedBodies.Choices.First(c => c.Key == body).Label;
 
@@ -237,8 +266,9 @@ internal sealed class SizeSetPanel(PenumbraBridge penumbra, UVRemapService uvRem
         scanning = Task.Run(() =>
         {
             var bodies = index.RefreshState(mods, modsRoot).List;
-            return SupportedBodies.Choices.Select(c => c.Key).Where(k => SupportedBodies.Installed(k, bodies))
-                                  .ToHashSet(StringComparer.Ordinal);
+            return (SupportedBodies.Choices.Select(c => c.Key).Where(k => SupportedBodies.Installed(k, bodies))
+                                   .ToHashSet(StringComparer.Ordinal),
+                    bodies.Select(b => (b.Dir, b.Name)).ToList());
         });
     }
 
@@ -264,7 +294,7 @@ internal sealed class SizeSetPanel(PenumbraBridge penumbra, UVRemapService uvRem
         }
         var request = new SizeSetRefit.Request(modRoot, keys, config.SizeSetYas, remake, [], readGameFile,
                                                config.SizeSetEnds, race => gameBodies.GetValueOrDefault(race),
-                                               config.SizeSetPiercings, across);
+                                               config.SizeSetPiercings, across, madeOn.Dir);
         cancel = new CancellationTokenSource();
         var ct = cancel.Token;
         runningFor = modDir;
@@ -341,7 +371,7 @@ internal sealed class SizeSetPanel(PenumbraBridge penumbra, UVRemapService uvRem
         var r = task.Result;
         notes = r.Notes;
         warnings = r.Warnings ?? [];
-        result = r.Made > 0 ? string.Format(Strings.SizeSet.DoneFmt, r.Made) : Strings.SizeSet.NothingAdded;
+        result = SizeSetRefit.ResultLine(r);
         log.Information("[Proteus] size set: {0} sizes added to {1}; {2} left out", r.Made, dir, r.Notes.Count);
     }
 }

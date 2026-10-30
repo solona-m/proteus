@@ -746,6 +746,71 @@ public class BodyWeightsTests
         Assert.Equal(!acrossBodies, materials.Contains(Pubes));
         Assert.Equal(!acrossBodies, materials.Contains(Piercings));
         Assert.Contains(Cloth, materials);
+
+        // Their names go with them: the game loads every material the model names, and one the new body has no file
+        // for hides the whole model. The meshes kept still draw what they drew.
+        var table = SecondSkinWriter.MaterialNames(plan.Model);
+        Assert.Equal(!acrossBodies, table.Contains(Pubes));
+        Assert.Equal(!acrossBodies, table.Contains(Piercings));
+        Assert.Equal(table.Count, table.Distinct().Count());
+        Assert.Equal(materials.Order(), SecondSkinWriter.DrawnMaterialNames(plan.Model).Order());
+    }
+
+    /// <summary>
+    /// The old body's pubic hair and piercings dropped across body mods, their materials declared before and between the
+    /// cloth's: the names leave the table and each cloth mesh still draws its own material, moved down to its new index.
+    /// </summary>
+    [Fact]
+    public void Dropped_extras_take_their_material_names_and_the_cloth_keeps_its_own()
+    {
+        const string Pubes = "/mt_c0201b0001_bibopube.mtrl";
+        const string Lace = "/mt_c0201e6255_top_b.mtrl";
+        byte[] bytes = SyntheticModel.Build([],
+            new SyntheticModel.Mesh(Pubes, new SyntheticModel.Sub(0, TrianglesPerIsland: 2, Weights: [("j_kosi", 1f)])),
+            new SyntheticModel.Mesh(Cloth, new SyntheticModel.Sub(0, TrianglesPerIsland: 3, Weights: [("j_kosi", 1f)])),
+            new SyntheticModel.Mesh(Piercings, new SyntheticModel.Sub(0, TrianglesPerIsland: 2, Weights: [("j_kosi", 1f)])),
+            new SyntheticModel.Mesh(Lace, new SyntheticModel.Sub(0, TrianglesPerIsland: 4, Weights: [("j_kosi", 1f)])));
+        Assert.Equal([Pubes, Cloth, Piercings, Lace], SecondSkinWriter.MaterialNames(bytes));
+        var pairs = new[] { Pair(Body(("j_kosi", 1f)), Body(("j_kosi", 0.8f), ("iv_omanko", 0.2f))) };
+
+        var plan = BodyRetarget.Plan(ModelPartReader.Read(bytes)!, bytes, pairs, "_top", pushOut: false,
+                                     replaceSkin: false, acrossBodies: true);
+
+        Assert.Equal([Cloth, Lace], SecondSkinWriter.MaterialNames(plan.Model));
+        // Each kept mesh by its triangles: the 3-triangle cloth still draws Cloth, the 4-triangle lace Lace.
+        var meshes = ModelPartReader.Read(plan.Model)!.Parts.Where(p => p.Island < 0).GroupBy(p => p.Mesh)
+                                    .Select(g => (g.First().Material, Tris: g.Sum(p => p.Triangles.Length / 3)))
+                                    .OrderBy(m => m.Tris).ToList();
+        Assert.Equal([(Cloth, 3), (Lace, 4)], meshes);
+    }
+
+    /// <summary>
+    /// An extras material a kept mesh still draws stays named: only the mesh left out goes, and the one kept still draws
+    /// it. Every mesh of it left out, the name goes too.
+    /// </summary>
+    [Fact]
+    public void An_extras_material_a_kept_mesh_still_draws_stays_named()
+    {
+        byte[] host = SyntheticModel.Build([],
+            new SyntheticModel.Mesh(Piercings, new SyntheticModel.Sub(0, TrianglesPerIsland: 2, Weights: [("j_kosi", 1f)])),
+            new SyntheticModel.Mesh(Cloth, new SyntheticModel.Sub(0, TrianglesPerIsland: 3, Weights: [("j_kosi", 1f)])),
+            new SyntheticModel.Mesh(Piercings, new SyntheticModel.Sub(0, TrianglesPerIsland: 4, Weights: [("j_kosi", 1f)])));
+        Assert.Equal([Piercings, Cloth], SecondSkinWriter.MaterialNames(host));
+
+        var one = SecondSkinWriter.Build([], [], host, out _, dropHostMesh: m => m == 0,
+                                         dropHostMaterial: BodyRetarget.IsBodyExtraMaterial);
+        Assert.Equal([Piercings, Cloth], SecondSkinWriter.MaterialNames(one));
+        Assert.Equal([(Cloth, 3), (Piercings, 4)], Meshes(one));
+
+        var both = SecondSkinWriter.Build([], [], host, out _, dropHostMesh: m => m != 1,
+                                          dropHostMaterial: BodyRetarget.IsBodyExtraMaterial);
+        Assert.Equal([Cloth], SecondSkinWriter.MaterialNames(both));
+        Assert.Equal([(Cloth, 3)], Meshes(both));
+
+        static List<(string, int)> Meshes(byte[] model)
+            => ModelPartReader.Read(model)!.Parts.Where(p => p.Island < 0).GroupBy(p => p.Mesh)
+                              .Select(g => (g.First().Material, g.Sum(p => p.Triangles.Length / 3)))
+                              .OrderBy(m => m.Item2).ToList();
     }
 
     /// <summary>

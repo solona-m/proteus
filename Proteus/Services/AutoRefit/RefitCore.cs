@@ -677,8 +677,29 @@ internal static partial class RefitCore
         // Without the character to bend it back by, the preview is pushed unbent; the save itself needs no wearer.
         var preview = who != null ? route.Back(plan.Model, who, out _) : null;
         var saved = WithBodySkin(plan, targetPaths, log);
+        // Never saved naming a skin material the new body does not use: the game renames a skin material after the
+        // wearer's race, and one no mod ships for it is a null material the renderer reads through — a male Viera crashed
+        // drawing women's legs that still named Bibo+'s _bibo (mt_c1701b0001_bibo.mtrl, 2026-10-28). WithBodySkin renames
+        // every one it can; what is left is a body whose own skin it could not read.
+        if (ForeignSkin(saved.Model, targetPaths) is { Count: > 0 } foreign)
+        {
+            log.Warning("[Proteus] retarget: refused to save — the model still names skin {0}, which the new body does "
+                      + "not use", string.Join(", ", foreign));
+            return (null, null, string.Format(Strings.Parts.RetargetForeignSkinFmt, string.Join(", ", foreign)));
+        }
         SayDuplicateBones(saved.Model, log);
         return (saved, preview, "");
+    }
+
+    /// <summary>The skin materials <paramref name="model"/> names that none of <paramref name="targetPaths"/>' bodies use.</summary>
+    internal static List<string> ForeignSkin(byte[] model, IReadOnlyList<string> targetPaths)
+    {
+        var bodies = new HashSet<string>(StringComparer.Ordinal);
+        foreach (string path in targetPaths.Distinct(StringComparer.OrdinalIgnoreCase))
+            bodies.UnionWith(SecondSkinWriter.Parse(File.ReadAllBytes(path)).MatNames.Where(SecondSkinWriter.IsBodySkinMaterial));
+        return SecondSkinWriter.Parse(model).MatNames
+                               .Where(m => SecondSkinWriter.IsBodySkinMaterial(m) && !bodies.Contains(m))
+                               .Distinct(StringComparer.Ordinal).ToList();
     }
 
     /// <summary>
@@ -1186,7 +1207,7 @@ internal static partial class RefitCore
                                  deepClear: DeepClearFor(skin.DeepClear, primary),
                                  keepStandoff: KeepStandoffFor(skin.KeepStandoff, primary),
                                  carryPiercings: carryPiercings, seeInside: SeeInsideFor(skin.SeeInside, primary),
-                                 relaxSinkGuard: skin.RelaxSinkGuard);
+                                 relaxSinkGuard: skin.RelaxSinkGuard, openSkin: true);
     }
 
     /// <summary>

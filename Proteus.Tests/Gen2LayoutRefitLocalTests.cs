@@ -105,6 +105,7 @@ public class Gen2LayoutRefitLocalTests(ITestOutputHelper output)
     [InlineData("medium")]
     [InlineData("large")]
     [Trait("Plan", "EDGE-gen2-legs-refit-12")]
+    [Trait("Speed", "Slow")]
     public void TandF_legs_onto_AB_Body_stay_refused(string size)
     {
         var (source, sourceCat) = Mod(TandF);
@@ -301,6 +302,7 @@ public class Gen2LayoutRefitLocalTests(ITestOutputHelper output)
     /// </summary>
     [LocalDataFact(LocalData.GameData, Bibo, Rue, AbBody, LocalData.UvMaps)]
     [Trait("Plan", "EDGE-gen2-legs-refit-20")]
+    [Trait("Speed", "Slow")]
     public void The_game_s_body_pieces_onto_body_mods_census()
     {
         var data = new Lumina.GameData(LocalData.Path(LocalData.GameData));
@@ -418,6 +420,7 @@ public class Gen2LayoutRefitLocalTests(ITestOutputHelper output)
     [LocalDataFact(TheBodySe, TheBodySeX)]
     [Trait("Plan", "AC-gen2-legs-refit-7")]
     [Trait("Plan", "AC-cross-sex-tops-yas-7")]
+    [Trait("Speed", "Slow")]
     public void A_size_once_refused_for_folds_is_made_and_says_how() // [AC-cross-sex-tops-yas-7]
     {
         string copy = Path.Combine(Path.GetTempPath(), "proteus-sizeset-" + Guid.NewGuid().ToString("N"));

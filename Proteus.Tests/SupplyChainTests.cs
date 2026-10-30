@@ -473,8 +473,41 @@ public sealed class SupplyChainTests
     [Fact]
     public void Dependabot_SubmodulesLimitedToOneOpenPr() =>
         Assert.True(Value(DependabotEntries()["gitsubmodule"], "open-pull-requests-limit") == "1",
-            "Glamourer tracks its testing branch and each IPC bump needs checking in game: keep the " +
+            "Glamourer tracks its stable branch and each IPC bump needs checking in game: keep the " +
             "gitsubmodule entry at open-pull-requests-limit: 1.");
+
+    /// <summary>
+    /// Penumbra.Api builds against our Luna, Glamourer.Api against Glamourer's own, and only one Luna.dll ships. Dependabot
+    /// bumps the two submodules apart and the build stays green; a Luna IPC change would then fail only as the plugin
+    /// loads. The checked-out commits, which are what was built.
+    /// </summary>
+    [Fact]
+    public void Luna_IsOnTheCommitGlamourerPins()
+    {
+        var ours = CheckedOutCommit("Luna");
+        var glamourers = CheckedOutCommit(Path.Combine("Glamourer", "Luna"));
+        Assert.True(ours == glamourers,
+            $"Luna is checked out at {ours}, Glamourer's own Luna at {glamourers}. Both APIs' IPC subscribers come from " +
+            "Luna and one Luna.dll ships: move Luna to the commit Glamourer pins (git -C Glamourer ls-tree HEAD Luna).");
+    }
+
+    private static string CheckedOutCommit(string submodule)
+    {
+        var dir = Path.Combine(RepoRoot, submodule);
+        Assert.True(Directory.Exists(dir) && Directory.EnumerateFileSystemEntries(dir).Any(),
+            $"{submodule} is not checked out: run git submodule update --init --recursive.");
+        var git = System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo("git", ["-C", dir, "rev-parse", "HEAD"])
+        {
+            RedirectStandardOutput = true,
+            RedirectStandardError = true,
+            UseShellExecute = false,
+        })!;
+        var sha = git.StandardOutput.ReadToEnd().Trim();
+        var err = git.StandardError.ReadToEnd();
+        git.WaitForExit();
+        Assert.True(git.ExitCode == 0, $"git rev-parse HEAD in {submodule} failed: {err}");
+        return sha;
+    }
 
     // ---------------------------------------------------------------------------------------------
     // CodeQL

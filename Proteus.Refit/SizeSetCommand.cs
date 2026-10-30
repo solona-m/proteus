@@ -28,6 +28,9 @@ internal static class SizeSetCommand
         var keys = SizeSetBatch.ParseKeys(required(opts, "bodies"), out var keyError)
                    ?? throw new Program.UsageException(keyError!);
         if (SizeSetBatch.Validate(modRoot, modsRoot, game, skeleton) is { } error) throw new Program.UsageException(error);
+        string? madeOn = opts.TryGetValue("made-on", out var madeOnArg)
+            ? SizeSetBatch.MadeOnFolder(madeOnArg, modsRoot, out var madeOnError) ?? throw new Program.UsageException(madeOnError!)
+            : null;
         // The report names this machine's folders: never inside the mod that ships, nor among the installed mods.
         if (opts.TryGetValue("report", out var reportAt)
             && (PenumbraModMeta.IsAtOrUnder(reportAt, modRoot) || PenumbraModMeta.IsAtOrUnder(reportAt, modsRoot)))
@@ -67,7 +70,8 @@ internal static class SizeSetCommand
         try
         {
             outcome = SizeSetBatch.Run(new SizeSetBatch.Inputs(modRoot, modsRoot, keys, men, ends, ReadGame, uvRemap, log,
-                                                               skeleton == null ? null : Path.GetFullPath(skeleton)),
+                                                               skeleton == null ? null : Path.GetFullPath(skeleton),
+                                                               MadeOn: madeOn),
                                        runLog, p => stderr.WriteLine(p), cancel.Token);
         }
         finally

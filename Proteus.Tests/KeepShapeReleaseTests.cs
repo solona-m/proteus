@@ -33,6 +33,7 @@ public class KeepShapeReleaseTests
     [Fact]
     [Trait("Plan", "AC-keep-shape-release-4")]
     [Trait("Plan", "EDGE-keep-shape-release-14")]
+    [Trait("Speed", "Slow")]
     public void Plate_over_a_growing_bump_is_released_and_bends()
     {
         var plate = Plate(Vector3.Zero, 0.06f, 0.001f);
@@ -60,6 +61,7 @@ public class KeepShapeReleaseTests
 
     [Fact]
     [Trait("Plan", "AC-keep-shape-release-4")]
+    [Trait("Speed", "Slow")]
     public void A_user_ticked_large_panel_is_released_too()
     {
         // 20 cm across: HardPieces would never pick it, so only a user ticking it keeps it. The rule is the same.
@@ -74,6 +76,7 @@ public class KeepShapeReleaseTests
     [Fact]
     [Trait("Plan", "AC-keep-shape-release-4")]
     [Trait("Plan", "AC-keep-shape-release-9")]
+    [Trait("Speed", "Slow")]
     public void Plate_over_a_small_bump_stays_kept()
     {
         var plate = Plate(Vector3.Zero, 0.06f, 0.001f);
@@ -118,6 +121,7 @@ public class KeepShapeReleaseTests
 
     [Fact]
     [Trait("Plan", "EDGE-keep-shape-release-3")]
+    [Trait("Speed", "Slow")]
     public void No_kept_pieces_reports_nothing()
     {
         var plate = Plate(Vector3.Zero, 0.06f, 0.001f);
@@ -134,6 +138,7 @@ public class KeepShapeReleaseTests
 
     [Fact]
     [Trait("Plan", "EDGE-keep-shape-release-4")]
+    [Trait("Speed", "Slow")]
     public void All_released_equals_no_keep_shape()
     {
         // Two plates, each over a dome of its own and both sinking: with both let go the refit is the one with none kept.
@@ -155,6 +160,7 @@ public class KeepShapeReleaseTests
 
     [Fact]
     [Trait("Plan", "EDGE-keep-shape-release-5")]
+    [Trait("Speed", "Slow")]
     public void An_unplaced_piece_is_not_judged()
     {
         var plate = Plate(Vector3.Zero, 0.06f, 0.001f);
@@ -222,6 +228,7 @@ public class KeepShapeReleaseTests
 
     [Fact]
     [Trait("Plan", "EDGE-keep-shape-release-8")]
+    [Trait("Speed", "Slow")]
     public void A_node_shared_with_a_kept_piece_follows_the_kept_piece()
     {
         // Two plates sharing an edge (welded by position): one over the dome, which sinks, one well off it, which
@@ -242,6 +249,7 @@ public class KeepShapeReleaseTests
 
     [Fact]
     [Trait("Plan", "EDGE-keep-shape-release-11")]
+    [Trait("Speed", "Slow")]
     public void Each_target_is_judged_on_its_own()
     {
         var plate = Plate(Vector3.Zero, 0.06f, 0.001f);
@@ -286,6 +294,7 @@ public class KeepShapeReleaseTests
 
     [Fact]
     [Trait("Plan", "EDGE-keep-shape-release-15")]
+    [Trait("Speed", "Slow")]
     public void Report_carries_the_first_round()
     {
         // The steady plate first this time, so the released one is at index 1.

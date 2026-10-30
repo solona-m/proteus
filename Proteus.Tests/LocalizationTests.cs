@@ -752,14 +752,17 @@ public sealed class LocalizationTests
     [Trait("Plan", "AC-refit-other-race-1")]
     [Trait("Plan", "AC-refit-other-race-9")]
     [Trait("Plan", "AC-refit-race-down-9")]
-    public void RefitOtherRace_strings_are_translated_not_copied(string lang)
+    [Trait("Plan", "AC-vanilla-cross-sex-legs-7")]
+    public void RefitOtherRace_strings_are_translated_not_copied(string lang) // [AC-vanilla-cross-sex-legs-7]
     {
         var en = Load(Source);
         var tr = Load(lang);
         var keys = en.Keys.Where(k => k.StartsWith("Parts.Retarget.Race.", StringComparison.Ordinal)).ToList();
-        // 23, cross-sex-refit's five (OtherSex, CrossSexNote, CrossSexWears, CrossSexQuality, CrossSexHint) and
-        // cross-sex-tops-yas's four (CrossSexFolded, BonesMoved, NeedsSkeleton, RenameFailed)
-        Assert.Equal(32, keys.Count);
+        // 23, cross-sex-refit's five (OtherSex, CrossSexNote, CrossSexWears, CrossSexQuality, CrossSexHint),
+        // cross-sex-tops-yas's four (CrossSexFolded, BonesMoved, NeedsSkeleton, RenameFailed) and
+        // vanilla-cross-sex-legs's two (ReplacesGame, CharacterKeepsGame); own-model-overwrite re-keyed OwnModel as
+        // OwnModelReplaced, one for one
+        Assert.Equal(34, keys.Count);
         foreach (string key in keys)
         {
             Assert.True(tr.ContainsKey(key), $"[{lang}] has no {key}");
@@ -781,6 +784,75 @@ public sealed class LocalizationTests
         string bullet = readme.Split('\n').Single(l => l.StartsWith("- **" + label + "**", StringComparison.Ordinal));
         Assert.Contains("M Highlander", bullet);
     }
+
+    /// <summary>
+    /// The line under a pick the mod has its own model of, and the two that say what outranks a save into the author's
+    /// group, are translated, not copied, with their placeholders; the old "refit that one instead" line is gone.
+    /// </summary>
+    [Theory]
+    [MemberData(nameof(Translations))]
+    [Trait("Plan", "AC-own-model-overwrite-6")]
+    public void OwnModelReplaced_and_Clash_strings_are_translated_not_copied(string lang) // [AC-own-model-overwrite-6]
+    {
+        var en = Load(Source);
+        var tr = Load(lang);
+        foreach (var (key, holes) in new[]
+                 {
+                     ("Parts.Retarget.Race.OwnModelReplaced.Fmt", new[] { "{0}" }),
+                     ("Parts.Retarget.Clash.Outranked.Fmt", new[] { "{0}", "{1}" }),
+                     ("Parts.Retarget.Clash.OptionOutranked.Fmt", new[] { "{0}", "{1}" }),
+                 })
+        {
+            Assert.True(tr.ContainsKey(key), $"[{lang}] has no {key}");
+            Assert.NotEqual(en[key].Message, tr[key].Message);
+            foreach (string hole in holes) Assert.Contains(hole, tr[key].Message);
+        }
+        Assert.False(tr.ContainsKey("Parts.Retarget.Race.OwnModel.Fmt"), $"[{lang}] still has Parts.Retarget.Race.OwnModel.Fmt");
+        Assert.False(en.ContainsKey("Parts.Retarget.Race.OwnModel.Fmt"));
+    }
+
+    /// <summary>
+    /// Every README's Refit for bullet no longer says Proteus points at the mod's own model instead: it says the saved
+    /// refit takes that model's place, and that the automatic refit keeps the author's model.
+    /// </summary>
+    [Theory]
+    [MemberData(nameof(AllLocales))]
+    [Trait("Plan", "AC-own-model-overwrite-7")]
+    public void Readme_says_a_refit_can_take_the_place_of_the_mod_s_own_model(string lang) // [AC-own-model-overwrite-7]
+    {
+        var dir = new System.IO.DirectoryInfo(AppContext.BaseDirectory);
+        while (dir != null && !System.IO.File.Exists(System.IO.Path.Combine(dir.FullName, "proteus.slnx"))) dir = dir.Parent;
+        Assert.True(dir != null, $"Could not find proteus.slnx above {AppContext.BaseDirectory}.");
+        string readme = System.IO.File.ReadAllText(System.IO.Path.Combine(
+            dir!.FullName, lang == Source ? "README.md" : System.IO.Path.Combine("docs", $"README.{lang}.md")));
+        string label = Load(lang)["Parts.Retarget.Race.Label"].Message;
+        string bullet = readme.Split('\n').Single(l => l.StartsWith("- **" + label + "**", StringComparison.Ordinal)
+                                                      && l.Contains("M Highlander", StringComparison.Ordinal));
+        var (old, now) = ReadmeOwnModel[lang];
+        Assert.DoesNotContain(old, bullet);
+        foreach (string sentence in now) Assert.Contains(sentence, bullet);
+    }
+
+    /// <summary>What each README's Refit for bullet said of the mod's own model, and the two sentences it says now.</summary>
+    private static readonly Dictionary<string, (string Old, string[] Now)> ReadmeOwnModel = new()
+    {
+        ["en"] = ("Proteus points you to it instead.",
+                  ["the saved refit takes that model's place while it is on.", "The automatic refit on equip still keeps the author's model"]),
+        ["de"] = ("verweist Proteus stattdessen darauf.",
+                  ["tritt die gespeicherte Anpassung an seine Stelle", "Die automatische Anpassung beim Anlegen behält das Modell des Autors"]),
+        ["es"] = ("Proteus te lleva a él.",
+                  ["el ajuste guardado ocupa su lugar", "El reajuste automático al equipar sigue conservando el modelo del autor"]),
+        ["fr"] = ("Proteus vous y renvoie.",
+                  ["l'ajustement enregistré prend sa place", "Le réajustement automatique à l'équipement garde toujours le modèle de l'auteur"]),
+        ["ja"] = ("そちらを案内します。",
+                  ["保存した合わせ直しがオンの間そのモデルの代わりになります", "装備時の自動リフィットは、その種族の作者のモデルをそのまま使います"]),
+        ["ko"] = ("그 모델로 안내합니다.",
+                  ["저장한 리핏이 켜져 있는 동안 그 모델을 대신합니다", "장착 시 자동 리핏은 그 종족의 작가 모델을 그대로 둡니다"]),
+        ["ru"] = ("Proteus укажет на неё.",
+                  ["сохранённая подгонка заменит её", "Автоматическая подгонка при надевании по-прежнему оставляет модель автора"]),
+        ["zh"] = ("Proteus 会改为引导你去改配那个模型。",
+                  ["保存的改配结果在开启时会取代那个模型", "穿戴时的自动改配仍会保留作者为该种族做的模型"]),
+    };
 
     /// <summary>
     /// The README's Refit for bullet says it goes the other way too — a Highlander-only model made a Midlander's — in
@@ -923,7 +995,8 @@ public sealed class LocalizationTests
     [MemberData(nameof(Translations))]
     [Trait("Plan", "AC-cross-sex-refit-9")]
     [Trait("Plan", "AC-cross-sex-tops-yas-10")]
-    public void Cross_sex_strings_exist_and_are_translated_in_every_locale(string lang) // [AC-cross-sex-refit-9] [AC-cross-sex-tops-yas-10]
+    [Trait("Plan", "AC-vanilla-cross-sex-legs-7")]
+    public void Cross_sex_strings_exist_and_are_translated_in_every_locale(string lang) // [AC-cross-sex-refit-9] [AC-cross-sex-tops-yas-10] [AC-vanilla-cross-sex-legs-7]
     {
         var en = Load(Source);
         var tr = Load(lang);
@@ -940,6 +1013,7 @@ public sealed class LocalizationTests
                      "Parts.Retarget.Race.CrossSexFolded.Fmt", "Parts.Retarget.Race.BonesMoved.Fmt",
                      "Parts.Retarget.Race.NeedsSkeleton.Fmt", "Parts.Retarget.Race.RenameFailed.Fmt",
                      "HairPort.Folded.Fmt", "HairPort.Scan.State.FittedWarn.Fmt",
+                     "Parts.Retarget.Race.ReplacesGame.Fmt", "Parts.Retarget.Race.CharacterKeepsGame.Fmt",
                  })
         {
             Assert.True(tr.ContainsKey(key), $"[{lang}] has no {key}");
@@ -982,6 +1056,51 @@ public sealed class LocalizationTests
         }
     }
 
+    /// <summary>The game's own model replaced, and the character who keeps it: one race, the option named as written.</summary>
+    [Theory]
+    [MemberData(nameof(AllLocales))]
+    [Trait("Plan", "AC-vanilla-cross-sex-legs-5")]
+    public void ReplacesGame_and_CharacterKeepsGame_format_with_a_race(string lang) // [AC-vanilla-cross-sex-legs-5]
+    {
+        var strings = Load(lang);
+        foreach (string key in new[] { "Parts.Retarget.Race.ReplacesGame.Fmt", "Parts.Retarget.Race.CharacterKeepsGame.Fmt" })
+        {
+            string message = strings[key].Message;
+            Assert.Contains("{0}", message);
+            Assert.DoesNotContain("{1}", message);
+            Assert.Contains("Midlander M", string.Format(message, "Midlander M"));
+        }
+        Assert.Contains("Original", strings["Parts.Retarget.Race.ReplacesGame.Fmt"].Message);
+        if (lang == Source)
+        {
+            Assert.Equal("The game has its own {0} model of this item. Once saved, this refit replaces it for everyone you see "
+                         + "wearing the game's {0} model while the new mod is on. Choose “Original” in that mod, or turn it off, "
+                         + "to bring the game's back.", strings["Parts.Retarget.Race.ReplacesGame.Fmt"].Message);
+            Assert.Equal("Your character is {0}, and the game has a {0} model of this item of its own: this refit won't show "
+                         + "on your character.", strings["Parts.Retarget.Race.CharacterKeepsGame.Fmt"].Message);
+        }
+    }
+
+    /// <summary>Every README's cross-sex bullet says the game's own women's legs are refitted for men from its body.</summary>
+    [Theory]
+    [MemberData(nameof(AllLocales))]
+    [Trait("Plan", "AC-vanilla-cross-sex-legs-7")]
+    public void Readme_says_game_womens_legs_refit_for_men(string lang) // [AC-vanilla-cross-sex-legs-7]
+    {
+        var dir = new System.IO.DirectoryInfo(AppContext.BaseDirectory);
+        while (dir != null && !System.IO.File.Exists(System.IO.Path.Combine(dir.FullName, "proteus.slnx"))) dir = dir.Parent;
+        Assert.True(dir != null, $"Could not find proteus.slnx above {AppContext.BaseDirectory}.");
+        string readme = System.IO.File.ReadAllText(System.IO.Path.Combine(
+            dir!.FullName, lang == Source ? "README.md" : System.IO.Path.Combine("docs", $"README.{lang}.md")));
+        var strings = Load(lang);
+        string label = "**" + strings["Parts.Retarget.Race.Label"].Message + "**";
+        string vanilla = "**" + strings["Parts.Retarget.FromVanilla"].Message + "**";
+        string bullet = readme.Split('\n').Single(l => l.StartsWith("- ", StringComparison.Ordinal) && l.Contains(label)
+                                                       && l.Contains("bibo↔TBSE"));
+        Assert.Contains(vanilla, bullet);
+        if (lang == Source) Assert.Contains("women's legs only", bullet);
+    }
+
     /// <summary>The size set's men's versions speak every language, in its own words, with the same placeholders.</summary>
     [Theory]
     [MemberData(nameof(Translations))]
@@ -994,7 +1113,7 @@ public sealed class LocalizationTests
                  {
                      "SizeSet.ForMen.Fmt", "SizeSet.ForMen.Tip.Fmt", "SizeSet.MensGroup", "SizeSet.CheckInGame",
                      "SizeSet.MenMapsMissing", "SizeSet.NoSourceForMen.Fmt", "SizeSet.MensGroupTaken.Fmt",
-                     "SizeSet.EndsNotForMen", "SizeSet.OneVariant.Fmt", "SizeSet.NotMade", "SizeSet.RigUnreadable", "SizeSet.Intro",
+                     "SizeSet.EndFromGameBody.Fmt", "SizeSet.EndClothGap.Fmt", "SizeSet.OneVariant.Fmt", "SizeSet.NotMade", "SizeSet.RigUnreadable", "SizeSet.Intro",
                  })
         {
             Assert.True(tr.ContainsKey(key), $"[{lang}] has no {key}");

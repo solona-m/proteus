@@ -65,6 +65,7 @@ public class ChestBeneathLocalTests(ITestOutputHelper output)
 
     [LocalDataFact(Geometric, IvcsBibo, FixPubes, Rue)]
     [Trait("Plan", "EDGE-outfit-fit-19")]
+    [Trait("Speed", "Slow")]
     public void Legs_with_no_chest_and_no_twin_among_the_bodies_take_no_chest()
     {
         // Bibo+ — the twin — is not among the bodies: [IVCS] Bibo+ and Rue have chests, but not the same legs.
@@ -121,6 +122,7 @@ public class ChestBeneathLocalTests(ITestOutputHelper output)
     [LocalDataFact(Heartthrob, Scarlet, Bibo, Neolithe)]
     [Trait("Plan", "AC-outfit-fit-7")]
     [Trait("Plan", "EDGE-outfit-fit-14")]
+    [Trait("Speed", "Slow")]
     public void Pants_that_stop_at_the_hips_take_no_chest()
     {
         var bodies = new[] { Body(Bibo), Body(Neolithe) }.ToList();
@@ -146,6 +148,7 @@ public class ChestBeneathLocalTests(ITestOutputHelper output)
     [Trait("Plan", "AC-outfit-fit-5")]
     [Trait("Plan", "EDGE-outfit-fit-17")]
     [Trait("Plan", "EDGE-outfit-fit-25")]
+    [Trait("Speed", "Slow")]
     public void Geometrics_skirt_onto_Rue_keeps_the_belly_inside_its_waist()
     {
         var bodies = new[] { Body(FixPubes), Body(Bibo), Body(Rue) }.ToList();

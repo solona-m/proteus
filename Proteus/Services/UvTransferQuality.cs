@@ -28,12 +28,13 @@ internal static class UvTransferQuality
 
         /// <summary>
         /// Landmarks the user accepted past <see cref="TorsoLandmark"/> (2026-10-20), where a woman's body and a man's
-        /// differ in shape rather than the map in placement: the under-bust point sits on the breast, the belly and
-        /// pubis are shaped apart. Each at what the shipped bake measured, rounded up.
+        /// differ in shape rather than the map in placement: the belly and pubis are shaped apart. At what the shipped
+        /// bake measured, rounded up. (The old under-bust point's 32 mm went with it: that point sat at Bibo+'s nipple
+        /// height; the crease that replaced it is bounded by <see cref="LandmarkLimitMm"/>.)
         /// </summary>
         public static readonly Dictionary<string, float> AcceptedLandmarkMm = new(StringComparer.Ordinal)
         {
-            ["underBustL"] = 32f, ["underBustR"] = 32f, ["lowerBelly"] = 46f,
+            ["lowerBelly"] = 46f,
         };
         // Identity (two bodies on one layout baked onto each other), in px at 4096: the plan's 4 / 16 accepted by the user
         // (2026-10-20, after checking tattoos in game) at what was measured — Rue+→Bibo+ 4.5 / 30, TBSE-X→TBSE 2.7 / 66 —
@@ -42,10 +43,41 @@ internal static class UvTransferQuality
 
         /// <summary>How far, in px at 4096, a dot on one body's sternum may land from the other's (6.5 mm measured; 27 px).</summary>
         public const float SternumDotPx = 30f;
+
+        /// <summary>How far, in px at 4096, a dot on one body's nipple may land from the other's (about 3 mm).</summary>
+        public const float NippleDotPx = 12f;
+
+        /// <summary>
+        /// How far ACROSS the skin a nipple may land from the other body's (3 mm). Not the full distance: a breast stands
+        /// centimetres before a man's chest, which is the bodies' shape, not the map's placement.
+        /// </summary>
+        public const float NippleTangentMm = 3f;
+
+        // The chest field (ChestField), checked before any map is baked with it: no triangle of the destination squeezed
+        // under a fifth of its area or turned over; pins held to 0.1 mm; arm and neck skin moved no more than 3 mm; no
+        // point moved further than 1.05 × the largest offset or more than 1 mm against it; the sternum and the clavicle
+        // row held within 2 mm; each target's landing within 0.5 mm of where it must be.
+        // The chest's distortion where the field reaches: no more than 1.25 × the plain map's there (area against the
+        // map's median scale, and anisotropy, at p99). What the anatomy predicts is reported beside it, not gated: a
+        // cap under the anatomy's own need would forbid the correspondence asked for.
+        public const double StretchMargin = 1.25;
+
+        /// <summary>How far apart on the body neighbours at the edge of a correction may land where the plain map's land together (2 mm).</summary>
+        public const double EdgeLeewayM = 0.002;
+
+        public const float FieldJacobianMin = 0.2f, FieldPinMm = 0.1f, FieldOffTorsoMm = 3f, FieldOvershoot = 1.05f,
+                           FieldReverseMm = 1f, FieldStillMm = 2f, FieldResidualMm = 0.5f;
     }
 
     /// <summary>The named places on the torso and legs the gate checks, by name.</summary>
-    internal static readonly string[] NamedRegions = ["sternum", "underBust", "lowerBelly", "innerThigh"];
+    internal static readonly string[] NamedRegions = ["sternum", "underBust", "lowerBelly", "innerThigh", Disc];
+
+    /// <summary>
+    /// The skin within <see cref="DiscRadius"/> of a nipple, facing forward: counted on its own, not by
+    /// <see cref="Frame.NamedRegion"/>'s first match, so a texel may be both in it and in another region.
+    /// </summary>
+    internal const string Disc = "nipple";
+    internal const float DiscRadius = 0.03f;
 
     /// <summary>Where a body's frame is: from its own bone centroids, so each body is measured by its own shape.</summary>
     internal sealed class Frame
@@ -101,11 +133,36 @@ internal static class UvTransferQuality
         public Dictionary<string, RegionFigures> Regions = [];
         public Dictionary<string, float> LandmarksMm = [];
         public Dictionary<string, float> LandmarksTangentMm = [];
+        /// <summary>The landmarks as the plain projection (no chest field) lands them: the crease's bound comes from here.</summary>
+        public Dictionary<string, float> PlainLandmarksMm = [];
+        public StretchFigures? Stretch;
         public List<string> Failures = [];
     }
 
+    /// <summary>
+    /// What the chest field does to the map where it reaches: per texel, the map's Jacobian against the plain map's —
+    /// area as max(a, 1/a), anisotropy as the ratio of singular-value ratios — and what the anatomy predicts of it.
+    /// </summary>
+    internal sealed class StretchFigures
+    {
+        public double AreaP50, AreaP99, AreaP999, AreaMax, AnisoP50, AnisoP99, AnisoP999, AnisoMax;
+        public double PredictedArea, PredictedAniso, PlainAreaP99, PlainAnisoP99;
+        /// <summary>
+        /// At the edge of the correction, how far apart neighbours either side land, with it and without: on the source
+        /// body in metres when measured there, else on its sheet in px.
+        /// </summary>
+        public double EdgeJumpP99, EdgeJumpMax, PlainEdgeJumpP99, PlainEdgeJumpMax;
+        public long EdgePairs, EdgeOffSkin, PlainEdgeOffSkin;
+        public bool EdgeOnBody;
+        /// <summary>How much more than the plain map's this map's distortion may be (<see cref="Gate.StretchMargin"/>, or 1 for the inverse).</summary>
+        public double Margin = Gate.StretchMargin;
+        /// <summary>The texel (inside the reach) of the largest jump at its edge, or -1.</summary>
+        public int EdgeJumpAt = -1;
+        public long Measured, ChangedInside, ChangedOutside;
+    }
+
     /// <summary>The destination's triangles grouped into uv islands: triangles sharing a vertex.</summary>
-    private static int[] Islands(BakeBody body)
+    internal static int[] Islands(BakeBody body)
     {
         var parent = new int[body.P.Length];
         for (int i = 0; i < parent.Length; i++) parent[i] = i;
@@ -156,15 +213,18 @@ internal static class UvTransferQuality
                 islandVotes[island[t]] = islandVotes.GetValueOrDefault(island[t]) + sign[i];
             }
 
+        var nipples = UvBakeNipples.Find(dest).Found is { } found ? new[] { found.L.Pos, found.R.Pos } : [];
+        var counted = new List<RegionFigures>(2);
         for (int i = 0; i < sign.Length; i++)
         {
             int t = raster.Owner[i];
             if (t < 0) continue;
             float u = raster.BaryU[i], v = raster.BaryV[i];
             var (pos, nrm, _) = dest.At(t, u, v, 1f - u - v);
-            var name = frame.NamedRegion(pos, nrm);
-            var region = name == null ? null : f.Regions[name];
-            if (region != null)
+            counted.Clear();
+            if (frame.NamedRegion(pos, nrm) is { } name) counted.Add(f.Regions[name]);
+            if (nrm.Z > 0f && nipples.Any(n => Vector3.Distance(n, pos) <= DiscRadius)) counted.Add(f.Regions[Disc]);
+            foreach (var region in counted)
             {
                 region.Owned++;
                 if (map.Valid[i])
@@ -177,16 +237,139 @@ internal static class UvTransferQuality
             }
             if (sign[i] == 0) continue;
             f.FoldMeasured++;
-            if (region != null) region.Measured++;
+            foreach (var region in counted) region.Measured++;
             long vote = islandVotes.GetValueOrDefault(island[t]);
             if (vote != 0 && Math.Sign(vote) != sign[i])
             {
                 f.Folds++;
-                if (region != null) region.Folds++;
+                foreach (var region in counted) region.Folds++;
             }
         }
         f.FoldShare = f.FoldMeasured == 0 ? 0 : (double)f.Folds / f.FoldMeasured;
         return f;
+    }
+
+    /// <summary>
+    /// The chest field's effect on a map: <paramref name="warped"/> (baked with it) against <paramref name="plain"/>
+    /// (without), on <paramref name="dest"/>'s raster. Every texel the field cannot reach must be the same in both; where
+    /// it can, the stretch of the one against the other.
+    /// </summary>
+    internal static StretchFigures WarpStretch(UvTransferBake.Result warped, UvTransferBake.Result plain,
+                                               UvTransferBake.Raster raster, BakeBody dest, ChestField field)
+        => WarpStretch(warped, plain, raster, i =>
+        {
+            int t = raster.Owner[i];
+            return field.InSupport(dest.At(t, raster.BaryU[i], raster.BaryV[i], 1 - raster.BaryU[i] - raster.BaryV[i]).Pos);
+        });
+
+    /// <summary>
+    /// The same, where <paramref name="reach"/> says which destination texels the correction may change, and
+    /// <paramref name="edge"/> (that reach when not given) which it did change: its edge is where a tear would be.
+    /// </summary>
+    /// <param name="onSource">Where on the source body a stored coordinate lands, so a jump at the edge is measured on
+    /// the body (metres): two islands of the source's sheet meeting there are a seam, not a tear. Without it, on the
+    /// sheet (px at this size).</param>
+    internal static StretchFigures WarpStretch(UvTransferBake.Result warped, UvTransferBake.Result plain,
+                                               UvTransferBake.Raster raster, Func<int, bool> reach, Func<int, bool>? edge = null,
+                                               Func<ushort, ushort, Vector3?>? onSource = null)
+    {
+        edge ??= reach;
+        int size = warped.Size;
+        const int Seam = 65536 / 32;
+        var s = new StretchFigures();
+        // Each map's own distortion: per texel, its area scale against the map's median (as max(a, 1/a)) and its
+        // anisotropy (the Jacobian's singular-value ratio) — for the map with the field and the plain one, at the
+        // texels the field reaches. The plain map is no yardstick of what is right there (it squeezed a man's
+        // under-bust onto a sliver of the breast), so each is measured on its own and the two compared.
+        double medianW = MedianDet(warped), medianP = MedianDet(plain);
+        var areaW = new List<double>();
+        var anisoW = new List<double>();
+        var areaP = new List<double>();
+        var anisoP = new List<double>();
+        for (int i = 0; i < raster.Owner.Length; i++)
+        {
+            if (raster.Owner[i] < 0) continue;
+            bool same = warped.Valid[i] == plain.Valid[i] && warped.R[i] == plain.R[i] && warped.G[i] == plain.G[i];
+            if (!reach(i)) { if (!same) s.ChangedOutside++; continue; }
+            if (!same) s.ChangedInside++;
+            int x = i % size, y = i / size;
+            if (x + 1 >= size || y + 1 >= size) continue;
+            int ix = i + 1, iy = i + size;
+            foreach (var (m, median, areas, anisos) in new[] { (warped, medianW, areaW, anisoW), (plain, medianP, areaP, anisoP) })
+            {
+                if (!Both(m, i, ix, iy) || Jacobian(m, i, ix, iy, Seam) is not { } j) continue;
+                double det = Math.Abs(j.A * j.D - j.B * j.C);
+                if (det == 0) continue;
+                double a = det / median;
+                areas.Add(Math.Max(a, 1 / a));
+                anisos.Add(Ratio(j));
+            }
+        }
+        // The edge of the reach: neighbours one side in and one out, how far apart they land (source px at this size),
+        // with the correction and without. A correction that does not fold can still tear there; a seam of the plain
+        // map's own is a seam, not a tear, and is left out.
+        var jumpW = new List<double>();
+        var jumpP = new List<double>();
+        for (int i = 0; i < raster.Owner.Length; i++)
+        {
+            if (raster.Owner[i] < 0 || !edge(i)) continue;
+            int x = i % size, y = i / size;
+            foreach (int j in new[] { x + 1 < size ? i + 1 : -1, x > 0 ? i - 1 : -1, y + 1 < size ? i + size : -1, y > 0 ? i - size : -1 })
+            {
+                if (j < 0 || raster.Owner[j] < 0 || edge(j)) continue;
+                if (!warped.Valid[i] || !warped.Valid[j] || !plain.Valid[i] || !plain.Valid[j]) continue;
+                double? Jump(UvTransferBake.Result m)
+                {
+                    if (onSource == null) return Math.Sqrt(Math.Pow(m.R[i] - m.R[j], 2) + Math.Pow(m.G[i] - m.G[j], 2)) * (size - 1) / 65535.0;
+                    return onSource(m.R[i], m.G[i]) is { } a && onSource(m.R[j], m.G[j]) is { } b ? Vector3.Distance(a, b) : null;
+                }
+                if (onSource == null && (Math.Abs(plain.R[i] - plain.R[j]) > Seam || Math.Abs(plain.G[i] - plain.G[j]) > Seam)) continue;
+                double? jwn = Jump(warped), jpn = Jump(plain);
+                // A neighbour landing off the source's skin cannot be measured: counted, for each map, rather than passed over.
+                if (jwn == null) s.EdgeOffSkin++;
+                if (jpn == null) s.PlainEdgeOffSkin++;
+                if (jwn is not { } jw || jpn is not { } jp) continue;
+                if (jw > s.EdgeJumpMax) { s.EdgeJumpMax = jw; s.EdgeJumpAt = i; }
+                jumpW.Add(jw);
+                jumpP.Add(jp);
+            }
+        }
+        s.EdgePairs = jumpW.Count;
+        s.EdgeOnBody = onSource != null;
+
+        s.Measured = areaW.Count;
+        double P(List<double> v, double q) => v.Count == 0 ? double.NaN : v[Math.Min(v.Count - 1, (int)(v.Count * q))];
+        foreach (var v in new[] { areaW, anisoW, areaP, anisoP, jumpW, jumpP }) v.Sort();
+        (s.EdgeJumpP99, s.PlainEdgeJumpP99, s.PlainEdgeJumpMax) = (P(jumpW, 0.99), P(jumpP, 0.99), jumpP.Count == 0 ? 0 : jumpP[^1]);
+        (s.AreaP50, s.AreaP99, s.AreaP999, s.AreaMax) = (P(areaW, 0.5), P(areaW, 0.99), P(areaW, 0.999), areaW.Count == 0 ? double.NaN : areaW[^1]);
+        (s.AnisoP50, s.AnisoP99, s.AnisoP999, s.AnisoMax) = (P(anisoW, 0.5), P(anisoW, 0.99), P(anisoW, 0.999), anisoW.Count == 0 ? double.NaN : anisoW[^1]);
+        (s.PlainAreaP99, s.PlainAnisoP99) = (P(areaP, 0.99), P(anisoP, 0.99));
+        return s;
+
+        static double MedianDet(UvTransferBake.Result m)
+        {
+            var dets = new List<double>();
+            for (int i = 0; i + m.Size + 1 < m.Valid.Length; i += 7)
+                if (Both(m, i, i + 1, i + m.Size) && Jacobian(m, i, i + 1, i + m.Size, Seam) is { } j && j.A * j.D - j.B * j.C != 0)
+                    dets.Add(Math.Abs(j.A * j.D - j.B * j.C));
+            dets.Sort();
+            return dets.Count == 0 ? 1 : dets[dets.Count / 2];
+        }
+
+        static bool Both(UvTransferBake.Result m, int i, int ix, int iy) => m.Valid[i] && m.Valid[ix] && m.Valid[iy];
+        static (double A, double B, double C, double D)? Jacobian(UvTransferBake.Result m, int i, int ix, int iy, int seam)
+        {
+            int dux = m.R[ix] - m.R[i], dvx = m.G[ix] - m.G[i], duy = m.R[iy] - m.R[i], dvy = m.G[iy] - m.G[i];
+            if (Math.Abs(dux) > seam || Math.Abs(dvx) > seam || Math.Abs(duy) > seam || Math.Abs(dvy) > seam) return null;
+            return (dux, duy, dvx, dvy);
+        }
+        static double Ratio((double A, double B, double C, double D) j)
+        {
+            double f = j.A * j.A + j.B * j.B + j.C * j.C + j.D * j.D, det = j.A * j.D - j.B * j.C;
+            double root = Math.Sqrt(Math.Max(f * f - 4 * det * det, 0));
+            double s1 = Math.Sqrt((f + root) / 2), s2 = Math.Sqrt(Math.Max((f - root) / 2, 0));
+            return s2 <= 1e-9 ? 1e9 : s1 / s2;
+        }
     }
 
     /// <summary>
@@ -253,6 +436,17 @@ internal static class UvTransferQuality
         }
         const float Band = 0.01f;
 
+        // The nipples and, under each, the under-bust crease (UvBakeNipples). The old under-bust point — the front at
+        // the middle spine's height — is kept as underBustOld for the record: on Bibo+ that height is its nipple's.
+        if (UvBakeNipples.Find(body).Found is { } nipples)
+        {
+            var bvh = new TriangleBvh(body);
+            foreach (var (side, n) in new[] { ("L", nipples.L), ("R", nipples.R) })
+            {
+                result["nipple" + side] = (n.Tri, n.Bary);
+                if (UvBakeNipples.Crease(body, n, bvh).Found is { } crease) result["underBust" + side] = (crease.Tri, crease.Bary);
+            }
+        }
         foreach (var (side, sx, suffix) in new[] { ("L", 1f, "_l"), ("R", -1f, "_r") })
         {
             var hand = sx > 0 ? Region.HandL : Region.HandR;
@@ -261,7 +455,7 @@ internal static class UvTransferQuality
             Pick("fingertip" + side, (p, r) => r == hand ? p.X * sx : null);
             Pick("toe" + side, (p, r) => r == foot ? p.Z : null);
             if (C("j_sebo_b") is { } mid)
-                Pick("underBust" + side, (p, _) => MathF.Abs(p.X - 0.08f * sx) < Band && MathF.Abs(p.Y - mid.Y) < Band ? p.Z : null);
+                Pick("underBustOld" + side, (p, _) => MathF.Abs(p.X - 0.08f * sx) < Band && MathF.Abs(p.Y - mid.Y) < Band ? p.Z : null);
             if (C("j_asi_a" + suffix) is { } th)
                 Pick("innerThigh" + side, (p, r) => r == thigh && MathF.Abs(p.Y - th.Y) < Band ? -p.X * sx : null);
             if (C("j_ude_a" + suffix) is { } arm)
@@ -311,6 +505,17 @@ internal static class UvTransferQuality
         return errors;
     }
 
+    /// <summary>Where on <paramref name="src"/>'s surface the stored coordinate (<paramref name="r"/>, <paramref name="g"/>) lands, or null off its skin.</summary>
+    internal static Vector3? OnSource(ushort r, ushort g, BakeBody src, UvTransferBake.Raster srcRaster)
+    {
+        int sx = (int)MathF.Round(r / 65535f * (srcRaster.Size - 1));
+        int sy = (int)MathF.Round(g / 65535f * (srcRaster.Size - 1));
+        int st = srcRaster.Owner[sy * srcRaster.Size + sx];
+        if (st < 0) return null;
+        int si = sy * srcRaster.Size + sx;
+        return src.At(st, srcRaster.BaryU[si], srcRaster.BaryV[si], 1 - srcRaster.BaryU[si] - srcRaster.BaryV[si]).Pos;
+    }
+
     /// <summary>Where on <paramref name="src"/>'s surface map pixel <paramref name="i"/> lands, or null off its sheet.</summary>
     private static Vector3? SourcePoint(UvTransferBake.Result map, int i, BakeBody src, UvTransferBake.Raster srcRaster)
     {
@@ -352,10 +557,48 @@ internal static class UvTransferQuality
         }
         foreach (var (name, mm) in f.LandmarksMm)
         {
-            float limit = Gate.AcceptedLandmarkMm.TryGetValue(name, out var accepted) ? accepted
-                        : (name.StartsWith("fingertip") || name.StartsWith("toe") ? Gate.TipLandmark : Gate.TorsoLandmark) * 1000f;
+            if (name.StartsWith("underBustOld", StringComparison.Ordinal)) continue;   // reported only
+            if (name.StartsWith("nipple", StringComparison.Ordinal))
+            {
+                float across = f.LandmarksTangentMm.GetValueOrDefault(name, float.NaN);
+                if (float.IsNaN(across) || across > Gate.NippleTangentMm)
+                    miss.Add($"{mapName}: landmark {name} off by {across:F1} mm across the skin > {Gate.NippleTangentMm:F0} mm");
+                continue;
+            }
+            float limit = LandmarkLimitMm(name, f);
             if (float.IsNaN(mm) || mm > limit) miss.Add($"{mapName}: landmark {name} off by {mm:F1} mm > {limit:F0} mm");
         }
+        if (f.Stretch is { } s)
+        {
+            if (!(s.AreaP99 <= s.PlainAreaP99 * s.Margin))
+                miss.Add($"{mapName}: chest distortion area p99 {s.AreaP99:F2} > {s.Margin} × the plain map's {s.PlainAreaP99:F2} there");
+            if (!(s.AnisoP99 <= s.PlainAnisoP99 * s.Margin))
+                miss.Add($"{mapName}: chest distortion anisotropy p99 {s.AnisoP99:F2} > {s.Margin} × the plain map's {s.PlainAnisoP99:F2} there");
+            if (s.ChangedOutside > 0) miss.Add($"{mapName}: the chest field changed {s.ChangedOutside} texels outside its reach");
+            // A correction that folds nowhere can still tear where it ends: neighbours either side of its edge land no
+            // further apart than the plain map's do there (a pixel's leeway where those are next to nothing).
+            if (s.EdgeOffSkin > s.PlainEdgeOffSkin)
+                miss.Add($"{mapName}: {s.EdgeOffSkin} pairs at the correction's edge land off the skin, the plain map {s.PlainEdgeOffSkin}");
+            double leeway = s.EdgeOnBody ? Gate.EdgeLeewayM : 1;
+            string unit = s.EdgeOnBody ? "m" : "px";
+            if (!(s.EdgeJumpP99 <= Gate.StretchMargin * Math.Max(s.PlainEdgeJumpP99, leeway)))
+                miss.Add($"{mapName}: the chest correction tears at its edge: p99 {s.EdgeJumpP99:G3} {unit}, the plain map {s.PlainEdgeJumpP99:G3}");
+            if (!(s.EdgeJumpMax <= Gate.StretchMargin * Math.Max(s.PlainEdgeJumpMax, leeway)))
+                miss.Add($"{mapName}: the chest correction tears at its edge: {s.EdgeJumpMax:G3} {unit} at most, the plain map {s.PlainEdgeJumpMax:G3}");
+        }
         return miss;
+    }
+
+    /// <summary>
+    /// A landmark's bound: the under-bust crease's from the plain projection's own error there (rounded up, never
+    /// under the torso's 15 mm) — the crease replaced a mis-placed point and has no older bound — the user's accepted
+    /// figures, then the torso's or tip's.
+    /// </summary>
+    internal static float LandmarkLimitMm(string name, Figures f)
+    {
+        if (name.StartsWith("underBust", StringComparison.Ordinal) && f.PlainLandmarksMm.TryGetValue(name, out var plain) && !float.IsNaN(plain))
+            return Math.Max(MathF.Ceiling(plain), Gate.TorsoLandmark * 1000f);
+        return Gate.AcceptedLandmarkMm.TryGetValue(name, out var accepted) ? accepted
+             : (name.StartsWith("fingertip") || name.StartsWith("toe") ? Gate.TipLandmark : Gate.TorsoLandmark) * 1000f;
     }
 }

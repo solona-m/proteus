@@ -16,6 +16,7 @@ namespace Proteus.Tests;
 /// metres off YAS Tre: the polar turn fit diverged on their flat ornament cards, and the scale fitted to the broken turn
 /// was kept for the second pass (see <see cref="TurnFit.TurnTolerance"/>).
 /// </summary>
+[Trait("Speed", "Slow")]
 public class VirtuDancerRefitLocalTests(ITestOutputHelper output)
 {
     private const string Tre = LocalData.Mods + ":hs-[YAS] Tre-5.5.3-8xB";

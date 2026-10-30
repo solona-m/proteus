@@ -150,6 +150,42 @@ public sealed class SizeSetStrings
     public readonly string NothingAdded = ProteusLoc.Localize("SizeSet.NothingAdded",
         "No sizes were added: the mod already has every size of the bodies ticked.");
 
+    public readonly string NothingAddedSeeLeftOut = ProteusLoc.Localize("SizeSet.NothingAdded.SeeLeftOut",
+        "No sizes were added. Why is listed under \"Left out\" below.");
+
+    public readonly string NothingAddedSeeLog = ProteusLoc.Localize("SizeSet.NothingAdded.SeeLog",
+        "No sizes were added. The Dalamud log (/xllog) says why for each size.");
+
+    public readonly string MadeOn = ProteusLoc.Localize("SizeSet.MadeOn", "Made on") + "###sizeSetMadeOn";
+
+    public readonly string MadeOnAuto = ProteusLoc.Localize("SizeSet.MadeOn.Auto", "Find it for me");
+
+    public readonly string MadeOnTip = ProteusLoc.Localize("SizeSet.MadeOn.Tip",
+        "The body mod this mod's chest and legs were made on. Used only for sizes Proteus can't read itself, such as a "
+      + "mod made on an older release of a body (Bibo+ before Dawntrail, say). Leave it as Find it for me unless Proteus "
+      + "says it couldn't tell.");
+
+    /// <summary>{0} is the piece.</summary>
+    public readonly string UnreadableMadeOnFmt = ProteusLoc.Localize("SizeSet.UnreadableMadeOn.Fmt",
+        "{0}: couldn't tell which body it was made on, so no sizes were made of it. If you know, choose it under "
+      + "\"Made on\" and add the sizes again.");
+
+    /// <summary>{0} is the piece, {1} the body chosen under "Made on".</summary>
+    public readonly string NotMadeOnFmt = ProteusLoc.Localize("SizeSet.NotMadeOn.Fmt",
+        "{0}: none of its sizes sits on {1}, so no sizes were made of it. Check the body chosen under \"Made on\".");
+
+    /// <summary>{0} is the piece, {1} the body chosen under "Made on".</summary>
+    public readonly string MadeOnMissingFmt = ProteusLoc.Localize("SizeSet.MadeOnMissing.Fmt",
+        "{0}: {1}, chosen under \"Made on\", isn't installed, so no sizes were made of it.");
+
+    /// <summary>{0} is the piece, {1} the body chosen under "Made on".</summary>
+    public readonly string MadeOnUnclearFmt = ProteusLoc.Localize("SizeSet.MadeOnUnclear.Fmt",
+        "{0}: on {1}, its sizes can't be told apart, so no sizes were made of it.");
+
+    /// <summary>{0} is the piece, {1} the author's size, {2} the body it was read on, {3} the body chosen under "Made on".</summary>
+    public readonly string MadeOnOtherBodyFmt = ProteusLoc.Localize("SizeSet.MadeOnOtherBody.Fmt",
+        "{0}: \"{1}\" was read as made on {2}, not on {3} chosen under \"Made on\", and its sizes were cut as made on {2}.");
+
     public readonly string LeftOut = ProteusLoc.Localize("SizeSet.LeftOut", "Left out:");
 
     public readonly string FailedFmt = ProteusLoc.Localize("SizeSet.Failed.Fmt", "Couldn't add the sizes: {0}");
@@ -234,8 +270,14 @@ public sealed class SizeSetStrings
         "The mod already has a group of the author's called \"{0}\", so no men's versions were made. Rename that group "
       + "in Penumbra and add the sizes again.");
 
-    public readonly string EndsNotForMen = ProteusLoc.Localize("SizeSet.EndsNotForMen",
-        "Shoes and gloves get no men's version: only chest and legs pieces are refitted across the sexes.");
+    /// <summary>{0} is the piece, {1} the men's option.</summary>
+    public readonly string EndFromGameBodyFmt = ProteusLoc.Localize("SizeSet.EndFromGameBody.Fmt",
+        "{0}, \"{1}\": its leg or arm has no skin to read a body off, so it was refit as made on the game's own body.");
+
+    /// <summary>{0} is the piece, {1} the men's option, {2} millimetres, {3} the body.</summary>
+    public readonly string EndClothGapFmt = ProteusLoc.Localize("SizeSet.EndClothGap.Fmt",
+        "{0}, \"{1}\": its cloth sits about {2:F0} mm off {3}'s leg or arm on average, so the body it was read on may "
+      + "not be the one it was made on.");
 
     /// <summary>{0} is the piece, {1} the author's option the men's version was made from.</summary>
     public readonly string OneVariantFmt = ProteusLoc.Localize("SizeSet.OneVariant.Fmt",
@@ -2991,6 +3033,14 @@ public sealed class PartsStrings
     public readonly string RetargetClashFmt = ProteusLoc.Localize("Parts.Retarget.Clash.Fmt",
         "Group \"{0}\" also replaces this model; the new group wins over it.");
 
+    /// <summary>{0} is another group of the mod that replaces the same model; {1} is the group the refit is to be saved into.</summary>
+    public readonly string RetargetClashOutrankedFmt = ProteusLoc.Localize("Parts.Retarget.Clash.Outranked.Fmt",
+        "Group \"{0}\" also replaces this model and outranks \"{1}\" in Penumbra, so a refit saved there won't show while \"{0}\" is on. Save it to a new group instead.");
+
+    /// <summary>{0} is another option of the multi-choice group {1} that replaces the same model.</summary>
+    public readonly string RetargetClashOptionOutrankedFmt = ProteusLoc.Localize("Parts.Retarget.Clash.OptionOutranked.Fmt",
+        "Option \"{0}\" of \"{1}\" also replaces this model and comes before the refit in that group, so the refit won't show while \"{0}\" is ticked. Untick it in Penumbra, or save to a new group instead.");
+
     public readonly string RetargetSave = ProteusLoc.Localize("Parts.Retarget.Save", "Save as a new option")
                                         + "###partsRetargetSave";
 
@@ -3152,6 +3202,10 @@ public sealed class PartsStrings
     public readonly string RetargetBendBackFmt = ProteusLoc.Localize("Parts.Retarget.Bake.BendBack.Fmt",
         "the refit could not be bent back into the {0} shape ({1})");
 
+    /// <summary>A reason like <see cref="RetargetBendBackFmt"/>; {0} is the skin material names, as the model writes them.</summary>
+    public readonly string RetargetForeignSkinFmt = ProteusLoc.Localize("Parts.Retarget.Bake.ForeignSkin.Fmt",
+        "it would still draw skin with {0}, a skin material the new body does not use, and the game can crash loading a skin material it cannot find");
+
     /// <summary>A reason in the {1} of <see cref="RetargetBendBackFmt"/>.</summary>
     public readonly string RetargetBakeNoWearer = ProteusLoc.Localize("Parts.Retarget.Bake.NoWearer",
         "your character could not be read");
@@ -3189,6 +3243,14 @@ public sealed class PartsStrings
     public readonly string RetargetRaceCrossSexHintFmt = ProteusLoc.Localize("Parts.Retarget.Race.CrossSexHint.Fmt",
         "To make a version for {0}, pick it under “Refit for”.");
 
+    /// <summary>{0} is the race picked under "Refit for", such as "Midlander M", for the game's own gear.</summary>
+    public readonly string RetargetRaceReplacesGameFmt = ProteusLoc.Localize("Parts.Retarget.Race.ReplacesGame.Fmt",
+        "The game has its own {0} model of this item. Once saved, this refit replaces it for everyone you see wearing the game's {0} model while the new mod is on. Choose “Original” in that mod, or turn it off, to bring the game's back.");
+
+    /// <summary>{0} is the race of the character playing, such as "Highlander M".</summary>
+    public readonly string RetargetRaceCharacterKeepsGameFmt = ProteusLoc.Localize("Parts.Retarget.Race.CharacterKeepsGame.Fmt",
+        "Your character is {0}, and the game has a {0} model of this item of its own: this refit won't show on your character.");
+
     /// <summary>{0} is the race of the model open, such as "Midlander F".</summary>
     public readonly string RetargetRefuseCrossSexMadeForFmt = ProteusLoc.Localize("Parts.Retarget.Refuse.CrossSexMadeFor.Fmt",
         "Across the sexes, the bodies this garment was made on have to be {0} bodies. Pick the body mod it was made for under “Made for body”.");
@@ -3216,9 +3278,9 @@ public sealed class PartsStrings
     public readonly string RetargetRaceAsWornFmt = ProteusLoc.Localize("Parts.Retarget.Race.AsWorn.Fmt",
         "{0} (as your character wears it)");
 
-    /// <summary>{0} is a race such as "Highlander M".</summary>
-    public readonly string RetargetRaceOwnModelFmt = ProteusLoc.Localize("Parts.Retarget.Race.OwnModel.Fmt",
-        "This mod already has its own {0} model. Refit that one instead.");
+    /// <summary>{0} is a race such as "Midlander M" the mod already ships a model for (or one that race falls through to).</summary>
+    public readonly string RetargetRaceOwnModelReplacedFmt = ProteusLoc.Localize("Parts.Retarget.Race.OwnModelReplaced.Fmt",
+        "This mod already has a model of its own that {0} wears. A refit for {0} saved into this mod takes its place while it is on. If that model is the author's own work, open it and refit it instead.");
 
     /// <summary>A button; {0} is a race such as "Highlander M".</summary>
     public readonly string RetargetRaceOpenModelFmt = ProteusLoc.Localize("Parts.Retarget.Race.OpenModel.Fmt",

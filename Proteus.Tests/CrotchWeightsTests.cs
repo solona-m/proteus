@@ -185,6 +185,7 @@ public class CrotchWeightsTests
     }
 
     [Fact]
+    [Trait("Speed", "Slow")]
     public void Pants_come_out_as_before()
     {
         // [AC-crotch-leg-weights-3]
@@ -685,6 +686,7 @@ public class CrotchWeightsTests
     }
 
     [Fact]
+    [Trait("Speed", "Slow")]
     public void A_pants_crotch_insert_stays_with_its_legs()
     {
         // [EDGE-crotch-leg-weights-21] The insert is its own piece, touching the pant legs at the crotch.

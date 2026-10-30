@@ -760,6 +760,9 @@ internal static partial class BodyRetarget
     /// <param name="relaxSinkGuard">Keep a relax round from laying a cloth face onto skin that comes through its middle (see
     /// <see cref="RelaxSinkTolerance"/>): the game's own gear, in the automatic refit and the Studio, never a modder's
     /// garment. Only with <paramref name="clearBody"/>.</param>
+    /// <param name="openSkin">On a slot the garment only reaches onto, cut with <paramref name="cutHidden"/> off, draw the
+    /// skin that cut leaves out in the open inside the author's own skin (see <see cref="GrowSpannedOpenSkin"/>): the
+    /// automatic refit, never the Studio, whose refit is written into the modder's own mod.</param>
     public static Planned Plan(ModelParts garment, byte[] garmentBytes, IReadOnlyList<SlotPair> pairs,
                                string? garmentSlot = null, bool pushOut = true, IReadOnlySet<int>? held = null,
                                bool replaceSkin = false, bool acrossBodies = false, bool clearBody = false,
@@ -768,7 +771,7 @@ internal static partial class BodyRetarget
                                string? chestSlot = null, Action<string, Vec3[]>? trace = null,
                                Outfit? outfit = null, string? tuckSlot = null, bool deepClear = false,
                                bool keepStandoff = false, bool carryPiercings = false, bool liftUnderbust = true,
-                               bool seeInside = false, bool relaxSinkGuard = false)
+                               bool seeInside = false, bool relaxSinkGuard = false, bool openSkin = false)
     {
         // First, before anything reads the new chest: its nipples smoothed where the garment covers more of them than
         // the old body had, so every pass below sees one surface — the one the swap draws.
@@ -837,11 +840,14 @@ internal static partial class BodyRetarget
         {
             bool see = seeInside && tuckSlot != null && !Tuned.NoSeeInside;
             var rebuilt = Rebuild(model, pairs, replaceSkin, weights, out var swapped, cutHidden, acrossBodies,
-                                  swapMeshes, tuckSlot, carryPiercings, parted, see);
+                                  swapMeshes, tuckSlot, carryPiercings, parted, see, openSkin);
             if (rebuilt != null)
             {
                 model = rebuilt;
                 swap = swapped;
+                if (swapped.Spanned > 0)
+                    log?.Invoke($"skin kept in the open: {swapped.Spanned} triangles of the new body inside the author's skin, "
+                                + "past the cut's reach");
                 if (swapped.Tucked > 0)
                     log?.Invoke($"skin tucked: {swapped.Tucked} triangles of the new body under the cloth past the author's edge "
                                 + $"({swapped.Opened} in the open, inside the author's skin"
@@ -1065,6 +1071,20 @@ internal static partial class BodyRetarget
         if (covered != null) KeepLayerOrder(sets, covered, nodeDelta, stay, layered!, drawn);
         Stage("layer-order");
 
+        // The worst push as the report says it: how far a pushed point now lies from where the push-out found it — the
+        // passes after it, which smooth and settle the pushed cloth, included. The passes add their pushes up as they go
+        // (pushedBy, which caps them), and an oscillating settle summed into a "worst push" of 259 mm where no pushed point
+        // ended more than 30 mm from where the push-out found it (Stormblessed's bottoms on TBSE Gen A, 2026-10-29).
+        if (stage.PushStart is { } pushStart && pushedBy != null)
+        {
+            worstPush = 0f;
+            for (int n = 0; n < sets.NodeCount; n++)
+                if (pushedBy[n] > 0f
+                    && Len(new Vec3(nodeDelta[n].X - pushStart[n].X, nodeDelta[n].Y - pushStart[n].Y,
+                                    nodeDelta[n].Z - pushStart[n].Z)) is var moved && float.IsFinite(moved))
+                    worstPush = MathF.Max(worstPush, moved);
+        }
+
         // And outside the other piece of its outfit, which is already drawn as it is — see KeepOutfitOrder. After the
         // garment's own layers, which it puts back in order itself, so nothing moves either piece after it.
         int outfitLayered = 0;
@@ -1125,9 +1145,12 @@ internal static partial class BodyRetarget
     /// <param name="OpenEdgeFitted">Nodes the push-out took in by the made-on body's reading; see
     /// <see cref="TargetBody.Fitted"/>.</param>
     /// <param name="Fallbacks">Turns of kept pieces made by Horn's fit, both passes; see <see cref="TurnOf"/>.</param>
+    /// <param name="PushStart">Every node where the push-out found it, the kept pieces already moved whole: what the
+    /// report's worst push is measured from.</param>
     private sealed record ShapeStage(int Pushed, float WorstPush, TargetBody? Drawn, FaceCheck? FaceCheck,
                                      float[]? PushedBy, ShapeOutcome[]? Shapes, int DeepCleared = 0, float DeepWorst = 0f,
-                                     IReadOnlyList<int>? DeepAt = null, int OpenEdgeFitted = 0, int Fallbacks = 0);
+                                     IReadOnlyList<int>? DeepAt = null, int OpenEdgeFitted = 0, int Fallbacks = 0,
+                                     Vec3[]? PushStart = null);
 
     /// <summary>
     /// The kept pieces moved whole, the push-out, and the pieces whole again around where the push put them — then each
@@ -1175,6 +1198,8 @@ internal static partial class BodyRetarget
         foreach (int n in sets.ClothNodes)
             if (!snapped[n] || pushSnapped) pushable.Add(n);
 
+        // Where the push-out found each point: the report's worst push is measured from here (see Solve).
+        var pushStart = (Vec3[])nodeDelta.Clone();
         int pushed = PushOut(sets, pushable, before, after, nodeDelta, clearBody, out float worstPush,
                              out var faceCheck, out var pushedBy, pushSnapped ? snapped : null, deep,
                              out var deepNodes, out float deepWorst, out int openEdgeFitted);
@@ -1200,7 +1225,7 @@ internal static partial class BodyRetarget
             shapes = JudgeShapes(sets, placed, owner, bent, nodeDelta, SignedOff(after), SignedOff(before));
         }
         return new ShapeStage(pushed, worstPush, after, faceCheck, pushedBy, shapes, deepNodes.Count, deepWorst, deepAt,
-                              openEdgeFitted, fallbacks);
+                              openEdgeFitted, fallbacks, pushStart);
     }
 
     /// <summary>

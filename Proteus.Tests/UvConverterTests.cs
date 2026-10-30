@@ -219,6 +219,7 @@ public class UvConverterTests
     /// </summary>
     [LocalDataFact(LocalData.TbseUvMaps)]
     [Trait("Plan", "AC-tbse-uvmap-9")]
+    [Trait("Speed", "Slow")]
     public void Cross_sex_refit_still_refused_with_tbse_maps_present() // [AC-tbse-uvmap-9]
     {
         var withMaps = new UVRemapService(Substitute.For<IPluginLog>(), LocalData.Path(LocalData.TbseUvMaps));

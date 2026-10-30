@@ -25,7 +25,7 @@ public sealed class Plugin : IDalamudPlugin
     [PluginService] public static ITextureProvider TextureProvider { get; private set; } = null!;
 
     /// <summary>Hand-maintained; bump it for in-game testing. <see cref="BuildStamp"/> is the one that can't go stale.</summary>
-    public const int BuildNumber = 1379;
+    public const int BuildNumber = 1398;
 
     /// <summary>
     /// Which set of release notes is current. Raise it when a release has something new to say: the window
@@ -106,6 +106,7 @@ public sealed class Plugin : IDalamudPlugin
                                                    a => _ = framework.RunOnTick(a, TimeSpan.FromMilliseconds(250)),
                                                    log));
 
+        Interop.LunaLog.Attach(log);
         penumbra = new PenumbraBridge(pluginInterface, log);
         glamourer = new GlamourerBridge(pluginInterface, ObjectTable, log);
         textureLoader = new TextureLoader(DataManager, log)
@@ -128,6 +129,8 @@ public sealed class Plugin : IDalamudPlugin
         discovery.SeedDefaultEffects();
         effectsDl.EnsureAsync(onProgress: () => { if (!_disposed) discovery.SeedDefaultEffects(); });
         uvRemap = new UVRemapService(log, dataDir);
+        // Nothing may read a UV map before this: the download service swaps an upgraded men's pair into place as it is
+        // made, and a map read (or cached) first would be the old one, or a file mid-move.
         uvMapDl = new UVMapDownloadService(log, dataDir, assemblyDir);
         compositor = new CompositorService(penumbra, glamourer, discovery, textureLoader, config, log, uvRemap);
 
@@ -541,6 +544,7 @@ public sealed class Plugin : IDalamudPlugin
         compositor.Dispose();
         glamourer.Dispose();
         penumbra.Dispose();
+        Interop.LunaLog.Detach();
         loc.Dispose();   // last: unhooks LanguageChanged, which anything above could still be drawing under
     }
 }

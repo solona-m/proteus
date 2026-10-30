@@ -70,6 +70,11 @@ internal static class Program
         Proteus.Refit --size-set <unpacked mod folder> --bodies <key>[,<key>...]|all
                       --mods-root <Penumbra mod folder> --game <FFXIV game\sqpack> --uvmaps <Proteus plugin dir>
                       [--men] [--no-ends] [--skeleton <men's base .sklb>] [--report <file.json>]
+                      [--made-on <body mod folder under --mods-root>]   (the body the chest and legs were made on,
+                       for the sizes it cannot read itself: an older release of a body; and a skinless shoe's or
+                       glove's men's version is read there first)
+                      (--men: a women's mod's chest, legs, shoes and gloves get men's versions; --no-ends leaves
+                       shoes and gloves out)
                       keys: neolithe, bibo, rue, yab, yab-buff, tre, rosaline, tbse, tbse-x ("all" = every women's body)
                       (the Studio's "Every size for other bodies" on a work copy outside the mod folder; a v3 mod is
                        converted to v4 in place first. The bodies are the mod folder's; the mod itself never is one.

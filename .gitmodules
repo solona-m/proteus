@@ -5,7 +5,7 @@
 [submodule "Glamourer"]
 	path = Glamourer
 	url = https://github.com/Ottermandias/Glamourer.git
-	branch = testing
+	branch = stable
 [submodule "Luna"]
 	path = Luna
 	url = https://github.com/Ottermandias/Luna.git

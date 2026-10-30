@@ -59,6 +59,7 @@ public class NecklineFloatTests(ITestOutputHelper output)
     [Fact]
     [Trait("Plan", "AC-neckline-float-1")]
     [Trait("Plan", "AC-neckline-float-3")]
+    [Trait("Speed", "Slow")]
     public void A_neckline_lifted_off_a_shrunk_upper_chest_comes_back_to_its_standoff()
     {
         var (top, pair) = FloatingNeckline();

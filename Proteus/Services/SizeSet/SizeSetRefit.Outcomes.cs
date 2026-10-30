@@ -90,6 +90,7 @@ internal static partial class SizeSetRefit
         internal const string NoSource = "no-source";
         internal const string NoSourceMen = "no-source-men";
         internal const string Unreadable = "unreadable";
+        internal const string NotMadeOn = "not-made-on";
         internal const string EndsUnreadable = "ends-unreadable";
         internal const string Unpaired = "unpaired";
         internal const string EndNoLead = "end-no-lead";
@@ -99,7 +100,6 @@ internal static partial class SizeSetRefit
         internal const string MenGroupTaken = "men-group-taken";
         internal const string MenMapsMissing = "men-maps-missing";
         internal const string NoGameData = "no-game-data";
-        internal const string EndsNotForMen = "ends-not-for-men";
         internal const string SameSkin = "same-skin";
         internal const string NoEnd = "no-end";
         internal const string SaveFailed = "save-failed";

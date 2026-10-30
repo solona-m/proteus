@@ -3615,6 +3615,14 @@
     "message": "分组“{0}”也会替换此模型；新分组优先。",
     "description": ""
   },
+  "Parts.Retarget.Clash.Outranked.Fmt": {
+    "message": "分组“{0}”也会替换此模型，并且在 Penumbra 中优先于“{1}”，因此只要“{0}”开启，保存在那里的转换结果就不会显示。请改为保存到新分组。",
+    "description": "{0} is another group of the mod that replaces the same model; {1} is the group the refit is to be saved into."
+  },
+  "Parts.Retarget.Clash.OptionOutranked.Fmt": {
+    "message": "“{1}”中的选项“{0}”也会替换此模型，并且在该分组中先于转换结果生效，因此只要勾选了“{0}”，转换结果就不会显示。请在 Penumbra 中取消勾选，或改为保存到新分组。",
+    "description": "{0} is another option of the multi-choice group {1} that replaces the same model."
+  },
   "Parts.Retarget.ClearBody": {
     "message": "将布料推出体外",
     "description": ""
@@ -3778,6 +3786,10 @@
   "Parts.Retarget.Lowered.Fmt": {
     "message": "根据 {0} 模型生成 {1} 模型，按游戏在两者之间的弯曲方式弯成 {1} 体型。保存时会添加游戏所需的元数据。",
     "description": "{0} is the race of the model open, {1} the race picked below it."
+  },
+  "Parts.Retarget.Bake.ForeignSkin.Fmt": {
+    "message": "皮肤仍会使用 {0} 绘制，这是新身体不使用的皮肤材质，游戏在加载找不到的皮肤材质时可能会崩溃",
+    "description": "{0} is the skin material names, as the model writes them."
   },
   "Parts.Retarget.Bake.BendBack.Fmt": {
     "message": "无法将转换结果变形回 {0} 体型（{1}）",
@@ -4411,6 +4423,14 @@
     "message": "翻转面 {0} 个；身体对应 {1}。",
     "description": "{0} is a count of folded (turned-over) faces; {1} a percentage such as \"97%\"."
   },
+  "Parts.Retarget.Race.ReplacesGame.Fmt": {
+    "message": "游戏自带此物品的{0}模型。保存后，只要新模组开启，你看到的所有穿着游戏{0}模型的人都会改为显示这个转换结果。在该模组中选择「Original」或关闭该模组，即可恢复游戏原模型。",
+    "description": "Warning under “Refit for” for the game's own gear. {0} is the race picked, such as \"Midlander M\". “Original” is the literal name of the option Proteus writes into the new mod; keep it in English."
+  },
+  "Parts.Retarget.Race.CharacterKeepsGame.Fmt": {
+    "message": "你的角色是{0}，而游戏自带此物品的{0}模型：这个转换结果不会显示在你的角色身上。",
+    "description": "Warning for the game's own gear refitted for another race. {0} is the race of the character playing, such as \"Highlander M\"."
+  },
   "Parts.Retarget.Race.CrossSexHint.Fmt": {
     "message": "要为{0}制作版本，请在“转换给种族”中选择它。",
     "description": "{0} is a race such as \"Midlander M\". “Refit for” is the dropdown's label (Parts.Retarget.Race.Label)."
@@ -4463,9 +4483,9 @@
     "message": "{0}（按你的角色穿着）",
     "description": "An entry of the Refit for list; {0} is a race such as \"Midlander F\": the race the logged-in character would get it as."
   },
-  "Parts.Retarget.Race.OwnModel.Fmt": {
-    "message": "此模组已有自己的{0}模型。请改为转换那个模型。",
-    "description": "{0} is a race such as \"Highlander M\" the mod already ships a model of."
+  "Parts.Retarget.Race.OwnModelReplaced.Fmt": {
+    "message": "此模组已有{0}所穿的专属模型。保存到此模组的{0}转换结果在开启时会取代它。如果那个模型是作者自己的作品，请打开它并改为转换那个模型。",
+    "description": "{0} is a race such as \"Midlander M\" the mod already ships a model for (or one that race falls through to)."
   },
   "Parts.Retarget.Race.OpenModel.Fmt": {
     "message": "打开{0}模型",
@@ -5135,6 +5155,46 @@
     "message": "没有添加尺码：模组已经拥有所勾选体型的全部尺码。",
     "description": ""
   },
+  "SizeSet.NothingAdded.SeeLeftOut": {
+    "message": "没有添加任何尺码。原因见下方“未制作”。",
+    "description": ""
+  },
+  "SizeSet.NothingAdded.SeeLog": {
+    "message": "没有添加任何尺码。每个尺码的原因见 Dalamud 日志（/xllog）。",
+    "description": ""
+  },
+  "SizeSet.MadeOn": {
+    "message": "制作所用体型",
+    "description": ""
+  },
+  "SizeSet.MadeOn.Auto": {
+    "message": "自动判断",
+    "description": ""
+  },
+  "SizeSet.MadeOn.Tip": {
+    "message": "此模组的上衣和腿部所基于的体型模组。只用于 Proteus 自己无法判断的尺码，例如基于旧版体型（比如 Dawntrail 之前的 Bibo+）制作的模组。除非 Proteus 提示无法判断，否则请保持“自动判断”。",
+    "description": ""
+  },
+  "SizeSet.UnreadableMadeOn.Fmt": {
+    "message": "{0}：无法判断它是为哪个体型制作的，因此没有制作它的尺码。如果你知道，请在“制作所用体型”中选择它，然后重新添加尺码。",
+    "description": ""
+  },
+  "SizeSet.NotMadeOn.Fmt": {
+    "message": "{0}：它的尺码都不贴合 {1}，因此没有制作它的尺码。请检查“制作所用体型”中选择的体型。",
+    "description": ""
+  },
+  "SizeSet.MadeOnMissing.Fmt": {
+    "message": "{0}：在“制作所用体型”中选择的 {1} 未安装，因此没有制作它的尺码。",
+    "description": ""
+  },
+  "SizeSet.MadeOnUnclear.Fmt": {
+    "message": "{0}：在 {1} 上无法区分它的尺码，因此没有制作它的尺码。",
+    "description": ""
+  },
+  "SizeSet.MadeOnOtherBody.Fmt": {
+    "message": "{0}：“{1}”被判断为基于 {2} 制作，而不是“制作所用体型”中选择的 {3}，因此它的尺码按基于 {2} 制作。",
+    "description": ""
+  },
   "SizeSet.LeftOut": {
     "message": "未制作：",
     "description": ""
@@ -5227,9 +5287,13 @@
     "message": "此模组已有作者的“{0}”组，因此未制作男性版本。请在 Penumbra 中重命名该组，然后再次添加尺码。",
     "description": "{0} is the group's name."
   },
-  "SizeSet.EndsNotForMen": {
-    "message": "鞋子和手套没有男性版本：只有上身和腿部部件会跨性别调整。",
-    "description": "Said once when a women's mod's men's versions are made and it has shoes or gloves."
+  "SizeSet.EndFromGameBody.Fmt": {
+    "message": "{0}，“{1}”：腿或手臂上没有可读取体型的皮肤，因此按游戏自带体型制作来调整。",
+    "description": "Check in game: a women's shoe or glove made a men's with no skin to read a body off. {0} is the piece, {1} the men's option."
+  },
+  "SizeSet.EndClothGap.Fmt": {
+    "message": "{0}，“{1}”：布料离{3}的腿或手臂平均约 {2:F0} 毫米，所以读取到的体型可能不是它原本制作时用的体型。",
+    "description": "Check in game: a women's shoe or glove made a men's whose cloth sits far off the leg or arm it was read on. {0} is the piece, {1} the men's option, {2} millimetres, {3} the body."
   },
   "SizeSet.OneVariant.Fmt": {
     "message": "{0}：男性只得到一个版本，由“{1}”制作；模组的其他变体仍只供女性使用。",

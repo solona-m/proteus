@@ -18,6 +18,7 @@ namespace Proteus.Tests;
 /// the body's own chest, shipped as one of the garment's sizes beside one that is nothing of the body's. Against the
 /// installed Rue+, so skipped where it is not.
 /// </summary>
+[Trait("Speed", "Slow")]
 public class AuthorSizeTests : IDisposable
 {
     private const string Rue = LocalData.Mods + ":hs-Rue+-2.2.7-y0f";

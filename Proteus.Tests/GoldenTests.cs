@@ -41,6 +41,7 @@ public class GoldenTests(ITestOutputHelper o)
                    SecondSkinWriterVerbatimTests.RueNeed, SecondSkinWriterVerbatimTests.HostRingNeed, ToeCapPng,
                    LocalData.PiercingsPack)]
     [Trait("Plan", "AC-navel-bridge-8")]
+    [Trait("Speed", "Slow")]
     public void Shell_output_matches_baseline()
     {
         var cases = new Cases(o);
@@ -108,6 +109,7 @@ public class GoldenTests(ITestOutputHelper o)
 
     /// <summary>[AC-within-body-weights-7] The refit's output, byte for byte against the recorded baseline.</summary>
     [LocalDataFact(NeolitheChest, NeolitheExtra, NeolitheLegs)]
+    [Trait("Speed", "Slow")]
     public void Retarget_output_matches_baseline()
     {
         var cases = new Cases(o);

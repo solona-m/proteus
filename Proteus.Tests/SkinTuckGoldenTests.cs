@@ -19,9 +19,9 @@ public class SkinTuckGoldenTests(ITestOutputHelper output)
     private static readonly HashSet<int> NoneHeld = [];
 
     /// <summary>A game top as it was before the neckline tuck and the deep clear (and the game chest's bra read, and the
-    /// relax guard).</summary>
+    /// relax guard, and the cut that keeps a triangle the author's skin covers only inside).</summary>
     private static readonly BodyRetarget.Tuning Before = new(NoTuck: true, NoDeepClear: true, NoKeepStandoff: true,
-                                                            NoSourceWorn: true, NoRelaxSinkGuard: true);
+                                                            NoSourceWorn: true, NoRelaxSinkGuard: true, NoCutInside: true);
 
     /// <summary>A game top with the tuck as change (a) made it: no deep clear, no open skin.</summary>
     private static readonly BodyRetarget.Tuning TuckOnly = new(NoDeepClear: true, NoOpenSkin: true, NoKeepStandoff: true,
@@ -444,6 +444,7 @@ public class SkinTuckGoldenTests(ITestOutputHelper output)
     [LocalDataFact(LocalData.GameData, Neolithe)]
     [Trait("Plan", "AC-neckline-skin-tuck-3")]
     [Trait("Plan", "AC-open-patch-authored-4")]
+    [Trait("Speed", "Slow")]
     public void A_modders_cut_on_Neolithe_plans_as_before()
     {
         var (bytes, source, target, pair, _) = Setup("Neo-Ishgardian Top of Maiming", "neobelly chest - smallclothes/sfw m.mdl");
@@ -452,7 +453,10 @@ public class SkinTuckGoldenTests(ITestOutputHelper output)
         var garment = ModelPartReader.Read(bytes)!;
         // As it was pinned: before cloth past the top's own open skin edge was read against the body it was made on
         // (build 1323), which takes 80 of its points in — see A_modders_cut_on_Neolithe_plans_as_fitted.
-        var plan = BodyRetarget.WithTuning(new BodyRetarget.Tuning(NoOpenEdgeFit: true), () => MaimingCut(garment, bytes, pair));
+        // Before 1382's seam weights too (measured at 1382: 108 vertices on 32 seams took one weighting, the most any moved
+        // 0.098, positions untouched).
+        var plan = BodyRetarget.WithTuning(new BodyRetarget.Tuning(NoOpenEdgeFit: true, NoSeamWeights: true),
+                                           () => MaimingCut(garment, bytes, pair));
         Pinned(plan.Model, MaimingStudioCut);
     }
 
@@ -464,12 +468,19 @@ public class SkinTuckGoldenTests(ITestOutputHelper output)
     /// </summary>
     [LocalDataFact(LocalData.GameData, Neolithe)]
     [Trait("Plan", "AC-open-patch-authored-9")]
+    [Trait("Plan", "EDGE-seam-weights-15")]
+    [Trait("Speed", "Slow")]
     public void A_modders_cut_on_Neolithe_plans_as_fitted()
     {
         var (bytes, source, target, pair, _) = Setup("Neo-Ishgardian Top of Maiming", "neobelly chest - smallclothes/sfw m.mdl");
         if (!SameInputs(("garment", bytes, MaimingSha), ("source", File.ReadAllBytes(source), VanillaTopSha),
                         ("target", File.ReadAllBytes(target), NeobellyMSha))) return;
-        Pinned(MaimingCut(ModelPartReader.Read(bytes)!, bytes, pair).Model, MaimingStudioCutFitted);
+        // As pinned on 1323: before 1382's seam weights (measured at 1382: 109 vertices on 33 seams, at most 0.099).
+        var pinned = BodyRetarget.WithTuning(new BodyRetarget.Tuning(NoSeamWeights: true),
+                                             () => MaimingCut(ModelPartReader.Read(bytes)!, bytes, pair)).Model;
+        Pinned(pinned, MaimingStudioCutFitted);
+        // [EDGE-seam-weights-15] With them: the same cut, weights apart.
+        SeamWeightsTests.SameGeometry(pinned, MaimingCut(ModelPartReader.Read(bytes)!, bytes, pair).Model);
     }
 
     private static BodyRetarget.Planned MaimingCut(ModelParts garment, byte[] bytes, BodyRetarget.SlotPair pair)
@@ -479,6 +490,7 @@ public class SkinTuckGoldenTests(ITestOutputHelper output)
 
     [LocalDataFact(LocalData.GameData, Neolithe)]
     [Trait("Plan", "AC-neckline-skin-tuck-3")]
+    [Trait("Speed", "Slow")]
     public void The_Dirndl_game_refit_without_the_tuck_plans_as_before()
     {
         var (bytes, source, target, pair, uv) = Setup("Dirndl's Bodice", "extra chest - smallclothes/nsfw almond xs.mdl");
