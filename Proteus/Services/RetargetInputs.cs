@@ -22,6 +22,19 @@ internal static class RetargetInputs
         public bool KeepEnds => EndSlot != null;
     }
 
+    /// <summary>
+    /// The part a garment is laid out as: its own, whatever the body mod offers. Another part never stands in for it —
+    /// a leg piece shown the chest's sizes as its own is the wrong garment's refit. A body mod without the part is
+    /// said so instead (<see cref="MissingSlot"/>). Only a garment that is no body part (an accessory) takes the body
+    /// mod's first part, as it always has.
+    /// </summary>
+    internal static string GarmentSlot(string? own, IEnumerable<string> offered)
+        => own ?? offered.FirstOrDefault() ?? "_top";
+
+    /// <summary>The part the layout needs sizes of that the body mod has none of, or null when it has them.</summary>
+    internal static string? MissingSlot(IEnumerable<string> offered, Layout layout)
+        => offered.Contains(layout.Primary) ? null : layout.Primary;
+
     /// <summary>Whether a garment in <paramref name="slot"/> can keep its ends at all, which is when the box is shown.</summary>
     internal static bool OffersKeepEnds(string slot) => AutoRefitDecisions.LimbOf(slot) != null;
 

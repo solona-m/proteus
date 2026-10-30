@@ -5682,5 +5682,17 @@
   "HairPort.Earless.Refused.Outside.Fmt": {
     "message": "{0}은(는) 모드의 귀 없는 폴더 안의 경로가 아니어서 아무것도 기록하지 않았습니다",
     "description": ""
+  },
+  "Parts.Retarget.NoSlotInBody.Fmt": {
+    "message": "{0}에는 이 부위({1})의 사이즈가 없습니다. 사이즈가 있는 체형 모드를 고르세요.",
+    "description": ""
+  },
+  "Parts.Retarget.UseWornBody.Fmt": {
+    "message": "{0} 사용",
+    "description": ""
+  },
+  "Parts.Retarget.UseWornBody.Tip": {
+    "message": "이 부위에 착용 중인 체형 모드에 맞춥니다. \"적용 체형\"에서 고르는 것과 같습니다.",
+    "description": ""
   }
 }

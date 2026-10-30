@@ -18,6 +18,13 @@ namespace Proteus.Services;
 internal static class RememberedTargets
 {
     /// <summary>
+    /// Whether pointing the memory at <paramref name="dir"/> forgets the sizes remembered for
+    /// <paramref name="rememberedFor"/>: it does whenever the body mod is another one, however it came to be picked.
+    /// </summary>
+    internal static bool ForgetsOnRepoint(string? rememberedFor, string dir)
+        => !string.Equals(dir, rememberedFor, StringComparison.OrdinalIgnoreCase);
+
+    /// <summary>
     /// The slots to fill, and the option file to fill each with.
     /// </summary>
     /// <param name="remembered">Slot to option file, as last chosen — see <c>Configuration.RetargetTargets</c>.</param>

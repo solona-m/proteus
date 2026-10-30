@@ -5682,5 +5682,17 @@
   "HairPort.Earless.Refused.Outside.Fmt": {
     "message": "{0} no es una ruta dentro de la carpeta sin orejas del mod, así que no se escribió nada",
     "description": ""
+  },
+  "Parts.Retarget.NoSlotInBody.Fmt": {
+    "message": "{0} no tiene tallas para esta parte ({1}). Elige un mod de cuerpo que las tenga.",
+    "description": ""
+  },
+  "Parts.Retarget.UseWornBody.Fmt": {
+    "message": "Usar {0}",
+    "description": ""
+  },
+  "Parts.Retarget.UseWornBody.Tip": {
+    "message": "Ajustar al mod de cuerpo que llevas para esta parte. Es lo mismo que elegirlo en «Ajustar al cuerpo».",
+    "description": ""
   }
 }

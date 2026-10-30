@@ -72,4 +72,15 @@ public class RememberedTargetsTests
     {
         Assert.Empty(Fill(bodyDir: null));
     }
+
+    [Fact]
+    [Trait("Plan", "AC-studio-slot-body-5")]
+    [Trait("Plan", "EDGE-studio-slot-body-15")]
+    public void Picking_another_folder_forgets_old_sizes_and_same_folder_keeps_them()   // [AC-studio-slot-body-5] [EDGE-studio-slot-body-15]
+    {
+        // The "Use ..." button is a pick like the dropdown's, and goes through the same rule.
+        Assert.True(RememberedTargets.ForgetsOnRepoint("A", "B"));
+        Assert.False(RememberedTargets.ForgetsOnRepoint("A", "a"));
+        Assert.True(RememberedTargets.ForgetsOnRepoint(null, "B"));
+    }
 }

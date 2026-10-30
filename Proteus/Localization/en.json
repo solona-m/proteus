@@ -5682,5 +5682,17 @@
   "HairPort.Earless.Refused.Outside.Fmt": {
     "message": "{0} is not a path inside the mod's earless folder, so nothing was written",
     "description": ""
+  },
+  "Parts.Retarget.NoSlotInBody.Fmt": {
+    "message": "{0} has no sizes for this part ({1}). Pick a body mod that has them.",
+    "description": ""
+  },
+  "Parts.Retarget.UseWornBody.Fmt": {
+    "message": "Use {0}",
+    "description": ""
+  },
+  "Parts.Retarget.UseWornBody.Tip": {
+    "message": "Refit onto the body mod you're wearing for this part. The same as picking it under \"Refit onto body\".",
+    "description": ""
   }
 }

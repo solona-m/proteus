@@ -5682,5 +5682,17 @@
   "HairPort.Earless.Refused.Outside.Fmt": {
     "message": "{0} はModの耳なしフォルダー内のパスではないため、何も書き込みませんでした",
     "description": ""
+  },
+  "Parts.Retarget.NoSlotInBody.Fmt": {
+    "message": "{0} にはこの部位（{1}）のサイズがありません。サイズのある体型 Mod を選んでください。",
+    "description": ""
+  },
+  "Parts.Retarget.UseWornBody.Fmt": {
+    "message": "{0} を使う",
+    "description": ""
+  },
+  "Parts.Retarget.UseWornBody.Tip": {
+    "message": "この部位に着ている体型 Mod にリフィットします。「リフィット先の体型 Mod」で選ぶのと同じです。",
+    "description": ""
   }
 }

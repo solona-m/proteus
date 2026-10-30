@@ -3168,6 +3168,16 @@ public sealed class PartsStrings
     public readonly string RetargetNoChestInBodyFmt = ProteusLoc.Localize("Parts.Retarget.NoChestInBody.Fmt",
         "{0} has no chest to refit by, so the whole piece is refitted.");
 
+    /// <summary>{0}: a body mod's name; {1}: the part, as <see cref="RetargetChest"/>, <see cref="RetargetLegs"/>, ….</summary>
+    public readonly string RetargetNoSlotInBodyFmt = ProteusLoc.Localize("Parts.Retarget.NoSlotInBody.Fmt",
+        "{0} has no sizes for this part ({1}). Pick a body mod that has them.");
+
+    /// <summary>{0}: the name of the body mod the character wears for this part.</summary>
+    public readonly string RetargetUseWornBodyFmt = ProteusLoc.Localize("Parts.Retarget.UseWornBody.Fmt", "Use {0}");
+
+    public readonly string RetargetUseWornBodyTip = ProteusLoc.Localize("Parts.Retarget.UseWornBody.Tip",
+        "Refit onto the body mod you're wearing for this part. The same as picking it under \"Refit onto body\".");
+
     public readonly string RetargetSwapShapesFmt = ProteusLoc.Localize("Parts.Retarget.SwapShapes.Fmt",
         "{0} shape key(s) lost to the skin swap. Untick \"Use the new body's skin\" to keep them.");
 
