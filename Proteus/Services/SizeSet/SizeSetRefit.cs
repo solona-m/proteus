@@ -284,7 +284,7 @@ internal static partial class SizeSetRefit
             => ourFiles.Contains(RefitCore.Normal(file))
                || RefitCore.Normal(file).StartsWith(BodyRetargetWriter.Subfolder.ToLowerInvariant() + "/", StringComparison.Ordinal);
 
-        bool IsCopy(Piece piece)
+        bool IsRacialCopy(Piece piece)
         {
             string other = RacialModelBake.WithRace(piece.GamePath, piece.Race == "0101" ? CrossSexRefit.Women : CrossSexRefit.Men);
             var sibling = pieces.FirstOrDefault(s => string.Equals(s.GamePath, other, StringComparison.OrdinalIgnoreCase));
@@ -314,7 +314,7 @@ internal static partial class SizeSetRefit
                    || sibling.Options.Any(o => models.Mine(o.File) is not { } mine || GameModelCopy.IsAuthors(mine, theirGame));
         }
 
-        var copies = pieces.Where(IsCopy).ToList();
+        var copies = pieces.Where(IsRacialCopy).ToList();
         foreach (var copy in copies) droppedCopy?.Invoke(copy.GamePath);
         return copies.Count == 0 ? pieces : pieces.Where(p => !copies.Contains(p)).ToList();
     }
@@ -346,7 +346,20 @@ internal static partial class SizeSetRefit
 
         /// <summary>Whether two of the mod's files hold the same bytes; unreadable is not.</summary>
         internal bool SameBytes(string a, string b)
-            => Bytes(a) is { } x && Bytes(b) is { } y && x.AsSpan().SequenceEqual(y);
+            => Length(a) is { } la && la == Length(b) && Bytes(a) is { } x && Bytes(b) is { } y && x.AsSpan().SequenceEqual(y);
+
+        private long? Length(string file)
+        {
+            try
+            {
+                var info = new FileInfo(BodySizeCatalog.ResolveCaseInsensitive(modRoot, file));
+                return info.Exists ? info.Length : null;
+            }
+            catch (Exception)
+            {
+                return null;
+            }
+        }
 
         private byte[]? Bytes(string file)
         {

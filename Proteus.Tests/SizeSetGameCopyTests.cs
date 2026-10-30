@@ -116,6 +116,12 @@ public class SizeSetGameCopyTests
     private static IEnumerable<string> Names(IEnumerable<SizeSetRefit.Piece> pieces)
         => pieces.Select(p => Path.GetFileNameWithoutExtension(p.GamePath));
 
+    /// <summary>The Debug lines <paramref name="log"/> received naming <paramref name="path"/>.</summary>
+    private static int DebugsNaming(IPluginLog log, string path)
+        => log.ReceivedCalls().Count(c => c.GetMethodInfo().Name == nameof(IPluginLog.Debug)
+                                          && c.GetArguments().SelectMany(a => a is object?[] list ? list : [a])
+                                              .Any(a => a as string == path));
+
     private static void Delete(string root)
     {
         if (Directory.Exists(root)) Directory.Delete(root, recursive: true);
@@ -170,6 +176,8 @@ public class SizeSetGameCopyTests
             Assert.Null(outcome.RefusalCode);
             Assert.Contains("tbse@women", outcome.Keys);
             Assert.DoesNotContain("tbse", outcome.Keys);
+            // Said once, by the run — not again by the batch's own read of the pieces.
+            Assert.Equal(1, DebugsNaming(log, PathOf("0101")));
 
             // The copy is the author's file still, given as before: men with no TBSE pick keep the mod's textures on it.
             Assert.Contains(PenumbraModMeta.ReadAllRedirects(root),
@@ -399,13 +407,37 @@ public class SizeSetGameCopyTests
             Delete(root);
         }
 
-        // On the exact rule's own path — a men's model alone, no women's beside it — an unreadable model is the
-        // author's: it no longer stops the whole read.
-        root = Mod(("Fit", [new F("Fit", PathOf("0101"), "m.mdl", garbage)]));
+        // On the exact rule's own path — a men's model alone, no women's beside it — a model whose read throws (the file
+        // held open elsewhere) is the author's: it no longer stops the whole read.
+        root = Mod(("Fit", [new F("Fit", PathOf("0101"), "m.mdl", Game)]));
         try
         {
-            Assert.Equal(["c0101e6000_top"], Names(SizeSetRefit.PiecesOf(root, Reader3())));
+            using (new FileStream(Path.Combine(root, "m.mdl"), FileMode.Open, FileAccess.Read, FileShare.None))
+                Assert.Equal(["c0101e6000_top"], Names(SizeSetRefit.PiecesOf(root, Reader3())));
+            Assert.Empty(SizeSetRefit.PiecesOf(root, Reader3()));   // readable, it is the game's own
             Assert.Equal(["c0101e6000_top"], Names(SizeSetRefit.PiecesOf(root, _ => throw new IOException("gone"))));
+        }
+        finally
+        {
+            Delete(root);
+        }
+    }
+
+    [Fact]
+    [Trait("Plan", "EDGE-old-game-copies-11")]
+    public void An_unreadable_womens_model_counts_as_the_authors()   // [EDGE-old-game-copies-11]
+    {
+        // On purpose: the copy beside it must still be a copy, beside a racial copy, and one model. Garbage, or held open
+        // elsewhere, the women's model is kept as the author's and the men's copy goes.
+        byte[] garbage = [.. Enumerable.Range(0, 300).Select(i => (byte)(i * 7))];
+        string root = Boobies();
+        try
+        {
+            string womens = Path.Combine(root, "halter", "c0201_top.mdl");
+            using (new FileStream(womens, FileMode.Open, FileAccess.Read, FileShare.None))
+                Assert.Equal(["c0201e6000_top"], Names(SizeSetRefit.PiecesOf(root, Reader3())));
+            File.WriteAllBytes(womens, garbage);
+            Assert.Equal(["c0201e6000_top"], Names(SizeSetRefit.PiecesOf(root, Reader3())));
         }
         finally
         {
@@ -462,6 +494,28 @@ public class SizeSetGameCopyTests
                                       new F("Everything", PathOf("0901"), BodyRetargetWriter.Subfolder + "/hi.mdl", Copy)]));
         try
         {
+            Assert.Contains("c0101e6000_top", Names(SizeSetRefit.PiecesOf(root, Reader3())));
+        }
+        finally
+        {
+            Delete(root);
+        }
+
+        // Nor one our record lists, wherever it was saved.
+        root = Mod(("Halter", [new F("Everything", PathOf("0201"), "halter/w.mdl", Design),
+                               new F("Everything", PathOf("0101"), "halter/m.mdl", Copy)]),
+                   ("Ours", [new F("Hi", PathOf("0901"), "refits/hi.mdl", Copy)]));
+        Directory.CreateDirectory(Path.Combine(root, SidecarDiscoveryService.SidecarSubdir));
+        File.WriteAllText(Path.Combine(root, SidecarDiscoveryService.SidecarSubdir, BodyRetargetWriter.RecordFile),
+                          JsonSerializer.Serialize(new
+                          {
+                              Group = "Ours",
+                              Options = new[] { new { Group = "Ours", Name = "Hi", GamePath = PathOf("0901"), File = "refits/hi.mdl" } },
+                          }));
+        try
+        {
+            Assert.Contains(RefitCore.Normal("refits/hi.mdl"),
+                            BodyRetargetWriter.ReadRecord(root)!.Options.Select(e => RefitCore.Normal(e.File)));
             Assert.Contains("c0101e6000_top", Names(SizeSetRefit.PiecesOf(root, Reader3())));
         }
         finally
@@ -532,6 +586,20 @@ public class SizeSetGameCopyTests
             Delete(root);
         }
 
+        // Of this item but another slot: no copy of this one either.
+        root = Mod(("Halter", [new F("Everything", PathOf("0201"), "halter/w.mdl", Design),
+                               new F("Everything", PathOf("0101"), "halter/m.mdl", Copy),
+                               new F("Everything", PathOf("0901", "_dwn"), "halter/hi_dwn.mdl", Copy)]));
+        try
+        {
+            Assert.Contains("c0101e6000_top",
+                            Names(SizeSetRefit.PiecesOf(root, Reader(PathOf("0101"), PathOf("0201"), PathOf("0901", "_dwn")))));
+        }
+        finally
+        {
+            Delete(root);
+        }
+
         // Of this item, named in capitals: it counts.
         root = Mod(("Halter", [new F("Everything", PathOf("0201"), "halter/w.mdl", Design),
                                new F("Everything", PathOf("0101"), "halter/m.mdl", Copy),
@@ -569,6 +637,32 @@ public class SizeSetGameCopyTests
         finally
         {
             Delete(root);
+        }
+    }
+
+    [Fact]
+    [Trait("Plan", "EDGE-old-game-copies-20")]
+    public void A_mod_of_only_the_games_own_logs_it_once_from_the_batch()   // [EDGE-old-game-copies-20]
+    {
+        // No pieces left, so no run: the batch says what it left out, once.
+        string root = Mod(("Fit", [new F("Fit", PathOf("0101"), "m.mdl", Game)]));
+        string mods = Path.Combine(Path.GetTempPath(), "proteus-gamecopy-mods-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(mods);
+        try
+        {
+            var log = Substitute.For<IPluginLog>();
+            var runLog = new SizeSetRefit.RunLog();
+            var outcome = SizeSetBatch.Run(new SizeSetBatch.Inputs(root, mods, SizeSetBatch.ParseKeys("all", out _)!, Men: true,
+                                                                   Ends: false, Reader3(), null, log),
+                                           runLog, _ => { }, CancellationToken.None);
+            Assert.Null(outcome.RefusalCode);
+            Assert.Equal("no-pieces", Assert.Single(runLog.Sizes).ReasonCode);
+            Assert.Equal(1, DebugsNaming(log, PathOf("0101")));
+        }
+        finally
+        {
+            Delete(root);
+            Delete(mods);
         }
     }
 
