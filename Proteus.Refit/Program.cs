@@ -329,7 +329,7 @@ internal static class Program
 
             if (from != null)
             {
-                ushort? mask = MaskOf(catalog, slot);
+                var mask = MaskOf(catalog, slot, race)?.Onto(from);
                 string path = catalog.PathOf(from);
                 if (BodyRetarget.BuildPair(slot, path, path, slot, male, mask, mask, null, out var pair) is { } refusal)
                     skinSkipped = refusal;
@@ -1095,7 +1095,8 @@ internal static class Program
                                           .ToList();
         Directory.CreateDirectory(outDir);
 
-        ushort? sourceMask = MaskOf(src, slot), targetMask = MaskOf(dst, slot);
+        // Read once for the body; each size is taken as chosen in its own group below (BodyDraw.Onto).
+        BodyRetarget.BodyDraw? sourceMask = MaskOf(src, slot, race), targetMask = MaskOf(dst, slot, race);
 
         string? legsSkipped = null;
         Legs? legs = null;
@@ -1122,8 +1123,9 @@ internal static class Program
             if (string.Equals(Path.GetFullPath(chestSourcePath), Path.GetFullPath(chestTargetPath),
                               StringComparison.OrdinalIgnoreCase))
                 chestNote = $"the waist already sits on \"{chestTarget.Label}\"";
-            else if (BodyRetarget.BuildPair("_top", chestSourcePath, chestTargetPath, "_top", male, MaskOf(src, "_top"),
-                                            MaskOf(dst, "_top"), uvRemap, out var built) is { } chestRefusal)
+            else if (BodyRetarget.BuildPair("_top", chestSourcePath, chestTargetPath, "_top", male, MaskOf(src, "_top", race),
+                                            MaskOf(dst, "_top", race)?.Onto(chestTarget), uvRemap, out var built)
+                     is { } chestRefusal)
                 chestNote = chestRefusal;
             else
             {
@@ -1147,8 +1149,8 @@ internal static class Program
         foreach (var (label, option) in targets)
         {
             var pairs = new List<BodyRetarget.SlotPair>();
-            if (BodyRetarget.BuildPair(slot, src.PathOf(from), dst.PathOf(option), slot, male, sourceMask, targetMask,
-                                       uvRemap, out var pair) is { } refusal)
+            if (BodyRetarget.BuildPair(slot, src.PathOf(from), dst.PathOf(option), slot, male, sourceMask,
+                                       targetMask?.Onto(option), uvRemap, out var pair) is { } refusal)
             {
                 sizes.Add(new { label, to = option.Rel, refusal });
                 continue;
@@ -1289,9 +1291,10 @@ internal static class Program
                    $"  {s.Option.Rel}  rms {s.Rms * 1000f:F2} mm, exact {s.HitRate:P0}"));
     }
 
-    /// <summary>A body mod's own IMC mask for a slot, under its default settings — no player here to ask.</summary>
-    private static ushort? MaskOf(BodySizeCatalog catalog, string slot)
-        => BodyRetarget.ImcSlotName(slot) is { } equip ? ImcEntrySource.MaskFor(catalog.ModRoot, 0, equip, null) : null;
+    /// <summary>What a body mod draws of a slot — its IMC mask and its <c>Atr</c> switches (see
+    /// <see cref="RefitCore.MaskOf"/>) — under its default settings: no player here to ask.</summary>
+    internal static BodyRetarget.BodyDraw? MaskOf(BodySizeCatalog catalog, string slot, string? race)
+        => RefitCore.MaskOf(catalog.ModRoot, catalog, slot, null, RefitCore.RaceNumber(race));
 
     /// <summary>The option whose model is <paramref name="rel"/> — slashes and case as Penumbra treats them.</summary>
     private static BodyOption Find(BodySizeCatalog catalog, string slot, string rel)
@@ -1347,8 +1350,8 @@ internal static class Program
         public required string SourcePath { get; init; }
         public required string Confidence { get; init; }
         public string? Note { get; init; }
-        public ushort? SourceMask { get; init; }
-        public ushort? TargetMask { get; init; }
+        public BodyRetarget.BodyDraw? SourceMask { get; init; }
+        public BodyRetarget.BodyDraw? TargetMask { get; init; }
         public required Dictionary<string, string?> Targets { get; init; }
         public required Dictionary<string, string> Notes { get; init; }
 
@@ -1451,8 +1454,8 @@ internal static class Program
                 SourcePath = sourcePath,
                 Confidence = confidence,
                 Note = note,
-                SourceMask = MaskOf(src, "_dwn"),
-                TargetMask = MaskOf(dst, "_dwn"),
+                SourceMask = MaskOf(src, "_dwn", race),
+                TargetMask = MaskOf(dst, "_dwn", race),
                 Targets = targets,
                 Notes = notes,
             };

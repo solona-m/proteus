@@ -1093,7 +1093,16 @@ internal static partial class BodyRetarget
             if (pair.Slot != "_top" || pair.TargetModel == null) continue;
             if (ModelSkinReader.Read(pair.TargetModel, null, null) is not { } skin
                 || skin.VertexCount * 3 != pair.Target.Positions.Length) return true;
-            if (Array.Exists(BoneShares(skin, IsBreastBone), share => share >= BreastWeight)) return true;
+            var shares = BoneShares(skin, IsBreastBone);
+            if (pair.TargetHidden is not { Count: > 0 })
+            {
+                if (Array.Exists(shares, share => share >= BreastWeight)) return true;
+                continue;
+            }
+            // Only the parts its mod draws: NIRÆ's "As flat as earth" leaves eight breasted chests in the file, undrawn.
+            foreach (var part in pair.Target.Parts)
+                foreach (int v in part.Triangles)
+                    if (v < shares.Length && shares[v] >= BreastWeight) return true;
         }
         return false;
     }

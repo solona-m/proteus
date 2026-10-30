@@ -47,7 +47,7 @@ internal static partial class RefitCore
     /// refused. Either way the legs are refitted as before.
     /// </summary>
     internal static bool ChestBeneathPair(ChestBeneath beneath, string targetDir, BodySizeCatalog targetCat,
-                                          BodyOption chestTo, bool male, ushort? sourceMask, ushort? targetMask,
+                                          BodyOption chestTo, bool male, BodyRetarget.BodyDraw? sourceMask, BodyRetarget.BodyDraw? targetMask,
                                           UVRemapService? uvRemap, Action<string> note, out BodyRetarget.SlotPair pair)
     {
         pair = default;
@@ -57,7 +57,7 @@ internal static partial class RefitCore
             return false;
         }
         if (BodyRetarget.BuildPair("_top", beneath.Catalog.PathOf(beneath.Chest), targetCat.PathOf(chestTo),
-                                   AutoRefitWatcher.SlotName("_top"), male, sourceMask, targetMask, uvRemap,
+                                   AutoRefitWatcher.SlotName("_top"), male, sourceMask, targetMask?.Onto(chestTo), uvRemap,
                                    out var built) is { } why)
         {
             note($"the chest beneath left out: {why}");

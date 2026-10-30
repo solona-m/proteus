@@ -290,7 +290,8 @@ public sealed partial class AutoRefitWatcher
             var (toBody, to) = placed[slot];
             if (BodyRetarget.BuildPair(slot, sourceCat.PathOf(pick.Option), toBody.Catalog.PathOf(to), SlotName(slot), male,
                                        RefitCore.MaskOf(pick.Dir, sourceCat, slot, OptionsOf(g.Settings, pick.Dir)),
-                                       RefitCore.MaskOf(toBody.Dir, toBody.Catalog, slot, OptionsOf(g.Settings, toBody.Dir)),
+                                       RefitCore.MaskOf(toBody.Dir, toBody.Catalog, slot, OptionsOf(g.Settings, toBody.Dir),
+                                                        RefitCore.RaceNumber(race))?.Onto(to),
                                        uvRemap, out var pair) is { } refusal)
             {
                 if (slot == primary)

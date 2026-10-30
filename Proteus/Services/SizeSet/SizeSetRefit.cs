@@ -591,8 +591,9 @@ internal static partial class SizeSetRefit
             if (body == null || target == null) continue;
             var targetCat = target.Catalog;
             bool Across(Candidate c) => !string.Equals(target.Dir, c.Pick!.Dir, StringComparison.OrdinalIgnoreCase);
-            ushort? targetMask = RefitCore.MaskOf(target.Dir, targetCat, piece.Slot, null);
-            ushort? targetLegsMask = RefitCore.MaskOf(target.Dir, targetCat, "_dwn", null);
+            // Read once for the body; each size is taken as chosen in its own group below (BodyDraw.Onto).
+            var slotTargetMask = RefitCore.MaskOf(target.Dir, targetCat, piece.Slot, null, RefitCore.RaceNumber(race));
+            var targetLegsMask = RefitCore.MaskOf(target.Dir, targetCat, "_dwn", null, RefitCore.RaceNumber(race));
 
             // A family's sizes are read off the primary's file name, which for legs following a chest is a legs name:
             // those take the table's chest sizes, and their legs move along the family below.
@@ -748,6 +749,7 @@ internal static partial class SizeSetRefit
                 bool across = Across(chosen);
                 var sourceCat = chosen.Entry.Catalog;
                 string targetPath = targetCat.PathOf(to);
+                var targetMask = slotTargetMask?.Onto(to);
                 if (BodyRetarget.BuildPair(piece.Slot, chosen.SourcePath, targetPath, SlotName(piece.Slot), male,
                                            RefitCore.MaskOf(chosen.Pick!.Dir, sourceCat, piece.Slot, null), targetMask,
                                            uvRemap, out var pair) is { } refusal)
@@ -771,7 +773,7 @@ internal static partial class SizeSetRefit
                     {
                         if (BodyRetarget.BuildPair("_dwn", sourceCat.PathOf(sourceLegs), targetCat.PathOf(legsTo),
                                                    SlotName("_dwn"), male, RefitCore.MaskOf(chosen.Pick.Dir, sourceCat, "_dwn", null),
-                                                   targetLegsMask, uvRemap, out var legsPair) is { } legsRefusal)
+                                                   targetLegsMask?.Onto(legsTo), uvRemap, out var legsPair) is { } legsRefusal)
                             log.Information("[Proteus] size set: {0} {1}: hips left as they are: {2}", piece.Label, option,
                                             legsRefusal);
                         else
@@ -790,7 +792,8 @@ internal static partial class SizeSetRefit
                     && ChestBeneathTo(key, size, piece.FollowsChest, yas, targetCat, race) is { } chestTo
                     && RefitCore.ChestBeneathPair(beneath, target.Dir, targetCat, chestTo, male,
                                                   RefitCore.MaskOf(beneath.Dir, beneath.Catalog, "_top", null),
-                                                  RefitCore.MaskOf(target.Dir, targetCat, "_top", null), uvRemap,
+                                                  RefitCore.MaskOf(target.Dir, targetCat, "_top", null,
+                                                                   RefitCore.RaceNumber(race)), uvRemap,
                                                   note => log.Information("[Proteus] size set: {0} {1}: {2}", piece.Label,
                                                                           option, note),
                                                   out var chestPair))

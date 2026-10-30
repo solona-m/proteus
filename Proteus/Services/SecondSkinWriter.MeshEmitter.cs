@@ -25,6 +25,7 @@ public static partial class SecondSkinWriter
             private readonly IReadOnlySet<string>? hiddenAttrs;
             private readonly bool clearAttrs;
             private readonly bool dropVariantAttrs;
+            private readonly IReadOnlySet<string>? dropAttrs;
 
             /// <summary>New skinning for this (host) mesh, per vertex; null leaves it as authored.</summary>
             private readonly (string Bone, float W)[]?[]? reskin;
@@ -63,10 +64,11 @@ public static partial class SecondSkinWriter
             private List<byte[]> subsForMesh = null!;
 
             public MeshEmitter(ShellBuild build, Source src, int m, ushort materialIndex, float push, bool preserve, SecondSkinLayer? cov, bool mirrorUv1, IReadOnlySet<string>? hiddenAttrs, bool clearAttrs, CapUvPlan? capUv, bool dropVariantAttrs = false,
-                               (string Bone, float W)[]?[]? reskin = null)
+                               (string Bone, float W)[]?[]? reskin = null, IReadOnlySet<string>? dropAttrs = null)
             {
                 this.reskin = reskin;
                 this.dropVariantAttrs = dropVariantAttrs;
+                this.dropAttrs = dropAttrs;
                 this.build = build;
                 this.src = src;
                 this.m = m;
@@ -533,6 +535,8 @@ public static partial class SecondSkinWriter
                     // IMC mask could cull it.
                     // With dropVariantAttrs, the variant bits go and every other tag stays (ContentGeometry.DropVariantAttributes).
                     uint mask = dropVariantAttrs ? U32(ss + 8) & ~VariantBits(src) : U32(ss + 8);
+                    // With dropAttrs, the named tags go too (ContentGeometry.DropAttributes).
+                    mask &= ~NamedBits(src, dropAttrs);
                     W32(ns, 8, clearAttrs ? 0 : build.RemapAttrs(src, mask));
                     // A window of its OWN, never one shared by every submesh of the mesh: of 275 game and author
                     // models measured, every one gives each submesh its own and not one shares.

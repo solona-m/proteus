@@ -180,19 +180,35 @@ internal static partial class RefitCore
     }
 
     /// <summary>
-    /// The IMC attribute mask a body mod gives its model in <paramref name="slot"/> under a choice of its options —
-    /// which of the body's variant parts the game draws (see <see cref="BodyRetarget.UndrawnVariants"/>). Null when the
-    /// mod has no say, the game's own bodies included: every part is then taken as drawn.
+    /// What of its model in <paramref name="slot"/> a body mod draws under a choice of its options: the IMC attribute
+    /// mask — which of the body's variant parts the game draws (see <see cref="BodyRetarget.UndrawnVariants"/>) — and the
+    /// custom attributes its <c>Atr</c> options switch (see <see cref="BodyAtrSwitches"/>). Null when the mod has no say,
+    /// the game's own bodies included: every part is then taken as drawn. Read once per slot; a refit onto one of its
+    /// sizes takes that size as chosen with <see cref="BodyRetarget.BodyDraw.Onto"/>.
     /// </summary>
     /// <param name="selected">The mod's ticked options in the collection, as Penumbra reports them; null reads the
     /// mod's defaults.</param>
-    internal static ushort? MaskOf(string? dir, BodySizeCatalog? mod, string slot,
-                                   IReadOnlyDictionary<string, List<string>>? selected)
+    /// <param name="race">The body's race as Penumbra codes it (<see cref="RaceNumber"/>); null when unknown, and an
+    /// option limited to one race then leaves its attribute as it was.</param>
+    internal static BodyRetarget.BodyDraw? MaskOf(string? dir, BodySizeCatalog? mod, string slot,
+                                                  IReadOnlyDictionary<string, List<string>>? selected, ushort? race = null)
     {
         if (dir == null || dir == VanillaBodyCatalog.Key || mod == null) return null;
         if (BodyRetarget.ImcSlotName(slot) is not { } equipSlot) return null;
-        return ImcEntrySource.MaskFor(mod.ModRoot, 0, equipSlot, selected);
+        ushort? imc = ImcEntrySource.MaskFor(mod.ModRoot, 0, equipSlot, selected);
+        var query = BodyAtrSwitches.Manifest(mod.ModRoot) is { } manifest
+            ? new BodyAtrSwitches.Query(manifest, equipSlot, selected, race)
+            : null;
+        var atr = query == null ? null : BodyAtrSwitches.Resolve(query);
+        if (imc == null && atr == null) return null;
+        return new BodyRetarget.BodyDraw(imc, atr?.Off ?? new HashSet<string>(StringComparer.Ordinal),
+                                         atr?.Switched ?? new HashSet<string>(StringComparer.Ordinal), query);
     }
+
+    /// <summary>A model race code as Penumbra numbers races ("0201" is 201); null when it is not one.</summary>
+    internal static ushort? RaceNumber(string? code)
+        => code != null && ushort.TryParse(code, System.Globalization.NumberStyles.None,
+                                           System.Globalization.CultureInfo.InvariantCulture, out var n) ? n : null;
 
     /// <summary>The mod's single-choice groups, in the author's order.</summary>
     internal static List<string> SingleGroups(string modRoot) => GroupsOfType(modRoot, "Single", int.MaxValue);

@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Linq;
 using Proteus.Localization;
 
 namespace Proteus.Services;
@@ -25,7 +26,7 @@ internal static partial class BodyRetarget
     /// <param name="targetMale">The target body's sex when it is not the garment's: a refit for the other sex (see
     /// <see cref="CrossSexRefit"/>). Null reads both as <paramref name="male"/>.</param>
     internal static string? BuildPair(string slot, string sourcePath, string targetPath, string name, bool male,
-                                      ushort? sourceMask, ushort? targetMask, UVRemapService? uvRemap,
+                                      BodyDraw? sourceMask, BodyDraw? targetMask, UVRemapService? uvRemap,
                                       out SlotPair pair, bool? targetMale = null)
     {
         return BuildPair(slot, File.ReadAllBytes(sourcePath), File.ReadAllBytes(targetPath), name, male, sourceMask,
@@ -36,7 +37,7 @@ internal static partial class BodyRetarget
     /// <param name="targetMaterial">Reads the target body mod's materials (see <see cref="SlotPair.TargetMaterial"/>);
     /// null when there is no mod to read them from.</param>
     internal static string? BuildPair(string slot, byte[] sourceBytes, byte[] targetBytes, string name, bool male,
-                                      ushort? sourceMask, ushort? targetMask, UVRemapService? uvRemap,
+                                      BodyDraw? sourceMask, BodyDraw? targetMask, UVRemapService? uvRemap,
                                       out SlotPair pair, Func<string, byte[]?>? targetMaterial = null,
                                       bool? targetMale = null)
         => BuildPair(slot, sourceBytes, targetBytes, name, male, sourceMask, targetMask, uvRemap, out pair, out _,
@@ -45,7 +46,7 @@ internal static partial class BodyRetarget
     /// <inheritdoc cref="BuildPair(string, byte[], byte[], string, bool, ushort?, ushort?, UVRemapService?, out SlotPair, Func{string, byte[]}?, bool?)"/>
     /// <param name="stats">How the two bodies' skin landed on each other; null for the same mesh.</param>
     internal static string? BuildPair(string slot, byte[] sourceBytes, byte[] targetBytes, string name, bool male,
-                                      ushort? sourceMask, ushort? targetMask, UVRemapService? uvRemap,
+                                      BodyDraw? sourceMask, BodyDraw? targetMask, UVRemapService? uvRemap,
                                       out SlotPair pair, out UvAtlasCorrespondence.Stats? stats,
                                       Func<string, byte[]?>? targetMaterial = null, bool? targetMale = null)
     {
@@ -55,8 +56,12 @@ internal static partial class BodyRetarget
         var source = ModelPartReader.Read(sourceBytes);
         var target = ModelPartReader.Read(targetBytes);
         if (source == null || target == null) return string.Format(Strings.Parts.RetargetUnreadableFmt, name);
-        source = Drawn(source, slot, sourceMask, out _);
-        target = Drawn(target, slot, targetMask, out var targetHidden);
+        // The source as today, every alternative of its options included: which one the author made the garment on,
+        // the reader's choice of the body mod's options cannot say. The target as the options draw it.
+        source = Drawn(source, slot, sourceMask, atr: false, out _, out _);
+        target = Drawn(target, slot, targetMask, atr: true, out var targetHidden, out var targetSwitched);
+        if (!target.Parts.Any(p => p.Island < 0 && SecondSkinWriter.IsBodySkinMaterial(p.Material)))
+            return string.Format(Strings.Parts.RetargetUnreadableFmt, name);   // its options draw none of its skin
 
         if (!BodyCorrespondence.TryBuild(source, Uv(sourceBytes), target, Uv(targetBytes), name,
                                          out var correspondence, out string refusal, out stats, uvRemap, male, targetMale))
@@ -64,14 +69,23 @@ internal static partial class BodyRetarget
 
         pair = new SlotPair(slot, correspondence!, target, targetBytes, sourceBytes, targetHidden,
                             TargetMaterial: targetMaterial,
-                            SourceIsGameChest: slot == "_top" && VanillaBodyCatalog.IsGameModel(sourceBytes, slot));
+                            SourceIsGameChest: slot == "_top" && VanillaBodyCatalog.IsGameModel(sourceBytes, slot),
+                            TargetSwitched: targetSwitched);
         return null;
     }
 
-    /// <summary>A body model without the variant parts its mod does not draw, and the tags of those parts.</summary>
-    private static ModelParts Drawn(ModelParts body, string slot, ushort? mask, out IReadOnlySet<string>? hidden)
+    /// <summary>
+    /// A body model without the parts its mod does not draw, the tags of those parts, and the drawn tags its options
+    /// switch. With <paramref name="atr"/> off only the IMC variants are judged, as before custom attributes were read.
+    /// </summary>
+    private static ModelParts Drawn(ModelParts body, string slot, BodyDraw? draw, bool atr,
+                                    out IReadOnlySet<string>? hidden, out IReadOnlySet<string>? switched)
     {
-        hidden = mask is { } m ? UndrawnVariants(body.AttributeNames, slot, m) : null;
+        hidden = draw?.Hidden(body.AttributeNames, slot, atr);
+        // The undrawn IMC variants alone, as an empty set when there are none: what TargetHidden always held.
+        if (draw is { ImcMask: null } && hidden is { Count: 0 }) hidden = null;
+        switched = atr ? draw?.Switched(body.AttributeNames, hidden ?? new HashSet<string>()) : null;
+        if (switched is { Count: 0 }) switched = null;
         return Without(body, hidden);
     }
 

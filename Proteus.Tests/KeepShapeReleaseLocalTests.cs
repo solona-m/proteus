@@ -140,7 +140,7 @@ public class KeepShapeReleaseLocalTests
     {
         var garment = ModelPartReader.Read(bytes)!;
         string fromRoot = LocalData.Path(fromNeed), toRoot = LocalData.Path(toNeed);
-        static ushort? Mask(string root) => ImcEntrySource.MaskFor(root, 0, BodyRetarget.ImcSlotName("_top")!, null);
+        static BodyRetarget.BodyDraw? Mask(string root) => RefitCore.MaskOf(root, BodySizeCatalog.Read(root), "_top", null);
         Assert.Null(BodyRetarget.BuildPair("_top", BodySizeCatalog.ResolveCaseInsensitive(fromRoot, fromRel),
                                            BodySizeCatalog.ResolveCaseInsensitive(toRoot, toRel), "_top", false,
                                            Mask(fromRoot), Mask(toRoot), null, out var pair));

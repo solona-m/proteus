@@ -478,6 +478,72 @@ public class SecondSkinWriterVerbatimTests(Xunit.Abstractions.ITestOutputHelper 
         Assert.Single(drawn, m => m == ude);
     }
 
+    /// <summary>The masks of the submeshes a built model draws.</summary>
+    private static List<uint> DrawnMasks(byte[] built)
+    {
+        var t = Tables.Of(built);
+        return Enumerable.Range(0, t.SubmeshCount(built))
+            .Where(i => BitConverter.ToUInt32(built, t.SubStart + i * 16 + 4) > 0)
+            .Select(i => BitConverter.ToUInt32(built, t.SubStart + i * 16 + 8))
+            .ToList();
+    }
+
+    private static byte[] BuildContent(params ContentGeometry[] geometry)
+        => SecondSkinWriter.Build(Array.Empty<SecondSkinWriter.SourceSpec>(),
+                                  [new SecondSkinLayer { MaterialName = "/mt_c0201a0053_rir_a.mtrl", Geometry = [.. geometry] }],
+                                  null, out _);
+
+    /// <summary>
+    /// [AC-body-atr-switches-3] A body mod's switched tag named in <see cref="ContentGeometry.DropAttributes"/> goes off
+    /// the skin that carries it; every other tag on it stays.
+    /// </summary>
+    [Fact]
+    [Trait("Plan", "AC-body-atr-switches-3")]
+    public void DropAttributes_clears_only_the_named_bits()
+    {
+        string[] attrs = ["atrx_a", "atr_ude", "atrx_nt_mani"];
+        var content = SyntheticModel.Build(attrs,
+            new SyntheticModel.Mesh("/mt_pack.mtrl", new SyntheticModel.Sub(0b111)));
+
+        var built = BuildContent(new ContentGeometry(content, _ => true,
+                                                     DropAttributes: new HashSet<string>(StringComparer.Ordinal) { "atrx_a" }));
+        Validate(built);
+        var names = AttributeNames(built);
+        var mask = Assert.Single(DrawnMasks(built));
+        Assert.Equal((1u << names.IndexOf("atr_ude")) | (1u << names.IndexOf("atrx_nt_mani")), mask);
+        Assert.DoesNotContain("atrx_a", names);
+
+        // Nothing named: the model exactly as without the field.
+        Assert.Equal(BuildContent(new ContentGeometry(content, _ => true)),
+                     BuildContent(new ContentGeometry(content, _ => true, DropAttributes: new HashSet<string>())));
+    }
+
+    /// <summary>
+    /// [EDGE-body-atr-switches-16] A name every geometry of a model drops takes no slot in the attribute table; one
+    /// another geometry of the same model keeps stays in it, and on that geometry's submesh.
+    /// </summary>
+    [Fact]
+    [Trait("Plan", "EDGE-body-atr-switches-16")]
+    public void Names_every_geometry_drops_take_no_table_slot()
+    {
+        var content = SyntheticModel.Build(["atrx_a"],
+            new SyntheticModel.Mesh("/mt_skin.mtrl", new SyntheticModel.Sub(1)),
+            new SyntheticModel.Mesh("/mt_ring.mtrl", new SyntheticModel.Sub(1, OffsetX: 1f)));
+        var drop = new HashSet<string>(StringComparer.Ordinal) { "atrx_a" };
+
+        var both = BuildContent(new ContentGeometry(content, m => m.EndsWith("skin.mtrl"), DropAttributes: drop),
+                                new ContentGeometry(content, m => m.EndsWith("ring.mtrl"), DropAttributes: drop));
+        Validate(both);
+        Assert.DoesNotContain("atrx_a", AttributeNames(both));
+
+        var one = BuildContent(new ContentGeometry(content, m => m.EndsWith("skin.mtrl"), DropAttributes: drop),
+                               new ContentGeometry(content, m => m.EndsWith("ring.mtrl")));
+        Validate(one);
+        var names = AttributeNames(one);
+        Assert.Contains("atrx_a", names);
+        Assert.Equal([0u, 1u << names.IndexOf("atrx_a")], DrawnMasks(one).Order());
+    }
+
     /// <summary>
     /// [EDGE-imported-imc-toggles-23] An option mask that hides every part on a host is reported as the user's
     /// toggle, as an Imc group's is.

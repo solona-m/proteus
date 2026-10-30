@@ -475,6 +475,32 @@ public partial class BodyRetargetTests
         Assert.False(BodyRetarget.BreastInPlay([new BodyRetarget.SlotPair("_dwn", built!, cube, [1, 2, 3, 4])]));
     }
 
+    /// <summary>A chest with a flat alternative and a breasted one, tagged as NIRÆ tags its chests.</summary>
+    private static byte[] FlatAndBreasted() => SyntheticModel.Build(["atrx_flat", "atrx_large"],
+        new SyntheticModel.Mesh(SkinMaterial,
+            new SyntheticModel.Sub(0b01, TrianglesPerIsland: 4, Weights: [("j_sebo_c", 1f)]),
+            new SyntheticModel.Sub(0b10, TrianglesPerIsland: 4, OffsetZ: 0.03f, Weights: [("j_mune_l", 1f)])));
+
+    [Fact]
+    [Trait("Plan", "EDGE-body-atr-switches-21")]
+    public void BreastInPlay_ignores_hidden_alternatives()
+    {
+        // [EDGE-body-atr-switches-21] NIRÆ's "As flat as earth" leaves its breasted chests in the file, undrawn.
+        var body = FlatAndBreasted();
+        Assert.False(BodyRetarget.BreastInPlay([Narrowed("_top", body, Names("atrx_large"), Names("atrx_flat"))]));
+        Assert.True(BodyRetarget.BreastInPlay([Narrowed("_top", body, Names("atrx_flat"), Names("atrx_large"))]));
+    }
+
+    [Fact]
+    [Trait("Plan", "AC-body-atr-switches-7")]
+    public void BreastInPlay_with_nothing_hidden_is_unchanged()
+    {
+        // [AC-body-atr-switches-7] Nothing hidden reads every vertex of the file, as before — spares included.
+        var body = FlatAndBreasted();
+        Assert.True(BodyRetarget.BreastInPlay([Narrowed("_top", body, null, null)]));
+        Assert.True(BodyRetarget.BreastInPlay([Narrowed("_top", body, None, null)]));
+    }
+
     /// <summary>A chest pair over the cube whose body file is not a model.</summary>
     private static BodyRetarget.SlotPair Unreadable()
     {

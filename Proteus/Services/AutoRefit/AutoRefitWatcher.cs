@@ -1390,12 +1390,23 @@ public sealed partial class AutoRefitWatcher : IDisposable
         }
         var others = parts.Others.Select(o => (o.Slot, o.From, o.To)).ToList();
 
-        ushort? SourceMask(string slot) => RefitCore.MaskOf(pick.Dir, sourceCat, slot, OptionsOf(g.Settings, pick.Dir));
-        ushort? TargetMask(string slot)
+        BodyRetarget.BodyDraw? SourceMask(string slot)
+            => RefitCore.MaskOf(pick.Dir, sourceCat, slot, OptionsOf(g.Settings, pick.Dir));
+        BodyRetarget.BodyDraw? TargetMask(string slot)
         {
             // A part on a body of its own; the chest beneath, which is not one of them, on the chest's.
             var body = bodyOf.TryGetValue(slot, out var on) ? on : targets.Body(slot);
-            return RefitCore.MaskOf(body?.Dir, body?.Catalog, slot, body == null ? null : OptionsOf(g.Settings, body.Dir));
+            return RefitCore.MaskOf(body?.Dir, body?.Catalog, slot, body == null ? null : OptionsOf(g.Settings, body.Dir),
+                                    RefitCore.RaceNumber(race));
+        }
+        // What the new body's options switched, for the log: the chest a refit onto NIRÆ was fitted to.
+        void Drawn(string slot, BodyOption onto, BodyRetarget.BodyDraw? draw, BodyRetarget.SlotPair pair)
+        {
+            if (draw is { AtrOff.Count: > 0 })
+                log.Information("[Proteus] auto refit: {0} {1} onto \"{2}\": draws {3}; switched off {4}", item, slot,
+                                onto.Label,
+                                string.Join(", ", (pair.TargetSwitched ?? new HashSet<string>()).Order(StringComparer.Ordinal)),
+                                string.Join(", ", draw.AtrOff.Order(StringComparer.Ordinal)));
         }
 
         // ── where it goes ──
@@ -1453,13 +1464,15 @@ public sealed partial class AutoRefitWatcher : IDisposable
         current = current with { Message = string.Format(Strings.AutoRefit.WorkingFmt, item), Failed = false };
 
         string sourcePath = sourceCat.PathOf(pick.Option), targetPath = lead.Catalog.PathOf(target);
+        var primaryDraw = TargetMask(primary)?.Onto(target);
         if (BodyRetarget.BuildPair(primary, sourcePath, targetPath, SlotName(primary), male, SourceMask(primary),
-                                   TargetMask(primary), uvRemap, out var primaryPair) is { } refusal)
+                                   primaryDraw, uvRemap, out var primaryPair) is { } refusal)
         {
             Fail(r, string.Format(ProteusLoc.Localize("Chat.AutoRefit.Failed.Fmt", "[Proteus] Couldn't refit {0}: {1}"), item,
                                refusal));
             return;
         }
+        Drawn(primary, target, primaryDraw, primaryPair);
         var pairs = new List<BodyRetarget.SlotPair> { primaryPair };
         var kept = new List<(string Slot, BodyOption From, BodyOption To)>();
         // Every body the garment's skin may now be drawn by, the lead's first (see RefitCore.MatchSkinToBody).
@@ -1467,14 +1480,16 @@ public sealed partial class AutoRefitWatcher : IDisposable
         foreach (var other in others)
         {
             string otherPath = bodyOf[other.Slot].Catalog.PathOf(other.To);
+            var otherDraw = TargetMask(other.Slot)?.Onto(other.To);
             if (BodyRetarget.BuildPair(other.Slot, sourceCat.PathOf(other.From), otherPath,
-                                       SlotName(other.Slot), male, SourceMask(other.Slot), TargetMask(other.Slot),
+                                       SlotName(other.Slot), male, SourceMask(other.Slot), otherDraw,
                                        uvRemap, out var pair) is { } why)
             {
                 log.Information("[Proteus] auto refit: {0} {1} left out: {2}", item, other.Slot, why);
                 dropped.Add(SlotName(other.Slot));
                 continue;
             }
+            Drawn(other.Slot, other.To, otherDraw, pair);
             pairs.Add(pair);
             kept.Add(other);
             if (!string.Equals(OnDir(other.Slot), lead.Dir, StringComparison.OrdinalIgnoreCase))
@@ -2317,7 +2332,7 @@ public sealed partial class AutoRefitWatcher : IDisposable
         return answer;
     }
 
-    private static IReadOnlyDictionary<string, List<string>>? OptionsOf(
+    internal static IReadOnlyDictionary<string, List<string>>? OptionsOf(
         IReadOnlyDictionary<string, PenumbraBridge.ModSettingsSnapshot>? settings, string dir)
         => settings != null && settings.TryGetValue(dir, out var s) ? s.Options : null;
 

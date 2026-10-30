@@ -629,12 +629,27 @@ public static partial class SecondSkinWriter
                           .All(g => g.DropVariantAttributes))
                     variantDropped.Add(src);
 
+            // And of the names dropped one by one (ContentGeometry.DropAttributes), those every geometry of it drops.
+            var namedDropped = new Dictionary<Source, HashSet<string>>();
+            foreach (var (model, src) in geomByModel)
+            {
+                HashSet<string>? all = null;
+                foreach (var g in layers.SelectMany(l => l.Geometry).Where(g => ReferenceEquals(g.Model, model)))
+                {
+                    var these = g.DropAttributes ?? new HashSet<string>();
+                    if (all == null) all = new HashSet<string>(these, StringComparer.Ordinal);
+                    else all.IntersectWith(these);
+                }
+                if (all is { Count: > 0 }) namedDropped[src] = all;
+            }
+
             attrNames = new List<string>();
             attrIndex = new Dictionary<string, int>(StringComparer.Ordinal);
             foreach (var src in boneSources)
-                foreach (var name in ownedOnly.Contains(src) ? []
+                foreach (var name in (ownedOnly.Contains(src) ? []
                                    : variantDropped.Contains(src) ? src.AttrNames.Where(n => !IsVariantAttribute(n))
                                    : src.AttrNames)
+                                   .Where(n => !namedDropped.TryGetValue(src, out var dropped) || !dropped.Contains(n)))
                 {
                     if (attrIndex.ContainsKey(name) || attrNames.Count >= 32) continue;
                     attrIndex[name] = attrNames.Count;
@@ -992,10 +1007,10 @@ public static partial class SecondSkinWriter
                       SecondSkinLayer? cov,
                       bool mirrorUv1 = false, IReadOnlySet<string>? hiddenAttrs = null,
                       bool clearAttrs = false, CapUvPlan? capUv = null, bool dropVariantAttrs = false,
-                      (string Bone, float W)[]?[]? reskin = null)
+                      (string Bone, float W)[]?[]? reskin = null, IReadOnlySet<string>? dropAttrs = null)
         {
             new MeshEmitter(this, src, m, materialIndex, push, preserve, cov, mirrorUv1, hiddenAttrs, clearAttrs, capUv,
-                            dropVariantAttrs, reskin).Run();
+                            dropVariantAttrs, reskin, dropAttrs).Run();
         }
 
         /// <summary>
