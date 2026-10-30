@@ -43,7 +43,12 @@ public class ContentPiece
     [JsonPropertyName("GateOption")]
     public string? GateOption { get; set; }
 
-    /// <summary>Where the piece rides, as a label ("Head", "Body"). Display only.</summary>
+    /// <summary>
+    /// Where the piece rides, as the label the importer read off the model's game path ("Head", "Right ring"). Also
+    /// matches the pack's toggle groups to the piece when its model is not stored under a game path
+    /// (<c>ContentPieceResolver.GoverningGroups</c>), so it stays English (<c>ContentSlot.DisplayLabel</c> translates
+    /// it for display); null or an unknown label lets every group judge the piece.
+    /// </summary>
     [JsonPropertyName("Slot")]
     public string? Slot { get; set; }
 

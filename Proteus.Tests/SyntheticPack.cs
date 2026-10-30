@@ -89,6 +89,64 @@ internal sealed class SyntheticPack : IDisposable
     }
 
     /// <summary>
+    /// The Neolithe Piercings (Empyrean Ring) shape: chest piercings ride the right ring and legs piercings the left,
+    /// both on set a0103, each picked by size in a Single group whose model sits in the archive OFF a game path
+    /// (<c>chest/…</c>, <c>legs/…</c>), both binding one shared material. Two <c>Imc</c> groups toggle the parts, told
+    /// apart only by EquipSlot: "Chest piercings" (RFinger, bits a–h) and "Legs piercings" (LFinger, only e–g).
+    /// </summary>
+    internal static SyntheticPack RingImcGroups()
+    {
+        const string Material = "mt_c0201a0103_ri_piercings.mtrl";
+        static byte[] Model(int parts)
+        {
+            var attrs = Enumerable.Range(0, parts).Select(i => $"atr_rv_{(char)('a' + i)}").ToArray();
+            return SyntheticModel.Build(attrs, new SyntheticModel.Mesh("/" + Material,
+                [.. Enumerable.Range(0, parts).Select(i => new SyntheticModel.Sub(1u << i))]));
+        }
+
+        static string Size(string group, string option, string slot, string entry)
+            => "{\"Type\":\"Single\",\"Name\":" + Quote(group) + ",\"DefaultSettings\":0,\"Options\":[{\"Name\":"
+             + Quote(option) + ",\"Files\":{" + Quote($"chara/accessory/a0103/model/c0201a0103_{slot}.mdl") + ":"
+             + Quote(entry) + "}}]}";
+
+        static string Imc(string group, string slot, params (string Name, int Mask)[] options)
+            => "{\"Type\":\"Imc\",\"Name\":" + Quote(group) + ",\"DefaultSettings\":0,"
+             + "\"Identifier\":{\"ObjectType\":\"Accessory\",\"PrimaryId\":103,\"Variant\":1,\"EquipSlot\":"
+             + Quote(slot) + "},\"DefaultEntry\":{\"MaterialId\":1,\"DecalId\":0,\"VfxId\":0,"
+             + "\"MaterialAnimationId\":0,\"AttributeMask\":0,\"SoundId\":0},\"Options\":["
+             + string.Join(",", options.Select(o => "{\"Name\":" + Quote(o.Name) + ",\"AttributeMask\":" + o.Mask + "}"))
+             + "]}";
+
+        string[] groups =
+        [
+            Size("Chest size (right ring)", "Neolithe NSFW Hazelnut S", "rir", "chest/chest piece.mdl"),
+            Size("Legs size (left ring)", "Neolithe Gen B Small", "ril", "legs/legs piece.mdl"),
+            Imc("Chest piercings", "RFinger", ("Collar bones dermals", 1), ("Chest dermals", 2),
+                ("NSFW ONLY: Nipples piercings", 4), ("NSFW ONLY: Nipples hearts piercings", 8), ("Belly dermals", 16),
+                ("Belly button piercing", 32), ("Belly button piercing heart charm", 64),
+                ("Collar bones dermals bottom", 128)),
+            Imc("Legs piercings", "LFinger", ("Hips dermals", 16), ("Christina (NSFW ONLY)", 32),
+                ("Vertical hood (GEN B & C ONLY)", 64)),
+        ];
+
+        var json = "{\"FileVersion\":4,\"Name\":\"Synthetic\",\"Author\":\"Tests\",\"Description\":\"\","
+                 + "\"DefaultData\":{\"Files\":{" + Quote($"chara/accessory/a0103/material/v0001/{Material}") + ":"
+                 + Quote("piercings/" + Material) + "},\"FileSwaps\":{},\"Manipulations\":[]},"
+                 + "\"Groups\":[" + string.Join(",", groups) + "]}";
+
+        var path = System.IO.Path.Combine(System.IO.Path.GetTempPath(),
+            "proteus-synth-" + Guid.NewGuid().ToString("N") + ".pmp");
+        using (var zip = ZipFile.Open(path, ZipArchiveMode.Create))
+        {
+            Write(zip, "meta.json", Encoding.UTF8.GetBytes(json));
+            Write(zip, "chest/chest piece.mdl", Model(8));
+            Write(zip, "legs/legs piece.mdl", Model(7));
+            Write(zip, "piercings/" + Material, [0]);
+        }
+        return new SyntheticPack(path);
+    }
+
+    /// <summary>
     /// A pack whose garment has "ex" bones — the Cerise kimono shape. One model on the <c>met</c> slot in a
     /// single-select group, and an <c>Est</c> manipulation declaring the extra skeleton its bones live in.
     /// <para/>

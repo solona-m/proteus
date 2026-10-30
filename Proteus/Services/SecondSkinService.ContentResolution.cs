@@ -167,10 +167,19 @@ public sealed partial class SecondSkinService
                 var imcEdits = parsedModel.Attrs.Any(SecondSkinWriter.IsVariantAttribute)
                     ? ImcEdits(cEntry.ModDirectory, modRoot) : null;
                 var vis = ContentImcVisibility.For(cEntry.Metadata.ContentAttributes, imcEdits,
-                    modelRel, parsedModel.Attrs,
+                    modelRel, piece.Slot, parsedModel.Attrs,
                     cEntry.Metadata.ContentAttributes is { Count: > 0 } || imcEdits != null
                         ? ModSelection(cEntry.ModDirectory) : null,
                     VanillaMask);
+                // When the piece's slot cannot be trusted, the next "it doesn't show" report needs to say so.
+                var slotNotice = SlotNotice(cEntry.Metadata.ContentAttributes, modelRel, piece.Slot);
+                if (slotNotice != PieceSlotNotice.None
+                    && (slotNotice == PieceSlotNotice.PathDisagrees
+                        ? ContentImcNotices.FirstSlotDisagreement(modRoot)
+                        : ContentImcNotices.FirstUntrustedSlot(modRoot)))
+                    build.service.log.Information("{0}", SlotNoticeMessage(slotNotice, cEntry.ModDirectory, modelRel,
+                        ContentSlot.Parse(modelRel)?.Label, piece.Slot,
+                        [.. GoverningGroups(cEntry.Metadata.ContentAttributes, modelRel, piece.Slot).Select(g => g.Group)]) ?? "");
                 var hidden = vis.Hidden;
                 if (hidden is { Count: > 0 })
                 {

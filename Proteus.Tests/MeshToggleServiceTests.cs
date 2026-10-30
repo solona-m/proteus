@@ -1059,10 +1059,10 @@ public class MeshToggleServiceTests
         Assert.Equal("Body", attr.Slot);
 
         // What the composite does with it: the bow is dropped while the switch is off, and kept while it is on.
-        var off = ContentPieceResolver.HiddenAttributes(SidecarAttributes(mod), ContentRel, after.AttributeNames,
+        var off = ContentPieceResolver.HiddenAttributes(SidecarAttributes(mod), ContentRel, null, after.AttributeNames,
             new Dictionary<string, List<string>> { [groupName] = [] });
         Assert.Equal(["atr_tv_a"], off!);
-        Assert.Null(ContentPieceResolver.HiddenAttributes(SidecarAttributes(mod), ContentRel, after.AttributeNames,
+        Assert.Null(ContentPieceResolver.HiddenAttributes(SidecarAttributes(mod), ContentRel, null, after.AttributeNames,
             new Dictionary<string, List<string>> { [groupName] = ["Bow"] }));
 
         // Edited in place: a field this build does not know is still there.

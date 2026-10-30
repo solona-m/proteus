@@ -109,10 +109,12 @@ internal static class ContentPieceResolver
     }
 
     /// <summary>
-    /// Does this toggle group speak for that model? Set AND slot: packs put several garments on one set. A group
-    /// naming no slot, or an unknown one, matches anything.
+    /// Does this toggle group speak for that model? Set AND slot: packs put several garments on one set. The slot is
+    /// the model path's when that is a game path, else the piece's recorded one (<see cref="ContentPiece.Slot"/>):
+    /// imported packs store archive entries, which name no slot. A group naming no slot, or an unknown one, and a
+    /// model whose slot is unknown, match anything. The set is only known from a game path.
     /// </summary>
-    private static bool Governs(ContentAttributeGroup g, string modelRel)
+    private static bool Governs(ContentAttributeGroup g, string modelRel, string? pieceSlot)
     {
         var parsed = ContentSlot.Parse(modelRel);
         if (g.SetId >= 0 && (parsed is { } p ? ContentSlot.SetIdOf(p.SetTag) : null) is { } s
@@ -121,16 +123,71 @@ internal static class ContentPieceResolver
 
         return g.Slot is not { Length: > 0 } gs
             || ContentSlot.LabelForEquipSlot(gs) is not { } wantLabel
-            || parsed is not { } mp
-            || string.Equals(mp.Label, wantLabel, StringComparison.OrdinalIgnoreCase);
+            || (parsed?.Label ?? ContentSlot.EquipLabel(pieceSlot)) is not { } modelLabel
+            || string.Equals(modelLabel, wantLabel, StringComparison.OrdinalIgnoreCase);
     }
+
+    /// <summary>The toggle groups that speak for the model (<see cref="Governs"/>); the one place that is decided.</summary>
+    internal static IReadOnlyList<ContentAttributeGroup> GoverningGroups(
+        IReadOnlyList<ContentAttributeGroup>? groups, string modelRel, string? pieceSlot)
+        => groups is { Count: > 0 } ? [.. groups.Where(g => Governs(g, modelRel, pieceSlot))] : [];
 
     /// <summary>
     /// Whether any toggle group governs the model, so Proteus strips its attribute tags
     /// (<see cref="ContentGeometry.OwnAttributes"/>), even when nothing is currently hidden.
     /// </summary>
-    internal static bool GovernsModel(IReadOnlyList<ContentAttributeGroup>? groups, string modelRel)
-        => groups is { Count: > 0 } && groups.Any(g => Governs(g, modelRel));
+    internal static bool GovernsModel(IReadOnlyList<ContentAttributeGroup>? groups, string modelRel, string? pieceSlot)
+        => GoverningGroups(groups, modelRel, pieceSlot).Count > 0;
+
+    /// <summary>
+    /// Whether the pack has a toggle group for a slot the composite can tell apart — the only case in which a piece's
+    /// slot decides anything.
+    /// </summary>
+    internal static bool HasSlottedGroup(IReadOnlyList<ContentAttributeGroup>? groups)
+        => groups is { Count: > 0 }
+           && groups.Any(g => g.Slot is { Length: > 0 } gs && ContentSlot.LabelForEquipSlot(gs) != null);
+
+    /// <summary>
+    /// Why a piece's slot cannot be trusted, for the log: its game-path-shaped file name and its recorded slot
+    /// disagree (the file name wins), or it is stored off a game path with no recorded slot, or one that is not an
+    /// equipment slot (every group judges it). None when the pack has no slotted group.
+    /// </summary>
+    internal static PieceSlotNotice SlotNotice(
+        IReadOnlyList<ContentAttributeGroup>? groups, string modelRel, string? pieceSlot)
+    {
+        if (!HasSlottedGroup(groups)) return PieceSlotNotice.None;
+        var recorded = ContentSlot.EquipLabel(pieceSlot);
+        if (ContentSlot.Parse(modelRel) is { } parsed)
+            return recorded != null && !string.Equals(parsed.Label, recorded, StringComparison.OrdinalIgnoreCase)
+                ? PieceSlotNotice.PathDisagrees : PieceSlotNotice.None;
+        if (recorded != null) return PieceSlotNotice.None;
+        return string.IsNullOrWhiteSpace(pieceSlot) ? PieceSlotNotice.MissingSlot : PieceSlotNotice.UnusableSlot;
+    }
+
+    /// <summary>
+    /// The log line for <paramref name="notice"/>, or null for none. Toggle groups on a piece without a slot almost
+    /// always mean an import from before the slot was recorded, which re-importing fixes; an unusable one stays so.
+    /// </summary>
+    /// <param name="governingNames">The groups that judge the piece (<see cref="GoverningGroups"/>).</param>
+    internal static string? SlotNoticeMessage(
+        PieceSlotNotice notice, string modDir, string modelRel, string? parsedLabel, string? recordedSlot,
+        IReadOnlyList<string> governingNames)
+        => notice switch
+        {
+            PieceSlotNotice.PathDisagrees =>
+                $"[Proteus] content: {modDir} — {modelRel} is named for the {parsedLabel} slot but was imported as "
+                + $"{recordedSlot}; "
+                + (governingNames.Count > 0
+                    ? $"its toggles follow {string.Join(", ", governingNames)}"
+                    : $"it is judged as {parsedLabel}"),
+            PieceSlotNotice.MissingSlot =>
+                $"[Proteus] content: {modDir} — {modelRel} has no recorded slot, so every one of its toggle groups "
+                + "judges it; re-import the mod to record it",
+            PieceSlotNotice.UnusableSlot =>
+                $"[Proteus] content: {modDir} — {modelRel}'s slot \"{recordedSlot}\" can't pick its toggle group, so "
+                + "every one of its toggle groups judges it",
+            _ => null,
+        };
 
     /// <summary>
     /// What the game has toggled on one drawn model (<see cref="Interop.BodyShapeReader.ReadEnabledShapes"/>). The walk
@@ -155,16 +212,14 @@ internal static class ContentPieceResolver
     /// </summary>
     /// <param name="selected">The mod's live Penumbra selection: group name → chosen options.</param>
     internal static IReadOnlySet<string>? HiddenAttributes(
-        IReadOnlyList<ContentAttributeGroup>? groups, string modelRel, IReadOnlyList<string> attrNames,
-        IReadOnlyDictionary<string, List<string>>? selected)
+        IReadOnlyList<ContentAttributeGroup>? groups, string modelRel, string? pieceSlot,
+        IReadOnlyList<string> attrNames, IReadOnlyDictionary<string, List<string>>? selected)
     {
         if (groups is not { Count: > 0 } || attrNames.Count == 0) return null;
 
         HashSet<string>? hidden = null;
-        foreach (var g in groups)
+        foreach (var g in GoverningGroups(groups, modelRel, pieceSlot))
         {
-            if (!Governs(g, modelRel)) continue;
-
             int mask = g.MaskFor(
                 selected != null && selected.TryGetValue(g.Group, out var sel) ? sel : null);
 
@@ -346,4 +401,16 @@ internal static class ContentPieceResolver
         }
         catch { return false; }
     }
+}
+
+/// <summary>Why a content piece's slot cannot be trusted (<see cref="ContentPieceResolver.SlotNotice"/>).</summary>
+internal enum PieceSlotNotice
+{
+    None,
+    /// <summary>The file is named for one slot and was imported as another; the file name wins.</summary>
+    PathDisagrees,
+    /// <summary>Stored off a game path with no recorded slot, so every toggle group judges it.</summary>
+    MissingSlot,
+    /// <summary>Stored off a game path with a recorded slot that is not an equipment slot, so every toggle group judges it.</summary>
+    UnusableSlot,
 }
