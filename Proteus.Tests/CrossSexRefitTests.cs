@@ -562,7 +562,8 @@ public class CrossSexRefitTests
         string panel = Source("Proteus/Gui/BodyRetargetPanel.cs");
         Assert.Contains("if (Build(sourcePath, targetPath, name, male, masks, to, out var pair, out _, targetMale, report: true)", panel);
         Assert.Contains("return Build(sourcePath, targetPath, name, male, masks, target, out _, out _, targetMale) ?? \"\";", panel);
-        Assert.Contains("plan = RefitCore.MatchSkinToBody(plan, garmentSource, targetPath, uvRemap, male, log, targetMale);", panel);
+        // Every body the refit went onto (a part may have one of its own, per-part-target-body), with the target's sex.
+        Assert.Contains("plan = RefitCore.MatchSkinToBody(plan, garmentSource, targetPaths, uvRemap, male, log, targetMale);", panel);
     }
 
     [Fact]
