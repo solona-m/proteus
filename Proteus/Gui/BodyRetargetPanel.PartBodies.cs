@@ -31,7 +31,11 @@ internal sealed partial class BodyRetargetPanel
     /// <see cref="DropPrimaryPartBody"/>).
     /// </summary>
     private StudioPartBodies.Target PartTarget(string slot)
-        => StudioPartBodies.Resolve(slot, null, bodyDir, Onto, partBodies, CachedCatalog);
+        => StudioPartBodies.Resolve(slot, bodyDir, Onto, partBodies, CachedCatalog);
+
+    /// <summary>Whether a part's own body can be read now; a part whose body cannot sits out (see
+    /// <see cref="StudioPartBodies.SitsOut"/>).</summary>
+    private bool PartBodyReadable(string dir) => CachedCatalog(dir) != null;
 
     /// <summary>A part's sizes to refit onto, from its body, at the garment's race.</summary>
     private IReadOnlyList<BodyOption> PartOptions(string slot) => PartTarget(slot).Catalog?.For(slot, race) ?? [];
@@ -42,7 +46,8 @@ internal sealed partial class BodyRetargetPanel
     /// </summary>
     private void DropPrimaryPartBody(string primary)
     {
-        if (!partBodies.Remove(primary)) return;
+        if (!StudioPartBodies.DropsForPrimary(partBodies, primary)) return;
+        partBodies.Remove(primary);
         to.Remove(primary);
         foreach (string key in refusals.Keys.Where(k => k.StartsWith(primary + ">", StringComparison.Ordinal)).ToList())
             refusals.Remove(key);

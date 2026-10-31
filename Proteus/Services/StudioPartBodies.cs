@@ -30,23 +30,41 @@ internal static class StudioPartBodies
         => offered ? stored : new Dictionary<string, string>(StringComparer.Ordinal);
 
     /// <summary>
-    /// The parts taking part in the refit: <paramref name="chosen"/>, less every part holding a body of its own while
-    /// part bodies cannot be used. Such a part's sizes are that body's, and are never read against the main body's —
-    /// two body mods laid out alike (Rue and LaRue) would silently give the main body's file.
+    /// Whether a part holding a body of its own sits out of the refit: part bodies cannot be used now, or its body can no
+    /// longer be read (uninstalled since, or no longer a body). Its sizes are that body's, and are never read against the
+    /// main body's — two body mods laid out alike (Rue and LaRue) would silently give the main body's file.
     /// </summary>
+    /// <param name="readable">Whether a body mod can be read now, by folder.</param>
+    internal static bool SitsOut(string slot, IReadOnlyDictionary<string, string> stored, bool offered, Func<string, bool> readable)
+        => stored.TryGetValue(slot, out string? dir) && (!offered || !readable(dir));
+
+    /// <summary>The parts taking part in the refit: <paramref name="chosen"/>, less every part that sits out (see <see cref="SitsOut"/>).</summary>
     internal static List<string> TakingPart(IEnumerable<string> chosen, IReadOnlyDictionary<string, string> stored,
-                                            bool offered)
-        => offered ? chosen.ToList() : chosen.Where(s => !stored.ContainsKey(s)).ToList();
+                                            bool offered, Func<string, bool> readable)
+        => chosen.Where(s => !SitsOut(s, stored, offered, readable)).ToList();
 
     /// <summary>
-    /// The sizes chosen to refit onto, less those of every part set aside (see <see cref="TakingPart"/>): what a refit is
-    /// assembled, keyed and named from, so a set-aside part leaves no trace in it.
+    /// The sizes chosen to refit onto, less those of every part that sits out (see <see cref="SitsOut"/>): what a refit is
+    /// assembled, keyed and named from, so such a part leaves no trace in it.
     /// </summary>
     internal static IReadOnlyDictionary<string, List<BodyOption>> Active(IReadOnlyDictionary<string, List<BodyOption>> to,
-                                                                         IReadOnlyDictionary<string, string> stored, bool offered)
-        => offered || stored.Count == 0
+                                                                         IReadOnlyDictionary<string, string> stored, bool offered,
+                                                                         Func<string, bool> readable)
+        => stored.Count == 0 || to.Keys.All(s => !SitsOut(s, stored, offered, readable))
             ? to
-            : to.Where(p => !stored.ContainsKey(p.Key)).ToDictionary(p => p.Key, p => p.Value, StringComparer.Ordinal);
+            : to.Where(p => !SitsOut(p.Key, stored, offered, readable))
+                .ToDictionary(p => p.Key, p => p.Value, StringComparer.Ordinal);
+
+    /// <summary>
+    /// Whether the rows changed so that a part holding a body of its own became the garment's own part (a shoe keeping
+    /// its feet is laid out by its legs). The garment's own part always goes onto the body picked above, so that body
+    /// goes, with the sizes of it — not set aside: unticking the box does not bring it back.
+    /// </summary>
+    internal static bool DropsForPrimary(IReadOnlyDictionary<string, string> stored, string primary) => stored.ContainsKey(primary);
+
+    /// <summary>Whether a part's chosen size is remembered for the body picked above: never for a part on a body of its
+    /// own, whose size is that body's file.</summary>
+    internal static bool Remembers(string slot, IReadOnlyDictionary<string, string> stored) => !stored.ContainsKey(slot);
 
     /// <summary>Whether a part is set aside: it holds a body of its own that cannot be used now.</summary>
     internal static bool SetAside(string slot, IReadOnlyDictionary<string, string> stored, bool offered)
@@ -56,22 +74,22 @@ internal static class StudioPartBodies
     internal readonly record struct Target(string? Dir, BodySizeCatalog? Catalog);
 
     /// <summary>
-    /// The body a part goes onto: the garment's own part (<paramref name="primary"/>, when given) always the main one;
-    /// another its own, when it has one in <paramref name="bodies"/>; else the main one. The one place a part's body is
-    /// looked up, so no lookup can miss it.
+    /// The body a part's sizes are of: its own, when it has one in <paramref name="bodies"/> (null sizes when that cannot
+    /// be read — the part then sits out, see <see cref="SitsOut"/>); else the main one. The one place a part's body is
+    /// looked up, so no lookup can miss it. The garment's own part never has one (see <see cref="DropsForPrimary"/>).
     /// </summary>
-    internal static Target Resolve(string slot, string? primary, string? mainDir, BodySizeCatalog? main,
+    internal static Target Resolve(string slot, string? mainDir, BodySizeCatalog? main,
                                    IReadOnlyDictionary<string, string> bodies, Func<string, BodySizeCatalog?> catalogOf)
-        => slot != primary && bodies.TryGetValue(slot, out string? dir) ? new Target(dir, catalogOf(dir)) : new Target(mainDir, main);
+        => bodies.TryGetValue(slot, out string? dir) ? new Target(dir, catalogOf(dir)) : new Target(mainDir, main);
 
     /// <summary>
     /// Each part's sizes at a new race on the body KEPT for it, set aside or not — what a race change keeps a chosen size
     /// by (see <see cref="RetargetInputs.StillOffered"/>).
     /// </summary>
-    internal static Func<string, IReadOnlyList<BodyOption>> SizesAtRace(string? primary, string? mainDir, BodySizeCatalog? main,
+    internal static Func<string, IReadOnlyList<BodyOption>> SizesAtRace(string? mainDir, BodySizeCatalog? main,
                                                                         IReadOnlyDictionary<string, string> stored,
                                                                         Func<string, BodySizeCatalog?> catalogOf, string? race)
-        => slot => Resolve(slot, primary, mainDir, main, stored, catalogOf).Catalog?.For(slot, race) ?? [];
+        => slot => Resolve(slot, mainDir, main, stored, catalogOf).Catalog?.For(slot, race) ?? [];
 
     /// <summary>
     /// Whether the refit is one between body mods: some part goes onto another body mod than the garment was made on,
@@ -123,20 +141,6 @@ internal static class StudioPartBodies
         => labels.Count == chosen.Count
             ? chosen.Select((s, i) => (bodyNameOf(s), labels[i])).ToList()
             : labels.Select(l => (mainName, l)).ToList();
-
-    /// <summary>
-    /// Whether a part's size made for and its size refitted onto are one size of one body mod: the same file within the
-    /// same mod. With no part bodies this is the check the tool always made within one mod; across two mods it is never
-    /// true, however alike they lay their files out.
-    /// </summary>
-    internal static bool SameSize(string? sourceDir, BodyOption source, string? targetDir, BodyOption target)
-        => string.Equals(sourceDir, targetDir, StringComparison.OrdinalIgnoreCase)
-           && string.Equals(source.Rel, target.Rel, StringComparison.OrdinalIgnoreCase);
-
-    /// <summary>Whether two model paths are one file: by the whole path, never the file within its mod — two body mods
-    /// laid out alike share those.</summary>
-    internal static bool SameFile(string a, string b)
-        => string.Equals(Path.GetFullPath(a), Path.GetFullPath(b), StringComparison.OrdinalIgnoreCase);
 
     /// <summary>
     /// Whether a part already has its choice, which a remembered size never fills over (see

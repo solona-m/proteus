@@ -441,6 +441,9 @@ internal sealed partial class BodyRetargetPanel(PenumbraBridge penumbra, UVRemap
             // the check below, so a flip into a part the body mod has no sizes of still takes a shown refit down; after
             // the "made for" picker, so a pick there that changes the rows is seen in the same frame.
             layout = Layout(ctx);
+            // Every frame, not only on a flip — a race change clears the rows' memory — and ahead of the flip's check of
+            // the new garment part: that part never keeps a body of its own (see StudioPartBodies.DropsForPrimary).
+            DropPrimaryPartBody(layout.Value.Primary);
             if (RetargetInputs.Flips(lastLayout, layout.Value))
             {
                 wornFor = null;
@@ -450,9 +453,6 @@ internal sealed partial class BodyRetargetPanel(PenumbraBridge penumbra, UVRemap
                 DropPlan(ctx);
                 StartValidate(layout.Value.Primary);
             }
-            // Every frame, not only on a flip: a race change clears the rows' memory, and the garment's own part must
-            // never keep a body of its own (see PartTarget).
-            DropPrimaryPartBody(layout.Value.Primary);
             lastLayout = layout;
             missing = RetargetInputs.MissingSlot(Onto!.SlotsFor(race), layout.Value);
         }
@@ -842,7 +842,7 @@ internal sealed partial class BodyRetargetPanel(PenumbraBridge penumbra, UVRemap
             // a racial garment's route leaves the body mod's list as it was.
             // Each part judged on the body its sizes are of: its own, set aside or not (see StudioPartBodies.SizesAtRace).
             var kept = Onto is { } snapshot
-                ? RetargetInputs.StillOffered(to, StudioPartBodies.SizesAtRace(null, bodyDir, snapshot, partBodies,
+                ? RetargetInputs.StillOffered(to, StudioPartBodies.SizesAtRace(bodyDir, snapshot, partBodies,
                                                                               CachedCatalog, race))
                 : [];
             var ownBodies = partBodies;
@@ -1282,7 +1282,7 @@ internal sealed partial class BodyRetargetPanel(PenumbraBridge penumbra, UVRemap
     private void Remember(string slot)
     {
         // A part on a body of its own: its size is that body's file, never to be remembered as the one above's.
-        if (bodyDir == null || partBodies.ContainsKey(slot)) return;
+        if (bodyDir == null || !StudioPartBodies.Remembers(slot, partBodies)) return;
 
         // Before this slot's own choice is written, because it may forget everything: the body can have changed since
         // the sizes were remembered without the user ever opening the dropdown.
@@ -1387,7 +1387,7 @@ internal sealed partial class BodyRetargetPanel(PenumbraBridge penumbra, UVRemap
     /// <summary>The sizes to refit onto of the parts that can take part: a part set to a body of its own sits out while
     /// that body cannot be used (see <see cref="StudioPartBodies.Active"/>).</summary>
     private IReadOnlyDictionary<string, List<BodyOption>> ActiveTo(in RetargetContext ctx)
-        => StudioPartBodies.Active(to, partBodies, PartsOffered(ctx));
+        => StudioPartBodies.Active(to, partBodies, PartsOffered(ctx), PartBodyReadable);
 
     /// <summary>
     /// Every slot worth offering, the garment's own first.
@@ -1403,7 +1403,8 @@ internal sealed partial class BodyRetargetPanel(PenumbraBridge penumbra, UVRemap
 
     /// <summary>The slots actually taking part: the ones with both ends chosen.</summary>
     private List<string> Chosen(in RetargetContext ctx)
-        => StudioPartBodies.TakingPart(RetargetInputs.Chosen(Slots(ctx), from, to), partBodies, PartsOffered(ctx));
+        => StudioPartBodies.TakingPart(RetargetInputs.Chosen(Slots(ctx), from, to), partBodies, PartsOffered(ctx),
+                                       PartBodyReadable);
 
     /// <summary>A slot's targets; empty when none is ticked.</summary>
     private IReadOnlyList<BodyOption> Targets(string slot)
@@ -2047,8 +2048,7 @@ internal sealed partial class BodyRetargetPanel(PenumbraBridge penumbra, UVRemap
             string targetPath = snapshot.PathOf(target);
             // The same size of one body mod needs no check. Never by the file's place alone across two mods: two body
             // mods laid out alike (a fork) share it, and a part on a body of its own is another mod's.
-            if (StudioPartBodies.SameSize(SourceDir, source, targetDir, target) || StudioPartBodies.SameFile(sourcePath, targetPath))
-                continue;
+            if (AutoRefitDecisions.SameFile(SourceDir ?? "", source, targetDir ?? "", target)) continue;
 
             // A newer choice replaces an older check outright; the older one's answer is dropped in Consume by its tag.
             validating[PairKey(slot, target)] = (source.Rel, Task.Run(() =>
@@ -2078,11 +2078,12 @@ internal sealed partial class BodyRetargetPanel(PenumbraBridge penumbra, UVRemap
         // Each other part from the body its sizes are of — its own, when it has one (see PartTarget). Only parts
         // taking part are here (Inputs), so none set aside.
         var others = inputs.Shared.Select(s => (Slot: s.Slot, Source: sources.PathOf(s.From),
-                                                Target: (PartTarget(s.Slot).Catalog ?? snapshot).PathOf(s.To),
+                                                Target: PartTarget(s.Slot).Catalog!.PathOf(s.To),
                                                 Name: SlotName(s.Slot), Masks: MasksFor(s.Slot), To: s.To))
                                   .ToList();
         // Every body the garment's skin may be drawn by, after the lead's (see RefitCore.MatchSkinToBody).
-        var otherBodies = inputs.Shared.Select(s => (Dir: PartTarget(s.Slot).Dir, Path: (PartTarget(s.Slot).Catalog ?? snapshot).PathOf(s.To)))
+        // A part whose own body cannot be read sits out (StudioPartBodies.SitsOut): every part here has a catalog.
+        var otherBodies = inputs.Shared.Select(s => (Dir: PartTarget(s.Slot).Dir, Path: PartTarget(s.Slot).Catalog!.PathOf(s.To)))
                                        .ToList();
         var garment = ctx.Garment;
         var bytes = ctx.GarmentBytes;

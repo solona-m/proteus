@@ -388,4 +388,22 @@ public class AutoRefitPartsTests
         Assert.Equal([Bibo.Dir, Rue.Dir, Yab.Dir, Bibo.Dir], AutoRefitDecisions.Slots.Select(pref.BodyOf));
         Assert.Equal("L", pref.Chest!.Name);
     }
+
+    [Fact]
+    [Trait("Plan", "AC-per-part-target-body-6")]
+    [Trait("Plan", "EDGE-per-part-target-body-24")]
+    public void Rue_split_text_names_both_sides_the_forget_button_and_the_ends_left()
+    {
+        var s = Proteus.Localization.Strings.AutoRefit;
+        string Name(string slot) => slot.TrimStart('_');
+        string legs = AutoRefitPanel.RueSplitText(new AutoRefitTargets.RueSplit(["_dwn"], ["_top", "_glv"], true, false), Name);
+        Assert.Contains("dwn", legs);
+        Assert.Contains("top, glv", legs);
+        Assert.Contains(s.ClearLabel, legs);
+        Assert.Contains(s.RueSplitShoes, legs);
+        Assert.DoesNotContain(s.RueSplitGloves, legs);
+        string hands = AutoRefitPanel.RueSplitText(new AutoRefitTargets.RueSplit(["_glv"], ["_top"], false, true), Name);
+        Assert.Contains(s.RueSplitGloves, hands);
+        Assert.DoesNotContain(s.RueSplitShoes, hands);
+    }
 }

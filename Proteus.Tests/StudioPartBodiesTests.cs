@@ -38,15 +38,40 @@ public class StudioPartBodiesTests
 
     [Fact]
     [Trait("Plan", "AC-per-part-target-body-1")]
-    public void Resolve_gives_primary_the_main_body_and_a_part_its_own()
+    public void Resolve_gives_a_part_its_own_body_and_the_rest_the_main_one()
     {
-        var bodies = Bodies(("_dwn", Yab.Dir), ("_top", Yab.Dir));
+        var bodies = Bodies(("_dwn", Yab.Dir));
         Assert.Equal(new StudioPartBodies.Target(Bibo.Dir, Bibo.Catalog),
-                     StudioPartBodies.Resolve("_top", "_top", Bibo.Dir, Bibo.Catalog, bodies, CatalogOf));
+                     StudioPartBodies.Resolve("_top", Bibo.Dir, Bibo.Catalog, bodies, CatalogOf));
         Assert.Equal(new StudioPartBodies.Target(Yab.Dir, Yab.Catalog),
-                     StudioPartBodies.Resolve("_dwn", "_top", Bibo.Dir, Bibo.Catalog, bodies, CatalogOf));
+                     StudioPartBodies.Resolve("_dwn", Bibo.Dir, Bibo.Catalog, bodies, CatalogOf));
         Assert.Equal(new StudioPartBodies.Target(Bibo.Dir, Bibo.Catalog),
-                     StudioPartBodies.Resolve("_glv", "_top", Bibo.Dir, Bibo.Catalog, bodies, CatalogOf));
+                     StudioPartBodies.Resolve("_glv", Bibo.Dir, Bibo.Catalog, bodies, CatalogOf));
+    }
+
+    /// <summary>
+    /// The garment's own part never keeps a body of its own: a shoe whose legs were set to one, its box then ticked to keep
+    /// the feet, is laid out by its legs — they go onto the body picked above, and their own body goes with its sizes.
+    /// </summary>
+    [Fact]
+    [Trait("Plan", "AC-per-part-target-body-4")]
+    [Trait("Plan", "EDGE-per-part-target-body-6")]
+    public void A_part_that_becomes_the_garments_own_drops_its_body()
+    {
+        var stored = Bodies(("_dwn", Yab.Dir));
+        var whole = new RetargetInputs.Layout("_sho", "_sho", null);
+        Assert.False(StudioPartBodies.DropsForPrimary(stored, whole.Primary));
+        Assert.True(StudioPartBodies.DropsForPrimary(stored, KeptFeet.Primary));
+    }
+
+    [Fact]
+    [Trait("Plan", "AC-per-part-target-body-4")]
+    public void A_part_on_its_own_body_never_remembers_its_size_for_the_main_body()
+    {
+        var stored = Bodies(("_dwn", Yab.Dir));
+        Assert.False(StudioPartBodies.Remembers("_dwn", stored));
+        Assert.True(StudioPartBodies.Remembers("_top", stored));
+        Assert.True(StudioPartBodies.Remembers("_dwn", Bodies()));
     }
 
     [Fact]
@@ -126,10 +151,10 @@ public class StudioPartBodiesTests
     {
         // The legs have a body of their own but no "made for" size: they do not take part, so nothing is held.
         var stored = Bodies(("_dwn", "Y"));
-        var taking = StudioPartBodies.TakingPart(["_top"], stored, offered: true);
+        var taking = StudioPartBodies.TakingPart(["_top"], stored, offered: true, _ => true);
         string? DirOf(string s) => stored.GetValueOrDefault(s) ?? "X";
         Assert.False(StudioPartBodies.KeptOnOwnBody("X", "X", taking.Where(s => s != "_top").Select(DirOf)));
-        var both = StudioPartBodies.TakingPart(["_top", "_dwn"], stored, offered: true);
+        var both = StudioPartBodies.TakingPart(["_top", "_dwn"], stored, offered: true, _ => true);
         Assert.True(StudioPartBodies.KeptOnOwnBody("X", "X", both.Where(s => s != "_top").Select(DirOf)));
     }
 
@@ -165,9 +190,9 @@ public class StudioPartBodiesTests
     {
         // LaRue has no hands; "Gone" is not installed.
         var bodies = Bodies(("_glv", LaRue.Dir), ("_sho", "Gone"));
-        var hands = StudioPartBodies.Resolve("_glv", "_top", Bibo.Dir, Bibo.Catalog, bodies, CatalogOf);
+        var hands = StudioPartBodies.Resolve("_glv", Bibo.Dir, Bibo.Catalog, bodies, CatalogOf);
         Assert.Empty(hands.Catalog!.For("_glv", "0201"));
-        var feet = StudioPartBodies.Resolve("_sho", "_top", Bibo.Dir, Bibo.Catalog, bodies, CatalogOf);
+        var feet = StudioPartBodies.Resolve("_sho", Bibo.Dir, Bibo.Catalog, bodies, CatalogOf);
         Assert.Equal("Gone", feet.Dir);
         Assert.Null(feet.Catalog);
 
@@ -190,8 +215,8 @@ public class StudioPartBodiesTests
     {
         var bodies = Bodies(("_dwn", "LaRue"));
         BodySizeCatalog? OwnOf(string dir) => dir == "LaRue" ? LaRueFiles : null;
-        var legs = StudioPartBodies.Resolve("_dwn", "_top", "Rue", RueFiles, bodies, OwnOf);
-        var chest = StudioPartBodies.Resolve("_top", "_top", "Rue", RueFiles, bodies, OwnOf);
+        var legs = StudioPartBodies.Resolve("_dwn", "Rue", RueFiles, bodies, OwnOf);
+        var chest = StudioPartBodies.Resolve("_top", "Rue", RueFiles, bodies, OwnOf);
         var size = legs.Catalog!.For("_dwn")[0];
         Assert.Equal(RueFiles.For("_dwn")[0].Rel, size.Rel);   // the same file within each mod...
         Assert.StartsWith(Path.Combine("mods", "LaRue"), legs.Catalog.PathOf(size));   // ...read from the part's own
@@ -202,12 +227,12 @@ public class StudioPartBodiesTests
     [Trait("Plan", "EDGE-per-part-target-body-4")]
     public void Same_rel_on_two_bodies_is_not_the_same_file()
     {
+        // What the pair check skips as nothing to do (BodyRetargetPanel.StartValidate): one size of one mod only.
         var rue = RueFiles.For("_dwn")[0];
         var laRue = LaRueFiles.For("_dwn")[0];
-        Assert.True(StudioPartBodies.SameSize("Rue", rue, "rue", rue));
-        Assert.False(StudioPartBodies.SameSize("Rue", rue, "LaRue", laRue));
-        Assert.False(StudioPartBodies.SameFile(RueFiles.PathOf(rue), LaRueFiles.PathOf(laRue)));
-        Assert.True(StudioPartBodies.SameFile(RueFiles.PathOf(rue), RueFiles.PathOf(rue).ToUpperInvariant()));
+        Assert.True(AutoRefitDecisions.SameFile("Rue", rue, "rue", rue));
+        Assert.False(AutoRefitDecisions.SameFile("Rue", rue, "LaRue", laRue));
+        Assert.NotEqual(RueFiles.PathOf(rue), LaRueFiles.PathOf(laRue));
     }
 
     // ── set aside, not lost ─────────────────────────────────────────────────
@@ -241,36 +266,59 @@ public class StudioPartBodiesTests
             ["_dwn"] = [Of(LaRue, "_dwn", "M")],
         };
         Assert.Equal(Of(Rue, "_dwn", "M").Rel, to["_dwn"][0].Rel);
-        var looked = new List<string>();
-        BodySizeCatalog? Recording(string dir) { looked.Add(dir); return CatalogOf(dir); }
 
         // Set aside: the legs sit out of everything a refit is made, keyed and named from.
         var chosen = RetargetInputs.Chosen(["_top", "_dwn"], from, to);
-        var taking = StudioPartBodies.TakingPart(chosen, stored, offered: false);
-        var active = StudioPartBodies.Active(to, stored, offered: false);
+        var taking = StudioPartBodies.TakingPart(chosen, stored, offered: false, _ => true);
+        var active = StudioPartBodies.Active(to, stored, offered: false, _ => true);
         Assert.Equal(["_top"], taking);
         Assert.False(active.ContainsKey("_dwn"));
-        var effective = StudioPartBodies.Effective(stored, offered: false);
-        Assert.Empty(effective);
+        Assert.Empty(StudioPartBodies.Effective(stored, offered: false));
 
-        // ...exactly as the same refit with no legs body and the legs unchosen.
+        // ...exactly as the same refit with no legs body and the legs unchosen. The other parts a plan reads its paths,
+        // masks and bodies from are Inputs' Shared (BodyRetargetPanel.StartPlan): none here, so none of them is read.
         var bare = new Dictionary<string, List<BodyOption>> { ["_top"] = [Of(Rue, "_top", "M")] };
         var hiddenInputs = RetargetInputs.Assemble(Whole, ["_top", "_dwn"], from, active, null);
         var bareInputs = RetargetInputs.Assemble(Whole, ["_top", "_dwn"], from, bare, null);
         Assert.Empty(hiddenInputs.Shared);
-        Assert.Equal(Key(bareInputs, ["_top"], from, bare, null), Key(hiddenInputs, taking, from, active, effective));
-        Assert.Equal(StudioPartBodies.NamedParts(["_top"], ["M"], "Rue", _ => "Rue"),
-                     StudioPartBodies.NamedParts(taking, ["M"], "Rue", s => effective.TryGetValue(s, out var d) ? d : "Rue"));
-        Assert.Equal(StudioPartBodies.Across(Rue.Dir, Rue.Dir, [], false),
-                     StudioPartBodies.Across(Rue.Dir, Rue.Dir, taking.Skip(1).Select(s =>
-                         StudioPartBodies.Resolve(s, "_top", Rue.Dir, Rue.Catalog, effective, Recording).Dir), false));
-        Assert.Equal(StudioPartBodies.TargetPaths("lead", Rue.Dir, []),
-                     StudioPartBodies.TargetPaths("lead", Rue.Dir, taking.Skip(1).Select(s => ((string?)Rue.Dir, s))));
-        Assert.DoesNotContain(LaRue.Dir, looked);
+        Assert.Equal(bareInputs, hiddenInputs with { PrimaryTargets = bareInputs.PrimaryTargets, Shared = bareInputs.Shared });
+        // The key, with the part bodies in play as the panel passes them (those of parts taking part, none set aside).
+        var inPlay = StudioPartBodies.Effective(stored, offered: false).Where(p => taking.Contains(p.Key))
+                                     .ToDictionary(p => p.Key, p => p.Value, StringComparer.Ordinal);
+        Assert.Equal(Key(bareInputs, ["_top"], from, bare, null), Key(hiddenInputs, taking, from, active, inPlay));
+        Assert.Equal(RefitCore.OptionName("Rue", ["M"]),
+                     RefitCore.OptionName(StudioPartBodies.NamedParts(taking, ["M"], "Rue", s => stored.GetValueOrDefault(s) ?? "Rue")));
 
         // Offered again: the legs come back with their LaRue size.
-        Assert.Equal(["_top", "_dwn"], StudioPartBodies.TakingPart(chosen, stored, offered: true));
-        Assert.Same(to["_dwn"], StudioPartBodies.Active(to, stored, offered: true)["_dwn"]);
+        Assert.Equal(["_top", "_dwn"], StudioPartBodies.TakingPart(chosen, stored, offered: true, _ => true));
+        Assert.Same(to["_dwn"], StudioPartBodies.Active(to, stored, offered: true, _ => true)["_dwn"]);
+    }
+
+    /// <summary>
+    /// A part whose own body can no longer be read (uninstalled since its size was picked) sits out, rather than being
+    /// refitted onto the main body's file of the same name.
+    /// </summary>
+    [Fact]
+    [Trait("Plan", "EDGE-per-part-target-body-3")]
+    public void A_part_whose_body_cannot_be_read_sits_out()
+    {
+        var stored = Bodies(("_dwn", LaRue.Dir));
+        var from = new Dictionary<string, BodyOption> { ["_top"] = Of(Rue, "_top", "M"), ["_dwn"] = Of(Rue, "_dwn", "M") };
+        var to = new Dictionary<string, List<BodyOption>>
+        {
+            ["_top"] = [Of(Rue, "_top", "M")],
+            ["_dwn"] = [Of(LaRue, "_dwn", "M")],
+        };
+        bool Gone(string dir) => dir != LaRue.Dir;
+        var chosen = RetargetInputs.Chosen(["_top", "_dwn"], from, to);
+        Assert.True(StudioPartBodies.SitsOut("_dwn", stored, offered: true, Gone));
+        Assert.Equal(["_top"], StudioPartBodies.TakingPart(chosen, stored, offered: true, Gone));
+        var active = StudioPartBodies.Active(to, stored, offered: true, Gone);
+        Assert.False(active.ContainsKey("_dwn"));
+        Assert.Empty(RetargetInputs.Assemble(Whole, ["_top", "_dwn"], from, active, null).Shared);
+        // Readable again, it takes part again; a part on the main body never sits out.
+        Assert.Equal(["_top", "_dwn"], StudioPartBodies.TakingPart(chosen, stored, offered: true, _ => true));
+        Assert.False(StudioPartBodies.SitsOut("_top", stored, offered: false, Gone));
     }
 
     [Fact]
@@ -278,9 +326,9 @@ public class StudioPartBodiesTests
     public void Taking_part_is_unchanged_without_part_bodies()
     {
         var none = Bodies();
-        Assert.Equal(["_top", "_dwn"], StudioPartBodies.TakingPart(["_top", "_dwn"], none, offered: false));
+        Assert.Equal(["_top", "_dwn"], StudioPartBodies.TakingPart(["_top", "_dwn"], none, offered: false, _ => false));
         var to = new Dictionary<string, List<BodyOption>> { ["_dwn"] = [Of(Bibo, "_dwn", "M")] };
-        Assert.Same(to, StudioPartBodies.Active(to, none, offered: false));
+        Assert.Same(to, StudioPartBodies.Active(to, none, offered: false, _ => false));
     }
 
     [Fact]
@@ -295,7 +343,7 @@ public class StudioPartBodiesTests
             ["_top"] = [Of(Rue, "_top", "M")],
             ["_dwn"] = [Of(LaRue, "_dwn", "M")],
         };
-        var kept = RetargetInputs.StillOffered(chosen, StudioPartBodies.SizesAtRace(null, "main", mainHere, stored, CatalogOf, "0201"));
+        var kept = RetargetInputs.StillOffered(chosen, StudioPartBodies.SizesAtRace("main", mainHere, stored, CatalogOf, "0201"));
         Assert.Equal(["_dwn", "_top"], kept.Keys.Order(StringComparer.Ordinal));
         // Judged against the main body alone, the legs would be dropped.
         Assert.False(RetargetInputs.StillOffered(chosen, s => mainHere.For(s, "0201")).ContainsKey("_dwn"));
