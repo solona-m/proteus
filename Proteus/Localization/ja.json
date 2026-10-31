@@ -47,6 +47,18 @@
     "message": "このコレクションの体型設定を消去",
     "description": ""
   },
+  "AutoRefit.RueSplit.Fmt": {
+    "message": "{0}はRue体型、{1}は別の体型です。RueのパーツはRueにしか合わないため、両側にかかる装備は自身のパーツ側だけがリフィットされ、残りはサイズがそのままです。全パーツを同じ体型にするには「{2}」を押して、その体型を選び直してください。",
+    "description": ""
+  },
+  "AutoRefit.RueSplit.Shoes": {
+    "message": "足と脚がこの境界の別々の側にある間は、靴がそのままになることがあります。",
+    "description": ""
+  },
+  "AutoRefit.RueSplit.Gloves": {
+    "message": "手と胸がこの境界の別々の側にある間は、手袋がそのままになることがあります。",
+    "description": ""
+  },
   "AutoRefit.Collection": {
     "message": "コレクション",
     "description": ""
@@ -4045,6 +4057,26 @@
   },
   "Parts.Retarget.ToBody": {
     "message": "リフィット先の体型 Mod",
+    "description": ""
+  },
+  "Parts.Retarget.PartBody.Same.Fmt": {
+    "message": "上と同じ ({0})",
+    "description": ""
+  },
+  "Parts.Retarget.PartBody.Tip": {
+    "message": "このパーツのリフィット先の体型 Mod。ロングドレスの脚は胸とは別の体型にリフィットできます。",
+    "description": ""
+  },
+  "Parts.Retarget.PartBody.KeptOnOwn.Fmt": {
+    "message": "これはまだできません：{2}を別の体型にリフィットする一方で、{0}はこの衣装が作られた体型（{1}）のままです。衣装が作られた体型から一部のパーツだけを移すことはできず、そのパーツの肌が消えるか折れてしまいます。{0}も別の体型 Modにリフィットすれば可能です。",
+    "description": ""
+  },
+  "Parts.Retarget.PartBody.RueApart.Fmt": {
+    "message": "{0}はRue体型ですが、{1}は違います。RueのウエストはRueにしか合わないので、プレビューでウエストを確認してください。",
+    "description": ""
+  },
+  "Parts.Retarget.PartBody.SetAside.Fmt": {
+    "message": "いったん除外中：このパーツには専用の体型（{0}）が設定されていますが、これは「リフィット対象の種族」で種族を選ばずに衣装全体をリフィットする場合にしか使えません。その状態に戻ると復帰します。",
     "description": ""
   },
   "Settings.ReduceMotion": {

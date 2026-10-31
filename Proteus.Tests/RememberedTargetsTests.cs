@@ -50,6 +50,19 @@ public class RememberedTargetsTests
     }
 
     [Fact]
+    [Trait("Plan", "AC-per-part-target-body-4")]
+    public void Fillable_skips_a_slot_with_its_own_body()
+    {
+        // The legs set to a body of their own, no size picked there yet: the remembered legs size is the main body's
+        // file, and is never put into the other body's list.
+        var to = new Dictionary<string, List<BodyOption>>(StringComparer.Ordinal);
+        var own = new Dictionary<string, string>(StringComparer.Ordinal) { ["_dwn"] = "YAB+" };
+        var filled = Fill(hasTarget: slot => StudioPartBodies.HasChoice(slot, to, own));
+
+        Assert.Equal(["_top", "_glv"], filled.Select(f => f.Slot));
+    }
+
+    [Fact]
     public void A_choice_already_made_is_never_overwritten()
     {
         // Including one made seconds ago for this garment: this runs every frame, and a remembered size that kept

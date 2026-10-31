@@ -221,14 +221,16 @@ internal static class RetargetInputs
     /// <param name="pieces">Pieces moved whole (see <see cref="BodyRetarget.KeepShape"/>).</param>
     /// <param name="carryPiercings">See <see cref="CarryPiercings"/>.</param>
     /// <param name="liftUnderbust">See <see cref="BodyRetarget.Plan"/>.</param>
+    /// <param name="trace">See <see cref="BodyRetarget.Plan"/>: for tests measuring inside the pass.</param>
     internal static BodyRetarget.Planned StudioPlan(ModelParts garment, byte[] bytes, IReadOnlyList<BodyRetarget.SlotPair> pairs,
                                                     string garmentSlot, IReadOnlySet<int>? held, bool layOnBody,
                                                     bool acrossBodies, StudioSkinRule rule, bool cut,
                                                     IReadOnlyList<IReadOnlyCollection<int>>? pieces, bool carryPiercings,
-                                                    bool liftUnderbust, Action<string>? log = null, Action<string>? warn = null)
+                                                    bool liftUnderbust, Action<string>? log = null, Action<string>? warn = null,
+                                                    Action<string, SecondSkinWriter.Vec3[]>? trace = null)
         => BodyRetarget.Plan(garment, bytes, pairs, garmentSlot, held: held, replaceSkin: layOnBody,
                              acrossBodies: acrossBodies, clearBody: rule.ClearBody, cutHidden: cut, keepShape: pieces,
-                             log: log, warn: warn, tuckSlot: rule.TuckSlot, deepClear: rule.DeepClear,
+                             log: log, warn: warn, trace: trace, tuckSlot: rule.TuckSlot, deepClear: rule.DeepClear,
                              keepStandoff: rule.KeepStandoff, carryPiercings: carryPiercings,
                              liftUnderbust: liftUnderbust, seeInside: rule.SeeInside, relaxSinkGuard: rule.RelaxSinkGuard);
 
@@ -244,13 +246,16 @@ internal static class RetargetInputs
     /// A plan whose key no longer matches is stale. The piercings choice counts only where it changes the plan (see
     /// <see cref="CarryPiercings"/>): never on a skin-only redraw, which swaps nothing.
     /// </summary>
+    /// <param name="partBodies">The parts going onto a body of their own, by slot (see <see cref="StudioPartBodies"/>):
+    /// only those taking part, none while set aside. Without any the key is what it always was.</param>
     /// <param name="gameTop">The game's own top's rule applies (see <see cref="StudioSkinRule.ClearForced"/>): a plan made
     /// under it is never shown or saved for the garment judged a mod's, nor the other way round.</param>
     internal static string Key(string modelRel, string? fromBodyDir, Inputs inputs, IReadOnlyList<string> chosen,
                                IReadOnlyDictionary<string, BodyOption> from,
                                IReadOnlyDictionary<string, List<BodyOption>> to, IEnumerable<string> held,
                                IEnumerable<string>? keepShape, bool replaceSkin, bool cutHidden, bool clearBody,
-                               bool carryPiercings = false, bool gameTop = false)
+                               bool carryPiercings = false, bool gameTop = false,
+                               IReadOnlyDictionary<string, string>? partBodies = null)
         => modelRel + "|from:" + (fromBodyDir ?? "") + "|"
          + string.Join("|", chosen.Select(s => $"{s}:{from[s].Rel}>{string.Join(",", to[s].Select(t => t.Rel))}"))
          + "|held:" + string.Join(",", held.OrderBy(h => h, StringComparer.Ordinal))
@@ -263,5 +268,9 @@ internal static class RetargetInputs
          + (inputs.SkinOnly && inputs.EndSlot != null && from.TryGetValue(inputs.EndSlot, out var own)
                 ? "|skin:" + own.Rel + ">" + string.Join(",", inputs.PrimaryTargets.Select(t => t.Rel))
                 : "")
-         + (gameTop ? "|gametop" : "");
+         + (gameTop ? "|gametop" : "")
+         // Two body mods laid out alike share every rel: the bodies a part goes onto are part of what a plan was made from.
+         + (partBodies is { Count: > 0 }
+                ? "|bodies:" + string.Join(",", partBodies.OrderBy(p => p.Key, StringComparer.Ordinal).Select(p => $"{p.Key}={p.Value}"))
+                : "");
 }

@@ -47,6 +47,18 @@
     "message": "Oublier le corps de cette collection",
     "description": ""
   },
+  "AutoRefit.RueSplit.Fmt": {
+    "message": "{0} sur un corps Rue et {1} sur un autre. Les parties de Rue ne rejoignent que celles de Rue : un vêtement qui atteint les deux côtés n\u0027est ajusté que du côté de sa propre partie, le reste garde sa taille. Pour mettre un seul corps sur toutes les parties, appuyez sur « {2} » puis choisissez à nouveau ce corps.",
+    "description": ""
+  },
+  "AutoRefit.RueSplit.Shoes": {
+    "message": "Les chaussures peuvent rester telles quelles tant que les pieds et les jambes sont de part et d\u0027autre de cette ligne.",
+    "description": ""
+  },
+  "AutoRefit.RueSplit.Gloves": {
+    "message": "Les gants peuvent rester tels quels tant que les mains et la poitrine sont de part et d\u0027autre de cette ligne.",
+    "description": ""
+  },
   "AutoRefit.Collection": {
     "message": "Collection",
     "description": ""
@@ -4045,6 +4057,26 @@
   },
   "Parts.Retarget.ToBody": {
     "message": "Ajuster vers le corps",
+    "description": ""
+  },
+  "Parts.Retarget.PartBody.Same.Fmt": {
+    "message": "Comme ci-dessus ({0})",
+    "description": ""
+  },
+  "Parts.Retarget.PartBody.Tip": {
+    "message": "Le mod de corps sur lequel cette partie est ajustée. Les jambes d\u0027une robe longue peuvent aller sur un autre corps que sa poitrine.",
+    "description": ""
+  },
+  "Parts.Retarget.PartBody.KeptOnOwn.Fmt": {
+    "message": "Ce n\u0027est pas encore possible : {0} reste sur {1}, le corps pour lequel ce vêtement a été fait, tandis que {2} va sur un autre corps. Un ajustement ne peut pas déplacer seulement certaines parties hors du corps d\u0027origine du vêtement ; la peau de cette partie serait perdue ou pliée. Cela fonctionne si {0} est aussi ajusté sur un autre mod de corps.",
+    "description": ""
+  },
+  "Parts.Retarget.PartBody.RueApart.Fmt": {
+    "message": "{0} est un corps Rue et {1} non. La taille de Rue ne rejoint que celle de Rue : vérifiez la taille dans l\u0027aperçu.",
+    "description": ""
+  },
+  "Parts.Retarget.PartBody.SetAside.Fmt": {
+    "message": "Mise de côté pour l\u0027instant : cette partie a son propre corps, {0}, que seul un ajustement du vêtement entier sans race choisie dans « Ajuster pour » peut utiliser. Elle revient dès que c\u0027est le cas.",
     "description": ""
   },
   "Settings.ReduceMotion": {

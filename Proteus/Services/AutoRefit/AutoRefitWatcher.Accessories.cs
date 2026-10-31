@@ -90,7 +90,7 @@ public sealed partial class AutoRefitWatcher
             ? cached
             : MeasureCover(garment, targets, AccessoryCover.MeasuredOn(chestTo, targets.Options("_top")),
                            AccessoryCover.MeasuredOn(legsTo, targets.Options("_dwn")), coverKey);
-        var covered = cover.Covered(SizedWith);
+        IReadOnlyList<string> covered = cover.Covered(SizedWith);
         log.Information("[Proteus] auto refit: {0} covers {1:P0} of the chest and {2:P0} of the legs (sized with the "
                       + "chest: {3}, the legs: {4})", item, cover.Chest, cover.Legs, SizedWith("_top"), SizedWith("_dwn"));
         if (covered.Count == 0)
@@ -99,6 +99,12 @@ public sealed partial class AutoRefitWatcher
                     "[Proteus] {0} doesn't cover the body, so it was left as it is."), item));
             return;
         }
+        // Rue goes with Rue alone, as for a body-slot garment: a covered part whose body is across that line from the
+        // part the accessory is measured as is left out — before it is asked a size, so it never stops the rest.
+        var acrossRue = targets.CoveredAcrossRue(covered);
+        foreach (string slot in acrossRue)
+            log.Information("[Proteus] auto refit: {0} {1} left out: Rue goes only with Rue", item, slot);
+        if (acrossRue.Count > 0) covered = covered.Except(acrossRue).ToList();
         bool Chosen(string slot) => (slot == "_top" ? g.Preference.Chest : g.Preference.Legs) != null;
         if (AccessoryCover.WithoutSize(covered, TargetFor, Chosen) is { } unsized)
         {
@@ -192,7 +198,7 @@ public sealed partial class AutoRefitWatcher
             return;
         }
         var sources = new Dictionary<string, AutoRefitDecisions.Pick>(parts.Sources, StringComparer.Ordinal);
-        var leftOut = parts.LeftOut.Select(SlotName).ToList();
+        var leftOut = acrossRue.Concat(parts.LeftOut).Select(SlotName).ToList();
         ct.ThrowIfCancellationRequested();
 
         var pickOf = sources[primary];

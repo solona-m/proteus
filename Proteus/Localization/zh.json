@@ -47,6 +47,18 @@
     "message": "清除此合集的体型",
     "description": ""
   },
+  "AutoRefit.RueSplit.Fmt": {
+    "message": "{0}使用Rue体型，{1}使用其他体型。Rue的部位只与Rue衔接，所以跨两边的装备只转换它自己部位那一侧，其余保持原尺寸。要让所有部位使用同一个体型，请按“{2}”然后重新选择该体型。",
+    "description": ""
+  },
+  "AutoRefit.RueSplit.Shoes": {
+    "message": "当脚和腿位于这条界线的不同两侧时，鞋子可能保持原样。",
+    "description": ""
+  },
+  "AutoRefit.RueSplit.Gloves": {
+    "message": "当手和胸部位于这条界线的不同两侧时，手套可能保持原样。",
+    "description": ""
+  },
   "AutoRefit.Collection": {
     "message": "合集",
     "description": ""
@@ -4045,6 +4057,26 @@
   },
   "Parts.Retarget.ToBody": {
     "message": "转换到体型",
+    "description": ""
+  },
+  "Parts.Retarget.PartBody.Same.Fmt": {
+    "message": "与上方相同（{0}）",
+    "description": ""
+  },
+  "Parts.Retarget.PartBody.Tip": {
+    "message": "这个部位要转换到的体型模组。长裙的腿部可以转换到与胸部不同的体型。",
+    "description": ""
+  },
+  "Parts.Retarget.PartBody.KeptOnOwn.Fmt": {
+    "message": "暂时还做不到：{0}留在{1}（这件衣服原适配的体型）上，而{2}要转换到另一个体型。转换无法只把部分部位移出衣服原适配的体型，那个部位的皮肤会丢失或折叠。把{0}也转换到另一个体型模组就可以了。",
+    "description": ""
+  },
+  "Parts.Retarget.PartBody.RueApart.Fmt": {
+    "message": "{0}是Rue体型，而{1}不是。Rue的腰部只与Rue衔接，请在预览中检查腰部。",
+    "description": ""
+  },
+  "Parts.Retarget.PartBody.SetAside.Fmt": {
+    "message": "暂时排除：这个部位设置了自己的体型 {0}，只有在不在“转换给种族”中选择种族、转换整件衣服时才能使用。满足条件后会恢复。",
     "description": ""
   },
   "Settings.ReduceMotion": {

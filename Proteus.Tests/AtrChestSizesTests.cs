@@ -270,7 +270,8 @@ public class AtrChestSizesTests
 
     [Fact]
     [Trait("Plan", "AC-atr-chest-sizes-9")]
-    public void Build_number_is_1405() => Assert.Equal(1405, Plugin.BuildNumber);
+    // At least: the build this shipped in, which every later build still contains.
+    public void Build_number_is_at_least_1405() => Assert.True(Plugin.BuildNumber >= 1405, $"build {Plugin.BuildNumber}");
 
     // ── edges ───────────────────────────────────────────────────────────────────────────────────────────
 

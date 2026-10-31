@@ -900,6 +900,62 @@ public sealed class LocalizationTests
         Assert.Contains("Rue", step);
     }
 
+    private static readonly string[] PerPartBodyKeys =
+    [
+        "Parts.Retarget.PartBody.Same.Fmt", "Parts.Retarget.PartBody.Tip", "Parts.Retarget.PartBody.KeptOnOwn.Fmt",
+        "Parts.Retarget.PartBody.RueApart.Fmt", "Parts.Retarget.PartBody.SetAside.Fmt", "AutoRefit.RueSplit.Fmt",
+        "AutoRefit.RueSplit.Shoes", "AutoRefit.RueSplit.Gloves",
+    ];
+
+    /// <summary>A part's own body in the Studio and the Rue split in Settings: each language's own words.</summary>
+    [Theory]
+    [MemberData(nameof(Translations))]
+    [Trait("Plan", "AC-per-part-target-body-7")]
+    public void PerPartBody_strings_are_translated_not_copied(string lang)
+    {
+        var en = Load(Source);
+        var tr = Load(lang);
+        foreach (string key in PerPartBodyKeys)
+        {
+            Assert.True(tr.ContainsKey(key), $"[{lang}] has no {key}");
+            Assert.NotEqual(en[key].Message, tr[key].Message);
+        }
+    }
+
+    /// <summary>The Rue split names the button that puts one body on every part, by that language's own label for it.</summary>
+    [Theory]
+    [MemberData(nameof(AllLocales))]
+    [Trait("Plan", "AC-per-part-target-body-6")]
+    public void RueSplit_names_the_forget_button(string lang)
+    {
+        var strings = Load(lang);
+        string text = string.Format(strings["AutoRefit.RueSplit.Fmt"].Message, "a", "b", strings["AutoRefit.Clear"].Message);
+        Assert.Contains(strings["AutoRefit.Clear"].Message, text);
+        Assert.Contains("Rue", text);
+        Assert.Equal(Proteus.Localization.Strings.AutoRefit.ClearLabel + "###autoRefitClear", Proteus.Localization.Strings.AutoRefit.Clear);
+    }
+
+    /// <summary>Every README's multi-part bullet says a part can go onto a body of its own, and Settings' step names
+    /// the button that puts one body on every part — in the words the panels use.</summary>
+    [Theory]
+    [MemberData(nameof(AllLocales))]
+    [Trait("Plan", "AC-per-part-target-body-7")]
+    public void Readme_says_a_part_can_go_onto_its_own_body(string lang)
+    {
+        var dir = new System.IO.DirectoryInfo(AppContext.BaseDirectory);
+        while (dir != null && !System.IO.File.Exists(System.IO.Path.Combine(dir.FullName, "proteus.slnx"))) dir = dir.Parent;
+        Assert.True(dir != null, $"Could not find proteus.slnx above {AppContext.BaseDirectory}.");
+        string readme = System.IO.File.ReadAllText(System.IO.Path.Combine(
+            dir!.FullName, lang == Source ? "README.md" : System.IO.Path.Combine("docs", $"README.{lang}.md")));
+        var strings = Load(lang);
+        var lines = readme.Split('\n');
+        string bullet = lines.Single(l => l.Contains("**" + strings["Parts.Retarget.LeaveOut"].Message + "**", StringComparison.Ordinal));
+        Assert.Contains("**" + strings["Parts.Retarget.ToBody"].Message + "**", bullet);
+        string step = lines.Single(l => l.StartsWith("3. ", StringComparison.Ordinal)
+                                        && l.Contains("**" + strings["AutoRefit.Size"].Message + "**", StringComparison.Ordinal));
+        Assert.Contains("**" + strings["AutoRefit.Clear"].Message + "**", step);
+    }
+
     private static readonly string[] MoveMirrorKeys =
     [
         "Parts.Mirror.Tip", "Parts.Move.Mirror.Paired.Fmt", "Parts.Move.Mirror.Held.Fmt",
