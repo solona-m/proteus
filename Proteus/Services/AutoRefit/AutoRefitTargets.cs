@@ -18,6 +18,7 @@ internal sealed class AutoRefitTargets
     private readonly AutoRefitPreference pref;
     private readonly Func<string, BodyModIndex.Entry?> find;
     private readonly IReadOnlyDictionary<string, BodyOption?> worn;
+    private readonly Func<string, IReadOnlyDictionary<string, List<string>>?>? selectedOf;
 
     /// <summary>The race sizes are listed at; null lists every race's.</summary>
     public string? Race { get; }
@@ -25,18 +26,23 @@ internal sealed class AutoRefitTargets
     /// <param name="find">An installed body mod by folder, or null when it is not installed.</param>
     /// <param name="worn">What the character wears in each part's own body (see <see cref="WornFrom"/>); a part left out
     /// wears nothing that can be told.</param>
+    /// <param name="selectedOf">The options ticked in each part's own body mod, by slot, when known: which chest a size
+    /// kept before a body's chests were sizes stands for (see <see cref="AutoRefitDecisions.Resolve"/>).</param>
     public AutoRefitTargets(AutoRefitPreference pref, Func<string, BodyModIndex.Entry?> find, string? race,
-                            IReadOnlyDictionary<string, BodyOption?>? worn = null)
+                            IReadOnlyDictionary<string, BodyOption?>? worn = null,
+                            Func<string, IReadOnlyDictionary<string, List<string>>?>? selectedOf = null)
     {
         this.pref = pref;
         this.find = find;
         Race = race;
         this.worn = worn ?? new Dictionary<string, BodyOption?>(StringComparer.Ordinal);
+        this.selectedOf = selectedOf;
     }
 
     /// <summary>The same preference and bodies at <paramref name="race"/>, with what is worn in each part's body.</summary>
-    public AutoRefitTargets With(string? race, IReadOnlyDictionary<string, BodyOption?> wornNow)
-        => new(pref, find, race, wornNow);
+    public AutoRefitTargets With(string? race, IReadOnlyDictionary<string, BodyOption?> wornNow,
+                                 Func<string, IReadOnlyDictionary<string, List<string>>?>? selectedNow = null)
+        => new(pref, find, race, wornNow, selectedNow ?? selectedOf);
 
     /// <summary>The body mod folder a part is refitted onto; empty for none.</summary>
     public string DirOf(string slot) => pref.BodyOf(slot);
@@ -54,7 +60,8 @@ internal sealed class AutoRefitTargets
     public IReadOnlyList<BodyOption> Options(string slot) => Catalog(slot)?.For(slot, Race) ?? [];
 
     /// <summary>The size chosen for a part, found in its own body at the race; null when none is.</summary>
-    public BodyOption? Chosen(string slot) => AutoRefitDecisions.Resolve(Options(slot), pref.SizeOf(slot));
+    public BodyOption? Chosen(string slot)
+        => AutoRefitDecisions.Resolve(Options(slot), pref.SizeOf(slot), Worn(slot), selectedOf?.Invoke(slot));
 
     /// <summary>What the character wears in a part's body, as handed in.</summary>
     public BodyOption? Worn(string slot) => worn.GetValueOrDefault(slot);
@@ -296,9 +303,11 @@ internal sealed class AutoRefitTargets
     /// alone — matched off the framework thread, the asking done on it (see <see cref="RefitCore.WornOption"/>).
     /// </summary>
     /// <param name="resolved">Each game path as Penumbra resolved it for the player; a path left out resolves to nothing.</param>
+    /// <param name="selected">The options ticked in the body mod, when known (see <see cref="RefitCore.WornOption"/>).</param>
     internal static BodyOption? WornFrom(BodySizeCatalog catalog, string slot, string? race,
-                                         IReadOnlyDictionary<string, string?> resolved)
-        => RefitCore.WornOption(catalog, slot, race, path => resolved.GetValueOrDefault(path));
+                                         IReadOnlyDictionary<string, string?> resolved,
+                                         IReadOnlyDictionary<string, List<string>>? selected = null)
+        => RefitCore.WornOption(catalog, slot, race, path => resolved.GetValueOrDefault(path), selected);
 
     /// <summary>The game paths a part's body draws at the race: what is asked of Penumbra for <see cref="WornFrom"/>.</summary>
     internal static IEnumerable<string> GamePathsOf(BodySizeCatalog catalog, string slot, string? race)

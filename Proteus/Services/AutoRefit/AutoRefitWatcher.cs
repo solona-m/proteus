@@ -586,7 +586,8 @@ public sealed partial class AutoRefitWatcher : IDisposable
         if (waiting.Count == 0) return;
         if (LiveCharacter.PlayerSkeleton(Plugin.ObjectTable) is not { } skeleton) return;   // the race decides the sizes
         string race = $"{skeleton.GenderRace:D4}";
-        string? active = penumbra.GetPlayerCollection()?.Id.ToString("D");
+        var activeId = penumbra.GetPlayerCollection()?.Id;
+        string? active = activeId?.ToString("D");
 
         bool saved = false;
         foreach (var (key, pref) in waiting)
@@ -602,14 +603,19 @@ public sealed partial class AutoRefitWatcher : IDisposable
         var slots = worn.PendingFill.Keys.ToList();
         var readIn = slots.ToDictionary(s => s, worn.BodyOf, StringComparer.Ordinal);
         var resolved = new Dictionary<string, string?>(StringComparer.OrdinalIgnoreCase);
+        var ticked = new Dictionary<string, IReadOnlyDictionary<string, List<string>>?>(StringComparer.Ordinal);
         foreach (string slot in slots)
             if (targets.Catalog(slot) is { } catalog)
+            {
                 foreach (string path in AutoRefitTargets.GamePathsOf(catalog, slot, race))
                     resolved[path] = penumbra.ResolvePlayer(path);
+                // Which chest is worn, of a body whose chests are sizes (NIRÆ): its ticked Chest option.
+                ticked[slot] = activeId is { } id ? penumbra.GetModSettings(id, worn.BodyOf(slot))?.Options : null;
+            }
 
         Interlocked.Exchange(ref filling, 1);
         _ = Task.Run(() => slots.ToDictionary(s => s, s => targets.Catalog(s) is { } c
-                                                   ? AutoRefitTargets.WornFrom(c, s, race, resolved)
+                                                   ? AutoRefitTargets.WornFrom(c, s, race, resolved, ticked.GetValueOrDefault(s))
                                                    : null, StringComparer.Ordinal))
                 .ContinueWith(read =>
                 {
@@ -626,7 +632,8 @@ public sealed partial class AutoRefitWatcher : IDisposable
                                     return;
                                 }
                                 if (disposed || !config.AutoRefitByCollection.TryGetValue(active, out var live)) return;
-                                if (Fill(active, live, new AutoRefitTargets(live, state.Find, race, read.Result), readIn))
+                                if (Fill(active, live, new AutoRefitTargets(live, state.Find, race, read.Result,
+                                                                            s => ticked.GetValueOrDefault(s)), readIn))
                                     config.Save();
                             }
                             catch (Exception ex)
@@ -1271,9 +1278,11 @@ public sealed partial class AutoRefitWatcher : IDisposable
         var worn = new Dictionary<string, BodyOption?>(StringComparer.Ordinal);
         foreach (string slot in AutoRefitDecisions.Slots)
             worn[slot] = targets.Catalog(slot) is { } catalog
-                ? RefitCore.WornOption(catalog, slot, race, path => resolved.GetValueOrDefault(path))
+                ? RefitCore.WornOption(catalog, slot, race, path => resolved.GetValueOrDefault(path),
+                                       OptionsOf(g.Settings, targets.DirOf(slot)))
                 : null;
-        targets = targets.With(race, worn);
+        var bodyTargets = targets;
+        targets = targets.With(race, worn, s => OptionsOf(g.Settings, bodyTargets.DirOf(s)));
 
         // ── what to refit onto ──
         // The piece's own part goes only onto a size the player chose (checked above). A part it merely reaches — the
@@ -2111,7 +2120,8 @@ public sealed partial class AutoRefitWatcher : IDisposable
         var bones = new HashSet<string>(SecondSkinWriter.Parse(bestBytes!).BoneNames, StringComparer.Ordinal);
         var ranking = BodySizeMatch.Rank(bestModel!, targetCat.For(slot, race), targetCat.PathOf, bones);
         return ranking.Confidence == Confidence.Exact && ranking.Best is { } top
-               && RefitCore.Normal(top.Option.Rel) == RefitCore.Normal(target.Rel)
+               // By model file: a ranking names a chest model by its first chest (BodySizeCatalog.IsShape).
+               && RefitCore.Normal(BodySizeCatalog.FileOf(top.Option.Rel)) == RefitCore.Normal(BodySizeCatalog.FileOf(target.Rel))
             ? best
             : null;
     }

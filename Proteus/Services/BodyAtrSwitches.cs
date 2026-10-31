@@ -87,6 +87,51 @@ internal static class BodyAtrSwitches
         return BodySlots.Any(slot => Resolve(new Query(manifest, slot, null, null)) is { Switched.Count: > 0 });
     }
 
+    /// <summary>A group of options that picks one of several shapes a body model carries — NIRÆ's "Chest".</summary>
+    /// <param name="Options">Its options' names, the first of each name, in the author's order.</param>
+    /// <param name="Default">The one drawn when nothing is ticked: an index into <paramref name="Options"/>.</param>
+    /// <param name="Attributes">The attributes it switches: the shapes, as the model's parts are tagged.</param>
+    internal sealed record ShapeAxis(string Group, IReadOnlyList<string> Options, int Default, IReadOnlySet<string> Attributes);
+
+    /// <summary>
+    /// The group of <paramref name="manifest"/> that picks which shape of <paramref name="equipSlot"/>'s body model is
+    /// drawn, or null: a single-choice group with no conditions, no files and at least two options, switching custom
+    /// attributes of that slot for the body (set 0) — of several such, the one switching the most attributes (NIRÆ's
+    /// Chest over its Belly, Nipples and Piercings), the earlier on a tie. Never throws.
+    /// </summary>
+    internal static ShapeAxis? ShapeGroup(PenumbraPackage.Contents manifest, string equipSlot)
+    {
+        try
+        {
+            ShapeAxis? best = null;
+            int most = 0;
+            foreach (var g in manifest.Groups)
+            {
+                if (!string.Equals(g.Type, "Single", StringComparison.OrdinalIgnoreCase) || g.HasCondition
+                    || g.Options.Count < 2 || g.Options.Any(o => o.HasCondition || o.Files.Count > 0)) continue;
+                var attributes = g.Options.SelectMany(o => o.Atr)
+                                  .Where(e => Custom(e) && e.Readable && (e.Id is null or 0)
+                                              && (e.Slot == null || string.Equals(e.Slot, equipSlot, StringComparison.OrdinalIgnoreCase)))
+                                  .Select(e => e.Attribute).ToHashSet(StringComparer.Ordinal);
+                int count = attributes.Count;
+                if (count <= most) continue;
+                var names = new List<string>();
+                foreach (var o in g.Options)
+                    if (!names.Contains(o.Name, StringComparer.OrdinalIgnoreCase)) names.Add(o.Name);
+                // SingleModGroup.FixSetting: past the last option is the last.
+                string dflt = g.Options[(int)Math.Min(g.DefaultSettings, (ulong)(g.Options.Count - 1))].Name;
+                best = new ShapeAxis(g.Name, names, names.FindIndex(n => string.Equals(n, dflt, StringComparison.OrdinalIgnoreCase)),
+                                     attributes);
+                most = count;
+            }
+            return best;
+        }
+        catch (Exception)
+        {
+            return null;
+        }
+    }
+
     private sealed record Owner(IReadOnlyList<PenumbraPackage.PackAtr> Entries, bool Judgeable);
 
     private static Result? ResolveOrThrow(Query q, BodyOption? onto)

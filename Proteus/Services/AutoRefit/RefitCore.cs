@@ -866,18 +866,21 @@ internal static partial class RefitCore
     /// </summary>
     /// <param name="resolve">Resolves a game path through the player's collection (Penumbra IPC, so whatever thread
     /// the caller is allowed to ask from).</param>
+    /// <param name="selected">The body mod's ticked options, when known: of a chest model's chests
+    /// (<see cref="BodySizeCatalog.IsShape"/>) the one ticked is worn, else the default one.</param>
     internal static BodyOption? WornOption(BodySizeCatalog catalog, string slot, string? race,
-                                           Func<string, string?> resolve)
+                                           Func<string, string?> resolve,
+                                           IReadOnlyDictionary<string, List<string>>? selected = null)
     {
         var options = catalog.For(slot, race);
         foreach (string gamePath in options.Select(o => o.GamePath).Distinct(StringComparer.OrdinalIgnoreCase))
         {
             if (resolve(gamePath) is not { } resolved) continue;
             string full = Path.GetFullPath(resolved);
-            foreach (var option in options)
-                if (string.Equals(option.GamePath, gamePath, StringComparison.OrdinalIgnoreCase)
-                    && string.Equals(Path.GetFullPath(catalog.PathOf(option)), full, StringComparison.OrdinalIgnoreCase))
-                    return option;
+            var worn = options.Where(o => string.Equals(o.GamePath, gamePath, StringComparison.OrdinalIgnoreCase)
+                                          && string.Equals(Path.GetFullPath(catalog.PathOf(o)), full, StringComparison.OrdinalIgnoreCase))
+                              .ToList();
+            if (worn.Count > 0) return BodySizeCatalog.PickShape(worn, selected);
         }
         return null;
     }

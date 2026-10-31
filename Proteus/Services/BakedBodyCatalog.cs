@@ -134,7 +134,8 @@ internal static class BakedBodyCatalog
             made[path] = rel;
             if (rel == null) failed.Add($"{option.FullLabel}: {why}");
         }
-        if (rel != null) options.Add(option with { Rel = rel, GamePath = RacialModelBake.WithRace(option.GamePath, to) });
+        // A chest entry keeps its chest: the bent model is shared, the chests stay apart.
+        if (rel != null) options.Add(option with { Rel = rel + BodySizeCatalog.ShapeSuffix(option.Rel), GamePath = RacialModelBake.WithRace(option.GamePath, to) });
     }
 
     /// <summary>

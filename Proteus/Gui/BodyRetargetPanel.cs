@@ -1308,8 +1308,9 @@ internal sealed partial class BodyRetargetPanel(PenumbraBridge penumbra, UVRemap
         foreach (var (slot, rel) in RememberedTargets.Fillable(config.RetargetTargets, bodyDir,
                                                               config.RetargetBodyDir, drawn.Contains, to.ContainsKey))
         {
-            if (snapshot.For(slot, race).FirstOrDefault(o =>
-                    string.Equals(o.Rel, rel, StringComparison.OrdinalIgnoreCase)) is not { } remembered) continue;
+            // A size kept before a body's chests were sizes names the model alone: the chest ticked of it.
+            if (BodySizeCatalog.ByFile(snapshot.For(slot, race), rel, SelectedOf(bodyDir, snapshot)) is not { } remembered)
+                continue;
 
             to[slot] = [remembered];
             StartValidate(slot);
@@ -1324,7 +1325,7 @@ internal sealed partial class BodyRetargetPanel(PenumbraBridge penumbra, UVRemap
 
     /// <summary>The option of this slot whose file the player's collection resolves the body model to.</summary>
     private BodyOption? WornOption(BodySizeCatalog snapshot, string slot)
-        => RefitCore.WornOption(snapshot, slot, race, penumbra.ResolvePlayer);
+        => RefitCore.WornOption(snapshot, slot, race, penumbra.ResolvePlayer, SelectedOf(bodyDir, snapshot));
 
     // ── which slots take part ───────────────────────────────────────────────
 
