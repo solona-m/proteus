@@ -158,7 +158,12 @@ internal sealed record BodySizeCatalog(string ModRoot, IReadOnlyList<BodyOption>
             }
         }
 
+        // Only a body whose chest models stand for more than one option each — the rest of the body chosen beside the
+        // chest, as NIRÆ's builds carry three hips each — or that ships its chest as plain files.
         if (options.FirstOrDefault(o => o.Slot == "_top") is { } chest
+            && options.Where(o => o.Slot == "_top")
+                      .GroupBy(o => (o.GamePath.ToLowerInvariant(), Normal(o.Rel)))
+                      .Any(g => g.Count() > 1 || g.Any(o => o.Group == DefaultGroupName))
             && BodyAtrSwitches.Manifest(modRoot) is { } manifest
             && BodyAtrSwitches.ShapeGroup(manifest, "Body") is { } axis
             && CarriesShapes(ResolveCaseInsensitive(modRoot, chest.Rel), axis))
@@ -219,7 +224,7 @@ internal sealed record BodySizeCatalog(string ModRoot, IReadOnlyList<BodyOption>
         return same.Count == 0 ? null : PickShape(same, selected);
     }
 
-    private static string Normal(string rel) => rel.Replace('\\', '/').Trim().ToLowerInvariant();
+    private static string Normal(string rel) => RefitCore.Normal(rel);
 
     /// <summary>
     /// The chest options of a body that picks its chest by <paramref name="axis"/>: one per chest model and chest,
@@ -230,10 +235,16 @@ internal sealed record BodySizeCatalog(string ModRoot, IReadOnlyList<BodyOption>
     private static List<BodyOption> WithChests(List<BodyOption> options, BodyAtrSwitches.ShapeAxis axis)
     {
         var models = options.Where(o => o.Slot == "_top")
-                            .GroupBy(o => Normal(o.Rel)).Select(g => g.ToList()).ToList();
-        var shared = models.Select(m => models.Count == 1 ? "" : BuildOf(m)).ToList();
+                            .GroupBy(o => (o.GamePath.ToLowerInvariant(), Normal(o.Rel))).Select(g => g.ToList()).ToList();
+        // Builds are told apart within one race's chest (one game path): a mod shipping each build for two races
+        // names "Slim" once for each.
+        bool Peers(List<BodyOption> a, List<BodyOption> b)
+            => string.Equals(a[0].GamePath, b[0].GamePath, StringComparison.OrdinalIgnoreCase);
+        var shared = models.Select(m => models.Count(o => Peers(o, m)) == 1 ? "" : BuildOf(m)).ToList();
         // Two builds of one name: told apart by their first option's label.
-        var builds = shared.Select((b, i) => shared.Count(o => string.Equals(o, b, StringComparison.OrdinalIgnoreCase)) > 1
+        var builds = shared.Select((b, i) => Enumerable.Range(0, models.Count)
+                                                       .Count(j => Peers(models[j], models[i])
+                                                                   && string.Equals(shared[j], b, StringComparison.OrdinalIgnoreCase)) > 1
                                                  ? models[i][0].Label : b).ToList();
         var chests = new List<BodyOption>();
         for (int m = 0; m < models.Count; m++)
@@ -260,17 +271,25 @@ internal sealed record BodySizeCatalog(string ModRoot, IReadOnlyList<BodyOption>
     /// of its attributes — rather than the group switching something the chest does not carry (a belly drawn on the
     /// legs). False when the model cannot be read.
     /// </summary>
+    /// <remarks>The model's attribute names are read once per edit of the file: the Studio reads a body's sizes on the
+    /// framework thread.</remarks>
     private static bool CarriesShapes(string path, BodyAtrSwitches.ShapeAxis axis)
     {
         try
         {
-            return SecondSkinWriter.AttributeNames(File.ReadAllBytes(path)).Count(axis.Attributes.Contains) >= 2;
+            var info = new FileInfo(path);
+            string key = $"{path}|{info.Length}|{info.LastWriteTimeUtc.Ticks}";
+            var names = ModelAttributes.GetOrAdd(key, _ => SecondSkinWriter.AttributeNames(File.ReadAllBytes(path)).ToList());
+            return names.Count(axis.Attributes.Contains) >= 2;
         }
         catch (Exception)
         {
             return false;
         }
     }
+
+    private static readonly System.Collections.Concurrent.ConcurrentDictionary<string, List<string>> ModelAttributes =
+        new(StringComparer.OrdinalIgnoreCase);
 
     private static readonly char[] Separators = ['·', '-', '–', '—', '|', '/', ':', ',', '=', '*', '~', ' '];
 

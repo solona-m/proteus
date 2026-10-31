@@ -127,15 +127,25 @@ internal static class BakedBodyCatalog
                             BodySizeCatalog source, BodyOption option, ushort from, ushort to, RacialModelBake.Wearer who,
                             BendHow how)
     {
-        string path = source.PathOf(option);
-        if (!made.TryGetValue(path, out string? rel))
-        {
-            rel = Bend(path, from, to, who, how, out string why);
-            made[path] = rel;
-            if (rel == null) failed.Add($"{option.FullLabel}: {why}");
-        }
-        // A chest entry keeps its chest: the bent model is shared, the chests stay apart.
-        if (rel != null) options.Add(option with { Rel = rel + BodySizeCatalog.ShapeSuffix(option.Rel), GamePath = RacialModelBake.WithRace(option.GamePath, to) });
+        string why = "";
+        if (Baked(made, source.PathOf(option), option, to, p => Bend(p, from, to, who, how, out why), out bool bent) is { } baked)
+            options.Add(baked);
+        else if (bent) failed.Add($"{option.FullLabel}: {why}");
+    }
+
+    /// <summary>
+    /// <paramref name="option"/> on its bent model: each model file bent once (<paramref name="made"/>, by path), and a
+    /// chest entry keeping its chest (<see cref="BodySizeCatalog.IsShape"/>) — the bent model is shared, the chests stay
+    /// apart. Null when the model could not be bent.
+    /// </summary>
+    /// <param name="bent">Whether this call bent the model, rather than finding it bent before.</param>
+    internal static BodyOption? Baked(Dictionary<string, string?> made, string path, BodyOption option, ushort to,
+                                      Func<string, string?> bend, out bool bent)
+    {
+        bent = !made.TryGetValue(path, out string? rel);
+        if (bent) made[path] = rel = bend(path);
+        return rel == null ? null
+            : option with { Rel = rel + BodySizeCatalog.ShapeSuffix(option.Rel), GamePath = RacialModelBake.WithRace(option.GamePath, to) };
     }
 
     /// <summary>

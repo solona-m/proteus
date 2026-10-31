@@ -2119,12 +2119,15 @@ public sealed partial class AutoRefitWatcher : IDisposable
 
         var bones = new HashSet<string>(SecondSkinWriter.Parse(bestBytes!).BoneNames, StringComparer.Ordinal);
         var ranking = BodySizeMatch.Rank(bestModel!, targetCat.For(slot, race), targetCat.PathOf, bones);
-        return ranking.Confidence == Confidence.Exact && ranking.Best is { } top
-               // By model file: a ranking names a chest model by its first chest (BodySizeCatalog.IsShape).
-               && RefitCore.Normal(BodySizeCatalog.FileOf(top.Option.Rel)) == RefitCore.Normal(BodySizeCatalog.FileOf(target.Rel))
+        return ranking.Confidence == Confidence.Exact && ranking.Best is { } top && IsTargetModel(top.Option, target)
             ? best
             : null;
     }
+
+    /// <summary>Whether the size a ranking names is <paramref name="target"/>'s model. By model file: a ranking names a
+    /// chest model by its first chest (<see cref="BodySizeCatalog.IsShape"/>), whichever chest is the target.</summary>
+    internal static bool IsTargetModel(BodyOption ranked, BodyOption target)
+        => RefitCore.Normal(BodySizeCatalog.FileOf(ranked.Rel)) == RefitCore.Normal(BodySizeCatalog.FileOf(target.Rel));
 
     /// <summary>A cached reading, as it was. Its pick is null when the garment could not be read.</summary>
     private sealed record Restored(AutoRefitDecisions.Pick? Pick);

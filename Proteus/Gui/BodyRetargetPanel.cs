@@ -920,7 +920,8 @@ internal sealed partial class BodyRetargetPanel(PenumbraBridge penumbra, UVRemap
     /// taking it is a pick like any in the dropdown.
     /// <para/>
     /// Worked out once per question, on this thread as every other body pick is: at most two resolves, which are IPC and
-    /// must be made here, and two manifest reads — no models — cached by folder.
+    /// must be made here, and two manifest reads, cached by folder — with, for a body whose chests are sizes (NIRÆ), its
+    /// chest model's attribute names, read once per edit of the file (<see cref="BodySizeCatalog.IsShape"/>).
     /// </summary>
     private void DrawWornBodyButton(in RetargetContext ctx, string missing)
     {

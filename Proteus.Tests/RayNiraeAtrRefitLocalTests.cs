@@ -45,7 +45,11 @@ public class RayNiraeAtrRefitLocalTests(ITestOutputHelper output)
         {
             var source = neo.For(slot, "0201").First(o => o.Label == from);
             var target = nir.For(slot, "0201").First(o => o.Label == Onto(slot));
-            var draw = RefitCore.MaskOf(nirDir, nir, slot, SmallPerky, RefitCore.RaceNumber("0201"))!.Onto(target);
+            // The chest entry alone picks Small Perky, whatever is ticked: the same draw as with it ticked.
+            var draw = RefitCore.MaskOf(nirDir, nir, slot, slot == "_top" ? null : SmallPerky, RefitCore.RaceNumber("0201"))!
+                                .Onto(target);
+            var ticked = RefitCore.MaskOf(nirDir, nir, slot, SmallPerky, RefitCore.RaceNumber("0201"))!.Onto(target);
+            Assert.Equal(ticked.AtrOff.Order(StringComparer.Ordinal), draw.AtrOff.Order(StringComparer.Ordinal));
             if (slot == "_top") topDraw = draw;
             if (!atr) draw = draw with { AtrOff = new HashSet<string>(), AtrSwitched = new HashSet<string>() };
             Assert.Null(BodyRetarget.BuildPair(slot, neo.PathOf(source), nir.PathOf(target), slot, false,

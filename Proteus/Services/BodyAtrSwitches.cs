@@ -7,7 +7,7 @@ namespace Proteus.Services;
 
 /// <summary>
 /// Which of a body model's custom attributes (<c>atrx_</c>) its mod's options switch off — Penumbra's <c>Atr</c>
-/// manipulations, under a choice of those options. NIRÆ ships all nine of its chests in one chest model and lets its
+/// manipulations, under a choice of those options. NIRÆ ships all its chests in one chest model and lets its
 /// "Chest" group pick the one drawn: everything a refit does with the body has to see only that one, as with the IMC
 /// variants of <see cref="BodyRetarget.UndrawnVariants"/>.
 /// <para/>

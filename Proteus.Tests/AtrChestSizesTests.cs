@@ -360,8 +360,21 @@ public class AtrChestSizesTests
         Assert.Equal("X · S|X · M", Labelled("X · S", "X · L", "X · M", "X · XL"));
 
         using var one = new Mod(Meta(null, Group("Size", "Single", 0, null,
-            Option("Only", new() { [TopPath] = @"files\\top_a.mdl" }, null)), Chests()));
+            Option("Only S", new() { [TopPath] = @"files\\top_a.mdl" }, null),
+            Option("Only L", new() { [TopPath] = @"files\\top_a.mdl" }, null)), Chests()));
         Assert.Equal(ChestNames, one.Catalog.For("_top").Select(o => o.Label));
+
+        // One chest file per option: a body that sizes its chests by file, its Atr group something else.
+        using var ownFiles = new Mod(Meta(null, Group("Size", "Single", 0, null,
+            Option("S", new() { [TopPath] = @"files\\top_a.mdl" }, null),
+            Option("L", new() { [TopPath] = @"files\\top_b.mdl" }, null)), Chests()));
+        Assert.Equal(["S", "L"], ownFiles.Catalog.For("_top").Select(o => o.Label));
+
+        // The same builds for two races: each race names its own.
+        string Raced(string race) => Option($"{race} · x", new() { [TopPath.Replace("c0201", race)] = $"files\\\\top_{(race == "c0201" ? "a" : "b")}.mdl" }, null);
+        using var races = new Mod(Meta(null, Group("Size", "Single", 0, null,
+            Raced("c0201"), Raced("c0201").Replace(" · x", " · y"), Raced("c1801"), Raced("c1801").Replace(" · x", " · y")), Chests()));
+        Assert.Equal(ChestNames.Concat(ChestNames), races.Catalog.For("_top").Select(o => o.Label));
     }
 
     [Fact]
@@ -450,9 +463,14 @@ public class AtrChestSizesTests
     {
         using var mod = new Mod(Nirae());
         var entries = mod.Catalog.For("_top").Take(3).ToList();
-        var bent = entries.Select(o => o with { Rel = "baked.mdl" + BodySizeCatalog.ShapeSuffix(o.Rel) }).ToList();
+        var made = new Dictionary<string, string?>(StringComparer.OrdinalIgnoreCase);
+        int bends = 0;
+        var bent = entries.Select(o => BakedBodyCatalog.Baked(made, mod.Catalog.PathOf(o), o, 401,
+                                                              _ => { bends++; return "baked.mdl"; }, out _)!).ToList();
+        Assert.Equal(1, bends);
         Assert.Equal(3, bent.Select(o => o.Rel).Distinct().Count());
         Assert.All(bent, o => Assert.Equal("baked.mdl", BodySizeCatalog.FileOf(o.Rel)));
+        Assert.Equal(entries.Select(o => o.Label), bent.Select(o => o.Label));
         Assert.Equal("", BodySizeCatalog.ShapeSuffix(@"files\top_a.mdl"));
     }
 
@@ -473,12 +491,15 @@ public class AtrChestSizesTests
     [Trait("Plan", "EDGE-atr-chest-sizes-15")]
     public void Author_size_matches_by_model_file()
     {
-        // The AuthorSize check compares model files: the ranking names a chest model by its first chest.
+        // A ranking names a chest model by its first chest; the author's copy of it is the target whichever chest it is.
         using var mod = new Mod(Nirae());
         var first = Entry(mod.Catalog, "B · Flat");
-        var target = Entry(mod.Catalog, "B · Small Perky");
-        Assert.Equal(RefitCore.Normal(BodySizeCatalog.FileOf(first.Rel)), RefitCore.Normal(BodySizeCatalog.FileOf(target.Rel)));
-        Assert.Equal(mod.Catalog.PathOf(first), mod.Catalog.PathOf(target));
+        Assert.True(AutoRefitWatcher.IsTargetModel(first, Entry(mod.Catalog, "B · Small Perky")));
+        Assert.False(AutoRefitWatcher.IsTargetModel(first, Entry(mod.Catalog, "A · Small Perky")));
+        using var plain = new Mod(Meta(null, Builds()));
+        var p = plain.Catalog.For("_top");
+        Assert.True(AutoRefitWatcher.IsTargetModel(p[0], p[1]));
+        Assert.False(AutoRefitWatcher.IsTargetModel(p[0], p[2]));
     }
 
     [Fact]

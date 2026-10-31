@@ -8,7 +8,7 @@ namespace Proteus.Tests;
 
 /// <summary>
 /// The installed NIRÆ body: four chest models (one per build) under twelve "Build &amp; Hips" options, and a file-less
-/// "Chest" group picking which of nine chests each model draws — its chest sizes are build × chest
+/// "Chest" group picking which of its chests each model draws — its chest sizes are build × chest
 /// (<see cref="BodySizeCatalog.IsShape"/>), its legs build × hips as before.
 /// </summary>
 public class NiraeChestSizesLocalTests
