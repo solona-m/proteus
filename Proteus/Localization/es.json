@@ -47,6 +47,18 @@
     "message": "Olvidar el cuerpo de esta colección",
     "description": ""
   },
+  "AutoRefit.RueSplit.Fmt": {
+    "message": "{0} en un cuerpo Rue y {1} en otro. Las partes de Rue solo encajan con las de Rue, así que la ropa que llega a ambos lados se ajusta solo en el lado de su propia parte; el resto conserva su talla. Para poner un mismo cuerpo en todas las partes, pulsa «{2}» y vuelve a elegir ese cuerpo.",
+    "description": ""
+  },
+  "AutoRefit.RueSplit.Shoes": {
+    "message": "Los zapatos pueden quedarse como están mientras los pies y las piernas estén a distintos lados de esa línea.",
+    "description": ""
+  },
+  "AutoRefit.RueSplit.Gloves": {
+    "message": "Los guantes pueden quedarse como están mientras las manos y el pecho estén a distintos lados de esa línea.",
+    "description": ""
+  },
   "AutoRefit.Collection": {
     "message": "Colección",
     "description": ""
@@ -4045,6 +4057,26 @@
   },
   "Parts.Retarget.ToBody": {
     "message": "Ajustar al cuerpo",
+    "description": ""
+  },
+  "Parts.Retarget.PartBody.Same.Fmt": {
+    "message": "Igual que arriba ({0})",
+    "description": ""
+  },
+  "Parts.Retarget.PartBody.Tip": {
+    "message": "El mod de cuerpo al que se ajusta esta parte. Las piernas de un vestido largo pueden ir a otro cuerpo distinto del de su pecho.",
+    "description": ""
+  },
+  "Parts.Retarget.PartBody.KeptOnOwn.Fmt": {
+    "message": "Esto aún no se puede hacer: {0} se queda en {1}, el cuerpo para el que se hizo esta prenda, mientras que {2} va a otro cuerpo. Un ajuste no puede sacar solo algunas partes del cuerpo para el que se hizo la prenda; la piel de esa parte se perdería o se plegaría. Funciona si {0} también se ajusta a otro mod de cuerpo.",
+    "description": ""
+  },
+  "Parts.Retarget.PartBody.RueApart.Fmt": {
+    "message": "{0} es un cuerpo Rue y {1} no. La cintura de Rue solo encaja con la de Rue, así que revisa la cintura en la vista previa.",
+    "description": ""
+  },
+  "Parts.Retarget.PartBody.SetAside.Fmt": {
+    "message": "Excluida por ahora: esta parte tiene su propio cuerpo, {0}, que solo puede usar un ajuste de la prenda entera sin raza elegida en «Ajustar para». Vuelve cuando sea así.",
     "description": ""
   },
   "Settings.ReduceMotion": {

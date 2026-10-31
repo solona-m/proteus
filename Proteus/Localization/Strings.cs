@@ -368,7 +368,21 @@ public sealed class AutoRefitStrings
     public readonly string EndsKept = ProteusLoc.Localize("AutoRefit.EndsKept",
         "Gloves and shoes keep the hands and feet they were made with; only the arms and legs they reach are refitted.");
 
-    public readonly string Clear = ProteusLoc.Localize("AutoRefit.Clear", "Forget this collection's body") + "###autoRefitClear";
+    /// <summary>The "Forget this collection's body" button's text, as other text names it.</summary>
+    public readonly string ClearLabel = ProteusLoc.Localize("AutoRefit.Clear", "Forget this collection's body");
+
+    public string Clear => ClearLabel + "###autoRefitClear";
+
+    public readonly string RueSplitFmt = ProteusLoc.Localize("AutoRefit.RueSplit.Fmt",
+        "{0} on a Rue body and {1} on another. Rue's parts only meet Rue's, so gear that reaches both sides is refitted on "
+      + "its own part's side only; the rest of it keeps its size. To put one body on every part, press \"{2}\" and pick "
+      + "that body again.");
+
+    public readonly string RueSplitShoes = ProteusLoc.Localize("AutoRefit.RueSplit.Shoes",
+        "Shoes may be left as they are while the feet and legs are on different sides of that line.");
+
+    public readonly string RueSplitGloves = ProteusLoc.Localize("AutoRefit.RueSplit.Gloves",
+        "Gloves may be left as they are while the hands and chest are on different sides of that line.");
 
     public readonly string RunNow = ProteusLoc.Localize("AutoRefit.RunNow", "Refit what I'm wearing now") + "###autoRefitRunNow";
 
@@ -2882,6 +2896,24 @@ public sealed class PartsStrings
                                            + "###partsRetargetGuideOk";
 
     public readonly string RetargetToBody =ProteusLoc.Localize("Parts.Retarget.ToBody", "Refit onto body");
+
+    public readonly string RetargetPartBodySameFmt = ProteusLoc.Localize("Parts.Retarget.PartBody.Same.Fmt",
+        "Same as above ({0})");
+
+    public readonly string RetargetPartBodyTip = ProteusLoc.Localize("Parts.Retarget.PartBody.Tip",
+        "The body mod this part is refitted onto. A long dress's legs can go onto another body than its chest.");
+
+    public readonly string RetargetPartBodyKeptOnOwnFmt = ProteusLoc.Localize("Parts.Retarget.PartBody.KeptOnOwn.Fmt",
+        "This can't be done yet: the {0} stays on {1}, the body this garment was made for, while the {2} goes onto another "
+      + "body. A refit can't move only some parts off the body a garment was made for; that part's skin would be lost or "
+      + "folded. It works when the {0} is refitted onto another body mod too.");
+
+    public readonly string RetargetPartBodyRueApartFmt = ProteusLoc.Localize("Parts.Retarget.PartBody.RueApart.Fmt",
+        "{0} is a Rue body and {1} isn't. Rue's waist only meets Rue's, so check the waist in the preview.");
+
+    public readonly string RetargetPartBodySetAsideFmt = ProteusLoc.Localize("Parts.Retarget.PartBody.SetAside.Fmt",
+        "Left out for now: this part is set to its own body, {0}, which only a whole-garment refit with no race picked "
+      + "under \"Refit for\" can use. It comes back when that's so.");
 
     public readonly string RetargetFromBody = ProteusLoc.Localize("Parts.Retarget.FromBody", "Made for body");
 

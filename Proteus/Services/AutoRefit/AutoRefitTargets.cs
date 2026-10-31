@@ -219,6 +219,9 @@ internal sealed class AutoRefitTargets
     internal (BodyModIndex.Entry Body, BodyOption To)? CoverTarget(string slot, BodyModIndex.Entry lead, BodyOption leadTarget,
                                                                     bool leadStays, BodyOption? own)
     {
+        // Rue goes with Rue alone, on an accessory as on a body-slot garment (see CoveredAcrossRue, which takes such a
+        // part out first; this is the second line).
+        if (AcrossRue(slot, lead)) return null;
         if (!leadStays || (Body(slot) is { } body && string.Equals(body.Dir, lead.Dir, StringComparison.OrdinalIgnoreCase)))
             return own != null && Body(slot) is { } mine ? (mine, own) : null;
         var options = lead.Catalog.For(slot, Race);
@@ -226,11 +229,42 @@ internal sealed class AutoRefitTargets
                is { } there ? (lead, there) : null;
     }
 
-    /// <summary>Whether a part on <paramref name="dir"/> is on the other side of the Rue line (see <see cref="IsRue"/>)
-    /// from the bodies the other parts are on.</summary>
-    internal bool CrossesRue(string slot, string dir, string? name)
-        => AutoRefitDecisions.Slots.Where(s => s != slot && DirOf(s).Length > 0)
-                                   .Any(s => IsRue(DirOf(s), Body(s)?.Name) != IsRue(dir, name));
+    /// <summary>
+    /// The parts of an accessory's cover after its first — the part it is measured as, and routed by — whose body is on
+    /// the other side of the Rue line from that one's: left out of its refit, as <see cref="TargetFor"/> leaves such a
+    /// part out of a body-slot garment's. Judged before anything is read or sized, so such a part is never asked a size
+    /// of. A part with no body chosen is on no side.
+    /// </summary>
+    internal List<string> CoveredAcrossRue(IReadOnlyList<string> covered)
+    {
+        if (covered.Count == 0) return [];
+        bool rue = IsRue(DirOf(covered[0]), Body(covered[0])?.Name);
+        return covered.Skip(1).Where(s => DirOf(s).Length > 0 && IsRue(DirOf(s), Body(s)?.Name) != rue).ToList();
+    }
+
+    /// <summary>The chosen parts on each side of the Rue line, for Settings to say so.</summary>
+    /// <param name="ShoesLeft">The feet and the legs are on different sides: a shoe keeping its feet may be left as it is.</param>
+    /// <param name="GlovesLeft">The hands and the chest are on different sides, likewise for a glove.</param>
+    internal sealed record RueSplit(IReadOnlyList<string> Rue, IReadOnlyList<string> Other, bool ShoesLeft, bool GlovesLeft);
+
+    /// <summary>
+    /// The parts whose chosen body is installed, split by the Rue line (see <see cref="IsRue"/>); null unless both sides
+    /// have one. Each part keeps its own pick (<see cref="AutoRefitDecisions.ChooseBody"/>), and gear reaching both sides
+    /// is refitted on its own part's side only.
+    /// </summary>
+    internal RueSplit? RueSides()
+    {
+        var rue = new List<string>();
+        var other = new List<string>();
+        foreach (string slot in AutoRefitDecisions.Slots)
+        {
+            if (Body(slot) is not { } body) continue;
+            (IsRue(body.Dir, body.Name) ? rue : other).Add(slot);
+        }
+        if (rue.Count == 0 || other.Count == 0) return null;
+        bool Apart(string a, string b) => rue.Contains(a) && other.Contains(b) || other.Contains(a) && rue.Contains(b);
+        return new RueSplit(rue, other, Apart("_sho", "_dwn"), Apart("_glv", "_top"));
+    }
 
     /// <summary>A part follows the anchor's size by name (<see cref="Basis.Anchor"/>), else the size worn, else the first.</summary>
     internal enum Basis { Anchor, Worn, First }

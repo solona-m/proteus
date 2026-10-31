@@ -505,4 +505,50 @@ public class RetargetInputsTests
         Assert.Null(RetargetInputs.MissingSlot(chestAndLegs, kept));
         Assert.Equal("_sho", RetargetInputs.MissingSlot(chestAndLegs, unticked));
     }
+
+    // ── a part on a body of its own (per-part-target-body) ───────────────────
+
+    private static string KeyWith(IReadOnlyDictionary<string, string>? bodies, BodyOption legsTo)
+    {
+        var layout = new RetargetInputs.Layout("_top", "_top", null);
+        var chest = new BodyOption("Chest", "", "M", "chest/m.mdl", "chara/equipment/e0000/model/c0201e0000_top.mdl", "_top");
+        var from = new Dictionary<string, BodyOption> { ["_top"] = chest, ["_dwn"] = LegsS };
+        var to = new Dictionary<string, List<BodyOption>> { ["_top"] = [chest], ["_dwn"] = [legsTo] };
+        var inputs = RetargetInputs.Assemble(layout, ["_top", "_dwn"], from, to, null);
+        return RetargetInputs.Key("m", null, inputs, RetargetInputs.Chosen(["_top", "_dwn"], from, to), from, to, [], null,
+                                  true, true, false, partBodies: bodies);
+    }
+
+    [Fact]
+    [Trait("Plan", "AC-per-part-target-body-4")]
+    [Trait("Plan", "EDGE-per-part-target-body-10")]
+    [Trait("Plan", "EDGE-per-part-target-body-19")]
+    public void Key_unchanged_without_part_bodies_and_changes_with_them()
+    {
+        string today = KeyWith(null, LegsM);
+        Assert.Equal(today, KeyWith(new Dictionary<string, string>(), LegsM));
+        Assert.DoesNotContain("bodies", today);
+        string yab = KeyWith(new Dictionary<string, string> { ["_dwn"] = "YAB+" }, LegsM);
+        Assert.NotEqual(today, yab);
+        Assert.NotEqual(yab, KeyWith(new Dictionary<string, string> { ["_dwn"] = "Bibo+" }, LegsM));
+    }
+
+    [Fact]
+    [Trait("Plan", "EDGE-per-part-target-body-4")]
+    public void Key_tells_two_bodies_with_the_same_files_apart()
+    {
+        // Rue and its fork LaRue lay their files out alike: the same rel, another body.
+        Assert.NotEqual(KeyWith(new Dictionary<string, string> { ["_dwn"] = "Rue" }, LegsM),
+                        KeyWith(new Dictionary<string, string> { ["_dwn"] = "LaRue" }, LegsM));
+    }
+
+    [Fact]
+    [Trait("Plan", "EDGE-per-part-target-body-20")]
+    public void Slots_list_only_main_body_parts_with_several_models()
+    {
+        // The rows a part body can be picked on are the main body's parts with more than one model, as always.
+        var layout = new RetargetInputs.Layout("_top", "_top", null);
+        var slots = RetargetInputs.Slots(layout, CatalogSlots, s => s == "_dwn" ? 1 : 2);
+        Assert.Equal(["_top", "_glv", "_sho"], slots);
+    }
 }

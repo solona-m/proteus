@@ -47,6 +47,18 @@
     "message": "Körper dieser Kollektion vergessen",
     "description": ""
   },
+  "AutoRefit.RueSplit.Fmt": {
+    "message": "{0} auf einem Rue-Körper und {1} auf einem anderen. Rues Teile passen nur zu Rues, daher wird Kleidung, die beide Seiten erreicht, nur auf der Seite ihres eigenen Teils angepasst; der Rest behält seine Größe. Um einen Körper für alle Teile zu nutzen, drücke „{2}“ und wähle den Körper erneut.",
+    "description": ""
+  },
+  "AutoRefit.RueSplit.Shoes": {
+    "message": "Schuhe bleiben eventuell unverändert, solange Füße und Beine auf verschiedenen Seiten dieser Grenze liegen.",
+    "description": ""
+  },
+  "AutoRefit.RueSplit.Gloves": {
+    "message": "Handschuhe bleiben eventuell unverändert, solange Hände und Brust auf verschiedenen Seiten dieser Grenze liegen.",
+    "description": ""
+  },
   "AutoRefit.Collection": {
     "message": "Kollektion",
     "description": ""
@@ -4045,6 +4057,26 @@
   },
   "Parts.Retarget.ToBody": {
     "message": "Auf Körper anpassen",
+    "description": ""
+  },
+  "Parts.Retarget.PartBody.Same.Fmt": {
+    "message": "Wie oben ({0})",
+    "description": ""
+  },
+  "Parts.Retarget.PartBody.Tip": {
+    "message": "Der Körper-Mod, auf den dieser Teil angepasst wird. Die Beine eines langen Kleides können auf einen anderen Körper als seine Brust.",
+    "description": ""
+  },
+  "Parts.Retarget.PartBody.KeptOnOwn.Fmt": {
+    "message": "Das geht noch nicht: {0} bleibt auf {1}, dem Körper, für den dieses Kleidungsstück gemacht wurde, während {2} auf einen anderen Körper kommt. Eine Anpassung kann nicht nur einige Teile vom ursprünglichen Körper wegbewegen; die Haut dieses Teils ginge verloren oder würde gefaltet. Es klappt, wenn {0} ebenfalls auf einen anderen Körper-Mod angepasst wird.",
+    "description": ""
+  },
+  "Parts.Retarget.PartBody.RueApart.Fmt": {
+    "message": "{0} ist ein Rue-Körper und {1} nicht. Rues Taille passt nur zu Rue, prüfe also die Taille in der Vorschau.",
+    "description": ""
+  },
+  "Parts.Retarget.PartBody.SetAside.Fmt": {
+    "message": "Vorerst ausgelassen: Dieser Teil ist auf einen eigenen Körper gesetzt, {0}, den nur eine Anpassung des ganzen Kleidungsstücks ohne gewähltes Volk unter „Anpassen für“ nutzen kann. Er kommt zurück, sobald das wieder so ist.",
     "description": ""
   },
   "Settings.ReduceMotion": {

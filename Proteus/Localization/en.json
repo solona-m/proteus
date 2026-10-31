@@ -47,6 +47,18 @@
     "message": "Forget this collection's body",
     "description": "Button that removes the selected collection's chosen body."
   },
+  "AutoRefit.RueSplit.Fmt": {
+    "message": "{0} on a Rue body and {1} on another. Rue\u0027s parts only meet Rue\u0027s, so gear that reaches both sides is refitted on its own part\u0027s side only; the rest of it keeps its size. To put one body on every part, press \"{2}\" and pick that body again.",
+    "description": "Warning under Settings > Body refit\u0027s parts table when some parts are on a Rue body and others on another body. {0} and {1} list parts (Chest, Legs, Hands, Feet). {2} is the \"Forget this collection\u0027s body\" button\u0027s text. Keep \"Rue\" as is."
+  },
+  "AutoRefit.RueSplit.Shoes": {
+    "message": "Shoes may be left as they are while the feet and legs are on different sides of that line.",
+    "description": "Added to AutoRefit.RueSplit.Fmt when the feet and the legs are on different sides of the Rue line."
+  },
+  "AutoRefit.RueSplit.Gloves": {
+    "message": "Gloves may be left as they are while the hands and chest are on different sides of that line.",
+    "description": "Added to AutoRefit.RueSplit.Fmt when the hands and the chest are on different sides of the Rue line."
+  },
   "AutoRefit.Collection": {
     "message": "Collection",
     "description": "Label above the dropdown of Penumbra collections in the Body refit section."
@@ -4046,6 +4058,26 @@
   "Parts.Retarget.ToBody": {
     "message": "Refit onto body",
     "description": ""
+  },
+  "Parts.Retarget.PartBody.Same.Fmt": {
+    "message": "Same as above ({0})",
+    "description": "First entry of a part\u0027s own \"Refit onto body\" dropdown in the Studio\u0027s Body size tool: the part goes onto the same body mod as the garment\u0027s own part. {0} is that body mod\u0027s name."
+  },
+  "Parts.Retarget.PartBody.Tip": {
+    "message": "The body mod this part is refitted onto. A long dress\u0027s legs can go onto another body than its chest.",
+    "description": "Tooltip on a part\u0027s own \"Refit onto body\" dropdown in the Studio\u0027s Body size tool."
+  },
+  "Parts.Retarget.PartBody.KeptOnOwn.Fmt": {
+    "message": "This can\u0027t be done yet: the {0} stays on {1}, the body this garment was made for, while the {2} goes onto another body. A refit can\u0027t move only some parts off the body a garment was made for; that part\u0027s skin would be lost or folded. It works when the {0} is refitted onto another body mod too.",
+    "description": "Why Preview is greyed in the Studio\u0027s Body size tool. {0} is the garment\u0027s own part (chest, legs…), lowercase, {1} the body mod it was made for, {2} the other part set to its own body."
+  },
+  "Parts.Retarget.PartBody.RueApart.Fmt": {
+    "message": "{0} is a Rue body and {1} isn\u0027t. Rue\u0027s waist only meets Rue\u0027s, so check the waist in the preview.",
+    "description": "Warning under a part\u0027s own body in the Studio\u0027s Body size tool when one of the two body mods is Rue (or a fork of it) and the other isn\u0027t. {0} and {1} are body mod names. Keep \"Rue\" as is."
+  },
+  "Parts.Retarget.PartBody.SetAside.Fmt": {
+    "message": "Left out for now: this part is set to its own body, {0}, which only a whole-garment refit with no race picked under \"Refit for\" can use. It comes back when that\u0027s so.",
+    "description": "Under a part\u0027s greyed \"Refit onto\" list in the Studio\u0027s Body size tool, while its own body can\u0027t be used (a shoe or glove keeping its feet or hands, or a race picked under \"Refit for\"). {0} is the body mod\u0027s name. Use the same words as the \"Refit for\" label."
   },
   "Settings.ReduceMotion": {
     "message": "Reduce motion",

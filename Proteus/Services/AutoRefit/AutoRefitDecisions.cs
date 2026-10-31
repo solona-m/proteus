@@ -196,24 +196,19 @@ internal static class AutoRefitDecisions
     /// and legs wait for the size the character wears in it (<see cref="ApplySnapshot"/>), else take its first size for
     /// the race — a deliberate exception to never guessing a size, asked for, and said in Settings — and hands and feet
     /// are matched. Picked again later for one part, only that part changes: a chest or legs then waits for the size
-    /// worn in the new body and is left unchosen without one; hands and feet are matched. Rue goes only with Rue (see
-    /// <see cref="AutoRefitTargets.IsRue"/>): a pick that would put a Rue part beside another body's, or the other way
-    /// round, goes onto every part, as the first body does.
+    /// worn in the new body and is left unchosen without one; hands and feet are matched. That holds across the Rue line
+    /// too (see <see cref="AutoRefitTargets.IsRue"/>): a Rue part beside another body's keeps its own pick, and the refit
+    /// leaves a part across that line out of a garment's (<see cref="AutoRefitTargets.TargetFor"/>,
+    /// <see cref="AutoRefitTargets.CoveredAcrossRue"/>), which Settings says (<see cref="AutoRefitTargets.RueSides"/>).
+    /// "Forget this collection's body" and one pick still put one body on every part.
     /// </summary>
     /// <param name="race">The player's race; null while it cannot be told, when sizes wait for it.</param>
     /// <param name="canReadWorn">The collection is the one the player wears, so what is worn in it can be read.</param>
-    /// <param name="find">An installed body by folder, for the other parts' names.</param>
     /// <returns>The parts given the body's first size there and then, for Settings to say so.</returns>
     internal static List<string> ChooseBody(AutoRefitPreference pref, string slot, BodyModIndex.Entry body, string? race,
-                                            bool canReadWorn, Func<string, BodyModIndex.Entry?>? find = null)
+                                            bool canReadWorn)
     {
         var prefilled = new List<string>();
-        if (pref.HasAnyBody() && new AutoRefitTargets(pref, find ?? (_ => null), race).CrossesRue(slot, body.Dir, body.Name))
-        {
-            pref.LegacyBodyDir = pref.ChestBody = pref.LegsBody = pref.HandsBody = pref.FeetBody = "";
-            foreach (string part in Slots) pref.SetSize(part, null);
-            pref.PendingFill.Clear();
-        }
         if (!pref.HasAnyBody())
         {
             foreach (string part in Slots)

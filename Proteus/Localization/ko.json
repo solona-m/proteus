@@ -47,6 +47,18 @@
     "message": "이 컬렉션의 체형 잊기",
     "description": ""
   },
+  "AutoRefit.RueSplit.Fmt": {
+    "message": "{0}는 Rue 체형, {1}는 다른 체형입니다. Rue의 부위는 Rue에만 맞으므로, 양쪽에 걸치는 장비는 자기 부위 쪽만 리핏되고 나머지는 크기가 그대로입니다. 모든 부위에 같은 체형을 쓰려면 \"{2}\"를 누르고 그 체형을 다시 고르세요.",
+    "description": ""
+  },
+  "AutoRefit.RueSplit.Shoes": {
+    "message": "발과 다리가 이 경계의 서로 다른 쪽에 있는 동안에는 신발이 그대로 남을 수 있습니다.",
+    "description": ""
+  },
+  "AutoRefit.RueSplit.Gloves": {
+    "message": "손과 가슴이 이 경계의 서로 다른 쪽에 있는 동안에는 장갑이 그대로 남을 수 있습니다.",
+    "description": ""
+  },
   "AutoRefit.Collection": {
     "message": "컬렉션",
     "description": ""
@@ -4045,6 +4057,26 @@
   },
   "Parts.Retarget.ToBody": {
     "message": "적용 체형",
+    "description": ""
+  },
+  "Parts.Retarget.PartBody.Same.Fmt": {
+    "message": "위와 같음 ({0})",
+    "description": ""
+  },
+  "Parts.Retarget.PartBody.Tip": {
+    "message": "이 부위를 리핏할 체형 모드입니다. 긴 드레스의 다리는 가슴과 다른 체형에 리핏할 수 있습니다.",
+    "description": ""
+  },
+  "Parts.Retarget.PartBody.KeptOnOwn.Fmt": {
+    "message": "아직 할 수 없습니다: {2}는 다른 체형으로 가지만 {0}는 이 의상이 만들어진 체형인 {1}에 그대로 남습니다. 의상이 만들어진 체형에서 일부 부위만 옮길 수는 없으며, 그 부위의 피부가 사라지거나 접힙니다. {0}도 다른 체형 모드에 리핏하면 됩니다.",
+    "description": ""
+  },
+  "Parts.Retarget.PartBody.RueApart.Fmt": {
+    "message": "{0}는 Rue 체형이고 {1}는 아닙니다. Rue의 허리는 Rue에만 맞으므로 미리보기에서 허리를 확인하세요.",
+    "description": ""
+  },
+  "Parts.Retarget.PartBody.SetAside.Fmt": {
+    "message": "지금은 제외됨: 이 부위에는 자체 체형 {0}가 설정되어 있으며, 이는 \"리핏 대상 종족\"에서 종족을 고르지 않은 의상 전체 리핏에서만 쓸 수 있습니다. 그 상태가 되면 다시 돌아옵니다.",
     "description": ""
   },
   "Settings.ReduceMotion": {
