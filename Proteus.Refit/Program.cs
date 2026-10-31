@@ -32,7 +32,7 @@ namespace Proteus.Refit;
 /// </summary>
 internal static class Program
 {
-    private const string Usage =
+    internal const string Usage =
         """
         Proteus.Refit --garment <xs.mdl> --body-root <body mod> --from <rel|auto> --to <rel>=<label>[,...] --out-dir <dir>
                       [--from-root <body mod the garment was made on>] [--uvmaps <Proteus plugin dir>]
@@ -44,6 +44,8 @@ internal static class Program
                       [--keep-default]   (keep the shape of the pieces the Studio ticks by default)
                       [--no-push] [--tune <knob>,...]
         Proteus.Refit --list --body-root <body mod> [--slot _top]
+                      (a chest size of a body that picks its chest by option is listed as "<file>|<chest>";
+                       quote it in a shell, which reads | as a pipe)
         Proteus.Refit --inspect --garment <model.mdl>
         Proteus.Refit --detect --garment <xs.mdl> --body-root <body mod> [--slot _top] [--race 0201]
         Proteus.Refit --detect --mods-root <Penumbra mods> --to-mod <body mod folder>
@@ -1120,8 +1122,7 @@ internal static class Program
             var chestSource = Find(src, "_top", Required(opts, "chest-from"));
             var chestTarget = Find(dst, "_top", Required(opts, "chest-to"));
             string chestSourcePath = src.PathOf(chestSource), chestTargetPath = dst.PathOf(chestTarget);
-            if (string.Equals(Path.GetFullPath(chestSourcePath), Path.GetFullPath(chestTargetPath),
-                              StringComparison.OrdinalIgnoreCase))
+            if (SameChestBody(src, chestSource, dst, chestTarget))
                 chestNote = $"the waist already sits on \"{chestTarget.Label}\"";
             else if (BodyRetarget.BuildPair("_top", chestSourcePath, chestTargetPath, "_top", male, MaskOf(src, "_top", race),
                                             MaskOf(dst, "_top", race)?.Onto(chestTarget), uvRemap, out var built)
@@ -1296,13 +1297,17 @@ internal static class Program
     internal static BodyRetarget.BodyDraw? MaskOf(BodySizeCatalog catalog, string slot, string? race)
         => RefitCore.MaskOf(catalog.ModRoot, catalog, slot, null, RefitCore.RaceNumber(race));
 
-    /// <summary>The option whose model is <paramref name="rel"/> — slashes and case as Penumbra treats them.</summary>
-    private static BodyOption Find(BodySizeCatalog catalog, string slot, string rel)
-    {
-        string want = Normal(rel);
-        return catalog.For(slot).FirstOrDefault(o => Normal(o.Rel) == want)
-            ?? throw new UsageException($"No {slot} body option in {catalog.ModRoot} uses \"{rel}\". Run --list to see them.");
-    }
+    /// <summary>The option whose model is <paramref name="rel"/> — slashes and case as Penumbra treats them. Of a body
+    /// whose chests are sizes, a bare model file is its default chest.</summary>
+    internal static BodyOption Find(BodySizeCatalog catalog, string slot, string rel)
+        => BodySizeCatalog.ByFile(catalog.For(slot), rel, null)
+           ?? throw new UsageException($"No {slot} body option in {catalog.ModRoot} uses \"{rel}\". Run --list to see them.");
+
+    /// <summary>Whether a legs garment's chest already sits on the chest it is sent to: the same model file, and — two
+    /// chests of one model being two sizes (<see cref="BodySizeCatalog.IsShape"/>) — the same chest of it.</summary>
+    internal static bool SameChestBody(BodySizeCatalog src, BodyOption from, BodySizeCatalog dst, BodyOption to)
+        => string.Equals(Path.GetFullPath(src.PathOf(from)), Path.GetFullPath(dst.PathOf(to)), StringComparison.OrdinalIgnoreCase)
+           && Normal(BodySizeCatalog.ShapeSuffix(from.Rel)) == Normal(BodySizeCatalog.ShapeSuffix(to.Rel));
 
     internal static string Normal(string rel) => rel.Replace('\\', '/').Trim('/').ToLowerInvariant();
 

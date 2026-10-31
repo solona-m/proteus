@@ -920,7 +920,8 @@ internal sealed partial class BodyRetargetPanel(PenumbraBridge penumbra, UVRemap
     /// taking it is a pick like any in the dropdown.
     /// <para/>
     /// Worked out once per question, on this thread as every other body pick is: at most two resolves, which are IPC and
-    /// must be made here, and two manifest reads — no models — cached by folder.
+    /// must be made here, and two manifest reads, cached by folder — with, for a body whose chests are sizes (NIRÆ), its
+    /// chest model's attribute names, read once per edit of the file (<see cref="BodySizeCatalog.IsShape"/>).
     /// </summary>
     private void DrawWornBodyButton(in RetargetContext ctx, string missing)
     {
@@ -1308,8 +1309,9 @@ internal sealed partial class BodyRetargetPanel(PenumbraBridge penumbra, UVRemap
         foreach (var (slot, rel) in RememberedTargets.Fillable(config.RetargetTargets, bodyDir,
                                                               config.RetargetBodyDir, drawn.Contains, to.ContainsKey))
         {
-            if (snapshot.For(slot, race).FirstOrDefault(o =>
-                    string.Equals(o.Rel, rel, StringComparison.OrdinalIgnoreCase)) is not { } remembered) continue;
+            // A size kept before a body's chests were sizes names the model alone: the chest ticked of it.
+            if (BodySizeCatalog.ByFile(snapshot.For(slot, race), rel, SelectedOf(bodyDir, snapshot)) is not { } remembered)
+                continue;
 
             to[slot] = [remembered];
             StartValidate(slot);
@@ -1324,7 +1326,7 @@ internal sealed partial class BodyRetargetPanel(PenumbraBridge penumbra, UVRemap
 
     /// <summary>The option of this slot whose file the player's collection resolves the body model to.</summary>
     private BodyOption? WornOption(BodySizeCatalog snapshot, string slot)
-        => RefitCore.WornOption(snapshot, slot, race, penumbra.ResolvePlayer);
+        => RefitCore.WornOption(snapshot, slot, race, penumbra.ResolvePlayer, SelectedOf(bodyDir, snapshot));
 
     // ── which slots take part ───────────────────────────────────────────────
 

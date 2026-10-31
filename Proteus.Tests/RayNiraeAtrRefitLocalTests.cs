@@ -23,7 +23,8 @@ public class RayNiraeAtrRefitLocalTests(ITestOutputHelper output)
     private const string Neolithe = LocalData.Mods + ":Neolithe [ALL IN ONE]";
     private const string Nirae = LocalData.Mods + ":NIRÆ body";
 
-    private const string Onto = "Slim · Small hips";
+    // The chest is a size of its own since 1405 (BodySizeCatalog.IsShape); the legs keep NIRÆ's build and hips.
+    private static string Onto(string slot) => slot == "_top" ? "Slim · Small Perky" : "Slim · Small hips";
     private static readonly Dictionary<string, List<string>> SmallPerky = new() { ["Chest"] = ["Small Perky"] };
 
     private sealed record Run(List<BodyRetarget.SlotPair> Pairs, BodyRetarget.Planned Plan, ModelParts Laid);
@@ -43,8 +44,12 @@ public class RayNiraeAtrRefitLocalTests(ITestOutputHelper output)
         foreach (var (slot, from) in new[] { ("_top", "DEFAULT ALMOND · SFW Almond XS"), ("_dwn", "DEFAULT · Gen A Small") })
         {
             var source = neo.For(slot, "0201").First(o => o.Label == from);
-            var target = nir.For(slot, "0201").First(o => o.Label == Onto);
-            var draw = RefitCore.MaskOf(nirDir, nir, slot, SmallPerky, RefitCore.RaceNumber("0201"))!.Onto(target);
+            var target = nir.For(slot, "0201").First(o => o.Label == Onto(slot));
+            // The chest entry alone picks Small Perky, whatever is ticked: the same draw as with it ticked.
+            var draw = RefitCore.MaskOf(nirDir, nir, slot, slot == "_top" ? null : SmallPerky, RefitCore.RaceNumber("0201"))!
+                                .Onto(target);
+            var ticked = RefitCore.MaskOf(nirDir, nir, slot, SmallPerky, RefitCore.RaceNumber("0201"))!.Onto(target);
+            Assert.Equal(ticked.AtrOff.Order(StringComparer.Ordinal), draw.AtrOff.Order(StringComparer.Ordinal));
             if (slot == "_top") topDraw = draw;
             if (!atr) draw = draw with { AtrOff = new HashSet<string>(), AtrSwitched = new HashSet<string>() };
             Assert.Null(BodyRetarget.BuildPair(slot, neo.PathOf(source), nir.PathOf(target), slot, false,
@@ -183,7 +188,7 @@ public class RayNiraeAtrRefitLocalTests(ITestOutputHelper output)
         var defaults = RefitCore.MaskOf(dir, nir, "_top", null, 201)!;
         var perky = RefitCore.MaskOf(dir, nir, "_top", SmallPerky, 201)!;
         var legs = RefitCore.MaskOf(dir, nir, "_dwn", null, 201)!;
-        string[] chests = ["flat", "small", "smallperky", "medium", "large", "saggy", "perky", "earth", "mireya"];
+        string[] chests = ["flat", "small", "smallperky", "medium", "large", "saggy", "perky", "earth", "mireya", "champs"];
 
         // Under its defaults NIRÆ draws the large chest, soft nipples, no piercings.
         Assert.Equal(chests.Where(c => c != "large").Select(c => "atrx_cb_chest_" + c).Order(),

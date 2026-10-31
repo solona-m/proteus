@@ -19,7 +19,10 @@ namespace Proteus.Services;
 /// there are eight options called "SFW M". The heading is therefore not decoration, it is the only thing telling two
 /// identically-named sizes apart, and dropping it would put several indistinguishable entries in the picker.
 /// </param>
-internal sealed record BodyOption(string Group, string Section, string Name, string Rel, string GamePath, string Slot)
+/// <param name="DefaultShape">A chest entry (see <see cref="BodySizeCatalog.IsShape"/>) for the chest its mod draws by
+/// default.</param>
+internal sealed record BodyOption(string Group, string Section, string Name, string Rel, string GamePath, string Slot,
+                                  bool DefaultShape = false)
 {
     /// <summary>What the picker shows: unique within a group, and spelled the way the author spelled it.</summary>
     public string Label => Heading.Length > 0 ? $"{Heading} · {Name}" : Name;
@@ -155,7 +158,152 @@ internal sealed record BodySizeCatalog(string ModRoot, IReadOnlyList<BodyOption>
             }
         }
 
+        // Only a body whose chest models stand for more than one option each — the rest of the body chosen beside the
+        // chest, as NIRÆ's builds carry three hips each — or that ships its chest as plain files.
+        if (options.FirstOrDefault(o => o.Slot == "_top") is { } chest
+            && options.Where(o => o.Slot == "_top")
+                      .GroupBy(o => (o.GamePath.ToLowerInvariant(), Normal(o.Rel)))
+                      .Any(g => g.Count() > 1 || g.Any(o => o.Group == DefaultGroupName))
+            && BodyAtrSwitches.Manifest(modRoot) is { } manifest
+            && BodyAtrSwitches.ShapeGroup(manifest, "Body") is { } axis
+            && CarriesShapes(ResolveCaseInsensitive(modRoot, chest.Rel), axis))
+            options = WithChests(options, axis);
         return new BodySizeCatalog(modRoot, options);
+    }
+
+    // ── chests chosen by Atr (NIRÆ) ─────────────────────────────────────────
+
+    /// <summary>What sets a chest entry's chest apart from the model file in its <see cref="BodyOption.Rel"/>. Never in a
+    /// Windows path or a Penumbra file redirect.</summary>
+    internal const char ShapeMark = '|';
+
+    /// <summary>The model file of a size: its <see cref="BodyOption.Rel"/> without the chest of a chest entry.</summary>
+    internal static string FileOf(string rel) => rel.IndexOf(ShapeMark) is var at and >= 0 ? rel[..at] : rel;
+
+    /// <summary>The chest part of a size's rel, mark included; "" for any other size.</summary>
+    internal static string ShapeSuffix(string rel) => rel.IndexOf(ShapeMark) is var at and >= 0 ? rel[at..] : "";
+
+    /// <summary>
+    /// Whether an option is one of a chest model's chests: a body that ships every chest in one model and picks the one
+    /// drawn with an option group of <c>Atr</c> switches alone (NIRÆ). Such a size is the model AND the chest, so the
+    /// chest rides in its rel (<c>"files\top.mdl|Small Perky"</c>): every place that tells sizes apart by rel — settings,
+    /// refit records, the Studio's memory — tells the chests apart, and only file access cuts it off
+    /// (<see cref="ResolveCaseInsensitive"/>).
+    /// </summary>
+    internal static bool IsShape(BodyOption o) => o.Rel.Contains(ShapeMark);
+
+    /// <summary>
+    /// Of a model's chest entries, the chest <paramref name="selected"/> ticks in their group; failing that the one the
+    /// mod draws by default; failing that the first. Not a chest entry list: its first.
+    /// </summary>
+    internal static BodyOption PickShape(IReadOnlyList<BodyOption> sameFile,
+                                         IReadOnlyDictionary<string, List<string>>? selected)
+    {
+        var first = sameFile[0];
+        if (!IsShape(first)) return first;
+        if (selected != null)
+            foreach (var (group, ticked) in selected)
+                if (string.Equals(group, first.Group, StringComparison.OrdinalIgnoreCase) && ticked.Count > 0
+                    && sameFile.FirstOrDefault(o => string.Equals(o.Name, ticked[0], StringComparison.OrdinalIgnoreCase)) is { } pick)
+                    return pick;
+        return sameFile.FirstOrDefault(o => o.DefaultShape) ?? first;
+    }
+
+    /// <summary>
+    /// The option a remembered rel names: that very rel, else — a size kept before chests were sizes, by its model
+    /// file — the chest <paramref name="selected"/> ticks of that model (<see cref="PickShape"/>). Null when no option
+    /// has the file.
+    /// </summary>
+    internal static BodyOption? ByFile(IReadOnlyList<BodyOption> options, string rel,
+                                       IReadOnlyDictionary<string, List<string>>? selected)
+    {
+        string want = Normal(rel);
+        if (options.FirstOrDefault(o => Normal(o.Rel) == want) is { } exact) return exact;
+        string file = Normal(FileOf(rel));
+        var same = options.Where(o => Normal(FileOf(o.Rel)) == file).ToList();
+        return same.Count == 0 ? null : PickShape(same, selected);
+    }
+
+    private static string Normal(string rel) => RefitCore.Normal(rel);
+
+    /// <summary>
+    /// The chest options of a body that picks its chest by <paramref name="axis"/>: one per chest model and chest,
+    /// in place of the chest model's options of the group that ships it — which differ only in what they do to the
+    /// rest of the body (NIRÆ's three hip sizes per build). Labelled "build · chest": the build is what the model's
+    /// options share at the front of their names.
+    /// </summary>
+    private static List<BodyOption> WithChests(List<BodyOption> options, BodyAtrSwitches.ShapeAxis axis)
+    {
+        var models = options.Where(o => o.Slot == "_top")
+                            .GroupBy(o => (o.GamePath.ToLowerInvariant(), Normal(o.Rel))).Select(g => g.ToList()).ToList();
+        // Builds are told apart within one race's chest (one game path): a mod shipping each build for two races
+        // names "Slim" once for each.
+        bool Peers(List<BodyOption> a, List<BodyOption> b)
+            => string.Equals(a[0].GamePath, b[0].GamePath, StringComparison.OrdinalIgnoreCase);
+        var shared = models.Select(m => models.Count(o => Peers(o, m)) == 1 ? "" : BuildOf(m)).ToList();
+        // Two builds of one name: told apart by their first option's label.
+        var builds = shared.Select((b, i) => Enumerable.Range(0, models.Count)
+                                                       .Count(j => Peers(models[j], models[i])
+                                                                   && string.Equals(shared[j], b, StringComparison.OrdinalIgnoreCase)) > 1
+                                                 ? models[i][0].Label : b).ToList();
+        var chests = new List<BodyOption>();
+        for (int m = 0; m < models.Count; m++)
+        {
+            var model = models[m][0];
+            for (int i = 0; i < axis.Options.Count; i++)
+                chests.Add(new BodyOption(axis.Group, builds[m], axis.Options[i], model.Rel + ShapeMark + axis.Options[i],
+                                          model.GamePath, model.Slot, DefaultShape: i == axis.Default));
+        }
+
+        var result = new List<BodyOption>();
+        bool placed = false;
+        foreach (var o in options)
+        {
+            if (o.Slot != "_top") { result.Add(o); continue; }
+            if (!placed) result.AddRange(chests);
+            placed = true;
+        }
+        return result;
+    }
+
+    /// <summary>
+    /// Whether the chest model has the shapes <paramref name="axis"/> switches between — parts tagged with at least two
+    /// of its attributes — rather than the group switching something the chest does not carry (a belly drawn on the
+    /// legs). False when the model cannot be read.
+    /// </summary>
+    /// <remarks>The model's attribute names are read once per edit of the file: the Studio reads a body's sizes on the
+    /// framework thread.</remarks>
+    private static bool CarriesShapes(string path, BodyAtrSwitches.ShapeAxis axis)
+    {
+        try
+        {
+            var info = new FileInfo(path);
+            string key = $"{path}|{info.Length}|{info.LastWriteTimeUtc.Ticks}";
+            var names = ModelAttributes.GetOrAdd(key, _ => SecondSkinWriter.AttributeNames(File.ReadAllBytes(path)).ToList());
+            return names.Count(axis.Attributes.Contains) >= 2;
+        }
+        catch (Exception)
+        {
+            return false;
+        }
+    }
+
+    private static readonly System.Collections.Concurrent.ConcurrentDictionary<string, List<string>> ModelAttributes =
+        new(StringComparer.OrdinalIgnoreCase);
+
+    private static readonly char[] Separators = ['·', '-', '–', '—', '|', '/', ':', ',', '=', '*', '~', ' '];
+
+    /// <summary>The words a chest model's options all begin with, separators trimmed ("Slim" for "Slim · Small hips"
+    /// and "Slim · Large hips"); the first option's label when they share none.</summary>
+    private static string BuildOf(List<BodyOption> model)
+    {
+        var words = model.Select(o => o.Label.Split(' ', StringSplitOptions.RemoveEmptyEntries)).ToList();
+        int n = model.Count == 1 ? 0 : words.Min(w => w.Length);   // a lone option shares nothing: its whole label
+        int shared = 0;
+        while (shared < n && words.All(w => string.Equals(w[shared], words[0][shared], StringComparison.OrdinalIgnoreCase)))
+            shared++;
+        string build = string.Join(' ', words[0].Take(shared)).Trim(Separators);
+        return build.Length > 0 ? build : model[0].Label;
     }
 
     /// <summary>
@@ -196,8 +344,10 @@ internal sealed record BodySizeCatalog(string ModRoot, IReadOnlyList<BodyOption>
     /// </summary>
     public string PathOf(BodyOption option) => ResolveCaseInsensitive(ModRoot, option.Rel);
 
+    /// <remarks>A chest entry's chest is cut off its rel first (<see cref="FileOf"/>): it names no file.</remarks>
     internal static string ResolveCaseInsensitive(string root, string rel)
     {
+        rel = FileOf(rel);
         string direct = Path.Combine(root, rel.Replace('/', Path.DirectorySeparatorChar)
                                               .Replace('\\', Path.DirectorySeparatorChar));
         if (File.Exists(direct)) return direct;
