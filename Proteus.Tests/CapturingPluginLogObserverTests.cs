@@ -27,9 +27,9 @@ public class CapturingPluginLogObserverTests
         log.Warning("second {0}", "x");
         var captured = log.EndCapture();
         Assert.Equal(2, seen.Count);
-        Assert.Contains("[WRN] second x", seen[1]);
+        Assert.Contains("[WRN] second \"x\"", seen[1]);   // Serilog quotes string arguments
         Assert.Single(captured);
-        Assert.Contains("second x", captured[0]);
+        Assert.Contains("second \"x\"", captured[0]);
 
         log.LineObserver = _ => throw new InvalidOperationException("listener broke");
         log.Information("third");   // must not throw

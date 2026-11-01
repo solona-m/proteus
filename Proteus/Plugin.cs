@@ -23,9 +23,13 @@ public sealed class Plugin : IDalamudPlugin
     [PluginService] public static IClientState ClientState { get; private set; } = null!;
     [PluginService] public static IChatGui ChatGui { get; private set; } = null!;
     [PluginService] public static ITextureProvider TextureProvider { get; private set; } = null!;
+#if PROTEUS_TEST_HARNESS
+    /// <summary>The QA test harness's screenshot readback (dev builds only).</summary>
+    [PluginService] public static ITextureReadbackProvider TextureReadback { get; private set; } = null!;
+#endif
 
     /// <summary>Hand-maintained; bump it for in-game testing. <see cref="BuildStamp"/> is the one that can't go stale.</summary>
-    public const int BuildNumber = 1410;
+    public const int BuildNumber = 1411;
 
     /// <summary>
     /// Which set of release notes is current. Raise it when a release has something new to say: the window
@@ -82,6 +86,11 @@ public sealed class Plugin : IDalamudPlugin
     private readonly ShellCoverageFade shellCoverageFade;
     private readonly Gui.LiveMeshOverlay liveMesh;
     private readonly Gui.LiveBrush liveBrush;
+#if PROTEUS_TEST_HARNESS
+    /// <summary>The QA test harness (docs/agent-rules/adversarial-qa.md): compiled into local builds only, off until
+    /// <c>/proteus harness on</c>.</summary>
+    private readonly TestHarness.HarnessHost harness;
+#endif
 
     public Plugin(
         IDalamudPluginInterface pluginInterface,
@@ -245,6 +254,16 @@ public sealed class Plugin : IDalamudPlugin
 
         whatsNewWindow = new Gui.WhatsNewWindow(config, statusWindow);
 
+#if PROTEUS_TEST_HARNESS
+        harness = new TestHarness.HarnessHost(dataDir, pluginInterface.IsDev,
+            new TestHarness.GameHarnessAdapter(penumbra, compositor, autoRefit, ObjectTable, ClientState, framework,
+                                               TextureProvider, TextureReadback, config, uvRemap,
+                                               path => textureLoader.LoadRawFile(null, path),
+                                               dir => partsPanel.NoteModelsChanged(dir), log),
+            new TestHarness.DalamudFrameworkDispatcher(framework), observer => capture.LineObserver = observer, log,
+            BuildNumber, BuildStamp);
+#endif
+
         windowSystem = new WindowSystem("Proteus");
         windowSystem.AddWindow(statusWindow);
         windowSystem.AddWindow(whatsNewWindow);
@@ -278,6 +297,13 @@ public sealed class Plugin : IDalamudPlugin
 
         SuggestMirrorRepo(pluginInterface);
         ShowWhatsNew();
+#if PROTEUS_TEST_HARNESS
+        try
+        {
+            if (harness.TryAutostart() is { } harnessLine) ChatGui.Print(harnessLine);
+        }
+        catch (Exception ex) { log.Error(ex, "[Proteus] test harness: autostart failed"); }
+#endif
     }
 
     /// <summary>How many times <see cref="SuggestMirrorRepo"/> may speak before it gives up.</summary>
@@ -374,6 +400,14 @@ public sealed class Plugin : IDalamudPlugin
         foreach (var line in lines)
             if (line.Trim() is { Length: > 0 } command)
             {
+#if PROTEUS_TEST_HARNESS
+                // The harness's opt-in is the user's: it is never turned on (or off) from this file.
+                if (TestHarness.HarnessHost.IsTypedOnly(command))
+                {
+                    Log.Warning("[Proteus] dev command refused: \"{0}\" can only be typed in chat", command);
+                    continue;
+                }
+#endif
                 Log.Information("[Proteus] dev command: {0}", command);
                 try { OnCommand(CommandName, command); }
                 catch (Exception ex) { Log.Error(ex, "[Proteus] dev command failed: {0}", command); }
@@ -446,6 +480,23 @@ public sealed class Plugin : IDalamudPlugin
             return;
         }
 
+#if PROTEUS_TEST_HARNESS
+        // "/proteus harness on|off|status": the QA test harness (dev builds only; English, compiled out of every
+        // published build).
+        if (a.StartsWith("harness", StringComparison.OrdinalIgnoreCase))
+        {
+            string said;
+            try { said = harness.Command(a[7..]); }
+            catch (Exception ex)
+            {
+                Log.Error(ex, "[Proteus] test harness command failed");
+                said = $"[Proteus] Test harness: {ex.Message}";
+            }
+            ChatGui.Print(said);
+            return;
+        }
+#endif
+
         // "/proteus refresh [full]": the tab bar's Refresh button, and its shift-click, from a macro.
         if (a.StartsWith("refresh", StringComparison.OrdinalIgnoreCase))
         {
@@ -492,6 +543,10 @@ public sealed class Plugin : IDalamudPlugin
     private void DisposeServices()
     {
         _disposed = true;
+#if PROTEUS_TEST_HARNESS
+        // First, before the compositor and the bridges it calls: a queued after-change then skips.
+        try { harness.Dispose(); } catch { /* tearing down — never block the unload */ }
+#endif
 
         // Last chance for an import whose disk work landed after the final frame, registration only: no window, no recomposite.
         try { statusWindow.TickImport(unloading: true); } catch { /* tearing down — never block the unload */ }

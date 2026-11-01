@@ -79,6 +79,7 @@ documented by that workflow's own tooling (e.g. its installed plugin).
 - stop: none — unload the plugin in game via `/xlplugins`
 - single test: `dotnet test Proteus.Tests/Proteus.Tests.csproj -c Release --filter "FullyQualifiedName~BodyRetargetTests"`
 - default branch: `test` — reviews diff against it; work merges into it (`main` is the stable release branch)
+- in-game QA: the test harness (local builds only, ADR 0002), turned on by the user with `/proteus harness on`; QA reads the port and token from `%APPDATA%\XIVLauncher\pluginConfigs\Proteus\test-harness.json` and drives it with curl — see `docs/agent-rules/adversarial-qa.md`. Check a build has it: `dotnet test Proteus.Tests/Proteus.Tests.csproj -c Release --filter "FullyQualifiedName~HarnessBuildFlagTests"`
 
 ## Architecture
 
@@ -127,9 +128,11 @@ expanding here.
 - `Proteus/Interop/` — unsafe struct offsets and IPC threading (Penumbra events fire on the caller's thread)
 - `Proteus/Configuration.cs` migrations — a mistake loses user settings
 - `LogAnonymizer.cs` / `LogExportService.cs` — character names must not leak into exported logs
+- `Proteus/TestHarness/`, the `ProteusTestHarness` switch in `Directory.Build.props` and the release workflows' harness guard — a local control port that writes into mods; must stay compiled out of every CI build (ADR 0002)
 - `worker/`, `.github/workflows/` and `.github/dependabot.yml` — live release distribution; actions stay SHA-pinned (`SupplyChainTests`)
 
 ## Review & Planning Guidance
 
 - Code review guidance: `docs/agent-rules/code-critic.md`
 - Planning guidance: `docs/agent-rules/plan-critic.md`
+- Adversarial QA in game (the test harness): `docs/agent-rules/adversarial-qa.md`
