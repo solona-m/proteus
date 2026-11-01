@@ -119,19 +119,24 @@ public class PrGateClaudeE2ETests(ITestOutputHelper output)
             if (!line.TrimStart().StartsWith('{')) continue;
             JsonElement e;
             try { e = JsonDocument.Parse(line).RootElement.Clone(); } catch (JsonException) { continue; }
-            if (e.TryGetProperty("type", out var t) && t.GetString() == "system" && e.TryGetProperty("tools", out var ts))
-                tools.AddRange(ts.EnumerateArray().Select(x => x.GetString() ?? ""));
-            if (!e.TryGetProperty("message", out var m) || !m.TryGetProperty("content", out var content) ||
-                content.ValueKind != JsonValueKind.Array) continue;
+            if (e.ValueKind != JsonValueKind.Object) continue;
+            if (e.TryGetProperty("type", out var t) && t.ValueKind == JsonValueKind.String && t.GetString() == "system"
+                && e.TryGetProperty("tools", out var ts) && ts.ValueKind == JsonValueKind.Array)
+                tools.AddRange(ts.EnumerateArray().Where(x => x.ValueKind == JsonValueKind.String).Select(x => x.GetString()!));
+            if (!e.TryGetProperty("message", out var m) || m.ValueKind != JsonValueKind.Object
+                || !m.TryGetProperty("content", out var content) || content.ValueKind != JsonValueKind.Array) continue;
             foreach (var c in content.EnumerateArray())
             {
-                string kind = c.TryGetProperty("type", out var ct) ? ct.GetString() ?? "" : "";
+                if (c.ValueKind != JsonValueKind.Object) continue;
+                string kind = c.TryGetProperty("type", out var ct) && ct.ValueKind == JsonValueKind.String ? ct.GetString()! : "";
                 if (kind == "tool_use" && usedTool == null)
                 {
-                    usedTool = c.GetProperty("name").GetString();
-                    var input = c.GetProperty("input");
-                    keys.AddRange(input.EnumerateObject().Select(p => p.Name));
-                    if (input.TryGetProperty("command", out var cmd)) usedCommand = cmd.GetString();
+                    usedTool = c.TryGetProperty("name", out var n) ? n.ToString() : null;
+                    if (c.TryGetProperty("input", out var input) && input.ValueKind == JsonValueKind.Object)
+                    {
+                        keys.AddRange(input.EnumerateObject().Select(p => p.Name));
+                        if (input.TryGetProperty("command", out var cmd) && cmd.ValueKind == JsonValueKind.String) usedCommand = cmd.GetString();
+                    }
                 }
                 else if (kind == "tool_result")
                     results.AppendLine(c.TryGetProperty("content", out var rc) ? rc.ToString() : "");
@@ -208,8 +213,14 @@ public class PrGateClaudeE2ETests(ITestOutputHelper output)
         {
             var e = Claude(box, "Bash", heredoc);
             SameCommand(e, heredoc);
-            Assert.True(e.Debug.Contains("pr-gate.sh", StringComparison.Ordinal),
-                        "hook not exercised; re-plan (the debug log never ran pr-gate.sh for a too-complex command)");
+            // 2.1.316 logs `Hooks: PreToolUse:Bash [<command>] finished with status 0 (…ms)` for a hook that ran, and
+            // `Skipping hook due to if condition …` for one its `if` skipped.
+            Assert.False(e.Debug.Contains("Skipping hook due to if condition", StringComparison.Ordinal),
+                         "hook not exercised; re-plan (the if filter skipped it for a too-complex command)");
+            Assert.True(e.Debug.Split('\n').Any(l => l.Contains("PreToolUse:Bash", StringComparison.Ordinal)
+                                                     && l.Contains("pr-gate.sh", StringComparison.Ordinal)
+                                                     && l.Contains("finished with status 0", StringComparison.Ordinal)),
+                        "hook not exercised; re-plan (no 'finished with status 0' line for pr-gate.sh)");
             Assert.DoesNotContain("pr-gate:", e.Result);
         }
 

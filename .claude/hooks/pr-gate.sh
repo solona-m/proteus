@@ -112,7 +112,9 @@ done < "$record"
 
 [ -n "$commit" ] || block "record has no commit"
 if [ "$commit" != "$head" ]; then
-    block "record is for ${commit%"${commit#???????}"} but HEAD is ${head%"${head#???????}"}"
+    short=${commit%"${commit#???????}"}
+    [ -n "$short" ] || short=$commit
+    block "record is for $short but HEAD is ${head%"${head#???????}"}"
 fi
 case $qa in
     "ran: "[![:space:]]* | "skipped: "[![:space:]]* | "blocked: "[![:space:]]*) ;;

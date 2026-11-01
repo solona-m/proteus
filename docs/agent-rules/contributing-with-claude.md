@@ -47,7 +47,8 @@ Don't run `/init-workflow` here. If it runs, decline its `githooks/`, `scripts/r
 - It runs before your Claude's `gh pr create` and blocks it, with these steps, unless `.pr-ready` (gitignored) names the
   current commit and a QA outcome.
 - It catches `gh pr create` / `gh pr new` at the start of a command, or after `&&`, `||`, `;`, `|` or `&`, in the first
-  line before any quote. Anything else passes: it never gets in the way of commits, merges or pushes.
+  line before any quote, written in lower case. Anything else passes: it never gets in the way of commits, merges or
+  pushes.
 - It is not enforcement. A human can open the PR themselves, and the owner's own local merge flow is not gated.
 
 ## Changing `.claude/`

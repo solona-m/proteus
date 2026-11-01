@@ -134,8 +134,11 @@ public class PrGateTests(PrGateFixture fx) : IClassFixture<PrGateFixture>
 
     [ShellTheory]
     [InlineData("gh pr create --base test --fill", "ran: 1 finding fixed")]
-    [InlineData("cd . && gh pr create --base test", "skipped: no UI or API surface")]
+    [InlineData("gh pr create --base test --fill", "skipped: no UI or API surface")]
     [InlineData("gh pr create --base test --fill", "blocked: harness not listening; user chose to proceed")]
+    [InlineData("cd . && gh pr create --base test", "ran: 1 finding fixed")]
+    [InlineData("cd . && gh pr create --base test", "skipped: no UI or API surface")]
+    [InlineData("cd . && gh pr create --base test", "blocked: harness not listening; user chose to proceed")]
     public void Gate_AllowsWithValidRecord(string command, string qa)
     {
         // [AC-contributor-gate-3]
@@ -193,6 +196,11 @@ public class PrGateTests(PrGateFixture fx) : IClassFixture<PrGateFixture>
         { "Bash", "# gh pr create" },
         { "Bash", "git push # then gh pr create" },
         { "Bash", "git push\ngh pr create" },
+        // One row per cut, each of which would block if its cut were removed.
+        { "Bash", "git push # a; gh pr create --x" },
+        { "Bash", "echo `date; gh pr create --x`" },
+        { "Bash", "echo $(date; gh pr create --x)" },
+        { "Bash", "cat > f <<EOF; gh pr create --x\nbody\nEOF" },
     };
 
     [ShellTheory]
@@ -242,6 +250,8 @@ public class PrGateTests(PrGateFixture fx) : IClassFixture<PrGateFixture>
     [InlineData("(gh pr create)")]
     [InlineData("{ gh pr create; }")]
     [InlineData("if true; then gh pr create; fi")]
+    [InlineData("Gh pr create")]
+    [InlineData("GH PR CREATE")]
     public void Gate_AcceptedMissesExitZero(string command)
     {
         // [EDGE-contributor-gate-3] Near misses and the detector's accepted misses: pinned, so any change shows.
@@ -267,6 +277,8 @@ public class PrGateTests(PrGateFixture fx) : IClassFixture<PrGateFixture>
     {
         // [EDGE-contributor-gate-5] The description and transcript path mention gh/pr; only the command counts.
         Allowed(Gate(Payload("gh pr view 12", fx.NonGit.Path, description: "Then run gh pr create", indented: indented)));
+        // The end-of-string cut: without it the prefix would run on into the description.
+        Allowed(Gate(Payload("gh pr view 12", fx.NonGit.Path, description: "x; gh pr create --fill", indented: indented)));
         Blocked(Gate(Payload("gh pr create", fx.NonGit.Path, description: "Then run gh pr create", indented: indented)),
                 "cannot read HEAD");
     }
@@ -360,6 +372,43 @@ public class PrGateTests(PrGateFixture fx) : IClassFixture<PrGateFixture>
     }
 
     [ShellFact]
+    public void Gate_NoCwdInPayload_UsesProcessCwd()
+    {
+        // [AC-contributor-gate-9] [EDGE-contributor-gate-10] With no cwd in the payload (or a null one), the process's
+        // working directory decides.
+        string noCwd = JsonSerializer.Serialize(new Dictionary<string, object>
+        {
+            ["tool_name"] = "Bash", ["tool_input"] = new Dictionary<string, string> { ["command"] = "gh pr create" },
+        }, Compact);
+        string nullCwd = "{\"tool_name\":\"Bash\",\"tool_input\":{\"command\":\"gh pr create\"},\"cwd\":null}";
+        foreach (var stdin in new[] { noCwd, nullCwd })
+        {
+            Allowed(Gate(stdin, processCwd: fx.Ready.Path));
+            Blocked(Gate(stdin, processCwd: fx.NonGit.Path), "cannot read HEAD");
+        }
+    }
+
+    [ShellFact]
+    public void Gate_ShortCommitInRecord_NamesItWhole()
+    {
+        // [AC-contributor-gate-4] A hand-edited record with a short commit still blocks, and the message names it.
+        using var repo = Repo(out string head);
+        Record(repo.Path, "commit=abc\nqa=ran: fine\n");
+        Blocked(Gate(Payload("gh pr create", repo.Path)), $"record is for abc but HEAD is {head[..7]}");
+    }
+
+    [ShellFact]
+    public void Scripts_ParseUnderSh()
+    {
+        // [AC-contributor-gate-8] A syntax error would exit 2, a block, on every hook run: both scripts must parse.
+        foreach (var script in new[] { GateScript, ReadyScript })
+        {
+            var r = PosixShell.Run(["-n", script], null, fx.Elsewhere.Path);
+            Assert.True(r.ExitCode == 0, $"{Path.GetFileName(script)}: {r.Stderr}");
+        }
+    }
+
+    [ShellFact]
     public void PrReady_WritesRecordForHead()
     {
         // [AC-contributor-gate-6]
@@ -396,13 +445,17 @@ public class PrGateTests(PrGateFixture fx) : IClassFixture<PrGateFixture>
     [ShellFact]
     public void PrReady_RefusesOutsideARepoOrUnborn()
     {
-        // [AC-contributor-gate-6] [EDGE-contributor-gate-8]
-        var notRepo = PosixShell.Run([ReadyScript, "ran: x"], null, fx.NonGit.Path);
-        Assert.Equal(1, notRepo.ExitCode);
-        Assert.False(File.Exists(Path.Combine(fx.NonGit.Path, ".pr-ready")));
+        // [AC-contributor-gate-6] [EDGE-contributor-gate-6] No repo, or no commit: refused, nothing written.
+        using var notRepo = TempDir.New();
         using var unborn = TempDir.New();
         PosixShell.Git(unborn.Path, "init", "-q");
-        Assert.Equal(1, PosixShell.Run([ReadyScript, "ran: x"], null, unborn.Path).ExitCode);
-        Assert.False(File.Exists(Path.Combine(unborn.Path, ".pr-ready")));
+        foreach (var dir in new[] { notRepo.Path, unborn.Path })
+        {
+            var r = PosixShell.Run([ReadyScript, "ran: x"], null, dir);
+            Assert.Equal(1, r.ExitCode);
+            Assert.NotEqual("", r.Stderr);
+            Assert.False(File.Exists(Path.Combine(dir, ".pr-ready")));
+            Assert.Empty(Directory.EnumerateFiles(dir, ".pr-ready.tmp.*"));
+        }
     }
 }

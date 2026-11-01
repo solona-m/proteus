@@ -30,9 +30,10 @@ internal static class PosixShell
         if (exec == null) return null;
         var root = new DirectoryInfo(exec.Trim().Replace('/', Path.DirectorySeparatorChar)).Parent?.Parent?.Parent;
         if (root == null) return null;
-        // bin/sh.exe finds sed, cat and git on any PATH; usr/bin/sh.exe needs usr/bin put first.
+        // bin/sh.exe sets up its own PATH (cat, git), as Claude Code's hook shell does, so it runs with the PATH as
+        // given; usr/bin/sh.exe needs usr/bin put first.
         string bin = Path.Combine(root.FullName, "bin", "sh.exe");
-        if (File.Exists(bin)) return new Shell(bin, Path.Combine(root.FullName, "usr", "bin"));
+        if (File.Exists(bin)) return new Shell(bin, null);
         string usr = Path.Combine(root.FullName, "usr", "bin", "sh.exe");
         return File.Exists(usr) ? new Shell(usr, Path.Combine(root.FullName, "usr", "bin")) : null;
     }
