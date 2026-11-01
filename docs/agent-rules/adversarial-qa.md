@@ -78,7 +78,9 @@ curl -s -H "$H" http://127.0.0.1:$PORT/jobs/$JOB
 
 Job `error.code` is one of `legacy-mod`, `framework-timeout`, `backup-too-large`,
 `insufficient-space`, `backup-failed`, `run-failed`, `restore-failed`, `cancelled`,
-`after-change-skipped` — or `internal`, which is a harness bug: report it as a finding.
+`after-change-skipped`, `reload-failed` (Penumbra refused the reload: the files are as reported, the game may not
+match them until Penumbra reloads its mods — tell the user) — or `internal`, which is a harness bug: report it as a
+finding.
 
 Only one job runs at a time (409 `busy`), across `off`/`on` too: `on` is refused while
 a cancelled job is still stopping. A **plugin reload** mid-job is not covered — the old

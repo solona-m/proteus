@@ -151,6 +151,13 @@ public class HarnessRouterTests : IDisposable
     }
 
     [Fact]
+    public async Task Restore_ManagedModWithoutBackup_400NotNoBackup()
+    {
+        // [EDGE-qa-harness-32] In-game QA: the managed mod was refused as no-backup; it is refused as itself.
+        Assert.Equal((400, "managed-mod"), await Error("/actions/restore", """{"mod":"proteus"}"""));
+    }
+
+    [Fact]
     public async Task Refit_MissingFields_400()
     {
         // [EDGE-qa-harness-33]

@@ -258,6 +258,32 @@ public class HarnessJobsTests : IDisposable
     }
 
     [Fact]
+    public async Task ReloadRefused_ReloadFailed_NotDone()
+    {
+        // [EDGE-qa-harness-48] In-game QA: Penumbra threw on the reload after a restore took options away, and the job
+        // still said done. A refused reload is now the job's error.
+        string mod = f.AddMod();
+        var original = FolderState.Of(mod);
+        string refit = (await Refit()).GetProperty("id").GetString()!;
+        f.Game.ReloadSucceeds = false;
+        var job = await Restore($$"""{"job":"{{refit}}"}""");
+        Assert.Equal("failed", job.GetProperty("state").GetString());
+        Assert.Equal("reload-failed", Error(job));
+        Assert.False(job.GetProperty("reloaded").GetBoolean());
+        FolderState.AssertSame(original, mod);   // the files are still restored
+    }
+
+    [Fact]
+    public async Task FollowWindow_WalkDueOnly_False()
+    {
+        // [EDGE-qa-harness-36] In-game QA: every redraw schedules a walk, so a due walk alone is not "auto refit followed".
+        f.AddMod();
+        f.Game.OnAfterChange = () => f.Game.Activity = new AutoRefitWatcher.ActivitySnapshot(false, 0, true, false);
+        var job = await Refit();
+        Assert.False(job.GetProperty("autoRefitFollowed").GetBoolean());
+    }
+
+    [Fact]
     public async Task FollowWindow_RedrawQuiet_False()
     {
         // [EDGE-qa-harness-36]

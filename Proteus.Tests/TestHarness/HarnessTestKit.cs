@@ -136,6 +136,8 @@ internal sealed class FakeGame : IHarnessGame
             return 1;
         };
 
+    /// <summary>What Penumbra answers to the reload (false: it threw, as it can after options were taken away).</summary>
+    public bool ReloadSucceeds { get; set; } = true;
     /// <summary>Redraws arrive by themselves after an after-change asks for one, unless turned off.</summary>
     public bool RedrawArrives { get; set; } = true;
     /// <summary>The redraw lands before the after-change returns (it must still be observed).</summary>
@@ -244,7 +246,7 @@ internal sealed class FakeGame : IHarnessGame
         OnAfterChange?.Invoke();
         if (RedrawBeforeReturn) Redraw();
         else if (RedrawArrives) _ = Task.Delay(30).ContinueWith(_ => Redraw());
-        return new AfterChangeResult(true, true, baseline);
+        return new AfterChangeResult(ReloadSucceeds, true, baseline);
     }
 
     public uint ViewportId() { Fw(nameof(ViewportId)); return 7; }

@@ -54,6 +54,9 @@ internal sealed class HarnessJob(string id, string kind, string modDir)
     public void SetFollow(bool observed, bool? followed) => Set(j => { j.redrawObserved = observed; j.autoRefitFollowed = followed; });
     public void SetAfterChange(AfterChangeResult r)
         => Set(j => { j.reloaded = r.Reloaded; j.redrawRequested = r.RedrawRequested; j.Baseline = r.Baseline; });
+    /// <summary>What Penumbra answered to the after-change's reload; null before it ran.</summary>
+    public bool? Reloaded { get { lock (gate) return reloaded; } }
+
     /// <summary>The first error sticks: a later after-change skip does not hide why the run failed.</summary>
     public void Fail(JobError e) => Set(j => j.error ??= e);
     public bool Failed { get { lock (gate) return error != null; } }
@@ -184,6 +187,10 @@ internal sealed class HarnessJobs(IHarnessGame game, IFrameworkDispatcher dispat
         try { ran = await task.ConfigureAwait(false); }
         catch (Exception) { ran = false; }
         if (!ran) job.Fail(new JobError("after-change-skipped", "the reload and redraw were skipped (the harness was stopping)"));
+        // The files are as the job says, but Penumbra did not take them: the game is not drawing what is on disk.
+        else if (job.Reloaded == false)
+            job.Fail(new JobError("reload-failed",
+                "Penumbra refused to reload the mod (see /log); the files on disk are as reported, but the game may not match them until Penumbra reloads its mods"));
     }
 
     /// <summary>
@@ -209,7 +216,9 @@ internal sealed class HarnessJobs(IHarnessGame game, IFrameworkDispatcher dispat
         var until = DateTime.UtcNow + Timings.FollowWindow;
         do
         {
-            if (Game.AutoRefit().Busy) followed = true;
+            // Real auto-refit work only: a walk being due is what every redraw schedules, refit or not.
+            var a = Game.AutoRefit();
+            if (a.View.Busy || a.Activity.Running || a.Activity.Queued > 0 || a.Activity.Undoing) followed = true;
             if (followed || Disposing()) break;
             await Task.Delay(Timings.FollowSample).ConfigureAwait(false);
         } while (DateTime.UtcNow < until);

@@ -172,11 +172,36 @@ internal sealed class HarnessRouter(HarnessJobs jobs, LogRing ring, SessionNames
             body = doc.RootElement.Clone();
         }
         catch (JsonException) { return (default, HarnessResponse.Error(400, "bad-json", "the body is not valid JSON")); }
+        if (!StringsDecode(body)) return (default, HarnessResponse.Error(400, "bad-json", "the body has text that is not valid UTF-8"));
         if (body.ValueKind != JsonValueKind.Object) return (default, HarnessResponse.Error(400, "bad-json", "the body must be a JSON object"));
         foreach (var p in body.EnumerateObject())
             if (!allowed.Contains(p.Name, StringComparer.Ordinal))
                 return (default, HarnessResponse.Error(400, "invalid-field", $"unknown field {p.Name}"));
         return (body, null);
+    }
+
+    /// <summary>Every string in the body decodes: invalid UTF-8 or a lone surrogate escape parses, then throws on read.</summary>
+    private static bool StringsDecode(JsonElement e)
+    {
+        try
+        {
+            switch (e.ValueKind)
+            {
+                case JsonValueKind.String: _ = e.GetString(); return true;
+                case JsonValueKind.Object:
+                    foreach (var p in e.EnumerateObject())
+                    {
+                        _ = p.Name;
+                        if (!StringsDecode(p.Value)) return false;
+                    }
+                    return true;
+                case JsonValueKind.Array:
+                    foreach (var item in e.EnumerateArray()) if (!StringsDecode(item)) return false;
+                    return true;
+                default: return true;
+            }
+        }
+        catch (InvalidOperationException) { return false; }
     }
 
     private static string? OptionalString(JsonElement body, string name, out HarnessResponse? error)
@@ -284,6 +309,8 @@ internal sealed class HarnessRouter(HarnessJobs jobs, LogRing ring, SessionNames
         if (jobId != null && (mod != null || backupId != null))
             return HarnessResponse.Error(400, "invalid-field", "give job alone, or mod (with an optional backup)");
         if (jobId == null && mod == null) return HarnessResponse.Error(400, "invalid-field", "give job, or mod");
+        if (mod != null && string.Equals(mod, Game.ManagedModDir, StringComparison.OrdinalIgnoreCase))
+            return HarnessResponse.Error(400, "managed-mod", "Proteus's own output mod is never refitted or restored");
 
         if (!jobs.TryReserve()) return HarnessResponse.Error(409, "busy", "a job is already running");
         bool started = false;

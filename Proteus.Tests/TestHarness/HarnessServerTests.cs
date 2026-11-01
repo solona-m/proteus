@@ -462,6 +462,23 @@ public class HarnessServerTests : IDisposable
     }
 
     [Fact]
+    public async Task InvalidUtf8OrLoneSurrogate_400BadJson()
+    {
+        // [EDGE-qa-harness-33] In-game QA: these parsed, then threw on read, and came back 500 internal.
+        var bytes = new System.Collections.Generic.List<byte>(Encoding.ASCII.GetBytes("{\"mod\":\""));
+        bytes.Add(0xFF);
+        bytes.AddRange(Encoding.ASCII.GetBytes("\",\"bodies\":[\"rue\"]}"));
+        var content = new ByteArrayContent(bytes.ToArray());
+        content.Headers.ContentType = new MediaTypeHeaderValue("application/json");
+        var r = await f.Client.PostAsync("/actions/refit", content);
+        Assert.Equal(400, (int)r.StatusCode);
+        Assert.Equal("bad-json", (await HarnessFixture.Parse(r)).GetProperty("error").GetProperty("code").GetString());
+        var (status, b) = await f.Post("/actions/restore", "{\"mod\":\"\\ud800\"}");
+        Assert.Equal(400, status);
+        Assert.Equal("bad-json", b.GetProperty("error").GetProperty("code").GetString());
+    }
+
+    [Fact]
     public async Task NoContentType_415()
     {
         // [EDGE-qa-harness-33]
