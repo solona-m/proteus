@@ -142,6 +142,34 @@ public sealed partial class AutoRefitWatcher : IDisposable
     private volatile View current = new();
     public View Current => current;
 
+    /// <summary>Everything that can still make auto refit write, read without taking part in it.</summary>
+    /// <param name="Running">A runner is alive: refitting, or draining its batch.</param>
+    /// <param name="Queued">Requests waiting for the runner.</param>
+    /// <param name="WalkDue">A walk is scheduled and can run (auto refit on, not disposed); a walk left scheduled while
+    /// auto refit is off never runs, so it does not count.</param>
+    /// <param name="Undoing">An undo is running.</param>
+    internal readonly record struct ActivitySnapshot(bool Running, int Queued, bool WalkDue, bool Undoing);
+
+    /// <summary>A read-only look at the watcher's pending work, for the QA harness's "auto refit is quiet".</summary>
+    internal ActivitySnapshot Activity()
+    {
+        bool runningNow;
+        int queued;
+        lock (queueGate)
+        {
+            runningNow = runner != null;
+            queued = queue.Count;
+        }
+        return new ActivitySnapshot(runningNow, queued, WalkCounts(Interlocked.Read(ref walkDueAt), Enabled, disposed), Undoing);
+    }
+
+    /// <summary>
+    /// Whether a scheduled walk counts as pending work: only one that can run. <see cref="OnFrameworkUpdate"/> returns
+    /// before it looks at the schedule while auto refit is off, so a walk left scheduled then would never run, and
+    /// turning auto refit back on schedules a fresh one.
+    /// </summary>
+    internal static bool WalkCounts(long walkDueAt, bool enabled, bool disposed) => walkDueAt != 0 && enabled && !disposed;
+
     /// <param name="Collection">The collection the piece was put on in — where the refit is switched on.</param>
     /// <param name="Resolved">The file the game draws, or null for the game's own gear.</param>
     /// <param name="ModRoot">The mod supplying it, or null for the game's own gear.</param>

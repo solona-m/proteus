@@ -84,6 +84,33 @@ jobs:
         shell: pwsh
         run: Copy-Item "Proteus\bin\Release\win-x64\Proteus\latest.zip" -Destination latest.zip
 
+      # The QA test harness (Proteus/TestHarness/, ADR 0002) is a local control port and must never ship. The build
+      # leaves it out whenever CI or GITHUB_ACTIONS is set (Directory.Build.props); this checks the artifact itself,
+      # the loose DLL and the one inside the zip. For a testing release it is the only gate: test.yml runs for main.
+      - name: Guard against the test harness
+        shell: pwsh
+        run: |
+          $marker = 'Proteus.TestHarness'
+          $loose = [System.IO.File]::ReadAllBytes("Proteus\bin\Release\win-x64\Proteus.dll")
+          if ([System.Text.Encoding]::GetEncoding(28591).GetString($loose).Contains($marker)) {
+            Write-Error "Proteus.dll contains the QA test harness ($marker): a CI build must compile it out (ProteusTestHarness)."
+            exit 1
+          }
+          Add-Type -AssemblyName System.IO.Compression.FileSystem
+          $zip = [System.IO.Compression.ZipFile]::OpenRead((Resolve-Path latest.zip).Path)
+          try {
+            $entry = $zip.Entries | Where-Object { $_.FullName -ieq 'Proteus.dll' } | Select-Object -First 1
+            if (-not $entry) { Write-Error "latest.zip has no Proteus.dll to check"; exit 1 }
+            $ms = New-Object System.IO.MemoryStream
+            $stream = $entry.Open()
+            try { $stream.CopyTo($ms) } finally { $stream.Dispose() }
+            if ([System.Text.Encoding]::GetEncoding(28591).GetString($ms.ToArray()).Contains($marker)) {
+              Write-Error "latest.zip's Proteus.dll contains the QA test harness ($marker)."
+              exit 1
+            }
+          } finally { $zip.Dispose() }
+          Write-Host "No test harness in Proteus.dll, loose or zipped."
+
       # Dalamud re-downloads this zip on every update, for every user, and a testing tag goes out most
       # days — so anything large that sneaks into the build output is multiplied by all of that. It was
       # 31 MB (29 MB of it the starter effect art) until that art moved to its own release assets; the

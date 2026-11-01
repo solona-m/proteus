@@ -59,9 +59,22 @@ public sealed class CapturingPluginLog : IPluginLog
         }
     }
 
+    private volatile Action<string>? lineObserver;
+
+    /// <summary>
+    /// Told every rendered line, at every level, whether or not a capture session is open; null (the default) for
+    /// none. The QA test harness's log (dev builds only) listens here. Called outside the capture lock, and whatever
+    /// it throws is swallowed: a listener must never break the call a log line rides on.
+    /// </summary>
+    public Action<string>? LineObserver
+    {
+        get => lineObserver;
+        set => lineObserver = value;
+    }
+
     private void Record(LogEventLevel level, Exception? exception, string messageTemplate, object[] values)
     {
-        if (!capturing) return;
+        if (!capturing && lineObserver == null) return;
         try { renderer.Write(level, exception, messageTemplate, values); }
         catch { /* a bad template must never break the call it rides on */ }
     }
@@ -71,6 +84,11 @@ public sealed class CapturingPluginLog : IPluginLog
         var text = $"{e.Timestamp.LocalDateTime:HH:mm:ss.fff} [{Abbrev(e.Level)}] {e.RenderMessage()}";
         if (e.Exception != null)
             text += Environment.NewLine + e.Exception;
+        if (lineObserver is { } observer)
+        {
+            try { observer(text); }
+            catch { /* a listener must never break the call it rides on */ }
+        }
         lock (gate)
         {
             if (!capturing) return;
