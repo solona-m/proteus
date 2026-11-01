@@ -448,8 +448,16 @@ public sealed class HandsFeetPortLocalTests(ITestOutputHelper o) : IDisposable
             o.WriteLine($"{slot}: {outcome.Status} from {outcome.From}");
             Assert.Equal(SizeSetRefit.SizeStatus.Made, outcome.Status);
         }
-        Assert.DoesNotContain(run.Warnings, w => w.Contains("e0633") && w.Contains("Glove", StringComparison.OrdinalIgnoreCase)
-                                                 && w.Contains("outfit", StringComparison.OrdinalIgnoreCase));
+        // The gloves never take the outfit's legs; the boots, with no legs of their item here, still the game's body.
+        foreach (var piece in SizeSetRefit.PiecesOf(copy, Game, includeEnds: true).Where(p => p.GamePath.Contains("c0201e0633_")))
+        {
+            // The outfit-legs line up to the body it names: no warning of this piece's may start so.
+            string opening = string.Format(Strings.SizeSet.EndFromOutfitLegsFmt, piece.Label, "TBSE", "\u0001", "")
+                                   .Split('\u0001')[0];
+            Assert.DoesNotContain(run.Warnings, w => w.StartsWith(opening, StringComparison.Ordinal));
+        }
+        var boot = SizeSetRefit.PiecesOf(copy, Game, includeEnds: true).Single(p => p.GamePath == "chara/equipment/e0633/model/c0201e0633_sho.mdl");
+        Assert.Contains(string.Format(Strings.SizeSet.EndFromGameBodyFmt, boot.Label, "TBSE"), run.Warnings);
     }
 
     /// <summary>

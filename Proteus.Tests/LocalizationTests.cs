@@ -1267,7 +1267,7 @@ public sealed class LocalizationTests
                      "Parts.Retarget.CrossSexEnd.NoSizes", "Parts.Retarget.KeepEnds.CrossSex.Tip",
                      "Parts.Retarget.EndsUnreadable.CrossSex", "Parts.Retarget.KeepShape.CrossSexTip",
                      "Parts.Retarget.CrossSexEnd.PickMadeFor.Fmt", "Parts.Retarget.Race.CrossSexNude.Fmt",
-                     "Parts.Retarget.Race.WomensModel.Fmt", "Parts.Retarget.CrossSexEnd.NoLimb",
+                     "Parts.Retarget.Race.WomensModel.Fmt", "Parts.Retarget.CrossSexEnd.NoLimb", "SizeSet.EndFromOutfitLegs.Fmt",
                      "SizeSet.Intro", "SizeSet.ForMen.Tip.Fmt", "SizeSet.Ends.Tip", "Parts.Retarget.Race.Tip",
                  })
         {

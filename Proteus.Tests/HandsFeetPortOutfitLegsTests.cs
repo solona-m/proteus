@@ -139,6 +139,15 @@ public class HandsFeetPortOutfitLegsTests
         Assert.Equal(SizeSetRefit.ReadingKey("leg size/small/x.mdl", "_dwn", "0201", "The Body SE"),
                      SizeSetRefit.OutfitLegsKey(request, "leg size/small/x.mdl"));
 
+        // The crossed legs' own reading is kept under that very key: RunAcrossPiece prefers the first body mod given, and
+        // its Sources read by ReadingKey(file, slot, race, preferred) — pinned so the two can't drift apart (review #16).
+        string across = CrossSexRefitTests.Source("Proteus/Services/SizeSet/SizeSetRefit.CrossSex.cs");
+        string runPiece = across[across.IndexOf("private static int RunAcrossPiece(", StringComparison.Ordinal)..];
+        Assert.Contains("string preferred = mods[0].Dir;", runPiece[..runPiece.IndexOf("new Sources(", StringComparison.Ordinal)]);
+        Assert.Contains("var mods = request.Bodies.Select(b => (b.Dir, b.Catalog)).ToList();", runPiece);
+        Assert.Contains("ReadingKey(file, slot, race, preferred)",
+                        CrossSexRefitTests.Source("Proteus/Services/SizeSet/SizeSetRefit.Source.cs"));
+
         // Read before in this run (by the crossed legs): handed back, never read again from a file that isn't there.
         var seeded = new AutoRefitDecisions.Pick("Bibo+", Body("Type C - Small"), Confidence.Exact, false);
         var readings = new Dictionary<string, AutoRefitDecisions.Pick?>(StringComparer.Ordinal)
