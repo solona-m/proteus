@@ -284,6 +284,22 @@ public class HarnessJobsTests : IDisposable
     }
 
     [Fact]
+    public async Task NextJobRightAfterEndedAt_Accepted()
+    {
+        // [EDGE-qa-harness-35] A job shows endedAt only once its slot is free: the next one sent at once is accepted,
+        // never a spurious 409 busy (seen under the loaded quick suite).
+        f.AddMod();
+        f.Game.RedrawArrives = false;   // no follow window: jobs end as fast as they can
+        for (int i = 0; i < 20; i++)
+        {
+            var (status, b) = await f.Post("/actions/refit", RefitRue);
+            Assert.True(status == 202, $"round {i}: {status} {b}");
+            var id = b.GetProperty("job").GetString()!;
+            while ((await f.Get($"/jobs/{id}")).Body.GetProperty("endedAt").ValueKind == JsonValueKind.Null) { }
+        }
+    }
+
+    [Fact]
     public async Task FollowWindow_RedrawQuiet_False()
     {
         // [EDGE-qa-harness-36]

@@ -150,13 +150,15 @@ internal sealed class HarnessJobs(IHarnessGame game, IFrameworkDispatcher dispat
             }
             finally
             {
-                job.Finish();
+                // Registry and slot first, then the ended state: a client that sees endedAt and sends the next job at
+                // once must find the slot free, and "on" must not find the job still current.
                 lock (gate)
                 {
                     lastFinished = job;
                     if (ReferenceEquals(current, job)) current = null;
                 }
                 Release();
+                job.Finish();
             }
         });
     }
