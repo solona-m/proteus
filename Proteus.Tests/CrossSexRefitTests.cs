@@ -516,10 +516,8 @@ public class CrossSexRefitTests
         Assert.False(BodyCorrespondence.TryBuild(bibo, Uv(bibo), tbse, Uv(tbse), "_dwn", out _, out _, out var nullMaps,
                                                  null, male: false, targetMale: true));
         Assert.Null(nullMaps);
-        // Unreadable texture coordinates, through the pair builder every refit uses.
-        Assert.False(BodyCorrespondence.TryBuild(bibo, [], tbse, Uv(tbse), "_dwn", out _, out _, out var unreadable,
-                                                 NoMaps(), male: false, targetMale: true));
-        Assert.Null(unreadable);
+        // Unreadable models, through the pair builder every refit uses. (Unreadable texture coordinates with the maps
+        // there: CrossSexNudeLegsLocalTests.Refusals_before_measuring_give_no_stats.)
         Assert.NotNull(BodyRetarget.BuildPair("_dwn", [1, 2, 3], [4, 5, 6], "_dwn", false, null, null, NoMaps(),
                                               out _, out var garbage, null, true));
         Assert.Null(garbage);

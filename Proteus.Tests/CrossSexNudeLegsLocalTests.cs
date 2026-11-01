@@ -476,6 +476,10 @@ public class CrossSexNudeLegsLocalTests(ITestOutputHelper o)
             var studio = CrossSexRefitJob.ToStudio(r, 1);
             Assert.Null(studio.Planned);
             Assert.Equal(s.Refusal, studio.Error);
+            // The size set's note says the same reason.
+            var judged = SizeSetRefit.Judge("Feet", "TBSE-X", r, s);
+            Assert.False(judged.Save);
+            Assert.Contains(s.Refusal, judged.Note);
         }
     }
 
@@ -483,20 +487,55 @@ public class CrossSexNudeLegsLocalTests(ITestOutputHelper o)
                    CrossSexRefitLocalTests.TbseX)]
     [Trait("Plan", "AC-tbsex-nude-legs-6")]
     [Trait("Plan", "EDGE-tbsex-nude-legs-2")]
+    [Trait("Speed", "Slow")]
     public void Other_refusals_never_try_nude() // [AC-tbsex-nude-legs-6] [EDGE-tbsex-nude-legs-2]
     {
         // No body maps: refused in the match itself, before anything landed — never tried on the nude legs. (A different
         // layout is CrossSexRefitTests.Only_a_coverage_refusal_gives_its_stats.)
         int asked = 0;
-        var maps = new UVRemapService(Substitute.For<IPluginLog>(), Directory.CreateTempSubdirectory("proteus-nomaps-").FullName);
-        var s = CrossSexRefitJob.RunEnd(HalonesBootOntoTbseX(Substitute.For<IPluginLog>(), maps) with
+        var noMaps = Directory.CreateTempSubdirectory("proteus-nomaps-");
+        CrossSexRefitJob.Size s;
+        try
         {
-            Nude = _ => { asked++; return null; },
-        }).Sizes.Single();
+            var maps = new UVRemapService(Substitute.For<IPluginLog>(), noMaps.FullName);
+            s = CrossSexRefitJob.RunEnd(HalonesBootOntoTbseX(Substitute.For<IPluginLog>(), maps) with
+            {
+                Nude = _ => { asked++; return null; },
+            }).Sizes.Single();
+        }
+        finally
+        {
+            noMaps.Delete(recursive: true);
+        }
         o.WriteLine($"\"{s.Refusal}\"");
         Assert.Equal(0, asked);
         Assert.Null(s.Landed);
         Assert.False(string.IsNullOrEmpty(s.Refusal));
         Assert.False(s.Refusal.StartsWith(LowCoverageOpening, StringComparison.Ordinal));
+    }
+
+    /// <summary>With the maps there, a refusal that comes before anything was measured says nothing of coverage: only a
+    /// refusal for too little coverage may open the nude legs.</summary>
+    [LocalDataFact(CrossSexRefitLocalTests.Bibo, CrossSexRefitLocalTests.TbseX, LocalData.TbseUvMaps)]
+    [Trait("Plan", "AC-tbsex-nude-legs-6")]
+    [Trait("Plan", "EDGE-tbsex-nude-legs-8")]
+    public void Refusals_before_measuring_give_no_stats() // [AC-tbsex-nude-legs-6] [EDGE-tbsex-nude-legs-8]
+    {
+        var bibo = BodySizeCatalog.Read(LocalData.Path(CrossSexRefitLocalTests.Bibo));
+        var typeC = bibo.For("_dwn", "0201").First(b => b.Label.Contains("Type C - Small", StringComparison.Ordinal));
+        byte[] womenBytes = File.ReadAllBytes(bibo.PathOf(typeC));
+        byte[] menBytes = File.ReadAllBytes(TbseX().PathOf(TbseXOption(TbseXSfwRel)));
+        var women = ModelPartReader.Read(womenBytes)!;
+        var men = ModelPartReader.Read(menBytes)!;
+        float[] menUv = BodyRetarget.Uv(menBytes);
+        // The real pair is refused for coverage, and says how much landed: the maps are really there.
+        Assert.False(BodyCorrespondence.TryBuild(women, BodyRetarget.Uv(womenBytes), men, menUv, "_dwn", out _, out _,
+                                                 out var coverage, Maps(), male: false, targetMale: true));
+        Assert.NotNull(coverage);
+        // The same pair with the women's texture coordinates unreadable: refused before anything was measured.
+        Assert.False(BodyCorrespondence.TryBuild(women, new float[2], men, menUv, "_dwn", out _, out string refusal,
+                                                 out var unreadable, Maps(), male: false, targetMale: true));
+        o.WriteLine(refusal);
+        Assert.Null(unreadable);
     }
 }

@@ -95,7 +95,7 @@ internal static partial class BodyRetarget
         return Without(body, hidden);
     }
 
-    private static float[] Uv(byte[] mdl)
+    internal static float[] Uv(byte[] mdl)
         => SecondSkinWriter.TryReadLod0Geometry(mdl, out _, out var uv, out _, out _, out _, false, false, null)
             ? uv
             : [];

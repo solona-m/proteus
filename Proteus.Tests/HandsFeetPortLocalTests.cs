@@ -521,8 +521,9 @@ public sealed class HandsFeetPortLocalTests(ITestOutputHelper o) : IDisposable
         var xSize = SupportedBodies.Of("tbse-x", "_dwn", false)!.Sizes[0];
         var sfw = xLegs.First(l => RefitCore.Normal(l.Rel) == RefitCore.Normal(xSize.Rel));
         var flaccid = xLegs.First(l => RefitCore.Normal(l.Rel) == RefitCore.Normal(xSize.NudeRel!));
-        Assert.Equal(AutoRefitDecisions.Companion(tbseXCat.For("_sho"), sfw, null),
-                     AutoRefitDecisions.Companion(tbseXCat.For("_sho"), flaccid, null));
+        var feet = AutoRefitDecisions.Companion(tbseXCat.For("_sho"), sfw, null);
+        Assert.NotNull(feet);
+        Assert.Equal(feet, AutoRefitDecisions.Companion(tbseXCat.For("_sho"), flaccid, null));
         foreach (var (name, json) in before.Where(g => g.Name != mensGroup))
             Assert.True(JsonNode.DeepEquals(json, after.Single(g => g.Name == name).Group), $"group {name} changed");
     }
