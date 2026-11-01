@@ -394,9 +394,13 @@ internal static partial class SizeSetRefit
     {
         var runLog = new RunLog();
         int made = Run(request, runLog, uvRemap, log, progress, ct);
-        return new Result(made, runLog.Notes.Distinct(StringComparer.Ordinal).ToList(),
-                          runLog.Warnings.Distinct(StringComparer.Ordinal).ToList(), Summarize(runLog, made));
+        return ResultOf(runLog, made);
     }
+
+    /// <summary>The result a run's log and count come to: what the Studio shows and the test harness reports.</summary>
+    internal static Result ResultOf(RunLog runLog, int made)
+        => new(made, runLog.Notes.Distinct(StringComparer.Ordinal).ToList(),
+               runLog.Warnings.Distinct(StringComparer.Ordinal).ToList(), Summarize(runLog, made));
 
     /// <inheritdoc cref="Run(Request, UVRemapService?, IPluginLog, Action{string}, CancellationToken)"/>
     /// <param name="runLog">Filled as the run goes: what it says, and every size's outcome — kept when it is stopped.</param>

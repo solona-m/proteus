@@ -77,6 +77,15 @@
     <ProjectReference Include="..\Proteus.Refit\Proteus.Refit.csproj" Aliases="RefitCli" />
   </ItemGroup>
 
+  <!-- The QA test harness's tests follow the plugin's switch (Directory.Build.props): compiled only where the
+       harness is, so CI's test run still compiles. Root-level harness tests (HarnessBuildFlagTests, …) always run. -->
+  <PropertyGroup Condition="'$(ProteusTestHarness)' == 'true'">
+    <DefineConstants>$(DefineConstants);PROTEUS_TEST_HARNESS</DefineConstants>
+  </PropertyGroup>
+  <ItemGroup Condition="'$(ProteusTestHarness)' != 'true'">
+    <Compile Remove="TestHarness\**" />
+  </ItemGroup>
+
   <!-- Real .mtrl used by MtrlParseTests to check the parser against the actual file format rather than
        against the test's own byte builder. Its colour table is zeroed; every count, offset and table the
        parser walks is untouched. -->
