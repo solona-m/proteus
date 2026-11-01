@@ -104,5 +104,19 @@ internal static partial class SizeSetRefit
         internal const string NoEnd = "no-end";
         internal const string SaveFailed = "save-failed";
         internal const string PieceFailed = "piece-failed";
+        internal const string EndsLeftOut = "ends-left-out";
+        internal const string AuthorsMens = "authors-mens";
+    }
+
+    /// <summary>
+    /// The shoes and gloves "Include shoes and gloves" left out: one note naming them all, and one outcome each, so a run
+    /// with the box off never drops them silently. Nothing for none.
+    /// </summary>
+    internal static void SayEndsLeftOut(RunLog runLog, IReadOnlyList<Piece> leftOut)
+    {
+        if (leftOut.Count == 0) return;
+        string note = string.Format(Localization.Strings.SizeSet.EndsLeftOutFmt, string.Join(", ", leftOut.Select(p => p.Label)));
+        runLog.Notes.Add(note);
+        foreach (var piece in leftOut) runLog.Add(piece, SizeStatus.Skipped, Codes.EndsLeftOut, note);
     }
 }

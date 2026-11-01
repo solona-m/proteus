@@ -188,7 +188,9 @@ public class CrossSexRefitTests
         Assert.DoesNotContain(Offered("chara/equipment/e6091/model/c0301e6091_top.mdl"), c => c.CrossSex);
         Assert.DoesNotContain(Offered("chara/equipment/e6091/model/c1201e6091_top.mdl"), c => c.CrossSex);
         Assert.DoesNotContain(Offered("chara/equipment/e6091/model/c0101e6091_glv.mdl"), c => c.CrossSex);
-        Assert.DoesNotContain(Offered("chara/equipment/e6091/model/c0201e6091_sho.mdl"), c => c.CrossSex);
+        // A women's shoe is made a men's since hands-feet-port, through the men's legs (EndsCross); a men's glove still
+        // isn't made a women's.
+        Assert.Contains(Offered("chara/equipment/e6091/model/c0201e6091_sho.mdl"), c => c.CrossSex && c.Race == 101);
         Assert.Empty(Offered(MansTop, vanilla: true));
         Assert.True(CrossSexRefit.Supported(101, 201, "_top"));
         Assert.True(CrossSexRefit.Supported(101, 201, "_dwn"));
@@ -209,10 +211,9 @@ public class CrossSexRefitTests
         Assert.True(CrossSexRefit.Supported(201, 101, "_top"));
         string[] ok = ["game", "uvmaps", "from-root"];
         Assert.Null(CrossSexRefit.ValidateCli("0201", "0101", "_top", ok));
-        Assert.Equal("--for-race refits chest (_top) and legs (_dwn) garments only",
-                     CrossSexRefit.ValidateCli("0201", "0101", "_glv", ok));
-        Assert.Equal("--for-race refits chest (_top) and legs (_dwn) garments only",
-                     CrossSexRefit.ValidateCli("0101", "0201", "_sho", ok));
+        // A women's glove for men is taken since hands-feet-port; a men's shoe for women still isn't.
+        Assert.Null(CrossSexRefit.ValidateCli("0201", "0101", "_glv", ok));
+        Assert.Equal(CrossSexRefit.CliSlotError, CrossSexRefit.ValidateCli("0101", "0201", "_sho", ok));
         // --from-skeleton must name a file there is (the review's decision): checked with the other usage errors.
         Assert.Equal("--from-skeleton names no file: \"yas.sklb\"",
                      CrossSexRefit.ValidateCli("0201", "0101", "_top", [.. ok, "from-skeleton"], "yas.sklb", _ => false));
@@ -403,8 +404,10 @@ public class CrossSexRefitTests
                                               "HairPort.Refused.Folded", "if (ours) fits = false" })
                 Assert.False(text.Contains(banned, StringComparison.Ordinal), $"{Path.GetFileName(file)} still has {banned}");
         }
-        Assert.Contains("CrossSexRefit.CoverageAllowed(coverage)", Source("Proteus/Gui/BodyRetargetPanel.CrossSex.cs"));
-        Assert.Contains("RetargetRaceCrossSexQualityFmt", Source("Proteus/Gui/BodyRetargetPanel.CrossSex.cs"));
+        // The panel's check words its sizes through the one judge (hands-feet-port), which refuses on coverage alone.
+        Assert.Contains("CrossSexRefit.Judged(coverage, folded)", Source("Proteus/Gui/BodyRetargetPanel.CrossSex.cs"));
+        Assert.Contains("CoverageAllowed(coverage)", Source("Proteus/Services/CrossSexRefit.cs"));
+        Assert.Contains("RetargetRaceCrossSexQualityFmt", Source("Proteus/Services/CrossSexRefit.cs"));
         Assert.Contains("[\"folds\"] = size.Folds", Source("Proteus/Services/CrossSexRefitReport.cs"));
     }
 
@@ -574,7 +577,10 @@ public class CrossSexRefitTests
         // Once folds and coverage; folds are never a reason any more (cross-sex-tops-yas), only coverage.
         Assert.True(CrossSexRefit.CoverageAllowed(0.989));
         Assert.False(CrossSexRefit.CoverageAllowed(CrossSexRefit.MinCoverage - 0.01));
-        Assert.Contains("CrossSexRefit.CoverageAllowed(coverage)", Source("Proteus/Gui/BodyRetargetPanel.CrossSex.cs"));
+        // The panel's check goes through the one judge (hands-feet-port), which refuses on coverage.
+        Assert.Contains("CrossSexRefit.Judged(coverage, folded)", Source("Proteus/Gui/BodyRetargetPanel.CrossSex.cs"));
+        Assert.Null(CrossSexRefit.Judged(0.989, 500).Refusal);
+        Assert.NotNull(CrossSexRefit.Judged(CrossSexRefit.MinCoverage - 0.01, 0).Refusal);
     }
 
     [Fact]

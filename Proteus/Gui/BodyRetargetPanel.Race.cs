@@ -168,6 +168,71 @@ internal sealed partial class BodyRetargetPanel
         ImGui.Spacing();
     }
 
+    /// <summary>The race to pick when a model opens, left by <see cref="DrawWomensModel"/>'s button.</summary>
+    private readonly OtherRaceRefit.PendingPick pendingPick = new();
+
+    /// <summary>The open mod's pieces, as the size set judges them, read on a worker once per mod and manifest read.</summary>
+    private Task<HashSet<string>>? modPiecesTask;
+    private HashSet<string>? modPieces;
+    private (string? Root, object? Redirects) modPiecesFor;
+
+    /// <summary>
+    /// On a men's shoe or glove that is only the game's model (or a copy of it), a line pointing at the author's own
+    /// women's model of the item, with a button that opens it with "Midlander M" already picked (see
+    /// <see cref="OtherRaceRefit.WomensModelOf"/>). Nothing until the mod's pieces are read.
+    /// </summary>
+    private void DrawWomensModel(in RetargetContext ctx)
+    {
+        if (ctx.IsVanilla || ctx.ModRoot is not { } root || ModelSkinReader.RaceOf(ctx.GamePath) != CrossSexRefit.Men
+            || BodySizeCatalog.SlotOf(ctx.GamePath) is not ("_sho" or "_glv"))
+            return;
+        var key = ((string?)root, (object?)ctx.Redirects);
+        if (modPiecesFor != key)
+        {
+            modPiecesFor = key;
+            modPieces = null;
+            modPiecesTask = Task.Run(() => SizeSetRefit.PiecesOf(root, ReadGame, includeEnds: true)
+                                                       .Select(p => p.GamePath)
+                                                       .ToHashSet(StringComparer.OrdinalIgnoreCase));
+        }
+        if (modPiecesTask is { IsCompleted: true } done)
+        {
+            modPiecesTask = null;
+            if (done.IsCompletedSuccessfully) modPieces = done.Result;
+            else
+            {
+                log.Warning(done.Exception!, "[Proteus] retarget: reading {0}'s pieces failed", root);
+                modPieces = [];
+            }
+        }
+        if (modPieces == null
+            || OtherRaceRefit.WomensModelOf(ctx.GamePath, modPieces, ctx.IsVanilla) is not { } women
+            || ctx.OpenModelAt?.Invoke(women) is not { } open)
+            return;
+
+        var ps = Strings.Parts;
+        string womenName = ModelRace.Describe($"{CrossSexRefit.Women:D4}"), menName = ModelRace.Describe($"{CrossSexRefit.Men:D4}");
+        using (ImRaii.PushColor(ImGuiCol.Text, ImGui.GetColorU32(ImGuiCol.TextDisabled)))
+            ImGui.TextWrapped(string.Format(ps.RetargetRaceWomensModelFmt, womenName, menName));
+        if (ImGui.Button(string.Format(ps.RetargetRaceOpenModelFmt, womenName) + "##womensModel", FullWidth()))
+        {
+            pendingPick.Set(women, CrossSexRefit.Men);
+            log.Information("[Proteus] retarget: opening {0} to refit it for c0101", women);
+            open();
+        }
+        ImGui.Spacing();
+    }
+
+    /// <summary>Takes the pending pick for the model now open, before anything reads the pick this frame.</summary>
+    private void TakePendingPick(in RetargetContext given)
+    {
+        if (pendingPick.Take(given.GamePath, given.ModelRel) is not { } pick) return;
+        raceChoice = pick;
+        bakeRefusalFor = null;
+        raceInputs = null;
+        raceInputsFor = null;
+    }
+
     private string EntryLabel(OtherRaceRefit.Entry entry, ushort drawn) => entry.Kind switch
     {
         OtherRaceRefit.EntryKind.ThisModel => string.Format(Strings.Parts.RetargetRaceThisModelFmt,
@@ -432,7 +497,9 @@ internal sealed partial class BodyRetargetPanel
                                 route.Drawn, route.To, bodies?.Options.Count ?? 0, mapsHere ? "present" : "requested");
                 // Never the target race's own bodies in their place (CrossSexRefit.MadeForLine): with none of the drawn
                 // race's for the garment's part, there is nothing it was made on to refit from.
-                if (garmentSlot != null && bodies?.For(garmentSlot).Count is null or 0)
+                // A shoe or glove is refitted through its leg or arm: the made-for side needs that, not its feet or hands.
+                string? madeForSlot = garmentSlot != null ? AutoRefitDecisions.LimbOf(garmentSlot) ?? garmentSlot : null;
+                if (madeForSlot != null && bodies?.For(madeForSlot).Count is null or 0)
                     return (key, null, string.Format(Strings.Parts.RetargetRefuseCrossSexMadeForFmt,
                                                      ModelRace.Describe(drawnCode)));
             }
@@ -442,7 +509,7 @@ internal sealed partial class BodyRetargetPanel
             return (key, new Baked(key, bytes, route, model, parts, savePath, who)
             {
                 Fingerprint = print,
-                Explicit = true, Bodies = bodies, LeftOut = leftOut, Est = made.Est, FellBack = made.FellBack, DrawnPath = drawnPath,
+                Explicit = true, Bodies = bodies, MadeFor = source, LeftOut = leftOut, Est = made.Est, FellBack = made.FellBack, DrawnPath = drawnPath,
                 IsVanilla = vanilla,
                 Moves = moves, NeedsSkeleton = made.NeedsSkeleton ?? [], SkeletonFrom = SkeletonMod(inputs.ModdedFrom),
             }, "");

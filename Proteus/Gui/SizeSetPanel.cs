@@ -58,7 +58,9 @@ internal sealed class SizeSetPanel(PenumbraBridge penumbra, UVRemapService uvRem
     /// </summary>
     private List<SizeSetRefit.Piece>? pieces;
     private string? piecesFor;
-    private Task<List<SizeSetRefit.Piece>>? readingPieces;
+    private Task<(List<SizeSetRefit.Piece>, IReadOnlyList<SizeSetRefit.Piece>)>? readingPieces;
+    /// <summary>The open mod's shoes and gloves "Include shoes and gloves" leaves out; none while it is ticked.</summary>
+    private IReadOnlyList<SizeSetRefit.Piece> endsLeftOut = [];
 
     /// <summary>When the last look was started, and how soon one that came back with nothing is tried again.</summary>
     private long scanTriedAt;
@@ -109,7 +111,12 @@ internal sealed class SizeSetPanel(PenumbraBridge penumbra, UVRemapService uvRem
         ImGui.TextWrapped(s.Intro);
         ImGui.Spacing();
         if (installed == null || pieces == null) ImGui.TextDisabled(Strings.AutoRefit.FindingBodies);
-        else if (pieces.Count == 0) ImGui.TextDisabled(s.NoPieces);
+        else if (pieces.Count == 0)
+        {
+            ImGui.TextDisabled(s.NoPieces);
+            // A mod of shoes alone says why it has none.
+            DrawEndsLeftOut();
+        }
 
         bool busy = running != null;
         using (ImRaii.Disabled(busy))
@@ -164,6 +171,7 @@ internal sealed class SizeSetPanel(PenumbraBridge penumbra, UVRemapService uvRem
                 piecesFor = null;
             }
             if (ImGui.IsItemHovered()) ImGui.SetTooltip(s.EndsTip);
+            if (pieces is { Count: > 0 } && !config.SizeSetEnds) DrawEndsLeftOut();
 
             bool piercings = config.SizeSetPiercings;
             if (ImGui.Checkbox(s.Piercings, ref piercings))
@@ -234,6 +242,14 @@ internal sealed class SizeSetPanel(PenumbraBridge penumbra, UVRemapService uvRem
     /// <summary>A body as the table names it ("TBSE"), not as its row does ("TBSE (for men)").</summary>
     private static string BodyLabel(string body) => SupportedBodies.Choices.First(c => c.Key == body).Label;
 
+    /// <summary>The shoes and gloves "Include shoes and gloves" leaves out, named, and how to include them; nothing for none.</summary>
+    private void DrawEndsLeftOut()
+    {
+        if (endsLeftOut.Count == 0) return;
+        using (ImRaii.PushColor(ImGuiCol.Text, ImGui.GetColorU32(ImGuiCol.TextDisabled)))
+            ImGui.TextWrapped(string.Format(Strings.SizeSet.EndsLeftOutFmt, string.Join(", ", endsLeftOut.Select(p => p.Label))));
+    }
+
     /// <summary>The bodies for the open mod's pieces; none until they are read.</summary>
     private IReadOnlyList<SizeSetRefit.Choice> Offered() => pieces == null ? [] : SizeSetRefit.Offered(pieces);
 
@@ -243,18 +259,23 @@ internal sealed class SizeSetPanel(PenumbraBridge penumbra, UVRemapService uvRem
         if (readingPieces is { IsCompleted: true } done)
         {
             readingPieces = null;
-            if (done.IsCompletedSuccessfully) pieces = done.Result;
+            if (done.IsCompletedSuccessfully) (pieces, endsLeftOut) = done.Result;
             else
             {
                 log.Warning(done.Exception!, "[Proteus] size set: reading {0}'s pieces failed", piecesFor ?? "");
-                pieces = [];
+                (pieces, endsLeftOut) = ([], []);
             }
         }
         if (piecesFor == modDir || readingPieces != null) return;
         piecesFor = modDir;
-        pieces = null;
+        (pieces, endsLeftOut) = (null, []);
         bool ends = config.SizeSetEnds;
-        readingPieces = Task.Run(() => SizeSetRefit.PiecesOf(modRoot, readGameFile, ends));
+        // Read once with shoes and gloves, so those the box leaves out can be named.
+        readingPieces = Task.Run(() =>
+        {
+            var (kept, leftOut, _) = SizeSetRefit.ReadPieces(modRoot, readGameFile, ends);
+            return (kept, leftOut);
+        });
     }
 
     /// <summary>Find which bodies are installed, on a worker. Framework thread: Penumbra's mod list is asked for here.</summary>

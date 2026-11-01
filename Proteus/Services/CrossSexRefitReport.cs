@@ -28,6 +28,8 @@ internal static class CrossSexRefitReport
             ["label"] = label, ["to"] = size.Target.Rel, ["folds"] = size.Folds,
             ["coverage"] = size.Landed?.VertexCoverage ?? 0f,
         };
+        // Fitted to the size's nude smallclothes instead: "to" is the body fitted, this the one asked for.
+        if (size.Asked != null) entry["fittedInsteadOf"] = size.Asked.Rel;
         if (Refusal(size) is { } refusal) entry["refusal"] = refusal;
         else if (file != null) entry["file"] = file;
         return entry;

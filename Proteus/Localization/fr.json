@@ -4504,8 +4504,36 @@
     "description": "Heads the dropdown that picks which race's model a refit is made and saved as."
   },
   "Parts.Retarget.Race.Tip": {
-    "message": "Pour quelle race est le réajustement. Une autre race obtient son propre modèle, fait à partir de celui-ci comme le jeu le plie, réajusté sur le corps de cette race et enregistré là où cette race le charge. Un vêtement de torse ou de jambes Midlander peut aussi être réajusté pour l'autre sexe. Ce modèle reste tel quel.",
+    "message": "Pour quelle race est le réajustement. Une autre race obtient son propre modèle, fait à partir de celui-ci comme le jeu le plie, réajusté sur le corps de cette race et enregistré là où cette race le charge. Un vêtement de torse ou de jambes Midlander, ou une chaussure ou un gant pour femmes pour les hommes, peut aussi être réajusté pour l'autre sexe. Ce modèle reste tel quel.",
     "description": "Tooltip of Parts.Retarget.Race.Label."
+  },
+  "Parts.Retarget.CrossSexEnd.NoSizes": {
+    "message": "Aucune des tailles choisies pour le réajustement ne se trouve plus sur ce corps. Choisissez-les à nouveau.",
+    "description": ""
+  },
+  "Parts.Retarget.KeepEnds.CrossSex.Tip": {
+    "message": "Réajusté pour l'autre sexe, une chaussure garde toujours son propre pied et un gant sa propre main, avec la peau du nouveau corps : seuls la jambe ou le bras sont réajustés, par les cartes de corps.",
+    "description": ""
+  },
+  "Parts.Retarget.EndsUnreadable.CrossSex": {
+    "message": "Son rig est illisible, donc son pied ou sa main ne peuvent être distingués du reste, et une chaussure ou un gant n'est réajusté pour l'autre sexe qu'en les gardant.",
+    "description": ""
+  },
+  "Parts.Retarget.KeepShape.CrossSexTip": {
+    "message": "Réajusté pour l'autre sexe, la jambe d'une chaussure ou le bras d'un gant est réajusté d'un seul tenant : « Garder la forme » ne s'applique pas. Vos coches reviennent quand vous choisissez à nouveau sa propre race.",
+    "description": ""
+  },
+  "Parts.Retarget.CrossSexEnd.PickMadeFor.Fmt": {
+    "message": "Elle n'a pas de peau d'où lire sa taille, et son tissu ne repose sur aucune taille {1} de {0}. Sous « Fait pour le corps », choisissez le corps pour lequel elle a été faite (celui du jeu, si c'est sur lui), puis sa taille.",
+    "description": ""
+  },
+  "Parts.Retarget.Race.CrossSexNude.Fmt": {
+    "message": "{0} n'a apparié que {1} du corps, il a donc été ajusté sur {2} à la place ({3} apparié).",
+    "description": ""
+  },
+  "Parts.Retarget.Race.WomensModel.Fmt": {
+    "message": "Ce mod a aussi son propre modèle {0} de cet objet. Pour en faire une version {1}, ouvrez-le : « {1} » est choisi pour vous sous « Ajuster pour ».",
+    "description": ""
   },
   "Parts.Retarget.Race.ThisModel.Fmt": {
     "message": "{0} (ce modèle)",
@@ -5120,7 +5148,7 @@
     "description": ""
   },
   "SizeSet.Intro": {
-    "message": "Ajoute à tout ce mod chaque taille des corps cochés ci-dessous. Chaque taille est réajustée à partir de la taille de l'auteur la plus proche, les autres pièces de la tenue dans cette option à partir de la même taille, et enregistrée à côté des tailles de l'auteur sous « Rue S », « YAB Buff L », etc. Les tailles que le mod possède déjà ne sont pas touchées. Un mod pour femmes peut aussi recevoir TBSE et TBSE-X : son torse et ses jambes sont réajustés pour les hommes et enregistrés dans un groupe à part.",
+    "message": "Ajoute à tout ce mod chaque taille des corps cochés ci-dessous. Chaque taille est réajustée à partir de la taille de l'auteur la plus proche, les autres pièces de la tenue dans cette option à partir de la même taille, et enregistrée à côté des tailles de l'auteur sous « Rue S », « YAB Buff L », etc. Les tailles que le mod possède déjà ne sont pas touchées. Un mod pour femmes peut aussi recevoir TBSE et TBSE-X : son torse, ses jambes, ses chaussures et ses gants sont réajustés pour les hommes et enregistrés dans un groupe à part.",
     "description": ""
   },
   "SizeSet.Yas": {
@@ -5136,7 +5164,19 @@
     "description": ""
   },
   "SizeSet.Ends.Tip": {
-    "message": "Les chaussures et les gants gardent leurs propres pieds et mains ; seule la jambe ou le bras qu'ils atteignent est réajusté. Les chaussures reçoivent les tailles des jambes, les gants une option par corps, et tous deux rejoignent les tailles de buste ou de jambes de la tenue quand ils partagent un groupe.",
+    "message": "Les chaussures et les gants gardent leurs propres pieds et mains ; seule la jambe ou le bras qu'ils atteignent est réajusté. Les chaussures reçoivent les tailles des jambes, les gants une option par corps, et tous deux rejoignent les tailles de buste ou de jambes de la tenue quand ils partagent un groupe. Avec un corps d'homme coché « pour hommes », les chaussures et gants d'un mod pour femmes reçoivent aussi une version pour hommes.",
+    "description": ""
+  },
+  "SizeSet.EndsLeftOut.Fmt": {
+    "message": "Chaussures et gants laissés de côté ({0}) : cochez « Inclure les chaussures et les gants » pour faire leurs tailles et leurs versions pour hommes.",
+    "description": ""
+  },
+  "SizeSet.AuthorsMens.Fmt": {
+    "message": "{0} : aucune version pour hommes n'en a été faite, car le mod a son propre modèle masculin de la pièce, et celui-ci n'a rien produit cette fois.",
+    "description": ""
+  },
+  "SizeSet.AuthorsMensUnticked.Fmt": {
+    "message": "{0} : aucune version pour hommes n'en a été faite, car le mod a son propre modèle masculin de la pièce. Cochez le corps d'homme simple (par exemple « {1} ») pour faire les tailles de ce modèle.",
     "description": ""
   },
   "SizeSet.Piercings": {
@@ -5292,7 +5332,7 @@
     "description": "Checkbox label for a men's body offered for a women's mod. {0} is the body (\"TBSE\")."
   },
   "SizeSet.ForMen.Tip.Fmt": {
-    "message": "Les pièces de torse et de jambes pour femmes de ce mod reçoivent une version pour hommes sur {0} : réajustées pour les hommes Midlander par les cartes de corps, téléchargées la première fois qu'il en faut, chacune depuis la taille de l'auteur dont le corps, plié en forme d'homme, est le plus proche du sien. Elles sont enregistrées dans un groupe à part, « {1} », donc les tailles pour femmes restent telles quelles. Les chaussures et les gants ne sont pas réajustés entre les sexes, et une pièce que l'auteur a déjà faite pour hommes garde la sienne.",
+    "message": "Les pièces de torse et de jambes pour femmes de ce mod reçoivent une version pour hommes sur {0} : réajustées pour les hommes Midlander par les cartes de corps, téléchargées la première fois qu'il en faut, chacune depuis la taille de l'auteur dont le corps, plié en forme d'homme, est le plus proche du sien. Elles sont enregistrées dans un groupe à part, « {1} », donc les tailles pour femmes restent telles quelles. Ses chaussures et gants pour femmes reçoivent aussi une version pour hommes, réajustée par leurs jambes ou leurs bras, tant que « Inclure les chaussures et les gants » est cochée, et une pièce que l'auteur a déjà faite pour hommes garde la sienne.",
     "description": "Tooltip. {0} is a men's body (\"TBSE\"), {1} the group the men's versions go into."
   },
   "SizeSet.MensGroup": {

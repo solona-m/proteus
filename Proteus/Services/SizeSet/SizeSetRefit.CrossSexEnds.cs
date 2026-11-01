@@ -307,15 +307,9 @@ internal static partial class SizeSetRefit
         // The best size of a body for the leg's or arm's cloth, with how far it sits off it; null when it does not sit on
         // it — too little cloth near it, or too much inside — or the body pairs with no man's.
         (BodyOption Option, float Gap)? ClothOn(BodySizeCatalog catalog)
-        {
-            var options = catalog.For(limb, "0201");
-            if (options.Count == 0 || BodySizeMatch.RankByCloth(reading.LimbView, options, catalog.PathOf) is not
-                { Best: { } best }) return null;
-            if (!AcrossEligible(LayoutOf(catalog, best.Option))) return null;
-            if (BodySizeMatch.ClothAgainst(reading.LimbView, catalog.PathOf(best.Option)) is not { } on
-                || on.Near < BodySizeMatch.MinEvidence || on.Inside > on.Near * KeepEnds.SiblingInsideAtMost) return null;
-            return (best.Option, on.Gap);
-        }
+            => KeepEnds.ClothSitsOn(reading, catalog.For(limb, "0201"), catalog.PathOf) is { } sits
+               && AcrossEligible(LayoutOf(catalog, sits.Option))
+                ? (sits.Option, sits.Gap) : null;
 
         string? readLayout = null;
         if (found.Route is KeepEnds.Route.Skin or KeepEnds.Route.Cloth or KeepEnds.Route.Sibling or KeepEnds.Route.SkinOnly
@@ -337,10 +331,7 @@ internal static partial class SizeSetRefit
         // The made-for body narrowed to the size read and its own hand or foot: the job bends what it is given, and a
         // bent size is known by its new file, not the author's (as the legs' sources are handed over, MensSources).
         BodySizeCatalog Narrow(BodySizeCatalog catalog, BodyOption o)
-            => catalog with
-            {
-                Options = AutoRefitDecisions.Companion(catalog.For(reading.Slot, "0201"), o, null) is { } end ? [o, end] : [o],
-            };
+            => CrossSexRefitJob.NarrowMadeFor(catalog, o, reading.Slot, "0201");
         switch (choice)
         {
             case EndMadeForChoice.Read:

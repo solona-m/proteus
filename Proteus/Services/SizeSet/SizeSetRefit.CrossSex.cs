@@ -109,11 +109,7 @@ internal static partial class SizeSetRefit
         if (sizeRefusal == null) return (false, Refused(s.NotMade), []);
         if (sizeRefusal.Length > 0) return (false, Refused(sizeRefusal), []);
         if (!made) return (false, Refused(s.NotMade), []);
-        if (!CrossSexRefit.CoverageAllowed(coverage))
-            return (false, Refused(string.Format(Strings.Parts.RetargetRefuseCrossSexCoverageFmt,
-                                                 coverage.ToString("P0", System.Globalization.CultureInfo.CurrentCulture),
-                                                 CrossSexRefit.MinCoverage.ToString("P0",
-                                                     System.Globalization.CultureInfo.CurrentCulture))), []);
+        if (CrossSexRefit.Judged(coverage, folds).Refusal is { } low) return (false, Refused(low), []);
 
         var warnings = new List<string>();
         string Warn(string what) => string.Format(s.WarningFmt, piece, option, what);
@@ -362,12 +358,52 @@ internal static partial class SizeSetRefit
             => probes.TryGetValue(path, out var p) ? p : probes[path] = BodyProbes(path, note);
     }
 
-    private static int RunAcross(Request request, IReadOnlyList<Piece> pieces, UVRemapService? uvRemap, IPluginLog log,
-                                 Action<string> progress, RunLog runLog, CancellationToken ct)
+    /// <summary>
+    /// The women's pieces a men's version is not made of because the author made the men's model of it themselves
+    /// (<see cref="AcrossPieces"/>): one <see cref="Codes.AuthorsMens"/> outcome per men's body ticked, so none is silent.
+    /// A note only when there is something to do about it, read off what became of that men's model this run: it was
+    /// refused, failed or unreadable and made nothing; or only plain men's bodies were missing for it — then which to tick.
+    /// </summary>
+    internal static void StateAuthorsMens(IReadOnlyList<Piece> pieces, IReadOnlyList<string> mensKeys, RunLog runLog)
+    {
+        var paths = pieces.Select(p => p.GamePath).ToHashSet(StringComparer.OrdinalIgnoreCase);
+        foreach (var piece in pieces)
+        {
+            if (piece.Race != "0201"
+                || !(CrossSexRefit.Supported(CrossSexRefit.Women, CrossSexRefit.Men, piece.Slot)
+                     || CrossSexRefit.EndsCross(CrossSexRefit.Women, CrossSexRefit.Men, piece.Slot)))
+                continue;
+            string mens = RacialModelBake.WithRace(piece.GamePath, CrossSexRefit.Men);
+            if (!paths.Contains(mens)) continue;
+
+            var outcomes = runLog.Sizes.Where(s => string.Equals(s.GamePath, mens, StringComparison.OrdinalIgnoreCase))
+                                       .ToList();
+            bool madeAny = outcomes.Any(s => s.Status == SizeStatus.Made);
+            bool wrong = outcomes.Any(s => s.Status is SizeStatus.Refused or SizeStatus.Failed
+                                           || s.Status == SizeStatus.Skipped && s.ReasonCode is Codes.Unreadable
+                                                                                  or Codes.EndsUnreadable);
+            bool unticked = outcomes.Count > 0 && outcomes.All(s => s.ReasonCode == Codes.NoBodyForRace);
+            string? note = !madeAny && wrong ? string.Format(Strings.SizeSet.AuthorsMensFmt, piece.Label)
+                         : unticked ? string.Format(Strings.SizeSet.AuthorsMensUntickedFmt, piece.Label,
+                                                    SupportedBodies.Choices.First(c => c.Key == mensKeys[0]).Label)
+                         : null;
+            if (note != null) runLog.Notes.Add(note);
+            foreach (string key in mensKeys)
+                runLog.Add(piece, SizeStatus.Skipped, Codes.AuthorsMens,
+                           note ?? $"{mens} is the author's own men's model of it", piece.Group, body: key, men: true,
+                           gamePath: mens);
+        }
+    }
+
+    private static int RunAcross(Request request, IReadOnlyList<Piece> pieces, IReadOnlyList<Piece> all,
+                                 UVRemapService? uvRemap, IPluginLog log, Action<string> progress, RunLog runLog,
+                                 CancellationToken ct)
     {
         var notes = runLog.Notes;
         var mensKeys = MensKeys(request.Keys);
-        if (request.Across is not { } inputs || mensKeys.Count == 0) return 0;
+        if (mensKeys.Count == 0) return 0;
+        StateAuthorsMens(pieces, mensKeys, runLog);
+        if (request.Across is not { } inputs) return 0;
         var across = AcrossPieces(pieces);
         if (across.Count == 0) return 0;
 
@@ -385,7 +421,7 @@ internal static partial class SizeSetRefit
         // earlier run put men's shoes in is still ours when they are left out now.
         var mayHold = request.Ends || request.ReadGameFile == null
             ? across
-            : AcrossPieces(PiecesOf(request.ModRoot, request.ReadGameFile, includeEnds: true));
+            : AcrossPieces(all);
         string groupName = MensGroupName(request.ModRoot, mayHold);
         if (BodyRetargetWriter.IsAuthorGroup(request.ModRoot, groupName))
         {

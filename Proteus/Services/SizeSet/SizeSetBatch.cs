@@ -188,7 +188,7 @@ internal static class SizeSetBatch
 
         // ── the pieces, read off the mod as it is: v3 reads too ──
         var dropped = new List<string>();
-        var pieces = SizeSetRefit.PiecesOf(root, inputs.ReadGameFile, inputs.Ends, dropped.Add);
+        var (pieces, endsLeftOut, _) = SizeSetRefit.ReadPieces(root, inputs.ReadGameFile, inputs.Ends, dropped.Add);
         var keys = RunKeys(pieces, inputs.Keys, inputs.Men);
         var bodyKeys = keys.Select(k => k.Replace(SizeSetRefit.AcrossSuffix, "", StringComparison.Ordinal)).Distinct().ToList();
         var bodyMods = BodyModsOf(bodyKeys, bodies);
@@ -199,6 +199,8 @@ internal static class SizeSetBatch
             // that logs what was left out as the game's never comes, so it is logged here.
             foreach (string path in dropped)
                 inputs.Log.Debug("[Proteus] size set: {0} is the game's own model or a copy of it, not a piece", path);
+            // Shoes and gloves left out by --no-ends are said here: SizeSetRefit.Run, which says them otherwise, never runs.
+            SizeSetRefit.SayEndsLeftOut(runLog, endsLeftOut);
             SizeSetRefit.NoPieces(runLog);
             return new Outcome(keys, null, null, null, false, bodyMods, missing, total.Elapsed.TotalSeconds, scanSeconds, 0,
                                inputs.MadeOn);

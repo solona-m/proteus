@@ -76,12 +76,15 @@ internal static partial class OtherRaceRefit
         {
             if (!ushort.TryParse(code, out ushort race) || race % 100 != 1 || race == drawn) continue;
             bool cross = BodySizeCatalog.IsMaleRace(code) != BodySizeCatalog.IsMaleRace($"{drawn:D4}");
-            if (cross && !CrossSexRefit.Offerable(drawn, race, slot)) continue;
+            // A women's shoe or glove made a men's is refitted through its leg or arm: the target needs that, not feet.
+            bool crossEnd = cross && !isVanilla && CrossSexRefit.EndsCross(drawn, race, slot);
+            if (cross && !crossEnd && !CrossSexRefit.Offerable(drawn, race, slot)) continue;
             if (isVanilla && !(cross && CrossSexRefit.OfferableForGame(drawn, race, slot))) continue;
             var line = cross ? [] : RacialModelBake.SameSexLine(race).ToList();
             bool below = cross ? CrossSexRefit.Below(drawn, race) : !line.Contains(drawn);
             if (!cross && below && !RacialModelBake.SameSexLine(drawn).Contains(race)) continue;
-            if (!target.For(slot).Any(o => BodySizeCatalog.RaceOf(o.GamePath) == code)) continue;
+            string bodySlot = crossEnd ? AutoRefitDecisions.LimbOf(slot)! : slot;
+            if (!target.For(bodySlot).Any(o => BodySizeCatalog.RaceOf(o.GamePath) == code)) continue;
 
             if (isVanilla)
             {
@@ -239,6 +242,46 @@ internal static partial class OtherRaceRefit
     /// </summary>
     internal static Candidate? OwnModelOf(ushort chosen, IReadOnlyList<Candidate> offered)
         => chosen == 0 ? null : offered.FirstOrDefault(c => c.Race == chosen && c.OwnModelPath != null);
+
+    /// <summary>
+    /// On a men's Midlander shoe or glove that is NOT one of the author's pieces — the game's own model, or a TexTools copy
+    /// of it — the mod's own women's model of the same item, when that IS one of the author's pieces: the model a men's
+    /// version is made from ("Refit for" Midlander M). Null otherwise, so an author's own men's design is never pointed
+    /// away from.
+    /// </summary>
+    /// <param name="piecePaths">The game paths of the mod's pieces, as the size set judges them
+    /// (<see cref="SizeSetRefit.PiecesOf"/>, with the game's files): our own refits and copies of the game's are not
+    /// pieces.</param>
+    internal static string? WomensModelOf(string gamePath, IReadOnlyCollection<string> piecePaths, bool isVanilla)
+    {
+        if (isVanilla || ModelSkinReader.RaceOf(gamePath) != CrossSexRefit.Men
+            || BodySizeCatalog.SlotOf(gamePath) is not { } slot
+            || !CrossSexRefit.EndsCross(CrossSexRefit.Women, CrossSexRefit.Men, slot))
+            return null;
+        string women = RacialModelBake.WithRace(gamePath, CrossSexRefit.Women);
+        bool Has(string p) => piecePaths.Any(q => string.Equals(q, p, StringComparison.OrdinalIgnoreCase));
+        return Has(women) && !Has(gamePath) ? women : null;
+    }
+
+    /// <summary>
+    /// A race to pick under "Refit for" the next time a given model opens: left by the button that opens the women's
+    /// model from the men's (<see cref="WomensModelOf"/>), taken once, by that model only. In memory only.
+    /// </summary>
+    internal sealed class PendingPick
+    {
+        private string? path;
+        private ushort race;
+
+        internal void Set(string gamePath, ushort pick) => (path, race) = (gamePath, pick);
+
+        /// <summary>The pick for <paramref name="gamePath"/>, once; null, keeping it, for any other model.</summary>
+        internal Choice? Take(string gamePath, string modelRel)
+        {
+            if (path == null || !string.Equals(path, gamePath, StringComparison.OrdinalIgnoreCase)) return null;
+            path = null;
+            return new Choice(modelRel, race);
+        }
+    }
 
     /// <summary>The race of the other sex the no-bodies warning points at under "Refit for", or null for none.</summary>
     internal static Candidate? CrossSexHint(IReadOnlyList<Candidate> offered)

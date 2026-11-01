@@ -4504,8 +4504,36 @@
     "description": "Heads the dropdown that picks which race's model a refit is made and saved as."
   },
   "Parts.Retarget.Race.Tip": {
-    "message": "Für welche Rasse die Anpassung ist. Eine andere Rasse bekommt ein eigenes Modell, aus diesem so gebogen, wie das Spiel es biegt, auf den Körper dieser Rasse angepasst und dort gespeichert, wo diese Rasse es lädt. Ein Midlander-Oberteil oder eine Midlander-Hose lässt sich auch für das andere Geschlecht anpassen. Dieses Modell bleibt, wie es ist.",
+    "message": "Für welche Rasse die Anpassung ist. Eine andere Rasse bekommt ein eigenes Modell, aus diesem so gebogen, wie das Spiel es biegt, auf den Körper dieser Rasse angepasst und dort gespeichert, wo diese Rasse es lädt. Ein Midlander-Oberteil oder eine Midlander-Hose lässt sich auch für das andere Geschlecht anpassen, ein Schuh oder Handschuh für Frauen für Männer. Dieses Modell bleibt, wie es ist.",
     "description": "Tooltip of Parts.Retarget.Race.Label."
+  },
+  "Parts.Retarget.CrossSexEnd.NoSizes": {
+    "message": "Keine der Größen, auf die angepasst werden soll, ist auf diesem Körper noch zu finden. Wähle sie neu.",
+    "description": ""
+  },
+  "Parts.Retarget.KeepEnds.CrossSex.Tip": {
+    "message": "Für das andere Geschlecht angepasst, behält ein Schuh immer seinen eigenen Fuß und ein Handschuh seine eigene Hand, mit der Haut des neuen Körpers: Nur Bein oder Arm wird über die Körperkarten angepasst.",
+    "description": ""
+  },
+  "Parts.Retarget.EndsUnreadable.CrossSex": {
+    "message": "Sein Rig lässt sich nicht lesen, daher lassen sich Fuß oder Hand nicht vom Rest unterscheiden, und ein Schuh oder Handschuh wird nur mit ihnen für das andere Geschlecht angepasst.",
+    "description": ""
+  },
+  "Parts.Retarget.KeepShape.CrossSexTip": {
+    "message": "Für das andere Geschlecht angepasst, wird das Bein eines Schuhs oder der Arm eines Handschuhs als Ganzes angepasst: „Form behalten“ gilt hier nicht. Deine Haken kommen zurück, wenn du wieder seine eigene Rasse wählst.",
+    "description": ""
+  },
+  "Parts.Retarget.CrossSexEnd.PickMadeFor.Fmt": {
+    "message": "Es hat keine Haut, an der sich seine Größe ablesen lässt, und sein Stoff liegt an keiner {1}-Größe von {0} an. Wähle unter „Gemacht für Körper“ den Körper, für den es gemacht wurde (den Körper des Spiels, falls es darauf gemacht wurde), dann seine Größe.",
+    "description": ""
+  },
+  "Parts.Retarget.Race.CrossSexNude.Fmt": {
+    "message": "{0} hat nur {1} des Körpers zugeordnet, daher wurde stattdessen an {2} angepasst ({3} zugeordnet).",
+    "description": ""
+  },
+  "Parts.Retarget.Race.WomensModel.Fmt": {
+    "message": "Dieser Mod hat auch ein eigenes {0}-Modell dieses Gegenstands. Um daraus eine {1}-Version zu machen, öffne es: „{1}“ wird unter „Anpassen für“ für dich gewählt.",
+    "description": ""
   },
   "Parts.Retarget.Race.ThisModel.Fmt": {
     "message": "{0} (dieses Modell)",
@@ -5120,7 +5148,7 @@
     "description": ""
   },
   "SizeSet.Intro": {
-    "message": "Fügt dem ganzen Mod jede Größe der unten angehakten Körper hinzu. Jede Größe wird von der ihr nächsten Größe des Autors aus angepasst, die übrigen Teile des Outfits in dieser Option von derselben Größe, und neben den Größen des Autors als „Rue S“, „YAB Buff L“ usw. gespeichert. Größen, die der Mod schon hat, bleiben unberührt. Ein Frauen-Mod kann auch TBSE und TBSE-X bekommen: Oberteil und Hose werden für Männer angepasst und in einer eigenen Gruppe gespeichert.",
+    "message": "Fügt dem ganzen Mod jede Größe der unten angehakten Körper hinzu. Jede Größe wird von der ihr nächsten Größe des Autors aus angepasst, die übrigen Teile des Outfits in dieser Option von derselben Größe, und neben den Größen des Autors als „Rue S“, „YAB Buff L“ usw. gespeichert. Größen, die der Mod schon hat, bleiben unberührt. Ein Frauen-Mod kann auch TBSE und TBSE-X bekommen: Oberteil, Hose, Schuhe und Handschuhe werden für Männer angepasst und in einer eigenen Gruppe gespeichert.",
     "description": ""
   },
   "SizeSet.Yas": {
@@ -5136,7 +5164,19 @@
     "description": ""
   },
   "SizeSet.Ends.Tip": {
-    "message": "Schuhe und Handschuhe behalten ihre eigenen Füße und Hände; angepasst wird nur das Bein oder der Arm, den sie erreichen. Schuhe bekommen die Größen der Beine, Handschuhe eine Option pro Körper, und beide schließen sich den Brust- oder Beingrößen des Outfits an, wenn sie eine Gruppe teilen.",
+    "message": "Schuhe und Handschuhe behalten ihre eigenen Füße und Hände; angepasst wird nur das Bein oder der Arm, den sie erreichen. Schuhe bekommen die Größen der Beine, Handschuhe eine Option pro Körper, und beide schließen sich den Brust- oder Beingrößen des Outfits an, wenn sie eine Gruppe teilen. Ist ein Männerkörper „für Männer“ angehakt, bekommen auch Schuhe und Handschuhe eines Frauen-Mods Männerversionen.",
+    "description": ""
+  },
+  "SizeSet.EndsLeftOut.Fmt": {
+    "message": "Ausgelassene Schuhe und Handschuhe ({0}): Hake „Schuhe und Handschuhe einbeziehen“ an, um ihre Größen und Männerversionen zu machen.",
+    "description": ""
+  },
+  "SizeSet.AuthorsMens.Fmt": {
+    "message": "{0}: Daraus wurde keine Männerversion gemacht, weil der Mod ein eigenes Männermodell davon hat, und aus diesem wurde in diesem Lauf nichts gemacht.",
+    "description": ""
+  },
+  "SizeSet.AuthorsMensUnticked.Fmt": {
+    "message": "{0}: Daraus wurde keine Männerversion gemacht, weil der Mod ein eigenes Männermodell davon hat. Hake den einfachen Männerkörper an (zum Beispiel „{1}“), um diesem Modell Größen zu geben.",
     "description": ""
   },
   "SizeSet.Piercings": {
@@ -5292,7 +5332,7 @@
     "description": "Checkbox label for a men's body offered for a women's mod. {0} is the body (\"TBSE\")."
   },
   "SizeSet.ForMen.Tip.Fmt": {
-    "message": "Die Oberteile und Hosen dieses Mods für Frauen bekommen eine Männerversion auf {0}: über die Körperkarten, die beim ersten Bedarf heruntergeladen werden, für Midlander-Männer angepasst, jeweils von der Größe des Autors, deren Körper – in Männerform gebogen – seinem am nächsten liegt. Sie werden in einer eigenen Gruppe „{1}“ gespeichert, die Frauengrößen bleiben also, wie sie sind. Schuhe und Handschuhe werden nicht über die Geschlechter angepasst, und ein Teil, das der Autor schon für Männer gemacht hat, behält seins.",
+    "message": "Die Oberteile und Hosen dieses Mods für Frauen bekommen eine Männerversion auf {0}: über die Körperkarten, die beim ersten Bedarf heruntergeladen werden, für Midlander-Männer angepasst, jeweils von der Größe des Autors, deren Körper – in Männerform gebogen – seinem am nächsten liegt. Sie werden in einer eigenen Gruppe „{1}“ gespeichert, die Frauengrößen bleiben also, wie sie sind. Auch seine Schuhe und Handschuhe für Frauen bekommen Männerversionen, über ihre Beine oder Arme angepasst, solange „Schuhe und Handschuhe einbeziehen“ angehakt ist, und ein Teil, das der Autor schon für Männer gemacht hat, behält seins.",
     "description": "Tooltip. {0} is a men's body (\"TBSE\"), {1} the group the men's versions go into."
   },
   "SizeSet.MensGroup": {

@@ -406,8 +406,9 @@ internal static partial class SizeSetRefit
     {
         var notes = runLog.Notes;
         int made = 0;
-        var pieces = PiecesOf(request.ModRoot, request.ReadGameFile, request.Ends,
-                              path => log.Debug("[Proteus] size set: {0} is the game's own model or a copy of it, not a piece", path));
+        var (pieces, endsLeftOut, all) = ReadPieces(request.ModRoot, request.ReadGameFile, request.Ends,
+            path => log.Debug("[Proteus] size set: {0} is the game's own model or a copy of it, not a piece", path));
+        SayEndsLeftOut(runLog, endsLeftOut);
         if (pieces.Count == 0)
         {
             NoPieces(runLog);
@@ -443,8 +444,22 @@ internal static partial class SizeSetRefit
             }
         }
         // The women's chest and legs pieces' men's versions, after every piece's own sizes.
-        made += RunAcross(request, pieces, uvRemap, log, progress, runLog, ct);
+        made += RunAcross(request, pieces, all, uvRemap, log, progress, runLog, ct);
         return made;
+    }
+
+    /// <summary>
+    /// A mod's pieces read once, shoes and gloves included, then split by "Include shoes and gloves": the pieces to size,
+    /// the shoes and gloves the box leaves out (none when it is ticked), and every piece. Leaving shoes and gloves out
+    /// afterwards gives the very list <see cref="PiecesOf"/> gives without them: racial copies are judged against their own
+    /// slot's sibling, and no chest's or legs' follower flag hangs on a shoe or glove.
+    /// </summary>
+    internal static (List<Piece> Pieces, IReadOnlyList<Piece> EndsLeftOut, List<Piece> All) ReadPieces(
+        string modRoot, Func<string, byte[]?>? readGame, bool ends, Action<string>? droppedCopy = null)
+    {
+        var all = PiecesOf(modRoot, readGame, includeEnds: true, droppedCopy);
+        if (ends) return (all, [], all);
+        return (all.Where(p => !IsEnd(p.Slot)).ToList(), all.Where(p => IsEnd(p.Slot)).ToList(), all);
     }
 
     /// <summary>
@@ -1069,7 +1084,7 @@ internal static partial class SizeSetRefit
             : null;
     }
 
-    private static BodyOption? OptionByFile(IReadOnlyList<BodyOption> options, string rel)
+    internal static BodyOption? OptionByFile(IReadOnlyList<BodyOption> options, string rel)
     {
         string want = RefitCore.Normal(rel);
         return options.FirstOrDefault(o => RefitCore.Normal(o.Rel) == want);
