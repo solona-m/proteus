@@ -284,19 +284,23 @@ public class HarnessJobsTests : IDisposable
     }
 
     [Fact]
-    public async Task NextJobRightAfterEndedAt_Accepted()
+    public async Task EndedJob_SlotFreeAndNotCurrent()
     {
-        // [EDGE-qa-harness-35] A job shows endedAt only once its slot is free: the next one sent at once is accepted,
-        // never a spurious 409 busy (seen under the loaded quick suite).
-        f.AddMod();
-        f.Game.RedrawArrives = false;   // no follow window: jobs end as fast as they can
-        for (int i = 0; i < 20; i++)
+        // [EDGE-qa-harness-35] A job shows ended only once its slot is free and it is no longer current: a client
+        // that sees endedAt and sends the next job at once is never refused busy (seen under the loaded quick suite).
+        // Checked at the very moment the job shows ended, so the old ordering's gap is hit every time.
+        Assert.True(f.Jobs.TryReserve());
+        var job = new HarnessJob(HarnessJobs.NewJobId(), "refit", "Outfit");
+        bool? current = null, slotFree = null;
+        job.Finished = _ =>
         {
-            var (status, b) = await f.Post("/actions/refit", RefitRue);
-            Assert.True(status == 202, $"round {i}: {status} {b}");
-            var id = b.GetProperty("job").GetString()!;
-            while ((await f.Get($"/jobs/{id}")).Body.GetProperty("endedAt").ValueKind == JsonValueKind.Null) { }
-        }
+            current = f.Jobs.Current != null;
+            slotFree = f.Jobs.TryReserve();
+            if (slotFree == true) f.Jobs.Release();
+        };
+        await f.Jobs.Start(job, _ => Task.CompletedTask).WaitAsync(TimeSpan.FromSeconds(10));
+        Assert.False(current, "the job showed ended while still current");
+        Assert.True(slotFree, "the job showed ended while its slot was still taken");
     }
 
     [Fact]
