@@ -62,11 +62,17 @@ internal sealed class HarnessJob(string id, string kind, string modDir)
     public bool Failed { get { lock (gate) return error != null; } }
 
     public void Finish()
-        => Set(j =>
+    {
+        Set(j =>
         {
             j.ended = DateTime.UtcNow;
             j.state = j.error == null ? "done" : j.error.Code == "cancelled" ? "cancelled" : "failed";
         });
+        Finished?.Invoke(this);
+    }
+
+    /// <summary>Test seam: runs the moment the job shows ended, so a test can see what a client polling endedAt sees.</summary>
+    internal Action<HarnessJob>? Finished { get; set; }
 
     public bool Ended { get { lock (gate) return ended != null; } }
 
@@ -150,13 +156,15 @@ internal sealed class HarnessJobs(IHarnessGame game, IFrameworkDispatcher dispat
             }
             finally
             {
-                job.Finish();
+                // Registry and slot first, then the ended state: a client that sees endedAt and sends the next job at
+                // once must find the slot free, and "on" must not find the job still current.
                 lock (gate)
                 {
                     lastFinished = job;
                     if (ReferenceEquals(current, job)) current = null;
                 }
                 Release();
+                job.Finish();
             }
         });
     }
