@@ -207,6 +207,7 @@ public partial class CompositorService
     private void LogRefreshTimeline(RefreshTimeline tl, string outcome)
     {
         tl.Completed = true;
+        LastRefresh = new RefreshRecord(outcome, tl.TotalMs, tl.Describe(), DateTime.UtcNow);
         log.Information("[Proteus] refresh timeline: {0:F0}ms from first trigger to {1} ({2} trigger(s): {3}) — {4}{5}",
             tl.TotalMs, outcome, tl.Triggers, tl.Reasons.Length == 0 ? "?" : tl.Reasons, tl.Describe(),
             DescribePenumbraMainThread());
