@@ -25,9 +25,11 @@ internal static class Utf8Console
     /// With no console attached at all (a process started detached), the console's encoding cannot be set: stdout and
     /// stderr become UTF-8 writers instead, and the handle restores nothing. Only that failure falls back.
     /// </summary>
+    /// <param name="onCancel">Registers what to run when the user stops the run (Ctrl+C, Ctrl+Break), which ends the
+    /// process without unwinding to the caller's <c>using</c>: the code page is put back there too.</param>
     internal static IDisposable Use(Func<Encoding> getConsoleEncoding, Action<Encoding> setConsoleEncoding,
                                     Action<TextWriter> setOut, Action<TextWriter> setError,
-                                    Func<Stream> openOut, Func<Stream> openError)
+                                    Func<Stream> openOut, Func<Stream> openError, Action<Action>? onCancel = null)
     {
         Encoding original = getConsoleEncoding();
         try
@@ -40,17 +42,19 @@ internal static class Utf8Console
             setError(Writer(openError()));
             return new Restore(null);
         }
-        return new Restore(() => setConsoleEncoding(original));
+        var restore = new Restore(() => setConsoleEncoding(original));
+        onCancel?.Invoke(restore.Dispose);
+        return restore;
     }
 
     private sealed class Restore(Action? undo) : IDisposable
     {
         private Action? undo = undo;
 
+        /// <summary>Once, whichever comes first: the end of the run, or the user stopping it (another thread).</summary>
         public void Dispose()
         {
-            if (undo is not { } u) return;
-            undo = null;
+            if (System.Threading.Interlocked.Exchange(ref undo, null) is not { } u) return;
             // Apart: a reader that closed the pipe early fails the flush, and the terminal is still to be put back.
             try
             {

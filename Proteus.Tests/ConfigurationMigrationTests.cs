@@ -104,6 +104,24 @@ public class ConfigurationMigrationTests
     }
 
     [Fact]
+    [Trait("Plan", "EDGE-gh33-36-37-body-size-9")]
+    [Trait("Plan", "EDGE-gh33-36-37-body-size-22")]
+    public void V9_step_fills_a_null_entry_and_never_reseats_a_part()   // [EDGE-gh33-36-37-body-size-9] [EDGE-gh33-36-37-body-size-22]
+    {
+        var c = Load("""
+            {"Version":8,"RetargetBodyDir":"A","RetargetTargets":{"_top":"t","_dwn":"d"},
+             "RetargetBodyByPart":{"_dwn":"Rue"},"RetargetSizesByBody":{"a":null}}
+            """);
+        c.Migrate();
+        Assert.Equal(["a"], c.RetargetSizesByBody.Keys);                    // the existing key, whatever its case
+        Assert.Equal("t", c.RetargetSizesByBody["a"]["_top"]);
+        Assert.Equal("d", c.RetargetSizesByBody["a"]["_dwn"]);
+        Assert.Equal("A", c.RetargetBodyByPart["_top"]);
+        Assert.Equal("Rue", c.RetargetBodyByPart["_dwn"]);                  // a part already on a body keeps it
+        Assert.Empty(c.RetargetTargets);
+    }
+
+    [Fact]
     [Trait("Plan", "EDGE-gh33-36-37-body-size-11")]
     public void V8_sizes_without_a_body_are_dropped()   // [EDGE-gh33-36-37-body-size-11]
     {

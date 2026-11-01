@@ -24,11 +24,14 @@ public class RefitConsoleEncodingTests
         public Encoding Original = Encoding.GetEncoding(850);
         public Func<Encoding, Exception?> Throws = _ => null;
 
+        public Action? Cancel;
+
         public IDisposable Use(MemoryStream? outStream = null, MemoryStream? errStream = null)
             => Utf8Console.Use(() => Original,
                                e => { if (Throws(e) is { } ex) throw ex; Set.Add(e); },
                                w => Out = w, w => Error = w,
-                               () => outStream ?? new MemoryStream(), () => errStream ?? new MemoryStream());
+                               () => outStream ?? new MemoryStream(), () => errStream ?? new MemoryStream(),
+                               restore => Cancel = restore);
     }
 
     static RefitConsoleEncodingTests() => Encoding.RegisterProvider(CodePagesEncodingProvider.Instance);
@@ -92,6 +95,17 @@ public class RefitConsoleEncodingTests
         fh.Dispose();
         Assert.Empty(fallback.Set);
 
+        // Ctrl+C / Ctrl+Break end the process without unwinding to Main's using: the same restore runs from there, once.
+        var stopped = new Recorder();
+        var sh = stopped.Use();
+        Assert.NotNull(stopped.Cancel);
+        stopped.Cancel!();
+        sh.Dispose();
+        Assert.Equal([65001, 850], stopped.Set.Select(e => e.CodePage));
+        var noConsole = new Recorder { Throws = _ => new IOException() };
+        noConsole.Use();
+        Assert.Null(noConsole.Cancel);   // nothing to put back, so nothing to register
+
         // The process is exiting: a restore that fails is not worth an exception.
         var failing = new Recorder();
         var h = failing.Use();
@@ -110,6 +124,7 @@ public class RefitConsoleEncodingTests
         int use = body.IndexOf("using var console = Utf8Console.Use(", StringComparison.Ordinal);
         int loc = body.IndexOf("Loc.SetupWithFallbacks", StringComparison.Ordinal);
         Assert.True(use >= 0 && loc > use, "Main must set the console up first, before anything prints");
+        Assert.Contains("Console.CancelKeyPress += (_, _) => restore()", body[use..loc]);
         // Nothing but the opening brace and comments before it.
         string before = body[body.IndexOf('{')..use];
         Assert.DoesNotContain(";", string.Join("\n", before.Split('\n').Where(l => !l.TrimStart().StartsWith("//"))));

@@ -62,6 +62,22 @@ public class SourceBodyPickerTests
     }
 
     [Fact]
+    [Trait("Plan", "EDGE-gh33-36-37-body-size-16")]
+    [Trait("Plan", "EDGE-gh33-36-37-body-size-21")]
+    public void The_restore_runs_after_the_race_and_before_anything_decided_for_the_body()   // [EDGE-gh33-36-37-body-size-16] [EDGE-gh33-36-37-body-size-21]
+    {
+        // After the race is known (it decides whether a body sizes the garment); ahead of the remembered and worn sizes;
+        // and a switch returns, so nothing below is decided for the old body.
+        string draw = Method("public void Draw(in RetargetContext given)");
+        int race = draw.IndexOf("OnRaceChanged(ctx);", StringComparison.Ordinal);
+        int restore = draw.IndexOf("RestoreForGarment(ctx))", StringComparison.Ordinal);
+        int remembered = draw.IndexOf("ApplyRemembered(ctx);", StringComparison.Ordinal);
+        int worn = draw.IndexOf("PresetWornTargets(ctx);", StringComparison.Ordinal);
+        Assert.True(race >= 0 && restore > race && remembered > restore && worn > remembered);
+        Assert.Matches(@"RestoreForGarment\(ctx\)\)\s*\{\s*DrawSaved\(ctx\);\s*return;", draw[restore..]);
+    }
+
+    [Fact]
     [Trait("Plan", "EDGE-gh33-36-37-body-size-24")]
     public void A_restore_reuses_the_cached_catalog()   // [EDGE-gh33-36-37-body-size-24]
     {
