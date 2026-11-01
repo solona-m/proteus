@@ -112,6 +112,17 @@ public class HandsFeetPortOutfitLegsTests
         Assert.Equal("Medium", got!.Value.Legs.Option);
         Assert.Null(SizeSetRefit.PickOutfitLegs(options, Reader(new() { ["s"] = Pick("neolithe", Confidence.Exact) }), Eligible));
         Assert.Null(SizeSetRefit.PickOutfitLegs(options, Reader([]), Eligible));
+
+        // A reading too weak to make anything from is passed over: legs with no skin give no body (second-look review #1).
+        foreach (var weak in new[] { Confidence.NoBodyMesh, Confidence.TooLittle, Confidence.Ambiguous })
+        {
+            Assert.False(AutoRefitDecisions.Proceed(weak));
+            Assert.Null(SizeSetRefit.PickOutfitLegs(options, Reader(new() { ["s"] = Pick("bibo", weak), ["m"] = Pick("bibo", weak) }),
+                                                    Eligible));
+            got = SizeSetRefit.PickOutfitLegs(options, Reader(new() { ["s"] = Pick("bibo", weak),
+                                                                      ["m"] = Pick("bibo", Confidence.Likely) }), Eligible);
+            Assert.Equal("Medium", got!.Value.Legs.Option);
+        }
     }
 
     [Fact]

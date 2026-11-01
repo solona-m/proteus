@@ -120,7 +120,9 @@ internal static partial class SizeSetRefit
         ((string?, string), AutoRefitDecisions.Pick)? first = null;
         foreach (var option in options)
         {
-            if (read(option.File) is not { } pick || !eligible(pick)) continue;
+            // A reading too weak to make anything from — no skin, too little, ambiguous — is passed over, exactly as the
+            // crossed legs' own reading drops it (Sources.Read): never a body guessed for legs with no skin.
+            if (read(option.File) is not { } pick || !AutoRefitDecisions.Proceed(pick.Confidence) || !eligible(pick)) continue;
             if (pick.Confidence == BodySizeMatch.Confidence.Exact) return (option, pick);
             first ??= (option, pick);
         }
