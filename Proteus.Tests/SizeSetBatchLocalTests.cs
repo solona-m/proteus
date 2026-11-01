@@ -803,9 +803,13 @@ public class SizeSetBatchLocalTests(ThisOldThingRun tot, ITestOutputHelper outpu
             File.WriteAllText(Path.Combine(copy, PenumbraModMeta.MetaFile), meta.ToJsonString());
             var (_, runLog) = SizeSetBatchData.Batch(copy, [], men: true, [SizeSetBatchData.Bibo, SizeSetBatchData.Tbse, SizeSetBatchData.TbseX],
                                                      readGame: _ => null);
-            var mens = runLog.Sizes.Where(s => s.Men).ToList();
+            // A women's piece the author made the men's model of is stated as such whatever else stops the men's versions
+            // (hands-feet-port D19); every men's version that would be made says the group is taken.
+            var mens = runLog.Sizes.Where(s => s.Men && s.ReasonCode != SizeSetRefit.Codes.AuthorsMens).ToList();
             Assert.NotEmpty(mens);
             Assert.All(mens, s => Assert.Equal(SizeSetRefit.Codes.MenGroupTaken, s.ReasonCode));
+            Assert.All(runLog.Sizes.Where(s => s.ReasonCode == SizeSetRefit.Codes.AuthorsMens),
+                       s => Assert.Equal(SizeSetRefit.SizeStatus.Skipped, s.Status));
         }
         finally { SizeSetBatchData.Delete(copy); }
     }
