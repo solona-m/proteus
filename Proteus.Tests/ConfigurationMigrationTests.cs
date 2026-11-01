@@ -145,6 +145,22 @@ public class ConfigurationMigrationTests
         Proteus.Services.RememberedTargets.ChoseSize(inner, "_top", "A", "_top", "x");
         Assert.Equal("x", Proteus.Services.RememberedTargets.SizesOf(inner, "A")!["_top"]);
 
+        // Clearing a size on a null entry forgets the entry.
+        var cleared = Load("""{"Version":9,"RetargetSizesByBody":{"A":null}}""");
+        Proteus.Services.RememberedTargets.ChoseSize(cleared, "_top", "A", "_top", null);
+        Assert.Empty(cleared.RetargetSizesByBody);
+
+        // Blank folders are absent: nothing is written for them.
+        var blank = new Configuration();
+        string before = Newtonsoft.Json.JsonConvert.SerializeObject(blank);
+        Proteus.Services.RememberedTargets.PickedBody(blank, "_top", " ");
+        Proteus.Services.RememberedTargets.ChoseSize(blank, "_top", "", "_top", "x");
+        Assert.Equal(before, Newtonsoft.Json.JsonConvert.SerializeObject(blank));
+
+        // A blank part body falls back to the last body.
+        var part = Load("""{"Version":9,"RetargetBodyDir":"A","RetargetBodyByPart":{"_top":""}}""");
+        Assert.Equal("A", Proteus.Services.RememberedTargets.BodyToOpen(part, "_top", null, ["A"], _ => true).Dir);
+
         var old = Load("""{"Version":8,"RetargetBodyDir":"A","RetargetTargets":{"_top":"t"},"RetargetBodyByPart":null,"RetargetSizesByBody":null}""");
         old.Migrate();
         Assert.Equal("t", Proteus.Services.RememberedTargets.SizesOf(old, "A")!["_top"]);
@@ -273,7 +289,8 @@ public class ConfigurationMigrationTests
     /// week, not just get its version stamped.
     /// </summary>
     [Fact]
-    public void A_config_from_version_one_runs_every_step()
+    [Trait("Plan", "AC-gh33-36-37-body-size-8")]
+    public void A_config_from_version_one_runs_every_step()   // [AC-gh33-36-37-body-size-8]
     {
         var config = new Configuration
         {

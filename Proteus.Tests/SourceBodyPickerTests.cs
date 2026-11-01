@@ -47,6 +47,21 @@ public class SourceBodyPickerTests
     }
 
     [Fact]
+    [Trait("Plan", "AC-gh33-36-37-body-size-4")]
+    [Trait("Plan", "AC-gh33-36-37-body-size-6")]
+    [Trait("Plan", "EDGE-gh33-36-37-body-size-19")]
+    public void Picks_and_sizes_reach_the_memory()   // [AC-gh33-36-37-body-size-4] [AC-gh33-36-37-body-size-6] [EDGE-gh33-36-37-body-size-19]
+    {
+        // The services are tested on their own; this pins that the panel calls them where it records and fills.
+        Assert.Contains("RememberedTargets.PickedBody(config, GarmentPart(ctx), dir);",
+                        Method("private void PickOntoBody(in RetargetContext ctx, string dir)"));
+        Assert.Contains("RememberedTargets.ChoseSize(config, GarmentPart(ctx), bodyDir, slot,",
+                        Method("private void Remember(in RetargetContext ctx, string slot)"));
+        Assert.Contains("RememberedTargets.Fillable(config, bodyDir,",
+                        Method("private void ApplyRemembered(in RetargetContext ctx)"));
+    }
+
+    [Fact]
     [Trait("Plan", "EDGE-gh33-36-37-body-size-24")]
     public void A_restore_reuses_the_cached_catalog()   // [EDGE-gh33-36-37-body-size-24]
     {

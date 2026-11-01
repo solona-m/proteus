@@ -87,7 +87,9 @@ public class RefitConsoleEncodingTests
 
         // In fallback mode the console's encoding was never changed, so it is not touched at exit.
         var fallback = new Recorder { Throws = _ => new IOException() };
-        fallback.Use().Dispose();
+        var fh = fallback.Use();
+        fallback.Throws = _ => null;   // a restore call would now be recorded, not swallowed
+        fh.Dispose();
         Assert.Empty(fallback.Set);
 
         // The process is exiting: a restore that fails is not worth an exception.
@@ -149,8 +151,14 @@ public class RefitConsoleEncodingTests
             start.ArgumentList.Add(root);
             using var p = Process.Start(start)!;
             var bytes = new MemoryStream();
-            p.StandardOutput.BaseStream.CopyTo(bytes);   // to the end first: a full pipe would hold the child up
-            Assert.True(p.WaitForExit(60_000), "Proteus.Refit --list did not finish");
+            // To the end first (a full pipe would hold the child up), on a task, so a child that hangs fails the test.
+            var read = p.StandardOutput.BaseStream.CopyToAsync(bytes);
+            if (!read.Wait(60_000))
+            {
+                p.Kill(entireProcessTree: true);
+                Assert.Fail("Proteus.Refit --list did not finish");
+            }
+            Assert.True(p.WaitForExit(60_000), "Proteus.Refit --list did not exit");
             Assert.Equal(0, p.ExitCode);
 
             byte[] raw = bytes.ToArray();

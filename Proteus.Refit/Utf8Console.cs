@@ -51,10 +51,17 @@ internal static class Utf8Console
         {
             if (undo is not { } u) return;
             undo = null;
+            // Apart: a reader that closed the pipe early fails the flush, and the terminal is still to be put back.
             try
             {
                 Console.Out.Flush();
                 Console.Error.Flush();
+            }
+            catch (IOException)
+            {
+            }
+            try
+            {
                 u();
             }
             catch (IOException)
