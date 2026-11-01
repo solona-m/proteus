@@ -307,6 +307,7 @@ public class HarnessHostTests : IDisposable
         host.Command("off");
         Assert.Contains("still stopping", host.Command("on"));
         Assert.False(host.Listening);
+        Assert.False(Marker);
         release.Set();
         for (int i = 0; i < 500 && jobs.Find(id)?.View() is not { EndedAt: not null }; i++) await Task.Delay(20);
         Assert.Contains("listening", host.Command("on"));
@@ -322,6 +323,8 @@ public class HarnessHostTests : IDisposable
         Assert.Contains("could not start", host.Command("on"));
         Assert.False(host.Listening);
         Assert.Null(observer);
+        Assert.False(Marker);
+        Assert.False(File.Exists(HarnessSessionFile.PathIn(configDir) + ".tmp"));
     }
 
     [Fact]

@@ -67,8 +67,12 @@ internal sealed class HarnessHost : IDisposable
             case "on":
                 if (!isDev) return "[Proteus] The test harness only runs in a dev-loaded build.";
                 string started = Start();
-                try { File.WriteAllText(HarnessSessionFile.MarkerIn(configDir), "on"); }
-                catch (Exception e) { log.Warning(e, "[Proteus] test harness: could not write the autostart marker"); }
+                // Only once it is really on: a refused or undone start must not autostart at the next load.
+                if (Listening)
+                {
+                    try { File.WriteAllText(HarnessSessionFile.MarkerIn(configDir), "on"); }
+                    catch (Exception e) { log.Warning(e, "[Proteus] test harness: could not write the autostart marker"); }
+                }
                 return started;
             case "off":
                 Stop();

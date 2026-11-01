@@ -24,7 +24,13 @@ internal static class HarnessSessionFile
         string path = PathIn(configDir);
         string temp = path + ".tmp";
         File.WriteAllBytes(temp, HarnessJson.Bytes(session));
-        File.Move(temp, path, overwrite: true);
+        try { File.Move(temp, path, overwrite: true); }
+        catch
+        {
+            // Never leave a token lying in a temp file.
+            try { File.Delete(temp); } catch { /* best effort */ }
+            throw;
+        }
     }
 
     internal static HarnessSession? Read(string configDir)

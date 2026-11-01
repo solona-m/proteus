@@ -217,9 +217,12 @@ internal sealed class FakeGame : IHarnessGame
 
     public RefitOptions Options(bool remake) => new(true, true, false, remake);
 
+    /// <summary>Thrown by PrepareSizeSet when set: the game's bodies or the skeletons could not be read.</summary>
+    public Exception? PrepareThrows { get; set; }
     public SizeSetLaunch.Prepared PrepareSizeSet(string modRoot, IReadOnlyList<string> keys, RefitOptions options, ModList mods)
     {
         Fw(nameof(PrepareSizeSet));
+        if (PrepareThrows != null) throw PrepareThrows;
         return new SizeSetLaunch.Prepared(new SizeSetRefit.Request(modRoot, keys, options.Yas, options.Remake, []),
                                           mods.Mods, mods.ModsRoot);
     }

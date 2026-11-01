@@ -360,6 +360,20 @@ public class HarnessJobsTests : IDisposable
     }
 
     [Fact]
+    public async Task Refit_PrepareThrows_RunFailed_NothingWritten()
+    {
+        // [EDGE-qa-harness-41] The game's bodies or skeletons could not be read while preparing: run-failed, before any
+        // backup or write.
+        string mod = f.AddMod();
+        var before = FolderState.Of(mod);
+        f.Game.PrepareThrows = new InvalidOperationException("skeleton IPC failed");
+        var job = await Refit();
+        Assert.Equal("run-failed", Error(job));
+        Assert.Empty(f.Backups.List("Outfit"));
+        FolderState.AssertSame(before, mod);
+    }
+
+    [Fact]
     public async Task Refit_LegacyMod_Refused_NothingWritten_NoBackup()
     {
         // [EDGE-qa-harness-43]
