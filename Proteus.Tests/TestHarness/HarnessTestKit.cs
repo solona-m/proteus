@@ -199,7 +199,14 @@ internal sealed class FakeGame : IHarnessGame
         OnLegacyCheck?.Invoke();
         return Legacy.Contains(Path.GetFileName(modRoot));
     }
-    public IReadOnlyList<(string Key, string Body)> OfferedKeys(string modRoot) { Order.Enqueue("OfferedKeys@" + Where()); return Offered; }
+    /// <summary>Thrown by OfferedKeys when set: a mod manifest that cannot be read.</summary>
+    public Exception? OfferedThrows { get; set; }
+    public IReadOnlyList<(string Key, string Body)> OfferedKeys(string modRoot)
+    {
+        Order.Enqueue("OfferedKeys@" + Where());
+        if (OfferedThrows != null) throw OfferedThrows;
+        return Offered;
+    }
     public IReadOnlySet<string> InstalledKeys(ModList mods)
     {
         Order.Enqueue("InstalledKeys@" + Where());

@@ -40,8 +40,19 @@ internal static class RefitJob
         }
 
         job.Progress("reading the mod's pieces");
-        var offered = game.OfferedKeys(args.ModRoot);
-        var installed = game.InstalledKeys(args.Mods);
+        IReadOnlyList<(string Key, string Body)> offered;
+        IReadOnlySet<string> installed;
+        try
+        {
+            offered = game.OfferedKeys(args.ModRoot);
+            installed = game.InstalledKeys(args.Mods);
+        }
+        catch (Exception e) when (e is not OperationCanceledException)
+        {
+            // A mod's or a body's data could not be read: the run's failure, not the harness's.
+            job.Fail(new JobError("run-failed", $"reading the mod's pieces or the installed bodies failed: {e.GetType().Name}: {e.Message}"));
+            return;
+        }
         var keys = new List<string>();
         var skipped = new List<SkippedBody>();
         foreach (string key in args.Keys)
@@ -74,6 +85,12 @@ internal static class RefitJob
         catch (FrameworkTimeoutException)
         {
             job.Fail(new JobError("framework-timeout", "the game's framework did not prepare the run in time; nothing was written"));
+            return;
+        }
+        catch (Exception e) when (e is not OperationCanceledException)
+        {
+            // The game's bodies or the collection's skeletons could not be read: nothing was written.
+            job.Fail(new JobError("run-failed", $"preparing the run failed: {e.GetType().Name}: {e.Message}"));
             return;
         }
 
@@ -112,7 +129,11 @@ internal static class RefitJob
         await jobs.AwaitAfterChange(job).ConfigureAwait(false);
 
         try { jobs.Backups.WriteAfter(backup, args.ModRoot); }
-        catch (Exception) { /* changedSinceJob is then null: a warning lost, not data */ }
+        catch (Exception e)
+        {
+            // changedSinceJob is then null: a warning lost, not data.
+            jobs.Log?.Warning(e, "[Proteus] test harness: could not record {0}'s state after the refit", args.ModDir);
+        }
 
         if (outcome != null)
         {
@@ -125,7 +146,11 @@ internal static class RefitJob
                                                SizeSetRefit.MensKeys(keys).Count > 0, options.Ends).ToJsonString();
                 report = System.Text.Json.Nodes.JsonNode.Parse(LogAnonymizer.Scrub(json));
             }
-            catch (Exception) { /* the summary below still says what happened */ }
+            catch (Exception e)
+            {
+                // The summary below still says what happened.
+                jobs.Log?.Warning(e, "[Proteus] test harness: could not build the size set report for {0}", args.ModDir);
+            }
             job.SetResult(new
             {
                 summary = r.Summary.ToString(), resultLine = SizeSetRefit.ResultLine(r), made = r.Made, notes = r.Notes,

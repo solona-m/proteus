@@ -141,6 +141,18 @@ public class HarnessServerTests : IDisposable
     }
 
     [Fact]
+    public async Task BodyTooLarge_413_ReachesTheClient()
+    {
+        // [EDGE-qa-harness-15] The answer to an oversized body arrives intact, not as a connection reset.
+        for (int i = 0; i < 5; i++)
+        {
+            var r = await f.Client.PostAsync("/actions/refit", HarnessFixture.Json("{\"mod\":\"" + new string('a', 70_000) + "\"}"));
+            Assert.Equal(413, (int)r.StatusCode);
+        }
+        Assert.Equal(200, (await f.Get("/health")).Status);
+    }
+
+    [Fact]
     public async Task UnknownPath_404()
     {
         // [EDGE-qa-harness-17]

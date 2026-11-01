@@ -292,6 +292,39 @@ public class HarnessHostTests : IDisposable
     }
 
     [Fact]
+    public async Task OnAgainWhileOldJobStopping_Refused()
+    {
+        // [EDGE-qa-harness-9] One job at a time across sessions: off cancels a job that may still be writing, and on
+        // waits for it.
+        AddMod();
+        using var host = Host();
+        host.Command("on");
+        var release = new ManualResetEventSlim();
+        game.RunBody = (_, _, _) => { release.Wait(TimeSpan.FromSeconds(10)); return 0; };
+        var jobs = host.Jobs!;
+        string id = await StartRefit(SessionFile!);
+        await Task.Delay(100);
+        host.Command("off");
+        Assert.Contains("still stopping", host.Command("on"));
+        Assert.False(host.Listening);
+        release.Set();
+        for (int i = 0; i < 500 && jobs.Find(id)?.View() is not { EndedAt: not null }; i++) await Task.Delay(20);
+        Assert.Contains("listening", host.Command("on"));
+        Assert.True(host.Listening);
+    }
+
+    [Fact]
+    public void SessionFileUnwritable_StartUndone()
+    {
+        // [AC-qa-harness-2] Listening with no session file is a harness QA cannot find: the start is undone.
+        Directory.CreateDirectory(HarnessSessionFile.PathIn(configDir));   // a folder where the file must go
+        using var host = Host();
+        Assert.Contains("could not start", host.Command("on"));
+        Assert.False(host.Listening);
+        Assert.Null(observer);
+    }
+
+    [Fact]
     public void RedrawEvents_CountedWithTime()
     {
         // [AC-qa-harness-5] The adapter's counter: every local-player redraw counted, with its time.

@@ -349,6 +349,17 @@ public class HarnessJobsTests : IDisposable
     }
 
     [Fact]
+    public async Task Refit_UnreadableMod_RunFailed_NotInternal()
+    {
+        // [EDGE-qa-harness-41] A mod's data that cannot be read is the run's failure (run-failed), not a harness bug.
+        f.AddMod();
+        f.Game.OfferedThrows = new InvalidDataException("manifest is not JSON");
+        var job = await Refit();
+        Assert.Equal("run-failed", Error(job));
+        Assert.Empty(f.Backups.List("Outfit"));
+    }
+
+    [Fact]
     public async Task Refit_LegacyMod_Refused_NothingWritten_NoBackup()
     {
         // [EDGE-qa-harness-43]

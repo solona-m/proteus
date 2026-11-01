@@ -80,7 +80,10 @@ Job `error.code` is one of `legacy-mod`, `framework-timeout`, `backup-too-large`
 `insufficient-space`, `backup-failed`, `run-failed`, `restore-failed`, `cancelled`,
 `after-change-skipped` — or `internal`, which is a harness bug: report it as a finding.
 
-Only one job runs at a time (409 `busy`). Refit and restore are refused with 409
+Only one job runs at a time (409 `busy`), across `off`/`on` too: `on` is refused while
+a cancelled job is still stopping. A **plugin reload** mid-job is not covered — the old
+instance's job may still be writing while the new one listens — so never reload the
+plugin while a job runs; wait for its `endedAt`. Refit and restore are refused with 409
 `auto-refit-busy` while auto refit is working.
 
 ## You must back up and restore every mod you touch

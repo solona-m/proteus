@@ -105,6 +105,9 @@ internal sealed class HarnessJobs(IHarnessGame game, IFrameworkDispatcher dispat
     public Func<bool> Disposing { get; } = disposing;
     public HarnessTimings Timings { get; } = timings;
 
+    /// <summary>Where a job says what it lost (a report it could not build); none in tests that don't care.</summary>
+    public Dalamud.Plugin.Services.IPluginLog? Log { get; init; }
+
     public bool TryReserve() => Interlocked.CompareExchange(ref slot, 1, 0) == 0;
     public void Release() => Volatile.Write(ref slot, 0);
 

@@ -73,6 +73,7 @@ internal sealed class HarnessServer : IDisposable
                 using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(2));
                 await HarnessHttp.WriteAsync(client.GetStream(),
                                              HarnessResponse.Error(503, "busy", "too many connections; retry"), cts.Token).ConfigureAwait(false);
+                await CloseGracefully(client).ConfigureAwait(false);
             }
             catch (Exception) { /* the client went away */ }
         }
@@ -100,9 +101,33 @@ internal sealed class HarnessServer : IDisposable
                                ?? await handle(parsed.Request!).ConfigureAwait(false);
                 using var write = new CancellationTokenSource(TimeSpan.FromSeconds(30));
                 await HarnessHttp.WriteAsync(stream, response, write.Token).ConfigureAwait(false);
+                await CloseGracefully(client).ConfigureAwait(false);
             }
             catch (Exception) { /* IO failure or client gone: nothing to answer */ }
         }
+    }
+
+    /// <summary>
+    /// Close after an answer without losing it: closing a Windows socket with request bytes still unread (a 413, a
+    /// 431, a refused fifth connection) sends a reset that can discard the answer before the client reads it. So
+    /// say we are done sending, then drain what the client sent for a moment, bounded in time and bytes.
+    /// </summary>
+    private static async Task CloseGracefully(TcpClient client)
+    {
+        try
+        {
+            client.Client.Shutdown(SocketShutdown.Send);
+            using var drain = new CancellationTokenSource(TimeSpan.FromMilliseconds(500));
+            var buffer = new byte[8192];
+            long total = 0;
+            while (total < 1024 * 1024)
+            {
+                int n = await client.GetStream().ReadAsync(buffer, drain.Token).ConfigureAwait(false);
+                if (n == 0) break;
+                total += n;
+            }
+        }
+        catch (Exception) { /* timed out or the client went away: close anyway */ }
     }
 
     public void Dispose()

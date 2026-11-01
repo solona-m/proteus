@@ -93,19 +93,35 @@ internal sealed class HarnessHost : IDisposable
     private string Start()
     {
         if (server != null) return $"[Proteus] Test harness already listening on 127.0.0.1:{Port}.";
+        // One job at a time across sessions too: a job the last "off" cancelled may still be writing its mod.
+        if (jobs?.Current is { } stopping)
+            return $"[Proteus] A test harness job ({stopping.Kind} of {stopping.ModDir}) is still stopping; try again in a moment.";
         string session = HarnessJobs.NewJobId();
         token = HarnessAuth.NewToken();
         Names = new SessionNames();
         var ring = new LogRing(Names);
-        jobs = new HarnessJobs(game, dispatcher, new ModBackup(BackupsRoot, backupIds), session, () => disposing, timings);
+        jobs = new HarnessJobs(game, dispatcher, new ModBackup(BackupsRoot, backupIds), session, () => disposing, timings)
+        {
+            Log = log,
+        };
         var router = new HarnessRouter(jobs, ring, Names, new CaptureGate(timings.Capture), build, buildStamp, log);
         var s = new HarnessServer(router.Handle, token);
         s.Start();
         server = s;
         setLineObserver(ring.Add);
         game.NameSink = Names;
-        HarnessSessionFile.Write(configDir, new HarnessSession(s.Port, token, Environment.ProcessId, build, buildStamp,
-                                                               session, DateTime.UtcNow));
+        try
+        {
+            HarnessSessionFile.Write(configDir, new HarnessSession(s.Port, token, Environment.ProcessId, build, buildStamp,
+                                                                   session, DateTime.UtcNow));
+        }
+        catch (Exception e)
+        {
+            // Listening with no session file is a harness QA cannot find: undo the start.
+            log.Warning(e, "[Proteus] test harness: could not write its session file");
+            Stop();
+            return $"[Proteus] Test harness could not start: the session file could not be written ({e.Message}).";
+        }
         // The port and session only: the token is never logged.
         log.Information("[Proteus] test harness listening on 127.0.0.1:{0} (session {1})", s.Port, session);
         return $"[Proteus] Test harness listening on 127.0.0.1:{s.Port}. QA reads {HarnessSessionFile.FileName} in the plugin's config folder.";

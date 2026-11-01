@@ -156,7 +156,7 @@ internal sealed class HarnessRouter(HarnessJobs jobs, LogRing ring, SessionNames
         catch (CaptureBusyException) { return HarnessResponse.Error(429, "busy", "a screenshot is already being taken"); }
         catch (CaptureTimeoutException) { return HarnessResponse.Error(503, "capture-timeout", "the screenshot did not complete (is the game minimised?)"); }
         catch (BadFrameException e) { return HarnessResponse.Error(503, "capture-bad-frame", e.Message); }
-        catch (Exception e) { return HarnessResponse.Error(503, "capture-failed", $"{e.GetType().Name}: {e.Message}"); }
+        catch (Exception e) { return HarnessResponse.Error(503, "capture-failed", LogAnonymizer.Scrub($"{e.GetType().Name}: {e.Message}")); }
     }
 
     /// <summary>The body as a JSON object with only the allowed fields, or the error to answer with.</summary>
