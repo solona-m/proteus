@@ -47,7 +47,8 @@ internal static partial class BodyRetarget
                      targetMaterial, targetMale);
 
     /// <inheritdoc cref="BuildPair(string, byte[], byte[], string, bool, BodyDraw?, BodyDraw?, UVRemapService?, out SlotPair, Func{string, byte[]}?, bool?)"/>
-    /// <param name="stats">How the two bodies' skin landed on each other; null for the same mesh.</param>
+    /// <param name="stats">How the two bodies' skin landed on each other; null for the same mesh. On a refusal, set only
+    /// across the sexes and only when it was for too little coverage; null for every other refusal.</param>
     internal static string? BuildPair(string slot, byte[] sourceBytes, byte[] targetBytes, string name, bool male,
                                       BodyDraw? sourceMask, BodyDraw? targetMask, UVRemapService? uvRemap,
                                       out SlotPair pair, out UvAtlasCorrespondence.Stats? stats,

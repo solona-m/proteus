@@ -178,20 +178,75 @@ public sealed class HandsFeetPortLocalTests(ITestOutputHelper o) : IDisposable
         }
     }
 
-    /// <summary>TBSE-X: the glove made onto its chest; the shoe refused on its SFW legs (no nude legs to fall back to).</summary>
+    /// <summary>TBSE-X: the glove made onto its chest; the shoe, whose SFW legs match the game's women's body too little,
+    /// made on its Flaccid M A legs instead and said so (it was refused before tbsex-nude-legs).</summary>
     [LocalDataFact(LocalData.GameData, SizeSetCrossSexLocalTests.Stormblessed, CrossSexRefitLocalTests.TbseX, LocalData.TbseUvMaps)]
     [Trait("Plan", "EDGE-hands-feet-port-29")]
-    public void Tbse_x_glove_made_shoe_refused() // [EDGE-hands-feet-port-29]
+    [Trait("Plan", "AC-tbsex-nude-legs-3")]
+    public void Tbse_x_glove_and_shoe_made() // [EDGE-hands-feet-port-29] [AC-tbsex-nude-legs-3]
     {
         var tbseX = BodySizeCatalog.Read(LocalData.Path(CrossSexRefitLocalTests.TbseX));
         var glove = CrossSexRefitJob.RunEnd(StudioInputs("_glv", tbseX, SupportedBodies.Of("tbse-x", "_top", false)!.Sizes[0].Rel));
         Say(Assert.Single(glove.Sizes), "TBSE-X glove");
         Assert.True(glove.Sizes[0].SaveAllowed);
-        var shoe = CrossSexRefitJob.ToStudio(
-            CrossSexRefitJob.RunEnd(StudioInputs("_sho", tbseX, SupportedBodies.Of("tbse-x", "_dwn", false)!.Sizes[0].Rel)), 1);
-        o.WriteLine($"TBSE-X shoe: {shoe.Error}");
-        Assert.Null(shoe.Planned);
-        Assert.Contains(Strings.Parts.RetargetRefuseCrossSexCoverageFmt[..20], shoe.Error);
+        var size = SupportedBodies.Of("tbse-x", "_dwn", false)!.Sizes[0];
+        var shoe = CrossSexRefitJob.ToStudio(CrossSexRefitJob.RunEnd(StudioInputs("_sho", tbseX, size.Rel)), 1);
+        o.WriteLine($"TBSE-X shoe: \"{shoe.Error}\" {shoe.Quality}");
+        Assert.NotNull(shoe.Planned);
+        Assert.Contains(Strings.Parts.RetargetRaceCrossSexNudeFmt.Split('{')[1].Split('}')[1].Split('{')[0], shoe.Quality);
+        Assert.Contains("Flaccid M A", shoe.Quality);
+    }
+
+    /// <summary>Halone's boot in Studio onto TBSE-X: fitted to Flaccid M A, said in its quality line, and the very model the
+    /// size set saves for it.</summary>
+    [LocalDataFact(LocalData.GameData, HalonesChosen, CrossSexRefitLocalTests.Bibo, CrossSexRefitLocalTests.TbseX,
+                   LocalData.TbseUvMaps)]
+    [Trait("Plan", "AC-tbsex-nude-legs-3")]
+    [Trait("Plan", "EDGE-tbsex-nude-legs-9")]
+    public void Tbsex_shoe_in_studio_takes_flaccid_legs() // [AC-tbsex-nude-legs-3] [EDGE-tbsex-nude-legs-9]
+    {
+        var inputs = CrossSexNudeLegsLocalTests.HalonesBootOntoTbseX(Substitute.For<IPluginLog>());
+        var xLegs = OtherRaceRefit.OnlyRace(inputs.Onto, 101).For("_dwn");
+        var xSize = SupportedBodies.Of("tbse-x", "_dwn", false)!.Sizes[0];
+        var sfw = xLegs.First(l => RefitCore.Normal(l.Rel) == RefitCore.Normal(xSize.Rel));
+        Assert.Equal(RefitCore.Normal(xSize.NudeRel!), RefitCore.Normal(inputs.Nude!(sfw)!.Rel));
+        var studio = CrossSexRefitJob.ToStudio(CrossSexRefitJob.RunEnd(inputs), 1);
+        o.WriteLine(studio.Quality);
+        var made = Assert.Single(studio.Planned!);
+        var culture = System.Globalization.CultureInfo.CurrentCulture;
+        Assert.Contains(string.Format(Strings.Parts.RetargetRaceCrossSexNudeFmt, sfw.Label, "\u0001", "Flaccid M A", "\u0002")
+                              .Split('\u0001')[0], studio.Quality);
+        Assert.Contains("Flaccid M A", studio.Quality);
+        Assert.Contains(0.62.ToString("P0", culture), studio.Quality);
+
+        // The size set's TBSE-X boot, on a copy of the mod: the same model.
+        string copy = CopyOf(HalonesChosen);
+        SizeSetForMen(copy, Bodies(CrossSexRefitLocalTests.Bibo, CrossSexRefitLocalTests.Tbse, CrossSexRefitLocalTests.TbseX),
+                      "tbse-x@women");
+        const string mensBoot = "chara/equipment/e0613/model/c0101e0613_sho.mdl";
+        string mensGroup = SizeSetRefit.MensGroupName(copy, SizeSetRefit.AcrossPieces(SizeSetRefit.PiecesOf(copy, Game)));
+        var option = PenumbraModMeta.TryReadFileOptions(copy, mensGroup)!.First(x => x.Name == "TBSE-X");
+        string file = option.Files.First(f => string.Equals(f.Key, mensBoot, StringComparison.OrdinalIgnoreCase)).Value;
+        Assert.Equal(made.Saved.Model, File.ReadAllBytes(BodySizeCatalog.ResolveCaseInsensitive(copy, file)));
+    }
+
+    /// <summary>A glove is never fitted to nude legs: its job has none to offer.</summary>
+    [LocalDataFact(LocalData.GameData, HalonesChosen, CrossSexRefitLocalTests.Bibo, CrossSexRefitLocalTests.TbseX,
+                   LocalData.TbseUvMaps)]
+    [Trait("Plan", "EDGE-tbsex-nude-legs-5")]
+    public void Gloves_never_take_nude_legs() // [EDGE-tbsex-nude-legs-5]
+    {
+        const string gamePath = "chara/equipment/e0613/model/c0201e0613_glv.mdl";
+        byte[] glove = File.ReadAllBytes(Path.Combine(LocalData.Path(HalonesChosen), "common", "2", "c0201e0613_glv.mdl"));
+        var bibo = BodySizeCatalog.Read(LocalData.Path(CrossSexRefitLocalTests.Bibo));
+        var chest = bibo.For("_top", "0201").First(b => b.Label.Contains("SFW Bra - Small", StringComparison.Ordinal));
+        var tbseX = BodySizeCatalog.Read(LocalData.Path(CrossSexRefitLocalTests.TbseX));
+        var inputs = CrossSexRefitJob.EndInputs(glove, gamePath, 101, bibo, chest, tbseX,
+                                                [SupportedBodies.Of("tbse-x", "_top", false)!.Sizes[0].Rel],
+                                                CrossSexRefitLocalTests.Wearer(101, gamePath), Maps(),
+                                                Substitute.For<IPluginLog>(), true, false, null, null, out string? why);
+        Assert.True(inputs != null, why);
+        Assert.Null(inputs!.Nude);
     }
 
     /// <summary>TBSE's nude legs are offered for a shoe exactly as the size set offers them.</summary>
@@ -379,7 +434,8 @@ public sealed class HandsFeetPortLocalTests(ITestOutputHelper o) : IDisposable
     {
         var runLog = new SizeSetRefit.RunLog();
         var gameBodies = SizeSetRefit.GameBodies(keys, Game, ends: true);
-        SizeSetRefit.Run(new SizeSetRefit.Request(root, keys, false, false, bodies, Game, true,
+        // "Make again": the copy carries whatever the size set saved into the real mod in game, which a test must not read.
+        SizeSetRefit.Run(new SizeSetRefit.Request(root, keys, false, true, bodies, Game, true,
                                                   race => gameBodies.GetValueOrDefault(race),
                                                   Across: new SizeSetRefit.AcrossInputs(_ => null)),
                          runLog, Maps(), Substitute.For<IPluginLog>(), _ => { }, CancellationToken.None);
@@ -390,15 +446,22 @@ public sealed class HandsFeetPortLocalTests(ITestOutputHelper o) : IDisposable
 
     /// <summary>
     /// Halone's Chosen's boots have no skin and sit on no body closely; their outfit's legs read as Bibo+ Type C - Small, so
-    /// the men's boots are made from Bibo+, not from the game's body: TBSE made (said under Check in game), TBSE-X refused
-    /// with its reason. The author's groups are unchanged; the boot goes into our men's group.
+    /// the men's boots are made from Bibo+, not from the game's body: TBSE made (said under Check in game), and TBSE-X too
+    /// — its SFW legs match Bibo+'s only 62%, so onto its Flaccid M A legs (tbsex-nude-legs). The author's groups are
+    /// unchanged; the boots go into our men's group.
     /// </summary>
     [LocalDataFact(LocalData.GameData, HalonesChosen, CrossSexRefitLocalTests.Bibo, CrossSexRefitLocalTests.Tbse,
                    CrossSexRefitLocalTests.TbseX, LocalData.TbseUvMaps)]
     [Trait("Plan", "AC-hands-feet-port-12")]
     [Trait("Plan", "EDGE-hands-feet-port-39")]
     [Trait("Plan", "EDGE-hands-feet-port-45")]
-    public void Halones_chosen_boots_take_their_legs_body() // [AC-hands-feet-port-12] [EDGE-hands-feet-port-39] [EDGE-hands-feet-port-45]
+    [Trait("Plan", "AC-tbsex-nude-legs-2")]
+    [Trait("Plan", "AC-tbsex-nude-legs-7")]
+    [Trait("Plan", "EDGE-tbsex-nude-legs-6")]
+    [Trait("Plan", "EDGE-tbsex-nude-legs-7")]
+    [Trait("Plan", "EDGE-tbsex-nude-legs-11")]
+    [Trait("Plan", "EDGE-tbsex-nude-legs-12")]
+    public void Halones_chosen_boots_take_their_legs_body() // [AC-hands-feet-port-12] [EDGE-hands-feet-port-39] [EDGE-hands-feet-port-45] [AC-tbsex-nude-legs-2] [AC-tbsex-nude-legs-7] [EDGE-tbsex-nude-legs-6] [EDGE-tbsex-nude-legs-7] [EDGE-tbsex-nude-legs-11] [EDGE-tbsex-nude-legs-12]
     {
         string copy = CopyOf(HalonesChosen);
         static List<(string Name, JsonNode? Group)> Groups(string root)
@@ -421,15 +484,45 @@ public sealed class HandsFeetPortLocalTests(ITestOutputHelper o) : IDisposable
         Assert.DoesNotContain(run.Warnings, w => w == string.Format(Strings.SizeSet.EndFromGameBodyFmt, bootPiece.Label, "TBSE"));
 
         var tbseX = Assert.Single(run.Sizes, s => s.Men && s.Body == "tbse-x" && s.Piece == bootPiece.Label);
-        Assert.NotEqual(SizeSetRefit.SizeStatus.Made, tbseX.Status);
-        Assert.False(string.IsNullOrEmpty(tbseX.Reason));
+        Assert.Equal(SizeSetRefit.SizeStatus.Made, tbseX.Status);
+        Assert.Contains("Bibo+", tbseX.From);
+        Assert.Contains("Type C - Small", tbseX.From);
+        // Folded no worse than TBSE's Gen A fit by much (EDGE-12): both written down for the record.
+        o.WriteLine($"folds: TBSE {tbse.Measures?.Folded}, TBSE-X {tbseX.Measures?.Folded}");
+        Assert.True(tbseX.Measures!.Folded <= 1.25 * tbse.Measures!.Folded + 10,
+                    $"TBSE-X {tbseX.Measures.Folded} folds against TBSE's {tbse.Measures.Folded}");
 
         // Saved at the men's path, in our men's group; nothing at it in the TBSE-X option; the author's groups unchanged.
         string mensGroup = SizeSetRefit.MensGroupName(copy, SizeSetRefit.AcrossPieces(SizeSetRefit.PiecesOf(copy, Game)));
         var after = Groups(copy);
         var group = after.Single(g => g.Name == mensGroup).Group!["Options"]!.AsArray();
         Assert.Contains(group, opt => (string?)opt!["Name"] == "TBSE" && opt["Files"]?[mensBoot] != null);
-        Assert.DoesNotContain(group, opt => (string?)opt!["Name"] == "TBSE-X" && opt["Files"]?[mensBoot] != null);
+        var xOption = Assert.Single(group, opt => (string?)opt!["Name"] == "TBSE-X" && opt["Files"]?[mensBoot] != null);
+        byte[] savedBoot = File.ReadAllBytes(BodySizeCatalog.ResolveCaseInsensitive(copy, (string)xOption!["Files"]![mensBoot]!));
+        // No genital physics bone on a boot fitted to the nude legs (EDGE-6), and no material drawn by no mesh (EDGE-11).
+        var skinned = ModelSkinReader.Read(savedBoot, null, null)!;
+        static bool Genital(string n) => n.StartsWith("iv_funyachin", StringComparison.Ordinal)
+                                         || n.StartsWith("iv_kintama", StringComparison.Ordinal)
+                                         || n.StartsWith("iv_koumon", StringComparison.Ordinal);
+        int weighted = 0;
+        for (int v = 0; v < skinned.VertexCount; v++)
+            for (int k = 0; k < XivLiveMesh.SkinnedMesh.MaxInfluences; k++)
+            {
+                int i = v * XivLiveMesh.SkinnedMesh.MaxInfluences + k;
+                if (skinned.BoneWeights[i] > 0f && Genital(skinned.BoneNames[skinned.BoneIndices[i]])) { weighted++; break; }
+            }
+        o.WriteLine($"TBSE-X boot: {weighted} vertices weighted to a genital physics bone; listed bones: " +
+                    string.Join(", ", skinned.BoneNames.Where(Genital)));
+        Assert.Equal(0, weighted);
+        MaterialAssert.NoNewUndrawnNames(savedBoot, File.ReadAllBytes(LocalData.Path(CrossSexNudeLegsLocalTests.HalonesBoot)));
+        // The foot's shape from the same TBSE-X feet whichever legs it was fitted to (EDGE-7).
+        var tbseXCat = OtherRaceRefit.OnlyRace(BodySizeCatalog.Read(LocalData.Path(CrossSexRefitLocalTests.TbseX)), 101);
+        var xLegs = tbseXCat.For("_dwn");
+        var xSize = SupportedBodies.Of("tbse-x", "_dwn", false)!.Sizes[0];
+        var sfw = xLegs.First(l => RefitCore.Normal(l.Rel) == RefitCore.Normal(xSize.Rel));
+        var flaccid = xLegs.First(l => RefitCore.Normal(l.Rel) == RefitCore.Normal(xSize.NudeRel!));
+        Assert.Equal(AutoRefitDecisions.Companion(tbseXCat.For("_sho"), sfw, null),
+                     AutoRefitDecisions.Companion(tbseXCat.For("_sho"), flaccid, null));
         foreach (var (name, json) in before.Where(g => g.Name != mensGroup))
             Assert.True(JsonNode.DeepEquals(json, after.Single(g => g.Name == name).Group), $"group {name} changed");
     }
