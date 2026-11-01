@@ -73,7 +73,7 @@ public class Configuration : IPluginConfiguration
     /// Current config schema version. Bump whenever a STORED value has to be reinterpreted on load, and add the step
     /// to <see cref="Migrate"/>. A new config is stamped current, so it never runs old migrations.
     /// </summary>
-    public const int CurrentVersion = 8;
+    public const int CurrentVersion = 9;
 
     public int Version { get; set; } = CurrentVersion;
 
@@ -291,7 +291,9 @@ public class Configuration : IPluginConfiguration
     public bool InjectedGlasses { get; set; }
 
     /// <summary>
-    /// The body mod the Studio's Body size tool last refitted ONTO, by folder. Null until one is chosen.
+    /// The body mod the Studio's Body size tool last refitted ONTO, for any garment part, by folder. Null until one is
+    /// chosen. What a garment opens on when its own part has none remembered (<see cref="RetargetBodyByPart"/>) and no
+    /// body is chosen yet.
     /// <para/>
     /// A player refits onto the body they are wearing, over and over, across every garment they own — so the last
     /// answer is very nearly always the next one. Only the destination is remembered: the "made for" side belongs to
@@ -300,9 +302,23 @@ public class Configuration : IPluginConfiguration
     public string? RetargetBodyDir { get; set; }
 
     /// <summary>
-    /// Per body slot ("_top", "_dwn", …), the size last refitted onto in <see cref="RetargetBodyDir"/>, by the
-    /// option's file relative to that mod — the same identity the panel pairs and de-duplicates by, and the only one
-    /// that survives an author reusing a name (Neolithe has eight options called "SFW M").
+    /// The body mod the Body size tool last refitted onto for each garment part ("_top", "_dwn", "_glv", "_sho"), by
+    /// folder: a player wearing the chest from one body mod and the legs from another opens tops and bottoms each on
+    /// its own. Read only through <see cref="Services.RememberedTargets"/>.
+    /// </summary>
+    public Dictionary<string, string> RetargetBodyByPart { get; set; } = new(StringComparer.Ordinal);
+
+    /// <summary>
+    /// Per body mod folder, per body slot ("_top", "_dwn", …), the size last refitted onto in that mod, by the option's
+    /// file relative to it — the same identity the panel pairs and de-duplicates by, and the only one that survives an
+    /// author reusing a name (Neolithe has eight options called "SFW M"). Kept per mod, so picking another one forgets
+    /// nothing. Read only through <see cref="Services.RememberedTargets"/>, which matches folders without regard to case.
+    /// </summary>
+    public Dictionary<string, Dictionary<string, string>> RetargetSizesByBody { get; set; } = new(StringComparer.Ordinal);
+
+    /// <summary>
+    /// Before v9: the sizes for <see cref="RetargetBodyDir"/> alone. Kept so an older config can still be read; the v9
+    /// step moves them into <see cref="RetargetSizesByBody"/> and empties this.
     /// </summary>
     public Dictionary<string, string> RetargetTargets { get; set; } = new(StringComparer.Ordinal);
 
@@ -555,6 +571,9 @@ public class Configuration : IPluginConfiguration
 
         // v7 -> v8: hat compatibility on for everyone, once; a later opt-out sticks.
         if (Version < 8) AutoHatCompat = true;
+
+        // v8 -> v9: the Body size tool's memory kept per part and per body.
+        if (Version < 9) Services.RememberedTargets.MigrateToPerBody(this);
 
         Version = CurrentVersion;
     }

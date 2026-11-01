@@ -81,10 +81,18 @@ internal static class Program
                       (the Studio's "Every size for other bodies" on a work copy outside the mod folder; a v3 mod is
                        converted to v4 in place first. The bodies are the mod folder's; the mod itself never is one.
                        The JSON report on stdout is local output: it names folders on this machine.)
+              Output is UTF-8 without a BOM. Windows PowerShell 5.1 decodes a program's output in its own encoding:
+              set [Console]::OutputEncoding = [Text.UTF8Encoding]::new() first, or use --report <file>.
         """;
 
     private static int Main(string[] args)
     {
+        // UTF-8 without a BOM, whatever the console's code page: scripts read the JSON this prints as UTF-8. First, as
+        // Console.Out takes the encoding of the moment it is first read; disposed last, putting the terminal back.
+        using var console = Utf8Console.Use(() => Console.OutputEncoding, e => Console.OutputEncoding = e,
+                                            Console.SetOut, Console.SetError,
+                                            Console.OpenStandardOutput, Console.OpenStandardError,
+                                            restore => Console.CancelKeyPress += (_, _) => restore());
         // Loc.Localize returns "#key" for an assembly that was never set up, and refusals are worded through it.
         Loc.SetupWithFallbacks(typeof(Proteus.Plugin).Assembly);
         using var temp = TempFolders.Isolate();
