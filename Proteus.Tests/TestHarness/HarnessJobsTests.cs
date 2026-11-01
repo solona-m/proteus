@@ -98,6 +98,8 @@ public class HarnessJobsTests : IDisposable
             failed = await Restore("""{"mod":"Outfit"}""");
         Assert.Equal("failed", failed.GetProperty("state").GetString());
         Assert.Equal("restore-failed", Error(failed));
+        Assert.Equal(JsonValueKind.Null, failed.GetProperty("restored").GetProperty("files").ValueKind);
+        Assert.Equal(JsonValueKind.Null, failed.GetProperty("restored").GetProperty("deleted").ValueKind);
         Assert.Equal(JsonValueKind.String, failed.GetProperty("error").GetProperty("preRestore").GetProperty("id").ValueKind);
         Assert.True(failed.GetProperty("reloaded").GetBoolean());
         var retry = await Restore("""{"mod":"Outfit"}""");

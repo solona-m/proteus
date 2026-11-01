@@ -10,16 +10,16 @@ using Xunit;
 namespace Proteus.Tests;
 
 /// <summary>
-/// The size set's launch, shared by the Studio's "Make every size" button and the QA test harness: the request it
-/// prepares, and that the after-change is posted however a run ends. Always compiled: the Studio depends on it.
-/// </summary>
-/// <summary>
 /// Run alone: the run sets the process-wide GC latency mode, and the harness's tests start size sets of their own in
 /// parallel, so a latency check beside them would see theirs.
 /// </summary>
 [CollectionDefinition(nameof(GcLatencyCollection), DisableParallelization = true)]
 public class GcLatencyCollection;
 
+/// <summary>
+/// The size set's launch, shared by the Studio's "Make every size" button and the QA test harness: the request it
+/// prepares, and that the after-change is posted however a run ends. Always compiled: the Studio depends on it.
+/// </summary>
 [Collection(nameof(GcLatencyCollection))]
 public class SizeSetLaunchTests
 {

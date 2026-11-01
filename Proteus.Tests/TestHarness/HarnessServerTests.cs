@@ -225,7 +225,8 @@ public class HarnessServerTests : IDisposable
             [$@"{f.ModsRoot}\Outfit\chara\top.mdl"] = new(["chara/equipment/e0001/model/c0201e0001_top.mdl"]),
         };
         f.Game.Compositor = new CompositorService.ActivitySnapshot(1, 9, 0, 0, "", false);
-        f.Game.View = new AutoRefitWatcher.View("working", false, Busy: false);
+        f.Names.Add("Secret Collection", NameKind.Collection);
+        f.Game.View = new AutoRefitWatcher.View("refitting for Secret Collection", false, Busy: false);
         f.Game.Activity = new AutoRefitWatcher.ActivitySnapshot(true, 2, false, false);
         f.Game.Redraw();
         var (status, s) = await f.Get("/state");
@@ -244,6 +245,7 @@ public class HarnessServerTests : IDisposable
         string text = s.ToString();
         Assert.DoesNotContain("Secret Collection", text);
         Assert.DoesNotContain("Hidden Person", text);
+        Assert.Equal("refitting for <COLLECTION>", s.GetProperty("autoRefit").GetProperty("message").GetString());
         Assert.DoesNotContain("\"name\"", text);
     }
 
