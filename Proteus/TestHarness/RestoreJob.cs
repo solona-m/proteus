@@ -97,7 +97,7 @@ internal static class RestoreJob
         bool? changed = ModBackup.ChangedSince(from, modRoot);
 
         job.Progress("restoring");
-        int files = 0, deleted = 0;
+        int? files = null, deleted = null;   // null after a partial failure: how far it got is not known
         try
         {
             (files, deleted) = ModBackup.Restore(from, modRoot, ct);

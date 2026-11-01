@@ -518,14 +518,14 @@ public class HarnessServerTests : IDisposable
     [Fact]
     public async Task Restore_UnknownJob_404()
     {
-        // [EDGE-qa-harness-34]
+        // [EDGE-qa-harness-45]
         Assert.Equal(404, (await f.Post("/actions/restore", """{"job":"abcdef123456"}""")).Status);
     }
 
     [Fact]
     public async Task Restore_ModWithoutBackup_404()
     {
-        // [EDGE-qa-harness-34]
+        // [EDGE-qa-harness-45]
         f.AddMod();
         Assert.Equal(404, (await f.Post("/actions/restore", """{"mod":"Outfit"}""")).Status);
     }

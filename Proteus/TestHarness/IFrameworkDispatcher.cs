@@ -53,22 +53,38 @@ internal sealed class DalamudFrameworkDispatcher(Dalamud.Plugin.Services.IFramew
     {
         var ticket = new DispatchTicket();
         var started = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
-        var run = framework.RunOnFrameworkThread(() =>
+        var run = OffFramework(framework.RunOnFrameworkThread(() =>
         {
             if (!ticket.TryStart()) return default!;
             started.TrySetResult();
             return work();
-        });
+        }));
         return await DispatchWait.Await(ticket, started.Task, run, startTimeout, ct).ConfigureAwait(false);
     }
 
     public Task<bool> RunUnabandonable(Action work, Func<bool> skip)
-        => framework.RunOnFrameworkThread(() =>
+        => OffFramework(framework.RunOnFrameworkThread(() =>
         {
             if (skip()) return false;
             work();
             return true;
-        });
+        }));
+
+    /// <summary>
+    /// The same outcome, completed on the thread pool: whatever awaits it (JSON shaping, the socket write, a job's
+    /// next step) must never continue inline on the framework thread, however Dalamud completes its task.
+    /// </summary>
+    private static Task<T> OffFramework<T>(Task<T> onFramework)
+    {
+        var result = new TaskCompletionSource<T>(TaskCreationOptions.RunContinuationsAsynchronously);
+        onFramework.ContinueWith(t =>
+        {
+            if (t.IsCanceled) result.TrySetCanceled();
+            else if (t.IsFaulted) result.TrySetException(t.Exception!.InnerExceptions);
+            else result.TrySetResult(t.Result);
+        }, CancellationToken.None, TaskContinuationOptions.None, TaskScheduler.Default);
+        return result.Task;
+    }
 }
 
 /// <summary>The waiting half of <see cref="IFrameworkDispatcher.RunAsync"/>, shared with the test dispatcher.</summary>

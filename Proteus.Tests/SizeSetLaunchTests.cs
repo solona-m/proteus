@@ -13,6 +13,14 @@ namespace Proteus.Tests;
 /// The size set's launch, shared by the Studio's "Make every size" button and the QA test harness: the request it
 /// prepares, and that the after-change is posted however a run ends. Always compiled: the Studio depends on it.
 /// </summary>
+/// <summary>
+/// Run alone: the run sets the process-wide GC latency mode, and the harness's tests start size sets of their own in
+/// parallel, so a latency check beside them would see theirs.
+/// </summary>
+[CollectionDefinition(nameof(GcLatencyCollection), DisableParallelization = true)]
+public class GcLatencyCollection;
+
+[Collection(nameof(GcLatencyCollection))]
 public class SizeSetLaunchTests
 {
     private static readonly IPluginLog Log = Substitute.For<IPluginLog>();
@@ -137,7 +145,7 @@ public class SizeSetLaunchTests
     }
 
     [Fact]
-    public async Task GcLatencyRestored_CandidatesForgotten()
+    public async Task GcLatencyRestored_ThrowingPostHarmless()
     {
         // [EDGE-qa-harness-51] The run lowers GC latency for itself only; a throwing post never escapes the worker.
         var before = System.Runtime.GCSettings.LatencyMode;

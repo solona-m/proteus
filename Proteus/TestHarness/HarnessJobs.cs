@@ -11,8 +11,8 @@ internal sealed record JobError(string Code, string Message, BackupRef? PreResto
 /// <summary>A backup as job responses name it.</summary>
 internal sealed record BackupRef(string Id, string Path);
 
-/// <summary>What a restore did.</summary>
-internal sealed record RestoredInfo(BackupRef From, BackupRef PreRestore, int Files, int Deleted, bool? ChangedSinceJob,
+/// <summary>What a restore did. Files and Deleted are null when it failed partway.</summary>
+internal sealed record RestoredInfo(BackupRef From, BackupRef PreRestore, int? Files, int? Deleted, bool? ChangedSinceJob,
                                     IReadOnlyList<string> SkippedNewer, IReadOnlyList<string> OlderSessionBackups);
 
 /// <summary>A job as <c>/jobs/{id}</c> reports it.</summary>

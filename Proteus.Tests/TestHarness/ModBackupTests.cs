@@ -199,6 +199,31 @@ public class ModBackupTests : IDisposable
     }
 
     [Fact]
+    public void FolderPathIsAFile_BackupFailed_FileUntouched()
+    {
+        // [EDGE-qa-harness-39] A failure making the backup folder is the contract's backup-failed, never a raw
+        // exception; the file in the way is left alone.
+        string mod = Mod();
+        Directory.CreateDirectory(Path.Combine(BackupsRoot, "Outfit"));
+        string inTheWay = Path.Combine(BackupsRoot, "Outfit", "20260101-000000-abab");
+        File.WriteAllText(inTheWay, "not a folder");
+        var e = Assert.Throws<BackupException>(() => Backups(Ids("20260101-000000-abab"))
+            .Create(mod, "Outfit", BackupKind.Refit, "s", 1, null, CancellationToken.None));
+        Assert.Equal("backup-failed", e.Code);
+        Assert.Equal("not a folder", File.ReadAllText(inTheWay));
+    }
+
+    [Fact]
+    public void FreeSpaceThrows_BackupFailed()
+    {
+        // [EDGE-qa-harness-39] A volume whose free space cannot be read (a UNC root) is backup-failed too.
+        string mod = Mod();
+        var backups = new ModBackup(BackupsRoot, null, ModBackup.DefaultRefitCap, _ => throw new ArgumentException("UNC"));
+        Assert.Equal("backup-failed", Assert.Throws<BackupException>(
+            () => backups.Create(mod, "Outfit", BackupKind.Refit, "s", 1, null, CancellationToken.None)).Code);
+    }
+
+    [Fact]
     public void NoCompletionMarker_NeverSelectedOrListed()
     {
         // [EDGE-qa-harness-46] A folder without a complete meta.json is incomplete: not listed, found as incomplete.

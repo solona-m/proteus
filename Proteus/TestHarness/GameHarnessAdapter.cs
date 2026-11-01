@@ -171,10 +171,13 @@ internal sealed class GameHarnessAdapter : IHarnessGame, IDisposable
         var wrap = await textures.CreateFromImGuiViewportAsync(
             new ImGuiViewportTextureArgs { ViewportId = viewportId, TakeBeforeImGuiRender = !includeUi, KeepTransparency = false },
             "proteus-test-harness", ct).ConfigureAwait(false);
-        // leaveWrapOpen: false — the readback disposes the wrap however it ends.
-        var (spec, data) = await readback.GetRawImageAsync(wrap, new TextureModificationArgs { DxgiFormat = FramePng.B8G8R8A8Unorm },
-                                                          leaveWrapOpen: false, ct).ConfigureAwait(false);
-        return new RawFrame(spec.Width, spec.Height, spec.Pitch, spec.DxgiFormat, data);
+        // Disposed here, however the readback ends (a cancelled token included), rather than trusting the readback to.
+        using (wrap)
+        {
+            var (spec, data) = await readback.GetRawImageAsync(wrap, new TextureModificationArgs { DxgiFormat = FramePng.B8G8R8A8Unorm },
+                                                              leaveWrapOpen: true, ct).ConfigureAwait(false);
+            return new RawFrame(spec.Width, spec.Height, spec.Pitch, spec.DxgiFormat, data);
+        }
     }
 
     public void Dispose()

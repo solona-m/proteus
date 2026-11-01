@@ -123,11 +123,19 @@ internal sealed class ModBackup
         if (kind == BackupKind.Refit && size > refitCap)
             throw new BackupException("backup-too-large", $"the mod is {size / 1048576} MiB, over the {refitCap / 1048576} MiB a refit backs up");
         long needed = (long)(size * 1.1) + 512L * 1024 * 1024;
-        Directory.CreateDirectory(modFolder);
-        if (freeSpace(modFolder) < needed)
-            throw new BackupException("insufficient-space", $"backing up needs {needed / 1048576} MiB free");
-
-        string folder = Claim(modDir);
+        string folder;
+        try
+        {
+            Directory.CreateDirectory(modFolder);
+            if (freeSpace(modFolder) < needed)
+                throw new BackupException("insufficient-space", $"backing up needs {needed / 1048576} MiB free");
+            folder = Claim(modDir);
+        }
+        catch (Exception e) when (e is not BackupException and not OperationCanceledException)
+        {
+            // Nothing has been written into the mod or any backup: say so with the contract's code.
+            throw new BackupException("backup-failed", $"could not make a backup folder: {e.Message}", e);
+        }
         try
         {
             string before = Fingerprint(modRoot);
@@ -155,6 +163,7 @@ internal sealed class ModBackup
             if (folder == null) throw new BackupException("backup-failed", $"the id source gave '{id}', not a backup id");
             if (Directory.Exists(folder)) continue;
             BetweenCheckAndClaim?.Invoke(folder);
+            bool madeIt = !Directory.Exists(folder);
             Directory.CreateDirectory(folder);
             try
             {
@@ -165,6 +174,14 @@ internal sealed class ModBackup
             catch (IOException) when (File.Exists(Path.Combine(folder, OwnerFile)))
             {
                 // Another writer claimed it between our check and our claim.
+            }
+            catch (Exception e)
+            {
+                // Not a race: the claim itself failed. Remove the folder only if this call made it and it is still
+                // empty — never anyone else's.
+                if (madeIt)
+                    try { if (!Directory.EnumerateFileSystemEntries(folder).Any()) Directory.Delete(folder); } catch { /* left empty: harmless */ }
+                throw new BackupException("backup-failed", $"could not claim a backup folder: {e.Message}", e);
             }
         }
         throw new BackupException("backup-failed", $"no free backup id after {MaxIdAttempts} attempts");

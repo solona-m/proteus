@@ -96,7 +96,7 @@ internal sealed class HarnessRouter(HarnessJobs jobs, LogRing ring, SessionNames
                 phase = CompositorPhase.Of(c), inFlight = c.InFlight, epoch = c.Epoch,
                 pendingTriggers = c.PendingTriggers + c.Pending, pendingReasons = c.PendingReasons,
                 lastResult = s.LastResult is { } r
-                    ? new { success = r.Success, error = r.ErrorMessage, texturesPatched = r.TexturesPatched,
+                    ? new { success = r.Success, error = r.ErrorMessage is { } err ? names.Scrub(err) : null, texturesPatched = r.TexturesPatched,
                             overlayModsUsed = r.OverlayModsUsed, epoch = r.Epoch, at = r.Timestamp }
                     : null,
                 lastRefresh = s.LastRefresh is { } t ? new { outcome = t.Outcome, totalMs = t.TotalMs, spans = t.Spans, at = t.AtUtc } : null,
@@ -104,7 +104,8 @@ internal sealed class HarnessRouter(HarnessJobs jobs, LogRing ring, SessionNames
             redraws = new { count = Game.RedrawCount, lastAtUtc = Game.LastRedrawUtc },
             autoRefit = new
             {
-                busy = a.Busy, failed = a.View.Failed, message = a.View.Message,
+                // Free text the plugin wrote: the session names come out as they do from /log.
+                busy = a.Busy, failed = a.View.Failed, message = names.Scrub(a.View.Message),
                 pending = new { running = a.Activity.Running, queued = a.Activity.Queued, walkDue = a.Activity.WalkDue,
                                 undoing = a.Activity.Undoing },
             },

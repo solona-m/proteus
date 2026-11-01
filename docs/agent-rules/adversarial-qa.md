@@ -76,6 +76,10 @@ JOB=$(curl -s -H "$H" -H "Content-Type: application/json" -d '{"mod":"My Outfit"
 curl -s -H "$H" http://127.0.0.1:$PORT/jobs/$JOB
 ```
 
+Job `error.code` is one of `legacy-mod`, `framework-timeout`, `backup-too-large`,
+`insufficient-space`, `backup-failed`, `run-failed`, `restore-failed`, `cancelled`,
+`after-change-skipped` — or `internal`, which is a harness bug: report it as a finding.
+
 Only one job runs at a time (409 `busy`). Refit and restore are refused with 409
 `auto-refit-busy` while auto refit is working.
 
@@ -96,7 +100,8 @@ you finish**, whatever the outcome:
   over.
 - Every restore first takes a **pre-restore snapshot** of the mod as it is, so a
   restore never loses anything. If it fails partway (`restore-failed`), the snapshot
-  is named in the error; **retry** — it simply runs again.
+  is named in the error (and `restored.files`/`deleted` are null: how far it got is
+  not known); **retry** — it simply runs again.
 - `restored.changedSinceJob: true` warns that something else changed the mod after
   the refit (null = not known). It never refuses the restore.
 - An incomplete backup (a crash mid-copy) is never restored: `409 backup-incomplete`.
