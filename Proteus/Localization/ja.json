@@ -4504,8 +4504,40 @@
     "description": "Heads the dropdown that picks which race's model a refit is made and saved as."
   },
   "Parts.Retarget.Race.Tip": {
-    "message": "どの種族向けの調整か。別の種族には、ゲームが曲げるのと同じようにこのモデルから作り、その種族の体に合わせて、その種族が読み込む場所に保存した専用モデルができます。ミッドランダーの胴・脚装備は、異性向けにも調整できます。このモデルはそのままです。",
+    "message": "どの種族向けの調整か。別の種族には、ゲームが曲げるのと同じようにこのモデルから作り、その種族の体に合わせて、その種族が読み込む場所に保存した専用モデルができます。ミッドランダーの胴・脚装備や、女性用の靴・手袋（男性向け）は、異性向けにも調整できます。このモデルはそのままです。",
     "description": "Tooltip of Parts.Retarget.Race.Label."
+  },
+  "Parts.Retarget.CrossSexEnd.NoLimb": {
+    "message": "サイズを読み取れる脚や腕に届いていません。異性向けに合わせ直すときはそれでも脚や腕を通して調整するので、作られた脚または胸のサイズを選んでください。",
+    "description": ""
+  },
+  "Parts.Retarget.CrossSexEnd.NoSizes": {
+    "message": "合わせ先に選んだサイズが、そのボディにもう見つかりません。選び直してください。",
+    "description": ""
+  },
+  "Parts.Retarget.KeepEnds.CrossSex.Tip": {
+    "message": "異性向けに合わせ直すとき、靴は常に元の足を、手袋は元の手を残し、新しいボディの肌を使います。ボディマップを通して調整するのは脚や腕だけです。",
+    "description": ""
+  },
+  "Parts.Retarget.EndsUnreadable.CrossSex": {
+    "message": "リグを読み取れないため、足や手をほかの部分と区別できません。靴や手袋は、それらを残す形でしか異性向けに合わせ直せません。",
+    "description": ""
+  },
+  "Parts.Retarget.KeepShape.CrossSexTip": {
+    "message": "異性向けに合わせ直すとき、靴の脚や手袋の腕はひとまとまりで調整されるため、「形を保つ」は使われません。元の種族を選び直すと、チェックは元に戻ります。",
+    "description": ""
+  },
+  "Parts.Retarget.CrossSexEnd.PickMadeFor.Fmt": {
+    "message": "サイズを読み取れる肌がなく、布は{0}のどの{1}サイズにも沿っていません。「元の体型 Mod」で作られたボディ（ゲーム本来の体で作られたならそれ）を選び、次にサイズを選んでください。",
+    "description": ""
+  },
+  "Parts.Retarget.Race.CrossSexNude.Fmt": {
+    "message": "{0}は体の{1}しか対応しなかったため、代わりに{2}に合わせました（{3}対応）。",
+    "description": ""
+  },
+  "Parts.Retarget.Race.WomensModel.Fmt": {
+    "message": "このMODには、このアイテムの独自の{0}モデルもあります。そこから{1}版を作るには、それを開いてください。「リフィット対象の種族」で「{1}」が選ばれた状態になります。",
+    "description": ""
   },
   "Parts.Retarget.Race.ThisModel.Fmt": {
     "message": "{0}（このモデル）",
@@ -5120,7 +5152,7 @@
     "description": ""
   },
   "SizeSet.Intro": {
-    "message": "下でチェックしたボディの全サイズを、このMOD全体に追加します。各サイズは作者のサイズのうち最も近いものからリフィットし、そのオプション内の衣装の他のパーツも同じサイズから作り、作者のサイズの隣に「Rue S」「YAB Buff L」などとして保存します。MODにすでにあるサイズはそのままです。女性向けMODにもTBSEとTBSE-Xを追加できます。胴と脚が男性向けに調整され、専用のグループに保存されます。",
+    "message": "下でチェックしたボディの全サイズを、このMOD全体に追加します。各サイズは作者のサイズのうち最も近いものからリフィットし、そのオプション内の衣装の他のパーツも同じサイズから作り、作者のサイズの隣に「Rue S」「YAB Buff L」などとして保存します。MODにすでにあるサイズはそのままです。女性向けMODにもTBSEとTBSE-Xを追加できます。胴・脚・靴・手袋が男性向けに調整され、専用のグループに保存されます。",
     "description": ""
   },
   "SizeSet.Yas": {
@@ -5136,7 +5168,19 @@
     "description": ""
   },
   "SizeSet.Ends.Tip": {
-    "message": "靴と手袋は元の足と手を残し、届いている脚や腕だけをリフィットします。靴には脚のサイズが、手袋にはボディごとに1つのオプションが付き、同じグループならどちらも衣装の胸や脚のサイズに加わります。",
+    "message": "靴と手袋は元の足と手を残し、届いている脚や腕だけをリフィットします。靴には脚のサイズが、手袋にはボディごとに1つのオプションが付き、同じグループならどちらも衣装の胸や脚のサイズに加わります。男性ボディを「男性向け」でチェックすると、女性向けMODの靴と手袋にも男性版が作られます。",
+    "description": ""
+  },
+  "SizeSet.EndsLeftOut.Fmt": {
+    "message": "除外された靴と手袋（{0}）：サイズと男性版を作るには「靴と手袋も含める」をチェックしてください。",
+    "description": ""
+  },
+  "SizeSet.AuthorsMens.Fmt": {
+    "message": "{0}：MODに独自の男性用モデルがあるため、これからは男性版を作りませんでした。その男性用モデルからも今回は何も作られませんでした。",
+    "description": ""
+  },
+  "SizeSet.AuthorsMensUnticked.Fmt": {
+    "message": "{0}：MODに独自の男性用モデルがあるため、これからは男性版を作りませんでした。その男性用モデルのサイズを作るには、通常の男性ボディ（例：「{1}」）をチェックしてください。",
     "description": ""
   },
   "SizeSet.Piercings": {
@@ -5292,7 +5336,7 @@
     "description": "Checkbox label for a men's body offered for a women's mod. {0} is the body (\"TBSE\")."
   },
   "SizeSet.ForMen.Tip.Fmt": {
-    "message": "このMODの女性用の胴・脚パーツに{0}の男性版を作ります。ボディマップ（初めて必要になったときにダウンロードされます）を通してミッドランダー男性向けに調整し、それぞれ男性の形に曲げた体が彼の体に最も近い作者のサイズから作ります。専用のグループ「{1}」に保存されるので、女性用サイズはそのままです。靴と手袋は性別をまたいで調整されず、作者がすでに男性用に作ったパーツはそれが使われます。",
+    "message": "このMODの女性用の胴・脚パーツに{0}の男性版を作ります。ボディマップ（初めて必要になったときにダウンロードされます）を通してミッドランダー男性向けに調整し、それぞれ男性の形に曲げた体が彼の体に最も近い作者のサイズから作ります。専用のグループ「{1}」に保存されるので、女性用サイズはそのままです。「靴と手袋も含める」がオンなら、女性用の靴と手袋にも脚や腕を通して調整した男性版が作られます。作者がすでに男性用に作ったパーツはそれが使われます。",
     "description": "Tooltip. {0} is a men's body (\"TBSE\"), {1} the group the men's versions go into."
   },
   "SizeSet.MensGroup": {
@@ -5322,6 +5366,10 @@
   "SizeSet.EndFromGameBody.Fmt": {
     "message": "{0}「{1}」：脚または腕に体を読み取れる肌がないため、ゲーム本来の体で作られたものとして調整しました。",
     "description": "Check in game: a women's shoe or glove made a men's with no skin to read a body off. {0} is the piece, {1} the men's option."
+  },
+  "SizeSet.EndFromOutfitLegs.Fmt": {
+    "message": "{0}「{1}」：体を読み取れる肌がなく、布もどのボディにも密着していないため、この衣装の脚装備（「{3}」）が作られたボディ、{2}で作られたものとして調整しました。",
+    "description": ""
   },
   "SizeSet.EndClothGap.Fmt": {
     "message": "{0}「{1}」：布が{3}の脚または腕から平均で約{2:F0} mm離れています。読み取った体は、作られた体と違うかもしれません。",

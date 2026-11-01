@@ -4504,8 +4504,40 @@
     "description": "Heads the dropdown that picks which race's model a refit is made and saved as."
   },
   "Parts.Retarget.Race.Tip": {
-    "message": "调整针对哪个种族。其他种族会得到自己的模型：按游戏弯曲的方式由这个模型制作，调整到该种族的身体上，并保存在该种族加载的位置。中原之民的上身或腿部装备也可以为另一性别调整。这个模型保持不变。",
+    "message": "调整针对哪个种族。其他种族会得到自己的模型：按游戏弯曲的方式由这个模型制作，调整到该种族的身体上，并保存在该种族加载的位置。中原之民的上身或腿部装备，以及女性鞋子或手套（给男性），也可以为另一性别调整。这个模型保持不变。",
     "description": "Tooltip of Parts.Retarget.Race.Label."
+  },
+  "Parts.Retarget.CrossSexEnd.NoLimb": {
+    "message": "它没有覆盖到可判断尺码的腿或手臂。改配给另一性别时仍会通过腿或手臂改配：请选择它制作时所用的腿部或胸部尺码。",
+    "description": ""
+  },
+  "Parts.Retarget.CrossSexEnd.NoSizes": {
+    "message": "所选要改配到的尺码在该身体上已找不到。请重新选择。",
+    "description": ""
+  },
+  "Parts.Retarget.KeepEnds.CrossSex.Tip": {
+    "message": "改配给另一性别时，鞋子始终保留自己的脚，手套保留自己的手，并使用新身体的皮肤：只通过身体映射图改配腿或手臂。",
+    "description": ""
+  },
+  "Parts.Retarget.EndsUnreadable.CrossSex": {
+    "message": "无法读取它的骨骼绑定，因此无法将脚或手与其余部分区分开，而鞋子或手套只有保留脚或手时才会改配给另一性别。",
+    "description": ""
+  },
+  "Parts.Retarget.KeepShape.CrossSexTip": {
+    "message": "改配给另一性别时，鞋子的腿部或手套的手臂作为一个整体改配：“保持形状”不适用。重新选择它自己的种族时，你的勾选会恢复。",
+    "description": ""
+  },
+  "Parts.Retarget.CrossSexEnd.PickMadeFor.Fmt": {
+    "message": "它没有可判断尺码的皮肤，布料也不贴合{0}的任何{1}尺码。请在“原适配体型”中选择它所针对的身体（若是在游戏自带身体上制作的，就选它），再选择尺码。",
+    "description": ""
+  },
+  "Parts.Retarget.Race.CrossSexNude.Fmt": {
+    "message": "{0}只匹配了身体的{1}，因此改为贴合{2}（匹配{3}）。",
+    "description": ""
+  },
+  "Parts.Retarget.Race.WomensModel.Fmt": {
+    "message": "此模组还有该物品自己的{0}模型。要由它制作{1}版本，请打开它：“转换给种族”中会为你选好“{1}”。",
+    "description": ""
   },
   "Parts.Retarget.Race.ThisModel.Fmt": {
     "message": "{0}（此模型）",
@@ -5120,7 +5152,7 @@
     "description": ""
   },
   "SizeSet.Intro": {
-    "message": "为整个模组添加下方勾选体型的每个尺码。每个尺码都从作者最接近它的尺码重新适配，该选项中套装的其他部件也从同一尺码适配，并以“Rue S”“YAB Buff L”等名称保存在作者的尺码旁边。模组已有的尺码保持不变。女性模组也可以加入 TBSE 和 TBSE-X：其上身和腿部会为男性调整，并保存在单独的组中。",
+    "message": "为整个模组添加下方勾选体型的每个尺码。每个尺码都从作者最接近它的尺码重新适配，该选项中套装的其他部件也从同一尺码适配，并以“Rue S”“YAB Buff L”等名称保存在作者的尺码旁边。模组已有的尺码保持不变。女性模组也可以加入 TBSE 和 TBSE-X：其上身、腿部、鞋子和手套会为男性调整，并保存在单独的组中。",
     "description": ""
   },
   "SizeSet.Yas": {
@@ -5136,7 +5168,19 @@
     "description": ""
   },
   "SizeSet.Ends.Tip": {
-    "message": "鞋子和手套保留原本的脚和手，只重新适配它们覆盖到的腿或手臂。鞋子获得腿部的尺码，手套每个身体一个选项；两者与服装的胸部或腿部尺码在同一组时会并入其中。",
+    "message": "鞋子和手套保留原本的脚和手，只重新适配它们覆盖到的腿或手臂。鞋子获得腿部的尺码，手套每个身体一个选项；两者与服装的胸部或腿部尺码在同一组时会并入其中。勾选“男性用”的男性身体时，女性模组的鞋子和手套也会得到男性版本。",
+    "description": ""
+  },
+  "SizeSet.EndsLeftOut.Fmt": {
+    "message": "已略过的鞋子和手套（{0}）：勾选“包括鞋子和手套”即可为它们制作尺码和男性版本。",
+    "description": ""
+  },
+  "SizeSet.AuthorsMens.Fmt": {
+    "message": "{0}：模组自带该部件的男性模型，因此没有由它制作男性版本，而那个男性模型这次也没有制作出任何东西。",
+    "description": ""
+  },
+  "SizeSet.AuthorsMensUnticked.Fmt": {
+    "message": "{0}：模组自带该部件的男性模型，因此没有由它制作男性版本。勾选普通的男性身体（例如“{1}”）即可为那个模型制作尺码。",
     "description": ""
   },
   "SizeSet.Piercings": {
@@ -5292,7 +5336,7 @@
     "description": "Checkbox label for a men's body offered for a women's mod. {0} is the body (\"TBSE\")."
   },
   "SizeSet.ForMen.Tip.Fmt": {
-    "message": "此模组的女性上身和腿部部件会在 {0} 上获得男性版本：通过身体映射（首次需要时下载）为中原之民男性调整，每件都取自作者的某个尺码——其身体弯成男性形状后最接近他的身体。它们保存在单独的组“{1}”中，因此女性尺码保持不变。鞋子和手套不跨性别调整，作者已为男性制作的部件保留作者的版本。",
+    "message": "此模组的女性上身和腿部部件会在 {0} 上获得男性版本：通过身体映射（首次需要时下载）为中原之民男性调整，每件都取自作者的某个尺码——其身体弯成男性形状后最接近他的身体。它们保存在单独的组“{1}”中，因此女性尺码保持不变。勾选“包括鞋子和手套”时，它的女性鞋子和手套也会得到通过腿或手臂调整的男性版本；作者已为男性制作的部件保留作者的版本。",
     "description": "Tooltip. {0} is a men's body (\"TBSE\"), {1} the group the men's versions go into."
   },
   "SizeSet.MensGroup": {
@@ -5322,6 +5366,10 @@
   "SizeSet.EndFromGameBody.Fmt": {
     "message": "{0}，“{1}”：腿或手臂上没有可读取体型的皮肤，因此按游戏自带体型制作来调整。",
     "description": "Check in game: a women's shoe or glove made a men's with no skin to read a body off. {0} is the piece, {1} the men's option."
+  },
+  "SizeSet.EndFromOutfitLegs.Fmt": {
+    "message": "{0}，“{1}”：它没有可读取体型的自身皮肤，布料也没有紧贴任何身体，因此按{2}制作来调整——这套服装的腿部（“{3}”）就是在这个身体上制作的。",
+    "description": ""
   },
   "SizeSet.EndClothGap.Fmt": {
     "message": "{0}，“{1}”：布料离{3}的腿或手臂平均约 {2:F0} 毫米，所以读取到的体型可能不是它原本制作时用的体型。",

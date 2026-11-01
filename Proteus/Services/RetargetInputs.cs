@@ -38,6 +38,65 @@ internal static class RetargetInputs
     /// <summary>Whether a garment in <paramref name="slot"/> can keep its ends at all, which is when the box is shown.</summary>
     internal static bool OffersKeepEnds(string slot) => AutoRefitDecisions.LimbOf(slot) != null;
 
+    // ── a women's shoe or glove refitted for men ("Refit for", see CrossSexRefit.EndsCross) ──
+
+    /// <summary>
+    /// Whether the race picked under "Refit for" makes a shoe or glove a men's: read from the pick and what is offered,
+    /// never from the bake, so the answer is the same while the bake runs as once it has landed.
+    /// </summary>
+    internal static bool CrossSexEnd(ushort chosen, ushort drawn, IReadOnlyList<OtherRaceRefit.Candidate> offered,
+                                     string wornSlot)
+        => chosen != 0 && chosen != drawn && offered.Any(c => c.Race == chosen && c.CrossSex)
+           && AutoRefitDecisions.LimbOf(wornSlot) != null;
+
+    /// <summary>
+    /// <see cref="CrossSexEnd"/> from what the panel knows before anything else is worked out each frame — the garment's
+    /// own path, the pick and the offered races — false while no body mod is read or picked. Touches no panel state.
+    /// </summary>
+    internal static bool CrossSexEndOf(string gamePath, ushort chosen, IReadOnlyList<OtherRaceRefit.Candidate> offered,
+                                       bool hasCatalog)
+        => hasCatalog && BodySizeCatalog.SlotOf(gamePath) is { } slot
+           && CrossSexEnd(chosen, ModelSkinReader.RaceOf(gamePath), offered, slot);
+
+    /// <summary>The keep-ends box as it is in force: the user's tick, or on under a crossed end, which always keeps them.
+    /// The user's own tick is left as it was, and comes back with the drawn race.</summary>
+    internal static bool KeepEndsInForce(bool userTick, bool crossEnd) => userTick || crossEnd;
+
+    /// <summary>"Use the new body's skin" as it is in force: always on under a crossed end, for every box that hangs on it.</summary>
+    internal static bool EffectiveReplaceSkin(bool replaceSkin, bool crossEnd) => replaceSkin || crossEnd;
+
+    /// <summary>The parts kept in shape as the plan reads them: none under a crossed end, whose job refits the leg or arm
+    /// as one. The user's ticks are left as they were.</summary>
+    internal static IReadOnlyCollection<string>? ShapesFor(bool crossEnd, IReadOnlyCollection<string>? keepShape)
+        => crossEnd ? null : keepShape;
+
+    /// <summary>A part's "Keep shape" box: whether it can be ticked, whether it shows ticked, and whether its tooltip says
+    /// it doesn't apply under a crossed end.</summary>
+    internal static (bool Enabled, bool Ticked, bool CrossTip) KeepShapeBox(bool moves, bool keeps, bool crossEnd)
+        => crossEnd ? (false, false, true) : (moves, moves && keeps, false);
+
+    /// <summary>
+    /// Why a crossed shoe or glove can't keep its foot or hand, worded for the user; null when it can. It is never refitted
+    /// whole across the sexes instead.
+    /// </summary>
+    /// <param name="drawnRace">The drawn race, "0201".</param>
+    /// <remarks>A refit-onto body without the leg or arm is only reachable on a stale pick ("Refit for" isn't offered
+    /// then): its sizes are asked for again. Never "the whole piece is refitted", which a crossed end never is.</remarks>
+    internal static string? CrossSexEndRefusal(bool endsUnreadable, bool sourceHasLimb, bool targetHasLimb,
+                                               string drawnRace)
+    {
+        var ps = Localization.Strings.Parts;
+        if (endsUnreadable) return ps.RetargetEndsUnreadableCrossSex;
+        if (!sourceHasLimb) return string.Format(ps.RetargetRefuseCrossSexMadeForFmt, ModelRace.Describe(drawnRace));
+        if (!targetHasLimb) return ps.RetargetCrossSexEndNoSizes;
+        return null;
+    }
+
+    /// <summary>Whether to say what to pick for a crossed piece with no skin to tell its size by: read with no skin and no
+    /// size, and none chosen yet. A skinned piece that reaches no leg keeps its own line (NoLimbFeet/Hands).</summary>
+    internal static bool CrossSexEndHint(bool crossEnd, KeepEnds.StudioReading? read, bool limbChosen)
+        => crossEnd && !limbChosen && read is { Pick: null, Route: KeepEnds.Route.NoSkin };
+
     /// <summary>
     /// The layout, from what is known at once — never from a reading still on its way, so the rows do not change under
     /// the user once the detector lands, except for the one way they can: a rig that turns out unreadable.
@@ -75,9 +134,13 @@ internal static class RetargetInputs
     /// Every slot worth offering, the required one first: the others with more than one model to choose between, and
     /// never the kept end.
     /// </summary>
-    internal static List<string> Slots(Layout layout, IEnumerable<string> catalogSlots, Func<string, int> distinct)
+    /// <param name="onlyPrimary">A shoe or glove refitted for the other sex (<see cref="CrossSexEnd"/>): its job refits the
+    /// leg or arm alone, so no other row is offered — none would be silently left out.</param>
+    internal static List<string> Slots(Layout layout, IEnumerable<string> catalogSlots, Func<string, int> distinct,
+                                       bool onlyPrimary = false)
     {
         var slots = new List<string> { layout.Primary };
+        if (onlyPrimary) return slots;
         foreach (string slot in catalogSlots)
             if (slot != layout.Primary && slot != layout.EndSlot && distinct(slot) > 1) slots.Add(slot);
         return slots;

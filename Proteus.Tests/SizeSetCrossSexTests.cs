@@ -150,7 +150,9 @@ public sealed class SizeSetCrossSexTests : IDisposable
             SizeSetRefit.Run(new SizeSetRefit.Request(root, ["tbse@women"], false, false, [], Ends: false,
                                                       Across: new SizeSetRefit.AcrossInputs(_ => null)),
                              off, new UVRemapService(log, noMaps.FullName), log, _ => { }, default);
-            Assert.DoesNotContain(off.Sizes, s => s.Slot == "_sho");
+            // No men's version tried; the shoe left out is said once (hands-feet-port), never dropped silently.
+            Assert.DoesNotContain(off.Sizes, s => s.Slot == "_sho" && s.ReasonCode != SizeSetRefit.Codes.EndsLeftOut);
+            Assert.Single(off.Sizes, s => s.Slot == "_sho" && s.ReasonCode == SizeSetRefit.Codes.EndsLeftOut && !s.Men);
         }
         finally { noMaps.Delete(true); }
     }

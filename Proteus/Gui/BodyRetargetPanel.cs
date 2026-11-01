@@ -388,6 +388,12 @@ internal sealed partial class BodyRetargetPanel(PenumbraBridge penumbra, UVRemap
             saveTo = SwitchingGroup(given);
         }
 
+        // Before anything reads the pick this frame: a pick left by the men's model's "open the women's" button, and
+        // whether the pick makes a shoe or glove a men's — from the path and the pick alone, safe while no body mod is
+        // read yet (the parts list greys "Keep shape" by it, from the pick on).
+        TakePendingPick(given);
+        CrossSexEndOpen = RetargetInputs.CrossSexEndOf(given.GamePath, ChosenRace(given), Offered(given), catalog != null);
+
         // A garment drawn from another race's model is refitted as a model of the wearer's own, made first. Until it
         // is, nothing below can be offered: every size list is filtered by the race it will have.
         var ctx = Effective(given, out bool baking);
@@ -499,6 +505,7 @@ internal sealed partial class BodyRetargetPanel(PenumbraBridge penumbra, UVRemap
             DrawSaved(ctx);
             return;
         }
+        DrawWomensModel(ctx);
         DrawRacePicker(ctx);
         if (fromBodyDir != null) DrawNoBodiesFor(catalog, bodyDir);
         if (missing != null)
@@ -573,6 +580,10 @@ internal sealed partial class BodyRetargetPanel(PenumbraBridge penumbra, UVRemap
 
         /// <summary>With <see cref="Explicit"/>, the bodies it was made on, bent the same way: the "made for" side.</summary>
         public BodySizeCatalog? Bodies { get; init; }
+
+        /// <summary>With <see cref="Explicit"/>, the "made for" bodies UNBENT, as the bake read them: what a shoe or glove
+        /// made a men's hands its own job, which bends them itself (<see cref="CrossSexRefitJob.EndInputs"/>).</summary>
+        public BodySizeCatalog? MadeFor { get; init; }
 
         /// <summary>With <see cref="Explicit"/>, what the race needs of the extra-skeleton table.</summary>
         public EstPlan? Est { get; init; }
@@ -963,7 +974,8 @@ internal sealed partial class BodyRetargetPanel(PenumbraBridge penumbra, UVRemap
     private void DrawWornBodyButton(in RetargetContext ctx, string missing)
     {
         string? own = BodySizeCatalog.SlotOf(ctx.GamePath);
-        string key = StudioBodyChoice.Key(ctx.ModelRel, race, bodyDir, SourceDir, keepEnds);
+        string key = StudioBodyChoice.Key(ctx.ModelRel, race, bodyDir, SourceDir,
+                                          RetargetInputs.KeepEndsInForce(keepEnds, CrossSexEnd(ctx)));
         if (candidateFor != key)
         {
             var found = StudioBodyChoice.WornCandidate(own, bodyDir, bodies != null, WornBodyDir,
@@ -1013,7 +1025,8 @@ internal sealed partial class BodyRetargetPanel(PenumbraBridge penumbra, UVRemap
     /// </summary>
     private bool LimbUsableAfter(string dir, string? own)
     {
-        return StudioBodyChoice.LimbUsable(own, keepEnds, endsUnreadable, fromBodyDir, dir,
+        return StudioBodyChoice.LimbUsable(own, RetargetInputs.KeepEndsInForce(keepEnds, CrossSexEndOpen), endsUnreadable,
+                                           fromBodyDir, dir,
                                            picked => CachedCatalog(picked) is { } c ? OfferedBy(c) : null,
                                            () => (active?.Bodies ?? fromCatalog) is { } src ? src.SlotsFor(race).ToList() : null);
     }
@@ -1365,6 +1378,18 @@ internal sealed partial class BodyRetargetPanel(PenumbraBridge penumbra, UVRemap
     private string WornSlot(in RetargetContext ctx)
         => RetargetInputs.GarmentSlot(BodySizeCatalog.SlotOf(ctx.GamePath), Onto!.SlotsFor(race));
 
+    /// <summary>
+    /// Whether the pick under "Refit for" makes this shoe or glove a men's (<see cref="CrossSexRefit.EndsCross"/>): read
+    /// from the path and the pick alone, never from the bake, <see cref="WornSlot"/> or <see cref="Onto"/> — the same
+    /// answer before the bake lands as after, and safe while no body mod is read.
+    /// </summary>
+    private bool CrossSexEnd(in RetargetContext ctx)
+        => RetargetInputs.CrossSexEndOf(ctx.GamePath, ChosenRace(ctx), Offered(ctx), catalog != null);
+
+    /// <summary>Whether the open garment is a shoe or glove picked to be made a men's: the parts list greys "Keep shape"
+    /// by it. Set at the top of every draw.</summary>
+    internal bool CrossSexEndOpen { get; private set; }
+
     /// <summary>How the tool is laid out for this garment now (see <see cref="RetargetInputs.LayoutFor"/>).</summary>
     private RetargetInputs.Layout Layout(in RetargetContext ctx)
     {
@@ -1372,7 +1397,8 @@ internal sealed partial class BodyRetargetPanel(PenumbraBridge penumbra, UVRemap
         string? limb = AutoRefitDecisions.LimbOf(worn);
         bool sourceHasLimb = limb != null && SourceCatalog?.For(limb, race).Count > 0;
         bool targetHasLimb = limb != null && Onto?.For(limb, race).Count > 0;
-        return RetargetInputs.LayoutFor(worn, keepEnds, sourceHasLimb, targetHasLimb, endsUnreadable);
+        return RetargetInputs.LayoutFor(worn, RetargetInputs.KeepEndsInForce(keepEnds, CrossSexEnd(ctx)), sourceHasLimb,
+                                        targetHasLimb, endsUnreadable);
     }
 
     /// <summary>The slot whose sizes must be chosen: the garment's own, or the leg or arm a shoe or glove is refitted by.
@@ -1380,8 +1406,9 @@ internal sealed partial class BodyRetargetPanel(PenumbraBridge penumbra, UVRemap
     private string Primary(in RetargetContext ctx) => Layout(ctx).Primary;
 
     /// <summary>What a refit is made from, as chosen now.</summary>
+    /// <remarks>A shoe or glove made a men's is never only redrawn: its route is not handed on.</remarks>
     private RetargetInputs.Inputs Inputs(in RetargetContext ctx)
-        => RetargetInputs.Assemble(Layout(ctx), Slots(ctx), from, ActiveTo(ctx), studio?.Route);
+        => RetargetInputs.Assemble(Layout(ctx), Slots(ctx), from, ActiveTo(ctx), CrossSexEnd(ctx) ? null : studio?.Route);
 
     /// <summary>The sizes to refit onto of the parts that can take part: a part set to a body of its own sits out while
     /// that body cannot be used (see <see cref="StudioPartBodies.Active"/>).</summary>
@@ -1398,7 +1425,7 @@ internal sealed partial class BodyRetargetPanel(PenumbraBridge penumbra, UVRemap
     /// is no size to change there.
     /// </summary>
     private List<string> Slots(in RetargetContext ctx)
-        => RetargetInputs.Slots(Layout(ctx), Onto!.SlotsFor(race), Distinct);
+        => RetargetInputs.Slots(Layout(ctx), Onto!.SlotsFor(race), Distinct, onlyPrimary: CrossSexEnd(ctx));
 
     /// <summary>The slots actually taking part: the ones with both ends chosen.</summary>
     private List<string> Chosen(in RetargetContext ctx)
@@ -1432,19 +1459,31 @@ internal sealed partial class BodyRetargetPanel(PenumbraBridge penumbra, UVRemap
         bool feet = worn == "_sho";
         string limb = AutoRefitDecisions.LimbOf(worn)!;
         string noLimb = limb == "_dwn" ? ps.RetargetNoLegsInBodyFmt : ps.RetargetNoChestInBodyFmt;
-        string? why = endsUnreadable ? ps.RetargetEndsUnreadable
-                    : SourceCatalog?.For(limb, race).Count is not > 0 ? string.Format(noLimb, BodyName(SourceDir))
-                    : Onto?.For(limb, race).Count is not > 0 ? string.Format(noLimb, BodyName(bodyDir))
-                    : null;
+        bool sourceHasLimb = SourceCatalog?.For(limb, race).Count > 0, targetHasLimb = Onto?.For(limb, race).Count > 0;
+        bool crossEnd = CrossSexEnd(ctx);
+        // Made a men's, the box is always on: greyed, saying why — or, when it can't be, why the refit is refused.
+        string? why = crossEnd
+            ? RetargetInputs.CrossSexEndRefusal(endsUnreadable, sourceHasLimb, targetHasLimb, $"{ModelSkinReader.RaceOf(ctx.GamePath):D4}")
+            : endsUnreadable ? ps.RetargetEndsUnreadable
+            : !sourceHasLimb ? string.Format(noLimb, BodyName(SourceDir))
+            : !targetHasLimb ? string.Format(noLimb, BodyName(bodyDir))
+            : null;
 
-        bool on = keepEnds && why == null;
-        using (ImRaii.Disabled(why != null))
-            if (ImGui.Checkbox(feet ? ps.RetargetKeepFeet : ps.RetargetKeepHands, ref on))
+        bool inForce = RetargetInputs.KeepEndsInForce(keepEnds, crossEnd);
+        bool on = inForce && why == null;
+        using (ImRaii.Disabled(why != null || crossEnd))
+            if (ImGui.Checkbox(feet ? ps.RetargetKeepFeet : ps.RetargetKeepHands, ref on) && !crossEnd)
                 keepEnds = on;
         if (ImGui.IsItemHovered(ImGuiHoveredFlags.AllowWhenDisabled))
-            ImGui.SetTooltip(why ?? (feet ? ps.RetargetKeepFeetTip : ps.RetargetKeepHandsTip));
-        if (why == null && keepEnds && studio?.Route == KeepEnds.Route.SkinOnly && !from.ContainsKey(limb))
-            ImGui.TextDisabled(feet ? ps.RetargetNoLimbFeet : ps.RetargetNoLimbHands);
+            ImGui.SetTooltip(why ?? (crossEnd ? ps.RetargetKeepEndsCrossSexTip
+                                    : feet ? ps.RetargetKeepFeetTip : ps.RetargetKeepHandsTip));
+        if (why == null && RetargetInputs.CrossSexEndHint(crossEnd, studio, from.ContainsKey(limb)))
+            using (ImRaii.PushColor(ImGuiCol.Text, ImGui.GetColorU32(ImGuiCol.TextDisabled)))
+                ImGui.TextWrapped(string.Format(ps.RetargetCrossSexEndPickMadeForFmt, BodyName(SourceDir), SlotName(limb)));
+        else if (why == null && inForce && studio?.Route == KeepEnds.Route.SkinOnly && !from.ContainsKey(limb))
+            // Made a men's, it is never only redrawn: it needs its leg or arm size.
+            using (ImRaii.PushColor(ImGuiCol.Text, ImGui.GetColorU32(ImGuiCol.TextDisabled)))
+                ImGui.TextWrapped(crossEnd ? ps.RetargetCrossSexEndNoLimb : feet ? ps.RetargetNoLimbFeet : ps.RetargetNoLimbHands);
     }
 
     /// <summary>The slot's name, and for the garment's own slot how many sizes the body mod offers.</summary>
@@ -1683,19 +1722,26 @@ internal sealed partial class BodyRetargetPanel(PenumbraBridge penumbra, UVRemap
 
         if (detectTask != null) ImGui.TextUnformatted(ps.RetargetChecking);
 
-        ImGui.Checkbox(ps.RetargetReplaceSkin, ref replaceSkin);
-        if (ImGui.IsItemHovered()) ImGui.SetTooltip(ps.RetargetReplaceSkinTip);
+        // Made a men's, a shoe or glove always takes the new body's skin: shown ticked and greyed, the user's own tick
+        // left as it was for the drawn race.
+        bool crossEnd = CrossSexEnd(ctx);
+        bool swap = RetargetInputs.EffectiveReplaceSkin(replaceSkin, crossEnd);
+        using (ImRaii.Disabled(crossEnd))
+            if (ImGui.Checkbox(ps.RetargetReplaceSkin, ref swap) && !crossEnd)
+                replaceSkin = swap;
+        if (ImGui.IsItemHovered(ImGuiHoveredFlags.AllowWhenDisabled))
+            ImGui.SetTooltip(crossEnd ? ps.RetargetKeepEndsCrossSexTip : ps.RetargetReplaceSkinTip);
 
         // Only the swap brings in skin to cut, so the option sits under it and greys out with it. A kept foot always
         // cuts: uncut, a shoe would carry the whole legs body, waist to ankles.
         ImGui.Indent();
         bool cut = cutHidden || inputs.KeepEnds;
-        using (ImRaii.Disabled(!replaceSkin || inputs.KeepEnds))
+        using (ImRaii.Disabled(!swap || inputs.KeepEnds))
             if (ImGui.Checkbox(ps.RetargetCutHidden, ref cut) && !inputs.KeepEnds)
                 cutHidden = cut;
         if (ImGui.IsItemHovered(ImGuiHoveredFlags.AllowWhenDisabled))
             ImGui.SetTooltip(inputs.KeepEnds ? ps.RetargetCutForcedTip : ps.RetargetCutHiddenTip);
-        using (ImRaii.Disabled(!replaceSkin))
+        using (ImRaii.Disabled(!swap))
             ImGui.Checkbox(ps.RetargetPiercings, ref carryPiercings);
         if (ImGui.IsItemHovered(ImGuiHoveredFlags.AllowWhenDisabled)) ImGui.SetTooltip(ps.RetargetPiercingsTip);
         ImGui.Unindent();
@@ -1986,7 +2032,11 @@ internal sealed partial class BodyRetargetPanel(PenumbraBridge penumbra, UVRemap
         var garmentBytes = ctx.GarmentBytes;
         var slots = Slots(ctx);
         var layout = Layout(ctx);
-        var pieces = RefitCore.ShapePieces(garment, new HashSet<string>(ctx.KeepShape ?? [], StringComparer.Ordinal));
+        // Made a men's, a shoe or glove is read as its job reads it: no part kept in shape, and a piece with no skin read by
+        // where its cloth sits.
+        bool crossEnd = CrossSexEnd(ctx);
+        var pieces = RefitCore.ShapePieces(garment, new HashSet<string>(RetargetInputs.ShapesFor(crossEnd, ctx.KeepShape) ?? [],
+                                                                        StringComparer.Ordinal));
         string rel = ctx.ModelRel;
         string? sourceDir = SourceDir;
         string? garmentRace = race;
@@ -2011,7 +2061,8 @@ internal sealed partial class BodyRetargetPanel(PenumbraBridge penumbra, UVRemap
             {
                 if (KeepEnds.Read(layout.WornSlot, garment, garmentBytes, pieces) is not { } reading)
                     return new DetectResult(rel, sourceDir, rankings, layout, EndsUnreadable: true, Bodies: snapshot);
-                read = KeepEnds.StudioLimb(reading, garment, garmentBones, garmentRace ?? "", sourceDir ?? "", snapshot);
+                read = KeepEnds.StudioLimb(reading, garment, garmentBones, garmentRace ?? "", sourceDir ?? "", snapshot,
+                                           clothWhenSkinless: crossEnd);
                 if (read.Shown is { } shown)
                     rankings[read.Route == KeepEnds.Route.SkinOnly ? layout.EndSlot! : layout.Primary] = shown;
             }
@@ -2070,6 +2121,12 @@ internal sealed partial class BodyRetargetPanel(PenumbraBridge penumbra, UVRemap
         ctx.FlushPending();
 
         var inputs = Inputs(ctx);
+        // ── a women's shoe or glove made a men's: the job the size set and the CLI run, never the panel's own plan ──
+        if (CrossSexEnd(ctx))
+        {
+            StartCrossSexEndPlan(ctx, inputs, snapshot);
+            return;
+        }
         // The slot planned as: always the one the garment is worn in. Without kept ends it is also the required one.
         string garmentSlot = inputs.GarmentSlot;
         string primary = inputs.Primary;
@@ -2495,8 +2552,11 @@ internal sealed partial class BodyRetargetPanel(PenumbraBridge penumbra, UVRemap
         // Only the parts taking part: a part body set aside, or of a part sitting out, made no plan.
         var bodiesInPlay = EffectiveParts(ctx).Where(p => chosen.Contains(p.Key))
                                               .ToDictionary(p => p.Key, p => p.Value, StringComparer.Ordinal);
-        return RetargetInputs.Key(ctx.ModelRel, fromBodyDir, inputs, chosen, from, ActiveTo(ctx), ctx.Held, ctx.KeepShape,
-                                  replaceSkin, cutHidden, clearBody, carryPiercings, SkinRule(inputs).ClearForced,
+        bool crossEnd = CrossSexEnd(ctx);
+        return RetargetInputs.Key(ctx.ModelRel, fromBodyDir, inputs, chosen, from, ActiveTo(ctx), ctx.Held,
+                                  RetargetInputs.ShapesFor(crossEnd, ctx.KeepShape),
+                                  RetargetInputs.EffectiveReplaceSkin(replaceSkin, crossEnd), cutHidden, clearBody,
+                                  carryPiercings, SkinRule(inputs).ClearForced,
                                   bodiesInPlay)
                + "|g" + madeForGeneration;
     }

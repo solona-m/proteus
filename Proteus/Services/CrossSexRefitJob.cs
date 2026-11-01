@@ -10,9 +10,10 @@ namespace Proteus.Services;
 /// A refit for the other sex, headless (see <see cref="CrossSexRefit"/>): the order the Body size panel takes it in —
 /// the wearer read from files, the garment bent, the bodies it was made on bent the same way, each size matched through
 /// the bibo↔TBSE maps, refitted and finished as the save would. Shared by the CLI and the real-data gates, so what is
-/// measured is what the CLI writes.
+/// measured is what the CLI writes. Its shoes and gloves (<see cref="RunEnd"/>) serve Studio, the CLI and the size set
+/// alike, through one inputs builder (<see cref="EndInputs"/>) for the first two.
 /// </summary>
-internal static class CrossSexRefitJob
+internal static partial class CrossSexRefitJob
 {
     /// <param name="Garment">The model as drawn.</param>
     /// <param name="GamePath">Where it is drawn from (its race and slot are read off it).</param>
@@ -26,13 +27,15 @@ internal static class CrossSexRefitJob
     /// <param name="Nude">For a target, the same body's nude smallclothes, fitted instead when the target matches too little
     /// of the made-for body and they enough (<see cref="CrossSexRefit.TakesNude"/>). The size set's only: null fits every
     /// target as it was picked.</param>
+    /// <param name="HeldParts">A shoe's or glove's parts, by label, held where they are with the foot or hand: Studio's
+    /// unticked parts. Null holds none beside them.</param>
     internal sealed record Inputs(
         byte[] Garment, string GamePath, ushort To,
         BodySizeCatalog MadeFor, Func<BodyOption, bool>? FromPick,
         BodySizeCatalog Onto, Func<BodyOption, bool>? TargetPick,
         OtherRaceWearer.Inputs Wearer, UVRemapService UvRemap, IPluginLog Log,
         bool PushOut = true, bool CutHidden = true, bool CarryPiercings = false, bool? LiftUnderbust = null,
-        Func<BodyOption, BodyOption?>? Nude = null);
+        Func<BodyOption, BodyOption?>? Nude = null, IReadOnlySet<string>? HeldParts = null);
 
     /// <summary>One size made, or refused.</summary>
     /// <param name="Target">The body it was fitted to: the one picked, or its nude smallclothes (<see cref="Asked"/>).</param>
@@ -65,7 +68,7 @@ internal static class CrossSexRefitJob
     internal static Result Run(Inputs i) => Core(i, ends: false);
 
     /// <summary>
-    /// A women's shoe or glove made a men's, for the size set only (<see cref="CrossSexRefit.EndsCross"/>): its leg or arm
+    /// A women's shoe or glove made a men's — Studio's "Refit for", the CLI and the size set (<see cref="CrossSexRefit.EndsCross"/>): its leg or arm
     /// refitted as <see cref="KeepEnds"/> refits one, through the leg or arm of the made-for and the men's body, the foot
     /// or hand held and given its new shape, after the same bend and bone moves as a chest or legs garment.
     /// <see cref="Inputs.FromPick"/> and <see cref="Inputs.TargetPick"/> pick the limb (legs for a shoe, chest for a
@@ -133,8 +136,17 @@ internal static class CrossSexRefitJob
         // A shoe or glove: its foot or hand held, read apart from the leg or arm; the made-for body's own for its shape.
         KeepEnds.Reading? reading = null;
         string? endFromPath = null;
+        HashSet<int>? held = null;
         if (ends)
         {
+            // Held by label, as the panel's planner holds them: a submesh's triangles already include every island of it.
+            if (i.HeldParts is { Count: > 0 } labels)
+            {
+                held = [];
+                foreach (var part in garment.Parts)
+                    if (labels.Contains(part.Label))
+                        held.UnionWith(part.Triangles);
+            }
             if (KeepEnds.Read(slot, garment, baked) is not { } read)
                 return Refused(string.Format(Localization.Strings.SizeSet.EndsUnreadableFmt, Path.GetFileName(i.GamePath)),
                                baked, bent);
@@ -198,7 +210,7 @@ internal static class CrossSexRefitJob
                     i.Log.Information("[Proteus] cross-sex refit: {0} without the end's shape: no {1} to give it",
                                       target.Label, endFromPath == null ? "made-for end" : "men's end");
                 plan = KeepEnds.Plan(garment, baked, reading, pair, endPair, replaceSkin: true, across: true,
-                                     clearBody: i.PushOut, alsoHeld: null, extra: null,
+                                     clearBody: i.PushOut, alsoHeld: held, extra: null,
                                      log: line => i.Log.Debug("[Proteus] cross-sex refit: {0}", line),
                                      warn: line => i.Log.Warning("[Proteus] cross-sex refit: {0}", line),
                                      carryPiercings: i.CarryPiercings);

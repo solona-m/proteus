@@ -761,8 +761,8 @@ public sealed class LocalizationTests
         // 23, cross-sex-refit's five (OtherSex, CrossSexNote, CrossSexWears, CrossSexQuality, CrossSexHint),
         // cross-sex-tops-yas's four (CrossSexFolded, BonesMoved, NeedsSkeleton, RenameFailed) and
         // vanilla-cross-sex-legs's two (ReplacesGame, CharacterKeepsGame); own-model-overwrite re-keyed OwnModel as
-        // OwnModelReplaced, one for one
-        Assert.Equal(34, keys.Count);
+        // OwnModelReplaced, one for one; hands-feet-port's two (CrossSexNude, WomensModel)
+        Assert.Equal(36, keys.Count);
         foreach (string key in keys)
         {
             Assert.True(tr.ContainsKey(key), $"[{lang}] has no {key}");
@@ -1251,6 +1251,82 @@ public sealed class LocalizationTests
         Assert.Contains("— Proteus edit*", paragraph);
         Assert.DoesNotContain(ReadmeVanillaOpensAsIs[lang].Old, readme);
     }
+
+    /// <summary>Women's shoes and gloves made men's (hands-feet-port): every new and changed string is translated, not
+    /// copied, with its placeholders, and no language still says shoes and gloves aren't crossed.</summary>
+    [Theory]
+    [MemberData(nameof(Translations))]
+    [Trait("Plan", "AC-hands-feet-port-7")]
+    public void Hands_feet_port_strings_are_translated_not_copied(string lang) // [AC-hands-feet-port-7]
+    {
+        var en = Load(Source);
+        var tr = Load(lang);
+        foreach (string key in new[]
+                 {
+                     "SizeSet.EndsLeftOut.Fmt", "SizeSet.AuthorsMens.Fmt", "SizeSet.AuthorsMensUnticked.Fmt",
+                     "Parts.Retarget.CrossSexEnd.NoSizes", "Parts.Retarget.KeepEnds.CrossSex.Tip",
+                     "Parts.Retarget.EndsUnreadable.CrossSex", "Parts.Retarget.KeepShape.CrossSexTip",
+                     "Parts.Retarget.CrossSexEnd.PickMadeFor.Fmt", "Parts.Retarget.Race.CrossSexNude.Fmt",
+                     "Parts.Retarget.Race.WomensModel.Fmt", "Parts.Retarget.CrossSexEnd.NoLimb", "SizeSet.EndFromOutfitLegs.Fmt",
+                     "SizeSet.Intro", "SizeSet.ForMen.Tip.Fmt", "SizeSet.Ends.Tip", "Parts.Retarget.Race.Tip",
+                 })
+        {
+            Assert.True(tr.ContainsKey(key), $"[{lang}] has no {key}");
+            Assert.NotEqual(en[key].Message, tr[key].Message);
+            for (int i = 0; i < 4; i++)
+                Assert.Equal(en[key].Message.Contains("{" + i + "}"), tr[key].Message.Contains("{" + i + "}"));
+        }
+        Assert.DoesNotContain("aren't refitted across the sexes", en["SizeSet.ForMen.Tip.Fmt"].Message);
+        Assert.Contains("shoes and gloves get men's versions", en["SizeSet.ForMen.Tip.Fmt"].Message);
+        // Each language's old sentence is gone: it named shoes and gloves as not crossed.
+        Assert.DoesNotContain(HandsFeetOldSentence[lang], tr["SizeSet.ForMen.Tip.Fmt"].Message);
+    }
+
+    private static readonly Dictionary<string, string> HandsFeetOldSentence = new()
+    {
+        ["de"] = "werden nicht über die Geschlechter angepasst", ["es"] = "no se reajustan entre sexos",
+        ["fr"] = "ne sont pas réajustés entre les sexes", ["ja"] = "性別をまたいで調整されず",
+        ["ko"] = "성별을 넘어 맞추지 않으며", ["ru"] = "между полами не подгоняются", ["zh"] = "不跨性别调整",
+    };
+
+    /// <summary>Every README's "Refit for" other-sex bullet says women's shoes and gloves can be made men's, and still that
+    /// the game's own gear crosses for women's legs only.</summary>
+    [Theory]
+    [MemberData(nameof(AllLocales))]
+    [Trait("Plan", "AC-hands-feet-port-7")]
+    public void Readme_says_womens_shoes_and_gloves_cross(string lang) // [AC-hands-feet-port-7]
+    {
+        var dir = new System.IO.DirectoryInfo(AppContext.BaseDirectory);
+        while (dir != null && !System.IO.File.Exists(System.IO.Path.Combine(dir.FullName, "proteus.slnx"))) dir = dir.Parent;
+        Assert.True(dir != null, $"Could not find proteus.slnx above {AppContext.BaseDirectory}.");
+        string readme = System.IO.File.ReadAllText(System.IO.Path.Combine(
+            dir!.FullName, lang == Source ? "README.md" : System.IO.Path.Combine("docs", $"README.{lang}.md")));
+        string label = "**" + Load(lang)["Parts.Retarget.Race.Label"].Message + "**";
+        string bullet = readme.Split('\n').Single(l => l.StartsWith("- ", StringComparison.Ordinal) && l.Contains(label)
+                                                       && l.Contains("bibo↔TBSE"));
+        Assert.Contains(ReadmeShoeToken[lang], bullet);
+        if (lang == Source) Assert.Contains("women's legs only", bullet);
+        // The size set's bullet says what leaving shoes and gloves out does.
+        string ends = "**" + Load(lang)["SizeSet.Ends"].Message + "**";
+        Assert.Contains(readme.Split('\n'), l => l.Contains(ends) && l.Contains(ReadmeLeftOffToken[lang]));
+    }
+
+    private static readonly Dictionary<string, string> ReadmeShoeToken = new()
+    {
+        ["en"] = "Women's shoes and gloves made for Midlanders can be refitted for Midlander men",
+        ["de"] = "Auch Schuhe und Handschuhe für Midlander-Frauen", ["es"] = "Los zapatos y guantes de mujer Midlander",
+        ["fr"] = "Les chaussures et gants pour femmes Midlander", ["ja"] = "ミッドランダー女性用の靴と手袋も",
+        ["ko"] = "미드랜더 여성용 신발과 장갑도", ["ru"] = "Женские обувь и перчатки Midlander",
+        ["zh"] = "中原之民女性的鞋子和手套",
+    };
+
+    private static readonly Dictionary<string, string> ReadmeLeftOffToken = new()
+    {
+        ["en"] = "Left off, they get no sizes and no men's versions", ["de"] = "Ausgeschaltet bekommen sie weder Größen",
+        ["es"] = "Desactivada, no reciben tallas", ["fr"] = "Décochée, ils ne reçoivent ni tailles",
+        ["ja"] = "オフにすると、サイズも男性版も作られず", ["ko"] = "끄면 사이즈도 남성 버전도",
+        ["ru"] = "Если снять галочку, они не получают", ["zh"] = "关闭时，它们既没有尺码也没有男性版本",
+    };
 
     /// <summary>What each README's vanilla-gear paragraph says now, and the phrase it used for copying on open.</summary>
     private static readonly Dictionary<string, (string Now, string Old)> ReadmeVanillaOpensAsIs = new()

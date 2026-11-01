@@ -428,8 +428,9 @@ public class SizeSetBatchTests : IDisposable
         Assert.True(exit == 0, stderr);
         report = JsonNode.Parse(stdout)!;
         Assert.False((bool)report["ends"]!);
-        var only = Assert.Single(report["sizes"]!.AsArray());
-        Assert.Equal("no-pieces", (string)only!["reasonCode"]!);
+        // Nothing left to size, and the shoe left out is said, never dropped silently (hands-feet-port).
+        Assert.Equal(["ends-left-out", "no-pieces"],
+                     report["sizes"]!.AsArray().Select(s => (string)s!["reasonCode"]!).Order(StringComparer.Ordinal));
     }
 
     [Fact]

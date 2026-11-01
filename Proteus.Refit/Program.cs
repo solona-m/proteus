@@ -67,8 +67,8 @@ internal static class Program
                       --from <rel> --to <rel>=<label>[,...] --out-dir <dir>
                       --game <FFXIV game\sqpack> --uvmaps <Proteus plugin dir> [--skeleton <base .sklb>]
                       [--from-skeleton <drawn race's base .sklb>]
-                      [--slot _top|_dwn] [--set <id>] [--no-push] [--piercings]
-                      (refit for the other sex: chest and legs garments, both ways)
+                      [--slot _top|_dwn|_sho|_glv] [--set <id>] [--no-push] [--piercings]
+                      (refit for the other sex: chest and legs garments, both ways; women's shoes and gloves for men, by their legs or chest bodies)
         Proteus.Refit --size-set <unpacked mod folder> --bodies <key>[,<key>...]|all
                       --mods-root <Penumbra mod folder> --game <FFXIV game\sqpack> --uvmaps <Proteus plugin dir>
                       [--men] [--no-ends] [--skeleton <men's base .sklb>] [--report <file.json>]

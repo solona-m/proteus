@@ -4504,8 +4504,40 @@
     "description": "Heads the dropdown that picks which race's model a refit is made and saved as."
   },
   "Parts.Retarget.Race.Tip": {
-    "message": "어느 종족용 맞춤인지 고릅니다. 다른 종족은 게임이 구부리는 방식대로 이 모델에서 만든, 그 종족 체형에 맞춰 그 종족이 불러오는 곳에 저장한 자기 모델을 받습니다. 미드랜더의 몸통·다리 장비는 다른 성별용으로도 맞출 수 있습니다. 이 모델은 그대로입니다.",
+    "message": "어느 종족용 맞춤인지 고릅니다. 다른 종족은 게임이 구부리는 방식대로 이 모델에서 만든, 그 종족 체형에 맞춰 그 종족이 불러오는 곳에 저장한 자기 모델을 받습니다. 미드랜더의 몸통·다리 장비와 여성용 신발·장갑(남성용으로)은 다른 성별용으로도 맞출 수 있습니다. 이 모델은 그대로입니다.",
     "description": "Tooltip of Parts.Retarget.Race.Label."
+  },
+  "Parts.Retarget.CrossSexEnd.NoLimb": {
+    "message": "사이즈를 알 수 있는 다리나 팔에 닿지 않습니다. 다른 성별용으로 맞출 때는 그래도 다리나 팔을 통해 맞추므로, 만들어진 다리 또는 가슴 사이즈를 고르세요.",
+    "description": ""
+  },
+  "Parts.Retarget.CrossSexEnd.NoSizes": {
+    "message": "맞출 대상으로 고른 사이즈를 그 바디에서 더 이상 찾을 수 없습니다. 다시 고르세요.",
+    "description": ""
+  },
+  "Parts.Retarget.KeepEnds.CrossSex.Tip": {
+    "message": "다른 성별용으로 맞출 때 신발은 항상 원래 발을, 장갑은 원래 손을 유지하고 새 바디의 피부를 씁니다. 바디 맵을 통해 다리나 팔만 맞춥니다.",
+    "description": ""
+  },
+  "Parts.Retarget.EndsUnreadable.CrossSex": {
+    "message": "리그를 읽을 수 없어 발이나 손을 나머지와 구별할 수 없습니다. 신발이나 장갑은 그것들을 유지할 때만 다른 성별용으로 맞춥니다.",
+    "description": ""
+  },
+  "Parts.Retarget.KeepShape.CrossSexTip": {
+    "message": "다른 성별용으로 맞출 때 신발의 다리나 장갑의 팔은 하나로 맞추므로 '형태 유지'는 적용되지 않습니다. 원래 종족을 다시 고르면 체크가 돌아옵니다.",
+    "description": ""
+  },
+  "Parts.Retarget.CrossSexEnd.PickMadeFor.Fmt": {
+    "message": "사이즈를 알 수 있는 피부가 없고, 천이 {0}의 어떤 {1} 사이즈에도 닿지 않습니다. '제작 체형'에서 만들어진 바디(게임 기본 체형으로 만들었다면 그것)를 고른 다음 사이즈를 고르세요.",
+    "description": ""
+  },
+  "Parts.Retarget.Race.CrossSexNude.Fmt": {
+    "message": "{0}은(는) 체형의 {1}만 대응해서 대신 {2}에 맞췄습니다({3} 대응).",
+    "description": ""
+  },
+  "Parts.Retarget.Race.WomensModel.Fmt": {
+    "message": "이 모드에는 이 아이템의 자체 {0} 모델도 있습니다. 그것으로 {1} 버전을 만들려면 여세요. '리핏 대상 종족'에서 '{1}'가 선택된 상태가 됩니다.",
+    "description": ""
   },
   "Parts.Retarget.Race.ThisModel.Fmt": {
     "message": "{0} (이 모델)",
@@ -5120,7 +5152,7 @@
     "description": ""
   },
   "SizeSet.Intro": {
-    "message": "아래에서 체크한 바디의 모든 사이즈를 이 모드 전체에 추가합니다. 각 사이즈는 제작자의 사이즈 중 가장 가까운 것에서 리핏하고, 그 옵션 안의 의상 나머지 파츠도 같은 사이즈에서 만들어, 제작자의 사이즈 옆에 \"Rue S\", \"YAB Buff L\" 등으로 저장합니다. 모드에 이미 있는 사이즈는 그대로 둡니다. 여성용 모드에도 TBSE와 TBSE-X를 추가할 수 있습니다. 몸통과 다리가 남성용으로 맞춰져 별도의 그룹에 저장됩니다.",
+    "message": "아래에서 체크한 바디의 모든 사이즈를 이 모드 전체에 추가합니다. 각 사이즈는 제작자의 사이즈 중 가장 가까운 것에서 리핏하고, 그 옵션 안의 의상 나머지 파츠도 같은 사이즈에서 만들어, 제작자의 사이즈 옆에 \"Rue S\", \"YAB Buff L\" 등으로 저장합니다. 모드에 이미 있는 사이즈는 그대로 둡니다. 여성용 모드에도 TBSE와 TBSE-X를 추가할 수 있습니다. 몸통, 다리, 신발, 장갑이 남성용으로 맞춰져 별도의 그룹에 저장됩니다.",
     "description": ""
   },
   "SizeSet.Yas": {
@@ -5136,7 +5168,19 @@
     "description": ""
   },
   "SizeSet.Ends.Tip": {
-    "message": "신발과 장갑은 원래 발과 손을 유지하고, 닿는 다리나 팔만 리핏합니다. 신발은 다리 사이즈를, 장갑은 바디마다 옵션 하나를 받고, 같은 그룹이면 둘 다 의상의 가슴이나 다리 사이즈에 합류합니다.",
+    "message": "신발과 장갑은 원래 발과 손을 유지하고, 닿는 다리나 팔만 리핏합니다. 신발은 다리 사이즈를, 장갑은 바디마다 옵션 하나를 받고, 같은 그룹이면 둘 다 의상의 가슴이나 다리 사이즈에 합류합니다. 남성 바디를 '남성용'으로 체크하면 여성용 모드의 신발과 장갑에도 남성 버전이 만들어집니다.",
+    "description": ""
+  },
+  "SizeSet.EndsLeftOut.Fmt": {
+    "message": "빠진 신발과 장갑({0}): 사이즈와 남성 버전을 만들려면 '신발과 장갑 포함'을 체크하세요.",
+    "description": ""
+  },
+  "SizeSet.AuthorsMens.Fmt": {
+    "message": "{0}: 모드에 자체 남성 모델이 있어 이것으로 남성 버전을 만들지 않았고, 그 남성 모델에서도 이번에 아무것도 만들어지지 않았습니다.",
+    "description": ""
+  },
+  "SizeSet.AuthorsMensUnticked.Fmt": {
+    "message": "{0}: 모드에 자체 남성 모델이 있어 이것으로 남성 버전을 만들지 않았습니다. 그 모델의 사이즈를 만들려면 일반 남성 바디(예: '{1}')를 체크하세요.",
     "description": ""
   },
   "SizeSet.Piercings": {
@@ -5292,7 +5336,7 @@
     "description": "Checkbox label for a men's body offered for a women's mod. {0} is the body (\"TBSE\")."
   },
   "SizeSet.ForMen.Tip.Fmt": {
-    "message": "이 모드의 여성용 몸통·다리 파츠에 {0} 남성 버전이 생깁니다. 바디 맵(처음 필요할 때 다운로드됩니다)을 통해 미드랜더 남성용으로 맞추며, 각각 남성 체형으로 굽힌 몸이 그의 몸에 가장 가까운 제작자의 사이즈에서 만듭니다. 별도의 그룹 \"{1}\"에 저장되므로 여성용 사이즈는 그대로입니다. 신발과 장갑은 성별을 넘어 맞추지 않으며, 제작자가 이미 남성용으로 만든 파츠는 그것을 씁니다.",
+    "message": "이 모드의 여성용 몸통·다리 파츠에 {0} 남성 버전이 생깁니다. 바디 맵(처음 필요할 때 다운로드됩니다)을 통해 미드랜더 남성용으로 맞추며, 각각 남성 체형으로 굽힌 몸이 그의 몸에 가장 가까운 제작자의 사이즈에서 만듭니다. 별도의 그룹 \"{1}\"에 저장되므로 여성용 사이즈는 그대로입니다. '신발과 장갑 포함'이 켜져 있으면 여성용 신발과 장갑도 다리나 팔을 통해 맞춘 남성 버전이 만들어지며, 제작자가 이미 남성용으로 만든 파츠는 그것을 씁니다.",
     "description": "Tooltip. {0} is a men's body (\"TBSE\"), {1} the group the men's versions go into."
   },
   "SizeSet.MensGroup": {
@@ -5322,6 +5366,10 @@
   "SizeSet.EndFromGameBody.Fmt": {
     "message": "{0}, \"{1}\": 다리나 팔에 체형을 읽을 피부가 없어서 게임 기본 체형으로 만든 것으로 보고 맞췄습니다.",
     "description": "Check in game: a women's shoe or glove made a men's with no skin to read a body off. {0} is the piece, {1} the men's option."
+  },
+  "SizeSet.EndFromOutfitLegs.Fmt": {
+    "message": "{0}, \"{1}\": 체형을 읽을 자체 피부가 없고 천이 어떤 바디에도 가깝게 닿지 않아서, 이 의상의 다리 장비(\"{3}\")가 만들어진 바디인 {2}로 만든 것으로 보고 맞췄습니다.",
+    "description": ""
   },
   "SizeSet.EndClothGap.Fmt": {
     "message": "{0}, \"{1}\": 천이 {3}의 다리나 팔에서 평균 약 {2:F0} mm 떨어져 있습니다. 읽어 낸 체형이 실제로 만든 체형과 다를 수 있습니다.",

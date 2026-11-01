@@ -54,9 +54,10 @@ internal static class CrossSexRefit
         => CrossesSex(drawn, race) && Supported(drawn, race, slot);
 
     /// <summary>
-    /// Whether a shoe or glove drawn as <paramref name="drawn"/> is made a <paramref name="race"/> one by the size set: a
-    /// women's made a men's, its leg or arm refitted through the body maps (<see cref="CrossSexRefitJob.RunEnd"/>). Not
-    /// in <see cref="Cells"/>: Studio's "Refit for", the CLI's --for-race and the automatic refit do not offer them.
+    /// Whether a shoe or glove drawn as <paramref name="drawn"/> is made a <paramref name="race"/> one: a women's made a
+    /// men's, its foot or hand kept and its leg or arm refitted through the body maps (<see cref="CrossSexRefitJob.RunEnd"/>).
+    /// Studio's "Refit for", the CLI's --for-race and the size set make it; the automatic refit never does. Not in
+    /// <see cref="Cells"/>, which <see cref="CrossSexRefitJob.Run"/> (a whole garment) reads.
     /// </summary>
     internal static bool EndsCross(ushort drawn, ushort race, string? slot)
         => drawn == Women && race == Men && slot?.ToLowerInvariant() is "_sho" or "_glv";
@@ -183,14 +184,32 @@ internal static class CrossSexRefit
         if (!ushort.TryParse(race, out ushort from) || !ushort.TryParse(forRace, out ushort to)
             || !(from is Men or Women && to is Men or Women) || !CrossesSex(from, to))
             return "--for-race crosses the sexes between 0101 and 0201 only";
-        if (!Supported(from, to, slot))
-            return "--for-race refits chest (_top) and legs (_dwn) garments only";
+        if (!Supported(from, to, slot) && !EndsCross(from, to, slot))
+            return CliSlotError;
         if (!given.Contains("game") || !given.Contains("uvmaps") || !given.Contains("from-root"))
             return "--for-race needs --game, --uvmaps and --from-root";
         if (new[] { "legs", "legs-to", "chest-from", "chest-to", "finish", "detect", "whole", "keep-default" }.Any(given.Contains))
             return "--for-race is not combined with --legs, --legs-to, --chest-from, --chest-to, --finish, --detect, "
                  + "--whole or --keep-default yet";
         return null;
+    }
+
+    internal const string CliSlotError
+        = "--for-race refits chest (_top) and legs (_dwn) garments both ways, and women's shoes (_sho) and gloves (_glv) for men";
+
+    /// <summary>
+    /// How one size of a refit for the other sex is judged, worded once for every surface (Studio's chest and legs,
+    /// its shoes and gloves, and the size set): matched through too little of the body, the refusal; otherwise the
+    /// quality line, with the cloth faces it turned over. Percentages in the current culture.
+    /// </summary>
+    internal static (string? Refusal, string Quality) Judged(double coverage, int folds)
+    {
+        var ps = Localization.Strings.Parts;
+        var culture = System.Globalization.CultureInfo.CurrentCulture;
+        string cover = coverage.ToString("P0", culture);
+        return CoverageAllowed(coverage)
+            ? (null, string.Format(ps.RetargetRaceCrossSexQualityFmt, folds, cover))
+            : (string.Format(ps.RetargetRefuseCrossSexCoverageFmt, cover, MinCoverage.ToString("P0", culture)), "");
     }
 
     /// <summary>
