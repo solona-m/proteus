@@ -1,3 +1,4 @@
+using System.Linq;
 using Proteus;
 using Xunit;
 
@@ -29,6 +30,127 @@ public class ConfigurationMigrationTests
         config.AutoHatCompat = false;
         config.Migrate();
         Assert.False(config.AutoHatCompat);
+    }
+
+    [Fact]
+    [Trait("Plan", "EDGE-gh33-36-37-body-size-10")]
+    public void A_new_config_runs_no_body_memory_step()   // [EDGE-gh33-36-37-body-size-10]
+    {
+        var config = new Configuration();
+        Assert.Equal(9, config.Version);
+        config.RetargetTargets["_top"] = "chest/L.mdl";   // by hand: only a v8 config is moved
+        config.Migrate();
+        Assert.Single(config.RetargetTargets);
+        Assert.Empty(config.RetargetSizesByBody);
+    }
+
+    // ── v8 -> v9: the Body size tool's memory per part and per body ─────────────────────────────────────
+
+    private static Configuration Load(string json)
+    {
+        var settings = new Newtonsoft.Json.JsonSerializerSettings { TypeNameHandling = Newtonsoft.Json.TypeNameHandling.Objects };
+        return Newtonsoft.Json.JsonConvert.DeserializeObject<Configuration>(json, settings)!;
+    }
+
+    [Fact]
+    [Trait("Plan", "AC-gh33-36-37-body-size-8")]
+    public void V8_config_keeps_its_body_and_sizes_per_body()   // [AC-gh33-36-37-body-size-8]
+    {
+        var c = Load("""{"Version":8,"RetargetBodyDir":"Neolithe","RetargetTargets":{"_top":"chest/L.mdl","_dwn":"legs/C.mdl","_glv":"hands/S.mdl"}}""");
+        c.Migrate();
+
+        var sizes = Proteus.Services.RememberedTargets.SizesOf(c, "neolithe")!;
+        Assert.Equal("chest/L.mdl", sizes["_top"]);
+        Assert.Equal("legs/C.mdl", sizes["_dwn"]);
+        Assert.Equal("hands/S.mdl", sizes["_glv"]);
+        Assert.Equal(new[] { "_dwn", "_glv", "_top" }, c.RetargetBodyByPart.Keys.Order());
+        Assert.All(c.RetargetBodyByPart.Values, v => Assert.Equal("Neolithe", v));
+        Assert.Empty(c.RetargetTargets);
+        Assert.Equal("Neolithe", c.RetargetBodyDir);
+        Assert.Equal(9, c.Version);
+        Assert.Equal("Neolithe", Proteus.Services.RememberedTargets.BodyToOpen(c, "_dwn", null, ["Neolithe"], _ => true).Dir);
+    }
+
+    [Fact]
+    [Trait("Plan", "EDGE-gh33-36-37-body-size-9")]
+    public void A_downgrade_to_1406_and_back_keeps_what_1406_wrote()   // [EDGE-gh33-36-37-body-size-9]
+    {
+        // 1406 knows neither new field: it drops them on its next save and stamps the config 8.
+        // (a) Nothing changed in 1406.
+        var a = Load("""{"Version":8,"RetargetBodyDir":"A","RetargetTargets":{}}""");
+        a.Migrate();
+        Assert.Equal(9, a.Version);
+        Assert.Empty(a.RetargetTargets);
+        Assert.Null(Proteus.Services.RememberedTargets.SizesOf(a, "A"));
+        Assert.Equal("A", Proteus.Services.RememberedTargets.BodyToOpen(a, "_top", null, ["A", "B"], _ => true).Dir);
+
+        // (b) In 1406 the user picked B and a legs size.
+        var b = Load("""{"Version":8,"RetargetBodyDir":"B","RetargetTargets":{"_dwn":"legs/M.mdl"}}""");
+        b.Migrate();
+        Assert.Empty(b.RetargetTargets);
+        Assert.Equal(["_dwn"], Proteus.Services.RememberedTargets.SizesOf(b, "B")!.Keys);
+        Assert.Equal("B", b.RetargetBodyByPart["_dwn"]);
+        Assert.Single(b.RetargetBodyByPart);
+
+        // Never over what is there: a stale old-style size does not replace the per-body one, nor reseat a part.
+        var guard = Load("""
+            {"Version":8,"RetargetBodyDir":"B","RetargetTargets":{"_dwn":"old.mdl"},
+             "RetargetSizesByBody":{"B":{"_dwn":"new.mdl"}},"RetargetBodyByPart":{"_dwn":"Rue"}}
+            """);
+        guard.Migrate();
+        Assert.Equal("new.mdl", Proteus.Services.RememberedTargets.SizesOf(guard, "B")!["_dwn"]);
+        Assert.Equal("Rue", guard.RetargetBodyByPart["_dwn"]);
+        Assert.Empty(guard.RetargetTargets);
+    }
+
+    [Fact]
+    [Trait("Plan", "EDGE-gh33-36-37-body-size-11")]
+    public void V8_sizes_without_a_body_are_dropped()   // [EDGE-gh33-36-37-body-size-11]
+    {
+        foreach (string body in new[] { "", "\"RetargetBodyDir\":\"\"," })
+        {
+            var c = Load("{\"Version\":8," + body + "\"RetargetTargets\":{\"_top\":\"chest/L.mdl\"}}");
+            c.Migrate();
+            Assert.Empty(c.RetargetSizesByBody);
+            Assert.Empty(c.RetargetBodyByPart);
+            Assert.Empty(c.RetargetTargets);
+        }
+    }
+
+    [Fact]
+    [Trait("Plan", "EDGE-gh33-36-37-body-size-12")]
+    public void V8_body_without_sizes_seeds_no_part()   // [EDGE-gh33-36-37-body-size-12]
+    {
+        var c = Load("""{"Version":8,"RetargetBodyDir":"A"}""");
+        c.Migrate();
+        Assert.Empty(c.RetargetBodyByPart);
+        Assert.Equal("A", Proteus.Services.RememberedTargets.BodyToOpen(c, "_top", null, ["A"], _ => true).Dir);
+    }
+
+    [Fact]
+    [Trait("Plan", "EDGE-gh33-36-37-body-size-22")]
+    public void Null_memory_fields_read_as_empty()   // [EDGE-gh33-36-37-body-size-22]
+    {
+        var c = Load("""{"Version":9,"RetargetBodyDir":"","RetargetBodyByPart":null,"RetargetSizesByBody":null}""");
+        Assert.Null(Proteus.Services.RememberedTargets.SizesOf(c, "A"));
+        Assert.Empty(Proteus.Services.RememberedTargets.Fillable(c, "A", _ => true, _ => false));
+        Assert.Null(Proteus.Services.RememberedTargets.BodyToOpen(c, "_top", null, ["A"], _ => true).Dir);
+        Proteus.Services.RememberedTargets.ChoseSize(c, "_top", "A", "_top", "x");
+        Assert.Equal("x", Proteus.Services.RememberedTargets.SizesOf(c, "A")!["_top"]);
+        Assert.Equal("A", c.RetargetBodyByPart["_top"]);
+
+        var inner = Load("""{"Version":9,"RetargetSizesByBody":{"A":null}}""");
+        Assert.Null(Proteus.Services.RememberedTargets.SizesOf(inner, "A"));
+        Assert.Empty(Proteus.Services.RememberedTargets.Fillable(inner, "A", _ => true, _ => false));
+        Proteus.Services.RememberedTargets.ChoseSize(inner, "_top", "A", "_top", "x");
+        Assert.Equal("x", Proteus.Services.RememberedTargets.SizesOf(inner, "A")!["_top"]);
+
+        var old = Load("""{"Version":8,"RetargetBodyDir":"A","RetargetTargets":{"_top":"t"},"RetargetBodyByPart":null,"RetargetSizesByBody":null}""");
+        old.Migrate();
+        Assert.Equal("t", Proteus.Services.RememberedTargets.SizesOf(old, "A")!["_top"]);
+        var nulls = Load("""{"Version":8,"RetargetTargets":null}""");
+        nulls.Migrate();
+        Assert.Empty(nulls.RetargetTargets);
     }
 
     /// <summary>
@@ -160,10 +282,15 @@ public class ConfigurationMigrationTests
             DisableAutoRedraw = true,
             AutoHatCompat = false,
             HideRedundantMeshes = false,
+            RetargetBodyDir = "Neolithe",
         };
+        config.RetargetTargets["_top"] = "chest/L.mdl";
 
         config.Migrate();
 
+        Assert.Equal("chest/L.mdl", Proteus.Services.RememberedTargets.SizesOf(config, "Neolithe")!["_top"]);   // v9
+        Assert.Equal("Neolithe", config.RetargetBodyByPart["_top"]);
+        Assert.Empty(config.RetargetTargets);
         Assert.False(config.EnableCompression);        // v1 -> v2
         Assert.False(config.AutoRedraw);               // v3 -> v4, carried across from the opt-out
         Assert.True(config.HideRedundantMeshes);       // v6 -> v7

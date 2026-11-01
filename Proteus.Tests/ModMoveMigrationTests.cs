@@ -90,17 +90,22 @@ public class ModMoveMigrationTests
 
     [Fact]
     [Trait("Plan", "EDGE-mod-rename-20")]
+    [Trait("Plan", "EDGE-gh33-36-37-body-size-20")]
     public void Configuration_leaves_body_targets()
     {
         var c = new Configuration();
         var p = Pref(c);
         p.ChestBody = "Old";
         c.RetargetBodyDir = "Old";
+        c.RetargetBodyByPart["_top"] = "Old";
+        c.RetargetSizesByBody["Old"] = new() { ["_top"] = "chest/L.mdl" };
 
         ModMoveMigration.Configuration(c, "Old", "New");
 
         Assert.Equal("Old", p.ChestBody);
         Assert.Equal("Old", c.RetargetBodyDir);
+        Assert.Equal("Old", c.RetargetBodyByPart["_top"]);                              // [EDGE-gh33-36-37-body-size-20]
+        Assert.Equal(["Old"], c.RetargetSizesByBody.Keys);
     }
 
     [Fact]

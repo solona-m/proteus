@@ -137,6 +137,20 @@ public class StudioBodyChoiceTests
     }
 
     [Fact]
+    [Trait("Plan", "EDGE-gh33-36-37-body-size-18")]
+    public void A_restore_onto_the_made_for_body_makes_a_refit_between_its_sizes()   // [EDGE-gh33-36-37-body-size-18]
+    {
+        // Opening a leg piece on the body remembered for legs, which is the session's "made for" body: that is a refit
+        // between its own sizes, as a pick of it would be — so a restore, not only a pick, clears "made for". Intended.
+        var c = new Configuration();
+        RememberedTargets.PickedBody(c, "_dwn", "B");
+        string restored = RememberedTargets.BodyToOpen(c, "_dwn", "A", ["A", "B"], _ => true).Dir!;
+        Assert.Equal("B", restored);
+        Assert.Null(StudioBodyChoice.SourceAfterPick("B", restored));
+        Assert.Equal("C", StudioBodyChoice.SourceAfterPick("C", restored));
+    }
+
+    [Fact]
     [Trait("Plan", "EDGE-studio-slot-body-13")]
     public void Mod_owning_matches_whole_folders()   // [EDGE-studio-slot-body-13]
     {

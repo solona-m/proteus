@@ -188,6 +188,23 @@ public class RetargetInputsTests
     }
 
     [Fact]
+    [Trait("Plan", "EDGE-gh33-36-37-body-size-2")]
+    public void Key_changes_with_the_made_for_body()   // [EDGE-gh33-36-37-body-size-2]
+    {
+        // A plan still running when "Made for body" changes is dropped when it lands: Consume takes only a result whose
+        // key is the one asked for now.
+        var layout = Shoe(keep: false);
+        var slots = RetargetInputs.Slots(layout, CatalogSlots, Two);
+        var from = new Dictionary<string, BodyOption> { ["_sho"] = FeetS, ["_dwn"] = LegsS };
+        var to = new Dictionary<string, List<BodyOption>> { ["_sho"] = [FeetM], ["_dwn"] = [LegsM] };
+        var inputs = RetargetInputs.Assemble(layout, slots, from, to, null);
+        var chosen = RetargetInputs.Chosen(slots, from, to);
+        string Key(string? made) => RetargetInputs.Key("m", made, inputs, chosen, from, to, [], [], true, false, true);
+
+        Assert.Equal(3, new[] { Key("Rue+"), Key(null), Key("Bibo+") }.Distinct().Count());
+    }
+
+    [Fact]
     [Trait("Plan", "EDGE-keep-ends-studio-18")]
     public void Key_changes_with_keep_ends_skin_only_and_shapes()   // [EDGE-keep-ends-studio-18]
     {

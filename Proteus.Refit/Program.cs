@@ -85,6 +85,11 @@ internal static class Program
 
     private static int Main(string[] args)
     {
+        // UTF-8 without a BOM, whatever the console's code page: scripts read the JSON this prints as UTF-8. First, as
+        // Console.Out takes the encoding of the moment it is first read; disposed last, putting the terminal back.
+        using var console = Utf8Console.Use(() => Console.OutputEncoding, e => Console.OutputEncoding = e,
+                                            Console.SetOut, Console.SetError,
+                                            Console.OpenStandardOutput, Console.OpenStandardError);
         // Loc.Localize returns "#key" for an assembly that was never set up, and refusals are worded through it.
         Loc.SetupWithFallbacks(typeof(Proteus.Plugin).Assembly);
         using var temp = TempFolders.Isolate();
