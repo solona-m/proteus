@@ -14,19 +14,30 @@ namespace Proteus.Tests;
 /// </summary>
 public class OffThreadTests
 {
-    /// <summary>A task completed later, on a thread of its own, as Dalamud completes a framework hop.</summary>
-    private static (Task<int> Task, Func<int> ThreadId) CompletedLaterElsewhere(Action<TaskCompletionSource<int>> finish)
+    /// <summary>
+    /// A task completed later, on a thread of its own, as Dalamud completes a framework hop. The thread stays alive until
+    /// the test has compared ids (dispose the handle): .NET hands a finished thread's managed id to the next thread made,
+    /// so under load a pool thread could carry the completer's id and the comparison would fail for nothing.
+    /// </summary>
+    private static (Task<int> Task, Func<int> ThreadId, IDisposable Alive) CompletedLaterElsewhere(Action<TaskCompletionSource<int>> finish)
     {
         var source = new TaskCompletionSource<int>();
+        var release = new ManualResetEventSlim();
         int id = 0;
         var thread = new Thread(() =>
         {
             id = Environment.CurrentManagedThreadId;
             Thread.Sleep(100);
             finish(source);
+            release.Wait(TimeSpan.FromSeconds(30));
         }) { IsBackground = true };
         thread.Start();
-        return (source.Task, () => id);
+        return (source.Task, () => id, new Releaser(release));
+    }
+
+    private sealed class Releaser(ManualResetEventSlim release) : IDisposable
+    {
+        public void Dispose() => release.Set();
     }
 
     [Fact]
@@ -34,35 +45,39 @@ public class OffThreadTests
     {
         // Inside Task.Run: no synchronization context, as on the refit's worker — xUnit's own would carry the test back
         // to its thread whatever the helper did.
-        var (result, after, completer) = await Task.Run(async () =>
+        var (result, after, completer, alive) = await Task.Run(async () =>
         {
-            var (task, completer) = CompletedLaterElsewhere(s => s.SetResult(7));
+            var (task, completer, alive) = CompletedLaterElsewhere(s => s.SetResult(7));
             int result = await AutoRefitWatcher.OffThread(task);
-            return (result, Environment.CurrentManagedThreadId, completer);
+            return (result, Environment.CurrentManagedThreadId, completer, alive);
         });
 
-        Assert.Equal(7, result);
-        Assert.NotEqual(completer(), after);
+        using (alive)
+        {
+            Assert.Equal(7, result);
+            Assert.NotEqual(completer(), after);
+        }
     }
 
     [Fact]
     public async Task ForceYielding_alone_does_not_leave_that_thread()
     {
         // The defect itself, so that this test fails should the runtime ever change and make the helper unnecessary.
-        var (after, completer) = await Task.Run(async () =>
+        var (after, completer, alive) = await Task.Run(async () =>
         {
-            var (task, completer) = CompletedLaterElsewhere(s => s.SetResult(7));
+            var (task, completer, alive) = CompletedLaterElsewhere(s => s.SetResult(7));
             await task.ConfigureAwait(ConfigureAwaitOptions.ForceYielding);
-            return (Environment.CurrentManagedThreadId, completer);
+            return (Environment.CurrentManagedThreadId, completer, alive);
         });
 
-        Assert.Equal(completer(), after);
+        using (alive) Assert.Equal(completer(), after);
     }
 
     [Fact]
     public async Task A_failed_hop_throws_its_own_exception()
     {
-        var (task, _) = CompletedLaterElsewhere(s => s.SetException(new OperationCanceledException("auto refit disposed")));
+        var (task, _, alive) = CompletedLaterElsewhere(s => s.SetException(new OperationCanceledException("auto refit disposed")));
+        using var keep = alive;
 
         var thrown = await Assert.ThrowsAsync<OperationCanceledException>(() => AutoRefitWatcher.OffThread(task));
         Assert.Equal("auto refit disposed", thrown.Message);
