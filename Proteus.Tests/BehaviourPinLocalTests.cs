@@ -28,6 +28,13 @@ public class BehaviourPinLocalTests(ITestOutputHelper o)
     private const string StormblessedLegsPin = "3B2B3ADD084CBB2295D78499DCE8769656B8FCF49260C2C4190BC359ED846DA0";
     private const string HeelsSizeSetPin = "E53697A7A3235D1FB3EF57DF52FCA160BF6C3BAF193C8E49507F252B6A42F955";
 
+    // tbsex-nude-legs (AC-4): what the size set's "TBSE (for men)" made on test 52839714 (build 1410), before a coverage
+    // refusal could fall through to the nude legs. Each pin hashes the men's files it wrote and its outcome table;
+    // Halone's leaves its glove out, which cross-sex-wrist-band changes on purpose.
+    private const string HalonesTbsePin = "9750B6A7EAB22165D5D09EE74810E1E7FBA04B3E6D5D905CF062189BF0F4BFE9";
+    private const string SheerTbsePin = "C1715EB81143CC6BCF8D7D6C71BD5D09B61F05CA8B239B61262A46CF4D751A21";
+    private const string StormblessedTbsePin = "B51FD459F246F4F4F0BABE47175AA8D9BAEBC678D35839FF8042604AD929F661";
+
     private static UVRemapService Maps() => new(Substitute.For<IPluginLog>(), LocalData.Path(LocalData.TbseUvMaps));
 
     private static string GamePathOf(string path)
@@ -149,4 +156,79 @@ public class BehaviourPinLocalTests(ITestOutputHelper o)
             SizeSetBatchData.Delete(copy);
         }
     }
+    private static readonly Lazy<Lumina.GameData> GameData = new(() => new Lumina.GameData(LocalData.Path(LocalData.GameData)));
+    private static byte[]? Game(string path) => GameData.Value.GetFile(path)?.Data;
+
+    /// <summary>
+    /// The size set's "TBSE (for men)" run on a copy of a women's mod, "Make again": the men's files it wrote under
+    /// <see cref="BodyRetargetWriter.Subfolder"/> and one row per men's outcome (status, reason code, the body it was
+    /// made from, coverage), hashed together. Returned with the rows, so a changed pin names what moved.
+    /// </summary>
+    internal static (string Hash, List<string> Rows) TbseSizeSet(string modNeed, string? leaveOut = null)
+    {
+        string copy = SizeSetBatchData.CopyOf(modNeed);
+        try
+        {
+            var bodies = SizeSetBatch.ScanBodies(Path.GetDirectoryName(LocalData.Path(CrossSexRefitLocalTests.Tbse))!,
+                [SizeSetBatchData.Folder(CrossSexRefitLocalTests.Bibo), SizeSetBatchData.Folder(CrossSexRefitLocalTests.Tbse),
+                 SizeSetBatchData.Folder(CrossSexNudeLegsLocalTests.LavaBod)]);
+            string[] keys = ["tbse@women"];
+            var gameBodies = SizeSetRefit.GameBodies(keys, Game, ends: true);
+            var runLog = new SizeSetRefit.RunLog();
+            SizeSetRefit.Run(new SizeSetRefit.Request(copy, keys, Yas: false, Remake: true, bodies, Game, Ends: true,
+                                                      race => gameBodies.GetValueOrDefault(race),
+                                                      Across: new SizeSetRefit.AcrossInputs(_ => null)),
+                             runLog, Maps(), Substitute.For<IPluginLog>(), _ => { }, CancellationToken.None);
+            using var sha = IncrementalHash.CreateHash(HashAlgorithmName.SHA256);
+            string sub = Path.Combine(copy, BodyRetargetWriter.Subfolder);
+            var files = Directory.Exists(sub)
+                ? Directory.EnumerateFiles(sub, "c0101*", SearchOption.AllDirectories)
+                           .Where(f => leaveOut == null || !f.Contains(leaveOut, StringComparison.OrdinalIgnoreCase))
+                           .Order(StringComparer.Ordinal).ToList()
+                : [];
+            foreach (string file in files)
+            {
+                sha.AppendData(Encoding.UTF8.GetBytes(Path.GetRelativePath(copy, file).Replace('\\', '/')));
+                sha.AppendData(File.ReadAllBytes(file));
+            }
+            var rows = runLog.Sizes.Where(s => s.Men && (leaveOut == null || !s.GamePath.Contains(leaveOut, StringComparison.OrdinalIgnoreCase)))
+                             .Select(s => $"{s.GamePath}|{s.Body}|{s.Option}|{s.Status}|{s.ReasonCode}|{s.From}|" +
+                                          $"{s.Measures?.Coverage:F4}")
+                             .Order(StringComparer.Ordinal).ToList();
+            foreach (string row in rows) sha.AppendData(Encoding.UTF8.GetBytes(row + "\n"));
+            return (Convert.ToHexString(sha.GetHashAndReset()), rows);
+        }
+        finally
+        {
+            SizeSetBatchData.Delete(copy);
+        }
+    }
+
+    private void CheckTbse(string what, string pin, string modNeed, string? leaveOut = null)
+    {
+        var (hash, rows) = TbseSizeSet(modNeed, leaveOut);
+        foreach (string row in rows) o.WriteLine($"  {row}");
+        Check(what, pin, hash);
+    }
+
+    [LocalDataFact(LocalData.GameData, HandsFeetPortLocalTests.HalonesChosen, CrossSexRefitLocalTests.Bibo,
+                   CrossSexRefitLocalTests.Tbse, CrossSexNudeLegsLocalTests.LavaBod, LocalData.TbseUvMaps)]
+    [Trait("Plan", "AC-tbsex-nude-legs-4")]
+    [Trait("Plan", "EDGE-tbsex-nude-legs-10")]
+    public void Halones_tbse_size_set_is_unchanged() // [AC-tbsex-nude-legs-4] [EDGE-tbsex-nude-legs-10]
+        => CheckTbse("halone's tbse", HalonesTbsePin, HandsFeetPortLocalTests.HalonesChosen, leaveOut: "_glv");
+
+    [LocalDataFact(LocalData.GameData, SizeSetCrossSexLocalTests.Sheer, CrossSexRefitLocalTests.Bibo,
+                   CrossSexRefitLocalTests.Tbse, CrossSexNudeLegsLocalTests.LavaBod, LocalData.TbseUvMaps)]
+    [Trait("Plan", "AC-tbsex-nude-legs-4")]
+    [Trait("Plan", "EDGE-tbsex-nude-legs-10")]
+    public void Sheer_tbse_size_set_is_unchanged() // [AC-tbsex-nude-legs-4] [EDGE-tbsex-nude-legs-10]
+        => CheckTbse("sheer tbse", SheerTbsePin, SizeSetCrossSexLocalTests.Sheer);
+
+    [LocalDataFact(LocalData.GameData, SizeSetCrossSexLocalTests.Stormblessed, CrossSexRefitLocalTests.Bibo,
+                   CrossSexRefitLocalTests.Tbse, CrossSexNudeLegsLocalTests.LavaBod, LocalData.TbseUvMaps)]
+    [Trait("Plan", "AC-tbsex-nude-legs-4")]
+    [Trait("Plan", "EDGE-tbsex-nude-legs-10")]
+    public void Stormblessed_tbse_size_set_is_unchanged() // [AC-tbsex-nude-legs-4] [EDGE-tbsex-nude-legs-10]
+        => CheckTbse("stormblessed tbse", StormblessedTbsePin, SizeSetCrossSexLocalTests.Stormblessed);
 }
