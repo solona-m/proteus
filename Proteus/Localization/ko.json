@@ -4507,6 +4507,10 @@
     "message": "어느 종족용 맞춤인지 고릅니다. 다른 종족은 게임이 구부리는 방식대로 이 모델에서 만든, 그 종족 체형에 맞춰 그 종족이 불러오는 곳에 저장한 자기 모델을 받습니다. 미드랜더의 몸통·다리 장비와 여성용 신발·장갑(남성용으로)은 다른 성별용으로도 맞출 수 있습니다. 이 모델은 그대로입니다.",
     "description": "Tooltip of Parts.Retarget.Race.Label."
   },
+  "Parts.Retarget.CrossSexEnd.NoLimb": {
+    "message": "사이즈를 알 수 있는 다리나 팔에 닿지 않습니다. 다른 성별용으로 맞출 때는 그래도 다리나 팔을 통해 맞추므로, 만들어진 다리 또는 가슴 사이즈를 고르세요.",
+    "description": ""
+  },
   "Parts.Retarget.CrossSexEnd.NoSizes": {
     "message": "맞출 대상으로 고른 사이즈를 그 바디에서 더 이상 찾을 수 없습니다. 다시 고르세요.",
     "description": ""
@@ -5362,6 +5366,10 @@
   "SizeSet.EndFromGameBody.Fmt": {
     "message": "{0}, \"{1}\": 다리나 팔에 체형을 읽을 피부가 없어서 게임 기본 체형으로 만든 것으로 보고 맞췄습니다.",
     "description": "Check in game: a women's shoe or glove made a men's with no skin to read a body off. {0} is the piece, {1} the men's option."
+  },
+  "SizeSet.EndFromOutfitLegs.Fmt": {
+    "message": "{0}, \"{1}\": 체형을 읽을 자체 피부가 없고 천이 어떤 바디에도 가깝게 닿지 않아서, 이 의상의 다리 장비(\"{3}\")가 만들어진 바디인 {2}로 만든 것으로 보고 맞췄습니다.",
+    "description": ""
   },
   "SizeSet.EndClothGap.Fmt": {
     "message": "{0}, \"{1}\": 천이 {3}의 다리나 팔에서 평균 약 {2:F0} mm 떨어져 있습니다. 읽어 낸 체형이 실제로 만든 체형과 다를 수 있습니다.",

@@ -4507,6 +4507,10 @@
     "message": "Pour quelle race est le réajustement. Une autre race obtient son propre modèle, fait à partir de celui-ci comme le jeu le plie, réajusté sur le corps de cette race et enregistré là où cette race le charge. Un vêtement de torse ou de jambes Midlander, ou une chaussure ou un gant pour femmes pour les hommes, peut aussi être réajusté pour l'autre sexe. Ce modèle reste tel quel.",
     "description": "Tooltip of Parts.Retarget.Race.Label."
   },
+  "Parts.Retarget.CrossSexEnd.NoLimb": {
+    "message": "Elle n'atteint aucune jambe ni aucun bras d'où lire sa taille. Réajustée pour l'autre sexe, elle l'est tout de même par eux : choisissez la taille de jambes ou de poitrine sur laquelle elle a été faite.",
+    "description": ""
+  },
   "Parts.Retarget.CrossSexEnd.NoSizes": {
     "message": "Aucune des tailles choisies pour le réajustement ne se trouve plus sur ce corps. Choisissez-les à nouveau.",
     "description": ""
@@ -5362,6 +5366,10 @@
   "SizeSet.EndFromGameBody.Fmt": {
     "message": "{0}, « {1} » : sa jambe ou son bras n'a pas de peau d'où lire un corps, il a donc été réajusté comme s'il avait été fait sur le corps du jeu.",
     "description": "Check in game: a women's shoe or glove made a men's with no skin to read a body off. {0} is the piece, {1} the men's option."
+  },
+  "SizeSet.EndFromOutfitLegs.Fmt": {
+    "message": "{0}, « {1} » : elle n'a pas de peau à elle d'où lire un corps, et son tissu ne repose de près sur aucun corps ; elle a donc été réajustée comme faite sur {2}, le corps sur lequel les jambes de cette tenue (« {3} ») ont été faites.",
+    "description": ""
   },
   "SizeSet.EndClothGap.Fmt": {
     "message": "{0}, « {1} » : son tissu s'écarte en moyenne d'environ {2:F0} mm de la jambe ou du bras de {3}, le corps lu n'est donc peut-être pas celui sur lequel il a été fait.",

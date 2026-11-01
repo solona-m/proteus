@@ -252,6 +252,12 @@ public sealed class HandsFeetPortTests : IDisposable
         Assert.Contains(nude.Label, fitted.Quality);
         Assert.Contains(a.Label, fitted.Quality);
 
+        // A size refused for something other than coverage: its own reason, labelled only when several were asked.
+        Assert.Equal("pair refused", CrossSexRefitJob.ToStudio(Result("", Size(a, 1f, saved: false, refusal: "pair refused")), 1).Error);
+        Assert.Equal(Strings.SizeSet.NotMade, CrossSexRefitJob.ToStudio(Result("", Size(a, 1f, saved: false)), 1).Error);
+        Assert.Equal(a.Label + ": " + Strings.SizeSet.NotMade,
+                     CrossSexRefitJob.ToStudio(Result("", Size(a, 1f, saved: false)), 2).Error);
+
         // No sizes and no refusal: a stale pick, never an empty plan.
         var none = CrossSexRefitJob.ToStudio(Result(""), 1);
         Assert.Null(none.Planned);
@@ -462,6 +468,8 @@ public sealed class HandsFeetPortTests : IDisposable
         string branch = crossSex[crossSex.IndexOf("void StartCrossSexEndPlan(", StringComparison.Ordinal)..];
         branch = branch[..branch.IndexOf("void DrawFoldLine(", StringComparison.Ordinal)];
         Assert.Contains("bake.Source", branch);
+        // A refused bake says its own reason (review #29).
+        Assert.Contains("refusedTo != 0 && bakeRefusal.Length > 0 ? bakeRefusal", branch);
         Assert.Contains("bake.Model", branch);
         Assert.DoesNotContain("GarmentBytes", branch);
 
@@ -530,6 +538,8 @@ public sealed class HandsFeetPortTests : IDisposable
         Assert.False(RetargetInputs.CrossSexEndHint(true, noSkin with { Pick = Body("0201", "_dwn", "L") }, false));
         Assert.False(RetargetInputs.CrossSexEndHint(true, noSkin, limbChosen: true));
         Assert.False(RetargetInputs.CrossSexEndHint(false, noSkin, false));
+        // A skinned shoe that reaches no leg keeps its own "no leg" line, never the "no skin" hint (review #28).
+        Assert.False(RetargetInputs.CrossSexEndHint(true, noSkin with { Route = KeepEnds.Route.SkinOnly }, false));
         // A pick from the cloth reading fills the limb, not the feet.
         var layout = RetargetInputs.LayoutFor("_sho", true, true, true, false);
         var legs = Body("0201", "_dwn", "L");

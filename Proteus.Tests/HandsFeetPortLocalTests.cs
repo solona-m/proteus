@@ -359,6 +359,99 @@ public sealed class HandsFeetPortLocalTests(ITestOutputHelper o) : IDisposable
         else Assert.True(RetargetInputs.CrossSexEndHint(true, read, limbChosen: false));
     }
 
+    private string CopyOf(string localMod)
+    {
+        string from = LocalData.Path(localMod), dir = Temp();
+        foreach (string f in Directory.EnumerateFiles(from, "*", SearchOption.AllDirectories))
+        {
+            string to = Path.Combine(dir, Path.GetRelativePath(from, f));
+            Directory.CreateDirectory(Path.GetDirectoryName(to)!);
+            File.Copy(f, to);
+        }
+        return dir;
+    }
+
+    private static IReadOnlyList<BodyModIndex.Entry> Bodies(params string[] mods)
+        => SizeSetBatch.ScanBodies(Path.GetDirectoryName(LocalData.Path(CrossSexRefitLocalTests.Tbse))!,
+                                   mods.Select(m => Path.GetFileName(LocalData.Path(m))).ToList());
+
+    private SizeSetRefit.RunLog SizeSetForMen(string root, IReadOnlyList<BodyModIndex.Entry> bodies, params string[] keys)
+    {
+        var runLog = new SizeSetRefit.RunLog();
+        var gameBodies = SizeSetRefit.GameBodies(keys, Game, ends: true);
+        SizeSetRefit.Run(new SizeSetRefit.Request(root, keys, false, false, bodies, Game, true,
+                                                  race => gameBodies.GetValueOrDefault(race),
+                                                  Across: new SizeSetRefit.AcrossInputs(_ => null)),
+                         runLog, Maps(), Substitute.For<IPluginLog>(), _ => { }, CancellationToken.None);
+        foreach (var n in runLog.Notes) o.WriteLine("  note: " + n);
+        foreach (var w in runLog.Warnings) o.WriteLine("  check: " + w);
+        return runLog;
+    }
+
+    /// <summary>
+    /// Halone's Chosen's boots have no skin and sit on no body closely; their outfit's legs read as Bibo+ Type C - Small, so
+    /// the men's boots are made from Bibo+, not from the game's body: TBSE made (said under Check in game), TBSE-X refused
+    /// with its reason. The author's groups are unchanged; the boot goes into our men's group.
+    /// </summary>
+    [LocalDataFact(LocalData.GameData, HalonesChosen, CrossSexRefitLocalTests.Bibo, CrossSexRefitLocalTests.Tbse,
+                   CrossSexRefitLocalTests.TbseX, LocalData.TbseUvMaps)]
+    [Trait("Plan", "AC-hands-feet-port-12")]
+    [Trait("Plan", "EDGE-hands-feet-port-39")]
+    [Trait("Plan", "EDGE-hands-feet-port-45")]
+    public void Halones_chosen_boots_take_their_legs_body() // [AC-hands-feet-port-12] [EDGE-hands-feet-port-39] [EDGE-hands-feet-port-45]
+    {
+        string copy = CopyOf(HalonesChosen);
+        static List<(string Name, JsonNode? Group)> Groups(string root)
+            => PenumbraModMeta.TryReadGroups(root)!.Select(g => (g.Name, JsonNode.Parse(g.Group.GetRawText()))).ToList();
+        var before = Groups(copy);
+        var run = SizeSetForMen(copy, Bodies(CrossSexRefitLocalTests.Bibo, CrossSexRefitLocalTests.Tbse, CrossSexRefitLocalTests.TbseX),
+                                "tbse@women", "tbse-x@women");
+        const string boot = "chara/equipment/e0613/model/c0201e0613_sho.mdl", mensBoot = "chara/equipment/e0613/model/c0101e0613_sho.mdl";
+        var bootPiece = SizeSetRefit.PiecesOf(copy, Game, includeEnds: true).Single(p => p.GamePath == boot);
+        foreach (var s in run.Sizes.Where(s => s.Piece == bootPiece.Label))
+            o.WriteLine($"{s.Body}: {s.Status} {s.ReasonCode} from {s.From} folded {s.Measures?.Folded} " +
+                        $"worst {s.Measures?.WorstMoveMm:F1} mm — {s.Reason}");
+
+        var tbse = Assert.Single(run.Sizes, s => s.Men && s.Body == "tbse" && s.Piece == bootPiece.Label);
+        Assert.Equal(SizeSetRefit.SizeStatus.Made, tbse.Status);
+        Assert.Contains("Bibo+", tbse.From);
+        Assert.Contains("Type C - Small", tbse.From);
+        Assert.Contains(run.Warnings, w => w == string.Format(Strings.SizeSet.EndFromOutfitLegsFmt, bootPiece.Label, "TBSE",
+                                                              tbse.From, "Small"));
+        Assert.DoesNotContain(run.Warnings, w => w == string.Format(Strings.SizeSet.EndFromGameBodyFmt, bootPiece.Label, "TBSE"));
+
+        var tbseX = Assert.Single(run.Sizes, s => s.Men && s.Body == "tbse-x" && s.Piece == bootPiece.Label);
+        Assert.NotEqual(SizeSetRefit.SizeStatus.Made, tbseX.Status);
+        Assert.False(string.IsNullOrEmpty(tbseX.Reason));
+
+        // Saved at the men's path, in our men's group; nothing at it in the TBSE-X option; the author's groups unchanged.
+        string mensGroup = SizeSetRefit.MensGroupName(copy, SizeSetRefit.AcrossPieces(SizeSetRefit.PiecesOf(copy, Game)));
+        var after = Groups(copy);
+        var group = after.Single(g => g.Name == mensGroup).Group!["Options"]!.AsArray();
+        Assert.Contains(group, opt => (string?)opt!["Name"] == "TBSE" && opt["Files"]?[mensBoot] != null);
+        Assert.DoesNotContain(group, opt => (string?)opt!["Name"] == "TBSE-X" && opt["Files"]?[mensBoot] != null);
+        foreach (var (name, json) in before.Where(g => g.Name != mensGroup))
+            Assert.True(JsonNode.DeepEquals(json, after.Single(g => g.Name == name).Group), $"group {name} changed");
+    }
+
+    /// <summary>Stormblessed's ends are made as before: gloves untouched by the rule, boots still made for TBSE.</summary>
+    [LocalDataFact(LocalData.GameData, SizeSetCrossSexLocalTests.Stormblessed, CrossSexRefitLocalTests.Bibo,
+                   CrossSexRefitLocalTests.Tbse, LocalData.TbseUvMaps)]
+    [Trait("Plan", "EDGE-hands-feet-port-43")]
+    public void Stormblessed_ends_no_regression() // [EDGE-hands-feet-port-43]
+    {
+        string copy = CopyOf(SizeSetCrossSexLocalTests.Stormblessed);
+        var run = SizeSetForMen(copy, Bodies(CrossSexRefitLocalTests.Bibo, CrossSexRefitLocalTests.Tbse), "tbse@women");
+        foreach (string slot in new[] { "_sho", "_glv" })
+        {
+            var outcome = Assert.Single(run.Sizes, s => s.Men && s.Body == "tbse" && s.GamePath == $"chara/equipment/e0633/model/c0101e0633{slot}.mdl");
+            o.WriteLine($"{slot}: {outcome.Status} from {outcome.From}");
+            Assert.Equal(SizeSetRefit.SizeStatus.Made, outcome.Status);
+        }
+        Assert.DoesNotContain(run.Warnings, w => w.Contains("e0633") && w.Contains("Glove", StringComparison.OrdinalIgnoreCase)
+                                                 && w.Contains("outfit", StringComparison.OrdinalIgnoreCase));
+    }
+
     /// <summary>
     /// The size set on Halone's Chosen with "for men" bodies ticked: every women's shoe and glove has a men's outcome per
     /// men's body, or the stated exclusion of the author's own men's model — none silent — and the author's groups are
@@ -412,6 +505,12 @@ public sealed class HandsFeetPortLocalTests(ITestOutputHelper o) : IDisposable
                                                || (!string.IsNullOrEmpty(s.ReasonCode) && !string.IsNullOrEmpty(s.Reason)));
             }
         Assert.DoesNotContain(run.Notes, n => n.Contains("aren't refitted across the sexes", StringComparison.Ordinal));
+        // Halone's Chosen's legs: the author's own men's model stops them crossing, and that is stated — an authors-mens
+        // outcome per men's body, and the note to tick the plain body.
+        var womensLegs = SizeSetRefit.PiecesOf(copy, Game, includeEnds: true).Single(p => p.GamePath == "chara/equipment/e0613/model/c0201e0613_dwn.mdl");
+        foreach (string key in new[] { "tbse", "tbse-x" })
+            Assert.Contains(run.Sizes, s => s.ReasonCode == SizeSetRefit.Codes.AuthorsMens && s.Piece == womensLegs.Label && s.Body == key);
+        Assert.Contains(string.Format(Strings.SizeSet.AuthorsMensUntickedFmt, womensLegs.Label, "TBSE"), run.Notes);
         // Only "for men" bodies ticked: an author's men's model is said to want the plain body, never to have made nothing.
         foreach (var piece in SizeSetRefit.PiecesOf(copy, Game, includeEnds: true))
             Assert.DoesNotContain(string.Format(Strings.SizeSet.AuthorsMensFmt, piece.Label), run.Notes);

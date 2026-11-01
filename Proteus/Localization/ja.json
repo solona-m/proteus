@@ -4507,6 +4507,10 @@
     "message": "どの種族向けの調整か。別の種族には、ゲームが曲げるのと同じようにこのモデルから作り、その種族の体に合わせて、その種族が読み込む場所に保存した専用モデルができます。ミッドランダーの胴・脚装備や、女性用の靴・手袋（男性向け）は、異性向けにも調整できます。このモデルはそのままです。",
     "description": "Tooltip of Parts.Retarget.Race.Label."
   },
+  "Parts.Retarget.CrossSexEnd.NoLimb": {
+    "message": "サイズを読み取れる脚や腕に届いていません。異性向けに合わせ直すときはそれでも脚や腕を通して調整するので、作られた脚または胸のサイズを選んでください。",
+    "description": ""
+  },
   "Parts.Retarget.CrossSexEnd.NoSizes": {
     "message": "合わせ先に選んだサイズが、そのボディにもう見つかりません。選び直してください。",
     "description": ""
@@ -5362,6 +5366,10 @@
   "SizeSet.EndFromGameBody.Fmt": {
     "message": "{0}「{1}」：脚または腕に体を読み取れる肌がないため、ゲーム本来の体で作られたものとして調整しました。",
     "description": "Check in game: a women's shoe or glove made a men's with no skin to read a body off. {0} is the piece, {1} the men's option."
+  },
+  "SizeSet.EndFromOutfitLegs.Fmt": {
+    "message": "{0}「{1}」：体を読み取れる肌がなく、布もどのボディにも密着していないため、この衣装の脚装備（「{3}」）が作られたボディ、{2}で作られたものとして調整しました。",
+    "description": ""
   },
   "SizeSet.EndClothGap.Fmt": {
     "message": "{0}「{1}」：布が{3}の脚または腕から平均で約{2:F0} mm離れています。読み取った体は、作られた体と違うかもしれません。",

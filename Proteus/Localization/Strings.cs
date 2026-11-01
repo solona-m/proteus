@@ -288,6 +288,11 @@ public sealed class SizeSetStrings
     public readonly string EndFromGameBodyFmt = ProteusLoc.Localize("SizeSet.EndFromGameBody.Fmt",
         "{0}, \"{1}\": its leg or arm has no skin to read a body off, so it was refit as made on the game's own body.");
 
+    /// <summary>{0} is the piece, {1} the men's option, {2} the body and size its outfit's legs read as, {3} the legs option.</summary>
+    public readonly string EndFromOutfitLegsFmt = ProteusLoc.Localize("SizeSet.EndFromOutfitLegs.Fmt",
+        "{0}, \"{1}\": it has no skin of its own to read a body off, and its cloth sits on no body closely, so it was refit "
+      + "as made on {2}, the body this outfit's legs (\"{3}\") were made on.");
+
     /// <summary>{0} is the piece, {1} the men's option, {2} millimetres, {3} the body.</summary>
     public readonly string EndClothGapFmt = ProteusLoc.Localize("SizeSet.EndClothGap.Fmt",
         "{0}, \"{1}\": its cloth sits about {2:F0} mm off {3}'s leg or arm on average, so the body it was read on may "
@@ -3280,6 +3285,9 @@ public sealed class PartsStrings
         "Which race the refit is for. Another race gets its own model, made from this one the way the game bends it, refitted onto that race's body and saved where that race loads it. A Midlander chest or legs garment, or a women's shoe or glove for men, can also be refitted for the other sex. This model stays as it is.");
 
     // ── a women's shoe or glove refitted for men ──
+
+    public readonly string RetargetCrossSexEndNoLimb = ProteusLoc.Localize("Parts.Retarget.CrossSexEnd.NoLimb",
+        "It reaches no leg or arm to tell its size by. Refitted for the other sex, it is refitted through them all the same: pick the legs or chest size it was made on.");
 
     public readonly string RetargetCrossSexEndNoSizes = ProteusLoc.Localize("Parts.Retarget.CrossSexEnd.NoSizes",
         "None of the sizes picked to refit onto could be found on that body any more. Pick them again.");

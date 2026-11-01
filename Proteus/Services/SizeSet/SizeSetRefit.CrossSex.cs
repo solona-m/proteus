@@ -457,7 +457,7 @@ internal static partial class SizeSetRefit
             {
                 made += IsEnd(piece.Slot)
                     ? RunAcrossEnd(request, inputs, piece, groupName, mensKeys, uvRemap, log, progress, runLog,
-                                   leadSources, ct)
+                                   leadSources, pieces, readings, ct)
                     : RunAcrossPiece(request, inputs, piece, groupName, mensKeys, uvRemap, log, progress, runLog,
                                      readings, madeOnReadings, leadSources, ct);
             }

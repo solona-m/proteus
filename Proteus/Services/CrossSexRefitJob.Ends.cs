@@ -27,7 +27,8 @@ internal static partial class CrossSexRefitJob
     /// <summary>
     /// For a men's legs target, the same body's nude smallclothes among <paramref name="menLegs"/>, as the size set offers
     /// them (<see cref="SupportedBodies.Size.NudeRel"/>, TBSE's SFW legs → its Gen A); null for every other target, and
-    /// null altogether when none of <paramref name="menLegs"/> has any.
+    /// for a target whose nude legs <paramref name="menLegs"/> doesn't hold. Null altogether only when the size table names
+    /// no nude legs at all.
     /// </summary>
     internal static Func<BodyOption, BodyOption?>? NudeOf(IReadOnlyList<BodyOption> menLegs)
     {

@@ -1480,8 +1480,10 @@ internal sealed partial class BodyRetargetPanel(PenumbraBridge penumbra, UVRemap
         if (why == null && RetargetInputs.CrossSexEndHint(crossEnd, studio, from.ContainsKey(limb)))
             using (ImRaii.PushColor(ImGuiCol.Text, ImGui.GetColorU32(ImGuiCol.TextDisabled)))
                 ImGui.TextWrapped(string.Format(ps.RetargetCrossSexEndPickMadeForFmt, BodyName(SourceDir), SlotName(limb)));
-        else if (why == null && !crossEnd && keepEnds && studio?.Route == KeepEnds.Route.SkinOnly && !from.ContainsKey(limb))
-            ImGui.TextDisabled(feet ? ps.RetargetNoLimbFeet : ps.RetargetNoLimbHands);
+        else if (why == null && inForce && studio?.Route == KeepEnds.Route.SkinOnly && !from.ContainsKey(limb))
+            // Made a men's, it is never only redrawn: it needs its leg or arm size.
+            using (ImRaii.PushColor(ImGuiCol.Text, ImGui.GetColorU32(ImGuiCol.TextDisabled)))
+                ImGui.TextWrapped(crossEnd ? ps.RetargetCrossSexEndNoLimb : feet ? ps.RetargetNoLimbFeet : ps.RetargetNoLimbHands);
     }
 
     /// <summary>The slot's name, and for the garment's own slot how many sizes the body mod offers.</summary>

@@ -4507,6 +4507,10 @@
     "message": "Für welche Rasse die Anpassung ist. Eine andere Rasse bekommt ein eigenes Modell, aus diesem so gebogen, wie das Spiel es biegt, auf den Körper dieser Rasse angepasst und dort gespeichert, wo diese Rasse es lädt. Ein Midlander-Oberteil oder eine Midlander-Hose lässt sich auch für das andere Geschlecht anpassen, ein Schuh oder Handschuh für Frauen für Männer. Dieses Modell bleibt, wie es ist.",
     "description": "Tooltip of Parts.Retarget.Race.Label."
   },
+  "Parts.Retarget.CrossSexEnd.NoLimb": {
+    "message": "Es reicht an kein Bein und keinen Arm, an dem sich seine Größe ablesen ließe. Für das andere Geschlecht wird es trotzdem darüber angepasst: Wähle die Bein- oder Brustgröße, auf der es gemacht wurde.",
+    "description": ""
+  },
   "Parts.Retarget.CrossSexEnd.NoSizes": {
     "message": "Keine der Größen, auf die angepasst werden soll, ist auf diesem Körper noch zu finden. Wähle sie neu.",
     "description": ""
@@ -5362,6 +5366,10 @@
   "SizeSet.EndFromGameBody.Fmt": {
     "message": "{0}, \"{1}\": Bein oder Arm hat keine Haut, an der sich ein Körper ablesen lässt, daher wurde es angepasst, als wäre es auf dem Körper des Spiels gemacht.",
     "description": "Check in game: a women's shoe or glove made a men's with no skin to read a body off. {0} is the piece, {1} the men's option."
+  },
+  "SizeSet.EndFromOutfitLegs.Fmt": {
+    "message": "{0}, \"{1}\": Es hat keine eigene Haut, an der sich ein Körper ablesen lässt, und sein Stoff liegt an keinem Körper eng an, daher wurde es angepasst, als wäre es auf {2} gemacht – dem Körper, auf dem die Hose dieses Outfits (\"{3}\") gemacht wurde.",
+    "description": ""
   },
   "SizeSet.EndClothGap.Fmt": {
     "message": "{0}, \"{1}\": Der Stoff liegt im Schnitt etwa {2:F0} mm neben Bein oder Arm von {3}, der abgelesene Körper ist also vielleicht nicht der, auf dem es gemacht wurde.",

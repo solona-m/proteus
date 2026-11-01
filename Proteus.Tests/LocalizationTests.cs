@@ -1252,7 +1252,6 @@ public sealed class LocalizationTests
         Assert.DoesNotContain(ReadmeVanillaOpensAsIs[lang].Old, readme);
     }
 
-    /// <summary>What each README's vanilla-gear paragraph says now, and the phrase it used for copying on open.</summary>
     /// <summary>Women's shoes and gloves made men's (hands-feet-port): every new and changed string is translated, not
     /// copied, with its placeholders, and no language still says shoes and gloves aren't crossed.</summary>
     [Theory]
@@ -1268,7 +1267,7 @@ public sealed class LocalizationTests
                      "Parts.Retarget.CrossSexEnd.NoSizes", "Parts.Retarget.KeepEnds.CrossSex.Tip",
                      "Parts.Retarget.EndsUnreadable.CrossSex", "Parts.Retarget.KeepShape.CrossSexTip",
                      "Parts.Retarget.CrossSexEnd.PickMadeFor.Fmt", "Parts.Retarget.Race.CrossSexNude.Fmt",
-                     "Parts.Retarget.Race.WomensModel.Fmt",
+                     "Parts.Retarget.Race.WomensModel.Fmt", "Parts.Retarget.CrossSexEnd.NoLimb",
                      "SizeSet.Intro", "SizeSet.ForMen.Tip.Fmt", "SizeSet.Ends.Tip", "Parts.Retarget.Race.Tip",
                  })
         {
@@ -1329,6 +1328,7 @@ public sealed class LocalizationTests
         ["ru"] = "Если снять галочку, они не получают", ["zh"] = "关闭时，它们既没有尺码也没有男性版本",
     };
 
+    /// <summary>What each README's vanilla-gear paragraph says now, and the phrase it used for copying on open.</summary>
     private static readonly Dictionary<string, (string Now, string Old)> ReadmeVanillaOpensAsIs = new()
     {
         ["en"] = ("nothing is saved until you change it", "so opening it copies it into a new mod"),

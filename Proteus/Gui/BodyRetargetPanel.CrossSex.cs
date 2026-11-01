@@ -60,8 +60,10 @@ internal sealed partial class BodyRetargetPanel
         if (cannot != null || active is not { Explicit: true, MadeFor: { } madeFor } bake
             || !from.TryGetValue(limb, out var limbFrom))
         {
-            planTask = Task.FromResult(new PlanResult(key, null, cannot ?? string.Format(
-                Strings.Parts.RetargetRefuseCrossSexMadeForFmt, ModelRace.Describe(drawnRace))));
+            // A men's pick whose bake was refused says the bake's own reason, not a made-for one it never reached.
+            string why = cannot ?? (active == null && refusedTo != 0 && bakeRefusal.Length > 0 ? bakeRefusal
+                                    : string.Format(Strings.Parts.RetargetRefuseCrossSexMadeForFmt, ModelRace.Describe(drawnRace)));
+            planTask = Task.FromResult(new PlanResult(key, null, why));
             return;
         }
 

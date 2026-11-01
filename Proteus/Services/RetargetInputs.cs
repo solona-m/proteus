@@ -92,10 +92,10 @@ internal static class RetargetInputs
         return null;
     }
 
-    /// <summary>Whether to say what to pick for a crossed piece with no skin to tell its size by: read with no size, and
-    /// none chosen yet.</summary>
+    /// <summary>Whether to say what to pick for a crossed piece with no skin to tell its size by: read with no skin and no
+    /// size, and none chosen yet. A skinned piece that reaches no leg keeps its own line (NoLimbFeet/Hands).</summary>
     internal static bool CrossSexEndHint(bool crossEnd, KeepEnds.StudioReading? read, bool limbChosen)
-        => crossEnd && !limbChosen && read is { Pick: null, Route: KeepEnds.Route.NoSkin or KeepEnds.Route.SkinOnly };
+        => crossEnd && !limbChosen && read is { Pick: null, Route: KeepEnds.Route.NoSkin };
 
     /// <summary>
     /// The layout, from what is known at once — never from a reading still on its way, so the rows do not change under
