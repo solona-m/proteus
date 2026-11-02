@@ -130,7 +130,10 @@ internal static class SizeSetBatch
     /// <summary>The keys a run goes through for a mod of <paramref name="pieces"/>: what is offered for it, in the
     /// panel's order, of what was asked — and with <paramref name="men"/>, the men's bodies, for men's pieces and for the
     /// women's pieces' men's versions both.</summary>
-    internal static IReadOnlyList<string> RunKeys(IReadOnlyList<SizeSetRefit.Piece> pieces, IReadOnlyList<string> asked, bool men)
+    /// <param name="modRoot">The mod's folder: "for men" is offered for a women's piece whose author's men's model no file of
+    /// reads as a model, too (see <see cref="SizeSetRefit.Offered"/>).</param>
+    internal static IReadOnlyList<string> RunKeys(IReadOnlyList<SizeSetRefit.Piece> pieces, IReadOnlyList<string> asked, bool men,
+                                                  string? modRoot = null)
     {
         var wanted = new HashSet<string>(asked, StringComparer.Ordinal);
         if (men)
@@ -139,7 +142,7 @@ internal static class SizeSetBatch
                 wanted.Add(key);
                 wanted.Add(key + SizeSetRefit.AcrossSuffix);
             }
-        return SizeSetRefit.Offered(pieces).Select(c => c.Key).Where(wanted.Contains).ToList();
+        return SizeSetRefit.Offered(pieces, modRoot).Select(c => c.Key).Where(wanted.Contains).ToList();
     }
 
     /// <summary>
@@ -189,7 +192,7 @@ internal static class SizeSetBatch
         // ── the pieces, read off the mod as it is: v3 reads too ──
         var dropped = new List<string>();
         var (pieces, endsLeftOut, _) = SizeSetRefit.ReadPieces(root, inputs.ReadGameFile, inputs.Ends, dropped.Add);
-        var keys = RunKeys(pieces, inputs.Keys, inputs.Men);
+        var keys = RunKeys(pieces, inputs.Keys, inputs.Men, root);
         var bodyKeys = keys.Select(k => k.Replace(SizeSetRefit.AcrossSuffix, "", StringComparison.Ordinal)).Distinct().ToList();
         var bodyMods = BodyModsOf(bodyKeys, bodies);
         var missing = bodyKeys.Where(k => !SupportedBodies.Installed(k, bodies)).ToList();

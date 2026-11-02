@@ -33,12 +33,16 @@ internal static partial class SizeSetRefit
 
     /// <summary>
     /// The bodies offered for a mod of <paramref name="pieces"/>: the women's when it has women's pieces, the men's when it
-    /// has men's, and the men's again "for men" when it has women's chest or legs pieces to cross (<see cref="AcrossPieces"/>).
+    /// has men's, and the men's again "for men" when it has women's chest or legs pieces to cross (<see cref="AcrossPieces"/>)
+    /// — or, given <paramref name="modRoot"/>, one whose author's men's model no file of can be read as a model
+    /// (<see cref="UnparsableMensPaths"/>), which a run may cross after all.
     /// </summary>
-    internal static IReadOnlyList<Choice> Offered(IReadOnlyList<Piece> pieces)
+    /// <param name="modRoot">The mod's folder, to read the author's men's models' files by; null offers "for men" for
+    /// pieces with no men's model only. Reads files: called once per mod, never per frame.</param>
+    internal static IReadOnlyList<Choice> Offered(IReadOnlyList<Piece> pieces, string? modRoot = null)
     {
         var races = pieces.Select(p => p.Race).ToHashSet(StringComparer.Ordinal);
-        bool across = AcrossPieces(pieces).Count > 0;
+        bool across = AcrossPieces(pieces).Count > 0 || modRoot != null && UnparsableMensPaths(pieces, modRoot).Count > 0;
         var offered = new List<Choice>();
         foreach (var (key, label, male) in SupportedBodies.Choices)
             if (races.Contains(male ? "0101" : "0201")) offered.Add(new Choice(key, key, label, male, false, false));
@@ -56,14 +60,125 @@ internal static partial class SizeSetRefit
     /// (<see cref="PiecesOf"/>), so it stops nothing — nor a copy of it TexTools packed beside the author's women's design,
     /// an older version of the game's model as often as not.
     /// </summary>
-    internal static IReadOnlyList<Piece> AcrossPieces(IReadOnlyList<Piece> pieces)
+    /// <param name="crossedInstead">Men's paths whose author's model no file of can be read as a model at all
+    /// (<see cref="MensModelsUnparsable"/>): the women's piece there is crossed after all.</param>
+    internal static IReadOnlyList<Piece> AcrossPieces(IReadOnlyList<Piece> pieces, IReadOnlySet<string>? crossedInstead = null)
     {
         var paths = pieces.Select(p => p.GamePath).ToHashSet(StringComparer.OrdinalIgnoreCase);
-        return pieces.Where(p => p.Race == "0201"
-                                 && (CrossSexRefit.Supported(CrossSexRefit.Women, CrossSexRefit.Men, p.Slot)
-                                     || CrossSexRefit.EndsCross(CrossSexRefit.Women, CrossSexRefit.Men, p.Slot))
-                                 && !paths.Contains(RacialModelBake.WithRace(p.GamePath, CrossSexRefit.Men)))
+        return pieces.Where(p => Crossable(p)
+                                 && (!paths.Contains(MensPathOf(p)) || crossedInstead?.Contains(MensPathOf(p)) == true))
                      .ToList();
+    }
+
+    /// <summary>A women's piece of a kind that gets men's versions, whatever the author made for men.</summary>
+    internal static bool Crossable(Piece p)
+        => p.Race == "0201"
+           && (CrossSexRefit.Supported(CrossSexRefit.Women, CrossSexRefit.Men, p.Slot)
+               || CrossSexRefit.EndsCross(CrossSexRefit.Women, CrossSexRefit.Men, p.Slot));
+
+    /// <summary>Where a women's piece's men's version is saved: its c0101 path.</summary>
+    internal static string MensPathOf(Piece p) => RacialModelBake.WithRace(p.GamePath, CrossSexRefit.Men);
+
+    /// <summary>
+    /// Whether the author's men's model at <paramref name="mensPath"/> came to anything this run: a size made, or one
+    /// that leaves nothing to do (<see cref="NothingToDo"/>) — already there, the author's own, the size it was made on.
+    /// Never "no body of its race ticked": that model was not tried at all.
+    /// </summary>
+    internal static bool MensModelUsable(IEnumerable<SizeOutcome> outcomes)
+        => outcomes.Any(s => s.Status == SizeStatus.Made
+                             || s.Status == SizeStatus.Skipped && s.ReasonCode is { } code && NothingToDo.Contains(code)
+                                && code != Codes.NoBodyForRace);
+
+    /// <summary>
+    /// Whether every file the author gives <paramref name="mensPath"/> can't be read as a model at all: missing, zero
+    /// bytes, or rejected by the model parser. Every redirect at that path counts — default files and any option of any
+    /// group, ours left out as <see cref="PiecesOf"/> leaves them out — and none at all is false: there is nothing of the
+    /// author's to stand in for. A model that parses is never counted, however the size set read it; nor one that could
+    /// not be opened for another reason (locked, refused), which may well be a good model. Author FileSwaps are not read.
+    /// </summary>
+    internal static bool AuthorMensRedirectsUnparsable(string modRoot, string mensPath, BodyRetargetWriter.Record? record,
+                                                       IReadOnlyList<PenumbraModMeta.Redirect>? redirects = null)
+    {
+        var ours = OurFiles(record);
+        var authors = (redirects ?? PenumbraModMeta.ReadAllRedirects(modRoot))
+            .Where(r => string.Equals(r.GamePath, mensPath, StringComparison.OrdinalIgnoreCase) && !IsOurFile(ours, r.File))
+            .ToList();
+        return authors.Count > 0 && authors.All(r => Unparsable(modRoot, r.File));
+    }
+
+    /// <summary>A mod file that is missing, zero bytes, or one the model parser rejects. Found as the size set finds the
+    /// author's files (<see cref="BodySizeCatalog.ResolveCaseInsensitive"/>); one that cannot be opened is not counted.</summary>
+    internal static bool Unparsable(string modRoot, string file)
+    {
+        byte[] bytes;
+        try
+        {
+            string path = BodySizeCatalog.ResolveCaseInsensitive(modRoot, file);
+            if (!File.Exists(path)) return true;
+            bytes = File.ReadAllBytes(path);
+        }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException or ArgumentException
+                                       or NotSupportedException)
+        {
+            return false;
+        }
+        if (bytes.Length == 0) return true;
+        // The parser itself, not ModelPartReader.Read, which turns a parse failure into "no drawable part". Only what a
+        // malformed file raises counts: any other exception is a bug of ours, and must never replace the author's model.
+        try
+        {
+            SecondSkinWriter.Parse(bytes);
+            return false;
+        }
+        catch (Exception e) when (MalformedModel(e))
+        {
+            return true;
+        }
+        catch (Exception)
+        {
+            return false;
+        }
+    }
+
+    /// <summary>What reading a truncated or damaged model raises: reads past its end, sizes that don't fit.</summary>
+    internal static bool MalformedModel(Exception e)
+        => e is IndexOutOfRangeException or ArgumentException or OverflowException or EndOfStreamException
+                or InvalidDataException;
+
+    /// <summary>
+    /// The men's paths whose author's model can't be used at all, so the women's piece there is crossed after all: the
+    /// men's model came to nothing this run (<see cref="MensModelUsable"/>) — tried or not — and no file the author gives
+    /// that path can be read as a model (<see cref="AuthorMensRedirectsUnparsable"/>). None with a "Made on"
+    /// body chosen: the author said where the mod was made, and the size set never falls back past that.
+    /// </summary>
+    internal static IReadOnlySet<string> MensModelsUnparsable(IReadOnlyList<Piece> pieces, RunLog runLog, string modRoot,
+                                                              string? madeOn,
+                                                              IReadOnlyList<PenumbraModMeta.Redirect>? redirects = null)
+    {
+        var set = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        if (madeOn != null) return set;
+        // The files decide: none reads as a model, so whatever the men's bodies ticked, there is nothing of the author's to
+        // size — tried this run (unreadable) or not (only "for men" ticked). A size that came of it all the same keeps it.
+        foreach (string mens in UnparsableMensPaths(pieces, modRoot, redirects))
+            if (!MensModelUsable(runLog.Sizes.Where(s => string.Equals(s.GamePath, mens, StringComparison.OrdinalIgnoreCase))))
+                set.Add(mens);
+        return set;
+    }
+
+    /// <summary>
+    /// The c0101 paths of the crossable women's pieces whose author's men's piece beside them has no file that reads as a
+    /// model (<see cref="AuthorMensRedirectsUnparsable"/>): what the files alone say, before any run.
+    /// </summary>
+    internal static IReadOnlyList<string> UnparsableMensPaths(IReadOnlyList<Piece> pieces, string modRoot,
+                                                              IReadOnlyList<PenumbraModMeta.Redirect>? redirects = null)
+    {
+        var paths = pieces.Select(p => p.GamePath).ToHashSet(StringComparer.OrdinalIgnoreCase);
+        var mensPaths = pieces.Where(Crossable).Select(MensPathOf).Where(paths.Contains)
+                              .Distinct(StringComparer.OrdinalIgnoreCase).ToList();
+        if (mensPaths.Count == 0) return [];
+        var record = BodyRetargetWriter.ReadRecord(modRoot);
+        redirects ??= PenumbraModMeta.ReadAllRedirects(modRoot);
+        return mensPaths.Where(m => AuthorMensRedirectsUnparsable(modRoot, m, record, redirects)).ToList();
     }
 
     /// <summary>The men's bodies ticked for men's versions, by the table's keys ("tbse"), in the table's order.</summary>
@@ -133,15 +248,25 @@ internal static partial class SizeSetRefit
     /// ("TBSE", "TBSE-X") at the c0101 path of one of these pieces. A Body size panel "Refit for" save keeps its own
     /// group, beside the women's refits there, and the size set never writes into it.
     /// </summary>
-    internal static string MensGroupName(string modRoot, IReadOnlyList<Piece> across)
+    /// <param name="crossable">Women's pieces whose men's version an earlier run may have made though the author has a
+    /// men's model there (<see cref="MensModelsUnparsable"/>): their c0101 path counts too where the record holds an
+    /// entry of ours at it under a men's option name — so the group stays recognised whatever this run crosses.</param>
+    /// <param name="ownSizeGroups">The size groups of the mod's own men's pieces (<see cref="OwnSizeGroups"/>): never the
+    /// men's versions' group, though such a group holds nothing but men's options at those very paths.</param>
+    internal static string MensGroupName(string modRoot, IReadOnlyList<Piece> across, IReadOnlyList<Piece>? crossable = null,
+                                         IReadOnlySet<string>? ownSizeGroups = null)
     {
-        var saves = across.Select(p => RacialModelBake.WithRace(p.GamePath, CrossSexRefit.Men))
-                          .ToHashSet(StringComparer.OrdinalIgnoreCase);
-        var names = SupportedBodies.Choices.Where(c => c.Male)
-                                   .Select(c => AcrossTarget(c.Key, "_top") is { } at ? SupportedBodies.OptionName(at.Body, at.Size) : null)
-                                   .OfType<string>().ToHashSet(StringComparer.OrdinalIgnoreCase);
+        var saves = across.Select(MensPathOf).ToHashSet(StringComparer.OrdinalIgnoreCase);
+        var names = MensOptionNames();
         var record = BodyRetargetWriter.ReadRecord(modRoot);
         if (record == null) return Strings.SizeSet.MensGroup;
+        foreach (var piece in crossable ?? [])
+        {
+            string mens = MensPathOf(piece);
+            if (record.Options.Any(e => !e.InAuthorGroup && names.Contains(e.Name)
+                                        && string.Equals(e.GamePath, mens, StringComparison.OrdinalIgnoreCase)))
+                saves.Add(mens);
+        }
         var groups = PenumbraModMeta.TryReadGroups(modRoot)?.Select(g => g.Name).ToHashSet(StringComparer.OrdinalIgnoreCase);
         bool OnlyMens(string group)
             => record.Options.Where(e => string.Equals(record.GroupOf(e), group, StringComparison.OrdinalIgnoreCase))
@@ -149,9 +274,101 @@ internal static partial class SizeSetRefit
         return record.Options.Where(e => !e.InAuthorGroup && saves.Contains(e.GamePath))
                              .Select(e => record.GroupOf(e))
                              .Distinct(StringComparer.OrdinalIgnoreCase)
-                             .FirstOrDefault(g => g.Length > 0 && (groups?.Contains(g) ?? false) && OnlyMens(g))
+                             .FirstOrDefault(g => g.Length > 0 && (groups?.Contains(g) ?? false)
+                                                  && ownSizeGroups?.Contains(g) != true && OnlyMens(g))
                ?? Strings.SizeSet.MensGroup;
     }
+
+    /// <summary>The options a men's version is saved as: one per men's body ("TBSE", "TBSE-X").</summary>
+    internal static HashSet<string> MensOptionNames()
+        => SupportedBodies.Choices.Where(c => c.Male)
+                          .Select(c => AcrossTarget(c.Key, "_top") is { } at ? SupportedBodies.OptionName(at.Body, at.Size) : null)
+                          .OfType<string>().ToHashSet(StringComparer.OrdinalIgnoreCase);
+
+    /// <summary>
+    /// The groups the mod's own men's pieces are sized in: their author's size group, or the one made for them — named in
+    /// whichever language Proteus spoke when it was made, so in every language it ships.
+    /// </summary>
+    internal static HashSet<string> OwnSizeGroups(IReadOnlyList<Piece> all)
+    {
+        var groups = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var p in all.Where(p => p.Race == "0101"))
+        {
+            if (p.Group != null)
+            {
+                groups.Add(p.Group);
+                continue;
+            }
+            groups.Add(p.GroupName);
+            foreach (string format in GroupFormats.Value)
+                foreach (string model in p.Models ?? [])
+                    try { groups.Add(string.Format(format, model)); }
+                    catch (FormatException) { }
+        }
+        return groups;
+    }
+
+    /// <summary>The name format of a group made for a piece's sizes ("Body — {0}"), in every language Proteus ships.</summary>
+    private static readonly Lazy<IReadOnlyList<string>> GroupFormats
+        = new(() => InEveryLanguage("Parts.Retarget.Group.Fmt", Strings.Parts.RetargetGroupFmt));
+
+    /// <summary>A string's message in each language file embedded in the plugin, and <paramref name="current"/>.</summary>
+    internal static IReadOnlyList<string> InEveryLanguage(string key, string current)
+    {
+        var found = new List<string> { current };
+        var assembly = typeof(SizeSetRefit).Assembly;
+        foreach (string name in assembly.GetManifestResourceNames()
+                                        .Where(n => n.StartsWith("Proteus.Localization.", StringComparison.Ordinal)
+                                                    && n.EndsWith(".json", StringComparison.Ordinal)))
+            try
+            {
+                using var stream = assembly.GetManifestResourceStream(name);
+                if (stream == null) continue;
+                using var doc = System.Text.Json.JsonDocument.Parse(stream);
+                if (doc.RootElement.TryGetProperty(key, out var entry) && entry.TryGetProperty("message", out var message)
+                    && message.GetString() is { Length: > 0 } text)
+                    found.Add(text);
+            }
+            catch (System.Text.Json.JsonException) { }
+        return found.Distinct(StringComparer.Ordinal).ToList();
+    }
+
+    /// <summary>
+    /// The women's pieces whose author's men's model a men's version of ours still stands over, though this run makes none
+    /// there: the author has a men's piece at that path, and the record holds an entry of ours at it under a men's option
+    /// name in <paramref name="mensGroup"/> — made from the women's piece by an earlier run, when that model could not be
+    /// read. Never deleted: said, with how to show the author's model again.
+    /// </summary>
+    /// <param name="skip">Men's paths left out: those crossed this run, and those whose author's files can't be read as
+    /// a model — there a men's version of ours is the men's model, not one standing over the author's.</param>
+    internal static IReadOnlyList<Piece> StillReplaced(IReadOnlyList<Piece> all, BodyRetargetWriter.Record? record,
+                                                       string mensGroup, IReadOnlySet<string> skip)
+    {
+        if (record == null) return [];
+        var paths = all.Select(p => p.GamePath).ToHashSet(StringComparer.OrdinalIgnoreCase);
+        var names = MensOptionNames();
+        return all.Where(p => Crossable(p) && paths.Contains(MensPathOf(p)) && !skip.Contains(MensPathOf(p))
+                              && record.Options.Any(e => !e.InAuthorGroup && names.Contains(e.Name)
+                                                         && string.Equals(e.GamePath, MensPathOf(p), StringComparison.OrdinalIgnoreCase)
+                                                         && string.Equals(record.GroupOf(e), mensGroup, StringComparison.OrdinalIgnoreCase)))
+                  .ToList();
+    }
+
+    /// <summary>What Check in game says of each piece <see cref="StillReplaced"/> found.</summary>
+    internal static IEnumerable<string> StillReplacedLines(IEnumerable<Piece> pieces, string mensGroup)
+        => pieces.Select(p => string.Format(Strings.SizeSet.AuthorsMensStillReplacedFmt, p.Label, mensGroup));
+
+    /// <summary>
+    /// What Check in game says of each women's piece crossed because its author's men's model could not be read
+    /// (<see cref="MensModelsUnparsable"/>) and made a men's version this run: that it now replaces that model wherever a
+    /// men's body is picked in the group. Nothing for one whose crossing made nothing — its refusals say why.
+    /// </summary>
+    internal static IEnumerable<string> CrossedLines(IReadOnlySet<string> crossedInstead, IReadOnlyList<Piece> pieces,
+                                                     RunLog runLog, string mensGroup)
+        => pieces.Where(p => Crossable(p) && crossedInstead.Contains(MensPathOf(p))
+                             && runLog.Sizes.Any(s => s.Men && s.Status == SizeStatus.Made
+                                                      && string.Equals(s.GamePath, MensPathOf(p), StringComparison.OrdinalIgnoreCase)))
+                 .Select(p => string.Format(Strings.SizeSet.AuthorsMensCrossedFmt, p.Label, mensGroup));
 
     /// <summary>
     /// The key a men's option's lead is kept by: the piece's own size group — legs following a chest share it by
@@ -362,50 +579,101 @@ internal static partial class SizeSetRefit
     /// The women's pieces a men's version is not made of because the author made the men's model of it themselves
     /// (<see cref="AcrossPieces"/>): one <see cref="Codes.AuthorsMens"/> outcome per men's body ticked, so none is silent.
     /// A note only when there is something to do about it, read off what became of that men's model this run: it was
-    /// refused, failed or unreadable and made nothing; or only plain men's bodies were missing for it — then which to tick.
+    /// refused, failed or unreadable and came to nothing (<see cref="MensModelUsable"/>); or only plain men's bodies were
+    /// missing for it — then which to tick.
     /// </summary>
-    internal static void StateAuthorsMens(IReadOnlyList<Piece> pieces, IReadOnlyList<string> mensKeys, RunLog runLog)
+    /// <param name="crossedInstead">Men's paths whose women's piece is crossed after all (<see cref="MensModelsUnparsable"/>):
+    /// not stated here — the crossing says what became of it.</param>
+    /// <param name="stillReplaced">Pieces a men's version of ours still stands over (<see cref="StillReplaced"/>): their
+    /// reason is the line saying so, and no note says "no men's version was made from it".</param>
+    /// <param name="standsIn">Men's paths where a men's version of ours from an earlier run is the men's model, the
+    /// author's files there still unreadable: no note says "no men's version was made from it" of those.</param>
+    internal static void StateAuthorsMens(IReadOnlyList<Piece> pieces, IReadOnlyList<string> mensKeys, RunLog runLog,
+                                          IReadOnlySet<string>? crossedInstead = null,
+                                          IReadOnlyDictionary<Piece, string>? stillReplaced = null,
+                                          IReadOnlySet<string>? standsIn = null)
     {
         var paths = pieces.Select(p => p.GamePath).ToHashSet(StringComparer.OrdinalIgnoreCase);
         foreach (var piece in pieces)
         {
-            if (piece.Race != "0201"
-                || !(CrossSexRefit.Supported(CrossSexRefit.Women, CrossSexRefit.Men, piece.Slot)
-                     || CrossSexRefit.EndsCross(CrossSexRefit.Women, CrossSexRefit.Men, piece.Slot)))
-                continue;
-            string mens = RacialModelBake.WithRace(piece.GamePath, CrossSexRefit.Men);
-            if (!paths.Contains(mens)) continue;
+            if (!Crossable(piece)) continue;
+            string mens = MensPathOf(piece);
+            if (!paths.Contains(mens) || crossedInstead?.Contains(mens) == true) continue;
 
             var outcomes = runLog.Sizes.Where(s => string.Equals(s.GamePath, mens, StringComparison.OrdinalIgnoreCase))
                                        .ToList();
-            bool madeAny = outcomes.Any(s => s.Status == SizeStatus.Made);
             bool wrong = outcomes.Any(s => s.Status is SizeStatus.Refused or SizeStatus.Failed
                                            || s.Status == SizeStatus.Skipped && s.ReasonCode is Codes.Unreadable
                                                                                   or Codes.EndsUnreadable);
             bool unticked = outcomes.Count > 0 && outcomes.All(s => s.ReasonCode == Codes.NoBodyForRace);
-            string? note = !madeAny && wrong ? string.Format(Strings.SizeSet.AuthorsMensFmt, piece.Label)
+            string? stale = stillReplaced != null && stillReplaced.TryGetValue(piece, out var line) ? line : null;
+            string? note = stale != null || standsIn?.Contains(mens) == true ? null
+                         : !MensModelUsable(outcomes) && wrong ? string.Format(Strings.SizeSet.AuthorsMensFmt, piece.Label)
                          : unticked ? string.Format(Strings.SizeSet.AuthorsMensUntickedFmt, piece.Label,
                                                     SupportedBodies.Choices.First(c => c.Key == mensKeys[0]).Label)
                          : null;
             if (note != null) runLog.Notes.Add(note);
             foreach (string key in mensKeys)
                 runLog.Add(piece, SizeStatus.Skipped, Codes.AuthorsMens,
-                           note ?? $"{mens} is the author's own men's model of it", piece.Group, body: key, men: true,
-                           gamePath: mens);
+                           stale ?? note ?? $"{mens} is the author's own men's model of it", piece.Group, body: key,
+                           men: true, gamePath: mens);
         }
     }
 
-    private static int RunAcross(Request request, IReadOnlyList<Piece> pieces, IReadOnlyList<Piece> all,
-                                 UVRemapService? uvRemap, IPluginLog log, Action<string> progress, RunLog runLog,
-                                 CancellationToken ct)
+    internal static int RunAcross(Request request, IReadOnlyList<Piece> pieces, IReadOnlyList<Piece> all,
+                                  UVRemapService? uvRemap, IPluginLog log, Action<string> progress, RunLog runLog,
+                                  CancellationToken ct)
+    {
+        var mensKeys = MensKeys(request.Keys);
+        // The women's pieces crossed after all, their author's men's model being no model at all.
+        var crossedInstead = request.Across != null && mensKeys.Count > 0
+            ? MensModelsUnparsable(pieces, runLog, request.ModRoot, request.MadeOn)
+            : new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        // Every women's piece the group may hold, shoes and gloves too whether or not they are made this time: a group an
+        // earlier run put men's shoes in is still ours when they are left out now.
+        var mayHold = request.Ends || request.ReadGameFile == null
+            ? AcrossPieces(pieces, crossedInstead)
+            : AcrossPieces(all, crossedInstead);
+        var crossable = all.Where(Crossable).ToList();
+        string groupName = MensGroupName(request.ModRoot, mayHold, crossable, OwnSizeGroups(all));
+
+        // A men's version an earlier run made over an author's men's model that could not be read then still stands over
+        // it — said whatever this run makes, before anything else returns.
+        // Never where the author's files still can't be read: there ours is the men's model, not one standing over it.
+        var record = BodyRetargetWriter.ReadRecord(request.ModRoot);
+        var unparsable = UnparsableMensPaths(all, request.ModRoot).ToHashSet(StringComparer.OrdinalIgnoreCase);
+        unparsable.UnionWith(crossedInstead);
+        var stale = StillReplaced(all, record, groupName, unparsable);
+        var staleLines = stale.Zip(StillReplacedLines(stale, groupName)).ToDictionary(z => z.First, z => z.Second);
+        runLog.Warnings.AddRange(staleLines.Values);
+        if (mensKeys.Count == 0) return 0;
+        // The author's files still unreadable and an earlier men's version of ours there: that is the men's model.
+        var names = MensOptionNames();
+        var standsIn = unparsable.Where(m => record?.Options.Any(e => !e.InAuthorGroup && names.Contains(e.Name)
+                                                                     && string.Equals(e.GamePath, m, StringComparison.OrdinalIgnoreCase))
+                                             == true)
+                                 .ToHashSet(StringComparer.OrdinalIgnoreCase);
+        StateAuthorsMens(pieces, mensKeys, runLog, crossedInstead, staleLines, standsIn);
+        if (request.Across is not { } inputs) return 0;
+        var across = AcrossPieces(pieces, crossedInstead);
+        if (across.Count == 0) return 0;
+        try
+        {
+            return RunAcrossPieces(request, inputs, pieces, across, groupName, mensKeys, uvRemap, log, progress, runLog, ct);
+        }
+        finally
+        {
+            // The fallback pieces: the line saying what their men's versions now stand in for, however the run ended.
+            runLog.Warnings.AddRange(CrossedLines(crossedInstead, pieces, runLog, groupName));
+        }
+    }
+
+    private static int RunAcrossPieces(Request request, AcrossInputs inputs, IReadOnlyList<Piece> pieces,
+                                       IReadOnlyList<Piece> across, string groupName, IReadOnlyList<string> mensKeys,
+                                       UVRemapService? uvRemap, IPluginLog log, Action<string> progress, RunLog runLog,
+                                       CancellationToken ct)
     {
         var notes = runLog.Notes;
-        var mensKeys = MensKeys(request.Keys);
-        if (mensKeys.Count == 0) return 0;
-        StateAuthorsMens(pieces, mensKeys, runLog);
-        if (request.Across is not { } inputs) return 0;
-        var across = AcrossPieces(pieces);
-        if (across.Count == 0) return 0;
 
         // Every piece and men's body, when none is made at all.
         void NoneMade(string code, string reason, string? group)
@@ -417,12 +685,6 @@ internal static partial class SizeSetRefit
                                    ? SupportedBodies.OptionName(at.Body, at.Size) : null,
                                key, men: true, gamePath: RacialModelBake.WithRace(piece.GamePath, CrossSexRefit.Men));
         }
-        // Every women's piece the group may hold, shoes and gloves too whether or not they are made this time: a group an
-        // earlier run put men's shoes in is still ours when they are left out now.
-        var mayHold = request.Ends || request.ReadGameFile == null
-            ? across
-            : AcrossPieces(all);
-        string groupName = MensGroupName(request.ModRoot, mayHold);
         if (BodyRetargetWriter.IsAuthorGroup(request.ModRoot, groupName))
         {
             string said = string.Format(Strings.SizeSet.MensGroupTakenFmt, groupName);

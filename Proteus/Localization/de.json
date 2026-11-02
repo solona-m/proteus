@@ -5183,6 +5183,14 @@
     "message": "{0}: Daraus wurde keine Männerversion gemacht, weil der Mod ein eigenes Männermodell davon hat. Hake den einfachen Männerkörper an (zum Beispiel „{1}“), um diesem Modell Größen zu geben.",
     "description": ""
   },
+  "SizeSet.AuthorsMensCrossed.Fmt": {
+    "message": "{0}: Die eigene Männermodell-Datei des Mods dafür ließ sich gar nicht als Modell lesen (sie fehlt, ist null Bytes groß oder beschädigt), deshalb wurden seine Männerversionen aus diesem Frauenteil gemacht. Wo in der Gruppe „{1}“ ein Männerkörper gewählt ist, ersetzen sie das Männermodell des Autors.",
+    "description": ""
+  },
+  "SizeSet.AuthorsMensStillReplaced.Fmt": {
+    "message": "{0}: Der Mod hat ein eigenes Männermodell davon, und dieser Durchlauf hat es gelassen, wie es ist – aber eine Männerversion, die ein früherer Durchlauf aus diesem Frauenteil gemacht hat, ersetzt es in der Gruppe „{1}“ weiterhin, wo dieser Männerkörper gewählt ist. Um dort das Modell des Autors zu zeigen, wähle in „{1}“ Original oder entferne diese Option.",
+    "description": ""
+  },
   "SizeSet.Piercings": {
     "message": "Piercings der neuen Körper übernehmen",
     "description": ""

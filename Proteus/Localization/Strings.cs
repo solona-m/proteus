@@ -120,6 +120,14 @@ public sealed class SizeSetStrings
     public readonly string AuthorsMensUntickedFmt = ProteusLoc.Localize("SizeSet.AuthorsMensUnticked.Fmt",
         "{0}: no men's version was made from it, because the mod has its own men's model of it. Tick the plain men's body (for example “{1}”) to size that model.");
 
+    /// <summary>{0} is a women's piece ("Hands — e0613"), {1} the men's versions' group ("Men's body").</summary>
+    public readonly string AuthorsMensCrossedFmt = ProteusLoc.Localize("SizeSet.AuthorsMensCrossed.Fmt",
+        "{0}: the mod's own men's model file for it couldn't be read as a model at all (it is missing, zero bytes or damaged), so its men's versions were made from this women's piece. Wherever a men's body is picked in the “{1}” group, they replace the author's men's model.");
+
+    /// <summary>{0} is a women's piece ("Hands — e0613"), {1} the men's versions' group ("Men's body").</summary>
+    public readonly string AuthorsMensStillReplacedFmt = ProteusLoc.Localize("SizeSet.AuthorsMensStillReplaced.Fmt",
+        "{0}: the mod has its own men's model of it, and this run left that model as it is, but a men's version made from this women's piece in an earlier run still replaces it in the “{1}” group wherever that men's body is picked. To show the author's model there, pick Original in “{1}” or remove that option.");
+
     public readonly string Yas = ProteusLoc.Localize("SizeSet.Yas", "Use a body's YAS version where it has one") + "###sizeSetYas";
 
     public readonly string YasTip = ProteusLoc.Localize("SizeSet.Yas.Tip",

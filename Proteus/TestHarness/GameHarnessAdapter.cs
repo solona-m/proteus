@@ -133,7 +133,7 @@ internal sealed class GameHarnessAdapter : IHarnessGame, IDisposable
     public IReadOnlyList<(string Key, string Body)> OfferedKeys(string modRoot)
     {
         var (pieces, _, _) = SizeSetRefit.ReadPieces(modRoot, readGameFile, config.SizeSetEnds);
-        return SizeSetRefit.Offered(pieces).Select(c => (c.Key, c.Body)).ToList();
+        return SizeSetRefit.Offered(pieces, modRoot).Select(c => (c.Key, c.Body)).ToList();
     }
 
     public IReadOnlySet<string> InstalledKeys(ModList mods)

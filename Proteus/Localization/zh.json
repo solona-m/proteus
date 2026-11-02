@@ -5183,6 +5183,14 @@
     "message": "{0}：模组自带该部件的男性模型，因此没有由它制作男性版本。勾选普通的男性身体（例如“{1}”）即可为那个模型制作尺码。",
     "description": ""
   },
+  "SizeSet.AuthorsMensCrossed.Fmt": {
+    "message": "{0}：该模组自带的男性模型文件完全无法作为模型读取（缺失、为 0 字节或已损坏），因此其男性版本由这件女性部件制作。在“{1}”组中选中男性身体的地方，它们会取代作者的男性模型。",
+    "description": ""
+  },
+  "SizeSet.AuthorsMensStillReplaced.Fmt": {
+    "message": "{0}：该模组自带这件的男性模型，本次运行保持原样，但之前某次运行由这件女性部件制作的男性版本，在“{1}”组中选中该男性身体的地方仍会取代它。要在那里显示作者的模型，请在“{1}”中选择 Original，或删除该选项。",
+    "description": ""
+  },
   "SizeSet.Piercings": {
     "message": "加入各新体型的穿孔",
     "description": ""

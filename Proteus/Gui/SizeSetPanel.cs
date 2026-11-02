@@ -55,7 +55,7 @@ internal sealed class SizeSetPanel(PenumbraBridge penumbra, UVRemapService uvRem
     /// </summary>
     private List<SizeSetRefit.Piece>? pieces;
     private string? piecesFor;
-    private Task<(List<SizeSetRefit.Piece>, IReadOnlyList<SizeSetRefit.Piece>)>? readingPieces;
+    private Task<(List<SizeSetRefit.Piece>, IReadOnlyList<SizeSetRefit.Piece>, IReadOnlyList<SizeSetRefit.Choice>)>? readingPieces;
     /// <summary>The open mod's shoes and gloves "Include shoes and gloves" leaves out; none while it is ticked.</summary>
     private IReadOnlyList<SizeSetRefit.Piece> endsLeftOut = [];
 
@@ -248,7 +248,10 @@ internal sealed class SizeSetPanel(PenumbraBridge penumbra, UVRemapService uvRem
     }
 
     /// <summary>The bodies for the open mod's pieces; none until they are read.</summary>
-    private IReadOnlyList<SizeSetRefit.Choice> Offered() => pieces == null ? [] : SizeSetRefit.Offered(pieces);
+    private IReadOnlyList<SizeSetRefit.Choice> Offered() => pieces == null ? [] : offered;
+
+    /// <summary>What is offered for the open mod's pieces, worked out with them (it reads the author's men's models' files).</summary>
+    private IReadOnlyList<SizeSetRefit.Choice> offered = [];
 
     /// <summary>Read the open mod's pieces on a worker, once per mod: its manifest, which can be large.</summary>
     private void ReadPieces(string modRoot, string modDir)
@@ -256,22 +259,22 @@ internal sealed class SizeSetPanel(PenumbraBridge penumbra, UVRemapService uvRem
         if (readingPieces is { IsCompleted: true } done)
         {
             readingPieces = null;
-            if (done.IsCompletedSuccessfully) (pieces, endsLeftOut) = done.Result;
+            if (done.IsCompletedSuccessfully) (pieces, endsLeftOut, offered) = done.Result;
             else
             {
                 log.Warning(done.Exception!, "[Proteus] size set: reading {0}'s pieces failed", piecesFor ?? "");
-                (pieces, endsLeftOut) = ([], []);
+                (pieces, endsLeftOut, offered) = ([], [], []);
             }
         }
         if (piecesFor == modDir || readingPieces != null) return;
         piecesFor = modDir;
-        (pieces, endsLeftOut) = (null, []);
+        (pieces, endsLeftOut, offered) = (null, [], []);
         bool ends = config.SizeSetEnds;
         // Read once with shoes and gloves, so those the box leaves out can be named.
         readingPieces = Task.Run(() =>
         {
             var (kept, leftOut, _) = SizeSetRefit.ReadPieces(modRoot, readGameFile, ends);
-            return (kept, leftOut);
+            return (kept, leftOut, SizeSetRefit.Offered(kept, modRoot));
         });
     }
 
