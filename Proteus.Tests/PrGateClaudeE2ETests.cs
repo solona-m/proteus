@@ -98,9 +98,25 @@ public class PrGateClaudeE2ETests(ITestOutputHelper output)
 
     /// <summary>What one Claude call did: the tool it used, the exact command, what came back, and its debug log.</summary>
     private sealed record Call(string? Tool, string? Command, IReadOnlyList<string> InputKeys, string Result, string Debug,
-                               IReadOnlyList<string> Tools);
+                               IReadOnlyList<string> Tools, string SessionId, string Transcript);
 
-    private Call Claude(Sandbox box, string tool, string command)
+    /// <summary>The session's transcript, `&lt;config&gt;/projects/*/&lt;session&gt;.jsonl`, searched one level deep only.</summary>
+    private static string TranscriptOf(string sessionId)
+    {
+        if (sessionId.Length == 0) return "";
+        string config = Environment.GetEnvironmentVariable("CLAUDE_CONFIG_DIR") is { Length: > 0 } c
+            ? c : Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), ".claude");
+        string projects = Path.Combine(config, "projects");
+        if (!Directory.Exists(projects)) return "";
+        foreach (var dir in Directory.EnumerateDirectories(projects))
+        {
+            string file = Path.Combine(dir, sessionId + ".jsonl");
+            if (File.Exists(file)) return File.ReadAllText(file);
+        }
+        return "";
+    }
+
+    private Call Claude(Sandbox box, string tool, string command, params string[] extra)
     {
         string debug = Path.Combine(box.Root.Path, $"debug-{Guid.NewGuid():N}.txt");
         string prompt = $"Use the {tool} tool to run exactly the command below, once, character for character, with no " +
@@ -108,8 +124,10 @@ public class PrGateClaudeE2ETests(ITestOutputHelper output)
         var (_, stdout, stderr) = Run(ClaudePath()!, ["-p", prompt, "--output-format", "stream-json", "--verbose",
                                                       "--max-budget-usd", "0.5", "--setting-sources", "project",
                                                       "--debug-file", debug,
+                                                      .. extra,
                                                       "--allowedTools", "Bash(gh:*)", "Bash(cd:*)", "Bash(git commit:*)", "PowerShell(gh:*)"],
                                       box.Clone, box.Env);
+        string sessionId = "";
         string? usedTool = null, usedCommand = null;
         var keys = new List<string>();
         var results = new StringBuilder();
@@ -123,6 +141,8 @@ public class PrGateClaudeE2ETests(ITestOutputHelper output)
             if (e.TryGetProperty("type", out var t) && t.ValueKind == JsonValueKind.String && t.GetString() == "system"
                 && e.TryGetProperty("tools", out var ts) && ts.ValueKind == JsonValueKind.Array)
                 tools.AddRange(ts.EnumerateArray().Where(x => x.ValueKind == JsonValueKind.String).Select(x => x.GetString()!));
+            if (sessionId.Length == 0 && e.TryGetProperty("session_id", out var sid) && sid.ValueKind == JsonValueKind.String)
+                sessionId = sid.GetString()!;
             if (!e.TryGetProperty("message", out var m) || m.ValueKind != JsonValueKind.Object
                 || !m.TryGetProperty("content", out var content) || content.ValueKind != JsonValueKind.Array) continue;
             foreach (var c in content.EnumerateArray())
@@ -144,7 +164,7 @@ public class PrGateClaudeE2ETests(ITestOutputHelper output)
         }
         string debugText = File.Exists(debug) ? File.ReadAllText(debug) : "";
         output.WriteLine($"--- {tool}: {command.Split('\n')[0]}\n tool_use: {usedTool} {usedCommand?.Split('\n')[0]}\n result: {results.ToString().Trim()}\n stderr: {stderr.Trim()}");
-        return new Call(usedTool, usedCommand, keys, results.ToString(), debugText, tools);
+        return new Call(usedTool, usedCommand, keys, results.ToString(), debugText, tools, sessionId, TranscriptOf(sessionId));
     }
 
     private static void SameCommand(Call call, string expected)
@@ -153,11 +173,38 @@ public class PrGateClaudeE2ETests(ITestOutputHelper output)
 
     private const string Create = "gh pr create --base test --title x --body y";
 
-    [ClaudeE2EFact]
-    public void ClaudeRunner_BlocksAndAllows()
+    /// <summary>
+    /// The note reached Claude: the debug log says the hook gave additionalContext (2.1.316 names the hook by its command,
+    /// which holds pr-gate.sh), and the transcript holds the hook_additional_context attachment Claude is shown.
+    /// </summary>
+    private static void GateNoted(Call call, string tool, string reason)
     {
-        // [AC-contributor-gate-11] [AC-contributor-gate-5] [AC-contributor-gate-10] [EDGE-contributor-gate-1]
-        // [EDGE-contributor-gate-4] [EDGE-contributor-gate-11] [EDGE-contributor-gate-13]
+        Assert.True(call.Debug.Split('\n').Any(l => l.Contains("PreToolUse", StringComparison.Ordinal)
+                                                   && l.Contains("pr-gate.sh", StringComparison.Ordinal)
+                                                   && l.Contains("provided additionalContext", StringComparison.Ordinal)),
+                    "re-plan: the runner did not deliver the note (no 'provided additionalContext' line)");
+        Assert.True(call.Transcript.Split('\n').Any(l => l.Contains("\"hook_additional_context\"", StringComparison.Ordinal)
+                                                        && l.Contains($"PreToolUse:{tool}", StringComparison.Ordinal)
+                                                        && l.Contains("pr-gate: recommendation only", StringComparison.Ordinal)
+                                                        && l.Contains(reason, StringComparison.Ordinal)),
+                    "re-plan: the runner did not deliver the note (no hook_additional_context in the transcript)");
+    }
+
+    /// <summary>No note: no additionalContext from our hook, and none in the transcript.</summary>
+    private static void GateSilent(Call call)
+    {
+        Assert.False(call.Debug.Split('\n').Any(l => l.Contains("pr-gate.sh", StringComparison.Ordinal)
+                                                    && l.Contains("provided additionalContext", StringComparison.Ordinal)),
+                     "the hook gave a note it should not have");
+        Assert.DoesNotContain("pr-gate: recommendation only", call.Transcript);
+    }
+
+    [ClaudeE2EFact]
+    public void ClaudeRunner_RecommendsAndRuns()
+    {
+        // [AC-pr-gate-advisory-10] [AC-pr-gate-advisory-1] [AC-pr-gate-advisory-2] [AC-pr-gate-advisory-6]
+        // [AC-pr-gate-advisory-7] [EDGE-pr-gate-advisory-5] [EDGE-pr-gate-advisory-10] [EDGE-pr-gate-advisory-11]
+        // [EDGE-pr-gate-advisory-12] [AC-contributor-gate-11]
         using var box = new Sandbox();
 
         // Sentinel: both shells resolve the stub, not a real gh.
@@ -170,25 +217,33 @@ public class PrGateClaudeE2ETests(ITestOutputHelper output)
                     $"the stub gh was not the one resolved: {string.Join(" | ", box.Calls())}");
         box.ClearLog();
 
-        // (a) plain: the hook's own message, not a permission denial; the stub never ran.
+        // (a) No record: the PR command runs, and the note reaches Claude and the user.
         var a = Claude(box, "Bash", Create);
         SameCommand(a, Create);
-        Assert.Contains("no .pr-ready record", a.Result);
-        Assert.Empty(box.Calls());
+        Assert.Contains("pr create --base test --title x --body y", box.Calls());
+        GateNoted(a, "Bash", "no .pr-ready record");
+        Assert.DoesNotContain("hook blocking error", a.Result);
+        Assert.DoesNotContain("pr-gate: blocked", a.Result);
+        // [AC-pr-gate-advisory-2] The step-0 dry run showed -p persists the user-side note.
+        Assert.True(a.Transcript.Split('\n').Any(l => l.Contains("\"hook_system_message\"", StringComparison.Ordinal)
+                                                     && l.Contains("never blocks", StringComparison.Ordinal)),
+                    "the user-side note (hook_system_message) is missing from the transcript");
+        box.ClearLog();
 
-        // (b) compound: any subcommand matches the `if` filter.
+        // (b) Compound: any subcommand matches the `if` filter.
         string compound = "cd . && " + Create;
         var b = Claude(box, "Bash", compound);
         SameCommand(b, compound);
-        Assert.Contains("no .pr-ready record", b.Result);
-        Assert.Empty(box.Calls());
+        Assert.Contains("pr create --base test --title x --body y", box.Calls());
+        GateNoted(b, "Bash", "no .pr-ready record");
+        box.ClearLog();
 
-        // (c) an unrelated gh command: the `if` filter skips the hook.
+        // (c) An unrelated gh command: the `if` filter skips the hook.
         var c = Claude(box, "Bash", "gh pr view 1");
         SameCommand(c, "gh pr view 1");
         Assert.Contains("pr view 1", box.Calls());
-        Assert.DoesNotContain("pr-gate:", c.Result);
         Assert.Contains("Skipping hook due to if condition \"Bash(gh pr create *)\"", c.Debug);
+        GateSilent(c);
         box.ClearLog();
 
         // (d) PowerShell, when this session offers the tool.
@@ -198,12 +253,14 @@ public class PrGateClaudeE2ETests(ITestOutputHelper output)
             SameCommand(d, Create);
             Assert.Equal("PowerShell", d.Tool);
             Assert.Contains("command", d.InputKeys);
-            Assert.Contains("no .pr-ready record", d.Result);
-            Assert.Empty(box.Calls());
+            Assert.Contains("pr create --base test --title x --body y", box.Calls());
+            GateNoted(d, "PowerShell", "no .pr-ready record");
         }
         else output.WriteLine("(d) skipped: the PowerShell tool is not offered in this session");
+        box.ClearLog();
 
-        // (e) the owner's heredoc commits Claude Code can't parse: the hook runs and lets them through.
+        // (e) The owner's heredoc commits Claude Code can't parse: the hook runs and stays silent. (Claude Code's own
+        // permission check refuses these as too complex under -p, so whether the commit lands is not asserted.)
         string body = "Merge x\n\ngh pr create --base test is gated now\n";
         foreach (var heredoc in new[]
                  {
@@ -214,30 +271,36 @@ public class PrGateClaudeE2ETests(ITestOutputHelper output)
         {
             var e = Claude(box, "Bash", heredoc);
             SameCommand(e, heredoc);
-            // 2.1.316 logs `Hooks: PreToolUse:Bash [<command>] finished with status 0 (…ms)` for a hook that ran, and
-            // `Skipping hook due to if condition …` for one its `if` skipped.
             Assert.False(e.Debug.Contains("Skipping hook due to if condition", StringComparison.Ordinal),
                          "hook not exercised; re-plan (the if filter skipped it for a too-complex command)");
             Assert.True(e.Debug.Split('\n').Any(l => l.Contains("PreToolUse:Bash", StringComparison.Ordinal)
                                                      && l.Contains("pr-gate.sh", StringComparison.Ordinal)
                                                      && l.Contains("finished with status 0", StringComparison.Ordinal)),
                         "hook not exercised; re-plan (no 'finished with status 0' line for pr-gate.sh)");
-            Assert.DoesNotContain("pr-gate:", e.Result);
+            GateSilent(e);
         }
 
-        // (f) once the record names the clone's current HEAD, gh pr create goes through to the stub.
-        var ready = PosixShell.Run([Path.Combine(box.Clone, ".claude", "hooks", "pr-ready.sh"), "skipped: e2e"], null, box.Clone);
-        Assert.Equal(0, ready.ExitCode);
+        // (f) With a record for the current HEAD: the PR command runs, silently.
+        string readyScript = Path.Combine(box.Clone, ".claude", "hooks", "pr-ready.sh");
+        Assert.Equal(0, PosixShell.Run([readyScript, "skipped: e2e"], null, box.Clone).ExitCode);
         box.ClearLog();
         var f = Claude(box, "Bash", Create);
         SameCommand(f, Create);
         Assert.Contains("pr create --base test --title x --body y", box.Calls());
+        GateSilent(f);
+
+        // (g) The user's deny rule still wins: the note carries no permission decision.
+        File.Delete(Path.Combine(box.Clone, ".pr-ready"));
+        box.ClearLog();
+        var g = Claude(box, "Bash", Create, "--disallowedTools", "Bash(gh pr create:*)");
+        Assert.DoesNotContain(box.Calls(), call => call.Contains("pr create"));
+        Assert.DoesNotContain("pr-gate: recommendation only", g.Result);
     }
 
     [ClaudeE2EFact]
     public void HookCost_IsMeasured()
     {
-        // [AC-contributor-gate-10] The settings command's cost per run, through the same shell as Claude Code's hooks.
+        // [AC-contributor-gate-10] [EDGE-pr-gate-advisory-7] The settings command's cost per run, through the same shell as Claude Code's hooks.
         var shell = PosixShell.Find()!;
         using var nonGit = TempDir.New();
         var env = new Dictionary<string, string?> { ["CLAUDE_PROJECT_DIR"] = ContributorGateConfigTests.RepoRoot };
@@ -245,7 +308,7 @@ public class PrGateClaudeE2ETests(ITestOutputHelper output)
                  {
                      ("too-complex heredoc commit", "git commit -F - <<EOF\nmsg\ngh pr create later\nEOF"),
                      ("gh pr view", "gh pr view 12"),
-                     ("blocked gh pr create", "gh pr create"),
+                     ("noted gh pr create", "gh pr create"),
                  })
         {
             string payload = PrGateTests.Payload(command, nonGit.Path);
