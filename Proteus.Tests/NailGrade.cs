@@ -288,7 +288,13 @@ internal sealed class NailGrade
         return best == float.MaxValue || signed >= 0;
     }
     private static bool Closed(List<(Vector3, Vector3, Vector3)> soup, Ray r)
-        => FirstHit(soup, r.O, r.D) is { } h && h.Front && h.T < r.Far - 0.001f || Covered(soup, r);
+        => FirstHit(soup, r.O, r.D) is { } h && h.Front && h.T < r.Far - 0.001f || Covered(soup, r) || Enclosed(soup, r);
+
+    /// <summary>A ray that starts UNDER the result's surface — the first face met looking back out is one seen from
+    /// behind — is inside the finger already: reaching the far wall says nothing of a hole. Only sound where the seam is
+    /// shut (<see cref="SeamGap"/>), which <see cref="Problems"/> checks on its own.</summary>
+    private static bool Enclosed(List<(Vector3, Vector3, Vector3)> soup, Ray r)
+        => FirstHit(soup, r.O, -r.D) is { } b && !b.Front && b.T < 0.004f;
 
     /// <summary>Where a patch copying a nail's steep side leans out over the rim, a ray can start under it; then the same
     /// ray from 2 mm further out must meet a front face first, short of the far wall. (Not "the start is enclosed": on an

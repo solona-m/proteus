@@ -42,6 +42,10 @@ public static partial class SecondSkinWriter
     /// the socket's surface (a curled tip, another finger).</summary>
     private const float NailSeamReach = 0.004f;
 
+    /// <summary>How near the spanning nail's outline a rim edge must lie for the seam to count as shut where the seam rays
+    /// start under the patch: a twentieth of a millimetre, the grader's own seam-gap bound.</summary>
+    private const float NailSeamTight = 0.00005f;
+
     /// <summary>How far under its lowest rim point skin inside a socket's outline can lie and still be ON the socket
     /// (a patch of finger the socket rings round) rather than the far side of the finger, a finger's width down.</summary>
     private const float NailSocketSkinBelow = 0.002f;
@@ -866,6 +870,30 @@ public static partial class SecondSkinWriter
                 var tn = TriNormalRaw(pa, pb, pc);
                 edgeNormal[EdgeKey(ka, kb)] = tn; edgeNormal[EdgeKey(kb, kc)] = tn; edgeNormal[EdgeKey(kc, ka)] = tn;
             }
+            int np0 = tris.Length / 3;
+            bool UnderPatch(Vec3 p, Vec3 up)
+            {
+                var patchOnly = soup.GetRange(0, np0);
+                return FirstHit(patchOnly, p, up) is { } h && !h.Front && h.T <= NailSeamReach;
+            }
+            bool SeamTight(Vec3 a, Vec3 b)
+            {
+                float Off(Vec3 p)
+                {
+                    float best = float.MaxValue;
+                    for (int j = 0; j < nb; j++)
+                    {
+                        var (s0, s1) = (final[bLoop[j]], final[bLoop[(j + 1) % nb]]);
+                        var e = new Vec3(s1.X - s0.X, s1.Y - s0.Y, s1.Z - s0.Z);
+                        float ee = e.X * e.X + e.Y * e.Y + e.Z * e.Z;
+                        float t = ee <= 0 ? 0 : Math.Clamp(((p.X - s0.X) * e.X + (p.Y - s0.Y) * e.Y + (p.Z - s0.Z) * e.Z) / ee, 0f, 1f);
+                        best = MathF.Min(best, Dist(p, new Vec3(s0.X + e.X * t, s0.Y + e.Y * t, s0.Z + e.Z * t)));
+                    }
+                    return best;
+                }
+                var m = new Vec3((a.X + b.X) / 2, (a.Y + b.Y) / 2, (a.Z + b.Z) / 2);
+                return MathF.Max(Off(a), MathF.Max(Off(b), Off(m))) <= NailSeamTight;
+            }
             for (int i = 0; i < nr; i++)
             {
                 var (ka, kb) = (VKey(R[i].P), VKey(R[(i + 1) % nr].P));
@@ -891,7 +919,11 @@ public static partial class SecondSkinWriter
                 // (Not "the start is enclosed": on an open mesh that test passed slivers the 3 mm cast shows open.)
                 var far = new Vec3(o.X + n.X * 0.002f, o.Y + n.Y * 0.002f, o.Z + n.Z * 0.002f);
                 bool under = FirstHit(soup, far, d) is { } back && back.Front && back.T <= NailSeamReach + 0.002f;
-                if (!met && !under) return "the seam leaks";
+                // ...or the ray starts UNDER the patch — where the patch leans out over a fingertip that curls up past the rim
+                // (YAB+, Rue+, LavaBod+), the ray from 1 mm out and the one from 3 mm out both start inside the finger and reach
+                // its far wall without passing any hole. Then the seam itself is asked: the rim edge must lie on the patch's
+                // outline. Shut there, nothing passes between them.
+                if (!met && !under && !(UnderPatch(o, n) && SeamTight(a, b))) return "the seam leaks";
             }
         }
 

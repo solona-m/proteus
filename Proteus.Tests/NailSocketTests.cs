@@ -693,8 +693,8 @@ public class NailSocketTests(ITestOutputHelper o)
         var plans = SecondSkinWriter.NailBedPlans(hand, reach: SecondSkinWriter.LongNailReach);
         var sp = SecondSkinWriter.NailSockets(hand, plans, o.WriteLine, hidden);
         Assert.Equal(10, sp.Sockets.Count);
-        Assert.Equal(2, sp.Sockets.Count(s => s.Owner != null));
-        Assert.Equal(6, sp.Sockets.Count(s => s.LeftAsAuthored == "the seam leaks"));
+        Assert.Equal(4, sp.Sockets.Count(s => s.Owner != null));
+        Assert.Equal(4, sp.Sockets.Count(s => s.LeftAsAuthored == "the seam leaks"));
         Assert.Equal(2, sp.Sockets.Count(s => s.LeftAsAuthored == "the nearest nail's outline is not one loop"));
         Assert.Equal(10, sp.HiddenIslands.Count);
 
@@ -828,9 +828,10 @@ public class NailSocketSweep(ITestOutputHelper o)
     ];
 
     /// <summary>
-    /// What each socketed hand comes to, pinned from the first green run (2026-11-02, build 1417, long nails planned as
-    /// nails — <see cref="SecondSkinWriter.LongNailReach"/>): sockets found and
-    /// how many of them are spanned; the rest are left as authored (a nail, never a hole). First match wins.
+    /// What each socketed hand comes to, pinned from the first green run (2026-11-02, build 1418: long nails planned as
+    /// nails — <see cref="SecondSkinWriter.LongNailReach"/> — and a seam ray starting under the patch answered by the
+    /// seam itself): sockets found and how many of them are spanned; the rest are left as authored (a nail, never a
+    /// hole). First match wins.
     /// </summary>
     private static readonly (string Match, int Sockets, int Spanned)[] Pinned =
     [
@@ -838,10 +839,10 @@ public class NailSocketSweep(ITestOutputHelper o)
         // Muse+'s long default nails: two reach past the shell's own bed reach, over open skin — left as authored,
         // byte for byte (the authored-island check below).
         ("hs-Muse+", 0, 0),
-        (@"LavaBod+ 2.2\common\88\", 10, 1), (@"LavaBod+ 2.2\common\89\", 10, 2), (@"LavaBod+ 2.2\common\90\", 10, 2),
-        (@"LavaBod+ 2.2\common\91\", 12, 4), (@"LavaBod+ 2.2\common\92\", 10, 1), (@"LavaBod+ 2.2\common\93\", 10, 2),
-        (@"LavaBod+ 2.2\common\94\", 10, 2), (@"LavaBod+ 2.2\common\95\", 12, 4),
-        ("ballerina", 10, 2), ("long nails", 10, 2), ("short nails", 10, 2), ("stabbies", 10, 2),
+        (@"LavaBod+ 2.2\common\88\", 10, 1), (@"LavaBod+ 2.2\common\89\", 10, 5), (@"LavaBod+ 2.2\common\90\", 10, 6),
+        (@"LavaBod+ 2.2\common\91\", 12, 4), (@"LavaBod+ 2.2\common\92\", 10, 1), (@"LavaBod+ 2.2\common\93\", 10, 5),
+        (@"LavaBod+ 2.2\common\94\", 10, 6), (@"LavaBod+ 2.2\common\95\", 12, 4),
+        ("ballerina", 10, 4), ("long nails", 10, 4), ("short nails", 10, 6), ("stabbies", 10, 4),
     ];
 
     /// <summary>Known, deferred, and not this change's doing: graded and logged, but not failed.</summary>
