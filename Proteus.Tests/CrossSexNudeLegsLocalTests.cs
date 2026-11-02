@@ -358,4 +358,184 @@ public class CrossSexNudeLegsLocalTests(ITestOutputHelper o)
         Assert.True(s.Folds <= KnownSheerLegsFolds, $"{s.Folds} folds, more than the {KnownSheerLegsFolds} known");
         Assert.Equal(0, s.Plan!.Report.Missed);
     }
+
+    // ── tbsex-nude-legs: TBSE-X's SFW legs refuse a nude-made women's body outright (62%), its Flaccid M A legs take it ──
+
+    internal const string HalonesBoot = HandsFeetPortLocalTests.HalonesChosen
+        + "/edengate greaves of fending/chara/equipment/e0613/model/c0201e0613_sho.mdl";
+
+    private static BodySizeCatalog TbseX() => BodySizeCatalog.Read(LocalData.Path(CrossSexRefitLocalTests.TbseX));
+
+    private static string TbseXSfwRel => SupportedBodies.Of("tbse-x", "_dwn", false)!.Sizes[0].Rel;
+
+    private static BodyOption TbseXOption(string rel)
+        => OtherRaceRefit.OnlyRace(TbseX(), 101).For("_dwn").First(b => RefitCore.Normal(b.Rel) == RefitCore.Normal(rel));
+
+    /// <summary>Halone's boot made a men's onto TBSE-X's SFW legs, from the Bibo+ legs its outfit was made on, as Studio and
+    /// the CLI build it: the job offers the nude legs for a shoe.</summary>
+    internal static CrossSexRefitJob.Inputs HalonesBootOntoTbseX(IPluginLog log, UVRemapService? maps = null)
+    {
+        string path = LocalData.Path(HalonesBoot);
+        string gamePath = GamePathOf(path);
+        var bibo = BodySizeCatalog.Read(LocalData.Path(CrossSexRefitLocalTests.Bibo));
+        var typeC = bibo.For("_dwn", "0201").First(b => b.Label.Contains("Type C - Small", StringComparison.Ordinal));
+        var inputs = CrossSexRefitJob.EndInputs(File.ReadAllBytes(path), gamePath, CrossSexRefit.Men, bibo, typeC, TbseX(),
+                                                [TbseXSfwRel], CrossSexRefitLocalTests.Wearer(CrossSexRefit.Men, gamePath),
+                                                maps ?? Maps(), log, true, false, null, null, out string? why);
+        Assert.True(inputs != null, why);
+        return inputs!;
+    }
+
+    /// <summary>How the match's refusal for too little coverage opens, in the language the tests run in.</summary>
+    private static string LowCoverageOpening
+        => ProteusLoc.Localize("Parts.Retarget.Refuse.LowCoverage.Fmt", "Only {1:P0}").Split('{')[0];
+
+    [LocalDataFact(LocalData.GameData, HandsFeetPortLocalTests.HalonesChosen, CrossSexRefitLocalTests.Bibo,
+                   CrossSexRefitLocalTests.TbseX, LocalData.TbseUvMaps)]
+    [Trait("Plan", "AC-tbsex-nude-legs-1")]
+    [Trait("Plan", "AC-tbsex-nude-legs-6")]
+    [Trait("Speed", "Slow")]
+    public void Coverage_refusal_tries_the_nude_legs() // [AC-tbsex-nude-legs-1] [AC-tbsex-nude-legs-6]
+    {
+        var bibo = BodySizeCatalog.Read(LocalData.Path(CrossSexRefitLocalTests.Bibo));
+        var typeC = bibo.For("_dwn", "0201").First(b => b.Label.Contains("Type C - Small", StringComparison.Ordinal));
+        string sfwPath = TbseX().PathOf(TbseXOption(TbseXSfwRel));
+        // The SFW legs on their own: refused outright, and the refusal says how much landed.
+        string? refusal = BodyRetarget.BuildPair("_dwn", File.ReadAllBytes(bibo.PathOf(typeC)), File.ReadAllBytes(sfwPath),
+                                                 "_dwn", false, null, null, Maps(), out _, out var landed, null, true);
+        o.WriteLine($"SFW: {refusal} ({landed?.VertexCoverage:P1})");
+        Assert.NotNull(refusal);
+        Assert.NotNull(landed);
+        Assert.InRange(landed!.Value.VertexCoverage, 0.60f, 0.64f);
+
+        // Through the job, with the nude legs offered: fitted onto Flaccid M A, the SFW legs named as asked.
+        var log = Substitute.For<IPluginLog>();
+        var inputs = HalonesBootOntoTbseX(log);
+        Assert.NotNull(inputs.Nude);
+        var s = CrossSexRefitJob.RunEnd(inputs).Sizes.Single();
+        o.WriteLine($"job: target {s.Target.Label} {s.Landed?.VertexCoverage:P1}, asked {s.Asked?.Label} " +
+                    $"{s.AskedLanded?.VertexCoverage:P1}, {s.Folds} folded, refusal \"{s.Refusal}\"");
+        Assert.Equal("Flaccid M A", s.Target.Label);
+        Assert.Equal(TbseXOption(TbseXSfwRel).Label, s.Asked?.Label);
+        Assert.InRange(s.AskedLanded!.Value.VertexCoverage, 0.60f, 0.64f);
+        Assert.True(s.Landed!.Value.VertexCoverage >= 0.9f, $"{s.Landed.Value.VertexCoverage:P1}");
+        Assert.True(s.SaveAllowed);
+    }
+
+    [LocalDataFact(LocalData.GameData, StormblessedLegs, LavaBod, CrossSexRefitLocalTests.TbseX, LocalData.TbseUvMaps)]
+    [Trait("Plan", "AC-tbsex-nude-legs-1")]
+    [Trait("Speed", "Slow")]
+    public void Tbsex_takes_flaccid_legs_for_nude_made_legs() // [AC-tbsex-nude-legs-1]
+    {
+        // Stormblessed's bottoms, made on LavaBod+'s nude Gen A legs, onto TBSE-X as the size set fits them.
+        var log = Substitute.For<IPluginLog>();
+        string path = LocalData.Path(StormblessedLegs);
+        string gamePath = GamePathOf(path);
+        var (madeFor, option) = MadeFor(StormblessedLegs, LavaBod);
+        var onto = TbseX();
+        var men = OtherRaceRefit.OnlyRace(onto, 101).For("_dwn");
+        var r = CrossSexRefitJob.Run(new CrossSexRefitJob.Inputs(File.ReadAllBytes(path), gamePath, CrossSexRefit.Men, madeFor,
+            CrossSexRefitLocalTests.IsFile(madeFor, option.Rel), onto, CrossSexRefitLocalTests.IsFile(onto, TbseXSfwRel),
+            CrossSexRefitLocalTests.Wearer(CrossSexRefit.Men, gamePath), Maps(), log,
+            Nude: SizeSetRefit.NudeFor(men, SupportedBodies.Of("tbse-x", "_dwn", false)!.Sizes[0], log)));
+        var s = r.Sizes.Single();
+        Assert.NotNull(s.Saved);
+        int? shown = CrossSexRefit.NudeSkinShown(s.Saved!.Model, onto.PathOf(TbseXOption(TbseXSfwRel)));
+        o.WriteLine($"target {s.Target.Label} {s.Landed?.VertexCoverage:P1}, asked {s.Asked?.Label} {s.AskedLanded?.VertexCoverage:P1}, " +
+                    $"{s.Folds} folded, {shown} nude skin triangles shown; iv_ bones: " +
+                    string.Join(", ", SecondSkinWriter.Parse(s.Saved.Model).BoneNames.Where(n => n.StartsWith("iv_", StringComparison.Ordinal))));
+        Assert.Equal("Flaccid M A", s.Target.Label);
+        Assert.True(s.AskedLanded!.Value.VertexCoverage < 0.9f);
+        Assert.True(s.Landed!.Value.VertexCoverage >= 0.9f);
+        Assert.True(s.SaveAllowed);
+        Assert.NotNull(shown);
+        MaterialAssert.NoNewUndrawnNames(s.Saved.Model, File.ReadAllBytes(path));
+    }
+
+    [LocalDataFact(LocalData.GameData, HandsFeetPortLocalTests.HalonesChosen, CrossSexRefitLocalTests.Bibo,
+                   CrossSexRefitLocalTests.TbseX, LocalData.TbseUvMaps)]
+    [Trait("Plan", "AC-tbsex-nude-legs-5")]
+    [Trait("Plan", "EDGE-tbsex-nude-legs-4")]
+    [Trait("Plan", "EDGE-tbsex-nude-legs-1")]
+    [Trait("Plan", "EDGE-tbsex-nude-legs-9")]
+    [Trait("Speed", "Slow")]
+    public void Nude_failing_keeps_the_sfw_refusal() // [AC-tbsex-nude-legs-5] [EDGE-tbsex-nude-legs-4] [EDGE-tbsex-nude-legs-1] [EDGE-tbsex-nude-legs-9]
+    {
+        var log = Substitute.For<IPluginLog>();
+        var sfw = TbseXOption(TbseXSfwRel);
+        // The nude legs not installed, and "nude" legs that match as little (the SFW ones again).
+        foreach (var (what, nude) in new (string, Func<BodyOption, BodyOption?>)[] { ("not installed", _ => null), ("too little too", _ => sfw) })
+        {
+            var r = CrossSexRefitJob.RunEnd(HalonesBootOntoTbseX(log) with { Nude = nude });
+            var s = r.Sizes.Single();
+            o.WriteLine($"{what}: \"{s.Refusal}\"");
+            Assert.StartsWith(LowCoverageOpening, s.Refusal);
+            Assert.Null(s.Landed);
+            Assert.Null(s.Asked);
+            Assert.Null(s.Saved);
+            var studio = CrossSexRefitJob.ToStudio(r, 1);
+            Assert.Null(studio.Planned);
+            Assert.Equal(s.Refusal, studio.Error);
+            // The size set's note says the same reason.
+            var judged = SizeSetRefit.Judge("Feet", "TBSE-X", r, s);
+            Assert.False(judged.Save);
+            Assert.Contains(s.Refusal, judged.Note);
+        }
+    }
+
+    [LocalDataFact(LocalData.GameData, HandsFeetPortLocalTests.HalonesChosen, CrossSexRefitLocalTests.Bibo,
+                   CrossSexRefitLocalTests.TbseX)]
+    [Trait("Plan", "AC-tbsex-nude-legs-6")]
+    [Trait("Plan", "EDGE-tbsex-nude-legs-2")]
+    [Trait("Speed", "Slow")]
+    public void Other_refusals_never_try_nude() // [AC-tbsex-nude-legs-6] [EDGE-tbsex-nude-legs-2]
+    {
+        // No body maps: refused in the match itself, before anything landed — never tried on the nude legs. (A different
+        // layout is CrossSexRefitTests.Only_a_coverage_refusal_gives_its_stats.)
+        int asked = 0;
+        var noMaps = Directory.CreateTempSubdirectory("proteus-nomaps-");
+        CrossSexRefitJob.Size s;
+        try
+        {
+            var maps = new UVRemapService(Substitute.For<IPluginLog>(), noMaps.FullName);
+            s = CrossSexRefitJob.RunEnd(HalonesBootOntoTbseX(Substitute.For<IPluginLog>(), maps) with
+            {
+                Nude = _ => { asked++; return null; },
+            }).Sizes.Single();
+        }
+        finally
+        {
+            noMaps.Delete(recursive: true);
+        }
+        o.WriteLine($"\"{s.Refusal}\"");
+        Assert.Equal(0, asked);
+        Assert.Null(s.Landed);
+        Assert.False(string.IsNullOrEmpty(s.Refusal));
+        Assert.False(s.Refusal.StartsWith(LowCoverageOpening, StringComparison.Ordinal));
+    }
+
+    /// <summary>With the maps there, a refusal that comes before anything was measured says nothing of coverage: only a
+    /// refusal for too little coverage may open the nude legs.</summary>
+    [LocalDataFact(CrossSexRefitLocalTests.Bibo, CrossSexRefitLocalTests.TbseX, LocalData.TbseUvMaps)]
+    [Trait("Plan", "AC-tbsex-nude-legs-6")]
+    [Trait("Plan", "EDGE-tbsex-nude-legs-8")]
+    public void Refusals_before_measuring_give_no_stats() // [AC-tbsex-nude-legs-6] [EDGE-tbsex-nude-legs-8]
+    {
+        var bibo = BodySizeCatalog.Read(LocalData.Path(CrossSexRefitLocalTests.Bibo));
+        var typeC = bibo.For("_dwn", "0201").First(b => b.Label.Contains("Type C - Small", StringComparison.Ordinal));
+        byte[] womenBytes = File.ReadAllBytes(bibo.PathOf(typeC));
+        byte[] menBytes = File.ReadAllBytes(TbseX().PathOf(TbseXOption(TbseXSfwRel)));
+        var women = ModelPartReader.Read(womenBytes)!;
+        var men = ModelPartReader.Read(menBytes)!;
+        float[] menUv = BodyRetarget.Uv(menBytes);
+        // The real pair is refused for coverage, and says how much landed: the maps are really there.
+        Assert.False(BodyCorrespondence.TryBuild(women, BodyRetarget.Uv(womenBytes), men, menUv, "_dwn", out _, out _,
+                                                 out var coverage, Maps(), male: false, targetMale: true));
+        Assert.NotNull(coverage);
+        // The same pair with the women's texture coordinates unreadable: refused before anything was measured.
+        Assert.False(BodyCorrespondence.TryBuild(women, new float[2], men, menUv, "_dwn", out _, out string refusal,
+                                                 out var unreadable, Maps(), male: false, targetMale: true));
+        o.WriteLine(refusal);
+        Assert.Null(unreadable);
+    }
 }

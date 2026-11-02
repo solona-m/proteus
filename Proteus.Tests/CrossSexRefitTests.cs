@@ -492,6 +492,37 @@ public class CrossSexRefitTests
         Assert.False(CrossSexRefit.LayoutsPair("gen3", "tbse"));
     }
 
+    /// <summary>Across the sexes, only a refusal for too little coverage says how much landed — the one a refit may try
+    /// the nude smallclothes after. A different layout, missing maps and unreadable texture coordinates give nothing.</summary>
+    [Fact]
+    [Trait("Plan", "AC-tbsex-nude-legs-6")]
+    [Trait("Plan", "EDGE-tbsex-nude-legs-2")]
+    [Trait("Plan", "EDGE-tbsex-nude-legs-8")]
+    public void Only_a_coverage_refusal_gives_its_stats() // [AC-tbsex-nude-legs-6] [EDGE-tbsex-nude-legs-2] [EDGE-tbsex-nude-legs-8]
+    {
+        var gen3 = Skin("/mt_c0201b0001_b.mtrl");
+        var bibo = Skin("/mt_c0201b0001_bibo.mtrl");
+        var tbse = Skin("/mt_c0101b0001_b.mtrl");
+        float[] Uv(ModelParts m) => new float[m.Positions.Length / 3 * 2];
+
+        // A different layout.
+        Assert.False(BodyCorrespondence.TryBuild(gen3, Uv(gen3), tbse, Uv(tbse), "_dwn", out _, out _, out var layout,
+                                                 NoMaps(), male: false, targetMale: true));
+        Assert.Null(layout);
+        // The maps missing.
+        Assert.False(BodyCorrespondence.TryBuild(bibo, Uv(bibo), tbse, Uv(tbse), "_dwn", out _, out _, out var noMaps,
+                                                 NoMaps(), male: false, targetMale: true));
+        Assert.Null(noMaps);
+        Assert.False(BodyCorrespondence.TryBuild(bibo, Uv(bibo), tbse, Uv(tbse), "_dwn", out _, out _, out var nullMaps,
+                                                 null, male: false, targetMale: true));
+        Assert.Null(nullMaps);
+        // Unreadable models, through the pair builder every refit uses. (Unreadable texture coordinates with the maps
+        // there: CrossSexNudeLegsLocalTests.Refusals_before_measuring_give_no_stats.)
+        Assert.NotNull(BodyRetarget.BuildPair("_dwn", [1, 2, 3], [4, 5, 6], "_dwn", false, null, null, NoMaps(),
+                                              out _, out var garbage, null, true));
+        Assert.Null(garbage);
+    }
+
     [Fact]
     [Trait("Plan", "EDGE-cross-sex-refit-18")]
     public void Target_sex_left_out_is_the_old_behaviour() // [EDGE-cross-sex-refit-18]
