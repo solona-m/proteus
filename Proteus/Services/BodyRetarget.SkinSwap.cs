@@ -132,12 +132,19 @@ internal static partial class BodyRetarget
     /// other mesh is judged here as before. Null for none.</param>
     /// <param name="seeInside">With <paramref name="tuckSlot"/>, the tuck also draws open skin through which the garment's
     /// inside would show (see <see cref="TuckSeeReach"/>): the game's own top only. Off, as every other refit has it.</param>
+    /// <param name="swappedSkinTags">The tags the garment's own skin carried: the swapped-in skin keeps only these of the
+    /// body's own (a women's glove made a men's — its forearm never vanished under a long glove hiding atr_ude, so the
+    /// men's forearm put in its place must not either). Null keeps the body's tags as always.</param>
+    /// <param name="addedBySlot">Filled, when given, with the skin triangles each slot's new body put in, by slot (kept
+    /// apart from the report, which stays a plain value).</param>
     /// <returns>The rebuilt model, or null when there was nothing to change.</returns>
     internal static byte[]? Rebuild(byte[] garment, IReadOnlyList<SlotPair> pairs, bool swapSkin, WeightPlan? weights,
                                     out SwapReport report, bool cutHidden = true, bool acrossBodies = false,
                                     IReadOnlySet<int>? swapMeshes = null, string? tuckSlot = null,
                                     bool carryPiercings = false, IReadOnlySet<int>? parted = null,
-                                    bool seeInside = false, bool openSkin = false)
+                                    bool seeInside = false, bool openSkin = false,
+                                    IReadOnlySet<string>? swappedSkinTags = null,
+                                    Dictionary<string, int>? addedBySlot = null)
     {
         report = default;
         var swappable = swapSkin ? pairs.Where(p => p.Swaps).ToList() : [];
@@ -264,6 +271,7 @@ internal static partial class BodyRetarget
         // Each slot's body as it goes in: its own model, or one whose skin was pulled back to the author's edge.
         var bodyOf = new Dictionary<int, byte[]>();
         int cutTris = 0, keptTris = 0, tuckedTris = 0, tuckUnreadSlots = 0, openedTris = 0, seenIntoTris = 0, spannedTris = 0;
+        var addedBy = new Dictionary<int, int>();
         foreach (int s in claimedBy)
         {
             int these = 0, gone = 0, tucked = 0, opened = 0, seenInto = 0, spanned = 0;
@@ -284,6 +292,7 @@ internal static partial class BodyRetarget
                                                                       openSkin: open);
             authorCuts[s] = authorCut ?? cuts[s];
             bodyOf[s] = pulled ?? swappable[s].TargetModel!;
+            addedBy[s] = cuts[s] == null ? SkinTriangles(swappable[s].Target) : these;
             keptTris += cuts[s] == null ? SkinTriangles(swappable[s].Target) : these;
             cutTris += gone;
             tuckedTris += tucked;
@@ -340,7 +349,7 @@ internal static partial class BodyRetarget
             Geometry = [new ContentGeometry(bodyOf[s], SecondSkinWriter.IsBodySkinMaterial,
                                             HiddenAttributes: swappable[s].TargetHidden,
                                             DropVariantAttributes: true, DrawOnly: cuts[s],
-                                            DropAttributes: swappable[s].TargetSwitched)],
+                                            DropAttributes: SkinTagsDropped(swappable[s], swappedSkinTags))],
         }).ToList();
         // The new body's smallclothes, where it draws them in place of skin: each a layer of its own, under the garment's
         // own name for the copy of its material the save publishes (see ReadySmallclothes), cut as its skin is.
@@ -385,7 +394,28 @@ internal static partial class BodyRetarget
                                 weights?.Reweighted ?? 0, weights?.Trimmed ?? 0, extras, reskinned.Dropped, posed,
                                 cutTris, reskinned.Trimmed, adorned, tuckedTris, tuckUnreadSlots, openedTris,
                                 smallclothesTris, seenIntoTris, spannedTris);
+        if (addedBySlot != null)
+            foreach (int s in claimedBy)
+                addedBySlot[swappable[s].Slot] = addedBySlot.GetValueOrDefault(swappable[s].Slot) + addedBy.GetValueOrDefault(s);
         return rebuilt;
+    }
+
+    /// <summary>
+    /// The tags a swapped-in skin layer has taken off: the body mod's switched ones as always, and — when the garment's
+    /// own skin tags are given — every other tag on the new body's skin parts the garment's own skin did not carry.
+    /// </summary>
+    internal static IReadOnlySet<string>? SkinTagsDropped(SlotPair pair, IReadOnlySet<string>? keep)
+    {
+        if (keep == null) return pair.TargetSwitched;
+        var drop = new HashSet<string>(pair.TargetSwitched ?? new HashSet<string>(), StringComparer.Ordinal);
+        foreach (var part in pair.Target.Parts)
+        {
+            if (part.Island >= 0 || !SecondSkinWriter.IsBodySkinMaterial(part.Material)) continue;
+            for (int bit = 0; bit < 32 && bit < pair.Target.AttributeNames.Count; bit++)
+                if ((part.AttributeMask & (1u << bit)) != 0 && !keep.Contains(pair.Target.AttributeNames[bit]))
+                    drop.Add(pair.Target.AttributeNames[bit]);
+        }
+        return drop;
     }
 
     /// <summary>
