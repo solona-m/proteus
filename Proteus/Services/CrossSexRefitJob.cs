@@ -310,21 +310,30 @@ internal static partial class CrossSexRefitJob
         // The arm's skin came in: every laid point of the glove's skin on the men's chest lies on the rebuilt skin. The
         // chest's skin is claimed only when enough of the mesh lies on the chest alone, and a short strip of arm beside a
         // dense hand would otherwise lose its arm.
-        if (swap.AddedBySlot?.GetValueOrDefault(pair.Slot) is not > 0 || !ArmSkinCameIn(garment, plan, pair))
+        if (plan.AddedBySlot?.GetValueOrDefault(pair.Slot) is not > 0 || !ArmSkinCameIn(garment, plan, pair))
         {
             Kept("the arm's skin did not come in with the men's");
             return null;
         }
+        // And the hand's: a bare hand let go whose skin the men's hands did not put back would be a hole.
+        if (plan.AddedBySlot?.GetValueOrDefault(hands.Slot) is not > 0)
+        {
+            Kept("the hand's skin did not come in with the men's");
+            return null;
+        }
         i.Log.Information("[Proteus] cross-sex refit: {0} hand: made the men's ({1:P1} matched) — skin swapped for the " +
                           "men's ({2} → {3} triangles, {4} cut), {5} hand(s) kept as made", target,
-                          matched.VertexCoverage, swap.Removed, swap.Added, swap.Cut,
-                          reshaped.Ends.Count == 0 ? 0 : 1);
+                          matched.VertexCoverage, swap.Removed, swap.Added, swap.Cut, HandsHeld(reshaped, garment));
         return plan;
     }
 
+    /// <summary>How many hands the reshaped reading still holds as made: one per side of the body its held points lie on.</summary>
+    private static int HandsHeld(KeepEnds.Reading reshaped, ModelParts garment)
+        => reshaped.Ends.Select(v => garment.Positions[3 * v] >= 0f).Distinct().Count();
+
     /// <summary>Every glove skin point laid on the men's chest (within <see cref="BodyRetarget.SwapOnBody"/>) lies within
     /// <see cref="BodyRetarget.CutReach"/> of the rebuilt glove's skin.</summary>
-    private static bool ArmSkinCameIn(ModelParts garment, BodyRetarget.Planned plan, BodyRetarget.SlotPair chest)
+    internal static bool ArmSkinCameIn(ModelParts garment, BodyRetarget.Planned plan, BodyRetarget.SlotPair chest)
     {
         if (ModelPartReader.Read(plan.Model) is not { } rebuilt) return false;
         var skin = new BodySurface(rebuilt, BodySurface.CellFor(BodyRetarget.MeanEdgeOf(rebuilt)));

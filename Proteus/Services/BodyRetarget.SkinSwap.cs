@@ -73,14 +73,11 @@ internal static partial class BodyRetarget
     /// otherwise show (see <see cref="TuckSeeReach"/>); none of them is counted in <paramref name="Opened"/>.</param>
     /// <param name="Spanned">Of <paramref name="Added"/>, triangles a slot the garment only reaches onto drew in the open
     /// inside the author's own skin, which the cut had left out (see <see cref="GrowSpannedOpenSkin"/>).</param>
-    /// <param name="AddedBySlot">Of <paramref name="Added"/>, the skin triangles each slot's new body put in, by slot;
-    /// null when nothing was swapped.</param>
     internal readonly record struct SwapReport(int Removed, int Added, int Kept, int LostShapes,
                                                int Reweighted = 0, int Trimmed = 0, int ExtrasDropped = 0,
                                                int Unplaced = 0, int Posed = 0, int Cut = 0, int Slotted = 0,
                                                int Adorned = 0, int Tucked = 0, int TuckUnread = 0, int Opened = 0,
-                                               int Smallclothes = 0, int SeenInto = 0, int Spanned = 0,
-                                               IReadOnlyDictionary<string, int>? AddedBySlot = null);
+                                               int Smallclothes = 0, int SeenInto = 0, int Spanned = 0);
 
     /// <summary>
     /// Swap the garment's skin for the new body's, one body slot at a time: every skin mesh of the garment that belongs
@@ -138,13 +135,16 @@ internal static partial class BodyRetarget
     /// <param name="swappedSkinTags">The tags the garment's own skin carried: the swapped-in skin keeps only these of the
     /// body's own (a women's glove made a men's — its forearm never vanished under a long glove hiding atr_ude, so the
     /// men's forearm put in its place must not either). Null keeps the body's tags as always.</param>
+    /// <param name="addedBySlot">Filled, when given, with the skin triangles each slot's new body put in, by slot (kept
+    /// apart from the report, which stays a plain value).</param>
     /// <returns>The rebuilt model, or null when there was nothing to change.</returns>
     internal static byte[]? Rebuild(byte[] garment, IReadOnlyList<SlotPair> pairs, bool swapSkin, WeightPlan? weights,
                                     out SwapReport report, bool cutHidden = true, bool acrossBodies = false,
                                     IReadOnlySet<int>? swapMeshes = null, string? tuckSlot = null,
                                     bool carryPiercings = false, IReadOnlySet<int>? parted = null,
                                     bool seeInside = false, bool openSkin = false,
-                                    IReadOnlySet<string>? swappedSkinTags = null)
+                                    IReadOnlySet<string>? swappedSkinTags = null,
+                                    Dictionary<string, int>? addedBySlot = null)
     {
         report = default;
         var swappable = swapSkin ? pairs.Where(p => p.Swaps).ToList() : [];
@@ -393,9 +393,10 @@ internal static partial class BodyRetarget
         report = new SwapReport(removed, keptTris, kept, SecondSkinWriter.Parse(garment).Shapes.Count,
                                 weights?.Reweighted ?? 0, weights?.Trimmed ?? 0, extras, reskinned.Dropped, posed,
                                 cutTris, reskinned.Trimmed, adorned, tuckedTris, tuckUnreadSlots, openedTris,
-                                smallclothesTris, seenIntoTris, spannedTris,
-                                claimedBy.Count == 0 ? null
-                                    : claimedBy.ToDictionary(s => swappable[s].Slot, s => addedBy.GetValueOrDefault(s)));
+                                smallclothesTris, seenIntoTris, spannedTris);
+        if (addedBySlot != null)
+            foreach (int s in claimedBy)
+                addedBySlot[swappable[s].Slot] = addedBySlot.GetValueOrDefault(swappable[s].Slot) + addedBy.GetValueOrDefault(s);
         return rebuilt;
     }
 

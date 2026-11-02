@@ -66,6 +66,19 @@ public class KeepEndsReshapeTests
         Assert.Empty(two.Ends);
     }
 
+    /// <summary>A cuff on the let-go hand moves whole with it; one on the hand still held stays held.</summary>
+    [Fact]
+    [Trait("Plan", "EDGE-cross-sex-wrist-band-7")]
+    public void Free_pieces_recomputed_for_the_new_hold() // [EDGE-cross-sex-wrist-band-7]
+    {
+        var left = Glove(skinLeft: true, skinRight: false);
+        IReadOnlyCollection<int> leftCuff = [3, 4, 5], rightCuff = [9, 10, 11];
+        var reshaped = KeepEnds.Reshape(AllHeld(left), left, null, out _, [leftCuff, rightCuff], ["left cuff", "right cuff"])!;
+        Assert.Contains(reshaped.FreePieces, f => f.Count == 3 && f.All(leftCuff.Contains));
+        Assert.DoesNotContain(reshaped.FreePieces, f => f.Any(rightCuff.Contains));
+        Assert.Equal(["left cuff"], reshaped.FreeNames);
+    }
+
     [Fact]
     [Trait("Plan", "EDGE-cross-sex-wrist-band-1")]
     public void Skinless_glove_does_not_reshape() // [EDGE-cross-sex-wrist-band-1]

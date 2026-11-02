@@ -68,7 +68,9 @@ public class CrossSexGloveReshapeLocalTests(HalonesMensSizeSet run, ITestOutputH
     private static bool LeftArm(Vector3 p) => p.X > 0.3f;
 
     /// <summary>Halone's glove made a men's through EndInputs (Studio and the CLI), as the size set reads its arm.</summary>
-    private static CrossSexRefitJob.Size Glove(string key, bool before = false)
+    private static CrossSexRefitJob.Size Glove(string key, bool before = false) => Job(key, before).Sizes.Single();
+
+    private static CrossSexRefitJob.Result Job(string key, bool before = false)
     {
         byte[] glove = File.ReadAllBytes(Path.Combine(LocalData.Path(HandsFeetPortLocalTests.HalonesChosen), "common", "2",
                                                       "c0201e0613_glv.mdl"));
@@ -81,8 +83,24 @@ public class CrossSexGloveReshapeLocalTests(HalonesMensSizeSet run, ITestOutputH
                                                 new UVRemapService(Substitute.For<IPluginLog>(), LocalData.Path(LocalData.TbseUvMaps)),
                                                 Substitute.For<IPluginLog>(), true, false, null, null, out string? why);
         Assert.True(inputs != null, why);
-        return BodyRetarget.WithTuning(new BodyRetarget.Tuning(NoReshapeEnds: before),
-                                       () => CrossSexRefitJob.RunEnd(inputs!)).Sizes.Single();
+        return BodyRetarget.WithTuning(new BodyRetarget.Tuning(NoReshapeEnds: before), () => CrossSexRefitJob.RunEnd(inputs!));
+    }
+
+    private static UVRemapService Maps() => new(Substitute.For<IPluginLog>(), LocalData.Path(LocalData.TbseUvMaps));
+
+    /// <summary>The chest and hands pairs the job built for Halone's glove, as it built them (bent made-for → men's).</summary>
+    private static (BodyRetarget.SlotPair Chest, BodyRetarget.SlotPair Hands) Pairs(string key, CrossSexRefitJob.Result r)
+    {
+        var size = r.Sizes.Single();
+        Assert.Null(BodyRetarget.BuildPair("_top", File.ReadAllBytes(r.SourcePath!), File.ReadAllBytes(size.TargetPath), "_top",
+                                           false, null, null, Maps(), out var chest, null, true));
+        var onto = OtherRaceRefit.OnlyRace(BodySizeCatalog.Read(LocalData.Path(Onto(key))), 101);
+        var handsTo = AutoRefitDecisions.Companion(onto.For("_glv"), onto.For("_top").First(o => onto.PathOf(o) == size.TargetPath), null)!;
+        var handsFrom = AutoRefitDecisions.Companion(r.Bent!.For("_glv"),
+            r.Bent.For("_top").First(o => r.Bent.PathOf(o) == r.SourcePath), null)!;
+        Assert.Null(BodyRetarget.BuildPair("_glv", File.ReadAllBytes(r.Bent.PathOf(handsFrom)), File.ReadAllBytes(onto.PathOf(handsTo)),
+                                           "_glv", false, null, null, Maps(), out var hands, null, true));
+        return (chest, hands);
     }
 
     private static Vector3 At(ModelParts m, int v) => new(m.Positions[3 * v], m.Positions[3 * v + 1], m.Positions[3 * v + 2]);
@@ -194,4 +212,104 @@ public class CrossSexGloveReshapeLocalTests(HalonesMensSizeSet run, ITestOutputH
     [Trait("Plan", "AC-cross-sex-wrist-band-7")]
     public void Studio_cli_and_size_set_make_one_glove(string key) // [AC-cross-sex-wrist-band-7]
         => Assert.Equal(Glove(key).Saved!.Model, run.Saved(Option(key), "_glv"));
+
+    [LocalDataTheory(LocalData.GameData, HandsFeetPortLocalTests.HalonesChosen, CrossSexRefitLocalTests.Bibo,
+                     CrossSexRefitLocalTests.Tbse, CrossSexRefitLocalTests.TbseX, LocalData.TbseUvMaps)]
+    [InlineData("tbse")]
+    [InlineData("tbse-x")]
+    [Trait("Plan", "EDGE-cross-sex-wrist-band-18")]
+    [Trait("Plan", "EDGE-cross-sex-wrist-band-20")]
+    public void Halones_swap_drops_what_the_solve_parts_and_the_arm_comes_back(string key) // [EDGE-cross-sex-wrist-band-18] [EDGE-cross-sex-wrist-band-20]
+    {
+        var r = Job(key);
+        var size = r.Sizes.Single();
+        var garment = ModelPartReader.Read(r.Baked!)!;
+        var (chest, hands) = Pairs(key, r);
+        // One swapped-mesh set over the pairs as the rebuild sees them (the hands swapping): it holds the glove's skin mesh,
+        // and the rebuild took out exactly that skin.
+        var swapped = BodyRetarget.SwappedSkinMeshes(garment, [chest, hands with { ShapeOnly = false }]);
+        var skinMeshes = garment.Parts.Where(p => p.Island < 0 && SecondSkinWriter.IsBodySkinMaterial(p.Material))
+                                      .Select(p => p.Mesh).ToHashSet();
+        Assert.Subset(swapped, skinMeshes);
+        int skinTris = garment.Parts.Where(p => p.Island < 0 && skinMeshes.Contains(p.Mesh)
+                                                && SecondSkinWriter.IsBodySkinMaterial(p.Material))
+                                    .Sum(p => p.Triangles.Length / 3);
+        Assert.Equal(skinTris, size.Plan!.Report.Swap!.Value.Removed);
+        // Both the arm's and the hand's skin came in.
+        o.WriteLine($"{key}: added by slot " + string.Join(", ", size.Plan.AddedBySlot!.Select(kv => $"{kv.Key} {kv.Value}")));
+        Assert.True(size.Plan.AddedBySlot!["_top"] > 0);
+        Assert.True(size.Plan.AddedBySlot!["_glv"] > 0);
+        Assert.True(CrossSexRefitJob.ArmSkinCameIn(garment, size.Plan, chest));
+        // A rebuilt glove with no skin where the arm lay is caught.
+        byte[] skinless = File.ReadAllBytes(Path.Combine(LocalData.Path(HandsFeetPortLocalTests.HalonesChosen),
+            "edengate greaves of fending", "chara", "equipment", "e0613", "model", "c0201e0613_sho.mdl"));
+        Assert.False(CrossSexRefitJob.ArmSkinCameIn(garment, size.Plan with { Model = skinless }, chest));
+    }
+
+    [LocalDataTheory(LocalData.GameData, HandsFeetPortLocalTests.HalonesChosen, CrossSexRefitLocalTests.Bibo,
+                     CrossSexRefitLocalTests.Tbse, CrossSexRefitLocalTests.TbseX, LocalData.TbseUvMaps)]
+    [InlineData("tbse")]
+    [InlineData("tbse-x")]
+    [Trait("Plan", "AC-cross-sex-wrist-band-8")]
+    [Trait("Plan", "EDGE-cross-sex-wrist-band-8")]
+    public void Halones_swapped_skin_keeps_only_the_gloves_tags_and_its_winding(string key) // [AC-cross-sex-wrist-band-8] [EDGE-cross-sex-wrist-band-8]
+    {
+        byte[] authored = File.ReadAllBytes(Path.Combine(LocalData.Path(HandsFeetPortLocalTests.HalonesChosen), "common", "2",
+                                                         "c0201e0613_glv.mdl"));
+        var own = KeepEnds.SkinTagsOf(ModelPartReader.Read(authored)!);
+        var glove = ModelPartReader.Read(run.Saved(Option(key), "_glv"))!;
+        var tags = KeepEnds.SkinTagsOf(glove);
+        o.WriteLine($"{key}: the glove's own skin tags [{string.Join(", ", own)}], the saved skin's [{string.Join(", ", tags)}]");
+        Assert.Subset(own.ToHashSet(), tags.ToHashSet());
+        // No skin triangle turned: each is wound as the men's body winds the same triangle.
+        var onto = BodySizeCatalog.Read(LocalData.Path(Onto(key)));
+        var bodies = onto.For("_glv", "0101").Select(h => onto.PathOf(h))
+                         .Append(Path.Combine(LocalData.Path(Onto(key)), SupportedBodies.Of(key, "_top", false)!.Sizes[0].Rel))
+                         .Select(f => ModelPartReader.Read(File.ReadAllBytes(f))!).ToList();
+        static (int, int, int) K(Vector3 p) => ((int)MathF.Round(p.X * 1e5f), (int)MathF.Round(p.Y * 1e5f), (int)MathF.Round(p.Z * 1e5f));
+        var normalOf = new Dictionary<string, Vector3>();
+        foreach (var body in bodies)
+            foreach (var part in body.Parts.Where(p => p.Island < 0 && SecondSkinWriter.IsBodySkinMaterial(p.Material)))
+                for (int t = 0; t + 2 < part.Triangles.Length; t += 3)
+                {
+                    var (a, bb, c) = (At(body, part.Triangles[t]), At(body, part.Triangles[t + 1]), At(body, part.Triangles[t + 2]));
+                    normalOf[string.Join("|", new[] { K(a), K(bb), K(c) }.Order())] = Vector3.Cross(bb - a, c - a);
+                }
+        int matched = 0, turned = 0;
+        foreach (var part in glove.Parts.Where(p => p.Island < 0 && SecondSkinWriter.IsBodySkinMaterial(p.Material)))
+            for (int t = 0; t + 2 < part.Triangles.Length; t += 3)
+            {
+                var (a, bb, c) = (At(glove, part.Triangles[t]), At(glove, part.Triangles[t + 1]), At(glove, part.Triangles[t + 2]));
+                if (!normalOf.TryGetValue(string.Join("|", new[] { K(a), K(bb), K(c) }.Order()), out var n)) continue;
+                matched++;
+                if (Vector3.Dot(n, Vector3.Cross(bb - a, c - a)) <= 0f) turned++;
+            }
+        o.WriteLine($"{key}: {matched} skin triangles matched the men's body, {turned} turned");
+        Assert.True(matched > 0);
+        Assert.Equal(0, turned);
+    }
+
+    [LocalDataFact(LocalData.GameData, HandsFeetPortLocalTests.HalonesChosen, CrossSexRefitLocalTests.Bibo,
+                   CrossSexRefitLocalTests.Tbse, LocalData.TbseUvMaps)]
+    [Trait("Plan", "EDGE-cross-sex-wrist-band-7")]
+    [Trait("Plan", "AC-cross-sex-wrist-band-5")]
+    public void Halones_hard_pieces_on_the_bare_hand_move_whole() // [EDGE-cross-sex-wrist-band-7] [AC-cross-sex-wrist-band-5]
+    {
+        var r = Job("tbse");
+        var garment = ModelPartReader.Read(r.Baked!)!;
+        var reading = KeepEnds.Read("_glv", garment, r.Baked!)!;
+        var reshaped = KeepEnds.Reshape(reading, garment, null, out string why);
+        Assert.True(reshaped != null, why);
+        var pieces = RefitCore.ShapePieces(garment, RefitCore.DefaultKeepShape(garment), out var names);
+        int onBare = 0, onHeld = 0;
+        foreach (var piece in pieces)
+        {
+            bool inOldEnds = piece.All(reading.Ends.Contains);
+            bool stillHeld = piece.All(reshaped!.Ends.Contains);
+            bool free = reshaped.FreePieces.Any(f => f.Count == piece.Count && f.All(piece.Contains));
+            if (inOldEnds && !stillHeld) { onBare++; Assert.True(free, "a piece on the bare hand must move whole"); }
+            if (stillHeld) { onHeld++; Assert.False(free, "a piece on the held hand stays held"); }
+        }
+        o.WriteLine($"hard pieces: {onBare} on the let-go hand (moved whole), {onHeld} on the held hand");
+    }
 }

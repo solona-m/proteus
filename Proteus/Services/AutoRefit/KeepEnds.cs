@@ -389,9 +389,14 @@ internal static partial class KeepEnds
     /// A hand's side is the side of the body it is on (its x): hands are never near the middle. The hard pieces are split
     /// again for the new hold, so a cuff on the let-go hand moves whole with it.
     /// </summary>
+    /// <param name="pieces">The hard pieces the ends were read with; null for the defaults
+    /// (<see cref="RefitCore.DefaultKeepShape"/>), as the job reads them.</param>
+    /// <param name="names">Each of <paramref name="pieces"/>' labels, in the same order.</param>
     /// <returns>The reading with the new hold, or null (with <paramref name="why"/>) when no hand carries skin, or a part
     /// the user held lies in skin of a hand that would be let go.</returns>
-    internal static Reading? Reshape(Reading reading, ModelParts garment, IReadOnlySet<int>? userHeld, out string why)
+    internal static Reading? Reshape(Reading reading, ModelParts garment, IReadOnlySet<int>? userHeld, out string why,
+                                     IReadOnlyList<IReadOnlyCollection<int>>? pieces = null,
+                                     IReadOnlyList<string>? names = null)
     {
         int vc = garment.Positions.Length / 3;
         var skinVert = new bool[vc];
@@ -416,8 +421,12 @@ internal static partial class KeepEnds
             return null;
         }
         var ends = reading.Ends.Where(v => v >= 0 && v < vc && !bare.Contains(Side(garment, v))).ToHashSet();
-        var pieces = RefitCore.ShapePieces(garment, RefitCore.DefaultKeepShape(garment), out var names);
-        var (free, freeNames) = FreeOf(pieces, names, ends);
+        if (pieces == null)
+        {
+            pieces = RefitCore.ShapePieces(garment, RefitCore.DefaultKeepShape(garment), out var defaults);
+            names = defaults;
+        }
+        var (free, freeNames) = FreeOf(pieces, names ?? pieces.Select(_ => "").ToList(), ends);
         why = "";
         return reading with { Ends = ends, LimbView = RefitCore.LimbView(garment, ends), FreePieces = free, FreeNames = freeNames };
     }
