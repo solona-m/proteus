@@ -34,6 +34,12 @@ public static class SyntheticFinger
         AttrLayers,
         /// <summary><see cref="AttrLayers"/> with the second layer only half on atr_gv_c.</summary>
         AttrLayersPartly,
+        /// <summary>The open socket ringing a patch of skin of its own, too big to be a nail bed, under the nail.</summary>
+        SkinPatchInside,
+        /// <summary>A closed finger whose nail is half on atr_gv_c.</summary>
+        ClosedPartlyHidden,
+        /// <summary>The open socket with the finger itself on atr_gv_a.</summary>
+        TubeOnSwitch,
     }
 
     internal static float Y(int row) => row * L / (Along - 1);
@@ -69,7 +75,8 @@ public static class SyntheticFinger
             int dc = col - Around / 2;   // the top is column Around/2
             switch (v)
             {
-                case Variant.Closed or Variant.StrayCrack or Variant.CoincidentQuad or Variant.LongNail or Variant.Connector:
+                case Variant.Closed or Variant.StrayCrack or Variant.CoincidentQuad or Variant.LongNail or Variant.Connector
+                     or Variant.ClosedPartlyHidden:
                     return false;
                 case Variant.UnqualifiedOpen:
                     // Two holes touching at one corner: the corner vertex has four open edges, so it is no loop.
@@ -238,7 +245,38 @@ public static class SyntheticFinger
         if (v is Variant.AttrLayers or Variant.AttrLayersPartly)
             Patch(thA + ti, thB - ti, yA + Inset, yB - Inset, 16, 18, (_, _) => R + 0.0006f);
 
+        // A patch of skin inside the socket, under the nail: an island of its own, too big to be a nail bed.
+        if (v == Variant.SkinPatchInside)
+        {
+            const int nc = 28, nr = 18;
+            float g = 0.0005f;
+            var idx = new int[nc + 1, nr + 1];
+            for (int j = 0; j <= nr; j++)
+                for (int i = 0; i <= nc; i++)
+                {
+                    float y = yA + g + (yB - yA - 2 * g) * j / nr;
+                    float th = thA + g / R + (thB - thA - 2 * g / R) * i / nc;
+                    float u = 2f * i / nc - 1, w = 2f * j / nr - 1;
+                    idx[i, j] = m.Add(Pos(th, y, R - 0.0002f + 0.0003f * (1 - u * u) * (1 - w * w)), Out(th),
+                                      new Vector2(0.7f + 0.25f * i / nc, 0.72f + 0.06f * j / nr), weights ? Weight(y) : null);
+                }
+            for (int j = 0; j < nr; j++)
+                for (int i = 0; i < nc; i++)
+                {
+                    m.Tri(idx[i, j], idx[i + 1, j], idx[i, j + 1]);
+                    m.Tri(idx[i + 1, j], idx[i + 1, j + 1], idx[i, j + 1]);
+                }
+        }
+
         (uint, int[])[] submeshes = [(0u, [.. m.T])];
+        if (v == Variant.TubeOnSwitch)
+            submeshes = [(1u, [.. m.T.Take(restTris.Count)]), (0u, [.. m.T.Skip(restTris.Count)])];
+        if (v == Variant.ClosedPartlyHidden)
+        {
+            // The nail's first half on atr_gv_c (bit 1).
+            int tube = restTris.Count, nailHalf = tube + (m.T.Count - tube) / 6 * 3;
+            submeshes = [(0u, [.. m.T.Take(tube), .. m.T.Skip(nailHalf)]), (2u, [.. m.T.Skip(tube).Take(nailHalf - tube)])];
+        }
         if (v is Variant.AttrLayers or Variant.AttrLayersPartly)
         {
             // The tube on no switch, the first layer on atr_gv_a (bit 0), the second on atr_gv_c (bit 1) — all of it, or
@@ -275,6 +313,7 @@ public static class SyntheticFinger
                 }
             meshes.Add(new(NailMeshMaterial, [.. n.P], [.. n.N], [.. n.Uv], [.. n.W], [(0u, [.. n.T])]));
         }
-        return SyntheticModel.BuildSurface(v is Variant.AttrLayers or Variant.AttrLayersPartly ? ["atr_gv_a", "atr_gv_c"] : [], [.. meshes]);
+        return SyntheticModel.BuildSurface(v is Variant.AttrLayers or Variant.AttrLayersPartly or Variant.ClosedPartlyHidden or Variant.TubeOnSwitch
+                                           ? ["atr_gv_a", "atr_gv_c"] : [], [.. meshes]);
     }
 }

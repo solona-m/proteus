@@ -520,6 +520,54 @@ public class NailSocketTests(ITestOutputHelper o)
             Assert.True(flat == null || NailGrade.SameIsland(hand, flat, plans, m), $"island {m} changed");
     }
 
+    /// <summary>A socket ringing a patch of skin of its own — too big to be a nail bed — keeps its nail: spanning the rim
+    /// would lay the nail over that skin.</summary>
+    [Fact]
+    [Trait("Plan", "EDGE-nail-socket-hole-25")]
+    public void Skin_inside_a_socket_keeps_its_nail()
+    {
+        var hand = SyntheticFinger.Build(V.SkinPatchInside);
+        var plans = LongPlans(hand);
+        var sock = SecondSkinWriter.NailSockets(hand, plans, o.WriteLine).Sockets.Single();
+        Assert.Equal("skin inside the socket", sock.LeftAsAuthored);
+        var flat = BodyBridge.FlattenNails(hand, Full(), o.WriteLine);
+        foreach (var m in sock.Members)
+            Assert.True(flat == null || NailGrade.SameIsland(hand, flat, plans, m), $"island {m} changed");
+    }
+
+    /// <summary>A nail only partly on a hidden switch is left as authored on a closed finger too (the conservative
+    /// choice: half of it is still drawn, and what the hidden half becomes is not this pass's to say).</summary>
+    [Fact]
+    [Trait("Plan", "AC-nail-socket-close-2")]
+    [Trait("Plan", "EDGE-nail-socket-close-4")]
+    public void Partly_hidden_nail_on_a_closed_finger_is_left_as_authored()
+    {
+        var hand = SyntheticFinger.Build(V.ClosedPartlyHidden);
+        Assert.NotNull(BodyBridge.FlattenNails(hand, Full()));   // nothing hidden: it collapses, as ever
+        var flat = BodyBridge.FlattenNails(hand, Full(), o.WriteLine, new HashSet<string> { "atr_gv_c" });
+        Assert.True(flat == null || ReadPositionsEqual(hand, flat), "a partly hidden nail changed");
+    }
+
+    /// <summary>Hidden SKIN still counts as skin: open edges along a hidden part of the finger are no hole a nail should
+    /// span, so hiding the finger's own switch changes nothing.</summary>
+    [Fact]
+    [Trait("Plan", "AC-nail-socket-close-2")]
+    [Trait("Plan", "EDGE-nail-socket-close-5")]
+    public void Hidden_skin_still_counts_as_skin()
+    {
+        var hand = SyntheticFinger.Build(V.TubeOnSwitch);
+        var none = BodyBridge.FlattenNails(hand, Full());
+        Assert.NotNull(none);
+        Assert.Equal(none, BodyBridge.FlattenNails(hand, Full(), o.WriteLine, new HashSet<string> { "atr_gv_a" }));
+    }
+
+    private static bool ReadPositionsEqual(byte[] a, byte[] b)
+    {
+        SecondSkinWriter.TryReadLod0Geometry(a, out var pa, out _, out _);
+        SecondSkinWriter.TryReadLod0Geometry(b, out var pb, out _, out _);
+        return pa.SequenceEqual(pb);
+    }
+
     /// <summary>No hidden set, an empty one, or names the model does not have: exactly today's result.</summary>
     [Theory]
     [Trait("Plan", "AC-nail-socket-close-2")]
@@ -655,12 +703,24 @@ public class NailSocketTests(ITestOutputHelper o)
         Assert.NotNull(flat);
         foreach (var m in sp.HiddenIslands.Concat(sp.Sockets.Where(s => s.Owner == null).SelectMany(s => s.Members)))
             Assert.True(NailGrade.SameIsland(hand, flat!, plans, m), $"island {m} changed");
-        // The spanned sockets are those of the hand with nothing hidden, which the grader judges whole.
+        // What ships is graded: the hand with nothing hidden is judged whole by the grader, and the shipped hand matches
+        // it on every vertex outside the hidden layers (which stay as they were) — so the same sockets span the same way.
         var whole = BodyBridge.FlattenNails(hand, suit)!;
         var g = new NailGrade(hand, whole);
         var bad = g.Problems(o);
         Assert.True(bad.Count == 0, string.Join("; ", bad));
-        var shell = SecondSkinWriter.Build(new[] { new SecondSkinWriter.SourceSpec(whole, CoverNails: true) },
+        var hiddenVerts = sp.HiddenIslands.SelectMany(id => plans[id.Mesh].VertsOf[id.Island].Select(v => (id.Mesh, v))).ToHashSet();
+        var spanVerts = sp.Sockets.Where(s => s.Owner != null)
+                          .SelectMany(s => plans[s.Owner!.Value.Mesh].VertsOf[s.Owner!.Value.Island].Select(v => (s.Owner!.Value.Mesh, v))).ToList();
+        Assert.NotEmpty(spanVerts);
+        SecondSkinWriter.TryReadLod0Geometry(flat!, out var pf, out _, out _);
+        SecondSkinWriter.TryReadLod0Geometry(whole, out var pw, out _, out _);
+        foreach (var (mesh, v) in spanVerts)
+            Assert.True(mesh != 0 || (pf[v * 3] == pw[v * 3] && pf[v * 3 + 1] == pw[v * 3 + 1] && pf[v * 3 + 2] == pw[v * 3 + 2]),
+                        $"spanned vertex {v} differs from the graded hand");
+        Assert.DoesNotContain(spanVerts, x => hiddenVerts.Contains(x));
+        // ...and the garment the shipped hand gets — its hidden layers dropped, as the shell drops them — is closed.
+        var shell = SecondSkinWriter.Build(new[] { new SecondSkinWriter.SourceSpec(flat!, CoverNails: true, HiddenAttributes: hidden) },
                                            new[] { suit }, null, out _);
         g.AssertClosedAgainst(shell, skinOnly: false, o);
     }
@@ -670,9 +730,7 @@ public class NailSocketTests(ITestOutputHelper o)
     /// a curled edge whose patch would leak at the seam (Rue+
     /// Ballerina), and floating nails along a rim that must not hide it (Tight&amp;Firm).</summary>
     [LocalDataFact(LocalData.Mods + ":LavaBod+ 2.2", SecondSkinWriterVerbatimTests.RueNeed, LocalData.Mods + ":tight&firmgen2body-nsfw-installer")]
-    [Trait("Plan", "EDGE-nail-socket-hole-25")]
     [Trait("Plan", "EDGE-nail-socket-hole-27")]
-    [Trait("Plan", "EDGE-nail-socket-hole-29")]
     public void Socket_rules_hold_on_the_hands_that_need_them()
     {
         // Long nails: their second layers are nails now, not a "patch of skin" ringed by the socket — sockets span, and
@@ -797,6 +855,9 @@ public class NailSocketSweep(ITestOutputHelper o)
     [Trait("Plan", "EDGE-nail-socket-hole-23")]
     [Trait("Plan", "EDGE-nail-socket-hole-24")]
     [Trait("Plan", "EDGE-nail-socket-hole-30")]
+    [Trait("Plan", "EDGE-nail-socket-hole-29")]
+    [Trait("Plan", "AC-nail-socket-close-4")]
+    [Trait("Plan", "AC-nail-socket-close-6")]
     public void Every_installed_hand_closes_or_keeps_its_sockets()
     {
         string root = LocalData.Path(LocalData.Mods);

@@ -940,14 +940,18 @@ public static partial class SecondSkinWriter
         return best < float.MaxValue ? (best, front) : null;
     }
 
-    /// <summary>
-    /// Lay a loop (the spanning nail's outline, or the inner edge of a ring) onto a rim in order: both turned the same
-    /// way round in the rim's plane, matched by arc length from the best of 256 start offsets, each rim vertex claiming
-    /// the loop point nearest in parameter (monotonic, once each). Every loop point gets a target on the rim and the
-    /// finger's normal there; rim vertices no loop point claimed are moved onto the loop's targets (by key). Returns why
-    /// it could not, or null. <paramref name="reversed"/> (in the result) tells the caller its loop was turned round.
-    /// </summary>
+    /// <summary>What <see cref="MatchLoopOnto"/> found: the rim turned counter-clockwise, whether the loop was turned
+    /// round, each loop point's target on the rim and the finger's normal there, and rim vertices moved (by key).</summary>
     private sealed record LoopMatch(RimPoint[] R, bool Reversed, Vec3[] Target, Vec3[] RimN, Dictionary<(int, int, int), Vec3> RimMoves);
+
+    /// <summary>
+    /// Lay a loop (the spanning nail's outline) onto a rim in order: both turned the same way round in the rim's plane,
+    /// matched by arc length from the best of 256 start offsets, each rim vertex claiming the loop point nearest in
+    /// parameter (monotonic, once each). Every loop point gets a target on the rim and the finger's normal there; rim
+    /// vertices no loop point claimed are moved onto the loop's targets. Turns <paramref name="bp"/> round IN PLACE when
+    /// it runs the other way (<see cref="LoopMatch.Reversed"/>), so the caller can turn its own copy too. Returns why it
+    /// could not, or null.
+    /// </summary>
 
     private static string? MatchLoopOnto(RimPoint[] rim, List<Vec3> bp, Frame frame, out LoopMatch? match)
     {
