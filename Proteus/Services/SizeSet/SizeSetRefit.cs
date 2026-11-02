@@ -150,9 +150,11 @@ internal static partial class SizeSetRefit
     /// and gloves with no chest or legs. Each would add sizes of its own to the group, every one wearing the other piece
     /// unrefitted, so it gets no sizes, and a note.
     /// </param>
+    /// <param name="Model">The model's name <see cref="GroupName"/> is formed from, in any language ("e6255").</param>
     internal sealed record Piece(string GamePath, string Slot, string? Group,
                                  IReadOnlyList<(string? Option, string File)> Options, string Label, string GroupName,
-                                 string Race, bool FollowsChest = false, bool FollowsLegs = false, bool Unpaired = false);
+                                 string Race, bool FollowsChest = false, bool FollowsLegs = false, bool Unpaired = false,
+                                 string Model = "");
 
     /// <summary>
     /// The chest and legs models of a mod, each with the group its sizes are switched in. A model only a refit of ours
@@ -209,9 +211,10 @@ internal static partial class SizeSetRefit
                 droppedCopy?.Invoke(gamePath);
                 continue;
             }
+            string model = Gui.PartsPanel.ModelLabel(authors[0]);
             pieces.Add(new Piece(gamePath, slot, group, options, Gui.PartsPanel.SlotOf(authors[0]),
-                                 string.Format(Strings.Parts.RetargetGroupFmt, Gui.PartsPanel.ModelLabel(authors[0])),
-                                 BodySizeCatalog.RaceOf(gamePath)!));
+                                 string.Format(Strings.Parts.RetargetGroupFmt, model),
+                                 BodySizeCatalog.RaceOf(gamePath)!, Model: model));
         }
         if (models != null) pieces = WithoutRacialCopies(pieces, redirects, ourFiles, models, droppedCopy);
 

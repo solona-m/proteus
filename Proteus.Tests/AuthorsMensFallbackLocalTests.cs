@@ -181,7 +181,7 @@ public sealed class AuthorsMensFallbackLocalTests(ITestOutputHelper o) : IDispos
     /// (every file of the author's at that path missing, zero bytes or unparsable), against those it keeps. A report for
     /// the #43 closing comment; each candidate re-checked file by file.
     /// </summary>
-    [LocalDataFact(LocalData.GameData)]
+    [LocalDataFact(LocalData.GameData, LocalData.Mods)]
     [Trait("Plan", "AC-42-43-tbsex-legs-cross-1")]
     [Trait("Plan", "EDGE-42-43-tbsex-legs-cross-29")]
     public void Fallback_candidates_census() // [AC-42-43-tbsex-legs-cross-1] [EDGE-42-43-tbsex-legs-cross-29]

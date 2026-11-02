@@ -33,12 +33,16 @@ internal static partial class SizeSetRefit
 
     /// <summary>
     /// The bodies offered for a mod of <paramref name="pieces"/>: the women's when it has women's pieces, the men's when it
-    /// has men's, and the men's again "for men" when it has women's chest or legs pieces to cross (<see cref="AcrossPieces"/>).
+    /// has men's, and the men's again "for men" when it has women's chest or legs pieces to cross (<see cref="AcrossPieces"/>)
+    /// — or, given <paramref name="modRoot"/>, one whose author's men's model no file of can be read as a model
+    /// (<see cref="UnparsableMensPaths"/>), which a run may cross after all.
     /// </summary>
-    internal static IReadOnlyList<Choice> Offered(IReadOnlyList<Piece> pieces)
+    /// <param name="modRoot">The mod's folder, to read the author's men's models' files by; null offers "for men" for
+    /// pieces with no men's model only. Reads files: called once per mod, never per frame.</param>
+    internal static IReadOnlyList<Choice> Offered(IReadOnlyList<Piece> pieces, string? modRoot = null)
     {
         var races = pieces.Select(p => p.Race).ToHashSet(StringComparer.Ordinal);
-        bool across = AcrossPieces(pieces).Count > 0;
+        bool across = AcrossPieces(pieces).Count > 0 || modRoot != null && UnparsableMensPaths(pieces, modRoot).Count > 0;
         var offered = new List<Choice>();
         foreach (var (key, label, male) in SupportedBodies.Choices)
             if (races.Contains(male ? "0101" : "0201")) offered.Add(new Choice(key, key, label, male, false, false));
@@ -153,22 +157,30 @@ internal static partial class SizeSetRefit
     {
         var set = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         if (madeOn != null) return set;
-        var paths = pieces.Select(p => p.GamePath).ToHashSet(StringComparer.OrdinalIgnoreCase);
-        BodyRetargetWriter.Record? record = null;
-        bool recordRead = false;
-        foreach (var piece in pieces.Where(Crossable))
+        foreach (string mens in UnparsableMensPaths(pieces, modRoot, redirects))
         {
-            string mens = MensPathOf(piece);
-            if (!paths.Contains(mens) || set.Contains(mens)) continue;
             var outcomes = runLog.Sizes.Where(s => string.Equals(s.GamePath, mens, StringComparison.OrdinalIgnoreCase)).ToList();
-            if (MensModelUsable(outcomes)
-                || !outcomes.Any(s => s.Status == SizeStatus.Skipped && s.ReasonCode is Codes.Unreadable or Codes.EndsUnreadable))
-                continue;
-            if (!recordRead) (record, recordRead) = (BodyRetargetWriter.ReadRecord(modRoot), true);
-            redirects ??= PenumbraModMeta.ReadAllRedirects(modRoot);
-            if (AuthorMensRedirectsUnparsable(modRoot, mens, record, redirects)) set.Add(mens);
+            if (!MensModelUsable(outcomes)
+                && outcomes.Any(s => s.Status == SizeStatus.Skipped && s.ReasonCode is Codes.Unreadable or Codes.EndsUnreadable))
+                set.Add(mens);
         }
         return set;
+    }
+
+    /// <summary>
+    /// The c0101 paths of the crossable women's pieces whose author's men's piece beside them has no file that reads as a
+    /// model (<see cref="AuthorMensRedirectsUnparsable"/>): what the files alone say, before any run.
+    /// </summary>
+    internal static IReadOnlyList<string> UnparsableMensPaths(IReadOnlyList<Piece> pieces, string modRoot,
+                                                              IReadOnlyList<PenumbraModMeta.Redirect>? redirects = null)
+    {
+        var paths = pieces.Select(p => p.GamePath).ToHashSet(StringComparer.OrdinalIgnoreCase);
+        var mensPaths = pieces.Where(Crossable).Select(MensPathOf).Where(paths.Contains)
+                              .Distinct(StringComparer.OrdinalIgnoreCase).ToList();
+        if (mensPaths.Count == 0) return [];
+        var record = BodyRetargetWriter.ReadRecord(modRoot);
+        redirects ??= PenumbraModMeta.ReadAllRedirects(modRoot);
+        return mensPaths.Where(m => AuthorMensRedirectsUnparsable(modRoot, m, record, redirects)).ToList();
     }
 
     /// <summary>The men's bodies ticked for men's versions, by the table's keys ("tbse"), in the table's order.</summary>
@@ -275,9 +287,52 @@ internal static partial class SizeSetRefit
                           .Select(c => AcrossTarget(c.Key, "_top") is { } at ? SupportedBodies.OptionName(at.Body, at.Size) : null)
                           .OfType<string>().ToHashSet(StringComparer.OrdinalIgnoreCase);
 
-    /// <summary>The groups the mod's own men's pieces are sized in: their author's size group, or the one made for them.</summary>
+    /// <summary>
+    /// The groups the mod's own men's pieces are sized in: their author's size group, or the one made for them — named in
+    /// whichever language Proteus spoke when it was made, so in every language it ships.
+    /// </summary>
     internal static HashSet<string> OwnSizeGroups(IReadOnlyList<Piece> all)
-        => all.Where(p => p.Race == "0101").Select(p => p.Group ?? p.GroupName).ToHashSet(StringComparer.OrdinalIgnoreCase);
+    {
+        var groups = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var p in all.Where(p => p.Race == "0101"))
+        {
+            if (p.Group != null)
+            {
+                groups.Add(p.Group);
+                continue;
+            }
+            groups.Add(p.GroupName);
+            foreach (string format in GroupFormats.Value)
+                try { groups.Add(string.Format(format, p.Model)); }
+                catch (FormatException) { }
+        }
+        return groups;
+    }
+
+    /// <summary>The name format of a group made for a piece's sizes ("Body — {0}"), in every language Proteus ships.</summary>
+    private static readonly Lazy<IReadOnlyList<string>> GroupFormats
+        = new(() => InEveryLanguage("Parts.Retarget.Group.Fmt", Strings.Parts.RetargetGroupFmt));
+
+    /// <summary>A string's message in each language file embedded in the plugin, and <paramref name="current"/>.</summary>
+    internal static IReadOnlyList<string> InEveryLanguage(string key, string current)
+    {
+        var found = new List<string> { current };
+        var assembly = typeof(SizeSetRefit).Assembly;
+        foreach (string name in assembly.GetManifestResourceNames()
+                                        .Where(n => n.StartsWith("Proteus.Localization.", StringComparison.Ordinal)
+                                                    && n.EndsWith(".json", StringComparison.Ordinal)))
+            try
+            {
+                using var stream = assembly.GetManifestResourceStream(name);
+                if (stream == null) continue;
+                using var doc = System.Text.Json.JsonDocument.Parse(stream);
+                if (doc.RootElement.TryGetProperty(key, out var entry) && entry.TryGetProperty("message", out var message)
+                    && message.GetString() is { Length: > 0 } text)
+                    found.Add(text);
+            }
+            catch (System.Text.Json.JsonException) { }
+        return found.Distinct(StringComparer.Ordinal).ToList();
+    }
 
     /// <summary>
     /// The women's pieces whose author's men's model a men's version of ours still stands over, though this run makes none

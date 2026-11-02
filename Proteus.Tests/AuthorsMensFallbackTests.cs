@@ -163,6 +163,40 @@ public sealed class AuthorsMensFallbackTests : IDisposable
     }
 
     [Fact]
+    [Trait("Plan", "AC-42-43-tbsex-legs-cross-1")]
+    public void For_men_is_offered_when_the_authors_mens_model_is_unparsable() // [AC-42-43-tbsex-legs-cross-1]
+    {
+        // Every women's piece has the author's men's model beside it: nothing to cross as 1410 saw it. Its files missing,
+        // the size set may cross them after all, so "for men" must be offered — from the files, before any run.
+        string root = Mod([Top, Glove, MensTop, MensGlove]);
+        var pieces = PiecesOf(root);
+        Assert.DoesNotContain(Offered(pieces), c => c.ForMen);
+        Assert.Contains(Offered(pieces, root), c => c.Key == "tbse" + AcrossSuffix);
+        Assert.Contains(Offered(pieces, root), c => c.Key == "tbse");   // the plain body, to try the author's model
+        Assert.Contains("tbse" + AcrossSuffix, SizeSetBatch.RunKeys(pieces, ["tbse", "tbse@women"], men: false, root));
+
+        // Both men's models a model: not offered.
+        foreach (string rel in new[] { "s/2.mdl", "m/2.mdl", "s/3.mdl", "m/3.mdl" }) Write(root, rel, Model);
+        Assert.DoesNotContain(Offered(pieces, root), c => c.ForMen);
+    }
+
+    [Fact]
+    [Trait("Plan", "AC-42-43-tbsex-legs-cross-1")]
+    public void A_file_that_cannot_be_opened_keeps_the_authors_model() // [AC-42-43-tbsex-legs-cross-1]
+    {
+        string root = Mod([Glove, MensGlove]);
+        Write(root, "s/1.mdl", []);
+        Write(root, "m/1.mdl", Model);
+        Assert.False(AuthorMensRedirectsUnparsable(root, MensGlove, null));
+        // Held open by another program: may well be a good model, so never counted.
+        using (new FileStream(Path.Combine(root, "m", "1.mdl"), FileMode.Open, FileAccess.Read, FileShare.None))
+        {
+            Assert.False(Unparsable(root, "m/1.mdl"));
+            Assert.False(AuthorMensRedirectsUnparsable(root, MensGlove, null));
+        }
+    }
+
+    [Fact]
     [Trait("Plan", "EDGE-42-43-tbsex-legs-cross-39")]
     public void Is_our_file_matches_pieces_of() // [EDGE-42-43-tbsex-legs-cross-39]
     {
@@ -473,6 +507,21 @@ public sealed class AuthorsMensFallbackTests : IDisposable
         // Without the own size groups the first group of ours at the path is taken; with them, the men's body group.
         Assert.Equal(sizeGroup, MensGroupName(root, [], crossable));
         Assert.Equal(MensGroup, MensGroupName(root, [], crossable, OwnSizeGroups(pieces)));
+
+        // That size group made while Proteus spoke another language: still the men's piece's own, never ours for men.
+        var mensPiece = pieces.Single(p => p.GamePath == MensGlove);
+        string other = InEveryLanguage("Parts.Retarget.Group.Fmt", Strings.Parts.RetargetGroupFmt)
+                           .Select(f => string.Format(f, mensPiece.Model)).First(n => n != mensPiece.GroupName);
+        Assert.Contains(other, OwnSizeGroups(pieces));
+        string elsewhere = Mod([Glove], defaultFiles: defaults,
+                               extraGroups: OurGroup(other, MensGlove) + OurGroup(MensGroup, MensGlove));
+        Directory.CreateDirectory(Path.Combine(elsewhere, SidecarDiscoveryService.SidecarSubdir));
+        record.Options[0].Group = other;
+        File.WriteAllText(Path.Combine(elsewhere, SidecarDiscoveryService.SidecarSubdir, BodyRetargetWriter.RecordFile),
+                          JsonSerializer.Serialize(record));
+        var there = PiecesOf(elsewhere);
+        Assert.Equal(other, MensGroupName(elsewhere, [], there.Where(Crossable).ToList()));
+        Assert.Equal(MensGroup, MensGroupName(elsewhere, [], there.Where(Crossable).ToList(), OwnSizeGroups(there)));
     }
 
     [Fact]
