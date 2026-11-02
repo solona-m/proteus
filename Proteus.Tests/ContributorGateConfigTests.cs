@@ -24,7 +24,7 @@ public class ContributorGateConfigTests
     }
 
     internal const string GuardedCommand =
-        "[ ! -f \"${CLAUDE_PROJECT_DIR}/.claude/hooks/pr-gate.sh\" ] || sh \"${CLAUDE_PROJECT_DIR}/.claude/hooks/pr-gate.sh\"";
+        "[ ! -f \"${CLAUDE_PROJECT_DIR}/.claude/hooks/pr-gate.sh\" ] || sh \"${CLAUDE_PROJECT_DIR}/.claude/hooks/pr-gate.sh\" || true";
 
     private static JsonElement Settings()
         => JsonDocument.Parse(File.ReadAllText(Path.Combine(RepoRoot, ".claude", "settings.json"))).RootElement.Clone();
@@ -85,8 +85,13 @@ public class ContributorGateConfigTests
                      "gh pr create --base test", "Rule 4", "only when your user asks",
                      "/plugin marketplace add cunhaax/ai-workflow", "/plugin install ai-workflow@ai-workflow", "npx",
                      "not enforcement", ".claude/settings.json", "Git for Windows",
+                     // [AC-pr-gate-advisory-9] A recommendation, never a requirement.
+                     "recommended for non-trivial changes", "Small changes and contributors not using Claude Code don't need it",
+                     "never blocks", "silences", "the owner",
                  })
             Assert.True(guide.Contains(s, StringComparison.Ordinal), $"contributing-with-claude.md must mention '{s}'");
+        foreach (var s in new[] { "blocks it", "What the gate is", "required" })
+            Assert.False(guide.Contains(s, StringComparison.OrdinalIgnoreCase), $"contributing-with-claude.md must not say '{s}'");
     }
 
     [Fact]
@@ -98,12 +103,37 @@ public class ContributorGateConfigTests
         Assert.Contains("docs/agent-rules/contributing-with-claude.md", all);
         int commands = Array.IndexOf(lines, "## Commands");
         int architecture = Array.IndexOf(lines, "## Architecture");
-        Assert.Contains(lines[commands..architecture], l => l.Contains(".claude/hooks/pr-ready.sh", StringComparison.Ordinal));
+        // [AC-pr-gate-advisory-9] Optional, and it silences a recommendation.
+        var command = Assert.Single(lines[commands..architecture], l => l.Contains(".claude/hooks/pr-ready.sh", StringComparison.Ordinal));
+        Assert.Contains("optional", command);
+        Assert.Contains("silences", command);
+        Assert.DoesNotContain("required", command);
+        Assert.DoesNotContain("before a PR:", command);
         int sensitive = Array.FindIndex(lines, l => l.StartsWith("## Sensitive Areas", StringComparison.Ordinal));
         int next = Array.FindIndex(lines, sensitive + 1, l => l.StartsWith("## ", StringComparison.Ordinal));
         Assert.Contains(lines[sensitive..next], l => l.StartsWith("- ", StringComparison.Ordinal)
             && l.Contains(".claude/settings.json") && l.Contains(".claude/hooks/")
-            && l.Contains("every agent session") && l.Contains("checked out"));
+            && l.Contains("every agent session") && l.Contains("checked out")
+            && l.Contains("latency") && l.Contains("never blocks") && !l.Contains("required"));
+    }
+
+    [Fact]
+    public void CodeCriticMd_NamesReminderAdvisory()
+    {
+        // [AC-pr-gate-advisory-9]
+        var lines = File.ReadAllLines(Path.Combine(RepoRoot, "docs", "agent-rules", "code-critic.md"));
+        int i = Array.FindIndex(lines, l => l.Contains("PrGateTests", StringComparison.Ordinal));
+        Assert.True(i > 0, "code-critic.md must name PrGateTests");
+        Assert.Contains("advisory", lines[i - 1] + " " + lines[i]);
+    }
+
+    [Fact]
+    public void GateScript_NeverExitsNonZero()
+    {
+        // [EDGE-pr-gate-advisory-3] Exit 2 would block, so the script only ever exits 0 (the settings tail covers crashes).
+        var code = SupplyChainTests.NonCommentLines(File.ReadAllLines(Path.Combine(RepoRoot, ".claude", "hooks", "pr-gate.sh"))).ToList();
+        Assert.DoesNotContain(code, l => System.Text.RegularExpressions.Regex.IsMatch(l, @"\bexit\b(?!\s+0\b)"));
+        Assert.DoesNotContain(code, l => System.Text.RegularExpressions.Regex.IsMatch(l, @"\bset\s+-e"));
     }
 
     [Fact]
