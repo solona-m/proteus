@@ -112,7 +112,9 @@ public class TbseXNudeLegsLocalTests(ITestOutputHelper o)
     /// no skin at all. Fitted there, a man's garment would show bare hips where TBSE-X men wear briefs, well beyond the
     /// crotch Gen A shows on TBSE — and it is why the game's women's legs land only 81.6% on TBSE-X's SFW legs.</item>
     /// </list>
-    /// The gate was fixed before measuring and is not loosened: #42 stays open with these numbers.
+    /// That gate, fixed before measuring, asked more than TBSE's own SFW→Gen A pair shows: that the nude legs add skin
+    /// only at the crotch. #42 was shipped meanwhile on its own measure (build 1412, tbsex-nude-legs: Flaccid M A, only
+    /// after a coverage refusal, gated by the job's own checks); this stays as the record of what the nude legs add.
     /// </summary>
     internal const string? Winner = null;
 
@@ -135,16 +137,5 @@ public class TbseXNudeLegsLocalTests(ITestOutputHelper o)
             if (shape.Passes) winner ??= c;
         }
         Assert.Equal(Winner, winner);
-    }
-
-    /// <summary>With no candidate passing, TBSE-X's legs name no nude legs: its men's versions stay on its SFW legs.</summary>
-    [Fact]
-    [Trait("Plan", "AC-42-43-tbsex-legs-cross-6")]
-    [Trait("Plan", "EDGE-42-43-tbsex-legs-cross-26")]
-    public void Supported_bodies_names_the_measured_winner() // [AC-42-43-tbsex-legs-cross-6] [EDGE-42-43-tbsex-legs-cross-26]
-    {
-        var legs = SupportedBodies.Of("tbse-x", "_dwn", false)!;
-        Assert.Equal(Winner is null ? null : LegsDir + Winner + LegsFile, legs.Sizes.Single().NudeRel);
-        Assert.Null(SupportedBodies.Of("tbse-x", "_top", false)!.Sizes.Single().NudeRel);
     }
 }

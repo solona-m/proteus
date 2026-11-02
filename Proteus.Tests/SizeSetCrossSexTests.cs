@@ -517,23 +517,35 @@ public sealed class SizeSetCrossSexTests : IDisposable
     [Trait("Plan", "EDGE-cross-sex-area-coverage-6")]
     [Trait("Plan", "EDGE-cross-sex-area-coverage-11")]
     [Trait("Plan", "EDGE-cross-sex-area-coverage-12")]
-    public void Tbse_legs_name_their_nude_smallclothes() // [AC-cross-sex-area-coverage-2] [EDGE-cross-sex-area-coverage-6] [EDGE-cross-sex-area-coverage-11] [EDGE-cross-sex-area-coverage-12]
+    [Trait("Plan", "AC-tbsex-nude-legs-1")]
+    [Trait("Plan", "EDGE-tbsex-nude-legs-3")]
+    public void Tbse_legs_name_their_nude_smallclothes() // [AC-cross-sex-area-coverage-2] [EDGE-cross-sex-area-coverage-6] [EDGE-cross-sex-area-coverage-11] [EDGE-cross-sex-area-coverage-12] [AC-tbsex-nude-legs-1] [EDGE-tbsex-nude-legs-3]
     {
         var legs = SupportedBodies.Of("tbse", "_dwn", false)!;
         var size = Assert.Single(legs.Sizes);
         Assert.Equal(RefitCore.Normal(UvBakeInputs.TbseLegs[0].Rel), RefitCore.Normal(size.Rel));
         Assert.Equal(RefitCore.Normal(UvBakeInputs.TbseLegs[1].Rel), RefitCore.Normal(size.NudeRel!));
         Assert.Equal("TBSE", SupportedBodies.OptionName(legs, size));
+        // TBSE-X's SFW legs match a nude-made women's body less still: its Flaccid M A legs, under "TBSE-X".
+        var xLegs = SupportedBodies.Of("tbse-x", "_dwn", false)!;
+        var xSize = Assert.Single(xLegs.Sizes);
+        Assert.Equal(TbseXFlaccid, RefitCore.Normal(xSize.NudeRel!));
+        Assert.Equal("TBSE-X", SupportedBodies.OptionName(xLegs, xSize));
         foreach (var (key, label, male) in SupportedBodies.Choices)
             foreach (string slot in new[] { "_top", "_dwn" })
                 foreach (bool yas in new[] { false, true })
-                    if (SupportedBodies.Of(key, slot, yas) is { } body && !(key == "tbse" && slot == "_dwn"))
+                    if (SupportedBodies.Of(key, slot, yas) is { } body && !(key is "tbse" or "tbse-x" && slot == "_dwn"))
                         Assert.All(body.Sizes, s => Assert.Null(s.NudeRel));
     }
 
+    /// <summary>TBSE-X's nude legs, as the table names them.</summary>
+    private static readonly string TbseXFlaccid =
+        RefitCore.Normal("p1/legs (smallclothes legs)/flaccid m a/chara/equipment/e0000/model/c0101e0000_dwn.mdl");
+
     [Fact]
     [Trait("Plan", "EDGE-cross-sex-area-coverage-5")]
-    public void The_nude_option_is_found_by_its_file() // [EDGE-cross-sex-area-coverage-5]
+    [Trait("Plan", "EDGE-tbsex-nude-legs-1")]
+    public void The_nude_option_is_found_by_its_file() // [EDGE-cross-sex-area-coverage-5] [EDGE-tbsex-nude-legs-1]
     {
         static BodyOption Legs(string name, string rel)
             => new("Smallclothes", "", name, rel, "chara/equipment/e0000/model/c0101e0000_dwn.mdl", "_dwn");
@@ -546,6 +558,42 @@ public sealed class SizeSetCrossSexTests : IDisposable
         Assert.Equal(0, Told(log));
         Assert.Null(SizeSetRefit.NudeFor([sfw], size, log)!(sfw));
         Assert.Equal(1, Told(log));
-        Assert.Null(SizeSetRefit.NudeFor([sfw, genA], SupportedBodies.Of("tbse-x", "_dwn", false)!.Sizes[0], log));
+        // TBSE-X: its SFW legs give its Flaccid M A legs when listed; none, said once, when not.
+        var xSize = SupportedBodies.Of("tbse-x", "_dwn", false)!.Sizes[0];
+        var xSfw = Legs("SFW", xSize.Rel);
+        var flaccid = Legs("Flaccid M A", xSize.NudeRel!);
+        var xLog = Substitute.For<IPluginLog>();
+        Assert.Same(flaccid, SizeSetRefit.NudeFor([xSfw, flaccid], xSize, xLog)!(xSfw));
+        Assert.Equal(0, Told(xLog));
+        Assert.Null(SizeSetRefit.NudeFor([xSfw], xSize, xLog)!(xSfw));
+        Assert.Equal(1, Told(xLog));
+    }
+
+    /// <summary>A nude legs file is no size of its own: TBSE-X's legs are still one size, and a body mod holding only
+    /// the flaccid legs is not found as TBSE-X.</summary>
+    [Fact]
+    [Trait("Plan", "EDGE-tbsex-nude-legs-3")]
+    public void Tbsex_nude_rel_is_no_size() // [EDGE-tbsex-nude-legs-3]
+    {
+        var legs = SupportedBodies.Of("tbse-x", "_dwn", false)!;
+        var size = Assert.Single(legs.Sizes);
+        Assert.NotEqual(TbseXFlaccid, RefitCore.Normal(size.Rel));
+        var flaccid = new BodyOption("Legs", "", "Flaccid M A", size.NudeRel!, "chara/equipment/e0000/model/c0101e0000_dwn.mdl", "_dwn");
+        var nudeOnly = new BodyModIndex.Entry("<tbse-x nude only>", "TBSE-X nude only", new BodySizeCatalog("<nude>", [flaccid]));
+        Assert.Null(SupportedBodies.Find(legs, [nudeOnly]));
+    }
+
+    /// <summary>The nude legs are taken only when the SFW ones match too little and the nude ones enough; legs made on
+    /// gen3 are never crossed at all.</summary>
+    [Fact]
+    [Trait("Plan", "EDGE-tbsex-nude-legs-4")]
+    [Trait("Plan", "EDGE-tbsex-nude-legs-2")]
+    public void Nude_needs_both_sides() // [EDGE-tbsex-nude-legs-4] [EDGE-tbsex-nude-legs-2]
+    {
+        static UvAtlasCorrespondence.Stats At(float coverage) => new(0, 100, 0, coverage, coverage, coverage, 0, 0, 0, 0, 0, 0, 0f, 0f);
+        Assert.False(CrossSexRefit.TakesNude(At(0.62f), At(0.85f)));
+        Assert.False(CrossSexRefit.TakesNude(null, At(0.987f)));
+        Assert.True(CrossSexRefit.TakesNude(At(0.62f), At(0.987f)));
+        Assert.False(SizeSetRefit.AcrossEligible("gen3"));
     }
 }

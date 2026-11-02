@@ -25,8 +25,9 @@ internal static partial class CrossSexRefitJob
     /// <param name="Wearer">What the wearer of <paramref name="To"/> is built from (<see cref="OtherRaceWearer.Gather"/>).</param>
     /// <param name="LiftUnderbust">Overrides <see cref="CrossSexRefit.LiftsUnderbust"/>, for the measurement that decides it.</param>
     /// <param name="Nude">For a target, the same body's nude smallclothes, fitted instead when the target matches too little
-    /// of the made-for body and they enough (<see cref="CrossSexRefit.TakesNude"/>). The size set's only: null fits every
-    /// target as it was picked.</param>
+    /// of the made-for body and they enough (<see cref="CrossSexRefit.TakesNude"/>) — or the match refused the target
+    /// outright for too little coverage. The size set's legs and shoes, and Studio's and the CLI's shoes
+    /// (<see cref="NudeOf"/>); null fits every target as it was picked.</param>
     /// <param name="HeldParts">A shoe's or glove's parts, by label, held where they are with the foot or hand: Studio's
     /// unticked parts. Null holds none beside them.</param>
     internal sealed record Inputs(
@@ -161,34 +162,54 @@ internal static partial class CrossSexRefitJob
         {
             var target = picked;
             string targetPath = onto.PathOf(target);
-            if (BodyRetarget.BuildPair(limb, File.ReadAllBytes(sourcePath), File.ReadAllBytes(targetPath), limb, sourceMale,
-                                       null, null, i.UvRemap, out var pair, out var landed,
-                                       BodyRetarget.BodyMaterialReader(targetPath), targetMale) is { } refusal)
+            string? refusal = BodyRetarget.BuildPair(limb, File.ReadAllBytes(sourcePath), File.ReadAllBytes(targetPath),
+                                                     limb, sourceMale, null, null, i.UvRemap, out var pair, out var landed,
+                                                     BodyRetarget.BodyMaterialReader(targetPath), targetMale);
+            // Too little matched — accepted under the bar a men's version needs, or refused outright for coverage (only
+            // that refusal says how much landed; a different layout, missing maps or an unreadable body never do, and are
+            // never tried on the nude smallclothes, which they would refuse too).
+            bool tooLittle = refusal == null ? !CrossSexRefit.CoverageAllowed(landed?.VertexCoverage ?? 1f) : landed != null;
+            if (refusal != null && !(tooLittle && i.Nude != null))
             {
-                sizes.Add(new Size(target, targetPath, null, null, null, 0, landed, refusal));
+                // Landed stays null on a refusal: the refusal is said in its own words, never judged as a coverage.
+                sizes.Add(new Size(target, targetPath, null, null, null, 0, null, refusal));
                 continue;
             }
 
-            // Too little matched: the same body's nude smallclothes, when they match enough. A pair the match refused
-            // outright never gets here — a different layout would refuse them too.
+            // Too little matched: the same body's nude smallclothes, when they match enough (TBSE's Gen A legs, TBSE-X's
+            // Flaccid M A — the latter's SFW legs match a nude-made women's body only 62%, below the refusal's 80%).
             BodyOption? asked = null;
             UvAtlasCorrespondence.Stats? askedLanded = null;
-            if (!CrossSexRefit.CoverageAllowed(landed?.VertexCoverage ?? 1f) && i.Nude?.Invoke(target) is { } nude)
+            if (tooLittle && i.Nude?.Invoke(target) is { } nude)
             {
                 string nudePath = onto.PathOf(nude);
-                bool built = BodyRetarget.BuildPair(limb, File.ReadAllBytes(sourcePath), File.ReadAllBytes(nudePath), limb,
-                                                    sourceMale, null, null, i.UvRemap, out var nudePair, out var nudeLanded,
-                                                    BodyRetarget.BodyMaterialReader(nudePath), targetMale) == null;
-                if (built && CrossSexRefit.TakesNude(landed, nudeLanded))
+                string? nudeRefusal = BodyRetarget.BuildPair(limb, File.ReadAllBytes(sourcePath), File.ReadAllBytes(nudePath),
+                                                             limb, sourceMale, null, null, i.UvRemap, out var nudePair,
+                                                             out var nudeLanded, BodyRetarget.BodyMaterialReader(nudePath),
+                                                             targetMale);
+                bool built = nudeRefusal == null;
+                if (built && CrossSexRefit.TakesNude(landed, nudeLanded) && landed is { } sfw && nudeLanded is { } bare)
                 {
                     i.Log.Information("[Proteus] cross-sex refit: fitted onto {0} ({1:P1} matched); {2} matched {3:P1}",
-                                      nude.Label, nudeLanded!.Value.VertexCoverage, target.Label, landed!.Value.VertexCoverage);
+                                      nude.Label, bare.VertexCoverage, target.Label, sfw.VertexCoverage);
                     (asked, askedLanded) = (target, landed);
                     (target, targetPath, pair, landed) = (nude, nudePath, nudePair, nudeLanded);
+                    refusal = null;
                 }
+                else if (refusal != null)
+                    i.Log.Information("[Proteus] cross-sex refit: {0} {1}; {2} refused, matched {3:P1}",
+                                      nude.Label, built ? $"matched {nudeLanded?.VertexCoverage:P1}" : $"refused: {nudeRefusal}",
+                                      target.Label, landed?.VertexCoverage ?? 0f);
                 else
-                    i.Log.Information("[Proteus] cross-sex refit: {0} matched {1}; {2} kept",
-                                      nude.Label, built ? $"{nudeLanded?.VertexCoverage:P1}" : "nothing", target.Label);
+                    i.Log.Information("[Proteus] cross-sex refit: {0} {1}; {2} kept",
+                                      nude.Label, built ? $"matched {nudeLanded?.VertexCoverage:P1}" : $"refused: {nudeRefusal}",
+                                      target.Label);
+            }
+            // The nude smallclothes failed too, or are not installed: refused with the body's own reason, as before.
+            if (refusal != null)
+            {
+                sizes.Add(new Size(target, targetPath, null, null, null, 0, null, refusal));
+                continue;
             }
             BodyRetarget.Planned plan;
             if (reading != null)

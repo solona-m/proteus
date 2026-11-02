@@ -311,13 +311,16 @@ public class HarnessServerTests : IDisposable
     [Fact]
     public async Task Screenshot_Concurrent_429()
     {
-        // [EDGE-qa-harness-28]
+        // [EDGE-qa-harness-28] Its own fixture with a long capture timeout, and the second request sent only once the
+        // first is really inside the capture: under a loaded suite a fixed delay could send it first, or let the
+        // first time out (seen once in the quick suite).
+        using var g = new HarnessFixture(HarnessFixture.FastTimings with { Capture = TimeSpan.FromSeconds(30) });
         var slow = new TaskCompletionSource<RawFrame>();
-        var real = f.Game.Capture;
-        f.Game.Capture = (_, _, _) => slow.Task;
-        var first = f.Client.GetAsync("/screenshot");
-        await Task.Delay(100);
-        Assert.Equal(429, (await f.Get("/screenshot")).Status);
+        var inside = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        g.Game.Capture = (_, _, _) => { inside.TrySetResult(); return slow.Task; };
+        var first = g.Client.GetAsync("/screenshot");
+        await inside.Task.WaitAsync(TimeSpan.FromSeconds(20));
+        Assert.Equal(429, (await g.Get("/screenshot")).Status);
         slow.SetResult(new RawFrame(1, 1, 4, FramePng.B8G8R8A8Unorm, new byte[4]));
         Assert.Equal(200, (int)(await first).StatusCode);
     }

@@ -1318,7 +1318,7 @@ public sealed class LocalizationTests
         var lines = readme.Split('\n');
         string madeOn = "**" + Load(lang)["SizeSet.MadeOn"].Message.Split("###")[0] + "**";
         string mensGroup = "**" + Load(lang)["SizeSet.MensGroup"].Message + "**";
-        var (refitFor, mens, tbsex) = ReadmeAuthorsMensTokens[lang];
+        var (refitFor, mens, _) = ReadmeAuthorsMensTokens[lang];
         string refitBullet = lines.Single(l => l.StartsWith("- ", StringComparison.Ordinal) && l.Contains(refitFor));
         Assert.Contains(madeOn, refitBullet);
         Assert.Contains(mensGroup, refitBullet);
@@ -1328,12 +1328,10 @@ public sealed class LocalizationTests
         // After the new sentence: the bullet named Made on before it.
         Assert.True(mensBullet.IndexOf(madeOn, mensBullet.IndexOf(mens, StringComparison.Ordinal), StringComparison.Ordinal) > 0,
                     $"[{lang}] the new men's sentence doesn't name Made on");
-        Assert.Contains(tbsex, mensBullet);
         if (lang == Source)
         {
             Assert.Contains("can't be read as a model at all (missing, zero bytes or damaged)", refitBullet);
             Assert.Contains("A men's model the size set can read is always kept", refitBullet);
-            Assert.Contains("TBSE-X's nude legs don't stand in for its SFW legs", mensBullet);
         }
     }
 
