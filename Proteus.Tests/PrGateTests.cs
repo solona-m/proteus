@@ -199,7 +199,7 @@ public class PrGateTests(PrGateFixture fx) : IClassFixture<PrGateFixture>
     [InlineData("cd . && gh pr create --base test", "blocked: harness not listening; user chose to proceed")]
     public void Gate_AllowsWithValidRecord(string command, string qa)
     {
-        // [AC-contributor-gate-3]
+        // [AC-contributor-gate-3] [AC-pr-gate-advisory-3] [EDGE-pr-gate-advisory-11]
         using var repo = Repo(out string head);
         Record(repo.Path, $"commit={head}\nqa={qa}\n");
         Allowed(Gate(Payload(command, repo.Path)));
@@ -230,7 +230,7 @@ public class PrGateTests(PrGateFixture fx) : IClassFixture<PrGateFixture>
     [InlineData("dotnet test")]
     public void Gate_IgnoresOtherCommands(string command)
     {
-        // [AC-contributor-gate-5]
+        // [AC-contributor-gate-5] [AC-pr-gate-advisory-6]
         Allowed(Gate(Payload(command, fx.NonGit.Path)));
     }
 
@@ -265,7 +265,7 @@ public class PrGateTests(PrGateFixture fx) : IClassFixture<PrGateFixture>
     [MemberData(nameof(NeverNotes))]
     public void Gate_NeverNotesQuotedHeredocOrLaterLineText(string tool, string command)
     {
-        // [AC-contributor-gate-5] [EDGE-contributor-gate-2] [EDGE-contributor-gate-4] The owner's own multi-line
+        // [AC-contributor-gate-5] [EDGE-contributor-gate-2] [EDGE-contributor-gate-4] [AC-pr-gate-advisory-6] [EDGE-pr-gate-advisory-5] The owner's own multi-line
         // commits and merges, which Claude Code may run the hook for anyway: never blocked.
         Allowed(Gate(Payload(command, fx.NonGit.Path, tool)));
     }
@@ -286,7 +286,7 @@ public class PrGateTests(PrGateFixture fx) : IClassFixture<PrGateFixture>
     [InlineData("PowerShell", "git push; gh pr create --base test")]
     public void Gate_DetectsPrefixSegments(string tool, string command)
     {
-        // [EDGE-contributor-gate-1] [EDGE-contributor-gate-11]
+        // [EDGE-contributor-gate-1] [EDGE-contributor-gate-11] [EDGE-pr-gate-advisory-11] [EDGE-pr-gate-advisory-13]
         Noted(Gate(Payload(command, fx.NonGit.Path, tool)), "cannot read HEAD");
     }
 
@@ -312,7 +312,7 @@ public class PrGateTests(PrGateFixture fx) : IClassFixture<PrGateFixture>
     [InlineData("GH PR CREATE")]
     public void Gate_AcceptedMissesExitZero(string command)
     {
-        // [EDGE-contributor-gate-3] Near misses and the detector's accepted misses: pinned, so any change shows.
+        // [EDGE-contributor-gate-3] [EDGE-pr-gate-advisory-4] Near misses and the detector's accepted misses: pinned, so any change shows.
         Allowed(Gate(Payload(command, fx.NonGit.Path)));
     }
 
@@ -324,7 +324,7 @@ public class PrGateTests(PrGateFixture fx) : IClassFixture<PrGateFixture>
     [InlineData("{\"tool_name\":\"Bash\",\"tool_input\":{\"description\":\"command\"},\"cwd\":\"/\"}")]
     public void Gate_FailsOpenOnBadInput(string stdin)
     {
-        // [EDGE-contributor-gate-5]
+        // [EDGE-contributor-gate-5] [EDGE-pr-gate-advisory-6]
         Allowed(Gate(stdin));
     }
 
@@ -333,7 +333,7 @@ public class PrGateTests(PrGateFixture fx) : IClassFixture<PrGateFixture>
     [InlineData(true)]
     public void Gate_RealisticPayload(bool indented)
     {
-        // [EDGE-contributor-gate-5] The description and transcript path mention gh/pr; only the command counts.
+        // [EDGE-contributor-gate-5] [EDGE-pr-gate-advisory-6] The description and transcript path mention gh/pr; only the command counts.
         Allowed(Gate(Payload("gh pr view 12", fx.NonGit.Path, description: "Then run gh pr create", indented: indented)));
         // The end-of-string cut: without it the prefix would run on into the description.
         Allowed(Gate(Payload("gh pr view 12", fx.NonGit.Path, description: "x; gh pr create --fill", indented: indented)));
@@ -358,7 +358,7 @@ public class PrGateTests(PrGateFixture fx) : IClassFixture<PrGateFixture>
     [InlineData("commit={0}\nreview=pass\nqa=ran: fine\n")]
     public void Gate_AcceptsCrlfAndExtraLines(string record)
     {
-        // [EDGE-contributor-gate-7]
+        // [EDGE-contributor-gate-7] [EDGE-pr-gate-advisory-9]
         using var repo = Repo(out string head);
         Record(repo.Path, string.Format(record, head));
         Allowed(Gate(Payload("gh pr create", repo.Path)));
@@ -382,7 +382,7 @@ public class PrGateTests(PrGateFixture fx) : IClassFixture<PrGateFixture>
     [ShellFact]
     public void Gate_ReadsRecordFromCwdWorktree()
     {
-        // [AC-contributor-gate-9] [EDGE-contributor-gate-9] The cwd's worktree decides, never CLAUDE_PROJECT_DIR.
+        // [AC-contributor-gate-9] [EDGE-contributor-gate-9] [EDGE-pr-gate-advisory-8] The cwd's worktree decides, never CLAUDE_PROJECT_DIR.
         using var withRecord = Repo(out string head);
         using var without = Repo(out _);
         Record(withRecord.Path, $"commit={head}\nqa=ran: fine\n");
@@ -400,7 +400,7 @@ public class PrGateTests(PrGateFixture fx) : IClassFixture<PrGateFixture>
     [ShellFact]
     public void Gate_HandlesEscapedWindowsCwd()
     {
-        // [EDGE-contributor-gate-10] A path with a space and é, backslash-escaped in the JSON on Windows.
+        // [EDGE-contributor-gate-10] [EDGE-pr-gate-advisory-8] A path with a space and é, backslash-escaped in the JSON on Windows.
         string payload = Payload("gh pr create", fx.Ready.Path);
         if (OperatingSystem.IsWindows()) Assert.Contains("\\\\", payload);
         Allowed(Gate(payload));
@@ -413,7 +413,7 @@ public class PrGateTests(PrGateFixture fx) : IClassFixture<PrGateFixture>
     [ShellFact]
     public void Gate_ReadsPrettyPrintedCwd()
     {
-        // [AC-contributor-gate-9] [EDGE-contributor-gate-10] The payload's cwd, read from indented JSON, decides — not
+        // [AC-contributor-gate-9] [EDGE-contributor-gate-10] [EDGE-pr-gate-advisory-8] The payload's cwd, read from indented JSON, decides — not
         // the process's working directory.
         Allowed(Gate(Payload("gh pr create --base test", fx.Ready.Path, indented: true), processCwd: fx.NonGit.Path));
         Noted(Gate(Payload("gh pr create --base test", fx.NonGit.Path, indented: true), processCwd: fx.Ready.Path),
@@ -423,7 +423,7 @@ public class PrGateTests(PrGateFixture fx) : IClassFixture<PrGateFixture>
     [ShellFact]
     public void Gate_HandlesHugeCommand()
     {
-        // [EDGE-contributor-gate-15] A 200 KB unquoted heredoc (too complex, so the hook runs): allowed, quickly.
+        // [EDGE-contributor-gate-15] [EDGE-pr-gate-advisory-7] A 200 KB unquoted heredoc (too complex, so the hook runs): allowed, quickly.
         var body = string.Join("\n", Enumerable.Range(0, 4000).Select(i => $"line {i} gh pr create --base test filler text"));
         var r = Gate(Payload($"cat > f <<EOF\n{body}\nEOF", fx.NonGit.Path));
         Allowed(r);
@@ -433,7 +433,7 @@ public class PrGateTests(PrGateFixture fx) : IClassFixture<PrGateFixture>
     [ShellFact]
     public void Gate_NoCwdInPayload_UsesProcessCwd()
     {
-        // [AC-contributor-gate-9] [EDGE-contributor-gate-10] With no cwd in the payload (or a null one), the process's
+        // [AC-contributor-gate-9] [EDGE-contributor-gate-10] [EDGE-pr-gate-advisory-8] With no cwd in the payload (or a null one), the process's
         // working directory decides.
         string noCwd = JsonSerializer.Serialize(new Dictionary<string, object>
         {
@@ -477,7 +477,8 @@ public class PrGateTests(PrGateFixture fx) : IClassFixture<PrGateFixture>
     [ShellFact]
     public void Scripts_ParseUnderSh()
     {
-        // [AC-contributor-gate-8] A syntax error would exit 2, a block, on every hook run: both scripts must parse.
+        // [AC-contributor-gate-8] [EDGE-pr-gate-advisory-3] Both scripts must parse: a syntax error would exit 2, which the
+        // settings tail (`|| true`) turns into a silent no-op, so the note would quietly stop.
         foreach (var script in new[] { GateScript, ReadyScript })
         {
             var r = PosixShell.Run(["-n", script], null, fx.Elsewhere.Path);

@@ -77,7 +77,7 @@ note() {
         "Proteus PR reminder: review and QA are recommended for non-trivial changes; small changes don't need it. This never blocks. Guide: docs/agent-rules/contributing-with-claude.md" \
         "pr-gate: recommendation only; this gh pr create was not blocked ($1)." \
         "This repo's review pipeline (/feature with a code-critic review, then adversarial QA in game: docs/agent-rules/adversarial-qa.md) is recommended for non-trivial changes. Small changes and contributors not using Claude Code don't need it." \
-        "The PR is already open: if you or your user run the pipeline later, push fixes to this branch to update the PR." \
+        "If the PR was opened and you or your user run the pipeline later, push fixes to this branch to update the PR." \
         "PRs target test; if this one targets main, gh pr edit --base test." \
         "Guide: docs/agent-rules/contributing-with-claude.md. Please tell your user this in one line, and take no other action unless they ask."
     exit 0

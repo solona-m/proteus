@@ -280,7 +280,7 @@ public class PrGateClaudeE2ETests(ITestOutputHelper output)
             GateSilent(e);
         }
 
-        // (f) With a record for the current HEAD: the PR command runs, silently.
+        // (f) [AC-pr-gate-advisory-3] With a record for the current HEAD: the PR command runs, silently.
         string readyScript = Path.Combine(box.Clone, ".claude", "hooks", "pr-ready.sh");
         Assert.Equal(0, PosixShell.Run([readyScript, "skipped: e2e"], null, box.Clone).ExitCode);
         box.ClearLog();
@@ -293,8 +293,13 @@ public class PrGateClaudeE2ETests(ITestOutputHelper output)
         File.Delete(Path.Combine(box.Clone, ".pr-ready"));
         box.ClearLog();
         var g = Claude(box, "Bash", Create, "--disallowedTools", "Bash(gh pr create:*)");
+        SameCommand(g, Create);
         Assert.DoesNotContain(box.Calls(), call => call.Contains("pr create"));
-        Assert.DoesNotContain("pr-gate: recommendation only", g.Result);
+        Assert.True(g.Result.Contains("denied", StringComparison.OrdinalIgnoreCase)
+                    || g.Result.Contains("permission", StringComparison.OrdinalIgnoreCase),
+                    $"(g) expected a permission denial, got: {g.Result.Trim()}");
+        output.WriteLine("(g) hook ran before the deny: " + g.Debug.Split('\n').Any(l => l.Contains("PreToolUse:Bash", StringComparison.Ordinal)
+                                                                                  && l.Contains("pr-gate.sh", StringComparison.Ordinal)));
     }
 
     [ClaudeE2EFact]
