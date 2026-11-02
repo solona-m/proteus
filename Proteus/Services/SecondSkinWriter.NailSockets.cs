@@ -615,123 +615,15 @@ public static partial class SecondSkinWriter
         if (bLen <= 0 || rimLen < bLen * 0.5f || rimLen > bLen * 2f) return "rim and nail differ in size";
 
         var frame = LoopFrame(rp, rim.Select(r => r.N).ToArray());
-        // Both loops counter-clockwise in the rim's plane.
-        static float SignedArea((float X, float Y)[] p) { float a = 0; for (int i = 0; i < p.Length; i++) { var (q, r) = (p[i], p[(i + 1) % p.Length]); a += q.X * r.Y - r.X * q.Y; } return a / 2; }
-        var rimOrder = Enumerable.Range(0, rim.Length).ToList();
-        if (SignedArea(rp.Select(frame.Flat).ToArray()) < 0) rimOrder.Reverse();
-        if (SignedArea(bp.Select(frame.Flat).ToArray()) < 0) { bLoop.Reverse(); bp.Reverse(); }
-        var R = rimOrder.Select(i => rim[i]).ToArray();
+        var matchWhy = MatchLoopOnto(rim, bp, frame, out var lm);
+        if (matchWhy != null) return matchWhy;
+        if (lm!.Reversed) bLoop.Reverse();
+        var R = lm.R;
         var Rp = R.Select(r => r.P).ToArray();
-
-        static float[] Params(IReadOnlyList<Vec3> pts)
-        {
-            var s = new float[pts.Count];
-            float total = 0;
-            for (int i = 1; i < pts.Count; i++) { total += Dist(pts[i - 1], pts[i]); s[i] = total; }
-            total += Dist(pts[^1], pts[0]);
-            for (int i = 0; i < s.Length; i++) s[i] /= total;
-            return s;
-        }
-        static Vec3 At(IReadOnlyList<Vec3> pts, float[] s, float t, out int seg, out float f)
-        {
-            t -= MathF.Floor(t);
-            int n = pts.Count;
-            for (int i = 0; i < n; i++)
-            {
-                float a = s[i], b = i + 1 < n ? s[i + 1] : 1f;
-                if (t >= a && t <= b)
-                {
-                    f = b > a ? (t - a) / (b - a) : 0f;
-                    seg = i;
-                    var (p, q) = (pts[i], pts[(i + 1) % n]);
-                    return new Vec3(p.X + (q.X - p.X) * f, p.Y + (q.Y - p.Y) * f, p.Z + (q.Z - p.Z) * f);
-                }
-            }
-            seg = n - 1; f = 1f;
-            return pts[0];
-        }
-        var rs = Params(Rp);
-        var bs = Params(bp);
-
-        // The start offset that lays the outline on the rim best.
-        float bestO = 0, bestCost = float.MaxValue;
-        for (int k = 0; k < 256; k++)
-        {
-            float o = k / 256f, cost = 0;
-            for (int j = 0; j < 64; j++)
-            {
-                var a = At(Rp, rs, j / 64f, out _, out _);
-                var b = At(bp, bs, j / 64f + o, out _, out _);
-                float d = Dist(a, b); cost += d * d;
-            }
-            if (cost < bestCost) { bestCost = cost; bestO = o; }
-        }
-
-        // Each rim vertex claims the outline node nearest in parameter — in order, once each.
-        static float Circ(float a, float b) { float d = MathF.Abs(a - b) % 1f; return MathF.Min(d, 1f - d); }
+        var target = lm.Target;
+        var rimN = lm.RimN;
+        var rimMoves = lm.RimMoves;
         int nb = bLoop.Count, nr = R.Length;
-        var claimOf = new int[nr];   // rim index -> outline index, or -1
-        int first = -1, last = -1;
-        for (int i = 0; i < nr; i++)
-        {
-            float t = rs[i] + bestO;
-            int j = 0;
-            for (int q = 1; q < nb; q++) if (Circ(bs[q], t) < Circ(bs[j], t)) j = q;
-            claimOf[i] = -1;
-            if (first < 0) { first = j; last = 0; claimOf[i] = j; continue; }
-            int d = (j - first + nb) % nb;
-            if (d > last && d < nb) { claimOf[i] = j; last = d; }
-        }
-        var claimed = Enumerable.Range(0, nr).Where(i => claimOf[i] >= 0).ToList();
-        if (claimed.Count < 3) return "the nail's outline does not follow the rim";
-
-        // Targets for every outline node, and the finger's normal there.
-        var target = new Vec3[nb];
-        var rimN = new Vec3[nb];
-        for (int c = 0; c < claimed.Count; c++)
-        {
-            int ia = claimed[c], ib = claimed[(c + 1) % claimed.Count];
-            int ja = claimOf[ia], jb = claimOf[ib];
-            target[ja] = R[ia].P; rimN[ja] = R[ia].N;
-            float ra = rs[ia], rb = rs[ib]; if (rb <= ra) rb += 1f;
-            float ba = bs[ja], bb = bs[jb]; if (bb <= ba) bb += 1f;
-            for (int j = (ja + 1) % nb; j != jb; j = (j + 1) % nb)
-            {
-                float bj = bs[j]; if (bj < ba) bj += 1f;
-                float f = bb > ba ? (bj - ba) / (bb - ba) : 0f;
-                target[j] = At(Rp, rs, ra + f * (rb - ra), out int seg, out float sf);
-                var (n0, n1) = (R[seg].N, R[(seg + 1) % nr].N);
-                rimN[j] = NormalizeOr(new Vec3(n0.X + (n1.X - n0.X) * sf, n0.Y + (n1.Y - n0.Y) * sf, n0.Z + (n1.Z - n0.Z) * sf), frame.N);
-            }
-        }
-
-        // Rim vertices no outline node claimed move onto the outline, at their share of the way between claims.
-        var rimMoves = new Dictionary<(int, int, int), Vec3>();
-        for (int c = 0; c < claimed.Count; c++)
-        {
-            int ia = claimed[c], ib = claimed[(c + 1) % claimed.Count];
-            int ja = claimOf[ia], jb = claimOf[ib];
-            var seg = new List<Vec3>();
-            for (int j = ja; ; j = (j + 1) % nb) { seg.Add(target[j]); if (j == jb) break; }
-            var segS = new float[seg.Count];
-            float tot = 0; for (int q = 1; q < seg.Count; q++) { tot += Dist(seg[q - 1], seg[q]); segS[q] = tot; }
-            float ra = rs[ia], rb = rs[ib]; if (rb <= ra) rb += 1f;
-            for (int i = (ia + 1) % nr; i != ib; i = (i + 1) % nr)
-            {
-                float ri = rs[i]; if (ri < ra) ri += 1f;
-                float want = (rb > ra ? (ri - ra) / (rb - ra) : 0f) * tot;
-                Vec3 to = seg[^1];
-                for (int q = 1; q < seg.Count; q++)
-                    if (segS[q] >= want)
-                    {
-                        float f = segS[q] > segS[q - 1] ? (want - segS[q - 1]) / (segS[q] - segS[q - 1]) : 0f;
-                        to = new Vec3(seg[q - 1].X + (seg[q].X - seg[q - 1].X) * f, seg[q - 1].Y + (seg[q].Y - seg[q - 1].Y) * f,
-                                      seg[q - 1].Z + (seg[q].Z - seg[q - 1].Z) * f);
-                        break;
-                    }
-                rimMoves[VKey(R[i].P)] = to;
-            }
-        }
 
         // The authored nail as a height field over the rim's plane: its triangles that face out of the finger (an
         // edge curling over the fingertip is no guide to the finger under it), and its outline to carry that height
@@ -1022,5 +914,138 @@ public static partial class SecondSkinWriter
             front = n.X * d.X + n.Y * d.Y + n.Z * d.Z < 0;
         }
         return best < float.MaxValue ? (best, front) : null;
+    }
+
+    /// <summary>
+    /// Lay a loop (the spanning nail's outline, or the inner edge of a ring) onto a rim in order: both turned the same
+    /// way round in the rim's plane, matched by arc length from the best of 256 start offsets, each rim vertex claiming
+    /// the loop point nearest in parameter (monotonic, once each). Every loop point gets a target on the rim and the
+    /// finger's normal there; rim vertices no loop point claimed are moved onto the loop's targets (by key). Returns why
+    /// it could not, or null. <paramref name="reversed"/> (in the result) tells the caller its loop was turned round.
+    /// </summary>
+    private sealed record LoopMatch(RimPoint[] R, bool Reversed, Vec3[] Target, Vec3[] RimN, Dictionary<(int, int, int), Vec3> RimMoves);
+
+    private static string? MatchLoopOnto(RimPoint[] rim, List<Vec3> bp, Frame frame, out LoopMatch? match)
+    {
+        match = null; bool reversed = false;
+        var rp = rim.Select(r => r.P).ToArray();
+        static float SignedArea((float X, float Y)[] p) { float a = 0; for (int i = 0; i < p.Length; i++) { var (q, r) = (p[i], p[(i + 1) % p.Length]); a += q.X * r.Y - r.X * q.Y; } return a / 2; }
+        var rimOrder = Enumerable.Range(0, rim.Length).ToList();
+        if (SignedArea(rp.Select(frame.Flat).ToArray()) < 0) rimOrder.Reverse();
+        if (SignedArea(bp.Select(frame.Flat).ToArray()) < 0) { bp.Reverse(); reversed = true; }
+        var R = rimOrder.Select(i => rim[i]).ToArray();
+        var Rp = R.Select(r => r.P).ToArray();
+
+        static float[] Params(IReadOnlyList<Vec3> pts)
+        {
+            var s = new float[pts.Count];
+            float total = 0;
+            for (int i = 1; i < pts.Count; i++) { total += Dist(pts[i - 1], pts[i]); s[i] = total; }
+            total += Dist(pts[^1], pts[0]);
+            for (int i = 0; i < s.Length; i++) s[i] /= total;
+            return s;
+        }
+        static Vec3 At(IReadOnlyList<Vec3> pts, float[] s, float t, out int seg, out float f)
+        {
+            t -= MathF.Floor(t);
+            int n = pts.Count;
+            for (int i = 0; i < n; i++)
+            {
+                float a = s[i], b = i + 1 < n ? s[i + 1] : 1f;
+                if (t >= a && t <= b)
+                {
+                    f = b > a ? (t - a) / (b - a) : 0f;
+                    seg = i;
+                    var (p, q) = (pts[i], pts[(i + 1) % n]);
+                    return new Vec3(p.X + (q.X - p.X) * f, p.Y + (q.Y - p.Y) * f, p.Z + (q.Z - p.Z) * f);
+                }
+            }
+            seg = n - 1; f = 1f;
+            return pts[0];
+        }
+        var rs = Params(Rp);
+        var bs = Params(bp);
+
+        // The start offset that lays the outline on the rim best.
+        float bestO = 0, bestCost = float.MaxValue;
+        for (int k = 0; k < 256; k++)
+        {
+            float o = k / 256f, cost = 0;
+            for (int j = 0; j < 64; j++)
+            {
+                var a = At(Rp, rs, j / 64f, out _, out _);
+                var b = At(bp, bs, j / 64f + o, out _, out _);
+                float d = Dist(a, b); cost += d * d;
+            }
+            if (cost < bestCost) { bestCost = cost; bestO = o; }
+        }
+
+        // Each rim vertex claims the outline node nearest in parameter — in order, once each.
+        static float Circ(float a, float b) { float d = MathF.Abs(a - b) % 1f; return MathF.Min(d, 1f - d); }
+        int nb = bp.Count, nr = R.Length;
+        var claimOf = new int[nr];   // rim index -> outline index, or -1
+        int first = -1, last = -1;
+        for (int i = 0; i < nr; i++)
+        {
+            float t = rs[i] + bestO;
+            int j = 0;
+            for (int q = 1; q < nb; q++) if (Circ(bs[q], t) < Circ(bs[j], t)) j = q;
+            claimOf[i] = -1;
+            if (first < 0) { first = j; last = 0; claimOf[i] = j; continue; }
+            int d = (j - first + nb) % nb;
+            if (d > last && d < nb) { claimOf[i] = j; last = d; }
+        }
+        var claimed = Enumerable.Range(0, nr).Where(i => claimOf[i] >= 0).ToList();
+        if (claimed.Count < 3) return "the nail's outline does not follow the rim";
+
+        // Targets for every outline node, and the finger's normal there.
+        var target = new Vec3[nb];
+        var rimN = new Vec3[nb];
+        for (int c = 0; c < claimed.Count; c++)
+        {
+            int ia = claimed[c], ib = claimed[(c + 1) % claimed.Count];
+            int ja = claimOf[ia], jb = claimOf[ib];
+            target[ja] = R[ia].P; rimN[ja] = R[ia].N;
+            float ra = rs[ia], rb = rs[ib]; if (rb <= ra) rb += 1f;
+            float ba = bs[ja], bb = bs[jb]; if (bb <= ba) bb += 1f;
+            for (int j = (ja + 1) % nb; j != jb; j = (j + 1) % nb)
+            {
+                float bj = bs[j]; if (bj < ba) bj += 1f;
+                float f = bb > ba ? (bj - ba) / (bb - ba) : 0f;
+                target[j] = At(Rp, rs, ra + f * (rb - ra), out int seg, out float sf);
+                var (n0, n1) = (R[seg].N, R[(seg + 1) % nr].N);
+                rimN[j] = NormalizeOr(new Vec3(n0.X + (n1.X - n0.X) * sf, n0.Y + (n1.Y - n0.Y) * sf, n0.Z + (n1.Z - n0.Z) * sf), frame.N);
+            }
+        }
+
+        // Rim vertices no outline node claimed move onto the outline, at their share of the way between claims.
+        var rimMoves = new Dictionary<(int, int, int), Vec3>();
+        for (int c = 0; c < claimed.Count; c++)
+        {
+            int ia = claimed[c], ib = claimed[(c + 1) % claimed.Count];
+            int ja = claimOf[ia], jb = claimOf[ib];
+            var seg = new List<Vec3>();
+            for (int j = ja; ; j = (j + 1) % nb) { seg.Add(target[j]); if (j == jb) break; }
+            var segS = new float[seg.Count];
+            float tot = 0; for (int q = 1; q < seg.Count; q++) { tot += Dist(seg[q - 1], seg[q]); segS[q] = tot; }
+            float ra = rs[ia], rb = rs[ib]; if (rb <= ra) rb += 1f;
+            for (int i = (ia + 1) % nr; i != ib; i = (i + 1) % nr)
+            {
+                float ri = rs[i]; if (ri < ra) ri += 1f;
+                float want = (rb > ra ? (ri - ra) / (rb - ra) : 0f) * tot;
+                Vec3 to = seg[^1];
+                for (int q = 1; q < seg.Count; q++)
+                    if (segS[q] >= want)
+                    {
+                        float f = segS[q] > segS[q - 1] ? (want - segS[q - 1]) / (segS[q] - segS[q - 1]) : 0f;
+                        to = new Vec3(seg[q - 1].X + (seg[q].X - seg[q - 1].X) * f, seg[q - 1].Y + (seg[q].Y - seg[q - 1].Y) * f,
+                                      seg[q - 1].Z + (seg[q].Z - seg[q - 1].Z) * f);
+                        break;
+                    }
+                rimMoves[VKey(R[i].P)] = to;
+            }
+        }
+        match = new LoopMatch(R, reversed, target, rimN, rimMoves);
+        return null;
     }
 }
