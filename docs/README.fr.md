@@ -377,8 +377,9 @@ Deux autres sections repliables s'appliquent à tout le mod :
   - **Tendre le tissu sur le nombril** : le tissu se tend à plat sur le nombril au lieu de s'y enfoncer.
   - **Lisser l'entrejambe** : lisse le pli à l'entrejambe. Cela modifie le corps en dessous, donc cela s'applique à tous les vêtements portés à la fois.
   - **Lisser le téton** : lisse le tissu par-dessus. Pas encore terminé : le corps en dessous garde sa forme, donc sur un vêtement près du corps il peut encore transparaître.
+  - **Couvrir les orteils** : couvre les orteils d'un seul bout arrondi, comme tombent les bas et les chaussettes, au lieu de suivre chaque orteil. Sur un mod qui fournit son propre bout, c'est l'option *Toe Cap* du mod dans Penumbra (dans son groupe Masks) : elle est enregistrée dans votre collection Penumbra, et un design Glamourer qui inclut le mod la conserve. Sur tout autre mod, Proteus fournit le bout lui-même et le réglage est enregistré dans les paramètres Proteus du mod : il s'applique dans toutes les collections et accompagne le mod quand vous l'exportez, mais les designs et les préréglages ne le capturent pas. Cocher la case transforme les couches de peau du mod en seconde peau pour que le bout ait quelque chose à façonner. Le bout est fait pour Bibo+, Neolithe, Rue et YAB ; sur les autres corps le vêtement est construit, mais les orteils restent tels quels.
 
-  En activer un seul fait rendre le mod en seconde peau.
+  En activer un seul parmi les cinq premiers fait rendre le mod en seconde peau. **Couvrir les orteils** fait de même pour les overlays du corps qui ne sont ni fixés sur Peau ni un imprimé ; si rien dans le mod ne peut devenir un vêtement sur le corps, la case le signale.
 
 #### Options de calque
 
@@ -386,7 +387,7 @@ Sous les lignes, l'onglet d'un calque peut afficher :
 
 - **Ce calque est toute la peau** — pour un mod de peau converti, une image qui *est* la peau plutôt que quelque chose posé dessus. Sa carte de normales remplace celle de la peau au lieu de s'y ajouter, et l'atténuation de la teinte de peau tombe à 0 pour que votre propre carnation ressorte.
 - **Cette image est asymétrique** — activez-le quand les deux côtés sont censés différer : un tatouage sur un seul bras, un maquillage non miroir. Un corps et un visage vanilla replient l'image en deux, donc sans cela un côté est recopié en miroir sur l'autre. Proteus ne peut pas le détecter pour vous.
-- **Pointe renforcée** — sur un bas à pointe renforcée, tricote une pointe plus dense : un panneau plus sombre où les orteils transparaissent encore, s'estompant sur les bords. **Densité** règle son opacité. C'est enregistré dans le mod, donc les préréglages et les designs ne le capturent pas.
+- **Pointe renforcée** — sur un bas à pointe renforcée (**Couvrir les orteils** dans Géométrie), tricote une pointe plus dense : un panneau plus sombre où les orteils transparaissent encore, s'estompant sur les bords. **Densité** règle son opacité. C'est enregistré dans le mod, donc les préréglages et les designs ne le capturent pas.
 
 #### Lignes
 

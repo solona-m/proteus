@@ -187,10 +187,22 @@ public class SidecarDiscoveryTests
         };
         var entry = Entry(meta, sidecarRoot: tmpDir.Path);
 
-        MakeService().SaveMetadata(entry);
+        Assert.True(MakeService().SaveMetadata(entry));
 
         var metaPath = Path.Combine(tmpDir.Path, "metadata.json");
         Assert.True(File.Exists(metaPath));
+    }
+
+    /// <summary>The "Cap the toes" tick undoes its change when the save fails, so the failure has to be reported.</summary>
+    [Fact]
+    [Trait("Plan", "AC-toecap-geometry-6")]
+    public void SaveMetadata_returns_false_when_the_write_fails()
+    {
+        using var tmpDir = new TempDirectory();
+        Directory.CreateDirectory(Path.Combine(tmpDir.Path, "metadata.json"));   // a folder where the file must go
+        var entry = Entry(new ProteusMetadata { Name = "TestMod", CapToes = true }, sidecarRoot: tmpDir.Path);
+
+        Assert.False(MakeService().SaveMetadata(entry));
     }
 
     /// <summary>

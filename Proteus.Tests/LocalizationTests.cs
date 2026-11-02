@@ -204,6 +204,36 @@ public sealed class LocalizationTests
     }
 
     /// <summary>
+    /// The toe cap tick's words are translated, not copied, keep English's line breaks, and keep the Penumbra names
+    /// the user has to find ("Toe Cap", "Masks") verbatim.
+    /// </summary>
+    [Theory]
+    [MemberData(nameof(Translations))]
+    [Trait("Plan", "AC-toecap-geometry-7")]
+    public void ToeCap_strings_are_translated_not_copied(string lang)
+    {
+        var en = Load(Source);
+        var tr = Load(lang);
+        foreach (string key in new[] { "Colors.ToeCap.Label", "Colors.ToeCap.Tip", "Colors.ToeCap.Held.Tip",
+                                       "Colors.ToeCap.Inherited.Note", "Colors.ToeCap.Failed.Fmt",
+                                       "Colors.ToeCap.ModOff", "Colors.ToeCap.NoShell",
+                                       "Colors.ToeCap.Flag.Tip", "Colors.ToeCap.Locked.Tip", "Colors.ToeCap.SaveFailed" })
+        {
+            Assert.True(tr.ContainsKey(key), $"[{lang}] has no {key}");
+            Assert.NotEqual(en[key].Message, tr[key].Message);
+            Assert.Equal(en[key].Message.Count(c => c == '\n'), tr[key].Message.Count(c => c == '\n'));
+        }
+        foreach (string key in new[] { "Colors.ToeCap.Tip", "Colors.ToeCap.Held.Tip", "Colors.ToeCap.Locked.Tip" })
+        {
+            Assert.Contains("Toe Cap", tr[key].Message);
+            Assert.Contains("Masks", tr[key].Message);
+        }
+        foreach (string body in new[] { "Bibo+", "Neolithe", "Rue", "YAB" })
+            Assert.Contains(body, tr["Colors.ToeCap.Flag.Tip"].Message);
+        Assert.Contains("/xllog", tr["Colors.ToeCap.SaveFailed"].Message);
+    }
+
+    /// <summary>
     /// The words for a target option that draws underwear where the source has skin — the refusal, and the two Body size
     /// notes — are translated, not copied.
     /// </summary>

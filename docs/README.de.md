@@ -377,8 +377,9 @@ Zwei weitere aufklappbare Abschnitte gelten für den ganzen Mod:
   - **Bauchnabel überspannen**: Der Stoff spannt sich flach über den Nabel, statt in ihn einzusinken.
   - **Zwischen den Beinen glätten**: glättet die Falte im Schritt. Das verändert den Körper darunter und gilt deshalb für alle gleichzeitig getragenen Kleidungsstücke.
   - **Brustwarze glätten**: glättet den Stoff darüber. Noch nicht fertig: Der Körper darunter behält seine Form, bei enger Passform kann sie also weiterhin durchdrücken.
+  - **Zehen abdecken**: deckt die Zehen mit einer einzigen abgerundeten Zehenkappe ab, so wie Strümpfe und Socken sitzen, statt jedem Zeh zu folgen. Bei einem Mod, der eine eigene Zehenkappe mitliefert, ist das die Option *Toe Cap* des Mods in Penumbra (in seiner Gruppe Masks): Sie wird in deiner Penumbra-Sammlung gespeichert, und ein Glamourer-Design, das den Mod enthält, behält sie. Bei jedem anderen Mod liefert Proteus die Kappe selbst, und die Einstellung wird in den Proteus-Einstellungen des Mods gespeichert: Sie gilt in jeder Sammlung und geht mit dem Mod mit, wenn du ihn exportierst, aber Designs und Presets erfassen sie nicht. Das Häkchen macht die Hautebenen des Mods zu einer zweiten Haut, damit die Kappe etwas zu formen hat. Die Zehenkappe ist für Bibo+, Neolithe, Rue und YAB gemacht; auf anderen Körpern wird das Kleidungsstück gebaut, aber die Zehen bleiben, wie sie sind.
 
-  Sobald eines davon an ist, wird der Mod als zweite Haut dargestellt.
+  Sobald eines der ersten fünf an ist, wird der Mod als zweite Haut dargestellt. **Zehen abdecken** tut dasselbe für Körper-Overlays, die nicht auf Haut festgelegt oder ein Aufdruck sind; kann nichts im Mod zu einem Kleidungsstück am Körper werden, sagt der Haken das.
 
 #### Overlay-Optionen
 
@@ -386,7 +387,7 @@ Unter den Zeilen kann der Tab eines Overlays anzeigen:
 
 - **Dieses Overlay ist die ganze Haut** — für einen umgewandelten Haut-Mod, also Bildmaterial, das die Haut *ist*, statt etwas, das darauf liegt. Seine Normal-Map ersetzt die der Haut, statt sich dazuzuaddieren, und die Hautton-Unterdrückung fällt auf 0, damit dein eigener Ton durchkommt.
 - **Dieses Bildmaterial ist asymmetrisch** — schalte es ein, wenn die beiden Seiten sich unterscheiden sollen: ein Tattoo auf nur einem Arm, ein nicht gespiegeltes Make-up. Ein Vanilla-Körper und -Gesicht klappen das Bildmaterial in der Mitte zusammen, ohne das wird also eine Seite auf die andere gespiegelt. Proteus kann das nicht für dich erkennen.
-- **Verstärkte Spitze** — strickt bei einem Strumpf mit verstärkter Spitze eine dichtere Spitze: ein dunkleres Feld, durch das die Zehen noch durchscheinen und das zum Rand hin ausläuft. **Dichte** legt fest, wie blickdicht es ist. Es wird im Mod gespeichert, Presets und Designs erfassen es also nicht.
+- **Verstärkte Spitze** — strickt bei einem Strumpf mit verstärkter Spitze (**Zehen abdecken** unter Geometrie) eine dichtere Spitze: ein dunkleres Feld, durch das die Zehen noch durchscheinen und das zum Rand hin ausläuft. **Dichte** legt fest, wie blickdicht es ist. Es wird im Mod gespeichert, Presets und Designs erfassen es also nicht.
 
 #### Zeilen
 

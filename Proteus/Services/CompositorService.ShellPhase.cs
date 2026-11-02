@@ -331,7 +331,9 @@ public partial class CompositorService
                     shellTexSize: gs,
                     equippedSlotVariants: slotVariants,
                     hiddenParts: hiddenParts,
-                    wearerIsMan: run.wearerIsMan, menMapsReady: run.menMapsReady, menAllowed: run.OverlaysMenFor);
+                    wearerIsMan: run.wearerIsMan, menMapsReady: run.menMapsReady, menAllowed: run.OverlaysMenFor,
+                    // The caps this composite resolved before promotion: the build caps exactly what was promoted for it.
+                    toeCaps: run.ToeCapMaps);
                 run.shellAllHeld = run.compositor.secondSkin.LastBuildHeldAll;
             }
 

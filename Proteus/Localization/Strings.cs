@@ -2234,6 +2234,52 @@ public sealed class ColorsStrings
         "How far the fold is smoothed. 1.00 flattens it into the surrounding curve; lower values keep\n"
       + "more of it.");
 
+    public readonly string ToeCap = ProteusLoc.Localize("Colors.ToeCap.Label", "Cap the toes");
+
+    public readonly string ToeCapTip = ProteusLoc.Localize("Colors.ToeCap.Tip",
+        "Turn this on for stockings and socks.\n"
+      + "Proteus builds a garment as a copy of the body, so by default it follows every toe —\n"
+      + "which reads as painted on rather than worn. With this on, the toes are covered by one\n"
+      + "rounded toe box, the way real hosiery fits. It shapes only a garment that covers the toes.\n"
+      + "This is the \"Toe Cap\" option in this mod's Masks group in Penumbra: it is saved in your\n"
+      + "collection, not in the mod, and a Glamourer design that includes this mod keeps it.");
+
+    public readonly string ToeCapHeldTip = ProteusLoc.Localize("Colors.ToeCap.Held.Tip",
+        "A Glamourer design (or another plugin) is holding this mod's settings right now, so a\n"
+      + "change here wouldn't show. Change \"Toe Cap\" in the Masks group of that design instead.");
+
+    public readonly string ToeCapInheritedNote = ProteusLoc.Localize("Colors.ToeCap.Inherited.Note",
+        "This collection inherits this mod's settings. Changing this gives it its own setting\n"
+      + "for the mod, as changing it in Penumbra would.");
+
+    public readonly string ToeCapFailedFmt = ProteusLoc.Localize("Colors.ToeCap.Failed.Fmt",
+        "Penumbra didn't take the change: {0}");
+
+    public readonly string ToeCapModOff = ProteusLoc.Localize("Colors.ToeCap.ModOff",
+        "This mod is off in your collection, so the cap won't show until you turn it on.");
+
+    public readonly string ToeCapNoShell = ProteusLoc.Localize("Colors.ToeCap.NoShell",
+        "Nothing this mod shows becomes a garment on the body (it's pinned to Skin, a print, on the\n"
+      + "face or hair rather than the body, or its author set it to skip the toe cap), so the cap has\n"
+      + "nothing of this mod's to shape. It still shapes another mod's garment over the toes.");
+
+    public readonly string ToeCapFlagTip = ProteusLoc.Localize("Colors.ToeCap.Flag.Tip",
+        "Turn this on for stockings and socks: the toes are covered by one rounded toe box, the way\n"
+      + "real hosiery fits, instead of following every toe.\n"
+      + "Ticking it turns this mod's skin layers into a garment (a second skin) so the cap has\n"
+      + "something to shape — that costs a rebuild, and a print or a layer pinned to Skin stays as it is.\n"
+      + "The toe box is made for Bibo+, Neolithe, Rue and YAB; on other bodies the garment is built\n"
+      + "but the toes stay as they are.\n"
+      + "This mod has no toe cap of its own, so this is saved in the mod's Proteus settings: it applies\n"
+      + "in every collection and goes with the mod when you export it.");
+
+    public readonly string ToeCapLockedTip = ProteusLoc.Localize("Colors.ToeCap.Locked.Tip",
+        "This mod's own \"Toe Cap\" option is selected in Penumbra, in a Masks group that allows only\n"
+      + "one choice, so it can't be turned off here. Change it in Penumbra.");
+
+    public readonly string ToeCapSaveFailed = ProteusLoc.Localize("Colors.ToeCap.SaveFailed",
+        "Couldn't save this mod's Proteus settings, so the change was undone. The log (/xllog) has the reason.");
+
     public readonly string WholeSkinTip = ProteusLoc.Localize("Colors.WholeSkin.Tip",
         "Turn this on for a converted skin mod — art that IS the skin, not something laid on it.\n"
       + "It moves two settings together, and they only work as a pair.\n"
