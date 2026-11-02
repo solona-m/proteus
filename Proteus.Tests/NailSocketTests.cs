@@ -693,8 +693,8 @@ public class NailSocketTests(ITestOutputHelper o)
         var plans = SecondSkinWriter.NailBedPlans(hand, reach: SecondSkinWriter.LongNailReach);
         var sp = SecondSkinWriter.NailSockets(hand, plans, o.WriteLine, hidden);
         Assert.Equal(10, sp.Sockets.Count);
-        Assert.Equal(4, sp.Sockets.Count(s => s.Owner != null));
-        Assert.Equal(4, sp.Sockets.Count(s => s.LeftAsAuthored == "the seam leaks"));
+        Assert.Equal(8, sp.Sockets.Count(s => s.Owner != null));
+        Assert.Equal(0, sp.Sockets.Count(s => s.LeftAsAuthored == "the seam leaks"));
         Assert.Equal(2, sp.Sockets.Count(s => s.LeftAsAuthored == "the nearest nail's outline is not one loop"));
         Assert.Equal(10, sp.HiddenIslands.Count);
 
@@ -703,27 +703,11 @@ public class NailSocketTests(ITestOutputHelper o)
         Assert.NotNull(flat);
         foreach (var m in sp.HiddenIslands.Concat(sp.Sockets.Where(s => s.Owner == null).SelectMany(s => s.Members)))
             Assert.True(NailGrade.SameIsland(hand, flat!, plans, m), $"island {m} changed");
-        // What ships is graded: the hand with nothing hidden is judged whole by the grader, and the shipped hand matches
-        // it on every skin vertex of every mesh, except where the shipped hand left a vertex exactly as authored — the
-        // hidden layers — and those are no more than the hidden layers hold.
-        var whole = BodyBridge.FlattenNails(hand, suit)!;
-        var g = new NailGrade(hand, whole);
+        // What ships is graded as it is: with the layers hidden, more sockets span than with nothing hidden (a socket
+        // whose nails sat on different switches has one visible nail left), so the shipped hand is judged on its own.
+        var g = new NailGrade(hand, flat!);
         var bad = g.Problems(o);
         Assert.True(bad.Count == 0, string.Join("; ", bad));
-        SecondSkinWriter.TryReadLod0Geometry(hand, out var ph, out _, out _);
-        SecondSkinWriter.TryReadLod0Geometry(flat!, out var pf, out _, out _);
-        SecondSkinWriter.TryReadLod0Geometry(whole, out var pw, out _, out _);
-        int kept = 0;
-        for (int v = 0; v < pf.Length / 3; v++)
-        {
-            bool same = pf[v * 3] == pw[v * 3] && pf[v * 3 + 1] == pw[v * 3 + 1] && pf[v * 3 + 2] == pw[v * 3 + 2];
-            if (same) continue;
-            bool asAuthored = pf[v * 3] == ph[v * 3] && pf[v * 3 + 1] == ph[v * 3 + 1] && pf[v * 3 + 2] == ph[v * 3 + 2];
-            Assert.True(asAuthored, $"vertex {v} differs from the graded hand and was moved");
-            kept++;
-        }
-        int hiddenVerts = sp.HiddenIslands.Sum(id => plans[id.Mesh].VertsOf[id.Island].Length);
-        Assert.True(kept > 0 && kept <= hiddenVerts, $"{kept} vertices kept as authored, the hidden layers hold {hiddenVerts}");
         Assert.DoesNotContain(sp.Sockets.Where(s => s.Owner != null), s => sp.HiddenIslands.Contains(s.Owner!.Value));
         // ...and the garment the shipped hand gets — its hidden layers dropped, as the shell drops them — is closed.
         var shell = SecondSkinWriter.Build(new[] { new SecondSkinWriter.SourceSpec(flat!, CoverNails: true, HiddenAttributes: hidden) },
@@ -747,9 +731,12 @@ public class NailSocketTests(ITestOutputHelper o)
         var lavaFlat = BodyBridge.FlattenNails(lavaHand, Full())!;
         var lavaBad = new NailGrade(lavaHand, lavaFlat).Problems(o);
         Assert.True(lavaBad.Count == 0, string.Join("; ", lavaBad));
-        // A curled edge facing into the finger leaks at the seam and is left as authored.
-        var (_, bal) = Real("hs-Rue+-2.2.7-y0f/files/Hands - Smallclothes/Ballerina/chara/equipment/e0000/model/c0201e0000_glv.mdl");
-        Assert.Contains(bal.Sockets, s => s.LeftAsAuthored == "the seam leaks");
+        // A curled edge whose seam rays start under the patch: answered by the seam itself, and the grader finds the
+        // hand closed — no sliver beside the rim where the finger turns sharply.
+        var (balHand, bal) = Real("hs-Rue+-2.2.7-y0f/files/Hands - Smallclothes/Ballerina/chara/equipment/e0000/model/c0201e0000_glv.mdl");
+        Assert.True(bal.Sockets.Count(s => s.Owner != null) >= 6);
+        var balBad = new NailGrade(balHand, BodyBridge.FlattenNails(balHand, Full())!).Problems(o);
+        Assert.True(balBad.Count == 0, string.Join("; ", balBad));
         // Floating nails along their rims once hid these sockets; with its long nail layers taken as nails, the hand
         // shows no open socket at all, and every collapsed nail sits over closed skin.
         var (tfHand, _) = Real("tight&firmgen2body-nsfw-installer/common/2/c0201e0000_glv.mdl");
@@ -828,9 +815,9 @@ public class NailSocketSweep(ITestOutputHelper o)
     ];
 
     /// <summary>
-    /// What each socketed hand comes to, pinned from the first green run (2026-11-02, build 1418: long nails planned as
-    /// nails — <see cref="SecondSkinWriter.LongNailReach"/> — and a seam ray starting under the patch answered by the
-    /// seam itself): sockets found and how many of them are spanned; the rest are left as authored (a nail, never a
+    /// What each socketed hand comes to, pinned from the first green run (2026-11-02, build 1419: long nails planned as
+    /// nails — <see cref="SecondSkinWriter.LongNailReach"/> — a seam ray starting under the patch answered by the
+    /// seam itself, and the patch filled smoothly from the finger round it): sockets found and how many of them are spanned; the rest are left as authored (a nail, never a
     /// hole). First match wins.
     /// </summary>
     private static readonly (string Match, int Sockets, int Spanned)[] Pinned =
@@ -839,10 +826,10 @@ public class NailSocketSweep(ITestOutputHelper o)
         // Muse+'s long default nails: two reach past the shell's own bed reach, over open skin — left as authored,
         // byte for byte (the authored-island check below).
         ("hs-Muse+", 0, 0),
-        (@"LavaBod+ 2.2\common\88\", 10, 1), (@"LavaBod+ 2.2\common\89\", 10, 5), (@"LavaBod+ 2.2\common\90\", 10, 6),
-        (@"LavaBod+ 2.2\common\91\", 12, 4), (@"LavaBod+ 2.2\common\92\", 10, 1), (@"LavaBod+ 2.2\common\93\", 10, 5),
-        (@"LavaBod+ 2.2\common\94\", 10, 6), (@"LavaBod+ 2.2\common\95\", 12, 4),
-        ("ballerina", 10, 4), ("long nails", 10, 4), ("short nails", 10, 6), ("stabbies", 10, 4),
+        (@"LavaBod+ 2.2\common\88\", 10, 6), (@"LavaBod+ 2.2\common\89\", 10, 6), (@"LavaBod+ 2.2\common\90\", 10, 6),
+        (@"LavaBod+ 2.2\common\91\", 12, 8), (@"LavaBod+ 2.2\common\92\", 10, 6), (@"LavaBod+ 2.2\common\93\", 10, 6),
+        (@"LavaBod+ 2.2\common\94\", 10, 6), (@"LavaBod+ 2.2\common\95\", 12, 8),
+        ("ballerina", 10, 6), ("long nails", 10, 6), ("short nails", 10, 6), ("stabbies", 10, 6),
     ];
 
     /// <summary>Known, deferred, and not this change's doing: graded and logged, but not failed.</summary>
