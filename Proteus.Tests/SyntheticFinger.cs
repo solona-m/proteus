@@ -25,6 +25,15 @@ public static class SyntheticFinger
     {
         OpenSocket, Closed, Sewn, StrayCrack, UnqualifiedOpen, TopAndTip, ClosedOwner, CoincidentQuad, SparseOwner,
         DomedHigh, TwoLoops, WrapAround, WrappedRim, InsetSocket, DuplicatedRest, TwoTriangleOwner,
+        /// <summary>A closed finger with a LONG nail: it rises to 10 mm off the skin (Stabbies, LavaBod+).</summary>
+        LongNail,
+        /// <summary>A closed finger with a small island rising 15 mm off it, as far as a wrist connector hangs.</summary>
+        Connector,
+        /// <summary>The open socket with two nail layers over it on two attribute switches, atr_gv_a and atr_gv_c
+        /// (Stabbies' alternative nails).</summary>
+        AttrLayers,
+        /// <summary><see cref="AttrLayers"/> with the second layer only half on atr_gv_c.</summary>
+        AttrLayersPartly,
     }
 
     internal static float Y(int row) => row * L / (Along - 1);
@@ -60,7 +69,7 @@ public static class SyntheticFinger
             int dc = col - Around / 2;   // the top is column Around/2
             switch (v)
             {
-                case Variant.Closed or Variant.StrayCrack or Variant.CoincidentQuad:
+                case Variant.Closed or Variant.StrayCrack or Variant.CoincidentQuad or Variant.LongNail or Variant.Connector:
                     return false;
                 case Variant.UnqualifiedOpen:
                     // Two holes touching at one corner: the corner vertex has four open edges, so it is no loop.
@@ -212,14 +221,39 @@ public static class SyntheticFinger
             case Variant.StrayCrack or Variant.Closed:
                 Patch(thA + ti, thB - ti, yA + Inset, yB - Inset, 16, 18, Proud);
                 break;
+            case Variant.LongNail or Variant.Connector:
+            {
+                // Rising off the closed finger along its length, to 10 mm (a long nail) or 15 mm (a connector) at the end.
+                float rise = v == Variant.LongNail ? 0.010f : 0.015f;
+                Patch(thA, thB, yA, yB, 8, 9, (_, y) => R + 0.0003f + rise * (y - yA) / (yB - yA));
+                break;
+            }
             default:
                 Patch(thA + ti, thB - ti, yA + Inset, yB - Inset, 16, 18, Proud);
                 break;
         }
 
+        // The second nail layer of AttrLayers, just over the first, on a switch of its own.
+        int layerB = m.T.Count;
+        if (v is Variant.AttrLayers or Variant.AttrLayersPartly)
+            Patch(thA + ti, thB - ti, yA + Inset, yB - Inset, 16, 18, (_, _) => R + 0.0006f);
+
+        (uint, int[])[] submeshes = [(0u, [.. m.T])];
+        if (v is Variant.AttrLayers or Variant.AttrLayersPartly)
+        {
+            // The tube on no switch, the first layer on atr_gv_a (bit 0), the second on atr_gv_c (bit 1) — all of it, or
+            // only its first half (the rest on no switch).
+            int tube = restTris.Count, bHalf = v == Variant.AttrLayersPartly ? layerB + (m.T.Count - layerB) / 6 * 3 : m.T.Count;
+            submeshes =
+            [
+                (0u, [.. m.T.Take(tube), .. m.T.Skip(bHalf)]),
+                (1u, [.. m.T.Skip(tube).Take(layerB - tube)]),
+                (2u, [.. m.T.Skip(layerB).Take(bHalf - layerB)]),
+            ];
+        }
         var meshes = new List<SyntheticModel.SurfaceMesh>
         {
-            new(Skin, [.. m.P], [.. m.N], [.. m.Uv], [.. m.W], [(0u, [.. m.T])]),
+            new(Skin, [.. m.P], [.. m.N], [.. m.Uv], [.. m.W], submeshes),
         };
         if (nailMesh)
         {
@@ -241,6 +275,6 @@ public static class SyntheticFinger
                 }
             meshes.Add(new(NailMeshMaterial, [.. n.P], [.. n.N], [.. n.Uv], [.. n.W], [(0u, [.. n.T])]));
         }
-        return SyntheticModel.BuildSurface([], [.. meshes]);
+        return SyntheticModel.BuildSurface(v is Variant.AttrLayers or Variant.AttrLayersPartly ? ["atr_gv_a", "atr_gv_c"] : [], [.. meshes]);
     }
 }

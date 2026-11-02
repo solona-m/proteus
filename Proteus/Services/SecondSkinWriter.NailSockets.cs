@@ -81,6 +81,10 @@ public static partial class SecondSkinWriter
         public required int RejectedLoops;
         /// <summary>The model could not be read for sockets: nothing about its nails can be shown safe to change.</summary>
         public bool Unreadable;
+        /// <summary>Nail islands wholly on a switch the game is hiding for this body: drawn by nothing, left untouched.</summary>
+        public HashSet<(int Mesh, int Island)> HiddenIslands = [];
+        /// <summary>Nail islands only partly hidden: left as authored.</summary>
+        public HashSet<(int Mesh, int Island)> PartlyHidden = [];
     }
 
     /// <summary>One welded rest-skin vertex: where it is, its normal, and every copy of it in the skin meshes.</summary>
@@ -129,7 +133,7 @@ public static partial class SecondSkinWriter
     /// the socket's nails as authored — a nail where a nail was, never a hole.
     /// </summary>
     internal static NailSocketPlan NailSockets(byte[] mdl, IReadOnlyDictionary<int, NailBedPlan> plans,
-                                               Action<string>? diag = null)
+                                               Action<string>? diag = null, IReadOnlySet<string>? hidden = null)
     {
         var empty = new NailSocketPlan { Sockets = [], OverOpenSkin = [], RejectedLoops = 0 };
         if (plans.Count == 0) return empty;
@@ -141,6 +145,32 @@ public static partial class SecondSkinWriter
         int biggest = 0;
         foreach (var sm in meshes) foreach (int n in sm.IslandSize.Values) biggest = Math.Max(biggest, n);
         int bedMax = (int)(biggest * NailBedIslandMax);
+
+        // ---- Each triangle's attribute switches, and which of them the game is hiding for this body: a NAIL wholly
+        // on hidden switches is drawn by nothing and is no member of a socket. (Hidden SKIN still counts as skin: open
+        // edges along a hidden part are no hole a nail should span.) ----
+        var maskOf = new Dictionary<(int Mesh, (int, int, int) Tri), uint>();
+        foreach (var sm in meshes)
+        {
+            int mo = src.MeshStart + sm.Mesh * 36;
+            ushort si = BitConverter.ToUInt16(src.S, mo + 10), sc = BitConverter.ToUInt16(src.S, mo + 12);
+            for (int su = 0; su < sc; su++)
+            {
+                int ss = src.SubmeshStart + (si + su) * 16;
+                if (ss + 16 > src.S.Length) break;
+                uint so = BitConverter.ToUInt32(src.S, ss), cnt = BitConverter.ToUInt32(src.S, ss + 4);
+                uint mask = BitConverter.ToUInt32(src.S, ss + 8);
+                for (uint t = 0; t + 2 < cnt; t += 3)
+                {
+                    int q = src.Ib + (int)(so + t) * 2;
+                    if (q + 6 > src.S.Length) break;
+                    maskOf[(sm.Mesh, Sorted3(BitConverter.ToUInt16(src.S, q), BitConverter.ToUInt16(src.S, q + 2),
+                                             BitConverter.ToUInt16(src.S, q + 4)))] = mask;
+                }
+            }
+        }
+        bool Hidden(int mesh, int a, int b, int c)
+            => hidden is { Count: > 0 } && maskOf.TryGetValue((mesh, Sorted3(a, b, c)), out var hm) && IsHidden(src, hm, hidden);
 
         // ---- The rest skin's edges, each exact triangle counted once, and the nail beds' edges. ----
         var points = new Dictionary<(int, int, int), RimPoint>();
@@ -219,14 +249,24 @@ public static partial class SecondSkinWriter
             if (n == 1 && !bedEdges.Contains(ek) && points.ContainsKey(ek.Item1) && points.ContainsKey(ek.Item2))
                 open.Add(ek);
 
-        // ---- Nail islands: positions, and how many open edges lie near each. ----
+        // ---- Nail islands: positions, and how many open edges lie near each. A nail wholly on a hidden switch is not
+        // drawn: no member of anything, and left untouched. One only PARTLY hidden is left as authored. ----
         var islandVerts = new Dictionary<(int Mesh, int Island), Vec3[]>();
+        var hiddenIslands = new HashSet<(int Mesh, int Island)>();
+        var partlyHidden = new HashSet<(int Mesh, int Island)>();
         foreach (var (m, plan) in plans)
         {
             if (!byMesh.TryGetValue(m, out var sm)) continue;
             for (int k = 0; k < plan.VertsOf.Count; k++)
+            {
+                var ts = plan.Islands[k];
+                int nHidden = 0, nTri = ts.Length / 3;
+                for (int t = 0; t + 2 < ts.Length; t += 3) if (Hidden(m, ts[t], ts[t + 1], ts[t + 2])) nHidden++;
+                if (nHidden > 0 && nHidden == nTri) { hiddenIslands.Add((m, k)); continue; }
+                if (nHidden > 0) partlyHidden.Add((m, k));
                 if (k >= plan.Sewn.Count || !plan.Sewn[k])
                     islandVerts[(m, k)] = plan.VertsOf[k].Select(v => sm.Pos[v]).ToArray();
+            }
         }
         Vec3 Mid((int, int, int) a, (int, int, int) b)
         {
@@ -343,27 +383,8 @@ public static partial class SecondSkinWriter
 
         // ---- Every nail of a socket on the same attribute switches as its owner. ----
         // The game hides submeshes by attribute: were the owner on one switch and a nail it collapses on another, hiding
-        // the owner's would leave the collapsed nail showing over an open socket. Such a socket is left as authored.
-        var maskOf = new Dictionary<(int Mesh, (int, int, int) Tri), uint>();
-        foreach (var sm in meshes)
-        {
-            int mo = src.MeshStart + sm.Mesh * 36;
-            ushort si = BitConverter.ToUInt16(src.S, mo + 10), sc = BitConverter.ToUInt16(src.S, mo + 12);
-            for (int su = 0; su < sc; su++)
-            {
-                int ss = src.SubmeshStart + (si + su) * 16;
-                if (ss + 16 > src.S.Length) break;
-                uint so = BitConverter.ToUInt32(src.S, ss), cnt = BitConverter.ToUInt32(src.S, ss + 4);
-                uint mask = BitConverter.ToUInt32(src.S, ss + 8);
-                for (uint t = 0; t + 2 < cnt; t += 3)
-                {
-                    int q = src.Ib + (int)(so + t) * 2;
-                    if (q + 6 > src.S.Length) break;
-                    maskOf[(sm.Mesh, Sorted3(BitConverter.ToUInt16(src.S, q), BitConverter.ToUInt16(src.S, q + 2),
-                                             BitConverter.ToUInt16(src.S, q + 4)))] = mask;
-                }
-            }
-        }
+        // the owner's would leave the collapsed nail showing over an open socket. Such a socket is left as authored. Only
+        // DRAWN nails count: one on a switch hidden for this body is no member (Stabbies' alternative nail layers).
         HashSet<uint> MasksOf((int Mesh, int Island) id)
         {
             var set = new HashSet<uint>();
@@ -376,7 +397,9 @@ public static partial class SecondSkinWriter
         {
             if (sock.Owner is not { } own) continue;
             var ownMasks = MasksOf(own);
-            if (sock.Members.Any(m => !MasksOf(m).SetEquals(ownMasks)))
+            if (sock.Members.Any(partlyHidden.Contains))
+            { sock.Owner = null; sock.LeftAsAuthored = "a nail partly on a hidden switch"; }
+            else if (sock.Members.Any(m => !MasksOf(m).SetEquals(ownMasks)))
             { sock.Owner = null; sock.LeftAsAuthored = "the nails are on different attribute switches"; }
         }
 
@@ -431,7 +454,8 @@ public static partial class SecondSkinWriter
                    + $", {over.Count} nail(s) over open skin outside any socket"
                    + string.Concat(sockets.Where(s => s.Owner != null)
                          .Select(s => $"; nail moved off its own shape up to {s.MiddleOffset * 1000:F2}mm")));
-        return new NailSocketPlan { Sockets = sockets, OverOpenSkin = over, RejectedLoops = rejected };
+        return new NailSocketPlan { Sockets = sockets, OverOpenSkin = over, RejectedLoops = rejected,
+                                    HiddenIslands = hiddenIslands, PartlyHidden = partlyHidden };
     }
 
     /// <summary>Walk a component whose every vertex has two neighbours, in order.</summary>

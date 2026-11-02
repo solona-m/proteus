@@ -20,6 +20,15 @@ public static partial class SecondSkinWriter
     /// </summary>
     private const float NailBedReach = 0.008f;
 
+    /// <summary>
+    /// How far a LONG nail reaches off the finger and is still a nail — for <c>BodyBridge.FlattenNails</c> only, which
+    /// takes nails off a hand under a garment. Measured on the small islands <see cref="NailBedReach"/> leaves as skin:
+    /// long-nail layers reach 8.2-10.9 mm (Stabbies on Rue+/YAB+ 8.4-8.9, LavaBod+ 8.2-10.9, Tight&amp;Firm 9.2-9.8),
+    /// wrist connectors 13.7-22.4 (Neolithe, TBSE, Bibo+, Kräuter). Left as skin, a long nail is copied by the garment
+    /// over it: the bodysuit grows the nail. The shell's own nail handling keeps <see cref="NailBedReach"/>.
+    /// </summary>
+    internal const float LongNailReach = 0.0115f;
+
     /// <summary>Least mean coverage the fingertip must have for a nail bed to move onto it: an unpainted finger
     /// has nothing to lend.</summary>
     private const float NailBedPaintedFloor = CoverageFloor;
@@ -137,23 +146,23 @@ public static partial class SecondSkinWriter
     }
 
     /// <summary>A hand model's nail beds in full, keyed by mesh — see <see cref="NailBedPlan"/>.</summary>
-    internal static Dictionary<int, NailBedPlan> NailBedPlans(byte[] mdl, Action<string>? diag = null)
+    internal static Dictionary<int, NailBedPlan> NailBedPlans(byte[] mdl, Action<string>? diag = null, float reach = NailBedReach)
     {
         Source src;
         try { src = Parse(mdl); }
         catch { return []; }
-        return NailBeds(src, diag);
+        return NailBeds(src, diag, reach);
     }
 
     /// <summary>
     /// Plan the nail beds of every skin mesh of a hand source, keyed by mesh; a mesh with none is absent.
     /// Islands are each mesh's index-connected components, so a UV seam separates them. A nail bed is one under
-    /// <see cref="NailBedIslandMax"/> of the source's biggest lying wholly within <see cref="NailBedReach"/> of
-    /// the rest of the skin — Bibo+ keeps its nail beds in a mesh of their own, so the fingertips they land on are
+    /// <see cref="NailBedIslandMax"/> of the source's biggest lying wholly within <paramref name="reach"/> (by default
+    /// <see cref="NailBedReach"/>) of the rest of the skin — Bibo+ keeps its nail beds in a mesh of their own, so the fingertips they land on are
     /// in another. Each bed vertex lands on the nearest point of the rest of the skin: the rim lands on the finger's
     /// own rim, and the inside takes the fingertip's colour.
     /// </summary>
-    private static Dictionary<int, NailBedPlan> NailBeds(Source src, Action<string>? diag)
+    private static Dictionary<int, NailBedPlan> NailBeds(Source src, Action<string>? diag, float reach = NailBedReach)
     {
         var plans = new Dictionary<int, NailBedPlan>();
         var meshes = ReadNailSkinMeshes(src);
@@ -240,7 +249,7 @@ public static partial class SecondSkinWriter
                                                    at.Y - outward.Y * NailSinkDepth,
                                                    at.Z - outward.Z * NailSinkDepth));
                 }
-                if (far > NailBedReach) { loose++; continue; }
+                if (far > reach) { loose++; continue; }
                 worst = MathF.Max(worst, far);
                 foreach (var (v, uv, at) in landed) { tip[v] = uv; onSkin[v] = at; }
                 islands.Add(l.ToArray());
@@ -259,7 +268,7 @@ public static partial class SecondSkinWriter
         }
 
         diag?.Invoke($"nail beds: {beds} in {plans.Count} mesh(es) (islands of at most {bedMax} of {biggest} triangles; "
-                   + $"{loose} small island(s) straying past {NailBedReach:F3} of the rest of the skin left alone), "
+                   + $"{loose} small island(s) straying past {reach:F3} of the rest of the skin left alone), "
                    + $"furthest from the fingertip {worst:F4}, a nail mesh up to {highest:F5} above them");
         return plans;
     }

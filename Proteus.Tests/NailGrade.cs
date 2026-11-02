@@ -57,7 +57,7 @@ internal sealed class NailGrade
         Assert.Equal(H.Length, F.Length);
         key = H.Select(Key).ToArray();
 
-        var plans = SecondSkinWriter.NailBedPlans(hand);
+        var plans = SecondSkinWriter.NailBedPlans(hand, reach: SecondSkinWriter.LongNailReach);   // the nails as FlattenNails takes them
         // Where each skin mesh's vertices start in the global arrays: the reader appends every kept mesh whole, in
         // order, so a mesh is kept exactly when its vertices are found at the running offset.
         var offsetOf = new Dictionary<int, int>();
