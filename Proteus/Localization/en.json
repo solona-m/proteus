@@ -5184,8 +5184,8 @@
     "description": "Size set note: a women's piece got no men's version because the mod has its own men's model of it, which only a plain men's body sizes. {0} is the women's piece, {1} a plain men's body such as 'TBSE' (a name, never translated)."
   },
   "SizeSet.AuthorsMensCrossed.Fmt": {
-    "message": "{0}: the mod's own men's model file for it couldn't be read as a model at all (it is zero bytes or damaged), so its men's versions were made from this women's piece. Wherever a men's body is picked in the “{1}” group, they replace the author's men's model.",
-    "description": "Size set Check in game line: a women's piece was made men's because every file of the mod's own men's model of it is zero bytes or can't be parsed. {0} is the women's piece, e.g. 'Hands — e0613'; {1} the men's versions' group name, e.g. 'Men's body'."
+    "message": "{0}: the mod's own men's model file for it couldn't be read as a model at all (it is missing, zero bytes or damaged), so its men's versions were made from this women's piece. Wherever a men's body is picked in the “{1}” group, they replace the author's men's model.",
+    "description": "Size set Check in game line: a women's piece was made men's because every file of the mod's own men's model of it is missing, zero bytes or can't be parsed. {0} is the women's piece, e.g. 'Hands — e0613'; {1} the men's versions' group name, e.g. 'Men's body'."
   },
   "SizeSet.AuthorsMensStillReplaced.Fmt": {
     "message": "{0}: the mod has its own men's model of it, and this run left that model as it is, but a men's version made from this women's piece in an earlier run still replaces it in the “{1}” group wherever that men's body is picked. To show the author's model there, pick Original in “{1}” or remove that option.",

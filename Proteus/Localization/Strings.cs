@@ -122,7 +122,7 @@ public sealed class SizeSetStrings
 
     /// <summary>{0} is a women's piece ("Hands — e0613"), {1} the men's versions' group ("Men's body").</summary>
     public readonly string AuthorsMensCrossedFmt = ProteusLoc.Localize("SizeSet.AuthorsMensCrossed.Fmt",
-        "{0}: the mod's own men's model file for it couldn't be read as a model at all (it is zero bytes or damaged), so its men's versions were made from this women's piece. Wherever a men's body is picked in the “{1}” group, they replace the author's men's model.");
+        "{0}: the mod's own men's model file for it couldn't be read as a model at all (it is missing, zero bytes or damaged), so its men's versions were made from this women's piece. Wherever a men's body is picked in the “{1}” group, they replace the author's men's model.");
 
     /// <summary>{0} is a women's piece ("Hands — e0613"), {1} the men's versions' group ("Men's body").</summary>
     public readonly string AuthorsMensStillReplacedFmt = ProteusLoc.Localize("SizeSet.AuthorsMensStillReplaced.Fmt",

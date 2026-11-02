@@ -5184,7 +5184,7 @@
     "description": ""
   },
   "SizeSet.AuthorsMensCrossed.Fmt": {
-    "message": "{0} : le fichier du modèle masculin propre au mod n'a pas pu être lu comme un modèle (il fait zéro octet ou il est endommagé), donc ses versions masculines ont été faites à partir de cette pièce féminine. Là où un corps masculin est choisi dans le groupe « {1} », elles remplacent le modèle masculin de l'auteur.",
+    "message": "{0} : le fichier du modèle masculin propre au mod n'a pas pu être lu comme un modèle (il manque, fait zéro octet ou est endommagé), donc ses versions masculines ont été faites à partir de cette pièce féminine. Là où un corps masculin est choisi dans le groupe « {1} », elles remplacent le modèle masculin de l'auteur.",
     "description": ""
   },
   "SizeSet.AuthorsMensStillReplaced.Fmt": {
