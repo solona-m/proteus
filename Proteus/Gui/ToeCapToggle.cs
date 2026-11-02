@@ -95,13 +95,13 @@ internal static class ToeCapToggle
         bool geometry = RenderModeInference.WantsGeometry(md);
         if (active.Any(p => CarriesCap(p.Overlay, p.Rows, geometry))) return ToeCapReach.Draws;
 
-        // A mask shell is built on the body and gets the cap too; whether one is built depends on mask files.
+        // A mask shell is built on the body and gets the cap too (full strength, whatever the overlays say). It is built
+        // for a mod with any shell of its own, or an all-skin mod whose masks render as cloth, when a selected mask has
+        // _id/_n files; those aren't probed per frame, so a possible one means "can't tell".
         bool otherMask = GroupSelection(selection, SidecarDiscoveryService.MaskGroupName)?
             .Any(o => !string.IsNullOrWhiteSpace(o) && !SidecarDiscoveryService.IsToeCapOption(o)) == true;
-        bool offBodyShell = active.Any(p => CompositorService.CanRenderAsShell(p.Overlay)
-                                            && !OnBodySurface(p.Overlay.MaterialGamePaths)
-                                            && BecomesGear(p.Overlay, p.Rows, geometry));
-        if (otherMask && (md.MaskDescriptor?.Layer == OverlayLayer.Gear || offBodyShell))
+        bool anyShell = active.Any(p => CompositorService.CanRenderAsShell(p.Overlay) && BecomesGear(p.Overlay, p.Rows, geometry));
+        if (otherMask && (md.MaskDescriptor?.Layer == OverlayLayer.Gear || anyShell))
             return ToeCapReach.Unknown;
 
         return ToeCapReach.NoShell;
@@ -178,6 +178,4 @@ internal sealed class ToeCapOptionCache
     }
 
     public void Forget(string modDir) => byMod.Remove(modDir);
-
-    public void Clear() => byMod.Clear();
 }

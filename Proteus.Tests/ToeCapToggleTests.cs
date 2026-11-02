@@ -485,6 +485,10 @@ public sealed class ToeCapToggleTests : IDisposable
         Assert.Equal(ToeCapReach.NoShell, ToeCapToggle.Reach(c, true, With(), false));
         // (e) no mask descriptor, only a pinned body overlay
         Assert.Equal(ToeCapReach.NoShell, ToeCapToggle.Reach(Simple(Body(pinned: true)), true, With("Seam"), false));
+        // (f) a body garment with the cap off still gets a mask shell, which is capped at full strength
+        var f = Simple(Body(layer: OverlayLayer.Gear, strength: 0f));
+        Assert.Equal(ToeCapReach.Unknown, ToeCapToggle.Reach(f, true, With("Seam"), false));
+        Assert.Equal(ToeCapReach.NoShell, ToeCapToggle.Reach(f, true, With("Toe Cap"), false));
     }
 
     [Theory]
