@@ -8,6 +8,12 @@ using Proteus.Interop;
 
 namespace Proteus.Services;
 
+/// <summary>
+/// A mod's usable toe cap (<see cref="SidecarDiscoveryService.FindToeCapOption"/>): its Masks group and the option to
+/// select, as the manifest names them, and every toe-cap option there with a map (manifest order; Option is the first).
+/// </summary>
+public sealed record ToeCapOptionRef(string Group, string Option, IReadOnlyList<string> CappedOptions);
+
 public record OverlayEntry(
     string ModDirectory,
     string ModName,
@@ -164,8 +170,15 @@ public class SidecarDiscoveryService
     /// Is this the reserved toe-cap option? Matched on letters and digits only, case-insensitively: an unmatched
     /// name would silently fall through as an ordinary mask.
     /// </summary>
-    private static bool IsToeCapOption(string? option) =>
+    internal static bool IsToeCapOption(string? option) =>
         option != null && Squash(option) == Squash(ToeCapOptionName);
+
+    /// <summary>
+    /// The toe-cap option the compositor uses from a Masks selection: the first one selected. Shared with the Colors
+    /// window's tick so the two cannot disagree about whether the cap is on.
+    /// </summary>
+    internal static string? FirstSelectedToeCap(IEnumerable<string>? selected) =>
+        selected?.FirstOrDefault(IsToeCapOption);
 
     private static string Squash(string s) =>
         new(s.Where(char.IsLetterOrDigit).Select(char.ToLowerInvariant).ToArray());
@@ -625,7 +638,7 @@ public class SidecarDiscoveryService
             .FirstOrDefault(kv => string.Equals(kv.Key, MaskGroupName, StringComparison.OrdinalIgnoreCase))
             .Value;
 
-        var option = selected?.FirstOrDefault(IsToeCapOption);
+        var option = FirstSelectedToeCap(selected);
         if (option == null) return null;   // not selected — the ordinary case, say nothing
 
         var path = ResolveMaskAsset(Path.Combine(entry.SidecarRoot, MaskSubdir, option.Trim()));
@@ -788,6 +801,54 @@ public class SidecarDiscoveryService
         // Otherwise a sidecar-relative path (back-compat with metadata written by hand).
         var rel = Path.Combine(entry.SidecarRoot, scroll);
         return File.Exists(rel) ? rel : null;
+    }
+
+    /// <summary>
+    /// The mod's usable toe cap, for the Colors window's tick: its multi-select <see cref="MaskGroupName"/> group and
+    /// every toe-cap option in it whose map exists (<c>Masks/&lt;name&gt;</c>, as <see cref="ResolveActiveToeCap(OverlayEntry, Guid)"/>
+    /// finds it), names as the manifest writes them. Null when there is none, or the group is not multi-select.
+    /// </summary>
+    internal static ToeCapOptionRef? FindToeCapOption(string? modRoot, string sidecarRoot)
+    {
+        if (modRoot == null) return null;
+        var group = ReadMaskGroup(modRoot);
+        if (group is not { } g || !string.Equals(g.Type, "Multi", StringComparison.OrdinalIgnoreCase)) return null;
+
+        var capped = g.Options
+            .Where(o => IsToeCapOption(o) && ResolveMaskAsset(Path.Combine(sidecarRoot, MaskSubdir, o.Trim())) != null)
+            .ToList();
+        return capped.Count == 0 ? null : new ToeCapOptionRef(g.Name, capped[0], capped);
+    }
+
+    /// <summary>The <see cref="MaskGroupName"/> group's name, type and option names (v4 <c>meta.json</c>, else legacy <c>group_*.json</c>).</summary>
+    private static (string Name, string Type, List<string> Options)? ReadMaskGroup(string modRoot)
+    {
+        if (PenumbraModMeta.TryReadGroups(modRoot) is { } groups)
+        {
+            foreach (var (name, group) in groups)
+                if (string.Equals(name, MaskGroupName, StringComparison.OrdinalIgnoreCase))
+                    return (name, PenumbraModMeta.TypeOf(group), PenumbraModMeta.ReadOptionNames(group));
+            return null;
+        }
+
+        try
+        {
+            foreach (var file in Directory.EnumerateFiles(modRoot, "group_*.json"))
+            {
+                try
+                {
+                    using var doc = JsonDocument.Parse(File.ReadAllText(file));
+                    var root = doc.RootElement;
+                    if (!root.TryGetProperty("Name", out var nameEl) || nameEl.GetString() is not { } name
+                        || !string.Equals(name, MaskGroupName, StringComparison.OrdinalIgnoreCase))
+                        continue;
+                    return (name, PenumbraModMeta.TypeOf(root), PenumbraModMeta.ReadOptionNames(root));
+                }
+                catch { /* skip a malformed group file, keep scanning */ }
+            }
+        }
+        catch { /* modRoot missing/unreadable */ }
+        return null;
     }
 
     /// <summary>

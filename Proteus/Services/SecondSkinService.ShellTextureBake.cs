@@ -186,6 +186,7 @@ public sealed partial class SecondSkinService
                     // A shell follows every contour, so hosiery sleeves each toe unless the toe area is marked; the writer then
                     // rebuilds it as one rounded cap. BODY surfaces only (the map is body UV). Resolved before the textures, because
                     // a cap decides whether the normal is held back for the reinforced toe.
+                    // The Colors window predicts this in ToeCapToggle.Reach; keep the two in step.
                     var toeCap = layerSurf.Key.IsBody
                         ? build.service.ToeCapFor(ov.Descriptor, entry, srcType, dstType, build.sharedToeCap, alpha, build.texSize)
                         : null;

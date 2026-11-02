@@ -383,8 +383,9 @@ Two more collapsible sections apply to the whole mod:
   - **Span the belly button**: the fabric stretches flat across the navel instead of dipping into it.
   - **Smooth between the legs**: smooths the fold at the crotch. This changes the body underneath, so it applies to every garment worn at once.
   - **Smooth the nipple**: smooths the fabric over it. Not finished yet: the body underneath keeps its shape, so on a close fit it can still show through.
+  - **Cap the toes**: covers the toes with one rounded toe box, as stockings and socks fit. It appears only on mods that ship a toe cap, and it is the mod's *Toe Cap* option in Penumbra (in its Masks group): it's saved in your Penumbra collection, not in the mod, and a Glamourer design that includes the mod keeps it.
 
-  Turning any of them on renders the mod as a second skin.
+  Turning on any of the first five renders the mod as a second skin. **Cap the toes** does the same for body overlays that aren't pinned to Skin or a print; if nothing in the mod can become a garment on the body, the tick says so.
 
 #### Overlay options
 
@@ -392,7 +393,7 @@ Below the rows, an overlay's tab may show:
 
 - **This overlay is the whole skin** — for a converted skin mod, art that *is* the skin rather than something laid on it. Its normal map replaces the skin's instead of adding to it, and skin-tint suppression drops to 0 so your own tone comes through.
 - **This art is asymmetric** — turn it on when the two sides are meant to differ: a tattoo on one arm, makeup that isn't mirrored. A vanilla body and face fold art in half, so without this one side is mirrored onto the other. Proteus can't detect it for you.
-- **Reinforced toe** — on a stocking with a capped toe, knits a denser toe box: a darker panel with the toes still showing through, fading out at the edge. **Density** sets how solid it is. It's saved to the mod, so presets and designs don't capture it.
+- **Reinforced toe** — on a stocking with a capped toe (**Cap the toes** under Geometry), knits a denser toe box: a darker panel with the toes still showing through, fading out at the edge. **Density** sets how solid it is. It's saved to the mod, so presets and designs don't capture it.
 
 #### Rows
 

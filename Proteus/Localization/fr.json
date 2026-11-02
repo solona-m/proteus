@@ -603,6 +603,34 @@
     "message": "Activez ceci pour du tissu sur l'entrejambe.\nProteus construit un vêtement comme une copie du corps : il reproduit donc le pli entre les jambes —\nce qui semble peint sur le corps plutôt que porté. Avec ceci, la peau y est d'abord adoucie jusqu'à\nla courbe environnante, si bien que le vêtement qui en est tiré ressort lisse lui aussi.\nCeci modifie le corps : l'effet s'applique donc à tous les vêtements portés à la fois.",
     "description": ""
   },
+  "Colors.ToeCap.Label": {
+    "message": "Couvrir les orteils",
+    "description": ""
+  },
+  "Colors.ToeCap.Tip": {
+    "message": "À activer pour les bas et les chaussettes.\nProteus construit un vêtement comme une copie du corps, il suit donc par défaut chaque orteil —\nce qui fait peint plutôt que porté. Activé, les orteils sont couverts par un seul bout\narrondi, comme tombe la vraie bonneterie. Il ne façonne qu'un vêtement qui couvre les orteils.\nC'est l'option \"Toe Cap\" du groupe Masks de ce mod dans Penumbra : elle est enregistrée dans votre\ncollection, pas dans le mod, et un design Glamourer qui inclut ce mod la conserve.",
+    "description": ""
+  },
+  "Colors.ToeCap.Held.Tip": {
+    "message": "Un design Glamourer (ou un autre plugin) maintient en ce moment les réglages de ce mod, donc\nun changement ici ne se verrait pas. Changez plutôt \"Toe Cap\" dans le groupe Masks de ce design.",
+    "description": ""
+  },
+  "Colors.ToeCap.Inherited.Note": {
+    "message": "Cette collection hérite des réglages de ce mod. Changer ceci lui donne son propre réglage\npour le mod, comme le ferait un changement dans Penumbra.",
+    "description": ""
+  },
+  "Colors.ToeCap.Failed.Fmt": {
+    "message": "Penumbra n'a pas accepté le changement : {0}",
+    "description": ""
+  },
+  "Colors.ToeCap.ModOff": {
+    "message": "Ce mod est désactivé dans votre collection, le bout ne s'affichera donc pas tant que vous ne l'activez pas.",
+    "description": ""
+  },
+  "Colors.ToeCap.NoShell": {
+    "message": "Rien de ce que montre ce mod ne devient un vêtement sur le corps (il est fixé sur Peau, c'est un imprimé, il est\nsur le visage ou les cheveux plutôt que sur le corps, ou son auteur l'a réglé pour ignorer le bout), donc le bout\nn'a rien de ce mod à façonner. Il façonne toujours le vêtement d'un autre mod par-dessus les orteils.",
+    "description": ""
+  },
   "Colors.SmoothNipples.Label": {
     "message": "Adoucir le téton",
     "description": ""

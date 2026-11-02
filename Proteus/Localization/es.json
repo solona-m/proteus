@@ -603,6 +603,34 @@
     "message": "Activa esto para tela sobre la entrepierna.\nProteus construye una prenda como una copia del cuerpo, así que reproduce el pliegue entre las piernas —\nlo que parece pintado en el cuerpo en vez de puesto. Con esto, la piel de ahí se suaviza primero hasta\nla curva de alrededor, de modo que la prenda cortada de ella también sale lisa.\nEsto cambia el cuerpo, así que se aplica a todas las prendas que lleves a la vez.",
     "description": ""
   },
+  "Colors.ToeCap.Label": {
+    "message": "Cubrir los dedos de los pies",
+    "description": ""
+  },
+  "Colors.ToeCap.Tip": {
+    "message": "Actívalo para medias y calcetines.\nProteus construye una prenda como una copia del cuerpo, así que por defecto sigue cada dedo —\nlo que parece pintado en vez de puesto. Con esto activado, los dedos quedan cubiertos por una sola\npuntera redondeada, como sienta la ropa de calcetería real. Solo da forma a una prenda que cubra los dedos.\nEs la opción \"Toe Cap\" del grupo Masks de este mod en Penumbra: se guarda en tu colección,\nno en el mod, y un diseño de Glamourer que incluya este mod la conserva.",
+    "description": ""
+  },
+  "Colors.ToeCap.Held.Tip": {
+    "message": "Un diseño de Glamourer (u otro plugin) está fijando ahora los ajustes de este mod, así que\nun cambio aquí no se vería. Cambia \"Toe Cap\" en el grupo Masks de ese diseño.",
+    "description": ""
+  },
+  "Colors.ToeCap.Inherited.Note": {
+    "message": "Esta colección hereda los ajustes de este mod. Cambiar esto le da su propio ajuste\npara el mod, igual que cambiarlo en Penumbra.",
+    "description": ""
+  },
+  "Colors.ToeCap.Failed.Fmt": {
+    "message": "Penumbra no aceptó el cambio: {0}",
+    "description": ""
+  },
+  "Colors.ToeCap.ModOff": {
+    "message": "Este mod está desactivado en tu colección, así que la puntera no se verá hasta que lo actives.",
+    "description": ""
+  },
+  "Colors.ToeCap.NoShell": {
+    "message": "Nada de lo que muestra este mod se convierte en una prenda sobre el cuerpo (está fijado en Piel, es un estampado,\nestá en la cara o el pelo en vez del cuerpo, o su autor lo marcó para omitir la puntera), así que la puntera no\ntiene nada de este mod que moldear. Sigue moldeando la prenda de otro mod sobre los dedos.",
+    "description": ""
+  },
   "Colors.SmoothNipples.Label": {
     "message": "Suavizar el pezón",
     "description": ""

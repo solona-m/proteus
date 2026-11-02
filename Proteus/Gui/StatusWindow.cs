@@ -114,6 +114,8 @@ public class StatusWindow : Window
         _colorWindowMod = ModMoveMigration.Follow(_colorWindowMod, oldDir, newDir);
         ModMoveMigration.RekeyKey(_colorEditorSel, oldDir, newDir);
         _groupOrderCache.Remove(oldDir);
+        _toeCapOptions.Forget(oldDir);
+        _toeCapError.Remove(oldDir);
         if (_stackDragSrc is { } drag && ModMoveMigration.Same(drag.Mod, oldDir)) _stackDragSrc = null;
         exportTab.FollowMove(oldDir, newDir);
         parts.FollowMove(oldDir, newDir);
@@ -121,7 +123,18 @@ public class StatusWindow : Window
 
     /// <summary>Open the colour editor for a mod, or close it when it is already open for that mod.</summary>
     internal void ToggleColorWindow(string modDirectory)
-        => _colorWindowMod = _colorWindowMod == modDirectory ? null : modDirectory;
+    {
+        _colorWindowMod = _colorWindowMod == modDirectory ? null : modDirectory;
+        if (_colorWindowMod == null) return;
+        // Opening re-reads whether the mod ships a toe cap: it may have been updated since.
+        _toeCapOptions.Forget(modDirectory);
+        _toeCapError.Remove(modDirectory);
+    }
+
+    /// <summary>Which mods ship a usable toe cap, for the Geometry section's tick.</summary>
+    private readonly ToeCapOptionCache _toeCapOptions = new();
+    /// <summary>Mod dir → why Penumbra refused the last toe-cap click; shown under the tick until the next success.</summary>
+    private readonly Dictionary<string, string> _toeCapError = new(StringComparer.OrdinalIgnoreCase);
     // Mod dir → "group\0option" the colour editor is scoped to; by identity so it follows the option when reordered.
     private readonly Dictionary<string, string> _colorEditorSel = new();
     // Identity of the overlay tab currently being dragged to restack (payload carries only a marker).
@@ -2345,7 +2358,8 @@ public class StatusWindow : Window
     /// <summary>
     /// The mod-wide geometry passes (<see cref="GeometryToggles.All"/>), written to the sidecar because they are authoring
     /// decisions that ship with the pack. Ticking any promotes the mod's skin overlays to a shell, so
-    /// <see cref="RenderModeInference.WantsGeometry"/> must list every one.
+    /// <see cref="RenderModeInference.WantsGeometry"/> must list every one. Then the toe cap, the one tick not in the
+    /// sidecar: it is the mod's Toe Cap option in Penumbra and promotes through <c>ToeCapWanted</c> instead.
     /// </summary>
     private void DrawBustBridgeAdvanced(OverlayEntry entry)
     {
@@ -2365,6 +2379,59 @@ public class StatusWindow : Window
             if (ImGui.IsItemHovered())
                 ImGui.SetTooltip(t.Tip(cs));
         }
+
+        DrawToeCapTick(entry);
+    }
+
+    /// <summary>
+    /// "Cap the toes": the mod's reserved Toe Cap option in its Masks group, read from and written to Penumbra. Drawn
+    /// only for a mod that ships a usable cap. Everything it shows comes from this frame's settings read through
+    /// <see cref="ToeCapToggle"/>, never from the compositor's per-composite snapshot. A write raises Penumbra's
+    /// setting-changed event, which recomposites the mod; nothing else is triggered here.
+    /// </summary>
+    private void DrawToeCapTick(OverlayEntry entry)
+    {
+        var dir = entry.ModDirectory;
+        var opt = _toeCapOptions.Get(dir, entry.ModRoot, entry.SidecarRoot);
+        if (opt == null) return;   // before any IPC: most mods never have a cap
+        if (penumbra.GetPlayerCollectionId() is not { } coll) return;
+        var snap = penumbra.GetModSettingsSnapshot(coll, dir);
+        var view = ToeCapToggle.View(opt, snap);
+        if (!view.Visible || snap is not { } s) return;
+
+        var cs = Strings.Colors;
+        if (view.Held) ImGui.BeginDisabled();
+        bool on = view.On;
+        if (ImGui.Checkbox($"{cs.ToeCap}###toecap_{dir}", ref on))
+        {
+            var sel = ToeCapToggle.SelectionAfter(ToeCapToggle.GroupSelection(s.Options, opt.Group), opt.Option, on);
+            var ec = penumbra.SetModOption(coll, dir, opt.Group, sel);
+            if (ToeCapToggle.Succeeded(ec))
+            {
+                _toeCapError.Remove(dir);
+                Plugin.Log.Information("[Proteus] colors: toe cap {0} in {1} ({2}){3}", on ? "on" : "off", dir, ec,
+                    view.Inherited ? " — the collection now has its own setting for this mod instead of inheriting it" : "");
+            }
+            else
+            {
+                _toeCapError[dir] = string.Format(cs.ToeCapFailedFmt, ec);
+                Plugin.Log.Warning("[Proteus] colors: Penumbra refused toe cap {0} in {1} ({2}: {3} = [{4}])",
+                    on ? "on" : "off", dir, ec, opt.Group, string.Join(", ", sel));
+            }
+        }
+        if (view.Held) ImGui.EndDisabled();
+        if (ImGui.IsItemHovered(ImGuiHoveredFlags.AllowWhenDisabled))
+            ImGui.SetTooltip(view.Held ? cs.ToeCapHeldTip
+                                       : view.Inherited ? cs.ToeCapTip + "\n\n" + cs.ToeCapInheritedNote : cs.ToeCapTip);
+
+        if (view.On)
+        {
+            var reach = ToeCapToggle.Reach(entry.Metadata, s.Enabled, s.Options, editRouter.HasOverride(dir));
+            if (reach == ToeCapReach.ModOff) ImGui.TextDisabled(cs.ToeCapModOff);
+            else if (reach == ToeCapReach.NoShell) ImGui.TextDisabled(cs.ToeCapNoShell);
+        }
+        if (_toeCapError.TryGetValue(dir, out var error))
+            ImGui.TextColored(ProteusStyle.Warn, error);
     }
 
     /// <summary>

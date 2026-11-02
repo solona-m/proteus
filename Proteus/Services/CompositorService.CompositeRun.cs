@@ -508,6 +508,7 @@ public partial class CompositorService
                             entry.ModDirectory,
                             string.Join(", ", toeCapMods.OrderBy(m => m, StringComparer.OrdinalIgnoreCase)));
                     }
+                    // The Colors window predicts this in ToeCapToggle.Reach; keep the two in step.
                     else if (RenderModeInference.ShouldPromoteToGear(overlay.Descriptor.Layer,
                             overlay.Descriptor.ManualShaderLock, overlay.ColorTableRows, aboveGear, canShell,
                             unmirrors, toeCapMods.Contains(entry.ModDirectory),
@@ -846,6 +847,7 @@ public partial class CompositorService
 
             // Mods that get a dedicated top mask shell: gear shells plus mask _id/relief assets. For these the mask lives
             // entirely on the shell, so the skin diffuse/relief passes and LoadIndexMerged must skip them.
+            // The Colors window predicts this in ToeCapToggle.Reach (a mask shell carries the toe cap); keep the two in step.
             maskShellMods = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
             foreach (var mod in gearOverlays.Select(g => g.Entry.ModDirectory).Distinct(StringComparer.OrdinalIgnoreCase))
                 if (maskAssetsByMod.TryGetValue(mod, out var mA)

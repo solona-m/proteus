@@ -377,8 +377,9 @@ Otras dos secciones plegables se aplican a todo el mod:
   - **Tensar la tela sobre el ombligo**: la tela queda plana sobre el ombligo en lugar de hundirse en él.
   - **Suavizar entre las piernas**: suaviza el pliegue de la entrepierna. Esto cambia el cuerpo de debajo, así que se aplica a todas las prendas que lleves a la vez.
   - **Suavizar el pezón**: suaviza la tela por encima. Aún sin terminar: el cuerpo de debajo conserva su forma, así que en una prenda ajustada todavía puede marcarse.
+  - **Cubrir los dedos de los pies**: cubre los dedos con una sola puntera redondeada, como sientan las medias y los calcetines. Solo aparece en mods que incluyen una puntera, y es la opción *Toe Cap* del mod en Penumbra (en su grupo Masks): se guarda en tu colección de Penumbra, no en el mod, y un diseño de Glamourer que incluya el mod la conserva.
 
-  Activar cualquiera de ellos hace que el mod se represente como segunda piel.
+  Activar cualquiera de los cinco primeros hace que el mod se represente como segunda piel. **Cubrir los dedos de los pies** hace lo mismo con los overlays del cuerpo que no estén fijados en Piel ni sean un estampado; si nada del mod puede convertirse en una prenda sobre el cuerpo, la casilla lo indica.
 
 #### Opciones de capa
 
@@ -386,7 +387,7 @@ Bajo las filas, la pestaña de una capa puede mostrar:
 
 - **Esta capa es toda la piel** — para un mod de piel convertido, arte que *es* la piel en lugar de algo puesto encima. Su mapa de normales sustituye al de la piel en vez de sumarse a él, y la atenuación del tono de piel baja a 0 para que asome tu propio tono.
 - **Este arte es asimétrico** — actívalo cuando los dos lados deban ser distintos: un tatuaje en un solo brazo, un maquillaje sin espejo. Un cuerpo y una cara vanilla pliegan el arte por la mitad, así que sin esto un lado se refleja sobre el otro. Proteus no puede detectarlo por ti.
-- **Puntera reforzada** — en una media con puntera reforzada, teje una puntera más densa: un panel más oscuro por el que los dedos siguen transparentándose, que se difumina en el borde. **Densidad** fija cuánto tapa. Se guarda en el mod, así que los preajustes y los diseños no lo capturan.
+- **Puntera reforzada** — en una media con puntera reforzada (**Cubrir los dedos de los pies** en Geometría), teje una puntera más densa: un panel más oscuro por el que los dedos siguen transparentándose, que se difumina en el borde. **Densidad** fija cuánto tapa. Se guarda en el mod, así que los preajustes y los diseños no lo capturan.
 
 #### Filas
 
