@@ -145,7 +145,7 @@ public sealed partial class SecondSkinService
                     && ShouldLog(outcome))
                 {
                     if (stats.CapUsed is { } capUsed)
-                        build.service.log.Information("[Proteus] second skin: toe cap {0}", capUsed);
+                        build.service.log.Information("[Proteus] second skin: toe cap {0} on {1}", capUsed, hostKey);
                     else if (stats.CapDeclined == SecondSkinWriter.NoBareFootReason)
                         build.service.log.Information("[Proteus] second skin: toe cap not placed on {0} — {1}",
                             hostKey, SecondSkinWriter.NoBareFootReason);

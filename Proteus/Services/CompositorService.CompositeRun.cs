@@ -496,7 +496,8 @@ public partial class CompositorService
                         && (aboveGear || RenderModeInference.HasCloth(overlay.ColorTableRows ?? [])))
                         compositor.NotifyNoShellSurface(entry, overlay.ColorTableRows, overlay.Descriptor);
                     // A cap only promotes the overlays of the mod that ships it (see ToeCapWanted). Another mod's skin stocking over the
-                    // same toes stays skin; logged once per mod so the trade is findable.
+                    // same toes stays skin; logged once per mod per composite, at Debug: it fires for every other mod in the look
+                    // (faces, whole skins), where ticking the cap would be the wrong advice.
                     else if (toeCapMods.Count > 0 && !toeCapMods.Contains(entry.ModDirectory)
                         // The bust bridge is held equal across the pair: this asks what the cap alone decides.
                         && !RenderModeInference.ShouldPromoteToGear(overlay.Descriptor.Layer,
@@ -507,11 +508,11 @@ public partial class CompositorService
                                 canShell, unmirrors, true, RenderModeInference.WantsGeometry(entry.Metadata))
                         && capNarrowedMods.Add(entry.ModDirectory))
                     {
-                        compositor.log.Information("[Proteus] {0}: a toe cap is selected in [{1}], not here, so this "
+                        compositor.log.Debug("[Proteus] {0}: a toe cap is wanted in [{1}], not here, so this "
                                       + "mod's skin overlays stay on the skin — the cap still shapes any "
-                                      + "shell over the toes, but this mod has no shell to shape. Tick "
-                                      + "\"Cap the toes\" in this mod's Colors window too if its art should "
-                                      + "follow the rebuilt toes.",
+                                      + "shell over the toes, but this mod has no shell to shape. If this is "
+                                      + "legwear whose art should follow the rebuilt toes, tick \"Cap the toes\" "
+                                      + "in its Colors window too.",
                             entry.ModDirectory,
                             string.Join(", ", toeCapMods.OrderBy(m => m, StringComparer.OrdinalIgnoreCase)));
                     }
