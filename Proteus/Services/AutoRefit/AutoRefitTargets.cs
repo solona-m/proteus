@@ -61,7 +61,12 @@ internal sealed class AutoRefitTargets
 
     /// <summary>The size chosen for a part, found in its own body at the race; null when none is.</summary>
     public BodyOption? Chosen(string slot)
-        => AutoRefitDecisions.Resolve(Options(slot), pref.SizeOf(slot), Worn(slot), selectedOf?.Invoke(slot));
+        => AutoRefitDecisions.Resolve(Options(slot), SavedSize(Catalog(slot), slot), Worn(slot), selectedOf?.Invoke(slot));
+
+    /// <summary>The size saved for a part, read in <paramref name="catalog"/>: one saved against a physics variant of a
+    /// chest (NIRÆ's "Squish", #59) is its build's. The preference itself is left as saved.</summary>
+    private BodySizeRef? SavedSize(BodySizeCatalog? catalog, string slot)
+        => catalog != null ? catalog.Canonical(pref.SizeOf(slot)) : pref.SizeOf(slot);
 
     /// <summary>What the character wears in a part's body, as handed in.</summary>
     public BodyOption? Worn(string slot) => worn.GetValueOrDefault(slot);
@@ -158,7 +163,7 @@ internal sealed class AutoRefitTargets
             if (stays && !onLead)
             {
                 var options = lead.Catalog.For(slot, Race);
-                if ((AutoRefitDecisions.Resolve(options, pref.SizeOf(slot)) ?? AutoRefitDecisions.Companion(options, target, null))
+                if ((AutoRefitDecisions.Resolve(options, SavedSize(lead.Catalog, slot)) ?? AutoRefitDecisions.Companion(options, target, null))
                     is { } there)
                 {
                     parts.Add(new Part(slot, from, there, lead));
@@ -225,7 +230,7 @@ internal sealed class AutoRefitTargets
         if (!leadStays || (Body(slot) is { } body && string.Equals(body.Dir, lead.Dir, StringComparison.OrdinalIgnoreCase)))
             return own != null && Body(slot) is { } mine ? (mine, own) : null;
         var options = lead.Catalog.For(slot, Race);
-        return (AutoRefitDecisions.Resolve(options, pref.SizeOf(slot)) ?? AutoRefitDecisions.Companion(options, leadTarget, null))
+        return (AutoRefitDecisions.Resolve(options, SavedSize(lead.Catalog, slot)) ?? AutoRefitDecisions.Companion(options, leadTarget, null))
                is { } there ? (lead, there) : null;
     }
 
