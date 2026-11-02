@@ -79,6 +79,8 @@ public static partial class SecondSkinWriter
         public required HashSet<(int Mesh, int Island)> OverOpenSkin;
         /// <summary>Closed loops of open edges that are not sockets (too big, too small, not a hole).</summary>
         public required int RejectedLoops;
+        /// <summary>The model could not be read for sockets: nothing about its nails can be shown safe to change.</summary>
+        public bool Unreadable;
     }
 
     /// <summary>One welded rest-skin vertex: where it is, its normal, and every copy of it in the skin meshes.</summary>
@@ -133,7 +135,7 @@ public static partial class SecondSkinWriter
         if (plans.Count == 0) return empty;
         Source src;
         try { src = Parse(mdl); }
-        catch { return empty; }
+        catch { return new NailSocketPlan { Sockets = [], OverOpenSkin = [], RejectedLoops = 0, Unreadable = true }; }
         var meshes = ReadNailSkinMeshes(src);
         var byMesh = meshes.ToDictionary(m => m.Mesh);
         int biggest = 0;
@@ -338,6 +340,45 @@ public static partial class SecondSkinWriter
         foreach (var (_, list) in ownerOf)
             if (list.Count > 1)
                 foreach (int si in list) { sockets[si].Owner = null; sockets[si].LeftAsAuthored = "one nail nearest two sockets"; }
+
+        // ---- Every nail of a socket on the same attribute switches as its owner. ----
+        // The game hides submeshes by attribute: were the owner on one switch and a nail it collapses on another, hiding
+        // the owner's would leave the collapsed nail showing over an open socket. Such a socket is left as authored.
+        var maskOf = new Dictionary<(int Mesh, (int, int, int) Tri), uint>();
+        foreach (var sm in meshes)
+        {
+            int mo = src.MeshStart + sm.Mesh * 36;
+            ushort si = BitConverter.ToUInt16(src.S, mo + 10), sc = BitConverter.ToUInt16(src.S, mo + 12);
+            for (int su = 0; su < sc; su++)
+            {
+                int ss = src.SubmeshStart + (si + su) * 16;
+                if (ss + 16 > src.S.Length) break;
+                uint so = BitConverter.ToUInt32(src.S, ss), cnt = BitConverter.ToUInt32(src.S, ss + 4);
+                uint mask = BitConverter.ToUInt32(src.S, ss + 8);
+                for (uint t = 0; t + 2 < cnt; t += 3)
+                {
+                    int q = src.Ib + (int)(so + t) * 2;
+                    if (q + 6 > src.S.Length) break;
+                    maskOf[(sm.Mesh, Sorted3(BitConverter.ToUInt16(src.S, q), BitConverter.ToUInt16(src.S, q + 2),
+                                             BitConverter.ToUInt16(src.S, q + 4)))] = mask;
+                }
+            }
+        }
+        HashSet<uint> MasksOf((int Mesh, int Island) id)
+        {
+            var set = new HashSet<uint>();
+            var ts = plans[id.Mesh].Islands[id.Island];
+            for (int t = 0; t + 2 < ts.Length; t += 3)
+                set.Add(maskOf.TryGetValue((id.Mesh, Sorted3(ts[t], ts[t + 1], ts[t + 2])), out var mk) ? mk : 0u);
+            return set;
+        }
+        foreach (var sock in sockets)
+        {
+            if (sock.Owner is not { } own) continue;
+            var ownMasks = MasksOf(own);
+            if (sock.Members.Any(m => !MasksOf(m).SetEquals(ownMasks)))
+            { sock.Owner = null; sock.LeftAsAuthored = "the nails are on different attribute switches"; }
+        }
 
         // ---- Span each owned socket. ----
         for (int si = 0; si < sockets.Count; si++)

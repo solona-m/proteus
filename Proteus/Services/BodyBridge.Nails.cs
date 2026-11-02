@@ -83,6 +83,8 @@ internal static partial class BodyBridge
         }
 
         var sockets = NailSockets(mdl, plans, log);
+        // Unreadable for sockets: collapsing its nails could open one, so nothing is changed.
+        if (sockets.Unreadable) return null;
         var fate = new Dictionary<(int, int), NailFate>();
         var spanBy = new Dictionary<(int, int), NailSocket>();
         foreach (var id in sockets.OverOpenSkin) fate[id] = NailFate.Authored;
@@ -198,7 +200,8 @@ internal static partial class BodyBridge
 
             // Re-shade what was laid down onto the finger or spans a socket, from the surface it now is. NOT the
             // collapsed islands (given one shared normal above, which a per-vertex re-shade would undo), and not a
-            // nail left as authored or alone, which must not change at all.
+            // nail of a socket left as authored or held back, which must not change at all. (A sewn nail is re-shaded
+            // whether covered or not, as it always was: its normals are recomputed from an unchanged surface.)
             if (ne is { } nel && nel.Stream <= 2 && moved > 0)
                 for (int k = 0; k < plan.Islands.Count; k++)
                 {
