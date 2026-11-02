@@ -428,7 +428,8 @@ public partial class AtrChestSizesTests
     [Trait("Plan", "EDGE-59-nirae-squish-3")]
     public void Variant_whose_options_name_different_builds_is_unmapped()
     {
-        using var mod = new Mod(Meta(null, Builds(), Chests(), SquishNamed(("Firm (A)", "top_b_squish"), ("Jelly (B)", "top_b_squish"))));
+        // One option names A, the other no build at all: every option must name it.
+        using var mod = new Mod(Meta(null, Builds(), Chests(), SquishNamed(("Firm (A)", "top_b_squish"), ("Jelly", "top_b_squish"))));
         Assert.Empty(mod.Catalog.Variants);
         Assert.Equal(SixLabels, mod.Catalog.For("_top").Select(o => o.Label));
     }
@@ -441,7 +442,8 @@ public partial class AtrChestSizesTests
         using var mod = new Mod(Meta(null, Builds(), Chests(), SquishNamed(("Firm (B)", "top_a"), ("Jelly (B)", "top_a"))));
         var cat = mod.Catalog;
         Assert.Equal(SixLabels, cat.For("_top").Select(o => o.Label));
-        Assert.All(cat.Variants, v => Assert.Equal(RefitCore.Normal(v.Rel), RefitCore.Normal(v.BuildRel)));
+        var own = Assert.Single(cat.Variants);
+        Assert.Equal(RefitCore.Normal(own.Rel), RefitCore.Normal(own.BuildRel));
         Assert.Equal(@"files\top_a.mdl|Flat", cat.Canonical(@"files\top_a.mdl|Flat"));
         Assert.Equal("A · Flat", RefitCore.WornOption(cat, "_top", "0201", Wears(cat, "top_a.mdl"), Pick("Chest", "Flat"))!.Label);
     }
