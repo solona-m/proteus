@@ -1332,7 +1332,6 @@ public sealed class LocalizationTests
         if (lang == Source)
         {
             Assert.Contains("can't be read as a model at all (missing, zero bytes or damaged)", refitBullet);
-            Assert.Contains("the plain men's body is ticked too", refitBullet);
             Assert.Contains("A men's model the size set can read is always kept", refitBullet);
             Assert.Contains("TBSE-X's nude legs don't stand in for its SFW legs", mensBullet);
         }

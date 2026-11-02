@@ -147,8 +147,8 @@ internal static partial class SizeSetRefit
 
     /// <summary>
     /// The men's paths whose author's model can't be used at all, so the women's piece there is crossed after all: the
-    /// men's model came to nothing this run (<see cref="MensModelUsable"/>), it was read as unreadable, and no file the
-    /// author gives that path can be read as a model (<see cref="AuthorMensRedirectsUnparsable"/>). None with a "Made on"
+    /// men's model came to nothing this run (<see cref="MensModelUsable"/>) — tried or not — and no file the author gives
+    /// that path can be read as a model (<see cref="AuthorMensRedirectsUnparsable"/>). None with a "Made on"
     /// body chosen: the author said where the mod was made, and the size set never falls back past that.
     /// </summary>
     internal static IReadOnlySet<string> MensModelsUnparsable(IReadOnlyList<Piece> pieces, RunLog runLog, string modRoot,
@@ -157,13 +157,11 @@ internal static partial class SizeSetRefit
     {
         var set = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         if (madeOn != null) return set;
+        // The files decide: none reads as a model, so whatever the men's bodies ticked, there is nothing of the author's to
+        // size — tried this run (unreadable) or not (only "for men" ticked). A size that came of it all the same keeps it.
         foreach (string mens in UnparsableMensPaths(pieces, modRoot, redirects))
-        {
-            var outcomes = runLog.Sizes.Where(s => string.Equals(s.GamePath, mens, StringComparison.OrdinalIgnoreCase)).ToList();
-            if (!MensModelUsable(outcomes)
-                && outcomes.Any(s => s.Status == SizeStatus.Skipped && s.ReasonCode is Codes.Unreadable or Codes.EndsUnreadable))
+            if (!MensModelUsable(runLog.Sizes.Where(s => string.Equals(s.GamePath, mens, StringComparison.OrdinalIgnoreCase))))
                 set.Add(mens);
-        }
         return set;
     }
 
@@ -303,8 +301,9 @@ internal static partial class SizeSetRefit
             }
             groups.Add(p.GroupName);
             foreach (string format in GroupFormats.Value)
-                try { groups.Add(string.Format(format, p.Model)); }
-                catch (FormatException) { }
+                foreach (string model in p.Models ?? [])
+                    try { groups.Add(string.Format(format, model)); }
+                    catch (FormatException) { }
         }
         return groups;
     }
@@ -340,17 +339,15 @@ internal static partial class SizeSetRefit
     /// name in <paramref name="mensGroup"/> — made from the women's piece by an earlier run, when that model could not be
     /// read. Never deleted: said, with how to show the author's model again.
     /// </summary>
-    /// <param name="made">Men's paths this run made a men's version at, or found it already there.</param>
-    /// <param name="onlyAt">When given, only the pieces whose men's path is one of these.</param>
+    /// <param name="skip">Men's paths left out: those crossed this run, and those whose author's files can't be read as
+    /// a model — there a men's version of ours is the men's model, not one standing over the author's.</param>
     internal static IReadOnlyList<Piece> StillReplaced(IReadOnlyList<Piece> all, BodyRetargetWriter.Record? record,
-                                                       string mensGroup, IReadOnlySet<string> made,
-                                                       IReadOnlySet<string>? onlyAt = null)
+                                                       string mensGroup, IReadOnlySet<string> skip)
     {
         if (record == null) return [];
         var paths = all.Select(p => p.GamePath).ToHashSet(StringComparer.OrdinalIgnoreCase);
         var names = MensOptionNames();
-        return all.Where(p => Crossable(p) && paths.Contains(MensPathOf(p)) && !made.Contains(MensPathOf(p))
-                              && onlyAt?.Contains(MensPathOf(p)) != false
+        return all.Where(p => Crossable(p) && paths.Contains(MensPathOf(p)) && !skip.Contains(MensPathOf(p))
                               && record.Options.Any(e => !e.InAuthorGroup && names.Contains(e.Name)
                                                          && string.Equals(e.GamePath, MensPathOf(p), StringComparison.OrdinalIgnoreCase)
                                                          && string.Equals(record.GroupOf(e), mensGroup, StringComparison.OrdinalIgnoreCase)))
@@ -639,8 +636,11 @@ internal static partial class SizeSetRefit
 
         // A men's version an earlier run made over an author's men's model that could not be read then still stands over
         // it — said whatever this run makes, before anything else returns.
+        // Never where the author's files still can't be read: there ours is the men's model, not one standing over it.
         var record = BodyRetargetWriter.ReadRecord(request.ModRoot);
-        var stale = StillReplaced(all, record, groupName, crossedInstead);
+        var unparsable = UnparsableMensPaths(all, request.ModRoot).ToHashSet(StringComparer.OrdinalIgnoreCase);
+        unparsable.UnionWith(crossedInstead);
+        var stale = StillReplaced(all, record, groupName, unparsable);
         var staleLines = stale.Zip(StillReplacedLines(stale, groupName)).ToDictionary(z => z.First, z => z.Second);
         runLog.Warnings.AddRange(staleLines.Values);
         if (mensKeys.Count == 0) return 0;
@@ -654,12 +654,7 @@ internal static partial class SizeSetRefit
         }
         finally
         {
-            // The fallback pieces: the line saying what their men's versions now replace, or — made nothing this time —
-            // that an earlier one still does.
-            var madeNow = runLog.Sizes.Where(s => s.Men && (s.Status == SizeStatus.Made || s.ReasonCode == Codes.AlreadyThere))
-                                      .Select(s => s.GamePath).ToHashSet(StringComparer.OrdinalIgnoreCase);
-            var after = StillReplaced(all, BodyRetargetWriter.ReadRecord(request.ModRoot), groupName, madeNow, crossedInstead);
-            runLog.Warnings.AddRange(StillReplacedLines(after, groupName));
+            // The fallback pieces: the line saying what their men's versions now stand in for, however the run ended.
             runLog.Warnings.AddRange(CrossedLines(crossedInstead, pieces, runLog, groupName));
         }
     }

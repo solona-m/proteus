@@ -150,11 +150,12 @@ internal static partial class SizeSetRefit
     /// and gloves with no chest or legs. Each would add sizes of its own to the group, every one wearing the other piece
     /// unrefitted, so it gets no sizes, and a note.
     /// </param>
-    /// <param name="Model">The model's name <see cref="GroupName"/> is formed from, in any language ("e6255").</param>
+    /// <param name="Models">The model's name <see cref="GroupName"/> is formed from, in every language Proteus ships
+    /// ("Hands — e0633", "Mains — e0633"): the author's option label as it is, or the slot named in each language.</param>
     internal sealed record Piece(string GamePath, string Slot, string? Group,
                                  IReadOnlyList<(string? Option, string File)> Options, string Label, string GroupName,
                                  string Race, bool FollowsChest = false, bool FollowsLegs = false, bool Unpaired = false,
-                                 string Model = "");
+                                 IReadOnlyList<string>? Models = null);
 
     /// <summary>
     /// The chest and legs models of a mod, each with the group its sizes are switched in. A model only a refit of ours
@@ -214,7 +215,7 @@ internal static partial class SizeSetRefit
             string model = Gui.PartsPanel.ModelLabel(authors[0]);
             pieces.Add(new Piece(gamePath, slot, group, options, Gui.PartsPanel.SlotOf(authors[0]),
                                  string.Format(Strings.Parts.RetargetGroupFmt, model),
-                                 BodySizeCatalog.RaceOf(gamePath)!, Model: model));
+                                 BodySizeCatalog.RaceOf(gamePath)!, Models: ModelNames(authors[0], model)));
         }
         if (models != null) pieces = WithoutRacialCopies(pieces, redirects, ourFiles, models, droppedCopy);
 
@@ -235,6 +236,16 @@ internal static partial class SizeSetRefit
                                 : p)
                      .ToList();
     }
+
+    /// <summary>
+    /// What a model is called (<see cref="Gui.PartsPanel.ModelLabel"/>) in every language Proteus ships: the author's
+    /// option label is the same in all; a model the default files give is named by its slot, which is translated.
+    /// </summary>
+    private static IReadOnlyList<string> ModelNames(PenumbraModMeta.Redirect r, string current)
+        => r.Source.Length > 0 || ContentSlot.Parse(r.GamePath) is not { } slot
+            ? [current]
+            : InEveryLanguage("Common.Slot." + slot.Label, current[..current.LastIndexOf(" — ", StringComparison.Ordinal)])
+                .Select(name => $"{name} — {slot.SetTag}").Append(current).Distinct(StringComparer.Ordinal).ToList();
 
     /// <summary>The files refits of ours wrote, as <see cref="IsOurFile"/> takes them.</summary>
     internal static HashSet<string> OurFiles(BodyRetargetWriter.Record? record)

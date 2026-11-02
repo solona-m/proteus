@@ -244,11 +244,12 @@ public sealed class AuthorsMensFallbackTests : IDisposable
     [Trait("Plan", "EDGE-42-43-tbsex-legs-cross-32")]
     public void Usable_or_other_is_not_crossed() // [AC-42-43-tbsex-legs-cross-3] [EDGE-42-43-tbsex-legs-cross-1] [EDGE-42-43-tbsex-legs-cross-2] [EDGE-42-43-tbsex-legs-cross-3] [EDGE-42-43-tbsex-legs-cross-4] [EDGE-42-43-tbsex-legs-cross-6] [EDGE-42-43-tbsex-legs-cross-32]
     {
-        string root = Mod([Glove, MensGlove]);   // the men's glove's files missing: only (a) and (b) can say no
+        string root = Mod([Glove, MensGlove]);   // the men's glove's files missing
         var pieces = PiecesOf(root);
         var mens = pieces.Single(p => p.GamePath == MensGlove);
         var women = pieces.Single(p => p.GamePath == Glove);
         var unread = (SizeStatus.Skipped, (string?)Codes.EndsUnreadable);
+        // Something came of the men's model this run: it is kept, whatever its files.
         foreach (var outcomes in new (SizeStatus, string?)[][]
                  {
                      [(SizeStatus.Skipped, Codes.AlreadyThere), unread],
@@ -258,19 +259,25 @@ public sealed class AuthorsMensFallbackTests : IDisposable
                      [(SizeStatus.Skipped, Codes.NoEnd), unread],
                      [(SizeStatus.Skipped, Codes.NoOwnLegs), unread],
                      [(SizeStatus.Made, null), unread],
-                     [(SizeStatus.Refused, Codes.RefusedPair)],
-                     [(SizeStatus.Failed, Codes.PieceFailed)],
-                     [(SizeStatus.Failed, Codes.SaveFailed)],
-                     [(SizeStatus.Skipped, Codes.NotMadeOn)],
                  })
             Assert.Empty(MensModelsUnparsable(pieces, Seeded(mens, outcomes), root, null));
-        // Not tried for a plain men's body, but read unreadable all the same: the model is not there.
-        Assert.Single(MensModelsUnparsable(pieces, Seeded(mens, (SizeStatus.Skipped, Codes.NoBodyForRace), unread), root, null));
+        // Nothing came of it: the files decide, tried this run or not (only "for men" ticked: no outcome, or no body).
+        foreach (var outcomes in new (SizeStatus, string?)[][]
+                 {
+                     [unread], [], [(SizeStatus.Skipped, Codes.NoBodyForRace)], [(SizeStatus.Refused, Codes.RefusedPair)],
+                     [(SizeStatus.Failed, Codes.PieceFailed)], [(SizeStatus.Failed, Codes.SaveFailed)],
+                 })
+            Assert.Single(MensModelsUnparsable(pieces, Seeded(mens, outcomes), root, null));
         // A "Made on" body chosen: never.
         Assert.Empty(MensModelsUnparsable(pieces, Seeded(mens, unread), root, "Bibo+"));
-        // A file of the author's that parses: never.
+        // A file of the author's that parses: never, whatever became of it.
         Write(root, "s/1.mdl", Model);
-        Assert.Empty(MensModelsUnparsable(pieces, Seeded(mens, unread), root, null));
+        foreach (var outcomes in new (SizeStatus, string?)[][]
+                 {
+                     [unread], [], [(SizeStatus.Skipped, Codes.NoBodyForRace)], [(SizeStatus.Refused, Codes.RefusedPair)],
+                     [(SizeStatus.Failed, Codes.PieceFailed)], [(SizeStatus.Skipped, Codes.NotMadeOn)],
+                 })
+            Assert.Empty(MensModelsUnparsable(pieces, Seeded(mens, outcomes), root, null));
 
         // The notes: "made nothing" only when nothing came of it.
         var usable = Seeded(mens, (SizeStatus.Skipped, Codes.AlreadyThere), unread);
@@ -287,7 +294,10 @@ public sealed class AuthorsMensFallbackTests : IDisposable
     [Trait("Plan", "EDGE-42-43-tbsex-legs-cross-5")]
     public void Untried_mens_model_keeps_the_unticked_note() // [AC-42-43-tbsex-legs-cross-3] [EDGE-42-43-tbsex-legs-cross-5]
     {
+        // The author's men's glove a model: only "for men" ticked leaves it untried, and says to tick the plain body.
         string root = Mod([Glove, MensGlove]);
+        Write(root, "s/1.mdl", Model);
+        Write(root, "m/1.mdl", Model);
         var pieces = PiecesOf(root);
         var women = pieces.Single(p => p.GamePath == Glove);
         var log = Seeded(pieces.Single(p => p.GamePath == MensGlove), (SizeStatus.Skipped, Codes.NoBodyForRace));
@@ -295,6 +305,14 @@ public sealed class AuthorsMensFallbackTests : IDisposable
         Across(Req(root, ["tbse@women"]), pieces, pieces, log);
         Assert.Contains(string.Format(Strings.SizeSet.AuthorsMensUntickedFmt, women.Label, "TBSE"), log.Notes);
         Assert.Contains(log.Sizes, s => s.ReasonCode == Codes.AuthorsMens && s.GamePath == MensGlove);
+
+        // Its files missing: "for men" alone crosses it, the plain body never needed (here the maps are missing).
+        string missing = Mod([Glove, MensGlove]);
+        var there = PiecesOf(missing);
+        var crossed = Seeded(there.Single(p => p.GamePath == MensGlove), (SizeStatus.Skipped, Codes.NoBodyForRace));
+        Across(Req(missing, ["tbse-x@women"]), there, there, crossed);
+        Assert.Contains(crossed.Sizes, s => s.GamePath == MensGlove && s.Men && s.ReasonCode == Codes.MenMapsMissing);
+        Assert.DoesNotContain(crossed.Notes, n => n == string.Format(Strings.SizeSet.AuthorsMensUntickedFmt, women.Label, "TBSE-X"));
     }
 
     [Fact]
@@ -359,10 +377,16 @@ public sealed class AuthorsMensFallbackTests : IDisposable
 
     // ── an earlier fallback still standing over the author's model ────────
 
-    private (string Root, List<Piece> Pieces) WithEarlierFallback(params string[] paths)
+    /// <summary>A mod of <paramref name="paths"/> whose men's body group holds a men's glove of ours from an earlier run;
+    /// the author's men's glove, when one of <paramref name="paths"/>, a model again (or, unless
+    /// <paramref name="authorsModel"/>, still missing).</summary>
+    private (string Root, List<Piece> Pieces) WithEarlierFallback(string[] paths, bool authorsModel = true)
     {
         string root = Mod(paths, extraGroups: OurGroup(MensGroup, MensGlove));
         Record(root, MensGroup, MensGlove);
+        int at = Array.IndexOf(paths, MensGlove);
+        if (authorsModel && at >= 0)
+            foreach (string option in new[] { "s", "m" }) Write(root, $"{option}/{at}.mdl", Model);
         return (root, PiecesOf(root));
     }
 
@@ -377,7 +401,7 @@ public sealed class AuthorsMensFallbackTests : IDisposable
     [Trait("Plan", "EDGE-42-43-tbsex-legs-cross-33")]
     public void Still_replaced_line() // [AC-42-43-tbsex-legs-cross-3] [EDGE-42-43-tbsex-legs-cross-10] [EDGE-42-43-tbsex-legs-cross-14] [EDGE-42-43-tbsex-legs-cross-30] [EDGE-42-43-tbsex-legs-cross-31] [EDGE-42-43-tbsex-legs-cross-33]
     {
-        var (root, pieces) = WithEarlierFallback(Top, Glove, MensGlove);
+        var (root, pieces) = WithEarlierFallback([Top, Glove, MensGlove]);
         var mens = pieces.Single(p => p.GamePath == MensGlove);
         var women = pieces.Single(p => p.GamePath == Glove);
         Assert.Equal(MensGroup, MensGroupName(root, AcrossPieces(pieces), pieces.Where(Crossable).ToList(), OwnSizeGroups(pieces)));
@@ -405,16 +429,23 @@ public sealed class AuthorsMensFallbackTests : IDisposable
     [Fact]
     [Trait("Plan", "AC-42-43-tbsex-legs-cross-3")]
     [Trait("Plan", "EDGE-42-43-tbsex-legs-cross-36")]
-    public void Attempted_fallback_with_prior_entry_says_still_replaced() // [AC-42-43-tbsex-legs-cross-3] [EDGE-42-43-tbsex-legs-cross-36]
+    public void Attempted_fallback_with_prior_entry_says_nothing_stale() // [AC-42-43-tbsex-legs-cross-3] [EDGE-42-43-tbsex-legs-cross-36]
     {
-        var (root, pieces) = WithEarlierFallback(Glove, MensGlove);   // the author's men's glove files are missing
+        // The author's men's glove still missing: our earlier men's version is the men's model there, not one standing over
+        // the author's — so no "pick Original to show the author's model" for a model that isn't there, however the run
+        // goes (here the maps are missing; or only "for men" ticked, or a "Made on" body chosen).
+        var (root, pieces) = WithEarlierFallback([Glove, MensGlove], authorsModel: false);
         var mens = pieces.Single(p => p.GamePath == MensGlove);
         var women = pieces.Single(p => p.GamePath == Glove);
-        var log = Seeded(mens, (SizeStatus.Skipped, Codes.EndsUnreadable));
-        Across(Req(root, ["tbse", "tbse@women"]), pieces, pieces, log);
-        Assert.Contains(log.Sizes, s => s.GamePath == MensGlove && s.Men && s.ReasonCode == Codes.MenMapsMissing);
-        Assert.Single(log.Warnings, w => w == Stale(women));
-        Assert.DoesNotContain(log.Warnings, w => w == string.Format(Strings.SizeSet.AuthorsMensCrossedFmt, women.Label, MensGroup));
+        foreach (var request in new[] { Req(root, ["tbse", "tbse@women"]), Req(root, ["tbse-x@women"]),
+                                        Req(root, ["tbse", "tbse@women"], madeOn: "Bibo+"), Req(root, ["tbse"]) })
+        {
+            var log = Seeded(mens, (SizeStatus.Skipped, Codes.EndsUnreadable));
+            Across(request, pieces, pieces, log);
+            Assert.DoesNotContain(log.Warnings, w => w == Stale(women));
+            Assert.DoesNotContain(log.Sizes, s => s.Reason == Stale(women));
+            Assert.DoesNotContain(log.Warnings, w => w == string.Format(Strings.SizeSet.AuthorsMensCrossedFmt, women.Label, MensGroup));
+        }
     }
 
     [Fact]
@@ -426,6 +457,7 @@ public sealed class AuthorsMensFallbackTests : IDisposable
         const string renamed = "Corps masculin";
         string root = Mod([Glove, MensGlove], extraGroups: OurGroup(renamed, MensGlove));
         Record(root, renamed, MensGlove);
+        Write(root, "s/1.mdl", Model);   // the author's men's glove a model again
         var pieces = PiecesOf(root);
         var women = pieces.Single(p => p.GamePath == Glove);
         int groups = PenumbraModMeta.TryReadGroups(root)!.Count;
@@ -458,6 +490,7 @@ public sealed class AuthorsMensFallbackTests : IDisposable
         };
         File.WriteAllText(Path.Combine(root, SidecarDiscoveryService.SidecarSubdir, BodyRetargetWriter.RecordFile),
                           JsonSerializer.Serialize(record));
+        Write(root, "default/top.mdl", Model);   // the author's men's top: a model
         var pieces = PiecesOf(root);
         var women = pieces.Single(p => p.GamePath == Top);
         var log = Seeded(pieces.Single(p => p.GamePath == MensTop), (SizeStatus.Made, null));
@@ -470,7 +503,7 @@ public sealed class AuthorsMensFallbackTests : IDisposable
     [Trait("Plan", "EDGE-42-43-tbsex-legs-cross-35")]
     public void No_stale_line_without_an_authors_mens_model() // [EDGE-42-43-tbsex-legs-cross-35]
     {
-        var (root, pieces) = WithEarlierFallback(Top, Glove);   // no men's glove of the author's: ours is the only one
+        var (root, pieces) = WithEarlierFallback([Top, Glove]);   // no men's glove of the author's: ours is the only one
         foreach (var request in new[] { Req(root, ["tbse"]), Req(root, ["tbse", "tbse@women"], across: false) })
         {
             var log = new RunLog();
@@ -509,9 +542,9 @@ public sealed class AuthorsMensFallbackTests : IDisposable
         Assert.Equal(MensGroup, MensGroupName(root, [], crossable, OwnSizeGroups(pieces)));
 
         // That size group made while Proteus spoke another language: still the men's piece's own, never ours for men.
-        var mensPiece = pieces.Single(p => p.GamePath == MensGlove);
-        string other = InEveryLanguage("Parts.Retarget.Group.Fmt", Strings.Parts.RetargetGroupFmt)
-                           .Select(f => string.Format(f, mensPiece.Model)).First(n => n != mensPiece.GroupName);
+        // As a French run named it: French's group name around French's slot name, whatever this run's language is.
+        string other = string.Format(French("Parts.Retarget.Group.Fmt"), $"{French("Common.Slot.Hands")} — e6000");
+        Assert.NotEqual(pieces.Single(p => p.GamePath == MensGlove).GroupName, other);
         Assert.Contains(other, OwnSizeGroups(pieces));
         string elsewhere = Mod([Glove], defaultFiles: defaults,
                                extraGroups: OurGroup(other, MensGlove) + OurGroup(MensGroup, MensGlove));
@@ -522,6 +555,14 @@ public sealed class AuthorsMensFallbackTests : IDisposable
         var there = PiecesOf(elsewhere);
         Assert.Equal(other, MensGroupName(elsewhere, [], there.Where(Crossable).ToList()));
         Assert.Equal(MensGroup, MensGroupName(elsewhere, [], there.Where(Crossable).ToList(), OwnSizeGroups(there)));
+    }
+
+    /// <summary>A message of the French locale file the plugin ships.</summary>
+    private static string French(string key)
+    {
+        using var stream = typeof(SizeSetRefit).Assembly.GetManifestResourceStream("Proteus.Localization.fr.json")!;
+        using var doc = JsonDocument.Parse(stream);
+        return doc.RootElement.GetProperty(key).GetProperty("message").GetString()!;
     }
 
     [Fact]
