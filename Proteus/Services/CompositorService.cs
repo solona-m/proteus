@@ -55,6 +55,17 @@ public partial class CompositorService : IDisposable
     // Debounce slot for the recomposite trigger: cancels the pending run and issues the new one's token.
     private readonly DebounceGate recompositeGate = new();
     private readonly SecondSkinService secondSkin;
+
+    /// <summary>
+    /// The bare body parts the published shell was cut from whose body mod draws one of several shapes by its options
+    /// (NIRÆ's chests), with what each left out. Replaced whole, only when a composite publishes; a settings change is
+    /// judged against it (<see cref="ShellBodyAtr.Moved"/>).
+    /// </summary>
+    private volatile IReadOnlyList<ShellBodyAtr.Use> _lastBodyAtrUses = [];
+
+    /// <summary>At most one forced rebuild per shape change (see <see cref="ShellBodyAtr.ForceLatch"/>).</summary>
+    private readonly ShellBodyAtr.ForceLatch _bodyAtrLatch = new();
+
     private readonly UvSeamMapService seamMaps;
     private readonly FaceUvDoublingService faceUv;
 
@@ -495,7 +506,7 @@ public partial class CompositorService : IDisposable
         // ResolveUpstream, not a bare resolver: the append host may be modded, so SecondSkinService must read the
         // player's file even where our own redirect masks the path. Only invoked during a composite, after managedModDir is set.
         this.secondSkin = new SecondSkinService(penumbra, textureLoader, discovery, uvRemap, config, log,
-                                                ResolveUpstream, SettledUpstream);
+                                                ResolveUpstream, SettledUpstream, () => modsRoot);
         this.seamMaps  = new UvSeamMapService(log);
         this.faceUv    = new FaceUvDoublingService(log, textureLoader, uvRemap);
 

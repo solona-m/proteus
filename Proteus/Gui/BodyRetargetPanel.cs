@@ -1353,7 +1353,9 @@ internal sealed partial class BodyRetargetPanel(PenumbraBridge penumbra, UVRemap
                                                               s => StudioPartBodies.HasChoice(s, to, partBodies)))
         {
             // A size kept before a body's chests were sizes names the model alone: the chest ticked of it.
-            if (BodySizeCatalog.ByFile(snapshot.For(slot, race), rel, SelectedOf(bodyDir, snapshot)) is not { } remembered)
+            // A size remembered against a physics variant of a chest (NIRÆ's "Squish", #59) is its build's.
+            if (BodySizeCatalog.ByFile(snapshot.For(slot, race), snapshot.Canonical(rel), SelectedOf(bodyDir, snapshot))
+                is not { } remembered)
                 continue;
 
             to[slot] = [remembered];

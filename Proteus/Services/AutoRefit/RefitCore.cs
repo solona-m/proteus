@@ -868,6 +868,8 @@ internal static partial class RefitCore
     /// the caller is allowed to ask from).</param>
     /// <param name="selected">The body mod's ticked options, when known: of a chest model's chests
     /// (<see cref="BodySizeCatalog.IsShape"/>) the one ticked is worn, else the default one.</param>
+    /// <remarks>A body's physics variant of a chest model (NIRÆ's "Squish", #59, see <see cref="BodySizeCatalog.Variants"/>)
+    /// is read as its build's model: wearing it is wearing the build's chest.</remarks>
     internal static BodyOption? WornOption(BodySizeCatalog catalog, string slot, string? race,
                                            Func<string, string?> resolve,
                                            IReadOnlyDictionary<string, List<string>>? selected = null)
@@ -881,6 +883,17 @@ internal static partial class RefitCore
                                           && string.Equals(Path.GetFullPath(catalog.PathOf(o)), full, StringComparison.OrdinalIgnoreCase))
                               .ToList();
             if (worn.Count > 0) return BodySizeCatalog.PickShape(worn, selected);
+
+            // A physics variant of a build's chest (NIRÆ's "Squish", #59) is not a size: wearing it is wearing the build.
+            if (catalog.Variants.FirstOrDefault(v => string.Equals(v.GamePath, gamePath, StringComparison.OrdinalIgnoreCase)
+                    && string.Equals(Path.GetFullPath(BodySizeCatalog.ResolveCaseInsensitive(catalog.ModRoot, v.Rel)), full,
+                                     StringComparison.OrdinalIgnoreCase)) is { } variant)
+            {
+                var build = options.Where(o => string.Equals(o.GamePath, gamePath, StringComparison.OrdinalIgnoreCase)
+                                               && Normal(BodySizeCatalog.FileOf(o.Rel)) == Normal(variant.BuildRel))
+                                   .ToList();
+                if (build.Count > 0) return BodySizeCatalog.PickShape(build, selected);
+            }
         }
         return null;
     }

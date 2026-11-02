@@ -279,7 +279,9 @@ internal static class AutoRefitDecisions
     /// </summary>
     /// <remarks>A body whose chests are sizes (<see cref="BodySizeCatalog.IsShape"/>, NIRÆ) names its chests by build
     /// ("Slim · Small Perky") and its legs by build and hips ("Slim · Small hips"): the two go together by build, the
-    /// worn one first, else the build's first legs or default chest.</remarks>
+    /// worn one first, else the build's first legs or default chest. A chest drawn from a physics variant of a build's
+    /// model (NIRÆ's "Squish", #59) is that build's chest, so legs nobody chose follow its build — even when the legs worn
+    /// are another build's.</remarks>
     internal static BodyOption? Companion(IReadOnlyList<BodyOption> options, BodyOption? anchor, BodyOption? worn)
     {
         if (options.Count == 0) return null;
