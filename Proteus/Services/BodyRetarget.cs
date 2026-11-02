@@ -768,6 +768,11 @@ internal static partial class BodyRetarget
     /// <param name="openSkin">On a slot the garment only reaches onto, cut with <paramref name="cutHidden"/> off, draw the
     /// skin that cut leaves out in the open inside the author's own skin (see <see cref="GrowSpannedOpenSkin"/>): the
     /// automatic refit, never the Studio, whose refit is written into the modder's own mod.</param>
+    /// <param name="rebuildSwapsShapeOnly">The rebuild also swaps the skin of the pairs that go in for their shape only,
+    /// while the solve still treats them so (its push-out and snapped rule unchanged): a women's glove made a men's, whose
+    /// bare hand takes the men's hands skin. One swapped-mesh set, worked out over the pairs as the rebuild sees them,
+    /// feeds both, so the cloth the solve parts is exactly the skin the rebuild drops.</param>
+    /// <param name="swappedSkinTags">See <see cref="Rebuild"/>; null keeps the body's tags.</param>
     public static Planned Plan(ModelParts garment, byte[] garmentBytes, IReadOnlyList<SlotPair> pairs,
                                string? garmentSlot = null, bool pushOut = true, IReadOnlySet<int>? held = null,
                                bool replaceSkin = false, bool acrossBodies = false, bool clearBody = false,
@@ -776,7 +781,8 @@ internal static partial class BodyRetarget
                                string? chestSlot = null, Action<string, Vec3[]>? trace = null,
                                Outfit? outfit = null, string? tuckSlot = null, bool deepClear = false,
                                bool keepStandoff = false, bool carryPiercings = false, bool liftUnderbust = true,
-                               bool seeInside = false, bool relaxSinkGuard = false, bool openSkin = false)
+                               bool seeInside = false, bool relaxSinkGuard = false, bool openSkin = false,
+                               bool rebuildSwapsShapeOnly = false, IReadOnlySet<string>? swappedSkinTags = null)
     {
         // First, before anything reads the new chest: its nipples smoothed where the garment covers more of them than
         // the old body had, so every pass below sees one surface — the one the swap draws.
@@ -795,8 +801,11 @@ internal static partial class BodyRetarget
         // mesh it parted that the rebuild then keeps opens the seam (see Sets.From). Without a hold the two rules agree as long
         // as the old body's skin lies on the new one once laid (see parted, below); with one, a held ankle ring stays where the old body had it and the rebuild, judging the laid model,
         // could keep a mesh the solver already parted. So the solver's set is handed to the rebuild.
+        var rebuildPairs = rebuildSwapsShapeOnly
+            ? pairs.Select(p => p.ShapeOnly ? p with { ShapeOnly = false } : p).ToList()
+            : pairs;
         IReadOnlySet<int>? swapMeshes = SwapSlotSwapped(pairs, replaceSkin, swapSlot)
-            ? SwappedSkinMeshes(garment, pairs)
+            ? SwappedSkinMeshes(garment, rebuildPairs)
             : null;
         // Without a hold the rules can still part ways: the solver judges the skin on the body it was made on, the rebuild
         // on the new one once laid there, and the old body's legs can reach further up the waist than the new one's. Metro
@@ -844,8 +853,8 @@ internal static partial class BodyRetarget
         if (replaceSkin || weights != null)
         {
             bool see = seeInside && tuckSlot != null && !Tuned.NoSeeInside;
-            var rebuilt = Rebuild(model, pairs, replaceSkin, weights, out var swapped, cutHidden, acrossBodies,
-                                  swapMeshes, tuckSlot, carryPiercings, parted, see, openSkin);
+            var rebuilt = Rebuild(model, rebuildPairs, replaceSkin, weights, out var swapped, cutHidden, acrossBodies,
+                                  swapMeshes, tuckSlot, carryPiercings, parted, see, openSkin, swappedSkinTags);
             if (rebuilt != null)
             {
                 model = rebuilt;

@@ -80,6 +80,8 @@ internal static partial class BodyRetarget
     /// cloth over it too, so long as none crowds it.</param>
     /// <param name="CutOpenSkinAnyFacing">Measuring only: let <see cref="GrowSpannedOpenSkin"/> keep skin whose laid skin
     /// faces another way (see <see cref="CutOpenSkinFacing"/>).</param>
+    /// <param name="NoReshapeEnds">Make a women's glove a men's with its bare hand held as the women's and its skin kept, as
+    /// builds before 1413 did, never swapped for the men's arm and hand (tests only; see <c>CrossSexRefitJob</c>).</param>
     internal sealed record Tuning(bool NoFollow = false, bool NoOwnSkinWeights = false,
                                   float OwnSkinReach = OwnSkinReachDefault, float CopyReach = CopyReachDefault,
                                   float CopyTolerance = CopyToleranceDefault, bool NoGiveUp = false,
@@ -95,7 +97,8 @@ internal static partial class BodyRetarget
                                   bool NoSourceWorn = false, bool NoSeeInside = false, bool NoTurnFallback = false,
                                   bool NoRelaxSinkGuard = false, bool NoSeamWeights = false,
                                   bool NoCutOpenSkin = false, bool CutOpenSkinUnderCloth = false,
-                                  bool CutOpenSkinAnyFacing = false, bool NoCutInside = false);
+                                  bool CutOpenSkinAnyFacing = false, bool NoCutInside = false,
+                                  bool NoReshapeEnds = false);
 
     private static readonly Tuning DefaultTuning = new();
 

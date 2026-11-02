@@ -356,12 +356,17 @@ internal static partial class KeepEnds
     /// skin there is no gap correction — cloth whose nearest skin is held keeps only its transfer move.</param>
     /// <param name="extra">The other body parts chosen beside the limb (the Studio's other rows), refitted with it.
     /// Never the end's slot: the end goes in for its shape only.</param>
+    /// <param name="reshapeEnd">A women's glove made a men's (<see cref="Reshape"/>): the end's skin is swapped for the
+    /// men's hands skin in the rebuild, while the solve still takes the end for its shape only.</param>
+    /// <param name="swappedSkinTags">The tags the garment's own skin carried (<see cref="SkinTagsOf"/>), all the swapped-in
+    /// skin keeps; null keeps the body's.</param>
     internal static BodyRetarget.Planned Plan(ModelParts garment, byte[] bytes, Reading reading,
                                               BodyRetarget.SlotPair limb, BodyRetarget.SlotPair? end, bool replaceSkin,
                                               bool across, bool clearBody, IReadOnlySet<int>? alsoHeld,
                                               IReadOnlyList<BodyRetarget.SlotPair>? extra,
                                               Action<string>? log = null, Action<string>? warn = null,
-                                              BodyRetarget.Outfit? outfit = null, bool carryPiercings = false)
+                                              BodyRetarget.Outfit? outfit = null, bool carryPiercings = false,
+                                              bool reshapeEnd = false, IReadOnlySet<string>? swappedSkinTags = null)
     {
         List<BodyRetarget.SlotPair> pairs = [limb];
         if (end is { } shape) pairs.Add(shape with { ShapeOnly = true });
@@ -371,7 +376,63 @@ internal static partial class KeepEnds
         return BodyRetarget.Plan(garment, bytes, pairs, reading.Slot, held: held, replaceSkin: replaceSkin,
                                  acrossBodies: across, clearBody: clearBody, cutHidden: true,
                                  keepShape: reading.FreePieces, swapSlot: reading.Limb, log: log, warn: warn,
-                                 outfit: outfit, carryPiercings: carryPiercings);
+                                 outfit: outfit, carryPiercings: carryPiercings,
+                                 rebuildSwapsShapeOnly: reshapeEnd, swappedSkinTags: reshapeEnd ? swappedSkinTags : null);
+    }
+
+    /// <summary>
+    /// A women's glove made a men's, its bare hand made the men's (cross-sex-wrist-band): only the hands that carry no
+    /// body skin stay held as the author made them; a hand whose skin is bare is let go, refitted with the arm and its skin
+    /// swapped for the men's own. Held so, the women's wrist stood out of the men's top's arm end — TBSE's chest arm runs
+    /// further down the wrist than Bibo+'s — and drew the line Halone's Chosen showed across the forearm.
+    /// <para/>
+    /// A hand's side is the side of the body it is on (its x): hands are never near the middle. The hard pieces are split
+    /// again for the new hold, so a cuff on the let-go hand moves whole with it.
+    /// </summary>
+    /// <returns>The reading with the new hold, or null (with <paramref name="why"/>) when no hand carries skin, or a part
+    /// the user held lies in skin of a hand that would be let go.</returns>
+    internal static Reading? Reshape(Reading reading, ModelParts garment, IReadOnlySet<int>? userHeld, out string why)
+    {
+        int vc = garment.Positions.Length / 3;
+        var skinVert = new bool[vc];
+        var skinMeshOf = new Dictionary<int, int>();
+        foreach (var part in garment.Parts)
+            if (part.Island < 0 && SecondSkinWriter.IsBodySkinMaterial(part.Material))
+                foreach (int v in part.Triangles)
+                    if (v >= 0 && v < vc) { skinVert[v] = true; skinMeshOf[v] = part.Mesh; }
+        static int Side(ModelParts g, int v) => g.Positions[3 * v] >= 0f ? 1 : -1;
+        var bare = reading.Ends.Where(v => v >= 0 && v < vc && skinVert[v]).Select(v => Side(garment, v)).ToHashSet();
+        if (bare.Count == 0)
+        {
+            why = "no hand carries skin";
+            return null;
+        }
+        // A part the user held, lying in a skin mesh with skin on a hand let go: it would be swapped all the same.
+        var bareMeshes = reading.Ends.Where(v => v >= 0 && v < vc && skinVert[v] && bare.Contains(Side(garment, v)))
+                                     .Select(v => skinMeshOf[v]).ToHashSet();
+        if (userHeld?.Any(v => v >= 0 && v < vc && skinMeshOf.TryGetValue(v, out int m) && bareMeshes.Contains(m)) == true)
+        {
+            why = "a part held in the Studio lies in the hand's skin";
+            return null;
+        }
+        var ends = reading.Ends.Where(v => v >= 0 && v < vc && !bare.Contains(Side(garment, v))).ToHashSet();
+        var pieces = RefitCore.ShapePieces(garment, RefitCore.DefaultKeepShape(garment), out var names);
+        var (free, freeNames) = FreeOf(pieces, names, ends);
+        why = "";
+        return reading with { Ends = ends, LimbView = RefitCore.LimbView(garment, ends), FreePieces = free, FreeNames = freeNames };
+    }
+
+    /// <summary>The attribute names the garment's own body skin carries: what a swapped-in skin may keep of its body's.</summary>
+    internal static IReadOnlySet<string> SkinTagsOf(ModelParts garment)
+    {
+        var tags = new HashSet<string>(StringComparer.Ordinal);
+        foreach (var part in garment.Parts)
+        {
+            if (part.Island >= 0 || !SecondSkinWriter.IsBodySkinMaterial(part.Material)) continue;
+            for (int bit = 0; bit < 32 && bit < garment.AttributeNames.Count; bit++)
+                if ((part.AttributeMask & (1u << bit)) != 0) tags.Add(garment.AttributeNames[bit]);
+        }
+        return tags;
     }
 
     /// <summary>

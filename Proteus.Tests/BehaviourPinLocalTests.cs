@@ -28,7 +28,7 @@ public class BehaviourPinLocalTests(ITestOutputHelper o)
     private const string StormblessedLegsPin = "3B2B3ADD084CBB2295D78499DCE8769656B8FCF49260C2C4190BC359ED846DA0";
     private const string HeelsSizeSetPin = "E53697A7A3235D1FB3EF57DF52FCA160BF6C3BAF193C8E49507F252B6A42F955";
 
-    // cross-sex-wrist-band (EDGE-9, AC-10): Halone's Chosen's glove made a men's through EndInputs, as Studio and the CLI build it
+    // cross-sex-wrist-band (EDGE-16, AC-10): Halone's Chosen's glove made a men's through EndInputs, as Studio and the CLI build it
     // from the authored glove file, on test 3bab948e (build 1410's refit code; tbsex-nude-legs changes no glove).
     private const string HalonesGloveTbsePin = "2AEA65FC2BA9FF10408D14C763C8259F126F1DB603E3E419F977928ACA22DE19";
     private const string HalonesGloveTbseXPin = "599C7882A605C629ABB2ECB9FB3C86996403BEB0159FBB4EAC7F1C4CDE3B3545";
@@ -158,13 +158,15 @@ public class BehaviourPinLocalTests(ITestOutputHelper o)
     }
 
     /// <summary>Halone's glove made a men's onto TBSE or TBSE-X (Bibo+ SFW Bra - Small, the chest its arm was read on),
-    /// through the inputs Studio and the CLI share: the file the job saves, and its materials.</summary>
+    /// through the inputs Studio and the CLI share: the file the job saves, and its materials — as builds before 1413 made
+    /// it, the bare hand held and the glove's own skin kept (Tuning.NoReshapeEnds; cross-sex-wrist-band swaps them).</summary>
     [LocalDataTheory(LocalData.GameData, HandsFeetPortLocalTests.HalonesChosen, CrossSexRefitLocalTests.Bibo,
                      CrossSexRefitLocalTests.Tbse, CrossSexRefitLocalTests.TbseX, LocalData.TbseUvMaps)]
     [InlineData("tbse")]
     [InlineData("tbse-x")]
-    [Trait("Plan", "EDGE-cross-sex-wrist-band-9")]
-    public void Halones_glove_made_mens_is_unchanged(string key) // [EDGE-cross-sex-wrist-band-9]
+    [Trait("Plan", "EDGE-cross-sex-wrist-band-16")]
+    [Trait("Plan", "AC-cross-sex-wrist-band-10")]
+    public void Halones_glove_made_mens_is_unchanged(string key) // [EDGE-cross-sex-wrist-band-16] [AC-cross-sex-wrist-band-10]
     {
         const string gamePath = "chara/equipment/e0613/model/c0201e0613_glv.mdl";
         byte[] glove = File.ReadAllBytes(Path.Combine(LocalData.Path(HandsFeetPortLocalTests.HalonesChosen), "common", "2",
@@ -178,7 +180,8 @@ public class BehaviourPinLocalTests(ITestOutputHelper o)
                                                 Substitute.For<IPluginLog>(), true, false, null, null, out string? why);
         Assert.True(inputs != null, why);
         Check($"halone's glove {key}", key == "tbse" ? HalonesGloveTbsePin : HalonesGloveTbseXPin,
-              Hash(CrossSexRefitJob.RunEnd(inputs!)));
+              Hash(BodyRetarget.WithTuning(new BodyRetarget.Tuning(NoReshapeEnds: true),
+                                           () => CrossSexRefitJob.RunEnd(inputs!))));
     }
 
     /// <summary>Halone's boot made a men's onto TBSE-X (Bibo+ Type C - Small, onto its Flaccid M A legs) through the inputs
@@ -186,8 +189,8 @@ public class BehaviourPinLocalTests(ITestOutputHelper o)
     [LocalDataFact(LocalData.GameData, HandsFeetPortLocalTests.HalonesChosen, CrossSexRefitLocalTests.Bibo,
                    CrossSexRefitLocalTests.TbseX, LocalData.TbseUvMaps)]
     [Trait("Plan", "AC-cross-sex-wrist-band-10")]
-    [Trait("Plan", "EDGE-cross-sex-wrist-band-17")]
-    public void Halones_tbsex_boot_made_mens_is_unchanged() // [AC-cross-sex-wrist-band-10] [EDGE-cross-sex-wrist-band-17]
+    [Trait("Plan", "EDGE-cross-sex-wrist-band-13")]
+    public void Halones_tbsex_boot_made_mens_is_unchanged() // [AC-cross-sex-wrist-band-10] [EDGE-cross-sex-wrist-band-13]
         => Check("halone's tbse-x boot", HalonesTbseXBootPin,
                  Hash(CrossSexRefitJob.RunEnd(CrossSexNudeLegsLocalTests.HalonesBootOntoTbseX(Substitute.For<IPluginLog>()))));
 }
