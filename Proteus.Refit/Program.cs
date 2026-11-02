@@ -1308,7 +1308,7 @@ internal static class Program
     /// <summary>The option whose model is <paramref name="rel"/> — slashes and case as Penumbra treats them. Of a body
     /// whose chests are sizes, a bare model file is its default chest.</summary>
     internal static BodyOption Find(BodySizeCatalog catalog, string slot, string rel)
-        => BodySizeCatalog.ByFile(catalog.For(slot), rel, null)
+        => BodySizeCatalog.ByFile(catalog.For(slot), catalog.Canonical(rel), null)
            ?? throw new UsageException($"No {slot} body option in {catalog.ModRoot} uses \"{rel}\". Run --list to see them.");
 
     /// <summary>Whether a legs garment's chest already sits on the chest it is sent to: the same model file, and — two

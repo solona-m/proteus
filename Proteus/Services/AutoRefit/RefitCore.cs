@@ -881,6 +881,17 @@ internal static partial class RefitCore
                                           && string.Equals(Path.GetFullPath(catalog.PathOf(o)), full, StringComparison.OrdinalIgnoreCase))
                               .ToList();
             if (worn.Count > 0) return BodySizeCatalog.PickShape(worn, selected);
+
+            // A physics variant of a build's chest (NIRÆ's "Squish", #59) is not a size: wearing it is wearing the build.
+            if (catalog.Variants.FirstOrDefault(v => string.Equals(v.GamePath, gamePath, StringComparison.OrdinalIgnoreCase)
+                    && string.Equals(Path.GetFullPath(BodySizeCatalog.ResolveCaseInsensitive(catalog.ModRoot, v.Rel)), full,
+                                     StringComparison.OrdinalIgnoreCase)) is { } variant)
+            {
+                var build = options.Where(o => string.Equals(o.GamePath, gamePath, StringComparison.OrdinalIgnoreCase)
+                                               && Normal(BodySizeCatalog.FileOf(o.Rel)) == Normal(variant.BuildRel))
+                                   .ToList();
+                if (build.Count > 0) return BodySizeCatalog.PickShape(build, selected);
+            }
         }
         return null;
     }

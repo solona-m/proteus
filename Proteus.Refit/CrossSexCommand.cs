@@ -40,14 +40,20 @@ internal static class CrossSexCommand
         var madeFor = BodySizeCatalog.Read(required(opts, "from-root"));
         var onto = BodySizeCatalog.Read(required(opts, "body-root"));
         string fromArg = required(opts, "from");
-        var targets = required(opts, "to").Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
-                                         .Select(t => t.Split('=', 2)).ToDictionary(t => Norm(t[0]), t => t.Length > 1 ? t[1] : t[0]);
+        var toArgs = required(opts, "to").Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+                                         .Select(t => t.Split('=', 2)).ToList();
+        // A size named twice — the same rel, or a physics variant's and its build's (#59) — is one size.
+        if (DuplicateTarget(onto, toArgs.Select(t => t[0])) is { } twice)
+        {
+            usageError($"--to names one size twice: \"{twice}\"");
+            return 2;
+        }
+        var targets = toArgs.ToDictionary(t => Norm(onto.Canonical(t[0])), t => t.Length > 1 ? t[1] : t[0]);
         // The size it was made on, named: across the sexes there is no detecting it against the other sex's bodies, and
         // a guess would write models from the wrong size.
         // Checked against the bodies the job reads: the made-for mod's of the drawn race in this slot, and the target
         // mod's of the picked race — a body of another slot or race would leave the run with nothing to make.
-        var original = madeFor.For(limb).Where(o => BodySizeCatalog.RaceOf(o.GamePath) == $"{drawn:D4}")
-                              .FirstOrDefault(o => Norm(o.Rel) == Norm(fromArg));
+        var original = MadeOn(madeFor, limb, drawn, fromArg);
         if (original == null)
         {
             usageError(fromArg == "auto"
@@ -56,8 +62,7 @@ internal static class CrossSexCommand
             return 2;
         }
         Func<BodyOption, bool> fromPick = o => o.Group == original.Group && o.Section == original.Section && o.Name == original.Name;
-        var ontoHere = OtherRaceRefit.OnlyRace(onto, to).For(limb);
-        if (targets.Keys.FirstOrDefault(t => ontoHere.All(o => Norm(o.Rel) != t)) is { } unknown)
+        if (UnknownTarget(onto, to, limb, targets.Keys) is { } unknown)
         {
             usageError($"--to names no c{to:D4} {limb} body of {opts["body-root"]}: \"{unknown}\"");
             return 2;
@@ -113,6 +118,32 @@ internal static class CrossSexCommand
     }
 
     private static string Norm(string rel) => rel.Replace('\\', '/').TrimStart('/').ToLowerInvariant();
+
+    /// <summary>The size <c>--from</c> names among the made-for body's of the drawn race, by its exact rel — one named
+    /// by a physics variant of its chest (NIRÆ's "Squish", #59) read as its build's. Null when none is.</summary>
+    internal static BodyOption? MadeOn(BodySizeCatalog madeFor, string limb, ushort drawn, string fromArg)
+    {
+        string want = Norm(madeFor.Canonical(fromArg));
+        return madeFor.For(limb).Where(o => BodySizeCatalog.RaceOf(o.GamePath) == $"{drawn:D4}")
+                      .FirstOrDefault(o => Norm(o.Rel) == want);
+    }
+
+    /// <summary>The first <c>--to</c> rel (already read through <see cref="BodySizeCatalog.Canonical(string)"/> and
+    /// normalised, as the targets are keyed) naming no size of <paramref name="onto"/> at the picked race; null when
+    /// every one does.</summary>
+    internal static string? UnknownTarget(BodySizeCatalog onto, ushort to, string limb, IEnumerable<string> keys)
+    {
+        var here = OtherRaceRefit.OnlyRace(onto, to).For(limb);
+        return keys.FirstOrDefault(t => here.All(o => Norm(o.Rel) != Norm(onto.Canonical(t))));
+    }
+
+    /// <summary>The first of the <c>--to</c> rels (the rel of each <c>rel=label</c>) naming a size an earlier one already
+    /// named — the same rel, or a physics variant's and its build's; null when none does.</summary>
+    internal static string? DuplicateTarget(BodySizeCatalog onto, IEnumerable<string> rels)
+    {
+        var seen = new HashSet<string>(StringComparer.Ordinal);
+        return rels.FirstOrDefault(r => !seen.Add(Norm(onto.Canonical(r))));
+    }
 
     /// <summary>
     /// The label a size is written under: the one given for the <c>--to</c> asked for. A size fitted to its body's nude

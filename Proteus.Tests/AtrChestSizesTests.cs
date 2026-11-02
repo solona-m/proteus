@@ -14,7 +14,7 @@ namespace Proteus.Tests;
 /// (NIRÆ's "Chest"): its chest sizes are build × chest, each its own size, the chest riding in the size's rel
 /// (<see cref="BodySizeCatalog.IsShape"/>). Hand-written manifests in the shape of NIRÆ's.
 /// </summary>
-public class AtrChestSizesTests
+public partial class AtrChestSizesTests
 {
     // ── manifests, written by hand ──────────────────────────────────────────────────────────────────────
 
@@ -89,7 +89,7 @@ public class AtrChestSizesTests
             // The chest models carry the chests the Chest group switches between, as NIRÆ's do.
             byte[] chest = SyntheticModel.Build(ChestAttrs, new SyntheticModel.Mesh("mt_c0201b0001_a.mtrl",
                 ChestAttrs.Select((_, i) => new SyntheticModel.Sub(1u << i)).ToArray()));
-            foreach (string f in new[] { "top_a", "top_b", "top" })
+            foreach (string f in new[] { "top_a", "top_b", "top", "top_a_squish", "top_b_squish", "top_squish" })
                 File.WriteAllBytes(Path.Combine(Root, "files", f + ".mdl"), chest);
             foreach (string f in new[] { "dwn_a_s", "dwn_a_l", "dwn_b_s", "dwn_b_l", "glv" })
                 File.WriteAllBytes(Path.Combine(Root, "files", f + ".mdl"), [0]);
