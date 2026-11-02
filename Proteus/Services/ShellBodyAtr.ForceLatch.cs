@@ -57,6 +57,12 @@ internal static partial class ShellBodyAtr
                 if (target == null || runStamp < armedStamp) return;
                 if (published == target)
                 {
+                    // The shell followed a change away from whatever was given up on: going back to it is a new change.
+                    if (exhausted != null && exhausted != target)
+                    {
+                        debug?.Invoke($"[{target}] was drawn as forced — [{exhausted}] may be forced again");
+                        exhausted = null;
+                    }
                     target = null;
                     pending = false;
                     return;

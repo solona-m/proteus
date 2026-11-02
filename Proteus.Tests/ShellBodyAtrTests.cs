@@ -666,6 +666,13 @@ public class ShellBodyAtrTests
         Assert.True(latch.TryArm("u"));
         latch.OnPublished("u", latch.Stamp(), () => throw new InvalidOperationException("not asked"), warnings.Add);
         Assert.Single(warnings);
+        // The shell followed a forced change away from t (a Glamourer design, say): going back to t is a new change.
+        Assert.False(latch.IsExhausted("t"));
+        Assert.True(latch.TryArm("t"));
+        latch.OnPublished("p", latch.Stamp(), () => "t", warnings.Add);
+        Assert.Equal(2, warnings.Count);
+        Assert.True(latch.IsExhausted("t"));
+        warnings.RemoveAt(1);
 
         // A publish that does draw t after all: it may be forced again, from any run, armed or not.
         latch.OnPublished("t", 0, () => "t", warnings.Add);
