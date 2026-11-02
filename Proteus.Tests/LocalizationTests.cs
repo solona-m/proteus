@@ -1303,7 +1303,7 @@ public sealed class LocalizationTests
     /// <summary>
     /// Every README says when the size set makes a women's piece men's over the author's own men's model — only when no
     /// file of it reads as a model, never with a Made on body chosen — in both the "Refit for" bullet and the size set's
-    /// men's bullet, the latter also saying TBSE-X has no nude legs to fall back to.
+    /// men's bullet.
     /// </summary>
     [Theory]
     [MemberData(nameof(AllLocales))]
@@ -1318,7 +1318,7 @@ public sealed class LocalizationTests
         var lines = readme.Split('\n');
         string madeOn = "**" + Load(lang)["SizeSet.MadeOn"].Message.Split("###")[0] + "**";
         string mensGroup = "**" + Load(lang)["SizeSet.MensGroup"].Message + "**";
-        var (refitFor, mens, _) = ReadmeAuthorsMensTokens[lang];
+        var (refitFor, mens) = ReadmeAuthorsMensTokens[lang];
         string refitBullet = lines.Single(l => l.StartsWith("- ", StringComparison.Ordinal) && l.Contains(refitFor));
         Assert.Contains(madeOn, refitBullet);
         Assert.Contains(mensGroup, refitBullet);
@@ -1335,18 +1335,17 @@ public sealed class LocalizationTests
         }
     }
 
-    /// <summary>Per language: a phrase of the new "Refit for" sentence, one of the new men's-bullet sentence, and its
-    /// TBSE-X sentence.</summary>
-    private static readonly Dictionary<string, (string RefitFor, string Mens, string TbseX)> ReadmeAuthorsMensTokens = new()
+    /// <summary>Per language: a phrase of the new "Refit for" sentence, and one of the new men's-bullet sentence.</summary>
+    private static readonly Dictionary<string, (string RefitFor, string Mens)> ReadmeAuthorsMensTokens = new()
     {
-        ["en"] = ("The size set keeps it too", "The one exception to keeping the author's men's model", "TBSE-X's nude legs don't stand in"),
-        ["de"] = ("Auch die Größenreihe behält es", "Die einzige Ausnahme davon", "Die nackten Beine von TBSE-X ersetzen seine SFW-Beine nicht"),
-        ["es"] = ("El conjunto de tallas también lo conserva", "La única excepción a conservar", "Las piernas desnudas de TBSE-X no sustituyen"),
-        ["fr"] = ("La série de tailles le garde aussi", "La seule exception au maintien", "Les jambes nues de TBSE-X ne remplacent pas"),
-        ["ja"] = ("サイズセットもそれを残します", "作者の男性用モデルを残すことの唯一の例外", "TBSE-Xの裸の脚はSFWの脚の代わりにはなりません"),
-        ["ko"] = ("사이즈 세트도 그것을 남깁니다", "작가의 남성용 모델을 남기는 것의 유일한 예외", "TBSE-X의 맨 다리는 SFW 다리를 대신하지 않습니다"),
-        ["ru"] = ("Набор размеров тоже её сохраняет", "Единственное исключение из сохранения", "Голые ноги TBSE-X не заменяют"),
-        ["zh"] = ("尺码组同样保留它", "保留作者男性模型的唯一例外", "TBSE-X 的裸腿不能代替它的 SFW 腿"),
+        ["en"] = ("The size set keeps it too", "The one exception to keeping the author's men's model"),
+        ["de"] = ("Auch die Größenreihe behält es", "Die einzige Ausnahme davon"),
+        ["es"] = ("El conjunto de tallas también lo conserva", "La única excepción a conservar"),
+        ["fr"] = ("La série de tailles le garde aussi", "La seule exception au maintien"),
+        ["ja"] = ("サイズセットもそれを残します", "作者の男性用モデルを残すことの唯一の例外"),
+        ["ko"] = ("사이즈 세트도 그것을 남깁니다", "작가의 남성용 모델을 남기는 것의 유일한 예외"),
+        ["ru"] = ("Набор размеров тоже её сохраняет", "Единственное исключение из сохранения"),
+        ["zh"] = ("尺码组同样保留它", "保留作者男性模型的唯一例外"),
     };
 
     private static readonly Dictionary<string, string> HandsFeetOldSentence = new()
