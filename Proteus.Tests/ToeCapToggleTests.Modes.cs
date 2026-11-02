@@ -206,6 +206,32 @@ public sealed partial class ToeCapToggleTests
         Assert.Equal(ToeCapApplyStatus.SaveFailed, r.Status);
     }
 
+    [Theory]
+    [Trait("Plan", "EDGE-toecap-geometry-38")]
+    [Trait("Plan", "EDGE-toecap-geometry-39")]
+    [InlineData(null, true)]
+    [InlineData(true, false)]
+    public void WriteFlag_restores_the_setting_when_the_save_fails(bool? before, bool flag)
+    {
+        var md = new ProteusMetadata { CapToes = before };
+        bool? during = null;
+        Assert.False(ToeCapToggle.WriteFlag(md, flag, () => { during = md.CapToes; return false; }));
+        Assert.Equal(flag ? true : null, during);   // the save saw the new value
+        Assert.Equal(before, md.CapToes);           // and the failure put the old one back
+    }
+
+    [Theory]
+    [Trait("Plan", "AC-toecap-geometry-4")]
+    [Trait("Plan", "EDGE-toecap-geometry-33")]
+    [InlineData(true, true)]
+    [InlineData(false, null)]
+    public void WriteFlag_writes_true_or_removes_never_false(bool flag, bool? want)
+    {
+        var md = new ProteusMetadata { CapToes = flag ? null : true };
+        Assert.True(ToeCapToggle.WriteFlag(md, flag, () => true));
+        Assert.Equal(want, md.CapToes);
+    }
+
     [Fact]
     [Trait("Plan", "AC-toecap-geometry-6")]
     public void Apply_ok_writes_both_in_order()

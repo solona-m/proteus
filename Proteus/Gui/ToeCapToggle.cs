@@ -93,6 +93,19 @@ internal static class ToeCapToggle
     }
 
     /// <summary>
+    /// Write the "Cap the toes" setting into <paramref name="md"/> (true or removed, never false) and save it; when the
+    /// save fails, put the old value back, so the tick and the next composite still read what the file says.
+    /// </summary>
+    public static bool WriteFlag(ProteusMetadata md, bool flag, Func<bool> save)
+    {
+        var prev = md.CapToes;
+        md.CapToes = flag ? true : null;
+        if (save()) return true;
+        md.CapToes = prev;
+        return false;
+    }
+
+    /// <summary>
     /// Carry out a click: the Penumbra write first, and the setting only once that took (or none was needed), so a
     /// refusal leaves both stores as they were. <paramref name="writeFlag"/> returns whether the save succeeded.
     /// </summary>

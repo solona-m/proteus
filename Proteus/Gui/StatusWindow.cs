@@ -2411,14 +2411,7 @@ public class StatusWindow : Window
             var write = ToeCapToggle.WriteFor(opt, s.Options, view, capToes, on);
             var result = ToeCapToggle.Apply(write,
                 sel => penumbra.SetModOption(coll, dir, opt!.Group, sel),
-                flag =>
-                {
-                    var prev = md.CapToes;
-                    md.CapToes = flag ? true : null;   // written true or removed, never false
-                    if (discovery.SaveMetadata(entry)) return true;
-                    md.CapToes = prev;
-                    return false;
-                });
+                flag => ToeCapToggle.WriteFlag(md, flag, () => discovery.SaveMetadata(entry)));
             switch (result.Status)
             {
                 case ToeCapApplyStatus.Ok:

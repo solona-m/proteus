@@ -493,6 +493,41 @@ public class ColorsetSaveOnReleaseTests : IDisposable
         Assert.Equal(2, Count(src, "if (!overrideActive || reset"));
     }
 
+    /// <summary>
+    /// "Cap the toes" recomposites only after a click went through (a failed save must not rebuild from the undone value),
+    /// the setting goes through the restoring helper, and the Masks tab names only a cap from its own group's option.
+    /// </summary>
+    [Fact]
+    [Trait("Plan", "EDGE-toecap-geometry-38")]
+    [Trait("Plan", "EDGE-toecap-geometry-30")]
+    public void Toe_cap_tick_recomposites_only_on_success_and_masks_label_follows_the_option()
+    {
+        var tick = Method(Source(Path.Combine("Gui", "StatusWindow.cs")), "private void DrawToeCapTick(");
+        Assert.Equal(1, Count(tick, "RecompositeForOverlay(entry, \"toe-cap\")"));
+        int ok = tick.IndexOf("case ToeCapApplyStatus.Ok:", StringComparison.Ordinal);
+        int refused = tick.IndexOf("case ToeCapApplyStatus.PenumbraRefused:", StringComparison.Ordinal);
+        int recomposite = tick.IndexOf("RecompositeForOverlay(entry, \"toe-cap\")", StringComparison.Ordinal);
+        Assert.True(ok > 0 && ok < recomposite && recomposite < refused, "the recomposite sits inside case Ok");
+        Assert.Contains("ToeCapToggle.WriteFlag(md, flag, () => discovery.SaveMetadata(entry))", tick);
+
+        var window = Source(Path.Combine("Gui", "StatusWindow.cs"));
+        int gate = window.IndexOf("if (compositor.ToeCapFromOptionFor(entry.ModDirectory))", StringComparison.Ordinal);
+        Assert.True(gate > 0, "the Masks label is gated on the option source");
+        Assert.Contains("Strings.ColorPanel.ToeCapOn", window.Substring(gate, 200));
+    }
+
+    /// <summary>The shell build caps exactly what promotion resolved: the composite hands it its own toe-cap answer.</summary>
+    [Fact]
+    [Trait("Plan", "EDGE-toecap-geometry-40")]
+    public void Shell_build_receives_the_composites_toe_caps()
+    {
+        var phase = Source(Path.Combine("Services", "CompositorService.ShellPhase.cs"));
+        Assert.Contains("toeCaps: run.ToeCapMaps", phase);
+        var run = Source(Path.Combine("Services", "CompositorService.CompositeRun.cs"));
+        Assert.Contains("toeCaps = compositor.ToeCapWanted(entries);", run);
+        Assert.Contains("ToeCapMaps => toeCaps.Maps", run);
+    }
+
     [Fact]
     [Trait("Plan", "AC-colorset-save-on-release-2")]
     public void Discovery_reads_through_what_is_held()
