@@ -83,7 +83,13 @@ public partial class CompositorService
             // Glamourer re-applies temporary mod settings after our redraws; suppress triggers within 1500ms of our own
             // redraw. Applies to overlay and body mods alike.
             var msSince = unchecked(Environment.TickCount64 - Interlocked.Read(ref _lastOwnRedrawTick));
-            if (msSince >= 0 && msSince < 1500) return;
+            if (msSince >= 0 && msSince < 1500)
+            {
+                // A Glamourer design that also picks a body's chest lands here too: look at the shapes, off this thread.
+                if (ShellBodyAtr.Watches(_lastBodyAtrUses, modDir))
+                    CheckBodyShapesOffThread(modDir, $"ModSettingChanged:{change}:{modDir}", own);
+                return;
+            }
         }
 
         // Everything below acts, so this is where a mod joins _knownDisabled: the set means "a composite was kicked
@@ -313,6 +319,90 @@ public partial class CompositorService
         return false;
     }
 
+    /// <summary>What a settings change on a body mod comes to.</summary>
+    internal enum SettingVerdict { Ignore, Recomposite }
+
+    /// <param name="Force">The composite skips the unchanged-inputs gate.</param>
+    /// <param name="InvalidateUpstreams">A base moved (or may have): drop the remembered upstreams first.</param>
+    /// <param name="ScheduleRecheck">No base moved yet: look again once Penumbra has finished rebuilding.</param>
+    internal readonly record struct SettingDecision(SettingVerdict Verdict, bool Force, bool InvalidateUpstreams,
+                                                    bool ScheduleRecheck);
+
+    /// <summary>
+    /// The decision <see cref="EvaluateSurfaceModOffThread"/> acts on. A mod providing none of our bases, or one whose
+    /// bases did not move, is ignored as before — unless the shapes the published shell's body draws by its options
+    /// moved (<paramref name="shapesMoved"/>, NIRÆ's chest), which no fingerprint sees: then a forced composite. A
+    /// settings change that has not moved a base yet still gets its re-check, since a file can move late.
+    /// </summary>
+    /// <param name="surface">Whether the mod has a surface tree; it decides nothing here, kept for the record.</param>
+    internal static SettingDecision DecideSettingChange(bool surface, bool affects, bool checkBasesMoved, bool baseMoved,
+                                                        bool shapesMoved, bool force)
+    {
+        _ = surface;
+        if (!affects)
+            return shapesMoved
+                ? new SettingDecision(SettingVerdict.Recomposite, true, false, false)
+                : new SettingDecision(SettingVerdict.Ignore, false, false, false);
+        if (checkBasesMoved && !baseMoved)
+            return new SettingDecision(shapesMoved ? SettingVerdict.Recomposite : SettingVerdict.Ignore, shapesMoved,
+                                       false, true);
+        return new SettingDecision(SettingVerdict.Recomposite, force || shapesMoved, true, false);
+    }
+
+    /// <summary>
+    /// The unchanged-inputs gate: skip when nothing forced the composite and its inputs hash to what is published, and
+    /// the shapes the published shell's body draws by its options have not moved. <paramref name="shapesMoved"/> is
+    /// asked last, only when everything else says skip: it reads Penumbra.
+    /// </summary>
+    internal static bool SkipUnchanged(bool force, bool forcePending, string? lastFingerprint, string fingerprint,
+                                       Func<bool> shapesMoved)
+        => !force && !forcePending && lastFingerprint != null && fingerprint == lastFingerprint && !shapesMoved();
+
+    /// <summary>
+    /// Force a rebuild when the shapes the published shell's body draws by its options have changed since — of
+    /// <paramref name="modDir"/>, or of any watched mod when null — and that change has not been forced already. Reads
+    /// Penumbra on the framework thread and blocks: call from a pool thread only.
+    /// </summary>
+    private bool TryForceForShapes(string? modDir, string reason, bool deferWhileHeld = false)
+    {
+        if (!ShellBodyAtr.Moved(_lastBodyAtrUses, modDir, secondSkin.PlayerModSettings, out var why, out var target))
+            return false;
+        if (!_bodyAtrLatch.TryArm(target))
+        {
+            log.Debug("[Proteus] {0}: the body's switched shapes changed ({1}) but a rebuild was already forced for "
+                      + "that — not again", reason, why);
+            return false;
+        }
+        log.Information("[Proteus] {0}: the shapes this body draws by its options changed ({1}) — recompositing",
+            reason, why);
+        TriggerRecomposite(reason, force: true, deferWhileHeld: deferWhileHeld);
+        return true;
+    }
+
+    /// <summary>
+    /// A watched body mod's settings changed inside the window where its event would be dropped: compare its shapes off
+    /// the event thread, counted as an evaluation so a draining auto refit batch waits for it.
+    /// </summary>
+    private void CheckBodyShapesOffThread(string modDir, string reason, bool deferWhileHeld)
+    {
+        NoteEvaluating(modDir, +1);
+        Task.Run(() =>
+        {
+            try
+            {
+                TryForceForShapes(modDir, reason, deferWhileHeld);
+            }
+            catch (Exception ex)
+            {
+                log.Debug("[Proteus] {0}: body-shapes check failed: {1}", reason, ex.Message);
+            }
+            finally
+            {
+                NoteEvaluating(modDir, -1);
+            }
+        });
+    }
+
     /// <param name="deferWhileHeld">The change is an auto refit batch's own write: its composite, re-check and stale
     /// snapshot wait for the batch's end (see <see cref="RedrawHold"/>).</param>
     private void EvaluateSurfaceModOffThread(string modDir, string reason, bool force = true,
@@ -324,45 +414,72 @@ public partial class CompositorService
         {
             try
             {
-                var (surface, affects) = ClassifySurfaceMod(modDir);
-                if (!surface && !affects) return;
-                textureLoader.EvictMod(modDir);   // body textures may have changed under a cached decode
-                // Either verdict earns the snapshot re-walk: a face/hair/iris mod moves which materials are on the character,
-                // and a mod feeding us without a surface tree (e.g. an append host) can change the materials a model references.
-                if (surface || affects) MarkMaterialsDirty(owedWhileHeld: deferWhileHeld);
-
-                // The gate: a mod that provides none of our base paths cannot change the output, and forcing a composite
-                // latches _forcePending, defeating the unchanged-inputs gate next time. The upstream invalidation stays below it.
-                if (!affects)
+                // A body drawing one of several shapes by its options (NIRÆ's chest): a choice that moves no file still
+                // changes the shell. Compared with what the published shell left out; forced at most once per change.
+                bool shapesMoved = false;
+                string shapesWhy = "";
+                try
                 {
-                    // Information, not Debug: this line explains an absent recomposite. The base-set size makes a false negative diagnosable.
-                    log.Information("[Proteus] {0}: mod provides none of the {1} base path(s) this composite "
-                                  + "reads — no recomposite",
-                        reason, _compositeBaseKeys?.Paths.Count ?? 0);
-                    return;
+                    shapesMoved = ShellBodyAtr.Moved(_lastBodyAtrUses, modDir, secondSkin.PlayerModSettings,
+                                                     out shapesWhy, out var shapesTarget)
+                                  && _bodyAtrLatch.TryArm(shapesTarget);
+                }
+                catch (Exception ex)
+                {
+                    log.Debug("[Proteus] {0}: body-shapes check failed: {1}", reason, ex.Message);
+                    shapesMoved = false;
+                }
+
+                var (surface, affects) = ClassifySurfaceMod(modDir);
+                if (surface || affects)
+                {
+                    textureLoader.EvictMod(modDir);   // body textures may have changed under a cached decode
+                    // Either verdict earns the snapshot re-walk: a face/hair/iris mod moves which materials are on the character,
+                    // and a mod feeding us without a surface tree (e.g. an append host) can change the materials a model references.
+                    MarkMaterialsDirty(owedWhileHeld: deferWhileHeld);
                 }
 
                 // Could it matter is settled; now ask whether it did. Settings changes only: ModAdded rewrites files wholesale.
                 // The manifest scan is repeated because ClassifySurfaceMod answers from a fingerprint cache without paths.
-                if (checkBasesMoved)
+                IReadOnlyCollection<string>? supplied = null;
+                bool baseMoved = true;
+                string why = "";
+                if (affects && checkBasesMoved)
                 {
-                    var supplied = ScanModManifests(Path.Combine(modsRoot, modDir)).Paths;
-                    if (!ModSettingMovedABase(supplied, out var why))
-                    {
-                        // Information: this line explains an absent recomposite.
+                    supplied = ScanModManifests(Path.Combine(modsRoot, modDir)).Paths;
+                    baseMoved = ModSettingMovedABase(supplied, out why);
+                }
+
+                var d = DecideSettingChange(surface, affects, checkBasesMoved, baseMoved, shapesMoved, force);
+
+                // Information, not Debug: these lines explain an absent (or an unexpected) recomposite.
+                if (shapesMoved)
+                    log.Information("[Proteus] {0}: the shapes this body draws by its options changed ({1}) — "
+                                  + "recompositing", reason, shapesWhy);
+                if (surface && !affects && !shapesMoved)
+                    // The gate: a mod that provides none of our base paths cannot change the output, and forcing a composite
+                    // latches _forcePending, defeating the unchanged-inputs gate next time. The base-set size makes a false
+                    // negative diagnosable.
+                    log.Information("[Proteus] {0}: mod provides none of the {1} base path(s) this composite "
+                                  + "reads — no recomposite",
+                        reason, _compositeBaseKeys?.Paths.Count ?? 0);
+                if (d.ScheduleRecheck)
+                {
+                    if (!shapesMoved)
                         log.Information("[Proteus] {0}: settings changed but no base moved ({1}) — no "
                                       + "recomposite (re-checking in {2}ms)", reason, why, MovedBaseRecheckMs);
-                        ScheduleMovedBaseRecheck(modDir, supplied, reason, force, deferWhileHeld: deferWhileHeld);
-                        return;
-                    }
-                    log.Debug("[Proteus] {0}: a base moved ({1})", reason, why);
+                    ScheduleMovedBaseRecheck(modDir, supplied!, reason, force, deferWhileHeld: deferWhileHeld);
                 }
+                else if (affects && checkBasesMoved)
+                    log.Debug("[Proteus] {0}: a base moved ({1})", reason, why);
+
+                if (d.Verdict == SettingVerdict.Ignore) return;
 
                 // The authoritative invalidation: MayMoveOurBases answered from a possibly stale cached verdict, and
                 // ClassifySurfaceMod has just re-derived it. Idempotent.
-                InvalidateUpstreamCache(reason);
+                if (d.InvalidateUpstreams) InvalidateUpstreamCache(reason);
                 // Safe to gate on an ambient re-assert: the fingerprint's upstream identity detects a moved body mod.
-                TriggerRecomposite(reason, force: force, deferWhileHeld: deferWhileHeld);
+                TriggerRecomposite(reason, force: d.Force, deferWhileHeld: deferWhileHeld);
             }
             catch (Exception ex)
             {
