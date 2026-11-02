@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 
 namespace Proteus.Services;
 using static Proteus.Services.SecondSkinWriter;
@@ -30,16 +31,25 @@ internal static partial class BodyBridge
 
     /// <summary>
     /// Flattens the NAILS out of a hand, on the body itself, so a garment over them has nothing to poke through.
-    /// Each nail is its own little island of skin sitting in a socket in the finger (see
-    /// <see cref="SecondSkinWriter.NailBedIslands"/>); relaxing its inside with its rim pinned replaces the nail
-    /// with the surface that spans the socket — the nail is gone and the gap is bridged by its own triangles, so
-    /// nothing is added or removed and no offset in the file moves. A separate nail MESH riding on the bed is
-    /// carried down with it by <see cref="CarrySkinMove"/>, the same way the nipple relax carries piercings.
+    /// Each nail is a little island of skin (see <see cref="SecondSkinWriter.NailBedIslands"/>), and what becomes of
+    /// it depends on what it sits in:
+    /// <list type="bullet">
+    /// <item>on a closed finger, it COLLAPSES to a point and draws nothing;</item>
+    /// <item>sewn into the finger, it is LAID DOWN onto the skin around it;</item>
+    /// <item>floating in an open socket of the finger (Rue+, YAB+, LavaBod+, FreyjaAF...), the nail nearest the
+    /// socket's whole rim SPANS it — its outline matched to the rim, its middle brought down to the finger — and the
+    /// socket's other nails collapse (see <see cref="SecondSkinWriter.NailSockets"/>);</item>
+    /// <item>over open skin that cannot be spanned cleanly, it is LEFT AS AUTHORED: a nail where a nail was, never a
+    /// hole.</item>
+    /// </list>
+    /// Nothing is added or removed and no offset in the file moves. A separate nail MESH riding on a nail that was
+    /// taken off goes with it (<see cref="RemoveNailMeshes"/>).
     /// <para/>
     /// Runs on the body BEFORE the shell is cut from it, like the other body passes, so the garment is a displaced
     /// copy of a hand that has no nails. Returns null when there is nothing to do.
     /// </summary>
-    /// <param name="gate">Carries the garment's coverage; a nail no layer covers is left alone.</param>
+    /// <param name="gate">Carries the garment's coverage; a nail no layer covers is left alone, and so is every nail
+    /// of a socket any of whose nails is uncovered.</param>
     internal static byte[]? FlattenNails(byte[] mdl, SecondSkinLayer gate, Action<string>? log = null)
     {
         if (mdl is not { Length: > 0 }) return null;
@@ -55,37 +65,63 @@ internal static partial class BodyBridge
         var matNames = ReadMaterialNames(s, src);
         // Every nail bed vertex as it stood BEFORE flattening: a nail MESH drawn over one is removed with it.
         var nailWas = new List<Vec3>();
-        int nails = 0, uncovered = 0, moved = 0, collapsed = 0, weldWeights = 0;
+        int nails = 0, uncovered = 0, moved = 0, collapsed = 0, weldWeights = 0, spanned = 0, authored = 0;
         float most = 0f;
 
         Span<float> tmp = stackalloc float[4];
+
+        // Is each nail covered? Asked up front, because a socket's nails go together or not at all.
+        var covered = new Dictionary<(int, int), bool>();
         foreach (var (m, plan) in plans)
         {
-            var beds = plan.Islands;
-            int mo = src.MeshStart + m * 36;
-            if (mo + 36 > s.Length) continue;
-            ushort vc = BitConverter.ToUInt16(s, mo);
-            if (vc == 0) continue;
+            if (MeshLayout(src, m) is not { } ml) continue;
+            for (int k = 0; k < plan.Islands.Count && k < plan.VertsOf.Count; k++)
+                // The FINGERTIP around the nail counts as well as the nail's own island: a glove's art rarely paints
+                // the nail chart at all — that is why the nails showed through it in the first place.
+                covered[(m, k)] = Covered(gate, s, src, ml.Uv, ml.At, plan.VertsOf[k], tmp)
+                                  || FingertipCovered(gate, plan, plan.VertsOf[k]);
+        }
 
-            var decl = m < src.Decls.Length ? src.Decls[m] : [];
-            VElem? pe = null, ne = null, ue = null;
-            foreach (var el in decl)
+        var sockets = NailSockets(mdl, plans, log);
+        var fate = new Dictionary<(int, int), NailFate>();
+        var spanBy = new Dictionary<(int, int), NailSocket>();
+        foreach (var id in sockets.OverOpenSkin) fate[id] = NailFate.Authored;
+        foreach (var sock in sockets.Sockets.Where(x => x.Owner == null))
+            foreach (var id in sock.Members) fate[id] = NailFate.Authored;
+        // A socket is acted on only when every one of its nails is covered; one held back holds its sockets back.
+        var active = sockets.Sockets.Where(x => x.Owner != null).ToHashSet();
+        var held = new HashSet<(int, int)>();
+        for (bool changed = true; changed;)
+        {
+            changed = false;
+            foreach (var sock in active.ToList())
+                if (sock.Members.Any(id => !covered.GetValueOrDefault(id) || held.Contains(id)))
+                {
+                    active.Remove(sock);
+                    foreach (var id in sock.Members) held.Add(id);
+                    changed = true;
+                }
+        }
+        foreach (var id in held) fate.TryAdd(id, NailFate.Held);
+        foreach (var sock in active)
+            foreach (var id in sock.Members)
             {
-                if (el.Usage == UsePosition) pe ??= el;
-                else if (el.Usage == UseNormal) ne ??= el;
-                else if (el.Usage == UseUV && el.UsageIndex == 0) ue ??= el;
+                if (fate.ContainsKey(id)) continue;
+                // The owner spans the socket, and so does any nail plugging a hole in it; the rest collapse.
+                bool spans = id == sock.Owner || (id.Item1 == sock.Owner!.Value.Mesh && sock.Plugs.Contains(id.Item2));
+                fate[id] = spans ? NailFate.Span : NailFate.Collapse;
+                if (spans) spanBy[id] = sock;
             }
-            if (pe is not { } pel || pel.Stream > 2) continue;
 
-            uint[] vbo = { BitConverter.ToUInt32(s, mo + 20), BitConverter.ToUInt32(s, mo + 24),
-                           BitConverter.ToUInt32(s, mo + 28) };
-            byte[] bs = { s[mo + 32], s[mo + 33], s[mo + 34] };
-            int At(VElem el, int i) => src.Vb + (int)vbo[el.Stream] + i * bs[el.Stream] + el.Offset;
+        foreach (var (m, plan) in plans)
+        {
+            if (MeshLayout(src, m) is not { } ml) continue;
+            var (vc, decl, vbo, bs, pel, ne, at) = (ml.Vc, ml.Decl, ml.Vbo, ml.Bs, ml.Pos, ml.Nrm, ml.At);
 
             var pos = new Vec3[vc];
             for (int i = 0; i < vc; i++)
             {
-                int a = At(pel, i);
+                int a = at(pel, i);
                 if (a < 0 || a + 16 > s.Length) return null;
                 ReadTyped(s, a, pel.Type, tmp);
                 pos[i] = new Vec3(tmp[0], tmp[1], tmp[2]);
@@ -93,20 +129,28 @@ internal static partial class BodyBridge
 
             for (int k = 0; k < plan.Islands.Count && k < plan.VertsOf.Count; k++)
             {
-                var (tris, verts) = (plan.Islands[k], plan.VertsOf[k]);
-                // The FINGERTIP around the nail counts as well as the nail's own island: a glove's art rarely paints
-                // the nail chart at all — that is why the nails showed through it in the first place.
-                if (!Covered(gate, s, src, ue, At, verts, tmp) && !FingertipCovered(gate, plan, verts))
+                var verts = plan.VertsOf[k];
+                var f = fate.GetValueOrDefault((m, k), NailFate.Default);
+                if (f == NailFate.Authored) { authored++; continue; }
+                if (f == NailFate.Held || (f == NailFate.Default && !covered.GetValueOrDefault((m, k))))
                 { uncovered++; continue; }
 
                 var flat = new List<(int V, Vec3 To)>(verts.Length);
-                if (k < plan.Sewn.Count && !plan.Sewn[k])
+                if (f == NailFate.Span)
                 {
-                    // Nothing holds this nail to the finger, and the finger is whole underneath: collapse it to a
-                    // point. Every triangle then has no area and draws nothing — a flattened patch cannot match
-                    // that, because its triangles are chords and a chord cuts back out of the skin across a fold.
-                    // The point is taken INSIDE the finger (the landings, which are under the skin), so there is
-                    // nothing of it outside the body even before its triangles collapse.
+                    // Spanning an open socket: the island is the finger now, so it keeps its own skinning, and is
+                    // re-shaded below like the finger it has become.
+                    foreach (int v in verts)
+                        if (spanBy[(m, k)].Spanned.TryGetValue(v, out var to)) flat.Add((v, to));
+                    spanned++;
+                }
+                else if (f == NailFate.Collapse || (k < plan.Sewn.Count && !plan.Sewn[k]))
+                {
+                    // Nothing holds this nail to the finger, and the finger is whole underneath (or spanned by its
+                    // neighbour): collapse it to a point. Every triangle then has no area and draws nothing — a
+                    // flattened patch cannot match that, because its triangles are chords and a chord cuts back out
+                    // of the skin across a fold. The point is taken INSIDE the finger (the landings, which are under
+                    // the skin), so there is nothing of it outside the body even before its triangles collapse.
                     float cx = 0, cy = 0, cz = 0;
                     int n = 0;
                     foreach (int v in verts)
@@ -116,8 +160,8 @@ internal static partial class BodyBridge
                         foreach (int v in verts) { cx += pos[v].X; cy += pos[v].Y; cz += pos[v].Z; }
                         n = verts.Length;
                     }
-                    var at = new Vec3(cx / n, cy / n, cz / n);
-                    foreach (int v in verts) flat.Add((v, at));
+                    var point = new Vec3(cx / n, cy / n, cz / n);
+                    foreach (int v in verts) flat.Add((v, point));
                     // ...and ONE set of bone weights for the lot. A collapsed island is only collapsed in the bind
                     // pose: leave each vertex its own weights and the game's skinning pulls them apart again the
                     // moment a finger bends, and the triangles get their area back. That is the speck at the tip.
@@ -125,13 +169,14 @@ internal static partial class BodyBridge
                     // ...and ONE normal, for the same reason: the second skin pushes every vertex out along its
                     // own, so a collapsed point whose vertices still face every which way fans back open into
                     // slivers — wearing the nail's texture, since they keep its UVs.
-                    if (ne is { } nel2 && nel2.Stream <= 2) WeldNormals(outBytes, At, nel2, verts);
+                    if (ne is { } nel2 && nel2.Stream <= 2) WeldNormals(outBytes, at, nel2, verts);
                     collapsed++;
+                    fate[(m, k)] = NailFate.Collapse;
                 }
                 else
                 {
-                    // Sewn in: removing it would open a hole, so it is laid down onto the skin AROUND it instead,
-                    // rim and all. Not a surface spanning its own boundary — that boundary is the nail's outline.
+                    // Sewn in: removing it would open a hole, so it is laid down onto the skin AROUND it instead —
+                    // the finger as it would be with no nail on it, which the rim it shares with the finger is on.
                     foreach (int v in verts)
                         if (plan.OnSkin[v] is { } to) flat.Add((v, to));
                 }
@@ -144,28 +189,56 @@ internal static partial class BodyBridge
                     nailWas.Add(pos[v]);
                     float d = Dist(pos[v], to);
                     if (d <= 1e-7f) continue;
-                    WriteXYZ(outBytes, At(pel, v), pel.Type, to.X, to.Y, to.Z);
+                    WriteXYZ(outBytes, at(pel, v), pel.Type, to.X, to.Y, to.Z);
                     pos[v] = to;
                     moved++;
                     most = MathF.Max(most, d);
                 }
             }
 
-            // Re-shade what was laid down onto the finger, from the surface it now is. NOT the collapsed islands:
-            // those were given one shared normal above, and a per-vertex re-shade would undo it.
+            // Re-shade what was laid down onto the finger or spans a socket, from the surface it now is. NOT the
+            // collapsed islands (given one shared normal above, which a per-vertex re-shade would undo), and not a
+            // nail left as authored or alone, which must not change at all.
             if (ne is { } nel && nel.Stream <= 2 && moved > 0)
                 for (int k = 0; k < plan.Islands.Count; k++)
                 {
-                    if (k < plan.Sewn.Count && !plan.Sewn[k]) continue;
+                    var f = fate.GetValueOrDefault((m, k), NailFate.Default);
+                    if (f is NailFate.Collapse or NailFate.Authored or NailFate.Held) continue;
+                    if (f == NailFate.Default && k < plan.Sewn.Count && !plan.Sewn[k]) continue;
                     foreach (var (v, n) in IslandNormals(pos, plan.Islands[k]))
-                        WriteNormal(outBytes, At(nel, v), nel.Type, n.X, n.Y, n.Z);
+                        WriteNormal(outBytes, at(nel, v), nel.Type, n.X, n.Y, n.Z);
+                    // ...except where a spanning nail meets the rim: there it takes the finger's own normal, or the
+                    // second skin's push along the normals opens a sliver between the two.
+                    if (f == NailFate.Span)
+                        foreach (var (v, n) in spanBy[(m, k)].RimNormal)
+                            WriteNormal(outBytes, at(nel, v), nel.Type, n.X, n.Y, n.Z);
                 }
         }
 
+        // The finger's own rim, where a spanning nail had fewer outline vertices than the rim: those rim vertices
+        // come onto the nail's outline, every welded copy alike, so no crescent stays open between the two.
+        int rimMoved = 0;
+        float rimMost = 0f;
+        if (moved > 0)
+            foreach (var sock in active)
+                foreach (var (m, v, to) in sock.RimMoves)
+                {
+                    if (MeshLayout(src, m) is not { } ml || v >= ml.Vc) continue;
+                    int a = ml.At(ml.Pos, v);
+                    if (a < 0 || a + 16 > s.Length) continue;
+                    ReadTyped(outBytes, a, ml.Pos.Type, tmp);
+                    float d = Dist(new Vec3(tmp[0], tmp[1], tmp[2]), to);
+                    if (d <= 1e-7f) continue;
+                    WriteXYZ(outBytes, a, ml.Pos.Type, to.X, to.Y, to.Z);
+                    rimMoved++;
+                    rimMost = MathF.Max(rimMost, d);
+                }
+
         if (moved == 0)
         {
-            if (uncovered > 0)
-                log?.Invoke($"nails: {uncovered} left alone, nothing covers them");
+            if (uncovered > 0 || authored > 0)
+                log?.Invoke($"nails: {uncovered} left alone, nothing covers them; "
+                          + $"{authored} over open skin left as authored");
             return null;
         }
 
@@ -174,12 +247,45 @@ internal static partial class BodyBridge
         // has no area and nothing is rasterised — the same in-place edit, no index or submesh surgery.
         var (removedIslands, removedVerts) = RemoveNailMeshes(outBytes, src, matNames, nailWas);
 
+        int leftSockets = sockets.Sockets.Count(x => x.Owner == null);
         log?.Invoke($"nails: {collapsed} of {nails} collapsed to nothing ({weldWeights} vertices given one "
                   + $"skinning so they stay collapsed when the hand moves), the rest laid down onto the finger "
                   + $"({moved} vertices, furthest {most:F4}), "
                   + $"removed {removedIslands} nail mesh island(s) ({removedVerts} vertices), "
-                  + $"{uncovered} left uncovered");
+                  + $"{uncovered} left uncovered, "
+                  + $"{spanned} spanning an open socket ({rimMoved} rim vertices moved onto it, furthest {rimMost:F5}), "
+                  + $"{leftSockets} socket(s) left as authored, {authored} nail(s) over open skin left as authored");
         return outBytes;
+    }
+
+    /// <summary>What <see cref="FlattenNails"/> does with one nail island.</summary>
+    private enum NailFate { Default, Span, Collapse, Authored, Held }
+
+    /// <summary>One LOD0 mesh's vertex layout, as <see cref="FlattenNails"/> reads and writes it.</summary>
+    private sealed record NailMeshLayout(int Vc, VElem[] Decl, uint[] Vbo, byte[] Bs, VElem Pos, VElem? Nrm,
+                                         VElem? Uv, Func<VElem, int, int> At);
+
+    private static NailMeshLayout? MeshLayout(Source src, int m)
+    {
+        var s = src.S;
+        int mo = src.MeshStart + m * 36;
+        if (mo + 36 > s.Length) return null;
+        ushort vc = BitConverter.ToUInt16(s, mo);
+        if (vc == 0) return null;
+        var decl = m < src.Decls.Length ? src.Decls[m] : [];
+        VElem? pe = null, ne = null, ue = null;
+        foreach (var el in decl)
+        {
+            if (el.Usage == UsePosition) pe ??= el;
+            else if (el.Usage == UseNormal) ne ??= el;
+            else if (el.Usage == UseUV && el.UsageIndex == 0) ue ??= el;
+        }
+        if (pe is not { } pel || pel.Stream > 2) return null;
+        uint[] vbo = { BitConverter.ToUInt32(s, mo + 20), BitConverter.ToUInt32(s, mo + 24),
+                       BitConverter.ToUInt32(s, mo + 28) };
+        byte[] bs = { s[mo + 32], s[mo + 33], s[mo + 34] };
+        int At(VElem el, int i) => src.Vb + (int)vbo[el.Stream] + i * bs[el.Stream] + el.Offset;
+        return new NailMeshLayout(vc, decl, vbo, bs, pel, ne, ue, At);
     }
 
     /// <summary>

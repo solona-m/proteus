@@ -61,9 +61,10 @@ public static partial class SecondSkinWriter
         public required float[] Lift;
         /// <summary>
         /// Per nail-bed vertex, where it sits on the skin AROUND the nail, a hair under the surface: the finger as
-        /// it would be with no nail on it. <c>BodyBridge.FlattenNails</c> takes the nail down onto this. Not a
-        /// surface spanning the island's own boundary — that boundary IS the nail's outline, and a patch spanning
-        /// it is still a nail, flat instead of domed.
+        /// it would be with no nail on it. <c>BodyBridge.FlattenNails</c> lays a SEWN nail down onto this. On a closed
+        /// finger the island's own boundary is the nail's outline, so a patch spanning it would still be a nail;
+        /// over an open socket, though, this lands every vertex on the socket's rim — which is why a nail floating
+        /// in a socket is spanned onto the rim by <see cref="NailSockets"/> instead.
         /// </summary>
         public required Vec3?[] OnSkin;
         /// <summary>
@@ -71,7 +72,9 @@ public static partial class SecondSkinWriter
         /// removing it would open a hole and it has to be laid down onto <see cref="OnSkin"/> instead. False for a
         /// nail that merely sits on a closed finger: that one collapses to a point and draws nothing, which no
         /// amount of sinking a flattened patch can match, since its triangles are chords and a chord cuts back out
-        /// of the skin across a fold.
+        /// of the skin across a fold. Also false for a nail FLOATING in an open socket without sharing its rim:
+        /// <see cref="NailSockets"/> decides that one — spanned onto the rim, collapsed beside the nail that spans
+        /// it, or left as authored — since collapsing it would leave the socket open.
         /// </summary>
         public required List<bool> Sewn;
     }
@@ -201,6 +204,8 @@ public static partial class SecondSkinWriter
 
         int beds = 0, loose = 0;
         float worst = 0f, highest = 0f;
+        // Which welded edges the skin that is NOT a nail uses: a nail bed sharing one is sewn into the finger.
+        var restEdges = RestEdges(meshes, bedMax);
         foreach (var sm in meshes)
         {
             var bedTris = new Dictionary<int, List<int>>();
@@ -212,20 +217,6 @@ public static partial class SecondSkinWriter
                 l.Add(sm.Tris[t]); l.Add(sm.Tris[t + 1]); l.Add(sm.Tris[t + 2]);
             }
             if (bedTris.Count == 0) continue;
-
-            // Which welded edges the skin that is NOT a nail uses: a nail bed sharing one is sewn into the finger.
-            var restEdges = new HashSet<((int, int, int), (int, int, int))>();
-            foreach (var other in meshes)
-                for (int t = 0; t + 2 < other.Tris.Count; t += 3)
-                {
-                    if (other.IslandSize[other.Island[t / 3]] <= bedMax) continue;
-                    for (int e = 0; e < 3; e++)
-                    {
-                        var pa = other.Pos[other.Tris[t + e]];
-                        var pb = other.Pos[other.Tris[t + (e + 1) % 3]];
-                        restEdges.Add(WeldedEdge(pa, pb));
-                    }
-                }
 
             var islands = new List<int[]>();
             var vertsOf = new List<int[]>();
@@ -393,6 +384,9 @@ public static partial class SecondSkinWriter
         {
             (a[t], b[t], c[t]) = (P(nt[t * 3]), P(nt[t * 3 + 1]), P(nt[t * 3 + 2]));
             ctr[t] = new Vec3((a[t].X + b[t].X + c[t].X) / 3f, (a[t].Y + b[t].Y + c[t].Y) / 3f, (a[t].Z + b[t].Z + c[t].Z) / 3f);
+            // A nail mesh FlattenNails collapsed is still in the file, as a point with no area: it draws nothing, so
+            // it has nothing to clear — counted, it would lift the nail spanning a socket up to a millimetre.
+            if (TriArea(a[t], b[t], c[t]) < 1e-12f) ctr[t] = new Vec3(float.MaxValue, float.MaxValue, float.MaxValue);
         }
 
         // Centroid cull: a nail triangle is a few millimetres across at most.
