@@ -356,6 +356,7 @@ public partial class CompositorService
                         run.redirects[gamePath] = relPath;
                     run.manipulations = shells.Manipulations;
                     run.nextSecondSkinActive = true;   // an accessory model was redirected — disable must full-redraw
+                    run.nextBodyAtrUses = shells.BodyAtrUses;
 
                     // Only new geometry forces the heavy path: an in-place reload applies a colorset-only .mtrl change. An enabled
                     // shape-key change is a redraw trigger in its own right (ModelChanged can miss it).

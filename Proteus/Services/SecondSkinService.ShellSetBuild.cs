@@ -57,6 +57,9 @@ public sealed partial class SecondSkinService
         private bool wearsOnlyGen2;
         private string equipCode = null!;
         private List<(byte[] Bytes, HashSet<string>? Shapes, string Path, string? Uv)> bodies = null!;
+        // Body game path → the attributes its body mod's options switch off (ShellBodyAtr), and the parts watched.
+        private Dictionary<string, IReadOnlySet<string>> bodyAtrOff = new(StringComparer.OrdinalIgnoreCase);
+        private IReadOnlyList<ShellBodyAtr.Use> bodyAtrUses = [];
         private HashSet<string> bodySettled = null!;
         private HashSet<string> smoothable = null!;
         private string? modelType;
@@ -391,6 +394,16 @@ public sealed partial class SecondSkinService
             // Bare-body slots attempted vs. missing; the whole-body fallback fires only when every one was missing.
             barePartsTried = 0;
             barePartsMissing = 0;
+            // What each bare part's body mod switches off by its options (NIRÆ's chests): left out of the shell, and the
+            // parts watched for a change. Settings read once per mod per build.
+            bodyAtrOff = new Dictionary<string, IReadOnlySet<string>>(StringComparer.OrdinalIgnoreCase);
+            var bodyAtrUses = new List<ShellBodyAtr.Use>();
+            var settingsMemo = new Dictionary<string, ShellBodyAtr.ModSettings?>(StringComparer.OrdinalIgnoreCase);
+            ShellBodyAtr.ModSettings? SettingsOf(string modDir)
+                => settingsMemo.TryGetValue(modDir, out var known) ? known : settingsMemo[modDir] = service.PlayerModSettings(modDir);
+            var modsRoot = service.modsRootOf?.Invoke();
+            // Penumbra judges a race-limited switch by the drawn race; with none known, those switches stay drawn.
+            var atrRace = RefitCore.RaceNumber(drawnRaceCode);
             foreach (var part in Parts)
             {
                 // A slot the worn gear's EQP hides is loaded but never drawn (a top shipping its own legs); a shell cut from it
@@ -448,6 +461,7 @@ public sealed partial class SecondSkinService
                     {
                         Directory.CreateDirectory(upstreamDir);
                         WriteIfChanged(upstreamDisk, settledBytes);
+                        ShellBodyAtr.WriteSource(upstreamDisk, settledDisk, modsRoot);
                     }
                     catch (Exception ex)
                     { service.log.Warning(ex, "[Proteus] second skin: could not keep the upstream {0}", bodyGamePath); }
@@ -464,6 +478,13 @@ public sealed partial class SecondSkinService
                 {
                     bytes = File.ReadAllBytes(upstreamDisk);
                     service._upstreamBodies[bodyGamePath] = bytes;
+                    // Which mod the kept copy came from, recorded beside it: after a restart, the only way to know. Bare parts
+                    // only: for a garment it would also change what smoothing may republish (IsProteusModFile below).
+                    if (isBarePart)
+                    {
+                        sourceDisk = ShellBodyAtr.ReadSource(upstreamDisk, modsRoot, bytes.Length);
+                        if (sourceDisk != null) service._upstreamBodyDisks[bodyGamePath] = sourceDisk;
+                    }
                     service.log.Debug("[Proteus] second skin: {0} resolves to our own output — smoothing the upstream "
                             + "kept at {1}", bodyGamePath, upstreamDisk);
                 }
@@ -489,7 +510,9 @@ public sealed partial class SecondSkinService
                         try
                         {
                             Directory.CreateDirectory(upstreamDir);
+                            // Game data (no bodyDisk), or a file outside the mods folder, deletes any record of a mod.
                             WriteIfChanged(upstreamDisk, bytes);
+                            ShellBodyAtr.WriteSource(upstreamDisk, bodyDisk, modsRoot);
                         }
                         catch (Exception ex)
                         { service.log.Warning(ex, "[Proteus] second skin: could not keep the upstream {0}", bodyGamePath); }
@@ -543,7 +566,23 @@ public sealed partial class SecondSkinService
 
                 bodies.Add((bytes, partShapes, bodyGamePath, partType));
                 if (isBarePart || IsProteusModFile(sourceDisk, outputRoot)) smoothable.Add(bodyGamePath);
+
+                // A body mod that draws one of several shapes by its options (NIRÆ's chests): the shell covers only the
+                // ones drawn. Judged by the mod file the part really comes from, never our own republished copy.
+                // Debug: a vanilla body (game data) has no mod to record and lands here on every composite.
+                if (isBarePart && bodyIsOurs && sourceDisk == null)
+                    service.log.Debug("[Proteus] second skin part {0}: no record of which mod supplies {1} — any "
+                            + "shapes its options switch are all covered", part, bodyGamePath);
+                var atr = ShellBodyAtr.ForPart(part, isBarePart, sourceDisk, modsRoot, atrRace, SettingsOf);
+                if (atr.Note != null)
+                {
+                    if (atr.Warning) service.log.Warning("[Proteus] {0}", atr.Note);
+                    else service.log.Information("[Proteus] {0}", atr.Note);
+                }
+                if (atr.Off is { Count: > 0 } off) bodyAtrOff[bodyGamePath] = off;
+                if (atr.Use != null) bodyAtrUses.Add(atr.Use);
             }
+            this.bodyAtrUses = bodyAtrUses;
         }
 
         private bool WholeBodyFallback()
@@ -897,7 +936,9 @@ public sealed partial class SecondSkinService
                     EnabledShapes: Interop.BodyShapeReader.Split(b.Shapes).Shapes,
                     // The variant this body draws when it ships more than one of a region (BodyShapeReader.ReadEnabledShapes);
                     // independent of the redundancy setting.
-                    HiddenAttributes: Interop.BodyShapeReader.Split(b.Shapes).HiddenAttributes,
+                    // ...and the shapes its body mod's options switch off (NIRÆ's other chests).
+                    HiddenAttributes: ShellBodyAtr.Merge(Interop.BodyShapeReader.Split(b.Shapes).HiddenAttributes,
+                                                         bodyAtrOff.GetValueOrDefault(b.Path)),
                     UvConv: i < uvConverters.Count ? uvConverters[i] : null,
                     DelegateKey: "keep:-|uv:" + (i < uvConverters.Count && uvConverters[i] != null
                         ? $"{(menUnmirror && IsGen2(b.Uv) ? UVRemapService.MaleVanillaSpace : b.Uv)}>{bodyType}:{unmirror}" : "-"),
@@ -1693,7 +1734,7 @@ public sealed partial class SecondSkinService
 
             return new Result(redirects, manipulations, shellChanged, shellMaterials, modelChangedAny,
                               hostModelPaths, appendHostModelPaths, contentMaterials, shellLight, contentModels,
-                              appendHostSources);
+                              appendHostSources) { BodyAtrUses = bodyAtrUses };
         }
 
         private string VariantFolderFor(HostAccessory h)

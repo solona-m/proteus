@@ -160,7 +160,8 @@ public sealed partial class SecondSkinService
     public SecondSkinService(
         PenumbraBridge penumbra, TextureLoader textureLoader, SidecarDiscoveryService discovery,
         UVRemapService uvRemap, Configuration config, IPluginLog log,
-        Func<string, string?>? resolveUpstream = null, Func<string, string?>? settledUpstream = null)
+        Func<string, string?>? resolveUpstream = null, Func<string, string?>? settledUpstream = null,
+        Func<string?>? modsRoot = null)
     {
         this.penumbra = penumbra;
         this.textureLoader = textureLoader;
@@ -170,6 +171,33 @@ public sealed partial class SecondSkinService
         this.log = log;
         this.resolveUpstream = resolveUpstream;
         this.settledUpstream = settledUpstream;
+        this.modsRootOf = modsRoot;
+    }
+
+    /// <summary>Penumbra's mods folder, as the compositor already knows it: no IPC per build.</summary>
+    private readonly Func<string?>? modsRootOf;
+
+    /// <summary>
+    /// A mod's settings in the player's collection, temporary ones included (what Glamourer sets), for
+    /// <see cref="ShellBodyAtr"/>. Null when they cannot be read. Marshals onto the framework thread and blocks, so it
+    /// must only be called from a pool thread.
+    /// </summary>
+    internal ShellBodyAtr.ModSettings? PlayerModSettings(string modDir)
+    {
+        try
+        {
+            return Plugin.Framework.RunOnFrameworkThread(() =>
+                    penumbra.GetPlayerCollectionId() is { } id && penumbra.GetModSettings(id, modDir) is { } s
+                        ? new ShellBodyAtr.ModSettings(s.Enabled, s.Options)
+                        : (ShellBodyAtr.ModSettings?)null)
+                .GetAwaiter().GetResult();
+        }
+        catch (Exception ex)
+        {
+            log.Warning("[Proteus] second skin: could not read {0}'s Penumbra settings ({1}) — every shape its "
+                        + "options switch is covered", modDir, ex.Message);
+            return null;
+        }
     }
 
     /// <summary>
@@ -246,7 +274,12 @@ public sealed partial class SecondSkinService
         // Append host game path (one of AppendHostModelPaths) → the disk file its base model was read from, when that
         // was a file rather than the game's own data: the only record of which mod supplies a ring the game now draws
         // out of our output.
-        Dictionary<string, string> AppendHostSources);
+        Dictionary<string, string> AppendHostSources)
+    {
+        /// <summary>The bare body parts this shell was cut from whose body mod switches shapes by option (NIRÆ's
+        /// chests), with what each left out: what a later settings change is compared against.</summary>
+        internal IReadOnlyList<ShellBodyAtr.Use> BodyAtrUses { get; init; } = [];
+    }
 
     /// <summary>
     /// One surface, resolved: the geometry a shell is cut from, sharing one UV layout and one race code.

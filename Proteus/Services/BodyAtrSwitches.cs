@@ -83,9 +83,18 @@ internal static class BodyAtrSwitches
     /// </summary>
     internal static bool SwitchesShapes(string modRoot)
     {
+        // Asked of every bare body part on every shell build: answered once per edit, like the manifest.
+        long fingerprint = BodyModIndex.Fingerprint(modRoot);
+        if (fingerprint != 0 && SwitchesCache.TryGetValue(modRoot, out var have) && have.Fingerprint == fingerprint)
+            return have.Switches;
         if (Manifest(modRoot) is not { } manifest) return false;
-        return BodySlots.Any(slot => Resolve(new Query(manifest, slot, null, null)) is { Switched.Count: > 0 });
+        bool switches = BodySlots.Any(slot => Resolve(new Query(manifest, slot, null, null)) is { Switched.Count: > 0 });
+        if (fingerprint != 0) SwitchesCache[modRoot] = (fingerprint, switches);
+        return switches;
     }
+
+    private static readonly ConcurrentDictionary<string, (long Fingerprint, bool Switches)> SwitchesCache =
+        new(StringComparer.OrdinalIgnoreCase);
 
     /// <summary>A group of options that picks one of several shapes a body model carries — NIRÆ's "Chest".</summary>
     /// <param name="Options">Its options' names, the first of each name, in the author's order.</param>
