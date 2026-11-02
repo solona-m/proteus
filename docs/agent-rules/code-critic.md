@@ -33,8 +33,8 @@ them by hand.
 Build-enforced: the localization rule (`Proteus.Tests/LocalizationTests.cs`:
 keys, placeholders and format specifiers match English across every locale,
 code keys match `en.json`), the supply-chain rule
-(`Proteus.Tests/SupplyChainTests.cs`) and the contributor PR gate
-(`Proteus.Tests/ContributorGateConfigTests.cs`, `Proteus.Tests/PrGateTests.cs`).
+(`Proteus.Tests/SupplyChainTests.cs`) and the contributor PR reminder (advisory, never blocks;
+`Proteus.Tests/ContributorGateConfigTests.cs`, `Proteus.Tests/PrGateTests.cs`).
 
 ## Rules
 

@@ -79,11 +79,31 @@ public class PrGateTests(PrGateFixture fx) : IClassFixture<PrGateFixture>
         Assert.Equal("", r.Stderr);
     }
 
-    private static void Blocked(PosixShell.Result r, string reason)
+    internal const string FirstLine = "pr-gate: recommendation only; this gh pr create was not blocked ({0}).";
+
+    private static readonly string[] NoPermissionKeys =
+        ["permissionDecision", "permissionDecisionReason", "decision", "continue", "reason", "updatedInput"];
+
+    /// <summary>
+    /// A note, never a block: exit 0, empty stderr, and stdout exactly one JSON object with these keys in order and no
+    /// permission decision anywhere. Returns (additionalContext, systemMessage).
+    /// </summary>
+    private static (string Context, string System) Noted(PosixShell.Result r, string reason)
     {
-        Assert.True(r.ExitCode == 2, $"expected exit 2, got {r.ExitCode}: {r.Stderr}");
-        Assert.Equal("", r.Stdout);
-        Assert.StartsWith("pr-gate: blocked gh pr create: " + reason, r.Stderr);
+        Assert.True(r.ExitCode == 0, $"expected exit 0, got {r.ExitCode}: {r.Stderr}");
+        Assert.Equal("", r.Stderr);
+        Assert.True(r.Stdout.Length < 2000, $"note is {r.Stdout.Length} characters");
+        Assert.True(r.Stdout.All(c => c < 128), "note must be ASCII");
+        using var doc = JsonDocument.Parse(r.Stdout);
+        var root = doc.RootElement;
+        Assert.Equal(["systemMessage", "hookSpecificOutput"], root.EnumerateObject().Select(p => p.Name));
+        var specific = root.GetProperty("hookSpecificOutput");
+        Assert.Equal(["hookEventName", "additionalContext"], specific.EnumerateObject().Select(p => p.Name));
+        Assert.Equal("PreToolUse", specific.GetProperty("hookEventName").GetString());
+        foreach (var key in NoPermissionKeys) Assert.DoesNotContain($"\"{key}\"", r.Stdout);
+        string context = specific.GetProperty("additionalContext").GetString()!;
+        Assert.Equal(string.Format(FirstLine, reason), context.Split('\n')[0]);
+        return (context, root.GetProperty("systemMessage").GetString()!);
     }
 
     private static TempDir Repo(out string head)
@@ -98,9 +118,11 @@ public class PrGateTests(PrGateFixture fx) : IClassFixture<PrGateFixture>
     private static void Record(string dir, string text) => File.WriteAllText(Path.Combine(dir, ".pr-ready"), text);
 
     [ShellFact]
-    public void SettingsCommand_GuardsMissingScriptAndPassesExit2()
+    public void SettingsCommand_GuardsMissingScriptAndNeverBlocks()
     {
-        // [AC-contributor-gate-10] [EDGE-contributor-gate-14] The settings command, run as Claude Code's hook shell does.
+        // [AC-contributor-gate-10] [EDGE-contributor-gate-14] [EDGE-pr-gate-advisory-2] [EDGE-pr-gate-advisory-3] The
+        // settings command, run as Claude Code's hook shell does: silent without the script, the note passes through,
+        // and no script failure can block.
         string payload = Payload("gh pr create", fx.NonGit.Path);
         var missing = PosixShell.Run(["-c", ContributorGateConfigTests.GuardedCommand], payload, fx.Elsewhere.Path,
                                      new Dictionary<string, string?> { ["CLAUDE_PROJECT_DIR"] = fx.EmptyProject.Path });
@@ -112,24 +134,60 @@ public class PrGateTests(PrGateFixture fx) : IClassFixture<PrGateFixture>
         File.Copy(GateScript, Path.Combine(hooks, "pr-gate.sh"));
         var present = PosixShell.Run(["-c", ContributorGateConfigTests.GuardedCommand], payload, fx.Elsewhere.Path,
                                      new Dictionary<string, string?> { ["CLAUDE_PROJECT_DIR"] = project.Path });
-        Blocked(present, "cannot read HEAD");
+        Noted(present, "cannot read HEAD");
+
+        foreach (var (body, stdout) in new[] { ("printf x; exit 2\n", "x"), ("if then fi (\n", "") })
+        {
+            File.WriteAllText(Path.Combine(hooks, "pr-gate.sh"), body);
+            var broken = PosixShell.Run(["-c", ContributorGateConfigTests.GuardedCommand], payload, fx.Elsewhere.Path,
+                                        new Dictionary<string, string?> { ["CLAUDE_PROJECT_DIR"] = project.Path });
+            Assert.Equal(0, broken.ExitCode);
+            Assert.Equal(stdout, broken.Stdout);
+        }
     }
 
     [ShellFact]
-    public void Gate_BlocksPrCreateWithoutRecord()
+    public void Gate_NotesPrCreateWithoutRecord()
     {
-        // [AC-contributor-gate-2] [EDGE-contributor-gate-13] Blocked, with every step and the install fallback.
+        // [AC-pr-gate-advisory-1] [AC-pr-gate-advisory-2] [EDGE-pr-gate-advisory-10] Never blocked: advice for the PR
+        // just opened, and a one-line note for the user.
         using var repo = Repo(out _);
-        var r = Gate(Payload("gh pr create --fill", repo.Path));
-        Blocked(r, "no .pr-ready record");
+        var (context, system) = Noted(Gate(Payload("gh pr create --fill", repo.Path)), "no .pr-ready record");
         foreach (var s in new[]
                  {
-                     "/feature", "scripts/review-ok.sh", "skip", "docs/agent-rules/adversarial-qa.md", "sh .claude/hooks/pr-ready.sh",
-                     "gh pr create --base test", "only if your user asked", "docs/agent-rules/contributing-with-claude.md",
-                     "/plugin marketplace add cunhaax/ai-workflow", "/plugin install ai-workflow@ai-workflow",
-                     "not enforcement", "open the PR themselves",
+                     "recommended for non-trivial changes", "Small changes and contributors not using Claude Code don't need it",
+                     "push fixes to this branch to update the PR", "code-critic", "docs/agent-rules/adversarial-qa.md",
+                     "docs/agent-rules/contributing-with-claude.md", "tell your user", "take no other action unless they ask",
                  })
-            Assert.True(r.Stderr.Contains(s, StringComparison.Ordinal), $"block message must mention '{s}'");
+            Assert.True(context.Contains(s, StringComparison.Ordinal), $"the note must say '{s}'");
+        Assert.DoesNotContain("required", context, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("pr-gate: blocked", context);
+        Assert.DoesNotContain('\n', system);
+        foreach (var s in new[] { "recommended for non-trivial changes", "small changes don't need it", "never blocks",
+                                  "docs/agent-rules/contributing-with-claude.md" })
+            Assert.True(system.Contains(s, StringComparison.Ordinal), $"the user's note must say '{s}'");
+        Assert.DoesNotContain("required", system, StringComparison.OrdinalIgnoreCase);
+    }
+
+    public static TheoryData<string, string> EveryReason() => new()
+    {
+        { "none", "no .pr-ready record" },
+        { "qa=ran: x\n", "record has no commit" },
+        { "commit={0}\n", "qa outcome missing or malformed" },
+        { "commit=0000000000000000000000000000000000000000\nqa=ran: x\n", "record is for 0000000 but HEAD is {1}" },
+        { "unreadable", "cannot read HEAD" },
+    };
+
+    [ShellTheory]
+    [MemberData(nameof(EveryReason))]
+    public void Gate_NoteCarriesNoPermissionDecision(string record, string reason)
+    {
+        // [AC-pr-gate-advisory-7] [EDGE-pr-gate-advisory-14] For every reason: no permission decision anywhere, so the
+        // user's own rules (deny, ask) decide as usual. Noted() checks the exact keys and their absence.
+        using var repo = Repo(out string head);
+        string cwd = record == "unreadable" ? fx.NonGit.Path : repo.Path;
+        if (record != "none" && record != "unreadable") Record(repo.Path, string.Format(record, head));
+        Noted(Gate(Payload("gh pr create", cwd)), string.Format(reason, head, head[..7]));
     }
 
     [ShellTheory]
@@ -148,14 +206,14 @@ public class PrGateTests(PrGateFixture fx) : IClassFixture<PrGateFixture>
     }
 
     [ShellFact]
-    public void Gate_BlocksStaleRecord()
+    public void Gate_NotesStaleRecord()
     {
-        // [AC-contributor-gate-4] A commit after the record makes it stale; both short SHAs are named.
+        // [AC-contributor-gate-4] [AC-pr-gate-advisory-4] A commit after the record makes it stale; the note names both.
         using var repo = Repo(out string old);
         Assert.Equal(0, PosixShell.Run([ReadyScript, "skipped: x"], null, repo.Path).ExitCode);
         PosixShell.Git(repo.Path, "commit", "-q", "--allow-empty", "-m", "second");
         string now = PosixShell.Git(repo.Path, "rev-parse", "HEAD");
-        Blocked(Gate(Payload("gh pr create", repo.Path)), $"record is for {old[..7]} but HEAD is {now[..7]}");
+        Noted(Gate(Payload("gh pr create", repo.Path)), $"record is for {old[..7]} but HEAD is {now[..7]}");
     }
 
     [ShellTheory]
@@ -178,7 +236,7 @@ public class PrGateTests(PrGateFixture fx) : IClassFixture<PrGateFixture>
 
     private const string Body = "Merge x: the gate\n\ngh pr create --base test is gated now (\"quoted\", 'single')\nmore)";
 
-    public static TheoryData<string, string> NeverBlocks() => new()
+    public static TheoryData<string, string> NeverNotes() => new()
     {
         { "Bash", $"git commit -m \"{Body.Replace("\"", "\\\"")}\"" },
         { "Bash", $"git commit -F - <<'EOF'\n{Body}\nEOF" },
@@ -204,8 +262,8 @@ public class PrGateTests(PrGateFixture fx) : IClassFixture<PrGateFixture>
     };
 
     [ShellTheory]
-    [MemberData(nameof(NeverBlocks))]
-    public void Gate_NeverBlocksQuotedHeredocOrLaterLineText(string tool, string command)
+    [MemberData(nameof(NeverNotes))]
+    public void Gate_NeverNotesQuotedHeredocOrLaterLineText(string tool, string command)
     {
         // [AC-contributor-gate-5] [EDGE-contributor-gate-2] [EDGE-contributor-gate-4] The owner's own multi-line
         // commits and merges, which Claude Code may run the hook for anyway: never blocked.
@@ -229,7 +287,7 @@ public class PrGateTests(PrGateFixture fx) : IClassFixture<PrGateFixture>
     public void Gate_DetectsPrefixSegments(string tool, string command)
     {
         // [EDGE-contributor-gate-1] [EDGE-contributor-gate-11]
-        Blocked(Gate(Payload(command, fx.NonGit.Path, tool)), "cannot read HEAD");
+        Noted(Gate(Payload(command, fx.NonGit.Path, tool)), "cannot read HEAD");
     }
 
     [ShellTheory]
@@ -279,18 +337,19 @@ public class PrGateTests(PrGateFixture fx) : IClassFixture<PrGateFixture>
         Allowed(Gate(Payload("gh pr view 12", fx.NonGit.Path, description: "Then run gh pr create", indented: indented)));
         // The end-of-string cut: without it the prefix would run on into the description.
         Allowed(Gate(Payload("gh pr view 12", fx.NonGit.Path, description: "x; gh pr create --fill", indented: indented)));
-        Blocked(Gate(Payload("gh pr create", fx.NonGit.Path, description: "Then run gh pr create", indented: indented)),
+        Noted(Gate(Payload("gh pr create", fx.NonGit.Path, description: "Then run gh pr create", indented: indented)),
                 "cannot read HEAD");
     }
 
     [ShellFact]
-    public void Gate_FailsClosedWhenHeadUnreadable()
+    public void Gate_NotesWhenHeadUnreadable()
     {
-        // [EDGE-contributor-gate-6] Not a repo, and a repo with no commit.
-        Blocked(Gate(Payload("gh pr create", fx.NonGit.Path)), "cannot read HEAD");
+        // [EDGE-contributor-gate-6] [AC-pr-gate-advisory-5] [EDGE-pr-gate-advisory-13] Not a repo, and a repo with no
+        // commit: still runs, with a note.
+        Noted(Gate(Payload("gh pr create", fx.NonGit.Path)), "cannot read HEAD");
         using var unborn = TempDir.New();
         PosixShell.Git(unborn.Path, "init", "-q");
-        Blocked(Gate(Payload("gh pr create", unborn.Path)), "cannot read HEAD");
+        Noted(Gate(Payload("gh pr create", unborn.Path)), "cannot read HEAD");
     }
 
     [ShellTheory]
@@ -312,12 +371,12 @@ public class PrGateTests(PrGateFixture fx) : IClassFixture<PrGateFixture>
     [InlineData("commit={0}\nqa=skipped:   \n", "qa outcome missing or malformed")]
     [InlineData("commit={0}\nqa=done: x\n", "qa outcome missing or malformed")]
     [InlineData("commit={0}\nqa=ran:x\n", "qa outcome missing or malformed")]
-    public void Gate_RejectsMalformedRecord(string record, string reason)
+    public void Gate_NotesMalformedRecord(string record, string reason)
     {
-        // [EDGE-contributor-gate-8]
+        // [EDGE-contributor-gate-8] [AC-pr-gate-advisory-5]
         using var repo = Repo(out string head);
         Record(repo.Path, string.Format(record, head));
-        Blocked(Gate(Payload("gh pr create", repo.Path)), reason);
+        Noted(Gate(Payload("gh pr create", repo.Path)), reason);
     }
 
     [ShellFact]
@@ -328,7 +387,7 @@ public class PrGateTests(PrGateFixture fx) : IClassFixture<PrGateFixture>
         using var without = Repo(out _);
         Record(withRecord.Path, $"commit={head}\nqa=ran: fine\n");
         Allowed(Gate(Payload("gh pr create", withRecord.Path), projectDir: without.Path));
-        Blocked(Gate(Payload("gh pr create", without.Path), projectDir: withRecord.Path), "no .pr-ready record");
+        Noted(Gate(Payload("gh pr create", without.Path), projectDir: withRecord.Path), "no .pr-ready record");
 
         using var parent = TempDir.New();
         string tree = Path.Combine(parent.Path, "wt");
@@ -348,7 +407,7 @@ public class PrGateTests(PrGateFixture fx) : IClassFixture<PrGateFixture>
         using var noRecord = TempDir.New(withSpace: true);
         PosixShell.Git(noRecord.Path, "init", "-q");
         PosixShell.Git(noRecord.Path, "commit", "-q", "--allow-empty", "-m", "first");
-        Blocked(Gate(Payload("gh pr create", noRecord.Path)), "no .pr-ready record");
+        Noted(Gate(Payload("gh pr create", noRecord.Path)), "no .pr-ready record");
     }
 
     [ShellFact]
@@ -357,7 +416,7 @@ public class PrGateTests(PrGateFixture fx) : IClassFixture<PrGateFixture>
         // [AC-contributor-gate-9] [EDGE-contributor-gate-10] The payload's cwd, read from indented JSON, decides — not
         // the process's working directory.
         Allowed(Gate(Payload("gh pr create --base test", fx.Ready.Path, indented: true), processCwd: fx.NonGit.Path));
-        Blocked(Gate(Payload("gh pr create --base test", fx.NonGit.Path, indented: true), processCwd: fx.Ready.Path),
+        Noted(Gate(Payload("gh pr create --base test", fx.NonGit.Path, indented: true), processCwd: fx.Ready.Path),
                 "cannot read HEAD");
     }
 
@@ -384,17 +443,35 @@ public class PrGateTests(PrGateFixture fx) : IClassFixture<PrGateFixture>
         foreach (var stdin in new[] { noCwd, nullCwd })
         {
             Allowed(Gate(stdin, processCwd: fx.Ready.Path));
-            Blocked(Gate(stdin, processCwd: fx.NonGit.Path), "cannot read HEAD");
+            Noted(Gate(stdin, processCwd: fx.NonGit.Path), "cannot read HEAD");
         }
     }
 
-    [ShellFact]
-    public void Gate_ShortCommitInRecord_NamesItWhole()
+    [ShellTheory]
+    [InlineData("abc", "abc")]
+    [InlineData("ab\"c\\d", "ab?c?d")]
+    [InlineData("1%d2%s", "1?d2??")]
+    [InlineData("\ta", "?a")]
+    public void Gate_RecordCommitIsCleaned(string commit, string shown)
     {
-        // [AC-contributor-gate-4] A hand-edited record with a short commit still blocks, and the message names it.
+        // [AC-pr-gate-advisory-4] [EDGE-pr-gate-advisory-1] A hand-edited commit goes into JSON: anything outside hex
+        // shows as `?`, and `%` is never a printf format.
         using var repo = Repo(out string head);
-        Record(repo.Path, "commit=abc\nqa=ran: fine\n");
-        Blocked(Gate(Payload("gh pr create", repo.Path)), $"record is for abc but HEAD is {head[..7]}");
+        Record(repo.Path, $"commit={commit}\nqa=ran: fine\n");
+        Noted(Gate(Payload("gh pr create", repo.Path)), $"record is for {shown} but HEAD is {head[..7]}");
+    }
+
+    [ShellFact]
+    public void Gate_RecordCommitNonAsciiIsCleaned()
+    {
+        // [EDGE-pr-gate-advisory-1] One `?` per byte or per character, whichever the locale gives; the note stays ASCII.
+        using var repo = Repo(out string head);
+        File.WriteAllText(Path.Combine(repo.Path, ".pr-ready"), "commit=ab\u00e91\nqa=ran: fine\n", new System.Text.UTF8Encoding(false));
+        var r = Gate(Payload("gh pr create", repo.Path));
+        Assert.Equal(0, r.ExitCode);
+        Assert.True(r.Stdout.All(c => c < 128), "note must be ASCII");
+        string context = JsonDocument.Parse(r.Stdout).RootElement.GetProperty("hookSpecificOutput").GetProperty("additionalContext").GetString()!;
+        Assert.Matches(@"^pr-gate: recommendation only; this gh pr create was not blocked \(record is for ab\?+1 but HEAD is [0-9a-f]{7}\)\.", context);
     }
 
     [ShellFact]
@@ -415,7 +492,8 @@ public class PrGateTests(PrGateFixture fx) : IClassFixture<PrGateFixture>
         using var repo = Repo(out string head);
         var r = PosixShell.Run([ReadyScript, "skipped: no UI or API surface"], null, repo.Path);
         Assert.Equal(0, r.ExitCode);
-        Assert.Contains($"Recorded PR readiness for {head[..7]}", r.Stdout);
+        // [AC-pr-gate-advisory-8]
+        Assert.Contains($"Recorded PR readiness for {head[..7]}; the PR recommendation is silenced for this commit.", r.Stdout);
         Assert.Contains("gh pr create --base test", r.Stdout);
         Assert.Equal($"commit={head}\nqa=skipped: no UI or API surface\n", File.ReadAllText(Path.Combine(repo.Path, ".pr-ready")));
         Allowed(Gate(Payload("gh pr create", repo.Path)));

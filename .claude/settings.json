@@ -27,13 +27,13 @@
             "type": "command",
             "if": "Bash(gh pr create *)",
             "timeout": 10,
-            "command": "[ ! -f \"${CLAUDE_PROJECT_DIR}/.claude/hooks/pr-gate.sh\" ] || sh \"${CLAUDE_PROJECT_DIR}/.claude/hooks/pr-gate.sh\""
+            "command": "[ ! -f \"${CLAUDE_PROJECT_DIR}/.claude/hooks/pr-gate.sh\" ] || sh \"${CLAUDE_PROJECT_DIR}/.claude/hooks/pr-gate.sh\" || true"
           },
           {
             "type": "command",
             "if": "Bash(gh pr new *)",
             "timeout": 10,
-            "command": "[ ! -f \"${CLAUDE_PROJECT_DIR}/.claude/hooks/pr-gate.sh\" ] || sh \"${CLAUDE_PROJECT_DIR}/.claude/hooks/pr-gate.sh\""
+            "command": "[ ! -f \"${CLAUDE_PROJECT_DIR}/.claude/hooks/pr-gate.sh\" ] || sh \"${CLAUDE_PROJECT_DIR}/.claude/hooks/pr-gate.sh\" || true"
           }
         ]
       },
@@ -44,13 +44,13 @@
             "type": "command",
             "if": "PowerShell(gh pr create *)",
             "timeout": 10,
-            "command": "[ ! -f \"${CLAUDE_PROJECT_DIR}/.claude/hooks/pr-gate.sh\" ] || sh \"${CLAUDE_PROJECT_DIR}/.claude/hooks/pr-gate.sh\""
+            "command": "[ ! -f \"${CLAUDE_PROJECT_DIR}/.claude/hooks/pr-gate.sh\" ] || sh \"${CLAUDE_PROJECT_DIR}/.claude/hooks/pr-gate.sh\" || true"
           },
           {
             "type": "command",
             "if": "PowerShell(gh pr new *)",
             "timeout": 10,
-            "command": "[ ! -f \"${CLAUDE_PROJECT_DIR}/.claude/hooks/pr-gate.sh\" ] || sh \"${CLAUDE_PROJECT_DIR}/.claude/hooks/pr-gate.sh\""
+            "command": "[ ! -f \"${CLAUDE_PROJECT_DIR}/.claude/hooks/pr-gate.sh\" ] || sh \"${CLAUDE_PROJECT_DIR}/.claude/hooks/pr-gate.sh\" || true"
           }
         ]
       }
