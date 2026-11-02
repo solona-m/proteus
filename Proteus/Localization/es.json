@@ -5183,6 +5183,14 @@
     "message": "{0}: no se hizo versión de hombre a partir de él, porque el mod tiene su propio modelo de hombre. Marca el cuerpo de hombre simple (por ejemplo «{1}») para hacer las tallas de ese modelo.",
     "description": ""
   },
+  "SizeSet.AuthorsMensCrossed.Fmt": {
+    "message": "{0}: el archivo del modelo masculino propio del mod no se pudo leer como modelo en absoluto (tiene cero bytes o está dañado), así que sus versiones masculinas se hicieron a partir de esta pieza femenina. Donde se elija un cuerpo masculino en el grupo «{1}», sustituyen al modelo masculino del autor.",
+    "description": ""
+  },
+  "SizeSet.AuthorsMensStillReplaced.Fmt": {
+    "message": "{0}: el mod tiene su propio modelo masculino de esta pieza y esta pasada lo dejó como estaba, pero una versión masculina hecha a partir de esta pieza femenina en una pasada anterior lo sigue sustituyendo en el grupo «{1}» donde se elija ese cuerpo masculino. Para mostrar ahí el modelo del autor, elige Original en «{1}» o quita esa opción.",
+    "description": ""
+  },
   "SizeSet.Piercings": {
     "message": "Añadir los piercings de los nuevos cuerpos",
     "description": ""

@@ -80,7 +80,7 @@ internal static partial class SizeSetRefit
     }
 
     /// <summary>The outcomes that leave nothing to do: the size is in the mod already, or there is none to make.</summary>
-    private static readonly HashSet<string> NothingToDo = new(StringComparer.Ordinal)
+    internal static readonly HashSet<string> NothingToDo = new(StringComparer.Ordinal)
     {
         Codes.AlreadyThere, Codes.AuthorsOwn, Codes.MadeOnIt, Codes.NoOwnLegs, Codes.NoBodyForRace,
         Codes.SameSkin, Codes.NoEnd,
@@ -175,7 +175,7 @@ internal static partial class SizeSetRefit
     {
         var redirects = PenumbraModMeta.ReadAllRedirects(modRoot);
         var record = BodyRetargetWriter.ReadRecord(modRoot);
-        var ourFiles = (record?.Options ?? []).Select(e => RefitCore.Normal(e.File)).ToHashSet(StringComparer.Ordinal);
+        var ourFiles = OurFiles(record);
         var single = RefitCore.SingleGroups(modRoot);
         var pieces = new List<Piece>();
         var models = readGameFile != null ? new Models(modRoot, readGameFile) : null;
@@ -184,11 +184,7 @@ internal static partial class SizeSetRefit
                                                     && (includeEnds || !IsEnd(BodySizeCatalog.SlotOf(r.GamePath)!)))
                                         .GroupBy(r => r.GamePath.ToLowerInvariant()))
         {
-            var authors = byPath.Where(r => !ourFiles.Contains(RefitCore.Normal(r.File))
-                                            && !RefitCore.Normal(r.File).StartsWith(
-                                                   BodyRetargetWriter.Subfolder.ToLowerInvariant() + "/",
-                                                   StringComparison.Ordinal))
-                                .ToList();
+            var authors = byPath.Where(r => !IsOurFile(ourFiles, r.File)).ToList();
             if (authors.Count == 0) continue;
             string gamePath = authors[0].GamePath;
             string slot = BodySizeCatalog.SlotOf(gamePath)!;
@@ -237,6 +233,18 @@ internal static partial class SizeSetRefit
                      .ToList();
     }
 
+    /// <summary>The files refits of ours wrote, as <see cref="IsOurFile"/> takes them.</summary>
+    internal static HashSet<string> OurFiles(BodyRetargetWriter.Record? record)
+        => (record?.Options ?? []).Select(e => RefitCore.Normal(e.File)).ToHashSet(StringComparer.Ordinal);
+
+    /// <summary>
+    /// Whether a file a mod's manifest gives is ours, not the author's: one a refit of ours wrote (its record names it), or
+    /// any under <see cref="BodyRetargetWriter.Subfolder"/>. What <see cref="PiecesOf"/> leaves out of a mod's pieces.
+    /// </summary>
+    internal static bool IsOurFile(IReadOnlySet<string> ourFiles, string file)
+        => ourFiles.Contains(RefitCore.Normal(file))
+           || RefitCore.Normal(file).StartsWith(BodyRetargetWriter.Subfolder.ToLowerInvariant() + "/", StringComparison.Ordinal);
+
     /// <summary>
     /// Whether every model a mod gives <paramref name="gamePath"/> is the game's own one there: the same vertices in the
     /// same places. Not the same bytes — TexTools re-saves what it ships, 68 bytes longer — and stopping at the first
@@ -280,9 +288,7 @@ internal static partial class SizeSetRefit
     private static List<Piece> WithoutRacialCopies(List<Piece> pieces, List<PenumbraModMeta.Redirect> redirects,
                                                    HashSet<string> ourFiles, Models models, Action<string>? droppedCopy)
     {
-        bool Ours(string file)
-            => ourFiles.Contains(RefitCore.Normal(file))
-               || RefitCore.Normal(file).StartsWith(BodyRetargetWriter.Subfolder.ToLowerInvariant() + "/", StringComparison.Ordinal);
+        bool Ours(string file) => IsOurFile(ourFiles, file);
 
         bool IsRacialCopy(Piece piece)
         {
