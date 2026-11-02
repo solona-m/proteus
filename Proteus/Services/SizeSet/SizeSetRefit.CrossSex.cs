@@ -119,17 +119,27 @@ internal static partial class SizeSetRefit
             return false;
         }
         if (bytes.Length == 0) return true;
-        // The parser itself, not ModelPartReader.Read, which turns a parse failure into "no drawable part".
+        // The parser itself, not ModelPartReader.Read, which turns a parse failure into "no drawable part". Only what a
+        // malformed file raises counts: any other exception is a bug of ours, and must never replace the author's model.
         try
         {
             SecondSkinWriter.Parse(bytes);
             return false;
         }
-        catch (Exception e) when (e is not OutOfMemoryException)
+        catch (Exception e) when (MalformedModel(e))
         {
             return true;
         }
+        catch (Exception)
+        {
+            return false;
+        }
     }
+
+    /// <summary>What reading a truncated or damaged model raises: reads past its end, sizes that don't fit.</summary>
+    internal static bool MalformedModel(Exception e)
+        => e is IndexOutOfRangeException or ArgumentException or OverflowException or EndOfStreamException
+                or InvalidDataException;
 
     /// <summary>
     /// The men's paths whose author's model can't be used at all, so the women's piece there is crossed after all: the

@@ -124,7 +124,10 @@ public sealed class AuthorsMensFallbackTests : IDisposable
     public void Author_redirects_unparsable() // [AC-42-43-tbsex-legs-cross-1] [EDGE-42-43-tbsex-legs-cross-29] [EDGE-42-43-tbsex-legs-cross-37] [EDGE-42-43-tbsex-legs-cross-38] [EDGE-42-43-tbsex-legs-cross-39]
     {
         byte[] garbage = Model[..64];
-        Assert.ThrowsAny<Exception>(() => SecondSkinWriter.Parse(garbage));
+        Assert.True(MalformedModel(Assert.ThrowsAny<Exception>(() => SecondSkinWriter.Parse(garbage))));
+        // Anything else the parser could raise is a bug of ours, never a damaged file of the author's.
+        Assert.False(MalformedModel(new NullReferenceException()));
+        Assert.False(MalformedModel(new InvalidOperationException()));
         byte[] emptied = SyntheticModel.Build([], new SyntheticModel.Mesh("mt_c0101e6000_glv_a.mtrl"));
         SecondSkinWriter.Parse(emptied);   // parses, whatever it draws
 
@@ -378,6 +381,55 @@ public sealed class AuthorsMensFallbackTests : IDisposable
         Assert.Contains(log.Sizes, s => s.GamePath == MensGlove && s.Men && s.ReasonCode == Codes.MenMapsMissing);
         Assert.Single(log.Warnings, w => w == Stale(women));
         Assert.DoesNotContain(log.Warnings, w => w == string.Format(Strings.SizeSet.AuthorsMensCrossedFmt, women.Label, MensGroup));
+    }
+
+    [Fact]
+    [Trait("Plan", "EDGE-42-43-tbsex-legs-cross-11")]
+    public void Renamed_mens_group_is_still_recognised() // [EDGE-42-43-tbsex-legs-cross-11]
+    {
+        // An earlier run in another language named the men's versions' group "Corps masculin"; this run's language
+        // would call it something else. Only the plain-body tick changes: "for men" alone.
+        const string renamed = "Corps masculin";
+        string root = Mod([Glove, MensGlove], extraGroups: OurGroup(renamed, MensGlove));
+        Record(root, renamed, MensGlove);
+        var pieces = PiecesOf(root);
+        var women = pieces.Single(p => p.GamePath == Glove);
+        int groups = PenumbraModMeta.TryReadGroups(root)!.Count;
+        Assert.Equal(renamed, MensGroupName(root, [], pieces.Where(Crossable).ToList(), OwnSizeGroups(pieces)));
+        var log = Seeded(pieces.Single(p => p.GamePath == MensGlove), (SizeStatus.Skipped, Codes.NoBodyForRace));
+        Across(Req(root, ["tbse@women"]), pieces, pieces, log);
+        Assert.Single(log.Warnings, w => w == string.Format(Strings.SizeSet.AuthorsMensStillReplacedFmt, women.Label, renamed));
+        Assert.Equal(groups, PenumbraModMeta.TryReadGroups(root)!.Count);
+    }
+
+    [Fact]
+    [Trait("Plan", "EDGE-42-43-tbsex-legs-cross-34")]
+    public void Kept_mens_group_says_the_top_is_still_replaced() // [EDGE-42-43-tbsex-legs-cross-34]
+    {
+        // The author's men's top in default files, sized into its own size group of ours ("TBSE" at its path); our men's
+        // body group also holds a men's version at that path, made from the women's top by an earlier run.
+        string defaults = $"\"{MensTop}\": \"default\\\\top.mdl\"";
+        var mensTop = PiecesOf(Mod([Top], defaultFiles: defaults)).Single(p => p.GamePath == MensTop);
+        string root = Mod([Top], defaultFiles: defaults,
+                          extraGroups: OurGroup(mensTop.GroupName, MensTop) + OurGroup(MensGroup, MensTop));
+        Directory.CreateDirectory(Path.Combine(root, SidecarDiscoveryService.SidecarSubdir));
+        var record = new BodyRetargetWriter.Record
+        {
+            Group = MensGroup,
+            Options =
+            [
+                new() { Group = mensTop.GroupName, Name = "TBSE", GamePath = MensTop, File = $"{BodyRetargetWriter.Subfolder}/men0.mdl" },
+                new() { Group = MensGroup, Name = "TBSE", GamePath = MensTop, File = $"{BodyRetargetWriter.Subfolder}/men0.mdl" },
+            ],
+        };
+        File.WriteAllText(Path.Combine(root, SidecarDiscoveryService.SidecarSubdir, BodyRetargetWriter.RecordFile),
+                          JsonSerializer.Serialize(record));
+        var pieces = PiecesOf(root);
+        var women = pieces.Single(p => p.GamePath == Top);
+        var log = Seeded(pieces.Single(p => p.GamePath == MensTop), (SizeStatus.Made, null));
+        Across(Req(root, ["tbse", "tbse@women"]), pieces, pieces, log);
+        Assert.Equal([string.Format(Strings.SizeSet.AuthorsMensStillReplacedFmt, women.Label, MensGroup)],
+                     log.Warnings.Where(w => w.Contains("earlier run", StringComparison.Ordinal)));
     }
 
     [Fact]

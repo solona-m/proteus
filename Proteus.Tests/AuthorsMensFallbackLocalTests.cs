@@ -129,6 +129,8 @@ public sealed class AuthorsMensFallbackLocalTests(ITestOutputHelper o) : IDispos
         Assert.Equal(men, Groups(root)[^1].Name);
         var group = JsonNode.Parse(Groups(root)[^1].Json)!;
         Assert.Equal(BodyRetargetWriter.OriginalOption, (string?)group["Options"]![(int)group["DefaultSettings"]!]!["Name"]);
+        // Picked, ours wins: no group of the author's at the men's glove's path outranks it.
+        Assert.Empty(BodyRetargetWriter.Outranking(PenumbraModMeta.TryReadRawGroups(root), MensGlove, men, null));
 
         // [EDGE-9] Again, Remake off: already there; nothing more claims the path.
         var files = PenumbraModMeta.TryReadFileOptions(root, men)!.Select(x => (x.Name, string.Join("|", x.Files.OrderBy(f => f.Key))))
@@ -186,6 +188,7 @@ public sealed class AuthorsMensFallbackLocalTests(ITestOutputHelper o) : IDispos
     {
         int mods = 0, seen = 0;
         var candidates = new List<string>();
+        var detail = new List<string>();
         foreach (string root in Directory.EnumerateDirectories(LocalData.Path(LocalData.Mods)))
         {
             if (!File.Exists(Path.Combine(root, PenumbraModMeta.MetaFile))) continue;
@@ -208,17 +211,19 @@ public sealed class AuthorsMensFallbackLocalTests(ITestOutputHelper o) : IDispos
                                                              && !IsOurFile(ours, r.File)))
                 {
                     string path = BodySizeCatalog.ResolveCaseInsensitive(root, r.File);
-                    bool bad = !File.Exists(path) || new FileInfo(path).Length == 0;
-                    if (!bad)
+                    string? why = !File.Exists(path) ? "missing" : new FileInfo(path).Length == 0 ? "zero bytes" : null;
+                    if (why == null)
                         try { SecondSkinWriter.Parse(File.ReadAllBytes(path)); }
-                        catch (Exception) { bad = true; }
-                    Assert.True(bad, $"{root}: {r.File} parses, but was counted as a fallback");
+                        catch (Exception e) { why = $"parse throws {e.GetType().Name}: {e.Message}"; }
+                    Assert.True(why != null, $"{root}: {r.File} parses, but was counted as a fallback");
+                    detail.Add($"{Path.GetFileName(root)}: {r.Source}: {r.File} — {why}");
                 }
             }
         }
         o.WriteLine($"{mods} mods; {seen} men's models beside a women's piece; {candidates.Count} the fallback would replace, "
                     + $"{seen - candidates.Count} kept");
         foreach (string c in candidates) o.WriteLine("  " + c);
+        foreach (string d in detail) o.WriteLine("    " + d);
         Assert.True(seen > 0, "no men's model beside a women's piece in the library");
     }
 }
