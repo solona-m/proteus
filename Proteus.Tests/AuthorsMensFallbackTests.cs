@@ -444,6 +444,8 @@ public sealed class AuthorsMensFallbackTests : IDisposable
             Across(request, pieces, pieces, log);
             Assert.DoesNotContain(log.Warnings, w => w == Stale(women));
             Assert.DoesNotContain(log.Sizes, s => s.Reason == Stale(women));
+            // Nor "no men's version was made from it": ours from the earlier run is the men's model there.
+            Assert.DoesNotContain(string.Format(Strings.SizeSet.AuthorsMensFmt, women.Label), log.Notes);
             Assert.DoesNotContain(log.Warnings, w => w == string.Format(Strings.SizeSet.AuthorsMensCrossedFmt, women.Label, MensGroup));
         }
     }

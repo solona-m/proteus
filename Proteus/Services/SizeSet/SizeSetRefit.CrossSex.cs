@@ -586,9 +586,12 @@ internal static partial class SizeSetRefit
     /// not stated here — the crossing says what became of it.</param>
     /// <param name="stillReplaced">Pieces a men's version of ours still stands over (<see cref="StillReplaced"/>): their
     /// reason is the line saying so, and no note says "no men's version was made from it".</param>
+    /// <param name="standsIn">Men's paths where a men's version of ours from an earlier run is the men's model, the
+    /// author's files there still unreadable: no note says "no men's version was made from it" of those.</param>
     internal static void StateAuthorsMens(IReadOnlyList<Piece> pieces, IReadOnlyList<string> mensKeys, RunLog runLog,
                                           IReadOnlySet<string>? crossedInstead = null,
-                                          IReadOnlyDictionary<Piece, string>? stillReplaced = null)
+                                          IReadOnlyDictionary<Piece, string>? stillReplaced = null,
+                                          IReadOnlySet<string>? standsIn = null)
     {
         var paths = pieces.Select(p => p.GamePath).ToHashSet(StringComparer.OrdinalIgnoreCase);
         foreach (var piece in pieces)
@@ -604,7 +607,7 @@ internal static partial class SizeSetRefit
                                                                                   or Codes.EndsUnreadable);
             bool unticked = outcomes.Count > 0 && outcomes.All(s => s.ReasonCode == Codes.NoBodyForRace);
             string? stale = stillReplaced != null && stillReplaced.TryGetValue(piece, out var line) ? line : null;
-            string? note = stale != null ? null
+            string? note = stale != null || standsIn?.Contains(mens) == true ? null
                          : !MensModelUsable(outcomes) && wrong ? string.Format(Strings.SizeSet.AuthorsMensFmt, piece.Label)
                          : unticked ? string.Format(Strings.SizeSet.AuthorsMensUntickedFmt, piece.Label,
                                                     SupportedBodies.Choices.First(c => c.Key == mensKeys[0]).Label)
@@ -644,7 +647,13 @@ internal static partial class SizeSetRefit
         var staleLines = stale.Zip(StillReplacedLines(stale, groupName)).ToDictionary(z => z.First, z => z.Second);
         runLog.Warnings.AddRange(staleLines.Values);
         if (mensKeys.Count == 0) return 0;
-        StateAuthorsMens(pieces, mensKeys, runLog, crossedInstead, staleLines);
+        // The author's files still unreadable and an earlier men's version of ours there: that is the men's model.
+        var names = MensOptionNames();
+        var standsIn = unparsable.Where(m => record?.Options.Any(e => !e.InAuthorGroup && names.Contains(e.Name)
+                                                                     && string.Equals(e.GamePath, m, StringComparison.OrdinalIgnoreCase))
+                                             == true)
+                                 .ToHashSet(StringComparer.OrdinalIgnoreCase);
+        StateAuthorsMens(pieces, mensKeys, runLog, crossedInstead, staleLines, standsIn);
         if (request.Across is not { } inputs) return 0;
         var across = AcrossPieces(pieces, crossedInstead);
         if (across.Count == 0) return 0;
