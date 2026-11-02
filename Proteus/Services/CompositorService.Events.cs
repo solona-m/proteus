@@ -420,6 +420,8 @@ public partial class CompositorService
                 string shapesWhy = "";
                 try
                 {
+                    // A deliberate change (not Glamourer re-asserting) to a watched mod: anything given up on gets one more try.
+                    if (force && ShellBodyAtr.Watches(_lastBodyAtrUses, modDir)) _bodyAtrLatch.ClearExhausted();
                     shapesMoved = ShellBodyAtr.Moved(_lastBodyAtrUses, modDir, secondSkin.PlayerModSettings,
                                                      out shapesWhy, out var shapesTarget)
                                   && _bodyAtrLatch.TryArm(shapesTarget);

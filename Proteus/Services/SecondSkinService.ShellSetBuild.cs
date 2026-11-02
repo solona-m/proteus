@@ -478,9 +478,13 @@ public sealed partial class SecondSkinService
                 {
                     bytes = File.ReadAllBytes(upstreamDisk);
                     service._upstreamBodies[bodyGamePath] = bytes;
-                    // Which mod the kept copy came from, recorded beside it: after a restart, the only way to know.
-                    sourceDisk = ShellBodyAtr.ReadSource(upstreamDisk, modsRoot, bytes.Length);
-                    if (sourceDisk != null) service._upstreamBodyDisks[bodyGamePath] = sourceDisk;
+                    // Which mod the kept copy came from, recorded beside it: after a restart, the only way to know. Bare parts
+                    // only: for a garment it would also change what smoothing may republish (IsProteusModFile below).
+                    if (isBarePart)
+                    {
+                        sourceDisk = ShellBodyAtr.ReadSource(upstreamDisk, modsRoot, bytes.Length);
+                        if (sourceDisk != null) service._upstreamBodyDisks[bodyGamePath] = sourceDisk;
+                    }
                     service.log.Debug("[Proteus] second skin: {0} resolves to our own output — smoothing the upstream "
                             + "kept at {1}", bodyGamePath, upstreamDisk);
                 }
@@ -565,9 +569,10 @@ public sealed partial class SecondSkinService
 
                 // A body mod that draws one of several shapes by its options (NIRÆ's chests): the shell covers only the
                 // ones drawn. Judged by the mod file the part really comes from, never our own republished copy.
+                // Debug: a vanilla body (game data) has no mod to record and lands here on every composite.
                 if (isBarePart && bodyIsOurs && sourceDisk == null)
-                    service.log.Information("[Proteus] second skin part {0}: no record of which mod supplies {1} — any "
-                                  + "shapes its options switch are all covered", part, bodyGamePath);
+                    service.log.Debug("[Proteus] second skin part {0}: no record of which mod supplies {1} — any "
+                            + "shapes its options switch are all covered", part, bodyGamePath);
                 var atr = ShellBodyAtr.ForPart(part, isBarePart, sourceDisk, modsRoot, atrRace, SettingsOf);
                 if (atr.Note != null)
                 {

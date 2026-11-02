@@ -2,8 +2,6 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
-using System.Text;
-using System.Threading;
 
 namespace Proteus.Services;
 
@@ -18,7 +16,7 @@ namespace Proteus.Services;
 /// so the two can never judge the same settings differently. Everything that cannot be judged hides nothing: the shell
 /// is then exactly what it was before this existed.
 /// </summary>
-internal static class ShellBodyAtr
+internal static partial class ShellBodyAtr
 {
     /// <summary>A mod's settings in the player's collection, as Penumbra reports them (temporary settings included).</summary>
     internal readonly record struct ModSettings(bool Enabled, IReadOnlyDictionary<string, List<string>> Options);
@@ -109,9 +107,12 @@ internal static class ShellBodyAtr
             if (!BodyAtrSwitches.SwitchesShapes(modRoot)) return NotWatched;
             return Resolve(modRoot, folder, part, race, settingsOf);
         }
-        catch (Exception)
+        catch (Exception ex)
         {
-            return NotWatched;
+            // Not watched, as for a body that switches nothing, but said: otherwise "every chest covered" has no explanation.
+            return new PartAtr(null, null, true,
+                $"second skin part {part}: could not tell whether its body switches shapes ({ex.Message}) — every shape "
+                + "covered", Warning: true);
         }
     }
 
@@ -195,153 +196,6 @@ internal static class ShellBodyAtr
         {
             why = "the re-check failed: " + ex.Message;
             return false;
-        }
-    }
-
-    // ── which mod an upstream copy came from, kept beside it across a restart ─────────────────────────────
-
-    private const string SourceSuffix = ".src";
-
-    /// <summary>
-    /// Record beside a kept upstream copy which mod file it is, mod-relative. A source unknown or outside the mods root
-    /// deletes any record, so it can never name a body the copy no longer is. May throw (I/O); the caller logs.
-    /// </summary>
-    internal static void WriteSource(string upstreamDisk, string? sourceDisk, string? modsRoot)
-    {
-        var record = upstreamDisk + SourceSuffix;
-        string? rel = null;
-        if (!string.IsNullOrEmpty(sourceDisk) && !string.IsNullOrEmpty(modsRoot)
-            && CompositorService.ModFolderOf(sourceDisk, modsRoot) != null)
-            rel = sourceDisk[modsRoot.Length..].TrimStart('/', '\\').Replace('\\', '/');
-        if (string.IsNullOrEmpty(rel))
-        {
-            if (File.Exists(record)) File.Delete(record);
-            return;
-        }
-        var bytes = Encoding.UTF8.GetBytes(rel);
-        if (File.Exists(record) && File.ReadAllBytes(record).AsSpan().SequenceEqual(bytes)) return;
-        File.WriteAllBytes(record, bytes);
-    }
-
-    /// <summary>
-    /// The mod file a kept upstream copy came from, or null: no record, a record leaving the mods root, or a file that is
-    /// gone or no longer the copy's length. Never throws.
-    /// </summary>
-    internal static string? ReadSource(string upstreamDisk, string? modsRoot, long expectedLength)
-    {
-        try
-        {
-            if (string.IsNullOrEmpty(modsRoot)) return null;
-            var record = upstreamDisk + SourceSuffix;
-            if (!File.Exists(record)) return null;
-            var rel = File.ReadAllText(record, Encoding.UTF8).Trim();
-            if (rel.Length == 0 || Path.IsPathRooted(rel)
-                || rel.Split('/', '\\').Any(s => s == "..")) return null;
-            var full = Path.Combine(modsRoot, rel.Replace('/', Path.DirectorySeparatorChar));
-            var info = new FileInfo(full);
-            return info.Exists && info.Length == expectedLength ? full : null;
-        }
-        catch (Exception)
-        {
-            return null;
-        }
-    }
-
-    // ── one forced rebuild per target ─────────────────────────────────────────────────────────────────────
-
-    /// <summary>
-    /// Bounds the forced rebuilds a shape change may cause. A target (a <see cref="Canonical"/> of what a rebuild should
-    /// publish) is forced once; until a run started after that publishes, it is not forced again. A publish that draws
-    /// something else, while the settings still say the target, means the build and the check disagree: warned once, and
-    /// that target is never forced again — until a publish draws it after all. Without this, a redraw, Glamourer
-    /// re-asserting its settings, and another forced rebuild could chase each other for ever. Thread-safe.
-    /// </summary>
-    internal sealed class ForceLatch
-    {
-        private readonly object gate = new();
-        private long stamps;
-        private string? target;
-        private long armedStamp;
-        private bool pending;
-        private string? exhausted;
-
-        /// <summary>A fresh, increasing stamp: a composite run takes one as it starts.</summary>
-        internal long Stamp() => Interlocked.Increment(ref stamps);
-
-        /// <summary>May a rebuild be forced for <paramref name="t"/>? True arms it.</summary>
-        internal bool TryArm(string t)
-        {
-            lock (gate)
-            {
-                if (t == exhausted) return false;
-                if (pending && t == target) return false;
-                target = t;
-                armedStamp = Stamp();
-                pending = true;
-                return true;
-            }
-        }
-
-        /// <summary>A run published <paramref name="published"/>.</summary>
-        /// <param name="freshTarget">What the settings say now; called only on a disagreement, outside the lock.</param>
-        internal void OnPublished(string published, long runStamp, Func<string?> freshTarget, Action<string> warn,
-                                  Action<string>? debug = null)
-        {
-            string armed;
-            long armedAt;
-            lock (gate)
-            {
-                if (exhausted != null && published == exhausted)
-                {
-                    exhausted = null;
-                    debug?.Invoke($"shell caught up with [{published}] — it may be forced again");
-                }
-                if (target == null || runStamp < armedStamp) return;
-                if (published == target)
-                {
-                    target = null;
-                    pending = false;
-                    return;
-                }
-                armed = target;
-                armedAt = armedStamp;
-            }
-
-            string? fresh;
-            try { fresh = freshTarget(); }
-            catch (Exception) { fresh = null; }
-
-            bool disagree;
-            lock (gate)
-            {
-                if (target != armed || armedStamp != armedAt) return;   // armed again meanwhile: that arm stands
-                disagree = fresh == armed;
-                if (disagree) exhausted = armed;
-                target = null;
-                pending = false;
-            }
-            if (disagree)
-                warn($"forced a rebuild for the body's switched shapes [{armed}] but the build drew [{published}]; the "
-                     + "check and the build disagree — not forcing again for these settings");
-            else
-                debug?.Invoke($"the settings moved again since [{armed}] was forced — letting the next check decide");
-        }
-
-        /// <summary>A run ended; one that did not publish releases a pending target so it may be forced again.</summary>
-        internal void OnRunEnded(long runStamp, bool published, Action<string>? debug = null)
-        {
-            lock (gate)
-            {
-                if (published || !pending || runStamp < armedStamp) return;
-                pending = false;
-            }
-            debug?.Invoke("a forced run ended without publishing — the target may be forced again");
-        }
-
-        /// <summary>Has <paramref name="t"/> been given up on?</summary>
-        internal bool IsExhausted(string t)
-        {
-            lock (gate) return t == exhausted;
         }
     }
 }

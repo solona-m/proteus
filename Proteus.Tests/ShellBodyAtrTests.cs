@@ -580,6 +580,8 @@ public class ShellBodyAtrTests
 
         var harvest = Method(Source("Services/SecondSkinService.ShellSetBuild.cs"), "private void HarvestParts(");
         Assert.Contains("ShellBodyAtr.ReadSource(upstreamDisk, modsRoot, bytes.Length)", harvest);
+        // Bare parts only: a garment's restored source would change what smoothing republishes.
+        Assert.Matches(@"if \(isBarePart\)\s*\{\s*sourceDisk = ShellBodyAtr\.ReadSource\(", harvest);
     }
 
     [Fact]
@@ -671,6 +673,17 @@ public class ShellBodyAtrTests
         Assert.True(latch.TryArm("t"));
         Assert.Single(warnings);
 
+        // A deliberate settings change forgives: what was given up on may be forced again.
+        latch.OnPublished("p", latch.Stamp(), () => "t", warnings.Add);
+        Assert.True(latch.IsExhausted("t"));
+        latch.ClearExhausted();
+        Assert.False(latch.IsExhausted("t"));
+        Assert.True(latch.TryArm("t"));
+        var evaluate = Method(Source("Services/CompositorService.Events.cs"), "private void EvaluateSurfaceModOffThread(");
+        Assert.Contains("if (force && ShellBodyAtr.Watches(_lastBodyAtrUses, modDir)) _bodyAtrLatch.ClearExhausted();", evaluate);
+        warnings.Clear();
+        warnings.Add("(the forgiven one)");
+
         // A fresh read that fails is no disagreement.
         latch.OnPublished("p", latch.Stamp(), () => throw new InvalidOperationException(), warnings.Add);
         Assert.Single(warnings);
@@ -715,6 +728,15 @@ public class ShellBodyAtrTests
         ShellBodyAtr.WriteSource(upstream, m.Top, m.Root);
         Assert.Null(ShellBodyAtr.ReadSource(upstream, m.Root, 99));      // the copy is not that file any more
         Assert.NotNull(ShellBodyAtr.ReadSource(upstream, m.Root, 100));
+
+        // A record that leaves the mods folder, or says nothing, is no record — whatever file it would reach.
+        File.WriteAllBytes(Path.Combine(m.Root, "escaped.mdl"), new byte[100]);
+        foreach (var record in new[] { "NIRAE/../escaped.mdl", "../" + Path.GetFileName(m.Root) + "/escaped.mdl",
+                                       m.Top, "   ", "" })
+        {
+            File.WriteAllText(upstream + ".src", record);
+            Assert.Null(ShellBodyAtr.ReadSource(upstream, m.Root, 100));
+        }
 
         // The record follows the copy: right after each write of it, in the same try.
         var harvest = Method(Source("Services/SecondSkinService.ShellSetBuild.cs"), "private void HarvestParts(");
