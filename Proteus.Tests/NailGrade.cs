@@ -290,10 +290,11 @@ internal sealed class NailGrade
     private static bool Closed(List<(Vector3, Vector3, Vector3)> soup, Ray r)
         => FirstHit(soup, r.O, r.D) is { } h && h.Front && h.T < r.Far - 0.001f || Covered(soup, r);
 
-    /// <summary>Does the result already enclose the ray's start — a patch copying a nail's steep side can lean out over
-    /// the rim — so the skin above it covers that spot? Looking back up the ray, the first face met is then a back face.</summary>
+    /// <summary>Where a patch copying a nail's steep side leans out over the rim, a ray can start under it; then the same
+    /// ray from 2 mm further out must meet a front face first, short of the far wall. (Not "the start is enclosed": on an
+    /// open mesh that test passed slivers a cast from further out showed open.)</summary>
     private static bool Covered(List<(Vector3, Vector3, Vector3)> soup, Ray r)
-        => FirstHit(soup, r.O, -r.D) is { } b && !b.Front && b.T < 0.003f;
+        => FirstHit(soup, r.O - r.D * 0.002f, r.D) is { } b && b.Front && b.T < r.Far + 0.001f;
 
     /// <summary>The socket rays a spanning nail answers for: those through its own loop's gap and its socket's nails.</summary>
     private List<Ray> OwnedRays()
@@ -372,6 +373,41 @@ internal sealed class NailGrade
         Assert.Equal(0, open);
     }
 
+
+    /// <summary>
+    /// The nail meshes by their nail's fate: over a spanning nail, gone (no area left); over a nail left as authored
+    /// (unsewn, unmoved, beside a socket), exactly as it was. Returns what is still drawn over spanning nails and how
+    /// many nail-mesh triangles over authored nails moved.
+    /// </summary>
+    internal (float DrawnOverSpanned, int MovedOverAuthored, int OverSpanned, int OverAuthored) NailMeshFates(byte[] result)
+    {
+        SecondSkinWriter.TryReadLod0Geometry(hand, out var hp, out _, out var ht, out _, out _, skinOnly: false, nonSkin: true);
+        SecondSkinWriter.TryReadLod0Geometry(result, out var fp, out _, out var ft, out _, out _, skinOnly: false, nonSkin: true);
+        Assert.Equal(ht, ft);
+        Vector3 P(float[] p, int i) => new(p[i * 3], p[i * 3 + 1], p[i * 3 + 2]);
+        var spanned = Spanned.SelectMany(id => Of(id).Verts).Select(v => H[v]).ToList();
+        var authored = islands.Where(i => !i.Sewn && !Spanned.Contains(i.Id) && i.Verts.All(v => H[v] == F[v])
+                                          && loops.Any(l => l.Verts.Any(w => Nearest(H[w], i.Verts, H) <= OwnReach)))
+                              .SelectMany(i => i.Verts).Select(v => H[v]).ToList();
+        float drawn = 0; int moved = 0, overS = 0, overA = 0;
+        for (int i = 0; i + 2 < ht.Length; i += 3)
+        {
+            var c = (P(hp, ht[i]) + P(hp, ht[i + 1]) + P(hp, ht[i + 2])) / 3;
+            bool nearS = spanned.Any(q => Vector3.Distance(q, c) < 0.001f);
+            bool nearA = !nearS && authored.Any(q => Vector3.Distance(q, c) < 0.001f);
+            if (nearS)
+            {
+                overS++;
+                drawn += Vector3.Cross(P(fp, ft[i + 1]) - P(fp, ft[i]), P(fp, ft[i + 2]) - P(fp, ft[i])).Length() / 2;
+            }
+            else if (nearA)
+            {
+                overA++;
+                if (Enumerable.Range(0, 3).Any(e => P(hp, ht[i + e]) != P(fp, ft[i + e]))) moved++;
+            }
+        }
+        return (drawn, moved, overS, overA);
+    }
     internal void AssertCollateral() { var c = Collateral(); Assert.True(c == null, c); }
 
     internal void AssertNoMembraneOnRestSkin() => Assert.Equal(0, OnTopOfRestSkin());

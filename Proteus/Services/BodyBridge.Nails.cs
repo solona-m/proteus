@@ -107,8 +107,8 @@ internal static partial class BodyBridge
             foreach (var id in sock.Members)
             {
                 if (fate.ContainsKey(id)) continue;
-                // The owner spans the socket, and so does any nail plugging a hole in it; the rest collapse.
-                bool spans = id == sock.Owner || (id.Item1 == sock.Owner!.Value.Mesh && sock.Plugs.Contains(id.Item2));
+                // The owner spans the socket; its other nails collapse.
+                bool spans = id == sock.Owner;
                 fate[id] = spans ? NailFate.Span : NailFate.Collapse;
                 if (spans) spanBy[id] = sock;
             }
@@ -205,7 +205,9 @@ internal static partial class BodyBridge
                     var f = fate.GetValueOrDefault((m, k), NailFate.Default);
                     if (f is NailFate.Collapse or NailFate.Authored or NailFate.Held) continue;
                     if (f == NailFate.Default && k < plan.Sewn.Count && !plan.Sewn[k]) continue;
-                    foreach (var (v, n) in IslandNormals(pos, plan.Islands[k]))
+                    // A spanned patch is re-shaded without IslandNormals' floor: its triangles are millimetre-sized, their raw
+                    // normals far under it, and a vertex skipped would keep the authored nail's normal — the shell pushes along it.
+                    foreach (var (v, n) in f == NailFate.Span ? SpanNormals(pos, plan.Islands[k]) : IslandNormals(pos, plan.Islands[k]))
                         WriteNormal(outBytes, at(nel, v), nel.Type, n.X, n.Y, n.Z);
                     // ...except where a spanning nail meets the rim: there it takes the finger's own normal, or the
                     // second skin's push along the normals opens a sliver between the two.
@@ -237,8 +239,8 @@ internal static partial class BodyBridge
         if (moved == 0)
         {
             if (uncovered > 0 || authored > 0)
-                log?.Invoke($"nails: {uncovered} left alone, nothing covers them; "
-                          + $"{authored} over open skin left as authored");
+                log?.Invoke($"nails: {uncovered} left alone (nothing covers them, or not all of a socket), "
+                          + $"{authored} left as authored (a socket that could not be spanned, or open skin)");
             return null;
         }
 
@@ -254,7 +256,7 @@ internal static partial class BodyBridge
                   + $"removed {removedIslands} nail mesh island(s) ({removedVerts} vertices), "
                   + $"{uncovered} left uncovered, "
                   + $"{spanned} spanning an open socket ({rimMoved} rim vertices moved onto it, furthest {rimMost:F5}), "
-                  + $"{leftSockets} socket(s) left as authored, {authored} nail(s) over open skin left as authored");
+                  + $"{leftSockets} socket(s) left as authored ({authored} nail(s) in them or over open skin)");
         return outBytes;
     }
 
@@ -522,6 +524,31 @@ internal static partial class BodyBridge
         return asked > 0 && covered >= asked * NailIslandCoveredShare;
     }
 
+
+    /// <summary>Area-weighted vertex normals over an island, normalised by length however small — see the re-shade.</summary>
+    private static List<(int V, Vec3 N)> SpanNormals(Vec3[] pos, int[] tris)
+    {
+        var sum = new Dictionary<int, Vec3>();
+        for (int t = 0; t + 2 < tris.Length; t += 3)
+        {
+            var (a, b, c) = (pos[tris[t]], pos[tris[t + 1]], pos[tris[t + 2]]);
+            var n = new Vec3((b.Y - a.Y) * (c.Z - a.Z) - (b.Z - a.Z) * (c.Y - a.Y),
+                             (b.Z - a.Z) * (c.X - a.X) - (b.X - a.X) * (c.Z - a.Z),
+                             (b.X - a.X) * (c.Y - a.Y) - (b.Y - a.Y) * (c.X - a.X));
+            for (int e = 0; e < 3; e++)
+            {
+                int v = tris[t + e];
+                sum[v] = sum.TryGetValue(v, out var acc) ? new Vec3(acc.X + n.X, acc.Y + n.Y, acc.Z + n.Z) : n;
+            }
+        }
+        var outp = new List<(int V, Vec3 N)>(sum.Count);
+        foreach (var (v, n) in sum)
+        {
+            float len = MathF.Sqrt(n.X * n.X + n.Y * n.Y + n.Z * n.Z);
+            if (len > 0 && float.IsFinite(len)) outp.Add((v, new Vec3(n.X / len, n.Y / len, n.Z / len)));
+        }
+        return outp;
+    }
     /// <summary>Area-weighted vertex normals over one island, for the vertices it moved.</summary>
     private static List<(int V, Vec3 N)> IslandNormals(Vec3[] pos, int[] tris)
     {

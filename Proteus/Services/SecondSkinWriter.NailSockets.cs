@@ -58,8 +58,6 @@ public static partial class SecondSkinWriter
         public Dictionary<int, Vec3> RimNormal = [];
         /// <summary>Finger rim vertices moved onto the spanning nail's boundary, every welded copy of each.</summary>
         public List<(int Mesh, int Vertex, Vec3 To)> RimMoves = [];
-        /// <summary>Islands of the owner's mesh welded into holes in it, spanned with it rather than collapsed.</summary>
-        public List<int> Plugs = [];
         /// <summary>Furthest the spanning nail's inside moved off its authored shape (the outline's move onto the rim,
         /// carried in), for the log.</summary>
         public float MiddleOffset;
@@ -312,7 +310,8 @@ public static partial class SecondSkinWriter
             loopKeys.Add(loop);
         }
 
-        // ---- Owners: the nearest candidate, closed islands included. ----
+        // ---- Owners: the member nearest the WHOLE rim (every rim vertex within NailSocketOwnReach of it), closed
+        // islands included. ----
         var ownerOf = new Dictionary<(int, int), List<int>>();
         for (int si = 0; si < sockets.Count; si++)
         {
@@ -324,8 +323,6 @@ public static partial class SecondSkinWriter
             foreach (var id in sock.Members)
             {
                 var vs = islandVerts[id];
-                int near = lp.Count(p => Nearest(p, vs) <= NailSocketOwnReach);
-                if (near * 2 < lp.Length) continue;
                 float far = lp.Max(p => Nearest(p, vs));
                 if (far < bestFar) { bestFar = far; best = id; }
             }
@@ -345,13 +342,9 @@ public static partial class SecondSkinWriter
             var plan = plans[id.Mesh];
             var sm = byMesh[id.Mesh];
             var loop = loopKeys[si];
-            var others = new List<(int Island, int[] Tris, int[] Verts)>();
-            for (int k = 0; k < plan.Islands.Count && k < plan.VertsOf.Count; k++)
-                if (k != id.Island && (k >= plan.Sewn.Count || !plan.Sewn[k])) others.Add((k, plan.Islands[k], plan.VertsOf[k]));
-            string? why = SpanSocket(sock, sm, plan.Islands[id.Island], plan.VertsOf[id.Island], others,
+            string? why = SpanSocket(sock, sm, plan.Islands[id.Island], plan.VertsOf[id.Island],
                                      loop.Select(k => points[k]).ToArray(), points, restTris);
-            if (why != null) { sock.Owner = null; sock.LeftAsAuthored = why; sock.Spanned.Clear(); sock.RimNormal.Clear(); sock.RimMoves.Clear(); sock.Plugs.Clear(); }
-            else foreach (int p in sock.Plugs) if (!sock.Members.Contains((id.Mesh, p))) sock.Members.Add((id.Mesh, p));
+            if (why != null) { sock.Owner = null; sock.LeftAsAuthored = why; sock.Spanned.Clear(); sock.RimNormal.Clear(); sock.RimMoves.Clear(); }
         }
 
         // ---- A nail cannot both stay and go: any socket touching a nail left as authored is left as authored. ----
@@ -365,7 +358,7 @@ public static partial class SecondSkinWriter
             {
                 if (s.Owner == null) { foreach (var m in s.Members) authored.Add(m); continue; }
                 foreach (var m in s.Members)
-                    (roles.TryGetValue(m, out var r) ? r : roles[m] = []).Add(s.Owner == m || (m.Item1 == s.Owner!.Value.Mesh && s.Plugs.Contains(m.Item2)));
+                    (roles.TryGetValue(m, out var r) ? r : roles[m] = []).Add(s.Owner == m);
             }
             foreach (var s in sockets)
             {
@@ -373,7 +366,7 @@ public static partial class SecondSkinWriter
                 if (s.Members.Any(m => authored.Contains(m) || roles[m].Count > 1))
                 {
                     s.Owner = null; s.LeftAsAuthored ??= "shares a nail with a socket left as authored";
-                    s.Spanned.Clear(); s.RimNormal.Clear(); s.RimMoves.Clear(); s.Plugs.Clear();
+                    s.Spanned.Clear(); s.RimNormal.Clear(); s.RimMoves.Clear();
                     changed = true;
                 }
             }
@@ -503,7 +496,7 @@ public static partial class SecondSkinWriter
     /// rays onto the seam meet skin. Returns why it could not, or null when <paramref name="sock"/> is filled in.
     /// </summary>
     private static string? SpanSocket(NailSocket sock, NailSkinMesh sm, int[] tris, int[] verts,
-                                      List<(int Island, int[] Tris, int[] Verts)> others, RimPoint[] rim,
+                                      RimPoint[] rim,
                                       Dictionary<(int, int, int), RimPoint> points,
                                       List<((int, int, int) A, (int, int, int) B, (int, int, int) C)> restTris)
     {
@@ -564,44 +557,9 @@ public static partial class SecondSkinWriter
         var outline = Outline(tris, verts);
         if (outline.Count == 0) return "the nearest nail is closed";
         if (outline.Any(l => l.Count < 3)) return "the nearest nail's outline is not one loop";
-        if (outline.Count > 1)
-        {
-            // A small hole inside the nail, plugged by another of the socket's nails welded into it (Rue+, YAB+ and
-            // LavaBod+ thumbs: a two-triangle island in a 2.4 mm hole). The plug goes with the nail that spans the
-            // socket — collapsed on its own it would reopen the hole. A second outline as long as the first (a
-            // double-layered nail, FreyjaAF) is no hole, and is left as authored.
-            var outer = outline.OrderByDescending(l => Perim(l.Select(n => nodePos[n]).ToList())).First();
-            float outerLen = Perim(outer.Select(n => nodePos[n]).ToList());
-            var allTris = new List<int>(tris);
-            var allVerts = new List<int>(verts);
-            foreach (var hole in outline.Where(l => l != outer))
-            {
-                if (Perim(hole.Select(n => nodePos[n]).ToList()) > outerLen * 0.25f) return "the nearest nail's outline is not one loop";
-                var holeKeys = hole.Select(n => VKey(nodePos[n])).ToHashSet();
-                int found = -1;
-                foreach (var (island, ots, ovs) in others)
-                {
-                    var keys = ovs.Select(v => VKey(sm.Pos[v])).ToHashSet();
-                    if (keys.IsSupersetOf(holeKeys) && keys.Count <= holeKeys.Count + 2) { found = island; allTris.AddRange(ots); allVerts.AddRange(ovs); break; }
-                }
-                if (found < 0) return "the nearest nail's outline is not one loop";
-                // ...and only if the hole is a hole: a window in the nail onto the finger's own skin (LavaBod+ lays a
-                // rest quad under a two-triangle nail there) would have the plug laid over that skin.
-                var hc = new Vec3(hole.Average(n => nodePos[n].X), hole.Average(n => nodePos[n].Y), hole.Average(n => nodePos[n].Z));
-                float hr = hole.Max(n => Dist(nodePos[n], hc));
-                foreach (var (ka, kb, kc) in restTris)
-                {
-                    if (!points.TryGetValue(ka, out var pa) || !points.TryGetValue(kb, out var pb) || !points.TryGetValue(kc, out var pc)) continue;
-                    var c = new Vec3((pa.P.X + pb.P.X + pc.P.X) / 3, (pa.P.Y + pb.P.Y + pc.P.Y) / 3, (pa.P.Z + pb.P.Z + pc.P.Z) / 3);
-                    if (Dist(c, hc) < hr * 0.9f) { sock.Plugs.Clear(); return "skin inside the nail"; }
-                }
-                sock.Plugs.Add(found);
-            }
-            tris = [.. allTris];
-            verts = [.. allVerts.Distinct()];
-            outline = Outline(tris, verts);
-            if (outline.Count != 1 || outline[0].Count < 3) { sock.Plugs.Clear(); return "the nearest nail's outline is not one loop"; }
-        }
+        // One outline only. A nail with a hole in it — a double-layered nail (FreyjaAF), or a small hole another nail
+        // plugs (Rue+ thumbs) — is left as authored: spanning it could not be checked as a single disk.
+        if (outline.Count != 1) return "the nearest nail's outline is not one loop";
         var bLoop = outline[0];
         int nn = nodePos.Count;
 
@@ -949,9 +907,10 @@ public static partial class SecondSkinWriter
             for (int i = 0; i < nr; i++)
             {
                 var (ka, kb) = (VKey(R[i].P), VKey(R[(i + 1) % nr].P));
-                if (!edgeNormal.TryGetValue(EdgeKey(ka, kb), out var en)) continue;
+                // No readable skin beside an edge cannot be shown closed: fail safe.
+                if (!edgeNormal.TryGetValue(EdgeKey(ka, kb), out var en)) return "the seam leaks";
                 float el = MathF.Sqrt(en.X * en.X + en.Y * en.Y + en.Z * en.Z);
-                if (el <= 0) continue;
+                if (el <= 0) return "the seam leaks";
                 var n = new Vec3(en.X / el, en.Y / el, en.Z / el);
                 var a = Now(ka); var b = Now(kb);
                 var mid = new Vec3((a.X + b.X) / 2, (a.Y + b.Y) / 2, (a.Z + b.Z) / 2);
@@ -965,8 +924,10 @@ public static partial class SecondSkinWriter
                 var d = new Vec3(-n.X, -n.Y, -n.Z);
                 // Through a hole, the first face met is the inside of the finger's far wall — a back face.
                 bool met = FirstHit(soup, o, d) is { } hit && hit.Front;
-                // ...or the patch already stands over that spot: rising steeply off the rim, it can be above the ray's start.
-                bool under = FirstHit(soup, o, n) is { } back && !back.Front && back.T < 0.003f;
+                // ...or, where the patch rises steeply off the rim and stands over the ray's start, the same ray from 3 mm out.
+                // (Not "the start is enclosed": on an open mesh that test passed slivers the 3 mm cast shows open.)
+                var far = new Vec3(o.X + n.X * 0.002f, o.Y + n.Y * 0.002f, o.Z + n.Z * 0.002f);
+                bool under = FirstHit(soup, far, d) is { } back && back.Front;
                 if (!met && !under) return "the seam leaks";
             }
         }

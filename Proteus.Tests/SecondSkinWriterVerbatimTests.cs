@@ -1348,7 +1348,7 @@ public class SecondSkinWriterVerbatimTests(Xunit.Abstractions.ITestOutputHelper 
         var plans = SecondSkinWriter.NailBedPlans(hand);
         var sp = SecondSkinWriter.NailSockets(hand, plans);
         var spanning = sp.Sockets.Where(s => s.Owner != null)
-            .SelectMany(s => s.Members.Where(m => m == s.Owner || (m.Mesh == s.Owner!.Value.Mesh && s.Plugs.Contains(m.Island)))).ToHashSet();
+            .Select(s => s.Owner!.Value).ToHashSet();
         var authored = sp.Sockets.Where(s => s.Owner == null).SelectMany(s => s.Members).Concat(sp.OverOpenSkin).ToHashSet();
         var flatPos = SecondSkinWriter.ReadCapMeshes(flat!).ToDictionary(x => x.Mesh, x => x.Pos);
         float collapsedArea = 0;
@@ -1536,7 +1536,7 @@ public class SecondSkinWriterVerbatimTests(Xunit.Abstractions.ITestOutputHelper 
                       + $"{Area(nowP, nowT) * 1e6f:F1}mm² after");
             Assert.True(Area(wasP, wasT) > 1e-5f, "this hand has no nail mesh to remove");
             // Over a socket left as authored, its nail mesh stays with the nail it rides on.
-            if (socketed) Assert.True(Area(nowP, nowT) < Area(wasP, wasT) * 0.8f, "the nail mesh over the spanned sockets is still drawing");
+            if (socketed) NailSocketTests.AssertNailMeshFates(hand, flat);
             else Assert.True(Area(nowP, nowT) < Area(wasP, wasT) * 0.01f, "the nail mesh is still drawing");
         }
 
