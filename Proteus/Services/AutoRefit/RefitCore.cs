@@ -868,6 +868,8 @@ internal static partial class RefitCore
     /// the caller is allowed to ask from).</param>
     /// <param name="selected">The body mod's ticked options, when known: of a chest model's chests
     /// (<see cref="BodySizeCatalog.IsShape"/>) the one ticked is worn, else the default one.</param>
+    /// <remarks>A body's physics variant of a chest model (NIRÆ's "Squish", #59, see <see cref="BodySizeCatalog.Variants"/>)
+    /// is read as its build's model: wearing it is wearing the build's chest.</remarks>
     internal static BodyOption? WornOption(BodySizeCatalog catalog, string slot, string? race,
                                            Func<string, string?> resolve,
                                            IReadOnlyDictionary<string, List<string>>? selected = null)

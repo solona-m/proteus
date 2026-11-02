@@ -282,7 +282,8 @@ internal sealed record BodySizeCatalog(string ModRoot, IReadOnlyList<BodyOption>
     /// drawn with an option group of <c>Atr</c> switches alone (NIRÆ). Such a size is the model AND the chest, so the
     /// chest rides in its rel (<c>"files\top.mdl|Small Perky"</c>): every place that tells sizes apart by rel — settings,
     /// refit records, the Studio's memory — tells the chests apart, and only file access cuts it off
-    /// (<see cref="ResolveCaseInsensitive"/>).
+    /// (<see cref="ResolveCaseInsensitive"/>). Only build models carry chest entries: a physics-variant group's copies of
+    /// them (NIRÆ's "Squish", #59) are no sizes at all (<see cref="Variants"/>).
     /// </summary>
     internal static bool IsShape(BodyOption o) => o.Rel.Contains(ShapeMark);
 
@@ -306,7 +307,8 @@ internal sealed record BodySizeCatalog(string ModRoot, IReadOnlyList<BodyOption>
     /// <summary>
     /// The option a remembered rel names: that very rel, else — a size kept before chests were sizes, by its model
     /// file — the chest <paramref name="selected"/> ticks of that model (<see cref="PickShape"/>). Null when no option
-    /// has the file.
+    /// has the file. A rel naming a physics variant's chest model (#59) is read through <see cref="Canonical(string)"/>
+    /// by the caller first: this matches files as they are listed.
     /// </summary>
     internal static BodyOption? ByFile(IReadOnlyList<BodyOption> options, string rel,
                                        IReadOnlyDictionary<string, List<string>>? selected)
@@ -324,7 +326,9 @@ internal sealed record BodySizeCatalog(string ModRoot, IReadOnlyList<BodyOption>
     /// The chest options of a body that picks its chest by <paramref name="axis"/>: one per chest model and chest,
     /// in place of the chest model's options of the group that ships it — which differ only in what they do to the
     /// rest of the body (NIRÆ's three hip sizes per build). Labelled "build · chest": the build is what the model's
-    /// options share at the front of their names.
+    /// options share at the front of their names. Only <paramref name="buildOptions"/> are crossed; every other chest
+    /// option — a physics-variant group's copies of the builds (NIRÆ's "Squish", #59) — is dropped and returned as a
+    /// variant of its build (<see cref="MapVariants"/>).
     /// </summary>
     private static (List<BodyOption> Options, List<ChestVariant> Variants) WithChests(
         List<BodyOption> options, BodyAtrSwitches.ShapeAxis axis, List<BodyOption> buildOptions)
@@ -376,23 +380,29 @@ internal sealed record BodySizeCatalog(string ModRoot, IReadOnlyList<BodyOption>
                                               .Select(g => g.ToList()))
         {
             var first = variant[0];
-            var here = Enumerable.Range(0, models.Count)
-                                 .Where(m => string.Equals(models[m][0].GamePath, first.GamePath, StringComparison.OrdinalIgnoreCase))
-                                 .ToList();
-            int? to = here.Cast<int?>().FirstOrDefault(m => Normal(models[m!.Value][0].Rel) == Normal(first.Rel));
-            if (to == null && here.Count == 1) to = here[0];
-            if (to == null)
+            var here = new List<int>();
+            for (int m = 0; m < models.Count; m++)
+                if (string.Equals(models[m][0].GamePath, first.GamePath, StringComparison.OrdinalIgnoreCase)) here.Add(m);
+
+            int to = -1;
+            foreach (int m in here)
+                if (Normal(models[m][0].Rel) == Normal(first.Rel)) { to = m; break; }      // (i) the very same file
+            if (to < 0 && here.Count == 1) to = here[0];                                     // (ii) the only build there
+            if (to < 0)                                                                      // (iii) the one build named
             {
                 var optionWords = variant.Select(o => Words(o.Name)).ToList();
                 var named = here.Where(m => Words(buildNames[m]) is { Count: > 0 } build
                                             && optionWords.All(w => build.All(w.Contains))).ToList();
                 if (named.Count == 1) to = named[0];
             }
-            if (to is int m2) found.Add(new ChestVariant(first.GamePath, first.Rel, models[m2][0].Rel));
+            if (to >= 0) found.Add(new ChestVariant(first.GamePath, first.Rel, models[to][0].Rel));
         }
-        // A file read as two different builds at two game paths is no one build's.
+        // A file read as two different builds at two game paths is no one build's; nor is a build's own file read as
+        // another build's anywhere — Canonical maps by file, and would turn every size saved on that build into the other.
+        var buildFiles = models.Select(m => Normal(m[0].Rel)).ToHashSet();
         var ambiguous = found.GroupBy(v => Normal(v.Rel))
-                             .Where(g => g.Select(v => Normal(v.BuildRel)).Distinct().Count() > 1)
+                             .Where(g => g.Select(v => Normal(v.BuildRel)).Distinct().Count() > 1
+                                         || (buildFiles.Contains(g.Key) && g.Any(v => Normal(v.BuildRel) != g.Key)))
                              .Select(g => g.Key).ToHashSet();
         return found.Where(v => !ambiguous.Contains(Normal(v.Rel))).ToList();
     }

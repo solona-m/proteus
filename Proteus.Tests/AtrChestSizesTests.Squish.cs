@@ -390,4 +390,81 @@ public partial class AtrChestSizesTests
         var labelled = new[] { "files/top_a_squish.mdl|Flat=X", "files/top_a.mdl|Flat=Y" }.Select(t => t.Split('=', 2)[0]);
         Assert.Equal("files/top_a.mdl|Flat", RefitCli::Proteus.Refit.CrossSexCommand.DuplicateTarget(cat, labelled));
     }
+
+    [Fact]
+    [Trait("Plan", "AC-59-nirae-squish-3")]
+    public void Saved_squish_size_of_a_part_taken_along_resolves()
+    {
+        // A legs garment made on NIRÆ and staying there takes the chest along onto NIRÆ, though the chest is set to
+        // another body: the size saved for the chest, against a Squish model, is its build's.
+        using var mod = new Mod(Meta(null, Builds(), Chests(), Belly(), Squish()));
+        using var other = new Mod(Meta(null, Builds()));
+        var lead = new BodyModIndex.Entry("nir", "NIRÆ body", mod.Catalog);
+        var mine = new BodyModIndex.Entry("other", "Other", other.Catalog);
+        var pref = new AutoRefitPreference();
+        pref.SetBody("_top", "other");
+        pref.SetSize("_top", SavedSquish(@"files\top_b_squish.mdl|Flat"));
+        var targets = new AutoRefitTargets(pref, d => d == "nir" ? lead : d == "other" ? mine : null, "0201");
+        var legs = mod.Catalog.For("_dwn").First();
+        var plan = targets.PlanParts("_dwn", lead, legs, "nir", legs, [("_top", Entry(lead.Catalog, "A · Large"))]);
+        var top = Assert.Single(plan.Others, p => p.Slot == "_top");
+        Assert.Same(lead, top.Body);
+        Assert.Equal("B · Flat", top.To.Label);
+    }
+
+    private static string SquishNamed(params (string Name, string File)[] options)
+        => SquishGroup("\"DefaultSettings\":0,", "Single", [("Off", null), .. options.Select(o => (o.Name, (string?)o.File))]);
+
+    [Fact]
+    [Trait("Plan", "EDGE-59-nirae-squish-3")]
+    public void Variant_naming_several_builds_is_unmapped()
+    {
+        using var mod = new Mod(Meta(null, Builds(), Chests(), SquishNamed(("Firm (A B)", "top_b_squish"), ("Jelly (A B)", "top_b_squish"))));
+        Assert.Empty(mod.Catalog.Variants);
+        Assert.Equal(SixLabels, mod.Catalog.For("_top").Select(o => o.Label));
+    }
+
+    [Fact]
+    [Trait("Plan", "EDGE-59-nirae-squish-3")]
+    public void Variant_whose_options_name_different_builds_is_unmapped()
+    {
+        using var mod = new Mod(Meta(null, Builds(), Chests(), SquishNamed(("Firm (A)", "top_b_squish"), ("Jelly (B)", "top_b_squish"))));
+        Assert.Empty(mod.Catalog.Variants);
+        Assert.Equal(SixLabels, mod.Catalog.For("_top").Select(o => o.Label));
+    }
+
+    [Fact]
+    [Trait("Plan", "EDGE-59-nirae-squish-3")]
+    public void Variant_of_a_builds_own_file_is_that_build()
+    {
+        // Named for B, but the very file of A: it is A's, and a size saved on A stays A's.
+        using var mod = new Mod(Meta(null, Builds(), Chests(), SquishNamed(("Firm (B)", "top_a"), ("Jelly (B)", "top_a"))));
+        var cat = mod.Catalog;
+        Assert.Equal(SixLabels, cat.For("_top").Select(o => o.Label));
+        Assert.All(cat.Variants, v => Assert.Equal(RefitCore.Normal(v.Rel), RefitCore.Normal(v.BuildRel)));
+        Assert.Equal(@"files\top_a.mdl|Flat", cat.Canonical(@"files\top_a.mdl|Flat"));
+        Assert.Equal("A · Flat", RefitCore.WornOption(cat, "_top", "0201", Wears(cat, "top_a.mdl"), Pick("Chest", "Flat"))!.Label);
+    }
+
+    [Fact]
+    [Trait("Plan", "EDGE-59-nirae-squish-9")]
+    public void Build_file_reused_as_another_races_variant_is_dropped()
+    {
+        // c0201's B model, swapped in at c1801 by a variant named for A — whose c1801 model is another file. Read by file,
+        // it would turn every size saved on c0201's B into A's.
+        Dictionary<string, string> BuildFiles(string b, string h) => new()
+        {
+            [TopPath] = $"files\\\\top_{b}.mdl", [Top1801] = $"files\\\\top_{(b == "a" ? "c" : "d")}.mdl",
+            [DwnPath] = $"files\\\\dwn_{b}_{h}.mdl",
+        };
+        var builds = Group("Build & Hips", "Single", 0, null,
+            new[] { "a", "b" }.SelectMany(b => Hips.Select(h => Option($"{b.ToUpperInvariant()} · {h} hips", BuildFiles(b, h), null)))
+                              .ToArray());
+        var squish = $"{{\"Name\":\"Squish\",\"Type\":\"Single\",\"Priority\":2,\"DefaultSettings\":0,\"Options\":["
+                     + Option("Off", null, null) + ","
+                     + Option("Firm (A)", new Dictionary<string, string> { [Top1801] = "files\\\\top_b.mdl" }, null) + "]}";
+        using var mod = new Mod(Meta(null, builds, Chests(), squish));
+        Assert.Empty(mod.Catalog.Variants);
+        Assert.Equal(@"files\top_b.mdl|Flat", mod.Catalog.Canonical(@"files\top_b.mdl|Flat"));
+    }
 }
