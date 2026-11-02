@@ -516,7 +516,7 @@ public class NailSocketTests(ITestOutputHelper o)
         o.WriteLine($"nail mesh {before * 1e6f:F1}mm² -> {after * 1e6f:F1}mm²");
         // Gone over every spanned socket; kept over a socket left as authored, with the nail it rides on.
         Assert.True(before > 1e-5f && after > 0, "this hand should carry a nail mesh, and keep it over sockets left as authored");
-        AssertNailMeshFates(hand, flat);
+        AssertNailMeshFates(hand, flat, o);
     }
 
     private static (byte[] Hand, SecondSkinWriter.NailSocketPlan Plan) Real(string rel)
@@ -552,14 +552,14 @@ public class NailSocketTests(ITestOutputHelper o)
 
     /// <summary>Every nail-mesh triangle over a spanning nail draws nothing — and there are some, so this measures
     /// something.</summary>
-    internal static void AssertNailMeshFates(byte[] hand, byte[] flat)
+    internal static void AssertNailMeshFates(byte[] hand, byte[] flat, ITestOutputHelper o)
     {
         var (drawn, moved, overS, overA) = new NailGrade(hand, flat).NailMeshFates(flat);
         Assert.True(overS > 0, "no nail mesh rides a spanning nail — this measures nothing");
         Assert.True(drawn < 1e-9f, $"the nail mesh over spanning nails still draws {drawn * 1e6f:F2}mm²");
         // Over a nail left as authored the nail mesh may go with a collapsed tip beside it (RemoveNailMeshes, unchanged):
         // an overlay removed opens no hole, so it is reported, not failed.
-        Console.WriteLine($"{moved} of {overA} nail-mesh triangles over nails left as authored went with a collapsed neighbour");
+        o.WriteLine($"{moved} of {overA} nail-mesh triangles over nails left as authored went with a collapsed neighbour");
     }
     private static float SkinArea(byte[] m, bool skinOnly)
     {

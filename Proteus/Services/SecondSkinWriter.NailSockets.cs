@@ -37,6 +37,11 @@ public static partial class SecondSkinWriter
     /// </summary>
     private const float NailTopFacing = 0.7f;
 
+    /// <summary>How far down a seam ray may meet the patch or the finger and still count as closed: the ray starts a
+    /// millimetre up, and a steep patch wall can sit a few millimetres further; anything past this is no part of
+    /// the socket's surface (a curled tip, another finger).</summary>
+    private const float NailSeamReach = 0.004f;
+
     /// <summary>How far under its lowest rim point skin inside a socket's outline can lie and still be ON the socket
     /// (a patch of finger the socket rings round) rather than the far side of the finger, a finger's width down.</summary>
     private const float NailSocketSkinBelow = 0.002f;
@@ -923,11 +928,12 @@ public static partial class SecondSkinWriter
                                  mid.Z + tc.Z * 0.0003f + n.Z * 0.001f);
                 var d = new Vec3(-n.X, -n.Y, -n.Z);
                 // Through a hole, the first face met is the inside of the finger's far wall — a back face.
-                bool met = FirstHit(soup, o, d) is { } hit && hit.Front;
+                // Bounded, as a garment would see it: a front face further off may be another part of the finger.
+                bool met = FirstHit(soup, o, d) is { } hit && hit.Front && hit.T <= NailSeamReach;
                 // ...or, where the patch rises steeply off the rim and stands over the ray's start, the same ray from 3 mm out.
                 // (Not "the start is enclosed": on an open mesh that test passed slivers the 3 mm cast shows open.)
                 var far = new Vec3(o.X + n.X * 0.002f, o.Y + n.Y * 0.002f, o.Z + n.Z * 0.002f);
-                bool under = FirstHit(soup, far, d) is { } back && back.Front;
+                bool under = FirstHit(soup, far, d) is { } back && back.Front && back.T <= NailSeamReach + 0.002f;
                 if (!met && !under) return "the seam leaks";
             }
         }

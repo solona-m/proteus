@@ -1536,7 +1536,7 @@ public class SecondSkinWriterVerbatimTests(Xunit.Abstractions.ITestOutputHelper 
                       + $"{Area(nowP, nowT) * 1e6f:F1}mm² after");
             Assert.True(Area(wasP, wasT) > 1e-5f, "this hand has no nail mesh to remove");
             // Over a socket left as authored, its nail mesh stays with the nail it rides on.
-            if (socketed) NailSocketTests.AssertNailMeshFates(hand, flat);
+            if (socketed) NailSocketTests.AssertNailMeshFates(hand, flat, o);
             else Assert.True(Area(nowP, nowT) < Area(wasP, wasT) * 0.01f, "the nail mesh is still drawing");
         }
 
