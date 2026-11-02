@@ -32,8 +32,9 @@ them by hand.
 
 Build-enforced: the localization rule (`Proteus.Tests/LocalizationTests.cs`:
 keys, placeholders and format specifiers match English across every locale,
-code keys match `en.json`) and the supply-chain rule
-(`Proteus.Tests/SupplyChainTests.cs`).
+code keys match `en.json`), the supply-chain rule
+(`Proteus.Tests/SupplyChainTests.cs`) and the contributor PR gate
+(`Proteus.Tests/ContributorGateConfigTests.cs`, `Proteus.Tests/PrGateTests.cs`).
 
 ## Rules
 
@@ -105,6 +106,8 @@ code keys match `en.json`) and the supply-chain rule
   diff here. Only the read-only `codeql.yml`, and `dependabot-automerge.yml`
   on Dependabot's own PRs, may run on a push or PR to `test`.
   Build-enforced by `SupplyChainTests`. Repo-wide.
+  Exception: `.claude/settings.json`'s ai-workflow marketplace follows its
+  default branch: the source can't take a SHA and the repo has no tags.
 
 ### Commits
 
