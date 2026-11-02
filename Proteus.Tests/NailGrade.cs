@@ -475,7 +475,10 @@ internal sealed class NailGrade
             {
                 var tn = TriN(F, i);
                 bool onOutline = isl.Boundary.Contains(T[i]) && isl.Boundary.Contains(T[i + 1]) && isl.Boundary.Contains(T[i + 2]);
-                if (tn.Length() / 2 < 1e-12f) { if (!onOutline) n++; continue; }
+                // Two corners welded onto one point (a pinhole in the nail shut) draw nothing and turn nothing over.
+                bool welded = Vector3.Distance(F[T[i]], F[T[i + 1]]) < 1e-7f || Vector3.Distance(F[T[i + 1]], F[T[i + 2]]) < 1e-7f
+                              || Vector3.Distance(F[T[i + 2]], F[T[i]]) < 1e-7f;
+                if (tn.Length() / 2 < 1e-12f) { if (!onOutline && !welded) n++; continue; }
                 bool intoFinger = sign * Vector3.Dot(tn, FingerNormalAt(NearestLoop(isl), (F[T[i]] + F[T[i + 1]] + F[T[i + 2]]) / 3)) <= 0;
                 bool turned = Vector3.Dot(tn, TriN(H, i)) <= 0;
                 if (intoFinger && turned) n++;

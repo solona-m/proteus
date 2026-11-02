@@ -693,9 +693,9 @@ public class NailSocketTests(ITestOutputHelper o)
         var plans = SecondSkinWriter.NailBedPlans(hand, reach: SecondSkinWriter.LongNailReach);
         var sp = SecondSkinWriter.NailSockets(hand, plans, o.WriteLine, hidden);
         Assert.Equal(10, sp.Sockets.Count);
-        Assert.Equal(8, sp.Sockets.Count(s => s.Owner != null));
-        Assert.Equal(0, sp.Sockets.Count(s => s.LeftAsAuthored == "the seam leaks"));
-        Assert.Equal(2, sp.Sockets.Count(s => s.LeftAsAuthored == "the nearest nail's outline is not one loop"));
+        // Every socket spans: the curled tips' seam rays start under the patch (answered by the seam), and the middle
+        // fingers' pinholes are welded shut.
+        Assert.Equal(10, sp.Sockets.Count(s => s.Owner != null));
         Assert.Equal(10, sp.HiddenIslands.Count);
 
         var suit = Gate(SecondSkinWriterVerbatimTests.PaintFingersNotNailBeds(hand, 1024), 1024);

@@ -50,6 +50,12 @@ public static partial class SecondSkinWriter
     /// heights: 0.4 mm, inside the grader's 0.5 mm floor.</summary>
     private const double NailFillFloor = 0.0004;
 
+    /// <summary>A second outline of a nail this small is a pinhole — a quad missing from the mesh (YAB+'s middle fingers:
+    /// 4 corners, 2.4 mm round, against 33 mm for the nail) — and is welded shut rather than leaving the socket as
+    /// authored. A real double layer (FreyjaAF) or a hole another nail plugs is far larger.</summary>
+    private const int NailPinholeMaxNodes = 8;
+    private const float NailPinholeMaxShare = 0.15f;
+
     /// <summary>How far under its lowest rim point skin inside a socket's outline can lie and still be ON the socket
     /// (a patch of finger the socket rings round) rather than the far side of the finger, a finger's width down.</summary>
     private const float NailSocketSkinBelow = 0.002f;
@@ -582,7 +588,7 @@ public static partial class SecondSkinWriter
         Dictionary<int, int> nodeOf = [];
         List<Vec3> nodePos = [];
         HashSet<int>[] nbr = [];
-        List<List<int>> Outline(int[] ts, IEnumerable<int> vs)
+        List<List<int>> Outline(int[] ts, IEnumerable<int> vs, Dictionary<(int, int, int), (int, int, int)>? alias = null)
         {
             nodeOf = [];
             nodePos = [];
@@ -590,6 +596,7 @@ public static partial class SecondSkinWriter
             foreach (int v in vs)
             {
                 var k = VKey(sm.Pos[v]);
+                if (alias != null && alias.TryGetValue(k, out var to)) k = to;
                 if (!nodeKey.TryGetValue(k, out int n)) { nodeKey[k] = n = nodePos.Count; nodePos.Add(sm.Pos[v]); }
                 nodeOf[v] = n;
             }
@@ -633,6 +640,25 @@ public static partial class SecondSkinWriter
         float Perim(IReadOnlyList<Vec3> pts) { float s = 0; for (int i = 0; i < pts.Count; i++) s += Dist(pts[i], pts[(i + 1) % pts.Count]); return s; }
 
         var outline = Outline(tris, verts);
+        // A pinhole in the nail — a quad missing from the mesh (YAB+'s middle fingers) — is a second outline, and would be
+        // a hole in the patch. One that small is welded shut: its corners become one node, its triangles meet there.
+        if (outline.Count > 1)
+        {
+            var outer = outline.OrderByDescending(l => Perim(l.Select(n => nodePos[n]).ToList())).First();
+            float outerLen = Perim(outer.Select(n => nodePos[n]).ToList());
+            var holes = outline.Where(l => !ReferenceEquals(l, outer)).ToList();
+            if (holes.All(h => h.Count >= 3 && h.Count <= NailPinholeMaxNodes
+                               && Perim(h.Select(n => nodePos[n]).ToList()) <= outerLen * NailPinholeMaxShare))
+            {
+                var alias = new Dictionary<(int, int, int), (int, int, int)>();
+                foreach (var h in holes)
+                {
+                    var rep = VKey(nodePos[h[0]]);
+                    foreach (int n in h) alias[VKey(nodePos[n])] = rep;
+                }
+                outline = Outline(tris, verts, alias);
+            }
+        }
         if (outline.Count == 0) return "the nearest nail is closed";
         if (outline.Any(l => l.Count < 3)) return "the nearest nail's outline is not one loop";
         // One outline only. A nail with a hole in it — a double-layered nail (FreyjaAF), or a small hole another nail
