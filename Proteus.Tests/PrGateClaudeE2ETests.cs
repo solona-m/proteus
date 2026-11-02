@@ -188,13 +188,14 @@ public class PrGateClaudeE2ETests(ITestOutputHelper output)
         SameCommand(c, "gh pr view 1");
         Assert.Contains("pr view 1", box.Calls());
         Assert.DoesNotContain("pr-gate:", c.Result);
-        Assert.Contains("Skipping hook due to if condition", c.Debug);
+        Assert.Contains("Skipping hook due to if condition \"Bash(gh pr create *)\"", c.Debug);
         box.ClearLog();
 
         // (d) PowerShell, when this session offers the tool.
         if (a.Tools.Contains("PowerShell"))
         {
             var d = Claude(box, "PowerShell", Create);
+            SameCommand(d, Create);
             Assert.Equal("PowerShell", d.Tool);
             Assert.Contains("command", d.InputKeys);
             Assert.Contains("no .pr-ready record", d.Result);

@@ -77,6 +77,7 @@ internal static class PosixShell
         };
         foreach (var a in args) psi.ArgumentList.Add(a);
         foreach (var k in new[] { "GIT_DIR", "GIT_WORK_TREE", "GIT_INDEX_FILE", "CLAUDE_PROJECT_DIR" }) psi.Environment.Remove(k);
+        psi.Environment["GIT_CEILING_DIRECTORIES"] = TempRoot;
         if (shell.PathPrefix != null)
             psi.Environment["PATH"] = shell.PathPrefix + Path.PathSeparator + psi.Environment["PATH"];
         if (env != null)
@@ -114,6 +115,7 @@ internal static class PosixShell
             psi.ArgumentList.Add(a);
         foreach (var a in args) psi.ArgumentList.Add(a);
         foreach (var k in new[] { "GIT_DIR", "GIT_WORK_TREE", "GIT_INDEX_FILE" }) psi.Environment.Remove(k);
+        psi.Environment["GIT_CEILING_DIRECTORIES"] = TempRoot;
         using var p = Process.Start(psi)!;
         string o = p.StandardOutput.ReadToEnd();
         string e = p.StandardError.ReadToEnd();
@@ -123,6 +125,9 @@ internal static class PosixShell
     }
 
     private static readonly Lazy<string> NoHooks = new(() => TempDir.New().Path);
+
+    /// <summary>The temp folder, as git's ceiling: a test folder never resolves a repo above it.</summary>
+    private static string TempRoot => Path.GetTempPath().TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
 }
 
 /// <summary>A GUID-named temp folder, deleted on Dispose.</summary>

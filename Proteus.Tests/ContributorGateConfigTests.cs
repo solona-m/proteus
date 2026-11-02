@@ -59,6 +59,8 @@ public class ContributorGateConfigTests
             Assert.Equal([$"{tool}(gh pr create *)", $"{tool}(gh pr new *)"], list.Select(h => h.GetProperty("if").GetString()));
             foreach (var h in list)
             {
+                // Exactly these keys: an onFailure or shell key could turn a script failure into a block in every session.
+                Assert.Equal(["type", "if", "timeout", "command"], h.EnumerateObject().Select(p => p.Name));
                 Assert.Equal("command", h.GetProperty("type").GetString());
                 Assert.Equal(10, h.GetProperty("timeout").GetInt32());
                 Assert.Equal(GuardedCommand, h.GetProperty("command").GetString());
