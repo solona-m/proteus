@@ -631,6 +631,18 @@
     "message": "이 모드가 보여 주는 것 중 몸 위의 옷이 되는 것이 없습니다(스킨에 고정됨, 프린트, 몸이 아니라\n얼굴이나 머리카락 위, 또는 제작자가 토캡을 제외함). 그래서 이 모드에는 다듬을 것이\n없습니다. 발가락을 덮는 다른 모드의 옷에는 계속 적용됩니다.",
     "description": ""
   },
+  "Colors.ToeCap.Flag.Tip": {
+    "message": "스타킹과 양말에 켜세요. 발가락 하나하나를 따라가는 대신, 실제 양말처럼\n둥근 토캡 하나로 발가락을 덮습니다.\n체크하면 토캡이 다듬을 대상이 생기도록 이 모드의 스킨 레이어가 옷(세컨드 스킨)이\n됩니다. 다시 빌드하는 만큼 시간이 들고, 프린트나 스킨에 고정한 레이어는 그대로입니다.\n토캡은 Bibo+, Neolithe, Rue, YAB용으로 만들어졌습니다. 다른 체형에서는 옷은 만들어지지만\n발가락은 그대로입니다.\n이 모드에는 자체 토캡이 없으므로 이 설정은 모드의 Proteus 설정에 저장됩니다.\n모든 컬렉션에 적용되며, 내보낼 때 모드와 함께 갑니다.",
+    "description": ""
+  },
+  "Colors.ToeCap.Locked.Tip": {
+    "message": "이 모드 자체의 \"Toe Cap\" 옵션이 Penumbra에서 선택되어 있습니다. 하나만 고를 수 있는\nMasks 그룹에 있어서 여기서는 끌 수 없습니다. Penumbra에서 바꾸세요.",
+    "description": ""
+  },
+  "Colors.ToeCap.SaveFailed": {
+    "message": "이 모드의 Proteus 설정을 저장하지 못해 변경을 되돌렸습니다. 이유는 로그(/xllog)에 있습니다.",
+    "description": ""
+  },
   "Colors.SmoothNipples.Label": {
     "message": "유두를 매끄럽게",
     "description": ""

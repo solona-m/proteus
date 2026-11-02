@@ -485,9 +485,10 @@ public class ColorsetSaveOnReleaseTests : IDisposable
         Assert.DoesNotContain("SaveToeCapDensity", src);
         Assert.Equal(4, Count(src, "discovery.StageMetadata(entry)"));
         Assert.Equal(2, Count(src, "discovery.StageToeCapDensity(entry,"));
-        // The one direct save left is the discrete Geometry checkbox.
-        Assert.Equal(1, Count(src, "discovery.SaveMetadata("));
+        // The direct saves left are the discrete Geometry checkboxes: the five toggles and "Cap the toes".
+        Assert.Equal(2, Count(src, "discovery.SaveMetadata("));
         Assert.Contains("discovery.SaveMetadata(", Method(src, "private void DrawBustBridgeAdvanced("));
+        Assert.Contains("discovery.SaveMetadata(", Method(src, "private void DrawToeCapTick("));
         // Preset/design edits still only hold a reset or the toe: the gates are unchanged.
         Assert.Equal(2, Count(src, "if (!overrideActive || reset"));
     }

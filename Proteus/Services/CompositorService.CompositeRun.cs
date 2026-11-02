@@ -57,7 +57,9 @@ public partial class CompositorService
 
         /// <summary>Whether this run paints mod <paramref name="modDir"/>'s women's art on a man ("Overlay on men").</summary>
         internal bool OverlaysMenFor(string modDir) => !menOffMods.Contains(modDir);
-        private HashSet<string> toeCapMods = null!;
+        private ToeCapSnapshot toeCaps = ToeCapSnapshot.Empty;
+        private IReadOnlySet<string> toeCapMods = null!;
+        internal IReadOnlyDictionary<string, ToeCapMap> ToeCapMaps => toeCaps.Maps;
         private bool wearingMirroredBody;
         private HashSet<string> unmirrorMods = null!;
         private HashSet<string> asymmetricNotWorn = null!;
@@ -217,6 +219,8 @@ public partial class CompositorService
 
             if (entries.Count == 0)
             {
+                // Nothing composites, so nothing wants a cap: the editor must not keep the last look's answer.
+                compositor.ClearToeCapSnapshot();
                 // A shell hosted on an accessory (a rewritten skin material, or anything on the head) needs a full redraw to
                 // go away. This early return skips the normal end-of-method reset, hence doing it explicitly.
                 bool withdrawing = compositor._secondSkinActive || compositor._lastSkinMaterialRedirects.Count > 0
@@ -320,12 +324,14 @@ public partial class CompositorService
 
             // Is a toe cap selected anywhere in the look? A cap belongs to the foot, not the mod, and must be known before
             // promotion because a cap is geometry and needs a shell.
-            toeCapMods = compositor.ToeCapWanted(entries);
+            toeCaps = compositor.ToeCapWanted(entries);
+            toeCapMods = toeCaps.Wanted;
             if (toeCapMods.Count > 0)
-                compositor.log.Debug("[Proteus] toe cap is selected in [{0}] — THAT MOD's skin overlays that can be cut "
-                        + "into a shell are promoted to cloth, since the cap has to rebuild geometry the skin "
-                        + "layer has none of. Other mods are left alone: a cap is a Penumbra option, and a "
-                        + "mod re-exported with its options reordered re-points every saved selection.",
+                compositor.log.Debug("[Proteus] toe cap is wanted in [{0}] (its Toe Cap option, or Cap the toes in its "
+                        + "Proteus settings) — THAT MOD's skin overlays that can be cut into a shell are promoted to "
+                        + "cloth, since the cap has to rebuild geometry the skin layer has none of. Other mods are "
+                        + "left alone: a cap is the mod's own choice, and a mod re-exported with its options "
+                        + "reordered re-points every saved selection.",
                     string.Join(", ", toeCapMods.OrderBy(m => m, StringComparer.OrdinalIgnoreCase)));
             if (activeMtrl != null)
                 foreach (var m in activeMtrl)
@@ -503,8 +509,9 @@ public partial class CompositorService
                     {
                         compositor.log.Information("[Proteus] {0}: a toe cap is selected in [{1}], not here, so this "
                                       + "mod's skin overlays stay on the skin — the cap still shapes any "
-                                      + "shell over the toes, but this mod has no shell to shape. Tick the "
-                                      + "cap in this mod too if its art should follow the rebuilt toes.",
+                                      + "shell over the toes, but this mod has no shell to shape. Tick "
+                                      + "\"Cap the toes\" in this mod's Colors window too if its art should "
+                                      + "follow the rebuilt toes.",
                             entry.ModDirectory,
                             string.Join(", ", toeCapMods.OrderBy(m => m, StringComparer.OrdinalIgnoreCase)));
                     }

@@ -631,6 +631,18 @@
     "message": "Nothing this mod shows becomes a garment on the body (it's pinned to Skin, a print, on the\nface or hair rather than the body, or its author set it to skip the toe cap), so the cap has\nnothing of this mod's to shape. It still shapes another mod's garment over the toes.",
     "description": "Shown under the ticked \"Cap the toes\" checkbox when nothing in the mod becomes a garment on the body, so the cap has nothing to shape. Contains deliberate line breaks - keep the same number."
   },
+  "Colors.ToeCap.Flag.Tip": {
+    "message": "Turn this on for stockings and socks: the toes are covered by one rounded toe box, the way\nreal hosiery fits, instead of following every toe.\nTicking it turns this mod's skin layers into a garment (a second skin) so the cap has\nsomething to shape — that costs a rebuild, and a print or a layer pinned to Skin stays as it is.\nThe toe box is made for Bibo+, Neolithe, Rue and YAB; on other bodies the garment is built\nbut the toes stay as they are.\nThis mod has no toe cap of its own, so this is saved in the mod's Proteus settings: it applies\nin every collection and goes with the mod when you export it.",
+    "description": "Tooltip of the \"Cap the toes\" checkbox on a mod with no toe cap option of its own; Proteus supplies the cap and the setting is saved in the mod. Keep the body names Bibo+, Neolithe, Rue and YAB as written. Contains deliberate line breaks - keep the same number."
+  },
+  "Colors.ToeCap.Locked.Tip": {
+    "message": "This mod's own \"Toe Cap\" option is selected in Penumbra, in a Masks group that allows only\none choice, so it can't be turned off here. Change it in Penumbra.",
+    "description": "Tooltip of the greyed-out \"Cap the toes\" checkbox when the mod's own \"Toe Cap\" option is selected in a single-choice Masks group. \"Toe Cap\", \"Masks\" and \"Penumbra\" are names - keep them as written. Contains deliberate line breaks - keep the same number."
+  },
+  "Colors.ToeCap.SaveFailed": {
+    "message": "Couldn't save this mod's Proteus settings, so the change was undone. The log (/xllog) has the reason.",
+    "description": "Shown under the \"Cap the toes\" checkbox when the mod's Proteus settings could not be saved. Keep /xllog as written."
+  },
   "Colors.SmoothNipples.Label": {
     "message": "Smooth the nipple",
     "description": "Checkbox in the colour-table editor's Advanced section."

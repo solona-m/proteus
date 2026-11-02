@@ -187,9 +187,9 @@ public sealed partial class SecondSkinService
                     // rebuilds it as one rounded cap. BODY surfaces only (the map is body UV). Resolved before the textures, because
                     // a cap decides whether the normal is held back for the reinforced toe.
                     // The Colors window predicts this in ToeCapToggle.Reach; keep the two in step.
-                    var toeCap = layerSurf.Key.IsBody
-                        ? build.service.ToeCapFor(ov.Descriptor, entry, srcType, dstType, build.sharedToeCap, alpha, build.texSize)
-                        : null;
+                    // No authored cap loaded: no cap at all, rather than the writer generating one from the mask.
+                    var toeCap = LayerToeCap(layerSurf.Key.IsBody, build.capsAvailable,
+                        () => build.service.ToeCapFor(ov.Descriptor, entry, srcType, dstType, build.sharedToeCap, alpha, build.texSize));
 
                     // A reinforced toe needs a cap, and not a mask shell (that would apply it twice).
                     DeferredShellNormal? deferredNormal =

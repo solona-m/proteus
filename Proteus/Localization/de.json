@@ -631,6 +631,18 @@
     "message": "Nichts, was dieser Mod zeigt, wird zu einem Kleidungsstück am Körper (es ist auf Haut festgelegt, ein Aufdruck,\nauf Gesicht oder Haaren statt am Körper, oder sein Autor hat die Zehenkappe ausgeschlossen), daher hat die\nKappe nichts von diesem Mod zu formen. Ein Kleidungsstück eines anderen Mods über den Zehen formt sie weiterhin.",
     "description": ""
   },
+  "Colors.ToeCap.Flag.Tip": {
+    "message": "Für Strümpfe und Socken einschalten: Die Zehen werden von einer runden Zehenkappe bedeckt, wie echte\nStrumpfware sitzt, statt jedem Zeh zu folgen.\nDas Häkchen macht die Hautebenen dieses Mods zu einem Kleidungsstück (einer zweiten Haut), damit die Kappe\netwas zu formen hat — das kostet einen Neuaufbau, und ein Aufdruck oder eine auf Haut festgelegte Ebene bleibt, wie sie ist.\nDie Zehenkappe ist für Bibo+, Neolithe, Rue und YAB gemacht; auf anderen Körpern wird das Kleidungsstück gebaut,\naber die Zehen bleiben, wie sie sind.\nDieser Mod hat keine eigene Zehenkappe, daher wird dies in den Proteus-Einstellungen des Mods gespeichert: Es gilt\nin jeder Sammlung und geht mit dem Mod mit, wenn du ihn exportierst.",
+    "description": ""
+  },
+  "Colors.ToeCap.Locked.Tip": {
+    "message": "Die eigene Option \"Toe Cap\" dieses Mods ist in Penumbra gewählt, in einer Masks-Gruppe, die nur\neine Wahl erlaubt, daher lässt sie sich hier nicht ausschalten. Ändere sie in Penumbra.",
+    "description": ""
+  },
+  "Colors.ToeCap.SaveFailed": {
+    "message": "Die Proteus-Einstellungen dieses Mods konnten nicht gespeichert werden, daher wurde die Änderung zurückgenommen. Der Grund steht im Log (/xllog).",
+    "description": ""
+  },
   "Colors.SmoothNipples.Label": {
     "message": "Brustwarze glätten",
     "description": ""

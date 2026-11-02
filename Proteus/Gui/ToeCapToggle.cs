@@ -7,12 +7,25 @@ using Proteus.Services;
 
 namespace Proteus.Gui;
 
+/// <summary>Where the tick writes: the mod's own Toe Cap option in Penumbra, or the mod's "Cap the toes" Proteus setting.</summary>
+internal enum ToeCapMode { Option, Flag }
+
 /// <summary>What the Geometry section's "Cap the toes" tick shows this frame.</summary>
-/// <param name="Visible">The mod ships a usable toe cap and Penumbra answered.</param>
-/// <param name="On">The cap the compositor would use is selected and has a map.</param>
-/// <param name="Held">A temporary setting (a Glamourer design, typically) holds the mod, so a write would not show.</param>
-/// <param name="Inherited">The collection inherits this mod's settings; a write gives it its own.</param>
-internal readonly record struct ToeCapTickView(bool Visible, bool On, bool Held, bool Inherited);
+/// <param name="Visible">Penumbra answered for the mod.</param>
+/// <param name="On">The next composite would cap this mod: its own mapped cap is selected, or its setting is on.</param>
+/// <param name="Held">Option mode, and a temporary setting (a Glamourer design, typically) holds the mod, so a write would not show.</param>
+/// <param name="Inherited">Option mode, and the collection inherits this mod's settings; a write gives it its own.</param>
+/// <param name="Mode">Which store the tick writes.</param>
+/// <param name="Locked">Flag mode, but the mod's own single-select cap is selected in Penumbra: only Penumbra can turn it off.</param>
+internal readonly record struct ToeCapTickView(bool Visible, bool On, bool Held, bool Inherited, ToeCapMode Mode, bool Locked);
+
+/// <summary>What one click writes: the Masks group's new selection (null = no Penumbra write) and the setting (null = unchanged).</summary>
+internal readonly record struct ToeCapWrite(IReadOnlyList<string>? MaskSelection, bool? CapToes);
+
+internal enum ToeCapApplyStatus { Ok, PenumbraRefused, SaveFailed }
+
+/// <summary>How a click went; <paramref name="Ec"/> is Penumbra's answer when it refused.</summary>
+internal readonly record struct ToeCapApplyResult(ToeCapApplyStatus Status, PenumbraApiEc? Ec = null);
 
 /// <summary>Whether a ticked cap can show from this mod: the hint under the tick.</summary>
 internal enum ToeCapReach
@@ -28,24 +41,72 @@ internal enum ToeCapReach
 }
 
 /// <summary>
-/// The "Cap the toes" tick in the Colors window's Geometry section. Unlike <see cref="GeometryToggles"/>, it is not a
-/// sidecar flag: it is the mod's reserved <see cref="SidecarDiscoveryService.ToeCapOptionName"/> option in its Masks
-/// group in Penumbra, so it lives in the collection and the compositor reads it unchanged. Pure, so every state the
-/// tick shows is tested; StatusWindow only maps it onto ImGui.
+/// The "Cap the toes" tick in the Colors window's Geometry section, on every mod. On a mod that ships its own toe cap in
+/// a multi-select Masks group it is that reserved <see cref="SidecarDiscoveryService.ToeCapOptionName"/> option in
+/// Penumbra (per collection, kept by designs); on any other mod it is the <see cref="ProteusMetadata.CapToes"/> setting,
+/// which caps with Proteus's built-in cap. The compositor's precedence lives in
+/// <see cref="SidecarDiscoveryService.ChooseToeCap"/>. Pure, so every state the tick shows is tested; StatusWindow only
+/// maps it onto ImGui and supplies the two writes.
 /// </summary>
 internal static class ToeCapToggle
 {
     /// <summary>
-    /// The tick's state from this frame's settings read. Hidden without a usable cap or without settings. On follows
-    /// the compositor's rule (<see cref="SidecarDiscoveryService.FirstSelectedToeCap"/>, then its map), so the tick
-    /// and the cap cannot disagree.
+    /// The tick's state from this frame's settings read and the mod's setting. Hidden without settings. On follows the
+    /// compositor's rule (<see cref="SidecarDiscoveryService.FirstSelectedToeCap"/>, then its map, else the setting), so
+    /// the tick and the cap cannot disagree.
     /// </summary>
-    public static ToeCapTickView View(ToeCapOptionRef? option, PenumbraBridge.ModSettingsSnapshot? settings)
+    public static ToeCapTickView View(ToeCapOptionRef? option, PenumbraBridge.ModSettingsSnapshot? settings, bool capToes)
     {
-        if (option == null || settings is not { } s) return default;
-        var first = SidecarDiscoveryService.FirstSelectedToeCap(GroupSelection(s.Options, option.Group));
-        bool on = first != null && option.CappedOptions.Contains(first, StringComparer.OrdinalIgnoreCase);
-        return new ToeCapTickView(true, on, s.Temporary, s.Inherited);
+        if (settings is not { } s) return default;
+        bool optionOn = false;
+        if (option != null)
+        {
+            var first = SidecarDiscoveryService.FirstSelectedToeCap(GroupSelection(s.Options, option.Group));
+            optionOn = first != null && option.CappedOptions.Contains(first, StringComparer.OrdinalIgnoreCase);
+        }
+        var mode = option is { Writable: true } ? ToeCapMode.Option : ToeCapMode.Flag;
+        bool isOption = mode == ToeCapMode.Option;
+        return new ToeCapTickView(true, optionOn || capToes, s.Temporary && isOption, s.Inherited && isOption, mode,
+                                  optionOn && !isOption);
+    }
+
+    /// <summary>
+    /// What a click writes. Ticking selects the mod's own cap in option mode, or sets the setting in flag mode. Unticking
+    /// deselects every toe-cap option (when one is selected and the group is writable) and clears the setting if set.
+    /// </summary>
+    public static ToeCapWrite WriteFor(ToeCapOptionRef? option, IReadOnlyDictionary<string, List<string>>? options,
+                                       ToeCapTickView view, bool capToes, bool on)
+    {
+        if (on)
+            return view.Mode == ToeCapMode.Option && option != null
+                ? new ToeCapWrite(SelectionAfter(GroupSelection(options, option.Group), option.Option, true), null)
+                : new ToeCapWrite(null, true);
+
+        IReadOnlyList<string>? selection = null;
+        if (option is { Writable: true })
+        {
+            var current = GroupSelection(options, option.Group);
+            if (SidecarDiscoveryService.FirstSelectedToeCap(current) != null)
+                selection = SelectionAfter(current, option.Option, false);
+        }
+        return new ToeCapWrite(selection, capToes ? false : null);
+    }
+
+    /// <summary>
+    /// Carry out a click: the Penumbra write first, and the setting only once that took (or none was needed), so a
+    /// refusal leaves both stores as they were. <paramref name="writeFlag"/> returns whether the save succeeded.
+    /// </summary>
+    public static ToeCapApplyResult Apply(ToeCapWrite write, Func<IReadOnlyList<string>, PenumbraApiEc> writeOption,
+                                          Func<bool, bool> writeFlag)
+    {
+        if (write.MaskSelection is { } selection)
+        {
+            var ec = writeOption(selection);
+            if (!Succeeded(ec)) return new ToeCapApplyResult(ToeCapApplyStatus.PenumbraRefused, ec);
+        }
+        if (write.CapToes is { } flag && !writeFlag(flag))
+            return new ToeCapApplyResult(ToeCapApplyStatus.SaveFailed);
+        return new ToeCapApplyResult(ToeCapApplyStatus.Ok);
     }
 
     /// <summary>A group's selection from Penumbra's settings, by name in any case; null when the group is absent.</summary>

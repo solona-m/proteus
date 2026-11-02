@@ -38,6 +38,19 @@ public class GeometryTogglesTests
         }
     }
 
+    /// <summary>
+    /// "Cap the toes" promotes through the composite's toe-cap answer (only once a cap resolves), never through
+    /// <see cref="RenderModeInference.WantsGeometry"/>, and it is not one of the five sidecar toggles.
+    /// </summary>
+    [Fact]
+    [Trait("Plan", "EDGE-toecap-geometry-34")]
+    public void CapToes_alone_does_not_want_geometry()
+    {
+        var md = new ProteusMetadata { CapToes = true };
+        Assert.False(RenderModeInference.WantsGeometry(md));
+        Assert.DoesNotContain(GeometryToggles.All, t => t.IsOn(md));
+    }
+
     /// <summary>Each tick alone promotes the mod to a shell, and each property the promotion reads has a tick.</summary>
     [Fact]
     [Trait("Plan", "AC-navel-bridge-3")]

@@ -134,24 +134,25 @@ public sealed partial class SecondSkinService
 
             private void ReportStats()
             {
-                // A toe cap was wanted but no binding described this body. Logged, not chat (the wearer cannot fix it); deduped.
-                if (stats.CapDeclined is { } declined && build.service.lastCapDeclined != declined)
+                // Which cap this host got, or why it got none. Logged, not chat (the wearer cannot fix it), per host and only
+                // on a change, so a feet host and a legs host in one look don't take turns repeating it every recomposite.
+                // A host with no foot at all (a top) records "none" and says nothing.
+                var hostKey = $"{host.Prefix}{host.SetId:D4}/{host.Slot}";
+                string outcome = stats.CapUsed is { } used ? "used:" + used
+                               : stats.CapDeclined is { } why ? "declined:" + why
+                               : "none";
+                if (OutcomeChanged(build.service.capOutcomeByHost, build.service.capLogGate, hostKey, outcome)
+                    && ShouldLog(outcome))
                 {
-                    build.service.lastCapDeclined = declined;
-                    build.service.lastCapUsed = null;   // the cap placed again later is news, the same way a new decline is
-                    build.service.log.Warning("[Proteus] second skin: toe cap declined — {0}", declined);
-                }
-
-                // Which cap this shell actually got. Only on a change, so it is not log spam.
-                if (stats.CapUsed is { } capUsed)
-                {
-                    // A placed cap re-arms the decline line, so declining again later is logged.
-                    build.service.lastCapDeclined = null;
-                    if (build.service.lastCapUsed != capUsed)
-                    {
-                        build.service.lastCapUsed = capUsed;
+                    if (stats.CapUsed is { } capUsed)
                         build.service.log.Information("[Proteus] second skin: toe cap {0}", capUsed);
-                    }
+                    else if (stats.CapDeclined == SecondSkinWriter.NoBareFootReason)
+                        build.service.log.Information("[Proteus] second skin: toe cap not placed on {0} — {1}",
+                            hostKey, SecondSkinWriter.NoBareFootReason);
+                    else
+                        build.service.log.Information("[Proteus] second skin: toe cap declined on {0} — {1}; the toes "
+                            + "keep the plain shell. Toe caps ship for Bibo+, Neolithe, Rue and YAB.",
+                            hostKey, stats.CapDeclined ?? "");
                 }
 
                 // What the redundancy pass took out, at Information (the writer's per-drop lines are Debug) and naming the switch.

@@ -101,6 +101,8 @@ public sealed partial class SecondSkinService
         private byte[]?[] alphaByLayer = null!;
         private List<(string ModDir, int LayerIdx, byte[] Normal)> reliefContribs = null!;
         private byte[]? sharedToeCap;
+        /// <summary>Whether any authored toe cap loaded; without one no layer gets a cap (see <see cref="LayerToeCap"/>).</summary>
+        private bool capsAvailable;
         private Dictionary<string, float> bridgeByMod = null!;
         private Dictionary<string, float> smoothByMod = null!;
         private Dictionary<string, float> cleftByMod = null!;
@@ -152,6 +154,9 @@ public sealed partial class SecondSkinService
         internal bool MenMapsReady { get; init; }
         /// <summary>Whether a mod's women's art may be painted on a man ("Overlay on men"); null allows every mod.</summary>
         internal Func<string, bool>? MenAllowed { get; init; }
+
+        /// <summary>This composite's toe-cap map per mod (null = none): resolved once, before promotion, and reused here.</summary>
+        internal IReadOnlyDictionary<string, ToeCapMap>? ToeCaps { get; init; }
 
         /// <summary>
         /// The men's layout the shell's body surface is in on a man — TBSE's for <c>_b</c> parts, the men's vanilla for
@@ -1169,24 +1174,34 @@ public sealed partial class SecondSkinService
 
             // A toe cap belongs to the FOOT, not the mod that ships the map: one mod paints it and every shell over the toes
             // is rebuilt with it. The map is remapped into body UV with its own mod's source type.
+            // The map only says a cap is WANTED: the authored cap's footprint decides the cut. Without an authored cap the
+            // writer would generate one from the mask, which a whole-sheet mask must never reach, so then nothing is capped.
             sharedToeCap = null;
-            var capCandidates = (allEntries ?? gearOverlays.Select(g => g.Entry).ToList())
-                .GroupBy(e => e.ModDirectory, StringComparer.OrdinalIgnoreCase)
-                .Select(g => g.First());
-            foreach (var tEntry in capCandidates)
+            capsAvailable = service.AuthoredCaps().Count > 0;
+            if (!capsAvailable && ToeCaps is { Count: > 0 })
             {
-                var tPath = service.discovery.ResolveActiveToeCap(tEntry);
-                if (tPath == null) continue;
-
-                // Remapped with the OWNING mod's UV space; after that it is body-UV pixels anyone can use.
-                var tDesc = gearOverlays.FirstOrDefault(g =>
-                    string.Equals(g.Entry.ModDirectory, tEntry.ModDirectory, StringComparison.OrdinalIgnoreCase)).Overlay?.Descriptor;
-                var tSrc = tDesc != null ? tDesc.SourceBodyType ?? InferOverlayBodyType(tDesc) : bodyType;
-                sharedToeCap = service.ReadToeCap(tPath, tSrc, bodyType);
+                var meshDir = Path.Combine(service.discovery.AssemblyDir ?? "?", "Meshes");
+                if (LogLineChanged(ref service.lastCapsMissing, meshDir))
+                    service.log.Warning("[Proteus] second skin: no authored toe cap loaded from {0} — the install is "
+                                      + "damaged; toe caps are off until Proteus is reinstalled", meshDir);
+            }
+            var capCandidates = (allEntries ?? gearOverlays.Select(g => g.Entry).ToList())
+                .Select(e => e.ModDirectory);
+            foreach (var (tMod, tMap) in capsAvailable ? CapCandidates(capCandidates, ToeCaps) : [])
+            {
+                // An own map is remapped with the OWNING mod's UV space; after that it is body-UV pixels anyone can use.
+                // The built-in cap is uniform, so it has no UV space and is never read or remapped.
+                sharedToeCap = SharedCapMask(tMap, path =>
+                {
+                    var tDesc = gearOverlays.FirstOrDefault(g =>
+                        string.Equals(g.Entry.ModDirectory, tMod, StringComparison.OrdinalIgnoreCase)).Overlay?.Descriptor;
+                    var tSrc = tDesc != null ? tDesc.SourceBodyType ?? InferOverlayBodyType(tDesc) : bodyType;
+                    return service.ReadToeCap(path, tSrc, bodyType);
+                });
                 if (sharedToeCap != null)
                 {
                     service.log.Information("[Proteus] second skin: toe cap {0} from \"{1}\" applies to every shell over the toes",
-                        Path.GetFileName(tPath), tEntry.ModDirectory);
+                        tMap.OwnPath is { } own ? Path.GetFileName(own) : "(built-in)", tMod);
                     break;
                 }
             }

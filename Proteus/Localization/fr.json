@@ -631,6 +631,18 @@
     "message": "Rien de ce que montre ce mod ne devient un vêtement sur le corps (il est fixé sur Peau, c'est un imprimé, il est\nsur le visage ou les cheveux plutôt que sur le corps, ou son auteur l'a réglé pour ignorer le bout), donc le bout\nn'a rien de ce mod à façonner. Il façonne toujours le vêtement d'un autre mod par-dessus les orteils.",
     "description": ""
   },
+  "Colors.ToeCap.Flag.Tip": {
+    "message": "Activez-le pour les bas et les chaussettes : les orteils sont couverts par un bout arrondi, comme\nun vrai bas, au lieu de suivre chaque orteil.\nCocher cette case transforme les couches de peau de ce mod en vêtement (une seconde peau) pour que le bout ait\nquelque chose à façonner — cela coûte une reconstruction, et un imprimé ou une couche fixée sur Peau reste tel quel.\nLe bout est fait pour Bibo+, Neolithe, Rue et YAB ; sur les autres corps le vêtement est construit\nmais les orteils restent tels quels.\nCe mod n'a pas de bout à lui, donc ce réglage est enregistré dans les paramètres Proteus du mod : il s'applique\ndans toutes les collections et accompagne le mod quand vous l'exportez.",
+    "description": ""
+  },
+  "Colors.ToeCap.Locked.Tip": {
+    "message": "L'option \"Toe Cap\" propre à ce mod est sélectionnée dans Penumbra, dans un groupe Masks qui n'autorise\nqu'un seul choix, elle ne peut donc pas être désactivée ici. Modifiez-la dans Penumbra.",
+    "description": ""
+  },
+  "Colors.ToeCap.SaveFailed": {
+    "message": "Impossible d'enregistrer les paramètres Proteus de ce mod, la modification a donc été annulée. Le journal (/xllog) en donne la raison.",
+    "description": ""
+  },
   "Colors.SmoothNipples.Label": {
     "message": "Adoucir le téton",
     "description": ""

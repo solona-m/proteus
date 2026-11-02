@@ -188,7 +188,7 @@ public partial class CompositorService
         HashSet<string> maskShellMods,
         List<string> baseKeys,
         List<(OverlayEntry Entry, ResolvedContent Content)> contentLayers,
-        HashSet<string> toeCapMods,
+        IReadOnlySet<string> toeCapMods,
         bool skinOnly = false)
     {
         var sb = new System.Text.StringBuilder();

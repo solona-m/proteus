@@ -631,6 +631,18 @@
     "message": "Nada de lo que muestra este mod se convierte en una prenda sobre el cuerpo (está fijado en Piel, es un estampado,\nestá en la cara o el pelo en vez del cuerpo, o su autor lo marcó para omitir la puntera), así que la puntera no\ntiene nada de este mod que moldear. Sigue moldeando la prenda de otro mod sobre los dedos.",
     "description": ""
   },
+  "Colors.ToeCap.Flag.Tip": {
+    "message": "Actívalo para medias y calcetines: los dedos quedan cubiertos por una puntera redondeada, como\nsienta la calcetería real, en vez de seguir cada dedo.\nMarcarlo convierte las capas de piel de este mod en una prenda (una segunda piel) para que la puntera tenga\nalgo que moldear; eso cuesta una reconstrucción, y un estampado o una capa fijada en Piel se queda como está.\nLa puntera está hecha para Bibo+, Neolithe, Rue y YAB; en otros cuerpos la prenda se construye\npero los dedos se quedan como están.\nEste mod no tiene puntera propia, así que esto se guarda en los ajustes de Proteus del mod: se aplica\nen todas las colecciones y va con el mod cuando lo exportas.",
+    "description": ""
+  },
+  "Colors.ToeCap.Locked.Tip": {
+    "message": "La opción \"Toe Cap\" propia de este mod está seleccionada en Penumbra, en un grupo Masks que solo permite\nuna elección, así que no se puede desactivar aquí. Cámbiala en Penumbra.",
+    "description": ""
+  },
+  "Colors.ToeCap.SaveFailed": {
+    "message": "No se pudieron guardar los ajustes de Proteus de este mod, así que el cambio se deshizo. El registro (/xllog) indica el motivo.",
+    "description": ""
+  },
   "Colors.SmoothNipples.Label": {
     "message": "Suavizar el pezón",
     "description": ""

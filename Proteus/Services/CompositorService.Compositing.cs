@@ -92,31 +92,39 @@ public partial class CompositorService
     }
 
     /// <summary>
-    /// Which enabled mods have a toe cap selected; public so the editor asks the same promotion predicate. Per mod, so a
-    /// stale selection bit can only promote its own mod's overlays.
+    /// Which enabled mods want a toe cap, and with which map (their own option's, or the built-in one for "Cap the
+    /// toes"). Resolved ONCE per composite: promotion, the fingerprint, the shell build and the editor all read this one
+    /// answer, so they cannot disagree. Per mod, so a stale selection bit can only promote its own mod's overlays.
     /// </summary>
-    public HashSet<string> ToeCapWanted(IEnumerable<OverlayEntry> allEntries)
+    public ToeCapSnapshot ToeCapWanted(IEnumerable<OverlayEntry> allEntries)
     {
-        var want = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        var maps = new List<(string, ToeCapMap?)>();
         // The collection is read once, not per mod. Null means no player, so nothing is on.
         var collId = penumbra.GetPlayerCollectionId();
         if (collId != null)
             foreach (var e in allEntries)
-                if (e.Enabled && discovery.ResolveActiveToeCap(e, collId.Value) != null)
-                    want.Add(e.ModDirectory);
-        _toeCapWantedSnapshot = want;
-        return want;
+                if (e.Enabled)
+                    maps.Add((e.ModDirectory, discovery.ResolveActiveToeCap(e, collId.Value)));
+        var snapshot = ToeCapSnapshot.From(maps);
+        _toeCapSnapshot = snapshot;
+        return snapshot;
     }
+
+    /// <summary>Publish "nothing wants a cap", for a composite that resolves no mods at all.</summary>
+    internal void ClearToeCapSnapshot() => _toeCapSnapshot = ToeCapSnapshot.Empty;
 
     /// <summary>
     /// The last composite's answer for one mod, for the editor. False until a composite has run.
     /// </summary>
-    public bool ToeCapWantedFor(string modDirectory) => _toeCapWantedSnapshot.Contains(modDirectory);
+    public bool ToeCapWantedFor(string modDirectory) => _toeCapSnapshot.Wanted.Contains(modDirectory);
+
+    /// <summary>Whether the last composite capped this mod from its own Toe Cap option (not the built-in cap).</summary>
+    public bool ToeCapFromOptionFor(string modDirectory) => _toeCapSnapshot.FromOption.Contains(modDirectory);
 
     /// <summary>
     /// Replaced wholesale, never mutated. The composite is the only writer; readers are on the framework thread.
     /// </summary>
-    private volatile HashSet<string> _toeCapWantedSnapshot = new(StringComparer.OrdinalIgnoreCase);
+    private volatile ToeCapSnapshot _toeCapSnapshot = ToeCapSnapshot.Empty;
 
     public bool NeedsUnmirroredShell(OverlayDescriptor d)
     {

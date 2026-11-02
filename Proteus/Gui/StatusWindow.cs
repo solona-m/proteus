@@ -2078,7 +2078,8 @@ public class StatusWindow : Window
             compositor.TriggerRecomposite("mask-glow-warmup");
 
         // The toe cap is stripped from every mask list yet promotes the mod's skin overlays to cloth, so show it on the tab owning its group.
-        if (compositor.ToeCapWantedFor(entry.ModDirectory))
+        // Only when the cap comes from that group's option: a "Cap the toes" setting is not in Masks.
+        if (compositor.ToeCapFromOptionFor(entry.ModDirectory))
         {
             ImGui.TextDisabled(Strings.ColorPanel.ToeCapOn);
             if (ImGui.IsItemHovered())
@@ -2358,8 +2359,8 @@ public class StatusWindow : Window
     /// <summary>
     /// The mod-wide geometry passes (<see cref="GeometryToggles.All"/>), written to the sidecar because they are authoring
     /// decisions that ship with the pack. Ticking any promotes the mod's skin overlays to a shell, so
-    /// <see cref="RenderModeInference.WantsGeometry"/> must list every one. Then the toe cap, the one tick not in the
-    /// sidecar: it is the mod's Toe Cap option in Penumbra and promotes through <c>ToeCapWanted</c> instead.
+    /// <see cref="RenderModeInference.WantsGeometry"/> must list every one. Then the toe cap, which promotes through
+    /// <c>ToeCapWanted</c> instead: the mod's own Toe Cap option in Penumbra where it has one, else its <c>CapToes</c> setting.
     /// </summary>
     private void DrawBustBridgeAdvanced(OverlayEntry entry)
     {
@@ -2384,45 +2385,69 @@ public class StatusWindow : Window
     }
 
     /// <summary>
-    /// "Cap the toes": the mod's reserved Toe Cap option in its Masks group, read from and written to Penumbra. Drawn
-    /// only for a mod that ships a usable cap. Everything it shows comes from this frame's settings read through
-    /// <see cref="ToeCapToggle"/>, never from the compositor's per-composite snapshot. A write raises Penumbra's
-    /// setting-changed event, which recomposites the mod; nothing else is triggered here.
+    /// "Cap the toes", on every mod: the mod's reserved Toe Cap option in its Masks group in Penumbra where it ships a
+    /// writable one, else its <c>CapToes</c> Proteus setting (Proteus's built-in cap). Everything it shows comes from this
+    /// frame's settings read and the mod's metadata through <see cref="ToeCapToggle"/>, never from the compositor's
+    /// per-composite snapshot. An option write raises Penumbra's setting-changed event, which recomposites the mod; a
+    /// setting write recomposites here, like the other geometry ticks.
     /// </summary>
     private void DrawToeCapTick(OverlayEntry entry)
     {
         var dir = entry.ModDirectory;
+        var md = entry.Metadata;
         var opt = _toeCapOptions.Get(dir, entry.ModRoot, entry.SidecarRoot);
-        if (opt == null) return;   // before any IPC: most mods never have a cap
         if (penumbra.GetPlayerCollectionId() is not { } coll) return;
         var snap = penumbra.GetModSettingsSnapshot(coll, dir);
-        var view = ToeCapToggle.View(opt, snap);
+        bool capToes = md.CapToes == true;
+        var view = ToeCapToggle.View(opt, snap, capToes);
         if (!view.Visible || snap is not { } s) return;
 
         var cs = Strings.Colors;
-        if (view.Held) ImGui.BeginDisabled();
+        bool disabled = view.Held || view.Locked;
+        if (disabled) ImGui.BeginDisabled();
         bool on = view.On;
         if (ImGui.Checkbox($"{cs.ToeCap}###toecap_{dir}", ref on))
         {
-            var sel = ToeCapToggle.SelectionAfter(ToeCapToggle.GroupSelection(s.Options, opt.Group), opt.Option, on);
-            var ec = penumbra.SetModOption(coll, dir, opt.Group, sel);
-            if (ToeCapToggle.Succeeded(ec))
+            var write = ToeCapToggle.WriteFor(opt, s.Options, view, capToes, on);
+            var result = ToeCapToggle.Apply(write,
+                sel => penumbra.SetModOption(coll, dir, opt!.Group, sel),
+                flag =>
+                {
+                    var prev = md.CapToes;
+                    md.CapToes = flag ? true : null;   // written true or removed, never false
+                    if (discovery.SaveMetadata(entry)) return true;
+                    md.CapToes = prev;
+                    return false;
+                });
+            switch (result.Status)
             {
-                _toeCapError.Remove(dir);
-                Plugin.Log.Information("[Proteus] colors: toe cap {0} in {1} ({2}){3}", on ? "on" : "off", dir, ec,
-                    view.Inherited ? " — the collection now has its own setting for this mod instead of inheriting it" : "");
-            }
-            else
-            {
-                _toeCapError[dir] = string.Format(cs.ToeCapFailedFmt, ec);
-                Plugin.Log.Warning("[Proteus] colors: Penumbra refused toe cap {0} in {1} ({2}: {3} = [{4}])",
-                    on ? "on" : "off", dir, ec, opt.Group, string.Join(", ", sel));
+                case ToeCapApplyStatus.Ok:
+                    _toeCapError.Remove(dir);
+                    if (write.CapToes != null) RecompositeForOverlay(entry, "toe-cap");
+                    Plugin.Log.Information("[Proteus] colors: toe cap {0} in {1} ({2}){3}", on ? "on" : "off", dir,
+                        write.MaskSelection != null ? "its Toe Cap option" : "Cap the toes setting",
+                        view.Inherited && write.MaskSelection != null
+                            ? " — the collection now has its own setting for this mod instead of inheriting it" : "");
+                    break;
+                case ToeCapApplyStatus.PenumbraRefused:
+                    _toeCapError[dir] = string.Format(cs.ToeCapFailedFmt, result.Ec);
+                    Plugin.Log.Warning("[Proteus] colors: Penumbra refused toe cap {0} in {1} ({2}: {3} = [{4}])",
+                        on ? "on" : "off", dir, result.Ec?.ToString() ?? "?", opt?.Group ?? "?",
+                        string.Join(", ", write.MaskSelection ?? []));
+                    break;
+                case ToeCapApplyStatus.SaveFailed:
+                    _toeCapError[dir] = cs.ToeCapSaveFailed;
+                    Plugin.Log.Warning("[Proteus] colors: toe cap {0} in {1} not saved — the mod's Proteus settings could "
+                                     + "not be written", on ? "on" : "off", dir);
+                    break;
             }
         }
-        if (view.Held) ImGui.EndDisabled();
+        if (disabled) ImGui.EndDisabled();
         if (ImGui.IsItemHovered(ImGuiHoveredFlags.AllowWhenDisabled))
             ImGui.SetTooltip(view.Held ? cs.ToeCapHeldTip
-                                       : view.Inherited ? cs.ToeCapTip + "\n\n" + cs.ToeCapInheritedNote : cs.ToeCapTip);
+                           : view.Locked ? cs.ToeCapLockedTip
+                           : view.Mode == ToeCapMode.Flag ? cs.ToeCapFlagTip
+                           : view.Inherited ? cs.ToeCapTip + "\n\n" + cs.ToeCapInheritedNote : cs.ToeCapTip);
 
         if (view.On)
         {

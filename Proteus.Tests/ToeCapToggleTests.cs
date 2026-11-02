@@ -15,7 +15,7 @@ namespace Proteus.Tests;
 /// The Colors window's "Cap the toes" tick (<see cref="ToeCapToggle"/>): which mods get it, what it reads from
 /// Penumbra, what a click writes back, and when it says the cap can't show.
 /// </summary>
-public sealed class ToeCapToggleTests : IDisposable
+public sealed partial class ToeCapToggleTests : IDisposable
 {
     private const string BodyPath = "chara/human/c0201/obj/body/b0001/material/v0001/mt_c0201b0001_a.mtrl";
     private const string FacePath = "chara/human/c0201/obj/face/f0001/material/mt_c0201f0001_fac_a.mtrl";
@@ -53,7 +53,7 @@ public sealed class ToeCapToggleTests : IDisposable
     private static Dictionary<string, List<string>> Sel(string group, params string[] options)
         => new() { [group] = [.. options] };
 
-    private static ToeCapOptionRef Cap(params string[] capped) => new("Masks", capped[0], capped);
+    private static ToeCapOptionRef Cap(params string[] capped) => new("Masks", capped[0], capped, true);
 
     private static List<ColorTableRowPreset> PrintRows()
         => [new ColorTableRowPreset { Row = 16, SubRowA = new ColorTableSubRowPreset { Blend = RowBlend.Multiply } }];
@@ -107,9 +107,12 @@ public sealed class ToeCapToggleTests : IDisposable
 
     [Fact]
     [Trait("Plan", "AC-toecap-geometry-4")]
-    public void View_is_hidden_without_a_usable_option()
+    public void View_shows_the_flag_tick_without_a_usable_option()
     {
-        Assert.False(ToeCapToggle.View(null, Snap(Sel("Masks", "Toe Cap"))).Visible);
+        Assert.Equal(new ToeCapTickView(true, false, false, false, ToeCapMode.Flag, false),
+                     ToeCapToggle.View(null, Snap(Sel("Masks", "Toe Cap")), false));
+        Assert.Equal(new ToeCapTickView(true, true, false, false, ToeCapMode.Flag, false),
+                     ToeCapToggle.View(null, Snap(Sel("Masks")), true));
 
         Assert.Null(SidecarDiscoveryService.FindToeCapOption(ModRoot, SidecarRoot));   // no meta.json
         Assert.Null(SidecarDiscoveryService.FindToeCapOption(null, SidecarRoot));
@@ -155,11 +158,15 @@ public sealed class ToeCapToggleTests : IDisposable
 
     [Fact]
     [Trait("Plan", "EDGE-toecap-geometry-4")]
-    public void Find_is_null_for_a_single_select_masks_group()
+    public void Find_marks_a_single_select_cap_read_only()
     {
         WriteMeta("Masks", "Single", "Sleeves", "Toe Cap");
         WriteMap("Toe Cap");
-        Assert.Null(SidecarDiscoveryService.FindToeCapOption(ModRoot, SidecarRoot));
+        var found = SidecarDiscoveryService.FindToeCapOption(ModRoot, SidecarRoot)!;
+        Assert.Equal("Toe Cap", found.Option);
+        Assert.False(found.Writable);
+        WriteMeta("Masks", "Multi", "Sleeves", "Toe Cap");
+        Assert.True(SidecarDiscoveryService.FindToeCapOption(ModRoot, SidecarRoot)!.Writable);
     }
 
     [Fact]
@@ -170,7 +177,7 @@ public sealed class ToeCapToggleTests : IDisposable
         WriteMap("Toe Cap");
         var found = SidecarDiscoveryService.FindToeCapOption(ModRoot, SidecarRoot)!;
         Assert.Equal("masks", found.Group);
-        Assert.True(ToeCapToggle.View(found, Snap(Sel("MASKS", "Toe Cap"))).On);
+        Assert.True(ToeCapToggle.View(found, Snap(Sel("MASKS", "Toe Cap")), false).On);
     }
 
     [Fact]
@@ -183,10 +190,11 @@ public sealed class ToeCapToggleTests : IDisposable
         var found = SidecarDiscoveryService.FindToeCapOption(ModRoot, SidecarRoot);
         Assert.NotNull(found);
         Assert.Equal("Toe Cap", found!.Option);
+        Assert.True(found.Writable);
 
         File.WriteAllText(Path.Combine(ModRoot, "group_001_masks.json"),
             "{\"Name\":\"Masks\",\"Type\":\"Single\",\"Options\":[{\"Name\":\"Toe Cap\"}]}");
-        Assert.Null(SidecarDiscoveryService.FindToeCapOption(ModRoot, SidecarRoot));
+        Assert.False(SidecarDiscoveryService.FindToeCapOption(ModRoot, SidecarRoot)!.Writable);
     }
 
     // ── the tick's state ────────────────────────────────────────────────────
@@ -196,36 +204,36 @@ public sealed class ToeCapToggleTests : IDisposable
     [Trait("Plan", "EDGE-toecap-geometry-14")]
     public void View_is_on_exactly_when_the_compositor_would_cap()
     {
-        var on = ToeCapToggle.View(Cap("Toe Cap"), Snap(Sel("Masks", "Sleeves", "Toe Cap")));
-        Assert.Equal(new ToeCapTickView(true, true, false, false), on);
-        var off = ToeCapToggle.View(Cap("Toe Cap"), Snap(Sel("Masks", "Sleeves")));
-        Assert.Equal(new ToeCapTickView(true, false, false, false), off);
+        var on = ToeCapToggle.View(Cap("Toe Cap"), Snap(Sel("Masks", "Sleeves", "Toe Cap")), false);
+        Assert.Equal(new ToeCapTickView(true, true, false, false, ToeCapMode.Option, false), on);
+        var off = ToeCapToggle.View(Cap("Toe Cap"), Snap(Sel("Masks", "Sleeves")), false);
+        Assert.Equal(new ToeCapTickView(true, false, false, false, ToeCapMode.Option, false), off);
     }
 
     [Fact]
     [Trait("Plan", "AC-toecap-geometry-5")]
     public void View_is_held_under_a_temporary_setting()
     {
-        Assert.Equal(new ToeCapTickView(true, true, true, false),
-                     ToeCapToggle.View(Cap("Toe Cap"), Snap(Sel("Masks", "Toe Cap"), temporary: true)));
-        Assert.Equal(new ToeCapTickView(true, false, true, false),
-                     ToeCapToggle.View(Cap("Toe Cap"), Snap(Sel("Masks"), temporary: true)));
+        Assert.Equal(new ToeCapTickView(true, true, true, false, ToeCapMode.Option, false),
+                     ToeCapToggle.View(Cap("Toe Cap"), Snap(Sel("Masks", "Toe Cap"), temporary: true), false));
+        Assert.Equal(new ToeCapTickView(true, false, true, false, ToeCapMode.Option, false),
+                     ToeCapToggle.View(Cap("Toe Cap"), Snap(Sel("Masks"), temporary: true), false));
     }
 
     [Fact]
     [Trait("Plan", "EDGE-toecap-geometry-7")]
     public void View_is_hidden_without_settings()
-        => Assert.False(ToeCapToggle.View(Cap("Toe Cap"), null).Visible);
+        => Assert.False(ToeCapToggle.View(Cap("Toe Cap"), null, false).Visible);
 
     [Fact]
     [Trait("Plan", "EDGE-toecap-geometry-15")]
     public void View_reports_inherited_settings()
     {
-        var v = ToeCapToggle.View(Cap("Toe Cap"), Snap(Sel("Masks", "Toe Cap"), inherited: true));
+        var v = ToeCapToggle.View(Cap("Toe Cap"), Snap(Sel("Masks", "Toe Cap"), inherited: true), false);
         Assert.True(v.Visible);
         Assert.True(v.Inherited);
         Assert.False(v.Held);
-        Assert.False(ToeCapToggle.View(Cap("Toe Cap"), Snap(Sel("Masks"))).Inherited);
+        Assert.False(ToeCapToggle.View(Cap("Toe Cap"), Snap(Sel("Masks")), false).Inherited);
     }
 
     [Fact]
@@ -233,7 +241,7 @@ public sealed class ToeCapToggleTests : IDisposable
     public void Untouched_masks_group_reads_off_and_ticks_to_the_cap()
     {
         var options = Sel("Fabric", "Silk");
-        var v = ToeCapToggle.View(Cap("Toe Cap"), Snap(options));
+        var v = ToeCapToggle.View(Cap("Toe Cap"), Snap(options), false);
         Assert.True(v.Visible);
         Assert.False(v.On);
         Assert.Equal(["Toe Cap"], ToeCapToggle.SelectionAfter(ToeCapToggle.GroupSelection(options, "Masks"), "Toe Cap", true));
@@ -249,8 +257,8 @@ public sealed class ToeCapToggleTests : IDisposable
         Assert.Equal("Toe Cap", found.Option);
         Assert.Equal(["Toe Cap"], found.CappedOptions);
 
-        Assert.False(ToeCapToggle.View(found, Snap(Sel("Masks", "ToeCap", "Toe Cap"))).On);
-        Assert.True(ToeCapToggle.View(found, Snap(Sel("Masks", "Toe Cap"))).On);
+        Assert.False(ToeCapToggle.View(found, Snap(Sel("Masks", "ToeCap", "Toe Cap")), false).On);
+        Assert.True(ToeCapToggle.View(found, Snap(Sel("Masks", "Toe Cap")), false).On);
         Assert.Equal(["Seam", "Toe Cap"], ToeCapToggle.SelectionAfter(["ToeCap", "Seam", "Toe Cap"], "Toe Cap", true));
         Assert.Equal(["Seam"], ToeCapToggle.SelectionAfter(["ToeCap", "Seam", "Toe Cap"], "Toe Cap", false));
     }
@@ -308,7 +316,8 @@ public sealed class ToeCapToggleTests : IDisposable
     {
         var cs = new ColorsStrings();
         foreach (var s in new[] { cs.ToeCap, cs.ToeCapTip, cs.ToeCapHeldTip, cs.ToeCapInheritedNote,
-                                  cs.ToeCapFailedFmt, cs.ToeCapModOff, cs.ToeCapNoShell })
+                                  cs.ToeCapFailedFmt, cs.ToeCapModOff, cs.ToeCapNoShell,
+                                  cs.ToeCapFlagTip, cs.ToeCapLockedTip, cs.ToeCapSaveFailed })
             Assert.False(string.IsNullOrWhiteSpace(s));
         Assert.Contains("{0}", cs.ToeCapFailedFmt);
     }
@@ -360,7 +369,7 @@ public sealed class ToeCapToggleTests : IDisposable
     public void Reach_is_mod_off_when_disabled()
     {
         Assert.Equal(ToeCapReach.ModOff, ToeCapToggle.Reach(Simple(Body()), false, null, false));
-        var v = ToeCapToggle.View(Cap("Toe Cap"), Snap(Sel("Masks", "Toe Cap"), enabled: false));
+        var v = ToeCapToggle.View(Cap("Toe Cap"), Snap(Sel("Masks", "Toe Cap"), enabled: false), false);
         Assert.True(v.Visible);
         Assert.False(v.Held);
     }

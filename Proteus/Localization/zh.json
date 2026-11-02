@@ -631,6 +631,18 @@
     "message": "此模组显示的内容都不会成为身体上的衣物（被固定为皮肤、是印花、位于脸或头发而不是\n身体上，或作者设置为跳过袜头），所以袜头在此模组中没有可塑形的对象。\n它仍会作用于覆盖脚趾的其他模组的衣物。",
     "description": ""
   },
+  "Colors.ToeCap.Flag.Tip": {
+    "message": "用于丝袜和袜子：脚趾会被一个圆润的袜头包住，就像真正的袜子那样，\n而不是贴合每一根脚趾。\n勾选后，此模组的皮肤图层会变成衣物（第二层皮肤），让袜头有可塑形的对象\n——这需要重新构建一次，印花或固定为皮肤的图层保持不变。\n袜头为 Bibo+、Neolithe、Rue 和 YAB 制作；在其他体型上会生成衣物，\n但脚趾保持原样。\n此模组没有自带袜头，所以此设置保存在模组的 Proteus 设置中：\n它在所有合集中生效，导出模组时会随模组一起带走。",
+    "description": ""
+  },
+  "Colors.ToeCap.Locked.Tip": {
+    "message": "此模组自带的 \"Toe Cap\" 选项已在 Penumbra 中选中，它所在的 Masks 组只允许\n选一个，所以无法在这里关闭。请在 Penumbra 中更改。",
+    "description": ""
+  },
+  "Colors.ToeCap.SaveFailed": {
+    "message": "无法保存此模组的 Proteus 设置，所以已撤销更改。原因见日志（/xllog）。",
+    "description": ""
+  },
   "Colors.SmoothNipples.Label": {
     "message": "平滑乳头",
     "description": ""
