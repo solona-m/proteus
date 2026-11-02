@@ -404,7 +404,7 @@ internal static partial class BodyRetarget
     /// The tags a swapped-in skin layer has taken off: the body mod's switched ones as always, and — when the garment's
     /// own skin tags are given — every other tag on the new body's skin parts the garment's own skin did not carry.
     /// </summary>
-    private static IReadOnlySet<string>? SkinTagsDropped(SlotPair pair, IReadOnlySet<string>? keep)
+    internal static IReadOnlySet<string>? SkinTagsDropped(SlotPair pair, IReadOnlySet<string>? keep)
     {
         if (keep == null) return pair.TargetSwitched;
         var drop = new HashSet<string>(pair.TargetSwitched ?? new HashSet<string>(), StringComparer.Ordinal);

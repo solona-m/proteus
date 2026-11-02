@@ -99,6 +99,20 @@ public class KeepEndsReshapeTests
         Assert.NotNull(KeepEnds.Reshape(AllHeld(left), left, new HashSet<int> { 9 }, out _));
     }
 
+    /// <summary>The writer's input for a swapped-in skin: every tag on the new body's skin the glove's own skin did not
+    /// carry is taken off, alongside the body mod's switched tags; with no glove tags given, only the switched ones, as
+    /// always.</summary>
+    [Fact]
+    [Trait("Plan", "EDGE-cross-sex-wrist-band-8")]
+    public void Swapped_skin_drops_the_tags_the_glove_did_not_carry() // [EDGE-cross-sex-wrist-band-8]
+    {
+        var body = Glove(skinLeft: true, skinRight: true, skinMask: 0b11, names: ["atr_ude", "atr_kos"]);
+        var pair = default(BodyRetarget.SlotPair) with { Slot = "_glv", Target = body, TargetSwitched = new HashSet<string> { "atrx_switch" } };
+        Assert.Equal(["atrx_switch"], BodyRetarget.SkinTagsDropped(pair, null)!.Order());
+        Assert.Equal(["atr_kos", "atr_ude", "atrx_switch"], BodyRetarget.SkinTagsDropped(pair, new HashSet<string>())!.Order());
+        Assert.Equal(["atr_kos", "atrx_switch"], BodyRetarget.SkinTagsDropped(pair, new HashSet<string> { "atr_ude" })!.Order());
+    }
+
     [Fact]
     [Trait("Plan", "EDGE-cross-sex-wrist-band-8")]
     public void Skin_tags_are_the_gloves_own() // [EDGE-cross-sex-wrist-band-8]

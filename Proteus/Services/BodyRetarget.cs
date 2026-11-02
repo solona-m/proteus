@@ -788,7 +788,8 @@ internal static partial class BodyRetarget
                                bool rebuildSwapsShapeOnly = false, IReadOnlySet<string>? swappedSkinTags = null)
     {
         // The pairs that go in for their shape only as asked — not one ReadySmallclothes turns so below, which keeps the
-        // garment's own skin because its new body's smallclothes could not be brought in.
+        // garment's own skin because its new body's smallclothes could not be brought in. A pair asked so is never readied
+        // for smallclothes itself: the one caller, a glove's men's hands (TBSE, TBSE-X), draws none.
         var shapeOnlyAsked = rebuildSwapsShapeOnly
             ? pairs.Where(p => p.ShapeOnly).Select(p => p.Slot).ToHashSet(StringComparer.Ordinal)
             : null;

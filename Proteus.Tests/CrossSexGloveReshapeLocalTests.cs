@@ -275,18 +275,34 @@ public class CrossSexGloveReshapeLocalTests(HalonesMensSizeSet run, ITestOutputH
                     var (a, bb, c) = (At(body, part.Triangles[t]), At(body, part.Triangles[t + 1]), At(body, part.Triangles[t + 2]));
                     normalOf[string.Join("|", new[] { K(a), K(bb), K(c) }.Order())] = Vector3.Cross(bb - a, c - a);
                 }
-        int matched = 0, turned = 0;
+        // A triangle the cut pulled a corner of is not the body's own any more: judged against the men's body surface at
+        // its middle instead.
+        var surfaces = bodies.Select(m => new BodySurface(m, 0.02f)).ToList();
+        int matched = 0, turned = 0, pulled = 0, pulledTurned = 0;
         foreach (var part in glove.Parts.Where(p => p.Island < 0 && SecondSkinWriter.IsBodySkinMaterial(p.Material)))
             for (int t = 0; t + 2 < part.Triangles.Length; t += 3)
             {
                 var (a, bb, c) = (At(glove, part.Triangles[t]), At(glove, part.Triangles[t + 1]), At(glove, part.Triangles[t + 2]));
-                if (!normalOf.TryGetValue(string.Join("|", new[] { K(a), K(bb), K(c) }.Order()), out var n)) continue;
-                matched++;
-                if (Vector3.Dot(n, Vector3.Cross(bb - a, c - a)) <= 0f) turned++;
+                var facing = Vector3.Cross(bb - a, c - a);
+                if (normalOf.TryGetValue(string.Join("|", new[] { K(a), K(bb), K(c) }.Order()), out var n))
+                {
+                    matched++;
+                    if (Vector3.Dot(n, facing) <= 0f) turned++;
+                    continue;
+                }
+                pulled++;
+                var mid = (a + bb + c) / 3f;
+                BodySurface.Hit best = default;
+                bool any = false;
+                foreach (var surface in surfaces)
+                    if (surface.Nearest(mid, 0.02f, out var hit) && (!any || hit.Distance < best.Distance)) { best = hit; any = true; }
+                if (!any || Vector3.Dot(best.Normal, facing) <= 0f) pulledTurned++;
             }
-        o.WriteLine($"{key}: {matched} skin triangles matched the men's body, {turned} turned");
+        o.WriteLine($"{key}: {matched} skin triangles matched the men's body, {turned} turned; {pulled} pulled at the cut, {pulledTurned} turned");
         Assert.True(matched > 0);
         Assert.Equal(0, turned);
+        Assert.Equal(0, pulledTurned);
+        Assert.True(pulled <= 30, $"{pulled} skin triangles off the men's body");
     }
 
     [LocalDataFact(LocalData.GameData, HandsFeetPortLocalTests.HalonesChosen, CrossSexRefitLocalTests.Bibo,
