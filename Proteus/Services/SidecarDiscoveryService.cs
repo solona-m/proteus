@@ -842,6 +842,8 @@ public class SidecarDiscoveryService
                     if (!root.TryGetProperty("Name", out var nameEl) || nameEl.GetString() is not { } name
                         || !string.Equals(name, MaskGroupName, StringComparison.OrdinalIgnoreCase))
                         continue;
+                    if (!root.TryGetProperty("Options", out var opts) || opts.ValueKind != JsonValueKind.Array)
+                        continue;
                     return (name, PenumbraModMeta.TypeOf(root), PenumbraModMeta.ReadOptionNames(root));
                 }
                 catch { /* skip a malformed group file, keep scanning */ }
@@ -856,41 +858,7 @@ public class SidecarDiscoveryService
     /// <paramref name="modRoot"/> (v4 <c>meta.json</c>, else legacy <c>group_*.json</c>), top to bottom; empty if absent.
     /// </summary>
     internal static List<string> ReadMaskGroupOptionOrder(string modRoot)
-    {
-        if (PenumbraModMeta.TryReadGroups(modRoot) is { } groups)
-        {
-            foreach (var (name, group) in groups)
-                if (string.Equals(name, MaskGroupName, StringComparison.OrdinalIgnoreCase))
-                    return PenumbraModMeta.ReadOptionNames(group);
-            return [];
-        }
-
-        try
-        {
-            foreach (var file in Directory.EnumerateFiles(modRoot, "group_*.json"))
-            {
-                try
-                {
-                    using var doc = JsonDocument.Parse(File.ReadAllText(file));
-                    var root = doc.RootElement;
-                    if (!root.TryGetProperty("Name", out var nameEl)
-                        || !string.Equals(nameEl.GetString(), MaskGroupName, StringComparison.OrdinalIgnoreCase))
-                        continue;
-                    if (!root.TryGetProperty("Options", out var opts) || opts.ValueKind != JsonValueKind.Array)
-                        continue;
-
-                    var names = new List<string>();
-                    foreach (var o in opts.EnumerateArray())
-                        if (o.TryGetProperty("Name", out var on) && on.GetString() is { } s)
-                            names.Add(s);
-                    return names;
-                }
-                catch { /* skip a malformed group file, keep scanning */ }
-            }
-        }
-        catch { /* modRoot missing/unreadable */ }
-        return [];
-    }
+        => ReadMaskGroup(modRoot)?.Options ?? [];
 
     /// <summary>
     /// Penumbra group name → its ordinal: the index in <c>meta.json</c>'s <c>Groups</c> array, or the legacy filename

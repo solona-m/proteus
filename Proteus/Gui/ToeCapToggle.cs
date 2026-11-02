@@ -134,26 +134,26 @@ internal static class ToeCapToggle
                canShell: true, needsUnmirroredShell: false, toeCapWanted: true, geometryWanted: geometryWanted);
 
     /// <summary>
-    /// The overlays the composite draws for this selection, with the rows each reads: a simple mod's own, or every
-    /// selected option of each group (not "… None"), with the option's rows else the mod's. Mirrors ActiveOptionsFor.
+    /// The overlays the composite draws for this selection, with the rows each reads: the mod's own overlays whenever it
+    /// has any, otherwise every selected option of each group, with the option's rows else the mod's. Mirrors
+    /// <c>SidecarDiscoveryService.ResolveActiveOverlays</c>.
     /// </summary>
     private static List<(OverlayDescriptor Overlay, IReadOnlyList<ColorTableRowPreset>? Rows)> ActiveOverlays(
         ProteusMetadata md, IReadOnlyDictionary<string, List<string>>? selection)
     {
         var result = new List<(OverlayDescriptor, IReadOnlyList<ColorTableRowPreset>?)>();
-        if (md.OptionGroups is not { Count: > 0 } groups)
+        if (md.Overlays is { Count: > 0 } own)
         {
-            foreach (var d in md.Overlays ?? []) result.Add((d, md.ColorTableRows));
+            foreach (var d in own) result.Add((d, md.ColorTableRows));
             return result;
         }
 
-        foreach (var group in groups)
+        foreach (var group in md.OptionGroups ?? [])
         {
             var sel = GroupSelection(selection, group.PenumbraGroupName);
             if (sel is not { Count: > 0 }) continue;
             foreach (var opt in group.Options)
             {
-                if (opt.Name.EndsWith("None", StringComparison.OrdinalIgnoreCase)) continue;
                 if (!sel.Any(s => string.Equals(s, opt.Name, StringComparison.OrdinalIgnoreCase))) continue;
                 foreach (var d in opt.Overlays) result.Add((d, opt.ColorTableRows ?? md.ColorTableRows));
             }

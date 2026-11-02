@@ -452,6 +452,18 @@ public sealed class ToeCapToggleTests : IDisposable
         Assert.Equal(ToeCapReach.Draws, ToeCapToggle.Reach(md, true, Sel("Design", "Loose"), false));
     }
 
+    /// <summary>A mod with its own overlays draws those whatever its groups select, as the compositor does.</summary>
+    [Fact]
+    [Trait("Plan", "EDGE-toecap-geometry-21")]
+    public void Reach_prefers_the_mods_own_overlays_over_its_options()
+    {
+        var md = Grouped(("Loose", [Body()]));
+        md.Overlays = [Body(pinned: true)];
+        Assert.Equal(ToeCapReach.NoShell, ToeCapToggle.Reach(md, true, Sel("Design", "Loose"), false));
+        md.Overlays = [Body()];
+        Assert.Equal(ToeCapReach.Draws, ToeCapToggle.Reach(md, true, Sel("Other", "x"), false));
+    }
+
     [Fact]
     [Trait("Plan", "EDGE-toecap-geometry-22")]
     public void Reach_is_unknown_when_a_mask_shell_is_possible()
@@ -462,8 +474,9 @@ public sealed class ToeCapToggleTests : IDisposable
         var a = Simple(Body(pinned: true));
         a.MaskDescriptor = new OverlayDescriptor { Layer = OverlayLayer.Gear };
         Assert.Equal(ToeCapReach.Unknown, ToeCapToggle.Reach(a, true, With("Seam", "Toe Cap"), false));
-        // (b) only the cap itself is selected
+        // (b) only the cap itself is selected; a blank entry is no mask
         Assert.Equal(ToeCapReach.NoShell, ToeCapToggle.Reach(a, true, With("Toe Cap"), false));
+        Assert.Equal(ToeCapReach.NoShell, ToeCapToggle.Reach(a, true, With(" ", "Toe Cap"), false));
         // (c) a shell off the body, another mask selected
         var c = Simple(Body(layer: OverlayLayer.Gear, paths: FacePath));
         c.MaskDescriptor = new OverlayDescriptor { Layer = OverlayLayer.Skin };
