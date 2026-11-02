@@ -51,7 +51,7 @@ public static partial class SecondSkinWriter
     {
         /// <summary>The rim, in walk order: each edge as its two ends.</summary>
         public required (Vec3 A, Vec3 B)[] Rim;
-        /// <summary>Every unsewn nail island with an edge of this rim within <see cref="NailSocketReach"/>.</summary>
+        /// <summary>Every unsewn, drawn (not wholly hidden) nail island with an edge of this rim within <see cref="NailSocketReach"/>.</summary>
         public required List<(int Mesh, int Island)> Members;
         /// <summary>The island that spans it; null when the socket is left as authored.</summary>
         public (int Mesh, int Island)? Owner;
@@ -198,8 +198,8 @@ public static partial class SecondSkinWriter
                 foreach (var (ek, n) in inIsland) if (n == 1) bedEdges.Add(ek);
             }
         }
-        // The finger's skin: every skin triangle that is no nail — including a small patch the nail-bed planner left
-        // alone (LavaBod+ keeps one inside each socket), which is drawn skin all the same.
+        // The finger's skin: every skin triangle that is no nail — including a small patch of skin the nail-bed planner
+        // left alone, which is drawn skin all the same.
         var bedTri = new Dictionary<int, HashSet<(int, int, int)>>();
         foreach (var (m, plan) in plans)
         {

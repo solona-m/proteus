@@ -704,21 +704,27 @@ public class NailSocketTests(ITestOutputHelper o)
         foreach (var m in sp.HiddenIslands.Concat(sp.Sockets.Where(s => s.Owner == null).SelectMany(s => s.Members)))
             Assert.True(NailGrade.SameIsland(hand, flat!, plans, m), $"island {m} changed");
         // What ships is graded: the hand with nothing hidden is judged whole by the grader, and the shipped hand matches
-        // it on every vertex outside the hidden layers (which stay as they were) — so the same sockets span the same way.
+        // it on every skin vertex of every mesh, except where the shipped hand left a vertex exactly as authored — the
+        // hidden layers — and those are no more than the hidden layers hold.
         var whole = BodyBridge.FlattenNails(hand, suit)!;
         var g = new NailGrade(hand, whole);
         var bad = g.Problems(o);
         Assert.True(bad.Count == 0, string.Join("; ", bad));
-        var hiddenVerts = sp.HiddenIslands.SelectMany(id => plans[id.Mesh].VertsOf[id.Island].Select(v => (id.Mesh, v))).ToHashSet();
-        var spanVerts = sp.Sockets.Where(s => s.Owner != null)
-                          .SelectMany(s => plans[s.Owner!.Value.Mesh].VertsOf[s.Owner!.Value.Island].Select(v => (s.Owner!.Value.Mesh, v))).ToList();
-        Assert.NotEmpty(spanVerts);
+        SecondSkinWriter.TryReadLod0Geometry(hand, out var ph, out _, out _);
         SecondSkinWriter.TryReadLod0Geometry(flat!, out var pf, out _, out _);
         SecondSkinWriter.TryReadLod0Geometry(whole, out var pw, out _, out _);
-        foreach (var (mesh, v) in spanVerts)
-            Assert.True(mesh != 0 || (pf[v * 3] == pw[v * 3] && pf[v * 3 + 1] == pw[v * 3 + 1] && pf[v * 3 + 2] == pw[v * 3 + 2]),
-                        $"spanned vertex {v} differs from the graded hand");
-        Assert.DoesNotContain(spanVerts, x => hiddenVerts.Contains(x));
+        int kept = 0;
+        for (int v = 0; v < pf.Length / 3; v++)
+        {
+            bool same = pf[v * 3] == pw[v * 3] && pf[v * 3 + 1] == pw[v * 3 + 1] && pf[v * 3 + 2] == pw[v * 3 + 2];
+            if (same) continue;
+            bool asAuthored = pf[v * 3] == ph[v * 3] && pf[v * 3 + 1] == ph[v * 3 + 1] && pf[v * 3 + 2] == ph[v * 3 + 2];
+            Assert.True(asAuthored, $"vertex {v} differs from the graded hand and was moved");
+            kept++;
+        }
+        int hiddenVerts = sp.HiddenIslands.Sum(id => plans[id.Mesh].VertsOf[id.Island].Length);
+        Assert.True(kept > 0 && kept <= hiddenVerts, $"{kept} vertices kept as authored, the hidden layers hold {hiddenVerts}");
+        Assert.DoesNotContain(sp.Sockets.Where(s => s.Owner != null), s => sp.HiddenIslands.Contains(s.Owner!.Value));
         // ...and the garment the shipped hand gets — its hidden layers dropped, as the shell drops them — is closed.
         var shell = SecondSkinWriter.Build(new[] { new SecondSkinWriter.SourceSpec(flat!, CoverNails: true, HiddenAttributes: hidden) },
                                            new[] { suit }, null, out _);
