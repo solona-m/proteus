@@ -49,11 +49,14 @@ internal static partial class BodyBridge
     /// copy of a hand that has no nails. Returns null when there is nothing to do.
     /// </summary>
     /// <param name="gate">Carries the garment's coverage; a nail no layer covers is left alone, and so is every nail
-    /// of a socket any of whose nails is uncovered.</param>
-    internal static byte[]? FlattenNails(byte[] mdl, SecondSkinLayer gate, Action<string>? log = null)
+    /// of a socket whose owner (the nail over it) is uncovered.</param>
+    internal static byte[]? FlattenNails(byte[] mdl, SecondSkinLayer gate, Action<string>? log = null,
+                                         IReadOnlySet<string>? hiddenAttributes = null)
     {
         if (mdl is not { Length: > 0 }) return null;
-        var plans = NailBedPlans(mdl);
+        // Long nails too: a nail reaching past the shell's own bed reach is still a nail, and left as skin the garment
+        // over it copies it (Stabbies, LavaBod+).
+        var plans = NailBedPlans(mdl, reach: LongNailReach);
         if (plans.Count == 0) return null;
 
         Source src;
@@ -65,7 +68,7 @@ internal static partial class BodyBridge
         var matNames = ReadMaterialNames(s, src);
         // Every nail bed vertex as it stood BEFORE flattening: a nail MESH drawn over one is removed with it.
         var nailWas = new List<Vec3>();
-        int nails = 0, uncovered = 0, moved = 0, collapsed = 0, weldWeights = 0, spanned = 0, authored = 0;
+        int nails = 0, uncovered = 0, moved = 0, collapsed = 0, weldWeights = 0, spanned = 0, authored = 0, hiddenNails = 0;
         float most = 0f;
 
         Span<float> tmp = stackalloc float[4];
@@ -82,22 +85,27 @@ internal static partial class BodyBridge
                                   || FingertipCovered(gate, plan, plan.VertsOf[k]);
         }
 
-        var sockets = NailSockets(mdl, plans, log);
+        var sockets = NailSockets(mdl, plans, log, hiddenAttributes);
         // Unreadable for sockets: collapsing its nails could open one, so nothing is changed.
         if (sockets.Unreadable) return null;
         var fate = new Dictionary<(int, int), NailFate>();
         var spanBy = new Dictionary<(int, int), NailSocket>();
         foreach (var id in sockets.OverOpenSkin) fate[id] = NailFate.Authored;
+        // A nail wholly on a switch the game hides for this body is drawn by nothing: left exactly as it is. One only
+        // partly hidden is left as authored.
+        foreach (var id in sockets.HiddenIslands) fate[id] = NailFate.Hidden;
+        foreach (var id in sockets.PartlyHidden) fate[id] = NailFate.Authored;
         foreach (var sock in sockets.Sockets.Where(x => x.Owner == null))
             foreach (var id in sock.Members) fate[id] = NailFate.Authored;
-        // A socket is acted on only when every one of its nails is covered; one held back holds its sockets back.
+        // A socket is acted on when the nail over it — its owner — is covered: a nail beside it that overhangs the finger
+        // (a tip) needs no paint of its own, and goes with it. One held back holds its sockets back.
         var active = sockets.Sockets.Where(x => x.Owner != null).ToHashSet();
         var held = new HashSet<(int, int)>();
         for (bool changed = true; changed;)
         {
             changed = false;
             foreach (var sock in active.ToList())
-                if (sock.Members.Any(id => !covered.GetValueOrDefault(id) || held.Contains(id)))
+                if (!covered.GetValueOrDefault(sock.Owner!.Value) || sock.Members.Any(held.Contains))
                 {
                     active.Remove(sock);
                     foreach (var id in sock.Members) held.Add(id);
@@ -134,6 +142,7 @@ internal static partial class BodyBridge
                 var verts = plan.VertsOf[k];
                 var f = fate.GetValueOrDefault((m, k), NailFate.Default);
                 if (f == NailFate.Authored) { authored++; continue; }
+                if (f == NailFate.Hidden) { hiddenNails++; continue; }
                 if (f == NailFate.Held || (f == NailFate.Default && !covered.GetValueOrDefault((m, k))))
                 { uncovered++; continue; }
 
@@ -206,7 +215,7 @@ internal static partial class BodyBridge
                 for (int k = 0; k < plan.Islands.Count; k++)
                 {
                     var f = fate.GetValueOrDefault((m, k), NailFate.Default);
-                    if (f is NailFate.Collapse or NailFate.Authored or NailFate.Held) continue;
+                    if (f is NailFate.Collapse or NailFate.Authored or NailFate.Held or NailFate.Hidden) continue;
                     if (f == NailFate.Default && k < plan.Sewn.Count && !plan.Sewn[k]) continue;
                     // A spanned patch is re-shaded without IslandNormals' floor: its triangles are millimetre-sized, their raw
                     // normals far under it, and a vertex skipped would keep the authored nail's normal — the shell pushes along it.
@@ -242,8 +251,8 @@ internal static partial class BodyBridge
         if (moved == 0)
         {
             if (uncovered > 0 || authored > 0)
-                log?.Invoke($"nails: {uncovered} left alone (nothing covers them, or not all of a socket), "
-                          + $"{authored} left as authored (a socket that could not be spanned, or open skin)");
+                log?.Invoke($"nails: {uncovered} left alone (nothing covers them, or the nail over their socket), "
+                          + $"{authored} left as authored (a socket that could not be spanned, or open skin), {hiddenNails} on hidden switches");
             return null;
         }
 
@@ -259,12 +268,13 @@ internal static partial class BodyBridge
                   + $"removed {removedIslands} nail mesh island(s) ({removedVerts} vertices), "
                   + $"{uncovered} left uncovered, "
                   + $"{spanned} spanning an open socket ({rimMoved} rim vertices moved onto it, furthest {rimMost:F5}), "
-                  + $"{leftSockets} socket(s) left as authored ({authored} nail(s) in them or over open skin)");
+                  + $"{leftSockets} socket(s) left as authored ({authored} nail(s) in them or over open skin), "
+                  + $"{hiddenNails} nail(s) on hidden switches untouched");
         return outBytes;
     }
 
     /// <summary>What <see cref="FlattenNails"/> does with one nail island.</summary>
-    private enum NailFate { Default, Span, Collapse, Authored, Held }
+    private enum NailFate { Default, Span, Collapse, Authored, Held, Hidden }
 
     /// <summary>One LOD0 mesh's vertex layout, as <see cref="FlattenNails"/> reads and writes it.</summary>
     private sealed record NailMeshLayout(int Vc, VElem[] Decl, uint[] Vbo, byte[] Bs, VElem Pos, VElem? Nrm,

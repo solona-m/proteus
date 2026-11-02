@@ -1572,7 +1572,7 @@ public sealed partial class SecondSkinService
                 };
 
                 var smoothedBody = new Dictionary<string, byte[]>(StringComparer.OrdinalIgnoreCase);
-                foreach (var (bBytes, _, bPath, _) in bodies)
+                foreach (var (bBytes, bShapes, bPath, _) in bodies)
                 {
                     // With no relax asked for, the nails are the only reason to be here, and they are on the HANDS. Any
                     // other part skips the pass exactly as it did before the nails — above all the hold below, which
@@ -1616,7 +1616,9 @@ public sealed partial class SecondSkinService
                         // a flattened toe under a stocking that still has a hole over it is no better off.
                         if (nailGate != null && bPath.EndsWith("_glv.mdl", StringComparison.OrdinalIgnoreCase)
                             && BodyBridge.FlattenNails(smoothed ?? bBytes, nailGate,
-                                   msg => service.log.Debug("[Proteus] second skin: {0}", msg)) is { } noNails)
+                                   msg => service.log.Debug("[Proteus] second skin: {0}", msg),
+                                   // The nail layers this body hides (Stabbies' alternative nails) are no nails of its.
+                                   Interop.BodyShapeReader.Split(bShapes).HiddenAttributes) is { } noNails)
                             smoothed = noNails;
                     }
                     catch (Exception ex)
