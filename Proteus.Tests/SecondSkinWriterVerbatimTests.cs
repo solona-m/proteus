@@ -1409,7 +1409,7 @@ public class SecondSkinWriterVerbatimTests(Xunit.Abstractions.ITestOutputHelper 
         (int X, int Y) Block(int v) => (Math.Clamp((int)MathF.Floor(uv[v * 2] * size), 0, size - 1),
                                         Math.Clamp((int)MathF.Floor(uv[v * 2 + 1] * size), 0, size - 1));
         var bleed = new byte[size * size];
-        var islands = SecondSkinWriter.NailBedPlans(hand).SelectMany(p => p.Value.VertsOf).ToList();
+        var islands = SecondSkinWriter.NailBedPlans(hand, reach: SecondSkinWriter.LongNailReach).SelectMany(p => p.Value.VertsOf).ToList();
         foreach (var verts in islands)
         {
             var (x, y) = Block(verts.MinBy(v => uv[v * 2]));
@@ -1427,10 +1427,19 @@ public class SecondSkinWriterVerbatimTests(Xunit.Abstractions.ITestOutputHelper 
         Assert.True(mostlyPainted < islands.Count / 2, "the model of a bleed paints most of the nails outright");
         var taken = System.Text.RegularExpressions.Regex.Match(string.Join("\n", log), @"nails: \d+ of (\d+) collapsed");
         int takenOff = flat == null ? 0 : int.Parse(taken.Groups[1].Value);
-        // A nail in a socket comes off only when EVERY nail of that socket is covered [AC-nail-socket-hole-5], so bleed
-        // onto one of them takes off fewer still; nowhere does it take off more than it paints.
-        if (SecondSkinWriter.NailSockets(hand, SecondSkinWriter.NailBedPlans(hand)).Sockets.Count == 0) Assert.Equal(mostlyPainted, takenOff);
-        else Assert.True(takenOff <= mostlyPainted, $"{takenOff} nails taken off by bleed onto {mostlyPainted}");
+        // A socket comes off when its OWNER is covered [AC-nail-socket-close-3], and its other nails (a tip beside it)
+        // go with it, painted or not; so bleed takes off at most the nails it paints plus the rest of the sockets whose
+        // owner it paints. Nowhere does it take off more.
+        var longPlans = SecondSkinWriter.NailBedPlans(hand, reach: SecondSkinWriter.LongNailReach);
+        var sockets = SecondSkinWriter.NailSockets(hand, longPlans).Sockets;
+        bool Painted((int Mesh, int Island) id)
+        {
+            var vs = longPlans[id.Mesh].VertsOf[id.Island];
+            return id.Mesh == longPlans.Keys.Min() && vs.Count(v => bleed[Block(v).Y * size + Block(v).X] > 0) * 2 >= vs.Length;
+        }
+        int alongside = sockets.Where(s => s.Owner is { } ow && Painted(ow)).Sum(s => s.Members.Count(m => !Painted(m)));
+        if (sockets.Count == 0) Assert.Equal(mostlyPainted, takenOff);
+        else Assert.True(takenOff <= mostlyPainted + alongside, $"{takenOff} nails taken off by bleed onto {mostlyPainted} (+{alongside} beside covered owners)");
     }
 
     /// <summary>
@@ -1477,7 +1486,7 @@ public class SecondSkinWriterVerbatimTests(Xunit.Abstractions.ITestOutputHelper 
         bool inside = after <= 0.0001f;
         // A hand whose nails sit in open sockets (Rue+) is graded by fate instead [AC-nail-socket-hole-1/2]: there the
         // old "every nail gone" is exactly the bug — taking a socketed nail away leaves the socket open.
-        bool socketed = SecondSkinWriter.NailSockets(hand, SecondSkinWriter.NailBedPlans(hand)).Sockets.Count > 0;
+        bool socketed = SecondSkinWriter.NailSockets(hand, SecondSkinWriter.NailBedPlans(hand, reach: SecondSkinWriter.LongNailReach)).Sockets.Count > 0;
         if (socketed)
             new NailGrade(hand, flat).AssertSpanned(o, band: false);
         else
