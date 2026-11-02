@@ -1183,7 +1183,7 @@ public class SecondSkinWriterVerbatimTests(Xunit.Abstractions.ITestOutputHelper 
     }
 
     /// <summary>A body's hands model, by its name in <see cref="Bodies"/>.</summary>
-    private static byte[] Hands(string body) => File.ReadAllBytes(Array.Find(Bodies, b => b.Body == body).Parts[2]);
+    internal static byte[] Hands(string body) => File.ReadAllBytes(Array.Find(Bodies, b => b.Body == body).Parts[2]);
 
     /// <summary>
     /// A glove has to cover the nails. Every one of these hands lays a small UV island of skin under each nail,
@@ -1341,7 +1341,28 @@ public class SecondSkinWriterVerbatimTests(Xunit.Abstractions.ITestOutputHelper 
         foreach (var l in log) o.WriteLine(l);
         Assert.NotNull(flat);
         Assert.Contains(log, l => l.Contains(" 0 left uncovered", StringComparison.Ordinal));
-        Assert.True(NailBedArea(flat!, hand) < 1e-9f, "a glove over the fingers must leave no nail to draw");
+        // Every nail by its fate [AC-nail-socket-hole-2, AC-nail-socket-hole-3]: a collapsed nail draws nothing; a nail
+        // spanning an open socket closes it (graded on its own, never by the pass); a nail left as authored over a
+        // socket that could not be spanned is exactly as it was. Stricter than the old "no nail area at all", which on
+        // Rue+ held only because every socket was left open.
+        var plans = SecondSkinWriter.NailBedPlans(hand);
+        var sp = SecondSkinWriter.NailSockets(hand, plans);
+        var spanning = sp.Sockets.Where(s => s.Owner != null)
+            .Select(s => s.Owner!.Value).ToHashSet();
+        var authored = sp.Sockets.Where(s => s.Owner == null).SelectMany(s => s.Members).Concat(sp.OverOpenSkin).ToHashSet();
+        var flatPos = SecondSkinWriter.ReadCapMeshes(flat!).ToDictionary(x => x.Mesh, x => x.Pos);
+        float collapsedArea = 0;
+        foreach (var (m, plan) in plans)
+            for (int k = 0; k < plan.Islands.Count; k++)
+            {
+                if (spanning.Contains((m, k)) || authored.Contains((m, k)) || plan.Sewn[k]) continue;
+                var t = plan.Islands[k];
+                for (int i = 0; i + 2 < t.Length; i += 3) collapsedArea += MeshMath.TriArea(flatPos[m][t[i]], flatPos[m][t[i + 1]], flatPos[m][t[i + 2]]);
+            }
+        Assert.True(collapsedArea < 1e-9f, $"the collapsed nails still draw {collapsedArea * 1e6f:F2}mm²");
+        foreach (var id in authored) Assert.True(NailGrade.SameIsland(hand, flat!, plans, id), $"nail {id} left as authored changed");
+        if (spanning.Count > 0) new NailGrade(hand, flat!).AssertSpanned(o, band: false);
+        else Assert.True(NailBedArea(flat!, hand) < 1e-9f, "a glove over the fingers must leave no nail to draw");
     }
 
     /// <summary>
@@ -1405,7 +1426,11 @@ public class SecondSkinWriterVerbatimTests(Xunit.Abstractions.ITestOutputHelper 
         o.WriteLine($"{mostlyPainted} of {islands.Count} nails have most of their vertices on the bled block");
         Assert.True(mostlyPainted < islands.Count / 2, "the model of a bleed paints most of the nails outright");
         var taken = System.Text.RegularExpressions.Regex.Match(string.Join("\n", log), @"nails: \d+ of (\d+) collapsed");
-        Assert.Equal(mostlyPainted, flat == null ? 0 : int.Parse(taken.Groups[1].Value));
+        int takenOff = flat == null ? 0 : int.Parse(taken.Groups[1].Value);
+        // A nail in a socket comes off only when EVERY nail of that socket is covered [AC-nail-socket-hole-5], so bleed
+        // onto one of them takes off fewer still; nowhere does it take off more than it paints.
+        if (SecondSkinWriter.NailSockets(hand, SecondSkinWriter.NailBedPlans(hand)).Sockets.Count == 0) Assert.Equal(mostlyPainted, takenOff);
+        else Assert.True(takenOff <= mostlyPainted, $"{takenOff} nails taken off by bleed onto {mostlyPainted}");
     }
 
     /// <summary>
@@ -1450,11 +1475,19 @@ public class SecondSkinWriterVerbatimTests(Xunit.Abstractions.ITestOutputHelper 
         // on a socket's rim is level with the finger by definition.
         bool gone = areaAfter <= areaBefore * 0.01f;
         bool inside = after <= 0.0001f;
-        Assert.True(gone || inside, $"the nails still draw {areaAfter * 1e6f:F1}mm² and stand "
-                                  + $"{after * 1000:F3}mm above the finger");
-        // Bibo+'s nails are flush with the finger to begin with — nothing to take down, and nothing to prove here.
-        if (before > 0.0005f && !gone)
-            Assert.True(after < before * 0.05f, $"the nails barely moved: {before * 1000:F3}mm -> {after * 1000:F3}mm");
+        // A hand whose nails sit in open sockets (Rue+) is graded by fate instead [AC-nail-socket-hole-1/2]: there the
+        // old "every nail gone" is exactly the bug — taking a socketed nail away leaves the socket open.
+        bool socketed = SecondSkinWriter.NailSockets(hand, SecondSkinWriter.NailBedPlans(hand)).Sockets.Count > 0;
+        if (socketed)
+            new NailGrade(hand, flat).AssertSpanned(o, band: false);
+        else
+        {
+            Assert.True(gone || inside, $"the nails still draw {areaAfter * 1e6f:F1}mm² and stand "
+                                      + $"{after * 1000:F3}mm above the finger");
+            // Bibo+'s nails are flush with the finger to begin with — nothing to take down, and nothing to prove here.
+            if (before > 0.0005f && !gone)
+                Assert.True(after < before * 0.05f, $"the nails barely moved: {before * 1000:F3}mm -> {after * 1000:F3}mm");
+        }
 
         // A collapsed nail has to stay collapsed once the hand MOVES. Its vertices share a position, but if they
         // keep their own bone weights the game's skinning pulls them apart and the triangles get their area back —
@@ -1502,7 +1535,9 @@ public class SecondSkinWriterVerbatimTests(Xunit.Abstractions.ITestOutputHelper 
             o.WriteLine($"the nail mesh drew {Area(wasP, wasT) * 1e6f:F1}mm² before, "
                       + $"{Area(nowP, nowT) * 1e6f:F1}mm² after");
             Assert.True(Area(wasP, wasT) > 1e-5f, "this hand has no nail mesh to remove");
-            Assert.True(Area(nowP, nowT) < Area(wasP, wasT) * 0.01f, "the nail mesh is still drawing");
+            // Over a socket left as authored, its nail mesh stays with the nail it rides on.
+            if (socketed) NailSocketTests.AssertNailMeshFates(hand, flat, o);
+            else Assert.True(Area(nowP, nowT) < Area(wasP, wasT) * 0.01f, "the nail mesh is still drawing");
         }
 
         // A garment that covers nothing leaves the hand exactly as it was.
@@ -1518,13 +1553,15 @@ public class SecondSkinWriterVerbatimTests(Xunit.Abstractions.ITestOutputHelper 
     /// Area drawn with NAIL texture coordinates anywhere in a model, whatever geometry carries them: the nail art
     /// lives in those islands of the sheet, so anything sampling them shows a nail.
     /// </summary>
-    private static float NailUvArea(byte[] model, byte[] hand)
+    internal static float NailUvArea(byte[] model, byte[] hand, Func<int, int, bool>? island = null)
     {
         Assert.True(SecondSkinWriter.TryReadLod0Geometry(hand, out _, out var huv, out _));
         var boxes = new List<(float U0, float U1, float V0, float V1)>();
-        foreach (var (_, beds) in SecondSkinWriter.NailBedIslands(hand))
-            foreach (var b in beds)
+        foreach (var (mesh, beds) in SecondSkinWriter.NailBedIslands(hand))
+            for (int k = 0; k < beds.Count; k++)
             {
+                if (island != null && !island(mesh, k)) continue;
+                var b = beds[k];
                 float u0 = 9, u1 = -9, v0 = 9, v1 = -9;
                 foreach (int v in b)
                 {
@@ -1554,7 +1591,7 @@ public class SecondSkinWriterVerbatimTests(Xunit.Abstractions.ITestOutputHelper 
     }
 
     /// <summary>What the nail beds put on screen, in square metres: their islands' triangles in these positions.</summary>
-    private static float NailBedArea(byte[] hand, byte[] facing)
+    internal static float NailBedArea(byte[] hand, byte[] facing)
     {
         var byMesh = SecondSkinWriter.ReadCapMeshes(hand).ToDictionary(x => x.Mesh, x => x.Pos);
         float sum = 0f;
@@ -1580,7 +1617,7 @@ public class SecondSkinWriterVerbatimTests(Xunit.Abstractions.ITestOutputHelper 
     /// the skin that is not a nail, signed by that skin's own outward normal. Islands come from
     /// <paramref name="facing"/> so the same nails are measured before and after.
     /// </summary>
-    private static float NailHeightOverTheFinger(byte[] hand, byte[] facing)
+    internal static float NailHeightOverTheFinger(byte[] hand, byte[] facing)
     {
         var byMesh = SecondSkinWriter.ReadCapMeshes(hand).ToDictionary(x => x.Mesh, x => x.Pos);
         float worst = float.MinValue;
@@ -1650,10 +1687,10 @@ public class SecondSkinWriterVerbatimTests(Xunit.Abstractions.ITestOutputHelper 
               .Where(m => m.Success).Sum(m => int.Parse(m.Groups[1].Value));
 
     /// <summary>A coverage map painting every UV island of the hand's skin except its nail beds.</summary>
-    private static byte[] PaintFingersNotNailBeds(byte[] hand, int size) => PaintIslands(hand, size, beds: false);
+    internal static byte[] PaintFingersNotNailBeds(byte[] hand, int size) => PaintIslands(hand, size, beds: false);
 
     /// <summary>...and its opposite: only the nail beds, as a glove that bares the fingers leaves them.</summary>
-    private static byte[] PaintNailBedsOnly(byte[] hand, int size) => PaintIslands(hand, size, beds: true);
+    internal static byte[] PaintNailBedsOnly(byte[] hand, int size) => PaintIslands(hand, size, beds: true);
 
     private static byte[] PaintIslands(byte[] hand, int size, bool beds)
     {
