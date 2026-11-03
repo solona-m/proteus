@@ -603,6 +603,46 @@
     "message": "为覆盖胯部的布料开启此项。\nProteus 以身体的副本来构建服装，因此会照搬双腿之间的褶皱——\n看起来像画在身上而不是穿上的。开启后，会先把那里的皮肤抚平到周围的\n曲面，这样从中裁出的服装也就平滑了。\n此项改动的是身体本身，因此会同时作用于身上的每一件服装。",
     "description": ""
   },
+  "Colors.ToeCap.Label": {
+    "message": "包覆脚趾",
+    "description": ""
+  },
+  "Colors.ToeCap.Tip": {
+    "message": "丝袜和袜子请打开此项。\nProteus 把衣物做成身体的副本，所以默认会贴合每一根脚趾 —\n看起来像是画上去的，而不是穿上的。打开后，脚趾会被一个圆润的\n袜头包住，就像真正的袜子那样。只作用于覆盖脚趾的衣物。\n这是 Penumbra 中此模组 Masks 组里的 \"Toe Cap\" 选项：它保存在你的\n合集里而不是模组里，包含此模组的 Glamourer 设计也会保留它。",
+    "description": ""
+  },
+  "Colors.ToeCap.Held.Tip": {
+    "message": "某个 Glamourer 设计（或其他插件）正在锁定此模组的设置，所以\n在这里修改不会生效。请在该设计的 Masks 组中修改 \"Toe Cap\"。",
+    "description": ""
+  },
+  "Colors.ToeCap.Inherited.Note": {
+    "message": "此合集继承了此模组的设置。在这里修改会让它拥有自己的\n模组设置，就像在 Penumbra 中修改一样。",
+    "description": ""
+  },
+  "Colors.ToeCap.Failed.Fmt": {
+    "message": "Penumbra 没有接受这次修改：{0}",
+    "description": ""
+  },
+  "Colors.ToeCap.ModOff": {
+    "message": "此模组在你的合集中处于关闭状态，打开它之前袜头不会显示。",
+    "description": ""
+  },
+  "Colors.ToeCap.NoShell": {
+    "message": "此模组显示的内容都不会成为身体上的衣物（被固定为皮肤、是印花、位于脸或头发而不是\n身体上，或作者设置为跳过袜头），所以袜头在此模组中没有可塑形的对象。\n它仍会作用于覆盖脚趾的其他模组的衣物。",
+    "description": ""
+  },
+  "Colors.ToeCap.Flag.Tip": {
+    "message": "用于丝袜和袜子：脚趾会被一个圆润的袜头包住，就像真正的袜子那样，\n而不是贴合每一根脚趾。\n勾选后，此模组的皮肤图层会变成衣物（第二层皮肤），让袜头有可塑形的对象\n——这需要重新构建一次，印花或固定为皮肤的图层保持不变。\n袜头为 Bibo+、Neolithe、Rue 和 YAB 制作；在其他体型上会生成衣物，\n但脚趾保持原样。\n此模组没有自带袜头，所以此设置保存在模组的 Proteus 设置中：\n它在所有合集中生效，导出模组时会随模组一起带走。",
+    "description": ""
+  },
+  "Colors.ToeCap.Locked.Tip": {
+    "message": "此模组自带的 \"Toe Cap\" 选项已在 Penumbra 中选中，它所在的 Masks 组只允许\n选一个，所以无法在这里关闭。请在 Penumbra 中更改。",
+    "description": ""
+  },
+  "Colors.ToeCap.SaveFailed": {
+    "message": "无法保存此模组的 Proteus 设置，所以已撤销更改。原因见日志（/xllog）。",
+    "description": ""
+  },
   "Colors.SmoothNipples.Label": {
     "message": "平滑乳头",
     "description": ""

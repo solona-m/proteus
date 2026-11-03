@@ -603,6 +603,46 @@
     "message": "股間を覆う布にはこれを有効にしてください。\nProteus は衣装を身体の複製として作るため、脚の間の溝もそのまま写し取り——\n布というより身体に描いた模様のように見えます。有効にすると、まず素肌の側を周囲の\n曲面までなめらかにするので、そこから切り出した衣装もなめらかになります。\nこれは身体そのものを変えるため、同時に着ているすべての衣装に効きます。",
     "description": ""
   },
+  "Colors.ToeCap.Label": {
+    "message": "つま先をまとめる",
+    "description": ""
+  },
+  "Colors.ToeCap.Tip": {
+    "message": "ストッキングや靴下ではオンにしてください。\nProteus は衣装を体のコピーとして作るため、通常は指一本一本に沿ってしまい —\n履いているというより描いたように見えます。オンにすると、つま先が一つの丸い\nトウで覆われ、本物の靴下のように見えます。つま先を覆う衣装だけに効きます。\nこれは Penumbra でこの Mod の Masks グループにある \"Toe Cap\" オプションです。Mod ではなく\nコレクションに保存され、この Mod を含む Glamourer デザインにも残ります。",
+    "description": ""
+  },
+  "Colors.ToeCap.Held.Tip": {
+    "message": "Glamourer デザイン(または別のプラグイン)が今この Mod の設定を固定しているため、\nここで変えても反映されません。そのデザインの Masks グループで \"Toe Cap\" を変えてください。",
+    "description": ""
+  },
+  "Colors.ToeCap.Inherited.Note": {
+    "message": "このコレクションはこの Mod の設定を継承しています。ここで変えると、Penumbra で変えた\nときと同じく、この Mod 用の独自の設定になります。",
+    "description": ""
+  },
+  "Colors.ToeCap.Failed.Fmt": {
+    "message": "Penumbra が変更を受け付けませんでした: {0}",
+    "description": ""
+  },
+  "Colors.ToeCap.ModOff": {
+    "message": "この Mod はコレクションでオフになっているため、オンにするまでつま先は表示されません。",
+    "description": ""
+  },
+  "Colors.ToeCap.NoShell": {
+    "message": "この Mod が表示するものは、体の上の衣装になりません(スキンに固定、プリント、体ではなく\n顔や髪の上、または作者がつま先を除外している)。そのためこの Mod には整えるものが\nありません。つま先を覆う別の Mod の衣装には引き続き効きます。",
+    "description": ""
+  },
+  "Colors.ToeCap.Flag.Tip": {
+    "message": "ストッキングや靴下に使います。つま先が指一本ずつに沿うのではなく、本物の靴下のように\n丸いつま先ひとつで覆われます。\nオンにすると、つま先を整える対象ができるよう、この Mod のスキンレイヤーが衣装(セカンドスキン)に\nなります。再構築の分だけ時間がかかり、プリントやスキンに固定したレイヤーはそのままです。\nつま先は Bibo+、Neolithe、Rue、YAB 用に作られています。ほかの体では衣装は作られますが\nつま先はそのままです。\nこの Mod には専用のつま先がないため、この設定は Mod の Proteus 設定に保存されます。\nすべてのコレクションに適用され、エクスポートすると Mod と一緒に持ち出されます。",
+    "description": ""
+  },
+  "Colors.ToeCap.Locked.Tip": {
+    "message": "この Mod 自身の \"Toe Cap\" オプションが Penumbra で選ばれています。選択肢をひとつしか選べない\nMasks グループにあるため、ここではオフにできません。Penumbra で変更してください。",
+    "description": ""
+  },
+  "Colors.ToeCap.SaveFailed": {
+    "message": "この Mod の Proteus 設定を保存できなかったため、変更を元に戻しました。理由はログ (/xllog) にあります。",
+    "description": ""
+  },
   "Colors.SmoothNipples.Label": {
     "message": "乳首をなめらかにする",
     "description": ""

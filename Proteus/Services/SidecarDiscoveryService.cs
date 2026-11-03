@@ -8,6 +8,27 @@ using Proteus.Interop;
 
 namespace Proteus.Services;
 
+/// <summary>
+/// A mod's own toe cap (<see cref="SidecarDiscoveryService.FindToeCapOption"/>): its Masks group and the option to
+/// select, as the manifest names them, and every toe-cap option there with a map (manifest order; Option is the first).
+/// <paramref name="Writable"/>: the group is multi-select, so the Colors tick can select the cap without dropping the
+/// other masks; a single-select cap is left to Penumbra.
+/// </summary>
+public sealed record ToeCapOptionRef(string Group, string Option, IReadOnlyList<string> CappedOptions, bool Writable);
+
+/// <summary>
+/// The toe-cap map one mod contributes to a composite: its own <c>Masks/</c> map (<paramref name="OwnPath"/>), or
+/// Proteus's built-in mask (null) when only its "Cap the toes" setting asks for one. The map only says a cap is WANTED;
+/// the authored cap's own footprint decides where the toes are cut.
+/// </summary>
+public sealed record ToeCapMap(string? OwnPath)
+{
+    public bool BuiltIn => OwnPath is null;
+
+    /// <summary>The built-in cap: no file, nothing to remap.</summary>
+    public static readonly ToeCapMap Default = new((string?)null);
+}
+
 public record OverlayEntry(
     string ModDirectory,
     string ModName,
@@ -164,8 +185,15 @@ public class SidecarDiscoveryService
     /// Is this the reserved toe-cap option? Matched on letters and digits only, case-insensitively: an unmatched
     /// name would silently fall through as an ordinary mask.
     /// </summary>
-    private static bool IsToeCapOption(string? option) =>
+    internal static bool IsToeCapOption(string? option) =>
         option != null && Squash(option) == Squash(ToeCapOptionName);
+
+    /// <summary>
+    /// The toe-cap option the compositor uses from a Masks selection: the first one selected. Shared with the Colors
+    /// window's tick so the two cannot disagree about whether the cap is on.
+    /// </summary>
+    internal static string? FirstSelectedToeCap(IEnumerable<string>? selected) =>
+        selected?.FirstOrDefault(IsToeCapOption);
 
     private static string Squash(string s) =>
         new(s.Where(char.IsLetterOrDigit).Select(char.ToLowerInvariant).ToArray());
@@ -604,44 +632,61 @@ public class SidecarDiscoveryService
     }
 
     /// <summary>
-    /// Path of this mod's toe-cap map when the reserved <see cref="ToeCapOptionName"/> option is selected in the
-    /// <see cref="MaskGroupName"/> group and its file exists; otherwise null.
+    /// Which toe-cap map a mod contributes: its own map when the reserved <see cref="ToeCapOptionName"/> option is
+    /// selected in the <see cref="MaskGroupName"/> group and the file exists, otherwise Proteus's built-in cap when
+    /// its "Cap the toes" setting (<see cref="ProteusMetadata.CapToes"/>) is on, otherwise none.
+    /// <c>MissingOption</c> names a selected option whose map is missing (it falls through to the setting).
     /// </summary>
-    public string? ResolveActiveToeCap(OverlayEntry entry)
+    internal static (ToeCapMap? Map, string? MissingOption) ChooseToeCap(
+        IReadOnlyList<string>? maskSelection, string sidecarRoot, bool capToes)
     {
-        var collId = penumbra.GetPlayerCollectionId();
-        return collId == null ? null : ResolveActiveToeCap(entry, collId.Value);
+        string? missing = null;
+        if (FirstSelectedToeCap(maskSelection) is { } option)
+        {
+            if (ResolveMaskAsset(Path.Combine(sidecarRoot, MaskSubdir, option.Trim())) is { } path)
+                return (new ToeCapMap(path), null);
+            missing = option;
+        }
+        return (capToes ? ToeCapMap.Default : null, missing);
     }
 
     /// <summary>
-    /// <see cref="ResolveActiveToeCap(OverlayEntry)"/> against a collection id the caller already has.
+    /// This mod's toe-cap map in collection <paramref name="collId"/> (<see cref="ChooseToeCap"/>); null when it asks
+    /// for none. Read once per composite (<c>CompositorService.ToeCapWanted</c>), which every later step shares.
     /// </summary>
-    public string? ResolveActiveToeCap(OverlayEntry entry, Guid collId)
+    public ToeCapMap? ResolveActiveToeCap(OverlayEntry entry, Guid collId)
     {
+        bool capToes = entry.Metadata?.CapToes == true;
         var settings = penumbra.GetModSettings(collId, entry.ModDirectory);
-        if (settings == null) return null;
+        if (settings == null && !capToes) return null;
 
-        var selected = settings.Value.Options
+        var selected = settings?.Options
             .FirstOrDefault(kv => string.Equals(kv.Key, MaskGroupName, StringComparison.OrdinalIgnoreCase))
             .Value;
 
-        var option = selected?.FirstOrDefault(IsToeCapOption);
-        if (option == null) return null;   // not selected — the ordinary case, say nothing
+        var (map, missing) = ChooseToeCap(selected, entry.SidecarRoot, capToes);
+        if (missing != null)
+            log.Warning("[Proteus] toe cap \"{0}\" is selected but {1}\\{2}\\{0}.png is missing — {3}",
+                missing, entry.SidecarRoot, MaskSubdir,
+                map != null ? "using Proteus's built-in toe cap (Cap the toes is on)" : "no cap");
 
-        var path = ResolveMaskAsset(Path.Combine(entry.SidecarRoot, MaskSubdir, option.Trim()));
-        if (path == null)
-            log.Warning("[Proteus] toe cap \"{0}\" is selected but {1}\\{2}\\{0}.png is missing — no cap",
-                option, entry.SidecarRoot, MaskSubdir);
-        // Announced once per mod and option, then Debug: the cap is absent from every mask list, so it needs
-        // saying, but this runs for every mod on every composite.
-        else if (_toeCapAnnounced.TryAdd($"{entry.ModDirectory}\0{option}", 0))
-            log.Information("[Proteus] toe cap \"{0}\" is selected in \"{1}\" — if you did not tick it, the "
-                          + "mod's option ORDER changed since the selection was saved (Penumbra stores it by "
-                          + "index); re-tick the group to re-sync it",
-                option, entry.ModDirectory);
-        else
-            log.Debug("[Proteus] toe cap \"{0}\" is selected in \"{1}\"", option, entry.ModDirectory);
-        return path;
+        if (map is { BuiltIn: false })
+        {
+            var option = FirstSelectedToeCap(selected)!;
+            // Announced once per mod and option, then Debug: the cap is absent from every mask list, so it needs
+            // saying, but this runs for every mod on every composite.
+            if (_toeCapAnnounced.TryAdd($"{entry.ModDirectory}\0{option}", 0))
+                log.Information("[Proteus] toe cap \"{0}\" is selected in \"{1}\" — if you did not tick it, the "
+                              + "mod's option ORDER changed since the selection was saved (Penumbra stores it by "
+                              + "index); re-tick the group to re-sync it",
+                    option, entry.ModDirectory);
+            else
+                log.Debug("[Proteus] toe cap \"{0}\" is selected in \"{1}\"", option, entry.ModDirectory);
+        }
+        else if (map != null && _toeCapAnnounced.TryAdd($"{entry.ModDirectory}\0<built-in>", 0))
+            log.Information("[Proteus] toe cap for \"{0}\" uses Proteus's built-in toe cap (Cap the toes is on in "
+                          + "the mod's Proteus settings)", entry.ModDirectory);
+        return map;
     }
 
     /// <summary>
@@ -791,17 +836,32 @@ public class SidecarDiscoveryService
     }
 
     /// <summary>
-    /// Reads the option-name order of the <see cref="MaskGroupName"/> group from the manifest in
-    /// <paramref name="modRoot"/> (v4 <c>meta.json</c>, else legacy <c>group_*.json</c>), top to bottom; empty if absent.
+    /// The mod's own toe cap, for the Colors window's tick: its <see cref="MaskGroupName"/> group and every toe-cap
+    /// option in it whose map exists (<c>Masks/&lt;name&gt;</c>, as <see cref="ResolveActiveToeCap(OverlayEntry, Guid)"/>
+    /// finds it), names as the manifest writes them; <see cref="ToeCapOptionRef.Writable"/> only for a multi-select
+    /// group. Null when the mod has no mapped toe-cap option.
     /// </summary>
-    internal static List<string> ReadMaskGroupOptionOrder(string modRoot)
+    internal static ToeCapOptionRef? FindToeCapOption(string? modRoot, string sidecarRoot)
+    {
+        if (modRoot == null) return null;
+        if (ReadMaskGroup(modRoot) is not { } g) return null;
+
+        var capped = g.Options
+            .Where(o => IsToeCapOption(o) && ResolveMaskAsset(Path.Combine(sidecarRoot, MaskSubdir, o.Trim())) != null)
+            .ToList();
+        bool writable = string.Equals(g.Type, "Multi", StringComparison.OrdinalIgnoreCase);
+        return capped.Count == 0 ? null : new ToeCapOptionRef(g.Name, capped[0], capped, writable);
+    }
+
+    /// <summary>The <see cref="MaskGroupName"/> group's name, type and option names (v4 <c>meta.json</c>, else legacy <c>group_*.json</c>).</summary>
+    private static (string Name, string Type, List<string> Options)? ReadMaskGroup(string modRoot)
     {
         if (PenumbraModMeta.TryReadGroups(modRoot) is { } groups)
         {
             foreach (var (name, group) in groups)
                 if (string.Equals(name, MaskGroupName, StringComparison.OrdinalIgnoreCase))
-                    return PenumbraModMeta.ReadOptionNames(group);
-            return [];
+                    return (name, PenumbraModMeta.TypeOf(group), PenumbraModMeta.ReadOptionNames(group));
+            return null;
         }
 
         try
@@ -812,24 +872,26 @@ public class SidecarDiscoveryService
                 {
                     using var doc = JsonDocument.Parse(File.ReadAllText(file));
                     var root = doc.RootElement;
-                    if (!root.TryGetProperty("Name", out var nameEl)
-                        || !string.Equals(nameEl.GetString(), MaskGroupName, StringComparison.OrdinalIgnoreCase))
+                    if (!root.TryGetProperty("Name", out var nameEl) || nameEl.GetString() is not { } name
+                        || !string.Equals(name, MaskGroupName, StringComparison.OrdinalIgnoreCase))
                         continue;
                     if (!root.TryGetProperty("Options", out var opts) || opts.ValueKind != JsonValueKind.Array)
                         continue;
-
-                    var names = new List<string>();
-                    foreach (var o in opts.EnumerateArray())
-                        if (o.TryGetProperty("Name", out var on) && on.GetString() is { } s)
-                            names.Add(s);
-                    return names;
+                    return (name, PenumbraModMeta.TypeOf(root), PenumbraModMeta.ReadOptionNames(root));
                 }
                 catch { /* skip a malformed group file, keep scanning */ }
             }
         }
         catch { /* modRoot missing/unreadable */ }
-        return [];
+        return null;
     }
+
+    /// <summary>
+    /// Reads the option-name order of the <see cref="MaskGroupName"/> group from the manifest in
+    /// <paramref name="modRoot"/> (v4 <c>meta.json</c>, else legacy <c>group_*.json</c>), top to bottom; empty if absent.
+    /// </summary>
+    internal static List<string> ReadMaskGroupOptionOrder(string modRoot)
+        => ReadMaskGroup(modRoot)?.Options ?? [];
 
     /// <summary>
     /// Penumbra group name → its ordinal: the index in <c>meta.json</c>'s <c>Groups</c> array, or the legacy filename
@@ -1118,7 +1180,8 @@ public class SidecarDiscoveryService
         }
     }
 
-    public void SaveMetadata(OverlayEntry entry)
+    /// <summary>Write the mod's metadata now. False, with a Warning logged, when the write failed.</summary>
+    public bool SaveMetadata(OverlayEntry entry)
     {
         // Whatever the editor holds for this mod goes first, so nothing held is lost and this save is the last word.
         var held = staged.Peek(entry.ModDirectory);
@@ -1143,10 +1206,12 @@ public class SidecarDiscoveryService
             // A held edit whose own write failed above must not be retried over this newer save. One staged since is kept.
             if (held != null) staged.Complete(held);
             writtenRoots.Enqueue(entry.SidecarRoot);
+            return true;
         }
         catch (Exception ex)
         {
             log.Warning(ex, "Failed to save Proteus metadata for {0}", entry.ModDirectory);
+            return false;
         }
     }
 

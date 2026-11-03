@@ -186,9 +186,10 @@ public sealed partial class SecondSkinService
                     // A shell follows every contour, so hosiery sleeves each toe unless the toe area is marked; the writer then
                     // rebuilds it as one rounded cap. BODY surfaces only (the map is body UV). Resolved before the textures, because
                     // a cap decides whether the normal is held back for the reinforced toe.
-                    var toeCap = layerSurf.Key.IsBody
-                        ? build.service.ToeCapFor(ov.Descriptor, entry, srcType, dstType, build.sharedToeCap, alpha, build.texSize)
-                        : null;
+                    // The Colors window predicts this in ToeCapToggle.Reach; keep the two in step.
+                    // No authored cap loaded: no cap at all, rather than the writer generating one from the mask.
+                    var toeCap = LayerToeCap(layerSurf.Key.IsBody, build.capsAvailable,
+                        () => build.service.ToeCapFor(ov.Descriptor, entry, srcType, dstType, build.sharedToeCap, alpha, build.texSize));
 
                     // A reinforced toe needs a cap, and not a mask shell (that would apply it twice).
                     DeferredShellNormal? deferredNormal =

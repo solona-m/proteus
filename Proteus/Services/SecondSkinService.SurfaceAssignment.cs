@@ -78,6 +78,7 @@ public sealed partial class SecondSkinService
             // Of several ids of the first-named kind, the one the character draws: a pack ships one face overlay for every face
             // id, and only the worn face can be cut. None drawn keeps the first, so the skip names it. Kept to that kind so a
             // face overlay that also names the body never lands its face-UV art on the body.
+            // The Colors window predicts this in ToeCapToggle.OnBodySurface; keep the two in step.
             private ShellSurfaceKey SurfaceKeyOf(ResolvedOverlay ov)
             {
                 if (ov.Descriptor.IsMaskShell) return build.bodySurface.Key;
