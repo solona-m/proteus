@@ -55,7 +55,8 @@ public class NailSocketTests(ITestOutputHelper o)
     [Fact]
     public void Spanned_patch_takes_the_rims_uvs_across()
     {
-        var hand = SyntheticFinger.Build(V.OpenSocket);
+        // A real hand's UV density: the rim within one patch of the atlas (NailRimUvSpread).
+        var hand = SyntheticFinger.Build(V.OpenSocket, tubeUvScale: 0.25f);
         var before = new List<string>();
         SecondSkinWriter.NailBedPlans(hand, before.Add);
         Assert.Contains(before, l => l.Contains("; 0 lying on the skin's edge", StringComparison.Ordinal));

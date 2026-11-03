@@ -455,7 +455,17 @@ internal sealed class NailGrade
         // target, or moved onto the chain), so the crack between the two — a crescent where the chain bends at an
         // outline node — shows only from the outline's side. A pinhole's corners, welded to one point inside the patch,
         // are no part of the outline.
-        var rimEdges = owned.SelectMany(l => l.Edges.Select(e => (F[e.A], F[e.B]))).ToList();
+        // Only a node off the rim TOWARD the hole opens a crack: one lying out over the skin beside the rim is the patch
+        // overlapping the skin, which nothing sees through. "Toward the hole" is the step inward along the skin, as the
+        // gap rays take it.
+        var rimEdges = owned.SelectMany(l => l.Edges.Select(e =>
+        {
+            var n = l.EdgeNormal[e];
+            var mid = (F[e.A] + F[e.B]) / 2;
+            var toC = l.Centroid - mid;
+            if (n.LengthSquared() > 1e-20f) { n = Vector3.Normalize(n); toC -= n * Vector3.Dot(toC, n); }
+            return (A: F[e.A], B: F[e.B], In: toC.LengthSquared() > 0 ? Vector3.Normalize(toC) : Vector3.Zero);
+        })).ToList();
         foreach (var id in Spanned)
         {
             var isl = Of(id);
@@ -463,7 +473,15 @@ internal sealed class NailGrade
             {
                 bool welded = isl.Boundary.Any(u => u != v && Vector3.Distance(F[u], F[v]) < 1e-7f && Vector3.Distance(H[u], H[v]) > 1e-6f);
                 if (welded) continue;
-                worst = MathF.Max(worst, ToChain(F[v], rimEdges));
+                var p = F[v];
+                float best = float.MaxValue; Vector3 off = default, inward = default;
+                foreach (var (a, b, inDir) in rimEdges)
+                {
+                    var ab = b - a; float t = ab.LengthSquared() > 0 ? Math.Clamp(Vector3.Dot(p - a, ab) / ab.LengthSquared(), 0, 1) : 0;
+                    var d = p - (a + ab * t);
+                    if (d.Length() < best) { best = d.Length(); off = d; inward = inDir; }
+                }
+                if (best < float.MaxValue && Vector3.Dot(off, inward) > 0) worst = MathF.Max(worst, best);
             }
         }
         return worst;
