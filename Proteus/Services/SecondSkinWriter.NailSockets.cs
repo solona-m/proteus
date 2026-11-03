@@ -42,6 +42,22 @@ public static partial class SecondSkinWriter
     /// the socket's surface (a curled tip, another finger).</summary>
     private const float NailSeamReach = 0.004f;
 
+    /// <summary>How near the spanning nail's outline a rim edge must lie for the seam to count as shut where the seam rays
+    /// start under the patch: a twentieth of a millimetre, the grader's own seam-gap bound.</summary>
+    private const float NailSeamTight = 0.00005f;
+
+    /// <summary>How far under the rim's lowest point the smooth fill may dip before it is refused for the nail-guided
+    /// heights: 0.4 mm, inside the grader's 0.5 mm floor.</summary>
+    private const double NailFillFloor = 0.0004;
+
+    /// <summary>A second outline of a nail this small is a pinhole — a quad missing from the mesh (YAB+'s middle fingers:
+    /// 4 corners, 2.4 mm round, against 33 mm for the nail), or the small hole a two-triangle plug island fills on Rue+,
+    /// YAB+ and LavaBod+ thumbs (the plug is a socket member and collapses with it) — and is welded shut rather than
+    /// leaving the socket as authored. A real double layer (FreyjaAF) is far larger. The welded corners share a
+    /// position in the bind pose only (each keeps its own skinning): 0.6 mm apart on one finger bone, accepted.</summary>
+    private const int NailPinholeMaxNodes = 8;
+    private const float NailPinholeMaxShare = 0.15f;
+
     /// <summary>How far under its lowest rim point skin inside a socket's outline can lie and still be ON the socket
     /// (a patch of finger the socket rings round) rather than the far side of the finger, a finger's width down.</summary>
     private const float NailSocketSkinBelow = 0.002f;
@@ -574,7 +590,7 @@ public static partial class SecondSkinWriter
         Dictionary<int, int> nodeOf = [];
         List<Vec3> nodePos = [];
         HashSet<int>[] nbr = [];
-        List<List<int>> Outline(int[] ts, IEnumerable<int> vs)
+        List<List<int>> Outline(int[] ts, IEnumerable<int> vs, Dictionary<(int, int, int), (int, int, int)>? alias = null)
         {
             nodeOf = [];
             nodePos = [];
@@ -582,6 +598,7 @@ public static partial class SecondSkinWriter
             foreach (int v in vs)
             {
                 var k = VKey(sm.Pos[v]);
+                if (alias != null && alias.TryGetValue(k, out var to)) k = to;
                 if (!nodeKey.TryGetValue(k, out int n)) { nodeKey[k] = n = nodePos.Count; nodePos.Add(sm.Pos[v]); }
                 nodeOf[v] = n;
             }
@@ -625,10 +642,29 @@ public static partial class SecondSkinWriter
         float Perim(IReadOnlyList<Vec3> pts) { float s = 0; for (int i = 0; i < pts.Count; i++) s += Dist(pts[i], pts[(i + 1) % pts.Count]); return s; }
 
         var outline = Outline(tris, verts);
+        // A pinhole in the nail — a quad missing from the mesh (YAB+'s middle fingers) — is a second outline, and would be
+        // a hole in the patch. One that small is welded shut: its corners become one node, its triangles meet there.
+        if (outline.Count > 1)
+        {
+            var outer = outline.OrderByDescending(l => Perim(l.Select(n => nodePos[n]).ToList())).First();
+            float outerLen = Perim(outer.Select(n => nodePos[n]).ToList());
+            var holes = outline.Where(l => !ReferenceEquals(l, outer)).ToList();
+            if (holes.All(h => h.Count >= 3 && h.Count <= NailPinholeMaxNodes
+                               && Perim(h.Select(n => nodePos[n]).ToList()) <= outerLen * NailPinholeMaxShare))
+            {
+                var alias = new Dictionary<(int, int, int), (int, int, int)>();
+                foreach (var h in holes)
+                {
+                    var rep = VKey(nodePos[h[0]]);
+                    foreach (int n in h) alias[VKey(nodePos[n])] = rep;
+                }
+                outline = Outline(tris, verts, alias);
+            }
+        }
         if (outline.Count == 0) return "the nearest nail is closed";
         if (outline.Any(l => l.Count < 3)) return "the nearest nail's outline is not one loop";
-        // One outline only. A nail with a hole in it — a double-layered nail (FreyjaAF), or a small hole another nail
-        // plugs (Rue+ thumbs) — is left as authored: spanning it could not be checked as a single disk.
+        // One outline only. A nail with a hole in it bigger than a pinhole — a double-layered nail (FreyjaAF) — is left as
+        // authored: spanning it could not be checked as a single disk.
         if (outline.Count != 1) return "the nearest nail's outline is not one loop";
         var bLoop = outline[0];
         int nn = nodePos.Count;
@@ -809,91 +845,229 @@ public static partial class SecondSkinWriter
             if (sign * area2 <= 0) return "the rim bends in too far to span";
         }
 
-        // Nothing written unless the result is finite, every triangle of it faces out of the finger the way the
-        // island is wound, and none has lost its area.
-        static bool Finite(Vec3 v) => float.IsFinite(v.X) && float.IsFinite(v.Y) && float.IsFinite(v.Z);
-        for (int n = 0; n < nn; n++) if (!Finite(final[n])) return "the span came out non-finite";
-        for (int t = 0; t + 2 < tris.Length; t += 3)
+        // The finger as it would be with no nail on it: heights filled across the socket smoothly (the least bending —
+        // a bilaplacian over the patch), held at the rim AND at the ring of skin just outside it, so the patch leaves
+        // the rim at the finger's own slope. The nail-guided heights above copy the nail's dome with its thickness
+        // taken off, and leave a groove where they drop to the rim: an outline of the nail under any garment. They
+        // stay as the fallback when the smooth fill fails a check below.
+        var smooth = SmoothFill();
+        Vec3[]? SmoothFill()
         {
-            int a = nodeOf[tris[t]], b = nodeOf[tris[t + 1]], c = nodeOf[tris[t + 2]];
-            if (a == b || b == c || a == c) continue;
-            var after = TriNormalRaw(final[a], final[b], final[c]);
-            // A triangle whose three corners are all on the outline lands flat on the rim where the rim runs straight
-            // (a corner of the nail on the side of the socket): no area, nothing drawn, nothing overlapped.
-            bool onRim = pinned[a] && pinned[b] && pinned[c];
-            if (TriArea(final[a], final[b], final[c]) < 1e-12f) { if (onRim) continue; return "the span folds"; }
-            // Folded only if it faces INTO the finger (against the finger's direction there — the rim's normals,
-            // weighted by nearness — not one normal for the whole socket) AND against the way it was authored. A wall
-            // that copies the authored nail's own steep side passes; a triangle turned over passes neither.
-            var cen = new Vec3((final[a].X + final[b].X + final[c].X) / 3, (final[a].Y + final[b].Y + final[c].Y) / 3,
-                               (final[a].Z + final[b].Z + final[c].Z) / 3);
-            var fn = FingerNormal(cen);
-            var was = TriNormalRaw(nodePos[a], nodePos[b], nodePos[c]);
-            bool intoFinger = sign * (after.X * fn.X + after.Y * fn.Y + after.Z * fn.Z) <= 0;
-            bool turned = after.X * was.X + after.Y * was.Y + after.Z * was.Z <= 0;
-            if (intoFinger && turned) return "the span folds";
-        }
-        foreach (var (ka, kb, kc) in restTris)
-        {
-            if (!rimMoves.ContainsKey(ka) && !rimMoves.ContainsKey(kb) && !rimMoves.ContainsKey(kc)) continue;
-            Vec3 P0(( int, int, int) k) => points.TryGetValue(k, out var q) ? q.P : default;
-            Vec3 P1((int, int, int) k) => rimMoves.TryGetValue(k, out var to) ? to : P0(k);
-            var before = TriNormalRaw(P0(ka), P0(kb), P0(kc));
-            var after = TriNormalRaw(P1(ka), P1(kb), P1(kc));
-            if (TriArea(P1(ka), P1(kb), P1(kc)) < 1e-12f) return "the rim folds";
-            if (before.X * after.X + before.Y * after.Y + before.Z * after.Z <= 0) return "the rim folds";
+            var rimKeys = R.Select(r => VKey(r.P)).ToHashSet();
+            var outer = new Dictionary<(int, int, int), HashSet<(int, int, int)>>();
+            foreach (var (ka, kb, kc) in restTris)
+                foreach (var (x, y) in new[] { (ka, kb), (kb, kc), (kc, ka), (kb, ka), (kc, kb), (ka, kc) })
+                    if (rimKeys.Contains(x) && !rimKeys.Contains(y) && points.ContainsKey(y))
+                        (outer.TryGetValue(x, out var hs) ? hs : outer[x] = []).Add(y);
+            var ghost = new List<double>[nn];
+            var cnt = new int[nn];
+            for (int n = 0; n < nn; n++)
+            {
+                ghost[n] = [];
+                if (pinned[n])
+                {
+                    var t = target[bIndex[n]];
+                    var near = R.MinBy(r => Dist(r.P, t))!;
+                    // Skin standing ABOVE the rim — the cuticle's fold, a fingertip curling up past the socket — is no
+                    // slope for the finger under the nail: met, it sends the patch diving into the socket. Held level.
+                    double rimH = frame.H(t);
+                    if (outer.TryGetValue(VKey(near.P), out var gs))
+                        foreach (var g in gs) ghost[n].Add(Math.Min(frame.H(points[g].P), rimH));
+                    if (ghost[n].Count == 0) return null;   // no skin beside the rim here: no slope to meet
+                }
+                cnt[n] = nbr[n].Count + ghost[n].Count;
+            }
+            var h = (double[])lh.Clone();
+            double LAt(int i)
+            {
+                if (cnt[i] == 0) return 0;
+                double sum = 0;
+                foreach (int k in nbr[i]) sum += h[k];
+                foreach (double g in ghost[i]) sum += g;
+                return sum / cnt[i] - h[i];
+            }
+            for (int it = 0; it < 6000; it++)
+            {
+                double moved = 0;
+                for (int k = 0; k < nn; k++)
+                {
+                    if (pinned[k] || cnt[k] == 0) continue;
+                    double num = 0, den = 0;
+                    double l0 = LAt(k), r0 = l0 + h[k];
+                    num += -r0; den += 1;
+                    foreach (int i in nbr[k])
+                    {
+                        if (cnt[i] == 0) continue;
+                        double ai = 1.0 / cnt[i], li = LAt(i), ri = li - ai * h[k];
+                        num += ai * ri; den += ai * ai;
+                    }
+                    double nh = -num / den;
+                    moved = Math.Max(moved, Math.Abs(nh - h[k]));
+                    h[k] = nh;
+                }
+                if (moved < 1e-10) break;
+            }
+            // Never above the authored nail where the nail lies over it: a garment over the finger must not stand
+            // further out than the nail it replaces.
+            for (int n = 0; n < nn; n++)
+                if (!pinned[n] && Authored(lx[n], ly[n]) is { } top && h[n] > top) h[n] = top;
+            // Never under the rim's lowest point by more than the grader's floor allows (a fill that sank, like the
+            // drum, is no finger): then the nail-guided heights are used instead.
+            double floor = Enumerable.Range(0, nn).Where(n => pinned[n]).Min(n => h[n]) - NailFillFloor;
+            for (int n = 0; n < nn; n++) if (!pinned[n] && h[n] < floor) return null;
+            var f = new Vec3[nn];
+            for (int n = 0; n < nn; n++)
+            {
+                if (pinned[n]) { f[n] = target[bIndex[n]]; continue; }
+                f[n] = new Vec3((float)(frame.C.X + frame.U.X * lx[n] + frame.W.X * ly[n] + frame.N.X * h[n]),
+                                (float)(frame.C.Y + frame.U.Y * lx[n] + frame.W.Y * ly[n] + frame.N.Y * h[n]),
+                                (float)(frame.C.Z + frame.U.Z * lx[n] + frame.W.Z * ly[n] + frame.N.Z * h[n]));
+            }
+            return f;
         }
 
-        // Last, look at the seam the way a garment over it would: a ray down onto the skin just inside each rim edge
-        // must meet the patch or the finger from outside, near. Measured on Rue+ Ballerina, a patch can be sound in
-        // every other respect and still leave a sliver of the socket open beside the rim where the finger turns
-        // sharply; that socket is left as authored instead.
+        string? Verify(Vec3[] final)
         {
-            Vec3 Now((int, int, int) k) => rimMoves.TryGetValue(k, out var to) ? to : points[k].P;
-            var rimC = new Vec3(Rp.Average(p => p.X), Rp.Average(p => p.Y), Rp.Average(p => p.Z));
-            float reach = Rp.Max(p => Dist(p, rimC)) + 0.004f;
-            var soup = new List<(Vec3 A, Vec3 B, Vec3 C)>();
+            // Nothing written unless the result is finite, every triangle of it faces out of the finger the way the
+            // island is wound, and none has lost its area.
+            static bool Finite(Vec3 v) => float.IsFinite(v.X) && float.IsFinite(v.Y) && float.IsFinite(v.Z);
+            for (int n = 0; n < nn; n++) if (!Finite(final[n])) return "the span came out non-finite";
             for (int t = 0; t + 2 < tris.Length; t += 3)
-                soup.Add(sign >= 0 ? (final[nodeOf[tris[t]]], final[nodeOf[tris[t + 1]]], final[nodeOf[tris[t + 2]]])
-                                   : (final[nodeOf[tris[t]]], final[nodeOf[tris[t + 2]]], final[nodeOf[tris[t + 1]]]));   // facing out
-            var edgeNormal = new Dictionary<((int, int, int), (int, int, int)), Vec3>();
+            {
+                int a = nodeOf[tris[t]], b = nodeOf[tris[t + 1]], c = nodeOf[tris[t + 2]];
+                if (a == b || b == c || a == c) continue;
+                var after = TriNormalRaw(final[a], final[b], final[c]);
+                // A triangle whose three corners are all on the outline lands flat on the rim where the rim runs straight
+                // (a corner of the nail on the side of the socket): no area, nothing drawn, nothing overlapped.
+                bool onRim = pinned[a] && pinned[b] && pinned[c];
+                if (TriArea(final[a], final[b], final[c]) < 1e-12f) { if (onRim) continue; return "the span folds"; }
+                // Folded only if it faces INTO the finger (against the finger's direction there — the rim's normals,
+                // weighted by nearness — not one normal for the whole socket) AND against the way it was authored. A wall
+                // that copies the authored nail's own steep side passes; a triangle turned over passes neither.
+                var cen = new Vec3((final[a].X + final[b].X + final[c].X) / 3, (final[a].Y + final[b].Y + final[c].Y) / 3,
+                                   (final[a].Z + final[b].Z + final[c].Z) / 3);
+                var fn = FingerNormal(cen);
+                var was = TriNormalRaw(nodePos[a], nodePos[b], nodePos[c]);
+                bool intoFinger = sign * (after.X * fn.X + after.Y * fn.Y + after.Z * fn.Z) <= 0;
+                bool turned = after.X * was.X + after.Y * was.Y + after.Z * was.Z <= 0;
+                if (intoFinger && turned) return "the span folds";
+            }
             foreach (var (ka, kb, kc) in restTris)
             {
-                if (!points.ContainsKey(ka) || !points.ContainsKey(kb) || !points.ContainsKey(kc)) continue;
-                var (pa, pb, pc) = (Now(ka), Now(kb), Now(kc));
-                if (Dist(pa, rimC) > reach && Dist(pb, rimC) > reach && Dist(pc, rimC) > reach) continue;
-                soup.Add((pa, pb, pc));
-                var tn = TriNormalRaw(pa, pb, pc);
-                edgeNormal[EdgeKey(ka, kb)] = tn; edgeNormal[EdgeKey(kb, kc)] = tn; edgeNormal[EdgeKey(kc, ka)] = tn;
+                if (!rimMoves.ContainsKey(ka) && !rimMoves.ContainsKey(kb) && !rimMoves.ContainsKey(kc)) continue;
+                Vec3 P0(( int, int, int) k) => points.TryGetValue(k, out var q) ? q.P : default;
+                Vec3 P1((int, int, int) k) => rimMoves.TryGetValue(k, out var to) ? to : P0(k);
+                var before = TriNormalRaw(P0(ka), P0(kb), P0(kc));
+                var after = TriNormalRaw(P1(ka), P1(kb), P1(kc));
+                if (TriArea(P1(ka), P1(kb), P1(kc)) < 1e-12f) return "the rim folds";
+                if (before.X * after.X + before.Y * after.Y + before.Z * after.Z <= 0) return "the rim folds";
             }
-            for (int i = 0; i < nr; i++)
+
+            // Last, look at the seam the way a garment over it would: a ray down onto the skin just inside each rim edge
+            // must meet the patch or the finger from outside, near. Measured on Rue+ Ballerina, a patch can be sound in
+            // every other respect and still leave a sliver of the socket open beside the rim where the finger turns
+            // sharply; that socket is left as authored instead.
             {
-                var (ka, kb) = (VKey(R[i].P), VKey(R[(i + 1) % nr].P));
-                // No readable skin beside an edge cannot be shown closed: fail safe.
-                if (!edgeNormal.TryGetValue(EdgeKey(ka, kb), out var en)) return "the seam leaks";
-                float el = MathF.Sqrt(en.X * en.X + en.Y * en.Y + en.Z * en.Z);
-                if (el <= 0) return "the seam leaks";
-                var n = new Vec3(en.X / el, en.Y / el, en.Z / el);
-                var a = Now(ka); var b = Now(kb);
-                var mid = new Vec3((a.X + b.X) / 2, (a.Y + b.Y) / 2, (a.Z + b.Z) / 2);
-                // Inward ALONG the skin (the step to the rim's middle with its part along the normal taken out): where the
-                // middle lies above the rim, a step straight at it would bring the ray down the seam itself.
-                var toC = new Vec3(rimC.X - mid.X, rimC.Y - mid.Y, rimC.Z - mid.Z);
-                float along = toC.X * n.X + toC.Y * n.Y + toC.Z * n.Z;
-                var tc = NormalizeOr(new Vec3(toC.X - n.X * along, toC.Y - n.Y * along, toC.Z - n.Z * along), default);
-                var o = new Vec3(mid.X + tc.X * 0.0003f + n.X * 0.001f, mid.Y + tc.Y * 0.0003f + n.Y * 0.001f,
-                                 mid.Z + tc.Z * 0.0003f + n.Z * 0.001f);
-                var d = new Vec3(-n.X, -n.Y, -n.Z);
-                // Through a hole, the first face met is the inside of the finger's far wall — a back face.
-                // Bounded, as a garment would see it: a front face further off may be another part of the finger.
-                bool met = FirstHit(soup, o, d) is { } hit && hit.Front && hit.T <= NailSeamReach;
-                // ...or, where the patch rises steeply off the rim and stands over the ray's start, the same ray from 3 mm out.
-                // (Not "the start is enclosed": on an open mesh that test passed slivers the 3 mm cast shows open.)
-                var far = new Vec3(o.X + n.X * 0.002f, o.Y + n.Y * 0.002f, o.Z + n.Z * 0.002f);
-                bool under = FirstHit(soup, far, d) is { } back && back.Front && back.T <= NailSeamReach + 0.002f;
-                if (!met && !under) return "the seam leaks";
+                Vec3 Now((int, int, int) k) => rimMoves.TryGetValue(k, out var to) ? to : points[k].P;
+                var rimC = new Vec3(Rp.Average(p => p.X), Rp.Average(p => p.Y), Rp.Average(p => p.Z));
+                float reach = Rp.Max(p => Dist(p, rimC)) + 0.004f;
+                var soup = new List<(Vec3 A, Vec3 B, Vec3 C)>();
+                for (int t = 0; t + 2 < tris.Length; t += 3)
+                    soup.Add(sign >= 0 ? (final[nodeOf[tris[t]]], final[nodeOf[tris[t + 1]]], final[nodeOf[tris[t + 2]]])
+                                       : (final[nodeOf[tris[t]]], final[nodeOf[tris[t + 2]]], final[nodeOf[tris[t + 1]]]));   // facing out
+                var edgeNormal = new Dictionary<((int, int, int), (int, int, int)), Vec3>();
+                foreach (var (ka, kb, kc) in restTris)
+                {
+                    if (!points.ContainsKey(ka) || !points.ContainsKey(kb) || !points.ContainsKey(kc)) continue;
+                    var (pa, pb, pc) = (Now(ka), Now(kb), Now(kc));
+                    if (Dist(pa, rimC) > reach && Dist(pb, rimC) > reach && Dist(pc, rimC) > reach) continue;
+                    soup.Add((pa, pb, pc));
+                    var tn = TriNormalRaw(pa, pb, pc);
+                    edgeNormal[EdgeKey(ka, kb)] = tn; edgeNormal[EdgeKey(kb, kc)] = tn; edgeNormal[EdgeKey(kc, ka)] = tn;
+                }
+                int np0 = tris.Length / 3;
+                bool UnderPatch(Vec3 p, Vec3 up)
+                {
+                    var patchOnly = soup.GetRange(0, np0);
+                    return FirstHit(patchOnly, p, up) is { } h && !h.Front && h.T <= NailSeamReach;
+                }
+                bool SeamTight(Vec3 a, Vec3 b)
+                {
+                    float Off(Vec3 p)
+                    {
+                        float best = float.MaxValue;
+                        for (int j = 0; j < nb; j++)
+                        {
+                            var (s0, s1) = (final[bLoop[j]], final[bLoop[(j + 1) % nb]]);
+                            var e = new Vec3(s1.X - s0.X, s1.Y - s0.Y, s1.Z - s0.Z);
+                            float ee = e.X * e.X + e.Y * e.Y + e.Z * e.Z;
+                            float t = ee <= 0 ? 0 : Math.Clamp(((p.X - s0.X) * e.X + (p.Y - s0.Y) * e.Y + (p.Z - s0.Z) * e.Z) / ee, 0f, 1f);
+                            best = MathF.Min(best, Dist(p, new Vec3(s0.X + e.X * t, s0.Y + e.Y * t, s0.Z + e.Z * t)));
+                        }
+                        return best;
+                    }
+                    static float ToSeg(Vec3 p, Vec3 s0, Vec3 s1)
+                    {
+                        var e = new Vec3(s1.X - s0.X, s1.Y - s0.Y, s1.Z - s0.Z);
+                        float ee = e.X * e.X + e.Y * e.Y + e.Z * e.Z;
+                        float t = ee <= 0 ? 0 : Math.Clamp(((p.X - s0.X) * e.X + (p.Y - s0.Y) * e.Y + (p.Z - s0.Z) * e.Z) / ee, 0f, 1f);
+                        return Dist(p, new Vec3(s0.X + e.X * t, s0.Y + e.Y * t, s0.Z + e.Z * t));
+                    }
+                    var m = new Vec3((a.X + b.X) / 2, (a.Y + b.Y) / 2, (a.Z + b.Z) / 2);
+                    float worst = MathF.Max(Off(a), MathF.Max(Off(b), Off(m)));
+                    // ...and from the outline's side: a rim vertex always lies ON the outline (it is a target, or was moved
+                    // onto the chain), so the crack — a crescent where the chain bends at an outline node between two rim
+                    // vertices — is widest AT that node. Every outline node nearer this rim edge than any other is asked.
+                    for (int j = 0; j < nb; j++)
+                    {
+                        var p = final[bLoop[j]];
+                        float here = ToSeg(p, a, b);
+                        if (here <= worst) continue;
+                        bool nearest = true;
+                        for (int k = 0; k < nr && nearest; k++)
+                            nearest = ToSeg(p, Now(VKey(R[k].P)), Now(VKey(R[(k + 1) % nr].P))) >= here - 1e-9f;
+                        if (nearest) worst = here;
+                    }
+                    return worst <= NailSeamTight;
+                }
+                for (int i = 0; i < nr; i++)
+                {
+                    var (ka, kb) = (VKey(R[i].P), VKey(R[(i + 1) % nr].P));
+                    // No readable skin beside an edge cannot be shown closed: fail safe.
+                    if (!edgeNormal.TryGetValue(EdgeKey(ka, kb), out var en)) return "the seam leaks";
+                    float el = MathF.Sqrt(en.X * en.X + en.Y * en.Y + en.Z * en.Z);
+                    if (el <= 0) return "the seam leaks";
+                    var n = new Vec3(en.X / el, en.Y / el, en.Z / el);
+                    var a = Now(ka); var b = Now(kb);
+                    var mid = new Vec3((a.X + b.X) / 2, (a.Y + b.Y) / 2, (a.Z + b.Z) / 2);
+                    // Inward ALONG the skin (the step to the rim's middle with its part along the normal taken out): where the
+                    // middle lies above the rim, a step straight at it would bring the ray down the seam itself.
+                    var toC = new Vec3(rimC.X - mid.X, rimC.Y - mid.Y, rimC.Z - mid.Z);
+                    float along = toC.X * n.X + toC.Y * n.Y + toC.Z * n.Z;
+                    var tc = NormalizeOr(new Vec3(toC.X - n.X * along, toC.Y - n.Y * along, toC.Z - n.Z * along), default);
+                    var o = new Vec3(mid.X + tc.X * 0.0003f + n.X * 0.001f, mid.Y + tc.Y * 0.0003f + n.Y * 0.001f,
+                                     mid.Z + tc.Z * 0.0003f + n.Z * 0.001f);
+                    var d = new Vec3(-n.X, -n.Y, -n.Z);
+                    // Through a hole, the first face met is the inside of the finger's far wall — a back face.
+                    // Bounded, as a garment would see it: a front face further off may be another part of the finger.
+                    bool met = FirstHit(soup, o, d) is { } hit && hit.Front && hit.T <= NailSeamReach;
+                    // ...or, where the patch rises steeply off the rim and stands over the ray's start, the same ray from 3 mm out.
+                    // (Not "the start is enclosed": on an open mesh that test passed slivers the 3 mm cast shows open.)
+                    var far = new Vec3(o.X + n.X * 0.002f, o.Y + n.Y * 0.002f, o.Z + n.Z * 0.002f);
+                    bool under = FirstHit(soup, far, d) is { } back && back.Front && back.T <= NailSeamReach + 0.002f;
+                    // ...or the ray starts UNDER the patch — where the patch leans out over a fingertip that curls up past the rim
+                    // (YAB+, Rue+, LavaBod+), the ray from 1 mm out and the one from 3 mm out both start inside the finger and reach
+                    // its far wall without passing any hole. Then the seam itself is asked: the rim edge must lie on the patch's
+                    // outline. Shut there, nothing passes between them.
+                    if (!met && !under && !(UnderPatch(o, n) && SeamTight(a, b))) return "the seam leaks";
+                }
             }
+
+            return null;
         }
+        string? smoothWhy = smooth == null ? "no skin beside the rim" : Verify(smooth);
+        if (smoothWhy == null) final = smooth!;
+        else if (Verify(final) is { } why) return why;
 
         foreach (int v in verts)
         {

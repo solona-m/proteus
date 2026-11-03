@@ -64,8 +64,10 @@ public static class SyntheticFinger
     /// <summary>
     /// Build a finger. <paramref name="weights"/> skins it to two bones varying along its length;
     /// <paramref name="nailMesh"/> adds a separate non-skin nail riding 0.1 mm over the top nail, as Rue+ has.
+    /// <paramref name="tubeUvScale"/> shrinks the tube's UVs: at 1 its socket rim spans a sixth of the sheet, at 0.25
+    /// about what a real hand's does (a few percent).
     /// </summary>
-    internal static byte[] Build(Variant v, bool weights = false, bool nailMesh = false)
+    internal static byte[] Build(Variant v, bool weights = false, bool nailMesh = false, float tubeUvScale = 1f)
     {
         int half = v switch { Variant.WrapAround => 13, Variant.WrappedRim => 6, _ => SocketHalf };
         int row0 = SocketRow0, row1 = SocketRow1;
@@ -96,7 +98,7 @@ public static class SyntheticFinger
             for (int c = 0; c < Around; c++)
             {
                 float th = (c - Around / 2) * MathF.Tau / Around;
-                grid[c, r] = m.Add(Pos(th, Y(r), R), Out(th), new Vector2((float)c / Around, 0.7f * r / (Along - 1)),
+                grid[c, r] = m.Add(Pos(th, Y(r), R), Out(th), new Vector2(tubeUvScale * c / Around, tubeUvScale * 0.7f * r / (Along - 1)),
                                    weights ? Weight(Y(r)) : null);
             }
         // The stray crack: one triangle takes its own copy of a corner, 30 µm off — four open edges in a tiny loop,
