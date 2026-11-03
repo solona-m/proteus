@@ -25,6 +25,9 @@ const REPO = 'proteus';
 // needs nothing in STATIC_PROXIES. REPO stays the default everywhere else: rawUrl and the document
 // table below are Proteus's own docs, not a shared surface.
 const CAMERA_TOOLS_REPO = 'camera-tools-ffxiv';
+// Pickles Playlist Editor's AI-score downloads (big binaries that don't fit in its installer). Kept in sync
+// with that repo's Tools/AiAssets.cs and devtools/aiscan/releases.json.
+const PICKLES_REPO = 'Pickles-Playlist-Editor';
 
 // Served at / and /README.md so the host explains itself instead of answering a bare 404. Inlined at
 // build time (scripts/embed-readme.mjs) rather than fetched, so it always describes THIS deployment
@@ -62,6 +65,9 @@ const ROUTES = [
     rx: /^\/camera-tools\/(v[0-9][0-9.]{0,30}|testing-[0-9]{1,10})\/(latest\.zip)$/,
     repo: CAMERA_TOOLS_REPO,
   },
+  // Pickles Playlist Editor, own prefix like Camera Tools. Only the aiscan-v<N> tags its upload workflow can
+  // create, and only the file kinds it publishes.
+  { rx: /^\/pickles\/(aiscan-v[0-9]{1,6})\/([A-Za-z0-9_.-]{1,80}\.(?:exe|onnx|data))$/, repo: PICKLES_REPO },
 ];
 
 const YEAR = 31536000;

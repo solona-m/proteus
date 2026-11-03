@@ -62,6 +62,7 @@ async function check(name, path, expectStatus, expectOrigin) {
 // only that the path and tag reach the right upstream, so it is stripped before comparing.
 const GH = 'https://github.com/solona-m/proteus/releases/download';
 const CAM = 'https://github.com/solona-m/camera-tools-ffxiv/releases/download';
+const PKL = 'https://github.com/solona-m/Pickles-Playlist-Editor/releases/download';
 const stripEpoch = (u) => (u ?? '').replace(/\?e=\d+$/, '');
 
 console.log('accepted paths:');
@@ -92,6 +93,50 @@ await check('camera tools rejects nesting', '/camera-tools/v1.0/sub/latest.zip',
 await check('camera tools prefix alone', '/camera-tools/latest.zip', 404, null);
 // Proteus's asset tags do not leak through the prefixed route into the camera tools repo.
 await check('camera tools rejects uvmaps tag', '/camera-tools/uvmaps-v1/x.tif', 404, null);
+
+// A third repo: Pickles Playlist Editor's AI-score assets, under its own prefix.
+// [AC-ai-assets-download-9] [EDGE-ai-assets-download-22] [EDGE-ai-assets-download-24] (Pickles plan ids)
+console.log('pickles (third origin repo):');
+for (const f of ['ffmpeg.exe', 'sonics-beta-120s.onnx', 'sonics-beta-120s.onnx.data']) {
+  await check(`pickles ${f}`, `/pickles/aiscan-v1/${f}`, 200, `${PKL}/aiscan-v1/${f}`);
+}
+{
+  const res = await worker.fetch(new Request('https://dl.example.com/pickles/aiscan-v1/ffmpeg.exe'), {}, ctx);
+  const cc = res.headers.get('cache-control') ?? '';
+  if (res.status === 200 && cc.includes('immutable') && cc.includes('max-age=31536000')) {
+    pass++; console.log(`  ok   pickles asset is immutable for a year (${cc})`);
+  } else { fail++; console.log(`  FAIL pickles cache-control: ${res.status} ${cc}`); }
+}
+await check('proteus bare tag unaffected by pickles', '/v2609.13.0.0/latest.zip', 200, `${GH}/v2609.13.0.0/latest.zip`);
+await check('camera tools unaffected by pickles', '/camera-tools/v2609.13.0.0/latest.zip', 200, `${CAM}/v2609.13.0.0/latest.zip`);
+for (const [name, p] of [
+  ['pickles no prefix', '/aiscan-v1/ffmpeg.exe'],
+  ['pickles dll', '/pickles/aiscan-v1/x.dll'],
+  ['pickles zip', '/pickles/aiscan-v1/x.zip'],
+  ['pickles app zip', '/pickles/v2.11.14/latest.zip'],
+  ['pickles nesting', '/pickles/aiscan-v1/sub/ffmpeg.exe'],
+  ['pickles traversal', '/pickles/aiscan-v1/../ffmpeg.exe'],
+  ['pickles encoded traversal', '/pickles/aiscan-v1/%2e%2e/ffmpeg.exe'],
+  ['pickles encoded slash', '/pickles/aiscan-v1/%2e%2e%2fffmpeg.exe'],
+  ['pickles upper-case tag', '/pickles/AISCAN-V1/ffmpeg.exe'],
+  ['pickles upper-case prefix', '/Pickles/aiscan-v1/ffmpeg.exe'],
+  ['pickles bad tag', '/pickles/aiscan-x/ffmpeg.exe'],
+  ['pickles other kind of tag', '/pickles/uvmaps-v1/x.tif'],
+  ['pickles tag under camera tools', '/camera-tools/aiscan-v1/ffmpeg.exe'],
+  ['pickles no file', '/pickles/aiscan-v1/'],
+  ['pickles space in name', '/pickles/aiscan-v1/ff mpeg.exe'],
+]) await check(name, p, 404, null);
+{
+  // An upstream 404 (e.g. a release not published yet) must not be cached: the next request goes back to GitHub.
+  fetched = [];
+  const first = await worker.fetch(new Request('https://dl.example.com/pickles/aiscan-v1/missing.exe'), {}, ctx);
+  const cc = first.headers.get('cache-control') ?? '';
+  fetched = [];
+  await worker.fetch(new Request('https://dl.example.com/pickles/aiscan-v1/missing.exe'), {}, ctx);
+  if (first.status === 404 && cc.includes('no-store') && fetched.length === 1) {
+    pass++; console.log('  ok   pickles upstream 404 not cached');
+  } else { fail++; console.log(`  FAIL pickles upstream 404: ${first.status} ${cc}, refetched ${fetched.length}`); }
+}
 
 console.log('rejected paths (must never reach an origin):');
 await check('traversal', '/uvmaps-v1/../../../etc/passwd', 404, null);
