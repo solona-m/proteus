@@ -172,6 +172,19 @@
     <ProjectReference Include="..\XivLiveMesh\XivLiveMesh.csproj" />
   </ItemGroup>
 
+  <!-- The QA test harness: compiled in only when Directory.Build.props leaves ProteusTestHarness true (local builds),
+       never under CI. ReportTestHarness says which, so a local build that silently lost it (a stray CI=true) shows. -->
+  <PropertyGroup Condition="'$(ProteusTestHarness)' == 'true'">
+    <DefineConstants>$(DefineConstants);PROTEUS_TEST_HARNESS</DefineConstants>
+  </PropertyGroup>
+  <ItemGroup Condition="'$(ProteusTestHarness)' != 'true'">
+    <Compile Remove="TestHarness\**" />
+  </ItemGroup>
+  <Target Name="ReportTestHarness" BeforeTargets="CoreCompile">
+    <Message Importance="high" Condition="'$(ProteusTestHarness)' == 'true'" Text="Proteus test harness: compiled IN" />
+    <Message Importance="high" Condition="'$(ProteusTestHarness)' != 'true'" Text="Proteus test harness: compiled OUT (CI=$(CI), GITHUB_ACTIONS=$(GITHUB_ACTIONS))" />
+  </Target>
+
   <Import Project="Sdk.targets" Sdk="Dalamud.NET.Sdk" />
 
 </Project>

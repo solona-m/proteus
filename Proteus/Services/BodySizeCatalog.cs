@@ -19,7 +19,10 @@ namespace Proteus.Services;
 /// there are eight options called "SFW M". The heading is therefore not decoration, it is the only thing telling two
 /// identically-named sizes apart, and dropping it would put several indistinguishable entries in the picker.
 /// </param>
-internal sealed record BodyOption(string Group, string Section, string Name, string Rel, string GamePath, string Slot)
+/// <param name="DefaultShape">A chest entry (see <see cref="BodySizeCatalog.IsShape"/>) for the chest its mod draws by
+/// default.</param>
+internal sealed record BodyOption(string Group, string Section, string Name, string Rel, string GamePath, string Slot,
+                                  bool DefaultShape = false)
 {
     /// <summary>What the picker shows: unique within a group, and spelled the way the author spelled it.</summary>
     public string Label => Heading.Length > 0 ? $"{Heading} · {Name}" : Name;
@@ -34,6 +37,12 @@ internal sealed record BodyOption(string Group, string Section, string Name, str
     public string FullLabel => $"{Group} / {Label}";
 }
 
+/// <summary>A physics-variant chest model (NIRÆ's "Squish", #59) and the build chest model it varies.</summary>
+/// <param name="GamePath">The game path both replace.</param>
+/// <param name="Rel">The variant's model file, relative to the mod root.</param>
+/// <param name="BuildRel">The build's model file it is read as.</param>
+internal sealed record ChestVariant(string GamePath, string Rel, string BuildRel);
+
 /// <summary>
 /// A body mod's size options, read off its Penumbra manifest.
 /// <para/>
@@ -46,6 +55,33 @@ internal sealed record BodyOption(string Group, string Section, string Name, str
 /// </summary>
 internal sealed record BodySizeCatalog(string ModRoot, IReadOnlyList<BodyOption> Options)
 {
+    /// <summary>
+    /// The chest models a body's physics-variant group swaps in (NIRÆ's "Squish", #59), each with the build model it is
+    /// a variant of. They are not sizes: a character drawing one is wearing that build's chest
+    /// (<see cref="RefitCore.WornOption"/>), and a size saved against one is that build's (<see cref="Canonical(string)"/>).
+    /// </summary>
+    public IReadOnlyList<ChestVariant> Variants { get; init; } = [];
+
+    /// <summary>A size's rel with a physics variant's chest model read as its build's (<see cref="Variants"/>): a size
+    /// saved against NIRÆ's Squish model before #59 is the build's. Any other rel unchanged.</summary>
+    internal string Canonical(string rel)
+    {
+        string file = Normal(FileOf(rel));
+        foreach (var v in Variants)
+            if (Normal(v.Rel) == file) return v.BuildRel + ShapeSuffix(rel);
+        return rel;
+    }
+
+    /// <summary><see cref="Canonical(string)"/> of a saved size, as a copy; the very same instance when nothing maps, and
+    /// never the stored preference changed.</summary>
+    internal BodySizeRef? Canonical(BodySizeRef? size)
+    {
+        if (size == null) return null;
+        string rel = Canonical(size.Rel);
+        return ReferenceEquals(rel, size.Rel) ? size
+            : new BodySizeRef { Rel = rel, Group = size.Group, Section = size.Section, Name = size.Name };
+    }
+
     /// <summary>Equipment slots a body model can occupy, longest-lived first.</summary>
     private static readonly string[] KnownSlots = ["_top", "_dwn", "_glv", "_sho"];
 
@@ -124,13 +160,22 @@ internal sealed record BodySizeCatalog(string ModRoot, IReadOnlyList<BodyOption>
         var groups = PenumbraModMeta.TryReadGroups(modRoot);
         if (groups == null) return new BodySizeCatalog(modRoot, options);
 
+        var shapes = new List<GroupShape>();
         foreach (var (groupName, group) in groups)
         {
             if (!group.TryGetProperty("Options", out var list) || list.ValueKind != JsonValueKind.Array) continue;
+            var shape = new GroupShape(groupName,
+                group.TryGetProperty("Type", out var type) && type.ValueKind == JsonValueKind.String
+                && string.Equals(type.GetString(), "Single", StringComparison.OrdinalIgnoreCase),
+                DefaultIndex(group, list.GetArrayLength()), []);
+            shapes.Add(shape);
 
             string section = "";
             foreach (var option in list.EnumerateArray())
             {
+                // Every option counts toward the default index, file-less ones included, as Penumbra counts them.
+                var slots = new HashSet<string>(StringComparer.Ordinal);
+                shape.OptionSlots.Add(slots);
                 if (option.ValueKind != JsonValueKind.Object) continue;
                 string name = option.TryGetProperty("Name", out var n) ? n.GetString() ?? "" : "";
 
@@ -150,12 +195,260 @@ internal sealed record BodySizeCatalog(string ModRoot, IReadOnlyList<BodyOption>
                     if (file.Value.GetString() is not { Length: > 0 } rel) continue;
                     if (!IsBodyModel(file.Name) || SlotOf(file.Name) is not { } slot) continue;
 
+                    slots.Add(slot);
                     options.Add(new BodyOption(groupName, section, name, rel, file.Name, slot));
                 }
             }
         }
 
+        // The chest models that are builds: not those a physics-variant group swaps in (NIRÆ's "Squish", #59), which
+        // would read as as many builds again. When every chest group is one, all of them, as before.
+        var variantGroups = VariantGroups(shapes);
+        var tops = options.Where(o => o.Slot == "_top").ToList();
+        var builds = tops.Where(o => !variantGroups.Contains(o.Group)).ToList();
+        if (builds.Count == 0) builds = tops;
+
+        // Only a body whose chest models stand for more than one option each — the rest of the body chosen beside the
+        // chest, as NIRÆ's builds carry three hips each — or that ships its chest as plain files.
+        if (builds.FirstOrDefault() is { } chest
+            && builds.GroupBy(o => (o.GamePath.ToLowerInvariant(), Normal(o.Rel)))
+                     .Any(g => g.Count() > 1 || g.Any(o => o.Group == DefaultGroupName))
+            && BodyAtrSwitches.Manifest(modRoot) is { } manifest
+            && BodyAtrSwitches.ShapeGroup(manifest, "Body") is { } axis
+            && CarriesShapes(ResolveCaseInsensitive(modRoot, chest.Rel), axis))
+        {
+            var (crossed, variants) = WithChests(options, axis, builds);
+            return new BodySizeCatalog(modRoot, crossed) { Variants = variants };
+        }
         return new BodySizeCatalog(modRoot, options);
+    }
+
+    /// <summary>One option group as the variant rule reads it: whether it is single-choice, which option it starts on,
+    /// and which body slots each option draws.</summary>
+    private sealed record GroupShape(string Name, bool Single, int? Default, List<HashSet<string>> OptionSlots);
+
+    /// <summary>
+    /// The option a group starts on, as Penumbra's <c>SingleModGroup.FixSetting</c> reads it: none given is the first,
+    /// past the last is the last. Null when it cannot be read (not a number, negative) or the group has no options.
+    /// </summary>
+    private static int? DefaultIndex(JsonElement group, int count)
+    {
+        if (count == 0) return null;
+        if (!group.TryGetProperty("DefaultSettings", out var d)) return 0;
+        if (d.ValueKind != JsonValueKind.Number || !d.TryGetInt64(out long v) || v < 0) return null;
+        return (int)Math.Min(v, count - 1);
+    }
+
+    /// <summary>
+    /// The single-choice groups that swap in a physics variant of the chest rather than choose a build (NIRÆ's
+    /// "Squish", #59): (a) the option it starts on draws no chest model while another does — out of the box the chest is
+    /// someone else's; or (b) its options draw the chest model alone while another single-choice group draws the chest
+    /// with its legs in every option — the build carries its hips, the variant only the chest. Read off the manifest:
+    /// never the user's ticks, the groups' order or their names.
+    /// </summary>
+    private static HashSet<string> VariantGroups(List<GroupShape> groups)
+    {
+        static bool Draws(GroupShape g, string slot) => g.OptionSlots.Any(s => s.Contains(slot));
+        static bool PairsChestWithLegs(GroupShape g)
+            => g.Single && Draws(g, "_top") && g.OptionSlots.Where(s => s.Contains("_top")).All(s => s.Contains("_dwn"));
+
+        var variants = new HashSet<string>(StringComparer.Ordinal);
+        foreach (var g in groups)
+        {
+            if (!g.Single || !Draws(g, "_top")) continue;
+            bool startsBare = g.Default is int d && !g.OptionSlots[d].Contains("_top");
+            bool chestAlone = !Draws(g, "_dwn") && !Draws(g, "_glv") && !Draws(g, "_sho")
+                              && groups.Any(o => !ReferenceEquals(o, g) && PairsChestWithLegs(o));
+            // Penumbra refuses two groups of one name, so the name stands for the group.
+            if (startsBare || chestAlone) variants.Add(g.Name);
+        }
+        return variants;
+    }
+
+    // ── chests chosen by Atr (NIRÆ) ─────────────────────────────────────────
+
+    /// <summary>What sets a chest entry's chest apart from the model file in its <see cref="BodyOption.Rel"/>. Never in a
+    /// Windows path or a Penumbra file redirect.</summary>
+    internal const char ShapeMark = '|';
+
+    /// <summary>The model file of a size: its <see cref="BodyOption.Rel"/> without the chest of a chest entry.</summary>
+    internal static string FileOf(string rel) => rel.IndexOf(ShapeMark) is var at and >= 0 ? rel[..at] : rel;
+
+    /// <summary>The chest part of a size's rel, mark included; "" for any other size.</summary>
+    internal static string ShapeSuffix(string rel) => rel.IndexOf(ShapeMark) is var at and >= 0 ? rel[at..] : "";
+
+    /// <summary>
+    /// Whether an option is one of a chest model's chests: a body that ships every chest in one model and picks the one
+    /// drawn with an option group of <c>Atr</c> switches alone (NIRÆ). Such a size is the model AND the chest, so the
+    /// chest rides in its rel (<c>"files\top.mdl|Small Perky"</c>): every place that tells sizes apart by rel — settings,
+    /// refit records, the Studio's memory — tells the chests apart, and only file access cuts it off
+    /// (<see cref="ResolveCaseInsensitive"/>). Only build models carry chest entries: a physics-variant group's copies of
+    /// them (NIRÆ's "Squish", #59) are no sizes at all (<see cref="Variants"/>).
+    /// </summary>
+    internal static bool IsShape(BodyOption o) => o.Rel.Contains(ShapeMark);
+
+    /// <summary>
+    /// Of a model's chest entries, the chest <paramref name="selected"/> ticks in their group; failing that the one the
+    /// mod draws by default; failing that the first. Not a chest entry list: its first.
+    /// </summary>
+    internal static BodyOption PickShape(IReadOnlyList<BodyOption> sameFile,
+                                         IReadOnlyDictionary<string, List<string>>? selected)
+    {
+        var first = sameFile[0];
+        if (!IsShape(first)) return first;
+        if (selected != null)
+            foreach (var (group, ticked) in selected)
+                if (string.Equals(group, first.Group, StringComparison.OrdinalIgnoreCase) && ticked.Count > 0
+                    && sameFile.FirstOrDefault(o => string.Equals(o.Name, ticked[0], StringComparison.OrdinalIgnoreCase)) is { } pick)
+                    return pick;
+        return sameFile.FirstOrDefault(o => o.DefaultShape) ?? first;
+    }
+
+    /// <summary>
+    /// The option a remembered rel names: that very rel, else — a size kept before chests were sizes, by its model
+    /// file — the chest <paramref name="selected"/> ticks of that model (<see cref="PickShape"/>). Null when no option
+    /// has the file. A rel naming a physics variant's chest model (#59) is read through <see cref="Canonical(string)"/>
+    /// by the caller first: this matches files as they are listed.
+    /// </summary>
+    internal static BodyOption? ByFile(IReadOnlyList<BodyOption> options, string rel,
+                                       IReadOnlyDictionary<string, List<string>>? selected)
+    {
+        string want = Normal(rel);
+        if (options.FirstOrDefault(o => Normal(o.Rel) == want) is { } exact) return exact;
+        string file = Normal(FileOf(rel));
+        var same = options.Where(o => Normal(FileOf(o.Rel)) == file).ToList();
+        return same.Count == 0 ? null : PickShape(same, selected);
+    }
+
+    private static string Normal(string rel) => RefitCore.Normal(rel);
+
+    /// <summary>
+    /// The chest options of a body that picks its chest by <paramref name="axis"/>: one per chest model and chest,
+    /// in place of the chest model's options of the group that ships it — which differ only in what they do to the
+    /// rest of the body (NIRÆ's three hip sizes per build). Labelled "build · chest": the build is what the model's
+    /// options share at the front of their names. Only <paramref name="buildOptions"/> are crossed; every other chest
+    /// option — a physics-variant group's copies of the builds (NIRÆ's "Squish", #59) — is dropped and returned as a
+    /// variant of its build (<see cref="MapVariants"/>).
+    /// </summary>
+    private static (List<BodyOption> Options, List<ChestVariant> Variants) WithChests(
+        List<BodyOption> options, BodyAtrSwitches.ShapeAxis axis, List<BodyOption> buildOptions)
+    {
+        var models = buildOptions.GroupBy(o => (o.GamePath.ToLowerInvariant(), Normal(o.Rel)))
+                                 .Select(g => g.ToList()).ToList();
+        // Builds are told apart within one race's chest (one game path): a mod shipping each build for two races
+        // names "Slim" once for each.
+        bool Peers(List<BodyOption> a, List<BodyOption> b)
+            => string.Equals(a[0].GamePath, b[0].GamePath, StringComparison.OrdinalIgnoreCase);
+        var shared = models.Select(m => models.Count(o => Peers(o, m)) == 1 ? "" : BuildOf(m)).ToList();
+        // Two builds of one name: told apart by their first option's label.
+        var builds = shared.Select((b, i) => Enumerable.Range(0, models.Count)
+                                                       .Count(j => Peers(models[j], models[i])
+                                                                   && string.Equals(shared[j], b, StringComparison.OrdinalIgnoreCase)) > 1
+                                                 ? models[i][0].Label : b).ToList();
+        var chests = new List<BodyOption>();
+        for (int m = 0; m < models.Count; m++)
+        {
+            var model = models[m][0];
+            for (int i = 0; i < axis.Options.Count; i++)
+                chests.Add(new BodyOption(axis.Group, builds[m], axis.Options[i], model.Rel + ShapeMark + axis.Options[i],
+                                          model.GamePath, model.Slot, DefaultShape: i == axis.Default));
+        }
+
+        var result = new List<BodyOption>();
+        bool placed = false;
+        foreach (var o in options)
+        {
+            if (o.Slot != "_top") { result.Add(o); continue; }
+            if (!placed) result.AddRange(chests);
+            placed = true;
+        }
+        return (result, MapVariants(options.Where(o => o.Slot == "_top" && !buildOptions.Contains(o)).ToList(), models, builds));
+    }
+
+    /// <summary>
+    /// The build model each physics-variant chest model varies, at its game path: the very same file; else the only build
+    /// there; else the one build whose name is a word of every name the variant's options have ("Thick" in
+    /// "Firm (Thick)"). One that names none or several is not mapped, nor one mapped to two builds across game paths: it
+    /// is then no size and no build, and reads as a file the body does not know. Nothing here checks the geometry; that
+    /// rests on the names and on NIRÆ's own files (NiraeChestSizesLocalTests).
+    /// </summary>
+    private static List<ChestVariant> MapVariants(List<BodyOption> variantOptions, List<List<BodyOption>> models,
+                                                  List<string> buildNames)
+    {
+        var found = new List<ChestVariant>();
+        foreach (var variant in variantOptions.GroupBy(o => (o.GamePath.ToLowerInvariant(), Normal(o.Rel)))
+                                              .Select(g => g.ToList()))
+        {
+            var first = variant[0];
+            var here = new List<int>();
+            for (int m = 0; m < models.Count; m++)
+                if (string.Equals(models[m][0].GamePath, first.GamePath, StringComparison.OrdinalIgnoreCase)) here.Add(m);
+
+            int to = -1;
+            foreach (int m in here)
+                if (Normal(models[m][0].Rel) == Normal(first.Rel)) { to = m; break; }      // (i) the very same file
+            if (to < 0 && here.Count == 1) to = here[0];                                     // (ii) the only build there
+            if (to < 0)                                                                      // (iii) the one build named
+            {
+                var optionWords = variant.Select(o => Words(o.Name)).ToList();
+                var named = here.Where(m => Words(buildNames[m]) is { Count: > 0 } build
+                                            && optionWords.All(w => build.All(w.Contains))).ToList();
+                if (named.Count == 1) to = named[0];
+            }
+            if (to >= 0) found.Add(new ChestVariant(first.GamePath, first.Rel, models[to][0].Rel));
+        }
+        // A file read as two different builds at two game paths is no one build's; nor is a build's own file read as
+        // another build's anywhere — Canonical maps by file, and would turn every size saved on that build into the other.
+        var buildFiles = models.Select(m => Normal(m[0].Rel)).ToHashSet();
+        var ambiguous = found.GroupBy(v => Normal(v.Rel))
+                             .Where(g => g.Select(v => Normal(v.BuildRel)).Distinct().Count() > 1
+                                         || (buildFiles.Contains(g.Key) && g.Any(v => Normal(v.BuildRel) != g.Key)))
+                             .Select(g => g.Key).ToHashSet();
+        return found.Where(v => !ambiguous.Contains(Normal(v.Rel))).ToList();
+    }
+
+    private static HashSet<string> Words(string text)
+        => System.Text.RegularExpressions.Regex.Split(text, @"[^\p{L}\p{N}]+")
+                 .Where(w => w.Length > 0).ToHashSet(StringComparer.OrdinalIgnoreCase);
+
+    /// <summary>
+    /// Whether the chest model has the shapes <paramref name="axis"/> switches between — parts tagged with at least two
+    /// of its attributes — rather than the group switching something the chest does not carry (a belly drawn on the
+    /// legs). False when the model cannot be read.
+    /// </summary>
+    /// <remarks>The model's attribute names are read once per edit of the file: the Studio reads a body's sizes on the
+    /// framework thread.</remarks>
+    private static bool CarriesShapes(string path, BodyAtrSwitches.ShapeAxis axis)
+    {
+        try
+        {
+            var info = new FileInfo(path);
+            string key = $"{path}|{info.Length}|{info.LastWriteTimeUtc.Ticks}";
+            var names = ModelAttributes.GetOrAdd(key, _ => SecondSkinWriter.AttributeNames(File.ReadAllBytes(path)).ToList());
+            return names.Count(axis.Attributes.Contains) >= 2;
+        }
+        catch (Exception)
+        {
+            return false;
+        }
+    }
+
+    private static readonly System.Collections.Concurrent.ConcurrentDictionary<string, List<string>> ModelAttributes =
+        new(StringComparer.OrdinalIgnoreCase);
+
+    private static readonly char[] Separators = ['·', '-', '–', '—', '|', '/', ':', ',', '=', '*', '~', ' '];
+
+    /// <summary>The words a chest model's options all begin with, separators trimmed ("Slim" for "Slim · Small hips"
+    /// and "Slim · Large hips"); the first option's label when they share none.</summary>
+    private static string BuildOf(List<BodyOption> model)
+    {
+        var words = model.Select(o => o.Label.Split(' ', StringSplitOptions.RemoveEmptyEntries)).ToList();
+        int n = model.Count == 1 ? 0 : words.Min(w => w.Length);   // a lone option shares nothing: its whole label
+        int shared = 0;
+        while (shared < n && words.All(w => string.Equals(w[shared], words[0][shared], StringComparison.OrdinalIgnoreCase)))
+            shared++;
+        string build = string.Join(' ', words[0].Take(shared)).Trim(Separators);
+        return build.Length > 0 ? build : model[0].Label;
     }
 
     /// <summary>
@@ -172,7 +465,7 @@ internal sealed record BodySizeCatalog(string ModRoot, IReadOnlyList<BodyOption>
     /// What a body shipped with no option is filed under. The picker has already named the mod by the time these are
     /// shown, so this only has to say WHERE in the mod it came from — and "no option" is the honest answer.
     /// </summary>
-    // Display text only: a size is remembered by its file (Configuration.RetargetTargets), never by name.
+    // Display text only: a size is remembered by its file (Configuration.RetargetSizesByBody), never by name.
     internal static string DefaultGroupName => ProteusLoc.Localize("Parts.Retarget.Size.NoOptionsGroup", "No options");
 
     /// <inheritdoc cref="DefaultGroupName"/>
@@ -196,8 +489,10 @@ internal sealed record BodySizeCatalog(string ModRoot, IReadOnlyList<BodyOption>
     /// </summary>
     public string PathOf(BodyOption option) => ResolveCaseInsensitive(ModRoot, option.Rel);
 
+    /// <remarks>A chest entry's chest is cut off its rel first (<see cref="FileOf"/>): it names no file.</remarks>
     internal static string ResolveCaseInsensitive(string root, string rel)
     {
+        rel = FileOf(rel);
         string direct = Path.Combine(root, rel.Replace('/', Path.DirectorySeparatorChar)
                                               .Replace('\\', Path.DirectorySeparatorChar));
         if (File.Exists(direct)) return direct;

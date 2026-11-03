@@ -210,7 +210,7 @@ public partial class ContentImportTests
         // submeshes the writer then drops.
         Assert.Equal(["atr_dv_a"], ContentPieceResolver.HiddenAttributes(
             sidecar.ContentAttributes,
-            "chara/equipment/e6058/model/c0101e6058_dwn.mdl",
+            "chara/equipment/e6058/model/c0101e6058_dwn.mdl", null,
             ["atr_dv_a", "atr_dv_b"],
             new Dictionary<string, List<string>> { ["Toggles"] = ["atr_dv_a Hide"] })!.Order());
     }

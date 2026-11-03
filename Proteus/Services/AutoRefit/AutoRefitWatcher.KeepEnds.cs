@@ -378,11 +378,14 @@ public sealed partial class AutoRefitWatcher
                 item, sourceName + " — " + pick.Option.Label, targetLabel));
         current = current with { Message = string.Format(Strings.AutoRefit.WorkingFmt, item), Failed = false };
 
-        ushort? SourceMask(string s) => RefitCore.MaskOf(pick.Dir, sourceCat, s, OptionsOf(g.Settings, pick.Dir));
-        ushort? TargetMask(string s)
+        BodyRetarget.BodyDraw? SourceMask(string s) => RefitCore.MaskOf(pick.Dir, sourceCat, s, OptionsOf(g.Settings, pick.Dir));
+        BodyRetarget.BodyDraw? TargetMask(string s)
         {
             var body = s == limb ? lead : j.Targets.Body(s);
-            return RefitCore.MaskOf(body?.Dir, body?.Catalog, s, body == null ? null : OptionsOf(g.Settings, body.Dir));
+            // The size refitted onto, chosen in its own group: the limb's target, or the feet or hands it rides with.
+            return RefitCore.MaskOf(body?.Dir, body?.Catalog, s, body == null ? null : OptionsOf(g.Settings, body.Dir),
+                                    RefitCore.RaceNumber(j.Race))
+                            ?.Onto(s == limb ? refit.Target : refit.EndTo);
         }
 
         string sourcePath = sourceCat.PathOf(pick.Option), targetPath = lead.Catalog.PathOf(refit.Target);

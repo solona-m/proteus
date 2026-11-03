@@ -267,7 +267,7 @@ public class AutoRefitTargetsTests
 
     // ── what a garment takes along (PlanParts) ───────────────────────────────
 
-    private static BodyOption Of(BodyModIndex.Entry body, string slot, string name)
+    internal static BodyOption Of(BodyModIndex.Entry body, string slot, string name)
         => body.Catalog.For(slot).First(o => o.Name == name);
 
     /// <summary>A chest-only body, for a garment's own body that has no legs.</summary>
@@ -455,6 +455,8 @@ public class AutoRefitTargetsTests
 
     [Fact]
     [Trait("Plan", "EDGE-auto-refit-part-bodies-31")]
+    [Trait("Plan", "AC-per-part-target-body-6")]
+    [Trait("Plan", "EDGE-per-part-target-body-18")]
     public void A_part_across_the_rue_line_stays_out_moving_or_staying()
     {
         var pref = Mixed(Ref(Bibo, "_top", "L"));
@@ -699,10 +701,109 @@ public class AutoRefitTargetsTests
         Assert.NotNull(dir);
         var readers = Directory.GetFiles(Path.Combine(dir!.FullName, "Proteus"), "*.cs", SearchOption.AllDirectories)
                                .Where(f => !f.EndsWith("Configuration.cs", StringComparison.Ordinal)
-                                           && !f.EndsWith("AutoRefitDecisions.cs", StringComparison.Ordinal)
                                            && File.ReadAllText(f).Contains("LegacyBodyDir", StringComparison.Ordinal))
                                .ToList();
-        // AutoRefitDecisions only clears it with the other parts, when a pick switches every part.
+        // No pick switches every part any more (see AutoRefitDecisions.ChooseBody), so nothing outside the
+        // configuration touches it.
         Assert.Empty(readers);
+    }
+
+    // ── parts on both sides of the Rue line (per-part-target-body) ──────────
+
+    [Fact]
+    [Trait("Plan", "AC-per-part-target-body-6")]
+    [Trait("Plan", "EDGE-per-part-target-body-18")]
+    public void RueSides_names_the_parts_on_each_side()
+    {
+        var pref = new AutoRefitPreference();
+        foreach (string slot in AutoRefitDecisions.Slots) pref.SetBody(slot, Bibo.Dir);
+        pref.SetBody("_dwn", Rue.Dir);
+        var split = new AutoRefitTargets(pref, Find, "0201").RueSides()!;
+        Assert.Equal(["_dwn"], split.Rue);
+        Assert.Equal(["_top", "_glv", "_sho"], split.Other);
+        Assert.True(split.ShoesLeft);    // feet on Bibo+, legs on Rue
+        Assert.False(split.GlovesLeft);  // hands and chest both on Bibo+
+    }
+
+    [Fact]
+    [Trait("Plan", "EDGE-per-part-target-body-24")]
+    public void RueSides_flags_shoes_and_gloves_left_as_they_are()
+    {
+        var pref = new AutoRefitPreference();
+        foreach (string slot in AutoRefitDecisions.Slots) pref.SetBody(slot, Bibo.Dir);
+        pref.SetBody("_sho", Rue.Dir);
+        var feet = new AutoRefitTargets(pref, Find, "0201").RueSides()!;
+        Assert.True(feet.ShoesLeft);
+        Assert.False(feet.GlovesLeft);
+
+        pref.SetBody("_sho", Bibo.Dir);
+        pref.SetBody("_glv", Rue.Dir);
+        var hands = new AutoRefitTargets(pref, Find, "0201").RueSides()!;
+        Assert.False(hands.ShoesLeft);
+        Assert.True(hands.GlovesLeft);
+    }
+
+    [Fact]
+    [Trait("Plan", "EDGE-per-part-target-body-16")]
+    public void RueSides_is_null_for_rue_with_its_fork_or_no_rue()
+    {
+        var pref = new AutoRefitPreference();
+        pref.SetBody("_top", Rue.Dir);
+        pref.SetBody("_dwn", LaRue.Dir);
+        Assert.Null(new AutoRefitTargets(pref, Find, "0201").RueSides());
+
+        Assert.Null(new AutoRefitTargets(Mixed(), Find, "0201").RueSides());   // Bibo+ and YAB+ only
+    }
+
+    [Fact]
+    [Trait("Plan", "EDGE-per-part-target-body-17")]
+    public void RueSides_skips_unchosen_and_missing_bodies()
+    {
+        var pref = new AutoRefitPreference();
+        pref.SetBody("_top", Rue.Dir);
+        pref.SetBody("_dwn", "Gone Bod");   // not installed: on no side
+        Assert.Null(new AutoRefitTargets(pref, Find, "0201").RueSides());
+        pref.SetBody("_glv", Bibo.Dir);
+        var split = new AutoRefitTargets(pref, Find, "0201").RueSides()!;
+        Assert.Equal(["_top"], split.Rue);
+        Assert.Equal(["_glv"], split.Other);   // feet unchosen, legs not installed
+    }
+
+    [Fact]
+    [Trait("Plan", "AC-per-part-target-body-8")]
+    [Trait("Plan", "EDGE-per-part-target-body-21")]
+    public void A_jacket_on_an_accessory_covering_rue_chest_and_other_legs_leaves_the_legs_out()
+    {
+        BodyOption? TargetsFor(AutoRefitTargets t, string slot) => t.Chosen(slot);
+
+        // (a) legs on a body across the line, with a size: left out, and never placed.
+        var pref = new AutoRefitPreference();
+        pref.SetBody("_top", Rue.Dir);
+        pref.Chest = Ref(Rue, "_top", "M");
+        pref.SetBody("_dwn", Bibo.Dir);
+        pref.Legs = Ref(Bibo, "_dwn", "L");
+        var targets = new AutoRefitTargets(pref, Find, "0201");
+        Assert.Equal(["_dwn"], targets.CoveredAcrossRue(["_top", "_dwn"]));
+        Assert.Null(targets.CoverTarget("_dwn", Rue, Of(Rue, "_top", "M"), leadStays: false, Of(Bibo, "_dwn", "L")));
+        Assert.Null(targets.CoverTarget("_dwn", Rue, Of(Rue, "_top", "M"), leadStays: true, Of(Bibo, "_dwn", "L")));
+
+        // (b) no legs size chosen: still left out for Rue, and what is left asks for no size.
+        pref.Legs = null;
+        targets = new AutoRefitTargets(pref, Find, "0201");
+        Assert.Equal(["_dwn"], targets.CoveredAcrossRue(["_top", "_dwn"]));
+        Assert.Null(AccessoryCover.WithoutSize(["_top"], s => TargetsFor(targets, s), _ => true));
+
+        // (c) Rue and its fork are one side: nothing left out, and the legs are placed.
+        pref.SetBody("_dwn", LaRue.Dir);
+        pref.Legs = Ref(LaRue, "_dwn", "M");
+        targets = new AutoRefitTargets(pref, Find, "0201");
+        Assert.Empty(targets.CoveredAcrossRue(["_top", "_dwn"]));
+        Assert.NotNull(targets.CoverTarget("_dwn", Rue, Of(Rue, "_top", "M"), leadStays: false, Of(LaRue, "_dwn", "M")));
+
+        // (d) legs with no body chosen are on no side.
+        var only = new AutoRefitPreference();
+        only.SetBody("_top", Rue.Dir);
+        Assert.Empty(new AutoRefitTargets(only, Find, "0201").CoveredAcrossRue(["_top", "_dwn"]));
+        Assert.Empty(new AutoRefitTargets(only, Find, "0201").CoveredAcrossRue([]));
     }
 }

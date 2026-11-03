@@ -188,7 +188,9 @@ public class CrossSexRefitTests
         Assert.DoesNotContain(Offered("chara/equipment/e6091/model/c0301e6091_top.mdl"), c => c.CrossSex);
         Assert.DoesNotContain(Offered("chara/equipment/e6091/model/c1201e6091_top.mdl"), c => c.CrossSex);
         Assert.DoesNotContain(Offered("chara/equipment/e6091/model/c0101e6091_glv.mdl"), c => c.CrossSex);
-        Assert.DoesNotContain(Offered("chara/equipment/e6091/model/c0201e6091_sho.mdl"), c => c.CrossSex);
+        // A women's shoe is made a men's since hands-feet-port, through the men's legs (EndsCross); a men's glove still
+        // isn't made a women's.
+        Assert.Contains(Offered("chara/equipment/e6091/model/c0201e6091_sho.mdl"), c => c.CrossSex && c.Race == 101);
         Assert.Empty(Offered(MansTop, vanilla: true));
         Assert.True(CrossSexRefit.Supported(101, 201, "_top"));
         Assert.True(CrossSexRefit.Supported(101, 201, "_dwn"));
@@ -209,10 +211,9 @@ public class CrossSexRefitTests
         Assert.True(CrossSexRefit.Supported(201, 101, "_top"));
         string[] ok = ["game", "uvmaps", "from-root"];
         Assert.Null(CrossSexRefit.ValidateCli("0201", "0101", "_top", ok));
-        Assert.Equal("--for-race refits chest (_top) and legs (_dwn) garments only",
-                     CrossSexRefit.ValidateCli("0201", "0101", "_glv", ok));
-        Assert.Equal("--for-race refits chest (_top) and legs (_dwn) garments only",
-                     CrossSexRefit.ValidateCli("0101", "0201", "_sho", ok));
+        // A women's glove for men is taken since hands-feet-port; a men's shoe for women still isn't.
+        Assert.Null(CrossSexRefit.ValidateCli("0201", "0101", "_glv", ok));
+        Assert.Equal(CrossSexRefit.CliSlotError, CrossSexRefit.ValidateCli("0101", "0201", "_sho", ok));
         // --from-skeleton must name a file there is (the review's decision): checked with the other usage errors.
         Assert.Equal("--from-skeleton names no file: \"yas.sklb\"",
                      CrossSexRefit.ValidateCli("0201", "0101", "_top", [.. ok, "from-skeleton"], "yas.sklb", _ => false));
@@ -403,8 +404,10 @@ public class CrossSexRefitTests
                                               "HairPort.Refused.Folded", "if (ours) fits = false" })
                 Assert.False(text.Contains(banned, StringComparison.Ordinal), $"{Path.GetFileName(file)} still has {banned}");
         }
-        Assert.Contains("CrossSexRefit.CoverageAllowed(coverage)", Source("Proteus/Gui/BodyRetargetPanel.CrossSex.cs"));
-        Assert.Contains("RetargetRaceCrossSexQualityFmt", Source("Proteus/Gui/BodyRetargetPanel.CrossSex.cs"));
+        // The panel's check words its sizes through the one judge (hands-feet-port), which refuses on coverage alone.
+        Assert.Contains("CrossSexRefit.Judged(coverage, folded)", Source("Proteus/Gui/BodyRetargetPanel.CrossSex.cs"));
+        Assert.Contains("CoverageAllowed(coverage)", Source("Proteus/Services/CrossSexRefit.cs"));
+        Assert.Contains("RetargetRaceCrossSexQualityFmt", Source("Proteus/Services/CrossSexRefit.cs"));
         Assert.Contains("[\"folds\"] = size.Folds", Source("Proteus/Services/CrossSexRefitReport.cs"));
     }
 
@@ -489,6 +492,37 @@ public class CrossSexRefitTests
         Assert.False(CrossSexRefit.LayoutsPair("gen3", "tbse"));
     }
 
+    /// <summary>Across the sexes, only a refusal for too little coverage says how much landed — the one a refit may try
+    /// the nude smallclothes after. A different layout, missing maps and unreadable texture coordinates give nothing.</summary>
+    [Fact]
+    [Trait("Plan", "AC-tbsex-nude-legs-6")]
+    [Trait("Plan", "EDGE-tbsex-nude-legs-2")]
+    [Trait("Plan", "EDGE-tbsex-nude-legs-8")]
+    public void Only_a_coverage_refusal_gives_its_stats() // [AC-tbsex-nude-legs-6] [EDGE-tbsex-nude-legs-2] [EDGE-tbsex-nude-legs-8]
+    {
+        var gen3 = Skin("/mt_c0201b0001_b.mtrl");
+        var bibo = Skin("/mt_c0201b0001_bibo.mtrl");
+        var tbse = Skin("/mt_c0101b0001_b.mtrl");
+        float[] Uv(ModelParts m) => new float[m.Positions.Length / 3 * 2];
+
+        // A different layout.
+        Assert.False(BodyCorrespondence.TryBuild(gen3, Uv(gen3), tbse, Uv(tbse), "_dwn", out _, out _, out var layout,
+                                                 NoMaps(), male: false, targetMale: true));
+        Assert.Null(layout);
+        // The maps missing.
+        Assert.False(BodyCorrespondence.TryBuild(bibo, Uv(bibo), tbse, Uv(tbse), "_dwn", out _, out _, out var noMaps,
+                                                 NoMaps(), male: false, targetMale: true));
+        Assert.Null(noMaps);
+        Assert.False(BodyCorrespondence.TryBuild(bibo, Uv(bibo), tbse, Uv(tbse), "_dwn", out _, out _, out var nullMaps,
+                                                 null, male: false, targetMale: true));
+        Assert.Null(nullMaps);
+        // Unreadable models, through the pair builder every refit uses. (Unreadable texture coordinates with the maps
+        // there: CrossSexNudeLegsLocalTests.Refusals_before_measuring_give_no_stats.)
+        Assert.NotNull(BodyRetarget.BuildPair("_dwn", [1, 2, 3], [4, 5, 6], "_dwn", false, null, null, NoMaps(),
+                                              out _, out var garbage, null, true));
+        Assert.Null(garbage);
+    }
+
     [Fact]
     [Trait("Plan", "EDGE-cross-sex-refit-18")]
     public void Target_sex_left_out_is_the_old_behaviour() // [EDGE-cross-sex-refit-18]
@@ -560,9 +594,10 @@ public class CrossSexRefitTests
     public void Shared_pairs_are_built_with_the_sides_sexes() // [EDGE-cross-sex-refit-15]
     {
         string panel = Source("Proteus/Gui/BodyRetargetPanel.cs");
-        Assert.Contains("if (Build(sourcePath, targetPath, name, male, masks, out var pair, out _, targetMale) is { } refusal)", panel);
-        Assert.Contains("return Build(sourcePath, targetPath, name, male, masks, out _, out _, targetMale) ?? \"\";", panel);
-        Assert.Contains("plan = RefitCore.MatchSkinToBody(plan, garmentSource, targetPath, uvRemap, male, log, targetMale);", panel);
+        Assert.Contains("if (Build(sourcePath, targetPath, name, male, masks, to, out var pair, out _, targetMale, report: true)", panel);
+        Assert.Contains("return Build(sourcePath, targetPath, name, male, masks, target, out _, out _, targetMale) ?? \"\";", panel);
+        // Every body the refit went onto (a part may have one of its own, per-part-target-body), with the target's sex.
+        Assert.Contains("plan = RefitCore.MatchSkinToBody(plan, garmentSource, targetPaths, uvRemap, male, log, targetMale);", panel);
     }
 
     [Fact]
@@ -573,7 +608,10 @@ public class CrossSexRefitTests
         // Once folds and coverage; folds are never a reason any more (cross-sex-tops-yas), only coverage.
         Assert.True(CrossSexRefit.CoverageAllowed(0.989));
         Assert.False(CrossSexRefit.CoverageAllowed(CrossSexRefit.MinCoverage - 0.01));
-        Assert.Contains("CrossSexRefit.CoverageAllowed(coverage)", Source("Proteus/Gui/BodyRetargetPanel.CrossSex.cs"));
+        // The panel's check goes through the one judge (hands-feet-port), which refuses on coverage.
+        Assert.Contains("CrossSexRefit.Judged(coverage, folded)", Source("Proteus/Gui/BodyRetargetPanel.CrossSex.cs"));
+        Assert.Null(CrossSexRefit.Judged(0.989, 500).Refusal);
+        Assert.NotNull(CrossSexRefit.Judged(CrossSexRefit.MinCoverage - 0.01, 0).Refusal);
     }
 
     [Fact]

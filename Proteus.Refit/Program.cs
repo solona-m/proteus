@@ -32,7 +32,7 @@ namespace Proteus.Refit;
 /// </summary>
 internal static class Program
 {
-    private const string Usage =
+    internal const string Usage =
         """
         Proteus.Refit --garment <xs.mdl> --body-root <body mod> --from <rel|auto> --to <rel>=<label>[,...] --out-dir <dir>
                       [--from-root <body mod the garment was made on>] [--uvmaps <Proteus plugin dir>]
@@ -44,6 +44,8 @@ internal static class Program
                       [--keep-default]   (keep the shape of the pieces the Studio ticks by default)
                       [--no-push] [--tune <knob>,...]
         Proteus.Refit --list --body-root <body mod> [--slot _top]
+                      (a chest size of a body that picks its chest by option is listed as "<file>|<chest>";
+                       quote it in a shell, which reads | as a pipe)
         Proteus.Refit --inspect --garment <model.mdl>
         Proteus.Refit --detect --garment <xs.mdl> --body-root <body mod> [--slot _top] [--race 0201]
         Proteus.Refit --detect --mods-root <Penumbra mods> --to-mod <body mod folder>
@@ -65,8 +67,8 @@ internal static class Program
                       --from <rel> --to <rel>=<label>[,...] --out-dir <dir>
                       --game <FFXIV game\sqpack> --uvmaps <Proteus plugin dir> [--skeleton <base .sklb>]
                       [--from-skeleton <drawn race's base .sklb>]
-                      [--slot _top|_dwn] [--set <id>] [--no-push] [--piercings]
-                      (refit for the other sex: chest and legs garments, both ways)
+                      [--slot _top|_dwn|_sho|_glv] [--set <id>] [--no-push] [--piercings]
+                      (refit for the other sex: chest and legs garments, both ways; women's shoes and gloves for men, by their legs or chest bodies)
         Proteus.Refit --size-set <unpacked mod folder> --bodies <key>[,<key>...]|all
                       --mods-root <Penumbra mod folder> --game <FFXIV game\sqpack> --uvmaps <Proteus plugin dir>
                       [--men] [--no-ends] [--skeleton <men's base .sklb>] [--report <file.json>]
@@ -79,10 +81,18 @@ internal static class Program
                       (the Studio's "Every size for other bodies" on a work copy outside the mod folder; a v3 mod is
                        converted to v4 in place first. The bodies are the mod folder's; the mod itself never is one.
                        The JSON report on stdout is local output: it names folders on this machine.)
+              Output is UTF-8 without a BOM. Windows PowerShell 5.1 decodes a program's output in its own encoding:
+              set [Console]::OutputEncoding = [Text.UTF8Encoding]::new() first, or use --report <file>.
         """;
 
     private static int Main(string[] args)
     {
+        // UTF-8 without a BOM, whatever the console's code page: scripts read the JSON this prints as UTF-8. First, as
+        // Console.Out takes the encoding of the moment it is first read; disposed last, putting the terminal back.
+        using var console = Utf8Console.Use(() => Console.OutputEncoding, e => Console.OutputEncoding = e,
+                                            Console.SetOut, Console.SetError,
+                                            Console.OpenStandardOutput, Console.OpenStandardError,
+                                            restore => Console.CancelKeyPress += (_, _) => restore());
         // Loc.Localize returns "#key" for an assembly that was never set up, and refusals are worded through it.
         Loc.SetupWithFallbacks(typeof(Proteus.Plugin).Assembly);
         using var temp = TempFolders.Isolate();
@@ -329,7 +339,7 @@ internal static class Program
 
             if (from != null)
             {
-                ushort? mask = MaskOf(catalog, slot);
+                var mask = MaskOf(catalog, slot, race)?.Onto(from);
                 string path = catalog.PathOf(from);
                 if (BodyRetarget.BuildPair(slot, path, path, slot, male, mask, mask, null, out var pair) is { } refusal)
                     skinSkipped = refusal;
@@ -1095,7 +1105,8 @@ internal static class Program
                                           .ToList();
         Directory.CreateDirectory(outDir);
 
-        ushort? sourceMask = MaskOf(src, slot), targetMask = MaskOf(dst, slot);
+        // Read once for the body; each size is taken as chosen in its own group below (BodyDraw.Onto).
+        BodyRetarget.BodyDraw? sourceMask = MaskOf(src, slot, race), targetMask = MaskOf(dst, slot, race);
 
         string? legsSkipped = null;
         Legs? legs = null;
@@ -1119,11 +1130,11 @@ internal static class Program
             var chestSource = Find(src, "_top", Required(opts, "chest-from"));
             var chestTarget = Find(dst, "_top", Required(opts, "chest-to"));
             string chestSourcePath = src.PathOf(chestSource), chestTargetPath = dst.PathOf(chestTarget);
-            if (string.Equals(Path.GetFullPath(chestSourcePath), Path.GetFullPath(chestTargetPath),
-                              StringComparison.OrdinalIgnoreCase))
+            if (SameChestBody(src, chestSource, dst, chestTarget))
                 chestNote = $"the waist already sits on \"{chestTarget.Label}\"";
-            else if (BodyRetarget.BuildPair("_top", chestSourcePath, chestTargetPath, "_top", male, MaskOf(src, "_top"),
-                                            MaskOf(dst, "_top"), uvRemap, out var built) is { } chestRefusal)
+            else if (BodyRetarget.BuildPair("_top", chestSourcePath, chestTargetPath, "_top", male, MaskOf(src, "_top", race),
+                                            MaskOf(dst, "_top", race)?.Onto(chestTarget), uvRemap, out var built)
+                     is { } chestRefusal)
                 chestNote = chestRefusal;
             else
             {
@@ -1147,8 +1158,8 @@ internal static class Program
         foreach (var (label, option) in targets)
         {
             var pairs = new List<BodyRetarget.SlotPair>();
-            if (BodyRetarget.BuildPair(slot, src.PathOf(from), dst.PathOf(option), slot, male, sourceMask, targetMask,
-                                       uvRemap, out var pair) is { } refusal)
+            if (BodyRetarget.BuildPair(slot, src.PathOf(from), dst.PathOf(option), slot, male, sourceMask,
+                                       targetMask?.Onto(option), uvRemap, out var pair) is { } refusal)
             {
                 sizes.Add(new { label, to = option.Rel, refusal });
                 continue;
@@ -1289,17 +1300,22 @@ internal static class Program
                    $"  {s.Option.Rel}  rms {s.Rms * 1000f:F2} mm, exact {s.HitRate:P0}"));
     }
 
-    /// <summary>A body mod's own IMC mask for a slot, under its default settings — no player here to ask.</summary>
-    private static ushort? MaskOf(BodySizeCatalog catalog, string slot)
-        => BodyRetarget.ImcSlotName(slot) is { } equip ? ImcEntrySource.MaskFor(catalog.ModRoot, 0, equip, null) : null;
+    /// <summary>What a body mod draws of a slot — its IMC mask and its <c>Atr</c> switches (see
+    /// <see cref="RefitCore.MaskOf"/>) — under its default settings: no player here to ask.</summary>
+    internal static BodyRetarget.BodyDraw? MaskOf(BodySizeCatalog catalog, string slot, string? race)
+        => RefitCore.MaskOf(catalog.ModRoot, catalog, slot, null, RefitCore.RaceNumber(race));
 
-    /// <summary>The option whose model is <paramref name="rel"/> — slashes and case as Penumbra treats them.</summary>
-    private static BodyOption Find(BodySizeCatalog catalog, string slot, string rel)
-    {
-        string want = Normal(rel);
-        return catalog.For(slot).FirstOrDefault(o => Normal(o.Rel) == want)
-            ?? throw new UsageException($"No {slot} body option in {catalog.ModRoot} uses \"{rel}\". Run --list to see them.");
-    }
+    /// <summary>The option whose model is <paramref name="rel"/> — slashes and case as Penumbra treats them. Of a body
+    /// whose chests are sizes, a bare model file is its default chest.</summary>
+    internal static BodyOption Find(BodySizeCatalog catalog, string slot, string rel)
+        => BodySizeCatalog.ByFile(catalog.For(slot), catalog.Canonical(rel), null)
+           ?? throw new UsageException($"No {slot} body option in {catalog.ModRoot} uses \"{rel}\". Run --list to see them.");
+
+    /// <summary>Whether a legs garment's chest already sits on the chest it is sent to: the same model file, and — two
+    /// chests of one model being two sizes (<see cref="BodySizeCatalog.IsShape"/>) — the same chest of it.</summary>
+    internal static bool SameChestBody(BodySizeCatalog src, BodyOption from, BodySizeCatalog dst, BodyOption to)
+        => string.Equals(Path.GetFullPath(src.PathOf(from)), Path.GetFullPath(dst.PathOf(to)), StringComparison.OrdinalIgnoreCase)
+           && Normal(BodySizeCatalog.ShapeSuffix(from.Rel)) == Normal(BodySizeCatalog.ShapeSuffix(to.Rel));
 
     internal static string Normal(string rel) => rel.Replace('\\', '/').Trim('/').ToLowerInvariant();
 
@@ -1347,8 +1363,8 @@ internal static class Program
         public required string SourcePath { get; init; }
         public required string Confidence { get; init; }
         public string? Note { get; init; }
-        public ushort? SourceMask { get; init; }
-        public ushort? TargetMask { get; init; }
+        public BodyRetarget.BodyDraw? SourceMask { get; init; }
+        public BodyRetarget.BodyDraw? TargetMask { get; init; }
         public required Dictionary<string, string?> Targets { get; init; }
         public required Dictionary<string, string> Notes { get; init; }
 
@@ -1451,8 +1467,8 @@ internal static class Program
                 SourcePath = sourcePath,
                 Confidence = confidence,
                 Note = note,
-                SourceMask = MaskOf(src, "_dwn"),
-                TargetMask = MaskOf(dst, "_dwn"),
+                SourceMask = MaskOf(src, "_dwn", race),
+                TargetMask = MaskOf(dst, "_dwn", race),
                 Targets = targets,
                 Notes = notes,
             };

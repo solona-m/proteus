@@ -37,7 +37,7 @@ public class SkinlessTargetMeasureLocalTests(ITestOutputHelper output)
         var source = ModelPartReader.Read(sourceBytes)!;
         var catalog = BodySizeCatalog.Read(neoRoot);
         if (RefitCore.MaskOf(Path.GetFileName(neoRoot), catalog, "_dwn", null) is { } mask)
-            source = BodyRetarget.Without(source, BodyRetarget.UndrawnVariants(source.AttributeNames, "_dwn", mask));
+            source = BodyRetarget.Without(source, mask.Hidden(source.AttributeNames, "_dwn", atr: false));
         var target = ModelPartReader.Read(targetBytes)!;
         bool built = UvAtlasCorrespondence.TryBuild(source, BodyCorrespondence.SameTile(Uv(sourceBytes)), target,
                                                     BodyCorrespondence.SameTile(Uv(targetBytes)), "legs",

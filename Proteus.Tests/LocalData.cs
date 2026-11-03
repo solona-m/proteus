@@ -52,6 +52,11 @@ internal static class LocalData
     /// Single group switches <c>atr_sv_a</c> by an <c>Imc</c> edit (On 1023, Off 1022) beside a same-set <c>Eqp</c>.</summary>
     internal const string ImcToggleMod = Mods + ":BWM - Spike Heels with stockings - no strap";
 
+    /// <summary>"Neolithe Piercings Empyrean Ring Proteus": Neolithe Piercings (Empyrean Ring) imported as content —
+    /// chest pieces on the right ring, legs on the left, both under <c>chest/</c> and <c>legs/</c> off a game path, with
+    /// a "Chest piercings" (RFinger) and a "Legs piercings" (LFinger) <c>Imc</c> group on set 103.</summary>
+    internal const string NeolitheRingMod = Mods + ":Neolithe Piercings Empyrean Ring Proteus";
+
     /// <summary>
     /// The uv transfer maps, which live in the repository (<c>Proteus/uvmaps</c>) but through Git LFS, so a checkout
     /// may hold only their pointers. Not a variable: found by walking up from the test binaries. <see cref="Path"/> gives

@@ -326,6 +326,24 @@ public class PenumbraBridge : IDisposable
     }
 
     /// <summary>
+    /// <see cref="GetModSettings"/> with whether the settings are inherited from a parent collection and whether a
+    /// temporary setting (Glamourer's, typically) is what produced them. Null when the mod is not found or Penumbra is
+    /// unavailable. A read on the caller's thread, as <see cref="GetModSettings"/>.
+    /// </summary>
+    public ModSettingsSnapshot? GetModSettingsSnapshot(Guid collectionId, string modDirectory)
+    {
+        if (!IsAvailable) return null;
+        try
+        {
+            var (ec, t) = getCurrentModSettings.Invoke(collectionId, modDirectory);
+            if (ec != PenumbraApiEc.Success || t == null) return null;
+            var (enabled, priority, options, inherited, temporary) = t.Value;
+            return new ModSettingsSnapshot(enabled, priority, options, inherited, temporary);
+        }
+        catch (Exception ex) { log.Error(ex, "GetCurrentModSettingsWithTemp failed for {0}", modDirectory); return null; }
+    }
+
+    /// <summary>
     /// One mod's settings as <see cref="GetCollectionModSettings"/> reports them. <paramref name="Temporary"/> is
     /// whether a temporary setting (Glamourer's, typically) is what produced them.
     /// </summary>

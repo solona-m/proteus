@@ -27,16 +27,29 @@ public sealed unsafe class LiveModelDump(IObjectTable objects)
     public List<string> DescribeLocalPlayer()
     {
         var outp = new List<string>();
+        var (models, problem) = LoadedModels();
+        if (problem != null) { outp.Add(problem); return outp; }
+        foreach (var (slot, file) in models)
+            outp.Add(file == null ? $"slot {slot,2}: model with no resource handle" : $"slot {slot,2}: {file}");
+        if (outp.Count == 0) outp.Add("no models on the draw object");
+        return outp;
+    }
+
+    /// <summary>
+    /// Every model on the local player's draw object, by renderer slot, with the file the renderer loaded it from
+    /// (null for a model with no resource handle) — the raw name, Penumbra's <c>|…|</c> prefix included. Empty, with
+    /// why, when there is no local player or no CharacterBase (mid-redraw). Framework thread.
+    /// </summary>
+    public (List<(int Slot, string? File)> Models, string? Problem) LoadedModels()
+    {
+        var models = new List<(int Slot, string? File)>();
         var addr = objects.Length > 0 ? objects[0]?.Address ?? nint.Zero : nint.Zero;
-        if (addr == nint.Zero) { outp.Add("no local player"); return outp; }
+        if (addr == nint.Zero) return (models, "no local player");
 
         var chara = (Character*)addr;
         var draw = chara->GameObject.DrawObject;
         if (draw == null || draw->GetObjectType() != ObjectType.CharacterBase)
-        {
-            outp.Add("local player has no CharacterBase draw object (mid-redraw?)");
-            return outp;
-        }
+            return (models, "local player has no CharacterBase draw object (mid-redraw?)");
 
         var cb = (CharacterBase*)draw;
         int i = -1;
@@ -46,13 +59,9 @@ public sealed unsafe class LiveModelDump(IObjectTable objects)
             var model = modelPtr.Value;
             if (model == null) continue;
             var handle = model->ModelResourceHandle;
-            if (handle == null) { outp.Add($"slot {i,2}: model with no resource handle"); continue; }
-
-            var name = handle->FileName.ToString();
-            outp.Add($"slot {i,2}: {name}");
+            models.Add((i, handle == null ? null : handle->FileName.ToString()));
         }
-        if (outp.Count == 0) outp.Add("no models on the draw object");
-        return outp;
+        return (models, null);
     }
 
     /// <summary>

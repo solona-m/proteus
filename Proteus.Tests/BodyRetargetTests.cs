@@ -1939,6 +1939,7 @@ public partial class BodyRetargetTests
     }
 
     [Fact]
+    [Trait("Plan", "EDGE-per-part-target-body-11")]
     public void Bodies_with_different_texture_layouts_are_refused()
     {
         // Nothing lines up by uv, so there is no way to say which point is which: the one case still refused.

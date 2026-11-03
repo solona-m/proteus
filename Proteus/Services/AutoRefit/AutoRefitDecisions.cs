@@ -152,14 +152,35 @@ internal static class AutoRefitDecisions
     /// <summary>
     /// The option a remembered size names, among <paramref name="options"/> (one slot, one race): the same file, or
     /// failing that the same option by group, heading and name — the same size at another race.
+    /// <para/>
+    /// A size kept before a body's chests were sizes (<see cref="BodySizeCatalog.IsShape"/>) names only the model: of
+    /// that model's chests, the one worn, else the one ticked, else the default.
     /// </summary>
-    internal static BodyOption? Resolve(IReadOnlyList<BodyOption> options, BodySizeRef? size)
+    internal static BodyOption? Resolve(IReadOnlyList<BodyOption> options, BodySizeRef? size, BodyOption? worn = null,
+                                        IReadOnlyDictionary<string, List<string>>? selected = null)
     {
         if (size == null) return null;
         string rel = RefitCore.Normal(size.Rel);
-        return options.FirstOrDefault(o => RefitCore.Normal(o.Rel) == rel)
-            ?? options.FirstOrDefault(o => Same(o.Group, size.Group) && Same(o.Section, size.Section)
+        if (options.FirstOrDefault(o => RefitCore.Normal(o.Rel) == rel) is { } exact) return exact;
+        string file = RefitCore.Normal(BodySizeCatalog.FileOf(size.Rel));
+        var sameFile = options.Where(o => RefitCore.Normal(BodySizeCatalog.FileOf(o.Rel)) == file).ToList();
+        if (sameFile.Count > 0)
+            return worn != null && sameFile.Contains(worn) ? worn : BodySizeCatalog.PickShape(sameFile, selected);
+        return options.FirstOrDefault(o => Same(o.Group, size.Group) && Same(o.Section, size.Section)
                                            && Same(o.Name, size.Name));
+    }
+
+    /// <summary>
+    /// The size to start a part on when none is known: the first the author lists — of a body whose chests are sizes,
+    /// the first model's default chest, not whatever chest happens to come first.
+    /// </summary>
+    internal static BodyOption FirstSize(IReadOnlyList<BodyOption> options)
+    {
+        var first = options[0];
+        if (!BodySizeCatalog.IsShape(first)) return first;
+        string file = RefitCore.Normal(BodySizeCatalog.FileOf(first.Rel));
+        return BodySizeCatalog.PickShape(
+            options.Where(o => RefitCore.Normal(BodySizeCatalog.FileOf(o.Rel)) == file).ToList(), null);
     }
 
     /// <summary>A size to remember, from the option picked.</summary>
@@ -175,24 +196,19 @@ internal static class AutoRefitDecisions
     /// and legs wait for the size the character wears in it (<see cref="ApplySnapshot"/>), else take its first size for
     /// the race — a deliberate exception to never guessing a size, asked for, and said in Settings — and hands and feet
     /// are matched. Picked again later for one part, only that part changes: a chest or legs then waits for the size
-    /// worn in the new body and is left unchosen without one; hands and feet are matched. Rue goes only with Rue (see
-    /// <see cref="AutoRefitTargets.IsRue"/>): a pick that would put a Rue part beside another body's, or the other way
-    /// round, goes onto every part, as the first body does.
+    /// worn in the new body and is left unchosen without one; hands and feet are matched. That holds across the Rue line
+    /// too (see <see cref="AutoRefitTargets.IsRue"/>): a Rue part beside another body's keeps its own pick, and the refit
+    /// leaves a part across that line out of a garment's (<see cref="AutoRefitTargets.TargetFor"/>,
+    /// <see cref="AutoRefitTargets.CoveredAcrossRue"/>), which Settings says (<see cref="AutoRefitTargets.RueSides"/>).
+    /// "Forget this collection's body" and one pick still put one body on every part.
     /// </summary>
     /// <param name="race">The player's race; null while it cannot be told, when sizes wait for it.</param>
     /// <param name="canReadWorn">The collection is the one the player wears, so what is worn in it can be read.</param>
-    /// <param name="find">An installed body by folder, for the other parts' names.</param>
     /// <returns>The parts given the body's first size there and then, for Settings to say so.</returns>
     internal static List<string> ChooseBody(AutoRefitPreference pref, string slot, BodyModIndex.Entry body, string? race,
-                                            bool canReadWorn, Func<string, BodyModIndex.Entry?>? find = null)
+                                            bool canReadWorn)
     {
         var prefilled = new List<string>();
-        if (pref.HasAnyBody() && new AutoRefitTargets(pref, find ?? (_ => null), race).CrossesRue(slot, body.Dir, body.Name))
-        {
-            pref.LegacyBodyDir = pref.ChestBody = pref.LegsBody = pref.HandsBody = pref.FeetBody = "";
-            foreach (string part in Slots) pref.SetSize(part, null);
-            pref.PendingFill.Clear();
-        }
         if (!pref.HasAnyBody())
         {
             foreach (string part in Slots)
@@ -203,7 +219,7 @@ internal static class AutoRefitDecisions
                 if (part is not ("_top" or "_dwn")) continue;
                 if (!canReadWorn && race != null)
                 {
-                    pref.SetSize(part, RefOf(body.Catalog.For(part, race)[0]));
+                    pref.SetSize(part, RefOf(FirstSize(body.Catalog.For(part, race))));
                     prefilled.Add(part);
                 }
                 else pref.PendingFill[part] = true;
@@ -246,7 +262,7 @@ internal static class AutoRefitDecisions
                 pref.SetSize(slot, RefOf(worn));
             else if (firstIfNone && options.Count > 0)
             {
-                pref.SetSize(slot, RefOf(options[0]));
+                pref.SetSize(slot, RefOf(FirstSize(options)));
                 prefilled.Add(slot);
             }
             else pref.PendingFill.Remove(slot);
@@ -261,12 +277,34 @@ internal static class AutoRefitDecisions
     /// of the same heading. Failing all of those, the size the character already wears there, and then the first the
     /// author lists — a body mod with one pair of hands has exactly one answer.
     /// </summary>
+    /// <remarks>A body whose chests are sizes (<see cref="BodySizeCatalog.IsShape"/>, NIRÆ) names its chests by build
+    /// ("Slim · Small Perky") and its legs by build and hips ("Slim · Small hips"): the two go together by build, the
+    /// worn one first, else the build's first legs or default chest. A chest drawn from a physics variant of a build's
+    /// model (NIRÆ's "Squish", #59) is that build's chest, so legs nobody chose follow its build — even when the legs worn
+    /// are another build's.</remarks>
     internal static BodyOption? Companion(IReadOnlyList<BodyOption> options, BodyOption? anchor, BodyOption? worn)
     {
         if (options.Count == 0) return null;
+        if (anchor != null && OfBuild(options, anchor) is { Count: > 0 } build)
+            return worn != null && build.Contains(worn) ? worn : BodySizeCatalog.PickShape(build, null);
         if (anchor != null && ByAnchor(options, anchor) is { } matched) return matched;
         if (worn != null && options.Contains(worn)) return worn;
-        return options[0];
+        return FirstSize(options);
+    }
+
+    /// <summary>The options of <paramref name="anchor"/>'s build, across a chest entry and its legs; null when neither
+    /// side is a chest entry.</summary>
+    private static List<BodyOption>? OfBuild(IReadOnlyList<BodyOption> options, BodyOption anchor)
+    {
+        if (BodySizeCatalog.IsShape(anchor) && anchor.Section.Length > 0)
+            return options.Where(o => !BodySizeCatalog.IsShape(o)
+                                      && o.Label.StartsWith(anchor.Section + " · ", StringComparison.OrdinalIgnoreCase))
+                          .ToList();
+        if (!BodySizeCatalog.IsShape(anchor) && options.Any(BodySizeCatalog.IsShape))
+            return options.Where(o => BodySizeCatalog.IsShape(o) && o.Section.Length > 0
+                                      && anchor.Label.StartsWith(o.Section + " · ", StringComparison.OrdinalIgnoreCase))
+                          .ToList();
+        return null;
     }
 
     /// <summary>The part of <see cref="Companion"/> that goes by the size chosen alone; null when nothing is named for it.</summary>

@@ -24,9 +24,6 @@ namespace Proteus.Gui;
 internal sealed class SizeSetPanel(PenumbraBridge penumbra, UVRemapService uvRemap, Func<string, byte[]?> readGameFile,
                                    Configuration config, IPluginLog log)
 {
-    /// <summary>Bodies the ranking may keep cached between runs — as the automatic refit keeps them.</summary>
-    private const int CachedBodiesKept = 400;
-
     /// <summary>
     /// The installed body mods, re-read (only where they changed) on opening and at the start of every run. The automatic
     /// refit's own once the plugin hands it over (<see cref="UseBodyIndex"/>): it is kept current as mods change, so a
@@ -58,14 +55,16 @@ internal sealed class SizeSetPanel(PenumbraBridge penumbra, UVRemapService uvRem
     /// </summary>
     private List<SizeSetRefit.Piece>? pieces;
     private string? piecesFor;
-    private Task<List<SizeSetRefit.Piece>>? readingPieces;
+    private Task<(List<SizeSetRefit.Piece>, IReadOnlyList<SizeSetRefit.Piece>, IReadOnlyList<SizeSetRefit.Choice>)>? readingPieces;
+    /// <summary>The open mod's shoes and gloves "Include shoes and gloves" leaves out; none while it is ticked.</summary>
+    private IReadOnlyList<SizeSetRefit.Piece> endsLeftOut = [];
 
     /// <summary>When the last look was started, and how soon one that came back with nothing is tried again.</summary>
     private long scanTriedAt;
     private const long ScanRetryMs = 3000;
 
     private bool remake;
-    private Task<SizeSetRefit.Result>? running;
+    private Task<SizeSetLaunch.Outcome>? running;
     private CancellationTokenSource? cancel;
 
     /// <summary>The mod being worked on, and what the worker last said it was doing.</summary>
@@ -109,7 +108,12 @@ internal sealed class SizeSetPanel(PenumbraBridge penumbra, UVRemapService uvRem
         ImGui.TextWrapped(s.Intro);
         ImGui.Spacing();
         if (installed == null || pieces == null) ImGui.TextDisabled(Strings.AutoRefit.FindingBodies);
-        else if (pieces.Count == 0) ImGui.TextDisabled(s.NoPieces);
+        else if (pieces.Count == 0)
+        {
+            ImGui.TextDisabled(s.NoPieces);
+            // A mod of shoes alone says why it has none.
+            DrawEndsLeftOut();
+        }
 
         bool busy = running != null;
         using (ImRaii.Disabled(busy))
@@ -164,6 +168,7 @@ internal sealed class SizeSetPanel(PenumbraBridge penumbra, UVRemapService uvRem
                 piecesFor = null;
             }
             if (ImGui.IsItemHovered()) ImGui.SetTooltip(s.EndsTip);
+            if (pieces is { Count: > 0 } && !config.SizeSetEnds) DrawEndsLeftOut();
 
             bool piercings = config.SizeSetPiercings;
             if (ImGui.Checkbox(s.Piercings, ref piercings))
@@ -234,8 +239,19 @@ internal sealed class SizeSetPanel(PenumbraBridge penumbra, UVRemapService uvRem
     /// <summary>A body as the table names it ("TBSE"), not as its row does ("TBSE (for men)").</summary>
     private static string BodyLabel(string body) => SupportedBodies.Choices.First(c => c.Key == body).Label;
 
+    /// <summary>The shoes and gloves "Include shoes and gloves" leaves out, named, and how to include them; nothing for none.</summary>
+    private void DrawEndsLeftOut()
+    {
+        if (endsLeftOut.Count == 0) return;
+        using (ImRaii.PushColor(ImGuiCol.Text, ImGui.GetColorU32(ImGuiCol.TextDisabled)))
+            ImGui.TextWrapped(string.Format(Strings.SizeSet.EndsLeftOutFmt, string.Join(", ", endsLeftOut.Select(p => p.Label))));
+    }
+
     /// <summary>The bodies for the open mod's pieces; none until they are read.</summary>
-    private IReadOnlyList<SizeSetRefit.Choice> Offered() => pieces == null ? [] : SizeSetRefit.Offered(pieces);
+    private IReadOnlyList<SizeSetRefit.Choice> Offered() => pieces == null ? [] : offered;
+
+    /// <summary>What is offered for the open mod's pieces, worked out with them (it reads the author's men's models' files).</summary>
+    private IReadOnlyList<SizeSetRefit.Choice> offered = [];
 
     /// <summary>Read the open mod's pieces on a worker, once per mod: its manifest, which can be large.</summary>
     private void ReadPieces(string modRoot, string modDir)
@@ -243,18 +259,23 @@ internal sealed class SizeSetPanel(PenumbraBridge penumbra, UVRemapService uvRem
         if (readingPieces is { IsCompleted: true } done)
         {
             readingPieces = null;
-            if (done.IsCompletedSuccessfully) pieces = done.Result;
+            if (done.IsCompletedSuccessfully) (pieces, endsLeftOut, offered) = done.Result;
             else
             {
                 log.Warning(done.Exception!, "[Proteus] size set: reading {0}'s pieces failed", piecesFor ?? "");
-                pieces = [];
+                (pieces, endsLeftOut, offered) = ([], [], []);
             }
         }
         if (piecesFor == modDir || readingPieces != null) return;
         piecesFor = modDir;
-        pieces = null;
+        (pieces, endsLeftOut, offered) = (null, [], []);
         bool ends = config.SizeSetEnds;
-        readingPieces = Task.Run(() => SizeSetRefit.PiecesOf(modRoot, readGameFile, ends));
+        // Read once with shoes and gloves, so those the box leaves out can be named.
+        readingPieces = Task.Run(() =>
+        {
+            var (kept, leftOut, _) = SizeSetRefit.ReadPieces(modRoot, readGameFile, ends);
+            return (kept, leftOut, SizeSetRefit.Offered(kept, modRoot));
+        });
     }
 
     /// <summary>Find which bodies are installed, on a worker. Framework thread: Penumbra's mod list is asked for here.</summary>
@@ -278,68 +299,24 @@ internal sealed class SizeSetPanel(PenumbraBridge penumbra, UVRemapService uvRem
         // Penumbra's mod list is IPC: asked here, on the framework thread, and handed to the worker.
         if (penumbra.GetAllMods() is not { } mods || penumbra.GetModDirectory() is not { } modsRoot) return;
 
-        // The game's own body, which a shoe or glove may have been made on, read here: the game's data is read on this
-        // thread, and a read that failed on the worker would leave the automatic refit without the game's body too.
-        var gameBodies = SizeSetRefit.GameBodies(keys, readGameFile, config.SizeSetEnds);
-        // A women's mod's men's versions are made for the men's skeleton the player's collection gives (IVCS when
-        // installed), asked for here — IPC — once; the game's own when Penumbra gives nothing.
-        SizeSetRefit.AcrossInputs? across = null;
-        if (SizeSetRefit.MensKeys(keys).Count > 0)
-        {
-            var skeletons = new[] { OtherRaceWearer.BaseSkeletonPath(CrossSexRefit.Men),
-                                    OtherRaceWearer.BaseSkeletonPath(CrossSexRefit.Women) };
-            var resolved = penumbra.ResolvePlayerPaths(skeletons);
-            if (resolved == null) log.Information("[Proteus] size set: the collection's skeletons could not be asked for; the game's are used");
-            across = new SizeSetRefit.AcrossInputs(path => resolved?.GetValueOrDefault(path));
-        }
-        var request = new SizeSetRefit.Request(modRoot, keys, config.SizeSetYas, remake, [], readGameFile,
-                                               config.SizeSetEnds, race => gameBodies.GetValueOrDefault(race),
-                                               config.SizeSetPiercings, across, madeOn.Dir);
+        var prepared = SizeSetLaunch.Prepare(mods, modsRoot, penumbra.ResolvePlayerPaths, modRoot, keys, config.SizeSetYas,
+                                             remake, config.SizeSetEnds, config.SizeSetPiercings, madeOn.Dir,
+                                             readGameFile, log);
         cancel = new CancellationTokenSource();
         var ct = cancel.Token;
         runningFor = modDir;
         progress = Strings.AutoRefit.FindingBodies;
         resultFor = null;
-        running = Task.Run(() =>
-        {
-            // A run reads hundreds of megabytes of models: a blocking full collection partway would stop the game too.
-            var latency = System.Runtime.GCSettings.LatencyMode;
-            System.Runtime.GCSettings.LatencyMode = System.Runtime.GCLatencyMode.SustainedLowLatency;
-            try
-            {
-                var bodies = index.RefreshState(mods, modsRoot).List;
-                return SizeSetRefit.Run(request with { Bodies = bodies }, uvRemap, log, p => progress = p, ct);
-            }
-            finally
-            {
-                System.Runtime.GCSettings.LatencyMode = latency;
-                BodySizeMatch.ForgetCandidatesBeyond(CachedBodiesKept);
-                Reload(modDir, afterChange);
-            }
-        }, ct);
-    }
-
-    /// <summary>
-    /// Tell Penumbra the mod changed, from the worker as the run ends — stopped, failed or done. Not left to the panel:
-    /// it is only drawn while the Body size tool is open on a model, so a run that finished with the Studio closed or
-    /// another tool chosen left Penumbra on the old manifest, and one that threw after its first save never told it at all.
-    /// Reloading a mod nothing was saved into is harmless.
-    /// </summary>
-    private void Reload(string modDir, Action<string> afterChange)
-    {
-        try
-        {
-            _ = Plugin.Framework.RunOnFrameworkThread(() =>
-            {
-                try { afterChange(modDir); }
-                catch (Exception e) { log.Warning(e, "[Proteus] size set: could not reload {0}", modDir); }
-            });
-        }
-        catch (Exception e)
-        {
-            // The plugin unloading under a run: nothing left to tell.
-            log.Warning(e, "[Proteus] size set: could not reach the framework to reload {0}", modDir);
-        }
+        // Penumbra is told from the worker as the run ends — stopped, failed or done. Not left to the panel: it is only
+        // drawn while the Body size tool is open on a model, so a run that finished with the Studio closed or another tool
+        // chosen left Penumbra on the old manifest, and one that threw after its first save never told it at all.
+        // Reloading a mod nothing was saved into is harmless. Posted and forgotten.
+        running = SizeSetLaunch.Start(prepared, index, uvRemap, log, p => progress = p, () => afterChange(modDir),
+                                      a => _ = Plugin.Framework.RunOnFrameworkThread(() =>
+                                      {
+                                          try { a(); }
+                                          catch (Exception e) { log.Warning(e, "[Proteus] size set: could not reload {0}", modDir); }
+                                      }), ct);
     }
 
     /// <summary>A finished run: keep what it came to for the panel. Penumbra was told by the run itself.</summary>
@@ -368,7 +345,7 @@ internal sealed class SizeSetPanel(PenumbraBridge penumbra, UVRemapService uvRem
             return;
         }
 
-        var r = task.Result;
+        var r = task.Result.Result;
         notes = r.Notes;
         warnings = r.Warnings ?? [];
         result = SizeSetRefit.ResultLine(r);

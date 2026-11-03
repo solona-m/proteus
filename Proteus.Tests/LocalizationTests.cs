@@ -204,6 +204,36 @@ public sealed class LocalizationTests
     }
 
     /// <summary>
+    /// The toe cap tick's words are translated, not copied, keep English's line breaks, and keep the Penumbra names
+    /// the user has to find ("Toe Cap", "Masks") verbatim.
+    /// </summary>
+    [Theory]
+    [MemberData(nameof(Translations))]
+    [Trait("Plan", "AC-toecap-geometry-7")]
+    public void ToeCap_strings_are_translated_not_copied(string lang)
+    {
+        var en = Load(Source);
+        var tr = Load(lang);
+        foreach (string key in new[] { "Colors.ToeCap.Label", "Colors.ToeCap.Tip", "Colors.ToeCap.Held.Tip",
+                                       "Colors.ToeCap.Inherited.Note", "Colors.ToeCap.Failed.Fmt",
+                                       "Colors.ToeCap.ModOff", "Colors.ToeCap.NoShell",
+                                       "Colors.ToeCap.Flag.Tip", "Colors.ToeCap.Locked.Tip", "Colors.ToeCap.SaveFailed" })
+        {
+            Assert.True(tr.ContainsKey(key), $"[{lang}] has no {key}");
+            Assert.NotEqual(en[key].Message, tr[key].Message);
+            Assert.Equal(en[key].Message.Count(c => c == '\n'), tr[key].Message.Count(c => c == '\n'));
+        }
+        foreach (string key in new[] { "Colors.ToeCap.Tip", "Colors.ToeCap.Held.Tip", "Colors.ToeCap.Locked.Tip" })
+        {
+            Assert.Contains("Toe Cap", tr[key].Message);
+            Assert.Contains("Masks", tr[key].Message);
+        }
+        foreach (string body in new[] { "Bibo+", "Neolithe", "Rue", "YAB" })
+            Assert.Contains(body, tr["Colors.ToeCap.Flag.Tip"].Message);
+        Assert.Contains("/xllog", tr["Colors.ToeCap.SaveFailed"].Message);
+    }
+
+    /// <summary>
     /// The words for a target option that draws underwear where the source has skin — the refusal, and the two Body size
     /// notes — are translated, not copied.
     /// </summary>
@@ -761,8 +791,8 @@ public sealed class LocalizationTests
         // 23, cross-sex-refit's five (OtherSex, CrossSexNote, CrossSexWears, CrossSexQuality, CrossSexHint),
         // cross-sex-tops-yas's four (CrossSexFolded, BonesMoved, NeedsSkeleton, RenameFailed) and
         // vanilla-cross-sex-legs's two (ReplacesGame, CharacterKeepsGame); own-model-overwrite re-keyed OwnModel as
-        // OwnModelReplaced, one for one
-        Assert.Equal(34, keys.Count);
+        // OwnModelReplaced, one for one; hands-feet-port's two (CrossSexNude, WomensModel)
+        Assert.Equal(36, keys.Count);
         foreach (string key in keys)
         {
             Assert.True(tr.ContainsKey(key), $"[{lang}] has no {key}");
@@ -898,6 +928,62 @@ public sealed class LocalizationTests
                                                                    StringComparison.Ordinal));
         Assert.Contains("**" + strings["AutoRefit.Body"].Message + "**", step);
         Assert.Contains("Rue", step);
+    }
+
+    private static readonly string[] PerPartBodyKeys =
+    [
+        "Parts.Retarget.PartBody.Same.Fmt", "Parts.Retarget.PartBody.Tip", "Parts.Retarget.PartBody.KeptOnOwn.Fmt",
+        "Parts.Retarget.PartBody.RueApart.Fmt", "Parts.Retarget.PartBody.SetAside.Fmt", "AutoRefit.RueSplit.Fmt",
+        "AutoRefit.RueSplit.Shoes", "AutoRefit.RueSplit.Gloves",
+    ];
+
+    /// <summary>A part's own body in the Studio and the Rue split in Settings: each language's own words.</summary>
+    [Theory]
+    [MemberData(nameof(Translations))]
+    [Trait("Plan", "AC-per-part-target-body-7")]
+    public void PerPartBody_strings_are_translated_not_copied(string lang)
+    {
+        var en = Load(Source);
+        var tr = Load(lang);
+        foreach (string key in PerPartBodyKeys)
+        {
+            Assert.True(tr.ContainsKey(key), $"[{lang}] has no {key}");
+            Assert.NotEqual(en[key].Message, tr[key].Message);
+        }
+    }
+
+    /// <summary>The Rue split names the button that puts one body on every part, by that language's own label for it.</summary>
+    [Theory]
+    [MemberData(nameof(AllLocales))]
+    [Trait("Plan", "AC-per-part-target-body-6")]
+    public void RueSplit_names_the_forget_button(string lang)
+    {
+        var strings = Load(lang);
+        string text = string.Format(strings["AutoRefit.RueSplit.Fmt"].Message, "a", "b", strings["AutoRefit.Clear"].Message);
+        Assert.Contains(strings["AutoRefit.Clear"].Message, text);
+        Assert.Contains("Rue", text);
+        Assert.Equal(Proteus.Localization.Strings.AutoRefit.ClearLabel + "###autoRefitClear", Proteus.Localization.Strings.AutoRefit.Clear);
+    }
+
+    /// <summary>Every README's multi-part bullet says a part can go onto a body of its own, and Settings' step names
+    /// the button that puts one body on every part — in the words the panels use.</summary>
+    [Theory]
+    [MemberData(nameof(AllLocales))]
+    [Trait("Plan", "AC-per-part-target-body-7")]
+    public void Readme_says_a_part_can_go_onto_its_own_body(string lang)
+    {
+        var dir = new System.IO.DirectoryInfo(AppContext.BaseDirectory);
+        while (dir != null && !System.IO.File.Exists(System.IO.Path.Combine(dir.FullName, "proteus.slnx"))) dir = dir.Parent;
+        Assert.True(dir != null, $"Could not find proteus.slnx above {AppContext.BaseDirectory}.");
+        string readme = System.IO.File.ReadAllText(System.IO.Path.Combine(
+            dir!.FullName, lang == Source ? "README.md" : System.IO.Path.Combine("docs", $"README.{lang}.md")));
+        var strings = Load(lang);
+        var lines = readme.Split('\n');
+        string bullet = lines.Single(l => l.Contains("**" + strings["Parts.Retarget.LeaveOut"].Message + "**", StringComparison.Ordinal));
+        Assert.Contains("**" + strings["Parts.Retarget.ToBody"].Message + "**", bullet);
+        string step = lines.Single(l => l.StartsWith("3. ", StringComparison.Ordinal)
+                                        && l.Contains("**" + strings["AutoRefit.Size"].Message + "**", StringComparison.Ordinal));
+        Assert.Contains("**" + strings["AutoRefit.Clear"].Message + "**", step);
     }
 
     private static readonly string[] MoveMirrorKeys =
@@ -1195,6 +1281,148 @@ public sealed class LocalizationTests
         Assert.Contains("— Proteus edit*", paragraph);
         Assert.DoesNotContain(ReadmeVanillaOpensAsIs[lang].Old, readme);
     }
+
+    /// <summary>Women's shoes and gloves made men's (hands-feet-port): every new and changed string is translated, not
+    /// copied, with its placeholders, and no language still says shoes and gloves aren't crossed.</summary>
+    [Theory]
+    [MemberData(nameof(Translations))]
+    [Trait("Plan", "AC-hands-feet-port-7")]
+    public void Hands_feet_port_strings_are_translated_not_copied(string lang) // [AC-hands-feet-port-7]
+    {
+        var en = Load(Source);
+        var tr = Load(lang);
+        foreach (string key in new[]
+                 {
+                     "SizeSet.EndsLeftOut.Fmt", "SizeSet.AuthorsMens.Fmt", "SizeSet.AuthorsMensUnticked.Fmt",
+                     "Parts.Retarget.CrossSexEnd.NoSizes", "Parts.Retarget.KeepEnds.CrossSex.Tip",
+                     "Parts.Retarget.EndsUnreadable.CrossSex", "Parts.Retarget.KeepShape.CrossSexTip",
+                     "Parts.Retarget.CrossSexEnd.PickMadeFor.Fmt", "Parts.Retarget.Race.CrossSexNude.Fmt",
+                     "Parts.Retarget.Race.WomensModel.Fmt", "Parts.Retarget.CrossSexEnd.NoLimb", "SizeSet.EndFromOutfitLegs.Fmt",
+                     "SizeSet.Intro", "SizeSet.ForMen.Tip.Fmt", "SizeSet.Ends.Tip", "Parts.Retarget.Race.Tip",
+                 })
+        {
+            Assert.True(tr.ContainsKey(key), $"[{lang}] has no {key}");
+            Assert.NotEqual(en[key].Message, tr[key].Message);
+            for (int i = 0; i < 4; i++)
+                Assert.Equal(en[key].Message.Contains("{" + i + "}"), tr[key].Message.Contains("{" + i + "}"));
+        }
+        Assert.DoesNotContain("aren't refitted across the sexes", en["SizeSet.ForMen.Tip.Fmt"].Message);
+        Assert.Contains("shoes and gloves get men's versions", en["SizeSet.ForMen.Tip.Fmt"].Message);
+        // Each language's old sentence is gone: it named shoes and gloves as not crossed.
+        Assert.DoesNotContain(HandsFeetOldSentence[lang], tr["SizeSet.ForMen.Tip.Fmt"].Message);
+    }
+
+    /// <summary>#43's two Check in game lines: in every language, translated, not copied, with both placeholders.</summary>
+    [Theory]
+    [MemberData(nameof(Translations))]
+    [Trait("Plan", "AC-42-43-tbsex-legs-cross-2")]
+    [Trait("Plan", "AC-42-43-tbsex-legs-cross-3")]
+    public void Tbsex_legs_cross_strings_are_translated_not_copied(string lang) // [AC-42-43-tbsex-legs-cross-2] [AC-42-43-tbsex-legs-cross-3]
+    {
+        var en = Load(Source);
+        var tr = Load(lang);
+        foreach (string key in new[] { "SizeSet.AuthorsMensCrossed.Fmt", "SizeSet.AuthorsMensStillReplaced.Fmt" })
+        {
+            Assert.True(tr.ContainsKey(key), $"[{lang}] has no {key}");
+            Assert.NotEqual(en[key].Message, tr[key].Message);
+            for (int i = 0; i < 3; i++)
+                Assert.Equal(en[key].Message.Contains("{" + i + "}"), tr[key].Message.Contains("{" + i + "}"));
+        }
+    }
+
+    /// <summary>
+    /// Every README says when the size set makes a women's piece men's over the author's own men's model — only when no
+    /// file of it reads as a model, never with a Made on body chosen — in both the "Refit for" bullet and the size set's
+    /// men's bullet.
+    /// </summary>
+    [Theory]
+    [MemberData(nameof(AllLocales))]
+    [Trait("Plan", "AC-42-43-tbsex-legs-cross-7")]
+    public void Readme_says_tbsex_legs_cross(string lang) // [AC-42-43-tbsex-legs-cross-7]
+    {
+        var dir = new System.IO.DirectoryInfo(AppContext.BaseDirectory);
+        while (dir != null && !System.IO.File.Exists(System.IO.Path.Combine(dir.FullName, "proteus.slnx"))) dir = dir.Parent;
+        Assert.True(dir != null, $"Could not find proteus.slnx above {AppContext.BaseDirectory}.");
+        string readme = System.IO.File.ReadAllText(System.IO.Path.Combine(
+            dir!.FullName, lang == Source ? "README.md" : System.IO.Path.Combine("docs", $"README.{lang}.md")));
+        var lines = readme.Split('\n');
+        string madeOn = "**" + Load(lang)["SizeSet.MadeOn"].Message.Split("###")[0] + "**";
+        string mensGroup = "**" + Load(lang)["SizeSet.MensGroup"].Message + "**";
+        var (refitFor, mens) = ReadmeAuthorsMensTokens[lang];
+        string refitBullet = lines.Single(l => l.StartsWith("- ", StringComparison.Ordinal) && l.Contains(refitFor));
+        Assert.Contains(madeOn, refitBullet);
+        Assert.Contains(mensGroup, refitBullet);
+        Assert.True(refitBullet.IndexOf(madeOn, refitBullet.IndexOf(refitFor, StringComparison.Ordinal), StringComparison.Ordinal) > 0,
+                    $"[{lang}] the new Refit for sentence doesn't name Made on");
+        string mensBullet = lines.Single(l => l.StartsWith("- ", StringComparison.Ordinal) && l.Contains(mens));
+        // After the new sentence: the bullet named Made on before it.
+        Assert.True(mensBullet.IndexOf(madeOn, mensBullet.IndexOf(mens, StringComparison.Ordinal), StringComparison.Ordinal) > 0,
+                    $"[{lang}] the new men's sentence doesn't name Made on");
+        if (lang == Source)
+        {
+            Assert.Contains("can't be read as a model at all (missing, zero bytes or damaged)", refitBullet);
+            Assert.Contains("A men's model the size set can read is always kept", refitBullet);
+        }
+    }
+
+    /// <summary>Per language: a phrase of the new "Refit for" sentence, and one of the new men's-bullet sentence.</summary>
+    private static readonly Dictionary<string, (string RefitFor, string Mens)> ReadmeAuthorsMensTokens = new()
+    {
+        ["en"] = ("The size set keeps it too", "The one exception to keeping the author's men's model"),
+        ["de"] = ("Auch die Größenreihe behält es", "Die einzige Ausnahme davon"),
+        ["es"] = ("El conjunto de tallas también lo conserva", "La única excepción a conservar"),
+        ["fr"] = ("La série de tailles le garde aussi", "La seule exception au maintien"),
+        ["ja"] = ("サイズセットもそれを残します", "作者の男性用モデルを残すことの唯一の例外"),
+        ["ko"] = ("사이즈 세트도 그것을 남깁니다", "작가의 남성용 모델을 남기는 것의 유일한 예외"),
+        ["ru"] = ("Набор размеров тоже её сохраняет", "Единственное исключение из сохранения"),
+        ["zh"] = ("尺码组同样保留它", "保留作者男性模型的唯一例外"),
+    };
+
+    private static readonly Dictionary<string, string> HandsFeetOldSentence = new()
+    {
+        ["de"] = "werden nicht über die Geschlechter angepasst", ["es"] = "no se reajustan entre sexos",
+        ["fr"] = "ne sont pas réajustés entre les sexes", ["ja"] = "性別をまたいで調整されず",
+        ["ko"] = "성별을 넘어 맞추지 않으며", ["ru"] = "между полами не подгоняются", ["zh"] = "不跨性别调整",
+    };
+
+    /// <summary>Every README's "Refit for" other-sex bullet says women's shoes and gloves can be made men's, and still that
+    /// the game's own gear crosses for women's legs only.</summary>
+    [Theory]
+    [MemberData(nameof(AllLocales))]
+    [Trait("Plan", "AC-hands-feet-port-7")]
+    public void Readme_says_womens_shoes_and_gloves_cross(string lang) // [AC-hands-feet-port-7]
+    {
+        var dir = new System.IO.DirectoryInfo(AppContext.BaseDirectory);
+        while (dir != null && !System.IO.File.Exists(System.IO.Path.Combine(dir.FullName, "proteus.slnx"))) dir = dir.Parent;
+        Assert.True(dir != null, $"Could not find proteus.slnx above {AppContext.BaseDirectory}.");
+        string readme = System.IO.File.ReadAllText(System.IO.Path.Combine(
+            dir!.FullName, lang == Source ? "README.md" : System.IO.Path.Combine("docs", $"README.{lang}.md")));
+        string label = "**" + Load(lang)["Parts.Retarget.Race.Label"].Message + "**";
+        string bullet = readme.Split('\n').Single(l => l.StartsWith("- ", StringComparison.Ordinal) && l.Contains(label)
+                                                       && l.Contains("bibo↔TBSE"));
+        Assert.Contains(ReadmeShoeToken[lang], bullet);
+        if (lang == Source) Assert.Contains("women's legs only", bullet);
+        // The size set's bullet says what leaving shoes and gloves out does.
+        string ends = "**" + Load(lang)["SizeSet.Ends"].Message + "**";
+        Assert.Contains(readme.Split('\n'), l => l.Contains(ends) && l.Contains(ReadmeLeftOffToken[lang]));
+    }
+
+    private static readonly Dictionary<string, string> ReadmeShoeToken = new()
+    {
+        ["en"] = "Women's shoes and gloves made for Midlanders can be refitted for Midlander men",
+        ["de"] = "Auch Schuhe und Handschuhe für Midlander-Frauen", ["es"] = "Los zapatos y guantes de mujer Midlander",
+        ["fr"] = "Les chaussures et gants pour femmes Midlander", ["ja"] = "ミッドランダー女性用の靴と手袋も",
+        ["ko"] = "미드랜더 여성용 신발과 장갑도", ["ru"] = "Женские обувь и перчатки Midlander",
+        ["zh"] = "中原之民女性的鞋子和手套",
+    };
+
+    private static readonly Dictionary<string, string> ReadmeLeftOffToken = new()
+    {
+        ["en"] = "Left off, they get no sizes and no men's versions", ["de"] = "Ausgeschaltet bekommen sie weder Größen",
+        ["es"] = "Desactivada, no reciben tallas", ["fr"] = "Décochée, ils ne reçoivent ni tailles",
+        ["ja"] = "オフにすると、サイズも男性版も作られず", ["ko"] = "끄면 사이즈도 남성 버전도",
+        ["ru"] = "Если снять галочку, они не получают", ["zh"] = "关闭时，它们既没有尺码也没有男性版本",
+    };
 
     /// <summary>What each README's vanilla-gear paragraph says now, and the phrase it used for copying on open.</summary>
     private static readonly Dictionary<string, (string Now, string Old)> ReadmeVanillaOpensAsIs = new()

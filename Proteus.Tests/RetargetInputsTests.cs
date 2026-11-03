@@ -188,6 +188,23 @@ public class RetargetInputsTests
     }
 
     [Fact]
+    [Trait("Plan", "EDGE-gh33-36-37-body-size-2")]
+    public void Key_changes_with_the_made_for_body()   // [EDGE-gh33-36-37-body-size-2]
+    {
+        // A plan still running when "Made for body" changes is dropped when it lands: Consume takes only a result whose
+        // key is the one asked for now.
+        var layout = Shoe(keep: false);
+        var slots = RetargetInputs.Slots(layout, CatalogSlots, Two);
+        var from = new Dictionary<string, BodyOption> { ["_sho"] = FeetS, ["_dwn"] = LegsS };
+        var to = new Dictionary<string, List<BodyOption>> { ["_sho"] = [FeetM], ["_dwn"] = [LegsM] };
+        var inputs = RetargetInputs.Assemble(layout, slots, from, to, null);
+        var chosen = RetargetInputs.Chosen(slots, from, to);
+        string Key(string? made) => RetargetInputs.Key("m", made, inputs, chosen, from, to, [], [], true, false, true);
+
+        Assert.Equal(3, new[] { Key("Rue+"), Key(null), Key("Bibo+") }.Distinct().Count());
+    }
+
+    [Fact]
     [Trait("Plan", "EDGE-keep-ends-studio-18")]
     public void Key_changes_with_keep_ends_skin_only_and_shapes()   // [EDGE-keep-ends-studio-18]
     {
@@ -403,5 +420,152 @@ public class RetargetInputsTests
         Assert.False(RetargetInputs.SkinOnlyChanges(baking: false, model, model));
         Assert.True(RetargetInputs.SkinOnlyChanges(baking: true, model, model));
         Assert.True(RetargetInputs.SkinOnlyChanges(baking: false, model, [1, 2, 3]));
+    }
+
+    // ── the garment's own part, whatever the body mod offers (studio-slot-body) ─────────────────────────────────────
+
+    private static RetargetInputs.Layout LayoutOf(string? own, string[] offered, bool keep = true)
+    {
+        string worn = RetargetInputs.GarmentSlot(own, offered);
+        string? limb = AutoRefitDecisions.LimbOf(worn);
+        bool hasLimb = limb != null && offered.Contains(limb);
+        return RetargetInputs.LayoutFor(worn, keep, hasLimb, hasLimb, endsUnreadable: false);
+    }
+
+    [Fact]
+    [Trait("Plan", "AC-studio-slot-body-1")]
+    public void Leg_piece_on_chest_only_body_is_missing_legs()   // [AC-studio-slot-body-1]
+    {
+        string[] chestOnly = ["_top"];
+        Assert.Equal("_dwn", RetargetInputs.GarmentSlot("_dwn", chestOnly));
+        var layout = LayoutOf("_dwn", chestOnly);
+        Assert.Equal("_dwn", layout.Primary);
+        Assert.Equal("_dwn", RetargetInputs.MissingSlot(chestOnly, layout));
+    }
+
+    [Fact]
+    [Trait("Plan", "AC-studio-slot-body-2")]
+    public void Own_part_is_never_replaced_by_another()   // [AC-studio-slot-body-2]
+    {
+        string[][] offers = [[], ["_top"], ["_dwn"], ["_top", "_dwn"], ["_glv", "_sho"], CatalogSlots];
+        foreach (string own in CatalogSlots)
+            foreach (var offered in offers)
+                Assert.Equal(own, RetargetInputs.GarmentSlot(own, offered));
+    }
+
+    [Fact]
+    [Trait("Plan", "AC-studio-slot-body-6")]
+    public void Made_for_body_without_the_part_is_reported()   // [AC-studio-slot-body-6]
+    {
+        var legs = RetargetInputs.LayoutFor("_dwn", true, false, false, false);
+        Assert.Equal("_dwn", RetargetInputs.MissingSlot(["_top"], legs));
+        Assert.Null(RetargetInputs.MissingSlot(["_top", "_dwn"], legs));
+    }
+
+    [Fact]
+    [Trait("Plan", "AC-studio-slot-body-7")]
+    [Trait("Plan", "EDGE-studio-slot-body-8")]
+    [Trait("Plan", "EDGE-studio-slot-body-10")]
+    public void Shoe_and_glove_on_bodies_without_ends_get_the_limb_layout()   // [AC-studio-slot-body-7] [EDGE-studio-slot-body-8] [EDGE-studio-slot-body-10]
+    {
+        // Before, both were laid out as tops: a body without feet or hands put its first part, the chest, in their place.
+        string[] chestAndLegs = ["_top", "_dwn"];
+        Assert.Equal("_sho", RetargetInputs.GarmentSlot("_sho", chestAndLegs));
+        var shoe = LayoutOf("_sho", chestAndLegs);
+        Assert.Equal(new RetargetInputs.Layout("_dwn", "_sho", "_sho"), shoe);
+        Assert.Null(RetargetInputs.MissingSlot(chestAndLegs, shoe));
+
+        string[] chestOnly = ["_top"];
+        Assert.Equal("_glv", RetargetInputs.GarmentSlot("_glv", chestOnly));
+        var glove = LayoutOf("_glv", chestOnly);
+        Assert.Equal(new RetargetInputs.Layout("_top", "_glv", "_glv"), glove);
+        Assert.Null(RetargetInputs.MissingSlot(chestOnly, glove));
+    }
+
+    [Fact]
+    [Trait("Plan", "AC-studio-slot-body-8")]
+    [Trait("Plan", "EDGE-studio-slot-body-1")]
+    public void Bodies_with_the_own_part_and_accessories_lay_out_as_before()   // [AC-studio-slot-body-8] [EDGE-studio-slot-body-1]
+    {
+        string[] chestAndLegs = ["_top", "_dwn"];
+        Assert.Equal("_top", RetargetInputs.GarmentSlot("_top", chestAndLegs));
+        Assert.Equal("_dwn", RetargetInputs.GarmentSlot("_dwn", chestAndLegs));
+        Assert.Null(RetargetInputs.MissingSlot(chestAndLegs, LayoutOf("_top", chestAndLegs)));
+        Assert.Null(RetargetInputs.MissingSlot(chestAndLegs, LayoutOf("_dwn", chestAndLegs)));
+
+        // An accessory is no body part: it takes the body mod's first, as it always has, and is never short of one.
+        Assert.Equal("_top", RetargetInputs.GarmentSlot(null, chestAndLegs));
+        Assert.Equal("_dwn", RetargetInputs.GarmentSlot(null, ["_dwn"]));
+        Assert.Equal("_top", RetargetInputs.GarmentSlot(null, []));
+        Assert.Null(RetargetInputs.MissingSlot(chestAndLegs, LayoutOf(null, chestAndLegs)));
+    }
+
+    [Fact]
+    [Trait("Plan", "EDGE-studio-slot-body-9")]
+    public void Shoe_unticked_on_body_without_feet_reports_feet()   // [EDGE-studio-slot-body-9]
+    {
+        string[] chestAndLegs = ["_top", "_dwn"];
+        var shoe = LayoutOf("_sho", chestAndLegs, keep: false);
+        Assert.Equal("_sho", shoe.Primary);
+        Assert.Equal("_sho", RetargetInputs.MissingSlot(chestAndLegs, shoe));
+    }
+
+    [Fact]
+    [Trait("Plan", "EDGE-studio-slot-body-17")]
+    public void Unticking_keep_feet_flips_into_a_missing_part()   // [EDGE-studio-slot-body-17]
+    {
+        // The panel takes a shown preview down on every flip, before it decides whether the rows can be drawn at all.
+        string[] chestAndLegs = ["_top", "_dwn"];
+        var kept = LayoutOf("_sho", chestAndLegs);
+        var unticked = LayoutOf("_sho", chestAndLegs, keep: false);
+        Assert.True(RetargetInputs.Flips(kept, unticked));
+        Assert.Null(RetargetInputs.MissingSlot(chestAndLegs, kept));
+        Assert.Equal("_sho", RetargetInputs.MissingSlot(chestAndLegs, unticked));
+    }
+
+    // ── a part on a body of its own (per-part-target-body) ───────────────────
+
+    private static string KeyWith(IReadOnlyDictionary<string, string>? bodies, BodyOption legsTo)
+    {
+        var layout = new RetargetInputs.Layout("_top", "_top", null);
+        var chest = new BodyOption("Chest", "", "M", "chest/m.mdl", "chara/equipment/e0000/model/c0201e0000_top.mdl", "_top");
+        var from = new Dictionary<string, BodyOption> { ["_top"] = chest, ["_dwn"] = LegsS };
+        var to = new Dictionary<string, List<BodyOption>> { ["_top"] = [chest], ["_dwn"] = [legsTo] };
+        var inputs = RetargetInputs.Assemble(layout, ["_top", "_dwn"], from, to, null);
+        return RetargetInputs.Key("m", null, inputs, RetargetInputs.Chosen(["_top", "_dwn"], from, to), from, to, [], null,
+                                  true, true, false, partBodies: bodies);
+    }
+
+    [Fact]
+    [Trait("Plan", "AC-per-part-target-body-4")]
+    [Trait("Plan", "EDGE-per-part-target-body-10")]
+    [Trait("Plan", "EDGE-per-part-target-body-19")]
+    public void Key_unchanged_without_part_bodies_and_changes_with_them()
+    {
+        string today = KeyWith(null, LegsM);
+        Assert.Equal(today, KeyWith(new Dictionary<string, string>(), LegsM));
+        Assert.DoesNotContain("bodies", today);
+        string yab = KeyWith(new Dictionary<string, string> { ["_dwn"] = "YAB+" }, LegsM);
+        Assert.NotEqual(today, yab);
+        Assert.NotEqual(yab, KeyWith(new Dictionary<string, string> { ["_dwn"] = "Bibo+" }, LegsM));
+    }
+
+    [Fact]
+    [Trait("Plan", "EDGE-per-part-target-body-4")]
+    public void Key_tells_two_bodies_with_the_same_files_apart()
+    {
+        // Rue and its fork LaRue lay their files out alike: the same rel, another body.
+        Assert.NotEqual(KeyWith(new Dictionary<string, string> { ["_dwn"] = "Rue" }, LegsM),
+                        KeyWith(new Dictionary<string, string> { ["_dwn"] = "LaRue" }, LegsM));
+    }
+
+    [Fact]
+    [Trait("Plan", "EDGE-per-part-target-body-20")]
+    public void Slots_list_only_main_body_parts_with_several_models()
+    {
+        // The rows a part body can be picked on are the main body's parts with more than one model, as always.
+        var layout = new RetargetInputs.Layout("_top", "_top", null);
+        var slots = RetargetInputs.Slots(layout, CatalogSlots, s => s == "_dwn" ? 1 : 2);
+        Assert.Equal(["_top", "_glv", "_sho"], slots);
     }
 }

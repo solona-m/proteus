@@ -99,13 +99,34 @@ public sealed class SizeSetStrings
         "Adds every size of the bodies ticked below to this whole mod. Each size is refitted from the author's size "
       + "nearest it, the outfit's other pieces in that option from the same size, and saved beside the author's sizes as "
       + "\"Rue S\", \"YAB Buff L\" and so on. Sizes the mod already has are left alone. A women's mod can get TBSE and "
-      + "TBSE-X too: its chest and legs are refitted for men and saved in a group of their own.");
+      + "TBSE-X too: its chest, legs, shoes and gloves are refitted for men and saved in a group of their own.");
 
     public readonly string Ends = ProteusLoc.Localize("SizeSet.Ends", "Include shoes and gloves") + "###sizeSetEnds";
 
     public readonly string EndsTip = ProteusLoc.Localize("SizeSet.Ends.Tip",
         "Shoes and gloves keep their own feet and hands; only the leg or arm they reach is refitted. Shoes get the legs' "
-      + "sizes, gloves one option per body, and both join the outfit's chest or legs sizes when they share a group.");
+      + "sizes, gloves one option per body, and both join the outfit's chest or legs sizes when they share a group. "
+      + "With a men's body ticked “for men”, a women's mod's shoes and gloves get men's versions too.");
+
+    /// <summary>{0} is the shoes and gloves left out, as pieces are named ("Feet — e6116"), joined with ", ".</summary>
+    public readonly string EndsLeftOutFmt = ProteusLoc.Localize("SizeSet.EndsLeftOut.Fmt",
+        "Shoes and gloves left out ({0}): tick “Include shoes and gloves” to size them and make their men's versions.");
+
+    /// <summary>{0} is a women's piece ("Hands — e0613").</summary>
+    public readonly string AuthorsMensFmt = ProteusLoc.Localize("SizeSet.AuthorsMens.Fmt",
+        "{0}: no men's version was made from it, because the mod has its own men's model of it, and that one made nothing this run.");
+
+    /// <summary>{0} is a women's piece ("Legs — e0613"), {1} a plain men's body ("TBSE").</summary>
+    public readonly string AuthorsMensUntickedFmt = ProteusLoc.Localize("SizeSet.AuthorsMensUnticked.Fmt",
+        "{0}: no men's version was made from it, because the mod has its own men's model of it. Tick the plain men's body (for example “{1}”) to size that model.");
+
+    /// <summary>{0} is a women's piece ("Hands — e0613"), {1} the men's versions' group ("Men's body").</summary>
+    public readonly string AuthorsMensCrossedFmt = ProteusLoc.Localize("SizeSet.AuthorsMensCrossed.Fmt",
+        "{0}: the mod's own men's model file for it couldn't be read as a model at all (it is missing, zero bytes or damaged), so its men's versions were made from this women's piece. Wherever a men's body is picked in the “{1}” group, they replace the author's men's model.");
+
+    /// <summary>{0} is a women's piece ("Hands — e0613"), {1} the men's versions' group ("Men's body").</summary>
+    public readonly string AuthorsMensStillReplacedFmt = ProteusLoc.Localize("SizeSet.AuthorsMensStillReplaced.Fmt",
+        "{0}: the mod has its own men's model of it, and this run left that model as it is, but a men's version made from this women's piece in an earlier run still replaces it in the “{1}” group wherever that men's body is picked. To show the author's model there, pick Original in “{1}” or remove that option.");
 
     public readonly string Yas = ProteusLoc.Localize("SizeSet.Yas", "Use a body's YAS version where it has one") + "###sizeSetYas";
 
@@ -246,7 +267,8 @@ public sealed class SizeSetStrings
         "This mod's women's chest and legs pieces get a men's version on {0}: refitted for Midlander men through the body "
       + "maps, which download the first time they're needed, each from the author's size whose body lies nearest his "
       + "once bent to a man's shape. They're saved in a group of their own, \"{1}\", so the women's sizes stay as they "
-      + "are. Shoes and gloves aren't refitted across the sexes, and a piece the author already made for men keeps theirs.");
+      + "are. Its women's shoes and gloves get men's versions too, refitted through their legs or arms, while “Include "
+      + "shoes and gloves” is ticked, and a piece the author already made for men keeps theirs.");
 
     /// <summary>The group a women's mod's men's versions are saved into.</summary>
     public readonly string MensGroup = ProteusLoc.Localize("SizeSet.MensGroup", "Men's body");
@@ -273,6 +295,11 @@ public sealed class SizeSetStrings
     /// <summary>{0} is the piece, {1} the men's option.</summary>
     public readonly string EndFromGameBodyFmt = ProteusLoc.Localize("SizeSet.EndFromGameBody.Fmt",
         "{0}, \"{1}\": its leg or arm has no skin to read a body off, so it was refit as made on the game's own body.");
+
+    /// <summary>{0} is the piece, {1} the men's option, {2} the body and size its outfit's legs read as, {3} the legs option.</summary>
+    public readonly string EndFromOutfitLegsFmt = ProteusLoc.Localize("SizeSet.EndFromOutfitLegs.Fmt",
+        "{0}, \"{1}\": it has no skin of its own to read a body off, and its cloth sits on no body closely, so it was refit "
+      + "as made on {2}, the body this outfit's legs (\"{3}\") were made on.");
 
     /// <summary>{0} is the piece, {1} the men's option, {2} millimetres, {3} the body.</summary>
     public readonly string EndClothGapFmt = ProteusLoc.Localize("SizeSet.EndClothGap.Fmt",
@@ -368,7 +395,21 @@ public sealed class AutoRefitStrings
     public readonly string EndsKept = ProteusLoc.Localize("AutoRefit.EndsKept",
         "Gloves and shoes keep the hands and feet they were made with; only the arms and legs they reach are refitted.");
 
-    public readonly string Clear = ProteusLoc.Localize("AutoRefit.Clear", "Forget this collection's body") + "###autoRefitClear";
+    /// <summary>The "Forget this collection's body" button's text, as other text names it.</summary>
+    public readonly string ClearLabel = ProteusLoc.Localize("AutoRefit.Clear", "Forget this collection's body");
+
+    public string Clear => ClearLabel + "###autoRefitClear";
+
+    public readonly string RueSplitFmt = ProteusLoc.Localize("AutoRefit.RueSplit.Fmt",
+        "{0} on a Rue body and {1} on another. Rue's parts only meet Rue's, so gear that reaches both sides is refitted on "
+      + "its own part's side only; the rest of it keeps its size. To put one body on every part, press \"{2}\" and pick "
+      + "that body again.");
+
+    public readonly string RueSplitShoes = ProteusLoc.Localize("AutoRefit.RueSplit.Shoes",
+        "Shoes may be left as they are while the feet and legs are on different sides of that line.");
+
+    public readonly string RueSplitGloves = ProteusLoc.Localize("AutoRefit.RueSplit.Gloves",
+        "Gloves may be left as they are while the hands and chest are on different sides of that line.");
 
     public readonly string RunNow = ProteusLoc.Localize("AutoRefit.RunNow", "Refit what I'm wearing now") + "###autoRefitRunNow";
 
@@ -2193,6 +2234,52 @@ public sealed class ColorsStrings
         "How far the fold is smoothed. 1.00 flattens it into the surrounding curve; lower values keep\n"
       + "more of it.");
 
+    public readonly string ToeCap = ProteusLoc.Localize("Colors.ToeCap.Label", "Cap the toes");
+
+    public readonly string ToeCapTip = ProteusLoc.Localize("Colors.ToeCap.Tip",
+        "Turn this on for stockings and socks.\n"
+      + "Proteus builds a garment as a copy of the body, so by default it follows every toe —\n"
+      + "which reads as painted on rather than worn. With this on, the toes are covered by one\n"
+      + "rounded toe box, the way real hosiery fits. It shapes only a garment that covers the toes.\n"
+      + "This is the \"Toe Cap\" option in this mod's Masks group in Penumbra: it is saved in your\n"
+      + "collection, not in the mod, and a Glamourer design that includes this mod keeps it.");
+
+    public readonly string ToeCapHeldTip = ProteusLoc.Localize("Colors.ToeCap.Held.Tip",
+        "A Glamourer design (or another plugin) is holding this mod's settings right now, so a\n"
+      + "change here wouldn't show. Change \"Toe Cap\" in the Masks group of that design instead.");
+
+    public readonly string ToeCapInheritedNote = ProteusLoc.Localize("Colors.ToeCap.Inherited.Note",
+        "This collection inherits this mod's settings. Changing this gives it its own setting\n"
+      + "for the mod, as changing it in Penumbra would.");
+
+    public readonly string ToeCapFailedFmt = ProteusLoc.Localize("Colors.ToeCap.Failed.Fmt",
+        "Penumbra didn't take the change: {0}");
+
+    public readonly string ToeCapModOff = ProteusLoc.Localize("Colors.ToeCap.ModOff",
+        "This mod is off in your collection, so the cap won't show until you turn it on.");
+
+    public readonly string ToeCapNoShell = ProteusLoc.Localize("Colors.ToeCap.NoShell",
+        "Nothing this mod shows becomes a garment on the body (it's pinned to Skin, a print, on the\n"
+      + "face or hair rather than the body, or its author set it to skip the toe cap), so the cap has\n"
+      + "nothing of this mod's to shape. It still shapes another mod's garment over the toes.");
+
+    public readonly string ToeCapFlagTip = ProteusLoc.Localize("Colors.ToeCap.Flag.Tip",
+        "Turn this on for stockings and socks: the toes are covered by one rounded toe box, the way\n"
+      + "real hosiery fits, instead of following every toe.\n"
+      + "Ticking it turns this mod's skin layers into a garment (a second skin) so the cap has\n"
+      + "something to shape — that costs a rebuild, and a print or a layer pinned to Skin stays as it is.\n"
+      + "The toe box is made for Bibo+, Neolithe, Rue and YAB; on other bodies the garment is built\n"
+      + "but the toes stay as they are.\n"
+      + "This mod has no toe cap of its own, so this is saved in the mod's Proteus settings: it applies\n"
+      + "in every collection and goes with the mod when you export it.");
+
+    public readonly string ToeCapLockedTip = ProteusLoc.Localize("Colors.ToeCap.Locked.Tip",
+        "This mod's own \"Toe Cap\" option is selected in Penumbra, in a Masks group that allows only\n"
+      + "one choice, so it can't be turned off here. Change it in Penumbra.");
+
+    public readonly string ToeCapSaveFailed = ProteusLoc.Localize("Colors.ToeCap.SaveFailed",
+        "Couldn't save this mod's Proteus settings, so the change was undone. The log (/xllog) has the reason.");
+
     public readonly string WholeSkinTip = ProteusLoc.Localize("Colors.WholeSkin.Tip",
         "Turn this on for a converted skin mod — art that IS the skin, not something laid on it.\n"
       + "It moves two settings together, and they only work as a pair.\n"
@@ -2883,6 +2970,24 @@ public sealed class PartsStrings
 
     public readonly string RetargetToBody =ProteusLoc.Localize("Parts.Retarget.ToBody", "Refit onto body");
 
+    public readonly string RetargetPartBodySameFmt = ProteusLoc.Localize("Parts.Retarget.PartBody.Same.Fmt",
+        "Same as above ({0})");
+
+    public readonly string RetargetPartBodyTip = ProteusLoc.Localize("Parts.Retarget.PartBody.Tip",
+        "The body mod this part is refitted onto. A long dress's legs can go onto another body than its chest.");
+
+    public readonly string RetargetPartBodyKeptOnOwnFmt = ProteusLoc.Localize("Parts.Retarget.PartBody.KeptOnOwn.Fmt",
+        "This can't be done yet: the {0} stays on {1}, the body this garment was made for, while the {2} goes onto another "
+      + "body. A refit can't move only some parts off the body a garment was made for; that part's skin would be lost or "
+      + "folded. It works when the {0} is refitted onto another body mod too.");
+
+    public readonly string RetargetPartBodyRueApartFmt = ProteusLoc.Localize("Parts.Retarget.PartBody.RueApart.Fmt",
+        "{0} is a Rue body and {1} isn't. Rue's waist only meets Rue's, so check the waist in the preview.");
+
+    public readonly string RetargetPartBodySetAsideFmt = ProteusLoc.Localize("Parts.Retarget.PartBody.SetAside.Fmt",
+        "Left out for now: this part is set to its own body, {0}, which only a whole-garment refit with no race picked "
+      + "under \"Refit for\" can use. It comes back when that's so.");
+
     public readonly string RetargetFromBody = ProteusLoc.Localize("Parts.Retarget.FromBody", "Made for body");
 
     public readonly string RetargetFromBodyTip = ProteusLoc.Localize("Parts.Retarget.FromBody.Tip",
@@ -3168,6 +3273,16 @@ public sealed class PartsStrings
     public readonly string RetargetNoChestInBodyFmt = ProteusLoc.Localize("Parts.Retarget.NoChestInBody.Fmt",
         "{0} has no chest to refit by, so the whole piece is refitted.");
 
+    /// <summary>{0}: a body mod's name; {1}: the part, as <see cref="RetargetChest"/>, <see cref="RetargetLegs"/>, ….</summary>
+    public readonly string RetargetNoSlotInBodyFmt = ProteusLoc.Localize("Parts.Retarget.NoSlotInBody.Fmt",
+        "{0} has no sizes for this part ({1}). Pick a body mod that has them.");
+
+    /// <summary>{0}: the name of the body mod the character wears for this part.</summary>
+    public readonly string RetargetUseWornBodyFmt = ProteusLoc.Localize("Parts.Retarget.UseWornBody.Fmt", "Use {0}");
+
+    public readonly string RetargetUseWornBodyTip = ProteusLoc.Localize("Parts.Retarget.UseWornBody.Tip",
+        "Refit onto the body mod you're wearing for this part. The same as picking it under \"Refit onto body\".");
+
     public readonly string RetargetSwapShapesFmt = ProteusLoc.Localize("Parts.Retarget.SwapShapes.Fmt",
         "{0} shape key(s) lost to the skin swap. Untick \"Use the new body's skin\" to keep them.");
 
@@ -3221,7 +3336,36 @@ public sealed class PartsStrings
     public readonly string RetargetRaceLabel = ProteusLoc.Localize("Parts.Retarget.Race.Label", "Refit for");
 
     public readonly string RetargetRaceTip = ProteusLoc.Localize("Parts.Retarget.Race.Tip",
-        "Which race the refit is for. Another race gets its own model, made from this one the way the game bends it, refitted onto that race's body and saved where that race loads it. A Midlander chest or legs garment can also be refitted for the other sex. This model stays as it is.");
+        "Which race the refit is for. Another race gets its own model, made from this one the way the game bends it, refitted onto that race's body and saved where that race loads it. A Midlander chest or legs garment, or a women's shoe or glove for men, can also be refitted for the other sex. This model stays as it is.");
+
+    // ── a women's shoe or glove refitted for men ──
+
+    public readonly string RetargetCrossSexEndNoLimb = ProteusLoc.Localize("Parts.Retarget.CrossSexEnd.NoLimb",
+        "It reaches no leg or arm to tell its size by. Refitted for the other sex, it is refitted through them all the same: pick the legs or chest size it was made on.");
+
+    public readonly string RetargetCrossSexEndNoSizes = ProteusLoc.Localize("Parts.Retarget.CrossSexEnd.NoSizes",
+        "None of the sizes picked to refit onto could be found on that body any more. Pick them again.");
+
+    public readonly string RetargetKeepEndsCrossSexTip = ProteusLoc.Localize("Parts.Retarget.KeepEnds.CrossSex.Tip",
+        "Refitted for the other sex, a shoe always keeps its own foot and a glove its own hand, with the new body's skin: only the leg or arm is refitted, through the body maps.");
+
+    public readonly string RetargetEndsUnreadableCrossSex = ProteusLoc.Localize("Parts.Retarget.EndsUnreadable.CrossSex",
+        "Its rig can't be read, so its foot or hand can't be told from the rest, and a shoe or glove is only refitted for the other sex with them kept.");
+
+    public readonly string RetargetKeepShapeCrossSexTip = ProteusLoc.Localize("Parts.Retarget.KeepShape.CrossSexTip",
+        "Refitted for the other sex, a shoe's leg or a glove's arm is refitted as one: “Keep shape” doesn't apply. Your ticks come back when you pick its own race again.");
+
+    /// <summary>{0} is the made-for body's name, {1} the part (legs or chest), as <see cref="RetargetLegs"/>.</summary>
+    public readonly string RetargetCrossSexEndPickMadeForFmt = ProteusLoc.Localize("Parts.Retarget.CrossSexEnd.PickMadeFor.Fmt",
+        "It has no skin to tell its size by, and its cloth sits on none of {0}'s {1} sizes. Under “Made for body”, pick the body it was made for (the game's own body, if that's what it was made on), then its size.");
+
+    /// <summary>{0} the size picked; {1} the share of the body it matched; {2} the nude size fitted instead; {3} its share.</summary>
+    public readonly string RetargetRaceCrossSexNudeFmt = ProteusLoc.Localize("Parts.Retarget.Race.CrossSexNude.Fmt",
+        "{0} matched only {1} of the body, so it was fitted to {2} instead ({3} matched).");
+
+    /// <summary>{0} is "Midlander F", {1} "Midlander M".</summary>
+    public readonly string RetargetRaceWomensModelFmt = ProteusLoc.Localize("Parts.Retarget.Race.WomensModel.Fmt",
+        "This mod also has its own {0} model of this item. To make a {1} version from it, open it: “{1}” is picked under “Refit for” for you.");
 
     /// <summary>{0} is a race of the other sex such as "Midlander M"; {1} the race of the model open.</summary>
     public readonly string RetargetRaceOtherSexFmt = ProteusLoc.Localize("Parts.Retarget.Race.OtherSex.Fmt",

@@ -22,8 +22,80 @@ internal static class RetargetInputs
         public bool KeepEnds => EndSlot != null;
     }
 
+    /// <summary>
+    /// The part a garment is laid out as: its own, whatever the body mod offers. Another part never stands in for it —
+    /// a leg piece shown the chest's sizes as its own is the wrong garment's refit. A body mod without the part is
+    /// said so instead (<see cref="MissingSlot"/>). Only a garment that is no body part (an accessory) takes the body
+    /// mod's first part, as it always has.
+    /// </summary>
+    internal static string GarmentSlot(string? own, IEnumerable<string> offered)
+        => own ?? offered.FirstOrDefault() ?? "_top";
+
+    /// <summary>The part the layout needs sizes of that the body mod has none of, or null when it has them.</summary>
+    internal static string? MissingSlot(IEnumerable<string> offered, Layout layout)
+        => offered.Contains(layout.Primary) ? null : layout.Primary;
+
     /// <summary>Whether a garment in <paramref name="slot"/> can keep its ends at all, which is when the box is shown.</summary>
     internal static bool OffersKeepEnds(string slot) => AutoRefitDecisions.LimbOf(slot) != null;
+
+    // ── a women's shoe or glove refitted for men ("Refit for", see CrossSexRefit.EndsCross) ──
+
+    /// <summary>
+    /// Whether the race picked under "Refit for" makes a shoe or glove a men's: read from the pick and what is offered,
+    /// never from the bake, so the answer is the same while the bake runs as once it has landed.
+    /// </summary>
+    internal static bool CrossSexEnd(ushort chosen, ushort drawn, IReadOnlyList<OtherRaceRefit.Candidate> offered,
+                                     string wornSlot)
+        => chosen != 0 && chosen != drawn && offered.Any(c => c.Race == chosen && c.CrossSex)
+           && AutoRefitDecisions.LimbOf(wornSlot) != null;
+
+    /// <summary>
+    /// <see cref="CrossSexEnd"/> from what the panel knows before anything else is worked out each frame — the garment's
+    /// own path, the pick and the offered races — false while no body mod is read or picked. Touches no panel state.
+    /// </summary>
+    internal static bool CrossSexEndOf(string gamePath, ushort chosen, IReadOnlyList<OtherRaceRefit.Candidate> offered,
+                                       bool hasCatalog)
+        => hasCatalog && BodySizeCatalog.SlotOf(gamePath) is { } slot
+           && CrossSexEnd(chosen, ModelSkinReader.RaceOf(gamePath), offered, slot);
+
+    /// <summary>The keep-ends box as it is in force: the user's tick, or on under a crossed end, which always keeps them.
+    /// The user's own tick is left as it was, and comes back with the drawn race.</summary>
+    internal static bool KeepEndsInForce(bool userTick, bool crossEnd) => userTick || crossEnd;
+
+    /// <summary>"Use the new body's skin" as it is in force: always on under a crossed end, for every box that hangs on it.</summary>
+    internal static bool EffectiveReplaceSkin(bool replaceSkin, bool crossEnd) => replaceSkin || crossEnd;
+
+    /// <summary>The parts kept in shape as the plan reads them: none under a crossed end, whose job refits the leg or arm
+    /// as one. The user's ticks are left as they were.</summary>
+    internal static IReadOnlyCollection<string>? ShapesFor(bool crossEnd, IReadOnlyCollection<string>? keepShape)
+        => crossEnd ? null : keepShape;
+
+    /// <summary>A part's "Keep shape" box: whether it can be ticked, whether it shows ticked, and whether its tooltip says
+    /// it doesn't apply under a crossed end.</summary>
+    internal static (bool Enabled, bool Ticked, bool CrossTip) KeepShapeBox(bool moves, bool keeps, bool crossEnd)
+        => crossEnd ? (false, false, true) : (moves, moves && keeps, false);
+
+    /// <summary>
+    /// Why a crossed shoe or glove can't keep its foot or hand, worded for the user; null when it can. It is never refitted
+    /// whole across the sexes instead.
+    /// </summary>
+    /// <param name="drawnRace">The drawn race, "0201".</param>
+    /// <remarks>A refit-onto body without the leg or arm is only reachable on a stale pick ("Refit for" isn't offered
+    /// then): its sizes are asked for again. Never "the whole piece is refitted", which a crossed end never is.</remarks>
+    internal static string? CrossSexEndRefusal(bool endsUnreadable, bool sourceHasLimb, bool targetHasLimb,
+                                               string drawnRace)
+    {
+        var ps = Localization.Strings.Parts;
+        if (endsUnreadable) return ps.RetargetEndsUnreadableCrossSex;
+        if (!sourceHasLimb) return string.Format(ps.RetargetRefuseCrossSexMadeForFmt, ModelRace.Describe(drawnRace));
+        if (!targetHasLimb) return ps.RetargetCrossSexEndNoSizes;
+        return null;
+    }
+
+    /// <summary>Whether to say what to pick for a crossed piece with no skin to tell its size by: read with no skin and no
+    /// size, and none chosen yet. A skinned piece that reaches no leg keeps its own line (NoLimbFeet/Hands).</summary>
+    internal static bool CrossSexEndHint(bool crossEnd, KeepEnds.StudioReading? read, bool limbChosen)
+        => crossEnd && !limbChosen && read is { Pick: null, Route: KeepEnds.Route.NoSkin };
 
     /// <summary>
     /// The layout, from what is known at once — never from a reading still on its way, so the rows do not change under
@@ -62,9 +134,13 @@ internal static class RetargetInputs
     /// Every slot worth offering, the required one first: the others with more than one model to choose between, and
     /// never the kept end.
     /// </summary>
-    internal static List<string> Slots(Layout layout, IEnumerable<string> catalogSlots, Func<string, int> distinct)
+    /// <param name="onlyPrimary">A shoe or glove refitted for the other sex (<see cref="CrossSexEnd"/>): its job refits the
+    /// leg or arm alone, so no other row is offered — none would be silently left out.</param>
+    internal static List<string> Slots(Layout layout, IEnumerable<string> catalogSlots, Func<string, int> distinct,
+                                       bool onlyPrimary = false)
     {
         var slots = new List<string> { layout.Primary };
+        if (onlyPrimary) return slots;
         foreach (string slot in catalogSlots)
             if (slot != layout.Primary && slot != layout.EndSlot && distinct(slot) > 1) slots.Add(slot);
         return slots;
@@ -208,16 +284,22 @@ internal static class RetargetInputs
     /// <param name="pieces">Pieces moved whole (see <see cref="BodyRetarget.KeepShape"/>).</param>
     /// <param name="carryPiercings">See <see cref="CarryPiercings"/>.</param>
     /// <param name="liftUnderbust">See <see cref="BodyRetarget.Plan"/>.</param>
+    /// <param name="trace">See <see cref="BodyRetarget.Plan"/>: for tests measuring inside the pass.</param>
     internal static BodyRetarget.Planned StudioPlan(ModelParts garment, byte[] bytes, IReadOnlyList<BodyRetarget.SlotPair> pairs,
                                                     string garmentSlot, IReadOnlySet<int>? held, bool layOnBody,
                                                     bool acrossBodies, StudioSkinRule rule, bool cut,
                                                     IReadOnlyList<IReadOnlyCollection<int>>? pieces, bool carryPiercings,
-                                                    bool liftUnderbust, Action<string>? log = null, Action<string>? warn = null)
+                                                    bool liftUnderbust, Action<string>? log = null, Action<string>? warn = null,
+                                                    Action<string, SecondSkinWriter.Vec3[]>? trace = null)
         => BodyRetarget.Plan(garment, bytes, pairs, garmentSlot, held: held, replaceSkin: layOnBody,
                              acrossBodies: acrossBodies, clearBody: rule.ClearBody, cutHidden: cut, keepShape: pieces,
-                             log: log, warn: warn, tuckSlot: rule.TuckSlot, deepClear: rule.DeepClear,
+                             log: log, warn: warn, trace: trace, tuckSlot: rule.TuckSlot, deepClear: rule.DeepClear,
                              keepStandoff: rule.KeepStandoff, carryPiercings: carryPiercings,
                              liftUnderbust: liftUnderbust, seeInside: rule.SeeInside, relaxSinkGuard: rule.RelaxSinkGuard);
+
+    /// <summary>The size a kept-end refit takes as chosen in the body mod's options (see <see cref="BodyRetarget.BodyDraw.Onto"/>):
+    /// the one target when there is one; with several they share the slot's selection, so none is.</summary>
+    internal static BodyOption? OverlayFor(IReadOnlyList<BodyOption> limbTargets) => limbTargets.Count == 1 ? limbTargets[0] : null;
 
     /// <summary>The headless refit's <c>--piercings</c>: the new body's piercings come in only when it is given.</summary>
     internal static bool CliCarryPiercings(IReadOnlyDictionary<string, string> opts) => opts.ContainsKey("piercings");
@@ -227,13 +309,16 @@ internal static class RetargetInputs
     /// A plan whose key no longer matches is stale. The piercings choice counts only where it changes the plan (see
     /// <see cref="CarryPiercings"/>): never on a skin-only redraw, which swaps nothing.
     /// </summary>
+    /// <param name="partBodies">The parts going onto a body of their own, by slot (see <see cref="StudioPartBodies"/>):
+    /// only those taking part, none while set aside. Without any the key is what it always was.</param>
     /// <param name="gameTop">The game's own top's rule applies (see <see cref="StudioSkinRule.ClearForced"/>): a plan made
     /// under it is never shown or saved for the garment judged a mod's, nor the other way round.</param>
     internal static string Key(string modelRel, string? fromBodyDir, Inputs inputs, IReadOnlyList<string> chosen,
                                IReadOnlyDictionary<string, BodyOption> from,
                                IReadOnlyDictionary<string, List<BodyOption>> to, IEnumerable<string> held,
                                IEnumerable<string>? keepShape, bool replaceSkin, bool cutHidden, bool clearBody,
-                               bool carryPiercings = false, bool gameTop = false)
+                               bool carryPiercings = false, bool gameTop = false,
+                               IReadOnlyDictionary<string, string>? partBodies = null)
         => modelRel + "|from:" + (fromBodyDir ?? "") + "|"
          + string.Join("|", chosen.Select(s => $"{s}:{from[s].Rel}>{string.Join(",", to[s].Select(t => t.Rel))}"))
          + "|held:" + string.Join(",", held.OrderBy(h => h, StringComparer.Ordinal))
@@ -246,5 +331,9 @@ internal static class RetargetInputs
          + (inputs.SkinOnly && inputs.EndSlot != null && from.TryGetValue(inputs.EndSlot, out var own)
                 ? "|skin:" + own.Rel + ">" + string.Join(",", inputs.PrimaryTargets.Select(t => t.Rel))
                 : "")
-         + (gameTop ? "|gametop" : "");
+         + (gameTop ? "|gametop" : "")
+         // Two body mods laid out alike share every rel: the bodies a part goes onto are part of what a plan was made from.
+         + (partBodies is { Count: > 0 }
+                ? "|bodies:" + string.Join(",", partBodies.OrderBy(p => p.Key, StringComparer.Ordinal).Select(p => $"{p.Key}={p.Value}"))
+                : "");
 }

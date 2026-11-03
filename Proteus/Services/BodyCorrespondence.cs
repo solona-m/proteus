@@ -40,7 +40,8 @@ internal static class BodyCorrespondence
                                 UVRemapService? uvRemap = null, bool male = false, bool? targetMale = null)
         => TryBuild(source, sourceUv, target, targetUv, what, out correspondence, out refusal, out _, uvRemap, male, targetMale);
 
-    /// <summary>As above, also giving how the atlas landed (null for an identity match).</summary>
+    /// <summary>As above, also giving how the atlas landed (null for an identity match). On a refusal it is null —
+    /// except across the sexes, where a refusal for too little coverage still says how much landed.</summary>
     internal static bool TryBuild(ModelParts source, float[] sourceUv, ModelParts target, float[] targetUv, string what,
                                   out IBodyCorrespondence? correspondence, out string refusal,
                                   out UvAtlasCorrespondence.Stats? stats,
@@ -157,6 +158,10 @@ internal static class BodyCorrespondence
             stats = measured;
             return true;
         }
+        // Refused for too little coverage — the one refusal measured before it is made: say how much landed, so a refit
+        // can try the same body's nude smallclothes instead (CrossSexRefitJob). Every other refusal (unreadable uvs, no
+        // skin on the target, a body drawn off its sheet) comes before anything was placed, and gives none.
+        if (measured.Placeable > 0) stats = measured;
         return false;
     }
 

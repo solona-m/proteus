@@ -160,7 +160,8 @@ public sealed partial class SecondSkinService
     public SecondSkinService(
         PenumbraBridge penumbra, TextureLoader textureLoader, SidecarDiscoveryService discovery,
         UVRemapService uvRemap, Configuration config, IPluginLog log,
-        Func<string, string?>? resolveUpstream = null, Func<string, string?>? settledUpstream = null)
+        Func<string, string?>? resolveUpstream = null, Func<string, string?>? settledUpstream = null,
+        Func<string?>? modsRoot = null)
     {
         this.penumbra = penumbra;
         this.textureLoader = textureLoader;
@@ -170,30 +171,61 @@ public sealed partial class SecondSkinService
         this.log = log;
         this.resolveUpstream = resolveUpstream;
         this.settledUpstream = settledUpstream;
+        this.modsRootOf = modsRoot;
+        // Read on first use (AssemblyDir is set after construction), then shared: overlapping shell builds all see one
+        // fully loaded list, never a half-filled one.
+        authoredCaps = new(() => LoadAuthoredCaps(discovery.AssemblyDir, log),
+                           LazyThreadSafetyMode.ExecutionAndPublication);
+    }
+
+    /// <summary>Penumbra's mods folder, as the compositor already knows it: no IPC per build.</summary>
+    private readonly Func<string?>? modsRootOf;
+
+    /// <summary>
+    /// A mod's settings in the player's collection, temporary ones included (what Glamourer sets), for
+    /// <see cref="ShellBodyAtr"/>. Null when they cannot be read. Marshals onto the framework thread and blocks, so it
+    /// must only be called from a pool thread.
+    /// </summary>
+    internal ShellBodyAtr.ModSettings? PlayerModSettings(string modDir)
+    {
+        try
+        {
+            return Plugin.Framework.RunOnFrameworkThread(() =>
+                    penumbra.GetPlayerCollectionId() is { } id && penumbra.GetModSettings(id, modDir) is { } s
+                        ? new ShellBodyAtr.ModSettings(s.Enabled, s.Options)
+                        : (ShellBodyAtr.ModSettings?)null)
+                .GetAwaiter().GetResult();
+        }
+        catch (Exception ex)
+        {
+            log.Warning("[Proteus] second skin: could not read {0}'s Penumbra settings ({1}) — every shape its "
+                        + "options switch is covered", modDir, ex.Message);
+            return null;
+        }
     }
 
     /// <summary>
     /// The hand-modelled toe boxes shipped beside the plugin, read once. Empty when missing or unparseable; additive.
     /// </summary>
-    private readonly List<SecondSkinWriter.AuthoredCapSet> authoredCaps = [];
-    private bool authoredCapTried;
+    private readonly Lazy<IReadOnlyList<SecondSkinWriter.AuthoredCapSet>> authoredCaps;
 
-    private IReadOnlyList<SecondSkinWriter.AuthoredCapSet> AuthoredCaps()
+    internal IReadOnlyList<SecondSkinWriter.AuthoredCapSet> AuthoredCaps() => authoredCaps.Value;
+
+    /// <summary>The toe caps in <c>&lt;assemblyDir&gt;/Meshes</c>, each with its binding. Never throws.</summary>
+    internal static IReadOnlyList<SecondSkinWriter.AuthoredCapSet> LoadAuthoredCaps(string? assemblyDir, IPluginLog log)
     {
-        if (authoredCapTried) return authoredCaps;
-        authoredCapTried = true;
+        var caps = new List<SecondSkinWriter.AuthoredCapSet>();
         try
         {
-            var dir = discovery.AssemblyDir;
-            if (dir == null) return authoredCaps;
+            if (assemblyDir == null) return [];
             // One cap per body (toecap.mdl / toecap.<body>.mdl), each with its binding; a binding carries a cap across foot
             // models of its body, not to another body. The writer picks by which binding places best.
-            var meshDir = Path.Combine(dir, "Meshes");
+            var meshDir = Path.Combine(assemblyDir, "Meshes");
             if (Directory.Exists(meshDir))
                 foreach (var mp in Directory.GetFiles(meshDir, "toecap*.mdl").OrderBy(x => x))
                 {
                     var bindPath = Path.ChangeExtension(mp, ".bind");
-                    authoredCaps.Add(new SecondSkinWriter.AuthoredCapSet(
+                    caps.Add(new SecondSkinWriter.AuthoredCapSet(
                         File.ReadAllBytes(mp),
                         File.Exists(bindPath) ? File.ReadAllBytes(bindPath) : null,
                         Path.GetFileNameWithoutExtension(mp)));
@@ -201,18 +233,92 @@ public sealed partial class SecondSkinService
                         Path.GetFileName(mp),
                         File.Exists(bindPath) ? "" : " (no binding — fits one foot only)");
                 }
-            if (authoredCaps.Count == 0)
+            if (caps.Count == 0)
                 log.Debug("[Proteus] second skin: no authored toe cap in {0}", meshDir);
         }
         catch (Exception ex)
         {
             log.Warning(ex, "[Proteus] second skin: could not load the authored toe cap");
         }
-        return authoredCaps;
+        return caps.ToArray();
     }
 
-    /// <summary>Last cap lines logged, so a recomposite doesn't repeat them.</summary>
-    private string? lastCapDeclined, lastCapUsed;
+    /// <summary>
+    /// The last cap outcome logged per host ("used:…", "declined:…" or "none"), so a recomposite doesn't repeat it and
+    /// a feet host and a legs host in one look don't take turns re-logging. Touched once per host per build.
+    /// </summary>
+    private readonly Dictionary<string, string> capOutcomeByHost = new(StringComparer.Ordinal);
+    private readonly object capLogGate = new();
+
+    /// <summary>The Meshes folder last warned about as missing every toe cap.</summary>
+    private string? lastCapsMissing;
+
+    /// <summary>Store <paramref name="outcome"/> for <paramref name="hostKey"/>; true when it differs from the last one.</summary>
+    internal static bool OutcomeChanged(Dictionary<string, string> byHost, object gate, string hostKey, string outcome)
+    {
+        lock (gate)
+        {
+            if (byHost.TryGetValue(hostKey, out var last) && string.Equals(last, outcome, StringComparison.Ordinal))
+                return false;
+            byHost[hostKey] = outcome;
+            return true;
+        }
+    }
+
+    /// <summary>Whether a changed cap outcome is worth a log line: a placed or declined cap is; "none" is not.</summary>
+    internal static bool ShouldLog(string outcome) => !string.Equals(outcome, "none", StringComparison.Ordinal);
+
+    /// <summary>Atomically set <paramref name="last"/> to <paramref name="now"/>; true when that changed it.</summary>
+    internal static bool LogLineChanged(ref string? last, string? now)
+        => !string.Equals(Interlocked.Exchange(ref last, now), now, StringComparison.Ordinal);
+
+    /// <summary>What the built-in toe cap paints: the same flat value as the first toe-cap map that shipped.</summary>
+    internal const byte BuiltInToeCapValue = 187;
+
+    /// <summary>
+    /// The built-in toe cap, a fresh array per call (a build may hand it on to code that edits it). Uniform, so no UV
+    /// layout applies: it only says a cap is WANTED; the authored cap's own footprint decides where the toes are cut.
+    /// </summary>
+    internal static byte[] NewBuiltInToeCapMask()
+    {
+        var mask = new byte[ToeCapSize * ToeCapSize];
+        Array.Fill(mask, BuiltInToeCapValue);
+        return mask;
+    }
+
+    /// <summary>The shared cap mask for <paramref name="map"/>: the built-in one, or the own map read by <paramref name="readOwn"/>.</summary>
+    internal static byte[]? SharedCapMask(ToeCapMap map, Func<string, byte[]?> readOwn)
+        => map.BuiltIn ? NewBuiltInToeCapMask() : readOwn(map.OwnPath!);
+
+    /// <summary>
+    /// The mods whose map may become the shared cap, in priority order (<paramref name="priorityOrderedMods"/>, never the
+    /// dictionary's order), deduped, mods with their own map first: an author's map beats the built-in one.
+    /// </summary>
+    internal static List<(string Mod, ToeCapMap Map)> CapCandidates(
+        IEnumerable<string> priorityOrderedMods, IReadOnlyDictionary<string, ToeCapMap>? caps)
+    {
+        var found = new List<(string, ToeCapMap)>();
+        if (caps == null) return found;
+        var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var mod in priorityOrderedMods)
+            if (seen.Add(mod) && caps.TryGetValue(mod, out var map))
+                found.Add((mod, map));
+        return OrderCapCandidates(found).ToList();
+    }
+
+    /// <summary>Own maps first, then built-in; order kept within each.</summary>
+    internal static IEnumerable<(string Mod, ToeCapMap Map)> OrderCapCandidates(IEnumerable<(string Mod, ToeCapMap Map)> candidates)
+    {
+        var list = candidates.ToList();
+        return list.Where(c => !c.Map.BuiltIn).Concat(list.Where(c => c.Map.BuiltIn));
+    }
+
+    /// <summary>
+    /// The toe cap a layer carries: only on a body surface, and only when an authored cap loaded — without one the writer
+    /// would fall back to generating a cap from the mask, which a whole-sheet mask must never reach.
+    /// </summary>
+    internal static byte[]? LayerToeCap(bool isBody, bool capsAvailable, Func<byte[]?> toeCapFor)
+        => isBody && capsAvailable ? toeCapFor() : null;
 
     /// <summary>
     /// The last redundancy tally reported, so the line is not repeated on every rebuild.
@@ -246,7 +352,12 @@ public sealed partial class SecondSkinService
         // Append host game path (one of AppendHostModelPaths) → the disk file its base model was read from, when that
         // was a file rather than the game's own data: the only record of which mod supplies a ring the game now draws
         // out of our output.
-        Dictionary<string, string> AppendHostSources);
+        Dictionary<string, string> AppendHostSources)
+    {
+        /// <summary>The bare body parts this shell was cut from whose body mod switches shapes by option (NIRÆ's
+        /// chests), with what each left out: what a later settings change is compared against.</summary>
+        internal IReadOnlyList<ShellBodyAtr.Use> BodyAtrUses { get; init; } = [];
+    }
 
     /// <summary>
     /// One surface, resolved: the geometry a shell is cut from, sharing one UV layout and one race code.
@@ -1033,11 +1144,13 @@ public sealed partial class SecondSkinService
         // when the composite began (see CompositeRun): a woman's layer is carried into his layout only when both hold.
         bool wearerIsMan = false, bool menMapsReady = false,
         // Whether a mod's women's art may be painted on a man ("Overlay on men"); null allows every mod.
-        Func<string, bool>? menAllowed = null)
+        Func<string, bool>? menAllowed = null,
+        // This composite's toe-cap map per mod (CompositorService.ToeCapWanted); null = no cap anywhere.
+        IReadOnlyDictionary<string, ToeCapMap>? toeCaps = null)
     {
         return new ShellSetBuild(this, charCode, gearOverlays, outputRoot, bodyType, effectsFolder, equippedPartModels, equippedAccessories, gen2Allowed, invisibleGlassesSet, metModels, enabledBodyShapes, maskShellMods, bareBodyModels, drawnRaceCode, activeMaterials, emperorRingVariant, invisibleGlassesVariant, humanPartModels, contentLayers, allEntries, pristineHumanModels, shellTexSize, equippedSlotVariants, hiddenParts)
         {
-            WearerIsMan = wearerIsMan, MenMapsReady = menMapsReady, MenAllowed = menAllowed,
+            WearerIsMan = wearerIsMan, MenMapsReady = menMapsReady, MenAllowed = menAllowed, ToeCaps = toeCaps,
         }.Run();
     }
 

@@ -274,9 +274,12 @@ internal sealed partial class BodyRetargetPanel(PenumbraBridge penumbra, UVRemap
         recordFor = null;
         keepEnds = true;
         endsUnreadable = false;
+        bodyRestoredFor = null;
         studio = null;
         lastLayout = null;
         gameHas.Clear();
+        candidateFor = null;
+        partBodies = new Dictionary<string, string>(StringComparer.Ordinal);
     }
 
     /// <summary>The race the open garment is made for (<c>"0101"</c>), which every option list is filtered to.</summary>
@@ -385,6 +388,12 @@ internal sealed partial class BodyRetargetPanel(PenumbraBridge penumbra, UVRemap
             saveTo = SwitchingGroup(given);
         }
 
+        // Before anything reads the pick this frame: a pick left by the men's model's "open the women's" button, and
+        // whether the pick makes a shoe or glove a men's — from the path and the pick alone, safe while no body mod is
+        // read yet (the parts list greys "Keep shape" by it, from the pick on).
+        TakePendingPick(given);
+        CrossSexEndOpen = RetargetInputs.CrossSexEndOf(given.GamePath, ChosenRace(given), Offered(given), catalog != null);
+
         // A garment drawn from another race's model is refitted as a model of the wearer's own, made first. Until it
         // is, nothing below can be offered: every size list is filtered by the race it will have.
         var ctx = Effective(given, out bool baking);
@@ -415,7 +424,14 @@ internal sealed partial class BodyRetargetPanel(PenumbraBridge penumbra, UVRemap
             vanillaSourceTried = false;
         }
 
-        if (bodyDir == null && bodies != null && !RestoreBody()) PickWornBody(ctx);
+        // The body remembered for this garment's part: after the race is known (it decides whether a body sizes the
+        // garment) and ahead of everything decided for the body. A switch is decided on afresh next frame.
+        if (bodies != null && bodyRestoredFor != GarmentKey(ctx) && RestoreForGarment(ctx))
+        {
+            DrawSaved(ctx);
+            return;
+        }
+        if (bodyDir == null && bodies != null) PickWornBody(ctx);
 
         // Ahead of PresetWornTargets below, which is what makes the remembered size win over the worn one. Moving this
         // after it would silently reverse that.
@@ -423,26 +439,42 @@ internal sealed partial class BodyRetargetPanel(PenumbraBridge penumbra, UVRemap
 
         // Top to bottom as the refit reads: where the garment comes from — its body mod, then its size — and where it
         // goes — the body mod, then the size.
-        DrawSourceBodyPicker();
+        DrawSourceBodyPicker(ctx);
         DrawNoBodiesFor(SourceCatalog, SourceDir);
-        bool ready = Onto is { IsBody: true } onto && onto.SlotsFor(race).Any();
-        List<string> slots = [];
-        if (ready)
+
+        // Whether there are rows to draw: the body mod sizes this garment's own part — or, for a shoe or glove keeping
+        // its ends, the leg or arm it is refitted by. A body mod without it is said so, never stood in for by another
+        // part: a leg piece shown the chest's sizes would be refitted as a top.
+        bool hasBodies = Onto is { IsBody: true } onto && onto.SlotsFor(race).Any();
+        RetargetInputs.Layout? layout = null;
+        string? missing = null;
+        if (hasBodies)
         {
             // The rows changed — the box toggled, a body without legs chosen, or the rig turned out unreadable: what was
-            // detected, preset and remembered was for the old rows. The old choices are kept, only not offered.
-            var layout = Layout(ctx);
-            if (RetargetInputs.Flips(lastLayout, layout))
+            // detected, preset and remembered was for the old rows. The old choices are kept, only not offered. Ahead of
+            // the check below, so a flip into a part the body mod has no sizes of still takes a shown refit down; after
+            // the "made for" picker, so a pick there that changes the rows is seen in the same frame.
+            layout = Layout(ctx);
+            // Every frame, not only on a flip — a race change clears the rows' memory — and ahead of the flip's check of
+            // the new garment part: that part never keeps a body of its own (see StudioPartBodies.DropsForPrimary).
+            DropPrimaryPartBody(layout.Value.Primary);
+            if (RetargetInputs.Flips(lastLayout, layout.Value))
             {
                 wornFor = null;
                 appliedFor = null;
                 detectedFor = null;
                 studio = null;
                 DropPlan(ctx);
-                StartValidate(layout.Primary);
+                StartValidate(layout.Value.Primary);
             }
             lastLayout = layout;
-
+            missing = RetargetInputs.MissingSlot(Onto!.SlotsFor(race), layout.Value);
+        }
+        bool ready = hasBodies && missing == null;
+        if (layout is { } shown) DrawSourceMissing(shown);
+        List<string> slots = [];
+        if (ready)
+        {
             // A different model opened under the same body: the old detection was about the old model.
             if (detectedFor != ctx.ModelRel && detectTask == null) StartDetect(ctx);
 
@@ -465,9 +497,27 @@ internal sealed partial class BodyRetargetPanel(PenumbraBridge penumbra, UVRemap
         }
 
         ImGui.Separator();
+        string? bodyBefore = bodyDir;
         DrawBodyPicker(ctx);
+        // A body picked this frame: everything above was decided for the old one. The next frame decides afresh.
+        if (bodyDir != bodyBefore)
+        {
+            DrawSaved(ctx);
+            return;
+        }
+        DrawWomensModel(ctx);
         DrawRacePicker(ctx);
         if (fromBodyDir != null) DrawNoBodiesFor(catalog, bodyDir);
+        if (missing != null)
+        {
+            // The box first: unticked, it is what made the feet or hands the missing part, and it stays in reach.
+            DrawKeepEnds(ctx);
+            using (ImRaii.PushColor(ImGuiCol.Text, ProteusStyle.Warn))
+                ImGui.TextWrapped(string.Format(ps.RetargetNoSlotInBodyFmt, BodyName(bodyDir), SlotName(missing)));
+            DrawWornBodyButton(ctx, missing);
+            DrawSaved(ctx);
+            return;
+        }
         if (!ready)
         {
             ImGui.TextWrapped(bodies == null ? ps.RetargetFindingBodies : ps.RetargetPickBody);
@@ -484,17 +534,26 @@ internal sealed partial class BodyRetargetPanel(PenumbraBridge penumbra, UVRemap
             // Both ends, not just a size to refit onto: the remembered sizes fill in every part, and a part with no
             // "made for" size beside it is not being refitted. Counting those would make a closed panel claim work it
             // is not doing.
-            int inUse = slots.Skip(1).Count(s => Targets(s).Count > 0 && from.ContainsKey(s));
+            // Chosen, so a part set aside with its own body (see StudioPartBodies.TakingPart) is not counted.
+            int inUse = Chosen(ctx).Count(s => s != slots[0]);
             string header = (inUse > 0 ? string.Format(ps.RetargetOtherPartsInUseFmt, inUse) : ps.RetargetOtherParts)
                           + "###retargetOtherParts";
             if (ImGui.CollapsingHeader(header))
             {
                 ImGui.TextDisabled(ps.RetargetSlotOptionalTip);
+                bool offered = PartsOffered(ctx);
+                string? keptOnOwn = offered ? KeptOnOwnWhy(ctx) : null;
                 foreach (string slot in slots.Skip(1))
                 {
                     DrawSlotHeading(ctx, slot);
                     DrawSlotFrom(ctx, slot);
+                    // A body of its own for this part: only for the whole garment, with no race picked under "Refit for".
+                    if (offered) DrawSlotBody(ctx, slot);
                     DrawSlotTo(ctx, slot);
+                    DrawSetAside(ctx, slot);
+                    if (keptOnOwn != null && partBodies.ContainsKey(slot) && Chosen(ctx).Contains(slot))
+                        using (ImRaii.PushColor(ImGuiCol.Text, ProteusStyle.Warn))
+                            ImGui.TextWrapped(keptOnOwn);
                 }
             }
         }
@@ -521,6 +580,10 @@ internal sealed partial class BodyRetargetPanel(PenumbraBridge penumbra, UVRemap
 
         /// <summary>With <see cref="Explicit"/>, the bodies it was made on, bent the same way: the "made for" side.</summary>
         public BodySizeCatalog? Bodies { get; init; }
+
+        /// <summary>With <see cref="Explicit"/>, the "made for" bodies UNBENT, as the bake read them: what a shoe or glove
+        /// made a men's hands its own job, which bends them itself (<see cref="CrossSexRefitJob.EndInputs"/>).</summary>
+        public BodySizeCatalog? MadeFor { get; init; }
 
         /// <summary>With <see cref="Explicit"/>, what the race needs of the extra-skeleton table.</summary>
         public EstPlan? Est { get; init; }
@@ -796,9 +859,15 @@ internal sealed partial class BodyRetargetPanel(PenumbraBridge penumbra, UVRemap
         {
             // The sizes refitted onto that the new race's lists still hold stay chosen: a "made for" change that flips
             // a racial garment's route leaves the body mod's list as it was.
-            var kept = Onto is { } snapshot ? RetargetInputs.StillOffered(to, slot => snapshot.For(slot, race)) : [];
+            // Each part judged on the body its sizes are of: its own, set aside or not (see StudioPartBodies.SizesAtRace).
+            var kept = Onto is { } snapshot
+                ? RetargetInputs.StillOffered(to, StudioPartBodies.SizesAtRace(bodyDir, snapshot, partBodies,
+                                                                              CachedCatalog, race))
+                : [];
+            var ownBodies = partBodies;
             if (planned != null) ctx.EndPreview();
             Clear();
+            partBodies = ownBodies;
             foreach (var (slot, sizes) in kept) to[slot] = sizes;
         }
         raceFor = race;
@@ -835,26 +904,140 @@ internal sealed partial class BodyRetargetPanel(PenumbraBridge penumbra, UVRemap
     {
         var ps = Strings.Parts;
         ImGui.TextUnformatted(ps.RetargetToBody);
-        if (DrawBodyCombo("##retargetBody", bodyDir, ref bodyFilter) is { } dir)
+        if (DrawBodyCombo("##retargetBody", bodyDir, ref bodyFilter) is { } dir) PickOntoBody(ctx, dir);
+    }
+
+    /// <summary>
+    /// Refit onto <paramref name="dir"/>, as the user chose — from the dropdown, or the "Use …" button that offers the
+    /// body mod worn for a part the current one has no sizes of. One path, so the two never drift apart: both are
+    /// remembered for the garment's part and as the last body, and read afresh.
+    /// </summary>
+    private void PickOntoBody(in RetargetContext ctx, string dir)
+    {
+        RememberedTargets.PickedBody(config, GarmentPart(ctx), dir);
+        config.Save();
+        SwitchOnto(ctx, dir, BodyRoot(dir) is { } root ? BodySizeCatalog.Read(root) : null);
+    }
+
+    /// <summary>
+    /// Refit onto <paramref name="dir"/>, read as <paramref name="read"/>: a pick, or the body remembered for the
+    /// garment's part (<see cref="RestoreForGarment"/>). Picking the "made for" mod itself makes it a refit between its
+    /// own sizes — and so can a restore, which opening the garment on that body means.
+    /// </summary>
+    private void SwitchOnto(in RetargetContext ctx, string dir, BodySizeCatalog? read)
+    {
+        // A refit shown on the character was planned against the old body; with it gone nothing could save it.
+        DropPlan(ctx);
+        bodyDir = dir;
+        catalog = read;
+        if (StudioBodyChoice.SourceAfterPick(fromBodyDir, dir) == null)
         {
-            bodyDir = dir;
-            RememberBody(dir);
-            config.Save();
-            catalog = BodyRoot(dir) is { } root ? BodySizeCatalog.Read(root) : null;
-            if (fromBodyDir == dir)
-            {
-                fromBodyDir = null;
-                fromCatalog = null;
-            }
-            Clear();
+            fromBodyDir = null;
+            fromCatalog = null;
         }
+        Clear();
+    }
+
+    /// <summary>
+    /// Say so when the "made for" body mod the user picked has no sizes for the part the garment is laid out by: its
+    /// list would be empty, and nothing else would say why. Not for the game's own body, which is chosen for the game's
+    /// gear, not by the user, and is the right source for it whatever it lacks.
+    /// </summary>
+    private void DrawSourceMissing(RetargetInputs.Layout layout)
+    {
+        var src = SourceCatalog is { IsBody: true } c && race != null ? c.SlotsFor(race).ToList() : null;
+        if (StudioBodyChoice.SourceMissing(fromBodyDir, src, layout) is not { } missing) return;
+        using (ImRaii.PushColor(ImGuiCol.Text, ProteusStyle.Warn))
+            ImGui.TextWrapped(string.Format(Strings.Parts.RetargetNoSlotInBodyFmt, BodyName(SourceDir), SlotName(missing)));
+    }
+
+    // ── the body mod worn for a part the chosen one has no sizes of ─────────
+
+    /// <summary>
+    /// Body mods read for <see cref="DrawWornBodyButton"/>, by folder; null for one that cannot be read or is no body.
+    /// For the session, until the next scan of the installed body mods.
+    /// </summary>
+    private readonly Dictionary<string, BodySizeCatalog?> catalogCache = new(StringComparer.OrdinalIgnoreCase);
+
+    /// <summary>The question <see cref="candidate"/> answers (<see cref="StudioBodyChoice.Key"/>).</summary>
+    private string? candidateFor;
+    private StudioBodyChoice.Candidate candidate;
+
+    /// <summary>
+    /// Offer, in one click, the body mod the character wears for the part the chosen one has no sizes of. Only offered:
+    /// taking it is a pick like any in the dropdown.
+    /// <para/>
+    /// Worked out once per question, on this thread as every other body pick is: at most two resolves, which are IPC and
+    /// must be made here, and two manifest reads, cached by folder — with, for a body whose chests are sizes (NIRÆ), its
+    /// chest model's attribute names, read once per edit of the file (<see cref="BodySizeCatalog.IsShape"/>).
+    /// </summary>
+    private void DrawWornBodyButton(in RetargetContext ctx, string missing)
+    {
+        string? own = BodySizeCatalog.SlotOf(ctx.GamePath);
+        string key = StudioBodyChoice.Key(ctx.ModelRel, race, bodyDir, SourceDir,
+                                          RetargetInputs.KeepEndsInForce(keepEnds, CrossSexEnd(ctx)));
+        if (candidateFor != key)
+        {
+            var found = StudioBodyChoice.WornCandidate(own, bodyDir, bodies != null, WornBodyDir,
+                                                       dir => CachedCatalog(dir) is { } c ? OfferedBy(c) : null,
+                                                       dir => LimbUsableAfter(dir, own));
+            if (!found.Known) return;
+            candidateFor = key;
+            candidate = found;
+            log.Information("[Proteus] retarget: {0} has no {1} sizes for c{2}; body mod worn there: {3}",
+                            bodyDir ?? "(none)", missing, race ?? "????", found.Dir ?? "none");
+        }
+        if (candidate.Dir is not { } dir) return;
+
+        if (ImGui.Button(string.Format(Strings.Parts.RetargetUseWornBodyFmt, BodyName(dir)) + "###retargetUseWornBody"))
+        {
+            log.Information("[Proteus] retarget: refit onto {0}, the body mod worn for {1}", dir, own ?? missing);
+            PickOntoBody(ctx, dir);
+            return;
+        }
+        if (ImGui.IsItemHovered()) ImGui.SetTooltip(Strings.Parts.RetargetUseWornBodyTip);
+    }
+
+    private BodySizeCatalog? CachedCatalog(string dir)
+    {
+        if (catalogCache.TryGetValue(dir, out var cached)) return cached;
+        BodySizeCatalog? read = null;
+        try
+        {
+            if (BodyRoot(dir) is { } root && BodySizeCatalog.Read(root) is { IsBody: true } c) read = c;
+        }
+        catch (Exception ex)
+        {
+            log.Warning(ex, "[Proteus] retarget: could not read the body mod {0}", dir);
+        }
+        return catalogCache[dir] = read;
+    }
+
+    /// <summary>The parts a body mod has sizes for at this garment's race, filtered as <see cref="Onto"/> is.</summary>
+    private IReadOnlyCollection<string> OfferedBy(BodySizeCatalog c)
+        => (active is { Explicit: true } b ? OtherRaceRefit.OnlyRace(c, b.Route.To) : c).SlotsFor(race).ToList();
+
+    /// <summary>
+    /// Whether a shoe or glove would keep its ends with <paramref name="dir"/> picked to refit onto: the box is ticked,
+    /// the rig can be read, and the "made for" side then has the leg or arm. That side is the picked mod itself when it
+    /// becomes a refit between its own sizes — read off it, not off bodies made from the current one — else the one
+    /// refitted from now.
+    /// </summary>
+    private bool LimbUsableAfter(string dir, string? own)
+    {
+        return StudioBodyChoice.LimbUsable(own, RetargetInputs.KeepEndsInForce(keepEnds, CrossSexEndOpen), endsUnreadable,
+                                           fromBodyDir, dir,
+                                           picked => CachedCatalog(picked) is { } c ? OfferedBy(c) : null,
+                                           () => (active?.Bodies ?? fromCatalog) is { } src ? src.SlotsFor(race).ToList() : null);
     }
 
     /// <summary>
     /// The body mod the garment was made for, shown by name: the refit-onto mod until another is picked, which is a
     /// refit between sizes; another body mod makes it a refit between bodies, which also rewrites the cloth's weights.
+    /// A pick takes down a refit shown on the character: it was planned from the old source, and with the plan gone
+    /// nothing could save or discard it.
     /// </summary>
-    private void DrawSourceBodyPicker()
+    private void DrawSourceBodyPicker(in RetargetContext ctx)
     {
         var ps = Strings.Parts;
         ImGui.TextUnformatted(ps.RetargetFromBody);
@@ -871,8 +1054,7 @@ internal sealed partial class BodyRetargetPanel(PenumbraBridge penumbra, UVRemap
         detectedFor = null;
         refusals.Clear();
         validating.Clear();
-        planned = null;
-        pendingPreview = null;
+        DropPlan(ctx);
     }
 
     /// <summary>
@@ -898,7 +1080,10 @@ internal sealed partial class BodyRetargetPanel(PenumbraBridge penumbra, UVRemap
     /// it, so it is a source. Refitting ONTO it would be shrinking a garment back to vanilla, which nobody has asked
     /// for and which the rest of the panel — the worn-body preset, the size lists — has no shape for.
     /// </param>
-    private string? DrawBodyCombo(string id, string? current, ref string filter, bool withGame = false)
+    /// <param name="sameAsMain">For a part's own body (see <see cref="DrawSlotBody"/>): the first row, shown while
+    /// <paramref name="current"/> is null, and picking it returns the body every part goes onto.</param>
+    private string? DrawBodyCombo(string id, string? current, ref string filter, bool withGame = false,
+                                  string? sameAsMain = null)
     {
         var ps = Strings.Parts;
         ImGui.SetNextItemWidth(-1);
@@ -906,7 +1091,8 @@ internal sealed partial class BodyRetargetPanel(PenumbraBridge penumbra, UVRemap
         // The first scan starts as soon as the tool is shown, so the list is usually ready by the time it is opened.
         if (bodies == null && bodiesTask == null) StartBodyScan();
 
-        string shown = current == VanillaBodyCatalog.Key ? ps.RetargetFromVanilla
+        string shown = current == null && sameAsMain != null ? sameAsMain
+                     : current == VanillaBodyCatalog.Key ? ps.RetargetFromVanilla
                      : current != null && bodies != null && bodies.TryGetValue(current, out string? name) ? name
                      : ps.RetargetNoBody;
         using var combo = ImRaii.Combo(id, shown);
@@ -927,6 +1113,12 @@ internal sealed partial class BodyRetargetPanel(PenumbraBridge penumbra, UVRemap
 
         // Above the mods, and never filtered away: it is one row, and it is the answer for every piece of the game's
         // own gear.
+        if (sameAsMain != null)
+        {
+            any = true;
+            if (ImGui.Selectable(sameAsMain + id + "same", current == null)) picked = bodyDir;
+            ImGui.Separator();
+        }
         if (withGame)
         {
             any = true;
@@ -1004,37 +1196,38 @@ internal sealed partial class BodyRetargetPanel(PenumbraBridge penumbra, UVRemap
     // rather than which options happen to be ticked in some group.
 
     /// <summary>
-    /// The body mod this tool was last used with, if it is still installed. Ahead of the worn body, which is only a
-    /// guess at the same answer: a player who refits onto something other than what they have on — a size they are
-    /// about to wear, a second character's body — said so once and should not have to say it per garment.
+    /// Open the garment on the body mod remembered for its part (<see cref="RememberedTargets.BodyToOpen"/>): the one
+    /// last picked for tops when a top is opened, for legs when a leg piece is — so a player wearing the chest from one
+    /// body mod and the legs from another moves between them without a click. Ahead of the worn body, which is only a
+    /// guess at the same answer: a player who refits onto something other than what they have on said so once.
     /// <para/>
-    /// Once, like the worn guess: this runs every frame until a body is chosen, and reading a mod's sizes is a walk
-    /// over its files.
+    /// Only a body that sizes this garment at its race, so a men's top never opens on the women's body remembered for
+    /// tops. Once per garment, after the body mods are found: the catalog it opens with is the one read since the last
+    /// scan (<see cref="CachedCatalog"/>) — a body mod changed mid-session is read again after the next scan, which
+    /// opening a body dropdown starts.
     /// </summary>
-    /// <returns>Whether a body was restored, so the caller knows not to guess.</returns>
-    private bool RestoreBody()
+    /// <returns>Whether it switched bodies, so the caller decides the rest afresh next frame.</returns>
+    private bool RestoreForGarment(in RetargetContext ctx)
     {
-        if (restoreTried) return false;
-        if (config.RetargetBodyDir is not { Length: > 0 } last || bodies?.ContainsKey(last) != true) return false;
-        if (BodyRoot(last) is not { } root) return false;
+        string? part = GarmentPart(ctx);
+        var restore = RememberedTargets.BodyToOpen(config, part, bodyDir, bodies?.Keys,
+            d => RememberedTargets.Sizes(CachedCatalog(d) is { } c ? OfferedBy(c) : null, part,
+                                         part != null && LimbUsableAfter(d, part)));
+        if (!restore.Known) return false;
+        bodyRestoredFor = GarmentKey(ctx);
+        if (restore.Dir is not { } dir) return false;
 
-        restoreTried = true;
-
-        try
-        {
-            var read = BodySizeCatalog.Read(root);
-            if (!read.IsBody) return false;      // still installed, but no longer publishes bodies
-            bodyDir = last;
-            catalog = read;
-            wornBodyTried = true;                // the worn guess is moot once the remembered answer is in
-            return true;
-        }
-        catch (Exception ex)
-        {
-            log.Warning(ex, "[Proteus] retarget: could not re-read the last body mod {0}", last);
-            return false;
-        }
+        log.Information("[Proteus] retarget: opened on {0}, the body mod last refitted onto for {1}", dir, part ?? "any part");
+        SwitchOnto(ctx, dir, CachedCatalog(dir));
+        wornBodyTried = true;                    // the worn guess is moot once the remembered answer is in
+        bodyRestoredFor = GarmentKey(ctx);       // Clear() reset it: this garment is decided
+        return true;
     }
+
+    /// <summary>The garment <see cref="RestoreForGarment"/> has run for; reset by <see cref="Clear"/>.</summary>
+    private string? bodyRestoredFor;
+
+    private static string GarmentKey(in RetargetContext ctx) => ctx.ModDir + "|" + ctx.ModelRel + "|" + ctx.GamePath;
 
     /// <summary>
     /// Choose, once, the body mod the character is wearing: the installed body mod that supplies the body model for the
@@ -1045,21 +1238,20 @@ internal sealed partial class BodyRetargetPanel(PenumbraBridge penumbra, UVRemap
         if (wornBodyTried || bodies == null) return;
         wornBodyTried = true;
 
-        string? modsRoot = penumbra.GetModDirectory();
-        if (modsRoot == null) return;
-        string slot = BodySizeCatalog.SlotOf(ctx.GamePath) ?? "_top";
-        string wornRace = race ?? "0201";
-        if (penumbra.ResolvePlayer($"chara/equipment/e0000/model/c{wornRace}e0000{slot}.mdl") is not { } resolved) return;
+        if (WornBodyDir(BodySizeCatalog.SlotOf(ctx.GamePath) ?? "_top") is not { } dir
+            || penumbra.GetModDirectory() is not { } modsRoot) return;
+        bodyDir = dir;
+        catalog = BodySizeCatalog.Read(Path.Combine(modsRoot, dir));
+    }
 
-        string full = Path.GetFullPath(resolved);
-        foreach (string dir in bodies.Keys)
-        {
-            string root = Path.GetFullPath(Path.Combine(modsRoot, dir)) + Path.DirectorySeparatorChar;
-            if (!full.StartsWith(root, StringComparison.OrdinalIgnoreCase)) continue;
-            bodyDir = dir;
-            catalog = BodySizeCatalog.Read(Path.Combine(modsRoot, dir));
-            return;
-        }
+    /// <summary>The installed body mod the character's body model for <paramref name="slot"/> comes from, or null.</summary>
+    private string? WornBodyDir(string slot)
+    {
+        if (bodies == null || penumbra.GetModDirectory() is not { } modsRoot) return null;
+        string wornRace = race ?? "0201";
+        if (penumbra.ResolvePlayer($"chara/equipment/e0000/model/c{wornRace}e0000{slot}.mdl") is not { } resolved)
+            return null;
+        return StudioBodyChoice.ModOwning(Path.GetFullPath(resolved), modsRoot, bodies.Keys);
     }
 
     /// <summary>
@@ -1082,9 +1274,6 @@ internal sealed partial class BodyRetargetPanel(PenumbraBridge penumbra, UVRemap
 
     /// <summary>Only ever tried once per session: the user may well choose another body mod on purpose.</summary>
     private bool wornBodyTried;
-
-    /// <summary>The same, for the remembered body mod: once, and never again over a choice made since.</summary>
-    private bool restoreTried;
 
     /// <summary>
     /// Default the garment's own slot's target to the option the character is wearing, leaving a choice already made.
@@ -1118,37 +1307,21 @@ internal sealed partial class BodyRetargetPanel(PenumbraBridge penumbra, UVRemap
 
     /// <summary>
     /// Keep this slot's chosen size for next time, or forget it when the slot is emptied. Written against the body
-    /// mod it belongs to, so switching mods does not leave one mod's sizes remembered under another's name.
+    /// mod it was chosen in, so one mod's sizes are never remembered under another's name and picking another mod
+    /// forgets nothing. The body is remembered for the garment's part too: a body the panel chose for the user (the
+    /// worn guess) becomes theirs once they choose a size in it.
     /// </summary>
-    private void Remember(string slot)
+    private void Remember(in RetargetContext ctx, string slot)
     {
-        if (bodyDir == null) return;
-
-        // Before this slot's own choice is written, because it may forget everything: the body can have changed since
-        // the sizes were remembered without the user ever opening the dropdown.
-        RememberBody(bodyDir);
-
-        if (Targets(slot).FirstOrDefault() is { } chosen) config.RetargetTargets[slot] = chosen.Rel;
-        else config.RetargetTargets.Remove(slot);
-
+        // A part on a body of its own: its size is that body's file, never to be remembered as the one above's.
+        if (bodyDir == null || !StudioPartBodies.Remembers(slot, partBodies)) return;
+        RememberedTargets.ChoseSize(config, GarmentPart(ctx), bodyDir, slot, Targets(slot).FirstOrDefault()?.Rel);
         config.Save();
     }
 
-    /// <summary>
-    /// Point the memory at a body mod, forgetting the remembered sizes if it is a different one from the sizes' own.
-    /// <para/>
-    /// Every change of <see cref="Configuration.RetargetBodyDir"/> goes through here, not just the dropdown: the body
-    /// is also chosen for the user, by <see cref="RestoreBody"/> and <see cref="PickWornBody"/>, and a size ticked
-    /// after one of those would otherwise re-label the previous mod's leftover sizes as this mod's. They mostly fail
-    /// to resolve and are skipped — but two mods that lay their files out alike (a fork of a body, the same body
-    /// reinstalled under another folder name) share rels, and then a size the user never picked would be filled in.
-    /// </summary>
-    private void RememberBody(string dir)
-    {
-        if (!string.Equals(dir, config.RetargetBodyDir, StringComparison.OrdinalIgnoreCase))
-            config.RetargetTargets.Clear();
-        config.RetargetBodyDir = dir;
-    }
+    /// <summary>The garment's own part (<c>_top</c>, <c>_dwn</c>, <c>_glv</c>, <c>_sho</c>), which the body to
+    /// refit onto is remembered by; null for a garment that is not a body part.</summary>
+    private static string? GarmentPart(in RetargetContext ctx) => BodySizeCatalog.SlotOf(ctx.GamePath);
 
     /// <summary>
     /// Fill in the sizes this tool was last used with — every slot, not only the garment's own, and whether or not the
@@ -1176,11 +1349,14 @@ internal sealed partial class BodyRetargetPanel(PenumbraBridge penumbra, UVRemap
         appliedFor = once;
 
         var drawn = new HashSet<string>(Slots(ctx), StringComparer.Ordinal);
-        foreach (var (slot, rel) in RememberedTargets.Fillable(config.RetargetTargets, bodyDir,
-                                                              config.RetargetBodyDir, drawn.Contains, to.ContainsKey))
+        foreach (var (slot, rel) in RememberedTargets.Fillable(config, bodyDir, drawn.Contains,
+                                                              s => StudioPartBodies.HasChoice(s, to, partBodies)))
         {
-            if (snapshot.For(slot, race).FirstOrDefault(o =>
-                    string.Equals(o.Rel, rel, StringComparison.OrdinalIgnoreCase)) is not { } remembered) continue;
+            // A size kept before a body's chests were sizes names the model alone: the chest ticked of it.
+            // A size remembered against a physics variant of a chest (NIRÆ's "Squish", #59) is its build's.
+            if (BodySizeCatalog.ByFile(snapshot.For(slot, race), snapshot.Canonical(rel), SelectedOf(bodyDir, snapshot))
+                is not { } remembered)
+                continue;
 
             to[slot] = [remembered];
             StartValidate(slot);
@@ -1194,18 +1370,27 @@ internal sealed partial class BodyRetargetPanel(PenumbraBridge penumbra, UVRemap
     private string? appliedFor;
 
     /// <summary>The option of this slot whose file the player's collection resolves the body model to.</summary>
-    private BodyOption? WornOption(BodySizeCatalog snapshot, string slot)
-        => RefitCore.WornOption(snapshot, slot, race, penumbra.ResolvePlayer);
+    /// <param name="dir">The body mod <paramref name="snapshot"/> is of: the one picked above unless a part has its own.</param>
+    private BodyOption? WornOption(BodySizeCatalog snapshot, string slot, string? dir = null)
+        => RefitCore.WornOption(snapshot, slot, race, penumbra.ResolvePlayer, SelectedOf(dir ?? bodyDir, snapshot));
 
     // ── which slots take part ───────────────────────────────────────────────
 
     /// <summary>The slot this garment is worn in, which is the one its cloth was cut against, and the one it is planned as.</summary>
     private string WornSlot(in RetargetContext ctx)
-    {
-        var slots = Onto!.SlotsFor(race).ToList();
-        string? own = BodySizeCatalog.SlotOf(ctx.GamePath);
-        return own != null && slots.Contains(own) ? own : slots.FirstOrDefault() ?? "_top";
-    }
+        => RetargetInputs.GarmentSlot(BodySizeCatalog.SlotOf(ctx.GamePath), Onto!.SlotsFor(race));
+
+    /// <summary>
+    /// Whether the pick under "Refit for" makes this shoe or glove a men's (<see cref="CrossSexRefit.EndsCross"/>): read
+    /// from the path and the pick alone, never from the bake, <see cref="WornSlot"/> or <see cref="Onto"/> — the same
+    /// answer before the bake lands as after, and safe while no body mod is read.
+    /// </summary>
+    private bool CrossSexEnd(in RetargetContext ctx)
+        => RetargetInputs.CrossSexEndOf(ctx.GamePath, ChosenRace(ctx), Offered(ctx), catalog != null);
+
+    /// <summary>Whether the open garment is a shoe or glove picked to be made a men's: the parts list greys "Keep shape"
+    /// by it. Set at the top of every draw.</summary>
+    internal bool CrossSexEndOpen { get; private set; }
 
     /// <summary>How the tool is laid out for this garment now (see <see cref="RetargetInputs.LayoutFor"/>).</summary>
     private RetargetInputs.Layout Layout(in RetargetContext ctx)
@@ -1214,7 +1399,8 @@ internal sealed partial class BodyRetargetPanel(PenumbraBridge penumbra, UVRemap
         string? limb = AutoRefitDecisions.LimbOf(worn);
         bool sourceHasLimb = limb != null && SourceCatalog?.For(limb, race).Count > 0;
         bool targetHasLimb = limb != null && Onto?.For(limb, race).Count > 0;
-        return RetargetInputs.LayoutFor(worn, keepEnds, sourceHasLimb, targetHasLimb, endsUnreadable);
+        return RetargetInputs.LayoutFor(worn, RetargetInputs.KeepEndsInForce(keepEnds, CrossSexEnd(ctx)), sourceHasLimb,
+                                        targetHasLimb, endsUnreadable);
     }
 
     /// <summary>The slot whose sizes must be chosen: the garment's own, or the leg or arm a shoe or glove is refitted by.
@@ -1222,8 +1408,14 @@ internal sealed partial class BodyRetargetPanel(PenumbraBridge penumbra, UVRemap
     private string Primary(in RetargetContext ctx) => Layout(ctx).Primary;
 
     /// <summary>What a refit is made from, as chosen now.</summary>
+    /// <remarks>A shoe or glove made a men's is never only redrawn: its route is not handed on.</remarks>
     private RetargetInputs.Inputs Inputs(in RetargetContext ctx)
-        => RetargetInputs.Assemble(Layout(ctx), Slots(ctx), from, to, studio?.Route);
+        => RetargetInputs.Assemble(Layout(ctx), Slots(ctx), from, ActiveTo(ctx), CrossSexEnd(ctx) ? null : studio?.Route);
+
+    /// <summary>The sizes to refit onto of the parts that can take part: a part set to a body of its own sits out while
+    /// that body cannot be used (see <see cref="StudioPartBodies.Active"/>).</summary>
+    private IReadOnlyDictionary<string, List<BodyOption>> ActiveTo(in RetargetContext ctx)
+        => StudioPartBodies.Active(to, partBodies, PartsOffered(ctx), PartBodyReadable);
 
     /// <summary>
     /// Every slot worth offering, the garment's own first.
@@ -1235,10 +1427,12 @@ internal sealed partial class BodyRetargetPanel(PenumbraBridge penumbra, UVRemap
     /// is no size to change there.
     /// </summary>
     private List<string> Slots(in RetargetContext ctx)
-        => RetargetInputs.Slots(Layout(ctx), Onto!.SlotsFor(race), Distinct);
+        => RetargetInputs.Slots(Layout(ctx), Onto!.SlotsFor(race), Distinct, onlyPrimary: CrossSexEnd(ctx));
 
     /// <summary>The slots actually taking part: the ones with both ends chosen.</summary>
-    private List<string> Chosen(in RetargetContext ctx) => RetargetInputs.Chosen(Slots(ctx), from, to);
+    private List<string> Chosen(in RetargetContext ctx)
+        => StudioPartBodies.TakingPart(RetargetInputs.Chosen(Slots(ctx), from, to), partBodies, PartsOffered(ctx),
+                                       PartBodyReadable);
 
     /// <summary>A slot's targets; empty when none is ticked.</summary>
     private IReadOnlyList<BodyOption> Targets(string slot)
@@ -1248,6 +1442,8 @@ internal sealed partial class BodyRetargetPanel(PenumbraBridge penumbra, UVRemap
     private static string PairKey(string slot, BodyOption target) => slot + ">" + target.Rel;
 
     /// <summary>How many different models a slot offers — several options can point at one file.</summary>
+    /// <remarks>Of the body picked above, even for a part with a body of its own: which parts get a row is decided by
+    /// that body, as it always was (see <see cref="Slots"/>); not an oversight of <see cref="PartTarget"/>.</remarks>
     private int Distinct(string slot)
         => Onto!.For(slot, race).Select(o => o.Rel).Distinct(StringComparer.OrdinalIgnoreCase).Count();
 
@@ -1265,19 +1461,31 @@ internal sealed partial class BodyRetargetPanel(PenumbraBridge penumbra, UVRemap
         bool feet = worn == "_sho";
         string limb = AutoRefitDecisions.LimbOf(worn)!;
         string noLimb = limb == "_dwn" ? ps.RetargetNoLegsInBodyFmt : ps.RetargetNoChestInBodyFmt;
-        string? why = endsUnreadable ? ps.RetargetEndsUnreadable
-                    : SourceCatalog?.For(limb, race).Count is not > 0 ? string.Format(noLimb, BodyName(SourceDir))
-                    : Onto?.For(limb, race).Count is not > 0 ? string.Format(noLimb, BodyName(bodyDir))
-                    : null;
+        bool sourceHasLimb = SourceCatalog?.For(limb, race).Count > 0, targetHasLimb = Onto?.For(limb, race).Count > 0;
+        bool crossEnd = CrossSexEnd(ctx);
+        // Made a men's, the box is always on: greyed, saying why — or, when it can't be, why the refit is refused.
+        string? why = crossEnd
+            ? RetargetInputs.CrossSexEndRefusal(endsUnreadable, sourceHasLimb, targetHasLimb, $"{ModelSkinReader.RaceOf(ctx.GamePath):D4}")
+            : endsUnreadable ? ps.RetargetEndsUnreadable
+            : !sourceHasLimb ? string.Format(noLimb, BodyName(SourceDir))
+            : !targetHasLimb ? string.Format(noLimb, BodyName(bodyDir))
+            : null;
 
-        bool on = keepEnds && why == null;
-        using (ImRaii.Disabled(why != null))
-            if (ImGui.Checkbox(feet ? ps.RetargetKeepFeet : ps.RetargetKeepHands, ref on))
+        bool inForce = RetargetInputs.KeepEndsInForce(keepEnds, crossEnd);
+        bool on = inForce && why == null;
+        using (ImRaii.Disabled(why != null || crossEnd))
+            if (ImGui.Checkbox(feet ? ps.RetargetKeepFeet : ps.RetargetKeepHands, ref on) && !crossEnd)
                 keepEnds = on;
         if (ImGui.IsItemHovered(ImGuiHoveredFlags.AllowWhenDisabled))
-            ImGui.SetTooltip(why ?? (feet ? ps.RetargetKeepFeetTip : ps.RetargetKeepHandsTip));
-        if (why == null && keepEnds && studio?.Route == KeepEnds.Route.SkinOnly && !from.ContainsKey(limb))
-            ImGui.TextDisabled(feet ? ps.RetargetNoLimbFeet : ps.RetargetNoLimbHands);
+            ImGui.SetTooltip(why ?? (crossEnd ? ps.RetargetKeepEndsCrossSexTip
+                                    : feet ? ps.RetargetKeepFeetTip : ps.RetargetKeepHandsTip));
+        if (why == null && RetargetInputs.CrossSexEndHint(crossEnd, studio, from.ContainsKey(limb)))
+            using (ImRaii.PushColor(ImGuiCol.Text, ImGui.GetColorU32(ImGuiCol.TextDisabled)))
+                ImGui.TextWrapped(string.Format(ps.RetargetCrossSexEndPickMadeForFmt, BodyName(SourceDir), SlotName(limb)));
+        else if (why == null && inForce && studio?.Route == KeepEnds.Route.SkinOnly && !from.ContainsKey(limb))
+            // Made a men's, it is never only redrawn: it needs its leg or arm size.
+            using (ImRaii.PushColor(ImGuiCol.Text, ImGui.GetColorU32(ImGuiCol.TextDisabled)))
+                ImGui.TextWrapped(crossEnd ? ps.RetargetCrossSexEndNoLimb : feet ? ps.RetargetNoLimbFeet : ps.RetargetNoLimbHands);
     }
 
     /// <summary>The slot's name, and for the garment's own slot how many sizes the body mod offers.</summary>
@@ -1309,7 +1517,8 @@ internal sealed partial class BodyRetargetPanel(PenumbraBridge penumbra, UVRemap
             // refit it ONTO: the size being worn, as the garment's own slot gets on opening. Without it the user picks
             // a target by hand and can pick one they are not wearing, which fits the garment to a body that is not
             // there — a stocking refitted onto a size other than the worn one clips through the leg.
-            if (!to.ContainsKey(slot) && Onto is { } snapshot && WornOption(snapshot, slot) is { } worn)
+            if (!to.ContainsKey(slot) && PartTarget(slot) is { Catalog: { } snapshot } own
+                && WornOption(snapshot, slot, own.Dir) is { } worn)
                 to[slot] = [worn];
 
             DropPlan(ctx);
@@ -1322,8 +1531,11 @@ internal sealed partial class BodyRetargetPanel(PenumbraBridge penumbra, UVRemap
     private void DrawSlotTo(in RetargetContext ctx, string slot)
     {
         var ps = Strings.Parts;
-        var options = Onto!.For(slot, race);
+        // From the part's own body when it has one (see PartTarget): the sizes are that body's files.
+        var options = PartOptions(slot);
         if (options.Count == 0) return;
+        // A part whose own body cannot be used now: its sizes shown as they are, greyed, and why.
+        using var setAside = ImRaii.Disabled(StudioPartBodies.SetAside(slot, partBodies, PartsOffered(ctx)));
 
         // One size at a time for now. The rest of the panel still handles several (the plan, the preview picker, the
         // batch save), so turning this back on is this line.
@@ -1344,7 +1556,7 @@ internal sealed partial class BodyRetargetPanel(PenumbraBridge penumbra, UVRemap
             else if (many) list.Add(pickedTo);
             else { list.Clear(); list.Add(pickedTo); }
             if (list.Count == 0) to.Remove(slot);
-            Remember(slot);
+            Remember(ctx, slot);
             DropPlan(ctx);
             StartValidate(slot);
         }
@@ -1425,10 +1637,11 @@ internal sealed partial class BodyRetargetPanel(PenumbraBridge penumbra, UVRemap
     {
         from.Remove(slot);
         to.Remove(slot);
+        partBodies = StudioPartBodies.Without(partBodies, slot);
         detected.Remove(slot);
         foreach (string key in refusals.Keys.Where(k => k.StartsWith(slot + ">", StringComparison.Ordinal)).ToList())
             refusals.Remove(key);
-        Remember(slot);
+        Remember(ctx, slot);
         DropPlan(ctx);
     }
 
@@ -1504,23 +1717,33 @@ internal sealed partial class BodyRetargetPanel(PenumbraBridge penumbra, UVRemap
         bool targetHasEnd = inputs.EndSlot != null && Onto?.For(inputs.EndSlot, race).Count > 0;
         // A race picked that the mod has its own model of is refitted all the same: the pick says so, with that model a
         // click away (DrawRacePicker), and a refit saved into the mod takes its place only while it is on.
-        bool ready = RetargetInputs.Ready(inputs, from, targetHasEnd, refused);
+        // The garment's own part kept on the body it was made for while another part goes onto another body: the refit
+        // cannot do that yet (see StudioPartBodies.KeptOnOwnBody), so it is held, and said why.
+        string? keptOnOwn = KeptOnOwnWhy(ctx);
+        bool ready = RetargetInputs.Ready(inputs, from, targetHasEnd, refused || keptOnOwn != null);
 
         if (detectTask != null) ImGui.TextUnformatted(ps.RetargetChecking);
 
-        ImGui.Checkbox(ps.RetargetReplaceSkin, ref replaceSkin);
-        if (ImGui.IsItemHovered()) ImGui.SetTooltip(ps.RetargetReplaceSkinTip);
+        // Made a men's, a shoe or glove always takes the new body's skin: shown ticked and greyed, the user's own tick
+        // left as it was for the drawn race.
+        bool crossEnd = CrossSexEnd(ctx);
+        bool swap = RetargetInputs.EffectiveReplaceSkin(replaceSkin, crossEnd);
+        using (ImRaii.Disabled(crossEnd))
+            if (ImGui.Checkbox(ps.RetargetReplaceSkin, ref swap) && !crossEnd)
+                replaceSkin = swap;
+        if (ImGui.IsItemHovered(ImGuiHoveredFlags.AllowWhenDisabled))
+            ImGui.SetTooltip(crossEnd ? ps.RetargetKeepEndsCrossSexTip : ps.RetargetReplaceSkinTip);
 
         // Only the swap brings in skin to cut, so the option sits under it and greys out with it. A kept foot always
         // cuts: uncut, a shoe would carry the whole legs body, waist to ankles.
         ImGui.Indent();
         bool cut = cutHidden || inputs.KeepEnds;
-        using (ImRaii.Disabled(!replaceSkin || inputs.KeepEnds))
+        using (ImRaii.Disabled(!swap || inputs.KeepEnds))
             if (ImGui.Checkbox(ps.RetargetCutHidden, ref cut) && !inputs.KeepEnds)
                 cutHidden = cut;
         if (ImGui.IsItemHovered(ImGuiHoveredFlags.AllowWhenDisabled))
             ImGui.SetTooltip(inputs.KeepEnds ? ps.RetargetCutForcedTip : ps.RetargetCutHiddenTip);
-        using (ImRaii.Disabled(!replaceSkin))
+        using (ImRaii.Disabled(!swap))
             ImGui.Checkbox(ps.RetargetPiercings, ref carryPiercings);
         if (ImGui.IsItemHovered(ImGuiHoveredFlags.AllowWhenDisabled)) ImGui.SetTooltip(ps.RetargetPiercingsTip);
         ImGui.Unindent();
@@ -1544,7 +1767,7 @@ internal sealed partial class BodyRetargetPanel(PenumbraBridge penumbra, UVRemap
             string why = inputs.SkinOnly ? string.Format(ps.RetargetNeedFromFmt, SlotName(inputs.EndSlot!))
                        : !from.ContainsKey(primary) ? string.Format(ps.RetargetNeedFromFmt, SlotName(primary))
                        : Targets(primary).Count == 0 ? string.Format(ps.RetargetNeedToFmt, SlotName(primary))
-                       : ps.RetargetRefusedHold;
+                       : keptOnOwn ?? ps.RetargetRefusedHold;
             using (ImRaii.PushColor(ImGuiCol.Text, ProteusStyle.Warn))
                 ImGui.TextWrapped(why);
         }
@@ -1811,7 +2034,11 @@ internal sealed partial class BodyRetargetPanel(PenumbraBridge penumbra, UVRemap
         var garmentBytes = ctx.GarmentBytes;
         var slots = Slots(ctx);
         var layout = Layout(ctx);
-        var pieces = RefitCore.ShapePieces(garment, new HashSet<string>(ctx.KeepShape ?? [], StringComparer.Ordinal));
+        // Made a men's, a shoe or glove is read as its job reads it: no part kept in shape, and a piece with no skin read by
+        // where its cloth sits.
+        bool crossEnd = CrossSexEnd(ctx);
+        var pieces = RefitCore.ShapePieces(garment, new HashSet<string>(RetargetInputs.ShapesFor(crossEnd, ctx.KeepShape) ?? [],
+                                                                        StringComparer.Ordinal));
         string rel = ctx.ModelRel;
         string? sourceDir = SourceDir;
         string? garmentRace = race;
@@ -1836,7 +2063,8 @@ internal sealed partial class BodyRetargetPanel(PenumbraBridge penumbra, UVRemap
             {
                 if (KeepEnds.Read(layout.WornSlot, garment, garmentBytes, pieces) is not { } reading)
                     return new DetectResult(rel, sourceDir, rankings, layout, EndsUnreadable: true, Bodies: snapshot);
-                read = KeepEnds.StudioLimb(reading, garment, garmentBones, garmentRace ?? "", sourceDir ?? "", snapshot);
+                read = KeepEnds.StudioLimb(reading, garment, garmentBones, garmentRace ?? "", sourceDir ?? "", snapshot,
+                                           clothWhenSkinless: crossEnd);
                 if (read.Shown is { } shown)
                     rankings[read.Route == KeepEnds.Route.SkinOnly ? layout.EndSlot! : layout.Primary] = shown;
             }
@@ -1856,8 +2084,11 @@ internal sealed partial class BodyRetargetPanel(PenumbraBridge penumbra, UVRemap
         foreach (string key in validating.Keys.Where(k => k.StartsWith(slot + ">", StringComparison.Ordinal)).ToList())
             validating.Remove(key);
 
-        if (Onto is not { } snapshot || SourceCatalog is not { } sources || !from.TryGetValue(slot, out var source))
+        // The part's own body when it has one: its sizes are that body's files (see PartTarget).
+        if (PartTarget(slot) is not { Catalog: { } snapshot } onto || SourceCatalog is not { } sources
+            || !from.TryGetValue(slot, out var source))
             return;
+        string? targetDir = onto.Dir;
         string sourcePath = sources.PathOf(source);
         string name = SlotName(slot);
         var (male, targetSex) = PairSexes;
@@ -1866,15 +2097,17 @@ internal sealed partial class BodyRetargetPanel(PenumbraBridge penumbra, UVRemap
 
         foreach (var target in Targets(slot))
         {
-            if (string.Equals(source.Rel, target.Rel, StringComparison.OrdinalIgnoreCase)) continue;
             string targetPath = snapshot.PathOf(target);
+            // The same size of one body mod needs no check. Never by the file's place alone across two mods: two body
+            // mods laid out alike (a fork) share it, and a part on a body of its own is another mod's.
+            if (AutoRefitDecisions.SameFile(SourceDir ?? "", source, targetDir ?? "", target)) continue;
 
             // A newer choice replaces an older check outright; the older one's answer is dropped in Consume by its tag.
             validating[PairKey(slot, target)] = (source.Rel, Task.Run(() =>
             {
                 try
                 {
-                    return Build(sourcePath, targetPath, name, male, masks, out _, out _, targetMale) ?? "";
+                    return Build(sourcePath, targetPath, name, male, masks, target, out _, out _, targetMale) ?? "";
                 }
                 catch (Exception ex)
                 {
@@ -1890,14 +2123,26 @@ internal sealed partial class BodyRetargetPanel(PenumbraBridge penumbra, UVRemap
         ctx.FlushPending();
 
         var inputs = Inputs(ctx);
+        // ── a women's shoe or glove made a men's: the job the size set and the CLI run, never the panel's own plan ──
+        if (CrossSexEnd(ctx))
+        {
+            StartCrossSexEndPlan(ctx, inputs, snapshot);
+            return;
+        }
         // The slot planned as: always the one the garment is worn in. Without kept ends it is also the required one.
         string garmentSlot = inputs.GarmentSlot;
         string primary = inputs.Primary;
         var targets = inputs.PrimaryTargets.Select(t => (Option: t, Path: snapshot.PathOf(t))).ToList();
+        // Each other part from the body its sizes are of — its own, when it has one (see PartTarget). Only parts
+        // taking part are here (Inputs), so none set aside.
         var others = inputs.Shared.Select(s => (Slot: s.Slot, Source: sources.PathOf(s.From),
-                                                Target: snapshot.PathOf(s.To), Name: SlotName(s.Slot),
-                                                Masks: MasksFor(s.Slot)))
+                                                Target: PartTarget(s.Slot).Catalog!.PathOf(s.To),
+                                                Name: SlotName(s.Slot), Masks: MasksFor(s.Slot), To: s.To))
                                   .ToList();
+        // Every body the garment's skin may be drawn by, after the lead's (see RefitCore.MatchSkinToBody).
+        // A part whose own body cannot be read sits out (StudioPartBodies.SitsOut): every part here has a catalog.
+        var otherBodies = inputs.Shared.Select(s => (Dir: PartTarget(s.Slot).Dir, Path: PartTarget(s.Slot).Catalog!.PathOf(s.To)))
+                                       .ToList();
         var garment = ctx.Garment;
         var bytes = ctx.GarmentBytes;
         var heldLabels = new HashSet<string>(ctx.Held, StringComparer.Ordinal);
@@ -1911,7 +2156,11 @@ internal sealed partial class BodyRetargetPanel(PenumbraBridge penumbra, UVRemap
         bool piercings = RetargetInputs.CarryPiercings(replaceSkin, carryPiercings);
         // A picked race's bent bodies are another rig than the race's own, even within one body mod: the cloth takes the
         // new body's weights, as it does between body mods.
-        bool acrossBodies = fromBodyDir != null || active?.Explicit == true;
+        // A part on a body of its own other than the one made for makes it one between bodies too — with none, exactly
+        // the rule this always was: a "made for" body other than the refit-onto one.
+        bool acrossBodies = StudioPartBodies.Across(SourceDir, bodyDir, otherBodies.Select(b => b.Dir),
+                                                    active?.Explicit == true);
+        string? mainDir = bodyDir;
         var (male, targetSex) = PairSexes;
         bool? targetMale = targetSex != male ? targetSex : null;
         // A pick for the other sex: checked before it may be saved (CrossSexRefit.CoverageAllowed).
@@ -1924,7 +2173,7 @@ internal sealed partial class BodyRetargetPanel(PenumbraBridge penumbra, UVRemap
 
         // What only this thread may read (IPC): each slot's IMC masks, and the feet or hands being worn.
         var limbMasks = MasksFor(primary);
-        var endMasks = inputs.EndSlot != null ? MasksFor(inputs.EndSlot) : default;
+        var endMasks = inputs.EndSlot != null ? MasksFor(inputs.EndSlot) : null;
         BodyOption? skinTarget = inputs.SkinOnly
             ? AutoRefitDecisions.Companion(snapshot.For(inputs.EndSlot!, race), inputs.PrimaryTargets.FirstOrDefault(),
                                            WornOption(snapshot, inputs.EndSlot!))
@@ -1950,9 +2199,10 @@ internal sealed partial class BodyRetargetPanel(PenumbraBridge penumbra, UVRemap
             {
                 // The other slots are the same pair for every size, so each is built once and shared.
                 var shared = new List<BodyRetarget.SlotPair>();
-                foreach (var (slot, sourcePath, targetPath, name, masks) in others)
+                foreach (var (slot, sourcePath, targetPath, name, masks, to) in others)
                 {
-                    if (Build(sourcePath, targetPath, name, male, masks, out var pair, out _, targetMale) is { } refusal)
+                    if (Build(sourcePath, targetPath, name, male, masks, to, out var pair, out _, targetMale, report: true)
+                            is { } refusal)
                         return new PlanResult(key, null, refusal);
                     shared.Add(pair);
                 }
@@ -1968,9 +2218,11 @@ internal sealed partial class BodyRetargetPanel(PenumbraBridge penumbra, UVRemap
                 // A bake's preview, here rather than on the framework thread when it is first shown (see
                 // RefitCore.Finish); a bent-down garment's refit bent back up, or refused — never saved in the wrong shape.
                 BodyRetarget.Planned Baked(BodyRetarget.Planned plan, string targetPath)
+                    => BakedOnto(plan, [targetPath]);
+                BodyRetarget.Planned BakedOnto(BodyRetarget.Planned plan, IReadOnlyList<string> targetPaths)
                 {
                     if (bake == null) return plan;
-                    var (saved, preview, refusal) = RefitCore.Finish(plan, bake.Route, bake.Wearer, targetPath, log);
+                    var (saved, preview, refusal) = RefitCore.Finish(plan, bake.Route, bake.Wearer, targetPaths, log);
                     if (saved == null)
                         throw new InvalidOperationException(string.Format(Strings.Parts.RetargetRefusedFmt, refusal));
                     if (preview != null) previews.AddOrUpdate(saved.Model, preview);
@@ -1993,7 +2245,9 @@ internal sealed partial class BodyRetargetPanel(PenumbraBridge penumbra, UVRemap
                     var input = new KeepEnds.StudioPlanInput(
                         garment, bytes, garmentSlot, pieces, sources, snapshot, garmentRace ?? "", male, limbFrom!,
                         limbTargets, sameBodyMod, fromCloth, layOnBody, acrossBodies, boxClear, held, shared,
-                        s => s == primary ? (limbMasks.Source, limbMasks.Target) : (endMasks.Source, endMasks.Target),
+                        // The size refitted onto counts as chosen only when there is one: several share the slot's.
+                        s => s == primary ? (limbMasks.Source, limbMasks.Target(RetargetInputs.OverlayFor(limbTargets)))
+                                          : (endMasks?.Source, endMasks?.Target(null)),
                         SlotName, modelRel, shapeNames, piercings);
                     var kept = KeepEnds.StudioPlan(input, Baked, uvRemap, log, () => Interlocked.Increment(ref planDone));
                     return new PlanResult(key, kept.Planned, kept.Error, kept.Notice, kept.ShapeNames);
@@ -2007,8 +2261,8 @@ internal sealed partial class BodyRetargetPanel(PenumbraBridge penumbra, UVRemap
                 if (garmentSource == null) return new PlanResult(key, null, string.Format(ps.RetargetNeedFromFmt, garmentName));
                 foreach (var (option, targetPath) in targets)
                 {
-                    if (Build(garmentSource, targetPath, garmentName, male, limbMasks, out var pair, out var landed,
-                              targetMale) is { } refusal)
+                    if (Build(garmentSource, targetPath, garmentName, male, limbMasks, option, out var pair, out var landed,
+                              targetMale, report: true) is { } refusal)
                         return new PlanResult(key, null, targets.Count > 1 ? $"{option.Label}: {refusal}" : refusal);
 
                     var pairs = new List<BodyRetarget.SlotPair> { pair };
@@ -2022,11 +2276,14 @@ internal sealed partial class BodyRetargetPanel(PenumbraBridge penumbra, UVRemap
                                                          warn: line => log.Warning("[Proteus] body size: {0}", line));
                     // Skin the refit kept of the garment's own, drawn in the new body's layout and material — or a
                     // gen2 garment's kept skin shows the wrong skin, and none of the tattoos, on a bibo body.
-                    plan = RefitCore.MatchSkinToBody(plan, garmentSource, targetPath, uvRemap, male, log, targetMale);
+                    // With parts on bodies of their own, every body the refit went onto, the lead's first: skin of any of
+                    // them is that body's own; with none, the one body it always was.
+                    var targetPaths = StudioPartBodies.TargetPaths(targetPath, mainDir, otherBodies);
+                    plan = RefitCore.MatchSkinToBody(plan, garmentSource, targetPaths, uvRemap, male, log, targetMale);
                     if (crossSex && CrossSexCheck(bytes, plan, landed, option.Label, targets.Count > 1, quality, crossSexFolds)
                             is { } refused)
                         return new PlanResult(key, null, refused);
-                    results.Add((option, Baked(plan, targetPath)));
+                    results.Add((option, BakedOnto(plan, targetPaths)));
                     Interlocked.Increment(ref planDone);
                 }
                 return new PlanResult(key, results, "", ShapeNames: shapeNames, Quality: string.Join("\n", quality),
@@ -2045,38 +2302,78 @@ internal sealed partial class BodyRetargetPanel(PenumbraBridge penumbra, UVRemap
     /// user. Worker thread only.
     /// </summary>
     /// <param name="male">The garment is a man's, and so both bodies are: every option list is filtered to its sex.</param>
-    /// <param name="masks">Each body mod's IMC mask for this slot (see <see cref="VariantMask"/>): both bodies are read
-    /// without the variant parts their mods do not draw.</param>
+    /// <param name="masks">What each body mod draws of this slot (see <see cref="Masks"/>): both bodies are read without
+    /// the variant parts their mods do not draw, and the new one without the alternatives its options switch off.</param>
+    /// <param name="onto">The size refitted onto, taken as chosen in its own group of the body mod's options.</param>
     /// <param name="landed">How the two bodies' skin landed on each other; null for the same mesh.</param>
     /// <param name="targetMale">The target body's sex under a pick for the other sex (see <see cref="PairSexes"/>).</param>
-    private string? Build(string sourcePath, string targetPath, string name, bool male, Masks masks,
-                          out BodyRetarget.SlotPair pair, out UvAtlasCorrespondence.Stats? landed, bool? targetMale = null)
-        => BodyRetarget.BuildPair(masks.Slot, File.ReadAllBytes(sourcePath), File.ReadAllBytes(targetPath), name, male,
-                                  masks.Source, masks.Target, uvRemap, out pair, out landed,
-                                  BodyRetarget.BodyMaterialReader(targetPath), targetMale);
-
-    /// <summary>
-    /// The IMC attribute mask a body mod gives its model in <paramref name="slot"/>, under the player's own choice of
-    /// its options — which of the body's variant parts the game draws (see <see cref="BodyRetarget.UndrawnVariants"/>).
-    /// Null when the mod has no say, the game's own bodies included: every part is then taken as drawn. IPC, so the
-    /// framework thread only.
-    /// </summary>
-    private ushort? VariantMask(string? dir, BodySizeCatalog? mod, string slot)
+    /// <param name="report">Log what the new body's options switch: for a plan, not for every check of a pick.</param>
+    private string? Build(string sourcePath, string targetPath, string name, bool male, Masks masks, BodyOption? onto,
+                          out BodyRetarget.SlotPair pair, out UvAtlasCorrespondence.Stats? landed, bool? targetMale = null,
+                          bool report = false)
     {
-        if (dir == null || dir == VanillaBodyCatalog.Key || mod == null) return null;
-        var selected = penumbra.GetPlayerCollectionId() is { } collection
-            ? penumbra.GetModSettings(collection, dir)?.Options
-            : null;
-        return RefitCore.MaskOf(dir, mod, slot, selected);
+        var target = masks.Target(onto);
+        string? refusal = BodyRetarget.BuildPair(masks.Slot, File.ReadAllBytes(sourcePath), File.ReadAllBytes(targetPath),
+                                                 name, male, masks.Source, target, uvRemap, out pair, out landed,
+                                                 BodyRetarget.BodyMaterialReader(targetPath), targetMale);
+        if (report && refusal == null && target is { AtrOff.Count: > 0 }
+            && pair.TargetHidden?.Where(target.AtrOff.Contains).Order(StringComparer.Ordinal).ToList() is { Count: > 0 } off)
+            log.Information("[Proteus] retarget: {0} {1} onto \"{2}\": draws {3}; switched off {4}", masks.Mod,
+                            masks.Slot, onto?.Label ?? "",
+                            string.Join(", ", (pair.TargetSwitched ?? new HashSet<string>()).Order(StringComparer.Ordinal)),
+                            string.Join(", ", off));
+        return refusal;
     }
 
-    /// <summary>One slot's two IMC masks, read on the framework thread for a worker to use.</summary>
-    private readonly record struct Masks(string Slot, ushort? Source, ushort? Target);
+    /// <summary>
+    /// The player's own choice of a body mod's options, as Penumbra reports it; null for the game's own bodies or no
+    /// mod. IPC, so the framework thread only.
+    /// </summary>
+    private IReadOnlyDictionary<string, List<string>>? SelectedOf(string? dir, BodySizeCatalog? mod)
+    {
+        if (dir == null || dir == VanillaBodyCatalog.Key || mod == null) return null;
+        return penumbra.GetPlayerCollectionId() is { } collection
+            ? penumbra.GetModSettings(collection, dir)?.Options
+            : null;
+    }
+
+    /// <summary>
+    /// What each body mod draws of one slot (see <see cref="RefitCore.MaskOf"/>): the player's choice of its options read
+    /// on the framework thread, the mod's manifest read on the worker the first time it is asked, once for the slot.
+    /// </summary>
+    private sealed class Masks(string slot, string mod, Func<BodyRetarget.BodyDraw?> source,
+                               Func<BodyRetarget.BodyDraw?> target)
+    {
+        /// <summary>The new body mod's folder, for the log: read with the rest on the framework thread.</summary>
+        public string Mod => mod;
+
+        private readonly Lazy<BodyRetarget.BodyDraw?> sourceDraw = new(source);
+        private readonly Lazy<BodyRetarget.BodyDraw?> targetDraw = new(target);
+
+        public string Slot => slot;
+
+        /// <summary>The body the garment was made on.</summary>
+        public BodyRetarget.BodyDraw? Source => sourceDraw.Value;
+
+        /// <summary>The new body, with the size refitted onto taken as chosen (see <see cref="BodyRetarget.BodyDraw.Onto"/>).</summary>
+        public BodyRetarget.BodyDraw? Target(BodyOption? onto) => targetDraw.Value?.Onto(onto);
+    }
 
     // The made-for mod's own catalog, not a bent copy of it: the mask is read from the mod's manifest, and a bent body
-    // keeps the parts it was made with.
+    // keeps the parts it was made with. The new body is judged by the race its sizes are listed for.
     private Masks MasksFor(string slot)
-        => new(slot, VariantMask(SourceDir, fromCatalog ?? catalog, slot), VariantMask(bodyDir, catalog, slot));
+    {
+        // The new body is the part's own when it has one (see PartTarget); the main mod's own catalog otherwise.
+        var own = partBodies.ContainsKey(slot) ? PartTarget(slot) : default;
+        string? sourceDir = SourceDir, targetDir = own.Catalog != null ? own.Dir : bodyDir;
+        var sourceMod = fromCatalog ?? catalog;
+        var targetMod = own.Catalog ?? catalog;
+        var sourceSelected = SelectedOf(sourceDir, sourceMod);
+        var targetSelected = SelectedOf(targetDir, targetMod);
+        ushort? targetRace = RefitCore.RaceNumber(race);
+        return new Masks(slot, Path.GetFileName(targetDir ?? ""), () => RefitCore.MaskOf(sourceDir, sourceMod, slot, sourceSelected),
+                         () => RefitCore.MaskOf(targetDir, targetMod, slot, targetSelected, targetRace));
+    }
 
     /// <summary>
     /// The mod this garment's refits live in, or null when there is none yet.
@@ -2231,7 +2528,10 @@ internal sealed partial class BodyRetargetPanel(PenumbraBridge penumbra, UVRemap
     private string OptionName(in RetargetContext ctx, BodyOption target)
     {
         string body = bodyDir != null && bodies != null && bodies.TryGetValue(bodyDir, out string? name) ? name : Strings.Parts.RetargetBodyFallback;
-        string option = RefitCore.OptionName(body, ToLabels(ctx, target));
+        // Each part named by the body it goes onto: with one body for all, exactly the name it always had.
+        string option = RefitCore.OptionName(StudioPartBodies.NamedParts(
+            Chosen(ctx), ToLabels(ctx, target), body,
+            s => partBodies.TryGetValue(s, out string? own) ? BodyName(own) : body));
         // Beside the drawn race's own sizes, a picked race's must not read the same.
         return active is { Explicit: true } b ? OtherRaceRefit.OptionName(option, b.Route.To) : option;
     }
@@ -2240,7 +2540,7 @@ internal sealed partial class BodyRetargetPanel(PenumbraBridge penumbra, UVRemap
     private string ToLabel(in RetargetContext ctx, BodyOption target) => string.Join(" + ", ToLabels(ctx, target));
 
     private List<string> ToLabels(in RetargetContext ctx, BodyOption target)
-        => RetargetInputs.ToLabels(Inputs(ctx), Chosen(ctx), target, to);
+        => RetargetInputs.ToLabels(Inputs(ctx), Chosen(ctx), target, ActiveTo(ctx));
 
     /// <summary>What a plan was made from: the model, each chosen pair, and which parts were held. A plan whose key no
     /// longer matches is stale — see <see cref="plannedKey"/>.
@@ -2250,8 +2550,16 @@ internal sealed partial class BodyRetargetPanel(PenumbraBridge penumbra, UVRemap
     private string Key(in RetargetContext ctx)
     {
         var inputs = Inputs(ctx);
-        return RetargetInputs.Key(ctx.ModelRel, fromBodyDir, inputs, Chosen(ctx), from, to, ctx.Held, ctx.KeepShape,
-                                  replaceSkin, cutHidden, clearBody, carryPiercings, SkinRule(inputs).ClearForced)
+        var chosen = Chosen(ctx);
+        // Only the parts taking part: a part body set aside, or of a part sitting out, made no plan.
+        var bodiesInPlay = EffectiveParts(ctx).Where(p => chosen.Contains(p.Key))
+                                              .ToDictionary(p => p.Key, p => p.Value, StringComparer.Ordinal);
+        bool crossEnd = CrossSexEnd(ctx);
+        return RetargetInputs.Key(ctx.ModelRel, fromBodyDir, inputs, chosen, from, ActiveTo(ctx), ctx.Held,
+                                  RetargetInputs.ShapesFor(crossEnd, ctx.KeepShape),
+                                  RetargetInputs.EffectiveReplaceSkin(replaceSkin, crossEnd), cutHidden, clearBody,
+                                  carryPiercings, SkinRule(inputs).ClearForced,
+                                  bodiesInPlay)
                + "|g" + madeForGeneration;
     }
 
@@ -2269,7 +2577,14 @@ internal sealed partial class BodyRetargetPanel(PenumbraBridge penumbra, UVRemap
         if (bodiesTask is { IsCompleted: true } bt)
         {
             bodiesTask = null;
-            if (bt.IsCompletedSuccessfully) bodies = bt.Result;
+            if (bt.IsCompletedSuccessfully)
+            {
+                bodies = bt.Result;
+                // A body mod installed, enabled or changed since: what was read of them, and offered, is read again.
+                // The restore (RestoreForGarment) opens with what was read since this scan — no fresher than it.
+                catalogCache.Clear();
+                candidateFor = null;
+            }
             else log.Warning(bt.Exception, "[Proteus] retarget: finding body mods failed");
         }
 

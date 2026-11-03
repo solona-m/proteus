@@ -57,7 +57,9 @@ public partial class CompositorService
 
         /// <summary>Whether this run paints mod <paramref name="modDir"/>'s women's art on a man ("Overlay on men").</summary>
         internal bool OverlaysMenFor(string modDir) => !menOffMods.Contains(modDir);
-        private HashSet<string> toeCapMods = null!;
+        private ToeCapSnapshot toeCaps = ToeCapSnapshot.Empty;
+        private IReadOnlySet<string> toeCapMods = null!;
+        internal IReadOnlyDictionary<string, ToeCapMap> ToeCapMaps => toeCaps.Maps;
         private bool wearingMirroredBody;
         private HashSet<string> unmirrorMods = null!;
         private HashSet<string> asymmetricNotWorn = null!;
@@ -103,6 +105,10 @@ public partial class CompositorService
         private Dictionary<string, string>? nextAppendHostSources;
         private ShellDrawnProbe? nextShellDrawnCheck;
         private bool shellBuilt;
+        private IReadOnlyList<ShellBodyAtr.Use> nextBodyAtrUses = [];
+        // This run's place against the shape-force latch, and whether it published (see ShellBodyAtr.ForceLatch).
+        private long latchStamp;
+        private bool publishedThisRun;
         private bool glassesPreHosted;
         private bool shellOnFacewear;
         private List<string> shellCarrierSlots = null!;
@@ -124,6 +130,7 @@ public partial class CompositorService
         {
             try
             {
+                latchStamp = compositor._bodyAtrLatch.Stamp();
                 if (!Discover()) return;
                 PlanOverlays();
                 ResolveEntries();
@@ -173,6 +180,12 @@ public partial class CompositorService
                 // Published output no longer matches any known inputs, so the next ambient trigger must composite.
                 compositor._lastCompositeFingerprint = null;
             }
+            finally
+            {
+                // However the run ended: one that did not publish must not leave a forced shape change pending for good.
+                compositor._bodyAtrLatch.OnRunEnded(latchStamp, publishedThisRun,
+                    m => compositor.log.Debug("[Proteus] second skin: {0}", m));
+            }
         }
 
         private bool Discover()
@@ -217,6 +230,8 @@ public partial class CompositorService
 
             if (entries.Count == 0)
             {
+                // Nothing composites, so nothing wants a cap: the editor must not keep the last look's answer.
+                compositor.ClearToeCapSnapshot();
                 // A shell hosted on an accessory (a rewritten skin material, or anything on the head) needs a full redraw to
                 // go away. This early return skips the normal end-of-method reset, hence doing it explicitly.
                 bool withdrawing = compositor._secondSkinActive || compositor._lastSkinMaterialRedirects.Count > 0
@@ -231,6 +246,7 @@ public partial class CompositorService
 
                 compositor._secondSkinActive = false;
                 compositor._lastShellHostPaths = new(StringComparer.OrdinalIgnoreCase);
+                compositor._lastBodyAtrUses = [];   // no shell, nothing cut from a body to watch
                 compositor._lastSkinMaterialRedirects = new(StringComparer.OrdinalIgnoreCase);
                 compositor._lastHeadRedirects = new(StringComparer.OrdinalIgnoreCase);
                 // ...and the UI-facing locators, which the skipped gear phase would otherwise publish.
@@ -320,12 +336,14 @@ public partial class CompositorService
 
             // Is a toe cap selected anywhere in the look? A cap belongs to the foot, not the mod, and must be known before
             // promotion because a cap is geometry and needs a shell.
-            toeCapMods = compositor.ToeCapWanted(entries);
+            toeCaps = compositor.ToeCapWanted(entries);
+            toeCapMods = toeCaps.Wanted;
             if (toeCapMods.Count > 0)
-                compositor.log.Debug("[Proteus] toe cap is selected in [{0}] — THAT MOD's skin overlays that can be cut "
-                        + "into a shell are promoted to cloth, since the cap has to rebuild geometry the skin "
-                        + "layer has none of. Other mods are left alone: a cap is a Penumbra option, and a "
-                        + "mod re-exported with its options reordered re-points every saved selection.",
+                compositor.log.Debug("[Proteus] toe cap is wanted in [{0}] (its Toe Cap option, or Cap the toes in its "
+                        + "Proteus settings) — THAT MOD's skin overlays that can be cut into a shell are promoted to "
+                        + "cloth, since the cap has to rebuild geometry the skin layer has none of. Other mods are "
+                        + "left alone: a cap is the mod's own choice, and a mod re-exported with its options "
+                        + "reordered re-points every saved selection.",
                     string.Join(", ", toeCapMods.OrderBy(m => m, StringComparer.OrdinalIgnoreCase)));
             if (activeMtrl != null)
                 foreach (var m in activeMtrl)
@@ -490,7 +508,8 @@ public partial class CompositorService
                         && (aboveGear || RenderModeInference.HasCloth(overlay.ColorTableRows ?? [])))
                         compositor.NotifyNoShellSurface(entry, overlay.ColorTableRows, overlay.Descriptor);
                     // A cap only promotes the overlays of the mod that ships it (see ToeCapWanted). Another mod's skin stocking over the
-                    // same toes stays skin; logged once per mod so the trade is findable.
+                    // same toes stays skin; logged once per mod per composite, at Debug: it fires for every other mod in the look
+                    // (faces, whole skins), where ticking the cap would be the wrong advice.
                     else if (toeCapMods.Count > 0 && !toeCapMods.Contains(entry.ModDirectory)
                         // The bust bridge is held equal across the pair: this asks what the cap alone decides.
                         && !RenderModeInference.ShouldPromoteToGear(overlay.Descriptor.Layer,
@@ -501,13 +520,15 @@ public partial class CompositorService
                                 canShell, unmirrors, true, RenderModeInference.WantsGeometry(entry.Metadata))
                         && capNarrowedMods.Add(entry.ModDirectory))
                     {
-                        compositor.log.Information("[Proteus] {0}: a toe cap is selected in [{1}], not here, so this "
+                        compositor.log.Debug("[Proteus] {0}: a toe cap is wanted in [{1}], not here, so this "
                                       + "mod's skin overlays stay on the skin — the cap still shapes any "
-                                      + "shell over the toes, but this mod has no shell to shape. Tick the "
-                                      + "cap in this mod too if its art should follow the rebuilt toes.",
+                                      + "shell over the toes, but this mod has no shell to shape. If this is "
+                                      + "legwear whose art should follow the rebuilt toes, tick \"Cap the toes\" "
+                                      + "in its Colors window too.",
                             entry.ModDirectory,
                             string.Join(", ", toeCapMods.OrderBy(m => m, StringComparer.OrdinalIgnoreCase)));
                     }
+                    // The Colors window predicts this in ToeCapToggle.Reach; keep the two in step.
                     else if (RenderModeInference.ShouldPromoteToGear(overlay.Descriptor.Layer,
                             overlay.Descriptor.ManualShaderLock, overlay.ColorTableRows, aboveGear, canShell,
                             unmirrors, toeCapMods.Contains(entry.ModDirectory),
@@ -846,6 +867,7 @@ public partial class CompositorService
 
             // Mods that get a dedicated top mask shell: gear shells plus mask _id/relief assets. For these the mask lives
             // entirely on the shell, so the skin diffuse/relief passes and LoadIndexMerged must skip them.
+            // The Colors window predicts this in ToeCapToggle.Reach (a mask shell carries the toe cap); keep the two in step.
             maskShellMods = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
             foreach (var mod in gearOverlays.Select(g => g.Entry.ModDirectory).Distinct(StringComparer.OrdinalIgnoreCase))
                 if (maskAssetsByMod.TryGetValue(mod, out var mA)
@@ -934,8 +956,15 @@ public partial class CompositorService
                 byMaterial, gearOverlays, maskPathsByMod, maskAssetsByMod, maskRowsByMod, maskDescByMod,
                 maskShellMods, baseKeys, contentLayers, toeCapMods, skinOnly: true);
 
-            if (!force && Volatile.Read(ref compositor._forcePending) == 0
-                && compositor._lastCompositeFingerprint != null && fingerprint == compositor._lastCompositeFingerprint)
+            // The fingerprint cannot see a body's options switching its shapes (NIRÆ's chest picked in another collection,
+            // or by a Glamourer design): asked last, only when everything else says skip, and only of watched mods.
+            string shapesWhy = "";
+            bool shapesMoved = false;
+            if (SkipUnchanged(force, Volatile.Read(ref compositor._forcePending) != 0,
+                    compositor._lastCompositeFingerprint, fingerprint,
+                    () => shapesMoved = ShellBodyAtr.Moved(compositor._lastBodyAtrUses, null,
+                                                           compositor.secondSkin.PlayerModSettings, out shapesWhy, out var t)
+                                        && !compositor._bodyAtrLatch.IsExhausted(t)))
             {
                 // Still reconcile the carriers: whatever redraw led here may have reverted them (ApplyFlag.Once). Idempotent.
                 compositor.ReconcileInvisibleGlasses(compositor._lastGearWanted, compositor._lastShellBuilt, compositor._lastShellOnFacewear,
@@ -950,6 +979,9 @@ public partial class CompositorService
                 compositor.LogRefreshTimeline(timeline, "skipped, inputs unchanged");
                 return false;
             }
+            if (shapesMoved)
+                compositor.log.Information("[Proteus] inputs unchanged but the shapes the body draws by its options "
+                              + "moved ({0}) — compositing", shapesWhy);
             return true;
         }
 
@@ -1187,6 +1219,17 @@ public partial class CompositorService
             compositor._shellLight       = nextShellLight ?? new(StringComparer.OrdinalIgnoreCase);
             compositor._shellDrawnCheck  = nextShellDrawnCheck;
 
+            // What the shell left out of a body drawing one of several shapes by its options (NIRÆ's chests), and whether
+            // that settles a rebuild forced for a shape change. On a disagreement the settings are read again here (a pool
+            // thread) to tell "they changed again" from "the build and the check disagree".
+            compositor._lastBodyAtrUses = shellBuilt ? nextBodyAtrUses : [];
+            compositor._bodyAtrLatch.OnPublished(ShellBodyAtr.Canonical(compositor._lastBodyAtrUses), latchStamp,
+                () => { ShellBodyAtr.Moved(compositor._lastBodyAtrUses, null, compositor.secondSkin.PlayerModSettings,
+                                           out _, out var now); return now; },
+                w => compositor.log.Warning("[Proteus] second skin: {0}", w),
+                m => compositor.log.Debug("[Proteus] second skin: {0}", m));
+            publishedThisRun = true;
+
             // No shell built but hosts were redirected last time: force a full redraw to reload the vacated accessories.
             if (!shellBuilt && compositor._lastShellHostPaths.Count > 0)
             {
@@ -1227,6 +1270,14 @@ public partial class CompositorService
             // Published: the manifest is now exactly these inputs' output, so set the fingerprint and settle the forced-work
             // latch. Only on this path, so the gate never claims unproduced output.
             compositor._lastCompositeFingerprint = fingerprint;
+            // The settings may have moved while this run built (a chest picked mid-composite): look once more, off this
+            // thread. Bounded by the shape-force latch, so it cannot chain.
+            if (compositor._lastBodyAtrUses.Count > 0)
+                _ = Task.Run(() =>
+                {
+                    try { compositor.TryForceForShapes(null, "body-shapes-moved"); }
+                    catch (Exception ex) { compositor.log.Debug("[Proteus] body-shapes re-check failed: {0}", ex.Message); }
+                });
             // The skin half, in one reference swap, only on publish (assigned even on reuse).
             compositor._lastSkinPublish = new SkinPublish(
                 skinFingerprint, skinRedirectsThisRun, compositor._channelContributions, compositor._skinGlowTargets);

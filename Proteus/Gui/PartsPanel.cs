@@ -1397,6 +1397,15 @@ public sealed partial class PartsPanel
     /// <summary>Set by a refit's save or undo; <see cref="Draw"/> re-reads the model list at the top of the next frame.</summary>
     private bool refreshModelsPending;
 
+    /// <summary>
+    /// A mod's models changed from outside the Studio (the QA test harness's refit or restore): if it is the open one,
+    /// re-read the model list at the top of the next frame, as the Studio's own size set does. Framework thread.
+    /// </summary>
+    internal void NoteModelsChanged(string dir)
+    {
+        if (string.Equals(dir, modDir, StringComparison.OrdinalIgnoreCase)) refreshModelsPending = true;
+    }
+
     /// <summary>A model Body size asked to open; <see cref="Draw"/> opens it at the top of the next frame.</summary>
     private int? openModelPending;
 
@@ -2669,12 +2678,15 @@ public sealed partial class PartsPanel
                 if (refitting && !skin)
                 {
                     ImGui.SameLine();
-                    bool keep = moves && KeepsShape(part);
-                    using (ImRaii.Disabled(!moves))
-                        if (ImGui.Checkbox($"{ps.RetargetKeepShape}##ks_{part.Label}", ref keep))
+                    // A shoe or glove made a men's refits its leg or arm as one: greyed, the ticks kept for the drawn race.
+                    var box = RetargetInputs.KeepShapeBox(moves, KeepsShape(part), retarget.CrossSexEndOpen);
+                    bool keep = box.Ticked;
+                    using (ImRaii.Disabled(!box.Enabled))
+                        if (ImGui.Checkbox($"{ps.RetargetKeepShape}##ks_{part.Label}", ref keep) && box.Enabled)
                             ToggleKeepShape(part);
                     if (ImGui.IsItemHovered(ImGuiHoveredFlags.AllowWhenDisabled))
-                        ImGui.SetTooltip($"{ps.RetargetKeepShapeTip}\n{ps.RetargetKeepShapeSinkTip}");
+                        ImGui.SetTooltip(box.CrossTip ? ps.RetargetKeepShapeCrossSexTip
+                                                      : $"{ps.RetargetKeepShapeTip}\n{ps.RetargetKeepShapeSinkTip}");
                 }
             }
             else

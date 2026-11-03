@@ -47,6 +47,18 @@
     "message": "このコレクションの体型設定を消去",
     "description": ""
   },
+  "AutoRefit.RueSplit.Fmt": {
+    "message": "{0}はRue体型、{1}は別の体型です。RueのパーツはRueにしか合わないため、両側にかかる装備は自身のパーツ側だけがリフィットされ、残りはサイズがそのままです。全パーツを同じ体型にするには「{2}」を押して、その体型を選び直してください。",
+    "description": ""
+  },
+  "AutoRefit.RueSplit.Shoes": {
+    "message": "足と脚がこの境界の別々の側にある間は、靴がそのままになることがあります。",
+    "description": ""
+  },
+  "AutoRefit.RueSplit.Gloves": {
+    "message": "手と胸がこの境界の別々の側にある間は、手袋がそのままになることがあります。",
+    "description": ""
+  },
   "AutoRefit.Collection": {
     "message": "コレクション",
     "description": ""
@@ -589,6 +601,46 @@
   },
   "Colors.SmoothFold.Tip": {
     "message": "股間を覆う布にはこれを有効にしてください。\nProteus は衣装を身体の複製として作るため、脚の間の溝もそのまま写し取り——\n布というより身体に描いた模様のように見えます。有効にすると、まず素肌の側を周囲の\n曲面までなめらかにするので、そこから切り出した衣装もなめらかになります。\nこれは身体そのものを変えるため、同時に着ているすべての衣装に効きます。",
+    "description": ""
+  },
+  "Colors.ToeCap.Label": {
+    "message": "つま先をまとめる",
+    "description": ""
+  },
+  "Colors.ToeCap.Tip": {
+    "message": "ストッキングや靴下ではオンにしてください。\nProteus は衣装を体のコピーとして作るため、通常は指一本一本に沿ってしまい —\n履いているというより描いたように見えます。オンにすると、つま先が一つの丸い\nトウで覆われ、本物の靴下のように見えます。つま先を覆う衣装だけに効きます。\nこれは Penumbra でこの Mod の Masks グループにある \"Toe Cap\" オプションです。Mod ではなく\nコレクションに保存され、この Mod を含む Glamourer デザインにも残ります。",
+    "description": ""
+  },
+  "Colors.ToeCap.Held.Tip": {
+    "message": "Glamourer デザイン(または別のプラグイン)が今この Mod の設定を固定しているため、\nここで変えても反映されません。そのデザインの Masks グループで \"Toe Cap\" を変えてください。",
+    "description": ""
+  },
+  "Colors.ToeCap.Inherited.Note": {
+    "message": "このコレクションはこの Mod の設定を継承しています。ここで変えると、Penumbra で変えた\nときと同じく、この Mod 用の独自の設定になります。",
+    "description": ""
+  },
+  "Colors.ToeCap.Failed.Fmt": {
+    "message": "Penumbra が変更を受け付けませんでした: {0}",
+    "description": ""
+  },
+  "Colors.ToeCap.ModOff": {
+    "message": "この Mod はコレクションでオフになっているため、オンにするまでつま先は表示されません。",
+    "description": ""
+  },
+  "Colors.ToeCap.NoShell": {
+    "message": "この Mod が表示するものは、体の上の衣装になりません(スキンに固定、プリント、体ではなく\n顔や髪の上、または作者がつま先を除外している)。そのためこの Mod には整えるものが\nありません。つま先を覆う別の Mod の衣装には引き続き効きます。",
+    "description": ""
+  },
+  "Colors.ToeCap.Flag.Tip": {
+    "message": "ストッキングや靴下に使います。つま先が指一本ずつに沿うのではなく、本物の靴下のように\n丸いつま先ひとつで覆われます。\nオンにすると、つま先を整える対象ができるよう、この Mod のスキンレイヤーが衣装(セカンドスキン)に\nなります。再構築の分だけ時間がかかり、プリントやスキンに固定したレイヤーはそのままです。\nつま先は Bibo+、Neolithe、Rue、YAB 用に作られています。ほかの体では衣装は作られますが\nつま先はそのままです。\nこの Mod には専用のつま先がないため、この設定は Mod の Proteus 設定に保存されます。\nすべてのコレクションに適用され、エクスポートすると Mod と一緒に持ち出されます。",
+    "description": ""
+  },
+  "Colors.ToeCap.Locked.Tip": {
+    "message": "この Mod 自身の \"Toe Cap\" オプションが Penumbra で選ばれています。選択肢をひとつしか選べない\nMasks グループにあるため、ここではオフにできません。Penumbra で変更してください。",
+    "description": ""
+  },
+  "Colors.ToeCap.SaveFailed": {
+    "message": "この Mod の Proteus 設定を保存できなかったため、変更を元に戻しました。理由はログ (/xllog) にあります。",
     "description": ""
   },
   "Colors.SmoothNipples.Label": {
@@ -4047,6 +4099,26 @@
     "message": "リフィット先の体型 Mod",
     "description": ""
   },
+  "Parts.Retarget.PartBody.Same.Fmt": {
+    "message": "上と同じ ({0})",
+    "description": ""
+  },
+  "Parts.Retarget.PartBody.Tip": {
+    "message": "このパーツのリフィット先の体型 Mod。ロングドレスの脚は胸とは別の体型にリフィットできます。",
+    "description": ""
+  },
+  "Parts.Retarget.PartBody.KeptOnOwn.Fmt": {
+    "message": "これはまだできません：{2}を別の体型にリフィットする一方で、{0}はこの衣装が作られた体型（{1}）のままです。衣装が作られた体型から一部のパーツだけを移すことはできず、そのパーツの肌が消えるか折れてしまいます。{0}も別の体型 Modにリフィットすれば可能です。",
+    "description": ""
+  },
+  "Parts.Retarget.PartBody.RueApart.Fmt": {
+    "message": "{0}はRue体型ですが、{1}は違います。RueのウエストはRueにしか合わないので、プレビューでウエストを確認してください。",
+    "description": ""
+  },
+  "Parts.Retarget.PartBody.SetAside.Fmt": {
+    "message": "いったん除外中：このパーツには専用の体型（{0}）が設定されていますが、これは「リフィット対象の種族」で種族を選ばずに衣装全体をリフィットする場合にしか使えません。その状態に戻ると復帰します。",
+    "description": ""
+  },
   "Settings.ReduceMotion": {
     "message": "動きを減らす",
     "description": ""
@@ -4472,8 +4544,40 @@
     "description": "Heads the dropdown that picks which race's model a refit is made and saved as."
   },
   "Parts.Retarget.Race.Tip": {
-    "message": "どの種族向けの調整か。別の種族には、ゲームが曲げるのと同じようにこのモデルから作り、その種族の体に合わせて、その種族が読み込む場所に保存した専用モデルができます。ミッドランダーの胴・脚装備は、異性向けにも調整できます。このモデルはそのままです。",
+    "message": "どの種族向けの調整か。別の種族には、ゲームが曲げるのと同じようにこのモデルから作り、その種族の体に合わせて、その種族が読み込む場所に保存した専用モデルができます。ミッドランダーの胴・脚装備や、女性用の靴・手袋（男性向け）は、異性向けにも調整できます。このモデルはそのままです。",
     "description": "Tooltip of Parts.Retarget.Race.Label."
+  },
+  "Parts.Retarget.CrossSexEnd.NoLimb": {
+    "message": "サイズを読み取れる脚や腕に届いていません。異性向けに合わせ直すときはそれでも脚や腕を通して調整するので、作られた脚または胸のサイズを選んでください。",
+    "description": ""
+  },
+  "Parts.Retarget.CrossSexEnd.NoSizes": {
+    "message": "合わせ先に選んだサイズが、そのボディにもう見つかりません。選び直してください。",
+    "description": ""
+  },
+  "Parts.Retarget.KeepEnds.CrossSex.Tip": {
+    "message": "異性向けに合わせ直すとき、靴は常に元の足を、手袋は元の手を残し、新しいボディの肌を使います。ボディマップを通して調整するのは脚や腕だけです。",
+    "description": ""
+  },
+  "Parts.Retarget.EndsUnreadable.CrossSex": {
+    "message": "リグを読み取れないため、足や手をほかの部分と区別できません。靴や手袋は、それらを残す形でしか異性向けに合わせ直せません。",
+    "description": ""
+  },
+  "Parts.Retarget.KeepShape.CrossSexTip": {
+    "message": "異性向けに合わせ直すとき、靴の脚や手袋の腕はひとまとまりで調整されるため、「形を保つ」は使われません。元の種族を選び直すと、チェックは元に戻ります。",
+    "description": ""
+  },
+  "Parts.Retarget.CrossSexEnd.PickMadeFor.Fmt": {
+    "message": "サイズを読み取れる肌がなく、布は{0}のどの{1}サイズにも沿っていません。「元の体型 Mod」で作られたボディ（ゲーム本来の体で作られたならそれ）を選び、次にサイズを選んでください。",
+    "description": ""
+  },
+  "Parts.Retarget.Race.CrossSexNude.Fmt": {
+    "message": "{0}は体の{1}しか対応しなかったため、代わりに{2}に合わせました（{3}対応）。",
+    "description": ""
+  },
+  "Parts.Retarget.Race.WomensModel.Fmt": {
+    "message": "このMODには、このアイテムの独自の{0}モデルもあります。そこから{1}版を作るには、それを開いてください。「リフィット対象の種族」で「{1}」が選ばれた状態になります。",
+    "description": ""
   },
   "Parts.Retarget.Race.ThisModel.Fmt": {
     "message": "{0}（このモデル）",
@@ -5088,7 +5192,7 @@
     "description": ""
   },
   "SizeSet.Intro": {
-    "message": "下でチェックしたボディの全サイズを、このMOD全体に追加します。各サイズは作者のサイズのうち最も近いものからリフィットし、そのオプション内の衣装の他のパーツも同じサイズから作り、作者のサイズの隣に「Rue S」「YAB Buff L」などとして保存します。MODにすでにあるサイズはそのままです。女性向けMODにもTBSEとTBSE-Xを追加できます。胴と脚が男性向けに調整され、専用のグループに保存されます。",
+    "message": "下でチェックしたボディの全サイズを、このMOD全体に追加します。各サイズは作者のサイズのうち最も近いものからリフィットし、そのオプション内の衣装の他のパーツも同じサイズから作り、作者のサイズの隣に「Rue S」「YAB Buff L」などとして保存します。MODにすでにあるサイズはそのままです。女性向けMODにもTBSEとTBSE-Xを追加できます。胴・脚・靴・手袋が男性向けに調整され、専用のグループに保存されます。",
     "description": ""
   },
   "SizeSet.Yas": {
@@ -5104,7 +5208,27 @@
     "description": ""
   },
   "SizeSet.Ends.Tip": {
-    "message": "靴と手袋は元の足と手を残し、届いている脚や腕だけをリフィットします。靴には脚のサイズが、手袋にはボディごとに1つのオプションが付き、同じグループならどちらも衣装の胸や脚のサイズに加わります。",
+    "message": "靴と手袋は元の足と手を残し、届いている脚や腕だけをリフィットします。靴には脚のサイズが、手袋にはボディごとに1つのオプションが付き、同じグループならどちらも衣装の胸や脚のサイズに加わります。男性ボディを「男性向け」でチェックすると、女性向けMODの靴と手袋にも男性版が作られます。",
+    "description": ""
+  },
+  "SizeSet.EndsLeftOut.Fmt": {
+    "message": "除外された靴と手袋（{0}）：サイズと男性版を作るには「靴と手袋も含める」をチェックしてください。",
+    "description": ""
+  },
+  "SizeSet.AuthorsMens.Fmt": {
+    "message": "{0}：MODに独自の男性用モデルがあるため、これからは男性版を作りませんでした。その男性用モデルからも今回は何も作られませんでした。",
+    "description": ""
+  },
+  "SizeSet.AuthorsMensUnticked.Fmt": {
+    "message": "{0}：MODに独自の男性用モデルがあるため、これからは男性版を作りませんでした。その男性用モデルのサイズを作るには、通常の男性ボディ（例：「{1}」）をチェックしてください。",
+    "description": ""
+  },
+  "SizeSet.AuthorsMensCrossed.Fmt": {
+    "message": "{0}：このMOD自身の男性用モデルファイルをモデルとしてまったく読めませんでした（見つからないか、0バイトか、壊れています）。そのため男性版はこの女性用パーツから作りました。「{1}」グループで男性ボディを選んでいる所では、作者の男性用モデルの代わりになります。",
+    "description": ""
+  },
+  "SizeSet.AuthorsMensStillReplaced.Fmt": {
+    "message": "{0}：このMODには自身の男性用モデルがあり、今回の実行ではそのままにしました。ですが、以前の実行でこの女性用パーツから作った男性版が、「{1}」グループでその男性ボディを選んでいる所では今も作者のモデルの代わりになっています。そこで作者のモデルを表示するには、「{1}」でOriginalを選ぶか、そのオプションを削除してください。",
     "description": ""
   },
   "SizeSet.Piercings": {
@@ -5260,7 +5384,7 @@
     "description": "Checkbox label for a men's body offered for a women's mod. {0} is the body (\"TBSE\")."
   },
   "SizeSet.ForMen.Tip.Fmt": {
-    "message": "このMODの女性用の胴・脚パーツに{0}の男性版を作ります。ボディマップ（初めて必要になったときにダウンロードされます）を通してミッドランダー男性向けに調整し、それぞれ男性の形に曲げた体が彼の体に最も近い作者のサイズから作ります。専用のグループ「{1}」に保存されるので、女性用サイズはそのままです。靴と手袋は性別をまたいで調整されず、作者がすでに男性用に作ったパーツはそれが使われます。",
+    "message": "このMODの女性用の胴・脚パーツに{0}の男性版を作ります。ボディマップ（初めて必要になったときにダウンロードされます）を通してミッドランダー男性向けに調整し、それぞれ男性の形に曲げた体が彼の体に最も近い作者のサイズから作ります。専用のグループ「{1}」に保存されるので、女性用サイズはそのままです。「靴と手袋も含める」がオンなら、女性用の靴と手袋にも脚や腕を通して調整した男性版が作られます。作者がすでに男性用に作ったパーツはそれが使われます。",
     "description": "Tooltip. {0} is a men's body (\"TBSE\"), {1} the group the men's versions go into."
   },
   "SizeSet.MensGroup": {
@@ -5290,6 +5414,10 @@
   "SizeSet.EndFromGameBody.Fmt": {
     "message": "{0}「{1}」：脚または腕に体を読み取れる肌がないため、ゲーム本来の体で作られたものとして調整しました。",
     "description": "Check in game: a women's shoe or glove made a men's with no skin to read a body off. {0} is the piece, {1} the men's option."
+  },
+  "SizeSet.EndFromOutfitLegs.Fmt": {
+    "message": "{0}「{1}」：体を読み取れる肌がなく、布もどのボディにも密着していないため、この衣装の脚装備（「{3}」）が作られたボディ、{2}で作られたものとして調整しました。",
+    "description": ""
   },
   "SizeSet.EndClothGap.Fmt": {
     "message": "{0}「{1}」：布が{3}の脚または腕から平均で約{2:F0} mm離れています。読み取った体は、作られた体と違うかもしれません。",
@@ -5681,6 +5809,18 @@
   },
   "HairPort.Earless.Refused.Outside.Fmt": {
     "message": "{0} はModの耳なしフォルダー内のパスではないため、何も書き込みませんでした",
+    "description": ""
+  },
+  "Parts.Retarget.NoSlotInBody.Fmt": {
+    "message": "{0} にはこの部位（{1}）のサイズがありません。サイズのある体型 Mod を選んでください。",
+    "description": ""
+  },
+  "Parts.Retarget.UseWornBody.Fmt": {
+    "message": "{0} を使う",
+    "description": ""
+  },
+  "Parts.Retarget.UseWornBody.Tip": {
+    "message": "この部位に着ている体型 Mod にリフィットします。「リフィット先の体型 Mod」で選ぶのと同じです。",
     "description": ""
   }
 }

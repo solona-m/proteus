@@ -31,9 +31,17 @@ internal static partial class KeepEnds
     /// The game's own gear is read as the automatic refit reads it, off the game's own body (<see cref="VanillaPick"/>),
     /// so it routes the same way in both.
     /// </summary>
+    /// <param name="clothWhenSkinless">Refitted for the other sex (<see cref="CrossSexRefit.EndsCross"/>): a piece with no
+    /// skin at all is read by where its leg's or arm's cloth sits on <paramref name="source"/> (<see cref="ClothSitsOn"/>),
+    /// as the size set reads one, so its size is filled in rather than left to a guess. Off, nothing changes.</param>
     internal static StudioReading StudioLimb(Reading reading, ModelParts garment, IReadOnlySet<string> bones, string race,
-                                             string sourceDir, BodySizeCatalog source)
+                                             string sourceDir, BodySizeCatalog source, bool clothWhenSkinless = false)
     {
+        if (clothWhenSkinless && BodySizeMatch.SkinPoints(garment).Count == 0)
+            return ClothSitsOn(reading, source.For(reading.Limb, race), source.PathOf) is { } sits
+                ? new StudioReading(Route.NoSkin, sits.Ranking, sits.Option)
+                : new StudioReading(Route.NoSkin, null, null);
+
         if (sourceDir == VanillaBodyCatalog.Key)
         {
             var found = Find(reading, garment, bones, race, (_, slot) => VanillaPick(source, slot, race), _ => source);
@@ -66,6 +74,22 @@ internal static partial class KeepEnds
         var ownRanking = own.Count > 0 ? BodySizeMatch.Rank(garment, own, source.PathOf, bones) : null;
         return new StudioReading(Route.SkinOnly, ownRanking,
                                  ownRanking?.Best?.Option ?? (own.Count > 0 ? own[0] : null));
+    }
+
+    /// <summary>
+    /// The size of <paramref name="options"/> a shoe's leg or a glove's arm sits on by its cloth — the best by
+    /// <see cref="BodySizeMatch.RankByCloth"/>, with enough cloth near it and little enough inside — with how far it sits
+    /// off it; null when it sits on none. The size set's test for a piece with no skin to read (its men's versions), and
+    /// Studio's for the same piece refitted for the other sex.
+    /// </summary>
+    internal static (BodyOption Option, float Gap, BodySizeMatch.Ranking Ranking)? ClothSitsOn(
+        Reading reading, IReadOnlyList<BodyOption> options, Func<BodyOption, string> pathOf)
+    {
+        if (options.Count == 0 || BodySizeMatch.RankByCloth(reading.LimbView, options, pathOf) is not
+            { Best: { } best } ranking) return null;
+        if (BodySizeMatch.ClothAgainst(reading.LimbView, pathOf(best.Option)) is not { } on
+            || on.Near < BodySizeMatch.MinEvidence || on.Inside > on.Near * SiblingInsideAtMost) return null;
+        return (best.Option, on.Gap, ranking);
     }
 
     /// <summary>A pick as a one-line ranking, for the line under a dropdown where nothing was ranked.</summary>
@@ -104,7 +128,7 @@ internal static partial class KeepEnds
         BodyOption LimbFrom, IReadOnlyList<BodyOption> LimbTargets,
         bool SameBodyMod, bool FromCloth, bool ReplaceSkin, bool Across, bool ClearBody,
         IReadOnlySet<int>? Held, IReadOnlyList<BodyRetarget.SlotPair>? Shared,
-        Func<string, (ushort? Source, ushort? Target)> Masks, Func<string, string> SlotName, string ModelRel,
+        Func<string, (BodyRetarget.BodyDraw? Source, BodyRetarget.BodyDraw? Target)> Masks, Func<string, string> SlotName, string ModelRel,
         IReadOnlyList<string>? PieceNames = null, bool CarryPiercings = false);
 
     /// <summary>

@@ -73,6 +73,13 @@ public class MultiBodyRefitLocalTests(ITestOutputHelper output)
         Assert.NotNull(final);
         plan = RefitCore.MatchSkinToBody(plan, d.From.PathOf(d.Pick.Option), skinOf, Maps.Value, false, NSubstitute.Substitute.For<Dalamud.Plugin.Services.IPluginLog>());
 
+        return Measure(d, plan, chest, legs, chestTo, final!);
+    }
+
+    /// <summary>What a plan came to, with the cloth's stretch in the waist band read off the pass's final positions.</summary>
+    private static Outcome Measure(Read d, BodyRetarget.Planned plan, BodyRetarget.SlotPair chest, BodyRetarget.SlotPair legs,
+                                   string chestTo, SecondSkinWriter.Vec3[] final)
+    {
         var sets = BodyRetarget.Sets.From(d.Garment, new HashSet<int>(),
                                           BodyRetarget.PartedSkinMeshes(d.Garment, [chest, legs], "_top", true, null));
         float waist = ModelPartReader.Read(File.ReadAllBytes(chestTo))!.Positions.Where((_, i) => i % 3 == 1).Min();
@@ -85,12 +92,41 @@ public class MultiBodyRefitLocalTests(ITestOutputHelper output)
                     int a = part.Triangles[t + e], b = part.Triangles[t + (e + 1) % 3];
                     if (MathF.Abs(p[a * 3 + 1] - waist) > WaistBand || MathF.Abs(p[b * 3 + 1] - waist) > WaistBand) continue;
                     float before = Distance(p[a * 3], p[a * 3 + 1], p[a * 3 + 2], p[b * 3], p[b * 3 + 1], p[b * 3 + 2]);
-                    var fa = final![sets.NodeOf[a]];
+                    var fa = final[sets.NodeOf[a]];
                     var fb = final[sets.NodeOf[b]];
                     stretch = MathF.Max(stretch, MathF.Abs(Distance(fa.X, fa.Y, fa.Z, fb.X, fb.Y, fb.Z) - before));
                 }
         var swap = plan.Report.Swap ?? default;
         return new Outcome(plan, plan.Report.Folded, swap.Unplaced, swap.Kept, swap.Posed, stretch);
+    }
+
+    /// <summary>
+    /// The dress refitted the way the Studio's Body size tool plans a whole garment (BodyRetargetPanel.StartPlan): its
+    /// chest onto <paramref name="chestDir"/>'s <paramref name="chestTo"/>, its legs onto <paramref name="legsDir"/>'s
+    /// <paramref name="legsTo"/> (a body of their own when that is another) with the tool's default boxes, between bodies
+    /// as StudioPartBodies.Across says, and the skin matched to every body it went onto (StudioPartBodies.TargetPaths).
+    /// </summary>
+    private Outcome StudioRefit(Read d, string chestDir, string chestTo, string legsDir, string legsTo)
+    {
+        Assert.Null(BodyRetarget.BuildPair("_top", d.From.PathOf(d.Pick.Option), chestTo, "_top", false, null, null, Maps.Value,
+                                           out var chest));
+        Assert.Null(BodyRetarget.BuildPair("_dwn", d.From.PathOf(d.LegsFrom), legsTo, "_dwn", false, null, null, Maps.Value,
+                                           out var legs));
+        bool across = StudioPartBodies.Across(d.Pick.Dir, chestDir, [legsDir], explicitRace: false);
+        Assert.True(across);
+        var rule = RetargetInputs.StudioSkin(replaceSkin: true, cutHidden: true, clearBody: false, gameGear: false, "_top",
+                                             crossSex: false);
+        SecondSkinWriter.Vec3[]? final = null;
+        var plan = RetargetInputs.StudioPlan(d.Garment, d.Bytes, [chest, legs], "_top", new HashSet<int>(), layOnBody: true,
+                                             acrossBodies: across, rule, cut: true, pieces: null, carryPiercings: false,
+                                             liftUnderbust: true,
+                                             trace: (stage, nodes) => { if (stage == "layer-order") final = nodes; });
+        Assert.NotNull(final);
+        var targetPaths = StudioPartBodies.TargetPaths(chestTo, chestDir, [(legsDir, legsTo)]);
+        plan = RefitCore.MatchSkinToBody(plan, d.From.PathOf(d.Pick.Option), targetPaths, Maps.Value, false,
+                                         NSubstitute.Substitute.For<Dalamud.Plugin.Services.IPluginLog>());
+        Assert.NotNull(ModelPartReader.Read(plan.Model));
+        return Measure(d, plan, chest, legs, chestTo, final!);
     }
 
     private static float Distance(float ax, float ay, float az, float bx, float by, float bz)
@@ -152,6 +188,7 @@ public class MultiBodyRefitLocalTests(ITestOutputHelper output)
     /// </summary>
     [LocalDataFact(Dresses, Bibo, Rue, LocalData.UvMaps)]
     [Trait("Plan", "EDGE-auto-refit-part-bodies-31")]
+    [Trait("Plan", "AC-per-part-target-body-3")]
     public void A_dress_kept_on_its_own_body_with_its_legs_sent_elsewhere_is_not_swapped_as_on_one_body()
     {
         var d = Setup();
@@ -196,5 +233,72 @@ public class MultiBodyRefitLocalTests(ITestOutputHelper output)
         // of every body's skin (RefitCore.MatchSkinToBody) is for.
         Assert.DoesNotContain(SkinOf(leadOnly.Plan.Model), biboSkin.Contains);
         Assert.Equal(0, both.Unplaced);
+    }
+
+    // ── the Studio: a part onto a body of its own (per-part-target-body) ─────
+
+    /// <summary>
+    /// The Studio's refit with the legs on a body of their own: made on Bibo+, the chest onto YAB+ (the body picked above),
+    /// the legs onto Bibo+ (picked for them). Measured against the same Studio refit onto YAB+ alone. Thresholds fixed
+    /// before the first run.
+    /// </summary>
+    [LocalDataFact(Dresses, Bibo, Rue, Yab, LocalData.UvMaps)]
+    [Trait("Plan", "AC-per-part-target-body-2")]
+    [Trait("Plan", "EDGE-per-part-target-body-13")]
+    public void Studio_refit_with_chest_and_legs_on_two_bodies_swaps_both()
+    {
+        var d = Setup();
+        var yab = Body(Yab);
+        string yabChest = FirstOf(Yab, "_top"), yabLegs = FirstOf(Yab, "_dwn");
+        string biboLegs = d.From.PathOf(d.LegsFrom);
+        var one = StudioRefit(d, yab.Dir, yabChest, yab.Dir, yabLegs);
+        var two = StudioRefit(d, yab.Dir, yabChest, d.Pick.Dir, biboLegs);
+        Say("Studio, one body (YAB+)", one);
+        Say("Studio, YAB+ chest and Bibo+ legs", two);
+
+        Assert.Equal(0, two.Unplaced);
+        Assert.Equal(0, two.Kept);
+        Assert.Equal(0, two.Posed);
+        Assert.True(two.Folded <= one.Folded, $"{two.Folded} folded against {one.Folded} on one body");
+        Assert.True(two.Stretch <= MathF.Max(one.Stretch * 1.5f, one.Stretch + 0.002f),
+                    $"waist stretched {two.Stretch * 1000f:F2} mm against {one.Stretch * 1000f:F2} on one body");
+
+        // The garment's own leftover skin is drawn as the lead's.
+        Assert.Contains(SkinOf(two.Plan.Model), SkinOf(File.ReadAllBytes(yabChest)).Contains);
+        // Not asserted here: that the legs' body's own skin stays that body's. YAB+ and Bibo+ draw their skin with one
+        // material name (/mt_c0201b0001_bibo.mtrl, measured 2026-10-31), so this pair cannot tell the two apart; bodies
+        // whose skin is named apart are held to it by Parts_on_bodies_of_two_layouts_keep_each_bodys_own_skin.
+    }
+
+    /// <summary>
+    /// Three bodies in the Studio: made on Bibo+, the chest onto YAB+, the legs onto Rue+, across the Rue line too, which
+    /// the Studio only warns of. Its folds and the cloth's stretch at the waist, where the two bodies meet, against the
+    /// one-body Studio refits onto YAB+ and onto Rue+. Thresholds fixed before the first run; a failure is a re-plan
+    /// (hold the Studio across the Rue line), never a looser bound.
+    /// </summary>
+    [LocalDataFact(Dresses, Bibo, Rue, Yab, LocalData.UvMaps)]
+    [Trait("Plan", "AC-per-part-target-body-2")]
+    [Trait("Plan", "AC-per-part-target-body-9")]
+    public void Studio_refit_onto_three_bodies_made_for_x_main_y_legs_z()
+    {
+        var d = Setup();
+        var yab = Body(Yab);
+        var rue = Body(Rue);
+        string yabChest = FirstOf(Yab, "_top"), yabLegs = FirstOf(Yab, "_dwn");
+        string rueChest = FirstOf(Rue, "_top"), rueLegs = FirstOf(Rue, "_dwn");
+        var oneYab = StudioRefit(d, yab.Dir, yabChest, yab.Dir, yabLegs);
+        var oneRue = StudioRefit(d, rue.Dir, rueChest, rue.Dir, rueLegs);
+        var three = StudioRefit(d, yab.Dir, yabChest, rue.Dir, rueLegs);
+        Say("Studio, one body (YAB+)", oneYab);
+        Say("Studio, one body (Rue+)", oneRue);
+        Say("Studio, made on Bibo+, YAB+ chest, Rue+ legs", three);
+
+        Assert.Equal(0, three.Unplaced);
+        Assert.Equal(0, three.Kept);
+        Assert.True(three.Folded <= Math.Max(oneYab.Folded, oneRue.Folded),
+                    $"{three.Folded} folded against {oneYab.Folded} (YAB+) and {oneRue.Folded} (Rue+)");
+        float maxOne = MathF.Max(oneYab.Stretch, oneRue.Stretch);
+        Assert.True(three.Stretch <= MathF.Max(maxOne * 1.5f, maxOne + 0.002f),
+                    $"waist stretched {three.Stretch * 1000f:F2} mm against {maxOne * 1000f:F2} on one body");
     }
 }

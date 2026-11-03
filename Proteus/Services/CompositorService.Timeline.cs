@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Text.Json;
+using System.Threading;
 using Penumbra.Api.Enums;
 
 namespace Proteus.Services;
@@ -40,6 +41,36 @@ public partial class CompositorService
             if (!_refreshBurstReasons.Contains(shortReason) && _refreshBurstReasons.Count < 4)
                 _refreshBurstReasons.Add(shortReason);
         }
+    }
+
+    /// <summary>The last refresh to finish: what it came to, its total time from first trigger, and its spans.</summary>
+    internal sealed record RefreshRecord(string Outcome, double TotalMs, string Spans, DateTime AtUtc);
+
+    /// <summary>The last refresh to finish, or null before the first. Read-only observability (the QA harness).</summary>
+    internal RefreshRecord? LastRefresh { get; private set; }
+
+    /// <summary>What the compositor is doing right now, read without taking part in it.</summary>
+    /// <param name="InFlight">Composites running.</param>
+    /// <param name="Epoch">The newest composite's epoch.</param>
+    /// <param name="Pending">Recomposites queued but not yet started.</param>
+    /// <param name="PendingTriggers">Triggers no composite has answered yet.</param>
+    /// <param name="PendingReasons">Those triggers' reasons, short.</param>
+    /// <param name="BootHold">The boot composite is still held.</param>
+    internal readonly record struct ActivitySnapshot(int InFlight, long Epoch, int Pending, int PendingTriggers,
+                                                     string PendingReasons, bool BootHold);
+
+    /// <summary>A read-only look at the compositor's activity, for the QA harness's <c>/state</c>.</summary>
+    internal ActivitySnapshot Activity()
+    {
+        int triggers;
+        string reasons;
+        lock (_refreshBurstLock)
+        {
+            triggers = _refreshBurstTriggers;
+            reasons = string.Join(",", _refreshBurstReasons);
+        }
+        return new ActivitySnapshot(Volatile.Read(ref _compositesInFlight), Volatile.Read(ref _recompositeEpoch),
+                                    Volatile.Read(ref _recompositesPending), triggers, reasons, BootCompositeHold);
     }
 
     /// <summary>The run that most recently claimed the pending triggers — the one a superseded run's wait is
@@ -157,7 +188,7 @@ public partial class CompositorService
         HashSet<string> maskShellMods,
         List<string> baseKeys,
         List<(OverlayEntry Entry, ResolvedContent Content)> contentLayers,
-        HashSet<string> toeCapMods,
+        IReadOnlySet<string> toeCapMods,
         bool skinOnly = false)
     {
         var sb = new System.Text.StringBuilder();

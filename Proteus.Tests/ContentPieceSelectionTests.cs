@@ -1553,12 +1553,17 @@ public class ContentPieceSelectionTests
 
         // Selecting a LEGS option shows its attribute on the legs model. The Body and Feet groups have
         // nothing to say about this model and must not reach it — they are the ones that used to hide it.
-        var onLegs = ContentPieceResolver.HiddenAttributes(groups, Legs, attrs, Sel("Legs toggles", "+ harness"));
+        var onLegs = ContentPieceResolver.HiddenAttributes(groups, Legs, null, attrs, Sel("Legs toggles", "+ harness"));
         Assert.DoesNotContain("atr_a", onLegs ?? new HashSet<string>());
+
+        // [EDGE-imc-group-piece-slot-1] A game path names its own slot; a recorded slot that disagrees changes nothing.
+        Assert.Equal((onLegs ?? new HashSet<string>()).Order(),
+            (ContentPieceResolver.HiddenAttributes(groups, Legs, "Feet", attrs, Sel("Legs toggles", "+ harness"))
+             ?? new HashSet<string>()).Order());
 
         // And the same selection changes nothing on the TOP model, which the Legs group does not govern.
         // Body defaults to 16 — bit 4, past this three-name table — so every named attribute is off there.
-        var onTop = ContentPieceResolver.HiddenAttributes(groups, Top, attrs, Sel("Legs toggles", "+ harness"));
+        var onTop = ContentPieceResolver.HiddenAttributes(groups, Top, null, attrs, Sel("Legs toggles", "+ harness"));
         Assert.Equal(["atr_a", "atr_b", "atr_c"], onTop!.Order());
 
         // A group naming no slot still matches anything, so sidecars written before the slot was recorded
@@ -1566,7 +1571,7 @@ public class ContentPieceSelectionTests
         var legacy = G("Legs", 0, ("+ harness", 1));
         legacy.Slot = null;
         Assert.DoesNotContain("atr_a",
-            ContentPieceResolver.HiddenAttributes([legacy], Top, attrs, Sel("Legs toggles", "+ harness"))
+            ContentPieceResolver.HiddenAttributes([legacy], Top, null, attrs, Sel("Legs toggles", "+ harness"))
             ?? new HashSet<string>());
     }
 
@@ -1605,35 +1610,35 @@ public class ContentPieceSelectionTests
             { ["Toggles"] = [.. on] };
 
         // Nothing selected: the default has both bits, so nothing is hidden at all.
-        Assert.Null(ContentPieceResolver.HiddenAttributes(groups, Mid, forward, Sel()));
-        Assert.Null(ContentPieceResolver.HiddenAttributes(groups, Mid, forward, null));
+        Assert.Null(ContentPieceResolver.HiddenAttributes(groups, Mid, null, forward, Sel()));
+        Assert.Null(ContentPieceResolver.HiddenAttributes(groups, Mid, null, forward, null));
 
         // Bit 0 is whichever name ends in "a" — in either table order.
         Assert.Equal(["atr_dv_a"],
-            ContentPieceResolver.HiddenAttributes(groups, Mid, forward, Sel("Panty Strap Hide"))!.Order());
+            ContentPieceResolver.HiddenAttributes(groups, Mid, null, forward, Sel("Panty Strap Hide"))!.Order());
         Assert.Equal(["atr_dv_a"],
-            ContentPieceResolver.HiddenAttributes(groups, Mid, reversed, Sel("Panty Strap Hide"))!.Order());
+            ContentPieceResolver.HiddenAttributes(groups, Mid, null, reversed, Sel("Panty Strap Hide"))!.Order());
 
         // Both selected: the mask empties and every part attribute goes.
         Assert.Equal(["atr_dv_a", "atr_dv_b"],
-            ContentPieceResolver.HiddenAttributes(groups, Mid, forward,
+            ContentPieceResolver.HiddenAttributes(groups, Mid, null, forward,
                 Sel("Panty Strap Hide", "Pockets Hide"))!.Order());
 
         // A group for a different set leaves this model alone — a pack can ship several items.
         Assert.Null(ContentPieceResolver.HiddenAttributes(groups,
-            "items/chara/equipment/e9999/model/c0101e9999_dwn.mdl", forward, Sel("Panty Strap Hide")));
+            "items/chara/equipment/e9999/model/c0101e9999_dwn.mdl", null, forward, Sel("Panty Strap Hide")));
 
         // Names that are not part attributes are never touched. atr_hij, atr_nek, atr_ude, atr_hiz and
         // atr_sne suppress body geometry and the game drives them from EQP; reading them as parts is what
         // made deadrose's "+ arm belts" toggle atr_nek and therefore do nothing visible at all.
         Assert.Null(ContentPieceResolver.HiddenAttributes(
             [new ContentAttributeGroup { Group = "Toggles", SetId = 6058, DefaultMask = 0 }],
-            Mid, ["atr_hij", "atr_nek", "atr_ude", "atr_hiz", "atr_sne"], null));
+            Mid, null, ["atr_hij", "atr_nek", "atr_ude", "atr_hiz", "atr_sne"], null));
 
         // Part J is the last bit an IMC mask has; anything beyond it is not addressable and stays put.
         Assert.Equal(["atr_tv_j"], ContentPieceResolver.HiddenAttributes(
             [new ContentAttributeGroup { Group = "Toggles", SetId = 6058, DefaultMask = 0x1FF }],
-            Mid, ["atr_tv_j", "atr_tv_k"], null)!.Order());
+            Mid, null, ["atr_tv_j", "atr_tv_k"], null)!.Order());
     }
 
     /// <summary>

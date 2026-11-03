@@ -21,3 +21,4 @@ Thumbs.db
 .qa-evidence/
 .playwright-mcp/
 .workflow-log/
+.pr-ready*

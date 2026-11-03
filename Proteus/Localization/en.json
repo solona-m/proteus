@@ -47,6 +47,18 @@
     "message": "Forget this collection's body",
     "description": "Button that removes the selected collection's chosen body."
   },
+  "AutoRefit.RueSplit.Fmt": {
+    "message": "{0} on a Rue body and {1} on another. Rue\u0027s parts only meet Rue\u0027s, so gear that reaches both sides is refitted on its own part\u0027s side only; the rest of it keeps its size. To put one body on every part, press \"{2}\" and pick that body again.",
+    "description": "Warning under Settings > Body refit\u0027s parts table when some parts are on a Rue body and others on another body. {0} and {1} list parts (Chest, Legs, Hands, Feet). {2} is the \"Forget this collection\u0027s body\" button\u0027s text. Keep \"Rue\" as is."
+  },
+  "AutoRefit.RueSplit.Shoes": {
+    "message": "Shoes may be left as they are while the feet and legs are on different sides of that line.",
+    "description": "Added to AutoRefit.RueSplit.Fmt when the feet and the legs are on different sides of the Rue line."
+  },
+  "AutoRefit.RueSplit.Gloves": {
+    "message": "Gloves may be left as they are while the hands and chest are on different sides of that line.",
+    "description": "Added to AutoRefit.RueSplit.Fmt when the hands and the chest are on different sides of the Rue line."
+  },
   "AutoRefit.Collection": {
     "message": "Collection",
     "description": "Label above the dropdown of Penumbra collections in the Body refit section."
@@ -590,6 +602,46 @@
   "Colors.SmoothFold.Tip": {
     "message": "Turn this on for cloth over the crotch.\nProteus builds a garment as a copy of the body, so it reproduces the fold between the legs —\nwhich reads as body paint rather than fabric. With this on, the skin there is smoothed out to\nthe surrounding curve first, so the garment cut from it comes out smooth too.\nThis changes the body, so it applies to every garment worn at once.",
     "description": "Tooltip for the checkbox above. Contains deliberate line breaks - keep the same number, moving them where your language needs."
+  },
+  "Colors.ToeCap.Label": {
+    "message": "Cap the toes",
+    "description": "Checkbox in the colour-table editor window's Geometry section. Turns on the mod's toe cap: the toes are covered by one rounded toe box, as stockings and socks fit."
+  },
+  "Colors.ToeCap.Tip": {
+    "message": "Turn this on for stockings and socks.\nProteus builds a garment as a copy of the body, so by default it follows every toe —\nwhich reads as painted on rather than worn. With this on, the toes are covered by one\nrounded toe box, the way real hosiery fits. It shapes only a garment that covers the toes.\nThis is the \"Toe Cap\" option in this mod's Masks group in Penumbra: it is saved in your\ncollection, not in the mod, and a Glamourer design that includes this mod keeps it.",
+    "description": "Tooltip for the \"Cap the toes\" checkbox. \"Toe Cap\" and \"Masks\" are the option and group names shown in Penumbra, and \"Penumbra\" and \"Glamourer\" are plugin names - keep all four verbatim. Contains deliberate line breaks - keep the same number, moving them where your language needs."
+  },
+  "Colors.ToeCap.Held.Tip": {
+    "message": "A Glamourer design (or another plugin) is holding this mod's settings right now, so a\nchange here wouldn't show. Change \"Toe Cap\" in the Masks group of that design instead.",
+    "description": "Tooltip for the \"Cap the toes\" checkbox while it is greyed out because a temporary setting holds the mod. Keep \"Toe Cap\", \"Masks\" and \"Glamourer\" verbatim. Contains deliberate line breaks - keep the same number."
+  },
+  "Colors.ToeCap.Inherited.Note": {
+    "message": "This collection inherits this mod's settings. Changing this gives it its own setting\nfor the mod, as changing it in Penumbra would.",
+    "description": "Added below the \"Cap the toes\" tooltip when the Penumbra collection inherits the mod's settings from a parent collection. Contains deliberate line breaks - keep the same number."
+  },
+  "Colors.ToeCap.Failed.Fmt": {
+    "message": "Penumbra didn't take the change: {0}",
+    "description": "Shown under the \"Cap the toes\" checkbox when Penumbra refused the change. {0} is Penumbra's error code (e.g. OptionMissing), left untranslated."
+  },
+  "Colors.ToeCap.ModOff": {
+    "message": "This mod is off in your collection, so the cap won't show until you turn it on.",
+    "description": "Shown under the ticked \"Cap the toes\" checkbox when the mod is disabled in the Penumbra collection."
+  },
+  "Colors.ToeCap.NoShell": {
+    "message": "Nothing this mod shows becomes a garment on the body (it's pinned to Skin, a print, on the\nface or hair rather than the body, or its author set it to skip the toe cap), so the cap has\nnothing of this mod's to shape. It still shapes another mod's garment over the toes.",
+    "description": "Shown under the ticked \"Cap the toes\" checkbox when nothing in the mod becomes a garment on the body, so the cap has nothing to shape. Contains deliberate line breaks - keep the same number."
+  },
+  "Colors.ToeCap.Flag.Tip": {
+    "message": "Turn this on for stockings and socks: the toes are covered by one rounded toe box, the way\nreal hosiery fits, instead of following every toe.\nTicking it turns this mod's skin layers into a garment (a second skin) so the cap has\nsomething to shape — that costs a rebuild, and a print or a layer pinned to Skin stays as it is.\nThe toe box is made for Bibo+, Neolithe, Rue and YAB; on other bodies the garment is built\nbut the toes stay as they are.\nThis mod has no toe cap of its own, so this is saved in the mod's Proteus settings: it applies\nin every collection and goes with the mod when you export it.",
+    "description": "Tooltip of the \"Cap the toes\" checkbox on a mod with no toe cap option of its own; Proteus supplies the cap and the setting is saved in the mod. Keep the body names Bibo+, Neolithe, Rue and YAB as written. Contains deliberate line breaks - keep the same number."
+  },
+  "Colors.ToeCap.Locked.Tip": {
+    "message": "This mod's own \"Toe Cap\" option is selected in Penumbra, in a Masks group that allows only\none choice, so it can't be turned off here. Change it in Penumbra.",
+    "description": "Tooltip of the greyed-out \"Cap the toes\" checkbox when the mod's own \"Toe Cap\" option is selected in a single-choice Masks group. \"Toe Cap\", \"Masks\" and \"Penumbra\" are names - keep them as written. Contains deliberate line breaks - keep the same number."
+  },
+  "Colors.ToeCap.SaveFailed": {
+    "message": "Couldn't save this mod's Proteus settings, so the change was undone. The log (/xllog) has the reason.",
+    "description": "Shown under the \"Cap the toes\" checkbox when the mod's Proteus settings could not be saved. Keep /xllog as written."
   },
   "Colors.SmoothNipples.Label": {
     "message": "Smooth the nipple",
@@ -4047,6 +4099,26 @@
     "message": "Refit onto body",
     "description": ""
   },
+  "Parts.Retarget.PartBody.Same.Fmt": {
+    "message": "Same as above ({0})",
+    "description": "First entry of a part\u0027s own \"Refit onto body\" dropdown in the Studio\u0027s Body size tool: the part goes onto the same body mod as the garment\u0027s own part. {0} is that body mod\u0027s name."
+  },
+  "Parts.Retarget.PartBody.Tip": {
+    "message": "The body mod this part is refitted onto. A long dress\u0027s legs can go onto another body than its chest.",
+    "description": "Tooltip on a part\u0027s own \"Refit onto body\" dropdown in the Studio\u0027s Body size tool."
+  },
+  "Parts.Retarget.PartBody.KeptOnOwn.Fmt": {
+    "message": "This can\u0027t be done yet: the {0} stays on {1}, the body this garment was made for, while the {2} goes onto another body. A refit can\u0027t move only some parts off the body a garment was made for; that part\u0027s skin would be lost or folded. It works when the {0} is refitted onto another body mod too.",
+    "description": "Why Preview is greyed in the Studio\u0027s Body size tool. {0} is the garment\u0027s own part (chest, legs…), lowercase, {1} the body mod it was made for, {2} the other part set to its own body."
+  },
+  "Parts.Retarget.PartBody.RueApart.Fmt": {
+    "message": "{0} is a Rue body and {1} isn\u0027t. Rue\u0027s waist only meets Rue\u0027s, so check the waist in the preview.",
+    "description": "Warning under a part\u0027s own body in the Studio\u0027s Body size tool when one of the two body mods is Rue (or a fork of it) and the other isn\u0027t. {0} and {1} are body mod names. Keep \"Rue\" as is."
+  },
+  "Parts.Retarget.PartBody.SetAside.Fmt": {
+    "message": "Left out for now: this part is set to its own body, {0}, which only a whole-garment refit with no race picked under \"Refit for\" can use. It comes back when that\u0027s so.",
+    "description": "Under a part\u0027s greyed \"Refit onto\" list in the Studio\u0027s Body size tool, while its own body can\u0027t be used (a shoe or glove keeping its feet or hands, or a race picked under \"Refit for\"). {0} is the body mod\u0027s name. Use the same words as the \"Refit for\" label."
+  },
   "Settings.ReduceMotion": {
     "message": "Reduce motion",
     "description": "Settings > General checkbox. Stops the window's decorative animation."
@@ -4472,8 +4544,40 @@
     "description": "Heads the dropdown that picks which race's model a refit is made and saved as."
   },
   "Parts.Retarget.Race.Tip": {
-    "message": "Which race the refit is for. Another race gets its own model, made from this one the way the game bends it, refitted onto that race's body and saved where that race loads it. A Midlander chest or legs garment can also be refitted for the other sex. This model stays as it is.",
+    "message": "Which race the refit is for. Another race gets its own model, made from this one the way the game bends it, refitted onto that race's body and saved where that race loads it. A Midlander chest or legs garment, or a women's shoe or glove for men, can also be refitted for the other sex. This model stays as it is.",
     "description": "Tooltip of Parts.Retarget.Race.Label."
+  },
+  "Parts.Retarget.CrossSexEnd.NoLimb": {
+    "message": "It reaches no leg or arm to tell its size by. Refitted for the other sex, it is refitted through them all the same: pick the legs or chest size it was made on.",
+    "description": "Body size, a women's shoe or glove picked to be refitted for men that reaches no leg or arm to read its size by: it is still refitted through its leg or arm, so its legs or chest size must be picked by hand."
+  },
+  "Parts.Retarget.CrossSexEnd.NoSizes": {
+    "message": "None of the sizes picked to refit onto could be found on that body any more. Pick them again.",
+    "description": "Body size, a women's shoe or glove refitted for men: the sizes picked to refit onto are no longer on the body mod (it changed since). Asks to pick them again."
+  },
+  "Parts.Retarget.KeepEnds.CrossSex.Tip": {
+    "message": "Refitted for the other sex, a shoe always keeps its own foot and a glove its own hand, with the new body's skin: only the leg or arm is refitted, through the body maps.",
+    "description": "Tooltip on the greyed 'Keep its own feet/hands' and 'Use the new body's skin' boxes when a women's shoe or glove is refitted for men under 'Refit for'."
+  },
+  "Parts.Retarget.EndsUnreadable.CrossSex": {
+    "message": "Its rig can't be read, so its foot or hand can't be told from the rest, and a shoe or glove is only refitted for the other sex with them kept.",
+    "description": "Body size: a women's shoe or glove refitted for men is refused because its rig can't be read, so its foot or hand can't be kept."
+  },
+  "Parts.Retarget.KeepShape.CrossSexTip": {
+    "message": "Refitted for the other sex, a shoe's leg or a glove's arm is refitted as one: “Keep shape” doesn't apply. Your ticks come back when you pick its own race again.",
+    "description": "Tooltip on a part's greyed 'Keep shape' box while a women's shoe or glove is picked to be refitted for men. Quote 'Keep shape' with the same words as Parts.Retarget.KeepShape."
+  },
+  "Parts.Retarget.CrossSexEnd.PickMadeFor.Fmt": {
+    "message": "It has no skin to tell its size by, and its cloth sits on none of {0}'s {1} sizes. Under “Made for body”, pick the body it was made for (the game's own body, if that's what it was made on), then its size.",
+    "description": "Body size, a women's shoe or glove refitted for men with no skin to read its size by. {0} is the made-for body mod's name, {1} the part (Legs or Chest, as Parts.Retarget.Legs/Chest). Quote 'Made for body' with the same words as Parts.Retarget.FromBody."
+  },
+  "Parts.Retarget.Race.CrossSexNude.Fmt": {
+    "message": "{0} matched only {1} of the body, so it was fitted to {2} instead ({3} matched).",
+    "description": "Body size, a women's shoe refitted for men: the legs size picked matched too little, so it was fitted to the same body's nude smallclothes legs instead. {0} the size picked, {1} the share of the body it matched (e.g. '87%'), {2} the nude legs fitted instead, {3} their share."
+  },
+  "Parts.Retarget.Race.WomensModel.Fmt": {
+    "message": "This mod also has its own {0} model of this item. To make a {1} version from it, open it: “{1}” is picked under “Refit for” for you.",
+    "description": "Body size, on a men's shoe or glove that is only the game's model: the mod has the author's own women's model of the item, which can be made a men's. {0} is 'Midlander F', {1} 'Midlander M' (race names, as the game's). A button 'Open the {0} model' follows. Quote 'Refit for' with the same words as Parts.Retarget.Race.Label."
   },
   "Parts.Retarget.Race.ThisModel.Fmt": {
     "message": "{0} (this model)",
@@ -5088,7 +5192,7 @@
     "description": "Heading of the Body size tool's section that adds every size of other body mods to the whole open mod."
   },
   "SizeSet.Intro": {
-    "message": "Adds every size of the bodies ticked below to this whole mod. Each size is refitted from the author's size nearest it, the outfit's other pieces in that option from the same size, and saved beside the author's sizes as \"Rue S\", \"YAB Buff L\" and so on. Sizes the mod already has are left alone. A women's mod can get TBSE and TBSE-X too: its chest and legs are refitted for men and saved in a group of their own.",
+    "message": "Adds every size of the bodies ticked below to this whole mod. Each size is refitted from the author's size nearest it, the outfit's other pieces in that option from the same size, and saved beside the author's sizes as \"Rue S\", \"YAB Buff L\" and so on. Sizes the mod already has are left alone. A women's mod can get TBSE and TBSE-X too: its chest, legs, shoes and gloves are refitted for men and saved in a group of their own.",
     "description": "Explains the section. Rue S and YAB Buff L are option names: keep them as they are."
   },
   "SizeSet.Yas": {
@@ -5104,8 +5208,28 @@
     "description": "Checkbox in Studio > Body size > Every size for other bodies: also make sizes of the mod's shoes and gloves."
   },
   "SizeSet.Ends.Tip": {
-    "message": "Shoes and gloves keep their own feet and hands; only the leg or arm they reach is refitted. Shoes get the legs' sizes, gloves one option per body, and both join the outfit's chest or legs sizes when they share a group.",
+    "message": "Shoes and gloves keep their own feet and hands; only the leg or arm they reach is refitted. Shoes get the legs' sizes, gloves one option per body, and both join the outfit's chest or legs sizes when they share a group. With a men's body ticked “for men”, a women's mod's shoes and gloves get men's versions too.",
     "description": "Tooltip for 'Include shoes and gloves'."
+  },
+  "SizeSet.EndsLeftOut.Fmt": {
+    "message": "Shoes and gloves left out ({0}): tick “Include shoes and gloves” to size them and make their men's versions.",
+    "description": "Size set: shown under 'Include shoes and gloves' when it is off and the mod has some, and added to a run's notes. {0} is the shoes and gloves left out, as pieces are named, joined with ', '. Quote 'Include shoes and gloves' with the same words as SizeSet.Ends."
+  },
+  "SizeSet.AuthorsMens.Fmt": {
+    "message": "{0}: no men's version was made from it, because the mod has its own men's model of it, and that one made nothing this run.",
+    "description": "Size set note: a women's piece got no men's version because the mod has its own men's model of it, and that model made nothing this run. {0} is the women's piece, e.g. 'Hands — e0613'."
+  },
+  "SizeSet.AuthorsMensUnticked.Fmt": {
+    "message": "{0}: no men's version was made from it, because the mod has its own men's model of it. Tick the plain men's body (for example “{1}”) to size that model.",
+    "description": "Size set note: a women's piece got no men's version because the mod has its own men's model of it, which only a plain men's body sizes. {0} is the women's piece, {1} a plain men's body such as 'TBSE' (a name, never translated)."
+  },
+  "SizeSet.AuthorsMensCrossed.Fmt": {
+    "message": "{0}: the mod's own men's model file for it couldn't be read as a model at all (it is missing, zero bytes or damaged), so its men's versions were made from this women's piece. Wherever a men's body is picked in the “{1}” group, they replace the author's men's model.",
+    "description": "Size set Check in game line: a women's piece was made men's because every file of the mod's own men's model of it is missing, zero bytes or can't be parsed. {0} is the women's piece, e.g. 'Hands — e0613'; {1} the men's versions' group name, e.g. 'Men's body'."
+  },
+  "SizeSet.AuthorsMensStillReplaced.Fmt": {
+    "message": "{0}: the mod has its own men's model of it, and this run left that model as it is, but a men's version made from this women's piece in an earlier run still replaces it in the “{1}” group wherever that men's body is picked. To show the author's model there, pick Original in “{1}” or remove that option.",
+    "description": "Size set Check in game line: a men's version an earlier run made from the women's piece (when the author's men's model couldn't be read) still overrides the author's men's model. {0} is the women's piece; {1} the men's versions' group name. 'Original' is the option's name, never translated."
   },
   "SizeSet.Piercings": {
     "message": "Add the new bodies' piercings",
@@ -5260,7 +5384,7 @@
     "description": "Checkbox label for a men's body offered for a women's mod. {0} is the body (\"TBSE\")."
   },
   "SizeSet.ForMen.Tip.Fmt": {
-    "message": "This mod's women's chest and legs pieces get a men's version on {0}: refitted for Midlander men through the body maps, which download the first time they're needed, each from the author's size whose body lies nearest his once bent to a man's shape. They're saved in a group of their own, \"{1}\", so the women's sizes stay as they are. Shoes and gloves aren't refitted across the sexes, and a piece the author already made for men keeps theirs.",
+    "message": "This mod's women's chest and legs pieces get a men's version on {0}: refitted for Midlander men through the body maps, which download the first time they're needed, each from the author's size whose body lies nearest his once bent to a man's shape. They're saved in a group of their own, \"{1}\", so the women's sizes stay as they are. Its women's shoes and gloves get men's versions too, refitted through their legs or arms, while “Include shoes and gloves” is ticked, and a piece the author already made for men keeps theirs.",
     "description": "Tooltip. {0} is a men's body (\"TBSE\"), {1} the group the men's versions go into."
   },
   "SizeSet.MensGroup": {
@@ -5290,6 +5414,10 @@
   "SizeSet.EndFromGameBody.Fmt": {
     "message": "{0}, \"{1}\": its leg or arm has no skin to read a body off, so it was refit as made on the game's own body.",
     "description": "Check in game: a women's shoe or glove made a men's with no skin to read a body off. {0} is the piece, {1} the men's option."
+  },
+  "SizeSet.EndFromOutfitLegs.Fmt": {
+    "message": "{0}, \"{1}\": it has no skin of its own to read a body off, and its cloth sits on no body closely, so it was refit as made on {2}, the body this outfit's legs (\"{3}\") were made on.",
+    "description": "Size set, Check in game: a skinless women's shoe made a men's from the body its outfit's own legs were made on. {0} is the piece, {1} the men's option (\"TBSE\"), {2} the body and size the legs read as (\"Bibo+ Type C - Small\"), {3} the legs option read (\"Small\"). Quote {1} and {3} as SizeSet.EndFromGameBody.Fmt quotes {1}."
   },
   "SizeSet.EndClothGap.Fmt": {
     "message": "{0}, \"{1}\": its cloth sits about {2:F0} mm off {3}'s leg or arm on average, so the body it was read on may not be the one it was made on.",
@@ -5681,6 +5809,18 @@
   },
   "HairPort.Earless.Refused.Outside.Fmt": {
     "message": "{0} is not a path inside the mod's earless folder, so nothing was written",
+    "description": ""
+  },
+  "Parts.Retarget.NoSlotInBody.Fmt": {
+    "message": "{0} has no sizes for this part ({1}). Pick a body mod that has them.",
+    "description": ""
+  },
+  "Parts.Retarget.UseWornBody.Fmt": {
+    "message": "Use {0}",
+    "description": ""
+  },
+  "Parts.Retarget.UseWornBody.Tip": {
+    "message": "Refit onto the body mod you're wearing for this part. The same as picking it under \"Refit onto body\".",
     "description": ""
   }
 }

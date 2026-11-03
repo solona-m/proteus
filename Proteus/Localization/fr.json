@@ -47,6 +47,18 @@
     "message": "Oublier le corps de cette collection",
     "description": ""
   },
+  "AutoRefit.RueSplit.Fmt": {
+    "message": "{0} sur un corps Rue et {1} sur un autre. Les parties de Rue ne rejoignent que celles de Rue : un vêtement qui atteint les deux côtés n\u0027est ajusté que du côté de sa propre partie, le reste garde sa taille. Pour mettre un seul corps sur toutes les parties, appuyez sur « {2} » puis choisissez à nouveau ce corps.",
+    "description": ""
+  },
+  "AutoRefit.RueSplit.Shoes": {
+    "message": "Les chaussures peuvent rester telles quelles tant que les pieds et les jambes sont de part et d\u0027autre de cette ligne.",
+    "description": ""
+  },
+  "AutoRefit.RueSplit.Gloves": {
+    "message": "Les gants peuvent rester tels quels tant que les mains et la poitrine sont de part et d\u0027autre de cette ligne.",
+    "description": ""
+  },
   "AutoRefit.Collection": {
     "message": "Collection",
     "description": ""
@@ -589,6 +601,46 @@
   },
   "Colors.SmoothFold.Tip": {
     "message": "Activez ceci pour du tissu sur l'entrejambe.\nProteus construit un vêtement comme une copie du corps : il reproduit donc le pli entre les jambes —\nce qui semble peint sur le corps plutôt que porté. Avec ceci, la peau y est d'abord adoucie jusqu'à\nla courbe environnante, si bien que le vêtement qui en est tiré ressort lisse lui aussi.\nCeci modifie le corps : l'effet s'applique donc à tous les vêtements portés à la fois.",
+    "description": ""
+  },
+  "Colors.ToeCap.Label": {
+    "message": "Couvrir les orteils",
+    "description": ""
+  },
+  "Colors.ToeCap.Tip": {
+    "message": "À activer pour les bas et les chaussettes.\nProteus construit un vêtement comme une copie du corps, il suit donc par défaut chaque orteil —\nce qui fait peint plutôt que porté. Activé, les orteils sont couverts par un seul bout\narrondi, comme tombe la vraie bonneterie. Il ne façonne qu'un vêtement qui couvre les orteils.\nC'est l'option \"Toe Cap\" du groupe Masks de ce mod dans Penumbra : elle est enregistrée dans votre\ncollection, pas dans le mod, et un design Glamourer qui inclut ce mod la conserve.",
+    "description": ""
+  },
+  "Colors.ToeCap.Held.Tip": {
+    "message": "Un design Glamourer (ou un autre plugin) maintient en ce moment les réglages de ce mod, donc\nun changement ici ne se verrait pas. Changez plutôt \"Toe Cap\" dans le groupe Masks de ce design.",
+    "description": ""
+  },
+  "Colors.ToeCap.Inherited.Note": {
+    "message": "Cette collection hérite des réglages de ce mod. Changer ceci lui donne son propre réglage\npour le mod, comme le ferait un changement dans Penumbra.",
+    "description": ""
+  },
+  "Colors.ToeCap.Failed.Fmt": {
+    "message": "Penumbra n'a pas accepté le changement : {0}",
+    "description": ""
+  },
+  "Colors.ToeCap.ModOff": {
+    "message": "Ce mod est désactivé dans votre collection, le bout ne s'affichera donc pas tant que vous ne l'activez pas.",
+    "description": ""
+  },
+  "Colors.ToeCap.NoShell": {
+    "message": "Rien de ce que montre ce mod ne devient un vêtement sur le corps (il est fixé sur Peau, c'est un imprimé, il est\nsur le visage ou les cheveux plutôt que sur le corps, ou son auteur l'a réglé pour ignorer le bout), donc le bout\nn'a rien de ce mod à façonner. Il façonne toujours le vêtement d'un autre mod par-dessus les orteils.",
+    "description": ""
+  },
+  "Colors.ToeCap.Flag.Tip": {
+    "message": "Activez-le pour les bas et les chaussettes : les orteils sont couverts par un bout arrondi, comme\nun vrai bas, au lieu de suivre chaque orteil.\nCocher cette case transforme les couches de peau de ce mod en vêtement (une seconde peau) pour que le bout ait\nquelque chose à façonner — cela coûte une reconstruction, et un imprimé ou une couche fixée sur Peau reste tel quel.\nLe bout est fait pour Bibo+, Neolithe, Rue et YAB ; sur les autres corps le vêtement est construit\nmais les orteils restent tels quels.\nCe mod n'a pas de bout à lui, donc ce réglage est enregistré dans les paramètres Proteus du mod : il s'applique\ndans toutes les collections et accompagne le mod quand vous l'exportez.",
+    "description": ""
+  },
+  "Colors.ToeCap.Locked.Tip": {
+    "message": "L'option \"Toe Cap\" propre à ce mod est sélectionnée dans Penumbra, dans un groupe Masks qui n'autorise\nqu'un seul choix, elle ne peut donc pas être désactivée ici. Modifiez-la dans Penumbra.",
+    "description": ""
+  },
+  "Colors.ToeCap.SaveFailed": {
+    "message": "Impossible d'enregistrer les paramètres Proteus de ce mod, la modification a donc été annulée. Le journal (/xllog) en donne la raison.",
     "description": ""
   },
   "Colors.SmoothNipples.Label": {
@@ -4047,6 +4099,26 @@
     "message": "Ajuster vers le corps",
     "description": ""
   },
+  "Parts.Retarget.PartBody.Same.Fmt": {
+    "message": "Comme ci-dessus ({0})",
+    "description": ""
+  },
+  "Parts.Retarget.PartBody.Tip": {
+    "message": "Le mod de corps sur lequel cette partie est ajustée. Les jambes d\u0027une robe longue peuvent aller sur un autre corps que sa poitrine.",
+    "description": ""
+  },
+  "Parts.Retarget.PartBody.KeptOnOwn.Fmt": {
+    "message": "Ce n\u0027est pas encore possible : {0} reste sur {1}, le corps pour lequel ce vêtement a été fait, tandis que {2} va sur un autre corps. Un ajustement ne peut pas déplacer seulement certaines parties hors du corps d\u0027origine du vêtement ; la peau de cette partie serait perdue ou pliée. Cela fonctionne si {0} est aussi ajusté sur un autre mod de corps.",
+    "description": ""
+  },
+  "Parts.Retarget.PartBody.RueApart.Fmt": {
+    "message": "{0} est un corps Rue et {1} non. La taille de Rue ne rejoint que celle de Rue : vérifiez la taille dans l\u0027aperçu.",
+    "description": ""
+  },
+  "Parts.Retarget.PartBody.SetAside.Fmt": {
+    "message": "Mise de côté pour l\u0027instant : cette partie a son propre corps, {0}, que seul un ajustement du vêtement entier sans race choisie dans « Ajuster pour » peut utiliser. Elle revient dès que c\u0027est le cas.",
+    "description": ""
+  },
   "Settings.ReduceMotion": {
     "message": "Réduire les animations",
     "description": ""
@@ -4472,8 +4544,40 @@
     "description": "Heads the dropdown that picks which race's model a refit is made and saved as."
   },
   "Parts.Retarget.Race.Tip": {
-    "message": "Pour quelle race est le réajustement. Une autre race obtient son propre modèle, fait à partir de celui-ci comme le jeu le plie, réajusté sur le corps de cette race et enregistré là où cette race le charge. Un vêtement de torse ou de jambes Midlander peut aussi être réajusté pour l'autre sexe. Ce modèle reste tel quel.",
+    "message": "Pour quelle race est le réajustement. Une autre race obtient son propre modèle, fait à partir de celui-ci comme le jeu le plie, réajusté sur le corps de cette race et enregistré là où cette race le charge. Un vêtement de torse ou de jambes Midlander, ou une chaussure ou un gant pour femmes pour les hommes, peut aussi être réajusté pour l'autre sexe. Ce modèle reste tel quel.",
     "description": "Tooltip of Parts.Retarget.Race.Label."
+  },
+  "Parts.Retarget.CrossSexEnd.NoLimb": {
+    "message": "Elle n'atteint aucune jambe ni aucun bras d'où lire sa taille. Réajustée pour l'autre sexe, elle l'est tout de même par eux : choisissez la taille de jambes ou de poitrine sur laquelle elle a été faite.",
+    "description": ""
+  },
+  "Parts.Retarget.CrossSexEnd.NoSizes": {
+    "message": "Aucune des tailles choisies pour le réajustement ne se trouve plus sur ce corps. Choisissez-les à nouveau.",
+    "description": ""
+  },
+  "Parts.Retarget.KeepEnds.CrossSex.Tip": {
+    "message": "Réajusté pour l'autre sexe, une chaussure garde toujours son propre pied et un gant sa propre main, avec la peau du nouveau corps : seuls la jambe ou le bras sont réajustés, par les cartes de corps.",
+    "description": ""
+  },
+  "Parts.Retarget.EndsUnreadable.CrossSex": {
+    "message": "Son rig est illisible, donc son pied ou sa main ne peuvent être distingués du reste, et une chaussure ou un gant n'est réajusté pour l'autre sexe qu'en les gardant.",
+    "description": ""
+  },
+  "Parts.Retarget.KeepShape.CrossSexTip": {
+    "message": "Réajusté pour l'autre sexe, la jambe d'une chaussure ou le bras d'un gant est réajusté d'un seul tenant : « Garder la forme » ne s'applique pas. Vos coches reviennent quand vous choisissez à nouveau sa propre race.",
+    "description": ""
+  },
+  "Parts.Retarget.CrossSexEnd.PickMadeFor.Fmt": {
+    "message": "Elle n'a pas de peau d'où lire sa taille, et son tissu ne repose sur aucune taille {1} de {0}. Sous « Fait pour le corps », choisissez le corps pour lequel elle a été faite (celui du jeu, si c'est sur lui), puis sa taille.",
+    "description": ""
+  },
+  "Parts.Retarget.Race.CrossSexNude.Fmt": {
+    "message": "{0} n'a apparié que {1} du corps, il a donc été ajusté sur {2} à la place ({3} apparié).",
+    "description": ""
+  },
+  "Parts.Retarget.Race.WomensModel.Fmt": {
+    "message": "Ce mod a aussi son propre modèle {0} de cet objet. Pour en faire une version {1}, ouvrez-le : « {1} » est choisi pour vous sous « Ajuster pour ».",
+    "description": ""
   },
   "Parts.Retarget.Race.ThisModel.Fmt": {
     "message": "{0} (ce modèle)",
@@ -5088,7 +5192,7 @@
     "description": ""
   },
   "SizeSet.Intro": {
-    "message": "Ajoute à tout ce mod chaque taille des corps cochés ci-dessous. Chaque taille est réajustée à partir de la taille de l'auteur la plus proche, les autres pièces de la tenue dans cette option à partir de la même taille, et enregistrée à côté des tailles de l'auteur sous « Rue S », « YAB Buff L », etc. Les tailles que le mod possède déjà ne sont pas touchées. Un mod pour femmes peut aussi recevoir TBSE et TBSE-X : son torse et ses jambes sont réajustés pour les hommes et enregistrés dans un groupe à part.",
+    "message": "Ajoute à tout ce mod chaque taille des corps cochés ci-dessous. Chaque taille est réajustée à partir de la taille de l'auteur la plus proche, les autres pièces de la tenue dans cette option à partir de la même taille, et enregistrée à côté des tailles de l'auteur sous « Rue S », « YAB Buff L », etc. Les tailles que le mod possède déjà ne sont pas touchées. Un mod pour femmes peut aussi recevoir TBSE et TBSE-X : son torse, ses jambes, ses chaussures et ses gants sont réajustés pour les hommes et enregistrés dans un groupe à part.",
     "description": ""
   },
   "SizeSet.Yas": {
@@ -5104,7 +5208,27 @@
     "description": ""
   },
   "SizeSet.Ends.Tip": {
-    "message": "Les chaussures et les gants gardent leurs propres pieds et mains ; seule la jambe ou le bras qu'ils atteignent est réajusté. Les chaussures reçoivent les tailles des jambes, les gants une option par corps, et tous deux rejoignent les tailles de buste ou de jambes de la tenue quand ils partagent un groupe.",
+    "message": "Les chaussures et les gants gardent leurs propres pieds et mains ; seule la jambe ou le bras qu'ils atteignent est réajusté. Les chaussures reçoivent les tailles des jambes, les gants une option par corps, et tous deux rejoignent les tailles de buste ou de jambes de la tenue quand ils partagent un groupe. Avec un corps d'homme coché « pour hommes », les chaussures et gants d'un mod pour femmes reçoivent aussi une version pour hommes.",
+    "description": ""
+  },
+  "SizeSet.EndsLeftOut.Fmt": {
+    "message": "Chaussures et gants laissés de côté ({0}) : cochez « Inclure les chaussures et les gants » pour faire leurs tailles et leurs versions pour hommes.",
+    "description": ""
+  },
+  "SizeSet.AuthorsMens.Fmt": {
+    "message": "{0} : aucune version pour hommes n'en a été faite, car le mod a son propre modèle masculin de la pièce, et celui-ci n'a rien produit cette fois.",
+    "description": ""
+  },
+  "SizeSet.AuthorsMensUnticked.Fmt": {
+    "message": "{0} : aucune version pour hommes n'en a été faite, car le mod a son propre modèle masculin de la pièce. Cochez le corps d'homme simple (par exemple « {1} ») pour faire les tailles de ce modèle.",
+    "description": ""
+  },
+  "SizeSet.AuthorsMensCrossed.Fmt": {
+    "message": "{0} : le fichier du modèle masculin propre au mod n'a pas pu être lu comme un modèle (il manque, fait zéro octet ou est endommagé), donc ses versions masculines ont été faites à partir de cette pièce féminine. Là où un corps masculin est choisi dans le groupe « {1} », elles remplacent le modèle masculin de l'auteur.",
+    "description": ""
+  },
+  "SizeSet.AuthorsMensStillReplaced.Fmt": {
+    "message": "{0} : le mod a son propre modèle masculin de cette pièce, et ce passage l'a laissé tel quel, mais une version masculine faite à partir de cette pièce féminine lors d'un passage précédent le remplace toujours dans le groupe « {1} » là où ce corps masculin est choisi. Pour y montrer le modèle de l'auteur, choisis Original dans « {1} » ou retire cette option.",
     "description": ""
   },
   "SizeSet.Piercings": {
@@ -5260,7 +5384,7 @@
     "description": "Checkbox label for a men's body offered for a women's mod. {0} is the body (\"TBSE\")."
   },
   "SizeSet.ForMen.Tip.Fmt": {
-    "message": "Les pièces de torse et de jambes pour femmes de ce mod reçoivent une version pour hommes sur {0} : réajustées pour les hommes Midlander par les cartes de corps, téléchargées la première fois qu'il en faut, chacune depuis la taille de l'auteur dont le corps, plié en forme d'homme, est le plus proche du sien. Elles sont enregistrées dans un groupe à part, « {1} », donc les tailles pour femmes restent telles quelles. Les chaussures et les gants ne sont pas réajustés entre les sexes, et une pièce que l'auteur a déjà faite pour hommes garde la sienne.",
+    "message": "Les pièces de torse et de jambes pour femmes de ce mod reçoivent une version pour hommes sur {0} : réajustées pour les hommes Midlander par les cartes de corps, téléchargées la première fois qu'il en faut, chacune depuis la taille de l'auteur dont le corps, plié en forme d'homme, est le plus proche du sien. Elles sont enregistrées dans un groupe à part, « {1} », donc les tailles pour femmes restent telles quelles. Ses chaussures et gants pour femmes reçoivent aussi une version pour hommes, réajustée par leurs jambes ou leurs bras, tant que « Inclure les chaussures et les gants » est cochée, et une pièce que l'auteur a déjà faite pour hommes garde la sienne.",
     "description": "Tooltip. {0} is a men's body (\"TBSE\"), {1} the group the men's versions go into."
   },
   "SizeSet.MensGroup": {
@@ -5290,6 +5414,10 @@
   "SizeSet.EndFromGameBody.Fmt": {
     "message": "{0}, « {1} » : sa jambe ou son bras n'a pas de peau d'où lire un corps, il a donc été réajusté comme s'il avait été fait sur le corps du jeu.",
     "description": "Check in game: a women's shoe or glove made a men's with no skin to read a body off. {0} is the piece, {1} the men's option."
+  },
+  "SizeSet.EndFromOutfitLegs.Fmt": {
+    "message": "{0}, « {1} » : elle n'a pas de peau à elle d'où lire un corps, et son tissu ne repose de près sur aucun corps ; elle a donc été réajustée comme faite sur {2}, le corps sur lequel les jambes de cette tenue (« {3} ») ont été faites.",
+    "description": ""
   },
   "SizeSet.EndClothGap.Fmt": {
     "message": "{0}, « {1} » : son tissu s'écarte en moyenne d'environ {2:F0} mm de la jambe ou du bras de {3}, le corps lu n'est donc peut-être pas celui sur lequel il a été fait.",
@@ -5681,6 +5809,18 @@
   },
   "HairPort.Earless.Refused.Outside.Fmt": {
     "message": "{0} n'est pas un chemin dans le dossier sans oreilles du mod, rien n'a donc été écrit",
+    "description": ""
+  },
+  "Parts.Retarget.NoSlotInBody.Fmt": {
+    "message": "{0} n'a pas de tailles pour cette partie ({1}). Choisis un mod de corps qui en a.",
+    "description": ""
+  },
+  "Parts.Retarget.UseWornBody.Fmt": {
+    "message": "Utiliser {0}",
+    "description": ""
+  },
+  "Parts.Retarget.UseWornBody.Tip": {
+    "message": "Ajuster vers le mod de corps que tu portes pour cette partie. Comme le choisir sous « Ajuster vers le corps ».",
     "description": ""
   }
 }

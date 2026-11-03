@@ -18,6 +18,7 @@ internal sealed class AutoRefitTargets
     private readonly AutoRefitPreference pref;
     private readonly Func<string, BodyModIndex.Entry?> find;
     private readonly IReadOnlyDictionary<string, BodyOption?> worn;
+    private readonly Func<string, IReadOnlyDictionary<string, List<string>>?>? selectedOf;
 
     /// <summary>The race sizes are listed at; null lists every race's.</summary>
     public string? Race { get; }
@@ -25,18 +26,23 @@ internal sealed class AutoRefitTargets
     /// <param name="find">An installed body mod by folder, or null when it is not installed.</param>
     /// <param name="worn">What the character wears in each part's own body (see <see cref="WornFrom"/>); a part left out
     /// wears nothing that can be told.</param>
+    /// <param name="selectedOf">The options ticked in each part's own body mod, by slot, when known: which chest a size
+    /// kept before a body's chests were sizes stands for (see <see cref="AutoRefitDecisions.Resolve"/>).</param>
     public AutoRefitTargets(AutoRefitPreference pref, Func<string, BodyModIndex.Entry?> find, string? race,
-                            IReadOnlyDictionary<string, BodyOption?>? worn = null)
+                            IReadOnlyDictionary<string, BodyOption?>? worn = null,
+                            Func<string, IReadOnlyDictionary<string, List<string>>?>? selectedOf = null)
     {
         this.pref = pref;
         this.find = find;
         Race = race;
         this.worn = worn ?? new Dictionary<string, BodyOption?>(StringComparer.Ordinal);
+        this.selectedOf = selectedOf;
     }
 
     /// <summary>The same preference and bodies at <paramref name="race"/>, with what is worn in each part's body.</summary>
-    public AutoRefitTargets With(string? race, IReadOnlyDictionary<string, BodyOption?> wornNow)
-        => new(pref, find, race, wornNow);
+    public AutoRefitTargets With(string? race, IReadOnlyDictionary<string, BodyOption?> wornNow,
+                                 Func<string, IReadOnlyDictionary<string, List<string>>?>? selectedNow = null)
+        => new(pref, find, race, wornNow, selectedNow ?? selectedOf);
 
     /// <summary>The body mod folder a part is refitted onto; empty for none.</summary>
     public string DirOf(string slot) => pref.BodyOf(slot);
@@ -54,7 +60,13 @@ internal sealed class AutoRefitTargets
     public IReadOnlyList<BodyOption> Options(string slot) => Catalog(slot)?.For(slot, Race) ?? [];
 
     /// <summary>The size chosen for a part, found in its own body at the race; null when none is.</summary>
-    public BodyOption? Chosen(string slot) => AutoRefitDecisions.Resolve(Options(slot), pref.SizeOf(slot));
+    public BodyOption? Chosen(string slot)
+        => AutoRefitDecisions.Resolve(Options(slot), SavedSize(Catalog(slot), slot), Worn(slot), selectedOf?.Invoke(slot));
+
+    /// <summary>The size saved for a part, read in <paramref name="catalog"/>: one saved against a physics variant of a
+    /// chest (NIRÆ's "Squish", #59) is its build's. The preference itself is left as saved.</summary>
+    private BodySizeRef? SavedSize(BodySizeCatalog? catalog, string slot)
+        => catalog != null ? catalog.Canonical(pref.SizeOf(slot)) : pref.SizeOf(slot);
 
     /// <summary>What the character wears in a part's body, as handed in.</summary>
     public BodyOption? Worn(string slot) => worn.GetValueOrDefault(slot);
@@ -151,7 +163,7 @@ internal sealed class AutoRefitTargets
             if (stays && !onLead)
             {
                 var options = lead.Catalog.For(slot, Race);
-                if ((AutoRefitDecisions.Resolve(options, pref.SizeOf(slot)) ?? AutoRefitDecisions.Companion(options, target, null))
+                if ((AutoRefitDecisions.Resolve(options, SavedSize(lead.Catalog, slot)) ?? AutoRefitDecisions.Companion(options, target, null))
                     is { } there)
                 {
                     parts.Add(new Part(slot, from, there, lead));
@@ -212,18 +224,52 @@ internal sealed class AutoRefitTargets
     internal (BodyModIndex.Entry Body, BodyOption To)? CoverTarget(string slot, BodyModIndex.Entry lead, BodyOption leadTarget,
                                                                     bool leadStays, BodyOption? own)
     {
+        // Rue goes with Rue alone, on an accessory as on a body-slot garment (see CoveredAcrossRue, which takes such a
+        // part out first; this is the second line).
+        if (AcrossRue(slot, lead)) return null;
         if (!leadStays || (Body(slot) is { } body && string.Equals(body.Dir, lead.Dir, StringComparison.OrdinalIgnoreCase)))
             return own != null && Body(slot) is { } mine ? (mine, own) : null;
         var options = lead.Catalog.For(slot, Race);
-        return (AutoRefitDecisions.Resolve(options, pref.SizeOf(slot)) ?? AutoRefitDecisions.Companion(options, leadTarget, null))
+        return (AutoRefitDecisions.Resolve(options, SavedSize(lead.Catalog, slot)) ?? AutoRefitDecisions.Companion(options, leadTarget, null))
                is { } there ? (lead, there) : null;
     }
 
-    /// <summary>Whether a part on <paramref name="dir"/> is on the other side of the Rue line (see <see cref="IsRue"/>)
-    /// from the bodies the other parts are on.</summary>
-    internal bool CrossesRue(string slot, string dir, string? name)
-        => AutoRefitDecisions.Slots.Where(s => s != slot && DirOf(s).Length > 0)
-                                   .Any(s => IsRue(DirOf(s), Body(s)?.Name) != IsRue(dir, name));
+    /// <summary>
+    /// The parts of an accessory's cover after its first — the part it is measured as, and routed by — whose body is on
+    /// the other side of the Rue line from that one's: left out of its refit, as <see cref="TargetFor"/> leaves such a
+    /// part out of a body-slot garment's. Judged before anything is read or sized, so such a part is never asked a size
+    /// of. A part with no body chosen is on no side.
+    /// </summary>
+    internal List<string> CoveredAcrossRue(IReadOnlyList<string> covered)
+    {
+        if (covered.Count == 0) return [];
+        bool rue = IsRue(DirOf(covered[0]), Body(covered[0])?.Name);
+        return covered.Skip(1).Where(s => DirOf(s).Length > 0 && IsRue(DirOf(s), Body(s)?.Name) != rue).ToList();
+    }
+
+    /// <summary>The chosen parts on each side of the Rue line, for Settings to say so.</summary>
+    /// <param name="ShoesLeft">The feet and the legs are on different sides: a shoe keeping its feet may be left as it is.</param>
+    /// <param name="GlovesLeft">The hands and the chest are on different sides, likewise for a glove.</param>
+    internal sealed record RueSplit(IReadOnlyList<string> Rue, IReadOnlyList<string> Other, bool ShoesLeft, bool GlovesLeft);
+
+    /// <summary>
+    /// The parts whose chosen body is installed, split by the Rue line (see <see cref="IsRue"/>); null unless both sides
+    /// have one. Each part keeps its own pick (<see cref="AutoRefitDecisions.ChooseBody"/>), and gear reaching both sides
+    /// is refitted on its own part's side only.
+    /// </summary>
+    internal RueSplit? RueSides()
+    {
+        var rue = new List<string>();
+        var other = new List<string>();
+        foreach (string slot in AutoRefitDecisions.Slots)
+        {
+            if (Body(slot) is not { } body) continue;
+            (IsRue(body.Dir, body.Name) ? rue : other).Add(slot);
+        }
+        if (rue.Count == 0 || other.Count == 0) return null;
+        bool Apart(string a, string b) => rue.Contains(a) && other.Contains(b) || other.Contains(a) && rue.Contains(b);
+        return new RueSplit(rue, other, Apart("_sho", "_dwn"), Apart("_glv", "_top"));
+    }
 
     /// <summary>A part follows the anchor's size by name (<see cref="Basis.Anchor"/>), else the size worn, else the first.</summary>
     internal enum Basis { Anchor, Worn, First }
@@ -296,9 +342,11 @@ internal sealed class AutoRefitTargets
     /// alone — matched off the framework thread, the asking done on it (see <see cref="RefitCore.WornOption"/>).
     /// </summary>
     /// <param name="resolved">Each game path as Penumbra resolved it for the player; a path left out resolves to nothing.</param>
+    /// <param name="selected">The options ticked in the body mod, when known (see <see cref="RefitCore.WornOption"/>).</param>
     internal static BodyOption? WornFrom(BodySizeCatalog catalog, string slot, string? race,
-                                         IReadOnlyDictionary<string, string?> resolved)
-        => RefitCore.WornOption(catalog, slot, race, path => resolved.GetValueOrDefault(path));
+                                         IReadOnlyDictionary<string, string?> resolved,
+                                         IReadOnlyDictionary<string, List<string>>? selected = null)
+        => RefitCore.WornOption(catalog, slot, race, path => resolved.GetValueOrDefault(path), selected);
 
     /// <summary>The game paths a part's body draws at the race: what is asked of Penumbra for <see cref="WornFrom"/>.</summary>
     internal static IEnumerable<string> GamePathsOf(BodySizeCatalog catalog, string slot, string? race)

@@ -57,6 +57,9 @@ public sealed partial class SecondSkinService
         private bool wearsOnlyGen2;
         private string equipCode = null!;
         private List<(byte[] Bytes, HashSet<string>? Shapes, string Path, string? Uv)> bodies = null!;
+        // Body game path → the attributes its body mod's options switch off (ShellBodyAtr), and the parts watched.
+        private Dictionary<string, IReadOnlySet<string>> bodyAtrOff = new(StringComparer.OrdinalIgnoreCase);
+        private IReadOnlyList<ShellBodyAtr.Use> bodyAtrUses = [];
         private HashSet<string> bodySettled = null!;
         private HashSet<string> smoothable = null!;
         private string? modelType;
@@ -101,6 +104,8 @@ public sealed partial class SecondSkinService
         private byte[]?[] alphaByLayer = null!;
         private List<(string ModDir, int LayerIdx, byte[] Normal)> reliefContribs = null!;
         private byte[]? sharedToeCap;
+        /// <summary>Whether any authored toe cap loaded; without one no layer gets a cap (see <see cref="LayerToeCap"/>).</summary>
+        private bool capsAvailable;
         private Dictionary<string, float> bridgeByMod = null!;
         private Dictionary<string, float> smoothByMod = null!;
         private Dictionary<string, float> cleftByMod = null!;
@@ -152,6 +157,9 @@ public sealed partial class SecondSkinService
         internal bool MenMapsReady { get; init; }
         /// <summary>Whether a mod's women's art may be painted on a man ("Overlay on men"); null allows every mod.</summary>
         internal Func<string, bool>? MenAllowed { get; init; }
+
+        /// <summary>This composite's toe-cap map per mod (null = none): resolved once, before promotion, and reused here.</summary>
+        internal IReadOnlyDictionary<string, ToeCapMap>? ToeCaps { get; init; }
 
         /// <summary>
         /// The men's layout the shell's body surface is in on a man — TBSE's for <c>_b</c> parts, the men's vanilla for
@@ -391,6 +399,16 @@ public sealed partial class SecondSkinService
             // Bare-body slots attempted vs. missing; the whole-body fallback fires only when every one was missing.
             barePartsTried = 0;
             barePartsMissing = 0;
+            // What each bare part's body mod switches off by its options (NIRÆ's chests): left out of the shell, and the
+            // parts watched for a change. Settings read once per mod per build.
+            bodyAtrOff = new Dictionary<string, IReadOnlySet<string>>(StringComparer.OrdinalIgnoreCase);
+            var bodyAtrUses = new List<ShellBodyAtr.Use>();
+            var settingsMemo = new Dictionary<string, ShellBodyAtr.ModSettings?>(StringComparer.OrdinalIgnoreCase);
+            ShellBodyAtr.ModSettings? SettingsOf(string modDir)
+                => settingsMemo.TryGetValue(modDir, out var known) ? known : settingsMemo[modDir] = service.PlayerModSettings(modDir);
+            var modsRoot = service.modsRootOf?.Invoke();
+            // Penumbra judges a race-limited switch by the drawn race; with none known, those switches stay drawn.
+            var atrRace = RefitCore.RaceNumber(drawnRaceCode);
             foreach (var part in Parts)
             {
                 // A slot the worn gear's EQP hides is loaded but never drawn (a top shipping its own legs); a shell cut from it
@@ -448,6 +466,7 @@ public sealed partial class SecondSkinService
                     {
                         Directory.CreateDirectory(upstreamDir);
                         WriteIfChanged(upstreamDisk, settledBytes);
+                        ShellBodyAtr.WriteSource(upstreamDisk, settledDisk, modsRoot);
                     }
                     catch (Exception ex)
                     { service.log.Warning(ex, "[Proteus] second skin: could not keep the upstream {0}", bodyGamePath); }
@@ -464,6 +483,13 @@ public sealed partial class SecondSkinService
                 {
                     bytes = File.ReadAllBytes(upstreamDisk);
                     service._upstreamBodies[bodyGamePath] = bytes;
+                    // Which mod the kept copy came from, recorded beside it: after a restart, the only way to know. Bare parts
+                    // only: for a garment it would also change what smoothing may republish (IsProteusModFile below).
+                    if (isBarePart)
+                    {
+                        sourceDisk = ShellBodyAtr.ReadSource(upstreamDisk, modsRoot, bytes.Length);
+                        if (sourceDisk != null) service._upstreamBodyDisks[bodyGamePath] = sourceDisk;
+                    }
                     service.log.Debug("[Proteus] second skin: {0} resolves to our own output — smoothing the upstream "
                             + "kept at {1}", bodyGamePath, upstreamDisk);
                 }
@@ -489,7 +515,9 @@ public sealed partial class SecondSkinService
                         try
                         {
                             Directory.CreateDirectory(upstreamDir);
+                            // Game data (no bodyDisk), or a file outside the mods folder, deletes any record of a mod.
                             WriteIfChanged(upstreamDisk, bytes);
+                            ShellBodyAtr.WriteSource(upstreamDisk, bodyDisk, modsRoot);
                         }
                         catch (Exception ex)
                         { service.log.Warning(ex, "[Proteus] second skin: could not keep the upstream {0}", bodyGamePath); }
@@ -543,7 +571,23 @@ public sealed partial class SecondSkinService
 
                 bodies.Add((bytes, partShapes, bodyGamePath, partType));
                 if (isBarePart || IsProteusModFile(sourceDisk, outputRoot)) smoothable.Add(bodyGamePath);
+
+                // A body mod that draws one of several shapes by its options (NIRÆ's chests): the shell covers only the
+                // ones drawn. Judged by the mod file the part really comes from, never our own republished copy.
+                // Debug: a vanilla body (game data) has no mod to record and lands here on every composite.
+                if (isBarePart && bodyIsOurs && sourceDisk == null)
+                    service.log.Debug("[Proteus] second skin part {0}: no record of which mod supplies {1} — any "
+                            + "shapes its options switch are all covered", part, bodyGamePath);
+                var atr = ShellBodyAtr.ForPart(part, isBarePart, sourceDisk, modsRoot, atrRace, SettingsOf);
+                if (atr.Note != null)
+                {
+                    if (atr.Warning) service.log.Warning("[Proteus] {0}", atr.Note);
+                    else service.log.Information("[Proteus] {0}", atr.Note);
+                }
+                if (atr.Off is { Count: > 0 } off) bodyAtrOff[bodyGamePath] = off;
+                if (atr.Use != null) bodyAtrUses.Add(atr.Use);
             }
+            this.bodyAtrUses = bodyAtrUses;
         }
 
         private bool WholeBodyFallback()
@@ -897,7 +941,9 @@ public sealed partial class SecondSkinService
                     EnabledShapes: Interop.BodyShapeReader.Split(b.Shapes).Shapes,
                     // The variant this body draws when it ships more than one of a region (BodyShapeReader.ReadEnabledShapes);
                     // independent of the redundancy setting.
-                    HiddenAttributes: Interop.BodyShapeReader.Split(b.Shapes).HiddenAttributes,
+                    // ...and the shapes its body mod's options switch off (NIRÆ's other chests).
+                    HiddenAttributes: ShellBodyAtr.Merge(Interop.BodyShapeReader.Split(b.Shapes).HiddenAttributes,
+                                                         bodyAtrOff.GetValueOrDefault(b.Path)),
                     UvConv: i < uvConverters.Count ? uvConverters[i] : null,
                     DelegateKey: "keep:-|uv:" + (i < uvConverters.Count && uvConverters[i] != null
                         ? $"{(menUnmirror && IsGen2(b.Uv) ? UVRemapService.MaleVanillaSpace : b.Uv)}>{bodyType}:{unmirror}" : "-"),
@@ -1169,24 +1215,34 @@ public sealed partial class SecondSkinService
 
             // A toe cap belongs to the FOOT, not the mod that ships the map: one mod paints it and every shell over the toes
             // is rebuilt with it. The map is remapped into body UV with its own mod's source type.
+            // The map only says a cap is WANTED: the authored cap's footprint decides the cut. Without an authored cap the
+            // writer would generate one from the mask, which a whole-sheet mask must never reach, so then nothing is capped.
             sharedToeCap = null;
-            var capCandidates = (allEntries ?? gearOverlays.Select(g => g.Entry).ToList())
-                .GroupBy(e => e.ModDirectory, StringComparer.OrdinalIgnoreCase)
-                .Select(g => g.First());
-            foreach (var tEntry in capCandidates)
+            capsAvailable = service.AuthoredCaps().Count > 0;
+            if (!capsAvailable && ToeCaps is { Count: > 0 })
             {
-                var tPath = service.discovery.ResolveActiveToeCap(tEntry);
-                if (tPath == null) continue;
-
-                // Remapped with the OWNING mod's UV space; after that it is body-UV pixels anyone can use.
-                var tDesc = gearOverlays.FirstOrDefault(g =>
-                    string.Equals(g.Entry.ModDirectory, tEntry.ModDirectory, StringComparison.OrdinalIgnoreCase)).Overlay?.Descriptor;
-                var tSrc = tDesc != null ? tDesc.SourceBodyType ?? InferOverlayBodyType(tDesc) : bodyType;
-                sharedToeCap = service.ReadToeCap(tPath, tSrc, bodyType);
+                var meshDir = Path.Combine(service.discovery.AssemblyDir ?? "?", "Meshes");
+                if (LogLineChanged(ref service.lastCapsMissing, meshDir))
+                    service.log.Warning("[Proteus] second skin: no authored toe cap loaded from {0} — the install is "
+                                      + "damaged; toe caps are off until Proteus is reinstalled", meshDir);
+            }
+            var capCandidates = (allEntries ?? gearOverlays.Select(g => g.Entry).ToList())
+                .Select(e => e.ModDirectory);
+            foreach (var (tMod, tMap) in capsAvailable ? CapCandidates(capCandidates, ToeCaps) : [])
+            {
+                // An own map is remapped with the OWNING mod's UV space; after that it is body-UV pixels anyone can use.
+                // The built-in cap is uniform, so it has no UV space and is never read or remapped.
+                sharedToeCap = SharedCapMask(tMap, path =>
+                {
+                    var tDesc = gearOverlays.FirstOrDefault(g =>
+                        string.Equals(g.Entry.ModDirectory, tMod, StringComparison.OrdinalIgnoreCase)).Overlay?.Descriptor;
+                    var tSrc = tDesc != null ? tDesc.SourceBodyType ?? InferOverlayBodyType(tDesc) : bodyType;
+                    return service.ReadToeCap(path, tSrc, bodyType);
+                });
                 if (sharedToeCap != null)
                 {
                     service.log.Information("[Proteus] second skin: toe cap {0} from \"{1}\" applies to every shell over the toes",
-                        Path.GetFileName(tPath), tEntry.ModDirectory);
+                        tMap.OwnPath is { } own ? Path.GetFileName(own) : "(built-in)", tMod);
                     break;
                 }
             }
@@ -1572,7 +1628,7 @@ public sealed partial class SecondSkinService
                 };
 
                 var smoothedBody = new Dictionary<string, byte[]>(StringComparer.OrdinalIgnoreCase);
-                foreach (var (bBytes, _, bPath, _) in bodies)
+                foreach (var (bBytes, bShapes, bPath, _) in bodies)
                 {
                     // With no relax asked for, the nails are the only reason to be here, and they are on the HANDS. Any
                     // other part skips the pass exactly as it did before the nails — above all the hold below, which
@@ -1616,7 +1672,9 @@ public sealed partial class SecondSkinService
                         // a flattened toe under a stocking that still has a hole over it is no better off.
                         if (nailGate != null && bPath.EndsWith("_glv.mdl", StringComparison.OrdinalIgnoreCase)
                             && BodyBridge.FlattenNails(smoothed ?? bBytes, nailGate,
-                                   msg => service.log.Debug("[Proteus] second skin: {0}", msg)) is { } noNails)
+                                   msg => service.log.Debug("[Proteus] second skin: {0}", msg),
+                                   // The nail layers this body hides (Stabbies' alternative nails) are no nails of its.
+                                   Interop.BodyShapeReader.Split(bShapes).HiddenAttributes) is { } noNails)
                             smoothed = noNails;
                     }
                     catch (Exception ex)
@@ -1691,7 +1749,7 @@ public sealed partial class SecondSkinService
 
             return new Result(redirects, manipulations, shellChanged, shellMaterials, modelChangedAny,
                               hostModelPaths, appendHostModelPaths, contentMaterials, shellLight, contentModels,
-                              appendHostSources);
+                              appendHostSources) { BodyAtrUses = bodyAtrUses };
         }
 
         private string VariantFolderFor(HostAccessory h)

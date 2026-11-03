@@ -86,8 +86,9 @@ public static partial class SecondSkinWriter
 
             private void DropDeclinedCap()
             {
-                // A declined cap takes its cut with it, so the toes keep the shell they already had.
-                if (build.capDeclined != null && def.ToeCap != null)
+                // A declined cap takes its cut with it, so the toes keep the shell they already had. A footless host drops
+                // the request too: it must never reach the generated solver.
+                if ((build.capDeclined != null || build.capNoFoot) && def.ToeCap != null)
                     def = WithCoverageAndCap(def, def.Coverage, null, 0, 0);
             }
 
@@ -320,7 +321,7 @@ public static partial class SecondSkinWriter
                             build.EmitMesh(gsrc, m, matIndex, 0f, preserve: true, cov: null,
                                 mirrorUv1: geo.MirrorUv1,
                                 hiddenAttrs: geo.HiddenAttributes, clearAttrs: geo.OwnAttributes,
-                                dropVariantAttrs: geo.DropVariantAttributes);
+                                dropVariantAttrs: geo.DropVariantAttributes, dropAttrs: geo.DropAttributes);
                         }
                     }
                     return false;

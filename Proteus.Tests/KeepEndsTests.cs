@@ -925,7 +925,7 @@ public class KeepEndsTests
         return path;
     }
 
-    private static (ushort?, ushort?) NoMask(string _) => (null, null);
+    private static (BodyRetarget.BodyDraw?, BodyRetarget.BodyDraw?) NoMask(string _) => (null, null);
 
     [Fact]
     [Trait("Plan", "AC-keep-ends-studio-10")]
@@ -1203,6 +1203,35 @@ public class KeepEndsTests
                                              "body", catalog);
             Assert.Equal(KeepEnds.Route.NoSkin, noSkin.Route);
             Assert.Null(noSkin.Pick);
+        });
+    }
+
+    /// <summary>A shoe with no skin at all, refitted for the other sex (hands-feet-port): read by where its shaft's cloth
+    /// sits, its legs size filled in; without the flag, nothing is filled in as before.</summary>
+    [Fact]
+    [Trait("Plan", "EDGE-hands-feet-port-26")]
+    [Trait("Plan", "EDGE-hands-feet-port-20")]
+    public void Studio_reads_a_skinless_crossed_shoe_by_its_cloth()   // [EDGE-hands-feet-port-26] [EDGE-hands-feet-port-20]
+    {
+        InBodies(dir =>
+        {
+            Write(dir, "s.mdl", LegsBody(120, 0f, 100f));
+            var catalog = new BodySizeCatalog(dir, [LegsS with { Rel = "s.mdl" }, FeetM]);
+            var clothOnly = SyntheticModel.Build([], new SyntheticModel.Mesh(Cloth,
+                new SyntheticModel.Sub(0, TrianglesPerIsland: 2, Weights: Foot),
+                new SyntheticModel.Sub(0, TrianglesPerIsland: 120, OffsetX: 100f, OffsetZ: 0.003f, Weights: Calf)));
+            var parts = ModelPartReader.Read(clothOnly)!;
+            var reading = KeepEnds.Read("_sho", parts, clothOnly)!;
+            Assert.NotNull(KeepEnds.ClothSitsOn(reading, catalog.For("_dwn", "0201"), catalog.PathOf));
+
+            var crossed = KeepEnds.StudioLimb(reading, parts, NoBones, "0201", "body", catalog, clothWhenSkinless: true);
+            Assert.Equal(KeepEnds.Route.NoSkin, crossed.Route);
+            Assert.Equal("s.mdl", crossed.Pick!.Rel);
+            Assert.NotNull(crossed.Shown);
+
+            var same = KeepEnds.StudioLimb(reading, parts, NoBones, "0201", "body", catalog);
+            Assert.Equal(KeepEnds.Route.NoSkin, same.Route);
+            Assert.Null(same.Pick);
         });
     }
 

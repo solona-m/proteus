@@ -30,6 +30,7 @@ public class AutoRefitPartsTests
 
     [Fact]
     [Trait("Plan", "AC-auto-refit-part-bodies-1")]
+    [Trait("Plan", "EDGE-per-part-target-body-15")]
     public void Rows_are_chest_legs_hands_feet_each_with_its_own_body_and_size()
     {
         var pref = new AutoRefitPreference();
@@ -366,21 +367,43 @@ public class AutoRefitPartsTests
 
     // ── Rue goes only with Rue ───────────────────────────────────────────────
 
+    /// <summary>
+    /// Replaces "picking Rue beside another body switches every part": a reporter's chest and legs were forced onto one
+    /// body that way. Each part keeps its own pick now; the refit leaves a part across the line out (see
+    /// AutoRefitTargetsTests), and Settings says so (RueSides).
+    /// </summary>
     [Fact]
-    [Trait("Plan", "AC-auto-refit-part-bodies-1")]
-    public void Picking_rue_beside_another_body_switches_every_part()
+    [Trait("Plan", "AC-per-part-target-body-5")]
+    public void Picking_rue_for_one_part_changes_only_that_part()
     {
         var pref = SetUp();
         pref.SetSize("_top", Ref(Bibo, "_top", "L"));
-        var first = AutoRefitDecisions.ChooseBody(pref, "_dwn", Rue, "0201", canReadWorn: false, Find);
-        Assert.All(AutoRefitDecisions.Slots, s => Assert.Equal(Rue.Dir, pref.BodyOf(s)));
-        Assert.Equal(["_top", "_dwn"], first);
-        Assert.Equal("M", pref.Chest!.Name);   // Rue's first, not Bibo+'s L
+        var first = AutoRefitDecisions.ChooseBody(pref, "_dwn", Rue, "0201", canReadWorn: false);
+        Assert.Empty(first);
+        Assert.Equal([Bibo.Dir, Rue.Dir, Bibo.Dir, Bibo.Dir], AutoRefitDecisions.Slots.Select(pref.BodyOf));
+        Assert.Equal("L", pref.Chest!.Name);   // Bibo+'s L kept
 
-        // And back: a non-Rue body beside Rue switches every part again; Rue beside its fork does not.
-        AutoRefitDecisions.ChooseBody(pref, "_top", LaRue, "0201", canReadWorn: false, Find);
-        Assert.Equal([LaRue.Dir, Rue.Dir], new[] { "_top", "_dwn" }.Select(pref.BodyOf));
-        AutoRefitDecisions.ChooseBody(pref, "_glv", Yab, "0201", canReadWorn: false, Find);
-        Assert.All(AutoRefitDecisions.Slots, s => Assert.Equal(Yab.Dir, pref.BodyOf(s)));
+        // Another body for the hands, across the line from the legs: only the hands change.
+        AutoRefitDecisions.ChooseBody(pref, "_glv", Yab, "0201", canReadWorn: false);
+        Assert.Equal([Bibo.Dir, Rue.Dir, Yab.Dir, Bibo.Dir], AutoRefitDecisions.Slots.Select(pref.BodyOf));
+        Assert.Equal("L", pref.Chest!.Name);
+    }
+
+    [Fact]
+    [Trait("Plan", "AC-per-part-target-body-6")]
+    [Trait("Plan", "EDGE-per-part-target-body-24")]
+    public void Rue_split_text_names_both_sides_the_forget_button_and_the_ends_left()
+    {
+        var s = Proteus.Localization.Strings.AutoRefit;
+        string Name(string slot) => slot.TrimStart('_');
+        string legs = AutoRefitPanel.RueSplitText(new AutoRefitTargets.RueSplit(["_dwn"], ["_top", "_glv"], true, false), Name);
+        Assert.Contains("dwn", legs);
+        Assert.Contains("top, glv", legs);
+        Assert.Contains(s.ClearLabel, legs);
+        Assert.Contains(s.RueSplitShoes, legs);
+        Assert.DoesNotContain(s.RueSplitGloves, legs);
+        string hands = AutoRefitPanel.RueSplitText(new AutoRefitTargets.RueSplit(["_glv"], ["_top"], false, true), Name);
+        Assert.Contains(s.RueSplitGloves, hands);
+        Assert.DoesNotContain(s.RueSplitShoes, hands);
     }
 }

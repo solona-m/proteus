@@ -180,19 +180,35 @@ internal static partial class RefitCore
     }
 
     /// <summary>
-    /// The IMC attribute mask a body mod gives its model in <paramref name="slot"/> under a choice of its options —
-    /// which of the body's variant parts the game draws (see <see cref="BodyRetarget.UndrawnVariants"/>). Null when the
-    /// mod has no say, the game's own bodies included: every part is then taken as drawn.
+    /// What of its model in <paramref name="slot"/> a body mod draws under a choice of its options: the IMC attribute
+    /// mask — which of the body's variant parts the game draws (see <see cref="BodyRetarget.UndrawnVariants"/>) — and the
+    /// custom attributes its <c>Atr</c> options switch (see <see cref="BodyAtrSwitches"/>). Null when the mod has no say,
+    /// the game's own bodies included: every part is then taken as drawn. Read once per slot; a refit onto one of its
+    /// sizes takes that size as chosen with <see cref="BodyRetarget.BodyDraw.Onto"/>.
     /// </summary>
     /// <param name="selected">The mod's ticked options in the collection, as Penumbra reports them; null reads the
     /// mod's defaults.</param>
-    internal static ushort? MaskOf(string? dir, BodySizeCatalog? mod, string slot,
-                                   IReadOnlyDictionary<string, List<string>>? selected)
+    /// <param name="race">The body's race as Penumbra codes it (<see cref="RaceNumber"/>); null when unknown, and an
+    /// option limited to one race then leaves its attribute as it was.</param>
+    internal static BodyRetarget.BodyDraw? MaskOf(string? dir, BodySizeCatalog? mod, string slot,
+                                                  IReadOnlyDictionary<string, List<string>>? selected, ushort? race = null)
     {
         if (dir == null || dir == VanillaBodyCatalog.Key || mod == null) return null;
         if (BodyRetarget.ImcSlotName(slot) is not { } equipSlot) return null;
-        return ImcEntrySource.MaskFor(mod.ModRoot, 0, equipSlot, selected);
+        ushort? imc = ImcEntrySource.MaskFor(mod.ModRoot, 0, equipSlot, selected);
+        var query = BodyAtrSwitches.Manifest(mod.ModRoot) is { } manifest
+            ? new BodyAtrSwitches.Query(manifest, equipSlot, selected, race)
+            : null;
+        var atr = query == null ? null : BodyAtrSwitches.Resolve(query);
+        if (imc == null && atr == null) return null;
+        return new BodyRetarget.BodyDraw(imc, atr?.Off ?? new HashSet<string>(StringComparer.Ordinal),
+                                         atr?.Switched ?? new HashSet<string>(StringComparer.Ordinal), query);
     }
+
+    /// <summary>A model race code as Penumbra numbers races ("0201" is 201); null when it is not one.</summary>
+    internal static ushort? RaceNumber(string? code)
+        => code != null && ushort.TryParse(code, System.Globalization.NumberStyles.None,
+                                           System.Globalization.CultureInfo.InvariantCulture, out var n) ? n : null;
 
     /// <summary>The mod's single-choice groups, in the author's order.</summary>
     internal static List<string> SingleGroups(string modRoot) => GroupsOfType(modRoot, "Single", int.MaxValue);
@@ -850,18 +866,34 @@ internal static partial class RefitCore
     /// </summary>
     /// <param name="resolve">Resolves a game path through the player's collection (Penumbra IPC, so whatever thread
     /// the caller is allowed to ask from).</param>
+    /// <param name="selected">The body mod's ticked options, when known: of a chest model's chests
+    /// (<see cref="BodySizeCatalog.IsShape"/>) the one ticked is worn, else the default one.</param>
+    /// <remarks>A body's physics variant of a chest model (NIRÆ's "Squish", #59, see <see cref="BodySizeCatalog.Variants"/>)
+    /// is read as its build's model: wearing it is wearing the build's chest.</remarks>
     internal static BodyOption? WornOption(BodySizeCatalog catalog, string slot, string? race,
-                                           Func<string, string?> resolve)
+                                           Func<string, string?> resolve,
+                                           IReadOnlyDictionary<string, List<string>>? selected = null)
     {
         var options = catalog.For(slot, race);
         foreach (string gamePath in options.Select(o => o.GamePath).Distinct(StringComparer.OrdinalIgnoreCase))
         {
             if (resolve(gamePath) is not { } resolved) continue;
             string full = Path.GetFullPath(resolved);
-            foreach (var option in options)
-                if (string.Equals(option.GamePath, gamePath, StringComparison.OrdinalIgnoreCase)
-                    && string.Equals(Path.GetFullPath(catalog.PathOf(option)), full, StringComparison.OrdinalIgnoreCase))
-                    return option;
+            var worn = options.Where(o => string.Equals(o.GamePath, gamePath, StringComparison.OrdinalIgnoreCase)
+                                          && string.Equals(Path.GetFullPath(catalog.PathOf(o)), full, StringComparison.OrdinalIgnoreCase))
+                              .ToList();
+            if (worn.Count > 0) return BodySizeCatalog.PickShape(worn, selected);
+
+            // A physics variant of a build's chest (NIRÆ's "Squish", #59) is not a size: wearing it is wearing the build.
+            if (catalog.Variants.FirstOrDefault(v => string.Equals(v.GamePath, gamePath, StringComparison.OrdinalIgnoreCase)
+                    && string.Equals(Path.GetFullPath(BodySizeCatalog.ResolveCaseInsensitive(catalog.ModRoot, v.Rel)), full,
+                                     StringComparison.OrdinalIgnoreCase)) is { } variant)
+            {
+                var build = options.Where(o => string.Equals(o.GamePath, gamePath, StringComparison.OrdinalIgnoreCase)
+                                               && Normal(BodySizeCatalog.FileOf(o.Rel)) == Normal(variant.BuildRel))
+                                   .ToList();
+                if (build.Count > 0) return BodySizeCatalog.PickShape(build, selected);
+            }
         }
         return null;
     }
@@ -910,6 +942,14 @@ internal static partial class RefitCore
                                                    string preferredDir, Func<string, bool> enabled, Action<string>? note,
                                                    bool byNearness, Action? onNearness)
     {
+        // A body that switches its shapes by option (NIRÆ) is never a source: read as every shape at once, one of them
+        // lies near almost any garment's skin, and garments made on other bodies were taken for it.
+        var switching = mods.Where(m => BodyAtrSwitches.SwitchesShapes(m.Catalog.ModRoot)).Select(m => m.Dir).ToList();
+        if (switching.Count > 0)
+        {
+            note?.Invoke($"left out as sources, switching their shapes by option: {string.Join(", ", switching)}");
+            mods = mods.Where(m => !switching.Contains(m.Dir)).ToList();
+        }
         using var reading = BodySizeMatch.BeginReading();
         var skinPoints = BodySizeMatch.SkinPoints(garment);
         var probes = BodySizeMatch.ProbeKeys(skinPoints);

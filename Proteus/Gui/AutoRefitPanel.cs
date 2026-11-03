@@ -253,6 +253,21 @@ internal sealed class AutoRefitPanel(AutoRefitWatcher watcher, PenumbraBridge pe
 
     private static string PartName(string slot) => AutoRefitWatcher.SlotName(slot);
 
+    /// <summary>
+    /// What Settings says of parts on both sides of the Rue line (see <see cref="AutoRefitTargets.RueSides"/>): the parts
+    /// on each side, that gear reaching both is refitted on its own part's side only, the shoes or gloves that may be
+    /// left as they are, and the button that puts one body on every part.
+    /// </summary>
+    internal static string RueSplitText(AutoRefitTargets.RueSplit split, Func<string, string> partName)
+    {
+        var s = Strings.AutoRefit;
+        string text = string.Format(s.RueSplitFmt, string.Join(", ", split.Rue.Select(partName)),
+                                    string.Join(", ", split.Other.Select(partName)), s.ClearLabel);
+        if (split.ShoesLeft) text += " " + s.RueSplitShoes;
+        if (split.GlovesLeft) text += " " + s.RueSplitGloves;
+        return text;
+    }
+
     private void DrawParts(IReadOnlyList<BodyModIndex.Entry>? bodies, AutoRefitPreference? pref, string key, Guid collection)
     {
         var s = Strings.AutoRefit;
@@ -300,6 +315,11 @@ internal sealed class AutoRefitPanel(AutoRefitWatcher watcher, PenumbraBridge pe
                                         + string.Format(Strings.Parts.RetargetNoBodiesForSexFmt, row.Body!.Name, sex));
                 }
             }
+        // Each part keeps its own pick across the Rue line, which the refit itself does not cross: said, so a split the
+        // player did not mean is seen, with the way to one body on every part.
+        if (pref != null && new AutoRefitTargets(pref, watcher.Index.Find, race).RueSides() is { } split)
+            using (ImRaii.PushColor(ImGuiCol.Text, ProteusStyle.Warn))
+                ImGui.TextWrapped(RueSplitText(split, PartName));
         if (pref is { PendingFill.Count: > 0 })
             ImGui.TextDisabled(s.SizesPending);
         if (watcher.PrefilledIn(key) is { Count: > 0 } first)
@@ -348,8 +368,7 @@ internal sealed class AutoRefitPanel(AutoRefitWatcher watcher, PenumbraBridge pe
             var chosen = pref ?? new AutoRefitPreference();
             // What is worn can be read only in the collection being worn; elsewhere a first pick takes first sizes.
             var first = AutoRefitDecisions.ChooseBody(chosen, row.Slot, body, race,
-                                                      canReadWorn: collection == currentCollection?.Id,
-                                                      watcher.Index.Find);
+                                                      canReadWorn: collection == currentCollection?.Id);
             if (first.Count > 0) watcher.NotePrefilled(key, first);
             chosen.CollectionName = collections != null && collections.TryGetValue(collection, out var name) ? name : "";
             config.AutoRefitByCollection[key] = chosen;

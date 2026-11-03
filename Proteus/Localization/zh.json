@@ -47,6 +47,18 @@
     "message": "清除此合集的体型",
     "description": ""
   },
+  "AutoRefit.RueSplit.Fmt": {
+    "message": "{0}使用Rue体型，{1}使用其他体型。Rue的部位只与Rue衔接，所以跨两边的装备只转换它自己部位那一侧，其余保持原尺寸。要让所有部位使用同一个体型，请按“{2}”然后重新选择该体型。",
+    "description": ""
+  },
+  "AutoRefit.RueSplit.Shoes": {
+    "message": "当脚和腿位于这条界线的不同两侧时，鞋子可能保持原样。",
+    "description": ""
+  },
+  "AutoRefit.RueSplit.Gloves": {
+    "message": "当手和胸部位于这条界线的不同两侧时，手套可能保持原样。",
+    "description": ""
+  },
   "AutoRefit.Collection": {
     "message": "合集",
     "description": ""
@@ -589,6 +601,46 @@
   },
   "Colors.SmoothFold.Tip": {
     "message": "为覆盖胯部的布料开启此项。\nProteus 以身体的副本来构建服装，因此会照搬双腿之间的褶皱——\n看起来像画在身上而不是穿上的。开启后，会先把那里的皮肤抚平到周围的\n曲面，这样从中裁出的服装也就平滑了。\n此项改动的是身体本身，因此会同时作用于身上的每一件服装。",
+    "description": ""
+  },
+  "Colors.ToeCap.Label": {
+    "message": "包覆脚趾",
+    "description": ""
+  },
+  "Colors.ToeCap.Tip": {
+    "message": "丝袜和袜子请打开此项。\nProteus 把衣物做成身体的副本，所以默认会贴合每一根脚趾 —\n看起来像是画上去的，而不是穿上的。打开后，脚趾会被一个圆润的\n袜头包住，就像真正的袜子那样。只作用于覆盖脚趾的衣物。\n这是 Penumbra 中此模组 Masks 组里的 \"Toe Cap\" 选项：它保存在你的\n合集里而不是模组里，包含此模组的 Glamourer 设计也会保留它。",
+    "description": ""
+  },
+  "Colors.ToeCap.Held.Tip": {
+    "message": "某个 Glamourer 设计（或其他插件）正在锁定此模组的设置，所以\n在这里修改不会生效。请在该设计的 Masks 组中修改 \"Toe Cap\"。",
+    "description": ""
+  },
+  "Colors.ToeCap.Inherited.Note": {
+    "message": "此合集继承了此模组的设置。在这里修改会让它拥有自己的\n模组设置，就像在 Penumbra 中修改一样。",
+    "description": ""
+  },
+  "Colors.ToeCap.Failed.Fmt": {
+    "message": "Penumbra 没有接受这次修改：{0}",
+    "description": ""
+  },
+  "Colors.ToeCap.ModOff": {
+    "message": "此模组在你的合集中处于关闭状态，打开它之前袜头不会显示。",
+    "description": ""
+  },
+  "Colors.ToeCap.NoShell": {
+    "message": "此模组显示的内容都不会成为身体上的衣物（被固定为皮肤、是印花、位于脸或头发而不是\n身体上，或作者设置为跳过袜头），所以袜头在此模组中没有可塑形的对象。\n它仍会作用于覆盖脚趾的其他模组的衣物。",
+    "description": ""
+  },
+  "Colors.ToeCap.Flag.Tip": {
+    "message": "用于丝袜和袜子：脚趾会被一个圆润的袜头包住，就像真正的袜子那样，\n而不是贴合每一根脚趾。\n勾选后，此模组的皮肤图层会变成衣物（第二层皮肤），让袜头有可塑形的对象\n——这需要重新构建一次，印花或固定为皮肤的图层保持不变。\n袜头为 Bibo+、Neolithe、Rue 和 YAB 制作；在其他体型上会生成衣物，\n但脚趾保持原样。\n此模组没有自带袜头，所以此设置保存在模组的 Proteus 设置中：\n它在所有合集中生效，导出模组时会随模组一起带走。",
+    "description": ""
+  },
+  "Colors.ToeCap.Locked.Tip": {
+    "message": "此模组自带的 \"Toe Cap\" 选项已在 Penumbra 中选中，它所在的 Masks 组只允许\n选一个，所以无法在这里关闭。请在 Penumbra 中更改。",
+    "description": ""
+  },
+  "Colors.ToeCap.SaveFailed": {
+    "message": "无法保存此模组的 Proteus 设置，所以已撤销更改。原因见日志（/xllog）。",
     "description": ""
   },
   "Colors.SmoothNipples.Label": {
@@ -4047,6 +4099,26 @@
     "message": "转换到体型",
     "description": ""
   },
+  "Parts.Retarget.PartBody.Same.Fmt": {
+    "message": "与上方相同（{0}）",
+    "description": ""
+  },
+  "Parts.Retarget.PartBody.Tip": {
+    "message": "这个部位要转换到的体型模组。长裙的腿部可以转换到与胸部不同的体型。",
+    "description": ""
+  },
+  "Parts.Retarget.PartBody.KeptOnOwn.Fmt": {
+    "message": "暂时还做不到：{0}留在{1}（这件衣服原适配的体型）上，而{2}要转换到另一个体型。转换无法只把部分部位移出衣服原适配的体型，那个部位的皮肤会丢失或折叠。把{0}也转换到另一个体型模组就可以了。",
+    "description": ""
+  },
+  "Parts.Retarget.PartBody.RueApart.Fmt": {
+    "message": "{0}是Rue体型，而{1}不是。Rue的腰部只与Rue衔接，请在预览中检查腰部。",
+    "description": ""
+  },
+  "Parts.Retarget.PartBody.SetAside.Fmt": {
+    "message": "暂时排除：这个部位设置了自己的体型 {0}，只有在不在“转换给种族”中选择种族、转换整件衣服时才能使用。满足条件后会恢复。",
+    "description": ""
+  },
   "Settings.ReduceMotion": {
     "message": "减少动效",
     "description": ""
@@ -4472,8 +4544,40 @@
     "description": "Heads the dropdown that picks which race's model a refit is made and saved as."
   },
   "Parts.Retarget.Race.Tip": {
-    "message": "调整针对哪个种族。其他种族会得到自己的模型：按游戏弯曲的方式由这个模型制作，调整到该种族的身体上，并保存在该种族加载的位置。中原之民的上身或腿部装备也可以为另一性别调整。这个模型保持不变。",
+    "message": "调整针对哪个种族。其他种族会得到自己的模型：按游戏弯曲的方式由这个模型制作，调整到该种族的身体上，并保存在该种族加载的位置。中原之民的上身或腿部装备，以及女性鞋子或手套（给男性），也可以为另一性别调整。这个模型保持不变。",
     "description": "Tooltip of Parts.Retarget.Race.Label."
+  },
+  "Parts.Retarget.CrossSexEnd.NoLimb": {
+    "message": "它没有覆盖到可判断尺码的腿或手臂。改配给另一性别时仍会通过腿或手臂改配：请选择它制作时所用的腿部或胸部尺码。",
+    "description": ""
+  },
+  "Parts.Retarget.CrossSexEnd.NoSizes": {
+    "message": "所选要改配到的尺码在该身体上已找不到。请重新选择。",
+    "description": ""
+  },
+  "Parts.Retarget.KeepEnds.CrossSex.Tip": {
+    "message": "改配给另一性别时，鞋子始终保留自己的脚，手套保留自己的手，并使用新身体的皮肤：只通过身体映射图改配腿或手臂。",
+    "description": ""
+  },
+  "Parts.Retarget.EndsUnreadable.CrossSex": {
+    "message": "无法读取它的骨骼绑定，因此无法将脚或手与其余部分区分开，而鞋子或手套只有保留脚或手时才会改配给另一性别。",
+    "description": ""
+  },
+  "Parts.Retarget.KeepShape.CrossSexTip": {
+    "message": "改配给另一性别时，鞋子的腿部或手套的手臂作为一个整体改配：“保持形状”不适用。重新选择它自己的种族时，你的勾选会恢复。",
+    "description": ""
+  },
+  "Parts.Retarget.CrossSexEnd.PickMadeFor.Fmt": {
+    "message": "它没有可判断尺码的皮肤，布料也不贴合{0}的任何{1}尺码。请在“原适配体型”中选择它所针对的身体（若是在游戏自带身体上制作的，就选它），再选择尺码。",
+    "description": ""
+  },
+  "Parts.Retarget.Race.CrossSexNude.Fmt": {
+    "message": "{0}只匹配了身体的{1}，因此改为贴合{2}（匹配{3}）。",
+    "description": ""
+  },
+  "Parts.Retarget.Race.WomensModel.Fmt": {
+    "message": "此模组还有该物品自己的{0}模型。要由它制作{1}版本，请打开它：“转换给种族”中会为你选好“{1}”。",
+    "description": ""
   },
   "Parts.Retarget.Race.ThisModel.Fmt": {
     "message": "{0}（此模型）",
@@ -5088,7 +5192,7 @@
     "description": ""
   },
   "SizeSet.Intro": {
-    "message": "为整个模组添加下方勾选体型的每个尺码。每个尺码都从作者最接近它的尺码重新适配，该选项中套装的其他部件也从同一尺码适配，并以“Rue S”“YAB Buff L”等名称保存在作者的尺码旁边。模组已有的尺码保持不变。女性模组也可以加入 TBSE 和 TBSE-X：其上身和腿部会为男性调整，并保存在单独的组中。",
+    "message": "为整个模组添加下方勾选体型的每个尺码。每个尺码都从作者最接近它的尺码重新适配，该选项中套装的其他部件也从同一尺码适配，并以“Rue S”“YAB Buff L”等名称保存在作者的尺码旁边。模组已有的尺码保持不变。女性模组也可以加入 TBSE 和 TBSE-X：其上身、腿部、鞋子和手套会为男性调整，并保存在单独的组中。",
     "description": ""
   },
   "SizeSet.Yas": {
@@ -5104,7 +5208,27 @@
     "description": ""
   },
   "SizeSet.Ends.Tip": {
-    "message": "鞋子和手套保留原本的脚和手，只重新适配它们覆盖到的腿或手臂。鞋子获得腿部的尺码，手套每个身体一个选项；两者与服装的胸部或腿部尺码在同一组时会并入其中。",
+    "message": "鞋子和手套保留原本的脚和手，只重新适配它们覆盖到的腿或手臂。鞋子获得腿部的尺码，手套每个身体一个选项；两者与服装的胸部或腿部尺码在同一组时会并入其中。勾选“男性用”的男性身体时，女性模组的鞋子和手套也会得到男性版本。",
+    "description": ""
+  },
+  "SizeSet.EndsLeftOut.Fmt": {
+    "message": "已略过的鞋子和手套（{0}）：勾选“包括鞋子和手套”即可为它们制作尺码和男性版本。",
+    "description": ""
+  },
+  "SizeSet.AuthorsMens.Fmt": {
+    "message": "{0}：模组自带该部件的男性模型，因此没有由它制作男性版本，而那个男性模型这次也没有制作出任何东西。",
+    "description": ""
+  },
+  "SizeSet.AuthorsMensUnticked.Fmt": {
+    "message": "{0}：模组自带该部件的男性模型，因此没有由它制作男性版本。勾选普通的男性身体（例如“{1}”）即可为那个模型制作尺码。",
+    "description": ""
+  },
+  "SizeSet.AuthorsMensCrossed.Fmt": {
+    "message": "{0}：该模组自带的男性模型文件完全无法作为模型读取（缺失、为 0 字节或已损坏），因此其男性版本由这件女性部件制作。在“{1}”组中选中男性身体的地方，它们会取代作者的男性模型。",
+    "description": ""
+  },
+  "SizeSet.AuthorsMensStillReplaced.Fmt": {
+    "message": "{0}：该模组自带这件的男性模型，本次运行保持原样，但之前某次运行由这件女性部件制作的男性版本，在“{1}”组中选中该男性身体的地方仍会取代它。要在那里显示作者的模型，请在“{1}”中选择 Original，或删除该选项。",
     "description": ""
   },
   "SizeSet.Piercings": {
@@ -5260,7 +5384,7 @@
     "description": "Checkbox label for a men's body offered for a women's mod. {0} is the body (\"TBSE\")."
   },
   "SizeSet.ForMen.Tip.Fmt": {
-    "message": "此模组的女性上身和腿部部件会在 {0} 上获得男性版本：通过身体映射（首次需要时下载）为中原之民男性调整，每件都取自作者的某个尺码——其身体弯成男性形状后最接近他的身体。它们保存在单独的组“{1}”中，因此女性尺码保持不变。鞋子和手套不跨性别调整，作者已为男性制作的部件保留作者的版本。",
+    "message": "此模组的女性上身和腿部部件会在 {0} 上获得男性版本：通过身体映射（首次需要时下载）为中原之民男性调整，每件都取自作者的某个尺码——其身体弯成男性形状后最接近他的身体。它们保存在单独的组“{1}”中，因此女性尺码保持不变。勾选“包括鞋子和手套”时，它的女性鞋子和手套也会得到通过腿或手臂调整的男性版本；作者已为男性制作的部件保留作者的版本。",
     "description": "Tooltip. {0} is a men's body (\"TBSE\"), {1} the group the men's versions go into."
   },
   "SizeSet.MensGroup": {
@@ -5290,6 +5414,10 @@
   "SizeSet.EndFromGameBody.Fmt": {
     "message": "{0}，“{1}”：腿或手臂上没有可读取体型的皮肤，因此按游戏自带体型制作来调整。",
     "description": "Check in game: a women's shoe or glove made a men's with no skin to read a body off. {0} is the piece, {1} the men's option."
+  },
+  "SizeSet.EndFromOutfitLegs.Fmt": {
+    "message": "{0}，“{1}”：它没有可读取体型的自身皮肤，布料也没有紧贴任何身体，因此按{2}制作来调整——这套服装的腿部（“{3}”）就是在这个身体上制作的。",
+    "description": ""
   },
   "SizeSet.EndClothGap.Fmt": {
     "message": "{0}，“{1}”：布料离{3}的腿或手臂平均约 {2:F0} 毫米，所以读取到的体型可能不是它原本制作时用的体型。",
@@ -5681,6 +5809,18 @@
   },
   "HairPort.Earless.Refused.Outside.Fmt": {
     "message": "{0} 不是该 Mod 无耳文件夹内的路径，因此未写入任何内容",
+    "description": ""
+  },
+  "Parts.Retarget.NoSlotInBody.Fmt": {
+    "message": "{0} 没有这个部位（{1}）的尺寸。请选择有这些尺寸的体型模组。",
+    "description": ""
+  },
+  "Parts.Retarget.UseWornBody.Fmt": {
+    "message": "使用 {0}",
+    "description": ""
+  },
+  "Parts.Retarget.UseWornBody.Tip": {
+    "message": "转换到你这个部位正在穿的体型模组。与在“转换到体型”中选择它相同。",
     "description": ""
   }
 }

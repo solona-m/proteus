@@ -96,6 +96,13 @@ public class ProteusMetadata
     [JsonPropertyName("SmoothFoldStrength")]
     public float? SmoothFoldStrength { get; set; }
 
+    /// <summary>
+    /// Whether this mod's shells get a toe cap from Proteus's built-in cap (null = off; written true or removed, never
+    /// false). Whole mod, body surfaces only. A selected, mapped "Toe Cap" option of the mod's own wins over it.
+    /// </summary>
+    [JsonPropertyName("CapToes")]
+    public bool? CapToes { get; set; }
+
     /// <summary>Geometry this pack contributes unconditionally, when it declares no <see cref="ContentGroups"/>.</summary>
     [JsonPropertyName("Content")]
     public List<ContentPiece>? Content { get; set; }

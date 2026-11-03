@@ -6,5 +6,54 @@
       "Bash(SKIP_REVIEW_GATE=1 git push)",
       "Bash(SKIP_REVIEW_GATE=1 git push:*)"
     ]
+  },
+  "extraKnownMarketplaces": {
+    "ai-workflow": {
+      "source": {
+        "source": "github",
+        "repo": "cunhaax/ai-workflow"
+      }
+    }
+  },
+  "enabledPlugins": {
+    "ai-workflow@ai-workflow": true
+  },
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "if": "Bash(gh pr create *)",
+            "timeout": 10,
+            "command": "[ ! -f \"${CLAUDE_PROJECT_DIR}/.claude/hooks/pr-gate.sh\" ] || sh \"${CLAUDE_PROJECT_DIR}/.claude/hooks/pr-gate.sh\" || true"
+          },
+          {
+            "type": "command",
+            "if": "Bash(gh pr new *)",
+            "timeout": 10,
+            "command": "[ ! -f \"${CLAUDE_PROJECT_DIR}/.claude/hooks/pr-gate.sh\" ] || sh \"${CLAUDE_PROJECT_DIR}/.claude/hooks/pr-gate.sh\" || true"
+          }
+        ]
+      },
+      {
+        "matcher": "PowerShell",
+        "hooks": [
+          {
+            "type": "command",
+            "if": "PowerShell(gh pr create *)",
+            "timeout": 10,
+            "command": "[ ! -f \"${CLAUDE_PROJECT_DIR}/.claude/hooks/pr-gate.sh\" ] || sh \"${CLAUDE_PROJECT_DIR}/.claude/hooks/pr-gate.sh\" || true"
+          },
+          {
+            "type": "command",
+            "if": "PowerShell(gh pr new *)",
+            "timeout": 10,
+            "command": "[ ! -f \"${CLAUDE_PROJECT_DIR}/.claude/hooks/pr-gate.sh\" ] || sh \"${CLAUDE_PROJECT_DIR}/.claude/hooks/pr-gate.sh\" || true"
+          }
+        ]
+      }
+    ]
   }
 }

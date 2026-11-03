@@ -39,8 +39,13 @@ public static class PenumbraPackage
         IReadOnlyList<string>? Swaps = null,
         IReadOnlyList<PackManipulation>? Manipulations = null,
         IReadOnlyList<PackImc>? Imc = null,
-        int Priority = 0)
+        int Priority = 0,
+        IReadOnlyList<PackAtr>? Atr = null,
+        bool HasCondition = false)
     {
+        /// <summary>The option's <c>Atr</c> manipulations in full (see <see cref="PackAtr"/>). Never null.</summary>
+        public IReadOnlyList<PackAtr> Atr { get; init; } = Atr ?? [];
+
         /// <summary>Never null, so callers can enumerate without a guard.</summary>
         public IReadOnlyList<PackEst> Est { get; init; } = Est ?? [];
 
@@ -79,6 +84,18 @@ public static class PenumbraPackage
         int MaterialId, int DecalId, int VfxId, int MaterialAnimationId, int AttributeMask, int SoundId);
 
     /// <summary>
+    /// One <c>Atr</c> manipulation: whether custom attribute <paramref name="Attribute"/> is drawn on models in
+    /// <paramref name="Slot"/>, for set <paramref name="Id"/> and race <paramref name="GenderRace"/>. Read as Penumbra
+    /// reads it (<c>MetaDeserialization.ReadAtr</c>): <c>Id</c> and <c>GenderRaceCondition</c> as JSON numbers only.
+    /// </summary>
+    /// <param name="Slot">Penumbra's <c>HumanSlot</c> name ("Body", "Legs"), or null for every slot.</param>
+    /// <param name="Id">The set id, or null for every set.</param>
+    /// <param name="GenderRace">Penumbra's <c>GenderRace</c> code (201 = Midlander woman), 0 for every race.</param>
+    /// <param name="Readable">Every field read, and as Penumbra's <c>AtrIdentifier.Validate</c> accepts it. Unreadable
+    /// entries are kept, so a reader can tell the attribute has a say it cannot judge.</param>
+    public sealed record PackAtr(string Attribute, string? Slot, int? Id, int GenderRace, bool Entry, bool Readable);
+
+    /// <summary>
     /// One option group. <paramref name="Index"/> is Penumbra's own ordinal (v4 array position or v3 filename
     /// number); lower means higher priority.
     /// </summary>
@@ -94,10 +111,17 @@ public static class PenumbraPackage
     /// <param name="Priority">The group's priority: higher applies first, so its edits win.</param>
     /// <param name="DefaultSettings">What the group selects until the user chooses: a Single group's option index, a
     /// Multi group's bitmask of options.</param>
+    /// <param name="HasCondition">The group carries a <c>Condition</c>, gating its data on another group's choice.</param>
+    /// <param name="ContainerAtr">A <c>Combining</c> group's <c>Atr</c> manipulations, from its <c>Containers</c>.</param>
     public sealed record PackGroup(
         string Name, string Type, int Index, IReadOnlyList<PackOption> Options, string? Entry,
         int ImcSetId = -1, string? ImcSlot = null, ushort DefaultAttributeMask = 0,
-        int Priority = 0, ulong DefaultSettings = 0);
+        int Priority = 0, ulong DefaultSettings = 0, bool HasCondition = false,
+        IReadOnlyList<PackAtr>? ContainerAtr = null)
+    {
+        /// <summary>Never null.</summary>
+        public IReadOnlyList<PackAtr> ContainerAtr { get; init; } = ContainerAtr ?? [];
+    }
 
     /// <summary>A parsed pack.</summary>
     /// <param name="Entries">Every archive entry, normalised, with its uncompressed size.</param>
@@ -114,8 +138,12 @@ public static class PenumbraPackage
         IReadOnlyDictionary<string, string> DefaultFiles,
         IReadOnlyList<PackGroup> Groups,
         IReadOnlyList<PackEst>? DefaultEst = null,
-        IReadOnlyList<PackImc>? DefaultImc = null)
+        IReadOnlyList<PackImc>? DefaultImc = null,
+        IReadOnlyList<PackAtr>? DefaultAtr = null)
     {
+        /// <summary>The always-applied <c>Atr</c> manipulations. Never null.</summary>
+        public IReadOnlyList<PackAtr> DefaultAtr { get; init; } = DefaultAtr ?? [];
+
         /// <summary>The always-applied extra-skeleton entries, gated by no option. Never null.</summary>
         public IReadOnlyList<PackEst> DefaultEst { get; init; } = DefaultEst ?? [];
 
@@ -178,6 +206,7 @@ public static class PenumbraPackage
         var defaultFiles = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
         var defaultEst = new List<PackEst>();
         var defaultImc = new List<PackImc>();
+        var defaultAtr = new List<PackAtr>();
         var groups = new List<PackGroup>();
 
         if (fileVersion >= PenumbraModMeta.SingleFileVersion)
@@ -187,6 +216,7 @@ public static class PenumbraPackage
                 ReadFiles(dd, defaultFiles);
                 ReadEst(dd, defaultEst);
                 defaultImc.AddRange(ReadImc(dd));
+                defaultAtr.AddRange(ReadAtr(dd));
             }
             if (manifest["Groups"] is JsonArray arr)
                 for (int i = 0; i < arr.Count; i++)
@@ -200,6 +230,7 @@ public static class PenumbraPackage
                 ReadFiles(legacy, defaultFiles);
                 ReadEst(legacy, defaultEst);
                 defaultImc.AddRange(ReadImc(legacy));
+                defaultAtr.AddRange(ReadAtr(legacy));
             }
 
             // v3 group files, ordered by the number in their name: that number is the group's priority.
@@ -226,7 +257,8 @@ public static class PenumbraPackage
             defaultFiles,
             groups,
             defaultEst,
-            defaultImc);
+            defaultImc,
+            defaultAtr);
     }
 
     /// <summary>
@@ -431,7 +463,7 @@ public static class PenumbraPackage
                 options.Add(new PackOption(
                     Str(oo, "Name") ?? string.Empty, Str(oo, "Description"), files, attrs,
                     Mask(oo, "AttributeMask"), est, ReadSwaps(oo), ReadManipulations(oo), ReadImc(oo),
-                    Int(oo, "Priority") ?? 0));
+                    Int(oo, "Priority") ?? 0, ReadAtr(oo), oo["Condition"] is JsonObject));
             }
 
         // An Imc group's edit lives on the group; read only for that kind.
@@ -459,7 +491,11 @@ public static class PenumbraPackage
             slot,
             defaultMask,
             Int(g, "Priority") ?? 0,
-            g["DefaultSettings"] is JsonValue ds && ds.TryGetValue<ulong>(out var bits) ? bits : 0);
+            g["DefaultSettings"] is JsonValue ds && ds.TryGetValue<ulong>(out var bits) ? bits : 0,
+            g["Condition"] is JsonObject,
+            g["Containers"] is JsonArray containers
+                ? containers.OfType<JsonObject>().SelectMany(ReadAtr).ToList()
+                : null);
     }
 
     /// <summary>One IMC attribute mask field, clamped to the ten bits the format actually carries.</summary>
@@ -515,6 +551,69 @@ public static class PenumbraPackage
                 Int(e, "SoundId") ?? (packed >> 10)));
         }
         return result;
+    }
+
+    /// <summary>Penumbra's <c>HumanSlot</c> names an <c>Atr</c> entry may give (<c>AtrIdentifier.Validate</c> refuses
+    /// <c>UnkBonus</c>).</summary>
+    private static readonly HashSet<string> AtrSlots = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "Head", "Body", "Hands", "Legs", "Feet", "Ears", "Neck", "Wrists", "RFinger", "LFinger", "Glasses", "Hair",
+        "Face", "Ear", "Unknown",
+    };
+
+    /// <summary>Penumbra's <c>ShapeAttributeHashSet.GenderRaceValues</c>: any race (0) and the eighteen it judges.</summary>
+    internal static readonly IReadOnlySet<int> AtrGenderRaces = new HashSet<int>
+    {
+        0, 101, 201, 301, 401, 501, 601, 701, 801, 901, 1001, 1101, 1201, 1301, 1401, 1501, 1601, 1701, 1801,
+    };
+
+    /// <summary>
+    /// The <c>Atr</c> manipulations an owner declares, in order. One that Penumbra would not read the same way — a string
+    /// where it reads a number, a slot it does not know, a race it does not judge, an id with no slot — is kept, marked
+    /// not <see cref="PackAtr.Readable"/>.
+    /// </summary>
+    internal static List<PackAtr> ReadAtr(JsonObject owner)
+    {
+        var result = new List<PackAtr>();
+        if (owner["Manipulations"] is not JsonArray manips) return result;
+        foreach (var m in manips)
+        {
+            if (m is not JsonObject mo
+                || !string.Equals(Str(mo, "Type"), "Atr", StringComparison.OrdinalIgnoreCase)
+                || mo["Manipulation"] is not JsonObject inner
+                || Str(inner, "Attribute") is not { Length: > 0 } attribute) continue;
+
+            bool readable = true;
+            string? slot = null;
+            if (inner["Slot"] is { } slotNode)
+            {
+                if (slotNode is JsonValue sv && sv.TryGetValue<string>(out var name) && AtrSlots.Contains(name))
+                    slot = string.Equals(name, "Unknown", StringComparison.OrdinalIgnoreCase) ? null : name;
+                else readable = false;
+            }
+            int? id = null;
+            if (inner["Id"] is { } idNode)
+            {
+                if (Number(idNode) is { } n and >= 0 and <= ushort.MaxValue) id = n;
+                else readable = false;
+            }
+            int race = 0;
+            if (inner["GenderRaceCondition"] is { } raceNode)
+            {
+                if (Number(raceNode) is { } r && AtrGenderRaces.Contains(r)) race = r;
+                else readable = false;
+            }
+            bool entry = false;
+            if (inner["Entry"] is JsonValue ev && ev.TryGetValue<bool>(out var on)) entry = on;
+            else readable = false;
+            if (slot == null && id != null) readable = false;
+            result.Add(new PackAtr(attribute, slot, id, race, entry, readable));
+        }
+        return result;
+
+        // A JSON number only: Penumbra reads these with NumberProperty, and a string there is not the number.
+        static int? Number(JsonNode node)
+            => node is JsonValue v && v.GetValueKind() == JsonValueKind.Number && v.TryGetValue<int>(out var n) ? n : null;
     }
 
     private static List<string> ReadSwaps(JsonObject owner)

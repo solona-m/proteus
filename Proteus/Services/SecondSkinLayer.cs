@@ -106,6 +106,12 @@ public sealed class SecondSkinLayer
 /// tag would be judged against the host item's own IMC mask, which was never written for it. Ignored with
 /// <paramref name="OwnAttributes"/>, which drops every tag.
 /// </param>
+/// <param name="DropAttributes">
+/// Tags taken off this geometry by name, every other tag kept, alongside <paramref name="DropVariantAttributes"/>: a body
+/// mod's custom attributes its options switch (<c>BodyRetarget.SlotPair.TargetSwitched</c>), which would hide the skin a
+/// refit brought in as soon as the user picked another option. Null or empty takes nothing off. Ignored with
+/// <paramref name="OwnAttributes"/>.
+/// </param>
 /// <param name="DrawOnly">
 /// Per mesh of <paramref name="Model"/>, the only vertices it may draw: a triangle with no corner among them is not
 /// emitted (see <c>Source.DrawOnly</c>). How a body mod's skin is cut down to what the garment's own skin drew, so
@@ -115,7 +121,7 @@ public sealed class SecondSkinLayer
 public sealed record ContentGeometry(
     byte[] Model, Func<string, bool> KeepMaterial, bool MirrorUv1 = false,
     IReadOnlySet<string>? HiddenAttributes = null, bool OwnAttributes = false, bool DropVariantAttributes = false,
-    Dictionary<int, HashSet<ushort>>? DrawOnly = null);
+    Dictionary<int, HashSet<ushort>>? DrawOnly = null, IReadOnlySet<string>? DropAttributes = null);
 
 /// <summary>
 /// A host's shell came out with no meshes. <see cref="ByToggle"/> separates a fault (coverage trimming

@@ -114,13 +114,16 @@ internal static class SupportedBodies
     // The men's bodies: one chest each (Midlander, which Miqo'te, Au Ra, Elezen and Viera men share) and their SFW legs.
     // Neither has chest sizes; TBSE-X's many legs are crotches, not sizes, and only SFW is offered. Women's legs made on a
     // nude body (LavaBod+, Bibo+'s Types) have crotch skin TBSE's SFW legs draw underwear over: those are fitted to its
-    // Gen A legs instead, saved under the same "TBSE" option. TBSE-X's legs are another layout, refused before that.
+    // Gen A legs instead, saved under the same "TBSE" option. TBSE-X's SFW legs match them less still (62% of Bibo+'s
+    // Type C, refused outright for coverage), so they are fitted to its Flaccid M A legs, saved under "TBSE-X".
     private const string TbseChest = "common/1/c0101e0000_top.mdl";
     private const string TbseLegs = "p2/step 6- smallclothes options/sfw/chara/equipment/e0000/model/c0101e0000_dwn.mdl";
     private const string TbseNudeLegs = "p2/step 6- smallclothes options/gen a/chara/equipment/e0000/model/c0101e0000_dwn.mdl";
     private const string TbseXChest =
         "p1/torso/m midlander miqo'te au'ra elezen viera/chara/equipment/e0000/model/c0101e0000_top.mdl";
     private const string TbseXLegs = "p1/legs (smallclothes legs)/sfw/chara/equipment/e0000/model/c0101e0000_dwn.mdl";
+    private const string TbseXNudeLegs =
+        "p1/legs (smallclothes legs)/flaccid m a/chara/equipment/e0000/model/c0101e0000_dwn.mdl";
 
     private static Body Chests(string key, string label, bool yas, Func<string, string> chest, Func<string, string?> legs,
                                bool family = false)
@@ -171,7 +174,7 @@ internal static class SupportedBodies
         new("tbse", "TBSE", "_top", false, [new Size("", TbseChest, TbseLegs)], Race: "0101"),
         new("tbse", "TBSE", "_dwn", false, [new Size("", TbseLegs, null, TbseNudeLegs)], Race: "0101"),
         new("tbse-x", "TBSE-X", "_top", false, [new Size("", TbseXChest, TbseXLegs)], Race: "0101"),
-        new("tbse-x", "TBSE-X", "_dwn", false, [new Size("", TbseXLegs, null)], Race: "0101"),
+        new("tbse-x", "TBSE-X", "_dwn", false, [new Size("", TbseXLegs, null, TbseXNudeLegs)], Race: "0101"),
     ];
 
     /// <summary>A body's sizes for one slot, plain or YAS; null when the table has none (YAB Buff has no legs of its own).</summary>

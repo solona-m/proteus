@@ -10,9 +10,10 @@ namespace Proteus.Services;
 /// A refit for the other sex, headless (see <see cref="CrossSexRefit"/>): the order the Body size panel takes it in —
 /// the wearer read from files, the garment bent, the bodies it was made on bent the same way, each size matched through
 /// the bibo↔TBSE maps, refitted and finished as the save would. Shared by the CLI and the real-data gates, so what is
-/// measured is what the CLI writes.
+/// measured is what the CLI writes. Its shoes and gloves (<see cref="RunEnd"/>) serve Studio, the CLI and the size set
+/// alike, through one inputs builder (<see cref="EndInputs"/>) for the first two.
 /// </summary>
-internal static class CrossSexRefitJob
+internal static partial class CrossSexRefitJob
 {
     /// <param name="Garment">The model as drawn.</param>
     /// <param name="GamePath">Where it is drawn from (its race and slot are read off it).</param>
@@ -24,15 +25,18 @@ internal static class CrossSexRefitJob
     /// <param name="Wearer">What the wearer of <paramref name="To"/> is built from (<see cref="OtherRaceWearer.Gather"/>).</param>
     /// <param name="LiftUnderbust">Overrides <see cref="CrossSexRefit.LiftsUnderbust"/>, for the measurement that decides it.</param>
     /// <param name="Nude">For a target, the same body's nude smallclothes, fitted instead when the target matches too little
-    /// of the made-for body and they enough (<see cref="CrossSexRefit.TakesNude"/>). The size set's only: null fits every
-    /// target as it was picked.</param>
+    /// of the made-for body and they enough (<see cref="CrossSexRefit.TakesNude"/>) — or the match refused the target
+    /// outright for too little coverage. The size set's legs and shoes, and Studio's and the CLI's shoes
+    /// (<see cref="NudeOf"/>); null fits every target as it was picked.</param>
+    /// <param name="HeldParts">A shoe's or glove's parts, by label, held where they are with the foot or hand: Studio's
+    /// unticked parts. Null holds none beside them.</param>
     internal sealed record Inputs(
         byte[] Garment, string GamePath, ushort To,
         BodySizeCatalog MadeFor, Func<BodyOption, bool>? FromPick,
         BodySizeCatalog Onto, Func<BodyOption, bool>? TargetPick,
         OtherRaceWearer.Inputs Wearer, UVRemapService UvRemap, IPluginLog Log,
         bool PushOut = true, bool CutHidden = true, bool CarryPiercings = false, bool? LiftUnderbust = null,
-        Func<BodyOption, BodyOption?>? Nude = null);
+        Func<BodyOption, BodyOption?>? Nude = null, IReadOnlySet<string>? HeldParts = null);
 
     /// <summary>One size made, or refused.</summary>
     /// <param name="Target">The body it was fitted to: the one picked, or its nude smallclothes (<see cref="Asked"/>).</param>
@@ -65,7 +69,7 @@ internal static class CrossSexRefitJob
     internal static Result Run(Inputs i) => Core(i, ends: false);
 
     /// <summary>
-    /// A women's shoe or glove made a men's, for the size set only (<see cref="CrossSexRefit.EndsCross"/>): its leg or arm
+    /// A women's shoe or glove made a men's — Studio's "Refit for", the CLI and the size set (<see cref="CrossSexRefit.EndsCross"/>): its leg or arm
     /// refitted as <see cref="KeepEnds"/> refits one, through the leg or arm of the made-for and the men's body, the foot
     /// or hand held and given its new shape, after the same bend and bone moves as a chest or legs garment.
     /// <see cref="Inputs.FromPick"/> and <see cref="Inputs.TargetPick"/> pick the limb (legs for a shoe, chest for a
@@ -133,8 +137,17 @@ internal static class CrossSexRefitJob
         // A shoe or glove: its foot or hand held, read apart from the leg or arm; the made-for body's own for its shape.
         KeepEnds.Reading? reading = null;
         string? endFromPath = null;
+        HashSet<int>? held = null;
         if (ends)
         {
+            // Held by label, as the panel's planner holds them: a submesh's triangles already include every island of it.
+            if (i.HeldParts is { Count: > 0 } labels)
+            {
+                held = [];
+                foreach (var part in garment.Parts)
+                    if (labels.Contains(part.Label))
+                        held.UnionWith(part.Triangles);
+            }
             if (KeepEnds.Read(slot, garment, baked) is not { } read)
                 return Refused(string.Format(Localization.Strings.SizeSet.EndsUnreadableFmt, Path.GetFileName(i.GamePath)),
                                baked, bent);
@@ -149,34 +162,54 @@ internal static class CrossSexRefitJob
         {
             var target = picked;
             string targetPath = onto.PathOf(target);
-            if (BodyRetarget.BuildPair(limb, File.ReadAllBytes(sourcePath), File.ReadAllBytes(targetPath), limb, sourceMale,
-                                       null, null, i.UvRemap, out var pair, out var landed,
-                                       BodyRetarget.BodyMaterialReader(targetPath), targetMale) is { } refusal)
+            string? refusal = BodyRetarget.BuildPair(limb, File.ReadAllBytes(sourcePath), File.ReadAllBytes(targetPath),
+                                                     limb, sourceMale, null, null, i.UvRemap, out var pair, out var landed,
+                                                     BodyRetarget.BodyMaterialReader(targetPath), targetMale);
+            // Too little matched — accepted under the bar a men's version needs, or refused outright for coverage (only
+            // that refusal says how much landed; a different layout, missing maps or an unreadable body never do, and are
+            // never tried on the nude smallclothes, which they would refuse too).
+            bool tooLittle = refusal == null ? !CrossSexRefit.CoverageAllowed(landed?.VertexCoverage ?? 1f) : landed != null;
+            if (refusal != null && !(tooLittle && i.Nude != null))
             {
-                sizes.Add(new Size(target, targetPath, null, null, null, 0, landed, refusal));
+                // Landed stays null on a refusal: the refusal is said in its own words, never judged as a coverage.
+                sizes.Add(new Size(target, targetPath, null, null, null, 0, null, refusal));
                 continue;
             }
 
-            // Too little matched: the same body's nude smallclothes, when they match enough. A pair the match refused
-            // outright never gets here — a different layout would refuse them too.
+            // Too little matched: the same body's nude smallclothes, when they match enough (TBSE's Gen A legs, TBSE-X's
+            // Flaccid M A — the latter's SFW legs match a nude-made women's body only 62%, below the refusal's 80%).
             BodyOption? asked = null;
             UvAtlasCorrespondence.Stats? askedLanded = null;
-            if (!CrossSexRefit.CoverageAllowed(landed?.VertexCoverage ?? 1f) && i.Nude?.Invoke(target) is { } nude)
+            if (tooLittle && i.Nude?.Invoke(target) is { } nude)
             {
                 string nudePath = onto.PathOf(nude);
-                bool built = BodyRetarget.BuildPair(limb, File.ReadAllBytes(sourcePath), File.ReadAllBytes(nudePath), limb,
-                                                    sourceMale, null, null, i.UvRemap, out var nudePair, out var nudeLanded,
-                                                    BodyRetarget.BodyMaterialReader(nudePath), targetMale) == null;
-                if (built && CrossSexRefit.TakesNude(landed, nudeLanded))
+                string? nudeRefusal = BodyRetarget.BuildPair(limb, File.ReadAllBytes(sourcePath), File.ReadAllBytes(nudePath),
+                                                             limb, sourceMale, null, null, i.UvRemap, out var nudePair,
+                                                             out var nudeLanded, BodyRetarget.BodyMaterialReader(nudePath),
+                                                             targetMale);
+                bool built = nudeRefusal == null;
+                if (built && CrossSexRefit.TakesNude(landed, nudeLanded) && landed is { } sfw && nudeLanded is { } bare)
                 {
                     i.Log.Information("[Proteus] cross-sex refit: fitted onto {0} ({1:P1} matched); {2} matched {3:P1}",
-                                      nude.Label, nudeLanded!.Value.VertexCoverage, target.Label, landed!.Value.VertexCoverage);
+                                      nude.Label, bare.VertexCoverage, target.Label, sfw.VertexCoverage);
                     (asked, askedLanded) = (target, landed);
                     (target, targetPath, pair, landed) = (nude, nudePath, nudePair, nudeLanded);
+                    refusal = null;
                 }
+                else if (refusal != null)
+                    i.Log.Information("[Proteus] cross-sex refit: {0} {1}; {2} refused, matched {3:P1}",
+                                      nude.Label, built ? $"matched {nudeLanded?.VertexCoverage:P1}" : $"refused: {nudeRefusal}",
+                                      target.Label, landed?.VertexCoverage ?? 0f);
                 else
-                    i.Log.Information("[Proteus] cross-sex refit: {0} matched {1}; {2} kept",
-                                      nude.Label, built ? $"{nudeLanded?.VertexCoverage:P1}" : "nothing", target.Label);
+                    i.Log.Information("[Proteus] cross-sex refit: {0} {1}; {2} kept",
+                                      nude.Label, built ? $"matched {nudeLanded?.VertexCoverage:P1}" : $"refused: {nudeRefusal}",
+                                      target.Label);
+            }
+            // The nude smallclothes failed too, or are not installed: refused with the body's own reason, as before.
+            if (refusal != null)
+            {
+                sizes.Add(new Size(target, targetPath, null, null, null, 0, null, refusal));
+                continue;
             }
             BodyRetarget.Planned plan;
             if (reading != null)
@@ -184,24 +217,29 @@ internal static class CrossSexRefitJob
                 // The foot or hand's shape, from the made-for body's to the men's body's; refitted without it when either
                 // has none or the two do not pair.
                 BodyRetarget.SlotPair? endPair = null;
+                UvAtlasCorrespondence.Stats? endLanded = null;
                 string? endToPath = AutoRefitDecisions.Companion(onto.For(slot), target, null) is { } endTo
                     ? onto.PathOf(endTo) : null;
                 if (endFromPath != null && endToPath != null)
                 {
                     if (BodyRetarget.BuildPair(slot, File.ReadAllBytes(endFromPath), File.ReadAllBytes(endToPath), slot,
-                                               sourceMale, null, null, i.UvRemap, out var shape, out _,
+                                               sourceMale, null, null, i.UvRemap, out var shape, out var endStats,
                                                BodyRetarget.BodyMaterialReader(endToPath), targetMale) is { } endWhy)
                         i.Log.Information("[Proteus] cross-sex refit: {0} without the end's shape: {1}", target.Label, endWhy);
-                    else endPair = shape;
+                    else (endPair, endLanded) = (shape, endStats);
                 }
                 else
                     i.Log.Information("[Proteus] cross-sex refit: {0} without the end's shape: no {1} to give it",
                                       target.Label, endFromPath == null ? "made-for end" : "men's end");
-                plan = KeepEnds.Plan(garment, baked, reading, pair, endPair, replaceSkin: true, across: true,
-                                     clearBody: i.PushOut, alsoHeld: null, extra: null,
+                BodyRetarget.Planned Today()
+                    => KeepEnds.Plan(garment, baked, reading, pair, endPair, replaceSkin: true, across: true,
+                                     clearBody: i.PushOut, alsoHeld: held, extra: null,
                                      log: line => i.Log.Debug("[Proteus] cross-sex refit: {0}", line),
                                      warn: line => i.Log.Warning("[Proteus] cross-sex refit: {0}", line),
                                      carryPiercings: i.CarryPiercings);
+                plan = slot == "_glv" && !BodyRetarget.Tuned.NoReshapeEnds
+                    ? Reshaped(garment, baked, reading, pair, endPair, endLanded, held, target.Label, i) ?? Today()
+                    : Today();
             }
             else
                 plan = BodyRetarget.Plan(garment, baked, [pair], slot, replaceSkin: true, acrossBodies: true,
@@ -217,5 +255,101 @@ internal static class CrossSexRefitJob
             sizes.Add(new Size(target, targetPath, plan, saved, preview, folds, landed, finishRefusal, asked, askedLanded));
         }
         return new Result("", route, who, baked, bent, sourcePath, sizes, moves, made.Est, made.NeedsSkeleton, earrings);
+    }
+
+    /// <summary>
+    /// A women's glove made a men's with its bare hand made the men's (cross-sex-wrist-band): the glove's skin swapped for
+    /// the men's own chest-arm and hands skin, cut to what it drew, the bare hand refitted with the arm — as the men's top's
+    /// arm already is, so where both draw the arm they draw the same triangles, and the hand meets it only where the men's
+    /// body meets itself. Null, said once, whenever that cannot be done safely; the glove is then made as before.
+    /// </summary>
+    private static BodyRetarget.Planned? Reshaped(ModelParts garment, byte[] baked, KeepEnds.Reading reading,
+                                                  BodyRetarget.SlotPair pair, BodyRetarget.SlotPair? endPair,
+                                                  UvAtlasCorrespondence.Stats? endLanded, IReadOnlySet<int>? held,
+                                                  string target, Inputs i)
+    {
+        void Kept(string why)
+            => i.Log.Information("[Proteus] cross-sex refit: {0} hand kept as made: {1}", target, why);
+        if (endPair is not { } hands)
+        {
+            Kept("no men's hands to refit it onto");
+            return null;
+        }
+        if (endLanded is not { } matched || !CrossSexRefit.CoverageAllowed(matched.VertexCoverage))
+        {
+            Kept($"the hands bodies match only {endLanded?.VertexCoverage ?? 0f:P1}");
+            return null;
+        }
+        if (KeepEnds.Reshape(reading, garment, held, out string why) is not { } reshaped)
+        {
+            Kept(why);
+            return null;
+        }
+        // The hand is the body's own: every skin mesh with skin on a hand let go lies on the made-for bodies.
+        var bodyMeshes = BodyRetarget.SwappedSkinMeshes(garment, [pair, hands with { ShapeOnly = false }]);
+        var letGo = reading.Ends.Except(reshaped.Ends).ToHashSet();
+        var handMeshes = garment.Parts.Where(p => p.Island < 0 && SecondSkinWriter.IsBodySkinMaterial(p.Material)
+                                                  && p.Triangles.Any(letGo.Contains))
+                                      .Select(p => p.Mesh).ToHashSet();
+        if (!handMeshes.All(bodyMeshes.Contains))
+        {
+            Kept("its skin is not the made-for body's own (posed or sculpted)");
+            return null;
+        }
+        var plan = KeepEnds.Plan(garment, baked, reshaped, pair, hands, replaceSkin: true, across: true,
+                                 clearBody: i.PushOut, alsoHeld: held, extra: null,
+                                 log: line => i.Log.Debug("[Proteus] cross-sex refit: {0}", line),
+                                 warn: line => i.Log.Warning("[Proteus] cross-sex refit: {0}", line),
+                                 carryPiercings: i.CarryPiercings, reshapeEnd: true,
+                                 swappedSkinTags: KeepEnds.SkinTagsOf(garment));
+        if (plan.Report.Swap is not { Posed: 0, Kept: 0, Removed: > 0 } swap)
+        {
+            Kept("the swap kept the glove's own skin");
+            return null;
+        }
+        // The arm's skin came in: every laid point of the glove's skin on the men's chest lies on the rebuilt skin. The
+        // chest's skin is claimed only when enough of the mesh lies on the chest alone, and a short strip of arm beside a
+        // dense hand would otherwise lose its arm.
+        if (plan.AddedBySlot?.GetValueOrDefault(pair.Slot) is not > 0 || !ArmSkinCameIn(garment, plan, pair))
+        {
+            Kept("the arm's skin did not come in with the men's");
+            return null;
+        }
+        // And the hand's: a bare hand let go whose skin the men's hands did not put back would be a hole.
+        if (plan.AddedBySlot?.GetValueOrDefault(hands.Slot) is not > 0)
+        {
+            Kept("the hand's skin did not come in with the men's");
+            return null;
+        }
+        i.Log.Information("[Proteus] cross-sex refit: {0} hand: made the men's ({1:P1} matched) — skin swapped for the " +
+                          "men's ({2} → {3} triangles, {4} cut), {5} hand(s) kept as made", target,
+                          matched.VertexCoverage, swap.Removed, swap.Added, swap.Cut, HandsHeld(reshaped, garment));
+        return plan;
+    }
+
+    /// <summary>How many hands the reshaped reading still holds as made: one per side of the body its held points lie on.</summary>
+    private static int HandsHeld(KeepEnds.Reading reshaped, ModelParts garment)
+        => reshaped.Ends.Select(v => garment.Positions[3 * v] >= 0f).Distinct().Count();
+
+    /// <summary>Every glove skin point laid on the men's chest (within <see cref="BodyRetarget.SwapOnBody"/>) lies within
+    /// <see cref="BodyRetarget.CutReach"/> of the rebuilt glove's skin.</summary>
+    internal static bool ArmSkinCameIn(ModelParts garment, BodyRetarget.Planned plan, BodyRetarget.SlotPair chest)
+    {
+        if (ModelPartReader.Read(plan.Model) is not { } rebuilt) return false;
+        var skin = new BodySurface(rebuilt, BodySurface.CellFor(BodyRetarget.MeanEdgeOf(rebuilt)));
+        var body = new BodySurface(chest.Target, BodySurface.CellFor(BodyRetarget.MeanEdgeOf(chest.Target)));
+        foreach (var part in garment.Parts)
+        {
+            if (part.Island >= 0 || !SecondSkinWriter.IsBodySkinMaterial(part.Material)) continue;
+            foreach (int v in part.Triangles.Distinct())
+            {
+                var d = plan.Edit.DeltaAt(v);
+                var at = new System.Numerics.Vector3(garment.Positions[3 * v] + d.X, garment.Positions[3 * v + 1] + d.Y,
+                                                      garment.Positions[3 * v + 2] + d.Z);
+                if (!body.Nearest(at, BodyRetarget.SwapOnBody, out _)) continue;
+                if (!skin.Nearest(at, BodyRetarget.CutReach, out _)) return false;
+            }
+        }
+        return true;
     }
 }

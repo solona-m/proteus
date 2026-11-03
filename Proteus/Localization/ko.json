@@ -47,6 +47,18 @@
     "message": "이 컬렉션의 체형 잊기",
     "description": ""
   },
+  "AutoRefit.RueSplit.Fmt": {
+    "message": "{0}는 Rue 체형, {1}는 다른 체형입니다. Rue의 부위는 Rue에만 맞으므로, 양쪽에 걸치는 장비는 자기 부위 쪽만 리핏되고 나머지는 크기가 그대로입니다. 모든 부위에 같은 체형을 쓰려면 \"{2}\"를 누르고 그 체형을 다시 고르세요.",
+    "description": ""
+  },
+  "AutoRefit.RueSplit.Shoes": {
+    "message": "발과 다리가 이 경계의 서로 다른 쪽에 있는 동안에는 신발이 그대로 남을 수 있습니다.",
+    "description": ""
+  },
+  "AutoRefit.RueSplit.Gloves": {
+    "message": "손과 가슴이 이 경계의 서로 다른 쪽에 있는 동안에는 장갑이 그대로 남을 수 있습니다.",
+    "description": ""
+  },
   "AutoRefit.Collection": {
     "message": "컬렉션",
     "description": ""
@@ -589,6 +601,46 @@
   },
   "Colors.SmoothFold.Tip": {
     "message": "사타구니를 덮는 천에는 이 옵션을 켜세요.\nProteus는 의상을 신체의 복사본으로 만들기 때문에 다리 사이의 주름까지 그대로 옮깁니다 —\n천이라기보다 몸에 그려 넣은 것처럼 보이죠. 켜면 그곳의 피부를 먼저 주변 곡면까지\n매끄럽게 펴므로, 거기서 잘라낸 의상도 매끄럽게 나옵니다.\n이 옵션은 신체 자체를 바꾸므로 동시에 착용한 모든 의상에 적용됩니다.",
+    "description": ""
+  },
+  "Colors.ToeCap.Label": {
+    "message": "발가락 감싸기",
+    "description": ""
+  },
+  "Colors.ToeCap.Tip": {
+    "message": "스타킹과 양말에는 켜 두세요.\nProteus는 옷을 몸의 복사본으로 만들기 때문에 기본적으로 발가락 하나하나를 따라갑니다 —\n입은 것보다 그려 넣은 것처럼 보이죠. 켜면 발가락이 하나의 둥근 토캡으로\n덮여 실제 양말처럼 보입니다. 발가락을 덮는 옷에만 적용됩니다.\n이것은 Penumbra에서 이 모드의 Masks 그룹에 있는 \"Toe Cap\" 옵션입니다. 모드가 아니라\n컬렉션에 저장되며, 이 모드를 포함한 Glamourer 디자인도 이 설정을 유지합니다.",
+    "description": ""
+  },
+  "Colors.ToeCap.Held.Tip": {
+    "message": "Glamourer 디자인(또는 다른 플러그인)이 지금 이 모드의 설정을 잡고 있어서\n여기서 바꿔도 보이지 않습니다. 대신 그 디자인의 Masks 그룹에서 \"Toe Cap\"을 바꾸세요.",
+    "description": ""
+  },
+  "Colors.ToeCap.Inherited.Note": {
+    "message": "이 컬렉션은 이 모드의 설정을 상속받고 있습니다. 여기서 바꾸면 Penumbra에서 바꿀 때처럼\n이 모드에 대한 자체 설정이 생깁니다.",
+    "description": ""
+  },
+  "Colors.ToeCap.Failed.Fmt": {
+    "message": "Penumbra가 변경을 받아들이지 않았습니다: {0}",
+    "description": ""
+  },
+  "Colors.ToeCap.ModOff": {
+    "message": "이 모드가 컬렉션에서 꺼져 있어서, 켜기 전까지는 토캡이 보이지 않습니다.",
+    "description": ""
+  },
+  "Colors.ToeCap.NoShell": {
+    "message": "이 모드가 보여 주는 것 중 몸 위의 옷이 되는 것이 없습니다(스킨에 고정됨, 프린트, 몸이 아니라\n얼굴이나 머리카락 위, 또는 제작자가 토캡을 제외함). 그래서 이 모드에는 다듬을 것이\n없습니다. 발가락을 덮는 다른 모드의 옷에는 계속 적용됩니다.",
+    "description": ""
+  },
+  "Colors.ToeCap.Flag.Tip": {
+    "message": "스타킹과 양말에 켜세요. 발가락 하나하나를 따라가는 대신, 실제 양말처럼\n둥근 토캡 하나로 발가락을 덮습니다.\n체크하면 토캡이 다듬을 대상이 생기도록 이 모드의 스킨 레이어가 옷(세컨드 스킨)이\n됩니다. 다시 빌드하는 만큼 시간이 들고, 프린트나 스킨에 고정한 레이어는 그대로입니다.\n토캡은 Bibo+, Neolithe, Rue, YAB용으로 만들어졌습니다. 다른 체형에서는 옷은 만들어지지만\n발가락은 그대로입니다.\n이 모드에는 자체 토캡이 없으므로 이 설정은 모드의 Proteus 설정에 저장됩니다.\n모든 컬렉션에 적용되며, 내보낼 때 모드와 함께 갑니다.",
+    "description": ""
+  },
+  "Colors.ToeCap.Locked.Tip": {
+    "message": "이 모드 자체의 \"Toe Cap\" 옵션이 Penumbra에서 선택되어 있습니다. 하나만 고를 수 있는\nMasks 그룹에 있어서 여기서는 끌 수 없습니다. Penumbra에서 바꾸세요.",
+    "description": ""
+  },
+  "Colors.ToeCap.SaveFailed": {
+    "message": "이 모드의 Proteus 설정을 저장하지 못해 변경을 되돌렸습니다. 이유는 로그(/xllog)에 있습니다.",
     "description": ""
   },
   "Colors.SmoothNipples.Label": {
@@ -4047,6 +4099,26 @@
     "message": "적용 체형",
     "description": ""
   },
+  "Parts.Retarget.PartBody.Same.Fmt": {
+    "message": "위와 같음 ({0})",
+    "description": ""
+  },
+  "Parts.Retarget.PartBody.Tip": {
+    "message": "이 부위를 리핏할 체형 모드입니다. 긴 드레스의 다리는 가슴과 다른 체형에 리핏할 수 있습니다.",
+    "description": ""
+  },
+  "Parts.Retarget.PartBody.KeptOnOwn.Fmt": {
+    "message": "아직 할 수 없습니다: {2}는 다른 체형으로 가지만 {0}는 이 의상이 만들어진 체형인 {1}에 그대로 남습니다. 의상이 만들어진 체형에서 일부 부위만 옮길 수는 없으며, 그 부위의 피부가 사라지거나 접힙니다. {0}도 다른 체형 모드에 리핏하면 됩니다.",
+    "description": ""
+  },
+  "Parts.Retarget.PartBody.RueApart.Fmt": {
+    "message": "{0}는 Rue 체형이고 {1}는 아닙니다. Rue의 허리는 Rue에만 맞으므로 미리보기에서 허리를 확인하세요.",
+    "description": ""
+  },
+  "Parts.Retarget.PartBody.SetAside.Fmt": {
+    "message": "지금은 제외됨: 이 부위에는 자체 체형 {0}가 설정되어 있으며, 이는 \"리핏 대상 종족\"에서 종족을 고르지 않은 의상 전체 리핏에서만 쓸 수 있습니다. 그 상태가 되면 다시 돌아옵니다.",
+    "description": ""
+  },
   "Settings.ReduceMotion": {
     "message": "움직임 줄이기",
     "description": ""
@@ -4472,8 +4544,40 @@
     "description": "Heads the dropdown that picks which race's model a refit is made and saved as."
   },
   "Parts.Retarget.Race.Tip": {
-    "message": "어느 종족용 맞춤인지 고릅니다. 다른 종족은 게임이 구부리는 방식대로 이 모델에서 만든, 그 종족 체형에 맞춰 그 종족이 불러오는 곳에 저장한 자기 모델을 받습니다. 미드랜더의 몸통·다리 장비는 다른 성별용으로도 맞출 수 있습니다. 이 모델은 그대로입니다.",
+    "message": "어느 종족용 맞춤인지 고릅니다. 다른 종족은 게임이 구부리는 방식대로 이 모델에서 만든, 그 종족 체형에 맞춰 그 종족이 불러오는 곳에 저장한 자기 모델을 받습니다. 미드랜더의 몸통·다리 장비와 여성용 신발·장갑(남성용으로)은 다른 성별용으로도 맞출 수 있습니다. 이 모델은 그대로입니다.",
     "description": "Tooltip of Parts.Retarget.Race.Label."
+  },
+  "Parts.Retarget.CrossSexEnd.NoLimb": {
+    "message": "사이즈를 알 수 있는 다리나 팔에 닿지 않습니다. 다른 성별용으로 맞출 때는 그래도 다리나 팔을 통해 맞추므로, 만들어진 다리 또는 가슴 사이즈를 고르세요.",
+    "description": ""
+  },
+  "Parts.Retarget.CrossSexEnd.NoSizes": {
+    "message": "맞출 대상으로 고른 사이즈를 그 바디에서 더 이상 찾을 수 없습니다. 다시 고르세요.",
+    "description": ""
+  },
+  "Parts.Retarget.KeepEnds.CrossSex.Tip": {
+    "message": "다른 성별용으로 맞출 때 신발은 항상 원래 발을, 장갑은 원래 손을 유지하고 새 바디의 피부를 씁니다. 바디 맵을 통해 다리나 팔만 맞춥니다.",
+    "description": ""
+  },
+  "Parts.Retarget.EndsUnreadable.CrossSex": {
+    "message": "리그를 읽을 수 없어 발이나 손을 나머지와 구별할 수 없습니다. 신발이나 장갑은 그것들을 유지할 때만 다른 성별용으로 맞춥니다.",
+    "description": ""
+  },
+  "Parts.Retarget.KeepShape.CrossSexTip": {
+    "message": "다른 성별용으로 맞출 때 신발의 다리나 장갑의 팔은 하나로 맞추므로 '형태 유지'는 적용되지 않습니다. 원래 종족을 다시 고르면 체크가 돌아옵니다.",
+    "description": ""
+  },
+  "Parts.Retarget.CrossSexEnd.PickMadeFor.Fmt": {
+    "message": "사이즈를 알 수 있는 피부가 없고, 천이 {0}의 어떤 {1} 사이즈에도 닿지 않습니다. '제작 체형'에서 만들어진 바디(게임 기본 체형으로 만들었다면 그것)를 고른 다음 사이즈를 고르세요.",
+    "description": ""
+  },
+  "Parts.Retarget.Race.CrossSexNude.Fmt": {
+    "message": "{0}은(는) 체형의 {1}만 대응해서 대신 {2}에 맞췄습니다({3} 대응).",
+    "description": ""
+  },
+  "Parts.Retarget.Race.WomensModel.Fmt": {
+    "message": "이 모드에는 이 아이템의 자체 {0} 모델도 있습니다. 그것으로 {1} 버전을 만들려면 여세요. '리핏 대상 종족'에서 '{1}'가 선택된 상태가 됩니다.",
+    "description": ""
   },
   "Parts.Retarget.Race.ThisModel.Fmt": {
     "message": "{0} (이 모델)",
@@ -5088,7 +5192,7 @@
     "description": ""
   },
   "SizeSet.Intro": {
-    "message": "아래에서 체크한 바디의 모든 사이즈를 이 모드 전체에 추가합니다. 각 사이즈는 제작자의 사이즈 중 가장 가까운 것에서 리핏하고, 그 옵션 안의 의상 나머지 파츠도 같은 사이즈에서 만들어, 제작자의 사이즈 옆에 \"Rue S\", \"YAB Buff L\" 등으로 저장합니다. 모드에 이미 있는 사이즈는 그대로 둡니다. 여성용 모드에도 TBSE와 TBSE-X를 추가할 수 있습니다. 몸통과 다리가 남성용으로 맞춰져 별도의 그룹에 저장됩니다.",
+    "message": "아래에서 체크한 바디의 모든 사이즈를 이 모드 전체에 추가합니다. 각 사이즈는 제작자의 사이즈 중 가장 가까운 것에서 리핏하고, 그 옵션 안의 의상 나머지 파츠도 같은 사이즈에서 만들어, 제작자의 사이즈 옆에 \"Rue S\", \"YAB Buff L\" 등으로 저장합니다. 모드에 이미 있는 사이즈는 그대로 둡니다. 여성용 모드에도 TBSE와 TBSE-X를 추가할 수 있습니다. 몸통, 다리, 신발, 장갑이 남성용으로 맞춰져 별도의 그룹에 저장됩니다.",
     "description": ""
   },
   "SizeSet.Yas": {
@@ -5104,7 +5208,27 @@
     "description": ""
   },
   "SizeSet.Ends.Tip": {
-    "message": "신발과 장갑은 원래 발과 손을 유지하고, 닿는 다리나 팔만 리핏합니다. 신발은 다리 사이즈를, 장갑은 바디마다 옵션 하나를 받고, 같은 그룹이면 둘 다 의상의 가슴이나 다리 사이즈에 합류합니다.",
+    "message": "신발과 장갑은 원래 발과 손을 유지하고, 닿는 다리나 팔만 리핏합니다. 신발은 다리 사이즈를, 장갑은 바디마다 옵션 하나를 받고, 같은 그룹이면 둘 다 의상의 가슴이나 다리 사이즈에 합류합니다. 남성 바디를 '남성용'으로 체크하면 여성용 모드의 신발과 장갑에도 남성 버전이 만들어집니다.",
+    "description": ""
+  },
+  "SizeSet.EndsLeftOut.Fmt": {
+    "message": "빠진 신발과 장갑({0}): 사이즈와 남성 버전을 만들려면 '신발과 장갑 포함'을 체크하세요.",
+    "description": ""
+  },
+  "SizeSet.AuthorsMens.Fmt": {
+    "message": "{0}: 모드에 자체 남성 모델이 있어 이것으로 남성 버전을 만들지 않았고, 그 남성 모델에서도 이번에 아무것도 만들어지지 않았습니다.",
+    "description": ""
+  },
+  "SizeSet.AuthorsMensUnticked.Fmt": {
+    "message": "{0}: 모드에 자체 남성 모델이 있어 이것으로 남성 버전을 만들지 않았습니다. 그 모델의 사이즈를 만들려면 일반 남성 바디(예: '{1}')를 체크하세요.",
+    "description": ""
+  },
+  "SizeSet.AuthorsMensCrossed.Fmt": {
+    "message": "{0}: 모드 자체의 남성용 모델 파일을 모델로 전혀 읽을 수 없어서(없거나 0바이트이거나 손상됨) 남성 버전을 이 여성용 파츠로 만들었습니다. “{1}” 그룹에서 남성 바디를 고른 곳에서는 작가의 남성용 모델을 대신합니다.",
+    "description": ""
+  },
+  "SizeSet.AuthorsMensStillReplaced.Fmt": {
+    "message": "{0}: 이 모드에는 자체 남성용 모델이 있고 이번 실행에서는 그대로 두었지만, 이전 실행에서 이 여성용 파츠로 만든 남성 버전이 “{1}” 그룹에서 그 남성 바디를 고른 곳에서는 여전히 작가의 모델을 대신합니다. 그곳에 작가의 모델을 보이려면 “{1}”에서 Original을 고르거나 그 옵션을 지우세요.",
     "description": ""
   },
   "SizeSet.Piercings": {
@@ -5260,7 +5384,7 @@
     "description": "Checkbox label for a men's body offered for a women's mod. {0} is the body (\"TBSE\")."
   },
   "SizeSet.ForMen.Tip.Fmt": {
-    "message": "이 모드의 여성용 몸통·다리 파츠에 {0} 남성 버전이 생깁니다. 바디 맵(처음 필요할 때 다운로드됩니다)을 통해 미드랜더 남성용으로 맞추며, 각각 남성 체형으로 굽힌 몸이 그의 몸에 가장 가까운 제작자의 사이즈에서 만듭니다. 별도의 그룹 \"{1}\"에 저장되므로 여성용 사이즈는 그대로입니다. 신발과 장갑은 성별을 넘어 맞추지 않으며, 제작자가 이미 남성용으로 만든 파츠는 그것을 씁니다.",
+    "message": "이 모드의 여성용 몸통·다리 파츠에 {0} 남성 버전이 생깁니다. 바디 맵(처음 필요할 때 다운로드됩니다)을 통해 미드랜더 남성용으로 맞추며, 각각 남성 체형으로 굽힌 몸이 그의 몸에 가장 가까운 제작자의 사이즈에서 만듭니다. 별도의 그룹 \"{1}\"에 저장되므로 여성용 사이즈는 그대로입니다. '신발과 장갑 포함'이 켜져 있으면 여성용 신발과 장갑도 다리나 팔을 통해 맞춘 남성 버전이 만들어지며, 제작자가 이미 남성용으로 만든 파츠는 그것을 씁니다.",
     "description": "Tooltip. {0} is a men's body (\"TBSE\"), {1} the group the men's versions go into."
   },
   "SizeSet.MensGroup": {
@@ -5290,6 +5414,10 @@
   "SizeSet.EndFromGameBody.Fmt": {
     "message": "{0}, \"{1}\": 다리나 팔에 체형을 읽을 피부가 없어서 게임 기본 체형으로 만든 것으로 보고 맞췄습니다.",
     "description": "Check in game: a women's shoe or glove made a men's with no skin to read a body off. {0} is the piece, {1} the men's option."
+  },
+  "SizeSet.EndFromOutfitLegs.Fmt": {
+    "message": "{0}, \"{1}\": 체형을 읽을 자체 피부가 없고 천이 어떤 바디에도 가깝게 닿지 않아서, 이 의상의 다리 장비(\"{3}\")가 만들어진 바디인 {2}로 만든 것으로 보고 맞췄습니다.",
+    "description": ""
   },
   "SizeSet.EndClothGap.Fmt": {
     "message": "{0}, \"{1}\": 천이 {3}의 다리나 팔에서 평균 약 {2:F0} mm 떨어져 있습니다. 읽어 낸 체형이 실제로 만든 체형과 다를 수 있습니다.",
@@ -5681,6 +5809,18 @@
   },
   "HairPort.Earless.Refused.Outside.Fmt": {
     "message": "{0}은(는) 모드의 귀 없는 폴더 안의 경로가 아니어서 아무것도 기록하지 않았습니다",
+    "description": ""
+  },
+  "Parts.Retarget.NoSlotInBody.Fmt": {
+    "message": "{0}에는 이 부위({1})의 사이즈가 없습니다. 사이즈가 있는 체형 모드를 고르세요.",
+    "description": ""
+  },
+  "Parts.Retarget.UseWornBody.Fmt": {
+    "message": "{0} 사용",
+    "description": ""
+  },
+  "Parts.Retarget.UseWornBody.Tip": {
+    "message": "이 부위에 착용 중인 체형 모드에 맞춥니다. \"적용 체형\"에서 고르는 것과 같습니다.",
     "description": ""
   }
 }

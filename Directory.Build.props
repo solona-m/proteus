@@ -5,6 +5,17 @@
     <DalamudLibPath>$(DALAMUD_HOME)\</DalamudLibPath>
   </PropertyGroup>
 
+  <!-- The in-game QA test harness (Proteus/TestHarness/, docs/agent-rules/adversarial-qa.md) is a local control
+       port, so it is compiled into local dev builds only and out of EVERY build CI makes (stable and testing
+       releases, CI tests, CodeQL). The switch is the CI environment, not the configuration: the release workflows
+       run the same `dotnet build -c Release` as a local build (AGENTS.md Rule 1), so Debug/Release cannot tell
+       them apart. GitHub Actions sets CI=true and GITHUB_ACTIONS=true, which MSBuild reads as properties; the
+       later assignment wins. The release workflows also check the DLL itself (see ADR 0002). -->
+  <PropertyGroup>
+    <ProteusTestHarness Condition="'$(ProteusTestHarness)' == ''">true</ProteusTestHarness>
+    <ProteusTestHarness Condition="'$(CI)' == 'true' OR '$(GITHUB_ACTIONS)' == 'true'">false</ProteusTestHarness>
+  </PropertyGroup>
+
   <Target Name="ComputeProteusVersion" BeforeTargets="GetAssemblyVersion;GenerateNuspec;Build" Condition="'$(ProteusVersion)' == ''">
     <!-- stderr is redirected because ConsoleToMsBuild captures BOTH streams and joins the lines with
          ';', so any git warning ends up spliced into the version. A corrupt commit-graph cache once

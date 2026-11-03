@@ -287,7 +287,12 @@ public sealed class SizeSetCrossSexLocalTests(ITestOutputHelper o) : IDisposable
     [Trait("Plan", "AC-cross-sex-area-coverage-3")]
     [Trait("Plan", "AC-cross-sex-area-coverage-7")]
     [Trait("Plan", "EDGE-cross-sex-area-coverage-6")]
-    public void Sheer_elegance_gains_mens_versions() // [AC-sizeset-cross-sex-2] [AC-sizeset-cross-sex-4] [EDGE-sizeset-cross-sex-19] [EDGE-sizeset-cross-sex-24] [EDGE-sizeset-cross-sex-3] [AC-cross-sex-area-coverage-3] [AC-cross-sex-area-coverage-7] [EDGE-cross-sex-area-coverage-6]
+    [Trait("Plan", "AC-tbsex-nude-legs-1")]
+    [Trait("Plan", "AC-tbsex-nude-legs-4")]
+    [Trait("Plan", "AC-tbsex-nude-legs-7")]
+    [Trait("Plan", "EDGE-tbsex-nude-legs-11")]
+    [Trait("Plan", "EDGE-tbsex-nude-legs-12")]
+    public void Sheer_elegance_gains_mens_versions() // [AC-sizeset-cross-sex-2] [AC-sizeset-cross-sex-4] [EDGE-sizeset-cross-sex-19] [EDGE-sizeset-cross-sex-24] [EDGE-sizeset-cross-sex-3] [AC-cross-sex-area-coverage-3] [AC-cross-sex-area-coverage-7] [EDGE-cross-sex-area-coverage-6] [AC-tbsex-nude-legs-1] [AC-tbsex-nude-legs-4] [AC-tbsex-nude-legs-7] [EDGE-tbsex-nude-legs-11] [EDGE-tbsex-nude-legs-12]
     {
         string root = Copy(Sheer);
         var across = SizeSetRefit.AcrossPieces(SizeSetRefit.PiecesOf(root, Game, includeEnds: false));
@@ -302,15 +307,20 @@ public sealed class SizeSetCrossSexLocalTests(ITestOutputHelper o) : IDisposable
         var result = RunMen(root, ["tbse@women", "tbse-x@women"],
                             Installed(CrossSexRefitLocalTests.Bibo, CrossSexRefitLocalTests.Tbse, CrossSexRefitLocalTests.TbseX),
                             runLog: runLog);
-        var legsMade = Assert.Single(runLog.Sizes, s => s.Men && s.Slot == "_dwn" && s.Status == SizeSetRefit.SizeStatus.Made);
-        o.WriteLine($"legs cut from {legsMade.CutFrom}");
-        Assert.Equal(SheerLegsCutFrom, legsMade.CutFrom);
+        var legsMade = runLog.Sizes.Where(s => s.Men && s.Slot == "_dwn" && s.Status == SizeSetRefit.SizeStatus.Made).ToList();
+        Assert.Equal(["TBSE", "TBSE-X"], legsMade.Select(s => s.Option).Order(StringComparer.Ordinal));
+        foreach (var made in legsMade) o.WriteLine($"{made.Option} legs cut from {made.CutFrom}, {made.Measures?.Folded} folded");
+        Assert.Equal(SheerLegsCutFrom, legsMade.Single(s => s.Option == "TBSE").CutFrom);
         // The top on both. The legs are made on Bibo+'s nude Type A, whose crotch TBSE's SFW legs have no place for (88.3%
-        // of the body, measured 2026-10-24): fitted to TBSE's Gen A legs instead (98.7%). They share no layout with
-        // TBSE-X's: left out there, saying why, never written.
-        Assert.Equal(3, result.Made);
+        // of the body, measured 2026-10-24): fitted to TBSE's Gen A legs instead (98.7%). TBSE-X's SFW legs match less
+        // still, refused outright: fitted to its Flaccid M A legs instead (tbsex-nude-legs).
+        Assert.Equal(4, result.Made);
         Assert.DoesNotContain(result.Notes, n => n.StartsWith(legs.Label + ": \"TBSE\"", StringComparison.Ordinal));
-        Assert.Contains(result.Notes, n => n.StartsWith(legs.Label + ": \"TBSE-X\"", StringComparison.Ordinal));
+        Assert.DoesNotContain(result.Notes, n => n.StartsWith(legs.Label + ": \"TBSE-X\"", StringComparison.Ordinal));
+        // Folded no worse than TBSE's Gen A fit by much (EDGE-12), both written down.
+        int genAFolds = legsMade.Single(s => s.Option == "TBSE").Measures!.Folded;
+        int flaccidFolds = legsMade.Single(s => s.Option == "TBSE-X").Measures!.Folded;
+        Assert.True(flaccidFolds <= 1.25 * genAFolds + 10, $"TBSE-X legs {flaccidFolds} folds against TBSE's {genAFolds}");
         string legsMen = RacialModelBake.WithRace(legs.GamePath, CrossSexRefit.Men);
         across = [across.First(p => p.GamePath == SheerTop)];
 
@@ -332,8 +342,11 @@ public sealed class SizeSetCrossSexLocalTests(ITestOutputHelper o) : IDisposable
             // Only the men's paths and the materials it publishes: nothing at a women's path.
             Assert.DoesNotContain(option.Files.Keys, k => k.Contains("/c0201", StringComparison.OrdinalIgnoreCase)
                                                           && k.EndsWith(".mdl", StringComparison.OrdinalIgnoreCase));
-            bool hasLegs = option.Files.Keys.Any(k => string.Equals(k, legsMen, StringComparison.OrdinalIgnoreCase));
-            Assert.Equal(option.Name == "TBSE", hasLegs);
+            var legsFile = option.Files.FirstOrDefault(f => string.Equals(f.Key, legsMen, StringComparison.OrdinalIgnoreCase));
+            Assert.NotNull(legsFile.Value);
+            // No material drawn by no mesh — Flaccid M A's piercing material in particular (EDGE-11).
+            MaterialAssert.NoNewUndrawnNames(File.ReadAllBytes(BodySizeCatalog.ResolveCaseInsensitive(root, legsFile.Value)),
+                                             File.ReadAllBytes(BodySizeCatalog.ResolveCaseInsensitive(root, legs.Options[0].File)));
             string meta = System.Text.Json.JsonSerializer.Serialize(option.Manipulations);
             Assert.Contains("Eqdp", meta);
         }
@@ -615,9 +628,12 @@ public sealed class SizeSetCrossSexLocalTests(ITestOutputHelper o) : IDisposable
         }
         Assert.Contains("Feet", manips);
         Assert.Contains("Hands", manips);
-        // The boots have no skin and no installed body's legs their cloth sits on: made on the game's own body, and said.
-        Assert.Contains(runLog.Warnings, w => w == string.Format(Localization.Strings.SizeSet.EndFromGameBodyFmt,
-                                                                 across.First(p => p.Slot == "_sho").Label, "TBSE"));
+        // The boots have no skin and no installed body's legs their cloth sits on: made on the body the outfit's own legs
+        // read as (LavaBod+'s Gen A, installed here), and said — since hands-feet-port's outfit-legs rule (build 1409).
+        var boots = Assert.Single(runLog.Sizes, s => s.Men && s.Slot == "_sho" && s.Option == "TBSE");
+        Assert.Contains(runLog.Warnings, w => w == string.Format(Localization.Strings.SizeSet.EndFromOutfitLegsFmt,
+                                                                 across.First(p => p.Slot == "_sho").Label, "TBSE",
+                                                                 boots.From, "c0201e0633_dwn.mdl"));
 
         var now = Groups(root).Where(g => g.Name != men).ToList();
         Assert.Equal(authors.Select(g => g.Name), now.Select(g => g.Name));

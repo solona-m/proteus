@@ -10,6 +10,30 @@ using static Proteus.Services.NavelBridge;
 
 public static partial class SecondSkinWriter
 {
+    /// <summary>Why a cap is declined on a host whose skin has no toes (legs under boots): not the body's fault.</summary>
+    internal const string NoBareFootReason = "no bare foot to cap on this part";
+
+    /// <summary>A declined cap is the "no bare foot" kind exactly when no skin on the host is weighted to the toes.</summary>
+    internal static bool IsNoBareFoot(bool toeBones) => !toeBones;
+
+    /// <summary>A toe bone: the foot's toe joint, or one of Rue/YAB's per-toe bones.</summary>
+    internal static bool IsToeBone(string bone)
+        => bone.StartsWith("j_asi_e_", StringComparison.Ordinal) || bone.StartsWith("iv_asi_", StringComparison.Ordinal);
+
+    /// <summary>Whether any skin triangle carries weight on a toe bone (<see cref="IsToeBone"/>).</summary>
+    private static bool HasToeWeights(List<SkinTri> skin)
+    {
+        static bool Any((string Bone, float W)[] ws)
+        {
+            foreach (var (bone, w) in ws)
+                if (w > 0f && IsToeBone(bone)) return true;
+            return false;
+        }
+        foreach (var t in skin)
+            if (Any(t.Wa) || Any(t.Wb) || Any(t.Wc)) return true;
+        return false;
+    }
+
     private sealed partial class ShellBuild
     {
         private readonly IReadOnlyList<SourceSpec> sources;
@@ -40,6 +64,11 @@ public static partial class SecondSkinWriter
         private Dictionary<int, CapPlacement>? capPlaced;
         private string? capDeclined;
         private string? capUsed;
+        /// <summary>
+        /// A cap was wanted but this host has no foot for any cap to fit (a top, a chest): the cap request is dropped, and
+        /// a footless host must never reach the generated solver. Not a decline: nothing to tell the user.
+        /// </summary>
+        private bool capNoFoot;
         private float capStandoff;
         private bool anyLayerWantsCap;
         private const float smoothStrength = 0f;
@@ -332,6 +361,7 @@ public static partial class SecondSkinWriter
             capPlaced = null;
             capDeclined = null;
             capUsed = null;
+            capNoFoot = false;
             // How far the chosen cap already stands off this body; the push below is driven from it.
             capStandoff = 0f;
             // Same predicate as the per-layer `wantCap` test below, hoisted: selection and placement are only worth
@@ -527,9 +557,25 @@ public static partial class SecondSkinWriter
                     // BuildVerbatim does not fall back to generating a cap, which throws.
                     capBytes = best.Value.Cap;
                     try { capSrc = ParseCached(best.Value.Cap); } catch { /* declined anyway */ }
-                    capDeclined = bestRate is > 0f and < float.MaxValue
-                        ? $"{bestRate * 100:F0}% of the toe cap could not be placed on this body"
-                        : "no toe cap has been measured against this body";
+                    capDeclined = IsNoBareFoot(HasToeWeights(fitSurface ??= BindSurface(sourceModels)))
+                        ? NoBareFootReason
+                        : bestRate is > 0f and < float.MaxValue
+                            ? $"{bestRate * 100:F0}% of the toe cap could not be placed on this body"
+                            : "no toe cap has been measured against this body";
+                    diag?.Invoke($"authored cap: DECLINED — {capDeclined}; the toes keep the plain shell");
+                }
+                else if (!HasToeWeights(fitSurface ??= BindSurface(sourceModels)))
+                {
+                    // No binding probed and no skin here is weighted to the toes: a footless host (a top, a chest). The
+                    // request is dropped (DropDeclinedCap), so this host never reaches the generated solver.
+                    capNoFoot = true;
+                    diag?.Invoke("authored cap: none of the bound bones are on this host — no foot on this host for "
+                               + "any cap to fit; the cap is not wanted here");
+                }
+                else
+                {
+                    // Toes are skinned here, yet no binding probed: say so, and leave the toes plain (the decline drops the cut).
+                    capDeclined = "a foot was found but no toe cap could be fitted to it";
                     diag?.Invoke($"authored cap: DECLINED — {capDeclined}; the toes keep the plain shell");
                 }
             }
@@ -629,21 +675,37 @@ public static partial class SecondSkinWriter
                           .All(g => g.DropVariantAttributes))
                     variantDropped.Add(src);
 
+            // And of the names dropped one by one (ContentGeometry.DropAttributes), those every geometry of it drops.
+            var namedDropped = new Dictionary<Source, HashSet<string>>();
+            foreach (var (model, src) in geomByModel)
+            {
+                HashSet<string>? all = null;
+                foreach (var g in layers.SelectMany(l => l.Geometry).Where(g => ReferenceEquals(g.Model, model)))
+                {
+                    var these = g.DropAttributes ?? new HashSet<string>();
+                    if (all == null) all = new HashSet<string>(these, StringComparer.Ordinal);
+                    else all.IntersectWith(these);
+                }
+                if (all is { Count: > 0 }) namedDropped[src] = all;
+            }
+
+            IEnumerable<string> Wanted(Source src)
+                => (ownedOnly.Contains(src) ? []
+                    : variantDropped.Contains(src) ? src.AttrNames.Where(n => !IsVariantAttribute(n))
+                    : src.AttrNames)
+                   .Where(n => !namedDropped.TryGetValue(src, out var dropped) || !dropped.Contains(n));
+
             attrNames = new List<string>();
             attrIndex = new Dictionary<string, int>(StringComparer.Ordinal);
             foreach (var src in boneSources)
-                foreach (var name in ownedOnly.Contains(src) ? []
-                                   : variantDropped.Contains(src) ? src.AttrNames.Where(n => !IsVariantAttribute(n))
-                                   : src.AttrNames)
+                foreach (var name in Wanted(src))
                 {
                     if (attrIndex.ContainsKey(name) || attrNames.Count >= 32) continue;
                     attrIndex[name] = attrNames.Count;
                     attrNames.Add(name);
                 }
-            // Counted over the same sources the union was built from, or untagged sources report names as dropped.
-            attrOverflow = boneSources.Where(s => !ownedOnly.Contains(s))
-                .SelectMany(s => s.AttrNames).Distinct(StringComparer.Ordinal)
-                .Count() - attrNames.Count;
+            // Counted over the same names the union was built from: a name dropped on purpose did not overflow.
+            attrOverflow = boneSources.SelectMany(Wanted).Distinct(StringComparer.Ordinal).Count() - attrNames.Count;
         }
 
         private void AllocateOutput()
@@ -992,10 +1054,10 @@ public static partial class SecondSkinWriter
                       SecondSkinLayer? cov,
                       bool mirrorUv1 = false, IReadOnlySet<string>? hiddenAttrs = null,
                       bool clearAttrs = false, CapUvPlan? capUv = null, bool dropVariantAttrs = false,
-                      (string Bone, float W)[]?[]? reskin = null)
+                      (string Bone, float W)[]?[]? reskin = null, IReadOnlySet<string>? dropAttrs = null)
         {
             new MeshEmitter(this, src, m, materialIndex, push, preserve, cov, mirrorUv1, hiddenAttrs, clearAttrs, capUv,
-                            dropVariantAttrs, reskin).Run();
+                            dropVariantAttrs, reskin, dropAttrs).Run();
         }
 
         /// <summary>
