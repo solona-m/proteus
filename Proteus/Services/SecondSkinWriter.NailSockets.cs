@@ -51,8 +51,10 @@ public static partial class SecondSkinWriter
     private const double NailFillFloor = 0.0004;
 
     /// <summary>A second outline of a nail this small is a pinhole — a quad missing from the mesh (YAB+'s middle fingers:
-    /// 4 corners, 2.4 mm round, against 33 mm for the nail) — and is welded shut rather than leaving the socket as
-    /// authored. A real double layer (FreyjaAF) or a hole another nail plugs is far larger.</summary>
+    /// 4 corners, 2.4 mm round, against 33 mm for the nail), or the small hole a two-triangle plug island fills on Rue+,
+    /// YAB+ and LavaBod+ thumbs (the plug is a socket member and collapses with it) — and is welded shut rather than
+    /// leaving the socket as authored. A real double layer (FreyjaAF) is far larger. The welded corners share a
+    /// position in the bind pose only (each keeps its own skinning): 0.6 mm apart on one finger bone, accepted.</summary>
     private const int NailPinholeMaxNodes = 8;
     private const float NailPinholeMaxShare = 0.15f;
 
@@ -661,8 +663,8 @@ public static partial class SecondSkinWriter
         }
         if (outline.Count == 0) return "the nearest nail is closed";
         if (outline.Any(l => l.Count < 3)) return "the nearest nail's outline is not one loop";
-        // One outline only. A nail with a hole in it — a double-layered nail (FreyjaAF), or a small hole another nail
-        // plugs (Rue+ thumbs) — is left as authored: spanning it could not be checked as a single disk.
+        // One outline only. A nail with a hole in it bigger than a pinhole — a double-layered nail (FreyjaAF) — is left as
+        // authored: spanning it could not be checked as a single disk.
         if (outline.Count != 1) return "the nearest nail's outline is not one loop";
         var bLoop = outline[0];
         int nn = nodePos.Count;
@@ -1004,8 +1006,29 @@ public static partial class SecondSkinWriter
                         }
                         return best;
                     }
+                    static float ToSeg(Vec3 p, Vec3 s0, Vec3 s1)
+                    {
+                        var e = new Vec3(s1.X - s0.X, s1.Y - s0.Y, s1.Z - s0.Z);
+                        float ee = e.X * e.X + e.Y * e.Y + e.Z * e.Z;
+                        float t = ee <= 0 ? 0 : Math.Clamp(((p.X - s0.X) * e.X + (p.Y - s0.Y) * e.Y + (p.Z - s0.Z) * e.Z) / ee, 0f, 1f);
+                        return Dist(p, new Vec3(s0.X + e.X * t, s0.Y + e.Y * t, s0.Z + e.Z * t));
+                    }
                     var m = new Vec3((a.X + b.X) / 2, (a.Y + b.Y) / 2, (a.Z + b.Z) / 2);
-                    return MathF.Max(Off(a), MathF.Max(Off(b), Off(m))) <= NailSeamTight;
+                    float worst = MathF.Max(Off(a), MathF.Max(Off(b), Off(m)));
+                    // ...and from the outline's side: a rim vertex always lies ON the outline (it is a target, or was moved
+                    // onto the chain), so the crack — a crescent where the chain bends at an outline node between two rim
+                    // vertices — is widest AT that node. Every outline node nearer this rim edge than any other is asked.
+                    for (int j = 0; j < nb; j++)
+                    {
+                        var p = final[bLoop[j]];
+                        float here = ToSeg(p, a, b);
+                        if (here <= worst) continue;
+                        bool nearest = true;
+                        for (int k = 0; k < nr && nearest; k++)
+                            nearest = ToSeg(p, Now(VKey(R[k].P)), Now(VKey(R[(k + 1) % nr].P))) >= here - 1e-9f;
+                        if (nearest) worst = here;
+                    }
+                    return worst <= NailSeamTight;
                 }
                 for (int i = 0; i < nr; i++)
                 {

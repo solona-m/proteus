@@ -498,7 +498,9 @@ internal static partial class BodyBridge
         int landings = 0, covered = 0;
         foreach (int v in verts)
         {
-            if (v >= plan.FingertipUv.Length || plan.FingertipUv[v] is not { } t) continue;
+            // Where the landing was: an island on the skin's edge has its inside's UVs carried into the socket's hole in
+            // the atlas, which glove art may leave unpainted — the question is the fingertip's, the rim it landed on.
+            if (v >= plan.FingertipUv.Length || (plan.LandingUv?[v] ?? plan.FingertipUv[v]) is not { } t) continue;
             landings++;
             int x0 = (int)MathF.Floor(t.U * w), y0 = (int)MathF.Floor(t.V * h);
             // A texel either way: a landing sits on the EDGE of the finger's island, and the coarse map can round it

@@ -288,17 +288,20 @@ internal sealed class NailGrade
         return best == float.MaxValue || signed >= 0;
     }
     private static bool Closed(List<(Vector3, Vector3, Vector3)> soup, Ray r)
-        => FirstHit(soup, r.O, r.D) is { } h && h.Front && h.T < r.Far - 0.001f || Covered(soup, r) || Enclosed(soup, r);
+        => FirstHit(soup, r.O, r.D) is { } h && h.Front && h.T < r.Far - 0.001f || Covered(soup, r);
 
-    /// <summary>A ray that starts UNDER the result's surface — the first face met looking back out is one seen from
-    /// behind — is inside the finger already: reaching the far wall says nothing of a hole. Only sound where the seam is
-    /// shut (<see cref="SeamGap"/>), which <see cref="Problems"/> checks on its own.</summary>
-    private static bool Enclosed(List<(Vector3, Vector3, Vector3)> soup, Ray r)
-        => FirstHit(soup, r.O, -r.D) is { } b && !b.Front && b.T < 0.004f;
+    /// <summary>
+    /// A rim "gap" ray of a spanned socket that starts UNDER the spanning patch — looking back out, the first face of the
+    /// patch met is its back — is inside the finger already, where the patch leans out over a fingertip curling up past
+    /// the rim: reaching the far wall says nothing of a hole. Asked of gap rays only and of the patch's own faces only,
+    /// and sound only because the seam is measured shut both ways on its own (<see cref="SeamGap"/>): on an open mesh,
+    /// "the start is enclosed" alone passed slivers.
+    /// </summary>
+    private static bool UnderPatch(List<(Vector3, Vector3, Vector3)> patch, Ray r)
+        => r.Kind == "gap" && FirstHit(patch, r.O, -r.D) is { } b && !b.Front && b.T < 0.004f;
 
     /// <summary>Where a patch copying a nail's steep side leans out over the rim, a ray can start under it; then the same
-    /// ray from 2 mm further out must meet a front face first, short of the far wall. (Not "the start is enclosed": on an
-    /// open mesh that test passed slivers a cast from further out showed open.)</summary>
+    /// ray from 2 mm further out must meet a front face first, short of the far wall.</summary>
     private static bool Covered(List<(Vector3, Vector3, Vector3)> soup, Ray r)
         => FirstHit(soup, r.O - r.D * 0.002f, r.D) is { } b && b.Front && b.T < r.Far + 0.001f;
 
@@ -323,7 +326,8 @@ internal sealed class NailGrade
         var model = Soup(F, Enumerable.Range(0, T.Length / 3).Select(i => i * 3));
         // Spanned sockets are closed.
         var owned = OwnedRays();
-        int open = owned.Count(r => !Closed(model, r));
+        var patch = Soup(F, Spanned.SelectMany(id => Of(id).Tris));
+        int open = owned.Count(r => !Closed(model, r) && !UnderPatch(patch, r));
         if (open > 0) bad.Add($"{open} of {owned.Count} socket rays through a spanned socket still open");
         // A collapsed nail never sits over a hole (a missed socket).
         var collapsed = islands.Where(i => !i.Sewn && i.Tris.Sum(t => TriN(F, t).Length()) < 1e-12f).Select(i => i.Id).ToHashSet();
@@ -432,18 +436,36 @@ internal sealed class NailGrade
                     if (isl.Boundary.Contains(a) && isl.Boundary.Contains(b)) edges.Add((F[a], F[b]));
                 }
         }
-        float worst = 0;
-        foreach (var l in Owned())
-            foreach (int v in l.Verts)
+        static float ToChain(Vector3 p, List<(Vector3, Vector3)> chain)
+        {
+            float best = float.MaxValue;
+            foreach (var (a, b) in chain)
             {
-                float best = float.MaxValue;
-                foreach (var (a, b) in edges)
-                {
-                    var ab = b - a; float t = ab.LengthSquared() > 0 ? Math.Clamp(Vector3.Dot(F[v] - a, ab) / ab.LengthSquared(), 0, 1) : 0;
-                    best = MathF.Min(best, Vector3.Distance(F[v], a + ab * t));
-                }
-                worst = MathF.Max(worst, best);
+                var ab = b - a; float t = ab.LengthSquared() > 0 ? Math.Clamp(Vector3.Dot(p - a, ab) / ab.LengthSquared(), 0, 1) : 0;
+                best = MathF.Min(best, Vector3.Distance(p, a + ab * t));
             }
+            return best;
+        }
+        float worst = 0;
+        var owned = Owned();
+        // Rim to outline: every rim vertex lies on the patch's outline...
+        foreach (var l in owned)
+            foreach (int v in l.Verts) worst = MathF.Max(worst, ToChain(F[v], edges));
+        // ...and outline to rim: every outline vertex lies on the rim. A rim vertex always sits ON the outline (it is a
+        // target, or moved onto the chain), so the crack between the two — a crescent where the chain bends at an
+        // outline node — shows only from the outline's side. A pinhole's corners, welded to one point inside the patch,
+        // are no part of the outline.
+        var rimEdges = owned.SelectMany(l => l.Edges.Select(e => (F[e.A], F[e.B]))).ToList();
+        foreach (var id in Spanned)
+        {
+            var isl = Of(id);
+            foreach (int v in isl.Boundary)
+            {
+                bool welded = isl.Boundary.Any(u => u != v && Vector3.Distance(F[u], F[v]) < 1e-7f && Vector3.Distance(H[u], H[v]) > 1e-6f);
+                if (welded) continue;
+                worst = MathF.Max(worst, ToChain(F[v], rimEdges));
+            }
+        }
         return worst;
     }
 

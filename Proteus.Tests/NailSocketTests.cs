@@ -49,6 +49,39 @@ public class NailSocketTests(ITestOutputHelper o)
         g.AssertSpanned(o, band: true);
     }
 
+    /// <summary>A spanned patch's inside takes the rim's UVs carried across (not every vertex the rim's nearest texel,
+    /// which painted a nail-shaped ring under a garment); the outline keeps the rim's own; a nail floating over its
+    /// socket is no island on the skin's edge.</summary>
+    [Fact]
+    public void Spanned_patch_takes_the_rims_uvs_across()
+    {
+        var hand = SyntheticFinger.Build(V.OpenSocket);
+        var before = new List<string>();
+        SecondSkinWriter.NailBedPlans(hand, before.Add);
+        Assert.Contains(before, l => l.Contains("; 0 lying on the skin's edge", StringComparison.Ordinal));
+        var flat = BodyBridge.FlattenNails(hand, Full())!;
+        var after = new List<string>();
+        var plans = SecondSkinWriter.NailBedPlans(flat, after.Add);
+        foreach (var l in after) o.WriteLine(l);
+        Assert.Contains(after, l => l.Contains("; 1 lying on the skin's edge", StringComparison.Ordinal));
+        var plan = Assert.Single(plans.Values, p => p.LandingUv != null);
+        int island = plan.VertsOf.FindIndex(vs => vs.Any(v => plan.LandingUv![v] != null));
+        var verts = plan.VertsOf[island];
+        var inside = verts.Where(v => plan.LandingUv![v] != null).ToList();
+        var outline = verts.Where(v => plan.LandingUv![v] == null).Select(v => plan.FingertipUv[v]!.Value).ToList();
+        Assert.NotEmpty(inside);
+        Assert.NotEmpty(outline);
+        float u0 = outline.Min(t => t.U), u1 = outline.Max(t => t.U), v0 = outline.Min(t => t.V), v1 = outline.Max(t => t.V);
+        foreach (int v in inside)
+        {
+            var t = plan.FingertipUv[v]!.Value;
+            Assert.InRange(t.U, u0 - 1e-5f, u1 + 1e-5f);
+            Assert.InRange(t.V, v0 - 1e-5f, v1 + 1e-5f);
+        }
+        // ...and they are not all the rim: the middle of the patch lands inside the rim's UVs.
+        Assert.Contains(inside, v => plan.FingertipUv[v]!.Value != plan.LandingUv![v]!.Value);
+    }
+
     /// <summary>...and the bodysuit built over that hand is closed too: the rays meet the garment.</summary>
     [Fact]
     [Trait("Plan", "AC-nail-socket-hole-1")]
@@ -699,8 +732,11 @@ public class NailSocketTests(ITestOutputHelper o)
         Assert.Equal(10, sp.HiddenIslands.Count);
 
         var suit = Gate(SecondSkinWriterVerbatimTests.PaintFingersNotNailBeds(hand, 1024), 1024);
-        var flat = BodyBridge.FlattenNails(hand, suit, o.WriteLine, hidden);
+        var flog = new List<string>();
+        var flat = BodyBridge.FlattenNails(hand, suit, l => { flog.Add(l); o.WriteLine(l); }, hidden);
         Assert.NotNull(flat);
+        // Every socket the planner spans is spanned in the hand that ships: none held back as uncovered by the suit.
+        Assert.Contains(flog, l => l.Contains(" 0 left uncovered") && l.Contains("10 spanning an open socket"));
         foreach (var m in sp.HiddenIslands.Concat(sp.Sockets.Where(s => s.Owner == null).SelectMany(s => s.Members)))
             Assert.True(NailGrade.SameIsland(hand, flat!, plans, m), $"island {m} changed");
         // What ships is graded as it is: with the layers hidden, more sockets span than with nothing hidden (a socket
@@ -708,6 +744,7 @@ public class NailSocketTests(ITestOutputHelper o)
         var g = new NailGrade(hand, flat!);
         var bad = g.Problems(o);
         Assert.True(bad.Count == 0, string.Join("; ", bad));
+        Assert.Equal(10, g.Spanned.Count);
         Assert.DoesNotContain(sp.Sockets.Where(s => s.Owner != null), s => sp.HiddenIslands.Contains(s.Owner!.Value));
         // ...and the garment the shipped hand gets — its hidden layers dropped, as the shell drops them — is closed.
         var shell = SecondSkinWriter.Build(new[] { new SecondSkinWriter.SourceSpec(flat!, CoverNails: true, HiddenAttributes: hidden) },
