@@ -32,6 +32,28 @@ public partial class HairPortScanTests
         s.Reloaded(root, MenId);
     }
 
+    /// <summary>[AC-hair-material-scalp-fit-9] After the update, the check remakes the old ports for the race the player
+    /// wears only: another race's old port stays out of date until worn as that race or remade in the Studio.</summary>
+    [Fact]
+    [Trait("Plan", "AC-hair-material-scalp-fit-9")]
+    public void The_check_remakes_only_the_players_race()
+    {
+        using var s = new Setup();
+        var root = MensMod(s);
+        var plan = HairPortBuilder.Build(root, HairPortPlan.HairPath(101, MenId), [Me, 401], Pbd(), s.Host.Game, withSharers: false);
+        Assert.Empty(plan.Refused);
+        Assert.True(HairPortWriter.Save(root, plan.Writes, auto: false).Ok);
+        var record = HairPortRecord.Read(root);
+        foreach (var e in record.Ports) e.PortVersion = 1;
+        HairPortRecord.Write(root, record);
+        s.Reloaded(root, MenId);
+
+        s.Run(HairPortScan.IdsInMod(HairPortPlan.ReadOwners(root), Me, HairPortRecord.Read(root)), force: true);
+        var after = HairPortRecord.Read(root).Ports;
+        Assert.Equal(HairPortBaker.Version, after.Single(e => e.TargetGamePath == HairPortPlan.HairPath(Me, MenId)).PortVersion);
+        Assert.Equal(1, after.Single(e => e.TargetGamePath == HairPortPlan.HairPath(401, MenId)).PortVersion);
+    }
+
     [Fact]
     [Trait("Plan", "AC-cross-sex-hair-port-5")]
     public void A_check_never_ports_across_the_sexes()

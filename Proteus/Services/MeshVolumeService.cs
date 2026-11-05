@@ -216,7 +216,7 @@ internal static class MeshVolumeService
     /// Every vertex named as a shape's replacement, per mesh — the spares, which the main pass must leave
     /// alone. Keyed <c>(mesh &lt;&lt; 32) | localVertex</c>.
     /// </summary>
-    private static HashSet<long> SpareVertices(byte[] mdl, SecondSkinWriter.Source src)
+    internal static HashSet<long> SpareVertices(byte[] mdl, SecondSkinWriter.Source src)
     {
         var spares = new HashSet<long>();
         if (src.Shapes.Count == 0) return spares;

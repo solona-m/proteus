@@ -57,8 +57,8 @@ public class HairPortBakerTests
     public void A_port_that_sinks_into_the_head_is_saved_with_a_warning()
     {
         // Once refused (EDGE-hair-race-port-30); now saved, and said, as the folds are.
-        // The target's head is a third larger than the hair: the hair lies inside it.
-        var result = Port(HairModel(801), 801, 201, out var why, targetHead: HeadModel(201, 0.13f));
+        // The target's head is twice the hair's size — deeper than the scalp push goes (HairScalpPush.MaxPush): the hair lies inside it.
+        var result = Port(HairModel(801), 801, 201, out var why, targetHead: HeadModel(201, 0.2f));
         Assert.True(result != null, why);
         Assert.True(result!.Sunk > HairPortBaker.SunkLimit);
         Assert.Contains("c0201", result.Warning);
@@ -93,7 +93,7 @@ public class HairPortBakerTests
             (1201, 1101, new() { ["j_kao"] = mirror }),
         ]));
         var result = HairPortBaker.Prepare(HairModel(801), 801, 1201, Id, pbd, NoExtra, HeadModel(801),
-                                           HeadModel(1201, 0.13f), out var why);
+                                           HeadModel(1201, 0.2f), out var why);
         Assert.True(result != null, why);
         Assert.Contains("sinks into the skull", result!.Warning);
         Assert.Contains("inside out", result.Warning);

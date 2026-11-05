@@ -239,9 +239,16 @@ internal static class HairPortBuilder
 
                 var materials = Materials(modRoot, owners, owner, bytes, from, to, id, readGame, out var missing);
                 if (missing != null) { why = missing; break; }
+                // A material of the port's own name is a file the game does not ship: published nowhere the port is on,
+                // the hair draws invisible. Refused for its race instead.
+                if (OwnMaterialUnpublishable(owners, owner, record, result.Model, to, id, materials) is { } covered)
+                {
+                    why = HairPortWriter.Covered(covered);
+                    break;
+                }
                 writes.Add(new HairPortWriter.PortWrite(owner, sourceGamePath, rel, HairPortPlan.Sha8(bytes), target,
                                                         result.Model, [.. materials, .. skeletonFiles], result.Millis, est,
-                                                        skeletonFrom));
+                                                        skeletonFrom, Pushed: result.Pushed, PushWorst: result.PushWorst));
                 if (result.Warning is { } warning) warnings[to] = warning;
             }
             if (why != null)
@@ -273,6 +280,25 @@ internal static class HairPortBuilder
 
         foreach (var to in refused.Keys) warnings.Remove(to);
         return new Plan(writes, refused, current, Unreadable: noVerdict, EditBlocked: editBlocked, Warnings: warnings);
+    }
+
+    /// <summary>
+    /// The first own-named material (<see cref="HairMaterialPath.IsOwnName"/>) the port's model names that would be
+    /// published nowhere it is on — not redirected among <paramref name="materials"/>, or not publishable from
+    /// <paramref name="owner"/> while the default data does not publish it either — or null when every one will be.
+    /// </summary>
+    internal static string? OwnMaterialUnpublishable(IReadOnlyList<HairPortPlan.Owner> owners, HairPortPlan.Owner owner,
+                                                     HairPortRecord record, byte[] model, ushort to, int id,
+                                                     IReadOnlyList<HairPortWriter.MaterialWrite> materials)
+    {
+        foreach (var name in SecondSkinWriter.Parse(model).MatNames.Distinct())
+        {
+            if (!HairMaterialPath.IsOwnName(name) || HairMaterialPath.GamePath(to, id, name) is not { } path) continue;
+            if (!materials.Any(m => m.GamePath.Equals(path, StringComparison.OrdinalIgnoreCase))) return path;
+            if (!HairPortWriter.MayPublish(owners, owner, record, path) && !HairPortWriter.PublishedByDefaults(owners, owner, path))
+                return path;
+        }
+        return null;
     }
 
     /// <summary>Why the automatic path makes no port across the sexes.</summary>
@@ -456,7 +482,7 @@ internal static class HairPortBuilder
         foreach (var name in names)
         {
             var source = HairMaterialPath.GamePath(from, id, name);
-            var target = HairMaterialPath.GamePath(to, id, HairMaterialPath.RenameRace(name, to));
+            var target = HairMaterialPath.GamePath(to, id, HairMaterialPath.PortName(name, from, to, id));
             if (target == null || string.Equals(source, target, StringComparison.OrdinalIgnoreCase)) continue;
             // The target's sex: across the sexes, the races that read the target's material are its own sex's.
             foreach (var other in HairPortPlan.SameGenderRaces(to).Where(r => r != from && canWear?.Invoke(r) != false))
@@ -481,7 +507,7 @@ internal static class HairPortBuilder
         foreach (var name in SecondSkinWriter.Parse(source).MatNames.Distinct())
         {
             var s = HairMaterialPath.GamePath(from, id, name);
-            var t = HairMaterialPath.GamePath(to, id, HairMaterialPath.RenameRace(name, to));
+            var t = HairMaterialPath.GamePath(to, id, HairMaterialPath.PortName(name, from, to, id));
             if (s == null || t == null || string.Equals(s, t, StringComparison.OrdinalIgnoreCase)) continue;
 
             if (Carry(modRoot, owners, owner, s, t, readGame).Write is not { } write)

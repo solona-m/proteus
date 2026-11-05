@@ -20,9 +20,11 @@ namespace Proteus.Services;
 internal static class HairPortBaker
 {
     /// <summary>
-    /// Raised whenever a port would come out differently, so ports made by an older build are made again.
+    /// Raised whenever a port would come out differently, so ports made by an older build are made again. 2: hair the
+    /// bend sank into the target's skull is pushed back out (<see cref="HairScalpPush"/>), and a port across the sexes
+    /// into a shared material folder names a material of its own (<see cref="HairMaterialPath.PortName"/>).
     /// </summary>
-    public const int Version = 1;
+    public const int Version = 2;
 
     /// <summary>
     /// The most of a port's cranium vertices that may sit deeper than <see cref="InsideDepth"/> inside the target's
@@ -61,8 +63,12 @@ internal static class HairPortBaker
     /// <param name="Warning">Said beside the port when it does not sit on the target's head (over <see cref="SunkLimit"/>
     /// or <see cref="GapMargin"/>), or more than <see cref="FoldedShare"/> of it turned inside out: it is saved all the
     /// same, for the player to look at in game. Null otherwise.</param>
+    /// <param name="Pushed">Points pushed back out of the target's skull (<see cref="HairScalpPush"/>).</param>
+    /// <param name="PushWorst">The furthest any was pushed, in metres.</param>
+    /// <param name="Clips">Points still sunk into the head where the source's are not, after the push.</param>
     public sealed record Result(byte[] Model, IReadOnlyList<(string From, string To)> Renamed, float Sunk,
-                                float GapShift, int FurHidden, long Millis, int Folded = 0, string? Warning = null);
+                                float GapShift, int FurHidden, long Millis, int Folded = 0, string? Warning = null,
+                                int Pushed = 0, float PushWorst = 0f, int Clips = 0);
 
     /// <summary>
     /// Where each bone sits in a hairstyle's skeleton, for the deformer: a bone it does not list takes its nearest
@@ -158,10 +164,20 @@ internal static class HairPortBaker
             foreach (var bone in src.BoneNames.Where(b => b.StartsWith(EarBonePrefix, StringComparison.Ordinal)))
                 model = ModelAttributeWriter.RenameBone(model, bone, HeadBone);
 
+        // The bend scales a head but does not know its shape: what it sank into the target's skull, where the source sat
+        // on its own scalp, goes back out — a bald patch otherwise.
+        HairScalpPush.Result? push = null;
+        if (shown != null && HairScalpPush.FrameOf(sourceHead) is { } sourceFrame && HairScalpPush.FrameOf(targetHead) is { } targetFrame)
+        {
+            try { push = HairScalpPush.Apply(model, shown, sourceFrame, targetFrame); }
+            catch (ModelAttributeWriter.ModelEditException ex) { refusal = ex.Message; return null; }
+            model = push.Model;
+        }
+
         var renamed = new List<(string, string)>();
         foreach (var name in SecondSkinWriter.Parse(model).MatNames)
         {
-            var next = HairMaterialPath.RenameRace(name, to);
+            var next = HairMaterialPath.PortName(name, from, to, hairId);
             if (next == name) continue;
             model = ModelAttributeWriter.RenameMaterial(model, name, next);
             renamed.Add((name, next));
@@ -201,8 +217,17 @@ internal static class HairPortBaker
                 to, after.Value.Sunk, MathF.Abs(shift) * 1000f);
             warning = warning == null ? fit : fit + "; " + warning;
         }
+        // What the push could not reach — below the fade, or deeper than the source's own gap gives back.
+        if (push is { } p && p.After > HairScalpPush.ClipLimit(p.Cranium))
+        {
+            var clip = string.Format(ProteusLoc.Localize("HairPort.Clip.Fmt",
+                "bent onto c{0:D4}, {1} of its points sink into the head where the original's do not, which may show the " +
+                "scalp; check it in game"), to, p.After);
+            warning = warning == null ? clip : warning + "; " + clip;
+        }
 
-        return new Result(model, renamed, after.Value.Sunk, shift, furHidden, clock.ElapsedMilliseconds, folded, warning);
+        return new Result(model, renamed, after.Value.Sunk, shift, furHidden, clock.ElapsedMilliseconds, folded, warning,
+                          push?.Pushed ?? 0, push?.Worst ?? 0f, push?.After ?? 0);
     }
 
     /// <summary>

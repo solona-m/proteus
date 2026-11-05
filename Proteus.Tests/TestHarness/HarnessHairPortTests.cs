@@ -575,10 +575,14 @@ public class HarnessHairPortTests : IDisposable
         if (noPbd) f.Game.GameFiles.Remove(Proteus.Interop.LiveCharacter.PbdGamePath);
         else
         {
-            // Hairstyle 130 to one man alone: the men's material is every man's, so the Studio refuses it.
+            // Hairstyle 130 to one man, whose own material another group of the author's publishes, always on beside the
+            // option: the Studio refuses it rather than leave the port drawing invisible.
             hair = HairPortPlan.HairPath(201, 130);
             CrossSexFixtures.AddFile(mod, "Long", hair, "h130.mdl", CrossSexFixtures.Cap(201, 130));
             foreach (var (k, v) in CrossSexFixtures.GameFiles(null, [130])) f.Game.GameFiles[k] = v;
+            mod.Put("extra.mtrl", [9]);
+            CrossSexFixtures.EditMeta(mod, n => n["Groups"]!.AsArray().Add(System.Text.Json.Nodes.JsonNode.Parse(HairPortFixtures.Group(
+                "Extra", "Single", ("On", new Dictionary<string, string> { [HairPortOwnMaterialTests.Own(101)] = "extra.mtrl" })))));
         }
         var before = FolderState.Of(mod.Root);
         var job = await Job($"\"mod\":\"Hair\",\"hair\":\"{hair}\",\"races\":[\"c0101\"]");
@@ -593,7 +597,7 @@ public class HarnessHairPortTests : IDisposable
         {
             var result = Result(job);
             Assert.Equal("nothing-ported", result.GetProperty("summary").GetString());
-            Assert.Contains("c1101", result.GetProperty("refused").EnumerateArray().Single().GetProperty("reason").GetString());
+            Assert.Contains("_port0101.mtrl", result.GetProperty("refused").EnumerateArray().Single().GetProperty("reason").GetString());
             Assert.Equal(0, f.Game.AfterChanges);
         }
     }

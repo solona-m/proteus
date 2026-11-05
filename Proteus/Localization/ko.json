@@ -5483,6 +5483,14 @@
     "message": "c{0:D4}의 머리에 맞지 않습니다. {1:P0}가 두개골 안으로 파묻히고, 두피와의 거리가 원본과 {2:F0} mm 차이 납니다. 게임에서 확인하세요",
     "description": ""
   },
+  "HairPort.Clip.Fmt": {
+    "message": "c{0:D4}에 맞추면 원본에서는 파묻히지 않는 점 {1}개가 머리 안으로 파묻혀 두피가 보일 수 있습니다. 게임에서 확인하세요",
+    "description": "A hair port saved with a warning (lowercase sentence fragment): bent onto another race, some of it still sinks into that race's head where the original sits on its own scalp, which may show the skin; shown after a race or file name and a colon. {0} race code number, {1} number of points."
+  },
+  "HairPort.Undo.Also.Fmt": {
+    "message": "{0}의 이식도 제거했습니다. 자기 헤어스타일이 읽는 머티리얼 리디렉션을 사용하고 있었습니다.",
+    "description": "Sentence added after a hair-port removal: ports made by an older build were taken out too, because they redirected a material the named races' own hairstyle reads. {0} race codes, comma-separated (e.g. c0301, c0501)."
+  },
   "HairPort.Refused.NotHair": {
     "message": "헤어스타일 모델이 아닙니다",
     "description": ""

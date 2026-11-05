@@ -5483,6 +5483,14 @@
     "message": "it does not sit on c{0:D4}'s head: {1:P0} of it sinks into the skull, and its distance from the scalp is {2:F0} mm off the original's; check it in game",
     "description": "A hair port saved with a warning (lowercase sentence fragment): ported to another race, it does not sit on that race's head; shown after a race or file name and a colon. {0} race code number, {1} fraction sunk into the skull, {2} millimetres."
   },
+  "HairPort.Clip.Fmt": {
+    "message": "bent onto c{0:D4}, {1} of its points sink into the head where the original's do not, which may show the scalp; check it in game",
+    "description": "A hair port saved with a warning (lowercase sentence fragment): bent onto another race, some of it still sinks into that race's head where the original sits on its own scalp, which may show the skin; shown after a race or file name and a colon. {0} race code number, {1} number of points."
+  },
+  "HairPort.Undo.Also.Fmt": {
+    "message": "Also took out the ports for {0}, which used a material redirect their own hairstyle reads.",
+    "description": "Sentence added after a hair-port removal: ports made by an older build were taken out too, because they redirected a material the named races' own hairstyle reads. {0} race codes, comma-separated (e.g. c0301, c0501)."
+  },
   "HairPort.Refused.NotHair": {
     "message": "it is not a hairstyle model",
     "description": "Reason (lowercase sentence fragment) why a hairstyle could not be ported to another race; shown after a race or file name and a colon."

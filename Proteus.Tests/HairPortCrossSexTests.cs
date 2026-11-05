@@ -552,9 +552,11 @@ public class HairPortCrossSexTests
         Assert.Contains(HairPortRecord.Read(mod.Root).Ports, e => e.TargetGamePath == HairPortPlan.HairPath(101, id) && e.SkeletonFrom == 0);
         mod.Put("long.mdl", CrossSexFixtures.Cap(201, id, 0.101f, [("j_ex_h0130_ke_b", 1f)]));
 
+        // With their own materials the two men share nothing any more (AC-hair-material-scalp-fit-2): the remake of one
+        // neither drags the stripped other along nor counts it — it is simply not in this build.
         var plan = CrossSexFixtures.Build(mod, [1101], auto: true, game, source);
         Assert.Empty(plan.Refused);
-        Assert.Contains((ushort)101, plan.Current);
+        Assert.DoesNotContain((ushort)101, plan.Current);
         var write = Assert.Single(plan.Writes, w => !w.Stripped);
         Assert.Equal(HairPortPlan.HairPath(1101, id), write.TargetGamePath);
         Assert.DoesNotContain(plan.Writes, w => w.TargetGamePath == HairPortPlan.HairPath(101, id));
@@ -678,10 +680,14 @@ public class HairPortCrossSexTests
         Assert.Contains("c0101", CrossSexFixtures.Build(mod, [101], false, game).Refused[101]);
     }
 
-    /// <summary>Hairstyle 130: every man but a Hrothgar reads the Midlander man's material for it.</summary>
+    /// <summary>
+    /// Hairstyle 130: every man but a Hrothgar reads the Midlander man's material for it. A port of the women's model gives
+    /// each man its own material (was EDGE-cross-sex-hair-port-5, which needed every man ticked): one alone ports, and two
+    /// get two names, neither the game's shared one.
+    /// </summary>
     [Fact]
-    [Trait("Plan", "EDGE-cross-sex-hair-port-5")]
-    public void Shared_mens_material_needs_every_man_ticked()
+    [Trait("Plan", "AC-hair-material-scalp-fit-2")]
+    public void Shared_mens_material_no_longer_needs_every_man()
     {
         const int id = 130;
         string source = HairPortPlan.HairPath(201, id);
@@ -689,35 +695,42 @@ public class HairPortCrossSexTests
         var game = CrossSexFixtures.Game(files);
         using var mod = CrossSexFixtures.WomensMod(id);
         var alone = CrossSexFixtures.Build(mod, [101], false, game, source);
-        Assert.Empty(alone.Writes);
-        Assert.Contains("c1101", alone.Refused[101]);
+        Assert.Empty(alone.Refused);
+        Assert.Single(alone.Writes);
 
         var both = CrossSexFixtures.Build(mod, [101, 1101], false, game, source);
         Assert.Empty(both.Refused);
         Assert.Equal(2, both.Writes.Count);
         var mens = CrossSexFixtures.Material(101, id);
-        Assert.Equal(CrossSexFixtures.Material(1101, id), mens);
-        Assert.All(both.Writes, w => Assert.Equal(files[CrossSexFixtures.Material(201, id)],
-                                                  w.Materials.Single(m => m.GamePath == mens).Bytes));
+        var paths = both.Writes.Select(w => w.Materials.Single().GamePath).ToList();
+        Assert.Equal([HairPortOwnMaterialTests.Own(101), HairPortOwnMaterialTests.Own(1101)], paths.Order());
+        Assert.DoesNotContain(mens, paths);
+        Assert.All(both.Writes, w => Assert.Equal(files[CrossSexFixtures.Material(201, id)], w.Materials.Single().Bytes));
     }
 
+    /// <summary>
+    /// A Roegadyn man can now choose the hairstyle too (was EDGE-cross-sex-hair-port-8, where that refused every remake):
+    /// with its own materials the Studio's port has no sharer, so the automatic remake of it goes alone, under the same
+    /// material path, and no new man is ported.
+    /// </summary>
     [Fact]
-    [Trait("Plan", "EDGE-cross-sex-hair-port-8")]
-    public void An_automatic_remake_never_adds_a_new_cross_sex_sharer()
+    [Trait("Plan", "AC-hair-material-scalp-fit-4")]
+    [Trait("Plan", "EDGE-hair-material-scalp-fit-7")]
+    public void A_new_race_able_to_wear_it_changes_nothing()
     {
         const int id = 130;
         string source = HairPortPlan.HairPath(201, id);
         using var mod = CrossSexFixtures.WomensMod(id);
-        CrossSexFixtures.HandPort(mod, [101, 1101], CrossSexFixtures.Game(CrossSexFixtures.GameFiles([101, 201, 1101], [id])), source);
+        CrossSexFixtures.HandPort(mod, [101], CrossSexFixtures.Game(CrossSexFixtures.GameFiles([101, 201, 1101], [id])), source);
+        var before = HairPortRecord.Read(mod.Root).Ports.Single().Materials.Keys.ToList();
         mod.Put("long.mdl", CrossSexFixtures.Cap(201, id, 0.101f));
-        // A Roegadyn man can now choose it too: he would read the same material.
         var game = CrossSexFixtures.Game(CrossSexFixtures.GameFiles([101, 201, 1101, 1301], [id]));
 
         var plan = CrossSexFixtures.Build(mod, [101], auto: true, game, source);
-        Assert.Equal(HairPortBuilder.OtherSexAuto, plan.Refused[1301]);
-        Assert.Contains("c1301", plan.Refused[101]);
-        Assert.Contains("c1301", plan.Refused[1101]);
-        Assert.Empty(plan.Writes);
+        Assert.Empty(plan.Refused);
+        var w = Assert.Single(plan.Writes);
+        Assert.Equal(HairPortPlan.HairPath(101, id), w.TargetGamePath);
+        Assert.Equal(before, w.Materials.Select(m => m.GamePath));
     }
 
     [Fact]
@@ -742,9 +755,10 @@ public class HairPortCrossSexTests
         Assert.All(plan.Writes, w => Assert.Equal(Target, w.TargetGamePath));
     }
 
+    /// <summary>Was EDGE-cross-sex-hair-port-15 (unchanged at 1): this change moves it, so every older port is remade.</summary>
     [Fact]
-    [Trait("Plan", "EDGE-cross-sex-hair-port-15")]
-    public void Version_is_unchanged() => Assert.Equal(1, HairPortBaker.Version);
+    [Trait("Plan", "AC-hair-material-scalp-fit-9")]
+    public void Version_is_2() => Assert.Equal(2, HairPortBaker.Version);
 
     [Fact]
     [Trait("Plan", "EDGE-cross-sex-hair-port-16")]

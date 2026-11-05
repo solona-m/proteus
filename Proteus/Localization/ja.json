@@ -5483,6 +5483,14 @@
     "message": "c{0:D4} の頭に収まりません。{1:P0} が頭蓋骨に沈み込み、頭皮からの距離が元より {2:F0} mm ずれています。ゲーム内で確認してください",
     "description": ""
   },
+  "HairPort.Clip.Fmt": {
+    "message": "c{0:D4} に合わせると、元では沈まない {1} 個の点が頭に沈み込み、頭皮が見えることがあります。ゲーム内で確認してください",
+    "description": "A hair port saved with a warning (lowercase sentence fragment): bent onto another race, some of it still sinks into that race's head where the original sits on its own scalp, which may show the skin; shown after a race or file name and a colon. {0} race code number, {1} number of points."
+  },
+  "HairPort.Undo.Also.Fmt": {
+    "message": "{0} への移植も取り除きました。それらは、自身の髪型が読み込むマテリアルのリダイレクトを使っていました。",
+    "description": "Sentence added after a hair-port removal: ports made by an older build were taken out too, because they redirected a material the named races' own hairstyle reads. {0} race codes, comma-separated (e.g. c0301, c0501)."
+  },
   "HairPort.Refused.NotHair": {
     "message": "髪型のモデルではありません",
     "description": ""

@@ -5483,6 +5483,14 @@
     "message": "no se asienta en la cabeza de c{0:D4}: el {1:P0} se hunde en el cráneo, y su distancia al cuero cabelludo difiere {2:F0} mm de la del original; revísalo en el juego",
     "description": ""
   },
+  "HairPort.Clip.Fmt": {
+    "message": "doblado sobre c{0:D4}, {1} de sus puntos se hunden en la cabeza donde los del original no, lo que puede dejar ver el cuero cabelludo; revísalo en el juego",
+    "description": "A hair port saved with a warning (lowercase sentence fragment): bent onto another race, some of it still sinks into that race's head where the original sits on its own scalp, which may show the skin; shown after a race or file name and a colon. {0} race code number, {1} number of points."
+  },
+  "HairPort.Undo.Also.Fmt": {
+    "message": "También se quitaron los peinados portados de {0}, que usaban una redirección de material que lee su propio peinado.",
+    "description": "Sentence added after a hair-port removal: ports made by an older build were taken out too, because they redirected a material the named races' own hairstyle reads. {0} race codes, comma-separated (e.g. c0301, c0501)."
+  },
   "HairPort.Refused.NotHair": {
     "message": "no es un modelo de peinado",
     "description": ""

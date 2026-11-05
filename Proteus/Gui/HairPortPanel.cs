@@ -256,9 +256,10 @@ internal sealed class HairPortPanel(Func<string, byte[]?> readGameFile, IPluginL
                                  + "of the race loads its slot, or the mod gives the race a skeleton of its own)",
                                  w.TargetGamePath, w.Into.Group, w.Into.Option);
             else
-                log?.Information("hair port: {0} → {1} in {2} / {3}, bent in {4} ms, skeleton entry {5}, carried from {6}",
+                log?.Information("hair port: {0} → {1} in {2} / {3}, bent in {4} ms, skeleton entry {5}, carried from {6}, "
+                                 + "{7} point(s) pushed out of the skull, worst {8:F1} mm",
                                  w.SourceGamePath, w.TargetGamePath, w.Into.Group, w.Into.Option, w.Millis, w.Est,
-                                 w.SkeletonFrom);
+                                 w.SkeletonFrom, w.Pushed, w.PushWorst * 1000f);
         foreach (var (race, why) in plan.Refused) log?.Information("hair port: c{0:D4} not ported — {1}", race, why);
         return outcome;
     }

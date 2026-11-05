@@ -67,6 +67,24 @@ public partial class HairPortWatcherDecisionTests
         public void Dispose() { try { Directory.Delete(ModsRoot, true); } catch { } }
     }
 
+    /// <summary>[AC-hair-material-scalp-fit-9] A Studio port made by an older build, worn: the watcher remakes it to the
+    /// current version (with the scalp push and its own material).</summary>
+    [Fact]
+    [Trait("Plan", "AC-hair-material-scalp-fit-9")]
+    public void The_watcher_remakes_a_worn_old_port()
+    {
+        using var s = new CrossSetup();
+        X.HandPort(s.Mod, [101]);
+        var record = HairPortRecord.Read(s.Mod.Root);
+        record.Ports.Single().PortVersion = 1;
+        HairPortRecord.Write(s.Mod.Root, record);
+        s.Reloaded();
+
+        var view = s.Run();
+        Assert.True(view.Ported);
+        Assert.Equal(HairPortBaker.Version, HairPortRecord.Read(s.Mod.Root).Ports.Single().PortVersion);
+    }
+
     [Fact]
     [Trait("Plan", "AC-cross-sex-hair-port-5")]
     public void A_womans_hair_mod_never_fits_a_man()
