@@ -444,7 +444,8 @@ public sealed class ShaderUpgradeWatcher : IDisposable
                 Announce(n, names.TryGetValue(dir, out var name) ? name : dir);
         }
         bool redraw = RedrawAfter(kind, config.AutoRedraw, true);
-        if (redraw) compositor.RedrawForChangedModel("shader upgrade", deferWhileHeld: kind == RunKind.Upgrade);
+        // Never held for the auto refit's batch (only its own work is): the walk already waits until it is idle.
+        if (redraw) compositor.RedrawForChangedModel("shader upgrade");
         return (reloaded, redraw);
     }
 

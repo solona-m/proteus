@@ -243,6 +243,9 @@ internal static class ShaderUpgradeWriter
             // (a failure aborts the unit), or the old original would stand in for the author's new file.
             if (EntryOf(record, w.Rel) is { } stale && sha != stale.SourceSha8 && sha != stale.UpgradedSha8)
             {
+                // Still naming our mask (our output with its shader set back by hand): not the author's update. Its
+                // backup is the only original left, so the unit is left alone.
+                if (EditedAfterUpgrade(current, stale)) { left.Add((w.Rel, LeftReason.WriteFailed)); return; }
                 Forget(modRoot, record, stale, keep, strictBackup: true);
                 WriteRecord(modRoot, record);
             }
@@ -401,7 +404,8 @@ internal static class ShaderUpgradeWriter
 
     /// <summary>
     /// Put one file back the way its author shipped it. Refused while a later feature (the brush) changed it after us,
-    /// and for a file edited after the upgrade (its edits and our backup, mask and redirects are all kept).
+    /// and for a file edited after the upgrade (its edits and our backup, mask and redirects are all kept; it is still
+    /// declined when <paramref name="decline"/> is set).
     /// The backup is restored only over a file still as Proteus left it; an author's update is kept. Either way our
     /// mask redirects (only while they still name our mask) and unnamed masks go, the entry is dropped, and the file
     /// is declined when <paramref name="decline"/> is set.
@@ -433,6 +437,12 @@ internal static class ShaderUpgradeWriter
             var current = SafeRead(path);
             if (EditedAfterUpgrade(current, entry))
             {
+                // Declined all the same: the original copied back by hand (as the message says) is not upgraded again.
+                if (decline && !record.Declined.Contains(rel, StringComparer.OrdinalIgnoreCase))
+                {
+                    record.Declined.Add(rel);
+                    TryWriteRecord(modRoot, record);
+                }
                 message = EditedMessage(rel);
                 return Undone.Refused;
             }

@@ -200,6 +200,7 @@ public class ShaderUpgradeWriterTests
         Assert.True(kit.Upgrade(mod, WornRed(mod), _ => Spec(mod)).ChangedAny);
         var update = CharacterShaderUpgrade.Upgrade(Kit.FormA())!;   // the author ships a Dawntrail file
         File.WriteAllBytes(Path.Combine(mod, "red", "top.mtrl"), update);
+        Assert.False(ShaderUpgradeWriter.IsUpgraded(mod, Red));   // names no mask of ours: not counted as upgraded
         Assert.Equal(ShaderUpgradeWriter.Undone.Forgotten, ShaderUpgradeWriter.RevertOrForget(mod, Red, false, out _));
         Assert.Equal(update, Kit.Get(mod, Red));
         Assert.False(Directory.Exists(Path.Combine(mod, "Shader Upgrade")));
@@ -325,14 +326,43 @@ public class ShaderUpgradeWriterTests
         Assert.True(File.Exists(Path.Combine(mod, mask.Rel)));
         Assert.Contains(Redirects(mod), r => r.GamePath == mask.GamePath);
         Assert.Single(ShaderUpgradeWriter.ReadRecord(mod)!.Files);
-        Assert.False(ShaderUpgradeWriter.IsDeclined(mod, Red));
+        Assert.True(ShaderUpgradeWriter.IsDeclined(mod, Red));
 
-        // Copied back by hand as the message says: the next undo tidies up.
+        // Copied back by hand as the message says: the next walk leaves it (declined), the next undo tidies up.
         File.Copy(Path.Combine(mod, "Proteus", "shaderupgrade-backup", "red", "top.mtrl"), Path.Combine(mod, "red", "top.mtrl"), true);
+        var replan = kit.Plan(WornRed(mod), _ => Spec(mod));
+        Assert.Empty(replan.PerMod);
+        Assert.Equal(LeftReason.Declined, Assert.Single(replan.Left).Reason);
+        Assert.False(kit.Upgrade(mod, WornRed(mod), _ => Spec(mod)).ChangedAny);
+        Assert.Equal(Kit.FormB(), Kit.Get(mod, Red));
         Assert.Equal(ShaderUpgradeWriter.Undone.Nothing, ShaderUpgradeWriter.RevertOrForget(mod, Red, false, out _));
         Assert.Empty(ShaderUpgradeWriter.ReadRecord(mod)?.Files ?? []);
         Assert.False(File.Exists(Path.Combine(mod, mask.Rel)));
         Assert.DoesNotContain(Redirects(mod), r => r.GamePath == mask.GamePath);
+    }
+
+    [Fact]
+    [Trait("Plan", "AC-dt-shader-upgrade-13")]
+    public void A_legacy_file_still_naming_our_mask_is_not_taken_for_an_author_update()
+    {
+        using var kit = new Kit();
+        var mod = kit.Dress("B", Kit.FormB(), withSpec: true);
+        Assert.True(kit.Upgrade(mod, WornRed(mod), _ => Spec(mod)).ChangedAny);
+        // Our output with its shader set back by hand: legacy again, matching neither hash, naming our mask. Simulated by
+        // a record whose source hash differs and whose mask is the game path the legacy file names.
+        File.Copy(Path.Combine(mod, "Proteus", "shaderupgrade-backup", "red", "top.mtrl"), Path.Combine(mod, "red", "top.mtrl"), true);
+        var at = Path.Combine(mod, "Proteus", "shaderupgrade.json");
+        var json = System.Text.Json.Nodes.JsonNode.Parse(File.ReadAllText(at))!;
+        var file = json["Files"]![0]!;
+        file["SourceSha8"] = "0000000000000000";
+        file["Mask"]!["GamePath"] = Kit.SpecPath;
+        File.WriteAllText(at, json.ToJsonString());
+
+        var outcome = kit.Upgrade(mod, WornRed(mod), _ => Spec(mod));
+        Assert.False(outcome.ChangedAny);
+        Assert.Equal(LeftReason.WriteFailed, Assert.Single(outcome.Left).Reason);
+        Assert.True(File.Exists(Path.Combine(mod, "Proteus", "shaderupgrade-backup", "red", "top.mtrl")));
+        Assert.Single(ShaderUpgradeWriter.ReadRecord(mod)!.Files);
     }
 
     [Fact]

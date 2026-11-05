@@ -568,9 +568,13 @@ public class ShaderUpgradePlanTests
 
     [Fact]
     [Trait("Plan", "EDGE-dt-shader-upgrade-16")]
-    public void Redraw_is_requested_deferred_while_held()
-        => Assert.Contains("RedrawForChangedModel(\"shader upgrade\", deferWhileHeld: kind == RunKind.Upgrade)",
-                           File.ReadAllText(SourceFile("Proteus/Services/ShaderUpgrade/ShaderUpgradeWatcher.cs")));
+    public void Redraw_is_never_held_and_the_walk_waits_out_the_auto_refit()
+    {
+        // Only the auto refit's own work may be held (RedrawHoldWiringTests); the walk waits while it is busy instead.
+        var src = File.ReadAllText(SourceFile("Proteus/Services/ShaderUpgrade/ShaderUpgradeWatcher.cs"));
+        Assert.Contains("RedrawForChangedModel(\"shader upgrade\")", src);
+        Assert.DoesNotContain("deferWhileHeld", src);
+    }
 
     [Fact]
     [Trait("Plan", "EDGE-dt-shader-upgrade-20")]
