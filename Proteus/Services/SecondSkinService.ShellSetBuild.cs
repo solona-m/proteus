@@ -476,7 +476,9 @@ public sealed partial class SecondSkinService
                     { service.log.Warning(ex, "[Proteus] second skin: could not keep the upstream {0}", bodyGamePath); }
                     if (changed)
                         service.log.Information("[Proteus] second skin: {0} is behind our own output — using the body the "
-                                      + "collection now provides, {1}", bodyGamePath, settledDisk!);
+                                      + "collection now provides, {1}", bodyGamePath,
+                                      string.Equals(settledDisk, bodyGamePath, StringComparison.OrdinalIgnoreCase)
+                                          ? "(game data)" : settledDisk!);
                 }
                 else if (source == BodySourceKind.Remembered && service._upstreamBodies.TryGetValue(bodyGamePath, out var remembered))
                 {
@@ -568,7 +570,7 @@ public sealed partial class SecondSkinService
 
                 service.log.Information("[Proteus] second skin part {0}: uv={1} {2} ({3} KB) skin={4} <- {5}",
                     part, partType ?? "(unknown)", bodyGamePath, bytes.Length / 1024, shape,
-                    bodyDisk ?? "(game data)");
+                    SourceLabel(source, sourceDisk, bodyDisk, bodyGamePath));
 
                 // Shape keys enabled on this exact body model (matched by file stem — see LiveModelState).
                 var partShapes = LiveModelState(enabledBodyShapes, bodyGamePath, bodyDisk);

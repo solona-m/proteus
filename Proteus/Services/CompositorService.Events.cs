@@ -541,7 +541,7 @@ public partial class CompositorService
         try
         {
             // Bare-body and human models too: an empty slot is cut from the bare body, an iris shell from the face model.
-            foreach (var p in ShellSourceModelPaths()) ResolveUpstream(p);
+            foreach (var p in ShellSourceModelPaths()) ResolveUpstream(p, bookkeeping: true);
         }
         catch (Exception ex)
         {
