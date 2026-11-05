@@ -85,6 +85,40 @@ internal static class ShaderUpgradeCopies
     }
 
     /// <summary>
+    /// Write a plan's units, checking before every write that the watcher has not been stopped meanwhile (then nothing
+    /// more is written and null is returned). A unit whose write is refused is reported and left out.
+    /// </summary>
+    public static List<RedirectUnit>? WriteUnits(string managedRoot, IEnumerable<ShaderUpgradePlan.Unit> units,
+                                                 TexEncoding encoding, Func<bool> stopped,
+                                                 Action<string, byte[]>? writeMaterial,
+                                                 Func<byte[], int, int, string, TexEncoding, bool> writeTex,
+                                                 Action<ShaderUpgradePlan.Unit, ShaderUpgradePlan.MaskSpec> written,
+                                                 Action<ShaderUpgradePlan.Unit, string> refused)
+    {
+        var result = new List<RedirectUnit>();
+        foreach (var u in units)
+        {
+            if (stopped()) return null;
+            try
+            {
+                var copy = WriteMaterial(managedRoot, u.MaterialCopyName, u.MaterialBytes, writeMaterial);
+                RedirectMask? mask = null;
+                if (u.Mask is { } m)
+                {
+                    if (stopped()) return null;
+                    var maskPath = WriteMask(managedRoot, m, encoding, writeTex);
+                    written(u, m);
+                    mask = new RedirectMask(m.GamePath, maskPath);
+                }
+                result.Add(new RedirectUnit(u.MaterialGamePath, copy, mask, u.Upstream, u.SourceLabel, u.Form,
+                                            u.Mask?.Width ?? 0, u.Mask?.Height ?? 0));
+            }
+            catch (WriteRefused ex) { refused(u, ex.Message); }
+        }
+        return stopped() ? null : result;
+    }
+
+    /// <summary>
     /// The most recently replaced masks, kept since the game may still be reading one. A name added again moves to the
     /// back. Thread-safe.
     /// </summary>

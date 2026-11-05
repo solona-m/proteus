@@ -760,7 +760,11 @@ internal static class ShaderUpgradePlan
         public bool Broken => InPlaceLoadsMaterials == false;
     }
 
-    /// <summary>Per applied-map stamp: in place, then a full redraw, then give up. Never a loop.</summary>
+    /// <summary>
+    /// Per applied-map stamp: in place, then a full redraw, then give up. Never a loop. The reload a walk issues is
+    /// registered (<see cref="Issued"/>), so the verify after an in-place reload goes to the redraw, and the verify after
+    /// a redraw gives up.
+    /// </summary>
     internal sealed class Escalation
     {
         private string? stamp;
@@ -768,17 +772,88 @@ internal static class ShaderUpgradePlan
 
         internal enum Next { InPlace, Redraw, GaveUp }
 
+        /// <summary>A reload of <paramref name="route"/> was issued for this map.</summary>
+        public void Issued(string mapStamp, ReloadRoute route)
+        {
+            if (mapStamp != stamp) { stamp = mapStamp; step = 0; }
+            step = Math.Max(step, route == ReloadRoute.InPlace ? 1 : route == ReloadRoute.Redraw ? 2 : step);
+        }
+
         /// <summary>The next step for a reload that has not taken yet, for this map.</summary>
         public Next Fail(string mapStamp)
         {
             if (mapStamp != stamp) { stamp = mapStamp; step = 0; }
-            var next = step switch { 0 => Next.InPlace, 1 => Next.Redraw, _ => Next.GaveUp };
-            step++;
-            return next;
+            return step switch { 0 => Next.InPlace, 1 => Next.Redraw, _ => Next.GaveUp };
         }
 
         public void Reset() { stamp = null; step = 0; }
     }
+
+    /// <summary>
+    /// Whether the character still draws one of our copies at a path the new map no longer redirects to it: a unit
+    /// dropped (the compositor took the path, the player chose a material that is not upgraded, another redirect
+    /// outranks it) while its copy is on screen. Without a reload the old upgrade would hide the player's choice.
+    /// </summary>
+    public static bool DrawsDroppedCopy(IEnumerable<RedirectUnit> applied, IReadOnlyDictionary<string, string> loaded,
+                                        Func<string, bool> isCopy)
+    {
+        var now = applied.ToDictionary(u => u.MaterialGamePath, u => NormalPath(u.MaterialCopy), StringComparer.OrdinalIgnoreCase);
+        foreach (var (gamePath, file) in loaded)
+        {
+            var f = StripPenumbraPrefix(file);
+            if (!isCopy(f)) continue;
+            if (!now.TryGetValue(gamePath, out var copy) || !string.Equals(copy, NormalPath(f), StringComparison.OrdinalIgnoreCase))
+                return true;
+        }
+        return false;
+    }
+
+    /// <summary>What a walk's hop B does about reloading.</summary>
+    internal readonly record struct ReloadPlan(ReloadRoute Route, bool AwaitingRedraw, bool GaveUp);
+
+    /// <summary>
+    /// Hop B's reload decision, given whether the character still draws something other than the map wants
+    /// (<paramref name="needs"/>). A verify walk after an in-place reload teaches <paramref name="learning"/>; a verify
+    /// that still needs a reload escalates (in place, then a redraw, then give up); the route chosen is registered with
+    /// <paramref name="escalation"/>.
+    /// </summary>
+    public static ReloadPlan DecideReload(bool needs, bool verify, string stamp, ReloadRoute lastRoute,
+                                          Escalation escalation, ReloadLearning learning,
+                                          bool autoRedraw, bool held, bool useInPlace, bool glamourerAvailable)
+    {
+        if (verify && lastRoute == ReloadRoute.InPlace)
+            learning.Observe(ReloadRoute.InPlace, resolvesToCopy: true, loadedCopy: !needs);
+        if (!needs)
+        {
+            if (!verify) escalation.Reset();
+            return new ReloadPlan(ReloadRoute.None, false, false);
+        }
+        bool escalate = false;
+        if (verify)
+        {
+            var next = escalation.Fail(stamp);
+            if (next == Escalation.Next.GaveUp) return new ReloadPlan(ReloadRoute.None, false, true);
+            escalate = next == Escalation.Next.Redraw;
+        }
+        var route = ChooseReloadRoute(autoRedraw, userRequested: false, held, useInPlace, glamourerAvailable,
+                                      learning.Broken, escalate);
+        if (route is ReloadRoute.InPlace or ReloadRoute.Redraw) escalation.Issued(stamp, route);
+        return new ReloadPlan(route, route == ReloadRoute.None, false);
+    }
+
+    /// <summary>
+    /// When a walk asked for at <paramref name="now"/> with <paramref name="delayMs"/> is due: a burst of signals
+    /// collapses into one walk (the latest signal's settle time decides), but never later than
+    /// <see cref="MaxWalkWaitMs"/> after the first signal still pending, so a steady stream of events cannot postpone it
+    /// for ever.
+    /// </summary>
+    public static (long Due, long FirstAt) NextDue(long now, int delayMs, long pendingDue, long firstAt)
+    {
+        long first = pendingDue == 0 ? now : firstAt;
+        return (Math.Min(now + delayMs, first + MaxWalkWaitMs), first);
+    }
+
+    public const int MaxWalkWaitMs = 2000;
 
     // ── signals ─────────────────────────────────────────────────────────────
 

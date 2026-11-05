@@ -80,7 +80,7 @@ public class ShaderUpgradeRedirectsTests
         r.Apply(r.Begin(), B, [Unit("dwn")]);   // A would not let go, so both are held
         p.Refuse.Clear();
         p.Calls.Clear();
-        var (removed, paths) = r.Teardown();
+        var (removed, paths, _) = r.Teardown();
         Assert.True(removed);
         Assert.Contains("remove aaaa", p.Calls);
         Assert.Contains("remove bbbb", p.Calls);
@@ -95,7 +95,7 @@ public class ShaderUpgradeRedirectsTests
     {
         var (_, r) = Make();
         r.Apply(r.Begin(), A, [Unit("top", mask: true)]);
-        var (_, paths) = r.Teardown();
+        var (_, paths, _) = r.Teardown();
         Assert.Contains("chara/equipment/e0001/material/v0001/mt_c0201e0001_top_a.mtrl", paths);
         Assert.Contains("chara/proteus/shaderupgrade/top_mask.tex", paths);
     }

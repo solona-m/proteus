@@ -583,11 +583,27 @@ public class ShaderUpgradePlanTests
     {
         var e = new Escalation();
         Assert.Equal(Escalation.Next.InPlace, e.Fail("a"));
+        e.Issued("a", ReloadRoute.InPlace);
         Assert.Equal(Escalation.Next.Redraw, e.Fail("a"));
-        Assert.Equal(Escalation.Next.GaveUp, e.Fail("a"));
+        e.Issued("a", ReloadRoute.Redraw);
         Assert.Equal(Escalation.Next.GaveUp, e.Fail("a"));
         Assert.Equal(Escalation.Next.InPlace, e.Fail("b"));
         Assert.Equal(ReloadRoute.Redraw, ChooseReloadRoute(true, false, false, true, true, false, escalate: true));
+
+        // The whole sequence through hop B's decision: in place, then ONE full redraw, then give up.
+        var esc = new Escalation();
+        var learn = new ReloadLearning();
+        var first = DecideReload(needs: true, verify: false, "m", ReloadRoute.None, esc, learn, true, false, true, true);
+        Assert.Equal(ReloadRoute.InPlace, first.Route);
+        var second = DecideReload(true, verify: true, "m", first.Route, esc, learn, true, false, true, true);
+        Assert.Equal(ReloadRoute.Redraw, second.Route);
+        var third = DecideReload(true, verify: true, "m", second.Route, esc, learn, true, false, true, true);
+        Assert.True(third.GaveUp);
+        Assert.Equal(ReloadRoute.None, third.Route);
+        // In-place off: one redraw, then give up.
+        var e2 = new Escalation();
+        Assert.Equal(ReloadRoute.Redraw, DecideReload(true, false, "n", ReloadRoute.None, e2, new ReloadLearning(), true, false, false, true).Route);
+        Assert.True(DecideReload(true, true, "n", ReloadRoute.Redraw, e2, new ReloadLearning(), true, false, false, true).GaveUp);
     }
 
     [Fact]
@@ -652,6 +668,32 @@ public class ShaderUpgradePlanTests
         var a = new RedirectUnit("p/a.mtrl", @"C:\c\a.mtrl", null);
         Assert.False(NeedsReload([a], new Dictionary<string, string> { ["p/a.mtrl"] = "c:/c/a.mtrl" }));
         Assert.True(NeedsReload([a], new Dictionary<string, string> { ["p/a.mtrl"] = @"C:\mods\X\a.mtrl" }));
+    }
+
+    [Fact]
+    [Trait("Plan", "EDGE-dt-shader-upgrade-29")]
+    [Trait("Plan", "AC-dt-shader-upgrade-6")]
+    public void A_dropped_unit_still_on_screen_reloads()
+    {
+        static bool IsCopy(string f) => f.Contains(@"\ShaderUpgrade\");
+        var loaded = new Dictionary<string, string> { ["p/a.mtrl"] = @"C:\P\ShaderUpgrade\1-a.mtrl" };
+        Assert.True(DrawsDroppedCopy([], loaded, IsCopy));
+        Assert.False(DrawsDroppedCopy([new RedirectUnit("p/a.mtrl", @"C:\P\ShaderUpgrade\1-a.mtrl", null)], loaded, IsCopy));
+        Assert.True(DrawsDroppedCopy([new RedirectUnit("p/a.mtrl", @"C:\P\ShaderUpgrade\1-b.mtrl", null)], loaded, IsCopy));
+        Assert.False(DrawsDroppedCopy([], new Dictionary<string, string> { ["p/a.mtrl"] = @"C:\mods\X\a.mtrl" }, IsCopy));
+    }
+
+    [Fact]
+    [Trait("Plan", "EDGE-dt-shader-upgrade-23")]
+    public void A_stream_of_signals_cannot_postpone_the_walk_for_ever()
+    {
+        var (due, first) = NextDue(1000, 750, 0, 0);
+        Assert.Equal((1750, 1000), (due, first));
+        (due, first) = NextDue(1500, 750, due, first);   // pushed back by a later signal
+        Assert.Equal(2250, due);
+        (due, first) = NextDue(2900, 750, due, first);   // but capped at first + MaxWalkWaitMs
+        Assert.Equal(1000 + MaxWalkWaitMs, due);
+        Assert.Equal(1600, NextDue(1600, 0, 2250, 1000).Due);   // an immediate signal walks now
     }
 
     [Fact]

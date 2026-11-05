@@ -735,6 +735,12 @@ public class DesignBindingService : IDisposable
 
     // ── Character snapshot (capture) ────────────────────────────────────────────
 
+    /// <summary>
+    /// The source a drawn file stands for when it is a gear shader upgrade copy (file, its game paths), or null. Set by
+    /// the plugin; null when the upgrade is not wired.
+    /// </summary>
+    internal Func<string, IEnumerable<string>?, string?>? CopySource { get; set; }
+
     // Bumped by everything that supersedes a character restore, so its post-load sweep stands down.
     // Framework thread only.
     private int characterWorkGeneration;
@@ -743,12 +749,6 @@ public class DesignBindingService : IDisposable
     /// The settings of every mod on the character right now, or null when unreadable (the caller then keeps
     /// the snapshot it had).
     /// </summary>
-    /// <summary>
-    /// The source a drawn file stands for when it is a gear shader upgrade copy (file, its game paths), or null. Set by
-    /// the plugin; null when the upgrade is not wired.
-    /// </summary>
-    internal Func<string, IEnumerable<string>?, string?>? CopySource { get; set; }
-
     private List<PenumbraModSetting>? ReadCharacterMods(Guid collId)
     {
         var modsRoot  = penumbra.GetModDirectory();

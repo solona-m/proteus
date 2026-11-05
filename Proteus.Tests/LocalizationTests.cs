@@ -205,8 +205,8 @@ public sealed class LocalizationTests
     }
 
     /// <summary>
-    /// The toe cap tick's words are translated, not copied, keep English's line breaks, and keep the Penumbra names
-    /// the user has to find ("Toe Cap", "Masks") verbatim.
+    /// The gear shader upgrade's words are translated, not copied, keep English's line breaks, and keep the shader file
+    /// names verbatim.
     /// </summary>
     [Theory]
     [MemberData(nameof(Translations))]
@@ -226,6 +226,10 @@ public sealed class LocalizationTests
         Assert.Contains("character.shpk", tr["Settings.GearShaders.AutoUpgrade.Tip"].Message);
     }
 
+    /// <summary>
+    /// The toe cap tick's words are translated, not copied, keep English's line breaks, and keep the Penumbra names
+    /// the user has to find ("Toe Cap", "Masks") verbatim.
+    /// </summary>
     [Theory]
     [MemberData(nameof(Translations))]
     [Trait("Plan", "AC-toecap-geometry-7")]

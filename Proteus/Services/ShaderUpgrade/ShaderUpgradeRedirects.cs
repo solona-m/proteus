@@ -22,6 +22,14 @@ internal sealed class ShaderUpgradeRedirects(Func<Guid, Dictionary<string, strin
     /// <summary>The collection the current units are applied in, or null.</summary>
     private Guid? current;
 
+    /// <summary>
+    /// Every held unit, replaced wholesale under <see cref="gate"/>, read without it: the compositor's workers ask
+    /// <see cref="SourceFor"/> while the framework thread may be inside a Penumbra call under the gate.
+    /// </summary>
+    private volatile IReadOnlyList<RedirectUnit> snapshot = [];
+
+    private void Snap() => snapshot = holding.Values.SelectMany(u => u).ToList();
+
     /// <summary>A peek took the current map down; the next apply or restore puts a map back.</summary>
     private bool peekDown;
 
@@ -77,12 +85,14 @@ internal sealed class ShaderUpgradeRedirects(Func<Guid, Dictionary<string, strin
                 if (holding.ContainsKey(collection) && remove(collection)) holding.Remove(collection);
                 current = holding.ContainsKey(collection) ? collection : null;
                 peekDown = false;
+                Snap();
                 return true;
             }
 
             if (!peekDown && holding.TryGetValue(collection, out var was) && SameMap(was, units))
             {
                 current = collection;
+                Snap();
                 return true;
             }
 
@@ -90,6 +100,7 @@ internal sealed class ShaderUpgradeRedirects(Func<Guid, Dictionary<string, strin
             holding[collection] = [.. units];
             current = collection;
             peekDown = false;
+            Snap();
             return set(collection, MapOf(units));
         }
     }
@@ -137,61 +148,53 @@ internal sealed class ShaderUpgradeRedirects(Func<Guid, Dictionary<string, strin
     /// the next attempt. Never waits on anything. Returns whether anything came down, and the game paths that were
     /// redirected (for the compositor to forget).
     /// </summary>
-    public (bool Removed, List<string> HeldPaths) Teardown()
+    public (bool Removed, List<string> HeldPaths, List<string> HeldMasks) Teardown()
     {
         lock (gate)
         {
             endedAt = generation;
             var paths = holding.Values.SelectMany(MapOf).Select(kv => kv.Key)
                                .Distinct(StringComparer.OrdinalIgnoreCase).ToList();
+            var masks = holding.Values.SelectMany(u => u).Where(u => u.Mask != null)
+                               .Select(u => Path.GetFileName(u.Mask!.Copy)).Distinct(StringComparer.OrdinalIgnoreCase).ToList();
             bool any = false;
             foreach (var c in holding.Keys.ToList())
                 if (remove(c)) { holding.Remove(c); any = true; }
             current = null;
             peekDown = false;
-            return (any, paths);
+            Snap();
+            return (any, paths, masks);
         }
     }
 
     /// <summary>The mask copy file names any held collection still points at.</summary>
     public IReadOnlySet<string> ReferencedMasks()
-    {
-        lock (gate)
-            return holding.Values.SelectMany(u => u)
-                          .Where(u => u.Mask != null)
-                          .Select(u => Path.GetFileName(u.Mask!.Copy))
-                          .ToHashSet(StringComparer.OrdinalIgnoreCase);
-    }
+        => snapshot.Where(u => u.Mask != null)
+                   .Select(u => Path.GetFileName(u.Mask!.Copy))
+                   .ToHashSet(StringComparer.OrdinalIgnoreCase);
 
-    /// <summary>The source a redirected game path's copy was made from, from the current units.</summary>
+    /// <summary>The source a redirected game path's copy was made from. Lock-free (see <see cref="snapshot"/>).</summary>
     public string? SourceFor(string gamePath)
     {
-        lock (gate)
-        {
-            foreach (var units in holding.Values)
-                foreach (var u in units)
-                    if (string.Equals(u.MaterialGamePath, gamePath, StringComparison.OrdinalIgnoreCase))
-                        return u.Upstream;
-            return null;
-        }
+        foreach (var u in snapshot)
+            if (string.Equals(u.MaterialGamePath, gamePath, StringComparison.OrdinalIgnoreCase))
+                return u.Upstream;
+        return null;
     }
 
-    /// <summary>The upstream of the copy a file is (by copy path), from the units; null when it is not one of ours.</summary>
+    /// <summary>The upstream of the copy a file is (by copy path), per game path when given; null when it is not ours.</summary>
     public string? SourceForCopy(string file, IEnumerable<string>? gamePaths = null)
     {
-        lock (gate)
-        {
-            var units = holding.Values.SelectMany(u => u).ToList();
-            if (gamePaths != null)
-                foreach (var g in gamePaths)
-                    foreach (var u in units)
-                        if (string.Equals(u.MaterialGamePath, g, StringComparison.OrdinalIgnoreCase)
-                            && SamePath(u.MaterialCopy, file))
-                            return u.Upstream;
-            foreach (var u in units)
-                if (SamePath(u.MaterialCopy, file)) return u.Upstream;
-            return null;
-        }
+        var units = snapshot;
+        if (gamePaths != null)
+            foreach (var g in gamePaths)
+                foreach (var u in units)
+                    if (string.Equals(u.MaterialGamePath, g, StringComparison.OrdinalIgnoreCase)
+                        && SamePath(u.MaterialCopy, file))
+                        return u.Upstream;
+        foreach (var u in units)
+            if (SamePath(u.MaterialCopy, file)) return u.Upstream;
+        return null;
     }
 
     private static bool SamePath(string a, string b)

@@ -49,7 +49,7 @@ public sealed class ShaderUpgradeWatcher : IShaderUpgradeSources, IDisposable
     private volatile bool stopped;
     private bool wasEnabled, leftoverRemoved, askedManagedMod, swept;
     private int blanks;
-    private long walkDueAt;
+    private long walkDueAt, firstRequestAt;
     private int peekDue;
     private int verifyDue;
 
@@ -190,10 +190,21 @@ public sealed class ShaderUpgradeWatcher : IShaderUpgradeSources, IDisposable
         var (delay, peek) = SignalFor(s);
         if (peek) Interlocked.Exchange(ref peekDue, 1);
         if (s == Signal.Verify) Interlocked.Exchange(ref verifyDue, 1);
-        long due = Environment.TickCount64 + delay;
-        // A later signal never pushes an earlier due walk back past its own delay, but a burst collapses to one walk.
-        Interlocked.Exchange(ref walkDueAt, due);
+        Schedule(delay);
     }
+
+    /// <summary>A burst collapses into one walk, but never later than <see cref="MaxWalkWaitMs"/> after its first signal.</summary>
+    private void Schedule(int delayMs)
+    {
+        lock (scheduleSync)
+        {
+            var (due, first) = NextDue(Environment.TickCount64, delayMs, Interlocked.Read(ref walkDueAt), firstRequestAt);
+            firstRequestAt = first;
+            Interlocked.Exchange(ref walkDueAt, due);
+        }
+    }
+
+    private readonly object scheduleSync = new();
 
     private void OnEquip() => Request(Signal.Equip);
 
@@ -228,8 +239,7 @@ public sealed class ShaderUpgradeWatcher : IShaderUpgradeSources, IDisposable
             shipsCache.TryRemove(modDirectory, out _);
         }
         pendingSettings.Enqueue((collection, modDirectory ?? ""));
-        var (delay, _) = SignalFor(Signal.ModSetting);
-        Interlocked.Exchange(ref walkDueAt, Environment.TickCount64 + delay);
+        Schedule(SignalFor(Signal.ModSetting).DelayMs);
     }
 
     // ── the frame ───────────────────────────────────────────────────────────
@@ -262,14 +272,14 @@ public sealed class ShaderUpgradeWatcher : IShaderUpgradeSources, IDisposable
         long due = Interlocked.Read(ref walkDueAt);
         if (due == 0 || Environment.TickCount64 < due) return;
         if (gate.Busy || penumbra.MovePending) return;
-        Interlocked.CompareExchange(ref walkDueAt, 0, due);
+        lock (scheduleSync) Interlocked.CompareExchange(ref walkDueAt, 0, due);
 
         bool peek = Interlocked.Exchange(ref peekDue, 0) == 1;
         bool verify = Interlocked.Exchange(ref verifyDue, 0) == 1;
         Task.Run(() =>
         {
             if (!gate.RunWalk(() => Walk(peek, verify)))
-                Interlocked.Exchange(ref walkDueAt, Environment.TickCount64 + 100);   // taken meanwhile: try again
+                Schedule(100);   // taken meanwhile: try again
         });
     }
 
@@ -294,8 +304,10 @@ public sealed class ShaderUpgradeWatcher : IShaderUpgradeSources, IDisposable
     /// </summary>
     private void TearDown(bool reload, string cause)
     {
-        var (removed, paths) = redirects.Teardown();
+        var (removed, paths, masks) = redirects.Teardown();
         compositor.ForgetUpstreams(paths);
+        // The masks on screen until the reload below lands are kept in the tail, not pruned out from under the game.
+        foreach (var m in masks) tail.Add(m);
         gate.RequestPrune();
         escalation.Reset();
         current = new View(MaskGloss: GlossName(gloss), Peeks: Peeks(), Reload: Reloads(), Masks: Masks());
@@ -389,30 +401,15 @@ public sealed class ShaderUpgradeWatcher : IShaderUpgradeSources, IDisposable
         }
 
         // Write, checking before every write that the watcher has not been stopped meanwhile.
-        var units = new List<RedirectUnit>();
-        foreach (var u in plan.Units)
-        {
-            if (stopped) return;
-            try
+        var units = ShaderUpgradeCopies.WriteUnits(managedRoot!, plan.Units, encoding, () => stopped, null,
+            textureLoader.WriteTex,
+            (_, m) => memo.Put(m.Key, new MaskMemo.Entry(m.CopyName, m.GamePath, m.Width, m.Height)),
+            (u, why) =>
             {
-                var copy = ShaderUpgradeCopies.WriteMaterial(managedRoot!, u.MaterialCopyName, u.MaterialBytes);
-                RedirectMask? mask = null;
-                if (u.Mask is { } m)
-                {
-                    var maskPath = ShaderUpgradeCopies.WriteMask(managedRoot!, m, encoding, textureLoader.WriteTex);
-                    memo.Put(m.Key, new MaskMemo.Entry(m.CopyName, m.GamePath, m.Width, m.Height));
-                    mask = new RedirectMask(m.GamePath, maskPath);
-                }
-                units.Add(new RedirectUnit(u.MaterialGamePath, copy, mask, u.Upstream, u.SourceLabel, u.Form,
-                                           u.Mask?.Width ?? 0, u.Mask?.Height ?? 0));
-            }
-            catch (ShaderUpgradeCopies.WriteRefused ex)
-            {
-                log.Warning("[Proteus] shader upgrade: {0} left on the old shader — {1}", u.SourceLabel, ex.Message);
+                log.Warning("[Proteus] shader upgrade: {0} left on the old shader — {1}", u.SourceLabel, why);
                 left.Add(new Left(u.MaterialGamePath, u.SourceLabel, LeftReason.WriteFailed));
-            }
-        }
-        if (stopped) return;
+            });
+        if (units == null || stopped) return;
 
         OnFramework(() => { HopBOnFramework(a, units, left, verify, modsRoot); return 0; }, "apply");
     }
@@ -552,60 +549,45 @@ public sealed class ShaderUpgradeWatcher : IShaderUpgradeSources, IDisposable
         foreach (var b in before)
             if (b.Mask != null && !nowMasks.Contains(Path.GetFileName(b.Mask.Copy))) tail.Add(Path.GetFileName(b.Mask.Copy));
 
-        // Reload when the character still draws a redirected material from another file.
-        bool awaiting = false;
-        bool needs = NeedsReload(ready, a.Loaded);
-        if (verify && lastRoute == ReloadRoute.InPlace)
-            learning.Observe(ReloadRoute.InPlace, resolvesToCopy: true, loadedCopy: !needs);
-        if (needs)
+        // Reload when the character still draws a redirected material from another file, or still draws one of our
+        // copies where the map no longer wants it (a unit dropped while on screen).
+        var managedRoot = compositor.ManagedModFolder;
+        bool needs = NeedsReload(ready, a.Loaded)
+                  || DrawsDroppedCopy(ready, a.Loaded, f => ManagedModPaths.IsShaderUpgradeCopy(f, managedRoot));
+        var stamp = string.Join("|", ready.Select(u => u.MaterialGamePath + ">" + u.MaterialCopy).Order());
+        var decision = DecideReload(needs, verify, stamp, lastRoute, escalation, learning, config.AutoRedraw,
+                                    compositor.RedrawsHeld, config.UseInPlaceReload, glamourer.IsAvailable);
+        if (decision.GaveUp)
         {
-            bool escalate = false;
-            if (verify)
-            {
-                var stamp = string.Join("|", ready.Select(u => u.MaterialGamePath + ">" + u.MaterialCopy).Order());
-                var next = escalation.Fail(stamp);
-                if (next == Escalation.Next.GaveUp)
-                {
-                    Interlocked.Increment(ref gaveUp);
-                    log.Warning("[Proteus] shader upgrade: the character still draws the original material after a full "
-                              + "redraw — giving up on this set until something changes");
-                    needs = false;
-                }
-                escalate = next == Escalation.Next.Redraw;
-            }
-            if (needs)
-            {
-                var route = ChooseReloadRoute(config.AutoRedraw, userRequested: false, compositor.RedrawsHeld,
-                                              config.UseInPlaceReload, glamourer.IsAvailable, learning.Broken, escalate);
-                lastRoute = route;
-                switch (route)
-                {
-                    case ReloadRoute.None:
-                        awaiting = true;
-                        break;
-                    case ReloadRoute.Deferred:
-                        compositor.RedrawForChangedModel("shader upgrade", deferWhileHeld: true);
-                        Request(Signal.Verify);
-                        break;
-                    case ReloadRoute.InPlace:
-                        if (compositor.ReloadGearInPlace("shader upgrade")) Interlocked.Increment(ref reloadsInPlace);
-                        else
-                        {
-                            lastRoute = ReloadRoute.Redraw;
-                            compositor.RedrawForChangedModel("shader upgrade");
-                            Interlocked.Increment(ref reloadsRedraw);
-                        }
-                        Request(Signal.Verify);
-                        break;
-                    case ReloadRoute.Redraw:
-                        compositor.RedrawForChangedModel("shader upgrade");
-                        Interlocked.Increment(ref reloadsRedraw);
-                        Request(Signal.Verify);
-                        break;
-                }
-            }
+            Interlocked.Increment(ref gaveUp);
+            log.Warning("[Proteus] shader upgrade: the character still draws the wrong material after a full redraw — "
+                      + "giving up on this set until something changes");
         }
-        else if (!verify) escalation.Reset();
+        if (decision.Route != ReloadRoute.None) lastRoute = decision.Route;
+        switch (decision.Route)
+        {
+            case ReloadRoute.Deferred:
+                compositor.RedrawForChangedModel("shader upgrade", deferWhileHeld: true);
+                Request(Signal.Verify);
+                break;
+            case ReloadRoute.InPlace:
+                if (compositor.ReloadGearInPlace("shader upgrade")) Interlocked.Increment(ref reloadsInPlace);
+                else
+                {
+                    lastRoute = ReloadRoute.Redraw;
+                    escalation.Issued(stamp, ReloadRoute.Redraw);
+                    compositor.RedrawForChangedModel("shader upgrade");
+                    Interlocked.Increment(ref reloadsRedraw);
+                }
+                Request(Signal.Verify);
+                break;
+            case ReloadRoute.Redraw:
+                compositor.RedrawForChangedModel("shader upgrade");
+                Interlocked.Increment(ref reloadsRedraw);
+                Request(Signal.Verify);
+                break;
+        }
+        bool awaiting = decision.AwaitingRedraw;
 
         var upgraded = ready.Select(u => new UpgradedEntry(
             u.MaterialGamePath, u.SourceLabel, Path.GetFileName(u.MaterialCopy),
