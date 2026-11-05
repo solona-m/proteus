@@ -143,7 +143,7 @@ public class CrossSexEndsLocalTests(ITestOutputHelper o)
     /// (pinned, as NailSocketSweep pins its KNOWN exemption; #47 stays open while it holds). Null: the case is fixed and
     /// the source must not be Elegy. Set from the first real run of build 1429.
     /// </summary>
-    private const string? KnownElegyFallback = null;
+    private static readonly string? KnownElegyFallback = null;
 
     [LocalDataFact(LocalData.GameData, SizeSetCrossSexLocalTests.Stormblessed, Elegy, RueMod, NeolitheMod,
                    CrossSexRefitLocalTests.Bibo, CrossSexRefitLocalTests.Tbse, CrossSexRefitLocalTests.TbseX,

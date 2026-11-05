@@ -330,6 +330,22 @@ public sealed class ShaderUpgradeWatcher : IDisposable
             foreach (var g in WornModFiles(worn, inputs).GroupBy(f => f.ModRoot, StringComparer.OrdinalIgnoreCase))
                 ShaderUpgradeWriter.ClearDeclines(g.Key, g.Select(f => f.Rel));
 
+        // A diffuse/specular material an older wind save moved to character.shpk without its diffuse (dark, #65) goes back
+        // to the author's file first, so the upgrade below moves it properly in this same run.
+        var changed = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
+        foreach (var g in WornModFiles(worn, inputs).GroupBy(f => f.ModRoot, StringComparer.OrdinalIgnoreCase))
+        {
+            if (stopped || (kind == RunKind.Upgrade && !Enabled)) return;
+            var restored = MeshVolumeService.RepairWindDiffuse(g.Key, g.Select(f => f.Rel),
+                why => log.Warning("[Proteus] shader upgrade: {0}", why));
+            if (restored.Count == 0) continue;
+            changed[g.Key] = restored.Count;
+            log.Information("[Proteus] shader upgrade: restored {0} wind-brushed material(s) in {1} to the author's "
+                          + "diffuse/specular file (an older wind save had moved them to character.shpk without their "
+                          + "diffuse, drawing them dark); save the wind again to bring back their sway",
+                            restored.Count, Path.GetFileName(g.Key));
+        }
+
         var (candidates, left) = Candidates(worn.Materials, inputs);
         var slots = candidates.Where(c => c.SpecularGamePath != null).Select(c => c.SpecularGamePath!)
                               .Distinct(StringComparer.OrdinalIgnoreCase).ToList();
@@ -340,7 +356,6 @@ public sealed class ShaderUpgradeWatcher : IDisposable
         Interlocked.Add(ref decodes, plan.Decodes);
         Interlocked.Add(ref memoHits, plan.MemoHits);
 
-        var changed = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
         bool rewalk = false;
         foreach (var mod in plan.PerMod)
         {
@@ -354,7 +369,7 @@ public sealed class ShaderUpgradeWatcher : IDisposable
                         left.Add(new Left(g, $"{Path.GetFileName(mod.ModRoot)}/{rel}", reason));
             if (outcome.ChangedAny)
             {
-                changed[mod.ModRoot] = outcome.Written.Count;
+                changed[mod.ModRoot] = changed.GetValueOrDefault(mod.ModRoot) + outcome.Written.Count;
                 log.Information("[Proteus] shader upgrade: rewrote {0} legacy material(s) in {1} to character.shpk",
                                 outcome.Written.Count, Path.GetFileName(mod.ModRoot));
             }
