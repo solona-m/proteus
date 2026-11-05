@@ -218,13 +218,6 @@ internal static partial class SizeSetRefit
             string gamePath = authors[0].GamePath;
             string slot = BodySizeCatalog.SlotOf(gamePath)!;
             string? group = SizeGroupOf(redirects, gamePath, record, single, rawGroups, ourFiles);
-            if (group != null && RefitCore.SwitchingGroup(redirects, gamePath, record?.OwnGroups, single) is var today
-                && !string.Equals(group, today, StringComparison.OrdinalIgnoreCase))
-                // What may still win the path over it while on: an author's partial or multi-choice group applied first.
-                regrouped?.Invoke(gamePath, today, group,
-                                  BodyRetargetWriter.Outranking(rawGroups, gamePath, group, cutFrom: null)
-                                                    .Select(r => r.Option == null ? r.Group : r.Group + " / " + r.Option)
-                                                    .ToList());
 
             var options = new List<(string? Option, string File)>();
             foreach (var r in authors)
@@ -251,6 +244,16 @@ internal static partial class SizeSetRefit
                                  BodySizeCatalog.RaceOf(gamePath)!, Models: ModelNames(authors[0], model)));
         }
         if (models != null) pieces = WithoutRacialCopies(pieces, redirects, ourFiles, models, droppedCopy);
+        // Said only of a piece kept: sized in another group than the switching rule gives, and what may still win its path
+        // over that group while on — an author's partial or multi-choice group applied first.
+        if (regrouped != null)
+            foreach (var p in pieces)
+                if (p.Group != null && RefitCore.SwitchingGroup(redirects, p.GamePath, record?.OwnGroups, single) is var today
+                    && !string.Equals(p.Group, today, StringComparison.OrdinalIgnoreCase))
+                    regrouped(p.GamePath, today, p.Group,
+                              BodyRetargetWriter.Outranking(rawGroups, p.GamePath, p.Group, cutFrom: null)
+                                                .Select(r => r.Option == null ? r.Group : r.Group + " / " + r.Option)
+                                                .ToList());
 
         // Legs sized in the same group as a chest of their race follow the chest's sizes, and a shoe or glove follows the
         // chest — or, a shoe, the legs — it is sized with. Chests first, then legs, then shoes and gloves, so the options a
@@ -312,6 +315,9 @@ internal static partial class SizeSetRefit
         {
             if (own.Contains(group) || candidates.Any(c => string.Equals(c.Name, group, StringComparison.OrdinalIgnoreCase)))
                 continue;
+            // A name with " / " in it cannot be told from its options in a redirect's source ("SFW / NSFW / On"): the
+            // switching rule never returns one, and PiecesOf could not read its options, so neither does this.
+            if (group.Contains(" / ", StringComparison.Ordinal)) continue;
             if (!authorsAt.Any(s => s.StartsWith(group + " / ", StringComparison.OrdinalIgnoreCase))) continue;
             int index = -1;
             for (int i = 0; i < rawGroups.Count && index < 0; i++)
@@ -323,7 +329,15 @@ internal static partial class SizeSetRefit
                                                                                     StringComparison.OrdinalIgnoreCase))
                                                           .Select(e => e.Name) ?? [],
                                            StringComparer.OrdinalIgnoreCase);
-            var options = PenumbraModMeta.ReadOptionNames(rawGroups[index]).Where(o => !ours.Contains(o)).ToList();
+            List<string> options;
+            try
+            {
+                options = PenumbraModMeta.ReadOptionNames(rawGroups[index]).Where(o => !ours.Contains(o)).ToList();
+            }
+            catch (InvalidOperationException)
+            {
+                options = [];   // a malformed option list: never counts as switching it in every option
+            }
             bool every = options.Count > 0 && options.All(o => authorsAt.Contains(group + " / " + o));
             candidates.Add((group, BodyRetargetWriter.GroupPriority(rawGroups[index]), index, every));
         }

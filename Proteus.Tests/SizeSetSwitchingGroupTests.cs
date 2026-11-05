@@ -265,6 +265,23 @@ public class SizeSetSwitchingGroupTests : IDisposable
     }
 
     [Fact]
+    [Trait("Plan", "AC-equinox-legs-slits-3")]
+    public void A_group_named_with_a_slash_is_never_chosen()
+    {
+        // "SFW / NSFW" carries the top in both options, but its name cannot be told from its options in a redirect's
+        // source: the switching rule never takes it, and neither does the size set, so the piece is still read — from
+        // "Base", as before — rather than dropped with no options.
+        string root = Mod(("Base", 0, [Option("Install", (Top, "base/top.mdl"))]),
+                          ("SFW / NSFW", 0, [Option("SFW", (Top, "sfw/top.mdl")), Option("NSFW", (Top, "nsfw/top.mdl"))]));
+
+        var piece = Assert.Single(SizeSetRefit.PiecesOf(root));
+
+        Assert.Equal("Base", piece.Group);
+        Assert.Equal(["Install"], piece.Options.Select(o => o.Option));
+        Assert.Equal("Base", GroupOf(root, Top));
+    }
+
+    [Fact]
     [Trait("Plan", "EDGE-equinox-legs-slits-28")]
     public void A_partial_group_applied_first_is_named_as_a_rival()
     {

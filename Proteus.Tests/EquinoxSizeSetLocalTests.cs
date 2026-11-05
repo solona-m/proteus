@@ -154,7 +154,9 @@ public class EquinoxSizeSetLocalTests(ITestOutputHelper output, EquinoxRun run) 
         // Rue Large ties Rue+ and the Elegy underwear (55.2% each): the body mod wins, so Coconut is cut from Rue's body.
         // Read on Elegy, as before, the same size left 10.2 cm² of the cups uncovered, 37.41 cm² of skin through the
         // cloth and 19 folds.
-        Assert.DoesNotContain(run.LogA.Sizes, s => (s.From ?? "").Contains("Elegy", StringComparison.OrdinalIgnoreCase));
+        // (Its legs' Yab WC is no tie: it shares 96.8% with Elegy's legs and 88.0% with YAB+'s, so it reads on Elegy, as
+        // a clear share should.)
+        Assert.DoesNotContain(run.LogA.Sizes, s => s.Slot == "_top" && (s.From ?? "").Contains("Elegy", StringComparison.OrdinalIgnoreCase));
         var coconut = run.LogA.Sizes.Single(s => s.Option == "Rosaline Coconut" && s.Slot == "_top");
         Assert.Equal("Rue Large", coconut.CutFrom);
         Assert.Contains("Rue+", coconut.From ?? "");

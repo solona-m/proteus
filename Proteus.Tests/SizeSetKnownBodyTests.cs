@@ -26,17 +26,6 @@ public class SizeSetKnownBodyTests
     }
 
     [Fact]
-    [Trait("Plan", "EDGE-equinox-legs-slits-31")]
-    public void A_copy_of_a_request_knows_the_same_bodies()
-    {
-        var request = new SizeSetRefit.Request("mod", ["rue"], Yas: false, Remake: false, Bodies: []);
-        var copy = request with { Remake = true };
-
-        Assert.False(request.KnownBody("Elegy - Sylvie Bra & Panties (RueYABUranusRe)"));
-        Assert.Equal(request.KnownBody("hs-Rue+-2.2.7-y0f"), copy.KnownBody("hs-Rue+-2.2.7-y0f"));
-    }
-
-    [Fact]
     [Trait("Plan", "AC-equinox-legs-slits-8")]
     [Trait("Plan", "EDGE-equinox-legs-slits-29")]
     [Trait("Plan", "EDGE-equinox-legs-slits-30")]

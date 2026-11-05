@@ -97,8 +97,9 @@ public class SizeSetCorpusLocalTests(ITestOutputHelper output)
         output.WriteLine($"{checkedCount} of {Expected.Length} expected moves checked");
     }
 
-    [LocalDataFact(LocalData.Mods, SizeSetBatchData.Rue, SizeSetBatchData.ElegySylvie)]
+    [LocalDataFact(LocalData.Mods, SizeSetBatchData.Rue, SizeSetBatchData.Tbse, SizeSetBatchData.ElegySylvie)]
     [Trait("Plan", "AC-equinox-legs-slits-8")]
+    [Trait("Plan", "EDGE-equinox-legs-slits-31")]
     public void The_size_set_knows_the_body_mods_and_not_the_underwear_that_ships_their_skin()
     {
         // Every body mod in the mod folder, as the size set is given them in game.
@@ -112,6 +113,11 @@ public class SizeSetCorpusLocalTests(ITestOutputHelper output)
         foreach (string dir in known) output.WriteLine("  " + dir);
 
         Assert.True(request.KnownBody(Data.Folder(SizeSetBatchData.Rue)));
+        Assert.True(request.KnownBody(Data.Folder(SizeSetBatchData.Tbse)));   // the men's bodies count too
         Assert.False(request.KnownBody(Data.Folder(SizeSetBatchData.ElegySylvie)));
+        // A copy given other bodies answers for its own, never for the list it was copied from.
+        var none = request with { Bodies = [] };
+        Assert.False(none.KnownBody(Data.Folder(SizeSetBatchData.Rue)));
+        Assert.True(request.KnownBody(Data.Folder(SizeSetBatchData.Rue)));
     }
 }
