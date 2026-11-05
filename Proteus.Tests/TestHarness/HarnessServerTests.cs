@@ -367,7 +367,9 @@ public class HarnessServerTests : IDisposable
         g.Game.Capture = (_, _, _) => { inside.TrySetResult(); return slow.Task; };
         var first = g.Client.GetAsync("/screenshot");
         await inside.Task.WaitAsync(TimeSpan.FromSeconds(20));
-        Assert.Equal(429, (await g.Get("/screenshot")).Status);
+        var (busyStatus, busyBody) = await g.Get("/screenshot");
+        Assert.Equal(429, busyStatus);
+        Assert.Equal("busy", busyBody.GetProperty("error").GetProperty("code").GetString());   // unchanged by #67
         slow.SetResult(new RawFrame(1, 1, 4, FramePng.B8G8R8A8Unorm, new byte[4]));
         Assert.Equal(200, (int)(await first).StatusCode);
     }
