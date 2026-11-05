@@ -15,15 +15,17 @@ namespace Proteus.TestHarness;
 /// thread. Game reads live in <see cref="IHarnessGame"/>, job logic in <see cref="RefitJob"/>/<see cref="RestoreJob"/>,
 /// file work in <see cref="ModBackup"/>.
 /// </summary>
-internal sealed class HarnessRouter(HarnessJobs jobs, LogRing ring, SessionNames names, CaptureGate capture,
-                                    int build, string buildStamp, Dalamud.Plugin.Services.IPluginLog log)
+internal sealed partial class HarnessRouter(HarnessJobs jobs, LogRing ring, SessionNames names, CaptureGate capture,
+                                            int build, string buildStamp, Dalamud.Plugin.Services.IPluginLog log,
+                                            HarnessChanges changes)
 {
     /// <summary>Every route, for the docs test and 405's Allow header.</summary>
     internal static readonly IReadOnlyList<(string Method, string Path)> Routes =
     [
         ("GET", "/health"), ("GET", "/state"), ("GET", "/log"), ("GET", "/screenshot"), ("GET", "/hair-port"),
         ("POST", "/actions/refit"), ("POST", "/actions/restore"), ("POST", "/actions/shader-upgrade"),
-        ("POST", "/actions/hair-port"), ("GET", "/jobs/{id}"),
+        ("POST", "/actions/hair-port"), ("POST", "/actions/equip"), ("POST", "/actions/mod-settings"),
+        ("POST", "/actions/put-back"), ("GET", "/jobs/{id}"),
     ];
 
     private IHarnessGame Game => jobs.Game;
@@ -52,6 +54,9 @@ internal sealed class HarnessRouter(HarnessJobs jobs, LogRing ring, SessionNames
                 "/actions/shader-upgrade" => await ShaderUpgradeAction(request),
                 "/hair-port" => await HairPortView(request),
                 "/actions/hair-port" => await HairPortAction(request),
+                "/actions/equip" => await Equip(request),
+                "/actions/mod-settings" => await ModSettings(request),
+                "/actions/put-back" => await PutBack(request),
                 _ => Job(path["/jobs/".Length..]),
             };
         }
@@ -85,7 +90,7 @@ internal sealed class HarnessRouter(HarnessJobs jobs, LogRing ring, SessionNames
 
     private async Task<HarnessResponse> State()
     {
-        var s = await OnFramework(Game.State);
+        var (s, harnessChanges) = await OnFramework(() => (Game.State(), changes.View()));
         var models = ModelJoin.Join(s.Loaded, s.ResourceMap, s.ModsRoot);
         var c = s.Compositor;
         var a = s.AutoRefit;
@@ -116,8 +121,23 @@ internal sealed class HarnessRouter(HarnessJobs jobs, LogRing ring, SessionNames
             shaderUpgrade = ShaderUpgradeBlock(Game.ShaderUpgrade()),
             hairPort = HairPortBlock(Game.HairPort(), names),
             job = jobs.Current?.View(),
+            gear = GearBlock(s.Gear),
+            harnessChanges,
         });
     }
+
+    /// <summary>The ten slots in <c>/state</c>, in slot order: item and dyes (null when unreadable), set/variant for a custom id.</summary>
+    internal static object GearBlock(IReadOnlyDictionary<string, Worn>? gear)
+        => HarnessGear.Slots.Select(slot =>
+        {
+            Worn? w = gear != null && gear.TryGetValue(slot, out var v) ? v : null;
+            var decoded = w is { } x ? HarnessGear.TryDecode(x.Item) : null;
+            return new
+            {
+                slot, item = w?.Item, dyes = w is { } d ? new int[] { d.Dye1, d.Dye2 } : null,
+                set = decoded?.Set, variant = decoded?.Variant,
+            };
+        }).ToList();
 
     /// <summary>The gear shader upgrade in <c>/state</c>: read-only, scrubbed with the rest.</summary>
     internal static object ShaderUpgradeBlock(ShaderUpgradeWatcher.View v) => new
@@ -463,19 +483,11 @@ internal sealed class HarnessRouter(HarnessJobs jobs, LogRing ring, SessionNames
         return FindModOnFramework(mod);
     }
 
-    /// <summary>Penumbra there, and the folder one of Penumbra's, matched without regard to case — never a path outside
-    /// the mods folder; never Proteus's own output mod.</summary>
+    /// <summary><see cref="FindMod"/> answered as a response: the lookup refit, restore and hair port share.</summary>
     private (string? ModDir, ModList? Mods, HarnessResponse? Error) FindModOnFramework(string mod)
     {
-        if (Game.Mods() is not { } mods)
-            return (null, null, HarnessResponse.Error(503, "penumbra-unavailable", "Penumbra is not available"));
-        var dir = mods.Mods.Keys.FirstOrDefault(k => string.Equals(k, mod, StringComparison.OrdinalIgnoreCase));
-        if (dir == null)
-            return (null, null, HarnessResponse.Error(404, "mod-not-found", $"no Penumbra mod folder '{mod}' (folder names only, not display names)"));
-        if (string.Equals(dir, Game.ManagedModDir, StringComparison.OrdinalIgnoreCase))
-            return (null, null, HarnessResponse.Error(400, "managed-mod", "Proteus's own output mod is never refitted, hair-ported or restored"));
-        if (!ModBackup.SafeModDir(dir))
-            return (null, null, HarnessResponse.Error(400, "invalid-field", "the mod folder name is not a plain folder name"));
+        var (dir, mods, error) = FindMod(mod);
+        if (error != null) return (null, null, Answer(error));
         return (dir, mods, null);
     }
 
@@ -530,7 +542,7 @@ internal sealed class HarnessRouter(HarnessJobs jobs, LogRing ring, SessionNames
             return HarnessResponse.Error(400, "invalid-field", "give job alone, or mod (with an optional backup)");
         if (jobId == null && mod == null) return HarnessResponse.Error(400, "invalid-field", "give job, or mod");
         if (mod != null && string.Equals(mod, Game.ManagedModDir, StringComparison.OrdinalIgnoreCase))
-            return HarnessResponse.Error(400, "managed-mod", "Proteus's own output mod is never refitted, hair-ported or restored");
+            return HarnessResponse.Error(400, "managed-mod", "Proteus's own output mod is never refitted, hair-ported, restored or held");
 
         if (!jobs.TryReserve()) return HarnessResponse.Error(409, "busy", "a job is already running");
         bool started = false;

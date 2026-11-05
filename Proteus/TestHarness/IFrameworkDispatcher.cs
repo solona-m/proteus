@@ -44,11 +44,16 @@ internal interface IFrameworkDispatcher
     /// completes with false. For the after-change following a write, which must not be dropped.
     /// </summary>
     Task<bool> RunUnabandonable(Action work, Func<bool> skip);
+
+    /// <summary>Whether the caller is on the framework thread now (so framework work may run inline).</summary>
+    bool OnFrameworkThread { get; }
 }
 
 /// <summary>The dispatcher on Dalamud's framework.</summary>
 internal sealed class DalamudFrameworkDispatcher(Dalamud.Plugin.Services.IFramework framework) : IFrameworkDispatcher
 {
+    public bool OnFrameworkThread => framework.IsInFrameworkUpdateThread;
+
     public async Task<T> RunAsync<T>(Func<T> work, TimeSpan startTimeout, CancellationToken ct = default)
     {
         var ticket = new DispatchTicket();

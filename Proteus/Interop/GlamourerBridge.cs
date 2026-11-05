@@ -283,6 +283,29 @@ public class GlamourerBridge : IDisposable
         }
     }
 
+    /// <summary>Two dyes as Glamourer's <c>SetItem</c> wants them: a two-element list, never an empty one (see NoStains).</summary>
+    internal static List<byte> StainList(byte stain1, byte stain2) => [stain1, stain2];
+
+    /// <summary>
+    /// Equip an item (or a Glamourer custom id) in one of the ten gear slots by Glamourer's slot name ("Body",
+    /// "RFinger", …), with <see cref="ApplyFlag.Once"/>, key 0 and no lock: the general form of <see cref="SetAccessory"/>.
+    /// Null when Glamourer is unavailable, there is no player, the slot is not a gear slot, or the call threw; else
+    /// Glamourer's answer. Framework thread.
+    /// </summary>
+    public GlamourerApiEc? SetGearItem(string slotName, ulong itemId, byte stain1, byte stain2)
+    {
+        if (!IsAvailable || objectTable.LocalPlayer == null) return null;
+        if (!Enum.TryParse<ApiEquipSlot>(slotName, out var slot)
+            || slot is ApiEquipSlot.Unknown or ApiEquipSlot.MainHand or ApiEquipSlot.OffHand)
+            return null;
+        try { return setItem.Invoke(0, slot, itemId, StainList(stain1, stain2), key: 0, ApplyFlag.Once); }
+        catch (Exception ex)
+        {
+            log.Warning(ex, "[Proteus] SetItem({0},{1}) failed", slot, itemId);
+            return null;
+        }
+    }
+
     /// <summary>
     /// Equip an item in an accessory slot ("rir", "ril", "wrs", "nek"), as <see cref="SetGlasses"/>. The slot must
     /// match the one the shell was published for: the game only loads the one it asked for.

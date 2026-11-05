@@ -194,7 +194,8 @@ public class HarnessRouterTests : IDisposable
     public void Routes_AreTheContract()
     {
         Assert.Equal(["/health", "/state", "/log", "/screenshot", "/hair-port", "/actions/refit", "/actions/restore",
-                      "/actions/shader-upgrade", "/actions/hair-port", "/jobs/{id}"],
+                      "/actions/shader-upgrade", "/actions/hair-port", "/actions/equip", "/actions/mod-settings",
+                      "/actions/put-back", "/jobs/{id}"],
                      HarnessRouter.Routes.Select(r => r.Path));
     }
 
