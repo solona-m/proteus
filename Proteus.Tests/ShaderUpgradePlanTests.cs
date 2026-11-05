@@ -344,6 +344,29 @@ public class ShaderUpgradePlanTests
     }
 
     [Fact]
+    [Trait("Plan", "EDGE-dt-shader-upgrade-57")]
+    public void A_specular_map_from_an_independent_option_is_mixed_unless_default_data_ships_it()
+    {
+        using var kit = new Kit();
+        // The material in default data, the _s chosen by a colour group: baking it would go stale when the colour changes.
+        var mod = kit.Mod("Indep", new Dictionary<string, string> { [Kit.TopPath] = "top.mtrl" },
+            ("Spec", "Single", [("Shiny", new Dictionary<string, string> { [Kit.SpecPath] = "shiny_s.tex" }),
+                                ("Dull", new Dictionary<string, string> { [Kit.SpecPath] = "dull_s.tex" })]));
+        Kit.Put(mod, "top.mtrl", Kit.FormB());
+        Kit.Put(mod, "shiny_s.tex", Kit.Fixture("legacy_spec_s.tex"));
+        Kit.Put(mod, "dull_s.tex", Kit.Fixture("legacy_spec_s.tex"));
+        var plan = kit.Plan([Kit.Worn(Kit.TopPath, mod, "top.mtrl")], _ => Path.Combine(mod, "shiny_s.tex"));
+        Assert.Equal(LeftReason.MixedSpecular, Assert.Single(plan.Left).Reason);
+
+        // The material in an option, the _s in default data: fine.
+        var ok = kit.Mod("Def", new Dictionary<string, string> { [Kit.SpecPath] = "s.tex" },
+            ("Colour", "Single", [("Red", new Dictionary<string, string> { [Kit.TopPath] = "top.mtrl" })]));
+        Kit.Put(ok, "top.mtrl", Kit.FormB());
+        Kit.Put(ok, "s.tex", Kit.Fixture("legacy_spec_s.tex"));
+        Assert.Single(kit.Plan([Kit.Worn(Kit.TopPath, ok, "top.mtrl")], _ => Path.Combine(ok, "s.tex")).PerMod);
+    }
+
+    [Fact]
     [Trait("Plan", "EDGE-dt-shader-upgrade-71")]
     public void Specular_from_another_mod_leaves_the_material()
     {

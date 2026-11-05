@@ -226,9 +226,9 @@ public class Configuration : IPluginConfiguration
 
     /// <summary>
     /// Draw worn gear whose mod still uses the pre-Dawntrail <c>characterlegacy.shpk</c> with Dawntrail's
-    /// <c>character.shpk</c> instead (<c>ShaderUpgradeWatcher</c>), as it is put on. Nothing is written into any mod:
-    /// upgraded copies live in Proteus's own folder and are redirected by a Penumbra temporary mod that turning this off
-    /// takes down. Off by default, since it changes how other authors' gear looks; a missing property reads off, so no
+    /// <c>character.shpk</c> instead (<c>ShaderUpgradeWatcher</c>), as it is put on, by rewriting the worn mod's own
+    /// material files (each backed up first; "Undo for what I'm wearing" puts them back). Turning this off only stops
+    /// further upgrades. Off by default, since it changes other authors' mods; a missing property reads off, so no
     /// migration.
     /// </summary>
     public bool AutoUpgradeLegacyShaders { get; set; } = false;

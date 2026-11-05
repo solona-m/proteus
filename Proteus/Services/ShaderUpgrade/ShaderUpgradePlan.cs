@@ -379,15 +379,17 @@ internal static class ShaderUpgradePlan
     /// <summary>
     /// Where a Form B material's specular map comes from, so the derived mask bakes its own mod's art and nothing else.
     /// <list type="bullet">
-    /// <item>The resolved <c>_s</c> is a file of the material's own mod, and no owner of the material maps the
-    /// <c>_s</c> game path to a different file: <see cref="SpecularKind.File"/> (with that file's mod-relative path).</item>
+    /// <item>The resolved <c>_s</c> is a file of the material's own mod, shipped either by EVERY owner of the material
+    /// or by the mod's default data: <see cref="SpecularKind.File"/> (with that file's mod-relative path). An <c>_s</c>
+    /// chosen by an independent option (a colour group) would be baked in and go stale when the option changes.</item>
     /// <item>It is the game's own file (Penumbra echoes the path), and no owner ships one: <see cref="SpecularKind.Game"/>.</item>
     /// <item>It resolves into another mod (a retexture): <see cref="SpecularKind.OtherMod"/>.</item>
     /// <item>The owners disagree: <see cref="SpecularKind.Mixed"/>.</item>
     /// </list>
     /// </summary>
     public static (SpecularKind Kind, string? Rel) SpecularSource(string? resolvedS, string sGamePath, string materialModRoot,
-                                                                  string modsRoot, IReadOnlyList<HairPortPlan.Owner> materialOwners)
+                                                                  string modsRoot, IReadOnlyList<HairPortPlan.Owner> materialOwners,
+                                                                  HairPortPlan.Owner? defaultData = null)
     {
         var shipped = materialOwners.Select(o => HairPortPlan.FileFor(o, sGamePath))
                                     .Where(r => r != null)
@@ -404,7 +406,10 @@ internal static class ShaderUpgradePlan
             return (SpecularKind.OtherMod, null);
         rel = MeshVolumeService.Rel(rel);
         if (shipped.Any(s => !string.Equals(s, rel, StringComparison.OrdinalIgnoreCase))) return (SpecularKind.Mixed, null);
-        return (SpecularKind.File, rel);
+        bool everyOwner = materialOwners.All(o => HairPortPlan.FileFor(o, sGamePath) != null);
+        bool byDefault = defaultData != null && HairPortPlan.FileFor(defaultData, sGamePath) is { } d
+                      && string.Equals(MeshVolumeService.Rel(d), rel, StringComparison.OrdinalIgnoreCase);
+        return everyOwner || byDefault ? (SpecularKind.File, rel) : (SpecularKind.Mixed, null);
     }
 
     /// <summary>Every owner (default data, option, container) that ships <paramref name="rel"/>.</summary>
@@ -569,7 +574,8 @@ internal static class ShaderUpgradePlan
                     continue;
                 }
                 resolvedSpecular.TryGetValue(slot, out var resolvedS);
-                var (kind, sRel) = SpecularSource(resolvedS, slot, c.ModRoot, inp.ModsRoot!, mine);
+                var (kind, sRel) = SpecularSource(resolvedS, slot, c.ModRoot, inp.ModsRoot!, mine,
+                                                  owners.FirstOrDefault(o => o.IsDefault));
                 if (kind == SpecularKind.OtherMod) { LeftAll(left, c.GamePaths, label, LeftReason.SpecularFromOtherMod); continue; }
                 if (kind == SpecularKind.Mixed) { LeftAll(left, c.GamePaths, label, LeftReason.MixedSpecular); continue; }
 

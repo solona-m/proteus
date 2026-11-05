@@ -128,8 +128,12 @@ The harness never deletes or overwrites a backup; the user may delete them by ha
   masks:{memoHits, decodes}, lastRun:{kind: upgrade|undo-worn|upgrade-now, modsChanged, filesChanged, restored, kept, refused, reloaded, redrawRequested, atUtc}}`.
   After switching it on or equipping, wait for `shaderUpgrade.busy == false` before you assert. **Clean up everything
   you caused:** hash every file of each mod you will touch first; afterwards, while wearing each upgraded piece, POST
-  `{"undoWorn":true,"decline":false}` and check every non-manifest file hashes as before, the mod's redirects are as
-  before, and no `Shader Upgrade/` folder, `Proteus/shaderupgrade.json` or `Proteus/shaderupgrade-backup/` remains.
+  `{"enabled":false,"undoWorn":true,"decline":false}` — switching the setting off in the SAME body, or the undo's own
+  redraw walks and upgrades the pieces again — and check every non-manifest file hashes as before, the mod's redirects
+  are as before, and no `Shader Upgrade/` folder, `Proteus/shaderupgrade.json` or `Proteus/shaderupgrade-backup/`
+  remains. This undo deletes the gear shader upgrade's OWN backups as it restores them: that is the feature's undo, not
+  the harness's refit backups, which ADR 0002 says the harness never deletes. `upgraded[].mask` names the Form B mask
+  (`{gamePath, file}`).
 - After a refit or restore, wait for the job to end, then for `/state`
   `autoRefit.busy == false` and `compositor.phase == "idle"` before you assert
   anything or take a screenshot.

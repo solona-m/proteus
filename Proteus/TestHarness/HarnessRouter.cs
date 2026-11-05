@@ -119,7 +119,11 @@ internal sealed class HarnessRouter(HarnessJobs jobs, LogRing ring, SessionNames
     internal static object ShaderUpgradeBlock(ShaderUpgradeWatcher.View v) => new
     {
         enabled = v.Enabled, busy = v.Busy, waiting = v.Waiting, awaitingRedraw = v.AwaitingRedraw, maskGloss = v.MaskGloss,
-        upgraded = v.UpgradedList.Select(u => new { gamePath = u.GamePath, modDir = u.ModDir, file = u.File, form = u.Form }),
+        upgraded = v.UpgradedList.Select(u => new
+        {
+            gamePath = u.GamePath, modDir = u.ModDir, file = u.File, form = u.Form,
+            mask = u.MaskGamePath is { } mg ? new { gamePath = mg, file = u.MaskFile } : null,
+        }),
         left = v.LeftList.Select(l => new { gamePath = l.GamePath, source = l.Source, reason = l.Reason }),
         masks = new { memoHits = v.MemoHits, decodes = v.Decodes },
         lastRun = v.LastRun is { } r

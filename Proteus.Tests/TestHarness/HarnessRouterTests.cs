@@ -194,7 +194,8 @@ public class HarnessRouterTests : IDisposable
     {
         f.Game.ShaderUpgradeView = new Proteus.Services.ShaderUpgradeWatcher.View(
             Enabled: true, Waiting: "none", MaskGloss: "mid",
-            Upgraded: [new("chara/equipment/e0001/material/v0001/mt_c0201e0001_top_a.mtrl", "Dress", "red/top.mtrl", "diffuse")],
+            Upgraded: [new("chara/equipment/e0001/material/v0001/mt_c0201e0001_top_a.mtrl", "Dress", "red/top.mtrl", "diffuse",
+                           "chara/equipment/e0001/texture/dt_ab_mask.tex", "Shader Upgrade/ab_mask.tex")],
             Left: [new("chara/equipment/e0002/material/v0001/mt_c0201e0002_dwn_a.mtrl", "Skirt/b.mtrl", "specular-from-other-mod")],
             MemoHits: 2, Decodes: 1,
             LastRun: new("undo-worn", 1, 2, 2, 0, 0, true, true, DateTime.UtcNow));
@@ -206,6 +207,7 @@ public class HarnessRouterTests : IDisposable
         var up = su.GetProperty("upgraded")[0];
         Assert.Equal("Dress", up.GetProperty("modDir").GetString());
         Assert.Equal("diffuse", up.GetProperty("form").GetString());
+        Assert.Equal("Shader Upgrade/ab_mask.tex", up.GetProperty("mask").GetProperty("file").GetString());
         Assert.Equal("specular-from-other-mod", su.GetProperty("left")[0].GetProperty("reason").GetString());
         Assert.Equal(2, su.GetProperty("masks").GetProperty("memoHits").GetInt32());
         Assert.Equal("undo-worn", su.GetProperty("lastRun").GetProperty("kind").GetString());

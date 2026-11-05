@@ -129,9 +129,11 @@ internal static class ShaderUpgradeWriter
     [ThreadStatic] internal static Action<string>? AfterStep;
 
     /// <summary>
-    /// Upgrade a mod's materials. Per file, under the locks: re-check the file is still the one planned; forget an
-    /// entry an author's update has left behind; back up once; record (pending); write the mask and its redirects;
-    /// write the material; record (done). <paramref name="mayWrite"/> is asked before every file.
+    /// Upgrade a mod's materials. The masks are encoded first, OUTSIDE the locks (the brush saves under the same write lock
+    /// on the framework thread, and an encode can take a while). Then per file, under the locks: re-check the file is
+    /// still the one planned; forget an entry an author's update has left behind; back up; record (pending); place the
+    /// mask and add its redirects; write the material; record (done). <paramref name="mayWrite"/> is asked before every
+    /// file.
     /// </summary>
     /// <param name="writeTex"><see cref="TextureLoader.WriteTex(byte[], int, int, string, TexEncoding)"/>.</param>
     public static Outcome Apply(string modRoot, IReadOnlyList<MaterialWrite> writes, Func<bool> mayWrite,
@@ -140,121 +142,184 @@ internal static class ShaderUpgradeWriter
         var written = new List<string>();
         var left = new List<(string, LeftReason)>();
         bool rewalk = false;
+        if (!Directory.Exists(modRoot))
+            return new Outcome(written, writes.Select(w => (w.Rel, LeftReason.WriteFailed)).ToList(), true);
         lock (ModManifestLock.Gate)
-        lock (MeshVolumeService.WriteLock)
         {
-            if (!Directory.Exists(modRoot))
-                return new Outcome(written, writes.Select(w => (w.Rel, LeftReason.WriteFailed)).ToList(), true);
             if (PenumbraModMeta.IsLegacyFolder(modRoot) || HairPortPlan.ReadOwners(modRoot) == null)
                 return new Outcome(written, writes.Select(w => (w.Rel, LeftReason.LegacyMod)).ToList(), false);
             if (IsProteusPack(modRoot))
                 return new Outcome(written, writes.Select(w => (w.Rel, LeftReason.ProteusPack)).ToList(), false);
+        }
 
+        // Masks this batch names: an author-update forget must not delete one a write here is about to reuse.
+        var keep = writes.Where(w => w.Mask != null).Select(w => MeshVolumeService.Rel(w.Mask!.Rel))
+                         .ToHashSet(StringComparer.OrdinalIgnoreCase);
+        var prepared = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);   // mask rel → encoded temp file
+        try
+        {
             foreach (var w in writes)
             {
                 if (!mayWrite()) break;
-                var record = ReadRecord(modRoot) ?? new Record();
-                if (record.Declined.Contains(w.Rel, StringComparer.OrdinalIgnoreCase)) { left.Add((w.Rel, LeftReason.Declined)); continue; }
-
-                var path = FileOf(modRoot, w.Rel);
-                byte[] current;
-                try { current = File.ReadAllBytes(path); }
-                catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+                string? tmp = null;
+                if (w.Mask is { Rgba: not null } m && !prepared.ContainsKey(m.Rel))
                 {
-                    left.Add((w.Rel, LeftReason.WriteFailed));
-                    rewalk = true;
-                    continue;
-                }
-                var sha = Sha8(current);
-                if (sha != w.SourceSha8) { rewalk = true; continue; }   // changed since planning: look again
-
-                // An entry whose file matches neither hash is an author's update: never restore over it.
-                if (EntryOf(record, w.Rel) is { } stale && sha != stale.SourceSha8 && sha != stale.UpgradedSha8)
-                {
-                    Forget(modRoot, record, stale);
-                    WriteRecord(modRoot, record);
-                }
-
-                try
-                {
-                    Backup(modRoot, w.Rel);
-                    var entry = EntryOf(record, w.Rel);
-                    if (entry == null) record.Files.Add(entry = new FileEntry { Rel = w.Rel });
-                    entry.Form = w.Form == LegacyForm.Diffuse ? "diffuse" : "index-mask";
-                    entry.SourceSha8 = w.SourceSha8;
-                    entry.UpgradedSha8 = Sha8(w.Bytes);
-                    entry.Version = Version;
-                    entry.Pending = true;
-                    entry.Mask = w.Mask is { } m
-                        ? new MaskEntry
-                        {
-                            Rel = m.Rel, GamePath = m.GamePath,
-                            Owners = m.Owners.Select(o => new OwnerRef { Group = o.Group, Option = o.Option }).ToList(),
-                        }
-                        : null;
-                    WriteRecord(modRoot, record);
-                    AfterStep?.Invoke("pending");
-
-                    if (w.Mask is { } mask)
+                    try
                     {
-                        WriteMask(modRoot, mask, encoding, writeTex);
-                        AfterStep?.Invoke("mask");
-                        foreach (var (group, option) in mask.Owners)
-                            PenumbraModMeta.MergeOptionRedirects(modRoot, group, option,
-                                new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase) { [mask.GamePath] = Native(mask.Rel) });
-                        AfterStep?.Invoke("redirects");
+                        tmp = PrepareMask(modRoot, m, encoding, writeTex);
+                        if (tmp != null) prepared[m.Rel] = tmp;
                     }
-
-                    PenumbraModMeta.AtomicWrite(path, w.Bytes);
-                    AfterStep?.Invoke("material");
-                    entry.Pending = false;
-                    WriteRecord(modRoot, record);
-                    written.Add(w.Rel);
-                }
-                catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or InvalidOperationException
-                                                 or ArgumentException or JsonException or WriteRefused)
-                {
-                    // The material write is atomic, so the file is as it was; take out what this unit added.
-                    var r2 = ReadRecord(modRoot) ?? record;
-                    if (EntryOf(r2, w.Rel) is { } e && Sha8(SafeRead(path) ?? []) != e.UpgradedSha8)
+                    catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or WriteRefused)
                     {
-                        Forget(modRoot, r2, e);
-                        TryWriteRecord(modRoot, r2);
+                        left.Add((w.Rel, LeftReason.WriteFailed));
+                        continue;
                     }
-                    left.Add((w.Rel, LeftReason.WriteFailed));
+                }
+
+                lock (ModManifestLock.Gate)
+                lock (MeshVolumeService.WriteLock)
+                {
+                    if (!mayWrite()) break;
+                    WriteOne(modRoot, w, prepared, keep, written, left, ref rewalk);
                 }
             }
+        }
+        finally
+        {
+            foreach (var tmp in prepared.Values) TryDelete(tmp);
         }
         return new Outcome(written, left, rewalk);
     }
 
-    /// <summary>Copy the author's file aside, ONCE: a second pass must not overwrite the pristine copy.</summary>
-    private static void Backup(string modRoot, string rel)
+    private static void WriteOne(string modRoot, MaterialWrite w, Dictionary<string, string> prepared, ISet<string> keep,
+                                 List<string> written, List<(string, LeftReason)> left, ref bool rewalk)
+    {
+        var record = ReadRecord(modRoot) ?? new Record();
+        if (record.Declined.Contains(w.Rel, StringComparer.OrdinalIgnoreCase)) { left.Add((w.Rel, LeftReason.Declined)); return; }
+
+        var path = FileOf(modRoot, w.Rel);
+        byte[] current;
+        try { current = File.ReadAllBytes(path); }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            left.Add((w.Rel, LeftReason.WriteFailed));
+            rewalk = true;
+            return;
+        }
+        var sha = Sha8(current);
+        if (sha != w.SourceSha8) { rewalk = true; return; }   // changed since planning: look again
+
+        try
+        {
+            // An entry whose file matches neither hash is an author's update: never restore over it. Its backup must go
+            // (a failure aborts the unit), or the old original would stand in for the author's new file.
+            if (EntryOf(record, w.Rel) is { } stale && sha != stale.SourceSha8 && sha != stale.UpgradedSha8)
+            {
+                Forget(modRoot, record, stale, keep, strictBackup: true);
+                WriteRecord(modRoot, record);
+            }
+
+            var entry = EntryOf(record, w.Rel);
+            // No entry: any backup on disk is an orphan (a write that failed before its record), never this file's original.
+            Backup(modRoot, w.Rel, replace: entry == null);
+            if (entry == null) record.Files.Add(entry = new FileEntry { Rel = w.Rel });
+            else if (entry.Mask is { } oldMask && (w.Mask == null
+                     || !string.Equals(oldMask.Rel, w.Mask.Rel, StringComparison.OrdinalIgnoreCase)))
+            {
+                // A pending entry reused after a crash, now planned with another mask: take the old one out first.
+                RemoveMaskRedirects(modRoot, oldMask);
+                entry.Mask = null;
+                DeleteUnnamedMask(modRoot, oldMask.Rel, record, keep);
+            }
+            entry.Form = w.Form == LegacyForm.Diffuse ? "diffuse" : "index-mask";
+            entry.SourceSha8 = w.SourceSha8;
+            entry.UpgradedSha8 = Sha8(w.Bytes);
+            entry.Version = Version;
+            entry.Pending = true;
+            entry.Mask = w.Mask is { } m
+                ? new MaskEntry
+                {
+                    Rel = m.Rel, GamePath = m.GamePath,
+                    Owners = m.Owners.Select(o => new OwnerRef { Group = o.Group, Option = o.Option }).ToList(),
+                }
+                : null;
+            WriteRecord(modRoot, record);
+            AfterStep?.Invoke("pending");
+
+            if (w.Mask is { } mask)
+            {
+                PlaceMask(modRoot, mask, prepared.TryGetValue(mask.Rel, out var tmp) ? tmp : null);
+                AfterStep?.Invoke("mask");
+                foreach (var (group, option) in mask.Owners)
+                    PenumbraModMeta.MergeOptionRedirects(modRoot, group, option,
+                        new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase) { [mask.GamePath] = Native(mask.Rel) });
+                AfterStep?.Invoke("redirects");
+            }
+
+            PenumbraModMeta.AtomicWrite(path, w.Bytes);
+            AfterStep?.Invoke("material");
+            entry.Pending = false;
+            WriteRecord(modRoot, record);
+            written.Add(w.Rel);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or InvalidOperationException
+                                         or ArgumentException or JsonException or WriteRefused)
+        {
+            // The material write is atomic, so the file is as it was; take out what this unit added.
+            var r2 = ReadRecord(modRoot) ?? record;
+            if (EntryOf(r2, w.Rel) is { } e && Sha8(SafeRead(path) ?? []) != e.UpgradedSha8)
+            {
+                Forget(modRoot, r2, e, keep: null, strictBackup: false);
+                TryWriteRecord(modRoot, r2);
+            }
+            left.Add((w.Rel, LeftReason.WriteFailed));
+            // A mask the plan meant to reuse was gone: the next walk derives it again.
+            if (ex is MaskMissing) rewalk = true;
+        }
+    }
+
+    /// <summary>
+    /// Copy the author's file aside, ONCE: a second pass must not overwrite the pristine copy. With
+    /// <paramref name="replace"/> (no record entry claims a backup), one already there is an orphan and is replaced.
+    /// <c>File.Copy</c> keeps the source's write time, which <see cref="ModelBackupOrder"/> reads.
+    /// </summary>
+    private static void Backup(string modRoot, string rel, bool replace)
     {
         var backup = BackupPath(modRoot, rel);
-        if (File.Exists(backup)) return;
+        if (File.Exists(backup))
+        {
+            if (!replace) return;
+            File.Delete(backup);
+        }
         Directory.CreateDirectory(Path.GetDirectoryName(backup)!);
         File.Copy(FileOf(modRoot, rel), backup);
     }
 
     /// <summary>A write refused by the mask gate.</summary>
-    internal sealed class WriteRefused(string message) : Exception(message);
+    internal class WriteRefused(string message) : Exception(message);
 
-    /// <summary>
-    /// Write a derived mask into the mod: to a temporary file first, its header checked, then moved to its final name.
-    /// A complete file of that name (same content address) is reused.
-    /// </summary>
-    internal static string WriteMask(string modRoot, MaskWrite mask, TexEncoding encoding,
-                                     Func<byte[], int, int, string, TexEncoding, bool> writeTex)
+    /// <summary>A mask the plan meant to reuse is no longer in the mod.</summary>
+    internal sealed class MaskMissing(string message) : WriteRefused(message);
+
+    private static string MaskPath(string modRoot, MaskWrite mask)
     {
         var path = FileOf(modRoot, mask.Rel);
         var dir = Path.GetFullPath(Path.Combine(modRoot, MaskFolder));
         if (!string.Equals(Path.GetDirectoryName(Path.GetFullPath(path)), dir, StringComparison.OrdinalIgnoreCase))
             throw new WriteRefused($"\"{mask.Rel}\" is outside {MaskFolder}/");
-        if (TextureLoader.IsCompleteTex(path)) return path;
-        if (mask.Rgba == null) throw new WriteRefused($"{mask.Rel} is missing and has no pixels to write");
+        return path;
+    }
 
-        Directory.CreateDirectory(dir);
+    /// <summary>
+    /// Encode a mask to a temporary file beside its final name and check its header — no lock held. Null when a complete
+    /// file of that name (same content address) is already there.
+    /// </summary>
+    internal static string? PrepareMask(string modRoot, MaskWrite mask, TexEncoding encoding,
+                                        Func<byte[], int, int, string, TexEncoding, bool> writeTex)
+    {
+        var path = MaskPath(modRoot, mask);
+        if (TextureLoader.IsCompleteTex(path) || mask.Rgba == null) return null;
+        Directory.CreateDirectory(Path.GetDirectoryName(path)!);
         var tmp = path + "." + Path.GetRandomFileName() + ".part";
         try
         {
@@ -269,11 +334,37 @@ internal static class ShaderUpgradeWriter
             }
             if (!IsSoundMaskHeader(header, length, mask.Width, mask.Height) || !TextureLoader.IsCompleteTex(tmp))
                 throw new WriteRefused($"{mask.Rel} failed its header check");
-            try { File.Move(tmp, path, overwrite: false); }
-            catch (IOException) when (TextureLoader.IsCompleteTex(path)) { /* the same mask, written meanwhile */ }
-            return path;
+            return tmp;
         }
-        finally { TryDelete(tmp); }
+        catch
+        {
+            TryDelete(tmp);
+            throw;
+        }
+    }
+
+    /// <summary>Move a prepared mask to its final name (under the locks). A complete file already there is reused.</summary>
+    private static string PlaceMask(string modRoot, MaskWrite mask, string? prepared)
+    {
+        var path = MaskPath(modRoot, mask);
+        if (TextureLoader.IsCompleteTex(path)) return path;
+        if (prepared == null || !File.Exists(prepared)) throw new MaskMissing($"{mask.Rel} is missing and has no pixels to write");
+        try { File.Move(prepared, path, overwrite: false); }
+        catch (IOException) when (TextureLoader.IsCompleteTex(path)) { /* the same mask, placed meanwhile */ }
+        return path;
+    }
+
+    /// <summary>Prepare and place in one step (no lock): for tests and single writes.</summary>
+    internal static string WriteMask(string modRoot, MaskWrite mask, TexEncoding encoding,
+                                     Func<byte[], int, int, string, TexEncoding, bool> writeTex)
+    {
+        string? tmp = null;
+        try
+        {
+            tmp = PrepareMask(modRoot, mask, encoding, writeTex);
+            return PlaceMask(modRoot, mask, tmp);
+        }
+        finally { if (tmp != null) TryDelete(tmp); }
     }
 
     // ── undo ────────────────────────────────────────────────────────────────
@@ -340,35 +431,44 @@ internal static class ShaderUpgradeWriter
 
     /// <summary>
     /// Drop an entry: its backup first, then its mask redirects (only while they still name our mask), then the mask
-    /// file if nothing names it any more. The caller writes the record.
+    /// file if nothing names it any more (nor <paramref name="keep"/>). The caller writes the record.
     /// </summary>
-    internal static void Forget(string modRoot, Record record, FileEntry entry)
+    /// <param name="strictBackup">Throw when the backup cannot be deleted (a stale original must never survive).</param>
+    internal static void Forget(string modRoot, Record record, FileEntry entry, ISet<string>? keep = null,
+                                bool strictBackup = false)
     {
-        TryDelete(BackupPath(modRoot, entry.Rel));
+        var backup = BackupPath(modRoot, entry.Rel);
+        if (strictBackup) { if (File.Exists(backup)) File.Delete(backup); }
+        else TryDelete(backup);
+        record.Files.Remove(entry);
         if (entry.Mask is { } m)
         {
-            foreach (var o in m.Owners)
-            {
-                try
-                {
-                    PenumbraModMeta.RemoveOptionRedirects(modRoot, o.Group, o.Option,
-                        new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase) { [m.GamePath] = Native(m.Rel) });
-                }
-                catch (Exception ex) when (ex is InvalidOperationException or ArgumentException or IOException
-                                                 or KeyNotFoundException)
-                {
-                    /* the option is gone: nothing of ours left in it */
-                }
-            }
-            record.Files.Remove(entry);
-            DeleteUnnamedMask(modRoot, m.Rel, record);
+            RemoveMaskRedirects(modRoot, m);
+            DeleteUnnamedMask(modRoot, m.Rel, record, keep);
         }
-        else record.Files.Remove(entry);
     }
 
-    /// <summary>Delete a mask under <c>Shader Upgrade/</c> that no redirect and no other entry names.</summary>
-    private static void DeleteUnnamedMask(string modRoot, string maskRel, Record record)
+    private static void RemoveMaskRedirects(string modRoot, MaskEntry m)
     {
+        foreach (var o in m.Owners)
+        {
+            try
+            {
+                PenumbraModMeta.RemoveOptionRedirects(modRoot, o.Group, o.Option,
+                    new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase) { [m.GamePath] = Native(m.Rel) });
+            }
+            catch (Exception ex) when (ex is InvalidOperationException or ArgumentException or IOException
+                                             or KeyNotFoundException)
+            {
+                /* the option is gone: nothing of ours left in it */
+            }
+        }
+    }
+
+    /// <summary>Delete a mask under <c>Shader Upgrade/</c> that no redirect, no other entry and nothing in <paramref name="keep"/> names.</summary>
+    private static void DeleteUnnamedMask(string modRoot, string maskRel, Record record, ISet<string>? keep = null)
+    {
+        if (keep?.Contains(MeshVolumeService.Rel(maskRel)) == true) return;
         if (record.Files.Any(f => f.Mask != null && string.Equals(f.Mask.Rel, maskRel, StringComparison.OrdinalIgnoreCase)))
             return;
         var named = PenumbraModMeta.ReadAllRedirects(modRoot)

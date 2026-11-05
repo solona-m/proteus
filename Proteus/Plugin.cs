@@ -29,7 +29,7 @@ public sealed class Plugin : IDalamudPlugin
 #endif
 
     /// <summary>Hand-maintained; bump it for in-game testing. <see cref="BuildStamp"/> is the one that can't go stale.</summary>
-    public const int BuildNumber = 1423;
+    public const int BuildNumber = 1424;
 
     /// <summary>
     /// Which set of release notes is current. Raise it when a release has something new to say: the window
@@ -235,7 +235,6 @@ public sealed class Plugin : IDalamudPlugin
         hatCompat = new HatCompatWatcher(compositor, penumbra, glamourer, config, log);
         // The same: a hair mod made for another race is fitted when it is put on, window shut or open.
         hairPort = new HairPortWatcher(compositor, penumbra, glamourer, config, log);
-        // The same: old gear is drawn with Dawntrail's shader as it is put on, window shut or open.
 
         // The same: gear put on is refitted onto the collection's body whether or not any window is open.
         autoRefit = new AutoRefitWatcher(compositor, penumbra, glamourer, designBindings, uvRemap,

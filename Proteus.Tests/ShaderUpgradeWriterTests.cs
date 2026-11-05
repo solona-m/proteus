@@ -98,9 +98,10 @@ public class ShaderUpgradeWriterTests
         var mod = kit.Mod("Two", new Dictionary<string, string> { [Kit.TopPath] = "a.mtrl", [Kit.DwnPath] = "b.mtrl" });
         Kit.Put(mod, "a.mtrl", Kit.FormA());
         Kit.Put(mod, "b.mtrl", Kit.FormA());
-        int asked = 0;
+        // The setting goes off as soon as one file has been written.
+        bool AnyWritten() => new[] { "a.mtrl", "b.mtrl" }.Any(r => CharacterShaderUpgrade.ShaderOf(Kit.Get(mod, r)) == "character.shpk");
         var outcome = kit.Upgrade(mod, [Kit.Worn(Kit.TopPath, mod, "a.mtrl"), Kit.Worn(Kit.DwnPath, mod, "b.mtrl")],
-                                  mayWrite: () => ++asked == 1);
+                                  mayWrite: () => !AnyWritten());
         Assert.Single(outcome.Written);
         Assert.Equal(1, new[] { "a.mtrl", "b.mtrl" }.Count(r => CharacterShaderUpgrade.ShaderOf(Kit.Get(mod, r)) == "character.shpk"));
     }
@@ -239,6 +240,85 @@ public class ShaderUpgradeWriterTests
     }
 
     [Fact]
+    [Trait("Plan", "AC-dt-shader-upgrade-13")]
+    [Trait("Plan", "EDGE-dt-shader-upgrade-73")]
+    public void Diffuse_author_update_between_walks_reuses_the_mask_it_was_told_to()
+    {
+        using var kit = new Kit();
+        var mod = kit.Dress("B", Kit.FormB(), withSpec: true);
+        Assert.True(kit.Upgrade(mod, WornRed(mod), _ => Spec(mod)).ChangedAny);
+        // The author ships a new legacy diffuse file, its _s unchanged: the next plan reuses the mask already there.
+        var f2 = Kit.FormB();
+        BitConverter.TryWriteBytes(f2.AsSpan(GearMaterialWriter.ColorTableStart(f2)), (Half)0.5f);
+        File.WriteAllBytes(Path.Combine(mod, "red", "top.mtrl"), f2);
+        var plan = kit.Plan(WornRed(mod), _ => Spec(mod));
+        Assert.Null(Assert.Single(plan.PerMod[0].Writes).Mask!.Rgba);
+        var outcome = ShaderUpgradeWriter.Apply(mod, plan.PerMod[0].Writes, () => true, Kit.WriteTex, TexEncoding.Uncompressed);
+        Assert.Equal([Red], outcome.Written);   // the forget of the old entry kept the mask this write reuses
+        Assert.True(TextureLoader.IsCompleteTex(Path.Combine(mod, MaskSlotPathRel(mod))));
+        Assert.Equal(ShaderUpgradeWriter.Undone.Restored, ShaderUpgradeWriter.RevertOrForget(mod, Red, false, out _));
+        Assert.Equal(f2, Kit.Get(mod, Red));
+    }
+
+    private static string MaskSlotPathRel(string mod)
+        => HairPortPlan.FileFor(HairPortPlan.ReadOwners(mod)!.Single(o => o.Option == "Red"), MaskSlotPath(Kit.Get(mod, Red))!)!;
+
+    [Fact]
+    [Trait("Plan", "AC-dt-shader-upgrade-13")]
+    public void An_orphan_backup_never_stands_in_for_the_original()
+    {
+        using var kit = new Kit();
+        var mod = kit.Dress("D", Kit.FormA());
+        // A backup left by a write that failed before its record: not this file's original.
+        var orphan = CharacterShaderUpgrade.Upgrade(Kit.FormA())!;
+        Kit.Put(mod, "Proteus/shaderupgrade-backup/red/top.mtrl", orphan);
+        Assert.True(kit.Upgrade(mod, WornRed(mod)).ChangedAny);
+        Assert.Equal(Kit.FormA(), Kit.Get(mod, "Proteus/shaderupgrade-backup/red/top.mtrl"));
+        ShaderUpgradeWriter.RevertOrForget(mod, Red, false, out _);
+        Assert.Equal(Kit.FormA(), Kit.Get(mod, Red));
+    }
+
+    [Fact]
+    [Trait("Plan", "EDGE-dt-shader-upgrade-64")]
+    public void Masks_are_encoded_outside_the_write_lock()
+    {
+        using var kit = new Kit();
+        var mod = kit.Dress("B", Kit.FormB(), withSpec: true);
+        var plan = kit.Plan(WornRed(mod), _ => Spec(mod));
+        bool heldDuringEncode = true;
+        var outcome = ShaderUpgradeWriter.Apply(mod, plan.PerMod[0].Writes, () => true, (rgba, w, h, path, e) =>
+        {
+            heldDuringEncode = System.Threading.Monitor.IsEntered(MeshVolumeService.WriteLock)
+                            || System.Threading.Monitor.IsEntered(ModManifestLock.Gate);
+            return Kit.WriteTex(rgba, w, h, path, e);
+        }, TexEncoding.Uncompressed);
+        Assert.True(outcome.ChangedAny);
+        Assert.False(heldDuringEncode);
+        Assert.Empty(Directory.GetFiles(Path.Combine(mod, "Shader Upgrade"), "*.part"));
+    }
+
+    [Fact]
+    [Trait("Plan", "EDGE-dt-shader-upgrade-59")]
+    public void A_pending_entry_replanned_with_another_mask_takes_the_old_one_out()
+    {
+        using var kit = new Kit();
+        var mod = kit.Dress("B", Kit.FormB(), withSpec: true);
+        ShaderUpgradeWriter.AfterStep = s => { if (s == "redirects") throw new CrashSim(); };
+        try { kit.Upgrade(mod, WornRed(mod), _ => Spec(mod)); } catch (CrashSim) { }
+        finally { ShaderUpgradeWriter.AfterStep = null; }
+        var oldMask = ShaderUpgradeWriter.ReadRecord(mod)!.Files.Single().Mask!;
+        // Replanned with another strategy: another mask. The old mask's redirects and file go before the new ones land.
+        var plan = kit.Plan(WornRed(mod), _ => Spec(mod), MaskGloss.MidConstant);
+        Assert.Single(ShaderUpgradeWriter.Apply(mod, plan.PerMod[0].Writes, () => true, Kit.WriteTex, TexEncoding.Uncompressed).Written);
+        Assert.DoesNotContain(Redirects(mod), r => r.GamePath == oldMask.GamePath);
+        Assert.False(File.Exists(Path.Combine(mod, oldMask.Rel)));
+        ShaderUpgradeWriter.RevertOrForget(mod, Red, false, out _);
+        Assert.False(Directory.Exists(Path.Combine(mod, "Shader Upgrade")));
+    }
+
+    private sealed class CrashSim : Exception;
+
+    [Fact]
     [Trait("Plan", "EDGE-dt-shader-upgrade-19")]
     public void Material_write_failure_leaves_file_and_takes_out_its_mask()
     {
@@ -252,7 +332,7 @@ public class ShaderUpgradeWriterTests
         Assert.Equal(LeftReason.WriteFailed, Assert.Single(outcome.Left).Reason);
         Assert.Equal(Kit.FormB(), Kit.Get(mod, Red));
         Assert.Equal(redirectsBefore, Redirects(mod));
-        Assert.False(File.Exists(Path.Combine(mod, "Shader Upgrade")) && Directory.EnumerateFiles(Path.Combine(mod, "Shader Upgrade")).Any());
+        Assert.False(Directory.Exists(Path.Combine(mod, "Shader Upgrade")) && Directory.EnumerateFiles(Path.Combine(mod, "Shader Upgrade")).Any());
         Assert.Empty(ShaderUpgradeWriter.ReadRecord(mod)?.Files ?? []);
     }
 

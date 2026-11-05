@@ -581,8 +581,9 @@ you pack.
 
 To put your files back, a user wears the pieces and presses **"Undo for what I'm wearing"** (those pieces are then
 left alone until "Upgrade what I'm wearing now"). For a piece that can no longer be worn, copy each file from
-`Proteus/shaderupgrade-backup/` back over the mod's own and delete `Shader Upgrade/`, `Proteus/shaderupgrade.json` and
-the backup folder. An update you ship later is never overwritten by an old backup: Proteus keeps the new file, and
+`Proteus/shaderupgrade-backup/` back over the mod's own, delete `Shader Upgrade/`, `Proteus/shaderupgrade.json` and
+the backup folder, then remove the redirects that pointed into `Shader Upgrade/` (Penumbra's Advanced Editing >
+"Remove Missing Files" does it once the folder is gone). An update you ship later is never overwritten by an old backup: Proteus keeps the new file, and
 upgrades it again only if it is still old-shader.
 
 ### Distributing Your Mod

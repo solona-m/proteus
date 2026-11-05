@@ -48,7 +48,8 @@ public sealed class ShaderUpgradeWatcher : IDisposable
     private volatile MaskGloss gloss = MaskGloss.InverseSpecular;
 
     /// <summary>One upgraded material on what is worn.</summary>
-    public sealed record UpgradedEntry(string GamePath, string ModDir, string File, string Form);
+    public sealed record UpgradedEntry(string GamePath, string ModDir, string File, string Form,
+                                       string? MaskGamePath = null, string? MaskFile = null);
 
     public sealed record LeftEntry(string GamePath, string Source, string Reason);
 
@@ -306,7 +307,19 @@ public sealed class ShaderUpgradeWatcher : IDisposable
     {
         if (stopped) return;
         var worn = OnFramework(ReadWorn, "read");
-        if (worn == null || stopped) return;
+        // A button pressed mid-redraw (or before Penumbra is up) waits for the character rather than doing nothing.
+        for (int tries = 0; worn == null && kind != RunKind.Upgrade && tries < BlanksBeforeNone && !stopped; tries++)
+        {
+            Thread.Sleep(SignalFor(Signal.BlankRetry));
+            worn = OnFramework(ReadWorn, "read");
+        }
+        if (worn == null || stopped)
+        {
+            if (kind != RunKind.Upgrade)
+                current = current with { LastRun = new RunInfo(KindName(kind), 0, 0, 0, 0, 0, false, false, DateTime.UtcNow,
+                                                               Strings.Settings.GearShadersWaiting) };
+            return;
+        }
 
         var encoding = config.EnableCompression && textureLoader.CompressionAffordable() ? TexEncoding.Bc7
                                                                                          : TexEncoding.Uncompressed;
@@ -399,7 +412,7 @@ public sealed class ShaderUpgradeWatcher : IDisposable
         log.Information("[Proteus] shader upgrade: undo for what is worn — {0} restored, {1} kept as the author's update, "
                       + "{2} refused", restored, kept, refused);
         var (reloaded, redrew) = OnFramework(() => ReloadChanged([.. changed], RunKind.UndoWorn, worn.ModNames, null), "reload");
-        Publish(worn, inputs, [],
+        Publish(worn, inputs, Candidates(worn.Materials, inputs).Left,
                 new RunInfo(KindName(RunKind.UndoWorn), changed.Count, restored + kept, restored, kept, refused, reloaded,
                             redrew, DateTime.UtcNow, string.Join(" ", messages.Distinct())),
                 awaiting: false);
@@ -458,9 +471,10 @@ public sealed class ShaderUpgradeWatcher : IDisposable
             if (!HatCompatService.InMods(file, worn.ModsRoot, out var root, out var rel)) continue;
             rel = MeshVolumeService.Rel(rel);
             if (!ShaderUpgradeWriter.IsUpgraded(root, rel)) continue;
-            var form = ShaderUpgradeWriter.ReadRecord(root)?.Files
-                           .FirstOrDefault(f => string.Equals(f.Rel, rel, StringComparison.OrdinalIgnoreCase))?.Form ?? "index-mask";
-            upgraded.Add(new UpgradedEntry(w.GamePath, Path.GetFileName(root), rel, form));
+            var e = ShaderUpgradeWriter.ReadRecord(root)?.Files
+                        .FirstOrDefault(f => string.Equals(f.Rel, rel, StringComparison.OrdinalIgnoreCase));
+            upgraded.Add(new UpgradedEntry(w.GamePath, Path.GetFileName(root), rel, e?.Form ?? "index-mask",
+                                           e?.Mask?.GamePath, e?.Mask?.Rel));
         }
         current = new View(
             Waiting: "none", AwaitingRedraw: awaiting, MaskGloss: GlossName(gloss), Upgraded: upgraded,
