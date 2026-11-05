@@ -1199,6 +1199,65 @@ public sealed class SettingsStrings
         "Undo: {0} restored, {1} kept as the author's update, {2} refused.");
     public readonly string GearShadersBusy = ProteusLoc.Localize("Settings.GearShaders.Busy", "Working…");
 
+    // ── gear variants ───────────────────────────────────────────────────────────────────────────────
+    public readonly string SecGearVariants = ProteusLoc.Localize("Settings.Section.GearVariants", "Gear variants");
+    public readonly string GearVariantsAuto = ProteusLoc.Localize("Settings.GearVariants.Auto.Label",
+        "Point every variant of worn gear at its mod's material") + "###autoRepointVariants";
+    public readonly string GearVariantsAutoTip = ProteusLoc.Localize("Settings.GearVariants.Auto.Tip",
+        "A mod made for one variant of an item ships that variant's material folder only, so the item worn\n"
+      + "in another variant draws the game's material (or another outfit's, or none) on the mod's model. As you\n"
+      + "put such a piece on, Proteus copies the mod's material paths to the other variant folders, inside the\n"
+      + "mod's own options, like TexTools' \"Apply to All Variants\" for the material only. Those variants then show\n"
+      + "the mod's material wherever the mod wins; parts, VFX and sound stay their own. Turning this off stops\n"
+      + "further changes; it does not undo them. \"Undo for what I'm wearing\" takes them out.");
+    public readonly string GearVariantsStatusFmt = ProteusLoc.Localize("Settings.GearVariants.Status.Fmt",
+        "{0} piece(s) repointed · {1} left");
+    public readonly string GearVariantsRepointedTipFmt = ProteusLoc.Localize("Settings.GearVariants.Repointed.Tip.Fmt",
+        "Repointed:\n{0}");
+    public readonly string GearVariantsLeftTipFmt = ProteusLoc.Localize("Settings.GearVariants.Left.Tip.Fmt",
+        "Left as they are:\n{0}");
+    public readonly string GearVariantsNextRedraw = ProteusLoc.Localize("Settings.GearVariants.NextRedraw",
+        "Takes effect at the next redraw (Auto redraw is off).");
+    public readonly string GearVariantsWaiting = ProteusLoc.Localize("Settings.GearVariants.Waiting", "Waiting for Penumbra.");
+    public readonly string GearVariantsReasonSeveralVariants = ProteusLoc.Localize(
+        "Settings.GearVariants.Reason.SeveralVariants", "the mod ships several variants of its own");
+    public readonly string GearVariantsReasonModImc = ProteusLoc.Localize("Settings.GearVariants.Reason.ModImc",
+        "the mod sets this variant itself");
+    public readonly string GearVariantsReasonOtherModMaterial = ProteusLoc.Localize(
+        "Settings.GearVariants.Reason.OtherModMaterial", "its material comes from another mod");
+    public readonly string GearVariantsReasonNoImc = ProteusLoc.Localize("Settings.GearVariants.Reason.NoImc",
+        "the game's variant table could not be read");
+    public readonly string GearVariantsReasonMetaUnreadable = ProteusLoc.Localize(
+        "Settings.GearVariants.Reason.MetaUnreadable", "Penumbra's metadata could not be read");
+    public readonly string GearVariantsReasonOutranked = ProteusLoc.Localize("Settings.GearVariants.Reason.OtherModWins",
+        "another mod's metadata outranks it");
+    public readonly string GearVariantsReasonLegacyMod = ProteusLoc.Localize("Settings.GearVariants.Reason.LegacyMod",
+        "an old-format mod folder Proteus does not write to");
+    public readonly string GearVariantsReasonProteusPack = ProteusLoc.Localize("Settings.GearVariants.Reason.ProteusPack",
+        "a Proteus pack (Proteus draws it itself)");
+    public readonly string GearVariantsReasonDeclined = ProteusLoc.Localize("Settings.GearVariants.Reason.Declined",
+        "undone by you");
+    public readonly string GearVariantsReasonWriteFailed = ProteusLoc.Localize("Settings.GearVariants.Reason.WriteFailed",
+        "the mod could not be written");
+    public readonly string GearVariantsRepointNow = ProteusLoc.Localize("Settings.GearVariants.RepointNow",
+        "Repoint what I'm wearing now") + "###variantRepointNow";
+    public readonly string GearVariantsRepointNowTip = ProteusLoc.Localize("Settings.GearVariants.RepointNow.Tip",
+        "Point the variants of what you are wearing now at their mods' materials,\n"
+      + "including pieces you undid before.");
+    public readonly string GearVariantsUndoWorn = ProteusLoc.Localize("Settings.GearVariants.UndoWorn",
+        "Undo for what I'm wearing") + "###variantUndoWorn";
+    public readonly string GearVariantsUndoWornTip = ProteusLoc.Localize("Settings.GearVariants.UndoWorn.Tip",
+        "Take Proteus's variant entries out of the mods of the pieces you are wearing, and leave them alone\n"
+      + "until you use \"Repoint what I'm wearing now\". An entry changed by someone since is kept.");
+    public readonly string GearVariantsResultFmt = ProteusLoc.Localize("Settings.GearVariants.Result.Fmt",
+        "Undo: {0} removed, {1} kept as changed since, {2} refused.");
+    public readonly string GearVariantsNothingRecorded = ProteusLoc.Localize("Settings.GearVariants.NothingRecorded",
+        "Nothing recorded for what you are wearing.");
+    public readonly string GearVariantsBusy = ProteusLoc.Localize("Settings.GearVariants.Busy", "Working…");
+    public readonly string GearVariantsChatFmt = ProteusLoc.Localize("Chat.VariantRepoint.Fmt",
+        "[Proteus] Copied the material paths of \"{1}\" to {0} more variant folder(s), so those variants show the mod's "
+      + "own material wherever it wins. Undo under /proteus > Settings > Gear variants.");
+
     public readonly string SecHosting     = ProteusLoc.Localize("Settings.Section.Hosting", "Hosting");
 
     public readonly string SecLightResponse = ProteusLoc.Localize("Settings.Section.LightResponse", "Light-sensitive glow");

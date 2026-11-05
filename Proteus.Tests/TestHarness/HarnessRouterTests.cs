@@ -194,8 +194,8 @@ public class HarnessRouterTests : IDisposable
     public void Routes_AreTheContract()
     {
         Assert.Equal(["/health", "/state", "/log", "/screenshot", "/hair-port", "/actions/refit", "/actions/restore",
-                      "/actions/shader-upgrade", "/actions/hair-port", "/actions/equip", "/actions/mod-settings",
-                      "/actions/put-back", "/jobs/{id}"],
+                      "/actions/shader-upgrade", "/actions/variant-repoint", "/actions/hair-port", "/actions/equip",
+                      "/actions/mod-settings", "/actions/put-back", "/jobs/{id}"],
                      HarnessRouter.Routes.Select(r => r.Path));
     }
 
@@ -255,6 +255,75 @@ public class HarnessRouterTests : IDisposable
         var (getStatus, _) = await f.Get("/actions/shader-upgrade");
         Assert.Equal(405, getStatus);
         Assert.Contains(f.Game.Order, o => o == "StartShaderUpgradeRun@framework");
+    }
+
+    [Fact]
+    [Trait("Plan", "AC-imc-all-variants-10")]
+    public async Task Variant_repoint_state_block_shape()
+    {
+        f.Game.VariantRepointView = new Proteus.Services.VariantRepointWatcher.View(
+            Enabled: true, Waiting: "none", AwaitingRedraw: true,
+            Worn: [new("This Old Thing", "e6255 Body", 2, 1, "v0001"), new(null, "a0053 Earrings", 1, null, null)],
+            Repointed: [new("This Old Thing", "e6255 Body", 1, [2], [0, 2], [3])],
+            Left: [new("Skirt", "e6256 Legs", "several-variants")],
+            LastRun: new("repoint", 1, 2, 0, 0, 0, true, true, DateTime.UtcNow));
+        var (status, b) = await f.Get("/state");
+        Assert.Equal(200, status);
+        var vr = b.GetProperty("variantRepoint");
+        Assert.True(vr.GetProperty("enabled").GetBoolean());
+        Assert.True(vr.GetProperty("awaitingRedraw").GetBoolean());
+        Assert.Equal("none", vr.GetProperty("waiting").GetString());
+        var worn = vr.GetProperty("worn")[0];
+        Assert.Equal("This Old Thing", worn.GetProperty("modDir").GetString());
+        Assert.Equal("e6255 Body", worn.GetProperty("item").GetString());
+        Assert.Equal(2, worn.GetProperty("variant").GetInt32());
+        Assert.Equal(1, worn.GetProperty("effectiveMaterialId").GetInt32());
+        Assert.Equal("v0001", worn.GetProperty("loadedFolder").GetString());
+        Assert.Equal(JsonValueKind.Null, vr.GetProperty("worn")[1].GetProperty("modDir").ValueKind);
+        var rp = vr.GetProperty("repointed")[0];
+        Assert.Equal(1, rp.GetProperty("materialId").GetInt32());
+        Assert.Equal(2, rp.GetProperty("variants").GetArrayLength());
+        Assert.Equal(2, rp.GetProperty("folders")[0].GetInt32());
+        Assert.Equal(3, rp.GetProperty("legacyImcVariants")[0].GetInt32());
+        Assert.Equal("several-variants", vr.GetProperty("left")[0].GetProperty("reason").GetString());
+        var run = vr.GetProperty("lastRun");
+        Assert.Equal("repoint", run.GetProperty("kind").GetString());
+        Assert.Equal(2, run.GetProperty("foldersWritten").GetInt32());
+        Assert.False(run.GetProperty("nothingRecorded").GetBoolean());
+    }
+
+    [Fact]
+    [Trait("Plan", "AC-imc-all-variants-10")]
+    public async Task Variant_repoint_action_validates_and_starts()
+    {
+        var (status, b) = await f.Post("/actions/variant-repoint", """{"enabled":true}""");
+        Assert.Equal(200, status);
+        Assert.True(b.GetProperty("enabled").GetBoolean());
+        Assert.True(f.Game.VariantRepointEnabled);
+
+        (status, _) = await f.Post("/actions/variant-repoint", """{"undoWorn":true,"decline":false}""");
+        Assert.Equal(202, status);
+        (status, _) = await f.Post("/actions/variant-repoint", """{"repointWornNow":true}""");
+        Assert.Equal(202, status);
+        Assert.Equal([(true, false), (false, true)], f.Game.VariantRepointRuns);
+
+        f.Game.VariantRepointBusy = true;
+        Assert.Equal((409, "busy"), await Error("/actions/variant-repoint", """{"undoWorn":true}"""));
+        f.Game.VariantRepointBusy = false;
+        f.Game.VariantRepointOthersBusy = true;   // the shader upgrade or auto refit
+        Assert.Equal((409, "busy"), await Error("/actions/variant-repoint", """{"repointWornNow":true}"""));
+        f.Game.VariantRepointOthersBusy = false;
+
+        Assert.Equal((400, "invalid-field"), await Error("/actions/variant-repoint", "{}"));
+        Assert.Equal((400, "invalid-field"), await Error("/actions/variant-repoint", """{"undo":"all"}"""));
+        Assert.Equal((400, "invalid-field"), await Error("/actions/variant-repoint", """{"decline":false}"""));
+        Assert.Equal((400, "invalid-field"), await Error("/actions/variant-repoint", """{"undoWorn":true,"repointWornNow":true}"""));
+        Assert.Equal((400, "invalid-field"), await Error("/actions/variant-repoint", """{"enabled":"yes"}"""));
+        Assert.Equal((400, "invalid-field"), await Error("/actions/variant-repoint", """{"undoWorn":false}"""));
+        Assert.Equal((400, "bad-json"), await Error("/actions/variant-repoint", "{not json"));
+        var (getStatus, _) = await f.Get("/actions/variant-repoint");
+        Assert.Equal(405, getStatus);
+        Assert.Contains(f.Game.Order, o => o == "StartVariantRepointRun@framework");
     }
 
     [Fact]

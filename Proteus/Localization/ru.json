@@ -5966,5 +5966,109 @@
   "MeshVolume.Feature.ShaderUpgrade": {
     "message": "обновление шейдеров снаряжения",
     "description": ""
+  },
+  "Settings.Section.GearVariants": {
+    "message": "Варианты снаряжения",
+    "description": ""
+  },
+  "Settings.GearVariants.Auto.Label": {
+    "message": "Направлять все варианты надетого снаряжения на материал его мода",
+    "description": ""
+  },
+  "Settings.GearVariants.Auto.Tip": {
+    "message": "Мод, сделанный для одного варианта предмета, содержит только папку материалов этого варианта, поэтому предмет,\nнадетый в другом варианте, рисует на модели мода материал игры (или другого наряда, или никакого). Когда вы\nнадеваете такую вещь, Proteus копирует пути материалов мода в другие папки вариантов, внутри собственных\nопций мода, как «Apply to All Variants» в TexTools, но только для материала. Эти варианты затем показывают\nматериал мода везде, где мод побеждает; части, VFX и звук остаются своими. Выключение останавливает дальнейшие\nизменения, но не отменяет их. «Отменить для надетого» убирает их.",
+    "description": ""
+  },
+  "Settings.GearVariants.Status.Fmt": {
+    "message": "{0} вещ. перенаправлено · {1} оставлено",
+    "description": ""
+  },
+  "Settings.GearVariants.Repointed.Tip.Fmt": {
+    "message": "Перенаправлено:\n{0}",
+    "description": ""
+  },
+  "Settings.GearVariants.Left.Tip.Fmt": {
+    "message": "Оставлено как есть:\n{0}",
+    "description": ""
+  },
+  "Settings.GearVariants.NextRedraw": {
+    "message": "Вступит в силу при следующей перерисовке (автоперерисовка выключена).",
+    "description": ""
+  },
+  "Settings.GearVariants.Waiting": {
+    "message": "Ожидание Penumbra.",
+    "description": ""
+  },
+  "Settings.GearVariants.Reason.SeveralVariants": {
+    "message": "мод сам содержит несколько вариантов",
+    "description": ""
+  },
+  "Settings.GearVariants.Reason.ModImc": {
+    "message": "мод сам задаёт этот вариант",
+    "description": ""
+  },
+  "Settings.GearVariants.Reason.OtherModMaterial": {
+    "message": "его материал берётся из другого мода",
+    "description": ""
+  },
+  "Settings.GearVariants.Reason.NoImc": {
+    "message": "не удалось прочитать таблицу вариантов игры",
+    "description": ""
+  },
+  "Settings.GearVariants.Reason.MetaUnreadable": {
+    "message": "не удалось прочитать метаданные Penumbra",
+    "description": ""
+  },
+  "Settings.GearVariants.Reason.OtherModWins": {
+    "message": "метаданные другого мода имеют приоритет",
+    "description": ""
+  },
+  "Settings.GearVariants.Reason.LegacyMod": {
+    "message": "папка мода старого формата, в которую Proteus не пишет",
+    "description": ""
+  },
+  "Settings.GearVariants.Reason.ProteusPack": {
+    "message": "пакет Proteus (Proteus рисует его сам)",
+    "description": ""
+  },
+  "Settings.GearVariants.Reason.Declined": {
+    "message": "отменено вами",
+    "description": ""
+  },
+  "Settings.GearVariants.Reason.WriteFailed": {
+    "message": "не удалось записать мод",
+    "description": ""
+  },
+  "Settings.GearVariants.RepointNow": {
+    "message": "Перенаправить надетое сейчас",
+    "description": ""
+  },
+  "Settings.GearVariants.RepointNow.Tip": {
+    "message": "Направить варианты того, что на вас сейчас, на материалы их модов,\nвключая вещи, которые вы ранее отменили.",
+    "description": ""
+  },
+  "Settings.GearVariants.UndoWorn": {
+    "message": "Отменить для надетого",
+    "description": ""
+  },
+  "Settings.GearVariants.UndoWorn.Tip": {
+    "message": "Убрать записи вариантов Proteus из модов надетых вещей и не трогать их,\nпока вы не нажмёте «Перенаправить надетое сейчас». Запись, изменённая кем-то с тех пор, сохраняется.",
+    "description": ""
+  },
+  "Settings.GearVariants.Result.Fmt": {
+    "message": "Отмена: {0} убрано, {1} сохранено как изменённые с тех пор, {2} отклонено.",
+    "description": ""
+  },
+  "Settings.GearVariants.NothingRecorded": {
+    "message": "Для надетого ничего не записано.",
+    "description": ""
+  },
+  "Settings.GearVariants.Busy": {
+    "message": "Выполняется…",
+    "description": ""
+  },
+  "Chat.VariantRepoint.Fmt": {
+    "message": "[Proteus] Пути материалов «{1}» скопированы ещё в {0} папк(и) вариантов, чтобы эти варианты показывали собственный материал мода везде, где он побеждает. Отменить: /proteus > Настройки > Варианты снаряжения.",
+    "description": ""
   }
 }

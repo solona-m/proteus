@@ -5966,5 +5966,109 @@
   "MeshVolume.Feature.ShaderUpgrade": {
     "message": "la mise à jour des shaders d'équipement",
     "description": ""
+  },
+  "Settings.Section.GearVariants": {
+    "message": "Variantes d'équipement",
+    "description": ""
+  },
+  "Settings.GearVariants.Auto.Label": {
+    "message": "Pointer chaque variante de l'équipement porté vers le matériau de son mod",
+    "description": ""
+  },
+  "Settings.GearVariants.Auto.Tip": {
+    "message": "Un mod fait pour une variante d'un objet ne fournit que le dossier de matériaux de cette variante : l'objet\nporté dans une autre variante affiche alors le matériau du jeu (ou celui d'une autre tenue, ou aucun) sur le modèle du mod. Quand vous\nenfilez une telle pièce, Proteus copie les chemins de matériau du mod vers les autres dossiers de variante, dans les\noptions du mod lui-même, comme « Apply to All Variants » de TexTools, pour le matériau seulement. Ces variantes affichent alors\nle matériau du mod partout où le mod l'emporte ; les pièces, les VFX et le son restent les leurs. Désactiver ceci arrête\nles changements suivants sans les annuler. « Annuler pour ce que je porte » les retire.",
+    "description": ""
+  },
+  "Settings.GearVariants.Status.Fmt": {
+    "message": "{0} pièce(s) repointée(s) · {1} laissée(s)",
+    "description": ""
+  },
+  "Settings.GearVariants.Repointed.Tip.Fmt": {
+    "message": "Repointées :\n{0}",
+    "description": ""
+  },
+  "Settings.GearVariants.Left.Tip.Fmt": {
+    "message": "Laissées telles quelles :\n{0}",
+    "description": ""
+  },
+  "Settings.GearVariants.NextRedraw": {
+    "message": "Prend effet au prochain redessin (le redessin automatique est désactivé).",
+    "description": ""
+  },
+  "Settings.GearVariants.Waiting": {
+    "message": "En attente de Penumbra.",
+    "description": ""
+  },
+  "Settings.GearVariants.Reason.SeveralVariants": {
+    "message": "le mod fournit lui-même plusieurs variantes",
+    "description": ""
+  },
+  "Settings.GearVariants.Reason.ModImc": {
+    "message": "le mod définit lui-même cette variante",
+    "description": ""
+  },
+  "Settings.GearVariants.Reason.OtherModMaterial": {
+    "message": "son matériau vient d'un autre mod",
+    "description": ""
+  },
+  "Settings.GearVariants.Reason.NoImc": {
+    "message": "la table des variantes du jeu n'a pas pu être lue",
+    "description": ""
+  },
+  "Settings.GearVariants.Reason.MetaUnreadable": {
+    "message": "les métadonnées de Penumbra n'ont pas pu être lues",
+    "description": ""
+  },
+  "Settings.GearVariants.Reason.OtherModWins": {
+    "message": "les métadonnées d'un autre mod ont la priorité",
+    "description": ""
+  },
+  "Settings.GearVariants.Reason.LegacyMod": {
+    "message": "un dossier de mod à l'ancien format où Proteus n'écrit pas",
+    "description": ""
+  },
+  "Settings.GearVariants.Reason.ProteusPack": {
+    "message": "un pack Proteus (Proteus le dessine lui-même)",
+    "description": ""
+  },
+  "Settings.GearVariants.Reason.Declined": {
+    "message": "annulé par vous",
+    "description": ""
+  },
+  "Settings.GearVariants.Reason.WriteFailed": {
+    "message": "le mod n'a pas pu être écrit",
+    "description": ""
+  },
+  "Settings.GearVariants.RepointNow": {
+    "message": "Repointer ce que je porte",
+    "description": ""
+  },
+  "Settings.GearVariants.RepointNow.Tip": {
+    "message": "Pointer les variantes de ce que vous portez vers les matériaux de leurs mods,\ny compris les pièces annulées auparavant.",
+    "description": ""
+  },
+  "Settings.GearVariants.UndoWorn": {
+    "message": "Annuler pour ce que je porte",
+    "description": ""
+  },
+  "Settings.GearVariants.UndoWorn.Tip": {
+    "message": "Retirer les entrées de variantes de Proteus des mods des pièces portées, et les laisser tranquilles\njusqu'à « Repointer ce que je porte ». Une entrée modifiée par quelqu'un depuis est conservée.",
+    "description": ""
+  },
+  "Settings.GearVariants.Result.Fmt": {
+    "message": "Annulation : {0} retirées, {1} conservées car modifiées depuis, {2} refusées.",
+    "description": ""
+  },
+  "Settings.GearVariants.NothingRecorded": {
+    "message": "Rien n'est enregistré pour ce que vous portez.",
+    "description": ""
+  },
+  "Settings.GearVariants.Busy": {
+    "message": "En cours…",
+    "description": ""
+  },
+  "Chat.VariantRepoint.Fmt": {
+    "message": "[Proteus] Chemins de matériau de « {1} » copiés vers {0} dossier(s) de variante de plus, pour que ces variantes affichent le matériau du mod partout où il l'emporte. Annulez sous /proteus > Paramètres > Variantes d'équipement.",
+    "description": ""
   }
 }

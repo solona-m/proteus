@@ -179,6 +179,7 @@ public class StatusWindow : Window
         HairPortWatcher hairPortWatcher,
         AutoRefitWatcher autoRefitWatcher,
         ShaderUpgradeWatcher shaderUpgradeWatcher,
+        VariantRepointWatcher variantRepointWatcher,
         ModMoveService modMoves,
         LogExportService logExport)
         // "###ProteusStatus" is the stable window id; the title shows the assembly version, not the dev BuildNumber.
@@ -214,7 +215,7 @@ public class StatusWindow : Window
         settingsTab = new SettingsTab(config, compositor, discovery, designBindings, hatCompat,
                                       new HairPortSettingsPanel(hairPortWatcher, config),
                                       new AutoRefitPanel(autoRefitWatcher, penumbra, config), shaderUpgradeWatcher,
-                                      logExport);
+                                      variantRepointWatcher, logExport);
 
         SizeConstraints = AutoFitConstraints;
 

@@ -63,12 +63,13 @@ four requests were open at once: retry when one finishes; it is never a busy run
 | Route | What it does |
 |---|---|
 | `GET /health` | `{ok, harness, session, build, buildStamp, penumbra, loggedIn, pluginEnabled}` |
-| `GET /state` | The live character (race, tribe, gender, body type, drawn race code), the player collection's id, every drawn model (`slot`, `loaded`, `gamePath`, `resolved`, `modDir`; `slot:-1` = Penumbra resolves it but it is not drawn), the compositor (`phase`: `boot-hold`/`compositing`/`pending`/`idle`, last result, last refresh), `redraws` (`count`, `lastAtUtc`), `autoRefit` (`busy`, `pending`), `shaderUpgrade` (below), the current `job`, `gear` (the ten slots in order: `slot`, `item`, `dyes`, and `set`/`variant` only for a Glamourer custom id; nulls when Glamourer cannot be read) and `harnessChanges` (`stopping`, and this session's recorded equips `gear[]` with `original`, `applied`, `requested`, `verified`, and holds `holds[]` with `before`). No names. |
+| `GET /state` | The live character (race, tribe, gender, body type, drawn race code), the player collection's id, every drawn model (`slot`, `loaded`, `gamePath`, `resolved`, `modDir`; `slot:-1` = Penumbra resolves it but it is not drawn), the compositor (`phase`: `boot-hold`/`compositing`/`pending`/`idle`, last result, last refresh), `redraws` (`count`, `lastAtUtc`), `autoRefit` (`busy`, `pending`), `shaderUpgrade` and `variantRepoint` (below), the current `job`, `gear` (the ten slots in order: `slot`, `item`, `dyes`, and `set`/`variant` only for a Glamourer custom id; nulls when Glamourer cannot be read) and `harnessChanges` (`stopping`, and this session's recorded equips `gear[]` with `original`, `applied`, `requested`, `verified`, and holds `holds[]` with `before`). No names. |
 | `GET /log?since=<n>&max=<m>` | Plugin log lines after cursor `n` (`max` default 200, cap 2000): `{session, next, oldest, dropped, lines:[{seq,text}]}`. Pass `next` back as `since`. `dropped:true` = lines were lost to the ring. |
 | `GET /screenshot?ui=true\|false` | The game screen as PNG (`ui=false` = before Dalamud's UI). 429 while another is taken; 503 `capture-timeout` when the game is minimised or not rendering. |
 | `POST /actions/refit` | `{"mod":"<Penumbra folder name>","bodies":["rue","tbse@women"],"remake":false}` → 202 `{job, modDir, state}`. Runs the Studio's "Make every size" with the Studio's current settings, after backing the mod up; then reloads the mod and redraws. |
 | `POST /actions/restore` | `{"job":"<refit job id>"}`, or `{"mod":"<folder>"}`, or `{"mod":"<folder>","backup":"<backupId>"}` → 202. |
 | `POST /actions/shader-upgrade` | `{"enabled":true\|false}` and/or `{"maskGloss":"inverse-specular"\|"low"\|"mid"}` → 200 `{enabled, maskGloss}`; `{"undoWorn":true}` (optionally `"decline":false`) or `{"upgradeWornNow":true}` → 202 `{started}`. Switches the gear shader upgrade as its Settings checkbox does; `maskGloss` picks how the diffuse form's derived mask fills its roughness channel, for this session only (never saved) and only for files written after it; `undoWorn` / `upgradeWornNow` run the two Settings buttons. 409 `busy` while a run or auto refit is working; 400 `invalid-field` for an unknown field or value, a wrong type, no field, `decline` without `undoWorn`, or both runs at once. |
+| `POST /actions/variant-repoint` | `{"enabled":true\|false}` → 200 `{enabled}`; `{"undoWorn":true}` (optionally `"decline":false`) or `{"repointWornNow":true}` → 202 `{started}`. Switches "Gear variants" as its Settings checkbox does; `undoWorn` / `repointWornNow` run the two Settings buttons. 409 `busy` while a run, the shader upgrade or auto refit is working; 400 `invalid-field` for an unknown field, a wrong type, no field, `decline` without `undoWorn`, or both runs at once. |
 | `GET /hair-port?mod=<folder>&hair=<hair model game path>` | Read-only: what the Studio's "Port to all races" lists for that hairstyle — `{modDir, hair, source, sourceRace, id, otherSexNote, rows:[{race:"c0101", state: open\|covered\|ported\|stale\|no-style\|other-sex-authored, otherSex, ownVersion, ownSkeleton, tickable, defaultTicked, declined, stateText, warning}], ports:[{race, targetGamePath, sourceGamePath, group, option, file, auto, est, skeletonFrom, portVersion}]}`. `hair` may use either slash and any case; a port of ours stands for the author's hairstyle it was made from (`source`). `warning` is set only on `ported`/`stale` rows. 404 `hair-not-in-mod`, 409 `legacy-mod`, 409 `mod-unreadable`. |
 | `POST /actions/hair-port` | `{"mod":"<folder>","hair":"<hair model game path>","races":["c0101","c0401"]}` → 202 `{job, modDir, state}`: the Studio's **Port** button for those races (leave `races` out for the Studio's default ticks), after a backup; then reloads the mod and redraws. `{"mod","hair","remove":true}` is the **Remove ports** button. Only races the Studio lets you tick are ported; the rest come back in `result.skippedRaces` (`not-listed`, `covered`, `ported`, `no-style`, `other-sex-authored`, `own-version`, `own-skeleton`). Job kinds `hair-port` / `hair-remove`; `result` = `{action, summary: ported\|nothing-to-port\|nothing-ported\|removed\|nothing-to-remove, resultLine, source, asked, skippedRaces, ported:[{race, group, option, est, skeletonFrom}], stripped, refused:[{race, reason}], warnings, current, saved}` (remove: `removed, message, remaining`). No backup is taken when nothing would be written. 400 `invalid-field` for a bad `hair`, `races` that are not playable `cNNNN` codes, `remove` other than `true`, or both; 409 `hair-port-busy` (below). |
 | `POST /actions/equip` | `{"slot":"Body","item":12345}` or `{"slot":"Body","set":317,"variant":2}` → 200 `{slot, sent, item, set, variant, dyes, previous, original}` (`readBack:false` when the worn item could not be read back). Equips through Glamourer for this session only (no lock, no design). Slots: Head, Body, Hands, Legs, Feet, Ears, Neck, Wrists, RFinger, LFinger (any case). `set`/`variant` equip that model even when no item uses it. 400 `invalid-field` / `item-invalid`; 409 `busy`, `auto-refit-busy`, `not-logged-in`, `carrier-slot`, `glamourer-refused`; 503 `glamourer-unavailable`, `harness-stopping`. |
@@ -203,6 +204,43 @@ curl -s -X POST -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/
   remains. This undo deletes the gear shader upgrade's OWN backups as it restores them: that is the feature's undo, not
   the harness's refit backups, which ADR 0002 says the harness never deletes. `upgraded[].mask` names the Form B mask
   (`{gamePath, file}`).
+- **Gear variants — it WRITES INTO THE WORN MODS' MANIFESTS.** `/state` `variantRepoint` is
+  `{enabled, busy, waiting: none|penumbra, awaitingRedraw,
+  worn:[{modDir|null, item: "e6255 Body", variant, effectiveMaterialId, loadedFolder: "v0001"|null}],
+  repointed:[{modDir, item, materialId, folders:[int], variants:[int], legacyImcVariants:[int]}],
+  left:[{modDir, item, reason: several-variants|mod-imc|other-mod-material|no-imc|meta-unreadable|outranked|legacy-mod|proteus-pack|declined|write-failed}],
+  lastRun:{kind: repoint|repoint-now|undo-worn, modsChanged, foldersWritten, removed, kept, refused, reloaded, redrawRequested, nothingRecorded, atUtc}}`.
+  It writes NO Imc entries: it copies the mod's own `…/v{N}/<name>` material redirects to `…/v{M}/<name>` (same file)
+  inside the same options and containers, appended after their existing keys. `legacyImcVariants` lists Imc entries an
+  older build (1428) wrote; they are still undone.
+  `loadedFolder` is the material folder the game actually loaded for the piece (from the resource map), the real-game
+  cross-check of `effectiveMaterialId`. **It is ON by default**, so it may already have written into a worn mod before
+  you start: to take a "before" reading, first POST `{"enabled":false,"undoWorn":true,"decline":false}` while wearing
+  the piece, check `repointed` is empty and wait for a redraw. After switching it on or equipping, wait for
+  `variantRepoint.busy == false` and a redraw before you assert. **Clean up everything you caused:** copy the mod's
+  `meta.json` and hash its other files first; afterwards, while wearing each repointed piece, POST
+  `{"enabled":false,"undoWorn":true,"decline":false}`, check the manifest is as before (every container's `Files`,
+  `DefaultData.Manipulations`) and no `Proteus/variantrepoint.json` remains (unless a case repointed a copy by hand: undo keeps such released keys recorded), then switch it back on (`{"enabled":true}`, the user's default) unless the user
+  had it off.
+  **Case A (a game-served variant, e.g. Satin - Sleepwear's e0050 Body, which ships only `v0003`, worn as the
+  Coliseum Shawl, variant 1):** take the "before" reading as above (`loadedFolder` `v0001`, the game's material on
+  the mod's model), then switch it on and check `repointed` lists folder 1, each container holding
+  `.../v0003/mt_c0201e0050_top_a.mtrl` gained `.../v0001/...` -> the same file appended after its keys, no Imc
+  manipulation was added, and the v0001 material now resolves into the mod.
+  **Case B (custom-named material shipped only under `v0001`, e.g. Elegy - Clara Lingerie's e0051 `_top_b`, worn as the
+  Striped Summer Top, variant 2):** take the "before" reading as above — wear the piece and record `loadedFolder` and a
+  screenshot with the feature off and nothing repointed. If `loadedFolder` is already `v0001` (the game fell back for
+  the missing material), STOP and report it as a finding: "wrong" must narrow to "a vanilla file exists under the worn
+  folder" and EDGE-imc-all-variants-33 flips. Otherwise switch it on and check `repointed` lists the worn folder in
+  `folders`, the worn `v{M}` material now resolves into the mod (`loadedFolder` stays `v{M}`, its file the mod's), and the
+  piece is drawn.
+  **Case C (a competing model replacement, EDGE-imc-all-variants-41):** "moonfire lace - by solona" (e0317 Body, ships
+  only `v0001`) worn as variant 2 with Rose, Sweetheart Lingerie and Equinox enabled (each also replaces the e0317 model
+  and ships its own `v0002` material). With the "before" reading taken as above (`loadedFolder` `v0002`, Rose's
+  material on moonfire lace's model), switch it on: `left` no longer lists it as `other-mod-material`, `repointed`
+  names it with `folders` [2], every moonfire lace container holding `…/v0001/mt_c0201e0317_top_b.mtrl` gained
+  `…/v0002/…` → the same file, no Imc manipulation was added, and the v0002 material now resolves into moonfire lace
+  (`loadedFolder` stays `v0002`).
 - After a refit or restore, wait for the job to end, then for `/state`
   `autoRefit.busy == false` and `compositor.phase == "idle"` before you assert
   anything or take a screenshot.

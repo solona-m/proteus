@@ -132,6 +132,21 @@ internal interface IHarnessGame
     /// </summary>
     bool StartShaderUpgradeRun(bool undoWorn, bool decline);
 
+    /// <summary>"Gear variants" right now. Any thread.</summary>
+    VariantRepointWatcher.View VariantRepoint();
+
+    /// <summary>Switch "Gear variants" as its checkbox does. Returns the state after. Framework thread.</summary>
+    bool SetVariantRepoint(bool enabled);
+
+    /// <summary>Whether the shader upgrade or auto refit is working, so a "Gear variants" run would collide. Framework thread.</summary>
+    bool VariantRepointBlocked();
+
+    /// <summary>
+    /// Start "Undo for what I'm wearing" (<paramref name="undoWorn"/>, declining unless <paramref name="decline"/> is
+    /// false) or "Repoint what I'm wearing now". False when a run is already going. Framework thread.
+    /// </summary>
+    bool StartVariantRepointRun(bool undoWorn, bool decline);
+
     /// <summary>The automatic hair path and the Hair settings. Any thread.</summary>
     HairPortInfo HairPort();
 

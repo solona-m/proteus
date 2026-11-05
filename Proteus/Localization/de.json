@@ -5966,5 +5966,109 @@
   "MeshVolume.Feature.ShaderUpgrade": {
     "message": "die Ausrüstungs-Shader-Umstellung",
     "description": ""
+  },
+  "Settings.Section.GearVariants": {
+    "message": "Ausrüstungsvarianten",
+    "description": ""
+  },
+  "Settings.GearVariants.Auto.Label": {
+    "message": "Alle Varianten getragener Ausrüstung auf das Material ihres Mods zeigen lassen",
+    "description": ""
+  },
+  "Settings.GearVariants.Auto.Tip": {
+    "message": "Ein Mod für eine Variante eines Gegenstands liefert nur den Materialordner dieser Variante, daher zeichnet der\nin einer anderen Variante getragene Gegenstand das Material des Spiels (oder eines anderen Outfits, oder keins) auf das Modell des Mods.\nZiehst du so ein Teil an, kopiert Proteus die Materialpfade des Mods in die anderen Variantenordner, innerhalb der\neigenen Optionen des Mods, wie „Apply to All Variants“ in TexTools, nur für das Material. Diese Varianten zeigen dann\ndas Material des Mods, wo immer der Mod gewinnt; Teile, VFX und Klang bleiben ihre eigenen. Ausschalten stoppt\nweitere Änderungen, macht sie aber nicht rückgängig. „Für das Getragene rückgängig machen“ entfernt sie.",
+    "description": ""
+  },
+  "Settings.GearVariants.Status.Fmt": {
+    "message": "{0} Teil(e) umgeleitet · {1} belassen",
+    "description": ""
+  },
+  "Settings.GearVariants.Repointed.Tip.Fmt": {
+    "message": "Umgeleitet:\n{0}",
+    "description": ""
+  },
+  "Settings.GearVariants.Left.Tip.Fmt": {
+    "message": "Unverändert gelassen:\n{0}",
+    "description": ""
+  },
+  "Settings.GearVariants.NextRedraw": {
+    "message": "Wirkt beim nächsten Neuzeichnen (Automatisch neu zeichnen ist aus).",
+    "description": ""
+  },
+  "Settings.GearVariants.Waiting": {
+    "message": "Warte auf Penumbra.",
+    "description": ""
+  },
+  "Settings.GearVariants.Reason.SeveralVariants": {
+    "message": "der Mod liefert selbst mehrere Varianten",
+    "description": ""
+  },
+  "Settings.GearVariants.Reason.ModImc": {
+    "message": "der Mod legt diese Variante selbst fest",
+    "description": ""
+  },
+  "Settings.GearVariants.Reason.OtherModMaterial": {
+    "message": "sein Material kommt aus einem anderen Mod",
+    "description": ""
+  },
+  "Settings.GearVariants.Reason.NoImc": {
+    "message": "die Variantentabelle des Spiels konnte nicht gelesen werden",
+    "description": ""
+  },
+  "Settings.GearVariants.Reason.MetaUnreadable": {
+    "message": "Penumbras Metadaten konnten nicht gelesen werden",
+    "description": ""
+  },
+  "Settings.GearVariants.Reason.OtherModWins": {
+    "message": "die Metadaten eines anderen Mods haben Vorrang",
+    "description": ""
+  },
+  "Settings.GearVariants.Reason.LegacyMod": {
+    "message": "ein Mod-Ordner im alten Format, in den Proteus nicht schreibt",
+    "description": ""
+  },
+  "Settings.GearVariants.Reason.ProteusPack": {
+    "message": "ein Proteus-Paket (Proteus zeichnet es selbst)",
+    "description": ""
+  },
+  "Settings.GearVariants.Reason.Declined": {
+    "message": "von dir rückgängig gemacht",
+    "description": ""
+  },
+  "Settings.GearVariants.Reason.WriteFailed": {
+    "message": "der Mod konnte nicht geschrieben werden",
+    "description": ""
+  },
+  "Settings.GearVariants.RepointNow": {
+    "message": "Getragenes jetzt umleiten",
+    "description": ""
+  },
+  "Settings.GearVariants.RepointNow.Tip": {
+    "message": "Die Varianten dessen, was du gerade trägst, auf die Materialien ihrer Mods zeigen lassen,\nauch bei Teilen, die du vorher rückgängig gemacht hast.",
+    "description": ""
+  },
+  "Settings.GearVariants.UndoWorn": {
+    "message": "Für das Getragene rückgängig machen",
+    "description": ""
+  },
+  "Settings.GearVariants.UndoWorn.Tip": {
+    "message": "Proteus' Varianteneinträge aus den Mods der getragenen Teile entfernen und sie in Ruhe lassen,\nbis du „Getragenes jetzt umleiten“ nutzt. Ein seitdem von jemandem geänderter Eintrag bleibt.",
+    "description": ""
+  },
+  "Settings.GearVariants.Result.Fmt": {
+    "message": "Rückgängig: {0} entfernt, {1} als seitdem geändert behalten, {2} abgelehnt.",
+    "description": ""
+  },
+  "Settings.GearVariants.NothingRecorded": {
+    "message": "Für das, was du trägst, ist nichts verzeichnet.",
+    "description": ""
+  },
+  "Settings.GearVariants.Busy": {
+    "message": "Wird bearbeitet…",
+    "description": ""
+  },
+  "Chat.VariantRepoint.Fmt": {
+    "message": "[Proteus] Die Materialpfade von „{1}“ wurden in {0} weitere(n) Variantenordner kopiert, sodass diese Varianten das eigene Material des Mods zeigen, wo immer er gewinnt. Rückgängig unter /proteus > Einstellungen > Ausrüstungsvarianten.",
+    "description": ""
   }
 }

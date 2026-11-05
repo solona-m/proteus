@@ -586,6 +586,38 @@ the backup folder, then remove the redirects that pointed into `Shader Upgrade/`
 "Remove Missing Files" does it once the folder is gone). An update you ship later is never overwritten by an old backup: Proteus keeps the new file, and
 upgrades it again only if it is still old-shader.
 
+### Gear variants (what it changes in a user's copy of your mod)
+
+**Settings > Gear variants > "Point every variant of worn gear at its mod's material"** is **on by default** (users can
+turn it off). It is for a
+mod that ships one variant's material folder (say `material/v0001/`) for an item: worn in a variant whose IMC entry
+uses another folder, the game loads that folder's material onto your model — the game's own, or nothing for a
+material name the game does not have, or a competing outfit's material for that folder. When a user puts on such a
+piece, Proteus fixes **their installed copy** of your mod — like TexTools' metadata tab "Apply to All Variants", but
+for the material only:
+
+- Your material redirects are **copied** to the other variant folders the item's variants use: for each option (or
+  default data, or combining container) that redirects `…/material/v0001/<name>`, the same option gains
+  `…/material/v0002/<name>` (and so on) pointing at **the same file**. Every option keeps its own file, so a colour
+  choice still works on every variant.
+- **No IMC entry is written.** Each variant keeps its own visible parts, VFX and sound. Because the copies are plain
+  redirects inside your mod, Penumbra resolves them at your mod's priority — the same ordering that decides your model.
+  Where another outfit outranks yours, its model and material show; a copy can still serve a variant folder no higher
+  mod covers.
+- Nothing you set on purpose is overridden: a variant your own IMC data sends to another material folder is left
+  alone, a key you already wrote is never replaced, and a mod that ships several variant folders is left as it is. No
+  group is added, moved or reordered, and every other option and setting is left as it is.
+- What was written is recorded in `Proteus/variantrepoint.json`. If that file is lost, the copies look like your own
+  redirects and Proteus no longer touches them.
+
+All of it lives inside the mod folder, so it travels with a Penumbra export. **Because the setting is on by default,
+wearing your own source mods changes your working copy too** — turn it off while you work on a mod, or undo it before
+you pack.
+
+To take the copies out, a user wears the pieces and presses **"Undo for what I'm wearing"** (those pieces are then
+left alone until "Repoint what I'm wearing now"). A copy someone repointed since is theirs and kept. When you ship an
+update, Proteus notices that its copies are gone and the mod changed, and looks at the pieces afresh.
+
 ### Distributing Your Mod
 
 Pack your mod folder as a `.zip` and rename the extension to `.pmp`. Penumbra imports `.pmp` files directly. Include everything in the mod root:

@@ -41,6 +41,7 @@ internal sealed class GameHarnessAdapter : IHarnessGame, IDisposable
     private readonly CompositorService compositor;
     private readonly AutoRefitWatcher autoRefit;
     private readonly ShaderUpgradeWatcher shaderUpgrade;
+    private readonly VariantRepointWatcher variantRepoint;
     private readonly HairPortWatcher hairPort;
     private readonly IObjectTable objects;
     private readonly IClientState clientState;
@@ -61,7 +62,8 @@ internal sealed class GameHarnessAdapter : IHarnessGame, IDisposable
     public SessionNames? NameSink { get; set; }
 
     public GameHarnessAdapter(PenumbraBridge penumbra, GlamourerBridge glamourer, CompositorService compositor,
-                              AutoRefitWatcher autoRefit, ShaderUpgradeWatcher shaderUpgrade, HairPortWatcher hairPort,
+                              AutoRefitWatcher autoRefit, ShaderUpgradeWatcher shaderUpgrade,
+                              VariantRepointWatcher variantRepoint, HairPortWatcher hairPort,
                               IObjectTable objects, IClientState clientState, IFramework framework,
                               ITextureProvider textures, ITextureReadbackProvider readback, Configuration config,
                               UVRemapService uvRemap, Func<string, byte[]?> readGameFile, Action<string> onModChanged,
@@ -72,6 +74,7 @@ internal sealed class GameHarnessAdapter : IHarnessGame, IDisposable
         this.compositor = compositor;
         this.autoRefit = autoRefit;
         this.shaderUpgrade = shaderUpgrade;
+        this.variantRepoint = variantRepoint;
         this.hairPort = hairPort;
         this.objects = objects;
         this.clientState = clientState;
@@ -116,6 +119,19 @@ internal sealed class GameHarnessAdapter : IHarnessGame, IDisposable
 
     public bool StartShaderUpgradeRun(bool undoWorn, bool decline)
         => undoWorn ? shaderUpgrade.UndoWorn(decline) : shaderUpgrade.UpgradeWornNow();
+
+    public VariantRepointWatcher.View VariantRepoint() => variantRepoint.Current;
+
+    public bool SetVariantRepoint(bool enabled)
+    {
+        variantRepoint.SetEnabled(enabled);
+        return config.AutoRepointVariants;
+    }
+
+    public bool VariantRepointBlocked() => variantRepoint.OthersBusy();
+
+    public bool StartVariantRepointRun(bool undoWorn, bool decline)
+        => undoWorn ? variantRepoint.UndoWorn(decline) : variantRepoint.RepointWornNow();
 
     public HairPortInfo HairPort()
         => new(hairPort.Current, hairPort.Scan, hairPort.CheckOwed, config.AutoHairPort, config.EarlessMiqoteHair);

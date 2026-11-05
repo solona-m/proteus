@@ -244,6 +244,58 @@ internal static class ImcEntrySource
         return FromImc(readGameFile, $"chara/{folder}/{tag}/{tag}.imc", slotLabel, variant);
     }
 
+    /// <summary>The game path of an equipment ("e0666") or accessory ("a0053") set's <c>.imc</c>, or null.</summary>
+    public static string? ImcPathForSet(string setTag)
+    {
+        var kind = setTag.Length > 1 ? char.ToLowerInvariant(setTag[0]) : '\0';
+        var folder = kind == 'e' ? "equipment" : kind == 'a' ? "accessory" : null;
+        if (folder == null) return null;
+        var tag = setTag.ToLowerInvariant();
+        return $"chara/{folder}/{tag}/{tag}.imc";
+    }
+
+    /// <summary>
+    /// How many variants a five-slot gear set declares (the header's first <c>u16</c>), or null when its <c>.imc</c> is
+    /// missing, short, or not the five-slot layout (weapons and monsters).
+    /// </summary>
+    public static int? VariantCount(Func<string, byte[]?> readGameFile, string setTag)
+    {
+        if (ImcPathForSet(setTag) is not { } path) return null;
+        var bytes = readGameFile(path);
+        if (bytes == null || bytes.Length < 4 || BitConverter.ToUInt16(bytes, 2) != SetType) return null;
+        return BitConverter.ToUInt16(bytes, 0);
+    }
+
+    /// <summary>
+    /// One slot's entry for every variant of a five-slot gear set: index 0 is the default set (what the game uses for a
+    /// variant it does not declare), index <c>v</c> variant <c>v</c>. Null when the file is missing, short, truncated or
+    /// not the five-slot layout.
+    /// </summary>
+    public static ImcEntry[]? GameEntries(Func<string, byte[]?> readGameFile, string setTag, string slotLabel)
+    {
+        if (ImcPathForSet(setTag) is not { } path) return null;
+        var bytes = readGameFile(path);
+        if (bytes == null || bytes.Length < 4 || BitConverter.ToUInt16(bytes, 2) != SetType) return null;
+        int count = BitConverter.ToUInt16(bytes, 0);
+        int part = SlotIndexOf(slotLabel);
+        if (part < 0) return null;
+        var entries = new ImcEntry[count + 1];
+        for (int set = 0; set <= count; set++)
+        {
+            int at = 4 + (set * SetSlots + part) * EntrySize;
+            if (at + EntrySize > bytes.Length) return null;
+            entries[set] = EntryAt(bytes, at);
+        }
+        return entries;
+    }
+
+    private static ImcEntry EntryAt(byte[] bytes, int at)
+    {
+        ushort attrSound = BitConverter.ToUInt16(bytes, at + 2);
+        return new ImcEntry(bytes[at], bytes[at + 1], (ushort)(attrSound & 0x3FF), (byte)(attrSound >> 10),
+                            bytes[at + 4], bytes[at + 5]);
+    }
+
     private static ImcEntry? FromImc(Func<string, byte[]?> readGameFile, string path, string slotLabel, int variant)
     {
         var bytes = readGameFile(path);
