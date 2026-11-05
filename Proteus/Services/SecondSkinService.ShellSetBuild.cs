@@ -104,6 +104,16 @@ public sealed partial class SecondSkinService
         private byte[]?[] alphaByLayer = null!;
         private List<(string ModDir, int LayerIdx, byte[] Normal)> reliefContribs = null!;
         private byte[]? sharedToeCap;
+        /// <summary>The shared cap is uniform in its own file (built-in, or a flat own map): gated over the toes (#62).</summary>
+        private bool sharedToeCapUniform;
+        private readonly System.Collections.Concurrent.ConcurrentDictionary<string, Lazy<byte[]?>> toeRegions = new(StringComparer.Ordinal);
+
+        /// <summary>Where the toes are in <paramref name="dstType"/>'s UV, from this build's bodies of that UV (all when
+        /// null), once per build.</summary>
+        private byte[]? ToeRegionFor(string? dstType)
+            => toeRegions.GetOrAdd(dstType ?? "", _ => new Lazy<byte[]?>(() => SecondSkinWriter.ToeRegionMask(
+                   bodies.Where(b => dstType == null || string.Equals(b.Uv, dstType, StringComparison.OrdinalIgnoreCase))
+                         .Select(b => b.Bytes), ToeCapSize))).Value;
         /// <summary>Whether any authored toe cap loaded; without one no layer gets a cap (see <see cref="LayerToeCap"/>).</summary>
         private bool capsAvailable;
         private Dictionary<string, float> bridgeByMod = null!;
@@ -1223,6 +1233,7 @@ public sealed partial class SecondSkinService
             // The map only says a cap is WANTED: the authored cap's footprint decides the cut. Without an authored cap the
             // writer would generate one from the mask, which a whole-sheet mask must never reach, so then nothing is capped.
             sharedToeCap = null;
+            sharedToeCapUniform = false;
             capsAvailable = service.AuthoredCaps().Count > 0;
             if (!capsAvailable && ToeCaps is { Count: > 0 })
             {
@@ -1237,13 +1248,15 @@ public sealed partial class SecondSkinService
             {
                 // An own map is remapped with the OWNING mod's UV space; after that it is body-UV pixels anyone can use.
                 // The built-in cap is uniform, so it has no UV space and is never read or remapped.
+                bool ownUniform = false;
                 sharedToeCap = SharedCapMask(tMap, path =>
                 {
                     var tDesc = gearOverlays.FirstOrDefault(g =>
                         string.Equals(g.Entry.ModDirectory, tMod, StringComparison.OrdinalIgnoreCase)).Overlay?.Descriptor;
                     var tSrc = tDesc != null ? tDesc.SourceBodyType ?? InferOverlayBodyType(tDesc) : bodyType;
-                    return service.ReadToeCap(path, tSrc, bodyType);
+                    return service.ReadToeCap(path, tSrc, bodyType, out ownUniform);
                 });
+                sharedToeCapUniform = tMap.BuiltIn || ownUniform;
                 if (sharedToeCap != null)
                 {
                     service.log.Information("[Proteus] second skin: toe cap {0} from \"{1}\" applies to every shell over the toes",

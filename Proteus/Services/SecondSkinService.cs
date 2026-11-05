@@ -1386,8 +1386,15 @@ public sealed partial class SecondSkinService
     /// Load this shell's toe-cap map as a single-channel mask in the BODY's UV space (red channel). Null, and no cap,
     /// when the file won't load or the map is all black.
     /// </summary>
-    private byte[]? ReadToeCap(string path, string? srcType, string? dstType)
+    private byte[]? ReadToeCap(string path, string? srcType, string? dstType) => ReadToeCap(path, srcType, dstType, out _);
+
+    /// <param name="sourceUniform">The map is one value everywhere IN ITS OWN FILE (<see cref="IsUniformCap"/>) — judged
+    /// before the remap, which zeroes texels outside the islands of another UV layout (#62).</param>
+    private byte[]? ReadToeCap(string path, string? srcType, string? dstType, out bool sourceUniform)
     {
+        sourceUniform = false;
+        if (srcType != dstType && RemapPath(path, srcType, srcType, ToeCapSize, ToeCapSize) is { } source)
+            sourceUniform = IsUniformCap(RedOf(source));
         var rgba = RemapPath(path, srcType, dstType, ToeCapSize, ToeCapSize);
         if (rgba == null)
         {
@@ -1402,44 +1409,93 @@ public sealed partial class SecondSkinService
             mask[p] = rgba[p * 4];
             if (mask[p] != 0) any = true;
         }
+        if (srcType == dstType) sourceUniform = any && IsUniformCap(mask);
         return any ? mask : null;   // all black = untouched everywhere; keep the build byte-identical
     }
+
+    private static byte[] RedOf(byte[] rgba)
+    {
+        var red = new byte[rgba.Length / 4];
+        for (int p = 0; p < red.Length; p++) red[p] = rgba[p * 4];
+        return red;
+    }
+
+    /// <summary>A toe-cap map that is one non-zero value everywhere: it only says a cap is wanted, not where the toes
+    /// are (the built-in cap, the Stockings' flat map).</summary>
+    internal static bool IsUniformCap(byte[] mask)
+    {
+        if (mask.Length == 0 || mask[0] == 0) return false;
+        byte v = mask[0];
+        foreach (var b in mask) if (b != v) return false;
+        return true;
+    }
+
+    /// <summary>The region the coverage gate measures: for a uniform map, the toes (when the body has a toe region);
+    /// otherwise the map itself, as authored (#62).</summary>
+    internal static byte[] ToeGateRegion(byte[] mask, bool sourceUniform, byte[]? toeRegion)
+        => sourceUniform && toeRegion != null ? toeRegion : mask;
+
+    /// <summary>How much of <paramref name="region"/> (texels ≥ 128, at ToeCapSize²) the shell's coverage paints.</summary>
+    internal static float ToeShare(byte[] region, byte[] alpha, int texSize)
+    {
+        int over = 0, painted = 0;
+        int step = Math.Max(1, texSize / ToeCapSize);
+        for (int y = 0; y < ToeCapSize; y++)
+            for (int x = 0; x < ToeCapSize; x++)
+            {
+                if (region[y * ToeCapSize + x] < 128) continue;
+                over++;
+                int at = (y * step) * texSize + x * step;
+                if (at < alpha.Length && alpha[at] >= 32) painted++;
+            }
+        return over == 0 ? 0f : (float)painted / over;
+    }
+
+    /// <summary>The last toe-gate outcome logged per mod and UV ("placed:N" / "uncapped:N"), so a recomposite doesn't
+    /// repeat it.</summary>
+    private readonly Dictionary<string, string> toeGateByLayer = new(StringComparer.Ordinal);
 
     /// <summary>
     /// The toe cap for one shell: its option's own map, otherwise the shared map. Returned only when this shell's art
     /// reaches the toes, or the cap would carve a hole and fill it with fabric.
     /// </summary>
     // texSize is the build's sheet size (what `alpha` is square at); the cap map stays at ToeCapSize.
+    /// <param name="sharedUniform">The shared map is uniform in its own file (the built-in cap, a flat map).</param>
+    /// <param name="toeRegion">Where the toes are in this UV (<see cref="SecondSkinWriter.ToeRegionMask"/>), or null.</param>
     private byte[]? ToeCapFor(OverlayDescriptor d, OverlayEntry entry, string? srcType, string? dstType,
-                              byte[]? shared, byte[]? alpha, int texSize)
+                              byte[]? shared, byte[]? alpha, int texSize, bool sharedUniform = false, byte[]? toeRegion = null)
     {
         if ((d.ToeCapStrength ?? 1f) <= 0f) return null;
 
+        bool uniform = sharedUniform;
         var mask = d.ToeCap != null
-            ? ReadToeCap(Path.Combine(entry.SidecarRoot, d.ToeCap), srcType, dstType)
+            ? ReadToeCap(Path.Combine(entry.SidecarRoot, d.ToeCap), srcType, dstType, out uniform)
             : shared;
         if (mask == null || alpha == null) return null;
 
-        // How much of the capped area this shell actually paints, sampling the coverage under the map.
-        int over = 0, painted = 0;
-        int step = texSize / ToeCapSize;
-        for (int y = 0; y < ToeCapSize; y++)
-            for (int x = 0; x < ToeCapSize; x++)
-            {
-                if (mask[y * ToeCapSize + x] < 128) continue;
-                over++;
-                if (alpha[(y * step) * texSize + x * step] >= 32) painted++;
-            }
-        float share = over == 0 ? 0f : (float)painted / over;
+        // How much of the toes this shell actually paints. A uniform map says only that a cap is wanted, so it is measured
+        // over the toes; an authored map over itself (#62).
+        var region = ToeGateRegion(mask, uniform, toeRegion);
+        bool overToes = !ReferenceEquals(region, mask);
+        float share = ToeShare(region, alpha, texSize);
+        string key = $"{entry.ModDirectory}|{dstType}|{d.ToeCap ?? "built-in"}";
         if (share < MinToeCoverage)
         {
-            log.Debug("[Proteus] second skin: shell covers {0:P0} of the toe cap area — below {1:P0}, left uncapped",
-                share, MinToeCoverage);
+            if (OutcomeChanged(toeGateByLayer, capLogGate, key, $"uncapped:{share:P0}"))
+            {
+                if (overToes)
+                    log.Information("[Proteus] second skin: {0}: toe cap left off — its art covers {1:P0} of the toes "
+                                  + "(below {2:P0})", entry.ModDirectory, share, MinToeCoverage);
+                else
+                    log.Debug("[Proteus] second skin: shell covers {0:P0} of the toe cap map — below {1:P0}, left uncapped",
+                              share, MinToeCoverage);
+            }
             return null;
         }
 
-        log.Information("[Proteus] second skin: toe cap at strength {0:0.##}, shell covers {1:P0} of it",
-            d.ToeCapStrength ?? 1f, share);
+        if (OutcomeChanged(toeGateByLayer, capLogGate, key, $"placed:{share:P0}"))
+            log.Information("[Proteus] second skin: toe cap at strength {0:0.##}, shell covers {1:P0} of {2}",
+                d.ToeCapStrength ?? 1f, share, overToes ? "the toes" : "the toe cap map");
         return mask;
     }
 
