@@ -213,6 +213,19 @@ internal static class BodyRetargetWriter
         return clashes;
     }
 
+    /// <summary>A group's or option's <c>Priority</c> as Penumbra reads it: a whole number, else 0.</summary>
+    internal static int GroupPriority(JsonElement e)
+        => e.ValueKind == JsonValueKind.Object && e.TryGetProperty("Priority", out var p) && p.ValueKind == JsonValueKind.Number
+           && p.TryGetInt32(out int v) ? v : 0;
+
+    /// <summary>
+    /// Whether the group at <paramref name="index"/> in the mod's raw <c>Groups</c> array is applied before the one at
+    /// <paramref name="otherIndex"/>, and so wins a path both claim: Penumbra walks the groups by priority, highest first,
+    /// a tie going to the LATER one in the array (<c>Mod.GetData</c>; see <see cref="Outranking"/>).
+    /// </summary>
+    internal static bool AppliedBefore(int priority, int index, int otherPriority, int otherIndex)
+        => priority > otherPriority || (priority == otherPriority && index > otherIndex);
+
     /// <summary>What may keep a refit saved into an author's group from showing: another group (<see cref="Option"/>
     /// null), or another option of the destination itself.</summary>
     internal readonly record struct Rival(string Group, string? Option);
@@ -245,15 +258,14 @@ internal static class BodyRetargetWriter
         for (int i = 0; i < groups.Count && at < 0; i++)
             if (string.Equals(NameOf(groups[i]), destination, StringComparison.OrdinalIgnoreCase)) at = i;
         if (at < 0) return rivals;
-        int priority = PriorityOf(groups[at]);
+        int priority = GroupPriority(groups[at]);
 
         for (int i = 0; i < groups.Count; i++)
         {
             if (i == at) continue;
             var g = groups[i];
             if (string.Equals(TypeOf(g), "Imc", StringComparison.OrdinalIgnoreCase)) continue;
-            int p = PriorityOf(g);
-            if ((p > priority || (p == priority && i > at)) && Containers(g).Any(c => Claims(c, gamePath)))
+            if (AppliedBefore(GroupPriority(g), i, priority, at) && Containers(g).Any(c => Claims(c, gamePath)))
                 rivals.Add(new Rival(NameOf(g) ?? "", null));
         }
 
@@ -271,7 +283,7 @@ internal static class BodyRetargetWriter
             {
                 string? name = NameOf(list[i]);
                 if (name == null || Saving(name) || string.Equals(name, cutFrom, StringComparison.OrdinalIgnoreCase)) continue;
-                int p = PriorityOf(list[i]);
+                int p = GroupPriority(list[i]);
                 if ((p > 0 || (p == 0 && i < refitAt)) && Claims(list[i], gamePath)) rivals.Add(new Rival(destination, name));
             }
         }
@@ -281,9 +293,6 @@ internal static class BodyRetargetWriter
             => e.TryGetProperty("Name", out var n) && n.ValueKind == JsonValueKind.String ? n.GetString() : null;
         static string? TypeOf(JsonElement e)
             => e.TryGetProperty("Type", out var t) && t.ValueKind == JsonValueKind.String ? t.GetString() : null;
-        static int PriorityOf(JsonElement e)
-            => e.TryGetProperty("Priority", out var p) && p.ValueKind == JsonValueKind.Number && p.TryGetInt32(out int v)
-                ? v : 0;
         static IEnumerable<JsonElement> Containers(JsonElement g)
         {
             foreach (string list in new[] { "Options", "Containers" })

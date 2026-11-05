@@ -1471,6 +1471,25 @@ public class BodyRetargetWriterTests : IDisposable
 
     private List<string> GroupNames() => (PenumbraModMeta.TryReadGroups(root) ?? []).Select(g => g.Name).ToList();
 
+    [Fact]
+    [Trait("Plan", "AC-equinox-legs-slits-3")]
+    [Trait("Plan", "EDGE-equinox-legs-slits-19")]
+    public void Group_priority_and_tie_rule_are_Penumbras()
+    {
+        JsonElement Of(string json) => JsonDocument.Parse(json).RootElement;
+        Assert.Equal(3, BodyRetargetWriter.GroupPriority(Of("{\"Priority\":3}")));
+        Assert.Equal(-2, BodyRetargetWriter.GroupPriority(Of("{\"Priority\":-2}")));
+        Assert.Equal(0, BodyRetargetWriter.GroupPriority(Of("{}")));
+        Assert.Equal(0, BodyRetargetWriter.GroupPriority(Of("{\"Priority\":\"high\"}")));
+        Assert.Equal(0, BodyRetargetWriter.GroupPriority(Of("{\"Priority\":1.5}")));
+
+        Assert.True(BodyRetargetWriter.AppliedBefore(1, 0, 0, 5));     // higher priority first, wherever it stands
+        Assert.False(BodyRetargetWriter.AppliedBefore(0, 5, 1, 0));
+        Assert.True(BodyRetargetWriter.AppliedBefore(0, 2, 0, 1));     // a tie goes to the later group
+        Assert.False(BodyRetargetWriter.AppliedBefore(0, 1, 0, 2));
+        Assert.True(BodyRetargetWriter.AppliedBefore(-1, 0, -2, 1));   // negative priorities in the same order
+    }
+
     private int PriorityOf(string group) => Read(group).GetProperty("Priority").GetInt32();
 
     private JsonElement Read(string group)
