@@ -64,7 +64,9 @@ internal sealed class VariantRepointPanel(VariantRepointWatcher watcher, Configu
         var parts = new System.Collections.Generic.List<string>();
         if (view.RepointedList.Count > 0)
             parts.Add(string.Format(Strings.Settings.GearVariantsRepointedTipFmt,
-                string.Join("\n", view.RepointedList.Select(r => $"{r.ModDir}: {r.Item} → v{r.MaterialId:D4}"))));
+                string.Join("\n", view.RepointedList.Select(r => r.Folders.Count == 0
+                    ? $"{r.ModDir}: {r.Item}"
+                    : $"{r.ModDir}: {r.Item} v{r.MaterialId:D4} → {string.Join(", ", r.Folders.Select(f => $"v{f:D4}"))}"))));
         if (view.LeftList.Count > 0)
         {
             var lines = view.LeftList.GroupBy(l => l.Reason)
@@ -92,10 +94,7 @@ internal sealed class VariantRepointPanel(VariantRepointWatcher watcher, Configu
         {
             "several-variants" => s.GearVariantsReasonSeveralVariants,
             "mod-imc" => s.GearVariantsReasonModImc,
-            "imc-group" => s.GearVariantsReasonImcGroup,
-            "proteus-toggles" => s.GearVariantsReasonProteusToggles,
             "other-mod-material" => s.GearVariantsReasonOtherModMaterial,
-            "folder-unused" => s.GearVariantsReasonFolderUnused,
             "no-imc" => s.GearVariantsReasonNoImc,
             "meta-unreadable" => s.GearVariantsReasonMetaUnreadable,
             "outranked" => s.GearVariantsReasonOutranked,

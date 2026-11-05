@@ -5940,7 +5940,7 @@
     "description": ""
   },
   "Settings.GearVariants.Auto.Tip": {
-    "message": "Un mod fait pour une variante d'un objet ne fournit que le dossier de matériaux de cette variante : l'objet\nporté dans une autre variante affiche alors le matériau du jeu (ou aucun) sur le modèle du mod. Quand vous enfilez une telle pièce,\nProteus écrit dans les données par défaut du mod des entrées IMC qui pointent chacune de ces variantes vers le matériau\ndu mod, comme « Apply to All Variants » de TexTools. Le changement s'applique à tous ceux qui portent ces variantes\ndans les collections où le mod est actif, même avec son option de modèle désactivée. Désactiver ceci arrête les\nchangements suivants sans les annuler. « Annuler pour ce que je porte » les retire.",
+    "message": "Un mod fait pour une variante d'un objet ne fournit que le dossier de matériaux de cette variante : l'objet\nporté dans une autre variante affiche alors le matériau du jeu (ou celui d'une autre tenue, ou aucun) sur le modèle du mod. Quand vous\nenfilez une telle pièce, Proteus copie les chemins de matériau du mod vers les autres dossiers de variante, dans les\noptions du mod lui-même, comme « Apply to All Variants » de TexTools, pour le matériau seulement. Ces variantes affichent alors\nle matériau du mod partout où le mod l'emporte ; les pièces, les VFX et le son restent les leurs. Désactiver ceci arrête\nles changements suivants sans les annuler. « Annuler pour ce que je porte » les retire.",
     "description": ""
   },
   "Settings.GearVariants.Status.Fmt": {
@@ -5971,20 +5971,8 @@
     "message": "le mod définit lui-même cette variante",
     "description": ""
   },
-  "Settings.GearVariants.Reason.ImcGroup": {
-    "message": "un groupe IMC du mod la couvre",
-    "description": ""
-  },
-  "Settings.GearVariants.Reason.ProteusToggles": {
-    "message": "les bascules de pièces de Proteus gardent les matériaux du jeu",
-    "description": ""
-  },
   "Settings.GearVariants.Reason.OtherModMaterial": {
     "message": "son matériau vient d'un autre mod",
-    "description": ""
-  },
-  "Settings.GearVariants.Reason.FolderUnused": {
-    "message": "aucune variante de l'objet n'utilise le dossier du mod",
     "description": ""
   },
   "Settings.GearVariants.Reason.NoImc": {
@@ -6044,7 +6032,7 @@
     "description": ""
   },
   "Chat.VariantRepoint.Fmt": {
-    "message": "[Proteus] {0} variante(s) d'une pièce de « {1} » pointée(s) vers le matériau du mod. Cela s'applique à tous ceux qui portent ces variantes dans les collections où le mod est actif, même avec son option de modèle désactivée. Annulez sous /proteus > Paramètres > Variantes d'équipement.",
+    "message": "[Proteus] Chemins de matériau de « {1} » copiés vers {0} dossier(s) de variante de plus, pour que ces variantes affichent le matériau du mod partout où il l'emporte. Annulez sous /proteus > Paramètres > Variantes d'équipement.",
     "description": ""
   }
 }

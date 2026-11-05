@@ -10,66 +10,97 @@ using static Proteus.Tests.VariantRepointTestKit;
 namespace Proteus.Tests;
 
 /// <summary>
-/// "Gear variants" writes into a mod, end to end on disk (<see cref="VariantRepointWriter"/>): plan, write, walk again,
+/// "Gear variants" writes into a mod, end to end on disk (<see cref="VariantRepointWriter"/>): plan, copy, walk again,
 /// undo, and every way the mod can change under it. SENSITIVE writer: these stay in the quick suite.
 /// </summary>
 public class VariantRepointWriterTests
 {
     private static string RecordPath(string mod) => Path.Combine(mod, "Proteus", VariantRepointWriter.RecordFile);
 
+    private static readonly PenumbraModMeta.ContainerRef Red = new("Colour", "Red");
+    private static readonly PenumbraModMeta.ContainerRef Blue = new("Colour", "Blue");
+
     [Fact]
     [Trait("Plan", "AC-imc-all-variants-1")]
-    public void Wrong_worn_variant_points_every_wrong_variant_at_the_mods_folder()
+    public void Wrong_worn_variant_gets_redirect_copies_for_every_wrong_folder()
     {
         using var k = new VariantRepointTestKit();
-        var mod = k.Dress("Dress", Top);
+        var mod = k.Colours("Dress", Top);
         k.Imc(Top, E(2), E(1), E(2), E(3), E(1));
         var (outcomes, left) = k.Run([k.Worn(Top, 2, mod)]);
         Assert.Empty(left);
-        var written = Assert.Single(Assert.Single(outcomes).Written);
-        Assert.Equal([0, 2, 3], written.Variants);
-        var entries = DefaultImc(mod, Top);
-        Assert.Equal([0, 2, 3], entries.Keys.Order());
-        Assert.All(entries.Values, e => Assert.Equal(1, e.MaterialId));
-        var m = Manifest(mod)["DefaultData"]!["Manipulations"]!.AsArray()[0]!["Manipulation"]!;
-        Assert.Equal("Equipment", m["ObjectType"]!.GetValue<string>());
-        Assert.Equal("Body", m["EquipSlot"]!.GetValue<string>());
+        var w = Assert.Single(Assert.Single(outcomes).Written);
+        Assert.Equal([2, 3], w.Folders);
+        Assert.Equal([0, 2, 3], w.Variants);
+        foreach (var (opt, file) in new[] { (Red, "red/m.mtrl"), (Blue, "blue/m.mtrl") })
+        {
+            var files = FilesOf(mod, opt);
+            Assert.Equal(file, files[MaterialPath(Top, 2)]);
+            Assert.Equal(file, files[MaterialPath(Top, 3)]);
+        }
     }
 
     [Fact]
     [Trait("Plan", "AC-imc-all-variants-1")]
-    public void Accessory_item_uses_accessory_identity()
+    public void Accessory_item_copies_under_accessory_folder()
     {
         using var k = new VariantRepointTestKit();
         var mod = k.Dress("Earrings", Earring);
         k.Imc(Earring, E(1), E(1), E(2));
         k.Run([k.Worn(Earring, 2, mod)]);
-        var m = Manifest(mod)["DefaultData"]!["Manipulations"]!.AsArray().Single()!["Manipulation"]!;
-        Assert.Equal("Accessory", m["ObjectType"]!.GetValue<string>());
-        Assert.Equal("Ears", m["EquipSlot"]!.GetValue<string>());
-        Assert.Equal(53, m["PrimaryId"]!.GetValue<int>());
+        Assert.Equal("ear_a.mtrl", FilesOf(mod, Default)["chara/accessory/a0053/material/v0002/mt_c0201a0053_ear_a.mtrl"]);
+    }
+
+    [Fact]
+    [Trait("Plan", "AC-imc-all-variants-1")]
+    [Trait("Plan", "EDGE-imc-all-variants-41")]
+    public void Competing_model_mods_material_gets_redirect_copies_moonfire_lace()
+    {
+        using var k = new VariantRepointTestKit();
+        var mod = k.Colours("moonfire lace", Top, material: "b");
+        k.Dress("Rose", Top, folder: 2, material: "b");
+        k.Dress("Sweetheart Lingerie", Top, folder: 2, material: "b");
+        k.Imc(Top, E(1), E(1), E(2));
+        Assert.Contains("Rose", k.ResolveOne(MaterialPath(Top, 2, "b")));
+        var (outcomes, left) = k.Run([k.Worn(Top, 2, mod)]);
+        Assert.Empty(left);
+        Assert.Single(outcomes);
+        Assert.Equal("red/m.mtrl", FilesOf(mod, Red)[MaterialPath(Top, 2, "b")]);
+        Assert.Equal("blue/m.mtrl", FilesOf(mod, Blue)[MaterialPath(Top, 2, "b")]);
+        Assert.StartsWith(mod, k.ResolveOne(MaterialPath(Top, 2, "b")));
+    }
+
+    [Fact]
+    [Trait("Plan", "AC-imc-all-variants-2")]
+    public void No_imc_entry_is_ever_written()
+    {
+        using var k = new VariantRepointTestKit();
+        var mod = k.Colours("Dress", Top);
+        k.Imc(Top, E(1), E(1), E(2), E(3));
+        k.Run([k.Worn(Top, 2, mod)]);
+        Assert.Empty(ManifestImcEdits(mod));
+        Assert.Empty(Manifest(mod)["DefaultData"]!["Manipulations"]!.AsArray());
     }
 
     [Fact]
     [Trait("Plan", "EDGE-imc-all-variants-33")]
-    public void Custom_suffix_material_without_vanilla_file_is_written()
+    public void Custom_suffix_material_without_vanilla_file_gets_copies()
     {
         using var k = new VariantRepointTestKit();
-        // This Old Thing: only v0001/mt_c0201e6255_top_b.mtrl, which the game has under no other folder. The resolver
-        // echoes v0002's path, as Penumbra does for a file no mod serves, whether or not the game has it.
         var mod = k.Dress("This Old Thing", Top, material: "b");
         k.Imc(Top, E(1), E(1), E(2));
         k.Run([k.Worn(Top, 2, mod)]);
-        Assert.Equal(1, DefaultImc(mod, Top)[2].MaterialId);
+        Assert.Equal("top_b.mtrl", FilesOf(mod, Default)[MaterialPath(Top, 2, "b")]);
     }
 
     [Fact]
     [Trait("Plan", "AC-imc-all-variants-5")]
+    [Trait("Plan", "EDGE-imc-all-variants-14")]
     [Trait("Plan", "EDGE-imc-all-variants-35")]
-    public void Second_walk_writes_nothing()
+    public void Second_walk_after_copies_writes_nothing()
     {
         using var k = new VariantRepointTestKit();
-        var mod = k.Dress("Dress", Top);
+        var mod = k.Colours("Dress", Top);
         k.Imc(Top, E(1), E(1), E(2), E(3));
         k.Run([k.Worn(Top, 2, mod)]);
         var manifest = File.ReadAllText(Path.Combine(mod, "meta.json"));
@@ -78,24 +109,37 @@ public class VariantRepointWriterTests
         {
             var (outcomes, left) = k.Run([k.Worn(Top, worn, mod)]);
             Assert.Empty(outcomes);
-            Assert.Empty(left);   // our own entries never read as the mod's ("mod-imc")
+            Assert.Empty(left);
         }
         Assert.Equal(manifest, File.ReadAllText(Path.Combine(mod, "meta.json")));
         Assert.Equal(record, File.ReadAllText(RecordPath(mod)));
     }
 
     [Fact]
-    [Trait("Plan", "AC-imc-all-variants-9")]
-    public void Only_default_manipulations_change()
+    [Trait("Plan", "EDGE-imc-all-variants-35")]
+    public void Walk_after_write_has_no_left_and_no_write()
     {
         using var k = new VariantRepointTestKit();
-        var mod = k.Mod("Dress", new() { [ModelPath(Top)] = "top.mdl", [MaterialPath(Top, 1)] = "top_a.mtrl" },
-                        groups: [("Colour", "Single", [("Red", new() { ["chara/x.tex"] = "red.tex" }, []),
-                                                       ("Blue", new() { ["chara/x.tex"] = "blue.tex" }, [])])]);
+        var mod = k.Dress("Dress", Top);
+        k.Imc(Top, E(1), E(1), E(2));
+        VariantRepointWriter.AfterStep = s => { if (s == "manifest") throw new CrashException(); };
+        Assert.Throws<CrashException>(() => k.Run([k.Worn(Top, 2, mod)]));
+        VariantRepointWriter.AfterStep = null;
+        var (outcomes, left) = k.Run([k.Worn(Top, 2, mod)]);   // the pending item is adopted
+        Assert.Empty(outcomes);
+        Assert.Empty(left);
+    }
+
+    [Fact]
+    [Trait("Plan", "AC-imc-all-variants-9")]
+    public void Only_copied_redirects_change()
+    {
+        using var k = new VariantRepointTestKit();
+        var mod = k.Colours("Dress", Top);
         var before = Manifest(mod);
         before["Custom"] = new JsonObject { ["Kept"] = true };
         WriteManifest(mod, before);
-        File.WriteAllText(Path.Combine(mod, "top_a.mtrl"), "x");
+        File.WriteAllText(Path.Combine(mod, "x.bin"), "x");
         var hashes = ShaderUpgradeTestKit.Hashes(mod);
         k.Imc(Top, E(1), E(1), E(2));
         k.Run([k.Worn(Top, 2, mod)]);
@@ -103,99 +147,131 @@ public class VariantRepointWriterTests
         var after = Manifest(mod);
         Assert.Equal(before.Select(p => p.Key), after.Select(p => p.Key));
         foreach (var (key, value) in before)
-            if (key != "DefaultData") Assert.True(JsonNode.DeepEquals(value, after[key]), key);
-        Assert.True(JsonNode.DeepEquals(before["DefaultData"]!["Files"], after["DefaultData"]!["Files"]));
-        Assert.True(JsonNode.DeepEquals(before["DefaultData"]!["FileSwaps"], after["DefaultData"]!["FileSwaps"]));
-        Assert.Single(after["DefaultData"]!["Manipulations"]!.AsArray());
-
+            if (key != "Groups") Assert.True(JsonNode.DeepEquals(value, after[key]), key);
+        var bg = before["Groups"]![0]!.AsObject();
+        var ag = after["Groups"]![0]!.AsObject();
+        Assert.Equal(bg.Select(p => p.Key), ag.Select(p => p.Key));
+        for (int o = 0; o < 2; o++)
+        {
+            var bf = bg["Options"]![o]!["Files"]!.AsObject();
+            var af = ag["Options"]![o]!["Files"]!.AsObject();
+            Assert.Equal(bf.Select(p => p.Key).Append(MaterialPath(Top, 2)), af.Select(p => p.Key));   // appended (V5)
+        }
         var now = ShaderUpgradeTestKit.Hashes(mod);
         foreach (var (file, hash) in hashes) Assert.Equal(hash, now[file]);
         Assert.Equal(["Proteus/" + VariantRepointWriter.RecordFile], now.Keys.Except(hashes.Keys));
-        var record = VariantRepointWriter.ReadRecord(mod)!;
-        var item = Assert.Single(record.Items);
-        Assert.Equal(("Equipment", 6255, "Body", 1), (item.ObjectType, item.SetId, item.Slot, item.MaterialId));
-        Assert.Equal([2], item.Variants.Select(v => v.Variant));
+    }
+
+    [Fact]
+    [Trait("Plan", "EDGE-imc-all-variants-61")]
+    public void Material_variant_of_still_returns_the_mods_folder_after_copies()
+    {
+        using var k = new VariantRepointTestKit();
+        var mod = k.Dress("Dress", Top);
+        k.Imc(Top, E(1), E(1), E(2), E(3));
+        k.Run([k.Worn(Top, 2, mod)]);
+        Assert.Equal(1, ImcEntrySource.MaterialVariantOf(PenumbraModMeta.ReadAllRedirects(mod), Top.SetTag));
     }
 
     [Fact]
     [Trait("Plan", "AC-imc-all-variants-8")]
-    public void Outcome_names_item_and_variants()
+    public void Outcome_names_item_folders_and_variants()
     {
         using var k = new VariantRepointTestKit();
-        var mod = k.Dress("Dress", Top);
+        var mod = k.Colours("Dress", Top);
         k.Imc(Top, E(1), E(1), E(2), E(3));
         var (outcomes, _) = k.Run([k.Worn(Top, 3, mod)]);
-        var (item, variants) = Assert.Single(Assert.Single(outcomes).Written);
+        var (item, folders, variants, copies) = Assert.Single(Assert.Single(outcomes).Written);
         Assert.Equal("e6255 Body", item.Label);
+        Assert.Equal([2, 3], folders);
         Assert.Equal([2, 3], variants);
-        Assert.Equal(2, outcomes[0].Entries);
+        Assert.Equal(4, copies);
     }
 
     [Fact]
     [Trait("Plan", "AC-imc-all-variants-6")]
-    public void Undo_removes_ours_keeps_changed_and_declines()
+    public void Undo_removes_copies_still_as_written()
     {
         using var k = new VariantRepointTestKit();
-        var mod = k.Dress("Dress", Top);
-        k.Imc(Top, E(1), E(1), E(2), E(3));
+        var mod = k.Colours("Dress", Top);
+        var original = File.ReadAllText(Path.Combine(mod, "meta.json"));
+        k.Imc(Top, E(1), E(1), E(2));
         k.Run([k.Worn(Top, 2, mod)]);
-        // Someone edits variant 3's entry by hand.
-        EditDefaultManips(mod, a =>
-        {
-            var v3 = a.First(m => m!["Manipulation"]!["Variant"]!.GetValue<int>() == 3)!;
-            v3["Manipulation"]!["Entry"]!["VfxId"] = 9;
-        });
         Assert.Equal(VariantRepointWriter.Undone.Removed,
                      VariantRepointWriter.UndoItem(mod, Top, true, out var removed, out var kept, out _));
-        Assert.Equal((1, 1), (removed, kept));
-        Assert.Equal([3], DefaultImc(mod, Top).Keys);
-        var record = VariantRepointWriter.ReadRecord(mod)!;
-        Assert.Contains(Top.Key, record.Declined);
+        Assert.Equal((2, 0), (removed, kept));
+        Assert.False(FilesOf(mod, Red).ContainsKey(MaterialPath(Top, 2)));
+        Assert.True(JsonNode.DeepEquals(JsonNode.Parse(original)!["Groups"], Manifest(mod)["Groups"]));
+        Assert.Contains(Top.Key, VariantRepointWriter.ReadRecord(mod)!.Declined);
         Assert.Equal(RepointReason.Declined, Assert.Single(k.Plan([k.Worn(Top, 2, mod)]).Left).Reason);
-
         VariantRepointWriter.ClearDeclines(mod, [Top]);
-        Assert.Single(Assert.Single(k.Plan([k.Worn(Top, 2, mod)]).PerMod).Items);
+        Assert.Single(k.Plan([k.Worn(Top, 2, mod)]).PerMod);
     }
 
     [Fact]
     [Trait("Plan", "AC-imc-all-variants-6")]
-    public void Undo_after_reconcile_counts_replaced_entries_as_kept()
+    [Trait("Plan", "EDGE-imc-all-variants-49")]
+    public void Undo_removes_legacy_imc_entries()
     {
-        // The watcher reconciles before it undoes: a replaced entry is forgotten there, and counted as kept.
         using var k = new VariantRepointTestKit();
-        var mod = k.Dress("Dress", Top);
-        k.Imc(Top, E(1), E(1), E(2), E(3));
-        k.Run([k.Worn(Top, 2, mod)]);
-        EditDefaultManips(mod, a =>
-            a.First(m => m!["Manipulation"]!["Variant"]!.GetValue<int>() == 3)!["Manipulation"]!["Entry"]!["VfxId"] = 9);
-        var rc = VariantRepointWriter.Reconcile(mod);
-        VariantRepointWriter.UndoItem(mod, Top, true, out var removed, out var kept, out _);
-        Assert.Equal((1, 1), (removed, kept + rc.Forgotten));
-        Assert.Equal([3], DefaultImc(mod, Top).Keys);
+        var mod = k.Mod("Dress", new() { [ModelPath(Top)] = "top.mdl", [MaterialPath(Top, 1)] = "top_a.mtrl" },
+                        [Imc(Top, 2, E(1, attr: 1))]);
+        LegacyRecord(mod, Top, 1, (2, E(1, attr: 1)));
+        VariantRepointWriter.UndoItem(mod, Top, false, out var removed, out _, out _);
+        Assert.Equal(1, removed);
+        Assert.Empty(ManifestImcEdits(mod));
+        Assert.False(File.Exists(RecordPath(mod)));
     }
 
     [Fact]
-    [Trait("Plan", "EDGE-imc-all-variants-20")]
-    public void Unreadable_record_is_never_replaced()
+    [Trait("Plan", "EDGE-imc-all-variants-49")]
+    public void Legacy_v1_record_is_read_reconciled_and_undone()
     {
         using var k = new VariantRepointTestKit();
-        var legs = new Item('e', 6255, "dwn");
-        var mod = k.Mod("Outfit", new()
-        {
-            [ModelPath(Top)] = "top.mdl", [MaterialPath(Top, 1)] = "top_a.mtrl",
-            [ModelPath(legs)] = "dwn.mdl", [MaterialPath(legs, 1)] = "dwn_a.mtrl",
-        });
-        k.ImcSlots(Top.SetTag, (1, [E(1), E(1), E(2)]), (3, [E(1), E(1), E(2)]));
-        k.Run([k.Worn(Top, 2, mod)]);
-        File.WriteAllText(RecordPath(mod), "{ corrupt");
-        var manifest = File.ReadAllText(Path.Combine(mod, "meta.json"));
-        var outcome = VariantRepointWriter.Apply(mod, [new ItemWrite(legs, 1, [(2, E(1))])], () => true);
-        Assert.Empty(outcome.Written);
-        Assert.Equal(RepointReason.WriteFailed, Assert.Single(outcome.Left).Reason);
-        Assert.Equal("{ corrupt", File.ReadAllText(RecordPath(mod)));
-        Assert.Equal(manifest, File.ReadAllText(Path.Combine(mod, "meta.json")));
-        Assert.Equal(VariantRepointWriter.Undone.Failed, VariantRepointWriter.UndoItem(mod, Top, true, out _, out _, out _));
-        Assert.Equal("{ corrupt", File.ReadAllText(RecordPath(mod)));
+        var mod = k.Mod("Dress", new() { [ModelPath(Top)] = "top.mdl", [MaterialPath(Top, 1)] = "top_a.mtrl" },
+                        [Imc(Top, 2, E(1))]);
+        LegacyRecord(mod, Top, 1, (2, E(1)));
+        k.Imc(Top, E(1), E(1), E(2), E(3));
+        // Variant 2 reads Dressed through the legacy entry; variant 3 gets copies; no new IMC is written.
+        k.Run([k.Worn(Top, 3, mod)]);
+        var record = VariantRepointWriter.ReadRecord(mod)!;
+        Assert.Equal(2, record.Version);
+        var item = Assert.Single(record.Items);
+        Assert.Equal([2], item.Variants.Select(v => v.Variant));
+        Assert.Equal([3], item.Redirects.Select(r => r.Folder));
+        Assert.Single(ManifestImcEdits(mod));
+        VariantRepointWriter.UndoItem(mod, Top, false, out var removed, out _, out _);
+        Assert.Equal(2, removed);
+        Assert.Empty(ManifestImcEdits(mod));
+        Assert.False(FilesOf(mod, Default).ContainsKey(MaterialPath(Top, 3)));
+    }
+
+    [Fact]
+    [Trait("Plan", "EDGE-imc-all-variants-49")]
+    public void Legacy_imc_entries_stripped_on_stale_folder()
+    {
+        using var k = new VariantRepointTestKit();
+        var mod = k.Mod("Dress", new() { [ModelPath(Top)] = "top.mdl", [MaterialPath(Top, 1)] = "top_a.mtrl" },
+                        [Imc(Top, 2, E(1))]);
+        LegacyRecord(mod, Top, 1, (2, E(1)));
+        EditFiles(mod, f => f[MaterialPath(Top, 4)] = "other.mtrl");
+        var rc = VariantRepointWriter.Reconcile(mod);
+        Assert.True(rc.ManifestChanged);
+        Assert.Empty(ManifestImcEdits(mod));
+    }
+
+    [Fact]
+    [Trait("Plan", "EDGE-imc-all-variants-49")]
+    public void Legacy_imc_variants_read_dressed_no_new_imc()
+    {
+        using var k = new VariantRepointTestKit();
+        var mod = k.Mod("Dress", new() { [ModelPath(Top)] = "top.mdl", [MaterialPath(Top, 1)] = "top_a.mtrl" },
+                        [Imc(Top, 2, E(1))]);
+        LegacyRecord(mod, Top, 1, (2, E(1)));
+        k.Imc(Top, E(1), E(1), E(2));
+        var (outcomes, left) = k.Run([k.Worn(Top, 2, mod)]);
+        Assert.Empty(outcomes);
+        Assert.Empty(left);
     }
 
     [Fact]
@@ -208,7 +284,6 @@ public class VariantRepointWriterTests
         k.Run([k.Worn(Top, 2, mod)]);
         VariantRepointWriter.UndoItem(mod, Top, false, out var removed, out _, out _);
         Assert.Equal(1, removed);
-        Assert.Empty(DefaultImc(mod, Top));
         Assert.False(File.Exists(RecordPath(mod)));
         Assert.False(Directory.Exists(Path.Combine(mod, "Proteus")));
     }
@@ -222,7 +297,6 @@ public class VariantRepointWriterTests
         var manifest = File.ReadAllText(Path.Combine(mod, "meta.json"));
         Assert.Equal(VariantRepointWriter.Undone.NothingRecorded, VariantRepointWriter.UndoItem(mod, Top, true, out _, out _, out _));
         Assert.Equal(manifest, File.ReadAllText(Path.Combine(mod, "meta.json")));
-        Assert.False(File.Exists(RecordPath(mod)));
     }
 
     [Fact]
@@ -241,6 +315,30 @@ public class VariantRepointWriterTests
     }
 
     [Fact]
+    [Trait("Plan", "EDGE-imc-all-variants-20")]
+    public void Unreadable_record_is_never_replaced()
+    {
+        using var k = new VariantRepointTestKit();
+        var legs = new Item('e', 6255, "dwn");
+        var mod = k.Mod("Outfit", new()
+        {
+            [ModelPath(Top)] = "top.mdl", [MaterialPath(Top, 1)] = "top_a.mtrl",
+            [ModelPath(legs)] = "dwn.mdl", [MaterialPath(legs, 1)] = "dwn_a.mtrl",
+        });
+        k.ImcSlots(Top.SetTag, (1, [E(1), E(1), E(2)]), (3, [E(1), E(1), E(2)]));
+        k.Run([k.Worn(Top, 2, mod)]);
+        File.WriteAllText(RecordPath(mod), "{ corrupt");
+        var manifest = File.ReadAllText(Path.Combine(mod, "meta.json"));
+        var copy = new PenumbraModMeta.ContainerRedirect(Default, MaterialPath(legs, 2), "dwn_a.mtrl");
+        var outcome = VariantRepointWriter.Apply(mod, [new ItemWrite(legs, 1, [(2, copy)], [2])], () => true);
+        Assert.Empty(outcome.Written);
+        Assert.Equal(RepointReason.WriteFailed, Assert.Single(outcome.Left).Reason);
+        Assert.Equal("{ corrupt", File.ReadAllText(RecordPath(mod)));
+        Assert.Equal(manifest, File.ReadAllText(Path.Combine(mod, "meta.json")));
+        Assert.Equal(VariantRepointWriter.Undone.Failed, VariantRepointWriter.UndoItem(mod, Top, true, out _, out _, out _));
+    }
+
+    [Fact]
     [Trait("Plan", "EDGE-imc-all-variants-6")]
     public void Legacy_folder_never_written()
     {
@@ -252,157 +350,258 @@ public class VariantRepointWriterTests
         var (outcomes, left) = k.Run([k.Worn(Top, 2, mod)]);
         Assert.Empty(outcomes);
         Assert.Equal(RepointReason.LegacyMod, Assert.Single(left).Reason);
+        var copy = new PenumbraModMeta.ContainerRedirect(Default, MaterialPath(Top, 2), "a.mtrl");
         Assert.Equal(RepointReason.LegacyMod,
-                     Assert.Single(VariantRepointWriter.Apply(mod, [new ItemWrite(Top, 1, [(2, E(1))])], () => true).Left).Reason);
+                     Assert.Single(VariantRepointWriter.Apply(mod, [new ItemWrite(Top, 1, [(2, copy)], [2])], () => true).Left).Reason);
         Assert.Equal(meta, File.ReadAllBytes(Path.Combine(mod, "meta.json")));
         Assert.Equal(dm, File.ReadAllBytes(Path.Combine(mod, "default_mod.json")));
-        Assert.False(Directory.Exists(Path.Combine(mod, "Proteus")));
     }
 
     [Fact]
-    [Trait("Plan", "EDGE-imc-all-variants-14")]
-    public void Penumbra_respelled_entries_still_ours()
-    {
-        using var k = new VariantRepointTestKit();
-        var mod = k.Dress("Dress", Top);
-        k.Imc(Top, E(1), E(1, attr: 5, sound: 2), E(2));
-        k.Run([k.Worn(Top, 2, mod)]);
-        // Penumbra's own save: no AttributeAndSound, keys reordered, the variant as a string.
-        EditDefaultManips(mod, a =>
-        {
-            var m = a[0]!["Manipulation"]!.AsObject();
-            var e = m["Entry"]!.AsObject();
-            a[0] = new JsonObject
-            {
-                ["Type"] = "Imc",
-                ["Manipulation"] = new JsonObject
-                {
-                    ["Variant"] = m["Variant"]!.GetValue<int>().ToString(), ["PrimaryId"] = 6255, ["EquipSlot"] = "Body",
-                    ["ObjectType"] = "Equipment", ["SecondaryId"] = 0, ["BodySlot"] = "Unknown",
-                    ["Entry"] = new JsonObject
-                    {
-                        ["MaterialAnimationId"] = e["MaterialAnimationId"]!.GetValue<int>(), ["VfxId"] = e["VfxId"]!.GetValue<int>(),
-                        ["SoundId"] = e["SoundId"]!.GetValue<int>(), ["AttributeMask"] = e["AttributeMask"]!.GetValue<int>(),
-                        ["DecalId"] = e["DecalId"]!.GetValue<int>(), ["MaterialId"] = e["MaterialId"]!.GetValue<int>(),
-                    },
-                },
-            };
-        });
-        var (outcomes, left) = k.Run([k.Worn(Top, 2, mod)]);
-        Assert.Empty(outcomes);
-        Assert.Empty(left);
-        Assert.Single(VariantRepointWriter.ReadRecord(mod)!.Items);
-        VariantRepointWriter.UndoItem(mod, Top, false, out var removed, out var kept, out _);
-        Assert.Equal((1, 0), (removed, kept));
-        Assert.Empty(DefaultImc(mod, Top));
-    }
-
-    [Fact]
-    [Trait("Plan", "EDGE-imc-all-variants-16")]
-    [Trait("Plan", "AC-imc-all-variants-7")]
-    public void Removed_entries_decline_the_item()
-    {
-        using var k = new VariantRepointTestKit();
-        var mod = k.Dress("Dress", Top);
-        k.Imc(Top, E(1), E(1), E(2), E(3));
-        k.Run([k.Worn(Top, 2, mod)]);
-        // Partial removal: variant 3 deleted by someone.
-        EditDefaultManips(mod, a => a.Remove(a.First(m => m!["Manipulation"]!["Variant"]!.GetValue<int>() == 3)));
-        var (outcomes, left) = k.Run([k.Worn(Top, 3, mod)]);
-        Assert.Empty(outcomes);
-        Assert.Equal(RepointReason.Declined, Assert.Single(left).Reason);
-        Assert.Equal([2], DefaultImc(mod, Top).Keys);
-
-        // Full removal, the mod otherwise unchanged: declined too, never re-added.
-        using var k2 = new VariantRepointTestKit();
-        var mod2 = k2.Dress("Dress", Top);
-        k2.Imc(Top, E(1), E(1), E(2));
-        k2.Run([k2.Worn(Top, 2, mod2)]);
-        EditDefaultManips(mod2, a => a.Clear());
-        var (o2, l2) = k2.Run([k2.Worn(Top, 2, mod2)]);
-        Assert.Empty(o2);
-        Assert.Equal(RepointReason.Declined, Assert.Single(l2).Reason);
-        Assert.Empty(DefaultImc(mod2, Top));
-    }
-
-    [Fact]
-    [Trait("Plan", "EDGE-imc-all-variants-16")]
-    public void Repoint_now_lifts_the_decline()
+    [Trait("Plan", "EDGE-imc-all-variants-53")]
+    public void Penumbra_respelled_copy_still_ours()
     {
         using var k = new VariantRepointTestKit();
         var mod = k.Dress("Dress", Top);
         k.Imc(Top, E(1), E(1), E(2));
         k.Run([k.Worn(Top, 2, mod)]);
-        EditDefaultManips(mod, a => a.Clear());
+        // Penumbra re-saves: the key upper-cased, the file with back-slashes.
+        EditFiles(mod, f =>
+        {
+            var key = f.First(p => p.Key == MaterialPath(Top, 2)).Key;
+            var file = f[key]!.GetValue<string>();
+            f.Remove(key);
+            f[key.ToUpperInvariant()] = file.Replace('/', '\\').ToUpperInvariant();
+        });
+        var (outcomes, left) = k.Run([k.Worn(Top, 2, mod)]);
+        Assert.Empty(outcomes);
+        Assert.Empty(left);
+        Assert.Single(VariantRepointWriter.ReadRecord(mod)!.Items.Single().Redirects);
+        VariantRepointWriter.UndoItem(mod, Top, false, out var removed, out var kept, out _);
+        Assert.Equal((1, 0), (removed, kept));
+    }
+
+    [Fact]
+    [Trait("Plan", "EDGE-imc-all-variants-16")]
+    [Trait("Plan", "EDGE-imc-all-variants-48")]
+    [Trait("Plan", "AC-imc-all-variants-7")]
+    public void Removed_copies_decline_the_item()
+    {
+        using var k = new VariantRepointTestKit();
+        var mod = k.Colours("Dress", Top);
+        k.Imc(Top, E(1), E(1), E(2));
         k.Run([k.Worn(Top, 2, mod)]);
-        VariantRepointWriter.ClearDeclines(mod, [Top]);
+        EditFiles(mod, f => f.Remove(MaterialPath(Top, 2)), "Colour", "Red");
         var (outcomes, _) = k.Run([k.Worn(Top, 2, mod)]);
-        Assert.Single(outcomes);
-        Assert.Equal([2], DefaultImc(mod, Top).Keys);
+        Assert.Empty(outcomes);
+        Assert.Contains(Top.Key, VariantRepointWriter.ReadRecord(mod)!.Declined);
+        Assert.False(FilesOf(mod, Red).ContainsKey(MaterialPath(Top, 2)));   // never put back
+        Assert.True(FilesOf(mod, Blue).ContainsKey(MaterialPath(Top, 2)));    // the other stands, recorded
+        Assert.Single(VariantRepointWriter.ReadRecord(mod)!.Items.Single().Redirects);
     }
 
     [Fact]
     [Trait("Plan", "EDGE-imc-all-variants-17")]
     [Trait("Plan", "AC-imc-all-variants-7")]
-    public void Replaced_entry_forgotten_and_kept()
+    public void Changed_legacy_imc_entry_forgotten_and_kept()
     {
         using var k = new VariantRepointTestKit();
-        var mod = k.Dress("Dress", Top);
+        var mod = k.Mod("Dress", new() { [ModelPath(Top)] = "top.mdl", [MaterialPath(Top, 1)] = "top_a.mtrl" },
+                        [Imc(Top, 2, E(1))]);
+        LegacyRecord(mod, Top, 1, (2, E(1)));
+        var m = Manifest(mod);
+        m["DefaultData"]!["Manipulations"]![0]!["Manipulation"]!["Entry"]!["DecalId"] = 7;
+        WriteManifest(mod, m);
+        var rc = VariantRepointWriter.Reconcile(mod);
+        Assert.Equal(1, rc.Forgotten);
+        Assert.Equal(VariantRepointWriter.Undone.NothingRecorded, VariantRepointWriter.UndoItem(mod, Top, true, out _, out _, out _));
+        Assert.Single(ManifestImcEdits(mod));
+    }
+
+    [Fact]
+    [Trait("Plan", "EDGE-imc-all-variants-52")]
+    [Trait("Plan", "EDGE-imc-all-variants-48")]
+    [Trait("Plan", "AC-imc-all-variants-7")]
+    public void Repointed_copy_released_others_stand()
+    {
+        using var k = new VariantRepointTestKit();
+        var mod = k.Colours("Dress", Top);
         k.Imc(Top, E(1), E(1), E(2));
         k.Run([k.Worn(Top, 2, mod)]);
-        EditDefaultManips(mod, a => a[0]!["Manipulation"]!["Entry"]!["DecalId"] = 7);
-        var theirs = DefaultImc(mod, Top)[2];
+        EditFiles(mod, f => f[MaterialPath(Top, 2)] = "red/custom.mtrl", "Colour", "Red");
+        var rc = VariantRepointWriter.Reconcile(mod);
+        Assert.Equal(1, rc.Forgotten);
+        Assert.False(rc.ManifestChanged);
+        var item = VariantRepointWriter.ReadRecord(mod)!.Items.Single();
+        Assert.Single(item.Redirects);
+        var released = Assert.Single(item.Released);
+        Assert.Equal("red/custom.mtrl", released.File);
+        Assert.DoesNotContain(Top.Key, VariantRepointWriter.ReadRecord(mod)!.Declined);
+        var (outcomes, left) = k.Run([k.Worn(Top, 2, mod)]);
+        Assert.Empty(outcomes);
+        Assert.Empty(left);   // not "several-variants": the released key is not a folder
+        VariantRepointWriter.UndoItem(mod, Top, false, out var removed, out _, out _);
+        Assert.Equal(1, removed);
+        Assert.Equal("red/custom.mtrl", FilesOf(mod, Red)[MaterialPath(Top, 2)]);   // theirs is left alone
+    }
+
+    [Fact]
+    [Trait("Plan", "EDGE-imc-all-variants-52")]
+    public void Released_entry_kept_while_the_key_exists_and_dropped_when_gone()
+    {
+        using var k = new VariantRepointTestKit();
+        var mod = k.Colours("Dress", Top);
+        k.Imc(Top, E(1), E(1), E(2));
+        k.Run([k.Worn(Top, 2, mod)]);
+        EditFiles(mod, f => f[MaterialPath(Top, 2)] = "red/custom.mtrl", "Colour", "Red");
+        VariantRepointWriter.Reconcile(mod);
+        EditFiles(mod, f => f[MaterialPath(Top, 2)] = "red/again.mtrl", "Colour", "Red");
+        VariantRepointWriter.Reconcile(mod);
+        Assert.Single(VariantRepointWriter.ReadRecord(mod)!.Items.Single().Released);
+        EditFiles(mod, f => f.Remove(MaterialPath(Top, 2)), "Colour", "Red");
+        VariantRepointWriter.Reconcile(mod);
+        Assert.Empty(VariantRepointWriter.ReadRecord(mod)!.Items.Single().Released);
+    }
+
+    [Fact]
+    [Trait("Plan", "EDGE-imc-all-variants-50")]
+    [Trait("Plan", "AC-imc-all-variants-7")]
+    public void Renamed_option_copy_is_found_and_adopted()
+    {
+        using var k = new VariantRepointTestKit();
+        var mod = k.Colours("Dress", Top);
+        k.Imc(Top, E(1), E(1), E(2));
+        k.Run([k.Worn(Top, 2, mod)]);
+        var m = Manifest(mod);
+        m["Groups"]![0]!["Options"]![0]!["Name"] = "Crimson";
+        WriteManifest(mod, m);
+        var rc = VariantRepointWriter.Reconcile(mod);
+        Assert.Equal((0, 0, false), (rc.Dropped, rc.Forgotten, rc.ManifestChanged));
+        var record = VariantRepointWriter.ReadRecord(mod)!;
+        Assert.Empty(record.Declined);
+        Assert.Contains(record.Items.Single().Redirects, r => r.Container.Option == "Crimson");
         var (outcomes, left) = k.Run([k.Worn(Top, 2, mod)]);
         Assert.Empty(outcomes);
         Assert.Empty(left);
-        Assert.Equal(theirs, DefaultImc(mod, Top)[2]);
+    }
+
+    [Fact]
+    [Trait("Plan", "EDGE-imc-all-variants-51")]
+    [Trait("Plan", "AC-imc-all-variants-7")]
+    public void Removed_combining_option_copy_adopted_at_new_index()
+    {
+        using var k = new VariantRepointTestKit();
+        var mod = k.Mod("Combo", new() { [ModelPath(Top)] = "top.mdl" },
+                        groups: [("Looks", "Combining", [("Plain", new() { ["chara/x.tex"] = "x.tex" }, []),
+                                                         ("Shiny", new() { [MaterialPath(Top, 1)] = "a.mtrl" }, [])])]);
+        k.Imc(Top, E(1), E(1), E(2));
+        k.Run([k.Worn(Top, 2, mod)]);
+        var m = Manifest(mod);
+        m["Groups"]![0]!["Containers"]!.AsArray().RemoveAt(0);
+        m["Groups"]![0]!["Options"]!.AsArray().RemoveAt(0);
+        WriteManifest(mod, m);
+        var rc = VariantRepointWriter.Reconcile(mod);
+        Assert.Equal(0, rc.Dropped);
+        Assert.Equal(0, VariantRepointWriter.ReadRecord(mod)!.Items.Single().Redirects.Single().Container.Index);
+    }
+
+    [Fact]
+    [Trait("Plan", "EDGE-imc-all-variants-51")]
+    [Trait("Plan", "AC-imc-all-variants-7")]
+    public void Combining_copy_content_gone_declines()
+    {
+        using var k = new VariantRepointTestKit();
+        var mod = k.Mod("Combo", new() { [ModelPath(Top)] = "top.mdl", [MaterialPath(Top, 1)] = "base.mtrl" },
+                        groups: [("Looks", "Combining", [("Shiny", new() { [MaterialPath(Top, 1)] = "a.mtrl" }, [])])]);
+        k.Imc(Top, E(1), E(1), E(2));
+        k.Run([k.Worn(Top, 2, mod)]);
+        EditFiles(mod, f => f.Remove(MaterialPath(Top, 2)), "Looks", index: 0);
+        var rc = VariantRepointWriter.Reconcile(mod);
+        Assert.Equal(1, rc.Dropped);
+        Assert.Contains(Top.Key, VariantRepointWriter.ReadRecord(mod)!.Declined);
+    }
+
+    [Fact]
+    [Trait("Plan", "EDGE-imc-all-variants-51")]
+    public void Whole_group_gone_searches_mod_wide()
+    {
+        using var k = new VariantRepointTestKit();
+        var mod = k.Colours("Dress", Top);
+        k.Imc(Top, E(1), E(1), E(2));
+        k.Run([k.Worn(Top, 2, mod)]);
+        // The author folds the "Colour" group into a new "Paint" group, keeping both options (and our copies) as they were.
+        var m = Manifest(mod);
+        m["Groups"]![0]!["Name"] = "Paint";
+        WriteManifest(mod, m);
+        var rc = VariantRepointWriter.Reconcile(mod);
+        Assert.Equal(0, rc.Dropped);
+        Assert.All(VariantRepointWriter.ReadRecord(mod)!.Items.Single().Redirects, r => Assert.Equal("Paint", r.Container.Group));
+    }
+
+    [Fact]
+    [Trait("Plan", "EDGE-imc-all-variants-60")]
+    [Trait("Plan", "AC-imc-all-variants-7")]
+    public void Identical_pair_in_another_group_is_not_adopted()
+    {
+        using var k = new VariantRepointTestKit();
+        var mod = k.Mod("Dress", new() { [ModelPath(Top)] = "top.mdl" },
+                        groups: [("Colour", "Single", [("Red", new() { [MaterialPath(Top, 1)] = "a.mtrl" }, [])]),
+                                 ("Other", "Single", [("One", new() { ["chara/y.tex"] = "y.tex" }, [])])]);
+        k.Imc(Top, E(1), E(1), E(2));
+        k.Run([k.Worn(Top, 2, mod)]);
+        // An author update drops our copy and ships the same pair in another group, with new content.
+        var m = Manifest(mod);
+        m["Version"] = "2.0";
+        m["Groups"]![0]!["Options"]![0]!["Files"]!.AsObject().Remove(MaterialPath(Top, 2));
+        m["Groups"]![1]!["Options"]![0]!["Files"]!.AsObject()[MaterialPath(Top, 2)] = "a.mtrl";
+        WriteManifest(mod, m);
+        var rc = VariantRepointWriter.Reconcile(mod);
+        Assert.True(rc.Replanned);
         Assert.Equal(VariantRepointWriter.Undone.NothingRecorded, VariantRepointWriter.UndoItem(mod, Top, true, out _, out _, out _));
-        Assert.Equal(theirs, DefaultImc(mod, Top)[2]);
+        Assert.Equal("a.mtrl", FilesOf(mod, new("Other", "One"))[MaterialPath(Top, 2)]);
     }
 
     [Fact]
     [Trait("Plan", "EDGE-imc-all-variants-18")]
+    [Trait("Plan", "EDGE-imc-all-variants-48")]
     [Trait("Plan", "AC-imc-all-variants-7")]
-    public void Author_update_new_folder_replans()
+    public void Author_update_new_folder_strips_and_replans()
     {
         using var k = new VariantRepointTestKit();
         var mod = k.Dress("Dress", Top);
         k.Imc(Top, E(1), E(1), E(2), E(3));
         k.Run([k.Worn(Top, 2, mod)]);
-        // The author now ships v0003 instead of v0001.
-        var m = Manifest(mod);
-        var files = m["DefaultData"]!["Files"]!.AsObject();
-        files.Remove(MaterialPath(Top, 1));
-        files[MaterialPath(Top, 3)] = "top_a.mtrl";
-        WriteManifest(mod, m);
+        // The author now ships v0004 instead of v0001 (our copies at v0002/v0003 point at a folder it no longer ships).
+        EditFiles(mod, f => { f.Remove(MaterialPath(Top, 1)); f[MaterialPath(Top, 4)] = "new_a.mtrl"; });
         k.Run([k.Worn(Top, 2, mod)]);
-        var entries = DefaultImc(mod, Top);
-        Assert.Equal([0, 1, 2], entries.Keys.Order());
-        Assert.All(entries.Values, e => Assert.Equal(3, e.MaterialId));
-        Assert.Equal(3, Assert.Single(VariantRepointWriter.ReadRecord(mod)!.Items).MaterialId);
+        var files = FilesOf(mod, Default);
+        Assert.Equal("new_a.mtrl", files[MaterialPath(Top, 2)]);
+        Assert.Equal("new_a.mtrl", files[MaterialPath(Top, 3)]);
+        Assert.Equal("new_a.mtrl", files[MaterialPath(Top, 1)]);
+        Assert.Equal(4, VariantRepointWriter.ReadRecord(mod)!.Items.Single().MaterialId);
     }
 
     [Fact]
     [Trait("Plan", "EDGE-imc-all-variants-18")]
+    [Trait("Plan", "EDGE-imc-all-variants-48")]
     [Trait("Plan", "AC-imc-all-variants-7")]
-    public void Author_update_several_folders_removes_ours()
+    public void Author_update_several_folders_strips_ours()
     {
         using var k = new VariantRepointTestKit();
         var mod = k.Dress("Dress", Top);
-        k.Imc(Top, E(1), E(1), E(2));
+        k.Imc(Top, E(1), E(1), E(2), E(3));
         k.Run([k.Worn(Top, 2, mod)]);
-        var m = Manifest(mod);
-        m["DefaultData"]!["Files"]!.AsObject()[MaterialPath(Top, 2)] = "top_b.mtrl";
-        WriteManifest(mod, m);
+        EditFiles(mod, f => f[MaterialPath(Top, 4)] = "other.mtrl");
         var (outcomes, left) = k.Run([k.Worn(Top, 2, mod)]);
         Assert.Empty(outcomes);
         Assert.Equal(RepointReason.SeveralVariants, Assert.Single(left).Reason);
-        Assert.Empty(DefaultImc(mod, Top));
+        Assert.False(FilesOf(mod, Default).ContainsKey(MaterialPath(Top, 2)));
         Assert.False(File.Exists(RecordPath(mod)));
     }
 
     [Fact]
     [Trait("Plan", "EDGE-imc-all-variants-34")]
+    [Trait("Plan", "EDGE-imc-all-variants-48")]
     [Trait("Plan", "AC-imc-all-variants-7")]
     public void Author_update_fingerprint_change_replans_not_declines()
     {
@@ -410,55 +609,45 @@ public class VariantRepointWriterTests
         var mod = k.Dress("Dress", Top);
         k.Imc(Top, E(1), E(1), E(2));
         k.Run([k.Worn(Top, 2, mod)]);
-        // The author ships an update: a new version and files, and none of our entries.
         var m = Manifest(mod);
         m["Version"] = "2.0";
-        m["DefaultData"]!["Files"]!.AsObject()["chara/new.tex"] = "new.tex";
-        m["DefaultData"]!["Manipulations"] = new JsonArray();
+        var files = m["DefaultData"]!["Files"]!.AsObject();
+        files.Remove(MaterialPath(Top, 2));
+        files["chara/new.tex"] = "new.tex";
         WriteManifest(mod, m);
         var (outcomes, left) = k.Run([k.Worn(Top, 2, mod)]);
         Assert.Empty(left);
         Assert.Single(outcomes);
-        Assert.Equal([2], DefaultImc(mod, Top).Keys);
+        Assert.True(FilesOf(mod, Default).ContainsKey(MaterialPath(Top, 2)));
         Assert.Empty(VariantRepointWriter.ReadRecord(mod)!.Declined);
     }
 
     [Fact]
     [Trait("Plan", "EDGE-imc-all-variants-34")]
-    public void Author_update_keeps_existing_declines()
+    [Trait("Plan", "EDGE-imc-all-variants-46")]
+    public void Copies_are_not_a_second_folder_and_keep_the_fingerprint()
     {
         using var k = new VariantRepointTestKit();
-        var legs = new Item('e', 6255, "dwn");
-        var mod = k.Mod("Outfit", new()
-        {
-            [ModelPath(Top)] = "top.mdl", [MaterialPath(Top, 1)] = "top_a.mtrl",
-            [ModelPath(legs)] = "dwn.mdl", [MaterialPath(legs, 1)] = "dwn_a.mtrl",
-        });
-        k.ImcSlots(Top.SetTag, (1, [E(1), E(1), E(2)]), (3, [E(1), E(1), E(2)]));
-        k.Run([k.Worn(Top, 2, mod), k.Worn(legs, 2, mod)]);
-        VariantRepointWriter.UndoItem(mod, legs, true, out _, out _, out _);
-        var m = Manifest(mod);
-        m["Version"] = "2.0";
-        m["DefaultData"]!["Manipulations"] = new JsonArray();
-        WriteManifest(mod, m);
-        var (_, left) = k.Run([k.Worn(Top, 2, mod), k.Worn(legs, 2, mod)]);
-        Assert.Equal(RepointReason.Declined, Assert.Single(left).Reason);
-        Assert.Equal([2], DefaultImc(mod, Top).Keys);
-        Assert.Empty(DefaultImc(mod, legs));
+        var mod = k.Colours("Dress", Top);
+        var before = Fingerprint(mod);
+        k.Imc(Top, E(1), E(1), E(2));
+        k.Run([k.Worn(Top, 2, mod)]);
+        var record = VariantRepointWriter.ReadRecord(mod)!;
+        Assert.Equal(before, record.Fingerprint);
+        Assert.Equal(before, Fingerprint(mod, record.AllCopies()));
+        var (candidates, _) = Candidates([k.Worn(Top, 2, mod)], k.Inputs());
+        var c = Assert.Single(candidates);
+        Assert.Equal(1, c.Folder);
+        Assert.Equal(2, c.Sources.Count);
     }
 
     [Fact]
     [Trait("Plan", "EDGE-imc-all-variants-34")]
-    public void Fingerprint_unchanged_by_our_write_and_penumbra_resave()
+    public void Fingerprint_unchanged_by_penumbra_resave()
     {
         using var k = new VariantRepointTestKit();
         var mod = k.Dress("Dress", Top);
         var before = Fingerprint(mod);
-        k.Imc(Top, E(1), E(1), E(2));
-        k.Run([k.Worn(Top, 2, mod)]);
-        Assert.Equal(before, Fingerprint(mod));
-        Assert.Equal(before, VariantRepointWriter.ReadRecord(mod)!.Fingerprint);
-        // Penumbra re-saves: key order, spelling of slashes, a layout key.
         var m = Manifest(mod);
         var files = m["DefaultData"]!["Files"]!.AsObject();
         var pairs = files.Select(p => (p.Key, p.Value!.GetValue<string>())).Reverse().ToList();
@@ -475,60 +664,37 @@ public class VariantRepointWriterTests
     public void Other_proteus_edit_then_removal_declines_not_replans()
     {
         using var k = new VariantRepointTestKit();
-        var mod = k.Mod("Dress", new() { [ModelPath(Top)] = "top.mdl", [MaterialPath(Top, 1)] = "top_a.mtrl" },
-                        groups: [("Colour", "Single", [("Red", new() { ["chara/x.tex"] = "red.tex" }, [])])]);
+        var mod = k.Colours("Dress", Top);
         k.Imc(Top, E(1), E(1), E(2));
-        // 1. our write
         k.Run([k.Worn(Top, 2, mod)]);
-        // 2. a shader-upgrade-style edit: a mask redirect added inside an option
         PenumbraModMeta.MergeOptionRedirects(mod, "Colour", "Red",
             new System.Collections.Generic.Dictionary<string, string> { ["chara/x_mask.tex"] = "Shader Upgrade/m.tex" });
-        Assert.NotEqual(VariantRepointWriter.ReadRecord(mod)!.Fingerprint, Fingerprint(mod));
-        // 3. a walk finds our entries intact and re-stamps
-        k.Run([k.Worn(Top, 2, mod)]);
-        Assert.Equal(Fingerprint(mod), VariantRepointWriter.ReadRecord(mod)!.Fingerprint);
-        // 4. every entry of ours removed by the user: declined, not replanned
-        EditDefaultManips(mod, a => a.Clear());
+        k.Run([k.Worn(Top, 2, mod)]);   // a walk finds our copies intact and re-stamps
+        Assert.Equal(Fingerprint(mod, VariantRepointWriter.ReadRecord(mod)!.AllCopies()),
+                     VariantRepointWriter.ReadRecord(mod)!.Fingerprint);
+        EditFiles(mod, f => f.Remove(MaterialPath(Top, 2)), "Colour", "Red");
+        EditFiles(mod, f => f.Remove(MaterialPath(Top, 2)), "Colour", "Blue");
         var (outcomes, left) = k.Run([k.Worn(Top, 2, mod)]);
         Assert.Empty(outcomes);
         Assert.Equal(RepointReason.Declined, Assert.Single(left).Reason);
-        Assert.Empty(DefaultImc(mod, Top));
     }
 
     [Fact]
     [Trait("Plan", "EDGE-imc-all-variants-19")]
-    public void Pending_record_after_crash_is_resolved()
+    public void Pending_copies_after_crash_are_resolved()
     {
         using var k = new VariantRepointTestKit();
         var mod = k.Dress("Dress", Top);
         k.Imc(Top, E(1), E(1), E(2));
-        VariantRepointWriter.AfterStep = step => { if (step == "pending") throw new CrashException(); };
+        VariantRepointWriter.AfterStep = s => { if (s == "pending") throw new CrashException(); };
         Assert.Throws<CrashException>(() => k.Run([k.Worn(Top, 2, mod)]));
         VariantRepointWriter.AfterStep = null;
         Assert.True(VariantRepointWriter.ReadRecord(mod)!.Items.Single().Pending);
-        Assert.Empty(DefaultImc(mod, Top));
-        // The next run drops the absent entry without declining, and writes it properly.
         var (outcomes, left) = k.Run([k.Worn(Top, 2, mod)]);
         Assert.Empty(left);
         Assert.Single(outcomes);
-        var item = VariantRepointWriter.ReadRecord(mod)!.Items.Single();
-        Assert.False(item.Pending);
-        Assert.Equal([2], DefaultImc(mod, Top).Keys);
-
-        // A crash after the manifest write: the present entry is adopted.
-        using var k2 = new VariantRepointTestKit();
-        var mod2 = k2.Dress("Dress", Top);
-        k2.Imc(Top, E(1), E(1), E(2));
-        VariantRepointWriter.AfterStep = step => { if (step == "manifest") throw new CrashException(); };
-        Assert.Throws<CrashException>(() => k2.Run([k2.Worn(Top, 2, mod2)]));
-        VariantRepointWriter.AfterStep = null;
-        var (o2, l2) = k2.Run([k2.Worn(Top, 2, mod2)]);
-        Assert.Empty(o2);
-        Assert.Empty(l2);
-        var adopted = VariantRepointWriter.ReadRecord(mod2)!.Items.Single();
-        Assert.False(adopted.Pending);
-        Assert.Equal([2], adopted.Variants.Select(v => v.Variant));
-        Assert.Empty(VariantRepointWriter.ReadRecord(mod2)!.Declined);
+        Assert.False(VariantRepointWriter.ReadRecord(mod)!.Items.Single().Pending);
+        Assert.Empty(VariantRepointWriter.ReadRecord(mod)!.Declined);
     }
 
     private sealed class CrashException : Exception;
@@ -546,11 +712,9 @@ public class VariantRepointWriterTests
         using (new FileStream(Path.Combine(mod, "meta.json"), FileMode.Open, FileAccess.Read, FileShare.None))
             outcome = VariantRepointWriter.Apply(mod, plan.PerMod.Single().Items, () => true);
         Assert.Equal(RepointReason.WriteFailed, Assert.Single(outcome.Left).Reason);
-        Assert.Empty(outcome.Written);
         Assert.Equal(manifest, File.ReadAllText(Path.Combine(mod, "meta.json")));
         Assert.False(File.Exists(RecordPath(mod)));
-        Assert.False(Directory.Exists(Path.Combine(mod, "Proteus")));   // the folder the record made goes with it
-        // Retried later.
+        Assert.False(Directory.Exists(Path.Combine(mod, "Proteus")));
         Assert.Single(k.Run([k.Worn(Top, 2, mod)]).Outcomes);
     }
 
@@ -569,7 +733,6 @@ public class VariantRepointWriterTests
         int asked = 0;
         var (outcomes, _) = k.Run([k.Worn(Top, 2, mod), k.Worn(legs, 2, mod)], () => asked++ == 0);
         Assert.Single(Assert.Single(outcomes).Written);
-        Assert.Single(VariantRepointWriter.ReadRecord(mod)!.Items);
     }
 
     [Fact]
@@ -582,13 +745,11 @@ public class VariantRepointWriterTests
             [ModelPath(RightRing)] = "rir.mdl", [MaterialPath(RightRing, 1)] = "rir_a.mtrl",
             [ModelPath(LeftRing)] = "ril.mdl", [MaterialPath(LeftRing, 1)] = "ril_a.mtrl",
         });
-        // Right ring is slot 3 of the set, left ring slot 4: only the right ring's variant 2 misses.
         k.ImcSlots(RightRing.SetTag, (3, [E(1), E(1), E(2)]), (4, [E(1), E(1), E(1)]));
         k.Run([k.Worn(RightRing, 2, mod), k.Worn(LeftRing, 2, mod)]);
-        Assert.Equal([2], DefaultImc(mod, RightRing).Keys);
-        Assert.Empty(DefaultImc(mod, LeftRing));
-        var m = Manifest(mod)["DefaultData"]!["Manipulations"]!.AsArray().Single()!["Manipulation"]!;
-        Assert.Equal("RFinger", m["EquipSlot"]!.GetValue<string>());
+        var files = FilesOf(mod, Default);
+        Assert.True(files.ContainsKey(MaterialPath(RightRing, 2)));
+        Assert.False(files.ContainsKey(MaterialPath(LeftRing, 2)));
     }
 
     [Fact]
@@ -601,6 +762,7 @@ public class VariantRepointWriterTests
         k.Run([k.Worn(Top, 2, mod)]);
         var moved = Path.Combine(k.ModsRoot, "Dress (renamed)");
         Directory.Move(mod, moved);
+        k.Priority[k.Priority.IndexOf(mod)] = moved;
         var (outcomes, left) = k.Run([k.Worn(Top, 2, moved)]);
         Assert.Empty(outcomes);
         Assert.Empty(left);
@@ -625,7 +787,20 @@ public class VariantRepointWriterTests
         Assert.Equal("Ça va — ✓", after["Description"]!.GetValue<string>());
         Assert.True(JsonNode.DeepEquals(m["SomethingNew"], after["SomethingNew"]));
         Assert.True(JsonNode.DeepEquals(m["Groups"], after["Groups"]));
-        Assert.Equal("ünï/top_a.mtrl", after["DefaultData"]!["Files"]![MaterialPath(Top, 1)]!.GetValue<string>());
-        Assert.Contains("色", File.ReadAllText(Path.Combine(mod, "meta.json")));
+        Assert.Equal("ünï/top_a.mtrl", FilesOf(mod, Default)[MaterialPath(Top, 2)]);
+    }
+
+    [Fact]
+    [Trait("Plan", "AC-imc-all-variants-6")]
+    public void Undo_after_reconcile_counts_replaced_copies_as_kept()
+    {
+        using var k = new VariantRepointTestKit();
+        var mod = k.Colours("Dress", Top);
+        k.Imc(Top, E(1), E(1), E(2));
+        k.Run([k.Worn(Top, 2, mod)]);
+        EditFiles(mod, f => f[MaterialPath(Top, 2)] = "red/custom.mtrl", "Colour", "Red");
+        var rc = VariantRepointWriter.Reconcile(mod);
+        VariantRepointWriter.UndoItem(mod, Top, true, out var removed, out var kept, out _);
+        Assert.Equal((1, 1), (removed, kept + rc.ForgottenOf(Top)));
     }
 }

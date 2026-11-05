@@ -206,10 +206,14 @@ internal sealed class HarnessRouter(HarnessJobs jobs, LogRing ring, SessionNames
             modDir = w.ModDir, item = w.Item, variant = w.Variant, effectiveMaterialId = w.EffectiveMaterialId,
             loadedFolder = w.LoadedFolder,
         }),
-        repointed = v.RepointedList.Select(r => new { modDir = r.ModDir, item = r.Item, materialId = r.MaterialId, variants = r.Variants }),
+        repointed = v.RepointedList.Select(r => new
+        {
+            modDir = r.ModDir, item = r.Item, materialId = r.MaterialId, folders = r.Folders, variants = r.Variants,
+            legacyImcVariants = r.LegacyList,
+        }),
         left = v.LeftList.Select(l => new { modDir = l.ModDir, item = l.Item, reason = l.Reason }),
         lastRun = v.LastRun is { } r
-            ? new { kind = r.Kind, modsChanged = r.ModsChanged, entriesWritten = r.EntriesWritten, removed = r.Removed,
+            ? new { kind = r.Kind, modsChanged = r.ModsChanged, foldersWritten = r.FoldersWritten, removed = r.Removed,
                     kept = r.Kept, refused = r.Refused, reloaded = r.Reloaded, redrawRequested = r.RedrawRequested,
                     nothingRecorded = r.NothingRecorded, atUtc = r.AtUtc }
             : null,

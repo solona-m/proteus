@@ -252,7 +252,7 @@ public class HarnessRouterTests : IDisposable
         f.Game.VariantRepointView = new Proteus.Services.VariantRepointWatcher.View(
             Enabled: true, Waiting: "none", AwaitingRedraw: true,
             Worn: [new("This Old Thing", "e6255 Body", 2, 1, "v0001"), new(null, "a0053 Earrings", 1, null, null)],
-            Repointed: [new("This Old Thing", "e6255 Body", 1, [0, 2])],
+            Repointed: [new("This Old Thing", "e6255 Body", 1, [2], [0, 2], [3])],
             Left: [new("Skirt", "e6256 Legs", "several-variants")],
             LastRun: new("repoint", 1, 2, 0, 0, 0, true, true, DateTime.UtcNow));
         var (status, b) = await f.Get("/state");
@@ -271,10 +271,12 @@ public class HarnessRouterTests : IDisposable
         var rp = vr.GetProperty("repointed")[0];
         Assert.Equal(1, rp.GetProperty("materialId").GetInt32());
         Assert.Equal(2, rp.GetProperty("variants").GetArrayLength());
+        Assert.Equal(2, rp.GetProperty("folders")[0].GetInt32());
+        Assert.Equal(3, rp.GetProperty("legacyImcVariants")[0].GetInt32());
         Assert.Equal("several-variants", vr.GetProperty("left")[0].GetProperty("reason").GetString());
         var run = vr.GetProperty("lastRun");
         Assert.Equal("repoint", run.GetProperty("kind").GetString());
-        Assert.Equal(2, run.GetProperty("entriesWritten").GetInt32());
+        Assert.Equal(2, run.GetProperty("foldersWritten").GetInt32());
         Assert.False(run.GetProperty("nothingRecorded").GetBoolean());
     }
 

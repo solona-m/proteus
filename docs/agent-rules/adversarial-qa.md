@@ -138,19 +138,35 @@ The harness never deletes or overwrites a backup; the user may delete them by ha
 - **Gear variants — it WRITES INTO THE WORN MODS' MANIFESTS.** `/state` `variantRepoint` is
   `{enabled, busy, waiting: none|penumbra, awaitingRedraw,
   worn:[{modDir|null, item: "e6255 Body", variant, effectiveMaterialId, loadedFolder: "v0001"|null}],
-  repointed:[{modDir, item, materialId, variants:[int]}],
-  left:[{modDir, item, reason: several-variants|mod-imc|imc-group|proteus-toggles|other-mod-material|folder-unused|no-imc|meta-unreadable|outranked|legacy-mod|proteus-pack|declined|write-failed}],
-  lastRun:{kind: repoint|repoint-now|undo-worn, modsChanged, entriesWritten, removed, kept, refused, reloaded, redrawRequested, nothingRecorded, atUtc}}`.
+  repointed:[{modDir, item, materialId, folders:[int], variants:[int], legacyImcVariants:[int]}],
+  left:[{modDir, item, reason: several-variants|mod-imc|other-mod-material|no-imc|meta-unreadable|outranked|legacy-mod|proteus-pack|declined|write-failed}],
+  lastRun:{kind: repoint|repoint-now|undo-worn, modsChanged, foldersWritten, removed, kept, refused, reloaded, redrawRequested, nothingRecorded, atUtc}}`.
+  It writes NO Imc entries: it copies the mod's own `…/v{N}/<name>` material redirects to `…/v{M}/<name>` (same file)
+  inside the same options and containers, appended after their existing keys. `legacyImcVariants` lists Imc entries an
+  older build (1428) wrote; they are still undone.
   `loadedFolder` is the material folder the game actually loaded for the piece (from the resource map), the real-game
-  cross-check of `effectiveMaterialId`. After switching it on or equipping, wait for `variantRepoint.busy == false`
-  and a redraw before you assert. **Clean up everything you caused:** copy the mod's `meta.json` and hash its other
-  files first; afterwards, while wearing each repointed piece, POST `{"enabled":false,"undoWorn":true,"decline":false}`
-  and check `DefaultData.Manipulations` is as before and no `Proteus/variantrepoint.json` remains.
-  **Case B (custom-named material, e.g. This Old Thing's `mt_c0201e6255_top_b.mtrl`, shipped only under `v0001`):**
-  before switching the feature on, wear the piece in a variant whose MaterialId is not 1 and record `loadedFolder` and
-  a screenshot. If `loadedFolder` is already `v0001` (the game fell back for the missing material), STOP and report it
-  as a finding: "wrong" must narrow to "a vanilla file exists under the worn folder" and EDGE-imc-all-variants-33
-  flips. Otherwise switch it on and check `loadedFolder` becomes `v0001` and the piece is drawn.
+  cross-check of `effectiveMaterialId`. **It is ON by default**, so it may already have written into a worn mod before
+  you start: to take a "before" reading, first POST `{"enabled":false,"undoWorn":true,"decline":false}` while wearing
+  the piece, check `repointed` is empty and wait for a redraw. After switching it on or equipping, wait for
+  `variantRepoint.busy == false` and a redraw before you assert. **Clean up everything you caused:** copy the mod's
+  `meta.json` and hash its other files first; afterwards, while wearing each repointed piece, POST
+  `{"enabled":false,"undoWorn":true,"decline":false}`, check the manifest is as before (every container's `Files`,
+  `DefaultData.Manipulations`) and no `Proteus/variantrepoint.json` remains, then switch it back on (`{"enabled":true}`, the user's default) unless the user
+  had it off.
+  **Case B (custom-named material shipped only under `v0001`, e.g. Elegy - Clara Lingerie's e0051 `_top_b`, worn as the
+  Striped Summer Top, variant 2):** take the "before" reading as above — wear the piece and record `loadedFolder` and a
+  screenshot with the feature off and nothing repointed. If `loadedFolder` is already `v0001` (the game fell back for
+  the missing material), STOP and report it as a finding: "wrong" must narrow to "a vanilla file exists under the worn
+  folder" and EDGE-imc-all-variants-33 flips. Otherwise switch it on and check `repointed` lists the worn folder in
+  `folders`, the worn `v{M}` material now resolves into the mod (`loadedFolder` stays `v{M}`, its file the mod's), and the
+  piece is drawn.
+  **Case C (a competing model replacement, EDGE-imc-all-variants-41):** "moonfire lace - by solona" (e0317 Body, ships
+  only `v0001`) worn as variant 2 with Rose, Sweetheart Lingerie and Equinox enabled (each also replaces the e0317 model
+  and ships its own `v0002` material). With the "before" reading taken as above (`loadedFolder` `v0002`, Rose's
+  material on moonfire lace's model), switch it on: `left` no longer lists it as `other-mod-material`, `repointed`
+  names it with `folders` [2], every moonfire lace container holding `…/v0001/mt_c0201e0317_top_b.mtrl` gained
+  `…/v0002/…` → the same file, no Imc manipulation was added, and the v0002 material now resolves into moonfire lace
+  (`loadedFolder` stays `v0002`).
 - After a refit or restore, wait for the job to end, then for `/state`
   `autoRefit.busy == false` and `compositor.phase == "idle"` before you assert
   anything or take a screenshot.

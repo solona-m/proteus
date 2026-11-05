@@ -11,21 +11,22 @@ namespace Proteus.Services;
 /// <summary>Why a worn piece's variants were not pointed at its mod's material.</summary>
 internal enum RepointReason
 {
-    SeveralVariants, ModImc, ImcGroup, ProteusToggles, OtherModMaterial, FolderUnused, NoImc, MetaUnreadable, Outranked,
+    SeveralVariants, ModImc, OtherModMaterial, NoImc, MetaUnreadable, Outranked,
     LegacyMod, ProteusPack, Declined, WriteFailed,
 }
 
 /// <summary>
 /// The "Gear variants" policy, with no game, Penumbra or disk writes of its own: which worn pieces would draw the wrong
 /// material (or none) because their mod ships one variant's material folder and the worn variant uses another, and the
-/// per-variant IMC entries that point them at the mod's folder. <see cref="VariantRepointWriter"/> writes;
+/// copies of the mod's own material redirects that fix them. <see cref="VariantRepointWriter"/> writes;
 /// <see cref="VariantRepointWatcher"/> schedules.
 /// <para/>
-/// What is written matches TexTools' metadata tab "Apply to All Variants" (<c>ImcControl.ApplyAllButton_Click</c>), which
-/// copies the chosen variant's <c>Mask</c> (attributes and sound, one <c>u16</c>), decal, VFX, material set and animation
-/// to every entry of the slot — all six fields. Proteus copies the same six, but on purpose only to the variants that
-/// miss the mod's folder and that the mod's own IMC data does not name, and as Penumbra default-data entries (undoable,
-/// and outranked by every author option) rather than a rewritten <c>.imc</c>.
+/// TexTools' metadata tab "Apply to All Variants" (<c>ImcControl.ApplyAllButton_Click</c>) copies the chosen variant's
+/// whole IMC entry (<c>Mask</c> = attributes and sound, decal, VFX, material set, animation) to every variant. Proteus
+/// fixes the material only, and without IMC (the owner's decision): it copies the mod's <c>…/vN/&lt;name&gt;</c>
+/// redirects to <c>…/vM/&lt;name&gt;</c> in the same containers, so Penumbra resolves them at the mod's priority — the
+/// ordering that picks the model. An IMC entry would apply wherever the mod is enabled, even where another mod's model
+/// wins. Each variant keeps its own parts, VFX and sound.
 /// </summary>
 internal static class VariantRepointPlan
 {
@@ -74,25 +75,35 @@ internal static class VariantRepointPlan
       + $@"(?<name>mt_c\d{{4}}{item.SetTag}_{item.Suffix}_[^/]*\.mtrl)$",
         RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
 
+    /// <summary>The material folder and file name a game path dresses for the item, or null for any other path.</summary>
+    public static (int Folder, string Name)? MaterialOf(string gamePath, Item item)
+    {
+        var m = MaterialRe(item).Match(gamePath.Replace('\\', '/'));
+        return m.Success && int.TryParse(m.Groups["v"].Value, out var v) && v > 0
+            ? (v, m.Groups["name"].Value.ToLowerInvariant()) : null;
+    }
+
     /// <summary>
     /// The material folders (the <c>NNNN</c> of <c>vNNNN</c>) a mod's redirects dress for the item, in its default data,
     /// any option or any combining container, active or not; and the material file names under them.
     /// </summary>
-    public static (SortedSet<int> Folders, List<string> Names) DressedFolders(IEnumerable<PenumbraModMeta.Redirect> redirects,
-                                                                               Item item)
+    public static (SortedSet<int> Folders, List<string> Names) DressedFolders(IEnumerable<string> gamePaths, Item item)
     {
-        var re = MaterialRe(item);
         var folders = new SortedSet<int>();
         var names = new SortedSet<string>(StringComparer.OrdinalIgnoreCase);
-        foreach (var r in redirects)
-        {
-            var m = re.Match(r.GamePath.Replace('\\', '/'));
-            if (!m.Success || !int.TryParse(m.Groups["v"].Value, out var v) || v <= 0) continue;
-            folders.Add(v);
-            names.Add(m.Groups["name"].Value.ToLowerInvariant());
-        }
+        foreach (var g in gamePaths)
+            if (MaterialOf(g, item) is { } m)
+            {
+                folders.Add(m.Folder);
+                names.Add(m.Name);
+            }
         return (folders, [.. names]);
     }
+
+    /// <summary>A material game path moved to another folder, keeping its own spelling otherwise.</summary>
+    public static string InFolder(string gamePath, int folder)
+        => Regex.Replace(gamePath, @"([/\\]material[/\\]v)\d{4}([/\\])", m => m.Groups[1].Value + folder.ToString("D4") + m.Groups[2].Value,
+                         RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
 
     // ── reading IMC edits ───────────────────────────────────────────────────
 
@@ -208,9 +219,11 @@ internal static class VariantRepointPlan
     /// <summary>
     /// The mod's content as far as an author update goes: the manifest's version, default-data files and every group's
     /// name, type and options' (and containers') files, canonically spelled. Manipulations and layout keys are left out,
-    /// so our own entries and Penumbra's re-saves never change it. "" when unreadable.
+    /// so our own entries and Penumbra's re-saves never change it. Proteus's own redirect copies are left out too
+    /// (<paramref name="exclude"/>: each skipped where it sits, matched case- and slash-insensitively), so a copy written
+    /// or removed never changes it either. "" when unreadable.
     /// </summary>
-    public static string Fingerprint(string modRoot)
+    public static string Fingerprint(string modRoot, IReadOnlyCollection<PenumbraModMeta.ContainerRedirect>? exclude = null)
     {
         try
         {
@@ -220,29 +233,37 @@ internal static class VariantRepointPlan
             var root = doc.RootElement;
             var sb = new StringBuilder();
             sb.Append("V:").Append(root.TryGetProperty("Version", out var ver) ? ver.ToString() : "").Append('\n');
-            if (root.TryGetProperty("DefaultData", out var dd)) Files(dd, "D");
+            if (root.TryGetProperty("DefaultData", out var dd)) Files(dd, "D", new PenumbraModMeta.ContainerRef(""));
             if (root.TryGetProperty("Groups", out var gs) && gs.ValueKind == JsonValueKind.Array)
                 foreach (var g in gs.EnumerateArray())
                 {
                     if (g.ValueKind != JsonValueKind.Object) continue;
-                    sb.Append("G:").Append(Str(g, "Name")).Append('|').Append(Str(g, "Type")).Append('\n');
+                    var group = Str(g, "Name");
+                    sb.Append("G:").Append(group).Append('|').Append(Str(g, "Type")).Append('\n');
                     if (g.TryGetProperty("Options", out var opts) && opts.ValueKind == JsonValueKind.Array)
                         foreach (var o in opts.EnumerateArray())
                         {
                             sb.Append("O:").Append(Str(o, "Name")).Append('\n');
-                            Files(o, "F");
+                            Files(o, "F", new PenumbraModMeta.ContainerRef(group, Str(o, "Name")));
                         }
                     if (g.TryGetProperty("Containers", out var cs) && cs.ValueKind == JsonValueKind.Array)
-                        foreach (var c in cs.EnumerateArray()) Files(c, "C");
+                    {
+                        int i = 0;
+                        foreach (var c in cs.EnumerateArray()) Files(c, "C", new PenumbraModMeta.ContainerRef(group, null, i++));
+                    }
                 }
             return ShaderUpgradePlan.Hash16(Encoding.UTF8.GetBytes(sb.ToString()));
 
-            void Files(JsonElement owner, string tag)
+            void Files(JsonElement owner, string tag, PenumbraModMeta.ContainerRef at)
             {
                 if (owner.ValueKind != JsonValueKind.Object || !owner.TryGetProperty("Files", out var f)
                     || f.ValueKind != JsonValueKind.Object)
                     return;
                 foreach (var line in f.EnumerateObject()
+                                      .Where(p => exclude == null || !exclude.Any(x => x.Container.SameAs(at)
+                                          && PenumbraModMeta.SameFile(x.GamePath, p.Name)
+                                          && p.Value.ValueKind == JsonValueKind.String
+                                          && PenumbraModMeta.SameFile(x.File, p.Value.GetString()!)))
                                       .Select(p => Canon(p.Name) + "=" + (p.Value.ValueKind == JsonValueKind.String
                                                                               ? Canon(p.Value.GetString()!) : ""))
                                       .OrderBy(s => s, StringComparer.Ordinal))
@@ -261,35 +282,41 @@ internal static class VariantRepointPlan
 
     public readonly record struct Left(string ModDir, string Item, RepointReason Reason);
 
-    /// <summary>How a group in the mod covers the item: not at all, a Proteus part-toggle group, or the author's.</summary>
-    internal enum Cover { None, ProteusToggles, Author }
-
     /// <summary>
-    /// What the mod itself says about the item's IMC, minus Proteus's own recorded entries: the variants it names
-    /// anywhere, its default-data entry per variant, a group covering the item, and variants only a pinned group names.
+    /// A worn piece from one mod X that dresses exactly one material folder of the item. <see cref="Sources"/> are X's
+    /// own redirects under that folder (Proteus's copies and released keys left out), each in its container: what is
+    /// copied. <see cref="Present"/> are Proteus's recorded copies for the item that the reconcile found in X.
     /// </summary>
-    public sealed record Claims(IReadOnlySet<int> Named, IReadOnlyDictionary<int, ImcEntry> OwnDefault, Cover Cover,
-                                IReadOnlySet<int> Pinned);
-
-    /// <summary>A worn piece from one mod that dresses exactly one folder of the item.</summary>
     public sealed record Candidate(string ModRoot, WornItem Worn, int Folder, IReadOnlyList<string> MaterialNames,
-                                   ImcEntry[] Vanilla, Claims Claims, IReadOnlySet<int> Ours, bool Declined)
+                                   IReadOnlyList<PenumbraModMeta.ContainerRedirect> Sources,
+                                   IReadOnlyList<PenumbraModMeta.ContainerRedirect> AllRedirects,
+                                   ImcEntry[] Vanilla, IReadOnlyDictionary<int, int> AuthorFolders,
+                                   IReadOnlyList<VariantRepointWriter.RedirectEntry> Present, bool Declined)
     {
         public Item Item => Worn.Item;
         public string ModDir => Path.GetFileName(ModRoot.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar));
         public int Count => Vanilla.Length - 1;
         /// <summary>The set the game uses for the worn variant: its own, or the default set (0) for one it does not declare.</summary>
         public int WornIndex => Worn.Variant >= 1 && Worn.Variant <= Count ? Worn.Variant : 0;
+        /// <summary>The folders Proteus has already copied into.</summary>
+        public IEnumerable<int> CopiedFolders => Present.Select(p => p.Folder).Distinct();
     }
 
-    /// <summary>The entries to write for one item.</summary>
-    public sealed record ItemWrite(Item Item, int Folder, IReadOnlyList<(int Variant, ImcEntry Entry)> Add);
+    /// <summary>
+    /// The copies to write for one item: X's own redirects under <see cref="Folder"/> repeated under each target folder,
+    /// in the same container, pointing at the same file. <see cref="Variants"/> are the variants those folders fix.
+    /// </summary>
+    public sealed record ItemWrite(Item Item, int Folder, IReadOnlyList<(int Folder, PenumbraModMeta.ContainerRedirect Copy)> Copies,
+                                   IReadOnlyList<int> Variants)
+    {
+        public IReadOnlyList<int> Folders => Copies.Select(c => c.Folder).Distinct().Order().ToList();
+    }
 
     public sealed record ModWrites(string ModRoot, List<ItemWrite> Items);
 
     public sealed record Plan(List<ModWrites> PerMod, List<Left> Left);
 
-    /// <summary>Everything planning reads, injected so it needs no game.</summary>
+    /// <summary>Everything planning reads, injected so it needs no game. One instance lives for one walk (its caches).</summary>
     public sealed class Inputs
     {
         public required string? ModsRoot { get; init; }
@@ -297,21 +324,45 @@ internal static class VariantRepointPlan
         /// <summary>Reads a game path from the game's own data, or null.</summary>
         public required Func<string, byte[]?> ReadGameFile { get; init; }
         public Func<string, bool> IsProteusPack { get; init; } = ShaderUpgradePlan.IsProteusPack;
-        public Func<string, MeshToggleRecord?> ReadToggleRecord { get; init; } = MeshToggleService.ReadRecord;
         public Func<string, VariantRepointWriter.Record?> ReadRecord { get; init; } = VariantRepointWriter.ReadRecord;
+        /// <summary>Every redirect of a mod with its container: <see cref="PenumbraModMeta.ReadContainerRedirects"/>.</summary>
+        public Func<string, List<PenumbraModMeta.ContainerRedirect>> ReadContainerRedirects { get; init; }
+            = PenumbraModMeta.ReadContainerRedirects;
+
+        private readonly Dictionary<string, List<PenumbraModMeta.ContainerRedirect>> redirects = new(StringComparer.OrdinalIgnoreCase);
+
+        /// <summary>A mod's redirects, read once per walk.</summary>
+        public List<PenumbraModMeta.ContainerRedirect> RedirectsOf(string modRoot)
+        {
+            var key = ShaderUpgradePlan.NormalPath(modRoot);
+            lock (redirects)
+            {
+                if (!redirects.TryGetValue(key, out var r)) redirects[key] = r = ReadContainerRedirects(modRoot);
+                return r;
+            }
+        }
     }
+
+    /// <summary>Whether a mod redirects exactly this model game path (case- and slash-insensitive), anywhere in it.</summary>
+    public static bool RedirectsPath(IEnumerable<PenumbraModMeta.ContainerRedirect> redirects, string gamePath)
+        => redirects.Any(r => PenumbraModMeta.SameFile(r.GamePath, gamePath));
+
+    /// <summary>Whether a resolved file lies in this mod folder, however Penumbra spells it (prefix, slashes, case).</summary>
+    public static bool SameMod(string? resolved, string modRoot, string? modsRoot)
+        => resolved != null && ModRootOf(resolved, modsRoot) is { } root
+           && string.Equals(ShaderUpgradePlan.NormalPath(root), ShaderUpgradePlan.NormalPath(modRoot),
+                            StringComparison.OrdinalIgnoreCase);
 
     /// <summary>
     /// The worn pieces worth a look: drawn with a model from a mod that dresses exactly one material folder of the
-    /// item, with the game's entries and the mod's own IMC claims read. Pieces left for a reason that holds whatever is
-    /// worn (several folders, a v3 folder, a Proteus pack, no readable <c>.imc</c>) are listed; the rest are judged in
-    /// <see cref="Build"/>, once the collection's entries are known.
+    /// item (Proteus's own copies and released keys not counted), with the game's entries read. Pieces left for a reason
+    /// that holds whatever is worn (several folders, a v3 folder, a Proteus pack, no readable <c>.imc</c>) are listed; the
+    /// rest are judged in <see cref="Build"/>, once the collection's entries are known. Read after the reconcile.
     /// </summary>
     public static (List<Candidate> Candidates, List<Left> Left) Candidates(IEnumerable<WornItem> worn, Inputs inp)
     {
         var candidates = new List<Candidate>();
         var left = new List<Left>();
-        var redirectsCache = new Dictionary<string, List<PenumbraModMeta.Redirect>>(StringComparer.OrdinalIgnoreCase);
         foreach (var w in worn)
         {
             if (w.Glasses || w.ModelGamePath == null) continue;
@@ -331,9 +382,12 @@ internal static class VariantRepointPlan
                 left.Add(new Left(DirOf(modRoot), w.Item.Label, RepointReason.LegacyMod));
                 continue;
             }
-            if (!redirectsCache.TryGetValue(modRoot, out var redirects))
-                redirectsCache[modRoot] = redirects = PenumbraModMeta.ReadAllRedirects(modRoot);
-            var (folders, names) = DressedFolders(redirects, w.Item);
+            var record = inp.ReadRecord(modRoot);
+            var entry = record?.Find(w.Item);
+            var all = inp.RedirectsOf(modRoot);
+            // X's own redirects: Proteus's copies and the keys it released (theirs now, but not a deliberate folder) out.
+            var own = all.Where(r => !(entry?.Covers(r) ?? false)).ToList();
+            var (folders, names) = DressedFolders(own.Select(r => r.GamePath), w.Item);
             if (folders.Count == 0) continue;   // a model-only mod dresses whatever variant is worn
             if (folders.Count > 1)
             {
@@ -346,10 +400,11 @@ internal static class VariantRepointPlan
                 continue;
             }
 
-            var record = inp.ReadRecord(modRoot);
-            var ours = OursOf(record, w.Item);
-            candidates.Add(new Candidate(modRoot, w, folders.Min, names, vanilla,
-                                         ClaimsOf(modRoot, w.Item, w.Variant, record, inp), ours,
+            int folder = folders.Min;
+            var sources = own.Where(r => MaterialOf(r.GamePath, w.Item) is { } m && m.Folder == folder).ToList();
+            var present = entry?.Redirects.ToList() ?? [];
+            candidates.Add(new Candidate(modRoot, w, folder, names, sources, all, vanilla,
+                                         AuthorFolders(modRoot, w.Item, vanilla, entry, folder), present,
                                          record?.Declined.Contains(w.Item.Key, StringComparer.OrdinalIgnoreCase) == true));
         }
         return (candidates, left);
@@ -363,46 +418,35 @@ internal static class VariantRepointPlan
            && HatCompatService.InMods(ShaderUpgradePlan.StripPenumbraPrefix(resolved), modsRoot, out var root, out _)
             ? root : null;
 
-    /// <summary>The variants of the item Proteus's record says it wrote (the record as reconciled: present and equal).</summary>
-    private static HashSet<int> OursOf(VariantRepointWriter.Record? record, Item item)
-        => record?.Find(item) is { } e ? e.Variants.Select(v => v.Variant).ToHashSet() : [];
-
-    /// <summary>The mod's own IMC claims on the item, with Proteus's recorded entries taken out.</summary>
-    internal static Claims ClaimsOf(string modRoot, Item item, int wornVariant, VariantRepointWriter.Record? record,
-                                    Inputs inp)
+    /// <summary>
+    /// The variants the author deliberately sends to a material folder other than the game's: X's own IMC data — default
+    /// data, any option (active or not), or a non-<c>OnlyAttributes</c> Imc group's entry — naming a MaterialId that
+    /// differs from the game's entry for that variant. Proteus's legacy IMC entries do not count, and neither do edits
+    /// that change only attributes or groups that change only attributes (those keep the game's folder).
+    /// </summary>
+    /// <returns>Variant → the folder the author sends it to. A claim on the mod's own folder is left out: the author
+    /// already agrees with the fix (W1).</returns>
+    internal static Dictionary<int, int> AuthorFolders(string modRoot, Item item, ImcEntry[] vanilla,
+                                                       VariantRepointWriter.ItemEntry? ours, int ownFolder)
     {
-        var mine = record?.Find(item);
-        var named = new HashSet<int>();
-        var own = new Dictionary<int, ImcEntry>();
-        foreach (var (edit, isDefault, _) in ManifestImcEdits(modRoot))
+        var set = new Dictionary<int, int>();
+        foreach (var (edit, _, _) in ManifestImcEdits(modRoot))
         {
-            if (edit.Item != item) continue;
-            if (mine != null && mine.Variants.Any(v => v.Variant == edit.Variant && v.Entry.ToImc() == edit.Entry))
-                continue;   // ours, not the author's
-            named.Add(edit.Variant);
-            if (isDefault) own[edit.Variant] = edit.Entry;
+            if (edit.Item != item || edit.Variant < 0 || edit.Variant >= vanilla.Length) continue;
+            if (ours != null && ours.Variants.Any(v => v.Variant == edit.Variant && v.Entry.ToImc() == edit.Entry)) continue;
+            if (edit.Entry.MaterialId != vanilla[edit.Variant].MaterialId && edit.Entry.MaterialId != ownFolder)
+                set[edit.Variant] = edit.Entry.MaterialId;
         }
-
-        var cover = Cover.None;
-        var pinned = new HashSet<int>();
-        var toggles = inp.ReadToggleRecord(modRoot);
         foreach (var g in ImcEntrySource.ImcGroups(modRoot))
         {
+            if (g.Group.TryGetProperty("OnlyAttributes", out var oa) && oa.ValueKind == JsonValueKind.True) continue;
             if (!GroupNames(g.Group, item, out bool allVariants, out int variant)) continue;
-            bool covers = allVariants || variant == wornVariant;
-            if (!covers)
-            {
-                pinned.Add(variant);
-                continue;
-            }
-            bool isToggles = toggles?.Items.Any(t => t.AdoptedGroup != true && t.SetId == item.SetId
-                                                     && string.Equals(t.Slot, item.EquipSlot, StringComparison.OrdinalIgnoreCase)
-                                                     && string.Equals(t.GroupName, g.Name, StringComparison.OrdinalIgnoreCase))
-                             == true;
-            if (isToggles) { if (cover == Cover.None) cover = Cover.ProteusToggles; }
-            else cover = Cover.Author;
+            if (ImcEntrySource.EntryOf(g.Group) is not { } e) continue;
+            for (int v = 0; v < vanilla.Length; v++)
+                if ((allVariants || v == variant) && e.MaterialId != vanilla[v].MaterialId && e.MaterialId != ownFolder)
+                    set[v] = e.MaterialId;
         }
-        return new Claims(named, own, cover, pinned);
+        return set;
     }
 
     /// <summary>Whether an <c>Imc</c> group edits this item; and whether for every variant or one.</summary>
@@ -429,73 +473,62 @@ internal static class VariantRepointPlan
         => effective.TryGetValue(new PenumbraMetaImc.Key(c.Item.Kind, c.Item.SetId, c.Item.SlotLabel, variant), out var e)
             ? e : c.Vanilla[variant];
 
-    /// <summary>The material paths the candidates' variants would load, for Penumbra to resolve before <see cref="Build"/>.</summary>
+    /// <summary>X's material names under one folder, as game paths.</summary>
+    private static IEnumerable<string> NamesIn(Candidate c, int folder) => c.MaterialNames.Select(n => c.Item.MaterialDir(folder) + n);
+
+    /// <summary>
+    /// The material paths to resolve before <see cref="Build"/>: X's names under its own folder, and under every other
+    /// folder the item's variants use.
+    /// </summary>
     public static List<string> ResolveRequests(IEnumerable<Candidate> candidates,
                                                IReadOnlyDictionary<PenumbraMetaImc.Key, ImcEntry> effective)
     {
         var paths = new SortedSet<string>(StringComparer.OrdinalIgnoreCase);
         foreach (var c in candidates)
+        {
+            foreach (var p in NamesIn(c, c.Folder)) paths.Add(p);
             for (int v = 0; v <= c.Count; v++)
             {
                 int m = Effective(c, effective, v).MaterialId;
-                if (m == c.Folder) continue;
-                foreach (var name in c.MaterialNames) paths.Add(c.Item.MaterialDir(m) + name);
+                if (m != c.Folder) foreach (var p in NamesIn(c, m)) paths.Add(p);
             }
+        }
         return [.. paths];
     }
 
     internal enum VariantState { Dressed, OtherMod, Wrong }
 
     /// <summary>
-    /// Whether a variant draws the mod's material: dressed when it uses the mod's folder, or when its own folder's
-    /// material resolves into the mod itself (a file swap); served elsewhere when any of the mod's material names under
-    /// its folder resolves into another mod, Proteus's output or outside the mods root; otherwise wrong — the game's own
-    /// file, or no file at all (a custom-named material the game does not have).
+    /// What a variant folder of the item draws on X's model. Dressed: it is X's folder, or one of X's names there
+    /// resolves into X (a file swap, an earlier copy). Served elsewhere: a name resolves into a mod that does not replace
+    /// the model path X wins (a retexture, possibly an add-on for X), a Proteus pack, Proteus's output or outside the mods
+    /// root. Wrong: every name is the game's (a vanilla file, or none at all), or comes from a competing mod that also
+    /// replaces that model path and lost it to X — made for its own model, not this one.
     /// </summary>
-    public static VariantState StateOf(Candidate c, ImcEntry entry, IReadOnlyDictionary<string, string?> resolved,
-                                       Inputs inp)
+    public static VariantState StateOf(Candidate c, int folder, IReadOnlyDictionary<string, string?> resolved, Inputs inp)
     {
-        if (entry.MaterialId == c.Folder) return VariantState.Dressed;
+        if (folder == c.Folder) return VariantState.Dressed;
         bool other = false;
-        foreach (var name in c.MaterialNames)
+        foreach (var path in NamesIn(c, folder))
         {
-            var path = c.Item.MaterialDir(entry.MaterialId) + name;
             resolved.TryGetValue(path, out var r);
             var src = ShaderUpgradePlan.Classify(path, r, inp.ModsRoot, inp.ManagedRoot, inp.IsProteusPack);
             if (src == ShaderUpgradePlan.Source.Game) continue;
-            if (src is ShaderUpgradePlan.Source.Mod or ShaderUpgradePlan.Source.ProteusPack
-                && ModRootOf(r!, inp.ModsRoot) is { } root
-                && string.Equals(ShaderUpgradePlan.NormalPath(root), ShaderUpgradePlan.NormalPath(c.ModRoot),
-                                 StringComparison.OrdinalIgnoreCase))
-                return VariantState.Dressed;
+            if (SameMod(r, c.ModRoot, inp.ModsRoot)) return VariantState.Dressed;
+            if (src == ShaderUpgradePlan.Source.Mod && ModRootOf(r!, inp.ModsRoot) is { } y
+                && RedirectsPath(inp.RedirectsOf(y), c.Worn.ModelGamePath!))
+                continue;   // a competing replacement of the same model: wrong on ours, like the game's
             other = true;
         }
         return other ? VariantState.OtherMod : VariantState.Wrong;
     }
 
-    /// <summary>
-    /// The variant the mod dresses: the lowest variant (1 up) whose entry — the mod's own default-data entry, else the
-    /// game's — uses the mod's folder; null when none does.
-    /// </summary>
-    public static int? DressedVariant(Candidate c)
-    {
-        for (int v = 1; v <= c.Count; v++)
-            if (DressedEntryAt(c, v).MaterialId == c.Folder) return v;
-        return null;
-    }
-
-    private static ImcEntry DressedEntryAt(Candidate c, int v)
-        => c.Claims.OwnDefault.TryGetValue(v, out var own) ? own : c.Vanilla[v];
+    /// <summary>Whether X's own folder is X's: at least one of its names there resolves into X (N2).</summary>
+    public static bool ServesOwnFolder(Candidate c, IReadOnlyDictionary<string, string?> resolved, Inputs inp)
+        => NamesIn(c, c.Folder).Any(p => resolved.TryGetValue(p, out var r) && SameMod(r, c.ModRoot, inp.ModsRoot));
 
     /// <summary>
-    /// The entry copied to every variant written: the dressed variant's whole entry (all six fields, as TexTools copies
-    /// them), taken from the mod's own default data or the game — never another mod's edit. Null when no variant uses
-    /// the mod's folder.
-    /// </summary>
-    public static ImcEntry? DressedEntry(Candidate c) => DressedVariant(c) is { } v ? DressedEntryAt(c, v) : null;
-
-    /// <summary>
-    /// The writes for the candidates, and a reason for every worn piece left that would show the wrong material.
+    /// The copies for the candidates, and a reason for every worn piece left that would show the wrong material.
     /// <paramref name="effective"/> is the collection's IMC (null when unreadable: nothing is written);
     /// <paramref name="resolved"/> what each requested material path resolves to; <paramref name="refreshPending"/> the
     /// mods written whose reload and redraw have not settled, which get no "outranked" verdict yet.
@@ -515,47 +548,57 @@ internal static class VariantRepointPlan
                 continue;
             }
             int w = c.WornIndex;
-            var wornState = StateOf(c, Effective(c, effective, w), resolved, inp);
+            int wornFolder = Effective(c, effective, w).MaterialId;
+            var wornState = StateOf(c, wornFolder, resolved, inp);
             if (wornState == VariantState.Dressed) continue;
 
-            RepointReason? reason = c.Claims.Cover switch
+            RepointReason? reason = null;
+            // The author sends the worn variant, or the folder it uses, somewhere on purpose (W2).
+            if (c.AuthorFolders.ContainsKey(w) || c.AuthorFolders.Values.Contains(wornFolder)) reason = RepointReason.ModImc;
+            else if (c.CopiedFolders.Contains(wornFolder))
             {
-                Cover.ProteusToggles => RepointReason.ProteusToggles,
-                Cover.Author => RepointReason.ImcGroup,
-                _ => null,
-            };
-            reason ??= c.Claims.Named.Contains(w) ? RepointReason.ModImc
-                     : wornState == VariantState.OtherMod ? RepointReason.OtherModMaterial
-                     : c.Declined ? RepointReason.Declined
-                     : null;
-            if (reason == null && DressedEntry(c) == null) reason = RepointReason.FolderUnused;
+                // Copied already, yet the worn folder still isn't ours: another mod outranks the copy — unless the
+                // reload and redraw after our own write have not settled, when what resolves is not to be trusted yet.
+                if (!refreshPending.Contains(ShaderUpgradePlan.NormalPath(c.ModRoot)))
+                    left.Add(new Left(c.ModDir, c.Item.Label, RepointReason.Outranked));
+                continue;
+            }
+            else if (wornState == VariantState.OtherMod || !ServesOwnFolder(c, resolved, inp))
+                reason = RepointReason.OtherModMaterial;
+            else if (c.Declined) reason = RepointReason.Declined;
             if (reason is { } r)
             {
                 left.Add(new Left(c.ModDir, c.Item.Label, r));
                 continue;
             }
 
-            if (c.Ours.Contains(w))
-            {
-                // Written already, yet the worn variant still misses: another mod outranks it — unless the reload and
-                // redraw after our own write have not settled, when the collection's entries are not to be trusted yet.
-                if (!refreshPending.Contains(ShaderUpgradePlan.NormalPath(c.ModRoot)))
-                    left.Add(new Left(c.ModDir, c.Item.Label, RepointReason.Outranked));
-                continue;
-            }
-
-            var entry = DressedEntry(c)!.Value;
-            var add = new List<(int, ImcEntry)>();
+            var targets = new SortedDictionary<int, List<int>>();   // folder → the variants it fixes
             for (int v = 0; v <= c.Count; v++)
             {
-                if (c.Claims.Named.Contains(v) || c.Claims.Pinned.Contains(v) || c.Ours.Contains(v)) continue;
-                if (StateOf(c, Effective(c, effective, v), resolved, inp) != VariantState.Wrong) continue;
-                add.Add((v, entry));
+                if (c.AuthorFolders.ContainsKey(v)) continue;
+                int m = Effective(c, effective, v).MaterialId;
+                if (m == c.Folder || c.CopiedFolders.Contains(m) || c.AuthorFolders.Values.Contains(m)) continue;
+                if (!targets.TryGetValue(m, out var vs))
+                {
+                    if (StateOf(c, m, resolved, inp) != VariantState.Wrong) continue;
+                    targets[m] = vs = [];
+                }
+                vs.Add(v);
             }
-            if (add.Count == 0) continue;
+            var copies = new List<(int, PenumbraModMeta.ContainerRedirect)>();
+            foreach (var m in targets.Keys)
+                foreach (var s in c.Sources)
+                {
+                    var path = InFolder(s.GamePath, m);
+                    // A key the container already holds is the author's: never overwritten.
+                    if (c.AllRedirects.Any(x => x.Container.SameAs(s.Container) && PenumbraModMeta.SameFile(x.GamePath, path)))
+                        continue;
+                    copies.Add((m, new PenumbraModMeta.ContainerRedirect(s.Container, path, s.File)));
+                }
+            if (copies.Count == 0) continue;
             if (!perMod.TryGetValue(c.ModRoot, out var mw)) perMod[c.ModRoot] = mw = new ModWrites(c.ModRoot, []);
-            if (mw.Items.Any(i => i.Item == c.Item)) continue;   // the same piece worn twice (both rings of one set are two items)
-            mw.Items.Add(new ItemWrite(c.Item, c.Folder, add));
+            if (mw.Items.Any(i => i.Item == c.Item)) continue;
+            mw.Items.Add(new ItemWrite(c.Item, c.Folder, copies, targets.Values.SelectMany(v => v).Order().ToList()));
         }
         return new Plan([.. perMod.Values], left);
     }
@@ -576,10 +619,7 @@ internal static class VariantRepointPlan
     {
         RepointReason.SeveralVariants => "several-variants",
         RepointReason.ModImc => "mod-imc",
-        RepointReason.ImcGroup => "imc-group",
-        RepointReason.ProteusToggles => "proteus-toggles",
         RepointReason.OtherModMaterial => "other-mod-material",
-        RepointReason.FolderUnused => "folder-unused",
         RepointReason.NoImc => "no-imc",
         RepointReason.MetaUnreadable => "meta-unreadable",
         RepointReason.Outranked => "outranked",

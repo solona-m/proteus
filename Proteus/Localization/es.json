@@ -5940,7 +5940,7 @@
     "description": ""
   },
   "Settings.GearVariants.Auto.Tip": {
-    "message": "Un mod hecho para una variante de un objeto solo incluye la carpeta de materiales de esa variante, así que el objeto\npuesto en otra variante dibuja el material del juego (o ninguno) sobre el modelo del mod. Al ponerte una pieza así,\nProteus escribe entradas IMC en los datos predeterminados del mod que apuntan cada una de esas variantes al material\ndel mod, como «Apply to All Variants» de TexTools. El cambio se aplica a todos los que lleven esas variantes\nen colecciones donde el mod está activo, incluso con su opción de modelo desactivada. Desactivarlo detiene los\ncambios siguientes; no los deshace. «Deshacer en lo que llevo puesto» los quita.",
+    "message": "Un mod hecho para una variante de un objeto solo incluye la carpeta de materiales de esa variante, así que el objeto\npuesto en otra variante dibuja el material del juego (o el de otro atuendo, o ninguno) sobre el modelo del mod. Al ponerte\nuna pieza así, Proteus copia las rutas de material del mod a las demás carpetas de variante, dentro de las propias\nopciones del mod, como «Apply to All Variants» de TexTools pero solo para el material. Esas variantes muestran entonces\nel material del mod allí donde el mod gana; las partes, los VFX y el sonido siguen siendo los suyos. Desactivarlo detiene\nlos cambios siguientes; no los deshace. «Deshacer en lo que llevo puesto» los quita.",
     "description": ""
   },
   "Settings.GearVariants.Status.Fmt": {
@@ -5971,20 +5971,8 @@
     "message": "el mod define esta variante por sí mismo",
     "description": ""
   },
-  "Settings.GearVariants.Reason.ImcGroup": {
-    "message": "un grupo IMC del mod la cubre",
-    "description": ""
-  },
-  "Settings.GearVariants.Reason.ProteusToggles": {
-    "message": "los interruptores de partes de Proteus conservan los materiales del juego",
-    "description": ""
-  },
   "Settings.GearVariants.Reason.OtherModMaterial": {
     "message": "su material viene de otro mod",
-    "description": ""
-  },
-  "Settings.GearVariants.Reason.FolderUnused": {
-    "message": "ninguna variante del objeto usa la carpeta del mod",
     "description": ""
   },
   "Settings.GearVariants.Reason.NoImc": {
@@ -6044,7 +6032,7 @@
     "description": ""
   },
   "Chat.VariantRepoint.Fmt": {
-    "message": "[Proteus] Se apuntaron {0} variante(s) de una pieza de «{1}» al material propio del mod. Esto se aplica a todos los que lleven esas variantes en colecciones donde el mod está activo, incluso con su opción de modelo desactivada. Deshazlo en /proteus > Ajustes > Variantes del equipo.",
+    "message": "[Proteus] Se copiaron las rutas de material de «{1}» a {0} carpeta(s) de variante más, para que esas variantes muestren el material propio del mod allí donde gana. Deshazlo en /proteus > Ajustes > Variantes del equipo.",
     "description": ""
   }
 }

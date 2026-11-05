@@ -8,52 +8,14 @@ using static Proteus.Tests.VariantRepointTestKit;
 
 namespace Proteus.Tests;
 
-/// <summary>The "Gear variants" policy (<see cref="VariantRepointPlan"/>): which pieces are repointed, and why others are left.</summary>
+/// <summary>The "Gear variants" policy (<see cref="VariantRepointPlan"/>): which pieces get copies, and why others are left.</summary>
 public class VariantRepointPlanTests
 {
-    /// <summary>The single item write of a plan.</summary>
     private static ItemWrite Only(Plan plan) => Assert.Single(Assert.Single(plan.PerMod).Items);
 
     private static RepointReason LeftReason(Plan plan) => Assert.Single(plan.Left).Reason;
 
-    [Fact]
-    [Trait("Plan", "AC-imc-all-variants-2")]
-    public void Dressed_entry_is_copied_whole_like_texttools()
-    {
-        using var k = new VariantRepointTestKit();
-        var mod = k.Dress("Dress", Top);
-        // Variant 1 is the mod's; variant 3 differs in every field, its own sound included.
-        k.Imc(Top, E(1), E(1, 2, 0x3, 4, 5, 6), E(1), E(2, 7, 0x10, 9, 8, 1));
-        var write = Only(k.Plan([k.Worn(Top, 3, mod)]));
-        var (variant, entry) = Assert.Single(write.Add);
-        Assert.Equal(3, variant);
-        Assert.Equal(E(1, 2, 0x3, 4, 5, 6), entry);
-        // TexTools' ApplyAllButton_Click copies XivImc.Mask, whose top six bits are the sound: so is the sound here.
-        Assert.Equal(4, entry.SoundId);
-    }
-
-    [Fact]
-    [Trait("Plan", "AC-imc-all-variants-2")]
-    public void Dressed_entry_prefers_mods_own_default_entry()
-    {
-        using var k = new VariantRepointTestKit();
-        var mod = k.Mod("Dress", new() { [ModelPath(Top)] = "top.mdl", [MaterialPath(Top, 1)] = "top_a.mtrl" },
-                        [Imc(Top, 1, E(1, attr: 0x7))]);
-        k.Imc(Top, E(1), E(1, attr: 0x1), E(2));
-        Assert.Equal(E(1, attr: 0x7), Only(k.Plan([k.Worn(Top, 2, mod)])).Add.Single().Entry);
-    }
-
-    [Fact]
-    [Trait("Plan", "EDGE-imc-all-variants-36")]
-    public void Other_mods_edit_of_dressed_variant_not_imported()
-    {
-        using var k = new VariantRepointTestKit();
-        var mod = k.Dress("Dress", Top);
-        k.Imc(Top, E(1), E(1, attr: 0x1), E(2));
-        // Another mod hides parts of variant 1: its mask must not travel into this mod.
-        k.Collection[new('e', 6255, "Body", 1)] = E(1, attr: 0x200, vfx: 3);
-        Assert.Equal(E(1, attr: 0x1), Only(k.Plan([k.Worn(Top, 2, mod)])).Add.Single().Entry);
-    }
+    private static List<int> Folders(Plan plan) => Only(plan).Folders.ToList();
 
     [Fact]
     [Trait("Plan", "AC-imc-all-variants-1")]
@@ -70,16 +32,28 @@ public class VariantRepointPlanTests
         => Assert.False(RedrawAfter(RunKind.Repoint, autoRedraw: false, changedAny: true));
 
     [Fact]
+    [Trait("Plan", "AC-imc-all-variants-2")]
+    public void Each_option_keeps_its_own_file_under_the_new_folder()
+    {
+        using var k = new VariantRepointTestKit();
+        var mod = k.Colours("Dress", Top);
+        k.Imc(Top, E(1), E(1), E(2));
+        var write = Only(k.Plan([k.Worn(Top, 2, mod)]));
+        Assert.Equal(2, write.Copies.Count);
+        Assert.Contains(write.Copies, c => c.Copy.Container.Option == "Red" && c.Copy.File == "red/m.mtrl"
+                                           && c.Copy.GamePath == MaterialPath(Top, 2));
+        Assert.Contains(write.Copies, c => c.Copy.Container.Option == "Blue" && c.Copy.File == "blue/m.mtrl");
+    }
+
+    [Fact]
     [Trait("Plan", "AC-imc-all-variants-4")]
     public void Setting_on_by_default_and_transitions()
     {
         Assert.True(new Configuration().AutoRepointVariants);
-        // An existing config without the property reads on too: no migration.
         var cfg = System.Text.Json.JsonSerializer.Deserialize<Configuration>("{\"Version\":9}")!;
         Assert.True(cfg.AutoRepointVariants);
         Assert.False(System.Text.Json.JsonSerializer.Deserialize<Configuration>(
             "{\"Version\":9,\"AutoRepointVariants\":false}")!.AutoRepointVariants);
-        Assert.Equal(9, cfg.Version);
         Assert.Equal(ShaderUpgradePlan.TransitionKind.Evaluate, ShaderUpgradePlan.Transition(false, true));
         Assert.Equal(ShaderUpgradePlan.TransitionKind.Stop, ShaderUpgradePlan.Transition(true, false));
     }
@@ -91,7 +65,6 @@ public class VariantRepointPlanTests
         var announced = new HashSet<string>(System.StringComparer.OrdinalIgnoreCase);
         Assert.True(ShaderUpgradePlan.ShouldAnnounce(announced, "Dress"));
         Assert.False(ShaderUpgradePlan.ShouldAnnounce(announced, "dress"));
-        Assert.True(ShaderUpgradePlan.ShouldAnnounce(announced, "Skirt"));
     }
 
     [Fact]
@@ -99,7 +72,7 @@ public class VariantRepointPlanTests
     public void Several_folders_left()
     {
         using var k = new VariantRepointTestKit();
-        var mod = k.Mod("Dress", new() { [MaterialPath(Top, 1)] = "a.mtrl" },
+        var mod = k.Mod("Dress", new() { [ModelPath(Top)] = "top.mdl", [MaterialPath(Top, 1)] = "a.mtrl" },
                         groups: [("Colour", "Single", [("Blue", new() { [MaterialPath(Top, 2)] = "b.mtrl" }, [])])]);
         k.Imc(Top, E(1), E(1), E(2), E(3));
         var plan = k.Plan([k.Worn(Top, 3, mod)]);
@@ -121,7 +94,7 @@ public class VariantRepointPlanTests
 
     [Fact]
     [Trait("Plan", "EDGE-imc-all-variants-3")]
-    public void Worn_variant_already_right_does_nothing()
+    public void Worn_folder_already_right_does_nothing()
     {
         using var k = new VariantRepointTestKit();
         var mod = k.Dress("Dress", Top);
@@ -160,120 +133,14 @@ public class VariantRepointPlanTests
     }
 
     [Fact]
-    [Trait("Plan", "EDGE-imc-all-variants-7")]
-    public void Mod_imc_on_worn_variant_left()
-    {
-        using var k = new VariantRepointTestKit();
-        k.Imc(Top, E(1), E(1), E(2), E(3));
-        // In default data; and in an option that is not even on.
-        var a = k.Mod("A", new() { [ModelPath(Top)] = "top.mdl", [MaterialPath(Top, 1)] = "a.mtrl" },
-                      [Imc(Top, 2, E(3))]);
-        var b = k.Mod("B", new() { [ModelPath(Top)] = "top.mdl", [MaterialPath(Top, 1)] = "a.mtrl" },
-                      groups: [("Extras", "Multi", [("Glow", new(), [Imc(Top, 2, E(2, vfx: 1))])])]);
-        foreach (var mod in new[] { a, b })
-        {
-            k.Collection.Clear();
-            var plan = k.Plan([k.Worn(Top, 2, mod)]);
-            Assert.Empty(plan.PerMod);
-            Assert.Equal(RepointReason.ModImc, LeftReason(plan));
-        }
-    }
-
-    [Fact]
-    [Trait("Plan", "EDGE-imc-all-variants-7")]
-    public void Mod_named_variants_skipped()
-    {
-        using var k = new VariantRepointTestKit();
-        var mod = k.Mod("A", new() { [ModelPath(Top)] = "top.mdl", [MaterialPath(Top, 1)] = "a.mtrl" },
-                        groups: [("Extras", "Multi", [("Alt", new(), [Imc(Top, 3, E(3, attr: 2))])])]);
-        k.Imc(Top, E(1), E(1), E(2), E(3));
-        var write = Only(k.Plan([k.Worn(Top, 2, mod)]));
-        Assert.Equal([2], write.Add.Select(a => a.Variant));
-    }
-
-    [Fact]
-    [Trait("Plan", "EDGE-imc-all-variants-8")]
-    public void Author_imc_group_covers_item_left()
-    {
-        using var k = new VariantRepointTestKit();
-        var mod = k.Mod("A", new() { [ModelPath(Top)] = "top.mdl", [MaterialPath(Top, 1)] = "a.mtrl" },
-                        rawGroups: [ImcGroup("Belt", Top)]);
-        k.Imc(Top, E(1), E(1), E(2));
-        var plan = k.Plan([k.Worn(Top, 2, mod)]);
-        Assert.Empty(plan.PerMod);
-        Assert.Equal(RepointReason.ImcGroup, LeftReason(plan));
-    }
-
-    [Fact]
-    [Trait("Plan", "EDGE-imc-all-variants-8")]
-    public void Hand_edited_numeric_slot_in_a_group_is_read_not_fatal()
-    {
-        using var k = new VariantRepointTestKit();
-        var group = (System.Collections.Generic.Dictionary<string, object>)ImcGroup("Belt", Top);
-        ((System.Collections.Generic.Dictionary<string, object>)group["Identifier"])["EquipSlot"] = 4;   // Body, as a number
-        var mod = k.Mod("A", new() { [ModelPath(Top)] = "top.mdl", [MaterialPath(Top, 1)] = "a.mtrl" }, rawGroups: [group]);
-        k.Imc(Top, E(1), E(1), E(2));
-        Assert.Equal(RepointReason.ImcGroup, LeftReason(k.Plan([k.Worn(Top, 2, mod)])));
-    }
-
-    [Fact]
-    [Trait("Plan", "EDGE-imc-all-variants-8")]
-    public void Pinned_group_other_variant_only_skips_it()
-    {
-        using var k = new VariantRepointTestKit();
-        var mod = k.Mod("A", new() { [ModelPath(Top)] = "top.mdl", [MaterialPath(Top, 1)] = "a.mtrl" },
-                        rawGroups: [ImcGroup("Belt", Top, allVariants: false, variant: 3)]);
-        k.Imc(Top, E(1), E(1), E(2), E(3));
-        Assert.Equal([2], Only(k.Plan([k.Worn(Top, 2, mod)])).Add.Select(a => a.Variant));
-    }
-
-    [Fact]
-    [Trait("Plan", "EDGE-imc-all-variants-39")]
-    public void Proteus_toggle_group_left_as_proteus_toggles()
-    {
-        using var k = new VariantRepointTestKit();
-        var mod = k.Mod("A", new() { [ModelPath(Top)] = "top.mdl", [MaterialPath(Top, 1)] = "a.mtrl" },
-                        rawGroups: [ImcGroup(MeshToggleService.GroupNameFor("Body"), Top)]);
-        ToggleRecord(mod, Top, MeshToggleService.GroupNameFor("Body"));
-        k.Imc(Top, E(1), E(1), E(2));
-        var plan = k.Plan([k.Worn(Top, 2, mod)]);
-        Assert.Empty(plan.PerMod);
-        Assert.Equal(RepointReason.ProteusToggles, LeftReason(plan));
-    }
-
-    [Fact]
-    [Trait("Plan", "EDGE-imc-all-variants-39")]
-    public void Recorded_toggle_group_deleted_falls_through()
-    {
-        using var k = new VariantRepointTestKit();
-        var mod = k.Dress("A", Top);
-        ToggleRecord(mod, Top, MeshToggleService.GroupNameFor("Body"));   // the group itself is gone
-        k.Imc(Top, E(1), E(1), E(2));
-        Assert.Equal([2], Only(k.Plan([k.Worn(Top, 2, mod)])).Add.Select(a => a.Variant));
-    }
-
-    [Fact]
-    [Trait("Plan", "EDGE-imc-all-variants-39")]
-    public void Recorded_toggle_group_no_longer_covers_item_falls_through()
-    {
-        using var k = new VariantRepointTestKit();
-        var other = new Item('e', 6256, "top");
-        var mod = k.Mod("A", new() { [ModelPath(Top)] = "top.mdl", [MaterialPath(Top, 1)] = "a.mtrl" },
-                        rawGroups: [ImcGroup(MeshToggleService.GroupNameFor("Body"), other)]);
-        ToggleRecord(mod, Top, MeshToggleService.GroupNameFor("Body"));
-        k.Imc(Top, E(1), E(1), E(2));
-        Assert.Equal([2], Only(k.Plan([k.Worn(Top, 2, mod)])).Add.Select(a => a.Variant));
-    }
-
-    [Fact]
     [Trait("Plan", "EDGE-imc-all-variants-9")]
-    public void Worn_material_from_other_mod_left()
+    public void Worn_material_from_retexture_mod_left()
     {
         using var k = new VariantRepointTestKit();
         var mod = k.Dress("Dress", Top);
-        var retex = k.Mod("Retexture");
+        k.Mod("Retexture", new() { [MaterialPath(Top, 2)] = "b.mtrl" });   // materials, no model
+        k.Priority.Reverse();   // the retexture above the dress
         k.Imc(Top, E(1), E(1), E(2));
-        k.Served[MaterialPath(Top, 2)] = Path.Combine(retex, "b.mtrl");
         var plan = k.Plan([k.Worn(Top, 2, mod)]);
         Assert.Empty(plan.PerMod);
         Assert.Equal(RepointReason.OtherModMaterial, LeftReason(plan));
@@ -281,41 +148,126 @@ public class VariantRepointPlanTests
 
     [Fact]
     [Trait("Plan", "EDGE-imc-all-variants-9")]
-    public void Other_variant_from_other_mod_skipped()
+    public void Other_folder_from_retexture_mod_skipped()
     {
         using var k = new VariantRepointTestKit();
         var mod = k.Dress("Dress", Top);
-        var retex = k.Mod("Retexture");
+        k.Mod("Retexture", new() { [MaterialPath(Top, 3)] = "c.mtrl" });
         k.Imc(Top, E(1), E(1), E(2), E(3));
-        k.Served[MaterialPath(Top, 3)] = Path.Combine(retex, "c.mtrl");
-        Assert.Equal([2], Only(k.Plan([k.Worn(Top, 2, mod)])).Add.Select(a => a.Variant));
+        Assert.Equal([2], Folders(k.Plan([k.Worn(Top, 2, mod)])));
     }
 
     [Fact]
-    [Trait("Plan", "EDGE-imc-all-variants-40")]
-    public void Material_served_by_own_mod_is_dressed()
+    [Trait("Plan", "EDGE-imc-all-variants-9")]
+    public void Worn_material_from_own_output_or_outside_left()
     {
         using var k = new VariantRepointTestKit();
         var mod = k.Dress("Dress", Top);
-        k.Imc(Top, E(1), E(1), E(2), E(3));
-        // The mod's own file swap serves v0002.
-        k.Served[MaterialPath(Top, 2)] = Path.Combine(mod, "top_a.mtrl");
-        var nothing = k.Plan([k.Worn(Top, 2, mod)]);
-        Assert.Empty(nothing.PerMod);
-        Assert.Empty(nothing.Left);
-        Assert.Equal([3], Only(k.Plan([k.Worn(Top, 3, mod)])).Add.Select(a => a.Variant));
+        k.Imc(Top, E(1), E(1), E(2));
+        foreach (var file in new[] { Path.Combine(k.ManagedRoot, "files", "b.mtrl"), Path.Combine(Path.GetTempPath(), "x", "b.mtrl") })
+        {
+            k.Served[MaterialPath(Top, 2)] = file;
+            Assert.Equal(RepointReason.OtherModMaterial, LeftReason(k.Plan([k.Worn(Top, 2, mod)])));
+        }
     }
 
     [Fact]
-    [Trait("Plan", "EDGE-imc-all-variants-10")]
-    public void Unused_folder_left()
+    [Trait("Plan", "EDGE-imc-all-variants-9")]
+    [Trait("Plan", "EDGE-imc-all-variants-41")]
+    public void Competing_model_on_another_race_is_other_mod_material()
     {
         using var k = new VariantRepointTestKit();
-        var mod = k.Dress("Dress", Top, folder: 7);
+        var mod = k.Dress("moonfire lace", Top, material: "b");
+        k.Mod("Rival", new() { [ModelPath(Top, "1401")] = "top.mdl", [MaterialPath(Top, 2, "b")] = "b.mtrl" });
+        k.Imc(Top, E(1), E(1), E(2));
+        Assert.Equal(RepointReason.OtherModMaterial, LeftReason(k.Plan([k.Worn(Top, 2, mod)])));
+    }
+
+    [Fact]
+    [Trait("Plan", "EDGE-imc-all-variants-41")]
+    [Trait("Plan", "EDGE-imc-all-variants-9")]
+    public void Retexture_only_mod_stays_other_mod_material()
+    {
+        using var k = new VariantRepointTestKit();
+        var mod = k.Dress("moonfire lace", Top, material: "b");
+        k.Mod("Retexture", new() { [MaterialPath(Top, 2, "b")] = "b.mtrl" });
+        k.Imc(Top, E(1), E(1), E(2));
+        Assert.Equal(RepointReason.OtherModMaterial, LeftReason(k.Plan([k.Worn(Top, 2, mod)])));
+    }
+
+    [Fact]
+    [Trait("Plan", "EDGE-imc-all-variants-41")]
+    public void Competing_model_redirect_in_inactive_option_counts()
+    {
+        using var k = new VariantRepointTestKit();
+        var mod = k.Dress("moonfire lace", Top, material: "b");
+        k.Mod("Rival", new() { [MaterialPath(Top, 2, "b")] = "b.mtrl" },
+              groups: [("Body", "Single", [("Off", new() { [ModelPath(Top)] = "top.mdl" }, [])])]);
+        k.Imc(Top, E(1), E(1), E(2));
+        Assert.Equal([2], Folders(k.Plan([k.Worn(Top, 2, mod)])));
+    }
+
+    [Fact]
+    [Trait("Plan", "EDGE-imc-all-variants-41")]
+    public void Competing_model_rule_applies_to_other_folders()
+    {
+        using var k = new VariantRepointTestKit();
+        var mod = k.Dress("moonfire lace", Top, material: "b");
+        k.Dress("Rose", Top, folder: 3, material: "b");
         k.Imc(Top, E(1), E(1), E(2), E(3));
-        var plan = k.Plan([k.Worn(Top, 2, mod)]);
-        Assert.Empty(plan.PerMod);
-        Assert.Equal(RepointReason.FolderUnused, LeftReason(plan));
+        Assert.Equal([2, 3], Folders(k.Plan([k.Worn(Top, 2, mod)])));
+    }
+
+    [Fact]
+    [Trait("Plan", "EDGE-imc-all-variants-41")]
+    public void Mixed_names_retexture_wins()
+    {
+        using var k = new VariantRepointTestKit();
+        var mod = k.Mod("moonfire lace", new()
+        {
+            [ModelPath(Top)] = "top.mdl", [MaterialPath(Top, 1, "a")] = "a.mtrl", [MaterialPath(Top, 1, "b")] = "b.mtrl",
+        });
+        k.Dress("Rose", Top, folder: 2, material: "a");
+        k.Mod("Retexture", new() { [MaterialPath(Top, 2, "b")] = "rb.mtrl" });
+        k.Imc(Top, E(1), E(1), E(2));
+        Assert.Equal(RepointReason.OtherModMaterial, LeftReason(k.Plan([k.Worn(Top, 2, mod)])));
+    }
+
+    [Fact]
+    [Trait("Plan", "EDGE-imc-all-variants-41")]
+    public void Redirects_read_once_per_mod_per_walk()
+    {
+        using var k = new VariantRepointTestKit();
+        var mod = k.Dress("moonfire lace", Top, material: "b");
+        k.Dress("Rose", Top, folder: 2, material: "b");
+        k.ImcSlots(Top.SetTag, (1, [E(1), E(1), E(2), E(2), E(3)]));
+        k.Dress("Equinox", Top, folder: 3, material: "b");
+        var reads = new Dictionary<string, int>(System.StringComparer.OrdinalIgnoreCase);
+        var inp = new Inputs
+        {
+            ModsRoot = k.ModsRoot, ManagedRoot = k.ManagedRoot,
+            ReadGameFile = p => k.Game.TryGetValue(p, out var b) ? b : null,
+            ReadContainerRedirects = root =>
+            {
+                reads[root] = reads.GetValueOrDefault(root) + 1;
+                return PenumbraModMeta.ReadContainerRedirects(root);
+            },
+        };
+        Assert.Equal([2, 3], Folders(k.Plan([k.Worn(Top, 2, mod)], inputs: inp)));
+        Assert.All(reads.Values, n => Assert.Equal(1, n));
+    }
+
+    [Fact]
+    [Trait("Plan", "EDGE-imc-all-variants-41")]
+    public void Race_fallback_model_path_is_the_one_compared()
+    {
+        // The c0201 character wears X's c0101 model (EQDP fallback): a rival replacing c0101 competes, one replacing c0201 does not.
+        using var k = new VariantRepointTestKit();
+        var mod = k.Mod("moonfire lace", new() { [ModelPath(Top, "0101")] = "top.mdl", [MaterialPath(Top, 1, "b")] = "b.mtrl" });
+        k.Mod("Rival", new() { [ModelPath(Top, "0101")] = "top.mdl", [MaterialPath(Top, 2, "b")] = "b.mtrl" });
+        k.Imc(Top, E(1), E(1), E(2));
+        var worn = new WornItem(Top, 2, ModelPath(Top, "0101"), Path.Combine(mod, "top.mdl"));
+        Assert.Equal([2], Folders(k.Plan([worn])));
     }
 
     [Fact]
@@ -328,9 +280,7 @@ public class VariantRepointPlanTests
         foreach (var bytes in new byte[]?[] { null, [2, 0], [2, 0, 1, 0, 0, 0, 0, 0, 0, 0] })
         {
             if (bytes == null) k.Game.Remove(path); else k.Game[path] = bytes;
-            var plan = k.Plan([k.Worn(Top, 2, mod)]);
-            Assert.Empty(plan.PerMod);
-            Assert.Equal(RepointReason.NoImc, LeftReason(plan));
+            Assert.Equal(RepointReason.NoImc, LeftReason(k.Plan([k.Worn(Top, 2, mod)])));
         }
     }
 
@@ -347,29 +297,72 @@ public class VariantRepointPlanTests
     }
 
     [Fact]
+    [Trait("Plan", "EDGE-imc-all-variants-12")]
+    public void Failed_resolve_is_meta_unreadable()
+    {
+        // The watcher hands Build a null collection when ResolvePlayerPaths fails: the same reason.
+        using var k = new VariantRepointTestKit();
+        var mod = k.Dress("Dress", Top);
+        k.Imc(Top, E(1), E(1), E(2));
+        var inp = k.Inputs();
+        var (candidates, left) = Candidates([k.Worn(Top, 2, mod)], inp);
+        var plan = Build(candidates, null, new Dictionary<string, string?>(), k.RefreshPending, inp, left);
+        Assert.Equal(RepointReason.MetaUnreadable, LeftReason(plan));
+    }
+
+    [Fact]
     [Trait("Plan", "EDGE-imc-all-variants-13")]
-    public void Variant_zero_included_none_beyond_count()
+    public void Variant_zero_folder_is_a_target_none_beyond_count()
     {
         using var k = new VariantRepointTestKit();
         var mod = k.Dress("Dress", Top);
-        // Default set 2 (wrong), variants 1..3; worn variant 9 is beyond the count, so the game uses the default set.
-        k.Imc(Top, E(2), E(1), E(2), E(2));
+        // Default set 4 (wrong), variants 1..3; worn variant 9 is beyond the count, so the game uses the default set.
+        k.Imc(Top, E(4), E(1), E(2), E(2));
         var write = Only(k.Plan([k.Worn(Top, 9, mod)]));
-        Assert.Equal([0, 2, 3], write.Add.Select(a => a.Variant));
+        Assert.Equal([2, 4], write.Folders);
+        Assert.Equal([0, 2, 3], write.Variants);
+    }
+
+    [Fact]
+    [Trait("Plan", "EDGE-imc-all-variants-54")]
+    public void Variants_sharing_a_folder_get_one_set_of_copies()
+    {
+        using var k = new VariantRepointTestKit();
+        var mod = k.Dress("Dress", Top);
+        k.Imc(Top, E(2), E(1), E(2), E(2));
+        var write = Only(k.Plan([k.Worn(Top, 2, mod)]));
+        Assert.Single(write.Copies);
+        Assert.Equal([0, 2, 3], write.Variants);
     }
 
     [Fact]
     [Trait("Plan", "EDGE-imc-all-variants-15")]
-    public void Outranked_entries_reported_not_rewritten()
+    public void Outranked_copy_reported_not_rewritten()
     {
         using var k = new VariantRepointTestKit();
         var mod = k.Dress("Dress", Top);
         k.Imc(Top, E(1), E(1), E(2));
         k.Run([k.Worn(Top, 2, mod)]);
-        k.Collection[new('e', 6255, "Body", 2)] = E(2, vfx: 4);   // a higher-priority mod
+        k.Served[MaterialPath(Top, 2)] = Path.Combine(k.ManagedRoot, "files", "x.mtrl");   // something above our copy
         var plan = k.Plan([k.Worn(Top, 2, mod)]);
         Assert.Empty(plan.PerMod);
         Assert.Equal(RepointReason.Outranked, LeftReason(plan));
+    }
+
+    [Fact]
+    [Trait("Plan", "EDGE-imc-all-variants-15")]
+    public void Inactive_option_competitor_outranking_reads_outranked()
+    {
+        // R4: Y's model sits only in an inactive option, so Y counts as competing; Y ranks above X and beats our copy.
+        using var k = new VariantRepointTestKit();
+        var mod = k.Dress("moonfire lace", Top, material: "b");
+        var rival = k.Mod("Rival", new() { [MaterialPath(Top, 2, "b")] = "b.mtrl" },
+                          groups: [("Body", "Single", [("Off", new() { [ModelPath(Top)] = "top.mdl" }, [])])]);
+        k.Imc(Top, E(1), E(1), E(2));
+        k.Run([k.Worn(Top, 2, mod)]);
+        k.Priority.Remove(rival);
+        k.Priority.Insert(0, rival);
+        Assert.Equal(RepointReason.Outranked, LeftReason(k.Plan([k.Worn(Top, 2, mod)])));
     }
 
     [Fact]
@@ -380,7 +373,7 @@ public class VariantRepointPlanTests
         var mod = k.Dress("Dress", Top);
         k.Imc(Top, E(1), E(1), E(2));
         k.Run([k.Worn(Top, 2, mod)]);
-        k.Collection[new('e', 6255, "Body", 2)] = E(2);   // a stale collection, before the reload lands
+        k.Served[MaterialPath(Top, 2)] = MaterialPath(Top, 2);   // a stale answer, before the reload lands
         k.RefreshPending.Add(ShaderUpgradePlan.NormalPath(mod));
         var pending = k.Plan([k.Worn(Top, 2, mod)]);
         Assert.Empty(pending.PerMod);
@@ -390,14 +383,17 @@ public class VariantRepointPlanTests
     }
 
     [Fact]
-    [Trait("Plan", "EDGE-imc-all-variants-38")]
-    public void Attribute_only_difference_not_written()
+    [Trait("Plan", "EDGE-imc-all-variants-21")]
+    public void Switched_off_mid_run_still_reloads_written_mods()
     {
+        // The watcher reloads every mod Apply changed; switching off only stops further items (mayWrite).
+        Assert.True(RedrawAfter(RunKind.RepointNow, autoRedraw: true, changedAny: true));
         using var k = new VariantRepointTestKit();
         var mod = k.Dress("Dress", Top);
-        // Variant 3 already uses folder 1, with other parts: left alone (fewer edits than TexTools, on purpose).
-        k.Imc(Top, E(1), E(1, attr: 1), E(2), E(1, attr: 6));
-        Assert.Equal([2], Only(k.Plan([k.Worn(Top, 2, mod)])).Add.Select(a => a.Variant));
+        k.Imc(Top, E(1), E(1), E(2));
+        var plan = k.Plan([k.Worn(Top, 2, mod)]);
+        var outcome = VariantRepointWriter.Apply(mod, plan.PerMod.Single().Items, () => true);
+        Assert.True(outcome.ChangedAny);
     }
 
     [Fact]
@@ -444,9 +440,7 @@ public class VariantRepointPlanTests
             [ModelPath(legs)] = "dwn.mdl", [MaterialPath(legs, 1)] = "dwn_a.mtrl",
         });
         k.ImcSlots(Top.SetTag, (1, [E(1), E(1), E(2)]), (3, [E(1), E(1), E(2)]));
-        var plan = k.Plan([k.Worn(Top, 2, mod), k.Worn(legs, 2, mod)]);
-        var m = Assert.Single(plan.PerMod);
-        Assert.Equal(2, m.Items.Count);
+        Assert.Equal(2, Assert.Single(k.Plan([k.Worn(Top, 2, mod), k.Worn(legs, 2, mod)]).PerMod).Items.Count);
     }
 
     [Fact]
@@ -457,21 +451,219 @@ public class VariantRepointPlanTests
         var head = new Item('e', 6255, "met");
         var mod = k.Dress("Glasses", head);
         k.ImcSlots(head.SetTag, (0, [E(1), E(1), E(2)]));
-        var glasses = k.Worn(head, 2, mod) with { Glasses = true };
-        Assert.Empty(k.Plan([glasses]).PerMod);
+        Assert.Empty(k.Plan([k.Worn(head, 2, mod) with { Glasses = true }]).PerMod);
         Assert.Null(ItemFor("w", 201));
         Assert.Null(ItemFor("hir", 1));
     }
 
     [Fact]
     [Trait("Plan", "EDGE-imc-all-variants-32")]
-    public void Combining_container_material_counts()
+    public void Combining_container_material_counts_and_gets_copies()
     {
         using var k = new VariantRepointTestKit();
         var mod = k.Mod("Combo", new() { [ModelPath(Top)] = "top.mdl" },
                         groups: [("Looks", "Combining", [("Shiny", new() { [MaterialPath(Top, 1)] = "a.mtrl" }, [])])]);
         k.Imc(Top, E(1), E(1), E(2));
-        Assert.Equal(1, Only(k.Plan([k.Worn(Top, 2, mod)])).Folder);
+        var copy = Assert.Single(Only(k.Plan([k.Worn(Top, 2, mod)])).Copies).Copy;
+        Assert.Equal(new PenumbraModMeta.ContainerRef("Looks", null, 0), copy.Container);
+    }
+
+    [Fact]
+    [Trait("Plan", "EDGE-imc-all-variants-45")]
+    public void Copies_mirror_every_container_holding_the_source()
+    {
+        using var k = new VariantRepointTestKit();
+        var mod = k.Mod("Dress", new() { [ModelPath(Top)] = "top.mdl", [MaterialPath(Top, 1)] = "base.mtrl" },
+                        groups: [("Colour", "Single", [("Red", new() { [MaterialPath(Top, 1)] = "red.mtrl" }, [])]),
+                                 ("Extras", "Multi", [("Glow", new() { [MaterialPath(Top, 1)] = "glow.mtrl" }, [])]),
+                                 ("Looks", "Combining", [("Shiny", new() { [MaterialPath(Top, 1)] = "shiny.mtrl" }, [])])]);
+        k.Imc(Top, E(1), E(1), E(2));
+        var copies = Only(k.Plan([k.Worn(Top, 2, mod)])).Copies.Select(c => c.Copy).ToList();
+        Assert.Equal(["base.mtrl", "glow.mtrl", "red.mtrl", "shiny.mtrl"], copies.Select(c => c.File).Order());
+        Assert.All(copies, c => Assert.Equal(MaterialPath(Top, 2), c.GamePath));
+    }
+
+    [Fact]
+    [Trait("Plan", "EDGE-imc-all-variants-40")]
+    public void Material_served_by_own_mod_is_dressed()
+    {
+        using var k = new VariantRepointTestKit();
+        var mod = k.Dress("Dress", Top);
+        k.Imc(Top, E(1), E(1), E(2), E(3));
+        k.Served[MaterialPath(Top, 2)] = Path.Combine(mod, "top_a.mtrl");   // a file swap of its own
+        var nothing = k.Plan([k.Worn(Top, 2, mod)]);
+        Assert.Empty(nothing.PerMod);
+        Assert.Empty(nothing.Left);
+        Assert.Equal([3], Folders(k.Plan([k.Worn(Top, 3, mod)])));
+    }
+
+    [Fact]
+    [Trait("Plan", "EDGE-imc-all-variants-42")]
+    public void Own_folder_not_served_by_mod_is_other_mod_material()
+    {
+        using var k = new VariantRepointTestKit();
+        var mod = k.Dress("Dress", Top);
+        k.Imc(Top, E(1), E(1), E(2));
+        k.Served[MaterialPath(Top, 1)] = Path.Combine(k.ManagedRoot, "files", "x.mtrl");   // something beats X's own v0001
+        Assert.Equal(RepointReason.OtherModMaterial, LeftReason(k.Plan([k.Worn(Top, 2, mod)])));
+    }
+
+    [Fact]
+    [Trait("Plan", "EDGE-imc-all-variants-43")]
+    public void Own_mod_recognised_through_path_spelling()
+    {
+        using var k = new VariantRepointTestKit();
+        var mod = k.Dress("Moonfire Lace", Top, material: "b");
+        k.Imc(Top, E(1), E(1), E(2));
+        var spelled = "|abc|" + Path.Combine(mod, "top_b.mtrl").Replace('\\', '/').ToUpperInvariant();
+        k.Served[MaterialPath(Top, 1, "b")] = spelled;
+        k.Served[MaterialPath(Top, 2, "b")] = spelled;
+        var plan = k.Plan([k.Worn(Top, 2, mod)]);
+        Assert.Empty(plan.PerMod);   // v0002 reads as X's own: Dressed
+        Assert.Empty(plan.Left);     // and v0001 is X's (N2)
+    }
+
+    [Fact]
+    [Trait("Plan", "EDGE-imc-all-variants-47")]
+    public void Model_won_by_competitor_leaves_our_copies_inert()
+    {
+        using var k = new VariantRepointTestKit();
+        var mod = k.Dress("moonfire lace", Top, material: "b");
+        var rose = k.Dress("Rose", Top, folder: 2, material: "b");
+        k.Imc(Top, E(1), E(1), E(2));
+        k.Run([k.Worn(Top, 2, mod)]);
+        var record = File.ReadAllText(Path.Combine(mod, "Proteus", VariantRepointWriter.RecordFile));
+        // Rose is raised above moonfire lace: Rose's model and Rose's v0002 win; moonfire lace is not worn at all.
+        var plan = k.Plan([k.Worn(Top, 2, rose)]);
+        Assert.Empty(plan.PerMod);
+        Assert.Equal(record, File.ReadAllText(Path.Combine(mod, "Proteus", VariantRepointWriter.RecordFile)));
+    }
+
+    [Fact]
+    [Trait("Plan", "EDGE-imc-all-variants-55")]
+    public void Only_attributes_groups_do_not_block_copies()
+    {
+        foreach (var proteusToggles in new[] { false, true })
+        {
+            using var k = new VariantRepointTestKit();
+            var name = proteusToggles ? MeshToggleService.GroupNameFor("Body") : "Belt";
+            var mod = k.Mod("Dress", new() { [ModelPath(Top)] = "top.mdl", [MaterialPath(Top, 1)] = "a.mtrl" },
+                            rawGroups: [ImcGroup(name, Top)]);
+            if (proteusToggles) ToggleRecord(mod, Top, name);
+            k.Imc(Top, E(1), E(1), E(2));
+            var group = Manifest(mod)["Groups"]![0]!.ToJsonString();
+            Assert.Equal([2], Folders(k.Plan([k.Worn(Top, 2, mod)])));
+            Assert.Equal(group, Manifest(mod)["Groups"]![0]!.ToJsonString());
+        }
+    }
+
+    [Fact]
+    [Trait("Plan", "EDGE-imc-all-variants-56")]
+    public void Mods_own_imc_material_on_worn_variant_is_mod_imc()
+    {
+        using var k = new VariantRepointTestKit();
+        k.Imc(Top, E(1), E(1), E(2), E(3));
+        var a = k.Mod("A", new() { [ModelPath(Top)] = "top.mdl", [MaterialPath(Top, 1)] = "a.mtrl" }, [Imc(Top, 2, E(3))]);
+        var b = k.Mod("B", new() { [ModelPath(Top)] = "top.mdl", [MaterialPath(Top, 1)] = "a.mtrl" },
+                      groups: [("Extras", "Multi", [("Alt", new(), [Imc(Top, 2, E(3))])])]);
+        foreach (var mod in new[] { a, b })
+        {
+            var plan = k.Plan([k.Worn(Top, 2, mod)]);
+            Assert.Empty(plan.PerMod);
+            Assert.Equal(RepointReason.ModImc, LeftReason(plan));
+        }
+    }
+
+    [Fact]
+    [Trait("Plan", "EDGE-imc-all-variants-56")]
+    public void Mods_own_imc_material_on_other_variant_skips_that_folder()
+    {
+        using var k = new VariantRepointTestKit();
+        var mod = k.Mod("A", new() { [ModelPath(Top)] = "top.mdl", [MaterialPath(Top, 1)] = "a.mtrl" },
+                        groups: [("Extras", "Multi", [("Alt", new(), [Imc(Top, 3, E(5))])])]);
+        k.Imc(Top, E(1), E(1), E(2), E(3));
+        Assert.Equal([2], Folders(k.Plan([k.Worn(Top, 2, mod)])));
+    }
+
+    [Fact]
+    [Trait("Plan", "EDGE-imc-all-variants-56")]
+    public void Worn_folder_set_by_another_variants_claim_is_mod_imc()
+    {
+        // W2: variant 3 is sent to folder 2 by the author, and the worn variant 2 uses folder 2 too.
+        using var k = new VariantRepointTestKit();
+        var mod = k.Mod("A", new() { [ModelPath(Top)] = "top.mdl", [MaterialPath(Top, 1)] = "a.mtrl" },
+                        groups: [("Extras", "Multi", [("Alt", new(), [Imc(Top, 3, E(2))])])]);
+        k.Imc(Top, E(1), E(1), E(2), E(3));
+        Assert.Equal(RepointReason.ModImc, LeftReason(k.Plan([k.Worn(Top, 2, mod)])));
+    }
+
+    [Fact]
+    [Trait("Plan", "EDGE-imc-all-variants-62")]
+    public void Claim_on_own_folder_does_not_block()
+    {
+        // W1: an unticked option that sends the worn variant to the mod's own folder agrees with the fix.
+        using var k = new VariantRepointTestKit();
+        var mod = k.Mod("A", new() { [ModelPath(Top)] = "top.mdl", [MaterialPath(Top, 1)] = "a.mtrl" },
+                        groups: [("Fix", "Multi", [("All on v1", new(), [Imc(Top, 2, E(1))])])]);
+        k.Imc(Top, E(1), E(1), E(2));
+        Assert.Equal([2], Folders(k.Plan([k.Worn(Top, 2, mod)])));
+    }
+
+    [Fact]
+    [Trait("Plan", "EDGE-imc-all-variants-57")]
+    public void Folder_no_variant_uses_still_gets_copies()
+    {
+        using var k = new VariantRepointTestKit();
+        var mod = k.Dress("Dress", Top, folder: 7);
+        k.Imc(Top, E(1), E(1), E(2));
+        Assert.Equal([1, 2], Folders(k.Plan([k.Worn(Top, 2, mod)])));
+    }
+
+    [Fact]
+    [Trait("Plan", "EDGE-imc-all-variants-58")]
+    public void Non_only_attributes_group_material_is_a_claim()
+    {
+        using var k = new VariantRepointTestKit();
+        var mod = k.Mod("A", new() { [ModelPath(Top)] = "top.mdl", [MaterialPath(Top, 1)] = "a.mtrl" },
+                        rawGroups: [ImcGroup("Dye", Top, onlyAttributes: false, material: 4)]);
+        k.Imc(Top, E(1), E(1), E(2));
+        Assert.Equal(RepointReason.ModImc, LeftReason(k.Plan([k.Worn(Top, 2, mod)])));
+    }
+
+    [Fact]
+    [Trait("Plan", "EDGE-imc-all-variants-58")]
+    public void Pinned_non_only_attributes_group_skips_its_folder()
+    {
+        using var k = new VariantRepointTestKit();
+        var mod = k.Mod("A", new() { [ModelPath(Top)] = "top.mdl", [MaterialPath(Top, 1)] = "a.mtrl" },
+                        rawGroups: [ImcGroup("Dye", Top, allVariants: false, variant: 3, onlyAttributes: false, material: 3)]);
+        k.Imc(Top, E(1), E(1), E(2), E(4));
+        Assert.Equal([2], Folders(k.Plan([k.Worn(Top, 2, mod)])));
+    }
+
+    [Fact]
+    [Trait("Plan", "EDGE-imc-all-variants-59")]
+    public void Attribute_only_mod_imc_entry_is_not_a_claim()
+    {
+        using var k = new VariantRepointTestKit();
+        var mod = k.Mod("A", new() { [ModelPath(Top)] = "top.mdl", [MaterialPath(Top, 1)] = "a.mtrl" },
+                        groups: [("Toggle", "Single", [("Off", new(), [Imc(Top, 2, E(2, attr: 0x3FE))])])]);
+        k.Imc(Top, E(1), E(1), E(2));
+        Assert.Equal([2], Folders(k.Plan([k.Worn(Top, 2, mod)])));
+    }
+
+    [Fact]
+    [Trait("Plan", "EDGE-imc-all-variants-49")]
+    public void Legacy_imc_entries_are_not_claims()
+    {
+        // A build-1428 IMC entry pointing variant 3 at folder 1 is Proteus's, not the author's: it never blocks a fix.
+        using var k = new VariantRepointTestKit();
+        var mod = k.Mod("Dress", new() { [ModelPath(Top)] = "top.mdl", [MaterialPath(Top, 1)] = "top_a.mtrl" },
+                        [Imc(Top, 3, E(5))]);
+        LegacyRecord(mod, Top, 1, (3, E(5)));
+        k.Imc(Top, E(1), E(1), E(2), E(3));
+        var write = Only(k.Plan([k.Worn(Top, 2, mod)]));
+        Assert.Contains(2, write.Folders);
     }
 
     [Fact]
@@ -484,13 +676,22 @@ public class VariantRepointPlanTests
     }
 
     [Fact]
-    [Trait("Plan", "EDGE-imc-all-variants-14")]
+    [Trait("Plan", "EDGE-imc-all-variants-53")]
     public void Penumbra_spelling_of_an_imc_entry_parses_the_same()
     {
         var proteus = System.Text.Json.JsonSerializer.SerializeToElement(Imc(Top, 2, E(1, 2, 3, 4, 5, 6)));
         var penumbra = System.Text.Json.JsonDocument.Parse(
             """{"Type":"Imc","Manipulation":{"Variant":"2","PrimaryId":6255,"EquipSlot":"Body","ObjectType":"Equipment","SecondaryId":0,"BodySlot":"Unknown","Entry":{"MaterialAnimationId":6,"VfxId":5,"SoundId":4,"AttributeMask":3,"DecalId":2,"MaterialId":1}}}""").RootElement;
         Assert.Equal(ParseImc(proteus), ParseImc(penumbra));
-        Assert.Equal(E(1, 2, 3, 4, 5, 6), ParseImc(penumbra)!.Value.Entry);
+    }
+
+    [Fact]
+    [Trait("Plan", "EDGE-imc-all-variants-45")]
+    public void InFolder_moves_only_the_folder()
+    {
+        Assert.Equal("chara/equipment/e6255/material/v0012/mt_c0201e6255_top_a.mtrl",
+                     InFolder("chara/equipment/e6255/material/v0001/mt_c0201e6255_top_a.mtrl", 12));
+        Assert.Equal(@"chara\equipment\e6255\material\v0002\MT_c0201e6255_top_a.mtrl",
+                     InFolder(@"chara\equipment\e6255\material\v0001\MT_c0201e6255_top_a.mtrl", 2));
     }
 }

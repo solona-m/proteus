@@ -5940,7 +5940,7 @@
     "description": ""
   },
   "Settings.GearVariants.Auto.Tip": {
-    "message": "为物品的某一变体制作的模组只包含该变体的材质文件夹，所以以另一变体穿戴时，\n模组的模型上会绘制游戏的材质（或什么都不绘制）。当你穿上这样的装备时，\nProteus 会在模组的默认数据中写入 IMC 条目，把每个这样的变体指向模组的\n材质，就像 TexTools 的“Apply to All Variants”。此更改适用于在启用该模组的合集中\n穿着这些变体的所有人，即使其模型选项已关闭。关闭此项会停止后续\n更改，但不会撤销它们。“撤销身上装备的变体指向”会将其移除。",
+    "message": "为物品的某一变体制作的模组只包含该变体的材质文件夹，所以以另一变体穿戴时，\n模组的模型上会绘制游戏的材质（或其他服装的材质，或什么都不绘制）。当你穿上这样的装备时，\nProteus 会在模组自己的选项中，把模组的材质路径复制到其他变体文件夹，\n就像 TexTools 的“Apply to All Variants”，但只针对材质。这样在模组优先的地方，这些变体会显示\n模组的材质；部件、VFX 和声音保持各自原样。关闭此项会停止后续\n更改，但不会撤销它们。“撤销身上装备的变体指向”会将其移除。",
     "description": ""
   },
   "Settings.GearVariants.Status.Fmt": {
@@ -5971,20 +5971,8 @@
     "message": "模组自行设置了此变体",
     "description": ""
   },
-  "Settings.GearVariants.Reason.ImcGroup": {
-    "message": "模组中的 IMC 组覆盖了它",
-    "description": ""
-  },
-  "Settings.GearVariants.Reason.ProteusToggles": {
-    "message": "Proteus 的部件开关保留了游戏的材质",
-    "description": ""
-  },
   "Settings.GearVariants.Reason.OtherModMaterial": {
     "message": "其材质来自另一个模组",
-    "description": ""
-  },
-  "Settings.GearVariants.Reason.FolderUnused": {
-    "message": "该物品没有变体使用模组的文件夹",
     "description": ""
   },
   "Settings.GearVariants.Reason.NoImc": {
@@ -6044,7 +6032,7 @@
     "description": ""
   },
   "Chat.VariantRepoint.Fmt": {
-    "message": "[Proteus] 已将“{1}”中一件装备的 {0} 个变体指向模组自己的材质。这适用于在启用该模组的合集中穿着这些变体的所有人，即使其模型选项已关闭。撤销位置：/proteus > 设置 > 装备变体。",
+    "message": "[Proteus] 已将“{1}”的材质路径复制到另外 {0} 个变体文件夹，使这些变体在模组优先的地方显示模组自己的材质。撤销位置：/proteus > 设置 > 装备变体。",
     "description": ""
   }
 }

@@ -5940,7 +5940,7 @@
     "description": ""
   },
   "Settings.GearVariants.Auto.Tip": {
-    "message": "Ein Mod für eine Variante eines Gegenstands liefert nur den Materialordner dieser Variante, daher zeichnet der\nin einer anderen Variante getragene Gegenstand das Material des Spiels (oder keins) auf das Modell des Mods. Ziehst du\nso ein Teil an, schreibt Proteus IMC-Einträge in die Standarddaten des Mods, die jede solche Variante auf das\nMaterial des Mods zeigen lassen, wie „Apply to All Variants“ in TexTools. Das gilt für alle, die diese Varianten in\nSammlungen tragen, in denen der Mod aktiv ist, auch wenn seine Modelloption aus ist. Ausschalten stoppt weitere\nÄnderungen, macht sie aber nicht rückgängig. „Für das Getragene rückgängig machen“ entfernt sie.",
+    "message": "Ein Mod für eine Variante eines Gegenstands liefert nur den Materialordner dieser Variante, daher zeichnet der\nin einer anderen Variante getragene Gegenstand das Material des Spiels (oder eines anderen Outfits, oder keins) auf das Modell des Mods.\nZiehst du so ein Teil an, kopiert Proteus die Materialpfade des Mods in die anderen Variantenordner, innerhalb der\neigenen Optionen des Mods, wie „Apply to All Variants“ in TexTools, nur für das Material. Diese Varianten zeigen dann\ndas Material des Mods, wo immer der Mod gewinnt; Teile, VFX und Klang bleiben ihre eigenen. Ausschalten stoppt\nweitere Änderungen, macht sie aber nicht rückgängig. „Für das Getragene rückgängig machen“ entfernt sie.",
     "description": ""
   },
   "Settings.GearVariants.Status.Fmt": {
@@ -5971,20 +5971,8 @@
     "message": "der Mod legt diese Variante selbst fest",
     "description": ""
   },
-  "Settings.GearVariants.Reason.ImcGroup": {
-    "message": "eine IMC-Gruppe im Mod deckt es ab",
-    "description": ""
-  },
-  "Settings.GearVariants.Reason.ProteusToggles": {
-    "message": "Proteus' Teile-Schalter behalten die Materialien des Spiels",
-    "description": ""
-  },
   "Settings.GearVariants.Reason.OtherModMaterial": {
     "message": "sein Material kommt aus einem anderen Mod",
-    "description": ""
-  },
-  "Settings.GearVariants.Reason.FolderUnused": {
-    "message": "keine Variante des Gegenstands nutzt den Ordner des Mods",
     "description": ""
   },
   "Settings.GearVariants.Reason.NoImc": {
@@ -6044,7 +6032,7 @@
     "description": ""
   },
   "Chat.VariantRepoint.Fmt": {
-    "message": "[Proteus] {0} Variante(n) eines Teils in „{1}“ auf das eigene Material des Mods gezeigt. Das gilt für alle, die diese Varianten in Sammlungen tragen, in denen der Mod aktiv ist, auch wenn seine Modelloption aus ist. Rückgängig unter /proteus > Einstellungen > Ausrüstungsvarianten.",
+    "message": "[Proteus] Die Materialpfade von „{1}“ wurden in {0} weitere(n) Variantenordner kopiert, sodass diese Varianten das eigene Material des Mods zeigen, wo immer er gewinnt. Rückgängig unter /proteus > Einstellungen > Ausrüstungsvarianten.",
     "description": ""
   }
 }

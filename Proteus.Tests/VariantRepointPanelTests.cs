@@ -12,8 +12,8 @@ public class VariantRepointPanelTests
 {
     private static readonly string[] Reasons =
     [
-        "several-variants", "mod-imc", "imc-group", "proteus-toggles", "other-mod-material", "folder-unused", "no-imc",
-        "meta-unreadable", "outranked", "legacy-mod", "proteus-pack", "declined", "write-failed",
+        "several-variants", "mod-imc", "other-mod-material", "no-imc", "meta-unreadable", "outranked", "legacy-mod",
+        "proteus-pack", "declined", "write-failed",
     ];
 
     [Fact]
@@ -32,11 +32,6 @@ public class VariantRepointPanelTests
     }
 
     [Fact]
-    [Trait("Plan", "EDGE-imc-all-variants-39")]
-    public void Proteus_toggles_reason_text()
-        => Assert.Equal(Strings.Settings.GearVariantsReasonProteusToggles, VariantRepointPanel.ReasonText("proteus-toggles"));
-
-    [Fact]
     [Trait("Plan", "AC-imc-all-variants-4")]
     public void Status_hidden_when_off()
     {
@@ -49,22 +44,24 @@ public class VariantRepointPanelTests
     [Trait("Plan", "AC-imc-all-variants-8")]
     public void Status_tooltip_lists_repointed_mods()
     {
-        var view = new VariantRepointWatcher.View(Enabled: true, Repointed: [new("This Old Thing", "e6255 Body", 1, [0, 2])]);
-        Assert.Contains("This Old Thing: e6255 Body → v0001", VariantRepointPanel.StatusTooltip(view));
+        var view = new VariantRepointWatcher.View(Enabled: true, Repointed: [new("moonfire lace", "e0317 Body", 1, [2, 3], [2, 3])]);
+        Assert.Contains("moonfire lace: e0317 Body v0001 → v0002, v0003", VariantRepointPanel.StatusTooltip(view));
         Assert.Null(VariantRepointPanel.StatusTooltip(new VariantRepointWatcher.View(Enabled: true)));
     }
 
     [Fact]
     [Trait("Plan", "AC-imc-all-variants-8")]
-    public void Chat_and_tip_say_who_it_applies_to()
+    public void Chat_and_tip_describe_copied_material_paths()
     {
         var s = Strings.Settings;
-        Assert.Contains("everyone", s.GearVariantsChatFmt);
-        Assert.Contains("model option off", s.GearVariantsChatFmt);
+        Assert.Contains("Copied the material paths", s.GearVariantsChatFmt);
+        Assert.Contains("wherever it wins", s.GearVariantsChatFmt);
         Assert.Contains("/proteus > Settings > Gear variants", s.GearVariantsChatFmt);
-        Assert.Contains("everyone wearing those variants", s.GearVariantsAutoTip);
+        Assert.Contains("copies the mod's material paths", s.GearVariantsAutoTip);
+        Assert.Contains("parts, VFX and sound stay their own", s.GearVariantsAutoTip);
         Assert.Contains("Apply to All Variants", s.GearVariantsAutoTip);
         Assert.Contains("Undo for what I'm wearing", s.GearVariantsAutoTip);
+        Assert.DoesNotContain("IMC", s.GearVariantsAutoTip);
     }
 
     [Fact]

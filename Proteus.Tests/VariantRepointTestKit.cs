@@ -14,8 +14,9 @@ namespace Proteus.Tests;
 
 /// <summary>
 /// Shared inputs for the "Gear variants" tests: a temporary mods folder holding v4 mods built the way Penumbra writes
-/// them, synthetic five-slot <c>.imc</c> files, a Penumbra meta blob builder and a resolver that answers like
-/// <c>ResolvePlayerPaths</c> (the game path itself for anything no mod redirects).
+/// them, synthetic five-slot <c>.imc</c> files, a Penumbra meta blob builder, and a resolver that answers like
+/// <c>ResolvePlayerPaths</c>: the highest-priority mod redirecting a path serves it (mods made first rank highest, every
+/// option counted as on), else the game path itself.
 /// </summary>
 internal sealed class VariantRepointTestKit : IDisposable
 {
@@ -30,10 +31,13 @@ internal sealed class VariantRepointTestKit : IDisposable
     /// <summary>Game files by game path (the synthetic <c>.imc</c>s).</summary>
     public Dictionary<string, byte[]> Game { get; } = new(StringComparer.OrdinalIgnoreCase);
 
-    /// <summary>Material paths another mod (or anything) serves: game path → resolved file.</summary>
+    /// <summary>Paths served by something other than an installed mod's redirect (Proteus's output, outside), or forced.</summary>
     public Dictionary<string, string> Served { get; } = new(StringComparer.OrdinalIgnoreCase);
 
-    /// <summary>The collection's IMC (the meta blob, parsed); entries the tests add stand for other mods' edits.</summary>
+    /// <summary>Mods by priority, highest first (creation order unless reordered).</summary>
+    public List<string> Priority { get; } = [];
+
+    /// <summary>The collection's IMC; entries the tests add stand for other mods' edits.</summary>
     public Dictionary<PenumbraMetaImc.Key, ImcEntry> Collection { get; } = new();
 
     public HashSet<string> RefreshPending { get; } = new(StringComparer.OrdinalIgnoreCase);
@@ -49,11 +53,7 @@ internal sealed class VariantRepointTestKit : IDisposable
     public static ImcEntry E(int mat, int decal = 0, int attr = 0, int sound = 0, int vfx = 0, int anim = 0)
         => new((byte)mat, (byte)decal, (ushort)attr, (byte)sound, (byte)vfx, (byte)anim);
 
-    /// <summary>
-    /// A five-slot <c>.imc</c> for a set: <paramref name="entries"/>[slotIndex][set] (set 0 = the default set), every
-    /// other slot zero. <paramref name="slot"/> is the slot index within a set (Body/Necklace = 1, Earrings/Head = 0,
-    /// Right ring = 3, Left ring = 4).
-    /// </summary>
+    /// <summary>A five-slot <c>.imc</c> for the item's set: <paramref name="sets"/>[s] for set s (0 = the default set).</summary>
     public void Imc(Item item, params ImcEntry[] sets) => ImcSlots(item.SetTag, (SlotIndex(item), sets));
 
     public void ImcSlots(string setTag, params (int Slot, ImcEntry[] Sets)[] slots)
@@ -84,12 +84,14 @@ internal sealed class VariantRepointTestKit : IDisposable
     public static string MaterialPath(Item item, int folder, string name = "a")
         => item.MaterialDir(folder) + $"mt_c0201{item.SetTag}_{item.Suffix}_{name}.mtrl";
 
-    public static string ModelPath(Item item)
-        => $"chara/{(item.Kind == 'a' ? "accessory" : "equipment")}/{item.SetTag}/model/c0201{item.SetTag}_{item.Suffix}.mdl";
+    public static string ModelPath(Item item, string race = "0201")
+        => $"chara/{(item.Kind == 'a' ? "accessory" : "equipment")}/{item.SetTag}/model/c{race}{item.SetTag}_{item.Suffix}.mdl";
+
+    public delegate (string Option, Dictionary<string, string> Files, object[] Manips) OptionSpec();
 
     /// <summary>
     /// A v4 mod: default data files and manipulations, and groups (name, type, options of game path → file and their
-    /// manipulations). Extra raw groups (Imc groups) are appended as given.
+    /// manipulations). Raw groups (Imc groups) are appended as given.
     /// </summary>
     public string Mod(string name, Dictionary<string, string>? defaults = null, IEnumerable<object>? defaultManips = null,
                       IEnumerable<(string Group, string Type, (string Option, Dictionary<string, string> Files, object[] Manips)[] Options)>? groups = null,
@@ -119,16 +121,23 @@ internal sealed class VariantRepointTestKit : IDisposable
                                     Manipulations = (defaultManips ?? []).ToArray() },
         };
         File.WriteAllText(Path.Combine(root, "meta.json"), JsonSerializer.Serialize(meta));
+        if (!Priority.Contains(root)) Priority.Add(root);
         return root;
     }
 
-    /// <summary>The standard case: a mod dressing <paramref name="item"/> at folder 1 in its default data.</summary>
+    /// <summary>The standard case: a mod dressing <paramref name="item"/> at one folder in its default data.</summary>
     public string Dress(string name, Item item, int folder = 1, string material = "a")
         => Mod(name, new Dictionary<string, string>
         {
             [ModelPath(item)] = $"{item.Suffix}.mdl",
             [MaterialPath(item, folder, material)] = $"{item.Suffix}_{material}.mtrl",
         });
+
+    /// <summary>A mod with a Single "Colour" group: Red and Blue each ship the item's material at folder 1, own files.</summary>
+    public string Colours(string name, Item item, string material = "a")
+        => Mod(name, new Dictionary<string, string> { [ModelPath(item)] = $"{item.Suffix}.mdl" },
+               groups: [("Colour", "Single", [("Red", new() { [MaterialPath(item, 1, material)] = "red/m.mtrl" }, []),
+                                              ("Blue", new() { [MaterialPath(item, 1, material)] = "blue/m.mtrl" }, [])])]);
 
     public string LegacyMod(string name, Item item)
     {
@@ -137,9 +146,10 @@ internal sealed class VariantRepointTestKit : IDisposable
         File.WriteAllText(Path.Combine(root, "meta.json"), "{\"FileVersion\":3,\"Name\":\"" + name + "\"}");
         File.WriteAllText(Path.Combine(root, "default_mod.json"), JsonSerializer.Serialize(new
         {
-            Files = new Dictionary<string, string> { [MaterialPath(item, 1)] = "a.mtrl" },
+            Files = new Dictionary<string, string> { [MaterialPath(item, 1)] = "a.mtrl", [ModelPath(item)] = "top.mdl" },
             FileSwaps = new Dictionary<string, string>(), Manipulations = Array.Empty<object>(),
         }));
+        Priority.Add(root);
         return root;
     }
 
@@ -153,28 +163,35 @@ internal sealed class VariantRepointTestKit : IDisposable
         ReadGameFile = p => Game.TryGetValue(p, out var b) ? b : null,
     };
 
-    /// <summary>What Penumbra resolves each requested path to: a served file, else the game path itself.</summary>
+    /// <summary>What Penumbra resolves each path to: a forced answer, else the highest-priority mod redirecting it, else the game path.</summary>
     public Dictionary<string, string?> Resolve(IEnumerable<string> requests)
-        => requests.ToDictionary(r => r, r => Served.TryGetValue(r, out var f) ? f : r, StringComparer.OrdinalIgnoreCase);
+        => requests.ToDictionary(r => r, r => (string?)ResolveOne(r), StringComparer.OrdinalIgnoreCase);
 
-    /// <summary>
-    /// The collection after Proteus's writes: our default-data entries in every mod join the other mods' entries the
-    /// tests set (ours lose to those, as a higher-priority mod's would win).
-    /// </summary>
+    public string ResolveOne(string path)
+    {
+        if (Served.TryGetValue(path, out var f)) return f;
+        foreach (var root in Priority)
+            foreach (var x in PenumbraModMeta.ReadContainerRedirects(root))
+                if (PenumbraModMeta.SameFile(x.GamePath, path)) return Path.Combine(root, x.File.Replace('/', Path.DirectorySeparatorChar));
+        return path;
+    }
+
+    /// <summary>The collection's IMC: every mod's own Imc manipulations (legacy entries included), then the tests' entries.</summary>
     public Dictionary<PenumbraMetaImc.Key, ImcEntry> EffectiveNow()
     {
         var all = new Dictionary<PenumbraMetaImc.Key, ImcEntry>();
-        foreach (var dir in Directory.GetDirectories(ModsRoot))
-            foreach (var (edit, _, _) in ManifestImcEdits(dir))
-                all[new PenumbraMetaImc.Key(edit.Item.Kind, edit.Item.SetId, edit.Item.SlotLabel, edit.Variant)] = edit.Entry;
+        foreach (var dir in Priority.AsEnumerable().Reverse())
+            foreach (var (edit, isDefault, _) in ManifestImcEdits(dir))
+                if (isDefault)
+                    all[new PenumbraMetaImc.Key(edit.Item.Kind, edit.Item.SetId, edit.Item.SlotLabel, edit.Variant)] = edit.Entry;
         foreach (var (k, v) in Collection) all[k] = v;
         return all;
     }
 
     /// <summary>Plan the worn pieces as the watcher does: reconcile, candidates, the collection's entries, resolve, build.</summary>
-    public Plan Plan(IEnumerable<WornItem> worn, bool metaUnreadable = false)
+    public Plan Plan(IEnumerable<WornItem> worn, bool metaUnreadable = false, Inputs? inputs = null)
     {
-        var inp = Inputs();
+        var inp = inputs ?? Inputs();
         foreach (var w in worn)
             if (w.ModelResolved != null && HatCompatService.InMods(w.ModelResolved, ModsRoot, out var root, out _))
                 VariantRepointWriter.Reconcile(root);
@@ -193,42 +210,52 @@ internal sealed class VariantRepointTestKit : IDisposable
         return (outcomes, plan.Left);
     }
 
-    /// <summary>The mod's default-data Imc entries, by variant (Proteus's or anyone's).</summary>
-    public static Dictionary<int, ImcEntry> DefaultImc(string modRoot, Item item)
-        => ManifestImcEdits(modRoot).Where(e => e.IsDefault && e.Edit.Item == item)
-                                    .ToDictionary(e => e.Edit.Variant, e => e.Edit.Entry);
+    /// <summary>The redirects of one container of a mod, game path → file.</summary>
+    public static Dictionary<string, string> FilesOf(string modRoot, PenumbraModMeta.ContainerRef at)
+        => PenumbraModMeta.ReadContainerRedirects(modRoot).Where(r => r.Container.SameAs(at))
+                          .ToDictionary(r => r.GamePath, r => r.File, StringComparer.OrdinalIgnoreCase);
+
+    public static readonly PenumbraModMeta.ContainerRef Default = new("");
 
     public static JsonObject Manifest(string modRoot) => JsonNode.Parse(File.ReadAllText(Path.Combine(modRoot, "meta.json")))!.AsObject();
 
     public static void WriteManifest(string modRoot, JsonObject manifest)
         => File.WriteAllText(Path.Combine(modRoot, "meta.json"), manifest.ToJsonString());
 
-    /// <summary>Rewrite the default data's manipulations with an edit (remove, change, respell).</summary>
-    public static void EditDefaultManips(string modRoot, Action<JsonArray> edit)
+    /// <summary>Edit one container's Files object in the manifest (default data when <paramref name="group"/> is null).</summary>
+    public static void EditFiles(string modRoot, Action<JsonObject> edit, string? group = null, string? option = null, int? index = null)
     {
         var m = Manifest(modRoot);
-        var arr = m["DefaultData"]!["Manipulations"]!.AsArray();
-        edit(arr);
+        JsonObject owner;
+        if (group == null) owner = m["DefaultData"]!.AsObject();
+        else
+        {
+            var g = m["Groups"]!.AsArray().First(x => x!["Name"]!.GetValue<string>() == group)!.AsObject();
+            owner = index is { } i ? g["Containers"]![i]!.AsObject()
+                  : g["Options"]!.AsArray().First(o => o!["Name"]!.GetValue<string>() == option)!.AsObject();
+        }
+        edit(owner["Files"]!.AsObject());
         WriteManifest(modRoot, m);
     }
 
-    /// <summary>An Imc manipulation as Proteus writes it.</summary>
+    /// <summary>An Imc manipulation as Proteus (build 1428) and Penumbra write it.</summary>
     public static object Imc(Item item, int variant, ImcEntry e)
         => PenumbraManipulations.ImcManipulation(item.Kind, item.SetId, variant, item.EquipSlot, e);
 
     /// <summary>An Imc group as <c>PenumbraModMeta.WriteImcGroup</c> (and so <c>MeshToggleService</c>) writes it.</summary>
-    public static object ImcGroup(string name, Item item, bool allVariants = true, int variant = 0)
-        => new Dictionary<string, object>
+    public static Dictionary<string, object> ImcGroup(string name, Item item, bool allVariants = true, int variant = 0,
+                                                      bool onlyAttributes = true, int material = 1)
+        => new()
         {
             ["Type"] = "Imc", ["Name"] = name, ["Description"] = "", ["Priority"] = 0, ["DefaultSettings"] = 1,
-            ["AllVariants"] = allVariants, ["OnlyAttributes"] = true,
+            ["AllVariants"] = allVariants, ["OnlyAttributes"] = onlyAttributes,
             ["Identifier"] = new Dictionary<string, object>
             {
                 ["ObjectType"] = item.ObjectType, ["PrimaryId"] = item.SetId, ["Variant"] = variant, ["EquipSlot"] = item.EquipSlot,
             },
             ["DefaultEntry"] = new Dictionary<string, object>
             {
-                ["MaterialId"] = 1, ["DecalId"] = 0, ["VfxId"] = 0, ["MaterialAnimationId"] = 0, ["AttributeMask"] = 0, ["SoundId"] = 0,
+                ["MaterialId"] = material, ["DecalId"] = 0, ["VfxId"] = 0, ["MaterialAnimationId"] = 0, ["AttributeMask"] = 0, ["SoundId"] = 0,
             },
             ["Options"] = new[] { new Dictionary<string, object> { ["Name"] = "Part A", ["AttributeMask"] = 1 } },
         };
@@ -242,6 +269,26 @@ internal sealed class VariantRepointTestKit : IDisposable
         {
             Items = new[] { new { GroupName = groupName, SetId = item.SetId, Slot = item.EquipSlot, Files = Array.Empty<string>(),
                                   Toggles = new Dictionary<string, string>() } },
+        }));
+    }
+
+    /// <summary>A version-1 record as build 1428 wrote it, for legacy IMC entries already in the mod's default data.</summary>
+    public static void LegacyRecord(string modRoot, Item item, int folder, params (int Variant, ImcEntry Entry)[] entries)
+    {
+        var dir = Path.Combine(modRoot, SidecarDiscoveryService.SidecarSubdir);
+        Directory.CreateDirectory(dir);
+        File.WriteAllText(Path.Combine(dir, VariantRepointWriter.RecordFile), JsonSerializer.Serialize(new
+        {
+            Version = 1, Fingerprint = VariantRepointPlan.Fingerprint(modRoot),
+            Items = new[]
+            {
+                new
+                {
+                    ObjectType = item.ObjectType, SetId = item.SetId, Slot = item.EquipSlot, MaterialId = folder, Pending = false,
+                    Variants = entries.Select(e => new { Variant = e.Variant, Entry = VariantRepointWriter.EntryJson.From(e.Entry) }),
+                },
+            },
+            Declined = Array.Empty<string>(),
         }));
     }
 

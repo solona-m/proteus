@@ -53,12 +53,20 @@ public sealed class VariantRepointWatcher : IDisposable
     public sealed record WornEntry(string? ModDir, string Item, int Variant, int? EffectiveMaterialId, string? LoadedFolder);
 
     /// <summary>One worn piece whose variants Proteus pointed at its mod's folder.</summary>
-    public sealed record RepointedEntry(string ModDir, string Item, int MaterialId, IReadOnlyList<int> Variants);
+    /// <param name="Folders">The material folders Proteus copied the mod's material paths into.</param>
+    /// <param name="Variants">The variants those folders fix.</param>
+    /// <param name="LegacyImcVariants">Variants with an IMC entry written by build 1428 (record version 1).</param>
+    public sealed record RepointedEntry(string ModDir, string Item, int MaterialId, IReadOnlyList<int> Folders,
+                                        IReadOnlyList<int> Variants, IReadOnlyList<int>? LegacyImcVariants = null)
+    {
+        public IReadOnlyList<int> LegacyList => LegacyImcVariants ?? [];
+    }
 
     public sealed record LeftEntry(string ModDir, string Item, string Reason);
 
     /// <summary>What the last run did.</summary>
-    public sealed record RunInfo(string Kind, int ModsChanged, int EntriesWritten, int Removed, int Kept, int Refused,
+    /// <param name="FoldersWritten">Material folders copied into, over every mod changed.</param>
+    public sealed record RunInfo(string Kind, int ModsChanged, int FoldersWritten, int Removed, int Kept, int Refused,
                                  bool Reloaded, bool RedrawRequested, DateTime AtUtc, string Message = "",
                                  bool NothingRecorded = false);
 
@@ -300,6 +308,12 @@ public sealed class VariantRepointWatcher : IDisposable
         ReadGameFile = readGameFile,
     };
 
+    /// <summary>The root of the mod a worn piece's model comes from, or null.</summary>
+    private static string? ModRootOfWorn(WornItem w, string modsRoot)
+        => w.ModelResolved != null
+           && HatCompatService.InMods(ShaderUpgradePlan.StripPenumbraPrefix(w.ModelResolved), modsRoot, out var root, out _)
+            ? root : null;
+
     /// <summary>The roots of the mods the worn pieces' models are drawn from.</summary>
     private static List<string> WornModRoots(WornState worn, Inputs inputs)
         => worn.Items.Where(w => !w.Glasses && w.ModelGamePath != null
@@ -334,7 +348,7 @@ public sealed class VariantRepointWatcher : IDisposable
         // Mods whose manifest the reconcile changed (entries for a folder no longer shipped taken out): reloaded with the
         // rest, or Penumbra keeps the old entries in memory — and could save them back.
         var reconciled = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-        int forgotten = 0;
+        int forgotten = 0;   // replaced entries of the WORN pieces only, counted as kept by an undo
         foreach (var root in roots)
         {
             if (stopped) return;
@@ -342,7 +356,9 @@ public sealed class VariantRepointWatcher : IDisposable
             {
                 var rc = VariantRepointWriter.Reconcile(root);
                 if (rc.ManifestChanged) reconciled.Add(root);
-                forgotten += rc.Forgotten;
+                forgotten += worn.Items.Where(w => ModRootOfWorn(w, worn.ModsRoot) is { } r
+                                                    && string.Equals(r, root, StringComparison.OrdinalIgnoreCase))
+                                       .Select(w => w.Item).Distinct().Sum(rc.ForgottenOf);
                 if (rc.ManifestChanged || rc.Replanned || rc.Dropped > 0 || rc.Forgotten > 0)
                     log.Information("[Proteus] gear variants: {0} — {1} entr(y/ies) forgotten as replaced, {2} removed by "
                                   + "someone (declined){3}{4}", Path.GetFileName(root), rc.Forgotten, rc.Dropped,
@@ -352,6 +368,8 @@ public sealed class VariantRepointWatcher : IDisposable
             catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or InvalidOperationException
                                            or System.Text.Json.JsonException or PenumbraModMeta.LegacyFolderException)
             {
+                // The manifest may already be changed (the record write after it failed): reload it anyway, harmless if not.
+                reconciled.Add(root);
                 log.Warning("[Proteus] gear variants: could not reconcile {0} — {1}", Path.GetFileName(root), ex.Message);
             }
         }
@@ -390,11 +408,12 @@ public sealed class VariantRepointWatcher : IDisposable
                 () => !stopped && (kind != RunKind.Repoint || Enabled));
             foreach (var (item, reason) in outcome.Left)
                 left.Add(new Left(Path.GetFileName(mod.ModRoot), item.Label, reason));
-            foreach (var (item, variants) in outcome.Written)
-                log.Information("[Proteus] gear variants: pointed {0} variant(s) ({1}) of {2} in {3} at its own material "
-                              + "folder v{4:D4}", variants.Count, string.Join(", ", variants), item.Label,
-                                Path.GetFileName(mod.ModRoot), mod.Items.First(i => i.Item == item).Folder);
-            if (outcome.ChangedAny) changed[mod.ModRoot] = outcome.Entries;
+            foreach (var (item, folders, variants, copies) in outcome.Written)
+                log.Information("[Proteus] gear variants: copied {0} material path(s) of {1} in {2} from v{3:D4} to {4} "
+                              + "(variants {5})", copies, item.Label, Path.GetFileName(mod.ModRoot),
+                                mod.Items.First(i => i.Item == item).Folder,
+                                string.Join(", ", folders.Select(f => $"v{f:D4}")), string.Join(", ", variants));
+            if (outcome.ChangedAny) changed[mod.ModRoot] = outcome.Written.Sum(x => x.Folders.Count);
         }
         if (stopped) return;
 
@@ -503,19 +522,23 @@ public sealed class VariantRepointWatcher : IDisposable
                 modDir = Path.GetFileName(r);
             }
             int? materialId = null;
-            if (ImcEntrySource.GameEntries(readGameFile, w.Item.SetTag, w.Item.SlotLabel) is { } vanilla)
-            {
-                int at = w.Variant >= 1 && w.Variant < vanilla.Length ? w.Variant : 0;
-                materialId = effective != null
-                             && effective.TryGetValue(new PenumbraMetaImc.Key(w.Item.Kind, w.Item.SetId, w.Item.SlotLabel, at),
-                                                      out var e)
-                    ? e.MaterialId : vanilla[at].MaterialId;
-            }
+            var vanilla = ImcEntrySource.GameEntries(readGameFile, w.Item.SetTag, w.Item.SlotLabel);
+            int FolderOf(int v)
+                => effective != null
+                   && effective.TryGetValue(new PenumbraMetaImc.Key(w.Item.Kind, w.Item.SetId, w.Item.SlotLabel, v), out var e)
+                    ? e.MaterialId : vanilla![v].MaterialId;
+            if (vanilla != null) materialId = FolderOf(w.Variant >= 1 && w.Variant < vanilla.Length ? w.Variant : 0);
             wornList.Add(new WornEntry(modDir, w.Item.Label, w.Variant, materialId,
                                        w.LoadedFolder is { } f ? $"v{f:D4}" : null));
-            if (root != null && VariantRepointWriter.ReadRecord(root)?.Find(w.Item) is { } rec)
-                repointed.Add(new RepointedEntry(modDir!, w.Item.Label, rec.MaterialId,
-                                                 rec.Variants.Select(v => v.Variant).OrderBy(v => v).ToList()));
+            if (root != null && VariantRepointWriter.ReadRecord(root)?.Find(w.Item) is { } rec
+                && (rec.Redirects.Count > 0 || rec.Variants.Count > 0))
+            {
+                var folders = rec.Redirects.Select(x => x.Folder).Distinct().Order().ToList();
+                var fixedVariants = vanilla == null ? []
+                    : Enumerable.Range(0, vanilla.Length).Where(v => folders.Contains(FolderOf(v))).ToList();
+                repointed.Add(new RepointedEntry(modDir!, w.Item.Label, rec.MaterialId, folders, fixedVariants,
+                                                 rec.Variants.Select(v => v.Variant).Order().ToList()));
+            }
         }
         current = new View(
             Waiting: "none", AwaitingRedraw: awaitingRedraw, Worn: wornList, Repointed: repointed,

@@ -5940,8 +5940,8 @@
     "description": "Checkbox: when worn gear is put on, write IMC entries into its mod so every variant uses the mod's material."
   },
   "Settings.GearVariants.Auto.Tip": {
-    "message": "A mod made for one variant of an item ships that variant's material folder only, so the item worn\nin another variant draws the game's material (or none) on the mod's model. As you put such a piece on,\nProteus writes IMC entries into the mod's default data that point every such variant at the mod's\nmaterial, like TexTools' \"Apply to All Variants\". The change applies to everyone wearing those variants\nin collections where the mod is on, even with its model option off. Turning this off stops further\nchanges; it does not undo them. \"Undo for what I'm wearing\" takes them out.",
-    "description": "Tooltip on the Gear variants checkbox. Keep IMC, TexTools and the button name \"Apply to All Variants\" (TexTools' own English label) verbatim; the quoted \"Undo for what I'm wearing\" must match Settings.GearVariants.UndoWorn. Keep the line breaks."
+    "message": "A mod made for one variant of an item ships that variant's material folder only, so the item worn\nin another variant draws the game's material (or another outfit's, or none) on the mod's model. As you\nput such a piece on, Proteus copies the mod's material paths to the other variant folders, inside the\nmod's own options, like TexTools' \"Apply to All Variants\" for the material only. Those variants then show\nthe mod's material wherever the mod wins; parts, VFX and sound stay their own. Turning this off stops\nfurther changes; it does not undo them. \"Undo for what I'm wearing\" takes them out.",
+    "description": "Tooltip on the Gear variants checkbox. Keep TexTools and the button name \"Apply to All Variants\" (TexTools' own English label) verbatim; the quoted \"Undo for what I'm wearing\" must match Settings.GearVariants.UndoWorn. Keep the line breaks."
   },
   "Settings.GearVariants.Status.Fmt": {
     "message": "{0} piece(s) repointed · {1} left",
@@ -5971,21 +5971,9 @@
     "message": "the mod sets this variant itself",
     "description": "Reason a piece was left: the mod's own IMC data sets the worn variant."
   },
-  "Settings.GearVariants.Reason.ImcGroup": {
-    "message": "an IMC group in the mod covers it",
-    "description": "Reason a piece was left: an IMC group the mod's author wrote covers the item."
-  },
-  "Settings.GearVariants.Reason.ProteusToggles": {
-    "message": "Proteus's part toggles keep the game's materials",
-    "description": "Reason a piece was left: Proteus's own part toggles (an IMC group) make every variant use the game's materials."
-  },
   "Settings.GearVariants.Reason.OtherModMaterial": {
     "message": "its material comes from another mod",
     "description": "Reason a piece was left: the worn variant's material is supplied by a different mod."
-  },
-  "Settings.GearVariants.Reason.FolderUnused": {
-    "message": "no variant of the item uses the mod's folder",
-    "description": "Reason a piece was left: no variant of the item uses the material folder the mod ships."
   },
   "Settings.GearVariants.Reason.NoImc": {
     "message": "the game's variant table could not be read",
@@ -6044,7 +6032,7 @@
     "description": "Tooltip on the buttons while a run is going."
   },
   "Chat.VariantRepoint.Fmt": {
-    "message": "[Proteus] Pointed {0} variant(s) of a piece in \"{1}\" at the mod's own material. This applies to everyone wearing those variants in collections where the mod is on, even with its model option off. Undo under /proteus > Settings > Gear variants.",
-    "description": "Chat notice, once per mod per session. {0} = number of variants pointed at the mod's material, {1} = the mod's name. Keep /proteus and the \"[Proteus]\" prefix; \"Settings\" and \"Gear variants\" name a tab and a section (match Tab.Settings and Settings.Section.GearVariants)."
+    "message": "[Proteus] Copied the material paths of \"{1}\" to {0} more variant folder(s), so those variants show the mod's own material wherever it wins. Undo under /proteus > Settings > Gear variants.",
+    "description": "Chat notice, once per mod per session. {0} = number of variant folders the mod's material paths were copied into, {1} = the mod's name. Keep /proteus and the \"[Proteus]\" prefix; \"Settings\" and \"Gear variants\" name a tab and a section (match Tab.Settings and Settings.Section.GearVariants)."
   }
 }

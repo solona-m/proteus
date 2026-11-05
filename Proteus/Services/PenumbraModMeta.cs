@@ -1080,10 +1080,193 @@ internal static class PenumbraModMeta
         return swapped;
     }
 
-    private static bool SameFile(string a, string b)
+    // ── containers: default data, an option, or a combining container ──────────────────────────────
+
+    /// <summary>
+    /// Where a redirect lives: the default data (<see cref="Group"/> ""), an option of a Single/Multi group
+    /// (<see cref="Group"/> + <see cref="Option"/>), or a container of a Combining group (<see cref="Group"/> +
+    /// <see cref="Index"/>, its position in <c>Containers</c>).
+    /// </summary>
+    public readonly record struct ContainerRef(string Group, string? Option = null, int? Index = null)
+    {
+        public bool IsDefault => Group.Length == 0;
+
+        public bool SameAs(ContainerRef o)
+            => string.Equals(Group, o.Group, StringComparison.OrdinalIgnoreCase)
+            && string.Equals(Option ?? "", o.Option ?? "", StringComparison.OrdinalIgnoreCase) && Index == o.Index;
+    }
+
+    /// <summary>One file redirect with the container it sits in.</summary>
+    public readonly record struct ContainerRedirect(ContainerRef Container, string GamePath, string File);
+
+    /// <summary>Redirects to add to and take out of one container (a removal only while it still names that file).</summary>
+    public sealed record ContainerEdit(ContainerRef Container, IReadOnlyDictionary<string, string> Add,
+                                       IReadOnlyDictionary<string, string> Remove);
+
+    /// <summary>
+    /// Every file redirect of a v4 mod with its container: default data, every option, every Combining container
+    /// (active or not). Empty for an unreadable or v3 folder.
+    /// </summary>
+    public static List<ContainerRedirect> ReadContainerRedirects(string modRoot)
+    {
+        var found = new List<ContainerRedirect>();
+        try
+        {
+            var manifest = ReadManifest(modRoot);
+            if (FileVersionOf(manifest) < SingleFileVersion) return found;
+            if (manifest.TryGetValue("DefaultData", out var dd)) Add(dd, new ContainerRef(""));
+            if (manifest.TryGetValue("Groups", out var groups) && groups.ValueKind == JsonValueKind.Array)
+                foreach (var g in groups.EnumerateArray())
+                {
+                    if (g.ValueKind != JsonValueKind.Object) continue;
+                    var name = g.TryGetProperty("Name", out var n) && n.ValueKind == JsonValueKind.String ? n.GetString() ?? "" : "";
+                    if (g.TryGetProperty("Containers", out var cs) && cs.ValueKind == JsonValueKind.Array)
+                    {
+                        int i = 0;
+                        foreach (var c in cs.EnumerateArray()) Add(c, new ContainerRef(name, null, i++));
+                        continue;
+                    }
+                    if (g.TryGetProperty("Options", out var opts) && opts.ValueKind == JsonValueKind.Array)
+                        foreach (var o in opts.EnumerateArray())
+                            if (o.ValueKind == JsonValueKind.Object && o.TryGetProperty("Name", out var on)
+                                && on.ValueKind == JsonValueKind.String)
+                                Add(o, new ContainerRef(name, on.GetString() ?? ""));
+                }
+        }
+        catch { /* unreadable: empty, and the caller writes nothing */ }
+        return found;
+
+        void Add(JsonElement owner, ContainerRef at)
+        {
+            if (owner.ValueKind != JsonValueKind.Object || !owner.TryGetProperty("Files", out var f)
+                || f.ValueKind != JsonValueKind.Object)
+                return;
+            foreach (var p in f.EnumerateObject())
+                if (p.Value.ValueKind == JsonValueKind.String && p.Value.GetString() is { Length: > 0 } file)
+                    found.Add(new ContainerRedirect(at, p.Name, file));
+        }
+    }
+
+    /// <summary>
+    /// Edit the redirects of any number of containers — default data, options, Combining containers — and optionally
+    /// drop default-data manipulations, in ONE manifest write. An add never replaces a key the container already
+    /// holds; a removal takes a key out only while it still names the file given. No group is added, moved or
+    /// reordered; every other key keeps its place. Throws (writing nothing) for a v3 folder, an unreadable manifest, or a
+    /// group, option or container that is not there.
+    /// </summary>
+    public static void EditContainers(string modRoot, IReadOnlyList<ContainerEdit> edits,
+                                      Func<JsonElement, bool>? dropManipulation = null)
+    {
+        var manifest = ReadManifestForWrite(modRoot);
+        if (manifest.Count == 0)
+            throw new InvalidOperationException(string.Format(ProteusLoc.Localize("Service.ModMeta.Unreadable.Fmt",
+                "The manifest of {0} could not be read, so it was not changed."), modRoot));
+
+        var dd = manifest.TryGetValue("DefaultData", out var d) && d.ValueKind == JsonValueKind.Object
+            ? System.Text.Json.Nodes.JsonNode.Parse(d.GetRawText())!.AsObject()
+            : null;
+        var groups = manifest.TryGetValue("Groups", out var g) && g.ValueKind == JsonValueKind.Array
+            ? System.Text.Json.Nodes.JsonNode.Parse(g.GetRawText())!.AsArray()
+            : null;
+        bool ddChanged = false, groupsChanged = false;
+
+        foreach (var e in edits)
+        {
+            System.Text.Json.Nodes.JsonObject owner;
+            if (e.Container.IsDefault)
+            {
+                dd ??= new System.Text.Json.Nodes.JsonObject
+                {
+                    ["Files"] = new System.Text.Json.Nodes.JsonObject(),
+                    ["FileSwaps"] = new System.Text.Json.Nodes.JsonObject(),
+                    ["Manipulations"] = new System.Text.Json.Nodes.JsonArray(),
+                };
+                owner = dd;
+                ddChanged = true;
+            }
+            else
+            {
+                owner = FindContainer(groups, e.Container)
+                        ?? throw new InvalidOperationException(string.Format(ProteusLoc.Localize(
+                            "Service.ModMeta.NoOption.Fmt", "The group \"{0}\" has no option called \"{1}\"."),
+                            e.Container.Group, e.Container.Option ?? "#" + (e.Container.Index + 1)));
+                groupsChanged = true;
+            }
+            if (owner["Files"] is not System.Text.Json.Nodes.JsonObject files) owner["Files"] = files = [];
+            foreach (var (path, file) in e.Remove)
+                if (KeyOf(files, path) is { } key && files[key]?.GetValueKind() == JsonValueKind.String
+                    && SameFile(files[key]!.GetValue<string>(), file))
+                    files.Remove(key);
+            foreach (var (path, file) in e.Add)
+                if (KeyOf(files, path) == null) files[path] = file;
+        }
+
+        if (dropManipulation != null && dd?["Manipulations"] is System.Text.Json.Nodes.JsonArray manips)
+            for (int i = manips.Count - 1; i >= 0; i--)
+                if (manips[i] is { } node && dropManipulation(JsonSerializer.SerializeToElement(node)))
+                {
+                    manips.RemoveAt(i);
+                    ddChanged = true;
+                }
+
+        var replace = new Dictionary<string, System.Text.Json.Nodes.JsonNode>();
+        if (ddChanged && dd != null) replace["DefaultData"] = dd;
+        if (groupsChanged && groups != null) replace["Groups"] = groups;
+        if (replace.Count == 0) return;
+        WriteManifestKeys(modRoot, manifest, replace);
+    }
+
+    private static System.Text.Json.Nodes.JsonObject? FindContainer(System.Text.Json.Nodes.JsonArray? groups, ContainerRef at)
+    {
+        if (groups == null) return null;
+        foreach (var node in groups)
+        {
+            if (node is not System.Text.Json.Nodes.JsonObject group) continue;
+            if (group["Name"] is not { } n || n.GetValueKind() != JsonValueKind.String
+                || !string.Equals(n.GetValue<string>(), at.Group, StringComparison.OrdinalIgnoreCase))
+                continue;
+            if (at.Index is { } index)
+                return group["Containers"] is System.Text.Json.Nodes.JsonArray cs && index >= 0 && index < cs.Count
+                    ? cs[index] as System.Text.Json.Nodes.JsonObject : null;
+            if (group["Containers"] is System.Text.Json.Nodes.JsonArray) return null;   // a Combining group's options hold no files
+            if (group["Options"] is not System.Text.Json.Nodes.JsonArray list) return null;
+            int at2 = IndexOfOption(list, at.Option ?? "");
+            return at2 >= 0 ? list[at2] as System.Text.Json.Nodes.JsonObject : null;
+        }
+        return null;
+    }
+
+    /// <summary>The manifest with some top-level keys replaced, every other key kept in place and order.</summary>
+    private static void WriteManifestKeys(string modRoot, Dictionary<string, JsonElement> manifest,
+                                          IReadOnlyDictionary<string, System.Text.Json.Nodes.JsonNode> replace)
+    {
+        using var stream = new MemoryStream();
+        using (var w = new Utf8JsonWriter(stream, ProteusJson.WriterOptions))
+        {
+            w.WriteStartObject();
+            var written = new HashSet<string>(StringComparer.Ordinal);
+            foreach (var (k, v) in manifest)
+            {
+                w.WritePropertyName(k);
+                if (replace.TryGetValue(k, out var node)) { node.WriteTo(w); written.Add(k); }
+                else v.WriteTo(w);
+            }
+            foreach (var (k, node) in replace)
+                if (!written.Contains(k))
+                {
+                    w.WritePropertyName(k);
+                    node.WriteTo(w);
+                }
+            w.WriteEndObject();
+        }
+        AtomicWrite(Path.Combine(modRoot, MetaFile), System.Text.Encoding.UTF8.GetString(stream.ToArray()));
+    }
+
+    /// <summary>Two files (or game paths) are the same: case- and slash-insensitive, as Penumbra re-spells them.</summary>
+    internal static bool SameFile(string a, string b)
         => string.Equals(a.Replace('\\', '/'), b.Replace('\\', '/'), StringComparison.OrdinalIgnoreCase);
 
-    private static string? KeyOf(System.Text.Json.Nodes.JsonObject files, string gamePath)
+    internal static string? KeyOf(System.Text.Json.Nodes.JsonObject files, string gamePath)
     {
         foreach (var (key, _) in files)
             if (SameFile(key, gamePath)) return key;

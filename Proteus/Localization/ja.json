@@ -5940,7 +5940,7 @@
     "description": ""
   },
   "Settings.GearVariants.Auto.Tip": {
-    "message": "あるアイテムの1つのバリアント用に作られたMODは、そのバリアントの素材フォルダーしか含みません。そのため\n別のバリアントで着ると、MODのモデルにゲームの素材が描かれます（または何も描かれません）。そのような装備を着ると、\nProteusはMODのデフォルトデータにIMCエントリーを書き込み、該当するすべてのバリアントをMODの\n素材に向けます。TexToolsの「Apply to All Variants」と同じです。この変更は、MODが有効なコレクションで\nそのバリアントを着ているすべての人に適用されます（モデルのオプションがオフでも）。オフにすると以後の\n変更は止まりますが、元には戻しません。「着ている装備を元に戻す」で取り除けます。",
+    "message": "あるアイテムの1つのバリアント用に作られたMODは、そのバリアントの素材フォルダーしか含みません。そのため\n別のバリアントで着ると、MODのモデルにゲームの素材（または別の衣装の素材、または何も）が描かれます。そのような\n装備を着ると、ProteusはMODの素材パスをほかのバリアントフォルダーへ、MOD自身のオプションの中でコピーします。\nTexToolsの「Apply to All Variants」と同じですが、素材だけです。これらのバリアントは、MODが優先される場所で\nMODの素材を表示します。パーツ・VFX・サウンドはそれぞれのままです。オフにすると以後の変更は止まりますが、\n元には戻しません。「着ている装備を元に戻す」で取り除けます。",
     "description": ""
   },
   "Settings.GearVariants.Status.Fmt": {
@@ -5971,20 +5971,8 @@
     "message": "MOD自身がこのバリアントを設定している",
     "description": ""
   },
-  "Settings.GearVariants.Reason.ImcGroup": {
-    "message": "MOD内のIMCグループが対象にしている",
-    "description": ""
-  },
-  "Settings.GearVariants.Reason.ProteusToggles": {
-    "message": "Proteusのパーツ切り替えがゲームの素材を保っている",
-    "description": ""
-  },
   "Settings.GearVariants.Reason.OtherModMaterial": {
     "message": "素材が別のMODから来ている",
-    "description": ""
-  },
-  "Settings.GearVariants.Reason.FolderUnused": {
-    "message": "このアイテムのどのバリアントもMODのフォルダーを使っていない",
     "description": ""
   },
   "Settings.GearVariants.Reason.NoImc": {
@@ -6044,7 +6032,7 @@
     "description": ""
   },
   "Chat.VariantRepoint.Fmt": {
-    "message": "[Proteus] 「{1}」の装備の{0}個のバリアントをMOD自身の素材に向けました。これはMODが有効なコレクションでそのバリアントを着ているすべての人に適用されます（モデルのオプションがオフでも）。元に戻すには /proteus > 設定 > 装備のバリアント。",
+    "message": "[Proteus] 「{1}」の素材パスを、さらに{0}個のバリアントフォルダーにコピーしました。これらのバリアントは、MODが優先される場所でMOD自身の素材を表示します。元に戻すには /proteus > 設定 > 装備のバリアント。",
     "description": ""
   }
 }

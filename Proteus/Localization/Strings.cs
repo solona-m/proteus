@@ -1192,11 +1192,11 @@ public sealed class SettingsStrings
         "Point every variant of worn gear at its mod's material") + "###autoRepointVariants";
     public readonly string GearVariantsAutoTip = ProteusLoc.Localize("Settings.GearVariants.Auto.Tip",
         "A mod made for one variant of an item ships that variant's material folder only, so the item worn\n"
-      + "in another variant draws the game's material (or none) on the mod's model. As you put such a piece on,\n"
-      + "Proteus writes IMC entries into the mod's default data that point every such variant at the mod's\n"
-      + "material, like TexTools' \"Apply to All Variants\". The change applies to everyone wearing those variants\n"
-      + "in collections where the mod is on, even with its model option off. Turning this off stops further\n"
-      + "changes; it does not undo them. \"Undo for what I'm wearing\" takes them out.");
+      + "in another variant draws the game's material (or another outfit's, or none) on the mod's model. As you\n"
+      + "put such a piece on, Proteus copies the mod's material paths to the other variant folders, inside the\n"
+      + "mod's own options, like TexTools' \"Apply to All Variants\" for the material only. Those variants then show\n"
+      + "the mod's material wherever the mod wins; parts, VFX and sound stay their own. Turning this off stops\n"
+      + "further changes; it does not undo them. \"Undo for what I'm wearing\" takes them out.");
     public readonly string GearVariantsStatusFmt = ProteusLoc.Localize("Settings.GearVariants.Status.Fmt",
         "{0} piece(s) repointed · {1} left");
     public readonly string GearVariantsRepointedTipFmt = ProteusLoc.Localize("Settings.GearVariants.Repointed.Tip.Fmt",
@@ -1210,14 +1210,8 @@ public sealed class SettingsStrings
         "Settings.GearVariants.Reason.SeveralVariants", "the mod ships several variants of its own");
     public readonly string GearVariantsReasonModImc = ProteusLoc.Localize("Settings.GearVariants.Reason.ModImc",
         "the mod sets this variant itself");
-    public readonly string GearVariantsReasonImcGroup = ProteusLoc.Localize("Settings.GearVariants.Reason.ImcGroup",
-        "an IMC group in the mod covers it");
-    public readonly string GearVariantsReasonProteusToggles = ProteusLoc.Localize(
-        "Settings.GearVariants.Reason.ProteusToggles", "Proteus's part toggles keep the game's materials");
     public readonly string GearVariantsReasonOtherModMaterial = ProteusLoc.Localize(
         "Settings.GearVariants.Reason.OtherModMaterial", "its material comes from another mod");
-    public readonly string GearVariantsReasonFolderUnused = ProteusLoc.Localize(
-        "Settings.GearVariants.Reason.FolderUnused", "no variant of the item uses the mod's folder");
     public readonly string GearVariantsReasonNoImc = ProteusLoc.Localize("Settings.GearVariants.Reason.NoImc",
         "the game's variant table could not be read");
     public readonly string GearVariantsReasonMetaUnreadable = ProteusLoc.Localize(
@@ -1248,9 +1242,8 @@ public sealed class SettingsStrings
         "Nothing recorded for what you are wearing.");
     public readonly string GearVariantsBusy = ProteusLoc.Localize("Settings.GearVariants.Busy", "Working…");
     public readonly string GearVariantsChatFmt = ProteusLoc.Localize("Chat.VariantRepoint.Fmt",
-        "[Proteus] Pointed {0} variant(s) of a piece in \"{1}\" at the mod's own material. This applies to everyone "
-      + "wearing those variants in collections where the mod is on, even with its model option off. Undo under "
-      + "/proteus > Settings > Gear variants.");
+        "[Proteus] Copied the material paths of \"{1}\" to {0} more variant folder(s), so those variants show the mod's "
+      + "own material wherever it wins. Undo under /proteus > Settings > Gear variants.");
 
     public readonly string SecHosting     = ProteusLoc.Localize("Settings.Section.Hosting", "Hosting");
 
