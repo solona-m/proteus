@@ -43,6 +43,25 @@ internal static partial class SizeSetRefit
         return -1;
     }
 
+    /// <summary>
+    /// The body a skinless shoe's or glove's cloth is read on (#47): the nearest of the RECOGNISED bodies
+    /// (<see cref="SupportedBodies.Recognised"/>) its cloth sits on; only when none fits, the nearest of the other
+    /// installed body-model mods (NIRÆ, AB Body, LavaBod+… — and lingerie, which is why they come second). Each entry
+    /// stays paired with its own reading. Null when nothing fits.
+    /// </summary>
+    internal static (BodyModIndex.Entry Entry, BodyOption Option, float Gap)? PickClothGuess(
+        IReadOnlyList<BodyModIndex.Entry> women, IReadOnlySet<string> recognised,
+        Func<BodyModIndex.Entry, (BodyOption Option, float Gap)?> clothOn, float tie)
+    {
+        foreach (bool known in new[] { true, false })
+        {
+            var tried = women.Where(w => recognised.Contains(w.Dir) == known).Select(w => (Entry: w, Reading: clothOn(w))).ToList();
+            if (NearestByCloth(tried.Select(t => t.Reading?.Gap).ToList(), tie) is var best and >= 0)
+                return (tried[best].Entry, tried[best].Reading!.Value.Option, tried[best].Reading!.Value.Gap);
+        }
+        return null;
+    }
+
     /// <summary>Which body a women's shoe or glove is made a men's from — see <see cref="EndMadeFor"/>.</summary>
     internal enum EndMadeForChoice
     {
@@ -410,9 +429,9 @@ internal static partial class SizeSetRefit
         (BodyModIndex.Entry Entry, BodyOption Option, float Gap)? byCloth = null;
         if (found.Route is KeepEnds.Route.NoSkin or KeepEnds.Route.SkinOnly && madeOnCloth == null)
         {
-            var clothReadings = women.Select(mod => ClothOn(mod.Catalog)).ToList();
-            if (NearestByCloth(clothReadings.Select(r => r?.Gap).ToList(), EndClothTie) is var best and >= 0)
-                byCloth = (women[best], clothReadings[best]!.Value.Option, clothReadings[best]!.Value.Gap);
+            // Recognised bodies first; an unrecognised body-model mod only when none fits (#47).
+            byCloth = PickClothGuess(women, SupportedBodies.Recognised(request.Bodies), mod => ClothOn(mod.Catalog),
+                                     EndClothTie);
         }
 
         // A skinless shoe its cloth places on no body closely: the body its outfit's own legs were made on, read off the

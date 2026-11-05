@@ -104,6 +104,16 @@ public sealed partial class SecondSkinService
         private byte[]?[] alphaByLayer = null!;
         private List<(string ModDir, int LayerIdx, byte[] Normal)> reliefContribs = null!;
         private byte[]? sharedToeCap;
+        /// <summary>The shared cap is uniform in its own file (built-in, or a flat own map): gated over the toes (#62).</summary>
+        private bool sharedToeCapUniform;
+        private readonly System.Collections.Concurrent.ConcurrentDictionary<string, Lazy<byte[]?>> toeRegions = new(StringComparer.Ordinal);
+
+        /// <summary>Where the toes are in <paramref name="dstType"/>'s UV, from this build's bodies of that UV (all when
+        /// null), once per build.</summary>
+        private byte[]? ToeRegionFor(string? dstType)
+            => toeRegions.GetOrAdd(dstType ?? "", _ => new Lazy<byte[]?>(() => SecondSkinWriter.ToeRegionMask(
+                   bodies.Where(b => dstType == null || string.Equals(b.Uv, dstType, StringComparison.OrdinalIgnoreCase))
+                         .Select(b => b.Bytes), ToeCapSize))).Value;
         /// <summary>Whether any authored toe cap loaded; without one no layer gets a cap (see <see cref="LayerToeCap"/>).</summary>
         private bool capsAvailable;
         private Dictionary<string, float> bridgeByMod = null!;
@@ -154,6 +164,9 @@ public sealed partial class SecondSkinService
 
         /// <summary>See <see cref="SecondSkinService.Build"/>'s parameters of the same names.</summary>
         internal bool WearerIsMan { get; init; }
+
+        /// <summary>The run's shared settings reads (<see cref="ShellBodyAtr.RunSettingsMemo"/>); null reads Penumbra.</summary>
+        internal Func<string, ShellBodyAtr.ModSettings?>? SettingsReader { get; init; }
         internal bool MenMapsReady { get; init; }
         /// <summary>Whether a mod's women's art may be painted on a man ("Overlay on men"); null allows every mod.</summary>
         internal Func<string, bool>? MenAllowed { get; init; }
@@ -405,7 +418,8 @@ public sealed partial class SecondSkinService
             var bodyAtrUses = new List<ShellBodyAtr.Use>();
             var settingsMemo = new Dictionary<string, ShellBodyAtr.ModSettings?>(StringComparer.OrdinalIgnoreCase);
             ShellBodyAtr.ModSettings? SettingsOf(string modDir)
-                => settingsMemo.TryGetValue(modDir, out var known) ? known : settingsMemo[modDir] = service.PlayerModSettings(modDir);
+                => settingsMemo.TryGetValue(modDir, out var known) ? known
+                 : settingsMemo[modDir] = (SettingsReader ?? service.PlayerModSettings)(modDir);
             var modsRoot = service.modsRootOf?.Invoke();
             // Penumbra judges a race-limited switch by the drawn race; with none known, those switches stay drawn.
             var atrRace = RefitCore.RaceNumber(drawnRaceCode);
@@ -476,7 +490,9 @@ public sealed partial class SecondSkinService
                     { service.log.Warning(ex, "[Proteus] second skin: could not keep the upstream {0}", bodyGamePath); }
                     if (changed)
                         service.log.Information("[Proteus] second skin: {0} is behind our own output — using the body the "
-                                      + "collection now provides, {1}", bodyGamePath, settledDisk!);
+                                      + "collection now provides, {1}", bodyGamePath,
+                                      string.Equals(settledDisk, bodyGamePath, StringComparison.OrdinalIgnoreCase)
+                                          ? "(game data)" : settledDisk!);
                 }
                 else if (source == BodySourceKind.Remembered && service._upstreamBodies.TryGetValue(bodyGamePath, out var remembered))
                 {
@@ -568,7 +584,7 @@ public sealed partial class SecondSkinService
 
                 service.log.Information("[Proteus] second skin part {0}: uv={1} {2} ({3} KB) skin={4} <- {5}",
                     part, partType ?? "(unknown)", bodyGamePath, bytes.Length / 1024, shape,
-                    bodyDisk ?? "(game data)");
+                    SourceLabel(source, sourceDisk, bodyDisk, bodyGamePath));
 
                 // Shape keys enabled on this exact body model (matched by file stem — see LiveModelState).
                 var partShapes = LiveModelState(enabledBodyShapes, bodyGamePath, bodyDisk);
@@ -1221,6 +1237,7 @@ public sealed partial class SecondSkinService
             // The map only says a cap is WANTED: the authored cap's footprint decides the cut. Without an authored cap the
             // writer would generate one from the mask, which a whole-sheet mask must never reach, so then nothing is capped.
             sharedToeCap = null;
+            sharedToeCapUniform = false;
             capsAvailable = service.AuthoredCaps().Count > 0;
             if (!capsAvailable && ToeCaps is { Count: > 0 })
             {
@@ -1235,13 +1252,15 @@ public sealed partial class SecondSkinService
             {
                 // An own map is remapped with the OWNING mod's UV space; after that it is body-UV pixels anyone can use.
                 // The built-in cap is uniform, so it has no UV space and is never read or remapped.
+                bool ownUniform = false;
                 sharedToeCap = SharedCapMask(tMap, path =>
                 {
                     var tDesc = gearOverlays.FirstOrDefault(g =>
                         string.Equals(g.Entry.ModDirectory, tMod, StringComparison.OrdinalIgnoreCase)).Overlay?.Descriptor;
                     var tSrc = tDesc != null ? tDesc.SourceBodyType ?? InferOverlayBodyType(tDesc) : bodyType;
-                    return service.ReadToeCap(path, tSrc, bodyType);
+                    return service.ReadToeCap(path, tSrc, bodyType, out ownUniform);
                 });
+                sharedToeCapUniform = tMap.BuiltIn || ownUniform;
                 if (sharedToeCap != null)
                 {
                     service.log.Information("[Proteus] second skin: toe cap {0} from \"{1}\" applies to every shell over the toes",

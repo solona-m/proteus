@@ -78,8 +78,13 @@ public class ShaderUpgradeOrderingTests
             using var kit = new Kit();
             var mod = kit.Dress("D" + i, Kit.FormA());
             var plan = kit.Plan([Kit.Worn(Kit.TopPath, mod, Red)]);
-            var up = Task.Run(() => ShaderUpgradeWriter.Apply(mod, plan.PerMod[0].Writes, () => true, Kit.WriteTex, TexEncoding.Uncompressed));
-            var brush = Task.Run(() => Brush(mod, Red));
+            // Dedicated threads, not the pool: beside the parallel quick suite a starved pool left both tasks unstarted past
+            // the deadlock guard (#49's kind); a real deadlock still trips it.
+            var up = Task.Factory.StartNew(() => ShaderUpgradeWriter.Apply(mod, plan.PerMod[0].Writes, () => true, Kit.WriteTex,
+                                                                             TexEncoding.Uncompressed),
+                                           CancellationToken.None, TaskCreationOptions.LongRunning, TaskScheduler.Default);
+            var brush = Task.Factory.StartNew(() => Brush(mod, Red), CancellationToken.None, TaskCreationOptions.LongRunning,
+                                              TaskScheduler.Default);
             Assert.True(Task.WaitAll([up, brush], TimeSpan.FromSeconds(10)), "deadlock");
             var after = Kit.Get(mod, Red);
             Assert.Equal("character.shpk", CharacterShaderUpgrade.ShaderOf(after));

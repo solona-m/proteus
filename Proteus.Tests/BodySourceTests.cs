@@ -93,6 +93,56 @@ public class BodySourceTests
         Assert.Contains("RememberedLoad(", rule);
     }
 
+    [Fact]
+    [Trait("Plan", "AC-issue-sweep-b-6")]
+    [Trait("Plan", "EDGE-issue-sweep-b-30")]
+    public void Hands_mod_echo_keeps_the_remembered_source()
+    {
+        const string glv = "chara/equipment/e0000/model/c0201e0000_glv.mdl";
+        var mods = Path.Combine(Path.GetTempPath(), "proteus-handsmod-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(Path.Combine(mods, "Hands"));
+        try
+        {
+            var remembered = Path.Combine(mods, "Hands", "glv.mdl");
+            File.WriteAllBytes(remembered, [1]);
+            bool named = CompositorService.NamesModFile(glv, remembered, null, mods, File.Exists);
+            var (memo, settled) = CompositorService.PrimeResult(glv, new System.Collections.Generic.Dictionary<string, string>(),
+                                                                settledAsGameData: true, republishedBody: true, named);
+            Assert.False(settled);
+            Assert.Null(CompositorService.SettledAnswer(glv, settled, memo, File.Exists, _ => false));
+            Assert.Equal(K.Remembered, SecondSkinService.ChooseBodySource(true, hasSettled: false, hasRemembered: true, false));
+        }
+        finally { Directory.Delete(mods, true); }
+    }
+
+    [Fact]
+    [Trait("Plan", "AC-issue-sweep-b-6")]
+    [Trait("Plan", "EDGE-issue-sweep-b-19")]
+    [Trait("Plan", "EDGE-issue-sweep-b-21")]
+    public void Game_data_settle_is_settled_with_the_game_path_id()
+    {
+        const string gp = "chara/equipment/e0000/model/c0201e0000_glv.mdl";
+        Assert.Equal(gp, SecondSkinService.BodySourceId(K.Settled, gp, [1, 2], gp));
+        var rule = Source("Services/SecondSkinService.BodySource.cs");
+        int check = rule.IndexOf("string.Equals(disk, gamePath, StringComparison.OrdinalIgnoreCase)) return gamePath;", StringComparison.Ordinal);
+        Assert.True(check >= 0 && check < rule.IndexOf("new FileInfo(disk)", StringComparison.Ordinal));
+        Assert.Equal(K.Remembered, SecondSkinService.ChooseBodySource(true, hasSettled: false, true, true));   // failed to load
+    }
+
+    [Fact]
+    [Trait("Plan", "AC-issue-sweep-b-7")]
+    public void Part_log_names_the_source_read()
+    {
+        const string gp = "chara/equipment/e0000/model/c0201e0000_glv.mdl";
+        const string ours = @"E:\mods\Proteus\models\smoothed_glv.mdl";
+        Assert.Equal(@"Settled: E:\mods\Hands\glv.mdl", SecondSkinService.SourceLabel(K.Settled, @"E:\mods\Hands\glv.mdl", ours, gp));
+        Assert.Equal("Settled: (game data)", SecondSkinService.SourceLabel(K.Settled, gp, ours, gp));
+        Assert.Equal("Remembered: (remembered copy)", SecondSkinService.SourceLabel(K.Remembered, null, ours, gp));
+        Assert.Equal("Resolved: (game data)", SecondSkinService.SourceLabel(K.Resolved, null, null, gp));
+        Assert.Equal($"OwnHeld: {ours} (our own output, held)", SecondSkinService.SourceLabel(K.OwnHeld, null, ours, gp));
+        Assert.Contains("SourceLabel(source, sourceDisk, bodyDisk, bodyGamePath)", Source("Services/SecondSkinService.ShellSetBuild.cs"));
+    }
+
     private static string Source(string relative, [CallerFilePath] string here = "")
         => File.ReadAllText(Path.Combine(Path.GetDirectoryName(here)!, "..", "Proteus", relative));
 }

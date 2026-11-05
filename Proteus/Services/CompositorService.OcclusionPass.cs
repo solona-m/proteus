@@ -29,6 +29,8 @@ public partial class CompositorService
                 private IslandBlurCache islandBlurCache = null!;
                 private HalfResIslandPlanes halfPlanes = null!;
                 private List<UvSeamMapService.SeamModel>? bodyMdls;
+                /// <summary>Each seam model's body source, parallel to <see cref="bodyMdls"/> (#55).</summary>
+                private List<SecondSkinService.BodySource>? bodySources;
                 private bool aoLoadedNormal;
                 private bool aoIndentedNormal;
                 private long tAo;
@@ -135,11 +137,13 @@ public partial class CompositorService
                     // Chosen by the shell's rule (BodySourceFor): file stats, the settled upstream read when it would be
                     // chosen, remembered bytes hashed. The seam map is cached by the identity; its full read waits for a miss.
                     bodyMdls = null;
+                    bodySources = null;
                     if (islandLabels != null)
                     {
                         if (BodyModelPathsFor(material.mtrlGamePath) is { } bodyMdlPaths)
                         {
                             bodyMdls = new List<UvSeamMapService.SeamModel>(bodyMdlPaths.Length);
+                            bodySources = new List<SecondSkinService.BodySource>(bodyMdlPaths.Length);
                             var compositor = material.run.compositor;
                             foreach (var gamePath in bodyMdlPaths)
                             {
@@ -152,6 +156,7 @@ public partial class CompositorService
                                     : source.Disk != null && Path.IsPathRooted(source.Disk) ? Path.GetFileName(source.Disk)
                                     : "(game data)");
                                 bodyMdls.Add(new UvSeamMapService.SeamModel(source.Id, source.Load));
+                                bodySources.Add(source);
                             }
                             // Which files the seam map will be built from; on a cache hit nothing else is logged.
                             material.run.compositor.log.Debug("[Proteus] seam map: {0} body part(s) for {1} — {2}",
@@ -224,7 +229,7 @@ public partial class CompositorService
                                     islandLabels, islandOwner, islandCount, bodyMdls, islandBlurCache, halfPlanes);
                                 material.SnapshotBaseDiffuse();
                                 ApplyAmbientOcclusion(material.baseD, strapD, blurredD, material.wD, material.hD, aoStrength, coveredAbove,
-                                    material.run.compositor.BustStandoff(modDir, bodyMdls, strapD, material.wD, material.hD, radiusD));
+                                    material.run.compositor.BustStandoff(modDir, bodyMdls, bodySources, material.run.RunModSettings, strapD, material.wD, material.hD, radiusD));
                                 // AO is a real edit to the skin diffuse; a gear-only mod legitimately owns the buffer through it.
                                 material.diffuseBlended = true;
                             }
@@ -268,7 +273,7 @@ public partial class CompositorService
                                     ApplyNormalIndent(material.baseN, blurredN, strapN, material.wN, material.hN, aoNormal,
                                         material.wN == material.wD && material.hN == material.hD ? coveredAbove : null, radiusN,
                                         material.wN == material.wD && material.hN == material.hD ? insidePlane : null,
-                                        material.run.compositor.BustStandoff(modDir, bodyMdls, strapN, material.wN, material.hN, radiusN));
+                                        material.run.compositor.BustStandoff(modDir, bodyMdls, bodySources, material.run.RunModSettings, strapN, material.wN, material.hN, radiusN));
                                     aoIndentedNormal = true;
                                     // A real write to the normal buffer, so the untouched-normal hand-back in PublishChannels
                                     // must not discard it. Not a contributor bump — no overlay asked for this.
