@@ -279,6 +279,46 @@ public class ShaderUpgradeWriterTests
     }
 
     [Fact]
+    [Trait("Plan", "AC-dt-shader-upgrade-13")]
+    [Trait("Plan", "EDGE-dt-shader-upgrade-73")]
+    public void A_stale_backup_that_cannot_be_deleted_aborts_the_unit_and_the_next_walk_replaces_it()
+    {
+        using var kit = new Kit();
+        var mod = kit.Dress("D", Kit.FormA());
+        Assert.True(kit.Upgrade(mod, WornRed(mod)).ChangedAny);
+        var f2 = Kit.FormA();
+        BitConverter.TryWriteBytes(f2.AsSpan(GearMaterialWriter.ColorTableStart(f2)), (Half)0.4f);
+        File.WriteAllBytes(Path.Combine(mod, "red", "top.mtrl"), f2);
+        var backup = Path.Combine(mod, "Proteus", "shaderupgrade-backup", "red", "top.mtrl");
+        using (new FileStream(backup, FileMode.Open, FileAccess.Read, FileShare.Read))   // File.Delete now throws
+        {
+            var outcome = kit.Upgrade(mod, WornRed(mod));
+            Assert.Equal(LeftReason.WriteFailed, Assert.Single(outcome.Left).Reason);
+            Assert.Equal(f2, Kit.Get(mod, Red));
+            Assert.Empty(ShaderUpgradeWriter.ReadRecord(mod)?.Files ?? []);
+        }
+        Assert.True(kit.Upgrade(mod, WornRed(mod)).ChangedAny);
+        Assert.Equal(f2, File.ReadAllBytes(backup));
+        Assert.Equal(ShaderUpgradeWriter.Undone.Restored, ShaderUpgradeWriter.RevertOrForget(mod, Red, false, out _));
+        Assert.Equal(f2, Kit.Get(mod, Red));
+    }
+
+    [Fact]
+    [Trait("Plan", "AC-dt-shader-upgrade-4")]
+    public void A_skipped_diffuse_unit_leaves_no_mask_folder()
+    {
+        using var kit = new Kit();
+        var mod = kit.Dress("B", Kit.FormB(), withSpec: true);
+        var plan = kit.Plan(WornRed(mod), _ => Spec(mod));
+        var changed = Kit.FormB();
+        BitConverter.TryWriteBytes(changed.AsSpan(GearMaterialWriter.ColorTableStart(changed)), (Half)0.2f);
+        File.WriteAllBytes(Path.Combine(mod, "red", "top.mtrl"), changed);   // changed since planning: skipped
+        var outcome = ShaderUpgradeWriter.Apply(mod, plan.PerMod[0].Writes, () => true, Kit.WriteTex, TexEncoding.Uncompressed);
+        Assert.Empty(outcome.Written);
+        Assert.False(Directory.Exists(Path.Combine(mod, "Shader Upgrade")));
+    }
+
+    [Fact]
     [Trait("Plan", "EDGE-dt-shader-upgrade-64")]
     public void Masks_are_encoded_outside_the_write_lock()
     {

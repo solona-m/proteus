@@ -187,6 +187,10 @@ internal static class ShaderUpgradeWriter
         finally
         {
             foreach (var tmp in prepared.Values) TryDelete(tmp);
+            // A folder made for masks that never landed (the unit was skipped) is not left in the author's mod.
+            var dir = Path.Combine(modRoot, MaskFolder);
+            try { if (Directory.Exists(dir) && !Directory.EnumerateFileSystemEntries(dir).Any()) Directory.Delete(dir); }
+            catch (IOException) { /* harmless */ }
         }
         return new Outcome(written, left, rewalk);
     }
