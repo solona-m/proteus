@@ -304,6 +304,38 @@ public class ShaderUpgradeWriterTests
     }
 
     [Fact]
+    [Trait("Plan", "AC-dt-shader-upgrade-13")]
+    public void Undo_refuses_a_material_edited_after_its_upgrade_and_keeps_its_original_and_mask()
+    {
+        using var kit = new Kit();
+        var mod = kit.Dress("B", Kit.FormB(), withSpec: true);
+        Assert.True(kit.Upgrade(mod, WornRed(mod), _ => Spec(mod)).ChangedAny);
+        var entry = ShaderUpgradeWriter.ReadRecord(mod)!.Files.Single();
+        var mask = entry.Mask!;
+        // Saved from a material editor: still our character.shpk output naming our mask, one colour changed.
+        var edited = Kit.Get(mod, Red);
+        BitConverter.TryWriteBytes(edited.AsSpan(GearMaterialWriter.ColorTableStart(edited) + 2), (Half)0.3f);
+        File.WriteAllBytes(Path.Combine(mod, "red", "top.mtrl"), edited);
+        Assert.True(ShaderUpgradeWriter.IsUpgraded(mod, Red));   // still counted, not lost from the status
+
+        Assert.Equal(ShaderUpgradeWriter.Undone.Refused, ShaderUpgradeWriter.RevertOrForget(mod, Red, true, out var why));
+        Assert.Contains("red/top.mtrl", why);
+        Assert.Equal(edited, Kit.Get(mod, Red));
+        Assert.Equal(Kit.FormB(), Kit.Get(mod, "Proteus/shaderupgrade-backup/red/top.mtrl"));
+        Assert.True(File.Exists(Path.Combine(mod, mask.Rel)));
+        Assert.Contains(Redirects(mod), r => r.GamePath == mask.GamePath);
+        Assert.Single(ShaderUpgradeWriter.ReadRecord(mod)!.Files);
+        Assert.False(ShaderUpgradeWriter.IsDeclined(mod, Red));
+
+        // Copied back by hand as the message says: the next undo tidies up.
+        File.Copy(Path.Combine(mod, "Proteus", "shaderupgrade-backup", "red", "top.mtrl"), Path.Combine(mod, "red", "top.mtrl"), true);
+        Assert.Equal(ShaderUpgradeWriter.Undone.Nothing, ShaderUpgradeWriter.RevertOrForget(mod, Red, false, out _));
+        Assert.Empty(ShaderUpgradeWriter.ReadRecord(mod)?.Files ?? []);
+        Assert.False(File.Exists(Path.Combine(mod, mask.Rel)));
+        Assert.DoesNotContain(Redirects(mod), r => r.GamePath == mask.GamePath);
+    }
+
+    [Fact]
     [Trait("Plan", "AC-dt-shader-upgrade-4")]
     public void A_skipped_diffuse_unit_leaves_no_mask_folder()
     {

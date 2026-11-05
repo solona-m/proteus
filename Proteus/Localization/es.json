@@ -5915,6 +5915,10 @@
     "message": "Deshacer: {0} restaurados, {1} conservados como actualización del autor, {2} rechazados.",
     "description": ""
   },
+  "Settings.GearShaders.Edited.Fmt": {
+    "message": "{0} se editó después de su actualización de shader, así que Deshacer lo deja como está. El original del autor se conserva en Proteus/shaderupgrade-backup/{0}: cópialo sobre el archivo para deshacer.",
+    "description": ""
+  },
   "Settings.GearShaders.Busy": {
     "message": "Trabajando…",
     "description": ""

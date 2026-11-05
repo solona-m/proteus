@@ -107,13 +107,37 @@ internal static class ShaderUpgradeWriter
     public static bool IsDeclined(string modRoot, string rel)
         => ReadRecord(modRoot)?.Declined.Contains(MeshVolumeService.Rel(rel), StringComparer.OrdinalIgnoreCase) == true;
 
-    /// <summary>Whether Proteus's upgrade of this file is recorded and the file is still as it left it.</summary>
+    /// <summary>
+    /// Whether Proteus's upgrade of this file is recorded and the file is still Proteus's output: as it left it, or
+    /// edited since (see <see cref="EditedAfterUpgrade"/>).
+    /// </summary>
     public static bool IsUpgraded(string modRoot, string rel)
     {
         if (ReadRecord(modRoot) is not { } r || EntryOf(r, rel) is not { } e) return false;
-        try { return Sha8(File.ReadAllBytes(FileOf(modRoot, e.Rel))) == e.UpgradedSha8; }
+        try
+        {
+            var bytes = File.ReadAllBytes(FileOf(modRoot, e.Rel));
+            return Sha8(bytes) == e.UpgradedSha8 || EditedAfterUpgrade(bytes, e);
+        }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { return false; }
     }
+
+    /// <summary>
+    /// The file is not the bytes Proteus wrote, yet still names the mask Proteus derived for it: someone edited the
+    /// upgraded material (a material editor, a colour change). It is built on our output, so it is neither the author's
+    /// update (which cannot know our mask's name) nor something the backup may overwrite. An index/mask upgrade names
+    /// no mask of ours and cannot be told from an author's Dawntrail update, so it is never "edited".
+    /// </summary>
+    internal static bool EditedAfterUpgrade(byte[]? current, FileEntry e)
+        => current is { Length: > 0 } && e.Mask is { } m && Sha8(current) != e.UpgradedSha8
+           && TexturePaths(current) is { } paths
+           && paths.Any(p => string.Equals(p, m.GamePath, StringComparison.OrdinalIgnoreCase));
+
+    /// <summary>The refusal an undo returns for a file <see cref="EditedAfterUpgrade"/>.</summary>
+    internal static string EditedMessage(string rel)
+        => string.Format(ProteusLoc.Localize("Settings.GearShaders.Edited.Fmt",
+            "{0} was edited after its shader upgrade, so Undo leaves it as it is. The author's original is kept in "
+          + "Proteus/shaderupgrade-backup/{0}: copy it back over the file to undo."), rel);
 
     // ── apply ───────────────────────────────────────────────────────────────
 
@@ -376,7 +400,8 @@ internal static class ShaderUpgradeWriter
     internal enum Undone { Nothing, Restored, Forgotten, Refused, Failed }
 
     /// <summary>
-    /// Put one file back the way its author shipped it. Refused while a later feature (the brush) changed it after us.
+    /// Put one file back the way its author shipped it. Refused while a later feature (the brush) changed it after us,
+    /// and for a file edited after the upgrade (its edits and our backup, mask and redirects are all kept).
     /// The backup is restored only over a file still as Proteus left it; an author's update is kept. Either way our
     /// mask redirects (only while they still name our mask) and unnamed masks go, the entry is dropped, and the file
     /// is declined when <paramref name="decline"/> is set.
@@ -405,7 +430,13 @@ internal static class ShaderUpgradeWriter
             }
 
             var path = FileOf(modRoot, rel);
-            var sha = Sha8(SafeRead(path) ?? []);
+            var current = SafeRead(path);
+            if (EditedAfterUpgrade(current, entry))
+            {
+                message = EditedMessage(rel);
+                return Undone.Refused;
+            }
+            var sha = Sha8(current ?? []);
             Undone result;
             try
             {

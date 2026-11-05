@@ -5915,6 +5915,10 @@
     "message": "元に戻す: {0}件を復元、{1}件は作者の更新として保持、{2}件は拒否。",
     "description": ""
   },
+  "Settings.GearShaders.Edited.Fmt": {
+    "message": "{0} はシェーダーのアップグレード後に編集されたため、元に戻すでは変更しません。作者のオリジナルは Proteus/shaderupgrade-backup/{0} に保存されています。元に戻すには、それをファイルに上書きコピーしてください。",
+    "description": ""
+  },
   "Settings.GearShaders.Busy": {
     "message": "処理中…",
     "description": ""

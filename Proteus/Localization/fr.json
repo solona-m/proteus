@@ -5915,6 +5915,10 @@
     "message": "Annulation : {0} restaurés, {1} conservés comme mise à jour de l'auteur, {2} refusés.",
     "description": ""
   },
+  "Settings.GearShaders.Edited.Fmt": {
+    "message": "{0} a été modifié après sa mise à niveau du shader, donc l'annulation le laisse tel quel. L'original de l'auteur est conservé dans Proteus/shaderupgrade-backup/{0} : recopiez-le par-dessus le fichier pour annuler.",
+    "description": ""
+  },
   "Settings.GearShaders.Busy": {
     "message": "En cours…",
     "description": ""

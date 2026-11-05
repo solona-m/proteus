@@ -5915,6 +5915,10 @@
     "message": "Rückgängig: {0} wiederhergestellt, {1} als Update des Autors behalten, {2} abgelehnt.",
     "description": ""
   },
+  "Settings.GearShaders.Edited.Fmt": {
+    "message": "{0} wurde nach dem Shader-Upgrade bearbeitet, daher lässt Rückgängig die Datei unverändert. Das Original des Autors liegt in Proteus/shaderupgrade-backup/{0}: kopiere es über die Datei, um das Upgrade rückgängig zu machen.",
+    "description": ""
+  },
   "Settings.GearShaders.Busy": {
     "message": "Wird bearbeitet…",
     "description": ""

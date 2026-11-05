@@ -5913,7 +5913,11 @@
   },
   "Settings.GearShaders.Result.Fmt": {
     "message": "Undo: {0} restored, {1} kept as the author's update, {2} refused.",
-    "description": "Result line after Undo. {0} = files restored from backup, {1} = files left as the author updated them, {2} = files that could not be undone (another feature must be undone first)."
+    "description": "Result line after Undo. {0} = files restored from backup, {1} = files left as the author updated them, {2} = files that could not be undone (another feature must be undone first, or the file was edited after the upgrade)."
+  },
+  "Settings.GearShaders.Edited.Fmt": {
+    "message": "{0} was edited after its shader upgrade, so Undo leaves it as it is. The author's original is kept in Proteus/shaderupgrade-backup/{0}: copy it back over the file to undo.",
+    "description": "Undo refusal for a material edited after the upgrade. {0} = the material's path inside the mod (used twice)."
   },
   "Settings.GearShaders.Busy": {
     "message": "Working…",

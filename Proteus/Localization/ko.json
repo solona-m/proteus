@@ -5915,6 +5915,10 @@
     "message": "되돌리기: {0}개 복원, {1}개는 제작자 업데이트로 유지, {2}개 거부.",
     "description": ""
   },
+  "Settings.GearShaders.Edited.Fmt": {
+    "message": "{0}은(는) 셰이더 업그레이드 후 편집되어 되돌리기가 그대로 둡니다. 제작자의 원본은 Proteus/shaderupgrade-backup/{0}에 보관되어 있습니다. 되돌리려면 원본을 파일 위에 복사하세요.",
+    "description": ""
+  },
   "Settings.GearShaders.Busy": {
     "message": "작업 중…",
     "description": ""

@@ -5915,6 +5915,10 @@
     "message": "撤销：已恢复 {0} 个，{1} 个作为作者更新保留，{2} 个被拒绝。",
     "description": ""
   },
+  "Settings.GearShaders.Edited.Fmt": {
+    "message": "{0} 在着色器升级后被编辑过，因此撤销不会改动它。作者的原始文件保存在 Proteus/shaderupgrade-backup/{0}：将其复制回去覆盖该文件即可撤销。",
+    "description": ""
+  },
   "Settings.GearShaders.Busy": {
     "message": "处理中…",
     "description": ""

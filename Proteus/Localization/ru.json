@@ -5915,6 +5915,10 @@
     "message": "Отмена: восстановлено {0}, оставлено как обновление автора {1}, отклонено {2}.",
     "description": ""
   },
+  "Settings.GearShaders.Edited.Fmt": {
+    "message": "{0} был изменён после обновления шейдера, поэтому отмена оставляет его как есть. Оригинал автора хранится в Proteus/shaderupgrade-backup/{0}: скопируйте его поверх файла, чтобы отменить.",
+    "description": ""
+  },
   "Settings.GearShaders.Busy": {
     "message": "Выполняется…",
     "description": ""
