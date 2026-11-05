@@ -40,6 +40,11 @@ public static class SyntheticFinger
         ClosedPartlyHidden,
         /// <summary>The open socket with the finger itself on atr_gv_a.</summary>
         TubeOnSwitch,
+        /// <summary>The open socket with a <see cref="Sewn"/> nail wholly on atr_gv_c and a drawn floating nail (on no
+        /// switch) over the same rim (#54).</summary>
+        SewnHiddenWithFloating,
+        /// <summary><see cref="SewnHiddenWithFloating"/> with only half of the sewn nail on atr_gv_c.</summary>
+        SewnPartlyHidden,
     }
 
     internal static float Y(int row) => row * L / (Along - 1);
@@ -183,8 +188,20 @@ public static class SyntheticFinger
         float yA = Y(row0), yB = Y(row1);
         float ti = Inset / R;
         float Proud(float th, float y) => R + 0.0003f;
+        int sewnFrom = -1, sewnTo = -1;
         switch (v)
         {
+            case Variant.SewnHiddenWithFloating or Variant.SewnPartlyHidden:
+                // The sewn nail (its outline the rim), then a floating one over it on no switch.
+                sewnFrom = m.T.Count;
+                Patch(thA, thB, yA, yB, 2 * half, row1 - row0, (th, y) =>
+                {
+                    bool rim = MathF.Abs(MathF.Abs(th) - thB) < 1e-6f || MathF.Abs(y - yA) < 1e-6f || MathF.Abs(y - yB) < 1e-6f;
+                    return rim ? R : R + 0.0003f;
+                });
+                sewnTo = m.T.Count;
+                Patch(thA + ti, thB - ti, yA + Inset, yB - Inset, 16, 18, (_, _) => R + 0.0006f);
+                break;
             case Variant.Sewn:
                 // Its outline IS the socket's rim: the same positions, so it is sewn in.
                 Patch(thA, thB, yA, yB, 2 * half, row1 - row0, (th, y) =>
@@ -291,6 +308,16 @@ public static class SyntheticFinger
                 (2u, [.. m.T.Skip(layerB).Take(bHalf - layerB)]),
             ];
         }
+        if (v is Variant.SewnHiddenWithFloating or Variant.SewnPartlyHidden)
+        {
+            // The tube and the floating nail on no switch; the sewn nail on atr_gv_c (bit 1) — all of it, or its first half.
+            int hideTo = v == Variant.SewnPartlyHidden ? sewnFrom + (sewnTo - sewnFrom) / 6 * 3 : sewnTo;
+            submeshes =
+            [
+                (0u, [.. m.T.Take(sewnFrom), .. m.T.Skip(hideTo)]),
+                (2u, [.. m.T.Skip(sewnFrom).Take(hideTo - sewnFrom)]),
+            ];
+        }
         var meshes = new List<SyntheticModel.SurfaceMesh>
         {
             new(Skin, [.. m.P], [.. m.N], [.. m.Uv], [.. m.W], submeshes),
@@ -316,6 +343,7 @@ public static class SyntheticFinger
             meshes.Add(new(NailMeshMaterial, [.. n.P], [.. n.N], [.. n.Uv], [.. n.W], [(0u, [.. n.T])]));
         }
         return SyntheticModel.BuildSurface(v is Variant.AttrLayers or Variant.AttrLayersPartly or Variant.ClosedPartlyHidden or Variant.TubeOnSwitch
+                                                 or Variant.SewnHiddenWithFloating or Variant.SewnPartlyHidden
                                            ? ["atr_gv_a", "atr_gv_c"] : [], [.. meshes]);
     }
 }

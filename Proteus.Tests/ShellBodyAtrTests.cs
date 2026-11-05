@@ -338,7 +338,7 @@ public class ShellBodyAtrTests
         Assert.Contains("ShellBodyAtr.ForPart(", harvest);
         Assert.Contains("isBarePart", Calls(harvest, "ShellBodyAtr.ForPart").Single());
         var surfaces = Method(Source("Services/SecondSkinService.ShellSetBuild.cs"), "private void ResolveSurfaces(");
-        Assert.Contains("ShellBodyAtr.Merge(", surfaces);
+        Assert.Contains("ShellBodyAtr.HiddenFor(", surfaces);   // Merge of the live and option-switched hides (#58)
     }
 
     [Fact]
@@ -824,6 +824,42 @@ public class ShellBodyAtrTests
         Assert.Contains("PlayerModSettings", published);
         Assert.True(commit.IndexOf("publishedThisRun = true", StringComparison.Ordinal)
                     > commit.IndexOf("_bodyAtrLatch.OnPublished(", StringComparison.Ordinal));
+    }
+
+    // ── #58: one hidden set for the shell's source and the nail flatten ──────────────────────────────────
+
+    [Fact]
+    [Trait("Plan", "AC-issue-sweep-a-5")]
+    [Trait("Plan", "EDGE-issue-sweep-a-14")]
+    [Trait("Plan", "EDGE-issue-sweep-a-15")]
+    public void HiddenFor_merges_live_and_option_switched_hides()
+    {
+        const string glv = "chara/equipment/e0000/model/c0201e0000_glv.mdl";
+        var none = new Dictionary<string, IReadOnlySet<string>>(StringComparer.OrdinalIgnoreCase);
+        var live = new HashSet<string> { "shp_a", Interop.BodyShapeReader.HiddenAttributePrefix + "atr_gv_c" };
+        var liveHidden = Interop.BodyShapeReader.Split(live).HiddenAttributes;
+        // Live only: exactly the live set; neither: null.
+        Assert.Equal(liveHidden, ShellBodyAtr.HiddenFor(live, none, glv));
+        Assert.Null(ShellBodyAtr.HiddenFor(null, none, glv));
+        // Option-switched only, found through the dictionary's comparer (another case).
+        var off = new Dictionary<string, IReadOnlySet<string>>(StringComparer.OrdinalIgnoreCase)
+        {
+            [glv.ToUpperInvariant()] = new HashSet<string> { "atr_gv_d" },
+        };
+        Assert.Equal(["atr_gv_d"], ShellBodyAtr.HiddenFor(null, off, glv)!);
+        // Both: the union.
+        var both = ShellBodyAtr.HiddenFor(live, off, glv)!;
+        Assert.Equal((liveHidden ?? []).Append("atr_gv_d").Order(), both.Order());
+    }
+
+    [Fact]
+    [Trait("Plan", "AC-issue-sweep-a-5")]
+    public void Shell_build_gives_flatten_nails_the_merged_hides()
+    {
+        var src = Source("Services/SecondSkinService.ShellSetBuild.cs");
+        var flatten = Assert.Single(Calls(src, "BodyBridge.FlattenNails"));
+        Assert.Contains("ShellBodyAtr.HiddenFor(", flatten);
+        Assert.Matches(@"HiddenAttributes:\s*ShellBodyAtr\.HiddenFor\(", src);
     }
 
     // ── reading the source, as AutoRedrawWiringTests does ─────────────────────────────────────────────────

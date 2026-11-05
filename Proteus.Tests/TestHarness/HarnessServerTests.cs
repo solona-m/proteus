@@ -17,6 +17,7 @@ using Xunit;
 namespace Proteus.Tests.TestHarness;
 
 /// <summary>End to end: a real loopback server, HttpClient, a fake game.</summary>
+[Collection(HarnessTimingCollection.Name)]
 public class HarnessServerTests : IDisposable
 {
     private readonly HarnessFixture f = new();
@@ -120,24 +121,70 @@ public class HarnessServerTests : IDisposable
     }
 
     [Fact]
+    [Trait("Plan", "AC-issue-sweep-a-3")]
+    [Trait("Plan", "AC-issue-sweep-a-4")]
+    [Trait("Plan", "EDGE-issue-sweep-a-12")]
     public async Task FifthConcurrentConnection_503()
     {
-        // [EDGE-qa-harness-16] Four open connections hold the slots; a fifth is told busy; the others complete.
+        // [EDGE-qa-harness-16] Four open connections hold the slots; a fifth is told too-many-connections; the others
+        // complete. A long read timeout keeps the four stalled slots held however slow the machine; the wait is on the
+        // server's own count, not a sleep; and the fifth reads its refusal BEFORE sending anything, so no request bytes
+        // sit unread when the server closes (which would reset the socket and lose the answer).
+        using var g = new HarnessFixture(readTimeout: TimeSpan.FromSeconds(30));
         var open = new List<TcpClient>();
-        for (int i = 0; i < HarnessServer.MaxConnections; i++)
+        try
         {
-            var c = new TcpClient();
-            await c.ConnectAsync(IPAddress.Loopback, f.Server.Port);
-            await c.GetStream().WriteAsync(Encoding.ASCII.GetBytes("GET /health HTTP/1.1\r\n"));
-            open.Add(c);
+            for (int i = 0; i < HarnessServer.MaxConnections; i++)
+            {
+                var c = new TcpClient();
+                await c.ConnectAsync(IPAddress.Loopback, g.Server.Port);
+                await c.GetStream().WriteAsync(Encoding.ASCII.GetBytes("GET /health HTTP/1.1\r\n"));
+                open.Add(c);
+            }
+            await WaitUntil(() => g.Server.OpenConnections == HarnessServer.MaxConnections);
+
+            using var fifth = new TcpClient();
+            await fifth.ConnectAsync(IPAddress.Loopback, g.Server.Port);
+            var reply = await ReadToEnd(fifth.GetStream()).WaitAsync(TimeSpan.FromSeconds(10));
+            Assert.StartsWith("HTTP/1.1 503", reply);
+            Assert.Contains("\"code\":\"too-many-connections\"", reply);
         }
-        await Task.Delay(100);
-        var r = await f.Client.GetAsync("/health");
-        Assert.Equal(503, (int)r.StatusCode);
-        Assert.Equal("busy", (await HarnessFixture.Parse(r)).GetProperty("error").GetProperty("code").GetString());
-        foreach (var c in open) c.Dispose();
-        await Task.Delay(700);   // the stalled ones time out
-        Assert.Equal(200, (await f.Get("/health")).Status);
+        finally { foreach (var c in open) c.Dispose(); }
+        await WaitUntil(() => g.Server.OpenConnections == 0);
+        Assert.Equal(200, (await g.Get("/health")).Status);
+    }
+
+    private static async Task WaitUntil(Func<bool> condition)
+    {
+        var until = DateTime.UtcNow.AddSeconds(10);
+        while (!condition())
+        {
+            Assert.True(DateTime.UtcNow < until, "timed out waiting");
+            await Task.Delay(10);
+        }
+    }
+
+    private static async Task<string> ReadToEnd(NetworkStream s)
+    {
+        using var all = new MemoryStream();
+        var buffer = new byte[4096];
+        int n;
+        while ((n = await s.ReadAsync(buffer)) > 0) all.Write(buffer, 0, n);
+        return Encoding.ASCII.GetString(all.ToArray());
+    }
+
+    [Fact]
+    [Trait("Plan", "AC-issue-sweep-a-3")]
+    public void Adversarial_qa_documents_the_connection_cap_and_duplicate_keys()
+    {
+        var dir = new DirectoryInfo(AppContext.BaseDirectory);
+        while (dir != null && !File.Exists(Path.Combine(dir.FullName, "proteus.slnx"))) dir = dir.Parent;
+        Assert.NotNull(dir);
+        var doc = File.ReadAllText(Path.Combine(dir!.FullName, "docs", "agent-rules", "adversarial-qa.md"));
+        Assert.Contains("too-many-connections", doc);
+        Assert.Contains("repeats a field", doc);
+        Assert.Contains("it is never a busy run", doc);   // the new sentence tells the two apart
+        Assert.Contains("409 `busy`", doc);
     }
 
     [Fact]
@@ -309,6 +356,7 @@ public class HarnessServerTests : IDisposable
     }
 
     [Fact]
+    [Trait("Plan", "EDGE-issue-sweep-a-11")]
     public async Task Screenshot_Concurrent_429()
     {
         // [EDGE-qa-harness-28] Its own fixture with a long capture timeout, and the second request sent only once the
@@ -320,7 +368,9 @@ public class HarnessServerTests : IDisposable
         g.Game.Capture = (_, _, _) => { inside.TrySetResult(); return slow.Task; };
         var first = g.Client.GetAsync("/screenshot");
         await inside.Task.WaitAsync(TimeSpan.FromSeconds(20));
-        Assert.Equal(429, (await g.Get("/screenshot")).Status);
+        var (busyStatus, busyBody) = await g.Get("/screenshot");
+        Assert.Equal(429, busyStatus);
+        Assert.Equal("busy", busyBody.GetProperty("error").GetProperty("code").GetString());   // unchanged by #67
         slow.SetResult(new RawFrame(1, 1, 4, FramePng.B8G8R8A8Unorm, new byte[4]));
         Assert.Equal(200, (int)(await first).StatusCode);
     }

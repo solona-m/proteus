@@ -399,7 +399,11 @@ public sealed class ShaderUpgradeWatcher : IDisposable
             switch (ShaderUpgradeWriter.RevertOrForget(modRoot, rel, decline, out var why))
             {
                 case ShaderUpgradeWriter.Undone.Restored: restored++; changed.Add(modRoot); break;
-                case ShaderUpgradeWriter.Undone.Forgotten: kept++; changed.Add(modRoot); break;
+                case ShaderUpgradeWriter.Undone.Forgotten:
+                    kept++;
+                    changed.Add(modRoot);
+                    if (why.Length > 0) log.Information("[Proteus] shader upgrade: {0}", why);
+                    break;
                 case ShaderUpgradeWriter.Undone.Nothing: changed.Add(modRoot); break;
                 case ShaderUpgradeWriter.Undone.Refused: refused++; messages.Add(why); break;
                 case ShaderUpgradeWriter.Undone.Failed:

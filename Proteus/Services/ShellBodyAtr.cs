@@ -126,6 +126,16 @@ internal static partial class ShellBodyAtr
         return merged;
     }
 
+    /// <summary>
+    /// Everything a body part hides: the attributes the game hides live (<paramref name="liveShapes"/>, as
+    /// <see cref="Interop.BodyShapeReader.ReadEnabledShapes"/> reads them) and the ones its body mod's options switch off
+    /// (<paramref name="atrOff"/>, keyed by game path with the dictionary's own comparer). The shell's source spec and
+    /// the nail flatten both ask this, so the two never disagree on which layers are drawn (#58).
+    /// </summary>
+    internal static HashSet<string>? HiddenFor(HashSet<string>? liveShapes,
+                                               IReadOnlyDictionary<string, IReadOnlySet<string>> atrOff, string path)
+        => Merge(Interop.BodyShapeReader.Split(liveShapes).HiddenAttributes, atrOff.GetValueOrDefault(path));
+
     /// <summary>The attributes, sorted and comma-joined; "" for none.</summary>
     internal static string Key(IReadOnlySet<string>? off)
         => off is { Count: > 0 } ? string.Join(",", off.Order(StringComparer.Ordinal)) : "";

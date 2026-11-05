@@ -2329,6 +2329,15 @@ public sealed class ColorsStrings
         "This mod's own \"Toe Cap\" option is selected in Penumbra, in a Masks group that allows only\n"
       + "one choice, so it can't be turned off here. Change it in Penumbra.");
 
+    public readonly string ToeCapFlagOwnTip = ProteusLoc.Localize("Colors.ToeCap.FlagOwn.Tip",
+        "Turn this on for stockings and socks: the toes are covered by one rounded toe box, the way\n"
+      + "real hosiery fits, instead of following every toe.\n"
+      + "This mod's own \"Toe Cap\" option is in a Masks group that allows only one choice, so this\n"
+      + "tick can't select it without dropping the other mask there. Ticking it uses Proteus's built-in\n"
+      + "cap instead (made for Bibo+, Neolithe, Rue and YAB), saved in the mod's Proteus settings: it\n"
+      + "applies in every collection and goes with the mod when you export it.\n"
+      + "For the author's own cap, select \"Toe Cap\" in Penumbra.");
+
     public readonly string ToeCapSaveFailed = ProteusLoc.Localize("Colors.ToeCap.SaveFailed",
         "Couldn't save this mod's Proteus settings, so the change was undone. The log (/xllog) has the reason.");
 

@@ -608,4 +608,71 @@ public sealed class AuthorsMensFallbackTests : IDisposable
         Write(root, "m/1.mdl", []);
         Assert.True(AuthorMensRedirectsUnparsable(root, MensGlove, null));
     }
+
+    // ── #46: a piece whose files are all missing is not told to choose "Made on" ───────────────
+
+    [Fact]
+    [Trait("Plan", "AC-issue-sweep-a-9")]
+    public void A_piece_whose_files_are_all_missing_gets_no_made_on_advice()
+    {
+        var s = Strings.SizeSet;
+        // The note: no Made-on advice once every file of the piece is unparsable; the same code either way.
+        Assert.Equal((string.Format(s.UnreadableFmt, "Top"), Codes.Unreadable),
+                     UnreadableNote("Top", null, null, false, [], noneParsed: true));
+        Assert.Equal((string.Format(s.UnreadableMadeOnFmt, "Top"), Codes.Unreadable),
+                     UnreadableNote("Top", null, null, false, [], noneParsed: false));
+        // With Made on chosen the Made-on notes are as before, whatever the files.
+        Assert.Equal((string.Format(s.MadeOnMissingFmt, "Top", "gone"), Codes.NotMadeOn),
+                     UnreadableNote("Top", "gone", null, true, [], noneParsed: true));
+        Assert.Equal((string.Format(s.UnreadableFmt, "Top"), Codes.Unreadable),
+                     UnreadableNote("Top", "Bibo+", "Bibo+", false, [], noneParsed: true));
+
+        // The piece's own files: missing (the Mod helper never writes them), empty, garbage.
+        string missing = Mod([MensTop]);
+        Assert.True(PieceFilesUnparsable(missing, PiecesOf(missing).Single(p => p.GamePath == MensTop)));
+        string empty = Mod([MensTop]);
+        Write(empty, "s/0.mdl", []);
+        Write(empty, "m/0.mdl", [1, 2, 3, 4, 5, 6, 7, 8]);
+        Assert.True(PieceFilesUnparsable(empty, PiecesOf(empty).Single(p => p.GamePath == MensTop)));
+        // Both callers ask it, only without Made on.
+        foreach (var file in new[] { "SizeSetRefit.cs", "SizeSetRefit.CrossSex.cs" })
+            Assert.Contains("noneParsed: request.MadeOn == null && PieceFilesUnparsable(root, piece)",
+                            File.ReadAllText(Path.Combine(SourceDir(), file)));
+    }
+
+    [Fact]
+    [Trait("Plan", "EDGE-issue-sweep-a-22")]
+    public void Made_on_advice_stays_when_a_file_reads()
+    {
+        // One file a model: the body may still be choosable, so the advice stays.
+        string one = Mod([MensTop]);
+        Write(one, "s/0.mdl", Model);
+        Assert.False(PieceFilesUnparsable(one, PiecesOf(one).Single(p => p.GamePath == MensTop)));
+        // A file that can't be opened (locked) is not counted.
+        string locked = Mod([MensTop]);
+        Write(locked, "s/0.mdl", []);
+        Write(locked, "m/0.mdl", Model);
+        using (new FileStream(Path.Combine(locked, "m", "0.mdl"), FileMode.Open, FileAccess.ReadWrite, FileShare.None))
+            Assert.False(PieceFilesUnparsable(locked, PiecesOf(locked).Single(p => p.GamePath == MensTop)));
+        // A piece listing no files.
+        var bare = PiecesOf(one).Single(p => p.GamePath == MensTop) with { Options = [] };
+        Assert.False(PieceFilesUnparsable(one, bare));
+    }
+
+    [Fact]
+    [Trait("Plan", "EDGE-issue-sweep-a-23")]
+    public void Missing_mens_model_note_keeps_the_unreadable_code()
+    {
+        string root = Mod([Top, MensTop]);
+        var pieces = PiecesOf(root);
+        var mens = pieces.Single(p => p.GamePath == MensTop);
+        var (_, code) = UnreadableNote(mens.Label, null, null, false, [], noneParsed: PieceFilesUnparsable(root, mens));
+        Assert.Equal(Codes.Unreadable, code);
+        var log = new RunLog();
+        log.Add(mens, SizeStatus.Skipped, code, "x");
+        Assert.Equal([MensTop], MensModelsUnparsable(pieces, log, root, null));   // still crossed (#43)
+    }
+
+    private static string SourceDir([System.Runtime.CompilerServices.CallerFilePath] string here = "")
+        => Path.Combine(Path.GetDirectoryName(here)!, "..", "Proteus", "Services", "SizeSet");
 }
