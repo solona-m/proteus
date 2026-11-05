@@ -158,6 +158,47 @@ public class VariantRepointWriterTests
     }
 
     [Fact]
+    [Trait("Plan", "AC-imc-all-variants-6")]
+    public void Undo_after_reconcile_counts_replaced_entries_as_kept()
+    {
+        // The watcher reconciles before it undoes: a replaced entry is forgotten there, and counted as kept.
+        using var k = new VariantRepointTestKit();
+        var mod = k.Dress("Dress", Top);
+        k.Imc(Top, E(1), E(1), E(2), E(3));
+        k.Run([k.Worn(Top, 2, mod)]);
+        EditDefaultManips(mod, a =>
+            a.First(m => m!["Manipulation"]!["Variant"]!.GetValue<int>() == 3)!["Manipulation"]!["Entry"]!["VfxId"] = 9);
+        var rc = VariantRepointWriter.Reconcile(mod);
+        VariantRepointWriter.UndoItem(mod, Top, true, out var removed, out var kept, out _);
+        Assert.Equal((1, 1), (removed, kept + rc.Forgotten));
+        Assert.Equal([3], DefaultImc(mod, Top).Keys);
+    }
+
+    [Fact]
+    [Trait("Plan", "EDGE-imc-all-variants-20")]
+    public void Unreadable_record_is_never_replaced()
+    {
+        using var k = new VariantRepointTestKit();
+        var legs = new Item('e', 6255, "dwn");
+        var mod = k.Mod("Outfit", new()
+        {
+            [ModelPath(Top)] = "top.mdl", [MaterialPath(Top, 1)] = "top_a.mtrl",
+            [ModelPath(legs)] = "dwn.mdl", [MaterialPath(legs, 1)] = "dwn_a.mtrl",
+        });
+        k.ImcSlots(Top.SetTag, (1, [E(1), E(1), E(2)]), (3, [E(1), E(1), E(2)]));
+        k.Run([k.Worn(Top, 2, mod)]);
+        File.WriteAllText(RecordPath(mod), "{ corrupt");
+        var manifest = File.ReadAllText(Path.Combine(mod, "meta.json"));
+        var outcome = VariantRepointWriter.Apply(mod, [new ItemWrite(legs, 1, [(2, E(1))])], () => true);
+        Assert.Empty(outcome.Written);
+        Assert.Equal(RepointReason.WriteFailed, Assert.Single(outcome.Left).Reason);
+        Assert.Equal("{ corrupt", File.ReadAllText(RecordPath(mod)));
+        Assert.Equal(manifest, File.ReadAllText(Path.Combine(mod, "meta.json")));
+        Assert.Equal(VariantRepointWriter.Undone.Failed, VariantRepointWriter.UndoItem(mod, Top, true, out _, out _, out _));
+        Assert.Equal("{ corrupt", File.ReadAllText(RecordPath(mod)));
+    }
+
+    [Fact]
     [Trait("Plan", "EDGE-imc-all-variants-26")]
     public void Undo_without_decline()
     {
@@ -508,6 +549,7 @@ public class VariantRepointWriterTests
         Assert.Empty(outcome.Written);
         Assert.Equal(manifest, File.ReadAllText(Path.Combine(mod, "meta.json")));
         Assert.False(File.Exists(RecordPath(mod)));
+        Assert.False(Directory.Exists(Path.Combine(mod, "Proteus")));   // the folder the record made goes with it
         // Retried later.
         Assert.Single(k.Run([k.Worn(Top, 2, mod)]).Outcomes);
     }

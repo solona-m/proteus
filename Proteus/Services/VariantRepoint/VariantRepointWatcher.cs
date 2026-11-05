@@ -43,6 +43,8 @@ public sealed class VariantRepointWatcher : IDisposable
     private readonly object scheduleSync = new();
 
     private volatile bool stopped;
+    /// <summary>Something was written with no redraw after it (Auto redraw off): until the next redraw, the status says so.</summary>
+    private volatile bool awaitingRedraw;
     private bool wasEnabled;
     private int busy, blanks;
     private long walkDueAt, firstRequestAt;
@@ -141,6 +143,8 @@ public sealed class VariantRepointWatcher : IDisposable
     {
         // The reload and redraw after our own write have landed: the collection's entries can be judged again.
         lock (refreshPending) refreshPending.Clear();
+        awaitingRedraw = false;
+        current = current with { AwaitingRedraw = false };
         Request(ShaderUpgradePlan.Signal.Redraw);
     }
 
@@ -327,12 +331,18 @@ public sealed class VariantRepointWatcher : IDisposable
 
         var inputs = InputsFor(worn.ModsRoot);
         var roots = WornModRoots(worn, inputs);
+        // Mods whose manifest the reconcile changed (entries for a folder no longer shipped taken out): reloaded with the
+        // rest, or Penumbra keeps the old entries in memory — and could save them back.
+        var reconciled = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        int forgotten = 0;
         foreach (var root in roots)
         {
             if (stopped) return;
             try
             {
                 var rc = VariantRepointWriter.Reconcile(root);
+                if (rc.ManifestChanged) reconciled.Add(root);
+                forgotten += rc.Forgotten;
                 if (rc.ManifestChanged || rc.Replanned || rc.Dropped > 0 || rc.Forgotten > 0)
                     log.Information("[Proteus] gear variants: {0} — {1} entr(y/ies) forgotten as replaced, {2} removed by "
                                   + "someone (declined){3}{4}", Path.GetFileName(root), rc.Forgotten, rc.Dropped,
@@ -346,7 +356,7 @@ public sealed class VariantRepointWatcher : IDisposable
             }
         }
 
-        if (kind == RunKind.UndoWorn) { RunUndo(worn, inputs, decline); return; }
+        if (kind == RunKind.UndoWorn) { RunUndo(worn, inputs, decline, reconciled, forgotten); return; }
         if (kind == RunKind.RepointNow)
             foreach (var root in roots)
                 VariantRepointWriter.ClearDeclines(root, worn.Items.Select(w => w.Item));
@@ -388,16 +398,18 @@ public sealed class VariantRepointWatcher : IDisposable
         }
         if (stopped) return;
 
-        var (reloaded, redrew) = OnFramework(() => ReloadChanged([.. changed.Keys], kind, worn.ModNames, changed), "reload");
+        var reload = changed.Keys.Union(reconciled, StringComparer.OrdinalIgnoreCase).ToList();
+        var (reloaded, redrew) = OnFramework(() => ReloadChanged(reload, kind, worn.ModNames, changed), "reload");
+        if (changed.Count > 0 && !redrew) awaitingRedraw = true;
         Publish(worn, inputs, effective, left, new RunInfo(KindName(kind), changed.Count, changed.Values.Sum(), 0, 0, 0,
-                                                           reloaded, redrew, DateTime.UtcNow),
-                awaiting: changed.Count > 0 && !redrew);
+                                                           reloaded, redrew, DateTime.UtcNow));
     }
 
-    private void RunUndo(WornState worn, Inputs inputs, bool decline)
+    /// <param name="forgotten">Entries the reconcile just forgot as replaced by someone: kept, and counted so.</param>
+    private void RunUndo(WornState worn, Inputs inputs, bool decline, ISet<string> reconciled, int forgotten)
     {
-        int removed = 0, kept = 0, refused = 0;
-        bool anyRecorded = false;
+        int removed = 0, kept = forgotten, refused = 0;
+        bool anyRecorded = forgotten > 0;
         var messages = new List<string>();
         var changed = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         foreach (var w in worn.Items)
@@ -427,11 +439,11 @@ public sealed class VariantRepointWatcher : IDisposable
         if (stopped) return;
         log.Information("[Proteus] gear variants: undo for what is worn — {0} removed, {1} kept as changed since, {2} refused",
                         removed, kept, refused);
-        var (reloaded, redrew) = OnFramework(() => ReloadChanged([.. changed], RunKind.UndoWorn, worn.ModNames, null), "reload");
+        var reload = changed.Union(reconciled, StringComparer.OrdinalIgnoreCase).ToList();
+        var (reloaded, redrew) = OnFramework(() => ReloadChanged(reload, RunKind.UndoWorn, worn.ModNames, null), "reload");
         Publish(worn, inputs, null, Candidates(worn.Items, inputs).Left,
                 new RunInfo(KindName(RunKind.UndoWorn), changed.Count, 0, removed, kept, refused, reloaded, redrew,
-                            DateTime.UtcNow, string.Join(" ", messages.Distinct()), NothingRecorded: !anyRecorded),
-                awaiting: false);
+                            DateTime.UtcNow, string.Join(" ", messages.Distinct()), NothingRecorded: !anyRecorded));
     }
 
     /// <summary>
@@ -473,7 +485,7 @@ public sealed class VariantRepointWatcher : IDisposable
 
     /// <summary>What is worn now: each piece's mod and folders, the pieces repointed (recorded), and what was left.</summary>
     private void Publish(WornState worn, Inputs inputs, IReadOnlyDictionary<PenumbraMetaImc.Key, ImcEntry>? effective,
-                         List<Left> left, RunInfo run, bool awaiting)
+                         List<Left> left, RunInfo run)
     {
         var wornList = new List<WornEntry>();
         var repointed = new List<RepointedEntry>();
@@ -506,7 +518,7 @@ public sealed class VariantRepointWatcher : IDisposable
                                                  rec.Variants.Select(v => v.Variant).OrderBy(v => v).ToList()));
         }
         current = new View(
-            Waiting: "none", AwaitingRedraw: awaiting, Worn: wornList, Repointed: repointed,
+            Waiting: "none", AwaitingRedraw: awaitingRedraw, Worn: wornList, Repointed: repointed,
             Left: left.Select(l => new LeftEntry(l.ModDir, l.Item, ReasonName(l.Reason))).Distinct().ToList(),
             LastRun: run);
     }

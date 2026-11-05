@@ -97,15 +97,25 @@ internal static class VariantRepointWriter
     private static string RecordPath(string modRoot)
         => Path.Combine(modRoot, SidecarDiscoveryService.SidecarSubdir, RecordFile);
 
-    internal static Record? ReadRecord(string modRoot)
+    /// <summary>The record, or null when there is none — or when it cannot be read (see <see cref="TryReadRecord"/>).</summary>
+    internal static Record? ReadRecord(string modRoot) => TryReadRecord(modRoot, out var r) ? r : null;
+
+    /// <summary>
+    /// The record: true with null when there is none, true with it when read, false when it is there but cannot be read
+    /// (corrupt, or held open). A write must never take an unreadable record for a missing one: it would replace it and
+    /// lose every earlier entry and decline.
+    /// </summary>
+    internal static bool TryReadRecord(string modRoot, out Record? record)
     {
+        record = null;
         try
         {
             var at = RecordPath(modRoot);
-            if (!File.Exists(at)) return null;
-            return JsonSerializer.Deserialize<Record>(File.ReadAllText(at));
+            if (!File.Exists(at)) return true;
+            record = JsonSerializer.Deserialize<Record>(File.ReadAllText(at));
+            return record != null;
         }
-        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or JsonException) { return null; }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or JsonException) { return false; }
     }
 
     private static readonly JsonSerializerOptions RecordJson = new() { WriteIndented = true };
@@ -127,11 +137,15 @@ internal static class VariantRepointWriter
         PenumbraModMeta.AtomicWrite(at, JsonSerializer.Serialize(r, RecordJson));
     }
 
-    /// <summary>The record exactly as it is on disk, to put back after a failed write; null when there is none.</summary>
-    private static string? Snapshot(string modRoot)
+    /// <summary>
+    /// The record exactly as it is on disk, to put back after a failed write: true with null when there is none, false
+    /// when it is there but cannot be read (the write is then refused, never restored by deleting).
+    /// </summary>
+    private static bool TrySnapshot(string modRoot, out string? snapshot)
     {
-        try { var at = RecordPath(modRoot); return File.Exists(at) ? File.ReadAllText(at) : null; }
-        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { return null; }
+        snapshot = null;
+        try { var at = RecordPath(modRoot); if (File.Exists(at)) snapshot = File.ReadAllText(at); return true; }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { return false; }
     }
 
     private static void Restore(string modRoot, string? snapshot)
@@ -139,8 +153,11 @@ internal static class VariantRepointWriter
         var at = RecordPath(modRoot);
         try
         {
-            if (snapshot == null) { if (File.Exists(at)) File.Delete(at); }
-            else PenumbraModMeta.AtomicWrite(at, snapshot);
+            if (snapshot != null) { PenumbraModMeta.AtomicWrite(at, snapshot); return; }
+            if (File.Exists(at)) File.Delete(at);
+            // A folder the record made, and nothing else: not left behind in the author's mod.
+            var dir = Path.GetDirectoryName(at)!;
+            if (Directory.Exists(dir) && !Directory.EnumerateFileSystemEntries(dir).Any()) Directory.Delete(dir);
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { /* the next reconcile settles it */ }
     }
@@ -293,8 +310,12 @@ internal static class VariantRepointWriter
             foreach (var w in items)
             {
                 if (!mayWrite()) break;
-                var snapshot = Snapshot(modRoot);
-                var r = ReadRecord(modRoot) ?? new Record();
+                if (!TrySnapshot(modRoot, out var snapshot) || !TryReadRecord(modRoot, out var read))
+                {
+                    left.Add((w.Item, RepointReason.WriteFailed));   // an unreadable record is never replaced
+                    continue;
+                }
+                var r = read ?? new Record();
                 var entry = r.Find(w.Item);
                 if (entry != null && entry.MaterialId != w.Folder)
                 {
@@ -330,10 +351,13 @@ internal static class VariantRepointWriter
                     continue;
                 }
 
+                // The entries are in the manifest now, so the item is written whatever happens to this record write:
+                // left pending, the next reconcile adopts what is present.
+                written.Add((w.Item, add.Select(a => a.Variant).ToList()));
                 entry.Pending = false;
                 r.Fingerprint = VariantRepointPlan.Fingerprint(modRoot);
-                WriteRecord(modRoot, r);
-                written.Add((w.Item, add.Select(a => a.Variant).ToList()));
+                try { WriteRecord(modRoot, r); }
+                catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { /* stays pending */ }
             }
         }
         return new Outcome(written, left);
@@ -354,7 +378,14 @@ internal static class VariantRepointWriter
         message = "";
         lock (ModManifestLock.Gate)
         {
-            if (ReadRecord(modRoot) is not { } r || r.Find(item) is not { } e) return Undone.NothingRecorded;
+            if (!TryReadRecord(modRoot, out var read))
+            {
+                message = string.Format(ProteusLoc.Localize("Service.ModMeta.Unreadable.Fmt",
+                    "The manifest of {0} could not be read, so it was not changed."),
+                    Path.Combine(Path.GetFileName(modRoot), SidecarDiscoveryService.SidecarSubdir, RecordFile));
+                return Undone.Failed;
+            }
+            if (read is not { } r || r.Find(item) is not { } e) return Undone.NothingRecorded;
             if (DefaultManipulations(modRoot) is not { } manips)
             {
                 message = string.Format(ProteusLoc.Localize("Service.ModMeta.Unreadable.Fmt",

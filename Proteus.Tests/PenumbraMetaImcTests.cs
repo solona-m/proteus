@@ -35,4 +35,13 @@ public class PenumbraMetaImcTests
         Assert.Null(PenumbraMetaImc.Parse(Blob([(11, 6255, 2, 13, E(1))])));
         Assert.Empty(PenumbraMetaImc.Parse(Blob([]))!);
     }
+
+    [Fact]
+    [Trait("Plan", "EDGE-imc-all-variants-12")]
+    public void Gear_slot_under_the_other_object_type_is_skipped_not_fatal()
+    {
+        // Penumbra accepts an Equipment identifier with an accessory slot: one such entry must not blind the collection.
+        var map = PenumbraMetaImc.Parse(Blob([(11, 53, 1, 12, E(5)), (11, 6255, 2, 4, E(1))]))!;
+        Assert.Equal(E(1), Assert.Single(map).Value);
+    }
 }

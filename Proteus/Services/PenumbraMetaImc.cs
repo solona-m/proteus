@@ -91,7 +91,13 @@ internal static class PenumbraMetaImc
             if (type == Equipment) kind = 'e';
             else if (type == Accessory) kind = 'a';
             else continue;   // weapons, monsters, demihumans: not gear this reads
-            if (LabelOf(type, slot) is not { } label) return null;   // the layout moved under us: trust none of it
+            if (LabelOf(type, slot) is not { } label)
+            {
+                // A gear slot under the other object type (Penumbra accepts an Equipment identifier with an accessory
+                // slot): an odd entry, skipped. A slot number gear does not have: the layout moved, trust none of it.
+                if (LabelOf(Equipment, slot) != null || LabelOf(Accessory, slot) != null) continue;
+                return null;
+            }
             ushort attrSound = BinaryPrimitives.ReadUInt16LittleEndian(rec[10..]);
             result[new Key(kind, set, label, variant)] = new ImcEntry(
                 rec[8], rec[9], (ushort)(attrSound & 0x3FF), (byte)(attrSound >> 10), rec[12], rec[13]);

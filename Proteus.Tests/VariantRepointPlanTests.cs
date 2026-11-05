@@ -71,11 +71,14 @@ public class VariantRepointPlanTests
 
     [Fact]
     [Trait("Plan", "AC-imc-all-variants-4")]
-    public void Setting_off_by_default_and_transitions()
+    public void Setting_on_by_default_and_transitions()
     {
-        Assert.False(new Configuration().AutoRepointVariants);
+        Assert.True(new Configuration().AutoRepointVariants);
+        // An existing config without the property reads on too: no migration.
         var cfg = System.Text.Json.JsonSerializer.Deserialize<Configuration>("{\"Version\":9}")!;
-        Assert.False(cfg.AutoRepointVariants);
+        Assert.True(cfg.AutoRepointVariants);
+        Assert.False(System.Text.Json.JsonSerializer.Deserialize<Configuration>(
+            "{\"Version\":9,\"AutoRepointVariants\":false}")!.AutoRepointVariants);
         Assert.Equal(9, cfg.Version);
         Assert.Equal(ShaderUpgradePlan.TransitionKind.Evaluate, ShaderUpgradePlan.Transition(false, true));
         Assert.Equal(ShaderUpgradePlan.TransitionKind.Stop, ShaderUpgradePlan.Transition(true, false));
@@ -199,6 +202,18 @@ public class VariantRepointPlanTests
         var plan = k.Plan([k.Worn(Top, 2, mod)]);
         Assert.Empty(plan.PerMod);
         Assert.Equal(RepointReason.ImcGroup, LeftReason(plan));
+    }
+
+    [Fact]
+    [Trait("Plan", "EDGE-imc-all-variants-8")]
+    public void Hand_edited_numeric_slot_in_a_group_is_read_not_fatal()
+    {
+        using var k = new VariantRepointTestKit();
+        var group = (System.Collections.Generic.Dictionary<string, object>)ImcGroup("Belt", Top);
+        ((System.Collections.Generic.Dictionary<string, object>)group["Identifier"])["EquipSlot"] = 4;   // Body, as a number
+        var mod = k.Mod("A", new() { [ModelPath(Top)] = "top.mdl", [MaterialPath(Top, 1)] = "a.mtrl" }, rawGroups: [group]);
+        k.Imc(Top, E(1), E(1), E(2));
+        Assert.Equal(RepointReason.ImcGroup, LeftReason(k.Plan([k.Worn(Top, 2, mod)])));
     }
 
     [Fact]

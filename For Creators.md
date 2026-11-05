@@ -588,10 +588,11 @@ upgrades it again only if it is still old-shader.
 
 ### Gear variants (what it changes in a user's copy of your mod)
 
-Users can turn on **Settings > Gear variants > "Point every variant of worn gear at its mod's material"**. It is for a
+**Settings > Gear variants > "Point every variant of worn gear at its mod's material"** is **on by default** (users can
+turn it off). It is for a
 mod that ships one variant's material folder (say `material/v0001/`) for an item: worn in a variant whose IMC entry
 uses another folder, the game loads that folder's material onto your model — the game's own, or nothing for a
-material name the game does not have. With the setting on, when a user puts on such a piece, Proteus does to **their
+material name the game does not have. When a user puts on such a piece, Proteus does to **their
 installed copy** of your mod what TexTools' metadata tab "Apply to All Variants" does:
 
 - An `Imc` entry is added to your mod's **default data** for each variant that would miss your folder, copying the
@@ -606,8 +607,8 @@ installed copy** of your mod what TexTools' metadata tab "Apply to All Variants"
 - What was written is recorded in `Proteus/variantrepoint.json`. If that file is lost, the entries look like your own
   and Proteus no longer touches them.
 
-All of it lives inside the mod folder, so it travels with a Penumbra export. **If you wear your own source mods with
-the setting on, your working copy is changed too** — leave the setting off while you work on a mod, or undo it before
+All of it lives inside the mod folder, so it travels with a Penumbra export. **Because the setting is on by default,
+wearing your own source mods changes your working copy too** — turn it off while you work on a mod, or undo it before
 you pack.
 
 To take the entries out, a user wears the pieces and presses **"Undo for what I'm wearing"** (those pieces are then

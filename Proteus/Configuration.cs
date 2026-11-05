@@ -237,10 +237,10 @@ public class Configuration : IPluginConfiguration
     /// "Gear variants": a worn piece whose mod ships one variant's material folder, worn in a variant that uses another,
     /// has every such variant pointed at the mod's folder by IMC entries written into the mod's default data
     /// (<c>VariantRepointWatcher</c>; recorded, "Undo for what I'm wearing" takes them out) — TexTools' "Apply to All
-    /// Variants". Turning this off only stops further writes. Off by default, since it changes other authors' mods; a
-    /// missing property reads off, so no migration.
+    /// Variants". Turning this off only stops further writes. On by default (the owner's call): a missing property reads
+    /// on, so existing users get it too, with no migration.
     /// </summary>
-    public bool AutoRepointVariants { get; set; } = false;
+    public bool AutoRepointVariants { get; set; } = true;
 
     /// <summary>
     /// When the worn hairstyle is drawn as the game's own because its mod was made for another race only, port that

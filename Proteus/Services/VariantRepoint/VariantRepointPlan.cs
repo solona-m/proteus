@@ -413,9 +413,13 @@ internal static class VariantRepointPlan
         if (!group.TryGetProperty("Identifier", out var id) || id.ValueKind != JsonValueKind.Object) return false;
         if (Num(id, "PrimaryId") != item.SetId) return false;
         if (id.TryGetProperty("ObjectType", out _) && ObjectKind(id) != item.Kind) return false;
-        if (id.TryGetProperty("EquipSlot", out var es) && es.GetString() is { } slot
-            && !string.Equals(slot, item.EquipSlot, StringComparison.OrdinalIgnoreCase))
-            return false;
+        if (id.TryGetProperty("EquipSlot", out var es))
+        {
+            // Penumbra writes the name; a hand-edited number is read too, and anything else never matches.
+            string? slot = es.ValueKind == JsonValueKind.String ? es.GetString()
+                         : es.ValueKind == JsonValueKind.Number && es.TryGetInt32(out var n) ? EquipSlotName(n) : null;
+            if (!string.Equals(slot, item.EquipSlot, StringComparison.OrdinalIgnoreCase)) return false;
+        }
         variant = Num(id, "Variant") ?? 0;
         return true;
     }
