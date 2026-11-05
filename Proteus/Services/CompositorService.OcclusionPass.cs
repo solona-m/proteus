@@ -139,23 +139,17 @@ public partial class CompositorService
                         if (BodyModelPathsFor(material.mtrlGamePath) is { } bodyMdlPaths)
                         {
                             bodyMdls = new List<UvSeamMapService.SeamModel>(bodyMdlPaths.Length);
-                            foreach (var mp in bodyMdlPaths)
+                            var compositor = material.run.compositor;
+                            foreach (var gamePath in bodyMdlPaths)
                             {
-                                var gamePath = mp;
-                                var disk = material.run.compositor.penumbra.ResolvePlayer(gamePath);
-                                // A modded part is a real file (size+mtime identity); a vanilla one can only change with a patch (game path identity).
-                                string id = gamePath;
-                                try
-                                {
-                                    if (!string.IsNullOrEmpty(disk))
-                                    {
-                                        var fi = new FileInfo(disk);
-                                        if (fi.Exists) id = $"{disk}|{fi.Length}|{fi.LastWriteTimeUtc.Ticks}";
-                                    }
-                                }
-                                catch { /* unreadable — fall back to the game path */ }
-                                bodyMdls.Add(new UvSeamMapService.SeamModel(
-                                    id, () => material.run.compositor.textureLoader.LoadRawFile(disk, gamePath)));
+                                // The body the shell is cut from in this same composite (#56): when the part resolves to our
+                                // own publication, its upstream, by the shell's rule. A modded part is identified by size and
+                                // mtime, remembered bytes by hash, a vanilla one by its game path (it changes only with a patch).
+                                var source = compositor.secondSkin.BodySourceFor(gamePath, compositor.managedModDir);
+                                compositor.log.Debug("[Proteus] seam map part {0}: {1} <- {2}", gamePath, source.Kind,
+                                    source.Disk != null ? Path.GetFileName(source.Disk)
+                                    : source.Kind == SecondSkinService.BodySourceKind.Remembered ? "(remembered)" : "(game data)");
+                                bodyMdls.Add(new UvSeamMapService.SeamModel(source.Id, source.Load));
                             }
                             // Which files the seam map will be built from; on a cache hit nothing else is logged.
                             material.run.compositor.log.Debug("[Proteus] seam map: {0} body part(s) for {1} — {2}",

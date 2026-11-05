@@ -443,8 +443,8 @@ public sealed partial class SecondSkinService
                 // because this list is also what the shell is cut from; bodySettled marks it so the smoothing pass holds instead.
                 // The upstream body is kept on disk, written whenever the path is unmasked and read back when it is masked, since
                 // nothing unmasks a body path afterwards. It lives in a subfolder because PruneManagedOutput does not recurse.
-                var upstreamDir = Path.Combine(modelsDir, "upstream");
-                var upstreamDisk = Path.Combine(upstreamDir, CompositorService.SanitizeName(bodyGamePath) + ".mdl");
+                var upstreamDisk = UpstreamKeptPath(outputRoot, bodyGamePath);
+                var upstreamDir = Path.GetDirectoryName(upstreamDisk)!;
 
                 // A SETTLED upstream outranks both remembered copies: those freeze the body at whatever it was before the first
                 // publish, while the prime reflects the body the user has selected now.
@@ -454,7 +454,11 @@ public sealed partial class SecondSkinService
                 byte[]? bytes;
                 // The mod file this part really comes from, when known; null for game data or when only a copy of the bytes survives.
                 string? sourceDisk = null;
-                if (settledBytes != null)
+                // The seam map asks the same rule (BodySourceFor), so both phases read one body (#56).
+                var source = ChooseBodySource(bodyIsOurs, settledBytes != null,
+                                              bodyIsOurs && service._upstreamBodies.ContainsKey(bodyGamePath),
+                                              bodyIsOurs && File.Exists(upstreamDisk));
+                if (source == BodySourceKind.Settled && settledBytes != null)
                 {
                     bytes = settledBytes;
                     sourceDisk = settledDisk;
@@ -474,12 +478,12 @@ public sealed partial class SecondSkinService
                         service.log.Information("[Proteus] second skin: {0} is behind our own output — using the body the "
                                       + "collection now provides, {1}", bodyGamePath, settledDisk!);
                 }
-                else if (bodyIsOurs && service._upstreamBodies.TryGetValue(bodyGamePath, out var remembered))
+                else if (source == BodySourceKind.Remembered && service._upstreamBodies.TryGetValue(bodyGamePath, out var remembered))
                 {
                     bytes = remembered;
                     sourceDisk = service._upstreamBodyDisks.GetValueOrDefault(bodyGamePath);
                 }
-                else if (bodyIsOurs && File.Exists(upstreamDisk))
+                else if (source == BodySourceKind.Kept)
                 {
                     bytes = File.ReadAllBytes(upstreamDisk);
                     service._upstreamBodies[bodyGamePath] = bytes;
@@ -493,7 +497,7 @@ public sealed partial class SecondSkinService
                     service.log.Debug("[Proteus] second skin: {0} resolves to our own output — smoothing the upstream "
                             + "kept at {1}", bodyGamePath, upstreamDisk);
                 }
-                else if (bodyIsOurs)
+                else if (bodyIsOurs)   // OwnHeld (or a remembered copy dropped meanwhile)
                 {
                     // Nothing remembered anywhere: cut the shell from what we published, but do not run the passes over it again.
                     // Never drop the part.
