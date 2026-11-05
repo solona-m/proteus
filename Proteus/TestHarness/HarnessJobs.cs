@@ -120,6 +120,9 @@ internal sealed class HarnessJobs(IHarnessGame game, IFrameworkDispatcher dispat
     public bool TryReserve() => Interlocked.CompareExchange(ref slot, 1, 0) == 0;
     public void Release() => Volatile.Write(ref slot, 0);
 
+    /// <summary>A job holds the slot: reserved, queued or running.</summary>
+    public bool Busy => Volatile.Read(ref slot) != 0;
+
     public long NextSeq() => Interlocked.Increment(ref seq);
 
     public static string NewJobId() => Convert.ToHexString(System.Security.Cryptography.RandomNumberGenerator.GetBytes(6)).ToLowerInvariant();

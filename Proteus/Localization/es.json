@@ -639,6 +639,10 @@
     "message": "La opción \"Toe Cap\" propia de este mod está seleccionada en Penumbra, en un grupo Masks que solo permite\nuna elección, así que no se puede desactivar aquí. Cámbiala en Penumbra.",
     "description": ""
   },
+  "Colors.ToeCap.FlagOwn.Tip": {
+    "message": "Actívalo para medias y calcetines: los dedos quedan cubiertos por una puntera redondeada, como\najusta la calcetería real, en vez de seguir cada dedo.\nLa opción \"Toe Cap\" propia de este mod está en un grupo Masks que solo permite una elección, así que\nesta casilla no puede seleccionarla sin quitar la otra máscara de ahí. Marcarla usa en su lugar la\npuntera integrada de Proteus (hecha para Bibo+, Neolithe, Rue y YAB), guardada en los ajustes de Proteus\ndel mod: se aplica en todas las colecciones y va con el mod cuando lo exportas.\nPara la puntera del autor, selecciona \"Toe Cap\" en Penumbra.",
+    "description": ""
+  },
   "Colors.ToeCap.SaveFailed": {
     "message": "No se pudieron guardar los ajustes de Proteus de este mod, así que el cambio se deshizo. El registro (/xllog) indica el motivo.",
     "description": ""
@@ -5487,10 +5491,6 @@
     "message": "el mod no incluye ese peinado",
     "description": ""
   },
-  "HairPort.Refused.Gender": {
-    "message": "los peinados solo se portan entre razas del mismo sexo",
-    "description": ""
-  },
   "HairPort.Refused.NoStyle.Fmt": {
     "message": "c{0:D4} no puede elegir el peinado {1}",
     "description": ""
@@ -5603,6 +5603,42 @@
     "message": "sin cubrir",
     "description": ""
   },
+  "HairPort.Studio.OtherSex": {
+    "message": "También para el otro sexo",
+    "description": "Section heading in the Studio's port list, above the races of the other sex."
+  },
+  "HairPort.Studio.OtherSex.Note.Fmt": {
+    "message": "En el juego, el peinado {0} es un estilo distinto para el otro sexo. Una raza a la que se porte aquí lleva este en su lugar siempre que elija el peinado {0} con este mod activo, para todos los que se muestren con el mod. Aquí no se marca nada por ti, y Proteus nunca porta entre sexos por sí solo.",
+    "description": "Note under the other-sex heading in the Studio port list. {0} is the hairstyle number."
+  },
+  "HairPort.Studio.OtherSexAuthored": {
+    "message": "el mod tiene su propia versión para este sexo",
+    "description": "Per-race status in the Studio port list for a race of the other sex: the mod ships its own model of this hairstyle for that sex."
+  },
+  "HairPort.Studio.OtherSexSkeleton": {
+    "message": "el mod da a esta raza su propio esqueleto",
+    "description": "Per-race status note in the Studio port list for a race of the other sex: the mod now gives that race its own hair skeleton."
+  },
+  "HairPort.Refused.NotTarget": {
+    "message": "es la propia raza del peinado o no es jugable",
+    "description": "Reason (lowercase sentence fragment) why a hairstyle could not be ported to a race; shown after a race name and a colon."
+  },
+  "HairPort.Refused.OtherSexAuto": {
+    "message": "es del otro sexo, al que solo se porta cuando se pide en el Estudio",
+    "description": "Reason (lowercase sentence fragment) why the automatic path did not port a hairstyle to a race of the other sex; shown after a race name and a colon."
+  },
+  "HairPort.Refused.OtherSexAuthored.Fmt": {
+    "message": "el mod tiene su propio peinado {1} para c{0:D4}; porta ese en su lugar",
+    "description": "Reason (lowercase sentence fragment) a hand port to the other sex is refused. {0} is a race code number, {1} the hairstyle number."
+  },
+  "HairPort.Refused.OtherSexAuthoredAuto.Fmt": {
+    "message": "el mod ahora tiene su propio peinado {1} para c{0:D4}; el portado hecho en el Estudio se deja como está",
+    "description": "Reason (lowercase sentence fragment) the automatic path leaves a Studio port to the other sex as it is. {0} is a race code number, {1} the hairstyle number."
+  },
+  "HairPort.Refused.OtherSexSkeleton.Fmt": {
+    "message": "el mod da a c{0:D4} un esqueleto propio para el peinado {1}, así que un portado del otro sexo no puede traer el suyo",
+    "description": "Reason (lowercase sentence fragment) a port to the other sex is refused. {0} is a race code number, {1} the hairstyle number."
+  },
   "HairPort.Studio.Port": {
     "message": "Portar",
     "description": ""
@@ -5679,8 +5715,8 @@
     "message": "No se pudo leer el registro de Proteus de los peinados portados de este mod (Proteus/hairport.json), así que no se cambió nada.",
     "description": ""
   },
-  "HairPort.Auto.Tip2": {
-    "message": "Muchos mods de pelo están hechos para una sola raza, así que en cualquier otra\nel juego muestra su propio peinado. Con esto activado, Proteus dobla el peinado\ndel mod sobre la cabeza de tu raza y lo añade a la misma opción del mismo mod:\npara el peinado que te pones y, por adelantado, para los mods de pelo activos en\ntu colección: al activar esto, al instalar, activar o cambiar un mod, y al pulsar\n«Comprobar ahora».\n\nSolo para tu propia raza, desde razas del mismo sexo. Sigue funcionando con\nProteus desactivado, viaja con el mod y se ve en todos los que se muestren con\nese mod activo. Se puede deshacer aquí.",
+  "HairPort.Auto.Tip3": {
+    "message": "Muchos mods de pelo están hechos para una sola raza, así que en cualquier otra\nel juego muestra su propio peinado. Con esto activado, Proteus dobla el peinado\ndel mod sobre la cabeza de tu raza y lo añade a la misma opción del mismo mod:\npara el peinado que te pones y, por adelantado, para los mods de pelo activos en\ntu colección: al activar esto, al instalar, activar o cambiar un mod, y al pulsar\n«Comprobar ahora».\n\nSolo para tu propia raza, desde razas del mismo sexo. Un portado entre sexos\nsolo se hace en el Estudio, pero uno hecho allí también se mantiene al día aquí.\nSigue funcionando con Proteus desactivado, viaja con el mod y se ve en todos los\nque se muestren con ese mod activo. Se puede deshacer aquí.",
     "description": ""
   },
   "HairPort.Scan.Starting": {

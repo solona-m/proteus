@@ -49,9 +49,13 @@ responsibility.
 5. **Every build meant for the game is loadable there.** Bump
    `Plugin.BuildNumber`, build Release, and copy the output to
    `E:\repos\Proteus\Proteus\bin\release\win-x64` — the only path the game
-   dev-loads. Do this before running tests, not after. From a worktree, run
-   `git submodule update --init --recursive` first, and check the copied
-   `Proteus.dll` timestamp rather than trusting the build's output.
+   dev-loads. From a worktree, run `git submodule update --init --recursive`
+   first, and check the copied `Proteus.dll` timestamp rather than trusting the
+   build's output. **Do not overwrite that DLL just to run tests:** whenever the
+   owner's game is running the test harness is on, so a copy reloads the plugin
+   under whatever in-game QA another session is running. Run unit tests
+   from your own worktree's build; copy only when your build is about to be
+   used in game (your own in-game QA, or the finished build).
 
 ## Project Overview
 
@@ -80,7 +84,7 @@ documented by that workflow's own tooling (e.g. its installed plugin).
 - optional, contributors using Claude Code: after a passing review and QA of a non-trivial change, silences the PR recommendation: `sh .claude/hooks/pr-ready.sh "<ran|skipped|blocked>: <reason>"`
 - single test: `dotnet test Proteus.Tests/Proteus.Tests.csproj -c Release --filter "FullyQualifiedName~BodyRetargetTests"`
 - default branch: `test` — reviews diff against it; work merges into it (`main` is the stable release branch)
-- in-game QA: the test harness (local builds only, ADR 0002), turned on by the user with `/proteus harness on`; QA reads the port and token from `%APPDATA%\XIVLauncher\pluginConfigs\Proteus\test-harness.json` and drives it with curl — see `docs/agent-rules/adversarial-qa.md`. Check a build has it: `dotnet test Proteus.Tests/Proteus.Tests.csproj -c Release --filter "FullyQualifiedName~HarnessBuildFlagTests"`
+- in-game QA: the test harness (local builds only, ADR 0002), always on on the owner's machine (no need to ask for `/proteus harness on`); QA reads the port and token from `%APPDATA%\XIVLauncher\pluginConfigs\Proteus\test-harness.json` and drives it with curl — see `docs/agent-rules/adversarial-qa.md`. Check a build has it: `dotnet test Proteus.Tests/Proteus.Tests.csproj -c Release --filter "FullyQualifiedName~HarnessBuildFlagTests"`
 
 ## Architecture
 
@@ -129,7 +133,7 @@ expanding here.
 - `Proteus/Interop/` — unsafe struct offsets and IPC threading (Penumbra events fire on the caller's thread)
 - `Proteus/Configuration.cs` migrations — a mistake loses user settings
 - `LogAnonymizer.cs` / `LogExportService.cs` — character names must not leak into exported logs
-- `Proteus/TestHarness/`, the `ProteusTestHarness` switch in `Directory.Build.props` and the release workflows' harness guard — a local control port that writes into mods; must stay compiled out of every CI build (ADR 0002)
+- `Proteus/TestHarness/`, the `ProteusTestHarness` switch in `Directory.Build.props` and the release workflows' harness guard — a local control port that writes into mods and, for the session, the character's gear and mod settings; must stay compiled out of every CI build (ADR 0002)
 - `.claude/settings.json` and `.claude/hooks/` — loaded by every agent session in the repo, the owner's too; a broken hook adds latency or errors to every matched call (its command ends in `|| true`, so it never blocks), and a contributor PR changing them takes effect as soon as its branch is checked out, so review it before it is checked out
 - `worker/`, `.github/workflows/` and `.github/dependabot.yml` — live release distribution; actions stay SHA-pinned (`SupplyChainTests`)
 

@@ -90,6 +90,45 @@ public partial class HairPortBuilderTests
         });
     }
 
+    /// <summary>The cross-sex rule leaves a same-sex port's skeleton as it was: an entry to the target's own copy, a
+    /// carry of the source's, nothing for none — each still current once saved.</summary>
+    [Fact]
+    [Trait("Plan", "EDGE-cross-sex-hair-port-21")]
+    public void Same_sex_choose_and_current_are_unchanged()
+    {
+        HairPortSkeleton.Choice Choose(Mod mod, Func<string, byte[]?> game, string option = "Long")
+            => HairPortSkeleton.Choose(new HairPortSkeleton.Place(mod.Root, mod.Owners, mod.Owner("Cut", option), null, [], 801, 201, Id,
+                                                                  game, HairSkeletonTable.Lazy(game)), mod.Get($"{option.ToLowerInvariant()}.mdl"));
+
+        using (var mod = PhysicsMod([PenumbraManipulations.EstManipulation("0801", "Hair", Id, 170)]))
+        {
+            var game = PhysicsGame((201, 170, H0170Skeleton));
+            var entry = Choose(mod, game);
+            Assert.Equal((HairPortSkeleton.Route.Entry, 170), (entry.Route, entry.Check));
+            Assert.Contains("j_ex_h0170_ke_b", entry.Bones);
+            Assert.True(HairPortWriter.Save(mod.Root, HairPortBuilder.Build(mod.Root, Source, [201], Pbd(), game, false).Writes, false).Ok);
+            Assert.False(OutOfDate(mod, game));
+        }
+        using (var mod = PhysicsMod([PenumbraManipulations.EstManipulation("0801", "Hair", Id, 170)]))
+        {
+            var game = MiqoteOnlyBones();
+            var carry = Choose(mod, game);
+            Assert.Equal((HairPortSkeleton.Route.Carry, 170), (carry.Route, carry.From));
+            Assert.Contains("j_ex_h0130_ke_f", carry.Bones);   // the target's own, as before (the carry replaces them)
+            Assert.True(HairPortWriter.Save(mod.Root, HairPortBuilder.Build(mod.Root, Source, [201], Pbd(), game, false).Writes, false).Ok);
+            Assert.False(OutOfDate(mod, game));
+        }
+        using (var mod = Cuts())
+        {
+            var own = Choose(mod, Game(Races));
+            Assert.Equal((HairPortSkeleton.Route.Own, 0), (own.Route, own.Check));
+            Assert.True(HairPortWriter.Save(mod.Root, HairPortBuilder.Build(mod.Root, Source, [201], Pbd(), Game(Races), false).Writes, false).Ok);
+            var record = HairPortRecord.Read(mod.Root);
+            Assert.All(record.Ports, e => Assert.False(
+                HairPortBuilder.IsOutOfDate(mod.Root, e, mod.Get(e.SourceFile), mod.Owners, record.Ports, Game(Races))));
+        }
+    }
+
     [Theory]
     [Trait("Plan", "AC-hair-skeleton-infer-1")]
     [Trait("Plan", "AC-hair-skeleton-infer-3")]

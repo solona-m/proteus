@@ -78,7 +78,12 @@ public partial class CompositorService
     /// since the raw map's edge follows the triangulation. Cached by mod, body model identity, size and radius; the
     /// garment silhouette is deliberately not in the key.
     /// </summary>
+    /// <param name="sources">Each model's body source (<see cref="SecondSkinService.BodySourceFor"/>), parallel to
+    /// <paramref name="models"/>: which body mod it comes from, so its option-switched chests are left out (#55).</param>
+    /// <param name="settingsOf">The run's shared settings reads (<see cref="ShellBodyAtr.RunSettingsMemo"/>).</param>
     private byte[]? BustStandoff(string modDir, IReadOnlyList<UvSeamMapService.SeamModel>? models,
+                                 IReadOnlyList<SecondSkinService.BodySource>? sources,
+                                 Func<string, ShellBodyAtr.ModSettings?> settingsOf,
                                  byte[]? coverage, int w, int h, int radius)
     {
         if (models is not { Count: > 0 } || w <= 0 || w != h) return null;
@@ -88,19 +93,25 @@ public partial class CompositorService
         float strength = Math.Clamp(entry.Metadata.BustBridgeStrength ?? 1f, 0f, 1f);
         if (strength <= 0f) return null;
 
-        var key = $"{modDir}\0{w}\0{radius}\0{strength}\0{string.Join("|", models.Select(m => m.Id))}";
+        // Only past the gates: a mod without a bust bridge never reads settings.
+        var hidden = StandoffHiddenList(models, sources, settingsOf);
+        var key = BustStandoffKey(modDir, w, radius, strength, models.Select(m => m.Id), hidden);
         if (_bustStandoff.TryGetValue(key, out var hit)) return hit;
 
+        // The bodies actually loaded, each with its hidden set.
         var bodies = new List<byte[]>(models.Count);
-        foreach (var m in models)
+        var bodyHidden = new List<IReadOnlySet<string>?>(models.Count);
+        for (int i = 0; i < models.Count; i++)
         {
-            try { if (m.Load() is { Length: > 0 } b) bodies.Add(b); }
+            try { if (models[i].Load() is { Length: > 0 } b) { bodies.Add(b); bodyHidden.Add(hidden[i]); } }
             catch { /* unreadable body — the map simply covers less */ }
         }
+        var clock = System.Diagnostics.Stopwatch.StartNew();
         var map = bodies.Count == 0
             ? null
             : BodyBridge.BustStandoffMap(bodies, coverage, w, h, strength, w, BustStandoffFull,
-                                               msg => log.Debug("[Proteus] bust standoff: {0}", msg));
+                                               msg => log.Debug("[Proteus] bust standoff: {0}", msg), bodyHidden);
+        long solveMs = clock.ElapsedMilliseconds;
         // Grow first, then feather: a texel's shadow is cast by cloth within reach, so suppression takes the neighbourhood
         // maximum. The halo reaches 2r and a one-pass feather bites r, so grow by 3r.
         if (map != null && radius >= 1)
@@ -108,11 +119,99 @@ public partial class CompositorService
             map = MaxFilter(map, w, h, radius * (BlurCoveragePasses + 1));
             map = BlurCoverage(map, w, h, radius, iterations: 1);
         }
+        EvictSiblings(_bustStandoff, key);
         _bustStandoff[key] = map;
-        log.Debug("[Proteus] bust standoff: {0} for {1} at {2}, feathered by {3} ({4} body model(s))",
-                  map == null ? "no map" : "built", modDir, w, radius, bodies.Count);
+        log.Debug("[Proteus] bust standoff: {0} for {1} at {2}, feathered by {3} ({4} body model(s), {5} ms, "
+                + "hidden [{6}])", map == null ? "no map" : "built", modDir, w, radius, bodies.Count, solveMs,
+                  string.Join("; ", hidden.Select(ShellBodyAtr.Key)));
         return map;
     }
+
+    /// <summary>
+    /// Per seam model, what its body mod's options switch off (<see cref="ShellBodyAtr.ForPart"/>, the shell's resolver
+    /// and guard), or null. A failed read or the every-shape-off guard reuses the last good set for that body mod, part
+    /// and race — never "every chest", which is the minutes-long pass #55 fixes, and would evict the good map.
+    /// </summary>
+    private IReadOnlyList<IReadOnlySet<string>?> StandoffHiddenList(IReadOnlyList<UvSeamMapService.SeamModel> models,
+        IReadOnlyList<SecondSkinService.BodySource>? sources, Func<string, ShellBodyAtr.ModSettings?> settingsOf)
+        => StandoffHiddenList(models.Count, sources, settingsOf, modsRoot, RefitCore.RaceNumber(_drawnRaceCode),
+                              _standoffLastHidden);
+
+    /// <summary>The standoff's hidden sets, pure but for <paramref name="lastGood"/>, which it reads and, on a good
+    /// answer with a known body mod, writes.</summary>
+    internal static IReadOnlyList<IReadOnlySet<string>?> StandoffHiddenList(int count,
+        IReadOnlyList<SecondSkinService.BodySource>? sources, Func<string, ShellBodyAtr.ModSettings?> settingsOf,
+        string? modsRoot, ushort? race, System.Collections.Concurrent.ConcurrentDictionary<string, IReadOnlySet<string>?> lastGood)
+    {
+        var list = new IReadOnlySet<string>?[count];
+        if (sources == null) return list;
+        for (int i = 0; i < count && i < sources.Count; i++)
+        {
+            var src = sources[i];
+            if (StandoffPart(src.GamePath) is not { } p) continue;
+            var atr = ShellBodyAtr.ForPart(p, bare: true, src.ModFile, modsRoot, race, settingsOf);
+            var bodyKey = StandoffBodyKey(ModFolderOf(src.ModFile, modsRoot), p, race);
+            lastGood.TryGetValue(bodyKey ?? "", out var last);
+            list[i] = StandoffHiddenOrLast(atr, bodyKey != null ? last : null, out bool good);
+            if (good && bodyKey != null) lastGood[bodyKey] = list[i];
+        }
+        return list;
+    }
+
+    /// <summary>"top"/"dwn"/"glv"/"sho" from a bare body game path "…c0201e0000_top.mdl" (never the mod file's own
+    /// name, which a body mod may call anything).</summary>
+    internal static string? StandoffPart(string? gamePath)
+    {
+        if (gamePath == null) return null;
+        foreach (var part in new[] { "top", "dwn", "glv", "sho" })
+            if (gamePath.EndsWith("_" + part + ".mdl", StringComparison.OrdinalIgnoreCase)) return part;
+        return null;
+    }
+
+    /// <summary>
+    /// The hidden set to use: a judged answer's Off (marked good), or — when the settings were unreadable or the
+    /// every-shape-off guard fired — the last good one, null with none.
+    /// </summary>
+    internal static IReadOnlySet<string>? StandoffHiddenOrLast(ShellBodyAtr.PartAtr atr, IReadOnlySet<string>? lastGood,
+                                                               out bool isGood)
+    {
+        // Undecided — unreadable settings, the every-shape-off guard, a manifest not readable just now (NoSay), or the
+        // resolver's own failure (no Use, a warning): never "every chest", the minutes-long pass, nor a reason to forget
+        // the good set.
+        if (atr.Use?.Key == ShellBodyAtr.NoSay || (atr.Use == null && atr.Warning))
+        {
+            isGood = false;
+            return lastGood;
+        }
+        isGood = atr.Use != null;
+        return atr.Off;
+    }
+
+    /// <summary>The last-good key: body mod folder, part and race (never the overlay mod); null with no folder.</summary>
+    internal static string? StandoffBodyKey(string? bodyModFolder, string part, ushort? race)
+        => bodyModFolder == null ? null : $"{bodyModFolder.ToLowerInvariant()}|{part}|{race}";
+
+    /// <summary>The standoff's cache key: mod, size, radius, strength, the body models — then the hidden sets, last.</summary>
+    internal static string BustStandoffKey(string modDir, int w, int radius, float strength, IEnumerable<string> ids,
+                                           IReadOnlyList<IReadOnlySet<string>?> hidden)
+        => $"{modDir}\0{w}\0{radius}\0{strength}\0{string.Join("|", ids)}{HiddenMark}{string.Join(";", hidden.Select(ShellBodyAtr.Key))}";
+
+    private const string HiddenMark = "\0hidden=";
+
+    /// <summary>Drop the cached maps that differ from <paramref name="key"/> only in their hidden sets: one map per mod,
+    /// body, size and radius, not one per chest ever worn.</summary>
+    internal static void EvictSiblings(System.Collections.Concurrent.ConcurrentDictionary<string, byte[]?> cache, string key)
+    {
+        int cut = key.IndexOf(HiddenMark, StringComparison.Ordinal);
+        if (cut < 0) return;
+        var prefix = key[..(cut + HiddenMark.Length)];
+        foreach (var k in cache.Keys)
+            if (k != key && k.StartsWith(prefix, StringComparison.Ordinal)) cache.TryRemove(k, out _);
+    }
+
+    /// <summary>The last good hidden set per body mod, part and race (<see cref="StandoffBodyKey"/>).</summary>
+    private readonly System.Collections.Concurrent.ConcurrentDictionary<string, IReadOnlySet<string>?> _standoffLastHidden =
+        new(StringComparer.Ordinal);
 
     /// <summary>
     /// Lift at which the skindent is fully suppressed, in model units. Above the shell's resting offset
@@ -120,7 +219,7 @@ public partial class CompositorService
     /// </summary>
     private const float BustStandoffFull = 0.0015f;
 
-    private readonly Dictionary<string, byte[]?> _bustStandoff = new(StringComparer.Ordinal);
+    private readonly System.Collections.Concurrent.ConcurrentDictionary<string, byte[]?> _bustStandoff = new(StringComparer.Ordinal);
 
     /// <summary>
     /// Blur the AO silhouette at half resolution and interpolate back: the halo carries nothing at texel scale.

@@ -11,6 +11,7 @@ using Xunit;
 namespace Proteus.Tests.TestHarness;
 
 /// <summary>The refit and restore jobs, driven through the real server.</summary>
+[Collection(HarnessTimingCollection.Name)]
 public class HarnessJobsTests : IDisposable
 {
     private HarnessFixture f = new();
@@ -137,6 +138,7 @@ public class HarnessJobsTests : IDisposable
     }
 
     [Fact]
+    [Trait("Plan", "EDGE-issue-sweep-a-11")]
     public async Task Refit_StallAtAfterChangeOver10s_ReloadsAndRedrawsOnResume()
     {
         // [EDGE-qa-harness-21] The after-change is never abandoned: through a stall far past the dispatch timeout the

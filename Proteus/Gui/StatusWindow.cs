@@ -2440,10 +2440,7 @@ public class StatusWindow : Window
         }
         if (disabled) ImGui.EndDisabled();
         if (ImGui.IsItemHovered(ImGuiHoveredFlags.AllowWhenDisabled))
-            ImGui.SetTooltip(view.Held ? cs.ToeCapHeldTip
-                           : view.Locked ? cs.ToeCapLockedTip
-                           : view.Mode == ToeCapMode.Flag ? cs.ToeCapFlagTip
-                           : view.Inherited ? cs.ToeCapTip + "\n\n" + cs.ToeCapInheritedNote : cs.ToeCapTip);
+            ImGui.SetTooltip(ToeCapToggle.TipText(ToeCapToggle.TipFor(view, opt), cs));
 
         if (view.On)
         {

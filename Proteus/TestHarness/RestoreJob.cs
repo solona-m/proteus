@@ -8,9 +8,9 @@ namespace Proteus.TestHarness;
 /// <summary>
 /// The restore action. Selection (off the framework thread, before the request's framework hop):
 /// <list type="bullet">
-/// <item>by refit job id, through this session's map;</item>
+/// <item>by refit or hair-port job id, through this session's map;</item>
 /// <item>by explicit backup id, from any session (an incomplete folder is refused before anything is written);</item>
-/// <item>by mod alone: this session's oldest complete refit backup, by seq. <c>olderSessionBackups</c> lists every
+/// <item>by mod alone: this session's oldest complete refit or hair-port backup, by seq. <c>olderSessionBackups</c> lists every
 /// complete backup of the mod from other sessions: the chosen one is the original only when that list is empty.</item>
 /// </list>
 /// Then, on a worker: refuse a legacy folder; snapshot the mod as it is now (a pre-restore backup, no size cap); make
@@ -55,11 +55,13 @@ internal static class RestoreJob
             return new Selected(new Selection(backup, [], OlderSessions(jobs, modDir, backup.Id)), null);
         }
 
+        // A refit's backup and a hair port's alike: the oldest of the session is the mod as QA found it.
         var mine = ModBackup.InSessionOrder(jobs.Backups.List(modDir)
-                                                .Where(b => b.Meta.Session == jobs.Session && b.Meta.Kind == BackupKind.Refit));
+                                                .Where(b => b.Meta.Session == jobs.Session
+                                                            && b.Meta.Kind is BackupKind.Refit or BackupKind.HairPort));
         if (mine.Count == 0)
             return new Selected(null, HarnessResponse.Error(404, "no-backup",
-                $"no refit backup of {modDir} from this harness session; restore an earlier one by its backup id"));
+                $"no refit or hair-port backup of {modDir} from this harness session; restore an earlier one by its backup id"));
         return new Selected(new Selection(mine[0], mine.Skip(1).Select(b => b.Id).ToList(), OlderSessions(jobs, modDir)), null);
     }
 

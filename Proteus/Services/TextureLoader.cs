@@ -1990,6 +1990,22 @@ public class TextureLoader
         return ((byte[])mtrl.Clone(), false);
     }
 
+    /// <summary>A material constant's first float, found by ID; null when the material doesn't declare it.</summary>
+    public static float? ConstantValue(byte[] mtrl, uint id)
+    {
+        if (!TryParseMtrlHeader(mtrl, out _, out _, out _, out int constCount, out _, out int constBase, out int svBase))
+            return null;
+        for (int i = 0; i < constCount; i++)
+        {
+            int e = constBase + i * 8;
+            if (e + 8 > mtrl.Length) break;
+            if (BitConverter.ToUInt32(mtrl, e) != id) continue;
+            int at = svBase + BitConverter.ToUInt16(mtrl, e + 4);
+            return BitConverter.ToUInt16(mtrl, e + 6) >= 4 && at + 4 <= mtrl.Length ? BitConverter.ToSingle(mtrl, at) : null;
+        }
+        return null;
+    }
+
     // Patches the constant in place if the material declares it; otherwise ADDS it, the way Penumbra's material editor
     // does: an 8-byte entry (id, value offset, byte size) at the end of the constant table, its floats at the end of
     // the ShaderValues list, and ConstantCount, ShaderValueListSize and FileSize grown to match. Returns

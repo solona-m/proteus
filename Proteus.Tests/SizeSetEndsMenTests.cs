@@ -1,5 +1,7 @@
 using System;
+using System.Collections.Generic;
 using System.IO;
+using System.Linq;
 using Proteus.Localization;
 using Proteus.Services;
 using Xunit;
@@ -121,4 +123,79 @@ public class SizeSetEndsMenTests
         Assert.Contains("--men: a women's mod's chest, legs, shoes and gloves get men's versions; --no-ends leaves",
                         CrossSexRefitTests.Source("Proteus.Refit/Program.cs"));
     }
+
+    // ── #47: crossed ends are read on recognised bodies before any other installed body-model mod ──────
+
+    private const string RueSmall = "files/chest - smallclothes/small/chara/equipment/e0000/model/c0201e0000_top.mdl";
+    private const string NeoSmall = "default chest - smallclothes/nsfw s.mdl";
+    private const string TopPath = "chara/equipment/e0000/model/c0201e0000_top.mdl";
+    private const string GlvPath = "chara/equipment/e0000/model/c0201e0000_glv.mdl";
+
+    private static BodyModIndex.Entry Body(string dir, params string[] rels)
+        => new(dir, dir, new BodySizeCatalog("<" + dir + ">",
+            rels.Select(r => new BodyOption("Chest", "", Path.GetFileNameWithoutExtension(r), r,
+                                            r.EndsWith("_glv.mdl") ? GlvPath : TopPath,
+                                            r.EndsWith("_glv.mdl") ? "_glv" : "_top")).ToList()));
+
+    private static readonly BodyModIndex.Entry Rue = Body("Rue", RueSmall);
+    private static readonly BodyModIndex.Entry Elegy = Body("Elegy - Sylvie Bra & Panties (Rue-YAB-UranusRe)",
+        "elegy/bra/c0201e0000_top.mdl", "elegy/hands/c0201e0000_glv.mdl");
+
+    [Fact]
+    [Trait("Plan", "AC-issue-sweep-b-3")]
+    [Trait("Plan", "EDGE-issue-sweep-b-9")]
+    public void Recognised_bodies()
+    {
+        var neo = Body("Neolithe", NeoSmall);
+        var neoYas = Body("Neolithe YAS AIO", NeoSmall);
+        var set = SupportedBodies.Recognised([Elegy, Rue, neo, neoYas]);
+        Assert.Contains("Rue", set);
+        Assert.Contains("RUE", set);   // case-insensitive
+        Assert.Contains("Neolithe", set);
+        Assert.DoesNotContain(Elegy.Dir, set);
+        Assert.DoesNotContain("Neolithe YAS AIO", set);   // plain Neolithe is there: the YAS re-release is no body chosen
+        Assert.Contains("Neolithe YAS AIO", SupportedBodies.Recognised([neoYas]));   // alone, it is the body
+    }
+
+    [Fact]
+    [Trait("Plan", "AC-issue-sweep-b-3")]
+    [Trait("Plan", "EDGE-issue-sweep-b-7")]
+    public void Cloth_guess_prefers_recognised_with_unrecognised_first()
+    {
+        var opt = (BodyModIndex.Entry e) => e.Catalog.Options[0];
+        (BodyOption, float)? Gap(BodyModIndex.Entry e) => e == Elegy ? (opt(e), 0.001f) : (opt(e), 0.004f);
+        var pick = SizeSetRefit.PickClothGuess([Elegy, Rue], new HashSet<string>(StringComparer.OrdinalIgnoreCase) { "rue" },
+                                               Gap, SizeSetRefit.EndClothTie);
+        Assert.NotNull(pick);
+        Assert.Same(Rue, pick!.Value.Entry);
+        Assert.Equal(Rue.Catalog.Options[0], pick.Value.Option);   // its own reading, not Elegy's
+        Assert.Equal(0.004f, pick.Value.Gap);
+    }
+
+    [Fact]
+    [Trait("Plan", "AC-issue-sweep-b-3")]
+    [Trait("Plan", "EDGE-issue-sweep-b-6")]
+    public void Cloth_guess_falls_back_to_unrecognised_then_none()
+    {
+        var recognised = new HashSet<string>(StringComparer.OrdinalIgnoreCase) { "Rue" };
+        (BodyOption, float)? OnlyElegy(BodyModIndex.Entry e) => e == Elegy ? (e.Catalog.Options[0], 0.003f) : null;
+        var pick = SizeSetRefit.PickClothGuess([Rue, Elegy], recognised, OnlyElegy, SizeSetRefit.EndClothTie);
+        Assert.Same(Elegy, pick!.Value.Entry);   // NIRÆ, AB Body… users keep a cloth reading
+        Assert.Null(SizeSetRefit.PickClothGuess([Rue, Elegy], recognised, _ => null, SizeSetRefit.EndClothTie));
+        Assert.Equal(Choice.GameBody, SizeSetRefit.EndMadeFor(Route.NoSkin, null, false, false, true));
+    }
+
+    [Fact]
+    [Trait("Plan", "AC-issue-sweep-b-3")]
+    [Trait("Plan", "EDGE-issue-sweep-b-8")]
+    public void Only_the_cloth_guess_changed()
+    {
+        var src = File.ReadAllText(Path.Combine(SourceDir(), "SizeSetRefit.CrossSexEnds.cs"));
+        Assert.Contains("PickClothGuess(women, SupportedBodies.Recognised(request.Bodies)", src);
+        Assert.Contains("var mods = women.Select(b => (b.Dir, b.Catalog)).ToList();", src);   // DetectSource: every body, in order
+        Assert.Contains("KeepEnds.Find(reading, garment, bones, \"0201\",", src);
+    }
+
+    private static string SourceDir([System.Runtime.CompilerServices.CallerFilePath] string here = "")
+        => Path.Combine(Path.GetDirectoryName(here)!, "..", "Proteus", "Services", "SizeSet");
 }

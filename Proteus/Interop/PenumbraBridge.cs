@@ -24,6 +24,7 @@ public class PenumbraBridge : IDisposable
     private readonly RemoveTemporaryModSettings removeTemporaryModSettings;
     private readonly SetTemporaryModSettings setTemporaryModSettings;
     private readonly RemoveAllTemporaryModSettings removeAllTemporaryModSettings;
+    private readonly QueryTemporaryModSettings queryTemporaryModSettings;
     private readonly ResolvePlayerPath resolvePlayerPath;
     private readonly ResolvePlayerPaths resolvePlayerPaths;
     private readonly AddMod addMod;
@@ -116,6 +117,7 @@ public class PenumbraBridge : IDisposable
         removeTemporaryModSettings = new RemoveTemporaryModSettings(pluginInterface);
         setTemporaryModSettings = new SetTemporaryModSettings(pluginInterface);
         removeAllTemporaryModSettings = new RemoveAllTemporaryModSettings(pluginInterface);
+        queryTemporaryModSettings = new QueryTemporaryModSettings(pluginInterface);
         resolvePlayerPath = new ResolvePlayerPath(pluginInterface);
         resolvePlayerPaths = new ResolvePlayerPaths(pluginInterface);
         addMod = new AddMod(pluginInterface);
@@ -409,6 +411,69 @@ public class PenumbraBridge : IDisposable
         }
         catch (Exception ex) { log.Error(ex, "SetTemporaryModSettings failed for {0}", modDirectory); return PenumbraApiEc.UnknownError; }
     }
+
+    /// <summary>A temporary setting on a mod, as Penumbra reports it: who placed it, whether it is locked against us.</summary>
+    public readonly record struct TemporaryHold(bool Present, bool Locked, string Source, bool Enabled, int Priority);
+
+    /// <summary>
+    /// Whether a temporary setting holds a mod in a collection, and whose it is. Null when Penumbra could not answer
+    /// (unavailable, a throw, or an error code other than the ones below). A read on the caller's thread.
+    /// </summary>
+    public TemporaryHold? QueryTemporaryModSettings(Guid collectionId, string modDirectory)
+    {
+        if (!IsAvailable) return null;
+        try
+        {
+            var ec = queryTemporaryModSettings.Invoke(collectionId, modDirectory, out var settings, out var source);
+            return ToTemporaryHold(ec, settings is { } t ? (t.Enabled, t.Priority) : null, source);
+        }
+        catch (Exception ex) { log.Error(ex, "QueryTemporaryModSettings failed for {0}", modDirectory); return null; }
+    }
+
+    /// <summary>
+    /// <see cref="QueryTemporaryModSettings"/>'s answer: Success with settings is a hold (its source); Success with none,
+    /// ModMissing or CollectionMissing is no hold; TemporarySettingDisallowed is a positive lock not ours (its source
+    /// still named); anything else is unknown (null).
+    /// </summary>
+    internal static TemporaryHold? ToTemporaryHold(PenumbraApiEc ec, (bool Enabled, int Priority)? settings, string? source)
+        => ec switch
+        {
+            PenumbraApiEc.Success when settings is { } s => new TemporaryHold(true, false, source ?? "", s.Enabled, s.Priority),
+            PenumbraApiEc.Success or PenumbraApiEc.ModMissing or PenumbraApiEc.CollectionMissing
+                => new TemporaryHold(false, false, "", false, 0),
+            PenumbraApiEc.TemporarySettingDisallowed
+                => new TemporaryHold(true, true, string.IsNullOrEmpty(source) ? "unknown" : source, false, 0),
+            _ => null,
+        };
+
+    public enum SettingsReadKind { Ok, None, Failed }
+
+    /// <summary>A settings read that tells "no settings" (the collection never configured the mod) from a failed read.</summary>
+    public readonly record struct SettingsRead(SettingsReadKind Kind, ModSettingsSnapshot? Settings);
+
+    /// <summary>
+    /// <see cref="GetModSettingsSnapshot"/>, but a failed read (unavailable, a throw, any code but Success) is
+    /// <see cref="SettingsReadKind.Failed"/>, never mistaken for <see cref="SettingsReadKind.None"/>.
+    /// </summary>
+    public SettingsRead ReadModSettings(Guid collectionId, string modDirectory)
+    {
+        if (!IsAvailable) return new SettingsRead(SettingsReadKind.Failed, null);
+        try
+        {
+            var (ec, t) = getCurrentModSettings.Invoke(collectionId, modDirectory);
+            return ToSettingsRead(ec, t is { } v ? new ModSettingsSnapshot(v.Item1, v.Item2, v.Item3, v.Item4, v.Item5) : null);
+        }
+        catch (Exception ex)
+        {
+            log.Error(ex, "GetCurrentModSettingsWithTemp failed for {0}", modDirectory);
+            return new SettingsRead(SettingsReadKind.Failed, null);
+        }
+    }
+
+    internal static SettingsRead ToSettingsRead(PenumbraApiEc ec, ModSettingsSnapshot? settings)
+        => ec != PenumbraApiEc.Success ? new SettingsRead(SettingsReadKind.Failed, null)
+         : settings is { } s ? new SettingsRead(SettingsReadKind.Ok, s)
+         : new SettingsRead(SettingsReadKind.None, null);
 
     /// <summary>Drop every temporary setting in a collection locked with <paramref name="key"/> — and only those.</summary>
     public PenumbraApiEc RemoveAllTemporaryModSettings(Guid collectionId, int key)

@@ -222,9 +222,10 @@ internal static class HairPortFixtures
 
         /// <param name="groups">The manifest's Groups array, as JSON.</param>
         /// <param name="defaults">The default data's Files, game path to file.</param>
-        public Mod(string groups = "[]", IDictionary<string, string>? defaults = null, int fileVersion = 4)
+        /// <param name="root">The mod's folder, as when it sits in a mods root of a test's; a fresh temp folder if null.</param>
+        public Mod(string groups = "[]", IDictionary<string, string>? defaults = null, int fileVersion = 4, string? root = null)
         {
-            Root = Path.Combine(Path.GetTempPath(), "proteus_hairport_" + Path.GetRandomFileName());
+            Root = root ?? Path.Combine(Path.GetTempPath(), "proteus_hairport_" + Path.GetRandomFileName());
             Directory.CreateDirectory(Root);
             var dd = JsonSerializer.Serialize(new { Files = defaults ?? new Dictionary<string, string>(),
                                                     FileSwaps = new Dictionary<string, string>(), Manipulations = Array.Empty<object>() });
