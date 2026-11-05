@@ -227,13 +227,16 @@ internal static class VariantRepointWriter
         => ParseImc(manipulation) is { } edit && item.Item is { } i && edit.Item == i && edit.Variant == variant.Variant;
 
     /// <summary>
-    /// The default option's manipulations; null only when the manifest cannot be read. A readable manifest with no
-    /// <c>DefaultData</c> at all (most mods: everything lives in groups) has none, as <c>RefitModService</c> reads it.
+    /// The default option's manipulations of a v4 manifest. A readable manifest with no <c>DefaultData</c> at all (most
+    /// mods: everything lives in groups), or a <c>DefaultData</c> with no <c>Manipulations</c>, has none, as
+    /// <c>RefitModService</c> reads it. Null ("unknown") when the manifest is held, missing or malformed, or
+    /// <c>DefaultData</c> is not an object or its <c>Manipulations</c> not an array.
     /// </summary>
-    /// <para/>
+    /// <remarks>
     /// One read decides both: two reads could straddle Penumbra releasing a held manifest and take a held one (unknown)
-    /// for "no DefaultData" (none), orphaning recorded legacy Imc entries. A held, missing or malformed manifest is null.
-    /// Callers have already refused a pre-v4 folder.
+    /// for "no DefaultData" (none), orphaning recorded legacy Imc entries. Every caller refuses a pre-v4 folder first:
+    /// its meta.json has no DefaultData, which would read as none.
+    /// </remarks>
     private static List<JsonElement>? DefaultManipulations(string modRoot)
     {
         try
@@ -577,7 +580,8 @@ internal static class VariantRepointWriter
                 return Undone.Failed;
             }
             if (read is not { } r || r.Find(item) is not { } e) return Undone.NothingRecorded;
-            if (DefaultManipulations(modRoot) is not { } manips)
+            // A pre-v4 folder is never written (Apply refuses it); if one holds a record, leave it and the record alone.
+            if (PenumbraModMeta.IsLegacyFolder(modRoot) || DefaultManipulations(modRoot) is not { } manips)
             {
                 message = string.Format(ProteusLoc.Localize("Service.ModMeta.Unreadable.Fmt",
                     "The manifest of {0} could not be read, so it was not changed."), Path.GetFileName(modRoot));

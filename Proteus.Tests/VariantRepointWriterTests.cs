@@ -221,6 +221,43 @@ public class VariantRepointWriterTests
         Assert.False(FilesOf(mod, Red).ContainsKey(MaterialPath(Top, 0)));
     }
 
+    [Theory]
+    [Trait("Plan", "EDGE-imc-all-variants-63")]
+    [InlineData("""{"Files":{},"FileSwaps":{}}""", true)]                  // no Manipulations: none
+    [InlineData("""{"Files":{},"Manipulations":null}""", true)]            // null Manipulations: none
+    [InlineData("""[]""", false)]                                          // DefaultData not an object: unknown
+    [InlineData("""{"Files":{},"Manipulations":{"x":1}}""", false)]        // Manipulations not an array: unknown
+    public void DefaultData_shapes_decide_none_or_unknown(string defaultData, bool undone)
+    {
+        using var k = new VariantRepointTestKit();
+        var mod = k.Colours("Dress", Top);
+        k.Imc(Top, E(1), E(1), E(2));
+        k.Run([k.Worn(Top, 2, mod)]);
+        var m = Manifest(mod);
+        m["DefaultData"] = JsonNode.Parse(defaultData);
+        WriteManifest(mod, m);
+        var result = VariantRepointWriter.UndoItem(mod, Top, true, out _, out _, out _);
+        Assert.Equal(undone ? VariantRepointWriter.Undone.Removed : VariantRepointWriter.Undone.Failed, result);
+        // Unknown never forgets the copies: they stay in the manifest and the record.
+        Assert.Equal(!undone, FilesOf(mod, Red).ContainsKey(MaterialPath(Top, 2)));
+        Assert.Equal(!undone, VariantRepointWriter.ReadRecord(mod) is { } r && r.Items.Count > 0);
+    }
+
+    [Fact]
+    [Trait("Plan", "EDGE-imc-all-variants-63")]
+    public void Undo_refuses_a_pre_v4_folder_and_keeps_the_record()
+    {
+        using var k = new VariantRepointTestKit();
+        var mod = k.Colours("Dress", Top);
+        k.Imc(Top, E(1), E(1), E(2));
+        k.Run([k.Worn(Top, 2, mod)]);
+        var m = Manifest(mod);
+        m["FileVersion"] = 3;
+        WriteManifest(mod, m);
+        Assert.Equal(VariantRepointWriter.Undone.Failed, VariantRepointWriter.UndoItem(mod, Top, true, out _, out _, out _));
+        Assert.Single(VariantRepointWriter.ReadRecord(mod)!.Items);
+    }
+
     [Fact]
     [Trait("Plan", "EDGE-imc-all-variants-64")]
     public void Worn_variant_on_material_0_writes_nothing()
