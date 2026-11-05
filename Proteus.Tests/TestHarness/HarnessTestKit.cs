@@ -329,7 +329,7 @@ internal sealed class HarnessFixture : IDisposable
                                                             TimeSpan.FromMilliseconds(400));
 
     public HarnessFixture(HarnessTimings? timings = null, Func<string>? backupIds = null, long refitCap = ModBackup.DefaultRefitCap,
-                          string session = "session-a")
+                          string session = "session-a", TimeSpan? readTimeout = null)
     {
         ModsRoot = Temp.Sub("mods");
         Game = new FakeGame(Dispatcher, ModsRoot);
@@ -339,7 +339,7 @@ internal sealed class HarnessFixture : IDisposable
         Ring = new LogRing(Names);
         Router = new HarnessRouter(Jobs, Ring, Names, new CaptureGate((timings ?? FastTimings).Capture), 1411, "11-01 12:00:00",
                                    Substitute.For<IPluginLog>());
-        Server = new HarnessServer(Router.Handle, Token, TimeSpan.FromMilliseconds(500));
+        Server = new HarnessServer(Router.Handle, Token, readTimeout ?? TimeSpan.FromMilliseconds(500));
         Server.Start();
         Client = NewClient();
     }

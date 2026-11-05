@@ -249,10 +249,10 @@ internal sealed class HarnessRouter(HarnessJobs jobs, LogRing ring, SessionNames
         JsonElement body;
         try
         {
-            using var doc = JsonDocument.Parse(request.Body);
+            using var doc = JsonDocument.Parse(request.Body, new JsonDocumentOptions { AllowDuplicateProperties = false });
             body = doc.RootElement.Clone();
         }
-        catch (JsonException) { return (default, HarnessResponse.Error(400, "bad-json", "the body is not valid JSON")); }
+        catch (JsonException) { return (default, HarnessResponse.Error(400, "bad-json", "the body is not valid JSON or repeats a field")); }
         if (!StringsDecode(body)) return (default, HarnessResponse.Error(400, "bad-json", "the body has text that is not valid UTF-8"));
         if (body.ValueKind != JsonValueKind.Object) return (default, HarnessResponse.Error(400, "bad-json", "the body must be a JSON object"));
         foreach (var p in body.EnumerateObject())

@@ -639,6 +639,10 @@
     "message": "L'option \"Toe Cap\" propre à ce mod est sélectionnée dans Penumbra, dans un groupe Masks qui n'autorise\nqu'un seul choix, elle ne peut donc pas être désactivée ici. Modifiez-la dans Penumbra.",
     "description": ""
   },
+  "Colors.ToeCap.FlagOwn.Tip": {
+    "message": "Activez ceci pour les bas et les chaussettes : les orteils sont couverts par un seul bout arrondi,\ncomme tombe un vrai bas, au lieu de suivre chaque orteil.\nL'option \"Toe Cap\" propre à ce mod se trouve dans un groupe Masks qui n'autorise qu'un seul choix :\ncette case ne peut donc pas la sélectionner sans retirer l'autre masque de ce groupe. La cocher utilise\nà la place le bout intégré de Proteus (fait pour Bibo+, Neolithe, Rue et YAB), enregistré dans les réglages\nProteus du mod : il s'applique dans toutes les collections et suit le mod quand vous l'exportez.\nPour le bout de l'auteur, sélectionnez \"Toe Cap\" dans Penumbra.",
+    "description": ""
+  },
   "Colors.ToeCap.SaveFailed": {
     "message": "Impossible d'enregistrer les paramètres Proteus de ce mod, la modification a donc été annulée. Le journal (/xllog) en donne la raison.",
     "description": ""

@@ -23,6 +23,9 @@ internal sealed class HarnessServer : IDisposable
     private readonly CancellationTokenSource stop = new();
     private Task? loop;
 
+    /// <summary>Connections being served right now (tests wait on it instead of sleeping).</summary>
+    internal int OpenConnections => MaxConnections - connections.CurrentCount;
+
     public HarnessServer(Func<HarnessRequest, Task<HarnessResponse>> handle, string token, TimeSpan? readTimeout = null)
     {
         this.handle = handle;
@@ -72,7 +75,7 @@ internal sealed class HarnessServer : IDisposable
             {
                 using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(2));
                 await HarnessHttp.WriteAsync(client.GetStream(),
-                                             HarnessResponse.Error(503, "busy", "too many connections; retry"), cts.Token).ConfigureAwait(false);
+                                             HarnessResponse.Error(503, "too-many-connections", "too many connections; retry"), cts.Token).ConfigureAwait(false);
                 await CloseGracefully(client).ConfigureAwait(false);
             }
             catch (Exception) { /* the client went away */ }

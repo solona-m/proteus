@@ -274,21 +274,70 @@ public sealed class LocalizationTests
         foreach (string key in new[] { "Colors.ToeCap.Label", "Colors.ToeCap.Tip", "Colors.ToeCap.Held.Tip",
                                        "Colors.ToeCap.Inherited.Note", "Colors.ToeCap.Failed.Fmt",
                                        "Colors.ToeCap.ModOff", "Colors.ToeCap.NoShell",
-                                       "Colors.ToeCap.Flag.Tip", "Colors.ToeCap.Locked.Tip", "Colors.ToeCap.SaveFailed" })
+                                       "Colors.ToeCap.Flag.Tip", "Colors.ToeCap.Locked.Tip", "Colors.ToeCap.SaveFailed",
+                                       "Colors.ToeCap.FlagOwn.Tip" })
         {
             Assert.True(tr.ContainsKey(key), $"[{lang}] has no {key}");
             Assert.NotEqual(en[key].Message, tr[key].Message);
             Assert.Equal(en[key].Message.Count(c => c == '\n'), tr[key].Message.Count(c => c == '\n'));
         }
-        foreach (string key in new[] { "Colors.ToeCap.Tip", "Colors.ToeCap.Held.Tip", "Colors.ToeCap.Locked.Tip" })
+        foreach (string key in new[] { "Colors.ToeCap.Tip", "Colors.ToeCap.Held.Tip", "Colors.ToeCap.Locked.Tip",
+                                       "Colors.ToeCap.FlagOwn.Tip" })
         {
             Assert.Contains("Toe Cap", tr[key].Message);
             Assert.Contains("Masks", tr[key].Message);
         }
+        Assert.Contains("Penumbra", tr["Colors.ToeCap.FlagOwn.Tip"].Message);
         foreach (string body in new[] { "Bibo+", "Neolithe", "Rue", "YAB" })
+        {
             Assert.Contains(body, tr["Colors.ToeCap.Flag.Tip"].Message);
+            Assert.Contains(body, tr["Colors.ToeCap.FlagOwn.Tip"].Message);
+        }
         Assert.Contains("/xllog", tr["Colors.ToeCap.SaveFailed"].Message);
     }
+
+    /// <summary>The single-choice tooltip (#61) never says the mod has no toe cap of its own: it has one.</summary>
+    [Fact]
+    [Trait("Plan", "AC-issue-sweep-a-10")]
+    [Trait("Plan", "EDGE-issue-sweep-a-25")]
+    public void ToeCap_single_choice_tip_names_the_mods_own_cap()
+    {
+        var en = Load(Source);
+        Assert.DoesNotContain("no toe cap of its own", en["Colors.ToeCap.FlagOwn.Tip"].Message);
+        Assert.Contains("only one choice", en["Colors.ToeCap.FlagOwn.Tip"].Message);
+        Assert.Contains("no toe cap of its own", en["Colors.ToeCap.Flag.Tip"].Message);   // still true where it's said
+    }
+
+    /// <summary>Every README's "Cap the toes" bullet says a Toe Cap in a single-choice group is chosen in Penumbra (#61).</summary>
+    [Theory]
+    [MemberData(nameof(AllLocales))]
+    [Trait("Plan", "AC-issue-sweep-a-10")]
+    [Trait("Plan", "EDGE-issue-sweep-a-25")]
+    public void Readme_toe_cap_bullet_names_the_single_choice_group(string lang)
+    {
+        var dir = new System.IO.DirectoryInfo(AppContext.BaseDirectory);
+        while (dir != null && !System.IO.File.Exists(System.IO.Path.Combine(dir.FullName, "proteus.slnx"))) dir = dir.Parent;
+        Assert.True(dir != null, $"Could not find proteus.slnx above {AppContext.BaseDirectory}.");
+        string readme = System.IO.File.ReadAllText(System.IO.Path.Combine(
+            dir!.FullName, lang == Source ? "README.md" : System.IO.Path.Combine("docs", $"README.{lang}.md")));
+        string bullet = readme.Split('\n').Single(l => l.Contains("**" + ReadmeCapTheToes[lang] + "**") && l.Contains("*Toe Cap*"));
+        Assert.Contains(ReadmeSingleChoice[lang], bullet);
+    }
+
+    /// <summary>The "Cap the toes" bullet's bold label in each README.</summary>
+    private static readonly Dictionary<string, string> ReadmeCapTheToes = new()
+    {
+        ["en"] = "Cap the toes", ["de"] = "Zehen abdecken", ["es"] = "Cubrir los dedos de los pies",
+        ["fr"] = "Couvrir les orteils", ["ja"] = "つま先をまとめる", ["ko"] = "발가락 감싸기",
+        ["ru"] = "Закрыть пальцы ног", ["zh"] = "包覆脚趾",
+    };
+
+    /// <summary>"A group with one choice", as each README's toe-cap bullet says it.</summary>
+    private static readonly Dictionary<string, string> ReadmeSingleChoice = new()
+    {
+        ["en"] = "single-choice group", ["de"] = "nur einer Wahl", ["es"] = "una sola elección", ["fr"] = "choix unique",
+        ["ja"] = "ひとつしか選べない", ["ko"] = "하나만 고를 수 있는", ["ru"] = "единственным выбором", ["zh"] = "只能单选",
+    };
 
     /// <summary>
     /// The words for a target option that draws underwear where the source has skin — the refusal, and the two Body size

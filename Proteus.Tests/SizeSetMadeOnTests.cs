@@ -61,20 +61,20 @@ public class SizeSetMadeOnTests
         var s = Strings.SizeSet;
         Assert.Equal((string.Format(s.MadeOnUnclearFmt, "Body", "Bibo+"), Codes.NotMadeOn),
                      SizeSetRefit.UnreadableNote("Body", "Bibo+", "Bibo+", false,
-                                                 [SizeSetRefit.MadeOnFit.Unclear, SizeSetRefit.MadeOnFit.Unclear]));
+                                                 [SizeSetRefit.MadeOnFit.Unclear, SizeSetRefit.MadeOnFit.Unclear], noneParsed: false));
         Assert.Equal((string.Format(s.NotMadeOnFmt, "Body", "Bibo+"), Codes.NotMadeOn),
                      SizeSetRefit.UnreadableNote("Body", "Bibo+", "Bibo+", false,
-                                                 [SizeSetRefit.MadeOnFit.Unclear, SizeSetRefit.MadeOnFit.TooFar]));
+                                                 [SizeSetRefit.MadeOnFit.Unclear, SizeSetRefit.MadeOnFit.TooFar], noneParsed: false));
         Assert.Equal((string.Format(s.NotMadeOnFmt, "Body", "TBSE"), Codes.NotMadeOn),
-                     SizeSetRefit.UnreadableNote("Body", "The Body SE", "TBSE", false, [SizeSetRefit.MadeOnFit.NoSizes]));
+                     SizeSetRefit.UnreadableNote("Body", "The Body SE", "TBSE", false, [SizeSetRefit.MadeOnFit.NoSizes], noneParsed: false));
         Assert.Equal((string.Format(s.MadeOnMissingFmt, "Body", "gone"), Codes.NotMadeOn),
-                     SizeSetRefit.UnreadableNote("Body", "gone", null, true, []));
+                     SizeSetRefit.UnreadableNote("Body", "gone", null, true, [], noneParsed: false));
         // Nothing read on it at all: its files could not be read, and the body chosen is not blamed.
         Assert.Equal((string.Format(s.UnreadableFmt, "Body"), Codes.Unreadable),
-                     SizeSetRefit.UnreadableNote("Body", "Bibo+", "Bibo+", false, []));
+                     SizeSetRefit.UnreadableNote("Body", "Bibo+", "Bibo+", false, [], noneParsed: false));
         // Without "Made on": couldn't tell, and where to say it.
         Assert.Equal((string.Format(s.UnreadableMadeOnFmt, "Body"), Codes.Unreadable),
-                     SizeSetRefit.UnreadableNote("Body", null, null, false, []));
+                     SizeSetRefit.UnreadableNote("Body", null, null, false, [], noneParsed: false));
     }
 
     [Fact]

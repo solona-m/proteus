@@ -192,21 +192,73 @@ public partial class CompositorService
     /// For the body models smoothing republishes, where a live answer mid-rebuild is unsafe (<see cref="ResolveUpstream"/>).
     /// </summary>
     private string? SettledUpstream(string gamePath)
-        => _upstreamSettled.ContainsKey(gamePath)
-           && _upstreamByGamePath.TryGetValue(gamePath, out var disk)
-           && !IsOwnOutput(disk) && File.Exists(disk)
-            ? disk
-            : null;
+        => SettledAnswer(gamePath, _upstreamSettled.ContainsKey(gamePath),
+                         _upstreamByGamePath.TryGetValue(gamePath, out var disk) ? disk : null, File.Exists, IsOwnOutput);
+
+    /// <summary>
+    /// What a settled path reads as: its memo when that is a live mod file; the game path itself when it settled as game
+    /// data (a republished vanilla body, #63 — <see cref="TextureLoader.LoadRawFile"/> reads game data for it); else null.
+    /// </summary>
+    internal static string? SettledAnswer(string gamePath, bool settled, string? memo, Func<string, bool> exists,
+                                          Func<string, bool> isOwn)
+    {
+        if (!settled || memo == null) return null;
+        if (string.Equals(memo, gamePath, StringComparison.OrdinalIgnoreCase)) return gamePath;
+        return !isOwn(memo) && exists(memo) ? memo : null;
+    }
+
+    /// <summary>
+    /// The answer for a path whose live resolve is our own output: its memo when that is a file still there; game data,
+    /// quietly, when the memo IS the game path (settled as game data); else game data with a warning — nothing upstream
+    /// is known.
+    /// </summary>
+    internal static (string? Disk, bool Warn) MaskedAnswer(string gamePath, string? memo, Func<string, bool> exists)
+    {
+        if (memo != null && string.Equals(memo, gamePath, StringComparison.OrdinalIgnoreCase)) return (null, false);
+        if (memo != null && exists(memo)) return (memo, false);
+        return (null, true);
+    }
+
+    /// <summary>
+    /// Whether something we remember for a body path names a real mod file: the remembered disk or the kept copy's
+    /// recorded source, under the Penumbra mods root, still there. A game path (what the shell remembers for a vanilla
+    /// part), a path outside the root or a deleted file never counts. When one does, a game-path echo for that path is
+    /// taken for a transient mid-rebuild read, not "nobody provides this" (#63).
+    /// </summary>
+    internal static bool NamesModFile(string gamePath, string? rememberedDisk, string? keptSource, string? modsRoot,
+                                      Func<string, bool> exists)
+    {
+        bool Names(string? c) => c != null && !string.Equals(c, gamePath, StringComparison.OrdinalIgnoreCase)
+                                 && ModFolderOf(c, modsRoot) != null && exists(c);
+        return Names(rememberedDisk) || Names(keptSource);
+    }
+
+    /// <summary>
+    /// What the prime memoises for a path: a settled disk; the game path itself for a republished body that settled as
+    /// game data with no known mod file behind it (so a vanilla body we republish smoothed stops being re-primed and its
+    /// shell is never cut from our own output, #63); else nothing — missed and retried, as every other path.
+    /// </summary>
+    internal static (string? Memo, bool Settled) PrimeResult(string path, IReadOnlyDictionary<string, string> settled,
+                                                             bool settledAsGameData, bool republishedBody, bool namesModFile)
+    {
+        if (settled.TryGetValue(path, out var disk)) return (disk, true);
+        if (settledAsGameData && republishedBody && !namesModFile) return (path, true);
+        return (null, false);
+    }
 
     /// <summary>
     /// Resolve <paramref name="gamePath"/> to the mod file a composite should read as its base, never our own previous
     /// output. Every base texture/material load goes through this. Returns null when there is no known upstream (fall
     /// through to game data). Timing shim; the body is in <c>…Core</c>.
     /// </summary>
-    private string? ResolveUpstream(string gamePath)
+    private string? ResolveUpstream(string gamePath) => ResolveUpstream(gamePath, bookkeeping: false);
+
+    /// <param name="bookkeeping">A record kept for the next settings change (<see cref="RecordShellSourceUpstreams"/>):
+    /// nothing reads it as a base now, so "no upstream known" is Debug, not a warning.</param>
+    private string? ResolveUpstream(string gamePath, bool bookkeeping)
     {
         var t0 = PhaseCounter.Begin();
-        try { return ResolveUpstreamCore(gamePath); }
+        try { return ResolveUpstreamCore(gamePath, bookkeeping); }
         finally { blendResolveStats.Stop(t0); }
     }
 
@@ -220,7 +272,7 @@ public partial class CompositorService
         finally { blendBaseLoadStats.Stop(t0); }
     }
 
-    private string? ResolveUpstreamCore(string gamePath)
+    private string? ResolveUpstreamCore(string gamePath, bool bookkeeping = false)
     {
         var disk = penumbra.ResolvePlayer(gamePath);
 
@@ -242,17 +294,24 @@ public partial class CompositorService
             return disk;
         }
 
-        if (_upstreamByGamePath.TryGetValue(gamePath, out var prev) && File.Exists(prev))
+        var (upstream, warn) = MaskedAnswer(gamePath, _upstreamByGamePath.TryGetValue(gamePath, out var prev) ? prev : null,
+                                            File.Exists);
+        if (upstream != null)
         {
             if (disk != null)
                 log.Debug("[Proteus] resolve for {0} still pointed at our output — using upstream {1}",
-                          gamePath, prev);
-            return prev;
+                          gamePath, upstream);
+            return upstream;
         }
 
-        if (disk != null)
-            log.Warning("[Proteus] ResolvePlayer returned our own managed file for {0} and no upstream is "
-                      + "known — falling back to game data", gamePath);
+        if (disk != null && warn)
+        {
+            if (bookkeeping)
+                log.Debug("[Proteus] {0} resolves to our own output and no upstream is known yet (recorded later)", gamePath);
+            else
+                log.Warning("[Proteus] ResolvePlayer returned our own managed file for {0} and no upstream is "
+                          + "known — falling back to game data", gamePath);
+        }
         return null;
     }
 
@@ -585,7 +644,15 @@ public partial class CompositorService
                     int missed = 0;
                     foreach (var p in needPrime)
                     {
-                        if (settled.TryGetValue(p, out var disk))
+                        bool gameData = _upstreamIsGameData.ContainsKey(p);
+                        bool named = false;
+                        if (gameData && republishedBodies.Contains(p))
+                        {
+                            var (remembered, keptSource) = secondSkin.KnownBodyFiles(p, managedModDir, modsRoot);
+                            named = NamesModFile(p, remembered, keptSource, modsRoot, File.Exists);
+                        }
+                        var (memo, isSettled) = PrimeResult(p, settled, gameData, republishedBodies.Contains(p), named);
+                        if (isSettled && memo is { } disk)
                         {
                             // Log the transition: a genuine skin change and a racy read produce identical output.
                             if (_upstreamByGamePath.TryGetValue(p, out var was)
@@ -593,7 +660,8 @@ public partial class CompositorService
                                 log.Information("[Proteus] base upstream CHANGED: {0}\n    was {1}\n    now {2}",
                                     p, was, disk);
                             else
-                                log.Information("[Proteus] base upstream: {0} <- {1}", p, disk);
+                                log.Information("[Proteus] base upstream: {0} <- {1}", p,
+                                    string.Equals(disk, p, StringComparison.OrdinalIgnoreCase) ? "(game data)" : disk);
 
                             _upstreamByGamePath[p] = disk;
                             _upstreamSettled[p] = 0;

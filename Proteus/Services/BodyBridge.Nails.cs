@@ -489,7 +489,8 @@ internal static partial class BodyBridge
     }
 
     /// <summary>Does the garment cover the fingertip around this nail? Asked at the UV of the skin each nail vertex
-    /// lands on (<see cref="NailBedPlan.FingertipUv"/>), the same question <c>RescueNailBeds</c> asks — and answered
+    /// lands on — <see cref="NailBedPlan.LandingUv"/> first, falling back to <see cref="NailBedPlan.FingertipUv"/> —
+    /// the same question <c>RescueNailBeds</c> asks — and answered
     /// yes only when most of the landings are covered (<see cref="FingertipCoveredShare"/>).</summary>
     private static bool FingertipCovered(SecondSkinLayer gate, NailBedPlan plan, int[] verts)
     {

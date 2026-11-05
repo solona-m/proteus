@@ -193,6 +193,7 @@ public class ShaderUpgradeWriterTests
     [Fact]
     [Trait("Plan", "AC-dt-shader-upgrade-13")]
     [Trait("Plan", "EDGE-dt-shader-upgrade-61")]
+    [Trait("Plan", "EDGE-issue-sweep-a-5")]
     public void Undo_after_author_update_keeps_the_file_and_only_our_redirects_and_masks_go()
     {
         using var kit = new Kit();
@@ -205,6 +206,7 @@ public class ShaderUpgradeWriterTests
         Assert.Equal(update, Kit.Get(mod, Red));
         Assert.False(Directory.Exists(Path.Combine(mod, "Shader Upgrade")));
         Assert.DoesNotContain(Redirects(mod), r => r.File.Replace('\\', '/').StartsWith("Shader Upgrade"));
+        Assert.False(Directory.Exists(Superseded(mod)));   // a diffuse entry has its mask: nothing archived
     }
 
     [Fact]
@@ -422,6 +424,7 @@ public class ShaderUpgradeWriterTests
 
     [Fact]
     [Trait("Plan", "EDGE-dt-shader-upgrade-19")]
+    [Trait("Plan", "EDGE-issue-sweep-a-1")]
     public void Material_write_failure_leaves_file_and_takes_out_its_mask()
     {
         using var kit = new Kit();
@@ -641,5 +644,272 @@ public class ShaderUpgradeWriterTests
         var outcome = ShaderUpgradeWriter.Apply(mod, [write], () => true, Kit.WriteTex, TexEncoding.Uncompressed);
         Assert.Equal(LeftReason.ProteusPack, Assert.Single(outcome.Left).Reason);
         Assert.Equal(before, Kit.Hashes(mod));
+    }
+
+    // ── issue sweep A: #68 (an unreadable material is an unknown state) and #66 (an edit we can't detect) ──
+
+    private static string Superseded(string mod) => Path.Combine(mod, "Proteus", ShaderUpgradeWriter.SupersededSubdir);
+    private static string RedPath(string mod) => Path.Combine(mod, "red", "top.mtrl");
+    private static string RedBackup(string mod) => Path.Combine(mod, "Proteus", "shaderupgrade-backup", "red", "top.mtrl");
+
+    private static byte[] EditColour(byte[] mtrl, float value)
+    {
+        var edited = (byte[])mtrl.Clone();
+        BitConverter.TryWriteBytes(edited.AsSpan(GearMaterialWriter.ColorTableStart(edited) + 2), (Half)value);
+        return edited;
+    }
+
+    [Fact]
+    [Trait("Plan", "AC-issue-sweep-a-1")]
+    [Trait("Plan", "EDGE-issue-sweep-a-3")]
+    public void An_unreadable_material_after_a_failed_unit_keeps_its_entry_and_backup()
+    {
+        // Locked: the material was written, then the unit failed while something held the file.
+        using (var kit = new Kit())
+        {
+            var mod = kit.Dress("D", Kit.FormA());
+            FileStream? hold = null;
+            ShaderUpgradeWriter.AfterStep = s =>
+            {
+                if (s != "material") return;
+                hold = new FileStream(RedPath(mod), FileMode.Open, FileAccess.ReadWrite, FileShare.None);
+                throw new IOException("record write failed");
+            };
+            ShaderUpgradeWriter.Outcome outcome;
+            try { outcome = kit.Upgrade(mod, WornRed(mod)); }
+            finally { ShaderUpgradeWriter.AfterStep = null; }
+            try
+            {
+                Assert.True(outcome.Rewalk);
+                Assert.Equal(LeftReason.WriteFailed, Assert.Single(outcome.Left).Reason);
+                Assert.Single(ShaderUpgradeWriter.ReadRecord(mod)!.Files);
+                Assert.Equal(Kit.FormA(), File.ReadAllBytes(RedBackup(mod)));
+            }
+            finally { hold?.Dispose(); }
+            Assert.True(ShaderUpgradeWriter.IsUpgraded(mod, Red));
+            Assert.Equal(ShaderUpgradeWriter.Undone.Restored, ShaderUpgradeWriter.RevertOrForget(mod, Red, false, out _));
+            Assert.Equal(Kit.FormA(), Kit.Get(mod, Red));
+        }
+        // Empty (an outside tool part-way through a save): unknown too.
+        using (var kit = new Kit())
+        {
+            var mod = kit.Dress("D", Kit.FormA());
+            ShaderUpgradeWriter.AfterStep = s =>
+            {
+                if (s != "material") return;
+                File.WriteAllBytes(RedPath(mod), []);
+                throw new IOException("record write failed");
+            };
+            ShaderUpgradeWriter.Outcome outcome;
+            try { outcome = kit.Upgrade(mod, WornRed(mod)); }
+            finally { ShaderUpgradeWriter.AfterStep = null; }
+            Assert.True(outcome.Rewalk);
+            Assert.Single(ShaderUpgradeWriter.ReadRecord(mod)!.Files);
+            Assert.Equal(Kit.FormA(), File.ReadAllBytes(RedBackup(mod)));
+        }
+        // Missing: an unknown state too, kept for the next walk.
+        using (var kit = new Kit())
+        {
+            var mod = kit.Dress("D", Kit.FormA());
+            ShaderUpgradeWriter.AfterStep = s =>
+            {
+                if (s != "material") return;
+                File.Delete(RedPath(mod));
+                throw new IOException("record write failed");
+            };
+            ShaderUpgradeWriter.Outcome outcome;
+            try { outcome = kit.Upgrade(mod, WornRed(mod)); }
+            finally { ShaderUpgradeWriter.AfterStep = null; }
+            Assert.True(outcome.Rewalk);
+            Assert.Single(ShaderUpgradeWriter.ReadRecord(mod)!.Files);
+            Assert.Equal(Kit.FormA(), File.ReadAllBytes(RedBackup(mod)));
+        }
+    }
+
+    [Fact]
+    [Trait("Plan", "EDGE-issue-sweep-a-2")]
+    public void A_failed_record_write_after_the_material_keeps_the_upgrade_undoable()
+    {
+        using var kit = new Kit();
+        var mod = kit.Dress("D", Kit.FormA());
+        ShaderUpgradeWriter.AfterStep = s => { if (s == "material") throw new IOException("record write failed"); };
+        try { kit.Upgrade(mod, WornRed(mod)); }
+        finally { ShaderUpgradeWriter.AfterStep = null; }
+        Assert.Single(ShaderUpgradeWriter.ReadRecord(mod)!.Files);
+        Assert.Equal(ShaderUpgradeWriter.Undone.Restored, ShaderUpgradeWriter.RevertOrForget(mod, Red, false, out _));
+        Assert.Equal(Kit.FormA(), Kit.Get(mod, Red));
+    }
+
+    [Fact]
+    [Trait("Plan", "AC-issue-sweep-a-1")]
+    [Trait("Plan", "EDGE-issue-sweep-a-26")]
+    public void Undo_of_a_locked_or_empty_material_fails_and_forgets_nothing()
+    {
+        foreach (var formB in new[] { false, true })
+        {
+            using var kit = new Kit();
+            var mod = formB ? kit.Dress("B", Kit.FormB(), withSpec: true) : kit.Dress("A", Kit.FormA());
+            var original = formB ? Kit.FormB() : Kit.FormA();
+            Assert.True((formB ? kit.Upgrade(mod, WornRed(mod), _ => Spec(mod)) : kit.Upgrade(mod, WornRed(mod))).ChangedAny);
+            var redirects = Redirects(mod);
+            var mask = ShaderUpgradeWriter.ReadRecord(mod)!.Files.Single().Mask;
+            using (new FileStream(RedPath(mod), FileMode.Open, FileAccess.ReadWrite, FileShare.None))
+            {
+                Assert.Equal(ShaderUpgradeWriter.Undone.Failed, ShaderUpgradeWriter.RevertOrForget(mod, Red, true, out var why));
+                Assert.Contains(Red, why);
+            }
+            Assert.Single(ShaderUpgradeWriter.ReadRecord(mod)!.Files);
+            Assert.False(ShaderUpgradeWriter.IsDeclined(mod, Red));
+            Assert.Equal(original, File.ReadAllBytes(RedBackup(mod)));
+            Assert.Equal(redirects, Redirects(mod));
+            if (mask != null) Assert.True(File.Exists(Path.Combine(mod, mask.Rel)));
+            Assert.False(Directory.Exists(Superseded(mod)));
+            // An empty file (a save still being written) is as unknown as a locked one.
+            var upgraded = Kit.Get(mod, Red);
+            File.WriteAllBytes(RedPath(mod), []);
+            Assert.Equal(ShaderUpgradeWriter.Undone.Failed, ShaderUpgradeWriter.RevertOrForget(mod, Red, false, out var whyEmpty));
+            Assert.Contains("is empty", whyEmpty);
+            Assert.Single(ShaderUpgradeWriter.ReadRecord(mod)!.Files);
+            Assert.Equal(original, File.ReadAllBytes(RedBackup(mod)));
+            Assert.Equal(redirects, Redirects(mod));
+            if (mask != null) Assert.True(File.Exists(Path.Combine(mod, mask.Rel)));
+            Assert.False(Directory.Exists(Superseded(mod)));
+            File.WriteAllBytes(RedPath(mod), upgraded);
+            Assert.Equal(ShaderUpgradeWriter.Undone.Restored, ShaderUpgradeWriter.RevertOrForget(mod, Red, false, out _));
+            Assert.Equal(original, Kit.Get(mod, Red));
+        }
+    }
+
+    [Fact]
+    [Trait("Plan", "AC-issue-sweep-a-2")]
+    [Trait("Plan", "EDGE-issue-sweep-a-8")]
+    public void Undo_of_an_edited_index_mask_material_archives_its_original()
+    {
+        // Edited after the upgrade (a material editor's save): kept, and the author's original archived.
+        using (var kit = new Kit())
+        {
+            var mod = kit.Dress("A", Kit.FormA());
+            Assert.True(kit.Upgrade(mod, WornRed(mod)).ChangedAny);
+            var edited = EditColour(Kit.Get(mod, Red), 0.3f);
+            File.WriteAllBytes(RedPath(mod), edited);
+            Assert.Equal(ShaderUpgradeWriter.Undone.Forgotten, ShaderUpgradeWriter.RevertOrForget(mod, Red, false, out var why));
+            Assert.Contains(ShaderUpgradeWriter.SupersededSubdir, why);
+            Assert.Equal(edited, Kit.Get(mod, Red));
+            Assert.Equal(Kit.FormA(), File.ReadAllBytes(Path.Combine(Superseded(mod), "red", "top.mtrl")));
+            Assert.False(File.Exists(RedBackup(mod)));
+            Assert.Empty(ShaderUpgradeWriter.ReadRecord(mod)?.Files ?? []);
+        }
+        // Truly missing at undo: forgotten, the original archived all the same.
+        using (var kit = new Kit())
+        {
+            var mod = kit.Dress("A", Kit.FormA());
+            Assert.True(kit.Upgrade(mod, WornRed(mod)).ChangedAny);
+            File.Delete(RedPath(mod));
+            Assert.Equal(ShaderUpgradeWriter.Undone.Forgotten, ShaderUpgradeWriter.RevertOrForget(mod, Red, false, out _));
+            Assert.Equal(Kit.FormA(), File.ReadAllBytes(Path.Combine(Superseded(mod), "red", "top.mtrl")));
+            Assert.Empty(ShaderUpgradeWriter.ReadRecord(mod)?.Files ?? []);
+        }
+    }
+
+    [Fact]
+    [Trait("Plan", "EDGE-issue-sweep-a-4")]
+    public void Undo_of_an_untouched_or_original_index_mask_file_archives_nothing()
+    {
+        using (var kit = new Kit())
+        {
+            var mod = kit.Dress("A", Kit.FormA());
+            Assert.True(kit.Upgrade(mod, WornRed(mod)).ChangedAny);
+            Assert.Equal(ShaderUpgradeWriter.Undone.Restored, ShaderUpgradeWriter.RevertOrForget(mod, Red, false, out _));
+            Assert.False(Directory.Exists(Superseded(mod)));
+        }
+        using (var kit = new Kit())
+        {
+            var mod = kit.Dress("A", Kit.FormA());
+            Assert.True(kit.Upgrade(mod, WornRed(mod)).ChangedAny);
+            File.WriteAllBytes(RedPath(mod), Kit.FormA());   // the original put back by hand
+            Assert.Equal(ShaderUpgradeWriter.Undone.Nothing, ShaderUpgradeWriter.RevertOrForget(mod, Red, false, out _));
+            Assert.False(File.Exists(RedBackup(mod)));
+            Assert.False(Directory.Exists(Superseded(mod)));
+        }
+    }
+
+    [Fact]
+    [Trait("Plan", "EDGE-issue-sweep-a-6")]
+    public void A_second_archive_of_the_same_file_gets_its_own_name()
+    {
+        using var kit = new Kit();
+        var mod = kit.Dress("A", Kit.FormA());
+        var first = Kit.FormA();
+        var second = EditColour(Kit.FormA(), 0.6f);   // the author's later legacy file
+        foreach (var legacy in new[] { first, second })
+        {
+            File.WriteAllBytes(RedPath(mod), legacy);
+            Assert.True(kit.Upgrade(mod, WornRed(mod)).ChangedAny);
+            File.WriteAllBytes(RedPath(mod), EditColour(Kit.Get(mod, Red), 0.2f));
+            Assert.Equal(ShaderUpgradeWriter.Undone.Forgotten, ShaderUpgradeWriter.RevertOrForget(mod, Red, false, out _));
+        }
+        var files = Directory.GetFiles(Path.Combine(Superseded(mod), "red"));
+        Assert.Equal(2, files.Length);
+        Assert.Equal(first, File.ReadAllBytes(Path.Combine(Superseded(mod), "red", "top.mtrl")));
+        Assert.Equal(second, File.ReadAllBytes(Assert.Single(files, f => Path.GetFileName(f) != "top.mtrl")));
+    }
+
+    [Fact]
+    [Trait("Plan", "EDGE-issue-sweep-a-7")]
+    public void A_failed_archive_move_fails_the_undo_and_forgets_nothing()
+    {
+        using var kit = new Kit();
+        var mod = kit.Dress("A", Kit.FormA());
+        Assert.True(kit.Upgrade(mod, WornRed(mod)).ChangedAny);
+        File.WriteAllBytes(RedPath(mod), EditColour(Kit.Get(mod, Red), 0.3f));
+        File.WriteAllBytes(Superseded(mod), [1, 2, 3]);   // a file where the archive folder should be
+        Assert.Equal(ShaderUpgradeWriter.Undone.Failed, ShaderUpgradeWriter.RevertOrForget(mod, Red, false, out _));
+        Assert.Single(ShaderUpgradeWriter.ReadRecord(mod)!.Files);
+        Assert.Equal(Kit.FormA(), File.ReadAllBytes(RedBackup(mod)));
+    }
+
+    [Fact]
+    [Trait("Plan", "EDGE-issue-sweep-a-27")]
+    public void An_archived_backup_survives_a_failed_record_write_and_the_next_undo_finishes()
+    {
+        using var kit = new Kit();
+        var mod = kit.Dress("A", Kit.FormA());
+        Assert.True(kit.Upgrade(mod, WornRed(mod)).ChangedAny);
+        File.WriteAllBytes(RedPath(mod), EditColour(Kit.Get(mod, Red), 0.3f));
+        var record = Path.Combine(mod, "Proteus", ShaderUpgradeWriter.RecordFile);
+        var archive = Path.Combine(Superseded(mod), "red", "top.mtrl");
+        File.SetAttributes(record, FileAttributes.ReadOnly);
+        try
+        {
+            Assert.Equal(ShaderUpgradeWriter.Undone.Failed, ShaderUpgradeWriter.RevertOrForget(mod, Red, false, out _));
+            Assert.Equal(Kit.FormA(), File.ReadAllBytes(archive));
+            Assert.Single(ShaderUpgradeWriter.ReadRecord(mod)!.Files);
+        }
+        finally { File.SetAttributes(record, FileAttributes.Normal); }
+        Assert.Equal(ShaderUpgradeWriter.Undone.Forgotten, ShaderUpgradeWriter.RevertOrForget(mod, Red, false, out _));
+        Assert.Equal(Kit.FormA(), File.ReadAllBytes(archive));
+        Assert.Empty(ShaderUpgradeWriter.ReadRecord(mod)?.Files ?? []);
+    }
+
+    [Fact]
+    [Trait("Plan", "EDGE-issue-sweep-a-9")]
+    public void The_archive_survives_folder_cleanup_and_blocks_no_other_feature()
+    {
+        using var kit = new Kit();
+        var mod = kit.Dress("A", Kit.FormA());
+        Assert.True(kit.Upgrade(mod, WornRed(mod)).ChangedAny);
+        File.WriteAllBytes(RedPath(mod), EditColour(Kit.Get(mod, Red), 0.3f));
+        Assert.Equal(ShaderUpgradeWriter.Undone.Forgotten, ShaderUpgradeWriter.RevertOrForget(mod, Red, false, out _));
+        Assert.False(Directory.Exists(Path.Combine(mod, "Proteus", ShaderUpgradeWriter.BackupSubdir)));
+        var archive = Path.Combine(Superseded(mod), "red", "top.mtrl");
+        Assert.True(File.Exists(archive));
+        File.SetLastWriteTimeUtc(archive, DateTime.UtcNow.AddMinutes(5));
+        // A brush backup of the same file, older than the archive: were the archive read as a feature's backup, it would
+        // count as a later feature and block the brush's undo.
+        var brush = Path.Combine(mod, "Proteus", MeshVolumeService.BackupSubdir, "red", "top.mtrl");
+        Directory.CreateDirectory(Path.GetDirectoryName(brush)!);
+        File.WriteAllBytes(brush, Kit.FormA());
+        File.SetLastWriteTimeUtc(brush, DateTime.UtcNow.AddMinutes(-5));
+        Assert.Null(ModelBackupOrder.LaterFeature(mod, MeshVolumeService.BackupSubdir, Red));
     }
 }
