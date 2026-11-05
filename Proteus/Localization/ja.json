@@ -639,6 +639,10 @@
     "message": "この Mod 自身の \"Toe Cap\" オプションが Penumbra で選ばれています。選択肢をひとつしか選べない\nMasks グループにあるため、ここではオフにできません。Penumbra で変更してください。",
     "description": ""
   },
+  "Colors.ToeCap.FlagOwn.Tip": {
+    "message": "ストッキングや靴下ではオンにしてください。指を一本ずつ追うのではなく、本物の靴下のように\nつま先をひとつの丸いトゥボックスで覆います。\nこの Mod 自身の \"Toe Cap\" オプションは、選択肢をひとつしか選べない Masks グループにあるため、\nこのチェックではそこにある別のマスクを外さずに選ぶことができません。チェックすると代わりに\nProteus 内蔵のキャップ（Bibo+、Neolithe、Rue、YAB 用）を使い、Mod の Proteus 設定に保存されます。\nすべてのコレクションで有効になり、エクスポートすると Mod と一緒に含まれます。\n作者のキャップを使うには、Penumbra で \"Toe Cap\" を選んでください。",
+    "description": ""
+  },
   "Colors.ToeCap.SaveFailed": {
     "message": "この Mod の Proteus 設定を保存できなかったため、変更を元に戻しました。理由はログ (/xllog) にあります。",
     "description": ""

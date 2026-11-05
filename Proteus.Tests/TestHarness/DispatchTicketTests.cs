@@ -6,6 +6,7 @@ using Xunit;
 
 namespace Proteus.Tests.TestHarness;
 
+[Collection(HarnessTimingCollection.Name)]
 public class DispatchTicketTests
 {
     [Fact]
@@ -25,12 +26,12 @@ public class DispatchTicketTests
     public async Task StartedBeforeTimeout_WaiterGetsResult()
     {
         // [EDGE-qa-harness-20] Work that started in time is waited for and returns its result.
-        // Started late (100 ms into a 300 ms start window), it runs past the window's end (to 350 ms) but within
-        // the extra window running work gets.
+        // Started late (600 ms into a 2 s start window), it runs past the window's end (to ~2.2 s) but within the
+        // extra window running work gets. Wide margins: a loaded machine can start the work late (#49).
         using var d = new FakeFrameworkDispatcher();
         d.Stall();
-        var task = d.RunAsync(() => { Thread.Sleep(250); return 42; }, TimeSpan.FromMilliseconds(300));
-        await Task.Delay(100);
+        var task = d.RunAsync(() => { Thread.Sleep(1600); return 42; }, TimeSpan.FromSeconds(2));
+        await Task.Delay(600);
         d.Resume();
         Assert.Equal(42, await task);
     }

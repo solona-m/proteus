@@ -19,6 +19,16 @@ internal enum ToeCapMode { Option, Flag }
 /// <param name="Locked">Flag mode, but the mod's own single-select cap is selected in Penumbra: only Penumbra can turn it off.</param>
 internal readonly record struct ToeCapTickView(bool Visible, bool On, bool Held, bool Inherited, ToeCapMode Mode, bool Locked);
 
+/// <summary>Which tooltip the tick shows.</summary>
+internal enum ToeCapTip
+{
+    Held, Locked,
+    /// <summary>Flag mode on a mod whose own Toe Cap is in a single-choice Masks group (unselected): the mod has a cap
+    /// of its own, but the tick can't select it, so it uses the built-in one (#61).</summary>
+    FlagOwnSingleChoice,
+    Flag, Inherited, Plain,
+}
+
 /// <summary>What one click writes: the Masks group's new selection (null = no Penumbra write) and the setting (null = unchanged).</summary>
 internal readonly record struct ToeCapWrite(IReadOnlyList<string>? MaskSelection, bool? CapToes);
 
@@ -69,6 +79,28 @@ internal static class ToeCapToggle
         return new ToeCapTickView(true, optionOn || capToes, s.Temporary && isOption, s.Inherited && isOption, mode,
                                   optionOn && !isOption);
     }
+
+    /// <summary>
+    /// The tooltip for a state: a held mod first, then a locked one, then flag mode — told apart by whether the mod
+    /// ships its own (unwritable, single-choice) Toe Cap — then option mode, inherited or not.
+    /// </summary>
+    public static ToeCapTip TipFor(ToeCapTickView view, ToeCapOptionRef? option)
+        => view.Held ? ToeCapTip.Held
+         : view.Locked ? ToeCapTip.Locked
+         : view.Mode == ToeCapMode.Flag ? (option is { Writable: false } ? ToeCapTip.FlagOwnSingleChoice : ToeCapTip.Flag)
+         : view.Inherited ? ToeCapTip.Inherited
+         : ToeCapTip.Plain;
+
+    /// <summary>The words of each tooltip.</summary>
+    public static string TipText(ToeCapTip tip, Localization.ColorsStrings cs) => tip switch
+    {
+        ToeCapTip.Held => cs.ToeCapHeldTip,
+        ToeCapTip.Locked => cs.ToeCapLockedTip,
+        ToeCapTip.FlagOwnSingleChoice => cs.ToeCapFlagOwnTip,
+        ToeCapTip.Flag => cs.ToeCapFlagTip,
+        ToeCapTip.Inherited => cs.ToeCapTip + "\n\n" + cs.ToeCapInheritedNote,
+        _ => cs.ToeCapTip,
+    };
 
     /// <summary>
     /// What a click writes. Ticking selects the mod's own cap in option mode, or sets the setting in flag mode. Unticking

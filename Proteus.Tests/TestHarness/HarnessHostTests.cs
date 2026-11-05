@@ -15,6 +15,7 @@ using Xunit;
 
 namespace Proteus.Tests.TestHarness;
 
+[Collection(HarnessTimingCollection.Name)]
 public class HarnessHostTests : IDisposable
 {
     private readonly TempDir temp = new();

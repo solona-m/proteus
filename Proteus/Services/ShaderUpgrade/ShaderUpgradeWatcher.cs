@@ -330,7 +330,29 @@ public sealed class ShaderUpgradeWatcher : IDisposable
             foreach (var g in WornModFiles(worn, inputs).GroupBy(f => f.ModRoot, StringComparer.OrdinalIgnoreCase))
                 ShaderUpgradeWriter.ClearDeclines(g.Key, g.Select(f => f.Rel));
 
-        var (candidates, left) = Candidates(worn.Materials, inputs);
+        // A diffuse/specular material an older wind save moved to character.shpk without its diffuse (dark, #65) goes back
+        // to the author's file first, so the upgrade below moves it properly in this same run.
+        // Counts are the upgrade's own (they feed the chat notice); a mod whose files were only restored is reloaded all
+        // the same, through `repaired`.
+        var changed = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
+        var repaired = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        bool aborted = false;
+        foreach (var g in WornModFiles(worn, inputs).GroupBy(f => f.ModRoot, StringComparer.OrdinalIgnoreCase))
+        {
+            if (stopped || (kind == RunKind.Upgrade && !Enabled)) { aborted = true; break; }
+            var restored = MeshVolumeService.RepairWindDiffuse(g.Key, g.Select(f => f.Rel),
+                why => log.Warning("[Proteus] shader upgrade: {0}", why));
+            if (restored.Count == 0) continue;
+            repaired.Add(g.Key);
+            log.Information("[Proteus] shader upgrade: restored {0} wind-brushed material(s) in {1} to the author's "
+                          + "diffuse/specular file (an older wind save had moved them to character.shpk without their "
+                          + "diffuse, drawing them dark); save the wind again to bring back their sway",
+                            restored.Count, Path.GetFileName(g.Key));
+        }
+
+        // Switched off mid-repair: what was restored is still reloaded below; nothing more is planned. (Stopped — the
+        // plugin going away — returns before any reload, as an upgrade does.)
+        var (candidates, left) = aborted ? (new List<Candidate>(), new List<Left>()) : Candidates(worn.Materials, inputs);
         var slots = candidates.Where(c => c.SpecularGamePath != null).Select(c => c.SpecularGamePath!)
                               .Distinct(StringComparer.OrdinalIgnoreCase).ToList();
         var resolvedS = slots.Count == 0
@@ -340,7 +362,6 @@ public sealed class ShaderUpgradeWatcher : IDisposable
         Interlocked.Add(ref decodes, plan.Decodes);
         Interlocked.Add(ref memoHits, plan.MemoHits);
 
-        var changed = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
         bool rewalk = false;
         foreach (var mod in plan.PerMod)
         {
@@ -361,11 +382,12 @@ public sealed class ShaderUpgradeWatcher : IDisposable
         }
         if (stopped) return;
 
-        var (reloaded, redrew) = OnFramework(() => ReloadChanged([.. changed.Keys], kind, worn.ModNames, changed), "reload");
+        var reload = changed.Keys.Union(repaired, StringComparer.OrdinalIgnoreCase).ToList();
+        var (reloaded, redrew) = OnFramework(() => ReloadChanged(reload, kind, worn.ModNames, changed), "reload");
         if (rewalk) Request(Signal.Redraw);
         Publish(worn, inputs, left, new RunInfo(KindName(kind), changed.Count, changed.Values.Sum(), 0, 0, 0,
                                                 reloaded, redrew, DateTime.UtcNow),
-                awaiting: changed.Count > 0 && !redrew);
+                awaiting: reload.Count > 0 && !redrew);
     }
 
     /// <summary>The worn materials' mod files (not game data, not Proteus's own), one per file.</summary>
@@ -399,7 +421,11 @@ public sealed class ShaderUpgradeWatcher : IDisposable
             switch (ShaderUpgradeWriter.RevertOrForget(modRoot, rel, decline, out var why))
             {
                 case ShaderUpgradeWriter.Undone.Restored: restored++; changed.Add(modRoot); break;
-                case ShaderUpgradeWriter.Undone.Forgotten: kept++; changed.Add(modRoot); break;
+                case ShaderUpgradeWriter.Undone.Forgotten:
+                    kept++;
+                    changed.Add(modRoot);
+                    if (why.Length > 0) log.Information("[Proteus] shader upgrade: {0}", why);
+                    break;
                 case ShaderUpgradeWriter.Undone.Nothing: changed.Add(modRoot); break;
                 case ShaderUpgradeWriter.Undone.Refused: refused++; messages.Add(why); break;
                 case ShaderUpgradeWriter.Undone.Failed:

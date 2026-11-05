@@ -639,6 +639,10 @@
     "message": "此模组自带的 \"Toe Cap\" 选项已在 Penumbra 中选中，它所在的 Masks 组只允许\n选一个，所以无法在这里关闭。请在 Penumbra 中更改。",
     "description": ""
   },
+  "Colors.ToeCap.FlagOwn.Tip": {
+    "message": "为丝袜和袜子开启此项：脚趾会被一个圆润的鞋头包住，像真正的袜子那样，\n而不是贴合每一根脚趾。\n此模组自带的 \"Toe Cap\" 选项位于只允许选一个的 Masks 组中，\n所以这个勾选框无法在不取消该组另一个遮罩的情况下选中它。勾选后会改用\nProteus 内置的鞋头（为 Bibo+、Neolithe、Rue 和 YAB 制作），保存在模组的 Proteus 设置中：\n它在所有合集中生效，导出时随模组一起带走。\n要使用作者自己的鞋头，请在 Penumbra 中选择 \"Toe Cap\"。",
+    "description": ""
+  },
   "Colors.ToeCap.SaveFailed": {
     "message": "无法保存此模组的 Proteus 设置，所以已撤销更改。原因见日志（/xllog）。",
     "description": ""

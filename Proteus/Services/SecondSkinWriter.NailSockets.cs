@@ -204,6 +204,13 @@ public static partial class SecondSkinWriter
             {
                 if (!plan.Sewn[k]) continue;
                 var tris = plan.Islands[k];
+                // A sewn nail wholly on hidden switches is drawn by nothing, so it closes no rim in game: its rim is a
+                // socket like any other (#54) — the same rule as hiddenIslands below. One only partly hidden still
+                // closes it.
+                bool wholly = tris.Length >= 3;
+                for (int t = 0; wholly && t + 2 < tris.Length; t += 3)
+                    if (!Hidden(m, tris[t], tris[t + 1], tris[t + 2])) wholly = false;
+                if (wholly) continue;
                 var inIsland = new Dictionary<((int, int, int), (int, int, int)), int>();
                 for (int t = 0; t + 2 < tris.Length; t += 3)
                     for (int e = 0; e < 3; e++)

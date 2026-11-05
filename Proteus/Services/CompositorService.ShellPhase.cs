@@ -333,7 +333,9 @@ public partial class CompositorService
                     hiddenParts: hiddenParts,
                     wearerIsMan: run.wearerIsMan, menMapsReady: run.menMapsReady, menAllowed: run.OverlaysMenFor,
                     // The caps this composite resolved before promotion: the build caps exactly what was promoted for it.
-                    toeCaps: run.ToeCapMaps);
+                    toeCaps: run.ToeCapMaps,
+                    // One settings read per run, shared with the skin phase's bust standoff (#55).
+                    settingsOf: run.RunModSettings);
                 run.shellAllHeld = run.compositor.secondSkin.LastBuildHeldAll;
             }
 

@@ -15,10 +15,13 @@ listens on IPv4 loopback only, and needs a per-session token.
    `dotnet test Proteus.Tests/Proteus.Tests.csproj -c Release --filter "FullyQualifiedName~HarnessBuildFlagTests"`.
    `compiled OUT` locally means the shell has `CI=true` (or `GITHUB_ACTIONS=true`)
    set — a Blocker; report it.
-3. The harness is normally already on: once the user types `/proteus harness on`
-   in game chat it stays on across plugin reloads until `/proteus harness off`.
+3. The harness is **always on** on the owner's machine (`/proteus harness on`
+   stays on across plugin reloads), so don't ask for it — read the session file.
    Only the user can turn it on (a `harness` line in the dev-command file is
-   refused) — ask only when `/health` does not answer.
+   refused), so if it is off there, that is a Blocker to report. On any other
+   machine (a contributor's), ask the user to type `/proteus harness on`.
+   Another session may be running in-game QA at the same time: never overwrite the
+   dev-loaded DLL except to load the build you are about to test (AGENTS.md Rule 5).
 4. **Not listening is a Blocker**, never a reason to work around it: no session
    file, a refused connection, or `/health` failing → stop and report.
 
@@ -53,7 +56,9 @@ Browsers are refused (any `Origin` header gets 403); so is a `Host` other than
 
 Errors are always `{"error":{"code","message"}}`. A `503 framework-timeout` means the
 game's framework did not run the request within 10 s (a loading screen): wait and
-retry — abandoned work never runs later.
+retry — abandoned work never runs later. A `503 too-many-connections` means more than
+four requests were open at once: retry when one finishes; it is never a busy run
+(`409 busy`). A body that repeats a field is refused: `400 bad-json`.
 
 | Route | What it does |
 |---|---|

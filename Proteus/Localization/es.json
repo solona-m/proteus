@@ -639,6 +639,10 @@
     "message": "La opción \"Toe Cap\" propia de este mod está seleccionada en Penumbra, en un grupo Masks que solo permite\nuna elección, así que no se puede desactivar aquí. Cámbiala en Penumbra.",
     "description": ""
   },
+  "Colors.ToeCap.FlagOwn.Tip": {
+    "message": "Actívalo para medias y calcetines: los dedos quedan cubiertos por una puntera redondeada, como\najusta la calcetería real, en vez de seguir cada dedo.\nLa opción \"Toe Cap\" propia de este mod está en un grupo Masks que solo permite una elección, así que\nesta casilla no puede seleccionarla sin quitar la otra máscara de ahí. Marcarla usa en su lugar la\npuntera integrada de Proteus (hecha para Bibo+, Neolithe, Rue y YAB), guardada en los ajustes de Proteus\ndel mod: se aplica en todas las colecciones y va con el mod cuando lo exportas.\nPara la puntera del autor, selecciona \"Toe Cap\" en Penumbra.",
+    "description": ""
+  },
   "Colors.ToeCap.SaveFailed": {
     "message": "No se pudieron guardar los ajustes de Proteus de este mod, así que el cambio se deshizo. El registro (/xllog) indica el motivo.",
     "description": ""

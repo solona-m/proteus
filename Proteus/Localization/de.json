@@ -639,6 +639,10 @@
     "message": "Die eigene Option \"Toe Cap\" dieses Mods ist in Penumbra gewählt, in einer Masks-Gruppe, die nur\neine Wahl erlaubt, daher lässt sie sich hier nicht ausschalten. Ändere sie in Penumbra.",
     "description": ""
   },
+  "Colors.ToeCap.FlagOwn.Tip": {
+    "message": "Schalte das für Strümpfe und Socken ein: Die Zehen werden von einer runden Zehenkappe bedeckt,\nso wie echte Strumpfware sitzt, statt jedem Zeh zu folgen.\nDie eigene Option \"Toe Cap\" dieses Mods liegt in einer Masks-Gruppe, die nur eine Wahl erlaubt,\ndaher kann dieses Häkchen sie nicht wählen, ohne die andere Maske dort abzuwählen. Das Häkchen nutzt\nstattdessen Proteus' eingebaute Kappe (für Bibo+, Neolithe, Rue und YAB), gespeichert in den\nProteus-Einstellungen des Mods: Sie gilt in jeder Collection und geht beim Export mit dem Mod mit.\nFür die Kappe des Autors wähle \"Toe Cap\" in Penumbra.",
+    "description": ""
+  },
   "Colors.ToeCap.SaveFailed": {
     "message": "Die Proteus-Einstellungen dieses Mods konnten nicht gespeichert werden, daher wurde die Änderung zurückgenommen. Der Grund steht im Log (/xllog).",
     "description": ""
