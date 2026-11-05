@@ -51,9 +51,9 @@ responsibility.
    `E:\repos\Proteus\Proteus\bin\release\win-x64` — the only path the game
    dev-loads. From a worktree, run `git submodule update --init --recursive`
    first, and check the copied `Proteus.dll` timestamp rather than trusting the
-   build's output. **Do not overwrite that DLL just to run tests:** the owner's
-   game is always running with the test harness on, so a copy reloads the
-   plugin under whatever in-game QA another session is running. Run unit tests
+   build's output. **Do not overwrite that DLL just to run tests:** whenever the
+   owner's game is running the test harness is on, so a copy reloads the plugin
+   under whatever in-game QA another session is running. Run unit tests
    from your own worktree's build; copy only when your build is about to be
    used in game (your own in-game QA, or the finished build).
 
