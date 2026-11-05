@@ -561,6 +561,31 @@ shared equipment space and is deformed onto the wearer exactly as a second skin 
 and `Ear` are authored at the character's own race and must **not** be deformed, so they can only ride a slot
 Proteus can replace outright — a free ring, or the facewear slot. Add `"SurfaceId": "f0001"` for those.
 
+### Gear shader upgrade (what it changes in a user's copy of your mod)
+
+Users can turn on **Settings > Gear shaders > "Upgrade old gear to Dawntrail shaders"**. With it on, when they put on
+gear your mod draws with the pre-Dawntrail `characterlegacy.shpk` shader, Proteus rewrites **their installed copy** of
+your mod:
+
+- Each worn old-shader gear `.mtrl` is rewritten in place to Dawntrail's `character.shpk`. Index/mask materials get the
+  gear mode; old diffuse/specular materials (`_d`/`_n`/`_s`/`_id`) get the game's monster diffuse mode.
+- For a diffuse/specular material, a Dawntrail mask derived from your `_s` is added under `Shader Upgrade/`, and a
+  redirect for it is added inside the options (or default data) that already ship that material. No group is added,
+  moved or reordered, and your `_s` is never changed.
+- Every rewritten file is backed up first, in `Proteus/shaderupgrade-backup/`, and the changes are recorded in
+  `Proteus/shaderupgrade.json`.
+
+All of it lives inside the mod folder, so it travels with a Penumbra export. **If you wear your own source mods with
+the setting on, your working copy is rewritten too** — leave the setting off while you work on a mod, or undo it before
+you pack.
+
+To put your files back, a user wears the pieces and presses **"Undo for what I'm wearing"** (those pieces are then
+left alone until "Upgrade what I'm wearing now"). For a piece that can no longer be worn, copy each file from
+`Proteus/shaderupgrade-backup/` back over the mod's own, delete `Shader Upgrade/`, `Proteus/shaderupgrade.json` and
+the backup folder, then remove the redirects that pointed into `Shader Upgrade/` (Penumbra's Advanced Editing >
+"Remove Missing Files" does it once the folder is gone). An update you ship later is never overwritten by an old backup: Proteus keeps the new file, and
+upgrades it again only if it is still old-shader.
+
 ### Distributing Your Mod
 
 Pack your mod folder as a `.zip` and rename the extension to `.pmp`. Penumbra imports `.pmp` files directly. Include everything in the mod root:

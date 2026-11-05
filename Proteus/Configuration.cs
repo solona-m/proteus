@@ -225,6 +225,15 @@ public class Configuration : IPluginConfiguration
     public bool AutoHatCompat { get; set; } = true;
 
     /// <summary>
+    /// Draw worn gear whose mod still uses the pre-Dawntrail <c>characterlegacy.shpk</c> with Dawntrail's
+    /// <c>character.shpk</c> instead (<c>ShaderUpgradeWatcher</c>), as it is put on, by rewriting the worn mod's own
+    /// material files (each backed up first; "Undo for what I'm wearing" puts them back). Turning this off only stops
+    /// further upgrades. Off by default, since it changes other authors' mods; a missing property reads off, so no
+    /// migration.
+    /// </summary>
+    public bool AutoUpgradeLegacyShaders { get; set; } = false;
+
+    /// <summary>
     /// When the worn hairstyle is drawn as the game's own because its mod was made for another race only, port that
     /// race's model to the wearer's and publish it from the same option of the same mod (<c>HairPortWatcher</c>) — and
     /// do the same before it is worn for the player's hair mods (<c>HairPortScan</c>). On by default; a missing property

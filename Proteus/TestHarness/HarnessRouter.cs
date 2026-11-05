@@ -22,7 +22,7 @@ internal sealed class HarnessRouter(HarnessJobs jobs, LogRing ring, SessionNames
     internal static readonly IReadOnlyList<(string Method, string Path)> Routes =
     [
         ("GET", "/health"), ("GET", "/state"), ("GET", "/log"), ("GET", "/screenshot"),
-        ("POST", "/actions/refit"), ("POST", "/actions/restore"), ("GET", "/jobs/{id}"),
+        ("POST", "/actions/refit"), ("POST", "/actions/restore"), ("POST", "/actions/shader-upgrade"), ("GET", "/jobs/{id}"),
     ];
 
     private IHarnessGame Game => jobs.Game;
@@ -48,6 +48,7 @@ internal sealed class HarnessRouter(HarnessJobs jobs, LogRing ring, SessionNames
                 "/screenshot" => await Screenshot(request),
                 "/actions/refit" => await Refit(request),
                 "/actions/restore" => await Restore(request),
+                "/actions/shader-upgrade" => await ShaderUpgradeAction(request),
                 _ => Job(path["/jobs/".Length..]),
             };
         }
@@ -109,8 +110,88 @@ internal sealed class HarnessRouter(HarnessJobs jobs, LogRing ring, SessionNames
                 pending = new { running = a.Activity.Running, queued = a.Activity.Queued, walkDue = a.Activity.WalkDue,
                                 undoing = a.Activity.Undoing },
             },
+            shaderUpgrade = ShaderUpgradeBlock(Game.ShaderUpgrade()),
             job = jobs.Current?.View(),
         });
+    }
+
+    /// <summary>The gear shader upgrade in <c>/state</c>: read-only, scrubbed with the rest.</summary>
+    internal static object ShaderUpgradeBlock(ShaderUpgradeWatcher.View v) => new
+    {
+        enabled = v.Enabled, busy = v.Busy, waiting = v.Waiting, awaitingRedraw = v.AwaitingRedraw, maskGloss = v.MaskGloss,
+        upgraded = v.UpgradedList.Select(u => new
+        {
+            gamePath = u.GamePath, modDir = u.ModDir, file = u.File, form = u.Form,
+            mask = u.MaskGamePath is { } mg ? new { gamePath = mg, file = u.MaskFile } : null,
+        }),
+        left = v.LeftList.Select(l => new { gamePath = l.GamePath, source = l.Source, reason = l.Reason }),
+        masks = new { memoHits = v.MemoHits, decodes = v.Decodes },
+        lastRun = v.LastRun is { } r
+            ? new { kind = r.Kind, modsChanged = r.ModsChanged, filesChanged = r.FilesChanged, restored = r.Restored,
+                    kept = r.Kept, refused = r.Refused, reloaded = r.Reloaded, redrawRequested = r.RedrawRequested,
+                    atUtc = r.AtUtc }
+            : null,
+    };
+
+    /// <summary>
+    /// The gear shader upgrade, for QA (which cannot click Settings): switch it, choose this session's mask strategy, or
+    /// start "Undo for what I'm wearing" (optionally without declining, so QA leaves nothing behind) or "Upgrade what I'm
+    /// wearing now". Every field is validated before anything changes.
+    /// </summary>
+    private async Task<HarnessResponse> ShaderUpgradeAction(HarnessRequest request)
+    {
+        var (body, bad) = JsonBody(request, "enabled", "maskGloss", "undoWorn", "decline", "upgradeWornNow");
+        if (bad != null) return bad;
+        bool? enabled = null;
+        string? gloss = null;
+        bool undoWorn = false, upgradeNow = false, decline = true;
+        if (body.TryGetProperty("enabled", out var e))
+        {
+            if (e.ValueKind is not (JsonValueKind.True or JsonValueKind.False))
+                return HarnessResponse.Error(400, "invalid-field", "enabled must be true or false");
+            enabled = e.GetBoolean();
+        }
+        if (body.TryGetProperty("maskGloss", out var g))
+        {
+            if (g.ValueKind != JsonValueKind.String || ShaderUpgradeWatcher.ParseGloss(g.GetString()) == null)
+                return HarnessResponse.Error(400, "invalid-field", "maskGloss must be one of inverse-specular, low, mid");
+            gloss = g.GetString();
+        }
+        if (body.TryGetProperty("undoWorn", out var u))
+        {
+            if (u.ValueKind != JsonValueKind.True) return HarnessResponse.Error(400, "invalid-field", "undoWorn must be true");
+            undoWorn = true;
+        }
+        if (body.TryGetProperty("upgradeWornNow", out var n))
+        {
+            if (n.ValueKind != JsonValueKind.True) return HarnessResponse.Error(400, "invalid-field", "upgradeWornNow must be true");
+            upgradeNow = true;
+        }
+        if (body.TryGetProperty("decline", out var d))
+        {
+            if (!undoWorn) return HarnessResponse.Error(400, "invalid-field", "decline goes with undoWorn");
+            if (d.ValueKind is not (JsonValueKind.True or JsonValueKind.False))
+                return HarnessResponse.Error(400, "invalid-field", "decline must be true or false");
+            decline = d.GetBoolean();
+        }
+        if (undoWorn && upgradeNow) return HarnessResponse.Error(400, "invalid-field", "give undoWorn or upgradeWornNow, not both");
+        if (enabled == null && gloss == null && !undoWorn && !upgradeNow)
+            return HarnessResponse.Error(400, "invalid-field", "give enabled, maskGloss, undoWorn or upgradeWornNow");
+
+        if (undoWorn || upgradeNow)
+        {
+            var started = await OnFramework(() =>
+            {
+                if (Game.AutoRefit().Busy) return false;
+                if (enabled != null || gloss != null) Game.SetShaderUpgrade(enabled, gloss);
+                return Game.StartShaderUpgradeRun(undoWorn, decline);
+            });
+            return started
+                ? HarnessResponse.Json(202, new { started = true })
+                : HarnessResponse.Error(409, "busy", "the shader upgrade or auto refit is working; wait for /state shaderUpgrade.busy == false");
+        }
+        var (on, now) = await OnFramework(() => Game.SetShaderUpgrade(enabled, gloss));
+        return HarnessResponse.Json(200, new { enabled = on, maskGloss = now });
     }
 
     private async Task<HarnessResponse> Log(HarnessRequest request)

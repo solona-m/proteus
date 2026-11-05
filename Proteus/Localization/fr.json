@@ -5822,5 +5822,113 @@
   "Parts.Retarget.UseWornBody.Tip": {
     "message": "Ajuster vers le mod de corps que tu portes pour cette partie. Comme le choisir sous « Ajuster vers le corps ».",
     "description": ""
+  },
+  "Settings.Section.GearShaders": {
+    "message": "Shaders d'équipement",
+    "description": ""
+  },
+  "Settings.GearShaders.AutoUpgrade.Label": {
+    "message": "Passer l'ancien équipement aux shaders de Dawntrail",
+    "description": ""
+  },
+  "Settings.GearShaders.Status.Fmt": {
+    "message": "{0} mis à jour · {1} laissés sur l'ancien shader",
+    "description": ""
+  },
+  "Settings.GearShaders.Left.Tip.Fmt": {
+    "message": "Laissés sur l'ancien shader :\n{0}",
+    "description": ""
+  },
+  "Settings.GearShaders.NextRedraw": {
+    "message": "Prend effet au prochain redessin (le redessin automatique est désactivé).",
+    "description": ""
+  },
+  "Settings.GearShaders.Reason.OldTable": {
+    "message": "une ancienne table de couleurs",
+    "description": ""
+  },
+  "Settings.GearShaders.Reason.UnsupportedForm": {
+    "message": "une disposition de textures non prise en charge",
+    "description": ""
+  },
+  "Settings.GearShaders.Reason.Unreadable": {
+    "message": "illisible",
+    "description": ""
+  },
+  "Settings.GearShaders.Reason.Compositor": {
+    "message": "les superpositions de Proteus le dessinent",
+    "description": ""
+  },
+  "Settings.GearShaders.Reason.WriteFailed": {
+    "message": "le fichier n'a pas pu être écrit",
+    "description": ""
+  },
+  "Settings.GearShaders.AutoUpgrade.Tip": {
+    "message": "Quand vous équipez une pièce, Proteus réécrit les matériaux à l'ancien shader (characterlegacy.shpk) du mod porté\nvers le shader de Dawntrail (character.shpk), dans le mod lui-même, en sauvegardant chaque fichier d'abord.\nDésactiver ceci arrête les mises à jour suivantes sans les annuler. « Annuler pour ce que je porte »\nremet les fichiers de l'auteur et laisse ces pièces tranquilles jusqu'à « Mettre à jour ce que je porte ».",
+    "description": ""
+  },
+  "Settings.GearShaders.Waiting": {
+    "message": "En attente de Penumbra.",
+    "description": ""
+  },
+  "Settings.GearShaders.Reason.LegacyMod": {
+    "message": "un dossier de mod à l'ancien format où Proteus n'écrit pas",
+    "description": ""
+  },
+  "Settings.GearShaders.Reason.MixedSpecular": {
+    "message": "ses options utilisent des cartes spéculaires différentes",
+    "description": ""
+  },
+  "Settings.GearShaders.Reason.SpecularFromOtherMod": {
+    "message": "sa carte spéculaire vient d'un autre mod",
+    "description": ""
+  },
+  "Settings.GearShaders.Reason.UnsupportedPlacement": {
+    "message": "il se trouve dans un groupe combinatoire",
+    "description": ""
+  },
+  "Settings.GearShaders.Reason.ProteusPack": {
+    "message": "un pack Proteus (Proteus le dessine lui-même)",
+    "description": ""
+  },
+  "Settings.GearShaders.Reason.Declined": {
+    "message": "annulé par vous",
+    "description": ""
+  },
+  "Settings.GearShaders.UpgradeNow": {
+    "message": "Mettre à jour ce que je porte",
+    "description": ""
+  },
+  "Settings.GearShaders.UpgradeNow.Tip": {
+    "message": "Passer maintenant au shader de Dawntrail les matériaux à l'ancien shader de ce que vous portez,\ny compris les pièces que vous aviez annulées.",
+    "description": ""
+  },
+  "Settings.GearShaders.UndoWorn": {
+    "message": "Annuler pour ce que je porte",
+    "description": ""
+  },
+  "Settings.GearShaders.UndoWorn.Tip": {
+    "message": "Remettre les fichiers de l'auteur pour les pièces portées et les laisser tranquilles\njusqu'à « Mettre à jour ce que je porte ». Une mise à jour publiée depuis par l'auteur est conservée.",
+    "description": ""
+  },
+  "Settings.GearShaders.Result.Fmt": {
+    "message": "Annulation : {0} restaurés, {1} conservés comme mise à jour de l'auteur, {2} refusés.",
+    "description": ""
+  },
+  "Settings.GearShaders.Edited.Fmt": {
+    "message": "{0} a été modifié après sa mise à niveau du shader, donc l'annulation le laisse tel quel. L'original de l'auteur est conservé dans Proteus/shaderupgrade-backup/{0} : recopiez-le par-dessus le fichier pour annuler.",
+    "description": ""
+  },
+  "Settings.GearShaders.Busy": {
+    "message": "En cours…",
+    "description": ""
+  },
+  "Chat.ShaderUpgrade.Fmt": {
+    "message": "[Proteus] {0} matériau(x) à l'ancien shader dans « {1} » passé(s) au shader de Dawntrail (chaque fichier sauvegardé). Annulation dans /proteus > Paramètres > Shaders d'équipement.",
+    "description": ""
+  },
+  "MeshVolume.Feature.ShaderUpgrade": {
+    "message": "la mise à jour des shaders d'équipement",
+    "description": ""
   }
 }

@@ -5822,5 +5822,113 @@
   "Parts.Retarget.UseWornBody.Tip": {
     "message": "この部位に着ている体型 Mod にリフィットします。「リフィット先の体型 Mod」で選ぶのと同じです。",
     "description": ""
+  },
+  "Settings.Section.GearShaders": {
+    "message": "装備シェーダー",
+    "description": ""
+  },
+  "Settings.GearShaders.AutoUpgrade.Label": {
+    "message": "古い装備を黄金のレガシーのシェーダーに更新する",
+    "description": ""
+  },
+  "Settings.GearShaders.Status.Fmt": {
+    "message": "{0}件を更新 ・ {1}件は旧シェーダーのまま",
+    "description": ""
+  },
+  "Settings.GearShaders.Left.Tip.Fmt": {
+    "message": "旧シェーダーのまま:\n{0}",
+    "description": ""
+  },
+  "Settings.GearShaders.NextRedraw": {
+    "message": "次の再描画で反映されます（自動再描画はオフです）。",
+    "description": ""
+  },
+  "Settings.GearShaders.Reason.OldTable": {
+    "message": "古いカラーテーブル",
+    "description": ""
+  },
+  "Settings.GearShaders.Reason.UnsupportedForm": {
+    "message": "非対応のテクスチャ構成",
+    "description": ""
+  },
+  "Settings.GearShaders.Reason.Unreadable": {
+    "message": "読み取れない",
+    "description": ""
+  },
+  "Settings.GearShaders.Reason.Compositor": {
+    "message": "Proteusのオーバーレイが描画",
+    "description": ""
+  },
+  "Settings.GearShaders.Reason.WriteFailed": {
+    "message": "ファイルを書き込めなかった",
+    "description": ""
+  },
+  "Settings.GearShaders.AutoUpgrade.Tip": {
+    "message": "装備を身に着けると、Proteusは着用中のMODにある旧シェーダー（characterlegacy.shpk）の素材を\nMOD内で黄金のレガシーのシェーダー（character.shpk）に書き換えます。各ファイルは先にバックアップされます。\nオフにすると以降の更新は止まりますが、元には戻りません。「着ている装備を元に戻す」は\n作者のファイルを戻し、「着ている装備を今すぐ更新」するまでその装備には触れません。",
+    "description": ""
+  },
+  "Settings.GearShaders.Waiting": {
+    "message": "Penumbraを待っています。",
+    "description": ""
+  },
+  "Settings.GearShaders.Reason.LegacyMod": {
+    "message": "Proteusが書き込まない旧形式のMODフォルダー",
+    "description": ""
+  },
+  "Settings.GearShaders.Reason.MixedSpecular": {
+    "message": "オプションごとにスペキュラーマップが異なる",
+    "description": ""
+  },
+  "Settings.GearShaders.Reason.SpecularFromOtherMod": {
+    "message": "スペキュラーマップが別のMODから来ている",
+    "description": ""
+  },
+  "Settings.GearShaders.Reason.UnsupportedPlacement": {
+    "message": "結合グループの中にある",
+    "description": ""
+  },
+  "Settings.GearShaders.Reason.ProteusPack": {
+    "message": "Proteusのパック（Proteus自身が描画）",
+    "description": ""
+  },
+  "Settings.GearShaders.Reason.Declined": {
+    "message": "あなたが元に戻した",
+    "description": ""
+  },
+  "Settings.GearShaders.UpgradeNow": {
+    "message": "着ている装備を今すぐ更新",
+    "description": ""
+  },
+  "Settings.GearShaders.UpgradeNow.Tip": {
+    "message": "今着ている装備の旧シェーダー素材を黄金のレガシーのシェーダーに更新します。\n以前に元に戻した装備も含みます。",
+    "description": ""
+  },
+  "Settings.GearShaders.UndoWorn": {
+    "message": "着ている装備を元に戻す",
+    "description": ""
+  },
+  "Settings.GearShaders.UndoWorn.Tip": {
+    "message": "着ている装備の作者のファイルを戻し、「着ている装備を今すぐ更新」を使うまで\nその装備には触れません。作者がその後に出した更新は残ります。",
+    "description": ""
+  },
+  "Settings.GearShaders.Result.Fmt": {
+    "message": "元に戻す: {0}件を復元、{1}件は作者の更新として保持、{2}件は拒否。",
+    "description": ""
+  },
+  "Settings.GearShaders.Edited.Fmt": {
+    "message": "{0} はシェーダーのアップグレード後に編集されたため、元に戻すでは変更しません。作者のオリジナルは Proteus/shaderupgrade-backup/{0} に保存されています。元に戻すには、それをファイルに上書きコピーしてください。",
+    "description": ""
+  },
+  "Settings.GearShaders.Busy": {
+    "message": "処理中…",
+    "description": ""
+  },
+  "Chat.ShaderUpgrade.Fmt": {
+    "message": "[Proteus] 「{1}」の旧シェーダー素材{0}件を黄金のレガシーのシェーダーに更新しました（各ファイルはバックアップ済み）。元に戻すには /proteus > 設定 > 装備シェーダー。",
+    "description": ""
+  },
+  "MeshVolume.Feature.ShaderUpgrade": {
+    "message": "装備シェーダーの更新",
+    "description": ""
   }
 }

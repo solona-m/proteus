@@ -5822,5 +5822,113 @@
   "Parts.Retarget.UseWornBody.Tip": {
     "message": "转换到你这个部位正在穿的体型模组。与在“转换到体型”中选择它相同。",
     "description": ""
+  },
+  "Settings.Section.GearShaders": {
+    "message": "装备着色器",
+    "description": ""
+  },
+  "Settings.GearShaders.AutoUpgrade.Label": {
+    "message": "将旧装备升级为金曦之遗辉着色器",
+    "description": ""
+  },
+  "Settings.GearShaders.Status.Fmt": {
+    "message": "已升级 {0} 个 · {1} 个保留旧着色器",
+    "description": ""
+  },
+  "Settings.GearShaders.Left.Tip.Fmt": {
+    "message": "保留旧着色器：\n{0}",
+    "description": ""
+  },
+  "Settings.GearShaders.NextRedraw": {
+    "message": "将在下次重绘时生效（自动重绘已关闭）。",
+    "description": ""
+  },
+  "Settings.GearShaders.Reason.OldTable": {
+    "message": "旧版颜色表",
+    "description": ""
+  },
+  "Settings.GearShaders.Reason.UnsupportedForm": {
+    "message": "不支持的贴图布局",
+    "description": ""
+  },
+  "Settings.GearShaders.Reason.Unreadable": {
+    "message": "无法读取",
+    "description": ""
+  },
+  "Settings.GearShaders.Reason.Compositor": {
+    "message": "由 Proteus 叠加层绘制",
+    "description": ""
+  },
+  "Settings.GearShaders.Reason.WriteFailed": {
+    "message": "无法写入文件",
+    "description": ""
+  },
+  "Settings.GearShaders.AutoUpgrade.Tip": {
+    "message": "穿上装备时，Proteus 会在模组内部把所穿模组中使用旧着色器（characterlegacy.shpk）的材质\n改写为金曦之遗辉的着色器（character.shpk），改写前先备份每个文件。\n关闭此项会停止后续升级，但不会撤销已有的升级。“撤销身上装备的升级”\n会恢复作者的文件，并在“立即升级身上装备”之前不再改动这些装备。",
+    "description": ""
+  },
+  "Settings.GearShaders.Waiting": {
+    "message": "正在等待 Penumbra。",
+    "description": ""
+  },
+  "Settings.GearShaders.Reason.LegacyMod": {
+    "message": "Proteus 不写入的旧格式模组文件夹",
+    "description": ""
+  },
+  "Settings.GearShaders.Reason.MixedSpecular": {
+    "message": "其选项使用不同的高光贴图",
+    "description": ""
+  },
+  "Settings.GearShaders.Reason.SpecularFromOtherMod": {
+    "message": "其高光贴图来自另一个模组",
+    "description": ""
+  },
+  "Settings.GearShaders.Reason.UnsupportedPlacement": {
+    "message": "它位于组合组中",
+    "description": ""
+  },
+  "Settings.GearShaders.Reason.ProteusPack": {
+    "message": "Proteus 包（由 Proteus 自行绘制）",
+    "description": ""
+  },
+  "Settings.GearShaders.Reason.Declined": {
+    "message": "已由你撤销",
+    "description": ""
+  },
+  "Settings.GearShaders.UpgradeNow": {
+    "message": "立即升级身上装备",
+    "description": ""
+  },
+  "Settings.GearShaders.UpgradeNow.Tip": {
+    "message": "立即把身上装备中使用旧着色器的材质升级为金曦之遗辉的着色器，\n包括你之前撤销过的装备。",
+    "description": ""
+  },
+  "Settings.GearShaders.UndoWorn": {
+    "message": "撤销身上装备的升级",
+    "description": ""
+  },
+  "Settings.GearShaders.UndoWorn.Tip": {
+    "message": "恢复身上装备的作者文件，并在你使用“立即升级身上装备”之前\n不再改动它们。作者之后发布的更新会被保留。",
+    "description": ""
+  },
+  "Settings.GearShaders.Result.Fmt": {
+    "message": "撤销：已恢复 {0} 个，{1} 个作为作者更新保留，{2} 个被拒绝。",
+    "description": ""
+  },
+  "Settings.GearShaders.Edited.Fmt": {
+    "message": "{0} 在着色器升级后被编辑过，因此撤销不会改动它。作者的原始文件保存在 Proteus/shaderupgrade-backup/{0}：将其复制回去覆盖该文件即可撤销。",
+    "description": ""
+  },
+  "Settings.GearShaders.Busy": {
+    "message": "处理中…",
+    "description": ""
+  },
+  "Chat.ShaderUpgrade.Fmt": {
+    "message": "[Proteus] 已将“{1}”中 {0} 个旧着色器材质升级为金曦之遗辉的着色器（每个文件均已备份）。撤销：/proteus > 设置 > 装备着色器。",
+    "description": ""
+  },
+  "MeshVolume.Feature.ShaderUpgrade": {
+    "message": "装备着色器升级",
+    "description": ""
   }
 }

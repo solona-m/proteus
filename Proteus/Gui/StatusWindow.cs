@@ -178,6 +178,7 @@ public class StatusWindow : Window
         HatCompatWatcher hatCompatWatcher,
         HairPortWatcher hairPortWatcher,
         AutoRefitWatcher autoRefitWatcher,
+        ShaderUpgradeWatcher shaderUpgradeWatcher,
         ModMoveService modMoves,
         LogExportService logExport)
         // "###ProteusStatus" is the stable window id; the title shows the assembly version, not the dev BuildNumber.
@@ -212,7 +213,8 @@ public class StatusWindow : Window
         hatCompat = new HatCompatPanel(hatCompatWatcher, config);
         settingsTab = new SettingsTab(config, compositor, discovery, designBindings, hatCompat,
                                       new HairPortSettingsPanel(hairPortWatcher, config),
-                                      new AutoRefitPanel(autoRefitWatcher, penumbra, config), logExport);
+                                      new AutoRefitPanel(autoRefitWatcher, penumbra, config), shaderUpgradeWatcher,
+                                      logExport);
 
         SizeConstraints = AutoFitConstraints;
 

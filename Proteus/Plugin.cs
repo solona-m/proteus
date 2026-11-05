@@ -29,7 +29,7 @@ public sealed class Plugin : IDalamudPlugin
 #endif
 
     /// <summary>Hand-maintained; bump it for in-game testing. <see cref="BuildStamp"/> is the one that can't go stale.</summary>
-    public const int BuildNumber = 1421;
+    public const int BuildNumber = 1427;
 
     /// <summary>
     /// Which set of release notes is current. Raise it when a release has something new to say: the window
@@ -74,6 +74,7 @@ public sealed class Plugin : IDalamudPlugin
     private readonly Gui.PartsPanel partsPanel;
     private readonly HatCompatWatcher hatCompat;
     private readonly HairPortWatcher hairPort;
+    private readonly ShaderUpgradeWatcher shaderUpgrade;
     private readonly AutoRefitWatcher autoRefit;
     private readonly ModMoveService modMoves;
     private readonly Gui.ProteusFonts fonts;
@@ -240,6 +241,9 @@ public sealed class Plugin : IDalamudPlugin
                                          path => textureLoader.LoadRawFile(null, path), config, log, dataDir);
         partsPanel.UseBodyIndex(autoRefit.Index);
 
+        // The same: old gear is moved to Dawntrail's shader in its own mod as it is put on, window shut or open.
+        shaderUpgrade = new ShaderUpgradeWatcher(compositor, penumbra, glamourer, autoRefit, textureLoader, config, log);
+
         // A mod renamed in Penumbra: every owner of per-mod state follows it, in one fixed order.
         modMoves = new ModMoveService(penumbra, config, presets, designBindings, compositor, hatCompat, hairPort,
                                       autoRefit, log);
@@ -247,7 +251,7 @@ public sealed class Plugin : IDalamudPlugin
         statusWindow = new StatusWindow(compositor, discovery, penumbra, config, designBindings,
             presets, editRouter, uvMapDl, uvRemap,
             modCreation, onionImport, contentImport, luminisImport, emissiveImport, eyeImport, modExport,
-            textureLoader, partsPanel, hatCompat, hairPort, autoRefit, modMoves,
+            textureLoader, partsPanel, hatCompat, hairPort, autoRefit, shaderUpgrade, modMoves,
             new LogExportService(capture, compositor, penumbra, config, dataDir));
 
         liveMesh = new Gui.LiveMeshOverlay(ObjectTable, DataManager, penumbra, ChatGui, log);
@@ -256,7 +260,7 @@ public sealed class Plugin : IDalamudPlugin
 
 #if PROTEUS_TEST_HARNESS
         harness = new TestHarness.HarnessHost(dataDir, pluginInterface.IsDev,
-            new TestHarness.GameHarnessAdapter(penumbra, compositor, autoRefit, ObjectTable, ClientState, framework,
+            new TestHarness.GameHarnessAdapter(penumbra, compositor, autoRefit, shaderUpgrade, ObjectTable, ClientState, framework,
                                                TextureProvider, TextureReadback, config, uvRemap,
                                                path => textureLoader.LoadRawFile(null, path),
                                                dir => partsPanel.NoteModelsChanged(dir), log),
@@ -593,6 +597,7 @@ public sealed class Plugin : IDalamudPlugin
         uvMaps.Dispose();      // before the downloads: no recomposite after this
         uvMapDl.Dispose();
         effectsDl.Dispose();
+        shaderUpgrade.Dispose();   // before auto refit, which it asks, and the bridges it unsubscribes from
         autoRefit.Dispose();   // before the compositor and the bridges, whose events it unsubscribes from
         hatCompat.Dispose();   // before the compositor: it unsubscribes from that object's event
         hairPort.Dispose();    // the same

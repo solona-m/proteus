@@ -19,6 +19,7 @@ internal sealed class SettingsTab
     private readonly HatCompatPanel hatCompat;
     private readonly HairPortSettingsPanel hairPort;
     private readonly AutoRefitPanel autoRefit;
+    private readonly ShaderUpgradePanel shaderUpgrade;
     private readonly LogExportService logExport;
 
     // Copy Logs: the running export, polled each frame, then the file it wrote or why it could not.
@@ -28,8 +29,9 @@ internal sealed class SettingsTab
 
     public SettingsTab(Configuration config, CompositorService compositor, SidecarDiscoveryService discovery,
         DesignBindingService designBindings, HatCompatPanel hatCompat, HairPortSettingsPanel hairPort,
-        AutoRefitPanel autoRefit, LogExportService logExport)
+        AutoRefitPanel autoRefit, ShaderUpgradeWatcher shaderUpgradeWatcher, LogExportService logExport)
     {
+        this.shaderUpgrade = new ShaderUpgradePanel(shaderUpgradeWatcher, config);
         this.config = config;
         this.compositor = compositor;
         this.discovery = discovery;
@@ -95,6 +97,12 @@ internal sealed class SettingsTab
         ProteusStyle.SectionHeader(s.SecAutoRefit);
         using (ProteusStyle.Card())
             autoRefit.Draw();
+
+        // Always drawn: its switch lives inside it.
+        ImGui.Spacing();
+        ProteusStyle.SectionHeader(s.SecGearShaders);
+        using (ProteusStyle.Card())
+            shaderUpgrade.Draw();
 
         ImGui.Spacing();
         ProteusStyle.SectionHeader(s.SecSkinEffects);
