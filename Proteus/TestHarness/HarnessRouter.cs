@@ -473,7 +473,7 @@ internal sealed class HarnessRouter(HarnessJobs jobs, LogRing ring, SessionNames
         if (dir == null)
             return (null, null, HarnessResponse.Error(404, "mod-not-found", $"no Penumbra mod folder '{mod}' (folder names only, not display names)"));
         if (string.Equals(dir, Game.ManagedModDir, StringComparison.OrdinalIgnoreCase))
-            return (null, null, HarnessResponse.Error(400, "managed-mod", "Proteus's own output mod is never refitted or restored"));
+            return (null, null, HarnessResponse.Error(400, "managed-mod", "Proteus's own output mod is never refitted, hair-ported or restored"));
         if (!ModBackup.SafeModDir(dir))
             return (null, null, HarnessResponse.Error(400, "invalid-field", "the mod folder name is not a plain folder name"));
         return (dir, mods, null);
@@ -530,7 +530,7 @@ internal sealed class HarnessRouter(HarnessJobs jobs, LogRing ring, SessionNames
             return HarnessResponse.Error(400, "invalid-field", "give job alone, or mod (with an optional backup)");
         if (jobId == null && mod == null) return HarnessResponse.Error(400, "invalid-field", "give job, or mod");
         if (mod != null && string.Equals(mod, Game.ManagedModDir, StringComparison.OrdinalIgnoreCase))
-            return HarnessResponse.Error(400, "managed-mod", "Proteus's own output mod is never refitted or restored");
+            return HarnessResponse.Error(400, "managed-mod", "Proteus's own output mod is never refitted, hair-ported or restored");
 
         if (!jobs.TryReserve()) return HarnessResponse.Error(409, "busy", "a job is already running");
         bool started = false;

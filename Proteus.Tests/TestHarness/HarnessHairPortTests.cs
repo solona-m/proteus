@@ -335,9 +335,10 @@ public class HarnessHairPortTests : IDisposable
     {
         string profile = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
         string modRoot = Path.Combine(profile, "mods", "Hair");
+        f.Names.AddAll(["Secret Collection"], "Hidden Person");
         f.Game.HairPortView = new HairPortInfo(
             new HairPortWatcher.View(Worn: CrossSexFixtures.Target, ModRoot: modRoot, Ported: true, PortsInMod: 2, Busy: false,
-                                     Warning: $"see {modRoot}"),
+                                     Message: "Hidden Person's hair", Warning: $"see {modRoot}"),
             new HairPortWatcher.ScanView(Running: true, Done: 1, Total: 3, Race: 101,
                 Rows: [new HairPortScan.Row(5, modRoot, "Hair", "Hair (name)", CrossSexFixtures.Target, HairPortScan.RowState.AlreadyFitted),
                        new HairPortScan.Row(6, modRoot, "Hair", "Hair (name)", HairPortPlan.HairPath(101, 6), HairPortScan.RowState.Refused, "no")]),
@@ -356,6 +357,7 @@ public class HarnessHairPortTests : IDisposable
         string text = h.ToString();
         Assert.DoesNotContain("modRoot", text);
         Assert.DoesNotContain(profile, text, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("Hidden Person", text);   // a session name, scrubbed as /log scrubs it
     }
 
     // ── Refusals ─────────────────────────────────────────────────────────────────────────────────────
@@ -627,15 +629,64 @@ public class HarnessHairPortTests : IDisposable
     {
         using var mod = f.AddHairMod();
         var before = FolderState.Of(mod.Root);
+        using var bending = new ManualResetEventSlim();
         using var gate = new ManualResetEventSlim();
-        f.Game.OnLegacyCheck = () => gate.Wait(5000);
+        // Stalled inside the bend of the last (only) race: reading the man's head, after the builder's own per-race check.
+        string head = HairPortPlan.HeadPaths(101).First();
+        f.Game.OnReadGameFile = path =>
+        {
+            if (!string.Equals(path, head, StringComparison.OrdinalIgnoreCase)) return;
+            bending.Set();
+            gate.Wait(5000);
+        };
         var (_, body) = await PostHair(Port("c0101"));
-        await Task.Delay(100);
+        Assert.True(bending.Wait(5000), "the bend never started");
         f.Jobs.CancelRunning();
         gate.Set();
         var job = await f.WaitJob(body.GetProperty("job").GetString()!);
         Assert.Equal("cancelled", job.GetProperty("state").GetString());
+        Assert.Equal(JsonValueKind.Null, job.GetProperty("backup").ValueKind);
+        Assert.True(NoBackups());
         FolderState.AssertSame(before, mod.Root);
+    }
+
+    [Fact]
+    [Trait("Plan", "EDGE-hair-port-qa-14")]
+    public async Task A_removal_that_removes_nothing_fails_and_changes_nothing()
+    {
+        using var mod = f.AddHairMod();
+        CrossSexFixtures.HandPort(mod, [101], CrossSexFixtures.Game(f.Game.GameFiles));
+        var file = HairPortRecord.Read(mod.Root).Ports.Single().File;
+        mod.Put($"Proteus/{MeshVolumeService.BackupSubdir}/{file}", [1]);   // the user edited the only port since
+        var before = FolderState.Of(mod.Root);
+
+        var job = await Job($"\"mod\":\"Hair\",\"hair\":\"{Hair}\",\"remove\":true");
+        Assert.Equal(("failed", "run-failed"), (job.GetProperty("state").GetString(), job.GetProperty("error").GetProperty("code").GetString()));
+        var result = Result(job);
+        Assert.Equal(0, result.GetProperty("removed").GetInt32());
+        Assert.Equal(["c0101"], Codes(result.GetProperty("remaining")));
+        Assert.NotEqual(JsonValueKind.Null, job.GetProperty("backup").ValueKind);
+        Assert.Equal(0, f.Game.AfterChanges);
+        FolderState.AssertSame(before, mod.Root);
+    }
+
+    [Fact]
+    [Trait("Plan", "AC-hair-port-qa-2")]
+    public async Task HairPort_reports_the_Studio_warnings()
+    {
+        using var mod = f.AddHairMod();
+        // A deformer that forgets the women's head: the port misses the man's, and is saved with the fit warning.
+        f.Game.GameFiles[Proteus.Interop.LiveCharacter.PbdGamePath] = CrossSexFixtures.PbdBytes(womenOffset: false);
+        var result = Result(await Job(Port("c0101")));
+        var warning = result.GetProperty("warnings").EnumerateArray().Single();
+        Assert.Equal("c0101", warning.GetProperty("race").GetString());
+        Assert.Contains("c0101", warning.GetProperty("warning").GetString());
+        Assert.Contains("c0101", result.GetProperty("resultLine").GetString());
+
+        // A racial deformer that cannot be read is the run's failure, not the harness's.
+        f.Game.GameFiles[Proteus.Interop.LiveCharacter.PbdGamePath] = [1, 2, 3];
+        var broken = await Job(Port("c0401"));
+        Assert.Equal("run-failed", broken.GetProperty("error").GetProperty("code").GetString());
     }
 
     [Theory]

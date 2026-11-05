@@ -287,9 +287,12 @@ internal sealed class FakeGame : IHarnessGame
 
     /// <summary>The game's own files a hair port reads: heads, hair models, materials, skeletons, the racial deformer.</summary>
     public Dictionary<string, byte[]> GameFiles { get; set; } = new(StringComparer.OrdinalIgnoreCase);
+    /// <summary>Runs on the reading thread before each game-file read: where a test stalls a bend.</summary>
+    public Action<string>? OnReadGameFile { get; set; }
     public byte[]? ReadGameFile(string gamePath)
     {
         Order.Enqueue("ReadGameFile@" + Where());
+        OnReadGameFile?.Invoke(gamePath);
         return GameFiles.TryGetValue(gamePath, out var b) ? b : null;
     }
 

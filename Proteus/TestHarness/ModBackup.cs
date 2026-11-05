@@ -16,7 +16,7 @@ internal sealed class BackupException(string code, string message, Exception? in
     public string Code { get; } = code;
 }
 
-/// <summary>What a backup is a copy of: the mod before a refit, or the mod as a restore found it.</summary>
+/// <summary>What a backup is a copy of: the mod before a refit, the mod before a hair port or removal, or the mod as a restore found it.</summary>
 internal enum BackupKind { Refit, PreRestore, HairPort }
 
 /// <summary>A backup's <c>meta.json</c>. Written last, atomically: a folder without it (complete) is incomplete.</summary>
@@ -61,7 +61,7 @@ internal sealed class ModBackup
 
     /// <param name="backupsRoot"><c>&lt;ConfigDirectory&gt;\test-harness\backups</c>.</param>
     /// <param name="newId">The id source; UTC time plus 4 random hex digits unless a test stands in.</param>
-    /// <param name="refitCap">Largest mod a refit backs up; the pre-restore snapshot has no cap.</param>
+    /// <param name="refitCap">Largest mod a refit or hair port backs up; the pre-restore snapshot has no cap.</param>
     /// <param name="freeSpace">Free bytes on the volume of a path.</param>
     public ModBackup(string backupsRoot, Func<string>? newId = null, long refitCap = DefaultRefitCap,
                      Func<string, long>? freeSpace = null)
@@ -110,7 +110,7 @@ internal sealed class ModBackup
 
     /// <summary>
     /// Copy a mod folder into a new backup. Worker thread. Throws <see cref="BackupException"/> with the job error code:
-    /// <c>backup-too-large</c> (a refit over the cap), <c>insufficient-space</c>, <c>backup-failed</c>, or
+    /// <c>backup-too-large</c> (a refit or hair port over the cap), <c>insufficient-space</c>, <c>backup-failed</c>, or
     /// <see cref="OperationCanceledException"/>. Nothing is ever written into an existing folder.
     /// </summary>
     public BackupInfo Create(string modRoot, string modDir, BackupKind kind, string session, long seq, string? jobId,

@@ -170,7 +170,14 @@ internal static class HairPortJob
             job.Fail(new JobError("run-failed", HairPortWatcher.NoPbd));
             return;
         }
-        var pbd = new PbdFile(pbdBytes);
+        PbdFile pbd;
+        try { pbd = new PbdFile(pbdBytes); }
+        catch (Exception e) when (e is not OperationCanceledException)
+        {
+            // The game's file could not be read as a deformer: the run's failure, not the harness's.
+            job.Fail(new JobError("run-failed", $"{HairPortWatcher.NoPbd} ({e.GetType().Name})"));
+            return;
+        }
 
         var plan = HairPortPanel.PlanByHand(args.ModRoot, source, targets, pbd, game.ReadGameFile, ct,
                                             (done, total) => job.Progress($"bending {done}/{total}"));
@@ -205,7 +212,7 @@ internal static class HairPortJob
         }
         if (backup != null) WriteAfter(jobs, backup, args);
 
-        var (line, failed, _) = HairPortPanel.ResultOf(plan, outcome, removed: false);
+        var (line, _, _) = HairPortPanel.ResultOf(plan, outcome, removed: false);
         var saved = outcome.SavedWrites;
         object Place(HairPortWriter.PortWrite w) => new
         {
@@ -228,7 +235,7 @@ internal static class HairPortJob
                        .Select(w => new { race = RaceCode(w.Key), warning = w.Value }),
             current = plan.Current.Order().Select(RaceCode), saved = outcome.Count,
         });
-        if (failed || !outcome.Ok) job.Fail(new JobError("run-failed", outcome.Message));
+        if (!outcome.Ok) job.Fail(new JobError("run-failed", outcome.Message));
 
         if (changed)
         {
