@@ -148,8 +148,9 @@ public partial class CompositorService
                                 // mtime, remembered bytes by hash, a vanilla one by its game path (it changes only with a patch).
                                 var source = compositor.secondSkin.BodySourceFor(gamePath, compositor.managedModDir);
                                 compositor.log.Debug("[Proteus] seam map part {0}: {1} <- {2}", gamePath, source.Kind,
-                                    source.Disk != null ? Path.GetFileName(source.Disk)
-                                    : source.Kind == SecondSkinService.BodySourceKind.Remembered ? "(remembered)" : "(game data)");
+                                    source.Kind == SecondSkinService.BodySourceKind.Remembered ? "(remembered)"
+                                    : source.Disk != null && Path.IsPathRooted(source.Disk) ? Path.GetFileName(source.Disk)
+                                    : "(game data)");
                                 bodyMdls.Add(new UvSeamMapService.SeamModel(source.Id, source.Load));
                             }
                             // Which files the seam map will be built from; on a cache hit nothing else is logged.

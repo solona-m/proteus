@@ -497,7 +497,7 @@ public sealed partial class SecondSkinService
                     service.log.Debug("[Proteus] second skin: {0} resolves to our own output — smoothing the upstream "
                             + "kept at {1}", bodyGamePath, upstreamDisk);
                 }
-                else if (bodyIsOurs)   // OwnHeld (or a remembered copy dropped meanwhile)
+                else if (bodyIsOurs)   // OwnHeld
                 {
                     // Nothing remembered anywhere: cut the shell from what we published, but do not run the passes over it again.
                     // Never drop the part.

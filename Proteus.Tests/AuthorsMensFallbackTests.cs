@@ -621,6 +621,11 @@ public sealed class AuthorsMensFallbackTests : IDisposable
                      UnreadableNote("Top", null, null, false, [], noneParsed: true));
         Assert.Equal((string.Format(s.UnreadableMadeOnFmt, "Top"), Codes.Unreadable),
                      UnreadableNote("Top", null, null, false, [], noneParsed: false));
+        // With Made on chosen the Made-on notes are as before, whatever the files.
+        Assert.Equal((string.Format(s.MadeOnMissingFmt, "Top", "gone"), Codes.NotMadeOn),
+                     UnreadableNote("Top", "gone", null, true, [], noneParsed: true));
+        Assert.Equal((string.Format(s.UnreadableFmt, "Top"), Codes.Unreadable),
+                     UnreadableNote("Top", "Bibo+", "Bibo+", false, [], noneParsed: true));
 
         // The piece's own files: missing (the Mod helper never writes them), empty, garbage.
         string missing = Mod([MensTop]);

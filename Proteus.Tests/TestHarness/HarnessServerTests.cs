@@ -183,6 +183,7 @@ public class HarnessServerTests : IDisposable
         var doc = File.ReadAllText(Path.Combine(dir!.FullName, "docs", "agent-rules", "adversarial-qa.md"));
         Assert.Contains("too-many-connections", doc);
         Assert.Contains("repeats a field", doc);
+        Assert.Contains("it is never a busy run", doc);   // the new sentence tells the two apart
         Assert.Contains("409 `busy`", doc);
     }
 

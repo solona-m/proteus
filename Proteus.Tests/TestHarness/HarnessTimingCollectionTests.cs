@@ -48,6 +48,7 @@ public class HarnessTimingCollectionTests
             .Select(Path.GetFileNameWithoutExtension)
             .Order(StringComparer.Ordinal)
             .ToList();
+        Assert.NotEmpty(users);
         Assert.All(users, u => Assert.Contains(Expected, t => t.Name == u));
     }
 

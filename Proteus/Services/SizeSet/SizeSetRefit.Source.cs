@@ -340,7 +340,7 @@ internal static partial class SizeSetRefit
     /// (<see cref="PieceFilesUnparsable"/>): choosing "Made on" can't make it readable — and would turn off the #43
     /// fallback that makes the women's piece men's — so it is not advised (#46).</param>
     internal static (string Note, string Code) UnreadableNote(string piece, string? madeOn, string? madeOnName, bool missing,
-                                                              IReadOnlyCollection<MadeOnFit> fits, bool noneParsed = false)
+                                                              IReadOnlyCollection<MadeOnFit> fits, bool noneParsed)
     {
         var s = Strings.SizeSet;
         if (madeOn == null)

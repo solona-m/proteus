@@ -31,8 +31,8 @@ public sealed partial class SecondSkinService
     internal static string UpstreamKeptPath(string outputRoot, string gamePath)
         => Path.Combine(outputRoot, "models", "upstream", CompositorService.SanitizeName(gamePath) + ".mdl");
 
-    /// <summary>A body part's chosen source: what it is, its file (null for game data or remembered bytes), a cache
-    /// identity, and how to read it.</summary>
+    /// <summary>A body part's chosen source: what it is, its file (null for remembered bytes; for game data the game
+    /// path itself, as Penumbra resolves an unmodded file — not rooted), a cache identity, and how to read it.</summary>
     internal readonly record struct BodySource(BodySourceKind Kind, string? Disk, string Id, Func<byte[]?> Load);
 
     /// <summary>
@@ -48,7 +48,8 @@ public sealed partial class SecondSkinService
             if (!string.IsNullOrEmpty(disk) && new FileInfo(disk) is { Exists: true } fi)
                 return $"{disk}|{fi.Length}|{fi.LastWriteTimeUtc.Ticks}";
         }
-        catch { /* unreadable — the game path */ }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or ArgumentException
+                                         or NotSupportedException) { /* unreadable — the game path */ }
         return gamePath;
     }
 
