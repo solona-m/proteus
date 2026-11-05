@@ -54,7 +54,30 @@ internal static partial class SizeSetRefit
     internal sealed record Request(string ModRoot, IReadOnlyList<string> Keys, bool Yas, bool Remake,
                                    IReadOnlyList<BodyModIndex.Entry> Bodies, Func<string, byte[]?>? ReadGameFile = null,
                                    bool Ends = true, Func<string, BodySizeCatalog?>? GameBody = null,
-                                   bool Piercings = false, AcrossInputs? Across = null, string? MadeOn = null);
+                                   bool Piercings = false, AcrossInputs? Across = null, string? MadeOn = null)
+    {
+        /// <summary>
+        /// Whether a mod is one the size table resolves a body to (<see cref="SupportedBodies.Recognised"/>, women's and
+        /// men's): what the size set passes where the automatic refit passes "switched on", to break a tie between mods
+        /// a garment matches equally — nothing is switched on for a size set. The table's body mod then wins over any
+        /// other installed mod shipping the same skin: an outfit or underwear mod (Equinox's Rue Large shared 55.2% with
+        /// Rue+ and with "Elegy - Sylvie Bra &amp; Panties", which ships three bodies' skin and so had more sizes: read on
+        /// Elegy, its Rosaline Coconut size was cut from the wrong body and left the cups open), but also a body mod the
+        /// table does not list (Uranus Redux, a second copy of a body). A tie between two mods the table does not resolve
+        /// to falls to the larger pack as before (a Uranus garment between Uranus Redux and Elegy).
+        /// </summary>
+        internal bool KnownBody(string dir) => Known.GetValue(Bodies, Resolve).Contains(dir);
+
+        /// <summary>The set per body list, so a copy of the request with other bodies answers for its own.</summary>
+        private static readonly System.Runtime.CompilerServices.ConditionalWeakTable<IReadOnlyList<BodyModIndex.Entry>, HashSet<string>> Known = new();
+
+        private static HashSet<string> Resolve(IReadOnlyList<BodyModIndex.Entry> bodies)
+        {
+            var dirs = SupportedBodies.Recognised(bodies, "0201");
+            dirs.UnionWith(SupportedBodies.Recognised(bodies, "0101"));
+            return dirs;
+        }
+    }
 
     /// <param name="ResolveCollection">The file the player's collection loads for a game path (a skeleton): a path on
     /// disk when a mod replaces it, anything else for the game's own (see <see cref="OtherRaceWearer.Gather"/>).</param>
@@ -933,10 +956,7 @@ internal static partial class SizeSetRefit
                                              replaceSkin: true, acrossBodies: across, clearBody: false, cutHidden: true,
                                              keepShape: chosen.Shape, log: line => log.Debug("[Proteus] size set: {0}", line),
                                              warn: line => log.Warning("[Proteus] size set: {0}", line),
-                                             carryPiercings: request.Piercings,
-                                             // A same-sex top's ring of skin left out in plain sight past the author's
-                                             // edge is drawn (see BodyRetarget.GrowSeenSlits); never a men's piece.
-                                             slitSlot: male ? null : RefitCore.SlitSlot(true, piece.Slot));
+                                             carryPiercings: request.Piercings);
                 plan = RefitCore.MatchSkinToBody(plan, chosen.SourcePath, targetPath, uvRemap, male, log);
                 // Folds are said, never refused (cross-sex-tops-yas).
                 log.Information("[Proteus] size set: {0} onto {1} (moved up to {2:F1} mm, {3} folded)", piece.Label, option,

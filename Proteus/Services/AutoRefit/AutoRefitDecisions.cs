@@ -407,6 +407,12 @@ internal static class AutoRefitDecisions
     /// <summary>
     /// Among equal answers: the preferred body, then one switched on, then the larger pack, then the first given. The
     /// one order both readings break ties in.
+    /// <para/>
+    /// "Switched on" is what the caller says it is: the automatic refit passes the player's collection, the size set a
+    /// mod the size table resolves a body to (<see cref="SizeSetRefit.Request.KnownBody"/>), since it has no collection.
+    /// Not yet handled: in the automatic refit, a tie between a body mod and an outfit or underwear mod shipping the same
+    /// skin with both switched on still goes to the larger pack (Rue+ against "Elegy - Sylvie Bra &amp; Panties"), and in
+    /// either reading so does a tie between two mods the table does not resolve to.
     /// </summary>
     private static string Prefer(IEnumerable<(string Dir, bool Preferred, bool Enabled, int Sizes, int Index, bool Equal)> all)
         => all.Where(x => x.Equal)

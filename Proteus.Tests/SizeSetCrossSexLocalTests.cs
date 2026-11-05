@@ -292,6 +292,7 @@ public sealed class SizeSetCrossSexLocalTests(ITestOutputHelper o) : IDisposable
     [Trait("Plan", "AC-tbsex-nude-legs-7")]
     [Trait("Plan", "EDGE-tbsex-nude-legs-11")]
     [Trait("Plan", "EDGE-tbsex-nude-legs-12")]
+    [Trait("Plan", "AC-equinox-legs-slits-7")]
     public void Sheer_elegance_gains_mens_versions() // [AC-sizeset-cross-sex-2] [AC-sizeset-cross-sex-4] [EDGE-sizeset-cross-sex-19] [EDGE-sizeset-cross-sex-24] [EDGE-sizeset-cross-sex-3] [AC-cross-sex-area-coverage-3] [AC-cross-sex-area-coverage-7] [EDGE-cross-sex-area-coverage-6] [AC-tbsex-nude-legs-1] [AC-tbsex-nude-legs-4] [AC-tbsex-nude-legs-7] [EDGE-tbsex-nude-legs-11] [EDGE-tbsex-nude-legs-12]
     {
         string root = Copy(Sheer);
@@ -354,8 +355,10 @@ public sealed class SizeSetCrossSexLocalTests(ITestOutputHelper o) : IDisposable
         // Its folds are said under "Check in game", never a refusal; and that men get one of the two variants.
         Assert.Contains(result.Warnings!, w => w.Contains("\"TBSE\"") && w.Contains("cloth face"));
         Assert.Contains(result.Warnings!, w => w.Contains("\"TBSE-X\"") && w.Contains("cloth face"));
-        Assert.Contains(result.Warnings!, w => w == string.Format(Localization.Strings.SizeSet.OneVariantFmt,
-                                                                  across.First(p => p.GamePath == SheerTop).Label, "SFW- Opaque"));
+        // equinox-legs-slits: the top is sized in "Chest size", the group the game draws it from (priority 1, over
+        // "Content Type"), whose every option is a size — so it no longer says men get only its "SFW- Opaque" variant.
+        Assert.DoesNotContain(result.Warnings!, w => w == string.Format(Localization.Strings.SizeSet.OneVariantFmt,
+                                                                        across.First(p => p.GamePath == SheerTop).Label, "SFW- Opaque"));
     }
 
     [LocalDataFact(LocalData.GameData, Sheer, CrossSexRefitLocalTests.Bibo, CrossSexRefitLocalTests.Tbse, LocalData.TbseUvMaps)]

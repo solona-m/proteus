@@ -14,33 +14,31 @@ using SizeStatus = Proteus.Services.SizeSetRefit.SizeStatus;
 namespace Proteus.Tests;
 
 /// <summary>
-/// Equinox as it shipped, unpacked and converted, sized with "Made on" = Bibo+: once for every women's body and the men's
-/// (A), and once for the women's bodies with the seen-slit pass off (B) — the runs the tests below read.
+/// Equinox as it shipped, unpacked and converted, sized once with "Made on" = Bibo+ for every women's body and the men's,
+/// over the bodies and the Elegy underwear a scan of the whole mod folder finds (Elegy ships Rue's skin: its Rue Large
+/// used to read as made on it) — the run the tests below read.
 /// </summary>
 public sealed class EquinoxRun : IDisposable
 {
     internal static readonly string[] Bodies =
-        [Data.Bibo, Data.Neolithe, Data.Rue, Data.Yab, Data.TreYas, Data.Rosaline, Data.Tbse, Data.TbseX];
+        [Data.Bibo, Data.Neolithe, Data.Rue, Data.Yab, Data.TreYas, Data.Rosaline, Data.Tbse, Data.TbseX, Data.ElegySylvie];
 
     internal static readonly string[] Needs =
         [Data.EquinoxPack, .. Bodies, LocalData.GameData, LocalData.UvMaps, LocalData.TbseUvMaps];
 
     internal string A { get; } = "";
-    internal string B { get; } = "";
     internal List<(string Group, List<string> Options, int? Default)> Before { get; } = [];
     internal List<SizeSetRefit.Piece> Pieces { get; } = [];
     internal SizeSetRefit.RunLog LogA { get; } = new();
-    internal SizeSetRefit.RunLog LogB { get; } = new();
     internal string SaidA { get; } = "";
     internal TimeSpan TimeA { get; }
-    internal TimeSpan TimeB { get; }
 
     public EquinoxRun()
     {
         if (LocalData.Missing(Needs) != null) return;
         var readGame = Data.Game();
-        A = Prepared();
-        B = Prepared();
+        A = Data.UnpackedPack(Data.EquinoxPack);
+        PenumbraModMeta.MigrateWorkCopy(A, LocalData.Path(LocalData.Mods));
         Before = Data.Shape(A);
         Pieces = SizeSetRefit.PiecesOf(A, readGame);
         var said = new StringWriter();
@@ -49,26 +47,10 @@ public sealed class EquinoxRun : IDisposable
                           uvmaps: LocalData.Path(LocalData.TbseUvMaps), madeOn: Data.Folder(Data.Bibo),
                           log: RefitCli::Proteus.Refit.ConsoleLog.To(said)).Log;
         TimeA = clock.Elapsed;
-        clock.Restart();
-        LogB = BodyRetarget.WithTuning(new BodyRetarget.Tuning(NoSeenSlits: true),
-            () => Data.Batch(B, SizeSetBatch.WomensKeys, men: false, Bodies, readGame: readGame,
-                             uvmaps: LocalData.Path(LocalData.TbseUvMaps), madeOn: Data.Folder(Data.Bibo)).Log);
-        TimeB = clock.Elapsed;
         SaidA = said.ToString();
     }
 
-    private static string Prepared()
-    {
-        string copy = Data.UnpackedPack(Data.EquinoxPack);
-        PenumbraModMeta.MigrateWorkCopy(copy, LocalData.Path(LocalData.Mods));
-        return copy;
-    }
-
-    public void Dispose()
-    {
-        Data.Delete(A);
-        Data.Delete(B);
-    }
+    public void Dispose() => Data.Delete(A);
 }
 
 [Trait("Speed", "Slow")]
@@ -95,33 +77,31 @@ public class EquinoxSizeSetLocalTests(ITestOutputHelper output, EquinoxRun run) 
         return ModelPartReader.Read(File.ReadAllBytes(BodySizeCatalog.ResolveCaseInsensitive(copy, entry.File)))!;
     }
 
-    private static byte[] BytesOf(string copy, string option, string gamePath)
+    private static void AssertNoDegenerate(ModelParts m)
     {
-        var entry = BodyRetargetWriter.ReadRecord(copy)!.Options
-            .Single(e => e.Name == option && string.Equals(e.GamePath, gamePath, StringComparison.OrdinalIgnoreCase));
-        return File.ReadAllBytes(BodySizeCatalog.ResolveCaseInsensitive(copy, entry.File));
+        System.Numerics.Vector3 P(int v) => new(m.Positions[v * 3], m.Positions[v * 3 + 1], m.Positions[v * 3 + 2]);
+        foreach (var part in m.Parts.Where(p => p.Island < 0 && SecondSkinWriter.IsBodySkinMaterial(p.Material)))
+            for (int t = 0; t + 2 < part.Triangles.Length; t += 3)
+                Assert.True(System.Numerics.Vector3.Cross(P(part.Triangles[t + 1]) - P(part.Triangles[t]),
+                                                          P(part.Triangles[t + 2]) - P(part.Triangles[t])).LengthSquared() > 1e-16f,
+                            "a degenerate skin triangle");
     }
 
-    private static IEnumerable<System.Numerics.Vector3> ClothOf(ModelParts m)
-        => m.Parts.Where(p => p.Island < 0 && !SecondSkinWriter.IsBodySkinMaterial(p.Material))
-                  .SelectMany(p => p.Triangles)
-                  .Select(v => new System.Numerics.Vector3(m.Positions[v * 3], m.Positions[v * 3 + 1], m.Positions[v * 3 + 2]));
-
+    /// <summary>[HS] Rosaline (Base)'s "Coconut" smallclothes chest, as the size set's Rosaline Coconut size reads it.</summary>
     private static ModelParts CoconutBody()
     {
-        var catalog = BodySizeCatalog.Read(LocalData.Path(Data.Rosaline));
-        var coconut = catalog.For("_top").Single(o => o.Label.Contains("Coconut", StringComparison.OrdinalIgnoreCase));
-        return ModelPartReader.Read(File.ReadAllBytes(catalog.PathOf(coconut)))!;
+        string rel = SupportedBodies.Of("rosaline", "_top", false)!.Sizes.Single(z => z.Name == "Coconut").Rel;
+        return ModelPartReader.Read(File.ReadAllBytes(BodySizeCatalog.ResolveCaseInsensitive(LocalData.Path(Data.Rosaline), rel)))!;
     }
 
     [LocalDataFact(Data.EquinoxPack, Data.Bibo, Data.Neolithe, Data.Rue, Data.Yab, Data.TreYas, Data.Rosaline, Data.Tbse,
-                   Data.TbseX, LocalData.GameData, LocalData.UvMaps, LocalData.TbseUvMaps)]
+                   Data.TbseX, Data.ElegySylvie, LocalData.GameData, LocalData.UvMaps, LocalData.TbseUvMaps)]
     [Trait("Plan", "AC-equinox-legs-slits-1")]
     [Trait("Plan", "AC-equinox-legs-slits-3")]
     public void Equinox_legs_are_sized_in_Bottom_Size_for_every_body()
     {
         Print(run.LogA);
-        output.WriteLine($"run A {run.TimeA.TotalSeconds:F0} s, run B {run.TimeB.TotalSeconds:F0} s");
+        output.WriteLine($"run {run.TimeA.TotalSeconds:F0} s");
 
         var legs = Assert.Single(run.Pieces, p => p.Slot == "_dwn" && p.GamePath.Equals(Dwn, StringComparison.OrdinalIgnoreCase));
         Assert.Equal("Bottom Size", legs.Group);
@@ -136,22 +116,20 @@ public class EquinoxSizeSetLocalTests(ITestOutputHelper output, EquinoxRun run) 
         Assert.Equal(3, madeLegs.Count(s => s.Body == "bibo"));
         Assert.Equal(2, madeLegs.Count(s => s.Body == "tre"));
 
-        // Top Size gained only tops; its author options keep the legs they carried.
+        // No legs refit went into Top Size (a new chest size there still carries its source option's own legs, which
+        // Bottom Size outranks); its author options keep the legs they carried.
         var after = Data.Shape(run.A);
         Data.AssertOnlyAppended(run.Before, after);
         var redirects = PenumbraModMeta.ReadAllRedirects(run.A);
-        var topSize = run.Before.Single(g => g.Group == "Top Size");
-        var added = after.Single(g => g.Group == "Top Size").Options.Skip(topSize.Options.Count).ToList();
-        Assert.DoesNotContain(redirects, r => r.Source.StartsWith("Top Size / ", StringComparison.Ordinal)
-                                               && added.Contains(r.Source["Top Size / ".Length..])
-                                               && r.GamePath.Equals(Dwn, StringComparison.OrdinalIgnoreCase));
+        Assert.DoesNotContain(BodyRetargetWriter.ReadRecord(run.A)!.Options,
+                              e => e.Group == "Top Size" && e.GamePath.Equals(Dwn, StringComparison.OrdinalIgnoreCase));
         Assert.Contains(redirects, r => r.Source == "Top Size / Rue Large" && r.GamePath.Equals(Dwn, StringComparison.OrdinalIgnoreCase));
         Assert.Contains("sized in \"Bottom Size\", not \"Top Size\"", run.SaidA);
         Assert.Contains("applied before it while on: none", run.SaidA);
     }
 
     [LocalDataFact(Data.EquinoxPack, Data.Bibo, Data.Neolithe, Data.Rue, Data.Yab, Data.TreYas, Data.Rosaline, Data.Tbse,
-                   Data.TbseX, LocalData.GameData, LocalData.UvMaps, LocalData.TbseUvMaps)]
+                   Data.TbseX, Data.ElegySylvie, LocalData.GameData, LocalData.UvMaps, LocalData.TbseUvMaps)]
     [Trait("Plan", "AC-equinox-legs-slits-2")]
     public void Equinox_gets_TBSE_and_TBSE_X_tops_and_legs()
     {
@@ -168,68 +146,37 @@ public class EquinoxSizeSetLocalTests(ITestOutputHelper output, EquinoxRun run) 
     }
 
     [LocalDataFact(Data.EquinoxPack, Data.Bibo, Data.Neolithe, Data.Rue, Data.Yab, Data.TreYas, Data.Rosaline, Data.Tbse,
-                   Data.TbseX, LocalData.GameData, LocalData.UvMaps, LocalData.TbseUvMaps)]
+                   Data.TbseX, Data.ElegySylvie, LocalData.GameData, LocalData.UvMaps, LocalData.TbseUvMaps)]
     [Trait("Plan", "AC-equinox-legs-slits-4")]
-    [Trait("Plan", "EDGE-equinox-legs-slits-10")]
-    public void Equinox_Rosaline_Coconut_top_has_narrower_cup_slits()
+    [Trait("Plan", "AC-equinox-legs-slits-8")]
+    public void Equinox_Rosaline_Coconut_top_is_read_on_Rue_and_left_whole()
     {
+        // Rue Large ties Rue+ and the Elegy underwear (55.2% each): the body mod wins, so Coconut is cut from Rue's body.
+        // Read on Elegy, as before, the same size left 10.2 cm² of the cups uncovered, 37.41 cm² of skin through the
+        // cloth and 19 folds.
+        Assert.DoesNotContain(run.LogA.Sizes, s => (s.From ?? "").Contains("Elegy", StringComparison.OrdinalIgnoreCase));
+        var coconut = run.LogA.Sizes.Single(s => s.Option == "Rosaline Coconut" && s.Slot == "_top");
+        Assert.Equal("Rue Large", coconut.CutFrom);
+        Assert.Contains("Rue+", coconut.From ?? "");
+
         var body = CoconutBody();
         var a = ModelOf(run.A, "Rosaline Coconut", Top);
-        var b = ModelOf(run.B, "Rosaline Coconut", Top);
-        var bands = new SortedDictionary<(float, string), double>();
-        double uncoveredA = VanillaGearRefitLocalTests.UncoveredUndrawn(a, body, bands);
-        double uncoveredB = VanillaGearRefitLocalTests.UncoveredUndrawn(b, body, new SortedDictionary<(float, string), double>());
-        double seenA = VanillaGearRefitLocalTests.SeenIntoGarmentAllAround(a, body);
-        double seenB = VanillaGearRefitLocalTests.SeenIntoGarmentAllAround(b, body);
-        double throughA = VanillaGearRefitLocalTests.SkinThrough(a, VanillaGearRefitLocalTests.Under);
-        double throughB = VanillaGearRefitLocalTests.SkinThrough(b, VanillaGearRefitLocalTests.Under);
-        int foldedA = run.LogA.Sizes.Single(s => s.Option == "Rosaline Coconut" && s.Slot == "_top").Measures!.Folded;
-        int foldedB = run.LogB.Sizes.Single(s => s.Option == "Rosaline Coconut" && s.Slot == "_top").Measures!.Folded;
-        output.WriteLine($"uncovered {uncoveredB:0.0} → {uncoveredA:0.0} cm², seen into {seenB:0.0} → {seenA:0.0} cm², "
-                         + $"skin through {throughB:0.00} → {throughA:0.00} cm², folded {foldedB} → {foldedA}");
+        double uncovered = VanillaGearRefitLocalTests.UncoveredUndrawn(a, body, new SortedDictionary<(float, string), double>());
+        double seen = VanillaGearRefitLocalTests.SeenIntoGarmentAllAround(a, body);
+        double through = VanillaGearRefitLocalTests.SkinThrough(a, VanillaGearRefitLocalTests.Under);
+        output.WriteLine($"from {coconut.From}: uncovered {uncovered:0.0} cm², seen into {seen:0.0} cm², skin through {through:0.00} cm², "
+                         + $"folded {coconut.Measures!.Folded}");
 
-        // The fixture still shows the slit without the pass…
-        Assert.True(uncoveredB >= 9.0, $"{uncoveredB:0.0} cm² uncovered without the pass");
-        Assert.True(seenB >= 9.0, $"{seenB:0.0} cm² seen into without the pass");
-        // …and the pass draws into it, no skin through the cloth and no fold added.
-        Assert.True(ClothOf(a).SequenceEqual(ClothOf(b)), "the cloth moved");
-        Assert.True(uncoveredA <= 6.5, $"{uncoveredA:0.0} cm² uncovered");
-        Assert.True(seenA <= 7.0, $"{seenA:0.0} cm² seen into");
-        Assert.True(throughA <= throughB, $"skin through {throughA:0.00} against {throughB:0.00}");
-        Assert.Equal(foldedB, foldedA);
-    }
-
-    [LocalDataFact(Data.EquinoxPack, Data.Bibo, Data.Neolithe, Data.Rue, Data.Yab, Data.TreYas, Data.Rosaline, Data.Tbse,
-                   Data.TbseX, LocalData.GameData, LocalData.UvMaps, LocalData.TbseUvMaps)]
-    [Trait("Plan", "AC-equinox-legs-slits-5")]
-    [Trait("Plan", "EDGE-equinox-legs-slits-17")]
-    public void Every_other_Equinox_top_is_unchanged_or_only_gains_skin()
-    {
-        var made = run.LogB.Sizes.Where(s => !s.Men && s.Status == SizeStatus.Made).ToList();
-        Assert.NotEmpty(made);
-        int changed = 0;
-        foreach (var s in made)
-        {
-            var bytesA = BytesOf(run.A, s.Option!, s.GamePath);
-            var bytesB = BytesOf(run.B, s.Option!, s.GamePath);
-            if (bytesA.AsSpan().SequenceEqual(bytesB)) continue;
-            Assert.Equal("_top", s.Slot);   // legs never change
-            changed++;
-            var a = ModelPartReader.Read(bytesA)!;
-            var b = ModelPartReader.Read(bytesB)!;
-            Assert.True(ClothOf(a).SequenceEqual(ClothOf(b)), $"{s.Option}: the cloth moved");
-            Assert.True(VanillaGearRefitLocalTests.SkinThrough(a, VanillaGearRefitLocalTests.Under)
-                        <= VanillaGearRefitLocalTests.SkinThrough(b, VanillaGearRefitLocalTests.Under) + 1e-6, $"{s.Option}: skin through");
-            Assert.Equal(s.Measures!.Folded,
-                         run.LogA.Sizes.Single(x => !x.Men && x.Option == s.Option && x.GamePath == s.GamePath).Measures!.Folded);
-            output.WriteLine($"{s.Option}: only skin added");
-        }
-        output.WriteLine($"{changed} of {made.Count} sizes gained skin; the rest byte-identical");
+        Assert.True(uncovered <= 1.0, $"{uncovered:0.0} cm² uncovered");
+        Assert.True(seen <= 1.0, $"{seen:0.0} cm² seen into");
+        Assert.True(through <= 37.41, $"skin through {through:0.00}");
+        Assert.True(coconut.Measures.Folded <= 19, $"{coconut.Measures.Folded} folded");
+        AssertNoDegenerate(a);
     }
 
     [LocalDataFact(Data.EquinoxPack, Data.Rue, LocalData.GameData, LocalData.UvMaps)]
     [Trait("Plan", "EDGE-equinox-legs-slits-9")]
-    public void Equinox_without_made_on_names_the_legs_it_cannot_read()
+    public void Equinox_without_made_on_sizes_its_legs_from_Bottom_Size_alone()
     {
         string copy = Data.UnpackedPack(Data.EquinoxPack);
         try
@@ -239,9 +186,14 @@ public class EquinoxSizeSetLocalTests(ITestOutputHelper output, EquinoxRun run) 
             var log = Data.Batch(copy, ["rue"], men: false, [Data.Rue], readGame: Data.Game()).Log;
             foreach (string note in log.Notes) output.WriteLine(note);
 
+            // Read from Bottom Size alone: its Rue WC reads on Rue without "Made on", so the legs are no longer the
+            // unread "0 of the author's 6" Top Size gave; none of Top Size's legs is a source.
             Assert.Equal("Bottom Size", legs.Group);
             Assert.DoesNotContain(legs.Options, o => o.File.StartsWith("top size", StringComparison.OrdinalIgnoreCase));
-            Assert.Contains(string.Format(Strings.SizeSet.UnreadableMadeOnFmt, legs.Label), log.Notes);
+            var legsOutcomes = log.Sizes.Where(s => s.GamePath.Equals(Dwn, StringComparison.OrdinalIgnoreCase)).ToList();
+            Assert.NotEmpty(legsOutcomes);
+            Assert.All(legsOutcomes, s => Assert.Equal("Bottom Size", s.Group));
+            Assert.DoesNotContain(legsOutcomes, s => s.ReasonCode == SizeSetRefit.Codes.NotMadeOn);
         }
         finally
         {

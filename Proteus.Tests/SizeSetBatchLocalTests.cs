@@ -28,6 +28,9 @@ internal static class SizeSetBatchData
     internal const string TreYas = LocalData.Mods + ":hs-[YAS] Tre-5.5.3-8xB";
     internal const string Tbse = LocalData.Mods + ":The Body SE";
     internal const string TbseX = LocalData.Mods + ":The Body SE-X IVCS2 V1_1_0";
+    /// <summary>A Rue-family underwear mod that ships the body's skin: a scan of the whole mod folder can read a Rue
+    /// garment as made on it (Equinox's Rue Large).</summary>
+    internal const string ElegySylvie = LocalData.Mods + ":Elegy - Sylvie Bra & Panties (RueYABUranusRe)";
     internal const string Sheer = LocalData.Mods + ":BiboPlus Sheer Elegance";
     internal const string TwillTrousers = LocalData.Mods + ":-Twill Trousers- [YAB, TBSE, TBSE-X]";
     internal const string HellForLeather = LocalData.Mods + ":Hell for Leather - by Solona";

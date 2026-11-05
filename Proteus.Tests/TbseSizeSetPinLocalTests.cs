@@ -139,8 +139,12 @@ public class TbseSizeSetPinLocalTests(ITestOutputHelper o)
                    CrossSexRefitLocalTests.Tbse, CrossSexNudeLegsLocalTests.LavaBod, LocalData.TbseUvMaps)]
     [Trait("Plan", "AC-tbsex-nude-legs-4")]
     [Trait("Plan", "EDGE-tbsex-nude-legs-10")]
+    [Trait("Plan", "AC-equinox-legs-slits-7")]
     public void Sheer_tbse_size_set_is_unchanged() // [AC-tbsex-nude-legs-4] [EDGE-tbsex-nude-legs-10]
-        => Check("sheer", SizeSetCrossSexLocalTests.Sheer, SheerRows, SheerFiles);
+        // equinox-legs-slits: Sheer's top is sized in "Chest size", the group the game draws it from (priority 1, over
+        // "Content Type"), so its men's TBSE top is cut from that group's nearest size, Perky - Small, not Perky - Medium:
+        // 114 folds before, 123 now, both over the site's drop limit; TBSE-X (113) and the legs (8, 14) as they were.
+        => Check("sheer", SizeSetCrossSexLocalTests.Sheer, SheerRows, SheerFiles, newlyMade: ["c0101e6010_top.mdl"]);
 
     [LocalDataFact(LocalData.GameData, SizeSetCrossSexLocalTests.Stormblessed, CrossSexRefitLocalTests.Bibo,
                    CrossSexRefitLocalTests.Tbse, CrossSexNudeLegsLocalTests.LavaBod, LocalData.TbseUvMaps)]

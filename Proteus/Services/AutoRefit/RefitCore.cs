@@ -1260,10 +1260,6 @@ internal static partial class RefitCore
     /// </summary>
     internal static string? TuckSlot(bool tuck, string garmentSlot) => tuck && garmentSlot == "_top" ? "_top" : null;
 
-    /// <summary>The slot whose skin left out in plain sight past the author's edge is drawn (see
-    /// <see cref="BodyRetarget.Plan"/>'s slitSlot): a top's chest only, and only when <paramref name="rule"/> asks.</summary>
-    internal static string? SlitSlot(bool rule, string garmentSlot) => rule && garmentSlot == "_top" ? "_top" : null;
-
     /// <summary>
     /// Whether a top's cloth buried in a far larger new breast is cleared out of it from deeper than usual (see
     /// <see cref="BodyRetarget.DeepClearDepth"/>): the game's own top, in the automatic refit and in the Studio (see
