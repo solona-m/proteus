@@ -359,17 +359,19 @@ public partial class CompositorService
                 r.CharCodes != null && !string.Equals(r.CharCodes, lastCharCodes, StringComparison.OrdinalIgnoreCase),
                 r.ShapeSig != null && !string.Equals(r.ShapeSig, lastShapeSig, StringComparison.Ordinal));
 
-        string? dropped = null;
+        // Every fact any dropped reading would have triggered (the union), for the Debug line.
+        bool dBody = false, dChar = false, dShapes = false;
         foreach (var r in readings)
             if (r is { } u && !Trusted(u))
             {
                 var (b, c, sh) = Changes(u);
-                var names = new List<string>();
-                if (b) names.Add("body type");
-                if (c) names.Add("char code");
-                if (sh) names.Add("shapes");
-                dropped = names.Count > 0 ? string.Join(", ", names) : null;
+                dBody |= b; dChar |= c; dShapes |= sh;
             }
+        var names = new List<string>();
+        if (dBody) names.Add("body type");
+        if (dChar) names.Add("char code");
+        if (dShapes) names.Add("shapes");
+        string? dropped = names.Count > 0 ? string.Join(", ", names) : null;
 
         int n = readings.Count;
         bool TrustedAt(int i) => i >= 0 && readings[i] is { } r && Trusted(r);

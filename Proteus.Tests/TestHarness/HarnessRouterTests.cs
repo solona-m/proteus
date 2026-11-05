@@ -217,6 +217,7 @@ public class HarnessRouterTests : IDisposable
     [Fact]
     [Trait("Plan", "AC-dt-shader-upgrade-10")]
     [Trait("Plan", "EDGE-dt-shader-upgrade-69")]
+    [Trait("Plan", "EDGE-issue-sweep-a-11")]
     public async Task Shader_upgrade_action_validates_and_starts_undo_worn_and_upgrade_now()
     {
         var (status, b) = await f.Post("/actions/shader-upgrade", """{"enabled":true,"maskGloss":"low"}""");

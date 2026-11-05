@@ -132,7 +132,8 @@ public partial class CompositorService
                 private void LoadSeams()
                 {
                     // The mesh that owns this UV layout: its seams are the only statement of which island edges continue into which.
-                    // Identity only here, no file opened; the seam map is cached by it.
+                    // Chosen by the shell's rule (BodySourceFor): file stats, the settled upstream read when it would be
+                    // chosen, remembered bytes hashed. The seam map is cached by the identity; its full read waits for a miss.
                     bodyMdls = null;
                     if (islandLabels != null)
                     {
@@ -155,7 +156,8 @@ public partial class CompositorService
                             material.run.compositor.log.Debug("[Proteus] seam map: {0} body part(s) for {1} — {2}",
                                       bodyMdls.Count, material.mtrlGamePath,
                                       string.Join(", ", bodyMdls.Select(m =>
-                                          m.Id.Contains('|') ? Path.GetFileName(m.Id[..m.Id.IndexOf('|')]) : "(game)")));
+                                          m.Id.StartsWith("mem|", StringComparison.Ordinal) ? "(remembered)"
+                                          : m.Id.Contains('|') ? Path.GetFileName(m.Id[..m.Id.IndexOf('|')]) : "(game)")));
                         }
                         else
                         {

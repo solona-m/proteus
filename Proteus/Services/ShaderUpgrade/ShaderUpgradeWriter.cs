@@ -303,13 +303,13 @@ internal static class ShaderUpgradeWriter
         {
             // The material write is atomic, so the file is as it was, or (a failure after it) our output; take out what
             // this unit added only when the file is readable and NOT our output. A file that can't be read (locked,
-            // missing) is an unknown state: the entry and its backup are kept, and the next walk looks again. An
+            // missing, empty) is an unknown state: the entry and its backup are kept, and the next walk looks again. An
             // already-upgraded file is never planned again, so its entry may stay Pending — harmless: undo works from
             // the hashes.
             var r2 = ReadRecord(modRoot) ?? record;
             if (EntryOf(r2, w.Rel) is { } e)
             {
-                if (SafeRead(path) is not { } now) rewalk = true;
+                if (SafeRead(path) is not { Length: > 0 } now) rewalk = true;   // unreadable, missing or empty: unknown
                 else if (Sha8(now) != e.UpgradedSha8)
                 {
                     Forget(modRoot, r2, e, keep: null, strictBackup: false);
@@ -455,7 +455,7 @@ internal static class ShaderUpgradeWriter
                 // There but unreadable (in use), or empty (a save still being written): its hash says nothing, and an
                 // unknown file must not be taken for the author's update (that would drop the only original). Nothing
                 // is forgotten; the next undo tries again.
-                message = $"{rel} could not be read (in use?); undo left it as it is — try again";
+                message = $"{rel} could not be read or is empty; undo left it as it is — try again";
                 return Undone.Failed;
             }
             if (EditedAfterUpgrade(current, entry))

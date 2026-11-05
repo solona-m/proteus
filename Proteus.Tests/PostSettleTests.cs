@@ -46,6 +46,9 @@ public class PostSettleTests
         var v = Run(Incoherent, Incoherent, Incoherent, Incoherent, Incoherent, Incoherent);
         Assert.Equal(A.None, v.Action);
         Assert.Contains("shapes", v.Dropped);
+        // The dropped facts are the union over every dropped reading: a later one that would trigger nothing hides none.
+        var quiet = new R("gen2", null, LastShapes);
+        Assert.Contains("shapes", Run(Incoherent, quiet, quiet, quiet, quiet, quiet).Dropped);
         // Two incoherent readings with equal keys never confirm one another.
         Assert.Equal(A.KeepSampling, Decide(false, Incoherent, Incoherent).Action);
         // A coherent reading then an incoherent last one: nothing to act on at the cap.

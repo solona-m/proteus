@@ -632,11 +632,24 @@ public class NailSocketTests(ITestOutputHelper o)
         Assert.True(NailGrade.SameIsland(hand, flat!, plans, sewn), "the hidden sewn nail changed");
         // NailGrade finds holes from the geometry alone and can't see switches (the hidden sewn nail still closes the
         // rim to it), so the span is judged by the pass's own count here; its shape is graded by the one-layer tests.
-        if (sock.Owner != null && sock.LeftAsAuthored == null)
-            Assert.Contains(log, l => l.Contains("1 spanning an open socket", StringComparison.Ordinal));
-        else
-            foreach (var m in sock.Members)
-                Assert.True(NailGrade.SameIsland(hand, flat!, plans, m), $"island {m} changed though its socket was left as authored");
+        // This fixture spans (pinned, so a change of branch is seen).
+        var owner = Assert.NotNull(sock.Owner);
+        Assert.Null(sock.LeftAsAuthored);
+        Assert.Contains(log, l => l.Contains("1 spanning an open socket", StringComparison.Ordinal));
+        // A layout never spanned before: the spanning island must stay a valid surface — every triangle with area,
+        // none turned in (its face facing out from the finger's axis, +Y).
+        var pos = SecondSkinWriter.ReadCapMeshes(flat!).Single(x => x.Mesh == mesh).Pos;
+        var tris = plan.Islands[owner.Island];
+        for (int t = 0; t + 2 < tris.Length; t += 3)
+        {
+            Vector3 P(int v) => new(pos[v].X, pos[v].Y, pos[v].Z);
+            var (a, b, c) = (P(tris[t]), P(tris[t + 1]), P(tris[t + 2]));
+            var n = Vector3.Cross(b - a, c - a);
+            Assert.True(n.Length() > 1e-12f, $"triangle {t / 3} of the span is degenerate");
+            var centre = (a + b + c) / 3;
+            var outward = new Vector3(centre.X, 0, centre.Z);
+            Assert.True(Vector3.Dot(n, outward) > 0, $"triangle {t / 3} of the span is turned in");
+        }
     }
 
     /// <summary>A sewn nail still drawn — not hidden at all, or only partly hidden — still closes its rim: no socket.</summary>

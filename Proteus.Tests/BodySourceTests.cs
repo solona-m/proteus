@@ -81,11 +81,12 @@ public class BodySourceTests
     public void Shell_and_seam_map_share_the_rule()
     {
         var shell = Source("Services/SecondSkinService.ShellSetBuild.cs");
-        Assert.Contains("ChooseBodySource(", shell);
+        Assert.Contains("ChooseBodySource(bodyIsOurs, settledBytes != null", shell);   // "settled" = it loaded, as the seam map
         Assert.Contains("UpstreamKeptPath(", shell);
         Assert.DoesNotContain("Path.Combine(modelsDir, \"upstream\")", shell);
         var seams = Source("Services/CompositorService.OcclusionPass.cs");
         Assert.Contains("BodySourceFor(", seams);
+        Assert.Contains("source.Kind", seams);   // the per-part Debug line names the kind
         Assert.DoesNotContain("penumbra.ResolvePlayer(", seams);
         var rule = Source("Services/SecondSkinService.BodySource.cs");
         Assert.Contains("ChooseBodySource(ours, settledBytes != null", rule);

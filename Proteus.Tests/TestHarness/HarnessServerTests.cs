@@ -355,6 +355,7 @@ public class HarnessServerTests : IDisposable
     }
 
     [Fact]
+    [Trait("Plan", "EDGE-issue-sweep-a-11")]
     public async Task Screenshot_Concurrent_429()
     {
         // [EDGE-qa-harness-28] Its own fixture with a long capture timeout, and the second request sent only once the
