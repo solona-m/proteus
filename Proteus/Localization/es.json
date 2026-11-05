@@ -5712,7 +5712,7 @@
     "description": ""
   },
   "HairPort.Auto.Tip3": {
-    "message": "Muchos mods de pelo están hechos para una sola raza, así que en cualquier otra\nel juego muestra su propio peinado. Con esto activado, Proteus dobla el peinado\ndel mod sobre la cabeza de tu raza y lo añade a la misma opción del mismo mod:\npara el peinado que te pones y, por adelantado, para los mods de pelo activos en\ntu colección: al activar esto, al instalar, activar o cambiar un mod, y al pulsar\n«Comprobar ahora».\n\nSolo para tu propia raza, desde razas del mismo sexo. Un portado entre sexos solo se hace en el Estudio, pero uno hecho allí también se mantiene al día aquí.\n Sigue funcionando con\nProteus desactivado, viaja con el mod y se ve en todos los que se muestren con\nese mod activo. Se puede deshacer aquí.",
+    "message": "Muchos mods de pelo están hechos para una sola raza, así que en cualquier otra\nel juego muestra su propio peinado. Con esto activado, Proteus dobla el peinado\ndel mod sobre la cabeza de tu raza y lo añade a la misma opción del mismo mod:\npara el peinado que te pones y, por adelantado, para los mods de pelo activos en\ntu colección: al activar esto, al instalar, activar o cambiar un mod, y al pulsar\n«Comprobar ahora».\n\nSolo para tu propia raza, desde razas del mismo sexo. Un portado entre sexos\nsolo se hace en el Estudio, pero uno hecho allí también se mantiene al día aquí.\nSigue funcionando con Proteus desactivado, viaja con el mod y se ve en todos los\nque se muestren con ese mod activo. Se puede deshacer aquí.",
     "description": ""
   },
   "HairPort.Scan.Starting": {

@@ -161,13 +161,17 @@ internal sealed class HairPortPanel(Func<string, byte[]?> readGameFile, IPluginL
         using (ImRaii.Disabled(busy))
         {
             foreach (var row in rows.Where(r => !r.OtherSex)) DrawRow(row);
-            // The other sex: always shown, so nothing ticked there is remade out of sight; nothing new ticked for you.
-            ImGui.Separator();
-            ImGui.TextUnformatted(s.OtherSex.Split("###")[0]);
-            if (HairPortPlan.Parse(source) is { } at)
-                using (ImRaii.PushColor(ImGuiCol.Text, ImGui.GetColorU32(ImGuiCol.TextDisabled)))
-                    ImGui.TextWrapped(OtherSexNote(at.Id));
-            foreach (var row in rows.Where(r => r.OtherSex)) DrawRow(row);
+            // The other sex: always shown when there is one, so nothing ticked there is remade out of sight; nothing new
+            // ticked for you.
+            if (rows.Any(r => r.OtherSex))
+            {
+                ImGui.Separator();
+                ImGui.TextUnformatted(s.OtherSex.Split("###")[0]);
+                if (HairPortPlan.Parse(source) is { } at)
+                    using (ImRaii.PushColor(ImGuiCol.Text, ImGui.GetColorU32(ImGuiCol.TextDisabled)))
+                        ImGui.TextWrapped(OtherSexNote(at.Id));
+                foreach (var row in rows.Where(r => r.OtherSex)) DrawRow(row);
+            }
         }
 
         ImGui.Spacing();
@@ -247,8 +251,9 @@ internal sealed class HairPortPanel(Func<string, byte[]?> readGameFile, IPluginL
             HairPortScan.RememberSaved(modRoot, outcome.SavedWrites, plan.Warnings);
             foreach (var w in outcome.SavedWrites)
                 if (w.Stripped)
-                    log.Information("hair port: {0} in {1} / {2} — its old port's skeleton, which another hairstyle of the "
-                                    + "race loads, taken out", w.TargetGamePath, w.Into.Group, w.Into.Option);
+                    log.Information("hair port: {0} in {1} / {2} — its old port's carried skeleton taken out (another hairstyle "
+                                    + "of the race loads its slot, or the mod gives the race a skeleton of its own)",
+                                    w.TargetGamePath, w.Into.Group, w.Into.Option);
                 else
                     log.Information("hair port: {0} → {1} in {2} / {3}, bent in {4} ms, skeleton entry {5}, carried from {6}",
                                     w.SourceGamePath, w.TargetGamePath, w.Into.Group, w.Into.Option, w.Millis, w.Est,

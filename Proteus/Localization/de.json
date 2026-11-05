@@ -5712,7 +5712,7 @@
     "description": ""
   },
   "HairPort.Auto.Tip3": {
-    "message": "Viele Haar-Mods sind nur für ein Volk gemacht, daher zeigt das Spiel bei jedem\nanderen Volk seine eigene Frisur. Ist dies aktiv, biegt Proteus die Frisur des\nMods auf den Kopf deines Volkes und fügt sie derselben Option desselben Mods\nhinzu – für die Frisur, die du trägst, und vorab für die Haar-Mods, die in deiner\nSammlung aktiv sind: beim Einschalten, wenn ein Mod installiert, aktiviert oder\ngeändert wird, und wenn du „Jetzt prüfen“ drückst.\n\nNur für dein eigenes Volk, aus Völkern desselben Geschlechts. Eine Übertragung über das Geschlecht hinweg entsteht nur im Studio, wird hier aber ebenfalls aktuell gehalten.\n Funktioniert auch\nmit ausgeschaltetem Proteus, wandert mit dem Mod und ist für alle sichtbar, die\nmit diesem Mod dargestellt werden. Hier rückgängig zu machen.",
+    "message": "Viele Haar-Mods sind nur für ein Volk gemacht, daher zeigt das Spiel bei jedem\nanderen Volk seine eigene Frisur. Ist dies aktiv, biegt Proteus die Frisur des\nMods auf den Kopf deines Volkes und fügt sie derselben Option desselben Mods\nhinzu – für die Frisur, die du trägst, und vorab für die Haar-Mods, die in deiner\nSammlung aktiv sind: beim Einschalten, wenn ein Mod installiert, aktiviert oder\ngeändert wird, und wenn du „Jetzt prüfen“ drückst.\n\nNur für dein eigenes Volk, aus Völkern desselben Geschlechts. Eine Übertragung\nüber das Geschlecht hinweg entsteht nur im Studio, wird hier aber ebenfalls\naktuell gehalten. Funktioniert auch mit ausgeschaltetem Proteus, wandert mit dem\nMod und ist für alle sichtbar, die mit diesem Mod dargestellt werden. Hier\nrückgängig zu machen.",
     "description": ""
   },
   "HairPort.Scan.Starting": {

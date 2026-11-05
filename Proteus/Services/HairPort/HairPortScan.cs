@@ -260,8 +260,8 @@ internal static class HairPortScan
             return new Ported([], false, plan.Refused.TryGetValue(race, out var none) ? none : "");
         foreach (var x in saved)
             host.Log(x.Stripped
-                ? $"{x.TargetGamePath} in {modDir}: {HairPortWriter.Describe(x.Into)} — its old port's skeleton, which another "
-                  + "hairstyle of the race loads, taken out"
+                ? $"{x.TargetGamePath} in {modDir}: {HairPortWriter.Describe(x.Into)} — its old port's carried skeleton taken "
+                  + "out (another hairstyle of the race loads its slot, or the mod gives the race a skeleton of its own)"
                 : $"{x.SourceGamePath} → {x.TargetGamePath} in {modDir}: {HairPortWriter.Describe(x.Into)} "
                   + $"({x.Materials.Count} material/skeleton redirect(s), bent in {x.Millis} ms, skeleton entry {x.Est}, "
                   + $"carried from {x.SkeletonFrom})");

@@ -261,6 +261,8 @@ public class HairPortCrossSexTests
         var plan = CrossSexFixtures.Build(mod, [101], auto: false);
         Assert.Empty(plan.Refused);
         var write = Assert.Single(plan.Writes);
+        // It sits on his head: no fit warning (the miss in A_cross_sex_port_that_misses_the_head… is warned).
+        Assert.False(plan.Warnings?.ContainsKey(101) == true, plan.Warnings?.GetValueOrDefault((ushort)101));
         // Bent 6 cm down onto the man's head, as the source sits on the woman's.
         float drop = CrossSexFixtures.MeanY(mod.Get("long.mdl")) - CrossSexFixtures.MeanY(write.Model);
         Assert.InRange(drop, 0.055f, 0.065f);
@@ -580,6 +582,39 @@ public class HairPortCrossSexTests
         Assert.NotNull(HairPortPlan.FileFor(owner, highlander));
     }
 
+    /// <summary>The mod gives the source race "no skeleton" (entry 0) for the hairstyle: nothing is carried across the
+    /// sexes, as nothing is within one — the game's skeleton is not what the source moves with under the mod.</summary>
+    [Fact]
+    [Trait("Plan", "AC-cross-sex-hair-port-9")]
+    [Trait("Plan", "EDGE-cross-sex-hair-port-23")]
+    public void A_source_given_no_skeleton_by_the_mod_carries_none()
+    {
+        using var mod = CrossSexFixtures.WomensMod(physics: true);
+        CrossSexFixtures.AddEst(mod, "Long", "0201", Id, 0);
+        var plan = CrossSexFixtures.Build(mod, [101], auto: false, CrossSexFixtures.Game(CrossSexFixtures.PhysicsFiles()));
+        Assert.Empty(plan.Writes);
+        Assert.Contains(CrossSexFixtures.Bone, plan.Refused[101]);
+    }
+
+    /// <summary>No verdict across the sexes when what the carry needs cannot be read: the game's table of hairstyle
+    /// skeletons, or the author's own file for the source's skeleton.</summary>
+    [Theory]
+    [Trait("Plan", "AC-cross-sex-hair-port-9")]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void A_cross_sex_carry_with_something_unreadable_is_no_verdict(bool authorsSkeleton)
+    {
+        using var mod = CrossSexFixtures.WomensMod(physics: true);
+        var files = CrossSexFixtures.PhysicsFiles();
+        if (authorsSkeleton)
+            CrossSexFixtures.EditMeta(mod, n => CrossSexFixtures.Option(n, "Long")["Files"]![HairPortPlan.SkeletonPath(201, Id)] = "gone.sklb");
+        else files.Remove(HairSkeletonTable.GamePath);
+        var plan = CrossSexFixtures.Build(mod, [101], auto: false, CrossSexFixtures.Game(files));
+        Assert.Empty(plan.Writes);
+        Assert.True(plan.Unreadable);
+        Assert.Contains(authorsSkeleton ? "gone.sklb" : "table of hairstyle skeletons", plan.Refused[101]);
+    }
+
     [Fact]
     [Trait("Plan", "EDGE-cross-sex-hair-port-22")]
     public void An_authors_skeleton_for_the_target_race_refuses_it()
@@ -769,5 +804,9 @@ public class HairPortCrossSexTests
         var plan = CrossSexFixtures.Build(mod, [101], auto: true);
         Assert.Empty(plan.Refused);
         Assert.Single(plan.Writes);
+        var saved = HairPortWriter.Save(mod.Root, plan.Writes, auto: true);
+        Assert.True(saved.Ok, saved.Message);
+        var entry = Assert.Single(HairPortRecord.Read(mod.Root).Ports);
+        Assert.Equal(HairPortPlan.Sha8(mod.Get("long.mdl")), entry.SourceSha8);
     }
 }

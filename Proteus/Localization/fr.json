@@ -5712,7 +5712,7 @@
     "description": ""
   },
   "HairPort.Auto.Tip3": {
-    "message": "Beaucoup de mods de cheveux ne sont faits que pour une race : sur toute autre race,\nle jeu affiche sa propre coiffure. Activé, Proteus plie la coiffure du mod sur la\ntête de votre race et l'ajoute à la même option du même mod — pour la coiffure que\nvous portez, et à l'avance pour les mods de cheveux activés dans votre collection :\nà l'activation de ce réglage, quand un mod est installé, activé ou modifié, et\nquand vous appuyez sur « Vérifier maintenant ».\n\nSeulement pour votre propre race, depuis des races du même sexe. Une transposition d'un sexe à l'autre ne se fait que dans le Studio, mais celle faite là-bas est aussi tenue à jour ici.\n Fonctionne même\nProteus désactivé, voyage avec le mod et se voit sur tous ceux affichés avec ce\nmod actif. Annulable ici.",
+    "message": "Beaucoup de mods de cheveux ne sont faits que pour une race : sur toute autre race,\nle jeu affiche sa propre coiffure. Activé, Proteus plie la coiffure du mod sur la\ntête de votre race et l'ajoute à la même option du même mod — pour la coiffure que\nvous portez, et à l'avance pour les mods de cheveux activés dans votre collection :\nà l'activation de ce réglage, quand un mod est installé, activé ou modifié, et\nquand vous appuyez sur « Vérifier maintenant ».\n\nSeulement pour votre propre race, depuis des races du même sexe. Une\ntransposition d'un sexe à l'autre ne se fait que dans le Studio, mais celle\nfaite là-bas est aussi tenue à jour ici. Fonctionne même Proteus désactivé,\nvoyage avec le mod et se voit sur tous ceux affichés avec ce mod actif.\nAnnulable ici.",
     "description": ""
   },
   "HairPort.Scan.Starting": {

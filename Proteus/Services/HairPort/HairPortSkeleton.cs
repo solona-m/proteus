@@ -114,17 +114,24 @@ internal static class HairPortSkeleton
             if (unreadable != null) return Unreadable(unreadable);
             if (theirs != null) return new Choice(Route.Entry, source, loaded, 0, theirs);
         }
-        if (source > 0)
-        {
-            // Only a source skeleton with every bone is worth carrying: one that lacks them too leaves nothing to add,
-            // and the bend's own check refuses — the same answer every look, so no port is called out of date for it.
-            var path = HairPortPlan.SkeletonPath(p.From, source);
-            var (skl, bytes) = HairPortBuilder.Carry(p.ModRoot, p.Owners, p.Owner, path, path, p.ReadGame);
-            if (skl?.AuthorFile is { } shipped && bytes == null) return Unreadable(shipped);
-            if (skl != null && Missing(extra, HairPortPlan.SkeletonBones(bytes)).Count == 0)
-                return new Choice(Route.Carry, 0, loaded, source, own);
-        }
-        return new Choice(Route.Own, loaded, loaded, 0, own);
+        return SourceCarry(p, extra, source, loaded, own) ?? new Choice(Route.Own, loaded, loaded, 0, own);
+    }
+
+    /// <summary>
+    /// A carry of the source race's skeleton <paramref name="source"/>, when it has every bone the model moves with —
+    /// only such a one is worth carrying: one that lacks them too leaves nothing to add, and the bend's own check
+    /// refuses, the same answer every look, so no port is called out of date for it. No verdict when the author's own
+    /// file for it cannot be read; null for no carry.
+    /// </summary>
+    /// <param name="bones">The bones the choice hands the bend until a slot is found (<see cref="Carry"/>).</param>
+    private static Choice? SourceCarry(Place p, List<string> extra, int source, int loaded, IReadOnlySet<string> bones)
+    {
+        if (source <= 0) return null;
+        var path = HairPortPlan.SkeletonPath(p.From, source);
+        var (skl, bytes) = HairPortBuilder.Carry(p.ModRoot, p.Owners, p.Owner, path, path, p.ReadGame);
+        if (skl?.AuthorFile is { } shipped && bytes == null) return Unreadable(shipped);
+        return skl != null && Missing(extra, HairPortPlan.SkeletonBones(bytes)).Count == 0
+            ? new Choice(Route.Carry, 0, loaded, source, bones) : null;
     }
 
     /// <summary>
@@ -139,17 +146,10 @@ internal static class HairPortSkeleton
         if (extra.Count == 0) return new Choice(Route.Own, 0, 0, 0, new HashSet<string>());
         if (p.Table() is not { } table) return new Choice(Route.Unknown, 0, 0, 0, new HashSet<string>());
         int loaded = table.Loaded(p.To, p.Id);
-        int source = HairPortPlan.SourceEst(p.Owner, p.Defaults, p.From, p.Id, p.Owners) is > 0 and var borrowed
-            ? borrowed : table.Loaded(p.From, p.Id);
-        if (source > 0)
-        {
-            var path = HairPortPlan.SkeletonPath(p.From, source);
-            var (skl, bytes) = HairPortBuilder.Carry(p.ModRoot, p.Owners, p.Owner, path, path, p.ReadGame);
-            if (skl?.AuthorFile is { } shipped && bytes == null) return Unreadable(shipped);
-            if (skl != null && Missing(extra, HairPortPlan.SkeletonBones(bytes)).Count == 0)
-                return new Choice(Route.Carry, 0, loaded, source, new HashSet<string>());
-        }
-        return new Choice(Route.Own, 0, loaded, 0, new HashSet<string>());
+        // What the source race moves with under the mod: its entry (0, "none", carries nothing), else the game's table.
+        int source = HairPortPlan.SourceEst(p.Owner, p.Defaults, p.From, p.Id, p.Owners) ?? table.Loaded(p.From, p.Id);
+        return SourceCarry(p, extra, source, loaded, new HashSet<string>())
+               ?? new Choice(Route.Own, 0, loaded, 0, new HashSet<string>());
     }
 
     /// <summary>
