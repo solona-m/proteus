@@ -110,7 +110,8 @@ public static partial class SecondSkinWriter
     public static bool TryReadLod0Geometry(byte[] mdl, out float[] positions, out float[] uvs,
                                            out int[] triangles, out (string Bone, float W)[][] weights,
                                            out float[] normals, bool skinOnly = true, bool nonSkin = false,
-                                           Func<string, bool>? keepMaterial = null)
+                                           Func<string, bool>? keepMaterial = null,
+                                           IReadOnlySet<string>? hiddenAttributes = null)
     {
         positions = []; uvs = []; triangles = []; weights = []; normals = [];
         Source src;
@@ -225,8 +226,31 @@ public static partial class SecondSkinWriter
                        if (wgt.Count > baseVertex) wgt.RemoveRange(baseVertex, wgt.Count - baseVertex);
                        continue; }
 
+            // The triangles of LOD0 submeshes whose attribute mask names a hidden attribute (the IsHidden rule) are left
+            // out: a body mod's switched-off parts are drawn by nothing (#55). Absolute index ranges, as NailSockets reads them.
+            List<(uint From, uint To)>? hiddenRanges = null;
+            if (hiddenAttributes is { Count: > 0 })
+            {
+                ushort si = BitConverter.ToUInt16(s, mo + 10), sc = BitConverter.ToUInt16(s, mo + 12);
+                for (int su = 0; su < sc; su++)
+                {
+                    int ss = src.SubmeshStart + (si + su) * 16;
+                    if (ss + 16 > s.Length) break;
+                    uint so = BitConverter.ToUInt32(s, ss), cnt = BitConverter.ToUInt32(s, ss + 4);
+                    if (IsHidden(src, BitConverter.ToUInt32(s, ss + 8), hiddenAttributes))
+                        (hiddenRanges ??= []).Add((so, so + cnt));
+                }
+            }
+
             for (uint i = 0; i + 2 < ic; i += 3)
             {
+                if (hiddenRanges != null)
+                {
+                    uint at = startIndex + i;
+                    bool hidden = false;
+                    foreach (var (from, to) in hiddenRanges) if (at >= from && at < to) { hidden = true; break; }
+                    if (hidden) continue;
+                }
                 int ia = (int)(src.Ib + (startIndex + i) * 2);
                 if (ia < 0 || ia + 6 > s.Length) break;
                 int a = BitConverter.ToUInt16(s, ia), b = BitConverter.ToUInt16(s, ia + 2), c = BitConverter.ToUInt16(s, ia + 4);

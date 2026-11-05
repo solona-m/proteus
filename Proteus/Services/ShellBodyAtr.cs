@@ -22,6 +22,25 @@ internal static partial class ShellBodyAtr
     internal readonly record struct ModSettings(bool Enabled, IReadOnlyDictionary<string, List<string>> Options);
 
     /// <summary>
+    /// A composite run's Penumbra settings reads, shared by the skin phase (the bust standoff) and the shell phase, so
+    /// both judge one reading (#55). Only a SUCCESSFUL read is kept: a failed one (null — a loading screen) is returned
+    /// but not stored, so the next caller in the run reads again rather than inheriting the failure.
+    /// </summary>
+    internal sealed class RunSettingsMemo
+    {
+        private readonly System.Collections.Concurrent.ConcurrentDictionary<string, ModSettings> read =
+            new(StringComparer.OrdinalIgnoreCase);
+
+        public ModSettings? Get(string modDir, Func<string, ModSettings?> reader)
+        {
+            if (read.TryGetValue(modDir, out var hit)) return hit;
+            var now = reader(modDir);
+            if (now is { } ok) read[modDir] = ok;
+            return now;
+        }
+    }
+
+    /// <summary>
     /// One bare body part of a published shell whose body mod switches shapes by option.
     /// </summary>
     /// <param name="ModDir">The mod's folder name, as Penumbra knows it.</param>

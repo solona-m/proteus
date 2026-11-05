@@ -34,7 +34,21 @@ public sealed partial class SecondSkinService
 
     /// <summary>A body part's chosen source: what it is, its file (null for remembered bytes; for game data the game
     /// path itself, as Penumbra resolves an unmodded file — not rooted), a cache identity, and how to read it.</summary>
-    internal readonly record struct BodySource(BodySourceKind Kind, string? Disk, string Id, Func<byte[]?> Load);
+    internal readonly record struct BodySource(BodySourceKind Kind, string? Disk, string Id, Func<byte[]?> Load,
+                                               string? ModFile = null, string? GamePath = null);
+
+    /// <summary>
+    /// The mod file a part's bytes really come from, as the shell works out its <c>sourceDisk</c>: the resolved or settled
+    /// file, the remembered copy's recorded disk, the kept copy's recorded source; none for our own output held.
+    /// </summary>
+    internal static string? SourceModFile(BodySourceKind kind, string? disk, string? rememberedDisk, string? keptRecord)
+        => kind switch
+        {
+            BodySourceKind.Resolved or BodySourceKind.Settled => disk,
+            BodySourceKind.Remembered => rememberedDisk,
+            BodySourceKind.Kept => keptRecord,
+            _ => null,
+        };
 
     /// <summary>
     /// A cache identity for a source: a file by path, size and write time; remembered bytes by game path, size and
@@ -118,19 +132,29 @@ public sealed partial class SecondSkinService
         {
             case BodySourceKind.Settled:
                 var settled = settledBytes!;
-                return new(kind, settledDisk, BodySourceId(kind, settledDisk, settled, gamePath), () => settled);
+                return new(kind, settledDisk, BodySourceId(kind, settledDisk, settled, gamePath), () => settled,
+                           SourceModFile(kind, settledDisk, null, null), gamePath);
             case BodySourceKind.Remembered:
                 var mem = remembered!;
-                return new(kind, null, BodySourceId(kind, null, mem, gamePath), () => RememberedLoad(mem));
+                return new(kind, null, BodySourceId(kind, null, mem, gamePath), () => RememberedLoad(mem),
+                           SourceModFile(kind, null, _upstreamBodyDisks.GetValueOrDefault(gamePath), null), gamePath);
             case BodySourceKind.Kept:
+                string? keptRecord = null;
+                try
+                {
+                    if (new FileInfo(kept) is { Exists: true } fi)
+                        keptRecord = ShellBodyAtr.ReadSource(kept, modsRootOf?.Invoke(), fi.Length);
+                }
+                catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { }
                 return new(kind, kept, BodySourceId(kind, kept, null, gamePath), () =>
                 {
                     try { return File.ReadAllBytes(kept); }
                     catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { return null; }
-                });
+                }, SourceModFile(kind, kept, null, keptRecord), gamePath);
             default:   // Resolved or OwnHeld: the resolved file itself (null = game data)
                 return new(kind, resolved, BodySourceId(kind, resolved, null, gamePath),
-                           () => textureLoader.LoadRawFile(resolved, gamePath));
+                           () => textureLoader.LoadRawFile(resolved, gamePath), SourceModFile(kind, resolved, null, null),
+                           gamePath);
         }
     }
 }

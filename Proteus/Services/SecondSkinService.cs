@@ -1102,7 +1102,7 @@ public sealed partial class SecondSkinService
              + $"rest {Math.Max(0, totalMs - measured):F0}";
     }
 
-    public Result? Build(
+    internal Result? Build(
         string charCode,
         IReadOnlyList<(OverlayEntry Entry, ResolvedOverlay Overlay)> gearOverlays,
         string outputRoot,
@@ -1146,11 +1146,14 @@ public sealed partial class SecondSkinService
         // Whether a mod's women's art may be painted on a man ("Overlay on men"); null allows every mod.
         Func<string, bool>? menAllowed = null,
         // This composite's toe-cap map per mod (CompositorService.ToeCapWanted); null = no cap anywhere.
-        IReadOnlyDictionary<string, ToeCapMap>? toeCaps = null)
+        IReadOnlyDictionary<string, ToeCapMap>? toeCaps = null,
+        // The run's shared settings reads (#55), so the shell and the skin's bust standoff judge one reading.
+        Func<string, ShellBodyAtr.ModSettings?>? settingsOf = null)
     {
         return new ShellSetBuild(this, charCode, gearOverlays, outputRoot, bodyType, effectsFolder, equippedPartModels, equippedAccessories, gen2Allowed, invisibleGlassesSet, metModels, enabledBodyShapes, maskShellMods, bareBodyModels, drawnRaceCode, activeMaterials, emperorRingVariant, invisibleGlassesVariant, humanPartModels, contentLayers, allEntries, pristineHumanModels, shellTexSize, equippedSlotVariants, hiddenParts)
         {
             WearerIsMan = wearerIsMan, MenMapsReady = menMapsReady, MenAllowed = menAllowed, ToeCaps = toeCaps,
+            SettingsReader = settingsOf,
         }.Run();
     }
 

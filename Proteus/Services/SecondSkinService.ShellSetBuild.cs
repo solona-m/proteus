@@ -164,6 +164,9 @@ public sealed partial class SecondSkinService
 
         /// <summary>See <see cref="SecondSkinService.Build"/>'s parameters of the same names.</summary>
         internal bool WearerIsMan { get; init; }
+
+        /// <summary>The run's shared settings reads (<see cref="ShellBodyAtr.RunSettingsMemo"/>); null reads Penumbra.</summary>
+        internal Func<string, ShellBodyAtr.ModSettings?>? SettingsReader { get; init; }
         internal bool MenMapsReady { get; init; }
         /// <summary>Whether a mod's women's art may be painted on a man ("Overlay on men"); null allows every mod.</summary>
         internal Func<string, bool>? MenAllowed { get; init; }
@@ -415,7 +418,8 @@ public sealed partial class SecondSkinService
             var bodyAtrUses = new List<ShellBodyAtr.Use>();
             var settingsMemo = new Dictionary<string, ShellBodyAtr.ModSettings?>(StringComparer.OrdinalIgnoreCase);
             ShellBodyAtr.ModSettings? SettingsOf(string modDir)
-                => settingsMemo.TryGetValue(modDir, out var known) ? known : settingsMemo[modDir] = service.PlayerModSettings(modDir);
+                => settingsMemo.TryGetValue(modDir, out var known) ? known
+                 : settingsMemo[modDir] = (SettingsReader ?? service.PlayerModSettings)(modDir);
             var modsRoot = service.modsRootOf?.Invoke();
             // Penumbra judges a race-limited switch by the drawn race; with none known, those switches stay drawn.
             var atrRace = RefitCore.RaceNumber(drawnRaceCode);

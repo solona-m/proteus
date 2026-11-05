@@ -727,6 +727,31 @@ internal static partial class BodyBridge
         return d;
     }
 
+    /// <summary>Drop the vertices no triangle uses, renumbering the triangles.</summary>
+    private static (float[] Pos, float[] Uv, int[] Tri, (string Bone, float W)[][] W, float[] Nrm) Compact(
+        float[] pos, float[] uv, int[] tri, (string Bone, float W)[][] w, float[] nrm)
+    {
+        int vc = pos.Length / 3;
+        var map = new int[vc];
+        Array.Fill(map, -1);
+        int kept = 0;
+        foreach (int v in tri) if (map[v] < 0) map[v] = kept++;
+        var p2 = new float[kept * 3]; var u2 = new float[kept * 2]; var n2 = new float[kept * 3];
+        var w2 = new (string Bone, float W)[kept][];
+        for (int v = 0; v < vc; v++)
+        {
+            int k = map[v];
+            if (k < 0) continue;
+            Array.Copy(pos, v * 3, p2, k * 3, 3);
+            Array.Copy(uv, v * 2, u2, k * 2, 2);
+            if (nrm.Length >= (v + 1) * 3) Array.Copy(nrm, v * 3, n2, k * 3, 3);
+            w2[k] = v < w.Length ? w[v] : [];
+        }
+        var t2 = new int[tri.Length];
+        for (int i = 0; i < tri.Length; i++) t2[i] = map[tri[i]];
+        return (p2, u2, t2, w2, n2);
+    }
+
     /// <summary>
     /// How far a bridged shell stands off the skin, as a body-UV map: 0 where the cloth lies on the body, 255 where it
     /// has lifted <paramref name="fullAt"/> or more. Null when this body has no bust bones, nothing is covered, or the
@@ -734,17 +759,30 @@ internal static partial class BodyBridge
     /// cleavage, so the same <see cref="BustBridgeSolve"/> the shell uses is run here over the body models.
     /// </summary>
     /// <param name="fullAt">Lift at which suppression is total, in model units.</param>
+    /// <param name="hidden">Per body (parallel to <paramref name="bodies"/>), the attributes its body mod's options switch
+    /// off: those submeshes' triangles are left out, and the vertices only they used dropped, so a chest NIRÆ does not
+    /// draw can't seed a lobe (#55). Null, or a null/empty entry, reads the body whole, byte-identically to before.</param>
     internal static byte[]? BustStandoffMap(IReadOnlyList<byte[]> bodies, byte[]? coverage, int covW, int covH,
-                                           float strength, int size, float fullAt, Action<string>? log = null)
+                                           float strength, int size, float fullAt, Action<string>? log = null,
+                                           IReadOnlyList<IReadOnlySet<string>?>? hidden = null)
     {
         if (bodies.Count == 0 || size <= 0 || strength <= 0f || fullAt <= 0f) return null;
 
         byte[]? map = null;
-        foreach (var mdl in bodies)
+        for (int bi = 0; bi < bodies.Count; bi++)
         {
+            var mdl = bodies[bi];
             if (mdl is not { Length: > 0 }) continue;
-            if (!TryReadLod0Geometry(mdl, out var fPos, out var fUv, out var fTri, out var fW, out var fNrm))
+            var hide = hidden != null && bi < hidden.Count ? hidden[bi] : null;
+            if (!TryReadLod0Geometry(mdl, out var fPos, out var fUv, out var fTri, out var fW, out var fNrm,
+                                     hiddenAttributes: hide))
                 continue;
+            if (hide is { Count: > 0 })
+            {
+                int total = fPos.Length / 3;
+                (fPos, fUv, fTri, fW, fNrm) = Compact(fPos, fUv, fTri, fW, fNrm);
+                log?.Invoke($"kept {fPos.Length / 3}/{total} vertices (hidden: {string.Join(",", hide.Order(StringComparer.Ordinal))})");
+            }
             int vc = fPos.Length / 3;
             if (vc == 0 || fTri.Length < 3) continue;
 
