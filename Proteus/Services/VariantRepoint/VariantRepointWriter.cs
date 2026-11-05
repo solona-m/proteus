@@ -230,10 +230,24 @@ internal static class VariantRepointWriter
     /// The default option's manipulations; null only when the manifest cannot be read. A readable manifest with no
     /// <c>DefaultData</c> at all (most mods: everything lives in groups) has none, as <c>RefitModService</c> reads it.
     /// </summary>
+    /// <para/>
+    /// One read decides both: two reads could straddle Penumbra releasing a held manifest and take a held one (unknown)
+    /// for "no DefaultData" (none), orphaning recorded legacy Imc entries. A held, missing or malformed manifest is null.
+    /// Callers have already refused a pre-v4 folder.
     private static List<JsonElement>? DefaultManipulations(string modRoot)
-        => PenumbraModMeta.TryReadDefaultData(modRoot) is { } dd ? dd.Manipulations.OfType<JsonElement>().ToList()
-         : PenumbraModMeta.HasReadableManifest(modRoot) ? []
-         : null;
+    {
+        try
+        {
+            using var doc = JsonDocument.Parse(File.ReadAllText(Path.Combine(modRoot, PenumbraModMeta.MetaFile)));
+            if (doc.RootElement.ValueKind != JsonValueKind.Object) return null;
+            if (!doc.RootElement.TryGetProperty("DefaultData", out var dd)) return [];
+            if (dd.ValueKind != JsonValueKind.Object) return null;
+            if (!dd.TryGetProperty("Manipulations", out var ms) || ms.ValueKind == JsonValueKind.Null) return [];
+            if (ms.ValueKind != JsonValueKind.Array) return null;
+            return ms.EnumerateArray().Select(m => m.Clone()).ToList();
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or JsonException) { return null; }
+    }
 
     /// <summary>
     /// The names of the mod's groups, so a search can tell a renamed option from a group that is gone. Null when the

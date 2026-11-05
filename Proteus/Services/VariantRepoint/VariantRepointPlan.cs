@@ -497,7 +497,7 @@ internal static class VariantRepointPlan
             for (int v = 0; v <= c.Count; v++)
             {
                 int m = Effective(c, effective, v).MaterialId;
-                if (m != c.Folder) foreach (var p in NamesIn(c, m)) paths.Add(p);
+                if (m != c.Folder && m != 0) foreach (var p in NamesIn(c, m)) paths.Add(p);
             }
         }
         return [.. paths];
@@ -579,6 +579,8 @@ internal static class VariantRepointPlan
             }
             int w = c.WornIndex;
             int wornFolder = Effective(c, effective, w).MaterialId;
+            // The worn variant names material 0, a folder the game never loads: no copy can change what is worn.
+            if (wornFolder == 0) continue;
             var wornState = StateOf(c, wornFolder, resolved, inp);
             if (wornState == VariantState.Dressed) continue;
 

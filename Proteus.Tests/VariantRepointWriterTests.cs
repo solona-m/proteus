@@ -208,7 +208,8 @@ public class VariantRepointWriterTests
     }
 
     [Fact]
-    [Trait("Plan", "AC-imc-all-variants-3")]
+    [Trait("Plan", "AC-imc-all-variants-1")]
+    [Trait("Plan", "EDGE-imc-all-variants-64")]
     public void Material_id_0_is_never_a_copy_target()
     {
         // In-game QA (1433): moonfire lace gained a dead v0000 key for a variant whose IMC entry names material 0.
@@ -221,7 +222,23 @@ public class VariantRepointWriterTests
     }
 
     [Fact]
+    [Trait("Plan", "EDGE-imc-all-variants-64")]
+    public void Worn_variant_on_material_0_writes_nothing()
+    {
+        // The worn variant names material 0 (no folder the game loads): copies to other folders cannot change what is
+        // worn, so the mod is not written for it.
+        using var k = new VariantRepointTestKit();
+        var mod = k.Colours("Dress", Top);
+        var before = File.ReadAllText(Path.Combine(mod, "meta.json"));
+        k.Imc(Top, E(1), E(0), E(2));
+        k.Run([k.Worn(Top, 1, mod)]);
+        Assert.Equal(before, File.ReadAllText(Path.Combine(mod, "meta.json")));
+        Assert.Null(VariantRepointWriter.ReadRecord(mod));
+    }
+
+    [Fact]
     [Trait("Plan", "AC-imc-all-variants-6")]
+    [Trait("Plan", "EDGE-imc-all-variants-63")]
     public void Undo_and_reconcile_work_on_a_manifest_without_DefaultData()
     {
         // In-game QA (1433): most mods keep everything in groups and have no DefaultData at all; undo refused them as
@@ -232,20 +249,21 @@ public class VariantRepointWriterTests
         var stripped = JsonNode.Parse(File.ReadAllText(meta))!.AsObject();
         stripped.Remove("DefaultData");
         File.WriteAllText(meta, stripped.ToJsonString());
-        var original = File.ReadAllText(meta);
         k.Imc(Top, E(1), E(1), E(2));
 
         k.Run([k.Worn(Top, 2, mod)]);
         Assert.True(FilesOf(mod, Red).ContainsKey(MaterialPath(Top, 2)));
-        k.Run([k.Worn(Top, 2, mod)]);   // the reconcile on the next walk finds its copies present: nothing duplicated
-        Assert.Single(FilesOf(mod, Red).Keys, key => key == MaterialPath(Top, 2));
+        // Reconcile acts on it: a copy the user repointed since is released (it used to skip the mod entirely).
+        EditFiles(mod, f => f[MaterialPath(Top, 2)] = "red/custom.mtrl", "Colour", "Red");
+        Assert.Equal(1, VariantRepointWriter.Reconcile(mod).Forgotten);
 
         Assert.Equal(VariantRepointWriter.Undone.Removed,
                      VariantRepointWriter.UndoItem(mod, Top, true, out var removed, out _, out var message));
         Assert.True(string.IsNullOrEmpty(message), message);
-        Assert.Equal(2, removed);
+        Assert.Equal(1, removed);   // Blue's copy; Red's is the user's now
         Assert.False(Manifest(mod).ContainsKey("DefaultData"));
-        Assert.True(JsonNode.DeepEquals(JsonNode.Parse(original)!["Groups"], Manifest(mod)["Groups"]));
+        Assert.False(FilesOf(mod, Blue).ContainsKey(MaterialPath(Top, 2)));
+        Assert.Equal("red/custom.mtrl", FilesOf(mod, Red)[MaterialPath(Top, 2)]);
     }
 
     [Fact]
