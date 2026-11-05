@@ -39,6 +39,7 @@ internal sealed class GameHarnessAdapter : IHarnessGame, IDisposable
     private readonly PenumbraBridge penumbra;
     private readonly CompositorService compositor;
     private readonly AutoRefitWatcher autoRefit;
+    private readonly ShaderUpgradeWatcher shaderUpgrade;
     private readonly IObjectTable objects;
     private readonly IClientState clientState;
     private readonly IFramework framework;
@@ -58,7 +59,7 @@ internal sealed class GameHarnessAdapter : IHarnessGame, IDisposable
     public SessionNames? NameSink { get; set; }
 
     public GameHarnessAdapter(PenumbraBridge penumbra, CompositorService compositor, AutoRefitWatcher autoRefit,
-                              IObjectTable objects, IClientState clientState, IFramework framework,
+                              ShaderUpgradeWatcher shaderUpgrade, IObjectTable objects, IClientState clientState, IFramework framework,
                               ITextureProvider textures, ITextureReadbackProvider readback, Configuration config,
                               UVRemapService uvRemap, Func<string, byte[]?> readGameFile, Action<string> onModChanged,
                               IPluginLog log)
@@ -66,6 +67,7 @@ internal sealed class GameHarnessAdapter : IHarnessGame, IDisposable
         this.penumbra = penumbra;
         this.compositor = compositor;
         this.autoRefit = autoRefit;
+        this.shaderUpgrade = shaderUpgrade;
         this.objects = objects;
         this.clientState = clientState;
         this.framework = framework;
@@ -97,6 +99,15 @@ internal sealed class GameHarnessAdapter : IHarnessGame, IDisposable
     public DateTime? LastRedrawUtc => redraws.LastUtc;
 
     public string ManagedModDir => SidecarDiscoveryService.ManagedModDir;
+
+    public ShaderUpgradeWatcher.View ShaderUpgrade() => shaderUpgrade.Current;
+
+    public (bool Enabled, string MaskGloss) SetShaderUpgrade(bool? enabled, string? maskGloss)
+    {
+        if (maskGloss != null && ShaderUpgradeWatcher.ParseGloss(maskGloss) is { } g) shaderUpgrade.Gloss = g;
+        if (enabled is { } on) shaderUpgrade.SetEnabled(on);
+        return (config.AutoUpgradeLegacyShaders, ShaderUpgradeWatcher.GlossName(shaderUpgrade.Gloss));
+    }
 
     public HealthInfo Health() => new(penumbra.IsAvailable, clientState.IsLoggedIn, config.PluginEnabled);
 

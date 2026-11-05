@@ -251,6 +251,18 @@ internal sealed class FakeGame : IHarnessGame
 
     public uint ViewportId() { Fw(nameof(ViewportId)); return 7; }
 
+    public ShaderUpgradeWatcher.View ShaderUpgradeView { get; set; } = new();
+    public ShaderUpgradeWatcher.View ShaderUpgrade() => ShaderUpgradeView;
+    public bool ShaderUpgradeEnabled { get; set; }
+    public string ShaderUpgradeGloss { get; set; } = "inverse-specular";
+    public (bool Enabled, string MaskGloss) SetShaderUpgrade(bool? enabled, string? maskGloss)
+    {
+        Fw(nameof(SetShaderUpgrade));
+        if (enabled is { } on) ShaderUpgradeEnabled = on;
+        if (maskGloss != null) ShaderUpgradeGloss = maskGloss;
+        return (ShaderUpgradeEnabled, ShaderUpgradeGloss);
+    }
+
     public Task<RawFrame> CaptureRaw(uint viewportId, bool includeUi, CancellationToken ct)
     {
         LastCaptureUi = includeUi;

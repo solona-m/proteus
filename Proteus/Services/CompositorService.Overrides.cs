@@ -127,7 +127,7 @@ public partial class CompositorService
         {
             try
             {
-                WriteManagedModJson(new Dictionary<string, string>());
+                WriteManagedModJson(new Dictionary<string, string>(), snapshot: true);
                 penumbra.ReloadModDirectory(SidecarDiscoveryService.ManagedModDir);
                 // Nothing is hosted, so the redraw hook must not re-equip a carrier.
                 RememberHostDecision(gearWanted: false, shellBuilt: false, onFacewear: false, carrierSlots: []);

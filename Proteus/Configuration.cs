@@ -225,6 +225,15 @@ public class Configuration : IPluginConfiguration
     public bool AutoHatCompat { get; set; } = true;
 
     /// <summary>
+    /// Draw worn gear whose mod still uses the pre-Dawntrail <c>characterlegacy.shpk</c> with Dawntrail's
+    /// <c>character.shpk</c> instead (<c>ShaderUpgradeWatcher</c>), as it is put on. Nothing is written into any mod:
+    /// upgraded copies live in Proteus's own folder and are redirected by a Penumbra temporary mod that turning this off
+    /// takes down. Off by default, since it changes how other authors' gear looks; a missing property reads off, so no
+    /// migration.
+    /// </summary>
+    public bool AutoUpgradeLegacyShaders { get; set; } = false;
+
+    /// <summary>
     /// When the worn hairstyle is drawn as the game's own because its mod was made for another race only, port that
     /// race's model to the wearer's and publish it from the same option of the same mod (<c>HairPortWatcher</c>) — and
     /// do the same before it is worn for the player's hair mods (<c>HairPortScan</c>). On by default; a missing property

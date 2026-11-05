@@ -57,11 +57,12 @@ retry — abandoned work never runs later.
 | Route | What it does |
 |---|---|
 | `GET /health` | `{ok, harness, session, build, buildStamp, penumbra, loggedIn, pluginEnabled}` |
-| `GET /state` | The live character (race, tribe, gender, body type, drawn race code), the player collection's id, every drawn model (`slot`, `loaded`, `gamePath`, `resolved`, `modDir`; `slot:-1` = Penumbra resolves it but it is not drawn), the compositor (`phase`: `boot-hold`/`compositing`/`pending`/`idle`, last result, last refresh), `redraws` (`count`, `lastAtUtc`), `autoRefit` (`busy`, `pending`), and the current `job`. No names. |
+| `GET /state` | The live character (race, tribe, gender, body type, drawn race code), the player collection's id, every drawn model (`slot`, `loaded`, `gamePath`, `resolved`, `modDir`; `slot:-1` = Penumbra resolves it but it is not drawn), the compositor (`phase`: `boot-hold`/`compositing`/`pending`/`idle`, last result, last refresh), `redraws` (`count`, `lastAtUtc`), `autoRefit` (`busy`, `pending`), `shaderUpgrade` (below), and the current `job`. No names. |
 | `GET /log?since=<n>&max=<m>` | Plugin log lines after cursor `n` (`max` default 200, cap 2000): `{session, next, oldest, dropped, lines:[{seq,text}]}`. Pass `next` back as `since`. `dropped:true` = lines were lost to the ring. |
 | `GET /screenshot?ui=true\|false` | The game screen as PNG (`ui=false` = before Dalamud's UI). 429 while another is taken; 503 `capture-timeout` when the game is minimised or not rendering. |
 | `POST /actions/refit` | `{"mod":"<Penumbra folder name>","bodies":["rue","tbse@women"],"remake":false}` → 202 `{job, modDir, state}`. Runs the Studio's "Make every size" with the Studio's current settings, after backing the mod up; then reloads the mod and redraws. |
 | `POST /actions/restore` | `{"job":"<refit job id>"}`, or `{"mod":"<folder>"}`, or `{"mod":"<folder>","backup":"<backupId>"}` → 202. |
+| `POST /actions/shader-upgrade` | `{"enabled":true\|false}` and/or `{"maskGloss":"inverse-specular"\|"low"\|"mid"}` → 200 `{enabled, maskGloss}`. Switches the gear shader upgrade as its Settings checkbox does; `maskGloss` picks how the diffuse form's derived mask fills its roughness channel, for this session only (never saved). 400 `invalid-field` for an unknown value, a wrong type or no field. |
 | `GET /jobs/{id}` | `{id, kind, modDir, state: queued\|running\|done\|failed\|cancelled, progress, backup, reloaded, redrawRequested, redrawObserved, autoRefitFollowed, result, restored, error}` |
 
 `mod` is the **folder name** Penumbra keeps the mod in (case-insensitive), never its
@@ -120,6 +121,15 @@ The harness never deletes or overwrites a backup; the user may delete them by ha
 
 ## Waiting for the game
 
+- **Gear shader upgrade.** `/state` `shaderUpgrade` is
+  `{enabled, busy, waiting: none|penumbra|managed-mod, awaitingRedraw, maskGloss,
+  upgraded:[{gamePath, source, copy, form: index-mask|diffuse, mask:{gamePath, copy, width, height}|null, loaded}],
+  left:[{gamePath, source, reason: old-table|unsupported-form|unreadable|outranked|unresolved|compositor|write-failed}],
+  peeks:{trustedFirstTry, settled, failedOpen}, reload:{inPlaceLoadsMaterials, inPlace, redraw, gaveUp},
+  masks:{memoHits, decodes, pruned, missingBeforeApply}, lastAppliedUtc}`.
+  After switching it or equipping, wait for `shaderUpgrade.busy == false` (and about 2 s for its verify walk)
+  before you assert `loaded`. Copies live in the managed mod's `ShaderUpgrade/` folder; the worn mod's own
+  folder must hash the same before and after.
 - After a refit or restore, wait for the job to end, then for `/state`
   `autoRefit.busy == false` and `compositor.phase == "idle"` before you assert
   anything or take a screenshot.

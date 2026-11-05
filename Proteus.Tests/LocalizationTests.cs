@@ -97,6 +97,7 @@ public sealed class LocalizationTests
 
     [Theory]
     [MemberData(nameof(Translations))]
+    [Trait("Plan", "AC-dt-shader-upgrade-9")]
     public void KeysMatchEnglish(string lang)
     {
         var en = Load(Source);
@@ -207,6 +208,24 @@ public sealed class LocalizationTests
     /// The toe cap tick's words are translated, not copied, keep English's line breaks, and keep the Penumbra names
     /// the user has to find ("Toe Cap", "Masks") verbatim.
     /// </summary>
+    [Theory]
+    [MemberData(nameof(Translations))]
+    [Trait("Plan", "AC-dt-shader-upgrade-9")]
+    public void ShaderUpgrade_strings_are_translated_not_copied(string lang)
+    {
+        var en = Load(Source);
+        var tr = Load(lang);
+        foreach (var key in en.Keys.Where(k => k.StartsWith("Settings.GearShaders.", StringComparison.Ordinal)
+                                            || k == "Settings.Section.GearShaders"))
+        {
+            Assert.True(tr.ContainsKey(key), $"[{lang}] has no {key}");
+            Assert.NotEqual(en[key].Message, tr[key].Message);
+            Assert.Equal(en[key].Message.Count(c => c == '\n'), tr[key].Message.Count(c => c == '\n'));
+        }
+        Assert.Contains("characterlegacy.shpk", tr["Settings.GearShaders.AutoUpgrade.Tip"].Message);
+        Assert.Contains("character.shpk", tr["Settings.GearShaders.AutoUpgrade.Tip"].Message);
+    }
+
     [Theory]
     [MemberData(nameof(Translations))]
     [Trait("Plan", "AC-toecap-geometry-7")]

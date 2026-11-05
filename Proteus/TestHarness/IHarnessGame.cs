@@ -99,4 +99,13 @@ internal interface IHarnessGame
 
     /// <summary>Capture the screen and read it back as B8G8R8A8. Off the framework thread; honours the token.</summary>
     Task<RawFrame> CaptureRaw(uint viewportId, bool includeUi, CancellationToken ct);
+
+    /// <summary>The gear shader upgrade right now. Any thread.</summary>
+    ShaderUpgradeWatcher.View ShaderUpgrade();
+
+    /// <summary>
+    /// Switch the gear shader upgrade as its checkbox does, and/or choose this session's mask strategy (one of
+    /// "inverse-specular", "low", "mid", already validated). Returns the state after. Framework thread.
+    /// </summary>
+    (bool Enabled, string MaskGloss) SetShaderUpgrade(bool? enabled, string? maskGloss);
 }

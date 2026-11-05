@@ -22,7 +22,7 @@ internal sealed class HarnessRouter(HarnessJobs jobs, LogRing ring, SessionNames
     internal static readonly IReadOnlyList<(string Method, string Path)> Routes =
     [
         ("GET", "/health"), ("GET", "/state"), ("GET", "/log"), ("GET", "/screenshot"),
-        ("POST", "/actions/refit"), ("POST", "/actions/restore"), ("GET", "/jobs/{id}"),
+        ("POST", "/actions/refit"), ("POST", "/actions/restore"), ("POST", "/actions/shader-upgrade"), ("GET", "/jobs/{id}"),
     ];
 
     private IHarnessGame Game => jobs.Game;
@@ -48,6 +48,7 @@ internal sealed class HarnessRouter(HarnessJobs jobs, LogRing ring, SessionNames
                 "/screenshot" => await Screenshot(request),
                 "/actions/refit" => await Refit(request),
                 "/actions/restore" => await Restore(request),
+                "/actions/shader-upgrade" => await ShaderUpgradeAction(request),
                 _ => Job(path["/jobs/".Length..]),
             };
         }
@@ -109,8 +110,54 @@ internal sealed class HarnessRouter(HarnessJobs jobs, LogRing ring, SessionNames
                 pending = new { running = a.Activity.Running, queued = a.Activity.Queued, walkDue = a.Activity.WalkDue,
                                 undoing = a.Activity.Undoing },
             },
+            shaderUpgrade = ShaderUpgradeBlock(Game.ShaderUpgrade()),
             job = jobs.Current?.View(),
         });
+    }
+
+    /// <summary>The gear shader upgrade in <c>/state</c>: read-only, scrubbed with the rest.</summary>
+    internal static object ShaderUpgradeBlock(ShaderUpgradeWatcher.View v) => new
+    {
+        enabled = v.Enabled, busy = v.Busy, waiting = v.Waiting, awaitingRedraw = v.AwaitingRedraw, maskGloss = v.MaskGloss,
+        upgraded = v.UpgradedList.Select(u => new
+        {
+            gamePath = u.GamePath, source = u.Source, copy = u.Copy, form = u.Form,
+            mask = u.MaskGamePath is { } mg ? new { gamePath = mg, copy = u.MaskCopy, width = u.MaskWidth, height = u.MaskHeight } : null,
+            loaded = u.Loaded,
+        }),
+        left = v.LeftList.Select(l => new { gamePath = l.GamePath, source = l.Source, reason = l.Reason }),
+        peeks = v.Peeks is { } p ? new { trustedFirstTry = p.TrustedFirstTry, settled = p.Settled, failedOpen = p.FailedOpen } : null,
+        reload = v.Reload is { } r ? new { inPlaceLoadsMaterials = r.InPlaceLoadsMaterials, inPlace = r.InPlace, redraw = r.Redraw, gaveUp = r.GaveUp } : null,
+        masks = v.Masks is { } m ? new { memoHits = m.MemoHits, decodes = m.Decodes, pruned = m.Pruned, missingBeforeApply = m.MissingBeforeApply } : null,
+        lastAppliedUtc = v.LastAppliedUtc,
+    };
+
+    /// <summary>
+    /// Switch the gear shader upgrade and/or choose this session's mask strategy, for QA (which cannot click Settings).
+    /// At least one field; each validated before anything changes.
+    /// </summary>
+    private async Task<HarnessResponse> ShaderUpgradeAction(HarnessRequest request)
+    {
+        var (body, bad) = JsonBody(request, "enabled", "maskGloss");
+        if (bad != null) return bad;
+        bool? enabled = null;
+        string? gloss = null;
+        if (body.TryGetProperty("enabled", out var e))
+        {
+            if (e.ValueKind is not (JsonValueKind.True or JsonValueKind.False))
+                return HarnessResponse.Error(400, "invalid-field", "enabled must be true or false");
+            enabled = e.GetBoolean();
+        }
+        if (body.TryGetProperty("maskGloss", out var g))
+        {
+            if (g.ValueKind != JsonValueKind.String || ShaderUpgradeWatcher.ParseGloss(g.GetString()) == null)
+                return HarnessResponse.Error(400, "invalid-field", "maskGloss must be one of inverse-specular, low, mid");
+            gloss = g.GetString();
+        }
+        if (enabled == null && gloss == null)
+            return HarnessResponse.Error(400, "invalid-field", "give enabled, maskGloss, or both");
+        var (on, now) = await OnFramework(() => Game.SetShaderUpgrade(enabled, gloss));
+        return HarnessResponse.Json(200, new { enabled = on, maskGloss = now });
     }
 
     private async Task<HarnessResponse> Log(HarnessRequest request)

@@ -499,7 +499,7 @@ public partial class CompositorService
                     // Our manifest masks the material, so its base must come from the remembered upstream; a null resolve would read
                     // vanilla and overwrite the body mod's material. A material no mod provides has the game file as its upstream,
                     // known from _upstreamIsGameData or Penumbra echoing the game path back.
-                    var liveMaterial = mtrlDisk == null ? run.compositor.penumbra.ResolvePlayer(mtrlGamePath) : null;
+                    var liveMaterial = mtrlDisk == null ? run.compositor.ResolveSeeThrough(mtrlGamePath) : null;
                     bool upstreamIsGame = run.compositor._upstreamIsGameData.ContainsKey(mtrlGamePath)
                         || (run.compositor._upstreamByGamePath.TryGetValue(mtrlGamePath, out var remembered)
                             && string.Equals(remembered, mtrlGamePath, StringComparison.OrdinalIgnoreCase));

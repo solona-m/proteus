@@ -5822,5 +5822,61 @@
   "Parts.Retarget.UseWornBody.Tip": {
     "message": "Refit onto the body mod you're wearing for this part. The same as picking it under \"Refit onto body\".",
     "description": ""
+  },
+  "Settings.Section.GearShaders": {
+    "message": "Gear shaders",
+    "description": "Settings section heading for the automatic upgrade of old (pre-Dawntrail) gear materials to the Dawntrail shader."
+  },
+  "Settings.GearShaders.AutoUpgrade.Label": {
+    "message": "Upgrade old gear to Dawntrail shaders",
+    "description": "Checkbox: as gear is put on, gear whose mod still uses the old characterlegacy.shpk shader is drawn with Dawntrail's character.shpk instead."
+  },
+  "Settings.GearShaders.AutoUpgrade.Tip": {
+    "message": "As you put gear on, a piece whose mod still uses the old characterlegacy.shpk\nshader is drawn with Dawntrail's character.shpk instead, so it is lit like current gear.\nYour mods are never changed: Proteus draws its own upgraded copies, and turning this\noff puts the originals back at once.",
+    "description": "Tooltip for the gear shader upgrade checkbox. Keep characterlegacy.shpk and character.shpk exactly as written (file names). Keep the three line breaks."
+  },
+  "Settings.GearShaders.Status.Fmt": {
+    "message": "{0} upgraded · {1} left on the old shader",
+    "description": "Status line under the gear shader upgrade checkbox. {0} = number of worn materials upgraded, {1} = number of worn old-shader materials left as they are."
+  },
+  "Settings.GearShaders.Left.Tip.Fmt": {
+    "message": "Left on the old shader:\n{0}",
+    "description": "Tooltip on the status line. {0} is a list of reasons, one per line, each with a count, e.g. \"2 × an older colour table\"."
+  },
+  "Settings.GearShaders.NextRedraw": {
+    "message": "Takes effect at the next redraw (Auto redraw is off).",
+    "description": "Status line: the upgrade is in place but the character is not reloaded because the Auto redraw setting is off. \"Auto redraw\" names a setting; match Settings.AutoRedraw."
+  },
+  "Settings.GearShaders.Waiting": {
+    "message": "Waiting for Penumbra and Proteus's mod folder…",
+    "description": "Status line: the upgrade cannot start yet because Penumbra or Proteus's own mod folder is not ready."
+  },
+  "Settings.GearShaders.Reason.OldTable": {
+    "message": "an older colour table",
+    "description": "Reason in the left-on-the-old-shader tooltip: the material's colour table is the pre-Dawntrail layout."
+  },
+  "Settings.GearShaders.Reason.UnsupportedForm": {
+    "message": "a texture layout not upgraded",
+    "description": "Reason in the tooltip: the material uses a texture layout the upgrade does not handle."
+  },
+  "Settings.GearShaders.Reason.Unreadable": {
+    "message": "unreadable",
+    "description": "Reason in the tooltip: the material file could not be read."
+  },
+  "Settings.GearShaders.Reason.Outranked": {
+    "message": "another plugin's redirect wins",
+    "description": "Reason in the tooltip: another plugin redirects this material above Proteus."
+  },
+  "Settings.GearShaders.Reason.Unresolved": {
+    "message": "still settling after a change",
+    "description": "Reason in the tooltip: after a mod change Penumbra's answer had not settled; it is retried at the next change."
+  },
+  "Settings.GearShaders.Reason.Compositor": {
+    "message": "Proteus's overlays draw it",
+    "description": "Reason in the tooltip: Proteus's own compositor publishes this material or its textures, so it is left to the compositor."
+  },
+  "Settings.GearShaders.Reason.WriteFailed": {
+    "message": "its copy could not be written",
+    "description": "Reason in the tooltip: the upgraded copy could not be saved to disk."
   }
 }

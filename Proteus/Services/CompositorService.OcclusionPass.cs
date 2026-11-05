@@ -142,7 +142,7 @@ public partial class CompositorService
                             foreach (var mp in bodyMdlPaths)
                             {
                                 var gamePath = mp;
-                                var disk = material.run.compositor.penumbra.ResolvePlayer(gamePath);
+                                var disk = material.run.compositor.ResolveSeeThrough(gamePath);
                                 // A modded part is a real file (size+mtime identity); a vanilla one can only change with a patch (game path identity).
                                 string id = gamePath;
                                 try

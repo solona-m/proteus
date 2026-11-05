@@ -1133,6 +1133,38 @@ public sealed class SettingsStrings
     public readonly string SecSkinEffects = ProteusLoc.Localize("Settings.Section.SkinEffects", "Skin effects");
     public readonly string SecHairPort    = ProteusLoc.Localize("Settings.Section.HairPort", "Hair");
     public readonly string SecAutoRefit   = ProteusLoc.Localize("Settings.Section.AutoRefit", "Body refit");
+    public readonly string SecGearShaders = ProteusLoc.Localize("Settings.Section.GearShaders", "Gear shaders");
+
+    // ── gear shaders ────────────────────────────────────────────────────────────────────────────────
+    public readonly string GearShadersAutoUpgrade = ProteusLoc.Localize("Settings.GearShaders.AutoUpgrade.Label",
+        "Upgrade old gear to Dawntrail shaders") + "###autoShaderUpgrade";
+    public readonly string GearShadersAutoUpgradeTip = ProteusLoc.Localize("Settings.GearShaders.AutoUpgrade.Tip",
+        "As you put gear on, a piece whose mod still uses the old characterlegacy.shpk\n"
+      + "shader is drawn with Dawntrail's character.shpk instead, so it is lit like current gear.\n"
+      + "Your mods are never changed: Proteus draws its own upgraded copies, and turning this\n"
+      + "off puts the originals back at once.");
+    public readonly string GearShadersStatusFmt = ProteusLoc.Localize("Settings.GearShaders.Status.Fmt",
+        "{0} upgraded · {1} left on the old shader");
+    public readonly string GearShadersLeftTipFmt = ProteusLoc.Localize("Settings.GearShaders.Left.Tip.Fmt",
+        "Left on the old shader:\n{0}");
+    public readonly string GearShadersNextRedraw = ProteusLoc.Localize("Settings.GearShaders.NextRedraw",
+        "Takes effect at the next redraw (Auto redraw is off).");
+    public readonly string GearShadersWaiting = ProteusLoc.Localize("Settings.GearShaders.Waiting",
+        "Waiting for Penumbra and Proteus's mod folder…");
+    public readonly string GearShadersReasonOldTable = ProteusLoc.Localize("Settings.GearShaders.Reason.OldTable",
+        "an older colour table");
+    public readonly string GearShadersReasonUnsupportedForm = ProteusLoc.Localize(
+        "Settings.GearShaders.Reason.UnsupportedForm", "a texture layout not upgraded");
+    public readonly string GearShadersReasonUnreadable = ProteusLoc.Localize("Settings.GearShaders.Reason.Unreadable",
+        "unreadable");
+    public readonly string GearShadersReasonOutranked = ProteusLoc.Localize("Settings.GearShaders.Reason.Outranked",
+        "another plugin's redirect wins");
+    public readonly string GearShadersReasonUnresolved = ProteusLoc.Localize("Settings.GearShaders.Reason.Unresolved",
+        "still settling after a change");
+    public readonly string GearShadersReasonCompositor = ProteusLoc.Localize("Settings.GearShaders.Reason.Compositor",
+        "Proteus's overlays draw it");
+    public readonly string GearShadersReasonWriteFailed = ProteusLoc.Localize("Settings.GearShaders.Reason.WriteFailed",
+        "its copy could not be written");
 
     public readonly string SecHosting     = ProteusLoc.Localize("Settings.Section.Hosting", "Hosting");
 

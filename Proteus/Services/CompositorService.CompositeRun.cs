@@ -240,7 +240,7 @@ public partial class CompositorService
 
                 var empty = new Dictionary<string, string>();
                 // Whether the empty output was already drawn is read under the same lock as this write.
-                var (stamp, alreadyDrawn) = compositor.WriteManagedModJson(empty);
+                var (stamp, alreadyDrawn) = compositor.WriteManagedModJson(empty, snapshot: true);
                 // Recorded so the history reflects reality: once this empty manifest ages out, everything becomes collectable.
                 var previous = compositor.RecordPublish(empty);
 
@@ -1252,7 +1252,7 @@ public partial class CompositorService
             }
             timeline.Mark("second skin");
 
-            compositor.WriteManagedModJson(redirects, manipulations);
+            compositor.WriteManagedModJson(redirects, manipulations, snapshot: true);
             return true;
         }
 

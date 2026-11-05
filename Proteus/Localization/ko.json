@@ -5822,5 +5822,61 @@
   "Parts.Retarget.UseWornBody.Tip": {
     "message": "이 부위에 착용 중인 체형 모드에 맞춥니다. \"적용 체형\"에서 고르는 것과 같습니다.",
     "description": ""
+  },
+  "Settings.Section.GearShaders": {
+    "message": "장비 셰이더",
+    "description": ""
+  },
+  "Settings.GearShaders.AutoUpgrade.Label": {
+    "message": "오래된 장비를 황금의 유산 셰이더로 업그레이드",
+    "description": ""
+  },
+  "Settings.GearShaders.AutoUpgrade.Tip": {
+    "message": "장비를 착용하면, 모드가 아직 예전 characterlegacy.shpk 셰이더를 쓰는 장비는\n대신 황금의 유산의 character.shpk로 그려져 현재 장비처럼 빛을 받습니다.\n모드는 절대 변경되지 않습니다. Proteus는 자체 업그레이드 사본을 그리며, 이 옵션을\n끄면 즉시 원본으로 돌아갑니다.",
+    "description": ""
+  },
+  "Settings.GearShaders.Status.Fmt": {
+    "message": "{0}개 업그레이드 · {1}개는 예전 셰이더 유지",
+    "description": ""
+  },
+  "Settings.GearShaders.Left.Tip.Fmt": {
+    "message": "예전 셰이더 유지:\n{0}",
+    "description": ""
+  },
+  "Settings.GearShaders.NextRedraw": {
+    "message": "다음 다시 그리기 때 적용됩니다(자동 다시 그리기가 꺼져 있음).",
+    "description": ""
+  },
+  "Settings.GearShaders.Waiting": {
+    "message": "Penumbra와 Proteus의 모드 폴더를 기다리는 중…",
+    "description": ""
+  },
+  "Settings.GearShaders.Reason.OldTable": {
+    "message": "예전 색상표",
+    "description": ""
+  },
+  "Settings.GearShaders.Reason.UnsupportedForm": {
+    "message": "지원하지 않는 텍스처 구성",
+    "description": ""
+  },
+  "Settings.GearShaders.Reason.Unreadable": {
+    "message": "읽을 수 없음",
+    "description": ""
+  },
+  "Settings.GearShaders.Reason.Outranked": {
+    "message": "다른 플러그인의 리디렉션이 우선",
+    "description": ""
+  },
+  "Settings.GearShaders.Reason.Unresolved": {
+    "message": "변경 후 아직 확정되지 않음",
+    "description": ""
+  },
+  "Settings.GearShaders.Reason.Compositor": {
+    "message": "Proteus 오버레이가 그림",
+    "description": ""
+  },
+  "Settings.GearShaders.Reason.WriteFailed": {
+    "message": "사본을 쓸 수 없음",
+    "description": ""
   }
 }

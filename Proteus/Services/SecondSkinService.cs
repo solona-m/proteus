@@ -182,6 +182,25 @@ public sealed partial class SecondSkinService
     private readonly Func<string?>? modsRootOf;
 
     /// <summary>
+    /// How a content piece's game paths are resolved: Penumbra, seen through the gear shader upgrade's copies
+    /// (<see cref="CompositorService.ResolveSeeThrough"/>), so a copy reads as its source. Set by the compositor.
+    /// </summary>
+    internal Func<string, string?>? ResolveContent { get; set; }
+
+    /// <summary>
+    /// A content piece's file from what its game path resolves to: accepted only when it is a real file inside the
+    /// pack (an echo of the game path is not a file). Null sends the caller to its fallback.
+    /// </summary>
+    internal static string? ContentFileFrom(string? resolved, string gamePath, string modRoot, Func<string, bool> exists,
+                                            Func<string, string, bool> isUnder)
+        => resolved != null
+        && !string.Equals(resolved, gamePath, StringComparison.OrdinalIgnoreCase)
+        && exists(resolved)
+        && isUnder(modRoot, resolved)
+            ? resolved
+            : null;
+
+    /// <summary>
     /// A mod's settings in the player's collection, temporary ones included (what Glamourer sets), for
     /// <see cref="ShellBodyAtr"/>. Null when they cannot be read. Marshals onto the framework thread and blocks, so it
     /// must only be called from a pool thread.
@@ -1869,15 +1888,9 @@ public sealed partial class SecondSkinService
             var key = modRoot + '\u0000' + gamePath;
             if (!cache.TryGetValue(key, out var hit))
             {
-                var viaPenumbra = penumbra.ResolvePlayer(gamePath);
+                var viaPenumbra = (ResolveContent ?? penumbra.ResolvePlayer)(gamePath);
                 // ResolvePlayer echoes the request back when nothing redirects it, which is not a file.
-                cache[key] = hit =
-                    viaPenumbra != null
-                 && !string.Equals(viaPenumbra, gamePath, StringComparison.OrdinalIgnoreCase)
-                 && File.Exists(viaPenumbra)
-                 && IsUnder(modRoot, viaPenumbra)
-                        ? viaPenumbra
-                        : null;
+                cache[key] = hit = ContentFileFrom(viaPenumbra, gamePath, modRoot, File.Exists, IsUnder);
             }
             if (hit != null) return hit;
         }
@@ -1891,13 +1904,10 @@ public sealed partial class SecondSkinService
     /// </summary>
     private string? ContentTextureFile(string modRoot, string gamePath)
     {
-        var viaPenumbra = penumbra.ResolvePlayer(gamePath);
+        var viaPenumbra = (ResolveContent ?? penumbra.ResolvePlayer)(gamePath);
         // ResolvePlayer echoes the request back when nothing redirects it, which is not a file.
-        if (viaPenumbra != null
-            && !string.Equals(viaPenumbra, gamePath, StringComparison.OrdinalIgnoreCase)
-            && File.Exists(viaPenumbra)
-            && IsUnder(modRoot, viaPenumbra))
-            return viaPenumbra;
+        if (ContentFileFrom(viaPenumbra, gamePath, modRoot, File.Exists, IsUnder) is { } file)
+            return file;
 
         try
         {

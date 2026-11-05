@@ -5822,5 +5822,61 @@
   "Parts.Retarget.UseWornBody.Tip": {
     "message": "转换到你这个部位正在穿的体型模组。与在“转换到体型”中选择它相同。",
     "description": ""
+  },
+  "Settings.Section.GearShaders": {
+    "message": "装备着色器",
+    "description": ""
+  },
+  "Settings.GearShaders.AutoUpgrade.Label": {
+    "message": "将旧装备升级为金曦之遗辉着色器",
+    "description": ""
+  },
+  "Settings.GearShaders.AutoUpgrade.Tip": {
+    "message": "穿上装备时，若其模组仍使用旧的 characterlegacy.shpk 着色器，\n则改用金曦之遗辉的 character.shpk 绘制，光照与现行装备一致。\n不会修改你的模组：Proteus 绘制自己的升级副本，关闭此项\n会立即恢复原样。",
+    "description": ""
+  },
+  "Settings.GearShaders.Status.Fmt": {
+    "message": "已升级 {0} 个 · {1} 个保留旧着色器",
+    "description": ""
+  },
+  "Settings.GearShaders.Left.Tip.Fmt": {
+    "message": "保留旧着色器：\n{0}",
+    "description": ""
+  },
+  "Settings.GearShaders.NextRedraw": {
+    "message": "将在下次重绘时生效（自动重绘已关闭）。",
+    "description": ""
+  },
+  "Settings.GearShaders.Waiting": {
+    "message": "正在等待 Penumbra 和 Proteus 的模组文件夹…",
+    "description": ""
+  },
+  "Settings.GearShaders.Reason.OldTable": {
+    "message": "旧版颜色表",
+    "description": ""
+  },
+  "Settings.GearShaders.Reason.UnsupportedForm": {
+    "message": "不支持的贴图布局",
+    "description": ""
+  },
+  "Settings.GearShaders.Reason.Unreadable": {
+    "message": "无法读取",
+    "description": ""
+  },
+  "Settings.GearShaders.Reason.Outranked": {
+    "message": "其他插件的重定向优先",
+    "description": ""
+  },
+  "Settings.GearShaders.Reason.Unresolved": {
+    "message": "更改后尚未稳定",
+    "description": ""
+  },
+  "Settings.GearShaders.Reason.Compositor": {
+    "message": "由 Proteus 叠加层绘制",
+    "description": ""
+  },
+  "Settings.GearShaders.Reason.WriteFailed": {
+    "message": "无法写入副本",
+    "description": ""
   }
 }

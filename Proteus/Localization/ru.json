@@ -5822,5 +5822,61 @@
   "Parts.Retarget.UseWornBody.Tip": {
     "message": "Подогнать под мод тела, который надет для этой части. То же, что выбрать его в «Подогнать под тело».",
     "description": ""
+  },
+  "Settings.Section.GearShaders": {
+    "message": "Шейдеры снаряжения",
+    "description": ""
+  },
+  "Settings.GearShaders.AutoUpgrade.Label": {
+    "message": "Переводить старое снаряжение на шейдеры Dawntrail",
+    "description": ""
+  },
+  "Settings.GearShaders.AutoUpgrade.Tip": {
+    "message": "Когда вы надеваете снаряжение, предмет, мод которого ещё использует старый шейдер characterlegacy.shpk,\nрисуется с шейдером character.shpk из Dawntrail и освещается как современное снаряжение.\nВаши моды никогда не изменяются: Proteus рисует собственные обновлённые копии, а выключение\nэтой настройки сразу возвращает оригиналы.",
+    "description": ""
+  },
+  "Settings.GearShaders.Status.Fmt": {
+    "message": "{0} обновлено · {1} оставлено на старом шейдере",
+    "description": ""
+  },
+  "Settings.GearShaders.Left.Tip.Fmt": {
+    "message": "Оставлено на старом шейдере:\n{0}",
+    "description": ""
+  },
+  "Settings.GearShaders.NextRedraw": {
+    "message": "Вступит в силу при следующей перерисовке (автоперерисовка выключена).",
+    "description": ""
+  },
+  "Settings.GearShaders.Waiting": {
+    "message": "Ожидание Penumbra и папки мода Proteus…",
+    "description": ""
+  },
+  "Settings.GearShaders.Reason.OldTable": {
+    "message": "старая таблица цветов",
+    "description": ""
+  },
+  "Settings.GearShaders.Reason.UnsupportedForm": {
+    "message": "неподдерживаемая схема текстур",
+    "description": ""
+  },
+  "Settings.GearShaders.Reason.Unreadable": {
+    "message": "не читается",
+    "description": ""
+  },
+  "Settings.GearShaders.Reason.Outranked": {
+    "message": "побеждает перенаправление другого плагина",
+    "description": ""
+  },
+  "Settings.GearShaders.Reason.Unresolved": {
+    "message": "ещё не устоялось после изменения",
+    "description": ""
+  },
+  "Settings.GearShaders.Reason.Compositor": {
+    "message": "его рисуют наложения Proteus",
+    "description": ""
+  },
+  "Settings.GearShaders.Reason.WriteFailed": {
+    "message": "не удалось записать копию",
+    "description": ""
   }
 }

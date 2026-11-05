@@ -208,6 +208,26 @@ public class ConfigurationMigrationTests
     }
 
     [Fact]
+    [Trait("Plan", "AC-dt-shader-upgrade-1")]
+    public void AutoUpgradeLegacyShaders_defaults_off_and_missing_property_reads_off()
+    {
+        Assert.False(new Configuration().AutoUpgradeLegacyShaders);
+        Assert.Equal(9, Configuration.CurrentVersion);
+
+        var old = Newtonsoft.Json.JsonConvert.DeserializeObject<Configuration>("""{"Version":9,"AutoHatCompat":true}""")!;
+        Assert.False(old.AutoUpgradeLegacyShaders);
+        old.Migrate();
+        Assert.False(old.AutoUpgradeLegacyShaders);
+
+        var on = new Configuration { AutoUpgradeLegacyShaders = true };
+        var back = Newtonsoft.Json.JsonConvert.DeserializeObject<Configuration>(Newtonsoft.Json.JsonConvert.SerializeObject(on))!;
+        Assert.True(back.AutoUpgradeLegacyShaders);
+        back.Migrate();
+        Assert.True(back.AutoUpgradeLegacyShaders);
+        Assert.Equal(Configuration.CurrentVersion, back.Version);
+    }
+
+    [Fact]
     [Trait("Plan", "AC-earless-miqote-hair-1")]
     public void Earless_defaults_off_and_missing_property_reads_off()
     {

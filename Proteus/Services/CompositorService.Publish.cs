@@ -234,7 +234,7 @@ public partial class CompositorService
     /// call sites read game data the same way.
     /// </summary>
     private byte[]? ReadGameOrModFile(string gamePath)
-        => textureLoader.LoadRawFile(penumbra.ResolvePlayer(gamePath), gamePath);
+        => textureLoader.LoadRawFile(ResolveSeeThrough(gamePath), gamePath);
 
     /// <summary>That same list's hairstyle identity, without reading the model.</summary>
     internal string? HatCompatKeyFor(IReadOnlyList<string>? parts)
@@ -257,7 +257,8 @@ public partial class CompositorService
     /// as our own. Framework thread only. Called explicitly: Glamourer's own queued reapply does not arrive in game.
     /// </summary>
     /// <returns>False when Glamourer is unavailable or refused, so the caller falls back to a redraw.</returns>
-    public bool ReloadGearInPlace()
+    /// <param name="cause">Who asked, for the redraw ledger.</param>
+    public bool ReloadGearInPlace(string cause = "live brush")
     {
         if (!glamourer.IsAvailable) return false;
         long until = Environment.TickCount64 + 1000;
@@ -265,7 +266,7 @@ public partial class CompositorService
         glamourer.ExpectOwnReapplyUntil(until);
         Interlocked.Exchange(ref _lastOwnReapplyTick, Environment.TickCount64);
         // Counted, but at Debug: the brush reloads once per stroke.
-        log.Debug("{0}", redrawLedger.Reloaded("live brush"));
+        log.Debug("{0}", redrawLedger.Reloaded(cause));
         return glamourer.ReapplyPlayerState();
     }
 
@@ -409,8 +410,12 @@ public partial class CompositorService
                                      IDictionary<string, string>? previous)
     {
         string? probe = null, expectedFull = null;
+        // A path the gear shader upgrade holds resolves to its copy until the upgrade yields it, so it cannot prove
+        // this manifest live (it would wait out the whole timeout).
+        var held = _shaderUpgradeSources;
         foreach (var (gamePath, rel) in redirects)
         {
+            if (!CanProbe(gamePath, held)) continue;
             if (previous != null && previous.TryGetValue(gamePath, out var was)
                 && string.Equals(was, rel, StringComparison.OrdinalIgnoreCase))
                 continue;                         // unchanged — proves nothing
@@ -425,7 +430,7 @@ public partial class CompositorService
         {
             foreach (var (gamePath, rel) in previous)
             {
-                if (redirects.ContainsKey(gamePath)) continue;
+                if (redirects.ContainsKey(gamePath) || !CanProbe(gamePath, held)) continue;
                 var full = TryCanonicalise(Path.Combine(managedModDir, rel));
                 if (full == null) continue;
                 goneProbe = gamePath; goneFull = full; break;

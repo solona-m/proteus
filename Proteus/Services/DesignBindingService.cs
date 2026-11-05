@@ -743,6 +743,12 @@ public class DesignBindingService : IDisposable
     /// The settings of every mod on the character right now, or null when unreadable (the caller then keeps
     /// the snapshot it had).
     /// </summary>
+    /// <summary>
+    /// The source a drawn file stands for when it is a gear shader upgrade copy (file, its game paths), or null. Set by
+    /// the plugin; null when the upgrade is not wired.
+    /// </summary>
+    internal Func<string, IEnumerable<string>?, string?>? CopySource { get; set; }
+
     private List<PenumbraModSetting>? ReadCharacterMods(Guid collId)
     {
         var modsRoot  = penumbra.GetModDirectory();
@@ -757,7 +763,9 @@ public class DesignBindingService : IDisposable
         }
 
         var proteusDirs = discovery.DiscoverAll().Select(e => e.ModDirectory).ToHashSet(StringComparer.OrdinalIgnoreCase);
-        var mods = SelectCharacterMods(modsRoot, resources.Keys, permanent, StillHeld(collId), names, proteusDirs);
+        var copySource = CopySource;
+        var mods = SelectCharacterMods(modsRoot, resources.Keys, permanent, StillHeld(collId), names, proteusDirs,
+                                       copySource == null ? null : f => copySource(f, resources.TryGetValue(f, out var g) ? g : null));
         log.Information("[Proteus] design-binding: captured {0} mod(s) on the character.", mods.Count);
         return mods;
     }
@@ -850,18 +858,21 @@ public class DesignBindingService : IDisposable
     /// through the managed mod, so the tree never names them). A <paramref name="held"/> mod records the
     /// design's un-raised state; any other records its PERMANENT setting, beneath Glamourer's temporary ones.
     /// </summary>
+    /// <param name="copySource">The mod file a drawn gear shader upgrade copy stands for (per its game paths), so a
+    /// material-only mod drawn through a copy is still captured as itself rather than as the managed mod.</param>
     internal static List<PenumbraModSetting> SelectCharacterMods(
         string modsRoot,
         IEnumerable<string> drawnFiles,
         IReadOnlyDictionary<string, PenumbraBridge.ModSettingsSnapshot> permanent,
         IReadOnlyDictionary<string, PenumbraModSetting> held,
         IReadOnlyDictionary<string, string> installed,
-        IReadOnlySet<string> proteusDirs)
+        IReadOnlySet<string> proteusDirs,
+        Func<string, string?>? copySource = null)
     {
         var chosen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
-        foreach (var file in drawnFiles)
-            if (OwningMod(modsRoot, file) is { } owner && installed.ContainsKey(owner))
+        foreach (var drawn in drawnFiles)
+            if (OwningMod(modsRoot, copySource?.Invoke(drawn) ?? drawn) is { } owner && installed.ContainsKey(owner))
                 chosen.Add(owner);
 
         foreach (var dir in proteusDirs)
@@ -1356,7 +1367,7 @@ public class DesignBindingService : IDisposable
         var tree     = penumbra.GetActivePlayerResourceMap();
         if (modsRoot == null || tree == null) return;
 
-        var strays = StrayDrawnMods(modsRoot, tree, postLoadSweepBound, postLoadSweepProteus);
+        var strays = StrayDrawnMods(modsRoot, tree, postLoadSweepBound, postLoadSweepProteus, CopySource);
         if (strays.Count == 0) return;
 
         var collId = postLoadSweepCollection;
@@ -1390,13 +1401,16 @@ public class DesignBindingService : IDisposable
     /// </summary>
     internal static List<string> StrayDrawnMods(
         string modsRoot, IReadOnlyDictionary<string, HashSet<string>> tree,
-        IReadOnlySet<string> bound, IReadOnlySet<string> proteusDirs)
+        IReadOnlySet<string> bound, IReadOnlySet<string> proteusDirs,
+        Func<string, IEnumerable<string>?, string?>? copySource = null)
     {
         var strays = new SortedSet<string>(StringComparer.OrdinalIgnoreCase);
-        foreach (var (file, gamePaths) in tree)
+        foreach (var (drawn, gamePaths) in tree)
         {
             if (gamePaths.Count > 0 && gamePaths.All(p => p.StartsWith("chara/weapon/", StringComparison.OrdinalIgnoreCase)))
                 continue;
+            // A gear shader upgrade copy is drawn for its source mod.
+            var file = copySource?.Invoke(drawn, gamePaths) ?? drawn;
             if (OwningMod(modsRoot, file) is not { } owner) continue;
             if (bound.Contains(owner) || proteusDirs.Contains(owner)) continue;
             if (string.Equals(owner, SidecarDiscoveryService.ManagedModDir, StringComparison.OrdinalIgnoreCase)) continue;

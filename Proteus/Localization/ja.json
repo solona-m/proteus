@@ -5822,5 +5822,61 @@
   "Parts.Retarget.UseWornBody.Tip": {
     "message": "この部位に着ている体型 Mod にリフィットします。「リフィット先の体型 Mod」で選ぶのと同じです。",
     "description": ""
+  },
+  "Settings.Section.GearShaders": {
+    "message": "装備シェーダー",
+    "description": ""
+  },
+  "Settings.GearShaders.AutoUpgrade.Label": {
+    "message": "古い装備を黄金のレガシーのシェーダーに更新する",
+    "description": ""
+  },
+  "Settings.GearShaders.AutoUpgrade.Tip": {
+    "message": "装備を身に着けると、MODがまだ古いcharacterlegacy.shpkシェーダーを使っている装備は、\n代わりに黄金のレガシーのcharacter.shpkで描画され、現行の装備と同じように照らされます。\nMODは一切変更されません。Proteusは独自に更新したコピーを描画し、これをオフにすると\nすぐに元に戻ります。",
+    "description": ""
+  },
+  "Settings.GearShaders.Status.Fmt": {
+    "message": "{0}件を更新 ・ {1}件は旧シェーダーのまま",
+    "description": ""
+  },
+  "Settings.GearShaders.Left.Tip.Fmt": {
+    "message": "旧シェーダーのまま:\n{0}",
+    "description": ""
+  },
+  "Settings.GearShaders.NextRedraw": {
+    "message": "次の再描画で反映されます（自動再描画はオフです）。",
+    "description": ""
+  },
+  "Settings.GearShaders.Waiting": {
+    "message": "PenumbraとProteusのMODフォルダーを待っています…",
+    "description": ""
+  },
+  "Settings.GearShaders.Reason.OldTable": {
+    "message": "古いカラーテーブル",
+    "description": ""
+  },
+  "Settings.GearShaders.Reason.UnsupportedForm": {
+    "message": "非対応のテクスチャ構成",
+    "description": ""
+  },
+  "Settings.GearShaders.Reason.Unreadable": {
+    "message": "読み取れない",
+    "description": ""
+  },
+  "Settings.GearShaders.Reason.Outranked": {
+    "message": "他のプラグインのリダイレクトが優先",
+    "description": ""
+  },
+  "Settings.GearShaders.Reason.Unresolved": {
+    "message": "変更後まだ確定していない",
+    "description": ""
+  },
+  "Settings.GearShaders.Reason.Compositor": {
+    "message": "Proteusのオーバーレイが描画",
+    "description": ""
+  },
+  "Settings.GearShaders.Reason.WriteFailed": {
+    "message": "コピーを書き込めなかった",
+    "description": ""
   }
 }
