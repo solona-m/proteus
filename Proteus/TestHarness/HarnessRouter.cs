@@ -15,14 +15,16 @@ namespace Proteus.TestHarness;
 /// thread. Game reads live in <see cref="IHarnessGame"/>, job logic in <see cref="RefitJob"/>/<see cref="RestoreJob"/>,
 /// file work in <see cref="ModBackup"/>.
 /// </summary>
-internal sealed class HarnessRouter(HarnessJobs jobs, LogRing ring, SessionNames names, CaptureGate capture,
-                                    int build, string buildStamp, Dalamud.Plugin.Services.IPluginLog log)
+internal sealed partial class HarnessRouter(HarnessJobs jobs, LogRing ring, SessionNames names, CaptureGate capture,
+                                            int build, string buildStamp, Dalamud.Plugin.Services.IPluginLog log,
+                                            HarnessChanges changes)
 {
     /// <summary>Every route, for the docs test and 405's Allow header.</summary>
     internal static readonly IReadOnlyList<(string Method, string Path)> Routes =
     [
         ("GET", "/health"), ("GET", "/state"), ("GET", "/log"), ("GET", "/screenshot"),
-        ("POST", "/actions/refit"), ("POST", "/actions/restore"), ("POST", "/actions/shader-upgrade"), ("GET", "/jobs/{id}"),
+        ("POST", "/actions/refit"), ("POST", "/actions/restore"), ("POST", "/actions/shader-upgrade"),
+        ("POST", "/actions/equip"), ("POST", "/actions/mod-settings"), ("POST", "/actions/put-back"), ("GET", "/jobs/{id}"),
     ];
 
     private IHarnessGame Game => jobs.Game;
@@ -49,6 +51,9 @@ internal sealed class HarnessRouter(HarnessJobs jobs, LogRing ring, SessionNames
                 "/actions/refit" => await Refit(request),
                 "/actions/restore" => await Restore(request),
                 "/actions/shader-upgrade" => await ShaderUpgradeAction(request),
+                "/actions/equip" => await Equip(request),
+                "/actions/mod-settings" => await ModSettings(request),
+                "/actions/put-back" => await PutBack(request),
                 _ => Job(path["/jobs/".Length..]),
             };
         }
@@ -82,7 +87,7 @@ internal sealed class HarnessRouter(HarnessJobs jobs, LogRing ring, SessionNames
 
     private async Task<HarnessResponse> State()
     {
-        var s = await OnFramework(Game.State);
+        var (s, harnessChanges) = await OnFramework(() => (Game.State(), changes.View()));
         var models = ModelJoin.Join(s.Loaded, s.ResourceMap, s.ModsRoot);
         var c = s.Compositor;
         var a = s.AutoRefit;
@@ -112,8 +117,23 @@ internal sealed class HarnessRouter(HarnessJobs jobs, LogRing ring, SessionNames
             },
             shaderUpgrade = ShaderUpgradeBlock(Game.ShaderUpgrade()),
             job = jobs.Current?.View(),
+            gear = GearBlock(s.Gear),
+            harnessChanges,
         });
     }
+
+    /// <summary>The ten slots in <c>/state</c>, in slot order: item and dyes (null when unreadable), set/variant for a custom id.</summary>
+    internal static object GearBlock(IReadOnlyDictionary<string, Worn>? gear)
+        => HarnessGear.Slots.Select(slot =>
+        {
+            Worn? w = gear != null && gear.TryGetValue(slot, out var v) ? v : null;
+            var decoded = w is { } x ? HarnessGear.TryDecode(x.Item) : null;
+            return new
+            {
+                slot, item = w?.Item, dyes = w is { } d ? new int[] { d.Dye1, d.Dye2 } : null,
+                set = decoded?.Set, variant = decoded?.Variant,
+            };
+        }).ToList();
 
     /// <summary>The gear shader upgrade in <c>/state</c>: read-only, scrubbed with the rest.</summary>
     internal static object ShaderUpgradeBlock(ShaderUpgradeWatcher.View v) => new

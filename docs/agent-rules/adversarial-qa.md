@@ -63,12 +63,15 @@ four requests were open at once: retry when one finishes; it is never a busy run
 | Route | What it does |
 |---|---|
 | `GET /health` | `{ok, harness, session, build, buildStamp, penumbra, loggedIn, pluginEnabled}` |
-| `GET /state` | The live character (race, tribe, gender, body type, drawn race code), the player collection's id, every drawn model (`slot`, `loaded`, `gamePath`, `resolved`, `modDir`; `slot:-1` = Penumbra resolves it but it is not drawn), the compositor (`phase`: `boot-hold`/`compositing`/`pending`/`idle`, last result, last refresh), `redraws` (`count`, `lastAtUtc`), `autoRefit` (`busy`, `pending`), `shaderUpgrade` (below), and the current `job`. No names. |
+| `GET /state` | The live character (race, tribe, gender, body type, drawn race code), the player collection's id, every drawn model (`slot`, `loaded`, `gamePath`, `resolved`, `modDir`; `slot:-1` = Penumbra resolves it but it is not drawn), the compositor (`phase`: `boot-hold`/`compositing`/`pending`/`idle`, last result, last refresh), `redraws` (`count`, `lastAtUtc`), `autoRefit` (`busy`, `pending`), `shaderUpgrade` (below), the current `job`, `gear` (the ten slots in order: `slot`, `item`, `dyes`, and `set`/`variant` only for a Glamourer custom id; nulls when Glamourer cannot be read) and `harnessChanges` (`stopping`, and this session's recorded equips `gear[]` with `original`, `applied`, `requested`, `verified`, and holds `holds[]` with `before`). No names. |
 | `GET /log?since=<n>&max=<m>` | Plugin log lines after cursor `n` (`max` default 200, cap 2000): `{session, next, oldest, dropped, lines:[{seq,text}]}`. Pass `next` back as `since`. `dropped:true` = lines were lost to the ring. |
 | `GET /screenshot?ui=true\|false` | The game screen as PNG (`ui=false` = before Dalamud's UI). 429 while another is taken; 503 `capture-timeout` when the game is minimised or not rendering. |
 | `POST /actions/refit` | `{"mod":"<Penumbra folder name>","bodies":["rue","tbse@women"],"remake":false}` → 202 `{job, modDir, state}`. Runs the Studio's "Make every size" with the Studio's current settings, after backing the mod up; then reloads the mod and redraws. |
 | `POST /actions/restore` | `{"job":"<refit job id>"}`, or `{"mod":"<folder>"}`, or `{"mod":"<folder>","backup":"<backupId>"}` → 202. |
 | `POST /actions/shader-upgrade` | `{"enabled":true\|false}` and/or `{"maskGloss":"inverse-specular"\|"low"\|"mid"}` → 200 `{enabled, maskGloss}`; `{"undoWorn":true}` (optionally `"decline":false`) or `{"upgradeWornNow":true}` → 202 `{started}`. Switches the gear shader upgrade as its Settings checkbox does; `maskGloss` picks how the diffuse form's derived mask fills its roughness channel, for this session only (never saved) and only for files written after it; `undoWorn` / `upgradeWornNow` run the two Settings buttons. 409 `busy` while a run or auto refit is working; 400 `invalid-field` for an unknown field or value, a wrong type, no field, `decline` without `undoWorn`, or both runs at once. |
+| `POST /actions/equip` | `{"slot":"Body","item":12345}` or `{"slot":"Body","set":317,"variant":2}` → 200 `{slot, sent, item, set, variant, dyes, previous, original}` (`readBack:false` when the worn item could not be read back). Equips through Glamourer for this session only (no lock, no design). Slots: Head, Body, Hands, Legs, Feet, Ears, Neck, Wrists, RFinger, LFinger (any case). `set`/`variant` equip that model even when no item uses it. 400 `invalid-field` / `item-invalid`; 409 `busy`, `auto-refit-busy`, `not-logged-in`, `carrier-slot`, `glamourer-refused`; 503 `glamourer-unavailable`, `harness-stopping`. |
+| `POST /actions/mod-settings` | `{"mod":"<folder>","enabled":false}` and/or `"priority":1000` → 200 `{mod, collection, enabled, priority, before, redrawRequested}`. Holds the mod in the player's collection with a Penumbra **temporary** setting (its options kept), never saved. 409 `held-elsewhere` when another plugin (Glamourer, design binding) holds it; 404 `mod-not-found`; 400 `managed-mod`; 409 `no-collection`, `penumbra-refused`; 503 `penumbra-unavailable`, `harness-stopping`. |
+| `POST /actions/put-back` | `{}` → 200 `{gear:[{slot,result}], holds:[{mod,result}], sweep, redrawRequested}`. Undoes every equip and hold of this session. Never refused. |
 | `GET /jobs/{id}` | `{id, kind, modDir, state: queued\|running\|done\|failed\|cancelled, progress, backup, reloaded, redrawRequested, redrawObserved, autoRefitFollowed, result, restored, error}` |
 
 `mod` is the **folder name** Penumbra keeps the mod in (case-insensitive), never its
@@ -124,6 +127,46 @@ you finish**, whatever the outcome:
 
 **Where backups live:** `$APPDATA/XIVLauncher/pluginConfigs/Proteus/test-harness/backups/<modDir>/<backupId>/`.
 The harness never deletes or overwrites a backup; the user may delete them by hand.
+
+## You must put back every equip and hold
+
+Equips and holds change the shared character for everyone, so:
+
+- **Call `POST /actions/put-back` before you finish**, check every entry, and retry
+  any `failed` one (only failures stay recorded). Results: gear `restored` /
+  `changed` / `failed`; holds `cleared` / `changed` / `gone` / `failed`.
+- `changed` means something else took the slot or the mod over since (the player, a
+  design, automation, a Proteus carrier, another plugin's hold): the harness left it
+  alone. Tell the user.
+- Holds are Penumbra temporary settings, never saved to the collection. A mod
+  another plugin already holds answers `held-elsewhere`; the harness never touches
+  that hold. A slot holding a Proteus invisible carrier answers `carrier-slot`.
+- Auto refit and the gear shader upgrade still react to what you equip, and
+  put-back does not undo *their* writes: hash the worn mods first and clean up as
+  the shader upgrade section says.
+- Confirm what is **drawn** in `/state.models`, not `/state.gear`: Glamourer's
+  restricted-gear protection can draw a different model than the worn item.
+- **One in-game QA at a time when you equip or hold.** Before each assert, check
+  that `/state.harnessChanges` lists only your entries and that `/state.session` is
+  unchanged. A changed session means the plugin reloaded, and put-back already ran
+  at unload: set your state up again and report it.
+- `off` and plugin unload put back on their own (an unload off the framework thread
+  cannot, and logs what it left).
+- Start with a smoke check: one equip and put-back of one slot, one hold and
+  put-back, with `/state` read before and after each.
+
+Example (a variant case): hold the competing mod off, equip the model, assert, put
+back:
+
+```bash
+curl -s -X POST -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" \
+  -d '{"mod":"Equinox","enabled":false}' http://127.0.0.1:$PORT/actions/mod-settings
+curl -s -X POST -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" \
+  -d '{"slot":"Body","set":317,"variant":2}' http://127.0.0.1:$PORT/actions/equip
+# ... wait for the compositor and auto refit to be idle, assert in /state.models ...
+curl -s -X POST -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" \
+  -d '{}' http://127.0.0.1:$PORT/actions/put-back
+```
 
 ## Waiting for the game
 

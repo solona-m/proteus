@@ -133,7 +133,7 @@ expanding here.
 - `Proteus/Interop/` — unsafe struct offsets and IPC threading (Penumbra events fire on the caller's thread)
 - `Proteus/Configuration.cs` migrations — a mistake loses user settings
 - `LogAnonymizer.cs` / `LogExportService.cs` — character names must not leak into exported logs
-- `Proteus/TestHarness/`, the `ProteusTestHarness` switch in `Directory.Build.props` and the release workflows' harness guard — a local control port that writes into mods; must stay compiled out of every CI build (ADR 0002)
+- `Proteus/TestHarness/`, the `ProteusTestHarness` switch in `Directory.Build.props` and the release workflows' harness guard — a local control port that writes into mods and, for the session, the character's gear and mod settings; must stay compiled out of every CI build (ADR 0002)
 - `.claude/settings.json` and `.claude/hooks/` — loaded by every agent session in the repo, the owner's too; a broken hook adds latency or errors to every matched call (its command ends in `|| true`, so it never blocks), and a contributor PR changing them takes effect as soon as its branch is checked out, so review it before it is checked out
 - `worker/`, `.github/workflows/` and `.github/dependabot.yml` — live release distribution; actions stay SHA-pinned (`SupplyChainTests`)
 

@@ -11,6 +11,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using Dalamud.Plugin.Services;
 using NSubstitute;
+using Proteus.Interop;
 using Proteus.Services;
 using Proteus.TestHarness;
 
@@ -48,6 +49,11 @@ internal sealed class FakeFrameworkDispatcher : IFrameworkDispatcher, IDisposabl
     }
 
     public bool OnFramework => Environment.CurrentManagedThreadId == ThreadId;
+    public bool OnFrameworkThread => OnFramework;
+
+    /// <summary>Run <paramref name="work"/> on the fake framework thread and wait for it.</summary>
+    public T Run<T>(Func<T> work) => Post(work).GetAwaiter().GetResult();
+    public void Run(Action work) => Post(() => { work(); return 0; }).GetAwaiter().GetResult();
 
     public void Stall() => running.Reset();
     public void Resume() => running.Set();
@@ -171,8 +177,112 @@ internal sealed class FakeGame : IHarnessGame
         Fw(nameof(State));
         return new RawState(LoggedIn ? Character : null, LoggedIn && PenumbraUp ? Collection : null, LoggedIn ? Loaded : [],
                             PenumbraUp ? ResourceMap : null, PenumbraUp ? ModsRoot : null, Compositor, null, null,
-                            new AutoRefitInfo(View, Activity));
+                            new AutoRefitInfo(View, Activity))
+        {
+            Gear = ReadGear(),
+        };
     }
+
+    // ── equip and hold ──────────────────────────────────────────────────────
+
+    /// <summary>What Glamourer says is worn; every slot starts as item 1000+index with no dyes.</summary>
+    public Dictionary<string, Worn> Gear { get; } =
+        HarnessGear.Slots.Select((s, i) => (s, i)).ToDictionary(t => t.s, t => new Worn(1000UL + (ulong)t.i, 0, 0));
+    public bool GlamourerUp { get; set; } = true;
+    /// <summary>The next N gear reads fail (null) once this many reads have gone by; -1 never.</summary>
+    public int GearReadsBeforeFailure { get; set; } = -1;
+    /// <summary>Glamourer's answer to SetGear: null = Success.</summary>
+    public Func<string, ulong, string?> SetGearAnswer { get; set; } = (_, _) => null;
+    /// <summary>What Glamourer stores for a sent id (it may normalise a custom id to an item id).</summary>
+    public Func<string, ulong, ulong> Normalise { get; set; } = (_, id) => id;
+    public List<(string Slot, ulong Id, byte Dye1, byte Dye2)> GearSets { get; } = [];
+    public HashSet<string> Carriers { get; } = new(StringComparer.Ordinal);
+
+    public Dictionary<(Guid, string), PenumbraBridge.TemporaryHold> Temporary { get; } = new();
+    public Dictionary<(Guid, string), int> TemporaryKeys { get; } = new();
+    public bool QueryFails { get; set; }
+    public Dictionary<string, PenumbraBridge.SettingsRead> Settings { get; } = new(StringComparer.OrdinalIgnoreCase);
+    public bool ReadThrows { get; set; }
+    public string? SetHoldAnswer { get; set; }
+    public string? ClearHoldAnswer { get; set; }
+    public List<(Guid Collection, string Dir, bool Enabled, int Priority, IReadOnlyDictionary<string, List<string>> Options, string Source, int Key)> HoldSets { get; } = [];
+    public List<(Guid Collection, int Key)> Sweeps { get; } = [];
+    public Func<Guid, int, string>? SweepAnswer { get; set; }
+    public int RedrawRequests;
+    public Action<string>? OnSetGear { get; set; }
+
+    private Dictionary<string, Worn>? ReadGear()
+    {
+        if (!GlamourerUp || !LoggedIn) return null;
+        if (GearReadsBeforeFailure == 0) return null;
+        if (GearReadsBeforeFailure > 0) GearReadsBeforeFailure--;
+        return new Dictionary<string, Worn>(Gear);
+    }
+
+    public IReadOnlyDictionary<string, Worn>? GearNow() { Fw(nameof(GearNow)); return ReadGear(); }
+
+    public bool PlayerPresent() { Fw(nameof(PlayerPresent)); return LoggedIn; }
+
+    public string? SetGear(string slot, ulong id, byte dye1, byte dye2)
+    {
+        Fw(nameof(SetGear));
+        OnSetGear?.Invoke(slot);
+        if (!GlamourerUp) return "unavailable";
+        if (SetGearAnswer(slot, id) is { } ec) return ec;
+        GearSets.Add((slot, id, dye1, dye2));
+        Gear[slot] = new Worn(Normalise(slot, id), dye1, dye2);
+        return null;
+    }
+
+    public IReadOnlyCollection<string> CarrierSlots() { Fw(nameof(CarrierSlots)); return Carriers.ToList(); }
+
+    public Guid? PlayerCollection() { Fw(nameof(PlayerCollection)); return PenumbraUp ? Collection : null; }
+
+    public PenumbraBridge.TemporaryHold? QueryHold(Guid collection, string modDir)
+    {
+        Fw(nameof(QueryHold));
+        if (QueryFails || !PenumbraUp) return null;
+        return Temporary.TryGetValue((collection, modDir), out var h) ? h : new PenumbraBridge.TemporaryHold(false, false, "", false, 0);
+    }
+
+    public PenumbraBridge.SettingsRead ReadSettings(Guid collection, string modDir)
+    {
+        Fw(nameof(ReadSettings));
+        if (ReadThrows) throw new InvalidOperationException("ipc gone");
+        return Settings.TryGetValue(modDir, out var r) ? r : new PenumbraBridge.SettingsRead(PenumbraBridge.SettingsReadKind.None, null);
+    }
+
+    public string? SetHold(Guid collection, string modDir, bool enabled, int priority,
+                           IReadOnlyDictionary<string, List<string>> options, string source, int key)
+    {
+        Fw(nameof(SetHold));
+        if (SetHoldAnswer != null) return SetHoldAnswer;
+        HoldSets.Add((collection, modDir, enabled, priority, options, source, key));
+        Temporary[(collection, modDir)] = new PenumbraBridge.TemporaryHold(true, false, source, enabled, priority);
+        TemporaryKeys[(collection, modDir)] = key;
+        return null;
+    }
+
+    public string? ClearHold(Guid collection, string modDir)
+    {
+        Fw(nameof(ClearHold));
+        if (ClearHoldAnswer != null) return ClearHoldAnswer;
+        if (!Temporary.Remove((collection, modDir))) return "NothingChanged";
+        TemporaryKeys.Remove((collection, modDir));
+        return null;
+    }
+
+    public string SweepHolds(Guid collection, int key)
+    {
+        Fw(nameof(SweepHolds));
+        Sweeps.Add((collection, key));
+        if (SweepAnswer != null) return SweepAnswer(collection, key);
+        var mine = TemporaryKeys.Where(kv => kv.Key.Item1 == collection && kv.Value == key).Select(kv => kv.Key).ToList();
+        foreach (var k in mine) { Temporary.Remove(k); TemporaryKeys.Remove(k); }
+        return mine.Count > 0 ? "Success" : "NothingChanged";
+    }
+
+    public void RequestRedraw() { Fw(nameof(RequestRedraw)); Interlocked.Increment(ref RedrawRequests); }
 
     public (IReadOnlyCollection<string> Collections, string? Character) NamesNow()
     {
@@ -318,11 +428,13 @@ internal sealed class HarnessFixture : IDisposable
     public SessionNames Names { get; } = new();
     public LogRing Ring { get; }
     public HarnessRouter Router { get; }
+    public HarnessChanges Changes { get; }
     public HarnessServer Server { get; }
     public HttpClient Client { get; }
     public string Token { get; } = HarnessAuth.NewToken();
     public string ModsRoot { get; }
     public bool Disposing { get; set; }
+    public IPluginLog Log { get; } = Substitute.For<IPluginLog>();
 
     public static readonly HarnessTimings FastTimings = new(TimeSpan.FromMilliseconds(400), TimeSpan.FromMilliseconds(600),
                                                             TimeSpan.FromMilliseconds(150), TimeSpan.FromMilliseconds(30),
@@ -337,8 +449,9 @@ internal sealed class HarnessFixture : IDisposable
                                 _ => long.MaxValue);
         Jobs = new HarnessJobs(Game, Dispatcher, Backups, session, () => Disposing, timings ?? FastTimings);
         Ring = new LogRing(Names);
+        Changes = new HarnessChanges(Game, Names, Log);
         Router = new HarnessRouter(Jobs, Ring, Names, new CaptureGate((timings ?? FastTimings).Capture), 1411, "11-01 12:00:00",
-                                   Substitute.For<IPluginLog>());
+                                   Substitute.For<IPluginLog>(), Changes);
         Server = new HarnessServer(Router.Handle, Token, readTimeout ?? TimeSpan.FromMilliseconds(500));
         Server.Start();
         Client = NewClient();
