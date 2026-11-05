@@ -765,7 +765,8 @@ internal static partial class SizeSetRefit
         if (sources.Primary == null)
         {
             var (unread, code) = UnreadableNote(piece.Label, request.MadeOn, sources.MadeOnName, sources.MadeOnMissing,
-                                                sources.Fits);
+                                                sources.Fits,
+                                                noneParsed: request.MadeOn == null && PieceFilesUnparsable(root, piece));
             runLog.Note(unread, piece, SizeStatus.Skipped, code, groupName, men: true, gamePath: save);
             return 0;
         }

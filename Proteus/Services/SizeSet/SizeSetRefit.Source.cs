@@ -336,11 +336,15 @@ internal static partial class SizeSetRefit
     /// <param name="madeOnName">What the "Made on" body is called; its folder when not installed.</param>
     /// <param name="missing">The "Made on" body is not installed.</param>
     /// <param name="fits">The verdicts of the sizes read on it.</param>
+    /// <param name="noneParsed">Every one of the piece's own files is missing, empty or no model
+    /// (<see cref="PieceFilesUnparsable"/>): choosing "Made on" can't make it readable — and would turn off the #43
+    /// fallback that makes the women's piece men's — so it is not advised (#46).</param>
     internal static (string Note, string Code) UnreadableNote(string piece, string? madeOn, string? madeOnName, bool missing,
-                                                              IReadOnlyCollection<MadeOnFit> fits)
+                                                              IReadOnlyCollection<MadeOnFit> fits, bool noneParsed = false)
     {
         var s = Strings.SizeSet;
-        if (madeOn == null) return (string.Format(s.UnreadableMadeOnFmt, piece), Codes.Unreadable);
+        if (madeOn == null)
+            return (string.Format(noneParsed ? s.UnreadableFmt : s.UnreadableMadeOnFmt, piece), Codes.Unreadable);
         string name = madeOnName ?? madeOn;
         if (missing) return (string.Format(s.MadeOnMissingFmt, piece, name), Codes.NotMadeOn);
         // None read on it at all: its files could not be read, which is no reason to doubt the body chosen.
@@ -349,6 +353,14 @@ internal static partial class SizeSetRefit
             return (string.Format(s.MadeOnUnclearFmt, piece, name), Codes.NotMadeOn);
         return (string.Format(s.NotMadeOnFmt, piece, name), Codes.NotMadeOn);
     }
+
+    /// <summary>
+    /// Whether every one of a piece's own files (<see cref="Piece.Options"/>, which <see cref="PiecesOf"/> already
+    /// limits to the author's) is missing, zero bytes or rejected by the model parser — the rule the #43 fallback uses
+    /// (<see cref="Unparsable"/>): a file that can't be opened is not counted, and a piece with no files is false.
+    /// </summary>
+    internal static bool PieceFilesUnparsable(string modRoot, Piece piece)
+        => piece.Options.Count > 0 && piece.Options.All(o => Unparsable(modRoot, o.File));
 
     /// <summary>
     /// One of the author's sizes ranked among the "Made on" body's sizes of its slot and race, and judged
