@@ -244,16 +244,6 @@ public partial class CompositorService
         catch (Exception ex) { log.Error(ex, "[Proteus] post-redraw shell check failed"); }
     }
 
-    /// <summary>
-    /// The body-side facts this backstop judges, as one comparable key. Narrower than <see cref="DrawStateSignature"/>:
-    /// equipment changes belong to the redraw hook.
-    /// </summary>
-    private static string PostSettleKey(in DrawSample s)
-        => string.Join('\n',
-            BodyTypeKey(s.Materials!)              ?? "-",
-            CharCodeKey(CharCodeSet(s.Materials!)) ?? "-",
-            BodyShapeSignature(s.Shapes));
-
     /// <summary>Set while a post-redraw body-type check is in flight, so overlapping composites cannot run two at once
     /// off different half-settled readings.</summary>
     private int _postSettleCheckRunning;
@@ -271,11 +261,11 @@ public partial class CompositorService
             {
                 await Task.Delay(PostSettleInitialMs).ConfigureAwait(false);
 
-                // Confirm before deciding: sample until two consecutive readings agree, since a single mid-reload read looks like
-                // a body-type change.
-                string? prevKey = null;
-                DrawSample latest = default;
-                bool confirmed = false;
+                // The loop only samples; DecidePostSettle judges the readings so far (#57). A body type beside no char
+                // code is a mid-reload walk, and its shapes come from that same walk: counted as a blank.
+                var samples = new List<DrawSample>();
+                var readings = new List<PostSettleReading?>();
+                PostSettleVerdict verdict = default;
                 for (int i = 0; i < PostSettleMaxPolls; i++)
                 {
                     DrawSample s;
@@ -284,77 +274,115 @@ public partial class CompositorService
                     catch (OperationCanceledException) { return; }
                     catch (Exception ex) when (_disposed || IsLoadContextUnloading(ex)) { return; }
 
+                    samples.Add(s);
                     // Empty as well as null is a blank walk; blanks must never agree with each other.
-                    if (s.Materials is { Count: > 0 })
-                    {
-                        latest = s;
-                        var key = PostSettleKey(s);
-                        if (string.Equals(key, prevKey, StringComparison.Ordinal)) { confirmed = true; break; }
-                        prevKey = key;
-                    }
-                    else prevKey = null;
-
-                    // Not after the last sample: nothing left to wait for.
-                    if (i < PostSettleMaxPolls - 1)
-                        await Task.Delay(PostSettlePollMs).ConfigureAwait(false);
+                    readings.Add(s.Materials is { Count: > 0 } m
+                        ? new PostSettleReading(BodyTypeKey(m), CharCodeKey(CharCodeSet(m)),
+                                                s.Shapes == null ? null : BodyShapeSignature(s.Shapes))
+                        : null);
+                    verdict = DecidePostSettle(readings, final: i == PostSettleMaxPolls - 1, _lastCompositedBodyType,
+                                               _lastCompositedCharCodes, _lastCompositedBodyShapeSig);
+                    if (verdict.Action != PostSettleAction.KeepSampling) break;
+                    await Task.Delay(PostSettlePollMs).ConfigureAwait(false);
                 }
-                if (prevKey == null) return;   // never got a usable reading at all
 
-                // Same builders WaitForRaceToSettle and Recomposite use (see CharCodeKey).
-                var snapshot       = latest.Materials!;
-                var newBodyTypeKey = BodyTypeKey(snapshot);
-                var newCharCodeKey = CharCodeKey(CharCodeSet(snapshot));
-
-                // A body type beside a null char code is a mid-reload walk: veto acting on the materials. A veto, not an early
-                // return, because the body-shape branch below reads shape keys, not materials.
-                bool materialsIncoherent = newBodyTypeKey != null && newCharCodeKey == null;
-                if (materialsIncoherent)
-                    log.Debug("[Proteus] post-settle materials are incoherent (bodyType={0}, charCode=none) — "
-                            + "judging shapes only", newBodyTypeKey ?? "none");
-
-                bool bodyTypeShrank  = IsStrictSubsetKey(newBodyTypeKey, _lastCompositedBodyType);
-                bool bodyTypeChanged = !materialsIncoherent && newBodyTypeKey != null && !bodyTypeShrank &&
-                    !string.Equals(newBodyTypeKey, _lastCompositedBodyType, StringComparison.OrdinalIgnoreCase);
-                bool charCodeChanged = !materialsIncoherent && newCharCodeKey != null &&
-                    !string.Equals(newCharCodeKey, _lastCompositedCharCodes, StringComparison.OrdinalIgnoreCase);
-
-                // Enabled body shapes can settle after the composite too. Independent of the material vetoes; only a failed (null)
-                // read is untrustworthy, an empty map means "nothing enabled".
-                var settledShapes = latest.Shapes;
-                bool shapesChanged = settledShapes != null && !string.Equals(
-                    BodyShapeSignature(settledShapes), _lastCompositedBodyShapeSig, StringComparison.Ordinal);
-
-                if (bodyTypeChanged || charCodeChanged || shapesChanged)
+                if (verdict.Action is PostSettleAction.None or PostSettleAction.KeepSampling)
                 {
-                    log.Debug("[Proteus] Post-settle correction: bodyType={0}→{1} charCode={2}→{3} "
-                            + "shapesChanged={4} confirmed={5} incoherent={6}",
-                        _lastCompositedBodyType ?? "none", newBodyTypeKey ?? "none",
-                        _lastCompositedCharCodes ?? "none", newCharCodeKey ?? "none",
-                        shapesChanged, confirmed, materialsIncoherent);
-
-                    // Published per source: shapes may be settled while the material walk is mid-reload.
-                    if (confirmed && !materialsIncoherent)
-                    {
-                        // Two agreeing readings: publish, so the corrective recomposite uses them (dirty stays false).
-                        _activeMtrlSnapshot = snapshot;
-                        _activeMtrlSnapshotDirty = false;
-                        _activeMtrlSnapshotRewalk = false;
-                        config.CachedActiveMaterialPaths = snapshot.ToList();
-                    }
-                    else
-                    {
-                        // Still moving at the cap, or incoherent: still worth a corrective composite, but ask for a fresh
-                        // walk rather than publish an unverified read; the trigger's settle walk re-reads it. Not dirty: no
-                        // body mod changed, and this publish already reloaded the character, so a preamble reload is waste.
-                        _activeMtrlSnapshotRewalk = true;
-                    }
-                    if (confirmed && settledShapes != null) _bodyShapeSnapshot = settledShapes;
-                    TriggerRecomposite("post-settle-correction", force: false);
+                    if (verdict.Dropped != null)
+                        log.Debug("[Proteus] post-settle: dropped an incoherent reading; it would have triggered: {0}",
+                                  verdict.Dropped);
+                    return;
                 }
+
+                var latest = samples[verdict.Latest];
+                var reading = readings[verdict.Latest]!.Value;
+                log.Debug("[Proteus] Post-settle correction: bodyType={0}→{1} charCode={2}→{3} "
+                        + "shapesChanged={4} confirmed={5}",
+                    _lastCompositedBodyType ?? "none", reading.BodyType ?? "none",
+                    _lastCompositedCharCodes ?? "none", reading.CharCodes ?? "none",
+                    verdict.ShapesChanged, verdict.Confirmed);
+
+                if (verdict.Action == PostSettleAction.Correct)
+                {
+                    // Two agreeing readings: publish, so the corrective recomposite uses them (dirty stays false).
+                    var snapshot = latest.Materials!;
+                    _activeMtrlSnapshot = snapshot;
+                    _activeMtrlSnapshotDirty = false;
+                    _activeMtrlSnapshotRewalk = false;
+                    config.CachedActiveMaterialPaths = snapshot.ToList();
+                    if (verdict.PublishShapes) _bodyShapeSnapshot = latest.Shapes;
+                }
+                else
+                {
+                    // Still moving at the cap: still worth a corrective composite, but ask for a fresh walk rather than
+                    // publish an unverified read; the trigger's settle walk re-reads it. Not dirty: no body mod changed,
+                    // and this publish already reloaded the character, so a preamble reload is waste.
+                    _activeMtrlSnapshotRewalk = true;
+                }
+                TriggerRecomposite("post-settle-correction", force: false);
             }
             catch (Exception ex) when (ex is OperationCanceledException or ObjectDisposedException) { }
             catch (Exception ex) when (_disposed || IsLoadContextUnloading(ex)) { }
             finally { Volatile.Write(ref _postSettleCheckRunning, 0); }
         });
+    }
+
+    /// <summary>One post-redraw reading: null elements as the walk gave them; a null <see cref="ShapeSig"/> means the
+    /// shapes were not read (an empty signature is "nothing enabled").</summary>
+    internal readonly record struct PostSettleReading(string? BodyType, string? CharCodes, string? ShapeSig);
+
+    internal enum PostSettleAction { KeepSampling, None, Correct, CorrectWithRewalk }
+
+    /// <summary>What <see cref="DecidePostSettle"/> concluded. <see cref="Latest"/> indexes the trusted reading acted on
+    /// (-1 when none); <see cref="Dropped"/> names, for a dropped incoherent reading, the facts it would have triggered.</summary>
+    internal readonly record struct PostSettleVerdict(PostSettleAction Action, int Latest, bool Confirmed, bool PublishShapes,
+                                                      bool BodyTypeChanged, bool CharCodeChanged, bool ShapesChanged,
+                                                      string? Dropped);
+
+    /// <summary>
+    /// The whole post-redraw backstop decision over the readings so far (null = a blank walk), so the loop only samples
+    /// (#57). A reading with a body type but no char code is a mid-reload walk — its shapes come from that same walk —
+    /// so it counts as a blank: it resets confirmation and is never acted on. Two consecutive trusted readings with
+    /// equal keys confirm; otherwise sampling goes on until <paramref name="final"/>, when a coherent last reading is
+    /// still judged (a correction with a fresh walk). A body type shrunk to a strict subset is no change; shapes change
+    /// only from a read, different signature.
+    /// </summary>
+    internal static PostSettleVerdict DecidePostSettle(IReadOnlyList<PostSettleReading?> readings, bool final,
+                                                       string? lastBodyType, string? lastCharCodes, string? lastShapeSig)
+    {
+        static bool Trusted(PostSettleReading r) => !(r.BodyType != null && r.CharCodes == null);
+        static string Key(PostSettleReading r) => string.Join('\n', r.BodyType ?? "-", r.CharCodes ?? "-", r.ShapeSig ?? "");
+
+        (bool Body, bool Char, bool Shapes) Changes(PostSettleReading r)
+            => (r.BodyType != null && !IsStrictSubsetKey(r.BodyType, lastBodyType)
+                    && !string.Equals(r.BodyType, lastBodyType, StringComparison.OrdinalIgnoreCase),
+                r.CharCodes != null && !string.Equals(r.CharCodes, lastCharCodes, StringComparison.OrdinalIgnoreCase),
+                r.ShapeSig != null && !string.Equals(r.ShapeSig, lastShapeSig, StringComparison.Ordinal));
+
+        string? dropped = null;
+        foreach (var r in readings)
+            if (r is { } u && !Trusted(u))
+            {
+                var (b, c, sh) = Changes(u);
+                var names = new List<string>();
+                if (b) names.Add("body type");
+                if (c) names.Add("char code");
+                if (sh) names.Add("shapes");
+                dropped = names.Count > 0 ? string.Join(", ", names) : null;
+            }
+
+        int n = readings.Count;
+        bool TrustedAt(int i) => i >= 0 && readings[i] is { } r && Trusted(r);
+        bool confirmed = n >= 2 && TrustedAt(n - 1) && TrustedAt(n - 2)
+                         && Key(readings[n - 1]!.Value) == Key(readings[n - 2]!.Value);
+        if (!confirmed && !final) return new(PostSettleAction.KeepSampling, -1, false, false, false, false, false, dropped);
+        if (!TrustedAt(n - 1)) return new(PostSettleAction.None, -1, false, false, false, false, false, dropped);
+
+        var latest = readings[n - 1]!.Value;
+        var (body, chr, shapes) = Changes(latest);
+        if (!(body || chr || shapes))
+            return new(PostSettleAction.None, n - 1, confirmed, false, false, false, false, dropped);
+        return new(confirmed ? PostSettleAction.Correct : PostSettleAction.CorrectWithRewalk, n - 1, confirmed,
+                   confirmed && latest.ShapeSig != null, body, chr, shapes, dropped);
     }
 }
