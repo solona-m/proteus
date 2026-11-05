@@ -226,8 +226,14 @@ internal static class VariantRepointWriter
     private static bool SameSlot(JsonElement manipulation, ItemEntry item, VariantEntry variant)
         => ParseImc(manipulation) is { } edit && item.Item is { } i && edit.Item == i && edit.Variant == variant.Variant;
 
+    /// <summary>
+    /// The default option's manipulations; null only when the manifest cannot be read. A readable manifest with no
+    /// <c>DefaultData</c> at all (most mods: everything lives in groups) has none, as <c>RefitModService</c> reads it.
+    /// </summary>
     private static List<JsonElement>? DefaultManipulations(string modRoot)
-        => PenumbraModMeta.TryReadDefaultData(modRoot) is { } dd ? dd.Manipulations.OfType<JsonElement>().ToList() : null;
+        => PenumbraModMeta.TryReadDefaultData(modRoot) is { } dd ? dd.Manipulations.OfType<JsonElement>().ToList()
+         : PenumbraModMeta.HasReadableManifest(modRoot) ? []
+         : null;
 
     /// <summary>
     /// The names of the mod's groups, so a search can tell a renamed option from a group that is gone. Null when the

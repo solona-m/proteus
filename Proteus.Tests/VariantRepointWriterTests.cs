@@ -208,6 +208,47 @@ public class VariantRepointWriterTests
     }
 
     [Fact]
+    [Trait("Plan", "AC-imc-all-variants-3")]
+    public void Material_id_0_is_never_a_copy_target()
+    {
+        // In-game QA (1433): moonfire lace gained a dead v0000 key for a variant whose IMC entry names material 0.
+        using var k = new VariantRepointTestKit();
+        var mod = k.Colours("Dress", Top);
+        k.Imc(Top, E(1), E(1), E(2), E(0));
+        k.Run([k.Worn(Top, 2, mod)]);
+        Assert.True(FilesOf(mod, Red).ContainsKey(MaterialPath(Top, 2)));
+        Assert.False(FilesOf(mod, Red).ContainsKey(MaterialPath(Top, 0)));
+    }
+
+    [Fact]
+    [Trait("Plan", "AC-imc-all-variants-6")]
+    public void Undo_and_reconcile_work_on_a_manifest_without_DefaultData()
+    {
+        // In-game QA (1433): most mods keep everything in groups and have no DefaultData at all; undo refused them as
+        // "could not be read" and reconcile skipped them. No DefaultData is still a readable manifest: none, not unknown.
+        using var k = new VariantRepointTestKit();
+        var mod = k.Colours("Dress", Top);
+        var meta = Path.Combine(mod, "meta.json");
+        var stripped = JsonNode.Parse(File.ReadAllText(meta))!.AsObject();
+        stripped.Remove("DefaultData");
+        File.WriteAllText(meta, stripped.ToJsonString());
+        var original = File.ReadAllText(meta);
+        k.Imc(Top, E(1), E(1), E(2));
+
+        k.Run([k.Worn(Top, 2, mod)]);
+        Assert.True(FilesOf(mod, Red).ContainsKey(MaterialPath(Top, 2)));
+        k.Run([k.Worn(Top, 2, mod)]);   // the reconcile on the next walk finds its copies present: nothing duplicated
+        Assert.Single(FilesOf(mod, Red).Keys, key => key == MaterialPath(Top, 2));
+
+        Assert.Equal(VariantRepointWriter.Undone.Removed,
+                     VariantRepointWriter.UndoItem(mod, Top, true, out var removed, out _, out var message));
+        Assert.True(string.IsNullOrEmpty(message), message);
+        Assert.Equal(2, removed);
+        Assert.False(Manifest(mod).ContainsKey("DefaultData"));
+        Assert.True(JsonNode.DeepEquals(JsonNode.Parse(original)!["Groups"], Manifest(mod)["Groups"]));
+    }
+
+    [Fact]
     [Trait("Plan", "AC-imc-all-variants-6")]
     [Trait("Plan", "EDGE-imc-all-variants-49")]
     public void Undo_removes_legacy_imc_entries()

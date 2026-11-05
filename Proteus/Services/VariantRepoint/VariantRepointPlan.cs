@@ -609,7 +609,9 @@ internal static class VariantRepointPlan
             {
                 if (c.AuthorFolders.ContainsKey(v)) continue;
                 int m = Effective(c, effective, v).MaterialId;
-                if (m == c.Folder || c.Claimed(m)) continue;
+                // MaterialId 0 names no folder the game loads (in-game QA: loadedFolder stays null): a v0000 copy would
+                // be a dead edit to the author's manifest.
+                if (m == 0 || m == c.Folder || c.Claimed(m)) continue;
                 if (!targets.TryGetValue(m, out var vs))
                 {
                     // A folder copied into before is judged by its missing copies alone (a source added since); any
