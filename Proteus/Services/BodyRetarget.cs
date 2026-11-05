@@ -771,6 +771,10 @@ internal static partial class BodyRetarget
     /// <param name="openSkin">On a slot the garment only reaches onto, cut with <paramref name="cutHidden"/> off, draw the
     /// skin that cut leaves out in the open inside the author's own skin (see <see cref="GrowSpannedOpenSkin"/>): the
     /// automatic refit, never the Studio, whose refit is written into the modder's own mod.</param>
+    /// <param name="slitSlot">Draw the new body's skin the cut left out in plain sight just past the author's edge, on
+    /// this slot (see <see cref="GrowSeenSlits"/>): the size set's same-sex tops alone, whose sizes are new options beside
+    /// the author's — never the Studio, whose refit is written into the modder's own model. Never with
+    /// <paramref name="tuckSlot"/> on the slot; null draws none.</param>
     /// <param name="rebuildSwapsShapeOnly">The rebuild also swaps the skin of the pairs that go in for their shape only,
     /// while the solve still treats them so (its push-out and snapped rule unchanged): a women's glove made a men's, whose
     /// bare hand takes the men's hands skin. One swapped-mesh set, worked out over the pairs as the rebuild sees them,
@@ -785,7 +789,8 @@ internal static partial class BodyRetarget
                                Outfit? outfit = null, string? tuckSlot = null, bool deepClear = false,
                                bool keepStandoff = false, bool carryPiercings = false, bool liftUnderbust = true,
                                bool seeInside = false, bool relaxSinkGuard = false, bool openSkin = false,
-                               bool rebuildSwapsShapeOnly = false, IReadOnlySet<string>? swappedSkinTags = null)
+                               bool rebuildSwapsShapeOnly = false, IReadOnlySet<string>? swappedSkinTags = null,
+                               string? slitSlot = null)
     {
         // The pairs that go in for their shape only as asked — not one ReadySmallclothes turns so below, which keeps the
         // garment's own skin because its new body's smallclothes could not be brought in. A pair asked so is never readied
@@ -865,11 +870,14 @@ internal static partial class BodyRetarget
             bool see = seeInside && tuckSlot != null && !Tuned.NoSeeInside;
             var rebuilt = Rebuild(model, rebuildPairs, replaceSkin, weights, out var swapped, cutHidden, acrossBodies,
                                   swapMeshes, tuckSlot, carryPiercings, parted, see, openSkin, swappedSkinTags,
-                                  addedBySlot);
+                                  addedBySlot, slitSlot);
             if (rebuilt != null)
             {
                 model = rebuilt;
                 swap = swapped;
+                if (swapped.Slits > 0)
+                    log?.Invoke($"skin drawn into slits: {swapped.Slits} triangles of the new body in plain sight beside the "
+                                + "author's edge");
                 if (swapped.Spanned > 0)
                     log?.Invoke($"skin kept in the open: {swapped.Spanned} triangles of the new body inside the author's skin, "
                                 + "past the cut's reach");

@@ -48,7 +48,9 @@ internal static partial class BodyRetarget
     /// <para/>
     /// Only in the automatic refit (see <see cref="Plan"/>'s openSkin), and only on a slot cut because the garment reaches
     /// onto it: everywhere else the cut carries an author's cut on purpose, and the Studio's refit is written into the
-    /// modder's own mod — and the rule was measured on the game's own tops.
+    /// modder's own mod — and the rule was measured on the game's own tops. The size set draws open skin of its own on
+    /// its tops, the ring just past the author's edge (see <see cref="GrowSeenSlits"/>): its sizes are new options beside
+    /// the author's, never the author's own models.
     /// </summary>
     /// <param name="drawn">The garment's own skin, laid onto the new body.</param>
     /// <param name="edges">Which of <paramref name="drawn"/>'s edges two of its triangles share.</param>
@@ -63,7 +65,34 @@ internal static partial class BodyRetarget
         BodySurface drawn, SkinEdges edges, ClothCrossings cloth, ModelParts parts, bool[] covered,
         IReadOnlyCollection<(int A, int B, int C)> keptTris, IReadOnlySet<Vector3> movedAt,
         IReadOnlyDictionary<int, int> baseOf)
+        => GrowOpenSkin(cloth, parts, covered, keptTris, baseOf, (_, p, nrm) =>
+        {
+            var level = new Vector3(nrm.X, 0f, nrm.Z);
+            return drawn.Nearest(p, TuckBand, out var hit)
+                   && Spans(drawn, hit, edges)
+                   && (Tuned.CutOpenSkinAnyFacing || Vector3.Dot(hit.Normal, nrm) >= CutOpenSkinFacing)
+                   && !cloth.Crowds(p, nrm, TuckClear, TuckBehind)
+                   && !movedAt.Contains(p)
+                   && (Tuned.CutOpenSkinUnderCloth
+                       || !(cloth.Over(p, nrm, TuckOver)
+                            || (level.LengthSquared() > 1e-6f && cloth.Over(p, Vector3.Normalize(level), TuckOver))));
+        });
+
+    /// <summary>
+    /// The walk <see cref="GrowSpannedOpenSkin"/> and <see cref="GrowSeenSlits"/> share: out from the kept skin's corners,
+    /// one welded body vertex at a time, a vertex going in only when every body triangle it would newly draw — the writer
+    /// draws a triangle when any corner is drawn — has every corner pass <paramref name="corner"/> and no cloth of
+    /// <paramref name="crowdCloth"/> crowding its middle or the middles of its edges. Judged against the cut as made, so
+    /// the result is the same in any order. Nothing moves.
+    /// </summary>
+    /// <param name="corner">Whether a corner may be drawn: its vertex in <paramref name="parts"/>, its position and its
+    /// unit normal (never zero: a corner with no normal never qualifies). Asked once per vertex.</param>
+    /// <returns>Per mesh, the vertices to draw as well (mesh-local), and how many triangles they newly draw.</returns>
+    private static (Dictionary<int, HashSet<ushort>> Grown, int Triangles) GrowOpenSkin(
+        ClothCrossings crowdCloth, ModelParts parts, bool[] covered, IReadOnlyCollection<(int A, int B, int C)> keptTris,
+        IReadOnlyDictionary<int, int> baseOf, System.Func<int, Vector3, Vector3, bool> corner)
     {
+        var cloth = crowdCloth;
         int vc = parts.Positions.Length / 3;
         // TuckUnderCloth's walk without its weights: a fix to one is a fix to the other.
         var pos = new Vec3[vc];
@@ -112,16 +141,7 @@ internal static partial class BodyRetarget
             if (cornerOk[v] is { } known) return known;
             var p = At(parts, v);
             var nrm = NormalOf(v);
-            var level = new Vector3(nrm.X, 0f, nrm.Z);
-            bool ok = nrm.LengthSquared() > 1e-12f
-                      && drawn.Nearest(p, TuckBand, out var hit)
-                      && Spans(drawn, hit, edges)
-                      && (Tuned.CutOpenSkinAnyFacing || Vector3.Dot(hit.Normal, nrm) >= CutOpenSkinFacing)
-                      && !cloth.Crowds(p, nrm, TuckClear, TuckBehind)
-                      && !movedAt.Contains(p)
-                      && (Tuned.CutOpenSkinUnderCloth
-                          || !(cloth.Over(p, nrm, TuckOver)
-                               || (level.LengthSquared() > 1e-6f && cloth.Over(p, Vector3.Normalize(level), TuckOver))));
+            bool ok = nrm.LengthSquared() > 1e-12f && corner(v, p, nrm);
             cornerOk[v] = ok;
             return ok;
         }

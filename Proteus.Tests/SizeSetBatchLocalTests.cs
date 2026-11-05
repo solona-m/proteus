@@ -36,6 +36,9 @@ internal static class SizeSetBatchData
     /// <summary>Oblique as it shipped, v3: made on Bibo+ before Dawntrail, so no installed body reads its skin. The
     /// installed copy has sizes added since; tests never read it.</summary>
     internal const string ObliquePack = LocalData.ModPacks + ":Oblique v1.0.0.pmp";
+    /// <summary>Equinox as it shipped, v3: its legs in "Top Size" (the Yab and Rue sizes) and in "Bottom Size" (every
+    /// option, the group the game draws them from); its plain sizes made on Bibo+ before Dawntrail.</summary>
+    internal const string EquinoxPack = LocalData.ModPacks + ":Equinox - by Solona.pmp";
 
     /// <summary>A pack unpacked into a work folder of its own.</summary>
     internal static string UnpackedPack(string pack)

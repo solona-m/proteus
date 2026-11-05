@@ -241,6 +241,10 @@ internal static partial class RefitCore
     /// <param name="ownGroups">The groups a refit made itself (<see cref="BodyRetargetWriter.Record.OwnGroups"/>):
     /// never the author's size group, even though they switch the model too.</param>
     /// <param name="multiGroups">The mod's multi-choice groups with room for one more option.</param>
+    /// <remarks>The first such group in the mod's order, not the one Penumbra draws from: where two single-choice groups
+    /// switch the model (Equinox's legs in "Top Size" and "Bottom Size"), the size set sizes it in the drawn one instead
+    /// (<see cref="SizeSetRefit.SizeGroupOf"/>). The Studio and the automatic refit still take this one, so they do not see
+    /// those sizes and may save a new one where it is outranked — a known issue, not yet moved over.</remarks>
     internal static string? SwitchingGroup(IEnumerable<PenumbraModMeta.Redirect> redirects, string gamePath,
                                            IEnumerable<string>? ownGroups, IReadOnlyCollection<string> singleGroups,
                                            string? modelRel = null, IReadOnlyCollection<string>? multiGroups = null)
@@ -1255,6 +1259,10 @@ internal static partial class RefitCore
     /// chest, when the rule asks for it. Measured on tops only — a pair of legs, a skirt or a long top's hips is not tucked.
     /// </summary>
     internal static string? TuckSlot(bool tuck, string garmentSlot) => tuck && garmentSlot == "_top" ? "_top" : null;
+
+    /// <summary>The slot whose skin left out in plain sight past the author's edge is drawn (see
+    /// <see cref="BodyRetarget.Plan"/>'s slitSlot): a top's chest only, and only when <paramref name="rule"/> asks.</summary>
+    internal static string? SlitSlot(bool rule, string garmentSlot) => rule && garmentSlot == "_top" ? "_top" : null;
 
     /// <summary>
     /// Whether a top's cloth buried in a far larger new breast is cleared out of it from deeper than usual (see

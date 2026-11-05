@@ -73,11 +73,13 @@ internal static partial class BodyRetarget
     /// otherwise show (see <see cref="TuckSeeReach"/>); none of them is counted in <paramref name="Opened"/>.</param>
     /// <param name="Spanned">Of <paramref name="Added"/>, triangles a slot the garment only reaches onto drew in the open
     /// inside the author's own skin, which the cut had left out (see <see cref="GrowSpannedOpenSkin"/>).</param>
+    /// <param name="Slits">Of <paramref name="Added"/>, triangles drawn in plain sight just past the author's edge, which
+    /// the cut had left out (see <see cref="GrowSeenSlits"/>).</param>
     internal readonly record struct SwapReport(int Removed, int Added, int Kept, int LostShapes,
                                                int Reweighted = 0, int Trimmed = 0, int ExtrasDropped = 0,
                                                int Unplaced = 0, int Posed = 0, int Cut = 0, int Slotted = 0,
                                                int Adorned = 0, int Tucked = 0, int TuckUnread = 0, int Opened = 0,
-                                               int Smallclothes = 0, int SeenInto = 0, int Spanned = 0);
+                                               int Smallclothes = 0, int SeenInto = 0, int Spanned = 0, int Slits = 0);
 
     /// <summary>
     /// Swap the garment's skin for the new body's, one body slot at a time: every skin mesh of the garment that belongs
@@ -137,6 +139,8 @@ internal static partial class BodyRetarget
     /// men's forearm put in its place must not either). Null keeps the body's tags as always.</param>
     /// <param name="addedBySlot">Filled, when given, with the skin triangles each slot's new body put in, by slot (kept
     /// apart from the report, which stays a plain value).</param>
+    /// <param name="slitSlot">The slot whose cut skin left out in plain sight just past the author's edge is drawn after
+    /// all (see <see cref="GrowSeenSlits"/>): the size set's tops. Never with the tuck; null draws none.</param>
     /// <returns>The rebuilt model, or null when there was nothing to change.</returns>
     internal static byte[]? Rebuild(byte[] garment, IReadOnlyList<SlotPair> pairs, bool swapSkin, WeightPlan? weights,
                                     out SwapReport report, bool cutHidden = true, bool acrossBodies = false,
@@ -144,7 +148,7 @@ internal static partial class BodyRetarget
                                     bool carryPiercings = false, IReadOnlySet<int>? parted = null,
                                     bool seeInside = false, bool openSkin = false,
                                     IReadOnlySet<string>? swappedSkinTags = null,
-                                    Dictionary<string, int>? addedBySlot = null)
+                                    Dictionary<string, int>? addedBySlot = null, string? slitSlot = null)
     {
         report = default;
         var swappable = swapSkin ? pairs.Where(p => p.Swaps).ToList() : [];
@@ -271,10 +275,13 @@ internal static partial class BodyRetarget
         // Each slot's body as it goes in: its own model, or one whose skin was pulled back to the author's edge.
         var bodyOf = new Dictionary<int, byte[]>();
         int cutTris = 0, keptTris = 0, tuckedTris = 0, tuckUnreadSlots = 0, openedTris = 0, seenIntoTris = 0, spannedTris = 0;
+        int slitTris = 0;
+        // The cloth with its IMC variants counted, any of which the wearer may draw: what may cover or crowd a slit.
+        ClothCrossings? clothAll = null;
         var addedBy = new Dictionary<int, int>();
         foreach (int s in claimedBy)
         {
-            int these = 0, gone = 0, tucked = 0, opened = 0, seenInto = 0, spanned = 0;
+            int these = 0, gone = 0, tucked = 0, opened = 0, seenInto = 0, spanned = 0, slitted = 0;
             byte[]? pulled = null;
             Dictionary<int, HashSet<ushort>>? authorCut = null;
             bool tuckUnread = false;
@@ -283,13 +290,16 @@ internal static partial class BodyRetarget
             // Cut only because the garment reaches onto it, the hidden-skin cut off: no author's cut is being carried
             // here, so skin the cut leaves out in the open inside the author's skin is drawn (see GrowSpannedOpenSkin).
             bool open = openSkin && alwaysCut.Contains(s) && !cutHidden && !tuck;
+            // The size set's top: the ring left out in plain sight past the author's edge is drawn (see GrowSeenSlits).
+            bool slits = cutThis && slitSlot != null && swappable[s].Slot == slitSlot && !tuck && !Tuned.NoSeenSlits;
+            if (slits) clothAll ??= new ClothCrossings(model, countVariants: true);
             cuts[s] = !cutThis || drawn == null || drawn.IsEmpty ? null : CutLike(drawn, drawnEdges!, cloth,
                                                                       swappable[s].TargetModel!, swappable[s].TargetHidden,
                                                                       tuck, out these, out gone, out pulled, out tucked,
                                                                       out authorCut, out tuckUnread, out opened,
-                                                                      out seenInto, out spanned, seeInside,
+                                                                      out seenInto, out spanned, out slitted, seeInside,
                                                                       smallclothes: swappable[s].Smallclothes != null,
-                                                                      openSkin: open);
+                                                                      openSkin: open, slitCloth: slits ? clothAll : null);
             authorCuts[s] = authorCut ?? cuts[s];
             bodyOf[s] = pulled ?? swappable[s].TargetModel!;
             addedBy[s] = cuts[s] == null ? SkinTriangles(swappable[s].Target) : these;
@@ -299,6 +309,7 @@ internal static partial class BodyRetarget
             openedTris += opened;
             seenIntoTris += seenInto;
             spannedTris += spanned;
+            slitTris += slitted;
             if (tuckUnread) tuckUnreadSlots++;
         }
 
@@ -393,7 +404,7 @@ internal static partial class BodyRetarget
         report = new SwapReport(removed, keptTris, kept, SecondSkinWriter.Parse(garment).Shapes.Count,
                                 weights?.Reweighted ?? 0, weights?.Trimmed ?? 0, extras, reskinned.Dropped, posed,
                                 cutTris, reskinned.Trimmed, adorned, tuckedTris, tuckUnreadSlots, openedTris,
-                                smallclothesTris, seenIntoTris, spannedTris);
+                                smallclothesTris, seenIntoTris, spannedTris, slitTris);
         if (addedBySlot != null)
             foreach (int s in claimedBy)
                 addedBySlot[swappable[s].Slot] = addedBySlot.GetValueOrDefault(swappable[s].Slot) + addedBy.GetValueOrDefault(s);
@@ -453,10 +464,11 @@ internal static partial class BodyRetarget
                                                              out int tucked,
                                                              out Dictionary<int, HashSet<ushort>>? authorCut,
                                                              out bool tuckUnread, out int opened, out int seenInto,
-                                                             out int spanned, bool seeInside, bool smallclothes = false,
-                                                             bool openSkin = false)
+                                                             out int spanned, out int slitted, bool seeInside,
+                                                             bool smallclothes = false, bool openSkin = false,
+                                                             ClothCrossings? slitCloth = null)
     {
-        kept = cut = tucked = opened = seenInto = spanned = 0;
+        kept = cut = tucked = opened = seenInto = spanned = slitted = 0;
         pulled = null;
         authorCut = null;
         tuckUnread = false;
@@ -526,6 +538,25 @@ internal static partial class BodyRetarget
                 spanned = spannedTris;
                 kept += spannedTris;
                 cut -= spannedTris;
+            }
+        }
+        if (slitCloth != null && !tuck && !Tuned.NoSeenSlits)
+        {
+            // The ring left out in plain sight just past the author's edge (see GrowSeenSlits). The author's cut is
+            // snapshotted first, so the new body's nails and piercings are still judged on it (see AdornmentsOf).
+            var (slitSets, slitTris, _) = GrowSeenSlits(drawn, cloth, slitCloth, body, parts, covered, keptTris, movedAt,
+                                                       baseOf);
+            if (slitTris > 0)
+            {
+                authorCut ??= sets.ToDictionary(e => e.Key, e => new HashSet<ushort>(e.Value));
+                foreach (var (mesh, local) in slitSets)
+                {
+                    if (!sets.TryGetValue(mesh, out var set)) sets[mesh] = set = [];
+                    set.UnionWith(local);
+                }
+                slitted = slitTris;
+                kept += slitTris;
+                cut -= slitTris;
             }
         }
         if (!tuck) return sets;
@@ -1013,6 +1044,27 @@ internal static partial class BodyRetarget
                 {
                     var (a, b, c) = tris[i];
                     if (LineHits(p, d, a, b, c, out float t) && t <= reach) return true;
+                }
+            }
+            return false;
+        }
+
+        /// <summary>Whether any of this garment's cloth lies within <paramref name="reach"/> of <paramref name="p"/>, by
+        /// the nearest point of each face (see <see cref="GrowSeenSlits"/>).</summary>
+        public bool Near(Vector3 p, float reach)
+        {
+            var (x0, y0, z0) = CellOf(p - new Vector3(reach));
+            var (x1, y1, z1) = CellOf(p + new Vector3(reach));
+            float r2 = reach * reach;
+            for (int x = x0; x <= x1; x++)
+            for (int y = y0; y <= y1; y++)
+            for (int z = z0; z <= z1; z++)
+            {
+                if (!grid.TryGetValue((x, y, z), out var bucket)) continue;
+                foreach (int i in bucket)
+                {
+                    var (a, b, c) = tris[i];
+                    if (Vector3.DistanceSquared(p, BrushTransfer.ClosestOnTriangle(p, a, b, c, out _, out _, out _)) <= r2) return true;
                 }
             }
             return false;

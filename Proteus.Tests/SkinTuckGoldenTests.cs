@@ -167,6 +167,20 @@ public class SkinTuckGoldenTests(ITestOutputHelper output)
     }
 
     [Fact]
+    [Trait("Plan", "AC-equinox-legs-slits-6")]
+    [Trait("Plan", "EDGE-equinox-legs-slits-16")]
+    public void A_size_set_plan_with_slits_on_a_grown_bust_plans_as_before()
+    {
+        // The every-size refit's call as it is now made, with the seen-slit pass on: nothing open past the author's edge on
+        // this sheet, so the model is the one pinned before it.
+        var (bytes, garment, pair, _) = GrownBust();
+        var plan = BodyRetarget.Plan(garment, bytes, [pair], "_top", held: new HashSet<int>(), replaceSkin: true,
+                                     acrossBodies: true, clearBody: false, cutHidden: true, keepShape: [],
+                                     slitSlot: RefitCore.SlitSlot(true, "_top"));
+        Pinned(plan.Model, GrownSizeSet);
+    }
+
+    [Fact]
     [Trait("Plan", "AC-neckline-large-bust-6")]
     [Trait("Plan", "EDGE-neckline-large-bust-24")]
     public void Studio_cut_and_clear_on_a_grown_bust_never_deep_clears()
