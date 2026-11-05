@@ -31,9 +31,9 @@ internal sealed partial class HarnessRouter
         (int Set, int Variant)? requested = null;
         if (hasItem)
         {
-            if (!WholeNumber(itemEl, 1, HarnessGear.ReservedFrom - 1, out var item))
+            if (!WholeNumber(itemEl, 1, HarnessGear.FirstGlamourerPseudoId - 1, out var item))
                 return HarnessResponse.Error(400, "invalid-field",
-                                             $"item must be a whole number from 1 to {HarnessGear.ReservedFrom - 1} (custom ids go through set and variant)");
+                                             $"item must be a whole number from 1 to {HarnessGear.FirstGlamourerPseudoId - 1} (custom ids go through set and variant)");
             sentId = item;
         }
         else
@@ -76,7 +76,7 @@ internal sealed partial class HarnessRouter
         var result = await OnFramework(() =>
         {
             if (changes.Gate(jobs.Busy, Game.AutoRefit().Busy) is { } refused) return refused;
-            var (dir, error) = FindMod(mod);
+            var (dir, _, error) = FindMod(mod);
             if (error != null) return error;
             if (Game.PlayerCollection() is not { } collection)
                 return ChangeResult.Fail(409, "no-collection", "the character has no Penumbra collection");
@@ -98,18 +98,21 @@ internal sealed partial class HarnessRouter
         });
     }
 
-    /// <summary>The Penumbra folder for a hold, matched as the refit matches it. Framework thread.</summary>
-    private (string? Dir, ChangeResult? Error) FindMod(string mod)
+    /// <summary>
+    /// The Penumbra folder a request names, matched case-insensitively: Penumbra there, the folder Penumbra's, not
+    /// Proteus's own output mod, a plain name. Shared by refit, restore and hold. Framework thread.
+    /// </summary>
+    private (string? Dir, ModList? Mods, ChangeResult? Error) FindMod(string mod)
     {
-        if (Game.Mods() is not { } mods) return (null, ChangeResult.Fail(503, "penumbra-unavailable", "Penumbra is not available"));
+        if (Game.Mods() is not { } mods) return (null, null, ChangeResult.Fail(503, "penumbra-unavailable", "Penumbra is not available"));
         var dir = mods.Mods.Keys.FirstOrDefault(k => string.Equals(k, mod, StringComparison.OrdinalIgnoreCase));
         if (dir == null)
-            return (null, ChangeResult.Fail(404, "mod-not-found", $"no Penumbra mod folder '{mod}' (folder names only, not display names)"));
+            return (null, null, ChangeResult.Fail(404, "mod-not-found", $"no Penumbra mod folder '{mod}' (folder names only, not display names)"));
         if (string.Equals(dir, Game.ManagedModDir, StringComparison.OrdinalIgnoreCase))
-            return (null, ChangeResult.Fail(400, "managed-mod", "Proteus's own output mod is never held"));
+            return (null, null, ChangeResult.Fail(400, "managed-mod", "Proteus's own output mod is never refitted, restored or held"));
         if (!ModBackup.SafeModDir(dir))
-            return (null, ChangeResult.Fail(400, "invalid-field", "the mod folder name is not a plain folder name"));
-        return (dir, null);
+            return (null, null, ChangeResult.Fail(400, "invalid-field", "the mod folder name is not a plain folder name"));
+        return (dir, mods, null);
     }
 
     /// <summary>A change's answer, scrubbed: mod folders and other plugins' sources can carry names.</summary>

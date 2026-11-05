@@ -157,10 +157,13 @@ internal sealed class HarnessHost : IDisposable
     {
         if (changes is not { } c) return;
         c.BeginStop();
-        if (c.Empty) return;
         if (!dispatcher.OnFrameworkThread)
         {
-            log.Warning("[Proteus] test harness stopped off the framework thread; not put back: {0}", c.Leftovers());
+            // The record is framework-only; a change landing mid-read must not throw out of Dispose.
+            string left;
+            try { left = c.Empty ? "" : c.Leftovers(); }
+            catch (Exception) { left = "unknown (the record changed while it was read)"; }
+            if (left.Length > 0) log.Warning("[Proteus] test harness stopped off the framework thread; not put back: {0}", left);
             return;
         }
         try

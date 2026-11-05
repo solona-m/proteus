@@ -374,4 +374,64 @@ public class HarnessChangesTests : IDisposable
         Assert.Equal(members.Length, calls.Select(c => c.Member).Distinct().Count());
         Assert.All(calls, c => Assert.Equal(fx.Dispatcher.ThreadId, c.Thread));
     }
+
+    // [AC-harness-equip-6] [EDGE-harness-equip-28] holds: only failures stay recorded, and a retry clears them.
+    [Fact]
+    public void PutBack_HoldFailures_Kept_RetryClears()
+    {
+        Hold("Equinox", false);
+        Game.SweepAnswer = (_, _) => "NothingChanged";   // keep the hold for the retries: the sweep is tested apart
+        Game.QueryFails = true;
+        Assert.Equal(new UndoEntry("Equinox", "failed", "penumbra-unavailable"), Assert.Single(PutBack().Holds));
+        Game.QueryFails = false;
+        Game.ClearHoldAnswer = "InvalidArgument";
+        Assert.Equal(new UndoEntry("Equinox", "failed", "InvalidArgument"), Assert.Single(PutBack().Holds));
+        Game.ClearHoldAnswer = null;
+        Assert.Equal("cleared", Assert.Single(PutBack().Holds).Result);
+        Assert.Empty(PutBack().Holds);
+    }
+
+    // [EDGE-harness-equip-29] a hold entry that throws: failed/internal, the gear is still put back.
+    [Fact]
+    public void PutBack_HoldThrows_GearStillRestored()
+    {
+        Equip("Body", 500);
+        Hold("Equinox", false);
+        Game.ClearHoldThrows = true;
+        var r = PutBack();
+        Assert.Equal(new UndoEntry("Equinox", "failed", "internal"), Assert.Single(r.Holds));
+        Assert.Equal("restored", Assert.Single(r.Gear).Result);
+    }
+
+    // [AC-harness-equip-6] a sweep Penumbra refuses, or that throws, is reported failed.
+    [Fact]
+    public void Sweep_Refused_Or_Throws_Failed()
+    {
+        Game.SweepAnswer = (_, _) => "CollectionMissing";
+        Assert.Equal("failed", PutBack().Sweep);
+        Game.SweepAnswer = (_, _) => throw new InvalidOperationException("ipc gone");
+        Assert.Equal("failed", PutBack().Sweep);
+    }
+
+    // [EDGE-harness-equip-13] a slot Glamourer's state leaves out is unknown: no equip, no made-up original.
+    [Fact]
+    public void Equip_SlotMissingFromState_503_NoRecord()
+    {
+        Game.Gear.Remove("Body");
+        var r = Equip("Body", 500);
+        Assert.Equal((503, "glamourer-unavailable"), (r.Status, r.Code));
+        Assert.Empty(Game.GearSets);
+        Assert.True(C.Empty);
+    }
+
+    // [EDGE-harness-equip-13] at put-back, a slot missing from the state is failed and kept, never set to Nothing.
+    [Fact]
+    public void PutBack_SlotMissingFromState_FailedKept()
+    {
+        Equip("Body", 500);
+        Game.Gear.Remove("Body");
+        int sets = Game.GearSets.Count;
+        Assert.Equal(new UndoEntry("Body", "failed", "glamourer-unavailable"), Assert.Single(PutBack().Gear));
+        Assert.Equal(sets, Game.GearSets.Count);
+    }
 }

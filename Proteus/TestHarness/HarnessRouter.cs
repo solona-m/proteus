@@ -349,15 +349,8 @@ internal sealed partial class HarnessRouter(HarnessJobs jobs, LogRing ring, Sess
     {
         if (Game.AutoRefit().Busy)
             return (null, null, HarnessResponse.Error(409, "auto-refit-busy", "auto refit is working; wait for /state autoRefit.busy == false"));
-        if (Game.Mods() is not { } mods)
-            return (null, null, HarnessResponse.Error(503, "penumbra-unavailable", "Penumbra is not available"));
-        var dir = mods.Mods.Keys.FirstOrDefault(k => string.Equals(k, mod, StringComparison.OrdinalIgnoreCase));
-        if (dir == null)
-            return (null, null, HarnessResponse.Error(404, "mod-not-found", $"no Penumbra mod folder '{mod}' (folder names only, not display names)"));
-        if (string.Equals(dir, Game.ManagedModDir, StringComparison.OrdinalIgnoreCase))
-            return (null, null, HarnessResponse.Error(400, "managed-mod", "Proteus's own output mod is never refitted or restored"));
-        if (!ModBackup.SafeModDir(dir))
-            return (null, null, HarnessResponse.Error(400, "invalid-field", "the mod folder name is not a plain folder name"));
+        var (dir, mods, error) = FindMod(mod);
+        if (error != null) return (null, null, Answer(error));
         return (dir, mods, null);
     }
 

@@ -18,7 +18,7 @@ internal static class HarnessGear
     public const ulong BonusFlag = 1UL << 49;
 
     /// <summary>The first id of Glamourer's Nothing/Smallclothes range (<c>uint.MaxValue - 512</c>): never sent as an item.</summary>
-    public const ulong ReservedFrom = uint.MaxValue - 512UL;
+    public const ulong FirstGlamourerPseudoId = uint.MaxValue - 512UL;
 
     /// <summary>The ten gear slots, Glamourer's names, in Glamourer's order.</summary>
     public static readonly string[] Slots = ["Head", "Body", "Hands", "Legs", "Feet", "Ears", "Neck", "Wrists", "RFinger", "LFinger"];

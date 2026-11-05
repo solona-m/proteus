@@ -448,4 +448,17 @@ public class HarnessHostTests : IDisposable
         Assert.Empty(state.GetProperty("harnessChanges").GetProperty("gear").EnumerateArray());
         Assert.Empty(state.GetProperty("harnessChanges").GetProperty("holds").EnumerateArray());
     }
+
+    [Fact]
+    public void Off_OnFramework_NothingRecorded_StillSweepsLeftovers()
+    {
+        // [EDGE-harness-equip-30] a crashed session's harness-key holds are swept by the next session's off.
+        using var host = Host();
+        host.Command("on");
+        var coll = game.Collection!.Value;
+        game.Temporary[(coll, "Leftover")] = new Proteus.Interop.PenumbraBridge.TemporaryHold(true, false, HarnessChanges.HoldSource, false, 0);
+        game.TemporaryKeys[(coll, "Leftover")] = HarnessChanges.HoldKey;
+        dispatcher.Run(() => host.Command("off"));
+        Assert.Empty(game.Temporary);
+    }
 }

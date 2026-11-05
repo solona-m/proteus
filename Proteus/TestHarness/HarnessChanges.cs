@@ -78,7 +78,9 @@ internal sealed class HarnessChanges(IHarnessGame game, SessionNames names, IPlu
         if (game.CarrierSlots().Contains(slot, StringComparer.OrdinalIgnoreCase))
             return ChangeResult.Fail(409, "carrier-slot", $"Proteus has an invisible carrier in {slot}; it is never replaced");
 
-        var prev = before.TryGetValue(slot, out var p) ? p : new Worn(0, 0, 0);
+        // A slot the state leaves out is unknown, not Nothing: putting back item 0 would unequip the real piece.
+        if (!before.TryGetValue(slot, out var prev))
+            return ChangeResult.Fail(503, "glamourer-unavailable", $"Glamourer's state has no readable {slot} slot");
         var ec = game.SetGear(slot, sentId, 0, 0);
         if (ec == "ItemInvalid") return ChangeResult.Fail(400, "item-invalid", $"Glamourer cannot put {sentId} in {slot}");
         if (ec != null) return ChangeResult.Fail(409, "glamourer-refused", $"Glamourer refused the equip: {ec}");
@@ -238,7 +240,7 @@ internal sealed class HarnessChanges(IHarnessGame game, SessionNames names, IPlu
     private UndoEntry UndoGear(GearRecord rec)
     {
         if (game.GearNow() is not { } now) return new UndoEntry(rec.Slot, "failed", "glamourer-unavailable");
-        var worn = now.TryGetValue(rec.Slot, out var w) ? w : new Worn(0, 0, 0);
+        if (!now.TryGetValue(rec.Slot, out var worn)) return new UndoEntry(rec.Slot, "failed", "glamourer-unavailable");
         if (!StillOurs(rec, worn)) return new UndoEntry(rec.Slot, "changed");
         return game.SetGear(rec.Slot, rec.Original.Item, rec.Original.Dye1, rec.Original.Dye2) is { } ec
             ? new UndoEntry(rec.Slot, "failed", ec)

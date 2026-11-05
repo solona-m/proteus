@@ -205,6 +205,7 @@ internal sealed class FakeGame : IHarnessGame
     public bool ReadThrows { get; set; }
     public string? SetHoldAnswer { get; set; }
     public string? ClearHoldAnswer { get; set; }
+    public bool ClearHoldThrows { get; set; }
     public List<(Guid Collection, string Dir, bool Enabled, int Priority, IReadOnlyDictionary<string, List<string>> Options, string Source, int Key)> HoldSets { get; } = [];
     public List<(Guid Collection, int Key)> Sweeps { get; } = [];
     public Func<Guid, int, string>? SweepAnswer { get; set; }
@@ -266,6 +267,7 @@ internal sealed class FakeGame : IHarnessGame
     public string? ClearHold(Guid collection, string modDir)
     {
         Fw(nameof(ClearHold));
+        if (ClearHoldThrows) throw new InvalidOperationException("ipc gone");
         if (ClearHoldAnswer != null) return ClearHoldAnswer;
         if (!Temporary.Remove((collection, modDir))) return "NothingChanged";
         TemporaryKeys.Remove((collection, modDir));
