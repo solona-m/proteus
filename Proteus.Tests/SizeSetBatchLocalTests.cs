@@ -28,6 +28,9 @@ internal static class SizeSetBatchData
     internal const string TreYas = LocalData.Mods + ":hs-[YAS] Tre-5.5.3-8xB";
     internal const string Tbse = LocalData.Mods + ":The Body SE";
     internal const string TbseX = LocalData.Mods + ":The Body SE-X IVCS2 V1_1_0";
+    /// <summary>A Rue-family underwear mod that ships the body's skin: a scan of the whole mod folder can read a Rue
+    /// garment as made on it (Equinox's Rue Large).</summary>
+    internal const string ElegySylvie = LocalData.Mods + ":Elegy - Sylvie Bra & Panties (RueYABUranusRe)";
     internal const string Sheer = LocalData.Mods + ":BiboPlus Sheer Elegance";
     internal const string TwillTrousers = LocalData.Mods + ":-Twill Trousers- [YAB, TBSE, TBSE-X]";
     internal const string HellForLeather = LocalData.Mods + ":Hell for Leather - by Solona";
@@ -36,6 +39,9 @@ internal static class SizeSetBatchData
     /// <summary>Oblique as it shipped, v3: made on Bibo+ before Dawntrail, so no installed body reads its skin. The
     /// installed copy has sizes added since; tests never read it.</summary>
     internal const string ObliquePack = LocalData.ModPacks + ":Oblique v1.0.0.pmp";
+    /// <summary>Equinox as it shipped, v3: its legs in "Top Size" (the Yab and Rue sizes) and in "Bottom Size" (every
+    /// option, the group the game draws them from); its plain sizes made on Bibo+ before Dawntrail.</summary>
+    internal const string EquinoxPack = LocalData.ModPacks + ":Equinox - by Solona.pmp";
 
     /// <summary>A pack unpacked into a work folder of its own.</summary>
     internal static string UnpackedPack(string pack)

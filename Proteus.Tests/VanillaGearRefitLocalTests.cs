@@ -1251,6 +1251,55 @@ public partial class VanillaGearRefitLocalTests(ITestOutputHelper output)
         return area * 1e4;
     }
 
+    /// <summary>
+    /// Torso skin of <paramref name="body"/>, cm², that <paramref name="m"/> leaves undrawn and through which a camera from
+    /// any side sees into the garment or straight through the body: <see cref="SeenIntoGarment"/> from views all round —
+    /// azimuth 15° + 30°k, elevation −10° to 70° by 20° — with no front-only filter, the void behind counting as a hole.
+    /// Undrawn torso skin within <see cref="SlitNear"/> of the skin the model draws (|x| ≤ 0.40 m, y ≥ 0.9 m) counts
+    /// where, from some view facing it, nothing the model draws (cloth or skin) stands in front of it, and past it the first
+    /// face the camera sees is no outer face turned toward it. Its own ray test, independent of the size set's slit rule.
+    /// </summary>
+    internal static double SeenIntoGarmentAllAround(ModelParts m, ModelParts body, IReadOnlyDictionary<string, bool>? culled = null)
+    {
+        var tris = DrawnTriangles(m, culled ?? new Dictionary<string, bool>());
+        var grid = new TriangleGrid(tris.Select(t => (t.A, t.B, t.C)).ToList());
+        var drawnSkin = new BodySurface(m, 0.01f);
+        var views = new List<Vector3>();
+        foreach (int elevation in new[] { -10, 10, 30, 50, 70 })
+            for (int k = 0; k < 12; k++)
+            {
+                float el = elevation * MathF.PI / 180f, az = (15 + 30 * k) * MathF.PI / 180f;
+                views.Add(new Vector3(MathF.Sin(az) * MathF.Cos(el), MathF.Sin(el), MathF.Cos(az) * MathF.Cos(el)));
+            }
+
+        double area = 0;
+        foreach (var part in body.Parts.Where(p => p.Island < 0 && SecondSkinWriter.IsBodySkinMaterial(p.Material)))
+            for (int t = 0; t + 2 < part.Triangles.Length; t += 3)
+            {
+                int ia = part.Triangles[t], ib = part.Triangles[t + 1], ic = part.Triangles[t + 2];
+                Vector3 a = At(body, ia), b = At(body, ib), c = At(body, ic);
+                var cross = Vector3.Cross(b - a, c - a);
+                if (cross.LengthSquared() < 1e-14f) continue;
+                var centre = (a + b + c) / 3f;
+                if (MathF.Abs(centre.X) > 0.40f || centre.Y < 0.9f) continue;
+                if (!drawnSkin.Nearest(centre, SlitNear, out var near) || near.Distance <= 0.002f) continue;
+                var normal = Vector3.Normalize(cross);
+                if (Vector3.Dot(normal, NormalAt(body, ia) + NormalAt(body, ib) + NormalAt(body, ic)) < 0) normal = -normal;
+                var origin = centre + normal * 0.001f;
+                foreach (var toCamera in views)
+                {
+                    if (Vector3.Dot(normal, toCamera) <= 0.1f) continue;
+                    bool Seen(int i) => !tris[i].Culled || Vector3.Dot(tris[i].Front, toCamera) > 0f;
+                    if (grid.Along(origin, toCamera, 1f).Any(Seen)) continue;
+                    if (grid.Nearest(origin, -toCamera, 1f, Seen) is int behind && Vector3.Dot(tris[behind].Front, toCamera) > 0f)
+                        continue;
+                    area += cross.Length() / 2;
+                    break;
+                }
+            }
+        return area * 1e4;
+    }
+
     /// <summary>How far from the skin a model draws undrawn skin still lies along its edge (25 mm): see
     /// <see cref="SeenIntoGarment"/>.</summary>
     private const float SlitNear = 0.025f;

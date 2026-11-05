@@ -176,7 +176,7 @@ internal static partial class SizeSetRefit
             string path = BodySizeCatalog.ResolveCaseInsensitive(request.ModRoot, file);
             if (File.Exists(path) && File.ReadAllBytes(path) is { } bytes && ModelPartReader.Read(bytes) is { } legs)
                 pick = RefitCore.DetectSource(legs, new HashSet<string>(SecondSkinWriter.Parse(bytes).BoneNames, StringComparer.Ordinal),
-                                              "_dwn", "0201", mods, preferred, _ => true, note);
+                                              "_dwn", "0201", mods, preferred, request.KnownBody, note);
         }
         catch (Exception e) when (e is IOException or UnauthorizedAccessException or InvalidDataException
                                        or InvalidOperationException or ArgumentException)

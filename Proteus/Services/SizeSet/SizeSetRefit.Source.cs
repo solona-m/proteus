@@ -605,7 +605,7 @@ internal static partial class SizeSetRefit
                             note($"{file} was read before in this run");
                         else
                             readings[reading] = pick = RefitCore.DetectSource(garment, bones, slot, race, mods, preferred,
-                                                                              _ => true, note);
+                                                                              request.KnownBody, note);
                         var read = new SourceReading(pick, false, null);
                         // Only what the automatic reading cannot place is read on the "Made on" body: a size it places
                         // is read the same whatever the author chose.
