@@ -586,6 +586,34 @@ the backup folder, then remove the redirects that pointed into `Shader Upgrade/`
 "Remove Missing Files" does it once the folder is gone). An update you ship later is never overwritten by an old backup: Proteus keeps the new file, and
 upgrades it again only if it is still old-shader.
 
+### Gear variants (what it changes in a user's copy of your mod)
+
+Users can turn on **Settings > Gear variants > "Point every variant of worn gear at its mod's material"**. It is for a
+mod that ships one variant's material folder (say `material/v0001/`) for an item: worn in a variant whose IMC entry
+uses another folder, the game loads that folder's material onto your model — the game's own, or nothing for a
+material name the game does not have. With the setting on, when a user puts on such a piece, Proteus does to **their
+installed copy** of your mod what TexTools' metadata tab "Apply to All Variants" does:
+
+- An `Imc` entry is added to your mod's **default data** for each variant that would miss your folder, copying the
+  whole entry of the variant your folder belongs to: material, decal, attributes (visible parts), sound, VFX and
+  material animation. So those variants show your material and your parts — and take that variant's VFX and sound.
+- Only variants your mod doesn't already dress, and doesn't set in its own IMC data, are written. A mod that ships
+  several variant folders, or whose options or IMC groups set the worn variant, is left alone. No group is added,
+  moved or reordered, and every option and setting is left as it is. Because default data comes last in Penumbra,
+  any option of yours that sets a variant still wins.
+- IMC entries apply to **everyone wearing those variants** in collections where your mod is on, of every race, even
+  with your model's option switched off.
+- What was written is recorded in `Proteus/variantrepoint.json`. If that file is lost, the entries look like your own
+  and Proteus no longer touches them.
+
+All of it lives inside the mod folder, so it travels with a Penumbra export. **If you wear your own source mods with
+the setting on, your working copy is changed too** — leave the setting off while you work on a mod, or undo it before
+you pack.
+
+To take the entries out, a user wears the pieces and presses **"Undo for what I'm wearing"** (those pieces are then
+left alone until "Repoint what I'm wearing now"). An entry changed by someone since is kept. When you ship an update,
+Proteus notices that its entries are gone and the mod changed, and looks at the pieces afresh.
+
 ### Distributing Your Mod
 
 Pack your mod folder as a `.zip` and rename the extension to `.pmp`. Penumbra imports `.pmp` files directly. Include everything in the mod root:

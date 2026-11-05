@@ -18,7 +18,8 @@ namespace Proteus.Interop;
 public static unsafe class EquippedSlotVariants
 {
     /// <summary>One drawn slot: the host-slot suffix it loads a model under, its set id and item variant.</summary>
-    public readonly record struct Slot(string Suffix, int SetId, int Variant);
+    /// <param name="Glasses">A facewear model (reported under "met" beside a hat), not a gear slot.</param>
+    public readonly record struct Slot(string Suffix, int SetId, int Variant, bool Glasses = false);
 
     /// <summary>
     /// <see cref="Human.EquipmentModels"/> order — Head, Top, Arms, Legs, Feet, Ear, Neck, Wrist, RFinger,
@@ -49,15 +50,15 @@ public static unsafe class EquippedSlotVariants
             Add(result, EquipmentSuffixes[i], equipment[i]);
 
         foreach (var glasses in human->GlassesModels)
-            Add(result, "met", glasses);
+            Add(result, "met", glasses, glasses: true);
 
         return result;
     }
 
-    private static void Add(List<Slot> into, string suffix, in EquipmentModelId id)
+    private static void Add(List<Slot> into, string suffix, in EquipmentModelId id, bool glasses = false)
     {
         // Set 0 is an empty slot; the game draws its bare-body stand-in, which no host is ever built on.
         if (id.Id == 0) return;
-        into.Add(new Slot(suffix, id.Id, id.Variant));
+        into.Add(new Slot(suffix, id.Id, id.Variant, glasses));
     }
 }

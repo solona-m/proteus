@@ -22,7 +22,8 @@ internal sealed class HarnessRouter(HarnessJobs jobs, LogRing ring, SessionNames
     internal static readonly IReadOnlyList<(string Method, string Path)> Routes =
     [
         ("GET", "/health"), ("GET", "/state"), ("GET", "/log"), ("GET", "/screenshot"),
-        ("POST", "/actions/refit"), ("POST", "/actions/restore"), ("POST", "/actions/shader-upgrade"), ("GET", "/jobs/{id}"),
+        ("POST", "/actions/refit"), ("POST", "/actions/restore"), ("POST", "/actions/shader-upgrade"),
+        ("POST", "/actions/variant-repoint"), ("GET", "/jobs/{id}"),
     ];
 
     private IHarnessGame Game => jobs.Game;
@@ -49,6 +50,7 @@ internal sealed class HarnessRouter(HarnessJobs jobs, LogRing ring, SessionNames
                 "/actions/refit" => await Refit(request),
                 "/actions/restore" => await Restore(request),
                 "/actions/shader-upgrade" => await ShaderUpgradeAction(request),
+                "/actions/variant-repoint" => await VariantRepointAction(request),
                 _ => Job(path["/jobs/".Length..]),
             };
         }
@@ -111,6 +113,7 @@ internal sealed class HarnessRouter(HarnessJobs jobs, LogRing ring, SessionNames
                                 undoing = a.Activity.Undoing },
             },
             shaderUpgrade = ShaderUpgradeBlock(Game.ShaderUpgrade()),
+            variantRepoint = VariantRepointBlock(Game.VariantRepoint()),
             job = jobs.Current?.View(),
         });
     }
@@ -192,6 +195,78 @@ internal sealed class HarnessRouter(HarnessJobs jobs, LogRing ring, SessionNames
         }
         var (on, now) = await OnFramework(() => Game.SetShaderUpgrade(enabled, gloss));
         return HarnessResponse.Json(200, new { enabled = on, maskGloss = now });
+    }
+
+    /// <summary>"Gear variants" in <c>/state</c>: read-only, scrubbed with the rest.</summary>
+    internal static object VariantRepointBlock(VariantRepointWatcher.View v) => new
+    {
+        enabled = v.Enabled, busy = v.Busy, waiting = v.Waiting, awaitingRedraw = v.AwaitingRedraw,
+        worn = v.WornList.Select(w => new
+        {
+            modDir = w.ModDir, item = w.Item, variant = w.Variant, effectiveMaterialId = w.EffectiveMaterialId,
+            loadedFolder = w.LoadedFolder,
+        }),
+        repointed = v.RepointedList.Select(r => new { modDir = r.ModDir, item = r.Item, materialId = r.MaterialId, variants = r.Variants }),
+        left = v.LeftList.Select(l => new { modDir = l.ModDir, item = l.Item, reason = l.Reason }),
+        lastRun = v.LastRun is { } r
+            ? new { kind = r.Kind, modsChanged = r.ModsChanged, entriesWritten = r.EntriesWritten, removed = r.Removed,
+                    kept = r.Kept, refused = r.Refused, reloaded = r.Reloaded, redrawRequested = r.RedrawRequested,
+                    nothingRecorded = r.NothingRecorded, atUtc = r.AtUtc }
+            : null,
+    };
+
+    /// <summary>
+    /// "Gear variants", for QA (which cannot click Settings): switch it, or start "Undo for what I'm wearing" (optionally
+    /// without declining, so QA leaves nothing behind) or "Repoint what I'm wearing now". Every field is validated
+    /// before anything changes.
+    /// </summary>
+    private async Task<HarnessResponse> VariantRepointAction(HarnessRequest request)
+    {
+        var (body, bad) = JsonBody(request, "enabled", "undoWorn", "decline", "repointWornNow");
+        if (bad != null) return bad;
+        bool? enabled = null;
+        bool undoWorn = false, repointNow = false, decline = true;
+        if (body.TryGetProperty("enabled", out var e))
+        {
+            if (e.ValueKind is not (JsonValueKind.True or JsonValueKind.False))
+                return HarnessResponse.Error(400, "invalid-field", "enabled must be true or false");
+            enabled = e.GetBoolean();
+        }
+        if (body.TryGetProperty("undoWorn", out var u))
+        {
+            if (u.ValueKind != JsonValueKind.True) return HarnessResponse.Error(400, "invalid-field", "undoWorn must be true");
+            undoWorn = true;
+        }
+        if (body.TryGetProperty("repointWornNow", out var n))
+        {
+            if (n.ValueKind != JsonValueKind.True) return HarnessResponse.Error(400, "invalid-field", "repointWornNow must be true");
+            repointNow = true;
+        }
+        if (body.TryGetProperty("decline", out var d))
+        {
+            if (!undoWorn) return HarnessResponse.Error(400, "invalid-field", "decline goes with undoWorn");
+            if (d.ValueKind is not (JsonValueKind.True or JsonValueKind.False))
+                return HarnessResponse.Error(400, "invalid-field", "decline must be true or false");
+            decline = d.GetBoolean();
+        }
+        if (undoWorn && repointNow) return HarnessResponse.Error(400, "invalid-field", "give undoWorn or repointWornNow, not both");
+        if (enabled == null && !undoWorn && !repointNow)
+            return HarnessResponse.Error(400, "invalid-field", "give enabled, undoWorn or repointWornNow");
+
+        if (undoWorn || repointNow)
+        {
+            var started = await OnFramework(() =>
+            {
+                if (Game.AutoRefit().Busy || Game.VariantRepointBlocked()) return false;
+                if (enabled is { } on) Game.SetVariantRepoint(on);
+                return Game.StartVariantRepointRun(undoWorn, decline);
+            });
+            return started
+                ? HarnessResponse.Json(202, new { started = true })
+                : HarnessResponse.Error(409, "busy", "gear variants, the shader upgrade or auto refit is working; wait for /state variantRepoint.busy == false");
+        }
+        var now = await OnFramework(() => Game.SetVariantRepoint(enabled!.Value));
+        return HarnessResponse.Json(200, new { enabled = now });
     }
 
     private async Task<HarnessResponse> Log(HarnessRequest request)

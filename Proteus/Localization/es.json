@@ -5930,5 +5930,121 @@
   "MeshVolume.Feature.ShaderUpgrade": {
     "message": "la actualización de sombreadores del equipo",
     "description": ""
+  },
+  "Settings.Section.GearVariants": {
+    "message": "Variantes del equipo",
+    "description": ""
+  },
+  "Settings.GearVariants.Auto.Label": {
+    "message": "Apuntar todas las variantes del equipo puesto al material de su mod",
+    "description": ""
+  },
+  "Settings.GearVariants.Auto.Tip": {
+    "message": "Un mod hecho para una variante de un objeto solo incluye la carpeta de materiales de esa variante, así que el objeto\npuesto en otra variante dibuja el material del juego (o ninguno) sobre el modelo del mod. Al ponerte una pieza así,\nProteus escribe entradas IMC en los datos predeterminados del mod que apuntan cada una de esas variantes al material\ndel mod, como «Apply to All Variants» de TexTools. El cambio se aplica a todos los que lleven esas variantes\nen colecciones donde el mod está activo, incluso con su opción de modelo desactivada. Desactivarlo detiene los\ncambios siguientes; no los deshace. «Deshacer en lo que llevo puesto» los quita.",
+    "description": ""
+  },
+  "Settings.GearVariants.Status.Fmt": {
+    "message": "{0} pieza(s) reapuntada(s) · {1} sin cambiar",
+    "description": ""
+  },
+  "Settings.GearVariants.Repointed.Tip.Fmt": {
+    "message": "Reapuntadas:\n{0}",
+    "description": ""
+  },
+  "Settings.GearVariants.Left.Tip.Fmt": {
+    "message": "Dejadas como están:\n{0}",
+    "description": ""
+  },
+  "Settings.GearVariants.NextRedraw": {
+    "message": "Surte efecto en el próximo redibujado (el redibujado automático está desactivado).",
+    "description": ""
+  },
+  "Settings.GearVariants.Waiting": {
+    "message": "Esperando a Penumbra.",
+    "description": ""
+  },
+  "Settings.GearVariants.Reason.SeveralVariants": {
+    "message": "el mod incluye varias variantes propias",
+    "description": ""
+  },
+  "Settings.GearVariants.Reason.ModImc": {
+    "message": "el mod define esta variante por sí mismo",
+    "description": ""
+  },
+  "Settings.GearVariants.Reason.ImcGroup": {
+    "message": "un grupo IMC del mod la cubre",
+    "description": ""
+  },
+  "Settings.GearVariants.Reason.ProteusToggles": {
+    "message": "los interruptores de partes de Proteus conservan los materiales del juego",
+    "description": ""
+  },
+  "Settings.GearVariants.Reason.OtherModMaterial": {
+    "message": "su material viene de otro mod",
+    "description": ""
+  },
+  "Settings.GearVariants.Reason.FolderUnused": {
+    "message": "ninguna variante del objeto usa la carpeta del mod",
+    "description": ""
+  },
+  "Settings.GearVariants.Reason.NoImc": {
+    "message": "no se pudo leer la tabla de variantes del juego",
+    "description": ""
+  },
+  "Settings.GearVariants.Reason.MetaUnreadable": {
+    "message": "no se pudieron leer los metadatos de Penumbra",
+    "description": ""
+  },
+  "Settings.GearVariants.Reason.OtherModWins": {
+    "message": "los metadatos de otro mod tienen prioridad",
+    "description": ""
+  },
+  "Settings.GearVariants.Reason.LegacyMod": {
+    "message": "una carpeta de mod en formato antiguo en la que Proteus no escribe",
+    "description": ""
+  },
+  "Settings.GearVariants.Reason.ProteusPack": {
+    "message": "un paquete de Proteus (Proteus lo dibuja por sí mismo)",
+    "description": ""
+  },
+  "Settings.GearVariants.Reason.Declined": {
+    "message": "deshecho por ti",
+    "description": ""
+  },
+  "Settings.GearVariants.Reason.WriteFailed": {
+    "message": "no se pudo escribir el mod",
+    "description": ""
+  },
+  "Settings.GearVariants.RepointNow": {
+    "message": "Reapuntar lo que llevo puesto",
+    "description": ""
+  },
+  "Settings.GearVariants.RepointNow.Tip": {
+    "message": "Apunta las variantes de lo que llevas puesto ahora a los materiales de sus mods,\nincluidas las piezas que deshiciste antes.",
+    "description": ""
+  },
+  "Settings.GearVariants.UndoWorn": {
+    "message": "Deshacer en lo que llevo puesto",
+    "description": ""
+  },
+  "Settings.GearVariants.UndoWorn.Tip": {
+    "message": "Quita las entradas de variantes de Proteus de los mods de las piezas que llevas puestas y déjalas en paz\nhasta que uses «Reapuntar lo que llevo puesto». Se conserva una entrada que alguien haya cambiado desde entonces.",
+    "description": ""
+  },
+  "Settings.GearVariants.Result.Fmt": {
+    "message": "Deshacer: {0} quitadas, {1} conservadas por haber cambiado, {2} rechazadas.",
+    "description": ""
+  },
+  "Settings.GearVariants.NothingRecorded": {
+    "message": "No hay nada registrado para lo que llevas puesto.",
+    "description": ""
+  },
+  "Settings.GearVariants.Busy": {
+    "message": "Trabajando…",
+    "description": ""
+  },
+  "Chat.VariantRepoint.Fmt": {
+    "message": "[Proteus] Se apuntaron {0} variante(s) de una pieza de «{1}» al material propio del mod. Esto se aplica a todos los que lleven esas variantes en colecciones donde el mod está activo, incluso con su opción de modelo desactivada. Deshazlo en /proteus > Ajustes > Variantes del equipo.",
+    "description": ""
   }
 }

@@ -5930,5 +5930,121 @@
   "MeshVolume.Feature.ShaderUpgrade": {
     "message": "장비 셰이더 업그레이드",
     "description": ""
+  },
+  "Settings.Section.GearVariants": {
+    "message": "장비 변형",
+    "description": ""
+  },
+  "Settings.GearVariants.Auto.Label": {
+    "message": "착용한 장비의 모든 변형을 모드의 재질로 지정",
+    "description": ""
+  },
+  "Settings.GearVariants.Auto.Tip": {
+    "message": "아이템의 한 변형용으로 만든 모드는 그 변형의 재질 폴더만 포함하므로, 다른 변형으로\n착용하면 모드의 모델에 게임의 재질이 그려지거나 아무것도 그려지지 않습니다. 그런 장비를 착용하면\nProteus가 모드의 기본 데이터에 IMC 항목을 써서 해당하는 모든 변형을 모드의 재질로\n지정합니다. TexTools의 \"Apply to All Variants\"와 같습니다. 이 변경은 모드가 켜진 컬렉션에서 그 변형을\n착용한 모든 사람에게 적용되며, 모델 옵션이 꺼져 있어도 마찬가지입니다. 끄면 이후의 변경만\n멈추고 되돌리지는 않습니다. \"착용 중인 장비 되돌리기\"로 제거할 수 있습니다.",
+    "description": ""
+  },
+  "Settings.GearVariants.Status.Fmt": {
+    "message": "{0}개 변경 · {1}개 그대로",
+    "description": ""
+  },
+  "Settings.GearVariants.Repointed.Tip.Fmt": {
+    "message": "변경됨:\n{0}",
+    "description": ""
+  },
+  "Settings.GearVariants.Left.Tip.Fmt": {
+    "message": "그대로 둔 것:\n{0}",
+    "description": ""
+  },
+  "Settings.GearVariants.NextRedraw": {
+    "message": "다음 다시 그리기 때 적용됩니다(자동 다시 그리기가 꺼져 있음).",
+    "description": ""
+  },
+  "Settings.GearVariants.Waiting": {
+    "message": "Penumbra를 기다리는 중입니다.",
+    "description": ""
+  },
+  "Settings.GearVariants.Reason.SeveralVariants": {
+    "message": "모드가 자체적으로 여러 변형을 포함함",
+    "description": ""
+  },
+  "Settings.GearVariants.Reason.ModImc": {
+    "message": "모드가 이 변형을 직접 설정함",
+    "description": ""
+  },
+  "Settings.GearVariants.Reason.ImcGroup": {
+    "message": "모드의 IMC 그룹이 이를 다룸",
+    "description": ""
+  },
+  "Settings.GearVariants.Reason.ProteusToggles": {
+    "message": "Proteus의 부위 토글이 게임의 재질을 유지함",
+    "description": ""
+  },
+  "Settings.GearVariants.Reason.OtherModMaterial": {
+    "message": "재질이 다른 모드에서 옴",
+    "description": ""
+  },
+  "Settings.GearVariants.Reason.FolderUnused": {
+    "message": "아이템의 어떤 변형도 모드의 폴더를 사용하지 않음",
+    "description": ""
+  },
+  "Settings.GearVariants.Reason.NoImc": {
+    "message": "게임의 변형 표를 읽을 수 없음",
+    "description": ""
+  },
+  "Settings.GearVariants.Reason.MetaUnreadable": {
+    "message": "Penumbra의 메타데이터를 읽을 수 없음",
+    "description": ""
+  },
+  "Settings.GearVariants.Reason.OtherModWins": {
+    "message": "다른 모드의 메타데이터가 우선함",
+    "description": ""
+  },
+  "Settings.GearVariants.Reason.LegacyMod": {
+    "message": "Proteus가 쓰지 않는 예전 형식의 모드 폴더",
+    "description": ""
+  },
+  "Settings.GearVariants.Reason.ProteusPack": {
+    "message": "Proteus 팩(Proteus가 직접 그림)",
+    "description": ""
+  },
+  "Settings.GearVariants.Reason.Declined": {
+    "message": "직접 되돌림",
+    "description": ""
+  },
+  "Settings.GearVariants.Reason.WriteFailed": {
+    "message": "모드를 쓸 수 없음",
+    "description": ""
+  },
+  "Settings.GearVariants.RepointNow": {
+    "message": "착용 중인 장비 지금 변경",
+    "description": ""
+  },
+  "Settings.GearVariants.RepointNow.Tip": {
+    "message": "지금 착용 중인 장비의 변형을 각 모드의 재질로 지정합니다.\n전에 되돌린 장비도 포함됩니다.",
+    "description": ""
+  },
+  "Settings.GearVariants.UndoWorn": {
+    "message": "착용 중인 장비 되돌리기",
+    "description": ""
+  },
+  "Settings.GearVariants.UndoWorn.Tip": {
+    "message": "착용 중인 장비의 모드에서 Proteus의 변형 항목을 제거하고, \"착용 중인 장비 지금 변경\"을\n사용할 때까지 그대로 둡니다. 그 뒤 누군가 바꾼 항목은 유지됩니다.",
+    "description": ""
+  },
+  "Settings.GearVariants.Result.Fmt": {
+    "message": "되돌리기: {0}개 제거, {1}개는 이후 변경되어 유지, {2}개 거부.",
+    "description": ""
+  },
+  "Settings.GearVariants.NothingRecorded": {
+    "message": "착용 중인 장비에 대해 기록된 것이 없습니다.",
+    "description": ""
+  },
+  "Settings.GearVariants.Busy": {
+    "message": "작업 중…",
+    "description": ""
+  },
+  "Chat.VariantRepoint.Fmt": {
+    "message": "[Proteus] \"{1}\"에 있는 장비의 변형 {0}개를 모드 자체의 재질로 지정했습니다. 모드가 켜진 컬렉션에서 그 변형을 착용한 모든 사람에게 적용되며, 모델 옵션이 꺼져 있어도 마찬가지입니다. 되돌리기: /proteus > 설정 > 장비 변형.",
+    "description": ""
   }
 }

@@ -232,6 +232,30 @@ public sealed class LocalizationTests
         Assert.Contains("/proteus", tr["Chat.ShaderUpgrade.Fmt"].Message);
     }
 
+    /// <summary>
+    /// "Gear variants" words are translated, not copied, keep English's line breaks, and keep TexTools' own button name
+    /// and /proteus verbatim.
+    /// </summary>
+    [Theory]
+    [MemberData(nameof(Translations))]
+    [Trait("Plan", "AC-imc-all-variants-8")]
+    public void GearVariants_strings_are_translated_not_copied(string lang)
+    {
+        var en = Load(Source);
+        var tr = Load(lang);
+        foreach (var key in en.Keys.Where(k => k.StartsWith("Settings.GearVariants.", StringComparison.Ordinal)
+                                            || k is "Settings.Section.GearVariants" or "Chat.VariantRepoint.Fmt"))
+        {
+            Assert.True(tr.ContainsKey(key), $"[{lang}] has no {key}");
+            Assert.NotEqual(en[key].Message, tr[key].Message);
+            Assert.Equal(en[key].Message.Count(c => c == '\n'), tr[key].Message.Count(c => c == '\n'));
+        }
+        Assert.Contains("Apply to All Variants", tr["Settings.GearVariants.Auto.Tip"].Message);
+        Assert.Contains("TexTools", tr["Settings.GearVariants.Auto.Tip"].Message);
+        Assert.Contains("/proteus", tr["Chat.VariantRepoint.Fmt"].Message);
+        Assert.Contains(tr["Settings.Section.GearVariants"].Message, tr["Chat.VariantRepoint.Fmt"].Message);
+    }
+
     /// <summary>The keys the temporary-copy design used are gone from every locale and from the code.</summary>
     [Theory]
     [MemberData(nameof(AllLocales))]

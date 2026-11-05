@@ -57,12 +57,13 @@ retry — abandoned work never runs later.
 | Route | What it does |
 |---|---|
 | `GET /health` | `{ok, harness, session, build, buildStamp, penumbra, loggedIn, pluginEnabled}` |
-| `GET /state` | The live character (race, tribe, gender, body type, drawn race code), the player collection's id, every drawn model (`slot`, `loaded`, `gamePath`, `resolved`, `modDir`; `slot:-1` = Penumbra resolves it but it is not drawn), the compositor (`phase`: `boot-hold`/`compositing`/`pending`/`idle`, last result, last refresh), `redraws` (`count`, `lastAtUtc`), `autoRefit` (`busy`, `pending`), `shaderUpgrade` (below), and the current `job`. No names. |
+| `GET /state` | The live character (race, tribe, gender, body type, drawn race code), the player collection's id, every drawn model (`slot`, `loaded`, `gamePath`, `resolved`, `modDir`; `slot:-1` = Penumbra resolves it but it is not drawn), the compositor (`phase`: `boot-hold`/`compositing`/`pending`/`idle`, last result, last refresh), `redraws` (`count`, `lastAtUtc`), `autoRefit` (`busy`, `pending`), `shaderUpgrade` and `variantRepoint` (below), and the current `job`. No names. |
 | `GET /log?since=<n>&max=<m>` | Plugin log lines after cursor `n` (`max` default 200, cap 2000): `{session, next, oldest, dropped, lines:[{seq,text}]}`. Pass `next` back as `since`. `dropped:true` = lines were lost to the ring. |
 | `GET /screenshot?ui=true\|false` | The game screen as PNG (`ui=false` = before Dalamud's UI). 429 while another is taken; 503 `capture-timeout` when the game is minimised or not rendering. |
 | `POST /actions/refit` | `{"mod":"<Penumbra folder name>","bodies":["rue","tbse@women"],"remake":false}` → 202 `{job, modDir, state}`. Runs the Studio's "Make every size" with the Studio's current settings, after backing the mod up; then reloads the mod and redraws. |
 | `POST /actions/restore` | `{"job":"<refit job id>"}`, or `{"mod":"<folder>"}`, or `{"mod":"<folder>","backup":"<backupId>"}` → 202. |
 | `POST /actions/shader-upgrade` | `{"enabled":true\|false}` and/or `{"maskGloss":"inverse-specular"\|"low"\|"mid"}` → 200 `{enabled, maskGloss}`; `{"undoWorn":true}` (optionally `"decline":false`) or `{"upgradeWornNow":true}` → 202 `{started}`. Switches the gear shader upgrade as its Settings checkbox does; `maskGloss` picks how the diffuse form's derived mask fills its roughness channel, for this session only (never saved) and only for files written after it; `undoWorn` / `upgradeWornNow` run the two Settings buttons. 409 `busy` while a run or auto refit is working; 400 `invalid-field` for an unknown field or value, a wrong type, no field, `decline` without `undoWorn`, or both runs at once. |
+| `POST /actions/variant-repoint` | `{"enabled":true\|false}` → 200 `{enabled}`; `{"undoWorn":true}` (optionally `"decline":false`) or `{"repointWornNow":true}` → 202 `{started}`. Switches "Gear variants" as its Settings checkbox does; `undoWorn` / `repointWornNow` run the two Settings buttons. 409 `busy` while a run, the shader upgrade or auto refit is working; 400 `invalid-field` for an unknown field, a wrong type, no field, `decline` without `undoWorn`, or both runs at once. |
 | `GET /jobs/{id}` | `{id, kind, modDir, state: queued\|running\|done\|failed\|cancelled, progress, backup, reloaded, redrawRequested, redrawObserved, autoRefitFollowed, result, restored, error}` |
 
 `mod` is the **folder name** Penumbra keeps the mod in (case-insensitive), never its
@@ -134,6 +135,22 @@ The harness never deletes or overwrites a backup; the user may delete them by ha
   remains. This undo deletes the gear shader upgrade's OWN backups as it restores them: that is the feature's undo, not
   the harness's refit backups, which ADR 0002 says the harness never deletes. `upgraded[].mask` names the Form B mask
   (`{gamePath, file}`).
+- **Gear variants — it WRITES INTO THE WORN MODS' MANIFESTS.** `/state` `variantRepoint` is
+  `{enabled, busy, waiting: none|penumbra, awaitingRedraw,
+  worn:[{modDir|null, item: "e6255 Body", variant, effectiveMaterialId, loadedFolder: "v0001"|null}],
+  repointed:[{modDir, item, materialId, variants:[int]}],
+  left:[{modDir, item, reason: several-variants|mod-imc|imc-group|proteus-toggles|other-mod-material|folder-unused|no-imc|meta-unreadable|outranked|legacy-mod|proteus-pack|declined|write-failed}],
+  lastRun:{kind: repoint|repoint-now|undo-worn, modsChanged, entriesWritten, removed, kept, refused, reloaded, redrawRequested, nothingRecorded, atUtc}}`.
+  `loadedFolder` is the material folder the game actually loaded for the piece (from the resource map), the real-game
+  cross-check of `effectiveMaterialId`. After switching it on or equipping, wait for `variantRepoint.busy == false`
+  and a redraw before you assert. **Clean up everything you caused:** copy the mod's `meta.json` and hash its other
+  files first; afterwards, while wearing each repointed piece, POST `{"enabled":false,"undoWorn":true,"decline":false}`
+  and check `DefaultData.Manipulations` is as before and no `Proteus/variantrepoint.json` remains.
+  **Case B (custom-named material, e.g. This Old Thing's `mt_c0201e6255_top_b.mtrl`, shipped only under `v0001`):**
+  before switching the feature on, wear the piece in a variant whose MaterialId is not 1 and record `loadedFolder` and
+  a screenshot. If `loadedFolder` is already `v0001` (the game fell back for the missing material), STOP and report it
+  as a finding: "wrong" must narrow to "a vanilla file exists under the worn folder" and EDGE-imc-all-variants-33
+  flips. Otherwise switch it on and check `loadedFolder` becomes `v0001` and the piece is drawn.
 - After a refit or restore, wait for the job to end, then for `/state`
   `autoRefit.busy == false` and `compositor.phase == "idle"` before you assert
   anything or take a screenshot.

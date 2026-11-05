@@ -5930,5 +5930,121 @@
   "MeshVolume.Feature.ShaderUpgrade": {
     "message": "装備シェーダーの更新",
     "description": ""
+  },
+  "Settings.Section.GearVariants": {
+    "message": "装備のバリアント",
+    "description": ""
+  },
+  "Settings.GearVariants.Auto.Label": {
+    "message": "着ている装備のすべてのバリアントをMODの素材に向ける",
+    "description": ""
+  },
+  "Settings.GearVariants.Auto.Tip": {
+    "message": "あるアイテムの1つのバリアント用に作られたMODは、そのバリアントの素材フォルダーしか含みません。そのため\n別のバリアントで着ると、MODのモデルにゲームの素材が描かれます（または何も描かれません）。そのような装備を着ると、\nProteusはMODのデフォルトデータにIMCエントリーを書き込み、該当するすべてのバリアントをMODの\n素材に向けます。TexToolsの「Apply to All Variants」と同じです。この変更は、MODが有効なコレクションで\nそのバリアントを着ているすべての人に適用されます（モデルのオプションがオフでも）。オフにすると以後の\n変更は止まりますが、元には戻しません。「着ている装備を元に戻す」で取り除けます。",
+    "description": ""
+  },
+  "Settings.GearVariants.Status.Fmt": {
+    "message": "{0}件を変更 · {1}件はそのまま",
+    "description": ""
+  },
+  "Settings.GearVariants.Repointed.Tip.Fmt": {
+    "message": "変更済み：\n{0}",
+    "description": ""
+  },
+  "Settings.GearVariants.Left.Tip.Fmt": {
+    "message": "そのままのもの：\n{0}",
+    "description": ""
+  },
+  "Settings.GearVariants.NextRedraw": {
+    "message": "次の再描画で反映されます（自動再描画はオフです）。",
+    "description": ""
+  },
+  "Settings.GearVariants.Waiting": {
+    "message": "Penumbraを待っています。",
+    "description": ""
+  },
+  "Settings.GearVariants.Reason.SeveralVariants": {
+    "message": "MODが独自に複数のバリアントを含んでいる",
+    "description": ""
+  },
+  "Settings.GearVariants.Reason.ModImc": {
+    "message": "MOD自身がこのバリアントを設定している",
+    "description": ""
+  },
+  "Settings.GearVariants.Reason.ImcGroup": {
+    "message": "MOD内のIMCグループが対象にしている",
+    "description": ""
+  },
+  "Settings.GearVariants.Reason.ProteusToggles": {
+    "message": "Proteusのパーツ切り替えがゲームの素材を保っている",
+    "description": ""
+  },
+  "Settings.GearVariants.Reason.OtherModMaterial": {
+    "message": "素材が別のMODから来ている",
+    "description": ""
+  },
+  "Settings.GearVariants.Reason.FolderUnused": {
+    "message": "このアイテムのどのバリアントもMODのフォルダーを使っていない",
+    "description": ""
+  },
+  "Settings.GearVariants.Reason.NoImc": {
+    "message": "ゲームのバリアント表を読み取れなかった",
+    "description": ""
+  },
+  "Settings.GearVariants.Reason.MetaUnreadable": {
+    "message": "Penumbraのメタデータを読み取れなかった",
+    "description": ""
+  },
+  "Settings.GearVariants.Reason.OtherModWins": {
+    "message": "別のMODのメタデータが優先されている",
+    "description": ""
+  },
+  "Settings.GearVariants.Reason.LegacyMod": {
+    "message": "Proteusが書き込まない旧形式のMODフォルダー",
+    "description": ""
+  },
+  "Settings.GearVariants.Reason.ProteusPack": {
+    "message": "Proteusのパック（Proteus自身が描画）",
+    "description": ""
+  },
+  "Settings.GearVariants.Reason.Declined": {
+    "message": "あなたが元に戻した",
+    "description": ""
+  },
+  "Settings.GearVariants.Reason.WriteFailed": {
+    "message": "MODに書き込めなかった",
+    "description": ""
+  },
+  "Settings.GearVariants.RepointNow": {
+    "message": "着ている装備を今すぐ変更",
+    "description": ""
+  },
+  "Settings.GearVariants.RepointNow.Tip": {
+    "message": "今着ている装備のバリアントを、それぞれのMODの素材に向けます。\n以前に元に戻した装備も含みます。",
+    "description": ""
+  },
+  "Settings.GearVariants.UndoWorn": {
+    "message": "着ている装備を元に戻す",
+    "description": ""
+  },
+  "Settings.GearVariants.UndoWorn.Tip": {
+    "message": "着ている装備のMODからProteusのバリアントエントリーを取り除き、「着ている装備を今すぐ変更」を\n使うまでそのままにします。その後に誰かが変更したエントリーは残します。",
+    "description": ""
+  },
+  "Settings.GearVariants.Result.Fmt": {
+    "message": "元に戻す：{0}件を削除、{1}件は変更済みのため保持、{2}件は拒否。",
+    "description": ""
+  },
+  "Settings.GearVariants.NothingRecorded": {
+    "message": "着ている装備について記録はありません。",
+    "description": ""
+  },
+  "Settings.GearVariants.Busy": {
+    "message": "処理中…",
+    "description": ""
+  },
+  "Chat.VariantRepoint.Fmt": {
+    "message": "[Proteus] 「{1}」の装備の{0}個のバリアントをMOD自身の素材に向けました。これはMODが有効なコレクションでそのバリアントを着ているすべての人に適用されます（モデルのオプションがオフでも）。元に戻すには /proteus > 設定 > 装備のバリアント。",
+    "description": ""
   }
 }

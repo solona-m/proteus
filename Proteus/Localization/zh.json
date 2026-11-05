@@ -5930,5 +5930,121 @@
   "MeshVolume.Feature.ShaderUpgrade": {
     "message": "装备着色器升级",
     "description": ""
+  },
+  "Settings.Section.GearVariants": {
+    "message": "装备变体",
+    "description": ""
+  },
+  "Settings.GearVariants.Auto.Label": {
+    "message": "将身上装备的所有变体指向其模组的材质",
+    "description": ""
+  },
+  "Settings.GearVariants.Auto.Tip": {
+    "message": "为物品的某一变体制作的模组只包含该变体的材质文件夹，所以以另一变体穿戴时，\n模组的模型上会绘制游戏的材质（或什么都不绘制）。当你穿上这样的装备时，\nProteus 会在模组的默认数据中写入 IMC 条目，把每个这样的变体指向模组的\n材质，就像 TexTools 的“Apply to All Variants”。此更改适用于在启用该模组的合集中\n穿着这些变体的所有人，即使其模型选项已关闭。关闭此项会停止后续\n更改，但不会撤销它们。“撤销身上装备的变体指向”会将其移除。",
+    "description": ""
+  },
+  "Settings.GearVariants.Status.Fmt": {
+    "message": "已重新指向 {0} 件 · {1} 件保持不变",
+    "description": ""
+  },
+  "Settings.GearVariants.Repointed.Tip.Fmt": {
+    "message": "已重新指向：\n{0}",
+    "description": ""
+  },
+  "Settings.GearVariants.Left.Tip.Fmt": {
+    "message": "保持原样：\n{0}",
+    "description": ""
+  },
+  "Settings.GearVariants.NextRedraw": {
+    "message": "将在下次重绘时生效（自动重绘已关闭）。",
+    "description": ""
+  },
+  "Settings.GearVariants.Waiting": {
+    "message": "正在等待 Penumbra。",
+    "description": ""
+  },
+  "Settings.GearVariants.Reason.SeveralVariants": {
+    "message": "模组自身包含多个变体",
+    "description": ""
+  },
+  "Settings.GearVariants.Reason.ModImc": {
+    "message": "模组自行设置了此变体",
+    "description": ""
+  },
+  "Settings.GearVariants.Reason.ImcGroup": {
+    "message": "模组中的 IMC 组覆盖了它",
+    "description": ""
+  },
+  "Settings.GearVariants.Reason.ProteusToggles": {
+    "message": "Proteus 的部件开关保留了游戏的材质",
+    "description": ""
+  },
+  "Settings.GearVariants.Reason.OtherModMaterial": {
+    "message": "其材质来自另一个模组",
+    "description": ""
+  },
+  "Settings.GearVariants.Reason.FolderUnused": {
+    "message": "该物品没有变体使用模组的文件夹",
+    "description": ""
+  },
+  "Settings.GearVariants.Reason.NoImc": {
+    "message": "无法读取游戏的变体表",
+    "description": ""
+  },
+  "Settings.GearVariants.Reason.MetaUnreadable": {
+    "message": "无法读取 Penumbra 的元数据",
+    "description": ""
+  },
+  "Settings.GearVariants.Reason.OtherModWins": {
+    "message": "另一个模组的元数据优先",
+    "description": ""
+  },
+  "Settings.GearVariants.Reason.LegacyMod": {
+    "message": "Proteus 不写入的旧格式模组文件夹",
+    "description": ""
+  },
+  "Settings.GearVariants.Reason.ProteusPack": {
+    "message": "Proteus 包（由 Proteus 自行绘制）",
+    "description": ""
+  },
+  "Settings.GearVariants.Reason.Declined": {
+    "message": "已由你撤销",
+    "description": ""
+  },
+  "Settings.GearVariants.Reason.WriteFailed": {
+    "message": "无法写入该模组",
+    "description": ""
+  },
+  "Settings.GearVariants.RepointNow": {
+    "message": "立即重新指向身上装备",
+    "description": ""
+  },
+  "Settings.GearVariants.RepointNow.Tip": {
+    "message": "将你现在穿着的装备的变体指向其模组的材质，\n包括你之前撤销过的装备。",
+    "description": ""
+  },
+  "Settings.GearVariants.UndoWorn": {
+    "message": "撤销身上装备的变体指向",
+    "description": ""
+  },
+  "Settings.GearVariants.UndoWorn.Tip": {
+    "message": "从你穿着的装备所属模组中移除 Proteus 的变体条目，并在你使用“立即重新指向身上装备”\n之前不再处理它们。此后被他人更改的条目会保留。",
+    "description": ""
+  },
+  "Settings.GearVariants.Result.Fmt": {
+    "message": "撤销：移除 {0} 个，{1} 个因之后被更改而保留，拒绝 {2} 个。",
+    "description": ""
+  },
+  "Settings.GearVariants.NothingRecorded": {
+    "message": "你穿着的装备没有任何记录。",
+    "description": ""
+  },
+  "Settings.GearVariants.Busy": {
+    "message": "处理中…",
+    "description": ""
+  },
+  "Chat.VariantRepoint.Fmt": {
+    "message": "[Proteus] 已将“{1}”中一件装备的 {0} 个变体指向模组自己的材质。这适用于在启用该模组的合集中穿着这些变体的所有人，即使其模型选项已关闭。撤销位置：/proteus > 设置 > 装备变体。",
+    "description": ""
   }
 }

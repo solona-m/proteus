@@ -273,6 +273,30 @@ internal sealed class FakeGame : IHarnessGame
         return true;
     }
 
+    public VariantRepointWatcher.View VariantRepointView { get; set; } = new();
+    public VariantRepointWatcher.View VariantRepoint() => VariantRepointView;
+    public bool VariantRepointEnabled { get; set; }
+    public bool SetVariantRepoint(bool enabled)
+    {
+        Fw(nameof(SetVariantRepoint));
+        VariantRepointEnabled = enabled;
+        return VariantRepointEnabled;
+    }
+
+    /// <summary>The shader upgrade or auto refit is working.</summary>
+    public bool VariantRepointOthersBusy { get; set; }
+    public bool VariantRepointBlocked() { Fw(nameof(VariantRepointBlocked)); return VariantRepointOthersBusy; }
+
+    public bool VariantRepointBusy { get; set; }
+    public List<(bool UndoWorn, bool Decline)> VariantRepointRuns { get; } = [];
+    public bool StartVariantRepointRun(bool undoWorn, bool decline)
+    {
+        Fw(nameof(StartVariantRepointRun));
+        if (VariantRepointBusy) return false;
+        VariantRepointRuns.Add((undoWorn, decline));
+        return true;
+    }
+
     public Task<RawFrame> CaptureRaw(uint viewportId, bool includeUi, CancellationToken ct)
     {
         LastCaptureUi = includeUi;

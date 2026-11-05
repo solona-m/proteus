@@ -88,6 +88,31 @@ public static class ContentSlot
         _         => null,
     };
 
+    /// <summary>The inverse of <see cref="LabelForEquipSlot"/>: "Right ring" → "RFinger"; null for a label it does not know.</summary>
+    public static string? EquipSlotForLabel(string label) => label switch
+    {
+        "Head"       => "Head",
+        "Body"       => "Body",
+        "Hands"      => "Hands",
+        "Legs"       => "Legs",
+        "Feet"       => "Feet",
+        "Earrings"   => "Ears",
+        "Necklace"   => "Neck",
+        "Bracelets"  => "Wrists",
+        "Right ring" => "RFinger",
+        "Left ring"  => "LFinger",
+        _            => null,
+    };
+
+    /// <summary>The <see cref="Slot.Label"/> of an equipment or accessory suffix ("top" → "Body"), or null.</summary>
+    public static string? LabelForSuffix(string suffix)
+    {
+        foreach (var s in Slots)
+            if (s.Category > 0 && string.Equals(s.Suffix, suffix, StringComparison.OrdinalIgnoreCase))
+                return s.Label;
+        return null;
+    }
+
     /// <summary>
     /// One of the ten equipment labels ("Body", "Right ring") in its canonical casing, or null for anything else —
     /// a character part, a raw suffix, free text. What a piece's recorded slot is trusted as.

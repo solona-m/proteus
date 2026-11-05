@@ -1,0 +1,30 @@
+using Lumina;
+using Proteus.Services;
+using Xunit;
+
+namespace Proteus.Tests;
+
+/// <summary>Every variant of a real gear <c>.imc</c>, read the way "Gear variants" reads it (<see cref="ImcEntrySource.GameEntries"/>).</summary>
+public class ImcEntrySourceLocalTests
+{
+    [LocalDataFact(LocalData.GameData)]
+    [Trait("Speed", "Slow")]
+    [Trait("Plan", "EDGE-imc-all-variants-13")]
+    public void Real_equipment_and_accessory_imc_offsets()
+    {
+        var game = new GameData(LocalData.Path(LocalData.GameData));
+        byte[]? Read(string p) => game.GetFile(p)?.Data;
+
+        foreach (var (tag, label) in new[] { ("e6255", "Body"), ("a0053", "Right ring"), ("a0053", "Left ring") })
+        {
+            var count = ImcEntrySource.VariantCount(Read, tag);
+            Assert.NotNull(count);
+            var entries = ImcEntrySource.GameEntries(Read, tag, label)!;
+            Assert.Equal(count + 1, entries.Length);
+            Assert.Equal(ImcEntrySource.FromGame(Read, tag, label, 0), entries[0]);   // the default set
+            for (int v = 1; v <= count; v++)
+                Assert.Equal(ImcEntrySource.FromGame(Read, tag, label, v), entries[v]);
+            Assert.True(entries[1].MaterialId >= 1);
+        }
+    }
+}

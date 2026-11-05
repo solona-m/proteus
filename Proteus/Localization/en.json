@@ -5930,5 +5930,121 @@
   "MeshVolume.Feature.ShaderUpgrade": {
     "message": "gear shader upgrade",
     "description": "A feature name inside \"Undo {0} first\" messages (see ModelBackups.Blocked.Fmt): the automatic upgrade of old gear materials to the Dawntrail shader."
+  },
+  "Settings.Section.GearVariants": {
+    "message": "Gear variants",
+    "description": "Settings section heading for pointing every variant of worn gear at its mod's material."
+  },
+  "Settings.GearVariants.Auto.Label": {
+    "message": "Point every variant of worn gear at its mod's material",
+    "description": "Checkbox: when worn gear is put on, write IMC entries into its mod so every variant uses the mod's material."
+  },
+  "Settings.GearVariants.Auto.Tip": {
+    "message": "A mod made for one variant of an item ships that variant's material folder only, so the item worn\nin another variant draws the game's material (or none) on the mod's model. As you put such a piece on,\nProteus writes IMC entries into the mod's default data that point every such variant at the mod's\nmaterial, like TexTools' \"Apply to All Variants\". The change applies to everyone wearing those variants\nin collections where the mod is on, even with its model option off. Turning this off stops further\nchanges; it does not undo them. \"Undo for what I'm wearing\" takes them out.",
+    "description": "Tooltip on the Gear variants checkbox. Keep IMC, TexTools and the button name \"Apply to All Variants\" (TexTools' own English label) verbatim; the quoted \"Undo for what I'm wearing\" must match Settings.GearVariants.UndoWorn. Keep the line breaks."
+  },
+  "Settings.GearVariants.Status.Fmt": {
+    "message": "{0} piece(s) repointed · {1} left",
+    "description": "Status under the checkbox. {0} = pieces worn whose variants Proteus repointed, {1} = pieces left alone."
+  },
+  "Settings.GearVariants.Repointed.Tip.Fmt": {
+    "message": "Repointed:\n{0}",
+    "description": "Tooltip part: {0} = one line per repointed piece (mod folder: item → material folder)."
+  },
+  "Settings.GearVariants.Left.Tip.Fmt": {
+    "message": "Left as they are:\n{0}",
+    "description": "Tooltip part: {0} = one line per reason pieces were left, with a count."
+  },
+  "Settings.GearVariants.NextRedraw": {
+    "message": "Takes effect at the next redraw (Auto redraw is off).",
+    "description": "Status line when the change is written but Auto redraw is off."
+  },
+  "Settings.GearVariants.Waiting": {
+    "message": "Waiting for Penumbra.",
+    "description": "Status while Penumbra is not ready."
+  },
+  "Settings.GearVariants.Reason.SeveralVariants": {
+    "message": "the mod ships several variants of its own",
+    "description": "Reason a piece was left: its mod ships material folders for several variants on purpose."
+  },
+  "Settings.GearVariants.Reason.ModImc": {
+    "message": "the mod sets this variant itself",
+    "description": "Reason a piece was left: the mod's own IMC data sets the worn variant."
+  },
+  "Settings.GearVariants.Reason.ImcGroup": {
+    "message": "an IMC group in the mod covers it",
+    "description": "Reason a piece was left: an IMC group the mod's author wrote covers the item."
+  },
+  "Settings.GearVariants.Reason.ProteusToggles": {
+    "message": "Proteus's part toggles keep the game's materials",
+    "description": "Reason a piece was left: Proteus's own part toggles (an IMC group) make every variant use the game's materials."
+  },
+  "Settings.GearVariants.Reason.OtherModMaterial": {
+    "message": "its material comes from another mod",
+    "description": "Reason a piece was left: the worn variant's material is supplied by a different mod."
+  },
+  "Settings.GearVariants.Reason.FolderUnused": {
+    "message": "no variant of the item uses the mod's folder",
+    "description": "Reason a piece was left: no variant of the item uses the material folder the mod ships."
+  },
+  "Settings.GearVariants.Reason.NoImc": {
+    "message": "the game's variant table could not be read",
+    "description": "Reason a piece was left: the game's .imc variant table for the item could not be read."
+  },
+  "Settings.GearVariants.Reason.MetaUnreadable": {
+    "message": "Penumbra's metadata could not be read",
+    "description": "Reason a piece was left: Penumbra's collection metadata could not be read, so nothing was written."
+  },
+  "Settings.GearVariants.Reason.OtherModWins": {
+    "message": "another mod's metadata outranks it",
+    "description": "Reason a piece was left: Proteus's entries are there, but another mod's metadata wins."
+  },
+  "Settings.GearVariants.Reason.LegacyMod": {
+    "message": "an old-format mod folder Proteus does not write to",
+    "description": "Reason a piece was left: an old-format (v3) mod folder."
+  },
+  "Settings.GearVariants.Reason.ProteusPack": {
+    "message": "a Proteus pack (Proteus draws it itself)",
+    "description": "Reason a piece was left: a Proteus pack, which Proteus draws itself."
+  },
+  "Settings.GearVariants.Reason.Declined": {
+    "message": "undone by you",
+    "description": "Reason a piece was left: the user undid it with \"Undo for what I'm wearing\"."
+  },
+  "Settings.GearVariants.Reason.WriteFailed": {
+    "message": "the mod could not be written",
+    "description": "Reason a piece was left: the mod's manifest could not be written."
+  },
+  "Settings.GearVariants.RepointNow": {
+    "message": "Repoint what I'm wearing now",
+    "description": "Button: repoint the variants of what is worn now, including pieces undone before."
+  },
+  "Settings.GearVariants.RepointNow.Tip": {
+    "message": "Point the variants of what you are wearing now at their mods' materials,\nincluding pieces you undid before.",
+    "description": "Tooltip on the Repoint button. Keep the line break."
+  },
+  "Settings.GearVariants.UndoWorn": {
+    "message": "Undo for what I'm wearing",
+    "description": "Button: take Proteus's variant entries out of the worn pieces' mods."
+  },
+  "Settings.GearVariants.UndoWorn.Tip": {
+    "message": "Take Proteus's variant entries out of the mods of the pieces you are wearing, and leave them alone\nuntil you use \"Repoint what I'm wearing now\". An entry changed by someone since is kept.",
+    "description": "Tooltip on the Undo button. The quoted button name must match Settings.GearVariants.RepointNow. Keep the line break."
+  },
+  "Settings.GearVariants.Result.Fmt": {
+    "message": "Undo: {0} removed, {1} kept as changed since, {2} refused.",
+    "description": "After Undo. {0} = entries removed, {1} = entries kept because someone changed them since, {2} = pieces refused."
+  },
+  "Settings.GearVariants.NothingRecorded": {
+    "message": "Nothing recorded for what you are wearing.",
+    "description": "After Undo, when Proteus had written nothing for what is worn."
+  },
+  "Settings.GearVariants.Busy": {
+    "message": "Working…",
+    "description": "Tooltip on the buttons while a run is going."
+  },
+  "Chat.VariantRepoint.Fmt": {
+    "message": "[Proteus] Pointed {0} variant(s) of a piece in \"{1}\" at the mod's own material. This applies to everyone wearing those variants in collections where the mod is on, even with its model option off. Undo under /proteus > Settings > Gear variants.",
+    "description": "Chat notice, once per mod per session. {0} = number of variants pointed at the mod's material, {1} = the mod's name. Keep /proteus and the \"[Proteus]\" prefix; \"Settings\" and \"Gear variants\" name a tab and a section (match Tab.Settings and Settings.Section.GearVariants)."
   }
 }
