@@ -707,7 +707,8 @@ public partial class HairPortScanTests
         Assert.Contains("if (view.Warning.Length > 0)", settings);
         Assert.Contains("Warning: ported.Warning", Source("Proteus/Services/HairPort/HairPortWatcher.cs"));
         string studio = Source("Proteus/Gui/HairPortPanel.cs");
-        Assert.Contains("resultWarn = true;", studio);
+        // The Studio's result line (HairPortPanel.ResultOf) is a warning when the saved ports warned.
+        Assert.Contains("string.Join(\"\\n\", warnings.Select(w => $\"c{w.Key:D4}: {w.Value}\")), false, true);", studio);
     }
 
     /// <summary>

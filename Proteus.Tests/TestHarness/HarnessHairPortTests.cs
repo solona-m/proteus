@@ -16,6 +16,7 @@ namespace Proteus.Tests.TestHarness;
 /// The Studio's "Port to all races" through the test harness, over a real loopback server: a women's hair mod (c0201
 /// hairstyle 5, option Cut / Long) on the cross-sex fixtures' deformer and game files.
 /// </summary>
+[Collection(HarnessTimingCollection.Name)]
 public class HarnessHairPortTests : IDisposable
 {
     private const string Hair = "chara/human/c0201/obj/hair/h0005/model/c0201h0005_hir.mdl";
