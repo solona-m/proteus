@@ -128,8 +128,8 @@ public class HarnessServerTests : IDisposable
     {
         // [EDGE-qa-harness-16] Four open connections hold the slots; a fifth is told too-many-connections; the others
         // complete. A long read timeout keeps the four stalled slots held however slow the machine; the wait is on the
-        // server's own count, not a sleep; and the fifth reads its refusal BEFORE sending anything, so no request bytes
-        // sit unread when the server closes (which would reset the socket and lose the answer).
+        // server's own count, not a sleep. This fifth client sends NOTHING: the refusal's request read times out and the
+        // 503 is still written (the client that sends first is Refused_clients_that_send_first_still_get_the_503).
         using var g = new HarnessFixture(readTimeout: TimeSpan.FromSeconds(30));
         var open = new List<TcpClient>();
         try
@@ -152,6 +152,43 @@ public class HarnessServerTests : IDisposable
         finally { foreach (var c in open) c.Dispose(); }
         await WaitUntil(() => g.Server.OpenConnections == 0);
         Assert.Equal(200, (await g.Get("/health")).Status);
+    }
+
+    [Fact]
+    [Trait("Plan", "AC-issue-sweep-a-3")]
+    public async Task Refused_clients_that_send_first_still_get_the_503()
+    {
+        // In-game QA: a client that sends its request at once (curl, HttpClient) often got a connection reset instead of
+        // the 503, because the refusal was written and the socket closed with the request still unread.
+        using var g = new HarnessFixture(readTimeout: TimeSpan.FromSeconds(30));
+        var open = new List<TcpClient>();
+        try
+        {
+            for (int i = 0; i < HarnessServer.MaxConnections; i++)
+            {
+                var c = new TcpClient();
+                await c.ConnectAsync(IPAddress.Loopback, g.Server.Port);
+                await c.GetStream().WriteAsync(Encoding.ASCII.GetBytes("GET /health HTTP/1.1\r\n"));
+                open.Add(c);
+            }
+            await WaitUntil(() => g.Server.OpenConnections == HarnessServer.MaxConnections);
+            for (int i = 0; i < 10; i++)
+            {
+                var r = await g.Client.GetAsync("/health");
+                Assert.Equal(503, (int)r.StatusCode);
+                Assert.Equal("too-many-connections",
+                             (await HarnessFixture.Parse(r)).GetProperty("error").GetProperty("code").GetString());
+            }
+            // With a body (curl -d), small or over the body limit: still the 503, never a 413 nor a reset.
+            foreach (var body in new[] { """{"mod":"Outfit","bodies":["rue"]}""", "{\"mod\":\"" + new string('a', 70_000) + "\"}" })
+            {
+                var r = await g.Client.PostAsync("/actions/refit", HarnessFixture.Json(body));
+                Assert.Equal(503, (int)r.StatusCode);
+                Assert.Equal("too-many-connections",
+                             (await HarnessFixture.Parse(r)).GetProperty("error").GetProperty("code").GetString());
+            }
+        }
+        finally { foreach (var c in open) c.Dispose(); }
     }
 
     private static async Task WaitUntil(Func<bool> condition)
