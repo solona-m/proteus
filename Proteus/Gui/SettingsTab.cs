@@ -20,7 +20,6 @@ internal sealed class SettingsTab
     private readonly HairPortSettingsPanel hairPort;
     private readonly AutoRefitPanel autoRefit;
     private readonly ShaderUpgradePanel shaderUpgrade;
-    private readonly ShaderUpgradeWatcher shaderUpgradeWatcher;
     private readonly LogExportService logExport;
 
     // Copy Logs: the running export, polled each frame, then the file it wrote or why it could not.
@@ -32,7 +31,6 @@ internal sealed class SettingsTab
         DesignBindingService designBindings, HatCompatPanel hatCompat, HairPortSettingsPanel hairPort,
         AutoRefitPanel autoRefit, ShaderUpgradeWatcher shaderUpgradeWatcher, LogExportService logExport)
     {
-        this.shaderUpgradeWatcher = shaderUpgradeWatcher;
         this.shaderUpgrade = new ShaderUpgradePanel(shaderUpgradeWatcher, config);
         this.config = config;
         this.compositor = compositor;
@@ -56,8 +54,6 @@ internal sealed class SettingsTab
             var enabledHelp = s.EnabledTip;
             if (ImGuiComponents.ToggleButton("##enabled", ref enabled))
             {
-                // The gear shader upgrade comes down first, so the compositor's withdraw below is the single reload.
-                shaderUpgradeWatcher.BeforePluginEnabledChange(enabled);
                 config.PluginEnabled = enabled;
                 config.Save();
                 // Ordered, not raced. Off: the mods bindings hold in the player's collection are let go, and

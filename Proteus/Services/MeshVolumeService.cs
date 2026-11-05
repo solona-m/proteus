@@ -49,8 +49,10 @@ internal static class MeshVolumeService
     /// never restores, whose backup it then deletes with the folder. Two backups of one shared material racing is the
     /// same story: the loser can copy the file the winner has already patched and keep that as "the original".
     /// Only the writing is held, never the edit's computation, so the framework thread waits at most one file's write.
+    /// The gear shader upgrade (<see cref="ShaderUpgradeWriter"/>) takes it too, inside <see cref="ModManifestLock.Gate"/>;
+    /// nothing here takes the Gate, so the two cannot deadlock.
     /// </summary>
-    private static readonly object WriteLock = new();
+    internal static readonly object WriteLock = new();
 
     /// <param name="UnmappedSpares">Distinct shape-key replacement vertices whose base vertex could not be found
     /// from any slot naming them, so they keep the author's position. Enabling that shape reverts the edit on the slots it rewires, which
@@ -522,6 +524,10 @@ internal static class MeshVolumeService
                 var start = before;
                 bool isLegacy = string.Equals(CharacterShaderUpgrade.ShaderOf(before), CharacterShaderUpgrade.Legacy,
                                               StringComparison.OrdinalIgnoreCase);
+                // The old diffuse/specular layout is left alone entirely: upgraded without a mask derived from its _s,
+                // the grey specular map read as a Dawntrail mask and drew the garment dark. The gear shader upgrade
+                // moves it properly; after that it is character.shpk here and takes its constants.
+                if (isLegacy && ShaderUpgradePlan.FormOf(before) == LegacyForm.Diffuse) { legacy++; continue; }
                 if (isLegacy && CharacterShaderUpgrade.Upgrade(before) is { } up) start = up;
                 bool upgradedHere = !ReferenceEquals(start, before);
                 if (isLegacy && !upgradedHere) legacy++;

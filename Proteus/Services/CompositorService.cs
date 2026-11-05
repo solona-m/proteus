@@ -506,10 +506,7 @@ public partial class CompositorService : IDisposable
         // ResolveUpstream, not a bare resolver: the append host may be modded, so SecondSkinService must read the
         // player's file even where our own redirect masks the path. Only invoked during a composite, after managedModDir is set.
         this.secondSkin = new SecondSkinService(penumbra, textureLoader, discovery, uvRemap, config, log,
-                                                ResolveUpstream, SettledUpstream, () => modsRoot)
-        {
-            ResolveContent = ResolveSeeThrough,
-        };
+                                                ResolveUpstream, SettledUpstream, () => modsRoot);
         this.seamMaps  = new UvSeamMapService(log);
         this.faceUv    = new FaceUvDoublingService(log, textureLoader, uvRemap);
 

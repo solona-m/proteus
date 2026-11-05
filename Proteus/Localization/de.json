@@ -5831,10 +5831,6 @@
     "message": "Alte Ausrüstung auf Dawntrail-Shader umstellen",
     "description": ""
   },
-  "Settings.GearShaders.AutoUpgrade.Tip": {
-    "message": "Wenn du Ausrüstung anlegst, wird ein Teil, dessen Mod noch den alten Shader characterlegacy.shpk\nnutzt, stattdessen mit Dawntrails character.shpk gezeichnet und wie aktuelle Ausrüstung beleuchtet.\nDeine Mods werden nie verändert: Proteus zeichnet eigene aktualisierte Kopien, und wenn du dies\nausschaltest, sind sofort die Originale zurück.",
-    "description": ""
-  },
   "Settings.GearShaders.Status.Fmt": {
     "message": "{0} umgestellt · {1} beim alten Shader belassen",
     "description": ""
@@ -5845,10 +5841,6 @@
   },
   "Settings.GearShaders.NextRedraw": {
     "message": "Wirkt beim nächsten Neuzeichnen (Automatisch neu zeichnen ist aus).",
-    "description": ""
-  },
-  "Settings.GearShaders.Waiting": {
-    "message": "Warte auf Penumbra und den Mod-Ordner von Proteus…",
     "description": ""
   },
   "Settings.GearShaders.Reason.OldTable": {
@@ -5863,20 +5855,76 @@
     "message": "unlesbar",
     "description": ""
   },
-  "Settings.GearShaders.Reason.Outranked": {
-    "message": "die Umleitung eines anderen Plugins gewinnt",
-    "description": ""
-  },
-  "Settings.GearShaders.Reason.Unresolved": {
-    "message": "nach einer Änderung noch unklar",
-    "description": ""
-  },
   "Settings.GearShaders.Reason.Compositor": {
     "message": "Proteus-Overlays zeichnen es",
     "description": ""
   },
   "Settings.GearShaders.Reason.WriteFailed": {
-    "message": "die Kopie konnte nicht geschrieben werden",
+    "message": "die Datei konnte nicht geschrieben werden",
+    "description": ""
+  },
+  "Settings.GearShaders.AutoUpgrade.Tip": {
+    "message": "Wenn du Ausrüstung anlegst, schreibt Proteus die Materialien des getragenen Mods mit altem Shader (characterlegacy.shpk)\nauf Dawntrails Shader (character.shpk) um, direkt im Mod, und sichert vorher jede Datei.\nAusschalten stoppt weitere Umstellungen, macht sie aber nicht rückgängig. „Für das Getragene rückgängig machen“\nstellt die Dateien des Autors wieder her und lässt diese Teile in Ruhe bis „Getragenes jetzt umstellen“.",
+    "description": ""
+  },
+  "Settings.GearShaders.Waiting": {
+    "message": "Warte auf Penumbra.",
+    "description": ""
+  },
+  "Settings.GearShaders.Reason.LegacyMod": {
+    "message": "ein Mod-Ordner im alten Format, in den Proteus nicht schreibt",
+    "description": ""
+  },
+  "Settings.GearShaders.Reason.MixedSpecular": {
+    "message": "seine Optionen nutzen verschiedene Glanzkarten",
+    "description": ""
+  },
+  "Settings.GearShaders.Reason.SpecularFromOtherMod": {
+    "message": "seine Glanzkarte stammt aus einem anderen Mod",
+    "description": ""
+  },
+  "Settings.GearShaders.Reason.UnsupportedPlacement": {
+    "message": "es liegt in einer kombinierenden Gruppe",
+    "description": ""
+  },
+  "Settings.GearShaders.Reason.ProteusPack": {
+    "message": "ein Proteus-Paket (Proteus zeichnet es selbst)",
+    "description": ""
+  },
+  "Settings.GearShaders.Reason.Declined": {
+    "message": "von dir rückgängig gemacht",
+    "description": ""
+  },
+  "Settings.GearShaders.UpgradeNow": {
+    "message": "Getragenes jetzt umstellen",
+    "description": ""
+  },
+  "Settings.GearShaders.UpgradeNow.Tip": {
+    "message": "Die Materialien mit altem Shader deiner getragenen Ausrüstung jetzt auf Dawntrails Shader umstellen,\nauch Teile, die du zuvor rückgängig gemacht hast.",
+    "description": ""
+  },
+  "Settings.GearShaders.UndoWorn": {
+    "message": "Für das Getragene rückgängig machen",
+    "description": ""
+  },
+  "Settings.GearShaders.UndoWorn.Tip": {
+    "message": "Die Dateien des Autors für die getragenen Teile wiederherstellen und sie in Ruhe lassen,\nbis du „Getragenes jetzt umstellen“ nutzt. Ein Update des Autors bleibt erhalten.",
+    "description": ""
+  },
+  "Settings.GearShaders.Result.Fmt": {
+    "message": "Rückgängig: {0} wiederhergestellt, {1} als Update des Autors behalten, {2} abgelehnt.",
+    "description": ""
+  },
+  "Settings.GearShaders.Busy": {
+    "message": "Wird bearbeitet…",
+    "description": ""
+  },
+  "Chat.ShaderUpgrade.Fmt": {
+    "message": "[Proteus] {0} Material(ien) mit altem Shader in „{1}“ auf Dawntrails Shader umgestellt (jede Datei gesichert). Rückgängig unter /proteus > Einstellungen > Ausrüstungs-Shader.",
+    "description": ""
+  },
+  "MeshVolume.Feature.ShaderUpgrade": {
+    "message": "die Ausrüstungs-Shader-Umstellung",
     "description": ""
   }
 }

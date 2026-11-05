@@ -1,5 +1,4 @@
 using System;
-using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
@@ -9,24 +8,22 @@ using System.Threading.Tasks;
 using Dalamud.Plugin.Services;
 using Penumbra.Api.Enums;
 using Proteus.Interop;
+using Proteus.Localization;
 using static Proteus.Services.ShaderUpgradePlan;
 
 namespace Proteus.Services;
 
 /// <summary>
 /// Moves worn gear from <c>characterlegacy.shpk</c> to Dawntrail's <c>character.shpk</c> as it is put on, when
-/// <see cref="Configuration.AutoUpgradeLegacyShaders"/> is on. Nothing is written into the user's mods: each worn legacy
-/// material is redirected, through one Penumbra temporary mod per collection, to an upgraded copy in the managed mod's
-/// <see cref="ManagedModPaths.ShaderUpgradeSubdir"/> (with a derived mask for the diffuse form). Turning the setting off
-/// takes the temporary mod down and reloads once.
+/// <see cref="Configuration.AutoUpgradeLegacyShaders"/> is on, by rewriting the worn mod's own material files
+/// (<see cref="ShaderUpgradeWriter"/>: backed up first, undoable). Turning the setting off only stops further upgrades.
 /// <para/>
-/// Only orchestration lives here: every decision is in <see cref="ShaderUpgradePlan"/>, the files in
-/// <see cref="ShaderUpgradeCopies"/>, the redirect state in <see cref="ShaderUpgradeRedirects"/> and the one-in-flight
-/// rule in <see cref="WalkGate"/>. A walk reads the draw object on the framework thread (hop A), builds and writes on a
-/// worker, and applies on the framework thread again (hop B); workers block on their hops, the framework thread never
-/// waits for a worker.
+/// Orchestration only: decisions are in <see cref="ShaderUpgradePlan"/>, every write and undo in the writer. One run at
+/// a time (an automatic walk, "Upgrade what I'm wearing now" or "Undo for what I'm wearing"). A run reads the draw object
+/// on the framework thread, plans and writes on a worker, and reloads on the framework thread; the worker blocks on its
+/// hops, the framework thread never waits for a worker.
 /// </summary>
-public sealed class ShaderUpgradeWatcher : IShaderUpgradeSources, IDisposable
+public sealed class ShaderUpgradeWatcher : IDisposable
 {
     private const long SlowFrameMs = 8;
     private const int BlanksBeforeNone = 4;
@@ -34,82 +31,57 @@ public sealed class ShaderUpgradeWatcher : IShaderUpgradeSources, IDisposable
     private readonly CompositorService compositor;
     private readonly PenumbraBridge penumbra;
     private readonly GlamourerBridge glamourer;
+    private readonly AutoRefitWatcher autoRefit;
     private readonly TextureLoader textureLoader;
     private readonly Configuration config;
     private readonly IPluginLog log;
 
-    private readonly ShaderUpgradeRedirects redirects;
-    private readonly WalkGate gate;
     private readonly MaskMemo memo = new();
-    private readonly ShaderUpgradeCopies.ReplacedTail tail = new(MaskTail);
-    private readonly ReloadLearning learning = new();
-    private readonly Escalation escalation = new();
-    private readonly int pid = Environment.ProcessId;
+    private readonly HashSet<string> announced = new(StringComparer.OrdinalIgnoreCase);
+    private readonly object scheduleSync = new();
 
     private volatile bool stopped;
-    private bool wasEnabled, leftoverRemoved, askedManagedMod, swept;
-    private int blanks;
+    private bool wasEnabled;
+    private int busy, blanks;
     private long walkDueAt, firstRequestAt;
-    private int peekDue;
-    private int verifyDue;
-
-    /// <summary>Penumbra setting changes since the last walk: (collection, mod folder), judged on the walk's worker.</summary>
-    private readonly ConcurrentQueue<(Guid Collection, string Mod)> pendingSettings = new();
-
-    /// <summary>The upstream each worn material game path was last learned to come from.</summary>
-    private readonly ConcurrentDictionary<string, string?> knownUpstream = new(StringComparer.OrdinalIgnoreCase);
-
-    /// <summary>Per mod folder: (option files' newest write, the game paths its option files name).</summary>
-    private readonly ConcurrentDictionary<string, (long Key, HashSet<string> Paths)> shipsCache =
-        new(StringComparer.OrdinalIgnoreCase);
-
-    private ReloadRoute lastRoute = ReloadRoute.None;
-
-    // Counters for /state.
-    private int memoHits, decodes, pruned, missingBeforeApply, peeksTrusted, peeksSettled, peeksFailedOpen,
-                reloadsInPlace, reloadsRedraw, gaveUp;
-
+    private int memoHits, decodes;
     private volatile MaskGloss gloss = MaskGloss.InverseSpecular;
 
-    /// <summary>One upgraded material as <c>/state</c> and the status line report it.</summary>
-    public sealed record UpgradedEntry(string GamePath, string Source, string Copy, string Form,
-                                       string? MaskGamePath, string? MaskCopy, int MaskWidth, int MaskHeight, bool Loaded);
+    /// <summary>One upgraded material on what is worn.</summary>
+    public sealed record UpgradedEntry(string GamePath, string ModDir, string File, string Form);
 
     public sealed record LeftEntry(string GamePath, string Source, string Reason);
 
-    public sealed record PeekStats(int TrustedFirstTry, int Settled, int FailedOpen);
-    public sealed record ReloadStats(bool? InPlaceLoadsMaterials, int InPlace, int Redraw, int GaveUp);
-    public sealed record MaskStats(int MemoHits, int Decodes, int Pruned, int MissingBeforeApply);
+    /// <summary>What the last run did.</summary>
+    public sealed record RunInfo(string Kind, int ModsChanged, int FilesChanged, int Restored, int Kept, int Refused,
+                                 bool Reloaded, bool RedrawRequested, DateTime AtUtc, string Message = "");
 
     /// <summary>Everything the panel and the harness show, replaced wholesale.</summary>
     public sealed record View(
         bool Enabled = false, bool Busy = false, string Waiting = "none", bool AwaitingRedraw = false,
         string MaskGloss = "inverse-specular",
         IReadOnlyList<UpgradedEntry>? Upgraded = null, IReadOnlyList<LeftEntry>? Left = null,
-        PeekStats? Peeks = null, ReloadStats? Reload = null, MaskStats? Masks = null, DateTime? LastAppliedUtc = null)
+        int MemoHits = 0, int Decodes = 0, RunInfo? LastRun = null)
     {
         public IReadOnlyList<UpgradedEntry> UpgradedList => Upgraded ?? [];
         public IReadOnlyList<LeftEntry> LeftList => Left ?? [];
     }
 
     private volatile View current = new();
-    public View Current => current with { Enabled = Enabled, Busy = gate.Busy };
+    public View Current => current with { Enabled = Enabled, Busy = Volatile.Read(ref busy) != 0 };
 
     public ShaderUpgradeWatcher(CompositorService compositor, PenumbraBridge penumbra, GlamourerBridge glamourer,
-                                TextureLoader textureLoader, Configuration config, IPluginLog log)
+                                AutoRefitWatcher autoRefit, TextureLoader textureLoader, Configuration config,
+                                IPluginLog log)
     {
         this.compositor = compositor;
         this.penumbra = penumbra;
         this.glamourer = glamourer;
+        this.autoRefit = autoRefit;
         this.textureLoader = textureLoader;
         this.config = config;
         this.log = log;
-        redirects = new ShaderUpgradeRedirects(
-            (c, map) => penumbra.SetTemporaryMod(Tag, c, map, Priority),
-            c => penumbra.RemoveTemporaryMod(Tag, c, Priority));
-        gate = new WalkGate(Prune);
 
-        compositor.UseShaderUpgradeSources(this);
         glamourer.LocalPlayerEquipmentChanged += OnEquip;
         glamourer.LocalPlayerStateChangedAny += OnStateChangedAny;
         penumbra.LocalPlayerRedrawn += OnRedrawn;
@@ -117,13 +89,12 @@ public sealed class ShaderUpgradeWatcher : IShaderUpgradeSources, IDisposable
         penumbra.ModSettingChanged += OnModSettingChanged;
         penumbra.PenumbraReady += OnPenumbraReady;
         penumbra.ModMoved += OnModMoved;
-        compositor.PublishedGamePathsChanged += OnPublishedChanged;
         Plugin.Framework.Update += OnFrameworkUpdate;
     }
 
     public void Dispose()
     {
-        // Marked stopped first: a walk checks before every write and before hop B, and writes nothing more.
+        // A run checks this before every file and before its reload hop, and writes nothing more.
         stopped = true;
         Plugin.Framework.Update -= OnFrameworkUpdate;
         glamourer.LocalPlayerEquipmentChanged -= OnEquip;
@@ -133,29 +104,18 @@ public sealed class ShaderUpgradeWatcher : IShaderUpgradeSources, IDisposable
         penumbra.ModSettingChanged -= OnModSettingChanged;
         penumbra.PenumbraReady -= OnPenumbraReady;
         penumbra.ModMoved -= OnModMoved;
-        compositor.PublishedGamePathsChanged -= OnPublishedChanged;
-        compositor.UseShaderUpgradeSources(null);
-        try
-        {
-            // No reload on unload; the redirect simply goes.
-            redirects.Teardown();
-            Prune();
-        }
-        catch (Exception ex) { log.Warning(ex, "[Proteus] shader upgrade: tearing down on unload failed"); }
     }
 
     private bool Enabled => config.PluginEnabled && config.AutoUpgradeLegacyShaders;
 
-    /// <summary>The mask strategy for this session (QA only; never persisted).</summary>
+    /// <summary>The mask strategy for this session (QA only; never persisted). Affects only files written after it.</summary>
     internal MaskGloss Gloss
     {
         get => gloss;
         set
         {
-            if (gloss == value) return;
             gloss = value;
             current = current with { MaskGloss = GlossName(value) };
-            Request(Signal.Enabled);
         }
     }
 
@@ -174,23 +134,27 @@ public sealed class ShaderUpgradeWatcher : IShaderUpgradeSources, IDisposable
         _ => null,
     };
 
-    // ── IShaderUpgradeSources and the design binding ───────────────────────
-
-    public string? SourceFor(string gamePath) => redirects.SourceFor(gamePath);
-
-    /// <summary>The source mod file a drawn copy stands for (per game path when given), or null when not a copy.</summary>
-    public string? SourceForCopy(string file, IEnumerable<string>? gamePaths = null)
-        => redirects.SourceForCopy(file, gamePaths);
+    internal static string ReasonName(LeftReason r) => r switch
+    {
+        LeftReason.OldTable => "old-table",
+        LeftReason.UnsupportedForm => "unsupported-form",
+        LeftReason.Unreadable => "unreadable",
+        LeftReason.Compositor => "compositor",
+        LeftReason.LegacyMod => "legacy-mod",
+        LeftReason.MixedSpecular => "mixed-specular",
+        LeftReason.SpecularFromOtherMod => "specular-from-other-mod",
+        LeftReason.UnsupportedPlacement => "unsupported-placement",
+        LeftReason.ProteusPack => "proteus-pack",
+        LeftReason.Declined => "declined",
+        _ => "write-failed",
+    };
 
     // ── signals ─────────────────────────────────────────────────────────────
 
     private void Request(Signal s)
     {
         if (stopped || !Enabled) return;
-        var (delay, peek) = SignalFor(s);
-        if (peek) Interlocked.Exchange(ref peekDue, 1);
-        if (s == Signal.Verify) Interlocked.Exchange(ref verifyDue, 1);
-        Schedule(delay);
+        Schedule(SignalFor(s));
     }
 
     /// <summary>A burst collapses into one walk, but never later than <see cref="MaxWalkWaitMs"/> after its first signal.</summary>
@@ -203,8 +167,6 @@ public sealed class ShaderUpgradeWatcher : IShaderUpgradeSources, IDisposable
             Interlocked.Exchange(ref walkDueAt, due);
         }
     }
-
-    private readonly object scheduleSync = new();
 
     private void OnEquip() => Request(Signal.Equip);
 
@@ -219,27 +181,18 @@ public sealed class ShaderUpgradeWatcher : IShaderUpgradeSources, IDisposable
     private void OnRedrawn() => Request(Signal.Redraw);
     private void OnCollectionChanged() => Request(Signal.Collection);
     private void OnPenumbraReady() => Request(Signal.PenumbraReady);
-    private void OnPublishedChanged() => Request(Signal.Published);
 
     private void OnModMoved(string oldDir, string newDir)
     {
-        shipsCache.TryRemove(oldDir, out _);
         memo.Clear();
         Request(Signal.ModMoved);
     }
 
     private void OnModSettingChanged(ModSettingChange change, Guid collection, string modDirectory, bool inherited)
     {
-        if (stopped || !Enabled) return;
         if (string.Equals(modDirectory, SidecarDiscoveryService.ManagedModDir, StringComparison.OrdinalIgnoreCase)) return;
-        if (change == ModSettingChange.TemporaryMod && string.Equals(modDirectory, Tag, StringComparison.Ordinal)) return;
-        if (change == ModSettingChange.Edited && penumbra.GetModDirectory() is { } root && !string.IsNullOrEmpty(modDirectory))
-        {
-            memo.EvictUnder(Path.Combine(root, modDirectory));
-            shipsCache.TryRemove(modDirectory, out _);
-        }
-        pendingSettings.Enqueue((collection, modDirectory ?? ""));
-        Schedule(SignalFor(Signal.ModSetting).DelayMs);
+        if (change == ModSettingChange.Edited) memo.Clear();
+        Request(Signal.ModSetting);
     }
 
     // ── the frame ───────────────────────────────────────────────────────────
@@ -247,14 +200,6 @@ public sealed class ShaderUpgradeWatcher : IShaderUpgradeSources, IDisposable
     private void OnFrameworkUpdate(IFramework framework)
     {
         if (stopped) return;
-
-        // Leftovers from an earlier load of the plugin in this game (a dev reload): ours, so ours to take down.
-        if (!leftoverRemoved && penumbra.IsAvailable && penumbra.GetPlayerCollectionId() is { } coll)
-        {
-            leftoverRemoved = true;
-            penumbra.RemoveTemporaryMod(Tag, coll, Priority);
-        }
-
         bool enabled = Enabled;
         switch (Transition(wasEnabled, enabled))
         {
@@ -262,76 +207,48 @@ public sealed class ShaderUpgradeWatcher : IShaderUpgradeSources, IDisposable
                 wasEnabled = true;
                 Request(Signal.Enabled);
                 break;
-            case TransitionKind.Teardown:
-                wasEnabled = false;
-                TearDown(reload: true, cause: "setting off");
+            case TransitionKind.Stop:
+                wasEnabled = false;   // stops: nothing already upgraded is touched
                 return;
         }
         if (!enabled) return;
 
         long due = Interlocked.Read(ref walkDueAt);
         if (due == 0 || Environment.TickCount64 < due) return;
-        if (gate.Busy || penumbra.MovePending) return;
+        if (Volatile.Read(ref busy) != 0 || penumbra.MovePending) return;
+        var a = autoRefit.Activity();
+        if (!MayWalk(a.Running, a.Queued, a.WalkDue, a.Undoing))
+        {
+            // Both write into worn mods on equip: let the refit finish, then look again.
+            lock (scheduleSync) Interlocked.Exchange(ref walkDueAt, 0);
+            Schedule(SignalFor(Signal.AutoRefitBusy));
+            return;
+        }
         lock (scheduleSync) Interlocked.CompareExchange(ref walkDueAt, 0, due);
+        Start(RunKind.Upgrade);
+    }
 
-        bool peek = Interlocked.Exchange(ref peekDue, 0) == 1;
-        bool verify = Interlocked.Exchange(ref verifyDue, 0) == 1;
+    /// <summary>"Upgrade what I'm wearing now": lifts the declines on the worn files and upgrades them.</summary>
+    public bool UpgradeWornNow() => Start(RunKind.UpgradeNow);
+
+    /// <summary>"Undo for what I'm wearing": puts the worn pieces' files back and (by default) declines them.</summary>
+    public bool UndoWorn(bool decline = true) => Start(RunKind.UndoWorn, decline);
+
+    private bool Start(RunKind kind, bool decline = true)
+    {
+        if (stopped || !MayStart(Volatile.Read(ref busy) != 0)) return false;
+        if (Interlocked.CompareExchange(ref busy, 1, 0) != 0) return false;
         Task.Run(() =>
         {
-            if (!gate.RunWalk(() => Walk(peek, verify)))
-                Schedule(100);   // taken meanwhile: try again
+            try { Run(kind, decline); }
+            catch (Exception ex) { log.Error(ex, "[Proteus] shader upgrade: a {0} run failed", kind); }
+            finally { Interlocked.Exchange(ref busy, 0); }
         });
+        return true;
     }
-
-    /// <summary>
-    /// Proteus's master switch is about to change. Turning it off takes the upgrade down FIRST, without a reload of its
-    /// own, and makes the compositor's withdraw a full redraw when in-place reloads are not known to pick materials up:
-    /// that redraw is then the single reload.
-    /// </summary>
-    internal void BeforePluginEnabledChange(bool enabling)
-    {
-        var (first, force) = OrderMasterSwitch(!enabling, redirects.AnythingHeld, learning.InPlaceLoadsMaterials);
-        if (!first) return;
-        bool held = redirects.AnythingHeld;
-        TearDown(reload: false, cause: "Proteus off");
-        wasEnabled = false;
-        if (force && held) compositor.RequireFullRedrawOnce();
-    }
-
-    /// <summary>
-    /// Take every redirect down at once and forget the compositor's memo for those paths. Never waits for a walk: the
-    /// prune is owed to the walk holding the gate, or runs now.
-    /// </summary>
-    private void TearDown(bool reload, string cause)
-    {
-        var (removed, paths, masks) = redirects.Teardown();
-        compositor.ForgetUpstreams(paths);
-        // The masks on screen until the reload below lands are kept in the tail, not pruned out from under the game.
-        foreach (var m in masks) tail.Add(m);
-        gate.RequestPrune();
-        escalation.Reset();
-        current = new View(MaskGloss: GlossName(gloss), Peeks: Peeks(), Reload: Reloads(), Masks: Masks());
-        log.Information("[Proteus] shader upgrade: taken down ({0}; {1} path(s))", cause, paths.Count);
-        if (!removed || !reload) return;
-
-        // The user asked for this: it reloads even with auto redraw off.
-        bool inPlace = learning.InPlaceLoadsMaterials == true && config.UseInPlaceReload && glamourer.IsAvailable;
-        if (inPlace && compositor.ReloadGearInPlace("shader upgrade off")) reloadsInPlace++;
-        else
-        {
-            compositor.RedrawForChangedModel("shader upgrade off");
-            reloadsRedraw++;
-        }
-    }
-
-    // ── a walk ──────────────────────────────────────────────────────────────
-
-    private sealed record HopA(Guid Collection, List<Worn> Worn, Dictionary<string, string> Loaded, int Generation,
-                               HashSet<string> Unresolved);
 
     private T OnFramework<T>(Func<T> work, string step)
-    {
-        return Plugin.Framework.RunOnFrameworkThread(() =>
+        => Plugin.Framework.RunOnFrameworkThread(() =>
         {
             var clock = Stopwatch.StartNew();
             try { return work(); }
@@ -341,348 +258,214 @@ public sealed class ShaderUpgradeWatcher : IShaderUpgradeSources, IDisposable
                     log.Warning("[Proteus] shader upgrade: framework-thread step {0} took {1} ms", step, clock.ElapsedMilliseconds);
             }
         }).GetAwaiter().GetResult();
-    }
 
-    /// <summary>Holds the gate throughout. Runs on a worker.</summary>
-    private void Walk(bool peekSignal, bool verify)
-    {
-        try { WalkCore(peekSignal, verify); }
-        catch (Exception ex) { log.Error(ex, "[Proteus] shader upgrade: a walk failed"); }
-    }
+    // ── a run ───────────────────────────────────────────────────────────────
 
-    private void WalkCore(bool peekSignal, bool verify)
+    private sealed record WornState(List<Worn> Materials, string ModsRoot, Dictionary<string, string> ModNames);
+
+    /// <summary>The worn gear materials, read on the framework thread; null when there is nothing to read yet.</summary>
+    private WornState? ReadWorn()
     {
-        if (stopped || !Enabled) return;
         var modsRoot = penumbra.GetModDirectory();
-        var managedRoot = compositor.ManagedModFolder;
-
-        // Which setting changes are worth a peek: judged here, on the worker, where reading a mod's option files is fine.
-        bool peek = peekSignal || SettingsWantPeek(modsRoot);
-
-        var a = OnFramework(() => HopAOnFramework(peek, modsRoot, managedRoot), "read");
-        if (a == null || stopped) return;
-
-        // An untrusted peek: the redirect stays down and the answers settle over later ticks, or fail open.
-        if (a.Unresolved.Count > 0) Settle(a, modsRoot, managedRoot);
-
-        var encoding = config.EnableCompression && textureLoader.CompressionAffordable() ? TexEncoding.Bc7
-                                                                                         : TexEncoding.Uncompressed;
-        var published = compositor.PublishedGamePaths;
-        var inputs = new Inputs
+        if (WaitingFor(penumbra.IsAvailable, modsRoot) != Waiting.None)
         {
-            ModsRoot = modsRoot,
-            ManagedRoot = managedRoot!,
-            Pid = pid,
-            Read = File.ReadAllBytes,
-            ResolveTexture = g => penumbra.ResolvePlayer(g),
-            DecodeNative = (disk, g) => textureLoader.LoadRawFile(disk, g) is { } raw
-                                        && textureLoader.LoadTexBytesAsRgba(raw, g) is { } t
-                ? (t.rgba, t.width, t.height) : null,
-            Stat = p => { try { var fi = new FileInfo(p); return fi.Exists ? (fi.Length, fi.LastWriteTimeUtc.Ticks) : null; }
-                          catch { return null; } },
-            MaskFileOk = name => TextureLoader.IsCompleteTex(ShaderUpgradeCopies.PathFor(managedRoot!, name)),
-            Memo = memo,
-            Gloss = gloss,
-            Encoding = encoding,
-            Published = published,
-        };
-        var plan = Build(a.Worn.Where(w => !a.Unresolved.Contains(w.GamePath)), inputs);
-        Interlocked.Add(ref decodes, plan.Decodes);
-        Interlocked.Add(ref memoHits, plan.MemoHits);
-        var left = plan.Left.ToList();
-        left.AddRange(a.Unresolved.Select(g => new Left(g, a.Worn.FirstOrDefault(w => w.GamePath == g).Upstream ?? g,
-                                                        LeftReason.Unresolved)));
-
-        if (!swept)
-        {
-            swept = true;
-            int n = ShaderUpgradeCopies.Sweep(managedRoot!, pid, ProcessAlive);
-            if (n > 0) log.Information("[Proteus] shader upgrade: swept {0} copy(ies) from games no longer running", n);
-        }
-
-        // Write, checking before every write that the watcher has not been stopped meanwhile.
-        var units = ShaderUpgradeCopies.WriteUnits(managedRoot!, plan.Units, encoding, () => stopped, null,
-            textureLoader.WriteTex,
-            (_, m) => memo.Put(m.Key, new MaskMemo.Entry(m.CopyName, m.GamePath, m.Width, m.Height)),
-            (u, why) =>
-            {
-                log.Warning("[Proteus] shader upgrade: {0} left on the old shader — {1}", u.SourceLabel, why);
-                left.Add(new Left(u.MaterialGamePath, u.SourceLabel, LeftReason.WriteFailed));
-            });
-        if (units == null || stopped) return;
-
-        OnFramework(() => { HopBOnFramework(a, units, left, verify, modsRoot); return 0; }, "apply");
-    }
-
-    private HopA? HopAOnFramework(bool peek, string? modsRoot, string? managedRoot)
-    {
-        if (stopped || !Enabled) return null;
-        bool metaExists = managedRoot != null && File.Exists(Path.Combine(managedRoot, PenumbraModMeta.MetaFile));
-        var waiting = WaitingFor(penumbra.IsAvailable, managedRoot, metaExists);
-        if (waiting != Waiting.None)
-        {
-            current = current with { Waiting = waiting == Waiting.Penumbra ? "penumbra" : "managed-mod" };
-            if (waiting == Waiting.ManagedMod && !askedManagedMod)
-            {
-                askedManagedMod = true;
-                log.Information("[Proteus] shader upgrade: no managed mod to put copies in yet; asking for one");
-                compositor.RequestManagedModForPreview();
-            }
+            current = current with { Waiting = "penumbra" };
             Request(Signal.BlankRetry);
             return null;
         }
-
-        if (penumbra.GetPlayerCollectionId() is not { } collection) return null;
         var loaded = GearMaterials(penumbra.GetActivePlayerResourceMap());
         if (loaded == null)
         {
-            // Mid-rebuild, most likely: keep what is redirected, look again shortly.
             if (++blanks < BlanksBeforeNone) Request(Signal.BlankRetry);
             return null;
         }
         blanks = 0;
-
-        var held = redirects.CurrentUnits.Select(u => u.MaterialGamePath).ToHashSet(StringComparer.OrdinalIgnoreCase);
-        bool collectionMoved = redirects.CurrentCollection is { } was && was != collection;
-        var fresh = loaded.Keys.Where(g => !held.Contains(g) || collectionMoved || peek).ToList();
-        var unresolved = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-
-        // A peek takes our redirect down for one resolve: trusted when no answer is one of our copies, and then the map
-        // goes straight back; otherwise it stays down and settles.
-        bool peeking = peek && held.Count > 0 && !collectionMoved;
-        if (peeking) redirects.PeekBegin(collection);
-        var answers = fresh.Count > 0 ? penumbra.ResolvePlayerPaths(fresh) : new Dictionary<string, string?>();
-        if (answers == null)
-        {
-            if (peeking) redirects.PeekRestore(collection);
-            return null;
-        }
-        bool anyCopy = answers.Values.Any(v => v != null
-            && ManagedModPaths.IsShaderUpgradeCopy(StripPenumbraPrefix(v), managedRoot));
-        if (peeking)
-        {
-            if (!anyCopy) { redirects.PeekRestore(collection); Interlocked.Increment(ref peeksTrusted); }
-            else foreach (var (g, v) in answers)
-                    if (v != null && ManagedModPaths.IsShaderUpgradeCopy(StripPenumbraPrefix(v), managedRoot))
-                        unresolved.Add(g);
-        }
-        foreach (var (g, v) in answers)
-            if (!unresolved.Contains(g)
-                && !(v != null && ManagedModPaths.IsShaderUpgradeCopy(StripPenumbraPrefix(v), managedRoot)))
-                knownUpstream[g] = v;
-
-        var worn = loaded.Keys.Select(g => new Worn(g, knownUpstream.TryGetValue(g, out var up) ? up : null)).ToList();
-        int gen = redirects.Begin();
-        return new HopA(collection, worn, loaded, gen, unresolved);
+        var names = penumbra.GetAllModsQuiet() ?? new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        return new WornState(loaded.Select(kv => new Worn(kv.Key, kv.Value)).ToList(), modsRoot!, names);
     }
 
-    /// <summary>Re-resolve an untrusted peek's paths every 50 ms until two rounds agree with no copy, or fail open.</summary>
-    private void Settle(HopA a, string? modsRoot, string? managedRoot)
+    private Inputs InputsFor(string modsRoot, TexEncoding encoding) => new()
     {
-        var clock = Stopwatch.StartNew();
-        IReadOnlyDictionary<string, string?>? previous = null;
-        var paths = a.Unresolved.ToList();
-        while (!stopped)
-        {
-            Thread.Sleep(PeekSettle.IntervalMs);
-            var now = OnFramework(() => penumbra.ResolvePlayerPaths(paths), "settle");
-            if (now == null) continue;
-            var step = PeekSettle.Step(previous, now,
-                v => v != null && ManagedModPaths.IsShaderUpgradeCopy(StripPenumbraPrefix(v), managedRoot),
-                clock.ElapsedMilliseconds);
-            if (step == PeekSettle.Outcome.Accept)
-            {
-                foreach (var (g, v) in now) knownUpstream[g] = v;
-                var known = a.Worn.Select(w => a.Unresolved.Contains(w.GamePath)
-                    ? w with { Upstream = now.TryGetValue(w.GamePath, out var v) ? v : w.Upstream } : w).ToList();
-                a.Worn.Clear();
-                a.Worn.AddRange(known);
-                a.Unresolved.Clear();
-                Interlocked.Increment(ref peeksSettled);
-                return;
-            }
-            if (step == PeekSettle.Outcome.FailOpen)
-            {
-                Interlocked.Increment(ref peeksFailedOpen);
-                log.Warning("[Proteus] shader upgrade: {0} path(s) did not settle after a peek — left on the original "
-                          + "material until the next change", paths.Count);
-                return;
-            }
-            previous = now;
-        }
-    }
-
-    private void HopBOnFramework(HopA a, List<RedirectUnit> units, List<Left> left, bool verify, string? modsRoot)
-    {
-        if (stopped || !Enabled) return;
-        var before = redirects.CurrentUnits;
-
-        var (ready, missing) = UnitsReadyToApply(units, File.Exists, TextureLoader.IsCompleteTex);
-        if (missing.Count > 0)
-        {
-            Interlocked.Add(ref missingBeforeApply, missing.Count);
-            foreach (var m in missing) if (m.Mask != null) memo.EvictMask(Path.GetFileName(m.Mask.Copy));
-            Request(Signal.Redraw);   // the next walk decodes and writes them again
-        }
-
-        if (!redirects.Apply(a.Generation, a.Collection, ready)) return;   // taken down meanwhile, or superseded
-
-        // Verify: every material and mask path must resolve to its own copy; either missing drops the whole unit.
-        var asked = ready.SelectMany(u => u.Mask is { } m ? new[] { u.MaterialGamePath, m.GamePath } : [u.MaterialGamePath])
-                         .ToList();
-        if (asked.Count > 0 && penumbra.ResolvePlayerPaths(asked) is { } resolved)
-        {
-            var outranked = Outranked(ready, resolved);
-            if (outranked.Count > 0)
-            {
-                ready = ready.Except(outranked).ToList();
-                redirects.Apply(a.Generation, a.Collection, ready);
-                foreach (var o in outranked) left.Add(new Left(o.MaterialGamePath, o.SourceLabel, LeftReason.Outranked));
-                log.Information("[Proteus] shader upgrade: {0} material(s) outranked by another temporary redirect — left alone",
-                                outranked.Count);
-            }
-        }
-
-        // Masks the new map no longer names were just replaced: kept for a while in case the game is still reading one.
-        var nowMasks = ready.Where(u => u.Mask != null).Select(u => Path.GetFileName(u.Mask!.Copy))
-                            .ToHashSet(StringComparer.OrdinalIgnoreCase);
-        foreach (var b in before)
-            if (b.Mask != null && !nowMasks.Contains(Path.GetFileName(b.Mask.Copy))) tail.Add(Path.GetFileName(b.Mask.Copy));
-
-        // Reload when the character still draws a redirected material from another file, or still draws one of our
-        // copies where the map no longer wants it (a unit dropped while on screen).
-        var managedRoot = compositor.ManagedModFolder;
-        bool needs = NeedsReload(ready, a.Loaded)
-                  || DrawsDroppedCopy(ready, a.Loaded, f => ManagedModPaths.IsShaderUpgradeCopy(f, managedRoot));
-        var stamp = string.Join("|", ready.Select(u => u.MaterialGamePath + ">" + u.MaterialCopy).Order());
-        var decision = DecideReload(needs, verify, stamp, lastRoute, escalation, learning, config.AutoRedraw,
-                                    compositor.RedrawsHeld, config.UseInPlaceReload, glamourer.IsAvailable);
-        if (decision.GaveUp)
-        {
-            Interlocked.Increment(ref gaveUp);
-            log.Warning("[Proteus] shader upgrade: the character still draws the wrong material after a full redraw — "
-                      + "giving up on this set until something changes");
-        }
-        if (decision.Route != ReloadRoute.None) lastRoute = decision.Route;
-        switch (decision.Route)
-        {
-            case ReloadRoute.Deferred:
-                compositor.RedrawForChangedModel("shader upgrade", deferWhileHeld: true);
-                Request(Signal.Verify);
-                break;
-            case ReloadRoute.InPlace:
-                if (compositor.ReloadGearInPlace("shader upgrade")) Interlocked.Increment(ref reloadsInPlace);
-                else
-                {
-                    lastRoute = ReloadRoute.Redraw;
-                    escalation.Issued(stamp, ReloadRoute.Redraw);
-                    compositor.RedrawForChangedModel("shader upgrade");
-                    Interlocked.Increment(ref reloadsRedraw);
-                }
-                Request(Signal.Verify);
-                break;
-            case ReloadRoute.Redraw:
-                compositor.RedrawForChangedModel("shader upgrade");
-                Interlocked.Increment(ref reloadsRedraw);
-                Request(Signal.Verify);
-                break;
-        }
-        bool awaiting = decision.AwaitingRedraw;
-
-        var upgraded = ready.Select(u => new UpgradedEntry(
-            u.MaterialGamePath, u.SourceLabel, Path.GetFileName(u.MaterialCopy),
-            u.Form == LegacyForm.Diffuse ? "diffuse" : "index-mask",
-            u.Mask?.GamePath, u.Mask == null ? null : Path.GetFileName(u.Mask.Copy), u.MaskWidth, u.MaskHeight,
-            a.Loaded.TryGetValue(u.MaterialGamePath, out var file)
-                && string.Equals(NormalPath(StripPenumbraPrefix(file)), NormalPath(u.MaterialCopy),
-                                 StringComparison.OrdinalIgnoreCase))).ToList();
-        current = new View(
-            Waiting: "none", AwaitingRedraw: awaiting, MaskGloss: GlossName(gloss),
-            Upgraded: upgraded,
-            Left: left.Select(l => new LeftEntry(l.GamePath, l.Source, ReasonName(l.Reason))).ToList(),
-            Peeks: Peeks(), Reload: Reloads(), Masks: Masks(),
-            LastAppliedUtc: ready.Count > 0 || before.Count > 0 ? DateTime.UtcNow : current.LastAppliedUtc);
-    }
-
-    internal static string ReasonName(LeftReason r) => r switch
-    {
-        LeftReason.OldTable => "old-table",
-        LeftReason.UnsupportedForm => "unsupported-form",
-        LeftReason.Unreadable => "unreadable",
-        LeftReason.Outranked => "outranked",
-        LeftReason.Unresolved => "unresolved",
-        LeftReason.Compositor => "compositor",
-        _ => "write-failed",
+        ModsRoot = modsRoot,
+        ManagedRoot = compositor.ManagedModFolder,
+        Read = File.ReadAllBytes,
+        DecodeNative = (disk, g) => textureLoader.LoadRawFile(disk, g) is { } raw
+                                    && textureLoader.LoadTexBytesAsRgba(raw, g) is { } t
+            ? (t.rgba, t.width, t.height) : null,
+        Stat = p => { try { var fi = new FileInfo(p); return fi.Exists ? (fi.Length, fi.LastWriteTimeUtc.Ticks) : null; }
+                      catch { return null; } },
+        ReadOwners = HairPortPlan.ReadOwners,
+        IsDeclined = ShaderUpgradeWriter.IsDeclined,
+        MaskFileOk = (modRoot, rel) => TextureLoader.IsCompleteTex(Path.Combine(modRoot, rel.Replace('/', Path.DirectorySeparatorChar))),
+        Memo = memo,
+        Gloss = gloss,
+        Encoding = encoding,
     };
 
-    private PeekStats Peeks() => new(peeksTrusted, peeksSettled, peeksFailedOpen);
-    private ReloadStats Reloads() => new(learning.InPlaceLoadsMaterials, reloadsInPlace, reloadsRedraw, gaveUp);
-    private MaskStats Masks() => new(memoHits, decodes, pruned, missingBeforeApply);
-
-    /// <summary>The prune, run only under the walk gate (see <see cref="WalkGate"/>) or after the watcher stopped.</summary>
-    private void Prune()
+    private void Run(RunKind kind, bool decline)
     {
-        var managedRoot = compositor.ManagedModFolder;
-        if (managedRoot == null) return;
-        int n = ShaderUpgradeCopies.PruneMasks(managedRoot, redirects.ReferencedMasks(), tail, pid);
-        if (n > 0)
+        if (stopped) return;
+        var worn = OnFramework(ReadWorn, "read");
+        if (worn == null || stopped) return;
+
+        var encoding = config.EnableCompression && textureLoader.CompressionAffordable() ? TexEncoding.Bc7
+                                                                                         : TexEncoding.Uncompressed;
+        var inputs = InputsFor(worn.ModsRoot, encoding);
+        if (kind == RunKind.UndoWorn) { RunUndo(worn, inputs, decline); return; }
+
+        if (kind == RunKind.UpgradeNow)
+            foreach (var g in WornModFiles(worn, inputs).GroupBy(f => f.ModRoot, StringComparer.OrdinalIgnoreCase))
+                ShaderUpgradeWriter.ClearDeclines(g.Key, g.Select(f => f.Rel));
+
+        var (candidates, left) = Candidates(worn.Materials, inputs);
+        var slots = candidates.Where(c => c.SpecularGamePath != null).Select(c => c.SpecularGamePath!)
+                              .Distinct(StringComparer.OrdinalIgnoreCase).ToList();
+        var resolvedS = slots.Count == 0
+            ? new Dictionary<string, string?>()
+            : OnFramework(() => penumbra.ResolvePlayerPaths(slots), "resolve") ?? new Dictionary<string, string?>();
+        var plan = Build(candidates, resolvedS, inputs, left);
+        Interlocked.Add(ref decodes, plan.Decodes);
+        Interlocked.Add(ref memoHits, plan.MemoHits);
+
+        var changed = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
+        bool rewalk = false;
+        foreach (var mod in plan.PerMod)
         {
-            Interlocked.Add(ref pruned, n);
-            current = current with { Masks = Masks() };
+            if (stopped || (kind == RunKind.Upgrade && !Enabled)) break;
+            var outcome = ShaderUpgradeWriter.Apply(mod.ModRoot, mod.Writes,
+                () => !stopped && (kind != RunKind.Upgrade || Enabled), textureLoader.WriteTex, encoding);
+            rewalk |= outcome.Rewalk;
+            foreach (var (rel, reason) in outcome.Left)
+                foreach (var w in mod.Writes.Where(w => w.Rel == rel))
+                    foreach (var g in w.GamePaths)
+                        left.Add(new Left(g, $"{Path.GetFileName(mod.ModRoot)}/{rel}", reason));
+            if (outcome.ChangedAny)
+            {
+                changed[mod.ModRoot] = outcome.Written.Count;
+                log.Information("[Proteus] shader upgrade: rewrote {0} legacy material(s) in {1} to character.shpk",
+                                outcome.Written.Count, Path.GetFileName(mod.ModRoot));
+            }
         }
+        if (stopped) return;
+
+        var (reloaded, redrew) = OnFramework(() => ReloadChanged([.. changed.Keys], kind, worn.ModNames, changed), "reload");
+        if (rewalk) Request(Signal.Redraw);
+        Publish(worn, inputs, left, new RunInfo(KindName(kind), changed.Count, changed.Values.Sum(), 0, 0, 0,
+                                                reloaded, redrew, DateTime.UtcNow),
+                awaiting: changed.Count > 0 && !redrew);
     }
 
-    // ── peeks for setting changes ───────────────────────────────────────────
-
-    private bool SettingsWantPeek(string? modsRoot)
+    /// <summary>The worn materials' mod files (not game data, not Proteus's own), one per file.</summary>
+    private static List<(string ModRoot, string Rel)> WornModFiles(WornState worn, Inputs inputs)
     {
-        bool want = false;
-        Guid? player = null;
-        bool askedPlayer = false;
-        var units = redirects.CurrentUnits;
-        var redirected = units.Select(u => u.MaterialGamePath).ToHashSet(StringComparer.OrdinalIgnoreCase);
-        var sourceMods = units.Select(u => u.SourceLabel.Split('/')[0]).ToHashSet(StringComparer.OrdinalIgnoreCase);
-        while (pendingSettings.TryDequeue(out var e))
+        var files = new List<(string, string)>();
+        var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var w in worn.Materials)
         {
-            if (want) continue;   // drain the rest
-            if (!askedPlayer) { player = penumbra.GetPlayerCollectionId(); askedPlayer = true; }
-            want = PeekFor(e.Collection, player, e.Mod, units.Count > 0, sourceMods,
-                           mod => ShipsAny(modsRoot, mod, redirected));
+            if (Classify(w.GamePath, w.Resolved, worn.ModsRoot, inputs.ManagedRoot, inputs.IsProteusPack) != Source.Mod)
+                continue;
+            var file = StripPenumbraPrefix(w.Resolved!);
+            if (!seen.Add(NormalPath(file))) continue;
+            if (HatCompatService.InMods(file, worn.ModsRoot, out var root, out var rel))
+                files.Add((root, MeshVolumeService.Rel(rel)));
         }
-        return want;
+        return files;
     }
 
-    /// <summary>Whether a mod's option files name any of these game paths, cached on the files' newest write.</summary>
-    private bool ShipsAny(string? modsRoot, string mod, IReadOnlySet<string> gamePaths)
+    private void RunUndo(WornState worn, Inputs inputs, bool decline)
     {
-        if (string.IsNullOrEmpty(modsRoot)) return true;
-        var dir = Path.Combine(modsRoot, mod);
+        int restored = 0, kept = 0, refused = 0;
+        var messages = new List<string>();
+        var changed = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var (modRoot, rel) in WornModFiles(worn, inputs))
+        {
+            if (stopped) return;
+            if (ShaderUpgradeWriter.ReadRecord(modRoot) is not { } r
+                || !r.Files.Any(f => string.Equals(f.Rel, rel, StringComparison.OrdinalIgnoreCase)))
+                continue;
+            switch (ShaderUpgradeWriter.RevertOrForget(modRoot, rel, decline, out var why))
+            {
+                case ShaderUpgradeWriter.Undone.Restored: restored++; changed.Add(modRoot); break;
+                case ShaderUpgradeWriter.Undone.Forgotten: kept++; changed.Add(modRoot); break;
+                case ShaderUpgradeWriter.Undone.Nothing: changed.Add(modRoot); break;
+                case ShaderUpgradeWriter.Undone.Refused: refused++; messages.Add(why); break;
+                case ShaderUpgradeWriter.Undone.Failed:
+                    refused++;
+                    log.Warning("[Proteus] shader upgrade: undo of {0} failed — {1}", rel, why);
+                    break;
+            }
+        }
+        if (stopped) return;
+        log.Information("[Proteus] shader upgrade: undo for what is worn — {0} restored, {1} kept as the author's update, "
+                      + "{2} refused", restored, kept, refused);
+        var (reloaded, redrew) = OnFramework(() => ReloadChanged([.. changed], RunKind.UndoWorn, worn.ModNames, null), "reload");
+        Publish(worn, inputs, [],
+                new RunInfo(KindName(RunKind.UndoWorn), changed.Count, restored + kept, restored, kept, refused, reloaded,
+                            redrew, DateTime.UtcNow, string.Join(" ", messages.Distinct())),
+                awaiting: false);
+    }
+
+    private static string KindName(RunKind k) => k switch
+    {
+        RunKind.UndoWorn => "undo-worn",
+        RunKind.UpgradeNow => "upgrade-now",
+        _ => "upgrade",
+    };
+
+    /// <summary>
+    /// Reload each changed mod (marked as our own edit), say so in chat once per mod per session, and redraw once when
+    /// allowed. Framework thread.
+    /// </summary>
+    private (bool Reloaded, bool Redrew) ReloadChanged(List<string> modRoots, RunKind kind, Dictionary<string, string> names,
+                                                       Dictionary<string, int>? counts)
+    {
+        if (stopped || modRoots.Count == 0) return (false, false);
+        bool reloaded = true;
+        foreach (var root in modRoots)
+        {
+            var dir = Path.GetFileName(root.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar));
+            compositor.ExpectOwnModEdit(dir);
+            var ec = penumbra.ReloadModDirectory(dir);
+            reloaded &= ec == PenumbraApiEc.Success;
+            if (counts != null && counts.TryGetValue(root, out var n) && ShouldAnnounce(announced, dir))
+                Announce(n, names.TryGetValue(dir, out var name) ? name : dir);
+        }
+        bool redraw = RedrawAfter(kind, config.AutoRedraw, true);
+        if (redraw) compositor.RedrawForChangedModel("shader upgrade", deferWhileHeld: kind == RunKind.Upgrade);
+        return (reloaded, redraw);
+    }
+
+    private void Announce(int count, string modName)
+    {
         try
         {
-            if (!Directory.Exists(dir)) return true;
-            var files = Directory.GetFiles(dir, "*.json").Select(f => (Path.GetFileName(f), new FileInfo(f).LastWriteTimeUtc.Ticks))
-                                 .ToList();
-            long key = PeekCacheKey(files);
-            if (!shipsCache.TryGetValue(mod, out var cached) || cached.Key != key)
-            {
-                var paths = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-                foreach (var (name, _) in files)
-                {
-                    if (!(name.Equals("meta.json", StringComparison.OrdinalIgnoreCase)
-                          || name.Equals("default_mod.json", StringComparison.OrdinalIgnoreCase)
-                          || name.StartsWith("group_", StringComparison.OrdinalIgnoreCase)))
-                        continue;
-                    var text = File.ReadAllText(Path.Combine(dir, name));
-                    foreach (System.Text.RegularExpressions.Match m in
-                             System.Text.RegularExpressions.Regex.Matches(text, "\"(chara/[^\"]+\\.mtrl)\""))
-                        paths.Add(m.Groups[1].Value);
-                }
-                cached = (key, paths);
-                shipsCache[mod] = cached;
-            }
-            return gamePaths.Any(cached.Paths.Contains);
+            var text = string.Format(ProteusLoc.Localize("Chat.ShaderUpgrade.Fmt",
+                "[Proteus] Moved {0} old-shader material(s) in \"{1}\" to Dawntrail's shader (each file backed up). "
+              + "Undo under /proteus > Settings > Gear shaders."), count, modName);
+            Plugin.ChatGui.Print(new Dalamud.Game.Text.SeStringHandling.SeStringBuilder().AddUiForeground(text, 45).Build());
         }
-        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { return true; }
+        catch (Exception ex) { log.Warning(ex, "[Proteus] shader upgrade: could not announce in chat"); }
+    }
+
+    /// <summary>What is worn now: upgraded files (recorded and still as Proteus left them), and what was left.</summary>
+    private void Publish(WornState worn, Inputs inputs, List<Left> left, RunInfo run, bool awaiting)
+    {
+        var upgraded = new List<UpgradedEntry>();
+        foreach (var w in worn.Materials)
+        {
+            if (Classify(w.GamePath, w.Resolved, worn.ModsRoot, inputs.ManagedRoot, inputs.IsProteusPack) != Source.Mod) continue;
+            var file = StripPenumbraPrefix(w.Resolved!);
+            if (!HatCompatService.InMods(file, worn.ModsRoot, out var root, out var rel)) continue;
+            rel = MeshVolumeService.Rel(rel);
+            if (!ShaderUpgradeWriter.IsUpgraded(root, rel)) continue;
+            var form = ShaderUpgradeWriter.ReadRecord(root)?.Files
+                           .FirstOrDefault(f => string.Equals(f.Rel, rel, StringComparison.OrdinalIgnoreCase))?.Form ?? "index-mask";
+            upgraded.Add(new UpgradedEntry(w.GamePath, Path.GetFileName(root), rel, form));
+        }
+        current = new View(
+            Waiting: "none", AwaitingRedraw: awaiting, MaskGloss: GlossName(gloss), Upgraded: upgraded,
+            Left: left.Select(l => new LeftEntry(l.GamePath, l.Source, ReasonName(l.Reason))).ToList(),
+            MemoHits: memoHits, Decodes: decodes, LastRun: run);
     }
 
     // ── harness and settings ────────────────────────────────────────────────
@@ -692,16 +475,5 @@ public sealed class ShaderUpgradeWatcher : IShaderUpgradeSources, IDisposable
     {
         lock (config.Gate) config.AutoUpgradeLegacyShaders = enabled;
         config.Save();
-    }
-
-    private static bool ProcessAlive(int id)
-    {
-        try
-        {
-            using var p = Process.GetProcessById(id);
-            return !p.HasExited;
-        }
-        catch (ArgumentException) { return false; }
-        catch { return true; }
     }
 }

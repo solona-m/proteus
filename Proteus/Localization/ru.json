@@ -5831,10 +5831,6 @@
     "message": "Переводить старое снаряжение на шейдеры Dawntrail",
     "description": ""
   },
-  "Settings.GearShaders.AutoUpgrade.Tip": {
-    "message": "Когда вы надеваете снаряжение, предмет, мод которого ещё использует старый шейдер characterlegacy.shpk,\nрисуется с шейдером character.shpk из Dawntrail и освещается как современное снаряжение.\nВаши моды никогда не изменяются: Proteus рисует собственные обновлённые копии, а выключение\nэтой настройки сразу возвращает оригиналы.",
-    "description": ""
-  },
   "Settings.GearShaders.Status.Fmt": {
     "message": "{0} обновлено · {1} оставлено на старом шейдере",
     "description": ""
@@ -5845,10 +5841,6 @@
   },
   "Settings.GearShaders.NextRedraw": {
     "message": "Вступит в силу при следующей перерисовке (автоперерисовка выключена).",
-    "description": ""
-  },
-  "Settings.GearShaders.Waiting": {
-    "message": "Ожидание Penumbra и папки мода Proteus…",
     "description": ""
   },
   "Settings.GearShaders.Reason.OldTable": {
@@ -5863,20 +5855,76 @@
     "message": "не читается",
     "description": ""
   },
-  "Settings.GearShaders.Reason.Outranked": {
-    "message": "побеждает перенаправление другого плагина",
-    "description": ""
-  },
-  "Settings.GearShaders.Reason.Unresolved": {
-    "message": "ещё не устоялось после изменения",
-    "description": ""
-  },
   "Settings.GearShaders.Reason.Compositor": {
     "message": "его рисуют наложения Proteus",
     "description": ""
   },
   "Settings.GearShaders.Reason.WriteFailed": {
-    "message": "не удалось записать копию",
+    "message": "не удалось записать файл",
+    "description": ""
+  },
+  "Settings.GearShaders.AutoUpgrade.Tip": {
+    "message": "Когда вы надеваете снаряжение, Proteus переписывает материалы надетого мода со старым шейдером (characterlegacy.shpk)\nна шейдер Dawntrail (character.shpk) прямо в моде, сначала сохраняя копию каждого файла.\nВыключение останавливает дальнейшие обновления, но не отменяет их. «Отменить для надетого»\nвозвращает файлы автора и не трогает эти предметы до «Обновить надетое сейчас».",
+    "description": ""
+  },
+  "Settings.GearShaders.Waiting": {
+    "message": "Ожидание Penumbra.",
+    "description": ""
+  },
+  "Settings.GearShaders.Reason.LegacyMod": {
+    "message": "папка мода старого формата, в которую Proteus не пишет",
+    "description": ""
+  },
+  "Settings.GearShaders.Reason.MixedSpecular": {
+    "message": "его опции используют разные карты блеска",
+    "description": ""
+  },
+  "Settings.GearShaders.Reason.SpecularFromOtherMod": {
+    "message": "его карта блеска взята из другого мода",
+    "description": ""
+  },
+  "Settings.GearShaders.Reason.UnsupportedPlacement": {
+    "message": "он в комбинирующей группе",
+    "description": ""
+  },
+  "Settings.GearShaders.Reason.ProteusPack": {
+    "message": "пакет Proteus (Proteus рисует его сам)",
+    "description": ""
+  },
+  "Settings.GearShaders.Reason.Declined": {
+    "message": "отменено вами",
+    "description": ""
+  },
+  "Settings.GearShaders.UpgradeNow": {
+    "message": "Обновить надетое сейчас",
+    "description": ""
+  },
+  "Settings.GearShaders.UpgradeNow.Tip": {
+    "message": "Перевести материалы надетого снаряжения со старым шейдером на шейдер Dawntrail,\nвключая предметы, которые вы раньше отменили.",
+    "description": ""
+  },
+  "Settings.GearShaders.UndoWorn": {
+    "message": "Отменить для надетого",
+    "description": ""
+  },
+  "Settings.GearShaders.UndoWorn.Tip": {
+    "message": "Вернуть файлы автора для надетых предметов и не трогать их,\nпока вы не нажмёте «Обновить надетое сейчас». Обновление, выпущенное автором позже, сохраняется.",
+    "description": ""
+  },
+  "Settings.GearShaders.Result.Fmt": {
+    "message": "Отмена: восстановлено {0}, оставлено как обновление автора {1}, отклонено {2}.",
+    "description": ""
+  },
+  "Settings.GearShaders.Busy": {
+    "message": "Выполняется…",
+    "description": ""
+  },
+  "Chat.ShaderUpgrade.Fmt": {
+    "message": "[Proteus] {0} материал(ов) со старым шейдером в «{1}» переведено на шейдер Dawntrail (копия каждого файла сохранена). Отмена: /proteus > Настройки > Шейдеры снаряжения.",
+    "description": ""
+  },
+  "MeshVolume.Feature.ShaderUpgrade": {
+    "message": "обновление шейдеров снаряжения",
     "description": ""
   }
 }

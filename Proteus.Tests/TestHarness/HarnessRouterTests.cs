@@ -194,45 +194,52 @@ public class HarnessRouterTests : IDisposable
     {
         f.Game.ShaderUpgradeView = new Proteus.Services.ShaderUpgradeWatcher.View(
             Enabled: true, Waiting: "none", MaskGloss: "mid",
-            Upgraded: [new("chara/equipment/e0001/material/v0001/mt_c0201e0001_top_a.mtrl", "Dress/a.mtrl", "1-a.mtrl",
-                           "diffuse", "chara/proteus/shaderupgrade/a_mask.tex", "1-a_mask.tex", 64, 64, true)],
-            Left: [new("chara/equipment/e0002/material/v0001/mt_c0201e0002_dwn_a.mtrl", "Skirt/b.mtrl", "old-table")],
-            Masks: new(2, 1, 0, 0));
+            Upgraded: [new("chara/equipment/e0001/material/v0001/mt_c0201e0001_top_a.mtrl", "Dress", "red/top.mtrl", "diffuse")],
+            Left: [new("chara/equipment/e0002/material/v0001/mt_c0201e0002_dwn_a.mtrl", "Skirt/b.mtrl", "specular-from-other-mod")],
+            MemoHits: 2, Decodes: 1,
+            LastRun: new("undo-worn", 1, 2, 2, 0, 0, true, true, DateTime.UtcNow));
         var (status, b) = await f.Get("/state");
         Assert.Equal(200, status);
         var su = b.GetProperty("shaderUpgrade");
         Assert.True(su.GetProperty("enabled").GetBoolean());
-        Assert.Equal("none", su.GetProperty("waiting").GetString());
         Assert.Equal("mid", su.GetProperty("maskGloss").GetString());
         var up = su.GetProperty("upgraded")[0];
-        Assert.True(up.GetProperty("loaded").GetBoolean());
+        Assert.Equal("Dress", up.GetProperty("modDir").GetString());
         Assert.Equal("diffuse", up.GetProperty("form").GetString());
-        Assert.Equal(64, up.GetProperty("mask").GetProperty("width").GetInt32());
-        Assert.Equal("old-table", su.GetProperty("left")[0].GetProperty("reason").GetString());
+        Assert.Equal("specular-from-other-mod", su.GetProperty("left")[0].GetProperty("reason").GetString());
         Assert.Equal(2, su.GetProperty("masks").GetProperty("memoHits").GetInt32());
+        Assert.Equal("undo-worn", su.GetProperty("lastRun").GetProperty("kind").GetString());
     }
 
     [Fact]
     [Trait("Plan", "AC-dt-shader-upgrade-10")]
-    public async Task Shader_upgrade_action_sets_the_setting_and_gloss_and_validates()
+    [Trait("Plan", "EDGE-dt-shader-upgrade-69")]
+    public async Task Shader_upgrade_action_validates_and_starts_undo_worn_and_upgrade_now()
     {
-        var (status, b) = await f.Post("/actions/shader-upgrade", """{"enabled":true}""");
+        var (status, b) = await f.Post("/actions/shader-upgrade", """{"enabled":true,"maskGloss":"low"}""");
         Assert.Equal(200, status);
         Assert.True(b.GetProperty("enabled").GetBoolean());
-        Assert.True(f.Game.ShaderUpgradeEnabled);
-
-        (status, b) = await f.Post("/actions/shader-upgrade", """{"maskGloss":"low"}""");
-        Assert.Equal(200, status);
         Assert.Equal("low", b.GetProperty("maskGloss").GetString());
-        Assert.True(f.Game.ShaderUpgradeEnabled);   // untouched by a gloss-only call
+
+        (status, b) = await f.Post("/actions/shader-upgrade", """{"undoWorn":true,"decline":false}""");
+        Assert.Equal(202, status);
+        (status, _) = await f.Post("/actions/shader-upgrade", """{"upgradeWornNow":true}""");
+        Assert.Equal(202, status);
+        Assert.Equal([(true, false), (false, true)], f.Game.ShaderUpgradeRuns);
+
+        f.Game.ShaderUpgradeBusy = true;
+        Assert.Equal((409, "busy"), await Error("/actions/shader-upgrade", """{"undoWorn":true}"""));
+        f.Game.ShaderUpgradeBusy = false;
 
         Assert.Equal((400, "invalid-field"), await Error("/actions/shader-upgrade", "{}"));
+        Assert.Equal((400, "invalid-field"), await Error("/actions/shader-upgrade", """{"undo":"all"}"""));
+        Assert.Equal((400, "invalid-field"), await Error("/actions/shader-upgrade", """{"decline":false}"""));
+        Assert.Equal((400, "invalid-field"), await Error("/actions/shader-upgrade", """{"undoWorn":true,"upgradeWornNow":true}"""));
         Assert.Equal((400, "invalid-field"), await Error("/actions/shader-upgrade", """{"enabled":"yes"}"""));
         Assert.Equal((400, "invalid-field"), await Error("/actions/shader-upgrade", """{"maskGloss":"shiny"}"""));
-        Assert.Equal((400, "invalid-field"), await Error("/actions/shader-upgrade", """{"enabled":true,"other":1}"""));
         Assert.Equal((400, "bad-json"), await Error("/actions/shader-upgrade", "{not json"));
         var (getStatus, _) = await f.Get("/actions/shader-upgrade");
         Assert.Equal(405, getStatus);
-        Assert.Contains(f.Game.Order, o => o == "SetShaderUpgrade@framework");
+        Assert.Contains(f.Game.Order, o => o == "StartShaderUpgradeRun@framework");
     }
 }

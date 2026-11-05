@@ -105,13 +105,11 @@ public partial class CompositorService
 
             var disk = raw[gamePath];
 
-            // A temporary hold above every mod on purpose: the Studio's live brush showing an edit on this piece, or the
-            // gear shader upgrade's copy of it. Not a loss, and not our own folder's stale file even when the copy is
-            // shared inside it; no priority change can affect it, and it comes down on its own.
-            if (HeldBy(disk, ManagedModFolder) is var hold and not Hold.None)
+            // The Studio's live brush is showing an edit on this piece, above every mod on purpose. Not a loss, and not
+            // our own folder's stale file even when the preview is shared inside it: it comes down when the Studio is left.
+            if (disk != null && LiveBrushPreview.IsPreviewFile(disk))
             {
-                log.Debug("[Proteus] redirect held by the {0}: {1} resolves to {2}",
-                          hold == Hold.LiveBrush ? "live brush preview" : "gear shader upgrade", gamePath, disk!);
+                log.Debug("[Proteus] redirect held by the live brush preview: {0} resolves to {1}", gamePath, disk);
                 continue;
             }
 
@@ -224,7 +222,7 @@ public partial class CompositorService
 
     private string? ResolveUpstreamCore(string gamePath)
     {
-        var disk = ResolveSeeThrough(gamePath);
+        var disk = penumbra.ResolvePlayer(gamePath);
 
         if (disk != null && !IsOwnOutput(disk))
         {
@@ -461,7 +459,7 @@ public partial class CompositorService
             for (int i = pending.Count - 1; i >= 0; i--)
             {
                 var p = pending[i];
-                var d = ResolveSeeThrough(p);
+                var d = penumbra.ResolvePlayer(p);
 
                 // Still masked or no answer: break the streak, so reads from before and after the narrow cannot pair.
                 if (d == null || IsOwnOutput(d))
@@ -578,7 +576,7 @@ public partial class CompositorService
                 try
                 {
                     // Manipulations are carried across verbatim: dropping them un-loads the shell's host accessory.
-                    WriteManagedModJson(narrowed, manips, snapshot: false);
+                    WriteManagedModJson(narrowed, manips);
                     penumbra.ReloadModDirectory(SidecarDiscoveryService.ManagedModDir);
 
                     // Wait for the answer to stop moving, not merely for our redirect to disappear (see SettleUpstreams).
@@ -617,7 +615,7 @@ public partial class CompositorService
                 finally
                 {
                     // Always, even if the prime threw: the narrowed manifest must never stay live.
-                    WriteManagedModJson(files, manips, snapshot: false);
+                    WriteManagedModJson(files, manips);
                     penumbra.ReloadModDirectory(SidecarDiscoveryService.ManagedModDir);
                 }
             }

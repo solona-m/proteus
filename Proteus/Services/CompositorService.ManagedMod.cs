@@ -69,7 +69,7 @@ public partial class CompositorService
     private void WriteManagedModFiles()
     {
         WriteManagedModMeta();
-        WriteManagedModJson(new Dictionary<string, string>(), snapshot: true);
+        WriteManagedModJson(new Dictionary<string, string>());
     }
 
     /// <summary>
@@ -238,11 +238,7 @@ public partial class CompositorService
     /// This write's place in the order of manifest writes, and whether the empty output was drawn just before it (see
     /// <see cref="_emptyOutputDrawn"/>), both read under the lock the write holds. Every write clears that flag.
     /// </returns>
-    /// <param name="snapshot">A real publish, or an off/empty write: what the managed mod publishes is now these
-    /// paths (<see cref="PublishedGamePaths"/>). False for the prime's narrowed manifest and its restore, which say
-    /// nothing about what the compositor owns.</param>
-    private ManifestWrite WriteManagedModJson(IDictionary<string, string> redirects, IReadOnlyList<object>? manipulations = null,
-                                              bool snapshot = false)
+    private ManifestWrite WriteManagedModJson(IDictionary<string, string> redirects, IReadOnlyList<object>? manipulations = null)
     {
         var files = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
         foreach (var (gamePath, relPath) in redirects)
@@ -254,7 +250,6 @@ public partial class CompositorService
             PenumbraModMeta.WriteRedirects(
                 managedModDir, SidecarDiscoveryService.ManagedModDir, files, swaps: null, manipulations: manipulations);
             _emptyOutputDrawn = false;
-            if (snapshot) SnapshotPublished(files.Keys);
             return new ManifestWrite(++_manifestWrites, wasDrawn);
         }
     }

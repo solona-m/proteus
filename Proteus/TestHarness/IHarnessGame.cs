@@ -108,4 +108,10 @@ internal interface IHarnessGame
     /// "inverse-specular", "low", "mid", already validated). Returns the state after. Framework thread.
     /// </summary>
     (bool Enabled, string MaskGloss) SetShaderUpgrade(bool? enabled, string? maskGloss);
+
+    /// <summary>
+    /// Start "Undo for what I'm wearing" (<paramref name="undoWorn"/>, declining unless <paramref name="decline"/> is
+    /// false) or "Upgrade what I'm wearing now". False when a run is already going. Framework thread.
+    /// </summary>
+    bool StartShaderUpgradeRun(bool undoWorn, bool decline);
 }

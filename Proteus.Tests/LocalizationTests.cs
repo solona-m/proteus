@@ -224,6 +224,40 @@ public sealed class LocalizationTests
         }
         Assert.Contains("characterlegacy.shpk", tr["Settings.GearShaders.AutoUpgrade.Tip"].Message);
         Assert.Contains("character.shpk", tr["Settings.GearShaders.AutoUpgrade.Tip"].Message);
+        foreach (var key in new[] { "Chat.ShaderUpgrade.Fmt", "MeshVolume.Feature.ShaderUpgrade" })
+        {
+            Assert.True(tr.ContainsKey(key), $"[{lang}] has no {key}");
+            Assert.NotEqual(en[key].Message, tr[key].Message);
+        }
+        Assert.Contains("/proteus", tr["Chat.ShaderUpgrade.Fmt"].Message);
+    }
+
+    /// <summary>The keys the temporary-copy design used are gone from every locale and from the code.</summary>
+    [Theory]
+    [MemberData(nameof(AllLocales))]
+    [Trait("Plan", "AC-dt-shader-upgrade-9")]
+    public void Obsolete_shader_upgrade_keys_are_gone(string lang)
+    {
+        var loc = Load(lang);
+        foreach (var key in new[] { "Settings.GearShaders.Reason.Outranked", "Settings.GearShaders.Reason.Unresolved" })
+            Assert.False(loc.ContainsKey(key), $"[{lang}] still has {key}");
+        var strings = System.IO.File.ReadAllText(ShaderUpgradePlanTests.SourceFile("Proteus/Localization/Strings.cs"));
+        Assert.DoesNotContain("Reason.Outranked", strings);
+        Assert.DoesNotContain("Reason.Unresolved", strings);
+    }
+
+    /// <summary>The English tip says the mods' files are rewritten (backed up), that off does not undo, and names both buttons.</summary>
+    [Fact]
+    [Trait("Plan", "AC-dt-shader-upgrade-14")]
+    public void ShaderUpgrade_tip_warns_about_rewrites_and_declines()
+    {
+        var en = Load(Source);
+        var tip = en["Settings.GearShaders.AutoUpgrade.Tip"].Message;
+        Assert.Contains("rewrites the worn mod", tip);
+        Assert.Contains("backing each file up", tip);
+        Assert.Contains("does not undo", tip);
+        Assert.Contains(en["Settings.GearShaders.UndoWorn"].Message, tip);
+        Assert.Contains(en["Settings.GearShaders.UpgradeNow"].Message, tip);
     }
 
     /// <summary>

@@ -5831,10 +5831,6 @@
     "message": "오래된 장비를 황금의 유산 셰이더로 업그레이드",
     "description": ""
   },
-  "Settings.GearShaders.AutoUpgrade.Tip": {
-    "message": "장비를 착용하면, 모드가 아직 예전 characterlegacy.shpk 셰이더를 쓰는 장비는\n대신 황금의 유산의 character.shpk로 그려져 현재 장비처럼 빛을 받습니다.\n모드는 절대 변경되지 않습니다. Proteus는 자체 업그레이드 사본을 그리며, 이 옵션을\n끄면 즉시 원본으로 돌아갑니다.",
-    "description": ""
-  },
   "Settings.GearShaders.Status.Fmt": {
     "message": "{0}개 업그레이드 · {1}개는 예전 셰이더 유지",
     "description": ""
@@ -5845,10 +5841,6 @@
   },
   "Settings.GearShaders.NextRedraw": {
     "message": "다음 다시 그리기 때 적용됩니다(자동 다시 그리기가 꺼져 있음).",
-    "description": ""
-  },
-  "Settings.GearShaders.Waiting": {
-    "message": "Penumbra와 Proteus의 모드 폴더를 기다리는 중…",
     "description": ""
   },
   "Settings.GearShaders.Reason.OldTable": {
@@ -5863,20 +5855,76 @@
     "message": "읽을 수 없음",
     "description": ""
   },
-  "Settings.GearShaders.Reason.Outranked": {
-    "message": "다른 플러그인의 리디렉션이 우선",
-    "description": ""
-  },
-  "Settings.GearShaders.Reason.Unresolved": {
-    "message": "변경 후 아직 확정되지 않음",
-    "description": ""
-  },
   "Settings.GearShaders.Reason.Compositor": {
     "message": "Proteus 오버레이가 그림",
     "description": ""
   },
   "Settings.GearShaders.Reason.WriteFailed": {
-    "message": "사본을 쓸 수 없음",
+    "message": "파일을 쓸 수 없음",
+    "description": ""
+  },
+  "Settings.GearShaders.AutoUpgrade.Tip": {
+    "message": "장비를 착용하면 Proteus가 착용 중인 모드의 예전 셰이더(characterlegacy.shpk) 재질을\n모드 안에서 황금의 유산 셰이더(character.shpk)로 다시 씁니다. 각 파일은 먼저 백업됩니다.\n끄면 이후 업그레이드가 멈추지만 되돌리지는 않습니다. \"착용 중인 장비 되돌리기\"는\n제작자의 파일을 복원하고 \"착용 중인 장비 지금 업그레이드\" 전까지 그 장비는 건드리지 않습니다.",
+    "description": ""
+  },
+  "Settings.GearShaders.Waiting": {
+    "message": "Penumbra를 기다리는 중입니다.",
+    "description": ""
+  },
+  "Settings.GearShaders.Reason.LegacyMod": {
+    "message": "Proteus가 쓰지 않는 예전 형식의 모드 폴더",
+    "description": ""
+  },
+  "Settings.GearShaders.Reason.MixedSpecular": {
+    "message": "옵션마다 스페큘러 맵이 다름",
+    "description": ""
+  },
+  "Settings.GearShaders.Reason.SpecularFromOtherMod": {
+    "message": "스페큘러 맵이 다른 모드에서 옴",
+    "description": ""
+  },
+  "Settings.GearShaders.Reason.UnsupportedPlacement": {
+    "message": "결합 그룹 안에 있음",
+    "description": ""
+  },
+  "Settings.GearShaders.Reason.ProteusPack": {
+    "message": "Proteus 팩(Proteus가 직접 그림)",
+    "description": ""
+  },
+  "Settings.GearShaders.Reason.Declined": {
+    "message": "직접 되돌림",
+    "description": ""
+  },
+  "Settings.GearShaders.UpgradeNow": {
+    "message": "착용 중인 장비 지금 업그레이드",
+    "description": ""
+  },
+  "Settings.GearShaders.UpgradeNow.Tip": {
+    "message": "지금 착용 중인 장비의 예전 셰이더 재질을 황금의 유산 셰이더로 바꿉니다.\n이전에 되돌린 장비도 포함됩니다.",
+    "description": ""
+  },
+  "Settings.GearShaders.UndoWorn": {
+    "message": "착용 중인 장비 되돌리기",
+    "description": ""
+  },
+  "Settings.GearShaders.UndoWorn.Tip": {
+    "message": "착용 중인 장비의 제작자 파일을 복원하고 \"착용 중인 장비 지금 업그레이드\"를 쓸 때까지\n그 장비는 건드리지 않습니다. 이후 제작자가 낸 업데이트는 유지됩니다.",
+    "description": ""
+  },
+  "Settings.GearShaders.Result.Fmt": {
+    "message": "되돌리기: {0}개 복원, {1}개는 제작자 업데이트로 유지, {2}개 거부.",
+    "description": ""
+  },
+  "Settings.GearShaders.Busy": {
+    "message": "작업 중…",
+    "description": ""
+  },
+  "Chat.ShaderUpgrade.Fmt": {
+    "message": "[Proteus] \"{1}\"의 예전 셰이더 재질 {0}개를 황금의 유산 셰이더로 바꿨습니다(각 파일 백업됨). 되돌리기: /proteus > 설정 > 장비 셰이더.",
+    "description": ""
+  },
+  "MeshVolume.Feature.ShaderUpgrade": {
+    "message": "장비 셰이더 업그레이드",
     "description": ""
   }
 }

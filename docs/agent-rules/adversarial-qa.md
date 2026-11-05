@@ -62,7 +62,7 @@ retry — abandoned work never runs later.
 | `GET /screenshot?ui=true\|false` | The game screen as PNG (`ui=false` = before Dalamud's UI). 429 while another is taken; 503 `capture-timeout` when the game is minimised or not rendering. |
 | `POST /actions/refit` | `{"mod":"<Penumbra folder name>","bodies":["rue","tbse@women"],"remake":false}` → 202 `{job, modDir, state}`. Runs the Studio's "Make every size" with the Studio's current settings, after backing the mod up; then reloads the mod and redraws. |
 | `POST /actions/restore` | `{"job":"<refit job id>"}`, or `{"mod":"<folder>"}`, or `{"mod":"<folder>","backup":"<backupId>"}` → 202. |
-| `POST /actions/shader-upgrade` | `{"enabled":true\|false}` and/or `{"maskGloss":"inverse-specular"\|"low"\|"mid"}` → 200 `{enabled, maskGloss}`. Switches the gear shader upgrade as its Settings checkbox does; `maskGloss` picks how the diffuse form's derived mask fills its roughness channel, for this session only (never saved). 400 `invalid-field` for an unknown value, a wrong type or no field. |
+| `POST /actions/shader-upgrade` | `{"enabled":true\|false}` and/or `{"maskGloss":"inverse-specular"\|"low"\|"mid"}` → 200 `{enabled, maskGloss}`; `{"undoWorn":true}` (optionally `"decline":false`) or `{"upgradeWornNow":true}` → 202 `{started}`. Switches the gear shader upgrade as its Settings checkbox does; `maskGloss` picks how the diffuse form's derived mask fills its roughness channel, for this session only (never saved) and only for files written after it; `undoWorn` / `upgradeWornNow` run the two Settings buttons. 409 `busy` while a run or auto refit is working; 400 `invalid-field` for an unknown field or value, a wrong type, no field, `decline` without `undoWorn`, or both runs at once. |
 | `GET /jobs/{id}` | `{id, kind, modDir, state: queued\|running\|done\|failed\|cancelled, progress, backup, reloaded, redrawRequested, redrawObserved, autoRefitFollowed, result, restored, error}` |
 
 `mod` is the **folder name** Penumbra keeps the mod in (case-insensitive), never its
@@ -121,15 +121,15 @@ The harness never deletes or overwrites a backup; the user may delete them by ha
 
 ## Waiting for the game
 
-- **Gear shader upgrade.** `/state` `shaderUpgrade` is
-  `{enabled, busy, waiting: none|penumbra|managed-mod, awaitingRedraw, maskGloss,
-  upgraded:[{gamePath, source, copy, form: index-mask|diffuse, mask:{gamePath, copy, width, height}|null, loaded}],
-  left:[{gamePath, source, reason: old-table|unsupported-form|unreadable|outranked|unresolved|compositor|write-failed}],
-  peeks:{trustedFirstTry, settled, failedOpen}, reload:{inPlaceLoadsMaterials, inPlace, redraw, gaveUp},
-  masks:{memoHits, decodes, pruned, missingBeforeApply}, lastAppliedUtc}`.
-  After switching it or equipping, wait for `shaderUpgrade.busy == false` (and about 2 s for its verify walk)
-  before you assert `loaded`. Copies live in the managed mod's `ShaderUpgrade/` folder; the worn mod's own
-  folder must hash the same before and after.
+- **Gear shader upgrade — it WRITES INTO THE WORN MODS.** `/state` `shaderUpgrade` is
+  `{enabled, busy, waiting: none|penumbra, awaitingRedraw, maskGloss,
+  upgraded:[{gamePath, modDir, file, form: index-mask|diffuse}],
+  left:[{gamePath, source, reason: old-table|unsupported-form|unreadable|compositor|write-failed|legacy-mod|mixed-specular|specular-from-other-mod|unsupported-placement|proteus-pack|declined}],
+  masks:{memoHits, decodes}, lastRun:{kind: upgrade|undo-worn|upgrade-now, modsChanged, filesChanged, restored, kept, refused, reloaded, redrawRequested, atUtc}}`.
+  After switching it on or equipping, wait for `shaderUpgrade.busy == false` before you assert. **Clean up everything
+  you caused:** hash every file of each mod you will touch first; afterwards, while wearing each upgraded piece, POST
+  `{"undoWorn":true,"decline":false}` and check every non-manifest file hashes as before, the mod's redirects are as
+  before, and no `Shader Upgrade/` folder, `Proteus/shaderupgrade.json` or `Proteus/shaderupgrade-backup/` remains.
 - After a refit or restore, wait for the job to end, then for `/state`
   `autoRefit.busy == false` and `compositor.phase == "idle"` before you assert
   anything or take a screenshot.

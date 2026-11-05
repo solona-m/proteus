@@ -5831,10 +5831,6 @@
     "message": "Upgrade old gear to Dawntrail shaders",
     "description": "Checkbox: as gear is put on, gear whose mod still uses the old characterlegacy.shpk shader is drawn with Dawntrail's character.shpk instead."
   },
-  "Settings.GearShaders.AutoUpgrade.Tip": {
-    "message": "As you put gear on, a piece whose mod still uses the old characterlegacy.shpk\nshader is drawn with Dawntrail's character.shpk instead, so it is lit like current gear.\nYour mods are never changed: Proteus draws its own upgraded copies, and turning this\noff puts the originals back at once.",
-    "description": "Tooltip for the gear shader upgrade checkbox. Keep characterlegacy.shpk and character.shpk exactly as written (file names). Keep the three line breaks."
-  },
   "Settings.GearShaders.Status.Fmt": {
     "message": "{0} upgraded · {1} left on the old shader",
     "description": "Status line under the gear shader upgrade checkbox. {0} = number of worn materials upgraded, {1} = number of worn old-shader materials left as they are."
@@ -5846,10 +5842,6 @@
   "Settings.GearShaders.NextRedraw": {
     "message": "Takes effect at the next redraw (Auto redraw is off).",
     "description": "Status line: the upgrade is in place but the character is not reloaded because the Auto redraw setting is off. \"Auto redraw\" names a setting; match Settings.AutoRedraw."
-  },
-  "Settings.GearShaders.Waiting": {
-    "message": "Waiting for Penumbra and Proteus's mod folder…",
-    "description": "Status line: the upgrade cannot start yet because Penumbra or Proteus's own mod folder is not ready."
   },
   "Settings.GearShaders.Reason.OldTable": {
     "message": "an older colour table",
@@ -5863,20 +5855,76 @@
     "message": "unreadable",
     "description": "Reason in the tooltip: the material file could not be read."
   },
-  "Settings.GearShaders.Reason.Outranked": {
-    "message": "another plugin's redirect wins",
-    "description": "Reason in the tooltip: another plugin redirects this material above Proteus."
-  },
-  "Settings.GearShaders.Reason.Unresolved": {
-    "message": "still settling after a change",
-    "description": "Reason in the tooltip: after a mod change Penumbra's answer had not settled; it is retried at the next change."
-  },
   "Settings.GearShaders.Reason.Compositor": {
     "message": "Proteus's overlays draw it",
     "description": "Reason in the tooltip: Proteus's own compositor publishes this material or its textures, so it is left to the compositor."
   },
   "Settings.GearShaders.Reason.WriteFailed": {
-    "message": "its copy could not be written",
-    "description": "Reason in the tooltip: the upgraded copy could not be saved to disk."
+    "message": "the file could not be written",
+    "description": "Reason in the tooltip: writing the upgraded material (or its mask) into the mod failed."
+  },
+  "Settings.GearShaders.AutoUpgrade.Tip": {
+    "message": "As you put gear on, Proteus rewrites the worn mod's old-shader materials (characterlegacy.shpk)\nto Dawntrail's shader (character.shpk), inside the mod, backing each file up first.\nTurning this off stops further upgrades; it does not undo them. \"Undo for what I'm wearing\"\nputs the author's files back and leaves those pieces alone until \"Upgrade what I'm wearing now\".",
+    "description": "Tooltip for the gear shader upgrade checkbox. Keep characterlegacy.shpk and character.shpk exactly as written. The two quoted button names must match Settings.GearShaders.UndoWorn and Settings.GearShaders.UpgradeNow. Keep the three line breaks."
+  },
+  "Settings.GearShaders.Waiting": {
+    "message": "Waiting for Penumbra.",
+    "description": "Status line: the upgrade cannot start yet because Penumbra is not ready."
+  },
+  "Settings.GearShaders.Reason.LegacyMod": {
+    "message": "an old-format mod folder Proteus does not write to",
+    "description": "Reason in the left-on-the-old-shader tooltip: a pre-v4 Penumbra mod folder."
+  },
+  "Settings.GearShaders.Reason.MixedSpecular": {
+    "message": "its options use different specular maps",
+    "description": "Reason in the tooltip: the options that ship the material name different specular textures for it."
+  },
+  "Settings.GearShaders.Reason.SpecularFromOtherMod": {
+    "message": "its specular map comes from another mod",
+    "description": "Reason in the tooltip: the specular texture the material draws is supplied by a different mod (a retexture), so it is not baked into this mod."
+  },
+  "Settings.GearShaders.Reason.UnsupportedPlacement": {
+    "message": "it sits in a combining group",
+    "description": "Reason in the tooltip: the material is shipped by a Penumbra Combining group, where Proteus does not add files. \"combining group\" is Penumbra's Combining group type."
+  },
+  "Settings.GearShaders.Reason.ProteusPack": {
+    "message": "a Proteus pack (Proteus draws it itself)",
+    "description": "Reason in the tooltip: the material belongs to a pack imported into Proteus, whose materials Proteus writes itself."
+  },
+  "Settings.GearShaders.Reason.Declined": {
+    "message": "undone by you",
+    "description": "Reason in the tooltip: the user undid this piece's upgrade, so it is left alone until they choose \"Upgrade what I'm wearing now\"."
+  },
+  "Settings.GearShaders.UpgradeNow": {
+    "message": "Upgrade what I'm wearing now",
+    "description": "Button: upgrade the old-shader materials of the gear being worn now, including pieces previously undone."
+  },
+  "Settings.GearShaders.UpgradeNow.Tip": {
+    "message": "Move the old-shader materials of what you are wearing now to Dawntrail's shader,\nincluding pieces you undid before.",
+    "description": "Tooltip for the Upgrade-now button. Keep the line break."
+  },
+  "Settings.GearShaders.UndoWorn": {
+    "message": "Undo for what I'm wearing",
+    "description": "Button: put the author's original files back for the gear being worn now."
+  },
+  "Settings.GearShaders.UndoWorn.Tip": {
+    "message": "Put the author's files back for the pieces you are wearing, and leave them alone\nuntil you use \"Upgrade what I'm wearing now\". An update the author shipped since is kept.",
+    "description": "Tooltip for the Undo button. The quoted name must match Settings.GearShaders.UpgradeNow. Keep the line break."
+  },
+  "Settings.GearShaders.Result.Fmt": {
+    "message": "Undo: {0} restored, {1} kept as the author's update, {2} refused.",
+    "description": "Result line after Undo. {0} = files restored from backup, {1} = files left as the author updated them, {2} = files that could not be undone (another feature must be undone first)."
+  },
+  "Settings.GearShaders.Busy": {
+    "message": "Working…",
+    "description": "Tooltip on the buttons while an upgrade or undo is running."
+  },
+  "Chat.ShaderUpgrade.Fmt": {
+    "message": "[Proteus] Moved {0} old-shader material(s) in \"{1}\" to Dawntrail's shader (each file backed up). Undo under /proteus > Settings > Gear shaders.",
+    "description": "Chat notice, once per mod per session. {0} = number of material files rewritten, {1} = the mod's name. Keep /proteus and the \"[Proteus]\" prefix; \"Settings\" and \"Gear shaders\" name a tab and a section (match Tab.Settings and Settings.Section.GearShaders)."
+  },
+  "MeshVolume.Feature.ShaderUpgrade": {
+    "message": "gear shader upgrade",
+    "description": "A feature name inside \"Undo {0} first\" messages (see ModelBackups.Blocked.Fmt): the automatic upgrade of old gear materials to the Dawntrail shader."
   }
 }

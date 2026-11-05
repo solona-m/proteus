@@ -29,7 +29,7 @@ public sealed class Plugin : IDalamudPlugin
 #endif
 
     /// <summary>Hand-maintained; bump it for in-game testing. <see cref="BuildStamp"/> is the one that can't go stale.</summary>
-    public const int BuildNumber = 1422;
+    public const int BuildNumber = 1423;
 
     /// <summary>
     /// Which set of release notes is current. Raise it when a release has something new to say: the window
@@ -236,13 +236,14 @@ public sealed class Plugin : IDalamudPlugin
         // The same: a hair mod made for another race is fitted when it is put on, window shut or open.
         hairPort = new HairPortWatcher(compositor, penumbra, glamourer, config, log);
         // The same: old gear is drawn with Dawntrail's shader as it is put on, window shut or open.
-        shaderUpgrade = new ShaderUpgradeWatcher(compositor, penumbra, glamourer, textureLoader, config, log);
-        designBindings.CopySource = shaderUpgrade.SourceForCopy;
 
         // The same: gear put on is refitted onto the collection's body whether or not any window is open.
         autoRefit = new AutoRefitWatcher(compositor, penumbra, glamourer, designBindings, uvRemap,
                                          path => textureLoader.LoadRawFile(null, path), config, log, dataDir);
         partsPanel.UseBodyIndex(autoRefit.Index);
+
+        // The same: old gear is moved to Dawntrail's shader in its own mod as it is put on, window shut or open.
+        shaderUpgrade = new ShaderUpgradeWatcher(compositor, penumbra, glamourer, autoRefit, textureLoader, config, log);
 
         // A mod renamed in Penumbra: every owner of per-mod state follows it, in one fixed order.
         modMoves = new ModMoveService(penumbra, config, presets, designBindings, compositor, hatCompat, hairPort,
@@ -597,10 +598,10 @@ public sealed class Plugin : IDalamudPlugin
         uvMaps.Dispose();      // before the downloads: no recomposite after this
         uvMapDl.Dispose();
         effectsDl.Dispose();
+        shaderUpgrade.Dispose();   // before auto refit, which it asks, and the bridges it unsubscribes from
         autoRefit.Dispose();   // before the compositor and the bridges, whose events it unsubscribes from
         hatCompat.Dispose();   // before the compositor: it unsubscribes from that object's event
         hairPort.Dispose();    // the same
-        shaderUpgrade.Dispose();   // the same; takes its temporary redirect down, no reload
         compositor.Dispose();
         glamourer.Dispose();
         penumbra.Dispose();

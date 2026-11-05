@@ -10,16 +10,14 @@ using Kit = Proteus.Tests.ShaderUpgradeTestKit;
 namespace Proteus.Tests;
 
 /// <summary>
-/// The gear shader upgrade's policy (<see cref="ShaderUpgradePlan"/>) against the two real legacy materials and the
-/// real grey specular map, in a temporary mods folder.
+/// The gear shader upgrade's policy (<see cref="ShaderUpgradePlan"/>): what is planned, how, and why anything is left —
+/// against the two real legacy materials and the real grey specular map, in temporary v4 mods.
 /// </summary>
 public class ShaderUpgradePlanTests
 {
-    private static Plan BuildOne(Kit kit, string gamePath, string upstream, MaskGloss gloss = MaskGloss.InverseSpecular,
-                                 IReadOnlySet<string>? published = null)
-        => Build([new Worn(gamePath, upstream)], kit.Inputs(gloss, published));
+    private static MaterialWrite One(Plan plan) => Assert.Single(Assert.Single(plan.PerMod).Writes);
 
-    // ── forms and the core upgrade ──────────────────────────────────────────
+    // ── forms and the recipe ────────────────────────────────────────────────
 
     [Fact]
     [Trait("Plan", "AC-dt-shader-upgrade-11")]
@@ -31,59 +29,22 @@ public class ShaderUpgradePlanTests
     }
 
     [Fact]
-    [Trait("Plan", "AC-dt-shader-upgrade-2")]
-    public void A_worn_index_mask_legacy_material_gets_a_sound_copy()
-    {
-        using var kit = new Kit();
-        var up = kit.Put("Old Top", "mt_top_a.mtrl", Kit.FormA());
-        var plan = BuildOne(kit, Kit.TopPath, up);
-
-        var u = Assert.Single(plan.Units);
-        Assert.Empty(plan.Left);
-        Assert.Equal(Kit.TopPath, u.MaterialGamePath);
-        Assert.Equal(LegacyForm.IndexMask, u.Form);
-        Assert.Null(u.Mask);
-        Assert.Equal("character.shpk", CharacterShaderUpgrade.ShaderOf(u.MaterialBytes));
-        Assert.True(IsSound(Kit.FormA(), u.MaterialBytes, LegacyForm.IndexMask, null));
-        Assert.Matches(@"^4242-[0-9a-f]{16}\.mtrl$", u.MaterialCopyName);
-        Assert.Equal("Old Top/mt_top_a.mtrl", u.SourceLabel);
-    }
-
-    [Fact]
-    [Trait("Plan", "AC-dt-shader-upgrade-11")]
-    public void A_worn_diffuse_legacy_material_gets_a_compatibility_mode_copy_with_a_derived_mask()
-    {
-        using var kit = new Kit();
-        var up = kit.Put("Bandana", "mt_top_b.mtrl", Kit.FormB());
-        var plan = BuildOne(kit, Kit.TopPath, up);
-
-        var u = Assert.Single(plan.Units);
-        Assert.Equal(LegacyForm.Diffuse, u.Form);
-        Assert.NotNull(u.Mask);
-        Assert.Equal((64, 64), (u.Mask!.Width, u.Mask.Height));
-        Assert.StartsWith(MaskGameRoot, u.Mask.GamePath);
-        Assert.Equal(TextureModeCompatibility, Keys(u.MaterialBytes)![TextureModeKey]);
-        Assert.Equal(u.Mask.GamePath, MaskSlotPath(u.MaterialBytes));
-        Assert.True(IsSound(Kit.FormB(), u.MaterialBytes, LegacyForm.Diffuse, u.Mask.GamePath));
-        // No added occlusion; the specular pattern kept.
-        Assert.All(Enumerable.Range(0, 64 * 64), i => Assert.Equal(255, u.Mask.Rgba![i * 4 + 2]));
-    }
-
-    [Fact]
     [Trait("Plan", "EDGE-dt-shader-upgrade-25")]
     public void Diffuse_form_keeps_its_mode_and_bindings_and_retargets_only_the_mask()
     {
         using var kit = new Kit();
+        var dress = kit.Dress("Bandana", Kit.FormB(), withSpec: true);
+        var w = One(kit.Plan([Kit.Worn(Kit.TopPath, dress, "red/top.mtrl")], _ => Path.Combine(dress, "tex", "top_s.tex")));
         var src = Kit.FormB();
-        var u = Assert.Single(BuildOne(kit, Kit.TopPath, kit.Put("B", "m.mtrl", src)).Units);
         var before = TexturePaths(src)!;
-        var after = TexturePaths(u.MaterialBytes)!;
-        Assert.Equal(Samplers(src), Samplers(u.MaterialBytes));
+        var after = TexturePaths(w.Bytes)!;
+        Assert.Equal(Samplers(src), Samplers(w.Bytes));
         int maskIndex = Samplers(src)!.Single(s => s.Id == SamplerMask).TextureIndex;
         for (int i = 0; i < before.Length; i++)
-            if (i == maskIndex) Assert.Equal(u.Mask!.GamePath, after[i]);
+            if (i == maskIndex) Assert.Equal(w.Mask!.GamePath, after[i]);
             else Assert.Equal(before[i], after[i]);
-        Assert.Equal(Keys(src)![TextureModeKey], Keys(u.MaterialBytes)![TextureModeKey]);
+        Assert.Equal(TextureModeCompatibility, Keys(w.Bytes)![TextureModeKey]);
+        Assert.Equal("character.shpk", CharacterShaderUpgrade.ShaderOf(w.Bytes));
     }
 
     [Fact]
@@ -95,136 +56,39 @@ public class ShaderUpgradePlanTests
         int row = GearMaterialWriter.ColorTableStart(src) + 2 * 64;
         BitConverter.TryWriteBytes(src.AsSpan(row + 3 * 2), (Half)20f);
         BitConverter.TryWriteBytes(src.AsSpan(row + 7 * 2), (Half)1f);
-        var u = Assert.Single(BuildOne(kit, Kit.TopPath, kit.Put("B", "m.mtrl", src)).Units);
-        int at = GearMaterialWriter.ColorTableStart(u.MaterialBytes) + 2 * 64;
-        Assert.Equal((Half)1f, BitConverter.ToHalf(u.MaterialBytes, at + 3 * 2));
-        Assert.Equal((Half)0f, BitConverter.ToHalf(u.MaterialBytes, at + 7 * 2));
-        Assert.Equal((Half)CharacterShaderUpgrade.RoughnessFromShininess(20f), BitConverter.ToHalf(u.MaterialBytes, at + 16 * 2));
+        var dress = kit.Dress("B", src, withSpec: true);
+        var w = One(kit.Plan([Kit.Worn(Kit.TopPath, dress, "red/top.mtrl")], _ => Path.Combine(dress, "tex", "top_s.tex")));
+        int at = GearMaterialWriter.ColorTableStart(w.Bytes) + 2 * 64;
+        Assert.Equal((Half)1f, BitConverter.ToHalf(w.Bytes, at + 3 * 2));
+        Assert.Equal((Half)0f, BitConverter.ToHalf(w.Bytes, at + 7 * 2));
+        Assert.Equal((Half)CharacterShaderUpgrade.RoughnessFromShininess(20f), BitConverter.ToHalf(w.Bytes, at + 16 * 2));
     }
 
     [Fact]
     [Trait("Plan", "EDGE-dt-shader-upgrade-26")]
-    public void Copies_carry_zero_wind_constants()
+    public void Writes_carry_zero_wind_constants()
     {
         using var kit = new Kit();
-        foreach (var src in new[] { Kit.FormA(), Kit.FormB() })
+        var a = kit.Dress("A", Kit.FormA());
+        var b = kit.Dress("B", Kit.FormB(), withSpec: true);
+        foreach (var (mod, resolve) in new[] { (a, (Func<string, string?>?)null), (b, _ => Path.Combine(b, "tex", "top_s.tex")) })
         {
-            var u = Assert.Single(BuildOne(kit, Kit.TopPath, kit.Put("M" + src.Length, "m.mtrl", src)).Units);
-            Assert.Equal([0f], Constant(u.MaterialBytes, MeshVolumeService.VertexMovementScaleId)!);
-            Assert.Equal([0f], Constant(u.MaterialBytes, MeshVolumeService.VertexMovementMaxLengthId)!);
+            var w = One(kit.Plan([Kit.Worn(Kit.TopPath, mod, "red/top.mtrl")], resolve));
+            Assert.Equal([0f], Constant(w.Bytes, MeshVolumeService.VertexMovementScaleId)!);
+            Assert.Equal([0f], Constant(w.Bytes, MeshVolumeService.VertexMovementMaxLengthId)!);
         }
     }
 
     [Fact]
-    [Trait("Plan", "AC-dt-shader-upgrade-7")]
-    public void Only_recognised_dawntrail_table_mod_materials_are_upgraded()
-    {
-        using var kit = new Kit();
-        var legacy = kit.Put("A", "legacy.mtrl", Kit.FormA());
-        var dt = kit.Put("B", "dt.mtrl", CharacterShaderUpgrade.Upgrade(Kit.FormA())!);
-        var old = Kit.FormA();
-        ClearTableShape(old);
-        var oldPath = kit.Put("C", "old.mtrl", old);
-        var plan = Build([
-            new Worn(Kit.TopPath, legacy),
-            new Worn(Kit.DwnPath, dt),
-            new Worn("chara/equipment/e0001/material/v0001/mt_c0201e0001_glv_a.mtrl", null),
-            new Worn("chara/equipment/e0002/material/v0001/mt_c0201e0002_sho_a.mtrl", oldPath),
-        ], kit.Inputs());
-        Assert.Equal(Kit.TopPath, Assert.Single(plan.Units).MaterialGamePath);
-        Assert.Equal(LeftReason.OldTable, Assert.Single(plan.Left).Reason);
-    }
-
-    private static void ClearTableShape(byte[] mtrl)
-    {
-        int flagsAt = GearMaterialWriter.ColorTableStart(mtrl) - mtrl[15];
-        uint flags = BitConverter.ToUInt32(mtrl, flagsAt);
-        BitConverter.TryWriteBytes(mtrl.AsSpan(flagsAt), flags & ~0xFF0u);
-    }
-
-    [Fact]
-    [Trait("Plan", "EDGE-dt-shader-upgrade-1")]
-    public void A_pre_dawntrail_table_is_left_as_old_table()
-    {
-        using var kit = new Kit();
-        var old = Kit.FormA();
-        ClearTableShape(old);
-        var plan = BuildOne(kit, Kit.TopPath, kit.Put("C", "old.mtrl", old));
-        Assert.Empty(plan.Units);
-        Assert.Equal(LeftReason.OldTable, Assert.Single(plan.Left).Reason);
-    }
-
-    [Fact]
-    [Trait("Plan", "EDGE-dt-shader-upgrade-2")]
-    public void Unreadable_or_unsound_is_left_and_never_written()
-    {
-        using var kit = new Kit();
-        // Truncated past its header: the shader name still reads as legacy, but nothing behind it can be walked.
-        var plan = BuildOne(kit, Kit.TopPath, kit.Put("T", "t.mtrl", Kit.FormA()[..200]));
-        Assert.Empty(plan.Units);
-        Assert.All(plan.Left, l => Assert.Equal(LeftReason.Unreadable, l.Reason));
-
-        // A missing file reads as unreadable too.
-        var gone = BuildOne(kit, Kit.TopPath, Path.Combine(kit.ModsRoot, "Gone", "x.mtrl"));
-        Assert.Equal(LeftReason.Unreadable, Assert.Single(gone.Left).Reason);
-
-        // IsSound refuses a header size off by one, or changed texture paths.
-        var good = CharacterShaderUpgrade.Upgrade(Kit.FormA())!;
-        var wind = WindNeutral(good)!;
-        Assert.True(IsSound(Kit.FormA(), wind, LegacyForm.IndexMask, null));
-        var badSize = (byte[])wind.Clone();
-        BitConverter.TryWriteBytes(badSize.AsSpan(4), (ushort)(wind.Length - 1));
-        Assert.False(IsSound(Kit.FormA(), badSize, LegacyForm.IndexMask, null));
-        var paths = TexturePaths(Kit.FormA())!;
-        var retargeted = TextureLoader.RetargetTexturePaths(wind, new Dictionary<string, string> { [paths[0]] = "chara/x/y.tex" })!;
-        Assert.False(IsSound(Kit.FormA(), retargeted, LegacyForm.IndexMask, null));
-        // Nothing upgraded means nothing written.
-        Assert.False(Directory.Exists(ManagedModPaths.ShaderUpgradeDir(kit.ManagedRoot)));
-    }
-
-    [Fact]
-    [Trait("Plan", "EDGE-dt-shader-upgrade-3")]
-    public void Already_character_shader_is_untouched()
-    {
-        using var kit = new Kit();
-        var plan = BuildOne(kit, Kit.TopPath, kit.Put("D", "d.mtrl", CharacterShaderUpgrade.Upgrade(Kit.FormA())!));
-        Assert.Empty(plan.Units);
-        Assert.Empty(plan.Left);
-    }
-
-    [Fact]
-    [Trait("Plan", "EDGE-dt-shader-upgrade-35")]
-    public void Unsupported_forms_are_left()
-    {
-        using var kit = new Kit();
-        // Form A with the compatibility mode: neither form.
-        var odd = Kit.FormA();
-        odd = TextureLoader.EnsureShaderKey(odd, TextureModeKey, TextureModeCompatibility);
-        Assert.Equal(LegacyForm.Unsupported, FormOf(odd));
-        var plan = BuildOne(kit, Kit.TopPath, kit.Put("O", "o.mtrl", odd));
-        Assert.Equal(LeftReason.UnsupportedForm, Assert.Single(plan.Left).Reason);
-    }
-
-    [Fact]
-    [Trait("Plan", "EDGE-dt-shader-upgrade-40")]
-    public void Compat_mask_diffuse_form_is_left_unsupported()
-    {
-        using var kit = new Kit();
-        var b = TextureLoader.EnsureShaderKey(Kit.FormB(), SpecularModeKey, SpecularModeMask);
-        Assert.Equal(LegacyForm.Unsupported, FormOf(b));
-        Assert.Equal(LeftReason.UnsupportedForm, Assert.Single(BuildOne(kit, Kit.TopPath, kit.Put("O", "o.mtrl", b)).Left).Reason);
-    }
-
-    [Fact]
     [Trait("Plan", "EDGE-dt-shader-upgrade-22")]
-    public void Dye_table_survives_into_the_copy()
+    public void Dye_table_survives_into_the_write()
     {
         using var kit = new Kit();
         var src = Kit.FormA();
         int dyeAt = GearMaterialWriter.ColorTableStart(src) + 32 * 64 + 15 * 4;
         BitConverter.TryWriteBytes(src.AsSpan(dyeAt), (400u << 16) | 0x01);
-        var u = Assert.Single(BuildOne(kit, Kit.TopPath, kit.Put("Dy", "d.mtrl", src)).Units);
-        uint v = BitConverter.ToUInt32(u.MaterialBytes, GearMaterialWriter.ColorTableStart(u.MaterialBytes) + 32 * 64 + 15 * 4);
+        var w = One(kit.Plan([Kit.Worn(Kit.TopPath, kit.Dress("Dy", src), "red/top.mtrl")]));
+        uint v = BitConverter.ToUInt32(w.Bytes, GearMaterialWriter.ColorTableStart(w.Bytes) + 32 * 64 + 15 * 4);
         Assert.Equal(1400u, (v >> 16) & 0x7FF);
     }
 
@@ -236,13 +100,139 @@ public class ShaderUpgradePlanTests
         var src = Kit.FormB();
         int dyeAt = GearMaterialWriter.ColorTableStart(src) + 32 * 64 + 3 * 4;
         BitConverter.TryWriteBytes(src.AsSpan(dyeAt), (213u << 16) | 0x01 | 0x08);
-        var u = Assert.Single(BuildOne(kit, Kit.TopPath, kit.Put("Dy", "d.mtrl", src)).Units);
-        uint v = BitConverter.ToUInt32(u.MaterialBytes, GearMaterialWriter.ColorTableStart(u.MaterialBytes) + 32 * 64 + 3 * 4);
+        var dress = kit.Dress("Dy", src, withSpec: true);
+        var w = One(kit.Plan([Kit.Worn(Kit.TopPath, dress, "red/top.mtrl")], _ => Path.Combine(dress, "tex", "top_s.tex")));
+        uint v = BitConverter.ToUInt32(w.Bytes, GearMaterialWriter.ColorTableStart(w.Bytes) + 32 * 64 + 3 * 4);
         Assert.Equal(1213u, (v >> 16) & 0x7FF);
         Assert.Equal(0x01u | 0x20, v & 0xFFF);
     }
 
-    // ── where files come from ───────────────────────────────────────────────
+    // ── what is planned and what is left ───────────────────────────────────
+
+    private static void ClearTableShape(byte[] mtrl)
+    {
+        int flagsAt = GearMaterialWriter.ColorTableStart(mtrl) - mtrl[15];
+        uint flags = BitConverter.ToUInt32(mtrl, flagsAt);
+        BitConverter.TryWriteBytes(mtrl.AsSpan(flagsAt), flags & ~0xFF0u);
+    }
+
+    private const string Glv = "chara/equipment/e000{0}/material/v0001/mt_c0201e000{0}_glv_a.mtrl";
+    private static string G(int n) => string.Format(Glv, n);
+
+    [Fact]
+    [Trait("Plan", "AC-dt-shader-upgrade-7")]
+    public void Only_recognised_mod_materials_are_planned()
+    {
+        using var kit = new Kit();
+        var compat = TextureLoader.EnsureShaderKey(Kit.FormB(), SpecularModeKey, SpecularModeMask);
+        var odd = TextureLoader.EnsureShaderKey(Kit.FormA(), TextureModeKey, TextureModeCompatibility);
+        var old = Kit.FormA();
+        ClearTableShape(old);
+        var mod = kit.Mod("Mixed", new Dictionary<string, string>
+        {
+            [Kit.TopPath] = "a.mtrl", [Kit.DwnPath] = "b.mtrl", [Kit.SpecPath] = "s.tex",
+            [G(1)] = "compat.mtrl", [G(2)] = "odd.mtrl", [G(3)] = "dt.mtrl", [G(4)] = "old.mtrl",
+        });
+        Kit.Put(mod, "a.mtrl", Kit.FormA());
+        Kit.Put(mod, "b.mtrl", Kit.FormB());
+        Kit.Put(mod, "s.tex", Kit.Fixture("legacy_spec_s.tex"));
+        Kit.Put(mod, "compat.mtrl", compat);
+        Kit.Put(mod, "odd.mtrl", odd);
+        Kit.Put(mod, "dt.mtrl", CharacterShaderUpgrade.Upgrade(Kit.FormA())!);
+        Kit.Put(mod, "old.mtrl", old);
+        var pack = kit.Mod("Pack", new Dictionary<string, string> { [G(5)] = "p.mtrl" });
+        Kit.Put(pack, "p.mtrl", Kit.FormA());
+        Kit.Put(pack, "Proteus/metadata.json", "{}"u8.ToArray());
+
+        var plan = kit.Plan([
+            Kit.Worn(Kit.TopPath, mod, "a.mtrl"), Kit.Worn(Kit.DwnPath, mod, "b.mtrl"),
+            Kit.Worn(G(1), mod, "compat.mtrl"), Kit.Worn(G(2), mod, "odd.mtrl"), Kit.Worn(G(3), mod, "dt.mtrl"),
+            Kit.Worn(G(4), mod, "old.mtrl"), Kit.Worn(G(5), pack, "p.mtrl"),
+            new Worn(G(6), null),
+            new Worn(G(7), Path.Combine(kit.ManagedRoot, "materials", "x.mtrl")),
+            new Worn(G(8), @"Q:\elsewhere\x.mtrl"),
+        ], _ => Path.Combine(mod, "s.tex"));
+        Assert.Equal(["a.mtrl", "b.mtrl"], Assert.Single(plan.PerMod).Writes.Select(w => w.Rel).Order());
+        Assert.Equal(new[] { LeftReason.OldTable, LeftReason.UnsupportedForm, LeftReason.UnsupportedForm,
+                             LeftReason.Compositor, LeftReason.ProteusPack }.Order(),
+                     plan.Left.Select(l => l.Reason).Order());
+    }
+
+    [Fact]
+    [Trait("Plan", "EDGE-dt-shader-upgrade-1")]
+    public void A_pre_dawntrail_table_is_left_as_old_table()
+    {
+        using var kit = new Kit();
+        var old = Kit.FormA();
+        ClearTableShape(old);
+        var plan = kit.Plan([Kit.Worn(Kit.TopPath, kit.Dress("Old", old), "red/top.mtrl")]);
+        Assert.Empty(plan.PerMod);
+        Assert.Equal(LeftReason.OldTable, Assert.Single(plan.Left).Reason);
+    }
+
+    [Fact]
+    [Trait("Plan", "EDGE-dt-shader-upgrade-2")]
+    public void Unreadable_or_unsound_is_left_and_never_written()
+    {
+        using var kit = new Kit();
+        var dress = kit.Dress("T", Kit.FormA()[..200]);
+        var plan = kit.Plan([Kit.Worn(Kit.TopPath, dress, "red/top.mtrl")]);
+        Assert.Empty(plan.PerMod);
+        Assert.All(plan.Left, l => Assert.Equal(LeftReason.Unreadable, l.Reason));
+        var gone = kit.Plan([new Worn(Kit.TopPath, Path.Combine(dress, "gone.mtrl"))]);
+        Assert.Equal(LeftReason.Unreadable, Assert.Single(gone.Left).Reason);
+
+        var good = WindNeutral(CharacterShaderUpgrade.Upgrade(Kit.FormA())!)!;
+        Assert.True(IsSound(Kit.FormA(), good, LegacyForm.IndexMask, null));
+        var badSize = (byte[])good.Clone();
+        BitConverter.TryWriteBytes(badSize.AsSpan(4), (ushort)(good.Length - 1));
+        Assert.False(IsSound(Kit.FormA(), badSize, LegacyForm.IndexMask, null));
+        var paths = TexturePaths(Kit.FormA())!;
+        Assert.False(IsSound(Kit.FormA(),
+                             TextureLoader.RetargetTexturePaths(good, new Dictionary<string, string> { [paths[0]] = "chara/x/y.tex" })!,
+                             LegacyForm.IndexMask, null));
+    }
+
+    [Fact]
+    [Trait("Plan", "EDGE-dt-shader-upgrade-3")]
+    public void Already_character_shader_is_untouched()
+    {
+        using var kit = new Kit();
+        var plan = kit.Plan([Kit.Worn(Kit.TopPath, kit.Dress("D", CharacterShaderUpgrade.Upgrade(Kit.FormA())!), "red/top.mtrl")]);
+        Assert.Empty(plan.PerMod);
+        Assert.Empty(plan.Left);
+    }
+
+    [Fact]
+    [Trait("Plan", "EDGE-dt-shader-upgrade-18")]
+    public void A_wind_upgraded_material_is_skipped()
+    {
+        using var kit = new Kit();
+        var dress = kit.Dress("W", CharacterShaderUpgrade.Upgrade(Kit.FormA())!);
+        Assert.Empty(kit.Plan([Kit.Worn(Kit.TopPath, dress, "red/top.mtrl")]).PerMod);
+    }
+
+    [Fact]
+    [Trait("Plan", "EDGE-dt-shader-upgrade-35")]
+    public void Unsupported_forms_are_left()
+    {
+        using var kit = new Kit();
+        var odd = TextureLoader.EnsureShaderKey(Kit.FormA(), TextureModeKey, TextureModeCompatibility);
+        Assert.Equal(LegacyForm.Unsupported, FormOf(odd));
+        Assert.Equal(LeftReason.UnsupportedForm,
+                     Assert.Single(kit.Plan([Kit.Worn(Kit.TopPath, kit.Dress("O", odd), "red/top.mtrl")]).Left).Reason);
+    }
+
+    [Fact]
+    [Trait("Plan", "EDGE-dt-shader-upgrade-40")]
+    public void Compat_mask_diffuse_form_is_left_unsupported()
+    {
+        using var kit = new Kit();
+        var b = TextureLoader.EnsureShaderKey(Kit.FormB(), SpecularModeKey, SpecularModeMask);
+        Assert.Equal(LegacyForm.Unsupported, FormOf(b));
+        Assert.Equal(LeftReason.UnsupportedForm,
+                     Assert.Single(kit.Plan([Kit.Worn(Kit.TopPath, kit.Dress("O", b), "red/top.mtrl")]).Left).Reason);
+    }
 
     [Fact]
     [Trait("Plan", "EDGE-dt-shader-upgrade-7")]
@@ -253,134 +243,144 @@ public class ShaderUpgradePlanTests
         foreach (var s in new[] { "ear", "nek", "wrs", "rir", "ril" })
             Assert.True(IsGearMaterial($"chara/accessory/a0123/material/v0001/mt_c0201a0123_{s}_a.mtrl"));
         Assert.False(IsGearMaterial("chara/human/c0201/obj/hair/h0001/material/v0001/mt_c0201h0001_hir_a.mtrl"));
-        Assert.False(IsGearMaterial("chara/human/c0201/obj/face/f0001/material/mt_c0201f0001_fac_a.mtrl"));
         Assert.False(IsGearMaterial("chara/human/c0201/obj/body/b0001/material/v0001/mt_c0201b0001_a.mtrl"));
         Assert.False(IsGearMaterial("chara/weapon/w0101/obj/body/b0001/material/v0001/mt_w0101b0001_a.mtrl"));
         Assert.False(IsGearMaterial("chara/equipment/e0123/material/mt_c0201e0123_top_a.mtrl"));
-        Assert.False(IsGearMaterial("/mt_c0201e0123_top_a.mtrl"));
     }
 
     [Fact]
     [Trait("Plan", "EDGE-dt-shader-upgrade-4")]
     public void Classify_game_served()
     {
-        Assert.Equal(Source.Game, Classify(Kit.TopPath, null, @"C:\mods", @"C:\mods\Proteus"));
-        Assert.Equal(Source.Game, Classify(Kit.TopPath, Kit.TopPath, @"C:\mods", @"C:\mods\Proteus"));
-        Assert.Equal(Source.Game, Classify(Kit.TopPath, "some/relative/file.mtrl", @"C:\mods", @"C:\mods\Proteus"));
+        static bool No(string _) => false;
+        Assert.Equal(Source.Game, Classify(Kit.TopPath, null, @"C:\mods", @"C:\mods\Proteus", No));
+        Assert.Equal(Source.Game, Classify(Kit.TopPath, Kit.TopPath, @"C:\mods", @"C:\mods\Proteus", No));
+        Assert.Equal(Source.Game, Classify(Kit.TopPath, "relative/file.mtrl", @"C:\mods", @"C:\mods\Proteus", No));
     }
 
     [Fact]
     [Trait("Plan", "EDGE-dt-shader-upgrade-6")]
     public void Classify_outside_the_mods_root()
     {
-        Assert.Equal(Source.Outside, Classify(Kit.TopPath, @"D:\elsewhere\x.mtrl", @"C:\mods", @"C:\mods\Proteus"));
-        Assert.Equal(Source.Mod, Classify(Kit.TopPath, @"C:\mods\Dress\x.mtrl", @"C:\mods", @"C:\mods\Proteus"));
-        Assert.Equal(Source.Copy, Classify(Kit.TopPath, @"C:\mods\Proteus\ShaderUpgrade\1-ab.mtrl", @"C:\mods", @"C:\mods\Proteus"));
+        static bool No(string _) => false;
+        Assert.Equal(Source.Outside, Classify(Kit.TopPath, @"D:\elsewhere\x.mtrl", @"C:\mods", @"C:\mods\Proteus", No));
+        Assert.Equal(Source.Mod, Classify(Kit.TopPath, @"C:\mods\Dress\x.mtrl", @"C:\mods", @"C:\mods\Proteus", No));
     }
 
     [Fact]
     [Trait("Plan", "EDGE-dt-shader-upgrade-5")]
-    public void Published_or_own_output_paths_are_left_to_the_compositor()
+    public void Managed_mod_output_is_left_to_the_compositor()
     {
         using var kit = new Kit();
-        Assert.Equal(Source.Own, Classify(Kit.TopPath, Path.Combine(kit.ManagedRoot, "materials", "x.mtrl"), kit.ModsRoot, kit.ManagedRoot));
-        var own = BuildOne(kit, Kit.TopPath, Path.Combine(kit.ManagedRoot, "materials", "x.mtrl"));
-        Assert.Equal(LeftReason.Compositor, Assert.Single(own.Left).Reason);
-
-        var published = new HashSet<string>(StringComparer.OrdinalIgnoreCase) { Kit.TopPath };
-        var pub = BuildOne(kit, Kit.TopPath, kit.Put("A", "a.mtrl", Kit.FormA()), published: published);
-        Assert.Empty(pub.Units);
-        Assert.Equal(LeftReason.Compositor, Assert.Single(pub.Left).Reason);
+        var plan = kit.Plan([new Worn(Kit.TopPath, Path.Combine(kit.ManagedRoot, "materials", "x.mtrl"))]);
+        Assert.Empty(plan.PerMod);
+        Assert.Equal(LeftReason.Compositor, Assert.Single(plan.Left).Reason);
     }
 
     [Fact]
-    [Trait("Plan", "EDGE-dt-shader-upgrade-47")]
-    public void Texture_level_compositor_ownership_is_form_B_mask_slot_only()
+    [Trait("Plan", "EDGE-dt-shader-upgrade-72")]
+    public void Proteus_sidecar_pack_is_left()
     {
         using var kit = new Kit();
-        var bSlot = MaskSlotPath(Kit.FormB())!;
-        var b = BuildOne(kit, Kit.TopPath, kit.Put("B", "b.mtrl", Kit.FormB()),
-                         published: new HashSet<string>(StringComparer.OrdinalIgnoreCase) { bSlot });
-        Assert.Empty(b.Units);
-        Assert.Equal(LeftReason.Compositor, Assert.Single(b.Left).Reason);
-
-        var aPaths = TexturePaths(Kit.FormA())!;
-        var a = BuildOne(kit, Kit.TopPath, kit.Put("A", "a.mtrl", Kit.FormA()),
-                         published: new HashSet<string>(aPaths, StringComparer.OrdinalIgnoreCase));
-        var u = Assert.Single(a.Units);
-        Assert.Equal(aPaths, TexturePaths(u.MaterialBytes));   // still samples the compositor's textures
+        var pack = kit.Dress("Pack", Kit.FormA());
+        Kit.Put(pack, "Proteus/metadata.json", "{}"u8.ToArray());
+        Assert.True(IsProteusPack(pack));
+        var plan = kit.Plan([Kit.Worn(Kit.TopPath, pack, "red/top.mtrl")]);
+        Assert.Empty(plan.PerMod);
+        Assert.Equal(LeftReason.ProteusPack, Assert.Single(plan.Left).Reason);
     }
 
     [Fact]
     [Trait("Plan", "EDGE-dt-shader-upgrade-17")]
-    public void One_upstream_many_paths_one_copy()
+    public void One_file_many_paths_one_write()
     {
         using var kit = new Kit();
-        var up = kit.Put("A", "a.mtrl", Kit.FormA());
-        int reads = 0;
-        var inp = kit.Inputs();
-        inp = new Inputs
-        {
-            ModsRoot = inp.ModsRoot, ManagedRoot = inp.ManagedRoot, Pid = inp.Pid,
-            Read = p => { reads++; return File.ReadAllBytes(p); },
-            ResolveTexture = inp.ResolveTexture, DecodeNative = inp.DecodeNative, Stat = inp.Stat, MaskFileOk = inp.MaskFileOk,
-            Memo = inp.Memo,
-        };
-        var plan = Build([new Worn(Kit.TopPath, up), new Worn(Kit.DwnPath, up)], inp);
-        Assert.Equal(2, plan.Units.Count);
-        Assert.Single(plan.Units.Select(u => u.MaterialCopyName).Distinct());
-        Assert.Equal(1, reads);
-    }
-
-    [Fact]
-    [Trait("Plan", "EDGE-dt-shader-upgrade-10")]
-    public void Same_bytes_same_copy_name()
-    {
-        var a = CopyName(1, [1, 2, 3]);
-        Assert.Equal(a, CopyName(1, [1, 2, 3]));
-        Assert.NotEqual(a, CopyName(1, [1, 2, 4]));
+        var mod = kit.Mod("M", new Dictionary<string, string> { [Kit.TopPath] = "a.mtrl", [Kit.DwnPath] = "a.mtrl" });
+        Kit.Put(mod, "a.mtrl", Kit.FormA());
+        Assert.Equal(2, One(kit.Plan([Kit.Worn(Kit.TopPath, mod, "a.mtrl"), Kit.Worn(Kit.DwnPath, mod, "a.mtrl")])).GamePaths.Count);
     }
 
     [Fact]
     [Trait("Plan", "AC-dt-shader-upgrade-6")]
-    public void A_changed_upstream_replaces_the_old_copy()
+    public void A_newly_drawn_file_is_planned()
     {
         using var kit = new Kit();
-        var first = Assert.Single(BuildOne(kit, Kit.TopPath, kit.Put("A", "a.mtrl", Kit.FormA())).Units);
-        var other = Kit.FormA();
-        BitConverter.TryWriteBytes(other.AsSpan(GearMaterialWriter.ColorTableStart(other)), (Half)0.5f);
-        var second = Assert.Single(BuildOne(kit, Kit.TopPath, kit.Put("B", "b.mtrl", other)).Units);
-        Assert.NotEqual(first.MaterialCopyName, second.MaterialCopyName);
-        Assert.NotEqual(first.Upstream, second.Upstream);
+        var dress = kit.Dress("D", Kit.FormA());
+        Assert.Equal("red/top.mtrl", One(kit.Plan([Kit.Worn(Kit.TopPath, dress, "red/top.mtrl")])).Rel);
+        // The player picked the other option: its file is what is drawn now, and it is planned.
+        Assert.Equal("blue/top.mtrl", One(kit.Plan([Kit.Worn(Kit.TopPath, dress, "blue/top.mtrl")])).Rel);
     }
 
     [Fact]
-    [Trait("Plan", "EDGE-dt-shader-upgrade-18")]
-    public void Edited_upstream_gets_a_new_copy_and_a_wind_upgraded_one_is_dropped()
+    [Trait("Plan", "EDGE-dt-shader-upgrade-56")]
+    public void Diffuse_material_in_a_combining_container_is_left_and_index_mask_is_not()
     {
         using var kit = new Kit();
-        var path = kit.Put("A", "a.mtrl", Kit.FormA());
-        var before = Assert.Single(BuildOne(kit, Kit.TopPath, path).Units).MaterialCopyName;
-        var edited = Kit.FormA();
-        BitConverter.TryWriteBytes(edited.AsSpan(GearMaterialWriter.ColorTableStart(edited) + 64), (Half)0.25f);
-        File.WriteAllBytes(path, edited);
-        Assert.NotEqual(before, Assert.Single(BuildOne(kit, Kit.TopPath, path).Units).MaterialCopyName);
-
-        // The wind brush upgraded the file itself: it is character.shpk now, and no unit is made.
-        File.WriteAllBytes(path, CharacterShaderUpgrade.Upgrade(edited)!);
-        Assert.Empty(BuildOne(kit, Kit.TopPath, path).Units);
+        var mod = kit.Mod("C", null, ("Mix", "Combining", [
+            ("A", new Dictionary<string, string> { [Kit.TopPath] = "b.mtrl", [Kit.SpecPath] = "s.tex" }),
+            ("B", new Dictionary<string, string> { [Kit.DwnPath] = "a.mtrl" })]));
+        Kit.Put(mod, "b.mtrl", Kit.FormB());
+        Kit.Put(mod, "a.mtrl", Kit.FormA());
+        Kit.Put(mod, "s.tex", Kit.Fixture("legacy_spec_s.tex"));
+        var plan = kit.Plan([Kit.Worn(Kit.TopPath, mod, "b.mtrl"), Kit.Worn(Kit.DwnPath, mod, "a.mtrl")], _ => Path.Combine(mod, "s.tex"));
+        Assert.Equal("a.mtrl", One(plan).Rel);
+        Assert.Equal(LeftReason.UnsupportedPlacement, Assert.Single(plan.Left).Reason);
     }
 
     [Fact]
-    [Trait("Plan", "EDGE-dt-shader-upgrade-24")]
-    public void Mod_moved_peeks_and_copies_follow_the_managed_root()
+    [Trait("Plan", "EDGE-dt-shader-upgrade-57")]
+    public void Owners_disagreeing_on_the_specular_file_leave_the_material()
     {
-        Assert.True(SignalFor(Signal.ModMoved).Peek);
         using var kit = new Kit();
-        var renamed = Path.Combine(kit.ModsRoot, "Proteus Renamed");
-        Assert.Equal(Source.Copy, Classify(Kit.TopPath, Path.Combine(renamed, "ShaderUpgrade", "1-ab.mtrl"), kit.ModsRoot, renamed));
-        var copy = ShaderUpgradeCopies.WriteMaterial(renamed, "1-aaaaaaaaaaaaaaaa.mtrl", [1, 2, 3], (p, b) => File.WriteAllBytes(p, b));
-        Assert.StartsWith(Path.Combine(renamed, "ShaderUpgrade"), copy);
+        var mod = kit.Mod("Mx", null, ("Colour", "Single", [
+            ("Red", new Dictionary<string, string> { [Kit.TopPath] = "top.mtrl", [Kit.SpecPath] = "red_s.tex" }),
+            ("Blue", new Dictionary<string, string> { [Kit.TopPath] = "top.mtrl", [Kit.SpecPath] = "blue_s.tex" })]));
+        Kit.Put(mod, "top.mtrl", Kit.FormB());
+        Kit.Put(mod, "red_s.tex", Kit.Fixture("legacy_spec_s.tex"));
+        Kit.Put(mod, "blue_s.tex", Kit.Fixture("legacy_spec_s.tex"));
+        var plan = kit.Plan([Kit.Worn(Kit.TopPath, mod, "top.mtrl")], _ => Path.Combine(mod, "red_s.tex"));
+        Assert.Empty(plan.PerMod);
+        Assert.Equal(LeftReason.MixedSpecular, Assert.Single(plan.Left).Reason);
+    }
+
+    [Fact]
+    [Trait("Plan", "EDGE-dt-shader-upgrade-71")]
+    public void Specular_from_another_mod_leaves_the_material()
+    {
+        using var kit = new Kit();
+        var dress = kit.Dress("Dress", Kit.FormB());   // ships the material, not the _s
+        var retex = kit.Mod("Retexture", new Dictionary<string, string> { [Kit.SpecPath] = "s.tex" });
+        Kit.Put(retex, "s.tex", Kit.Fixture("legacy_spec_s.tex"));
+        var owners = OwnersOf(HairPortPlan.ReadOwners(dress)!, "red/top.mtrl");
+
+        Assert.Equal(SpecularKind.OtherMod, SpecularSource(Path.Combine(retex, "s.tex"), Kit.SpecPath, dress, kit.ModsRoot, owners).Kind);
+        var plan = kit.Plan([Kit.Worn(Kit.TopPath, dress, "red/top.mtrl")], _ => Path.Combine(retex, "s.tex"));
+        Assert.Empty(plan.PerMod);
+        Assert.Equal(LeftReason.SpecularFromOtherMod, Assert.Single(plan.Left).Reason);
+
+        var own = kit.Dress("Own", Kit.FormB(), withSpec: true);
+        var ownOwners = OwnersOf(HairPortPlan.ReadOwners(own)!, "red/top.mtrl");
+        Assert.Equal((SpecularKind.File, "tex/top_s.tex"),
+                     SpecularSource(Path.Combine(own, "tex", "top_s.tex"), Kit.SpecPath, own, kit.ModsRoot, ownOwners));
+        Assert.Equal(SpecularKind.Game, SpecularSource(Kit.SpecPath, Kit.SpecPath, dress, kit.ModsRoot, owners).Kind);
+        Assert.Single(kit.Plan([Kit.Worn(Kit.TopPath, dress, "red/top.mtrl")], s => s).PerMod);
+    }
+
+    [Fact]
+    [Trait("Plan", "AC-dt-shader-upgrade-12")]
+    [Trait("Plan", "EDGE-dt-shader-upgrade-66")]
+    public void Declined_files_are_left_until_upgrade_now()
+    {
+        using var kit = new Kit();
+        var dress = kit.Dress("D", Kit.FormA());
+        var worn = new[] { Kit.Worn(Kit.TopPath, dress, "red/top.mtrl") };
+        Assert.True(kit.Upgrade(dress, worn).ChangedAny);
+        Assert.Equal(ShaderUpgradeWriter.Undone.Restored, ShaderUpgradeWriter.RevertOrForget(dress, "red/top.mtrl", decline: true, out _));
+        var plan = kit.Plan(worn);
+        Assert.Empty(plan.PerMod);
+        Assert.Equal(LeftReason.Declined, Assert.Single(plan.Left).Reason);
+        ShaderUpgradeWriter.ClearDeclines(dress, ["red/top.mtrl"]);   // what "Upgrade what I'm wearing now" does
+        Assert.Single(kit.Plan(worn).PerMod);
     }
 
     // ── the mask ────────────────────────────────────────────────────────────
@@ -393,9 +393,11 @@ public class ShaderUpgradePlanTests
         var m = DeriveMask(src, MaskGloss.InverseSpecular);
         Assert.Equal(new byte[] { 100, 155, 255, 255 }, m[..4]);
         Assert.Equal(Luma(255, 0, 0), m[4]);
-        Assert.Equal(255 - Luma(255, 0, 0), m[5]);
         Assert.Equal(new byte[] { 0, 255, 255, 255 }, m[8..12]);
-        Assert.Equal(new byte[] { 255, 1, 255, 255 }, m[12..16]);   // G never below 1
+        Assert.Equal(new byte[] { 255, 1, 255, 255 }, m[12..16]);
+        Assert.Equal("chara/equipment/e6024/texture/dt_abcdef0123456789_mask.tex",
+                     MaskGamePath("chara/equipment/e6024/texture/c0201e6024_top_b_s.tex", "ABCDEF0123456789"));
+        Assert.Equal("Shader Upgrade/abcdef0123456789_mask.tex", MaskRel("ABCDEF0123456789"));
     }
 
     [Fact]
@@ -409,23 +411,9 @@ public class ShaderUpgradePlanTests
         Assert.All(Enumerable.Range(0, w * h), i => Assert.Equal(26, low[i * 4 + 1]));
         Assert.All(Enumerable.Range(0, w * h), i => Assert.Equal(128, mid[i * 4 + 1]));
         Assert.All(Enumerable.Range(0, w * h), i => Assert.Equal(Math.Max(1, 255 - inv[i * 4]), inv[i * 4 + 1]));
-        var names = new[] { MaskHash(low, w, h, MaskGloss.LowConstant, TexEncoding.Bc7),
-                            MaskHash(mid, w, h, MaskGloss.MidConstant, TexEncoding.Bc7),
-                            MaskHash(inv, w, h, MaskGloss.InverseSpecular, TexEncoding.Bc7) };
-        Assert.Equal(3, names.Distinct().Count());
-        Assert.False(SignalFor(Signal.Enabled).DelayMs > 0);   // a strategy change walks at once
-    }
-
-    [Fact]
-    [Trait("Plan", "EDGE-dt-shader-upgrade-46")]
-    public void MaskGloss_defaults_to_inverse_specular()
-    {
-        using var kit = new Kit();
-        Assert.Equal(MaskGloss.InverseSpecular, new Inputs
-        {
-            ModsRoot = null, ManagedRoot = kit.ManagedRoot, Pid = 1, Read = _ => null, ResolveTexture = _ => null,
-            DecodeNative = (_, _) => null, Stat = _ => null, MaskFileOk = _ => false, Memo = new MaskMemo(),
-        }.Gloss);
+        Assert.Equal(3, new[] { MaskHash(low, w, h, MaskGloss.LowConstant, TexEncoding.Bc7),
+                                MaskHash(mid, w, h, MaskGloss.MidConstant, TexEncoding.Bc7),
+                                MaskHash(inv, w, h, MaskGloss.InverseSpecular, TexEncoding.Bc7) }.Distinct().Count());
         Assert.Equal("inverse-specular", ShaderUpgradeWatcher.GlossName(default));
     }
 
@@ -436,12 +424,10 @@ public class ShaderUpgradePlanTests
         Assert.Equal((64, 64), CapSize(64, 64));
         Assert.Equal((2048, 2048), CapSize(4096, 4096));
         Assert.Equal((2048, 1024), CapSize(4096, 2048));
-        Assert.Equal((2048, 2048), CapSize(2048, 2048));
         var (rgba, w, h) = Kit.Spec();
         var m = MaskFrom(rgba, w, h, MaskGloss.InverseSpecular);
         Assert.Equal((64, 64), (m.W, m.H));
-        var big = new byte[4096 * 2048 * 4];
-        var bm = MaskFrom(big, 4096, 2048, MaskGloss.MidConstant);
+        var bm = MaskFrom(new byte[4096 * 2048 * 4], 4096, 2048, MaskGloss.MidConstant);
         Assert.Equal((2048, 1024), (bm.W, bm.H));
     }
 
@@ -449,383 +435,156 @@ public class ShaderUpgradePlanTests
     [Trait("Plan", "EDGE-dt-shader-upgrade-45")]
     public void Build_never_uses_the_upscaling_base_loader()
     {
-        // The watcher decodes the specular map through LoadRawFile + LoadTexBytesAsRgba, never LoadBaseTexture (which
-        // upscales to 4096).
-        var src = File.ReadAllText(SourceFile("Proteus/Services/ShaderUpgrade/ShaderUpgradeWatcher.cs"));
-        Assert.DoesNotContain("LoadBaseTexture", src);
-        Assert.Contains("LoadTexBytesAsRgba", src);
-        Assert.DoesNotContain("LoadBaseTexture", File.ReadAllText(SourceFile("Proteus/Services/ShaderUpgrade/ShaderUpgradePlan.cs")));
-    }
-
-    [Fact]
-    [Trait("Plan", "EDGE-dt-shader-upgrade-50")]
-    public void Mask_game_path_is_lowercase_ascii_and_matches_the_retargeted_string()
-    {
-        var p = MaskGamePath("ABCDEF0123456789");
-        Assert.Equal("chara/proteus/shaderupgrade/abcdef0123456789_mask.tex", p);
-        Assert.All(p, c => Assert.True(c < 128 && !char.IsUpper(c)));
-        using var kit = new Kit();
-        var u = Assert.Single(BuildOne(kit, Kit.TopPath, kit.Put("B", "b.mtrl", Kit.FormB())).Units);
-        Assert.Equal(u.Mask!.GamePath, MaskSlotPath(u.MaterialBytes));
-        Assert.Equal(u.Mask.GamePath, u.Mask.GamePath.ToLowerInvariant());
-    }
-
-    [Fact]
-    [Trait("Plan", "EDGE-dt-shader-upgrade-39")]
-    public void Original_specular_path_is_never_redirected()
-    {
-        using var kit = new Kit();
-        var slot = MaskSlotPath(Kit.FormB())!;
-        var u = Assert.Single(BuildOne(kit, Kit.TopPath, kit.Put("B", "b.mtrl", Kit.FormB())).Units);
-        var unit = new RedirectUnit(u.MaterialGamePath, "c.mtrl", new RedirectMask(u.Mask!.GamePath, "m.tex"));
-        var map = ShaderUpgradeRedirects.MapOf([unit]);
-        Assert.DoesNotContain(slot, map.Keys);
-        Assert.Contains(u.Mask.GamePath, map.Keys);
+        foreach (var f in new[] { "ShaderUpgradeWatcher.cs", "ShaderUpgradePlan.cs", "ShaderUpgradeWriter.cs" })
+            Assert.DoesNotContain("LoadBaseTexture", File.ReadAllText(SourceFile("Proteus/Services/ShaderUpgrade/" + f)));
+        Assert.Contains("LoadTexBytesAsRgba", File.ReadAllText(SourceFile("Proteus/Services/ShaderUpgrade/ShaderUpgradeWatcher.cs")));
     }
 
     [Fact]
     [Trait("Plan", "EDGE-dt-shader-upgrade-51")]
-    public void Unchanged_walk_decodes_nothing()
+    public void Unchanged_specular_decodes_nothing_and_reuses_the_mask_file()
     {
         using var kit = new Kit();
-        kit.SpecDisk = kit.Put("B", "c0201e6024_top_b_s.tex", Kit.Fixture("legacy_spec_s.tex"));
-        var up = kit.Put("B", "b.mtrl", Kit.FormB());
-        var first = Assert.Single(BuildOne(kit, Kit.TopPath, up).Units);
+        var a = kit.Dress("A", Kit.FormB(), withSpec: true);
+        Func<string, string?> resolve = _ => Path.Combine(a, "tex", "top_s.tex");
+        Assert.True(kit.Upgrade(a, [Kit.Worn(Kit.TopPath, a, "red/top.mtrl")], resolve).ChangedAny);
         Assert.Equal(1, kit.Decodes);
-        // Written, as the watcher does, and memoised.
-        ShaderUpgradeCopies.WriteMask(kit.ManagedRoot, first.Mask!, TexEncoding.Uncompressed, Kit.WriteTex);
-        kit.Memo.Put(first.Mask!.Key, new MaskMemo.Entry(first.Mask.CopyName, first.Mask.GamePath, 64, 64));
-
-        var again = Build([new Worn(Kit.TopPath, up)], kit.Inputs());
+        // The other option ships the same material with the same _s: no decode, the same mask file, no pixels to write.
+        var second = One(kit.Plan([Kit.Worn(Kit.TopPath, a, "blue/top.mtrl")], resolve));
         Assert.Equal(1, kit.Decodes);
-        Assert.Equal(1, again.MemoHits);
-        Assert.Equal(first.MaterialCopyName, Assert.Single(again.Units).MaterialCopyName);
-
-        // A changed timestamp, another strategy, or a deleted mask file decodes again.
-        File.SetLastWriteTimeUtc(kit.SpecDisk, DateTime.UtcNow.AddMinutes(1));
-        Build([new Worn(Kit.TopPath, up)], kit.Inputs());
+        Assert.Null(second.Mask!.Rgba);
+        File.SetLastWriteTimeUtc(Path.Combine(a, "tex", "top_s.tex"), DateTime.UtcNow.AddMinutes(1));
+        kit.Plan([Kit.Worn(Kit.TopPath, a, "blue/top.mtrl")], resolve);
         Assert.Equal(2, kit.Decodes);
-        Build([new Worn(Kit.TopPath, up)], kit.Inputs(MaskGloss.MidConstant));
-        Assert.Equal(3, kit.Decodes);
-        Build([new Worn(Kit.TopPath, up)], kit.Inputs(MaskGloss.MidConstant));   // never written, so never memoised
-        Assert.Equal(4, kit.Decodes);
-        File.Delete(Path.Combine(ManagedModPaths.ShaderUpgradeDir(kit.ManagedRoot), first.Mask.CopyName));
-        File.SetLastWriteTimeUtc(kit.SpecDisk, DateTime.UtcNow.AddMinutes(-1));
-        kit.Memo.Put(MaskMemo.KeyFor(kit.SpecDisk, MaskSlotPath(Kit.FormB())!, kit.Inputs().Stat, MaskGloss.InverseSpecular,
-                                     TexEncoding.Uncompressed),
-                     new MaskMemo.Entry(first.Mask.CopyName, first.Mask.GamePath, 64, 64));
-        Build([new Worn(Kit.TopPath, up)], kit.Inputs());
-        Assert.Equal(5, kit.Decodes);
     }
 
-    [Fact]
-    [Trait("Plan", "EDGE-dt-shader-upgrade-53")]
-    public void UnitsReadyToApply_drops_units_whose_mask_file_is_missing()
-    {
-        using var kit = new Kit();
-        kit.SpecDisk = kit.Put("B", "s.tex", Kit.Fixture("legacy_spec_s.tex"));
-        var up = kit.Put("B", "b.mtrl", Kit.FormB());
-        var u = Assert.Single(BuildOne(kit, Kit.TopPath, up).Units);
-        var maskPath = ShaderUpgradeCopies.WriteMask(kit.ManagedRoot, u.Mask!, TexEncoding.Uncompressed, Kit.WriteTex);
-        var copy = ShaderUpgradeCopies.WriteMaterial(kit.ManagedRoot, u.MaterialCopyName, u.MaterialBytes, (p, b) => File.WriteAllBytes(p, b));
-        kit.Memo.Put(u.Mask!.Key, new MaskMemo.Entry(u.Mask.CopyName, u.Mask.GamePath, 64, 64));
-        var unit = new RedirectUnit(u.MaterialGamePath, copy, new RedirectMask(u.Mask.GamePath, maskPath));
-
-        File.Delete(maskPath);
-        var (ready, missing) = UnitsReadyToApply([unit], File.Exists, TextureLoader.IsCompleteTex);
-        Assert.Empty(ready);
-        Assert.Single(missing);
-        kit.Memo.EvictMask(Path.GetFileName(maskPath));
-        int before = kit.Decodes;
-        Build([new Worn(Kit.TopPath, up)], kit.Inputs());
-        Assert.Equal(before + 1, kit.Decodes);
-    }
-
-    // ── signals, reloads, peeks ─────────────────────────────────────────────
+    // ── signals and the run ─────────────────────────────────────────────────
 
     [Fact]
     [Trait("Plan", "AC-dt-shader-upgrade-2")]
-    public void Equip_schedules_a_walk_after_the_settle_time() => Assert.Equal((750, false), SignalFor(Signal.Equip));
+    public void Equip_schedules_a_walk_after_the_settle_time() => Assert.Equal(750, SignalFor(Signal.Equip));
+
+    [Fact]
+    [Trait("Plan", "AC-dt-shader-upgrade-2")]
+    public void Chat_notice_once_per_mod_per_session()
+    {
+        var said = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        Assert.True(ShouldAnnounce(said, "Dress"));
+        Assert.False(ShouldAnnounce(said, "dress"));
+        Assert.True(ShouldAnnounce(said, "Other"));
+    }
 
     [Fact]
     [Trait("Plan", "AC-dt-shader-upgrade-3")]
     public void Turning_on_or_starting_evaluates_what_is_worn()
     {
         Assert.Equal(TransitionKind.Evaluate, Transition(false, true));
-        Assert.Equal((0, true), SignalFor(Signal.Enabled));
-        Assert.Equal((0, true), SignalFor(Signal.PenumbraReady));
-        Assert.Equal(TransitionKind.None, Transition(true, true));
+        Assert.Equal(0, SignalFor(Signal.Enabled));
+        Assert.Equal(0, SignalFor(Signal.PenumbraReady));
     }
 
     [Fact]
     [Trait("Plan", "AC-dt-shader-upgrade-5")]
-    public void Turning_off_reloads_even_with_auto_redraw_off()
+    public void Turning_off_stops_walks_and_undoes_nothing()
     {
-        Assert.Equal(TransitionKind.Teardown, Transition(true, false));
-        Assert.NotEqual(ReloadRoute.None, ChooseReloadRoute(autoRedraw: false, userRequested: true, held: false,
-                                                            useInPlace: true, glamourerAvailable: true, inPlaceBroken: false,
-                                                            escalate: false));
+        Assert.Equal(TransitionKind.Stop, Transition(true, false));
+        var src = File.ReadAllText(SourceFile("Proteus/Services/ShaderUpgrade/ShaderUpgradeWatcher.cs"));
+        var stop = src[src.IndexOf("case TransitionKind.Stop:", StringComparison.Ordinal)..];
+        stop = stop[..stop.IndexOf("}", StringComparison.Ordinal)];
+        Assert.DoesNotContain("RevertOrForget", stop);
+        Assert.DoesNotContain("UndoWorn", stop);
     }
 
     [Fact]
-    [Trait("Plan", "EDGE-dt-shader-upgrade-15")]
-    public void Auto_redraw_off_means_no_reload_route()
-        => Assert.Equal(ReloadRoute.None, ChooseReloadRoute(false, false, false, true, true, false, false));
-
-    [Fact]
-    [Trait("Plan", "EDGE-dt-shader-upgrade-16")]
-    public void A_live_redraw_hold_defers()
-        => Assert.Equal(ReloadRoute.Deferred, ChooseReloadRoute(true, false, held: true, true, true, false, false));
-
-    [Fact]
-    [Trait("Plan", "EDGE-dt-shader-upgrade-9")]
-    public void Escalation_goes_in_place_then_redraw_then_gives_up()
-    {
-        var e = new Escalation();
-        Assert.Equal(Escalation.Next.InPlace, e.Fail("a"));
-        e.Issued("a", ReloadRoute.InPlace);
-        Assert.Equal(Escalation.Next.Redraw, e.Fail("a"));
-        e.Issued("a", ReloadRoute.Redraw);
-        Assert.Equal(Escalation.Next.GaveUp, e.Fail("a"));
-        Assert.Equal(Escalation.Next.InPlace, e.Fail("b"));
-        Assert.Equal(ReloadRoute.Redraw, ChooseReloadRoute(true, false, false, true, true, false, escalate: true));
-
-        // The whole sequence through hop B's decision: in place, then ONE full redraw, then give up.
-        var esc = new Escalation();
-        var learn = new ReloadLearning();
-        var first = DecideReload(needs: true, verify: false, "m", ReloadRoute.None, esc, learn, true, false, true, true);
-        Assert.Equal(ReloadRoute.InPlace, first.Route);
-        var second = DecideReload(true, verify: true, "m", first.Route, esc, learn, true, false, true, true);
-        Assert.Equal(ReloadRoute.Redraw, second.Route);
-        var third = DecideReload(true, verify: true, "m", second.Route, esc, learn, true, false, true, true);
-        Assert.True(third.GaveUp);
-        Assert.Equal(ReloadRoute.None, third.Route);
-        // In-place off: one redraw, then give up.
-        var e2 = new Escalation();
-        Assert.Equal(ReloadRoute.Redraw, DecideReload(true, false, "n", ReloadRoute.None, e2, new ReloadLearning(), true, false, false, true).Route);
-        Assert.True(DecideReload(true, true, "n", ReloadRoute.Redraw, e2, new ReloadLearning(), true, false, false, true).GaveUp);
-    }
-
-    [Fact]
-    [Trait("Plan", "EDGE-dt-shader-upgrade-31")]
-    public void Reload_route_is_learned_once_per_session()
-    {
-        var l = new ReloadLearning();
-        Assert.Null(l.InPlaceLoadsMaterials);
-        l.Observe(ReloadRoute.InPlace, resolvesToCopy: true, loadedCopy: true);
-        Assert.True(l.InPlaceLoadsMaterials);
-        l.Observe(ReloadRoute.InPlace, resolvesToCopy: true, loadedCopy: false);   // a later miss does not unlearn it
-        Assert.True(l.InPlaceLoadsMaterials);
-        var broken = new ReloadLearning();
-        broken.Observe(ReloadRoute.InPlace, true, false);
-        Assert.True(broken.Broken);
-        Assert.Equal(ReloadRoute.Redraw, ChooseReloadRoute(true, false, false, true, true, broken.Broken, false));
-    }
-
-    [Fact]
-    [Trait("Plan", "EDGE-dt-shader-upgrade-43")]
-    public void Learning_counts_only_resolved_but_not_loaded_verifies()
-    {
-        var l = new ReloadLearning();
-        l.Observe(ReloadRoute.InPlace, resolvesToCopy: false, loadedCopy: false);   // outranked or mid-rebuild
-        Assert.Null(l.InPlaceLoadsMaterials);
-        l.Observe(ReloadRoute.Redraw, resolvesToCopy: true, loadedCopy: false);    // not an in-place reload
-        Assert.Null(l.InPlaceLoadsMaterials);
-        l.Observe(ReloadRoute.InPlace, resolvesToCopy: true, loadedCopy: false);
-        Assert.False(l.InPlaceLoadsMaterials);
-    }
-
-    [Fact]
-    [Trait("Plan", "EDGE-dt-shader-upgrade-32")]
-    public void Master_switch_off_tears_down_first_and_forces_a_full_redraw_when_in_place_is_unproven()
-    {
-        Assert.Equal((true, true), OrderMasterSwitch(turningOff: true, anythingHeld: true, inPlaceLoadsMaterials: null));
-        Assert.Equal((true, true), OrderMasterSwitch(true, true, false));
-        Assert.Equal((true, false), OrderMasterSwitch(true, true, true));
-        Assert.Equal((true, false), OrderMasterSwitch(true, false, null));
-        Assert.Equal((false, false), OrderMasterSwitch(false, true, null));
-    }
-
-    [Fact]
-    [Trait("Plan", "EDGE-dt-shader-upgrade-8")]
-    public void Outranked_units_are_dropped_whole_when_material_or_mask_misses()
-    {
-        var a = new RedirectUnit("p/a.mtrl", @"C:\c\a.mtrl", null);
-        var b = new RedirectUnit("p/b.mtrl", @"C:\c\b.mtrl", new RedirectMask("p/b_mask.tex", @"C:\c\b.tex"));
-        var resolved = new Dictionary<string, string?>(StringComparer.OrdinalIgnoreCase)
-        {
-            ["p/a.mtrl"] = @"C:\c\a.mtrl", ["p/b.mtrl"] = @"C:\c\b.mtrl", ["p/b_mask.tex"] = @"C:\other\x.tex",
-        };
-        Assert.Equal([b], Outranked([a, b], resolved));
-        var loaded = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase) { ["p/a.mtrl"] = @"C:\c\a.mtrl" };
-        Assert.False(NeedsReload([a], loaded));
-    }
-
-    [Fact]
-    [Trait("Plan", "EDGE-dt-shader-upgrade-10")]
-    public void NeedsReload_false_when_loaded_from_the_copies()
-    {
-        var a = new RedirectUnit("p/a.mtrl", @"C:\c\a.mtrl", null);
-        Assert.False(NeedsReload([a], new Dictionary<string, string> { ["p/a.mtrl"] = "c:/c/a.mtrl" }));
-        Assert.True(NeedsReload([a], new Dictionary<string, string> { ["p/a.mtrl"] = @"C:\mods\X\a.mtrl" }));
-    }
-
-    [Fact]
-    [Trait("Plan", "EDGE-dt-shader-upgrade-29")]
     [Trait("Plan", "AC-dt-shader-upgrade-6")]
-    public void A_dropped_unit_still_on_screen_reloads()
+    public void Setting_and_collection_changes_walk()
     {
-        static bool IsCopy(string f) => f.Contains(@"\ShaderUpgrade\");
-        var loaded = new Dictionary<string, string> { ["p/a.mtrl"] = @"C:\P\ShaderUpgrade\1-a.mtrl" };
-        Assert.True(DrawsDroppedCopy([], loaded, IsCopy));
-        Assert.False(DrawsDroppedCopy([new RedirectUnit("p/a.mtrl", @"C:\P\ShaderUpgrade\1-a.mtrl", null)], loaded, IsCopy));
-        Assert.True(DrawsDroppedCopy([new RedirectUnit("p/a.mtrl", @"C:\P\ShaderUpgrade\1-b.mtrl", null)], loaded, IsCopy));
-        Assert.False(DrawsDroppedCopy([], new Dictionary<string, string> { ["p/a.mtrl"] = @"C:\mods\X\a.mtrl" }, IsCopy));
+        Assert.Equal(400, SignalFor(Signal.ModSetting));
+        Assert.Equal(400, SignalFor(Signal.Collection));
     }
 
     [Fact]
-    [Trait("Plan", "EDGE-dt-shader-upgrade-23")]
-    public void A_stream_of_signals_cannot_postpone_the_walk_for_ever()
-    {
-        var (due, first) = NextDue(1000, 750, 0, 0);
-        Assert.Equal((1750, 1000), (due, first));
-        (due, first) = NextDue(1500, 750, due, first);   // pushed back by a later signal
-        Assert.Equal(2250, due);
-        (due, first) = NextDue(2900, 750, due, first);   // but capped at first + MaxWalkWaitMs
-        Assert.Equal(1000 + MaxWalkWaitMs, due);
-        Assert.Equal(1600, NextDue(1600, 0, 2250, 1000).Due);   // an immediate signal walks now
-    }
-
-    [Fact]
-    [Trait("Plan", "EDGE-dt-shader-upgrade-21")]
-    public void Gear_taken_off_drops_its_unit_without_reload()
-    {
-        using var kit = new Kit();
-        var up = kit.Put("A", "a.mtrl", Kit.FormA());
-        var both = Build([new Worn(Kit.TopPath, up), new Worn(Kit.DwnPath, up)], kit.Inputs());
-        var after = Build([new Worn(Kit.TopPath, up)], kit.Inputs());
-        Assert.Equal(2, both.Units.Count);
-        Assert.Equal(Kit.TopPath, Assert.Single(after.Units).MaterialGamePath);
-        var unit = new RedirectUnit(Kit.TopPath, @"C:\c\a.mtrl", null);
-        // The piece taken off is no longer in the resource map, so nothing asks for a reload.
-        Assert.False(NeedsReload([unit], new Dictionary<string, string> { [Kit.TopPath] = @"C:\c\a.mtrl" }));
-    }
-
-    [Fact]
-    [Trait("Plan", "EDGE-dt-shader-upgrade-20")]
-    public void GearMaterials_is_null_mid_rebuild()
-    {
-        var rebuilding = new Dictionary<string, HashSet<string>>(StringComparer.OrdinalIgnoreCase)
-        {
-            [@"C:\f.mdl"] = ["chara/human/c0201/obj/face/f0001/model/c0201f0001_fac.mdl"],
-            [@"C:\h.mtrl"] = ["chara/human/c0201/obj/hair/h0001/material/v0001/mt_c0201h0001_hir_a.mtrl"],
-        };
-        Assert.Null(GearMaterials(rebuilding));
-        Assert.Null(GearMaterials(null));
-        var drawn = new Dictionary<string, HashSet<string>>(rebuilding, StringComparer.OrdinalIgnoreCase)
-        {
-            [@"C:\t.mdl"] = ["chara/equipment/e6024/model/c0201e6024_top.mdl"],
-            [@"C:\t.mtrl"] = [Kit.TopPath],
-        };
-        var got = GearMaterials(drawn)!;
-        Assert.Equal(@"C:\t.mtrl", Assert.Single(got).Value);
-    }
-
-    [Fact]
-    [Trait("Plan", "EDGE-dt-shader-upgrade-14")]
-    public void WaitingFor_penumbra_and_managed_mod()
-    {
-        Assert.Equal(Waiting.Penumbra, WaitingFor(false, @"C:\m\Proteus", true));
-        Assert.Equal(Waiting.Penumbra, WaitingFor(true, null, false));
-        Assert.Equal(Waiting.ManagedMod, WaitingFor(true, @"C:\m\Proteus", false));
-        Assert.Equal(Waiting.None, WaitingFor(true, @"C:\m\Proteus", true));
-    }
+    [Trait("Plan", "EDGE-dt-shader-upgrade-24")]
+    public void Mod_moved_walks() => Assert.Equal(0, SignalFor(Signal.ModMoved));
 
     [Fact]
     [Trait("Plan", "EDGE-dt-shader-upgrade-23")]
     public void Signal_table()
     {
-        Assert.Equal((750, false), SignalFor(Signal.Equip));
-        Assert.Equal((250, false), SignalFor(Signal.Redraw));
-        Assert.Equal((400, true), SignalFor(Signal.ModSetting));
-        Assert.Equal((250, true), SignalFor(Signal.Collection));
-        Assert.Equal((250, false), SignalFor(Signal.Published));
-        Assert.Equal((500, false), SignalFor(Signal.BlankRetry));
-        Assert.Equal((1000, false), SignalFor(Signal.Verify));
-        // The managed mod's own edits never peek.
-        var player = Guid.NewGuid();
-        Assert.False(PeekFor(player, player, SidecarDiscoveryService.ManagedModDir, true, new HashSet<string>(), _ => true));
+        Assert.Equal(250, SignalFor(Signal.Redraw));
+        Assert.Equal(500, SignalFor(Signal.BlankRetry));
+        var (due, first) = NextDue(1000, 750, 0, 0);
+        (due, first) = NextDue(1500, 750, due, first);
+        Assert.Equal(2250, due);
+        Assert.Equal(1000 + MaxWalkWaitMs, NextDue(2900, 750, due, first).Due);   // never postponed for ever
     }
 
     [Fact]
-    [Trait("Plan", "AC-dt-shader-upgrade-6")]
-    public void Setting_change_on_a_source_or_shipping_mod_peeks()
-    {
-        var player = Guid.NewGuid();
-        var sources = new HashSet<string>(StringComparer.OrdinalIgnoreCase) { "Dress" };
-        Assert.True(PeekFor(player, player, "Dress", true, sources, _ => false));
-        Assert.True(PeekFor(player, player, "Recolour", true, sources, m => m == "Recolour"));
-        Assert.True(PeekFor(player, player, "", true, sources, _ => false));
-        Assert.True(SignalFor(Signal.Collection).Peek);
-        Assert.True(SignalFor(Signal.ModMoved).Peek);
-    }
-
-    [Fact]
-    [Trait("Plan", "EDGE-dt-shader-upgrade-28")]
-    public void PeekFor_ignores_unrelated_mods_other_collections_and_the_managed_mod()
-    {
-        var player = Guid.NewGuid();
-        var sources = new HashSet<string>(StringComparer.OrdinalIgnoreCase) { "Dress" };
-        Assert.False(PeekFor(player, player, "Unrelated", true, sources, _ => false));
-        Assert.False(PeekFor(Guid.NewGuid(), player, "Dress", true, sources, _ => true));
-        Assert.False(PeekFor(player, player, "Proteus", true, sources, _ => true));
-        Assert.False(PeekFor(player, player, "Dress", anythingRedirected: false, sources, _ => true));
-        Assert.False(PeekFor(player, null, "Dress", true, sources, _ => true));
-    }
-
-    [Fact]
-    [Trait("Plan", "EDGE-dt-shader-upgrade-44")]
-    public void PeekCacheKey_changes_with_any_mod_json()
-    {
-        var files = new List<(string, long)> { ("meta.json", 10), ("default_mod.json", 20), ("group_001_a.json", 30) };
-        Assert.Equal(30, PeekCacheKey(files));
-        files[1] = ("default_mod.json", 40);
-        Assert.Equal(40, PeekCacheKey(files));
-        files.Add(("readme.json", 99));   // not an option file
-        Assert.Equal(40, PeekCacheKey(files));
-    }
-
-    [Fact]
-    [Trait("Plan", "EDGE-dt-shader-upgrade-27")]
-    public void PeekSettle_accepts_waits_and_fails_open()
-    {
-        bool IsCopy(string? v) => v?.Contains("ShaderUpgrade") == true;
-        var a = new Dictionary<string, string?> { ["p"] = @"C:\mods\X\a.mtrl" };
-        var copy = new Dictionary<string, string?> { ["p"] = @"C:\mods\Proteus\ShaderUpgrade\1-a.mtrl" };
-        Assert.Equal(PeekSettle.Outcome.Wait, PeekSettle.Step(null, a, IsCopy, 50));
-        Assert.Equal(PeekSettle.Outcome.Accept, PeekSettle.Step(a, a, IsCopy, 100));
-        Assert.Equal(PeekSettle.Outcome.Wait, PeekSettle.Step(copy, copy, IsCopy, 300));
-        Assert.Equal(PeekSettle.Outcome.FailOpen, PeekSettle.Step(copy, copy, IsCopy, 600));
-    }
-
-    [Fact]
-    [Trait("Plan", "EDGE-dt-shader-upgrade-29")]
-    public void Upgrade_first_then_published_yields_the_path()
+    [Trait("Plan", "EDGE-dt-shader-upgrade-23")]
+    public void A_walk_after_our_own_reload_plans_nothing()
     {
         using var kit = new Kit();
-        var up = kit.Put("A", "a.mtrl", Kit.FormA());
-        Assert.Single(BuildOne(kit, Kit.TopPath, up).Units);
-        // The compositor starts publishing the path: the next walk (a published-set change walks) yields it.
-        var after = BuildOne(kit, Kit.TopPath, up, published: new HashSet<string>(StringComparer.OrdinalIgnoreCase) { Kit.TopPath });
-        Assert.Empty(after.Units);
-        Assert.Equal(LeftReason.Compositor, Assert.Single(after.Left).Reason);
+        var dress = kit.Dress("D", Kit.FormA());
+        var worn = new[] { Kit.Worn(Kit.TopPath, dress, "red/top.mtrl") };
+        Assert.True(kit.Upgrade(dress, worn).ChangedAny);
+        var again = kit.Plan(worn);
+        Assert.Empty(again.PerMod);
+        Assert.Empty(again.Left);
     }
 
     [Fact]
-    [Trait("Plan", "EDGE-dt-shader-upgrade-42")]
-    public void Any_published_set_change_walks() => Assert.Equal((250, false), SignalFor(Signal.Published));
+    [Trait("Plan", "EDGE-dt-shader-upgrade-15")]
+    public void Auto_redraw_off_reloads_without_redraw_but_undo_redraws()
+    {
+        Assert.False(RedrawAfter(RunKind.Upgrade, autoRedraw: false, changedAny: true));
+        Assert.True(RedrawAfter(RunKind.UndoWorn, autoRedraw: false, changedAny: true));
+        Assert.True(RedrawAfter(RunKind.UpgradeNow, autoRedraw: false, changedAny: true));
+        Assert.True(RedrawAfter(RunKind.Upgrade, autoRedraw: true, changedAny: true));
+        Assert.False(RedrawAfter(RunKind.UndoWorn, true, changedAny: false));
+    }
 
-    private static string SourceFile(string file)
+    [Fact]
+    [Trait("Plan", "EDGE-dt-shader-upgrade-16")]
+    public void Redraw_is_requested_deferred_while_held()
+        => Assert.Contains("RedrawForChangedModel(\"shader upgrade\", deferWhileHeld: kind == RunKind.Upgrade)",
+                           File.ReadAllText(SourceFile("Proteus/Services/ShaderUpgrade/ShaderUpgradeWatcher.cs")));
+
+    [Fact]
+    [Trait("Plan", "EDGE-dt-shader-upgrade-20")]
+    public void GearMaterials_is_null_mid_rebuild()
+    {
+        var map = new Dictionary<string, HashSet<string>>(StringComparer.OrdinalIgnoreCase)
+        {
+            [@"C:\f.mdl"] = ["chara/human/c0201/obj/face/f0001/model/c0201f0001_fac.mdl"],
+        };
+        Assert.Null(GearMaterials(map));
+        Assert.Null(GearMaterials(null));
+        map[@"C:\t.mdl"] = ["chara/equipment/e6024/model/c0201e6024_top.mdl"];
+        map[@"C:\t.mtrl"] = [Kit.TopPath];
+        Assert.Equal(@"C:\t.mtrl", Assert.Single(GearMaterials(map)!).Value);
+    }
+
+    [Fact]
+    [Trait("Plan", "EDGE-dt-shader-upgrade-63")]
+    public void Walk_waits_while_auto_refit_is_busy()
+    {
+        Assert.True(MayWalk(false, 0, false, false));
+        Assert.False(MayWalk(true, 0, false, false));
+        Assert.False(MayWalk(false, 2, false, false));
+        Assert.False(MayWalk(false, 0, true, false));
+        Assert.False(MayWalk(false, 0, false, true));
+        Assert.Equal(500, SignalFor(Signal.AutoRefitBusy));
+    }
+
+    [Fact]
+    [Trait("Plan", "EDGE-dt-shader-upgrade-69")]
+    public void Undo_and_upgrade_now_are_refused_while_busy()
+    {
+        Assert.True(MayStart(busy: false));
+        Assert.False(MayStart(busy: true));
+    }
+
+    internal static string SourceFile(string file)
     {
         for (var d = new DirectoryInfo(AppContext.BaseDirectory); d != null; d = d.Parent)
         {

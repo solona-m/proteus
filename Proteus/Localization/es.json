@@ -5831,10 +5831,6 @@
     "message": "Actualizar el equipo antiguo a los sombreadores de Dawntrail",
     "description": ""
   },
-  "Settings.GearShaders.AutoUpgrade.Tip": {
-    "message": "Al ponerte equipo, una pieza cuyo mod aún usa el antiguo sombreador characterlegacy.shpk\nse dibuja con el character.shpk de Dawntrail y se ilumina como el equipo actual.\nTus mods nunca se modifican: Proteus dibuja sus propias copias actualizadas, y al desactivar\nesto vuelven los originales al instante.",
-    "description": ""
-  },
   "Settings.GearShaders.Status.Fmt": {
     "message": "{0} actualizados · {1} con el sombreador antiguo",
     "description": ""
@@ -5845,10 +5841,6 @@
   },
   "Settings.GearShaders.NextRedraw": {
     "message": "Surte efecto en el próximo redibujado (el redibujado automático está desactivado).",
-    "description": ""
-  },
-  "Settings.GearShaders.Waiting": {
-    "message": "Esperando a Penumbra y a la carpeta del mod de Proteus…",
     "description": ""
   },
   "Settings.GearShaders.Reason.OldTable": {
@@ -5863,20 +5855,76 @@
     "message": "ilegible",
     "description": ""
   },
-  "Settings.GearShaders.Reason.Outranked": {
-    "message": "gana la redirección de otro plugin",
-    "description": ""
-  },
-  "Settings.GearShaders.Reason.Unresolved": {
-    "message": "aún asentándose tras un cambio",
-    "description": ""
-  },
   "Settings.GearShaders.Reason.Compositor": {
     "message": "lo dibujan las superposiciones de Proteus",
     "description": ""
   },
   "Settings.GearShaders.Reason.WriteFailed": {
-    "message": "no se pudo escribir su copia",
+    "message": "no se pudo escribir el archivo",
+    "description": ""
+  },
+  "Settings.GearShaders.AutoUpgrade.Tip": {
+    "message": "Al ponerte equipo, Proteus reescribe los materiales con el sombreador antiguo (characterlegacy.shpk) del mod puesto\nal sombreador de Dawntrail (character.shpk), dentro del mod, haciendo antes una copia de cada archivo.\nDesactivarlo detiene nuevas actualizaciones, pero no las deshace. «Deshacer en lo que llevo puesto»\ndevuelve los archivos del autor y deja esas piezas en paz hasta «Actualizar lo que llevo puesto».",
+    "description": ""
+  },
+  "Settings.GearShaders.Waiting": {
+    "message": "Esperando a Penumbra.",
+    "description": ""
+  },
+  "Settings.GearShaders.Reason.LegacyMod": {
+    "message": "una carpeta de mod en formato antiguo en la que Proteus no escribe",
+    "description": ""
+  },
+  "Settings.GearShaders.Reason.MixedSpecular": {
+    "message": "sus opciones usan mapas especulares distintos",
+    "description": ""
+  },
+  "Settings.GearShaders.Reason.SpecularFromOtherMod": {
+    "message": "su mapa especular viene de otro mod",
+    "description": ""
+  },
+  "Settings.GearShaders.Reason.UnsupportedPlacement": {
+    "message": "está en un grupo combinado",
+    "description": ""
+  },
+  "Settings.GearShaders.Reason.ProteusPack": {
+    "message": "un paquete de Proteus (Proteus lo dibuja por sí mismo)",
+    "description": ""
+  },
+  "Settings.GearShaders.Reason.Declined": {
+    "message": "deshecho por ti",
+    "description": ""
+  },
+  "Settings.GearShaders.UpgradeNow": {
+    "message": "Actualizar lo que llevo puesto",
+    "description": ""
+  },
+  "Settings.GearShaders.UpgradeNow.Tip": {
+    "message": "Pasar ahora al sombreador de Dawntrail los materiales con sombreador antiguo de lo que llevas puesto,\nincluidas las piezas que deshiciste antes.",
+    "description": ""
+  },
+  "Settings.GearShaders.UndoWorn": {
+    "message": "Deshacer en lo que llevo puesto",
+    "description": ""
+  },
+  "Settings.GearShaders.UndoWorn.Tip": {
+    "message": "Devolver los archivos del autor de las piezas que llevas y dejarlas en paz\nhasta que uses «Actualizar lo que llevo puesto». Se conserva una actualización publicada por el autor.",
+    "description": ""
+  },
+  "Settings.GearShaders.Result.Fmt": {
+    "message": "Deshacer: {0} restaurados, {1} conservados como actualización del autor, {2} rechazados.",
+    "description": ""
+  },
+  "Settings.GearShaders.Busy": {
+    "message": "Trabajando…",
+    "description": ""
+  },
+  "Chat.ShaderUpgrade.Fmt": {
+    "message": "[Proteus] {0} material(es) con sombreador antiguo en «{1}» pasado(s) al sombreador de Dawntrail (cada archivo con copia). Deshacer en /proteus > Ajustes > Sombreadores del equipo.",
+    "description": ""
+  },
+  "MeshVolume.Feature.ShaderUpgrade": {
+    "message": "la actualización de sombreadores del equipo",
     "description": ""
   }
 }

@@ -263,6 +263,16 @@ internal sealed class FakeGame : IHarnessGame
         return (ShaderUpgradeEnabled, ShaderUpgradeGloss);
     }
 
+    public bool ShaderUpgradeBusy { get; set; }
+    public List<(bool UndoWorn, bool Decline)> ShaderUpgradeRuns { get; } = [];
+    public bool StartShaderUpgradeRun(bool undoWorn, bool decline)
+    {
+        Fw(nameof(StartShaderUpgradeRun));
+        if (ShaderUpgradeBusy) return false;
+        ShaderUpgradeRuns.Add((undoWorn, decline));
+        return true;
+    }
+
     public Task<RawFrame> CaptureRaw(uint viewportId, bool includeUi, CancellationToken ct)
     {
         LastCaptureUi = includeUi;

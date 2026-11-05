@@ -175,8 +175,7 @@ public sealed class ModCreationService
     {
         if (string.IsNullOrWhiteSpace(materialGamePath)) return new MtrlTexturePaths(null, null, null);
         // Raw parse, not Lumina's: Lumina misreads some Dawntrail layouts.
-        // Seen through the gear shader upgrade: an upgraded copy's invented mask path must never reach a created mod.
-        return textureLoader.ResolveMtrlTexturesRaw(compositor.ResolveSeeThrough(materialGamePath), materialGamePath);
+        return textureLoader.ResolveMtrlTexturesRaw(penumbra.ResolvePlayer(materialGamePath), materialGamePath);
     }
 
     /// <summary>
@@ -196,7 +195,7 @@ public sealed class ModCreationService
 
             // Never measure our own output: a doubled sheet published there would read as the native shape.
             // The native layout is a property of the race, so game data is the right fallback.
-            var disk = compositor.ResolveSeeThrough(slot);
+            var disk = penumbra.ResolvePlayer(slot);
             if (IsOwnOutput(disk)) disk = null;
             if (textureLoader.BaseNativeSize(disk, slot) is not { } native) return false;
 
@@ -277,7 +276,7 @@ public sealed class ModCreationService
             // The material's current diffuse; an unresolvable hand-typed path answers "no".
             var slot = ResolveMaterialSlots(materialTarget).Diffuse;
             if (slot == null) return false;
-            var loaded = textureLoader.LoadBaseTexture(compositor.ResolveSeeThrough(slot), slot);
+            var loaded = textureLoader.LoadBaseTexture(penumbra.ResolvePlayer(slot), slot);
             if (loaded is not { } b || b.rgba.Length == 0) return false;
 
             var skin = b.width == CoverageProbeSize && b.height == CoverageProbeSize

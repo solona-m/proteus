@@ -6,6 +6,7 @@ using System.Security.Cryptography;
 using System.Text;
 using System.Text.RegularExpressions;
 
+
 namespace Proteus.Services;
 
 /// <summary>The two legacy material layouts the gear shader upgrade recognises.</summary>
@@ -31,11 +32,15 @@ internal enum MaskGloss
 }
 
 /// <summary>Why a worn legacy material is left on the old shader.</summary>
-internal enum LeftReason { OldTable, UnsupportedForm, Unreadable, Outranked, Unresolved, Compositor, WriteFailed }
+internal enum LeftReason
+{
+    OldTable, UnsupportedForm, Unreadable, Compositor, WriteFailed, LegacyMod, MixedSpecular, SpecularFromOtherMod,
+    UnsupportedPlacement, ProteusPack, Declined,
+}
 
 /// <summary>
-/// The gear shader upgrade's policy, with no game, Penumbra or file access of its own: every decision the
-/// <see cref="ShaderUpgradeWatcher"/> takes lives here so it can be tested.
+/// The gear shader upgrade's policy, with no game, Penumbra or disk writes of its own: what to upgrade, how, and why
+/// anything is left alone. <see cref="ShaderUpgradeWriter"/> writes; <see cref="ShaderUpgradeWatcher"/> schedules.
 /// <para/>
 /// <b>Research</b> (the game install, the user's mod library and the TexTools framework, read for the plan):
 /// <list type="bullet">
@@ -48,7 +53,8 @@ internal enum LeftReason { OldTable, UnsupportedForm, Unreadable, Outranked, Unr
 /// <item>The game's own conversions of legacy diffuse materials to <c>character.shpk</c> (m0075, m0885, m0886) keep
 /// the compatibility mode and every binding; their <c>_s</c> files keep the name but hold a real Dawntrail mask
 /// (independent channels, blue ≈ 1). Mods' <c>_s</c> maps are grey legacy specular maps (R = G = B, means 0.07–0.39),
-/// so Form B gets a derived mask rather than its <c>_s</c>.</item>
+/// so Form B gets a derived mask rather than its <c>_s</c>. One conversion (m0885) runs a flow mode of its own with
+/// an extra flow sampler, and the constant 0xAD94E254 differs between them: those are each material's own choices.</item>
 /// <item>The library: 3,397 Form A, 2,083 Form B, 5 sixteen-row tables, 3 odd layouts, of 5,488 legacy materials.</item>
 /// </list>
 /// </summary>
@@ -59,19 +65,11 @@ internal static class ShaderUpgradePlan
     public const uint SamplerDiffuse = 0x115306BE, SamplerNormal = 0x0C5EC1F1, SamplerMask = 0x8A4E82B6,
                       SamplerIndex = 0x565F8FD8;
 
-    /// <summary>Root of the invented game paths the derived masks are served at. Under Proteus's own namespace.</summary>
-    public const string MaskGameRoot = CompositorService.OwnedTextureRoot + "shaderupgrade/";
-
     /// <summary>A derived mask is halved until both its sides are at most this.</summary>
     public const int MaxMaskSide = 2048;
 
-    /// <summary>How many replaced masks are kept, since the game may still be reading one.</summary>
-    public const int MaskTail = 4;
-
-    public const string Tag = "Proteus shader upgrade";
-
-    /// <summary>Above every regular mod (the managed mod can be raised), below the live brush's <c>int.MaxValue</c>.</summary>
-    public const int Priority = int.MaxValue - 1;
+    /// <summary>The folder in the mod the derived masks are written to.</summary>
+    public const string MaskFolder = "Shader Upgrade";
 
     // ── which files ──────────────────────────────────────────────────────────
 
@@ -105,23 +103,29 @@ internal static class ShaderUpgradePlan
 
     // ── where a file comes from ──────────────────────────────────────────────
 
-    internal enum Source { Mod, Game, Own, Copy, Outside }
+    internal enum Source { Mod, Game, Own, ProteusPack, Outside }
 
     /// <summary>
-    /// Where a resolved upstream comes from: game data (nothing resolved, an echo of the game path, or not a rooted
-    /// path), the compositor's own output, one of our own copies, a mod under the mods root, or somewhere else.
+    /// Where a resolved file comes from: game data (nothing resolved, an echo of the game path, or not a rooted path),
+    /// Proteus's own managed mod, a Proteus sidecar pack, another mod under the mods root, or somewhere else.
     /// </summary>
-    public static Source Classify(string gamePath, string? upstream, string? modsRoot, string? managedRoot)
+    /// <param name="isProteusPack">Whether a mod folder carries Proteus's sidecar (<c>Proteus/metadata.json</c>).</param>
+    public static Source Classify(string gamePath, string? resolved, string? modsRoot, string? managedRoot,
+                                  Func<string, bool> isProteusPack)
     {
-        if (string.IsNullOrEmpty(upstream) || string.Equals(upstream, gamePath, StringComparison.OrdinalIgnoreCase)
-            || !Path.IsPathRooted(StripPenumbraPrefix(upstream)))
+        if (string.IsNullOrEmpty(resolved) || string.Equals(resolved, gamePath, StringComparison.OrdinalIgnoreCase)
+            || !Path.IsPathRooted(StripPenumbraPrefix(resolved)))
             return Source.Game;
-        var file = StripPenumbraPrefix(upstream);
-        if (ManagedModPaths.IsShaderUpgradeCopy(file, managedRoot)) return Source.Copy;
-        if (ManagedModPaths.IsPublishedOutput(file, managedRoot)) return Source.Own;
-        if (!string.IsNullOrEmpty(modsRoot) && HatCompatService.InMods(file, modsRoot, out _, out _)) return Source.Mod;
-        return Source.Outside;
+        var file = StripPenumbraPrefix(resolved);
+        if (!string.IsNullOrEmpty(managedRoot) && ManagedModPaths.IsPublishedOutput(file, managedRoot)) return Source.Own;
+        if (string.IsNullOrEmpty(modsRoot) || !HatCompatService.InMods(file, modsRoot, out var modRoot, out _))
+            return Source.Outside;
+        return isProteusPack(modRoot) ? Source.ProteusPack : Source.Mod;
     }
+
+    /// <summary>A mod folder is a Proteus sidecar pack: Proteus writes its materials itself.</summary>
+    public static bool IsProteusPack(string modRoot)
+        => File.Exists(Path.Combine(modRoot, SidecarDiscoveryService.SidecarSubdir, SidecarDiscoveryService.MetadataFile));
 
     /// <summary>Penumbra spells some resolved files <c>|…|path</c>; the file is what follows the second bar.</summary>
     public static string StripPenumbraPrefix(string path)
@@ -134,12 +138,11 @@ internal static class ShaderUpgradePlan
         return path;
     }
 
-    /// <summary>"modDir/rel" for a mod file, for <c>/state</c> and the log; the file itself otherwise.</summary>
-    public static string SourceLabel(string upstream, string? modsRoot)
-        => !string.IsNullOrEmpty(modsRoot) && HatCompatService.InMods(StripPenumbraPrefix(upstream), modsRoot,
-                                                                       out var root, out var rel)
-            ? $"{Path.GetFileName(root)}/{rel}"
-            : upstream;
+    public static string NormalPath(string p)
+    {
+        try { return Path.GetFullPath(p.Replace('/', Path.DirectorySeparatorChar)); }
+        catch (Exception ex) when (ex is ArgumentException or NotSupportedException or PathTooLongException) { return p; }
+    }
 
     // ── material reading ────────────────────────────────────────────────────
 
@@ -223,14 +226,13 @@ internal static class ShaderUpgradePlan
         var keys = Keys(mtrl);
         if (samplers == null || keys == null) return LegacyForm.Unsupported;
         var ids = samplers.Select(s => s.Id).ToHashSet();
-        keys.TryGetValue(TextureModeKey, out var mode);
-        bool hasMode = keys.ContainsKey(TextureModeKey);
+        bool hasMode = keys.TryGetValue(TextureModeKey, out var mode);
 
-        if (ids.SetEquals([SamplerIndex, SamplerMask, SamplerNormal]) && samplers.Count == 3
+        if (samplers.Count == 3 && ids.SetEquals([SamplerIndex, SamplerMask, SamplerNormal])
             && (!hasMode || mode == TextureModeDefault))
             return LegacyForm.IndexMask;
 
-        if (ids.SetEquals([SamplerDiffuse, SamplerIndex, SamplerMask, SamplerNormal]) && samplers.Count == 4
+        if (samplers.Count == 4 && ids.SetEquals([SamplerDiffuse, SamplerIndex, SamplerMask, SamplerNormal])
             && hasMode && mode == TextureModeCompatibility
             && (!keys.TryGetValue(SpecularModeKey, out var spec) || spec == SpecularModeDefault))
             return LegacyForm.Diffuse;
@@ -273,7 +275,8 @@ internal static class ShaderUpgradePlan
     }
 
     /// <summary>Rec. 709 luma of an RGBA8 pixel, rounded.</summary>
-    public static byte Luma(byte r, byte g, byte b) => (byte)Math.Clamp((int)MathF.Round(0.2126f * r + 0.7152f * g + 0.0722f * b), 0, 255);
+    public static byte Luma(byte r, byte g, byte b)
+        => (byte)Math.Clamp((int)MathF.Round(0.2126f * r + 0.7152f * g + 0.0722f * b), 0, 255);
 
     /// <summary>The green a strategy gives for a specular value.</summary>
     public static byte GlossFor(MaskGloss gloss, byte s) => gloss switch
@@ -322,27 +325,34 @@ internal static class ShaderUpgradePlan
         return Hash16(all);
     }
 
-    /// <summary>The invented game path a mask is served at: lowercase ASCII only.</summary>
-    public static string MaskGamePath(string hash16) => MaskGameRoot + hash16.ToLowerInvariant() + "_mask.tex";
+    /// <summary>
+    /// The new game path a mask is published at: beside the specular map it replaces, named <c>dt_&lt;hash&gt;_mask.tex</c>,
+    /// lowercase ASCII only (the material's string and the redirect key must match exactly).
+    /// </summary>
+    public static string MaskGamePath(string sGamePath, string hash16)
+    {
+        var p = sGamePath.Replace('\\', '/');
+        int slash = p.LastIndexOf('/');
+        var dir = slash >= 0 ? p[..(slash + 1)] : "";
+        return (dir + "dt_" + hash16 + "_mask.tex").ToLowerInvariant();
+    }
 
-    public static string MaskName(int pid, string hash16) => $"{pid}-{hash16.ToLowerInvariant()}_mask.tex";
-
-    /// <summary>A material copy's file name: the writing process and the content's hash.</summary>
-    public static string CopyName(int pid, byte[] bytes) => $"{pid}-{Hash16(bytes)}.mtrl";
+    /// <summary>The mask file's path inside the mod.</summary>
+    public static string MaskRel(string hash16) => MaskFolder + "/" + hash16.ToLowerInvariant() + "_mask.tex";
 
     // ── the memo ────────────────────────────────────────────────────────────
 
     /// <summary>
-    /// Derived masks by what they came from, for the session: an unchanged walk decodes nothing. The key is the source
-    /// file's identity (path, length, last write; the game path for a vanilla <c>_s</c>), the strategy, the encoding and
-    /// the cap. Thread-safe.
+    /// Derived masks by what they came from, for the session: an unchanged specular map is not decoded again. The key is
+    /// the source file's identity (path, length, last write; the game path for a vanilla <c>_s</c>), the strategy, the
+    /// encoding and the cap. Thread-safe.
     /// </summary>
     internal sealed class MaskMemo
     {
         public readonly record struct Key(string Source, long Length, long Ticks, MaskGloss Gloss, TexEncoding Encoding,
                                           int Cap);
 
-        public readonly record struct Entry(string MaskName, string MaskGamePath, int Width, int Height);
+        public readonly record struct Entry(string Hash, int Width, int Height);
 
         private readonly Dictionary<Key, Entry> map = [];
         private readonly object sync = new();
@@ -355,189 +365,242 @@ internal static class ShaderUpgradePlan
             return new Key("game:" + sGamePath.ToLowerInvariant(), 0, 0, gloss, encoding, MaxMaskSide);
         }
 
-        public bool TryGet(Key key, out Entry entry)
-        {
-            lock (sync) return map.TryGetValue(key, out entry);
-        }
-
-        public void Put(Key key, Entry entry)
-        {
-            lock (sync) map[key] = entry;
-        }
-
-        public void Evict(Key key)
-        {
-            lock (sync) map.Remove(key);
-        }
-
-        /// <summary>Drop every entry naming this mask file.</summary>
-        public void EvictMask(string maskName)
-        {
-            lock (sync)
-                foreach (var k in map.Where(kv => string.Equals(kv.Value.MaskName, maskName,
-                                                                StringComparison.OrdinalIgnoreCase))
-                                     .Select(kv => kv.Key).ToList())
-                    map.Remove(k);
-        }
-
-        /// <summary>Drop every entry whose source lies under <paramref name="modRoot"/> (a mod evicted or edited).</summary>
-        public void EvictUnder(string modRoot)
-        {
-            var root = modRoot.TrimEnd('/', '\\').ToLowerInvariant();
-            lock (sync)
-                foreach (var k in map.Keys.Where(k => k.Source.StartsWith(root + "\\", StringComparison.Ordinal)
-                                                   || k.Source.StartsWith(root + "/", StringComparison.Ordinal))
-                                          .ToList())
-                    map.Remove(k);
-        }
-
-        public void Clear()
-        {
-            lock (sync) map.Clear();
-        }
-
+        public bool TryGet(Key key, out Entry entry) { lock (sync) return map.TryGetValue(key, out entry); }
+        public void Put(Key key, Entry entry) { lock (sync) map[key] = entry; }
+        public void Evict(Key key) { lock (sync) map.Remove(key); }
+        public void Clear() { lock (sync) map.Clear(); }
         public int Count { get { lock (sync) return map.Count; } }
     }
 
-    // ── building ────────────────────────────────────────────────────────────
+    // ── specular source ─────────────────────────────────────────────────────
 
-    /// <summary>A worn gear material, with what its game path resolves to under the player's mods.</summary>
-    public readonly record struct Worn(string GamePath, string? Upstream);
-
-    /// <summary>A derived mask: where it is served and stored, and its pixels when they still have to be written.</summary>
-    public sealed record MaskSpec(string GamePath, string CopyName, int Width, int Height, byte[]? Rgba, MaskMemo.Key Key);
+    internal enum SpecularKind { File, Game, Mixed, OtherMod }
 
     /// <summary>
-    /// One worn material's upgrade: its game path, the upstream it was made from, the copy, and for Form B its mask.
-    /// Applied, dropped and verified as one.
+    /// Where a Form B material's specular map comes from, so the derived mask bakes its own mod's art and nothing else.
+    /// <list type="bullet">
+    /// <item>The resolved <c>_s</c> is a file of the material's own mod, and no owner of the material maps the
+    /// <c>_s</c> game path to a different file: <see cref="SpecularKind.File"/> (with that file's mod-relative path).</item>
+    /// <item>It is the game's own file (Penumbra echoes the path), and no owner ships one: <see cref="SpecularKind.Game"/>.</item>
+    /// <item>It resolves into another mod (a retexture): <see cref="SpecularKind.OtherMod"/>.</item>
+    /// <item>The owners disagree: <see cref="SpecularKind.Mixed"/>.</item>
+    /// </list>
     /// </summary>
-    public sealed record Unit(string MaterialGamePath, string Upstream, string SourceLabel, LegacyForm Form,
-                              byte[] MaterialBytes, string MaterialCopyName, MaskSpec? Mask);
+    public static (SpecularKind Kind, string? Rel) SpecularSource(string? resolvedS, string sGamePath, string materialModRoot,
+                                                                  string modsRoot, IReadOnlyList<HairPortPlan.Owner> materialOwners)
+    {
+        var shipped = materialOwners.Select(o => HairPortPlan.FileFor(o, sGamePath))
+                                    .Where(r => r != null)
+                                    .Select(r => MeshVolumeService.Rel(r!))
+                                    .Distinct(StringComparer.OrdinalIgnoreCase)
+                                    .ToList();
+        if (string.IsNullOrEmpty(resolvedS) || string.Equals(resolvedS, sGamePath, StringComparison.OrdinalIgnoreCase)
+            || !Path.IsPathRooted(StripPenumbraPrefix(resolvedS)))
+            return shipped.Count == 0 ? (SpecularKind.Game, null) : (SpecularKind.Mixed, null);
+
+        var file = StripPenumbraPrefix(resolvedS);
+        if (!HatCompatService.InMods(file, modsRoot, out var root, out var rel)
+            || !string.Equals(NormalPath(root), NormalPath(materialModRoot), StringComparison.OrdinalIgnoreCase))
+            return (SpecularKind.OtherMod, null);
+        rel = MeshVolumeService.Rel(rel);
+        if (shipped.Any(s => !string.Equals(s, rel, StringComparison.OrdinalIgnoreCase))) return (SpecularKind.Mixed, null);
+        return (SpecularKind.File, rel);
+    }
+
+    /// <summary>Every owner (default data, option, container) that ships <paramref name="rel"/>.</summary>
+    public static List<HairPortPlan.Owner> OwnersOf(IReadOnlyList<HairPortPlan.Owner> owners, string rel)
+        => owners.Where(o => o.Files.Values.Any(f => string.Equals(MeshVolumeService.Rel(f), MeshVolumeService.Rel(rel),
+                                                                   StringComparison.OrdinalIgnoreCase)))
+                 .ToList();
+
+    // ── building ────────────────────────────────────────────────────────────
+
+    /// <summary>A worn gear material, with the file its game path resolves to under the player's mods.</summary>
+    public readonly record struct Worn(string GamePath, string? Resolved);
+
+    /// <summary>One worn mod file that will be upgraded, before anything is read.</summary>
+    public sealed record Candidate(string ModRoot, string Rel, List<string> GamePaths, byte[] Bytes, LegacyForm Form,
+                                   string? SpecularGamePath);
+
+    /// <summary>A derived mask, ready to write (pixels null when the file is already in the mod).</summary>
+    public sealed record MaskWrite(string Rel, string GamePath, int Width, int Height, byte[]? Rgba,
+                                   IReadOnlyList<(string Group, string Option)> Owners);
+
+    /// <summary>One material file to rewrite in its mod.</summary>
+    public sealed record MaterialWrite(string Rel, IReadOnlyList<string> GamePaths, LegacyForm Form, string SourceSha8,
+                                       byte[] Bytes, MaskWrite? Mask);
+
+    /// <summary>A mod's writes.</summary>
+    public sealed record ModWrites(string ModRoot, List<MaterialWrite> Writes);
 
     public readonly record struct Left(string GamePath, string Source, LeftReason Reason);
 
-    public sealed record Plan(List<Unit> Units, List<Left> Left, int Decodes, int MemoHits);
+    public sealed record Plan(List<ModWrites> PerMod, List<Left> Left, int Decodes, int MemoHits);
 
-    /// <summary>Everything <see cref="Build"/> reads, injected so it needs no game or disk.</summary>
+    /// <summary>The first 16 hex digits of the file's SHA-256: what the record compares files by.</summary>
+    public static string Sha8(byte[] bytes) => Hash16(bytes);
+
+    /// <summary>Everything planning reads, injected so it needs no game or disk.</summary>
     public sealed class Inputs
     {
         public required string? ModsRoot { get; init; }
-        public required string ManagedRoot { get; init; }
-        public required int Pid { get; init; }
+        public required string? ManagedRoot { get; init; }
         public required Func<string, byte[]?> Read { get; init; }
-        /// <summary>The resolved file of a specular map's game path (null: game data).</summary>
-        public required Func<string, string?> ResolveTexture { get; init; }
         /// <summary>Decode a texture at its native size: (resolved file or null, game path) → RGBA8.</summary>
         public required Func<string?, string, (byte[] Rgba, int W, int H)?> DecodeNative { get; init; }
         public required Func<string, (long Length, long Ticks)?> Stat { get; init; }
-        /// <summary>Whether a mask copy of this name exists and is complete.</summary>
-        public required Func<string, bool> MaskFileOk { get; init; }
+        /// <summary>The mod's owners (default data, options, containers), or null for an unreadable or v3 folder.</summary>
+        public required Func<string, List<HairPortPlan.Owner>?> ReadOwners { get; init; }
+        /// <summary>Whether a file of a mod is declined (undone by the user).</summary>
+        public required Func<string, string, bool> IsDeclined { get; init; }
+        /// <summary>Whether a mask file is already complete in the mod.</summary>
+        public required Func<string, string, bool> MaskFileOk { get; init; }
         public required MaskMemo Memo { get; init; }
+        public Func<string, bool> IsProteusPack { get; init; } = ShaderUpgradePlan.IsProteusPack;
         public MaskGloss Gloss { get; init; } = MaskGloss.InverseSpecular;
         public TexEncoding Encoding { get; init; } = TexEncoding.Uncompressed;
-        /// <summary>Game paths the compositor publishes.</summary>
-        public IReadOnlySet<string> Published { get; init; } = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
     }
 
     /// <summary>
-    /// The upgrades for what is worn: one unit per upgradable material game path, a reason for every legacy one left
-    /// alone, and nothing for materials that are not legacy, not from a mod, or not gear.
+    /// The worn mod files to upgrade, read and recognised, and a reason for every legacy one left alone. Nothing is left
+    /// for materials that are not legacy, not from a mod, or not gear. The specular maps the Form B candidates name
+    /// are returned for the caller to resolve through Penumbra before <see cref="Build"/>.
     /// </summary>
-    public static Plan Build(IEnumerable<Worn> worn, Inputs inp)
+    public static (List<Candidate> Candidates, List<Left> Left) Candidates(IEnumerable<Worn> worn, Inputs inp)
     {
-        var units = new List<Unit>();
+        var byFile = new Dictionary<string, (string ModRoot, string Rel, List<string> GamePaths, string Label)>(
+            StringComparer.OrdinalIgnoreCase);
         var left = new List<Left>();
-        int decodes = 0, hits = 0;
-        // One read and one upgrade per upstream: several game paths may share a file.
-        var made = new Dictionary<string, (Unit? Unit, Left? Left)>(StringComparer.OrdinalIgnoreCase);
-
         foreach (var w in worn)
         {
             if (!IsGearMaterial(w.GamePath)) continue;
-            if (inp.Published.Contains(w.GamePath))
+            switch (Classify(w.GamePath, w.Resolved, inp.ModsRoot, inp.ManagedRoot, inp.IsProteusPack))
             {
-                left.Add(new Left(w.GamePath, w.Upstream ?? w.GamePath, LeftReason.Compositor));
-                continue;
+                case Source.Own: left.Add(new Left(w.GamePath, w.Resolved!, LeftReason.Compositor)); continue;
+                case Source.ProteusPack:
+                    if (IsLegacyFile(inp, StripPenumbraPrefix(w.Resolved!)))
+                        left.Add(new Left(w.GamePath, w.Resolved!, LeftReason.ProteusPack));
+                    continue;
+                case Source.Mod: break;
+                default: continue;
             }
-            var src = Classify(w.GamePath, w.Upstream, inp.ModsRoot, inp.ManagedRoot);
-            if (src == Source.Own)
-            {
-                left.Add(new Left(w.GamePath, w.Upstream!, LeftReason.Compositor));
-                continue;
-            }
-            if (src != Source.Mod) continue;
-            var upstream = StripPenumbraPrefix(w.Upstream!);
-            var label = SourceLabel(upstream, inp.ModsRoot);
-
-            if (!made.TryGetValue(upstream, out var result))
-            {
-                result = Make(upstream, label, inp, ref decodes, ref hits);
-                made[upstream] = result;
-            }
-
-            if (result.Unit is { } u) units.Add(u with { MaterialGamePath = w.GamePath });
-            else if (result.Left is { } l) left.Add(l with { GamePath = w.GamePath });
+            var file = StripPenumbraPrefix(w.Resolved!);
+            HatCompatService.InMods(file, inp.ModsRoot!, out var modRoot, out var rel);
+            rel = MeshVolumeService.Rel(rel);
+            var key = NormalPath(file);
+            if (!byFile.TryGetValue(key, out var entry))
+                byFile[key] = entry = (modRoot, rel, [], $"{Path.GetFileName(modRoot)}/{rel}");
+            entry.GamePaths.Add(w.GamePath);
         }
-        return new Plan(units, left, decodes, hits);
+
+        var candidates = new List<Candidate>();
+        foreach (var (key, f) in byFile)
+        {
+            var bytes = SafeRead(inp, key);
+            if (bytes == null) { LeftAll(left, f.GamePaths, f.Label, LeftReason.Unreadable); continue; }
+            if (!string.Equals(CharacterShaderUpgrade.ShaderOf(bytes), CharacterShaderUpgrade.Legacy,
+                               StringComparison.OrdinalIgnoreCase))
+                continue;   // not legacy: untouched, not counted
+            if (inp.IsDeclined(f.ModRoot, f.Rel)) { LeftAll(left, f.GamePaths, f.Label, LeftReason.Declined); continue; }
+            var form = FormOf(bytes);
+            if (form == LegacyForm.Unsupported)
+            {
+                LeftAll(left, f.GamePaths, f.Label, Samplers(bytes) == null ? LeftReason.Unreadable : LeftReason.UnsupportedForm);
+                continue;
+            }
+            candidates.Add(new Candidate(f.ModRoot, f.Rel, f.GamePaths, bytes, form,
+                                         form == LegacyForm.Diffuse ? MaskSlotPath(bytes) : null));
+        }
+        return (candidates, left);
     }
 
-    private static byte[]? Read(Inputs inp, string path)
+    private static bool IsLegacyFile(Inputs inp, string path)
+        => SafeRead(inp, path) is { } b
+        && string.Equals(CharacterShaderUpgrade.ShaderOf(b), CharacterShaderUpgrade.Legacy, StringComparison.OrdinalIgnoreCase);
+
+    private static void LeftAll(List<Left> left, IEnumerable<string> gamePaths, string label, LeftReason reason)
+    {
+        foreach (var g in gamePaths) left.Add(new Left(g, label, reason));
+    }
+
+    private static byte[]? SafeRead(Inputs inp, string path)
     {
         try { return inp.Read(path); }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { return null; }
     }
 
-    private static (Unit?, Left?) Make(string upstream, string label, Inputs inp, ref int decodes, ref int hits)
+    /// <summary>
+    /// The upgrades for the candidates: each material upgraded, made wind-neutral and, for Form B, given a derived mask
+    /// published beside its own redirects. <paramref name="resolvedSpecular"/> holds what each specular game path resolves
+    /// to for the player.
+    /// </summary>
+    public static Plan Build(IEnumerable<Candidate> candidates, IReadOnlyDictionary<string, string?> resolvedSpecular,
+                             Inputs inp, List<Left>? leftSoFar = null)
     {
-        var bytes = Read(inp, upstream);
-        if (bytes == null) return (null, new Left("", label, LeftReason.Unreadable));
-        if (!string.Equals(CharacterShaderUpgrade.ShaderOf(bytes), CharacterShaderUpgrade.Legacy,
-                           StringComparison.OrdinalIgnoreCase))
-            return (null, null);   // not legacy: untouched, not counted
+        var left = leftSoFar ?? [];
+        var perMod = new Dictionary<string, ModWrites>(StringComparer.OrdinalIgnoreCase);
+        int decodes = 0, hits = 0;
+        var ownersCache = new Dictionary<string, List<HairPortPlan.Owner>?>(StringComparer.OrdinalIgnoreCase);
 
-        var form = FormOf(bytes);
-        if (form == LegacyForm.Unsupported)
-            return (null, new Left("", label, Samplers(bytes) == null ? LeftReason.Unreadable : LeftReason.UnsupportedForm));
-
-        var up = CharacterShaderUpgrade.Upgrade(bytes);
-        if (up == null) return (null, new Left("", label, IsOldTable(bytes) ? LeftReason.OldTable : LeftReason.Unreadable));
-        up = WindNeutral(up);
-        if (up == null) return (null, new Left("", label, LeftReason.Unreadable));
-
-        MaskSpec? mask = null;
-        if (form == LegacyForm.Diffuse)
+        foreach (var c in candidates)
         {
-            var slot = MaskSlotPath(bytes);
-            if (slot == null) return (null, new Left("", label, LeftReason.Unreadable));
-            // The compositor publishes this specular map (a gear overlay): a derived mask would freeze it.
-            if (inp.Published.Contains(slot)) return (null, new Left("", label, LeftReason.Compositor));
-            mask = MaskFor(slot, inp, ref decodes, ref hits);
-            if (mask == null) return (null, new Left("", label, LeftReason.Unreadable));
-            up = TextureLoader.RetargetTexturePaths(up, new Dictionary<string, string>(StringComparer.Ordinal)
-            {
-                [slot] = mask.GamePath,
-            });
-            if (up == null) return (null, new Left("", label, LeftReason.Unreadable));
-        }
+            var label = $"{Path.GetFileName(c.ModRoot)}/{c.Rel}";
+            if (!ownersCache.TryGetValue(c.ModRoot, out var owners)) ownersCache[c.ModRoot] = owners = inp.ReadOwners(c.ModRoot);
+            if (owners == null) { LeftAll(left, c.GamePaths, label, LeftReason.LegacyMod); continue; }
 
-        if (!IsSound(bytes, up, form, mask?.GamePath)) return (null, new Left("", label, LeftReason.Unreadable));
-        return (new Unit("", upstream, label, form, up, CopyName(inp.Pid, up), mask), null);
+            var up = CharacterShaderUpgrade.Upgrade(c.Bytes);
+            if (up == null)
+            {
+                LeftAll(left, c.GamePaths, label, IsOldTable(c.Bytes) ? LeftReason.OldTable : LeftReason.Unreadable);
+                continue;
+            }
+            up = WindNeutral(up);
+            if (up == null) { LeftAll(left, c.GamePaths, label, LeftReason.Unreadable); continue; }
+
+            MaskWrite? mask = null;
+            if (c.Form == LegacyForm.Diffuse)
+            {
+                var slot = c.SpecularGamePath;
+                if (slot == null) { LeftAll(left, c.GamePaths, label, LeftReason.Unreadable); continue; }
+                var mine = OwnersOf(owners, c.Rel);
+                if (mine.Count == 0 || mine.Any(o => o.IsCombining))
+                {
+                    LeftAll(left, c.GamePaths, label, LeftReason.UnsupportedPlacement);
+                    continue;
+                }
+                resolvedSpecular.TryGetValue(slot, out var resolvedS);
+                var (kind, sRel) = SpecularSource(resolvedS, slot, c.ModRoot, inp.ModsRoot!, mine);
+                if (kind == SpecularKind.OtherMod) { LeftAll(left, c.GamePaths, label, LeftReason.SpecularFromOtherMod); continue; }
+                if (kind == SpecularKind.Mixed) { LeftAll(left, c.GamePaths, label, LeftReason.MixedSpecular); continue; }
+
+                var sDisk = kind == SpecularKind.File ? Path.Combine(c.ModRoot, sRel!.Replace('/', Path.DirectorySeparatorChar)) : null;
+                var derived = Derive(c.ModRoot, slot, sDisk, inp, ref decodes, ref hits);
+                if (derived == null) { LeftAll(left, c.GamePaths, label, LeftReason.Unreadable); continue; }
+                var (hash, w, h, rgba) = derived.Value;
+                var gamePath = MaskGamePath(slot, hash);
+                mask = new MaskWrite(MaskRel(hash), gamePath, w, h, rgba, mine.Select(o => (o.Group, o.Option)).ToList());
+                up = TextureLoader.RetargetTexturePaths(up, new Dictionary<string, string>(StringComparer.Ordinal) { [slot] = gamePath });
+                if (up == null) { LeftAll(left, c.GamePaths, label, LeftReason.Unreadable); continue; }
+            }
+
+            if (!IsSound(c.Bytes, up, c.Form, mask?.GamePath)) { LeftAll(left, c.GamePaths, label, LeftReason.Unreadable); continue; }
+            if (!perMod.TryGetValue(c.ModRoot, out var mw)) perMod[c.ModRoot] = mw = new ModWrites(c.ModRoot, []);
+            mw.Writes.Add(new MaterialWrite(c.Rel, c.GamePaths, c.Form, Sha8(c.Bytes), up, mask));
+        }
+        return new Plan([.. perMod.Values], left, decodes, hits);
     }
 
-    private static MaskSpec? MaskFor(string slot, Inputs inp, ref int decodes, ref int hits)
+    private static (string Hash, int W, int H, byte[]? Rgba)? Derive(string modRoot, string slot, string? sDisk, Inputs inp,
+                                                                    ref int decodes, ref int hits)
     {
-        var sDisk = inp.ResolveTexture(slot);
-        if (sDisk != null && string.Equals(sDisk, slot, StringComparison.OrdinalIgnoreCase)) sDisk = null;
-        if (sDisk != null) sDisk = StripPenumbraPrefix(sDisk);
         var key = MaskMemo.KeyFor(sDisk, slot, inp.Stat, inp.Gloss, inp.Encoding);
         if (inp.Memo.TryGet(key, out var hit))
         {
-            if (inp.MaskFileOk(hit.MaskName))
+            if (inp.MaskFileOk(modRoot, MaskRel(hit.Hash)))
             {
                 hits++;
-                return new MaskSpec(hit.MaskGamePath, hit.MaskName, hit.Width, hit.Height, null, key);
+                return (hit.Hash, hit.Width, hit.Height, null);
             }
-            inp.Memo.Evict(key);
         }
 
         decodes++;
@@ -546,8 +609,8 @@ internal static class ShaderUpgradePlan
         var (rgba, w, h) = MaskFrom(d.Rgba, d.W, d.H, inp.Gloss);
         if (!IsSoundMaskBuffer(rgba, w, h, d.Rgba, d.W, d.H, inp.Gloss)) return null;
         var hash = MaskHash(rgba, w, h, inp.Gloss, inp.Encoding);
-        var spec = new MaskSpec(MaskGamePath(hash), MaskName(inp.Pid, hash), w, h, rgba, key);
-        return spec;
+        inp.Memo.Put(key, new MaskMemo.Entry(hash, w, h));
+        return (hash, w, h, inp.MaskFileOk(modRoot, MaskRel(hash)) ? null : rgba);
     }
 
     /// <summary>Both movement constants at 0, so upgraded legacy gear never starts to sway. Null when impossible.</summary>
@@ -562,9 +625,10 @@ internal static class ShaderUpgradePlan
     // ── gates ───────────────────────────────────────────────────────────────
 
     /// <summary>
-    /// The <c>.mtrl</c> gate: everything a copy must be before it is written. <c>character.shpk</c>; the header size
-    /// equals the length; it parses; the texture strings equal the source's, except Form B's mask entry, which is the
-    /// invented path exactly; the sampler bindings and the Texture Mode are unchanged; both movement constants are 0.
+    /// The <c>.mtrl</c> gate: everything a rewritten material must be before it is written. <c>character.shpk</c>; the
+    /// header size equals the length; it parses; the texture strings equal the source's, except Form B's mask entry,
+    /// which is the new mask path exactly; the sampler bindings and the Texture Mode are unchanged; both movement
+    /// constants are 0.
     /// </summary>
     public static bool IsSound(byte[] source, byte[] upgraded, LegacyForm form, string? maskGamePath)
     {
@@ -626,7 +690,7 @@ internal static class ShaderUpgradePlan
 
     /// <summary>
     /// The mask gate after writing: B8G8R8A8 (0x1450) or BC7 (0x6432), one mip, the planned size or 16×16 (a solid
-    /// colour is shrunk), and complete.
+    /// colour is shrunk), and complete. (WriteTex writes a non-4-aligned size uncompressed, so BC7 is always aligned.)
     /// </summary>
     public static bool IsSoundMaskHeader(byte[] header, long fileLength, int w, int h)
     {
@@ -640,206 +704,26 @@ internal static class ShaderUpgradePlan
         return fileLength == 80 + payload;
     }
 
-    // ── files ───────────────────────────────────────────────────────────────
+    // ── signals, timing, reloads ────────────────────────────────────────────
 
-    /// <summary>
-    /// Copies nothing can still be drawing: from a game no longer running. This process's are kept (a temporary mod from
-    /// an earlier plugin load in this game may still point at them), as are other running games'. Names not in the
-    /// <c>pid-hash</c> form are not ours to judge.
-    /// </summary>
-    public static IEnumerable<string> StaleCopies(IEnumerable<string> files, int ownPid, Func<int, bool> alive)
+    internal enum Signal { Equip, Redraw, ModSetting, Collection, ModMoved, PenumbraReady, Enabled, BlankRetry, AutoRefitBusy }
+
+    /// <summary>How long after a signal to walk.</summary>
+    public static int SignalFor(Signal s) => s switch
     {
-        foreach (var f in files)
-        {
-            var name = Path.GetFileName(f);
-            int dash = name.IndexOf('-');
-            if (dash <= 0 || !int.TryParse(name[..dash], out var pid)) continue;
-            if (pid != ownPid && !alive(pid)) yield return f;
-        }
-    }
+        Signal.Equip => 750,
+        Signal.Redraw => 250,
+        Signal.ModSetting => 400,
+        Signal.Collection => 400,
+        Signal.ModMoved => 0,
+        Signal.PenumbraReady => 0,
+        Signal.Enabled => 0,
+        Signal.BlankRetry => 500,
+        Signal.AutoRefitBusy => 500,
+        _ => 250,
+    };
 
-    /// <summary>
-    /// This process's mask files that no held collection references and that are not among the recently replaced ones.
-    /// Other processes' masks and every material copy are left alone.
-    /// </summary>
-    public static List<string> MasksToPrune(int ownPid, IEnumerable<string> files, IReadOnlySet<string> referenced,
-                                            IReadOnlyCollection<string> tail)
-    {
-        var prefix = ownPid + "-";
-        return files.Where(f =>
-            {
-                var name = Path.GetFileName(f);
-                return name.StartsWith(prefix, StringComparison.Ordinal)
-                    && name.EndsWith("_mask.tex", StringComparison.OrdinalIgnoreCase)
-                    && !referenced.Contains(name)
-                    && !tail.Contains(name, StringComparer.OrdinalIgnoreCase);
-            })
-            .ToList();
-    }
-
-    /// <summary>
-    /// Units whose copies are on disk (and whose mask is complete) are ready; the rest are missing and must not be
-    /// applied — Penumbra would happily redirect to a file that is not there.
-    /// </summary>
-    public static (List<RedirectUnit> Ready, List<RedirectUnit> Missing) UnitsReadyToApply(
-        IEnumerable<RedirectUnit> units, Func<string, bool> fileExists, Func<string, bool> isCompleteTex)
-    {
-        var ready = new List<RedirectUnit>();
-        var missing = new List<RedirectUnit>();
-        foreach (var u in units)
-        {
-            bool ok = fileExists(u.MaterialCopy) && (u.Mask is not { } m || isCompleteTex(m.Copy));
-            (ok ? ready : missing).Add(u);
-        }
-        return (ready, missing);
-    }
-
-    /// <summary>
-    /// Units Penumbra does not serve from our copies after an apply: either path resolving elsewhere drops the whole unit.
-    /// </summary>
-    public static List<RedirectUnit> Outranked(IEnumerable<RedirectUnit> units,
-                                               IReadOnlyDictionary<string, string?> resolved)
-    {
-        bool Same(string gamePath, string copy)
-            => resolved.TryGetValue(gamePath, out var r) && r != null
-            && string.Equals(NormalPath(StripPenumbraPrefix(r)), NormalPath(copy), StringComparison.OrdinalIgnoreCase);
-        return units.Where(u => !Same(u.MaterialGamePath, u.MaterialCopy)
-                             || (u.Mask is { } m && !Same(m.GamePath, m.Copy)))
-                    .ToList();
-    }
-
-    public static string NormalPath(string p)
-    {
-        try { return Path.GetFullPath(p.Replace('/', Path.DirectorySeparatorChar)); }
-        catch (Exception ex) when (ex is ArgumentException or NotSupportedException or PathTooLongException) { return p; }
-    }
-
-    // ── reloads ─────────────────────────────────────────────────────────────
-
-    /// <summary>
-    /// A reload is needed only when the character still draws a redirected material from something other than its copy
-    /// (gear just put on loads its old material before the walk).
-    /// </summary>
-    public static bool NeedsReload(IEnumerable<RedirectUnit> applied, IReadOnlyDictionary<string, string> loaded)
-        => applied.Any(u => loaded.TryGetValue(u.MaterialGamePath, out var file)
-                         && !string.Equals(NormalPath(StripPenumbraPrefix(file)), NormalPath(u.MaterialCopy),
-                                           StringComparison.OrdinalIgnoreCase));
-
-    internal enum ReloadRoute { None, Deferred, InPlace, Redraw }
-
-    /// <summary>
-    /// How to reload. Auto redraw off and not asked for by the user: none (it takes effect at the next redraw). An auto
-    /// refit batch holding redraws: deferred into its one redraw. In-place when allowed, available and not learned
-    /// broken, and not escalated; otherwise a full redraw.
-    /// </summary>
-    public static ReloadRoute ChooseReloadRoute(bool autoRedraw, bool userRequested, bool held, bool useInPlace,
-                                                bool glamourerAvailable, bool inPlaceBroken, bool escalate)
-    {
-        if (!autoRedraw && !userRequested) return ReloadRoute.None;
-        if (held && !userRequested) return ReloadRoute.Deferred;
-        if (useInPlace && glamourerAvailable && !inPlaceBroken && !escalate) return ReloadRoute.InPlace;
-        return ReloadRoute.Redraw;
-    }
-
-    /// <summary>What the session has learned about in-place reloads picking up materials. Null: not yet known.</summary>
-    internal sealed class ReloadLearning
-    {
-        public bool? InPlaceLoadsMaterials { get; private set; }
-
-        /// <summary>
-        /// A verify after an in-place reload. Learned "broken" only when Penumbra resolves the copy but the resource map
-        /// still shows the old file — a mid-rebuild character or an outranked path proves nothing.
-        /// </summary>
-        public void Observe(ReloadRoute route, bool resolvesToCopy, bool loadedCopy)
-        {
-            if (route != ReloadRoute.InPlace) return;
-            if (loadedCopy) InPlaceLoadsMaterials = true;
-            else if (resolvesToCopy && InPlaceLoadsMaterials != true) InPlaceLoadsMaterials = false;
-        }
-
-        public bool Broken => InPlaceLoadsMaterials == false;
-    }
-
-    /// <summary>
-    /// Per applied-map stamp: in place, then a full redraw, then give up. Never a loop. The reload a walk issues is
-    /// registered (<see cref="Issued"/>), so the verify after an in-place reload goes to the redraw, and the verify after
-    /// a redraw gives up.
-    /// </summary>
-    internal sealed class Escalation
-    {
-        private string? stamp;
-        private int step;
-
-        internal enum Next { InPlace, Redraw, GaveUp }
-
-        /// <summary>A reload of <paramref name="route"/> was issued for this map.</summary>
-        public void Issued(string mapStamp, ReloadRoute route)
-        {
-            if (mapStamp != stamp) { stamp = mapStamp; step = 0; }
-            step = Math.Max(step, route == ReloadRoute.InPlace ? 1 : route == ReloadRoute.Redraw ? 2 : step);
-        }
-
-        /// <summary>The next step for a reload that has not taken yet, for this map.</summary>
-        public Next Fail(string mapStamp)
-        {
-            if (mapStamp != stamp) { stamp = mapStamp; step = 0; }
-            return step switch { 0 => Next.InPlace, 1 => Next.Redraw, _ => Next.GaveUp };
-        }
-
-        public void Reset() { stamp = null; step = 0; }
-    }
-
-    /// <summary>
-    /// Whether the character still draws one of our copies at a path the new map no longer redirects to it: a unit
-    /// dropped (the compositor took the path, the player chose a material that is not upgraded, another redirect
-    /// outranks it) while its copy is on screen. Without a reload the old upgrade would hide the player's choice.
-    /// </summary>
-    public static bool DrawsDroppedCopy(IEnumerable<RedirectUnit> applied, IReadOnlyDictionary<string, string> loaded,
-                                        Func<string, bool> isCopy)
-    {
-        var now = applied.ToDictionary(u => u.MaterialGamePath, u => NormalPath(u.MaterialCopy), StringComparer.OrdinalIgnoreCase);
-        foreach (var (gamePath, file) in loaded)
-        {
-            var f = StripPenumbraPrefix(file);
-            if (!isCopy(f)) continue;
-            if (!now.TryGetValue(gamePath, out var copy) || !string.Equals(copy, NormalPath(f), StringComparison.OrdinalIgnoreCase))
-                return true;
-        }
-        return false;
-    }
-
-    /// <summary>What a walk's hop B does about reloading.</summary>
-    internal readonly record struct ReloadPlan(ReloadRoute Route, bool AwaitingRedraw, bool GaveUp);
-
-    /// <summary>
-    /// Hop B's reload decision, given whether the character still draws something other than the map wants
-    /// (<paramref name="needs"/>). A verify walk after an in-place reload teaches <paramref name="learning"/>; a verify
-    /// that still needs a reload escalates (in place, then a redraw, then give up); the route chosen is registered with
-    /// <paramref name="escalation"/>.
-    /// </summary>
-    public static ReloadPlan DecideReload(bool needs, bool verify, string stamp, ReloadRoute lastRoute,
-                                          Escalation escalation, ReloadLearning learning,
-                                          bool autoRedraw, bool held, bool useInPlace, bool glamourerAvailable)
-    {
-        if (verify && lastRoute == ReloadRoute.InPlace)
-            learning.Observe(ReloadRoute.InPlace, resolvesToCopy: true, loadedCopy: !needs);
-        if (!needs)
-        {
-            if (!verify) escalation.Reset();
-            return new ReloadPlan(ReloadRoute.None, false, false);
-        }
-        bool escalate = false;
-        if (verify)
-        {
-            var next = escalation.Fail(stamp);
-            if (next == Escalation.Next.GaveUp) return new ReloadPlan(ReloadRoute.None, false, true);
-            escalate = next == Escalation.Next.Redraw;
-        }
-        var route = ChooseReloadRoute(autoRedraw, userRequested: false, held, useInPlace, glamourerAvailable,
-                                      learning.Broken, escalate);
-        if (route is ReloadRoute.InPlace or ReloadRoute.Redraw) escalation.Issued(stamp, route);
-        return new ReloadPlan(route, route == ReloadRoute.None, false);
-    }
+    public const int MaxWalkWaitMs = 2000;
 
     /// <summary>
     /// When a walk asked for at <paramref name="now"/> with <paramref name="delayMs"/> is due: a burst of signals
@@ -853,99 +737,33 @@ internal static class ShaderUpgradePlan
         return (Math.Min(now + delayMs, first + MaxWalkWaitMs), first);
     }
 
-    public const int MaxWalkWaitMs = 2000;
+    internal enum TransitionKind { None, Evaluate, Stop }
 
-    // ── signals ─────────────────────────────────────────────────────────────
-
-    internal enum Signal { Equip, Redraw, ModSetting, Collection, ModMoved, PenumbraReady, Enabled, Verify, Published, BlankRetry }
-
-    /// <summary>How long after a signal to walk, and whether that walk must peek under our own redirect.</summary>
-    public static (int DelayMs, bool Peek) SignalFor(Signal s) => s switch
-    {
-        Signal.Equip => (750, false),
-        Signal.Redraw => (250, false),
-        Signal.ModSetting => (400, true),
-        Signal.Collection => (250, true),
-        Signal.ModMoved => (250, true),
-        Signal.PenumbraReady => (0, true),
-        Signal.Enabled => (0, true),
-        Signal.Verify => (1000, false),
-        Signal.Published => (250, false),
-        Signal.BlankRetry => (500, false),
-        _ => (250, false),
-    };
-
-    internal enum TransitionKind { None, Evaluate, Teardown }
-
+    /// <summary>Turning the setting on (or starting with it on) evaluates what is worn; turning it off only stops.</summary>
     public static TransitionKind Transition(bool was, bool now)
-        => !was && now ? TransitionKind.Evaluate : was && !now ? TransitionKind.Teardown : TransitionKind.None;
+        => !was && now ? TransitionKind.Evaluate : was && !now ? TransitionKind.Stop : TransitionKind.None;
 
-    internal enum Waiting { None, Penumbra, ManagedMod }
+    internal enum Waiting { None, Penumbra }
 
-    public static Waiting WaitingFor(bool penumbraAvailable, string? managedRoot, bool managedMetaExists)
-        => !penumbraAvailable || managedRoot == null ? Waiting.Penumbra
-         : !managedMetaExists ? Waiting.ManagedMod
-         : Waiting.None;
+    public static Waiting WaitingFor(bool penumbraAvailable, string? modsRoot)
+        => !penumbraAvailable || string.IsNullOrEmpty(modsRoot) ? Waiting.Penumbra : Waiting.None;
 
-    /// <summary>
-    /// Whether a Penumbra setting change must peek. Only for the player's collection; never the managed mod, never
-    /// while nothing is redirected; always when the event names no mod; otherwise only a mod that supplies a redirected
-    /// upstream or ships one of the redirected game paths.
-    /// </summary>
-    public static bool PeekFor(Guid eventCollection, Guid? playerCollection, string? modDirectory, bool anythingRedirected,
-                               IReadOnlySet<string> sourceMods, Func<string, bool> shipsRedirectedPath)
-    {
-        if (!anythingRedirected) return false;
-        if (playerCollection is not { } player || eventCollection != player) return false;
-        if (string.IsNullOrEmpty(modDirectory)) return true;
-        if (string.Equals(modDirectory, SidecarDiscoveryService.ManagedModDir, StringComparison.OrdinalIgnoreCase))
-            return false;
-        return sourceMods.Contains(modDirectory) || shipsRedirectedPath(modDirectory);
-    }
+    /// <summary>A walk waits while auto refit has anything running, queued, due or undoing: both write into worn mods.</summary>
+    public static bool MayWalk(bool running, int queued, bool walkDue, bool undoing)
+        => !running && queued == 0 && !walkDue && !undoing;
 
-    /// <summary>The newest last-write of a mod's option files: what a "ships this path" cache is keyed on.</summary>
-    public static long PeekCacheKey(IEnumerable<(string Name, long Ticks)> modJsonFiles)
-        => modJsonFiles.Where(f => f.Name.Equals("meta.json", StringComparison.OrdinalIgnoreCase)
-                                || f.Name.Equals("default_mod.json", StringComparison.OrdinalIgnoreCase)
-                                || (f.Name.StartsWith("group_", StringComparison.OrdinalIgnoreCase)
-                                    && f.Name.EndsWith(".json", StringComparison.OrdinalIgnoreCase)))
-                       .Select(f => f.Ticks).DefaultIfEmpty(0).Max();
+    internal enum RunKind { Upgrade, UndoWorn, UpgradeNow }
 
     /// <summary>
-    /// The untrusted peek's settle: re-resolve until two rounds agree with no copy among the answers, at most
-    /// <see cref="SettleCapMs"/>; then fail open.
+    /// Whether to redraw after a run that changed mods: an automatic upgrade follows auto redraw; the user's buttons
+    /// always redraw.
     /// </summary>
-    internal static class PeekSettle
-    {
-        public const int IntervalMs = 50, SettleCapMs = 600;
+    public static bool RedrawAfter(RunKind kind, bool autoRedraw, bool changedAny)
+        => changedAny && (kind != RunKind.Upgrade || autoRedraw);
 
-        internal enum Outcome { Accept, Wait, FailOpen }
+    /// <summary>The chat notice is said once per mod per session.</summary>
+    public static bool ShouldAnnounce(ISet<string> announced, string modDir) => announced.Add(modDir);
 
-        public static Outcome Step(IReadOnlyDictionary<string, string?>? previous, IReadOnlyDictionary<string, string?> now,
-                                   Func<string?, bool> isCopy, long elapsedMs)
-        {
-            bool anyCopy = now.Values.Any(isCopy);
-            bool agree = previous != null && previous.Count == now.Count
-                      && now.All(kv => previous.TryGetValue(kv.Key, out var p)
-                                     && string.Equals(p, kv.Value, StringComparison.OrdinalIgnoreCase));
-            if (!anyCopy && agree) return Outcome.Accept;
-            return elapsedMs >= SettleCapMs ? Outcome.FailOpen : Outcome.Wait;
-        }
-    }
-
-    /// <summary>
-    /// Proteus switched off: what to do, in order — take the upgrade down (and forget the compositor's memo for those
-    /// paths) before the compositor's withdraw, and make that withdraw a full redraw when anything was held and in-place
-    /// reloads are not known to pick materials up. The compositor's redraw is then the single reload.
-    /// </summary>
-    public static (bool TeardownFirst, bool ForceFullRedraw) OrderMasterSwitch(bool turningOff, bool anythingHeld,
-                                                                                bool? inPlaceLoadsMaterials)
-        => turningOff ? (true, anythingHeld && inPlaceLoadsMaterials != true) : (false, false);
+    /// <summary>The buttons start only when nothing else of the upgrade is running.</summary>
+    public static bool MayStart(bool busy) => !busy;
 }
-
-/// <summary>A unit as it is redirected: material game path → copy, and for Form B the mask game path → mask copy.</summary>
-internal sealed record RedirectUnit(string MaterialGamePath, string MaterialCopy, RedirectMask? Mask,
-                                    string Upstream = "", string SourceLabel = "", LegacyForm Form = LegacyForm.IndexMask,
-                                    int MaskWidth = 0, int MaskHeight = 0);
-
-internal sealed record RedirectMask(string GamePath, string Copy);

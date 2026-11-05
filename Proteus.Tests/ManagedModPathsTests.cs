@@ -28,24 +28,6 @@ public class ManagedModPathsTests
     }
 
     [Fact]
-    [Trait("Plan", "EDGE-dt-shader-upgrade-5")]
-    public void Shader_upgrade_copies_are_not_published_output()
-    {
-        Assert.Equal(@"C:\Penumbra\Proteus\ShaderUpgrade", ManagedModPaths.ShaderUpgradeDir(Managed));
-        foreach (var copy in new[] { @"C:\Penumbra\Proteus\ShaderUpgrade\1-ab.mtrl",
-                                     "|1_2_3|c:/penumbra/proteus/shaderupgrade/1-ab_mask.tex" })
-        {
-            Assert.True(ManagedModPaths.IsShaderUpgradeCopy(copy, Managed));
-            Assert.False(ManagedModPaths.IsPublishedOutput(copy, Managed));
-            Assert.False(CompositorService.IsOwnOutputCore(copy, Managed));
-        }
-        Assert.False(ManagedModPaths.IsShaderUpgradeCopy(@"C:\Penumbra\Proteus\ShaderUpgradeX\a.mtrl", Managed));
-        Assert.True(ManagedModPaths.IsPublishedOutput(@"C:\Penumbra\Proteus\ShaderUpgradeX\a.mtrl", Managed));
-        Assert.False(ManagedModPaths.IsShaderUpgradeCopy(@"C:\Penumbra\Old Thing\ShaderUpgrade\a.mtrl", Managed));
-        Assert.False(ManagedModPaths.IsShaderUpgradeCopy(@"C:\Penumbra\Proteus\ShaderUpgrade\a.mtrl", null));
-    }
-
-    [Fact]
     [Trait("Plan", "AC-brush-pair-sync-6")]
     [Trait("Plan", "EDGE-brush-pair-sync-14")]
     public void Published_output_excludes_live_previews_and_nothing_else()

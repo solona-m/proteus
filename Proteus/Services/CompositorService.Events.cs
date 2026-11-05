@@ -296,7 +296,7 @@ public partial class CompositorService
             }
 
             string? now;
-            try { now = ResolveSeeThrough(p); }
+            try { now = penumbra.ResolvePlayer(p); }
             catch { detail = p + " could not be resolved"; return true; }
 
             if (now == null || IsOwnOutput(now))

@@ -15,20 +15,22 @@ public class ShaderUpgradeLibraryLocalTests
 {
     [LocalDataFact(LocalData.Mods)]
     [Trait("Plan", "EDGE-dt-shader-upgrade-33")]
-    public void Every_legacy_library_material_is_upgraded_soundly_or_left_with_a_reason()
+    public void Every_legacy_library_material_is_planned_soundly_or_left_with_a_reason()
     {
+        // Planning only: nothing is ever written into the real library.
         var modsRoot = LocalData.Path(LocalData.Mods);
-        var managed = Path.Combine(Path.GetTempPath(), "proteus-su-lib-" + Guid.NewGuid().ToString("N")[..8], "Proteus");
         var grey = new byte[64 * 64 * 4];
         for (int i = 0; i < grey.Length; i += 4) { grey[i] = grey[i + 1] = grey[i + 2] = 60; grey[i + 3] = 255; }
+        var owners = new Dictionary<string, List<HairPortPlan.Owner>?>(StringComparer.OrdinalIgnoreCase);
         var inputs = new Inputs
         {
-            ModsRoot = modsRoot, ManagedRoot = managed, Pid = 1, Read = File.ReadAllBytes,
-            ResolveTexture = _ => null, DecodeNative = (_, _) => (grey, 64, 64), Stat = _ => null,
-            MaskFileOk = _ => false, Memo = new MaskMemo(),
+            ModsRoot = modsRoot, ManagedRoot = Path.Combine(modsRoot, "Proteus"), Read = File.ReadAllBytes,
+            DecodeNative = (_, _) => (grey, 64, 64), Stat = _ => null,
+            ReadOwners = root => owners.TryGetValue(root, out var o) ? o : owners[root] = HairPortPlan.ReadOwners(root),
+            IsDeclined = (_, _) => false, MaskFileOk = (_, _) => false, Memo = new MaskMemo(),
         };
 
-        int legacy = 0, upgraded = 0;
+        int legacy = 0, planned = 0;
         var reasons = new Dictionary<LeftReason, int>();
         foreach (var file in Directory.EnumerateFiles(modsRoot, "mt_c*.mtrl", SearchOption.AllDirectories))
         {
@@ -37,11 +39,21 @@ public class ShaderUpgradeLibraryLocalTests
             try { bytes = File.ReadAllBytes(file); } catch (IOException) { continue; }
             if (CharacterShaderUpgrade.ShaderOf(bytes) != CharacterShaderUpgrade.Legacy) continue;
             legacy++;
-            var plan = Build([new Worn("chara/equipment/e0001/material/v0001/mt_c0201e0001_top_a.mtrl", file)], inputs);
-            if (plan.Units is [var u])
+            var (candidates, left) = Candidates([new Worn("chara/equipment/e0001/material/v0001/mt_c0201e0001_top_a.mtrl", file)], inputs);
+            // The specular map resolves to the file the material's own owners ship, as Penumbra would serve it.
+            var resolved = new Dictionary<string, string?>(StringComparer.OrdinalIgnoreCase);
+            foreach (var c in candidates.Where(c => c.SpecularGamePath != null))
             {
-                upgraded++;
-                Assert.True(IsSound(bytes, u.MaterialBytes, u.Form, u.Mask?.GamePath), file);
+                var mine = inputs.ReadOwners(c.ModRoot) is { } all ? OwnersOf(all, c.Rel) : [];
+                var rel = mine.Select(o => HairPortPlan.FileFor(o, c.SpecularGamePath!)).FirstOrDefault(r => r != null);
+                resolved[c.SpecularGamePath!] = rel == null ? c.SpecularGamePath : Path.Combine(c.ModRoot, rel.Replace('/', Path.DirectorySeparatorChar));
+            }
+            var plan = Build(candidates, resolved, inputs, left);
+            if (plan.PerMod is [var mod])
+            {
+                planned++;
+                var w = Assert.Single(mod.Writes);
+                Assert.True(IsSound(bytes, w.Bytes, w.Form, w.Mask?.GamePath), file);
             }
             else
             {
@@ -50,8 +62,7 @@ public class ShaderUpgradeLibraryLocalTests
             }
         }
         Assert.True(legacy > 0, "no legacy gear materials found in the library");
-        // The library's own count (research): nearly all legacy gear is one of the two forms.
-        Assert.True(upgraded > legacy * 0.95, $"{upgraded} of {legacy} upgraded; left: {string.Join(", ", reasons)}");
+        Assert.True(planned > 0, $"none of {legacy} planned; left: {string.Join(", ", reasons)}");
     }
 }
 

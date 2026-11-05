@@ -109,6 +109,9 @@ internal sealed class GameHarnessAdapter : IHarnessGame, IDisposable
         return (config.AutoUpgradeLegacyShaders, ShaderUpgradeWatcher.GlossName(shaderUpgrade.Gloss));
     }
 
+    public bool StartShaderUpgradeRun(bool undoWorn, bool decline)
+        => undoWorn ? shaderUpgrade.UndoWorn(decline) : shaderUpgrade.UpgradeWornNow();
+
     public HealthInfo Health() => new(penumbra.IsAvailable, clientState.IsLoggedIn, config.PluginEnabled);
 
     public RawState State()
