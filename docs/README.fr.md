@@ -290,7 +290,7 @@ La section **Cheveux** adapte les mods de cheveux à votre personnage de deux fa
 - Les cheveux à physique gardent leur physique. Quand le squelette de votre race n'a pas les os avec lesquels une coiffure bouge, le portage apporte le squelette et la physique de la race d'origine pour cette coiffure.
 - Une coiffure qui ne tomberait pas correctement sur votre tête (elle s'y enfonce ou s'en écarte) est tout de même adaptée, et Proteus dit laquelle, pour que vous la vérifiiez en jeu.
 - Une coiffure que la courbure retourne en partie est tout de même adaptée, et Proteus dit laquelle, pour que vous la vérifiiez en jeu.
-- Pour couvrir toutes les races d'un coup, ouvrez un modèle de cheveux dans le **Studio** et utilisez **Transposer à toutes les races**.
+- Pour couvrir toutes les races d'un coup, ouvrez un modèle de cheveux dans le **Studio** et utilisez **Transposer à toutes les races**. Sous **Aussi pour l'autre sexe**, vous pouvez aussi cocher des races de l'autre sexe : elles portent alors cette coiffure à la place du style du jeu de ce numéro. Proteus tient ces transpositions à jour, mais n'en crée jamais une de lui-même.
 
 **Chapeaux.** La plupart des cheveux moddés ne gèrent pas les chapeaux, si bien qu'un chapeau porté par-dessus passe au travers. Proteus plaque contre votre tête les cheveux qu'un chapeau recouvrirait.
 

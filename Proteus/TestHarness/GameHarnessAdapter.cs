@@ -41,6 +41,7 @@ internal sealed class GameHarnessAdapter : IHarnessGame, IDisposable
     private readonly CompositorService compositor;
     private readonly AutoRefitWatcher autoRefit;
     private readonly ShaderUpgradeWatcher shaderUpgrade;
+    private readonly HairPortWatcher hairPort;
     private readonly IObjectTable objects;
     private readonly IClientState clientState;
     private readonly IFramework framework;
@@ -59,8 +60,9 @@ internal sealed class GameHarnessAdapter : IHarnessGame, IDisposable
     /// <summary>Where the once-a-second character-name sample goes while the harness listens.</summary>
     public SessionNames? NameSink { get; set; }
 
-    public GameHarnessAdapter(PenumbraBridge penumbra, GlamourerBridge glamourer, CompositorService compositor, AutoRefitWatcher autoRefit,
-                              ShaderUpgradeWatcher shaderUpgrade, IObjectTable objects, IClientState clientState, IFramework framework,
+    public GameHarnessAdapter(PenumbraBridge penumbra, GlamourerBridge glamourer, CompositorService compositor,
+                              AutoRefitWatcher autoRefit, ShaderUpgradeWatcher shaderUpgrade, HairPortWatcher hairPort,
+                              IObjectTable objects, IClientState clientState, IFramework framework,
                               ITextureProvider textures, ITextureReadbackProvider readback, Configuration config,
                               UVRemapService uvRemap, Func<string, byte[]?> readGameFile, Action<string> onModChanged,
                               IPluginLog log)
@@ -70,6 +72,7 @@ internal sealed class GameHarnessAdapter : IHarnessGame, IDisposable
         this.compositor = compositor;
         this.autoRefit = autoRefit;
         this.shaderUpgrade = shaderUpgrade;
+        this.hairPort = hairPort;
         this.objects = objects;
         this.clientState = clientState;
         this.framework = framework;
@@ -113,6 +116,13 @@ internal sealed class GameHarnessAdapter : IHarnessGame, IDisposable
 
     public bool StartShaderUpgradeRun(bool undoWorn, bool decline)
         => undoWorn ? shaderUpgrade.UndoWorn(decline) : shaderUpgrade.UpgradeWornNow();
+
+    public HairPortInfo HairPort()
+        => new(hairPort.Current, hairPort.Scan, hairPort.CheckOwed, config.AutoHairPort, config.EarlessMiqoteHair);
+
+    public byte[]? ReadGameFile(string gamePath) => readGameFile(gamePath);
+
+    public bool IsHairMod(string modRoot) => HairPortJob.IsHairMod(modRoot);
 
     public HealthInfo Health() => new(penumbra.IsAvailable, clientState.IsLoggedIn, config.PluginEnabled);
 

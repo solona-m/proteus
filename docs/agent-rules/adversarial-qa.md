@@ -69,6 +69,8 @@ four requests were open at once: retry when one finishes; it is never a busy run
 | `POST /actions/refit` | `{"mod":"<Penumbra folder name>","bodies":["rue","tbse@women"],"remake":false}` → 202 `{job, modDir, state}`. Runs the Studio's "Make every size" with the Studio's current settings, after backing the mod up; then reloads the mod and redraws. |
 | `POST /actions/restore` | `{"job":"<refit job id>"}`, or `{"mod":"<folder>"}`, or `{"mod":"<folder>","backup":"<backupId>"}` → 202. |
 | `POST /actions/shader-upgrade` | `{"enabled":true\|false}` and/or `{"maskGloss":"inverse-specular"\|"low"\|"mid"}` → 200 `{enabled, maskGloss}`; `{"undoWorn":true}` (optionally `"decline":false`) or `{"upgradeWornNow":true}` → 202 `{started}`. Switches the gear shader upgrade as its Settings checkbox does; `maskGloss` picks how the diffuse form's derived mask fills its roughness channel, for this session only (never saved) and only for files written after it; `undoWorn` / `upgradeWornNow` run the two Settings buttons. 409 `busy` while a run or auto refit is working; 400 `invalid-field` for an unknown field or value, a wrong type, no field, `decline` without `undoWorn`, or both runs at once. |
+| `GET /hair-port?mod=<folder>&hair=<hair model game path>` | Read-only: what the Studio's "Port to all races" lists for that hairstyle — `{modDir, hair, source, sourceRace, id, otherSexNote, rows:[{race:"c0101", state: open\|covered\|ported\|stale\|no-style\|other-sex-authored, otherSex, ownVersion, ownSkeleton, tickable, defaultTicked, declined, stateText, warning}], ports:[{race, targetGamePath, sourceGamePath, group, option, file, auto, est, skeletonFrom, portVersion}]}`. `hair` may use either slash and any case; a port of ours stands for the author's hairstyle it was made from (`source`). `warning` is set only on `ported`/`stale` rows. 404 `hair-not-in-mod`, 409 `legacy-mod`, 409 `mod-unreadable`. |
+| `POST /actions/hair-port` | `{"mod":"<folder>","hair":"<hair model game path>","races":["c0101","c0401"]}` → 202 `{job, modDir, state}`: the Studio's **Port** button for those races (leave `races` out for the Studio's default ticks), after a backup; then reloads the mod and redraws. `{"mod","hair","remove":true}` is the **Remove ports** button. Only races the Studio lets you tick are ported; the rest come back in `result.skippedRaces` (`not-listed`, `covered`, `ported`, `no-style`, `other-sex-authored`, `own-version`, `own-skeleton`). Job kinds `hair-port` / `hair-remove`; `result` = `{action, summary: ported\|nothing-to-port\|nothing-ported\|removed\|nothing-to-remove, resultLine, source, asked, skippedRaces, ported:[{race, group, option, est, skeletonFrom}], stripped, refused:[{race, reason}], warnings, current, saved}` (remove: `removed, message, remaining`). No backup is taken when nothing would be written. 400 `invalid-field` for a bad `hair`, `races` that are not playable `cNNNN` codes, `remove` other than `true`, or both; 409 `hair-port-busy` (below). |
 | `POST /actions/equip` | `{"slot":"Body","item":12345}` or `{"slot":"Body","set":317,"variant":2}` → 200 `{slot, sent, item, set, variant, dyes, previous, original}` (`readBack:false` when the worn item could not be read back). Equips through Glamourer for this session only (no lock, no design). Slots: Head, Body, Hands, Legs, Feet, Ears, Neck, Wrists, RFinger, LFinger (any case). `set`/`variant` equip that model even when no item uses it. 400 `invalid-field` / `item-invalid`; 409 `busy`, `auto-refit-busy`, `not-logged-in`, `carrier-slot`, `glamourer-refused`; 503 `glamourer-unavailable`, `harness-stopping`. |
 | `POST /actions/mod-settings` | `{"mod":"<folder>","enabled":false}` and/or `"priority":1000` → 200 `{mod, collection, enabled, priority, before, redrawRequested}`. Holds the mod in the player's collection with a Penumbra **temporary** setting (its options kept), never saved. 409 `held-elsewhere` when another plugin (Glamourer, design binding) holds it; 404 `mod-not-found`; 400 `managed-mod`; 409 `no-collection`, `penumbra-refused`; 503 `penumbra-unavailable`, `harness-stopping`. |
 | `POST /actions/put-back` | `{}` → 200 `{gear:[{slot,result}], holds:[{mod,result}], sweep, redrawRequested}`. Undoes every equip and hold of this session. Never refused. |
@@ -86,7 +88,15 @@ JOB=$(curl -s -H "$H" -H "Content-Type: application/json" -d '{"mod":"My Outfit"
 curl -s -H "$H" http://127.0.0.1:$PORT/jobs/$JOB
 ```
 
-Job `error.code` is one of `legacy-mod`, `framework-timeout`, `backup-too-large`,
+```bash
+curl -s -H "$H" -H "Content-Type: application/json" \
+     -d '{"mod":"My Hair","hair":"chara/human/c0201/obj/hair/h0005/model/c0201h0005_hir.mdl","races":["c0101"]}' \
+     http://127.0.0.1:$PORT/actions/hair-port
+```
+
+A hair job's `summary` is `ported` when it hair-ported at least one race (`hair-ported` in your notes means that).
+
+Job `error.code` is one of `legacy-mod`, `mod-unreadable`, `hair-not-in-mod`, `framework-timeout`, `backup-too-large`,
 `insufficient-space`, `backup-failed`, `run-failed`, `restore-failed`, `cancelled`,
 `after-change-skipped`, `reload-failed` (Penumbra refused the reload: the files are as reported, the game may not
 match them until Penumbra reloads its mods — tell the user) — or `internal`, which is a harness bug: report it as a
@@ -95,14 +105,24 @@ finding.
 Only one job runs at a time (409 `busy`), across `off`/`on` too: `on` is refused while
 a cancelled job is still stopping. A **plugin reload** mid-job is not covered — the old
 instance's job may still be writing while the new one listens — so never reload the
-plugin while a job runs; wait for its `endedAt`. Refit and restore are refused with 409
+plugin while a job runs; wait for its `endedAt`. Refit, restore and hair port are refused with 409
 `auto-refit-busy` while auto refit is working.
+
+`hair-port-busy` (409): a **hair port** is refused while the hair watcher examines the worn hairstyle, runs a check, or
+owes one (`/state hairPort.busy`) — retry; `busy` flickers after every redraw, and an owed check can hold for about 30 s.
+A **refit or restore** gets it only for a hair mod while the watcher is examining or checking right now
+(`hairPort.worn.busy`, `hairPort.check.running`); an owed check (`check.owed`) **never blocks a restore**, and a
+garment mod never waits on the hair watcher.
+
+Reasons (`refused[].reason`, `stateText`, `resultLine`, `otherSexNote`) are in the game's language: assert on the
+codes (`state`, `skippedRaces[].reason`, `summary`).
 
 ## You must back up and restore every mod you touch
 
-**Never edit a mod's files yourself — only through the harness.** Every refit backs
-the mod up before it writes, and **you must restore every mod you refitted before
-you finish**, whatever the outcome:
+**Never edit a mod's files yourself — only through the harness.** Every refit and hair
+port backs the mod up before it writes, and **you must restore every mod you refitted before
+you finish** — and every mod you hair-ported (a `hair-port` or `hair-remove` job id restores it too) — whatever the
+outcome:
 
 - **Restore by job:** `{"job":"<refit job id>"}` puts the mod back as it was just
   before that refit. To undo several refits, restore newest first, or restore the
@@ -194,6 +214,24 @@ curl -s -X POST -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/
   restore.
 - Known limitation: a refit cancelled before its worker started reloads nothing (it
   wrote nothing).
+- **Hair ports — the plugin's own hair path writes too.** `/state` `hairPort` is `{autoFit, earless, busy,
+  worn:{gamePath, modDir, ported, portsInMod, busy, message, failed, earless, warning},
+  check:{running, owed, done, total, race, message, rows:[{id, modDir, targetGamePath, state}], lastFitted}}`. After
+  any hair-port, hair-remove, refit or restore job, the job's reload makes Penumbra report the mod edited, and the hair
+  watcher owes a check of that mod (`check.owed`) about 400 ms later; the redraw also makes it look at the worn
+  hairstyle. Either may add ports of the player's own race (`ports[].auto == true` in `GET /hair-port`) when the mod
+  is on in the player's collection and "Fit hair automatically" is on — even right after a restore. So: wait for
+  `check.running == false` and `worn.busy == false` (and `check.owed == false` where it clears), `GET /hair-port`
+  again, and tell `"auto": true` ports (the plugin's) from yours (`"auto": false`) before you assert; restore even
+  while a check is owed, then look for `auto` ports again. **Prefer mods that are off in the player's collection** for
+  file-level checks, and hairstyles the character is not wearing.
+- **What a hair-port QA run cannot verify** — say so as UNVERIFIED for the user: that the automatic path never
+  starts a port across the sexes, remakes a Studio port after an author update, or leaves an undone one alone (they
+  need the character, the author's files or Settings); and anything visual of a race or sex the character is not (a
+  screenshot shows the character only). Check files, the record and the rows through the routes; screenshot only a
+  port of the character's own race while they wear that hairstyle.
+- **What restore does not cover for hair:** the hair watcher's session memory (its refusal memo and remembered
+  warnings), and ports the automatic path makes after the restore's reload.
 
 ## Personal data
 

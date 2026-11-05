@@ -22,9 +22,10 @@ internal sealed partial class HarnessRouter(HarnessJobs jobs, LogRing ring, Sess
     /// <summary>Every route, for the docs test and 405's Allow header.</summary>
     internal static readonly IReadOnlyList<(string Method, string Path)> Routes =
     [
-        ("GET", "/health"), ("GET", "/state"), ("GET", "/log"), ("GET", "/screenshot"),
+        ("GET", "/health"), ("GET", "/state"), ("GET", "/log"), ("GET", "/screenshot"), ("GET", "/hair-port"),
         ("POST", "/actions/refit"), ("POST", "/actions/restore"), ("POST", "/actions/shader-upgrade"),
-        ("POST", "/actions/equip"), ("POST", "/actions/mod-settings"), ("POST", "/actions/put-back"), ("GET", "/jobs/{id}"),
+        ("POST", "/actions/hair-port"), ("POST", "/actions/equip"), ("POST", "/actions/mod-settings"),
+        ("POST", "/actions/put-back"), ("GET", "/jobs/{id}"),
     ];
 
     private IHarnessGame Game => jobs.Game;
@@ -51,6 +52,8 @@ internal sealed partial class HarnessRouter(HarnessJobs jobs, LogRing ring, Sess
                 "/actions/refit" => await Refit(request),
                 "/actions/restore" => await Restore(request),
                 "/actions/shader-upgrade" => await ShaderUpgradeAction(request),
+                "/hair-port" => await HairPortView(request),
+                "/actions/hair-port" => await HairPortAction(request),
                 "/actions/equip" => await Equip(request),
                 "/actions/mod-settings" => await ModSettings(request),
                 "/actions/put-back" => await PutBack(request),
@@ -116,6 +119,7 @@ internal sealed partial class HarnessRouter(HarnessJobs jobs, LogRing ring, Sess
                                 undoing = a.Activity.Undoing },
             },
             shaderUpgrade = ShaderUpgradeBlock(Game.ShaderUpgrade()),
+            hairPort = HairPortBlock(Game.HairPort(), names),
             job = jobs.Current?.View(),
             gear = GearBlock(s.Gear),
             harnessChanges,
@@ -152,6 +156,133 @@ internal sealed partial class HarnessRouter(HarnessJobs jobs, LogRing ring, Sess
                     atUtc = r.AtUtc }
             : null,
     };
+
+    /// <summary>The automatic hair path in <c>/state</c>: read-only, folder names only, scrubbed with the rest.</summary>
+    internal static object HairPortBlock(HairPortInfo h, SessionNames names) => new
+    {
+        autoFit = h.AutoFit, earless = h.Earless, busy = h.Busy,
+        worn = new
+        {
+            gamePath = h.View.Worn, modDir = h.View.ModRoot is { } root ? Path.GetFileName(root) : null, ported = h.View.Ported,
+            portsInMod = h.View.PortsInMod, busy = h.View.Busy, message = names.Scrub(h.View.Message), failed = h.View.Failed,
+            earless = h.View.Earless, warning = names.Scrub(h.View.Warning),
+        },
+        check = new
+        {
+            running = h.Scan.Running, owed = h.CheckOwed, done = h.Scan.Done, total = h.Scan.Total,
+            race = h.Scan.Race > 0 ? HairPortJob.RaceCode(h.Scan.Race) : null, message = names.Scrub(h.Scan.Message),
+            rows = h.Scan.List.Select(r => new
+            {
+                id = r.Id, modDir = r.ModDir, targetGamePath = r.TargetGamePath, state = r.State,
+                message = names.Scrub(r.Message),
+            }),
+            lastFitted = h.Scan.Last.Count,
+        },
+    };
+
+    /// <summary>
+    /// The Studio's "Port to all races" rows for a mod's hairstyle, read-only: <c>?mod=&lt;folder&gt;&amp;hair=&lt;hair
+    /// model game path&gt;</c>.
+    /// </summary>
+    private async Task<HarnessResponse> HairPortView(HarnessRequest request)
+    {
+        if (!request.Query.TryGetValue("mod", out var mod) || mod is not { Length: > 0 })
+            return HarnessResponse.Error(400, "invalid-field", "mod is required");
+        if (!request.Query.TryGetValue("hair", out var hair) || ParseHair(hair) == null)
+            return HarnessResponse.Error(400, "invalid-field", "hair must be a hair model's game path (chara/human/cNNNN/obj/hair/hNNNN/model/cNNNNhNNNN_hir.mdl)");
+        var (dir, mods, error) = await OnFramework(() => FindModOnFramework(mod));
+        if (error != null) return error;
+        var (view, refused) = HairPortJob.Read(Game, Path.Combine(mods!.ModsRoot, dir!), dir!, hair, names);
+        return refused ?? Scrubbed(200, view);
+    }
+
+    /// <summary>A hair model's game path, with either slash; null for anything else.</summary>
+    internal static string? ParseHair(string? hair)
+        => hair is { Length: > 0 } && HairPortPlan.Parse(hair.Replace('\\', '/')) != null ? hair : null;
+
+    /// <summary>The races asked for, as playable race codes "c0101", de-duplicated in the order asked.</summary>
+    internal static (List<ushort>? Races, string? Error) ParseRaces(JsonElement races)
+    {
+        if (races.ValueKind != JsonValueKind.Array || races.GetArrayLength() == 0)
+            return (null, "races must be a non-empty array of race codes like \"c0101\"");
+        var list = new List<ushort>();
+        foreach (var item in races.EnumerateArray())
+        {
+            if (item.ValueKind != JsonValueKind.String || item.GetString() is not { } raw
+                || raw.Length != 5 || (raw[0] is not ('c' or 'C')) || !ushort.TryParse(raw[1..], System.Globalization.NumberStyles.None,
+                                                                                       System.Globalization.CultureInfo.InvariantCulture, out var race)
+                || !HairPortPlan.Playable(race))
+                return (null, $"'{item}' is not a playable race code like \"c0101\"");
+            if (!list.Contains(race)) list.Add(race);
+        }
+        return (list, null);
+    }
+
+    /// <summary>
+    /// The Studio's Port (<c>races</c>, or its default ticks) or Remove ports (<c>remove: true</c>) for a mod's hairstyle,
+    /// as a job, after a backup.
+    /// </summary>
+    private async Task<HarnessResponse> HairPortAction(HarnessRequest request)
+    {
+        var (body, bad) = JsonBody(request, "mod", "hair", "races", "remove");
+        if (bad != null) return bad;
+        string? mod = OptionalString(body, "mod", out bad);
+        if (bad != null) return bad;
+        if (mod == null) return HarnessResponse.Error(400, "invalid-field", "mod is required");
+        if (!body.TryGetProperty("hair", out var hairValue) || hairValue.ValueKind != JsonValueKind.String
+            || ParseHair(hairValue.GetString()) is not { } hair)
+            return HarnessResponse.Error(400, "invalid-field", "hair must be a hair model's game path (chara/human/cNNNN/obj/hair/hNNNN/model/cNNNNhNNNN_hir.mdl)");
+        List<ushort>? races = null;
+        if (body.TryGetProperty("races", out var racesValue))
+        {
+            (races, var error) = ParseRaces(racesValue);
+            if (races == null) return HarnessResponse.Error(400, "invalid-field", error!);
+        }
+        bool remove = false;
+        if (body.TryGetProperty("remove", out var removeValue))
+        {
+            if (removeValue.ValueKind != JsonValueKind.True) return HarnessResponse.Error(400, "invalid-field", "remove must be true");
+            remove = true;
+        }
+        if (remove && races != null) return HarnessResponse.Error(400, "invalid-field", "give races or remove, not both");
+
+        if (!jobs.TryReserve()) return HarnessResponse.Error(409, "busy", "a job is already running");
+        bool started = false;
+        try
+        {
+            var (dir, mods, error) = await OnFramework(() => CheckOnFramework(mod));
+            if (error != null) return error;
+            string modRoot = Path.Combine(mods!.ModsRoot, dir!);
+            if (HairBusy("hair-port", modRoot) is { } busy) return busy;
+            var job = new HarnessJob(HarnessJobs.NewJobId(), remove ? "hair-remove" : "hair-port", dir!);
+            var args = new HairPortJob.Args(dir!, modRoot, hair, races, remove);
+            _ = jobs.Start(job, j => HairPortJob.Run(jobs, j, args));
+            started = true;
+            return HarnessResponse.Json(202, new { job = job.Id, modDir = dir, state = "queued" });
+        }
+        finally
+        {
+            if (!started) jobs.Release();
+        }
+    }
+
+    /// <summary>
+    /// The hair watcher's refusal, read off the framework thread after the folder hop. A hair port waits while the watcher
+    /// works or owes a check (one would write into it soon). A refit or restore waits only for a hair mod, and only while
+    /// the watcher works now: an owed check can stay owed for minutes, and a garment mod never collides with a hair write.
+    /// </summary>
+    private HarnessResponse? HairBusy(string kind, string modRoot)
+    {
+        var hair = Game.HairPort();
+        if (kind == "hair-port")
+            return hair.Busy
+                ? HarnessResponse.Error(409, "hair-port-busy", "the hair watcher is examining, checking or owes a check; wait for /state hairPort.busy == false")
+                : null;
+        return hair.Working && Game.IsHairMod(modRoot)
+            ? HarnessResponse.Error(409, "hair-port-busy", "this is a hair mod and the hair watcher is examining or checking; "
+                                                         + "wait for /state hairPort.worn.busy and hairPort.check.running to be false")
+            : null;
+    }
 
     /// <summary>
     /// The gear shader upgrade, for QA (which cannot click Settings): switch it, choose this session's mask strategy, or
@@ -344,11 +475,17 @@ internal sealed partial class HarnessRouter(HarnessJobs jobs, LogRing ring, Sess
         return (keys, null);
     }
 
-    /// <summary>The framework hop both actions share: auto refit quiet, Penumbra there, the folder Penumbra's.</summary>
+    /// <summary>The framework hop every action shares: auto refit quiet, Penumbra there, the folder Penumbra's.</summary>
     private (string? ModDir, ModList? Mods, HarnessResponse? Error) CheckOnFramework(string mod)
     {
         if (Game.AutoRefit().Busy)
             return (null, null, HarnessResponse.Error(409, "auto-refit-busy", "auto refit is working; wait for /state autoRefit.busy == false"));
+        return FindModOnFramework(mod);
+    }
+
+    /// <summary><see cref="FindMod"/> answered as a response: the lookup refit, restore and hair port share.</summary>
+    private (string? ModDir, ModList? Mods, HarnessResponse? Error) FindModOnFramework(string mod)
+    {
         var (dir, mods, error) = FindMod(mod);
         if (error != null) return (null, null, Answer(error));
         return (dir, mods, null);
@@ -378,6 +515,7 @@ internal sealed partial class HarnessRouter(HarnessJobs jobs, LogRing ring, Sess
         {
             var (dir, mods, error) = await OnFramework(() => CheckOnFramework(mod));
             if (error != null) return error;
+            if (HairBusy("refit", Path.Combine(mods!.ModsRoot, dir!)) is { } hairBusy) return hairBusy;
             var job = new HarnessJob(HarnessJobs.NewJobId(), "refit", dir!);
             var args = new RefitJob.Args(dir!, Path.Combine(mods!.ModsRoot, dir!), keys, remake, mods);
             _ = jobs.Start(job, j => RefitJob.Run(jobs, j, args));
@@ -404,7 +542,7 @@ internal sealed partial class HarnessRouter(HarnessJobs jobs, LogRing ring, Sess
             return HarnessResponse.Error(400, "invalid-field", "give job alone, or mod (with an optional backup)");
         if (jobId == null && mod == null) return HarnessResponse.Error(400, "invalid-field", "give job, or mod");
         if (mod != null && string.Equals(mod, Game.ManagedModDir, StringComparison.OrdinalIgnoreCase))
-            return HarnessResponse.Error(400, "managed-mod", "Proteus's own output mod is never refitted or restored");
+            return HarnessResponse.Error(400, "managed-mod", "Proteus's own output mod is never refitted, hair-ported, restored or held");
 
         if (!jobs.TryReserve()) return HarnessResponse.Error(409, "busy", "a job is already running");
         bool started = false;
@@ -415,8 +553,9 @@ internal sealed partial class HarnessRouter(HarnessJobs jobs, LogRing ring, Sess
             var selection = selected.Selection!;
             var (dir, mods, error) = await OnFramework(() => CheckOnFramework(selection.Backup.ModDir));
             if (error != null) return error;
-            var job = new HarnessJob(HarnessJobs.NewJobId(), "restore", dir!);
             string modRoot = Path.Combine(mods!.ModsRoot, dir!);
+            if (HairBusy("restore", modRoot) is { } hairBusy) return hairBusy;
+            var job = new HarnessJob(HarnessJobs.NewJobId(), "restore", dir!);
             _ = jobs.Start(job, j => RestoreJob.Run(jobs, j, selection, modRoot));
             started = true;
             return HarnessResponse.Json(202, new { job = job.Id, modDir = dir, state = "queued" });

@@ -16,8 +16,8 @@ internal sealed class BackupException(string code, string message, Exception? in
     public string Code { get; } = code;
 }
 
-/// <summary>What a backup is a copy of: the mod before a refit, or the mod as a restore found it.</summary>
-internal enum BackupKind { Refit, PreRestore }
+/// <summary>What a backup is a copy of: the mod before a refit, the mod before a hair port or removal, or the mod as a restore found it.</summary>
+internal enum BackupKind { Refit, PreRestore, HairPort }
 
 /// <summary>A backup's <c>meta.json</c>. Written last, atomically: a folder without it (complete) is incomplete.</summary>
 internal sealed record BackupMeta(bool Complete, BackupKind Kind, string Session, long Seq, DateTime CreatedUtc,
@@ -61,7 +61,7 @@ internal sealed class ModBackup
 
     /// <param name="backupsRoot"><c>&lt;ConfigDirectory&gt;\test-harness\backups</c>.</param>
     /// <param name="newId">The id source; UTC time plus 4 random hex digits unless a test stands in.</param>
-    /// <param name="refitCap">Largest mod a refit backs up; the pre-restore snapshot has no cap.</param>
+    /// <param name="refitCap">Largest mod a refit or hair port backs up; the pre-restore snapshot has no cap.</param>
     /// <param name="freeSpace">Free bytes on the volume of a path.</param>
     public ModBackup(string backupsRoot, Func<string>? newId = null, long refitCap = DefaultRefitCap,
                      Func<string, long>? freeSpace = null)
@@ -110,7 +110,7 @@ internal sealed class ModBackup
 
     /// <summary>
     /// Copy a mod folder into a new backup. Worker thread. Throws <see cref="BackupException"/> with the job error code:
-    /// <c>backup-too-large</c> (a refit over the cap), <c>insufficient-space</c>, <c>backup-failed</c>, or
+    /// <c>backup-too-large</c> (a refit or hair port over the cap), <c>insufficient-space</c>, <c>backup-failed</c>, or
     /// <see cref="OperationCanceledException"/>. Nothing is ever written into an existing folder.
     /// </summary>
     public BackupInfo Create(string modRoot, string modDir, BackupKind kind, string session, long seq, string? jobId,
@@ -120,8 +120,8 @@ internal sealed class ModBackup
         long size;
         try { size = SizeOf(modRoot); }
         catch (Exception e) { throw new BackupException("backup-failed", $"could not read the mod folder: {e.Message}", e); }
-        if (kind == BackupKind.Refit && size > refitCap)
-            throw new BackupException("backup-too-large", $"the mod is {size / 1048576} MiB, over the {refitCap / 1048576} MiB a refit backs up");
+        if (kind != BackupKind.PreRestore && size > refitCap)
+            throw new BackupException("backup-too-large", $"the mod is {size / 1048576} MiB, over the {refitCap / 1048576} MiB a harness action backs up");
         long needed = (long)(size * 1.1) + 512L * 1024 * 1024;
         string folder;
         try

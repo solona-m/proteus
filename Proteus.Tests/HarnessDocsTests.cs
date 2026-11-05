@@ -40,6 +40,10 @@ public class HarnessDocsTests
                      "/actions/equip", "/actions/mod-settings", "/actions/put-back", "harnessChanges", "held-elsewhere",
                      "harness-stopping", "put back every equip and hold", "One in-game QA at a time", "/state.session",
                      "/state.models",
+                     // [AC-hair-port-qa-10] [EDGE-hair-port-qa-23]
+                     "/hair-port", "/actions/hair-port", "hairPort", "hair-port-busy", "hair-not-in-mod", "hair-ported",
+                     "check.owed", "check.running", "\"auto\"", "off in the player's collection", "UNVERIFIED",
+                     "never blocks a restore",
                  })
             Assert.True(doc.Contains(required, StringComparison.Ordinal), $"adversarial-qa.md must mention '{required}'");
         Assert.Contains("Never put names", doc);

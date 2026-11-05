@@ -36,6 +36,16 @@ public class HairPortPlanTests
     }
 
     [Fact]
+    [Trait("Plan", "AC-cross-sex-hair-port-1")]
+    public void Other_sex_races_are_every_playable_race_of_the_other_sex()
+    {
+        Assert.Equal([101, 301, 501, 701, 901, 1101, 1301, 1501, 1701], HairPortPlan.OtherSexRaces(201).Select(r => (int)r).ToArray());
+        Assert.Equal([201, 401, 601, 801, 1001, 1201, 1401, 1601, 1801], HairPortPlan.OtherSexRaces(101).Select(r => (int)r).ToArray());
+        Assert.Empty(HairPortPlan.OtherSexRaces(9101));
+        Assert.Empty(HairPortPlan.OtherSexRaces(0));
+    }
+
+    [Fact]
     [Trait("Plan", "EDGE-hair-race-port-2")]
     public void Nearest_race_by_fall_through_then_index()
     {

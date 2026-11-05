@@ -109,7 +109,7 @@ internal sealed partial class HarnessRouter
         if (dir == null)
             return (null, null, ChangeResult.Fail(404, "mod-not-found", $"no Penumbra mod folder '{mod}' (folder names only, not display names)"));
         if (string.Equals(dir, Game.ManagedModDir, StringComparison.OrdinalIgnoreCase))
-            return (null, null, ChangeResult.Fail(400, "managed-mod", "Proteus's own output mod is never refitted, restored or held"));
+            return (null, null, ChangeResult.Fail(400, "managed-mod", "Proteus's own output mod is never refitted, hair-ported, restored or held"));
         if (!ModBackup.SafeModDir(dir))
             return (null, null, ChangeResult.Fail(400, "invalid-field", "the mod folder name is not a plain folder name"));
         return (dir, mods, null);

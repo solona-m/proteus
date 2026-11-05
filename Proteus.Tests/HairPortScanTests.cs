@@ -16,7 +16,7 @@ namespace Proteus.Tests;
 /// (c0601) only — the "Genesis Floof for Elezen Hair 7" shape, default data and no material of its own — fitted before
 /// any of them is worn, through <see cref="HairPortScan.Run"/> with Penumbra and the game stood in for.
 /// </summary>
-public class HairPortScanTests
+public partial class HairPortScanTests
 {
     private const ushort Me = 201, Elezen = 601;
     private static readonly ushort[] Races = [101, 201, 401, 601, 801, 1001, 1101, 1201, 1401, 1601, 1801];
@@ -707,7 +707,8 @@ public class HairPortScanTests
         Assert.Contains("if (view.Warning.Length > 0)", settings);
         Assert.Contains("Warning: ported.Warning", Source("Proteus/Services/HairPort/HairPortWatcher.cs"));
         string studio = Source("Proteus/Gui/HairPortPanel.cs");
-        Assert.Contains("resultWarn = true;", studio);
+        // The Studio's result line (HairPortPanel.ResultOf) is a warning when the saved ports warned.
+        Assert.Contains("string.Join(\"\\n\", warnings.Select(w => $\"c{w.Key:D4}: {w.Value}\")), false, true);", studio);
     }
 
     /// <summary>

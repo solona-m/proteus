@@ -16,7 +16,8 @@ public class HarnessTimingCollectionTests
 {
     private static readonly Type[] Expected =
     [
-        typeof(DispatchTicketTests), typeof(HarnessChangesHttpTests), typeof(HarnessChangesTests), typeof(HarnessHostTests), typeof(HarnessJobsTests), typeof(HarnessRouterTests),
+        typeof(DispatchTicketTests), typeof(HarnessChangesHttpTests), typeof(HarnessChangesTests),
+        typeof(HarnessHairPortTests), typeof(HarnessHostTests), typeof(HarnessJobsTests), typeof(HarnessRouterTests),
         typeof(HarnessServerTests), typeof(OffThreadTests),
     ];
 

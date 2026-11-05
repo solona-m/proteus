@@ -260,7 +260,7 @@ public sealed class Plugin : IDalamudPlugin
 
 #if PROTEUS_TEST_HARNESS
         harness = new TestHarness.HarnessHost(dataDir, pluginInterface.IsDev,
-            new TestHarness.GameHarnessAdapter(penumbra, glamourer, compositor, autoRefit, shaderUpgrade, ObjectTable, ClientState, framework,
+            new TestHarness.GameHarnessAdapter(penumbra, glamourer, compositor, autoRefit, shaderUpgrade, hairPort, ObjectTable, ClientState, framework,
                                                TextureProvider, TextureReadback, config, uvRemap,
                                                path => textureLoader.LoadRawFile(null, path),
                                                dir => partsPanel.NoteModelsChanged(dir), log),

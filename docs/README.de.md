@@ -290,7 +290,7 @@ Der Abschnitt **Haare** passt Haar-Mods auf zwei Arten an dich an: Haar, das fü
 - Physik-Haar behält seine Physik. Fehlen dem Skelett deines Volkes die Knochen, mit denen sich eine Frisur bewegt, bringt die Übertragung für diese Frisur das Skelett und die Physik des Ausgangsvolkes mit.
 - Eine Frisur, die nicht richtig auf deinem Kopf sitzen würde (sie sinkt in ihn ein oder steht von ihm ab), wird trotzdem angepasst, und Proteus sagt, welche, damit du sie im Spiel prüfen kannst.
 - Eine Frisur, die die Biegung teilweise nach innen stülpt, wird trotzdem angepasst, und Proteus sagt, welche, damit du sie im Spiel prüfen kannst.
-- Um alle Völker auf einmal abzudecken, öffne ein Haarmodell im **Studio** und nutze **Auf alle Völker übertragen**.
+- Um alle Völker auf einmal abzudecken, öffne ein Haarmodell im **Studio** und nutze **Auf alle Völker übertragen**. Unter **Auch für das andere Geschlecht** kannst du auch Völker des anderen Geschlechts anhaken: Sie tragen dann diese Frisur statt der Frisur des Spiels mit dieser Nummer. Proteus hält solche Übertragungen aktuell, legt aber nie selbst eine an.
 
 **Hüte.** Die meisten Haar-Mods unterstützen keine Hüte, sodass ein darüber getragener Hut einfach hindurchgeht. Proteus drückt das Haar, das ein Hut bedecken würde, flach an deinen Kopf.
 
