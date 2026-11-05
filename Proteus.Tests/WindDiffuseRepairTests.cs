@@ -149,6 +149,27 @@ public sealed class WindDiffuseRepairTests : IDisposable
     }
 
     [Fact]
+    [Trait("Plan", "EDGE-issue-sweep-b-25")]
+    public void A_failed_record_write_keeps_every_backup()
+    {
+        var damaged = RecipeA(Kit.FormB(), 100f, 1f);
+        Brushed(damaged, Rel, "blue/top.mtrl");
+        var warnings = new List<string>();
+        IReadOnlyList<string> repaired;
+        using (new FileStream(RecordPath, FileMode.Open, FileAccess.Read, FileShare.Read))   // readable, not replaceable
+            repaired = MeshVolumeService.RepairWindDiffuse(mod, [Rel], warnings.Add);
+        Assert.Equal([Rel], repaired);
+        Assert.Equal(Kit.FormB(), File.ReadAllBytes(File_(Rel)));   // restored all the same
+        Assert.True(File.Exists(Backup(Rel)));                       // but no backup goes while the record names it
+        Assert.True(File.Exists(Backup("blue/top.mtrl")));
+        Assert.Equal([Rel, "blue/top.mtrl"], MeshVolumeService.ReadRecord(mod)!.Files);
+        Assert.Contains("backups are kept", Assert.Single(warnings));
+        // A malformed file is judged in a guard of its own: one bad material never aborts the rest of the run.
+        var src = File.ReadAllText(Path.Combine(ProteusDir(), "Services", "MeshVolumeService.cs"));
+        Assert.Contains("catch (Exception ex) when (ex is ArgumentException or IndexOutOfRangeException", src);
+    }
+
+    [Fact]
     [Trait("Plan", "AC-issue-sweep-b-8")]
     [Trait("Plan", "EDGE-issue-sweep-b-24")]
     [Trait("Plan", "EDGE-issue-sweep-b-27")]

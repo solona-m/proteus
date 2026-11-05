@@ -666,15 +666,16 @@ internal static class MeshVolumeService
                 return repaired;
             }
             var backupDir = Path.Combine(modRoot, SidecarDiscoveryService.SidecarSubdir, BackupSubdir);
-            try
+            void Delete(Action delete)
             {
-                if (record.Files.Count == 0) { if (Directory.Exists(backupDir)) Directory.Delete(backupDir, true); }
-                else foreach (var rel in repaired) File.Delete(Path.Combine(backupDir, Native(rel)));
+                try { delete(); }
+                catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+                {
+                    warn?.Invoke($"a wind brush backup could not be deleted ({ex.Message}); it is no longer recorded");
+                }
             }
-            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
-            {
-                warn?.Invoke($"a wind brush backup could not be deleted ({ex.Message}); it is no longer recorded");
-            }
+            if (record.Files.Count == 0) Delete(() => { if (Directory.Exists(backupDir)) Directory.Delete(backupDir, true); });
+            else foreach (var rel in repaired) Delete(() => File.Delete(Path.Combine(backupDir, Native(rel))));
             return repaired;
         }
     }
