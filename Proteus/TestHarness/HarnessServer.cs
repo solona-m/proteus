@@ -73,6 +73,13 @@ internal sealed class HarnessServer : IDisposable
         {
             try
             {
+                // Read the request first (briefly, bounded by the parser): answering before it arrives left its bytes
+                // unread at the close, and Windows then reset the socket and the client never saw the 503 (#67 QA).
+                using (var read = new CancellationTokenSource(TimeSpan.FromMilliseconds(500)))
+                {
+                    try { await HarnessHttp.ReadAsync(client.GetStream(), read.Token).ConfigureAwait(false); }
+                    catch (OperationCanceledException) { /* nothing (more) sent: answer anyway */ }
+                }
                 using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(2));
                 await HarnessHttp.WriteAsync(client.GetStream(),
                                              HarnessResponse.Error(503, "too-many-connections", "too many connections; retry"), cts.Token).ConfigureAwait(false);

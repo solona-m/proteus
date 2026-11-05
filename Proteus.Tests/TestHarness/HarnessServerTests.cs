@@ -154,6 +154,35 @@ public class HarnessServerTests : IDisposable
         Assert.Equal(200, (await g.Get("/health")).Status);
     }
 
+    [Fact]
+    [Trait("Plan", "AC-issue-sweep-a-3")]
+    public async Task Refused_clients_that_send_first_still_get_the_503()
+    {
+        // In-game QA: a client that sends its request at once (curl, HttpClient) often got a connection reset instead of
+        // the 503, because the refusal was written and the socket closed with the request still unread.
+        using var g = new HarnessFixture(readTimeout: TimeSpan.FromSeconds(30));
+        var open = new List<TcpClient>();
+        try
+        {
+            for (int i = 0; i < HarnessServer.MaxConnections; i++)
+            {
+                var c = new TcpClient();
+                await c.ConnectAsync(IPAddress.Loopback, g.Server.Port);
+                await c.GetStream().WriteAsync(Encoding.ASCII.GetBytes("GET /health HTTP/1.1\r\n"));
+                open.Add(c);
+            }
+            await WaitUntil(() => g.Server.OpenConnections == HarnessServer.MaxConnections);
+            for (int i = 0; i < 10; i++)
+            {
+                var r = await g.Client.GetAsync("/health");
+                Assert.Equal(503, (int)r.StatusCode);
+                Assert.Equal("too-many-connections",
+                             (await HarnessFixture.Parse(r)).GetProperty("error").GetProperty("code").GetString());
+            }
+        }
+        finally { foreach (var c in open) c.Dispose(); }
+    }
+
     private static async Task WaitUntil(Func<bool> condition)
     {
         var until = DateTime.UtcNow.AddSeconds(10);
