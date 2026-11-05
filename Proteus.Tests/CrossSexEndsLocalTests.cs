@@ -131,4 +131,57 @@ public class CrossSexEndsLocalTests(ITestOutputHelper o)
             }
         }
     }
+
+    // ── #47: Stormblessed's glove made men's is not read on the Elegy lingerie mod ─────────────────────
+
+    private const string Elegy = LocalData.Mods + ":Elegy - Sylvie Bra & Panties (RueYABUranusRe)";
+    private const string RueMod = LocalData.Mods + ":hs-Rue+-2.2.7-y0f";
+    private const string NeolitheMod = LocalData.Mods + ":Neolithe [ALL IN ONE]";
+
+    /// <summary>
+    /// The observed outcome when the glove's cloth fits no recognised body and the unrecognised fallback picks Elegy
+    /// (pinned, as NailSocketSweep pins its KNOWN exemption; #47 stays open while it holds). Null: the case is fixed and
+    /// the source must not be Elegy. Set from the first real run of build 1429.
+    /// </summary>
+    private const string? KnownElegyFallback = null;
+
+    [LocalDataFact(LocalData.GameData, SizeSetCrossSexLocalTests.Stormblessed, Elegy, RueMod, NeolitheMod,
+                   CrossSexRefitLocalTests.Bibo, CrossSexRefitLocalTests.Tbse, CrossSexRefitLocalTests.TbseX,
+                   LocalData.TbseUvMaps)]
+    [Trait("Plan", "AC-issue-sweep-b-3")]
+    public void Stormblessed_glove_source()
+    {
+        string from = LocalData.Path(SizeSetCrossSexLocalTests.Stormblessed);
+        string copy = Path.Combine(Path.GetTempPath(), "proteus-storm47-" + Guid.NewGuid().ToString("N"));
+        try
+        {
+            foreach (string f in Directory.EnumerateFiles(from, "*", SearchOption.AllDirectories))
+            {
+                string to = Path.Combine(copy, Path.GetRelativePath(from, f));
+                Directory.CreateDirectory(Path.GetDirectoryName(to)!);
+                File.Copy(f, to);
+            }
+            var bodies = SizeSetBatch.ScanBodies(Path.GetDirectoryName(LocalData.Path(CrossSexRefitLocalTests.Tbse))!,
+                new[] { Elegy, RueMod, NeolitheMod, CrossSexRefitLocalTests.Bibo, CrossSexRefitLocalTests.Tbse,
+                        CrossSexRefitLocalTests.TbseX }.Select(m => Path.GetFileName(LocalData.Path(m))).ToList());
+            var run = new SizeSetRefit.RunLog();
+            SizeSetRefit.Run(new SizeSetRefit.Request(copy, ["tbse-x@women"], false, true, bodies, Game, true,
+                                                      Across: new SizeSetRefit.AcrossInputs(_ => null)),
+                             run, Maps(), Substitute.For<IPluginLog>(), _ => { }, System.Threading.CancellationToken.None);
+            var gloves = run.Sizes.Where(s => s.Men && s.Slot == "_glv").ToList();
+            foreach (var g in gloves) o.WriteLine($"  glove {g.Piece} {g.Body}: {g.Status} {g.ReasonCode} from={g.From}");
+            foreach (var w in run.Warnings) o.WriteLine("  check: " + w);
+            Assert.NotEmpty(gloves);
+            string elegyName = Path.GetFileName(LocalData.Path(Elegy));
+            bool fromElegy = gloves.Any(g => g.From?.Contains("Elegy", StringComparison.OrdinalIgnoreCase) == true)
+                             || run.Warnings.Any(w => w.Contains(elegyName, StringComparison.OrdinalIgnoreCase));
+            if (KnownElegyFallback is { } known)
+            {
+                o.WriteLine("  KNOWN: " + known);
+                Assert.True(fromElegy, "the pinned Elegy fallback no longer holds: revisit KnownElegyFallback and #47");
+            }
+            else Assert.False(fromElegy, "the glove was read on the Elegy lingerie mod");
+        }
+        finally { try { Directory.Delete(copy, true); } catch (IOException) { } }
+    }
 }

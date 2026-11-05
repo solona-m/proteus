@@ -229,6 +229,19 @@ internal static class SupportedBodies
         ["tbse-x"] = ["se-x", "tbse-x", "tbsex"],
     };
 
+    /// <summary>
+    /// The installed mods that ARE one of the supported bodies of <paramref name="race"/> — the one <see cref="Find"/>
+    /// takes for each body, both slots, plain and YAS — by folder, case-insensitively. Any other installed mod that
+    /// replaces a body model (lingerie, a YAS re-release beside the plain body) is no body the user chose (#47).
+    /// </summary>
+    internal static HashSet<string> Recognised(IReadOnlyList<BodyModIndex.Entry> installed, string race = "0201")
+    {
+        var dirs = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var body in All.Where(b => b.Race == race))
+            if (Find(body, installed) is { } e) dirs.Add(e.Dir);
+        return dirs;
+    }
+
     /// <summary>Whether any of a choice's sizes — chest or legs, plain or YAS — are in an installed mod.</summary>
     internal static bool Installed(string key, IReadOnlyList<BodyModIndex.Entry> installed)
         => All.Any(b => b.Key == key && Find(b, installed) != null);
