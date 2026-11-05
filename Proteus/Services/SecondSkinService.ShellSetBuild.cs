@@ -942,8 +942,7 @@ public sealed partial class SecondSkinService
                     // The variant this body draws when it ships more than one of a region (BodyShapeReader.ReadEnabledShapes);
                     // independent of the redundancy setting.
                     // ...and the shapes its body mod's options switch off (NIRÆ's other chests).
-                    HiddenAttributes: ShellBodyAtr.Merge(Interop.BodyShapeReader.Split(b.Shapes).HiddenAttributes,
-                                                         bodyAtrOff.GetValueOrDefault(b.Path)),
+                    HiddenAttributes: ShellBodyAtr.HiddenFor(b.Shapes, bodyAtrOff, b.Path),
                     UvConv: i < uvConverters.Count ? uvConverters[i] : null,
                     DelegateKey: "keep:-|uv:" + (i < uvConverters.Count && uvConverters[i] != null
                         ? $"{(menUnmirror && IsGen2(b.Uv) ? UVRemapService.MaleVanillaSpace : b.Uv)}>{bodyType}:{unmirror}" : "-"),
@@ -1673,8 +1672,9 @@ public sealed partial class SecondSkinService
                         if (nailGate != null && bPath.EndsWith("_glv.mdl", StringComparison.OrdinalIgnoreCase)
                             && BodyBridge.FlattenNails(smoothed ?? bBytes, nailGate,
                                    msg => service.log.Debug("[Proteus] second skin: {0}", msg),
-                                   // The nail layers this body hides (Stabbies' alternative nails) are no nails of its.
-                                   Interop.BodyShapeReader.Split(bShapes).HiddenAttributes) is { } noNails)
+                                   // The nail layers this body hides (Stabbies' alternative nails), live or switched
+                                   // off by its body mod's options, are no nails of its.
+                                   ShellBodyAtr.HiddenFor(bShapes, bodyAtrOff, bPath)) is { } noNails)
                             smoothed = noNails;
                     }
                     catch (Exception ex)

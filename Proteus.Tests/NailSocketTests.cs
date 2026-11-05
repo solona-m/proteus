@@ -582,6 +582,75 @@ public class NailSocketTests(ITestOutputHelper o)
         Assert.True(flat == null || ReadPositionsEqual(hand, flat), "a partly hidden nail changed");
     }
 
+    /// <summary>A nail layer the body mod's OPTIONS switch off (not the game, live) is no nail either: the shell build
+    /// hands FlattenNails both sets merged (#58), and the result is the live-hide one's.</summary>
+    [Fact]
+    [Trait("Plan", "AC-issue-sweep-a-5")]
+    public void Option_switched_nail_layer_is_not_a_nail()
+    {
+        const string glv = "chara/equipment/e0000/model/c0201e0000_glv.mdl";
+        var hand = SyntheticFinger.Build(V.AttrLayers);
+        var plans = LongPlans(hand);
+        var atrOff = new Dictionary<string, IReadOnlySet<string>>(StringComparer.OrdinalIgnoreCase)
+        {
+            [glv.ToUpperInvariant()] = new HashSet<string> { "atr_gv_c" },
+        };
+        var hidden = ShellBodyAtr.HiddenFor(null, atrOff, glv);
+        Assert.Equal(["atr_gv_c"], hidden!);
+        var sp = SecondSkinWriter.NailSockets(hand, plans, o.WriteLine, hidden);
+        var layerB = sp.HiddenIslands.Single();
+        Assert.NotNull(sp.Sockets.Single().Owner);
+        Assert.DoesNotContain(layerB, sp.Sockets.Single().Members);
+        var flat = BodyBridge.FlattenNails(hand, Full(), o.WriteLine, hidden);
+        Assert.NotNull(flat);
+        Assert.True(NailGrade.SameIsland(hand, flat!, plans, layerB), "the switched-off layer changed");
+        var live = BodyBridge.FlattenNails(hand, Full(), o.WriteLine, new HashSet<string> { "atr_gv_c" })!;
+        SecondSkinWriter.TryReadLod0Geometry(live, out var p1, out _, out _);
+        SecondSkinWriter.TryReadLod0Geometry(flat!, out var p2, out _, out _);
+        Assert.Equal(p1, p2);
+    }
+
+    /// <summary>A SEWN nail wholly on a hidden switch closes no rim in game, so it must not hide its socket: a drawn
+    /// floating nail over that rim is spanned or left as authored — never collapsed with the rim left open (#54). The
+    /// hidden sewn nail itself is left byte for byte.</summary>
+    [Fact]
+    [Trait("Plan", "AC-issue-sweep-a-6")]
+    [Trait("Plan", "EDGE-issue-sweep-a-17")]
+    public void Hidden_sewn_nail_does_not_hide_its_socket()
+    {
+        var hand = SyntheticFinger.Build(V.SewnHiddenWithFloating);
+        var plans = LongPlans(hand);
+        var hidden = new HashSet<string> { "atr_gv_c" };
+        var sp = SecondSkinWriter.NailSockets(hand, plans, o.WriteLine, hidden);
+        var sewn = sp.HiddenIslands.Single();
+        var (mesh, plan) = plans.Single();
+        Assert.True(plan.Sewn[sewn.Island], "the fixture's hidden nail should be sewn into the finger");
+        var sock = sp.Sockets.Single();   // before #54 there was none, and the floating nail collapsed into the hole
+        var log = new List<string>();
+        var flat = BodyBridge.FlattenNails(hand, Full(), l => { log.Add(l); o.WriteLine(l); }, hidden);
+        Assert.NotNull(flat);
+        Assert.True(NailGrade.SameIsland(hand, flat!, plans, sewn), "the hidden sewn nail changed");
+        // NailGrade finds holes from the geometry alone and can't see switches (the hidden sewn nail still closes the
+        // rim to it), so the span is judged by the pass's own count here; its shape is graded by the one-layer tests.
+        if (sock.Owner != null && sock.LeftAsAuthored == null)
+            Assert.Contains(log, l => l.Contains("1 spanning an open socket", StringComparison.Ordinal));
+        else
+            foreach (var m in sock.Members)
+                Assert.True(NailGrade.SameIsland(hand, flat!, plans, m), $"island {m} changed though its socket was left as authored");
+    }
+
+    /// <summary>A sewn nail still drawn — not hidden at all, or only partly hidden — still closes its rim: no socket.</summary>
+    [Fact]
+    [Trait("Plan", "EDGE-issue-sweep-a-16")]
+    public void Drawn_or_partly_hidden_sewn_nail_still_blocks_the_rim()
+    {
+        var drawn = SyntheticFinger.Build(V.SewnHiddenWithFloating);
+        Assert.Empty(SecondSkinWriter.NailSockets(drawn, LongPlans(drawn), o.WriteLine).Sockets);
+        var partly = SyntheticFinger.Build(V.SewnPartlyHidden);
+        Assert.Empty(SecondSkinWriter.NailSockets(partly, LongPlans(partly), o.WriteLine,
+                                                  new HashSet<string> { "atr_gv_c" }).Sockets);
+    }
+
     /// <summary>Hidden SKIN still counts as skin: open edges along a hidden part of the finger are no hole a nail should
     /// span, so hiding the finger's own switch changes nothing.</summary>
     [Fact]
