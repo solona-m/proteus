@@ -42,17 +42,28 @@ public partial class HairPortBuilderTests
         Assert.All(plan.Writes, w => Assert.Empty(w.Materials));
     }
 
+    /// <summary>An authored race is never ported over. The other sex is never ported by the automatic path, and only by
+    /// hand — hairstyle 5, whose material no other race reads.</summary>
     [Fact]
     [Trait("Plan", "AC-hair-race-port-5")]
+    [Trait("Plan", "AC-cross-sex-hair-port-5")]
     public void Authored_races_and_the_other_sex_are_left_alone()
     {
-        using var mod = new Mod(defaults: new Dictionary<string, string> { [Source] = "a.mdl", [Target] = "b.mdl" });
-        mod.Put("a.mdl", HairModel(801));
-        mod.Put("b.mdl", HairModel(201));
-        var plan = HairPortBuilder.Build(mod.Root, Source, [201, 101], Pbd(), Game(Races), withSharers: false);
-        Assert.Empty(plan.Writes);
-        Assert.False(plan.Refused.ContainsKey(201));
-        Assert.True(plan.Refused.ContainsKey(101));
+        const int id = 5;
+        string source = HairPortPlan.HairPath(801, id), target = HairPortPlan.HairPath(201, id);
+        using var mod = new Mod(defaults: new Dictionary<string, string> { [source] = "a.mdl", [target] = "b.mdl" });
+        mod.Put("a.mdl", HairModelOf(801, id));
+        mod.Put("b.mdl", HairModelOf(201, id));
+        var game = GameOf(Races, [id]);
+
+        var auto = HairPortBuilder.Build(mod.Root, source, [201, 101], Pbd(), game, withSharers: true);
+        Assert.Empty(auto.Writes);
+        Assert.False(auto.Refused.ContainsKey(201));
+        Assert.Equal(HairPortBuilder.OtherSexAuto, auto.Refused[101]);
+
+        var byHand = HairPortBuilder.Build(mod.Root, source, [201, 101], Pbd(), game, withSharers: false);
+        Assert.Empty(byHand.Refused);
+        Assert.Equal([HairPortPlan.HairPath(101, id)], byHand.Writes.Select(w => w.TargetGamePath));
     }
 
     [Fact]

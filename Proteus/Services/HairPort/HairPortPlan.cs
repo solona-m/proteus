@@ -38,13 +38,22 @@ internal static partial class HairPortPlan
     /// <summary>A playable race's code, 101 to 1801.</summary>
     public static bool Playable(ushort race) => race % 100 == 1 && race / 100 is >= 1 and <= 18;
 
-    /// <summary>Every other playable race of <paramref name="race"/>'s sex — the races a hairstyle may be ported to.
-    /// Never across sexes: a woman's hairstyle is not fitted onto a man.</summary>
+    /// <summary>Every other playable race of <paramref name="race"/>'s sex — the races the automatic path fits a
+    /// hairstyle between. Across the sexes only by hand, in the Studio (<see cref="OtherSexRaces"/>): the same number is
+    /// another style for the other sex.</summary>
     public static IEnumerable<ushort> SameGenderRaces(ushort race)
     {
         if (!Playable(race)) yield break;
         for (int n = race / 100 % 2 == 0 ? 2 : 1; n <= 18; n += 2)
             if (n * 100 + 1 != race) yield return (ushort)(n * 100 + 1);
+    }
+
+    /// <summary>Every playable race of the other sex than <paramref name="race"/>'s, in race order — the races the Studio
+    /// may port a hairstyle to by hand. Empty for a race that is not playable.</summary>
+    public static IEnumerable<ushort> OtherSexRaces(ushort race)
+    {
+        if (!Playable(race)) yield break;
+        for (int n = race / 100 % 2 == 0 ? 1 : 2; n <= 18; n += 2) yield return (ushort)(n * 100 + 1);
     }
 
     /// <summary>How many fall-through steps apart two races are, through the race both fall to; a large number when

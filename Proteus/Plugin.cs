@@ -29,7 +29,7 @@ public sealed class Plugin : IDalamudPlugin
 #endif
 
     /// <summary>Hand-maintained; bump it for in-game testing. <see cref="BuildStamp"/> is the one that can't go stale.</summary>
-    public const int BuildNumber = 1429;
+    public const int BuildNumber = 1430;
 
     /// <summary>
     /// Which set of release notes is current. Raise it when a release has something new to say: the window
@@ -260,7 +260,7 @@ public sealed class Plugin : IDalamudPlugin
 
 #if PROTEUS_TEST_HARNESS
         harness = new TestHarness.HarnessHost(dataDir, pluginInterface.IsDev,
-            new TestHarness.GameHarnessAdapter(penumbra, compositor, autoRefit, shaderUpgrade, ObjectTable, ClientState, framework,
+            new TestHarness.GameHarnessAdapter(penumbra, compositor, autoRefit, shaderUpgrade, hairPort, ObjectTable, ClientState, framework,
                                                TextureProvider, TextureReadback, config, uvRemap,
                                                path => textureLoader.LoadRawFile(null, path),
                                                dir => partsPanel.NoteModelsChanged(dir), log),

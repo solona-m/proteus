@@ -5491,10 +5491,6 @@
     "message": "der Mod stellt diese Frisur nicht bereit",
     "description": ""
   },
-  "HairPort.Refused.Gender": {
-    "message": "Frisuren werden nur zwischen Völkern desselben Geschlechts übertragen",
-    "description": ""
-  },
   "HairPort.Refused.NoStyle.Fmt": {
     "message": "c{0:D4} kann Frisur {1} nicht wählen",
     "description": ""
@@ -5607,6 +5603,42 @@
     "message": "nicht abgedeckt",
     "description": ""
   },
+  "HairPort.Studio.OtherSex": {
+    "message": "Auch für das andere Geschlecht",
+    "description": "Section heading in the Studio's port list, above the races of the other sex."
+  },
+  "HairPort.Studio.OtherSex.Note.Fmt": {
+    "message": "Im Spiel ist Frisur {0} für das andere Geschlecht eine andere Frisur. Ein Volk, auf das sie hier übertragen wird, trägt stattdessen diese, sobald es mit diesem Mod Frisur {0} wählt – für alle, die mit dem Mod dargestellt werden. Hier wird nichts für dich angehakt, und Proteus überträgt nie von selbst über das Geschlecht hinweg.",
+    "description": "Note under the other-sex heading in the Studio port list. {0} is the hairstyle number."
+  },
+  "HairPort.Studio.OtherSexAuthored": {
+    "message": "der Mod hat eine eigene Version für dieses Geschlecht",
+    "description": "Per-race status in the Studio port list for a race of the other sex: the mod ships its own model of this hairstyle for that sex."
+  },
+  "HairPort.Studio.OtherSexSkeleton": {
+    "message": "der Mod gibt diesem Volk ein eigenes Skelett",
+    "description": "Per-race status note in the Studio port list for a race of the other sex: the mod now gives that race its own hair skeleton."
+  },
+  "HairPort.Refused.NotTarget": {
+    "message": "es ist das eigene Volk der Frisur oder kein spielbares",
+    "description": "Reason (lowercase sentence fragment) why a hairstyle could not be ported to a race; shown after a race name and a colon."
+  },
+  "HairPort.Refused.OtherSexAuto": {
+    "message": "es ist vom anderen Geschlecht, auf das nur auf Wunsch im Studio übertragen wird",
+    "description": "Reason (lowercase sentence fragment) why the automatic path did not port a hairstyle to a race of the other sex; shown after a race name and a colon."
+  },
+  "HairPort.Refused.OtherSexAuthored.Fmt": {
+    "message": "der Mod hat eine eigene Frisur {1} für c{0:D4}; übertrage stattdessen diese",
+    "description": "Reason (lowercase sentence fragment) a hand port to the other sex is refused. {0} is a race code number, {1} the hairstyle number."
+  },
+  "HairPort.Refused.OtherSexAuthoredAuto.Fmt": {
+    "message": "der Mod hat jetzt eine eigene Frisur {1} für c{0:D4}; die im Studio erstellte Übertragung bleibt, wie sie ist",
+    "description": "Reason (lowercase sentence fragment) the automatic path leaves a Studio port to the other sex as it is. {0} is a race code number, {1} the hairstyle number."
+  },
+  "HairPort.Refused.OtherSexSkeleton.Fmt": {
+    "message": "der Mod gibt c{0:D4} ein eigenes Skelett für Frisur {1}, daher kann eine Übertragung vom anderen Geschlecht ihres nicht mitbringen",
+    "description": "Reason (lowercase sentence fragment) a port to the other sex is refused. {0} is a race code number, {1} the hairstyle number."
+  },
   "HairPort.Studio.Port": {
     "message": "Übertragen",
     "description": ""
@@ -5683,8 +5715,8 @@
     "message": "Proteus' Aufzeichnung der Frisur-Übertragungen dieser Mod (Proteus/hairport.json) konnte nicht gelesen werden, daher wurde nichts geändert.",
     "description": ""
   },
-  "HairPort.Auto.Tip2": {
-    "message": "Viele Haar-Mods sind nur für ein Volk gemacht, daher zeigt das Spiel bei jedem\nanderen Volk seine eigene Frisur. Ist dies aktiv, biegt Proteus die Frisur des\nMods auf den Kopf deines Volkes und fügt sie derselben Option desselben Mods\nhinzu – für die Frisur, die du trägst, und vorab für die Haar-Mods, die in deiner\nSammlung aktiv sind: beim Einschalten, wenn ein Mod installiert, aktiviert oder\ngeändert wird, und wenn du „Jetzt prüfen“ drückst.\n\nNur für dein eigenes Volk, aus Völkern desselben Geschlechts. Funktioniert auch\nmit ausgeschaltetem Proteus, wandert mit dem Mod und ist für alle sichtbar, die\nmit diesem Mod dargestellt werden. Hier rückgängig zu machen.",
+  "HairPort.Auto.Tip3": {
+    "message": "Viele Haar-Mods sind nur für ein Volk gemacht, daher zeigt das Spiel bei jedem\nanderen Volk seine eigene Frisur. Ist dies aktiv, biegt Proteus die Frisur des\nMods auf den Kopf deines Volkes und fügt sie derselben Option desselben Mods\nhinzu – für die Frisur, die du trägst, und vorab für die Haar-Mods, die in deiner\nSammlung aktiv sind: beim Einschalten, wenn ein Mod installiert, aktiviert oder\ngeändert wird, und wenn du „Jetzt prüfen“ drückst.\n\nNur für dein eigenes Volk, aus Völkern desselben Geschlechts. Eine Übertragung\nüber das Geschlecht hinweg entsteht nur im Studio, wird hier aber ebenfalls\naktuell gehalten. Funktioniert auch mit ausgeschaltetem Proteus, wandert mit dem\nMod und ist für alle sichtbar, die mit diesem Mod dargestellt werden. Hier\nrückgängig zu machen.",
     "description": ""
   },
   "HairPort.Scan.Starting": {

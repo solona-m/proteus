@@ -5491,10 +5491,6 @@
     "message": "le mod ne fournit pas cette coiffure",
     "description": ""
   },
-  "HairPort.Refused.Gender": {
-    "message": "les coiffures ne sont transposées qu'entre races du même sexe",
-    "description": ""
-  },
   "HairPort.Refused.NoStyle.Fmt": {
     "message": "c{0:D4} ne peut pas choisir la coiffure {1}",
     "description": ""
@@ -5607,6 +5603,42 @@
     "message": "non couvert",
     "description": ""
   },
+  "HairPort.Studio.OtherSex": {
+    "message": "Aussi pour l'autre sexe",
+    "description": "Section heading in the Studio's port list, above the races of the other sex."
+  },
+  "HairPort.Studio.OtherSex.Note.Fmt": {
+    "message": "Dans le jeu, la coiffure {0} est un autre style pour l'autre sexe. Une race vers laquelle elle est transposée ici porte celle-ci à la place dès qu'elle choisit la coiffure {0} avec ce mod actif — pour tous ceux affichés avec le mod. Rien n'est coché pour vous ici, et Proteus ne transpose jamais d'un sexe à l'autre de lui-même.",
+    "description": "Note under the other-sex heading in the Studio port list. {0} is the hairstyle number."
+  },
+  "HairPort.Studio.OtherSexAuthored": {
+    "message": "le mod a sa propre version pour ce sexe",
+    "description": "Per-race status in the Studio port list for a race of the other sex: the mod ships its own model of this hairstyle for that sex."
+  },
+  "HairPort.Studio.OtherSexSkeleton": {
+    "message": "le mod donne à cette race son propre squelette",
+    "description": "Per-race status note in the Studio port list for a race of the other sex: the mod now gives that race its own hair skeleton."
+  },
+  "HairPort.Refused.NotTarget": {
+    "message": "c'est la race même de la coiffure, ou une race non jouable",
+    "description": "Reason (lowercase sentence fragment) why a hairstyle could not be ported to a race; shown after a race name and a colon."
+  },
+  "HairPort.Refused.OtherSexAuto": {
+    "message": "elle est de l'autre sexe, vers lequel on ne transpose que sur demande dans le Studio",
+    "description": "Reason (lowercase sentence fragment) why the automatic path did not port a hairstyle to a race of the other sex; shown after a race name and a colon."
+  },
+  "HairPort.Refused.OtherSexAuthored.Fmt": {
+    "message": "le mod a sa propre coiffure {1} pour c{0:D4} ; transposez plutôt celle-ci",
+    "description": "Reason (lowercase sentence fragment) a hand port to the other sex is refused. {0} is a race code number, {1} the hairstyle number."
+  },
+  "HairPort.Refused.OtherSexAuthoredAuto.Fmt": {
+    "message": "le mod a maintenant sa propre coiffure {1} pour c{0:D4} ; la transposition faite dans le Studio est laissée telle quelle",
+    "description": "Reason (lowercase sentence fragment) the automatic path leaves a Studio port to the other sex as it is. {0} is a race code number, {1} the hairstyle number."
+  },
+  "HairPort.Refused.OtherSexSkeleton.Fmt": {
+    "message": "le mod donne à c{0:D4} son propre squelette pour la coiffure {1}, donc une transposition depuis l'autre sexe ne peut pas apporter le sien",
+    "description": "Reason (lowercase sentence fragment) a port to the other sex is refused. {0} is a race code number, {1} the hairstyle number."
+  },
   "HairPort.Studio.Port": {
     "message": "Transposer",
     "description": ""
@@ -5683,8 +5715,8 @@
     "message": "Le registre Proteus des coiffures transposées de ce mod (Proteus/hairport.json) n'a pas pu être lu, donc rien n'a été modifié.",
     "description": ""
   },
-  "HairPort.Auto.Tip2": {
-    "message": "Beaucoup de mods de cheveux ne sont faits que pour une race : sur toute autre race,\nle jeu affiche sa propre coiffure. Activé, Proteus plie la coiffure du mod sur la\ntête de votre race et l'ajoute à la même option du même mod — pour la coiffure que\nvous portez, et à l'avance pour les mods de cheveux activés dans votre collection :\nà l'activation de ce réglage, quand un mod est installé, activé ou modifié, et\nquand vous appuyez sur « Vérifier maintenant ».\n\nSeulement pour votre propre race, depuis des races du même sexe. Fonctionne même\nProteus désactivé, voyage avec le mod et se voit sur tous ceux affichés avec ce\nmod actif. Annulable ici.",
+  "HairPort.Auto.Tip3": {
+    "message": "Beaucoup de mods de cheveux ne sont faits que pour une race : sur toute autre race,\nle jeu affiche sa propre coiffure. Activé, Proteus plie la coiffure du mod sur la\ntête de votre race et l'ajoute à la même option du même mod — pour la coiffure que\nvous portez, et à l'avance pour les mods de cheveux activés dans votre collection :\nà l'activation de ce réglage, quand un mod est installé, activé ou modifié, et\nquand vous appuyez sur « Vérifier maintenant ».\n\nSeulement pour votre propre race, depuis des races du même sexe. Une\ntransposition d'un sexe à l'autre ne se fait que dans le Studio, mais celle\nfaite là-bas est aussi tenue à jour ici. Fonctionne même Proteus désactivé,\nvoyage avec le mod et se voit sur tous ceux affichés avec ce mod actif.\nAnnulable ici.",
     "description": ""
   },
   "HairPort.Scan.Starting": {

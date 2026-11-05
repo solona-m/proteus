@@ -280,6 +280,27 @@ internal sealed class FakeGame : IHarnessGame
     }
 
     public bool? LastCaptureUi { get; private set; }
+
+    /// <summary>The automatic hair path as /state and the busy rules see it.</summary>
+    public HairPortInfo HairPortView { get; set; } = new(new HairPortWatcher.View(), new HairPortWatcher.ScanView(), false, true, false);
+    public HairPortInfo HairPort() => HairPortView;
+
+    /// <summary>The game's own files a hair port reads: heads, hair models, materials, skeletons, the racial deformer.</summary>
+    public Dictionary<string, byte[]> GameFiles { get; set; } = new(StringComparer.OrdinalIgnoreCase);
+    /// <summary>Runs on the reading thread before each game-file read: where a test stalls a bend.</summary>
+    public Action<string>? OnReadGameFile { get; set; }
+    public byte[]? ReadGameFile(string gamePath)
+    {
+        Order.Enqueue("ReadGameFile@" + Where());
+        OnReadGameFile?.Invoke(gamePath);
+        return GameFiles.TryGetValue(gamePath, out var b) ? b : null;
+    }
+
+    public bool IsHairMod(string modRoot)
+    {
+        Order.Enqueue("IsHairMod@" + Where());
+        return HairPortJob.IsHairMod(modRoot);
+    }
 }
 
 /// <summary>A temp folder deleted at the end.</summary>
@@ -362,6 +383,17 @@ internal sealed class HarnessFixture : IDisposable
         File.SetLastWriteTimeUtc(System.IO.Path.Combine(root, "chara", "model", "top.mdl"), new DateTime(2024, 1, 2, 3, 4, 5, DateTimeKind.Utc));
         Game.ModFolders[dir] = dir + " (display)";
         return root;
+    }
+
+    /// <summary>A women's hair mod (c0201 h0005 in option Cut / Long) installed, Penumbra knowing it, and the game's files
+    /// a port of it reads — the racial deformer among them.</summary>
+    public HairPortFixtures.Mod AddHairMod(string dir = "Hair", bool physics = false)
+    {
+        var mod = CrossSexFixtures.WomensMod(physics: physics, root: System.IO.Path.Combine(ModsRoot, dir));
+        Game.ModFolders[dir] = dir + " (display)";
+        Game.GameFiles = physics ? CrossSexFixtures.PhysicsFiles() : CrossSexFixtures.GameFiles();
+        Game.GameFiles[Proteus.Interop.LiveCharacter.PbdGamePath] = CrossSexFixtures.PbdBytes();
+        return mod;
     }
 
     public static StringContent Json(string json) => new(json, Encoding.UTF8, "application/json");

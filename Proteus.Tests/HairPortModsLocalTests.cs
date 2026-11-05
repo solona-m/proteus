@@ -119,6 +119,81 @@ public sealed class HairPortModsLocalTests(ITestOutputHelper o)
         Assert.Empty(refused);
     }
 
+    /// <summary>
+    /// Installed mods whose author ships one hairstyle for both sexes in the same place: the Midlander of one sex, bent
+    /// onto a race of the other, measured against the author's own model of it. Authors may re-style the other sex, so
+    /// this is evidence, not truth; with no such mod it says so and passes (the game-files measure decides).
+    /// </summary>
+    [LocalDataFact(LocalData.Mods, LocalData.GameData)]
+    [Trait("Plan", "AC-cross-sex-hair-port-4")]
+    public void Cross_sex_ports_of_installed_mods_land_near_the_authors_own_other_sex_model()
+    {
+        var game = HairPortLocalTests.Load();
+        var rows = new List<Row>();
+        foreach (var modRoot in Directory.EnumerateDirectories(LocalData.Path(LocalData.Mods)))
+        {
+            if (HairPortPlan.ReadOwners(modRoot) is not { } owners) continue;
+            foreach (var owner in owners.Where(w => !w.IsCombining))
+                foreach (var group in owner.Files.Select(f => (At: HairPortPlan.Parse(f.Key), File: f.Value))
+                                                 .Where(f => f.At != null && !HairPortPlan.IsPortFile(f.File))
+                                                 .GroupBy(f => f.At!.Value.Id))
+                {
+                    var races = group.ToDictionary(f => f.At!.Value.Race, f => f.File);
+                    foreach (ushort root in new ushort[] { 201, 101 })
+                    {
+                        if (!races.TryGetValue(root, out var srcRel) || Read(modRoot, srcRel) is not { } src) continue;
+                        foreach (var (to, rel) in races.Where(r => CrossSexRefit.CrossesSex(r.Key, root)))
+                            if (Read(modRoot, rel) is { } theirs
+                                && Compare(game, modRoot, owners, owner, group.Key, root, to, src, theirs, false) is { } row)
+                                rows.Add(row);
+                    }
+                }
+            if (rows.Count > 400) break;
+        }
+        foreach (var r in rows.OrderBy(r => r.Mod).ThenBy(r => r.Id).ThenBy(r => r.To))
+            o.WriteLine($"{r.Mod} | {r.Option} | h{r.Id:D4} -> c{r.To:D4}: median {r.Median * 1000:F1} mm, p90 {r.P90 * 1000:F1} mm "
+                      + $"(unbent {r.AsIsMedian * 1000:F1} / {r.AsIsP90 * 1000:F1} mm)" + (r.Refused ? $"  REFUSED {r.Why}" : ""));
+        if (rows.Count == 0)
+        {
+            o.WriteLine("no evidence: no installed mod ships one hairstyle for both sexes in one place");
+            return;
+        }
+        o.WriteLine($"{rows.Count} ports across the sexes, mean median {rows.Average(r => r.Median) * 1000:F1} mm");
+        Assert.True(rows.Average(r => r.Median) < 0.015, $"ports land {rows.Average(r => r.Median) * 1000:F1} mm from the authors' on average");
+    }
+
+    /// <summary>How often a cross-sex port of an installed physics hair mod would be refused because the mod gives a race
+    /// of the other sex a skeleton entry of its own for the same hairstyle. Printed only.</summary>
+    [LocalDataFact(LocalData.Mods)]
+    [Trait("Plan", "AC-cross-sex-hair-port-9")]
+    public void Installed_physics_hair_giving_the_other_sex_a_skeleton_diagnostic()
+    {
+        int mods = 0, physicsMods = 0;
+        foreach (var modRoot in Directory.EnumerateDirectories(LocalData.Path(LocalData.Mods)))
+        {
+            if (HairPortPlan.ReadOwners(modRoot) is not { } owners) continue;
+            var hits = new SortedSet<string>();
+            bool physics = false;
+            foreach (var owner in owners.Where(w => !w.IsCombining))
+                foreach (var (path, rel) in owner.Files)
+                {
+                    if (HairPortPlan.IsPortFile(rel) || HairPortPlan.Parse(path) is not { } at) continue;
+                    if (Read(modRoot, rel) is not { } model || HairPortSkeleton.ExtraBones(model).Count == 0) continue;
+                    physics = true;
+                    var defaults = owners.FirstOrDefault(w => w.IsDefault);
+                    foreach (var place in new[] { owner, defaults }.OfType<HairPortPlan.Owner>())
+                        foreach (ushort other in HairPortPlan.OtherSexRaces(at.Race))
+                            if (HairPortPlan.HairEst(place, other, at.Id) is { } e)
+                                hits.Add($"h{at.Id:D4} c{other:D4} -> {e} ({(place.IsDefault ? "default" : place.Option)})");
+                }
+            if (physics) physicsMods++;
+            if (hits.Count == 0) continue;
+            mods++;
+            o.WriteLine($"{Path.GetFileName(modRoot)}: {string.Join("; ", hits)}");
+        }
+        o.WriteLine($"{mods} of {physicsMods} installed physics hair mods give the other sex a skeleton entry of their own");
+    }
+
     private static Row? Compare(HairPortLocalTests.Game game, string modRoot, IReadOnlyList<HairPortPlan.Owner> owners,
                                 HairPortPlan.Owner owner, int id, ushort from, ushort to, byte[] src, byte[] theirs,
                                 bool lm)
