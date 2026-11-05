@@ -61,15 +61,20 @@ internal static class HairPortScan
         => Enumerable.Range(1, MaxId).Where(id => gameHas(HairPortPlan.HairPath(race, id))).ToList();
 
     /// <summary>The hairstyles a mod's author made for other races of <paramref name="race"/>'s sex — the ones a check
-    /// of that mod looks at. Empty for an unreadable manifest.</summary>
-    public static List<int> IdsInMod(IReadOnlyList<HairPortPlan.Owner>? owners, ushort race)
+    /// of that mod looks at — and, from <paramref name="record"/>, every hairstyle the mod holds a port of ours to
+    /// <paramref name="race"/> of: a port the Studio made across the sexes is kept current by that check too, though no
+    /// file of the race's sex names it. Empty for an unreadable manifest.</summary>
+    public static List<int> IdsInMod(IReadOnlyList<HairPortPlan.Owner>? owners, ushort race, HairPortRecord? record = null)
     {
         var ids = new SortedSet<int>();
-        foreach (var owner in owners ?? [])
+        if (owners == null) return [];
+        foreach (var owner in owners)
             foreach (var (path, rel) in owner.Files)
                 if (!HairPortPlan.IsPortFile(rel) && HairPortPlan.Parse(path) is { } at
                     && at.Race != race && at.Race / 100 % 2 == race / 100 % 2)
                     ids.Add(at.Id);
+        foreach (var e in record?.Ports ?? [])
+            if (HairPortPlan.Parse(e.TargetGamePath.Replace('\\', '/')) is { } to && to.Race == race) ids.Add(to.Id);
         return [.. ids];
     }
 
@@ -151,7 +156,7 @@ internal static class HairPortScan
                     rows.Add(MakeRow(host, id, modRoot, target, RowState.Refused, HairPortWatcher.NoPbd));
                     continue;
                 }
-                string refusal = RefusalKey(modRoot, d.Source!, resolved.GetValueOrDefault(d.Source!), race);
+                string refusal = RefusalKey(modRoot, d, resolved.GetValueOrDefault(d.Source!), race);
                 if (memo.Refusals.TryGetValue(refusal, out var known))
                 {
                     rows.Add(MakeRow(host, id, modRoot, target, RowState.Refused, known));
@@ -324,10 +329,13 @@ internal static class HairPortScan
         return new Row(id, modRoot, dir, host.ModName(dir), target, state, message);
     }
 
-    /// <summary>A refusal holds for the same model of the same mod onto the same race by the same bend.</summary>
-    private static string RefusalKey(string modRoot, string sourceGamePath, string? sourceFile, ushort race)
+    /// <summary>A refusal holds for the same model of the same mod onto the same race by the same bend. The model is
+    /// the stale port's own source file when the decision names one (a port across the sexes has a source no resolved
+    /// path names), else what the source path resolves to.</summary>
+    internal static string RefusalKey(string modRoot, HairPortWatcher.Decide.Decision d, string? resolvedSource, ushort race)
     {
-        string stamp = "";
+        string sourceGamePath = d.Source!, stamp = "";
+        string? sourceFile = d.SourceFile ?? resolvedSource;
         try
         {
             if (sourceFile != null && new FileInfo(sourceFile) is { Exists: true } f)

@@ -17,6 +17,7 @@ public class HairPortPanelTests
 
     [Fact]
     [Trait("Plan", "AC-hair-race-port-6")]
+    [Trait("Plan", "AC-cross-sex-hair-port-2")]
     public void Rows_list_every_other_same_gender_race_with_its_state()
     {
         using var mod = new Mod(defaults: new Dictionary<string, string>
@@ -30,7 +31,9 @@ public class HairPortPanelTests
                                                                      File = "Hair Ports/Default/x.mdl", PortVersion = HairPortBaker.Version }] })));
         var rows = Rows(mod, noStyle: [1601]);
 
-        Assert.Equal(HairPortPlan.SameGenderRaces(801), rows.Select(r => r.Race));
+        Assert.Equal(HairPortPlan.SameGenderRaces(801), rows.Where(r => !r.OtherSex).Select(r => r.Race));
+        Assert.Equal(HairPortPlan.OtherSexRaces(801), rows.Where(r => r.OtherSex).Select(r => r.Race));
+        // The other sex listed, none of it ticked.
         Assert.Equal(HairPortPanel.State.Ported, rows.Single(r => r.Race == 201).State);
         Assert.Equal(HairPortPanel.State.Covered, rows.Single(r => r.Race == 1401).State);
         Assert.Equal(HairPortPanel.State.NoStyle, rows.Single(r => r.Race == 1601).State);

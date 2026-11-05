@@ -5487,10 +5487,6 @@
     "message": "모드가 그 헤어스타일을 제공하지 않습니다",
     "description": ""
   },
-  "HairPort.Refused.Gender": {
-    "message": "헤어스타일은 같은 성별의 종족 사이에서만 이식됩니다",
-    "description": ""
-  },
   "HairPort.Refused.NoStyle.Fmt": {
     "message": "c{0:D4}은(는) 헤어스타일 {1}을(를) 선택할 수 없습니다",
     "description": ""
@@ -5603,6 +5599,42 @@
     "message": "미지원",
     "description": ""
   },
+  "HairPort.Studio.OtherSex": {
+    "message": "다른 성별에도",
+    "description": "Section heading in the Studio's port list, above the races of the other sex."
+  },
+  "HairPort.Studio.OtherSex.Note.Fmt": {
+    "message": "게임에서 헤어스타일 {0}은(는) 다른 성별에게는 다른 스타일입니다. 여기서 이식한 종족은 이 모드를 켠 채 헤어스타일 {0}을(를) 고르면 대신 이 스타일을 씁니다 — 그 모드로 표시되는 모두에게. 여기서는 아무것도 자동으로 체크되지 않으며, Proteus는 스스로 성별을 넘어 이식하지 않습니다.",
+    "description": "Note under the other-sex heading in the Studio port list. {0} is the hairstyle number."
+  },
+  "HairPort.Studio.OtherSexAuthored": {
+    "message": "모드에 이 성별용 자체 버전이 있습니다",
+    "description": "Per-race status in the Studio port list for a race of the other sex: the mod ships its own model of this hairstyle for that sex."
+  },
+  "HairPort.Studio.OtherSexSkeleton": {
+    "message": "모드가 이 종족에 자체 스켈레톤을 줍니다",
+    "description": "Per-race status note in the Studio port list for a race of the other sex: the mod now gives that race its own hair skeleton."
+  },
+  "HairPort.Refused.NotTarget": {
+    "message": "헤어스타일 자신의 종족이거나 플레이할 수 없는 종족입니다",
+    "description": "Reason (lowercase sentence fragment) why a hairstyle could not be ported to a race; shown after a race name and a colon."
+  },
+  "HairPort.Refused.OtherSexAuto": {
+    "message": "다른 성별이므로 스튜디오에서 요청할 때만 이식됩니다",
+    "description": "Reason (lowercase sentence fragment) why the automatic path did not port a hairstyle to a race of the other sex; shown after a race name and a colon."
+  },
+  "HairPort.Refused.OtherSexAuthored.Fmt": {
+    "message": "모드에 c{0:D4}용 자체 헤어스타일 {1}이(가) 있습니다. 대신 그것을 이식하세요",
+    "description": "Reason (lowercase sentence fragment) a hand port to the other sex is refused. {0} is a race code number, {1} the hairstyle number."
+  },
+  "HairPort.Refused.OtherSexAuthoredAuto.Fmt": {
+    "message": "모드에 이제 c{0:D4}용 자체 헤어스타일 {1}이(가) 있으므로 스튜디오에서 만든 이식은 그대로 둡니다",
+    "description": "Reason (lowercase sentence fragment) the automatic path leaves a Studio port to the other sex as it is. {0} is a race code number, {1} the hairstyle number."
+  },
+  "HairPort.Refused.OtherSexSkeleton.Fmt": {
+    "message": "모드가 c{0:D4}에 헤어스타일 {1}용 자체 스켈레톤을 주므로, 다른 성별에서 온 이식은 자기 스켈레톤을 가져올 수 없습니다",
+    "description": "Reason (lowercase sentence fragment) a port to the other sex is refused. {0} is a race code number, {1} the hairstyle number."
+  },
   "HairPort.Studio.Port": {
     "message": "이식",
     "description": ""
@@ -5679,8 +5711,8 @@
     "message": "이 모드의 헤어 이식에 대한 Proteus 기록(Proteus/hairport.json)을 읽을 수 없어 아무것도 변경하지 않았습니다.",
     "description": ""
   },
-  "HairPort.Auto.Tip2": {
-    "message": "많은 헤어 모드는 한 종족 전용으로 만들어져서, 다른 종족에서는 게임\n기본 헤어스타일이 대신 표시됩니다. 켜면 Proteus가 모드의 헤어스타일을\n당신 종족의 머리에 맞게 구부려 같은 모드의 같은 옵션에 추가합니다.\n착용한 헤어스타일뿐 아니라 컬렉션에서 켜진 헤어 모드도 미리 맞춥니다:\n이 설정을 켤 때, 모드를 설치·활성화·변경할 때, \"지금 확인\"을 누를 때.\n\n당신의 종족에만, 같은 성별의 종족에서 가져옵니다. Proteus를 꺼도 계속\n작동하고, 모드와 함께 따라가며, 그 모드를 켠 채로 표시되는 모두에게\n보입니다. 여기서 되돌릴 수 있습니다.",
+  "HairPort.Auto.Tip3": {
+    "message": "많은 헤어 모드는 한 종족 전용으로 만들어져서, 다른 종족에서는 게임\n기본 헤어스타일이 대신 표시됩니다. 켜면 Proteus가 모드의 헤어스타일을\n당신 종족의 머리에 맞게 구부려 같은 모드의 같은 옵션에 추가합니다.\n착용한 헤어스타일뿐 아니라 컬렉션에서 켜진 헤어 모드도 미리 맞춥니다:\n이 설정을 켤 때, 모드를 설치·활성화·변경할 때, \"지금 확인\"을 누를 때.\n\n당신의 종족에만, 같은 성별의 종족에서 가져옵니다. 성별을 넘는 이식은 스튜디오에서만 만들어지지만, 거기서 만든 것도 여기서 최신으로 유지됩니다.\n Proteus를 꺼도 계속\n작동하고, 모드와 함께 따라가며, 그 모드를 켠 채로 표시되는 모두에게\n보입니다. 여기서 되돌릴 수 있습니다.",
     "description": ""
   },
   "HairPort.Scan.Starting": {

@@ -411,7 +411,8 @@ public sealed partial class HairPortWatcher : IDisposable
                 }
                 var ids = work.Full
                     ? HairPortScan.IdsForFull(work.Race, host.GameHas)
-                    : work.Mods.SelectMany(d => HairPortScan.IdsInMod(HairPortPlan.ReadOwners(Path.Combine(modsRoot, d)), work.Race))
+                    : work.Mods.SelectMany(d => HairPortScan.IdsInMod(HairPortPlan.ReadOwners(Path.Combine(modsRoot, d)), work.Race,
+                                                                      HairPortRecord.Read(Path.Combine(modsRoot, d))))
                                .Distinct().ToList();
                 string label = work.Full ? "full" : "mod " + string.Join(", ", work.Mods);
                 if (ids.Count == 0) { log.Debug("hair port: {0} — no hairstyle to look at", label); return; }
@@ -910,8 +911,11 @@ public sealed partial class HairPortWatcher : IDisposable
 
         /// <param name="Source">For <see cref="Kind.Port"/>: the game path of the model to port.</param>
         /// <param name="Stale">The worn hairstyle is drawn from a port of ours that is out of date.</param>
+        /// <param name="SourceFile">For a stale port: the absolute path of the author's file it was made from — what a
+        /// refusal to remake it is remembered against, since a port across the sexes has a source no resolved path
+        /// names.</param>
         public sealed record Decision(Kind Kind, string? ModRoot = null, string? Source = null, bool Stale = false,
-                                      string Message = "");
+                                      string Message = "", string? SourceFile = null);
 
         /// <summary>
         /// What to do about the worn hairstyle, from what it and every same-sex race's copy of it resolve to.
@@ -943,14 +947,15 @@ public sealed partial class HairPortWatcher : IDisposable
                     && HairPortPlan.Parse(other.Source!)?.Race == HairPortPlan.Parse(entry.SourceGamePath)?.Race)
                     return other;
                 byte[]? source = null;
-                try { source = File.ReadAllBytes(Path.Combine(modRoot, entry.SourceFile.Replace('/', Path.DirectorySeparatorChar))); }
+                string sourceFile = Path.Combine(modRoot, entry.SourceFile.Replace('/', Path.DirectorySeparatorChar));
+                try { source = File.ReadAllBytes(sourceFile); }
                 catch (Exception) { /* the author's file is gone: nothing to remake it from */ }
                 // Judged on each look that gets this far — but a borrow changed in the manifest alone resolves no path
                 // differently, so the look that sees it is one a different resolution brings: another hairstyle, the
                 // mod switched off and on, the feature switched on again, or a plugin reload. As for a changed model.
                 return source != null && HairPortBuilder.IsOutOfDate(modRoot, entry, source, HairPortPlan.ReadOwners(modRoot), record.Ports,
                                                                      readGame)
-                    ? new Decision(Kind.Port, modRoot, entry.SourceGamePath, Stale: true)
+                    ? new Decision(Kind.Port, modRoot, entry.SourceGamePath, Stale: true, SourceFile: sourceFile)
                     : new Decision(Kind.Ported, modRoot);
             }
             return Source() ?? new Decision(Kind.None);

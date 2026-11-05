@@ -17,23 +17,32 @@ namespace Proteus.Gui;
 
 /// <summary>
 /// The Body size tool for a hairstyle: "Port to all races". Lists every other race of the hairstyle's sex and what the
-/// mod has for it, and ports the ticked ones into the same options of the mod (<see cref="HairPortBuilder"/>,
+/// mod has for it — then, under "Also for the other sex", every race of the other sex, never ticked for the user (the
+/// same number is another style there) — and ports the ticked ones into the same options of the mod (<see cref="HairPortBuilder"/>,
 /// <see cref="HairPortWriter"/>). The work runs on a worker; this starts it, shows how far it got, and reloads the mod.
 /// </summary>
 /// <param name="readGameFile">Reads a game path from the game's own data. Called from workers.</param>
 internal sealed class HairPortPanel(Func<string, byte[]?> readGameFile, IPluginLog log)
 {
-    /// <summary>What the mod has of one race.</summary>
-    public enum State { Open, Covered, Ported, Stale, NoStyle }
+    /// <summary>What the mod has of one race. <see cref="OtherSexAuthored"/>: a race of the other sex, which the mod has
+    /// its own model of the hairstyle for (for some race of that sex) — the author's look for that sex, not ours to
+    /// replace.</summary>
+    public enum State { Open, Covered, Ported, Stale, NoStyle, OtherSexAuthored }
 
-    public sealed record Row(ushort Race, State State);
+    /// <param name="OtherSex">Listed under "Also for the other sex".</param>
+    /// <param name="OwnVersion">A port across the sexes the mod has since made its own model of that sex for: left as it
+    /// is, never remade.</param>
+    /// <param name="OwnSkeleton">A port across the sexes the mod has since given the race a skeleton of its own for:
+    /// its carried skeleton taken out once, never remade.</param>
+    public sealed record Row(ushort Race, State State, bool OtherSex = false, bool OwnVersion = false, bool OwnSkeleton = false);
 
     /// <summary>Whether the open model is a hairstyle, whose Body size tool is this panel instead of the garment refit.</summary>
     public static bool Shows(string? gamePath) => gamePath != null && HairPortPlan.Parse(gamePath) != null;
 
     /// <summary>
     /// One row per other race of the hairstyle's sex, in race order: made by the author, ported (current or out of
-    /// date), one the game offers no such hairstyle to, or open to port.
+    /// date), one the game offers no such hairstyle to, or open to port. Then one per race of the other sex, the same
+    /// way — or, with no port there, "the mod has its own version for this sex" when it does.
     /// </summary>
     /// <param name="gameHas">Whether the game has its own model of this hairstyle for a race.</param>
     /// <param name="isStale">Whether an existing port is out of date.</param>
@@ -43,7 +52,10 @@ internal sealed class HairPortPanel(Func<string, byte[]?> readGameFile, IPluginL
         var rows = new List<Row>();
         if (HairPortPlan.Parse(sourceGamePath) is not { } at) return rows;
         var authored = HairPortPlan.AuthoredRaces(owners, at.Id).ToHashSet();
-        foreach (var race in HairPortPlan.SameGenderRaces(at.Race))
+        var defaults = owners.FirstOrDefault(o => o.IsDefault);
+        bool otherSexAuthored = authored.Any(r => CrossSexRefit.CrossesSex(r, at.Race));
+        foreach (var (race, otherSex) in HairPortPlan.SameGenderRaces(at.Race).Select(r => (r, false))
+                                             .Concat(HairPortPlan.OtherSexRaces(at.Race).Select(r => (r, true))))
         {
             string target = HairPortPlan.HairPath(race, at.Id);
             var ports = record.Ports.Where(e => e.TargetGamePath.Equals(target, StringComparison.OrdinalIgnoreCase)
@@ -51,16 +63,47 @@ internal sealed class HairPortPanel(Func<string, byte[]?> readGameFile, IPluginL
                               .ToList();
             var state = authored.Contains(race) ? State.Covered
                       : ports.Count > 0 ? (ports.Any(isStale) ? State.Stale : State.Ported)
+                      : otherSex && otherSexAuthored ? State.OtherSexAuthored
                       : !gameHas(race) ? State.NoStyle
                       : State.Open;
-            rows.Add(new Row(race, state));
+            bool held = otherSex && state is State.Ported or State.Stale;
+            bool ownSkeleton = held && ports.Any(e => owners.FirstOrDefault(o => HairPortPlan.Same(o, e.Owner)) is { } o
+                && HairPortBuilder.AuthorTargetEst(o, defaults, e, race, at.Id,
+                                                   HairPortBuilder.DefaultsPortEst(record.Ports, target)) != null);
+            rows.Add(new Row(race, state, otherSex, held && otherSexAuthored, ownSkeleton));
         }
         return rows;
     }
 
-    /// <summary>The races ticked on opening: every one there is something to do for.</summary>
+    /// <summary>Whether a row can be ticked: open or out of date, and not a port across the sexes the mod has since
+    /// answered itself (which is left as it is; Remove ports still takes it out).</summary>
+    internal static bool CanTick(Row r) => !r.OwnVersion && !r.OwnSkeleton && r.State is State.Open or State.Stale;
+
+    /// <summary>The races ticked on opening: every one there is something to do for — of the other sex, only an
+    /// out-of-date port the user made there before.</summary>
     public static IEnumerable<ushort> DefaultTicks(IEnumerable<Row> rows)
-        => rows.Where(r => r.State is State.Open or State.Stale).Select(r => r.Race);
+        => rows.Where(r => CanTick(r) && (!r.OtherSex || r.State == State.Stale)).Select(r => r.Race);
+
+    /// <summary>The note under "Also for the other sex": the number is another style for that sex in the game.</summary>
+    internal static string OtherSexNote(int id) => string.Format(Strings.HairPort.OtherSexNoteFmt, id);
+
+    /// <summary>A row's state as the list says it, with why a port across the sexes is left as it is.</summary>
+    internal static string StateText(Row r)
+    {
+        var s = Strings.HairPort;
+        string text = r.State switch
+        {
+            State.Covered => s.RaceCovered,
+            State.Ported => s.RacePorted,
+            State.Stale => s.RaceStale,
+            State.NoStyle => s.RaceNoStyle,
+            State.OtherSexAuthored => s.RaceOtherSexAuthored,
+            _ => s.RaceOpen,
+        };
+        return r.OwnSkeleton ? $"{text} — {s.RaceOtherSexSkeleton}"
+             : r.OwnVersion ? $"{text} — {s.RaceOtherSexAuthored}"
+             : text;
+    }
 
     private string? openKey;
     private Task<(string Source, List<Row> Rows)>? reading;
@@ -116,27 +159,16 @@ internal sealed class HairPortPanel(Func<string, byte[]?> readGameFile, IPluginL
 
         bool busy = running != null;
         using (ImRaii.Disabled(busy))
-            foreach (var row in rows)
-            {
-                bool can = row.State is State.Open or State.Stale;
-                bool tick = ticked.Contains(row.Race);
-                using (ImRaii.Disabled(!can))
-                    if (ImGui.Checkbox($"{ModelRace.Describe($"{row.Race:D4}")}###hairPortRace{row.Race}", ref tick))
-                    {
-                        if (tick) ticked.Add(row.Race); else ticked.Remove(row.Race);
-                    }
-                ImGui.SameLine();
-                ImGui.TextDisabled(row.State switch
-                {
-                    State.Covered => s.RaceCovered,
-                    State.Ported => s.RacePorted,
-                    State.Stale => s.RaceStale,
-                    State.NoStyle => s.RaceNoStyle,
-                    _ => s.RaceOpen,
-                });
-                if (refused.TryGetValue(row.Race, out var why))
-                    ImGui.TextColored(new Vector4(1f, 0.45f, 0.4f, 1f), $"    {why}");
-            }
+        {
+            foreach (var row in rows.Where(r => !r.OtherSex)) DrawRow(row);
+            // The other sex: always shown, so nothing ticked there is remade out of sight; nothing new ticked for you.
+            ImGui.Separator();
+            ImGui.TextUnformatted(s.OtherSex.Split("###")[0]);
+            if (HairPortPlan.Parse(source) is { } at)
+                using (ImRaii.PushColor(ImGuiCol.Text, ImGui.GetColorU32(ImGuiCol.TextDisabled)))
+                    ImGui.TextWrapped(OtherSexNote(at.Id));
+            foreach (var row in rows.Where(r => r.OtherSex)) DrawRow(row);
+        }
 
         ImGui.Spacing();
         if (busy)
@@ -161,6 +193,20 @@ internal sealed class HairPortPanel(Func<string, byte[]?> readGameFile, IPluginL
                     ImGui.TextWrapped(result);
             else ImGui.TextWrapped(result);
         }
+    }
+
+    private void DrawRow(Row row)
+    {
+        bool tick = ticked.Contains(row.Race);
+        using (ImRaii.Disabled(!CanTick(row)))
+            if (ImGui.Checkbox($"{ModelRace.Describe($"{row.Race:D4}")}###hairPortRace{row.Race}", ref tick))
+            {
+                if (tick) ticked.Add(row.Race); else ticked.Remove(row.Race);
+            }
+        ImGui.SameLine();
+        ImGui.TextDisabled(StateText(row));
+        if (refused.TryGetValue(row.Race, out var why))
+            ImGui.TextColored(new Vector4(1f, 0.45f, 0.4f, 1f), $"    {why}");
     }
 
     private void Read(string modRoot, string sourceGamePath)

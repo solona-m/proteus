@@ -539,16 +539,17 @@ public sealed class HairPortStrings
     public readonly string Auto = ProteusLoc.Localize(
         "HairPort.Auto.Label", "Fit hair mods made for another race") + "###hairPortAuto";
 
-    public readonly string AutoTip = ProteusLoc.Localize("HairPort.Auto.Tip2",
+    public readonly string AutoTip = ProteusLoc.Localize("HairPort.Auto.Tip3",
         "Many hair mods are made for one race only, so on any other race the game\n" +
         "shows its own hairstyle instead. When on, Proteus bends the mod's hairstyle\n" +
         "onto your race's head and adds it to the same option of the same mod — for the\n" +
         "hairstyle you put on, and ahead of time for the hair mods switched on in your\n" +
         "collection: when this is switched on, when a mod is installed, switched on or\n" +
         "changed, and when you press Check now.\n\n" +
-        "Only for your own race, from races of the same sex. It keeps working with\n" +
-        "Proteus off, travels with the mod, and shows for everyone drawn with that mod\n" +
-        "on. It can be undone here.");
+        "Only for your own race, from races of the same sex. A port across the sexes is\n" +
+        "only made in the Studio, but one made there is kept up to date here too. It\n" +
+        "keeps working with Proteus off, travels with the mod, and shows for everyone\n" +
+        "drawn with that mod on. It can be undone here.");
 
     public readonly string None = ProteusLoc.Localize("HairPort.Settings.None",
         "The hairstyle you are wearing needs no fitting.");
@@ -626,6 +627,18 @@ public sealed class HairPortStrings
     public readonly string RaceStale   = ProteusLoc.Localize("HairPort.Studio.Stale", "out of date");
     public readonly string RaceNoStyle = ProteusLoc.Localize("HairPort.Studio.NoStyle", "cannot choose this hairstyle");
     public readonly string RaceOpen    = ProteusLoc.Localize("HairPort.Studio.Open", "not covered");
+    public readonly string RaceOtherSexAuthored = ProteusLoc.Localize("HairPort.Studio.OtherSexAuthored",
+        "the mod has its own version for this sex");
+    public readonly string RaceOtherSexSkeleton = ProteusLoc.Localize("HairPort.Studio.OtherSexSkeleton",
+        "the mod gives this race its own skeleton");
+
+    public readonly string OtherSex = ProteusLoc.Localize("HairPort.Studio.OtherSex", "Also for the other sex") + "###hairPortOtherSex";
+
+    /// <summary>{0} is the hairstyle number.</summary>
+    public readonly string OtherSexNoteFmt = ProteusLoc.Localize("HairPort.Studio.OtherSex.Note.Fmt",
+        "In the game, hairstyle {0} is a different style for the other sex. A race ported here wears this one instead " +
+        "whenever it chooses hairstyle {0} with this mod on — for everyone drawn with the mod. Nothing here is ticked " +
+        "for you, and Proteus never ports across the sexes by itself.");
 
     public readonly string Port = ProteusLoc.Localize("HairPort.Studio.Port", "Port") + "###hairPortRun";
     public readonly string PortingFmt = ProteusLoc.Localize("HairPort.Studio.Porting.Fmt", "Porting… {0} of {1} races");

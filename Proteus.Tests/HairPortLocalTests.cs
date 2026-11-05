@@ -582,4 +582,31 @@ public sealed class HairPortLocalTests(ITestOutputHelper o)
         Assert.True(sourceHasAll > 0, "no cross-sex physics pair found");
         Assert.True(carried * 10 >= sourceHasAll * 9, $"only {carried} of {sourceHasAll} carried");
     }
+
+    /// <summary>On the game's own physics hairstyles, a port across the sexes never moves with the target's skeleton:
+    /// no entry to it, and no bones of it handed to the bend — the source's is carried, or nothing.</summary>
+    [LocalDataFact(LocalData.GameData)]
+    [Trait("Plan", "AC-cross-sex-hair-port-9")]
+    public void Cross_sex_choose_never_trusts_the_target_skeleton()
+    {
+        var game = Load();
+        var table = HairSkeletonTable.Parse(game.File(HairSkeletonTable.GamePath)!)!;
+        string root = Path.Combine(Path.GetTempPath(), "proteus-cross-sex-choose-" + Guid.NewGuid().ToString("N"));
+        int judged = 0, carries = 0;
+        foreach (var (from, to) in CrossSexPairs)
+            for (int id = 1; id <= 250; id++)
+            {
+                if (game.File(HairPath(from, id)) is not { } src || game.File(HairPath(to, id)) == null) continue;
+                if (HairPortSkeleton.ExtraBones(src).Count == 0) continue;
+                var owner = new HairPortPlan.Owner("", "", "", new Dictionary<string, string> { [HairPath(from, id)] = "hair.mdl" });
+                var choice = HairPortSkeleton.Choose(new HairPortSkeleton.Place(root, [owner], owner, null, [], from, to, id, game.File,
+                                                                                () => table), src);
+                judged++;
+                Assert.NotEqual(HairPortSkeleton.Route.Entry, choice.Route);
+                Assert.Empty(choice.Bones);
+                if (choice.Route == HairPortSkeleton.Route.Carry) carries++;
+            }
+        o.WriteLine($"{judged} cross-sex physics pairs judged, {carries} carry the source's skeleton");
+        Assert.True(judged > 0);
+    }
 }

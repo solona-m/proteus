@@ -44,7 +44,9 @@ internal static class HairPortBuilder
     /// <param name="withSharers">Also port to every race that would read the same material as a target (see
     /// <see cref="Sharers"/>) — what the automatic path does, so redirecting a shared material never dresses other
     /// races' own hairstyles in it; a race whose port the user undid is refused, and with it every race it shares with.
-    /// Off — a port asked for by hand — a target whose sharers are not all ported is refused.</param>
+    /// Off — a port asked for by hand — a target whose sharers are not all ported is refused. On, it is also the
+    /// automatic path's mark for races of the other sex: none gets a new port, and one the Studio made is remade only in
+    /// the places that already have it (<see cref="HasPrior"/>); by hand, the other sex may be ported to.</param>
     /// <param name="progress">Called with (done, total) after each race.</param>
     public static Plan Build(string modRoot, string sourceGamePath, IEnumerable<ushort> targets, PbdFile pbd,
                              Func<string, byte[]?> readGame, bool withSharers, CancellationToken ct = default,
@@ -130,9 +132,9 @@ internal static class HairPortBuilder
         {
             ct.ThrowIfCancellationRequested();
             progress?.Invoke(done++, wanted.Count);
-            if (to == from || to / 100 % 2 != from / 100 % 2 || !HairPortPlan.Playable(to))
+            if (to == from || !HairPortPlan.Playable(to))
             {
-                refused[to] = ProteusLoc.Localize("HairPort.Refused.Gender", "hairstyles are only ported between races of one sex");
+                refused[to] = ProteusLoc.Localize("HairPort.Refused.NotTarget", "it is the hairstyle's own race, or not a playable one");
                 continue;
             }
             if (authored.Contains(to)) continue;   // the author made one: never overwritten
@@ -141,6 +143,23 @@ internal static class HairPortBuilder
             if (withSharers && record.Declined.Contains(HairPortPlan.DeclineKey(target)))
             {
                 refused[to] = ProteusLoc.Localize("HairPort.Refused.Declined", "its port was undone, so it is left alone");
+                continue;
+            }
+            // Across the sexes: the author's own model for the target's sex is the look they meant for it; and the
+            // automatic path only keeps a port the Studio made current, in the places that have it — it never makes one.
+            bool cross = CrossSexRefit.CrossesSex(from, to);
+            if (cross && authored.FirstOrDefault(r => !CrossSexRefit.CrossesSex(r, to)) is var mine and > 0)
+            {
+                refused[to] = string.Format(withSharers
+                    ? ProteusLoc.Localize("HairPort.Refused.OtherSexAuthoredAuto.Fmt",
+                        "the mod now has its own hairstyle {1} for c{0:D4}; the port made in the Studio is left as it is")
+                    : ProteusLoc.Localize("HairPort.Refused.OtherSexAuthored.Fmt",
+                        "the mod has its own hairstyle {1} for c{0:D4}; port that one instead"), mine, id);
+                continue;
+            }
+            if (cross && withSharers && !serving.Any(o => HasPrior(record, o, target, sourceGamePath)))
+            {
+                refused[to] = OtherSexAuto;
                 continue;
             }
             if (readGame(target) == null)
@@ -171,10 +190,21 @@ internal static class HairPortBuilder
             {
                 string rel = sourceOf[owner];
                 var bytes = sources[rel]!;
-                var was = record.Ports.FirstOrDefault(e => HairPortPlan.Same(e.Owner, owner)
-                    && e.TargetGamePath.Equals(target, StringComparison.OrdinalIgnoreCase));
+                var was = record.Ports.FirstOrDefault(e => HairPortPlan.Same(e.Owner, owner) && SamePath(e.TargetGamePath, target));
                 if (was != null && !IsOutOfDate(modRoot, was, bytes, owners, record.Ports, readGame, table)) { anyCurrent = true; continue; }
+                // A remake by the automatic path goes only where the Studio put a port across the sexes before.
+                if (withSharers && cross && !HasPrior(record, owner, target, sourceGamePath)) continue;
                 if (was == null && !HairPortPlan.CanPortInto(owners, owner, target)) continue;
+                // The author gave the target race a skeleton of their own: their chain for their own style of that sex,
+                // which a port from the other sex cannot be checked against, nor bring its own beside.
+                if (cross && AuthorTargetEst(owner, owners.FirstOrDefault(o => o.IsDefault), was, to, id,
+                                             DefaultsPortEst(record.Ports, target)) != null)
+                {
+                    why = string.Format(ProteusLoc.Localize("HairPort.Refused.OtherSexSkeleton.Fmt",
+                        "the mod gives c{0:D4} a skeleton of its own for hairstyle {1}, so a port from the other sex cannot bring its own"),
+                        to, id);
+                    break;
+                }
 
                 var place = new HairPortSkeleton.Place(modRoot, owners, owner, was, record.Ports, from, to, id, readGame, table);
                 // A port the user edited since cannot be remade: refused for its race alone — the save would refuse the
@@ -245,6 +275,19 @@ internal static class HairPortBuilder
         return new Plan(writes, refused, current, Unreadable: noVerdict, EditBlocked: editBlocked, Warnings: warnings);
     }
 
+    /// <summary>Why the automatic path makes no port across the sexes.</summary>
+    internal static string OtherSexAuto => ProteusLoc.Localize("HairPort.Refused.OtherSexAuto",
+        "it is of the other sex, which is only ported when asked for in the Studio");
+
+    /// <summary>Whether the record holds a port of <paramref name="target"/> from <paramref name="source"/> in
+    /// <paramref name="owner"/> — paths compared without regard to case or slashes, as everywhere else here.</summary>
+    internal static bool HasPrior(HairPortRecord record, HairPortPlan.Owner owner, string target, string source)
+        => record.Ports.Any(e => HairPortPlan.Same(e.Owner, owner) && SamePath(e.TargetGamePath, target)
+                                 && SamePath(e.SourceGamePath, source));
+
+    private static bool SamePath(string a, string b)
+        => string.Equals(a.Replace('\\', '/'), b.Replace('\\', '/'), StringComparison.OrdinalIgnoreCase);
+
     /// <summary>Why a port that needs the game's table of hairstyle skeletons is refused without it.</summary>
     internal static string NoSkeletonTable
         => ProteusLoc.Localize("HairPort.Refused.NoSkeletonTable", "the game's table of hairstyle skeletons could not be read");
@@ -258,11 +301,19 @@ internal static class HairPortBuilder
         HairPortRecord record, ushort from, ushort to, int id, Func<string, byte[]?> readGame, Func<HairSkeletonTable?> table)
     {
         string target = HairPortPlan.HairPath(to, id);
+        var defaults = owners.FirstOrDefault(o => o.IsDefault);
         foreach (var e in record.Ports.Where(e => e.TargetGamePath.Equals(target, StringComparison.OrdinalIgnoreCase)))
         {
             if (owners.FirstOrDefault(o => HairPortPlan.Same(o, e.Owner)) is not { } owner) continue;
-            var place = new HairPortSkeleton.Place(modRoot, owners, owner, e, record.Ports, from, to, id, readGame, table);
-            if (!HairPortSkeleton.Harmful(place, e)) continue;
+            // Each port judged from its own source race: a build from one source may refuse a race another source's
+            // port of it sits in.
+            ushort src = HairPortPlan.Parse(e.SourceGamePath)?.Race ?? from;
+            var place = new HairPortSkeleton.Place(modRoot, owners, owner, e, record.Ports, src, to, id, readGame, table);
+            // Across the sexes, a carry beside a skeleton entry the author has since given the race is taken out too:
+            // two entries for one race in one place leave Penumbra's pick undefined.
+            bool authorsSkeleton = CrossSexRefit.CrossesSex(src, to) && e.SkeletonFrom > 0
+                && AuthorTargetEst(owner, defaults, e, to, id, DefaultsPortEst(record.Ports, target)) != null;
+            if (!HairPortSkeleton.Harmful(place, e) && !authorsSkeleton) continue;
             int slot = e.Est > 0 ? e.Est : id;
             var skeleton = new[] { HairPortPlan.SkeletonPath(to, slot), HairPortPlan.PhysicsPath(to, slot) };
             var kept = e.Materials.Where(m => !skeleton.Contains(m.Key, StringComparer.OrdinalIgnoreCase))
@@ -335,12 +386,37 @@ internal static class HairPortBuilder
                                      IReadOnlyList<HairPortPlan.Owner>? owners, IReadOnlyList<HairPortRecord.Entry> ports,
                                      Func<string, byte[]?> readGame, Func<HairSkeletonTable?> table)
     {
+        if (CrossSexVerdict(modRoot, entry, owners, ports, readGame, table) is { } settled) return settled;
         if (HairPortPlan.IsStale(entry, source)) return true;
         if (owners?.FirstOrDefault(o => HairPortPlan.Same(o, entry.Owner)) is not { } owner) return false;
         if (HairPortPlan.Parse(entry.SourceGamePath) is not { } src || HairPortPlan.Parse(entry.TargetGamePath) is not { } dst)
             return false;
         var place = new HairPortSkeleton.Place(modRoot, owners, owner, entry, ports, src.Race, dst.Race, dst.Id, readGame, table);
         return !HairPortSkeleton.Current(place, entry, source);
+    }
+
+    /// <summary>
+    /// A port across the sexes the mod has since given its own answer to, which is left as it is whatever its source
+    /// does — judged before the source, so an author's update never brings it back as a refusal on every look. The
+    /// author gave the target race a skeleton entry of their own: out of date only while the port still carries one,
+    /// so the build strips it once (<see cref="Strips"/>). The mod has its own model for the target's sex: out of date
+    /// only while its carried skeleton harms another hairstyle of the race (<see cref="HairPortSkeleton.Harmful"/>),
+    /// the same once-only strip. Null for every other port, which the usual tests judge.
+    /// </summary>
+    private static bool? CrossSexVerdict(string modRoot, HairPortRecord.Entry entry, IReadOnlyList<HairPortPlan.Owner>? owners,
+                                         IReadOnlyList<HairPortRecord.Entry> ports, Func<string, byte[]?> readGame,
+                                         Func<HairSkeletonTable?> table)
+    {
+        if (owners?.FirstOrDefault(o => HairPortPlan.Same(o, entry.Owner)) is not { } owner) return null;
+        if (HairPortPlan.Parse(entry.SourceGamePath) is not { } src || HairPortPlan.Parse(entry.TargetGamePath) is not { } dst
+            || !CrossSexRefit.CrossesSex(src.Race, dst.Race)) return null;
+        if (AuthorTargetEst(owner, owners.FirstOrDefault(o => o.IsDefault), entry, dst.Race, dst.Id,
+                            DefaultsPortEst(ports, entry.TargetGamePath)) != null)
+            return entry.SkeletonFrom > 0;
+        if (HairPortPlan.AuthoredRaces(owners, dst.Id).Any(r => !CrossSexRefit.CrossesSex(r, dst.Race)))
+            return HairPortSkeleton.Harmful(new HairPortSkeleton.Place(modRoot, owners, owner, entry, ports, src.Race,
+                                                                       dst.Race, dst.Id, readGame, table), entry);
+        return null;
     }
 
     /// <summary>
@@ -382,6 +458,7 @@ internal static class HairPortBuilder
             var source = HairMaterialPath.GamePath(from, id, name);
             var target = HairMaterialPath.GamePath(to, id, HairMaterialPath.RenameRace(name, to));
             if (target == null || string.Equals(source, target, StringComparison.OrdinalIgnoreCase)) continue;
+            // The target's sex: across the sexes, the races that read the target's material are its own sex's.
             foreach (var other in HairPortPlan.SameGenderRaces(to).Where(r => r != from && canWear?.Invoke(r) != false))
                 if (string.Equals(HairMaterialPath.GamePath(other, id, HairMaterialPath.RenameRace(name, other)), target,
                                   StringComparison.OrdinalIgnoreCase))
