@@ -13,7 +13,7 @@ namespace Proteus.Tests;
 /// The automatic path: what a Midlander woman wearing hairstyle 130 gets when the only enabled mod for it was made for
 /// Miqo'te — through <see cref="HairPortWatcher.Run"/> with Penumbra and the game stood in for.
 /// </summary>
-public class HairPortWatcherDecisionTests
+public partial class HairPortWatcherDecisionTests
 {
     private static readonly string Worn = HairPortPlan.HairPath(201, Id);
     private static readonly string Source = HairPortPlan.HairPath(801, Id);

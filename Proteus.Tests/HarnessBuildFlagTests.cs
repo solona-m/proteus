@@ -18,6 +18,7 @@ public class HarnessBuildFlagTests
     [Fact]
     public void HarnessTypes_MatchRuntimeCiEnvironment()
     {
+        // [AC-harness-equip-10] [EDGE-harness-equip-37] the equip/hold types are harness types too: compiled out on CI.
         // [AC-qa-harness-1] [EDGE-qa-harness-1] Judged by the environment the tests run in, not by the define: a
         // global -p:ProteusTestHarness=true in CI would turn both on together, and this would still fail.
         var harness = typeof(Plugin).Assembly.GetTypes()

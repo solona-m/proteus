@@ -1218,6 +1218,67 @@ public sealed class LocalizationTests
         Assert.Contains(tr["Parts.Retarget.FromBody"].Message, tr["Parts.Retarget.Refuse.CrossSexMadeFor.Fmt"].Message);
     }
 
+    private static readonly string[] CrossSexHairKeys =
+    [
+        "HairPort.Studio.OtherSex", "HairPort.Studio.OtherSex.Note.Fmt", "HairPort.Studio.OtherSexAuthored",
+        "HairPort.Studio.OtherSexSkeleton", "HairPort.Refused.NotTarget", "HairPort.Refused.OtherSexAuto",
+        "HairPort.Refused.OtherSexAuthored.Fmt", "HairPort.Refused.OtherSexAuthoredAuto.Fmt",
+        "HairPort.Refused.OtherSexSkeleton.Fmt", "HairPort.Auto.Tip3",
+    ];
+
+    /// <summary>Porting a hairstyle to the other sex is said in every language; the old "only one sex" text is gone.</summary>
+    [Theory]
+    [MemberData(nameof(Translations))]
+    [Trait("Plan", "AC-cross-sex-hair-port-8")]
+    public void Cross_sex_hair_port_strings_are_translated_in_every_locale(string lang)
+    {
+        var en = Load(Source);
+        var tr = Load(lang);
+        foreach (var key in CrossSexHairKeys)
+        {
+            Assert.True(tr.ContainsKey(key), $"{lang} lacks {key}");
+            Assert.NotEqual(en[key].Message, tr[key].Message);
+            Assert.Equal(Placeholders(en[key].Message), Placeholders(tr[key].Message));
+        }
+        foreach (var gone in new[] { "HairPort.Refused.Gender", "HairPort.Auto.Tip2" })
+        {
+            Assert.False(en.ContainsKey(gone), $"en still has {gone}");
+            Assert.False(tr.ContainsKey(gone), $"{lang} still has {gone}");
+        }
+    }
+
+    [Fact]
+    [Trait("Plan", "AC-cross-sex-hair-port-8")]
+    public void Auto_tip_says_studio_ports_across_the_sexes_are_kept()
+    {
+        var tip = Load(Source)["HairPort.Auto.Tip3"].Message;
+        Assert.Contains("Studio", tip);
+        Assert.Contains("kept up to date", tip);
+        Assert.Contains("Only for your own race, from races of the same sex.", tip);
+    }
+
+    /// <summary>Every README's "Port to all races" bullet says the other sex can be ticked too, under its own label.</summary>
+    [Theory]
+    [MemberData(nameof(AllLocales))]
+    [Trait("Plan", "AC-cross-sex-hair-port-8")]
+    public void Readme_says_port_to_all_races_can_cross_the_sexes(string lang)
+    {
+        var dir = new System.IO.DirectoryInfo(AppContext.BaseDirectory);
+        while (dir != null && !System.IO.File.Exists(System.IO.Path.Combine(dir.FullName, "proteus.slnx"))) dir = dir.Parent;
+        Assert.True(dir != null, $"Could not find proteus.slnx above {AppContext.BaseDirectory}.");
+        string readme = System.IO.File.ReadAllText(System.IO.Path.Combine(
+            dir!.FullName, lang == Source ? "README.md" : System.IO.Path.Combine("docs", $"README.{lang}.md")));
+        var strings = Load(lang);
+        string header = "**" + strings["HairPort.Studio.Header"].Message + "**";
+        string otherSex = "**" + strings["HairPort.Studio.OtherSex"].Message + "**";
+        Assert.Contains(readme.Split('\n'), l => l.StartsWith("- ", StringComparison.Ordinal) && l.Contains(header) && l.Contains(otherSex));
+        if (lang == Source)
+        {
+            Assert.Contains("the other sex", readme);
+            Assert.Contains("never makes one by itself", readme);
+        }
+    }
+
     /// <summary>Every README describes the refit for the other sex under its own "Refit for", and none still says it never happens.</summary>
     [Theory]
     [MemberData(nameof(AllLocales))]

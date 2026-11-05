@@ -11,7 +11,8 @@ whatever surface it exposes, with Bash and curl. Proteus has no such surface: it
 runs inside the game, and until now every in-game check was the user's
 ("UNVERIFIED"). The QA test harness (`Proteus/TestHarness/`, guide in
 `docs/agent-rules/adversarial-qa.md`) gives QA one — a small HTTP API inside the
-plugin that reads state, logs and the screen, and can refit and restore a mod.
+plugin that reads state, logs and the screen, and can refit and restore a mod,
+and for the session equip gear on the character and hold mod settings.
 
 That is a local control port inside a game client, able to write into users'
 Penumbra mods. It must never reach a user, and while it runs on the developer's
@@ -56,6 +57,11 @@ of scope — it could equally edit the mods directly.
 **Writes are undoable.** Every refit backs the mod up first; every restore
 snapshots the mod as it is before writing; the harness never deletes or
 overwrites a backup.
+
+*Amended 2026-11-05:* equips (through Glamourer, no lock) and mod holds are
+recorded per session and put back on request, on `off` and on unload. Holds are
+Penumbra temporary settings under the harness's own key, never saved to a
+collection. A stop off the framework thread cannot put back, and logs what it left.
 
 ## Consequences
 

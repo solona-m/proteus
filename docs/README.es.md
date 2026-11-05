@@ -290,7 +290,7 @@ La sección **Pelo** adapta los mods de pelo a ti de dos maneras: lleva el pelo 
 - El pelo con físicas conserva sus físicas. Cuando al esqueleto de tu raza le faltan los huesos con los que se mueve un peinado, la adaptación trae consigo el esqueleto y las físicas de la raza de origen para ese peinado.
 - Un peinado que no quedaría bien en tu cabeza (se hunde en ella o se separa de ella) se ajusta igualmente, y Proteus dice cuál, para que lo revises en el juego.
 - Un peinado que el doblado deja en parte del revés se ajusta igualmente, y Proteus dice cuál, para que lo revises en el juego.
-- Para cubrir todas las razas a la vez, abre un modelo de pelo en el **Estudio** y usa **Portar a todas las razas**.
+- Para cubrir todas las razas a la vez, abre un modelo de pelo en el **Estudio** y usa **Portar a todas las razas**. En **También para el otro sexo** también puedes marcar razas del otro sexo: llevarán entonces este peinado en lugar del estilo del juego con ese número. Proteus mantiene al día esos portados, pero nunca crea uno por sí solo.
 
 **Sombreros.** La mayoría del pelo con mods no tiene soporte para sombreros, así que un sombrero puesto encima lo atraviesa. Proteus aplasta contra tu cabeza el pelo que cubriría un sombrero.
 

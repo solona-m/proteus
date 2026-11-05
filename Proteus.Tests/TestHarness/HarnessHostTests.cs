@@ -340,4 +340,125 @@ public class HarnessHostTests : IDisposable
         Assert.Equal(2, counter.Count);
         Assert.True(DateTime.UtcNow - counter.LastUtc!.Value < TimeSpan.FromSeconds(5));
     }
+
+    // ── put back as the harness stops ───────────────────────────────────────
+
+    private static async Task Post(HarnessSession s, string path, string json)
+    {
+        using var c = Client(s);
+        var r = await c.PostAsync(path, new StringContent(json, Encoding.UTF8, "application/json"));
+        Assert.Equal(200, (int)r.StatusCode);
+    }
+
+    private async Task EquipAndHold(HarnessSession s)
+    {
+        game.ModFolders["Equinox"] = "Equinox";
+        await Post(s, "/actions/equip", """{"slot":"Body","item":500}""");
+        await Post(s, "/actions/mod-settings", """{"mod":"Equinox","enabled":false}""");
+    }
+
+    [Fact]
+    public async Task Off_OnFramework_PutsBackInline()
+    {
+        // [AC-harness-equip-7] [EDGE-harness-equip-31]
+        var gearBefore = new System.Collections.Generic.Dictionary<string, Worn>(game.Gear);
+        using var host = Host();
+        host.Command("on");
+        await EquipAndHold(SessionFile!);
+        bool? stoppingAtUndo = null, listeningAtUndo = null;
+        game.OnSetGear = _ => { stoppingAtUndo = host.Changes!.Stopping; listeningAtUndo = host.Listening; };
+        dispatcher.Run(() => host.Command("off"));
+        Assert.Equal(gearBefore, game.Gear);
+        Assert.Empty(game.Temporary);
+        Assert.True(stoppingAtUndo);
+        Assert.True(listeningAtUndo);
+        Assert.False(host.Listening);
+        Assert.Contains(log.ReceivedCalls(), c => c.GetArguments().OfType<string>().Any(a => a.Contains("put back as it stopped")));
+    }
+
+    [Fact]
+    public async Task Dispose_OnFramework_PutsBackBeforeReturning()
+    {
+        // [AC-harness-equip-7] [EDGE-harness-equip-32]
+        var gearBefore = new System.Collections.Generic.Dictionary<string, Worn>(game.Gear);
+        var host = Host();
+        host.Command("on");
+        await EquipAndHold(SessionFile!);
+        bool? sinkAtUndo = null;
+        game.OnSetGear = _ => sinkAtUndo = game.NameSink != null;
+        dispatcher.Run(host.Dispose);
+        Assert.Equal(gearBefore, game.Gear);
+        Assert.Empty(game.Temporary);
+        Assert.True(sinkAtUndo);
+    }
+
+    [Fact]
+    public async Task Stop_OffFramework_SkipsPutBack_LogsLeftovers_DoesNotBlock()
+    {
+        // [EDGE-harness-equip-33]
+        var host = Host();
+        host.Command("on");
+        await EquipAndHold(SessionFile!);
+        int setsBefore = game.GearSets.Count;
+        var sw = System.Diagnostics.Stopwatch.StartNew();
+        await Task.Run(host.Dispose);
+        Assert.True(sw.Elapsed < TimeSpan.FromSeconds(1));
+        dispatcher.Run(() => 0);   // drain: nothing was posted
+        Assert.Equal(setsBefore, game.GearSets.Count);
+        Assert.DoesNotContain(game.Calls, c => c.Member is nameof(IHarnessGame.ClearHold) or nameof(IHarnessGame.SweepHolds));
+        var warned = log.ReceivedCalls().Where(c => c.GetMethodInfo().Name == "Warning")
+                        .SelectMany(c => c.GetArguments()).SelectMany(a => a is object[] arr ? arr : [a]).OfType<string>().ToList();
+        Assert.Contains(warned, w => w.Contains("not put back"));
+        Assert.Contains(warned, w => w.Contains("Body") && w.Contains("Equinox"));
+    }
+
+    [Fact]
+    public async Task OffTwice_PutBackOnce_OnAgainFresh()
+    {
+        // [EDGE-harness-equip-46]
+        using var host = Host();
+        host.Command("on");
+        await EquipAndHold(SessionFile!);
+        dispatcher.Run(() => host.Command("off"));
+        int sets = game.GearSets.Count, sweeps = game.Sweeps.Count;
+        dispatcher.Run(() => host.Command("off"));
+        Assert.Equal(sets, game.GearSets.Count);
+        Assert.Equal(sweeps, game.Sweeps.Count);
+        host.Command("on");
+        using var c = Client(SessionFile!);
+        var state = JsonDocument.Parse(await c.GetStringAsync("/state")).RootElement;
+        Assert.False(state.GetProperty("harnessChanges").GetProperty("stopping").GetBoolean());
+        Assert.Empty(state.GetProperty("harnessChanges").GetProperty("gear").EnumerateArray());
+        await Post(SessionFile!, "/actions/equip", """{"slot":"Legs","item":700}""");
+    }
+
+    [Fact]
+    public async Task Restart_NewSession_EmptyChanges()
+    {
+        // [AC-harness-equip-7] [EDGE-harness-equip-41]
+        using var host = Host();
+        host.Command("on");
+        string first = host.Session!;
+        await EquipAndHold(SessionFile!);
+        dispatcher.Run(() => host.Command("off"));
+        host.Command("on");
+        Assert.NotEqual(first, host.Session);
+        using var c = Client(SessionFile!);
+        var state = JsonDocument.Parse(await c.GetStringAsync("/state")).RootElement;
+        Assert.Empty(state.GetProperty("harnessChanges").GetProperty("gear").EnumerateArray());
+        Assert.Empty(state.GetProperty("harnessChanges").GetProperty("holds").EnumerateArray());
+    }
+
+    [Fact]
+    public void Off_OnFramework_NothingRecorded_StillSweepsLeftovers()
+    {
+        // [EDGE-harness-equip-30] a crashed session's harness-key holds are swept by the next session's off.
+        using var host = Host();
+        host.Command("on");
+        var coll = game.Collection!.Value;
+        game.Temporary[(coll, "Leftover")] = new Proteus.Interop.PenumbraBridge.TemporaryHold(true, false, HarnessChanges.HoldSource, false, 0);
+        game.TemporaryKeys[(coll, "Leftover")] = HarnessChanges.HoldKey;
+        dispatcher.Run(() => host.Command("off"));
+        Assert.Empty(game.Temporary);
+    }
 }

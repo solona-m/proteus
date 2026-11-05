@@ -1,5 +1,6 @@
 using System;
 using System.IO;
+using System.Linq;
 using Dalamud.Plugin.Services;
 
 namespace Proteus.TestHarness;
@@ -25,6 +26,7 @@ internal sealed class HarnessHost : IDisposable
 
     private HarnessServer? server;
     private HarnessJobs? jobs;
+    private HarnessChanges? changes;
     private string? token;
     private volatile bool disposing;
 
@@ -51,6 +53,7 @@ internal sealed class HarnessHost : IDisposable
     public string? Session => jobs?.Session;
     public SessionNames? Names { get; private set; }
     internal HarnessJobs? Jobs => jobs;
+    internal HarnessChanges? Changes => changes;
 
     /// <summary>The backups folder: <c>&lt;ConfigDirectory&gt;\test-harness\backups</c>.</summary>
     public string BackupsRoot => Path.Combine(configDir, "test-harness", "backups");
@@ -108,7 +111,8 @@ internal sealed class HarnessHost : IDisposable
         {
             Log = log,
         };
-        var router = new HarnessRouter(jobs, ring, Names, new CaptureGate(timings.Capture), build, buildStamp, log);
+        changes = new HarnessChanges(game, Names, log);
+        var router = new HarnessRouter(jobs, ring, Names, new CaptureGate(timings.Capture), build, buildStamp, log, changes);
         var s = new HarnessServer(router.Handle, token);
         s.Start();
         server = s;
@@ -134,6 +138,7 @@ internal sealed class HarnessHost : IDisposable
     private void Stop()
     {
         if (server == null) return;
+        PutBackOnStop();
         jobs?.CancelRunning();
         setLineObserver(null);
         game.NameSink = null;
@@ -141,6 +146,33 @@ internal sealed class HarnessHost : IDisposable
         server = null;
         if (jobs != null) HarnessSessionFile.DeleteIfOwn(configDir, jobs.Session);
         log.Information("[Proteus] test harness stopped");
+    }
+
+    /// <summary>
+    /// Put back this session's equips and holds as the harness stops: inline when stopping on the framework thread (the
+    /// command, or an unload there), before any bridge goes. Off it nothing is posted (an unload must not wait on the
+    /// framework); what is left is logged instead.
+    /// </summary>
+    private void PutBackOnStop()
+    {
+        if (changes is not { } c) return;
+        c.BeginStop();
+        if (!dispatcher.OnFrameworkThread)
+        {
+            // The record is framework-only; a change landing mid-read must not throw out of Dispose.
+            string left;
+            try { left = c.Empty ? "" : c.Leftovers(); }
+            catch (Exception) { left = "unknown (the record changed while it was read)"; }
+            if (left.Length > 0) log.Warning("[Proteus] test harness stopped off the framework thread; not put back: {0}", left);
+            return;
+        }
+        try
+        {
+            var r = c.PutBack();
+            log.Information("[Proteus] test harness put back as it stopped: {0}",
+                            string.Join(", ", r.Gear.Concat(r.Holds).Select(e => $"{e.Name} {e.Result}{(e.Code is { } code ? $" ({code})" : "")}")));
+        }
+        catch (Exception e) { log.Warning(e, "[Proteus] test harness: putting back as it stopped failed"); }
     }
 
     /// <summary>

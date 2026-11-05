@@ -15,10 +15,12 @@ public class HarnessRouterTests : IDisposable
     public void Dispose() => f.Dispose();
 
     [Fact]
+    [Trait("Plan", "AC-hair-port-qa-2")]
     public async Task EveryRoute_FrameworkMembersOnDispatcherThread()
     {
         // [AC-qa-harness-4] Every game-touching call every route makes runs on the framework thread.
         f.AddMod();
+        using var hair = f.AddHairMod();
         await f.Get("/health");
         await f.Get("/state");
         await f.Get("/log");
@@ -28,6 +30,12 @@ public class HarnessRouterTests : IDisposable
         var (_, restore) = await f.Post("/actions/restore", $$"""{"job":"{{job.GetProperty("id").GetString()}}"}""");
         await f.WaitJob(restore.GetProperty("job").GetString()!);
         await f.Get($"/jobs/{job.GetProperty("id").GetString()}");
+        await f.Get("/hair-port?mod=Hair&hair=chara/human/c0201/obj/hair/h0005/model/c0201h0005_hir.mdl");
+        var (_, port) = await f.Post("/actions/hair-port",
+            """{"mod":"Hair","hair":"chara/human/c0201/obj/hair/h0005/model/c0201h0005_hir.mdl","races":["c0101"]}""");
+        await f.WaitJob(port.GetProperty("job").GetString()!);
+        // The hair routes read the game's files and the mod off the framework thread.
+        Assert.DoesNotContain(f.Game.Order, o => o is "ReadGameFile@framework" or "IsHairMod@framework");
 
         var members = f.Game.Calls.Select(c => c.Member).Distinct().ToHashSet();
         foreach (var expected in new[] { "Health", "State", "NamesNow", "ViewportId", "Mods", "PrepareSizeSet", "AfterModChange" })
@@ -182,10 +190,12 @@ public class HarnessRouterTests : IDisposable
 
     [Fact]
     [Trait("Plan", "AC-dt-shader-upgrade-10")]
+    [Trait("Plan", "AC-hair-port-qa-8")]
     public void Routes_AreTheContract()
     {
-        Assert.Equal(["/health", "/state", "/log", "/screenshot", "/actions/refit", "/actions/restore",
-                      "/actions/shader-upgrade", "/jobs/{id}"],
+        Assert.Equal(["/health", "/state", "/log", "/screenshot", "/hair-port", "/actions/refit", "/actions/restore",
+                      "/actions/shader-upgrade", "/actions/hair-port", "/actions/equip", "/actions/mod-settings",
+                      "/actions/put-back", "/jobs/{id}"],
                      HarnessRouter.Routes.Select(r => r.Path));
     }
 

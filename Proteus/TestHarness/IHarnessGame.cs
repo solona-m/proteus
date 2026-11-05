@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
+using Proteus.Interop;
 using Proteus.Services;
 
 namespace Proteus.TestHarness;
@@ -23,7 +24,23 @@ internal sealed record RawState(CharacterInfo? Character, Guid? CollectionId,
                                 IReadOnlyList<(int Slot, string? File)> Loaded,
                                 IReadOnlyDictionary<string, HashSet<string>>? ResourceMap, string? ModsRoot,
                                 CompositorService.ActivitySnapshot Compositor, CompositorResult? LastResult,
-                                CompositorService.RefreshRecord? LastRefresh, AutoRefitInfo AutoRefit);
+                                CompositorService.RefreshRecord? LastRefresh, AutoRefitInfo AutoRefit)
+{
+    /// <summary>The ten gear slots as Glamourer reports them; null when it cannot be read.</summary>
+    public IReadOnlyDictionary<string, Worn>? Gear { get; init; }
+}
+
+/// <summary>The automatic hair path right now, and the Hair settings: read-only.</summary>
+/// <param name="CheckOwed">A check of the player's hair mods is owed but not started.</param>
+internal sealed record HairPortInfo(HairPortWatcher.View View, HairPortWatcher.ScanView Scan, bool CheckOwed, bool AutoFit,
+                                    bool Earless)
+{
+    /// <summary>Examining the worn hairstyle or running a check right now.</summary>
+    public bool Working => View.Busy || Scan.Running;
+
+    /// <summary>Working, or a check is owed: what refuses a hair port.</summary>
+    public bool Busy => Working || CheckOwed;
+}
 
 /// <summary>Penumbra's mod list and mods folder.</summary>
 internal sealed record ModList(IReadOnlyDictionary<string, string> Mods, string ModsRoot);
@@ -114,4 +131,52 @@ internal interface IHarnessGame
     /// false) or "Upgrade what I'm wearing now". False when a run is already going. Framework thread.
     /// </summary>
     bool StartShaderUpgradeRun(bool undoWorn, bool decline);
+
+    /// <summary>The automatic hair path and the Hair settings. Any thread.</summary>
+    HairPortInfo HairPort();
+
+    /// <summary>A file of the game's own data (the reader the Studio's hair panel uses); null for none. Worker thread.</summary>
+    byte[]? ReadGameFile(string gamePath);
+
+    /// <summary>Whether a mod holds hair (<see cref="HairPortJob.IsHairMod"/>). Reads files: never the framework thread.</summary>
+    bool IsHairMod(string modRoot);
+
+    // ── equip and hold (HarnessChanges) ─────────────────────────────────────
+
+    /// <summary>The ten gear slots worn now, from Glamourer's state; null when it cannot be read. Framework thread.</summary>
+    IReadOnlyDictionary<string, Worn>? GearNow();
+
+    /// <summary>Whether there is a local player to equip. Framework thread.</summary>
+    bool PlayerPresent();
+
+    /// <summary>
+    /// Equip an item or custom id in a gear slot through Glamourer (Once, key 0, no lock). Null on Success; else
+    /// "unavailable" or Glamourer's answer by name. Framework thread.
+    /// </summary>
+    string? SetGear(string slot, ulong id, byte dye1, byte dye2);
+
+    /// <summary>The Glamourer slot names Proteus's invisible carriers occupy. Framework thread.</summary>
+    IReadOnlyCollection<string> CarrierSlots();
+
+    /// <summary>The player's effective collection, or null. Framework thread.</summary>
+    Guid? PlayerCollection();
+
+    /// <summary>Penumbra's temporary setting on a mod; null when it could not answer. Framework thread.</summary>
+    PenumbraBridge.TemporaryHold? QueryHold(Guid collection, string modDir);
+
+    /// <summary>The mod's effective settings, telling a failed read from none. Framework thread.</summary>
+    PenumbraBridge.SettingsRead ReadSettings(Guid collection, string modDir);
+
+    /// <summary>Hold a mod with a temporary setting. Null on Success, else Penumbra's answer by name. Framework thread.</summary>
+    string? SetHold(Guid collection, string modDir, bool enabled, int priority,
+                    IReadOnlyDictionary<string, List<string>> options, string source, int key);
+
+    /// <summary>Remove a mod's temporary setting. Null on Success, else Penumbra's answer by name. Framework thread.</summary>
+    string? ClearHold(Guid collection, string modDir);
+
+    /// <summary>Remove every temporary setting locked with <paramref name="key"/> in a collection: Penumbra's answer by name. Framework thread.</summary>
+    string SweepHolds(Guid collection, int key);
+
+    /// <summary>Ask for a redraw of the local player. Framework thread.</summary>
+    void RequestRedraw();
 }

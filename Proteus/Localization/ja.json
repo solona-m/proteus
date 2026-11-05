@@ -5491,10 +5491,6 @@
     "message": "このModはその髪型を提供していません",
     "description": ""
   },
-  "HairPort.Refused.Gender": {
-    "message": "髪型は同じ性別の種族間でのみ移植されます",
-    "description": ""
-  },
   "HairPort.Refused.NoStyle.Fmt": {
     "message": "c{0:D4} は髪型 {1} を選べません",
     "description": ""
@@ -5607,6 +5603,42 @@
     "message": "未対応",
     "description": ""
   },
+  "HairPort.Studio.OtherSex": {
+    "message": "異性の種族にも",
+    "description": "Section heading in the Studio's port list, above the races of the other sex."
+  },
+  "HairPort.Studio.OtherSex.Note.Fmt": {
+    "message": "ゲーム内では、髪型{0}は異性では別の髪型です。ここで移植した種族は、このModを有効にして髪型{0}を選ぶと、代わりにこの髪型になります（そのModで表示される全員に対して）。ここでは何も自動でチェックされず、Proteusが自分から性別をまたいで移植することはありません。",
+    "description": "Note under the other-sex heading in the Studio port list. {0} is the hairstyle number."
+  },
+  "HairPort.Studio.OtherSexAuthored": {
+    "message": "このModにはこの性別用の独自版があります",
+    "description": "Per-race status in the Studio port list for a race of the other sex: the mod ships its own model of this hairstyle for that sex."
+  },
+  "HairPort.Studio.OtherSexSkeleton": {
+    "message": "このModはこの種族に独自のスケルトンを与えています",
+    "description": "Per-race status note in the Studio port list for a race of the other sex: the mod now gives that race its own hair skeleton."
+  },
+  "HairPort.Refused.NotTarget": {
+    "message": "髪型自身の種族か、プレイアブルでない種族です",
+    "description": "Reason (lowercase sentence fragment) why a hairstyle could not be ported to a race; shown after a race name and a colon."
+  },
+  "HairPort.Refused.OtherSexAuto": {
+    "message": "異性の種族のため、スタジオで指示した場合のみ移植されます",
+    "description": "Reason (lowercase sentence fragment) why the automatic path did not port a hairstyle to a race of the other sex; shown after a race name and a colon."
+  },
+  "HairPort.Refused.OtherSexAuthored.Fmt": {
+    "message": "このModにはc{0:D4}用の独自の髪型{1}があります。代わりにそちらを移植してください",
+    "description": "Reason (lowercase sentence fragment) a hand port to the other sex is refused. {0} is a race code number, {1} the hairstyle number."
+  },
+  "HairPort.Refused.OtherSexAuthoredAuto.Fmt": {
+    "message": "このModにc{0:D4}用の独自の髪型{1}ができたため、スタジオで作った移植はそのままにします",
+    "description": "Reason (lowercase sentence fragment) the automatic path leaves a Studio port to the other sex as it is. {0} is a race code number, {1} the hairstyle number."
+  },
+  "HairPort.Refused.OtherSexSkeleton.Fmt": {
+    "message": "このModはc{0:D4}に髪型{1}用の独自のスケルトンを与えているため、異性からの移植は自身のスケルトンを持ち込めません",
+    "description": "Reason (lowercase sentence fragment) a port to the other sex is refused. {0} is a race code number, {1} the hairstyle number."
+  },
   "HairPort.Studio.Port": {
     "message": "移植",
     "description": ""
@@ -5683,8 +5715,8 @@
     "message": "このModの髪型移植の Proteus 記録（Proteus/hairport.json）を読み込めなかったため、何も変更していません。",
     "description": ""
   },
-  "HairPort.Auto.Tip2": {
-    "message": "多くの髪Modは一つの種族専用に作られているため、他の種族ではゲーム\n標準の髪型が表示されます。オンにすると、ProteusがModの髪型をあなたの\n種族の頭に合わせて曲げ、同じModの同じオプションに追加します。対象は\n着けた髪型と、コレクションで有効な髪Modの事前の調整です：この設定を\nオンにしたとき、Modのインストール・有効化・変更時、「今すぐ確認」を\n押したとき。\n\n自分の種族のみ、同じ性別の種族から。Proteusをオフにしても機能し、\nModと一緒に持ち運ばれ、そのModを有効にして表示される全員に見えます。\nここから元に戻せます。",
+  "HairPort.Auto.Tip3": {
+    "message": "多くの髪Modは一つの種族専用に作られているため、他の種族ではゲーム\n標準の髪型が表示されます。オンにすると、ProteusがModの髪型をあなたの\n種族の頭に合わせて曲げ、同じModの同じオプションに追加します。対象は\n着けた髪型と、コレクションで有効な髪Modの事前の調整です：この設定を\nオンにしたとき、Modのインストール・有効化・変更時、「今すぐ確認」を\n押したとき。\n\n自分の種族のみ、同じ性別の種族から。\n性別をまたぐ移植はスタジオでのみ作成されますが、\nそこで作ったものもここで最新に保たれます。\nProteusをオフにしても機能し、Modと一緒に持ち運ばれ、\nそのModを有効にして表示される全員に見えます。\nここから元に戻せます。",
     "description": ""
   },
   "HairPort.Scan.Starting": {

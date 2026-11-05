@@ -5491,10 +5491,6 @@
     "message": "该 Mod 未提供此发型",
     "description": ""
   },
-  "HairPort.Refused.Gender": {
-    "message": "发型只会在同一性别的种族之间移植",
-    "description": ""
-  },
   "HairPort.Refused.NoStyle.Fmt": {
     "message": "c{0:D4} 无法选择发型 {1}",
     "description": ""
@@ -5607,6 +5603,42 @@
     "message": "未覆盖",
     "description": ""
   },
+  "HairPort.Studio.OtherSex": {
+    "message": "也用于另一性别",
+    "description": "Section heading in the Studio's port list, above the races of the other sex."
+  },
+  "HairPort.Studio.OtherSex.Note.Fmt": {
+    "message": "在游戏中，发型 {0} 对另一性别来说是不同的发型。在此移植的种族，只要在启用该 Mod 时选择发型 {0}，就会改为显示这一款——对所有启用该 Mod 显示的角色都是如此。这里不会替你勾选任何项，Proteus 也绝不会自行跨性别移植。",
+    "description": "Note under the other-sex heading in the Studio port list. {0} is the hairstyle number."
+  },
+  "HairPort.Studio.OtherSexAuthored": {
+    "message": "该 Mod 有此性别的自有版本",
+    "description": "Per-race status in the Studio port list for a race of the other sex: the mod ships its own model of this hairstyle for that sex."
+  },
+  "HairPort.Studio.OtherSexSkeleton": {
+    "message": "该 Mod 为此种族提供了自己的骨架",
+    "description": "Per-race status note in the Studio port list for a race of the other sex: the mod now gives that race its own hair skeleton."
+  },
+  "HairPort.Refused.NotTarget": {
+    "message": "这是该发型自己的种族，或不是可玩种族",
+    "description": "Reason (lowercase sentence fragment) why a hairstyle could not be ported to a race; shown after a race name and a colon."
+  },
+  "HairPort.Refused.OtherSexAuto": {
+    "message": "它属于另一性别，只有在工作室中要求时才会移植",
+    "description": "Reason (lowercase sentence fragment) why the automatic path did not port a hairstyle to a race of the other sex; shown after a race name and a colon."
+  },
+  "HairPort.Refused.OtherSexAuthored.Fmt": {
+    "message": "该 Mod 有 c{0:D4} 的自有发型 {1}；请改为移植那一款",
+    "description": "Reason (lowercase sentence fragment) a hand port to the other sex is refused. {0} is a race code number, {1} the hairstyle number."
+  },
+  "HairPort.Refused.OtherSexAuthoredAuto.Fmt": {
+    "message": "该 Mod 现在有 c{0:D4} 的自有发型 {1}；在工作室中做的移植保持原样",
+    "description": "Reason (lowercase sentence fragment) the automatic path leaves a Studio port to the other sex as it is. {0} is a race code number, {1} the hairstyle number."
+  },
+  "HairPort.Refused.OtherSexSkeleton.Fmt": {
+    "message": "该 Mod 为 c{0:D4} 的发型 {1} 提供了自己的骨架，因此来自另一性别的移植无法带上自己的骨架",
+    "description": "Reason (lowercase sentence fragment) a port to the other sex is refused. {0} is a race code number, {1} the hairstyle number."
+  },
   "HairPort.Studio.Port": {
     "message": "移植",
     "description": ""
@@ -5683,8 +5715,8 @@
     "message": "无法读取 Proteus 对此 Mod 发型移植的记录（Proteus/hairport.json），因此未做任何更改。",
     "description": ""
   },
-  "HairPort.Auto.Tip2": {
-    "message": "许多发型 Mod 只为一个种族制作，因此在其他种族上游戏会显示自带\n的发型。开启后，Proteus 会把 Mod 的发型弯折到你的种族的头部上，\n并添加到同一 Mod 的同一选项中——既针对你戴上的发型，也会提前\n处理你的合集中已启用的发型 Mod：开启此项时、安装、启用或更改\nMod 时，以及点击“立即检查”时。\n\n仅针对你自己的种族，来源为同一性别的种族。即使关闭 Proteus 也依然\n有效，会随 Mod 一起带走，所有启用该 Mod 显示的角色都能看到。\n可以在这里撤销。",
+  "HairPort.Auto.Tip3": {
+    "message": "许多发型 Mod 只为一个种族制作，因此在其他种族上游戏会显示自带\n的发型。开启后，Proteus 会把 Mod 的发型弯折到你的种族的头部上，\n并添加到同一 Mod 的同一选项中——既针对你戴上的发型，也会提前\n处理你的合集中已启用的发型 Mod：开启此项时、安装、启用或更改\nMod 时，以及点击“立即检查”时。\n\n仅针对你自己的种族，来源为同一性别的种族。\n跨性别移植只能在工作室中进行，但在那里做的移植这里也会保持最新。\n即使关闭 Proteus 也依然有效，会随 Mod 一起带走，\n所有启用该 Mod 显示的角色都能看到。\n可以在这里撤销。",
     "description": ""
   },
   "HairPort.Scan.Starting": {

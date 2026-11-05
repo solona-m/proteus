@@ -5491,10 +5491,6 @@
     "message": "the mod does not publish that hairstyle",
     "description": "Reason (lowercase sentence fragment) why a hairstyle could not be ported to another race; shown after a race or file name and a colon."
   },
-  "HairPort.Refused.Gender": {
-    "message": "hairstyles are only ported between races of one sex",
-    "description": "Reason (lowercase sentence fragment) why a hairstyle could not be ported to another race; shown after a race or file name and a colon."
-  },
   "HairPort.Refused.NoStyle.Fmt": {
     "message": "c{0:D4} cannot choose hairstyle {1}",
     "description": "Reason (lowercase sentence fragment) why a hairstyle could not be ported to another race; shown after a race or file name and a colon. {0} race code number, {1} hairstyle number."
@@ -5607,6 +5603,42 @@
     "message": "not covered",
     "description": "Per-race status in the Studio port list: no version for this race yet."
   },
+  "HairPort.Studio.OtherSex": {
+    "message": "Also for the other sex",
+    "description": "Section heading in the Studio's port list, above the races of the other sex."
+  },
+  "HairPort.Studio.OtherSex.Note.Fmt": {
+    "message": "In the game, hairstyle {0} is a different style for the other sex. A race ported here wears this one instead whenever it chooses hairstyle {0} with this mod on — for everyone drawn with the mod. Nothing here is ticked for you, and Proteus never ports across the sexes by itself.",
+    "description": "Note under the other-sex heading in the Studio port list. {0} is the hairstyle number."
+  },
+  "HairPort.Studio.OtherSexAuthored": {
+    "message": "the mod has its own version for this sex",
+    "description": "Per-race status in the Studio port list for a race of the other sex: the mod ships its own model of this hairstyle for that sex."
+  },
+  "HairPort.Studio.OtherSexSkeleton": {
+    "message": "the mod gives this race its own skeleton",
+    "description": "Per-race status note in the Studio port list for a race of the other sex: the mod now gives that race its own hair skeleton."
+  },
+  "HairPort.Refused.NotTarget": {
+    "message": "it is the hairstyle's own race, or not a playable one",
+    "description": "Reason (lowercase sentence fragment) why a hairstyle could not be ported to a race; shown after a race name and a colon."
+  },
+  "HairPort.Refused.OtherSexAuto": {
+    "message": "it is of the other sex, which is only ported when asked for in the Studio",
+    "description": "Reason (lowercase sentence fragment) why the automatic path did not port a hairstyle to a race of the other sex; shown after a race name and a colon."
+  },
+  "HairPort.Refused.OtherSexAuthored.Fmt": {
+    "message": "the mod has its own hairstyle {1} for c{0:D4}; port that one instead",
+    "description": "Reason (lowercase sentence fragment) a hand port to the other sex is refused. {0} is a race code number, {1} the hairstyle number."
+  },
+  "HairPort.Refused.OtherSexAuthoredAuto.Fmt": {
+    "message": "the mod now has its own hairstyle {1} for c{0:D4}; the port made in the Studio is left as it is",
+    "description": "Reason (lowercase sentence fragment) the automatic path leaves a Studio port to the other sex as it is. {0} is a race code number, {1} the hairstyle number."
+  },
+  "HairPort.Refused.OtherSexSkeleton.Fmt": {
+    "message": "the mod gives c{0:D4} a skeleton of its own for hairstyle {1}, so a port from the other sex cannot bring its own",
+    "description": "Reason (lowercase sentence fragment) a port to the other sex is refused. {0} is a race code number, {1} the hairstyle number."
+  },
   "HairPort.Studio.Port": {
     "message": "Port",
     "description": "Button in the Studio that ports the hairstyle to all uncovered races."
@@ -5683,8 +5715,8 @@
     "message": "Proteus's record of this mod's hair ports (Proteus/hairport.json) could not be read, so nothing was changed.",
     "description": "Why a hair port save or undo was refused: Proteus's own record file in the mod is corrupt."
   },
-  "HairPort.Auto.Tip2": {
-    "message": "Many hair mods are made for one race only, so on any other race the game\nshows its own hairstyle instead. When on, Proteus bends the mod's hairstyle\nonto your race's head and adds it to the same option of the same mod — for the\nhairstyle you put on, and ahead of time for the hair mods switched on in your\ncollection: when this is switched on, when a mod is installed, switched on or\nchanged, and when you press Check now.\n\nOnly for your own race, from races of the same sex. It keeps working with\nProteus off, travels with the mod, and shows for everyone drawn with that mod\non. It can be undone here.",
+  "HairPort.Auto.Tip3": {
+    "message": "Many hair mods are made for one race only, so on any other race the game\nshows its own hairstyle instead. When on, Proteus bends the mod's hairstyle\nonto your race's head and adds it to the same option of the same mod — for the\nhairstyle you put on, and ahead of time for the hair mods switched on in your\ncollection: when this is switched on, when a mod is installed, switched on or\nchanged, and when you press Check now.\n\nOnly for your own race, from races of the same sex. A port across the sexes is\nonly made in the Studio, but one made there is kept up to date here too. It\nkeeps working with Proteus off, travels with the mod, and shows for everyone\ndrawn with that mod on. It can be undone here.",
     "description": "Tooltip for the automatic hair-port checkbox in Settings > Hair."
   },
   "HairPort.Scan.Starting": {
