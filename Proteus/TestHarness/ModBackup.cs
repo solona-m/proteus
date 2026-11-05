@@ -17,7 +17,7 @@ internal sealed class BackupException(string code, string message, Exception? in
 }
 
 /// <summary>What a backup is a copy of: the mod before a refit, or the mod as a restore found it.</summary>
-internal enum BackupKind { Refit, PreRestore }
+internal enum BackupKind { Refit, PreRestore, HairPort }
 
 /// <summary>A backup's <c>meta.json</c>. Written last, atomically: a folder without it (complete) is incomplete.</summary>
 internal sealed record BackupMeta(bool Complete, BackupKind Kind, string Session, long Seq, DateTime CreatedUtc,
@@ -120,8 +120,8 @@ internal sealed class ModBackup
         long size;
         try { size = SizeOf(modRoot); }
         catch (Exception e) { throw new BackupException("backup-failed", $"could not read the mod folder: {e.Message}", e); }
-        if (kind == BackupKind.Refit && size > refitCap)
-            throw new BackupException("backup-too-large", $"the mod is {size / 1048576} MiB, over the {refitCap / 1048576} MiB a refit backs up");
+        if (kind != BackupKind.PreRestore && size > refitCap)
+            throw new BackupException("backup-too-large", $"the mod is {size / 1048576} MiB, over the {refitCap / 1048576} MiB a harness action backs up");
         long needed = (long)(size * 1.1) + 512L * 1024 * 1024;
         string folder;
         try

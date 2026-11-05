@@ -99,6 +99,10 @@ public sealed partial class HairPortWatcher : IDisposable
     private int collectionGeneration;
     internal ScanView Scan => scan;
 
+    /// <summary>A check of the player's hair mods is owed but has not started (it waits for the race to hold still, or
+    /// for Penumbra to answer). Read-only, any thread: for the test harness's busy rule.</summary>
+    internal bool CheckOwed => Enabled && schedule.Pending;
+
     public HairPortWatcher(CompositorService compositor, PenumbraBridge penumbra, GlamourerBridge glamourer,
                            Configuration config, IPluginLog log)
     {

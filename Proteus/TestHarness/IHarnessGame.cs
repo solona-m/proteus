@@ -25,6 +25,18 @@ internal sealed record RawState(CharacterInfo? Character, Guid? CollectionId,
                                 CompositorService.ActivitySnapshot Compositor, CompositorResult? LastResult,
                                 CompositorService.RefreshRecord? LastRefresh, AutoRefitInfo AutoRefit);
 
+/// <summary>The automatic hair path right now, and the Hair settings: read-only.</summary>
+/// <param name="CheckOwed">A check of the player's hair mods is owed but not started.</param>
+internal sealed record HairPortInfo(HairPortWatcher.View View, HairPortWatcher.ScanView Scan, bool CheckOwed, bool AutoFit,
+                                    bool Earless)
+{
+    /// <summary>Examining the worn hairstyle or running a check right now.</summary>
+    public bool Working => View.Busy || Scan.Running;
+
+    /// <summary>Working, or a check is owed: what refuses a hair port.</summary>
+    public bool Busy => Working || CheckOwed;
+}
+
 /// <summary>Penumbra's mod list and mods folder.</summary>
 internal sealed record ModList(IReadOnlyDictionary<string, string> Mods, string ModsRoot);
 
@@ -114,4 +126,13 @@ internal interface IHarnessGame
     /// false) or "Upgrade what I'm wearing now". False when a run is already going. Framework thread.
     /// </summary>
     bool StartShaderUpgradeRun(bool undoWorn, bool decline);
+
+    /// <summary>The automatic hair path and the Hair settings. Any thread.</summary>
+    HairPortInfo HairPort();
+
+    /// <summary>A file of the game's own data (the reader the Studio's hair panel uses); null for none. Worker thread.</summary>
+    byte[]? ReadGameFile(string gamePath);
+
+    /// <summary>Whether a mod holds hair (<see cref="HairPortJob.IsHairMod"/>). Reads files: never the framework thread.</summary>
+    bool IsHairMod(string modRoot);
 }

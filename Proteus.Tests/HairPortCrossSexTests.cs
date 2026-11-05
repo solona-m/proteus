@@ -38,7 +38,10 @@ internal static class CrossSexFixtures
     private static Matrix4x4 Up(float y) => Matrix4x4.CreateTranslation(0f, y, 0f);
 
     /// <param name="womenOffset">Off: the deformer forgets the women's head — a bend that misses it.</param>
-    public static PbdFile Pbd(bool womenOffset = true) => new(HairPortFixtures.BuildPbd(
+    public static PbdFile Pbd(bool womenOffset = true) => new(PbdBytes(womenOffset));
+
+    /// <summary>The deformer's file, as the game serves it at <c>LiveCharacter.PbdGamePath</c>.</summary>
+    public static byte[] PbdBytes(bool womenOffset = true) => HairPortFixtures.BuildPbd(
     [
         (101, ushort.MaxValue, J(Matrix4x4.Identity)),
         (201, 101, J(womenOffset ? Up(0.06f) : Matrix4x4.Identity)),
@@ -49,7 +52,7 @@ internal static class CrossSexFixtures
         (1101, 101, J(Up(-0.6f))),
         (1201, 1101, J(Matrix4x4.Identity)),
         (1301, 101, J(Matrix4x4.Identity)),
-    ]));
+    ]);
 
     public static byte[] Head(ushort race)
         => SyntheticModel.BuildSurface([], HairPortFixtures.Sphere($"/mt_c{race:D4}f0001_fac_a.mtrl", HairPortFixtures.Head + Off(race),

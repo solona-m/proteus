@@ -36,6 +36,10 @@ public class HarnessDocsTests
                      "delete them by hand", "autoRefit.busy", "phase", "idle", "scratchpad", "Blocker",
                      "compiled OUT", "CI=true", "HarnessBuildFlagTests", "must restore every mod you refitted",
                      "Never edit a mod's files yourself", "Screenshots show the game HUD",
+                     // [AC-hair-port-qa-10] [EDGE-hair-port-qa-23]
+                     "/hair-port", "/actions/hair-port", "hairPort", "hair-port-busy", "hair-not-in-mod", "hair-ported",
+                     "check.owed", "check.running", "\"auto\"", "off in the player's collection", "UNVERIFIED",
+                     "never blocks a restore",
                  })
             Assert.True(doc.Contains(required, StringComparison.Ordinal), $"adversarial-qa.md must mention '{required}'");
         Assert.Contains("Never put names", doc);
