@@ -96,6 +96,13 @@ public class BustStandoffAtrTests
         Assert.Null(CompositorService.StandoffHiddenOrLast(unreadable, null, out _));
         var guard = new ShellBodyAtr.PartAtr(null, new ShellBodyAtr.Use("NIRAE", "root", "top", 1, ShellBodyAtr.NoSay), true, "x", Warning: true);
         Assert.Same(off, CompositorService.StandoffHiddenOrLast(guard, off, out _));
+        // A manifest not readable just now (NoSay, readable, no warning) and the resolver's own failure: undecided too.
+        var noManifest = new ShellBodyAtr.PartAtr(null, new ShellBodyAtr.Use("NIRAE", "root", "top", 1, ShellBodyAtr.NoSay), true, null);
+        Assert.Same(off, CompositorService.StandoffHiddenOrLast(noManifest, off, out isGood));
+        Assert.False(isGood);
+        var threw = new ShellBodyAtr.PartAtr(null, null, true, "could not tell", Warning: true);
+        Assert.Same(off, CompositorService.StandoffHiddenOrLast(threw, off, out isGood));
+        Assert.False(isGood);
         // Not a switching body (no Use): nothing hidden, and nothing to remember.
         var plain = new ShellBodyAtr.PartAtr(null, null, true, null);
         Assert.Null(CompositorService.StandoffHiddenOrLast(plain, off, out isGood));
@@ -127,16 +134,18 @@ public class BustStandoffAtrTests
     public void Cache_evicts_only_hidden_siblings()
     {
         IReadOnlySet<string>? Off(string a) => new HashSet<string> { a };
-        string Key(string ids, int w, IReadOnlySet<string>? h) => CompositorService.BustStandoffKey("Bralettes", w, 2, 1f, [ids], [h]);
+        string Key(string ids, int w, IReadOnlySet<string>? h, int radius = 2, float strength = 1f)
+            => CompositorService.BustStandoffKey("Bralettes", w, radius, strength, [ids], [h]);
         var cache = new ConcurrentDictionary<string, byte[]?>(StringComparer.Ordinal);
         string small = Key("nirae|1|2", 512, Off("atrx_c_large")), large = Key("nirae|1|2", 512, Off("atrx_c_small"));
         string otherIds = Key("rue|1|2", 512, Off("atrx_c_large")), otherSize = Key("nirae|1|2", 1024, Off("atrx_c_large"));
         Assert.NotEqual(small, large);
-        foreach (var k in new[] { small, otherIds, otherSize }) cache[k] = [1];
+        string otherRadius = Key("nirae|1|2", 512, Off("atrx_c_large"), radius: 3);
+        string otherStrength = Key("nirae|1|2", 512, Off("atrx_c_large"), strength: 0.5f);
+        foreach (var k in new[] { small, otherIds, otherSize, otherRadius, otherStrength }) cache[k] = [1];
         CompositorService.EvictSiblings(cache, large);
         Assert.False(cache.ContainsKey(small));   // the same body, size and radius: replaced
-        Assert.True(cache.ContainsKey(otherIds));
-        Assert.True(cache.ContainsKey(otherSize));
+        foreach (var k in new[] { otherIds, otherSize, otherRadius, otherStrength }) Assert.True(cache.ContainsKey(k));
     }
 
     [Fact]

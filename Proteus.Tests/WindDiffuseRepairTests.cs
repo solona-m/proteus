@@ -142,6 +142,7 @@ public sealed class WindDiffuseRepairTests : IDisposable
         var warnings = new List<string>();
         using (new FileStream(File_(Rel), FileMode.Open, FileAccess.ReadWrite, FileShare.None))
             Assert.Empty(MeshVolumeService.RepairWindDiffuse(mod, [Rel], warnings.Add));
+        Assert.Contains(Rel, Assert.Single(warnings));
         Assert.Equal(damaged, File.ReadAllBytes(File_(Rel)));
         Assert.Equal([Rel], MeshVolumeService.ReadRecord(mod)!.Files);
         Assert.True(File.Exists(Backup(Rel)));
@@ -160,8 +161,10 @@ public sealed class WindDiffuseRepairTests : IDisposable
         int candidates = src.IndexOf("Candidates(worn.Materials, inputs);", run, StringComparison.Ordinal);
         Assert.True(undoReturn > run && repair > undoReturn && candidates > repair, "repair after the undo return, before planning");
         var block = src[repair..candidates];
-        Assert.Contains("changed[g.Key] = restored.Count;", block);
-        Assert.Contains("if (stopped", src[undoReturn..repair]);
+        Assert.Contains("repaired.Add(g.Key);", block);
+        Assert.Contains("aborted = true; break;", src[undoReturn..candidates]);   // a stop mid-repair still reloads what was restored
+        Assert.Contains("changed.Keys.Union(repaired, StringComparer.OrdinalIgnoreCase)", src[candidates..]);
+        Assert.Contains("if (stopped", src[undoReturn..candidates]);
         var undo = src[src.IndexOf("private void RunUndo(", StringComparison.Ordinal)..];
         Assert.DoesNotContain("RepairWindDiffuse", undo[..undo.IndexOf("private static string KindName", StringComparison.Ordinal)]);
         Assert.DoesNotContain("ChatGui", block);

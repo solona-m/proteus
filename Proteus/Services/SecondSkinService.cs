@@ -1464,9 +1464,10 @@ public sealed partial class SecondSkinService
     /// </summary>
     // texSize is the build's sheet size (what `alpha` is square at); the cap map stays at ToeCapSize.
     /// <param name="sharedUniform">The shared map is uniform in its own file (the built-in cap, a flat map).</param>
-    /// <param name="toeRegion">Where the toes are in this UV (<see cref="SecondSkinWriter.ToeRegionMask"/>), or null.</param>
+    /// <param name="toeRegion">Where the toes are in this UV (<see cref="SecondSkinWriter.ToeRegionMask"/>), or null;
+    /// asked only for a uniform map.</param>
     private byte[]? ToeCapFor(OverlayDescriptor d, OverlayEntry entry, string? srcType, string? dstType,
-                              byte[]? shared, byte[]? alpha, int texSize, bool sharedUniform = false, byte[]? toeRegion = null)
+                              byte[]? shared, byte[]? alpha, int texSize, bool sharedUniform, Func<byte[]?> toeRegion)
     {
         if ((d.ToeCapStrength ?? 1f) <= 0f) return null;
 
@@ -1478,7 +1479,8 @@ public sealed partial class SecondSkinService
 
         // How much of the toes this shell actually paints. A uniform map says only that a cap is wanted, so it is measured
         // over the toes; an authored map over itself (#62).
-        var region = ToeGateRegion(mask, uniform, toeRegion);
+        // The toe region is read only when a uniform map is gated (#62 review): parsing the bodies' skin costs.
+        var region = ToeGateRegion(mask, uniform, uniform ? toeRegion() : null);
         bool overToes = !ReferenceEquals(region, mask);
         float share = ToeShare(region, alpha, texSize);
         string key = $"{entry.ModDirectory}|{dstType}|{d.ToeCap ?? "built-in"}";

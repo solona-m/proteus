@@ -190,7 +190,7 @@ public sealed partial class SecondSkinService
                     // No authored cap loaded: no cap at all, rather than the writer generating one from the mask.
                     var toeCap = LayerToeCap(layerSurf.Key.IsBody, build.capsAvailable,
                         () => build.service.ToeCapFor(ov.Descriptor, entry, srcType, dstType, build.sharedToeCap, alpha, build.texSize,
-                                                                build.sharedToeCapUniform, build.ToeRegionFor(dstType)));
+                                                                build.sharedToeCapUniform, () => build.ToeRegionFor(dstType)));
 
                     // A reinforced toe needs a cap, and not a mask shell (that would apply it twice).
                     DeferredShellNormal? deferredNormal =

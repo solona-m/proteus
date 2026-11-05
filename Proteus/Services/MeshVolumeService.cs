@@ -626,7 +626,16 @@ internal static class MeshVolumeService
                 {
                     if (!File.Exists(backup) || !File.Exists(path)) continue;
                     var original = File.ReadAllBytes(backup);
-                    if (!IsWindDamagedDiffuse(File.ReadAllBytes(path), original)) continue;
+                    bool damaged;
+                    // A malformed file must not abort the repair of every other worn mod, on every run.
+                    try { damaged = IsWindDamagedDiffuse(File.ReadAllBytes(path), original); }
+                    catch (Exception ex) when (ex is ArgumentException or IndexOutOfRangeException
+                                                     or InvalidOperationException or OverflowException)
+                    {
+                        warn?.Invoke($"{rel} could not be judged ({ex.Message}); left as it is");
+                        continue;
+                    }
+                    if (!damaged) continue;
                     if (ModelBackupOrder.LaterFeature(modRoot, BackupSubdir, rel) != null) continue;
                     PenumbraModMeta.AtomicWrite(path, original);
                 }
@@ -642,21 +651,30 @@ internal static class MeshVolumeService
             }
             if (repaired.Count == 0) return repaired;
 
-            // The record first, the backups last (as Revert): a throw between leaves a record naming a legacy file again,
-            // which the detector rejects — it only over-reports.
+            // The record first, the backups last: a backup goes only once the record no longer names it. When the record
+            // can't be written, every backup stays (a record entry whose file is legacy again only over-reports, and the
+            // detector rejects it; a record naming a backup that is gone would be the worse state).
             var recordPath = Path.Combine(modRoot, SidecarDiscoveryService.SidecarSubdir, RecordFile);
             try
             {
                 if (record.Files.Count == 0) File.Delete(recordPath);
                 else WriteRecord(modRoot, record);
             }
-            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { /* only over-reports */ }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+            {
+                warn?.Invoke($"the wind brush's record could not be updated ({ex.Message}); its backups are kept");
+                return repaired;
+            }
             var backupDir = Path.Combine(modRoot, SidecarDiscoveryService.SidecarSubdir, BackupSubdir);
-            if (record.Files.Count == 0)
-                try { if (Directory.Exists(backupDir)) Directory.Delete(backupDir, true); } catch (IOException) { }
-            else
-                foreach (var rel in repaired)
-                    try { File.Delete(Path.Combine(backupDir, Native(rel))); } catch (IOException) { }
+            try
+            {
+                if (record.Files.Count == 0) { if (Directory.Exists(backupDir)) Directory.Delete(backupDir, true); }
+                else foreach (var rel in repaired) File.Delete(Path.Combine(backupDir, Native(rel)));
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+            {
+                warn?.Invoke($"a wind brush backup could not be deleted ({ex.Message}); it is no longer recorded");
+            }
             return repaired;
         }
     }

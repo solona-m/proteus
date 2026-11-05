@@ -168,7 +168,10 @@ public partial class CompositorService
     internal static IReadOnlySet<string>? StandoffHiddenOrLast(ShellBodyAtr.PartAtr atr, IReadOnlySet<string>? lastGood,
                                                                out bool isGood)
     {
-        if (atr.Use?.Key == ShellBodyAtr.NoSay && (!atr.Readable || atr.Warning))
+        // Undecided — unreadable settings, the every-shape-off guard, a manifest not readable just now (NoSay), or the
+        // resolver's own failure (no Use, a warning): never "every chest", the minutes-long pass, nor a reason to forget
+        // the good set.
+        if (atr.Use?.Key == ShellBodyAtr.NoSay || (atr.Use == null && atr.Warning))
         {
             isGood = false;
             return lastGood;

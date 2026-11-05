@@ -129,11 +129,11 @@ public class ToeCapToeGateTests
         var body = svc[at..svc.IndexOf("/// A REINFORCED TOE", at, StringComparison.Ordinal)];
         Assert.Contains("if ((d.ToeCapStrength ?? 1f) <= 0f) return null;", body);
         Assert.Contains("if (mask == null || alpha == null) return null;", body);
-        Assert.Contains("ToeGateRegion(mask, uniform, toeRegion)", body);
+        Assert.Contains("ToeGateRegion(mask, uniform, uniform ? toeRegion() : null)", body);   // the region read only when gated
         Assert.Contains("ToeShare(region, alpha, texSize)", body);
         Assert.Contains("of the toes \"", body);
         Assert.Contains("OutcomeChanged(toeGateByLayer, capLogGate, key,", body);
-        Assert.Contains("build.sharedToeCapUniform, build.ToeRegionFor(dstType)", Source("Services/SecondSkinService.ShellTextureBake.cs"));
+        Assert.Contains("build.sharedToeCapUniform, () => build.ToeRegionFor(dstType)", Source("Services/SecondSkinService.ShellTextureBake.cs"));
     }
 
     private static string Source(string relative, [CallerFilePath] string here = "")
