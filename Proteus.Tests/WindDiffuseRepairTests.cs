@@ -104,6 +104,13 @@ public sealed class WindDiffuseRepairTests : IDisposable
         Assert.Contains("differs", MeshVolumeService.WindRecipeMismatch(edited, Kit.FormB()));
         Assert.Contains("no movement constants", MeshVolumeService.WindRecipeMismatch(CharacterShaderUpgrade.Upgrade(Kit.FormB())!, Kit.FormB()));
         Assert.False(MeshVolumeService.IsWindDamagedDiffuse(edited, Kit.FormB()));
+        // A texture path renamed since (re-pointed by hand): not the recipe either.
+        var path0 = System.Text.Encoding.ASCII.GetBytes(TexturePaths(damaged)![0]);
+        int at = damaged.AsSpan().IndexOf(path0);
+        Assert.True(at >= 0);
+        var renamed = (byte[])damaged.Clone();
+        renamed[at + path0.Length - 5] ^= 0x01;   // one character of the file name
+        Assert.False(MeshVolumeService.IsWindDamagedDiffuse(renamed, Kit.FormB()));
         // Not in the record, or no backup: nothing.
         Brushed(damaged, "blue/top.mtrl");
         Directory.CreateDirectory(Path.GetDirectoryName(File_(Rel))!);

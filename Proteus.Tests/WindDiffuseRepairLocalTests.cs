@@ -28,7 +28,8 @@ public class WindDiffuseRepairLocalTests(ITestOutputHelper o)
         {
             var recordPath = Path.Combine(dir, "Proteus", MeshVolumeService.RecordFile);
             if (!File.Exists(recordPath) || MeshVolumeService.ReadRecord(dir) is not { } record) continue;
-            var stamp = File.GetLastWriteTimeUtc(recordPath);
+            var proteus = Path.Combine(dir, "Proteus");
+            var stamps = Directory.EnumerateFiles(proteus, "*", SearchOption.AllDirectories).ToDictionary(f => f, File.GetLastWriteTimeUtc);
             foreach (var rel in record.Files.Where(f => f.EndsWith(".mtrl", StringComparison.OrdinalIgnoreCase)))
             {
                 var file = Path.Combine(dir, rel.Replace('/', Path.DirectorySeparatorChar));
@@ -42,7 +43,7 @@ public class WindDiffuseRepairLocalTests(ITestOutputHelper o)
                 if (why == null) matches++; else misses++;
                 o.WriteLine($"{(why == null ? "MATCH" : "near miss")}  {Path.GetFileName(dir)}/{rel}{(why == null ? "" : "  — " + why)}");
             }
-            Assert.Equal(stamp, File.GetLastWriteTimeUtc(recordPath));   // read-only
+            foreach (var (f, t) in stamps) Assert.Equal(t, File.GetLastWriteTimeUtc(f));   // read-only: nothing under Proteus/ written
         }
         o.WriteLine($"{matches} would be repaired, {misses} near misses left as they are");
     }

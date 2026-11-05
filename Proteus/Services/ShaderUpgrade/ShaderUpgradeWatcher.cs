@@ -350,7 +350,8 @@ public sealed class ShaderUpgradeWatcher : IDisposable
                             restored.Count, Path.GetFileName(g.Key));
         }
 
-        // Stopped or switched off mid-repair: what was restored is still reloaded below; nothing more is planned.
+        // Switched off mid-repair: what was restored is still reloaded below; nothing more is planned. (Stopped — the
+        // plugin going away — returns before any reload, as an upgrade does.)
         var (candidates, left) = aborted ? (new List<Candidate>(), new List<Left>()) : Candidates(worn.Materials, inputs);
         var slots = candidates.Where(c => c.SpecularGamePath != null).Select(c => c.SpecularGamePath!)
                               .Distinct(StringComparer.OrdinalIgnoreCase).ToList();

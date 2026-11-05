@@ -134,19 +134,26 @@ public partial class CompositorService
     /// </summary>
     private IReadOnlyList<IReadOnlySet<string>?> StandoffHiddenList(IReadOnlyList<UvSeamMapService.SeamModel> models,
         IReadOnlyList<SecondSkinService.BodySource>? sources, Func<string, ShellBodyAtr.ModSettings?> settingsOf)
+        => StandoffHiddenList(models.Count, sources, settingsOf, modsRoot, RefitCore.RaceNumber(_drawnRaceCode),
+                              _standoffLastHidden);
+
+    /// <summary>The standoff's hidden sets, pure but for <paramref name="lastGood"/>, which it reads and, on a good
+    /// answer with a known body mod, writes.</summary>
+    internal static IReadOnlyList<IReadOnlySet<string>?> StandoffHiddenList(int count,
+        IReadOnlyList<SecondSkinService.BodySource>? sources, Func<string, ShellBodyAtr.ModSettings?> settingsOf,
+        string? modsRoot, ushort? race, System.Collections.Concurrent.ConcurrentDictionary<string, IReadOnlySet<string>?> lastGood)
     {
-        var list = new IReadOnlySet<string>?[models.Count];
+        var list = new IReadOnlySet<string>?[count];
         if (sources == null) return list;
-        var race = RefitCore.RaceNumber(_drawnRaceCode);
-        for (int i = 0; i < models.Count && i < sources.Count; i++)
+        for (int i = 0; i < count && i < sources.Count; i++)
         {
             var src = sources[i];
             if (StandoffPart(src.GamePath) is not { } p) continue;
             var atr = ShellBodyAtr.ForPart(p, bare: true, src.ModFile, modsRoot, race, settingsOf);
             var bodyKey = StandoffBodyKey(ModFolderOf(src.ModFile, modsRoot), p, race);
-            _standoffLastHidden.TryGetValue(bodyKey ?? "", out var last);
+            lastGood.TryGetValue(bodyKey ?? "", out var last);
             list[i] = StandoffHiddenOrLast(atr, bodyKey != null ? last : null, out bool good);
-            if (good && bodyKey != null) _standoffLastHidden[bodyKey] = list[i];
+            if (good && bodyKey != null) lastGood[bodyKey] = list[i];
         }
         return list;
     }

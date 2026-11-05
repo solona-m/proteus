@@ -177,6 +177,7 @@ public class BustStandoffAtrTests
         var run = Source("Services/CompositorService.CompositeRun.cs");
         Assert.Contains("ShellBodyAtr.Moved(compositor._lastBodyAtrUses", run);
         Assert.Contains("TryForceForShapes(null, \"body-shapes-moved\")", run);
+        Assert.Contains("_lastBodyAtrUses = shellBuilt ? nextBodyAtrUses : [];", run);   // watched only with a shell
         Assert.Contains("{HiddenMark}{string.Join(\";\", hidden.Select(ShellBodyAtr.Key))}", Source("Services/CompositorService.BlendStats.cs"));
     }
 
@@ -190,6 +191,51 @@ public class BustStandoffAtrTests
         Assert.Equal("rem", SecondSkinService.SourceModFile(K.Remembered, null, "rem", "kept"));
         Assert.Equal("kept", SecondSkinService.SourceModFile(K.Kept, "keptfile", "rem", "kept"));
         Assert.Null(SecondSkinService.SourceModFile(K.OwnHeld, "ours", "rem", "kept"));
+    }
+
+    [Fact]
+    [Trait("Plan", "AC-issue-sweep-b-1")]
+    [Trait("Plan", "EDGE-issue-sweep-b-1")]
+    [Trait("Plan", "EDGE-issue-sweep-b-2")]
+    public void Hidden_list_follows_real_settings_and_keeps_the_last_good_one()
+    {
+        // A NIRÆ-like body mod: a Chest option whose choices switch chest attributes on the top.
+        var root = Path.Combine(Path.GetTempPath(), "proteus-standoff-" + Guid.NewGuid().ToString("N"));
+        var mod = Path.Combine(root, "NIRAE");
+        Directory.CreateDirectory(mod);
+        try
+        {
+            static string Atr(string a, bool on) => "{\"Type\":\"Atr\",\"Manipulation\":{\"Slot\":\"Body\",\"Attribute\":\"" + a
+                                                    + "\",\"Entry\":" + (on ? "true" : "false") + "}}";
+            static string Opt(string n, bool small) => "{\"Name\":\"" + n + "\",\"Priority\":0,\"Files\":{},\"Manipulations\":["
+                                                       + Atr("atrx_c_small", small) + "," + Atr("atrx_c_large", !small) + "]}";
+            File.WriteAllText(Path.Combine(mod, "meta.json"),
+                "{\"FileVersion\":4,\"Name\":\"Body\",\"Author\":\"x\",\"DefaultData\":{\"Files\":{},\"Manipulations\":[]},"
+              + "\"Groups\":[{\"Name\":\"Chest\",\"Type\":\"Single\",\"Priority\":0,\"DefaultSettings\":0,\"Options\":["
+              + Opt("Small", true) + "," + Opt("Large", false) + "]}]}");
+            File.WriteAllBytes(Path.Combine(mod, "top.mdl"), Chests(true));
+            var source = new SecondSkinService.BodySource(K.Resolved, Path.Combine(mod, "top.mdl"), "id", () => null,
+                                                          Path.Combine(mod, "top.mdl"), "chara/equipment/e0000/model/c0201e0000_top.mdl");
+            var lastGood = new ConcurrentDictionary<string, IReadOnlySet<string>?>(StringComparer.Ordinal);
+            ShellBodyAtr.ModSettings? Chest(string c) => new ShellBodyAtr.ModSettings(true, new Dictionary<string, List<string>> { ["Chest"] = [c] });
+
+            var small = CompositorService.StandoffHiddenList(1, [source], _ => Chest("Small"), root, 201, lastGood)[0];
+            Assert.Equal(["atrx_c_large"], small!);
+            Assert.Single(lastGood);
+            // Unreadable: the last good set, nothing forgotten.
+            Assert.Equal(small, CompositorService.StandoffHiddenList(1, [source], _ => null, root, 201, lastGood)[0]);
+            Assert.Equal(small, Assert.Single(lastGood).Value);
+            // A flip: the new set, remembered.
+            var large = CompositorService.StandoffHiddenList(1, [source], _ => Chest("Large"), root, 201, lastGood)[0];
+            Assert.Equal(["atrx_c_small"], large!);
+            // No mod file (our own output held): nothing hidden, nothing asked, nothing remembered.
+            bool asked = false;
+            var held = source with { Kind = K.OwnHeld, ModFile = null };
+            Assert.Null(CompositorService.StandoffHiddenList(1, [held], _ => { asked = true; return null; }, root, 201, lastGood)[0]);
+            Assert.False(asked);
+            Assert.Null(CompositorService.StandoffHiddenList(1, null, _ => null, root, 201, lastGood)[0]);
+        }
+        finally { Directory.Delete(root, true); }
     }
 
     private static string Source(string relative, [CallerFilePath] string here = "")
