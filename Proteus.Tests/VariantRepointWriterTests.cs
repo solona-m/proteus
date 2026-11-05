@@ -148,15 +148,14 @@ public class VariantRepointWriterTests
         Assert.Equal(before.Select(p => p.Key), after.Select(p => p.Key));
         foreach (var (key, value) in before)
             if (key != "Groups") Assert.True(JsonNode.DeepEquals(value, after[key]), key);
-        var bg = before["Groups"]![0]!.AsObject();
-        var ag = after["Groups"]![0]!.AsObject();
-        Assert.Equal(bg.Select(p => p.Key), ag.Select(p => p.Key));
         for (int o = 0; o < 2; o++)
         {
-            var bf = bg["Options"]![o]!["Files"]!.AsObject();
-            var af = ag["Options"]![o]!["Files"]!.AsObject();
+            var bf = before["Groups"]![0]!["Options"]![o]!["Files"]!.AsObject();
+            var af = after["Groups"]![0]!["Options"]![o]!["Files"]!.AsObject();
             Assert.Equal(bf.Select(p => p.Key).Append(MaterialPath(Top, 2)), af.Select(p => p.Key));   // appended (V5)
+            af.Remove(MaterialPath(Top, 2));
         }
+        Assert.True(JsonNode.DeepEquals(before["Groups"], after["Groups"]));   // nothing else in any group changed
         var now = ShaderUpgradeTestKit.Hashes(mod);
         foreach (var (file, hash) in hashes) Assert.Equal(hash, now[file]);
         Assert.Equal(["Proteus/" + VariantRepointWriter.RecordFile], now.Keys.Except(hashes.Keys));
@@ -799,8 +798,57 @@ public class VariantRepointWriterTests
         k.Imc(Top, E(1), E(1), E(2));
         k.Run([k.Worn(Top, 2, mod)]);
         EditFiles(mod, f => f[MaterialPath(Top, 2)] = "red/custom.mtrl", "Colour", "Red");
-        var rc = VariantRepointWriter.Reconcile(mod);
-        VariantRepointWriter.UndoItem(mod, Top, true, out var removed, out var kept, out _);
-        Assert.Equal((1, 1), (removed, kept + rc.ForgottenOf(Top)));
+        k.Run([k.Worn(Top, 2, mod)]);   // a walk in between releases the repointed copy
+        k.Run([k.Worn(Top, 3, mod)]);
+        VariantRepointWriter.UndoItem(mod, Top, false, out var removed, out var kept, out _);
+        Assert.Equal((1, 1), (removed, kept));
+        // The released key stays recorded, so the next walk doesn't read their redirect as a second folder.
+        Assert.Single(VariantRepointWriter.ReadRecord(mod)!.Items.Single().Released);
+        var (outcomes, left) = k.Run([k.Worn(Top, 2, mod)]);
+        Assert.DoesNotContain(left, l => l.Reason == RepointReason.SeveralVariants);
+    }
+
+    [Fact]
+    [Trait("Plan", "EDGE-imc-all-variants-26")]
+    public void Held_manifest_during_reconcile_and_undo_changes_nothing()
+    {
+        using var k = new VariantRepointTestKit();
+        var mod = k.Colours("Dress", Top);
+        k.Imc(Top, E(1), E(1), E(2));
+        k.Run([k.Worn(Top, 2, mod)]);
+        var record = File.ReadAllText(RecordPath(mod));
+        using (new FileStream(Path.Combine(mod, "meta.json"), FileMode.Open, FileAccess.Read, FileShare.None))
+        {
+            var rc = VariantRepointWriter.Reconcile(mod);
+            Assert.Equal((0, 0, false), (rc.Dropped, rc.Forgotten, rc.ManifestChanged));
+            Assert.Equal(VariantRepointWriter.Undone.Failed, VariantRepointWriter.UndoItem(mod, Top, true, out _, out _, out _));
+        }
+        Assert.Equal(record, File.ReadAllText(RecordPath(mod)));
+        Assert.Equal(2, VariantRepointWriter.ReadRecord(mod)!.Items.Single().Redirects.Count);
+    }
+
+    [Fact]
+    [Trait("Plan", "EDGE-imc-all-variants-15")]
+    [Trait("Plan", "EDGE-imc-all-variants-45")]
+    public void Source_added_after_the_first_copies_is_copied_not_outranked()
+    {
+        using var k = new VariantRepointTestKit();
+        var mod = k.Colours("Dress", Top);
+        k.Imc(Top, E(1), E(1), E(2));
+        k.Run([k.Worn(Top, 2, mod)]);
+        // The author adds a Green option holding v0001 in place (no author update: our copies are intact).
+        var m = Manifest(mod);
+        m["Groups"]![0]!["Options"]!.AsArray().Add(new JsonObject
+        {
+            ["Name"] = "Green", ["Description"] = "", ["Files"] = new JsonObject { [MaterialPath(Top, 1)] = "green/m.mtrl" },
+            ["FileSwaps"] = new JsonObject(), ["Manipulations"] = new JsonArray(),
+        });
+        WriteManifest(mod, m);
+        // Green selected: nothing serves v0002 (the kit counts every option as on, so say it outright).
+        k.Served[MaterialPath(Top, 2)] = MaterialPath(Top, 2);
+        var (outcomes, left) = k.Run([k.Worn(Top, 2, mod)]);
+        Assert.Empty(left);
+        Assert.Equal(1, Assert.Single(outcomes).Redirects);
+        Assert.Equal("green/m.mtrl", FilesOf(mod, new("Colour", "Green"))[MaterialPath(Top, 2)]);
     }
 }

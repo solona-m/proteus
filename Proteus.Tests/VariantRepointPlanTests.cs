@@ -386,14 +386,9 @@ public class VariantRepointPlanTests
     [Trait("Plan", "EDGE-imc-all-variants-21")]
     public void Switched_off_mid_run_still_reloads_written_mods()
     {
-        // The watcher reloads every mod Apply changed; switching off only stops further items (mayWrite).
-        Assert.True(RedrawAfter(RunKind.RepointNow, autoRedraw: true, changedAny: true));
-        using var k = new VariantRepointTestKit();
-        var mod = k.Dress("Dress", Top);
-        k.Imc(Top, E(1), E(1), E(2));
-        var plan = k.Plan([k.Worn(Top, 2, mod)]);
-        var outcome = VariantRepointWriter.Apply(mod, plan.PerMod.Single().Items, () => true);
-        Assert.True(outcome.ChangedAny);
+        // Switching off only stops further items (mayWrite); every mod written or reconciled is still reloaded.
+        Assert.Equal(["A", "B", "C"], ReloadSet(["A", "B"], ["b", "C"], disposed: false).Order());
+        Assert.Empty(ReloadSet(["A"], ["B"], disposed: true));
     }
 
     [Fact]
@@ -595,6 +590,19 @@ public class VariantRepointPlanTests
                         groups: [("Extras", "Multi", [("Alt", new(), [Imc(Top, 3, E(2))])])]);
         k.Imc(Top, E(1), E(1), E(2), E(3));
         Assert.Equal(RepointReason.ModImc, LeftReason(k.Plan([k.Worn(Top, 2, mod)])));
+    }
+
+    [Fact]
+    [Trait("Plan", "EDGE-imc-all-variants-56")]
+    public void Two_claims_on_one_variant_both_keep_their_folders()
+    {
+        // Default data sends variant 3 to folder 5, an option sends it to folder 6: neither folder is a target.
+        using var k = new VariantRepointTestKit();
+        var mod = k.Mod("A", new() { [ModelPath(Top)] = "top.mdl", [MaterialPath(Top, 1)] = "a.mtrl" },
+                        [Imc(Top, 3, E(5))],
+                        groups: [("Extras", "Multi", [("Alt", new(), [Imc(Top, 3, E(6))])])]);
+        k.ImcSlots(Top.SetTag, (1, [E(1), E(1), E(2), E(3), E(5), E(6)]));
+        Assert.Equal([2], Folders(k.Plan([k.Worn(Top, 2, mod)])));
     }
 
     [Fact]

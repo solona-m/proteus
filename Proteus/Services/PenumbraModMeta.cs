@@ -1107,12 +1107,19 @@ internal static class PenumbraModMeta
     /// Every file redirect of a v4 mod with its container: default data, every option, every Combining container
     /// (active or not). Empty for an unreadable or v3 folder.
     /// </summary>
-    public static List<ContainerRedirect> ReadContainerRedirects(string modRoot)
+    public static List<ContainerRedirect> ReadContainerRedirects(string modRoot) => TryReadContainerRedirects(modRoot) ?? [];
+
+    /// <summary>
+    /// <see cref="ReadContainerRedirects"/>, but null when the manifest is there and cannot be read (held open past the
+    /// retries, or malformed) — never mistaken for a mod with no redirects. Empty for a missing manifest or a v3 folder.
+    /// </summary>
+    public static List<ContainerRedirect>? TryReadContainerRedirects(string modRoot)
     {
         var found = new List<ContainerRedirect>();
         try
         {
-            var manifest = ReadManifest(modRoot);
+            var manifest = ReadManifest(modRoot, out bool readable, waitIfHeld: true);
+            if (!readable) return File.Exists(Path.Combine(modRoot, MetaFile)) ? null : found;
             if (FileVersionOf(manifest) < SingleFileVersion) return found;
             if (manifest.TryGetValue("DefaultData", out var dd)) Add(dd, new ContainerRef(""));
             if (manifest.TryGetValue("Groups", out var groups) && groups.ValueKind == JsonValueKind.Array)
@@ -1133,7 +1140,11 @@ internal static class PenumbraModMeta
                                 Add(o, new ContainerRef(name, on.GetString() ?? ""));
                 }
         }
-        catch { /* unreadable: empty, and the caller writes nothing */ }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or JsonException
+                                       or InvalidOperationException)
+        {
+            return null;   // unreadable: unknown, never "no redirects"
+        }
         return found;
 
         void Add(JsonElement owner, ContainerRef at)

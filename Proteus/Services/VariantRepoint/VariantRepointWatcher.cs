@@ -417,7 +417,7 @@ public sealed class VariantRepointWatcher : IDisposable
         }
         if (stopped) return;
 
-        var reload = changed.Keys.Union(reconciled, StringComparer.OrdinalIgnoreCase).ToList();
+        var reload = ReloadSet(changed.Keys, reconciled, stopped);
         var (reloaded, redrew) = OnFramework(() => ReloadChanged(reload, kind, worn.ModNames, changed), "reload");
         if (changed.Count > 0 && !redrew) awaitingRedraw = true;
         Publish(worn, inputs, effective, left, new RunInfo(KindName(kind), changed.Count, changed.Values.Sum(), 0, 0, 0,
@@ -427,8 +427,9 @@ public sealed class VariantRepointWatcher : IDisposable
     /// <param name="forgotten">Entries the reconcile just forgot as replaced by someone: kept, and counted so.</param>
     private void RunUndo(WornState worn, Inputs inputs, bool decline, ISet<string> reconciled, int forgotten)
     {
-        int removed = 0, kept = forgotten, refused = 0;
-        bool anyRecorded = forgotten > 0;
+        // Copies forgotten as repointed are released and counted as kept by UndoItem itself.
+        int removed = 0, kept = 0, refused = 0;
+        bool anyRecorded = false;
         var messages = new List<string>();
         var changed = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         foreach (var w in worn.Items)
@@ -458,7 +459,7 @@ public sealed class VariantRepointWatcher : IDisposable
         if (stopped) return;
         log.Information("[Proteus] gear variants: undo for what is worn — {0} removed, {1} kept as changed since, {2} refused",
                         removed, kept, refused);
-        var reload = changed.Union(reconciled, StringComparer.OrdinalIgnoreCase).ToList();
+        var reload = ReloadSet(changed, reconciled, stopped);
         var (reloaded, redrew) = OnFramework(() => ReloadChanged(reload, RunKind.UndoWorn, worn.ModNames, null), "reload");
         Publish(worn, inputs, null, Candidates(worn.Items, inputs).Left,
                 new RunInfo(KindName(RunKind.UndoWorn), changed.Count, 0, removed, kept, refused, reloaded, redrew,

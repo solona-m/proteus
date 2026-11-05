@@ -290,7 +290,7 @@ internal static class VariantRepointPlan
     public sealed record Candidate(string ModRoot, WornItem Worn, int Folder, IReadOnlyList<string> MaterialNames,
                                    IReadOnlyList<PenumbraModMeta.ContainerRedirect> Sources,
                                    IReadOnlyList<PenumbraModMeta.ContainerRedirect> AllRedirects,
-                                   ImcEntry[] Vanilla, IReadOnlyDictionary<int, int> AuthorFolders,
+                                   ImcEntry[] Vanilla, IReadOnlyDictionary<int, HashSet<int>> AuthorFolders,
                                    IReadOnlyList<VariantRepointWriter.RedirectEntry> Present, bool Declined)
     {
         public Item Item => Worn.Item;
@@ -300,6 +300,8 @@ internal static class VariantRepointPlan
         public int WornIndex => Worn.Variant >= 1 && Worn.Variant <= Count ? Worn.Variant : 0;
         /// <summary>The folders Proteus has already copied into.</summary>
         public IEnumerable<int> CopiedFolders => Present.Select(p => p.Folder).Distinct();
+        /// <summary>Whether some author claim sends a variant to this folder.</summary>
+        public bool Claimed(int folder) => AuthorFolders.Values.Any(s => s.Contains(folder));
     }
 
     /// <summary>
@@ -426,16 +428,21 @@ internal static class VariantRepointPlan
     /// </summary>
     /// <returns>Variant → the folder the author sends it to. A claim on the mod's own folder is left out: the author
     /// already agrees with the fix (W1).</returns>
-    internal static Dictionary<int, int> AuthorFolders(string modRoot, Item item, ImcEntry[] vanilla,
-                                                       VariantRepointWriter.ItemEntry? ours, int ownFolder)
+    internal static Dictionary<int, HashSet<int>> AuthorFolders(string modRoot, Item item, ImcEntry[] vanilla,
+                                                                VariantRepointWriter.ItemEntry? ours, int ownFolder)
     {
-        var set = new Dictionary<int, int>();
+        var set = new Dictionary<int, HashSet<int>>();
+        void Claim(int v, int folder)
+        {
+            if (!set.TryGetValue(v, out var s)) set[v] = s = [];
+            s.Add(folder);
+        }
         foreach (var (edit, _, _) in ManifestImcEdits(modRoot))
         {
             if (edit.Item != item || edit.Variant < 0 || edit.Variant >= vanilla.Length) continue;
             if (ours != null && ours.Variants.Any(v => v.Variant == edit.Variant && v.Entry.ToImc() == edit.Entry)) continue;
             if (edit.Entry.MaterialId != vanilla[edit.Variant].MaterialId && edit.Entry.MaterialId != ownFolder)
-                set[edit.Variant] = edit.Entry.MaterialId;
+                Claim(edit.Variant, edit.Entry.MaterialId);
         }
         foreach (var g in ImcEntrySource.ImcGroups(modRoot))
         {
@@ -444,7 +451,7 @@ internal static class VariantRepointPlan
             if (ImcEntrySource.EntryOf(g.Group) is not { } e) continue;
             for (int v = 0; v < vanilla.Length; v++)
                 if ((allVariants || v == variant) && e.MaterialId != vanilla[v].MaterialId && e.MaterialId != ownFolder)
-                    set[v] = e.MaterialId;
+                    Claim(v, e.MaterialId);
         }
         return set;
     }
@@ -523,6 +530,29 @@ internal static class VariantRepointPlan
         return other ? VariantState.OtherMod : VariantState.Wrong;
     }
 
+    /// <summary>
+    /// The copies a folder still lacks: each of X's own redirects under its folder, repeated under <paramref name="folder"/>
+    /// in the same container, unless that container already holds the key (ours from before, or the author's: never
+    /// overwritten).
+    /// </summary>
+    internal static IEnumerable<PenumbraModMeta.ContainerRedirect> MissingCopies(Candidate c, int folder)
+    {
+        foreach (var s in c.Sources)
+        {
+            var path = InFolder(s.GamePath, folder);
+            if (c.AllRedirects.Any(x => x.Container.SameAs(s.Container) && PenumbraModMeta.SameFile(x.GamePath, path)))
+                continue;
+            yield return new PenumbraModMeta.ContainerRedirect(s.Container, path, s.File);
+        }
+    }
+
+    /// <summary>
+    /// The mods to reload after a run: those whose manifest a write or a reconcile changed. None once disposed: there is
+    /// no framework hop to make.
+    /// </summary>
+    public static List<string> ReloadSet(IEnumerable<string> written, IEnumerable<string> reconciled, bool disposed)
+        => disposed ? [] : written.Union(reconciled, StringComparer.OrdinalIgnoreCase).ToList();
+
     /// <summary>Whether X's own folder is X's: at least one of its names there resolves into X (N2).</summary>
     public static bool ServesOwnFolder(Candidate c, IReadOnlyDictionary<string, string?> resolved, Inputs inp)
         => NamesIn(c, c.Folder).Any(p => resolved.TryGetValue(p, out var r) && SameMod(r, c.ModRoot, inp.ModsRoot));
@@ -554,16 +584,18 @@ internal static class VariantRepointPlan
 
             RepointReason? reason = null;
             // The author sends the worn variant, or the folder it uses, somewhere on purpose (W2).
-            if (c.AuthorFolders.ContainsKey(w) || c.AuthorFolders.Values.Contains(wornFolder)) reason = RepointReason.ModImc;
-            else if (c.CopiedFolders.Contains(wornFolder))
+            bool wornCopied = c.CopiedFolders.Contains(wornFolder);
+            if (c.AuthorFolders.ContainsKey(w) || c.Claimed(wornFolder)) reason = RepointReason.ModImc;
+            else if (wornCopied && !MissingCopies(c, wornFolder).Any())
             {
-                // Copied already, yet the worn folder still isn't ours: another mod outranks the copy — unless the
-                // reload and redraw after our own write have not settled, when what resolves is not to be trusted yet.
+                // Copied already, every copy still there, yet the worn folder still isn't ours: another mod outranks the
+                // copy — unless the reload and redraw after our own write have not settled, when what resolves is not
+                // to be trusted yet.
                 if (!refreshPending.Contains(ShaderUpgradePlan.NormalPath(c.ModRoot)))
                     left.Add(new Left(c.ModDir, c.Item.Label, RepointReason.Outranked));
                 continue;
             }
-            else if (wornState == VariantState.OtherMod || !ServesOwnFolder(c, resolved, inp))
+            else if ((!wornCopied && wornState == VariantState.OtherMod) || !ServesOwnFolder(c, resolved, inp))
                 reason = RepointReason.OtherModMaterial;
             else if (c.Declined) reason = RepointReason.Declined;
             if (reason is { } r)
@@ -577,24 +609,19 @@ internal static class VariantRepointPlan
             {
                 if (c.AuthorFolders.ContainsKey(v)) continue;
                 int m = Effective(c, effective, v).MaterialId;
-                if (m == c.Folder || c.CopiedFolders.Contains(m) || c.AuthorFolders.Values.Contains(m)) continue;
+                if (m == c.Folder || c.Claimed(m)) continue;
                 if (!targets.TryGetValue(m, out var vs))
                 {
-                    if (StateOf(c, m, resolved, inp) != VariantState.Wrong) continue;
+                    // A folder copied into before is judged by its missing copies alone (a source added since); any
+                    // other by what it draws now.
+                    if (c.CopiedFolders.Contains(m) ? !MissingCopies(c, m).Any()
+                                                    : StateOf(c, m, resolved, inp) != VariantState.Wrong)
+                        continue;
                     targets[m] = vs = [];
                 }
                 vs.Add(v);
             }
-            var copies = new List<(int, PenumbraModMeta.ContainerRedirect)>();
-            foreach (var m in targets.Keys)
-                foreach (var s in c.Sources)
-                {
-                    var path = InFolder(s.GamePath, m);
-                    // A key the container already holds is the author's: never overwritten.
-                    if (c.AllRedirects.Any(x => x.Container.SameAs(s.Container) && PenumbraModMeta.SameFile(x.GamePath, path)))
-                        continue;
-                    copies.Add((m, new PenumbraModMeta.ContainerRedirect(s.Container, path, s.File)));
-                }
+            var copies = targets.Keys.SelectMany(m => MissingCopies(c, m).Select(x => (m, x))).ToList();
             if (copies.Count == 0) continue;
             if (!perMod.TryGetValue(c.ModRoot, out var mw)) perMod[c.ModRoot] = mw = new ModWrites(c.ModRoot, []);
             if (mw.Items.Any(i => i.Item == c.Item)) continue;

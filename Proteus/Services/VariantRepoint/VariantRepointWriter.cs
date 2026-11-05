@@ -305,7 +305,8 @@ internal static class VariantRepointWriter
             if (PenumbraModMeta.IsLegacyFolder(modRoot)) return none;
             if (DefaultManipulations(modRoot) is not { } manips) return none;
             var before = JsonSerializer.Serialize(r, RecordJson);
-            var reds = PenumbraModMeta.ReadContainerRedirects(modRoot);
+            // An unreadable read is "unknown", never "no redirects": judging copies missing from it would orphan them.
+            if (PenumbraModMeta.TryReadContainerRedirects(modRoot) is not { } reds) return none;
             var groups = GroupNamesOf(modRoot);
             var claimed = new HashSet<int>();
 
@@ -559,7 +560,12 @@ internal static class VariantRepointWriter
                     "The manifest of {0} could not be read, so it was not changed."), Path.GetFileName(modRoot));
                 return Undone.Failed;
             }
-            var reds = PenumbraModMeta.ReadContainerRedirects(modRoot);
+            if (PenumbraModMeta.TryReadContainerRedirects(modRoot) is not { } reds)
+            {
+                message = string.Format(ProteusLoc.Localize("Service.ModMeta.Unreadable.Fmt",
+                    "The manifest of {0} could not be read, so it was not changed."), Path.GetFileName(modRoot));
+                return Undone.Failed;
+            }
             var groups = GroupNamesOf(modRoot);
             var claimed = new HashSet<int>();
             var copies = new List<PenumbraModMeta.ContainerRedirect>();
@@ -583,8 +589,13 @@ internal static class VariantRepointWriter
                 return Undone.Failed;
             }
             removed = copies.Count + legacy.Count;
-            kept = e.Redirects.Count + e.Variants.Count - removed;
-            r.Items.Remove(e);
+            // Copies someone repointed since (released, by this walk's reconcile or an earlier one) are theirs: kept.
+            kept = e.Redirects.Count + e.Variants.Count - removed + e.Released.Count;
+            // Released keys stay recorded, so their redirect never reads as a folder the author ships (several-variants).
+            e.Redirects.Clear();
+            e.Variants.Clear();
+            e.Pending = false;
+            if (e.Released.Count == 0) r.Items.Remove(e);
             if (decline && !r.Declined.Contains(item.Key, StringComparer.OrdinalIgnoreCase)) r.Declined.Add(item.Key);
             r.Fingerprint = VariantRepointPlan.Fingerprint(modRoot, r.AllCopies());
             WriteRecord(modRoot, r);

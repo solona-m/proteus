@@ -153,6 +153,11 @@ The harness never deletes or overwrites a backup; the user may delete them by ha
   `{"enabled":false,"undoWorn":true,"decline":false}`, check the manifest is as before (every container's `Files`,
   `DefaultData.Manipulations`) and no `Proteus/variantrepoint.json` remains, then switch it back on (`{"enabled":true}`, the user's default) unless the user
   had it off.
+  **Case A (a game-served variant, e.g. Satin - Sleepwear's e0050 Body, which ships only `v0003`, worn as the
+  Coliseum Shawl, variant 1):** take the "before" reading as above (`loadedFolder` `v0001`, the game's material on
+  the mod's model), then switch it on and check `repointed` lists folder 1, each container holding
+  `.../v0003/mt_c0201e0050_top_a.mtrl` gained `.../v0001/...` -> the same file appended after its keys, no Imc
+  manipulation was added, and the v0001 material now resolves into the mod.
   **Case B (custom-named material shipped only under `v0001`, e.g. Elegy - Clara Lingerie's e0051 `_top_b`, worn as the
   Striped Summer Top, variant 2):** take the "before" reading as above — wear the piece and record `loadedFolder` and a
   screenshot with the feature off and nothing repointed. If `loadedFolder` is already `v0001` (the game fell back for
