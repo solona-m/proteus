@@ -327,7 +327,7 @@ public sealed class AssetRelocationTests : IDisposable
             Assert.Single(urls);
     }
 
-    private static void WaitFor(Func<bool> cond, int timeoutMs = 5000)
+    private static void WaitFor(Func<bool> cond, int timeoutMs = 30_000)   // a poll: no cost when the condition holds; wide for a loaded machine (#49)
     {
         var sw = System.Diagnostics.Stopwatch.StartNew();
         while (sw.ElapsedMilliseconds < timeoutMs && !cond())

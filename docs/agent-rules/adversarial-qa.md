@@ -52,7 +52,9 @@ Browsers are refused (any `Origin` header gets 403); so is a `Host` other than
 
 Errors are always `{"error":{"code","message"}}`. A `503 framework-timeout` means the
 game's framework did not run the request within 10 s (a loading screen): wait and
-retry — abandoned work never runs later.
+retry — abandoned work never runs later. A `503 too-many-connections` means more than
+four requests were open at once: retry when one finishes; it is never a busy run
+(`409 busy`). A body that repeats a field is refused: `400 bad-json`.
 
 | Route | What it does |
 |---|---|

@@ -8,6 +8,7 @@ using Xunit;
 
 namespace Proteus.Tests.TestHarness;
 
+[Collection(HarnessTimingCollection.Name)]
 public class HarnessRouterTests : IDisposable
 {
     private readonly HarnessFixture f = new();
@@ -243,5 +244,24 @@ public class HarnessRouterTests : IDisposable
         var (getStatus, _) = await f.Get("/actions/shader-upgrade");
         Assert.Equal(405, getStatus);
         Assert.Contains(f.Game.Order, o => o == "StartShaderUpgradeRun@framework");
+    }
+
+    [Fact]
+    [Trait("Plan", "AC-issue-sweep-a-3")]
+    [Trait("Plan", "EDGE-issue-sweep-a-10")]
+    public async Task Duplicate_keys_are_refused_and_change_nothing()
+    {
+        f.AddMod();
+        Assert.False(f.Game.ShaderUpgradeEnabled);
+        Assert.Equal((400, "bad-json"), await Error("/actions/shader-upgrade", """{"enabled":true,"enabled":false}"""));
+        Assert.Equal((400, "bad-json"), await Error("/actions/shader-upgrade", """{"enabled":false,"enabled":true}"""));
+        Assert.False(f.Game.ShaderUpgradeEnabled);
+        Assert.DoesNotContain(f.Game.Order, o => o.StartsWith("SetShaderUpgrade"));
+        Assert.Equal((400, "bad-json"), await Error("/actions/refit", """{"mod":"Outfit","bodies":["rue"],"mod":"Other"}"""));
+        Assert.Equal((400, "bad-json"), await Error("/actions/restore", """{"mod":"Outfit","x":{"a":1,"a":2}}"""));
+        // A well-formed body still goes through.
+        var (status, _) = await f.Post("/actions/shader-upgrade", """{"enabled":true}""");
+        Assert.Equal(200, status);
+        Assert.True(f.Game.ShaderUpgradeEnabled);
     }
 }

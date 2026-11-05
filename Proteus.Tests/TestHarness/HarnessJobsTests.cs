@@ -11,6 +11,7 @@ using Xunit;
 namespace Proteus.Tests.TestHarness;
 
 /// <summary>The refit and restore jobs, driven through the real server.</summary>
+[Collection(HarnessTimingCollection.Name)]
 public class HarnessJobsTests : IDisposable
 {
     private HarnessFixture f = new();

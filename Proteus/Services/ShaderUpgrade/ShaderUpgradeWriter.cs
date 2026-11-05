@@ -19,7 +19,9 @@ namespace Proteus.Services;
 /// options (or default data) that already ship the material — no group is ever added, moved or reordered;</item>
 /// <item>v3 folders and Proteus sidecar packs are never written;</item>
 /// <item>undo restores only a file still as Proteus left it: an author's update is kept, never overwritten by an old
-/// backup, whether met by undo or by the next upgrade.</item>
+/// backup, whether met by undo or by the next upgrade. Where that update can't be told from an edit of our output (an
+/// index/mask upgrade names no mask of ours), undo archives the original in
+/// <c>Proteus/shaderupgrade-backup-superseded/</c> instead of deleting it; a file it can't read is left alone.</item>
 /// </list>
 /// Writes run under <see cref="ModManifestLock.Gate"/> then <see cref="MeshVolumeService.WriteLock"/> (the brush never
 /// takes the Gate, so the two cannot deadlock).
@@ -28,6 +30,9 @@ internal static class ShaderUpgradeWriter
 {
     public const string RecordFile = "shaderupgrade.json";
     public const string BackupSubdir = "shaderupgrade-backup";
+
+    /// <summary>Where undo archives an original it can no longer restore (see <see cref="RetireBackup"/>).</summary>
+    public const string SupersededSubdir = "shaderupgrade-backup-superseded";
 
     /// <summary>Bumped when what an upgrade writes changes for the same input.</summary>
     public const int Version = 1;
@@ -296,12 +301,20 @@ internal static class ShaderUpgradeWriter
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or InvalidOperationException
                                          or ArgumentException or JsonException or WriteRefused)
         {
-            // The material write is atomic, so the file is as it was; take out what this unit added.
+            // The material write is atomic, so the file is as it was, or (a failure after it) our output; take out what
+            // this unit added only when the file is readable and NOT our output. A file that can't be read (locked,
+            // missing) is an unknown state: the entry and its backup are kept, and the next walk looks again. An
+            // already-upgraded file is never planned again, so its entry may stay Pending — harmless: undo works from
+            // the hashes.
             var r2 = ReadRecord(modRoot) ?? record;
-            if (EntryOf(r2, w.Rel) is { } e && Sha8(SafeRead(path) ?? []) != e.UpgradedSha8)
+            if (EntryOf(r2, w.Rel) is { } e)
             {
-                Forget(modRoot, r2, e, keep: null, strictBackup: false);
-                TryWriteRecord(modRoot, r2);
+                if (SafeRead(path) is not { } now) rewalk = true;
+                else if (Sha8(now) != e.UpgradedSha8)
+                {
+                    Forget(modRoot, r2, e, keep: null, strictBackup: false);
+                    TryWriteRecord(modRoot, r2);
+                }
             }
             left.Add((w.Rel, LeftReason.WriteFailed));
             // A mask the plan meant to reuse was gone: the next walk derives it again.
@@ -408,7 +421,9 @@ internal static class ShaderUpgradeWriter
     /// declined when <paramref name="decline"/> is set).
     /// The backup is restored only over a file still as Proteus left it; an author's update is kept. Either way our
     /// mask redirects (only while they still name our mask) and unnamed masks go, the entry is dropped, and the file
-    /// is declined when <paramref name="decline"/> is set.
+    /// is declined when <paramref name="decline"/> is set. A kept file whose entry has no mask (so an edit can't be
+    /// told from the author's update) has its original archived, not deleted; <paramref name="message"/> then names
+    /// the archive. A file that exists but can't be read fails the undo and forgets nothing.
     /// </summary>
     public static Undone RevertOrForget(string modRoot, string rel, bool decline, out string message)
     {
@@ -435,6 +450,14 @@ internal static class ShaderUpgradeWriter
 
             var path = FileOf(modRoot, rel);
             var current = SafeRead(path);
+            if (current is null or { Length: 0 } && File.Exists(path))
+            {
+                // There but unreadable (in use), or empty (a save still being written): its hash says nothing, and an
+                // unknown file must not be taken for the author's update (that would drop the only original). Nothing
+                // is forgotten; the next undo tries again.
+                message = $"{rel} could not be read (in use?); undo left it as it is — try again";
+                return Undone.Failed;
+            }
             if (EditedAfterUpgrade(current, entry))
             {
                 // Declined all the same: the original copied back by hand (as the message says) is not upgraded again.
@@ -459,7 +482,13 @@ internal static class ShaderUpgradeWriter
                 }
                 else result = sha == entry.SourceSha8 ? Undone.Nothing : Undone.Forgotten;
 
-                Forget(modRoot, record, entry);
+                // With no mask of ours, an edit after the upgrade can't be told from the author's update
+                // (EditedAfterUpgrade needs the mask): the file is kept and the entry forgotten all the same, but the
+                // author's original is archived, never deleted.
+                var retire = result == Undone.Forgotten && entry.Mask is null;
+                var archived = Forget(modRoot, record, entry, retire: retire);
+                if (archived != null)
+                    message = $"kept the author's original of {rel} in {SidecarDiscoveryService.SidecarSubdir}/{SupersededSubdir}/{archived}";
                 if (decline && !record.Declined.Contains(rel, StringComparer.OrdinalIgnoreCase)) record.Declined.Add(rel);
                 WriteRecord(modRoot, record);
                 CleanFolders(modRoot, record);
@@ -479,11 +508,16 @@ internal static class ShaderUpgradeWriter
     /// file if nothing names it any more (nor <paramref name="keep"/>). The caller writes the record.
     /// </summary>
     /// <param name="strictBackup">Throw when the backup cannot be deleted (a stale original must never survive).</param>
-    internal static void Forget(string modRoot, Record record, FileEntry entry, ISet<string>? keep = null,
-                                bool strictBackup = false)
+    /// <param name="retire">Move the backup to <see cref="SupersededSubdir"/> instead of deleting it (see
+    /// <see cref="RetireBackup"/>).</param>
+    /// <returns>The archived file's path under <see cref="SupersededSubdir"/>, when one was archived.</returns>
+    internal static string? Forget(string modRoot, Record record, FileEntry entry, ISet<string>? keep = null,
+                                   bool strictBackup = false, bool retire = false)
     {
         var backup = BackupPath(modRoot, entry.Rel);
-        if (strictBackup) { if (File.Exists(backup)) File.Delete(backup); }
+        string? archived = null;
+        if (retire) archived = RetireBackup(modRoot, entry.Rel);
+        else if (strictBackup) { if (File.Exists(backup)) File.Delete(backup); }
         else TryDelete(backup);
         record.Files.Remove(entry);
         if (entry.Mask is { } m)
@@ -491,6 +525,35 @@ internal static class ShaderUpgradeWriter
             RemoveMaskRedirects(modRoot, m);
             DeleteUnnamedMask(modRoot, m.Rel, record, keep);
         }
+        return archived;
+    }
+
+    /// <summary>
+    /// Move a backup out of the restore path into <c>Proteus/shaderupgrade-backup-superseded/&lt;rel&gt;</c> (a
+    /// timestamped name when that one is taken). Nothing reads it back: it is the author's original kept for the user,
+    /// outside every feature's backup folder (<see cref="ModelBackupOrder"/> lists those by name). A missing backup is
+    /// already retired (an earlier attempt moved it, then its record write failed): no-op, null. A failed move of an
+    /// existing backup throws, so the caller forgets nothing.
+    /// </summary>
+    internal static string? RetireBackup(string modRoot, string rel)
+    {
+        var backup = BackupPath(modRoot, rel);
+        if (!File.Exists(backup)) return null;
+        var native = Native(MeshVolumeService.Rel(rel));
+        var root = Path.Combine(ProteusDir(modRoot), SupersededSubdir);
+        var target = Path.Combine(root, native);
+        if (File.Exists(target) || Directory.Exists(target))
+        {
+            var stamped = Path.Combine(Path.GetDirectoryName(native) ?? "",
+                Path.GetFileNameWithoutExtension(native) + "." + DateTime.UtcNow.ToString("yyyyMMdd-HHmmss",
+                    System.Globalization.CultureInfo.InvariantCulture) + Path.GetExtension(native));
+            target = Path.Combine(root, stamped);
+            for (int n = 2; File.Exists(target) || Directory.Exists(target); n++)
+                target = Path.Combine(root, Path.ChangeExtension(stamped, null) + "-" + n + Path.GetExtension(native));
+        }
+        Directory.CreateDirectory(Path.GetDirectoryName(target)!);
+        File.Move(backup, target, overwrite: false);
+        return Path.GetRelativePath(root, target).Replace(Path.DirectorySeparatorChar, '/');
     }
 
     private static void RemoveMaskRedirects(string modRoot, MaskEntry m)
