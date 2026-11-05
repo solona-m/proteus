@@ -15,9 +15,12 @@ listens on IPv4 loopback only, and needs a per-session token.
    `dotnet test Proteus.Tests/Proteus.Tests.csproj -c Release --filter "FullyQualifiedName~HarnessBuildFlagTests"`.
    `compiled OUT` locally means the shell has `CI=true` (or `GITHUB_ACTIONS=true`)
    set — a Blocker; report it.
-3. **Ask the user to type `/proteus harness on`** in game chat. Only the user can
-   turn it on: a `harness` line in the dev-command file is refused. It then stays
-   on across plugin reloads until `/proteus harness off`.
+3. The harness is **always on** on the owner's machine (`/proteus harness on`
+   stays on across plugin reloads), so don't ask for it — read the session file.
+   Only the user can turn it on (a `harness` line in the dev-command file is
+   refused), so if it is off, that is a Blocker to report.
+   Another session may be running in-game QA at the same time: never overwrite the
+   dev-loaded DLL except to load the build you are about to test (AGENTS.md Rule 5).
 4. **Not listening is a Blocker**, never a reason to work around it: no session
    file, a refused connection, or `/health` failing → stop and report.
 
