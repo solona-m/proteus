@@ -229,8 +229,11 @@ internal static class VariantRepointWriter
     private static List<JsonElement>? DefaultManipulations(string modRoot)
         => PenumbraModMeta.TryReadDefaultData(modRoot) is { } dd ? dd.Manipulations.OfType<JsonElement>().ToList() : null;
 
-    /// <summary>The names of the mod's groups, so a search can tell a renamed option from a group that is gone.</summary>
-    private static HashSet<string> GroupNamesOf(string modRoot)
+    /// <summary>
+    /// The names of the mod's groups, so a search can tell a renamed option from a group that is gone. Null when the
+    /// manifest cannot be read: every group would look gone, and the search would widen to the whole mod.
+    /// </summary>
+    private static HashSet<string>? GroupNamesOf(string modRoot)
     {
         var names = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         try
@@ -241,7 +244,7 @@ internal static class VariantRepointWriter
                     if (g.ValueKind == JsonValueKind.Object && g.TryGetProperty("Name", out var n) && n.ValueKind == JsonValueKind.String)
                         names.Add(n.GetString()!);
         }
-        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or JsonException) { }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or JsonException) { return null; }
         return names;
     }
 
@@ -307,7 +310,7 @@ internal static class VariantRepointWriter
             var before = JsonSerializer.Serialize(r, RecordJson);
             // An unreadable read is "unknown", never "no redirects": judging copies missing from it would orphan them.
             if (PenumbraModMeta.TryReadContainerRedirects(modRoot) is not { } reds) return none;
-            var groups = GroupNamesOf(modRoot);
+            if (GroupNamesOf(modRoot) is not { } groups) return none;
             var claimed = new HashSet<int>();
 
             // Where each copy and released key is now. Released keys are found by content too (their file is theirs).
@@ -560,13 +563,12 @@ internal static class VariantRepointWriter
                     "The manifest of {0} could not be read, so it was not changed."), Path.GetFileName(modRoot));
                 return Undone.Failed;
             }
-            if (PenumbraModMeta.TryReadContainerRedirects(modRoot) is not { } reds)
+            if (PenumbraModMeta.TryReadContainerRedirects(modRoot) is not { } reds || GroupNamesOf(modRoot) is not { } groups)
             {
                 message = string.Format(ProteusLoc.Localize("Service.ModMeta.Unreadable.Fmt",
                     "The manifest of {0} could not be read, so it was not changed."), Path.GetFileName(modRoot));
                 return Undone.Failed;
             }
-            var groups = GroupNamesOf(modRoot);
             var claimed = new HashSet<int>();
             var copies = new List<PenumbraModMeta.ContainerRedirect>();
             foreach (var c in e.Redirects)

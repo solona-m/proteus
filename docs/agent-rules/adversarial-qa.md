@@ -151,7 +151,7 @@ The harness never deletes or overwrites a backup; the user may delete them by ha
   `variantRepoint.busy == false` and a redraw before you assert. **Clean up everything you caused:** copy the mod's
   `meta.json` and hash its other files first; afterwards, while wearing each repointed piece, POST
   `{"enabled":false,"undoWorn":true,"decline":false}`, check the manifest is as before (every container's `Files`,
-  `DefaultData.Manipulations`) and no `Proteus/variantrepoint.json` remains, then switch it back on (`{"enabled":true}`, the user's default) unless the user
+  `DefaultData.Manipulations`) and no `Proteus/variantrepoint.json` remains (unless a case repointed a copy by hand: undo keeps such released keys recorded), then switch it back on (`{"enabled":true}`, the user's default) unless the user
   had it off.
   **Case A (a game-served variant, e.g. Satin - Sleepwear's e0050 Body, which ships only `v0003`, worn as the
   Coliseum Shawl, variant 1):** take the "before" reading as above (`loadedFolder` `v0001`, the game's material on
