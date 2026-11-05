@@ -639,6 +639,10 @@
     "message": "This mod's own \"Toe Cap\" option is selected in Penumbra, in a Masks group that allows only\none choice, so it can't be turned off here. Change it in Penumbra.",
     "description": "Tooltip of the greyed-out \"Cap the toes\" checkbox when the mod's own \"Toe Cap\" option is selected in a single-choice Masks group. \"Toe Cap\", \"Masks\" and \"Penumbra\" are names - keep them as written. Contains deliberate line breaks - keep the same number."
   },
+  "Colors.ToeCap.FlagOwn.Tip": {
+    "message": "Turn this on for stockings and socks: the toes are covered by one rounded toe box, the way\nreal hosiery fits, instead of following every toe.\nThis mod's own \"Toe Cap\" option is in a Masks group that allows only one choice, so this\ntick can't select it without dropping the other mask there. Ticking it uses Proteus's built-in\ncap instead (made for Bibo+, Neolithe, Rue and YAB), saved in the mod's Proteus settings: it\napplies in every collection and goes with the mod when you export it.\nFor the author's own cap, select \"Toe Cap\" in Penumbra.",
+    "description": "Tooltip of the \"Cap the toes\" checkbox on a mod whose own \"Toe Cap\" option sits, unselected, in a single-choice Masks group: the tick uses Proteus's built-in cap instead. \"Toe Cap\", \"Masks\" and \"Penumbra\" are names, and Bibo+, Neolithe, Rue and YAB body names - keep them as written. Contains deliberate line breaks - keep the same number."
+  },
   "Colors.ToeCap.SaveFailed": {
     "message": "Couldn't save this mod's Proteus settings, so the change was undone. The log (/xllog) has the reason.",
     "description": "Shown under the \"Cap the toes\" checkbox when the mod's Proteus settings could not be saved. Keep /xllog as written."
