@@ -166,7 +166,7 @@ public class RowHoverWiringTests
     public void Hover_never_writes_the_selected_row()
     {
         var body = DrawRows;
-        var writes = Regex.Matches(body, @"selectedRow\s*=[^=]").Select(m => body.Substring(m.Index, 60)).ToArray();
+        var writes = Regex.Matches(body, @"selectedRow\s*=[^=]").Select(m => body.Substring(m.Index, Math.Min(60, body.Length - m.Index))).ToArray();
         Assert.Equal(2, writes.Length);
         Assert.Contains(writes, w => w.StartsWith("selectedRow = RowPickerView.Land(", StringComparison.Ordinal));
         Assert.Contains(writes, w => w.StartsWith("selectedRow = row;", StringComparison.Ordinal));
@@ -250,6 +250,9 @@ public class RowHoverWiringTests
         var window = Method(Status, "private void DrawColorWindow(");
         Assert.Equal(2, Count(window, "ClearColorHighlights(); return;"));
         Assert.DoesNotContain("ColorTableEditor.Highlighter?.Clear(); return;", window);
+
+        // Closing the main window hides the Colors window (drawn from its PostDraw), so it clears them too.
+        Assert.Contains("ClearColorHighlights();", Method(Status, "public override void OnClose("));
 
         var clear = Method(Status, "private static void ClearColorHighlights(");
         Assert.Contains("ColorTableEditor.Highlighter?.Clear();", clear);
@@ -419,15 +422,17 @@ public class RowHoverWiringTests
     [Fact]
     [Trait("Plan", "AC-row-hover-highlight-3")]
     [Trait("Plan", "EDGE-row-hover-highlight-19")]
-    public void A_failed_pin_does_not_keep_the_previews_texture_after_the_hover()
+    public void A_failed_build_never_leaves_another_rows_texture_showing()
     {
-        // Apply leaves what's showing while a target's build isn't ready; a pin never retries, so a FAILED pinned diffuse
-        // is left out of what Apply sees and its slot is restored instead of keeping the last preview's gold.
+        // Apply leaves what's showing while a target's build isn't ready. A FAILED diffuse — of the pin (which never
+        // retries) or of the preview — is left out of what Apply sees, so its slot is restored instead of keeping another
+        // row's gold (the last preview's after a hover, or the previous hovered row's while this one fails).
         var effective = Method(Skin, "private Dictionary<string, Target> EffectiveTargets(");
-        int preview = effective.IndexOf("if (_preview is { } v) return v.ByPath;", StringComparison.Ordinal);
-        int failed = effective.IndexOf("if (!t.Failed) continue;", StringComparison.Ordinal);
-        int remove = effective.IndexOf("live.Remove(path);", StringComparison.Ordinal);
-        Assert.True(preview >= 0 && failed > preview && remove > failed);
+        int pick = effective.IndexOf("var st = _preview ?? _pinned;", StringComparison.Ordinal);
+        int count = effective.IndexOf("if (t.Failed) failed++;", StringComparison.Ordinal);
+        int remove = effective.IndexOf("if (t.Failed) live.Remove(path);", StringComparison.Ordinal);
+        Assert.True(pick >= 0 && count > pick && remove > count);
+        Assert.DoesNotContain("return v.ByPath", effective);
     }
 
     [Fact]

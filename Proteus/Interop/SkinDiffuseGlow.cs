@@ -194,20 +194,32 @@ public sealed unsafe class SkinDiffuseGlow : IDisposable
         t.Failed = true;
     }
 
-    // What Apply shows: the preview over the pin. A pinned diffuse whose build FAILED is left out (a pin never retries),
-    // so Apply restores that slot rather than "leaving what's showing" — which, after a hover, would be the preview's.
+    // What Apply shows: the preview over the pin. A diffuse whose build FAILED is left out, so Apply restores that slot
+    // rather than "leaving what's showing" — which would be another row's gold (the last preview's, or the previous
+    // hovered row's) presented as this one. The filtered copy is cached per (target, failure count): framework thread only.
+    private SkinTarget? _liveSource;
+    private int _liveFailed;
+    private Dictionary<string, Target>? _live;
+
     private Dictionary<string, Target> EffectiveTargets()
     {
-        if (_preview is { } v) return v.ByPath;
-        if (_pinned is not { } p) return NoTargets;
-        Dictionary<string, Target>? live = null;
-        foreach (var (path, t) in p.ByPath)
+        var st = _preview ?? _pinned;
+        if (st == null) return NoTargets;
+        int failed = 0;
+        foreach (var t in st.ByPath.Values)
+            if (t.Failed) failed++;
+        if (failed == 0) return st.ByPath;
+
+        if (!ReferenceEquals(_liveSource, st) || _liveFailed != failed || _live == null)
         {
-            if (!t.Failed) continue;
-            live ??= new Dictionary<string, Target>(p.ByPath);
-            live.Remove(path);
+            var live = new Dictionary<string, Target>(st.ByPath);
+            foreach (var (path, t) in st.ByPath)
+                if (t.Failed) live.Remove(path);
+            _liveSource = st;
+            _liveFailed = failed;
+            _live = live;
         }
-        return live ?? p.ByPath;
+        return _live;
     }
 
     /// <summary>Whether the PINNED target is this one — the Glow button's state, which a hover never changes.</summary>

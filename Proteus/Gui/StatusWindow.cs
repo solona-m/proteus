@@ -448,6 +448,9 @@ public class StatusWindow : Window
         FlushMetadataSaves();
         // The brush's autosave only runs while the Toggles tab draws, so flush it on close; the live preview comes down with it.
         parts.Leave();
+        // The Colors window is drawn from this window's PostDraw, so it vanishes with it: take its highlights down too,
+        // or a pinned Glow would stay on the character with no window to turn it off.
+        ClearColorHighlights();
     }
 
     /// <summary>
