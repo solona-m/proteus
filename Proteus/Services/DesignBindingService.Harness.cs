@@ -67,8 +67,10 @@ public partial class DesignBindingService
     /// <summary>Put the live state back as snapshotted: ids, the bag (fresh clones), and the holds its design implies.</summary>
     internal void HarnessRestoreLive(HarnessLiveSnapshot s)
     {
+        bool designChanged;
         lock (gate)
         {
+            designChanged     = activeDesignId != s.Active;
             activeDesignId    = s.Active;
             suspendedDesignId = s.Suspended;
         }
@@ -80,10 +82,14 @@ public partial class DesignBindingService
         else
             overrides.Clear();
 
-        ReleaseHeldMods();
-        DesignBinding? b = null;
-        if (s.Active is { } id) lock (gate) store.Bindings.TryGetValue(id, out b);
-        if (b != null && FeatureOn) Rehold(b, s.Active!.Value);
+        // The holds follow the design: an edit-only session left them as they were.
+        if (designChanged)
+        {
+            ReleaseHeldMods();
+            DesignBinding? b = null;
+            if (s.Active is { } id) lock (gate) store.Bindings.TryGetValue(id, out b);
+            if (b != null && FeatureOn) Rehold(b, s.Active!.Value);
+        }
         compositor.TriggerRecomposite("test harness: binding put back");
     }
 

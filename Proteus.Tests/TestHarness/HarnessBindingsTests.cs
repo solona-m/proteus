@@ -444,6 +444,46 @@ public class HarnessBindingsTests : IDisposable
     }
 
     [Fact]
+    [Trait("Plan", "EDGE-binding-reapply-50")]
+    public void Record_RefusedApplyInsideASession_NextApplyRewritesGlamourerBefore()
+    {
+        fx.Dispatcher.Run(() => B.WritePermanent(Coll, "Panties", false, null));   // session starts with a permanent write
+        Game.ApplyAnswer = "InvalidKey";
+        Assert.Equal("glamourer-refused", Begin(Design).Error!.Code);
+        Game.ApplyAnswer = null;
+        Game.GlamourerNow = FakeGame.GlamState(("Body", 333), ("Legs", 101));      // the look moves on
+        Apply(Design);
+        var rec = JObject.Parse(File.ReadAllText(RecordPath));
+        Assert.Equal(333UL, rec["glamourerBefore"]!["Equipment"]!["Body"]!["ItemId"]!.ToObject<ulong>());
+    }
+
+    [Fact]
+    [Trait("Plan", "AC-binding-reapply-12")]
+    public void FinishApply_IgnoresTheManagedOutputMod()
+    {
+        Game.Permanent[Game.ManagedModDir] = new PermanentSetting(true, 10);
+        Game.ApplyEffects[Design] = () =>
+        {
+            Game.GlamourerNow = FakeGame.GlamState(("Body", 100), ("Legs", 555));
+            Game.Permanent[Game.ManagedModDir] = new PermanentSetting(true, 99);    // the compositor's raise
+        };
+        Apply(Design);
+        PutBack();
+        Assert.Equal(new PermanentSetting(true, 99), Game.Permanent[Game.ManagedModDir]);
+        Assert.DoesNotContain(Game.PermanentWrites, w => w.Mod == Game.ManagedModDir);
+    }
+
+    [Fact]
+    [Trait("Plan", "EDGE-binding-reapply-27")]
+    public void CollectionChangedMidSession_Refused()
+    {
+        Apply(Design);
+        Game.Collection = Guid.NewGuid();
+        Assert.Equal("collection-changed", Begin(Design).Error!.Code);
+        Assert.Equal("collection-changed", fx.Dispatcher.Run(() => B.WritePermanent(Game.Collection!.Value, "Panties", false, null)).Code);
+    }
+
+    [Fact]
     [Trait("Plan", "EDGE-binding-reapply-33")]
     public void Permanent_NonProteusMod_Refused()
     {

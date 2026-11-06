@@ -51,7 +51,7 @@ public class HarnessDocsTests
                      "skipped-inconsistent", "echoWindowOpen", "binding.json", "Design bindings",
                      // [EDGE-binding-reapply-37] what an IPC apply leaves out, and what no route drives
                      "IpcManual", "are not put back by the harness", "automation, zone changes and relogin", "binding-2.json",
-                     "back to inheriting",
+                     "back to inheriting", "collection-changed",
                  })
             Assert.True(doc.Contains(required, StringComparison.Ordinal), $"adversarial-qa.md must mention '{required}'");
         Assert.Contains("Never put names", doc);

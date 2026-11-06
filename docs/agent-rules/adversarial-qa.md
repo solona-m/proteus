@@ -211,7 +211,9 @@ the user, and so do automation, zone changes and relogin (no route drives them).
   when it had no setting of its own). Never copy the record's content into a report.
 - **Refusals.** A design apply is refused while a per-mod preset is pinned
   (`presets-pinned`: the apply would drop it for good), while harness equips are
-  recorded (`put-back-first`: put back, then apply, then equip), when the design
+  recorded (`put-back-first`: put back, then apply, then equip), when the character's
+  collection changed since the session began (`collection-changed`, also for
+  `permanent`: put back first), when the design
   would change race, gender, clan or body type (`model-change`), and while any
   automatic writer is switched on: auto refit, the gear shader upgrade, Gear
   variants, Fit hair automatically or Auto Hat Compat (`auto-writers-on`). Those

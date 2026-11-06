@@ -72,6 +72,8 @@ internal sealed class HarnessBindings(IHarnessGame game, Func<string, string> sc
             return (ChangeResult.Fail(409, "model-change", $"the design changes {field}: a model change is never applied by the harness"), null);
 
         var coll = game.PlayerCollection();
+        if (collection is { } recorded && coll != recorded)
+            return (ChangeResult.Fail(409, "collection-changed", "the character's collection changed since this session began; put back first"), null);
         var permBefore = coll is { } c ? game.PermanentSettings(c) : null;
         var carriers = game.CarriersNow();
         var live = game.LiveSnapshot();
@@ -82,8 +84,10 @@ internal sealed class HarnessBindings(IHarnessGame game, Func<string, string> sc
         var countBefore = game.DesignAppliedCount;
         if (game.ApplyDesign(design) is { } ec)
         {
-            // Nothing changed: a record written for this attempt alone must not stand for a later session's Before.
+            // Nothing changed: a record written for this attempt alone must not stand for a later session's Before,
+            // nor its Glamourer state for a later apply's (the next apply rewrites it).
             if (!HasSession && recordPath != null) { recordPath = null; recordHasGlamourer = false; recordIndex--; }
+            else if (glamourerBefore == null) recordHasGlamourer = false;
             return (ChangeResult.Fail(409, "glamourer-refused", $"Glamourer refused the apply: {ec}"), null);
         }
 
@@ -110,6 +114,8 @@ internal sealed class HarnessBindings(IHarnessGame game, Func<string, string> sc
         if (p.Collection is { } c && p.PermanentBefore is { } before && game.PermanentSettings(c) is { } after)
             foreach (var mod in before.Keys.Union(after.Keys, StringComparer.OrdinalIgnoreCase))
             {
+                // The compositor raises its own output mod's priority as it publishes: not the restore's, never put back.
+                if (string.Equals(mod, game.ManagedModDir, StringComparison.OrdinalIgnoreCase)) continue;
                 var was = before.GetValueOrDefault(mod) ?? PermanentSetting.Inherits;
                 var now = after.GetValueOrDefault(mod) ?? PermanentSetting.Inherits;
                 if (!was.Equals(now)) NotePermanent(mod, was, now);
@@ -146,6 +152,8 @@ internal sealed class HarnessBindings(IHarnessGame game, Func<string, string> sc
     {
         if (!game.ProteusDirs().Contains(modDir))
             return ChangeResult.Fail(409, "not-a-proteus-mod", $"{modDir} is not a Proteus mod; only Proteus mods take permanent settings");
+        if (collection is { } recorded && coll != recorded)
+            return ChangeResult.Fail(409, "collection-changed", "the character's collection changed since this session began; put back first");
         if (game.PermanentSettings(coll) is not { } all)
             return ChangeResult.Fail(503, "penumbra-unavailable", "Penumbra could not read the mod's permanent settings");
         var cur = all.GetValueOrDefault(modDir) ?? PermanentSetting.Inherits;
