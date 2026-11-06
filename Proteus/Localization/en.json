@@ -587,6 +587,14 @@
     "message": "Turn this on for cloth over the chest.\nProteus builds a garment as a copy of the body, so by default it follows the body into\nthe cleavage — which is what makes it read as paint rather than fabric. Real cloth spans\nthe gap: a straight line between the furthest-forward point of each breast.\nWith this on, the fabric between the breasts is relaxed out to that line. Nothing is ever\npulled inward, so it cannot cut into the body, and the breasts themselves keep their shape.\nWhere a neckline has cut the cloth away between the cups there is nothing to span, and\nthis does nothing.",
     "description": "Tooltip for the checkbox above. Contains deliberate line breaks - keep the same number, moving them where your language needs."
   },
+  "Colors.ShowAllRows.Check": {
+    "message": "Show all rows",
+    "description": "Checkbox caption beside Copy row / Paste row in the colour-table editor window. Shows the row buttons the index texture hides."
+  },
+  "Colors.ShowAllRows.Tip": {
+    "message": "Also show the rows this index texture selects rarely or never.\nEditing them changes little or nothing you can see.",
+    "description": "Tooltip for the checkbox above. Contains a deliberate line break - keep the same number, moving it where your language needs."
+  },
   "Colors.SmoothFold.Label": {
     "message": "Smooth between the legs",
     "description": "Checkbox in the colour-table editor's Advanced section."

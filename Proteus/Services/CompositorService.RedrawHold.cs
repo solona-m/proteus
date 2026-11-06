@@ -46,6 +46,10 @@ public partial class CompositorService
     // Debounced composites not yet finished: a pending one will pay off an owed redraw with its publish.
     private int _recompositesPending;
 
+    /// <summary>A composite is pending or running, so the composited files may be about to change. Lock-free; any thread.</summary>
+    internal bool CompositeBusy
+        => Volatile.Read(ref _recompositesPending) > 0 || Volatile.Read(ref _compositesInFlight) > 0;
+
     private long _lastHoldReleaseTick;
     private long _batchSummaryDue;
 

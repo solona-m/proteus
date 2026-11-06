@@ -99,8 +99,8 @@ public class StatusWindow : Window
     // The width the window took on for the part drawer, to give back when it closes and to leave out of the saved size.
     private readonly DrawerResize _drawerResize = new();
 
-    // Absolute index-texture path → rows that appear in it; cleared on each popup open.
-    private readonly Dictionary<string, ContentIndexTexture.Scan> _indexRowCache = new();
+    // Absolute index-texture path → rows that appear in it; rescanned when the file changes, cleared on each popup open.
+    private readonly StampedScanCache _indexRowCache = new();
     /// <summary>Mod whose colour editor window is open, or null. A window rather than a popup, so it survives clicks into the game.</summary>
     private string? _colorWindowMod;
 
@@ -690,11 +690,11 @@ public class StatusWindow : Window
     private void DrawColorWindow()
     {
         // No colour editor open means no highlight glow.
-        if (_colorWindowMod == null) { ColorTableEditor.Highlighter?.Clear(); return; }
+        if (_colorWindowMod == null) { ClearColorHighlights(); return; }
 
         compositor.RefreshDisplayNames();   // the editor's title names the mod
         var entry = compositor.LastDiscovered.FirstOrDefault(e => e.ModDirectory == _colorWindowMod);
-        if (entry == null) { _colorWindowMod = null; ColorTableEditor.Highlighter?.Clear(); return; }
+        if (entry == null) { _colorWindowMod = null; ClearColorHighlights(); return; }
 
         bool open = true;
         // Scaled by hand: a bare ImGui.Begin never gets Dalamud's UI scale. Wide enough for the 16 row buttons 8-across.
@@ -704,8 +704,19 @@ public class StatusWindow : Window
         if (ImGui.Begin(string.Format(Strings.Colors.WindowTitleFmt, entry.ModName) + "###ProteusColors", ref open))
             DrawColorEditor(entry);
         ImGui.End();
+        // Outside Begin: a collapsed window still commits "nothing hovered", so a highlight can't stay on.
+        ColorTableEditor.CommitRowHover(RowHighlightClock.NowMs(), config.PluginEnabled, compositor.CompositeBusy);
 
         if (!open) _colorWindowMod = null;
+    }
+
+    /// <summary>Every colour highlight off: the gear Glow, the skin Glow, and any row hover.</summary>
+    private static void ClearColorHighlights()
+    {
+        ColorTableEditor.Highlighter?.Clear();
+        ColorTableEditor.ResetRowHover();
+        // Guarded: this runs every frame while the window is closed.
+        if (ColorTableEditor.SkinGlow?.IsActive == true) ColorTableEditor.SkinGlow.Clear();
     }
 
     private const string DiscordUrl = "https://discord.gg/solona";
@@ -1590,8 +1601,7 @@ public class StatusWindow : Window
         // Clear per-entry index cache on popup open so option switches are reflected.
         if (ImGui.IsWindowAppearing())
         {
-            foreach (var k in _indexRowCache.Keys.Where(k => k.StartsWith(entry.SidecarRoot)).ToList())
-                _indexRowCache.Remove(k);
+            _indexRowCache.RemoveWhere(k => k.StartsWith(entry.SidecarRoot));
             // Content scans are keyed by mod directory; sweep them too so files changed under an unchanged selection are re-read.
             foreach (var k in _contentIndexCache.Keys
                          .Where(k => k.StartsWith(entry.ModDirectory + "|", StringComparison.OrdinalIgnoreCase))
@@ -1644,31 +1654,12 @@ public class StatusWindow : Window
         var ovrRows  = overrideActive ? editRouter.PeekOverrideRows(entry.ModDirectory, null, null) : null;
         var rows = overrideActive ? DesignBindingService.CopyRows(ovrRows ?? metaRows) : metaRows;
 
-        var usedRowsSimple = new HashSet<int>();
-        var columnsSimple  = new List<string?>();
-        bool hasIdxSimple  = false;
-        foreach (var ov in entry.Metadata.Overlays ?? [])
-        {
-            if (ov.Index == null) continue;
-            var idxPath = Path.Combine(entry.SidecarRoot, ov.Index);
-            if (!_indexRowCache.ContainsKey(idxPath))
-                _indexRowCache[idxPath] = ScanIndexFile(idxPath, bodyType);
-            usedRowsSimple.UnionWith(_indexRowCache[idxPath].Rows);
-            columnsSimple.Add(_indexRowCache[idxPath].SubRow);
-            hasIdxSimple = true;
-        }
-        // Active "Masks" options can add rows via their own Index companion.
-        foreach (var asset in discovery.ResolveActiveMaskAssets(entry))
-        {
-            if (asset.IndexPath == null) continue;
-            if (!_indexRowCache.ContainsKey(asset.IndexPath))
-                _indexRowCache[asset.IndexPath] = ScanIndexFile(asset.IndexPath, bodyType);
-            usedRowsSimple.UnionWith(_indexRowCache[asset.IndexPath].Rows);
-            columnsSimple.Add(_indexRowCache[asset.IndexPath].SubRow);
-            hasIdxSimple = true;
-        }
-        var (filteredSimple, columnSimple) =
-            OverlayRowFilter(hasIdxSimple, usedRowsSimple, AgreedColumn(columnsSimple));
+        // Every overlay counts (one without an index samples row 16); active "Masks" options add their own Index.
+        var overlayReadsSimple = (entry.Metadata.Overlays ?? []).Select(o => ReadIndex(entry, o.Index, bodyType)).ToList();
+        var maskReadsSimple = discovery.ResolveActiveMaskAssets(entry).Where(a => a.IndexPath != null)
+            .Select(a => ReadIndexFile(a.IndexPath!, bodyType)).ToList();
+        bool hasIdxSimple = overlayReadsSimple.Any(r => r.HasIndex) || maskReadsSimple.Count > 0;
+        var (filteredSimple, columnSimple) = OverlayRowUse.Of(overlayReadsSimple, maskReadsSimple);
         if (!hasIdxSimple)
             ProteusStyle.DisabledWrapped(Strings.ColorPanel.NoIndexTexture);
 
@@ -1995,37 +1986,24 @@ public class StatusWindow : Window
     private (HashSet<int>? Rows, string? Column) ScanOptionRows(OverlayEntry entry, OverlayOption activeOpt,
         List<(string MaskPath, string? NormalPath, string? IndexPath)> maskAssets, string? bodyType)
     {
-        var scannedRows = new HashSet<int>();
-        var scannedColumns = new List<string?>();
-        var idxDesc = activeOpt.Overlays.FirstOrDefault(o => o.Index != null);
-        if (idxDesc?.Index != null)
-        {
-            var idxPath = Path.Combine(entry.SidecarRoot, idxDesc.Index);
-            if (!_indexRowCache.ContainsKey(idxPath))
-                _indexRowCache[idxPath] = ScanIndexFile(idxPath, bodyType);
-            var scan = _indexRowCache[idxPath];
-            scannedRows.UnionWith(scan.Rows);
-            scannedColumns.Add(scan.SubRow);
-        }
+        // Every overlay counts (one without an index samples row 16), and active "Masks" options add their own Index.
+        var overlayReads = activeOpt.Overlays.Select(o => ReadIndex(entry, o.Index, bodyType)).ToList();
+        var maskReads = maskAssets.Where(a => a.IndexPath != null)
+            .Select(a => ReadIndexFile(a.IndexPath!, bodyType)).ToList();
 
-        // Active "Masks" options can add rows via their own Index companion, so union those in.
-        foreach (var asset in maskAssets)
-        {
-            if (asset.IndexPath == null) continue;
-            if (!_indexRowCache.ContainsKey(asset.IndexPath))
-                _indexRowCache[asset.IndexPath] = ScanIndexFile(asset.IndexPath, bodyType);
-            var maskScan = _indexRowCache[asset.IndexPath];
-            scannedRows.UnionWith(maskScan.Rows);
-            scannedColumns.Add(maskScan.SubRow);
-        }
-
-        bool hasAnyIndex = idxDesc?.Index != null || maskAssets.Any(a => a.IndexPath != null);
-        var (usedRows, usedColumn) =
-            OverlayRowFilter(hasAnyIndex, scannedRows, AgreedColumn(scannedColumns));
+        bool hasAnyIndex = overlayReads.Any(r => r.HasIndex) || maskReads.Count > 0;
         if (!hasAnyIndex)
             ImGui.TextDisabled(Strings.ColorPanel.NoIndexTexture);
-        return (usedRows, usedColumn);
+        return OverlayRowUse.Of(overlayReads, maskReads);
     }
+
+    /// <summary>An overlay's index, relative to the mod's sidecar root, or <see cref="IndexRead.NoIndex"/>.</summary>
+    private IndexRead ReadIndex(OverlayEntry entry, string? relIndex, string? bodyType)
+        => relIndex == null ? IndexRead.NoIndex : ReadIndexFile(Path.Combine(entry.SidecarRoot, relIndex), bodyType);
+
+    /// <summary>Scans an index file, cached until the file changes on disk.</summary>
+    private IndexRead ReadIndexFile(string path, string? bodyType)
+        => new(true, _indexRowCache.Get(path, FileStamp.Of(path), () => ScanIndexFile(path, bodyType)));
 
     private void DrawMasksTab(OverlayEntry entry, List<(string GroupName, OverlayOption Option)> activeOptions, bool overrideActive,
         List<(string Name, string Path, bool FromMod)> effects, HashSet<int>? usedRows, string? usedColumn)
@@ -2601,8 +2579,7 @@ public class StatusWindow : Window
         editRouter.ClearOptionOverride(entry.ModDirectory, groupName, option?.Name);
 
         // Descriptor Index paths may differ from the edited ones, so the cached row scans are stale.
-        foreach (var k in _indexRowCache.Keys.Where(k => k.StartsWith(entry.SidecarRoot)).ToList())
-            _indexRowCache.Remove(k);
+        _indexRowCache.RemoveWhere(k => k.StartsWith(entry.SidecarRoot));
 
         Plugin.Log.Information("[Proteus] reset {0}{1} to recorded defaults",
             entry.ModDirectory, groupName == null ? "" : $" [{groupName}/{option!.Name}]");
@@ -2652,37 +2629,9 @@ public class StatusWindow : Window
         return has ? null : Strings.Colors.ResetBlockedTip;
     }
 
-    /// <summary>
-    /// The colour-table cell an overlay's art can reach: rows to leave live and the column, or nulls for unknown.
-    /// With no index texture a shell samples the fabricated index, row pair <see cref="GlowShell.Row"/> sub-row A.
-    /// </summary>
-    /// <param name="hasAnyIndex">Whether any overlay or active mask names an index at all.</param>
-    /// <param name="scanned">The union of every scan's rows; empty means the files were read and selected nothing.</param>
-    private static (HashSet<int>? Rows, string? Column) OverlayRowFilter(
-        bool hasAnyIndex, HashSet<int> scanned, string? column)
-        => !hasAnyIndex ? ([GlowShell.Row], ShellDefaultColumn)
-         : scanned.Count > 0 ? (scanned, column)
-         : (null, null);
-
-    /// <summary>The sub-row a shell with no <c>_id</c> lands in: the fabricated index's green is 255, which
-    /// is column A. Spelled the way <see cref="ContentIndexTexture.Scan.SubRow"/> spells it.</summary>
-    private const string ShellDefaultColumn = "A";
-
-    /// <summary>The one column every scan agrees on, or null if any scan has none or they disagree.</summary>
-    private static string? AgreedColumn(IEnumerable<string?> columns)
-    {
-        string? one = null;
-        foreach (var c in columns)
-        {
-            if (c == null) return null;
-            if (one == null) one = c;
-            else if (!string.Equals(one, c, StringComparison.Ordinal)) return null;
-        }
-        return one;
-    }
-
-    /// <summary>Which colour-table rows and column an overlay's own <c>_id</c> art selects; the rules live in <see cref="ContentIndexTexture.ReadOverlay"/>.</summary>
-    private ContentIndexTexture.Scan ScanIndexFile(string absolutePath, string? bodyType)
+    /// <summary>Which colour-table rows and column an overlay's own <c>_id</c> art selects; the rules live in
+    /// <see cref="ContentIndexTexture.ReadOverlay"/>. Null when the file can't be read.</summary>
+    private ContentIndexTexture.Scan? ScanIndexFile(string absolutePath, string? bodyType)
     {
         try
         {
@@ -2699,8 +2648,8 @@ public class StatusWindow : Window
         }
         catch
         {
-            // Unreadable is unknown: an empty scan becomes a null filter.
-            return new([], null);
+            // Unreadable is unknown (OverlayRowUse hides and dims nothing for it).
+            return null;
         }
     }
 }

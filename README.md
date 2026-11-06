@@ -398,9 +398,9 @@ Below the rows, an overlay's tab may show:
 
 #### Rows
 
-The editor shows up to 16 color table rows. Rows map to regions defined by the mod's index texture (if it has one). Row 16 is the fallback color used when there is no index texture. Rows the index texture never selects are dimmed.
+The editor shows up to 16 color table rows. Rows map to regions defined by the mod's index texture (if it has one). Row 16 is the fallback color used when there is no index texture. Rows the index textures select rarely or never are hidden; tick **Show all rows** to bring them back, dimmed.
 
-Press **Glow** on any sub-row to light that region up on your character, so you can find which row controls what.
+Press **Glow** on any sub-row to light that region up on your character, so you can find which row controls what. Or point at a row's button (#01–#16): both its sub-rows light up on your character while the pointer stays on it.
 
 Each row has two sub-rows:
 - **A** — applies where the index texture's green channel is 255.

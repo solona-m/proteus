@@ -645,6 +645,18 @@ public class TextureLoader
         catch { return null; }
     }
 
+    /// <summary>
+    /// An on-disk .tex as RGBA8 through the decode cache (keyed on path, write time and length), so repeated reads of
+    /// an unchanged file decode once. The array is SHARED with the cache: read it, never write it. Null on failure.
+    /// </summary>
+    public (byte[] Rgba, int Width, int Height)? LoadTexShared(string diskPath)
+    {
+        var key = DiskKey("TEXS", diskPath);
+        if (key == null) return null;
+        var e = GetOrDecode(key, () => LoadTexAsRgba(diskPath));
+        return e == null ? null : (e.Rgba, e.Width, e.Height);
+    }
+
     /// <summary>Load an on-disk .tex file as RGBA8. Returns null on failure.</summary>
     public (byte[] rgba, int width, int height)? LoadTexAsRgba(string diskPath)
     {

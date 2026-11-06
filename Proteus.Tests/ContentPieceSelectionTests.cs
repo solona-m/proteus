@@ -859,8 +859,8 @@ public class ContentPieceSelectionTests
             Sheet((0, 255, 128), (255, 255, 128)), 16, 16, island, 16, 16);
         Assert.Equal([1], masked.Rows.ToArray());
 
-        // Nothing readable at all stays UNKNOWN rather than becoming a claim — OverlayRowFilter turns an
-        // empty scan into a null filter, which dims nothing.
+        // Nothing readable at all stays UNKNOWN rather than becoming a claim — OverlayRowUse turns an
+        // empty scan into an unknown (null) filter, which hides and dims nothing.
         Assert.Empty(ContentIndexTexture.ReadOverlay([], 16, 16).Rows);
         Assert.Empty(ContentIndexTexture.ReadOverlay(Sheet((0, 255, 256)), 0, 0).Rows);
     }

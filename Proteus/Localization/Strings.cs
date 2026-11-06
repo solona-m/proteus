@@ -2063,6 +2063,11 @@ public sealed class ColorsStrings
     public readonly string PasteRowTipFmt = ProteusLoc.Localize("Colors.PasteRow.Tip.Fmt",
         "Overwrite row {0} (both sub-rows) with the copied row.");
 
+    /// <summary>Tick beside Copy/Paste row: shows the rows the index hides from the picker.</summary>
+    public readonly string ShowAllRows = ProteusLoc.Localize("Colors.ShowAllRows.Check", "Show all rows");
+    public readonly string ShowAllRowsTip = ProteusLoc.Localize("Colors.ShowAllRows.Tip",
+        "Also show the rows this index texture selects rarely or never.\nEditing them changes little or nothing you can see.");
+
     /// <summary>Column headers of the A/B panel. {0} is the row number; A and B are the two sub-rows.</summary>
     public readonly string SubRowAFmt = ProteusLoc.Localize("Colors.SubRowA.Fmt", "Row {0}A");
     public readonly string SubRowBFmt = ProteusLoc.Localize("Colors.SubRowB.Fmt", "Row {0}B");
