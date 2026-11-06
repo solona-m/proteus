@@ -153,6 +153,41 @@ public sealed class LocalizationTests
         }
     }
 
+    /// <summary>The row picker's "Show all rows" tick and its tooltip are translated, not copied, and the tooltip keeps
+    /// English's line break.</summary>
+    [Theory]
+    [MemberData(nameof(Translations))]
+    [Trait("Plan", "AC-row-hover-highlight-8")]
+    public void ShowAllRows_strings_are_translated_not_copied(string lang)
+    {
+        var en = Load(Source);
+        var tr = Load(lang);
+        foreach (string key in new[] { "Colors.ShowAllRows.Check", "Colors.ShowAllRows.Tip" })
+        {
+            Assert.True(tr.ContainsKey(key), $"[{lang}] has no {key}");
+            Assert.NotEqual(en[key].Message, tr[key].Message);
+            Assert.Equal(en[key].Message.Count(c => c == '\n'), tr[key].Message.Count(c => c == '\n'));
+        }
+    }
+
+    /// <summary>Every README's colour-row section names the "Show all rows" tick by its label in that language, and says
+    /// that pointing at a row button (#01–#16) lights it.</summary>
+    [Theory]
+    [MemberData(nameof(AllLocales))]
+    [Trait("Plan", "AC-row-hover-highlight-8")]
+    [Trait("Plan", "AC-row-hover-highlight-1")]
+    public void Readme_rows_section_names_Show_all_rows_and_hover(string lang)
+    {
+        var dir = new System.IO.DirectoryInfo(AppContext.BaseDirectory);
+        while (dir != null && !System.IO.File.Exists(System.IO.Path.Combine(dir.FullName, "proteus.slnx"))) dir = dir.Parent;
+        Assert.True(dir != null, $"Could not find proteus.slnx above {AppContext.BaseDirectory}.");
+        string readme = System.IO.File.ReadAllText(System.IO.Path.Combine(
+            dir!.FullName, lang == Source ? "README.md" : System.IO.Path.Combine("docs", $"README.{lang}.md")));
+
+        Assert.Contains("**" + Load(lang)["Colors.ShowAllRows.Check"].Message + "**", readme);
+        Assert.Contains(readme.Split('\n'), l => l.Contains("#01"));
+    }
+
     /// <summary>The README's gear-refits-itself bullet names accessories that cover the body, in each language — and the
     /// Settings intro says it too.</summary>
     [Theory]

@@ -392,9 +392,9 @@ Unter den Zeilen kann der Tab eines Overlays anzeigen:
 
 #### Zeilen
 
-Der Editor zeigt bis zu 16 Farbtabellen-Zeilen. Zeilen entsprechen Regionen, die die Index-Textur des Mods definiert (falls er eine hat). Zeile 16 ist die Ausweichfarbe, die genutzt wird, wenn es keine Index-Textur gibt. Zeilen, die die Index-Textur nie auswählt, werden gedimmt.
+Der Editor zeigt bis zu 16 Farbtabellen-Zeilen. Zeilen entsprechen Regionen, die die Index-Textur des Mods definiert (falls er eine hat). Zeile 16 ist die Ausweichfarbe, die genutzt wird, wenn es keine Index-Textur gibt. Zeilen, die die Index-Texturen selten oder nie auswählen, werden ausgeblendet; setze ein Häkchen bei **Alle Zeilen zeigen**, um sie gedimmt zurückzuholen.
 
-Drücke **Leuchten** in einer beliebigen Unterzeile, um diese Region auf deinem Charakter aufleuchten zu lassen, damit du siehst, welche Zeile was steuert.
+Drücke **Leuchten** in einer beliebigen Unterzeile, um diese Region auf deinem Charakter aufleuchten zu lassen, damit du siehst, welche Zeile was steuert. Oder zeige einfach auf den Knopf einer Zeile (#01–#16): Beide Unterzeilen leuchten auf deinem Charakter, solange der Zeiger darauf bleibt.
 
 Jede Zeile hat zwei Unterzeilen:
 - **A** — gilt dort, wo der Grünkanal der Index-Textur 255 ist.

@@ -392,9 +392,9 @@ Bajo las filas, la pestaña de una capa puede mostrar:
 
 #### Filas
 
-El editor muestra hasta 16 filas de tabla de colores. Las filas corresponden a regiones definidas por la textura de índice del mod (si tiene una). La fila 16 es el color de reserva que se usa cuando no hay textura de índice. Las filas que la textura de índice nunca selecciona aparecen atenuadas.
+El editor muestra hasta 16 filas de tabla de colores. Las filas corresponden a regiones definidas por la textura de índice del mod (si tiene una). La fila 16 es el color de reserva que se usa cuando no hay textura de índice. Las filas que las texturas de índice seleccionan rara vez o nunca se ocultan; marca **Mostrar todas las filas** para volver a verlas, atenuadas.
 
-Pulsa **Iluminar** en cualquier subfila para encender esa región en tu personaje y ver así qué fila controla qué.
+Pulsa **Iluminar** en cualquier subfila para encender esa región en tu personaje y ver así qué fila controla qué. O simplemente apunta al botón de una fila (#01–#16): sus dos subfilas se iluminan en tu personaje mientras el puntero siga encima.
 
 Cada fila tiene dos subfilas:
 - **A** — se aplica donde el canal verde de la textura de índice vale 255.

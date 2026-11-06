@@ -322,16 +322,15 @@ public static partial class ColorTableEditor
         // The render mode drives which feature controls are live vs dimmed; characterscroll does not render sphere/metal.
         var mode = RenderModeInference.ModeOf(gear ? OverlayLayer.Gear : OverlayLayer.Skin, shader);
 
-        // Rows the index texture never selects are DIMMED, not hidden or disabled: the reading can be wrong, and must not
-        // block editing.
+        // Rows the index texture never selects are hidden (below), or DIMMED under "Show all rows" — never disabled: the
+        // reading can be wrong, and must not block editing.
         bool InUse(int r) => usedRows == null || usedRows.Contains(r);
 
-        // Land on a live row only when nothing has been chosen yet (0 = unset), so a dimmed row can be picked on purpose.
-        if (selectedRow is <= 0 or > 16)
-        {
-            int firstUsed = Enumerable.Range(1, 16).FirstOrDefault(InUse);
-            selectedRow = firstUsed == 0 ? 1 : firstUsed;
-        }
+        // Rows the index never selects are hidden unless "Show all rows" is ticked (then dimmed, as before). The selection
+        // lands on a visible row when nothing is chosen yet or it is hidden; under Show all a dimmed row can be picked on
+        // purpose and stays picked.
+        var visible = RowPickerView.Visible(usedRows, _showAllRows);
+        selectedRow = RowPickerView.Land(selectedRow, visible, _showAllRows, InUse);
         int sel = selectedRow;                       // a ref param can't be captured by a lambda
 
         // ── row picker ───────────────────────────────────────────────────────
@@ -346,9 +345,11 @@ public static partial class ColorTableEditor
         var cs = Strings.Colors;
         int perLine = Math.Max(1, (int)((avail + ImGui.GetStyle().ItemSpacing.X) / (btn.X + ImGui.GetStyle().ItemSpacing.X)));
 
-        for (int row = 1; row <= 16; row++)
+        int hoveredRow = 0;
+        for (int i = 0; i < visible.Count; i++)
         {
-            if ((row - 1) % perLine != 0) ImGui.SameLine();
+            int row = visible[i];
+            if (i % perLine != 0) ImGui.SameLine();
 
             bool used = InUse(row);
             using (ImRaii.PushStyle(ImGuiStyleVar.Alpha, used ? 1f : 0.5f))
@@ -357,12 +358,20 @@ public static partial class ColorTableEditor
                 if (ImGui.Button($"#{row:D2}##row_{idScope}_{row}", btn))
                     selectedRow = row;
             }
+            // Pointing at a row lights it on the character (CommitRowHover, once per frame) — dimmed rows too, since
+            // the index reading can be wrong.
+            if (ImGui.IsItemHovered()) hoveredRow = row;
             if (!used && ImGui.IsItemHovered(ImGuiHoveredFlags.AllowWhenDisabled))
                 ImGui.SetTooltip(cs.RowUnusedTip);
 
             DrawRowSwatches(rows, row, ImGui.GetItemRectMin(), ImGui.GetItemRectMax(), used,
                 mirrorUnsetSubRows, onlyA, onlyB);
         }
+        if (hoveredRow != 0)
+            _hoverFrame.Offer(new RowHoverOffer(idScope, hoveredRow,
+                RowHighlightRoute.Pick(mode, Highlighter != null, shellMaterialLeaves?.Count ?? 0,
+                    SkinGlow != null, skinGlowTargets?.Count ?? 0),
+                shellMaterialLeaves, skinGlowTargets));
 
         ImGui.Separator();
 
@@ -389,6 +398,15 @@ public static partial class ColorTableEditor
             ImGui.SetTooltip(cs.NeedRowCopy);
         else if (ImGui.IsItemHovered())
             ImGui.SetTooltip(string.Format(cs.PasteRowTipFmt, selectedRow));
+
+        // Only when ticking it would change something: some rows used and some not.
+        if (RowPickerView.ToggleRelevant(usedRows))
+        {
+            ImGui.SameLine();
+            ImGui.Checkbox($"{cs.ShowAllRows}##showallrows_{idScope}", ref _showAllRows);
+            if (ImGui.IsItemHovered())
+                ImGui.SetTooltip(cs.ShowAllRowsTip);
+        }
 
         using (ImRaii.PushColor(ImGuiCol.TableHeaderBg, ImGui.GetColorU32(ProteusStyle.AccentSoft)))
         if (ImGui.BeginTable($"##ab_{idScope}", 2,
@@ -431,6 +449,69 @@ public static partial class ColorTableEditor
 
     /// <summary>Live skin-row glow via render-material diffuse rebind. Set once at startup; null disables the button.</summary>
     public static Proteus.Interop.SkinDiffuseGlow? SkinGlow { get; set; }
+
+    // ── row hover → live highlight ───────────────────────────────────────────
+    // "Show all rows": one flag for every table, for the session (never saved).
+    private static bool _showAllRows;
+    private static readonly RowHoverFrame _hoverFrame = new();
+    private static readonly RowHoverDwell _dwell = new();
+    // The latest offer per hovered row, so the active row can be renewed through a dwell or grace frame with no offer.
+    private static readonly Dictionary<(string Scope, int Row), RowHoverOffer> _offers = new();
+
+    /// <summary>
+    /// Once per frame, after every table has drawn (also while the window is collapsed): turns the hovered row button
+    /// into a preview on the matching highlighter — both sub-rows of the row — or ends the preview. A skin build is
+    /// decided once here and never starts while a composite is pending or running.
+    /// </summary>
+    internal static void CommitRowHover(long nowMs, bool pluginEnabled, bool compositeBusy)
+    {
+        var offer = _hoverFrame.Take();
+        (string Scope, int Row)? key = offer == null ? null : (offer.Scope, offer.Row);
+        if (offer != null) _offers[(offer.Scope, offer.Row)] = offer;
+
+        var active = _dwell.Update(key, nowMs,
+            offer?.Route == HighlightRoute.Skin ? RowHoverDwell.SkinDwellMs : RowHoverDwell.GearDwellMs);
+
+        // Keep only what can still be needed: the active row's offer and this frame's.
+        foreach (var k in _offers.Keys.ToList())
+            if (k != active && k != key) _offers.Remove(k);
+
+        RowHoverOffer? a = active is { } ak && _offers.TryGetValue(ak, out var stored) ? stored : null;
+
+        bool skinNeedsBuild = a?.Route == HighlightRoute.Skin && a.SkinTargets != null
+            && (SkinGlow?.PreviewNeedsBuild(a.SkinTargets, a.Row, nowMs) ?? false);
+
+        switch (RowHoverCommit.Decide(pluginEnabled, a?.Route, compositeBusy, skinNeedsBuild))
+        {
+            case HoverAction.Gear:
+                Highlighter?.SetPreview(a!.ShellLeaves!, ColorRowMask.Pair(a.Row));
+                SkinGlow?.EndPreview();
+                break;
+            case HoverAction.Skin:
+                SkinGlow?.SetPreview(a!.SkinTargets!, a.Row, skinNeedsBuild);
+                Highlighter?.EndPreview();
+                break;
+            case HoverAction.WaitSkin:
+                // The compositor is rewriting diffuses: keep whatever skin preview is showing until it is done.
+                Highlighter?.EndPreview();
+                SkinGlow?.RenewPreview();
+                break;
+            default:
+                Highlighter?.EndPreview();
+                SkinGlow?.EndPreview();
+                break;
+        }
+    }
+
+    /// <summary>The Colors window is closed: forget the hover and end both previews.</summary>
+    internal static void ResetRowHover()
+    {
+        _hoverFrame.Take();
+        _dwell.Reset();
+        _offers.Clear();
+        Highlighter?.EndPreview();
+        SkinGlow?.EndPreview();
+    }
 
     /// <summary>Sphere map index, as a dropdown of thumbnails — an index alone tells you nothing.</summary>
     private static void DrawSpherePicker(string id, ref int index, out bool changed)

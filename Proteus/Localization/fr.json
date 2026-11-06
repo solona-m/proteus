@@ -587,6 +587,14 @@
     "message": "Activez ceci pour du tissu sur la poitrine.\nProteus construit un vêtement comme une copie du corps : par défaut, il suit donc le corps\njusque dans le décolleté — c'est ce qui le fait lire comme de la peinture plutôt que du\ntissu. Le vrai tissu tend l'écart : une ligne droite entre le point le plus avancé de chaque sein.\nAvec ceci, le tissu entre les seins est détendu jusqu'à cette ligne. Rien n'est jamais tiré\nvers l'intérieur : cela ne peut donc pas entrer dans le corps, et les seins gardent leur forme.\nLà où une encolure a déjà découpé le tissu entre les bonnets, il n'y a rien à tendre, et\nceci ne fait rien.",
     "description": ""
   },
+  "Colors.ShowAllRows.Check": {
+    "message": "Afficher toutes les lignes",
+    "description": ""
+  },
+  "Colors.ShowAllRows.Tip": {
+    "message": "Affiche aussi les lignes que cette texture d\u0027index sélectionne rarement ou jamais.\nLes modifier ne change que peu ou rien de visible.",
+    "description": ""
+  },
   "Colors.SmoothFold.Label": {
     "message": "Adoucir l'entrejambe",
     "description": ""

@@ -587,6 +587,14 @@
     "message": "Aktiviere dies für Stoff über der Brust.\nProteus baut ein Kleidungsstück als Kopie des Körpers, folgt also standardmäßig dem\nKörper ins Dekolleté — und genau das lässt es wie Farbe statt wie Stoff wirken. Echter\nStoff überspannt die Lücke: eine gerade Linie zwischen den vordersten Punkten beider Brüste.\nDamit wird der Stoff zwischen den Brüsten auf diese Linie hinaus entspannt. Nichts wird je\nnach innen gezogen, es kann also nicht in den Körper schneiden, und die Brüste behalten ihre Form.\nWo ein Ausschnitt den Stoff zwischen den Körbchen weggeschnitten hat, gibt es nichts zu\nüberspannen, und dies bewirkt nichts.",
     "description": ""
   },
+  "Colors.ShowAllRows.Check": {
+    "message": "Alle Zeilen zeigen",
+    "description": ""
+  },
+  "Colors.ShowAllRows.Tip": {
+    "message": "Zeigt auch die Zeilen, die diese Index-Textur selten oder nie auswählt.\nSie zu bearbeiten ändert wenig oder nichts Sichtbares.",
+    "description": ""
+  },
   "Colors.SmoothFold.Label": {
     "message": "Zwischen den Beinen glätten",
     "description": ""

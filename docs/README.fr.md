@@ -392,9 +392,9 @@ Sous les lignes, l'onglet d'un calque peut afficher :
 
 #### Lignes
 
-L'éditeur affiche jusqu'à 16 lignes de table de couleurs. Les lignes correspondent aux régions définies par la texture d'index du mod (s'il en a une). La ligne 16 est la couleur de repli utilisée quand il n'y a pas de texture d'index. Les lignes que la texture d'index ne sélectionne jamais sont grisées.
+L'éditeur affiche jusqu'à 16 lignes de table de couleurs. Les lignes correspondent aux régions définies par la texture d'index du mod (s'il en a une). La ligne 16 est la couleur de repli utilisée quand il n'y a pas de texture d'index. Les lignes que les textures d'index sélectionnent rarement ou jamais sont masquées ; cochez **Afficher toutes les lignes** pour les faire revenir, grisées.
 
-Appuyez sur **Éclairer** sur n'importe quelle sous-ligne pour faire briller cette région sur votre personnage, afin de repérer quelle ligne contrôle quoi.
+Appuyez sur **Éclairer** sur n'importe quelle sous-ligne pour faire briller cette région sur votre personnage, afin de repérer quelle ligne contrôle quoi. Ou pointez simplement le bouton d'une ligne (#01–#16) : ses deux sous-lignes s'éclairent sur votre personnage tant que le pointeur reste dessus.
 
 Chaque ligne a deux sous-lignes :
 - **A** — s'applique là où le canal vert de la texture d'index vaut 255.
