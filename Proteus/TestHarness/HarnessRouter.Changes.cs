@@ -51,7 +51,7 @@ internal sealed partial class HarnessRouter
 
     private async Task<HarnessResponse> ModSettings(HarnessRequest request)
     {
-        var (body, bad) = JsonBody(request, "mod", "enabled", "priority");
+        var (body, bad) = JsonBody(request, "mod", "enabled", "priority", "permanent");
         if (bad != null) return bad;
         string? mod = OptionalString(body, "mod", out bad);
         if (bad != null) return bad;
@@ -70,6 +70,13 @@ internal sealed partial class HarnessRouter
                 return HarnessResponse.Error(400, "invalid-field", "priority must be a whole number that fits in 32 bits");
             priority = pr;
         }
+        bool permanent = false;
+        if (body.TryGetProperty("permanent", out var pm))
+        {
+            if (pm.ValueKind is not (JsonValueKind.True or JsonValueKind.False))
+                return HarnessResponse.Error(400, "invalid-field", "permanent must be true or false");
+            permanent = pm.GetBoolean();
+        }
         if (enabled == null && priority == null) return HarnessResponse.Error(400, "invalid-field", "give enabled, priority or both");
         if (!ModBackup.SafeModDir(mod)) return HarnessResponse.Error(400, "invalid-field", "the mod folder name is not a plain folder name");
 
@@ -80,7 +87,9 @@ internal sealed partial class HarnessRouter
             if (error != null) return error;
             if (Game.PlayerCollection() is not { } collection)
                 return ChangeResult.Fail(409, "no-collection", "the character has no Penumbra collection");
-            return changes.Hold(collection, dir!, enabled, priority);
+            // Permanent: a Proteus mod's own setting, recorded (on disk first) and written back by put-back.
+            return permanent ? changes.Bindings.WritePermanent(collection, dir!, enabled, priority)
+                             : changes.Hold(collection, dir!, enabled, priority);
         });
         return Answer(result);
     }
@@ -89,13 +98,20 @@ internal sealed partial class HarnessRouter
     {
         var (_, bad) = JsonBody(request);
         if (bad != null) return bad;
-        var report = await OnFramework(changes.PutBack);
+        var report = await OnFramework(() => changes.ApplySettling ? null : changes.PutBack());
+        if (report == null) return HarnessResponse.Error(409, "busy", "a design apply is still settling; wait for its answer");
+        var b = report.Binding;
         return Scrubbed(200, new
         {
             gear = report.Gear.Select(g => new { slot = g.Name, result = g.Result, code = g.Code }),
             holds = report.Holds.Select(h => new { mod = h.Name, result = h.Result, code = h.Code }),
             sweep = report.Sweep, redrawRequested = report.RedrawRequested,
             studio = StudioPutBackBlock(report),
+            binding = b == null ? null : new
+            {
+                glamourer = b.Glamourer, live = b.Live, record = b.Record,
+                permanent = b.Permanent.Select(e => new { mod = e.Name, result = e.Result, code = e.Code }),
+            },
         });
     }
 

@@ -2054,8 +2054,8 @@ public sealed class ColorsStrings
     public readonly string ResetTip = ProteusLoc.Localize("Colors.Reset.Tip",
         "Hold Ctrl and click to restore this option's colours, glow and mode to the\n" +
         "settings Proteus first recorded for this mod. Cannot be undone.\n\n" +
-        "If a design is applied, this also drops that design's saved override for this\n" +
-        "option — otherwise the design would just re-impose it. Other designs keep theirs.\n\n" +
+        "If a design is applied, it keeps its own saved values for this option and shows them\n" +
+        "again the next time the design is applied, until you press Update on the Bindings tab.\n\n" +
         "Note: those originals were captured the first time Proteus saved this mod —\n" +
         "if you had already edited it before then, that edited state is the \"default\".");
 

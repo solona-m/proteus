@@ -924,7 +924,7 @@
     "description": "Button caption. Appears in the colour-table editor window."
   },
   "Colors.Reset.Tip": {
-    "message": "Hold Ctrl and click to restore this option's colours, glow and mode to the\nsettings Proteus first recorded for this mod. Cannot be undone.\n\nIf a design is applied, this also drops that design's saved override for this\noption — otherwise the design would just re-impose it. Other designs keep theirs.\n\nNote: those originals were captured the first time Proteus saved this mod —\nif you had already edited it before then, that edited state is the \"default\".",
+    "message": "Hold Ctrl and click to restore this option's colours, glow and mode to the\nsettings Proteus first recorded for this mod. Cannot be undone.\n\nIf a design is applied, it keeps its own saved values for this option and shows them\nagain the next time the design is applied, until you press Update on the Bindings tab.\n\nNote: those originals were captured the first time Proteus saved this mod —\nif you had already edited it before then, that edited state is the \"default\".",
     "description": "Mentions the Ctrl key. Three paragraphs - keep the blank lines. Contains deliberate line breaks - keep the same number, moving them where your language needs."
   },
   "Colors.Roughness.Label": {

@@ -204,6 +204,11 @@ public class MoveAllSelectionTests
         var isel = Select(islands, null, new HashSet<string>(), false);
         Assert.Equal(1, isel.Rows);
         Assert.Equal(1, isel.MovingRows);
+        // Every island locked: the submesh moves nothing, so it is not counted as moving (QA, build 1439).
+        var allLocked = new MoveAllSelection();
+        allLocked.Update(islands, null, PartsPanel.BuildPartOfVertex(islands), p => p.Island < 0, 0, false);
+        Assert.Empty(allLocked.Seeds);
+        Assert.Equal(0, allLocked.MovingRows);
     }
 
     [Fact]

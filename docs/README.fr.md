@@ -196,7 +196,7 @@ Lie toute votre configuration Proteus — quels mods sont actifs, leurs priorit�
 
 Enregistrer un design capture l'état actuel avec lui : chaque mod présent sur votre personnage, pas seulement ceux de Proteus, plus toutes les couleurs Proteus. Appliquer ce design plus tard le restaure. Les couleurs et les réglages de couche sont restaurés sous forme de calque en direct, donc les fichiers du mod ne sont jamais réécrits. Chaque liaison liste les mods qu'elle restaure ; **Appliquer** en restaure une immédiatement sans passer par Glamourer, et **Délier** l'oublie sans toucher au design.
 
-Tant qu'une liaison est active, les modifications faites dans l'éditeur de couleurs s'affichent immédiatement en aperçu mais ne sont **pas** enregistrées avant d'appuyer sur **Mettre à jour** à côté de ce design dans l'onglet Liaisons — ce qui replie tout ce qui est à l'écran dans ce design.
+Tant qu'une liaison est active, les modifications faites dans l'éditeur de couleurs s'affichent immédiatement en aperçu mais ne sont **pas** enregistrées avant d'appuyer sur **Mettre à jour** à côté de ce design dans l'onglet Liaisons — ce qui replie tout ce qui est à l'écran dans ce design. Réappliquer le design dans Glamourer abandonne les modifications non enregistrées, **Rétablir les valeurs par défaut** compris, et rétablit ce que contient la liaison — appuyez d'abord sur **Mettre à jour** pour les garder. Cela vaut aussi quand vous l'appliquez après avoir modifié le design dans Glamourer sans porter cette version. Une liaison ne couvre pas les réglages propres à tout le mod ou globaux (Corps, Superposition gen2/vanilla, Superposition sur les hommes, Skindent/AO, Géométrie, densité de l'embout) ni les modifications des mods qu'elle n'a pas capturés ; celles-là restent telles quelles (les mods Proteus qu'elle n'a pas capturés sont quand même désactivés, sauf s'ils apportent leur propre contenu).
 
 | Option | Rôle |
 |--------|-------------|
@@ -408,7 +408,7 @@ Pour chaque sous-ligne :
 
 Les lignes et sous-lignes peuvent être copiées et collées entre elles.
 
-Les changements s'appliquent immédiatement à l'écran et sont recomposés environ une seconde après que vous arrêtez d'éditer. Ils sont enregistrés dans le `metadata.json` du mod — sauf si une liaison de design est active, auquel cas ils appartiennent à ce design jusqu'à ce que vous appuyiez sur **Mettre à jour** dans l'onglet Liaisons.
+Les changements s'appliquent immédiatement à l'écran et sont recomposés environ une seconde après que vous arrêtez d'éditer. Ils sont enregistrés dans le `metadata.json` du mod — sauf si la liaison de design active a capturé ce mod, auquel cas ils appartiennent à ce design jusqu'à ce que vous appuyiez sur **Mettre à jour** dans l'onglet Liaisons. Les modifications des mods que la liaison n'a pas capturés sont toujours enregistrées dans leur `metadata.json`.
 
 ### Remerciements
 Un immense merci à Sebby pour m'avoir appris à utiliser la correspondance d'images au pixel plutôt que la cuisson, et pour avoir publié les cartes cuites sous licence MIT via le loose texture compiler.

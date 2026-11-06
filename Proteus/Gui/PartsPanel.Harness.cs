@@ -68,7 +68,7 @@ public sealed partial class PartsPanel : IStudioHarness
             ["view"] = showModelView ? "model" : "character",
             ["settings"] = new { mirror = mirrorBrush, adjacent = moveAdjacent, moveSkin },
             ["effective"] = new { mirrorNow = MirrorNow, adjacentNow = AdjacentNow, skinMovesNow = SkinMovesNow,
-                                  followReady = volume?.FollowReady == true },
+                                  followReady = (parts != null ? volume : null)?.FollowReady == true },
             ["parts"] = parts?.Parts.Select(p => new
             {
                 label = p.Label, material = Path.GetFileName(p.Material.TrimStart('/')), island = p.Island, skin = IsSkin(p),
@@ -82,7 +82,7 @@ public sealed partial class PartsPanel : IStudioHarness
             ["pivot"] = pivot is { } at ? new[] { at.X, at.Y, at.Z } : null,
             ["help"] = MoveAllSelection.HelpFor(tool switch { Tool.Rotate => MoveHelpTool.Rotate, Tool.Scale => MoveHelpTool.Scale, _ => MoveHelpTool.Move },
                                                 showModelView, moveAll).ToString(),
-            ["edit"] = volume is { } v
+            ["edit"] = parts != null && volume is { } v   // the model closed (put-back, no mod open): no edit to show
                 ? new { dirty = v.Dirty, canUndo = v.CanUndo, worstMm = v.Worst * 1000f, saveOwed = brushChangedAt >= 0, editVersion = v.EditVersion }
                 : null,
             ["status"] = status is { } text ? new StudioStatusLine(text, statusIsError) : null,
@@ -203,7 +203,7 @@ public sealed partial class PartsPanel : IStudioHarness
             vol.Undo(); AfterBrushEdit(); SaveBrush();
             // A save that failed is not left owed: it would land in the mod later, outside the session.
             if (brushChangedAt >= 0) brushChangedAt = -1;
-            return Done("undo", was, null, root, before, session);
+            return Done("undo", was, PartTool ? MovePivot() : null, root, before, session);
         }
 
         var wanted = request.Kind switch { "rotate" => Tool.Rotate, "scale" => Tool.Scale, _ => Tool.Move };

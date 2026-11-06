@@ -196,7 +196,7 @@ Ata toda tu configuración de Proteus — qué mods están activos, sus priorida
 
 Guardar un diseño captura con él el estado actual: todos los mods de tu personaje, no solo los de Proteus, más todos los colores de Proteus. Aplicar ese diseño más tarde lo restaura. Los colores y los ajustes de capa se restauran como una superposición en vivo, así que los archivos del propio mod nunca se reescriben. Cada vínculo enumera los mods que restaura; **Aplicar** restaura uno al momento sin pasar por Glamourer, y **Desvincular** lo olvida sin tocar el diseño.
 
-Mientras un vínculo está activo, los cambios en el editor de colores se previsualizan al instante pero **no** se guardan hasta que pulsas **Actualizar** junto a ese diseño en la pestaña Vínculos, lo que pliega todo lo que hay en pantalla de vuelta a ese diseño.
+Mientras un vínculo está activo, los cambios en el editor de colores se previsualizan al instante pero **no** se guardan hasta que pulsas **Actualizar** junto a ese diseño en la pestaña Vínculos, lo que pliega todo lo que hay en pantalla de vuelta a ese diseño. Volver a aplicar el diseño en Glamourer descarta los cambios que no hayas guardado, incluido **Restaurar valores predeterminados**, y restaura lo que guarda el vínculo: pulsa antes **Actualizar** para conservarlos. Eso incluye aplicarlo después de cambiar el diseño en Glamourer mientras no llevabas puesta esa versión. Un vínculo no cubre ajustes de todo el mod ni globales (Cuerpos, Superposición gen2/vanilla, Superposición en hombres, Skindent/AO, Geometría, densidad de la puntera) ni los cambios que hagas en mods que no capturó; esos se quedan como están (los mods de Proteus que no capturó se siguen desactivando, salvo que incluyan contenido propio).
 
 | Opción | Qué hace |
 |--------|-------------|
@@ -408,7 +408,7 @@ Para cada subfila:
 
 Las filas y subfilas se pueden copiar y pegar entre sí.
 
-Los cambios se aplican en pantalla al instante y se recomponen alrededor de un segundo después de que dejes de editar. Se guardan en el `metadata.json` del mod, salvo que haya un vínculo de diseño activo, en cuyo caso pertenecen a ese diseño hasta que pulses **Actualizar** en la pestaña Vínculos.
+Los cambios se aplican en pantalla al instante y se recomponen alrededor de un segundo después de que dejes de editar. Se guardan en el `metadata.json` del mod, salvo que el vínculo de diseño activo haya capturado ese mod, en cuyo caso pertenecen a ese diseño hasta que pulses **Actualizar** en la pestaña Vínculos. Los cambios en mods que el vínculo no capturó se siguen guardando en su `metadata.json`.
 
 ### Agradecimientos
 Muchísimas gracias a Sebby por enseñarme a usar el mapeo de imágenes basado en píxeles en lugar de hornear, y por publicar los mapas horneados bajo licencia MIT a través del loose texture compiler.

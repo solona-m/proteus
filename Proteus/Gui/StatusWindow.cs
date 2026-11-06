@@ -2564,7 +2564,7 @@ public class StatusWindow : Window
         var defaults = discovery.TryLoadDefaults(entry);
         if (defaults == null) return false;
 
-        // Validate before mutating: the binding clear below is persisted and must not run on a path that restores nothing.
+        // Validate before mutating: neither the metadata reset nor the live binding clear below may run on a path that restores nothing.
         if (groupName == null)
         {
             // Simple mod: the top-level overlays and colour rows ARE the option.
@@ -2589,7 +2589,8 @@ public class StatusWindow : Window
             ReplaceOverlays(option.Overlays, srcOpt.Overlays);
         }
 
-        // A design binding would re-impose its own captured values for this option, so clear its override.
+        // A live design override would hide the reset, so clear it. Live only: the stored binding keeps its values for
+        // this option until Update, and applying the design again shows them.
         editRouter.ClearOptionOverride(entry.ModDirectory, groupName, option?.Name);
 
         // Descriptor Index paths may differ from the edited ones, so the cached row scans are stale.

@@ -63,7 +63,23 @@ recorded per session and put back on request, on `off` and on unload. Holds are
 Penumbra temporary settings under the harness's own key, never saved to a
 collection. A stop off the framework thread cannot put back, and logs what it left.
 
-*Amended 2026-11-06:* the Studio routes (`/studio`, `studio-open`, `studio-set`,
+*Amended 2026-11-06:* the harness can also apply a Glamourer design (Glamourer's own
+`ApplyDesign` IPC, created inside the harness, never in `Interop/`), edit or clear a
+live design-binding colour override, and write a Proteus mod's permanent
+enabled/priority. A design apply's restore can write any mod's own settings (with
+"Restore every mod on the character" on, other mods' too): every mod whose own
+setting changed is recorded and put back, options included, and back to inheriting
+when it had no setting of its own. Other plugins' temporary settings a restore clears
+are not put back (their owner re-asserts them). All of it is put back with the same
+"still what the harness left" checks, Glamourer state first; the permanent settings and the live binding state go
+back only once the Glamourer state has (otherwise `skipped-inconsistent`). Their
+durability class differs from a refit's: the undo is held in memory, and before the
+session's first change that outlives the game the Before values are written to
+`test-harness/backups/<session>/binding.json` for recovery by hand, with no replay.
+The harness never writes the binding store or a mod's files on this path. The
+release guard checks a second marker, `HarnessSuppressApplySignals`, a member of the
+harness-only `DesignBindingService` partial.
+It can also drive the Studio: its routes (`/studio`, `studio-open`, `studio-set`,
 `studio-drag`) drive the Studio panel through its own controls' code, and a drag
 writes into a mod through the Studio's brush save. They open only a mod with no
 saved Studio edits, never flush the user's edit, and keep one session at a time.

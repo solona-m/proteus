@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Numerics;
 using Proteus.Services;
 
@@ -132,26 +133,34 @@ internal sealed class MoveAllSelection
         var parts = model.Parts;
         var movesPart = new bool[parts.Count];
         labels.Clear();
-        int rows = 0, moving = 0;
-        bool skin = false;
+        int rows = 0;
         for (int p = 0; p < parts.Count; p++)
         {
             var part = parts[p];
             movesPart[p] = moves(part);
             if (part.Island < 0) rows++;
-            if (!movesPart[p]) continue;
-            labels.Add(part.Label);
-            if (part.Island < 0) moving++;
-            if (SecondSkinWriter.IsBodySkinMaterial(part.Material)) skin = true;
+            if (movesPart[p]) labels.Add(part.Label);
         }
 
+        // Counted from what actually moves — the seeds, by their finest part — so a submesh whose islands are all
+        // locked is not counted as moving, nor skin whose every piece is.
         var seeds = new List<int>();
+        var movingSubmeshes = new HashSet<(int, int)>();
+        bool skin = false;
+        var seen = new bool[parts.Count];
         for (int v = 0; v < partOfVertex.Length; v++)
-            if (partOfVertex[v] is var p and >= 0 && p < movesPart.Length && movesPart[p]) seeds.Add(v);
+        {
+            if (partOfVertex[v] is not (var p and >= 0) || p >= movesPart.Length || !movesPart[p]) continue;
+            seeds.Add(v);
+            if (seen[p]) continue;
+            seen[p] = true;
+            movingSubmeshes.Add((parts[p].Mesh, parts[p].Submesh));
+            if (SecondSkinWriter.IsBodySkinMaterial(parts[p].Material)) skin = true;
+        }
 
         Seeds = seeds.ToArray();
         Rows = rows;
-        MovingRows = moving;
+        MovingRows = parts.Count(q => q.Island < 0 && movingSubmeshes.Contains((q.Mesh, q.Submesh)));
         IncludesSkin = skin;
         Version++;
         return true;

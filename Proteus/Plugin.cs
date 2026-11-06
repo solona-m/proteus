@@ -29,7 +29,7 @@ public sealed class Plugin : IDalamudPlugin
 #endif
 
     /// <summary>Hand-maintained; bump it for in-game testing. <see cref="BuildStamp"/> is the one that can't go stale.</summary>
-    public const int BuildNumber = 1439;
+    public const int BuildNumber = 1440;
 
     /// <summary>
     /// Which set of release notes is current. Raise it when a release has something new to say: the window
@@ -269,6 +269,7 @@ public sealed class Plugin : IDalamudPlugin
                                                TextureProvider, TextureReadback, config, uvRemap,
                                                path => textureLoader.LoadRawFile(null, path),
                                                dir => partsPanel.NoteModelsChanged(dir), log,
+                                               pluginInterface, designBindings, editRouter, presets,
                                                partsPanel.AsHarnessStudio(statusWindow.OpenToStudio,
                                                                         () => statusWindow.IsOpen,
                                                                         () => statusWindow.IsOpen = false)),

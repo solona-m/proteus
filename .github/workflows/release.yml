@@ -90,9 +90,12 @@ jobs:
       - name: Guard against the test harness
         shell: pwsh
         run: |
-          $marker = 'Proteus.TestHarness'
+          # Two markers: the harness's namespace, and a harness-only member of a Proteus.Services partial.
+          $markers = @('Proteus.TestHarness', 'HarnessSuppressApplySignals')
           $loose = [System.IO.File]::ReadAllBytes("Proteus\bin\Release\win-x64\Proteus.dll")
-          if ([System.Text.Encoding]::GetEncoding(28591).GetString($loose).Contains($marker)) {
+          $text = [System.Text.Encoding]::GetEncoding(28591).GetString($loose)
+          $marker = $markers | Where-Object { $text.Contains($_) } | Select-Object -First 1
+          if ($marker) {
             Write-Error "Proteus.dll contains the QA test harness ($marker): a CI build must compile it out (ProteusTestHarness)."
             exit 1
           }
@@ -104,7 +107,9 @@ jobs:
             $ms = New-Object System.IO.MemoryStream
             $stream = $entry.Open()
             try { $stream.CopyTo($ms) } finally { $stream.Dispose() }
-            if ([System.Text.Encoding]::GetEncoding(28591).GetString($ms.ToArray()).Contains($marker)) {
+            $text = [System.Text.Encoding]::GetEncoding(28591).GetString($ms.ToArray())
+            $marker = $markers | Where-Object { $text.Contains($_) } | Select-Object -First 1
+            if ($marker) {
               Write-Error "latest.zip's Proteus.dll contains the QA test harness ($marker)."
               exit 1
             }

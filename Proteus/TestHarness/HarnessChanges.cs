@@ -21,7 +21,8 @@ internal sealed record HoldRecord(Guid Collection, string ModDir, bool Enabled, 
 /// <summary>One undone change: its slot or mod, and restored / cleared / changed / gone / failed (with a code).</summary>
 internal sealed record UndoEntry(string Name, string Result, string? Code = null);
 
-internal sealed record PutBackReport(IReadOnlyList<UndoEntry> Gear, IReadOnlyList<UndoEntry> Holds, string Sweep, bool RedrawRequested)
+internal sealed record PutBackReport(IReadOnlyList<UndoEntry> Gear, IReadOnlyList<UndoEntry> Holds, string Sweep, bool RedrawRequested,
+                                    BindingPutBack? Binding = null)
 {
     /// <summary>The Studio session put-back ended (or left recorded), if there was one.</summary>
     public IReadOnlyList<StudioPutBack> Studio { get; init; } = [];
@@ -42,7 +43,8 @@ internal sealed record ChangeResult(int Status, string? Code, string? Message, o
 /// <para/>
 /// Framework thread only, except <see cref="Stopping"/>, which the host sets from wherever <c>Stop</c> runs.
 /// </summary>
-internal sealed class HarnessChanges(IHarnessGame game, SessionNames names, IPluginLog? log)
+internal sealed class HarnessChanges(IHarnessGame game, SessionNames names, IPluginLog? log, string? recordRoot = null,
+                                     string session = "", int build = 0)
 {
     /// <summary>The harness's temporary-setting key: negative (it locks nobody out) and distinct from design binding's.</summary>
     internal const int HoldKey = -0x50544853;
@@ -51,6 +53,21 @@ internal sealed class HarnessChanges(IHarnessGame game, SessionNames names, IPlu
     private readonly Dictionary<string, GearRecord> gear = new(StringComparer.Ordinal);
     private readonly Dictionary<(Guid, string), HoldRecord> holds = new();
     private volatile bool stopping;
+    private volatile bool applySettling;
+    private HarnessBindings? bindings;
+
+    /// <summary>Design applies, live binding edits and permanent Proteus-mod settings (see <see cref="HarnessBindings"/>).</summary>
+    public HarnessBindings Bindings => bindings ??= new HarnessBindings(game, Scrub, log, recordRoot, session, build);
+
+    /// <summary>
+    /// A design apply is between its first and final hop, waiting for its deferred work to settle: every change route and
+    /// put-back answer 409 busy meanwhile, so nothing lands between the apply and its After readings. Set and cleared by the
+    /// glamourer-apply route (cleared in a finally, from whichever thread it ends on).
+    /// </summary>
+    public bool ApplySettling { get => applySettling; set => applySettling = value; }
+
+    /// <summary>Whether harness equips are recorded (a design apply must come first).</summary>
+    public bool EquipsRecorded => gear.Count > 0;
 
     public bool Stopping => stopping;
 
@@ -64,6 +81,7 @@ internal sealed class HarnessChanges(IHarnessGame game, SessionNames names, IPlu
     {
         if (stopping) return ChangeResult.Fail(503, "harness-stopping", "the test harness is stopping");
         if (jobBusy) return ChangeResult.Fail(409, "busy", "a harness job is running");
+        if (applySettling) return ChangeResult.Fail(409, "busy", "a design apply is still settling; wait for its answer");
         if (autoRefitBusy) return ChangeResult.Fail(409, "auto-refit-busy", "auto refit is working; wait for /state autoRefit.busy == false");
         return null;
     }
@@ -163,9 +181,15 @@ internal sealed class HarnessChanges(IHarnessGame game, SessionNames names, IPlu
     // ── put back ────────────────────────────────────────────────────────────
 
     /// <summary>
-    /// Undo every hold, then every equip, then sweep leftover harness holds. Never refused. Only failures stay recorded.
+    /// Undo every hold, then every equip, then sweep leftover harness holds, then the binding session. Never refused. Only
+    /// failures stay recorded.
     /// </summary>
-    public PutBackReport PutBack()
+    public PutBackReport PutBack() => PutBack(skipHalfRecordedBinding: false);
+
+    /// <inheritdoc cref="PutBack()"/>
+    /// <param name="skipHalfRecordedBinding">An apply is still settling (off/unload mid-apply): leave the binding session as
+    /// recorded and log it rather than undo half-recorded state.</param>
+    public PutBackReport PutBack(bool skipHalfRecordedBinding)
     {
         var holdResults = new List<UndoEntry>();
         var gearResults = new List<UndoEntry>();
@@ -247,7 +271,13 @@ internal sealed class HarnessChanges(IHarnessGame game, SessionNames names, IPlu
         log?.Information("[Proteus] test harness: put back {0} slot(s), {1} hold(s); sweep {2}; studio {3}",
                          gearResults.Count, holdResults.Count, sweep,
                          studioResults.Count == 0 ? "none" : string.Join(", ", studioResults.Select(s => $"{s.Files}/{s.Panel}{(s.Code is { } c ? $" ({c})" : "")}")));
-        return new PutBackReport(gearResults, holdResults, sweep, redraw) { Studio = studioResults };
+
+        // Last: the Glamourer state goes back over what gear put-back restored (its originals are post-apply states).
+        BindingPutBack? binding = null;
+        try { binding = bindings?.PutBack(skipHalfRecordedBinding); }
+        catch (Exception ex) { log?.Warning(ex, "[Proteus] test harness: putting back the binding session failed"); }
+        return new PutBackReport(gearResults, holdResults, sweep, redraw || binding?.Restored == true, binding)
+               { Studio = studioResults };
     }
 
     // ── the Studio ──────────────────────────────────────────────────────────
@@ -395,14 +425,16 @@ internal sealed class HarnessChanges(IHarnessGame game, SessionNames names, IPlu
             atUtc = h.AtUtc,
         }).ToList(),
         studio = StudioSessionView(),
+        binding = bindings?.View(),
+        applySettling,
     };
 
     /// <summary>The slots and mods still recorded, for the warning when put-back cannot run.</summary>
     public string Leftovers()
-        => string.Join(", ", gear.Keys.Concat(holds.Values.Select(h => h.ModDir))
+        => string.Join(", ", gear.Keys.Concat(holds.Values.Select(h => h.ModDir)).Concat(bindings?.Leftovers() ?? [])
                                  .Concat(studio is { } s
                                      ? [$"Studio edits in {s.ModDir} ({(s.Files.Count == 0 ? "nothing saved" : string.Join(", ", s.Files.Keys))}): press Undo saved changes"]
                                      : []));
 
-    internal bool Empty => gear.Count == 0 && holds.Count == 0 && studio == null;
+    internal bool Empty => gear.Count == 0 && holds.Count == 0 && bindings?.HasSession != true && studio == null;
 }
