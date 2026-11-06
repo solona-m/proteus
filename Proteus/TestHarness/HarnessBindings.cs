@@ -81,7 +81,11 @@ internal sealed class HarnessBindings(IHarnessGame game, Func<string, string> sc
         bool first = glamourerBefore == null;
         var countBefore = game.DesignAppliedCount;
         if (game.ApplyDesign(design) is { } ec)
+        {
+            // Nothing changed: a record written for this attempt alone must not stand for a later session's Before.
+            if (!HasSession && recordPath != null) { recordPath = null; recordHasGlamourer = false; recordIndex--; }
             return (ChangeResult.Fail(409, "glamourer-refused", $"Glamourer refused the apply: {ec}"), null);
+        }
 
         if (first) { glamourerBefore = state; carriersBefore = carriers; }
         liveBefore ??= live;

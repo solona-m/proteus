@@ -66,8 +66,12 @@ collection. A stop off the framework thread cannot put back, and logs what it le
 *Amended 2026-11-06:* the harness can also apply a Glamourer design (Glamourer's own
 `ApplyDesign` IPC, created inside the harness, never in `Interop/`), edit or clear a
 live design-binding colour override, and write a Proteus mod's permanent
-enabled/priority. These are put back with the same "still what the harness left"
-checks, Glamourer state first; the permanent settings and the live binding state go
+enabled/priority. A design apply's restore can write any mod's own settings (with
+"Restore every mod on the character" on, other mods' too): every mod whose own
+setting changed is recorded and put back, options included, and back to inheriting
+when it had no setting of its own. Other plugins' temporary settings a restore clears
+are not put back (their owner re-asserts them). All of it is put back with the same
+"still what the harness left" checks, Glamourer state first; the permanent settings and the live binding state go
 back only once the Glamourer state has (otherwise `skipped-inconsistent`). Their
 durability class differs from a refit's: the undo is held in memory, and before the
 session's first change that outlives the game the Before values are written to

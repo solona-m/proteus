@@ -371,8 +371,8 @@ internal sealed class GameHarnessAdapter : IHarnessGame, IDisposable
     {
         if (penumbra.GetCollectionModSettings(collection, ignoreTemporary: true) is not { } all) return null;
         return all.ToDictionary(kv => kv.Key,
-            kv => kv.Value.Inherited ? PermanentSetting.Inherits
-                : new PermanentSetting(kv.Value.Enabled, kv.Value.Priority, kv.Value.Options, Own: true),
+            // An inherited mod keeps the values it inherits (a partial write starts from them), with Own false.
+            kv => new PermanentSetting(kv.Value.Enabled, kv.Value.Priority, kv.Value.Options, Own: !kv.Value.Inherited),
             StringComparer.OrdinalIgnoreCase);
     }
 

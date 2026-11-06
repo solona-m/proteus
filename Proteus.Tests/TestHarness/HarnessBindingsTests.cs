@@ -399,6 +399,37 @@ public class HarnessBindingsTests : IDisposable
     }
 
     [Fact]
+    [Trait("Plan", "AC-binding-reapply-12")]
+    public void Permanent_PartialWriteOnInheritedMod_KeepsTheOtherFields()
+    {
+        // Panties inherits: enabled at priority 3 from the parent collection.
+        Game.Permanent["Panties"] = new PermanentSetting(true, 3, new Dictionary<string, List<string>>(), Own: false);
+        var r = fx.Dispatcher.Run(() => B.WritePermanent(Coll, "Panties", null, 5));
+        Assert.Equal(200, r.Status);
+        Assert.Equal(new PermanentSetting(true, 5), Game.Permanent["Panties"]);   // still enabled
+        var body = (Dictionary<string, object?>)r.Body!;
+        Assert.Contains("enabled = True", body["before"]!.ToString());
+        Assert.Contains("priority = 3", body["before"]!.ToString());
+        Assert.Contains("own = False", body["before"]!.ToString());
+
+        PutBack();
+        Assert.False(Game.Permanent["Panties"].Own);   // back to inheriting
+    }
+
+    [Fact]
+    [Trait("Plan", "EDGE-binding-reapply-22")]
+    public void ApplyDesign_RefusedAfterRecord_LeavesNoStaleRecordForTheNextSession()
+    {
+        Game.ApplyAnswer = "InvalidKey";
+        Assert.Equal("glamourer-refused", Begin(Design).Error!.Code);
+        Game.ApplyAnswer = null;
+        Game.GlamourerNow = FakeGame.GlamState(("Body", 222), ("Legs", 101));   // the look moved on before the real apply
+        Apply(Design);
+        var rec = JObject.Parse(File.ReadAllText(RecordPath));
+        Assert.Equal(222UL, rec["glamourerBefore"]!["Equipment"]!["Body"]!["ItemId"]!.ToObject<ulong>());
+    }
+
+    [Fact]
     [Trait("Plan", "EDGE-binding-reapply-33")]
     public void Permanent_NonProteusMod_Refused()
     {

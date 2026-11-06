@@ -201,7 +201,7 @@ the user, and so do automation, zone changes and relogin (no route drives them).
   design apply, whose restore writes Proteus mods' permanent settings, or a
   `permanent` write), the harness writes the Before values to
   `test-harness/backups/<session>/binding.json`: the Glamourer state, the carriers,
-  the live binding state and every Proteus mod's permanent setting. If it cannot,
+  the live binding state and every configured mod's own setting in the collection. If it cannot,
   the change is refused with 503 `record-failed`. Put-back is the undo; the record is
   for recovering by hand if put-back never ran (a crash, an unload off the framework
   thread). A later binding session in the same harness session writes

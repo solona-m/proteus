@@ -281,7 +281,8 @@ internal interface IHarnessGame
 }
 
 /// <summary>A mod's own (permanent) settings in a collection. <see cref="Own"/> false: the collection has no setting of its
-/// own for it (it inherits, or was never configured), and putting it back means letting it inherit again.</summary>
+/// own for it (it inherits, with the inherited values here; or was never configured: <see cref="Inherits"/>), and putting
+/// it back means letting it inherit again.</summary>
 internal sealed record PermanentSetting(bool Enabled, int Priority, IReadOnlyDictionary<string, List<string>> Options, bool Own)
 {
     public PermanentSetting(bool enabled, int priority) : this(enabled, priority, new Dictionary<string, List<string>>(), true) { }
