@@ -389,7 +389,7 @@ public partial class DesignBindingService : IDisposable
             // move, the quick bar): those keep its LastEdit, and must not fold unsaved live edits into the binding.
             if (!IsDesignEdit(cachedDesign, design))
             {
-                log.Debug("[Proteus] Skipping design capture for {0}: its file was rewritten without an edit (LastEdit unchanged).", designId);
+                log.Information("[Proteus] Skipping design capture for {0}: its file was rewritten without an edit (LastEdit unchanged).", designId);
                 return;
             }
             string? mismatch = null;

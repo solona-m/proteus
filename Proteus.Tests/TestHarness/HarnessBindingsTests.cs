@@ -440,6 +440,7 @@ public class HarnessBindingsTests : IDisposable
         Assert.Empty(Game.PermanentWrites);
         Assert.Equal(redraws, Game.RedrawRequests);
         Assert.False(B.HasSession);
+        Assert.False(File.Exists(RecordPath));   // nothing to record either
     }
 
     [Fact]
