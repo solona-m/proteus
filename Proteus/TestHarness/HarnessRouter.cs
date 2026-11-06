@@ -25,7 +25,8 @@ internal sealed partial class HarnessRouter(HarnessJobs jobs, LogRing ring, Sess
         ("GET", "/health"), ("GET", "/state"), ("GET", "/log"), ("GET", "/screenshot"), ("GET", "/hair-port"),
         ("POST", "/actions/refit"), ("POST", "/actions/restore"), ("POST", "/actions/shader-upgrade"),
         ("POST", "/actions/variant-repoint"), ("POST", "/actions/hair-port"), ("POST", "/actions/equip"),
-        ("POST", "/actions/mod-settings"), ("POST", "/actions/put-back"), ("GET", "/jobs/{id}"),
+        ("POST", "/actions/mod-settings"), ("POST", "/actions/put-back"), ("GET", "/bindings"),
+        ("POST", "/actions/glamourer-apply"), ("POST", "/actions/binding-edit"), ("GET", "/jobs/{id}"),
     ];
 
     private IHarnessGame Game => jobs.Game;
@@ -58,6 +59,9 @@ internal sealed partial class HarnessRouter(HarnessJobs jobs, LogRing ring, Sess
                 "/actions/equip" => await Equip(request),
                 "/actions/mod-settings" => await ModSettings(request),
                 "/actions/put-back" => await PutBack(request),
+                "/bindings" => await BindingsView(request),
+                "/actions/glamourer-apply" => await GlamourerApply(request),
+                "/actions/binding-edit" => await BindingEdit(request),
                 _ => Job(path["/jobs/".Length..]),
             };
         }

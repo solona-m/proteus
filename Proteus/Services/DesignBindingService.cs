@@ -80,7 +80,7 @@ public class ProteusModBinding
 /// options but applies colors as a non-destructive in-memory override (metadata.json is untouched).
 /// Apply detection is heuristic — a unique gear match against the player's current state.
 /// </summary>
-public class DesignBindingService : IDisposable
+public partial class DesignBindingService : IDisposable
 {
     // A design must apply at least this many equipment slots to be a heuristic candidate; gearless designs never match.
     private const int MinGearSlots = 3;
@@ -738,6 +738,9 @@ public class DesignBindingService : IDisposable
     // Bumped by everything that supersedes a character restore, so its post-load sweep stands down.
     // Framework thread only.
     private int characterWorkGeneration;
+
+    // Bumped only by the test harness's put-back, to cancel a queued UnequipUnsetSlots. Framework thread only.
+    private int unequipEpoch = 0;   // explicit: with the harness compiled out nothing assigns it (CS0649)
 
     /// <summary>
     /// The settings of every mod on the character right now, or null when unreadable (the caller then keeps
@@ -1853,8 +1856,11 @@ public class DesignBindingService : IDisposable
     {
         if (GetDesignCached(designId) is not { } design) return;
 
+        // Captured so a harness put-back (HarnessQuiesce) can cancel an unequip still queued; nothing else bumps it.
+        var epoch = unequipEpoch;
         framework.RunOnTick(() =>
         {
+            if (epoch != unequipEpoch) return;
             if (glamourer.GetObjectState(0) is not { } state) return;
             var slots = UnsetSlots(design, state, carriers);
             if (slots.Count == 0) return;
@@ -2030,7 +2036,7 @@ public class DesignBindingService : IDisposable
     }
 
     /// <summary>Whether a <see cref="StateFieldKeys"/> key names a slot Proteus is borrowing or filling with a carrier.</summary>
-    private static bool IsCarrierKey(string key, JObject before, JObject after, Carriers carriers)
+    internal static bool IsCarrierKey(string key, JObject before, JObject after, Carriers carriers)
     {
         var parts = key.Split('/');
         if (parts.Length != 3) return false;

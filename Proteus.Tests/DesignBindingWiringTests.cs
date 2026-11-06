@@ -161,6 +161,27 @@ public class DesignBindingWiringTests
         var clear = Method(src, "public bool ClearOptionOverride(");
         Assert.DoesNotContain("store", clear);
         Assert.DoesNotContain("ClearScope", clear);
+
+        // [EDGE-binding-reapply-45] Every other partial of the service writes no store at all (the harness one included).
+        var partials = Directory.GetFiles(Path.Combine(RepoDir(), "Proteus", "Services"), "DesignBindingService*.cs")
+                                .Where(f => !f.EndsWith("DesignBindingService.cs", StringComparison.Ordinal)).ToList();
+        Assert.Contains(partials, f => f.EndsWith("DesignBindingService.Harness.cs", StringComparison.Ordinal));
+        foreach (var file in partials)
+            Assert.Empty(Regex.Matches(File.ReadAllText(file), @"(?<![\w.])(Save|SaveDeferred)\(\);|store\.Bindings\[[^\]]+\]\s*=|store\.Bindings\.Remove\("));
+    }
+
+    [Fact]
+    [Trait("Plan", "EDGE-binding-reapply-40")]
+    public void Unequip_lambda_checks_the_epoch()
+    {
+        // A harness put-back cancels a queued unequip; only the harness partial bumps the epoch.
+        var unequip = Method(Service(), "private void UnequipUnsetSlots(");
+        var lambda = Method(unequip, "framework.RunOnTick(() =>");
+        var first = lambda.TrimStart('{').TrimStart().Split('\n')[0].Trim();
+        Assert.Equal("if (epoch != unequipEpoch) return;", first);
+        Assert.Contains("var epoch = unequipEpoch;", unequip);
+        Assert.DoesNotContain("unequipEpoch++", Service());
+        Assert.Contains("unequipEpoch++", File.ReadAllText(Path.Combine(RepoDir(), "Proteus", "Services", "DesignBindingService.Harness.cs")));
     }
 
     [Fact]

@@ -111,7 +111,7 @@ internal sealed class HarnessHost : IDisposable
         {
             Log = log,
         };
-        changes = new HarnessChanges(game, Names, log);
+        changes = new HarnessChanges(game, Names, log, BackupsRoot, session, build);
         var router = new HarnessRouter(jobs, ring, Names, new CaptureGate(timings.Capture), build, buildStamp, log, changes);
         var s = new HarnessServer(router.Handle, token);
         s.Start();
@@ -168,9 +168,11 @@ internal sealed class HarnessHost : IDisposable
         }
         try
         {
-            var r = c.PutBack();
-            log.Information("[Proteus] test harness put back as it stopped: {0}",
-                            string.Join(", ", r.Gear.Concat(r.Holds).Select(e => $"{e.Name} {e.Result}{(e.Code is { } code ? $" ({code})" : "")}")));
+            // An apply still settling has half-recorded its session: that part is left as recorded (and logged).
+            var r = c.PutBack(skipHalfRecordedBinding: c.ApplySettling);
+            log.Information("[Proteus] test harness put back as it stopped: {0}{1}",
+                            string.Join(", ", r.Gear.Concat(r.Holds).Select(e => $"{e.Name} {e.Result}{(e.Code is { } code ? $" ({code})" : "")}")),
+                            r.Binding is { } b ? $"; binding: glamourer {b.Glamourer}, live {b.Live}, {b.Permanent.Count} permanent" : "");
         }
         catch (Exception e) { log.Warning(e, "[Proteus] test harness: putting back as it stopped failed"); }
     }

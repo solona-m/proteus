@@ -29,4 +29,30 @@ public class HarnessBuildFlagTests
         else
             Assert.True(harness.Count > 0, "a local build must compile the QA test harness in (is CI=true set in this shell?)");
     }
+
+    [Fact]
+    [Trait("Plan", "AC-binding-reapply-13")]
+    [Trait("Plan", "EDGE-binding-reapply-36")]
+    [Trait("Plan", "EDGE-binding-reapply-37")]
+    public void DesignBindingHarnessMembers_MatchRuntimeCiEnvironment()
+    {
+        // The harness-only DesignBindingService partial (namespace Proteus.Services, so the type check above can't see it).
+        const System.Reflection.BindingFlags all = System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.Static
+                                                 | System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.NonPublic;
+        var members = typeof(Services.DesignBindingService).GetMembers(all)
+                                                           .Where(m => m.Name.StartsWith("Harness", StringComparison.Ordinal))
+                                                           .Select(m => m.Name).ToList();
+        var types = typeof(Plugin).Assembly.GetTypes().Where(t => t.Name.StartsWith("HarnessBinding", StringComparison.Ordinal)
+                                                               || t.Name == "HarnessLiveSnapshot").ToList();
+        if (UnderCi)
+        {
+            Assert.True(members.Count == 0, $"a CI build must compile the harness partial out, but DesignBindingService has {string.Join(", ", members)}");
+            Assert.True(types.Count == 0, $"a CI build must compile the harness records out, but has {string.Join(", ", types.Select(t => t.Name))}");
+        }
+        else
+        {
+            Assert.Contains("HarnessSuppressApplySignals", members);
+            Assert.NotEmpty(types);
+        }
+    }
 }

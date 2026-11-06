@@ -44,6 +44,10 @@ public class HarnessDocsTests
                      "/hair-port", "/actions/hair-port", "hairPort", "hair-port-busy", "hair-not-in-mod", "hair-ported",
                      "check.owed", "check.running", "\"auto\"", "off in the player's collection", "UNVERIFIED",
                      "never blocks a restore",
+                     // design bindings
+                     "/bindings", "/actions/glamourer-apply", "/actions/binding-edit", "\"permanent\"", "presets-pinned",
+                     "put-back-first", "model-change", "auto-writers-on", "allowAutoWriters", "record-failed",
+                     "skipped-inconsistent", "echoWindowOpen", "binding.json", "Design bindings",
                  })
             Assert.True(doc.Contains(required, StringComparison.Ordinal), $"adversarial-qa.md must mention '{required}'");
         Assert.Contains("Never put names", doc);

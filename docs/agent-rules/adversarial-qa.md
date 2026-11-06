@@ -74,7 +74,11 @@ four requests were open at once: retry when one finishes; it is never a busy run
 | `POST /actions/hair-port` | `{"mod":"<folder>","hair":"<hair model game path>","races":["c0101","c0401"]}` → 202 `{job, modDir, state}`: the Studio's **Port** button for those races (leave `races` out for the Studio's default ticks), after a backup; then reloads the mod and redraws. `{"mod","hair","remove":true}` is the **Remove ports** button. Only races the Studio lets you tick are ported; the rest come back in `result.skippedRaces` (`not-listed`, `covered`, `ported`, `no-style`, `other-sex-authored`, `own-version`, `own-skeleton`). Job kinds `hair-port` / `hair-remove`; `result` = `{action, summary: ported\|nothing-to-port\|nothing-ported\|removed\|nothing-to-remove, resultLine, source, asked, skippedRaces, ported:[{race, group, option, est, skeletonFrom}], stripped, refused:[{race, reason}], warnings, current, saved}` (remove: `removed, message, remaining`). No backup is taken when nothing would be written. 400 `invalid-field` for a bad `hair`, `races` that are not playable `cNNNN` codes, `remove` other than `true`, or both; 409 `hair-port-busy` (below). |
 | `POST /actions/equip` | `{"slot":"Body","item":12345}` or `{"slot":"Body","set":317,"variant":2}` → 200 `{slot, sent, item, set, variant, dyes, previous, original}` (`readBack:false` when the worn item could not be read back). Equips through Glamourer for this session only (no lock, no design). Slots: Head, Body, Hands, Legs, Feet, Ears, Neck, Wrists, RFinger, LFinger (any case). `set`/`variant` equip that model even when no item uses it. 400 `invalid-field` / `item-invalid`; 409 `busy`, `auto-refit-busy`, `not-logged-in`, `carrier-slot`, `glamourer-refused`; 503 `glamourer-unavailable`, `harness-stopping`. |
 | `POST /actions/mod-settings` | `{"mod":"<folder>","enabled":false}` and/or `"priority":1000` → 200 `{mod, collection, enabled, priority, before, redrawRequested}`. Holds the mod in the player's collection with a Penumbra **temporary** setting (its options kept), never saved. 409 `held-elsewhere` when another plugin (Glamourer, design binding) holds it; 404 `mod-not-found`; 400 `managed-mod`; 409 `no-collection`, `penumbra-refused`; 503 `penumbra-unavailable`, `harness-stopping`. |
-| `POST /actions/put-back` | `{}` → 200 `{gear:[{slot,result}], holds:[{mod,result}], sweep, redrawRequested}`. Undoes every equip and hold of this session. Never refused. |
+| `POST /actions/mod-settings` with `"permanent":true` | `{"mod":"<Proteus mod folder>","enabled":false,"permanent":true}` → 200 `{mod, collection, permanent:true, enabled, priority, before:{enabled,priority}, redrawRequested}`. Writes a **Proteus** mod's own enabled/priority (not a hold), recorded for put-back (see **Design bindings**). 409 `not-a-proteus-mod`, `penumbra-refused`; 503 `record-failed`. |
+| `POST /actions/put-back` | `{}` → 200 `{gear:[{slot,result}], holds:[{mod,result}], sweep, redrawRequested, binding}`. Undoes every equip and hold of this session, then the binding session (`binding` is null when there is none: see **Design bindings**). 409 `busy` only while a design apply is settling. |
+| `GET /bindings?mod=<folder>&group=<g>&option=<o>&design=<guid>&names=1` | Read-only design-binding state: `{enabled, followsAutomation, restoresCharacterMods, unequipUnset, echoWindowOpen, echoMsLeft, active:{id, fields}, storeSha256, bindings:[{id, capturedUtc, mods, sha256}], designs:[{id, bound}], mod, design}`. With `mod` (and `group`+`option`): `{mod, governed, presetDriven, live:[{row,diffuse,emissive}], stored:[…], settings:{enabled,priority,options,temporary}}`; with `design`: its applied `fields`. Names appear only with `names=1`, scrubbed. 400 `invalid-field`; 404 `mod-not-found`, `design-not-found`; 503 `glamourer-unavailable`. |
+| `POST /actions/glamourer-apply` | `{"design":"<guid>"}` (optionally `"allowAutoWriters":true`) → 200 `{design, activeBefore, activeAfter, finalizedSeen, settled, echoWindowOpen, echoMsLeft}`. Applies a Glamourer design to the character through Glamourer's own `ApplyDesign` IPC, as a user or plugin does (Proteus sees `finalized=DesignApplied`), and answers once its deferred work has settled. 409 `busy`, `auto-refit-busy`, `shader-upgrade-busy`, `variant-repoint-busy`, `hair-port-busy`, `not-logged-in`, `presets-pinned`, `put-back-first`, `auto-writers-on`, `model-change`, `glamourer-refused`; 404 `design-not-found`; 503 `glamourer-unavailable`, `record-failed`, `harness-stopping`. |
+| `POST /actions/binding-edit` | `{"mod","group","option","row":<n>,"diffuse":"#RRGGBB"}` sets one live colour row (sub-row A) of a mod the active binding captured, through the colour editor's path; `{"mod","group","option","clear":true}` clears that option's live override, through **Reset to defaults**' (live-only) path. Leave `group`/`option` out for a simple mod's top level. → 200 `{mod, group, option, governed, live}`. Never writes the binding store or the mod's files. 409 `binding-off`, `no-active-binding`, `not-bound`, `preset-driven`, `no-override-rows`, `busy`; 404 `row-not-found`, `mod-not-found`. |
 | `GET /jobs/{id}` | `{id, kind, modDir, state: queued\|running\|done\|failed\|cancelled, progress, backup, reloaded, redrawRequested, redrawObserved, autoRefitFollowed, result, restored, error}` |
 
 `mod` is the **folder name** Penumbra keeps the mod in (case-insensitive), never its
@@ -175,6 +179,65 @@ Equips and holds change the shared character for everyone, so:
   cannot, and logs what it left).
 - Start with a smoke check: one equip and put-back of one slot, one hold and
   put-back, with `/state` read before and after each.
+
+## Design bindings
+
+`GET /bindings`, `POST /actions/glamourer-apply`, `POST /actions/binding-edit` and
+`/actions/mod-settings` with `"permanent": true` let you drive design binding as a
+player does: apply a Glamourer design, edit a live colour, change a Proteus mod's
+own setting. The harness never writes the binding store (`design_bindings.json`) or
+a mod's files: there is no harness Update, and **Reset to defaults**' rewrite of the
+mod's metadata is not driven (only its live half, `clear`). Those stay UNVERIFIED for
+the user.
+
+- **Record first.** Before the session's first change that outlives the game (a
+  design apply, whose restore writes Proteus mods' permanent settings, or a
+  `permanent` write), the harness writes the Before values to
+  `test-harness/backups/<session>/binding.json`: the Glamourer state, the carriers,
+  the live binding state and every Proteus mod's permanent setting. If it cannot,
+  the change is refused with 503 `record-failed`. Put-back is the undo; the record is
+  for recovering by hand if put-back never ran (a crash, an unload off the framework
+  thread). Never copy its content into a report.
+- **Refusals.** A design apply is refused while a per-mod preset is pinned
+  (`presets-pinned`: the apply would drop it for good), while harness equips are
+  recorded (`put-back-first`: put back, then apply, then equip), when the design
+  would change race, gender, clan or body type (`model-change`), and while any
+  automatic writer is switched on: auto refit, the gear shader upgrade, Gear
+  variants, Fit hair automatically or Auto Hat Compat (`auto-writers-on`). Those
+  write into worn mods after the apply and put-back cannot undo that. Pass
+  `"allowAutoWriters": true` only when you will hash the worn mods first and clean up
+  as the shader upgrade, Gear variants, hair and auto refit sections say; with Fit
+  hair automatically on, a design that changes the hairstyle is still
+  `model-change`.
+- **Settling.** The apply answers only once the compositor and every automatic
+  writer are quiet (at most the redraw wait; `settled:false` otherwise: wait and
+  re-read). While it settles, every change route and put-back answer 409 `busy`:
+  wait for the apply's answer before sending anything else.
+- **The echo window.** For 2 s after a restore Proteus ignores the next design
+  apply as its own echo (`echoWindowOpen`, `echoMsLeft` in the apply's answer and
+  `/bindings`). Between any two applies wait until `echoWindowOpen` is false (at
+  least 2.5 s) and `compositor.phase` is `idle`, or the second apply is swallowed and
+  your check fails, or passes, for the wrong reason.
+- **Put-back** stops the restore's deferred work first, then puts the Glamourer
+  state back (carrier slots left alone) and re-reads it: `glamourer` is `restored`,
+  `partial` (something, such as advanced dyes, did not come back), `changed`
+  (someone applied something since: left alone), `failed` or `none`. Only after
+  `restored` (or `none`) does it write back each `permanent` setting and the `live`
+  binding state; otherwise they are `skipped-inconsistent` and stay recorded, so the
+  character never wears one look with another's binding. Each is restored only while
+  it is still what the harness left (`changed` otherwise). Retry once; report what is
+  left. `/state.harnessChanges.binding` shows the session (null when none).
+- **Script** (AC-binding-reapply). Read `/bindings` first and note `active`,
+  `storeSha256` and each `sha256`; pick a governed mod M with live rows
+  (`?mod=M&group=G&option=O`). (1) `binding-edit` a row to `#FF00FF`, then
+  `glamourer-apply` the active design: `/log` shows `finalized=DesignApplied` and
+  "re-applied — restoring its binding", `live` equals `stored`, `storeSha256`
+  unchanged. (2) `permanent` a captured Proteus mod off, re-apply: it is back on. (3)
+  edit, `equip` a slot, hold another mod: the edit stays, no "re-applied" line, then
+  put back. (4) an unbound design whose fields don't overlap the active one's:
+  "another design applied over", the edit stays. (5) edit, `clear`, re-apply: `live`
+  equals `stored`. Finish with put-back and check `storeSha256`, each `sha256`,
+  `active` and `live` equal what you read first.
 
 Example (a variant case): hold the competing mod off, equip the model, assert, put
 back:

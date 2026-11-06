@@ -47,11 +47,42 @@ public class HarnessReleaseGuardTests
 
         var step = lines.Skip(guard).TakeWhile((l, i) => i == 0 || !l.TrimStart().StartsWith("- name:", StringComparison.Ordinal)).ToList();
         Assert.Contains(step, l => l.Contains("'Proteus.TestHarness'", StringComparison.Ordinal));
+        // [AC-binding-reapply-13] [EDGE-binding-reapply-36] A second marker: a harness-only member outside the namespace.
+        Assert.Contains(step, l => l.Contains("'HarnessSuppressApplySignals'", StringComparison.Ordinal));
         Assert.Contains(step, l => l.Contains(@"Proteus\bin\Release\win-x64\Proteus.dll", StringComparison.Ordinal));
         Assert.Contains(step, l => l.Contains("latest.zip", StringComparison.Ordinal) && l.Contains("OpenRead", StringComparison.Ordinal));
         Assert.Contains(step, l => l.Contains("has no Proteus.dll", StringComparison.Ordinal));
         Assert.Equal(3, step.Count(l => l.Contains("exit 1", StringComparison.Ordinal)));
         Assert.DoesNotContain(step, l => l.TrimStart().StartsWith("uses:", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    [Trait("Plan", "AC-binding-reapply-13")]
+    [Trait("Plan", "EDGE-binding-reapply-51")]
+    public void SecondMarker_OnlyInsideHarnessGuards()
+    {
+        // The guard's second marker may only ever match a build that compiled the harness in: outside
+        // Proteus/TestHarness/ (removed from CI builds) it appears only between #if PROTEUS_TEST_HARNESS and #endif.
+        const string marker = "HarnessSuppressApplySignals";
+        var proteus = Path.Combine(RepoRoot, "Proteus");
+        var harness = Path.Combine(proteus, "TestHarness") + Path.DirectorySeparatorChar;
+        int seen = 0;
+        foreach (var file in Directory.EnumerateFiles(proteus, "*.cs", SearchOption.AllDirectories))
+        {
+            if (file.StartsWith(harness, StringComparison.OrdinalIgnoreCase)) continue;
+            if (file.Contains($"{Path.DirectorySeparatorChar}obj{Path.DirectorySeparatorChar}", StringComparison.Ordinal)) continue;
+            int depth = 0;
+            foreach (var line in File.ReadAllLines(file))
+            {
+                var t = line.Trim();
+                if (t.StartsWith("#if", StringComparison.Ordinal)) depth += t.Contains("PROTEUS_TEST_HARNESS", StringComparison.Ordinal) || depth > 0 ? 1 : 0;
+                else if (t.StartsWith("#endif", StringComparison.Ordinal) && depth > 0) depth--;
+                if (!line.Contains(marker, StringComparison.Ordinal)) continue;
+                seen++;
+                Assert.True(depth > 0, $"{Path.GetRelativePath(RepoRoot, file)} names {marker} outside #if PROTEUS_TEST_HARNESS");
+            }
+        }
+        Assert.True(seen > 0, $"{marker} is defined nowhere: the release guard's second marker would never match");
     }
 
     [Fact]

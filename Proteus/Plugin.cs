@@ -268,7 +268,8 @@ public sealed class Plugin : IDalamudPlugin
             new TestHarness.GameHarnessAdapter(penumbra, glamourer, compositor, autoRefit, shaderUpgrade, variantRepoint, hairPort, ObjectTable, ClientState, framework,
                                                TextureProvider, TextureReadback, config, uvRemap,
                                                path => textureLoader.LoadRawFile(null, path),
-                                               dir => partsPanel.NoteModelsChanged(dir), log),
+                                               dir => partsPanel.NoteModelsChanged(dir), log,
+                                               pluginInterface, designBindings, editRouter, presets),
             new TestHarness.DalamudFrameworkDispatcher(framework), observer => capture.LineObserver = observer, log,
             BuildNumber, BuildStamp);
 #endif
