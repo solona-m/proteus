@@ -194,6 +194,12 @@ public sealed class LocalizationTests
         Assert.Contains(tr["HairPort.Studio.OtherSex"].Message, tr["WhatsNew.HairOtherSex.Body"].Message);
         Assert.Contains(tr["Settings.GearVariants.Auto.Label"].Message, tr["WhatsNew.GearVariants.Body"].Message);
         Assert.Contains(tr["Settings.GearVariants.UndoWorn"].Message, tr["WhatsNew.GearVariants.Body"].Message);
+        Assert.Contains(tr["Tab.Settings"].Message, tr["WhatsNew.GearVariants.Body"].Message);
+        Assert.Contains(tr["Settings.Section.GearVariants"].Message, tr["WhatsNew.GearVariants.Body"].Message);
+        Assert.Contains(tr["Tab.Settings"].Message, tr["WhatsNew.ShaderUpgrade.Body"].Message);
+        // The Colors window, by the name its title bar shows ("Colors — {mod}").
+        string colors = tr["Colors.Window.Title.Fmt"].Message.Split(" — ")[0];
+        Assert.Contains(colors, tr["WhatsNew.ColorRows.Body"].Message);
         Assert.Contains(tr["Settings.GearShaders.AutoUpgrade.Label"].Message, tr["WhatsNew.ShaderUpgrade.Body"].Message);
         Assert.Contains(tr["Settings.GearShaders.UndoWorn"].Message, tr["WhatsNew.ShaderUpgrade.Body"].Message);
     }
