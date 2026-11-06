@@ -276,8 +276,8 @@ public partial class HairPortWatcherDecisionTests
     {
         // Once refused, writing nothing (EDGE-hair-race-port-30); now saved, and said.
         using var s = new Setup();
-        // A target head a third larger than the hair: the port sinks into it.
-        var game = Game(Races, new Dictionary<string, byte[]> { [HairPortPlan.HeadPaths(201).First()] = HeadModel(201, 0.13f) });
+        // A target head twice the hair's size: deeper than the scalp push goes (HairScalpPush.MaxPush), so the port sinks into it.
+        var game = Game(Races, new Dictionary<string, byte[]> { [HairPortPlan.HeadPaths(201).First()] = HeadModel(201, 0.2f) });
         var host = new BigHead(s.ModsRoot, game);
         foreach (var (k, v) in s.Host.Files) host.Files[k] = v;
         string? key = null;

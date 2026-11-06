@@ -296,7 +296,8 @@ The **Hair** section fits hair mods to you in two ways: hair made for another ra
 - Physics hair keeps its physics. When your race's skeleton lacks the bones a hairstyle moves with, the port brings the source race's skeleton and physics along for that hairstyle.
 - A hairstyle that wouldn't sit right on your head (it sinks into it, or stands off it) is still fitted, and Proteus says which, so you can check it in game.
 - A hairstyle the bend turns partly inside out is still fitted, and Proteus says which, so you can check it in game.
-- To cover every race at once, open a hair model in the **Studio** and use **Port to all races**. Under **Also for the other sex** you can tick races of the other sex too: they then wear this hairstyle instead of the game's style of that number. Proteus keeps such ports up to date but never makes one by itself.
+- Heads differ in shape, not just size, so bending a hairstyle onto a bigger head can sink part of it into the back of the skull and show a bald patch. Proteus pushes that hair back out to where it sat on the original head, and no further. On a much bigger head (Hrothgar) the hair stretches a little to cover it. If some still sinks in, Proteus says so. Hair Proteus fitted before this update is fitted again the next time you wear it, or from the Studio.
+- To cover every race at once, open a hair model in the **Studio** and use **Port to all races**. Under **Also for the other sex** you can tick races of the other sex too: they then wear this hairstyle instead of the game's style of that number. Proteus keeps such ports up to date but never makes one by itself. Each race of the other sex can be ported on its own: its port gets its own copy of the material, so the other races keep the game's style.
 
 **Hats.** Most modded hair has no hat support, so a hat worn over it goes straight through. Proteus presses the hair a hat would cover flat against your head.
 

@@ -20,14 +20,18 @@ namespace Proteus.Services;
 internal static class HairPortBaker
 {
     /// <summary>
-    /// Raised whenever a port would come out differently, so ports made by an older build are made again.
+    /// Raised whenever a port would come out differently, so ports made by an older build are made again. 2: hair the
+    /// bend sank into the target's skull is pushed back out (<see cref="HairScalpPush"/>), and a port across the sexes
+    /// into a shared material folder names a material of its own (<see cref="HairMaterialPath.PortName"/>).
     /// </summary>
-    public const int Version = 1;
+    public const int Version = 2;
 
     /// <summary>
     /// The most of a port's cranium vertices that may sit deeper than <see cref="InsideDepth"/> inside the target's
     /// skull. Measured over the game's own per-race copies of the shared hairstyles (2026-10-16): those reach 10%, ports
-    /// 19%, and a hairstyle left unbent on a smaller head 35–99% (see HairPortLocalTests).
+    /// 19%, and a hairstyle left unbent on a smaller head 35–99% (see HairPortLocalTests). Judged on the hat press's
+    /// furthest-vertex floor (<see cref="Measure"/>), not the skin surface the scalp push reads (<see cref="HairScalpPush"/>):
+    /// a port can carry this warning after the push cleared every point it sank, or the other way round.
     /// </summary>
     public const float SunkLimit = 0.25f;
 
@@ -61,8 +65,13 @@ internal static class HairPortBaker
     /// <param name="Warning">Said beside the port when it does not sit on the target's head (over <see cref="SunkLimit"/>
     /// or <see cref="GapMargin"/>), or more than <see cref="FoldedShare"/> of it turned inside out: it is saved all the
     /// same, for the player to look at in game. Null otherwise.</param>
+    /// <param name="Pushed">Points pushed back out of the target's skull (<see cref="HairScalpPush"/>).</param>
+    /// <param name="PushWorst">The furthest any was pushed, in metres.</param>
+    /// <param name="Clips">Points still sunk into the head where the source's are not, after the push.</param>
+    /// <param name="NoScalp">A face model had no skin mesh to read the scalp from, so nothing was pushed (said in the log).</param>
     public sealed record Result(byte[] Model, IReadOnlyList<(string From, string To)> Renamed, float Sunk,
-                                float GapShift, int FurHidden, long Millis, int Folded = 0, string? Warning = null);
+                                float GapShift, int FurHidden, long Millis, int Folded = 0, string? Warning = null,
+                                int Pushed = 0, float PushWorst = 0f, int Clips = 0, bool NoScalp = false);
 
     /// <summary>
     /// Where each bone sits in a hairstyle's skeleton, for the deformer: a bone it does not list takes its nearest
@@ -158,10 +167,23 @@ internal static class HairPortBaker
             foreach (var bone in src.BoneNames.Where(b => b.StartsWith(EarBonePrefix, StringComparison.Ordinal)))
                 model = ModelAttributeWriter.RenameBone(model, bone, HeadBone);
 
+        // The bend scales a head but does not know its shape: what it sank into the target's skull, where the source sat
+        // on its own scalp, goes back out — a bald patch otherwise.
+        HairScalpPush.Result? push = null;
+        var sourceFrame = HairScalpPush.FrameOf(sourceHead);
+        var targetFrame = HairScalpPush.FrameOf(targetHead);
+        bool noScalp = sourceFrame == null || targetFrame == null;
+        if (shown != null && sourceFrame != null && targetFrame != null)
+        {
+            try { push = HairScalpPush.Apply(model, shown, sourceFrame, targetFrame); }
+            catch (ModelAttributeWriter.ModelEditException ex) { refusal = ex.Message; return null; }
+            model = push.Model;
+        }
+
         var renamed = new List<(string, string)>();
         foreach (var name in SecondSkinWriter.Parse(model).MatNames)
         {
-            var next = HairMaterialPath.RenameRace(name, to);
+            var next = HairMaterialPath.PortName(name, from, to, hairId);
             if (next == name) continue;
             model = ModelAttributeWriter.RenameMaterial(model, name, next);
             renamed.Add((name, next));
@@ -201,8 +223,17 @@ internal static class HairPortBaker
                 to, after.Value.Sunk, MathF.Abs(shift) * 1000f);
             warning = warning == null ? fit : fit + "; " + warning;
         }
+        // What the push could not reach — below the fade, or deeper than the source's own gap gives back.
+        if (push is { } p && p.After > HairScalpPush.ClipLimit(p.Cranium))
+        {
+            var clip = string.Format(ProteusLoc.Localize("HairPort.Clip.Fmt",
+                "bent onto c{0:D4}, {1} of its points sink into the head where the original's do not, which may show the " +
+                "scalp; check it in game"), to, p.After);
+            warning = warning == null ? clip : warning + "; " + clip;
+        }
 
-        return new Result(model, renamed, after.Value.Sunk, shift, furHidden, clock.ElapsedMilliseconds, folded, warning);
+        return new Result(model, renamed, after.Value.Sunk, shift, furHidden, clock.ElapsedMilliseconds, folded, warning,
+                          push?.Pushed ?? 0, push?.Worst ?? 0f, push?.After ?? 0, noScalp);
     }
 
     /// <summary>
@@ -271,7 +302,8 @@ internal static class HairPortBaker
     /// no vertex around that cranium at all is nowhere near it, and measures as entirely sunk.
     /// </summary>
     /// <remarks>The scalp is <see cref="HatCompatSolve.HeadFloor"/>'s: per direction from the face model's centre, its
-    /// furthest vertex above that centre.</remarks>
+    /// furthest vertex above that centre — not the ray-cast skin surface <see cref="HairScalpPush"/> pushes against, so the
+    /// fit warning and the push can disagree on a port.</remarks>
     internal static (float Sunk, float Gap)? Measure(byte[] hair, byte[] head)
     {
         var frame = HatCompatSolve.HeadFrameFrom(head);

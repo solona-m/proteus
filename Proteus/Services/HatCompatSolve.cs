@@ -428,6 +428,29 @@ public static partial class HatCompatSolve
         return smooth;
     }
 
+    /// <summary>The direction grid <see cref="HeadFloor"/> is binned on: <see cref="FloorBinsU"/> around by
+    /// <see cref="FloorBinsV"/> from the crown down; bin <c>iv * FloorBinsU + iu</c>.</summary>
+    internal const int FloorBinsU = BinsU, FloorBinsV = BinsV;
+
+    /// <summary>
+    /// A per-bin value (a <see cref="HeadFloor"/>, or anything on its grid) read at <paramref name="dir"/>, blended
+    /// between the four nearest bin centres — so what is read along a surface has no steps at the bins' edges.
+    /// </summary>
+    internal static float FloorAt(float[] floor, Vector3 dir)
+    {
+        float u = MathF.Atan2(dir.Z, dir.X);
+        float v = MathF.Acos(Math.Clamp(dir.Y, -1f, 1f));
+        float fu = (u + MathF.PI) / (2 * MathF.PI) * BinsU - 0.5f;
+        float fv = Math.Clamp(v / MathF.PI * BinsV - 0.5f, 0f, BinsV - 1);
+        int u0 = (int)MathF.Floor(fu), v0 = (int)MathF.Floor(fv);
+        float tu = fu - u0, tv = fv - v0;
+        int v1 = Math.Min(v0 + 1, BinsV - 1);
+        int a = ((u0 % BinsU) + BinsU) % BinsU, b = (a + 1) % BinsU;
+        float top = floor[v0 * BinsU + a] * (1 - tu) + floor[v0 * BinsU + b] * tu;
+        float bottom = floor[v1 * BinsU + a] * (1 - tu) + floor[v1 * BinsU + b] * tu;
+        return top * (1 - tv) + bottom * tv;
+    }
+
     /// <summary>Bin index for a direction, and the bin's neighbours for smoothing.</summary>
     private static int BinOf(Vector3 dir)
     {

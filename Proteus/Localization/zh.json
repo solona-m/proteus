@@ -5483,6 +5483,14 @@
     "message": "它无法贴合 c{0:D4} 的头部：{1:P0} 陷入头骨，且与头皮的距离和原版相差 {2:F0} mm；请在游戏中检查",
     "description": ""
   },
+  "HairPort.Clip.Fmt": {
+    "message": "弯折到 c{0:D4} 后，有 {1} 个点陷入头部（原版此处不会），可能露出头皮；请在游戏中检查",
+    "description": "A hair port saved with a warning (lowercase sentence fragment): bent onto another race, some of it still sinks into that race's head where the original sits on its own scalp, which may show the skin; shown after a race or file name and a colon. {0} race code number, {1} number of points."
+  },
+  "HairPort.Undo.Also.Fmt": {
+    "message": "同时移除了 {0} 的移植，它们使用了其自身发型会读取的材质重定向。",
+    "description": "Sentence added after a hair-port removal: ports made by an older build were taken out too, because they redirected a material the named races' own hairstyle reads. {0} race codes, comma-separated (e.g. c0301, c0501)."
+  },
   "HairPort.Refused.NotHair": {
     "message": "它不是发型模型",
     "description": ""

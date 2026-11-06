@@ -33,10 +33,15 @@ internal static class HairPortWriter
     /// its record keeps how and when it was made. Skipped when the port is gone by the time it is saved.</param>
     /// <param name="StrippedFrom">For a strip, the port's entry and carried skeleton it was planned from: it applies only
     /// while the port still has them.</param>
+    /// <param name="Pushed">Points the bend sank into the target's skull that were pushed back out, for the log; never
+    /// saved.</param>
+    /// <param name="PushWorst">The furthest any was pushed, in metres, for the log.</param>
+    /// <param name="NoScalp">No scalp could be read to push against (a face model without a skin mesh), for the log.</param>
     public sealed record PortWrite(HairPortPlan.Owner Into, string SourceGamePath, string SourceFile, string SourceSha8,
                                    string TargetGamePath, byte[] Model, IReadOnlyList<MaterialWrite> Materials,
                                    long Millis = 0, int Est = 0, int SkeletonFrom = 0, bool Stripped = false,
-                                   (int Est, int SkeletonFrom) StrippedFrom = default);
+                                   (int Est, int SkeletonFrom) StrippedFrom = default, int Pushed = 0, float PushWorst = 0f,
+                                   bool NoScalp = false);
 
     /// <summary>The <c>Est</c> manipulation that gives a port's race its extra skeleton.</summary>
     internal static object EstFor(string targetGamePath, int entry)
@@ -61,7 +66,10 @@ internal static class HairPortWriter
 
     /// <param name="Saved">The writes saved — those a save skipped left out (a strip of a port no longer the one it was
     /// planned from).</param>
-    public sealed record Outcome(bool Ok, string Message, int Count, IReadOnlyList<PortWrite>? Saved = null)
+    /// <param name="Also">For an Undo, the ports of build 1430's shared sets it took along beyond what was asked for
+    /// (target game paths; <see cref="Join.Folder"/>), which its message names.</param>
+    public sealed record Outcome(bool Ok, string Message, int Count, IReadOnlyList<PortWrite>? Saved = null,
+                                 IReadOnlyList<string>? Also = null)
     {
         public IReadOnlyList<PortWrite> SavedWrites => Saved ?? [];
     }
@@ -123,6 +131,14 @@ internal static class HairPortWriter
                 if (w.Materials.FirstOrDefault(m => CarriesSkeleton(w, m.GamePath) && !MayPublish(owners, owner, record, m.GamePath))
                     is { } taken)
                     return new Outcome(false, Covered(taken.GamePath), 0);
+                // So is a material of the port's own name: the game ships no file there, so a model naming it with no
+                // redirect where it is on draws invisible. Borrowing the default data's — always on with any option — is
+                // the one way to go without our own.
+                if (!w.Stripped && w.Materials.FirstOrDefault(m => HairMaterialPath.IsOwnName(m.GamePath)
+                                                                   && !MayPublish(owners, owner, record, m.GamePath)
+                                                                   && !PublishedByDefaults(owners, owner, m.GamePath))
+                    is { } unpublishable)
+                    return new Outcome(false, Covered(unpublishable.GamePath), 0);
                 plan.Add((w, owner, was?.File ?? HairPortPlan.PortFile(owner, w.TargetGamePath), was));
             }
 
@@ -194,7 +210,7 @@ internal static class HairPortWriter
                 // later leaves none of these behind untracked.
                 foreach (var (_, owner, _, was) in plan.Where(p => p.Was != null))
                 {
-                    var drop = Unneeded(was!, owner, redirects[owner], record, plan.Select(p => p.Was));
+                    var drop = Unneeded(was!, owner, redirects[owner], record, plan.Select(p => p.Was), owners, entries);
                     if (drop.Count == 0) continue;
                     PenumbraModMeta.RemoveOptionRedirects(modRoot, owner.Group, owner.Option, drop);
                     dropped = true;
@@ -246,19 +262,60 @@ internal static class HairPortWriter
     /// <summary>
     /// The redirects a remade port's entry from before added that it no longer publishes (<paramref name="add"/> is
     /// everything its option is given now) and that no other port of the option still uses — the ports remade in the
-    /// same save, <paramref name="remade"/>, aside, since what they use is in <paramref name="add"/>.
+    /// same save, <paramref name="remade"/>, aside, since what they use is in <paramref name="add"/>. A material of a
+    /// port's own name stays while any port left — of any place, those this save writes (<paramref name="written"/>)
+    /// included — relies on it there (<see cref="ReliesOn"/>): an option's port may draw with the default data's.
     /// </summary>
     internal static Dictionary<string, string> Unneeded(HairPortRecord.Entry was, HairPortPlan.Owner owner,
                                                         IReadOnlyDictionary<string, string> add, HairPortRecord record,
-                                                        IEnumerable<HairPortRecord.Entry?> remade)
+                                                        IEnumerable<HairPortRecord.Entry?> remade,
+                                                        IReadOnlyList<HairPortPlan.Owner>? owners = null,
+                                                        IEnumerable<HairPortRecord.Entry>? written = null)
     {
         var replaced = remade.ToHashSet();
+        var left = record.Ports.Where(p => !replaced.Contains(p)).Concat(written ?? []).ToList();
         return was.Materials
                   .Where(m => !add.ContainsKey(m.Key)
-                              && !record.Ports.Any(p => !replaced.Contains(p) && HairPortPlan.Same(p.Owner, owner)
-                                                        && p.Materials.ContainsKey(m.Key)))
+                              && (HairMaterialPath.IsOwnName(m.Key)
+                                  ? !left.Any(p => ReliesOn(p, owner, m.Key, owners ?? []))
+                                  : !left.Any(p => HairPortPlan.Same(p.Owner, owner) && p.Materials.ContainsKey(m.Key))))
                   .ToDictionary(m => m.Key, m => m.Value, StringComparer.OrdinalIgnoreCase);
     }
+
+    /// <summary>
+    /// Whether <paramref name="entry"/>'s model may name the own-named material <paramref name="gamePath"/>: a port
+    /// across the sexes to the race the name was made for, of a hairstyle whose material folder holds it. Read from the
+    /// record alone, so it may say yes for a port that names none — it only ever keeps a redirect longer.
+    /// </summary>
+    internal static bool NeedsOwn(HairPortRecord.Entry entry, string gamePath)
+    {
+        if (!HairMaterialPath.IsOwnName(gamePath)) return false;
+        if (HairPortPlan.Parse(entry.TargetGamePath) is not { } t || HairPortPlan.Parse(entry.SourceGamePath) is not { } s)
+            return false;
+        if (HairMaterialPath.OwnRace(gamePath) != t.Race || !CrossSexRefit.CrossesSex(s.Race, t.Race)) return false;
+        string folder = $"chara/human/c{HairMaterialPath.Race(t.Race, t.Id):D4}/obj/hair/h{t.Id:D4}/material/";
+        return gamePath.Replace('\\', '/').StartsWith(folder, StringComparison.OrdinalIgnoreCase);
+    }
+
+    /// <summary>
+    /// Whether <paramref name="entry"/> draws with <paramref name="owner"/>'s redirect of the own-named material
+    /// <paramref name="gamePath"/>: its own place's, or the default data's when its own place does not publish it.
+    /// </summary>
+    internal static bool ReliesOn(HairPortRecord.Entry entry, HairPortPlan.Owner owner, string gamePath,
+                                  IReadOnlyList<HairPortPlan.Owner> owners)
+    {
+        if (!NeedsOwn(entry, gamePath)) return false;
+        if (HairPortPlan.Same(entry.Owner, owner)) return true;
+        if (!owner.IsDefault) return false;
+        var own = owners.FirstOrDefault(o => HairPortPlan.Same(o, entry.Owner));
+        return own == null || HairPortPlan.FileFor(own, gamePath) == null;
+    }
+
+    /// <summary>Whether the default data publishes <paramref name="gamePath"/> for a port of <paramref name="owner"/>
+    /// to draw with — always on with any option, so a port there need not publish its own.</summary>
+    internal static bool PublishedByDefaults(IReadOnlyList<HairPortPlan.Owner> owners, HairPortPlan.Owner owner, string gamePath)
+        => !owner.IsDefault && owners.FirstOrDefault(o => o.IsDefault) is { } defaults
+           && HairPortPlan.FileFor(defaults, gamePath) != null;
 
     /// <summary>
     /// Whether a redirect of <paramref name="gamePath"/> may be published from <paramref name="owner"/>: the path is
@@ -275,7 +332,7 @@ internal static class HairPortWriter
                                      && HairPortRecord.Rel(mine).Equals(HairPortRecord.Rel(existing), StringComparison.OrdinalIgnoreCase));
     }
 
-    private static string Covered(string gamePath)
+    internal static string Covered(string gamePath)
         => string.Format(ProteusLoc.Localize("HairPort.Refused.Covered.Fmt", "the mod already publishes {0} there"), gamePath);
 
     /// <summary>Whether <paramref name="gamePath"/> is the skeleton, or its physics, <paramref name="w"/> carries for its
@@ -291,12 +348,16 @@ internal static class HairPortWriter
     /// <summary>
     /// Take out every port <paramref name="which"/> picks — and every port sharing a material with one of them, since the
     /// races of a shared material go together (<see cref="HairPortBuilder.Sharers"/>): one taken out alone would draw its
-    /// own game hairstyle with the material the others still redirect. Its redirects go only while they still name
-    /// Proteus's file; then every file under <see cref="HairPortPlan.Folder"/> nothing names any more. A set with a port
-    /// the user edited since with the brush or part switches is left whole, the other sets still go, and the result says
-    /// why. Nothing is changed while the manifest cannot be read: unknown is not gone.
+    /// own game hairstyle with the material the others still redirect — and every port of build 1430's shared sets holding
+    /// a game-named redirect in a taken race's own folder (<see cref="Join.Folder"/>), which the result names. Its redirects
+    /// go only while they still name Proteus's file; a material of a port's own name only once no port left relies on it,
+    /// in that place or the default data (<see cref="ReliesOn"/>); then every file under <see cref="HairPortPlan.Folder"/>
+    /// nothing names any more. A set with a port the user edited since with the brush or part switches is left whole, the
+    /// other sets still go, and the result says why. Nothing is changed while the manifest cannot be read: unknown is not
+    /// gone.
     /// </summary>
-    /// <param name="decline">Remember the undo, so the automatic path does not port the same hairstyle there again.</param>
+    /// <param name="decline">Remember the undo, so the automatic path does not port the same hairstyle there again — for
+    /// what was asked for and what shares its material, never for an old port taken along by its folder.</param>
     public static Outcome Undo(string modRoot, Func<HairPortRecord.Entry, bool> which, bool decline)
     {
         lock (ModManifestLock.Gate)
@@ -316,20 +377,32 @@ internal static class HairPortWriter
             // would lose the material the others take out with them. The other sets still go.
             string blocked = "";
             var undo = new List<HairPortRecord.Entry>();
+            var how = new Dictionary<HairPortRecord.Entry, Join>();
             var left = new List<HairPortRecord.Entry>();
             foreach (var e in picked)
             {
                 // Its set was already taken, or already left whole.
                 if (undo.Contains(e) || left.Contains(e)) continue;
                 var set = SharerSet(record, [e]);
-                if (set.Select(p => EditedBy(modRoot, p.File)).FirstOrDefault(n => n != null) is { } later)
+                if (set.Select(p => EditedBy(modRoot, p.Entry.File)).FirstOrDefault(n => n != null) is { } later)
                 {
                     blocked = ModelBackupOrder.BlockedMessage(later);
-                    left.AddRange(set);
+                    left.AddRange(set.Select(p => p.Entry));
                     continue;
                 }
-                undo.AddRange(set.Where(p => !undo.Contains(p)));
+                // A port's join kind can depend on which pick reached it first: an old port's key-sharers reached through a
+                // remade pick's folder clause are Folder (not declined, listed as "also"); reached from that old port as a
+                // pick of its own first, they are Key. Harmless — Folder members are build 1430's cross-sex ports, which the
+                // automatic path never makes again — and accepted as such (review 2026-11-05).
+                foreach (var (p, j) in set)
+                {
+                    // What another pick took by its own key keeps that: only what nothing asked for is "also".
+                    if (how.TryGetValue(p, out var had)) { if (j < had) how[p] = j; continue; }
+                    undo.Add(p);
+                    how[p] = j;
+                }
             }
+            foreach (var e in picked.Where(how.ContainsKey)) how[e] = Join.Picked;
             if (undo.Count == 0) return new Outcome(false, blocked, 0);
 
             // The ports first, then their materials — each kept while any port still in the record uses it, so a port
@@ -341,7 +414,7 @@ internal static class HairPortWriter
                 if (owners.Any(o => HairPortPlan.Same(o, e.Owner)))
                     try
                     {
-                        PenumbraModMeta.RemoveOptionRedirects(modRoot, e.Group, e.Option,
+                        RemoveRedirects(modRoot, e.Group, e.Option,
                             new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase) { [e.TargetGamePath] = e.File },
                             e.Est > 0 ? IsEst(e.TargetGamePath, e.Est) : null);
                     }
@@ -352,7 +425,9 @@ internal static class HairPortWriter
             foreach (var e in gone)
             {
                 record.Ports.Remove(e);
-                if (decline && !record.Declined.Contains(HairPortPlan.DeclineKey(e.TargetGamePath)))
+                // Only what was asked for, and what goes with it by its own material: a port of build 1430 taken along
+                // because it held a redirect in the undone race's folder was never undone by the user.
+                if (decline && how[e] != Join.Folder && !record.Declined.Contains(HairPortPlan.DeclineKey(e.TargetGamePath)))
                     record.Declined.Add(HairPortPlan.DeclineKey(e.TargetGamePath));
                 // Only once the port is out: a hat fit of it has nothing left to restore.
                 if (HatCompatService.Forget(modRoot, e.File) is { } why) blocked = why;
@@ -361,40 +436,107 @@ internal static class HairPortWriter
             foreach (var e in gone.Where(e => e.Materials.Count > 0 && owners.Any(o => HairPortPlan.Same(o, e.Owner))))
             {
                 // A material another port of the same option still uses stays published — including one that could not
-                // be taken out above, which is still in the record.
-                var drop = e.Materials.Where(m => !record.Ports.Any(p => HairPortPlan.Same(p.Owner, e.Owner)
-                                                                         && p.Materials.ContainsKey(m.Key)))
+                // be taken out above, which is still in the record. One of a port's own name goes by its own rule, below.
+                var drop = e.Materials.Where(m => !HairMaterialPath.IsOwnName(m.Key)
+                                                  && !record.Ports.Any(p => HairPortPlan.Same(p.Owner, e.Owner)
+                                                                            && p.Materials.ContainsKey(m.Key)))
                                       .ToDictionary(m => m.Key, m => m.Value, StringComparer.OrdinalIgnoreCase);
-                try { PenumbraModMeta.RemoveOptionRedirects(modRoot, e.Group, e.Option, drop); }
+                try { RemoveRedirects(modRoot, e.Group, e.Option, drop); }
                 catch (Exception ex) { blocked = ex.Message; }
             }
+            if (DropOwnMaterials(modRoot, owners, record, gone) is { } failed) blocked = failed;
             int removed = gone.Count;
 
             DeleteUnnamed(modRoot);
             HairPortRecord.Write(modRoot, record);
-            return removed == 0 ? new Outcome(false, blocked, 0) : new Outcome(true, blocked, removed);
+            var also = gone.Where(e => how[e] == Join.Folder).Select(e => e.TargetGamePath).ToList();
+            string message = also.Count == 0 ? blocked : JoinText(blocked, AlsoMessage(also));
+            return removed == 0 ? new Outcome(false, blocked, 0) : new Outcome(true, message, removed, Also: also);
         }
     }
 
     /// <summary>
-    /// <paramref name="picked"/>, and every port that shares a material redirect with one of them in the same place of
-    /// the mod, over and over until nothing more joins.
+    /// Take each own-named material (<see cref="HairMaterialPath.IsOwnName"/>) a port in <paramref name="gone"/> may have
+    /// drawn with out of every place where no port left relies on it (<see cref="ReliesOn"/>) — the place the record says
+    /// published it, and any other, since the <c>_portNNNN</c> marker is Proteus's alone. Kept wherever a port left still
+    /// draws with it. The error of a place that could not be written, or null.
     /// </summary>
-    internal static List<HairPortRecord.Entry> SharerSet(HairPortRecord record, IEnumerable<HairPortRecord.Entry> picked)
+    private static string? DropOwnMaterials(string modRoot, IReadOnlyList<HairPortPlan.Owner> owners, HairPortRecord record,
+                                            IReadOnlyList<HairPortRecord.Entry> gone)
     {
-        var set = picked.ToList();
-        for (bool grew = true; grew;)
+        string? failed = null;
+        foreach (var owner in owners)
         {
-            grew = false;
-            foreach (var p in record.Ports)
+            var drop = owner.Files
+                .Where(f => HairMaterialPath.IsOwnName(f.Key) && gone.Any(e => NeedsOwn(e, f.Key))
+                            && !record.Ports.Any(p => ReliesOn(p, owner, f.Key, owners)))
+                .ToDictionary(f => f.Key, f => f.Value, StringComparer.OrdinalIgnoreCase);
+            if (drop.Count == 0) continue;
+            try { RemoveRedirects(modRoot, owner.Group, owner.Option, drop); }
+            catch (Exception ex) { failed = ex.Message; }
+        }
+        return failed;
+    }
+
+    private static string JoinText(string a, string b) => a.Length == 0 ? b : $"{a} {b}";
+
+    /// <summary>What an Undo says of the ports of build 1430 it took along (target game paths).</summary>
+    internal static string AlsoMessage(IEnumerable<string> targets)
+        => string.Format(ProteusLoc.Localize("HairPort.Undo.Also.Fmt",
+               "Also took out the ports for {0}, which used a material redirect their own hairstyle reads."),
+           string.Join(", ", targets.Select(t => HairPortPlan.Parse(t) is { } p ? $"c{p.Race:D4}" : t).Distinct()));
+
+    /// <summary>How a port joined an Undo's set: asked for; sharing a material redirect with what was asked for (and so
+    /// on); or holding a game-named redirect in the folder a member's race reads for its own hairstyle — a port of build
+    /// 1430's shared set, which would otherwise leave that race's own hairstyle drawn with a port's material.</summary>
+    internal enum Join { Picked, Key, Folder }
+
+    /// <summary>
+    /// <paramref name="picked"/>, and every port that shares a material redirect with one of them in the same place of
+    /// the mod, over and over until nothing more joins (<see cref="Join.Key"/>); then every port of the same place holding
+    /// a game-named redirect in the folder a member's race reads for its hairstyle (<see cref="HairMaterialPath.ReadBy"/>),
+    /// and what shares with those, over and over (<see cref="Join.Folder"/>). A port that joins both ways is Key.
+    /// </summary>
+    internal static List<(HairPortRecord.Entry Entry, Join How)> SharerSet(HairPortRecord record,
+                                                                           IEnumerable<HairPortRecord.Entry> picked)
+    {
+        var set = picked.Select(p => (Entry: p, How: Join.Picked)).ToList();
+        Grow(Join.Key, SharesKey);
+        Grow(Join.Folder, (e, p) => SharesKey(e, p) || InReadFolder(e, p));
+        return set;
+
+        void Grow(Join how, Func<HairPortRecord.Entry, HairPortRecord.Entry, bool> joins)
+        {
+            for (bool grew = true; grew;)
             {
-                if (set.Contains(p)) continue;
-                if (!set.Any(e => HairPortPlan.Same(e.Owner, p.Owner) && e.Materials.Keys.Any(p.Materials.ContainsKey))) continue;
-                set.Add(p);
-                grew = true;
+                grew = false;
+                foreach (var p in record.Ports)
+                {
+                    if (set.Any(s => s.Entry == p)) continue;
+                    if (!set.Any(s => HairPortPlan.Same(s.Entry.Owner, p.Owner) && joins(s.Entry, p))) continue;
+                    set.Add((p, how));
+                    grew = true;
+                }
             }
         }
-        return set;
+
+        static bool SharesKey(HairPortRecord.Entry e, HairPortRecord.Entry p) => e.Materials.Keys.Any(p.Materials.ContainsKey);
+
+        static bool InReadFolder(HairPortRecord.Entry e, HairPortRecord.Entry p)
+            => HairPortPlan.Parse(e.TargetGamePath) is { } t
+               && p.Materials.Keys.Any(k => HairMaterialPath.ReadBy(t.Race, t.Id, k));
+    }
+
+    /// <summary>A test seam: when set, called before each redirect removal an Undo makes, with the option and what goes;
+    /// it may throw to stand for a manifest that cannot be written. Per thread. Never set outside tests.</summary>
+    [ThreadStatic] internal static Action<string, IReadOnlyDictionary<string, string>>? BeforeRemove;
+
+    private static void RemoveRedirects(string modRoot, string group, string option, IReadOnlyDictionary<string, string> remove,
+                                        Func<JsonElement, bool>? dropManipulation = null)
+    {
+        if (remove.Count == 0 && dropManipulation == null) return;
+        BeforeRemove?.Invoke(option, remove);
+        PenumbraModMeta.RemoveOptionRedirects(modRoot, group, option, remove, dropManipulation);
     }
 
     /// <summary>A test seam: called before each option's redirects are merged, with how many are already in. Per
