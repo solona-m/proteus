@@ -181,8 +181,9 @@ internal sealed class HarnessChanges(IHarnessGame game, SessionNames names, IPlu
     // ── put back ────────────────────────────────────────────────────────────
 
     /// <summary>
-    /// Undo every hold, then every equip, then sweep leftover harness holds, then the binding session. Never refused. Only
-    /// failures stay recorded.
+    /// Undo every hold, then every equip, then sweep leftover harness holds, then end the Studio session, then the binding
+    /// session, each in its own try/catch. Never refused. Only failures stay recorded (and a Studio session something
+    /// else touched).
     /// </summary>
     public PutBackReport PutBack() => PutBack(skipHalfRecordedBinding: false);
 

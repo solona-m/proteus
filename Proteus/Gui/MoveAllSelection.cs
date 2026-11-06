@@ -136,10 +136,8 @@ internal sealed class MoveAllSelection
         int rows = 0;
         for (int p = 0; p < parts.Count; p++)
         {
-            var part = parts[p];
-            movesPart[p] = moves(part);
-            if (part.Island < 0) rows++;
-            if (movesPart[p]) labels.Add(part.Label);
+            movesPart[p] = moves(parts[p]);
+            if (parts[p].Island < 0) rows++;
         }
 
         // Counted from what actually moves — the seeds, by their finest part — so a submesh whose islands are all
@@ -157,6 +155,11 @@ internal sealed class MoveAllSelection
             movingSubmeshes.Add((parts[p].Mesh, parts[p].Submesh));
             if (SecondSkinWriter.IsBodySkinMaterial(parts[p].Material)) skin = true;
         }
+
+        // What is shown as moving matches the count: the parts with seeds, and the submesh rows they belong to.
+        for (int p = 0; p < parts.Count; p++)
+            if (seen[p] || (parts[p].Island < 0 && movingSubmeshes.Contains((parts[p].Mesh, parts[p].Submesh))))
+                labels.Add(parts[p].Label);
 
         Seeds = seeds.ToArray();
         Rows = rows;

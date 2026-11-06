@@ -209,6 +209,18 @@ public class MoveAllSelectionTests
         allLocked.Update(islands, null, PartsPanel.BuildPartOfVertex(islands), p => p.Island < 0, 0, false);
         Assert.Empty(allLocked.Seeds);
         Assert.Equal(0, allLocked.MovingRows);
+        Assert.Empty(allLocked.Labels);   // nothing is shown as moving that the count leaves out
+
+        // The same with body skin: skin whose every piece is locked is not "including skin".
+        var skinPos = new List<float>();
+        var sa = Sheet(skinPos, Vector3.Zero);
+        var sb = Sheet(skinPos, new Vector3(0.1f, 0f, 0f));
+        var skinIslands = Model(skinPos, [Part(0, 0, -1, "1.1", [.. sa, .. sb], Bibo), Part(0, 0, 0, "1.1a", sa, Bibo),
+                                          Part(0, 0, 1, "1.1b", sb, Bibo)]);
+        var skinLocked = new MoveAllSelection();
+        skinLocked.Update(skinIslands, null, PartsPanel.BuildPartOfVertex(skinIslands), p => p.Island < 0, 0, true);
+        Assert.False(skinLocked.IncludesSkin);
+        Assert.Equal(0, skinLocked.MovingRows);
     }
 
     [Fact]

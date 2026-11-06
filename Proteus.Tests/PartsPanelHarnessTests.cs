@@ -146,6 +146,17 @@ public class PartsPanelHarnessTests
     }
 
     [Fact]
+    [Trait("Plan", "AC-move-all-parts-11")]
+    public void StudioViewAfterQaFixes()
+    {
+        // Found in game (build 1439): once put-back closed the model, /studio showed its edit; undo answered no pivot.
+        var h = Harness();
+        Assert.Contains("followReady = (parts != null ? volume : null)?.FollowReady == true", h);
+        Assert.Contains("[\"edit\"] = parts != null && volume is { } v", h);
+        Assert.Contains("return Done(\"undo\", was, PartTool ? MovePivot() : null, root, before, session);", h);
+    }
+
+    [Fact]
     [Trait("Plan", "AC-move-all-parts-15")]
     public void NoImGuiBetweenFrames()
     {
