@@ -41,6 +41,10 @@ public class HarnessDocsTests
                      "/actions/equip", "/actions/mod-settings", "/actions/put-back", "harnessChanges", "held-elsewhere",
                      "harness-stopping", "put back every equip and hold", "One in-game QA at a time", "/state.session",
                      "/state.models",
+                     // [AC-move-all-parts-16] [EDGE-move-all-parts-37]
+                     "studio-has-edits", "studio-changed", "Undo saved changes", "blocked:", "hash-changed",
+                     "studio:[{mod,files,panel,code,kept}]", "put-back-first", "{applied, locks:[{label,result}], chosen, state}",
+                     "`harnessOpened`", "`wrong-tool` (locks outside Move, Rotate or Scale)",
                      // [AC-hair-port-qa-10] [EDGE-hair-port-qa-23]
                      "/hair-port", "/actions/hair-port", "hairPort", "hair-port-busy", "hair-not-in-mod", "hair-ported",
                      "check.owed", "check.running", "\"auto\"", "off in the player's collection", "UNVERIFIED",

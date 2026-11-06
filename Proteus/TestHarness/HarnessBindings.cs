@@ -49,7 +49,8 @@ internal sealed class HarnessBindings(IHarnessGame game, Func<string, string> sc
     /// The first hop of a design apply: the checks, the record, the Before readings, then Glamourer's apply. Null error
     /// with a pending apply on success.
     /// </summary>
-    public (ChangeResult? Error, PendingApply? Pending) BeginApply(Guid design, bool allowAutoWriters, bool equipsRecorded)
+    public (ChangeResult? Error, PendingApply? Pending) BeginApply(Guid design, bool allowAutoWriters, bool equipsRecorded,
+                                                                  bool studioSession = false)
     {
         if (!game.PlayerPresent()) return (ChangeResult.Fail(409, "not-logged-in", "there is no character to apply a design to"), null);
         if (game.Designs() is not { } designs) return (ChangeResult.Fail(503, "glamourer-unavailable", "Glamourer's designs cannot be read"), null);
@@ -61,6 +62,9 @@ internal sealed class HarnessBindings(IHarnessGame game, Func<string, string> sc
             return (ChangeResult.Fail(409, "presets-pinned", "a per-mod preset is pinned; a design apply would drop it for good. Unpin it first"), null);
         if (equipsRecorded)
             return (ChangeResult.Fail(409, "put-back-first", "harness equips are recorded; put back before applying a design"), null);
+        // A design apply's restore can rewrite the Studio session's mod settings and reload it: put the Studio back first.
+        if (studioSession)
+            return (ChangeResult.Fail(409, "put-back-first", "a harness Studio session is recorded; put back before applying a design"), null);
         var writers = game.AutoWritersOn();
         if (writers.Count > 0 && !allowAutoWriters)
             return (ChangeResult.Fail(409, "auto-writers-on",

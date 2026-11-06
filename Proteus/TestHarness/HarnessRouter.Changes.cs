@@ -106,6 +106,7 @@ internal sealed partial class HarnessRouter
             gear = report.Gear.Select(g => new { slot = g.Name, result = g.Result, code = g.Code }),
             holds = report.Holds.Select(h => new { mod = h.Name, result = h.Result, code = h.Code }),
             sweep = report.Sweep, redrawRequested = report.RedrawRequested,
+            studio = StudioPutBackBlock(report),
             binding = b == null ? null : new
             {
                 glamourer = b.Glamourer, live = b.Live, record = b.Record,

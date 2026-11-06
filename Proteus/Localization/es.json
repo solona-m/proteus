@@ -4095,6 +4095,62 @@
     "message": "Mueve, gira o escala polígonos sueltos en lugar de piezas enteras. Haz clic en un polígono para seleccionarlo;\nMayús+clic añade o quita uno. Elegir una pieza en la lista selecciona todos sus polígonos.",
     "description": ""
   },
+  "Parts.Move.SelectAll": {
+    "message": "Todo",
+    "description": ""
+  },
+  "Parts.Move.SelectAll.Tip": {
+    "message": "Mueve, gira o escala juntas todas las piezas marcadas de este modelo, como una sola.\nDesmarca una pieza en la lista de piezas para dejarla donde está. La piel solo se mueve con «Mover también la piel» activado.",
+    "description": ""
+  },
+  "Parts.Move.All.Fmt": {
+    "message": "{0} de {1} piezas de este modelo se mueven juntas.",
+    "description": ""
+  },
+  "Parts.Move.All.Skin.Fmt": {
+    "message": "{0} de {1} piezas de este modelo se mueven juntas, piel incluida.",
+    "description": ""
+  },
+  "Parts.Move.AllNone": {
+    "message": "Nada que mover: marca piezas en la lista de piezas.",
+    "description": ""
+  },
+  "Parts.Move.AllNothingFree": {
+    "message": "Nada de lo marcado puede moverse: todo es piel o está bloqueado.",
+    "description": ""
+  },
+  "Parts.Move.AllListTip": {
+    "message": "Todas las piezas marcadas se mueven juntas. Desmarca la casilla de una pieza para dejarla donde está: se oculta en el modelo y en tu personaje.",
+    "description": ""
+  },
+  "Parts.Move.AllOff.Tip": {
+    "message": "No se usa con «Todo»: todas las piezas marcadas se mueven como una sola.",
+    "description": ""
+  },
+  "Parts.Move.All.Help": {
+    "message": "Todas las piezas marcadas se mueven juntas: arrastra una flecha o un cuadrado. Arrastra en cualquier otro sitio para girar el modelo, Mayús+arrastrar para mover la vista y la rueda para hacer zoom.",
+    "description": ""
+  },
+  "Parts.Move.All.LiveHint": {
+    "message": "Todas las piezas marcadas se mueven juntas: arrastra una flecha o un cuadrado sobre tu personaje. Mantén Alt para mover la cámara. Cada movimiento se guarda al soltar.",
+    "description": ""
+  },
+  "Parts.Rotate.All.Help": {
+    "message": "Todas las piezas marcadas giran juntas: arrastra uno de los anillos de su centro. Arrastra en cualquier otro sitio para girar el modelo, Mayús+arrastrar para mover la vista y la rueda para hacer zoom.",
+    "description": ""
+  },
+  "Parts.Rotate.All.LiveHint": {
+    "message": "Todas las piezas marcadas giran juntas: arrastra uno de los anillos de su centro sobre tu personaje. Mantén Alt para mover la cámara. Cada giro se guarda al soltar.",
+    "description": ""
+  },
+  "Parts.ScaleAxes.All.Help": {
+    "message": "Todas las piezas marcadas se escalan juntas: arrastra un tirador para estirarlas a lo largo de ese eje, o pulsa sobre una pieza marcada y arrastra a la derecha para agrandar o a la izquierda para encoger. Arrastra en cualquier otro sitio para girar el modelo, Mayús+arrastrar para mover la vista y la rueda para hacer zoom.",
+    "description": ""
+  },
+  "Parts.ScaleAxes.All.LiveHint": {
+    "message": "Todas las piezas marcadas se escalan juntas: arrastra un tirador para estirarlas a lo largo de ese eje, o pulsa sobre una pieza marcada y arrastra a la derecha para agrandar o a la izquierda para encoger. Mantén Alt para mover la cámara. Cada cambio se guarda al soltar.",
+    "description": ""
+  },
   "Parts.Move.Shrink": {
     "message": "Reducir",
     "description": ""

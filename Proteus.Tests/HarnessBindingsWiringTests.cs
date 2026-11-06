@@ -84,6 +84,8 @@ public class HarnessBindingsWiringTests
         int ifAt = plugin.LastIndexOf("#if PROTEUS_TEST_HARNESS", call, StringComparison.Ordinal);
         int endAt = plugin.IndexOf("#endif", call, StringComparison.Ordinal);
         Assert.True(ifAt >= 0 && endAt > call, "the adapter is built inside #if PROTEUS_TEST_HARNESS");
-        Assert.Contains("pluginInterface, designBindings, editRouter, presets)", plugin[call..endAt]);
+        // (The Studio port follows them since the move-all-parts merge.)
+        Assert.Contains("pluginInterface, designBindings, editRouter, presets,", plugin[call..endAt]);
+        Assert.Contains("partsPanel.AsHarnessStudio(", plugin[call..endAt]);
     }
 }

@@ -197,6 +197,11 @@ internal interface IHarnessGame
     /// <summary>Ask for a redraw of the local player. Framework thread.</summary>
     void RequestRedraw();
 
+    // ── the Studio (HarnessChanges) ─────────────────────────────────────────
+
+    /// <summary>The Studio panel as the harness drives it; null when there is none. Its members: framework thread.</summary>
+    IStudioHarness? Studio { get; }
+
     // ── design binding (HarnessBindings) ────────────────────────────────────
 
     /// <summary>Glamourer's designs (id → name); null when Glamourer cannot answer. Framework thread.</summary>

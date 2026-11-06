@@ -171,7 +171,8 @@ internal sealed class HarnessHost : IDisposable
             // An apply still settling has half-recorded its session: that part is left as recorded (and logged).
             var r = c.PutBack(skipHalfRecordedBinding: c.ApplySettling);
             log.Information("[Proteus] test harness put back as it stopped: {0}{1}",
-                            string.Join(", ", r.Gear.Concat(r.Holds).Select(e => $"{e.Name} {e.Result}{(e.Code is { } code ? $" ({code})" : "")}")),
+                            string.Join(", ", r.Gear.Concat(r.Holds).Select(e => $"{e.Name} {e.Result}{(e.Code is { } code ? $" ({code})" : "")}")
+                                                .Concat(r.Studio.Select(s => $"Studio {s.Mod} files {s.Files}, panel {s.Panel}{(s.Code is { } code ? $" ({code})" : "")}"))),
                             r.Binding is { } b ? $"; binding: glamourer {b.Glamourer}, live {b.Live}, {b.Permanent.Count} permanent" : "");
         }
         catch (Exception e) { log.Warning(e, "[Proteus] test harness: putting back as it stopped failed"); }

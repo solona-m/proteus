@@ -22,7 +22,11 @@ internal sealed record HoldRecord(Guid Collection, string ModDir, bool Enabled, 
 internal sealed record UndoEntry(string Name, string Result, string? Code = null);
 
 internal sealed record PutBackReport(IReadOnlyList<UndoEntry> Gear, IReadOnlyList<UndoEntry> Holds, string Sweep, bool RedrawRequested,
-                                    BindingPutBack? Binding = null);
+                                    BindingPutBack? Binding = null)
+{
+    /// <summary>The Studio session put-back ended (or left recorded), if there was one.</summary>
+    public IReadOnlyList<StudioPutBack> Studio { get; init; } = [];
+}
 
 /// <summary>A change route's answer: 200 with a body, or an error status, code and message.</summary>
 internal sealed record ChangeResult(int Status, string? Code, string? Message, object? Body)
@@ -177,8 +181,9 @@ internal sealed class HarnessChanges(IHarnessGame game, SessionNames names, IPlu
     // ── put back ────────────────────────────────────────────────────────────
 
     /// <summary>
-    /// Undo every hold, then every equip, then sweep leftover harness holds, then the binding session. Never refused. Only
-    /// failures stay recorded.
+    /// Undo every hold, then every equip, then sweep leftover harness holds, then end the Studio session, then the binding
+    /// session, each in its own try/catch. Never refused. Only failures stay recorded (and a Studio session something
+    /// else touched).
     /// </summary>
     public PutBackReport PutBack() => PutBack(skipHalfRecordedBinding: false);
 
@@ -242,15 +247,128 @@ internal sealed class HarnessChanges(IHarnessGame game, SessionNames names, IPlu
             sweep = "failed";
         }
 
+        // The Studio after holds and gear (the order agreed with design binding's put-back, which comes after it); its own
+        // try/catch, so a throwing step above never stops it.
+        var studioResults = new List<StudioPutBack>();
+        if (studio is { } session)
+        {
+            StudioPutBack entry;
+            try
+            {
+                entry = game.Studio is { } port
+                    ? port.EndSession(session, refreshGame: true)
+                    : new StudioPutBack(session.ModDir, "failed", "none", "studio-unavailable", true);
+            }
+            catch (Exception ex)
+            {
+                log?.Warning(ex, "[Proteus] test harness: putting back the Studio session on {0} failed", session.ModDir);
+                entry = new StudioPutBack(session.ModDir, "failed", "none", "internal", true);
+            }
+            if (!entry.Keep) studio = null;
+            studioResults.Add(entry);
+        }
+
         if (redraw) game.RequestRedraw();
-        log?.Information("[Proteus] test harness: put back {0} slot(s), {1} hold(s); sweep {2}",
-                         gearResults.Count, holdResults.Count, sweep);
+        log?.Information("[Proteus] test harness: put back {0} slot(s), {1} hold(s); sweep {2}; studio {3}",
+                         gearResults.Count, holdResults.Count, sweep,
+                         studioResults.Count == 0 ? "none" : string.Join(", ", studioResults.Select(s => $"{s.Files}/{s.Panel}{(s.Code is { } c ? $" ({c})" : "")}")));
 
         // Last: the Glamourer state goes back over what gear put-back restored (its originals are post-apply states).
         BindingPutBack? binding = null;
         try { binding = bindings?.PutBack(skipHalfRecordedBinding); }
         catch (Exception ex) { log?.Warning(ex, "[Proteus] test harness: putting back the binding session failed"); }
-        return new PutBackReport(gearResults, holdResults, sweep, redraw || binding?.Restored == true, binding);
+        return new PutBackReport(gearResults, holdResults, sweep, redraw || binding?.Restored == true, binding)
+               { Studio = studioResults };
+    }
+
+    // ── the Studio ──────────────────────────────────────────────────────────
+
+    private StudioSession? studio;
+
+    /// <summary>
+    /// A Studio session is recorded: from the first <c>studio-open</c> until put-back ends it. While it is, design
+    /// binding's apply refuses (put-back-first). A put-back that finds the session touched leaves it recorded.
+    /// </summary>
+    public bool HasStudioSession => studio != null;
+
+    internal StudioSession? StudioSessionNow => studio;
+
+    /// <summary>The session as <c>/studio</c> and <c>/state</c> show it; null with none.</summary>
+    internal object? StudioSessionView() => studio is not { } s ? null : new
+    {
+        modDir = s.ModDir, file = s.File, windowOpened = s.WindowOpened, editVersion = s.EditVersion, snapshotTaken = true,
+        filesSaved = s.Files.Select(f => new { file = f.Key, sha256 = f.Value }).ToList(),
+    };
+
+    /// <summary>Open a mod's model in the Studio once the gate and the folder check passed. One session at a time.</summary>
+    public ChangeResult StudioOpen(string modDir, string model, bool show)
+    {
+        if (game.Studio is not { } port) return ChangeResult.Fail(503, "studio-unavailable", "the Studio is not available");
+        if (studio != null)
+            return ChangeResult.Fail(409, "put-back-first", $"a Studio session on {studio.ModDir} is recorded; put back first");
+        var o = port.Open(modDir, model, show);
+        if (o.Refused is { } r) return ChangeResult.Fail(r.Status, r.Code, r.Message);
+        studio = new StudioSession(modDir, o.File!, o.Snapshot!, o.WindowOpened) { EditVersion = o.EditVersion };
+        log?.Information("[Proteus] test harness: opened {0} in the Studio ({1})", studio.File, modDir);
+        return ChangeResult.Ok(WithSession(o.State));
+    }
+
+    /// <summary>Set the Studio's controls for the session's model.</summary>
+    public ChangeResult StudioSet(StudioSetRequest request)
+    {
+        if (SessionRefusal() is { } refused) return refused;
+        var o = game.Studio!.Set(request, studio!);
+        if (o.Refused is { } r) return ChangeResult.Fail(r.Status, r.Code, r.Message);
+        studio!.EditVersion = o.EditVersion;
+        return ChangeResult.Ok(new Dictionary<string, object?>
+        {
+            ["applied"] = new
+            {
+                tool = request.Tool, mode = request.Mode, view = request.View, mirror = request.Mirror, adjacent = request.Adjacent,
+                moveSkin = request.MoveSkin, unlockAll = request.UnlockAll ? true : (bool?)null,
+                part = request.Part,
+            },
+            ["locks"] = o.Locks.Select(l => new { label = l.Label, result = l.Result }).ToList(),
+            ["chosen"] = o.Chosen,
+            ["state"] = WithSession(o.State),
+        });
+    }
+
+    /// <summary>One drag (or undo) of the session's model, saved; what it saved is recorded for put-back.</summary>
+    public ChangeResult StudioDrag(StudioDragRequest request)
+    {
+        if (SessionRefusal() is { } refused) return refused;
+        var o = game.Studio!.Drag(request, studio!);
+        // Only a drag that went ahead is recorded: a refusal's counters are not the harness's.
+        if (o.Refused is { } r) return ChangeResult.Fail(r.Status, r.Code, r.Message);
+        studio!.Record(o.Files, o.EditVersion);
+        return ChangeResult.Ok(new Dictionary<string, object?>
+        {
+            ["kind"] = o.Kind, ["moved"] = o.Moved, ["nodes"] = o.Nodes, ["worstMm"] = o.WorstMm,
+            ["pivot"] = o.Pivot is { } p ? new[] { p.X, p.Y, p.Z } : null, ["saved"] = o.Saved,
+            ["status"] = o.Status is { } text ? new { text = Scrub(text), isError = o.StatusIsError } : null,
+            ["state"] = WithSession(o.State),
+        });
+    }
+
+    /// <summary>The state body with the session added.</summary>
+    internal Dictionary<string, object?> WithSession(IReadOnlyDictionary<string, object?>? state)
+    {
+        var body = state != null ? new Dictionary<string, object?>(state) : new Dictionary<string, object?>();
+        if (body.TryGetValue("status", out var line) && line is StudioStatusLine s0)
+            body["status"] = new { text = Scrub(s0.text), isError = s0.isError };
+        body["harnessOpened"] = studio is { } s && game.Studio is { } port && port.IsOpen(s.ModDir, s.File);
+        body["session"] = StudioSessionView();
+        return body;
+    }
+
+    private ChangeResult? SessionRefusal()
+    {
+        if (game.Studio is not { } port) return ChangeResult.Fail(503, "studio-unavailable", "the Studio is not available");
+        if (studio is not { } s) return ChangeResult.Fail(409, "no-studio-session", "open a model with /actions/studio-open first");
+        if (!port.IsOpen(s.ModDir, s.File))
+            return ChangeResult.Fail(409, "studio-changed", "the Studio no longer has the model the harness opened");
+        return null;
     }
 
     private UndoEntry UndoHold(HoldRecord rec)
@@ -307,13 +425,17 @@ internal sealed class HarnessChanges(IHarnessGame game, SessionNames names, IPlu
                            configured = h.Before.Configured },
             atUtc = h.AtUtc,
         }).ToList(),
+        studio = StudioSessionView(),
         binding = bindings?.View(),
         applySettling,
     };
 
     /// <summary>The slots and mods still recorded, for the warning when put-back cannot run.</summary>
     public string Leftovers()
-        => string.Join(", ", gear.Keys.Concat(holds.Values.Select(h => h.ModDir)).Concat(bindings?.Leftovers() ?? []));
+        => string.Join(", ", gear.Keys.Concat(holds.Values.Select(h => h.ModDir)).Concat(bindings?.Leftovers() ?? [])
+                                 .Concat(studio is { } s
+                                     ? [$"Studio edits in {s.ModDir} ({(s.Files.Count == 0 ? "nothing saved" : string.Join(", ", s.Files.Keys))}): press Undo saved changes"]
+                                     : []));
 
-    internal bool Empty => gear.Count == 0 && holds.Count == 0 && bindings?.HasSession != true;
+    internal bool Empty => gear.Count == 0 && holds.Count == 0 && bindings?.HasSession != true && studio == null;
 }

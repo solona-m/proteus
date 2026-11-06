@@ -79,6 +79,18 @@ session's first change that outlives the game the Before values are written to
 The harness never writes the binding store or a mod's files on this path. The
 release guard checks a second marker, `HarnessSuppressApplySignals`, a member of the
 harness-only `DesignBindingService` partial.
+It can also drive the Studio: its routes (`/studio`, `studio-open`, `studio-set`,
+`studio-drag`) drive the Studio panel through its own controls' code, and a drag
+writes into a mod through the Studio's brush save. They open only a mod with no
+saved Studio edits, never flush the user's edit, and keep one session at a time.
+At put-back the harness restores the model files and deletes the
+`meshvolume-backup` (and `meshvolume.json` record) its own saves created, through
+the Studio's "Undo saved changes" — an exception to "never deletes a backup" — but
+only when every file the record lists was written by a harness save and still
+hashes as the harness last wrote it, and the model is untouched in the Studio;
+otherwise it leaves everything and reports `changed`. The panel's settings, locks
+and open model are restored. The panel's harness code is a partial compiled out
+with the rest.
 
 ## Consequences
 

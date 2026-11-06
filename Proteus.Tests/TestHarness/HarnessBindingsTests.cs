@@ -104,6 +104,68 @@ public class HarnessBindingsTests : IDisposable
     }
 
     [Fact]
+    [Trait("Plan", "EDGE-binding-reapply-52")]
+    [Trait("Plan", "AC-move-all-parts-15")]
+    public async System.Threading.Tasks.Task ApplyDesign_RefusedWhileStudioSession()
+    {
+        Game.UseStudio();
+        fx.AddMod();
+        Assert.Equal(200, (await fx.Post("/actions/studio-open", """{"mod":"Outfit","model":"chara/model/top.mdl"}""")).Status);
+        var (status, body) = await fx.Post("/actions/glamourer-apply", $$"""{"design":"{{Design}}"}""");
+        Assert.Equal(409, status);
+        Assert.Equal("put-back-first", body.GetProperty("error").GetProperty("code").GetString());
+        Assert.Equal(0, Game.ApplyCalls);
+        await fx.Post("/actions/put-back", "{}");
+        Assert.False(C.HasStudioSession);
+    }
+
+    [Fact]
+    [Trait("Plan", "EDGE-move-all-parts-40")]
+    public async System.Threading.Tasks.Task StudioRoutes_BusyWhileApplySettling()
+    {
+        var studio = Game.UseStudio();
+        fx.AddMod();
+        await fx.Post("/actions/studio-open", """{"mod":"Outfit","model":"chara/model/top.mdl"}""");
+        C.ApplySettling = true;
+        try
+        {
+            foreach (var (path, json) in new[] { ("/actions/studio-open", """{"mod":"Outfit","model":"chara/model/top.mdl"}"""),
+                                                 ("/actions/studio-set", """{"mode":"all"}"""), ("/actions/studio-drag", """{"offsetMm":[1,0,0]}""") })
+            {
+                var (status, body) = await fx.Post(path, json);
+                Assert.Equal(409, status);
+                Assert.Equal("busy", body.GetProperty("error").GetProperty("code").GetString());
+            }
+            Assert.Single(studio.Opens);
+            Assert.Empty(studio.Sets);
+            Assert.Empty(studio.Drags);
+        }
+        finally { C.ApplySettling = false; }
+        await fx.Post("/actions/put-back", "{}");
+    }
+
+    [Theory]
+    [Trait("Plan", "AC-move-all-parts-15")]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async System.Threading.Tasks.Task PutBack_StudioBeforeBindings_EachInItsOwnTry(bool studioThrows)
+    {
+        var studio = Game.UseStudio();
+        if (studioThrows) studio.EndAnswer = _ => throw new InvalidOperationException("boom");
+        fx.AddMod();
+        Assert.Equal(200, Apply(Design).Status);
+        Assert.Equal(200, (await fx.Post("/actions/studio-open", """{"mod":"Outfit","model":"chara/model/top.mdl"}""")).Status);
+        var report = PutBack();
+        Assert.NotNull(report.Binding);   // the binding step runs whatever the Studio step did
+        var entry = Assert.Single(report.Studio);
+        if (studioThrows) Assert.Equal(("failed", "internal"), (entry.Files, entry.Code));
+        var order = Game.Order.ToList();
+        int end = order.FindIndex(o => o.StartsWith("EndSession", StringComparison.Ordinal));
+        int restore = order.FindLastIndex(o => o.StartsWith("RestoreGlamourerState", StringComparison.Ordinal));
+        Assert.True(end >= 0 && restore > end, "the Studio is put back before the Glamourer state");
+    }
+
+    [Fact]
     [Trait("Plan", "EDGE-binding-reapply-29")]
     public void ApplyDesign_RefusedAfterEquips_PutBackOrderGearFirst()
     {

@@ -113,7 +113,7 @@ internal sealed partial class HarnessRouter
         var begun = await OnFramework<ChangeResult?>(() =>
         {
             if (changes.Gate(jobs.Busy, Game.AutoRefit().Busy) is { } refused) return refused;
-            var (error, p) = changes.Bindings.BeginApply(design, allow, changes.EquipsRecorded);
+            var (error, p) = changes.Bindings.BeginApply(design, allow, changes.EquipsRecorded, changes.HasStudioSession);
             if (error != null) return error;
             pending = p;
             changes.ApplySettling = true;

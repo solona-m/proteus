@@ -186,10 +186,16 @@ public sealed partial class PartsPanel
     private bool moveAdjacent = true;
 
     /// <summary>
+    /// What Move, Rotate and Scale take hold of: one whole part, single polygons, or every ticked part as one piece.
+    /// Kept across the three tools and the brushes for the session; never saved.
+    /// </summary>
+    private MoveSelectMode moveSelect = MoveSelectMode.Parts;
+
+    /// <summary>
     /// Move, Rotate and Scale act on single polygons rather than whole parts. The selection is
     /// <see cref="movePolys"/>, and the soft falloff is measured along the surface through joined polygons.
     /// </summary>
-    private bool movePolygons;
+    private bool movePolygons => moveSelect == MoveSelectMode.Polygons;
 
     /// <summary>The selected polygons in polygon mode, by their corners. Cleared with the model.</summary>
     private readonly HashSet<PolygonSelection.Key> movePolys = [];
@@ -556,12 +562,8 @@ public sealed partial class PartsPanel
         {
             if (tools)
             {
-                if (ImGui.Checkbox(Strings.Parts.ShowModelView, ref showModelView))
-                {
-                    FlushPending();   // a stroke's pending save belongs to the surface it was painted on
-                    EndLivePreview(refreshGame: true);
-                    viewport.Recolour();
-                }
+                bool modelView = showModelView;
+                if (ImGui.Checkbox(Strings.Parts.ShowModelView, ref modelView)) SwitchView(modelView);
                 if (ImGui.IsItemHovered()) ImGui.SetTooltip(Strings.Parts.ShowModelViewTip);
                 ImGui.Separator();
 
@@ -632,11 +634,13 @@ public sealed partial class PartsPanel
             if (volume != null && brushBase != null
                 && ArmedModelFile(vanilla?.GamePath ?? CopyNotDrawnOpen(), ModRoot(), models[modelIndex].File) is { } armed)
                 liveBrush.ArmBrush(armed, brushBase, volume, ActiveRadiusMm / 1000f, showWind: tool == Tool.Wind,
-                                   mirror: mirrorBrush, partOf: partOfVertexFn,
+                                   mirror: MirrorNow, partOf: partOfVertexFn,
                                    lockClicked: moving ? moveClickedFn : pickParts ? tickClickedFn : lockClickedFn,
                                    pickParts: pickParts,
                                    partTicked: moving ? moveTickedFn : partTickedFn,
-                                   tickedVersion: moving ? (movePolygons ? movePolysVersion : MoveVersion()) : TickedVersion(),
+                                   tickedVersion: moving ? (movePolygons ? movePolysVersion
+                                                            : moveAll ? AllNow().Version ^ AllTintSalt
+                                                            : MoveVersion()) : TickedVersion(),
                                    moveGizmo: tool == Tool.Move ? moveGizmo : null,
                                    movePivot: moving ? MovePivot() : null,
                                    graftedGamePath: GraftedGamePath(),
@@ -1831,7 +1835,7 @@ public sealed partial class PartsPanel
         return set;
     }
 
-    private static int[] BuildPartOfVertex(ModelParts model)
+    internal static int[] BuildPartOfVertex(ModelParts model)
     {
         var result = new int[model.Positions.Length / 3];
         Array.Fill(result, -1);
@@ -1982,6 +1986,7 @@ public sealed partial class PartsPanel
     /// shrink from.</summary>
     private void SelectMovePart(string label)
     {
+        if (!MoveAllSelection.ClickChooses(moveSelect)) return;   // under All the ticks decide; a click chooses nothing
         if (volume is { Moving: true }) return;
         if (parts?.Parts.FirstOrDefault(p => p.Label == label) is not { } part
             || !SkinMovePolicy.MovePickable(IsSkin(part), IsLocked(part), SkinMovesNow)) return;
@@ -2078,9 +2083,13 @@ public sealed partial class PartsPanel
         SelectMovePart(parts.Parts[partOfVertex[vertex]].Label);
     }
 
-    /// <summary>Whether part <paramref name="index"/> is the one being moved — itself, or an island of it.</summary>
+    /// <summary>Whether part <paramref name="index"/> is the one being moved — itself, or an island of it. Under All,
+    /// whether it is one of the ticked parts that move.</summary>
     private bool MoveTicked(int index)
     {
+        if (moveAll)
+            return parts != null && index >= 0 && index < parts.Parts.Count
+                   && MoveAllSelection.Moves(IsSkin(parts.Parts[index]), IsLocked(parts.Parts[index]), SkinMovesNow);
         if (parts == null || movePart == null || index < 0 || index >= parts.Parts.Count) return false;
         var part = parts.Parts[index];
         return part.Label == movePart || (ParentOf(part) is { } parent && parent.Label == movePart);
@@ -2097,6 +2106,9 @@ public sealed partial class PartsPanel
     /// <summary>Whether the part labelled <paramref name="label"/> is the chosen one — itself, or an island of it.</summary>
     private bool IsChosenPart(string label)
     {
+        if (moveAll)
+            return parts?.Parts.FirstOrDefault(p => p.Label == label) is { } part
+                   && MoveAllSelection.Moves(IsSkin(part), IsLocked(part), SkinMovesNow);
         if (parts == null || movePart == null) return false;
         for (int i = 0; i < parts.Parts.Count; i++)
             if (parts.Parts[i].Label == label) return MoveTicked(i);
@@ -2108,6 +2120,7 @@ public sealed partial class PartsPanel
 
     private IReadOnlySet<string> MoveSelection()
     {
+        if (moveAll) return AllNow().Labels;
         moveSelectionSet.Clear();
         if (movePart != null) moveSelectionSet.Add(movePart);
         return moveSelectionSet;
@@ -2120,6 +2133,7 @@ public sealed partial class PartsPanel
     private Vector3? MovePivot()
     {
         if (volume == null) return null;
+        if (moveAll) return AllPivot();
         IEnumerable<int> corners;
         if (movePolygons)
         {
@@ -2152,7 +2166,7 @@ public sealed partial class PartsPanel
     private float[]? MoveFalloffNow()
     {
         float[]? shown = null;
-        if (PartTool && ((moveAdjacent && moveFalloffMm > 0f) || mirrorBrush) && volume is { } vol)
+        if (PartTool && ((AdjacentNow && moveFalloffMm > 0f) || MirrorNow) && volume is { } vol)
         {
             // Mid-drag, exactly what the drag is carrying — not the last measure, which a throttled slider may have
             // left behind it.
@@ -2163,7 +2177,7 @@ public sealed partial class PartsPanel
                     moveFalloffDragShown = true;
                     viewport.GeometryChanged();
                 }
-                if (ShowsMoveFalloff(PartTool, moveAdjacent, moveFalloffMm, mirrorBrush, vol.DragMirror?.Mode))
+                if (ShowsMoveFalloff(PartTool, AdjacentNow, moveFalloffMm, MirrorNow, vol.DragMirror?.Mode))
                     shown = dragging;
             }
             else
@@ -2180,8 +2194,8 @@ public sealed partial class PartsPanel
                 // The part by its name, not a hash of it: two names that hash alike must still count as a new choice.
                 // Mirror and Move adjacent parts too: either changes what is measured (with the falloff off, a
                 // mirrored measure is of the selection and its match alone). And whether skin moves.
-                var choice = (vol, vol.LockVersion, movePolygons, movePolysVersion, movePolygons ? null : movePart,
-                              SkinMovesNow, mirrorBrush, moveAdjacent);
+                var choice = (vol, vol.LockVersion, moveSelect, movePolysVersion, movePolygons ? null : movePart,
+                              SkinMovesNow, MirrorNow, AdjacentNow);
                 bool chosen = moveFalloffChoice != choice;
                 bool reshaped = vol.EditVersion != moveFalloffEdit || moveFalloffMm != moveFalloffMeasuredMm;
                 long now = Environment.TickCount64;
@@ -2193,15 +2207,15 @@ public sealed partial class PartsPanel
                     moveFalloffMeasuredAt = now;
                     // Into the same buffer each time: a held slider would otherwise throw away an array a measure.
                     var measured = MoveSeeds() is { } seeds
-                        ? vol.MoveFalloff(seeds, moveAdjacent ? moveFalloffMm / 1000f : 0f, movePolygons, movePreview,
-                                          mirror: mirrorBrush)
+                        ? vol.MoveFalloff(seeds, AdjacentNow ? moveFalloffMm / 1000f : 0f, movePolygons, movePreview,
+                                          mirror: MirrorNow)
                         : null;
                     if (measured != null) movePreview = measured;
                     movePreviewEmpty = measured == null;
                     viewport.GeometryChanged();   // the viewer interpolates the weights when it projects
                 }
                 if (!movePreviewEmpty
-                    && ShowsMoveFalloff(PartTool, moveAdjacent, moveFalloffMm, mirrorBrush, vol.PreviewMirror?.Mode))
+                    && ShowsMoveFalloff(PartTool, AdjacentNow, moveFalloffMm, MirrorNow, vol.PreviewMirror?.Mode))
                     shown = movePreview;
             }
         }
@@ -2222,6 +2236,7 @@ public sealed partial class PartsPanel
     private IEnumerable<int>? MoveSeeds()
         => movePolygons
             ? movePolys.Count > 0 ? PolygonSelection.CornersOf(movePolys) : null
+            : moveAll ? (AllNow().Seeds is { Length: > 0 } all ? all : null)
             : MovePart()?.Triangles;
 
 
@@ -2249,7 +2264,7 @@ public sealed partial class PartsPanel
     }
 
     // What movePreview was measured for, and when.
-    private (MeshVolumeSolve, int, bool, int, string?, bool, bool, bool)? moveFalloffChoice;
+    private (MeshVolumeSolve, int, MoveSelectMode, int, string?, bool, bool, bool)? moveFalloffChoice;
     private int moveFalloffEdit;
     private float moveFalloffMeasuredMm;
     private long moveFalloffMeasuredAt;
@@ -2286,37 +2301,63 @@ public sealed partial class PartsPanel
             _           => scaleDrag.Ended,
         };
 
-        if (started && MoveSeeds() is { } seeds)
-        {
-            // A stroke still open is ended here, shown and saved as itself — not closed silently inside BeginMove.
-            if (volume.StrokeOpen) EndBrushStroke(volume);
-            previewDirtyBeforeMove = previewDirty;
-            previewPushesAtMove = previewPushes;
-            // Mirrored about exactly the pivot the gizmo's own matrix is about.
-            MeshVolumeSolve.MoveMirror? mirror = mirrorBrush
-                ? tool switch
-                {
-                    Tool.Move   => new(MeshVolumeSolve.MoveKind.Translate, moveGizmo.DragPivot),
-                    Tool.Rotate => new(MeshVolumeSolve.MoveKind.Rotate, rotateGizmo.DragPivot),
-                    _           => new(MeshVolumeSolve.MoveKind.Scale, scaleDrag.DragPivot),
-                }
-                : null;
-            if (volume.BeginMove(seeds, moveAdjacent, moveFalloffMm / 1000f, alongSurface: movePolygons, mirror: mirror) == 0)
+        if (started)
+            BeginPartDrag(tool switch
             {
-                status = Strings.Parts.MoveNothingFree;
-                statusIsError = true;
-            }
-        }
+                Tool.Move   => moveGizmo.DragPivot,
+                Tool.Rotate => rotateGizmo.DragPivot,
+                _           => scaleDrag.DragPivot,
+            });
 
         if (!volume.Moving) return;
 
-        if (tool == Tool.Move) volume.MoveTo(moveGizmo.Offset);
-        else volume.TransformTo(tool == Tool.Rotate ? rotateGizmo.Transform : scaleDrag.Transform);
+        if (tool == Tool.Move) PlacePartDrag(moveGizmo.Offset, null);
+        else PlacePartDrag(null, tool == Tool.Rotate ? rotateGizmo.Transform : scaleDrag.Transform);
+
+        if (ended) FinishMove();
+    }
+
+    /// <summary>
+    /// Start a drag of what Move, Rotate or Scale has chosen, about <paramref name="dragPivot"/> — the gizmo's own
+    /// pivot, so a mirror is about exactly the point its matrix is. The gizmo and the test harness both start drags
+    /// here. Makes no ImGui call: the harness runs it between frames. True when a drag is under way.
+    /// </summary>
+    private bool BeginPartDrag(Vector3 dragPivot)
+    {
+        if (volume == null || MoveSeeds() is not { } seeds) return false;
+        // A stroke still open is ended here, shown and saved as itself — not closed silently inside BeginMove.
+        if (volume.StrokeOpen) EndBrushStroke(volume);
+        previewDirtyBeforeMove = previewDirty;
+        previewPushesAtMove = previewPushes;
+        // Mirrored about exactly the pivot the gizmo's own matrix is about.
+        MeshVolumeSolve.MoveMirror? mirror = MirrorNow
+            ? new(tool switch
+            {
+                Tool.Move   => MeshVolumeSolve.MoveKind.Translate,
+                Tool.Rotate => MeshVolumeSolve.MoveKind.Rotate,
+                _           => MeshVolumeSolve.MoveKind.Scale,
+            }, dragPivot)
+            : null;
+        if (volume.BeginMove(seeds, AdjacentNow, moveFalloffMm / 1000f, alongSurface: movePolygons, mirror: mirror) == 0)
+        {
+            status = moveAll ? Strings.Parts.MoveAllNothingFree : Strings.Parts.MoveNothingFree;
+            statusIsError = true;
+        }
+        return volume.Moving;
+    }
+
+    /// <summary>
+    /// Place the drag under way: a Move's <paramref name="offset"/>, or a Rotate's or Scale's model-space
+    /// <paramref name="transform"/> about the pivot. Shared by the gizmo and the test harness; no ImGui call.
+    /// </summary>
+    private void PlacePartDrag(Vector3? offset, Matrix4x4? transform)
+    {
+        if (volume is not { Moving: true }) return;
+        if (offset is { } by) volume.MoveTo(by);
+        else if (transform is { } m) volume.TransformTo(m);
         viewport.PositionOverride = volume.Positions();
         viewport.GeometryChanged();
         previewDirty = !showModelView;
-
-        if (ended) FinishMove();
     }
 
     /// <summary>End a move drag or a grab if one is under way: record it, and save — at once on the character, which
@@ -2367,36 +2408,42 @@ public sealed partial class PartsPanel
         ImGui.Spacing();
         ImGui.PushTextWrapPos(0);
         if (!showModelView && liveBrush.Problem is { } problem) ImGui.TextColored(ProteusStyle.Warn, problem);
-        else ImGui.TextDisabled((tool, showModelView) switch
-        {
-            (Tool.Rotate, true)  => ps.RotateHelp,
-            (Tool.Rotate, false) => ps.RotateLiveHint,
-            (Tool.Scale, true)   => ps.ScaleHelp,
-            (Tool.Scale, false)  => ps.ScaleLiveHint,
-            (_, true)            => ps.MoveHelp,
-            _                    => ps.MoveLiveHint,
-        });
+        else ImGui.TextDisabled(HelpText(MoveAllSelection.HelpFor(
+            tool switch { Tool.Rotate => MoveHelpTool.Rotate, Tool.Scale => MoveHelpTool.Scale, _ => MoveHelpTool.Move },
+            showModelView, moveAll)));
         ImGui.PopTextWrapPos();
         ImGui.Spacing();
 
-        // Whole parts, or single polygons.
-        if (ImGui.RadioButton(ps.MoveSelectParts, !movePolygons) && movePolygons && volume is not { Moving: true })
-        {
-            movePolygons = false;
-            ClearPolygons();
-            viewport.Recolour();
-        }
-        ImGui.SameLine();
-        if (ImGui.RadioButton(ps.MoveSelectPolygons, movePolygons) && !movePolygons && volume is not { Moving: true })
-        {
-            movePolygons = true;
-            movePart = null;
-            viewport.Recolour();
-        }
+        // Whole parts, single polygons, or every ticked part at once — on one line when the three fit, else one a line.
+        var style = ImGui.GetStyle();
+        bool oneLine = MoveAllSelection.RadiosFit(
+            [VisibleWidth(ps.MoveSelectParts), VisibleWidth(ps.MoveSelectPolygons), VisibleWidth(ps.MoveSelectAll)],
+            ImGui.GetFrameHeight(), style.ItemInnerSpacing.X, style.ItemSpacing.X, ImGui.GetContentRegionAvail().X);
+        if (ImGui.RadioButton(ps.MoveSelectParts, moveSelect == MoveSelectMode.Parts)
+            && moveSelect != MoveSelectMode.Parts && volume is not { Moving: true })
+            SwitchMoveSelect(MoveSelectMode.Parts);
+        if (oneLine) ImGui.SameLine();
+        if (ImGui.RadioButton(ps.MoveSelectPolygons, moveSelect == MoveSelectMode.Polygons)
+            && moveSelect != MoveSelectMode.Polygons && volume is not { Moving: true })
+            SwitchMoveSelect(MoveSelectMode.Polygons);
         if (ImGui.IsItemHovered()) ImGui.SetTooltip(ps.MoveSelectPolygonsTip);
+        if (oneLine) ImGui.SameLine();
+        if (ImGui.RadioButton(ps.MoveSelectAll, moveSelect == MoveSelectMode.All)
+            && moveSelect != MoveSelectMode.All && volume is not { Moving: true })
+            SwitchMoveSelect(MoveSelectMode.All);
+        if (ImGui.IsItemHovered()) ImGui.SetTooltip(ps.MoveSelectAllTip);
         ImGui.Spacing();
 
-        if (movePolygons)
+        if (moveAll)
+        {
+            var all = AllNow();
+            ImGui.PushTextWrapPos(0);
+            if (all.Seeds.Length == 0) ImGui.TextColored(ProteusStyle.Warn, ps.MoveAllNone);
+            else ImGui.TextUnformatted(string.Format(all.IncludesSkin ? ps.MoveAllSkinFmt : ps.MoveAllFmt,
+                                                     all.MovingRows, all.Rows));
+            ImGui.PopTextWrapPos();
+        }
+        else if (movePolygons)
         {
             ImGui.PushTextWrapPos(0);
             if (movePolys.Count == 0) ImGui.TextColored(ProteusStyle.Warn, ps.MoveNoPolygons);
@@ -2427,22 +2474,25 @@ public sealed partial class PartsPanel
         }
 
         ImGui.Spacing();
-        ImGui.Checkbox(ps.MoveAdjacent, ref moveAdjacent);
-        if (ImGui.IsItemHovered()) ImGui.SetTooltip(ps.MoveAdjacentTip);
+        // Under All the ticked parts move as one rigid piece: nothing nearby follows, and nothing is mirrored. The
+        // settings are kept as they are for the other modes and the brushes.
+        using (ImRaii.Disabled(moveAll)) ImGui.Checkbox(ps.MoveAdjacent, ref moveAdjacent);
+        if (ImGui.IsItemHovered(ImGuiHoveredFlags.AllowWhenDisabled))
+            ImGui.SetTooltip(moveAll ? ps.MoveAllOffTip : ps.MoveAdjacentTip);
 
-        using (ImRaii.Disabled(!moveAdjacent))
+        using (ImRaii.Disabled(!moveAdjacent || moveAll))
         {
             ImGui.SetNextItemWidth(ImGui.GetContentRegionAvail().X * 0.55f);
             ImGui.SliderFloat(ps.MoveFalloff, ref moveFalloffMm, MinBrushMm, MaxBrushMm,
                               moveFalloffMm < 10f ? Strings.Common.Mm1 : Strings.Common.Mm0, ImGuiSliderFlags.Logarithmic);
         }
         if (ImGui.IsItemHovered(ImGuiHoveredFlags.AllowWhenDisabled))
-            ImGui.SetTooltip(movePolygons ? ps.MoveFalloffSurfaceTip : ps.MoveFalloffTip);
+            ImGui.SetTooltip(moveAll ? ps.MoveAllOffTip : movePolygons ? ps.MoveFalloffSurfaceTip : ps.MoveFalloffTip);
 
         // A drag keeps the mirror it started with.
-        using (ImRaii.Disabled(volume is { Moving: true })) DrawMirrorToggle();
+        using (ImRaii.Disabled(volume is { Moving: true } || moveAll)) DrawMirrorToggle(moveAll ? ps.MoveAllOffTip : null);
         bool moving = volume is { Moving: true };
-        if (MirrorStatus(mirrorBrush, moving, volume?.DragMirror, MoveSeeds() == null ? null : volume?.PreviewMirror)
+        if (MirrorStatus(MirrorNow, moving, volume?.DragMirror, MoveSeeds() == null ? null : volume?.PreviewMirror)
             is { } mirrorSays)
         {
             ImGui.PushTextWrapPos(0);
@@ -2468,11 +2518,19 @@ public sealed partial class PartsPanel
     }
 
     /// <summary>The one Mirror left/right checkbox, under the brushes and under Move, Rotate and Scale alike.</summary>
-    private void DrawMirrorToggle()
+    /// <param name="tip">Its tooltip in place of the usual one — why it is greyed out; null for the usual.</param>
+    private void DrawMirrorToggle(string? tip = null)
     {
         var ps = Strings.Parts;
         if (ImGui.Checkbox(ps.BrushMirror, ref mirrorBrush)) viewport.Recolour();
-        if (ImGui.IsItemHovered(ImGuiHoveredFlags.AllowWhenDisabled)) ImGui.SetTooltip(ps.MirrorTip);
+        if (ImGui.IsItemHovered(ImGuiHoveredFlags.AllowWhenDisabled)) ImGui.SetTooltip(tip ?? ps.MirrorTip);
+    }
+
+    /// <summary>How wide a label draws: its text up to any "###" id.</summary>
+    private static float VisibleWidth(string label)
+    {
+        int id = label.IndexOf("###", StringComparison.Ordinal);
+        return ImGui.CalcTextSize(id >= 0 ? label[..id] : label).X;
     }
 
     /// <summary>
@@ -2560,7 +2618,7 @@ public sealed partial class PartsPanel
         viewport.ScalarRainbow = falloff != null;
         viewport.GrabBrush = tool == Tool.Grab;
         viewport.MirrorMinX = volume?.MirrorMinX ?? 1e-4f;
-        viewport.MirrorBrush = mirrorBrush;
+        viewport.MirrorBrush = MirrorNow;
 
         // The share cap is on the image's WIDTH, not the row's height: coupling the row to avail.X flickers as the
         // scrollbar comes and goes.
@@ -2636,7 +2694,25 @@ public sealed partial class PartsPanel
             var owner = (part.Mesh, part.Submesh);
             if (isIsland) ImGui.Indent(ProteusStyle.S(IslandIndent));
 
-            if (moving)
+            if (moving && moveAll)
+            {
+                // Under All the tick box is the whole row: every ticked part moves together, an unticked one stays.
+                // Skin moves only with "Move skin too" on; otherwise it has no box, and its label says why.
+                if (!IsSkin(part) || SkinMovePolicy.SkinRow(SkinMovesNow, moving: true) == SkinMovePolicy.SkinRowKind.MovePickable)
+                {
+                    bool moves = !IsLocked(part);
+                    using (ImRaii.Disabled(volume is { Moving: true }))
+                        if (ImGui.Checkbox($"{part.Label}##mvl_{part.Label}", ref moves))
+                            ToggleLock(part.Label);
+                    if (ImGui.IsItemHovered(ImGuiHoveredFlags.AllowWhenDisabled)) ImGui.SetTooltip(ps.MoveAllListTip);
+                }
+                else
+                {
+                    ImGui.TextDisabled(part.Label);
+                    if (ImGui.IsItemHovered()) ImGui.SetTooltip(ps.MoveSkinTip);
+                }
+            }
+            else if (moving)
             {
                 // Untick to lock: the part is left out of the pick and the model view, so what it covers can be reached.
                 // Skin is picked by a move only with "Move skin too" on; otherwise it has nothing to untick.
@@ -2758,7 +2834,7 @@ public sealed partial class PartsPanel
             var owner = (part.Mesh, part.Submesh);
 
             // A locked island always has a row under a brush, as a ticked one does for a switch.
-            bool listed = moving ? movePart == part.Label
+            bool listed = moving ? (moveAll ? Locks.Contains(part.Label) : movePart == part.Label)
                         : locking ? Locks.Contains(part.Label) : ticked.Contains(part.Label);
             if (isIsland && !expanded.Contains(owner) && !listed) continue;
             rows.Add(new PartRow(part, isIsland, !isIsland && islands.TryGetValue(owner, out var count) ? count : 0));
@@ -2793,7 +2869,9 @@ public sealed partial class PartsPanel
         foreach (var (part, isIsland, pieces) in ListedRows(model))
         {
             float w = isIsland ? ProteusStyle.S(IslandIndent) : 0f;
-            if (moving) w += (IsSkin(part) && !SkinMovesNow ? 0f : box + gap) + Labelled(part.Label);
+            // Under All one tick box carrying the label (skin that cannot move: the label alone); else box, then radio.
+            if (moving && moveAll) w += IsSkin(part) && !SkinMovesNow ? ImGui.CalcTextSize(part.Label).X : Labelled(part.Label);
+            else if (moving) w += (IsSkin(part) && !SkinMovesNow ? 0f : box + gap) + Labelled(part.Label);
             else
             {
                 w += Labelled(part.Label);
@@ -2840,7 +2918,7 @@ public sealed partial class PartsPanel
         return tool switch
         {
             Tool.Navigate => ps.ClickTip,
-            Tool.Move or Tool.Rotate or Tool.Scale => ps.MoveListTip,
+            Tool.Move or Tool.Rotate or Tool.Scale => moveAll ? ps.MoveAllListTip : ps.MoveListTip,
             Tool.Retarget => ps.RetargetLockListTip,
             _             => ps.BrushLockListTip,
         };
@@ -2859,7 +2937,8 @@ public sealed partial class PartsPanel
         // Counted over submesh rows: those are what the closed list would show.
         var rows = model.Parts.Where(p => p.Island < 0).ToList();
         string preview;
-        if (PartTool) preview = movePart ?? ps.PartsNoneChosen;
+        if (moveAll) preview = string.Format(ps.PartsTickedFmt, AllNow().MovingRows, AllNow().Rows);
+        else if (PartTool) preview = movePart ?? ps.PartsNoneChosen;
         else
         {
             bool locking = PaintTool || tool == Tool.Retarget;
@@ -2965,31 +3044,48 @@ public sealed partial class PartsPanel
 
             // The game's own gear changes tool like anything else: it is copied into a mod by its first saved change,
             // never by choosing a tool.
-            if (clicked && tool != value)
-            {
-                // Before leaving the brush: a save rewrites the whole model, so a pending edit would land on top of a switch.
-                FinishMove();
-                FlushPending();
-                // The chosen part carries between Move, Rotate and Scale — they work on the same choice.
-                if (!(PartTool && IsPartTool(value)))
-                {
-                    movePart = null;
-                    ClearPolygons();
-                }
-                tool = value;
-                ApplyLocks();   // Body size shows its own holds, every other tool the brush locks; and syncs the hiding
-                // Staged parts are a Pick-parts thing; a selection carried into the brush would sit there invisibly.
-                ticked.Clear();
-                ReleaseHandles();
-                viewport.Recolour();
-                viewport.GeometryChanged();   // the wind wash comes and goes with the wind tool
-            }
+            if (clicked) SwitchTool(value);
             if (ImGui.IsItemHovered())
                 ImGui.SetTooltip(value is Tool.Navigate or Tool.Retarget || IsPartTool(value)
                                      ? tip
                                      : tip + "\n\n" + ps.BrushLockHint);
         }
         ImGui.Spacing();
+    }
+
+    /// <summary>
+    /// Choose a tool, as its button does. Shared by the buttons and the test harness; no ImGui call (the harness runs
+    /// it between frames). Choosing the tool already in use does nothing.
+    /// </summary>
+    private void SwitchTool(Tool value)
+    {
+        if (tool == value) return;
+        // Before leaving the brush: a save rewrites the whole model, so a pending edit would land on top of a switch.
+        FinishMove();
+        FlushPending();
+        // The chosen part carries between Move, Rotate and Scale — they work on the same choice.
+        if (!(PartTool && IsPartTool(value)))
+        {
+            movePart = null;
+            ClearPolygons();
+        }
+        tool = value;
+        ApplyLocks();   // Body size shows its own holds, every other tool the brush locks; and syncs the hiding
+        // Staged parts are a Pick-parts thing; a selection carried into the brush would sit there invisibly.
+        ticked.Clear();
+        ReleaseHandles();
+        viewport.Recolour();
+        viewport.GeometryChanged();   // the wind wash comes and goes with the wind tool
+    }
+
+    /// <summary>Show the model view or work on the character, as its checkbox does. Shared with the test harness.</summary>
+    private void SwitchView(bool modelView)
+    {
+        if (showModelView == modelView) return;
+        showModelView = modelView;
+        FlushPending();   // a stroke's pending save belongs to the surface it was painted on
+        EndLivePreview(refreshGame: true);
+        viewport.Recolour();
     }
 
     /// <summary>

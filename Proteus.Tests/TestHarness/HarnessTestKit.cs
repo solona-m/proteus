@@ -286,6 +286,14 @@ internal sealed partial class FakeGame : IHarnessGame
 
     public void RequestRedraw() { Fw(nameof(RequestRedraw)); Interlocked.Increment(ref RedrawRequests); }
 
+    /// <summary>The scripted Studio; set to null for a build with none.</summary>
+    public FakeStudio? FakeStudio { get; set; }
+
+    public IStudioHarness? Studio => FakeStudio;
+
+    /// <summary>A fresh scripted Studio whose members record the thread they ran on into <see cref="Calls"/>.</summary>
+    public FakeStudio UseStudio() => FakeStudio = new FakeStudio(Fw);
+
     public (IReadOnlyCollection<string> Collections, string? Character) NamesNow()
     {
         Fw(nameof(NamesNow));

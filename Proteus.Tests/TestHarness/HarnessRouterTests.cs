@@ -196,7 +196,8 @@ public class HarnessRouterTests : IDisposable
         Assert.Equal(["/health", "/state", "/log", "/screenshot", "/hair-port", "/actions/refit", "/actions/restore",
                       "/actions/shader-upgrade", "/actions/variant-repoint", "/actions/hair-port", "/actions/equip",
                       "/actions/mod-settings", "/actions/put-back", "/bindings", "/actions/glamourer-apply",
-                      "/actions/binding-edit", "/jobs/{id}"],
+                      "/actions/binding-edit", "/jobs/{id}",
+                      "/studio", "/actions/studio-open", "/actions/studio-set", "/actions/studio-drag"],
                      HarnessRouter.Routes.Select(r => r.Path));
     }
 

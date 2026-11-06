@@ -18,7 +18,7 @@ public class HarnessTimingCollectionTests
     [
         typeof(DispatchTicketTests), typeof(HarnessBindingsHttpTests), typeof(HarnessBindingsTests), typeof(HarnessChangesHttpTests), typeof(HarnessChangesTests),
         typeof(HarnessHairPortTests), typeof(HarnessHostTests), typeof(HarnessJobsTests), typeof(HarnessRouterTests),
-        typeof(HarnessServerTests), typeof(OffThreadTests),
+        typeof(HarnessServerTests), typeof(HarnessStudioRouteTests), typeof(OffThreadTests),
     ];
 
     [Fact]
