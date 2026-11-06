@@ -264,7 +264,8 @@ internal static class HairPortScan
                   + "out (another hairstyle of the race loads its slot, or the mod gives the race a skeleton of its own)"
                 : $"{x.SourceGamePath} → {x.TargetGamePath} in {modDir}: {HairPortWriter.Describe(x.Into)} "
                   + $"({x.Materials.Count} material/skeleton redirect(s), bent in {x.Millis} ms, skeleton entry {x.Est}, "
-                  + $"carried from {x.SkeletonFrom}, {x.Pushed} point(s) pushed out of the skull, worst {x.PushWorst * 1000:F1} mm)");
+                  + $"carried from {x.SkeletonFrom}, {x.Pushed} point(s) pushed out of the skull, worst {x.PushWorst * 1000:F1} mm"
+                  + (x.NoScalp ? ", no scalp to push against: a face model has no skin mesh" : "") + ")");
         if (saved.All(x => x.Stripped))
             return new Ported(saved, false, plan.Refused.TryGetValue(race, out var why) ? why : "", Stripped: true);
         string warning = plan.Warnings?.TryGetValue(race, out var warned) == true ? warned : "";

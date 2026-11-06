@@ -208,9 +208,15 @@ public class HairScalpPushTests
         var shown = ModelPartReader.Read(hair)!;
         var spares = HairScalpPush.Spares(hair, shown);
         Assert.Equal(bases.Select(x => x.Spare).ToHashSet(), spares);
-        // Bigger by exactly what the cap stands off: the cap's base lands on the scalp, only the pressed spares sink.
+        // On an 8.5 cm source head the spares (8.6 cm) sit outside it, as created clips would: on a 9.1 cm target they are
+        // 5 mm in, while the cap's base lands on the scalp. Only the spares would read as created clips — were they not
+        // left out, they would seed the push and move the cap.
+        var source = Frame(Head(0.085f));
         var target = Frame(Head(0.091f));
-        var push = HairScalpPush.Apply(hair, shown, Frame(Head(0.09f)), target);
+        var counted = HairScalpPush.Created(shown, shown, source, target);
+        Assert.True(counted.Count > 0, "the spares must read as created clips when not left out, or this proves nothing");
+        Assert.Equal(0, HairScalpPush.Created(shown, shown, source, target, spares).Count);
+        var push = HairScalpPush.Apply(hair, shown, source, target);
         Assert.Equal(0, push.Before);
         Assert.Equal(0, push.Pushed);
         Assert.Same(hair, push.Model);
@@ -420,9 +426,77 @@ public class HairScalpPushTests
         var result = HairPortBaker.Prepare(hair, 201, 401, 130, pbd, new HashSet<string>(), Head(0.09f), bare, out var why);
         Assert.True(result != null, why);
         Assert.Equal(0, result!.Pushed);
+        Assert.True(result.NoScalp);
         Assert.DoesNotContain("of its points sink into the head", result.Warning ?? "");
         var bent = RacialModelBake.Port(hair, 201, 401, pbd, HairPortBaker.ParentOf, out _)!;
         Assert.Equal(ModelAttributeWriter.RenameMaterial(bent, "/mt_c0201h0130_hir_a.mtrl", "/mt_c0401h0130_hir_a.mtrl"), result.Model);
+    }
+
+    /// <summary>[EDGE-hair-material-scalp-fit-15] An ear or horn inside the skin mesh itself (an Elezen's, a Lalafell's, a
+    /// Miqo'te's ear base): the skull clips a bin standing 20 mm proud of its neighbourhood to the neighbourhood's median plus
+    /// the margin, and leaves every other bin as it was.</summary>
+    [Fact]
+    [Trait("Plan", "EDGE-hair-material-scalp-fit-15")]
+    public void The_skull_clips_an_ear_in_the_skin_mesh()
+    {
+        const int U = HatCompatSolve.FloorBinsU;
+        var floor = Enumerable.Repeat(0.09f, U * HatCompatSolve.FloorBinsV).ToArray();
+        int ear = 5 * U + 9;
+        floor[ear] = 0.11f;
+        var skull = HairScalpPush.Skull(floor);
+        Assert.Equal(0.09f + HairScalpPush.ProtrusionMargin, skull[ear], 1e-5f);
+        for (int b = 0; b < floor.Length; b++)
+            if (b != ear) Assert.Equal(0.09f, skull[b], 1e-6f);
+    }
+
+    /// <summary>[EDGE-hair-material-scalp-fit-15] Through the push: hair beside a 2 cm bump in the skin mesh's own
+    /// triangles is pushed no further than on the same head without it plus the protrusion margin — the most of a bump the
+    /// skull ever keeps.</summary>
+    [Fact]
+    [Trait("Plan", "EDGE-hair-material-scalp-fit-15")]
+    public void An_ear_in_the_skin_mesh_does_not_spike_the_hair()
+    {
+        var bump = HairPortFixtures.Sphere("/mt_c0101f0001_fac_a.mtrl", Centre + new Vector3(0.1f, 0.03f, 0f), 0.025f, [("j_kao", 1f)]);
+        var source = Frame(Head(0.09f));
+        var withEar = Frame(Head(0.11f, bump));
+        var plain = Frame(Head(0.11f));
+        var hair = Hair(Cap(0.091f));
+        var shown = ModelPartReader.Read(hair)!;
+        var a = Radii(HairScalpPush.Apply(hair, shown, source, withEar).Model);
+        var b = Radii(HairScalpPush.Apply(hair, shown, source, plain).Model);
+        // A bump in the skin mesh counts as skull up to the protrusion margin and no further: never the bump's 2 cm.
+        for (int i = 0; i < a.Length; i++)
+            Assert.True(a[i] <= b[i] + HairScalpPush.ProtrusionMargin + 0.001f, $"point {i}: {a[i] * 1000:F1} mm vs {b[i] * 1000:F1} mm");
+    }
+
+    /// <summary>[AC-hair-material-scalp-fit-6] The independent skin check has teeth on a small port: a few points the bend
+    /// sank 19 mm, with the push turned off (the bend compared with itself), fail its per-port rule — the floor for the two
+    /// measures' disagreement does not cover points that deep.</summary>
+    [Fact]
+    [Trait("Plan", "AC-hair-material-scalp-fit-6")]
+    public void The_independent_check_catches_a_missed_push_on_a_small_port()
+    {
+        var sourceHead = Head(0.09f);
+        var targetHead = Head(0.11f);
+        var source = Frame(sourceHead);
+        var target = Frame(targetHead);
+        // A small patch at the upper back only: a dozen points or so.
+        var patch = HairPortFixtures.Sphere("/mt_c0201h0130_hir_a.mtrl", Centre, 0.091f, [("j_kao", 1f)], rings: 6, segments: 8, minY: 0.3f);
+        var hair = Hair(patch);
+        var shown = ModelPartReader.Read(hair)!;
+        var r = HairPortScalpLocalTests.InsideSkin(HairPortScalpLocalTests.SkinOf(targetHead, target),
+                                                   HairPortScalpLocalTests.SkinOf(sourceHead, source), shown, shown, shown);
+        Assert.InRange(r.Before, 1, 40);
+        Assert.Equal(r.Before, r.After);
+        // Inside by the push's own radial gap too: a miss by both measures, not their disagreement.
+        Assert.Equal(r.Deep, r.MissedBoth);
+        Assert.True(r.Deep > 0);
+        foreach (ushort to in new ushort[] { 401, 1501 })   // Hrothgar's looser deep bound still fails it
+        {
+            var fails = new List<string>();
+            HairPortScalpLocalTests.CheckPort("missed", to, r, (ok, what) => { if (!ok) fails.Add(what); });
+            Assert.NotEmpty(fails);
+        }
     }
 
     /// <summary>[EDGE-hair-material-scalp-fit-21] A Miqo'te hairstyle with ears, to a race without: the fur is hidden, the

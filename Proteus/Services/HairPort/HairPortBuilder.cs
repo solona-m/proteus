@@ -248,7 +248,8 @@ internal static class HairPortBuilder
                 }
                 writes.Add(new HairPortWriter.PortWrite(owner, sourceGamePath, rel, HairPortPlan.Sha8(bytes), target,
                                                         result.Model, [.. materials, .. skeletonFiles], result.Millis, est,
-                                                        skeletonFrom, Pushed: result.Pushed, PushWorst: result.PushWorst));
+                                                        skeletonFrom, Pushed: result.Pushed, PushWorst: result.PushWorst,
+                                                        NoScalp: result.NoScalp));
                 if (result.Warning is { } warning) warnings[to] = warning;
             }
             if (why != null)

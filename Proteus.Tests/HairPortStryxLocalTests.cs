@@ -218,8 +218,10 @@ public sealed class HairPortStryxLocalTests(ITestOutputHelper o) : IDisposable
 
     /// <summary>
     /// [AC-hair-material-scalp-fit-6] The bald spot by the face's own skin triangles, not the push's scalp: for every race,
-    /// of the points the push moved at the upper back, at most 2% as many sit inside the skin after it as before (never
-    /// relaxed); and no moved point ends more than 0.5 mm further out than it sat on the source.
+    /// port by port, the upper-back points that sat on the source's skin and sit inside the target's after the push pass
+    /// <see cref="HairPortScalpLocalTests.CheckPort"/> — 2% of before wherever that is 16 or more (every large race: c0101,
+    /// c0301, c0501, c1101, c1201, c1501), hairstyles 168 and 133; and no moved point ends more than 0.5 mm further out than
+    /// it sat on the source.
     /// </summary>
     [LocalDataFact(LocalData.StryxMod, LocalData.GameData)]
     [Trait("Plan", "AC-hair-material-scalp-fit-6")]
@@ -228,12 +230,14 @@ public sealed class HairPortStryxLocalTests(ITestOutputHelper o) : IDisposable
     {
         var game = HairPortLocalTests.Load();
         var root = CleanCopy();
-        var source = SourceBytes(root, 168);
-        var shown = ModelPartReader.Read(source)!;
         var sf = HairScalpPush.FrameOf(game.Head(From)!)!;
         var fails = new List<string>();
+        foreach (int id in new[] { 168, 133 })
         foreach (var to in Targets())
         {
+            if (game.File(HairPortLocalTests.HairPath(to, id)) == null) continue;   // that race cannot choose it
+            var source = SourceBytes(root, id);
+            var shown = ModelPartReader.Read(source)!;
             var tf = HairScalpPush.FrameOf(game.Head(to)!)!;
             var bent = RacialModelBake.Port(source, From, to, game.Pbd, HairPortBaker.ParentOf, out _);
             if (bent == null) continue;
@@ -242,13 +246,13 @@ public sealed class HairPortStryxLocalTests(ITestOutputHelper o) : IDisposable
             var b = ModelPartReader.Read(bent)!;
             var p = ModelPartReader.Read(push.Model)!;
             var spares = HairScalpPush.Spares(bent, b);
-            var (inBefore, inAfter, protrusion, back) = HairPortScalpLocalTests.InsideSkin(HairPortScalpLocalTests.SkinOf(game.Head(to)!, tf),
+            var r = HairPortScalpLocalTests.InsideSkin(HairPortScalpLocalTests.SkinOf(game.Head(to)!, tf),
                 HairPortScalpLocalTests.SkinOf(game.Head(From)!, sf), shown, b, p, spares);
             float over = HairPortScalpLocalTests.Overshoot(shown, b, p, sf, tf, spares);
-            o.WriteLine($"c{to:D4}: pushed upper-back points inside the skin {inBefore} -> {inAfter} ({protrusion} under a protrusion, {back} at the upper back, not counted), worst overshoot {over * 1000:F2} mm");
-            if (inAfter > inBefore * 0.02) fails.Add($"c{to:D4}: {inBefore} -> {inAfter}");
-            if (back > HairPortScalpLocalTests.ProtrusionBackMax) fails.Add($"c{to:D4}: {back} protrusion points at the upper back");
-            if (inBefore + protrusion > 20 && inBefore < 0.5 * (inBefore + protrusion)) fails.Add($"c{to:D4}: protrusions are most of before");
+            o.WriteLine($"h{id:D4} c{to:D4}: upper-back points inside the skin {r.Before} -> {r.After} ({r.Deep} deep, {r.MissedBoth} by both), deepest unmoved " +
+                        $"{r.UnmovedDepth * 1000:F1} mm ({r.Protrusion} under a protrusion, {r.ProtrusionBack} at the upper back, not counted), worst overshoot {over * 1000:F2} mm");
+            HairPortScalpLocalTests.CheckPort($"h{id:D4} c{to:D4}", to, r,
+                                              (ok, what) => { if (!ok) fails.Add(what); });
             if (over > 0.0005f) fails.Add($"c{to:D4}: {over * 1000:F2} mm further out than the source");
         }
         Assert.True(fails.Count == 0, string.Join("; ", fails));

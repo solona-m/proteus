@@ -29,7 +29,9 @@ internal static class HairPortBaker
     /// <summary>
     /// The most of a port's cranium vertices that may sit deeper than <see cref="InsideDepth"/> inside the target's
     /// skull. Measured over the game's own per-race copies of the shared hairstyles (2026-10-16): those reach 10%, ports
-    /// 19%, and a hairstyle left unbent on a smaller head 35–99% (see HairPortLocalTests).
+    /// 19%, and a hairstyle left unbent on a smaller head 35–99% (see HairPortLocalTests). Judged on the hat press's
+    /// furthest-vertex floor (<see cref="Measure"/>), not the skin surface the scalp push reads (<see cref="HairScalpPush"/>):
+    /// a port can carry this warning after the push cleared every point it sank, or the other way round.
     /// </summary>
     public const float SunkLimit = 0.25f;
 
@@ -66,9 +68,10 @@ internal static class HairPortBaker
     /// <param name="Pushed">Points pushed back out of the target's skull (<see cref="HairScalpPush"/>).</param>
     /// <param name="PushWorst">The furthest any was pushed, in metres.</param>
     /// <param name="Clips">Points still sunk into the head where the source's are not, after the push.</param>
+    /// <param name="NoScalp">A face model had no skin mesh to read the scalp from, so nothing was pushed (said in the log).</param>
     public sealed record Result(byte[] Model, IReadOnlyList<(string From, string To)> Renamed, float Sunk,
                                 float GapShift, int FurHidden, long Millis, int Folded = 0, string? Warning = null,
-                                int Pushed = 0, float PushWorst = 0f, int Clips = 0);
+                                int Pushed = 0, float PushWorst = 0f, int Clips = 0, bool NoScalp = false);
 
     /// <summary>
     /// Where each bone sits in a hairstyle's skeleton, for the deformer: a bone it does not list takes its nearest
@@ -167,7 +170,10 @@ internal static class HairPortBaker
         // The bend scales a head but does not know its shape: what it sank into the target's skull, where the source sat
         // on its own scalp, goes back out — a bald patch otherwise.
         HairScalpPush.Result? push = null;
-        if (shown != null && HairScalpPush.FrameOf(sourceHead) is { } sourceFrame && HairScalpPush.FrameOf(targetHead) is { } targetFrame)
+        var sourceFrame = HairScalpPush.FrameOf(sourceHead);
+        var targetFrame = HairScalpPush.FrameOf(targetHead);
+        bool noScalp = sourceFrame == null || targetFrame == null;
+        if (shown != null && sourceFrame != null && targetFrame != null)
         {
             try { push = HairScalpPush.Apply(model, shown, sourceFrame, targetFrame); }
             catch (ModelAttributeWriter.ModelEditException ex) { refusal = ex.Message; return null; }
@@ -227,7 +233,7 @@ internal static class HairPortBaker
         }
 
         return new Result(model, renamed, after.Value.Sunk, shift, furHidden, clock.ElapsedMilliseconds, folded, warning,
-                          push?.Pushed ?? 0, push?.Worst ?? 0f, push?.After ?? 0);
+                          push?.Pushed ?? 0, push?.Worst ?? 0f, push?.After ?? 0, noScalp);
     }
 
     /// <summary>
@@ -296,7 +302,8 @@ internal static class HairPortBaker
     /// no vertex around that cranium at all is nowhere near it, and measures as entirely sunk.
     /// </summary>
     /// <remarks>The scalp is <see cref="HatCompatSolve.HeadFloor"/>'s: per direction from the face model's centre, its
-    /// furthest vertex above that centre.</remarks>
+    /// furthest vertex above that centre — not the ray-cast skin surface <see cref="HairScalpPush"/> pushes against, so the
+    /// fit warning and the push can disagree on a port.</remarks>
     internal static (float Sunk, float Gap)? Measure(byte[] hair, byte[] head)
     {
         var frame = HatCompatSolve.HeadFrameFrom(head);

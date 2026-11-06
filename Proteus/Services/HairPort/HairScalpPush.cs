@@ -22,6 +22,11 @@ namespace Proteus.Services;
 /// tucked. Shape keys' spares neither seed nor count: they follow their base (an author's or Proteus's hat fit presses
 /// them to the scalp on purpose).
 /// <para/>
+/// A point seeds the push and counts as sunk only when it is above the head's centre on both heads — a recorded
+/// deviation from "the target's head" alone, which seeded points straddling the centre line and broke three calibrated
+/// gates (points held at <see cref="MaxPush"/>, ports moved off the game's own copies, added folds); the cost is a few
+/// such points left partly inside on very large skulls (c0201→c1501 h0180: 8, a known issue).
+/// <para/>
 /// Calibrated 2026-11-05 on the game's shared hairstyles (c0201 and c0101 to every playable race) and LM Stryx Rainbow
 /// (see HairPortScalpLocalTests, HairPortStryxLocalTests): created clips on game ports 726 → 0 (none held at
 /// <see cref="MaxPush"/>; the deepest needs 55 mm, c0201→c1501); Stryx upper-back created clips → 0 for every race, and by

@@ -36,10 +36,12 @@ internal static class HairPortWriter
     /// <param name="Pushed">Points the bend sank into the target's skull that were pushed back out, for the log; never
     /// saved.</param>
     /// <param name="PushWorst">The furthest any was pushed, in metres, for the log.</param>
+    /// <param name="NoScalp">No scalp could be read to push against (a face model without a skin mesh), for the log.</param>
     public sealed record PortWrite(HairPortPlan.Owner Into, string SourceGamePath, string SourceFile, string SourceSha8,
                                    string TargetGamePath, byte[] Model, IReadOnlyList<MaterialWrite> Materials,
                                    long Millis = 0, int Est = 0, int SkeletonFrom = 0, bool Stripped = false,
-                                   (int Est, int SkeletonFrom) StrippedFrom = default, int Pushed = 0, float PushWorst = 0f);
+                                   (int Est, int SkeletonFrom) StrippedFrom = default, int Pushed = 0, float PushWorst = 0f,
+                                   bool NoScalp = false);
 
     /// <summary>The <c>Est</c> manipulation that gives a port's race its extra skeleton.</summary>
     internal static object EstFor(string targetGamePath, int entry)
@@ -388,6 +390,10 @@ internal static class HairPortWriter
                     left.AddRange(set.Select(p => p.Entry));
                     continue;
                 }
+                // A port's join kind can depend on which pick reached it first: an old port's key-sharers reached through a
+                // remade pick's folder clause are Folder (not declined, listed as "also"); reached from that old port as a
+                // pick of its own first, they are Key. Harmless — Folder members are build 1430's cross-sex ports, which the
+                // automatic path never makes again — and accepted as such (review 2026-11-05).
                 foreach (var (p, j) in set)
                 {
                     // What another pick took by its own key keeps that: only what nothing asked for is "also".
