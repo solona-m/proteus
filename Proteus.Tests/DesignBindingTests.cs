@@ -1013,6 +1013,21 @@ public class DesignBindingTests
             WithSlot(Worn(777), "Hands", 5), WithSlot(Worn(777), "Hands", 6), NoCarriers));
 
     [Fact]
+    [Trait("Plan", "AC-binding-reapply-7")]
+    public void IsReapplyOfActive_DyeChangedOutsideItsSet_IsAnotherDesign()
+    {
+        // A dye-only design over an outfit design that sets no dyes: edits are kept.
+        Assert.False(DesignBindingService.IsReapplyOfActive(Outfit(true),
+            WithStain(Worn(777), "Body", 10, 0), WithStain(Worn(777), "Body", 20, 0), NoCarriers));
+        // The design sets that dye itself: re-applying it put the dye back.
+        Assert.True(DesignBindingService.IsReapplyOfActive(WithStain(Outfit(true), "Body", 20, 0),
+            WithStain(Worn(777), "Body", 10, 0), WithStain(Worn(777), "Body", 20, 0), NoCarriers));
+        // A field only the after-state carries counts as changed.
+        Assert.False(DesignBindingService.IsReapplyOfActive(Outfit(true),
+            Worn(777), WithGlasses(Worn(777), (1UL << 48) | 9), NoCarriers));
+    }
+
+    [Fact]
     [Trait("Plan", "EDGE-binding-reapply-1")]
     public void IsReapplyOfActive_NoBeforeReading_IsAReapply()
         => Assert.True(DesignBindingService.IsReapplyOfActive(Outfit(true), null,
