@@ -4275,6 +4275,38 @@
     "message": "다른 종족용으로 만든 헤어 모드가 이제 내 종족에 맞춰집니다",
     "description": "Release-notes section heading for hair mods fitted automatically from another race to the player's."
   },
+  "WhatsNew.ColorRows.Head": {
+    "message": "색상 행을 가리켜 어디에 쓰이는지 보기",
+    "description": ""
+  },
+  "WhatsNew.ColorRows.Body": {
+    "message": "모드의 \"색상\" 창에서 행 버튼(#01–#16)에 포인터를 올리면, 그 행이 색을 입히는 캐릭터 부분이 포인터가 머무는 동안 빛납니다. 모드의 인덱스 텍스처가 거의 또는 전혀 쓰지 않는 행은 숨겨집니다. \"모든 행 표시\"를 체크하면 다시 나타납니다.",
+    "description": ""
+  },
+  "WhatsNew.HairOtherSex.Head": {
+    "message": "헤어스타일을 다른 성별에 이식",
+    "description": ""
+  },
+  "WhatsNew.HairOtherSex.Body": {
+    "message": "스튜디오의 \"모든 종족에 이식\"에 이제 다른 성별도 \"다른 성별에도\" 아래에 나옵니다. 같은 헤어스타일 번호가 다른 성별에서는 다른 스타일이므로, 그쪽으로 이식한 종족은 그 스타일 대신 이 모드의 헤어를 쓰게 됩니다. 그곳은 아무것도 미리 체크되어 있지 않으며, Proteus가 스스로 하지도 않습니다. 또한 이식한 헤어가 더 큰 머리에 파묻혀 맨살이 보이는 일도 없어졌습니다.",
+    "description": ""
+  },
+  "WhatsNew.GearVariants.Head": {
+    "message": "장비의 모든 변형에 모드가 보입니다",
+    "description": ""
+  },
+  "WhatsNew.GearVariants.Body": {
+    "message": "많은 장비 모드는 아이템의 모델을 바꾸지만 재질은 한 가지 변형용만 들어 있어서, 다른 변형으로 입으면 모드의 모델에 게임의 모습이 나오거나 아무것도 나오지 않습니다. 이제 Proteus가 장비를 착용할 때 이를 고칩니다. TexTools의 \"Apply to All Variants\"가 재질에 하는 일을 모드 자체의 옵션 안에서 합니다. 기본으로 켜져 있습니다: 설정, 장비 변형, \"착용한 장비의 모든 변형을 모드의 재질로 지정\". \"착용 중인 장비 되돌리기\"로 다시 뺄 수 있습니다.",
+    "description": ""
+  },
+  "WhatsNew.ShaderUpgrade.Head": {
+    "message": "오래된 장비를 황금의 유산 셰이더로",
+    "description": ""
+  },
+  "WhatsNew.ShaderUpgrade.Body": {
+    "message": "황금의 유산 이전에 만든 장비는 아직 게임의 옛 셰이더를 씁니다. 설정에서 \"오래된 장비를 황금의 유산 셰이더로 업그레이드\"를 체크하면, Proteus가 착용한 모드의 재질을 모드 안에서 황금의 유산 셰이더로 다시 쓰며, 각 파일은 먼저 백업합니다. 기본으로 꺼져 있으며, \"착용 중인 장비 되돌리기\"로 제작자의 파일을 되돌릴 수 있습니다.",
+    "description": ""
+  },
   "WhatsNew.HairPort.Body": {
     "message": "많은 헤어 모드는 한 종족용으로만 만들어져서, 다른 종족에서는 게임 자체의 헤어스타일이 대신 표시됩니다. 이제 Proteus가 모드의 헤어스타일을 내 종족의 머리에 맞게 구부려 같은 모드의 같은 옵션에 추가합니다. 지금 컬렉션에서 켜져 있는 헤어 모드를 한 번 살펴보고, 이후에는 헤어 모드를 설치하거나 켜거나 변경할 때마다 다시 살펴봅니다. 맞춘 헤어스타일 번호를 채팅으로 알려 주므로 어떤 것을 고르면 되는지 알 수 있습니다. 물리 효과가 있는 헤어는 물리 효과가 그대로 유지됩니다.\n\nProteus를 꺼도 계속 작동하고, 모드를 내보낼 때 함께 따라갑니다. 설정 › 헤어 에서 이 기능을 끄거나, 다시 확인하거나, 맞춘 헤어스타일을 되돌릴 수 있습니다.",
     "description": "Release-notes section on hair fitted automatically from another race. 'Settings, Hair' names the Settings tab and its Hair section - match Tab.Settings and Settings.Section.HairPort. 'Physics hair' is hair that sways with its own bones."

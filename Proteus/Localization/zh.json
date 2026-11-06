@@ -4275,6 +4275,38 @@
     "message": "为其他种族制作的发型 Mod 现在也能适配你的种族",
     "description": "Release-notes section heading for hair mods fitted automatically from another race to the player's."
   },
+  "WhatsNew.ColorRows.Head": {
+    "message": "指向颜色行，看看它用在哪里",
+    "description": ""
+  },
+  "WhatsNew.ColorRows.Body": {
+    "message": "在模组的「颜色」窗口中，把指针停在某一行的按钮（#01–#16）上，角色身上由这一行着色的部分就会发光，直到指针移开。模组的索引贴图很少或从不使用的行会被隐藏；勾选「显示所有行」即可让它们重新出现。",
+    "description": ""
+  },
+  "WhatsNew.HairOtherSex.Head": {
+    "message": "把发型移植到另一性别",
+    "description": ""
+  },
+  "WhatsNew.HairOtherSex.Body": {
+    "message": "工作室中的「移植到所有种族」现在也会列出另一性别，位于「也用于另一性别」下。同一个发型编号在另一性别上是另一款发型，所以你移植过去的种族会以此模组的头发代替那款发型。这里不会替你勾选任何项，Proteus 也绝不会自行这样做。此外，移植后的头发不再陷进更大的头部、露出秃块。",
+    "description": ""
+  },
+  "WhatsNew.GearVariants.Head": {
+    "message": "装备的每个变体都显示模组",
+    "description": ""
+  },
+  "WhatsNew.GearVariants.Body": {
+    "message": "许多装备模组替换了物品的模型，却只附带一个变体的材质，所以穿着其他变体时，模组的模型会显示游戏原本的样子，或什么都不显示。现在 Proteus 会在你穿上装备时修正这一点，在模组自己的选项中，做 TexTools 的「Apply to All Variants」对材质所做的事。默认开启：设置、装备变体、「将身上装备的所有变体指向其模组的材质」；「撤销身上装备的变体指向」可将其撤回。",
+    "description": ""
+  },
+  "WhatsNew.ShaderUpgrade.Head": {
+    "message": "把旧装备升级到金曦之遗辉的着色器",
+    "description": ""
+  },
+  "WhatsNew.ShaderUpgrade.Body": {
+    "message": "金曦之遗辉之前制作的装备仍在使用游戏的旧着色器。在设置中勾选「将旧装备升级为金曦之遗辉着色器」，Proteus 就会在模组内部把你穿上的模组的材质改写为金曦之遗辉的着色器，并先备份每个文件。默认关闭，「撤销身上装备的升级」可恢复作者的文件。",
+    "description": ""
+  },
   "WhatsNew.HairPort.Body": {
     "message": "许多发型 Mod 只为一个种族制作，换成其他种族时，游戏会显示原版发型。现在，Proteus 会把 Mod 中的发型弯折到你种族的头部上，并添加到同一 Mod 的同一选项中。它会立即检查一遍你合集中已启用的发型 Mod，之后每当有发型 Mod 被安装、启用或更改时会再次检查。聊天栏会列出已适配的发型编号，方便你知道该选哪一个。带物理效果的发型会保留其物理效果。\n\n即使关闭 Proteus，适配结果依然有效，并会随 Mod 一起带走。你可以在 设置 › 头发 中关闭此功能、重新检查，或撤销某个已适配的发型。",
     "description": "Release-notes section on hair fitted automatically from another race. 'Settings, Hair' names the Settings tab and its Hair section - match Tab.Settings and Settings.Section.HairPort. 'Physics hair' is hair that sways with its own bones."

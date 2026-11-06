@@ -463,6 +463,42 @@ public sealed class WhatsNewStrings
     public readonly string IntroSince = ProteusLoc.Localize("WhatsNew.IntroSince",
         "Something new since you last saw this window. It opens once, and not again.");
 
+    public readonly string ColorRowsHead = ProteusLoc.Localize("WhatsNew.ColorRows.Head",
+        "Point at a colour row to see where it goes");
+
+    public readonly string ColorRowsBody = ProteusLoc.Localize("WhatsNew.ColorRows.Body",
+        "In a mod's Colors window, point at a row button (#01–#16) and the part of your character that row colours "
+      + "lights up for as long as the pointer stays on it. Rows the mod's index textures use rarely or never are "
+      + "hidden; tick \"Show all rows\" to bring them back.");
+
+    public readonly string HairOtherSexHead = ProteusLoc.Localize("WhatsNew.HairOtherSex.Head",
+        "Port a hairstyle to the other sex");
+
+    public readonly string HairOtherSexBody = ProteusLoc.Localize("WhatsNew.HairOtherSex.Body",
+        "\"Port to all races\" in the Studio now lists the other sex too, under \"Also for the other sex\". The same "
+      + "hairstyle number is a different style for the other sex, so a race you port there wears this mod's hair in "
+      + "place of that style. Nothing there is ticked for you, and Proteus never does it on its own. Ported hair also "
+      + "no longer sinks into bigger heads and shows bald spots.");
+
+    public readonly string GearVariantsHead = ProteusLoc.Localize("WhatsNew.GearVariants.Head",
+        "Every variant of your gear shows the mod");
+
+    public readonly string GearVariantsBody = ProteusLoc.Localize("WhatsNew.GearVariants.Body",
+        "Many gear mods replace an item's model but ship its material for one variant only, so wearing the item in "
+      + "another variant shows the game's look, or none, on the mod's model. Proteus now fixes that as you put the "
+      + "gear on, the way TexTools' \"Apply to All Variants\" does for the material, inside the mod's own options. "
+      + "It is on by default: Settings, Gear variants, \"Point every variant of worn gear at its mod's material\", "
+      + "where \"Undo for what I'm wearing\" takes it back out.");
+
+    public readonly string ShaderUpgradeHead = ProteusLoc.Localize("WhatsNew.ShaderUpgrade.Head",
+        "Bring old gear up to Dawntrail's shader");
+
+    public readonly string ShaderUpgradeBody = ProteusLoc.Localize("WhatsNew.ShaderUpgrade.Body",
+        "Gear made before Dawntrail still uses the game's old shader. Tick \"Upgrade old gear to Dawntrail shaders\" "
+      + "in Settings and Proteus rewrites the materials of the mods you put on to Dawntrail's shader, inside the mod, "
+      + "backing each file up first. It is off by default, and \"Undo for what I'm wearing\" puts the author's files "
+      + "back.");
+
     public readonly string HairPortHead = ProteusLoc.Localize("WhatsNew.HairPort.Head",
         "Hair mods made for another race now fit yours");
 

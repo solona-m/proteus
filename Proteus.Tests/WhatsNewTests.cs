@@ -102,9 +102,18 @@ public class WhatsNewTests
         Assert.False(Gui.WhatsNewWindow.IsNew(refit, readRefit.WhatsNewShown));
         Assert.True(Gui.WhatsNewWindow.IsNew(hair, readRefit.WhatsNewShown));
 
-        // The hair sections belong to the current notes, so reading them retires them.
-        Assert.Equal(Plugin.CurrentWhatsNew, hair);
-        Assert.False(Gui.WhatsNewWindow.IsNew(hair, Plugin.CurrentWhatsNew));
+        // Read the hair notes: the window opens again, with the colour rows, hair across the sexes, gear variants and
+        // the shader upgrade alone.
+        const int rows = Gui.WhatsNewWindow.ColorRowsNotes;
+        var readHair = new Configuration { WhatsNewShown = hair };
+        Assert.True(readHair.WantsWhatsNew(Plugin.CurrentWhatsNew));
+        Assert.False(Gui.WhatsNewWindow.IsNew(hair, readHair.WhatsNewShown));
+        Assert.True(Gui.WhatsNewWindow.IsNew(rows, readHair.WhatsNewShown));
+        Assert.True(Gui.WhatsNewWindow.IsNew(rows, 0));
+
+        // The colour-row sections belong to the current notes, so reading them retires them.
+        Assert.Equal(Plugin.CurrentWhatsNew, rows);
+        Assert.False(Gui.WhatsNewWindow.IsNew(rows, Plugin.CurrentWhatsNew));
     }
 
     /// <summary>

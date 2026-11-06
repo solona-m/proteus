@@ -4275,6 +4275,38 @@
     "message": "別の種族用の髪Modがあなたの種族に合うように",
     "description": "Release-notes section heading for hair mods fitted automatically from another race to the player's."
   },
+  "WhatsNew.ColorRows.Head": {
+    "message": "カラー行を指して、どこに使われているか確かめる",
+    "description": ""
+  },
+  "WhatsNew.ColorRows.Body": {
+    "message": "MODの「カラー」ウィンドウで行のボタン（#01〜#16）にポインターを合わせると、その行が色を付けているキャラクターの部分が、ポインターを置いている間だけ光ります。MODのインデックステクスチャがほとんど、または一度も使わない行は隠れます。「すべての行を表示」にチェックを入れると戻ります。",
+    "description": ""
+  },
+  "WhatsNew.HairOtherSex.Head": {
+    "message": "髪型を異性に移植",
+    "description": ""
+  },
+  "WhatsNew.HairOtherSex.Body": {
+    "message": "スタジオの「全種族に移植」に、異性の種族も「異性の種族にも」として並ぶようになりました。同じ髪型番号は異性では別の髪型なので、そこで移植した種族は、その髪型の代わりにこのMODの髪を着けます。ここには何もチェックが入っておらず、Proteus が自分から行うこともありません。また、移植した髪が大きな頭に埋もれて地肌が見えることもなくなりました。",
+    "description": ""
+  },
+  "WhatsNew.GearVariants.Head": {
+    "message": "装備のどのバリアントでもMODが表示される",
+    "description": ""
+  },
+  "WhatsNew.GearVariants.Body": {
+    "message": "多くの装備MODはアイテムのモデルを置き換えますが、素材は一つのバリアント分しか入っていないため、別のバリアントで着るとMODのモデルにゲームの見た目が出るか、何も出ません。Proteus は装備を着けたときにこれを直すようになりました。TexTools の「Apply to All Variants」が素材に対して行うのと同じことを、MOD自身のオプションの中で行います。標準でオンです：設定、装備のバリアント、「着ている装備のすべてのバリアントをMODの素材に向ける」。「着ている装備を元に戻す」で取り除けます。",
+    "description": ""
+  },
+  "WhatsNew.ShaderUpgrade.Head": {
+    "message": "古い装備を黄金のレガシーのシェーダーに",
+    "description": ""
+  },
+  "WhatsNew.ShaderUpgrade.Body": {
+    "message": "黄金のレガシーより前に作られた装備は、まだゲームの古いシェーダーを使っています。設定で「古い装備を黄金のレガシーのシェーダーに更新する」にチェックを入れると、Proteus は着けたMODの素材を黄金のレガシーのシェーダーに書き換えます。MODの中で行い、各ファイルは先にバックアップします。標準ではオフで、「着ている装備を元に戻す」で作者のファイルに戻せます。",
+    "description": ""
+  },
   "WhatsNew.HairPort.Body": {
     "message": "多くの髪Modは一つの種族専用に作られているため、他の種族ではゲーム標準の髪型が表示されます。Proteus は Mod の髪型をあなたの種族の頭に合わせて曲げ、同じ Mod の同じオプションに追加するようになりました。コレクションで有効な髪Modを今いちど確認し、以後もインストール・有効化・変更のたびに確認します。合わせた髪型の番号はチャットでお知らせするので、どれを選べばよいかわかります。物理演算で揺れる髪は、その揺れもそのまま保たれます。\n\nProteus をオフにしても機能し、Mod と一緒に持ち運ばれます。オフにする、もう一度確認する、合わせた髪型を元に戻す、といった操作は 設定 › 髪 から行えます。",
     "description": "Release-notes section on hair fitted automatically from another race. 'Settings, Hair' names the Settings tab and its Hair section - match Tab.Settings and Settings.Section.HairPort. 'Physics hair' is hair that sways with its own bones."

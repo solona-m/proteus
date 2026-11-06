@@ -4275,6 +4275,38 @@
     "message": "Hair mods made for another race now fit yours",
     "description": "Release-notes section heading for hair mods fitted automatically from another race to the player's."
   },
+  "WhatsNew.ColorRows.Head": {
+    "message": "Point at a colour row to see where it goes",
+    "description": "Release-notes section heading: hovering a colour-table row button lights that row's area on the character."
+  },
+  "WhatsNew.ColorRows.Body": {
+    "message": "In a mod's Colors window, point at a row button (#01–#16) and the part of your character that row colours lights up for as long as the pointer stays on it. Rows the mod's index textures use rarely or never are hidden; tick \"Show all rows\" to bring them back.",
+    "description": "Release-notes section on hovering colour rows. \"Colors\" names the Colors window (match Colors.Window.Title.Fmt); \"Show all rows\" must match Colors.ShowAllRows.Check. Keep #01–#16."
+  },
+  "WhatsNew.HairOtherSex.Head": {
+    "message": "Port a hairstyle to the other sex",
+    "description": "Release-notes section heading: porting a hairstyle to the other sex in the Studio."
+  },
+  "WhatsNew.HairOtherSex.Body": {
+    "message": "\"Port to all races\" in the Studio now lists the other sex too, under \"Also for the other sex\". The same hairstyle number is a different style for the other sex, so a race you port there wears this mod's hair in place of that style. Nothing there is ticked for you, and Proteus never does it on its own. Ported hair also no longer sinks into bigger heads and shows bald spots.",
+    "description": "Release-notes section. \"Port to all races\" must match HairPort.Studio.Header and \"Also for the other sex\" HairPort.Studio.OtherSex."
+  },
+  "WhatsNew.GearVariants.Head": {
+    "message": "Every variant of your gear shows the mod",
+    "description": "Release-notes section heading: Gear variants."
+  },
+  "WhatsNew.GearVariants.Body": {
+    "message": "Many gear mods replace an item's model but ship its material for one variant only, so wearing the item in another variant shows the game's look, or none, on the mod's model. Proteus now fixes that as you put the gear on, the way TexTools' \"Apply to All Variants\" does for the material, inside the mod's own options. It is on by default: Settings, Gear variants, \"Point every variant of worn gear at its mod's material\", where \"Undo for what I'm wearing\" takes it back out.",
+    "description": "Release-notes section. Keep TexTools and \"Apply to All Variants\" (TexTools' own English label) verbatim. 'Settings, Gear variants' match Tab.Settings and Settings.Section.GearVariants; the quoted checkbox matches Settings.GearVariants.Auto.Label; \"Undo for what I'm wearing\" matches Settings.GearVariants.UndoWorn."
+  },
+  "WhatsNew.ShaderUpgrade.Head": {
+    "message": "Bring old gear up to Dawntrail's shader",
+    "description": "Release-notes section heading: the old-gear shader upgrade. Dawntrail is the game expansion; use its official name in your language."
+  },
+  "WhatsNew.ShaderUpgrade.Body": {
+    "message": "Gear made before Dawntrail still uses the game's old shader. Tick \"Upgrade old gear to Dawntrail shaders\" in Settings and Proteus rewrites the materials of the mods you put on to Dawntrail's shader, inside the mod, backing each file up first. It is off by default, and \"Undo for what I'm wearing\" puts the author's files back.",
+    "description": "Release-notes section. The quoted checkbox matches Settings.GearShaders.AutoUpgrade.Label; \"Undo for what I'm wearing\" matches Settings.GearShaders.UndoWorn; Settings matches Tab.Settings."
+  },
   "WhatsNew.HairPort.Body": {
     "message": "Many hair mods are made for one race only, so on any other race the game shows its own hairstyle instead. Proteus now bends the mod's hairstyle onto your race's head and adds it to the same option of the same mod. It looks through the hair mods switched on in your collection once now, and again whenever one is installed, switched on or changed. Chat names the hairstyle numbers it fitted, so you know which to choose. Physics hair keeps its physics.\n\nIt keeps working with Proteus turned off and travels with the mod. Switch it off, check again, or undo a fitted hairstyle under Settings, Hair.",
     "description": "Release-notes section on hair fitted automatically from another race. 'Settings, Hair' names the Settings tab and its Hair section - match Tab.Settings and Settings.Section.HairPort. 'Physics hair' is hair that sways with its own bones."
