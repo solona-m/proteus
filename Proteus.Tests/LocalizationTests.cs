@@ -170,6 +170,40 @@ public sealed class LocalizationTests
         }
     }
 
+    /// <summary>The fourth release notes are translated, not copied, and quote each language's own labels for the
+    /// controls they name.</summary>
+    [Theory]
+    [MemberData(nameof(Translations))]
+    public void WhatsNew_fourth_notes_are_translated_and_quote_the_UI_labels(string lang)
+    {
+        var en = Load(Source);
+        var tr = Load(lang);
+        foreach (string key in new[]
+                 {
+                     "WhatsNew.ColorRows.Head", "WhatsNew.ColorRows.Body", "WhatsNew.HairOtherSex.Head",
+                     "WhatsNew.HairOtherSex.Body", "WhatsNew.GearVariants.Head", "WhatsNew.GearVariants.Body",
+                     "WhatsNew.ShaderUpgrade.Head", "WhatsNew.ShaderUpgrade.Body",
+                 })
+        {
+            Assert.True(tr.ContainsKey(key), $"[{lang}] has no {key}");
+            Assert.NotEqual(en[key].Message, tr[key].Message);
+        }
+
+        Assert.Contains(tr["Colors.ShowAllRows.Check"].Message, tr["WhatsNew.ColorRows.Body"].Message);
+        Assert.Contains(tr["HairPort.Studio.Header"].Message, tr["WhatsNew.HairOtherSex.Body"].Message);
+        Assert.Contains(tr["HairPort.Studio.OtherSex"].Message, tr["WhatsNew.HairOtherSex.Body"].Message);
+        Assert.Contains(tr["Settings.GearVariants.Auto.Label"].Message, tr["WhatsNew.GearVariants.Body"].Message);
+        Assert.Contains(tr["Settings.GearVariants.UndoWorn"].Message, tr["WhatsNew.GearVariants.Body"].Message);
+        Assert.Contains(tr["Tab.Settings"].Message, tr["WhatsNew.GearVariants.Body"].Message);
+        Assert.Contains(tr["Settings.Section.GearVariants"].Message, tr["WhatsNew.GearVariants.Body"].Message);
+        Assert.Contains(tr["Tab.Settings"].Message, tr["WhatsNew.ShaderUpgrade.Body"].Message);
+        // The Colors window, by the name its title bar shows ("Colors — {mod}").
+        string colors = tr["Colors.Window.Title.Fmt"].Message.Split(" — ")[0];
+        Assert.Contains(colors, tr["WhatsNew.ColorRows.Body"].Message);
+        Assert.Contains(tr["Settings.GearShaders.AutoUpgrade.Label"].Message, tr["WhatsNew.ShaderUpgrade.Body"].Message);
+        Assert.Contains(tr["Settings.GearShaders.UndoWorn"].Message, tr["WhatsNew.ShaderUpgrade.Body"].Message);
+    }
+
     /// <summary>Every README's colour-row section names the "Show all rows" tick by its label in that language, and says
     /// that pointing at a row button (#01–#16) lights it.</summary>
     [Theory]

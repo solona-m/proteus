@@ -4275,6 +4275,38 @@
     "message": "Los mods de pelo hechos para otra raza ya se ajustan a la tuya",
     "description": "Release-notes section heading for hair mods fitted automatically from another race to the player's."
   },
+  "WhatsNew.ColorRows.Head": {
+    "message": "Señala una fila de color para ver adónde va",
+    "description": ""
+  },
+  "WhatsNew.ColorRows.Body": {
+    "message": "En la ventana «Colores» de un mod, señala el botón de una fila (#01–#16) y la parte de tu personaje que colorea esa fila se ilumina mientras el puntero siga encima. Las filas que las texturas de índice del mod usan rara vez o nunca se ocultan; marca «Mostrar todas las filas» para volver a verlas.",
+    "description": ""
+  },
+  "WhatsNew.HairOtherSex.Head": {
+    "message": "Porta un peinado al otro sexo",
+    "description": ""
+  },
+  "WhatsNew.HairOtherSex.Body": {
+    "message": "«Portar a todas las razas» en el Estudio ahora muestra también el otro sexo, en «También para el otro sexo». El mismo número de peinado es otro estilo para el otro sexo, así que una raza a la que lo portes allí lleva el pelo de este mod en lugar de ese estilo. Ahí no se marca nada por ti, y Proteus nunca lo hace por su cuenta. Además, el pelo portado ya no se hunde en cabezas más grandes ni deja calvas.",
+    "description": ""
+  },
+  "WhatsNew.GearVariants.Head": {
+    "message": "Todas las variantes de tu equipo muestran el mod",
+    "description": ""
+  },
+  "WhatsNew.GearVariants.Body": {
+    "message": "Muchos mods de equipo sustituyen el modelo de una pieza pero solo traen su material para una variante, así que al llevar la pieza en otra variante el modelo del mod muestra el aspecto del juego, o ninguno. Proteus ahora lo arregla al ponerte el equipo, como hace «Apply to All Variants» de TexTools con el material, dentro de las propias opciones del mod. Está activado por defecto: Ajustes, Variantes del equipo, «Apuntar todas las variantes del equipo puesto al material de su mod»; «Deshacer en lo que llevo puesto» lo vuelve a quitar.",
+    "description": ""
+  },
+  "WhatsNew.ShaderUpgrade.Head": {
+    "message": "Lleva el equipo antiguo al sombreador de Dawntrail",
+    "description": ""
+  },
+  "WhatsNew.ShaderUpgrade.Body": {
+    "message": "El equipo hecho antes de Dawntrail aún usa el sombreador antiguo del juego. Marca «Actualizar el equipo antiguo a los sombreadores de Dawntrail» en Ajustes y Proteus reescribe al sombreador de Dawntrail los materiales de los mods que te pongas, dentro del mod y guardando antes una copia de cada archivo. Está desactivado por defecto, y «Deshacer en lo que llevo puesto» devuelve los archivos del autor.",
+    "description": ""
+  },
   "WhatsNew.HairPort.Body": {
     "message": "Muchos mods de pelo están hechos para una sola raza, así que en cualquier otra el juego muestra su propio peinado. Ahora Proteus dobla el peinado del mod sobre la cabeza de tu raza y lo añade a la misma opción del mismo mod. Revisa ahora una vez los mods de pelo activos en tu colección, y de nuevo cada vez que se instala, se activa o se cambia uno. El chat indica los números de peinado que ha ajustado, para que sepas cuál elegir. El pelo con físicas conserva sus físicas.\n\nSigue funcionando con Proteus desactivado y viaja con el mod. Puedes desactivarlo, volver a comprobar o deshacer un peinado ajustado en Ajustes, Pelo.",
     "description": "Release-notes section on hair fitted automatically from another race. 'Settings, Hair' names the Settings tab and its Hair section - match Tab.Settings and Settings.Section.HairPort. 'Physics hair' is hair that sways with its own bones."

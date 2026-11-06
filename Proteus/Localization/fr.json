@@ -4275,6 +4275,38 @@
     "message": "Les mods de coiffure faits pour une autre race s'adaptent désormais à la vôtre",
     "description": "Release-notes section heading for hair mods fitted automatically from another race to the player's."
   },
+  "WhatsNew.ColorRows.Head": {
+    "message": "Pointez une ligne de couleur pour voir où elle va",
+    "description": ""
+  },
+  "WhatsNew.ColorRows.Body": {
+    "message": "Dans la fenêtre « Couleurs » d'un mod, pointez le bouton d'une ligne (#01–#16) : la partie de votre personnage que colore cette ligne s'éclaire tant que le pointeur reste dessus. Les lignes que les textures d'index du mod utilisent rarement ou jamais sont masquées ; cochez « Afficher toutes les lignes » pour les faire revenir.",
+    "description": ""
+  },
+  "WhatsNew.HairOtherSex.Head": {
+    "message": "Transposer une coiffure à l'autre sexe",
+    "description": ""
+  },
+  "WhatsNew.HairOtherSex.Body": {
+    "message": "« Transposer à toutes les races » dans le Studio liste désormais aussi l'autre sexe, sous « Aussi pour l'autre sexe ». Le même numéro de coiffure correspond à une autre coiffure pour l'autre sexe : une race vers laquelle vous transposez là-bas porte les cheveux de ce mod à la place de cette coiffure. Rien n'y est coché pour vous, et Proteus ne le fait jamais de lui-même. Les cheveux transposés ne s'enfoncent plus non plus dans les têtes plus grandes et ne laissent plus de zones chauves.",
+    "description": ""
+  },
+  "WhatsNew.GearVariants.Head": {
+    "message": "Chaque variante de votre équipement affiche le mod",
+    "description": ""
+  },
+  "WhatsNew.GearVariants.Body": {
+    "message": "Beaucoup de mods d'équipement remplacent le modèle d'un objet mais ne fournissent son matériau que pour une variante : porté dans une autre variante, le modèle du mod affiche l'apparence du jeu, ou rien. Proteus corrige désormais cela quand vous mettez l'équipement, comme « Apply to All Variants » de TexTools pour le matériau, dans les options du mod lui-même. C'est activé par défaut : Paramètres, Variantes d'équipement, « Pointer chaque variante de l'équipement porté vers le matériau de son mod » ; « Annuler pour ce que je porte » le retire.",
+    "description": ""
+  },
+  "WhatsNew.ShaderUpgrade.Head": {
+    "message": "Passer l'ancien équipement au shader de Dawntrail",
+    "description": ""
+  },
+  "WhatsNew.ShaderUpgrade.Body": {
+    "message": "L'équipement créé avant Dawntrail utilise encore l'ancien shader du jeu. Cochez « Passer l'ancien équipement aux shaders de Dawntrail » dans les Paramètres et Proteus réécrit vers le shader de Dawntrail les matériaux des mods que vous portez, dans le mod, en sauvegardant chaque fichier d'abord. C'est désactivé par défaut, et « Annuler pour ce que je porte » remet les fichiers de l'auteur.",
+    "description": ""
+  },
   "WhatsNew.HairPort.Body": {
     "message": "Beaucoup de mods de coiffure ne sont faits que pour une seule race : sur toute autre race, le jeu affiche alors sa propre coiffure à la place. Proteus plie désormais la coiffure du mod sur la tête de votre race et l'ajoute à la même option du même mod. Il passe en revue les mods de coiffure activés dans votre collection une première fois maintenant, puis à chaque fois qu'un mod est installé, activé ou modifié. Le chat indique les numéros des coiffures adaptées, pour que vous sachiez laquelle choisir. Les cheveux à physique gardent leur physique.\n\nCela continue de fonctionner avec Proteus désactivé et suit le mod. Désactivez la fonction, relancez une vérification ou annulez une coiffure adaptée dans Paramètres, Cheveux.",
     "description": "Release-notes section on hair fitted automatically from another race. 'Settings, Hair' names the Settings tab and its Hair section - match Tab.Settings and Settings.Section.HairPort. 'Physics hair' is hair that sways with its own bones."

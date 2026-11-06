@@ -4275,6 +4275,38 @@
     "message": "Haar-Mods für ein anderes Volk passen jetzt auch zu deinem",
     "description": "Release-notes section heading for hair mods fitted automatically from another race to the player's."
   },
+  "WhatsNew.ColorRows.Head": {
+    "message": "Auf eine Farbzeile zeigen und sehen, wohin sie gehört",
+    "description": ""
+  },
+  "WhatsNew.ColorRows.Body": {
+    "message": "Zeige im Fenster „Farben“ eines Mods auf einen Zeilenknopf (#01–#16), und der Teil deines Charakters, den diese Zeile färbt, leuchtet auf, solange der Zeiger darauf bleibt. Zeilen, die die Index-Texturen des Mods selten oder nie verwenden, werden ausgeblendet; setze ein Häkchen bei „Alle Zeilen zeigen“, um sie zurückzuholen.",
+    "description": ""
+  },
+  "WhatsNew.HairOtherSex.Head": {
+    "message": "Eine Frisur auf das andere Geschlecht übertragen",
+    "description": ""
+  },
+  "WhatsNew.HairOtherSex.Body": {
+    "message": "„Auf alle Völker übertragen“ im Studio listet jetzt auch das andere Geschlecht auf, unter „Auch für das andere Geschlecht“. Dieselbe Frisurnummer ist beim anderen Geschlecht eine andere Frisur, also trägt ein Volk, auf das du dorthin überträgst, die Haare dieses Mods anstelle jener Frisur. Dort ist nichts für dich angehakt, und Proteus tut das nie von selbst. Übertragene Haare sinken außerdem nicht mehr in größere Köpfe ein und zeigen keine kahlen Stellen mehr.",
+    "description": ""
+  },
+  "WhatsNew.GearVariants.Head": {
+    "message": "Jede Variante deiner Ausrüstung zeigt den Mod",
+    "description": ""
+  },
+  "WhatsNew.GearVariants.Body": {
+    "message": "Viele Ausrüstungs-Mods ersetzen das Modell eines Gegenstands, liefern sein Material aber nur für eine Variante mit. Trägst du den Gegenstand in einer anderen Variante, zeigt das Modell des Mods das Aussehen des Spiels oder gar keins. Proteus behebt das jetzt, sobald du die Ausrüstung anlegst, so wie TexTools' „Apply to All Variants“ es für das Material tut, innerhalb der eigenen Optionen des Mods. Es ist standardmäßig an: Einstellungen, Ausrüstungsvarianten, „Alle Varianten getragener Ausrüstung auf das Material ihres Mods zeigen lassen“; „Für das Getragene rückgängig machen“ nimmt es wieder heraus.",
+    "description": ""
+  },
+  "WhatsNew.ShaderUpgrade.Head": {
+    "message": "Alte Ausrüstung auf den Shader von Dawntrail bringen",
+    "description": ""
+  },
+  "WhatsNew.ShaderUpgrade.Body": {
+    "message": "Ausrüstung, die vor Dawntrail entstand, nutzt noch den alten Shader des Spiels. Setze in den Einstellungen ein Häkchen bei „Alte Ausrüstung auf Dawntrail-Shader umstellen“, und Proteus schreibt die Materialien der Mods, die du anlegst, auf den Shader von Dawntrail um, innerhalb des Mods, und sichert jede Datei vorher. Es ist standardmäßig aus, und „Für das Getragene rückgängig machen“ stellt die Dateien des Autors wieder her.",
+    "description": ""
+  },
   "WhatsNew.HairPort.Body": {
     "message": "Viele Haar-Mods sind nur für ein Volk gemacht, daher zeigt das Spiel bei jedem anderen Volk stattdessen seine eigene Frisur. Proteus biegt die Frisur des Mods jetzt auf den Kopf deines Volkes und fügt sie derselben Option desselben Mods hinzu. Die in deiner Sammlung aktiven Haar-Mods sieht es jetzt einmal durch und danach erneut, sobald einer installiert, aktiviert oder geändert wird. Der Chat nennt die Nummern der angepassten Frisuren, damit du weißt, welche du wählen musst. Haare mit Physik behalten ihre Physik.\n\nDas funktioniert auch mit ausgeschaltetem Proteus und wandert mit dem Mod. Abschalten, erneut prüfen oder eine angepasste Frisur rückgängig machen kannst du unter Einstellungen, Haare.",
     "description": "Release-notes section on hair fitted automatically from another race. 'Settings, Hair' names the Settings tab and its Hair section - match Tab.Settings and Settings.Section.HairPort. 'Physics hair' is hair that sways with its own bones."

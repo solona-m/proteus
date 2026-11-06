@@ -45,6 +45,10 @@ internal sealed class WhatsNewWindow : Window
     /// <summary>The generation that introduced hair fitted from other races, on its own and in the Studio.</summary>
     internal const int HairPortNotes = 3;
 
+    /// <summary>The generation that introduced colour-row hover, hair ports across the sexes, Gear variants and the
+    /// Dawntrail shader upgrade.</summary>
+    internal const int ColorRowsNotes = 4;
+
     /// <summary>
     /// Whether a section introduced in <paramref name="generation"/> is news to someone who has read up to
     /// <paramref name="read"/>. Someone who closed the first notes is shown only what came after them.
@@ -61,6 +65,13 @@ internal sealed class WhatsNewWindow : Window
         ImGui.Spacing();
 
         // Newest first: someone who missed more than one release reads the latest at the top.
+        if (IsNew(ColorRowsNotes, read))
+        {
+            Section(s.ColorRowsHead, s.ColorRowsBody);
+            Section(s.HairOtherSexHead, s.HairOtherSexBody);
+            Section(s.GearVariantsHead, s.GearVariantsBody);
+            Section(s.ShaderUpgradeHead, s.ShaderUpgradeBody);
+        }
         if (IsNew(HairPortNotes, read))
         {
             Section(s.HairPortHead, s.HairPortBody);
