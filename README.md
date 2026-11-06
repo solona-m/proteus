@@ -195,7 +195,7 @@ Ties your whole Proteus setup — which mods are on, their priorities and option
 
 Saving a design captures the current state against it: every mod on your character, not just Proteus ones, plus all Proteus colors. Applying that design later restores it. Colors and layer settings are restored as a live overlay, so the mod's own files are never rewritten. Each binding lists the mods it restores; **Apply** restores one straight away without going through Glamourer, and **Unbind** forgets it without touching the design.
 
-While a binding is active, edits in the color editor preview immediately but are **not** saved until you press **Update** beside that design on the Bindings tab — which folds everything currently on screen back into it.
+While a binding is active, edits in the color editor preview immediately but are **not** saved until you press **Update** beside that design on the Bindings tab — which folds everything currently on screen back into it. Applying the design again in Glamourer drops edits you haven't saved, **Reset to defaults** included, and restores what the binding holds — press **Update** first to keep them. That includes applying it after changing the design in Glamourer while you weren't wearing that version. A binding doesn't cover mod-wide or global settings (Bodies, Overlay gen2/vanilla, Overlay on men, Skindent/AO, Geometry, toe-cap density) or mods it didn't capture; those stay as they are.
 
 | Option | What it does |
 |--------|-------------|
@@ -416,7 +416,7 @@ For each sub-row:
 
 Rows and sub-rows can be copied and pasted between each other.
 
-Changes apply on screen immediately and re-composite about a second after you stop editing. They're saved to the mod's `metadata.json` — unless a design binding is active, in which case they belong to that design until you press **Update** on the Bindings tab.
+Changes apply on screen immediately and re-composite about a second after you stop editing. They're saved to the mod's `metadata.json` — unless the active design binding captured that mod, in which case they belong to that design until you press **Update** on the Bindings tab. Edits to mods the binding didn't capture are still saved to their `metadata.json`.
 
 ### Acknowledgements
 Thank you so much to Sebby for teaching me about how to use pixel-based image mapping instead of baking and for releasing the baked maps under the MIT license via the loose texture compiler.

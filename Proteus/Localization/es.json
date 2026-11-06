@@ -924,7 +924,7 @@
     "description": ""
   },
   "Colors.Reset.Tip": {
-    "message": "Mantén Ctrl y haz clic para restaurar los colores, el brillo y el modo de esta opción\na los ajustes que Proteus registró la primera vez para este mod. No se puede deshacer.\n\nSi hay un diseño aplicado, esto también elimina la anulación que ese diseño tenía\nguardada para esta opción; de lo contrario el diseño volvería a imponerla enseguida.\nLos demás diseños conservan la suya.\n\nNota: esos valores originales se capturaron la primera vez que Proteus guardó este mod;\nsi ya lo habías editado antes, ese estado editado es el «predeterminado».",
+    "message": "Mantén Ctrl y haz clic para restaurar los colores, el brillo y el modo de esta opción\na los ajustes que Proteus registró la primera vez para este mod. No se puede deshacer.\n\nSi hay un diseño aplicado, conserva sus propios valores guardados para esta opción\ny los vuelve a mostrar la próxima vez que se aplique el diseño, hasta que pulses\nActualizar en la pestaña Vínculos.\n\nNota: esos valores originales se capturaron la primera vez que Proteus guardó este mod;\nsi ya lo habías editado antes, ese estado editado es el «predeterminado».",
     "description": ""
   },
   "Colors.Roughness.Label": {

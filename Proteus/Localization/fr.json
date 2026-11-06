@@ -924,7 +924,7 @@
     "description": ""
   },
   "Colors.Reset.Tip": {
-    "message": "Maintenez Ctrl et cliquez pour rétablir les couleurs, la lueur et le mode de cette\noption tels que Proteus les a enregistrés la première fois pour ce mod. Irréversible.\n\nSi un design est appliqué, cela supprime aussi la surcharge que ce design avait\nenregistrée pour cette option — sinon le design la réimposerait aussitôt. Les autres\ndesigns gardent la leur.\n\nNote : ces valeurs d'origine ont été capturées la première fois que Proteus a enregistré\nce mod — si vous l'aviez déjà modifié avant, c'est cet état modifié qui fait office de\n« valeur par défaut ».",
+    "message": "Maintenez Ctrl et cliquez pour rétablir les couleurs, la lueur et le mode de cette\noption tels que Proteus les a enregistrés la première fois pour ce mod. Irréversible.\n\nSi un design est appliqué, il garde ses propres valeurs enregistrées pour cette option\net les réaffiche la prochaine fois que le design est appliqué, jusqu'à ce que vous\ncliquiez sur Mettre à jour dans l'onglet Liaisons.\n\nNote : ces valeurs d'origine ont été capturées la première fois que Proteus a enregistré\nce mod — si vous l'aviez déjà modifié avant, c'est cet état modifié qui fait office de\n« valeur par défaut ».",
     "description": ""
   },
   "Colors.Roughness.Label": {

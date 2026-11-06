@@ -1568,44 +1568,21 @@ public class DesignBindingService : IDisposable
         => overrides.GetEditableMaskGear(modDir, seed);
 
     /// <summary>
-    /// Drop one option's colour + gear override from the active design, both live and persisted, so "Reset to
-    /// defaults" sticks on a bound mod. False when no design is active or nothing was stored.
+    /// Drop one option's colour + gear override from the active design's live override, so "Reset to defaults" shows
+    /// the mod's own values now. Live only: the stored binding keeps this option until Update, and applying the
+    /// design again brings it back. False when no design is active or nothing was live.
     /// </summary>
     public bool ClearOptionOverride(string modDir, string? group, string? option)
     {
-        Guid id;
         lock (gate)
         {
-            if (activeDesignId is not { } active) return false;
-            id = active;
+            if (activeDesignId == null) return false;
         }
 
         // Outside `gate`: the bag has its own lock, and the two must never nest.
-        bool touched = overrides.ClearOption(modDir, group, option);
+        if (!overrides.ClearOption(modDir, group, option)) return false;
 
-        lock (gate)
-        {
-            // Persisted binding, so the design stops re-applying it.
-            if (store.Bindings.TryGetValue(id, out var b))
-            {
-                var mod = b.Mods.FirstOrDefault(m =>
-                    string.Equals(m.ModDirectory, modDir, StringComparison.OrdinalIgnoreCase));
-                if (mod != null)
-                {
-                    touched |= OverlayOverrideBag.ClearScope(mod.Colors.Options, group, option,
-                        () => { bool had = mod.Colors.Top != null; mod.Colors.Top = null; return had; });
-                    touched |= OverlayOverrideBag.ClearScope(mod.Gear.Options, group, option,
-                        () => OverlayOverrideBag.ClearTopGear(mod.Gear));
-                }
-            }
-
-            // Serialise under the lock, write outside it: the store reaches tens of MB and the caller is the UI thread.
-            if (touched) SaveDeferred();
-        }
-
-        if (!touched) return false;
-
-        log.Information("[Proteus] cleared binding override for {0} [{1}/{2}] from the active design",
+        log.Information("[Proteus] cleared the live design override for {0} [{1}/{2}]; the binding keeps it until Update",
             modDir, group ?? "(top)", option ?? "(top)");
         return true;
     }
@@ -1775,8 +1752,10 @@ public class DesignBindingService : IDisposable
                 Elapsed(sinceReapply));
         }
 
-        // Only an explicit design apply may strip slots: automation merges several designs.
+        // Only an explicit design apply may strip slots: automation merges several designs. Only an explicit apply
+        // re-restores the design already active, too: ReapplyAutomation fires on every zone-in.
         EvaluateAppliedDesign(allowUnbind: !inferred,
+            explicitApply: type is StateFinalizationType.DesignApplied,
             unequipUnset: type is StateFinalizationType.DesignApplied && config.DesignBindingUnequipUnsetSlots,
             preApply: type is StateFinalizationType.DesignApplied ? preApply : null);
     }
@@ -1905,7 +1884,9 @@ public class DesignBindingService : IDisposable
     /// <param name="unequipUnset">Also clear the gear slots the matched design leaves unset. Explicit applies only.</param>
     /// <param name="preApply">The state from before this apply, for explicit applies only — see
     /// <see cref="AppliedInsteadOfActive"/>.</param>
-    private void EvaluateAppliedDesign(bool allowUnbind, bool unequipUnset = false, JObject? preApply = null)
+    /// <param name="explicitApply">A <c>DesignApplied</c> finalization: the player applied a design themselves. The only
+    /// signal that re-restores the design already active — see <see cref="DecideActiveApply"/>.</param>
+    private void EvaluateAppliedDesign(bool allowUnbind, bool explicitApply = false, bool unequipUnset = false, JObject? preApply = null)
     {
         bool anyBindings;
         lock (gate) anyBindings = store.Bindings.Count > 0;
@@ -1943,8 +1924,28 @@ public class DesignBindingService : IDisposable
 
         if (activeDesignId == pick)
         {
-            // Already applied, so no restore runs, but packs switched on since still have to come off.
-            if (unequipUnset) DisableUnboundImportedPacks(pick.Value);
+            // Applying the active design again puts back what its binding holds: live edits are never saved into a
+            // binding by re-applying (only a design save or Update writes one). Anything else re-asserting it keeps them.
+            var isReapply = explicitApply && GetDesignCached(pick.Value) is { } activeDesign
+                         && IsReapplyOfActive(activeDesign, preApply, state, carriers);
+            var name = DesignNameOf(pick.Value);
+            switch (DecideActiveApply(explicitApply, isReapply, unequipUnset))
+            {
+                case ActiveApplyAction.Restore:
+                    log.Information("[Proteus] design-binding: {0} re-applied — restoring its binding; unsaved edits dropped.", name);
+                    Restore(pick.Value, stripImported: unequipUnset);
+                    break;
+                case ActiveApplyAction.KeepAndStripPacks:
+                    if (explicitApply)
+                        log.Information("[Proteus] design-binding: another design applied over {0} — keeping unsaved edits.", name);
+                    // Already applied, so no restore runs, but packs switched on since still have to come off.
+                    DisableUnboundImportedPacks(pick.Value);
+                    break;
+                default:
+                    if (explicitApply)
+                        log.Information("[Proteus] design-binding: another design applied over {0} — keeping unsaved edits.", name);
+                    break;
+            }
             return;
         }
         Restore(pick.Value, stripImported: unequipUnset);
@@ -1987,6 +1988,107 @@ public class DesignBindingService : IDisposable
             }
         }
         return pick;
+    }
+
+    /// <summary>The stored binding's design name for the log, else the GUID.</summary>
+    private string DesignNameOf(Guid id)
+    {
+        lock (gate) return store.Bindings.TryGetValue(id, out var b) && b.DesignName != null ? b.DesignName : id.ToString();
+    }
+
+    /// <summary>What an apply signal does when its best match is the design already active.</summary>
+    internal enum ActiveApplyAction { Keep, KeepAndStripPacks, Restore }
+
+    /// <summary>
+    /// The action for an apply whose best match is the active design. Only an explicit apply that reads as that
+    /// design applied again restores its binding (dropping unsaved live edits); everything else keeps the edits and,
+    /// with unequip-unset on, still switches off imported packs turned on since.
+    /// </summary>
+    internal static ActiveApplyAction DecideActiveApply(bool explicitApply, bool isReapply, bool unequipUnset)
+    {
+        if (explicitApply && isReapply) return ActiveApplyAction.Restore;
+        return unequipUnset ? ActiveApplyAction.KeepAndStripPacks : ActiveApplyAction.Keep;
+    }
+
+    /// <summary>
+    /// Whether an explicit apply that left the active design matching was that design applied again, rather than
+    /// another design applied over it: true when nothing outside the active design's own fields changed during the
+    /// apply. Proteus's carrier slots never decide. No before-reading (the first apply after a load) counts as a
+    /// re-apply, honouring the explicit action. Fields <see cref="StateMatches"/> doesn't compare (advanced dyes,
+    /// meta toggles, weapons, wetness) never decide either.
+    /// </summary>
+    internal static bool IsReapplyOfActive(JObject activeDesign, JObject? preApply, JObject state, Carriers carriers)
+    {
+        if (preApply == null) return true;
+
+        var own = AppliedFieldKeys(activeDesign);
+        var universe = StateFieldKeys(preApply);
+        universe.UnionWith(StateFieldKeys(state));
+        universe.RemoveWhere(k => IsCarrierKey(k, preApply, state, carriers));
+
+        return !universe.Where(k => !own.Contains(k)).Any(k => FieldChanged(preApply, state, k));
+    }
+
+    /// <summary>Whether a <see cref="StateFieldKeys"/> key names a slot Proteus is borrowing or filling with a carrier.</summary>
+    private static bool IsCarrierKey(string key, JObject before, JObject after, Carriers carriers)
+    {
+        var parts = key.Split('/');
+        if (parts.Length != 3) return false;
+
+        if (parts[0] == "Equipment")
+        {
+            if (carriers.OwnedSlots?.Contains(parts[1], StringComparer.Ordinal) == true) return true;
+            if (carriers.AccessoryItems is not { Count: > 0 } items) return false;
+            return CarriesItem(before) || CarriesItem(after);
+
+            bool CarriesItem(JObject s) => s["Equipment"]?[parts[1]]?["ItemId"] is { } id
+                                        && id.Type == JTokenType.Integer && items.Contains(id.ToObject<ulong>());
+        }
+
+        if (parts[0] == "Bonus" && parts[1] == "Glasses")
+        {
+            if (carriers.GlassesSlotOwned) return true;
+            if (carriers.GlassesRow is not { } row) return false;
+            return IsRow(before) || IsRow(after);
+
+            bool IsRow(JObject s) => s["Bonus"]?["Glasses"]?["BonusId"] is { } id
+                                  && id.Type == JTokenType.Integer && (id.ToObject<ulong>() & BonusIdRowMask) == row;
+        }
+
+        return false;
+    }
+
+    /// <summary>
+    /// Every field a Glamourer state carries, as <see cref="AppliedFieldKeys"/> keys, whatever its <c>Apply</c> flag:
+    /// the comparison universe of <see cref="IsReapplyOfActive"/>. Weapons, meta entries and wetness are left out,
+    /// as <see cref="StateMatches"/> leaves them out.
+    /// </summary>
+    internal static HashSet<string> StateFieldKeys(JObject state)
+    {
+        var keys = new HashSet<string>(StringComparer.Ordinal);
+
+        if (state["Equipment"] is JObject equip)
+            foreach (var p in equip.Properties())
+            {
+                if (NonMatchedSlots.Contains(p.Name) || p.Value is not JObject slot || slot["ItemId"] == null) continue;
+                keys.Add($"Equipment/{p.Name}/Item");
+                keys.Add($"Equipment/{p.Name}/Stain");
+            }
+
+        if (state["Bonus"] is JObject bonus)
+            foreach (var p in bonus.Properties())
+                if (p.Value is JObject) keys.Add($"Bonus/{p.Name}/Item");
+
+        if (state["Customize"] is JObject cust)
+            foreach (var p in cust.Properties())
+                if (p.Name != "Wetness" && p.Value is JObject c && c["Value"] != null)
+                    keys.Add($"Customize/{p.Name}/Value");
+
+        if (state["Parameters"] is JObject pars)
+            foreach (var p in pars.Properties())
+                if (p.Value is JObject) keys.Add($"Parameters/{p.Name}/Value");
+
+        return keys;
     }
 
     /// <summary>

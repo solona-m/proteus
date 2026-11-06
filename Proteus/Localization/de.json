@@ -924,7 +924,7 @@
     "description": ""
   },
   "Colors.Reset.Tip": {
-    "message": "Halte Strg und klicke, um Farben, Leuchten und Modus dieser Option auf die\nEinstellungen zurückzusetzen, die Proteus für diesen Mod zuerst festgehalten hat.\nKann nicht rückgängig gemacht werden.\n\nIst ein Design angewendet, entfernt das auch dessen gespeicherte Überschreibung für\ndiese Option — sonst würde das Design sie gleich wieder aufzwingen. Andere Designs\nbehalten ihre.\n\nHinweis: Diese Originale wurden erfasst, als Proteus diesen Mod zum ersten Mal\ngespeichert hat — hattest du ihn davor schon bearbeitet, ist dieser Zustand der „Standard“.",
+    "message": "Halte Strg und klicke, um Farben, Leuchten und Modus dieser Option auf die\nEinstellungen zurückzusetzen, die Proteus für diesen Mod zuerst festgehalten hat.\nKann nicht rückgängig gemacht werden.\n\nIst ein Design angewendet, behält es seine eigenen gespeicherten Werte für diese Option\nund zeigt sie beim nächsten Anwenden des Designs wieder — bis du im Tab „Bindungen“\nauf „Aktualisieren“ drückst.\n\nHinweis: Diese Originale wurden erfasst, als Proteus diesen Mod zum ersten Mal\ngespeichert hat — hattest du ihn davor schon bearbeitet, ist dieser Zustand der „Standard“.",
     "description": ""
   },
   "Colors.Roughness.Label": {

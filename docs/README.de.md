@@ -196,7 +196,7 @@ Bindet deine gesamte Proteus-Einrichtung — welche Mods an sind, ihre Prioritä
 
 Beim Speichern eines Designs wird der aktuelle Zustand dazu erfasst: jeder Mod an deinem Charakter, nicht nur Proteus-Mods, dazu alle Proteus-Farben. Wendest du das Design später an, wird er wiederhergestellt. Farben und Ebeneneinstellungen werden als Live-Overlay wiederhergestellt, sodass die Dateien des Mods selbst nie überschrieben werden. Jede Bindung listet die Mods auf, die sie wiederherstellt; **Anwenden** stellt eine sofort wieder her, ohne den Umweg über Glamourer, und **Lösen** vergisst sie, ohne das Design anzurühren.
 
-Solange eine Bindung aktiv ist, werden Änderungen im Farbeditor sofort in der Vorschau sichtbar, aber **nicht** gespeichert, bis du im Tab Bindungen neben diesem Design **Aktualisieren** drückst — das faltet alles, was gerade auf dem Bildschirm steht, zurück in dieses Design.
+Solange eine Bindung aktiv ist, werden Änderungen im Farbeditor sofort in der Vorschau sichtbar, aber **nicht** gespeichert, bis du im Tab Bindungen neben diesem Design **Aktualisieren** drückst — das faltet alles, was gerade auf dem Bildschirm steht, zurück in dieses Design. Wendest du das Design in Glamourer erneut an, verwirft das ungespeicherte Änderungen, **Auf Standard zurücksetzen** eingeschlossen, und stellt wieder her, was die Bindung enthält — drücke vorher **Aktualisieren**, um sie zu behalten. Das gilt auch, wenn du das Design in Glamourer geändert hast, während du diese Fassung nicht getragen hast. Eine Bindung erfasst keine modweiten oder globalen Einstellungen (Körper, Overlay gen2/Vanilla, Overlay auf Männern, Skindent/AO, Geometrie, Zehenkappen-Dichte) und keine Mods, die sie nicht erfasst hat; diese bleiben, wie sie sind.
 
 | Option | Was sie tut |
 |--------|-------------|
@@ -408,7 +408,7 @@ Für jede Unterzeile:
 
 Zeilen und Unterzeilen lassen sich untereinander kopieren und einfügen.
 
-Änderungen greifen sofort auf dem Bildschirm und werden etwa eine Sekunde nach dem letzten Bearbeiten neu komponiert. Sie werden in der `metadata.json` des Mods gespeichert — es sei denn, eine Design-Bindung ist aktiv, dann gehören sie zu diesem Design, bis du im Tab Bindungen **Aktualisieren** drückst.
+Änderungen greifen sofort auf dem Bildschirm und werden etwa eine Sekunde nach dem letzten Bearbeiten neu komponiert. Sie werden in der `metadata.json` des Mods gespeichert — es sei denn, die aktive Design-Bindung hat diesen Mod erfasst, dann gehören sie zu diesem Design, bis du im Tab Bindungen **Aktualisieren** drückst. Änderungen an Mods, die die Bindung nicht erfasst hat, werden weiterhin in deren `metadata.json` gespeichert.
 
 ### Danksagungen
 Ganz herzlichen Dank an Sebby dafür, mir beigebracht zu haben, wie man pixelbasiertes Bild-Mapping statt Backen einsetzt, und dafür, die gebackenen Maps über den Loose Texture Compiler unter der MIT-Lizenz veröffentlicht zu haben.

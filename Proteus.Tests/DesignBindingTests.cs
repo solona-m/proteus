@@ -897,6 +897,7 @@ public class DesignBindingTests
         => GearState(("Body", body), ("Legs", 101), ("Feet", 102), ("Head", head));
 
     [Fact]
+    [Trait("Plan", "EDGE-binding-reapply-7")]
     public void AppliedInsteadOfActive_TakesTheSubsetDesign_WhenTheHatIsALeftover()
     {
         Guid withHat = Guid.NewGuid(), noHat = Guid.NewGuid();
@@ -930,6 +931,170 @@ public class DesignBindingTests
         ((JObject)state["Equipment"]!)["Hands"] = new JObject { ["ItemId"] = 5UL, ["Apply"] = true };
 
         Assert.Empty(DesignBindingService.AppliedInsteadOfActive(active, candidates, state, state, NoCarriers));
+    }
+
+    // ── Re-applying the active design ────────────────────────────────────────────
+
+    [Theory]
+    [Trait("Plan", "AC-binding-reapply-1")]
+    [Trait("Plan", "AC-binding-reapply-6")]
+    [Trait("Plan", "AC-binding-reapply-7")]
+    [Trait("Plan", "EDGE-binding-reapply-6")]
+    [Trait("Plan", "EDGE-binding-reapply-20")]
+    [InlineData(true,  true,  false, "Restore")]
+    [InlineData(true,  true,  true,  "Restore")]
+    [InlineData(true,  false, false, "Keep")]
+    [InlineData(true,  false, true,  "KeepAndStripPacks")]
+    [InlineData(false, true,  false, "Keep")]
+    [InlineData(false, true,  true,  "KeepAndStripPacks")]
+    [InlineData(false, false, false, "Keep")]
+    [InlineData(false, false, true,  "KeepAndStripPacks")]
+    public void DecideActiveApply_TruthTable(bool explicitApply, bool isReapply, bool unequipUnset, string expected)
+        => Assert.Equal(expected, DesignBindingService.DecideActiveApply(explicitApply, isReapply, unequipUnset).ToString());
+
+    private static JObject WithCustomize(JObject state, string name, int value)
+    {
+        var c = (JObject)(state["Customize"] ??= new JObject());
+        c[name] = new JObject { ["Value"] = value, ["Apply"] = true };
+        return state;
+    }
+
+    private static JObject WithParameter(JObject state, string name, float value)
+    {
+        var p = (JObject)(state["Parameters"] ??= new JObject());
+        p[name] = new JObject { ["Value"] = value, ["Apply"] = true };
+        return state;
+    }
+
+    private static JObject WithGlasses(JObject state, ulong bonusId)
+    {
+        var b = (JObject)(state["Bonus"] ??= new JObject());
+        b["Glasses"] = new JObject { ["BonusId"] = bonusId, ["Apply"] = true };
+        return state;
+    }
+
+    private static JObject WithSlot(JObject state, string slot, ulong item)
+    {
+        ((JObject)state["Equipment"]!)[slot] = new JObject { ["ItemId"] = item, ["Apply"] = true };
+        return state;
+    }
+
+    [Fact]
+    [Trait("Plan", "AC-binding-reapply-1")]
+    [Trait("Plan", "EDGE-binding-reapply-8")]
+    public void IsReapplyOfActive_NothingChanged_IsAReapply()
+        => Assert.True(DesignBindingService.IsReapplyOfActive(Outfit(true), Worn(777), Worn(777), NoCarriers));
+
+    [Fact]
+    [Trait("Plan", "AC-binding-reapply-1")]
+    [Trait("Plan", "EDGE-binding-reapply-10")]
+    public void IsReapplyOfActive_OnlyItsOwnFieldsChanged_IsAReapply()
+        // A hat put on by hand; re-applying the hat design put 777 back.
+        => Assert.True(DesignBindingService.IsReapplyOfActive(Outfit(true), Worn(555), Worn(777), NoCarriers));
+
+    [Fact]
+    [Trait("Plan", "AC-binding-reapply-7")]
+    public void IsReapplyOfActive_FaceChangedUnderAnOutfitOnlyDesign_IsAnotherDesign()
+    {
+        Assert.False(DesignBindingService.IsReapplyOfActive(Outfit(true),
+            WithCustomize(Worn(777), "Face", 1), WithCustomize(Worn(777), "Face", 3), NoCarriers));
+        Assert.False(DesignBindingService.IsReapplyOfActive(Outfit(true),
+            WithParameter(Worn(777), "SkinDiffuse", 0.2f), WithParameter(Worn(777), "SkinDiffuse", 0.8f), NoCarriers));
+        Assert.False(DesignBindingService.IsReapplyOfActive(Outfit(true),
+            WithGlasses(Worn(777), (1UL << 48) | 7), WithGlasses(Worn(777), (1UL << 48) | 9), NoCarriers));
+    }
+
+    [Fact]
+    [Trait("Plan", "AC-binding-reapply-1")]
+    [Trait("Plan", "EDGE-binding-reapply-12")]
+    public void IsReapplyOfActive_FieldOutsideItsSetChanged_IsAnotherDesign()
+        // Outfit doesn't set Hands; a design (or the active one's links) changed them.
+        => Assert.False(DesignBindingService.IsReapplyOfActive(Outfit(true),
+            WithSlot(Worn(777), "Hands", 5), WithSlot(Worn(777), "Hands", 6), NoCarriers));
+
+    [Fact]
+    [Trait("Plan", "EDGE-binding-reapply-1")]
+    public void IsReapplyOfActive_NoBeforeReading_IsAReapply()
+        => Assert.True(DesignBindingService.IsReapplyOfActive(Outfit(true), null,
+            WithCustomize(Worn(777), "Face", 3), NoCarriers));
+
+    [Fact]
+    [Trait("Plan", "EDGE-binding-reapply-2")]
+    public void IsReapplyOfActive_CarrierChurnIsIgnored()
+    {
+        // A slot we are borrowing.
+        var before = WithSlot(Worn(777), "RFinger", 1234);
+        var after  = WithSlot(Worn(777), "RFinger", 9295);
+        Assert.True(DesignBindingService.IsReapplyOfActive(Outfit(true), before, after,
+            new DesignBindingService.Carriers(null, null, OwnedSlots: ["RFinger"])));
+        // An invisible accessory carrier, by item id.
+        Assert.True(DesignBindingService.IsReapplyOfActive(Outfit(true), before, after,
+            new DesignBindingService.Carriers(null, [9295UL])));
+        Assert.False(DesignBindingService.IsReapplyOfActive(Outfit(true), before, after, NoCarriers));
+
+        // The facewear host: owned slot, or the host's sheet row.
+        var gBefore = WithGlasses(Worn(777), 1UL << 48);
+        var gAfter  = WithGlasses(Worn(777), (1UL << 48) | 7);
+        Assert.True(DesignBindingService.IsReapplyOfActive(Outfit(true), gBefore, gAfter,
+            new DesignBindingService.Carriers(null, null, GlassesSlotOwned: true)));
+        Assert.True(DesignBindingService.IsReapplyOfActive(Outfit(true), gBefore, gAfter,
+            new DesignBindingService.Carriers(7, null)));
+        Assert.False(DesignBindingService.IsReapplyOfActive(Outfit(true), gBefore, gAfter, NoCarriers));
+    }
+
+    [Fact]
+    [Trait("Plan", "EDGE-binding-reapply-11")]
+    public void IsReapplyOfActive_WeaponsAndWetnessAreIgnored()
+    {
+        var before = WithCustomize(WithSlot(WithSlot(Worn(777), "MainHand", 10), "OffHand", 11), "Wetness", 0);
+        var after  = WithCustomize(WithSlot(WithSlot(Worn(777), "MainHand", 20), "OffHand", 21), "Wetness", 1);
+        Assert.True(DesignBindingService.IsReapplyOfActive(Outfit(true), before, after, NoCarriers));
+    }
+
+    [Fact]
+    [Trait("Plan", "AC-binding-reapply-1")]
+    [Trait("Plan", "EDGE-binding-reapply-9")]
+    public void IsReapplyOfActive_EquivalentUnboundDesign_CountsAsAReapply()
+        // Known false positive: a design that changes nothing on the character looks like a re-apply.
+        => Assert.True(DesignBindingService.IsReapplyOfActive(Outfit(false), Worn(777), Worn(777), NoCarriers));
+
+    [Fact]
+    [Trait("Plan", "EDGE-binding-reapply-13")]
+    public void IsReapplyOfActive_UncomparedFieldsDoNotDecide()
+    {
+        var before = Worn(777);
+        var after  = Worn(777);
+        before["Materials"] = new JObject { ["0"] = new JObject { ["DiffuseR"] = 0.1 } };
+        after["Materials"]  = new JObject { ["0"] = new JObject { ["DiffuseR"] = 0.9 } };
+        ((JObject)before["Equipment"]!)["Hat"] = new JObject { ["Show"] = true,  ["Apply"] = true };
+        ((JObject)after["Equipment"]!)["Hat"]  = new JObject { ["Show"] = false, ["Apply"] = true };
+        Assert.True(DesignBindingService.IsReapplyOfActive(Outfit(true), before, after, NoCarriers));
+    }
+
+    [Fact]
+    [Trait("Plan", "AC-binding-reapply-7")]
+    public void StateFieldKeys_ListsEveryComparedFieldRegardlessOfApply()
+    {
+        var state = WithSlot(Worn(777), "MainHand", 10);
+        ((JObject)state["Equipment"]!)["Legs"]!["Apply"] = false;
+        ((JObject)state["Equipment"]!)["Hat"] = new JObject { ["Show"] = true };
+        WithCustomize(state, "Face", 2);
+        WithCustomize(state, "Wetness", 1);
+        state["Customize"]!["Face"]!["Apply"] = false;
+        WithParameter(state, "SkinDiffuse", 0.5f);
+        WithGlasses(state, 1UL << 48);
+
+        var keys = DesignBindingService.StateFieldKeys(state);
+
+        Assert.Equal(
+            new[]
+            {
+                "Bonus/Glasses/Item", "Customize/Face/Value",
+                "Equipment/Body/Item", "Equipment/Body/Stain", "Equipment/Feet/Item", "Equipment/Feet/Stain",
+                "Equipment/Head/Item", "Equipment/Head/Stain", "Equipment/Legs/Item", "Equipment/Legs/Stain",
+                "Parameters/SkinDiffuse/Value",
+            },
+            keys.OrderBy(k => k, StringComparer.Ordinal));
     }
 
     private sealed class OptionWriteComparer : IEqualityComparer<(string, string, List<string>)>
