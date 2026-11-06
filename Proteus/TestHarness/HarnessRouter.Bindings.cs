@@ -59,7 +59,7 @@ internal sealed partial class HarnessRouter
             if (dir != null)
             {
                 var st = Game.EditState(dir);
-                PermanentSettingsBlock(dir, out var settings);
+                EffectiveSettingsBlock(dir, out var settings);
                 modBlock = new
                 {
                     mod = dir, governed = st.Governed, presetDriven = st.PresetDriven, group, option,
@@ -83,7 +83,7 @@ internal sealed partial class HarnessRouter
     }
 
     /// <summary>A mod's effective Penumbra settings (temporary included) for <c>/bindings?mod=</c>; null when unreadable.</summary>
-    private void PermanentSettingsBlock(string dir, out object? settings)
+    private void EffectiveSettingsBlock(string dir, out object? settings)
     {
         settings = null;
         if (Game.PlayerCollection() is not { } c) return;

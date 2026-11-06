@@ -328,6 +328,77 @@ public class HarnessBindingsTests : IDisposable
     }
 
     [Fact]
+    [Trait("Plan", "AC-binding-reapply-12")]
+    [Trait("Plan", "EDGE-binding-reapply-27")]
+    public void Permanent_OptionsAndInheritance_FromARestore_PutBack()
+    {
+        // The restore sets the bound mod's options and gives a mod that only inherited a setting of its own.
+        Game.Permanent["Panties"] = new PermanentSetting(true, 2, new Dictionary<string, List<string>> { ["Lace"] = ["Low"] }, true);
+        Game.Permanent["Shared"] = PermanentSetting.Inherits;
+        Game.ApplyEffects[Design] = () =>
+        {
+            Game.GlamourerNow = FakeGame.GlamState(("Body", 100), ("Legs", 555));
+            Game.Permanent["Panties"] = new PermanentSetting(true, 2, new Dictionary<string, List<string>> { ["Lace"] = ["High"] }, true);
+            Game.Permanent["Shared"] = new PermanentSetting(true, 9);
+            Game.Permanent["Fresh"] = new PermanentSetting(true, 4);   // never configured before
+        };
+        Apply(Design);
+        var rec = JObject.Parse(File.ReadAllText(RecordPath));
+        Assert.Equal("Low", rec["permanentBefore"]!["Panties"]!["options"]!["Lace"]![0]!.ToString());
+        Assert.False(rec["permanentBefore"]!["Shared"]!["own"]!.ToObject<bool>());
+
+        var r = PutBack().Binding!;
+        Assert.All(r.Permanent, e => Assert.Equal("restored", e.Result));
+        Assert.Equal(["Low"], Game.Permanent["Panties"].Options["Lace"]);
+        Assert.False(Game.Permanent["Shared"].Own);
+        Assert.False(Game.Permanent["Fresh"].Own);
+    }
+
+    [Fact]
+    [Trait("Plan", "AC-binding-reapply-13")]
+    [Trait("Plan", "EDGE-binding-reapply-38")]
+    public void Record_LiveBefore_IsTheFirstSnapshot_NotTheHarnessEdit()
+    {
+        var original = Game.LiveNow;
+        fx.Dispatcher.Run(() => B.EditRow("Panties", "Lace", "High", 0, "#FF00FF"));
+        Game.LiveNow = original with { BagJson = "{\"edited\":\"#FF00FF\"}" };
+        Apply(Design);
+        var bag = JObject.Parse(File.ReadAllText(RecordPath))["live"]!["bag"]!;
+        Assert.DoesNotContain("FF00FF", bag.ToString());
+    }
+
+    [Fact]
+    [Trait("Plan", "AC-binding-reapply-13")]
+    [Trait("Plan", "EDGE-binding-reapply-38")]
+    public void Record_LaterSessionWritesItsOwnFile()
+    {
+        Apply(Design);
+        Game.GlamourerNow = FakeGame.GlamState(("Body", 300));        // the user applied something: abandoned
+        Assert.Equal("changed", PutBack().Binding!.Glamourer);
+        var first = File.ReadAllText(RecordPath);
+
+        Game.ApplyEffects[Design] = () => Game.GlamourerNow = FakeGame.GlamState(("Body", 400));
+        Apply(Design);
+        var second = Path.Combine(Path.GetDirectoryName(RecordPath)!, "binding-2.json");
+        Assert.True(File.Exists(second));
+        Assert.Equal(first, File.ReadAllText(RecordPath));
+        Assert.Contains(C.Leftovers().Split(", "), l => l.EndsWith("binding-2.json", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    [Trait("Plan", "EDGE-binding-reapply-29")]
+    public void PutBack_GearBeforeGlamourer()
+    {
+        Apply(Design);
+        Game.Gear["Head"] = new Worn(111, 0, 0);
+        Assert.Equal(200, fx.Dispatcher.Run(() => C.Equip("Head", 500, null)).Status);   // equips after an apply are allowed
+        Game.Order.Clear();
+        PutBack();
+        var order = Order();
+        Assert.True(order.IndexOf(nameof(IHarnessGame.SetGear)) < order.IndexOf(nameof(IHarnessGame.RestoreGlamourerState)));
+    }
+
+    [Fact]
     [Trait("Plan", "EDGE-binding-reapply-33")]
     public void Permanent_NonProteusMod_Refused()
     {
@@ -423,7 +494,14 @@ public class HarnessBindingsTests : IDisposable
         Assert.Equal("skipped-inconsistent", Assert.Single(r.Permanent).Result);
         Assert.Equal("skipped-inconsistent", r.Live);
         Assert.Empty(Game.Restores);
-        Assert.True(B.HasSession);   // still recorded
+        // Abandoned for good (logged; the record keeps the Before values): a later put-back never restores them onto
+        // a look the harness did not put back.
+        Assert.False(B.HasSession);
+        Assert.Null(PutBack().Binding);
+        Assert.Null(PutBack().Binding);
+        Assert.Empty(Game.PermanentWrites);
+        Assert.Empty(Game.LiveRestores);
+        Assert.Equal(new PermanentSetting(false, 7), Game.Permanent["Panties"]);
     }
 
     [Fact]
@@ -437,6 +515,22 @@ public class HarnessBindingsTests : IDisposable
         Assert.Equal("skipped-inconsistent", Assert.Single(r.Permanent).Result);
         Assert.Equal("skipped-inconsistent", r.Live);
         Assert.True(B.HasSession);
+
+        // The second put-back retries the restore (not "changed"), still partial: nothing else goes back.
+        var second = PutBack().Binding!;
+        Assert.Equal("partial", second.Glamourer);
+        Assert.Equal(2, Game.Restores.Count);
+        Assert.Empty(Game.PermanentWrites);
+        Assert.Empty(Game.LiveRestores);
+
+        // Once the look comes back, the rest follows.
+        Game.AfterRestore = null;
+        Game.GlamourerNow.Remove("Materials");
+        var third = PutBack().Binding!;
+        Assert.Equal("restored", third.Glamourer);
+        Assert.Equal("restored", Assert.Single(third.Permanent).Result);
+        Assert.Equal("restored", third.Live);
+        Assert.False(B.HasSession);
     }
 
     [Fact]

@@ -71,15 +71,19 @@ public class HarnessReleaseGuardTests
         {
             if (file.StartsWith(harness, StringComparison.OrdinalIgnoreCase)) continue;
             if (file.Contains($"{Path.DirectorySeparatorChar}obj{Path.DirectorySeparatorChar}", StringComparison.Ordinal)) continue;
-            int depth = 0;
+            // One entry per open #if: whether its current branch is compiled only with the harness.
+            var stack = new System.Collections.Generic.Stack<bool>();
             foreach (var line in File.ReadAllLines(file))
             {
                 var t = line.Trim();
-                if (t.StartsWith("#if", StringComparison.Ordinal)) depth += t.Contains("PROTEUS_TEST_HARNESS", StringComparison.Ordinal) || depth > 0 ? 1 : 0;
-                else if (t.StartsWith("#endif", StringComparison.Ordinal) && depth > 0) depth--;
+                if (t.StartsWith("#if", StringComparison.Ordinal))
+                    stack.Push(System.Text.RegularExpressions.Regex.IsMatch(t, @"^#if\s+PROTEUS_TEST_HARNESS\s*(//.*)?$"));
+                else if (t.StartsWith("#elif", StringComparison.Ordinal) || t.StartsWith("#else", StringComparison.Ordinal))
+                { if (stack.Count > 0) { stack.Pop(); stack.Push(false); } }
+                else if (t.StartsWith("#endif", StringComparison.Ordinal) && stack.Count > 0) stack.Pop();
                 if (!line.Contains(marker, StringComparison.Ordinal)) continue;
                 seen++;
-                Assert.True(depth > 0, $"{Path.GetRelativePath(RepoRoot, file)} names {marker} outside #if PROTEUS_TEST_HARNESS");
+                Assert.True(stack.Contains(true), $"{Path.GetRelativePath(RepoRoot, file)} names {marker} outside #if PROTEUS_TEST_HARNESS");
             }
         }
         Assert.True(seen > 0, $"{marker} is defined nowhere: the release guard's second marker would never match");

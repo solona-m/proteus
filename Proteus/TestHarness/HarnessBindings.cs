@@ -37,6 +37,7 @@ internal sealed class HarnessBindings(IHarnessGame game, Func<string, string> sc
     private readonly List<Guid> applied = [];
     private int edits, cleared;
     private string? recordPath;
+    private int recordIndex;
     private bool recordHasGlamourer;
     private DateTime? since;
 
@@ -74,7 +75,7 @@ internal sealed class HarnessBindings(IHarnessGame game, Func<string, string> sc
         var permBefore = coll is { } c ? game.PermanentSettings(c) : null;
         var carriers = game.CarriersNow();
         var live = game.LiveSnapshot();
-        if (EnsureRecord(glamourerBefore ?? state, glamourerBefore == null ? carriers : carriersBefore, live, coll, permBefore) is { } failed)
+        if (EnsureRecord(glamourerBefore ?? state, glamourerBefore == null ? carriers : carriersBefore, liveBefore ?? live, coll, permBefore) is { } failed)
             return (failed, null);
 
         bool first = glamourerBefore == null;
@@ -103,8 +104,12 @@ internal sealed class HarnessBindings(IHarnessGame game, Func<string, string> sc
         liveAfterActive = live.Active;
         applied.Add(p.Design);
         if (p.Collection is { } c && p.PermanentBefore is { } before && game.PermanentSettings(c) is { } after)
-            foreach (var (mod, now) in after)
-                if (before.TryGetValue(mod, out var was) && was != now) NotePermanent(mod, was, now);
+            foreach (var mod in before.Keys.Union(after.Keys, StringComparer.OrdinalIgnoreCase))
+            {
+                var was = before.GetValueOrDefault(mod) ?? PermanentSetting.Inherits;
+                var now = after.GetValueOrDefault(mod) ?? PermanentSetting.Inherits;
+                if (!was.Equals(now)) NotePermanent(mod, was, now);
+            }
 
         long echo = game.EchoMsLeft();
         return ChangeResult.Ok(new Dictionary<string, object?>
@@ -137,11 +142,12 @@ internal sealed class HarnessBindings(IHarnessGame game, Func<string, string> sc
     {
         if (!game.ProteusDirs().Contains(modDir))
             return ChangeResult.Fail(409, "not-a-proteus-mod", $"{modDir} is not a Proteus mod; only Proteus mods take permanent settings");
-        if (game.PermanentSettings(coll) is not { } all || !all.TryGetValue(modDir, out var cur))
+        if (game.PermanentSettings(coll) is not { } all)
             return ChangeResult.Fail(503, "penumbra-unavailable", "Penumbra could not read the mod's permanent settings");
-        if (EnsureRecord(glamourerBefore, carriersBefore, game.LiveSnapshot(), coll, all) is { } failed) return failed;
+        var cur = all.GetValueOrDefault(modDir) ?? PermanentSetting.Inherits;
+        if (EnsureRecord(glamourerBefore, carriersBefore, liveBefore ?? game.LiveSnapshot(), coll, all) is { } failed) return failed;
 
-        var want = new PermanentSetting(enabled ?? cur.Enabled, priority ?? cur.Priority);
+        var want = new PermanentSetting(enabled ?? cur.Enabled, priority ?? cur.Priority, cur.Options, Own: true);
         if (game.WritePermanent(coll, modDir, want) is { } ec)
             return ChangeResult.Fail(409, "penumbra-refused", $"Penumbra refused the setting: {ec}");
         var now = game.PermanentSettings(coll)?.GetValueOrDefault(modDir) ?? want;
@@ -153,7 +159,7 @@ internal sealed class HarnessBindings(IHarnessGame game, Func<string, string> sc
         return ChangeResult.Ok(new Dictionary<string, object?>
         {
             ["mod"] = modDir, ["collection"] = coll, ["permanent"] = true, ["enabled"] = now.Enabled, ["priority"] = now.Priority,
-            ["before"] = new { enabled = cur.Enabled, priority = cur.Priority }, ["redrawRequested"] = true,
+            ["before"] = new { enabled = cur.Enabled, priority = cur.Priority, own = cur.Own }, ["redrawRequested"] = true,
         });
     }
 
@@ -229,7 +235,9 @@ internal sealed class HarnessBindings(IHarnessGame game, Func<string, string> sc
         {
             var dir = Path.Combine(recordRoot, session);
             Directory.CreateDirectory(dir);
-            var path = Path.Combine(dir, "binding.json");
+            // One file per binding session within this harness session: a finished one is never overwritten.
+            if (recordPath == null) recordIndex++;
+            var path = Path.Combine(dir, recordIndex == 1 ? "binding.json" : $"binding-{recordIndex}.json");
             // A rewrite keeps the first record's live and permanent Before values: they predate this apply.
             var prior = recordPath != null ? JObject.Parse(File.ReadAllText(path)) : null;
             var record = new JObject
@@ -248,7 +256,10 @@ internal sealed class HarnessBindings(IHarnessGame game, Func<string, string> sc
                 }),
                 ["collection"] = prior?["collection"] ?? (coll is { } c ? c.ToString() : null),
                 ["permanentBefore"] = prior?["permanentBefore"] ?? (permanentNow is { } p
-                    ? JObject.FromObject(p.ToDictionary(kv => kv.Key, kv => new { enabled = kv.Value.Enabled, priority = kv.Value.Priority }))
+                    ? JObject.FromObject(p.ToDictionary(kv => kv.Key, kv => new
+                      {
+                          own = kv.Value.Own, enabled = kv.Value.Enabled, priority = kv.Value.Priority, options = kv.Value.Options,
+                      }))
                     : null),
             };
             var tmp = path + ".tmp";
@@ -290,9 +301,13 @@ internal sealed class HarnessBindings(IHarnessGame game, Func<string, string> sc
         string glam;
         try { glam = PutBackGlamourer(); }
         catch (Exception e) { log?.Warning(e, "[Proteus] test harness: putting back the Glamourer state failed"); glam = "failed"; }
-        if (glam is "restored" or "changed" or "none") { glamourerBefore = null; glamourerAfter = null; }
+        if (glam is "restored" or "changed") { glamourerBefore = null; glamourerAfter = null; }
         if (glam == "restored") restoredAny = true;
+        // Only a look that is back (or was never changed) takes its binding and mod settings back. After "changed" they
+        // never can: they are abandoned (logged, the record keeps their Before values). After "partial" or "failed"
+        // everything stays recorded for the next put-back.
         bool consistent = glam is "restored" or "none";
+        bool abandon = glam == "changed";
 
         var perms = new List<UndoEntry>();
         foreach (var (mod, rec) in permanent.ToList())
@@ -300,7 +315,7 @@ internal sealed class HarnessBindings(IHarnessGame game, Func<string, string> sc
             UndoEntry entry;
             try { entry = consistent ? PutBackPermanent(mod, rec.Before, rec.After) : new UndoEntry(mod, "skipped-inconsistent"); }
             catch (Exception e) { log?.Warning(e, "[Proteus] test harness: putting back {0} failed", mod); entry = new UndoEntry(mod, "failed", "internal"); }
-            if (entry.Result is "restored" or "changed") permanent.Remove(mod);
+            if (entry.Result is "restored" or "changed" || abandon) permanent.Remove(mod);
             if (entry.Result == "restored") restoredAny = true;
             perms.Add(entry);
         }
@@ -314,7 +329,10 @@ internal sealed class HarnessBindings(IHarnessGame game, Func<string, string> sc
                  : Restore(liveBefore);
         }
         catch (Exception e) { log?.Warning(e, "[Proteus] test harness: putting back the live binding state failed"); live = "failed"; }
-        if (live is "restored" or "changed" or "none") { liveBefore = null; liveAfterActive = null; }
+        if (live is "restored" or "changed" or "none" || abandon) { liveBefore = null; liveAfterActive = null; }
+        if (abandon)
+            log?.Warning("[Proteus] test harness: the character's look changed since the design apply; its mod settings and "
+                       + "binding state were left as they are (Before values in {0})", recordPath is { } rp0 ? scrub(rp0) : "(no record)");
         if (live == "restored") restoredAny = true;
 
         var record = recordPath is { } rp ? scrub(rp) : null;
@@ -357,7 +375,9 @@ internal sealed class HarnessBindings(IHarnessGame game, Func<string, string> sc
 
         if (game.GlamourerState() is not { } back) return "partial";
         bool materials = JToken.DeepEquals(before["Materials"], back["Materials"]);
-        return materials && !ChangedOutsideCarriers(before, back, carriersBefore, game.CarriersNow()) ? "restored" : "partial";
+        if (materials && !ChangedOutsideCarriers(before, back, carriersBefore, game.CarriersNow())) return "restored";
+        glamourerAfter = back;   // a retry compares against what the harness itself last wrote
+        return "partial";
     }
 
     /// <summary>Whether any compared field differs between two states, Proteus's carriers (at either moment) aside.</summary>
@@ -383,7 +403,8 @@ internal sealed class HarnessBindings(IHarnessGame game, Func<string, string> sc
     {
         if (collection is not { } coll) return new UndoEntry(mod, "failed", "no-collection");
         if (game.PermanentSettings(coll) is not { } all) return new UndoEntry(mod, "failed", "penumbra-unavailable");
-        if (!all.TryGetValue(mod, out var now) || now != after) return new UndoEntry(mod, "changed");
+        var now = all.GetValueOrDefault(mod) ?? PermanentSetting.Inherits;
+        if (!now.Equals(after)) return new UndoEntry(mod, "changed");
         return game.WritePermanent(coll, mod, before) is { } ec ? new UndoEntry(mod, "failed", ec) : new UndoEntry(mod, "restored");
     }
 
@@ -403,5 +424,6 @@ internal sealed class HarnessBindings(IHarnessGame game, Func<string, string> sc
         if (glamourerBefore != null) yield return "glamourer state";
         if (liveBefore != null) yield return "live design binding";
         foreach (var m in permanent.Keys) yield return $"{m} (permanent)";
+        if (HasSession && recordPath != null) yield return $"Before values in {scrub(recordPath)}";
     }
 }

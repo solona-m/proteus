@@ -370,22 +370,30 @@ internal sealed class GameHarnessAdapter : IHarnessGame, IDisposable
     public IReadOnlyDictionary<string, PermanentSetting>? PermanentSettings(Guid collection)
     {
         if (penumbra.GetCollectionModSettings(collection, ignoreTemporary: true) is not { } all) return null;
-        return ProteusDirs().ToDictionary(d => d,
-            d => all.TryGetValue(d, out var s) ? new PermanentSetting(s.Enabled, s.Priority) : new PermanentSetting(false, 0),
+        return all.ToDictionary(kv => kv.Key,
+            kv => kv.Value.Inherited ? PermanentSetting.Inherits
+                : new PermanentSetting(kv.Value.Enabled, kv.Value.Priority, kv.Value.Options, Own: true),
             StringComparer.OrdinalIgnoreCase);
     }
 
     public string? WritePermanent(Guid collection, string modDir, PermanentSetting setting)
     {
-        PenumbraApiEc e1, e2;
+        var codes = new List<PenumbraApiEc>();
         using (compositor.SuppressModSettingEvents())
         {
-            e1 = penumbra.SetModEnabled(collection, modDir, setting.Enabled);
-            e2 = penumbra.SetModPriority(collection, modDir, setting.Priority);
+            if (!setting.Own)
+                codes.Add(penumbra.SetModInherited(collection, modDir));   // back to no setting of its own
+            else
+            {
+                codes.Add(penumbra.SetModEnabled(collection, modDir, setting.Enabled));
+                codes.Add(penumbra.SetModPriority(collection, modDir, setting.Priority));
+                foreach (var (group, options) in setting.Options)
+                    codes.Add(penumbra.SetModOption(collection, modDir, group, options));
+            }
         }
-        bool Ok(PenumbraApiEc ec) => ec is PenumbraApiEc.Success or PenumbraApiEc.NothingChanged;
-        if (Ok(e1) && Ok(e2)) { compositor.TriggerRecomposite("test harness: permanent mod setting"); return null; }
-        return (Ok(e1) ? e2 : e1).ToString();
+        var bad = codes.Where(ec => ec is not (PenumbraApiEc.Success or PenumbraApiEc.NothingChanged)).ToList();
+        if (bad.Count == 0) { compositor.TriggerRecomposite("test harness: permanent mod setting"); return null; }
+        return bad[0].ToString();
     }
 
     public bool CompositorIdle() => CompositorPhase.Of(compositor.Activity()) == "idle";

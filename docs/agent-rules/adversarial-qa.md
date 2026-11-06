@@ -188,7 +188,14 @@ player does: apply a Glamourer design, edit a live colour, change a Proteus mod'
 own setting. The harness never writes the binding store (`design_bindings.json`) or
 a mod's files: there is no harness Update, and **Reset to defaults**' rewrite of the
 mod's metadata is not driven (only its live half, `clear`). Those stay UNVERIFIED for
-the user.
+the user, and so do automation, zone changes and relogin (no route drives them).
+
+- **An IPC apply is not quite a UI apply.** Glamourer marks the state's source
+  `IpcManual` instead of `Manual`, and may not re-assert a design's associated mod
+  temporary settings. Temporary settings a restore cleared (another plugin's, with
+  "Restore every mod on the character" on) are not put back by the harness: their
+  owner re-asserts them on its next apply. Report a difference that may come from
+  this as such, not as a Proteus defect.
 
 - **Record first.** Before the session's first change that outlives the game (a
   design apply, whose restore writes Proteus mods' permanent settings, or a
@@ -197,7 +204,11 @@ the user.
   the live binding state and every Proteus mod's permanent setting. If it cannot,
   the change is refused with 503 `record-failed`. Put-back is the undo; the record is
   for recovering by hand if put-back never ran (a crash, an unload off the framework
-  thread). Never copy its content into a report.
+  thread). A later binding session in the same harness session writes
+  `binding-2.json`, `binding-3.json`…: none is overwritten. With "Restore every mod on
+  the character" on, a design apply's restore writes other mods' own settings too;
+  every mod whose own setting changed is recorded and put back (back to inheriting
+  when it had no setting of its own). Never copy the record's content into a report.
 - **Refusals.** A design apply is refused while a per-mod preset is pinned
   (`presets-pinned`: the apply would drop it for good), while harness equips are
   recorded (`put-back-first`: put back, then apply, then equip), when the design
@@ -223,10 +234,13 @@ the user.
   `partial` (something, such as advanced dyes, did not come back), `changed`
   (someone applied something since: left alone), `failed` or `none`. Only after
   `restored` (or `none`) does it write back each `permanent` setting and the `live`
-  binding state; otherwise they are `skipped-inconsistent` and stay recorded, so the
-  character never wears one look with another's binding. Each is restored only while
-  it is still what the harness left (`changed` otherwise). Retry once; report what is
-  left. `/state.harnessChanges.binding` shows the session (null when none).
+  binding state, so the character never wears one look with another's binding:
+  after `partial` or `failed` they are `skipped-inconsistent` and stay recorded for the
+  next put-back; after `changed` they are `skipped-inconsistent` and dropped for good
+  (the log names the record holding their Before values: tell the user). Each is
+  restored only while it is still what the harness left (`changed` otherwise). Retry
+  once; report what is left. `/state.harnessChanges.binding` shows the session (null
+  when none).
 - **Script** (AC-binding-reapply). Read `/bindings` first and note `active`,
   `storeSha256` and each `sha256`; pick a governed mod M with live rows
   (`?mod=M&group=G&option=O`). (1) `binding-edit` a row to `#FF00FF`, then

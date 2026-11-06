@@ -33,7 +33,6 @@ public class HarnessBuildFlagTests
     [Fact]
     [Trait("Plan", "AC-binding-reapply-13")]
     [Trait("Plan", "EDGE-binding-reapply-36")]
-    [Trait("Plan", "EDGE-binding-reapply-37")]
     public void DesignBindingHarnessMembers_MatchRuntimeCiEnvironment()
     {
         // The harness-only DesignBindingService partial (namespace Proteus.Services, so the type check above can't see it).

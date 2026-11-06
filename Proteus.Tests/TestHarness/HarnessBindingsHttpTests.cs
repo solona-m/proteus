@@ -95,6 +95,18 @@ public class HarnessBindingsHttpTests : IDisposable
     }
 
     [Fact]
+    [Trait("Plan", "AC-binding-reapply-9")]
+    [Trait("Plan", "EDGE-binding-reapply-39")]
+    public async Task ApplyDesign_QuietAtOnce_StillWaitsTheMinimumHops()
+    {
+        Game.Idle = true;
+        var (status, body) = await fx.Post("/actions/glamourer-apply", ApplyBody());
+        Assert.Equal(200, status);
+        Assert.True(body.GetProperty("settled").GetBoolean());
+        Assert.True(Game.Order.Count(o => o.StartsWith(nameof(IHarnessGame.CompositorIdle) + "@", StringComparison.Ordinal)) >= 3);
+    }
+
+    [Fact]
     [Trait("Plan", "EDGE-binding-reapply-39")]
     public async Task ApplyDesign_SettleTimeout_AnswersSettledFalse()
     {

@@ -33,7 +33,6 @@ public class HarnessBindingsWiringTests
 
     [Fact]
     [Trait("Plan", "AC-binding-reapply-9")]
-    [Trait("Plan", "EDGE-binding-reapply-37")]
     public void Apply_goes_through_Glamourers_own_ApplyDesign_ipc()
     {
         var apply = Member(Adapter(), "public string? ApplyDesign(Guid id)");
@@ -74,7 +73,6 @@ public class HarnessBindingsWiringTests
 
     [Fact]
     [Trait("Plan", "AC-binding-reapply-13")]
-    [Trait("Plan", "EDGE-binding-reapply-37")]
     public void Partial_and_plugin_wiring_are_harness_only()
     {
         var partial = Read("Proteus", "Services", "DesignBindingService.Harness.cs").Replace("\r\n", "\n").Trim();

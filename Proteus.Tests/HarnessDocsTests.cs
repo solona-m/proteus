@@ -23,6 +23,7 @@ public class HarnessDocsTests
     }
 
     [Fact]
+    [Trait("Plan", "EDGE-binding-reapply-37")]
     public void AdversarialQaDoc_CoversRequiredTopics()
     {
         // [AC-qa-harness-10] [EDGE-qa-harness-3]
@@ -48,6 +49,9 @@ public class HarnessDocsTests
                      "/bindings", "/actions/glamourer-apply", "/actions/binding-edit", "\"permanent\"", "presets-pinned",
                      "put-back-first", "model-change", "auto-writers-on", "allowAutoWriters", "record-failed",
                      "skipped-inconsistent", "echoWindowOpen", "binding.json", "Design bindings",
+                     // [EDGE-binding-reapply-37] what an IPC apply leaves out, and what no route drives
+                     "IpcManual", "are not put back by the harness", "automation, zone changes and relogin", "binding-2.json",
+                     "back to inheriting",
                  })
             Assert.True(doc.Contains(required, StringComparison.Ordinal), $"adversarial-qa.md must mention '{required}'");
         Assert.Contains("Never put names", doc);

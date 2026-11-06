@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using Newtonsoft.Json.Linq;
@@ -262,11 +263,13 @@ internal interface IHarnessGame
     /// <summary>The Proteus (sidecar) mods' folders. Framework thread.</summary>
     IReadOnlySet<string> ProteusDirs();
 
-    /// <summary>Every Proteus mod's permanent enabled/priority in a collection (temporary settings ignored); null when
-    /// Penumbra cannot answer. A mod the collection never configured reads off at priority 0. Framework thread.</summary>
+    /// <summary>Every configured mod's own settings in a collection (temporary settings ignored), keyed by folder; a mod
+    /// that only inherits is <see cref="PermanentSetting.Own"/> false, one never configured is absent. Null when Penumbra
+    /// cannot answer. Framework thread.</summary>
     IReadOnlyDictionary<string, PermanentSetting>? PermanentSettings(Guid collection);
 
-    /// <summary>Write a mod's permanent enabled/priority. Null on Success, else Penumbra's answer by name. Framework thread.</summary>
+    /// <summary>Write a mod's own settings back: enabled, priority and options, or back to inheriting when
+    /// <see cref="PermanentSetting.Own"/> is false. Null on Success, else Penumbra's answer by name. Framework thread.</summary>
     string? WritePermanent(Guid collection, string modDir, PermanentSetting setting);
 
     /// <summary>Whether the compositor is idle. Framework thread.</summary>
@@ -277,8 +280,22 @@ internal interface IHarnessGame
     IReadOnlyList<string> AutoWritersOn();
 }
 
-/// <summary>A mod's permanent enabled/priority in a collection.</summary>
-internal sealed record PermanentSetting(bool Enabled, int Priority);
+/// <summary>A mod's own (permanent) settings in a collection. <see cref="Own"/> false: the collection has no setting of its
+/// own for it (it inherits, or was never configured), and putting it back means letting it inherit again.</summary>
+internal sealed record PermanentSetting(bool Enabled, int Priority, IReadOnlyDictionary<string, List<string>> Options, bool Own)
+{
+    public PermanentSetting(bool enabled, int priority) : this(enabled, priority, new Dictionary<string, List<string>>(), true) { }
+
+    /// <summary>No setting of its own: inherited, or never configured.</summary>
+    public static readonly PermanentSetting Inherits = new(false, 0, new Dictionary<string, List<string>>(), false);
+
+    public bool Equals(PermanentSetting? other)
+        => other is not null && Enabled == other.Enabled && Priority == other.Priority && Own == other.Own
+        && Options.Count == other.Options.Count
+        && Options.All(kv => other.Options.TryGetValue(kv.Key, out var o) && o.SequenceEqual(kv.Value, StringComparer.Ordinal));
+
+    public override int GetHashCode() => HashCode.Combine(Enabled, Priority, Own, Options.Count);
+}
 
 /// <summary>Whether a binding edit may go ahead on a mod.</summary>
 internal sealed record BindingEditState(bool FeatureOn, bool HasActive, bool Governed, bool PresetDriven);
