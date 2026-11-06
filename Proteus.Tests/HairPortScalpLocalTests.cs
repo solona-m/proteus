@@ -297,25 +297,29 @@ public sealed class HairPortScalpLocalTests(ITestOutputHelper o)
     }
 
     /// <summary>
-    /// The independent skin check's rule for one hairstyle port: never more points inside after the push than before, and
-    /// after at most max(2% of before, 16) of points no deeper than <see cref="DisagreementDepth"/>, and at most 2% of before
-    /// of points deeper (5% on a Hrothgar, whose curved skull and nape part the two measures further) — no floor, so a miss
-    /// fails on a port of any size; and at most 2% of before inside by both measures, on every port. The floor is twice the worst disagreement measured
-    /// (8 points a port, 2026-11-05) between the push's radial gap and this check's distance to the nearest skin triangle,
-    /// which part by a few millimetres on steep skin — mostly points the push never moved. Points under a protrusion are
-    /// left out; at least half of before must be
-    /// otherwise where before totals 100 or more, and at the upper back (where the bald patch was) at most
-    /// <see cref="UpperBackProtrusionMax"/> per race family.
-    /// </summary>
-    /// <summary>
     /// The one port allowed more points inside by both measures than 2% of before, pinned by name and count: c0201→c1501
     /// h0180, 8 — two positions and their duplicates at the head's centre line, which the bend sinks 53–55 mm and only
     /// neighbouring seeds lift (47 of 55 mm), since a point seeds only above the centre on both heads (the calibrated rule;
-    /// seeding them broke three gates). A deferred known issue (2026-11-05). Any other port over 2%, or this one over 8,
-    /// fails.
+    /// seeding them broke three gates). Known issue #81 (2026-11-05). Any other port over 2%, or this one over 8, fails.
     /// </summary>
     internal static readonly Dictionary<string, int> MissedByBothExceptions = new() { ["c0201->c1501 h0180"] = 8 };
 
+    /// <summary>
+    /// The independent skin check's rule for one hairstyle port:
+    /// <list type="bullet">
+    /// <item>never more points inside after the push than before;</item>
+    /// <item>of the points left inside no deeper than <see cref="DisagreementDepth"/>, at most max(2% of before, 16) — the
+    /// floor is twice the worst disagreement measured (8 points a port, 2026-11-05) between the push's radial gap and this
+    /// check's distance to the nearest skin triangle, which part by a few millimetres on steep skin;</item>
+    /// <item>of the points left deeper, at most 2% of before (5% on a Hrothgar, whose curved skull and nape part the two
+    /// measures further), with no floor, so a miss fails on a port of any size;</item>
+    /// <item>of those, the ones inside by the push's own radial gap too — missed by both measures — at most 2% of before on
+    /// every port, the one pinned exception aside (<see cref="MissedByBothExceptions"/>);</item>
+    /// <item>points under a protrusion are left out of all of that, but where before totals 100 or more at least half of
+    /// it must be outside a protrusion, and at the upper back (where the bald patch was) at most
+    /// <see cref="UpperBackProtrusionMax"/> per race family.</item>
+    /// </list>
+    /// </summary>
     internal static void CheckPort(string at, ushort to, Inside r, Action<bool, string> check)
     {
         check(r.After <= r.Before, $"{at}: {r.Before} -> {r.After}, more inside after the push");
@@ -362,12 +366,12 @@ public sealed class HairPortScalpLocalTests(ITestOutputHelper o)
     /// <remarks>Points under a protrusion — their nearest target skin triangle standing more than
     /// <see cref="HairScalpPush.ProtrusionMargin"/> beyond the clipped skull in that direction: a Miqo'te's ear base, an
     /// Elezen's ear — are left out of both counts and counted on their own: the push does not push hair out of ears
-    /// (EDGE-hair-material-scalp-fit-15).</remarks>
-    /// <returns>Non-protrusion points inside before and after; protrusion points inside before or after, and of those, the ones
+    /// (EDGE-hair-material-scalp-fit-15).
+    /// Also counted: of the points inside after, how many lie deeper than <see cref="DisagreementDepth"/>, how many of
+    /// those the push's radial gap reads as inside too, and the deepest point inside that the push never moved.</remarks>
+    /// <returns>See <see cref="Inside"/>: non-protrusion points inside before and after; protrusion points inside before or after, and of those, the ones
     /// at the upper back (behind the ear line: |x| under half the distance from the centre) — the bald patch's region,
     /// where the exclusion must not reach.</returns>
-    /// <remarks>Also: of the points inside after, how many lie deeper than <see cref="DisagreementDepth"/>, and the deepest
-    /// of those the push never moved (metres).</remarks>
     internal static Inside InsideSkin(Skin target, Skin source, ModelParts shown, ModelParts bent, ModelParts pushed,
                                       IReadOnlySet<int>? spares = null)
     {

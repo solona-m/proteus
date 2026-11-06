@@ -480,13 +480,13 @@ public class HairScalpPushTests
         var targetHead = Head(0.11f);
         var source = Frame(sourceHead);
         var target = Frame(targetHead);
-        // A small patch at the upper back only: a dozen points or so.
-        var patch = HairPortFixtures.Sphere("/mt_c0201h0130_hir_a.mtrl", Centre, 0.091f, [("j_kao", 1f)], rings: 6, segments: 8, minY: 0.3f);
+        // A small patch on the cranium: a few dozen points at the upper back.
+        var patch = HairPortFixtures.Sphere("/mt_c0201h0130_hir_a.mtrl", Centre, 0.091f, [("j_kao", 1f)], rings: 8, segments: 12, minY: 0.3f);
         var hair = Hair(patch);
         var shown = ModelPartReader.Read(hair)!;
         var r = HairPortScalpLocalTests.InsideSkin(HairPortScalpLocalTests.SkinOf(targetHead, target),
                                                    HairPortScalpLocalTests.SkinOf(sourceHead, source), shown, shown, shown);
-        Assert.InRange(r.Before, 1, 40);
+        Assert.InRange(r.Before, 12, 60);
         Assert.Equal(r.Before, r.After);
         // Inside by the push's own radial gap too: a miss by both measures, not their disagreement.
         Assert.Equal(r.Deep, r.MissedBoth);
@@ -496,6 +496,18 @@ public class HairScalpPushTests
             var fails = new List<string>();
             HairPortScalpLocalTests.CheckPort("missed", to, r, (ok, what) => { if (!ok) fails.Add(what); });
             Assert.NotEmpty(fails);
+        }
+
+        // The control: the push on, the same patch passes — the rule is not one that always fails.
+        var pushed = ModelPartReader.Read(HairScalpPush.Apply(hair, shown, source, target).Model)!;
+        var c = HairPortScalpLocalTests.InsideSkin(HairPortScalpLocalTests.SkinOf(targetHead, target),
+                                                   HairPortScalpLocalTests.SkinOf(sourceHead, source), shown, shown, pushed);
+        Assert.Equal(0, c.Deep);
+        foreach (ushort to in new ushort[] { 401, 1501 })
+        {
+            var fails = new List<string>();
+            HairPortScalpLocalTests.CheckPort("pushed", to, c, (ok, what) => { if (!ok) fails.Add(what); });
+            Assert.Empty(fails);
         }
     }
 
