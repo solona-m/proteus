@@ -105,7 +105,10 @@ public static partial class ColorTableEditor
             // The overlay's colour table is baked into its shell material(s) ss_{letter}.mtrl; game row for
             // this sub-row is (row-1)*2 + (A?0:1). Click-toggle: clicking again (or another sub-row) moves the
             // glow. A mod/option with several gear overlays shares one colour table, so all of them glow.
-            if (gear && Highlighter != null && shellMaterialLeaves is { Count: > 0 })
+            // Routed like the row hover (RowHighlightRoute), so the button and the hover never disagree.
+            var route = RowHighlightRoute.Pick(mode, Highlighter != null, shellMaterialLeaves?.Count ?? 0,
+                SkinGlow != null, skinGlowTargets?.Count ?? 0);
+            if (route == HighlightRoute.Gear && Highlighter != null && shellMaterialLeaves != null)
             {
                 int gameRow = (row - 1) * 2 + (isA ? 0 : 1);
                 bool active = Highlighter.IsTarget(shellMaterialLeaves, gameRow);
@@ -120,8 +123,8 @@ public static partial class ColorTableEditor
                     ImGui.SetTooltip(cs.GlowGearTip);
             }
             // Skin overlays have no live colour table; SkinGlow rebinds the body diffuse instead. Static
-            // bright (it can't hue-cycle — the highlight is a baked 4K texture, rebuilt only on click).
-            else if (!gear && SkinGlow != null && skinGlowTargets is { Count: > 0 })
+            // bright (it can't hue-cycle — the highlight is a baked 4K texture, rebuilt only on a click or a settled hover).
+            else if (route == HighlightRoute.Skin && SkinGlow != null && skinGlowTargets != null)
             {
                 bool active = SkinGlow.IsTarget(skinGlowTargets, row, isA);
                 ImGui.SameLine();

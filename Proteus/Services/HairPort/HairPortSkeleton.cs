@@ -74,9 +74,14 @@ internal static class HairPortSkeleton
     /// An entry is judged by the file the game will load with the port on: the author's own where the port's place or
     /// the default data publishes one, the game's otherwise — and never points where another place of the mod (or a
     /// port of another hairstyle) publishes the skeleton, which may be what loads instead.
+    /// <para/>
+    /// Across the sexes (<see cref="CrossSexChoice"/>) only rules 3, 4 and 7 hold: hair bones are named by skeleton
+    /// number, so the other sex's skeleton of that number — another style's chain — has the same names, which proves
+    /// nothing. The source race's own skeleton is carried, or the bend refuses for missing bones.
     /// </summary>
     internal static Choice Choose(Place p, byte[] model)
     {
+        if (CrossSexRefit.CrossesSex(p.From, p.To)) return CrossSexChoice(p, model);
         var extra = ExtraBones(model);
         int defaultsOurs = HairPortBuilder.DefaultsPortEst(p.Ports, p.Target);
         if (HairPortBuilder.AuthorTargetEst(p.Owner, p.Defaults, p.Was, p.To, p.Id, defaultsOurs) is { } author)
@@ -109,17 +114,42 @@ internal static class HairPortSkeleton
             if (unreadable != null) return Unreadable(unreadable);
             if (theirs != null) return new Choice(Route.Entry, source, loaded, 0, theirs);
         }
-        if (source > 0)
-        {
-            // Only a source skeleton with every bone is worth carrying: one that lacks them too leaves nothing to add,
-            // and the bend's own check refuses — the same answer every look, so no port is called out of date for it.
-            var path = HairPortPlan.SkeletonPath(p.From, source);
-            var (skl, bytes) = HairPortBuilder.Carry(p.ModRoot, p.Owners, p.Owner, path, path, p.ReadGame);
-            if (skl?.AuthorFile is { } shipped && bytes == null) return Unreadable(shipped);
-            if (skl != null && Missing(extra, HairPortPlan.SkeletonBones(bytes)).Count == 0)
-                return new Choice(Route.Carry, 0, loaded, source, own);
-        }
-        return new Choice(Route.Own, loaded, loaded, 0, own);
+        return SourceCarry(p, extra, source, loaded, own) ?? new Choice(Route.Own, loaded, loaded, 0, own);
+    }
+
+    /// <summary>
+    /// A carry of the source race's skeleton <paramref name="source"/>, when it has every bone the model moves with —
+    /// only such a one is worth carrying: one that lacks them too leaves nothing to add, and the bend's own check
+    /// refuses, the same answer every look, so no port is called out of date for it. No verdict when the author's own
+    /// file for it cannot be read; null for no carry.
+    /// </summary>
+    /// <param name="bones">The bones the choice hands the bend until a slot is found (<see cref="Carry"/>).</param>
+    private static Choice? SourceCarry(Place p, List<string> extra, int source, int loaded, IReadOnlySet<string> bones)
+    {
+        if (source <= 0) return null;
+        var path = HairPortPlan.SkeletonPath(p.From, source);
+        var (skl, bytes) = HairPortBuilder.Carry(p.ModRoot, p.Owners, p.Owner, path, path, p.ReadGame);
+        if (skl?.AuthorFile is { } shipped && bytes == null) return Unreadable(shipped);
+        return skl != null && Missing(extra, HairPortPlan.SkeletonBones(bytes)).Count == 0
+            ? new Choice(Route.Carry, 0, loaded, source, bones) : null;
+    }
+
+    /// <summary>
+    /// <see cref="Choose"/> for a port across the sexes: nothing for a model with no hairstyle bones; no verdict without
+    /// the game's table; else a carry of the source race's skeleton when it has every bone. The bones are always empty —
+    /// never the target's — so a carry that finds no free slot (<see cref="Carry"/>, which needs the record) leaves the
+    /// bend nothing to move with, and it refuses for missing bones.
+    /// </summary>
+    private static Choice CrossSexChoice(Place p, byte[] model)
+    {
+        var extra = ExtraBones(model);
+        if (extra.Count == 0) return new Choice(Route.Own, 0, 0, 0, new HashSet<string>());
+        if (p.Table() is not { } table) return new Choice(Route.Unknown, 0, 0, 0, new HashSet<string>());
+        int loaded = table.Loaded(p.To, p.Id);
+        // What the source race moves with under the mod: its entry (0, "none", carries nothing), else the game's table.
+        int source = HairPortPlan.SourceEst(p.Owner, p.Defaults, p.From, p.Id, p.Owners) ?? table.Loaded(p.From, p.Id);
+        return SourceCarry(p, extra, source, loaded, new HashSet<string>())
+               ?? new Choice(Route.Own, 0, loaded, 0, new HashSet<string>());
     }
 
     /// <summary>

@@ -22,6 +22,25 @@ internal static partial class ShellBodyAtr
     internal readonly record struct ModSettings(bool Enabled, IReadOnlyDictionary<string, List<string>> Options);
 
     /// <summary>
+    /// A composite run's Penumbra settings reads, shared by the skin phase (the bust standoff) and the shell phase, so
+    /// both judge one reading (#55). Only a SUCCESSFUL read is kept: a failed one (null — a loading screen) is returned
+    /// but not stored, so the next caller in the run reads again rather than inheriting the failure.
+    /// </summary>
+    internal sealed class RunSettingsMemo
+    {
+        private readonly System.Collections.Concurrent.ConcurrentDictionary<string, ModSettings> read =
+            new(StringComparer.OrdinalIgnoreCase);
+
+        public ModSettings? Get(string modDir, Func<string, ModSettings?> reader)
+        {
+            if (read.TryGetValue(modDir, out var hit)) return hit;
+            var now = reader(modDir);
+            if (now is { } ok) read[modDir] = ok;
+            return now;
+        }
+    }
+
+    /// <summary>
     /// One bare body part of a published shell whose body mod switches shapes by option.
     /// </summary>
     /// <param name="ModDir">The mod's folder name, as Penumbra knows it.</param>
@@ -125,6 +144,16 @@ internal static partial class ShellBodyAtr
         merged.UnionWith(off);
         return merged;
     }
+
+    /// <summary>
+    /// Everything a body part hides: the attributes the game hides live (<paramref name="liveShapes"/>, as
+    /// <see cref="Interop.BodyShapeReader.ReadEnabledShapes"/> reads them) and the ones its body mod's options switch off
+    /// (<paramref name="atrOff"/>, keyed by game path with the dictionary's own comparer). The shell's source spec and
+    /// the nail flatten both ask this, so the two never disagree on which layers are drawn (#58).
+    /// </summary>
+    internal static HashSet<string>? HiddenFor(HashSet<string>? liveShapes,
+                                               IReadOnlyDictionary<string, IReadOnlySet<string>> atrOff, string path)
+        => Merge(Interop.BodyShapeReader.Split(liveShapes).HiddenAttributes, atrOff.GetValueOrDefault(path));
 
     /// <summary>The attributes, sorted and comma-joined; "" for none.</summary>
     internal static string Key(IReadOnlySet<string>? off)

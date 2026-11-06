@@ -28,6 +28,8 @@ internal static class ModelBackupOrder
         yield return (MeshToggleService.BackupSubdir, ProteusLoc.Localize("MeshVolume.Feature.Toggles", "part switches"));
         yield return (HatCompatService.BackupSubdir, ProteusLoc.Localize("MeshVolume.Feature.HatCompat", "hat fitting"));
         yield return (MeshVolumeService.BackupSubdir, ProteusLoc.Localize("MeshVolume.Feature.Brush", "the brush"));
+        yield return (ShaderUpgradeWriter.BackupSubdir,
+                      ProteusLoc.Localize("MeshVolume.Feature.ShaderUpgrade", "gear shader upgrade"));
     }
 
     /// <summary>

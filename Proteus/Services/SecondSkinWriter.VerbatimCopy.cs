@@ -236,7 +236,13 @@ public static partial class SecondSkinWriter
 
                 foreach (int i in nb.VertsOf[k])
                     if (nb.FingertipUv[i] is { } t)
+                    {
+                        // The rim's UVs carried across a spanned socket land in the socket's hole in the atlas; art
+                        // that leaves it unpainted would trim the patch away. There, the rim it first landed on.
+                        if (nb.LandingUv?[i] is { } rim && CoverageAt(cap, Converted(i, t, uOff, vOff).Uv) < NailBedPaintedFloor)
+                            t = rim;
                         uvs[i] = ShiftAndConvert(i, t, uOff, vOff, uvsPreConv);
+                    }
                 rescued++;
             }
             capLog?.Invoke($"nail beds: {rescued} of {nb.Islands.Count} under painted fingertips on this layer "

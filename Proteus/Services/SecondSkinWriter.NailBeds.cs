@@ -64,6 +64,10 @@ public static partial class SecondSkinWriter
         /// <summary>Per vertex, the RAW uv0 of the nearest skin outside every nail bed — the fingertip around the
         /// nail. Null for a vertex that is not in a nail bed.</summary>
         public required (float U, float V)?[] FingertipUv;
+        /// <summary>Per vertex, where an island lying on the skin's edge has had its inside filled from the rim's UVs
+        /// (<see cref="FingertipUv"/>), the UV it first landed on — the rim — for a layer that leaves the socket's hole
+        /// in the atlas unpainted. Null elsewhere.</summary>
+        public (float U, float V)?[]? LandingUv;
         /// <summary>Per vertex, extra push to clear a nail MESH standing on the bed (Neolithe, Rue+); zero off the
         /// beds and on hands whose nails are the skin itself (Bibo+). The shell sits a twentieth of a millimetre
         /// off the skin, and a nail stands up to a fifth.</summary>
@@ -211,7 +215,7 @@ public static partial class SecondSkinWriter
             return (MathF.Sqrt(best), bestUv, bestAt, bestOut);
         }
 
-        int beds = 0, loose = 0;
+        int beds = 0, loose = 0, rimUv = 0;
         float worst = 0f, highest = 0f;
         // Which welded edges the skin that is NOT a nail uses: a nail bed sharing one is sewn into the finger.
         var restEdges = RestEdges(meshes, bedMax);
@@ -231,6 +235,7 @@ public static partial class SecondSkinWriter
             var vertsOf = new List<int[]>();
             var sewn = new List<bool>();
             var tip = new (float U, float V)?[sm.Pos.Length];
+            (float U, float V)?[]? landingUv = null;
             var onSkin = new Vec3?[sm.Pos.Length];
             foreach (var l in bedTris.Values)
             {
@@ -238,11 +243,13 @@ public static partial class SecondSkinWriter
                 // stay within a few millimetres of it; a wrist connector hangs a couple of centimetres off the arm.
                 var verts = new HashSet<int>(l);
                 var landed = new (int V, (float U, float V) Uv, Vec3 At)[verts.Count];
+                var landDist = new Dictionary<int, float>();
                 float far = 0f;
                 int j = 0;
                 foreach (int v in verts)
                 {
                     var (d, uv, at, outward) = Land(sm.Pos[v]);
+                    landDist[v] = d;
                     far = MathF.Max(far, d);
                     // Just under the skin it lands on: level with it they would fight for the same pixels.
                     landed[j++] = (v, uv, new Vec3(at.X - outward.X * NailSinkDepth,
@@ -252,6 +259,16 @@ public static partial class SecondSkinWriter
                 if (far > reach) { loose++; continue; }
                 worst = MathF.Max(worst, far);
                 foreach (var (v, uv, at) in landed) { tip[v] = uv; onSkin[v] = at; }
+                // An island whose outline lies ON the skin's edge — a nail spanning its socket, or one sewn in — has no skin
+                // under its middle: every inside vertex lands on the rim, and the patch is painted with a smeared ring of
+                // the rim's texels (a nail-shaped mark under any garment). Its inside takes the rim's UVs carried across
+                // smoothly instead: the hole in the atlas the socket leaves, which continues the finger round it.
+                if (SpannedTipUv(sm, l, landDist, tip) is { } filled)
+                {
+                    landingUv ??= new (float U, float V)?[sm.Pos.Length];
+                    foreach (var (v, uv) in filled) { landingUv[v] = tip[v]; tip[v] = uv; }
+                    rimUv++;
+                }
                 islands.Add(l.ToArray());
                 vertsOf.Add([.. verts]);
                 sewn.Add(IsSewnIn(sm, l, restEdges));
@@ -263,13 +280,14 @@ public static partial class SecondSkinWriter
             beds += islands.Count;
             plans[sm.Mesh] = new NailBedPlan
             {
-                Islands = islands, VertsOf = vertsOf, FingertipUv = tip, Lift = lift, OnSkin = onSkin, Sewn = sewn,
+                Islands = islands, VertsOf = vertsOf, FingertipUv = tip, LandingUv = landingUv, Lift = lift, OnSkin = onSkin, Sewn = sewn,
             };
         }
 
         diag?.Invoke($"nail beds: {beds} in {plans.Count} mesh(es) (islands of at most {bedMax} of {biggest} triangles; "
                    + $"{loose} small island(s) straying past {reach:F3} of the rest of the skin left alone), "
-                   + $"furthest from the fingertip {worst:F4}, a nail mesh up to {highest:F5} above them");
+                   + $"furthest from the fingertip {worst:F4}, a nail mesh up to {highest:F5} above them; "
+                   + $"{rimUv} lying on the skin's edge take the rim's UVs across");
         return plans;
     }
 
@@ -419,5 +437,70 @@ public static partial class SecondSkinWriter
                 highest = MathF.Max(highest, d);
             }
         return lift;
+    }
+    /// <summary>How near the skin every outline vertex of a nail island must land for the island to count as lying ON
+    /// the skin's edge (a spanned socket, a sewn nail) rather than floating over the finger.</summary>
+    private const float NailOutlineOnSkin = 0.0001f;
+
+    /// <summary>Widest the rim's UVs may spread for them to be carried across the island: one patch of the atlas, not a
+    /// rim that runs over a UV seam (where an inside vertex would land between two charts).</summary>
+    private const float NailRimUvSpread = 0.05f;
+
+    /// <summary>
+    /// The fingertip UVs for an island lying on the skin's edge: its outline keeps the UV it lands on, its inside the
+    /// harmonic fill of those across the island (welded by position, so a seam inside the island is no outline). Null
+    /// when the island floats over the finger, has no outline, or its rim's UVs are not one patch of the atlas.
+    /// </summary>
+    private static Dictionary<int, (float U, float V)>? SpannedTipUv(NailSkinMesh sm, List<int> tris,
+        Dictionary<int, float> landDist, (float U, float V)?[] tip)
+    {
+        var keyOf = new Dictionary<int, (int, int, int)>();
+        foreach (int v in tris) keyOf.TryAdd(v, PositionKey(sm.Pos[v], WeldPerMetre));
+        var edgeUse = new Dictionary<((int, int, int), (int, int, int)), int>();
+        var nbr = new Dictionary<(int, int, int), HashSet<(int, int, int)>>();
+        for (int t = 0; t + 2 < tris.Count; t += 3)
+            for (int e = 0; e < 3; e++)
+            {
+                var (a, b) = (keyOf[tris[t + e]], keyOf[tris[t + (e + 1) % 3]]);
+                if (a == b) continue;
+                var k = a.CompareTo(b) < 0 ? (a, b) : (b, a);
+                edgeUse[k] = edgeUse.GetValueOrDefault(k) + 1;
+                (nbr.TryGetValue(a, out var na) ? na : nbr[a] = []).Add(b);
+                (nbr.TryGetValue(b, out var nb) ? nb : nbr[b] = []).Add(a);
+            }
+        var outline = new HashSet<(int, int, int)>();
+        foreach (var ((a, b), n) in edgeUse) if (n == 1) { outline.Add(a); outline.Add(b); }
+        if (outline.Count < 3 || outline.Count == nbr.Count) return null;
+        var uv = new Dictionary<(int, int, int), (double U, double V)>();
+        var fixedKey = new HashSet<(int, int, int)>();
+        foreach (var (v, k) in keyOf)
+        {
+            if (!outline.Contains(k)) continue;
+            if (landDist.GetValueOrDefault(v, float.MaxValue) > NailOutlineOnSkin || tip[v] is not { } t) return null;
+            uv.TryAdd(k, (t.U, t.V));
+            fixedKey.Add(k);
+        }
+        double u0 = uv.Values.Min(x => x.U), u1 = uv.Values.Max(x => x.U);
+        double v0 = uv.Values.Min(x => x.V), v1 = uv.Values.Max(x => x.V);
+        if (u1 - u0 > NailRimUvSpread || v1 - v0 > NailRimUvSpread) return null;
+        foreach (var k in nbr.Keys) uv.TryAdd(k, ((u0 + u1) / 2, (v0 + v1) / 2));
+        for (int it = 0; it < 4000; it++)
+        {
+            double moved = 0;
+            foreach (var (k, ns) in nbr)
+            {
+                if (fixedKey.Contains(k)) continue;
+                double su = 0, sv = 0;
+                foreach (var q in ns) { su += uv[q].U; sv += uv[q].V; }
+                var nu = (su / ns.Count, sv / ns.Count);
+                moved = Math.Max(moved, Math.Abs(nu.Item1 - uv[k].U) + Math.Abs(nu.Item2 - uv[k].V));
+                uv[k] = nu;
+            }
+            if (moved < 1e-9) break;
+        }
+        var outp = new Dictionary<int, (float U, float V)>();
+        foreach (var (v, k) in keyOf)
+            if (!fixedKey.Contains(k)) outp[v] = ((float)uv[k].U, (float)uv[k].V);
+        return outp;
     }
 }

@@ -561,6 +561,63 @@ shared equipment space and is deformed onto the wearer exactly as a second skin 
 and `Ear` are authored at the character's own race and must **not** be deformed, so they can only ride a slot
 Proteus can replace outright — a free ring, or the facewear slot. Add `"SurfaceId": "f0001"` for those.
 
+### Gear shader upgrade (what it changes in a user's copy of your mod)
+
+Users can turn on **Settings > Gear shaders > "Upgrade old gear to Dawntrail shaders"**. With it on, when they put on
+gear your mod draws with the pre-Dawntrail `characterlegacy.shpk` shader, Proteus rewrites **their installed copy** of
+your mod:
+
+- Each worn old-shader gear `.mtrl` is rewritten in place to Dawntrail's `character.shpk`. Index/mask materials get the
+  gear mode; old diffuse/specular materials (`_d`/`_n`/`_s`/`_id`) get the game's monster diffuse mode.
+- For a diffuse/specular material, a Dawntrail mask derived from your `_s` is added under `Shader Upgrade/`, and a
+  redirect for it is added inside the options (or default data) that already ship that material. No group is added,
+  moved or reordered, and your `_s` is never changed.
+- Every rewritten file is backed up first, in `Proteus/shaderupgrade-backup/`, and the changes are recorded in
+  `Proteus/shaderupgrade.json`.
+
+All of it lives inside the mod folder, so it travels with a Penumbra export. **If you wear your own source mods with
+the setting on, your working copy is rewritten too** — leave the setting off while you work on a mod, or undo it before
+you pack.
+
+To put your files back, a user wears the pieces and presses **"Undo for what I'm wearing"** (those pieces are then
+left alone until "Upgrade what I'm wearing now"). For a piece that can no longer be worn, copy each file from
+`Proteus/shaderupgrade-backup/` back over the mod's own, delete `Shader Upgrade/`, `Proteus/shaderupgrade.json` and
+the backup folder, then remove the redirects that pointed into `Shader Upgrade/` (Penumbra's Advanced Editing >
+"Remove Missing Files" does it once the folder is gone). An update you ship later is never overwritten by an old backup: Proteus keeps the new file, and
+upgrades it again only if it is still old-shader.
+
+### Gear variants (what it changes in a user's copy of your mod)
+
+**Settings > Gear variants > "Point every variant of worn gear at its mod's material"** is **on by default** (users can
+turn it off). It is for a
+mod that ships one variant's material folder (say `material/v0001/`) for an item: worn in a variant whose IMC entry
+uses another folder, the game loads that folder's material onto your model — the game's own, or nothing for a
+material name the game does not have, or a competing outfit's material for that folder. When a user puts on such a
+piece, Proteus fixes **their installed copy** of your mod — like TexTools' metadata tab "Apply to All Variants", but
+for the material only:
+
+- Your material redirects are **copied** to the other variant folders the item's variants use: for each option (or
+  default data, or combining container) that redirects `…/material/v0001/<name>`, the same option gains
+  `…/material/v0002/<name>` (and so on) pointing at **the same file**. Every option keeps its own file, so a colour
+  choice still works on every variant.
+- **No IMC entry is written.** Each variant keeps its own visible parts, VFX and sound. Because the copies are plain
+  redirects inside your mod, Penumbra resolves them at your mod's priority — the same ordering that decides your model.
+  Where another outfit outranks yours, its model and material show; a copy can still serve a variant folder no higher
+  mod covers.
+- Nothing you set on purpose is overridden: a variant your own IMC data sends to another material folder is left
+  alone, a key you already wrote is never replaced, and a mod that ships several variant folders is left as it is. No
+  group is added, moved or reordered, and every other option and setting is left as it is.
+- What was written is recorded in `Proteus/variantrepoint.json`. If that file is lost, the copies look like your own
+  redirects and Proteus no longer touches them.
+
+All of it lives inside the mod folder, so it travels with a Penumbra export. **Because the setting is on by default,
+wearing your own source mods changes your working copy too** — turn it off while you work on a mod, or undo it before
+you pack.
+
+To take the copies out, a user wears the pieces and presses **"Undo for what I'm wearing"** (those pieces are then
+left alone until "Repoint what I'm wearing now"). A copy someone repointed since is theirs and kept. When you ship an
+update, Proteus notices that its copies are gone and the mod changed, and looks at the pieces afresh.
+
 ### Distributing Your Mod
 
 Pack your mod folder as a `.zip` and rename the extension to `.pmp`. Penumbra imports `.pmp` files directly. Include everything in the mod root:

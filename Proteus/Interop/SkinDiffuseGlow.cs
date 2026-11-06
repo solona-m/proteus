@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
@@ -45,27 +46,42 @@ public sealed unsafe class SkinDiffuseGlow : IDisposable
         public readonly List<(byte[] Map, int W, int H)> Maps = new();
         public volatile byte[]? Bgra;   // built off-thread; published last (W/H set first)
         public int W, H;
+        // Superseded (another row, the preview ended, cleared): a running build skips its decode and paint.
+        public volatile bool Abandoned;
+        // The build gave up. FailedAtMs is written BEFORE Failed, so the volatile write publishes it.
+        public volatile bool Failed;
+        public long FailedAtMs;
     }
+
+    // One highlight request: the compositor's target list it came from (identity by reference), the row pair
+    // (1-16), the sub-row pick, which build attempt this is, and its per-diffuse build state. Replaced, never edited.
+    private sealed record SkinTarget(object SourceList, int Row, SubRowPick Pick, int Attempt,
+        Dictionary<string, Target> ByPath);
+
+    private static readonly Dictionary<string, Target> NoTargets = new();
 
     private readonly IFramework framework;
     private readonly IObjectTable objects;
     private readonly TextureLoader textures;
     private readonly IPluginLog log;
 
-    // Desired targets keyed by normalized diffuse path; swapped in as one reference (volatile publish).
-    private volatile Dictionary<string, Target> _targetByPath = new();
+    // The PINNED target (the sub-row Glow button) and a transient PREVIEW (pointing at a row button), shown over the
+    // pin while the UI keeps renewing it. Volatile references: builds run on the thread pool.
+    private volatile SkinTarget? _pinned;
+    private volatile SkinTarget? _preview;
+    private readonly PreviewKeepAlive _keep = new();
     // Currently-swapped textures keyed by the live texture slot (Texture** address — stable per handle, so
     // two handles sharing one path don't collide): our created texture, the original we displaced, and
     // WHICH target build produced it (so switching rows on the same material re-swaps instead of seeing
     // "already swapped" and keeping the previous row's highlight).
     private readonly Dictionary<nint, (nint Ours, nint Original, Target Applied)> _applied = new();
 
-    // Identity of the active target, for the button's pressed state.
-    private int _idRow = -1;
-    private bool _idA;
-
-    /// <summary>Ghosts the gear shells above the skin so an occluded skin glow shows through. Set by Plugin.</summary>
+    /// <summary>Ghosts the gear shells above the skin so an occluded skin glow shows through. Set by Plugin.
+    /// Only the pinned Glow ghosts; a hover preview never does.</summary>
     public ShellNormalGhost? Ghost { get; set; }
+
+    /// <summary>Anything to clear: a pin or preview (built or not yet), or a texture still swapped in.</summary>
+    public bool IsActive => _pinned != null || _preview != null || _applied.Count > 0;
 
     public SkinDiffuseGlow(IFramework framework, IObjectTable objects, TextureLoader textures, IPluginLog log)
     {
@@ -79,8 +95,73 @@ public sealed unsafe class SkinDiffuseGlow : IDisposable
     /// <summary>Glow preset row <paramref name="row"/> (1-16) sub-row A/B across every material in <paramref name="targets"/>.</summary>
     public void SetTarget(IReadOnlyList<SkinGlowTarget> targets, int row, bool isA)
     {
-        _idRow = row;
-        _idA   = isA;
+        var old = _pinned;
+        var st = NewTarget(targets, row, isA ? SubRowPick.A : SubRowPick.B, 1);
+        _pinned = st;
+        Abandon(old);
+        Start(st);
+        // Skin sits below every gear shell, so ghost them all while the skin glow is active.
+        Ghost?.GhostAbove(null);
+    }
+
+    /// <summary>Drops the pin and any preview.</summary>
+    public void Clear()
+    {
+        var p = _pinned;
+        var v = _preview;
+        _pinned  = null;
+        _preview = null;
+        Abandon(p);
+        Abandon(v);
+        Ghost?.Clear();
+    }
+
+    /// <summary>Whether hovering row <paramref name="row"/> of <paramref name="targets"/> needs a build now: no preview,
+    /// a different one, or a failed one due a retry (<see cref="SkinPreviewRule"/>). Decided once per frame by the
+    /// caller, which passes the answer to <see cref="SetPreview"/>.</summary>
+    public bool PreviewNeedsBuild(IReadOnlyList<SkinGlowTarget> targets, int row, long nowMs)
+    {
+        var v = _preview;
+        if (v == null) return true;
+        bool same = SkinPreviewRule.SameTarget(v.SourceList, v.Row, v.Pick, targets, row, SubRowPick.Both);
+        bool failed = false;
+        long failedAt = 0;
+        foreach (var t in v.ByPath.Values)
+            if (t.Failed) { failed = true; failedAt = Math.Max(failedAt, t.FailedAtMs); }
+        return SkinPreviewRule.NeedsBuild(same, failed, v.Attempt, failedAt, nowMs);
+    }
+
+    /// <summary>Preview both sub-rows of row <paramref name="row"/> over the pin. Starts a build only when
+    /// <paramref name="build"/> says so; otherwise it just keeps the current preview alive. Never ghosts.</summary>
+    public void SetPreview(IReadOnlyList<SkinGlowTarget> targets, int row, bool build)
+    {
+        if (build)
+        {
+            var old = _preview;
+            bool same = old != null
+                && SkinPreviewRule.SameTarget(old.SourceList, old.Row, old.Pick, targets, row, SubRowPick.Both);
+            var st = NewTarget(targets, row, SubRowPick.Both, same ? old!.Attempt + 1 : 1);
+            _preview = st;
+            Abandon(old);
+            Start(st);
+        }
+        _keep.Renew(RowHighlightClock.NowMs());
+    }
+
+    /// <summary>Keep the current preview (if any) alive without changing it.</summary>
+    public void RenewPreview() => _keep.Renew(RowHighlightClock.NowMs());
+
+    /// <summary>End the preview; the pin (or the original) shows again. A later hover is a fresh target.</summary>
+    public void EndPreview()
+    {
+        var v = _preview;
+        if (v == null) return;
+        _preview = null;
+        Abandon(v);
+    }
+
+    private static SkinTarget NewTarget(IReadOnlyList<SkinGlowTarget> targets, int row, SubRowPick pick, int attempt)
+    {
         var map = new Dictionary<string, Target>();
         foreach (var t in targets)
         {
@@ -89,28 +170,65 @@ public sealed unsafe class SkinDiffuseGlow : IDisposable
                 map[norm] = target = new Target { DiskPath = t.DiffuseDiskPath };
             target.Maps.Add((t.RowMap, t.Width, t.Height));   // several overlays may share one diffuse
         }
-        foreach (var target in map.Values)
+        return new SkinTarget(targets, row, pick, attempt, map);
+    }
+
+    private void Start(SkinTarget st)
+    {
+        foreach (var target in st.ByPath.Values)
         {
             var tt = target;
-            Task.Run(() => Build(tt, row, isA));
+            Task.Run(() => Build(tt, st.Row, st.Pick));
         }
-        _targetByPath = map;
-        // Skin sits below every gear shell, so ghost them all while the skin glow is active.
-        Ghost?.GhostAbove(null);
     }
 
-    public void Clear()
+    private static void Abandon(SkinTarget? st)
     {
-        _idRow = -1;
-        _targetByPath = new();
-        Ghost?.Clear();
+        if (st == null) return;
+        foreach (var t in st.ByPath.Values) t.Abandoned = true;
     }
 
+    private static void Fail(Target t)
+    {
+        t.FailedAtMs = RowHighlightClock.NowMs();
+        t.Failed = true;
+    }
+
+    // What Apply shows: the preview over the pin. A diffuse whose build FAILED is left out, so Apply restores that slot
+    // rather than "leaving what's showing" — which would be another row's gold (the last preview's, or the previous
+    // hovered row's) presented as this one. The filtered copy is cached per (target, failure count): framework thread only.
+    private SkinTarget? _liveSource;
+    private int _liveFailed;
+    private Dictionary<string, Target>? _live;
+
+    private Dictionary<string, Target> EffectiveTargets()
+    {
+        var st = _preview ?? _pinned;
+        if (st == null) return NoTargets;
+        int failed = 0;
+        foreach (var t in st.ByPath.Values)
+            if (t.Failed) failed++;
+        if (failed == 0) return st.ByPath;
+
+        if (!ReferenceEquals(_liveSource, st) || _liveFailed != failed || _live == null)
+        {
+            var live = new Dictionary<string, Target>(st.ByPath);
+            foreach (var (path, t) in st.ByPath)
+                if (t.Failed) live.Remove(path);
+            _liveSource = st;
+            _liveFailed = failed;
+            _live = live;
+        }
+        return _live;
+    }
+
+    /// <summary>Whether the PINNED target is this one — the Glow button's state, which a hover never changes.</summary>
     public bool IsTarget(IReadOnlyList<SkinGlowTarget> targets, int row, bool isA)
     {
-        var map = _targetByPath;
-        if (map.Count == 0 || row != _idRow || isA != _idA)
+        var p = _pinned;
+        if (p == null || p.ByPath.Count == 0 || row != p.Row || p.Pick != (isA ? SubRowPick.A : SubRowPick.B))
             return false;
+        var map = p.ByPath;
         // Compare by DISTINCT normalized paths — a target list may repeat a path (two overlays, one material).
         var wanted = new HashSet<string>();
         foreach (var t in targets) wanted.Add(Normalize(t.DiffuseDiskPath));
@@ -121,53 +239,98 @@ public sealed unsafe class SkinDiffuseGlow : IDisposable
         return true;
     }
 
-    private void Build(Target t, int row, bool isA)
+    private void Build(Target t, int row, SubRowPick pick)
     {
         try
         {
-            var dec = textures.LoadTexAsRgba(t.DiskPath);
-            if (dec == null) { log.Warning("[SkinGlow] could not decode diffuse {0}", t.DiskPath); return; }
-            var (rgba, w, h) = dec.Value;
-            int pair = row - 1;
-            var bgra = new byte[w * h * 4];
-            for (int y = 0; y < h; y++)
+            if (t.Abandoned) return;
+            // The compositor writes these files; never read one it hasn't finished (or is rewriting) — a torn read
+            // would log an Error. A failed build is retried, a few times, by the hover that wanted it.
+            if (!TextureLoader.IsCompleteTex(t.DiskPath))
             {
-                for (int x = 0; x < w; x++)
-                {
-                    int p = (y * w + x) * 4;
-                    bool hit = false;
-                    foreach (var (rm, mw, mh) in t.Maps)   // union: glow if any overlay resolves this row here
-                    {
-                        int my = mh == h ? y : (int)((long)y * mh / h);
-                        int mx = mw == w ? x : (int)((long)x * mw / w);
-                        byte m = rm[my * mw + mx];
-                        if ((m & 0x80) != 0 && (m & 0x0F) == pair && ((m & 0x40) != 0) == isA) { hit = true; break; }
-                    }
-                    if (hit)
-                    {
-                        bgra[p] = 0x30; bgra[p + 1] = 0xC4; bgra[p + 2] = 0xF4; bgra[p + 3] = 255;   // #F4C430
-                    }
-                    else
-                    {
-                        bgra[p] = rgba[p + 2]; bgra[p + 1] = rgba[p + 1]; bgra[p + 2] = rgba[p]; bgra[p + 3] = rgba[p + 3];
-                    }
-                }
+                log.Debug("[SkinGlow] diffuse not complete yet, skipped {0}", t.DiskPath);
+                Fail(t);
+                return;
             }
+            var s0 = FileStamp.Of(t.DiskPath);
+            var sw = Stopwatch.StartNew();
+            var dec = textures.LoadTexShared(t.DiskPath);   // shared, read-only: Paint only reads it
+            if (dec == null) { log.Warning("[SkinGlow] could not decode diffuse {0}", t.DiskPath); Fail(t); return; }
+            if (FileStamp.Of(t.DiskPath) != s0)
+            {
+                log.Debug("[SkinGlow] diffuse changed while decoding, skipped {0}", t.DiskPath);
+                Fail(t);
+                return;
+            }
+            if (t.Abandoned) return;
+
+            var (rgba, w, h) = dec.Value;
+            var bgra = Paint(rgba, w, h, t.Maps, row - 1, pick);
             t.W = w; t.H = h;
             t.Bgra = bgra;   // volatile release — publishes W/H too
+            log.Debug("[SkinGlow] built row {0}{1} in {2} ms, gen2 GCs {3}",
+                row, pick, sw.ElapsedMilliseconds, GC.CollectionCount(2));
         }
         catch (Exception ex)
         {
             log.Error(ex, "[SkinGlow] highlight build failed for {0}", t.DiskPath);
+            Fail(t);
         }
     }
 
-    private void OnFramework(IFramework fw) => Apply(objects.LocalPlayer?.Address ?? 0);
+    /// <summary>Whether a row-map byte lights for row pair <paramref name="pair"/> (0-15): <c>0x80</c> marks an overlay
+    /// pixel, <c>0x40</c> sub-row A, the low nibble the pair.</summary>
+    internal static bool Hit(byte m, int pair, SubRowPick pick)
+        => (m & 0x80) != 0 && (m & 0x0F) == pair
+        && (pick == SubRowPick.Both || ((m & 0x40) != 0) == (pick == SubRowPick.A));
+
+    /// <summary>The highlighted diffuse, as BGRA: pixels any map resolves to the row turn #F4C430, the rest are the
+    /// source RGBA swizzled. A map at another resolution is sampled nearest.</summary>
+    internal static byte[] Paint(byte[] rgba, int w, int h,
+        IReadOnlyList<(byte[] Map, int W, int H)> maps, int pair, SubRowPick pick)
+    {
+        var bgra = new byte[w * h * 4];
+        for (int y = 0; y < h; y++)
+        {
+            for (int x = 0; x < w; x++)
+            {
+                int p = (y * w + x) * 4;
+                bool hit = false;
+                foreach (var (rm, mw, mh) in maps)   // union: glow if any overlay resolves this row here
+                {
+                    int my = mh == h ? y : (int)((long)y * mh / h);
+                    int mx = mw == w ? x : (int)((long)x * mw / w);
+                    if (Hit(rm[my * mw + mx], pair, pick)) { hit = true; break; }
+                }
+                if (hit)
+                {
+                    bgra[p] = 0x30; bgra[p + 1] = 0xC4; bgra[p + 2] = 0xF4; bgra[p + 3] = 255;   // #F4C430
+                }
+                else
+                {
+                    bgra[p] = rgba[p + 2]; bgra[p + 1] = rgba[p + 1]; bgra[p + 2] = rgba[p]; bgra[p + 3] = rgba[p + 3];
+                }
+            }
+        }
+        return bgra;
+    }
+
+    private void OnFramework(IFramework fw)
+    {
+        _keep.Tick();
+        var v = _preview;
+        if (v != null && _keep.Expired(RowHighlightClock.NowMs()))
+        {
+            _preview = null;
+            Abandon(v);
+        }
+        Apply(objects.LocalPlayer?.Address ?? 0);
+    }
 
     private void Apply(nint addr)
     {
         if (addr == 0) { _applied.Clear(); return; }   // character gone; textures went with it
-        var targets = _targetByPath;
+        var targets = EffectiveTargets();
         if (targets.Count == 0 && _applied.Count == 0) return;
 
         var seen = new HashSet<nint>();
@@ -257,6 +420,13 @@ public sealed unsafe class SkinDiffuseGlow : IDisposable
     private nint CreateTex(byte[] bgra, int w, int h)
     {
         if (w <= 0 || h <= 0 || bgra.Length < w * h * 4) return 0;
+        var sw = Stopwatch.StartNew();   // this runs on the framework thread: measure what a hover costs the frame
+        try { return CreateTexCore(bgra, w, h); }
+        finally { log.Debug("[SkinGlow] texture {0}x{1} created in {2} ms", w, h, sw.ElapsedMilliseconds); }
+    }
+
+    private nint CreateTexCore(byte[] bgra, int w, int h)
+    {
         var size = stackalloc int[2];
         size[0] = w;
         size[1] = h;

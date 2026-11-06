@@ -587,6 +587,14 @@
     "message": "为覆盖胸部的布料开启此项。\nProteus 以身体的副本来构建衣物，因此默认会顺着身体陷进乳沟——\n这正是它看起来像彩绘而非布料的原因。真实的布料会横跨这段间隙：\n一条连接两侧乳房最前端的直线。\n开启后，两乳之间的布料会松弛到那条直线上。任何位置都不会被向内拉，\n因此不会切入身体，乳房本身也保持原有形状。\n若领口已把罩杯之间的布料裁掉，则没有可横跨的部分，\n此项不起作用。",
     "description": ""
   },
+  "Colors.ShowAllRows.Check": {
+    "message": "显示所有行",
+    "description": ""
+  },
+  "Colors.ShowAllRows.Tip": {
+    "message": "同时显示此索引纹理很少或从不选用的行。\n编辑它们几乎或完全不会产生可见变化。",
+    "description": ""
+  },
   "Colors.SmoothFold.Label": {
     "message": "抚平双腿之间",
     "description": ""
@@ -637,6 +645,10 @@
   },
   "Colors.ToeCap.Locked.Tip": {
     "message": "此模组自带的 \"Toe Cap\" 选项已在 Penumbra 中选中，它所在的 Masks 组只允许\n选一个，所以无法在这里关闭。请在 Penumbra 中更改。",
+    "description": ""
+  },
+  "Colors.ToeCap.FlagOwn.Tip": {
+    "message": "为丝袜和袜子开启此项：脚趾会被一个圆润的鞋头包住，像真正的袜子那样，\n而不是贴合每一根脚趾。\n此模组自带的 \"Toe Cap\" 选项位于只允许选一个的 Masks 组中，\n所以这个勾选框无法在不取消该组另一个遮罩的情况下选中它。勾选后会改用\nProteus 内置的鞋头（为 Bibo+、Neolithe、Rue 和 YAB 制作），保存在模组的 Proteus 设置中：\n它在所有合集中生效，导出时随模组一起带走。\n要使用作者自己的鞋头，请在 Penumbra 中选择 \"Toe Cap\"。",
     "description": ""
   },
   "Colors.ToeCap.SaveFailed": {
@@ -4263,6 +4275,38 @@
     "message": "为其他种族制作的发型 Mod 现在也能适配你的种族",
     "description": "Release-notes section heading for hair mods fitted automatically from another race to the player's."
   },
+  "WhatsNew.ColorRows.Head": {
+    "message": "指向颜色行，看看它用在哪里",
+    "description": ""
+  },
+  "WhatsNew.ColorRows.Body": {
+    "message": "在模组的「颜色」窗口中，把指针停在某一行的按钮（#01–#16）上，角色身上由这一行着色的部分就会发光，直到指针移开。模组的索引贴图很少或从不使用的行会被隐藏；勾选「显示所有行」即可让它们重新出现。",
+    "description": ""
+  },
+  "WhatsNew.HairOtherSex.Head": {
+    "message": "把发型移植到另一性别",
+    "description": ""
+  },
+  "WhatsNew.HairOtherSex.Body": {
+    "message": "工作室中的「移植到所有种族」现在也会列出另一性别，位于「也用于另一性别」下。同一个发型编号在另一性别上是另一款发型，所以你移植过去的种族会以此模组的头发代替那款发型。这里不会替你勾选任何项，Proteus 也绝不会自行这样做。此外，移植后的头发不再陷进更大的头部、露出秃块。",
+    "description": ""
+  },
+  "WhatsNew.GearVariants.Head": {
+    "message": "装备的每个变体都显示模组",
+    "description": ""
+  },
+  "WhatsNew.GearVariants.Body": {
+    "message": "许多装备模组替换了物品的模型，却只附带一个变体的材质，所以穿着其他变体时，模组的模型会显示游戏原本的样子，或什么都不显示。现在 Proteus 会在你穿上装备时修正这一点，在模组自己的选项中，做 TexTools 的「Apply to All Variants」对材质所做的事。默认开启：设置、装备变体、「将身上装备的所有变体指向其模组的材质」；「撤销身上装备的变体指向」可将其撤回。",
+    "description": ""
+  },
+  "WhatsNew.ShaderUpgrade.Head": {
+    "message": "把旧装备升级到金曦之遗辉的着色器",
+    "description": ""
+  },
+  "WhatsNew.ShaderUpgrade.Body": {
+    "message": "金曦之遗辉之前制作的装备仍在使用游戏的旧着色器。在设置中勾选「将旧装备升级为金曦之遗辉着色器」，Proteus 就会在模组内部把你穿上的模组的材质改写为金曦之遗辉的着色器，并先备份每个文件。默认关闭，「撤销身上装备的升级」可恢复作者的文件。",
+    "description": ""
+  },
   "WhatsNew.HairPort.Body": {
     "message": "许多发型 Mod 只为一个种族制作，换成其他种族时，游戏会显示原版发型。现在，Proteus 会把 Mod 中的发型弯折到你种族的头部上，并添加到同一 Mod 的同一选项中。它会立即检查一遍你合集中已启用的发型 Mod，之后每当有发型 Mod 被安装、启用或更改时会再次检查。聊天栏会列出已适配的发型编号，方便你知道该选哪一个。带物理效果的发型会保留其物理效果。\n\n即使关闭 Proteus，适配结果依然有效，并会随 Mod 一起带走。你可以在 设置 › 头发 中关闭此功能、重新检查，或撤销某个已适配的发型。",
     "description": "Release-notes section on hair fitted automatically from another race. 'Settings, Hair' names the Settings tab and its Hair section - match Tab.Settings and Settings.Section.HairPort. 'Physics hair' is hair that sways with its own bones."
@@ -5479,16 +5523,20 @@
     "message": "它无法贴合 c{0:D4} 的头部：{1:P0} 陷入头骨，且与头皮的距离和原版相差 {2:F0} mm；请在游戏中检查",
     "description": ""
   },
+  "HairPort.Clip.Fmt": {
+    "message": "弯折到 c{0:D4} 后，有 {1} 个点陷入头部（原版此处不会），可能露出头皮；请在游戏中检查",
+    "description": "A hair port saved with a warning (lowercase sentence fragment): bent onto another race, some of it still sinks into that race's head where the original sits on its own scalp, which may show the skin; shown after a race or file name and a colon. {0} race code number, {1} number of points."
+  },
+  "HairPort.Undo.Also.Fmt": {
+    "message": "同时移除了 {0} 的移植，它们使用了其自身发型会读取的材质重定向。",
+    "description": "Sentence added after a hair-port removal: ports made by an older build were taken out too, because they redirected a material the named races' own hairstyle reads. {0} race codes, comma-separated (e.g. c0301, c0501)."
+  },
   "HairPort.Refused.NotHair": {
     "message": "它不是发型模型",
     "description": ""
   },
   "HairPort.Refused.NotInMod": {
     "message": "该 Mod 未提供此发型",
-    "description": ""
-  },
-  "HairPort.Refused.Gender": {
-    "message": "发型只会在同一性别的种族之间移植",
     "description": ""
   },
   "HairPort.Refused.NoStyle.Fmt": {
@@ -5603,6 +5651,42 @@
     "message": "未覆盖",
     "description": ""
   },
+  "HairPort.Studio.OtherSex": {
+    "message": "也用于另一性别",
+    "description": "Section heading in the Studio's port list, above the races of the other sex."
+  },
+  "HairPort.Studio.OtherSex.Note.Fmt": {
+    "message": "在游戏中，发型 {0} 对另一性别来说是不同的发型。在此移植的种族，只要在启用该 Mod 时选择发型 {0}，就会改为显示这一款——对所有启用该 Mod 显示的角色都是如此。这里不会替你勾选任何项，Proteus 也绝不会自行跨性别移植。",
+    "description": "Note under the other-sex heading in the Studio port list. {0} is the hairstyle number."
+  },
+  "HairPort.Studio.OtherSexAuthored": {
+    "message": "该 Mod 有此性别的自有版本",
+    "description": "Per-race status in the Studio port list for a race of the other sex: the mod ships its own model of this hairstyle for that sex."
+  },
+  "HairPort.Studio.OtherSexSkeleton": {
+    "message": "该 Mod 为此种族提供了自己的骨架",
+    "description": "Per-race status note in the Studio port list for a race of the other sex: the mod now gives that race its own hair skeleton."
+  },
+  "HairPort.Refused.NotTarget": {
+    "message": "这是该发型自己的种族，或不是可玩种族",
+    "description": "Reason (lowercase sentence fragment) why a hairstyle could not be ported to a race; shown after a race name and a colon."
+  },
+  "HairPort.Refused.OtherSexAuto": {
+    "message": "它属于另一性别，只有在工作室中要求时才会移植",
+    "description": "Reason (lowercase sentence fragment) why the automatic path did not port a hairstyle to a race of the other sex; shown after a race name and a colon."
+  },
+  "HairPort.Refused.OtherSexAuthored.Fmt": {
+    "message": "该 Mod 有 c{0:D4} 的自有发型 {1}；请改为移植那一款",
+    "description": "Reason (lowercase sentence fragment) a hand port to the other sex is refused. {0} is a race code number, {1} the hairstyle number."
+  },
+  "HairPort.Refused.OtherSexAuthoredAuto.Fmt": {
+    "message": "该 Mod 现在有 c{0:D4} 的自有发型 {1}；在工作室中做的移植保持原样",
+    "description": "Reason (lowercase sentence fragment) the automatic path leaves a Studio port to the other sex as it is. {0} is a race code number, {1} the hairstyle number."
+  },
+  "HairPort.Refused.OtherSexSkeleton.Fmt": {
+    "message": "该 Mod 为 c{0:D4} 的发型 {1} 提供了自己的骨架，因此来自另一性别的移植无法带上自己的骨架",
+    "description": "Reason (lowercase sentence fragment) a port to the other sex is refused. {0} is a race code number, {1} the hairstyle number."
+  },
   "HairPort.Studio.Port": {
     "message": "移植",
     "description": ""
@@ -5679,8 +5763,8 @@
     "message": "无法读取 Proteus 对此 Mod 发型移植的记录（Proteus/hairport.json），因此未做任何更改。",
     "description": ""
   },
-  "HairPort.Auto.Tip2": {
-    "message": "许多发型 Mod 只为一个种族制作，因此在其他种族上游戏会显示自带\n的发型。开启后，Proteus 会把 Mod 的发型弯折到你的种族的头部上，\n并添加到同一 Mod 的同一选项中——既针对你戴上的发型，也会提前\n处理你的合集中已启用的发型 Mod：开启此项时、安装、启用或更改\nMod 时，以及点击“立即检查”时。\n\n仅针对你自己的种族，来源为同一性别的种族。即使关闭 Proteus 也依然\n有效，会随 Mod 一起带走，所有启用该 Mod 显示的角色都能看到。\n可以在这里撤销。",
+  "HairPort.Auto.Tip3": {
+    "message": "许多发型 Mod 只为一个种族制作，因此在其他种族上游戏会显示自带\n的发型。开启后，Proteus 会把 Mod 的发型弯折到你的种族的头部上，\n并添加到同一 Mod 的同一选项中——既针对你戴上的发型，也会提前\n处理你的合集中已启用的发型 Mod：开启此项时、安装、启用或更改\nMod 时，以及点击“立即检查”时。\n\n仅针对你自己的种族，来源为同一性别的种族。\n跨性别移植只能在工作室中进行，但在那里做的移植这里也会保持最新。\n即使关闭 Proteus 也依然有效，会随 Mod 一起带走，\n所有启用该 Mod 显示的角色都能看到。\n可以在这里撤销。",
     "description": ""
   },
   "HairPort.Scan.Starting": {
@@ -5821,6 +5905,218 @@
   },
   "Parts.Retarget.UseWornBody.Tip": {
     "message": "转换到你这个部位正在穿的体型模组。与在“转换到体型”中选择它相同。",
+    "description": ""
+  },
+  "Settings.Section.GearShaders": {
+    "message": "装备着色器",
+    "description": ""
+  },
+  "Settings.GearShaders.AutoUpgrade.Label": {
+    "message": "将旧装备升级为金曦之遗辉着色器",
+    "description": ""
+  },
+  "Settings.GearShaders.Status.Fmt": {
+    "message": "已升级 {0} 个 · {1} 个保留旧着色器",
+    "description": ""
+  },
+  "Settings.GearShaders.Left.Tip.Fmt": {
+    "message": "保留旧着色器：\n{0}",
+    "description": ""
+  },
+  "Settings.GearShaders.NextRedraw": {
+    "message": "将在下次重绘时生效（自动重绘已关闭）。",
+    "description": ""
+  },
+  "Settings.GearShaders.Reason.OldTable": {
+    "message": "旧版颜色表",
+    "description": ""
+  },
+  "Settings.GearShaders.Reason.UnsupportedForm": {
+    "message": "不支持的贴图布局",
+    "description": ""
+  },
+  "Settings.GearShaders.Reason.Unreadable": {
+    "message": "无法读取",
+    "description": ""
+  },
+  "Settings.GearShaders.Reason.Compositor": {
+    "message": "由 Proteus 叠加层绘制",
+    "description": ""
+  },
+  "Settings.GearShaders.Reason.WriteFailed": {
+    "message": "无法写入文件",
+    "description": ""
+  },
+  "Settings.GearShaders.AutoUpgrade.Tip": {
+    "message": "穿上装备时，Proteus 会在模组内部把所穿模组中使用旧着色器（characterlegacy.shpk）的材质\n改写为金曦之遗辉的着色器（character.shpk），改写前先备份每个文件。\n关闭此项会停止后续升级，但不会撤销已有的升级。“撤销身上装备的升级”\n会恢复作者的文件，并在“立即升级身上装备”之前不再改动这些装备。",
+    "description": ""
+  },
+  "Settings.GearShaders.Waiting": {
+    "message": "正在等待 Penumbra。",
+    "description": ""
+  },
+  "Settings.GearShaders.Reason.LegacyMod": {
+    "message": "Proteus 不写入的旧格式模组文件夹",
+    "description": ""
+  },
+  "Settings.GearShaders.Reason.MixedSpecular": {
+    "message": "其选项使用不同的高光贴图",
+    "description": ""
+  },
+  "Settings.GearShaders.Reason.SpecularFromOtherMod": {
+    "message": "其高光贴图来自另一个模组",
+    "description": ""
+  },
+  "Settings.GearShaders.Reason.UnsupportedPlacement": {
+    "message": "它位于组合组中",
+    "description": ""
+  },
+  "Settings.GearShaders.Reason.ProteusPack": {
+    "message": "Proteus 包（由 Proteus 自行绘制）",
+    "description": ""
+  },
+  "Settings.GearShaders.Reason.Declined": {
+    "message": "已由你撤销",
+    "description": ""
+  },
+  "Settings.GearShaders.UpgradeNow": {
+    "message": "立即升级身上装备",
+    "description": ""
+  },
+  "Settings.GearShaders.UpgradeNow.Tip": {
+    "message": "立即把身上装备中使用旧着色器的材质升级为金曦之遗辉的着色器，\n包括你之前撤销过的装备。",
+    "description": ""
+  },
+  "Settings.GearShaders.UndoWorn": {
+    "message": "撤销身上装备的升级",
+    "description": ""
+  },
+  "Settings.GearShaders.UndoWorn.Tip": {
+    "message": "恢复身上装备的作者文件，并在你使用“立即升级身上装备”之前\n不再改动它们。作者之后发布的更新会被保留。",
+    "description": ""
+  },
+  "Settings.GearShaders.Result.Fmt": {
+    "message": "撤销：已恢复 {0} 个，{1} 个作为作者更新保留，{2} 个被拒绝。",
+    "description": ""
+  },
+  "Settings.GearShaders.Edited.Fmt": {
+    "message": "{0} 在着色器升级后被编辑过，因此撤销不会改动它。作者的原始文件保存在 Proteus/shaderupgrade-backup/{0}：将其复制回去覆盖该文件即可撤销。",
+    "description": ""
+  },
+  "Settings.GearShaders.Busy": {
+    "message": "处理中…",
+    "description": ""
+  },
+  "Chat.ShaderUpgrade.Fmt": {
+    "message": "[Proteus] 已将“{1}”中 {0} 个旧着色器材质升级为金曦之遗辉的着色器（每个文件均已备份）。撤销：/proteus > 设置 > 装备着色器。",
+    "description": ""
+  },
+  "MeshVolume.Feature.ShaderUpgrade": {
+    "message": "装备着色器升级",
+    "description": ""
+  },
+  "Settings.Section.GearVariants": {
+    "message": "装备变体",
+    "description": ""
+  },
+  "Settings.GearVariants.Auto.Label": {
+    "message": "将身上装备的所有变体指向其模组的材质",
+    "description": ""
+  },
+  "Settings.GearVariants.Auto.Tip": {
+    "message": "为物品的某一变体制作的模组只包含该变体的材质文件夹，所以以另一变体穿戴时，\n模组的模型上会绘制游戏的材质（或其他服装的材质，或什么都不绘制）。当你穿上这样的装备时，\nProteus 会在模组自己的选项中，把模组的材质路径复制到其他变体文件夹，\n就像 TexTools 的“Apply to All Variants”，但只针对材质。这样在模组优先的地方，这些变体会显示\n模组的材质；部件、VFX 和声音保持各自原样。关闭此项会停止后续\n更改，但不会撤销它们。“撤销身上装备的变体指向”会将其移除。",
+    "description": ""
+  },
+  "Settings.GearVariants.Status.Fmt": {
+    "message": "已重新指向 {0} 件 · {1} 件保持不变",
+    "description": ""
+  },
+  "Settings.GearVariants.Repointed.Tip.Fmt": {
+    "message": "已重新指向：\n{0}",
+    "description": ""
+  },
+  "Settings.GearVariants.Left.Tip.Fmt": {
+    "message": "保持原样：\n{0}",
+    "description": ""
+  },
+  "Settings.GearVariants.NextRedraw": {
+    "message": "将在下次重绘时生效（自动重绘已关闭）。",
+    "description": ""
+  },
+  "Settings.GearVariants.Waiting": {
+    "message": "正在等待 Penumbra。",
+    "description": ""
+  },
+  "Settings.GearVariants.Reason.SeveralVariants": {
+    "message": "模组自身包含多个变体",
+    "description": ""
+  },
+  "Settings.GearVariants.Reason.ModImc": {
+    "message": "模组自行设置了此变体",
+    "description": ""
+  },
+  "Settings.GearVariants.Reason.OtherModMaterial": {
+    "message": "其材质来自另一个模组",
+    "description": ""
+  },
+  "Settings.GearVariants.Reason.NoImc": {
+    "message": "无法读取游戏的变体表",
+    "description": ""
+  },
+  "Settings.GearVariants.Reason.MetaUnreadable": {
+    "message": "无法读取 Penumbra 的元数据",
+    "description": ""
+  },
+  "Settings.GearVariants.Reason.OtherModWins": {
+    "message": "另一个模组的元数据优先",
+    "description": ""
+  },
+  "Settings.GearVariants.Reason.LegacyMod": {
+    "message": "Proteus 不写入的旧格式模组文件夹",
+    "description": ""
+  },
+  "Settings.GearVariants.Reason.ProteusPack": {
+    "message": "Proteus 包（由 Proteus 自行绘制）",
+    "description": ""
+  },
+  "Settings.GearVariants.Reason.Declined": {
+    "message": "已由你撤销",
+    "description": ""
+  },
+  "Settings.GearVariants.Reason.WriteFailed": {
+    "message": "无法写入该模组",
+    "description": ""
+  },
+  "Settings.GearVariants.RepointNow": {
+    "message": "立即重新指向身上装备",
+    "description": ""
+  },
+  "Settings.GearVariants.RepointNow.Tip": {
+    "message": "将你现在穿着的装备的变体指向其模组的材质，\n包括你之前撤销过的装备。",
+    "description": ""
+  },
+  "Settings.GearVariants.UndoWorn": {
+    "message": "撤销身上装备的变体指向",
+    "description": ""
+  },
+  "Settings.GearVariants.UndoWorn.Tip": {
+    "message": "从你穿着的装备所属模组中移除 Proteus 的变体条目，并在你使用“立即重新指向身上装备”\n之前不再处理它们。此后被他人更改的条目会保留。",
+    "description": ""
+  },
+  "Settings.GearVariants.Result.Fmt": {
+    "message": "撤销：移除 {0} 个，{1} 个因之后被更改而保留，拒绝 {2} 个。",
+    "description": ""
+  },
+  "Settings.GearVariants.NothingRecorded": {
+    "message": "你穿着的装备没有任何记录。",
+    "description": ""
+  },
+  "Settings.GearVariants.Busy": {
+    "message": "处理中…",
+    "description": ""
+  },
+  "Chat.VariantRepoint.Fmt": {
+    "message": "[Proteus] 已将“{1}”的材质路径复制到另外 {0} 个变体文件夹，使这些变体在模组优先的地方显示模组自己的材质。撤销位置：/proteus > 设置 > 装备变体。",
     "description": ""
   }
 }

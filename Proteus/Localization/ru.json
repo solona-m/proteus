@@ -587,6 +587,14 @@
     "message": "Включите это для ткани на груди.\nProteus строит одежду как копию тела, поэтому по умолчанию она повторяет тело и уходит\nв ложбинку — именно из-за этого она читается как роспись, а не как ткань. Настоящая ткань\nперекрывает промежуток: прямой линией между самыми выступающими точками обеих грудей.\nС этой настройкой ткань между грудями распрямляется до этой линии. Ничто никогда не\nсмещается внутрь, так что врезаться в тело она не может, а сама грудь сохраняет форму.\nТам, где вырез уже вырезал ткань между чашками, перекрывать нечего, и эта настройка\nничего не делает.",
     "description": ""
   },
+  "Colors.ShowAllRows.Check": {
+    "message": "Показать все строки",
+    "description": ""
+  },
+  "Colors.ShowAllRows.Tip": {
+    "message": "Показывает и строки, которые эта индексная текстура выбирает редко или никогда.\nИх правка почти или совсем ничего видимого не меняет.",
+    "description": ""
+  },
   "Colors.SmoothFold.Label": {
     "message": "Сгладить между ног",
     "description": ""
@@ -637,6 +645,10 @@
   },
   "Colors.ToeCap.Locked.Tip": {
     "message": "Собственный вариант \"Toe Cap\" этого мода выбран в Penumbra, в группе Masks, где можно выбрать\nтолько один вариант, поэтому здесь его не выключить. Измените его в Penumbra.",
+    "description": ""
+  },
+  "Colors.ToeCap.FlagOwn.Tip": {
+    "message": "Включите для чулок и носков: пальцы закрывает один закруглённый мысок, как сидят настоящие\nчулки, вместо того чтобы повторять каждый палец.\nСобственный вариант \"Toe Cap\" этого мода находится в группе Masks, где можно выбрать только один\nвариант, поэтому эта галочка не может выбрать его, не сняв другую маску в той группе. Галочка вместо\nэтого включает встроенный мысок Proteus (для Bibo+, Neolithe, Rue и YAB), сохранённый в настройках\nProteus мода: он действует во всех коллекциях и уходит вместе с модом при экспорте.\nЧтобы использовать мысок автора, выберите \"Toe Cap\" в Penumbra.",
     "description": ""
   },
   "Colors.ToeCap.SaveFailed": {
@@ -4263,6 +4275,38 @@
     "message": "Моды причёсок, сделанные для другой расы, теперь подходят и вашей",
     "description": "Release-notes section heading for hair mods fitted automatically from another race to the player's."
   },
+  "WhatsNew.ColorRows.Head": {
+    "message": "Наведите на строку цвета, чтобы увидеть, где она",
+    "description": ""
+  },
+  "WhatsNew.ColorRows.Body": {
+    "message": "В окне «Цвета» мода наведите указатель на кнопку строки (#01–#16), и часть персонажа, которую окрашивает эта строка, светится, пока указатель остаётся на кнопке. Строки, которые индексные текстуры мода используют редко или никогда, скрыты; отметьте «Показать все строки», чтобы вернуть их.",
+    "description": ""
+  },
+  "WhatsNew.HairOtherSex.Head": {
+    "message": "Перенос причёски на другой пол",
+    "description": ""
+  },
+  "WhatsNew.HairOtherSex.Body": {
+    "message": "«Перенести на все расы» в Студии теперь показывает и другой пол — в разделе «Также для другого пола». Тот же номер причёски у другого пола — другая причёска, поэтому раса, на которую вы переносите туда, носит волосы этого мода вместо той причёски. Там ничего не отмечено за вас, и Proteus никогда не делает этого сам. Кроме того, перенесённые волосы больше не утопают в крупных головах и не оставляют проплешин.",
+    "description": ""
+  },
+  "WhatsNew.GearVariants.Head": {
+    "message": "Каждый вариант снаряжения показывает мод",
+    "description": ""
+  },
+  "WhatsNew.GearVariants.Body": {
+    "message": "Многие моды снаряжения заменяют модель предмета, но содержат его материал только для одного варианта, поэтому в другом варианте модель мода показывает вид из игры или ничего. Теперь Proteus исправляет это, когда вы надеваете снаряжение, — так же, как «Apply to All Variants» в TexTools для материала, внутри собственных опций мода. По умолчанию включено: Настройки, Варианты снаряжения, «Направлять все варианты надетого снаряжения на материал его мода»; «Отменить для надетого» убирает изменения.",
+    "description": ""
+  },
+  "WhatsNew.ShaderUpgrade.Head": {
+    "message": "Старое снаряжение на шейдер Dawntrail",
+    "description": ""
+  },
+  "WhatsNew.ShaderUpgrade.Body": {
+    "message": "Снаряжение, сделанное до Dawntrail, всё ещё использует старый шейдер игры. Отметьте «Переводить старое снаряжение на шейдеры Dawntrail» на вкладке «Настройки», и Proteus перепишет материалы надетых модов на шейдер Dawntrail внутри самого мода, сначала сохранив копию каждого файла. По умолчанию выключено, а «Отменить для надетого» возвращает файлы автора.",
+    "description": ""
+  },
   "WhatsNew.HairPort.Body": {
     "message": "Многие моды причёсок сделаны только для одной расы, поэтому на любой другой игра показывает вместо них свою причёску. Теперь Proteus изгибает причёску из мода под голову вашей расы и добавляет её в тот же вариант того же мода. Он сразу просматривает моды причёсок, включённые в вашей коллекции, а затем делает это снова всякий раз, когда какой-либо из них устанавливают, включают или меняют. В чате указываются номера подогнанных причёсок, чтобы вы знали, какую выбрать. Причёски с физикой сохраняют свою физику.\n\nЭто продолжает работать и с выключенным Proteus и уезжает вместе с модом. Отключить функцию, запустить проверку заново или отменить подгонку причёски можно в Настройки › Волосы.",
     "description": "Release-notes section on hair fitted automatically from another race. 'Settings, Hair' names the Settings tab and its Hair section - match Tab.Settings and Settings.Section.HairPort. 'Physics hair' is hair that sways with its own bones."
@@ -5479,16 +5523,20 @@
     "message": "она не садится на голову c{0:D4}: {1:P0} уходит в череп, а расстояние до кожи головы отличается от оригинала на {2:F0} мм; проверьте в игре",
     "description": ""
   },
+  "HairPort.Clip.Fmt": {
+    "message": "при подгонке под c{0:D4} {1} её точек уходят в голову там, где у оригинала не уходят, и может просвечивать кожа головы; проверьте в игре",
+    "description": "A hair port saved with a warning (lowercase sentence fragment): bent onto another race, some of it still sinks into that race's head where the original sits on its own scalp, which may show the skin; shown after a race or file name and a colon. {0} race code number, {1} number of points."
+  },
+  "HairPort.Undo.Also.Fmt": {
+    "message": "Также удалены переносы для {0}: они использовали перенаправление материала, которое читает их собственная причёска.",
+    "description": "Sentence added after a hair-port removal: ports made by an older build were taken out too, because they redirected a material the named races' own hairstyle reads. {0} race codes, comma-separated (e.g. c0301, c0501)."
+  },
   "HairPort.Refused.NotHair": {
     "message": "это не модель причёски",
     "description": ""
   },
   "HairPort.Refused.NotInMod": {
     "message": "мод не содержит эту причёску",
-    "description": ""
-  },
-  "HairPort.Refused.Gender": {
-    "message": "причёски переносятся только между расами одного пола",
     "description": ""
   },
   "HairPort.Refused.NoStyle.Fmt": {
@@ -5603,6 +5651,42 @@
     "message": "не охвачено",
     "description": ""
   },
+  "HairPort.Studio.OtherSex": {
+    "message": "Также для другого пола",
+    "description": "Section heading in the Studio's port list, above the races of the other sex."
+  },
+  "HairPort.Studio.OtherSex.Note.Fmt": {
+    "message": "В игре причёска {0} для другого пола — другая причёска. Раса, на которую её перенесли здесь, носит вместо неё эту, когда выбирает причёску {0} с включённым модом, — для всех, кто отображается с этим модом. Здесь ничего не отмечено за вас, и Proteus никогда сам не переносит причёски между полами.",
+    "description": "Note under the other-sex heading in the Studio port list. {0} is the hairstyle number."
+  },
+  "HairPort.Studio.OtherSexAuthored": {
+    "message": "у мода есть своя версия для этого пола",
+    "description": "Per-race status in the Studio port list for a race of the other sex: the mod ships its own model of this hairstyle for that sex."
+  },
+  "HairPort.Studio.OtherSexSkeleton": {
+    "message": "мод даёт этой расе свой скелет",
+    "description": "Per-race status note in the Studio port list for a race of the other sex: the mod now gives that race its own hair skeleton."
+  },
+  "HairPort.Refused.NotTarget": {
+    "message": "это собственная раса причёски или неиграбельная раса",
+    "description": "Reason (lowercase sentence fragment) why a hairstyle could not be ported to a race; shown after a race name and a colon."
+  },
+  "HairPort.Refused.OtherSexAuto": {
+    "message": "это другой пол, на него переносят только по запросу в Студии",
+    "description": "Reason (lowercase sentence fragment) why the automatic path did not port a hairstyle to a race of the other sex; shown after a race name and a colon."
+  },
+  "HairPort.Refused.OtherSexAuthored.Fmt": {
+    "message": "у мода есть своя причёска {1} для c{0:D4}; лучше перенесите её",
+    "description": "Reason (lowercase sentence fragment) a hand port to the other sex is refused. {0} is a race code number, {1} the hairstyle number."
+  },
+  "HairPort.Refused.OtherSexAuthoredAuto.Fmt": {
+    "message": "у мода теперь есть своя причёска {1} для c{0:D4}; перенос, сделанный в Студии, оставлен как есть",
+    "description": "Reason (lowercase sentence fragment) the automatic path leaves a Studio port to the other sex as it is. {0} is a race code number, {1} the hairstyle number."
+  },
+  "HairPort.Refused.OtherSexSkeleton.Fmt": {
+    "message": "мод даёт c{0:D4} собственный скелет для причёски {1}, поэтому перенос с другого пола не может принести свой",
+    "description": "Reason (lowercase sentence fragment) a port to the other sex is refused. {0} is a race code number, {1} the hairstyle number."
+  },
   "HairPort.Studio.Port": {
     "message": "Перенести",
     "description": ""
@@ -5679,8 +5763,8 @@
     "message": "Не удалось прочитать запись Proteus о перенесённых причёсках этого мода (Proteus/hairport.json), поэтому ничего не изменено.",
     "description": ""
   },
-  "HairPort.Auto.Tip2": {
-    "message": "Многие моды причёсок сделаны только для одной расы, поэтому на любой другой\nигра показывает свою причёску. Когда включено, Proteus изгибает причёску мода\nпод голову вашей расы и добавляет её в тот же вариант того же мода — для\nпричёски, которую вы надели, и заранее для модов причёсок, включённых в вашей\nколлекции: при включении этой настройки, при установке, включении или\nизменении мода и по кнопке «Проверить сейчас».\n\nТолько для вашей расы, из рас того же пола. Работает и с выключенным Proteus,\nпереносится вместе с модом и видна всем, кто отображается с этим модом.\nЭто можно отменить здесь.",
+  "HairPort.Auto.Tip3": {
+    "message": "Многие моды причёсок сделаны только для одной расы, поэтому на любой другой\nигра показывает свою причёску. Когда включено, Proteus изгибает причёску мода\nпод голову вашей расы и добавляет её в тот же вариант того же мода — для\nпричёски, которую вы надели, и заранее для модов причёсок, включённых в вашей\nколлекции: при включении этой настройки, при установке, включении или\nизменении мода и по кнопке «Проверить сейчас».\n\nТолько для вашей расы, из рас того же пола. Перенос между полами делается только\nв Студии, но сделанный там тоже поддерживается здесь в актуальном виде. Работает\nи с выключенным Proteus, переносится вместе с модом и видна всем, кто\nотображается с этим модом. Это можно отменить здесь.",
     "description": ""
   },
   "HairPort.Scan.Starting": {
@@ -5821,6 +5905,218 @@
   },
   "Parts.Retarget.UseWornBody.Tip": {
     "message": "Подогнать под мод тела, который надет для этой части. То же, что выбрать его в «Подогнать под тело».",
+    "description": ""
+  },
+  "Settings.Section.GearShaders": {
+    "message": "Шейдеры снаряжения",
+    "description": ""
+  },
+  "Settings.GearShaders.AutoUpgrade.Label": {
+    "message": "Переводить старое снаряжение на шейдеры Dawntrail",
+    "description": ""
+  },
+  "Settings.GearShaders.Status.Fmt": {
+    "message": "{0} обновлено · {1} оставлено на старом шейдере",
+    "description": ""
+  },
+  "Settings.GearShaders.Left.Tip.Fmt": {
+    "message": "Оставлено на старом шейдере:\n{0}",
+    "description": ""
+  },
+  "Settings.GearShaders.NextRedraw": {
+    "message": "Вступит в силу при следующей перерисовке (автоперерисовка выключена).",
+    "description": ""
+  },
+  "Settings.GearShaders.Reason.OldTable": {
+    "message": "старая таблица цветов",
+    "description": ""
+  },
+  "Settings.GearShaders.Reason.UnsupportedForm": {
+    "message": "неподдерживаемая схема текстур",
+    "description": ""
+  },
+  "Settings.GearShaders.Reason.Unreadable": {
+    "message": "не читается",
+    "description": ""
+  },
+  "Settings.GearShaders.Reason.Compositor": {
+    "message": "его рисуют наложения Proteus",
+    "description": ""
+  },
+  "Settings.GearShaders.Reason.WriteFailed": {
+    "message": "не удалось записать файл",
+    "description": ""
+  },
+  "Settings.GearShaders.AutoUpgrade.Tip": {
+    "message": "Когда вы надеваете снаряжение, Proteus переписывает материалы надетого мода со старым шейдером (characterlegacy.shpk)\nна шейдер Dawntrail (character.shpk) прямо в моде, сначала сохраняя копию каждого файла.\nВыключение останавливает дальнейшие обновления, но не отменяет их. «Отменить для надетого»\nвозвращает файлы автора и не трогает эти предметы до «Обновить надетое сейчас».",
+    "description": ""
+  },
+  "Settings.GearShaders.Waiting": {
+    "message": "Ожидание Penumbra.",
+    "description": ""
+  },
+  "Settings.GearShaders.Reason.LegacyMod": {
+    "message": "папка мода старого формата, в которую Proteus не пишет",
+    "description": ""
+  },
+  "Settings.GearShaders.Reason.MixedSpecular": {
+    "message": "его опции используют разные карты блеска",
+    "description": ""
+  },
+  "Settings.GearShaders.Reason.SpecularFromOtherMod": {
+    "message": "его карта блеска взята из другого мода",
+    "description": ""
+  },
+  "Settings.GearShaders.Reason.UnsupportedPlacement": {
+    "message": "он в комбинирующей группе",
+    "description": ""
+  },
+  "Settings.GearShaders.Reason.ProteusPack": {
+    "message": "пакет Proteus (Proteus рисует его сам)",
+    "description": ""
+  },
+  "Settings.GearShaders.Reason.Declined": {
+    "message": "отменено вами",
+    "description": ""
+  },
+  "Settings.GearShaders.UpgradeNow": {
+    "message": "Обновить надетое сейчас",
+    "description": ""
+  },
+  "Settings.GearShaders.UpgradeNow.Tip": {
+    "message": "Перевести материалы надетого снаряжения со старым шейдером на шейдер Dawntrail,\nвключая предметы, которые вы раньше отменили.",
+    "description": ""
+  },
+  "Settings.GearShaders.UndoWorn": {
+    "message": "Отменить для надетого",
+    "description": ""
+  },
+  "Settings.GearShaders.UndoWorn.Tip": {
+    "message": "Вернуть файлы автора для надетых предметов и не трогать их,\nпока вы не нажмёте «Обновить надетое сейчас». Обновление, выпущенное автором позже, сохраняется.",
+    "description": ""
+  },
+  "Settings.GearShaders.Result.Fmt": {
+    "message": "Отмена: восстановлено {0}, оставлено как обновление автора {1}, отклонено {2}.",
+    "description": ""
+  },
+  "Settings.GearShaders.Edited.Fmt": {
+    "message": "{0} был изменён после обновления шейдера, поэтому отмена оставляет его как есть. Оригинал автора хранится в Proteus/shaderupgrade-backup/{0}: скопируйте его поверх файла, чтобы отменить.",
+    "description": ""
+  },
+  "Settings.GearShaders.Busy": {
+    "message": "Выполняется…",
+    "description": ""
+  },
+  "Chat.ShaderUpgrade.Fmt": {
+    "message": "[Proteus] {0} материал(ов) со старым шейдером в «{1}» переведено на шейдер Dawntrail (копия каждого файла сохранена). Отмена: /proteus > Настройки > Шейдеры снаряжения.",
+    "description": ""
+  },
+  "MeshVolume.Feature.ShaderUpgrade": {
+    "message": "обновление шейдеров снаряжения",
+    "description": ""
+  },
+  "Settings.Section.GearVariants": {
+    "message": "Варианты снаряжения",
+    "description": ""
+  },
+  "Settings.GearVariants.Auto.Label": {
+    "message": "Направлять все варианты надетого снаряжения на материал его мода",
+    "description": ""
+  },
+  "Settings.GearVariants.Auto.Tip": {
+    "message": "Мод, сделанный для одного варианта предмета, содержит только папку материалов этого варианта, поэтому предмет,\nнадетый в другом варианте, рисует на модели мода материал игры (или другого наряда, или никакого). Когда вы\nнадеваете такую вещь, Proteus копирует пути материалов мода в другие папки вариантов, внутри собственных\nопций мода, как «Apply to All Variants» в TexTools, но только для материала. Эти варианты затем показывают\nматериал мода везде, где мод побеждает; части, VFX и звук остаются своими. Выключение останавливает дальнейшие\nизменения, но не отменяет их. «Отменить для надетого» убирает их.",
+    "description": ""
+  },
+  "Settings.GearVariants.Status.Fmt": {
+    "message": "{0} вещ. перенаправлено · {1} оставлено",
+    "description": ""
+  },
+  "Settings.GearVariants.Repointed.Tip.Fmt": {
+    "message": "Перенаправлено:\n{0}",
+    "description": ""
+  },
+  "Settings.GearVariants.Left.Tip.Fmt": {
+    "message": "Оставлено как есть:\n{0}",
+    "description": ""
+  },
+  "Settings.GearVariants.NextRedraw": {
+    "message": "Вступит в силу при следующей перерисовке (автоперерисовка выключена).",
+    "description": ""
+  },
+  "Settings.GearVariants.Waiting": {
+    "message": "Ожидание Penumbra.",
+    "description": ""
+  },
+  "Settings.GearVariants.Reason.SeveralVariants": {
+    "message": "мод сам содержит несколько вариантов",
+    "description": ""
+  },
+  "Settings.GearVariants.Reason.ModImc": {
+    "message": "мод сам задаёт этот вариант",
+    "description": ""
+  },
+  "Settings.GearVariants.Reason.OtherModMaterial": {
+    "message": "его материал берётся из другого мода",
+    "description": ""
+  },
+  "Settings.GearVariants.Reason.NoImc": {
+    "message": "не удалось прочитать таблицу вариантов игры",
+    "description": ""
+  },
+  "Settings.GearVariants.Reason.MetaUnreadable": {
+    "message": "не удалось прочитать метаданные Penumbra",
+    "description": ""
+  },
+  "Settings.GearVariants.Reason.OtherModWins": {
+    "message": "метаданные другого мода имеют приоритет",
+    "description": ""
+  },
+  "Settings.GearVariants.Reason.LegacyMod": {
+    "message": "папка мода старого формата, в которую Proteus не пишет",
+    "description": ""
+  },
+  "Settings.GearVariants.Reason.ProteusPack": {
+    "message": "пакет Proteus (Proteus рисует его сам)",
+    "description": ""
+  },
+  "Settings.GearVariants.Reason.Declined": {
+    "message": "отменено вами",
+    "description": ""
+  },
+  "Settings.GearVariants.Reason.WriteFailed": {
+    "message": "не удалось записать мод",
+    "description": ""
+  },
+  "Settings.GearVariants.RepointNow": {
+    "message": "Перенаправить надетое сейчас",
+    "description": ""
+  },
+  "Settings.GearVariants.RepointNow.Tip": {
+    "message": "Направить варианты того, что на вас сейчас, на материалы их модов,\nвключая вещи, которые вы ранее отменили.",
+    "description": ""
+  },
+  "Settings.GearVariants.UndoWorn": {
+    "message": "Отменить для надетого",
+    "description": ""
+  },
+  "Settings.GearVariants.UndoWorn.Tip": {
+    "message": "Убрать записи вариантов Proteus из модов надетых вещей и не трогать их,\nпока вы не нажмёте «Перенаправить надетое сейчас». Запись, изменённая кем-то с тех пор, сохраняется.",
+    "description": ""
+  },
+  "Settings.GearVariants.Result.Fmt": {
+    "message": "Отмена: {0} убрано, {1} сохранено как изменённые с тех пор, {2} отклонено.",
+    "description": ""
+  },
+  "Settings.GearVariants.NothingRecorded": {
+    "message": "Для надетого ничего не записано.",
+    "description": ""
+  },
+  "Settings.GearVariants.Busy": {
+    "message": "Выполняется…",
+    "description": ""
+  },
+  "Chat.VariantRepoint.Fmt": {
+    "message": "[Proteus] Пути материалов «{1}» скопированы ещё в {0} папк(и) вариантов, чтобы эти варианты показывали собственный материал мода везде, где он побеждает. Отменить: /proteus > Настройки > Варианты снаряжения.",
     "description": ""
   }
 }

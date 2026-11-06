@@ -463,6 +463,42 @@ public sealed class WhatsNewStrings
     public readonly string IntroSince = ProteusLoc.Localize("WhatsNew.IntroSince",
         "Something new since you last saw this window. It opens once, and not again.");
 
+    public readonly string ColorRowsHead = ProteusLoc.Localize("WhatsNew.ColorRows.Head",
+        "Point at a colour row to see where it goes");
+
+    public readonly string ColorRowsBody = ProteusLoc.Localize("WhatsNew.ColorRows.Body",
+        "In a mod's Colors window, point at a row button (#01–#16) and the part of your character that row colours "
+      + "lights up for as long as the pointer stays on it. Rows the mod's index textures use rarely or never are "
+      + "hidden; tick \"Show all rows\" to bring them back.");
+
+    public readonly string HairOtherSexHead = ProteusLoc.Localize("WhatsNew.HairOtherSex.Head",
+        "Port a hairstyle to the other sex");
+
+    public readonly string HairOtherSexBody = ProteusLoc.Localize("WhatsNew.HairOtherSex.Body",
+        "\"Port to all races\" in the Studio now lists the other sex too, under \"Also for the other sex\". The same "
+      + "hairstyle number is a different style for the other sex, so a race you port there wears this mod's hair in "
+      + "place of that style. Nothing there is ticked for you, and Proteus never does it on its own. Ported hair also "
+      + "no longer sinks into bigger heads and shows bald spots.");
+
+    public readonly string GearVariantsHead = ProteusLoc.Localize("WhatsNew.GearVariants.Head",
+        "Every variant of your gear shows the mod");
+
+    public readonly string GearVariantsBody = ProteusLoc.Localize("WhatsNew.GearVariants.Body",
+        "Many gear mods replace an item's model but ship its material for one variant only, so wearing the item in "
+      + "another variant shows the game's look, or none, on the mod's model. Proteus now fixes that as you put the "
+      + "gear on, the way TexTools' \"Apply to All Variants\" does for the material, inside the mod's own options. "
+      + "It is on by default: Settings, Gear variants, \"Point every variant of worn gear at its mod's material\", "
+      + "where \"Undo for what I'm wearing\" takes it back out.");
+
+    public readonly string ShaderUpgradeHead = ProteusLoc.Localize("WhatsNew.ShaderUpgrade.Head",
+        "Bring old gear up to Dawntrail's shader");
+
+    public readonly string ShaderUpgradeBody = ProteusLoc.Localize("WhatsNew.ShaderUpgrade.Body",
+        "Gear made before Dawntrail still uses the game's old shader. Tick \"Upgrade old gear to Dawntrail shaders\" "
+      + "in Settings and Proteus rewrites the materials of the mods you put on to Dawntrail's shader, inside the mod, "
+      + "backing each file up first. It is off by default, and \"Undo for what I'm wearing\" puts the author's files "
+      + "back.");
+
     public readonly string HairPortHead = ProteusLoc.Localize("WhatsNew.HairPort.Head",
         "Hair mods made for another race now fit yours");
 
@@ -539,16 +575,17 @@ public sealed class HairPortStrings
     public readonly string Auto = ProteusLoc.Localize(
         "HairPort.Auto.Label", "Fit hair mods made for another race") + "###hairPortAuto";
 
-    public readonly string AutoTip = ProteusLoc.Localize("HairPort.Auto.Tip2",
+    public readonly string AutoTip = ProteusLoc.Localize("HairPort.Auto.Tip3",
         "Many hair mods are made for one race only, so on any other race the game\n" +
         "shows its own hairstyle instead. When on, Proteus bends the mod's hairstyle\n" +
         "onto your race's head and adds it to the same option of the same mod — for the\n" +
         "hairstyle you put on, and ahead of time for the hair mods switched on in your\n" +
         "collection: when this is switched on, when a mod is installed, switched on or\n" +
         "changed, and when you press Check now.\n\n" +
-        "Only for your own race, from races of the same sex. It keeps working with\n" +
-        "Proteus off, travels with the mod, and shows for everyone drawn with that mod\n" +
-        "on. It can be undone here.");
+        "Only for your own race, from races of the same sex. A port across the sexes is\n" +
+        "only made in the Studio, but one made there is kept up to date here too. It\n" +
+        "keeps working with Proteus off, travels with the mod, and shows for everyone\n" +
+        "drawn with that mod on. It can be undone here.");
 
     public readonly string None = ProteusLoc.Localize("HairPort.Settings.None",
         "The hairstyle you are wearing needs no fitting.");
@@ -626,6 +663,18 @@ public sealed class HairPortStrings
     public readonly string RaceStale   = ProteusLoc.Localize("HairPort.Studio.Stale", "out of date");
     public readonly string RaceNoStyle = ProteusLoc.Localize("HairPort.Studio.NoStyle", "cannot choose this hairstyle");
     public readonly string RaceOpen    = ProteusLoc.Localize("HairPort.Studio.Open", "not covered");
+    public readonly string RaceOtherSexAuthored = ProteusLoc.Localize("HairPort.Studio.OtherSexAuthored",
+        "the mod has its own version for this sex");
+    public readonly string RaceOtherSexSkeleton = ProteusLoc.Localize("HairPort.Studio.OtherSexSkeleton",
+        "the mod gives this race its own skeleton");
+
+    public readonly string OtherSex = ProteusLoc.Localize("HairPort.Studio.OtherSex", "Also for the other sex") + "###hairPortOtherSex";
+
+    /// <summary>{0} is the hairstyle number.</summary>
+    public readonly string OtherSexNoteFmt = ProteusLoc.Localize("HairPort.Studio.OtherSex.Note.Fmt",
+        "In the game, hairstyle {0} is a different style for the other sex. A race ported here wears this one instead " +
+        "whenever it chooses hairstyle {0} with this mod on — for everyone drawn with the mod. Nothing here is ticked " +
+        "for you, and Proteus never ports across the sexes by itself.");
 
     public readonly string Port = ProteusLoc.Localize("HairPort.Studio.Port", "Port") + "###hairPortRun";
     public readonly string PortingFmt = ProteusLoc.Localize("HairPort.Studio.Porting.Fmt", "Porting… {0} of {1} races");
@@ -1133,6 +1182,117 @@ public sealed class SettingsStrings
     public readonly string SecSkinEffects = ProteusLoc.Localize("Settings.Section.SkinEffects", "Skin effects");
     public readonly string SecHairPort    = ProteusLoc.Localize("Settings.Section.HairPort", "Hair");
     public readonly string SecAutoRefit   = ProteusLoc.Localize("Settings.Section.AutoRefit", "Body refit");
+    public readonly string SecGearShaders = ProteusLoc.Localize("Settings.Section.GearShaders", "Gear shaders");
+
+    // ── gear shaders ────────────────────────────────────────────────────────────────────────────────
+    public readonly string GearShadersAutoUpgrade = ProteusLoc.Localize("Settings.GearShaders.AutoUpgrade.Label",
+        "Upgrade old gear to Dawntrail shaders") + "###autoShaderUpgrade";
+    public readonly string GearShadersAutoUpgradeTip = ProteusLoc.Localize("Settings.GearShaders.AutoUpgrade.Tip",
+        "As you put gear on, Proteus rewrites the worn mod's old-shader materials (characterlegacy.shpk)\n"
+      + "to Dawntrail's shader (character.shpk), inside the mod, backing each file up first.\n"
+      + "Turning this off stops further upgrades; it does not undo them. \"Undo for what I'm wearing\"\n"
+      + "puts the author's files back and leaves those pieces alone until \"Upgrade what I'm wearing now\".");
+    public readonly string GearShadersStatusFmt = ProteusLoc.Localize("Settings.GearShaders.Status.Fmt",
+        "{0} upgraded · {1} left on the old shader");
+    public readonly string GearShadersLeftTipFmt = ProteusLoc.Localize("Settings.GearShaders.Left.Tip.Fmt",
+        "Left on the old shader:\n{0}");
+    public readonly string GearShadersNextRedraw = ProteusLoc.Localize("Settings.GearShaders.NextRedraw",
+        "Takes effect at the next redraw (Auto redraw is off).");
+    public readonly string GearShadersWaiting = ProteusLoc.Localize("Settings.GearShaders.Waiting", "Waiting for Penumbra.");
+    public readonly string GearShadersReasonOldTable = ProteusLoc.Localize("Settings.GearShaders.Reason.OldTable",
+        "an older colour table");
+    public readonly string GearShadersReasonUnsupportedForm = ProteusLoc.Localize(
+        "Settings.GearShaders.Reason.UnsupportedForm", "a texture layout not upgraded");
+    public readonly string GearShadersReasonUnreadable = ProteusLoc.Localize("Settings.GearShaders.Reason.Unreadable",
+        "unreadable");
+    public readonly string GearShadersReasonCompositor = ProteusLoc.Localize("Settings.GearShaders.Reason.Compositor",
+        "Proteus's overlays draw it");
+    public readonly string GearShadersReasonWriteFailed = ProteusLoc.Localize("Settings.GearShaders.Reason.WriteFailed",
+        "the file could not be written");
+    public readonly string GearShadersReasonLegacyMod = ProteusLoc.Localize("Settings.GearShaders.Reason.LegacyMod",
+        "an old-format mod folder Proteus does not write to");
+    public readonly string GearShadersReasonMixedSpecular = ProteusLoc.Localize(
+        "Settings.GearShaders.Reason.MixedSpecular", "its options use different specular maps");
+    public readonly string GearShadersReasonSpecularFromOtherMod = ProteusLoc.Localize(
+        "Settings.GearShaders.Reason.SpecularFromOtherMod", "its specular map comes from another mod");
+    public readonly string GearShadersReasonUnsupportedPlacement = ProteusLoc.Localize(
+        "Settings.GearShaders.Reason.UnsupportedPlacement", "it sits in a combining group");
+    public readonly string GearShadersReasonProteusPack = ProteusLoc.Localize("Settings.GearShaders.Reason.ProteusPack",
+        "a Proteus pack (Proteus draws it itself)");
+    public readonly string GearShadersReasonDeclined = ProteusLoc.Localize("Settings.GearShaders.Reason.Declined",
+        "undone by you");
+    public readonly string GearShadersUpgradeNow = ProteusLoc.Localize("Settings.GearShaders.UpgradeNow",
+        "Upgrade what I'm wearing now") + "###shaderUpgradeNow";
+    public readonly string GearShadersUpgradeNowTip = ProteusLoc.Localize("Settings.GearShaders.UpgradeNow.Tip",
+        "Move the old-shader materials of what you are wearing now to Dawntrail's shader,\n"
+      + "including pieces you undid before.");
+    public readonly string GearShadersUndoWorn = ProteusLoc.Localize("Settings.GearShaders.UndoWorn",
+        "Undo for what I'm wearing") + "###shaderUndoWorn";
+    public readonly string GearShadersUndoWornTip = ProteusLoc.Localize("Settings.GearShaders.UndoWorn.Tip",
+        "Put the author's files back for the pieces you are wearing, and leave them alone\n"
+      + "until you use \"Upgrade what I'm wearing now\". An update the author shipped since is kept.");
+    public readonly string GearShadersResultFmt = ProteusLoc.Localize("Settings.GearShaders.Result.Fmt",
+        "Undo: {0} restored, {1} kept as the author's update, {2} refused.");
+    public readonly string GearShadersBusy = ProteusLoc.Localize("Settings.GearShaders.Busy", "Working…");
+
+    // ── gear variants ───────────────────────────────────────────────────────────────────────────────
+    public readonly string SecGearVariants = ProteusLoc.Localize("Settings.Section.GearVariants", "Gear variants");
+    public readonly string GearVariantsAuto = ProteusLoc.Localize("Settings.GearVariants.Auto.Label",
+        "Point every variant of worn gear at its mod's material") + "###autoRepointVariants";
+    public readonly string GearVariantsAutoTip = ProteusLoc.Localize("Settings.GearVariants.Auto.Tip",
+        "A mod made for one variant of an item ships that variant's material folder only, so the item worn\n"
+      + "in another variant draws the game's material (or another outfit's, or none) on the mod's model. As you\n"
+      + "put such a piece on, Proteus copies the mod's material paths to the other variant folders, inside the\n"
+      + "mod's own options, like TexTools' \"Apply to All Variants\" for the material only. Those variants then show\n"
+      + "the mod's material wherever the mod wins; parts, VFX and sound stay their own. Turning this off stops\n"
+      + "further changes; it does not undo them. \"Undo for what I'm wearing\" takes them out.");
+    public readonly string GearVariantsStatusFmt = ProteusLoc.Localize("Settings.GearVariants.Status.Fmt",
+        "{0} piece(s) repointed · {1} left");
+    public readonly string GearVariantsRepointedTipFmt = ProteusLoc.Localize("Settings.GearVariants.Repointed.Tip.Fmt",
+        "Repointed:\n{0}");
+    public readonly string GearVariantsLeftTipFmt = ProteusLoc.Localize("Settings.GearVariants.Left.Tip.Fmt",
+        "Left as they are:\n{0}");
+    public readonly string GearVariantsNextRedraw = ProteusLoc.Localize("Settings.GearVariants.NextRedraw",
+        "Takes effect at the next redraw (Auto redraw is off).");
+    public readonly string GearVariantsWaiting = ProteusLoc.Localize("Settings.GearVariants.Waiting", "Waiting for Penumbra.");
+    public readonly string GearVariantsReasonSeveralVariants = ProteusLoc.Localize(
+        "Settings.GearVariants.Reason.SeveralVariants", "the mod ships several variants of its own");
+    public readonly string GearVariantsReasonModImc = ProteusLoc.Localize("Settings.GearVariants.Reason.ModImc",
+        "the mod sets this variant itself");
+    public readonly string GearVariantsReasonOtherModMaterial = ProteusLoc.Localize(
+        "Settings.GearVariants.Reason.OtherModMaterial", "its material comes from another mod");
+    public readonly string GearVariantsReasonNoImc = ProteusLoc.Localize("Settings.GearVariants.Reason.NoImc",
+        "the game's variant table could not be read");
+    public readonly string GearVariantsReasonMetaUnreadable = ProteusLoc.Localize(
+        "Settings.GearVariants.Reason.MetaUnreadable", "Penumbra's metadata could not be read");
+    public readonly string GearVariantsReasonOutranked = ProteusLoc.Localize("Settings.GearVariants.Reason.OtherModWins",
+        "another mod's metadata outranks it");
+    public readonly string GearVariantsReasonLegacyMod = ProteusLoc.Localize("Settings.GearVariants.Reason.LegacyMod",
+        "an old-format mod folder Proteus does not write to");
+    public readonly string GearVariantsReasonProteusPack = ProteusLoc.Localize("Settings.GearVariants.Reason.ProteusPack",
+        "a Proteus pack (Proteus draws it itself)");
+    public readonly string GearVariantsReasonDeclined = ProteusLoc.Localize("Settings.GearVariants.Reason.Declined",
+        "undone by you");
+    public readonly string GearVariantsReasonWriteFailed = ProteusLoc.Localize("Settings.GearVariants.Reason.WriteFailed",
+        "the mod could not be written");
+    public readonly string GearVariantsRepointNow = ProteusLoc.Localize("Settings.GearVariants.RepointNow",
+        "Repoint what I'm wearing now") + "###variantRepointNow";
+    public readonly string GearVariantsRepointNowTip = ProteusLoc.Localize("Settings.GearVariants.RepointNow.Tip",
+        "Point the variants of what you are wearing now at their mods' materials,\n"
+      + "including pieces you undid before.");
+    public readonly string GearVariantsUndoWorn = ProteusLoc.Localize("Settings.GearVariants.UndoWorn",
+        "Undo for what I'm wearing") + "###variantUndoWorn";
+    public readonly string GearVariantsUndoWornTip = ProteusLoc.Localize("Settings.GearVariants.UndoWorn.Tip",
+        "Take Proteus's variant entries out of the mods of the pieces you are wearing, and leave them alone\n"
+      + "until you use \"Repoint what I'm wearing now\". An entry changed by someone since is kept.");
+    public readonly string GearVariantsResultFmt = ProteusLoc.Localize("Settings.GearVariants.Result.Fmt",
+        "Undo: {0} removed, {1} kept as changed since, {2} refused.");
+    public readonly string GearVariantsNothingRecorded = ProteusLoc.Localize("Settings.GearVariants.NothingRecorded",
+        "Nothing recorded for what you are wearing.");
+    public readonly string GearVariantsBusy = ProteusLoc.Localize("Settings.GearVariants.Busy", "Working…");
+    public readonly string GearVariantsChatFmt = ProteusLoc.Localize("Chat.VariantRepoint.Fmt",
+        "[Proteus] Copied the material paths of \"{1}\" to {0} more variant folder(s), so those variants show the mod's "
+      + "own material wherever it wins. Undo under /proteus > Settings > Gear variants.");
 
     public readonly string SecHosting     = ProteusLoc.Localize("Settings.Section.Hosting", "Hosting");
 
@@ -1939,6 +2099,11 @@ public sealed class ColorsStrings
     public readonly string PasteRowTipFmt = ProteusLoc.Localize("Colors.PasteRow.Tip.Fmt",
         "Overwrite row {0} (both sub-rows) with the copied row.");
 
+    /// <summary>Tick beside Copy/Paste row: shows the rows the index hides from the picker.</summary>
+    public readonly string ShowAllRows = ProteusLoc.Localize("Colors.ShowAllRows.Check", "Show all rows");
+    public readonly string ShowAllRowsTip = ProteusLoc.Localize("Colors.ShowAllRows.Tip",
+        "Also show the rows this index texture selects rarely or never.\nEditing them changes little or nothing you can see.");
+
     /// <summary>Column headers of the A/B panel. {0} is the row number; A and B are the two sub-rows.</summary>
     public readonly string SubRowAFmt = ProteusLoc.Localize("Colors.SubRowA.Fmt", "Row {0}A");
     public readonly string SubRowBFmt = ProteusLoc.Localize("Colors.SubRowB.Fmt", "Row {0}B");
@@ -2276,6 +2441,15 @@ public sealed class ColorsStrings
     public readonly string ToeCapLockedTip = ProteusLoc.Localize("Colors.ToeCap.Locked.Tip",
         "This mod's own \"Toe Cap\" option is selected in Penumbra, in a Masks group that allows only\n"
       + "one choice, so it can't be turned off here. Change it in Penumbra.");
+
+    public readonly string ToeCapFlagOwnTip = ProteusLoc.Localize("Colors.ToeCap.FlagOwn.Tip",
+        "Turn this on for stockings and socks: the toes are covered by one rounded toe box, the way\n"
+      + "real hosiery fits, instead of following every toe.\n"
+      + "This mod's own \"Toe Cap\" option is in a Masks group that allows only one choice, so this\n"
+      + "tick can't select it without dropping the other mask there. Ticking it uses Proteus's built-in\n"
+      + "cap instead (made for Bibo+, Neolithe, Rue and YAB), saved in the mod's Proteus settings: it\n"
+      + "applies in every collection and goes with the mod when you export it.\n"
+      + "For the author's own cap, select \"Toe Cap\" in Penumbra.");
 
     public readonly string ToeCapSaveFailed = ProteusLoc.Localize("Colors.ToeCap.SaveFailed",
         "Couldn't save this mod's Proteus settings, so the change was undone. The log (/xllog) has the reason.");

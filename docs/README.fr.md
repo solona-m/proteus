@@ -290,7 +290,8 @@ La section **Cheveux** adapte les mods de cheveux à votre personnage de deux fa
 - Les cheveux à physique gardent leur physique. Quand le squelette de votre race n'a pas les os avec lesquels une coiffure bouge, le portage apporte le squelette et la physique de la race d'origine pour cette coiffure.
 - Une coiffure qui ne tomberait pas correctement sur votre tête (elle s'y enfonce ou s'en écarte) est tout de même adaptée, et Proteus dit laquelle, pour que vous la vérifiiez en jeu.
 - Une coiffure que la courbure retourne en partie est tout de même adaptée, et Proteus dit laquelle, pour que vous la vérifiiez en jeu.
-- Pour couvrir toutes les races d'un coup, ouvrez un modèle de cheveux dans le **Studio** et utilisez **Transposer à toutes les races**.
+- Les têtes diffèrent par la forme, pas seulement par la taille : une coiffure pliée sur une tête plus grande peut donc s'enfoncer en partie à l'arrière du crâne et laisser voir une zone chauve. Proteus ressort ces cheveux là où ils étaient sur la tête d'origine, et pas plus loin. Sur une tête bien plus grande (Hrothgar), les cheveux s'étirent un peu pour la couvrir. S'il en reste qui s'enfoncent, Proteus vous le dit. Les cheveux que Proteus a adaptés avant cette mise à jour sont adaptés à nouveau la prochaine fois que vous les portez, ou depuis le Studio.
+- Pour couvrir toutes les races d'un coup, ouvrez un modèle de cheveux dans le **Studio** et utilisez **Transposer à toutes les races**. Sous **Aussi pour l'autre sexe**, vous pouvez aussi cocher des races de l'autre sexe : elles portent alors cette coiffure à la place du style du jeu de ce numéro. Proteus tient ces transpositions à jour, mais n'en crée jamais une de lui-même. Chaque race de l'autre sexe peut être transposée seule : sa transposition reçoit sa propre copie du matériau, si bien que les autres races gardent la coiffure du jeu.
 
 **Chapeaux.** La plupart des cheveux moddés ne gèrent pas les chapeaux, si bien qu'un chapeau porté par-dessus passe au travers. Proteus plaque contre votre tête les cheveux qu'un chapeau recouvrirait.
 
@@ -377,7 +378,7 @@ Deux autres sections repliables s'appliquent à tout le mod :
   - **Tendre le tissu sur le nombril** : le tissu se tend à plat sur le nombril au lieu de s'y enfoncer.
   - **Lisser l'entrejambe** : lisse le pli à l'entrejambe. Cela modifie le corps en dessous, donc cela s'applique à tous les vêtements portés à la fois.
   - **Lisser le téton** : lisse le tissu par-dessus. Pas encore terminé : le corps en dessous garde sa forme, donc sur un vêtement près du corps il peut encore transparaître.
-  - **Couvrir les orteils** : couvre les orteils d'un seul bout arrondi, comme tombent les bas et les chaussettes, au lieu de suivre chaque orteil. Sur un mod qui fournit son propre bout, c'est l'option *Toe Cap* du mod dans Penumbra (dans son groupe Masks) : elle est enregistrée dans votre collection Penumbra, et un design Glamourer qui inclut le mod la conserve. Sur tout autre mod, Proteus fournit le bout lui-même et le réglage est enregistré dans les paramètres Proteus du mod : il s'applique dans toutes les collections et accompagne le mod quand vous l'exportez, mais les designs et les préréglages ne le capturent pas. Cocher la case transforme les couches de peau du mod en seconde peau pour que le bout ait quelque chose à façonner. Le bout est fait pour Bibo+, Neolithe, Rue et YAB ; sur les autres corps le vêtement est construit, mais les orteils restent tels quels.
+  - **Couvrir les orteils** : couvre les orteils d'un seul bout arrondi, comme tombent les bas et les chaussettes, au lieu de suivre chaque orteil. Sur un mod qui fournit son propre bout, c'est l'option *Toe Cap* du mod dans Penumbra (dans son groupe Masks, s'il autorise plusieurs choix) : elle est enregistrée dans votre collection Penumbra, et un design Glamourer qui inclut le mod la conserve. Sur tout autre mod, y compris celui dont le Toe Cap est dans un groupe à choix unique (sélectionnez-le dans Penumbra pour le bout de l'auteur), Proteus fournit le bout lui-même et le réglage est enregistré dans les paramètres Proteus du mod : il s'applique dans toutes les collections et accompagne le mod quand vous l'exportez, mais les designs et les préréglages ne le capturent pas. Cocher la case transforme les couches de peau du mod en seconde peau pour que le bout ait quelque chose à façonner. Le bout est fait pour Bibo+, Neolithe, Rue et YAB ; sur les autres corps le vêtement est construit, mais les orteils restent tels quels.
 
   En activer un seul parmi les cinq premiers fait rendre le mod en seconde peau. **Couvrir les orteils** fait de même pour les overlays du corps qui ne sont ni fixés sur Peau ni un imprimé ; si rien dans le mod ne peut devenir un vêtement sur le corps, la case le signale.
 
@@ -391,9 +392,9 @@ Sous les lignes, l'onglet d'un calque peut afficher :
 
 #### Lignes
 
-L'éditeur affiche jusqu'à 16 lignes de table de couleurs. Les lignes correspondent aux régions définies par la texture d'index du mod (s'il en a une). La ligne 16 est la couleur de repli utilisée quand il n'y a pas de texture d'index. Les lignes que la texture d'index ne sélectionne jamais sont grisées.
+L'éditeur affiche jusqu'à 16 lignes de table de couleurs. Les lignes correspondent aux régions définies par la texture d'index du mod (s'il en a une). La ligne 16 est la couleur de repli utilisée quand il n'y a pas de texture d'index. Les lignes que les textures d'index sélectionnent rarement ou jamais sont masquées ; cochez **Afficher toutes les lignes** pour les faire revenir, grisées.
 
-Appuyez sur **Éclairer** sur n'importe quelle sous-ligne pour faire briller cette région sur votre personnage, afin de repérer quelle ligne contrôle quoi.
+Appuyez sur **Éclairer** sur n'importe quelle sous-ligne pour faire briller cette région sur votre personnage, afin de repérer quelle ligne contrôle quoi. Ou pointez simplement le bouton d'une ligne (#01–#16) : ses deux sous-lignes s'éclairent sur votre personnage tant que le pointeur reste dessus.
 
 Chaque ligne a deux sous-lignes :
 - **A** — s'applique là où le canal vert de la texture d'index vaut 255.

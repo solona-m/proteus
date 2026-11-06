@@ -16,6 +16,11 @@ public partial class CompositorService
 {
     private sealed partial class CompositeRun
     {
+        /// <summary>This run's Penumbra settings reads, shared by the skin and shell phases (#55); successes only.</summary>
+        private readonly ShellBodyAtr.RunSettingsMemo settingsMemo = new();
+        internal ShellBodyAtr.ModSettings? RunModSettings(string modDir)
+            => settingsMemo.Get(modDir, compositor.secondSkin.PlayerModSettings);
+
         private readonly CompositorService compositor;
         private readonly CancellationToken ct;
         private readonly long epoch;

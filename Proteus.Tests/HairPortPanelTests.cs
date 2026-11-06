@@ -17,6 +17,7 @@ public class HairPortPanelTests
 
     [Fact]
     [Trait("Plan", "AC-hair-race-port-6")]
+    [Trait("Plan", "AC-cross-sex-hair-port-2")]
     public void Rows_list_every_other_same_gender_race_with_its_state()
     {
         using var mod = new Mod(defaults: new Dictionary<string, string>
@@ -30,12 +31,33 @@ public class HairPortPanelTests
                                                                      File = "Hair Ports/Default/x.mdl", PortVersion = HairPortBaker.Version }] })));
         var rows = Rows(mod, noStyle: [1601]);
 
-        Assert.Equal(HairPortPlan.SameGenderRaces(801), rows.Select(r => r.Race));
+        Assert.Equal(HairPortPlan.SameGenderRaces(801), rows.Where(r => !r.OtherSex).Select(r => r.Race));
+        Assert.Equal(HairPortPlan.OtherSexRaces(801), rows.Where(r => r.OtherSex).Select(r => r.Race));
+        // The other sex listed, none of it ticked.
         Assert.Equal(HairPortPanel.State.Ported, rows.Single(r => r.Race == 201).State);
         Assert.Equal(HairPortPanel.State.Covered, rows.Single(r => r.Race == 1401).State);
         Assert.Equal(HairPortPanel.State.NoStyle, rows.Single(r => r.Race == 1601).State);
         Assert.Equal(HairPortPanel.State.Open, rows.Single(r => r.Race == 401).State);
         Assert.Equal([401, 601, 1001, 1201, 1801], HairPortPanel.DefaultTicks(rows).Select(r => (int)r).ToArray());
+    }
+
+    /// <summary>The shared read the panel and the test harness both use: the rows of the author's hairstyle, which a port
+    /// of ours opened stands for.</summary>
+    [Fact]
+    [Trait("Plan", "AC-hair-port-qa-9")]
+    public void ReadRows_matches_Rows()
+    {
+        using var mod = CrossSexFixtures.WomensMod();
+        var game = CrossSexFixtures.Game();
+        CrossSexFixtures.HandPort(mod, [101], game);
+        var record = HairPortRecord.Read(mod.Root);
+        var expected = HairPortPanel.Rows(CrossSexFixtures.Source, mod.Owners, record,
+                                          r => game(HairPortPlan.HairPath(r, CrossSexFixtures.Id)) != null,
+                                          HairPortPanel.OutOfDate(mod.Root, mod.Owners, record, game));
+        var (source, rows) = HairPortPanel.ReadRows(mod.Root, CrossSexFixtures.Source, null, game);
+        Assert.Equal(CrossSexFixtures.Source, source);
+        Assert.Equal(expected, rows);
+        Assert.Equal(CrossSexFixtures.Source, HairPortPanel.ReadRows(mod.Root, CrossSexFixtures.Target, null, game).Source);
     }
 
     [Fact]

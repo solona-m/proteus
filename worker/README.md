@@ -145,6 +145,7 @@ about.
 | `/effects-v1/hello.kitty.png` | `releases/download/effects-v1/…` |
 | `/v2608.309.0.0/latest.zip` | `releases/download/v2608.309.0.0/…` |
 | `/camera-tools/v2609.12.0.0/latest.zip` | the same, in `solona-m/camera-tools-ffxiv` |
+| `/pickles/aiscan-v1/ffmpeg.exe` (and `.onnx`, `.onnx.data`) | the same, in `solona-m/Pickles-Playlist-Editor` |
 | `/` and `/README.md` | the project README, from `raw.githubusercontent.com` |
 | `/ja`, `/ja/`, `/ja/README.md` (and `en de fr zh ko es ru`) | that language's README — English is the repo root, the rest are `docs/README.<lang>.md` |
 | `/TROUBLESHOOTING.md`, `/For%20Creators.md` | the docs the README links to |
@@ -159,6 +160,23 @@ same `repo.json` already proxied at `/repo.json`, and it ships no icon or docume
 Proteus's own paths deliberately keep no prefix. `ProteusAssets.BaseUrls` builds them as
 `MirrorBase + tag + "/"` in every shipped build, so moving them behind a prefix would break every
 copy of the plugin already installed. A new plugin gets a prefix of its own; the original stays bare.
+
+### A third origin: Pickles Playlist Editor
+
+Pickles Playlist Editor's AI-score downloads are mirrored under `/pickles/`, resolving against
+`solona-m/Pickles-Playlist-Editor`. Only `aiscan-v<N>` tags and `.exe`, `.onnx` and `.data` files match,
+which is exactly what that repo's `upload-aiscan.yml` publishes; the app pins each file's size and SHA-256
+(`Tools/AiAssets.cs`) and falls back to GitHub on a 404, so it works before this route is deployed.
+
+The largest file is the 227,823,104-byte `ffmpeg.exe`, under the 512 MB cacheable-object limit. After a deploy,
+check a throttled cold download end to end before trusting the cache:
+
+```powershell
+curl.exe -sL --limit-rate 2M "https://dl.solona.info/pickles/aiscan-v1/ffmpeg.exe" -o ff.exe
+(Get-Item ff.exe).Length                                   # 227823104
+(Get-FileHash ff.exe -Algorithm SHA256).Hash.ToLower()     # 589e50b766d251afdf181dd664d40bd94407e200b019989fd7468c7d118a28d0
+curl.exe -sI "https://dl.solona.info/pickles/aiscan-v1/ffmpeg.exe" | findstr /i cf-cache-status   # HIT
+```
 
 ### Documents render for browsers, stay raw for tools
 

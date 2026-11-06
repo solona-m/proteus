@@ -296,7 +296,8 @@ The **Hair** section fits hair mods to you in two ways: hair made for another ra
 - Physics hair keeps its physics. When your race's skeleton lacks the bones a hairstyle moves with, the port brings the source race's skeleton and physics along for that hairstyle.
 - A hairstyle that wouldn't sit right on your head (it sinks into it, or stands off it) is still fitted, and Proteus says which, so you can check it in game.
 - A hairstyle the bend turns partly inside out is still fitted, and Proteus says which, so you can check it in game.
-- To cover every race at once, open a hair model in the **Studio** and use **Port to all races**.
+- Heads differ in shape, not just size, so bending a hairstyle onto a bigger head can sink part of it into the back of the skull and show a bald patch. Proteus pushes that hair back out to where it sat on the original head, and no further. On a much bigger head (Hrothgar) the hair stretches a little to cover it. If some still sinks in, Proteus says so. Hair Proteus fitted before this update is fitted again the next time you wear it, or from the Studio.
+- To cover every race at once, open a hair model in the **Studio** and use **Port to all races**. Under **Also for the other sex** you can tick races of the other sex too: they then wear this hairstyle instead of the game's style of that number. Proteus keeps such ports up to date but never makes one by itself. Each race of the other sex can be ported on its own: its port gets its own copy of the material, so the other races keep the game's style.
 
 **Hats.** Most modded hair has no hat support, so a hat worn over it goes straight through. Proteus presses the hair a hat would cover flat against your head.
 
@@ -383,7 +384,7 @@ Two more collapsible sections apply to the whole mod:
   - **Span the belly button**: the fabric stretches flat across the navel instead of dipping into it.
   - **Smooth between the legs**: smooths the fold at the crotch. This changes the body underneath, so it applies to every garment worn at once.
   - **Smooth the nipple**: smooths the fabric over it. Not finished yet: the body underneath keeps its shape, so on a close fit it can still show through.
-  - **Cap the toes**: covers the toes with one rounded toe box, the way stockings and socks fit, instead of following every toe. On a mod that ships its own toe cap, this is that mod's *Toe Cap* option in Penumbra (in its Masks group): it's saved in your Penumbra collection, and a Glamourer design that includes the mod keeps it. On any other mod Proteus supplies the cap itself, and the setting is saved in the mod's Proteus settings: it applies in every collection and goes with the mod when you export it, but designs and presets don't capture it. Ticking it turns the mod's skin layers into a second skin so the cap has something to shape. The toe box is made for Bibo+, Neolithe, Rue and YAB; on other bodies the garment is built but the toes stay as they are.
+  - **Cap the toes**: covers the toes with one rounded toe box, the way stockings and socks fit, instead of following every toe. On a mod that ships its own toe cap in a Masks group that allows several choices, this is that mod's *Toe Cap* option in Penumbra: it's saved in your Penumbra collection, and a Glamourer design that includes the mod keeps it. On any other mod, including one whose Toe Cap is in a single-choice group (choose it in Penumbra for the author's cap), Proteus supplies the cap itself, and the setting is saved in the mod's Proteus settings: it applies in every collection and goes with the mod when you export it, but designs and presets don't capture it. Ticking it turns the mod's skin layers into a second skin so the cap has something to shape. The toe box is made for Bibo+, Neolithe, Rue and YAB; on other bodies the garment is built but the toes stay as they are.
 
   Turning on any of the first five renders the mod as a second skin. **Cap the toes** does the same for body overlays that aren't pinned to Skin or a print; if nothing in the mod can become a garment on the body, the tick says so.
 
@@ -397,9 +398,9 @@ Below the rows, an overlay's tab may show:
 
 #### Rows
 
-The editor shows up to 16 color table rows. Rows map to regions defined by the mod's index texture (if it has one). Row 16 is the fallback color used when there is no index texture. Rows the index texture never selects are dimmed.
+The editor shows up to 16 color table rows. Rows map to regions defined by the mod's index texture (if it has one). Row 16 is the fallback color used when there is no index texture. Rows the index textures select rarely or never are hidden; tick **Show all rows** to bring them back, dimmed.
 
-Press **Glow** on any sub-row to light that region up on your character, so you can find which row controls what.
+Press **Glow** on any sub-row to light that region up on your character, so you can find which row controls what. Or point at a row's button (#01–#16): both its sub-rows light up on your character while the pointer stays on it.
 
 Each row has two sub-rows:
 - **A** — applies where the index texture's green channel is 255.

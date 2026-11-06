@@ -45,7 +45,7 @@ internal static partial class SizeSetRefit
         if (SiblingPiece.TryOpen(root, c.File, note) is { } opened)
             try
             {
-                pick = RefitCore.DetectSource(opened.Model, opened.Bones, slot, race, bodies, prefer, _ => true, note);
+                pick = RefitCore.DetectSource(opened.Model, opened.Bones, slot, race, bodies, prefer, request.KnownBody, note);
             }
             catch (Exception ex) when (ex is not OperationCanceledException)
             {

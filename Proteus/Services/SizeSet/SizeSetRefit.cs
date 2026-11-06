@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Text.Json;
 using System.Text.RegularExpressions;
 using System.Threading;
 using Dalamud.Plugin.Services;
@@ -53,7 +54,30 @@ internal static partial class SizeSetRefit
     internal sealed record Request(string ModRoot, IReadOnlyList<string> Keys, bool Yas, bool Remake,
                                    IReadOnlyList<BodyModIndex.Entry> Bodies, Func<string, byte[]?>? ReadGameFile = null,
                                    bool Ends = true, Func<string, BodySizeCatalog?>? GameBody = null,
-                                   bool Piercings = false, AcrossInputs? Across = null, string? MadeOn = null);
+                                   bool Piercings = false, AcrossInputs? Across = null, string? MadeOn = null)
+    {
+        /// <summary>
+        /// Whether a mod is one the size table resolves a body to (<see cref="SupportedBodies.Recognised"/>, women's and
+        /// men's): what the size set passes where the automatic refit passes "switched on", to break a tie between mods
+        /// a garment matches equally — nothing is switched on for a size set. The table's body mod then wins over any
+        /// other installed mod shipping the same skin: an outfit or underwear mod (Equinox's Rue Large shared 55.2% with
+        /// Rue+ and with "Elegy - Sylvie Bra &amp; Panties", which ships three bodies' skin and so had more sizes: read on
+        /// Elegy, its Rosaline Coconut size was cut from the wrong body and left the cups open), but also a body mod the
+        /// table does not list (Uranus Redux, a second copy of a body). A tie between two mods the table does not resolve
+        /// to falls to the larger pack as before (a Uranus garment between Uranus Redux and Elegy).
+        /// </summary>
+        internal bool KnownBody(string dir) => Known.GetValue(Bodies, Resolve).Contains(dir);
+
+        /// <summary>The set per body list, so a copy of the request with other bodies answers for its own.</summary>
+        private static readonly System.Runtime.CompilerServices.ConditionalWeakTable<IReadOnlyList<BodyModIndex.Entry>, HashSet<string>> Known = new();
+
+        private static HashSet<string> Resolve(IReadOnlyList<BodyModIndex.Entry> bodies)
+        {
+            var dirs = SupportedBodies.Recognised(bodies, "0201");
+            dirs.UnionWith(SupportedBodies.Recognised(bodies, "0101"));
+            return dirs;
+        }
+    }
 
     /// <param name="ResolveCollection">The file the player's collection loads for a game path (a skeleton): a path on
     /// disk when a mod replaces it, anything else for the game's own (see <see cref="OtherRaceWearer.Gather"/>).</param>
@@ -174,12 +198,14 @@ internal static partial class SizeSetRefit
     /// <param name="includeEnds">Shoes and gloves too (see <see cref="Request.Ends"/>).</param>
     /// <param name="droppedCopy">Told each game path left out as the game's own model or a copy of it, for the log.</param>
     internal static List<Piece> PiecesOf(string modRoot, Func<string, byte[]?>? readGameFile = null, bool includeEnds = true,
-                                         Action<string>? droppedCopy = null)
+                                         Action<string>? droppedCopy = null,
+                                         Action<string, string?, string, IReadOnlyList<string>>? regrouped = null)
     {
         var redirects = PenumbraModMeta.ReadAllRedirects(modRoot);
         var record = BodyRetargetWriter.ReadRecord(modRoot);
         var ourFiles = OurFiles(record);
         var single = RefitCore.SingleGroups(modRoot);
+        var rawGroups = PenumbraModMeta.TryReadRawGroups(modRoot);
         var pieces = new List<Piece>();
         var models = readGameFile != null ? new Models(modRoot, readGameFile) : null;
 
@@ -191,7 +217,7 @@ internal static partial class SizeSetRefit
             if (authors.Count == 0) continue;
             string gamePath = authors[0].GamePath;
             string slot = BodySizeCatalog.SlotOf(gamePath)!;
-            string? group = RefitCore.SwitchingGroup(redirects, gamePath, record?.OwnGroups, single);
+            string? group = SizeGroupOf(redirects, gamePath, record, single, rawGroups, ourFiles);
 
             var options = new List<(string? Option, string File)>();
             foreach (var r in authors)
@@ -218,6 +244,16 @@ internal static partial class SizeSetRefit
                                  BodySizeCatalog.RaceOf(gamePath)!, Models: ModelNames(authors[0], model)));
         }
         if (models != null) pieces = WithoutRacialCopies(pieces, redirects, ourFiles, models, droppedCopy);
+        // Said only of a piece kept: sized in another group than the switching rule gives, and what may still win its path
+        // over that group while on — an author's partial or multi-choice group applied first.
+        if (regrouped != null)
+            foreach (var p in pieces)
+                if (p.Group != null && RefitCore.SwitchingGroup(redirects, p.GamePath, record?.OwnGroups, single) is var today
+                    && !string.Equals(p.Group, today, StringComparison.OrdinalIgnoreCase))
+                    regrouped(p.GamePath, today, p.Group,
+                              BodyRetargetWriter.Outranking(rawGroups, p.GamePath, p.Group, cutFrom: null)
+                                                .Select(r => r.Option == null ? r.Group : r.Group + " / " + r.Option)
+                                                .ToList());
 
         // Legs sized in the same group as a chest of their race follow the chest's sizes, and a shoe or glove follows the
         // chest — or, a shoe, the legs — it is sized with. Chests first, then legs, then shoes and gloves, so the options a
@@ -235,6 +271,88 @@ internal static partial class SizeSetRefit
                                 : IsEnd(p.Slot) && SharesWithAnother(p) ? p with { Unpaired = true }
                                 : p)
                      .ToList();
+    }
+
+    /// <summary>
+    /// The author's group a piece's sizes are read from and saved into: the one Penumbra draws the piece from.
+    /// <para/>
+    /// <see cref="RefitCore.SwitchingGroup"/> takes the first single-choice group that redirects the path, but Penumbra
+    /// walks the groups by priority, highest first, a tie going to the LATER one (<see cref="BodyRetargetWriter.AppliedBefore"/>),
+    /// and the first claim wins. Equinox gives its legs in "Top Size" (6 of 19 options, the Yab and Rue sizes) and in
+    /// "Bottom Size" (9 of 9): the game always draws Bottom Size's, but the size set read only Top Size's six and made
+    /// no bottoms at all. Precious puts its top in "Default" (1 of 1) and "Size" (14 of 14): every size saved beside
+    /// Default was outranked by Size and never drawn.
+    /// <para/>
+    /// So among the author's single-choice groups giving the piece an author's file, those that switch it in EVERY option
+    /// of theirs — a size group by its shape, giving the piece whichever option is on — come first, and of those the one
+    /// Penumbra applies first. That is not a promise the game draws it: an author's partial single-choice group, or a
+    /// multi-choice one, applied before it still claims the path while its option is on (the run log names them, from
+    /// <see cref="BodyRetargetWriter.Outranking"/>); priority only orders the every-option groups among themselves. With none, the group the switching rule gives, so long as it has an author's file there;
+    /// failing that, the author's group Penumbra applies first. Our own options and files are never counted, and our
+    /// groups are never chosen. A style switch whose every option carries the piece (Codeine's "✦ HARNESS") takes the
+    /// sizes, which then replace its choice when picked: still better than sizes the game never draws.
+    /// </summary>
+    /// <param name="rawGroups">The mod's raw <c>Groups</c> array (<see cref="PenumbraModMeta.TryReadRawGroups"/>), its
+    /// positions Penumbra's tie order; null (an old or unreadable manifest) keeps the switching rule's group.</param>
+    /// <param name="ourFiles">The files refits of ours wrote (<see cref="OurFiles"/>).</param>
+    internal static string? SizeGroupOf(IReadOnlyList<PenumbraModMeta.Redirect> redirects, string gamePath,
+                                        BodyRetargetWriter.Record? record, IReadOnlyCollection<string> singleGroups,
+                                        IReadOnlyList<JsonElement>? rawGroups, IReadOnlySet<string> ourFiles)
+    {
+        string? today = RefitCore.SwitchingGroup(redirects, gamePath, record?.OwnGroups, singleGroups);
+        if (rawGroups == null) return today;
+
+        var own = new HashSet<string>(record?.OwnGroups ?? [], StringComparer.OrdinalIgnoreCase);
+        string path = RefitCore.Normal(gamePath);
+        // Per author's option ("Group / Option"), whether it gives the piece an author's file.
+        var authorsAt = redirects.Where(r => RefitCore.Normal(r.GamePath) == path && !IsOurFile(ourFiles, r.File)
+                                             && r.Source.Contains(" / ", StringComparison.Ordinal))
+                                 .Select(r => r.Source)
+                                 .ToHashSet(StringComparer.OrdinalIgnoreCase);
+
+        var candidates = new List<(string Name, int Priority, int Index, bool Every)>();
+        foreach (string group in singleGroups)
+        {
+            if (own.Contains(group) || candidates.Any(c => string.Equals(c.Name, group, StringComparison.OrdinalIgnoreCase)))
+                continue;
+            // A name with " / " in it cannot be told from its options in a redirect's source ("SFW / NSFW / On"): the
+            // switching rule never returns one, and PiecesOf could not read its options, so neither does this.
+            if (group.Contains(" / ", StringComparison.Ordinal)) continue;
+            if (!authorsAt.Any(s => s.StartsWith(group + " / ", StringComparison.OrdinalIgnoreCase))) continue;
+            int index = -1;
+            for (int i = 0; i < rawGroups.Count && index < 0; i++)
+                if (rawGroups[i].ValueKind == JsonValueKind.Object && rawGroups[i].TryGetProperty("Name", out var n)
+                    && n.ValueKind == JsonValueKind.String && string.Equals(n.GetString(), group, StringComparison.OrdinalIgnoreCase))
+                    index = i;
+            if (index < 0) continue;
+            var ours = new HashSet<string>(record?.Options.Where(e => string.Equals(record.GroupOf(e), group,
+                                                                                    StringComparison.OrdinalIgnoreCase))
+                                                          .Select(e => e.Name) ?? [],
+                                           StringComparer.OrdinalIgnoreCase);
+            List<string> options;
+            try
+            {
+                options = PenumbraModMeta.ReadOptionNames(rawGroups[index]).Where(o => !ours.Contains(o)).ToList();
+            }
+            catch (InvalidOperationException)
+            {
+                options = [];   // a malformed option list: never counts as switching it in every option
+            }
+            bool every = options.Count > 0 && options.All(o => authorsAt.Contains(group + " / " + o));
+            candidates.Add((group, BodyRetargetWriter.GroupPriority(rawGroups[index]), index, every));
+        }
+
+        (string Name, int Priority, int Index, bool Every)? First(IEnumerable<(string Name, int Priority, int Index, bool Every)> of)
+        {
+            (string Name, int Priority, int Index, bool Every)? best = null;
+            foreach (var c in of)
+                if (best is not { } b || BodyRetargetWriter.AppliedBefore(c.Priority, c.Index, b.Priority, b.Index)) best = c;
+            return best;
+        }
+
+        if (First(candidates.Where(c => c.Every)) is { } drawn) return drawn.Name;
+        if (today != null && candidates.Any(c => string.Equals(c.Name, today, StringComparison.OrdinalIgnoreCase))) return today;
+        return First(candidates)?.Name ?? today;
     }
 
     /// <summary>
@@ -431,7 +549,11 @@ internal static partial class SizeSetRefit
         var notes = runLog.Notes;
         int made = 0;
         var (pieces, endsLeftOut, all) = ReadPieces(request.ModRoot, request.ReadGameFile, request.Ends,
-            path => log.Debug("[Proteus] size set: {0} is the game's own model or a copy of it, not a piece", path));
+            path => log.Debug("[Proteus] size set: {0} is the game's own model or a copy of it, not a piece", path),
+            (path, was, now, rivals) => log.Information(
+                "[Proteus] size set: {0}: sized in \"{1}\", not \"{2}\" — the game draws it from \"{1}\", so it is picked "
+                + "there, apart from the pieces sized in \"{2}\"; applied before it while on: {3}", path, now, was ?? "(none)",
+                rivals.Count == 0 ? "none" : string.Join(", ", rivals)));
         SayEndsLeftOut(runLog, endsLeftOut);
         if (pieces.Count == 0)
         {
@@ -479,9 +601,10 @@ internal static partial class SizeSetRefit
     /// slot's sibling, and no chest's or legs' follower flag hangs on a shoe or glove.
     /// </summary>
     internal static (List<Piece> Pieces, IReadOnlyList<Piece> EndsLeftOut, List<Piece> All) ReadPieces(
-        string modRoot, Func<string, byte[]?>? readGame, bool ends, Action<string>? droppedCopy = null)
+        string modRoot, Func<string, byte[]?>? readGame, bool ends, Action<string>? droppedCopy = null,
+        Action<string, string?, string, IReadOnlyList<string>>? regrouped = null)
     {
-        var all = PiecesOf(modRoot, readGame, includeEnds: true, droppedCopy);
+        var all = PiecesOf(modRoot, readGame, includeEnds: true, droppedCopy, regrouped);
         if (ends) return (all, [], all);
         return (all.Where(p => !IsEnd(p.Slot)).ToList(), all.Where(p => IsEnd(p.Slot)).ToList(), all);
     }
@@ -563,7 +686,8 @@ internal static partial class SizeSetRefit
         if (sources.Primary is not { } primary)
         {
             var (unread, code) = UnreadableNote(piece.Label, request.MadeOn, sources.MadeOnName, sources.MadeOnMissing,
-                                                sources.Fits);
+                                                sources.Fits,
+                                                noneParsed: request.MadeOn == null && PieceFilesUnparsable(root, piece));
             runLog.Note(unread, piece, SizeStatus.Skipped, code, piece.Group ?? piece.GroupName);
             return 0;
         }

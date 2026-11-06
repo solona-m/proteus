@@ -97,6 +97,7 @@ public sealed class LocalizationTests
 
     [Theory]
     [MemberData(nameof(Translations))]
+    [Trait("Plan", "AC-dt-shader-upgrade-9")]
     public void KeysMatchEnglish(string lang)
     {
         var en = Load(Source);
@@ -152,6 +153,75 @@ public sealed class LocalizationTests
         }
     }
 
+    /// <summary>The row picker's "Show all rows" tick and its tooltip are translated, not copied, and the tooltip keeps
+    /// English's line break.</summary>
+    [Theory]
+    [MemberData(nameof(Translations))]
+    [Trait("Plan", "AC-row-hover-highlight-8")]
+    public void ShowAllRows_strings_are_translated_not_copied(string lang)
+    {
+        var en = Load(Source);
+        var tr = Load(lang);
+        foreach (string key in new[] { "Colors.ShowAllRows.Check", "Colors.ShowAllRows.Tip" })
+        {
+            Assert.True(tr.ContainsKey(key), $"[{lang}] has no {key}");
+            Assert.NotEqual(en[key].Message, tr[key].Message);
+            Assert.Equal(en[key].Message.Count(c => c == '\n'), tr[key].Message.Count(c => c == '\n'));
+        }
+    }
+
+    /// <summary>The fourth release notes are translated, not copied, and quote each language's own labels for the
+    /// controls they name.</summary>
+    [Theory]
+    [MemberData(nameof(Translations))]
+    public void WhatsNew_fourth_notes_are_translated_and_quote_the_UI_labels(string lang)
+    {
+        var en = Load(Source);
+        var tr = Load(lang);
+        foreach (string key in new[]
+                 {
+                     "WhatsNew.ColorRows.Head", "WhatsNew.ColorRows.Body", "WhatsNew.HairOtherSex.Head",
+                     "WhatsNew.HairOtherSex.Body", "WhatsNew.GearVariants.Head", "WhatsNew.GearVariants.Body",
+                     "WhatsNew.ShaderUpgrade.Head", "WhatsNew.ShaderUpgrade.Body",
+                 })
+        {
+            Assert.True(tr.ContainsKey(key), $"[{lang}] has no {key}");
+            Assert.NotEqual(en[key].Message, tr[key].Message);
+        }
+
+        Assert.Contains(tr["Colors.ShowAllRows.Check"].Message, tr["WhatsNew.ColorRows.Body"].Message);
+        Assert.Contains(tr["HairPort.Studio.Header"].Message, tr["WhatsNew.HairOtherSex.Body"].Message);
+        Assert.Contains(tr["HairPort.Studio.OtherSex"].Message, tr["WhatsNew.HairOtherSex.Body"].Message);
+        Assert.Contains(tr["Settings.GearVariants.Auto.Label"].Message, tr["WhatsNew.GearVariants.Body"].Message);
+        Assert.Contains(tr["Settings.GearVariants.UndoWorn"].Message, tr["WhatsNew.GearVariants.Body"].Message);
+        Assert.Contains(tr["Tab.Settings"].Message, tr["WhatsNew.GearVariants.Body"].Message);
+        Assert.Contains(tr["Settings.Section.GearVariants"].Message, tr["WhatsNew.GearVariants.Body"].Message);
+        Assert.Contains(tr["Tab.Settings"].Message, tr["WhatsNew.ShaderUpgrade.Body"].Message);
+        // The Colors window, by the name its title bar shows ("Colors — {mod}").
+        string colors = tr["Colors.Window.Title.Fmt"].Message.Split(" — ")[0];
+        Assert.Contains(colors, tr["WhatsNew.ColorRows.Body"].Message);
+        Assert.Contains(tr["Settings.GearShaders.AutoUpgrade.Label"].Message, tr["WhatsNew.ShaderUpgrade.Body"].Message);
+        Assert.Contains(tr["Settings.GearShaders.UndoWorn"].Message, tr["WhatsNew.ShaderUpgrade.Body"].Message);
+    }
+
+    /// <summary>Every README's colour-row section names the "Show all rows" tick by its label in that language, and says
+    /// that pointing at a row button (#01–#16) lights it.</summary>
+    [Theory]
+    [MemberData(nameof(AllLocales))]
+    [Trait("Plan", "AC-row-hover-highlight-8")]
+    [Trait("Plan", "AC-row-hover-highlight-1")]
+    public void Readme_rows_section_names_Show_all_rows_and_hover(string lang)
+    {
+        var dir = new System.IO.DirectoryInfo(AppContext.BaseDirectory);
+        while (dir != null && !System.IO.File.Exists(System.IO.Path.Combine(dir.FullName, "proteus.slnx"))) dir = dir.Parent;
+        Assert.True(dir != null, $"Could not find proteus.slnx above {AppContext.BaseDirectory}.");
+        string readme = System.IO.File.ReadAllText(System.IO.Path.Combine(
+            dir!.FullName, lang == Source ? "README.md" : System.IO.Path.Combine("docs", $"README.{lang}.md")));
+
+        Assert.Contains("**" + Load(lang)["Colors.ShowAllRows.Check"].Message + "**", readme);
+        Assert.Contains(readme.Split('\n'), l => l.Contains("#01"));
+    }
+
     /// <summary>The README's gear-refits-itself bullet names accessories that cover the body, in each language — and the
     /// Settings intro says it too.</summary>
     [Theory]
@@ -204,6 +274,86 @@ public sealed class LocalizationTests
     }
 
     /// <summary>
+    /// The gear shader upgrade's words are translated, not copied, keep English's line breaks, and keep the shader file
+    /// names verbatim.
+    /// </summary>
+    [Theory]
+    [MemberData(nameof(Translations))]
+    [Trait("Plan", "AC-dt-shader-upgrade-9")]
+    public void ShaderUpgrade_strings_are_translated_not_copied(string lang)
+    {
+        var en = Load(Source);
+        var tr = Load(lang);
+        foreach (var key in en.Keys.Where(k => k.StartsWith("Settings.GearShaders.", StringComparison.Ordinal)
+                                            || k == "Settings.Section.GearShaders"))
+        {
+            Assert.True(tr.ContainsKey(key), $"[{lang}] has no {key}");
+            Assert.NotEqual(en[key].Message, tr[key].Message);
+            Assert.Equal(en[key].Message.Count(c => c == '\n'), tr[key].Message.Count(c => c == '\n'));
+        }
+        Assert.Contains("characterlegacy.shpk", tr["Settings.GearShaders.AutoUpgrade.Tip"].Message);
+        Assert.Contains("character.shpk", tr["Settings.GearShaders.AutoUpgrade.Tip"].Message);
+        foreach (var key in new[] { "Chat.ShaderUpgrade.Fmt", "MeshVolume.Feature.ShaderUpgrade" })
+        {
+            Assert.True(tr.ContainsKey(key), $"[{lang}] has no {key}");
+            Assert.NotEqual(en[key].Message, tr[key].Message);
+        }
+        Assert.Contains("/proteus", tr["Chat.ShaderUpgrade.Fmt"].Message);
+    }
+
+    /// <summary>
+    /// "Gear variants" words are translated, not copied, keep English's line breaks, and keep TexTools' own button name
+    /// and /proteus verbatim.
+    /// </summary>
+    [Theory]
+    [MemberData(nameof(Translations))]
+    [Trait("Plan", "AC-imc-all-variants-8")]
+    public void GearVariants_strings_are_translated_not_copied(string lang)
+    {
+        var en = Load(Source);
+        var tr = Load(lang);
+        foreach (var key in en.Keys.Where(k => k.StartsWith("Settings.GearVariants.", StringComparison.Ordinal)
+                                            || k is "Settings.Section.GearVariants" or "Chat.VariantRepoint.Fmt"))
+        {
+            Assert.True(tr.ContainsKey(key), $"[{lang}] has no {key}");
+            Assert.NotEqual(en[key].Message, tr[key].Message);
+            Assert.Equal(en[key].Message.Count(c => c == '\n'), tr[key].Message.Count(c => c == '\n'));
+        }
+        Assert.Contains("Apply to All Variants", tr["Settings.GearVariants.Auto.Tip"].Message);
+        Assert.Contains("TexTools", tr["Settings.GearVariants.Auto.Tip"].Message);
+        Assert.Contains("/proteus", tr["Chat.VariantRepoint.Fmt"].Message);
+        Assert.Contains(tr["Settings.Section.GearVariants"].Message, tr["Chat.VariantRepoint.Fmt"].Message);
+    }
+
+    /// <summary>The keys the temporary-copy design used are gone from every locale and from the code.</summary>
+    [Theory]
+    [MemberData(nameof(AllLocales))]
+    [Trait("Plan", "AC-dt-shader-upgrade-9")]
+    public void Obsolete_shader_upgrade_keys_are_gone(string lang)
+    {
+        var loc = Load(lang);
+        foreach (var key in new[] { "Settings.GearShaders.Reason.Outranked", "Settings.GearShaders.Reason.Unresolved" })
+            Assert.False(loc.ContainsKey(key), $"[{lang}] still has {key}");
+        var strings = System.IO.File.ReadAllText(ShaderUpgradePlanTests.SourceFile("Proteus/Localization/Strings.cs"));
+        Assert.DoesNotContain("Reason.Outranked", strings);
+        Assert.DoesNotContain("Reason.Unresolved", strings);
+    }
+
+    /// <summary>The English tip says the mods' files are rewritten (backed up), that off does not undo, and names both buttons.</summary>
+    [Fact]
+    [Trait("Plan", "AC-dt-shader-upgrade-14")]
+    public void ShaderUpgrade_tip_warns_about_rewrites_and_declines()
+    {
+        var en = Load(Source);
+        var tip = en["Settings.GearShaders.AutoUpgrade.Tip"].Message;
+        Assert.Contains("rewrites the worn mod", tip);
+        Assert.Contains("backing each file up", tip);
+        Assert.Contains("does not undo", tip);
+        Assert.Contains(en["Settings.GearShaders.UndoWorn"].Message, tip);
+        Assert.Contains(en["Settings.GearShaders.UpgradeNow"].Message, tip);
+    }
+
+    /// <summary>
     /// The toe cap tick's words are translated, not copied, keep English's line breaks, and keep the Penumbra names
     /// the user has to find ("Toe Cap", "Masks") verbatim.
     /// </summary>
@@ -217,21 +367,70 @@ public sealed class LocalizationTests
         foreach (string key in new[] { "Colors.ToeCap.Label", "Colors.ToeCap.Tip", "Colors.ToeCap.Held.Tip",
                                        "Colors.ToeCap.Inherited.Note", "Colors.ToeCap.Failed.Fmt",
                                        "Colors.ToeCap.ModOff", "Colors.ToeCap.NoShell",
-                                       "Colors.ToeCap.Flag.Tip", "Colors.ToeCap.Locked.Tip", "Colors.ToeCap.SaveFailed" })
+                                       "Colors.ToeCap.Flag.Tip", "Colors.ToeCap.Locked.Tip", "Colors.ToeCap.SaveFailed",
+                                       "Colors.ToeCap.FlagOwn.Tip" })
         {
             Assert.True(tr.ContainsKey(key), $"[{lang}] has no {key}");
             Assert.NotEqual(en[key].Message, tr[key].Message);
             Assert.Equal(en[key].Message.Count(c => c == '\n'), tr[key].Message.Count(c => c == '\n'));
         }
-        foreach (string key in new[] { "Colors.ToeCap.Tip", "Colors.ToeCap.Held.Tip", "Colors.ToeCap.Locked.Tip" })
+        foreach (string key in new[] { "Colors.ToeCap.Tip", "Colors.ToeCap.Held.Tip", "Colors.ToeCap.Locked.Tip",
+                                       "Colors.ToeCap.FlagOwn.Tip" })
         {
             Assert.Contains("Toe Cap", tr[key].Message);
             Assert.Contains("Masks", tr[key].Message);
         }
+        Assert.Contains("Penumbra", tr["Colors.ToeCap.FlagOwn.Tip"].Message);
         foreach (string body in new[] { "Bibo+", "Neolithe", "Rue", "YAB" })
+        {
             Assert.Contains(body, tr["Colors.ToeCap.Flag.Tip"].Message);
+            Assert.Contains(body, tr["Colors.ToeCap.FlagOwn.Tip"].Message);
+        }
         Assert.Contains("/xllog", tr["Colors.ToeCap.SaveFailed"].Message);
     }
+
+    /// <summary>The single-choice tooltip (#61) never says the mod has no toe cap of its own: it has one.</summary>
+    [Fact]
+    [Trait("Plan", "AC-issue-sweep-a-10")]
+    [Trait("Plan", "EDGE-issue-sweep-a-25")]
+    public void ToeCap_single_choice_tip_names_the_mods_own_cap()
+    {
+        var en = Load(Source);
+        Assert.DoesNotContain("no toe cap of its own", en["Colors.ToeCap.FlagOwn.Tip"].Message);
+        Assert.Contains("only one choice", en["Colors.ToeCap.FlagOwn.Tip"].Message);
+        Assert.Contains("no toe cap of its own", en["Colors.ToeCap.Flag.Tip"].Message);   // still true where it's said
+    }
+
+    /// <summary>Every README's "Cap the toes" bullet says a Toe Cap in a single-choice group is chosen in Penumbra (#61).</summary>
+    [Theory]
+    [MemberData(nameof(AllLocales))]
+    [Trait("Plan", "AC-issue-sweep-a-10")]
+    [Trait("Plan", "EDGE-issue-sweep-a-25")]
+    public void Readme_toe_cap_bullet_names_the_single_choice_group(string lang)
+    {
+        var dir = new System.IO.DirectoryInfo(AppContext.BaseDirectory);
+        while (dir != null && !System.IO.File.Exists(System.IO.Path.Combine(dir.FullName, "proteus.slnx"))) dir = dir.Parent;
+        Assert.True(dir != null, $"Could not find proteus.slnx above {AppContext.BaseDirectory}.");
+        string readme = System.IO.File.ReadAllText(System.IO.Path.Combine(
+            dir!.FullName, lang == Source ? "README.md" : System.IO.Path.Combine("docs", $"README.{lang}.md")));
+        string bullet = readme.Split('\n').Single(l => l.Contains("**" + ReadmeCapTheToes[lang] + "**") && l.Contains("*Toe Cap*"));
+        Assert.Contains(ReadmeSingleChoice[lang], bullet);
+    }
+
+    /// <summary>The "Cap the toes" bullet's bold label in each README.</summary>
+    private static readonly Dictionary<string, string> ReadmeCapTheToes = new()
+    {
+        ["en"] = "Cap the toes", ["de"] = "Zehen abdecken", ["es"] = "Cubrir los dedos de los pies",
+        ["fr"] = "Couvrir les orteils", ["ja"] = "つま先をまとめる", ["ko"] = "발가락 감싸기",
+        ["ru"] = "Закрыть пальцы ног", ["zh"] = "包覆脚趾",
+    };
+
+    /// <summary>"A group with one choice", as each README's toe-cap bullet says it.</summary>
+    private static readonly Dictionary<string, string> ReadmeSingleChoice = new()
+    {
+        ["en"] = "single-choice group", ["de"] = "nur einer Wahl", ["es"] = "una sola elección", ["fr"] = "choix unique",
+        ["ja"] = "ひとつしか選べない", ["ko"] = "하나만 고를 수 있는", ["ru"] = "единственным выбором", ["zh"] = "只能单选",
+    };
 
     /// <summary>
     /// The words for a target option that draws underwear where the source has skin — the refusal, and the two Body size
@@ -1110,6 +1309,67 @@ public sealed class LocalizationTests
         // The hint and refusal name the dropdowns as this language labels them.
         Assert.Contains(tr["Parts.Retarget.Race.Label"].Message, tr["Parts.Retarget.Race.CrossSexHint.Fmt"].Message);
         Assert.Contains(tr["Parts.Retarget.FromBody"].Message, tr["Parts.Retarget.Refuse.CrossSexMadeFor.Fmt"].Message);
+    }
+
+    private static readonly string[] CrossSexHairKeys =
+    [
+        "HairPort.Studio.OtherSex", "HairPort.Studio.OtherSex.Note.Fmt", "HairPort.Studio.OtherSexAuthored",
+        "HairPort.Studio.OtherSexSkeleton", "HairPort.Refused.NotTarget", "HairPort.Refused.OtherSexAuto",
+        "HairPort.Refused.OtherSexAuthored.Fmt", "HairPort.Refused.OtherSexAuthoredAuto.Fmt",
+        "HairPort.Refused.OtherSexSkeleton.Fmt", "HairPort.Auto.Tip3",
+    ];
+
+    /// <summary>Porting a hairstyle to the other sex is said in every language; the old "only one sex" text is gone.</summary>
+    [Theory]
+    [MemberData(nameof(Translations))]
+    [Trait("Plan", "AC-cross-sex-hair-port-8")]
+    public void Cross_sex_hair_port_strings_are_translated_in_every_locale(string lang)
+    {
+        var en = Load(Source);
+        var tr = Load(lang);
+        foreach (var key in CrossSexHairKeys)
+        {
+            Assert.True(tr.ContainsKey(key), $"{lang} lacks {key}");
+            Assert.NotEqual(en[key].Message, tr[key].Message);
+            Assert.Equal(Placeholders(en[key].Message), Placeholders(tr[key].Message));
+        }
+        foreach (var gone in new[] { "HairPort.Refused.Gender", "HairPort.Auto.Tip2" })
+        {
+            Assert.False(en.ContainsKey(gone), $"en still has {gone}");
+            Assert.False(tr.ContainsKey(gone), $"{lang} still has {gone}");
+        }
+    }
+
+    [Fact]
+    [Trait("Plan", "AC-cross-sex-hair-port-8")]
+    public void Auto_tip_says_studio_ports_across_the_sexes_are_kept()
+    {
+        var tip = Load(Source)["HairPort.Auto.Tip3"].Message;
+        Assert.Contains("Studio", tip);
+        Assert.Contains("kept up to date", tip);
+        Assert.Contains("Only for your own race, from races of the same sex.", tip);
+    }
+
+    /// <summary>Every README's "Port to all races" bullet says the other sex can be ticked too, under its own label.</summary>
+    [Theory]
+    [MemberData(nameof(AllLocales))]
+    [Trait("Plan", "AC-cross-sex-hair-port-8")]
+    public void Readme_says_port_to_all_races_can_cross_the_sexes(string lang)
+    {
+        var dir = new System.IO.DirectoryInfo(AppContext.BaseDirectory);
+        while (dir != null && !System.IO.File.Exists(System.IO.Path.Combine(dir.FullName, "proteus.slnx"))) dir = dir.Parent;
+        Assert.True(dir != null, $"Could not find proteus.slnx above {AppContext.BaseDirectory}.");
+        string readme = System.IO.File.ReadAllText(System.IO.Path.Combine(
+            dir!.FullName, lang == Source ? "README.md" : System.IO.Path.Combine("docs", $"README.{lang}.md")));
+        var strings = Load(lang);
+        string header = "**" + strings["HairPort.Studio.Header"].Message + "**";
+        string otherSex = "**" + strings["HairPort.Studio.OtherSex"].Message + "**";
+        Assert.Contains(readme.Split('\n'), l => l.StartsWith("- ", StringComparison.Ordinal) && l.Contains(header) && l.Contains(otherSex));
+        if (lang == Source)
+        {
+            Assert.Contains("the other sex", readme);
+            Assert.Contains("never makes one by itself", readme);
+        }
     }
 
     /// <summary>Every README describes the refit for the other sex under its own "Refit for", and none still says it never happens.</summary>

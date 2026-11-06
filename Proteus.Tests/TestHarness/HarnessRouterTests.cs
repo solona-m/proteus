@@ -8,16 +8,19 @@ using Xunit;
 
 namespace Proteus.Tests.TestHarness;
 
+[Collection(HarnessTimingCollection.Name)]
 public class HarnessRouterTests : IDisposable
 {
     private readonly HarnessFixture f = new();
     public void Dispose() => f.Dispose();
 
     [Fact]
+    [Trait("Plan", "AC-hair-port-qa-2")]
     public async Task EveryRoute_FrameworkMembersOnDispatcherThread()
     {
         // [AC-qa-harness-4] Every game-touching call every route makes runs on the framework thread.
         f.AddMod();
+        using var hair = f.AddHairMod();
         await f.Get("/health");
         await f.Get("/state");
         await f.Get("/log");
@@ -27,6 +30,12 @@ public class HarnessRouterTests : IDisposable
         var (_, restore) = await f.Post("/actions/restore", $$"""{"job":"{{job.GetProperty("id").GetString()}}"}""");
         await f.WaitJob(restore.GetProperty("job").GetString()!);
         await f.Get($"/jobs/{job.GetProperty("id").GetString()}");
+        await f.Get("/hair-port?mod=Hair&hair=chara/human/c0201/obj/hair/h0005/model/c0201h0005_hir.mdl");
+        var (_, port) = await f.Post("/actions/hair-port",
+            """{"mod":"Hair","hair":"chara/human/c0201/obj/hair/h0005/model/c0201h0005_hir.mdl","races":["c0101"]}""");
+        await f.WaitJob(port.GetProperty("job").GetString()!);
+        // The hair routes read the game's files and the mod off the framework thread.
+        Assert.DoesNotContain(f.Game.Order, o => o is "ReadGameFile@framework" or "IsHairMod@framework");
 
         var members = f.Game.Calls.Select(c => c.Member).Distinct().ToHashSet();
         foreach (var expected in new[] { "Health", "State", "NamesNow", "ViewportId", "Mods", "PrepareSizeSet", "AfterModChange" })
@@ -180,9 +189,159 @@ public class HarnessRouterTests : IDisposable
     }
 
     [Fact]
+    [Trait("Plan", "AC-dt-shader-upgrade-10")]
+    [Trait("Plan", "AC-hair-port-qa-8")]
     public void Routes_AreTheContract()
     {
-        Assert.Equal(["/health", "/state", "/log", "/screenshot", "/actions/refit", "/actions/restore", "/jobs/{id}"],
+        Assert.Equal(["/health", "/state", "/log", "/screenshot", "/hair-port", "/actions/refit", "/actions/restore",
+                      "/actions/shader-upgrade", "/actions/variant-repoint", "/actions/hair-port", "/actions/equip",
+                      "/actions/mod-settings", "/actions/put-back", "/jobs/{id}"],
                      HarnessRouter.Routes.Select(r => r.Path));
+    }
+
+    [Fact]
+    [Trait("Plan", "AC-dt-shader-upgrade-10")]
+    public async Task State_reports_the_shader_upgrade_block()
+    {
+        f.Game.ShaderUpgradeView = new Proteus.Services.ShaderUpgradeWatcher.View(
+            Enabled: true, Waiting: "none", MaskGloss: "mid",
+            Upgraded: [new("chara/equipment/e0001/material/v0001/mt_c0201e0001_top_a.mtrl", "Dress", "red/top.mtrl", "diffuse",
+                           "chara/equipment/e0001/texture/dt_ab_mask.tex", "Shader Upgrade/ab_mask.tex")],
+            Left: [new("chara/equipment/e0002/material/v0001/mt_c0201e0002_dwn_a.mtrl", "Skirt/b.mtrl", "specular-from-other-mod")],
+            MemoHits: 2, Decodes: 1,
+            LastRun: new("undo-worn", 1, 2, 2, 0, 0, true, true, DateTime.UtcNow));
+        var (status, b) = await f.Get("/state");
+        Assert.Equal(200, status);
+        var su = b.GetProperty("shaderUpgrade");
+        Assert.True(su.GetProperty("enabled").GetBoolean());
+        Assert.Equal("mid", su.GetProperty("maskGloss").GetString());
+        var up = su.GetProperty("upgraded")[0];
+        Assert.Equal("Dress", up.GetProperty("modDir").GetString());
+        Assert.Equal("diffuse", up.GetProperty("form").GetString());
+        Assert.Equal("Shader Upgrade/ab_mask.tex", up.GetProperty("mask").GetProperty("file").GetString());
+        Assert.Equal("specular-from-other-mod", su.GetProperty("left")[0].GetProperty("reason").GetString());
+        Assert.Equal(2, su.GetProperty("masks").GetProperty("memoHits").GetInt32());
+        Assert.Equal("undo-worn", su.GetProperty("lastRun").GetProperty("kind").GetString());
+    }
+
+    [Fact]
+    [Trait("Plan", "AC-dt-shader-upgrade-10")]
+    [Trait("Plan", "EDGE-dt-shader-upgrade-69")]
+    [Trait("Plan", "EDGE-issue-sweep-a-11")]
+    public async Task Shader_upgrade_action_validates_and_starts_undo_worn_and_upgrade_now()
+    {
+        var (status, b) = await f.Post("/actions/shader-upgrade", """{"enabled":true,"maskGloss":"low"}""");
+        Assert.Equal(200, status);
+        Assert.True(b.GetProperty("enabled").GetBoolean());
+        Assert.Equal("low", b.GetProperty("maskGloss").GetString());
+
+        (status, b) = await f.Post("/actions/shader-upgrade", """{"undoWorn":true,"decline":false}""");
+        Assert.Equal(202, status);
+        (status, _) = await f.Post("/actions/shader-upgrade", """{"upgradeWornNow":true}""");
+        Assert.Equal(202, status);
+        Assert.Equal([(true, false), (false, true)], f.Game.ShaderUpgradeRuns);
+
+        f.Game.ShaderUpgradeBusy = true;
+        Assert.Equal((409, "busy"), await Error("/actions/shader-upgrade", """{"undoWorn":true}"""));
+        f.Game.ShaderUpgradeBusy = false;
+
+        Assert.Equal((400, "invalid-field"), await Error("/actions/shader-upgrade", "{}"));
+        Assert.Equal((400, "invalid-field"), await Error("/actions/shader-upgrade", """{"undo":"all"}"""));
+        Assert.Equal((400, "invalid-field"), await Error("/actions/shader-upgrade", """{"decline":false}"""));
+        Assert.Equal((400, "invalid-field"), await Error("/actions/shader-upgrade", """{"undoWorn":true,"upgradeWornNow":true}"""));
+        Assert.Equal((400, "invalid-field"), await Error("/actions/shader-upgrade", """{"enabled":"yes"}"""));
+        Assert.Equal((400, "invalid-field"), await Error("/actions/shader-upgrade", """{"maskGloss":"shiny"}"""));
+        Assert.Equal((400, "bad-json"), await Error("/actions/shader-upgrade", "{not json"));
+        var (getStatus, _) = await f.Get("/actions/shader-upgrade");
+        Assert.Equal(405, getStatus);
+        Assert.Contains(f.Game.Order, o => o == "StartShaderUpgradeRun@framework");
+    }
+
+    [Fact]
+    [Trait("Plan", "AC-imc-all-variants-10")]
+    public async Task Variant_repoint_state_block_shape()
+    {
+        f.Game.VariantRepointView = new Proteus.Services.VariantRepointWatcher.View(
+            Enabled: true, Waiting: "none", AwaitingRedraw: true,
+            Worn: [new("This Old Thing", "e6255 Body", 2, 1, "v0001"), new(null, "a0053 Earrings", 1, null, null)],
+            Repointed: [new("This Old Thing", "e6255 Body", 1, [2], [0, 2], [3])],
+            Left: [new("Skirt", "e6256 Legs", "several-variants")],
+            LastRun: new("repoint", 1, 2, 0, 0, 0, true, true, DateTime.UtcNow));
+        var (status, b) = await f.Get("/state");
+        Assert.Equal(200, status);
+        var vr = b.GetProperty("variantRepoint");
+        Assert.True(vr.GetProperty("enabled").GetBoolean());
+        Assert.True(vr.GetProperty("awaitingRedraw").GetBoolean());
+        Assert.Equal("none", vr.GetProperty("waiting").GetString());
+        var worn = vr.GetProperty("worn")[0];
+        Assert.Equal("This Old Thing", worn.GetProperty("modDir").GetString());
+        Assert.Equal("e6255 Body", worn.GetProperty("item").GetString());
+        Assert.Equal(2, worn.GetProperty("variant").GetInt32());
+        Assert.Equal(1, worn.GetProperty("effectiveMaterialId").GetInt32());
+        Assert.Equal("v0001", worn.GetProperty("loadedFolder").GetString());
+        Assert.Equal(JsonValueKind.Null, vr.GetProperty("worn")[1].GetProperty("modDir").ValueKind);
+        var rp = vr.GetProperty("repointed")[0];
+        Assert.Equal(1, rp.GetProperty("materialId").GetInt32());
+        Assert.Equal(2, rp.GetProperty("variants").GetArrayLength());
+        Assert.Equal(2, rp.GetProperty("folders")[0].GetInt32());
+        Assert.Equal(3, rp.GetProperty("legacyImcVariants")[0].GetInt32());
+        Assert.Equal("several-variants", vr.GetProperty("left")[0].GetProperty("reason").GetString());
+        var run = vr.GetProperty("lastRun");
+        Assert.Equal("repoint", run.GetProperty("kind").GetString());
+        Assert.Equal(2, run.GetProperty("foldersWritten").GetInt32());
+        Assert.False(run.GetProperty("nothingRecorded").GetBoolean());
+    }
+
+    [Fact]
+    [Trait("Plan", "AC-imc-all-variants-10")]
+    public async Task Variant_repoint_action_validates_and_starts()
+    {
+        var (status, b) = await f.Post("/actions/variant-repoint", """{"enabled":true}""");
+        Assert.Equal(200, status);
+        Assert.True(b.GetProperty("enabled").GetBoolean());
+        Assert.True(f.Game.VariantRepointEnabled);
+
+        (status, _) = await f.Post("/actions/variant-repoint", """{"undoWorn":true,"decline":false}""");
+        Assert.Equal(202, status);
+        (status, _) = await f.Post("/actions/variant-repoint", """{"repointWornNow":true}""");
+        Assert.Equal(202, status);
+        Assert.Equal([(true, false), (false, true)], f.Game.VariantRepointRuns);
+
+        f.Game.VariantRepointBusy = true;
+        Assert.Equal((409, "busy"), await Error("/actions/variant-repoint", """{"undoWorn":true}"""));
+        f.Game.VariantRepointBusy = false;
+        f.Game.VariantRepointOthersBusy = true;   // the shader upgrade or auto refit
+        Assert.Equal((409, "busy"), await Error("/actions/variant-repoint", """{"repointWornNow":true}"""));
+        f.Game.VariantRepointOthersBusy = false;
+
+        Assert.Equal((400, "invalid-field"), await Error("/actions/variant-repoint", "{}"));
+        Assert.Equal((400, "invalid-field"), await Error("/actions/variant-repoint", """{"undo":"all"}"""));
+        Assert.Equal((400, "invalid-field"), await Error("/actions/variant-repoint", """{"decline":false}"""));
+        Assert.Equal((400, "invalid-field"), await Error("/actions/variant-repoint", """{"undoWorn":true,"repointWornNow":true}"""));
+        Assert.Equal((400, "invalid-field"), await Error("/actions/variant-repoint", """{"enabled":"yes"}"""));
+        Assert.Equal((400, "invalid-field"), await Error("/actions/variant-repoint", """{"undoWorn":false}"""));
+        Assert.Equal((400, "bad-json"), await Error("/actions/variant-repoint", "{not json"));
+        var (getStatus, _) = await f.Get("/actions/variant-repoint");
+        Assert.Equal(405, getStatus);
+        Assert.Contains(f.Game.Order, o => o == "StartVariantRepointRun@framework");
+    }
+
+    [Fact]
+    [Trait("Plan", "AC-issue-sweep-a-3")]
+    [Trait("Plan", "EDGE-issue-sweep-a-10")]
+    public async Task Duplicate_keys_are_refused_and_change_nothing()
+    {
+        f.AddMod();
+        Assert.False(f.Game.ShaderUpgradeEnabled);
+        Assert.Equal((400, "bad-json"), await Error("/actions/shader-upgrade", """{"enabled":true,"enabled":false}"""));
+        Assert.Equal((400, "bad-json"), await Error("/actions/shader-upgrade", """{"enabled":false,"enabled":true}"""));
+        Assert.False(f.Game.ShaderUpgradeEnabled);
+        Assert.DoesNotContain(f.Game.Order, o => o.StartsWith("SetShaderUpgrade"));
+        Assert.Equal((400, "bad-json"), await Error("/actions/refit", """{"mod":"Outfit","bodies":["rue"],"mod":"Other"}"""));
+        Assert.Equal((400, "bad-json"), await Error("/actions/restore", """{"mod":"Outfit","x":{"a":1,"a":2}}"""));
+        // A well-formed body still goes through.
+        var (status, _) = await f.Post("/actions/shader-upgrade", """{"enabled":true}""");
+        Assert.Equal(200, status);
+        Assert.True(f.Game.ShaderUpgradeEnabled);
     }
 }

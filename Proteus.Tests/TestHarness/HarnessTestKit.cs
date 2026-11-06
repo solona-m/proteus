@@ -11,6 +11,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using Dalamud.Plugin.Services;
 using NSubstitute;
+using Proteus.Interop;
 using Proteus.Services;
 using Proteus.TestHarness;
 
@@ -48,6 +49,11 @@ internal sealed class FakeFrameworkDispatcher : IFrameworkDispatcher, IDisposabl
     }
 
     public bool OnFramework => Environment.CurrentManagedThreadId == ThreadId;
+    public bool OnFrameworkThread => OnFramework;
+
+    /// <summary>Run <paramref name="work"/> on the fake framework thread and wait for it.</summary>
+    public T Run<T>(Func<T> work) => Post(work).GetAwaiter().GetResult();
+    public void Run(Action work) => Post(() => { work(); return 0; }).GetAwaiter().GetResult();
 
     public void Stall() => running.Reset();
     public void Resume() => running.Set();
@@ -171,8 +177,114 @@ internal sealed class FakeGame : IHarnessGame
         Fw(nameof(State));
         return new RawState(LoggedIn ? Character : null, LoggedIn && PenumbraUp ? Collection : null, LoggedIn ? Loaded : [],
                             PenumbraUp ? ResourceMap : null, PenumbraUp ? ModsRoot : null, Compositor, null, null,
-                            new AutoRefitInfo(View, Activity));
+                            new AutoRefitInfo(View, Activity))
+        {
+            Gear = ReadGear(),
+        };
     }
+
+    // ── equip and hold ──────────────────────────────────────────────────────
+
+    /// <summary>What Glamourer says is worn; every slot starts as item 1000+index with no dyes.</summary>
+    public Dictionary<string, Worn> Gear { get; } =
+        HarnessGear.Slots.Select((s, i) => (s, i)).ToDictionary(t => t.s, t => new Worn(1000UL + (ulong)t.i, 0, 0));
+    public bool GlamourerUp { get; set; } = true;
+    /// <summary>The next N gear reads fail (null) once this many reads have gone by; -1 never.</summary>
+    public int GearReadsBeforeFailure { get; set; } = -1;
+    /// <summary>Glamourer's answer to SetGear: null = Success.</summary>
+    public Func<string, ulong, string?> SetGearAnswer { get; set; } = (_, _) => null;
+    /// <summary>What Glamourer stores for a sent id (it may normalise a custom id to an item id).</summary>
+    public Func<string, ulong, ulong> Normalise { get; set; } = (_, id) => id;
+    public List<(string Slot, ulong Id, byte Dye1, byte Dye2)> GearSets { get; } = [];
+    public HashSet<string> Carriers { get; } = new(StringComparer.Ordinal);
+
+    public Dictionary<(Guid, string), PenumbraBridge.TemporaryHold> Temporary { get; } = new();
+    public Dictionary<(Guid, string), int> TemporaryKeys { get; } = new();
+    public bool QueryFails { get; set; }
+    public Dictionary<string, PenumbraBridge.SettingsRead> Settings { get; } = new(StringComparer.OrdinalIgnoreCase);
+    public bool ReadThrows { get; set; }
+    public string? SetHoldAnswer { get; set; }
+    public string? ClearHoldAnswer { get; set; }
+    public bool ClearHoldThrows { get; set; }
+    public List<(Guid Collection, string Dir, bool Enabled, int Priority, IReadOnlyDictionary<string, List<string>> Options, string Source, int Key)> HoldSets { get; } = [];
+    public List<(Guid Collection, int Key)> Sweeps { get; } = [];
+    public Func<Guid, int, string>? SweepAnswer { get; set; }
+    public int RedrawRequests;
+    public Action<string>? OnSetGear { get; set; }
+
+    private Dictionary<string, Worn>? ReadGear()
+    {
+        if (!GlamourerUp || !LoggedIn) return null;
+        if (GearReadsBeforeFailure == 0) return null;
+        if (GearReadsBeforeFailure > 0) GearReadsBeforeFailure--;
+        return new Dictionary<string, Worn>(Gear);
+    }
+
+    public IReadOnlyDictionary<string, Worn>? GearNow() { Fw(nameof(GearNow)); return ReadGear(); }
+
+    public bool PlayerPresent() { Fw(nameof(PlayerPresent)); return LoggedIn; }
+
+    public string? SetGear(string slot, ulong id, byte dye1, byte dye2)
+    {
+        Fw(nameof(SetGear));
+        OnSetGear?.Invoke(slot);
+        if (!GlamourerUp) return "unavailable";
+        if (SetGearAnswer(slot, id) is { } ec) return ec;
+        GearSets.Add((slot, id, dye1, dye2));
+        Gear[slot] = new Worn(Normalise(slot, id), dye1, dye2);
+        return null;
+    }
+
+    public IReadOnlyCollection<string> CarrierSlots() { Fw(nameof(CarrierSlots)); return Carriers.ToList(); }
+
+    public Guid? PlayerCollection() { Fw(nameof(PlayerCollection)); return PenumbraUp ? Collection : null; }
+
+    public PenumbraBridge.TemporaryHold? QueryHold(Guid collection, string modDir)
+    {
+        Fw(nameof(QueryHold));
+        if (QueryFails || !PenumbraUp) return null;
+        return Temporary.TryGetValue((collection, modDir), out var h) ? h : new PenumbraBridge.TemporaryHold(false, false, "", false, 0);
+    }
+
+    public PenumbraBridge.SettingsRead ReadSettings(Guid collection, string modDir)
+    {
+        Fw(nameof(ReadSettings));
+        if (ReadThrows) throw new InvalidOperationException("ipc gone");
+        return Settings.TryGetValue(modDir, out var r) ? r : new PenumbraBridge.SettingsRead(PenumbraBridge.SettingsReadKind.None, null);
+    }
+
+    public string? SetHold(Guid collection, string modDir, bool enabled, int priority,
+                           IReadOnlyDictionary<string, List<string>> options, string source, int key)
+    {
+        Fw(nameof(SetHold));
+        if (SetHoldAnswer != null) return SetHoldAnswer;
+        HoldSets.Add((collection, modDir, enabled, priority, options, source, key));
+        Temporary[(collection, modDir)] = new PenumbraBridge.TemporaryHold(true, false, source, enabled, priority);
+        TemporaryKeys[(collection, modDir)] = key;
+        return null;
+    }
+
+    public string? ClearHold(Guid collection, string modDir)
+    {
+        Fw(nameof(ClearHold));
+        if (ClearHoldThrows) throw new InvalidOperationException("ipc gone");
+        if (ClearHoldAnswer != null) return ClearHoldAnswer;
+        if (!Temporary.Remove((collection, modDir))) return "NothingChanged";
+        TemporaryKeys.Remove((collection, modDir));
+        return null;
+    }
+
+    public string SweepHolds(Guid collection, int key)
+    {
+        Fw(nameof(SweepHolds));
+        Sweeps.Add((collection, key));
+        if (SweepAnswer != null) return SweepAnswer(collection, key);
+        var mine = TemporaryKeys.Where(kv => kv.Key.Item1 == collection && kv.Value == key).Select(kv => kv.Key).ToList();
+        foreach (var k in mine) { Temporary.Remove(k); TemporaryKeys.Remove(k); }
+        return mine.Count > 0 ? "Success" : "NothingChanged";
+    }
+
+    public void RequestRedraw() { Fw(nameof(RequestRedraw)); Interlocked.Increment(ref RedrawRequests); }
 
     public (IReadOnlyCollection<string> Collections, string? Character) NamesNow()
     {
@@ -251,6 +363,52 @@ internal sealed class FakeGame : IHarnessGame
 
     public uint ViewportId() { Fw(nameof(ViewportId)); return 7; }
 
+    public ShaderUpgradeWatcher.View ShaderUpgradeView { get; set; } = new();
+    public ShaderUpgradeWatcher.View ShaderUpgrade() => ShaderUpgradeView;
+    public bool ShaderUpgradeEnabled { get; set; }
+    public string ShaderUpgradeGloss { get; set; } = "inverse-specular";
+    public (bool Enabled, string MaskGloss) SetShaderUpgrade(bool? enabled, string? maskGloss)
+    {
+        Fw(nameof(SetShaderUpgrade));
+        if (enabled is { } on) ShaderUpgradeEnabled = on;
+        if (maskGloss != null) ShaderUpgradeGloss = maskGloss;
+        return (ShaderUpgradeEnabled, ShaderUpgradeGloss);
+    }
+
+    public bool ShaderUpgradeBusy { get; set; }
+    public List<(bool UndoWorn, bool Decline)> ShaderUpgradeRuns { get; } = [];
+    public bool StartShaderUpgradeRun(bool undoWorn, bool decline)
+    {
+        Fw(nameof(StartShaderUpgradeRun));
+        if (ShaderUpgradeBusy) return false;
+        ShaderUpgradeRuns.Add((undoWorn, decline));
+        return true;
+    }
+
+    public VariantRepointWatcher.View VariantRepointView { get; set; } = new();
+    public VariantRepointWatcher.View VariantRepoint() => VariantRepointView;
+    public bool VariantRepointEnabled { get; set; }
+    public bool SetVariantRepoint(bool enabled)
+    {
+        Fw(nameof(SetVariantRepoint));
+        VariantRepointEnabled = enabled;
+        return VariantRepointEnabled;
+    }
+
+    /// <summary>The shader upgrade or auto refit is working.</summary>
+    public bool VariantRepointOthersBusy { get; set; }
+    public bool VariantRepointBlocked() { Fw(nameof(VariantRepointBlocked)); return VariantRepointOthersBusy; }
+
+    public bool VariantRepointBusy { get; set; }
+    public List<(bool UndoWorn, bool Decline)> VariantRepointRuns { get; } = [];
+    public bool StartVariantRepointRun(bool undoWorn, bool decline)
+    {
+        Fw(nameof(StartVariantRepointRun));
+        if (VariantRepointBusy) return false;
+        VariantRepointRuns.Add((undoWorn, decline));
+        return true;
+    }
+
     public Task<RawFrame> CaptureRaw(uint viewportId, bool includeUi, CancellationToken ct)
     {
         LastCaptureUi = includeUi;
@@ -258,6 +416,27 @@ internal sealed class FakeGame : IHarnessGame
     }
 
     public bool? LastCaptureUi { get; private set; }
+
+    /// <summary>The automatic hair path as /state and the busy rules see it.</summary>
+    public HairPortInfo HairPortView { get; set; } = new(new HairPortWatcher.View(), new HairPortWatcher.ScanView(), false, true, false);
+    public HairPortInfo HairPort() => HairPortView;
+
+    /// <summary>The game's own files a hair port reads: heads, hair models, materials, skeletons, the racial deformer.</summary>
+    public Dictionary<string, byte[]> GameFiles { get; set; } = new(StringComparer.OrdinalIgnoreCase);
+    /// <summary>Runs on the reading thread before each game-file read: where a test stalls a bend.</summary>
+    public Action<string>? OnReadGameFile { get; set; }
+    public byte[]? ReadGameFile(string gamePath)
+    {
+        Order.Enqueue("ReadGameFile@" + Where());
+        OnReadGameFile?.Invoke(gamePath);
+        return GameFiles.TryGetValue(gamePath, out var b) ? b : null;
+    }
+
+    public bool IsHairMod(string modRoot)
+    {
+        Order.Enqueue("IsHairMod@" + Where());
+        return HairPortJob.IsHairMod(modRoot);
+    }
 }
 
 /// <summary>A temp folder deleted at the end.</summary>
@@ -296,18 +475,20 @@ internal sealed class HarnessFixture : IDisposable
     public SessionNames Names { get; } = new();
     public LogRing Ring { get; }
     public HarnessRouter Router { get; }
+    public HarnessChanges Changes { get; }
     public HarnessServer Server { get; }
     public HttpClient Client { get; }
     public string Token { get; } = HarnessAuth.NewToken();
     public string ModsRoot { get; }
     public bool Disposing { get; set; }
+    public IPluginLog Log { get; } = Substitute.For<IPluginLog>();
 
     public static readonly HarnessTimings FastTimings = new(TimeSpan.FromMilliseconds(400), TimeSpan.FromMilliseconds(600),
                                                             TimeSpan.FromMilliseconds(150), TimeSpan.FromMilliseconds(30),
                                                             TimeSpan.FromMilliseconds(400));
 
     public HarnessFixture(HarnessTimings? timings = null, Func<string>? backupIds = null, long refitCap = ModBackup.DefaultRefitCap,
-                          string session = "session-a")
+                          string session = "session-a", TimeSpan? readTimeout = null)
     {
         ModsRoot = Temp.Sub("mods");
         Game = new FakeGame(Dispatcher, ModsRoot);
@@ -315,9 +496,10 @@ internal sealed class HarnessFixture : IDisposable
                                 _ => long.MaxValue);
         Jobs = new HarnessJobs(Game, Dispatcher, Backups, session, () => Disposing, timings ?? FastTimings);
         Ring = new LogRing(Names);
+        Changes = new HarnessChanges(Game, Names, Log);
         Router = new HarnessRouter(Jobs, Ring, Names, new CaptureGate((timings ?? FastTimings).Capture), 1411, "11-01 12:00:00",
-                                   Substitute.For<IPluginLog>());
-        Server = new HarnessServer(Router.Handle, Token, TimeSpan.FromMilliseconds(500));
+                                   Substitute.For<IPluginLog>(), Changes);
+        Server = new HarnessServer(Router.Handle, Token, readTimeout ?? TimeSpan.FromMilliseconds(500));
         Server.Start();
         Client = NewClient();
     }
@@ -340,6 +522,17 @@ internal sealed class HarnessFixture : IDisposable
         File.SetLastWriteTimeUtc(System.IO.Path.Combine(root, "chara", "model", "top.mdl"), new DateTime(2024, 1, 2, 3, 4, 5, DateTimeKind.Utc));
         Game.ModFolders[dir] = dir + " (display)";
         return root;
+    }
+
+    /// <summary>A women's hair mod (c0201 h0005 in option Cut / Long) installed, Penumbra knowing it, and the game's files
+    /// a port of it reads — the racial deformer among them.</summary>
+    public HairPortFixtures.Mod AddHairMod(string dir = "Hair", bool physics = false)
+    {
+        var mod = CrossSexFixtures.WomensMod(physics: physics, root: System.IO.Path.Combine(ModsRoot, dir));
+        Game.ModFolders[dir] = dir + " (display)";
+        Game.GameFiles = physics ? CrossSexFixtures.PhysicsFiles() : CrossSexFixtures.GameFiles();
+        Game.GameFiles[Proteus.Interop.LiveCharacter.PbdGamePath] = CrossSexFixtures.PbdBytes();
+        return mod;
     }
 
     public static StringContent Json(string json) => new(json, Encoding.UTF8, "application/json");

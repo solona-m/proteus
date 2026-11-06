@@ -47,6 +47,68 @@ internal static partial class HairMaterialPath
     public static string RenameRace(string name, ushort race)
         => ShortName().IsMatch(name) ? $"/mt_c{race:D4}{name[9..]}" : name;
 
+    /// <summary>
+    /// Whether another playable race of <paramref name="race"/>'s sex reads the same material folder for this hairstyle
+    /// — every playable race, whether or not the game lets it choose the style, so the answer never moves with a patch.
+    /// </summary>
+    public static bool IsShared(ushort race, int hairId)
+    {
+        ushort folder = Race(race, hairId);
+        foreach (var other in HairPortPlan.SameGenderRaces(race))
+            if (Race(other, hairId) == folder) return true;
+        return false;
+    }
+
+    /// <summary>
+    /// The port's own name for a short material name: <c>/mt_c0201h0168_hir_b.mtrl</c> to c0101 is
+    /// <c>/mt_c0101h0168_hir_b_port0101.mtrl</c>. The game keeps everything after the race code (Penumbra.GameData
+    /// <c>GamePaths.Mtrl.Hair</c>; Penumbra's hair Item Swap gives a swap its own file in a shared folder the same way),
+    /// so it reads a file in the shared folder that no game model names. Unchanged for a name that already carries the
+    /// marker, and for any name that is not short.
+    /// </summary>
+    public static string OwnName(string name, ushort race)
+    {
+        if (!ShortName().IsMatch(name) || !name.EndsWith(".mtrl", StringComparison.OrdinalIgnoreCase)) return name;
+        var renamed = RenameRace(name, race);
+        string marker = $"{PortMarker}{race:D4}.mtrl";
+        if (renamed.EndsWith(marker, StringComparison.OrdinalIgnoreCase)) return renamed;
+        return renamed[..^".mtrl".Length] + marker;
+    }
+
+    /// <summary>
+    /// The name a port of <paramref name="from"/>'s hairstyle <paramref name="hairId"/> gives a material for
+    /// <paramref name="to"/>: the target's race code — and, across the sexes into a folder other races of that sex also
+    /// read (<see cref="IsShared"/>), the port's own name (<see cref="OwnName"/>), so redirecting it dresses nobody else.
+    /// One rule for the model's rename, its redirects and its sharers, so they never disagree.
+    /// </summary>
+    public static string PortName(string name, ushort from, ushort to, int hairId)
+        => CrossSexRefit.CrossesSex(from, to) && IsShared(to, hairId) ? OwnName(name, to) : RenameRace(name, to);
+
+    /// <summary>Whether a material name or game path is a port's own (<see cref="OwnName"/>): its file name ends in
+    /// <c>_portNNNN.mtrl</c>.</summary>
+    public static bool IsOwnName(string nameOrPath) => OwnMarker().IsMatch(nameOrPath);
+
+    /// <summary>The race an own name was made for, or 0 for any other name.</summary>
+    public static ushort OwnRace(string nameOrPath)
+        => OwnMarker().Match(nameOrPath) is { Success: true } m ? ushort.Parse(m.Groups[1].Value) : (ushort)0;
+
+    /// <summary>
+    /// Whether <paramref name="gamePath"/> is a game-named material in the folder <paramref name="race"/> reads for
+    /// hairstyle <paramref name="hairId"/> — a file that race's own model of the style may load. A port's own name never
+    /// is: no game model names it.
+    /// </summary>
+    public static bool ReadBy(ushort race, int hairId, string gamePath)
+    {
+        if (IsOwnName(gamePath)) return false;
+        string folder = $"chara/human/c{Race(race, hairId):D4}/obj/hair/h{hairId:D4}/material/";
+        return gamePath.Replace('\\', '/').StartsWith(folder, StringComparison.OrdinalIgnoreCase);
+    }
+
+    private const string PortMarker = "_port";
+
     [GeneratedRegex(@"^/mt_c\d{4}")]
     private static partial Regex ShortName();
+
+    [GeneratedRegex(@"_port(\d{4})\.mtrl$", RegexOptions.IgnoreCase)]
+    private static partial Regex OwnMarker();
 }

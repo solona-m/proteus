@@ -23,6 +23,9 @@ internal sealed class HarnessServer : IDisposable
     private readonly CancellationTokenSource stop = new();
     private Task? loop;
 
+    /// <summary>Connections being served right now (tests wait on it instead of sleeping).</summary>
+    internal int OpenConnections => MaxConnections - connections.CurrentCount;
+
     public HarnessServer(Func<HarnessRequest, Task<HarnessResponse>> handle, string token, TimeSpan? readTimeout = null)
     {
         this.handle = handle;
@@ -70,9 +73,16 @@ internal sealed class HarnessServer : IDisposable
         {
             try
             {
+                // Read the request first (briefly, bounded by the parser): answering before it arrives left its bytes
+                // unread at the close, and Windows then reset the socket and the client never saw the 503 (#67 QA).
+                using (var read = new CancellationTokenSource(TimeSpan.FromMilliseconds(500)))
+                {
+                    try { await HarnessHttp.ReadAsync(client.GetStream(), read.Token).ConfigureAwait(false); }
+                    catch (OperationCanceledException) { /* nothing (more) sent: answer anyway */ }
+                }
                 using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(2));
                 await HarnessHttp.WriteAsync(client.GetStream(),
-                                             HarnessResponse.Error(503, "busy", "too many connections; retry"), cts.Token).ConfigureAwait(false);
+                                             HarnessResponse.Error(503, "too-many-connections", "too many connections; retry"), cts.Token).ConfigureAwait(false);
                 await CloseGracefully(client).ConfigureAwait(false);
             }
             catch (Exception) { /* the client went away */ }

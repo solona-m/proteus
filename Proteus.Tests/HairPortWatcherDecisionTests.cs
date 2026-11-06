@@ -13,7 +13,7 @@ namespace Proteus.Tests;
 /// The automatic path: what a Midlander woman wearing hairstyle 130 gets when the only enabled mod for it was made for
 /// Miqo'te — through <see cref="HairPortWatcher.Run"/> with Penumbra and the game stood in for.
 /// </summary>
-public class HairPortWatcherDecisionTests
+public partial class HairPortWatcherDecisionTests
 {
     private static readonly string Worn = HairPortPlan.HairPath(201, Id);
     private static readonly string Source = HairPortPlan.HairPath(801, Id);
@@ -276,8 +276,8 @@ public class HairPortWatcherDecisionTests
     {
         // Once refused, writing nothing (EDGE-hair-race-port-30); now saved, and said.
         using var s = new Setup();
-        // A target head a third larger than the hair: the port sinks into it.
-        var game = Game(Races, new Dictionary<string, byte[]> { [HairPortPlan.HeadPaths(201).First()] = HeadModel(201, 0.13f) });
+        // A target head twice the hair's size: deeper than the scalp push goes (HairScalpPush.MaxPush), so the port sinks into it.
+        var game = Game(Races, new Dictionary<string, byte[]> { [HairPortPlan.HeadPaths(201).First()] = HeadModel(201, 0.2f) });
         var host = new BigHead(s.ModsRoot, game);
         foreach (var (k, v) in s.Host.Files) host.Files[k] = v;
         string? key = null;

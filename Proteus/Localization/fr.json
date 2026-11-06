@@ -587,6 +587,14 @@
     "message": "Activez ceci pour du tissu sur la poitrine.\nProteus construit un vêtement comme une copie du corps : par défaut, il suit donc le corps\njusque dans le décolleté — c'est ce qui le fait lire comme de la peinture plutôt que du\ntissu. Le vrai tissu tend l'écart : une ligne droite entre le point le plus avancé de chaque sein.\nAvec ceci, le tissu entre les seins est détendu jusqu'à cette ligne. Rien n'est jamais tiré\nvers l'intérieur : cela ne peut donc pas entrer dans le corps, et les seins gardent leur forme.\nLà où une encolure a déjà découpé le tissu entre les bonnets, il n'y a rien à tendre, et\nceci ne fait rien.",
     "description": ""
   },
+  "Colors.ShowAllRows.Check": {
+    "message": "Afficher toutes les lignes",
+    "description": ""
+  },
+  "Colors.ShowAllRows.Tip": {
+    "message": "Affiche aussi les lignes que cette texture d\u0027index sélectionne rarement ou jamais.\nLes modifier ne change que peu ou rien de visible.",
+    "description": ""
+  },
   "Colors.SmoothFold.Label": {
     "message": "Adoucir l'entrejambe",
     "description": ""
@@ -637,6 +645,10 @@
   },
   "Colors.ToeCap.Locked.Tip": {
     "message": "L'option \"Toe Cap\" propre à ce mod est sélectionnée dans Penumbra, dans un groupe Masks qui n'autorise\nqu'un seul choix, elle ne peut donc pas être désactivée ici. Modifiez-la dans Penumbra.",
+    "description": ""
+  },
+  "Colors.ToeCap.FlagOwn.Tip": {
+    "message": "Activez ceci pour les bas et les chaussettes : les orteils sont couverts par un seul bout arrondi,\ncomme tombe un vrai bas, au lieu de suivre chaque orteil.\nL'option \"Toe Cap\" propre à ce mod se trouve dans un groupe Masks qui n'autorise qu'un seul choix :\ncette case ne peut donc pas la sélectionner sans retirer l'autre masque de ce groupe. La cocher utilise\nà la place le bout intégré de Proteus (fait pour Bibo+, Neolithe, Rue et YAB), enregistré dans les réglages\nProteus du mod : il s'applique dans toutes les collections et suit le mod quand vous l'exportez.\nPour le bout de l'auteur, sélectionnez \"Toe Cap\" dans Penumbra.",
     "description": ""
   },
   "Colors.ToeCap.SaveFailed": {
@@ -4263,6 +4275,38 @@
     "message": "Les mods de coiffure faits pour une autre race s'adaptent désormais à la vôtre",
     "description": "Release-notes section heading for hair mods fitted automatically from another race to the player's."
   },
+  "WhatsNew.ColorRows.Head": {
+    "message": "Pointez une ligne de couleur pour voir où elle va",
+    "description": ""
+  },
+  "WhatsNew.ColorRows.Body": {
+    "message": "Dans la fenêtre « Couleurs » d'un mod, pointez le bouton d'une ligne (#01–#16) : la partie de votre personnage que colore cette ligne s'éclaire tant que le pointeur reste dessus. Les lignes que les textures d'index du mod utilisent rarement ou jamais sont masquées ; cochez « Afficher toutes les lignes » pour les faire revenir.",
+    "description": ""
+  },
+  "WhatsNew.HairOtherSex.Head": {
+    "message": "Transposer une coiffure à l'autre sexe",
+    "description": ""
+  },
+  "WhatsNew.HairOtherSex.Body": {
+    "message": "« Transposer à toutes les races » dans le Studio liste désormais aussi l'autre sexe, sous « Aussi pour l'autre sexe ». Le même numéro de coiffure correspond à une autre coiffure pour l'autre sexe : une race vers laquelle vous transposez là-bas porte les cheveux de ce mod à la place de cette coiffure. Rien n'y est coché pour vous, et Proteus ne le fait jamais de lui-même. Les cheveux transposés ne s'enfoncent plus non plus dans les têtes plus grandes et ne laissent plus de zones chauves.",
+    "description": ""
+  },
+  "WhatsNew.GearVariants.Head": {
+    "message": "Chaque variante de votre équipement affiche le mod",
+    "description": ""
+  },
+  "WhatsNew.GearVariants.Body": {
+    "message": "Beaucoup de mods d'équipement remplacent le modèle d'un objet mais ne fournissent son matériau que pour une variante : porté dans une autre variante, le modèle du mod affiche l'apparence du jeu, ou rien. Proteus corrige désormais cela quand vous mettez l'équipement, comme « Apply to All Variants » de TexTools pour le matériau, dans les options du mod lui-même. C'est activé par défaut : Paramètres, Variantes d'équipement, « Pointer chaque variante de l'équipement porté vers le matériau de son mod » ; « Annuler pour ce que je porte » le retire.",
+    "description": ""
+  },
+  "WhatsNew.ShaderUpgrade.Head": {
+    "message": "Passer l'ancien équipement au shader de Dawntrail",
+    "description": ""
+  },
+  "WhatsNew.ShaderUpgrade.Body": {
+    "message": "L'équipement créé avant Dawntrail utilise encore l'ancien shader du jeu. Cochez « Passer l'ancien équipement aux shaders de Dawntrail » dans les Paramètres et Proteus réécrit vers le shader de Dawntrail les matériaux des mods que vous portez, dans le mod, en sauvegardant chaque fichier d'abord. C'est désactivé par défaut, et « Annuler pour ce que je porte » remet les fichiers de l'auteur.",
+    "description": ""
+  },
   "WhatsNew.HairPort.Body": {
     "message": "Beaucoup de mods de coiffure ne sont faits que pour une seule race : sur toute autre race, le jeu affiche alors sa propre coiffure à la place. Proteus plie désormais la coiffure du mod sur la tête de votre race et l'ajoute à la même option du même mod. Il passe en revue les mods de coiffure activés dans votre collection une première fois maintenant, puis à chaque fois qu'un mod est installé, activé ou modifié. Le chat indique les numéros des coiffures adaptées, pour que vous sachiez laquelle choisir. Les cheveux à physique gardent leur physique.\n\nCela continue de fonctionner avec Proteus désactivé et suit le mod. Désactivez la fonction, relancez une vérification ou annulez une coiffure adaptée dans Paramètres, Cheveux.",
     "description": "Release-notes section on hair fitted automatically from another race. 'Settings, Hair' names the Settings tab and its Hair section - match Tab.Settings and Settings.Section.HairPort. 'Physics hair' is hair that sways with its own bones."
@@ -5479,16 +5523,20 @@
     "message": "elle ne tient pas sur la tête de c{0:D4} : {1:P0} s'enfonce dans le crâne, et sa distance au cuir chevelu s'écarte de {2:F0} mm de celle de l'original ; vérifie-le en jeu",
     "description": ""
   },
+  "HairPort.Clip.Fmt": {
+    "message": "pliée sur c{0:D4}, {1} de ses points s'enfoncent dans la tête là où ceux de l'original ne le font pas, ce qui peut laisser voir le cuir chevelu ; vérifie-le en jeu",
+    "description": "A hair port saved with a warning (lowercase sentence fragment): bent onto another race, some of it still sinks into that race's head where the original sits on its own scalp, which may show the skin; shown after a race or file name and a colon. {0} race code number, {1} number of points."
+  },
+  "HairPort.Undo.Also.Fmt": {
+    "message": "Les transpositions vers {0} ont aussi été retirées : elles utilisaient une redirection de matériau que lit leur propre coiffure.",
+    "description": "Sentence added after a hair-port removal: ports made by an older build were taken out too, because they redirected a material the named races' own hairstyle reads. {0} race codes, comma-separated (e.g. c0301, c0501)."
+  },
   "HairPort.Refused.NotHair": {
     "message": "ce n'est pas un modèle de coiffure",
     "description": ""
   },
   "HairPort.Refused.NotInMod": {
     "message": "le mod ne fournit pas cette coiffure",
-    "description": ""
-  },
-  "HairPort.Refused.Gender": {
-    "message": "les coiffures ne sont transposées qu'entre races du même sexe",
     "description": ""
   },
   "HairPort.Refused.NoStyle.Fmt": {
@@ -5603,6 +5651,42 @@
     "message": "non couvert",
     "description": ""
   },
+  "HairPort.Studio.OtherSex": {
+    "message": "Aussi pour l'autre sexe",
+    "description": "Section heading in the Studio's port list, above the races of the other sex."
+  },
+  "HairPort.Studio.OtherSex.Note.Fmt": {
+    "message": "Dans le jeu, la coiffure {0} est un autre style pour l'autre sexe. Une race vers laquelle elle est transposée ici porte celle-ci à la place dès qu'elle choisit la coiffure {0} avec ce mod actif — pour tous ceux affichés avec le mod. Rien n'est coché pour vous ici, et Proteus ne transpose jamais d'un sexe à l'autre de lui-même.",
+    "description": "Note under the other-sex heading in the Studio port list. {0} is the hairstyle number."
+  },
+  "HairPort.Studio.OtherSexAuthored": {
+    "message": "le mod a sa propre version pour ce sexe",
+    "description": "Per-race status in the Studio port list for a race of the other sex: the mod ships its own model of this hairstyle for that sex."
+  },
+  "HairPort.Studio.OtherSexSkeleton": {
+    "message": "le mod donne à cette race son propre squelette",
+    "description": "Per-race status note in the Studio port list for a race of the other sex: the mod now gives that race its own hair skeleton."
+  },
+  "HairPort.Refused.NotTarget": {
+    "message": "c'est la race même de la coiffure, ou une race non jouable",
+    "description": "Reason (lowercase sentence fragment) why a hairstyle could not be ported to a race; shown after a race name and a colon."
+  },
+  "HairPort.Refused.OtherSexAuto": {
+    "message": "elle est de l'autre sexe, vers lequel on ne transpose que sur demande dans le Studio",
+    "description": "Reason (lowercase sentence fragment) why the automatic path did not port a hairstyle to a race of the other sex; shown after a race name and a colon."
+  },
+  "HairPort.Refused.OtherSexAuthored.Fmt": {
+    "message": "le mod a sa propre coiffure {1} pour c{0:D4} ; transposez plutôt celle-ci",
+    "description": "Reason (lowercase sentence fragment) a hand port to the other sex is refused. {0} is a race code number, {1} the hairstyle number."
+  },
+  "HairPort.Refused.OtherSexAuthoredAuto.Fmt": {
+    "message": "le mod a maintenant sa propre coiffure {1} pour c{0:D4} ; la transposition faite dans le Studio est laissée telle quelle",
+    "description": "Reason (lowercase sentence fragment) the automatic path leaves a Studio port to the other sex as it is. {0} is a race code number, {1} the hairstyle number."
+  },
+  "HairPort.Refused.OtherSexSkeleton.Fmt": {
+    "message": "le mod donne à c{0:D4} son propre squelette pour la coiffure {1}, donc une transposition depuis l'autre sexe ne peut pas apporter le sien",
+    "description": "Reason (lowercase sentence fragment) a port to the other sex is refused. {0} is a race code number, {1} the hairstyle number."
+  },
   "HairPort.Studio.Port": {
     "message": "Transposer",
     "description": ""
@@ -5679,8 +5763,8 @@
     "message": "Le registre Proteus des coiffures transposées de ce mod (Proteus/hairport.json) n'a pas pu être lu, donc rien n'a été modifié.",
     "description": ""
   },
-  "HairPort.Auto.Tip2": {
-    "message": "Beaucoup de mods de cheveux ne sont faits que pour une race : sur toute autre race,\nle jeu affiche sa propre coiffure. Activé, Proteus plie la coiffure du mod sur la\ntête de votre race et l'ajoute à la même option du même mod — pour la coiffure que\nvous portez, et à l'avance pour les mods de cheveux activés dans votre collection :\nà l'activation de ce réglage, quand un mod est installé, activé ou modifié, et\nquand vous appuyez sur « Vérifier maintenant ».\n\nSeulement pour votre propre race, depuis des races du même sexe. Fonctionne même\nProteus désactivé, voyage avec le mod et se voit sur tous ceux affichés avec ce\nmod actif. Annulable ici.",
+  "HairPort.Auto.Tip3": {
+    "message": "Beaucoup de mods de cheveux ne sont faits que pour une race : sur toute autre race,\nle jeu affiche sa propre coiffure. Activé, Proteus plie la coiffure du mod sur la\ntête de votre race et l'ajoute à la même option du même mod — pour la coiffure que\nvous portez, et à l'avance pour les mods de cheveux activés dans votre collection :\nà l'activation de ce réglage, quand un mod est installé, activé ou modifié, et\nquand vous appuyez sur « Vérifier maintenant ».\n\nSeulement pour votre propre race, depuis des races du même sexe. Une\ntransposition d'un sexe à l'autre ne se fait que dans le Studio, mais celle\nfaite là-bas est aussi tenue à jour ici. Fonctionne même Proteus désactivé,\nvoyage avec le mod et se voit sur tous ceux affichés avec ce mod actif.\nAnnulable ici.",
     "description": ""
   },
   "HairPort.Scan.Starting": {
@@ -5821,6 +5905,218 @@
   },
   "Parts.Retarget.UseWornBody.Tip": {
     "message": "Ajuster vers le mod de corps que tu portes pour cette partie. Comme le choisir sous « Ajuster vers le corps ».",
+    "description": ""
+  },
+  "Settings.Section.GearShaders": {
+    "message": "Shaders d'équipement",
+    "description": ""
+  },
+  "Settings.GearShaders.AutoUpgrade.Label": {
+    "message": "Passer l'ancien équipement aux shaders de Dawntrail",
+    "description": ""
+  },
+  "Settings.GearShaders.Status.Fmt": {
+    "message": "{0} mis à jour · {1} laissés sur l'ancien shader",
+    "description": ""
+  },
+  "Settings.GearShaders.Left.Tip.Fmt": {
+    "message": "Laissés sur l'ancien shader :\n{0}",
+    "description": ""
+  },
+  "Settings.GearShaders.NextRedraw": {
+    "message": "Prend effet au prochain redessin (le redessin automatique est désactivé).",
+    "description": ""
+  },
+  "Settings.GearShaders.Reason.OldTable": {
+    "message": "une ancienne table de couleurs",
+    "description": ""
+  },
+  "Settings.GearShaders.Reason.UnsupportedForm": {
+    "message": "une disposition de textures non prise en charge",
+    "description": ""
+  },
+  "Settings.GearShaders.Reason.Unreadable": {
+    "message": "illisible",
+    "description": ""
+  },
+  "Settings.GearShaders.Reason.Compositor": {
+    "message": "les superpositions de Proteus le dessinent",
+    "description": ""
+  },
+  "Settings.GearShaders.Reason.WriteFailed": {
+    "message": "le fichier n'a pas pu être écrit",
+    "description": ""
+  },
+  "Settings.GearShaders.AutoUpgrade.Tip": {
+    "message": "Quand vous équipez une pièce, Proteus réécrit les matériaux à l'ancien shader (characterlegacy.shpk) du mod porté\nvers le shader de Dawntrail (character.shpk), dans le mod lui-même, en sauvegardant chaque fichier d'abord.\nDésactiver ceci arrête les mises à jour suivantes sans les annuler. « Annuler pour ce que je porte »\nremet les fichiers de l'auteur et laisse ces pièces tranquilles jusqu'à « Mettre à jour ce que je porte ».",
+    "description": ""
+  },
+  "Settings.GearShaders.Waiting": {
+    "message": "En attente de Penumbra.",
+    "description": ""
+  },
+  "Settings.GearShaders.Reason.LegacyMod": {
+    "message": "un dossier de mod à l'ancien format où Proteus n'écrit pas",
+    "description": ""
+  },
+  "Settings.GearShaders.Reason.MixedSpecular": {
+    "message": "ses options utilisent des cartes spéculaires différentes",
+    "description": ""
+  },
+  "Settings.GearShaders.Reason.SpecularFromOtherMod": {
+    "message": "sa carte spéculaire vient d'un autre mod",
+    "description": ""
+  },
+  "Settings.GearShaders.Reason.UnsupportedPlacement": {
+    "message": "il se trouve dans un groupe combinatoire",
+    "description": ""
+  },
+  "Settings.GearShaders.Reason.ProteusPack": {
+    "message": "un pack Proteus (Proteus le dessine lui-même)",
+    "description": ""
+  },
+  "Settings.GearShaders.Reason.Declined": {
+    "message": "annulé par vous",
+    "description": ""
+  },
+  "Settings.GearShaders.UpgradeNow": {
+    "message": "Mettre à jour ce que je porte",
+    "description": ""
+  },
+  "Settings.GearShaders.UpgradeNow.Tip": {
+    "message": "Passer maintenant au shader de Dawntrail les matériaux à l'ancien shader de ce que vous portez,\ny compris les pièces que vous aviez annulées.",
+    "description": ""
+  },
+  "Settings.GearShaders.UndoWorn": {
+    "message": "Annuler pour ce que je porte",
+    "description": ""
+  },
+  "Settings.GearShaders.UndoWorn.Tip": {
+    "message": "Remettre les fichiers de l'auteur pour les pièces portées et les laisser tranquilles\njusqu'à « Mettre à jour ce que je porte ». Une mise à jour publiée depuis par l'auteur est conservée.",
+    "description": ""
+  },
+  "Settings.GearShaders.Result.Fmt": {
+    "message": "Annulation : {0} restaurés, {1} conservés comme mise à jour de l'auteur, {2} refusés.",
+    "description": ""
+  },
+  "Settings.GearShaders.Edited.Fmt": {
+    "message": "{0} a été modifié après sa mise à niveau du shader, donc l'annulation le laisse tel quel. L'original de l'auteur est conservé dans Proteus/shaderupgrade-backup/{0} : recopiez-le par-dessus le fichier pour annuler.",
+    "description": ""
+  },
+  "Settings.GearShaders.Busy": {
+    "message": "En cours…",
+    "description": ""
+  },
+  "Chat.ShaderUpgrade.Fmt": {
+    "message": "[Proteus] {0} matériau(x) à l'ancien shader dans « {1} » passé(s) au shader de Dawntrail (chaque fichier sauvegardé). Annulation dans /proteus > Paramètres > Shaders d'équipement.",
+    "description": ""
+  },
+  "MeshVolume.Feature.ShaderUpgrade": {
+    "message": "la mise à jour des shaders d'équipement",
+    "description": ""
+  },
+  "Settings.Section.GearVariants": {
+    "message": "Variantes d'équipement",
+    "description": ""
+  },
+  "Settings.GearVariants.Auto.Label": {
+    "message": "Pointer chaque variante de l'équipement porté vers le matériau de son mod",
+    "description": ""
+  },
+  "Settings.GearVariants.Auto.Tip": {
+    "message": "Un mod fait pour une variante d'un objet ne fournit que le dossier de matériaux de cette variante : l'objet\nporté dans une autre variante affiche alors le matériau du jeu (ou celui d'une autre tenue, ou aucun) sur le modèle du mod. Quand vous\nenfilez une telle pièce, Proteus copie les chemins de matériau du mod vers les autres dossiers de variante, dans les\noptions du mod lui-même, comme « Apply to All Variants » de TexTools, pour le matériau seulement. Ces variantes affichent alors\nle matériau du mod partout où le mod l'emporte ; les pièces, les VFX et le son restent les leurs. Désactiver ceci arrête\nles changements suivants sans les annuler. « Annuler pour ce que je porte » les retire.",
+    "description": ""
+  },
+  "Settings.GearVariants.Status.Fmt": {
+    "message": "{0} pièce(s) repointée(s) · {1} laissée(s)",
+    "description": ""
+  },
+  "Settings.GearVariants.Repointed.Tip.Fmt": {
+    "message": "Repointées :\n{0}",
+    "description": ""
+  },
+  "Settings.GearVariants.Left.Tip.Fmt": {
+    "message": "Laissées telles quelles :\n{0}",
+    "description": ""
+  },
+  "Settings.GearVariants.NextRedraw": {
+    "message": "Prend effet au prochain redessin (le redessin automatique est désactivé).",
+    "description": ""
+  },
+  "Settings.GearVariants.Waiting": {
+    "message": "En attente de Penumbra.",
+    "description": ""
+  },
+  "Settings.GearVariants.Reason.SeveralVariants": {
+    "message": "le mod fournit lui-même plusieurs variantes",
+    "description": ""
+  },
+  "Settings.GearVariants.Reason.ModImc": {
+    "message": "le mod définit lui-même cette variante",
+    "description": ""
+  },
+  "Settings.GearVariants.Reason.OtherModMaterial": {
+    "message": "son matériau vient d'un autre mod",
+    "description": ""
+  },
+  "Settings.GearVariants.Reason.NoImc": {
+    "message": "la table des variantes du jeu n'a pas pu être lue",
+    "description": ""
+  },
+  "Settings.GearVariants.Reason.MetaUnreadable": {
+    "message": "les métadonnées de Penumbra n'ont pas pu être lues",
+    "description": ""
+  },
+  "Settings.GearVariants.Reason.OtherModWins": {
+    "message": "les métadonnées d'un autre mod ont la priorité",
+    "description": ""
+  },
+  "Settings.GearVariants.Reason.LegacyMod": {
+    "message": "un dossier de mod à l'ancien format où Proteus n'écrit pas",
+    "description": ""
+  },
+  "Settings.GearVariants.Reason.ProteusPack": {
+    "message": "un pack Proteus (Proteus le dessine lui-même)",
+    "description": ""
+  },
+  "Settings.GearVariants.Reason.Declined": {
+    "message": "annulé par vous",
+    "description": ""
+  },
+  "Settings.GearVariants.Reason.WriteFailed": {
+    "message": "le mod n'a pas pu être écrit",
+    "description": ""
+  },
+  "Settings.GearVariants.RepointNow": {
+    "message": "Repointer ce que je porte",
+    "description": ""
+  },
+  "Settings.GearVariants.RepointNow.Tip": {
+    "message": "Pointer les variantes de ce que vous portez vers les matériaux de leurs mods,\ny compris les pièces annulées auparavant.",
+    "description": ""
+  },
+  "Settings.GearVariants.UndoWorn": {
+    "message": "Annuler pour ce que je porte",
+    "description": ""
+  },
+  "Settings.GearVariants.UndoWorn.Tip": {
+    "message": "Retirer les entrées de variantes de Proteus des mods des pièces portées, et les laisser tranquilles\njusqu'à « Repointer ce que je porte ». Une entrée modifiée par quelqu'un depuis est conservée.",
+    "description": ""
+  },
+  "Settings.GearVariants.Result.Fmt": {
+    "message": "Annulation : {0} retirées, {1} conservées car modifiées depuis, {2} refusées.",
+    "description": ""
+  },
+  "Settings.GearVariants.NothingRecorded": {
+    "message": "Rien n'est enregistré pour ce que vous portez.",
+    "description": ""
+  },
+  "Settings.GearVariants.Busy": {
+    "message": "En cours…",
+    "description": ""
+  },
+  "Chat.VariantRepoint.Fmt": {
+    "message": "[Proteus] Chemins de matériau de « {1} » copiés vers {0} dossier(s) de variante de plus, pour que ces variantes affichent le matériau du mod partout où il l'emporte. Annulez sous /proteus > Paramètres > Variantes d'équipement.",
     "description": ""
   }
 }

@@ -85,6 +85,17 @@ public class ModBackupTests : IDisposable
     }
 
     [Fact]
+    [Trait("Plan", "EDGE-hair-port-qa-21")]
+    public void Cap_applies_to_hair_port_backups()
+    {
+        string mod = Mod();
+        var e = Assert.Throws<BackupException>(() => Backups(cap: 5).Create(mod, "Outfit", BackupKind.HairPort, "s", 1, null, CancellationToken.None));
+        Assert.Equal("backup-too-large", e.Code);
+        var snap = Backups(cap: 5).Create(mod, "Outfit", BackupKind.PreRestore, "s", 2, null, CancellationToken.None);
+        Assert.Equal(BackupKind.PreRestore, snap.Meta.Kind);
+    }
+
+    [Fact]
     public void PreRestoreSnapshot_ExemptFromCap_UnderCapBackupOverOverCapMod_Restores()
     {
         // [EDGE-qa-harness-38] A mod a refit pushed over the cap can still be put back: the snapshot has no cap.

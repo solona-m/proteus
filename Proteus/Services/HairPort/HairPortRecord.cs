@@ -90,6 +90,10 @@ internal sealed class HairPortRecord
         {
             e.File = Rel(e.File);
             e.SourceFile = Rel(e.SourceFile);
+            // Game paths with forward slashes, as every comparison of them expects (the builder, the writer, the panel):
+            // case is compared without regard to it everywhere, slashes are not.
+            e.SourceGamePath = (e.SourceGamePath ?? "").Replace('\\', '/');
+            e.TargetGamePath = (e.TargetGamePath ?? "").Replace('\\', '/');
             e.Materials = new Dictionary<string, string>(
                 (e.Materials ?? []).ToDictionary(p => p.Key, p => Rel(p.Value)), StringComparer.OrdinalIgnoreCase);
         }

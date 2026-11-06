@@ -645,6 +645,18 @@ public class TextureLoader
         catch { return null; }
     }
 
+    /// <summary>
+    /// An on-disk .tex as RGBA8 through the decode cache (keyed on path, write time and length), so repeated reads of
+    /// an unchanged file decode once. The array is SHARED with the cache: read it, never write it. Null on failure.
+    /// </summary>
+    public (byte[] Rgba, int Width, int Height)? LoadTexShared(string diskPath)
+    {
+        var key = DiskKey("TEXS", diskPath);
+        if (key == null) return null;
+        var e = GetOrDecode(key, () => LoadTexAsRgba(diskPath));
+        return e == null ? null : (e.Rgba, e.Width, e.Height);
+    }
+
     /// <summary>Load an on-disk .tex file as RGBA8. Returns null on failure.</summary>
     public (byte[] rgba, int width, int height)? LoadTexAsRgba(string diskPath)
     {
@@ -1988,6 +2000,22 @@ public class TextureLoader
             return (result, true);
         }
         return ((byte[])mtrl.Clone(), false);
+    }
+
+    /// <summary>A material constant's first float, found by ID; null when the material doesn't declare it.</summary>
+    public static float? ConstantValue(byte[] mtrl, uint id)
+    {
+        if (!TryParseMtrlHeader(mtrl, out _, out _, out _, out int constCount, out _, out int constBase, out int svBase))
+            return null;
+        for (int i = 0; i < constCount; i++)
+        {
+            int e = constBase + i * 8;
+            if (e + 8 > mtrl.Length) break;
+            if (BitConverter.ToUInt32(mtrl, e) != id) continue;
+            int at = svBase + BitConverter.ToUInt16(mtrl, e + 4);
+            return BitConverter.ToUInt16(mtrl, e + 6) >= 4 && at + 4 <= mtrl.Length ? BitConverter.ToSingle(mtrl, at) : null;
+        }
+        return null;
     }
 
     // Patches the constant in place if the material declares it; otherwise ADDS it, the way Penumbra's material editor

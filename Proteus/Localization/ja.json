@@ -587,6 +587,14 @@
     "message": "胸元にかかる布に対して有効にしてください。\nProteus は衣服を体のコピーとして作るため、既定では体に沿って谷間へ落ち込みます。\nそれが、布ではなく塗りに見える原因です。実際の布は谷間を渡ります——\n左右それぞれの胸の最も前に出た点を結ぶ、まっすぐな線として。\nこれを有効にすると、胸の間の布はその線まで緩められます。内側へ引かれることは決してないので、\n体に食い込むことはなく、胸そのものの形も保たれます。\nネックラインによって胸の間の布がすでに切り取られている場合、渡すものが無いため、\nこの設定は何もしません。",
     "description": ""
   },
+  "Colors.ShowAllRows.Check": {
+    "message": "すべての行を表示",
+    "description": ""
+  },
+  "Colors.ShowAllRows.Tip": {
+    "message": "このインデックステクスチャがほとんど、または一度も選ばない行も表示します。\n編集しても見た目はほとんど、またはまったく変わりません。",
+    "description": ""
+  },
   "Colors.SmoothFold.Label": {
     "message": "脚の間をなめらかにする",
     "description": ""
@@ -637,6 +645,10 @@
   },
   "Colors.ToeCap.Locked.Tip": {
     "message": "この Mod 自身の \"Toe Cap\" オプションが Penumbra で選ばれています。選択肢をひとつしか選べない\nMasks グループにあるため、ここではオフにできません。Penumbra で変更してください。",
+    "description": ""
+  },
+  "Colors.ToeCap.FlagOwn.Tip": {
+    "message": "ストッキングや靴下ではオンにしてください。指を一本ずつ追うのではなく、本物の靴下のように\nつま先をひとつの丸いトゥボックスで覆います。\nこの Mod 自身の \"Toe Cap\" オプションは、選択肢をひとつしか選べない Masks グループにあるため、\nこのチェックではそこにある別のマスクを外さずに選ぶことができません。チェックすると代わりに\nProteus 内蔵のキャップ（Bibo+、Neolithe、Rue、YAB 用）を使い、Mod の Proteus 設定に保存されます。\nすべてのコレクションで有効になり、エクスポートすると Mod と一緒に含まれます。\n作者のキャップを使うには、Penumbra で \"Toe Cap\" を選んでください。",
     "description": ""
   },
   "Colors.ToeCap.SaveFailed": {
@@ -4263,6 +4275,38 @@
     "message": "別の種族用の髪Modがあなたの種族に合うように",
     "description": "Release-notes section heading for hair mods fitted automatically from another race to the player's."
   },
+  "WhatsNew.ColorRows.Head": {
+    "message": "カラー行を指して、どこに使われているか確かめる",
+    "description": ""
+  },
+  "WhatsNew.ColorRows.Body": {
+    "message": "MODの「カラー」ウィンドウで行のボタン（#01〜#16）にポインターを合わせると、その行が色を付けているキャラクターの部分が、ポインターを置いている間だけ光ります。MODのインデックステクスチャがほとんど、または一度も使わない行は隠れます。「すべての行を表示」にチェックを入れると戻ります。",
+    "description": ""
+  },
+  "WhatsNew.HairOtherSex.Head": {
+    "message": "髪型を異性に移植",
+    "description": ""
+  },
+  "WhatsNew.HairOtherSex.Body": {
+    "message": "スタジオの「全種族に移植」に、異性の種族も「異性の種族にも」として並ぶようになりました。同じ髪型番号は異性では別の髪型なので、そこで移植した種族は、その髪型の代わりにこのMODの髪を着けます。ここには何もチェックが入っておらず、Proteus が自分から行うこともありません。また、移植した髪が大きな頭に埋もれて地肌が見えることもなくなりました。",
+    "description": ""
+  },
+  "WhatsNew.GearVariants.Head": {
+    "message": "装備のどのバリアントでもMODが表示される",
+    "description": ""
+  },
+  "WhatsNew.GearVariants.Body": {
+    "message": "多くの装備MODはアイテムのモデルを置き換えますが、素材は一つのバリアント分しか入っていないため、別のバリアントで着るとMODのモデルにゲームの見た目が出るか、何も出ません。Proteus は装備を着けたときにこれを直すようになりました。TexTools の「Apply to All Variants」が素材に対して行うのと同じことを、MOD自身のオプションの中で行います。標準でオンです：設定、装備のバリアント、「着ている装備のすべてのバリアントをMODの素材に向ける」。「着ている装備を元に戻す」で取り除けます。",
+    "description": ""
+  },
+  "WhatsNew.ShaderUpgrade.Head": {
+    "message": "古い装備を黄金のレガシーのシェーダーに",
+    "description": ""
+  },
+  "WhatsNew.ShaderUpgrade.Body": {
+    "message": "黄金のレガシーより前に作られた装備は、まだゲームの古いシェーダーを使っています。設定で「古い装備を黄金のレガシーのシェーダーに更新する」にチェックを入れると、Proteus は着けたMODの素材を黄金のレガシーのシェーダーに書き換えます。MODの中で行い、各ファイルは先にバックアップします。標準ではオフで、「着ている装備を元に戻す」で作者のファイルに戻せます。",
+    "description": ""
+  },
   "WhatsNew.HairPort.Body": {
     "message": "多くの髪Modは一つの種族専用に作られているため、他の種族ではゲーム標準の髪型が表示されます。Proteus は Mod の髪型をあなたの種族の頭に合わせて曲げ、同じ Mod の同じオプションに追加するようになりました。コレクションで有効な髪Modを今いちど確認し、以後もインストール・有効化・変更のたびに確認します。合わせた髪型の番号はチャットでお知らせするので、どれを選べばよいかわかります。物理演算で揺れる髪は、その揺れもそのまま保たれます。\n\nProteus をオフにしても機能し、Mod と一緒に持ち運ばれます。オフにする、もう一度確認する、合わせた髪型を元に戻す、といった操作は 設定 › 髪 から行えます。",
     "description": "Release-notes section on hair fitted automatically from another race. 'Settings, Hair' names the Settings tab and its Hair section - match Tab.Settings and Settings.Section.HairPort. 'Physics hair' is hair that sways with its own bones."
@@ -5479,16 +5523,20 @@
     "message": "c{0:D4} の頭に収まりません。{1:P0} が頭蓋骨に沈み込み、頭皮からの距離が元より {2:F0} mm ずれています。ゲーム内で確認してください",
     "description": ""
   },
+  "HairPort.Clip.Fmt": {
+    "message": "c{0:D4} に合わせると、元では沈まない {1} 個の点が頭に沈み込み、頭皮が見えることがあります。ゲーム内で確認してください",
+    "description": "A hair port saved with a warning (lowercase sentence fragment): bent onto another race, some of it still sinks into that race's head where the original sits on its own scalp, which may show the skin; shown after a race or file name and a colon. {0} race code number, {1} number of points."
+  },
+  "HairPort.Undo.Also.Fmt": {
+    "message": "{0} への移植も取り除きました。それらは、自身の髪型が読み込むマテリアルのリダイレクトを使っていました。",
+    "description": "Sentence added after a hair-port removal: ports made by an older build were taken out too, because they redirected a material the named races' own hairstyle reads. {0} race codes, comma-separated (e.g. c0301, c0501)."
+  },
   "HairPort.Refused.NotHair": {
     "message": "髪型のモデルではありません",
     "description": ""
   },
   "HairPort.Refused.NotInMod": {
     "message": "このModはその髪型を提供していません",
-    "description": ""
-  },
-  "HairPort.Refused.Gender": {
-    "message": "髪型は同じ性別の種族間でのみ移植されます",
     "description": ""
   },
   "HairPort.Refused.NoStyle.Fmt": {
@@ -5603,6 +5651,42 @@
     "message": "未対応",
     "description": ""
   },
+  "HairPort.Studio.OtherSex": {
+    "message": "異性の種族にも",
+    "description": "Section heading in the Studio's port list, above the races of the other sex."
+  },
+  "HairPort.Studio.OtherSex.Note.Fmt": {
+    "message": "ゲーム内では、髪型{0}は異性では別の髪型です。ここで移植した種族は、このModを有効にして髪型{0}を選ぶと、代わりにこの髪型になります（そのModで表示される全員に対して）。ここでは何も自動でチェックされず、Proteusが自分から性別をまたいで移植することはありません。",
+    "description": "Note under the other-sex heading in the Studio port list. {0} is the hairstyle number."
+  },
+  "HairPort.Studio.OtherSexAuthored": {
+    "message": "このModにはこの性別用の独自版があります",
+    "description": "Per-race status in the Studio port list for a race of the other sex: the mod ships its own model of this hairstyle for that sex."
+  },
+  "HairPort.Studio.OtherSexSkeleton": {
+    "message": "このModはこの種族に独自のスケルトンを与えています",
+    "description": "Per-race status note in the Studio port list for a race of the other sex: the mod now gives that race its own hair skeleton."
+  },
+  "HairPort.Refused.NotTarget": {
+    "message": "髪型自身の種族か、プレイアブルでない種族です",
+    "description": "Reason (lowercase sentence fragment) why a hairstyle could not be ported to a race; shown after a race name and a colon."
+  },
+  "HairPort.Refused.OtherSexAuto": {
+    "message": "異性の種族のため、スタジオで指示した場合のみ移植されます",
+    "description": "Reason (lowercase sentence fragment) why the automatic path did not port a hairstyle to a race of the other sex; shown after a race name and a colon."
+  },
+  "HairPort.Refused.OtherSexAuthored.Fmt": {
+    "message": "このModにはc{0:D4}用の独自の髪型{1}があります。代わりにそちらを移植してください",
+    "description": "Reason (lowercase sentence fragment) a hand port to the other sex is refused. {0} is a race code number, {1} the hairstyle number."
+  },
+  "HairPort.Refused.OtherSexAuthoredAuto.Fmt": {
+    "message": "このModにc{0:D4}用の独自の髪型{1}ができたため、スタジオで作った移植はそのままにします",
+    "description": "Reason (lowercase sentence fragment) the automatic path leaves a Studio port to the other sex as it is. {0} is a race code number, {1} the hairstyle number."
+  },
+  "HairPort.Refused.OtherSexSkeleton.Fmt": {
+    "message": "このModはc{0:D4}に髪型{1}用の独自のスケルトンを与えているため、異性からの移植は自身のスケルトンを持ち込めません",
+    "description": "Reason (lowercase sentence fragment) a port to the other sex is refused. {0} is a race code number, {1} the hairstyle number."
+  },
   "HairPort.Studio.Port": {
     "message": "移植",
     "description": ""
@@ -5679,8 +5763,8 @@
     "message": "このModの髪型移植の Proteus 記録（Proteus/hairport.json）を読み込めなかったため、何も変更していません。",
     "description": ""
   },
-  "HairPort.Auto.Tip2": {
-    "message": "多くの髪Modは一つの種族専用に作られているため、他の種族ではゲーム\n標準の髪型が表示されます。オンにすると、ProteusがModの髪型をあなたの\n種族の頭に合わせて曲げ、同じModの同じオプションに追加します。対象は\n着けた髪型と、コレクションで有効な髪Modの事前の調整です：この設定を\nオンにしたとき、Modのインストール・有効化・変更時、「今すぐ確認」を\n押したとき。\n\n自分の種族のみ、同じ性別の種族から。Proteusをオフにしても機能し、\nModと一緒に持ち運ばれ、そのModを有効にして表示される全員に見えます。\nここから元に戻せます。",
+  "HairPort.Auto.Tip3": {
+    "message": "多くの髪Modは一つの種族専用に作られているため、他の種族ではゲーム\n標準の髪型が表示されます。オンにすると、ProteusがModの髪型をあなたの\n種族の頭に合わせて曲げ、同じModの同じオプションに追加します。対象は\n着けた髪型と、コレクションで有効な髪Modの事前の調整です：この設定を\nオンにしたとき、Modのインストール・有効化・変更時、「今すぐ確認」を\n押したとき。\n\n自分の種族のみ、同じ性別の種族から。\n性別をまたぐ移植はスタジオでのみ作成されますが、\nそこで作ったものもここで最新に保たれます。\nProteusをオフにしても機能し、Modと一緒に持ち運ばれ、\nそのModを有効にして表示される全員に見えます。\nここから元に戻せます。",
     "description": ""
   },
   "HairPort.Scan.Starting": {
@@ -5821,6 +5905,218 @@
   },
   "Parts.Retarget.UseWornBody.Tip": {
     "message": "この部位に着ている体型 Mod にリフィットします。「リフィット先の体型 Mod」で選ぶのと同じです。",
+    "description": ""
+  },
+  "Settings.Section.GearShaders": {
+    "message": "装備シェーダー",
+    "description": ""
+  },
+  "Settings.GearShaders.AutoUpgrade.Label": {
+    "message": "古い装備を黄金のレガシーのシェーダーに更新する",
+    "description": ""
+  },
+  "Settings.GearShaders.Status.Fmt": {
+    "message": "{0}件を更新 ・ {1}件は旧シェーダーのまま",
+    "description": ""
+  },
+  "Settings.GearShaders.Left.Tip.Fmt": {
+    "message": "旧シェーダーのまま:\n{0}",
+    "description": ""
+  },
+  "Settings.GearShaders.NextRedraw": {
+    "message": "次の再描画で反映されます（自動再描画はオフです）。",
+    "description": ""
+  },
+  "Settings.GearShaders.Reason.OldTable": {
+    "message": "古いカラーテーブル",
+    "description": ""
+  },
+  "Settings.GearShaders.Reason.UnsupportedForm": {
+    "message": "非対応のテクスチャ構成",
+    "description": ""
+  },
+  "Settings.GearShaders.Reason.Unreadable": {
+    "message": "読み取れない",
+    "description": ""
+  },
+  "Settings.GearShaders.Reason.Compositor": {
+    "message": "Proteusのオーバーレイが描画",
+    "description": ""
+  },
+  "Settings.GearShaders.Reason.WriteFailed": {
+    "message": "ファイルを書き込めなかった",
+    "description": ""
+  },
+  "Settings.GearShaders.AutoUpgrade.Tip": {
+    "message": "装備を身に着けると、Proteusは着用中のMODにある旧シェーダー（characterlegacy.shpk）の素材を\nMOD内で黄金のレガシーのシェーダー（character.shpk）に書き換えます。各ファイルは先にバックアップされます。\nオフにすると以降の更新は止まりますが、元には戻りません。「着ている装備を元に戻す」は\n作者のファイルを戻し、「着ている装備を今すぐ更新」するまでその装備には触れません。",
+    "description": ""
+  },
+  "Settings.GearShaders.Waiting": {
+    "message": "Penumbraを待っています。",
+    "description": ""
+  },
+  "Settings.GearShaders.Reason.LegacyMod": {
+    "message": "Proteusが書き込まない旧形式のMODフォルダー",
+    "description": ""
+  },
+  "Settings.GearShaders.Reason.MixedSpecular": {
+    "message": "オプションごとにスペキュラーマップが異なる",
+    "description": ""
+  },
+  "Settings.GearShaders.Reason.SpecularFromOtherMod": {
+    "message": "スペキュラーマップが別のMODから来ている",
+    "description": ""
+  },
+  "Settings.GearShaders.Reason.UnsupportedPlacement": {
+    "message": "結合グループの中にある",
+    "description": ""
+  },
+  "Settings.GearShaders.Reason.ProteusPack": {
+    "message": "Proteusのパック（Proteus自身が描画）",
+    "description": ""
+  },
+  "Settings.GearShaders.Reason.Declined": {
+    "message": "あなたが元に戻した",
+    "description": ""
+  },
+  "Settings.GearShaders.UpgradeNow": {
+    "message": "着ている装備を今すぐ更新",
+    "description": ""
+  },
+  "Settings.GearShaders.UpgradeNow.Tip": {
+    "message": "今着ている装備の旧シェーダー素材を黄金のレガシーのシェーダーに更新します。\n以前に元に戻した装備も含みます。",
+    "description": ""
+  },
+  "Settings.GearShaders.UndoWorn": {
+    "message": "着ている装備を元に戻す",
+    "description": ""
+  },
+  "Settings.GearShaders.UndoWorn.Tip": {
+    "message": "着ている装備の作者のファイルを戻し、「着ている装備を今すぐ更新」を使うまで\nその装備には触れません。作者がその後に出した更新は残ります。",
+    "description": ""
+  },
+  "Settings.GearShaders.Result.Fmt": {
+    "message": "元に戻す: {0}件を復元、{1}件は作者の更新として保持、{2}件は拒否。",
+    "description": ""
+  },
+  "Settings.GearShaders.Edited.Fmt": {
+    "message": "{0} はシェーダーのアップグレード後に編集されたため、元に戻すでは変更しません。作者のオリジナルは Proteus/shaderupgrade-backup/{0} に保存されています。元に戻すには、それをファイルに上書きコピーしてください。",
+    "description": ""
+  },
+  "Settings.GearShaders.Busy": {
+    "message": "処理中…",
+    "description": ""
+  },
+  "Chat.ShaderUpgrade.Fmt": {
+    "message": "[Proteus] 「{1}」の旧シェーダー素材{0}件を黄金のレガシーのシェーダーに更新しました（各ファイルはバックアップ済み）。元に戻すには /proteus > 設定 > 装備シェーダー。",
+    "description": ""
+  },
+  "MeshVolume.Feature.ShaderUpgrade": {
+    "message": "装備シェーダーの更新",
+    "description": ""
+  },
+  "Settings.Section.GearVariants": {
+    "message": "装備のバリアント",
+    "description": ""
+  },
+  "Settings.GearVariants.Auto.Label": {
+    "message": "着ている装備のすべてのバリアントをMODの素材に向ける",
+    "description": ""
+  },
+  "Settings.GearVariants.Auto.Tip": {
+    "message": "あるアイテムの1つのバリアント用に作られたMODは、そのバリアントの素材フォルダーしか含みません。そのため\n別のバリアントで着ると、MODのモデルにゲームの素材（または別の衣装の素材、または何も）が描かれます。そのような\n装備を着ると、ProteusはMODの素材パスをほかのバリアントフォルダーへ、MOD自身のオプションの中でコピーします。\nTexToolsの「Apply to All Variants」と同じですが、素材だけです。これらのバリアントは、MODが優先される場所で\nMODの素材を表示します。パーツ・VFX・サウンドはそれぞれのままです。オフにすると以後の変更は止まりますが、\n元には戻しません。「着ている装備を元に戻す」で取り除けます。",
+    "description": ""
+  },
+  "Settings.GearVariants.Status.Fmt": {
+    "message": "{0}件を変更 · {1}件はそのまま",
+    "description": ""
+  },
+  "Settings.GearVariants.Repointed.Tip.Fmt": {
+    "message": "変更済み：\n{0}",
+    "description": ""
+  },
+  "Settings.GearVariants.Left.Tip.Fmt": {
+    "message": "そのままのもの：\n{0}",
+    "description": ""
+  },
+  "Settings.GearVariants.NextRedraw": {
+    "message": "次の再描画で反映されます（自動再描画はオフです）。",
+    "description": ""
+  },
+  "Settings.GearVariants.Waiting": {
+    "message": "Penumbraを待っています。",
+    "description": ""
+  },
+  "Settings.GearVariants.Reason.SeveralVariants": {
+    "message": "MODが独自に複数のバリアントを含んでいる",
+    "description": ""
+  },
+  "Settings.GearVariants.Reason.ModImc": {
+    "message": "MOD自身がこのバリアントを設定している",
+    "description": ""
+  },
+  "Settings.GearVariants.Reason.OtherModMaterial": {
+    "message": "素材が別のMODから来ている",
+    "description": ""
+  },
+  "Settings.GearVariants.Reason.NoImc": {
+    "message": "ゲームのバリアント表を読み取れなかった",
+    "description": ""
+  },
+  "Settings.GearVariants.Reason.MetaUnreadable": {
+    "message": "Penumbraのメタデータを読み取れなかった",
+    "description": ""
+  },
+  "Settings.GearVariants.Reason.OtherModWins": {
+    "message": "別のMODのメタデータが優先されている",
+    "description": ""
+  },
+  "Settings.GearVariants.Reason.LegacyMod": {
+    "message": "Proteusが書き込まない旧形式のMODフォルダー",
+    "description": ""
+  },
+  "Settings.GearVariants.Reason.ProteusPack": {
+    "message": "Proteusのパック（Proteus自身が描画）",
+    "description": ""
+  },
+  "Settings.GearVariants.Reason.Declined": {
+    "message": "あなたが元に戻した",
+    "description": ""
+  },
+  "Settings.GearVariants.Reason.WriteFailed": {
+    "message": "MODに書き込めなかった",
+    "description": ""
+  },
+  "Settings.GearVariants.RepointNow": {
+    "message": "着ている装備を今すぐ変更",
+    "description": ""
+  },
+  "Settings.GearVariants.RepointNow.Tip": {
+    "message": "今着ている装備のバリアントを、それぞれのMODの素材に向けます。\n以前に元に戻した装備も含みます。",
+    "description": ""
+  },
+  "Settings.GearVariants.UndoWorn": {
+    "message": "着ている装備を元に戻す",
+    "description": ""
+  },
+  "Settings.GearVariants.UndoWorn.Tip": {
+    "message": "着ている装備のMODからProteusのバリアントエントリーを取り除き、「着ている装備を今すぐ変更」を\n使うまでそのままにします。その後に誰かが変更したエントリーは残します。",
+    "description": ""
+  },
+  "Settings.GearVariants.Result.Fmt": {
+    "message": "元に戻す：{0}件を削除、{1}件は変更済みのため保持、{2}件は拒否。",
+    "description": ""
+  },
+  "Settings.GearVariants.NothingRecorded": {
+    "message": "着ている装備について記録はありません。",
+    "description": ""
+  },
+  "Settings.GearVariants.Busy": {
+    "message": "処理中…",
+    "description": ""
+  },
+  "Chat.VariantRepoint.Fmt": {
+    "message": "[Proteus] 「{1}」の素材パスを、さらに{0}個のバリアントフォルダーにコピーしました。これらのバリアントは、MODが優先される場所でMOD自身の素材を表示します。元に戻すには /proteus > 設定 > 装備のバリアント。",
     "description": ""
   }
 }

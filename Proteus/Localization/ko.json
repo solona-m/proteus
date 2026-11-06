@@ -587,6 +587,14 @@
     "message": "가슴을 덮는 천에 사용하세요.\nProteus는 의상을 몸의 복사본으로 만들기 때문에, 기본적으로 몸을 따라 가슴골로\n들어갑니다. 그래서 천이 아니라 칠한 것처럼 보입니다. 실제 천은 그 틈을 가로지릅니다.\n양쪽 가슴에서 가장 앞으로 나온 지점을 잇는 직선으로요.\n이 설정을 켜면 가슴 사이의 천이 그 선까지 이완됩니다. 안쪽으로 당겨지는 일은 없으므로\n몸을 파고들 수 없고, 가슴 자체의 형태도 그대로 유지됩니다.\n네크라인이 이미 컵 사이의 천을 잘라낸 곳에는 이을 것이 없으므로,\n이 설정은 아무 일도 하지 않습니다.",
     "description": ""
   },
+  "Colors.ShowAllRows.Check": {
+    "message": "모든 행 표시",
+    "description": ""
+  },
+  "Colors.ShowAllRows.Tip": {
+    "message": "이 인덱스 텍스처가 거의 또는 전혀 선택하지 않는 행도 표시합니다.\n편집해도 보이는 변화는 거의 또는 전혀 없습니다.",
+    "description": ""
+  },
   "Colors.SmoothFold.Label": {
     "message": "다리 사이를 매끄럽게",
     "description": ""
@@ -637,6 +645,10 @@
   },
   "Colors.ToeCap.Locked.Tip": {
     "message": "이 모드 자체의 \"Toe Cap\" 옵션이 Penumbra에서 선택되어 있습니다. 하나만 고를 수 있는\nMasks 그룹에 있어서 여기서는 끌 수 없습니다. Penumbra에서 바꾸세요.",
+    "description": ""
+  },
+  "Colors.ToeCap.FlagOwn.Tip": {
+    "message": "스타킹과 양말에는 켜 두세요. 발가락 하나하나를 따라가는 대신, 실제 양말처럼\n둥근 토박스 하나로 발가락을 덮습니다.\n이 모드 자체의 \"Toe Cap\" 옵션은 하나만 고를 수 있는 Masks 그룹에 있어서, 이 체크박스로는\n그 그룹의 다른 마스크를 빼지 않고는 선택할 수 없습니다. 체크하면 대신 Proteus 내장 캡\n(Bibo+, Neolithe, Rue, YAB용)을 쓰며, 모드의 Proteus 설정에 저장됩니다.\n모든 컬렉션에 적용되고 내보낼 때 모드와 함께 갑니다.\n제작자의 캡을 쓰려면 Penumbra에서 \"Toe Cap\"을 선택하세요.",
     "description": ""
   },
   "Colors.ToeCap.SaveFailed": {
@@ -4263,6 +4275,38 @@
     "message": "다른 종족용으로 만든 헤어 모드가 이제 내 종족에 맞춰집니다",
     "description": "Release-notes section heading for hair mods fitted automatically from another race to the player's."
   },
+  "WhatsNew.ColorRows.Head": {
+    "message": "색상 행을 가리켜 어디에 쓰이는지 보기",
+    "description": ""
+  },
+  "WhatsNew.ColorRows.Body": {
+    "message": "모드의 \"색상\" 창에서 행 버튼(#01–#16)에 포인터를 올리면, 그 행이 색을 입히는 캐릭터 부분이 포인터가 머무는 동안 빛납니다. 모드의 인덱스 텍스처가 거의 또는 전혀 쓰지 않는 행은 숨겨집니다. \"모든 행 표시\"를 체크하면 다시 나타납니다.",
+    "description": ""
+  },
+  "WhatsNew.HairOtherSex.Head": {
+    "message": "헤어스타일을 다른 성별에 이식",
+    "description": ""
+  },
+  "WhatsNew.HairOtherSex.Body": {
+    "message": "스튜디오의 \"모든 종족에 이식\"에 이제 다른 성별도 \"다른 성별에도\" 아래에 나옵니다. 같은 헤어스타일 번호가 다른 성별에서는 다른 스타일이므로, 그쪽으로 이식한 종족은 그 스타일 대신 이 모드의 헤어를 쓰게 됩니다. 그곳은 아무것도 미리 체크되어 있지 않으며, Proteus가 스스로 하지도 않습니다. 또한 이식한 헤어가 더 큰 머리에 파묻혀 맨살이 보이는 일도 없어졌습니다.",
+    "description": ""
+  },
+  "WhatsNew.GearVariants.Head": {
+    "message": "장비의 모든 변형에 모드가 보입니다",
+    "description": ""
+  },
+  "WhatsNew.GearVariants.Body": {
+    "message": "많은 장비 모드는 아이템의 모델을 바꾸지만 재질은 한 가지 변형용만 들어 있어서, 다른 변형으로 입으면 모드의 모델에 게임의 모습이 나오거나 아무것도 나오지 않습니다. 이제 Proteus가 장비를 착용할 때 이를 고칩니다. TexTools의 \"Apply to All Variants\"가 재질에 하는 일을 모드 자체의 옵션 안에서 합니다. 기본으로 켜져 있습니다: 설정, 장비 변형, \"착용한 장비의 모든 변형을 모드의 재질로 지정\". \"착용 중인 장비 되돌리기\"로 다시 뺄 수 있습니다.",
+    "description": ""
+  },
+  "WhatsNew.ShaderUpgrade.Head": {
+    "message": "오래된 장비를 황금의 유산 셰이더로",
+    "description": ""
+  },
+  "WhatsNew.ShaderUpgrade.Body": {
+    "message": "황금의 유산 이전에 만든 장비는 아직 게임의 옛 셰이더를 씁니다. 설정에서 \"오래된 장비를 황금의 유산 셰이더로 업그레이드\"를 체크하면, Proteus가 착용한 모드의 재질을 모드 안에서 황금의 유산 셰이더로 다시 쓰며, 각 파일은 먼저 백업합니다. 기본으로 꺼져 있으며, \"착용 중인 장비 되돌리기\"로 제작자의 파일을 되돌릴 수 있습니다.",
+    "description": ""
+  },
   "WhatsNew.HairPort.Body": {
     "message": "많은 헤어 모드는 한 종족용으로만 만들어져서, 다른 종족에서는 게임 자체의 헤어스타일이 대신 표시됩니다. 이제 Proteus가 모드의 헤어스타일을 내 종족의 머리에 맞게 구부려 같은 모드의 같은 옵션에 추가합니다. 지금 컬렉션에서 켜져 있는 헤어 모드를 한 번 살펴보고, 이후에는 헤어 모드를 설치하거나 켜거나 변경할 때마다 다시 살펴봅니다. 맞춘 헤어스타일 번호를 채팅으로 알려 주므로 어떤 것을 고르면 되는지 알 수 있습니다. 물리 효과가 있는 헤어는 물리 효과가 그대로 유지됩니다.\n\nProteus를 꺼도 계속 작동하고, 모드를 내보낼 때 함께 따라갑니다. 설정 › 헤어 에서 이 기능을 끄거나, 다시 확인하거나, 맞춘 헤어스타일을 되돌릴 수 있습니다.",
     "description": "Release-notes section on hair fitted automatically from another race. 'Settings, Hair' names the Settings tab and its Hair section - match Tab.Settings and Settings.Section.HairPort. 'Physics hair' is hair that sways with its own bones."
@@ -5479,16 +5523,20 @@
     "message": "c{0:D4}의 머리에 맞지 않습니다. {1:P0}가 두개골 안으로 파묻히고, 두피와의 거리가 원본과 {2:F0} mm 차이 납니다. 게임에서 확인하세요",
     "description": ""
   },
+  "HairPort.Clip.Fmt": {
+    "message": "c{0:D4}에 맞추면 원본에서는 파묻히지 않는 점 {1}개가 머리 안으로 파묻혀 두피가 보일 수 있습니다. 게임에서 확인하세요",
+    "description": "A hair port saved with a warning (lowercase sentence fragment): bent onto another race, some of it still sinks into that race's head where the original sits on its own scalp, which may show the skin; shown after a race or file name and a colon. {0} race code number, {1} number of points."
+  },
+  "HairPort.Undo.Also.Fmt": {
+    "message": "{0}의 이식도 제거했습니다. 자기 헤어스타일이 읽는 머티리얼 리디렉션을 사용하고 있었습니다.",
+    "description": "Sentence added after a hair-port removal: ports made by an older build were taken out too, because they redirected a material the named races' own hairstyle reads. {0} race codes, comma-separated (e.g. c0301, c0501)."
+  },
   "HairPort.Refused.NotHair": {
     "message": "헤어스타일 모델이 아닙니다",
     "description": ""
   },
   "HairPort.Refused.NotInMod": {
     "message": "모드가 그 헤어스타일을 제공하지 않습니다",
-    "description": ""
-  },
-  "HairPort.Refused.Gender": {
-    "message": "헤어스타일은 같은 성별의 종족 사이에서만 이식됩니다",
     "description": ""
   },
   "HairPort.Refused.NoStyle.Fmt": {
@@ -5603,6 +5651,42 @@
     "message": "미지원",
     "description": ""
   },
+  "HairPort.Studio.OtherSex": {
+    "message": "다른 성별에도",
+    "description": "Section heading in the Studio's port list, above the races of the other sex."
+  },
+  "HairPort.Studio.OtherSex.Note.Fmt": {
+    "message": "게임에서 헤어스타일 {0}은(는) 다른 성별에게는 다른 스타일입니다. 여기서 이식한 종족은 이 모드를 켠 채 헤어스타일 {0}을(를) 고르면 대신 이 스타일을 씁니다 — 그 모드로 표시되는 모두에게. 여기서는 아무것도 자동으로 체크되지 않으며, Proteus는 스스로 성별을 넘어 이식하지 않습니다.",
+    "description": "Note under the other-sex heading in the Studio port list. {0} is the hairstyle number."
+  },
+  "HairPort.Studio.OtherSexAuthored": {
+    "message": "모드에 이 성별용 자체 버전이 있습니다",
+    "description": "Per-race status in the Studio port list for a race of the other sex: the mod ships its own model of this hairstyle for that sex."
+  },
+  "HairPort.Studio.OtherSexSkeleton": {
+    "message": "모드가 이 종족에 자체 스켈레톤을 줍니다",
+    "description": "Per-race status note in the Studio port list for a race of the other sex: the mod now gives that race its own hair skeleton."
+  },
+  "HairPort.Refused.NotTarget": {
+    "message": "헤어스타일 자신의 종족이거나 플레이할 수 없는 종족입니다",
+    "description": "Reason (lowercase sentence fragment) why a hairstyle could not be ported to a race; shown after a race name and a colon."
+  },
+  "HairPort.Refused.OtherSexAuto": {
+    "message": "다른 성별이므로 스튜디오에서 요청할 때만 이식됩니다",
+    "description": "Reason (lowercase sentence fragment) why the automatic path did not port a hairstyle to a race of the other sex; shown after a race name and a colon."
+  },
+  "HairPort.Refused.OtherSexAuthored.Fmt": {
+    "message": "모드에 c{0:D4}용 자체 헤어스타일 {1}이(가) 있습니다. 대신 그것을 이식하세요",
+    "description": "Reason (lowercase sentence fragment) a hand port to the other sex is refused. {0} is a race code number, {1} the hairstyle number."
+  },
+  "HairPort.Refused.OtherSexAuthoredAuto.Fmt": {
+    "message": "모드에 이제 c{0:D4}용 자체 헤어스타일 {1}이(가) 있으므로 스튜디오에서 만든 이식은 그대로 둡니다",
+    "description": "Reason (lowercase sentence fragment) the automatic path leaves a Studio port to the other sex as it is. {0} is a race code number, {1} the hairstyle number."
+  },
+  "HairPort.Refused.OtherSexSkeleton.Fmt": {
+    "message": "모드가 c{0:D4}에 헤어스타일 {1}용 자체 스켈레톤을 주므로, 다른 성별에서 온 이식은 자기 스켈레톤을 가져올 수 없습니다",
+    "description": "Reason (lowercase sentence fragment) a port to the other sex is refused. {0} is a race code number, {1} the hairstyle number."
+  },
   "HairPort.Studio.Port": {
     "message": "이식",
     "description": ""
@@ -5679,8 +5763,8 @@
     "message": "이 모드의 헤어 이식에 대한 Proteus 기록(Proteus/hairport.json)을 읽을 수 없어 아무것도 변경하지 않았습니다.",
     "description": ""
   },
-  "HairPort.Auto.Tip2": {
-    "message": "많은 헤어 모드는 한 종족 전용으로 만들어져서, 다른 종족에서는 게임\n기본 헤어스타일이 대신 표시됩니다. 켜면 Proteus가 모드의 헤어스타일을\n당신 종족의 머리에 맞게 구부려 같은 모드의 같은 옵션에 추가합니다.\n착용한 헤어스타일뿐 아니라 컬렉션에서 켜진 헤어 모드도 미리 맞춥니다:\n이 설정을 켤 때, 모드를 설치·활성화·변경할 때, \"지금 확인\"을 누를 때.\n\n당신의 종족에만, 같은 성별의 종족에서 가져옵니다. Proteus를 꺼도 계속\n작동하고, 모드와 함께 따라가며, 그 모드를 켠 채로 표시되는 모두에게\n보입니다. 여기서 되돌릴 수 있습니다.",
+  "HairPort.Auto.Tip3": {
+    "message": "많은 헤어 모드는 한 종족 전용으로 만들어져서, 다른 종족에서는 게임\n기본 헤어스타일이 대신 표시됩니다. 켜면 Proteus가 모드의 헤어스타일을\n당신 종족의 머리에 맞게 구부려 같은 모드의 같은 옵션에 추가합니다.\n착용한 헤어스타일뿐 아니라 컬렉션에서 켜진 헤어 모드도 미리 맞춥니다:\n이 설정을 켤 때, 모드를 설치·활성화·변경할 때, \"지금 확인\"을 누를 때.\n\n당신의 종족에만, 같은 성별의 종족에서 가져옵니다. 성별을 넘는 이식은\n스튜디오에서만 만들어지지만, 거기서 만든 것도 여기서 최신으로 유지됩니다.\nProteus를 꺼도 계속 작동하고, 모드와 함께 따라가며, 그 모드를 켠 채로\n표시되는 모두에게 보입니다. 여기서 되돌릴 수 있습니다.",
     "description": ""
   },
   "HairPort.Scan.Starting": {
@@ -5821,6 +5905,218 @@
   },
   "Parts.Retarget.UseWornBody.Tip": {
     "message": "이 부위에 착용 중인 체형 모드에 맞춥니다. \"적용 체형\"에서 고르는 것과 같습니다.",
+    "description": ""
+  },
+  "Settings.Section.GearShaders": {
+    "message": "장비 셰이더",
+    "description": ""
+  },
+  "Settings.GearShaders.AutoUpgrade.Label": {
+    "message": "오래된 장비를 황금의 유산 셰이더로 업그레이드",
+    "description": ""
+  },
+  "Settings.GearShaders.Status.Fmt": {
+    "message": "{0}개 업그레이드 · {1}개는 예전 셰이더 유지",
+    "description": ""
+  },
+  "Settings.GearShaders.Left.Tip.Fmt": {
+    "message": "예전 셰이더 유지:\n{0}",
+    "description": ""
+  },
+  "Settings.GearShaders.NextRedraw": {
+    "message": "다음 다시 그리기 때 적용됩니다(자동 다시 그리기가 꺼져 있음).",
+    "description": ""
+  },
+  "Settings.GearShaders.Reason.OldTable": {
+    "message": "예전 색상표",
+    "description": ""
+  },
+  "Settings.GearShaders.Reason.UnsupportedForm": {
+    "message": "지원하지 않는 텍스처 구성",
+    "description": ""
+  },
+  "Settings.GearShaders.Reason.Unreadable": {
+    "message": "읽을 수 없음",
+    "description": ""
+  },
+  "Settings.GearShaders.Reason.Compositor": {
+    "message": "Proteus 오버레이가 그림",
+    "description": ""
+  },
+  "Settings.GearShaders.Reason.WriteFailed": {
+    "message": "파일을 쓸 수 없음",
+    "description": ""
+  },
+  "Settings.GearShaders.AutoUpgrade.Tip": {
+    "message": "장비를 착용하면 Proteus가 착용 중인 모드의 예전 셰이더(characterlegacy.shpk) 재질을\n모드 안에서 황금의 유산 셰이더(character.shpk)로 다시 씁니다. 각 파일은 먼저 백업됩니다.\n끄면 이후 업그레이드가 멈추지만 되돌리지는 않습니다. \"착용 중인 장비 되돌리기\"는\n제작자의 파일을 복원하고 \"착용 중인 장비 지금 업그레이드\" 전까지 그 장비는 건드리지 않습니다.",
+    "description": ""
+  },
+  "Settings.GearShaders.Waiting": {
+    "message": "Penumbra를 기다리는 중입니다.",
+    "description": ""
+  },
+  "Settings.GearShaders.Reason.LegacyMod": {
+    "message": "Proteus가 쓰지 않는 예전 형식의 모드 폴더",
+    "description": ""
+  },
+  "Settings.GearShaders.Reason.MixedSpecular": {
+    "message": "옵션마다 스페큘러 맵이 다름",
+    "description": ""
+  },
+  "Settings.GearShaders.Reason.SpecularFromOtherMod": {
+    "message": "스페큘러 맵이 다른 모드에서 옴",
+    "description": ""
+  },
+  "Settings.GearShaders.Reason.UnsupportedPlacement": {
+    "message": "결합 그룹 안에 있음",
+    "description": ""
+  },
+  "Settings.GearShaders.Reason.ProteusPack": {
+    "message": "Proteus 팩(Proteus가 직접 그림)",
+    "description": ""
+  },
+  "Settings.GearShaders.Reason.Declined": {
+    "message": "직접 되돌림",
+    "description": ""
+  },
+  "Settings.GearShaders.UpgradeNow": {
+    "message": "착용 중인 장비 지금 업그레이드",
+    "description": ""
+  },
+  "Settings.GearShaders.UpgradeNow.Tip": {
+    "message": "지금 착용 중인 장비의 예전 셰이더 재질을 황금의 유산 셰이더로 바꿉니다.\n이전에 되돌린 장비도 포함됩니다.",
+    "description": ""
+  },
+  "Settings.GearShaders.UndoWorn": {
+    "message": "착용 중인 장비 되돌리기",
+    "description": ""
+  },
+  "Settings.GearShaders.UndoWorn.Tip": {
+    "message": "착용 중인 장비의 제작자 파일을 복원하고 \"착용 중인 장비 지금 업그레이드\"를 쓸 때까지\n그 장비는 건드리지 않습니다. 이후 제작자가 낸 업데이트는 유지됩니다.",
+    "description": ""
+  },
+  "Settings.GearShaders.Result.Fmt": {
+    "message": "되돌리기: {0}개 복원, {1}개는 제작자 업데이트로 유지, {2}개 거부.",
+    "description": ""
+  },
+  "Settings.GearShaders.Edited.Fmt": {
+    "message": "{0}은(는) 셰이더 업그레이드 후 편집되어 되돌리기가 그대로 둡니다. 제작자의 원본은 Proteus/shaderupgrade-backup/{0}에 보관되어 있습니다. 되돌리려면 원본을 파일 위에 복사하세요.",
+    "description": ""
+  },
+  "Settings.GearShaders.Busy": {
+    "message": "작업 중…",
+    "description": ""
+  },
+  "Chat.ShaderUpgrade.Fmt": {
+    "message": "[Proteus] \"{1}\"의 예전 셰이더 재질 {0}개를 황금의 유산 셰이더로 바꿨습니다(각 파일 백업됨). 되돌리기: /proteus > 설정 > 장비 셰이더.",
+    "description": ""
+  },
+  "MeshVolume.Feature.ShaderUpgrade": {
+    "message": "장비 셰이더 업그레이드",
+    "description": ""
+  },
+  "Settings.Section.GearVariants": {
+    "message": "장비 변형",
+    "description": ""
+  },
+  "Settings.GearVariants.Auto.Label": {
+    "message": "착용한 장비의 모든 변형을 모드의 재질로 지정",
+    "description": ""
+  },
+  "Settings.GearVariants.Auto.Tip": {
+    "message": "아이템의 한 변형용으로 만든 모드는 그 변형의 재질 폴더만 포함하므로, 다른 변형으로\n착용하면 모드의 모델에 게임의 재질(또는 다른 의상의 재질, 또는 아무것도)이 그려집니다. 그런 장비를 착용하면\nProteus가 모드의 재질 경로를 다른 변형 폴더로, 모드 자체의 옵션 안에서 복사합니다.\nTexTools의 \"Apply to All Variants\"와 같지만 재질만 해당합니다. 그러면 그 변형들은 모드가 우선하는 곳에서\n모드의 재질을 보여 주며, 부위·VFX·소리는 각자의 것으로 유지됩니다. 끄면 이후의 변경만\n멈추고 되돌리지는 않습니다. \"착용 중인 장비 되돌리기\"로 제거할 수 있습니다.",
+    "description": ""
+  },
+  "Settings.GearVariants.Status.Fmt": {
+    "message": "{0}개 변경 · {1}개 그대로",
+    "description": ""
+  },
+  "Settings.GearVariants.Repointed.Tip.Fmt": {
+    "message": "변경됨:\n{0}",
+    "description": ""
+  },
+  "Settings.GearVariants.Left.Tip.Fmt": {
+    "message": "그대로 둔 것:\n{0}",
+    "description": ""
+  },
+  "Settings.GearVariants.NextRedraw": {
+    "message": "다음 다시 그리기 때 적용됩니다(자동 다시 그리기가 꺼져 있음).",
+    "description": ""
+  },
+  "Settings.GearVariants.Waiting": {
+    "message": "Penumbra를 기다리는 중입니다.",
+    "description": ""
+  },
+  "Settings.GearVariants.Reason.SeveralVariants": {
+    "message": "모드가 자체적으로 여러 변형을 포함함",
+    "description": ""
+  },
+  "Settings.GearVariants.Reason.ModImc": {
+    "message": "모드가 이 변형을 직접 설정함",
+    "description": ""
+  },
+  "Settings.GearVariants.Reason.OtherModMaterial": {
+    "message": "재질이 다른 모드에서 옴",
+    "description": ""
+  },
+  "Settings.GearVariants.Reason.NoImc": {
+    "message": "게임의 변형 표를 읽을 수 없음",
+    "description": ""
+  },
+  "Settings.GearVariants.Reason.MetaUnreadable": {
+    "message": "Penumbra의 메타데이터를 읽을 수 없음",
+    "description": ""
+  },
+  "Settings.GearVariants.Reason.OtherModWins": {
+    "message": "다른 모드의 메타데이터가 우선함",
+    "description": ""
+  },
+  "Settings.GearVariants.Reason.LegacyMod": {
+    "message": "Proteus가 쓰지 않는 예전 형식의 모드 폴더",
+    "description": ""
+  },
+  "Settings.GearVariants.Reason.ProteusPack": {
+    "message": "Proteus 팩(Proteus가 직접 그림)",
+    "description": ""
+  },
+  "Settings.GearVariants.Reason.Declined": {
+    "message": "직접 되돌림",
+    "description": ""
+  },
+  "Settings.GearVariants.Reason.WriteFailed": {
+    "message": "모드를 쓸 수 없음",
+    "description": ""
+  },
+  "Settings.GearVariants.RepointNow": {
+    "message": "착용 중인 장비 지금 변경",
+    "description": ""
+  },
+  "Settings.GearVariants.RepointNow.Tip": {
+    "message": "지금 착용 중인 장비의 변형을 각 모드의 재질로 지정합니다.\n전에 되돌린 장비도 포함됩니다.",
+    "description": ""
+  },
+  "Settings.GearVariants.UndoWorn": {
+    "message": "착용 중인 장비 되돌리기",
+    "description": ""
+  },
+  "Settings.GearVariants.UndoWorn.Tip": {
+    "message": "착용 중인 장비의 모드에서 Proteus의 변형 항목을 제거하고, \"착용 중인 장비 지금 변경\"을\n사용할 때까지 그대로 둡니다. 그 뒤 누군가 바꾼 항목은 유지됩니다.",
+    "description": ""
+  },
+  "Settings.GearVariants.Result.Fmt": {
+    "message": "되돌리기: {0}개 제거, {1}개는 이후 변경되어 유지, {2}개 거부.",
+    "description": ""
+  },
+  "Settings.GearVariants.NothingRecorded": {
+    "message": "착용 중인 장비에 대해 기록된 것이 없습니다.",
+    "description": ""
+  },
+  "Settings.GearVariants.Busy": {
+    "message": "작업 중…",
+    "description": ""
+  },
+  "Chat.VariantRepoint.Fmt": {
+    "message": "[Proteus] \"{1}\"의 재질 경로를 변형 폴더 {0}개에 더 복사했습니다. 그 변형들은 모드가 우선하는 곳에서 모드 자체의 재질을 보여 줍니다. 되돌리기: /proteus > 설정 > 장비 변형.",
     "description": ""
   }
 }

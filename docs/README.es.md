@@ -290,7 +290,8 @@ La sección **Pelo** adapta los mods de pelo a ti de dos maneras: lleva el pelo 
 - El pelo con físicas conserva sus físicas. Cuando al esqueleto de tu raza le faltan los huesos con los que se mueve un peinado, la adaptación trae consigo el esqueleto y las físicas de la raza de origen para ese peinado.
 - Un peinado que no quedaría bien en tu cabeza (se hunde en ella o se separa de ella) se ajusta igualmente, y Proteus dice cuál, para que lo revises en el juego.
 - Un peinado que el doblado deja en parte del revés se ajusta igualmente, y Proteus dice cuál, para que lo revises en el juego.
-- Para cubrir todas las razas a la vez, abre un modelo de pelo en el **Estudio** y usa **Portar a todas las razas**.
+- Las cabezas difieren en forma, no solo en tamaño, así que al doblar un peinado sobre una cabeza más grande parte de él puede hundirse en la nuca y dejar ver una calva. Proteus vuelve a sacar ese pelo hasta donde estaba en la cabeza original, y no más allá. En una cabeza mucho más grande (Hrothgar) el pelo se estira un poco para cubrirla. Si algo sigue hundiéndose, Proteus te lo dice. El pelo que Proteus adaptó antes de esta actualización se vuelve a adaptar la próxima vez que lo lleves, o desde el Estudio.
+- Para cubrir todas las razas a la vez, abre un modelo de pelo en el **Estudio** y usa **Portar a todas las razas**. En **También para el otro sexo** también puedes marcar razas del otro sexo: llevarán entonces este peinado en lugar del estilo del juego con ese número. Proteus mantiene al día esos portados, pero nunca crea uno por sí solo. Cada raza del otro sexo se puede portar por separado: su peinado portado recibe su propia copia del material, así que las demás razas conservan el peinado del juego.
 
 **Sombreros.** La mayoría del pelo con mods no tiene soporte para sombreros, así que un sombrero puesto encima lo atraviesa. Proteus aplasta contra tu cabeza el pelo que cubriría un sombrero.
 
@@ -377,7 +378,7 @@ Otras dos secciones plegables se aplican a todo el mod:
   - **Tensar la tela sobre el ombligo**: la tela queda plana sobre el ombligo en lugar de hundirse en él.
   - **Suavizar entre las piernas**: suaviza el pliegue de la entrepierna. Esto cambia el cuerpo de debajo, así que se aplica a todas las prendas que lleves a la vez.
   - **Suavizar el pezón**: suaviza la tela por encima. Aún sin terminar: el cuerpo de debajo conserva su forma, así que en una prenda ajustada todavía puede marcarse.
-  - **Cubrir los dedos de los pies**: cubre los dedos con una sola puntera redondeada, como sientan las medias y los calcetines, en vez de seguir cada dedo. En un mod que incluye su propia puntera, es la opción *Toe Cap* del mod en Penumbra (en su grupo Masks): se guarda en tu colección de Penumbra, y un diseño de Glamourer que incluya el mod la conserva. En cualquier otro mod, Proteus pone la puntera por su cuenta y el ajuste se guarda en los ajustes de Proteus del mod: se aplica en todas las colecciones y va con el mod cuando lo exportas, pero los diseños y los preajustes no lo capturan. Marcarlo convierte las capas de piel del mod en una segunda piel para que la puntera tenga algo que moldear. La puntera está hecha para Bibo+, Neolithe, Rue y YAB; en otros cuerpos la prenda se construye, pero los dedos se quedan como están.
+  - **Cubrir los dedos de los pies**: cubre los dedos con una sola puntera redondeada, como sientan las medias y los calcetines, en vez de seguir cada dedo. En un mod que incluye su propia puntera, es la opción *Toe Cap* del mod en Penumbra (en su grupo Masks, si permite varias elecciones): se guarda en tu colección de Penumbra, y un diseño de Glamourer que incluya el mod la conserva. En cualquier otro mod, incluido uno cuyo Toe Cap está en un grupo de una sola elección (selecciónalo en Penumbra para la puntera del autor), Proteus pone la puntera por su cuenta y el ajuste se guarda en los ajustes de Proteus del mod: se aplica en todas las colecciones y va con el mod cuando lo exportas, pero los diseños y los preajustes no lo capturan. Marcarlo convierte las capas de piel del mod en una segunda piel para que la puntera tenga algo que moldear. La puntera está hecha para Bibo+, Neolithe, Rue y YAB; en otros cuerpos la prenda se construye, pero los dedos se quedan como están.
 
   Activar cualquiera de los cinco primeros hace que el mod se represente como segunda piel. **Cubrir los dedos de los pies** hace lo mismo con los overlays del cuerpo que no estén fijados en Piel ni sean un estampado; si nada del mod puede convertirse en una prenda sobre el cuerpo, la casilla lo indica.
 
@@ -391,9 +392,9 @@ Bajo las filas, la pestaña de una capa puede mostrar:
 
 #### Filas
 
-El editor muestra hasta 16 filas de tabla de colores. Las filas corresponden a regiones definidas por la textura de índice del mod (si tiene una). La fila 16 es el color de reserva que se usa cuando no hay textura de índice. Las filas que la textura de índice nunca selecciona aparecen atenuadas.
+El editor muestra hasta 16 filas de tabla de colores. Las filas corresponden a regiones definidas por la textura de índice del mod (si tiene una). La fila 16 es el color de reserva que se usa cuando no hay textura de índice. Las filas que las texturas de índice seleccionan rara vez o nunca se ocultan; marca **Mostrar todas las filas** para volver a verlas, atenuadas.
 
-Pulsa **Iluminar** en cualquier subfila para encender esa región en tu personaje y ver así qué fila controla qué.
+Pulsa **Iluminar** en cualquier subfila para encender esa región en tu personaje y ver así qué fila controla qué. O simplemente apunta al botón de una fila (#01–#16): sus dos subfilas se iluminan en tu personaje mientras el puntero siga encima.
 
 Cada fila tiene dos subfilas:
 - **A** — se aplica donde el canal verde de la textura de índice vale 255.

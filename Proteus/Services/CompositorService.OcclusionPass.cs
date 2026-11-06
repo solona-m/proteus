@@ -29,6 +29,8 @@ public partial class CompositorService
                 private IslandBlurCache islandBlurCache = null!;
                 private HalfResIslandPlanes halfPlanes = null!;
                 private List<UvSeamMapService.SeamModel>? bodyMdls;
+                /// <summary>Each seam model's body source, parallel to <see cref="bodyMdls"/> (#55).</summary>
+                private List<SecondSkinService.BodySource>? bodySources;
                 private bool aoLoadedNormal;
                 private bool aoIndentedNormal;
                 private long tAo;
@@ -132,36 +134,36 @@ public partial class CompositorService
                 private void LoadSeams()
                 {
                     // The mesh that owns this UV layout: its seams are the only statement of which island edges continue into which.
-                    // Identity only here, no file opened; the seam map is cached by it.
+                    // Chosen by the shell's rule (BodySourceFor): file stats, the settled upstream read when it would be
+                    // chosen, remembered bytes hashed. The seam map is cached by the identity; its full read waits for a miss.
                     bodyMdls = null;
+                    bodySources = null;
                     if (islandLabels != null)
                     {
                         if (BodyModelPathsFor(material.mtrlGamePath) is { } bodyMdlPaths)
                         {
                             bodyMdls = new List<UvSeamMapService.SeamModel>(bodyMdlPaths.Length);
-                            foreach (var mp in bodyMdlPaths)
+                            bodySources = new List<SecondSkinService.BodySource>(bodyMdlPaths.Length);
+                            var compositor = material.run.compositor;
+                            foreach (var gamePath in bodyMdlPaths)
                             {
-                                var gamePath = mp;
-                                var disk = material.run.compositor.penumbra.ResolvePlayer(gamePath);
-                                // A modded part is a real file (size+mtime identity); a vanilla one can only change with a patch (game path identity).
-                                string id = gamePath;
-                                try
-                                {
-                                    if (!string.IsNullOrEmpty(disk))
-                                    {
-                                        var fi = new FileInfo(disk);
-                                        if (fi.Exists) id = $"{disk}|{fi.Length}|{fi.LastWriteTimeUtc.Ticks}";
-                                    }
-                                }
-                                catch { /* unreadable — fall back to the game path */ }
-                                bodyMdls.Add(new UvSeamMapService.SeamModel(
-                                    id, () => material.run.compositor.textureLoader.LoadRawFile(disk, gamePath)));
+                                // The body the shell is cut from in this same composite (#56): when the part resolves to our
+                                // own publication, its upstream, by the shell's rule. A modded part is identified by size and
+                                // mtime, remembered bytes by hash, a vanilla one by its game path (it changes only with a patch).
+                                var source = compositor.secondSkin.BodySourceFor(gamePath, compositor.managedModDir);
+                                compositor.log.Debug("[Proteus] seam map part {0}: {1} <- {2}", gamePath, source.Kind,
+                                    source.Kind == SecondSkinService.BodySourceKind.Remembered ? "(remembered)"
+                                    : source.Disk != null && Path.IsPathRooted(source.Disk) ? Path.GetFileName(source.Disk)
+                                    : "(game data)");
+                                bodyMdls.Add(new UvSeamMapService.SeamModel(source.Id, source.Load));
+                                bodySources.Add(source);
                             }
                             // Which files the seam map will be built from; on a cache hit nothing else is logged.
                             material.run.compositor.log.Debug("[Proteus] seam map: {0} body part(s) for {1} — {2}",
                                       bodyMdls.Count, material.mtrlGamePath,
                                       string.Join(", ", bodyMdls.Select(m =>
-                                          m.Id.Contains('|') ? Path.GetFileName(m.Id[..m.Id.IndexOf('|')]) : "(game)")));
+                                          m.Id.StartsWith("mem|", StringComparison.Ordinal) ? "(remembered)"
+                                          : m.Id.Contains('|') ? Path.GetFileName(m.Id[..m.Id.IndexOf('|')]) : "(game)")));
                         }
                         else
                         {
@@ -227,7 +229,7 @@ public partial class CompositorService
                                     islandLabels, islandOwner, islandCount, bodyMdls, islandBlurCache, halfPlanes);
                                 material.SnapshotBaseDiffuse();
                                 ApplyAmbientOcclusion(material.baseD, strapD, blurredD, material.wD, material.hD, aoStrength, coveredAbove,
-                                    material.run.compositor.BustStandoff(modDir, bodyMdls, strapD, material.wD, material.hD, radiusD));
+                                    material.run.compositor.BustStandoff(modDir, bodyMdls, bodySources, material.run.RunModSettings, strapD, material.wD, material.hD, radiusD));
                                 // AO is a real edit to the skin diffuse; a gear-only mod legitimately owns the buffer through it.
                                 material.diffuseBlended = true;
                             }
@@ -271,7 +273,7 @@ public partial class CompositorService
                                     ApplyNormalIndent(material.baseN, blurredN, strapN, material.wN, material.hN, aoNormal,
                                         material.wN == material.wD && material.hN == material.hD ? coveredAbove : null, radiusN,
                                         material.wN == material.wD && material.hN == material.hD ? insidePlane : null,
-                                        material.run.compositor.BustStandoff(modDir, bodyMdls, strapN, material.wN, material.hN, radiusN));
+                                        material.run.compositor.BustStandoff(modDir, bodyMdls, bodySources, material.run.RunModSettings, strapN, material.wN, material.hN, radiusN));
                                     aoIndentedNormal = true;
                                     // A real write to the normal buffer, so the untouched-normal hand-back in PublishChannels
                                     // must not discard it. Not a contributor bump — no overlay asked for this.

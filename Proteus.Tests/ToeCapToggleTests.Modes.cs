@@ -254,4 +254,35 @@ public sealed partial class ToeCapToggleTests
         Assert.Equal(ToeCapToggle.Reach(md, true, Sel("Masks", "Toe Cap"), false),
                      ToeCapToggle.Reach(flagged, true, Sel("Masks"), false));
     }
+
+    // ── #61: the tooltip of each state ──────────────────────────────────
+
+    [Fact]
+    [Trait("Plan", "AC-issue-sweep-a-10")]
+    [Trait("Plan", "EDGE-issue-sweep-a-24")]
+    public void Tip_names_a_single_choice_own_cap()
+    {
+        var cs = Proteus.Localization.Strings.Colors;
+        var single = new ToeCapOptionRef("Masks", "Toe Cap", Writable: false, CappedOptions: ["Toe Cap"]);
+        var multi = single with { Writable = true };
+        // Flag mode on a mod whose own cap is in a single-choice group, unselected: its own tooltip.
+        var flagOwn = new ToeCapTickView(true, false, false, false, ToeCapMode.Flag, false);
+        Assert.Equal(ToeCapTip.FlagOwnSingleChoice, ToeCapToggle.TipFor(flagOwn, single));
+        Assert.Equal(cs.ToeCapFlagOwnTip, ToeCapToggle.TipText(ToeCapTip.FlagOwnSingleChoice, cs));
+        // No cap of its own: the flag tooltip.
+        Assert.Equal(ToeCapTip.Flag, ToeCapToggle.TipFor(flagOwn, null));
+        Assert.Equal(cs.ToeCapFlagTip, ToeCapToggle.TipText(ToeCapTip.Flag, cs));
+        // Selected in its single-choice group: locked.
+        Assert.Equal(ToeCapTip.Locked, ToeCapToggle.TipFor(flagOwn with { Locked = true, On = true }, single));
+        // Multi-select: plain, inherited (two strings), held — and held beats everything.
+        var option = new ToeCapTickView(true, false, false, false, ToeCapMode.Option, false);
+        Assert.Equal(ToeCapTip.Plain, ToeCapToggle.TipFor(option, multi));
+        Assert.Equal(ToeCapTip.Inherited, ToeCapToggle.TipFor(option with { Inherited = true }, multi));
+        Assert.Equal(cs.ToeCapTip + "\n\n" + cs.ToeCapInheritedNote, ToeCapToggle.TipText(ToeCapTip.Inherited, cs));
+        Assert.Equal(ToeCapTip.Held, ToeCapToggle.TipFor(option with { Held = true, Inherited = true }, multi));
+        Assert.Equal(ToeCapTip.Held, ToeCapToggle.TipFor(flagOwn with { Held = true, Locked = true }, single));
+        Assert.Equal(cs.ToeCapHeldTip, ToeCapToggle.TipText(ToeCapTip.Held, cs));
+        Assert.Equal(cs.ToeCapLockedTip, ToeCapToggle.TipText(ToeCapTip.Locked, cs));
+        Assert.Equal(cs.ToeCapTip, ToeCapToggle.TipText(ToeCapTip.Plain, cs));
+    }
 }

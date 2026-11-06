@@ -57,6 +57,11 @@ internal static class LocalData
     /// a "Chest piercings" (RFinger) and a "Legs piercings" (LFinger) <c>Imc</c> group on set 103.</summary>
     internal const string NeolitheRingMod = Mods + ":Neolithe Piercings Empyrean Ring Proteus";
 
+    /// <summary>"LM Stryx Rainbow", installed: physics hair for c0201, hairstyles 133 and 168, its h0168 materials
+    /// <c>_hir_b</c> (default group) and <c>_hir_c</c> (<c>common/1</c>, shared with h0133); the source carries Proteus's
+    /// hat fit. The mod whose ports showed the bald spot at the back of the head (2026-11-05). Only ever read, or copied.</summary>
+    internal const string StryxMod = Mods + ":LM Stryx Rainbow";
+
     /// <summary>
     /// The uv transfer maps, which live in the repository (<c>Proteus/uvmaps</c>) but through Git LFS, so a checkout
     /// may hold only their pointers. Not a variable: found by walking up from the test binaries. <see cref="Path"/> gives

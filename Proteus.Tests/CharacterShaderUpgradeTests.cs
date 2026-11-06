@@ -100,6 +100,7 @@ public class CharacterShaderUpgradeTests
     /// roughness one, and the specular mask flag is dropped; the colour flags and channel stay.
     /// </summary>
     [Fact]
+    [Trait("Plan", "EDGE-dt-shader-upgrade-22")]
     public void Dye_rows_take_the_dawntrail_templates()
     {
         var mtrl = Fixture();

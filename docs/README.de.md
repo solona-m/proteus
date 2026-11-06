@@ -290,7 +290,8 @@ Der Abschnitt **Haare** passt Haar-Mods auf zwei Arten an dich an: Haar, das fü
 - Physik-Haar behält seine Physik. Fehlen dem Skelett deines Volkes die Knochen, mit denen sich eine Frisur bewegt, bringt die Übertragung für diese Frisur das Skelett und die Physik des Ausgangsvolkes mit.
 - Eine Frisur, die nicht richtig auf deinem Kopf sitzen würde (sie sinkt in ihn ein oder steht von ihm ab), wird trotzdem angepasst, und Proteus sagt, welche, damit du sie im Spiel prüfen kannst.
 - Eine Frisur, die die Biegung teilweise nach innen stülpt, wird trotzdem angepasst, und Proteus sagt, welche, damit du sie im Spiel prüfen kannst.
-- Um alle Völker auf einmal abzudecken, öffne ein Haarmodell im **Studio** und nutze **Auf alle Völker übertragen**.
+- Köpfe unterscheiden sich in der Form, nicht nur in der Größe, deshalb kann ein Teil einer auf einen größeren Kopf gebogenen Frisur hinten im Schädel versinken und eine kahle Stelle zeigen. Proteus drückt dieses Haar wieder dorthin hinaus, wo es auf dem ursprünglichen Kopf saß, und nicht weiter. Auf einem viel größeren Kopf (Hrothgar) dehnt sich das Haar ein wenig, um ihn zu bedecken. Sinkt danach noch etwas ein, sagt Proteus es dir. Haar, das Proteus vor diesem Update angepasst hat, wird beim nächsten Tragen oder im Studio neu angepasst.
+- Um alle Völker auf einmal abzudecken, öffne ein Haarmodell im **Studio** und nutze **Auf alle Völker übertragen**. Unter **Auch für das andere Geschlecht** kannst du auch Völker des anderen Geschlechts anhaken: Sie tragen dann diese Frisur statt der Frisur des Spiels mit dieser Nummer. Proteus hält solche Übertragungen aktuell, legt aber nie selbst eine an. Jede Rasse des anderen Geschlechts lässt sich einzeln übertragen: Ihre Übertragung bekommt eine eigene Kopie des Materials, sodass die anderen Rassen die Frisur des Spiels behalten.
 
 **Hüte.** Die meisten Haar-Mods unterstützen keine Hüte, sodass ein darüber getragener Hut einfach hindurchgeht. Proteus drückt das Haar, das ein Hut bedecken würde, flach an deinen Kopf.
 
@@ -377,7 +378,7 @@ Zwei weitere aufklappbare Abschnitte gelten für den ganzen Mod:
   - **Bauchnabel überspannen**: Der Stoff spannt sich flach über den Nabel, statt in ihn einzusinken.
   - **Zwischen den Beinen glätten**: glättet die Falte im Schritt. Das verändert den Körper darunter und gilt deshalb für alle gleichzeitig getragenen Kleidungsstücke.
   - **Brustwarze glätten**: glättet den Stoff darüber. Noch nicht fertig: Der Körper darunter behält seine Form, bei enger Passform kann sie also weiterhin durchdrücken.
-  - **Zehen abdecken**: deckt die Zehen mit einer einzigen abgerundeten Zehenkappe ab, so wie Strümpfe und Socken sitzen, statt jedem Zeh zu folgen. Bei einem Mod, der eine eigene Zehenkappe mitliefert, ist das die Option *Toe Cap* des Mods in Penumbra (in seiner Gruppe Masks): Sie wird in deiner Penumbra-Sammlung gespeichert, und ein Glamourer-Design, das den Mod enthält, behält sie. Bei jedem anderen Mod liefert Proteus die Kappe selbst, und die Einstellung wird in den Proteus-Einstellungen des Mods gespeichert: Sie gilt in jeder Sammlung und geht mit dem Mod mit, wenn du ihn exportierst, aber Designs und Presets erfassen sie nicht. Das Häkchen macht die Hautebenen des Mods zu einer zweiten Haut, damit die Kappe etwas zu formen hat. Die Zehenkappe ist für Bibo+, Neolithe, Rue und YAB gemacht; auf anderen Körpern wird das Kleidungsstück gebaut, aber die Zehen bleiben, wie sie sind.
+  - **Zehen abdecken**: deckt die Zehen mit einer einzigen abgerundeten Zehenkappe ab, so wie Strümpfe und Socken sitzen, statt jedem Zeh zu folgen. Bei einem Mod, der eine eigene Zehenkappe mitliefert, ist das die Option *Toe Cap* des Mods in Penumbra (in seiner Gruppe Masks, wenn sie mehrere Wahlen erlaubt): Sie wird in deiner Penumbra-Sammlung gespeichert, und ein Glamourer-Design, das den Mod enthält, behält sie. Bei jedem anderen Mod, auch einem, dessen Toe Cap in einer Gruppe mit nur einer Wahl liegt (wähle sie dann in Penumbra für die Kappe des Autors), liefert Proteus die Kappe selbst, und die Einstellung wird in den Proteus-Einstellungen des Mods gespeichert: Sie gilt in jeder Sammlung und geht mit dem Mod mit, wenn du ihn exportierst, aber Designs und Presets erfassen sie nicht. Das Häkchen macht die Hautebenen des Mods zu einer zweiten Haut, damit die Kappe etwas zu formen hat. Die Zehenkappe ist für Bibo+, Neolithe, Rue und YAB gemacht; auf anderen Körpern wird das Kleidungsstück gebaut, aber die Zehen bleiben, wie sie sind.
 
   Sobald eines der ersten fünf an ist, wird der Mod als zweite Haut dargestellt. **Zehen abdecken** tut dasselbe für Körper-Overlays, die nicht auf Haut festgelegt oder ein Aufdruck sind; kann nichts im Mod zu einem Kleidungsstück am Körper werden, sagt der Haken das.
 
@@ -391,9 +392,9 @@ Unter den Zeilen kann der Tab eines Overlays anzeigen:
 
 #### Zeilen
 
-Der Editor zeigt bis zu 16 Farbtabellen-Zeilen. Zeilen entsprechen Regionen, die die Index-Textur des Mods definiert (falls er eine hat). Zeile 16 ist die Ausweichfarbe, die genutzt wird, wenn es keine Index-Textur gibt. Zeilen, die die Index-Textur nie auswählt, werden gedimmt.
+Der Editor zeigt bis zu 16 Farbtabellen-Zeilen. Zeilen entsprechen Regionen, die die Index-Textur des Mods definiert (falls er eine hat). Zeile 16 ist die Ausweichfarbe, die genutzt wird, wenn es keine Index-Textur gibt. Zeilen, die die Index-Texturen selten oder nie auswählen, werden ausgeblendet; setze ein Häkchen bei **Alle Zeilen zeigen**, um sie gedimmt zurückzuholen.
 
-Drücke **Leuchten** in einer beliebigen Unterzeile, um diese Region auf deinem Charakter aufleuchten zu lassen, damit du siehst, welche Zeile was steuert.
+Drücke **Leuchten** in einer beliebigen Unterzeile, um diese Region auf deinem Charakter aufleuchten zu lassen, damit du siehst, welche Zeile was steuert. Oder zeige einfach auf den Knopf einer Zeile (#01–#16): Beide Unterzeilen leuchten auf deinem Charakter, solange der Zeiger darauf bleibt.
 
 Jede Zeile hat zwei Unterzeilen:
 - **A** — gilt dort, wo der Grünkanal der Index-Textur 255 ist.

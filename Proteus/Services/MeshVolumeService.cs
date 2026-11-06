@@ -49,8 +49,10 @@ internal static class MeshVolumeService
     /// never restores, whose backup it then deletes with the folder. Two backups of one shared material racing is the
     /// same story: the loser can copy the file the winner has already patched and keep that as "the original".
     /// Only the writing is held, never the edit's computation, so the framework thread waits at most one file's write.
+    /// The gear shader upgrade (<see cref="ShaderUpgradeWriter"/>) takes it too, inside <see cref="ModManifestLock.Gate"/>;
+    /// nothing here takes the Gate, so the two cannot deadlock.
     /// </summary>
-    private static readonly object WriteLock = new();
+    internal static readonly object WriteLock = new();
 
     /// <param name="UnmappedSpares">Distinct shape-key replacement vertices whose base vertex could not be found
     /// from any slot naming them, so they keep the author's position. Enabling that shape reverts the edit on the slots it rewires, which
@@ -214,7 +216,7 @@ internal static class MeshVolumeService
     /// Every vertex named as a shape's replacement, per mesh — the spares, which the main pass must leave
     /// alone. Keyed <c>(mesh &lt;&lt; 32) | localVertex</c>.
     /// </summary>
-    private static HashSet<long> SpareVertices(byte[] mdl, SecondSkinWriter.Source src)
+    internal static HashSet<long> SpareVertices(byte[] mdl, SecondSkinWriter.Source src)
     {
         var spares = new HashSet<long>();
         if (src.Shapes.Count == 0) return spares;
@@ -522,6 +524,10 @@ internal static class MeshVolumeService
                 var start = before;
                 bool isLegacy = string.Equals(CharacterShaderUpgrade.ShaderOf(before), CharacterShaderUpgrade.Legacy,
                                               StringComparison.OrdinalIgnoreCase);
+                // The old diffuse/specular layout is left alone entirely: upgraded without a mask derived from its _s,
+                // the grey specular map read as a Dawntrail mask and drew the garment dark. The gear shader upgrade
+                // moves it properly; after that it is character.shpk here and takes its constants.
+                if (isLegacy && ShaderUpgradePlan.FormOf(before) == LegacyForm.Diffuse) { legacy++; continue; }
                 if (isLegacy && CharacterShaderUpgrade.Upgrade(before) is { } up) start = up;
                 bool upgradedHere = !ReferenceEquals(start, before);
                 if (isLegacy && !upgradedHere) legacy++;
@@ -547,6 +553,131 @@ internal static class MeshVolumeService
 
         if (record != null) WriteRecord(modRoot, record);
         return new MaterialOutcome(changed, missing, notInMod, upgraded, legacy);
+    }
+
+    // ── #65: diffuse materials a 1290–1424 wind save darkened ───────────────
+
+    /// <summary>
+    /// What a 1290–1424 wind save made of <paramref name="backup"/>, the author's legacy diffuse/specular file, with the
+    /// movement constants at <paramref name="scale"/> and <paramref name="max"/>: recipe A (a save on the pristine file:
+    /// upgrade, then the constants) and recipe B (a 1289 save put the constants on the legacy file first, then a 1290
+    /// save upgraded it and patched them). Null for a recipe that can't be applied.
+    /// </summary>
+    private static IEnumerable<byte[]> WindRecipes(byte[] backup, float scale, float max)
+    {
+        byte[] Constants(byte[] m)
+            => TextureLoader.EnsureConstantValues(TextureLoader.EnsureConstantValues(m, VertexMovementScaleId, scale).data,
+                                                  VertexMovementMaxLengthId, max).data;
+        if (CharacterShaderUpgrade.Upgrade(backup) is { } a) yield return Constants(a);
+        if (CharacterShaderUpgrade.Upgrade(Constants(backup)) is { } b) yield return Constants(b);
+    }
+
+    /// <summary>
+    /// Whether <paramref name="current"/> is exactly what an older wind save made of the backed-up diffuse/specular
+    /// original (either recipe), the movement constants' values aside: such a file was moved to character.shpk without
+    /// its diffuse and draws dark (#65). Anything else — edited since, re-authored — is not, so a repair is lossless.
+    /// </summary>
+    internal static bool IsWindDamagedDiffuse(byte[] current, byte[] backup) => WindRecipeMismatch(current, backup) == null;
+
+    /// <summary>Why <paramref name="current"/> is not a wind-darkened copy of <paramref name="backup"/> (null when it is).</summary>
+    internal static string? WindRecipeMismatch(byte[] current, byte[] backup)
+    {
+        if (!string.Equals(CharacterShaderUpgrade.ShaderOf(backup), CharacterShaderUpgrade.Legacy, StringComparison.OrdinalIgnoreCase))
+            return "the backup is not characterlegacy.shpk";
+        if (ShaderUpgradePlan.FormOf(backup) != LegacyForm.Diffuse) return "the backup is not the diffuse/specular form";
+        if (!string.Equals(CharacterShaderUpgrade.ShaderOf(current), CharacterShaderUpgrade.Character, StringComparison.OrdinalIgnoreCase))
+            return "the file is not character.shpk";
+        if (TextureLoader.ConstantValue(current, VertexMovementScaleId) is not { } scale
+            || TextureLoader.ConstantValue(current, VertexMovementMaxLengthId) is not { } max)
+            return "the file has no movement constants";
+        int firstDiff = -1;
+        foreach (var recipe in WindRecipes(backup, scale, max))
+        {
+            if (recipe.AsSpan().SequenceEqual(current)) return null;
+            if (firstDiff < 0)
+                firstDiff = recipe.Length != current.Length ? Math.Min(recipe.Length, current.Length)
+                          : recipe.AsSpan().CommonPrefixLength(current);
+        }
+        return firstDiff < 0 ? "no recipe applies to the backup" : $"differs from the recipe at byte {firstDiff}";
+    }
+
+    /// <summary>
+    /// Put back the author's diffuse/specular original of every listed material an older wind save darkened
+    /// (<see cref="IsWindDamagedDiffuse"/>), so the gear shader upgrade can move it properly. Each is then no longer the
+    /// brush's: its record entry goes, then (last) its backup; the wind must be saved again for sway. Left alone: a file
+    /// not in the record, without a backup, not exactly the recipe, or one a later feature holds a backup of.
+    /// </summary>
+    /// <returns>The rels restored.</returns>
+    public static IReadOnlyList<string> RepairWindDiffuse(string modRoot, IEnumerable<string> rels, Action<string>? warn = null)
+    {
+        lock (WriteLock)
+        {
+            var repaired = new List<string>();
+            var record = ReadRecord(modRoot);
+            if (record == null) return repaired;
+            foreach (var rel in rels.Select(Rel).Distinct(StringComparer.OrdinalIgnoreCase))
+            {
+                if (!rel.EndsWith(".mtrl", StringComparison.OrdinalIgnoreCase)
+                    || !record.Files.Contains(rel, StringComparer.OrdinalIgnoreCase))
+                    continue;
+                var backup = Path.Combine(modRoot, SidecarDiscoveryService.SidecarSubdir, BackupSubdir, Native(rel));
+                var path = Path.Combine(modRoot, Native(rel));
+                try
+                {
+                    if (!File.Exists(backup) || !File.Exists(path)) continue;
+                    var original = File.ReadAllBytes(backup);
+                    bool damaged;
+                    // A malformed file must not abort the repair of every other worn mod, on every run.
+                    try { damaged = IsWindDamagedDiffuse(File.ReadAllBytes(path), original); }
+                    catch (Exception ex) when (ex is ArgumentException or IndexOutOfRangeException
+                                                     or InvalidOperationException or OverflowException)
+                    {
+                        warn?.Invoke($"{rel} could not be judged ({ex.Message}); left as it is");
+                        continue;
+                    }
+                    if (!damaged) continue;
+                    if (ModelBackupOrder.LaterFeature(modRoot, BackupSubdir, rel) != null) continue;
+                    PenumbraModMeta.AtomicWrite(path, original);
+                }
+                catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+                {
+                    warn?.Invoke($"{rel} could not be restored ({ex.Message}); the next walk tries again");
+                    continue;
+                }
+                record.Files.RemoveAll(f => f.Equals(rel, StringComparison.OrdinalIgnoreCase));
+                record.Versions.Remove(rel);
+                record.Worst.Remove(rel);
+                repaired.Add(rel);
+            }
+            if (repaired.Count == 0) return repaired;
+
+            // The record first, the backups last: a backup goes only once the record no longer names it. When the record
+            // can't be written, every backup stays (a record entry whose file is legacy again only over-reports, and the
+            // detector rejects it; a record naming a backup that is gone would be the worse state).
+            var recordPath = Path.Combine(modRoot, SidecarDiscoveryService.SidecarSubdir, RecordFile);
+            try
+            {
+                if (record.Files.Count == 0) File.Delete(recordPath);
+                else WriteRecord(modRoot, record);
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+            {
+                warn?.Invoke($"the wind brush's record could not be updated ({ex.Message}); its backups are kept");
+                return repaired;
+            }
+            var backupDir = Path.Combine(modRoot, SidecarDiscoveryService.SidecarSubdir, BackupSubdir);
+            void Delete(Action delete)
+            {
+                try { delete(); }
+                catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+                {
+                    warn?.Invoke($"a wind brush backup could not be deleted ({ex.Message}); it is no longer recorded");
+                }
+            }
+            if (record.Files.Count == 0) Delete(() => { if (Directory.Exists(backupDir)) Directory.Delete(backupDir, true); });
+            else foreach (var rel in repaired) Delete(() => File.Delete(Path.Combine(backupDir, Native(rel))));
+            return repaired;
+        }
     }
 
     // ── the record, the backup and the way back ─────────────────────────────

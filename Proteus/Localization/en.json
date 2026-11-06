@@ -587,6 +587,14 @@
     "message": "Turn this on for cloth over the chest.\nProteus builds a garment as a copy of the body, so by default it follows the body into\nthe cleavage — which is what makes it read as paint rather than fabric. Real cloth spans\nthe gap: a straight line between the furthest-forward point of each breast.\nWith this on, the fabric between the breasts is relaxed out to that line. Nothing is ever\npulled inward, so it cannot cut into the body, and the breasts themselves keep their shape.\nWhere a neckline has cut the cloth away between the cups there is nothing to span, and\nthis does nothing.",
     "description": "Tooltip for the checkbox above. Contains deliberate line breaks - keep the same number, moving them where your language needs."
   },
+  "Colors.ShowAllRows.Check": {
+    "message": "Show all rows",
+    "description": "Checkbox caption beside Copy row / Paste row in the colour-table editor window. Shows the row buttons the index texture hides."
+  },
+  "Colors.ShowAllRows.Tip": {
+    "message": "Also show the rows this index texture selects rarely or never.\nEditing them changes little or nothing you can see.",
+    "description": "Tooltip for the checkbox above. Contains a deliberate line break - keep the same number, moving it where your language needs."
+  },
   "Colors.SmoothFold.Label": {
     "message": "Smooth between the legs",
     "description": "Checkbox in the colour-table editor's Advanced section."
@@ -638,6 +646,10 @@
   "Colors.ToeCap.Locked.Tip": {
     "message": "This mod's own \"Toe Cap\" option is selected in Penumbra, in a Masks group that allows only\none choice, so it can't be turned off here. Change it in Penumbra.",
     "description": "Tooltip of the greyed-out \"Cap the toes\" checkbox when the mod's own \"Toe Cap\" option is selected in a single-choice Masks group. \"Toe Cap\", \"Masks\" and \"Penumbra\" are names - keep them as written. Contains deliberate line breaks - keep the same number."
+  },
+  "Colors.ToeCap.FlagOwn.Tip": {
+    "message": "Turn this on for stockings and socks: the toes are covered by one rounded toe box, the way\nreal hosiery fits, instead of following every toe.\nThis mod's own \"Toe Cap\" option is in a Masks group that allows only one choice, so this\ntick can't select it without dropping the other mask there. Ticking it uses Proteus's built-in\ncap instead (made for Bibo+, Neolithe, Rue and YAB), saved in the mod's Proteus settings: it\napplies in every collection and goes with the mod when you export it.\nFor the author's own cap, select \"Toe Cap\" in Penumbra.",
+    "description": "Tooltip of the \"Cap the toes\" checkbox on a mod whose own \"Toe Cap\" option sits, unselected, in a single-choice Masks group: the tick uses Proteus's built-in cap instead. \"Toe Cap\", \"Masks\" and \"Penumbra\" are names, and Bibo+, Neolithe, Rue and YAB body names - keep them as written. Contains deliberate line breaks - keep the same number."
   },
   "Colors.ToeCap.SaveFailed": {
     "message": "Couldn't save this mod's Proteus settings, so the change was undone. The log (/xllog) has the reason.",
@@ -4263,6 +4275,38 @@
     "message": "Hair mods made for another race now fit yours",
     "description": "Release-notes section heading for hair mods fitted automatically from another race to the player's."
   },
+  "WhatsNew.ColorRows.Head": {
+    "message": "Point at a colour row to see where it goes",
+    "description": "Release-notes section heading: hovering a colour-table row button lights that row's area on the character."
+  },
+  "WhatsNew.ColorRows.Body": {
+    "message": "In a mod's Colors window, point at a row button (#01–#16) and the part of your character that row colours lights up for as long as the pointer stays on it. Rows the mod's index textures use rarely or never are hidden; tick \"Show all rows\" to bring them back.",
+    "description": "Release-notes section on hovering colour rows. \"Colors\" names the Colors window (match Colors.Window.Title.Fmt); \"Show all rows\" must match Colors.ShowAllRows.Check. Keep #01–#16."
+  },
+  "WhatsNew.HairOtherSex.Head": {
+    "message": "Port a hairstyle to the other sex",
+    "description": "Release-notes section heading: porting a hairstyle to the other sex in the Studio."
+  },
+  "WhatsNew.HairOtherSex.Body": {
+    "message": "\"Port to all races\" in the Studio now lists the other sex too, under \"Also for the other sex\". The same hairstyle number is a different style for the other sex, so a race you port there wears this mod's hair in place of that style. Nothing there is ticked for you, and Proteus never does it on its own. Ported hair also no longer sinks into bigger heads and shows bald spots.",
+    "description": "Release-notes section. \"Port to all races\" must match HairPort.Studio.Header and \"Also for the other sex\" HairPort.Studio.OtherSex."
+  },
+  "WhatsNew.GearVariants.Head": {
+    "message": "Every variant of your gear shows the mod",
+    "description": "Release-notes section heading: Gear variants."
+  },
+  "WhatsNew.GearVariants.Body": {
+    "message": "Many gear mods replace an item's model but ship its material for one variant only, so wearing the item in another variant shows the game's look, or none, on the mod's model. Proteus now fixes that as you put the gear on, the way TexTools' \"Apply to All Variants\" does for the material, inside the mod's own options. It is on by default: Settings, Gear variants, \"Point every variant of worn gear at its mod's material\", where \"Undo for what I'm wearing\" takes it back out.",
+    "description": "Release-notes section. Keep TexTools and \"Apply to All Variants\" (TexTools' own English label) verbatim. 'Settings, Gear variants' match Tab.Settings and Settings.Section.GearVariants; the quoted checkbox matches Settings.GearVariants.Auto.Label; \"Undo for what I'm wearing\" matches Settings.GearVariants.UndoWorn."
+  },
+  "WhatsNew.ShaderUpgrade.Head": {
+    "message": "Bring old gear up to Dawntrail's shader",
+    "description": "Release-notes section heading: the old-gear shader upgrade. Dawntrail is the game expansion; use its official name in your language."
+  },
+  "WhatsNew.ShaderUpgrade.Body": {
+    "message": "Gear made before Dawntrail still uses the game's old shader. Tick \"Upgrade old gear to Dawntrail shaders\" in Settings and Proteus rewrites the materials of the mods you put on to Dawntrail's shader, inside the mod, backing each file up first. It is off by default, and \"Undo for what I'm wearing\" puts the author's files back.",
+    "description": "Release-notes section. The quoted checkbox matches Settings.GearShaders.AutoUpgrade.Label; \"Undo for what I'm wearing\" matches Settings.GearShaders.UndoWorn; Settings matches Tab.Settings."
+  },
   "WhatsNew.HairPort.Body": {
     "message": "Many hair mods are made for one race only, so on any other race the game shows its own hairstyle instead. Proteus now bends the mod's hairstyle onto your race's head and adds it to the same option of the same mod. It looks through the hair mods switched on in your collection once now, and again whenever one is installed, switched on or changed. Chat names the hairstyle numbers it fitted, so you know which to choose. Physics hair keeps its physics.\n\nIt keeps working with Proteus turned off and travels with the mod. Switch it off, check again, or undo a fitted hairstyle under Settings, Hair.",
     "description": "Release-notes section on hair fitted automatically from another race. 'Settings, Hair' names the Settings tab and its Hair section - match Tab.Settings and Settings.Section.HairPort. 'Physics hair' is hair that sways with its own bones."
@@ -5479,16 +5523,20 @@
     "message": "it does not sit on c{0:D4}'s head: {1:P0} of it sinks into the skull, and its distance from the scalp is {2:F0} mm off the original's; check it in game",
     "description": "A hair port saved with a warning (lowercase sentence fragment): ported to another race, it does not sit on that race's head; shown after a race or file name and a colon. {0} race code number, {1} fraction sunk into the skull, {2} millimetres."
   },
+  "HairPort.Clip.Fmt": {
+    "message": "bent onto c{0:D4}, {1} of its points sink into the head where the original's do not, which may show the scalp; check it in game",
+    "description": "A hair port saved with a warning (lowercase sentence fragment): bent onto another race, some of it still sinks into that race's head where the original sits on its own scalp, which may show the skin; shown after a race or file name and a colon. {0} race code number, {1} number of points."
+  },
+  "HairPort.Undo.Also.Fmt": {
+    "message": "Also took out the ports for {0}, which used a material redirect their own hairstyle reads.",
+    "description": "Sentence added after a hair-port removal: ports made by an older build were taken out too, because they redirected a material the named races' own hairstyle reads. {0} race codes, comma-separated (e.g. c0301, c0501)."
+  },
   "HairPort.Refused.NotHair": {
     "message": "it is not a hairstyle model",
     "description": "Reason (lowercase sentence fragment) why a hairstyle could not be ported to another race; shown after a race or file name and a colon."
   },
   "HairPort.Refused.NotInMod": {
     "message": "the mod does not publish that hairstyle",
-    "description": "Reason (lowercase sentence fragment) why a hairstyle could not be ported to another race; shown after a race or file name and a colon."
-  },
-  "HairPort.Refused.Gender": {
-    "message": "hairstyles are only ported between races of one sex",
     "description": "Reason (lowercase sentence fragment) why a hairstyle could not be ported to another race; shown after a race or file name and a colon."
   },
   "HairPort.Refused.NoStyle.Fmt": {
@@ -5603,6 +5651,42 @@
     "message": "not covered",
     "description": "Per-race status in the Studio port list: no version for this race yet."
   },
+  "HairPort.Studio.OtherSex": {
+    "message": "Also for the other sex",
+    "description": "Section heading in the Studio's port list, above the races of the other sex."
+  },
+  "HairPort.Studio.OtherSex.Note.Fmt": {
+    "message": "In the game, hairstyle {0} is a different style for the other sex. A race ported here wears this one instead whenever it chooses hairstyle {0} with this mod on — for everyone drawn with the mod. Nothing here is ticked for you, and Proteus never ports across the sexes by itself.",
+    "description": "Note under the other-sex heading in the Studio port list. {0} is the hairstyle number."
+  },
+  "HairPort.Studio.OtherSexAuthored": {
+    "message": "the mod has its own version for this sex",
+    "description": "Per-race status in the Studio port list for a race of the other sex: the mod ships its own model of this hairstyle for that sex."
+  },
+  "HairPort.Studio.OtherSexSkeleton": {
+    "message": "the mod gives this race its own skeleton",
+    "description": "Per-race status note in the Studio port list for a race of the other sex: the mod now gives that race its own hair skeleton."
+  },
+  "HairPort.Refused.NotTarget": {
+    "message": "it is the hairstyle's own race, or not a playable one",
+    "description": "Reason (lowercase sentence fragment) why a hairstyle could not be ported to a race; shown after a race name and a colon."
+  },
+  "HairPort.Refused.OtherSexAuto": {
+    "message": "it is of the other sex, which is only ported when asked for in the Studio",
+    "description": "Reason (lowercase sentence fragment) why the automatic path did not port a hairstyle to a race of the other sex; shown after a race name and a colon."
+  },
+  "HairPort.Refused.OtherSexAuthored.Fmt": {
+    "message": "the mod has its own hairstyle {1} for c{0:D4}; port that one instead",
+    "description": "Reason (lowercase sentence fragment) a hand port to the other sex is refused. {0} is a race code number, {1} the hairstyle number."
+  },
+  "HairPort.Refused.OtherSexAuthoredAuto.Fmt": {
+    "message": "the mod now has its own hairstyle {1} for c{0:D4}; the port made in the Studio is left as it is",
+    "description": "Reason (lowercase sentence fragment) the automatic path leaves a Studio port to the other sex as it is. {0} is a race code number, {1} the hairstyle number."
+  },
+  "HairPort.Refused.OtherSexSkeleton.Fmt": {
+    "message": "the mod gives c{0:D4} a skeleton of its own for hairstyle {1}, so a port from the other sex cannot bring its own",
+    "description": "Reason (lowercase sentence fragment) a port to the other sex is refused. {0} is a race code number, {1} the hairstyle number."
+  },
   "HairPort.Studio.Port": {
     "message": "Port",
     "description": "Button in the Studio that ports the hairstyle to all uncovered races."
@@ -5679,8 +5763,8 @@
     "message": "Proteus's record of this mod's hair ports (Proteus/hairport.json) could not be read, so nothing was changed.",
     "description": "Why a hair port save or undo was refused: Proteus's own record file in the mod is corrupt."
   },
-  "HairPort.Auto.Tip2": {
-    "message": "Many hair mods are made for one race only, so on any other race the game\nshows its own hairstyle instead. When on, Proteus bends the mod's hairstyle\nonto your race's head and adds it to the same option of the same mod — for the\nhairstyle you put on, and ahead of time for the hair mods switched on in your\ncollection: when this is switched on, when a mod is installed, switched on or\nchanged, and when you press Check now.\n\nOnly for your own race, from races of the same sex. It keeps working with\nProteus off, travels with the mod, and shows for everyone drawn with that mod\non. It can be undone here.",
+  "HairPort.Auto.Tip3": {
+    "message": "Many hair mods are made for one race only, so on any other race the game\nshows its own hairstyle instead. When on, Proteus bends the mod's hairstyle\nonto your race's head and adds it to the same option of the same mod — for the\nhairstyle you put on, and ahead of time for the hair mods switched on in your\ncollection: when this is switched on, when a mod is installed, switched on or\nchanged, and when you press Check now.\n\nOnly for your own race, from races of the same sex. A port across the sexes is\nonly made in the Studio, but one made there is kept up to date here too. It\nkeeps working with Proteus off, travels with the mod, and shows for everyone\ndrawn with that mod on. It can be undone here.",
     "description": "Tooltip for the automatic hair-port checkbox in Settings > Hair."
   },
   "HairPort.Scan.Starting": {
@@ -5822,5 +5906,217 @@
   "Parts.Retarget.UseWornBody.Tip": {
     "message": "Refit onto the body mod you're wearing for this part. The same as picking it under \"Refit onto body\".",
     "description": ""
+  },
+  "Settings.Section.GearShaders": {
+    "message": "Gear shaders",
+    "description": "Settings section heading for the automatic upgrade of old (pre-Dawntrail) gear materials to the Dawntrail shader."
+  },
+  "Settings.GearShaders.AutoUpgrade.Label": {
+    "message": "Upgrade old gear to Dawntrail shaders",
+    "description": "Checkbox: as gear is put on, gear whose mod still uses the old characterlegacy.shpk shader is drawn with Dawntrail's character.shpk instead."
+  },
+  "Settings.GearShaders.Status.Fmt": {
+    "message": "{0} upgraded · {1} left on the old shader",
+    "description": "Status line under the gear shader upgrade checkbox. {0} = number of worn materials upgraded, {1} = number of worn old-shader materials left as they are."
+  },
+  "Settings.GearShaders.Left.Tip.Fmt": {
+    "message": "Left on the old shader:\n{0}",
+    "description": "Tooltip on the status line. {0} is a list of reasons, one per line, each with a count, e.g. \"2 × an older colour table\"."
+  },
+  "Settings.GearShaders.NextRedraw": {
+    "message": "Takes effect at the next redraw (Auto redraw is off).",
+    "description": "Status line: the upgrade is in place but the character is not reloaded because the Auto redraw setting is off. \"Auto redraw\" names a setting; match Settings.AutoRedraw."
+  },
+  "Settings.GearShaders.Reason.OldTable": {
+    "message": "an older colour table",
+    "description": "Reason in the left-on-the-old-shader tooltip: the material's colour table is the pre-Dawntrail layout."
+  },
+  "Settings.GearShaders.Reason.UnsupportedForm": {
+    "message": "a texture layout not upgraded",
+    "description": "Reason in the tooltip: the material uses a texture layout the upgrade does not handle."
+  },
+  "Settings.GearShaders.Reason.Unreadable": {
+    "message": "unreadable",
+    "description": "Reason in the tooltip: the material file could not be read."
+  },
+  "Settings.GearShaders.Reason.Compositor": {
+    "message": "Proteus's overlays draw it",
+    "description": "Reason in the tooltip: Proteus's own compositor publishes this material or its textures, so it is left to the compositor."
+  },
+  "Settings.GearShaders.Reason.WriteFailed": {
+    "message": "the file could not be written",
+    "description": "Reason in the tooltip: writing the upgraded material (or its mask) into the mod failed."
+  },
+  "Settings.GearShaders.AutoUpgrade.Tip": {
+    "message": "As you put gear on, Proteus rewrites the worn mod's old-shader materials (characterlegacy.shpk)\nto Dawntrail's shader (character.shpk), inside the mod, backing each file up first.\nTurning this off stops further upgrades; it does not undo them. \"Undo for what I'm wearing\"\nputs the author's files back and leaves those pieces alone until \"Upgrade what I'm wearing now\".",
+    "description": "Tooltip for the gear shader upgrade checkbox. Keep characterlegacy.shpk and character.shpk exactly as written. The two quoted button names must match Settings.GearShaders.UndoWorn and Settings.GearShaders.UpgradeNow. Keep the three line breaks."
+  },
+  "Settings.GearShaders.Waiting": {
+    "message": "Waiting for Penumbra.",
+    "description": "Status line: the upgrade cannot start yet because Penumbra is not ready."
+  },
+  "Settings.GearShaders.Reason.LegacyMod": {
+    "message": "an old-format mod folder Proteus does not write to",
+    "description": "Reason in the left-on-the-old-shader tooltip: a pre-v4 Penumbra mod folder."
+  },
+  "Settings.GearShaders.Reason.MixedSpecular": {
+    "message": "its options use different specular maps",
+    "description": "Reason in the tooltip: the options that ship the material name different specular textures for it."
+  },
+  "Settings.GearShaders.Reason.SpecularFromOtherMod": {
+    "message": "its specular map comes from another mod",
+    "description": "Reason in the tooltip: the specular texture the material draws is supplied by a different mod (a retexture), so it is not baked into this mod."
+  },
+  "Settings.GearShaders.Reason.UnsupportedPlacement": {
+    "message": "it sits in a combining group",
+    "description": "Reason in the tooltip: the material is shipped by a Penumbra Combining group, where Proteus does not add files. \"combining group\" is Penumbra's Combining group type."
+  },
+  "Settings.GearShaders.Reason.ProteusPack": {
+    "message": "a Proteus pack (Proteus draws it itself)",
+    "description": "Reason in the tooltip: the material belongs to a pack imported into Proteus, whose materials Proteus writes itself."
+  },
+  "Settings.GearShaders.Reason.Declined": {
+    "message": "undone by you",
+    "description": "Reason in the tooltip: the user undid this piece's upgrade, so it is left alone until they choose \"Upgrade what I'm wearing now\"."
+  },
+  "Settings.GearShaders.UpgradeNow": {
+    "message": "Upgrade what I'm wearing now",
+    "description": "Button: upgrade the old-shader materials of the gear being worn now, including pieces previously undone."
+  },
+  "Settings.GearShaders.UpgradeNow.Tip": {
+    "message": "Move the old-shader materials of what you are wearing now to Dawntrail's shader,\nincluding pieces you undid before.",
+    "description": "Tooltip for the Upgrade-now button. Keep the line break."
+  },
+  "Settings.GearShaders.UndoWorn": {
+    "message": "Undo for what I'm wearing",
+    "description": "Button: put the author's original files back for the gear being worn now."
+  },
+  "Settings.GearShaders.UndoWorn.Tip": {
+    "message": "Put the author's files back for the pieces you are wearing, and leave them alone\nuntil you use \"Upgrade what I'm wearing now\". An update the author shipped since is kept.",
+    "description": "Tooltip for the Undo button. The quoted name must match Settings.GearShaders.UpgradeNow. Keep the line break."
+  },
+  "Settings.GearShaders.Result.Fmt": {
+    "message": "Undo: {0} restored, {1} kept as the author's update, {2} refused.",
+    "description": "Result line after Undo. {0} = files restored from backup, {1} = files left as the author updated them, {2} = files that could not be undone (another feature must be undone first, or the file was edited after the upgrade)."
+  },
+  "Settings.GearShaders.Edited.Fmt": {
+    "message": "{0} was edited after its shader upgrade, so Undo leaves it as it is. The author's original is kept in Proteus/shaderupgrade-backup/{0}: copy it back over the file to undo.",
+    "description": "Undo refusal for a material edited after the upgrade. {0} = the material's path inside the mod (used twice)."
+  },
+  "Settings.GearShaders.Busy": {
+    "message": "Working…",
+    "description": "Tooltip on the buttons while an upgrade or undo is running."
+  },
+  "Chat.ShaderUpgrade.Fmt": {
+    "message": "[Proteus] Moved {0} old-shader material(s) in \"{1}\" to Dawntrail's shader (each file backed up). Undo under /proteus > Settings > Gear shaders.",
+    "description": "Chat notice, once per mod per session. {0} = number of material files rewritten, {1} = the mod's name. Keep /proteus and the \"[Proteus]\" prefix; \"Settings\" and \"Gear shaders\" name a tab and a section (match Tab.Settings and Settings.Section.GearShaders)."
+  },
+  "MeshVolume.Feature.ShaderUpgrade": {
+    "message": "gear shader upgrade",
+    "description": "A feature name inside \"Undo {0} first\" messages (see ModelBackups.Blocked.Fmt): the automatic upgrade of old gear materials to the Dawntrail shader."
+  },
+  "Settings.Section.GearVariants": {
+    "message": "Gear variants",
+    "description": "Settings section heading for pointing every variant of worn gear at its mod's material."
+  },
+  "Settings.GearVariants.Auto.Label": {
+    "message": "Point every variant of worn gear at its mod's material",
+    "description": "Checkbox: when worn gear is put on, write IMC entries into its mod so every variant uses the mod's material."
+  },
+  "Settings.GearVariants.Auto.Tip": {
+    "message": "A mod made for one variant of an item ships that variant's material folder only, so the item worn\nin another variant draws the game's material (or another outfit's, or none) on the mod's model. As you\nput such a piece on, Proteus copies the mod's material paths to the other variant folders, inside the\nmod's own options, like TexTools' \"Apply to All Variants\" for the material only. Those variants then show\nthe mod's material wherever the mod wins; parts, VFX and sound stay their own. Turning this off stops\nfurther changes; it does not undo them. \"Undo for what I'm wearing\" takes them out.",
+    "description": "Tooltip on the Gear variants checkbox. Keep TexTools and the button name \"Apply to All Variants\" (TexTools' own English label) verbatim; the quoted \"Undo for what I'm wearing\" must match Settings.GearVariants.UndoWorn. Keep the line breaks."
+  },
+  "Settings.GearVariants.Status.Fmt": {
+    "message": "{0} piece(s) repointed · {1} left",
+    "description": "Status under the checkbox. {0} = pieces worn whose variants Proteus repointed, {1} = pieces left alone."
+  },
+  "Settings.GearVariants.Repointed.Tip.Fmt": {
+    "message": "Repointed:\n{0}",
+    "description": "Tooltip part: {0} = one line per repointed piece (mod folder: item → material folder)."
+  },
+  "Settings.GearVariants.Left.Tip.Fmt": {
+    "message": "Left as they are:\n{0}",
+    "description": "Tooltip part: {0} = one line per reason pieces were left, with a count."
+  },
+  "Settings.GearVariants.NextRedraw": {
+    "message": "Takes effect at the next redraw (Auto redraw is off).",
+    "description": "Status line when the change is written but Auto redraw is off."
+  },
+  "Settings.GearVariants.Waiting": {
+    "message": "Waiting for Penumbra.",
+    "description": "Status while Penumbra is not ready."
+  },
+  "Settings.GearVariants.Reason.SeveralVariants": {
+    "message": "the mod ships several variants of its own",
+    "description": "Reason a piece was left: its mod ships material folders for several variants on purpose."
+  },
+  "Settings.GearVariants.Reason.ModImc": {
+    "message": "the mod sets this variant itself",
+    "description": "Reason a piece was left: the mod's own IMC data sets the worn variant."
+  },
+  "Settings.GearVariants.Reason.OtherModMaterial": {
+    "message": "its material comes from another mod",
+    "description": "Reason a piece was left: the worn variant's material is supplied by a different mod."
+  },
+  "Settings.GearVariants.Reason.NoImc": {
+    "message": "the game's variant table could not be read",
+    "description": "Reason a piece was left: the game's .imc variant table for the item could not be read."
+  },
+  "Settings.GearVariants.Reason.MetaUnreadable": {
+    "message": "Penumbra's metadata could not be read",
+    "description": "Reason a piece was left: Penumbra's collection metadata could not be read, so nothing was written."
+  },
+  "Settings.GearVariants.Reason.OtherModWins": {
+    "message": "another mod's metadata outranks it",
+    "description": "Reason a piece was left: Proteus's entries are there, but another mod's metadata wins."
+  },
+  "Settings.GearVariants.Reason.LegacyMod": {
+    "message": "an old-format mod folder Proteus does not write to",
+    "description": "Reason a piece was left: an old-format (v3) mod folder."
+  },
+  "Settings.GearVariants.Reason.ProteusPack": {
+    "message": "a Proteus pack (Proteus draws it itself)",
+    "description": "Reason a piece was left: a Proteus pack, which Proteus draws itself."
+  },
+  "Settings.GearVariants.Reason.Declined": {
+    "message": "undone by you",
+    "description": "Reason a piece was left: the user undid it with \"Undo for what I'm wearing\"."
+  },
+  "Settings.GearVariants.Reason.WriteFailed": {
+    "message": "the mod could not be written",
+    "description": "Reason a piece was left: the mod's manifest could not be written."
+  },
+  "Settings.GearVariants.RepointNow": {
+    "message": "Repoint what I'm wearing now",
+    "description": "Button: repoint the variants of what is worn now, including pieces undone before."
+  },
+  "Settings.GearVariants.RepointNow.Tip": {
+    "message": "Point the variants of what you are wearing now at their mods' materials,\nincluding pieces you undid before.",
+    "description": "Tooltip on the Repoint button. Keep the line break."
+  },
+  "Settings.GearVariants.UndoWorn": {
+    "message": "Undo for what I'm wearing",
+    "description": "Button: take Proteus's variant entries out of the worn pieces' mods."
+  },
+  "Settings.GearVariants.UndoWorn.Tip": {
+    "message": "Take Proteus's variant entries out of the mods of the pieces you are wearing, and leave them alone\nuntil you use \"Repoint what I'm wearing now\". An entry changed by someone since is kept.",
+    "description": "Tooltip on the Undo button. The quoted button name must match Settings.GearVariants.RepointNow. Keep the line break."
+  },
+  "Settings.GearVariants.Result.Fmt": {
+    "message": "Undo: {0} removed, {1} kept as changed since, {2} refused.",
+    "description": "After Undo. {0} = entries removed, {1} = entries kept because someone changed them since, {2} = pieces refused."
+  },
+  "Settings.GearVariants.NothingRecorded": {
+    "message": "Nothing recorded for what you are wearing.",
+    "description": "After Undo, when Proteus had written nothing for what is worn."
+  },
+  "Settings.GearVariants.Busy": {
+    "message": "Working…",
+    "description": "Tooltip on the buttons while a run is going."
+  },
+  "Chat.VariantRepoint.Fmt": {
+    "message": "[Proteus] Copied the material paths of \"{1}\" to {0} more variant folder(s), so those variants show the mod's own material wherever it wins. Undo under /proteus > Settings > Gear variants.",
+    "description": "Chat notice, once per mod per session. {0} = number of variant folders the mod's material paths were copied into, {1} = the mod's name. Keep /proteus and the \"[Proteus]\" prefix; \"Settings\" and \"Gear variants\" name a tab and a section (match Tab.Settings and Settings.Section.GearVariants)."
   }
 }
