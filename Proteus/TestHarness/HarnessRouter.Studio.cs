@@ -1,4 +1,5 @@
 using System.Linq;
+using Proteus.Services;
 using System.Text.Json;
 using System.Threading.Tasks;
 
@@ -16,7 +17,7 @@ internal sealed partial class HarnessRouter
         var result = await OnFramework(() => Game.Studio is { } port
             ? ChangeResult.Ok(changes.WithSession(port.View()))
             : ChangeResult.Fail(503, "studio-unavailable", "the Studio is not available"));
-        return Answer(result);
+        return StudioAnswer(result);
     }
 
     private async Task<HarnessResponse> StudioOpen(HarnessRequest request)
@@ -44,7 +45,7 @@ internal sealed partial class HarnessRouter
             if (error != null) return error;
             return changes.StudioOpen(dir!, model, show);
         });
-        return Answer(result);
+        return StudioAnswer(result);
     }
 
     private async Task<HarnessResponse> StudioSet(HarnessRequest request)
@@ -54,7 +55,7 @@ internal sealed partial class HarnessRouter
         var (set, error) = HarnessStudio.ParseSet(body);
         if (set == null) return HarnessResponse.Error(400, "invalid-field", error!);
         var result = await OnFramework(() => changes.Gate(jobs.Busy, Game.AutoRefit().Busy) ?? changes.StudioSet(set));
-        return Answer(result);
+        return StudioAnswer(result);
     }
 
     private async Task<HarnessResponse> StudioDrag(HarnessRequest request)
@@ -64,7 +65,19 @@ internal sealed partial class HarnessRouter
         var (drag, error) = HarnessStudio.ParseDrag(body);
         if (drag == null) return HarnessResponse.Error(400, "invalid-field", error!);
         var result = await OnFramework(() => changes.Gate(jobs.Busy, Game.AutoRefit().Busy) ?? changes.StudioDrag(drag));
-        return Answer(result);
+        return StudioAnswer(result);
+    }
+
+    /// <summary>
+    /// A Studio answer, scrubbed as <c>/state</c> is: the session's names (the Studio's status line is free text the
+    /// plugin wrote) and every path's Windows user name.
+    /// </summary>
+    private HarnessResponse StudioAnswer(ChangeResult r)
+    {
+        string Clean(string text) => LogAnonymizer.Scrub(names.Scrub(text));
+        if (r.Status != 200) return HarnessResponse.Error(r.Status, r.Code!, Clean(r.Message ?? ""));
+        var json = System.Text.Encoding.UTF8.GetString(HarnessJson.Bytes(r.Body));
+        return new HarnessResponse(200, "application/json; charset=utf-8", System.Text.Encoding.UTF8.GetBytes(Clean(json)));
     }
 
     /// <summary>The put-back answer's Studio entries.</summary>

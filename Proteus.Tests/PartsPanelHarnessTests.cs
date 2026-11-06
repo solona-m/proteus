@@ -88,7 +88,8 @@ public class PartsPanelHarnessTests
         var h = Harness();
         var end = Method(h, "StudioPutBack IStudioHarness.EndSession(");
         // Gathered, planned and acted on in this one call.
-        Assert.True(Index(end, "RecordFiles(root)") < Index(end, "HarnessStudio.PlanPutBack("));
+        Assert.True(Index(end, "HarnessFacts(session, root)") < Index(end, "HarnessStudio.PlanPutBack("));
+        Assert.Contains("ReloadAfterRevert(session.ModDir, root, plan.ReloadByName)", end);
         Assert.True(Index(end, "HarnessStudio.PlanPutBack(") < Index(end, "MeshVolumeService.Revert("));
         Assert.Contains("if (plan.Files == \"changed\")", end);
         Assert.Contains("if (plan.Panel == \"restore\") CloseModelWithoutSaving();", end);
@@ -96,10 +97,9 @@ public class PartsPanelHarnessTests
         Assert.True(Index(end, "MeshVolumeService.Revert(") < Index(end, "var still = RecordFiles(root)"));
         Assert.Contains("\"still-patched\"", end);
         Assert.Contains("\"blocked:\" + later", end);
-        Assert.Contains("ReloadAfterRevert(session.ModDir, root)", end);
-
         var reload = Method(h, "private void ReloadAfterRevert(");
-        Assert.True(Index(reload, "string.Equals(modDir, sessionMod") < Index(reload, "AfterModChange(root)"));
+        // The panel's own refresh (which reselects its model) only when it holds nothing of the user's.
+        Assert.True(Index(reload, "if (!byNameOnly && showsMod)") < Index(reload, "AfterModChange(root)"));
         Assert.Contains("penumbra.ReloadModDirectory(sessionMod)", reload);
         Assert.Contains("compositor.RedrawForChangedModel(", reload);
 
@@ -112,6 +112,37 @@ public class PartsPanelHarnessTests
         foreach (var call in new[] { "SwitchTool(snap.Tool)", "SwitchMoveSelect(snap.Mode)", "SwitchView(snap.ModelView)", "snap.Mirror", "snap.Adjacent",
                                      "SetMoveSkin(snap.MoveSkin)", "lockedParts[snap.LockKey]" })
             Assert.Contains(call, restore);
+    }
+
+    [Fact]
+    [Trait("Plan", "AC-move-all-parts-15")]
+    [Trait("Plan", "EDGE-move-all-parts-21")]
+    [Trait("Plan", "EDGE-move-all-parts-32")]
+    public void SetAndDragActOnlyFromWhereTheHarnessLeftTheModel()
+    {
+        var h = Harness();
+        foreach (var sig in new[] { "StudioSetOutcome IStudioHarness.Set(", "StudioDragOutcome IStudioHarness.Drag(" })
+        {
+            var body = Method(h, sig);
+            int touched = Index(body, "Touched(session, root)");
+            foreach (var act in new[] { "SwitchTool(", "SwitchView(", "ToggleLock(", "BeginPartDrag(", "vol.Undo()" })
+                if (body.Contains(act, StringComparison.Ordinal)) Assert.True(touched < Index(body, act), $"{sig}: {act}");
+        }
+        // Touched is put-back's own judgement, so a drag that may go ahead is one put-back may revert.
+        Assert.Contains("=> TestHarness.HarnessStudio.PlanPutBack(HarnessFacts(session, root)) is { Files: \"changed\" } plan ? plan.Code : null;", h);
+        // Locks only under a part tool: Body size's holds are another set, which put-back does not keep.
+        Assert.Contains("!IsPartTool(toolAfter)", Method(h, "StudioSetOutcome IStudioHarness.Set("));
+        // A failed save is taken back at once, never left owed.
+        var drag = Method(h, "StudioDragOutcome IStudioHarness.Drag(");
+        int failed = Index(drag, "bool failed = brushChangedAt >= 0;");
+        Assert.True(failed < drag.IndexOf("vol.Undo();", failed, StringComparison.Ordinal));
+        Assert.True(failed < drag.IndexOf("brushChangedAt = -1;", failed, StringComparison.Ordinal));
+        // An undo whose save failed is not left owed either.
+        Assert.Contains("if (brushChangedAt >= 0) brushChangedAt = -1;", drag);
+        // A refused drag records nothing.
+        var changes = File.ReadAllText(Path.Combine(Gui(), "..", "TestHarness", "HarnessChanges.cs"));
+        var studioDrag = Method(changes, "public ChangeResult StudioDrag(");
+        Assert.True(Index(studioDrag, "if (o.Refused is { } r) return") < Index(studioDrag, "studio!.Record("));
     }
 
     [Fact]

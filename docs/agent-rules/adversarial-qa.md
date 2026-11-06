@@ -222,9 +222,15 @@ at once (the brush save, which keeps the author's original in the mod's
 - A session left recorded (`changed` or `failed`) keeps refusing a second
   `studio-open` (`put-back-first`), and design binding's apply, until a put-back
   ends it or the harness is switched `off`.
-- If the user opens another model meanwhile, `studio-set` and `studio-drag` answer
-  `studio-changed`; put-back still reverts the harness's files when it may, reloads
-  that mod by name, and leaves the user's panel as it is.
+- If the user opens another model meanwhile, or edits the harness's model (a
+  brush, a save owed, a file that no longer hashes as the harness wrote it),
+  `studio-set` and `studio-drag` answer `studio-changed` and change nothing; put
+  back then. Put-back still reverts the harness's files when it may, reloads that
+  mod by name, and leaves the user's panel as it is.
+- Locks (`lock`, `unlock`, `unlockAll`) are set only under Move, Rotate or Scale
+  (`wrong-tool` otherwise): Body size's holds are never touched.
+- A drag whose save fails answers `saved: false` and is taken back at once, so it
+  is never written into the mod later.
 - After a drag, wait as after a refit: `autoRefit.busy == false` and
   `compositor.phase == "idle"`. Auto refit and the hair watcher react to the save,
   and put-back does not undo their writes.

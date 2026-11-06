@@ -286,10 +286,17 @@ internal sealed class HarnessChanges(IHarnessGame game, SessionNames names, IPlu
     public ChangeResult StudioSet(StudioSetRequest request)
     {
         if (SessionRefusal() is { } refused) return refused;
-        var o = game.Studio!.Set(request);
+        var o = game.Studio!.Set(request, studio!);
         if (o.Refused is { } r) return ChangeResult.Fail(r.Status, r.Code, r.Message);
+        studio!.EditVersion = o.EditVersion;
         return ChangeResult.Ok(new Dictionary<string, object?>
         {
+            ["applied"] = new
+            {
+                tool = request.Tool, mode = request.Mode, view = request.View, mirror = request.Mirror, adjacent = request.Adjacent,
+                moveSkin = request.MoveSkin, unlockAll = request.UnlockAll ? true : (bool?)null,
+                part = request.Part,
+            },
             ["locks"] = o.Locks.Select(l => new { label = l.Label, result = l.Result }).ToList(),
             ["chosen"] = o.Chosen,
             ["state"] = WithSession(o.State),
@@ -300,9 +307,10 @@ internal sealed class HarnessChanges(IHarnessGame game, SessionNames names, IPlu
     public ChangeResult StudioDrag(StudioDragRequest request)
     {
         if (SessionRefusal() is { } refused) return refused;
-        var o = game.Studio!.Drag(request, studio!.Files.Keys.ToList());
-        studio.Record(o.Files, o.EditVersion);
+        var o = game.Studio!.Drag(request, studio!);
+        // Only a drag that went ahead is recorded: a refusal's counters are not the harness's.
         if (o.Refused is { } r) return ChangeResult.Fail(r.Status, r.Code, r.Message);
+        studio!.Record(o.Files, o.EditVersion);
         return ChangeResult.Ok(new Dictionary<string, object?>
         {
             ["kind"] = o.Kind, ["moved"] = o.Moved, ["nodes"] = o.Nodes, ["worstMm"] = o.WorstMm,
@@ -316,6 +324,7 @@ internal sealed class HarnessChanges(IHarnessGame game, SessionNames names, IPlu
     internal Dictionary<string, object?> WithSession(IReadOnlyDictionary<string, object?>? state)
     {
         var body = state != null ? new Dictionary<string, object?>(state) : new Dictionary<string, object?>();
+        body["harnessOpened"] = studio is { } s && game.Studio is { } port && port.IsOpen(s.ModDir, s.File);
         body["session"] = StudioSessionView();
         return body;
     }

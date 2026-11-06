@@ -29,6 +29,8 @@ internal sealed class FakeStudio(Action<string> fw) : IStudioHarness
     public List<(string Mod, string Model, bool Show)> Opens = [];
     public List<StudioSetRequest> Sets = [];
     public List<(StudioDragRequest Request, IReadOnlyCollection<string> HarnessFiles)> Drags = [];
+    /// <summary>Set to a reason to answer set and drag as the panel does when the model was touched since the harness left it.</summary>
+    public string? Touched;
     public List<StudioSession> Ended = [];
 
     public IReadOnlyDictionary<string, object?> View()
@@ -66,19 +68,22 @@ internal sealed class FakeStudio(Action<string> fw) : IStudioHarness
         return new StudioOpenOutcome(null, model, "snapshot", show, EditVersion, View());
     }
 
-    public StudioSetOutcome Set(StudioSetRequest request)
+    public StudioSetOutcome Set(StudioSetRequest request, StudioSession session)
     {
         fw(nameof(Set));
+        if (Touched != null) return new StudioSetOutcome(new StudioRefusal(409, "studio-changed", Touched), [], null, EditVersion + 100, null);
         Sets.Add(request);
         if (request.Tool is { } t) Tool = t;
-        return SetRefusal != null ? new StudioSetOutcome(SetRefusal, [], null, null)
-                                  : new StudioSetOutcome(null, LockResults, Chosen, View());
+        return SetRefusal != null ? new StudioSetOutcome(SetRefusal, [], null, EditVersion, null)
+                                  : new StudioSetOutcome(null, LockResults, Chosen, EditVersion, View());
     }
 
-    public StudioDragOutcome Drag(StudioDragRequest request, IReadOnlyCollection<string> harnessFiles)
+    public StudioDragOutcome Drag(StudioDragRequest request, StudioSession session)
     {
         fw(nameof(Drag));
-        Drags.Add((request, harnessFiles));
+        if (Touched != null)
+            return new StudioDragOutcome(new StudioRefusal(409, "studio-changed", Touched), request.Kind, false, 0, 0f, null, false, Status, true, [], EditVersion + 100, null);
+        Drags.Add((request, [.. session.Files.Keys]));
         if (DragRefusal != null)
             return new StudioDragOutcome(DragRefusal, request.Kind, false, 0, 0f, null, false, Status, true, [], EditVersion, null);
         EditVersion++;

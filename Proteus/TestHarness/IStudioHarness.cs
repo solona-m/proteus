@@ -21,8 +21,9 @@ internal sealed record StudioSetRequest(string? Tool, string? Mode, string? View
                                         bool UnlockAll, IReadOnlyList<string> Lock, IReadOnlyList<string> Unlock, string? Part);
 
 /// <summary>What <c>studio-set</c> did: per lock label locked / unlocked / unchanged / refused, and whether the part was taken.</summary>
+/// <param name="EditVersion">The solve's edit counter after the controls changed.</param>
 internal sealed record StudioSetOutcome(StudioRefusal? Refused, IReadOnlyList<(string Label, string Result)> Locks, bool? Chosen,
-                                        IReadOnlyDictionary<string, object?>? State);
+                                        int EditVersion, IReadOnlyDictionary<string, object?>? State);
 
 /// <summary>One drag, already validated: a Move by <see cref="Offset"/> (metres), a Rotate by <see cref="Degrees"/>
 /// about <see cref="Axis"/>, a Scale by <see cref="Factors"/>, or <c>undo</c>.</summary>
@@ -80,12 +81,14 @@ internal interface IStudioHarness
     /// <summary>Open a mod's model as picking it does, keeping the panel as it was. Framework thread.</summary>
     StudioOpenOutcome Open(string modDir, string model, bool show);
 
-    /// <summary>Set the controls as each one does. Framework thread.</summary>
-    StudioSetOutcome Set(StudioSetRequest request);
+    /// <summary>Set the controls as each one does — refused (studio-changed) unless the session's model is exactly as the
+    /// harness left it. Framework thread.</summary>
+    StudioSetOutcome Set(StudioSetRequest request, StudioSession session);
 
-    /// <summary>Run one drag through the gizmo's own code, and save it; <paramref name="harnessFiles"/> are the files the
-    /// session has saved so far. Framework thread.</summary>
-    StudioDragOutcome Drag(StudioDragRequest request, IReadOnlyCollection<string> harnessFiles);
+    /// <summary>Run one drag through the gizmo's own code, and save it — refused (studio-changed) unless the session's
+    /// model and files are exactly as the harness left them, so a later put-back can never take the user's work for
+    /// the harness's. Framework thread.</summary>
+    StudioDragOutcome Drag(StudioDragRequest request, StudioSession session);
 
     /// <summary>End the session at put-back: check, revert and restore in one call. Framework thread.</summary>
     StudioPutBack EndSession(StudioSession session, bool refreshGame);

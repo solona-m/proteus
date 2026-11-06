@@ -133,14 +133,22 @@ public sealed partial class PartsPanel : IStudioHarness
         return new StudioOpenOutcome(null, models[at].File, snapshot, windowOpened, volume?.EditVersion ?? -1, View());
     }
 
-    StudioSetOutcome IStudioHarness.Set(StudioSetRequest request)
+    StudioSetOutcome IStudioHarness.Set(StudioSetRequest request, StudioSession session)
     {
         HarnessSync();
-        static StudioSetOutcome Refuse(int status, string code, string message) => new(new StudioRefusal(status, code, message), [], null, null);
+        StudioSetOutcome Refuse(int status, string code, string message)
+            => new(new StudioRefusal(status, code, message), [], null, volume?.EditVersion ?? -1, null);
         if (HarnessDragOpen) return Refuse(409, "dragging", "a drag, grab or stroke is under way");
-        if (parts is not { } model) return Refuse(409, "studio-changed", "no model is open");
+        if (parts is not { } model || HarnessRoot(session.ModDir) is not { } root) return Refuse(409, "studio-changed", "no model is open");
+        // A tool or view switch flushes a save owed: only ever the harness's, never one the user left.
+        if (Touched(session, root) is { } touched)
+            return Refuse(409, "studio-changed", $"the model or its files changed since the harness last left them ({touched}); put back");
         foreach (var label in request.Lock.Concat(request.Unlock).Select(l => (string?)l).Append(request.Part).OfType<string>())
             if (model.Parts.All(p => p.Label != label)) return Refuse(400, "invalid-field", $"no part {label} in the open model");
+        // Locks are the Move tools' (Body size's holds are another set, which put-back does not keep).
+        var toolAfter = request.Tool is { } named ? named switch { "rotate" => Tool.Rotate, "scale" => Tool.Scale, _ => Tool.Move } : tool;
+        if ((request.UnlockAll || request.Lock.Count > 0 || request.Unlock.Count > 0) && !IsPartTool(toolAfter))
+            return Refuse(409, "wrong-tool", "locks are set under Move, Rotate or Scale; set the tool first");
 
         if (request.Tool is { } t) SwitchTool(t switch { "rotate" => Tool.Rotate, "scale" => Tool.Scale, _ => Tool.Move });
         if (request.Mode is { } m) SwitchMoveSelect(m switch { "polygons" => MoveSelectMode.Polygons, "all" => MoveSelectMode.All, _ => MoveSelectMode.Parts });
@@ -164,21 +172,27 @@ public sealed partial class PartsPanel : IStudioHarness
         bool? chosen = null;
         if (request.Part is { } chosenLabel)
         {
+            int polysBefore = movePolysVersion;
             SelectMovePart(chosenLabel);
-            chosen = !moveAll && (movePolygons ? movePolys.Count > 0 : movePart == chosenLabel);
+            // Taken only if this call changed the choice to this part: a refused pick leaves the old selection standing.
+            chosen = !moveAll && (movePolygons ? movePolysVersion != polysBefore && movePolys.Count > 0 : movePart == chosenLabel);
         }
-        return new StudioSetOutcome(null, locks, chosen, View());
+        return new StudioSetOutcome(null, locks, chosen, volume?.EditVersion ?? -1, View());
     }
 
-    StudioDragOutcome IStudioHarness.Drag(StudioDragRequest request, IReadOnlyCollection<string> harnessFiles)
+    StudioDragOutcome IStudioHarness.Drag(StudioDragRequest request, StudioSession session)
     {
         HarnessSync();
-        string? root = modDir is { } dir ? HarnessRoot(dir) : null;
+        string? root = HarnessRoot(session.ModDir);
         StudioDragOutcome Refuse(int status, string code, string message)
             => new(new StudioRefusal(status, code, message), request.Kind, false, 0, 0f, null, false, status == 409 ? this.status : null,
                    statusIsError, [], volume?.EditVersion ?? -1, null);
         if (volume is not { } vol || root == null || parts == null) return Refuse(409, "studio-changed", "no model is open");
         if (HarnessDragOpen) return Refuse(409, "dragging", "a drag, grab or stroke is under way");
+        // Only from exactly where the harness left the model: an edit of the user's (or a save they owe) would
+        // otherwise be folded into the session, and put-back would take it for the harness's and revert it.
+        if (Touched(session, root) is { } touched)
+            return Refuse(409, "studio-changed", $"the model or its files changed since the harness last left them ({touched}); put back");
         var before = RecordFiles(root);
 
         if (request.Kind == "undo")
@@ -187,7 +201,9 @@ public sealed partial class PartsPanel : IStudioHarness
             var was = vol.Positions().ToArray();
             // The Undo move button's own body.
             vol.Undo(); AfterBrushEdit(); SaveBrush();
-            return Done("undo", was, null, root, before, harnessFiles);
+            // A save that failed is not left owed: it would land in the mod later, outside the session.
+            if (brushChangedAt >= 0) brushChangedAt = -1;
+            return Done("undo", was, null, root, before, session);
         }
 
         var wanted = request.Kind switch { "rotate" => Tool.Rotate, "scale" => Tool.Scale, _ => Tool.Move };
@@ -202,20 +218,31 @@ public sealed partial class PartsPanel : IStudioHarness
         else PlacePartDrag(null, TestHarness.HarnessStudio.DragTransform(request, pivot));
         FinishMove();
         FlushPending();
-        return Done(request.Kind, start, pivot, root, before, harnessFiles);
+        bool failed = brushChangedAt >= 0;
+        if (failed && vol.CanUndo)
+        {
+            // The save failed: the drag is taken back at once rather than left owed, which would write it into the mod
+            // later (a retry, leaving the tab, unload), outside the session.
+            vol.Undo();
+            brushChangedAt = -1;
+            viewport.PositionOverride = vol.Positions();
+            viewport.GeometryChanged();
+        }
+        else if (failed) brushChangedAt = -1;
+        return Done(request.Kind, start, pivot, root, before, session, savedOverride: failed ? false : null);
     }
 
     /// <summary>A finished drag's answer: what moved, whether it is on disk, and the session's files hashed now.</summary>
     private StudioDragOutcome Done(string kind, float[] was, Vector3? pivot, string root, HashSet<string> before,
-                                   IReadOnlyCollection<string> harnessFiles)
+                                   StudioSession session, bool? savedOverride = null)
     {
         var now = volume!.Positions();
         int moved = 0;
         for (int v = 0; v * 3 + 2 < was.Length && v * 3 + 2 < now.Length; v++)
             if (was[v * 3] != now[v * 3] || was[v * 3 + 1] != now[v * 3 + 1] || was[v * 3 + 2] != now[v * 3 + 2]) moved++;
-        bool saved = brushChangedAt < 0 && !statusIsError;
+        bool saved = savedOverride ?? (brushChangedAt < 0 && !statusIsError);
         var files = RecordFiles(root)
-            .Where(f => !before.Contains(f) || harnessFiles.Contains(f, StringComparer.OrdinalIgnoreCase))
+            .Where(f => !before.Contains(f) || session.Files.ContainsKey(f))
             .Select(f => new StudioFile(f, Sha256Of(root, f) ?? ""))
             .ToList();
         return new StudioDragOutcome(null, kind, moved > 0, moved, volume.Worst * 1000f, pivot, saved, status, statusIsError,
@@ -229,12 +256,9 @@ public sealed partial class PartsPanel : IStudioHarness
             return new StudioPutBack(session.ModDir, "failed", "none", "penumbra-unavailable", true);
 
         // Gathered, planned and acted on in this one framework call: nothing can change in between.
-        var patched = RecordFiles(root).ToDictionary(f => f, f => Sha256Of(root, f), StringComparer.OrdinalIgnoreCase);
-        bool harnessModel = IsOpen(session.ModDir, session.File);
-        var plan = TestHarness.HarnessStudio.PlanPutBack(new TestHarness.HarnessStudio.StudioFacts(
-            patched, session.Files, harnessModel, volume?.EditVersion ?? -1, session.EditVersion,
-            SaveOwed: harnessModel && brushChangedAt >= 0, DragOpen: harnessModel && HarnessDragOpen,
-            ApplyingSizes: applySizesTask != null));
+        var facts = HarnessFacts(session, root);
+        var patched = facts.Patched;
+        var plan = TestHarness.HarnessStudio.PlanPutBack(facts);
 
         if (plan.Files == "changed")
             return new StudioPutBack(session.ModDir, "changed", "changed", plan.Code, true);
@@ -263,7 +287,7 @@ public sealed partial class PartsPanel : IStudioHarness
                     keep = true;
                 }
                 else files = "reverted";
-                if (refreshGame && result.Ok) ReloadAfterRevert(session.ModDir, root);
+                if (refreshGame && result.Ok) ReloadAfterRevert(session.ModDir, root, plan.ReloadByName);
             }
         }
 
@@ -278,12 +302,15 @@ public sealed partial class PartsPanel : IStudioHarness
     }
 
     /// <summary>
-    /// After a revert, reload the session's own mod by name — whatever the panel shows — and redraw. The panel's own
-    /// refresh only when it shows that mod; a panel on another mod is the user's and is left alone.
+    /// After a revert, reload the session's own mod by name and redraw. The panel's own refresh (which reselects its
+    /// model) only when the harness closed its model and the panel holds nothing of the user's
+    /// (<paramref name="byNameOnly"/> false); otherwise the panel is the user's — another model, perhaps of the same
+    /// mod — and only its saved-edits count is brought up to date.
     /// </summary>
-    private void ReloadAfterRevert(string sessionMod, string root)
+    private void ReloadAfterRevert(string sessionMod, string root, bool byNameOnly)
     {
-        if (string.Equals(modDir, sessionMod, StringComparison.OrdinalIgnoreCase) && vanilla == null)
+        bool showsMod = string.Equals(modDir, sessionMod, StringComparison.OrdinalIgnoreCase) && vanilla == null;
+        if (!byNameOnly && showsMod)
         {
             AfterModChange(root);
             return;
@@ -291,7 +318,27 @@ public sealed partial class PartsPanel : IStudioHarness
         penumbra.ReloadModDirectory(sessionMod);
         compositor.TriggerRecomposite("parts-written");
         compositor.RedrawForChangedModel("Studio parts");
+        if (showsMod)
+        {
+            existing = MeshToggleService.ReadRecord(root);
+            brushSaved = MeshVolumeService.PatchedCount(root);
+        }
     }
+
+    /// <summary>What put-back (and every drag or set first) judges: the record's files and hashes now, and the model.</summary>
+    private TestHarness.HarnessStudio.StudioFacts HarnessFacts(StudioSession session, string root)
+    {
+        var patched = RecordFiles(root).ToDictionary(f => f, f => Sha256Of(root, f), StringComparer.OrdinalIgnoreCase);
+        bool harnessModel = IsOpen(session.ModDir, session.File);
+        return new TestHarness.HarnessStudio.StudioFacts(
+            patched, session.Files, harnessModel, volume?.EditVersion ?? -1, session.EditVersion,
+            SaveOwed: harnessModel && brushChangedAt >= 0, DragOpen: harnessModel && HarnessDragOpen,
+            ApplyingSizes: applySizesTask != null);
+    }
+
+    /// <summary>Why the session's model or files are not as the harness left them, or null when they are.</summary>
+    private string? Touched(StudioSession session, string root)
+        => TestHarness.HarnessStudio.PlanPutBack(HarnessFacts(session, root)) is { Files: "changed" } plan ? plan.Code : null;
 
     /// <summary>Drop the open model without saving it: the save owed is cleared before anything that could flush it.</summary>
     private void CloseModelWithoutSaving()

@@ -195,6 +195,76 @@ public class HarnessStudioRouteTests : IDisposable
     }
 
     [Fact]
+    [Trait("Plan", "AC-move-all-parts-15")]
+    [Trait("Plan", "EDGE-move-all-parts-21")]
+    public async Task SetAndDrag_RefusedOnceTheUserTouchedTheModel_NothingRecorded()
+    {
+        await Open();
+        await f.Post("/actions/studio-drag", """{"offsetMm":[1,0,0]}""");
+        var session = f.Changes.StudioSessionNow!;
+        var (files, version) = (session.Files.ToDictionary(x => x.Key, x => x.Value), session.EditVersion);
+        // The user brushed the harness's model since: set and drag refuse, and the session keeps what the harness wrote.
+        studio.Touched = "hash-changed";
+        foreach (var (path, json) in new[] { ("/actions/studio-set", """{"tool":"rotate"}"""), ("/actions/studio-drag", """{"offsetMm":[1,0,0]}""") })
+        {
+            var (status, body) = await f.Post(path, json);
+            Assert.Equal((409, "studio-changed"), (status, Code(body)));
+        }
+        Assert.Equal(version, session.EditVersion);
+        Assert.Equal(files, session.Files);
+        Assert.Single(studio.Drags);
+        Assert.Empty(studio.Sets);
+    }
+
+    [Fact]
+    [Trait("Plan", "EDGE-move-all-parts-22")]
+    public async Task RefusedDrag_LeavesTheSessionAsItWas()
+    {
+        await Open();
+        int version = f.Changes.StudioSessionNow!.EditVersion;
+        studio.DragRefusal = new StudioRefusal(409, "wrong-tool", "rotate");
+        studio.EditVersion = 99;
+        await f.Post("/actions/studio-drag", """{"offsetMm":[1,0,0]}""");
+        Assert.Equal(version, f.Changes.StudioSessionNow.EditVersion);
+        Assert.Empty(f.Changes.StudioSessionNow.Files);
+    }
+
+    [Fact]
+    [Trait("Plan", "EDGE-move-all-parts-35")]
+    public async Task Status_Scrubbed()
+    {
+        f.Names.AddAll([], "Wyn Torrent");
+        studio.Status = @"Saved for Wyn Torrent in C:\Users\someone\mods\Outfit";
+        await Open();
+        var (_, body) = await f.Get("/studio");
+        var text = body.GetRawText();
+        Assert.DoesNotContain("Wyn Torrent", text);
+        Assert.DoesNotContain("someone", text);
+    }
+
+    [Fact]
+    [Trait("Plan", "EDGE-move-all-parts-26")]
+    public async Task OpenSetDrag_RefusedWhileAJobRuns()
+    {
+        Assert.True(f.Jobs.TryReserve());
+        try
+        {
+            Assert.Equal("busy", Code((await Open()).Body));
+            Assert.Empty(studio.Opens);
+        }
+        finally { f.Jobs.Release(); }
+        await Open();
+        Assert.True(f.Jobs.TryReserve());
+        try
+        {
+            Assert.Equal("busy", Code((await f.Post("/actions/studio-set", """{"mode":"all"}""")).Body));
+            Assert.Equal("busy", Code((await f.Post("/actions/studio-drag", """{"offsetMm":[1,0,0]}""")).Body));
+            Assert.Equal(200, (await f.Get("/studio")).Status);
+        }
+        finally { f.Jobs.Release(); }
+    }
+
+    [Fact]
     [Trait("Plan", "EDGE-move-all-parts-26")]
     public async Task SetAndDrag_Gates()
     {
@@ -264,6 +334,7 @@ public class HarnessStudioRouteTests : IDisposable
     [Fact]
     [Trait("Plan", "AC-move-all-parts-15")]
     [Trait("Plan", "EDGE-move-all-parts-21")]
+    [Trait("Plan", "EDGE-move-all-parts-29")]
     public async Task PutBack_TouchedModel_KeepsTheSession()
     {
         await Open();
