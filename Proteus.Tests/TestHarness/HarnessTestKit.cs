@@ -108,7 +108,7 @@ internal sealed class FakeFrameworkDispatcher : IFrameworkDispatcher, IDisposabl
 }
 
 /// <summary>The game as the harness sees it, scripted. Framework-thread members record the thread they ran on.</summary>
-internal sealed class FakeGame : IHarnessGame
+internal sealed partial class FakeGame : IHarnessGame
 {
     private readonly FakeFrameworkDispatcher dispatcher;
     public FakeGame(FakeFrameworkDispatcher dispatcher, string modsRoot)
@@ -496,7 +496,8 @@ internal sealed class HarnessFixture : IDisposable
                                 _ => long.MaxValue);
         Jobs = new HarnessJobs(Game, Dispatcher, Backups, session, () => Disposing, timings ?? FastTimings);
         Ring = new LogRing(Names);
-        Changes = new HarnessChanges(Game, Names, Log);
+        Changes = new HarnessChanges(Game, Names, Log, System.IO.Path.Combine(Temp.Path, "config", "test-harness", "backups"),
+                                     session, 1411);
         Router = new HarnessRouter(Jobs, Ring, Names, new CaptureGate((timings ?? FastTimings).Capture), 1411, "11-01 12:00:00",
                                    Substitute.For<IPluginLog>(), Changes);
         Server = new HarnessServer(Router.Handle, Token, readTimeout ?? TimeSpan.FromMilliseconds(500));

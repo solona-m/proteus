@@ -29,7 +29,7 @@ public sealed class Plugin : IDalamudPlugin
 #endif
 
     /// <summary>Hand-maintained; bump it for in-game testing. <see cref="BuildStamp"/> is the one that can't go stale.</summary>
-    public const int BuildNumber = 1438;
+    public const int BuildNumber = 1439;
 
     /// <summary>
     /// Which set of release notes is current. Raise it when a release has something new to say: the window
@@ -268,7 +268,8 @@ public sealed class Plugin : IDalamudPlugin
             new TestHarness.GameHarnessAdapter(penumbra, glamourer, compositor, autoRefit, shaderUpgrade, variantRepoint, hairPort, ObjectTable, ClientState, framework,
                                                TextureProvider, TextureReadback, config, uvRemap,
                                                path => textureLoader.LoadRawFile(null, path),
-                                               dir => partsPanel.NoteModelsChanged(dir), log),
+                                               dir => partsPanel.NoteModelsChanged(dir), log,
+                                               pluginInterface, designBindings, editRouter, presets),
             new TestHarness.DalamudFrameworkDispatcher(framework), observer => capture.LineObserver = observer, log,
             BuildNumber, BuildStamp);
 #endif

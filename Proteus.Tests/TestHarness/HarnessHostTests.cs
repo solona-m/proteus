@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Collections.Concurrent;
 using System.IO;
 using System.Linq;
@@ -390,6 +391,62 @@ public class HarnessHostTests : IDisposable
         Assert.Equal(gearBefore, game.Gear);
         Assert.Empty(game.Temporary);
         Assert.True(sinkAtUndo);
+    }
+
+    // ── the binding session as the harness stops ────────────────────────────
+
+    private static readonly Guid BoundDesign = Guid.Parse("dddddddd-0000-0000-0000-000000000009");
+
+    private async Task ApplyDesign(HarnessSession s)
+    {
+        game.DesignNames[BoundDesign] = "Look";
+        game.ApplyEffects[BoundDesign] = () => game.GlamourerNow = FakeGame.GlamState(("Body", 100), ("Legs", 555));
+        await Post(s, "/actions/glamourer-apply", $$"""{"design":"{{BoundDesign}}"}""");
+    }
+
+    private List<string> Logged(string level)
+        => log.ReceivedCalls().Where(c => c.GetMethodInfo().Name == level)
+              .SelectMany(c => c.GetArguments()).SelectMany(a => a is object[] arr ? arr : [a]).OfType<string>().ToList();
+
+    [Fact]
+    [Trait("Plan", "EDGE-binding-reapply-34")]
+    public async Task Stop_PutsBackBinding()
+    {
+        using var host = Host();
+        host.Command("on");
+        await ApplyDesign(SessionFile!);
+        dispatcher.Run(() => host.Command("off"));
+        Assert.Single(game.Restores);
+        Assert.Equal(101UL, game.GlamourerNow["Equipment"]!["Legs"]!["ItemId"]!.ToObject<ulong>());
+        Assert.Contains(Logged("Information"), l => l.Contains("binding: glamourer restored"));
+    }
+
+    [Fact]
+    [Trait("Plan", "EDGE-binding-reapply-46")]
+    public async Task Stop_DuringSettle_LeavesBindingRecorded_LogsAndNeverThrows()
+    {
+        using var host = Host();
+        host.Command("on");
+        await ApplyDesign(SessionFile!);
+        host.Changes!.ApplySettling = true;   // as if an apply were still settling when the harness stops
+        var ex = Record.Exception(() => dispatcher.Run(() => host.Command("off")));
+        Assert.Null(ex);
+        Assert.Empty(game.Restores);
+        Assert.Contains(Logged("Warning"), w => w.Contains("still settling"));
+    }
+
+    [Fact]
+    [Trait("Plan", "EDGE-binding-reapply-34")]
+    public async Task Stop_OffFramework_LogsBindingLeftoversWithRecordPath()
+    {
+        var host = Host();
+        host.Command("on");
+        await ApplyDesign(SessionFile!);
+        await Task.Run(host.Dispose);
+        Assert.Empty(game.Restores);
+        var warned = Logged("Warning");
+        Assert.Contains(warned, w => w.Contains("not put back"));
+        Assert.Contains(warned, w => w.Contains("glamourer state") && w.Contains("binding.json"));
     }
 
     [Fact]

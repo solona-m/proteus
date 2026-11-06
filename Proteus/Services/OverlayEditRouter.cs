@@ -118,8 +118,8 @@ public class OverlayEditRouter
     // ── Clearing one option ─────────────────────────────────────────────────────
 
     /// <summary>
-    /// "Reset to defaults" for one option. Against a pinned preset only the live override changes; a design
-    /// binding also forgets it in the stored binding.
+    /// "Reset to defaults" for one option. Live only on both channels: a pinned preset and a design binding keep
+    /// their saved values (the binding until Update), and re-applying them brings those back.
     /// </summary>
     public bool ClearOptionOverride(string modDir, string? group, string? option)
         => BagFor(modDir) is { } bag

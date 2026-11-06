@@ -1,7 +1,9 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
+using Newtonsoft.Json.Linq;
 using Proteus.Interop;
 using Proteus.Services;
 
@@ -194,4 +196,107 @@ internal interface IHarnessGame
 
     /// <summary>Ask for a redraw of the local player. Framework thread.</summary>
     void RequestRedraw();
+
+    // ── design binding (HarnessBindings) ────────────────────────────────────
+
+    /// <summary>Glamourer's designs (id → name); null when Glamourer cannot answer. Framework thread.</summary>
+    IReadOnlyDictionary<Guid, string>? Designs();
+
+    /// <summary>A design as Glamourer stores it; null when it cannot be read. Framework thread.</summary>
+    JObject? DesignJson(Guid id);
+
+    /// <summary>The local player's whole Glamourer state; null when it cannot be read. Framework thread.</summary>
+    JObject? GlamourerState();
+
+    /// <summary>Apply a design to the local player as a user or plugin does (DesignsApi.ApplyDesign, Once, key 0), raising
+    /// Glamourer's DesignApplied. Null on Success, else Glamourer's answer by name. Framework thread.</summary>
+    string? ApplyDesign(Guid id);
+
+    /// <summary>Whether a DesignApplied finalization for the local player has been seen so far (a counter). Any thread.</summary>
+    long DesignAppliedCount { get; }
+
+    /// <summary>
+    /// Put a Glamourer state back (ApplyState, Once, key 0) with Proteus's apply signals suppressed, leaving the named
+    /// gear slots (and the glasses when <paramref name="skipGlasses"/>) alone. Null on Success. Framework thread.
+    /// </summary>
+    string? RestoreGlamourerState(JObject state, IReadOnlyCollection<string> skipSlots, bool skipGlasses);
+
+    /// <summary>What Proteus has on the player right now, as design matching sees it. Framework thread.</summary>
+    DesignBindingService.Carriers CarriersNow();
+
+    /// <summary>Milliseconds left in design binding's echo window. Framework thread.</summary>
+    long EchoMsLeft();
+
+    /// <summary>Stop a restore's deferred work (post-load sweep, temporary guard, queued unequip). Framework thread.</summary>
+    void QuiesceBinding();
+
+    /// <summary>Design binding as <c>GET /bindings</c> shows it (names unscrubbed). Framework thread.</summary>
+    HarnessBindingView BindingView(string? mod, string? group, string? option);
+
+    /// <summary>A design's applied-field keys, or null. Framework thread.</summary>
+    IReadOnlyList<string>? DesignFields(Guid id);
+
+    /// <summary>Whether a design has a binding. Framework thread.</summary>
+    bool IsBound(Guid id);
+
+    /// <summary>Whether any per-mod preset is pinned. Framework thread.</summary>
+    bool PresetsPinned();
+
+    /// <summary>Whether design binding may act, a design is active, it governs the mod, and a preset drives it. Framework thread.</summary>
+    BindingEditState EditState(string modDir);
+
+    /// <summary>The live override rows a mod/option shows (top level when group/option are null). Framework thread.</summary>
+    List<ColorTableRowPreset>? LiveRows(string modDir, string? group, string? option);
+
+    /// <summary>Install live override rows through the colour editor's path and recomposite. Framework thread.</summary>
+    bool SetLiveRows(string modDir, string? group, string? option, List<ColorTableRowPreset> rows);
+
+    /// <summary>Clear one option's live override through Reset's path (live only) and recomposite. Framework thread.</summary>
+    bool ClearLiveOption(string modDir, string? group, string? option);
+
+    /// <summary>The live binding state, for put-back. Framework thread.</summary>
+    HarnessLiveSnapshot LiveSnapshot();
+
+    /// <summary>Put the live binding state back. Framework thread.</summary>
+    void RestoreLive(HarnessLiveSnapshot snapshot);
+
+    /// <summary>The Proteus (sidecar) mods' folders. Framework thread.</summary>
+    IReadOnlySet<string> ProteusDirs();
+
+    /// <summary>Every configured mod's own settings in a collection (temporary settings ignored), keyed by folder; a mod
+    /// that only inherits is <see cref="PermanentSetting.Own"/> false, one never configured is absent. Null when Penumbra
+    /// cannot answer. Framework thread.</summary>
+    IReadOnlyDictionary<string, PermanentSetting>? PermanentSettings(Guid collection);
+
+    /// <summary>Write a mod's own settings back: enabled, priority and options, or back to inheriting when
+    /// <see cref="PermanentSetting.Own"/> is false. Null on Success, else Penumbra's answer by name. Framework thread.</summary>
+    string? WritePermanent(Guid collection, string modDir, PermanentSetting setting);
+
+    /// <summary>Whether the compositor is idle. Framework thread.</summary>
+    bool CompositorIdle();
+
+    /// <summary>The automatic writers switched on (auto refit, gear shader upgrade, Gear variants, auto hair port, auto hat
+    /// compat), by name: they write into worn mods as gear changes, which put-back cannot undo. Framework thread.</summary>
+    IReadOnlyList<string> AutoWritersOn();
 }
+
+/// <summary>A mod's own (permanent) settings in a collection. <see cref="Own"/> false: the collection has no setting of its
+/// own for it (it inherits, with the inherited values here; or was never configured: <see cref="Inherits"/>), and putting
+/// it back means letting it inherit again.</summary>
+internal sealed record PermanentSetting(bool Enabled, int Priority, IReadOnlyDictionary<string, List<string>> Options, bool Own)
+{
+    public PermanentSetting(bool enabled, int priority) : this(enabled, priority, new Dictionary<string, List<string>>(), true) { }
+
+    /// <summary>No setting of its own: inherited, or never configured.</summary>
+    public static readonly PermanentSetting Inherits = new(false, 0, new Dictionary<string, List<string>>(), false);
+
+    public bool Equals(PermanentSetting? other)
+        => other is not null && Enabled == other.Enabled && Priority == other.Priority && Own == other.Own
+        && Options.Count == other.Options.Count
+        && Options.All(kv => other.Options.TryGetValue(kv.Key, out var o) && o.SequenceEqual(kv.Value, StringComparer.Ordinal));
+
+    public override int GetHashCode() => HashCode.Combine(Enabled, Priority, Own, Options.Count);
+}
+
+/// <summary>Whether a binding edit may go ahead on a mod.</summary>
+internal sealed record BindingEditState(bool FeatureOn, bool HasActive, bool Governed, bool PresetDriven);
