@@ -194,8 +194,21 @@ public sealed unsafe class SkinDiffuseGlow : IDisposable
         t.Failed = true;
     }
 
-    // What Apply shows: the preview over the pin.
-    private Dictionary<string, Target> EffectiveTargets() => (_preview ?? _pinned)?.ByPath ?? NoTargets;
+    // What Apply shows: the preview over the pin. A pinned diffuse whose build FAILED is left out (a pin never retries),
+    // so Apply restores that slot rather than "leaving what's showing" — which, after a hover, would be the preview's.
+    private Dictionary<string, Target> EffectiveTargets()
+    {
+        if (_preview is { } v) return v.ByPath;
+        if (_pinned is not { } p) return NoTargets;
+        Dictionary<string, Target>? live = null;
+        foreach (var (path, t) in p.ByPath)
+        {
+            if (!t.Failed) continue;
+            live ??= new Dictionary<string, Target>(p.ByPath);
+            live.Remove(path);
+        }
+        return live ?? p.ByPath;
+    }
 
     /// <summary>Whether the PINNED target is this one — the Glow button's state, which a hover never changes.</summary>
     public bool IsTarget(IReadOnlyList<SkinGlowTarget> targets, int row, bool isA)

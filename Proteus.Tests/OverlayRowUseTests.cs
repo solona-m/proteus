@@ -68,6 +68,19 @@ public class OverlayRowUseTests
     }
 
     [Fact]
+    [Trait("Plan", "EDGE-row-hover-highlight-35")]
+    public void An_index_less_skin_overlay_keeps_16_visible_though_it_has_no_glow_map()
+    {
+        // #16 shows (the skin pass fills an index-less overlay from row 16 A)...
+        var (rows, _) = OverlayRowUse.Of([NoIndex], []);
+        Assert.Contains(16, RowPickerView.Visible(rows, false));
+        // ...but the locator builds glow maps only from indexed overlays, so a map with no pair-15 byte lights nothing.
+        var map = new byte[4];
+        var bgra = Proteus.Interop.SkinDiffuseGlow.Paint(new byte[16], 2, 2, [(map, 2, 2)], 15, SubRowPick.Both);
+        Assert.DoesNotContain((byte)0x30, bgra);
+    }
+
+    [Fact]
     [Trait("Plan", "AC-row-hover-highlight-9")]
     [Trait("Plan", "EDGE-row-hover-highlight-37")]
     public void Any_unreadable_index_means_unknown()

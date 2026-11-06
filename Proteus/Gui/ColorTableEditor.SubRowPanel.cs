@@ -123,7 +123,7 @@ public static partial class ColorTableEditor
                     ImGui.SetTooltip(cs.GlowGearTip);
             }
             // Skin overlays have no live colour table; SkinGlow rebinds the body diffuse instead. Static
-            // bright (it can't hue-cycle — the highlight is a baked 4K texture, rebuilt only on click).
+            // bright (it can't hue-cycle — the highlight is a baked 4K texture, rebuilt only on a click or a settled hover).
             else if (route == HighlightRoute.Skin && SkinGlow != null && skinGlowTargets != null)
             {
                 bool active = SkinGlow.IsTarget(skinGlowTargets, row, isA);

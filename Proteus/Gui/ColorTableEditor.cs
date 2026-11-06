@@ -322,8 +322,8 @@ public static partial class ColorTableEditor
         // The render mode drives which feature controls are live vs dimmed; characterscroll does not render sphere/metal.
         var mode = RenderModeInference.ModeOf(gear ? OverlayLayer.Gear : OverlayLayer.Skin, shader);
 
-        // Rows the index texture never selects are DIMMED, not hidden or disabled: the reading can be wrong, and must not
-        // block editing.
+        // Rows the index texture never selects are hidden (below), or DIMMED under "Show all rows" — never disabled: the
+        // reading can be wrong, and must not block editing.
         bool InUse(int r) => usedRows == null || usedRows.Contains(r);
 
         // Rows the index never selects are hidden unless "Show all rows" is ticked (then dimmed, as before). The selection

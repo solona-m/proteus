@@ -89,6 +89,18 @@ public class RowPickerViewTests
         => Assert.Equal(10, RowPickerView.Land(10, [3, 10], false, new HashSet<int> { 3, 10 }.Contains));
 
     [Fact]
+    [Trait("Plan", "EDGE-row-hover-highlight-24")]
+    public void An_approximate_compressed_scan_hides_like_any_scan_and_Show_all_reveals_the_miss()
+    {
+        // An imported pack's BC-compressed index is read approximately: say it really uses 2, 5 and 9, but the snapped
+        // read reported only 2 and 9. The picker trusts the read like any scan; Show all is the way to the missed row.
+        var approximate = new HashSet<int> { 2, 9 };
+        Assert.Equal([2, 9], RowPickerView.Visible(approximate, false));
+        Assert.True(RowPickerView.ToggleRelevant(approximate));
+        Assert.Contains(5, RowPickerView.Visible(approximate, true));
+    }
+
+    [Fact]
     [Trait("Plan", "EDGE-row-hover-highlight-39")]
     public void A_row_missing_from_the_scan_is_hidden_until_Show_all()
     {

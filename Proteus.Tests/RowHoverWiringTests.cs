@@ -417,6 +417,20 @@ public class RowHoverWiringTests
     }
 
     [Fact]
+    [Trait("Plan", "AC-row-hover-highlight-3")]
+    [Trait("Plan", "EDGE-row-hover-highlight-19")]
+    public void A_failed_pin_does_not_keep_the_previews_texture_after_the_hover()
+    {
+        // Apply leaves what's showing while a target's build isn't ready; a pin never retries, so a FAILED pinned diffuse
+        // is left out of what Apply sees and its slot is restored instead of keeping the last preview's gold.
+        var effective = Method(Skin, "private Dictionary<string, Target> EffectiveTargets(");
+        int preview = effective.IndexOf("if (_preview is { } v) return v.ByPath;", StringComparison.Ordinal);
+        int failed = effective.IndexOf("if (!t.Failed) continue;", StringComparison.Ordinal);
+        int remove = effective.IndexOf("live.Remove(path);", StringComparison.Ordinal);
+        Assert.True(preview >= 0 && failed > preview && remove > failed);
+    }
+
+    [Fact]
     [Trait("Plan", "EDGE-row-hover-highlight-7")]
     [Trait("Plan", "EDGE-row-hover-highlight-13")]
     public void Expiry_counts_ticks_in_OnFramework()
