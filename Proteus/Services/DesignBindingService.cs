@@ -370,13 +370,26 @@ public partial class DesignBindingService : IDisposable
 
             // Only a design the character is actually wearing may be captured: Glamourer rewrites a design's
             // file on every edit. Judged exactly as an apply is, so the apply path can recognise it again.
-            lock (gate) designCache.Remove(designId);   // the file just changed; never judge a stale copy
+            JObject? cachedDesign;
+            lock (gate)
+            {
+                designCache.TryGetValue(designId, out cachedDesign);
+                designCache.Remove(designId);   // the file just changed; never judge a stale copy
+            }
             var design = GetDesignCached(designId);
             var state  = glamourer.GetObjectState(0);
             if (design == null || state == null)
             {
                 log.Debug("[Proteus] Skipping design capture for {0}: {1} unreadable, so it can't be checked against the character.",
                     designId, design == null ? "design" : "Glamourer state");
+                return;
+            }
+
+            // Glamourer also rewrites the file for things that are no edit of the design (write protection, a folder
+            // move, the quick bar): those keep its LastEdit, and must not fold unsaved live edits into the binding.
+            if (!IsDesignEdit(cachedDesign, design))
+            {
+                log.Debug("[Proteus] Skipping design capture for {0}: its file was rewritten without an edit (LastEdit unchanged).", designId);
                 return;
             }
             string? mismatch = null;
@@ -1995,6 +2008,16 @@ public partial class DesignBindingService : IDisposable
         }
         return pick;
     }
+
+    /// <summary>
+    /// Whether a rewritten design file is an edit of the design: Glamourer bumps <c>LastEdit</c> on every edit, and not
+    /// for the rewrites that change nothing about it. No earlier copy, or no <c>LastEdit</c> on either side, counts as an
+    /// edit (today's behaviour: capture).
+    /// </summary>
+    internal static bool IsDesignEdit(JObject? previous, JObject current)
+        => previous?["LastEdit"] is not { Type: not JTokenType.Null } before
+        || current["LastEdit"] is not { Type: not JTokenType.Null } after
+        || !JToken.DeepEquals(before, after);
 
     /// <summary>The stored binding's design name for the log, else the GUID.</summary>
     private string DesignNameOf(Guid id)

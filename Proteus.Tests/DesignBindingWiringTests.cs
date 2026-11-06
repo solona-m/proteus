@@ -227,6 +227,12 @@ public class DesignBindingWiringTests
         Assert.True(mismatch >= 0, "no worn-design check");
         Assert.True(mismatch < capture.IndexOf("store.Bindings[designId] = binding", StringComparison.Ordinal));
 
+        // [AC-binding-reapply-3] A rewrite that is no edit (write protection, a folder move) is never captured.
+        int notEdit = capture.IndexOf("if (!IsDesignEdit(cachedDesign, design))", StringComparison.Ordinal);
+        Assert.True(notEdit >= 0 && notEdit < capture.IndexOf("store.Bindings[designId] = binding", StringComparison.Ordinal));
+        Assert.True(capture.IndexOf("designCache.TryGetValue(designId, out cachedDesign)", StringComparison.Ordinal)
+                  < capture.IndexOf("designCache.Remove(designId)", StringComparison.Ordinal), "the earlier copy is read before it is dropped");
+
         // The skip branch only logs and returns: no record of the skipped design is kept.
         var skip = Method(capture[mismatch..], "if (!StateMatches(");
         Assert.DoesNotContain("=", skip.Replace("=>", "").Replace("??=", ""));

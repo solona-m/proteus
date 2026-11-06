@@ -152,6 +152,14 @@ internal sealed class HarnessBindings(IHarnessGame game, Func<string, string> sc
         if (EnsureRecord(glamourerBefore, carriersBefore, liveBefore ?? game.LiveSnapshot(), coll, all) is { } failed) return failed;
 
         var want = new PermanentSetting(enabled ?? cur.Enabled, priority ?? cur.Priority, cur.Options, Own: true);
+        // Already so: nothing to write, record or redraw (a redraw would wake auto refit for nothing).
+        if (want.Equals(cur))
+            return ChangeResult.Ok(new Dictionary<string, object?>
+            {
+                ["mod"] = modDir, ["collection"] = coll, ["permanent"] = true, ["enabled"] = cur.Enabled, ["priority"] = cur.Priority,
+                ["before"] = new { enabled = cur.Enabled, priority = cur.Priority, own = cur.Own }, ["redrawRequested"] = false,
+                ["unchanged"] = true,
+            });
         if (game.WritePermanent(coll, modDir, want) is { } ec)
             return ChangeResult.Fail(409, "penumbra-refused", $"Penumbra refused the setting: {ec}");
         var now = game.PermanentSettings(coll)?.GetValueOrDefault(modDir) ?? want;

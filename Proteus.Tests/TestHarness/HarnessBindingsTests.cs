@@ -430,6 +430,19 @@ public class HarnessBindingsTests : IDisposable
     }
 
     [Fact]
+    [Trait("Plan", "AC-binding-reapply-12")]
+    public void Permanent_NoOpWrite_WritesNothing_NoRedraw()
+    {
+        var redraws = Game.RedrawRequests;
+        var r = fx.Dispatcher.Run(() => B.WritePermanent(Coll, "Panties", true, 2));   // already enabled at 2
+        Assert.Equal(200, r.Status);
+        Assert.Equal(false, ((Dictionary<string, object?>)r.Body!)["redrawRequested"]);
+        Assert.Empty(Game.PermanentWrites);
+        Assert.Equal(redraws, Game.RedrawRequests);
+        Assert.False(B.HasSession);
+    }
+
+    [Fact]
     [Trait("Plan", "EDGE-binding-reapply-33")]
     public void Permanent_NonProteusMod_Refused()
     {

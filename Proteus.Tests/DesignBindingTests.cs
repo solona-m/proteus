@@ -1112,6 +1112,29 @@ public class DesignBindingTests
             keys.OrderBy(k => k, StringComparer.Ordinal));
     }
 
+    // ── A design-file write is only captured when it is an edit ──────────────────
+
+    [Fact]
+    [Trait("Plan", "AC-binding-reapply-3")]
+    public void IsDesignEdit_OnlyWhenLastEditMoved()
+    {
+        JObject D(string? lastEdit, bool writeProtected = false)
+        {
+            var d = Design(("Body", 100, true));
+            if (lastEdit != null) d["LastEdit"] = lastEdit;
+            d["WriteProtected"] = writeProtected;
+            return d;
+        }
+        // Write protection toggled (QA, build 1439): same LastEdit, not an edit.
+        Assert.False(DesignBindingService.IsDesignEdit(D("2026-11-06T15:40:00Z"), D("2026-11-06T15:40:00Z", writeProtected: true)));
+        // A real edit moves LastEdit.
+        Assert.True(DesignBindingService.IsDesignEdit(D("2026-11-06T15:40:00Z"), D("2026-11-06T15:45:31Z")));
+        // No earlier copy, or no LastEdit on either side: captured as before.
+        Assert.True(DesignBindingService.IsDesignEdit(null, D("2026-11-06T15:40:00Z")));
+        Assert.True(DesignBindingService.IsDesignEdit(D(null), D("2026-11-06T15:40:00Z")));
+        Assert.True(DesignBindingService.IsDesignEdit(D("2026-11-06T15:40:00Z"), D(null)));
+    }
+
     private sealed class OptionWriteComparer : IEqualityComparer<(string, string, List<string>)>
     {
         public bool Equals((string, string, List<string>) a, (string, string, List<string>) b)
