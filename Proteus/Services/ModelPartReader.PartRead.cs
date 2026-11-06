@@ -150,6 +150,10 @@ public static partial class ModelPartReader
                         // A stale index must never reach another mesh's vertices through the rebase; skipping it is
                         // why the ordinal is recorded rather than inferred.
                         if (a >= vc || b >= vc || c >= vc) continue;
+                        // A collapsed triangle (one corner three times) draws nothing: a matcap split leaves the moved
+                        // triangles collapsed in the source mesh and the rest collapsed in its copy. Skipped without
+                        // renumbering, so every other triangle keeps its ordinal.
+                        if (a == b && b == c) continue;
                         tris.Add(baseVertex + a); tris.Add(baseVertex + b); tris.Add(baseVertex + c);
                         ordinals.Add((int)(t / 3));
                     }
