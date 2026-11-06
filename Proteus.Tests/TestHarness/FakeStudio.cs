@@ -47,7 +47,7 @@ internal sealed class FakeStudio(Action<string> fw) : IStudioHarness
             ["all"] = new { seeds = 4, movingRows = 1, rows = 1, includesSkin = false, pivot = new[] { 0f, 1f, 0f } },
             ["help"] = "MoveAllLiveHint",
             ["edit"] = new { dirty = false, canUndo = false, worstMm = 0f, saveOwed = false, editVersion = EditVersion },
-            ["status"] = new { text = Status, isError = StatusIsError },
+            ["status"] = new StudioStatusLine(Status, StatusIsError),
         };
     }
 

@@ -324,6 +324,8 @@ internal sealed class HarnessChanges(IHarnessGame game, SessionNames names, IPlu
     internal Dictionary<string, object?> WithSession(IReadOnlyDictionary<string, object?>? state)
     {
         var body = state != null ? new Dictionary<string, object?>(state) : new Dictionary<string, object?>();
+        if (body.TryGetValue("status", out var line) && line is StudioStatusLine s0)
+            body["status"] = new { text = Scrub(s0.text), isError = s0.isError };
         body["harnessOpened"] = studio is { } s && game.Studio is { } port && port.IsOpen(s.ModDir, s.File);
         body["session"] = StudioSessionView();
         return body;

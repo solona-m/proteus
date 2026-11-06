@@ -85,7 +85,7 @@ public sealed partial class PartsPanel : IStudioHarness
             ["edit"] = volume is { } v
                 ? new { dirty = v.Dirty, canUndo = v.CanUndo, worstMm = v.Worst * 1000f, saveOwed = brushChangedAt >= 0, editVersion = v.EditVersion }
                 : null,
-            ["status"] = status is { } text ? new { text, isError = statusIsError } : null,
+            ["status"] = status is { } text ? new StudioStatusLine(text, statusIsError) : null,
         };
     }
 

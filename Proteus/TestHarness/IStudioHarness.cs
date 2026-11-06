@@ -6,6 +6,10 @@ namespace Proteus.TestHarness;
 /// <summary>A file a harness save wrote, mod-relative with forward slashes, and its SHA-256 as on disk after it.</summary>
 internal sealed record StudioFile(string File, string Sha256);
 
+/// <summary>The Studio's status line in <c>/studio</c>: free text the plugin wrote, scrubbed of the session's names by
+/// the harness (and only it: keys, folders and labels are left as they are).</summary>
+internal sealed record StudioStatusLine(string text, bool isError);
+
 /// <summary>A refusal from the Studio: status, code and message, as the routes answer them.</summary>
 internal sealed record StudioRefusal(int Status, string Code, string Message);
 

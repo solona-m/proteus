@@ -73,12 +73,10 @@ internal sealed partial class HarnessRouter
     /// plugin wrote) and every path's Windows user name.
     /// </summary>
     private HarnessResponse StudioAnswer(ChangeResult r)
-    {
-        string Clean(string text) => LogAnonymizer.Scrub(names.Scrub(text));
-        if (r.Status != 200) return HarnessResponse.Error(r.Status, r.Code!, Clean(r.Message ?? ""));
-        var json = System.Text.Encoding.UTF8.GetString(HarnessJson.Bytes(r.Body));
-        return new HarnessResponse(200, "application/json; charset=utf-8", System.Text.Encoding.UTF8.GetBytes(Clean(json)));
-    }
+        // The body's free text (the status lines) is name-scrubbed where it is built; the whole body only of paths, so
+        // keys, folders and part labels that happen to match a collection name come back intact.
+        => r.Status == 200 ? Scrubbed(200, r.Body)
+         : HarnessResponse.Error(r.Status, r.Code!, LogAnonymizer.Scrub(names.Scrub(r.Message ?? "")));
 
     /// <summary>The put-back answer's Studio entries.</summary>
     internal static object StudioPutBackBlock(PutBackReport report)

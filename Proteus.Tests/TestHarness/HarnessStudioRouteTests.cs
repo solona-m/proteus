@@ -243,6 +243,19 @@ public class HarnessStudioRouteTests : IDisposable
     }
 
     [Fact]
+    [Trait("Plan", "EDGE-move-all-parts-35")]
+    public async Task NameScrub_LeavesKeysAndFoldersIntact()
+    {
+        // A collection called "Parts" or "Outfit" must not rename the body's keys, the mod folder or a part label.
+        f.Names.AddAll(["Parts", "Outfit", "Mode"], null);
+        await Open();
+        var (_, body) = await f.Get("/studio");
+        Assert.True(body.TryGetProperty("parts", out _));
+        Assert.True(body.TryGetProperty("mode", out _));
+        Assert.Equal("Outfit", body.GetProperty("session").GetProperty("modDir").GetString());
+    }
+
+    [Fact]
     [Trait("Plan", "EDGE-move-all-parts-26")]
     public async Task OpenSetDrag_RefusedWhileAJobRuns()
     {
