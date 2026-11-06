@@ -170,7 +170,8 @@ internal sealed class HarnessHost : IDisposable
         {
             var r = c.PutBack();
             log.Information("[Proteus] test harness put back as it stopped: {0}",
-                            string.Join(", ", r.Gear.Concat(r.Holds).Select(e => $"{e.Name} {e.Result}{(e.Code is { } code ? $" ({code})" : "")}")));
+                            string.Join(", ", r.Gear.Concat(r.Holds).Select(e => $"{e.Name} {e.Result}{(e.Code is { } code ? $" ({code})" : "")}")
+                                                .Concat(r.Studio.Select(s => $"Studio {s.Mod} files {s.Files}, panel {s.Panel}{(s.Code is { } code ? $" ({code})" : "")}"))));
         }
         catch (Exception e) { log.Warning(e, "[Proteus] test harness: putting back as it stopped failed"); }
     }

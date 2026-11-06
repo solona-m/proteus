@@ -67,8 +67,9 @@ internal sealed class GameHarnessAdapter : IHarnessGame, IDisposable
                               IObjectTable objects, IClientState clientState, IFramework framework,
                               ITextureProvider textures, ITextureReadbackProvider readback, Configuration config,
                               UVRemapService uvRemap, Func<string, byte[]?> readGameFile, Action<string> onModChanged,
-                              IPluginLog log)
+                              IPluginLog log, IStudioHarness? studio = null)
     {
+        Studio = studio;
         this.penumbra = penumbra;
         this.glamourer = glamourer;
         this.compositor = compositor;
@@ -197,6 +198,9 @@ internal sealed class GameHarnessAdapter : IHarnessGame, IDisposable
     public string SweepHolds(Guid collection, int key) => penumbra.RemoveAllTemporaryModSettings(collection, key).ToString();
 
     public void RequestRedraw() => compositor.RedrawForChangedModel("test harness");
+
+    /// <summary>The Studio panel, in harness builds; its members run on the framework thread.</summary>
+    public IStudioHarness? Studio { get; }
 
     public (IReadOnlyCollection<string> Collections, string? Character) NamesNow()
         => ((IReadOnlyCollection<string>?)penumbra.GetCollections()?.Values.ToList() ?? [],

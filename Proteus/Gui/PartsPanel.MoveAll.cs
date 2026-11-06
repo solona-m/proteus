@@ -59,6 +59,21 @@ public sealed partial class PartsPanel
         return allPivot;
     }
 
+    /// <summary>
+    /// Switch what Move, Rotate and Scale take hold of, as the mode radios do: the other mode's selection is dropped,
+    /// and into All the live tint is handed a key it has not cached. Shared by the radios and the test harness; no
+    /// ImGui call (the harness runs it between frames).
+    /// </summary>
+    private void SwitchMoveSelect(MoveSelectMode value)
+    {
+        if (moveSelect == value || volume is { Moving: true }) return;
+        moveSelect = value;
+        movePart = null;
+        if (value != MoveSelectMode.Polygons) ClearPolygons();
+        if (value == MoveSelectMode.All) allSelection.Touch();
+        viewport.Recolour();
+    }
+
     /// <summary>The help line above the mode switch.</summary>
     internal static string HelpText(MoveHelpText which)
     {

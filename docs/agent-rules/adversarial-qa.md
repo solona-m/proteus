@@ -74,7 +74,11 @@ four requests were open at once: retry when one finishes; it is never a busy run
 | `POST /actions/hair-port` | `{"mod":"<folder>","hair":"<hair model game path>","races":["c0101","c0401"]}` → 202 `{job, modDir, state}`: the Studio's **Port** button for those races (leave `races` out for the Studio's default ticks), after a backup; then reloads the mod and redraws. `{"mod","hair","remove":true}` is the **Remove ports** button. Only races the Studio lets you tick are ported; the rest come back in `result.skippedRaces` (`not-listed`, `covered`, `ported`, `no-style`, `other-sex-authored`, `own-version`, `own-skeleton`). Job kinds `hair-port` / `hair-remove`; `result` = `{action, summary: ported\|nothing-to-port\|nothing-ported\|removed\|nothing-to-remove, resultLine, source, asked, skippedRaces, ported:[{race, group, option, est, skeletonFrom}], stripped, refused:[{race, reason}], warnings, current, saved}` (remove: `removed, message, remaining`). No backup is taken when nothing would be written. 400 `invalid-field` for a bad `hair`, `races` that are not playable `cNNNN` codes, `remove` other than `true`, or both; 409 `hair-port-busy` (below). |
 | `POST /actions/equip` | `{"slot":"Body","item":12345}` or `{"slot":"Body","set":317,"variant":2}` → 200 `{slot, sent, item, set, variant, dyes, previous, original}` (`readBack:false` when the worn item could not be read back). Equips through Glamourer for this session only (no lock, no design). Slots: Head, Body, Hands, Legs, Feet, Ears, Neck, Wrists, RFinger, LFinger (any case). `set`/`variant` equip that model even when no item uses it. 400 `invalid-field` / `item-invalid`; 409 `busy`, `auto-refit-busy`, `not-logged-in`, `carrier-slot`, `glamourer-refused`; 503 `glamourer-unavailable`, `harness-stopping`. |
 | `POST /actions/mod-settings` | `{"mod":"<folder>","enabled":false}` and/or `"priority":1000` → 200 `{mod, collection, enabled, priority, before, redrawRequested}`. Holds the mod in the player's collection with a Penumbra **temporary** setting (its options kept), never saved. 409 `held-elsewhere` when another plugin (Glamourer, design binding) holds it; 404 `mod-not-found`; 400 `managed-mod`; 409 `no-collection`, `penumbra-refused`; 503 `penumbra-unavailable`, `harness-stopping`. |
-| `POST /actions/put-back` | `{}` → 200 `{gear:[{slot,result}], holds:[{mod,result}], sweep, redrawRequested}`. Undoes every equip and hold of this session. Never refused. |
+| `POST /actions/put-back` | `{}` → 200 `{gear:[{slot,result}], holds:[{mod,result}], sweep, redrawRequested, studio:[{mod,files,panel,code,kept}]}`. Undoes every equip and hold of this session, then ends the Studio session (see *The Studio*). Never refused. |
+| `GET /studio` | The Studio's state: `open {modDir,file,gamePath}`, `window`, `tool`, `mode` (parts/polygons/all), `view`, `settings {mirror,adjacent,moveSkin}`, `effective {mirrorNow,adjacentNow,skinMovesNow,followReady}`, `parts [{label,material,island,skin,locked,moves}]`, `chosen`, `all {seeds,movingRows,rows,includesSkin,pivot}`, `pivot`, `help`, `edit {dirty,canUndo,worstMm,saveOwed,editVersion}`, `status`, `session`. Positions are model space, metres. |
+| `POST /actions/studio-open` | `{"mod":"<folder>","model":"<file or game path>","show":true}` → 200 the `/studio` body. Opens the model as picking it does; `show` brings the window up on the Studio tab. Refused: `managed-mod`, `mod-not-found`, `model-not-in-mod` (the message lists the models), `model-ambiguous` (give the file), `legacy-mod`, `studio-has-edits`, `studio-busy`, `put-back-first` (a session is already recorded), `busy`, `auto-refit-busy`, `harness-stopping`. |
+| `POST /actions/studio-set` | Any of `{"tool":"move\|rotate\|scale","mode":"parts\|polygons\|all","view":"character\|model","mirror":b,"adjacent":b,"moveSkin":b,"unlockAll":true,"lock":[label],"unlock":[label],"part":"<label>"}`, applied in that order → 200 `{locks:[{label,result}], chosen, state}`. Refused: `invalid-field`, `no-studio-session`, `studio-changed`, `dragging`, `busy`, `auto-refit-busy`, `harness-stopping`. |
+| `POST /actions/studio-drag` | One of `{"offsetMm":[x,y,z]}` (Move), `{"axis":"x\|y\|z" or [x,y,z],"degrees":d}` (Rotate), `{"factor":f}` / `{"factors":[x,y,z]}` (Scale), `{"undo":true}` → 200 `{kind, moved, nodes, worstMm, pivot, saved, status, state}`. Runs the gizmo's own drag about its pivot and saves at once. Refused: `invalid-field`, `wrong-tool`, `nothing-to-move`, `nothing-to-undo`, `no-studio-session`, `studio-changed`, `dragging`, `busy`, `auto-refit-busy`, `harness-stopping`. |
 | `GET /jobs/{id}` | `{id, kind, modDir, state: queued\|running\|done\|failed\|cancelled, progress, backup, reloaded, redrawRequested, redrawObserved, autoRefitFollowed, result, restored, error}` |
 
 `mod` is the **folder name** Penumbra keeps the mod in (case-insensitive), never its
@@ -148,6 +152,9 @@ outcome:
 
 **Where backups live:** `$APPDATA/XIVLauncher/pluginConfigs/Proteus/test-harness/backups/<modDir>/<backupId>/`.
 The harness never deletes or overwrites a backup; the user may delete them by hand.
+(The one exception is inside the mod: the Studio's own `meshvolume-backup`, which a
+harness Studio drag created and put-back's Undo saved changes removes — see
+*The Studio*.)
 
 ## You must put back every equip and hold
 
@@ -188,6 +195,49 @@ curl -s -X POST -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/
 curl -s -X POST -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" \
   -d '{}' http://127.0.0.1:$PORT/actions/put-back
 ```
+
+## The Studio (Move, Rotate, Scale)
+
+The Studio routes drive the Studio panel through the code its controls run: a drag
+goes through the gizmo's own begin, place and finish, and is **saved into the mod**
+at once (the brush save, which keeps the author's original in the mod's
+`Proteus/meshvolume-backup`). So:
+
+- **Pick a mod with no saved Studio edits** (`studio-has-edits` otherwise), and not
+  one the user is editing: `studio-busy` means the Studio has their drag, stroke or
+  unsaved edit, which the harness never flushes. Wear it if you want screenshots.
+- **Hash the mod's files before you start, and check them after put-back.**
+- Put-back closes the harness's model without saving, puts the files back with the
+  Studio's own **Undo saved changes**, restores the Studio's settings, locks and the
+  model that was open, and closes the window if `show` opened it. It reverts only
+  what is provably the harness's: every file the Studio record lists must be one a
+  harness save wrote and still hash as it wrote it, and the model must be untouched in
+  the Studio. Otherwise it reports `files: changed` / `panel: changed` with the
+  reason (`hash-changed`, `not-harness-saved`, `model-edited`, `save-owed`,
+  `drag-open`, `applying-sizes`) and touches nothing; tell the user, who can press
+  Undo saved changes. `failed` with `still-patched` is retried by the next put-back;
+  `blocked:<feature>` means a later feature (hat fitting, part switches) changed the
+  same model: undo that first, most recent first, as the Studio says, then put back
+  again.
+- A session left recorded (`changed` or `failed`) keeps refusing a second
+  `studio-open` (`put-back-first`), and design binding's apply, until a put-back
+  ends it or the harness is switched `off`.
+- If the user opens another model meanwhile, `studio-set` and `studio-drag` answer
+  `studio-changed`; put-back still reverts the harness's files when it may, reloads
+  that mod by name, and leaves the user's panel as it is.
+- After a drag, wait as after a refit: `autoRefit.busy == false` and
+  `compositor.phase == "idle"`. Auto refit and the hair watcher react to the save,
+  and put-back does not undo their writes.
+- Drive it from PowerShell with JSON bodies read from a file (Git Bash rewrites
+  path-like arguments).
+
+All-mode recipe: open with `show`, `{"tool":"move","mode":"all"}`, lock one part,
+read `all` and `effective` (mirror and adjacent off), drag `{"offsetMm":[0,20,0]}`,
+check `moved`, `nodes` and a screenshot, `{"tool":"rotate"}` and
+`{"axis":"y","degrees":30}`, `{"tool":"scale"}` and `{"factor":1.2}`,
+`{"undo":true}`, then put back and compare the hashes. Still UNVERIFIED after
+that: only the visual judgement of the handle against a whole garment on a posed
+character, and the radio row in German and Russian (screenshot both for the user).
 
 ## Waiting for the game
 

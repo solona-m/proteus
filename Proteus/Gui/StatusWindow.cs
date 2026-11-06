@@ -467,6 +467,15 @@ public class StatusWindow : Window
         Show(forceExpand: true);
     }
 
+    /// <summary>Open the window with the Studio tab selected (the test harness's <c>show</c>, so screenshots see the panel).</summary>
+    internal void OpenToStudio()
+    {
+        _forceStudioTab = true;
+        Show(forceExpand: true);
+    }
+
+    private bool _forceStudioTab;
+
     /// <summary>Open, un-collapse if needed, and bring to front; setting <see cref="Window.IsOpen"/> alone can leave it collapsed or behind the installer.</summary>
     /// <param name="forceExpand">Un-collapse even when reopening from closed; a plain open leaves a deliberate collapse alone.</param>
     public void Show(bool forceExpand = false)
@@ -587,7 +596,9 @@ public class StatusWindow : Window
                     if (t) { _tabDrawn = "mods"; modsTab.DrawModsTab(); }
 
                 // The Studio second, right after the mods it works on.
-                using (var t = ProteusStyle.HeaderTabItem(Strings.Tab.Parts, "toggles"))
+                var studioFlags = _forceStudioTab ? ImGuiTabItemFlags.SetSelected : ImGuiTabItemFlags.None;
+                _forceStudioTab = false;
+                using (var t = ProteusStyle.HeaderTabItem(Strings.Tab.Parts, "toggles", studioFlags))
                     if (t)
                     {
                         _tabDrawn = "toggles";

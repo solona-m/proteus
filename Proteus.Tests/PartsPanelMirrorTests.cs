@@ -105,7 +105,9 @@ public class PartsPanelMirrorTests
         Assert.Contains("moveGizmo.DragPivot", pump);
         Assert.Contains("rotateGizmo.DragPivot", pump);
         Assert.Contains("scaleDrag.DragPivot", pump);
-        Assert.Contains("mirror: mirror)", pump);
+        // ...through the one begin the gizmo and the test harness share, handed that pivot.
+        Assert.Contains("BeginPartDrag(", pump);
+        Assert.Contains("mirror: mirror)", Method(src, "private bool BeginPartDrag(Vector3 dragPivot)"));
 
         // The preview is measured again when the mirror or the falloff switch changes.
         var preview = Method(src, "private float[]? MoveFalloffNow()");

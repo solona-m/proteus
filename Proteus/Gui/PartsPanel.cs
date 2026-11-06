@@ -562,12 +562,8 @@ public sealed partial class PartsPanel
         {
             if (tools)
             {
-                if (ImGui.Checkbox(Strings.Parts.ShowModelView, ref showModelView))
-                {
-                    FlushPending();   // a stroke's pending save belongs to the surface it was painted on
-                    EndLivePreview(refreshGame: true);
-                    viewport.Recolour();
-                }
+                bool modelView = showModelView;
+                if (ImGui.Checkbox(Strings.Parts.ShowModelView, ref modelView)) SwitchView(modelView);
                 if (ImGui.IsItemHovered()) ImGui.SetTooltip(Strings.Parts.ShowModelViewTip);
                 ImGui.Separator();
 
@@ -2305,37 +2301,63 @@ public sealed partial class PartsPanel
             _           => scaleDrag.Ended,
         };
 
-        if (started && MoveSeeds() is { } seeds)
-        {
-            // A stroke still open is ended here, shown and saved as itself — not closed silently inside BeginMove.
-            if (volume.StrokeOpen) EndBrushStroke(volume);
-            previewDirtyBeforeMove = previewDirty;
-            previewPushesAtMove = previewPushes;
-            // Mirrored about exactly the pivot the gizmo's own matrix is about.
-            MeshVolumeSolve.MoveMirror? mirror = MirrorNow
-                ? tool switch
-                {
-                    Tool.Move   => new(MeshVolumeSolve.MoveKind.Translate, moveGizmo.DragPivot),
-                    Tool.Rotate => new(MeshVolumeSolve.MoveKind.Rotate, rotateGizmo.DragPivot),
-                    _           => new(MeshVolumeSolve.MoveKind.Scale, scaleDrag.DragPivot),
-                }
-                : null;
-            if (volume.BeginMove(seeds, AdjacentNow, moveFalloffMm / 1000f, alongSurface: movePolygons, mirror: mirror) == 0)
+        if (started)
+            BeginPartDrag(tool switch
             {
-                status = moveAll ? Strings.Parts.MoveAllNothingFree : Strings.Parts.MoveNothingFree;
-                statusIsError = true;
-            }
-        }
+                Tool.Move   => moveGizmo.DragPivot,
+                Tool.Rotate => rotateGizmo.DragPivot,
+                _           => scaleDrag.DragPivot,
+            });
 
         if (!volume.Moving) return;
 
-        if (tool == Tool.Move) volume.MoveTo(moveGizmo.Offset);
-        else volume.TransformTo(tool == Tool.Rotate ? rotateGizmo.Transform : scaleDrag.Transform);
+        if (tool == Tool.Move) PlacePartDrag(moveGizmo.Offset, null);
+        else PlacePartDrag(null, tool == Tool.Rotate ? rotateGizmo.Transform : scaleDrag.Transform);
+
+        if (ended) FinishMove();
+    }
+
+    /// <summary>
+    /// Start a drag of what Move, Rotate or Scale has chosen, about <paramref name="dragPivot"/> — the gizmo's own
+    /// pivot, so a mirror is about exactly the point its matrix is. The gizmo and the test harness both start drags
+    /// here. Makes no ImGui call: the harness runs it between frames. True when a drag is under way.
+    /// </summary>
+    private bool BeginPartDrag(Vector3 dragPivot)
+    {
+        if (volume == null || MoveSeeds() is not { } seeds) return false;
+        // A stroke still open is ended here, shown and saved as itself — not closed silently inside BeginMove.
+        if (volume.StrokeOpen) EndBrushStroke(volume);
+        previewDirtyBeforeMove = previewDirty;
+        previewPushesAtMove = previewPushes;
+        // Mirrored about exactly the pivot the gizmo's own matrix is about.
+        MeshVolumeSolve.MoveMirror? mirror = MirrorNow
+            ? new(tool switch
+            {
+                Tool.Move   => MeshVolumeSolve.MoveKind.Translate,
+                Tool.Rotate => MeshVolumeSolve.MoveKind.Rotate,
+                _           => MeshVolumeSolve.MoveKind.Scale,
+            }, dragPivot)
+            : null;
+        if (volume.BeginMove(seeds, AdjacentNow, moveFalloffMm / 1000f, alongSurface: movePolygons, mirror: mirror) == 0)
+        {
+            status = moveAll ? Strings.Parts.MoveAllNothingFree : Strings.Parts.MoveNothingFree;
+            statusIsError = true;
+        }
+        return volume.Moving;
+    }
+
+    /// <summary>
+    /// Place the drag under way: a Move's <paramref name="offset"/>, or a Rotate's or Scale's model-space
+    /// <paramref name="transform"/> about the pivot. Shared by the gizmo and the test harness; no ImGui call.
+    /// </summary>
+    private void PlacePartDrag(Vector3? offset, Matrix4x4? transform)
+    {
+        if (volume is not { Moving: true }) return;
+        if (offset is { } by) volume.MoveTo(by);
+        else if (transform is { } m) volume.TransformTo(m);
         viewport.PositionOverride = volume.Positions();
         viewport.GeometryChanged();
         previewDirty = !showModelView;
-
-        if (ended) FinishMove();
     }
 
     /// <summary>End a move drag or a grab if one is under way: record it, and save — at once on the character, which
@@ -2399,31 +2421,16 @@ public sealed partial class PartsPanel
             ImGui.GetFrameHeight(), style.ItemInnerSpacing.X, style.ItemSpacing.X, ImGui.GetContentRegionAvail().X);
         if (ImGui.RadioButton(ps.MoveSelectParts, moveSelect == MoveSelectMode.Parts)
             && moveSelect != MoveSelectMode.Parts && volume is not { Moving: true })
-        {
-            moveSelect = MoveSelectMode.Parts;
-            movePart = null;
-            ClearPolygons();
-            viewport.Recolour();
-        }
+            SwitchMoveSelect(MoveSelectMode.Parts);
         if (oneLine) ImGui.SameLine();
         if (ImGui.RadioButton(ps.MoveSelectPolygons, moveSelect == MoveSelectMode.Polygons)
             && moveSelect != MoveSelectMode.Polygons && volume is not { Moving: true })
-        {
-            moveSelect = MoveSelectMode.Polygons;
-            movePart = null;
-            viewport.Recolour();
-        }
+            SwitchMoveSelect(MoveSelectMode.Polygons);
         if (ImGui.IsItemHovered()) ImGui.SetTooltip(ps.MoveSelectPolygonsTip);
         if (oneLine) ImGui.SameLine();
         if (ImGui.RadioButton(ps.MoveSelectAll, moveSelect == MoveSelectMode.All)
             && moveSelect != MoveSelectMode.All && volume is not { Moving: true })
-        {
-            moveSelect = MoveSelectMode.All;
-            movePart = null;
-            ClearPolygons();
-            allSelection.Touch();
-            viewport.Recolour();
-        }
+            SwitchMoveSelect(MoveSelectMode.All);
         if (ImGui.IsItemHovered()) ImGui.SetTooltip(ps.MoveSelectAllTip);
         ImGui.Spacing();
 
@@ -3037,31 +3044,48 @@ public sealed partial class PartsPanel
 
             // The game's own gear changes tool like anything else: it is copied into a mod by its first saved change,
             // never by choosing a tool.
-            if (clicked && tool != value)
-            {
-                // Before leaving the brush: a save rewrites the whole model, so a pending edit would land on top of a switch.
-                FinishMove();
-                FlushPending();
-                // The chosen part carries between Move, Rotate and Scale — they work on the same choice.
-                if (!(PartTool && IsPartTool(value)))
-                {
-                    movePart = null;
-                    ClearPolygons();
-                }
-                tool = value;
-                ApplyLocks();   // Body size shows its own holds, every other tool the brush locks; and syncs the hiding
-                // Staged parts are a Pick-parts thing; a selection carried into the brush would sit there invisibly.
-                ticked.Clear();
-                ReleaseHandles();
-                viewport.Recolour();
-                viewport.GeometryChanged();   // the wind wash comes and goes with the wind tool
-            }
+            if (clicked) SwitchTool(value);
             if (ImGui.IsItemHovered())
                 ImGui.SetTooltip(value is Tool.Navigate or Tool.Retarget || IsPartTool(value)
                                      ? tip
                                      : tip + "\n\n" + ps.BrushLockHint);
         }
         ImGui.Spacing();
+    }
+
+    /// <summary>
+    /// Choose a tool, as its button does. Shared by the buttons and the test harness; no ImGui call (the harness runs
+    /// it between frames). Choosing the tool already in use does nothing.
+    /// </summary>
+    private void SwitchTool(Tool value)
+    {
+        if (tool == value) return;
+        // Before leaving the brush: a save rewrites the whole model, so a pending edit would land on top of a switch.
+        FinishMove();
+        FlushPending();
+        // The chosen part carries between Move, Rotate and Scale — they work on the same choice.
+        if (!(PartTool && IsPartTool(value)))
+        {
+            movePart = null;
+            ClearPolygons();
+        }
+        tool = value;
+        ApplyLocks();   // Body size shows its own holds, every other tool the brush locks; and syncs the hiding
+        // Staged parts are a Pick-parts thing; a selection carried into the brush would sit there invisibly.
+        ticked.Clear();
+        ReleaseHandles();
+        viewport.Recolour();
+        viewport.GeometryChanged();   // the wind wash comes and goes with the wind tool
+    }
+
+    /// <summary>Show the model view or work on the character, as its checkbox does. Shared with the test harness.</summary>
+    private void SwitchView(bool modelView)
+    {
+        if (showModelView == modelView) return;
+        showModelView = modelView;
+        FlushPending();   // a stroke's pending save belongs to the surface it was painted on
+        EndLivePreview(refreshGame: true);
+        viewport.Recolour();
     }
 
     /// <summary>

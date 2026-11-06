@@ -63,6 +63,19 @@ recorded per session and put back on request, on `off` and on unload. Holds are
 Penumbra temporary settings under the harness's own key, never saved to a
 collection. A stop off the framework thread cannot put back, and logs what it left.
 
+*Amended 2026-11-06:* the Studio routes (`/studio`, `studio-open`, `studio-set`,
+`studio-drag`) drive the Studio panel through its own controls' code, and a drag
+writes into a mod through the Studio's brush save. They open only a mod with no
+saved Studio edits, never flush the user's edit, and keep one session at a time.
+At put-back the harness restores the model files and deletes the
+`meshvolume-backup` (and `meshvolume.json` record) its own saves created, through
+the Studio's "Undo saved changes" — an exception to "never deletes a backup" — but
+only when every file the record lists was written by a harness save and still
+hashes as the harness last wrote it, and the model is untouched in the Studio;
+otherwise it leaves everything and reports `changed`. The panel's settings, locks
+and open model are restored. The panel's harness code is a partial compiled out
+with the rest.
+
 ## Consequences
 
 Easier: QA can test the plugin in a running game unattended once the user turns

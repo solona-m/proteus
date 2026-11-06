@@ -78,11 +78,14 @@ public class PartsPanelMoveAllTests
     public void AllFeedsTheOnePumpForBothViews()
     {
         var src = Source();
-        Assert.Contains("moveAll ? (AllNow().Seeds", Expression(src, "private IEnumerable<int>? MoveSeeds()"));
+        Assert.Contains("moveAll ? (AllNow().Seeds is { Length: > 0 } all ? all : null)",
+                        Expression(src, "private IEnumerable<int>? MoveSeeds()"));
         Assert.Contains("if (moveAll) return AllPivot();", Method(src, "private Vector3? MovePivot()"));
-        var pump = Method(src, "private void PumpMove()");
-        Assert.Contains("volume.BeginMove(seeds, AdjacentNow,", pump);
-        Assert.Contains("mirror = MirrorNow", pump);
+        // The gizmo's pump starts every drag through the one shared begin.
+        Assert.Contains("BeginPartDrag(", Method(src, "private void PumpMove()"));
+        var begin = Method(src, "private bool BeginPartDrag(Vector3 dragPivot)");
+        Assert.Contains("volume.BeginMove(seeds, AdjacentNow,", begin);
+        Assert.Contains("mirror = MirrorNow", begin);
         // One pump, run once a frame after the live brush is armed, for the model view and the character alike.
         Assert.Single(Regex.Matches(src, @"\bPumpMove\(\);"));
     }
@@ -186,7 +189,8 @@ public class PartsPanelMoveAllTests
         Assert.Contains("using (ImRaii.Disabled(volume is { Moving: true } || moveAll)) DrawMirrorToggle(moveAll ? ps.MoveAllOffTip : null);", move);
         Assert.Equal(3, Regex.Matches(move, @"ps\.MoveAllOffTip").Count);
 
-        foreach (var body in new[] { Method(src, "private void PumpMove()"), Method(src, "private float[]? MoveFalloffNow()"), move })
+        foreach (var body in new[] { Method(src, "private void PumpMove()"), Method(src, "private bool BeginPartDrag(Vector3 dragPivot)"),
+                                     Method(src, "private float[]? MoveFalloffNow()"), move })
         {
             Assert.DoesNotContain("mirrorBrush", body);
             Assert.DoesNotContain("moveAdjacent,", body.Replace("ref moveAdjacent", ""));
@@ -242,8 +246,10 @@ public class PartsPanelMoveAllTests
     {
         var src = Source();
         var move = Method(src, "private void DrawMove()");
-        var allRadio = move[Index(move, "ImGui.RadioButton(ps.MoveSelectAll,")..];
-        Assert.Contains("allSelection.Touch();", allRadio[..Index(allRadio, "ImGui.SetTooltip(ps.MoveSelectAllTip)")]);
+        var allRadio = move[Index(move, "ImGui.RadioButton(ps.MoveSelectAll,")..Index(move, "ImGui.SetTooltip(ps.MoveSelectAllTip)")];
+        Assert.Contains("SwitchMoveSelect(MoveSelectMode.All);", allRadio);
+        Assert.Contains("if (value == MoveSelectMode.All) allSelection.Touch();",
+                        Method(src, "private void SwitchMoveSelect(MoveSelectMode value)"));
         Assert.Contains("moveAll ? AllNow().Version ^ AllTintSalt", src);
         var salt = Regex.Match(src, @"AllTintSalt = (0x[0-9A-F]+);").Groups[1].Value;
         var moveSalt = Regex.Match(src, @"MoveVersion\(\) => .*\^ (0x[0-9A-F]+);").Groups[1].Value;
@@ -266,14 +272,16 @@ public class PartsPanelMoveAllTests
     [Trait("Plan", "EDGE-move-all-parts-6")]
     public void EnteringAllClearsOtherSelections()
     {
-        var move = Method(Source(), "private void DrawMove()");
-        var allRadio = move[Index(move, "ImGui.RadioButton(ps.MoveSelectAll,")..Index(move, "ImGui.SetTooltip(ps.MoveSelectAllTip)")];
-        Assert.Contains("movePart = null;", allRadio);
-        Assert.Contains("ClearPolygons();", allRadio);
-        var partsRadio = move[Index(move, "ImGui.RadioButton(ps.MoveSelectParts,")..Index(move, "ImGui.RadioButton(ps.MoveSelectPolygons,")];
-        Assert.Contains("ClearPolygons();", partsRadio);
-        var polyRadio = move[Index(move, "ImGui.RadioButton(ps.MoveSelectPolygons,")..Index(move, "ImGui.RadioButton(ps.MoveSelectAll,")];
-        Assert.Contains("movePart = null;", polyRadio);
+        var src = Source();
+        var move = Method(src, "private void DrawMove()");
+        // Each radio switches through the one shared body, which drops the chosen part always and the polygons
+        // whenever the new mode is not Polygons.
+        foreach (var mode in new[] { "Parts", "Polygons", "All" })
+            Assert.Contains($"SwitchMoveSelect(MoveSelectMode.{mode});", move);
+        var body = Method(src, "private void SwitchMoveSelect(MoveSelectMode value)");
+        Assert.Contains("movePart = null;", body);
+        Assert.Contains("if (value != MoveSelectMode.Polygons) ClearPolygons();", body);
+        Assert.Contains("if (moveSelect == value || volume is { Moving: true }) return;", body);
     }
 
     [Fact]
@@ -307,9 +315,9 @@ public class PartsPanelMoveAllTests
     [Trait("Plan", "EDGE-move-all-parts-12")]
     public void HeldAllSaysNothingFree()
     {
-        var pump = Method(Source(), "private void PumpMove()");
-        Assert.Contains("status = moveAll ? Strings.Parts.MoveAllNothingFree : Strings.Parts.MoveNothingFree;", pump);
-        Assert.Contains("statusIsError = true;", pump);
+        var begin = Method(Source(), "private bool BeginPartDrag(Vector3 dragPivot)");
+        Assert.Contains("status = moveAll ? Strings.Parts.MoveAllNothingFree : Strings.Parts.MoveNothingFree;", begin);
+        Assert.Contains("statusIsError = true;", begin);
     }
 
     [Fact]
