@@ -4095,6 +4095,62 @@
     "message": "移动、旋转或缩放单个多边形，而不是整个部件。单击多边形以选中；\nShift+单击可添加或移除。在列表中选择部件会选中其全部多边形。",
     "description": ""
   },
+  "Parts.Move.SelectAll": {
+    "message": "全部",
+    "description": ""
+  },
+  "Parts.Move.SelectAll.Tip": {
+    "message": "将此模型中所有勾选的部件作为一个整体一起移动、旋转或缩放。\n在部件列表中取消勾选某个部件，它就会留在原处。只有开启“同时移动皮肤”时皮肤才会移动。",
+    "description": ""
+  },
+  "Parts.Move.All.Fmt": {
+    "message": "此模型 {1} 个部件中有 {0} 个一起移动。",
+    "description": ""
+  },
+  "Parts.Move.All.Skin.Fmt": {
+    "message": "此模型 {1} 个部件中有 {0} 个一起移动，包括皮肤。",
+    "description": ""
+  },
+  "Parts.Move.AllNone": {
+    "message": "没有可移动的内容：请在部件列表中勾选部件。",
+    "description": ""
+  },
+  "Parts.Move.AllNothingFree": {
+    "message": "勾选的内容都无法移动：全部是皮肤或已锁定。",
+    "description": ""
+  },
+  "Parts.Move.AllListTip": {
+    "message": "所有勾选的部件一起移动。取消勾选某个部件可让它留在原处：它会在模型和你的角色上隐藏。",
+    "description": ""
+  },
+  "Parts.Move.AllOff.Tip": {
+    "message": "“全部”模式下不使用：所有勾选的部件作为一个整体移动。",
+    "description": ""
+  },
+  "Parts.Move.All.Help": {
+    "message": "所有勾选的部件一起移动：拖动箭头或方块。在其他地方拖动可旋转模型，Shift+拖动平移视图，滚轮缩放。",
+    "description": ""
+  },
+  "Parts.Move.All.LiveHint": {
+    "message": "所有勾选的部件一起移动：在角色身上拖动箭头或方块。按住 Alt 可移动镜头。每次移动在松开时保存。",
+    "description": ""
+  },
+  "Parts.Rotate.All.Help": {
+    "message": "所有勾选的部件一起旋转：拖动它们中心的某个圆环。在其他地方拖动可旋转模型，Shift+拖动平移视图，滚轮缩放。",
+    "description": ""
+  },
+  "Parts.Rotate.All.LiveHint": {
+    "message": "所有勾选的部件一起旋转：在角色身上拖动它们中心的某个圆环。按住 Alt 可移动镜头。每次旋转在松开时保存。",
+    "description": ""
+  },
+  "Parts.ScaleAxes.All.Help": {
+    "message": "所有勾选的部件一起缩放：拖动某个手柄沿该轴拉伸，或按住某个勾选的部件向右拖动放大、向左拖动缩小。在其他地方拖动可旋转模型，Shift+拖动平移视图，滚轮缩放。",
+    "description": ""
+  },
+  "Parts.ScaleAxes.All.LiveHint": {
+    "message": "所有勾选的部件一起缩放：拖动某个手柄沿该轴拉伸，或按住某个勾选的部件向右拖动放大、向左拖动缩小。按住 Alt 可移动镜头。每次更改在松开时保存。",
+    "description": ""
+  },
   "Parts.Move.Shrink": {
     "message": "缩小",
     "description": ""

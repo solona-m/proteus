@@ -1242,6 +1242,66 @@ public sealed class LocalizationTests
         Assert.Contains(bullets, b => b.Contains(undo, StringComparison.Ordinal));
     }
 
+    private static readonly string[] MoveAllKeys =
+    [
+        "Parts.Move.SelectAll", "Parts.Move.SelectAll.Tip", "Parts.Move.All.Fmt", "Parts.Move.All.Skin.Fmt",
+        "Parts.Move.AllNone", "Parts.Move.AllNothingFree", "Parts.Move.AllListTip", "Parts.Move.AllOff.Tip",
+        "Parts.Move.All.Help", "Parts.Move.All.LiveHint", "Parts.Rotate.All.Help", "Parts.Rotate.All.LiveHint",
+        "Parts.ScaleAxes.All.Help", "Parts.ScaleAxes.All.LiveHint",
+    ];
+
+    /// <summary>The "All" mode of Move, Rotate and Scale speaks every language, in its own words, with English's line
+    /// breaks and both counts.</summary>
+    [Theory]
+    [MemberData(nameof(Translations))]
+    [Trait("Plan", "AC-move-all-parts-1")]
+    public void MoveAll_strings_are_translated_not_copied(string lang)
+    {
+        var en = Load(Source);
+        var tr = Load(lang);
+        foreach (string key in MoveAllKeys)
+        {
+            Assert.True(en.ContainsKey(key), $"[en] has no {key}");
+            Assert.True(tr.ContainsKey(key), $"[{lang}] has no {key}");
+            Assert.NotEqual(en[key].Message, tr[key].Message);
+            Assert.Equal(en[key].Message.Count(c => c == '\n'), tr[key].Message.Count(c => c == '\n'));
+        }
+        foreach (string key in new[] { "Parts.Move.All.Fmt", "Parts.Move.All.Skin.Fmt" })
+        {
+            Assert.Contains("{0}", tr[key].Message);
+            Assert.Contains("{1}", tr[key].Message);
+        }
+    }
+
+    /// <summary>Every README names "All" on the "Whole parts or Polygons" line of Moving, turning and scaling, and in
+    /// the tool table's Move row — each in its language's label.</summary>
+    [Theory]
+    [MemberData(nameof(AllLocales))]
+    [Trait("Plan", "AC-move-all-parts-10")]
+    public void Readme_moving_section_names_All(string lang)
+    {
+        var dir = new System.IO.DirectoryInfo(AppContext.BaseDirectory);
+        while (dir != null && !System.IO.File.Exists(System.IO.Path.Combine(dir.FullName, "proteus.slnx"))) dir = dir.Parent;
+        Assert.True(dir != null, $"Could not find proteus.slnx above {AppContext.BaseDirectory}.");
+        string readme = System.IO.File.ReadAllText(System.IO.Path.Combine(
+            dir!.FullName, lang == Source ? "README.md" : System.IO.Path.Combine("docs", $"README.{lang}.md")));
+        var strings = Load(lang);
+        string polygons = "**" + strings["Parts.Move.SelectPolygons"].Message + "**";
+        string all = "**" + strings["Parts.Move.SelectAll"].Message + "**";
+        var lines = readme.Split('\n');
+        Assert.Single(lines, l => l.StartsWith("- ", StringComparison.Ordinal)
+                                  && l.Contains(polygons, StringComparison.Ordinal) && l.Contains(all, StringComparison.Ordinal));
+        string row = lines.Single(l => l.StartsWith(ReadmeMoveRow[lang], StringComparison.Ordinal));
+        Assert.Contains(all, row);
+    }
+
+    /// <summary>The start of each README's tool-table Move row, as that README names the tool.</summary>
+    private static readonly Dictionary<string, string> ReadmeMoveRow = new()
+    {
+        ["en"] = "| Move |", ["de"] = "| Verschieben |", ["es"] = "| Mover |", ["fr"] = "| Déplacer |",
+        ["ja"] = "| 移動 |", ["ko"] = "| 옮기기 |", ["ru"] = "| Переместить |", ["zh"] = "| 移动 |",
+    };
+
     /// <summary>The "Overlay on men" switch and the waiting message are in every language, in its own words.</summary>
     [Theory]
     [MemberData(nameof(Translations))]

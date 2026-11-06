@@ -2793,6 +2793,55 @@ public sealed class PartsStrings
         "Move, turn or scale single polygons instead of whole parts. Click a polygon to select it; Shift-click adds\n"
       + "or removes one. Choosing a part in the list selects all of its polygons.");
 
+    public readonly string MoveSelectAll = ProteusLoc.Localize("Parts.Move.SelectAll", "All") + "###partsMoveSelectAll";
+
+    public readonly string MoveSelectAllTip = ProteusLoc.Localize("Parts.Move.SelectAll.Tip",
+        "Move, turn or scale every ticked part of this model together, as one piece.\n"
+      + "Untick a part in the part list to leave it where it is. Skin moves only with “Move skin too” on.");
+
+    /// <summary>{0} is how many parts move, {1} how many there are.</summary>
+    public readonly string MoveAllFmt = ProteusLoc.Localize("Parts.Move.All.Fmt", "{0} of {1} parts of this model move together.");
+
+    /// <summary>{0} is how many parts move, {1} how many there are.</summary>
+    public readonly string MoveAllSkinFmt = ProteusLoc.Localize("Parts.Move.All.Skin.Fmt",
+        "{0} of {1} parts of this model move together, including skin.");
+
+    public readonly string MoveAllNone = ProteusLoc.Localize("Parts.Move.AllNone", "Nothing to move: tick parts in the part list.");
+
+    public readonly string MoveAllNothingFree = ProteusLoc.Localize("Parts.Move.AllNothingFree",
+        "Nothing ticked can move: it is all skin or locked.");
+
+    public readonly string MoveAllListTip = ProteusLoc.Localize("Parts.Move.AllListTip",
+        "Every ticked part moves together. Untick a part's box to leave it where it is: it is hidden on the model and on your character.");
+
+    public readonly string MoveAllOffTip = ProteusLoc.Localize("Parts.Move.AllOff.Tip",
+        "Not used with All: every ticked part moves as one piece.");
+
+    public readonly string MoveAllHelp = ProteusLoc.Localize("Parts.Move.All.Help",
+        "Every ticked part moves together: drag an arrow or a square. Drag anywhere else to turn the model, "
+      + "shift-drag to move the view, scroll to zoom.");
+
+    public readonly string MoveAllLiveHint = ProteusLoc.Localize("Parts.Move.All.LiveHint",
+        "Every ticked part moves together: drag an arrow or a square on your character. Hold Alt to move the camera. "
+      + "Each move is saved when you let go.");
+
+    public readonly string RotateAllHelp = ProteusLoc.Localize("Parts.Rotate.All.Help",
+        "Every ticked part turns together: drag one of the rings at their centre. Drag anywhere else to turn the model, "
+      + "shift-drag to move the view, scroll to zoom.");
+
+    public readonly string RotateAllLiveHint = ProteusLoc.Localize("Parts.Rotate.All.LiveHint",
+        "Every ticked part turns together: drag one of the rings at their centre on your character. Hold Alt to move "
+      + "the camera. Each turn is saved when you let go.");
+
+    public readonly string ScaleAllHelp = ProteusLoc.Localize("Parts.ScaleAxes.All.Help",
+        "Every ticked part scales together: drag a handle to stretch them along that axis, or press on a ticked part "
+      + "and drag right to grow or left to shrink. Drag anywhere else to turn the model, shift-drag to move the view, "
+      + "scroll to zoom.");
+
+    public readonly string ScaleAllLiveHint = ProteusLoc.Localize("Parts.ScaleAxes.All.LiveHint",
+        "Every ticked part scales together: drag a handle to stretch them along that axis, or press on a ticked part "
+      + "and drag right to grow or left to shrink. Hold Alt to move the camera. Each change is saved when you let go.");
+
     public readonly string MoveNoPolygons = ProteusLoc.Localize("Parts.Move.NoPolygons",
         "Click a polygon on the model to select it. Shift-click adds or removes one.");
 

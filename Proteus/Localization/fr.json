@@ -4095,6 +4095,62 @@
     "message": "Déplacer, tourner ou mettre à l'échelle des polygones isolés plutôt que des pièces entières. Cliquez sur un polygone\npour le sélectionner ; Maj+clic en ajoute ou en retire un. Choisir une pièce dans la liste sélectionne tous ses polygones.",
     "description": ""
   },
+  "Parts.Move.SelectAll": {
+    "message": "Tout",
+    "description": ""
+  },
+  "Parts.Move.SelectAll.Tip": {
+    "message": "Déplacer, tourner ou mettre à l'échelle ensemble toutes les pièces cochées de ce modèle, d'un seul bloc.\nDécochez une pièce dans la liste des pièces pour la laisser en place. La peau ne bouge qu'avec « Déplacer aussi la peau » activé.",
+    "description": ""
+  },
+  "Parts.Move.All.Fmt": {
+    "message": "{0} pièces sur {1} de ce modèle bougent ensemble.",
+    "description": ""
+  },
+  "Parts.Move.All.Skin.Fmt": {
+    "message": "{0} pièces sur {1} de ce modèle bougent ensemble, peau comprise.",
+    "description": ""
+  },
+  "Parts.Move.AllNone": {
+    "message": "Rien à déplacer : cochez des pièces dans la liste des pièces.",
+    "description": ""
+  },
+  "Parts.Move.AllNothingFree": {
+    "message": "Rien de coché ne peut bouger : tout est de la peau ou verrouillé.",
+    "description": ""
+  },
+  "Parts.Move.AllListTip": {
+    "message": "Toutes les pièces cochées bougent ensemble. Décochez la case d'une pièce pour la laisser en place : elle est masquée sur le modèle et sur votre personnage.",
+    "description": ""
+  },
+  "Parts.Move.AllOff.Tip": {
+    "message": "Inutilisé avec « Tout » : toutes les pièces cochées bougent d'un seul bloc.",
+    "description": ""
+  },
+  "Parts.Move.All.Help": {
+    "message": "Toutes les pièces cochées bougent ensemble : faites glisser une flèche ou un carré. Faites glisser ailleurs pour tourner le modèle, Maj+glisser pour déplacer la vue, molette pour zoomer.",
+    "description": ""
+  },
+  "Parts.Move.All.LiveHint": {
+    "message": "Toutes les pièces cochées bougent ensemble : faites glisser une flèche ou un carré sur votre personnage. Maintenez Alt pour bouger la caméra. Chaque déplacement est enregistré au relâchement.",
+    "description": ""
+  },
+  "Parts.Rotate.All.Help": {
+    "message": "Toutes les pièces cochées tournent ensemble : faites glisser un des anneaux à leur centre. Faites glisser ailleurs pour tourner le modèle, Maj+glisser pour déplacer la vue, molette pour zoomer.",
+    "description": ""
+  },
+  "Parts.Rotate.All.LiveHint": {
+    "message": "Toutes les pièces cochées tournent ensemble : faites glisser un des anneaux à leur centre sur votre personnage. Maintenez Alt pour déplacer la caméra. Chaque rotation est enregistrée quand vous relâchez.",
+    "description": ""
+  },
+  "Parts.ScaleAxes.All.Help": {
+    "message": "Toutes les pièces cochées changent d'échelle ensemble : faites glisser une poignée pour les étirer le long de cet axe, ou appuyez sur une pièce cochée et glissez à droite pour agrandir ou à gauche pour rétrécir. Faites glisser ailleurs pour tourner le modèle, Maj+glisser pour déplacer la vue, molette pour zoomer.",
+    "description": ""
+  },
+  "Parts.ScaleAxes.All.LiveHint": {
+    "message": "Toutes les pièces cochées changent d'échelle ensemble : faites glisser une poignée pour les étirer le long de cet axe, ou appuyez sur une pièce cochée et glissez à droite pour agrandir ou à gauche pour rétrécir. Maintenez Alt pour déplacer la caméra. Chaque changement est enregistré quand vous relâchez.",
+    "description": ""
+  },
   "Parts.Move.Shrink": {
     "message": "Réduire",
     "description": ""

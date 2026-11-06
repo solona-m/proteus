@@ -4095,6 +4095,62 @@
     "message": "パーツ全体ではなく個々のポリゴンを移動・回転・拡大縮小します。ポリゴンをクリックで選択、\nShift+クリックで追加・解除。リストでパーツを選ぶと、そのポリゴンがすべて選択されます。",
     "description": ""
   },
+  "Parts.Move.SelectAll": {
+    "message": "すべて",
+    "description": ""
+  },
+  "Parts.Move.SelectAll.Tip": {
+    "message": "このモデルのチェックしたパーツをすべて、ひとまとまりで移動・回転・拡大縮小します。\nパーツ一覧でチェックを外したパーツはその場に残ります。肌は「肌も動かす」がオンのときだけ動きます。",
+    "description": ""
+  },
+  "Parts.Move.All.Fmt": {
+    "message": "このモデルの {1} 個中 {0} 個のパーツがまとめて動きます。",
+    "description": ""
+  },
+  "Parts.Move.All.Skin.Fmt": {
+    "message": "このモデルの {1} 個中 {0} 個のパーツがまとめて動きます（肌を含む）。",
+    "description": ""
+  },
+  "Parts.Move.AllNone": {
+    "message": "動かすものがありません。パーツ一覧でパーツにチェックを入れてください。",
+    "description": ""
+  },
+  "Parts.Move.AllNothingFree": {
+    "message": "チェックしたものはどれも動かせません（すべて肌かロック済み）。",
+    "description": ""
+  },
+  "Parts.Move.AllListTip": {
+    "message": "チェックしたパーツはすべてまとめて動きます。チェックを外したパーツはその場に残り、モデルとキャラクターの上では非表示になります。",
+    "description": ""
+  },
+  "Parts.Move.AllOff.Tip": {
+    "message": "「すべて」では使いません。チェックしたパーツはすべてひとまとまりで動きます。",
+    "description": ""
+  },
+  "Parts.Move.All.Help": {
+    "message": "チェックしたパーツがまとめて動きます。矢印か四角をドラッグします。それ以外の場所をドラッグするとモデルが回転し、Shift+ドラッグで視点を移動、スクロールでズームします。",
+    "description": ""
+  },
+  "Parts.Move.All.LiveHint": {
+    "message": "チェックしたパーツがまとめて動きます。キャラクター上で矢印か四角をドラッグします。Altを押している間はカメラを動かせます。移動は離したときに保存されます。",
+    "description": ""
+  },
+  "Parts.Rotate.All.Help": {
+    "message": "チェックしたパーツがまとめて回転します。中心のリングのいずれかをドラッグします。それ以外の場所をドラッグするとモデルが回転し、Shift+ドラッグで視点を移動、スクロールでズームします。",
+    "description": ""
+  },
+  "Parts.Rotate.All.LiveHint": {
+    "message": "チェックしたパーツがまとめて回転します。キャラクター上で中心のリングのいずれかをドラッグします。Alt を押すとカメラを動かせます。回転は離したときに保存されます。",
+    "description": ""
+  },
+  "Parts.ScaleAxes.All.Help": {
+    "message": "チェックしたパーツがまとめて拡大縮小します。ハンドルをドラッグするとその軸方向に伸縮し、チェックしたパーツの上を押して右にドラッグすると拡大、左で縮小します。それ以外の場所をドラッグするとモデルが回転し、Shift+ドラッグで視点を移動、スクロールでズームします。",
+    "description": ""
+  },
+  "Parts.ScaleAxes.All.LiveHint": {
+    "message": "チェックしたパーツがまとめて拡大縮小します。ハンドルをドラッグするとその軸方向に伸縮し、チェックしたパーツの上を押して右にドラッグすると拡大、左で縮小します。Alt を押すとカメラを動かせます。変更は離したときに保存されます。",
+    "description": ""
+  },
   "Parts.Move.Shrink": {
     "message": "縮小",
     "description": ""

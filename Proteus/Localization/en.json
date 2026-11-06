@@ -4095,6 +4095,62 @@
     "message": "Move, turn or scale single polygons instead of whole parts. Click a polygon to select it; Shift-click adds\nor removes one. Choosing a part in the list selects all of its polygons.",
     "description": ""
   },
+  "Parts.Move.SelectAll": {
+    "message": "All",
+    "description": "Third radio of the Move/Rotate/Scale mode switch, after 'Whole parts' and 'Polygons' (Parts.Move.SelectParts, Parts.Move.SelectPolygons): every ticked part moves together. Keep it short."
+  },
+  "Parts.Move.SelectAll.Tip": {
+    "message": "Move, turn or scale every ticked part of this model together, as one piece.\nUntick a part in the part list to leave it where it is. Skin moves only with “Move skin too” on.",
+    "description": "Tooltip on the 'All' radio under Move, Rotate and Scale. 'Move skin too' is the checkbox Parts.SkinMoves - reuse your translation."
+  },
+  "Parts.Move.All.Fmt": {
+    "message": "{0} of {1} parts of this model move together.",
+    "description": "Line under the mode switch with 'All' chosen. {0} is how many parts move, {1} how many parts the model has."
+  },
+  "Parts.Move.All.Skin.Fmt": {
+    "message": "{0} of {1} parts of this model move together, including skin.",
+    "description": "As Parts.Move.All.Fmt, when the body's skin is among the parts that move."
+  },
+  "Parts.Move.AllNone": {
+    "message": "Nothing to move: tick parts in the part list.",
+    "description": "Warning under the mode switch with 'All' chosen when no ticked part can move."
+  },
+  "Parts.Move.AllNothingFree": {
+    "message": "Nothing ticked can move: it is all skin or locked.",
+    "description": "Error when an 'All' drag starts but every ticked point is held (skin or locked)."
+  },
+  "Parts.Move.AllListTip": {
+    "message": "Every ticked part moves together. Untick a part's box to leave it where it is: it is hidden on the model and on your character.",
+    "description": "Above the part list under Move, Rotate or Scale with 'All' chosen."
+  },
+  "Parts.Move.AllOff.Tip": {
+    "message": "Not used with All: every ticked part moves as one piece.",
+    "description": "Tooltip on 'Move adjacent parts', 'Falloff' and 'Mirror left/right', greyed out while 'All' is chosen."
+  },
+  "Parts.Move.All.Help": {
+    "message": "Every ticked part moves together: drag an arrow or a square. Drag anywhere else to turn the model, shift-drag to move the view, scroll to zoom.",
+    "description": "Help above the Move tool's controls in the model view, with 'All' chosen."
+  },
+  "Parts.Move.All.LiveHint": {
+    "message": "Every ticked part moves together: drag an arrow or a square on your character. Hold Alt to move the camera. Each move is saved when you let go.",
+    "description": "Help above the Move tool's controls on the character in the game world, with 'All' chosen."
+  },
+  "Parts.Rotate.All.Help": {
+    "message": "Every ticked part turns together: drag one of the rings at their centre. Drag anywhere else to turn the model, shift-drag to move the view, scroll to zoom.",
+    "description": "Help above the Rotate tool's controls in the model view, with 'All' chosen."
+  },
+  "Parts.Rotate.All.LiveHint": {
+    "message": "Every ticked part turns together: drag one of the rings at their centre on your character. Hold Alt to move the camera. Each turn is saved when you let go.",
+    "description": "Help above the Rotate tool's controls on the character in the game world, with 'All' chosen."
+  },
+  "Parts.ScaleAxes.All.Help": {
+    "message": "Every ticked part scales together: drag a handle to stretch them along that axis, or press on a ticked part and drag right to grow or left to shrink. Drag anywhere else to turn the model, shift-drag to move the view, scroll to zoom.",
+    "description": "Help above the Scale tool's controls in the model view, with 'All' chosen."
+  },
+  "Parts.ScaleAxes.All.LiveHint": {
+    "message": "Every ticked part scales together: drag a handle to stretch them along that axis, or press on a ticked part and drag right to grow or left to shrink. Hold Alt to move the camera. Each change is saved when you let go.",
+    "description": "Help above the Scale tool's controls on the character in the game world, with 'All' chosen."
+  },
   "Parts.Move.Shrink": {
     "message": "Shrink",
     "description": ""

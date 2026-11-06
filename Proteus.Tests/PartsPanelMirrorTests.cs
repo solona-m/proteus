@@ -94,9 +94,10 @@ public class PartsPanelMirrorTests
         // One checkbox, drawn under the brushes and under the move tools, where a drag under way disables it.
         Assert.Contains("DrawMirrorToggle();", Method(src, "private void DrawBrush()"));
         var move = Method(src, "private void DrawMove()");
-        Assert.Contains("using (ImRaii.Disabled(volume is { Moving: true })) DrawMirrorToggle();", move);
-        Assert.Contains("MirrorStatus(mirrorBrush,", move);
-        Assert.Contains("ps.BrushMirror, ref mirrorBrush", Method(src, "private void DrawMirrorToggle()"));
+        // (Greyed under All too, which moves the ticked parts as one piece: see PartsPanelMoveAllTests.)
+        Assert.Contains("using (ImRaii.Disabled(volume is { Moving: true } || moveAll)) DrawMirrorToggle(", move);
+        Assert.Contains("MirrorStatus(MirrorNow,", move);
+        Assert.Contains("ps.BrushMirror, ref mirrorBrush", Method(src, "private void DrawMirrorToggle("));
         Assert.Single(System.Text.RegularExpressions.Regex.Matches(src, @"ref mirrorBrush"));
 
         // The one pump, for the model view and the character alike, mirrors about each gizmo's own drag pivot.
@@ -108,7 +109,7 @@ public class PartsPanelMirrorTests
 
         // The preview is measured again when the mirror or the falloff switch changes.
         var preview = Method(src, "private float[]? MoveFalloffNow()");
-        Assert.Contains("mirrorBrush, moveAdjacent);", preview);
-        Assert.Contains("mirror: mirrorBrush)", preview);
+        Assert.Contains("MirrorNow, AdjacentNow);", preview);
+        Assert.Contains("mirror: MirrorNow)", preview);
     }
 }

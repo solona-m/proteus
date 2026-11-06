@@ -4095,6 +4095,62 @@
     "message": "Einzelne Polygone statt ganzer Teile verschieben, drehen oder skalieren. Klicke ein Polygon an, um es auszuwählen;\nUmschalt-Klick fügt eins hinzu oder entfernt es. Ein Teil in der Liste wählt alle seine Polygone aus.",
     "description": ""
   },
+  "Parts.Move.SelectAll": {
+    "message": "Alle",
+    "description": ""
+  },
+  "Parts.Move.SelectAll.Tip": {
+    "message": "Alle angehakten Teile dieses Modells zusammen verschieben, drehen oder skalieren, als ein Stück.\nEntferne das Häkchen bei einem Teil in der Teileliste, damit es bleibt, wo es ist. Haut bewegt sich nur mit „Haut mitbewegen“.",
+    "description": ""
+  },
+  "Parts.Move.All.Fmt": {
+    "message": "{0} von {1} Teilen dieses Modells bewegen sich zusammen.",
+    "description": ""
+  },
+  "Parts.Move.All.Skin.Fmt": {
+    "message": "{0} von {1} Teilen dieses Modells bewegen sich zusammen, Haut eingeschlossen.",
+    "description": ""
+  },
+  "Parts.Move.AllNone": {
+    "message": "Nichts zu bewegen: Hake Teile in der Teileliste an.",
+    "description": ""
+  },
+  "Parts.Move.AllNothingFree": {
+    "message": "Nichts Angehaktes kann sich bewegen: Es ist alles Haut oder gesperrt.",
+    "description": ""
+  },
+  "Parts.Move.AllListTip": {
+    "message": "Alle angehakten Teile bewegen sich zusammen. Entferne das Häkchen bei einem Teil, damit es bleibt, wo es ist: Es wird am Modell und an deinem Charakter ausgeblendet.",
+    "description": ""
+  },
+  "Parts.Move.AllOff.Tip": {
+    "message": "Bei „Alle“ nicht genutzt: Alle angehakten Teile bewegen sich als ein Stück.",
+    "description": ""
+  },
+  "Parts.Move.All.Help": {
+    "message": "Alle angehakten Teile bewegen sich zusammen: Ziehe einen Pfeil oder ein Quadrat. Ziehen anderswo dreht das Modell, Umschalt-Ziehen verschiebt die Ansicht, Scrollen zoomt.",
+    "description": ""
+  },
+  "Parts.Move.All.LiveHint": {
+    "message": "Alle angehakten Teile bewegen sich zusammen: Ziehe einen Pfeil oder ein Quadrat an deinem Charakter. Halte Alt, um die Kamera zu bewegen. Jede Verschiebung wird beim Loslassen gespeichert.",
+    "description": ""
+  },
+  "Parts.Rotate.All.Help": {
+    "message": "Alle angehakten Teile drehen sich zusammen: Ziehe an einem der Ringe in ihrer Mitte. Ziehen anderswo dreht das Modell, Umschalt-Ziehen verschiebt die Ansicht, Scrollen zoomt.",
+    "description": ""
+  },
+  "Parts.Rotate.All.LiveHint": {
+    "message": "Alle angehakten Teile drehen sich zusammen: Ziehe an deinem Charakter an einem der Ringe in ihrer Mitte. Halte Alt, um die Kamera zu bewegen. Jede Drehung wird beim Loslassen gespeichert.",
+    "description": ""
+  },
+  "Parts.ScaleAxes.All.Help": {
+    "message": "Alle angehakten Teile skalieren zusammen: Ziehe an einem Griff, um sie entlang dieser Achse zu strecken, oder drücke auf ein angehaktes Teil und ziehe nach rechts zum Vergrößern oder nach links zum Verkleinern. Ziehen anderswo dreht das Modell, Umschalt-Ziehen verschiebt die Ansicht, Scrollen zoomt.",
+    "description": ""
+  },
+  "Parts.ScaleAxes.All.LiveHint": {
+    "message": "Alle angehakten Teile skalieren zusammen: Ziehe an einem Griff, um sie entlang dieser Achse zu strecken, oder drücke auf ein angehaktes Teil und ziehe nach rechts zum Vergrößern oder nach links zum Verkleinern. Halte Alt, um die Kamera zu bewegen. Jede Änderung wird beim Loslassen gespeichert.",
+    "description": ""
+  },
   "Parts.Move.Shrink": {
     "message": "Verkleinern",
     "description": ""
