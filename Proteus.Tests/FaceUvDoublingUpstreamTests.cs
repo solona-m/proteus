@@ -65,6 +65,33 @@ public sealed class FaceUvDoublingUpstreamTests : IDisposable
     }
 
     [Fact]
+    [Trait("Plan", "EDGE-matcaps-59")]
+    public void Edit_mod_face_dropped_by_undo_folds_once_then_the_lower_face_mod_wins_never_vanilla()
+    {
+        var models = Path.Combine(root, "mods", "Proteus", "models");
+        Directory.CreateDirectory(models);
+        var ours = Path.Combine(models, "facelr_x.mdl");
+        File.WriteAllBytes(ours, [9]);
+        var edit = Path.Combine(root, "mods", "Face - Proteus edit", "face.mdl");
+        var lower = Path.Combine(root, "mods", "Lower Face Mod", "face.mdl");
+        Directory.CreateDirectory(Path.GetDirectoryName(edit)!);
+        Directory.CreateDirectory(Path.GetDirectoryName(lower)!);
+        File.WriteAllBytes(edit, [7, 7]);
+        File.WriteAllBytes(lower, [5, 5]);
+        var svc = Service();
+        bool IsOurs(string? p) => p == ours;
+
+        Assert.Equal([7, 7], svc.LoadUpstream(FacePath, _ => edit, IsOurs, models));   // the edit mod drew the face
+        // Undo drops the edit mod's copy (the game's own bytes again) and forgets the upstream.
+        File.Delete(edit);
+        svc.ForgetUpstream(FacePath, Path.Combine(root, "mods", "Proteus"));
+        // While our rewrite still wins: refused (a fold), never the game's face, which would hide the lower face mod.
+        Assert.Null(svc.LoadUpstream(FacePath, _ => ours, IsOurs, models));
+        // The fold unpublishes the rewrite; the next composite reads what really draws the face.
+        Assert.Equal([5, 5], svc.LoadUpstream(FacePath, _ => lower, IsOurs, models));
+    }
+
+    [Fact]
     [Trait("Plan", "EDGE-matcaps-43")]
     public void A_vanilla_face_copied_into_an_edit_mod_is_seeded_by_the_written_file()
     {

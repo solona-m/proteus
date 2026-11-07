@@ -211,13 +211,6 @@ public sealed class MatcapDrawnStatusTests : IDisposable
 /// <summary>Real game data: a split that appends a mesh read back stream by stream, and the face rewrite over split faces.</summary>
 public class MatcapReadbackLocalTests(ITestOutputHelper output)
 {
-    private static string WriteTemp(byte[] bytes)
-    {
-        var p = Path.Combine(Path.GetTempPath(), $"proteus-readback-{Guid.NewGuid():N}.mdl");
-        File.WriteAllBytes(p, bytes);
-        return p;
-    }
-
     /// <summary>Every vertex's uv0 in every mesh, NaN anywhere is a failure.</summary>
     internal static void AssertNoNaNUv(byte[] mdl)
     {
@@ -299,10 +292,10 @@ public class MatcapReadbackLocalTests(ITestOutputHelper output)
         var convert = new UVRemapService(NSubstitute.Substitute.For<Dalamud.Plugin.Services.IPluginLog>(), ".")
             .UvConverter(UVRemapService.FaceSpace, UVRemapService.FaceSplitSpace, unmirror: true)!;
         byte[]? rewritten = null;
-        var ex = Record.Exception(() => rewritten = FaceUvRewriter.RewriteFaceUv0(result.Model, n => n.Contains("_fac_b", StringComparison.Ordinal), convert, out _));
+        var ex = Record.Exception(() => rewritten = FaceUvRewriter.RewriteFaceUv0(result.Model,
+            n => n.TrimStart('/') == "mt_c1401f0001_fac_b.mtrl", convert, out _));   // matched by exact name, as the compositor does
         Assert.Null(ex);
-        // Rewritten (or refused, which folds instead): either way no uv is NaN in what would be published.
-        AssertNoNaNUv(rewritten ?? result.Model);
         Assert.NotNull(rewritten);
+        AssertNoNaNUv(rewritten!);
     }
 }

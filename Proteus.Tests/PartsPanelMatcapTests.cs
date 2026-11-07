@@ -122,7 +122,7 @@ public class PartsPanelMatcapTests
     public void Face_upstream_forgotten_before_the_recomposite_on_apply_undo_forget_not_change()
     {
         var finish = Method(Wiring(), "private void Finish(MatcapJobResult r)");
-        int forget = finish.IndexOf("compositor.ForgetFaceUpstream(r.GamePath, gameData: removed)", StringComparison.Ordinal);
+        int forget = finish.IndexOf("compositor.ForgetFaceUpstream(r.GamePath)", StringComparison.Ordinal);
         int after = finish.IndexOf("AfterModChange(", StringComparison.Ordinal);
         Assert.True(forget >= 0 && after > forget, "the face upstream is forgotten before AfterModChange");
         Assert.Contains("Kind: MatcapPlan.Kind.Face } && !r.IsChange", finish);

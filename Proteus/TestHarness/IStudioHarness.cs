@@ -80,7 +80,7 @@ internal sealed record StudioPutBack(string Mod, string Files, string Panel, str
 internal sealed record MatcapHarnessPort(
     Services.Matcap.MatcapIndex? Index, string? ImageFolder, Services.Matcap.IMatcapPenumbra Penumbra,
     Services.Matcap.MatcapStudio.Environment Env, string? ModsRoot, IReadOnlyDictionary<string, string>? Mods,
-    System.Action<string, bool>? ForgetFaceUpstream = null,   // (game path, the face is the game's own again)
+    System.Action<string>? ForgetFaceUpstream = null,
     // (mod root, game path, written files) -> the panel's drawn-file line after an Apply; framework thread.
     System.Func<string, string, IReadOnlyList<string>, string?>? DrawnStatus = null);
 

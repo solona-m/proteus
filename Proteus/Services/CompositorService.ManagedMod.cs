@@ -380,9 +380,9 @@ public partial class CompositorService
     /// A face model file was edited in its own mod (a matcap on Au Ra horns): the face rewrite must read it again rather
     /// than its remembered copy — see <see cref="FaceUvDoublingService.ForgetUpstream"/>. Call before the recomposite.
     /// </summary>
-    internal void ForgetFaceUpstream(string modelGamePath, string? writtenFile = null, bool gameData = false)
+    internal void ForgetFaceUpstream(string modelGamePath, string? writtenFile = null)
     {
-        if (ManagedModFolder is { } root) faceUv.ForgetUpstream(modelGamePath, root, writtenFile, gameData);
+        if (ManagedModFolder is { } root) faceUv.ForgetUpstream(modelGamePath, root, writtenFile);
     }
 
     /// <summary>

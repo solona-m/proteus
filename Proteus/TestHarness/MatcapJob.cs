@@ -204,11 +204,7 @@ internal static class MatcapJob
         bool changed = outcome.Ok || librarySetting != null;
         // A face the face overlay rewrites is read again after our edit, not from its remembered copy.
         if (changed && args.Kind != Action.Change && facePaths.Count > 0 && args.Port.ForgetFaceUpstream is { } forget)
-        {
-            // An undo that removed the file from its mod (a game face's edit mod, EDGE-59): the game's face is upstream again.
-            bool removed = args.Kind != Action.Apply && !File.Exists(MatcapWriter.Full(args.ModRoot, rel!));
-            await jobs.Dispatcher.RunAsync(() => { foreach (var p in facePaths) forget(p, removed); return true; }, jobs.Timings.FrameworkStart).ConfigureAwait(false);
-        }
+            await jobs.Dispatcher.RunAsync(() => { foreach (var p in facePaths) forget(p); return true; }, jobs.Timings.FrameworkStart).ConfigureAwait(false);
         // The panel's drawn-file line after an Apply (EDGE-47/58), on the framework thread.
         string? drawnLine = null;
         if (outcome.Ok && args.Kind == Action.Apply && gamePath != null && args.Port.DrawnStatus is { } drawnOf)
