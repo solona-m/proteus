@@ -83,6 +83,9 @@ four requests were open at once: retry when one finishes; it is never a busy run
 | `POST /actions/studio-open` | `{"mod":"<folder>","model":"<file or game path>","show":true}` → 200 the `/studio` body. Opens the model as picking it does; `show` brings the window up on the Studio tab. Refused: `managed-mod`, `mod-not-found`, `model-not-in-mod` (the message lists the models), `model-ambiguous` (give the file), `legacy-mod`, `studio-has-edits`, `studio-busy`, `put-back-first` (a session is already recorded), `busy`, `auto-refit-busy`, `harness-stopping`. |
 | `POST /actions/studio-set` | Any of `{"tool":"move\|rotate\|scale","mode":"parts\|polygons\|all","view":"character\|model","mirror":b,"adjacent":b,"moveSkin":b,"unlockAll":true,"lock":[label],"unlock":[label],"part":"<label>"}`, applied in that order → 200 `{applied, locks:[{label,result}], chosen, state}`. Refused: `invalid-field`, `wrong-tool` (locks outside Move, Rotate or Scale), `no-studio-session`, `studio-changed`, `dragging`, `busy`, `auto-refit-busy`, `harness-stopping`. |
 | `POST /actions/studio-drag` | One of `{"offsetMm":[x,y,z]}` (Move), `{"axis":"x\|y\|z" or [x,y,z],"degrees":d}` (Rotate), `{"factor":f}` / `{"factors":[x,y,z]}` (Scale), `{"undo":true}` → 200 `{kind, moved, nodes, worstMm, pivot, saved, status, state}`. Runs the gizmo's own drag about its pivot and saves at once. Refused: `invalid-field`, `wrong-tool`, `nothing-to-move`, `nothing-to-undo`, `no-studio-session`, `studio-changed`, `dragging`, `busy`, `auto-refit-busy`, `harness-stopping`. |
+| `GET /matcaps` | `[?refresh=1][&mod=<folder>&model=<file or game path>]` → 200 `{scanned, scanning, images:[{name,path}], libraries:[{mod,name,website,group,texture,options:[{name}],selected,enabled,inherited,heldBy,providers}], model}`; with `mod`+`model`, `model` is `{model, gamePath, images, parts:[{label,material,skin,onMatcap,tickable,island}], siblings, group, entries:[{name,gamePaths,meshes,source,state: ok\|superseded\|edited}], materialRoom}`. `refresh=1` rescans every mod. 400 `invalid-field`; 404 `mod-not-found`, `model-not-in-mod`; 409 `model-ambiguous`, `legacy-mod`; 503 `penumbra-unavailable`, `studio-unavailable`. |
+| `POST /actions/matcap-image` | `{"name":"qa-<x>.png","color":"#RRGGBB"}` → 200 `{name, path}`. Writes a generated 256×256 shaded sphere into the global matcap folder; put-back deletes it while unchanged (`matcap.images`: `deleted`, `changed`, `gone`). 400 `invalid-field`; 409 `exists`; 503 `harness-stopping`. |
+| `POST /actions/matcap` | Apply `{"mod","model","parts":[labels],"image":"<name>"}` or `{…,"library":"<folder>","group","option","confirmEnable":b}`; change `{"mod","model","entry":"<material name>",<image or library fields>}`; `{"mod","model","undo":true}`; `{"mod","model","forget":true}` → 202 `{job, modDir, state}` (kinds `matcap`, `matcap-change`, `matcap-undo`, `matcap-forget`), after a whole-mod backup. `result` = `{action, summary: applied\|changed\|undone\|forgotten\|refused\|nothing-to-undo, code, resultLine, material, gamePaths, files:[{file,meshesAdded,lod0Cut}], siblingsSkipped, librarySetting}`. A library that is off needs `confirmEnable` (`needs-confirm` otherwise, nothing written). Refusal codes: `legacy-mod`, `imported-piece`, `not-target`, `skin-part`, `already-matcap`, `regenerated-model`, `model-layout`, `material-cap`, `not-square`, `image-unreadable`, `no-template`, `edited`, `later-feature`, `cross-kind-change`, `unknown-part\|image\|library\|option`. Request refusals: 400 `invalid-field`; 409 `busy`, `auto-refit-busy`, `studio-busy` (never flushed); 503 `harness-stopping`, `studio-unavailable`. |
 | `GET /jobs/{id}` | `{id, kind, modDir, state: queued\|running\|done\|failed\|cancelled, progress, backup, reloaded, redrawRequested, redrawObserved, autoRefitFollowed, result, restored, error}` |
 
 `mod` is the **folder name** Penumbra keeps the mod in (case-insensitive), never its
@@ -326,6 +329,33 @@ check `moved`, `nodes` and a screenshot, `{"tool":"rotate"}` and
 `{"undo":true}`, then put back and compare the hashes. Still UNVERIFIED after
 that: only the visual judgement of the handle against a whole garment on a posed
 character, and the radio row in German and Russian (screenshot both for the user).
+
+## Matcaps
+
+The matcap routes run the Studio's Matcaps tool through the panel's own entry
+points, after a whole-mod backup. A library's option is a **permanent** collection
+setting of a third-party mod: its Before is written to the session record first and
+put back at put-back (in `matcap.settings`) while it is still what the harness left.
+
+- **Restore every job** (`POST /actions/restore {"job"}`) and **put back** when done;
+  a seeded `qa-` image is deleted then too.
+- The first steps are the in-game gates; do them before anything else:
+  - **G2 (looks right):** read `/state` and its character `code` (`c1401` …, never
+    the customize byte). Seed an image (`matcap-image`), apply it to a gear part, a
+    hair mod's part and a lace or fringe part (alpha-cut), screenshot each. Au Ra
+    horns are **face** parts (see the plan's AM-7): with a non-Au Ra character, or no
+    installed face mod with horns, the in-game half of horns is **UNVERIFIED**;
+    Viera ears likewise need a Viera character.
+  - **G3 (library missing):** apply a library option, then hold the library **off**
+    (`/actions/mod-settings`) and screenshot and read `/log`. If more than the
+    matcap parts disappear (the whole model, or errors), stop and report: the plan
+    re-plans library mode.
+  - **G4 (names resolve):** a gear `_mcap…` material must draw; a missing look
+    after apply is a Blocker to report, not to work around.
+- `needs-confirm` is the panel's confirmation: send `confirmEnable:true` only for a
+  library you would switch on by hand, and say what else it turns on (the message
+  lists it).
+- `studio-busy` means the user has an unsaved Studio edit: never work around it.
 
 ## Waiting for the game
 

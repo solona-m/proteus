@@ -112,6 +112,12 @@ internal sealed partial class HarnessRouter
                 glamourer = b.Glamourer, live = b.Live, record = b.Record,
                 permanent = b.Permanent.Select(e => new { mod = e.Name, result = e.Result, code = e.Code }),
             },
+            matcap = new
+            {
+                settings = (b?.Permanent ?? []).Where(e => report.MatcapMods.Contains(e.Name, StringComparer.OrdinalIgnoreCase))
+                                               .Select(e => new { mod = e.Name, result = e.Result, code = e.Code }),
+                images = report.MatcapImages.Select(e => new { name = e.Name, result = e.Result, code = e.Code }),
+            },
         });
     }
 
