@@ -161,6 +161,7 @@ internal static class HairPortJob
                 action = "port", summary = "nothing-to-port", resultLine = Strings.HairPort.NothingToDo, source, asked = askedCodes,
                 skippedRaces = skipped, ported = Array.Empty<object>(), stripped = Array.Empty<object>(),
                 refused = Array.Empty<object>(), warnings = Array.Empty<object>(), current = Array.Empty<string>(), saved = 0,
+                replaced = Array.Empty<object>(),
             });
             return;
         }

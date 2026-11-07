@@ -184,7 +184,7 @@ internal sealed partial class MeshVolumeSolve
             if (RidesSkin(n)) ride[n] = was;
         if (ride.Count > 0) UnfoldStroke(ride, allowCollapse);
 
-        KeepRidersAboveSkin(start);
+        KeepRidersAboveSkin(start, relativeToStart: true);
     }
 
     /// <summary>
@@ -321,7 +321,7 @@ internal sealed partial class MeshVolumeSolve
     /// <param name="relativeToStart">Judge "made worse" against where the operation found the cloth and skin, with
     /// measures a rigid move cannot change (#86): a move, turn or grab that carries skin and cloth together lifts
     /// nothing. Off — a size transfer's import — today's rule against the author's model.</param>
-    private void KeepRidersAboveSkin(Dictionary<int, Was> start, bool relativeToStart = true)
+    private void KeepRidersAboveSkin(Dictionary<int, Was> start, bool relativeToStart)
     {
         LastGuard = default;
         lastBoundLifted.Clear();

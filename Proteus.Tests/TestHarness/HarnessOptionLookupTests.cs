@@ -83,6 +83,14 @@ public class HarnessOptionLookupTests
             Assert.Equal(("Size", "Big"), (v4[0].Name, v4[0].Options[0]));
             File.WriteAllText(Path.Combine(root, "meta.json"), "{\"FileVersion\":4,\"Groups\":[");
             Assert.Null(HarnessOptionLookup.ReadGroups(root));
+
+            // Valid JSON of the wrong shape is unreadable too (409), never a 500: a group file that is an array, a group
+            // whose option is not an object.
+            File.WriteAllText(Path.Combine(root, "meta.json"), "{\"FileVersion\":3}");
+            File.WriteAllText(Path.Combine(root, "group_001_odd.json"), "[]");
+            Assert.Null(HarnessOptionLookup.ReadGroups(root));
+            File.WriteAllText(Path.Combine(root, "group_001_odd.json"), "{\"Name\":\"Odd\",\"Options\":[3]}");
+            Assert.Null(HarnessOptionLookup.ReadGroups(root));
         }
         finally { Directory.Delete(root, true); }
     }

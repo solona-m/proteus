@@ -79,7 +79,9 @@ internal static class HarnessOptionLookup
             }
             return result;
         }
-        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or JsonException)
+        // InvalidOperationException: valid JSON of the wrong shape (a group file that is an array, a Name that is not a
+        // string, an option that is not an object) — unreadable as groups, as malformed JSON is.
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or JsonException or InvalidOperationException)
         {
             return null;
         }

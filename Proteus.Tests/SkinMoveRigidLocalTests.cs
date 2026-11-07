@@ -98,7 +98,7 @@ public class SkinMoveRigidLocalTests(ITestOutputHelper output)
         Assert.Equal(0, solve.LastGuard.Bound + solve.LastGuard.Face);
         Assert.Equal(0, Folded(model, moved));
 
-        // (ii) All, Rotate 30° about Y around the bounds centre — from where (i) left it.
+        // (ii) All, Rotate 30° about Y around the bounds centre, on a fresh copy of the top.
         var (open, s2) = Open();
         var centre = (open.Min + open.Max) / 2f;
         var turn = Matrix4x4.CreateTranslation(-centre) * Matrix4x4.CreateRotationY(MathF.PI / 6f) * Matrix4x4.CreateTranslation(centre);
@@ -161,6 +161,32 @@ public class SkinMoveRigidLocalTests(ITestOutputHelper output)
             if (Vector3.Dot(authored, nrm) < 0f) f = -f;
             return Vector3.Dot(At(p, v) - (a * t.U + b * t.V + c * t.W), f);
         }
+        // A face poke, measured independently too: a skin vertex within reach of a cloth face this vertex is a corner of
+        // stands further outside it after the drag (before the guard) than it did at the start, by more than the guard's
+        // tolerance — "outside" along the skin's own normal, as SkinThroughCloth judges it (a face facing within 60°).
+        var skinVerts = model.Parts.Where(p => p.Island < 0 && SecondSkinWriter.IsBodySkinMaterial(p.Material))
+                                   .SelectMany(p => p.Triangles).Distinct().ToList();
+        var clothFaces = model.Parts.Where(p => p.Island < 0 && !SecondSkinWriter.IsBodySkinMaterial(p.Material))
+                                    .SelectMany(p => Enumerable.Range(0, p.Triangles.Length / 3)
+                                                               .Select(i => (p.Triangles[i * 3], p.Triangles[i * 3 + 1], p.Triangles[i * 3 + 2])))
+                                    .ToList();
+        float? Outside(float[] p, (int A, int B, int C) f, int s)
+        {
+            var a = At(p, f.A); var b = At(p, f.B); var c = At(p, f.C);
+            var n = Vector3.Cross(b - a, c - a);
+            if (n.LengthSquared() < 1e-14f) return null;
+            n = Vector3.Normalize(n);
+            var skinOut = Vector3.Normalize(At(model.Normals, s));
+            if (Vector3.Dot(n, skinOut) < 0f) n = -n;
+            if (Vector3.Dot(n, skinOut) < 0.5f) return null;
+            var q = BrushTransfer.ClosestOnTriangle(At(p, s), a, b, c, out _, out _, out _);
+            return Vector3.Distance(At(p, s), q) <= SkinThroughCloth.Reach ? Vector3.Dot(At(p, s) - q, n) : null;
+        }
+        bool FacePoke(int v)
+            => clothFaces.Where(f => f.Item1 == v || f.Item2 == v || f.Item3 == v)
+                         .Any(f => skinVerts.Any(s => Outside(dragged, f, s) is { } now
+                                                      && now > MathF.Max(Outside(start, f, s) ?? 0f, 0f) + SkinThroughCloth.Tolerance));
+
         int beyond = 0, proven = 0, face = 0;
         var unexplained = new List<int>();
         for (int v = 0; v < start.Length / 3; v++)
@@ -176,14 +202,14 @@ public class SkinMoveRigidLocalTests(ITestOutputHelper output)
                 boundPoke = Height(dragged, t, v) < floor - 1e-6f;
             }
             if (boundPoke && solve.LastBoundLifted.Contains(node)) proven++;
-            else if (solve.LastFaceLifted.Contains(node)) face++;
+            else if (solve.LastFaceLifted.Contains(node) && FacePoke(v)) face++;
             else unexplained.Add(v);
         }
         output.WriteLine($"row 1.1: {beyond} vertices beyond the drag: {proven} pushed under their skin by the drag itself, "
                        + $"{face} lifted by the face check over skin the move pushed through it");
         // Every vertex beyond the drag is a lift the guard answered to a poke this move made: a bound rider the drag sank
         // under its skin (measured here, independently), or a corner of a face the moved skin came through (the face check
-        // fires only where the skin stands further outside the face than both the author and the move's start had it).
+        // check fired, and the skin there measurably came through the face during the drag, before the guard ran).
         Assert.True(unexplained.Count == 0, $"beyond the drag with no poke behind it: {string.Join(", ", unexplained.Take(10))}");
         // Measured (build 1455): before the fix 29.77 mm, 420 vertices beyond the drag, 54 folded, 553 bound lifts; after,
         // 15.41 mm, 8 beyond (all face-check corners), 10 folded. The face check's corner lift folding a few triangles on

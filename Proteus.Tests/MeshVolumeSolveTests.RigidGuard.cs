@@ -107,6 +107,27 @@ public partial class MeshVolumeSolveTests
     }
 
     [Fact]
+    [Trait("Plan", "AC-issue-sweep-c-3")]
+    [Trait("Plan", "EDGE-issue-sweep-c-43")]
+    public void WholePartsSkinMoveWithFalloffNeverExceedsTheDrag()
+    {
+        // Whole parts with the Studio's defaults: adjacent on, a 50 mm falloff, so cloth near the moved skin takes a share
+        // under 1 — its riders included. Nothing goes further than the drag, and nothing folds.
+        var l = SplitNormalLayers();
+        var solve = SkinSolve(l.Model);
+        var drag = new Vector3(0f, 0.015f, 0.004f);
+        var skinRow = new List<int>();
+        for (int i = 3; i <= 7; i++) for (int j = 3; j <= 7; j++) skinRow.Add(l.SkinAt[i, j]);
+        Assert.True(solve.BeginMove(skinRow, adjacent: true, falloffRadius: 0.05f) > 0);
+        solve.MoveTo(drag);
+        Assert.True(solve.EndMove());
+        var after = solve.Positions();
+        float worst = EveryPart(l.Model).Max(v => Moved(l.Model, after, v).Length());
+        Assert.True(worst <= drag.Length() + 1e-5f, $"{worst * 1000f:F3} mm for a {drag.Length() * 1000f:F3} mm drag; {solve.LastGuard}");
+        Assert.Equal(0, Folded(l.Model, after));
+    }
+
+    [Fact]
     [Trait("Plan", "EDGE-issue-sweep-c-6")]
     [Trait("Plan", "EDGE-issue-sweep-c-8")]
     public void AMoveThatPokesSkinThroughStillLifts()
