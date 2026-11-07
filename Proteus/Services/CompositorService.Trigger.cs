@@ -24,6 +24,8 @@ public partial class CompositorService
     public void RefreshAndRecomposite(bool full = false)
     {
         InvalidateUpstreamCache(full ? "manual-full" : "manual");
+        // The user's refresh is also the fix for anything the discovery cache missed.
+        discovery.ForgetAll();
         // The user's fix for "not drawn" reloads the character even with no overlay mod enabled.
         ForgetEmptyOutputDrawn();
         if (full)

@@ -112,6 +112,13 @@ internal sealed class HarnessHost : IDisposable
             Log = log,
         };
         changes = new HarnessChanges(game, Names, log, BackupsRoot, session, build);
+        // Sidecar backups an earlier session never put back (a crash, or a changed file): reported, never restored here.
+        var leftovers = HarnessSidecar.ScanLeftovers(BackupsRoot, session, log);
+        changes.LeftoverSidecars = leftovers;
+        if (leftovers.Count > 0)
+            log.Warning("[Proteus] test harness: {0} sidecar backup(s) from earlier sessions were not put back: {1} — see "
+                      + "docs/agent-rules/adversarial-qa.md for the manual recovery", leftovers.Count,
+                        string.Join(", ", leftovers.Select(l => $"{l.Mod} ({l.Backup})")));
         var router = new HarnessRouter(jobs, ring, Names, new CaptureGate(timings.Capture), build, buildStamp, log, changes);
         var s = new HarnessServer(router.Handle, token);
         s.Start();
@@ -159,6 +166,18 @@ internal sealed class HarnessHost : IDisposable
         c.BeginStop();
         if (!dispatcher.OnFrameworkThread)
         {
+            // The sidecars and the auto-refit override need no framework thread (file work, the cache's lock, an in-memory
+            // switch): put them back here too. Only the recomposite is skipped; only failures are reported.
+            try
+            {
+                var (sidecars, _) = c.PutBackOffThreadParts();
+                var failed = sidecars.Where(s => s.Result is not ("restored" or "unchanged")).ToList();
+                if (failed.Count > 0)
+                    log.Warning("[Proteus] test harness stopped off the framework thread; sidecars not put back: {0}",
+                                string.Join(", ", failed.Select(f => $"{f.Mod} {f.Result}{(f.Code is { } code ? $" ({code})" : "")}")));
+            }
+            catch (Exception e) { log.Warning(e, "[Proteus] test harness: putting the sidecars back as it stopped failed"); }
+
             // The record is framework-only; a change landing mid-read must not throw out of Dispose.
             string left;
             try { left = c.Empty ? "" : c.Leftovers(); }

@@ -147,7 +147,7 @@ public readonly record struct ResolutionDiagnostic(
         PenumbraGroups.Count > 0 ? PenumbraGroups : other.PenumbraGroups);
 }
 
-public class SidecarDiscoveryService
+public partial class SidecarDiscoveryService
 {
     private readonly PenumbraBridge penumbra;
     private readonly IPluginLog log;
@@ -199,33 +199,171 @@ public class SidecarDiscoveryService
         new(s.Where(char.IsLetterOrDigit).Select(char.ToLowerInvariant).ToArray());
 
     public SidecarDiscoveryService(PenumbraBridge penumbra, IPluginLog log)
+        : this(penumbra, log, null) { }
+
+    /// <summary>For tests: the cache to read through (with its own clock and drive).</summary>
+    internal SidecarDiscoveryService(PenumbraBridge penumbra, IPluginLog log, SidecarCache? cache)
     {
         this.penumbra = penumbra;
         this.log = log;
+        Cache = cache ?? new SidecarCache(count: (key, n) => Io?.Count(key, n));
     }
+
+    /// <summary>Which mod folders have a sidecar, and each sidecar's text: what saves discovery asking the drive again.</summary>
+    internal SidecarCache Cache { get; }
+
+    /// <summary>Counts discoveries, stats and reads for the idle I/O summary; null counts nothing.</summary>
+    public IoCounters? Io { get; set; }
+
+    // ── Keeping the cache current ────────────────────────────────────────────
+
+    private PenumbraBridge? attached;
+
+    /// <summary>
+    /// Forget what the cache holds about a mod whenever Penumbra says it changed. Called right after construction,
+    /// before anything else subscribes to the bridge, so a discovery made by any other handler of the same event already
+    /// sees the change (events run their handlers in subscription order). The handlers never throw.
+    /// </summary>
+    public void AttachTo(PenumbraBridge bridge)
+    {
+        attached = bridge;
+        bridge.ModAdded          += OnPenumbraModAdded;
+        bridge.ModDeleted        += OnPenumbraModDeleted;
+        bridge.ModMoved          += OnPenumbraModMoved;
+        bridge.ModSettingChanged += OnPenumbraModSettingChanged;
+        bridge.PenumbraReady     += OnPenumbraReady;
+    }
+
+    public void Detach()
+    {
+        if (attached is not { } bridge) return;
+        bridge.ModAdded          -= OnPenumbraModAdded;
+        bridge.ModDeleted        -= OnPenumbraModDeleted;
+        bridge.ModMoved          -= OnPenumbraModMoved;
+        bridge.ModSettingChanged -= OnPenumbraModSettingChanged;
+        bridge.PenumbraReady     -= OnPenumbraReady;
+        attached = null;
+    }
+
+    internal void OnPenumbraModAdded(string? modDir) => ForgetQuietly(modDir, "added");
+
+    internal void OnPenumbraModDeleted(string? modDir) => ForgetQuietly(modDir, "deleted");
+
+    internal void OnPenumbraModMoved(string? oldDir, string? newDir)
+    {
+        ForgetQuietly(oldDir, "renamed");
+        ForgetQuietly(newDir, "renamed");
+    }
+
+    internal void OnPenumbraModSettingChanged(Penumbra.Api.Enums.ModSettingChange change, Guid collection,
+                                              string? modDir, bool inherited)
+    {
+        // Only an edit changes the mod's files; a setting change leaves the sidecar as it was.
+        if (change == Penumbra.Api.Enums.ModSettingChange.Edited) ForgetQuietly(modDir, "edited");
+    }
+
+    internal void OnPenumbraReady()
+    {
+        try { Cache.ForgetAll(); }
+        catch (Exception ex) { DebugQuietly("[Proteus] discovery: could not clear its cache: {0}", ex.Message); }
+    }
+
+    /// <summary>Forget one mod folder. A null or empty folder (Penumbra's temporary mods have none) is ignored, and a
+    /// fault is logged at Debug: first in line, a throw here would cost every later subscriber the event.</summary>
+    private void ForgetQuietly(string? modDir, string why)
+    {
+        if (string.IsNullOrEmpty(modDir)) return;
+        try { Cache.Forget(modDir); }
+        catch (Exception ex) { DebugQuietly("[Proteus] discovery: could not forget " + why + " mod {0}: " + ex.Message, modDir); }
+    }
+
+    private void DebugQuietly(string message, object arg)
+    {
+        try { log.Debug(message, arg); } catch { /* logging must not fail the event either */ }
+    }
+
+    /// <summary>Forget what is cached about one mod folder.</summary>
+    public void Forget(string modDir) => Cache.Forget(modDir);
+
+    /// <summary>Forget everything cached: the user asked for a refresh.</summary>
+    public void ForgetAll() => Cache.ForgetAll();
 
     /// <summary>
     /// Discover all Penumbra mods with a Proteus/ sidecar, with each mod's enabled state and priority from the
     /// player's collection, ordered by priority ascending. The managed Proteus mod is excluded.
     /// </summary>
-    public List<OverlayEntry> DiscoverAll() => Discover(enabledOnly: false);
+    public List<OverlayEntry> DiscoverAll() => Discover(enabledOnly: false, out _);
 
     /// <summary>
     /// Like <see cref="DiscoverAll"/> but only mods currently enabled in Penumbra — the set the
     /// compositor actually composites.
     /// </summary>
-    public List<OverlayEntry> DiscoverEnabled() => Discover(enabledOnly: true);
+    public List<OverlayEntry> DiscoverEnabled() => Discover(enabledOnly: true, out _);
 
-    private List<OverlayEntry> Discover(bool enabledOnly)
+    /// <summary>
+    /// <see cref="DiscoverEnabled()"/>, also saying whether the answer is <paramref name="complete"/>: Penumbra answered
+    /// every question it was asked, so an empty list means nothing is enabled rather than "not yet".
+    /// </summary>
+    public List<OverlayEntry> DiscoverEnabled(out bool complete) => Discover(enabledOnly: true, out complete);
+
+    /// <summary>A mod's settings in the player's collection: unreadable (the answer is incomplete), never configured there
+    /// (simply not enabled), or its enabled state and priority.</summary>
+    internal readonly record struct SettingsAnswer(bool Failed, bool Configured, bool Enabled, int Priority)
     {
-        var modsRoot = penumbra.GetModDirectory();
-        if (modsRoot == null) return [];
+        public static readonly SettingsAnswer Unreadable = new(true, false, false, 0);
+        public static readonly SettingsAnswer NotConfigured = new(false, false, false, 0);
+        public static SettingsAnswer Of(bool enabled, int priority) => new(false, true, enabled, priority);
+    }
 
+    /// <summary>What <see cref="DiscoverCore"/> needs, as delegates so it can be tested without Penumbra.</summary>
+    internal sealed record DiscoveryInputs(
+        string? ModsRoot,
+        IReadOnlyDictionary<string, string>? AllMods,
+        Guid? CollectionId,
+        Func<Guid, string, SettingsAnswer> GetSettings,
+        SidecarCache Cache,
+        Func<string, string, DiscoveryRead> Read,
+        Action<string, string, ProteusMetadata, long>? OnFound = null);
+
+    /// <summary>One sidecar as discovery read it: its metadata (null when absent or unparsable), whether the drive
+    /// failed it, and the file's write time.</summary>
+    internal readonly record struct DiscoveryRead(ProteusMetadata? Meta, bool IoFailed, long StampTicks);
+
+    private List<OverlayEntry> Discover(bool enabledOnly, out bool complete)
+    {
+        Io?.Count(IoCounters.DiscoveryCalls);
         var allMods = penumbra.GetAllMods();
-        if (allMods == null) return [];
+        var inputs = new DiscoveryInputs(
+            penumbra.GetModDirectory(),
+            allMods,
+            allMods == null ? null : penumbra.GetPlayerCollectionId(),
+            // A mod the collection never configured is "not enabled", not "Penumbra could not answer": only a failed read
+            // leaves the answer incomplete.
+            (coll, dir) => penumbra.ReadModSettings(coll, dir) switch
+            {
+                { Kind: PenumbraBridge.SettingsReadKind.Ok, Settings: { } s } => SettingsAnswer.Of(s.Enabled, s.Priority),
+                { Kind: PenumbraBridge.SettingsReadKind.Failed } => SettingsAnswer.Unreadable,
+                _ => SettingsAnswer.NotConfigured,
+            },
+            Cache,
+            (modDir, metaPath) => ReadForDiscoveryDetailed(modDir, metaPath),
+            (modDir, modRoot, metadata, stamp) => CheckStaleEffect(modDir, modRoot, metadata, stamp));
+        return DiscoverCore(inputs, enabledOnly, out complete);
+    }
 
-        var collId = penumbra.GetPlayerCollectionId();
-        if (collId == null) return [];
+    /// <summary>
+    /// The discovery loop. Only folders the cache says may have a sidecar are asked about, so a repeated discovery stats
+    /// the Proteus mods' metadata alone (and every other folder at most once per the cache's TTL). <paramref name="complete"/>
+    /// is false when the mods root, a non-empty mod list or the collection could not be read, when a sidecar mod's
+    /// settings could not be read, or when an enabled sidecar could not be read off the drive.
+    /// </summary>
+    internal static List<OverlayEntry> DiscoverCore(DiscoveryInputs inp, bool enabledOnly, out bool complete)
+    {
+        complete = false;
+        if (inp.ModsRoot is not { } modsRoot || inp.AllMods is not { } allMods || inp.CollectionId is not { } collId)
+            return [];
+        // An empty list while Penumbra is still loading is "not yet", not "nothing".
+        complete = allMods.Count > 0;
 
         var results = new List<OverlayEntry>();
 
@@ -234,22 +372,32 @@ public class SidecarDiscoveryService
             if (string.Equals(modDir, ManagedModDir, StringComparison.OrdinalIgnoreCase))
                 continue;
 
-            // Check for the sidecar before GetModSettings: File.Exists is far cheaper than an IPC hop.
+            // Ask the cache before GetModSettings: a cached answer is cheaper than an IPC hop, and a stat cheaper still.
+            if (!inp.Cache.MayHaveSidecar(modsRoot, modDir)) continue;
             var sidecarDir = Path.Combine(modsRoot, modDir, SidecarSubdir);
             var metaPath   = Path.Combine(sidecarDir, MetadataFile);
-            if (!File.Exists(metaPath)) continue;
 
-            var settings = penumbra.GetModSettings(collId.Value, modDir);
-            if (settings == null) continue;
-            if (enabledOnly && !settings.Value.Enabled) continue;
+            var settings = inp.GetSettings(collId, modDir);
+            if (settings.Failed)
+            {
+                complete = false;
+                continue;
+            }
+            // Never configured in this collection: not enabled, and (as before) not listed.
+            if (!settings.Configured) continue;
+            if (enabledOnly && !settings.Enabled) continue;
 
-            var metadata = ReadForDiscovery(modDir, metaPath);
-            if (metadata == null) continue;
+            var read = inp.Read(modDir, metaPath);
+            if (read.Meta is not { } metadata)
+            {
+                if (read.IoFailed && settings.Enabled) complete = false;
+                continue;
+            }
 
-            CheckStaleEffect(modDir, Path.Combine(modsRoot, modDir), metadata);
+            inp.OnFound?.Invoke(modDir, Path.Combine(modsRoot, modDir), metadata, read.StampTicks);
 
-            results.Add(new OverlayEntry(modDir, modName, settings.Value.Priority,
-                settings.Value.Enabled, metadata, sidecarDir));
+            results.Add(new OverlayEntry(modDir, modName, settings.Priority,
+                settings.Enabled, metadata, sidecarDir));
         }
 
         results.Sort((a, b) => a.Priority.CompareTo(b.Priority));
@@ -278,10 +426,10 @@ public class SidecarDiscoveryService
     /// Read the mod's manifest once per sidecar for an item effect its sidecar does not carry. Only for mods with
     /// pieces and no recorded effect, so a mod imported by this build is never read. Never throws.
     /// </summary>
-    private void CheckStaleEffect(string modDir, string modRoot, ProteusMetadata metadata)
+    private void CheckStaleEffect(string modDir, string modRoot, ProteusMetadata metadata, long stamp)
     {
-        // Re-checked when the sidecar changes: a re-import under the same folder name writes a new one.
-        var stamp = File.GetLastWriteTimeUtc(Path.Combine(modRoot, SidecarSubdir, MetadataFile)).Ticks;
+        // Re-checked when the sidecar changes: a re-import under the same folder name writes a new one. The stamp is
+        // the write time discovery's own stat saw.
         if (staleStamps.TryGetValue(modDir, out var seen) && seen == stamp) return;
         staleStamps[modDir] = stamp;
         string? piece = null, notice = null;
@@ -1105,19 +1253,70 @@ public class SidecarDiscoveryService
     /// is gone, so a deleted mod is never brought back by an edit still held for it.
     /// </summary>
     internal ProteusMetadata? ReadForDiscovery(string modDir, string metaPath)
+        => ReadForDiscoveryDetailed(modDir, metaPath).Meta;
+
+    /// <summary>
+    /// <see cref="ReadForDiscovery"/>, also saying whether the drive failed the read and the file's write time. The file
+    /// comes through <see cref="Cache"/>, so an unchanged one is not read again; it is parsed afresh every time, so each
+    /// caller owns the graph it gets. An unparsable file is warned about once per version of it.
+    /// </summary>
+    internal DiscoveryRead ReadForDiscoveryDetailed(string modDir, string metaPath)
     {
-        if (!File.Exists(metaPath)) return null;
-        if (staged.Peek(modDir) is not { } held) return TryParseMetadata(metaPath);
+        var read = Cache.ReadMetadata(modDir, metaPath);
+        switch (read.Kind)
+        {
+            case MetaReadKind.Missing:
+                return new DiscoveryRead(null, false, 0);
+            case MetaReadKind.IoError:
+                // The editor's held edit needs no file: a lock taken while the write-behind writes must not drop the mod.
+                if (staged.Peek(modDir) is { } heldOnIo && ParseHeld(modDir, heldOnIo.Json) is { } fromHeld)
+                    return new DiscoveryRead(fromHeld, false, 0);
+                if (ioWarned.TryAdd(metaPath, 0))
+                    log.Warning("[Proteus] could not read Proteus metadata {0} (locked or access denied) — will try again",
+                                metaPath);
+                else
+                    log.Debug("[Proteus] still could not read Proteus metadata {0}", metaPath);
+                return new DiscoveryRead(null, true, 0);
+        }
+        ioWarned.TryRemove(metaPath, out _);
+        long stamp = read.Stamp.LastWriteTicksUtc;
+
+        if (staged.Peek(modDir) is { } held && ParseHeld(modDir, held.Json) is { } fromHeldEdit)
+            return new DiscoveryRead(fromHeldEdit, false, stamp);
+
+        if (read.Kind == MetaReadKind.Unparsable) return new DiscoveryRead(null, false, stamp);
         try
         {
-            return JsonSerializer.Deserialize<ProteusMetadata>(held.Json, ProteusJson.MetadataRead);
+            return new DiscoveryRead(JsonSerializer.Deserialize<ProteusMetadata>(read.Text!, ProteusJson.MetadataRead),
+                                     false, stamp);
         }
         catch (Exception ex)
         {
-            log.Warning(ex, "Failed to parse held Proteus metadata for {0}", modDir);
-            return TryParseMetadata(metaPath);
+            if (unparsableWarned.TryAdd($"{metaPath}\0{stamp}\0{read.Stamp.Length}", 0))
+                log.Warning(ex, "Failed to parse Proteus metadata: {0}", metaPath);
+            Cache.NoteUnparsable(metaPath, read.Stamp, read.Text);
+            return new DiscoveryRead(null, false, stamp);
         }
     }
+
+    /// <summary>The editor's held edit as metadata; null, with a warning, when it will not parse (the file then decides).</summary>
+    private ProteusMetadata? ParseHeld(string modDir, string json)
+    {
+        try { return JsonSerializer.Deserialize<ProteusMetadata>(json, ProteusJson.MetadataRead); }
+        catch (Exception ex)
+        {
+            log.Warning(ex, "Failed to parse held Proteus metadata for {0}", modDir);
+            return null;
+        }
+    }
+
+    /// <summary>Metadata files whose IO failure has been warned about, until one reads again.</summary>
+    private readonly System.Collections.Concurrent.ConcurrentDictionary<string, byte> ioWarned =
+        new(StringComparer.OrdinalIgnoreCase);
+
+    /// <summary>Versions of metadata files already warned about as unparsable.</summary>
+    private readonly System.Collections.Concurrent.ConcurrentDictionary<string, byte> unparsableWarned =
+        new(StringComparer.OrdinalIgnoreCase);
 
     /// <summary>
     /// Write what is held, unless a control is still held (<paramref name="editing"/>). Once a frame, after the windows.
@@ -1174,6 +1373,8 @@ public class SidecarDiscoveryService
                 SnapshotDefaults(s.SidecarRoot, s.ModDirectory, path);
                 PenumbraModMeta.AtomicWrite(path, JsonSerializer.Serialize(metadata, ProteusJson.MetadataWrite),
                                             maxRetries: 2);
+                // Even a rewrite that keeps the stamp (coarse timestamps) must be read again.
+                Cache.ForgetPath(path);
                 staged.Complete(s);
                 writtenRoots.Enqueue(s.SidecarRoot);
             }
@@ -1222,6 +1423,8 @@ public class SidecarDiscoveryService
             // callers run on threads the user feels. Synchronous: the editor recomposites straight after and
             // Discover re-reads this file.
             PenumbraModMeta.AtomicWrite(path, json, maxRetries: 2);
+            // Even a rewrite that keeps the stamp (coarse timestamps) must be read again.
+            Cache.ForgetPath(path);
             // A held edit whose own write failed above must not be retried over this newer save. One staged since is kept.
             if (held != null) staged.Complete(held);
             writtenRoots.Enqueue(entry.SidecarRoot);

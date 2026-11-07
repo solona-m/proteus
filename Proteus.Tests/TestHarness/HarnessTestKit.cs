@@ -72,8 +72,14 @@ internal sealed class FakeFrameworkDispatcher : IFrameworkDispatcher, IDisposabl
         return tcs.Task;
     }
 
+    /// <summary>When it answers true on the calling thread, a framework hop throws (EDGE-idle-disk-io-59: no hop under the
+    /// sidecar lock).</summary>
+    public Func<bool>? RefuseHopWhen { get; set; }
+
     public Task<T> RunAsync<T>(Func<T> work, TimeSpan startTimeout, CancellationToken ct = default)
     {
+        if (RefuseHopWhen?.Invoke() == true)
+            throw new InvalidOperationException("a framework hop was asked for while the sidecar lock is held");
         var ticket = new DispatchTicket();
         var started = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         var run = Post(() =>

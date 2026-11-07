@@ -29,7 +29,7 @@ public sealed class Plugin : IDalamudPlugin
 #endif
 
     /// <summary>Hand-maintained; bump it for in-game testing. <see cref="BuildStamp"/> is the one that can't go stale.</summary>
-    public const int BuildNumber = 1452;
+    public const int BuildNumber = 1453;
 
     /// <summary>
     /// Which set of release notes is current. Raise it when a release has something new to say: the window
@@ -78,6 +78,8 @@ public sealed class Plugin : IDalamudPlugin
     private readonly HairPortWatcher hairPort;
     private readonly ShaderUpgradeWatcher shaderUpgrade;
     private readonly VariantRepointWatcher variantRepoint;
+    private readonly PlayerSettingsFilter settingsFilter;
+    private readonly IoCounters ioCounters;
     private readonly AutoRefitWatcher autoRefit;
     private readonly ModMoveService modMoves;
     private readonly Gui.ProteusFonts fonts;
@@ -138,6 +140,11 @@ public sealed class Plugin : IDalamudPlugin
             DefaultEffectsDir = effectsDl.EffectsDir,
             AssemblyDir       = assemblyDir,
         };
+        // Order is load-bearing: discovery subscribes to the bridge's mod events before anything else does, so its cache
+        // forgets a changed mod before any other handler of the same event discovers (IdleDiskIoWiringTests).
+        ioCounters = new IoCounters(line => log.Debug(line));
+        discovery.Io = ioCounters;
+        discovery.AttachTo(penumbra);
         // Seed the global effects library with the starter set. No-ops until Penumbra's mod directory resolves;
         // OnPenumbraReady and each finished starter download call it again.
         discovery.SeedDefaultEffects();
@@ -146,7 +153,10 @@ public sealed class Plugin : IDalamudPlugin
         // Nothing may read a UV map before this: the download service swaps an upgraded men's pair into place as it is
         // made, and a map read (or cached) first would be the old one, or a file mid-move.
         uvMapDl = new UVMapDownloadService(log, dataDir, assemblyDir);
-        compositor = new CompositorService(penumbra, glamourer, discovery, textureLoader, config, log, uvRemap);
+        compositor = new CompositorService(penumbra, glamourer, discovery, textureLoader, config, log, uvRemap)
+        {
+            Io = ioCounters,
+        };
 
         // Subscribed before the first download starts, so its arrival is never missed.
         uvMaps = new UvMapsCoordinator(uvRemap, uvMapDl,
@@ -242,18 +252,31 @@ public sealed class Plugin : IDalamudPlugin
 
         // The same: gear put on is refitted onto the collection's body whether or not any window is open.
         autoRefit = new AutoRefitWatcher(compositor, penumbra, glamourer, designBindings, uvRemap,
-                                         path => textureLoader.LoadRawFile(null, path), config, log, dataDir);
+                                         path => textureLoader.LoadRawFile(null, path), config, log, dataDir)
+        {
+            Io = ioCounters,
+        };
         partsPanel.UseBodyIndex(autoRefit.Index);
         // The matcap libraries among the installed mods, cached under the config folder across sessions.
         partsPanel.UseMatcapIndex(new Services.Matcap.MatcapIndex(dataDir));
         partsPanel.UseMatcapPack(matcapPackDl);
 
         // The same: old gear is moved to Dawntrail's shader in its own mod as it is put on, window shut or open.
-        shaderUpgrade = new ShaderUpgradeWatcher(compositor, penumbra, glamourer, autoRefit, textureLoader, config, log);
+        // Both see only the setting changes that can reach what the player wears, not sync plugins' collections.
+        settingsFilter = PlayerSettingsFilter.Attach(penumbra);
+        shaderUpgrade = new ShaderUpgradeWatcher(compositor, penumbra, glamourer, autoRefit, textureLoader, config, log,
+                                                 settingsFilter)
+        {
+            Io = ioCounters,
+        };
 
         // The same: a piece worn in a variant its mod does not dress has its variants pointed at the mod's material.
         variantRepoint = new VariantRepointWatcher(compositor, penumbra, glamourer, autoRefit, shaderUpgrade,
-                                                   path => textureLoader.LoadRawFile(null, path), config, log);
+                                                   path => textureLoader.LoadRawFile(null, path), config, log,
+                                                   settingsFilter)
+        {
+            Io = ioCounters,
+        };
 
         // A mod renamed in Penumbra: every owner of per-mod state follows it, in one fixed order.
         modMoves = new ModMoveService(penumbra, config, presets, designBindings, compositor, hatCompat, hairPort,
@@ -275,7 +298,7 @@ public sealed class Plugin : IDalamudPlugin
                                                TextureProvider, TextureReadback, config, uvRemap,
                                                path => textureLoader.LoadRawFile(null, path),
                                                dir => partsPanel.NoteModelsChanged(dir), log,
-                                               pluginInterface, designBindings, editRouter, presets,
+                                               pluginInterface, designBindings, editRouter, presets, discovery,
                                                partsPanel.AsHarnessStudio(statusWindow.OpenToStudio,
                                                                         () => statusWindow.IsOpen,
                                                                         () => statusWindow.IsOpen = false)),
@@ -615,10 +638,12 @@ public sealed class Plugin : IDalamudPlugin
         matcapPackDl.Dispose();
         variantRepoint.Dispose();  // before the shader upgrade and auto refit, which it asks
         shaderUpgrade.Dispose();   // before auto refit, which it asks, and the bridges it unsubscribes from
+        settingsFilter.Dispose();  // after both watchers that listen to it
         autoRefit.Dispose();   // before the compositor and the bridges, whose events it unsubscribes from
         hatCompat.Dispose();   // before the compositor: it unsubscribes from that object's event
         hairPort.Dispose();    // the same
         compositor.Dispose();
+        discovery.Detach();    // its cache's subscriptions, before the bridge goes
         glamourer.Dispose();
         penumbra.Dispose();
         Interop.LunaLog.Detach();

@@ -32,7 +32,16 @@ internal sealed record PutBackReport(IReadOnlyList<UndoEntry> Gear, IReadOnlyLis
 
     /// <summary>The library mods a matcap job changed the setting of (put back through the binding session's ledger).</summary>
     public IReadOnlyList<string> MatcapMods { get; init; } = [];
+
+    /// <summary>The sidecars the sidecar-edit route saved into, put back.</summary>
+    public IReadOnlyList<SidecarUndo> Sidecar { get; init; } = [];
+
+    /// <summary>The auto-refit override: cleared or none, and the mods auto refit wrote into while it stood (not undone).</summary>
+    public (string Result, IReadOnlyList<string> RefitsWhileOverridden) AutoRefit { get; init; } = ("none", []);
 }
+
+/// <summary>The harness's session-only auto-refit switch: what it set, and the effective state before the first set.</summary>
+internal sealed record AutoRefitOverrideRecord(bool Enabled, bool BeforeEffective, DateTime AtUtc);
 
 /// <summary>A change route's answer: 200 with a body, or an error status, code and message.</summary>
 internal sealed record ChangeResult(int Status, string? Code, string? Message, object? Body)
@@ -113,8 +122,56 @@ internal sealed class HarnessChanges(IHarnessGame game, SessionNames names, IPlu
 
     public bool Stopping => stopping;
 
-    /// <summary>From now on equips and holds are refused (503 harness-stopping); put-back still runs.</summary>
-    public void BeginStop() => stopping = true;
+    /// <summary>From now on equips, holds and sidecar edits are refused (503 harness-stopping); put-back still runs. A
+    /// sidecar edit in flight finishes first (it holds no framework hop, so this never deadlocks).</summary>
+    public void BeginStop()
+    {
+        stopping = true;
+        Sidecar.BeginStop();
+    }
+
+    // ── sidecar edits and the auto-refit override (idle disk I/O routes) ────
+
+    /// <summary>Made with the session, never lazily: a stop and the first edit on two threads must see the same ledger.</summary>
+    private readonly HarnessSidecar sidecar =
+        new(recordRoot ?? System.IO.Path.Combine(System.IO.Path.GetTempPath(), "proteus-harness-records"), session, log);
+
+    /// <summary>The sidecar-edit route's backups and ledger.</summary>
+    public HarnessSidecar Sidecar => sidecar;
+
+    /// <summary>Earlier sessions' sidecar ledgers left without a put-back, found at start (<c>/state.leftoverSidecar</c>).</summary>
+    public IReadOnlyList<LeftoverSidecar> LeftoverSidecars { get; set; } = [];
+
+    private AutoRefitOverrideRecord? autoRefitOverride;
+
+    /// <summary>Record the session override the auto-refit route set; the first set keeps its Before.</summary>
+    public AutoRefitOverrideRecord NoteAutoRefitOverride(bool enabled, bool beforeEffective)
+        => autoRefitOverride = new AutoRefitOverrideRecord(enabled, autoRefitOverride?.BeforeEffective ?? beforeEffective, DateTime.UtcNow);
+
+    /// <summary>Put the sidecars back and clear the override, from any thread (the off-thread stop): file work, the cache's
+    /// forget and an in-memory switch, no framework hop. The recomposite is the caller's.</summary>
+    internal (List<SidecarUndo> Sidecar, (string, IReadOnlyList<string>) AutoRefit) PutBackOffThreadParts()
+    {
+        List<SidecarUndo> sidecars;
+        try { sidecars = sidecar.PutBack(game.HasStaged, game.ForgetSidecar); }
+        catch (Exception ex) { log?.Warning(ex, "[Proteus] test harness: putting back the sidecars failed"); sidecars = []; }
+
+        (string, IReadOnlyList<string>) refit = ("none", []);
+        try
+        {
+            if (autoRefitOverride != null)
+            {
+                game.SetAutoRefitOverride(null);
+                refit = ("cleared", game.TakeRefitsWhileOverridden());
+                autoRefitOverride = null;
+                if (refit.Item2.Count > 0)
+                    log?.Information("[Proteus] test harness: auto refit wrote into {0} while its override stood (not undone by put-back)",
+                                     string.Join(", ", refit.Item2));
+            }
+        }
+        catch (Exception ex) { log?.Warning(ex, "[Proteus] test harness: clearing the auto-refit override failed"); }
+        return (sidecars, refit);
+    }
 
     internal string Scrub(string source) => LogAnonymizer.Scrub(names.Scrub(source));
 
@@ -209,14 +266,17 @@ internal sealed class HarnessChanges(IHarnessGame game, SessionNames names, IPlu
         var before = holds.TryGetValue(key, out var old) ? old.Before
                    : new HoldBefore(baseEnabled, basePriority, q.Present || s?.Temporary == true, s != null);
         holds[key] = new HoldRecord(collection, modDir, newEnabled, newPriority, before, DateTime.UtcNow);
-        game.RequestRedraw();
+        // Only a hold in the player's own collection changes what the character draws; a redraw for another collection's
+        // would itself wake every watcher and hide what QA is checking (that they ignore other collections).
+        bool redraw = game.PlayerCollection() == collection;
+        if (redraw) game.RequestRedraw();
         log?.Information("[Proteus] test harness: holding {0} enabled={1} priority={2}", modDir, newEnabled, newPriority);
         return ChangeResult.Ok(new Dictionary<string, object?>
         {
             ["mod"] = modDir, ["collection"] = collection, ["enabled"] = newEnabled, ["priority"] = newPriority,
             ["before"] = new { enabled = before.Enabled, priority = before.Priority, temporary = before.Temporary,
                                configured = before.Configured },
-            ["redrawRequested"] = true,
+            ["redrawRequested"] = redraw,
         });
     }
 
@@ -271,6 +331,9 @@ internal sealed class HarnessChanges(IHarnessGame game, SessionNames names, IPlu
         string sweep = "skipped";
         try
         {
+            // Every collection Penumbra lists, so a hold an earlier session left in another collection goes too; the
+            // recorded ones plus the player's when the list cannot be read.
+            if (game.Collections() is { } all) foreach (var (id, _) in all) collections.Add(id);
             if (game.PlayerCollection() is { } current) collections.Add(current);
             if (collections.Count > 0)
             {
@@ -310,6 +373,14 @@ internal sealed class HarnessChanges(IHarnessGame game, SessionNames names, IPlu
             studioResults.Add(entry);
         }
 
+        // After the Studio and before the binding session: the sidecars the harness saved, and the auto-refit override.
+        var (sidecars, autoRefit) = PutBackOffThreadParts();
+        if (sidecars.Any(s => s.Result == "restored"))
+        {
+            try { game.Recomposite("test harness: sidecar put back"); }
+            catch (Exception ex) { log?.Warning(ex, "[Proteus] test harness: the recomposite after the sidecar put-back failed"); }
+        }
+
         if (redraw) game.RequestRedraw();
         log?.Information("[Proteus] test harness: put back {0} slot(s), {1} hold(s); sweep {2}; studio {3}",
                          gearResults.Count, holdResults.Count, sweep,
@@ -327,7 +398,7 @@ internal sealed class HarnessChanges(IHarnessGame game, SessionNames names, IPlu
         var mods = matcapMods.ToList();
         matcapMods.Clear();
         return new PutBackReport(gearResults, holdResults, sweep, redraw || binding?.Restored == true, binding)
-               { Studio = studioResults, MatcapImages = images, MatcapMods = mods };
+               { Studio = studioResults, MatcapImages = images, MatcapMods = mods, Sidecar = sidecars, AutoRefit = autoRefit };
     }
 
     // ── the Studio ──────────────────────────────────────────────────────────
@@ -477,6 +548,8 @@ internal sealed class HarnessChanges(IHarnessGame game, SessionNames names, IPlu
         studio = StudioSessionView(),
         binding = bindings?.View(),
         applySettling,
+        sidecar = sidecar.View(),
+        autoRefitOverride = autoRefitOverride is { } o ? new { enabled = o.Enabled, before = o.BeforeEffective, atUtc = o.AtUtc } : null,
     };
 
     /// <summary>The slots and mods still recorded, for the warning when put-back cannot run.</summary>
@@ -484,7 +557,10 @@ internal sealed class HarnessChanges(IHarnessGame game, SessionNames names, IPlu
         => string.Join(", ", gear.Keys.Concat(holds.Values.Select(h => h.ModDir)).Concat(bindings?.Leftovers() ?? [])
                                  .Concat(studio is { } s
                                      ? [$"Studio edits in {s.ModDir} ({(s.Files.Count == 0 ? "nothing saved" : string.Join(", ", s.Files.Keys))}): press Undo saved changes"]
-                                     : []));
+                                     : [])
+                                 .Concat(sidecar.Leftovers())
+                                 .Concat(autoRefitOverride != null ? ["the auto-refit override"] : []));
 
-    internal bool Empty => gear.Count == 0 && holds.Count == 0 && bindings?.HasSession != true && studio == null;
+    internal bool Empty => gear.Count == 0 && holds.Count == 0 && bindings?.HasSession != true && studio == null
+                        && sidecar.Empty && autoRefitOverride == null;
 }

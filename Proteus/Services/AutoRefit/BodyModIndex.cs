@@ -41,19 +41,52 @@ internal sealed class BodyModIndex
         public Entry? Find(string dir) => List.FirstOrDefault(e => string.Equals(e.Dir, dir, StringComparison.OrdinalIgnoreCase));
     }
 
-    private volatile State? current;
+    /// <summary>
+    /// The published state and a generation, replaced whole by compare-and-swap: <see cref="MarkStale"/> must not be
+    /// lost to a refresh that was already reading the folders when the mods changed.
+    /// </summary>
+    internal sealed record IndexSlot(State? Current, long Gen);
 
-    /// <summary>The body mods and their version, together; null until the first <see cref="Refresh"/> has finished.</summary>
-    public State? Current => current;
+    private IndexSlot slot = new(null, 0);
 
-    /// <summary>The body mods, by name; null until the first <see cref="Refresh"/> has finished.</summary>
-    public IReadOnlyList<Entry>? Snapshot => current?.List;
+    private IndexSlot Slot => System.Threading.Volatile.Read(ref slot);
+
+    /// <summary>The body mods and their version, together; null until a <see cref="Refresh"/> has finished, and again
+    /// after <see cref="MarkStale"/>.</summary>
+    public State? Current => Slot.Current;
+
+    /// <summary>The body mods, by name; null until a <see cref="Refresh"/> has finished.</summary>
+    public IReadOnlyList<Entry>? Snapshot => Slot.Current?.List;
 
     /// <inheritdoc cref="State.Version"/>
-    public string Version => current?.Version ?? "";
+    public string Version => Slot.Current?.Version ?? "";
 
     /// <summary>One body mod by folder, or null when it is not installed or not a body.</summary>
-    public Entry? Find(string dir) => current?.Find(dir);
+    public Entry? Find(string dir) => Slot.Current?.Find(dir);
+
+    /// <summary>The generation <see cref="MarkStale"/> moves; for tests.</summary>
+    internal long Generation => Slot.Gen;
+
+    /// <summary>
+    /// Mods changed while nobody needs the index: drop what was published, so whoever needs it next refreshes rather than
+    /// reads a stale list. What each mod's manifests looked like is kept, so that refresh re-reads only what changed.
+    /// Never waits on a refresh that is running; that refresh's publish then fails.
+    /// </summary>
+    public void MarkStale()
+    {
+        while (true)
+        {
+            var seen = Slot;
+            if (ReferenceEquals(System.Threading.Interlocked.CompareExchange(ref slot, new IndexSlot(null, seen.Gen + 1), seen), seen))
+                return;
+        }
+    }
+
+    /// <summary>Test hook: runs between a refresh's reading and its publish.</summary>
+    internal Action? BeforePublish { get; set; }
+
+    /// <summary>Whether the last <see cref="RefreshState"/> published its state; for tests.</summary>
+    internal bool LastPublished { get; private set; }
 
     /// <summary>
     /// Bring the index up to date with Penumbra's mod list: forget mods that are gone, read new ones, re-read any whose
@@ -70,6 +103,9 @@ internal sealed class BodyModIndex
     {
         lock (gate)
         {
+            // First, inside the lock: refreshes are serialised, so only MarkStale can move the slot from here on.
+            var captured = Slot;
+
             foreach (string gone in known.Keys.Where(d => !mods.ContainsKey(d)).ToList()) known.Remove(gone);
 
             foreach (var (dir, name) in mods)
@@ -103,7 +139,10 @@ internal sealed class BodyModIndex
                                        .OrderBy(k => k.Key, StringComparer.OrdinalIgnoreCase)
                                        .Select(k => k.Key.ToLowerInvariant() + "|" + k.Value.Fingerprint)))))[..16];
             var state = new State(list, version);
-            current = state;
+            BeforePublish?.Invoke();
+            // Marked stale while this read the folders: the mark stands, and the caller still gets what it read.
+            LastPublished = ReferenceEquals(
+                System.Threading.Interlocked.CompareExchange(ref slot, new IndexSlot(state, captured.Gen), captured), captured);
             return state;
         }
     }
