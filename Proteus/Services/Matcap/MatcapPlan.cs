@@ -94,7 +94,9 @@ internal static partial class MatcapPlan
     /// <c>_mcap&lt;token&gt;&lt;N&gt;</c>, N the smallest number not in <paramref name="taken"/> (names in the model,
     /// the record and the mod's redirects, compared by file name). An absolute source name keeps its folder.
     /// </summary>
-    public static string NewName(string sourceMaterial, string token, IEnumerable<string> taken)
+    /// <param name="clashes">A name whose game paths are already taken (another material published there): skipped
+    /// too, so two models reading one folder never end up with one material redirect.</param>
+    public static string NewName(string sourceMaterial, string token, IEnumerable<string> taken, Func<string, bool>? clashes = null)
     {
         var used = new HashSet<string>(taken.Select(FileNameOf), StringComparer.OrdinalIgnoreCase);
         var src = sourceMaterial.Replace('\\', '/');
@@ -105,7 +107,7 @@ internal static partial class MatcapPlan
         for (int n = 1; ; n++)
         {
             var name = $"{stem}{Marker}{token}{n}.mtrl";
-            if (!used.Contains(FileNameOf(name))) return name;
+            if (!used.Contains(FileNameOf(name)) && clashes?.Invoke(name) != true) return name;
         }
     }
 
@@ -202,7 +204,7 @@ internal static partial class MatcapPlan
     public static string? Regenerated(string modRoot, string rel)
     {
         var norm = rel.Replace('\\', '/').ToLowerInvariant();
-        if (norm.StartsWith(HairPortPlan.Folder.ToLowerInvariant() + "/", StringComparison.Ordinal)) return "hair-port";
+        if (norm.StartsWith(HairPortPlan.Folder.ToLowerInvariant() + "/", StringComparison.Ordinal)) return HairPortKind;
         if (norm.StartsWith(EarlessHairPlan.Folder.ToLowerInvariant() + "/", StringComparison.Ordinal)) return "earless";
         if (SizeSetRefit.IsOurFile(SizeSetRefit.OurFiles(BodyRetargetWriter.ReadRecord(modRoot)), rel)) return RefitKind;
         return null;
@@ -211,13 +213,18 @@ internal static partial class MatcapPlan
     /// <summary><see cref="Regenerated"/>'s kind for a size-set or refit output.</summary>
     public const string RefitKind = "refit";
 
+    /// <summary><see cref="Regenerated"/>'s kind for one of Proteus's hair ports.</summary>
+    public const string HairPortKind = "hair-port";
+
     /// <summary>
-    /// Why the model file can't take a matcap, or null. Refits take one: they are seldom remade. A remake writes the file
-    /// again from its source: Undo then forgets the remade file instead of refusing, and the next Apply there retires the
-    /// old backup. Hair ports and earless copies are still refused: they are rewritten whenever their source hair changes.
+    /// Why the model file can't take a matcap, or null. Refits take one: they are seldom remade, and a remake writes the
+    /// file again from its source (Undo then forgets the remade file; the next Apply there retires the old backup). Hair
+    /// ports take one too: a matcapped port counts as edited (<see cref="HairPortWriter.EditedBy"/>), so Proteus no
+    /// longer remakes or undoes it until the matcap is undone. Earless copies are still refused: they are shared across
+    /// places and remade from the author's file, which is where their matcap belongs.
     /// </summary>
     public static string? RefusedRegenerated(string modRoot, string rel) =>
-        Regenerated(modRoot, rel) is { } kind && kind != RefitKind ? kind : null;
+        Regenerated(modRoot, rel) is { } kind && kind is not (RefitKind or HairPortKind) ? kind : null;
 
     // ── siblings ────────────────────────────────────────────────────────────
 

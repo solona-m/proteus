@@ -22,8 +22,9 @@ internal static class HairPortBuilder
     /// <param name="Unreadable">Refused because a file of the mod — its manifest, its port record, the model, its own
     /// skeleton — or the game's table of hairstyle skeletons could not be read (held open elsewhere, mid-update): no
     /// verdict on the model, the next look may read it.</param>
-    /// <param name="EditBlocked">Races refused because the user edited their port since: no verdict on the model
-    /// either — reverting the edit lets the next look port it.</param>
+    /// <param name="EditBlocked">Races refused because the user edited their port since (the brush, part switches or a
+    /// matcap of its own), and the races sharing such a race's material, refused with it: no verdict on the model either —
+    /// reverting the edit lets the next look port them.</param>
     /// <param name="Warnings">Races ported all the same with something to look at in game — a port that does not sit on
     /// the race's head, or a bend that turned part of the hairstyle inside out
     /// (<see cref="HairPortBaker.Result.Warning"/>) — with what.</param>

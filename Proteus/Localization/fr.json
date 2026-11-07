@@ -6574,5 +6574,9 @@
   "Parts.Matcap.KeptForRefits.Fmt": {
     "message": "Des refits faits à partir de lui dessinent encore la matcap, donc ses fichiers restent jusqu'à ce que les tailles soient refaites : {0}.",
     "description": ""
+  },
+  "Parts.Matcap.PortKept": {
+    "message": "Ce modèle est l'un des portages de coiffure de Proteus. Tant qu'il a une matcap, Proteus le laisse tel quel et ne refait pas de lui-même les portages des autres races qui partagent son matériau, jusqu'à ce que vous annuliez la matcap. Porter l'une de ces races à la main dans le Studio la refait tout de même.",
+    "description": ""
   }
 }

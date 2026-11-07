@@ -504,6 +504,7 @@ public class MatcapWriterTests
     [Theory]
     [Trait("Plan", "AC-matcaps-8")]
     [Trait("Plan", "EDGE-matcaps-35")]
+    [Trait("Plan", "AC-matcap-hair-ports-7")]
     [MemberData(nameof(RefusalCodes))]
     public void Refusals_leave_mod_untouched(string code)
     {
@@ -532,7 +533,7 @@ public class MatcapWriterTests
         if (code == "no-horns") gamePath = "chara/human/c1401/obj/face/f0001/model/c1401f0001_fac.mdl";
         if (code == "regenerated-model")
         {
-            rel = HairPortPlan.Folder + "/top.mdl";
+            rel = EarlessHairPlan.Folder + "/top.mdl";   // earless copies are still refused; ports take a matcap
             Directory.CreateDirectory(Path.GetDirectoryName(MatcapWriter.Full(f.ModRoot, rel))!);
             File.Copy(MatcapWriter.Full(f.ModRoot, MatcapFixture.ModelRel), MatcapWriter.Full(f.ModRoot, rel));
         }

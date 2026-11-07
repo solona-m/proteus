@@ -90,15 +90,15 @@ internal static class MatcapStudio
         var redirects = PenumbraModMeta.ReadAllRedirects(modRoot);
 
         // ── siblings: every file at this game path whose parts line up ──
-        // A refit's matcap stays on that file alone, and an author's file never spreads one to its refits: a remake
-        // writes the refits again from the author's file, so tying them into one apply group would leave Undo stuck.
-        bool onRefit = MatcapPlan.Regenerated(modRoot, modelRel) == MatcapPlan.RefitKind;
+        // A refit's or hair port's matcap stays on that file alone, and an author's file never spreads one to them: a
+        // remake writes them again from the author's file, so tying them into one apply group would leave Undo stuck.
+        bool onRegenerated = MatcapPlan.Regenerated(modRoot, modelRel) is MatcapPlan.RefitKind or MatcapPlan.HairPortKind;
         var models = new List<(string Rel, byte[] Bytes, IReadOnlyList<ModelPart> Parts)> { (modelRel, modelBytes, chosen) };
         var skipped = new List<string>();
         foreach (var sib in HatCompatService.SiblingFiles(modRoot, modelGamePath, modelRel))
         {
             if (PenumbraModMeta.SameFile(sib, modelRel)) continue;
-            if (onRefit || MatcapPlan.Regenerated(modRoot, sib) != null) { skipped.Add(sib); continue; }
+            if (onRegenerated || MatcapPlan.Regenerated(modRoot, sib) != null) { skipped.Add(sib); continue; }
             byte[] bytes;
             try { bytes = File.ReadAllBytes(MatcapWriter.Full(modRoot, sib)); } catch { skipped.Add(sib); continue; }
             var parts = ModelPartReader.Read(bytes)?.Parts;
@@ -131,12 +131,29 @@ internal static class MatcapStudio
         if (Directory.Exists(filesDir))
             foreach (var f in Directory.EnumerateFiles(filesDir))
                 taken.Add(Path.GetFileNameWithoutExtension(f) + ".mtrl");
+        // Where the materials will be published (from every candidate model: a superset of what splits, harmless for the
+        // collision check), and every game path a material already holds: a new name must not resolve onto one, or two
+        // models reading one folder (hair ports of races sharing a hair folder) would share one redirect.
+        var publishedAll = redirects.Where(r => models.Any(m => PenumbraModMeta.SameFile(r.File, m.Rel)))
+                                    .Select(r => r.GamePath).Distinct(StringComparer.OrdinalIgnoreCase).ToList();
+        IEnumerable<int>? folders = null;
+        if (target.Kind == MatcapPlan.Kind.Gear)
+        {
+            var item = target.Item!.Value;
+            folders = MatcapPlan.GearFolders(item, ImcEntrySource.GameEntries(env.ReadGameFile, item.SetTag, item.SlotLabel),
+                                             MatcapPlan.ModImcEntries(modRoot, item), redirects.Select(r => r.GamePath), env.WornFolder);
+        }
+        static string Norm(string path) => path.Replace('\\', '/').ToLowerInvariant();
+        var usedPaths = new HashSet<string>(redirects.Select(r => Norm(r.GamePath))
+                                                     .Concat(record.Materials.SelectMany(m => m.GamePaths).Select(Norm)), StringComparer.Ordinal);
         var names = new List<string>();
         foreach (var s in sources)
         {
-            var n = MatcapPlan.NewName(s, token, taken);
+            var n = MatcapPlan.NewName(s, token, taken,
+                c => MatcapPlan.MaterialGamePaths(target, c, publishedAll, folders).Any(gp => usedPaths.Contains(Norm(gp))));
             names.Add(n);
             taken.Add(n);
+            foreach (var gp in MatcapPlan.MaterialGamePaths(target, n, publishedAll, folders)) usedPaths.Add(Norm(gp));
         }
 
         // ── the splits, one source material at a time, on each model's running bytes ──
@@ -176,13 +193,6 @@ internal static class MatcapStudio
         // ── where the materials are published ──
         var publishedAt = redirects.Where(r => okModels.Any(m => PenumbraModMeta.SameFile(r.File, m.Rel)))
                                    .Select(r => r.GamePath).Distinct(StringComparer.OrdinalIgnoreCase).ToList();
-        IEnumerable<int>? folders = null;
-        if (target.Kind == MatcapPlan.Kind.Gear)
-        {
-            var item = target.Item!.Value;
-            folders = MatcapPlan.GearFolders(item, ImcEntrySource.GameEntries(env.ReadGameFile, item.SetTag, item.SlotLabel),
-                                             MatcapPlan.ModImcEntries(modRoot, item), redirects.Select(r => r.GamePath), env.WornFolder);
-        }
 
         // ── the shared textures ──
         Directory.CreateDirectory(env.TempDir);
@@ -219,7 +229,7 @@ internal static class MatcapStudio
         for (int si = 0; si < sources.Count; si++)
         {
             string name = names[si];
-            var sourceMtrl = SourceMaterial(modRoot, target, sources[si], redirects, env);
+            var sourceMtrl = SourceMaterial(modRoot, target, sources[si], redirects, env, modelRel);
             var sh = sourceMtrl != null ? MatcapMaterial.ReadHeader(sourceMtrl) : null;
             var normal = sh?.TextureOf(MatcapMaterial.SamplerNormal);
             float? alpha = sh?.AlphaThreshold;
@@ -281,19 +291,38 @@ internal static class MatcapStudio
     /// shader): their cut-outs follow the normal map's alpha under a matcap. The rule Prepare warns by.
     /// </summary>
     internal static bool IsAlphaTested(string modRoot, MatcapPlan.Target target, string name,
-                                       List<PenumbraModMeta.Redirect> redirects, Environment env)
+                                       List<PenumbraModMeta.Redirect> redirects, Environment env, string? modelRel = null)
     {
-        var sh = SourceMaterial(modRoot, target, name, redirects, env) is { } m ? MatcapMaterial.ReadHeader(m) : null;
+        var sh = SourceMaterial(modRoot, target, name, redirects, env, modelRel) is { } m ? MatcapMaterial.ReadHeader(m) : null;
         return sh?.AlphaThreshold is > 0f || string.Equals(sh?.Shader, "hair.shpk", StringComparison.OrdinalIgnoreCase);
     }
 
     /// <summary>
-    /// The parts' current material bytes: the mod's own file for it (a redirect whose game path ends in its name), else
-    /// the game's at the first path the model would read it from.
+    /// The parts' current material bytes: the mod's own file at a path the model reads it from; else the mod's file whose
+    /// game path ends in its name; else the game's at the first path the model would read it from. The exact path comes
+    /// first: a hair port of a race sharing a hair folder reads the author's file at another race's path, where only the
+    /// game's own material has the port's name.
     /// </summary>
     private static byte[]? SourceMaterial(string modRoot, MatcapPlan.Target target, string name,
-                                          List<PenumbraModMeta.Redirect> redirects, Environment env)
+                                          List<PenumbraModMeta.Redirect> redirects, Environment env, string? modelRel = null)
     {
+        // At a path the model reads: the model's own option first (options often ship their own material there), then
+        // the default data, then any option.
+        var own = modelRel == null ? new HashSet<string>(StringComparer.Ordinal)
+            : redirects.Where(r => PenumbraModMeta.SameFile(r.File, modelRel)).Select(r => r.Source).ToHashSet(StringComparer.Ordinal);
+        int Rank(PenumbraModMeta.Redirect r) => own.Contains(r.Source) ? 0 : r.Source.Length == 0 ? 1 : 2;
+        IEnumerable<int>? readFolders = target.Kind == MatcapPlan.Kind.Gear ? [env.WornFolder ?? 1] : null;
+        foreach (var gp in MatcapPlan.MaterialGamePaths(target, name, [], readFolders))
+            foreach (var r in redirects.Where(r => string.Equals(r.GamePath.Replace('\\', '/'), gp, StringComparison.OrdinalIgnoreCase))
+                                       .OrderBy(Rank))
+            {
+                try
+                {
+                    var full = MatcapWriter.Full(modRoot, r.File);
+                    if (File.Exists(full)) return File.ReadAllBytes(full);
+                }
+                catch { }
+            }
         var file = name.Replace('\\', '/');
         var tail = file.StartsWith('/') ? file : "/" + file[(file.LastIndexOf('/') + 1)..];
         foreach (var r in redirects)
@@ -307,8 +336,7 @@ internal static class MatcapStudio
             }
             catch { }
         }
-        IEnumerable<int>? folders = target.Kind == MatcapPlan.Kind.Gear ? [env.WornFolder ?? 1] : null;
-        foreach (var gp in MatcapPlan.MaterialGamePaths(target, name, [], folders))
+        foreach (var gp in MatcapPlan.MaterialGamePaths(target, name, [], readFolders))
             if (env.ReadGameFile(gp) is { } bytes) return bytes;
         return null;
     }

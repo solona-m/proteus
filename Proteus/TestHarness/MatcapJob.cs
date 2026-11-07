@@ -57,7 +57,7 @@ internal static class MatcapJob
         var alpha = new Dictionary<string, bool>(StringComparer.OrdinalIgnoreCase);
         if (target != null)
             foreach (var m in parts.Select(p => p.Material).Distinct(StringComparer.OrdinalIgnoreCase))
-                try { alpha[m] = MatcapStudio.IsAlphaTested(modRoot, target, m, redirects, port.Env); } catch { alpha[m] = false; }
+                try { alpha[m] = MatcapStudio.IsAlphaTested(modRoot, target, m, redirects, port.Env, rel); } catch { alpha[m] = false; }
         var tickableParts = parts.Where(p => p.Island < 0 && MatcapPlan.Tickable(p, kind, attrs)).ToList();
         var record = MatcapRecord.Read(modRoot);
         var states = MatcapWriter.Detect(modRoot);

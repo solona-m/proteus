@@ -141,7 +141,7 @@ internal static class MatcapWriter
                 if (!File.Exists(backup)) continue;
                 var names = TryNames(m.SourceBytes);
                 if (record.Model(m.Rel) is { } known && names != null && record.Materials.Any(x => names.Contains(x.Name))
-                    && !RemadeRefit(modRoot, m.Rel, record, known, m.SourceBytes)) continue;
+                    && !RemadeRegenerated(modRoot, m.Rel, record, known, m.SourceBytes)) continue;
                 staleBackups.Add(m.Rel);
             }
 
@@ -234,8 +234,14 @@ internal static class MatcapWriter
 
                 foreach (var e in entries) e.Pending = false;
                 MatcapRecord.Write(modRoot, record);
-                return Outcome.Done(string.Format(ProteusLoc.Localize("Parts.Matcap.Applied.Fmt", "Matcap applied: {0} on {1} model file(s)."),
-                    string.Join(", ", req.Materials.Select(p => StemOf(p.Name))), req.Models.Count), [.. req.Models.Select(m => m.Rel), .. created]);
+                var applied = string.Format(ProteusLoc.Localize("Parts.Matcap.Applied.Fmt", "Matcap applied: {0} on {1} model file(s)."),
+                    string.Join(", ", req.Materials.Select(p => StemOf(p.Name))), req.Models.Count);
+                // A hair port with a matcap is kept as it is (HairPortWriter.EditedBy): say so, since nothing else would
+                // until the hairstyle it was made from changes.
+                if (req.Models.Any(m => MatcapPlan.Regenerated(modRoot, m.Rel) == MatcapPlan.HairPortKind))
+                    applied += " " + ProteusLoc.Localize("Parts.Matcap.PortKept",
+                        "That model is one of Proteus's hair ports. While it has a matcap, Proteus keeps it as it is, and doesn't by itself remake the ports of other races that share its material, until you undo the matcap. Porting one of those races by hand in the Studio still remakes it.");
+                return Outcome.Done(applied, [.. req.Models.Select(m => m.Rel), .. created]);
             }
             catch (Exception ex)
             {
@@ -335,6 +341,21 @@ internal static class MatcapWriter
         return names != null && record.Materials.Any(m => names.Contains(m.Name));
     }
 
+    /// <summary>
+    /// Whether <paramref name="rel"/> still draws one of its OWN matcaps (a material whose meshes are in it) — not merely
+    /// one carried in from the file it was remade from. An unreadable record counts: never unblock by mistake. What makes
+    /// a hair port count as edited (<see cref="HairPortWriter.EditedBy"/>).
+    /// </summary>
+    public static bool NamesOwnMatcap(string modRoot, string rel)
+    {
+        var record = MatcapRecord.Read(modRoot);
+        if (record.Unreadable) return true;
+        var names = NamesIn(modRoot, rel);
+        // A file that is there but can't be read counts too (never overwritten by mistake); a missing one does not.
+        if (names == null) return File.Exists(Full(modRoot, rel)) && record.MaterialsOf(rel).Any();
+        return record.MaterialsOf(rel).Any(m => names.Contains(m.Name));
+    }
+
     /// <summary>One entry's state, read-only: what opening a model shows. Writes nothing.</summary>
     public enum State { Ok, Superseded, Edited }
 
@@ -418,15 +439,21 @@ internal static class MatcapWriter
                 var names = NamesIn(modRoot, g);
                 bool namesOurs = names != null && record.Materials.Any(m => names.Contains(m.Name));
                 if (!namesOurs) { forget.Add(g); continue; }                                // (c) superseded: forget it
-                if (forgetOnly) continue;
+                if (forgetOnly)
+                {
+                    // A refit or hair port written again from its source since (naming none of its own matcaps): forgotten
+                    // too, its backup retired — as Undo does.
+                    if (record.Model(g) is { } w && RemadeRegenerated(modRoot, g, record, w, File.ReadAllBytes(full))) forget.Add(g);
+                    continue;
+                }
                 if (ModelBackupOrder.LaterFeature(modRoot, BackupSubdir, g) is { } later)   // (a) a later feature
                     return Outcome.Refuse(CodeLaterFeature, ModelBackupOrder.BlockedMessage(later));
                 var bytes = File.ReadAllBytes(full);
                 var sha = HairPortPlan.Sha8(bytes);
                 if (record.Model(g) is { } me && me.WrittenSha8s.Contains(sha) && File.Exists(backup))
                     restore.Add((g, backup));                                               // (b) ours: restore it
-                else if (record.Model(g) is { } was && RemadeRefit(modRoot, g, record, was, bytes))
-                    forget.Add(g);                                                          // (f) a remade refit: forget it
+                else if (record.Model(g) is { } was && RemadeRegenerated(modRoot, g, record, was, bytes))
+                    forget.Add(g);                                                          // (f) a remade refit or port: forget it
                 else                                                                        // (d) edited on top
                     return Outcome.Refuse(CodeEdited, string.Format(ProteusLoc.Localize("Matcap.Refused.Edited.Fmt",
                         "{0} was changed after its matcap was applied, so it was not undone. Its original is kept at {1}."),
@@ -565,14 +592,14 @@ internal static class MatcapWriter
     }
 
     /// <summary>
-    /// A refit Proteus wrote again since our matcap went on (a remake from its source): not as we wrote it, and not an
+    /// A refit or hair port Proteus wrote again since our matcap went on (a remake from its source): not as we wrote it, and not an
     /// edit on top of ours either — the remake replaced the file whole, so its old backup is stale.
     /// </summary>
-    /// A remake writes the file from its source, so it never carries the refit's own matcaps: a file still naming one
+    /// (A refit or a hair port.) A remake writes the file from its source, so it never carries the file's own matcaps: one still naming one
     /// was edited on top (the brush, a hand edit) and keeps the old path — its backup, the later-feature order, a refusal.
-    private static bool RemadeRefit(string modRoot, string rel, MatcapRecord record, MatcapRecord.ModelEntry known, byte[] bytes)
+    private static bool RemadeRegenerated(string modRoot, string rel, MatcapRecord record, MatcapRecord.ModelEntry known, byte[] bytes)
     {
-        if (known.WrittenSha8s.Contains(HairPortPlan.Sha8(bytes)) || MatcapPlan.Regenerated(modRoot, rel) != MatcapPlan.RefitKind)
+        if (known.WrittenSha8s.Contains(HairPortPlan.Sha8(bytes)) || MatcapPlan.Regenerated(modRoot, rel) is not (MatcapPlan.RefitKind or MatcapPlan.HairPortKind))
             return false;
         var names = TryNames(bytes);
         return names != null && !record.MaterialsOf(rel).Any(m => names.Contains(m.Name));

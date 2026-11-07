@@ -352,9 +352,9 @@ internal static class HairPortWriter
     /// a game-named redirect in a taken race's own folder (<see cref="Join.Folder"/>), which the result names. Its redirects
     /// go only while they still name Proteus's file; a material of a port's own name only once no port left relies on it,
     /// in that place or the default data (<see cref="ReliesOn"/>); then every file under <see cref="HairPortPlan.Folder"/>
-    /// nothing names any more. A set with a port the user edited since with the brush or part switches is left whole, the
-    /// other sets still go, and the result says why. Nothing is changed while the manifest cannot be read: unknown is not
-    /// gone.
+    /// nothing names any more. A set with a port the user edited since — the brush, part switches or a matcap of its own —
+    /// is left whole, the other sets still go, and the result says why. Nothing is changed while the manifest cannot be
+    /// read: unknown is not gone.
     /// </summary>
     /// <param name="decline">Remember the undo, so the automatic path does not port the same hairstyle there again — for
     /// what was asked for and what shares its material, never for an old port taken along by its folder.</param>
@@ -544,8 +544,10 @@ internal static class HairPortWriter
     [ThreadStatic] internal static Action<int>? BeforeMerge;
 
     /// <summary>
-    /// The feature that edited a port in place since it was written — part switches or the brush, which each keep a
-    /// backup — or null. Hat fitting is not one: it is redone on whatever the port becomes.
+    /// The feature that edited a port in place since it was written — part switches, the brush or a matcap, which each
+    /// keep a backup — or null. A matcap counts only while the port still draws one of its own (an unreadable matcap
+    /// record counts: never overwritten by mistake); a retired matcap backup never does. Hat fitting is not one: it is
+    /// redone on whatever the port becomes. An edited port is neither remade nor undone until that edit is undone.
     /// </summary>
     internal static string? EditedBy(string modRoot, string rel)
     {
@@ -556,6 +558,9 @@ internal static class HairPortWriter
                  })
             if (File.Exists(Path.Combine(modRoot, SidecarDiscoveryService.SidecarSubdir, subdir, NativeRel(rel))))
                 return name;
+        if (File.Exists(Path.Combine(modRoot, SidecarDiscoveryService.SidecarSubdir, Matcap.MatcapWriter.BackupSubdir, NativeRel(rel)))
+            && Matcap.MatcapWriter.NamesOwnMatcap(modRoot, rel.Replace('\\', '/')))
+            return ProteusLoc.Localize("MeshVolume.Feature.Matcaps", "matcaps");
         return null;
     }
 
