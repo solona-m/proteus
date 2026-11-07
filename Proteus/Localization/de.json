@@ -6232,7 +6232,7 @@
     "description": ""
   },
   "Matcap.Refused.NotTarget": {
-    "message": "Matcaps gehören auf Ausrüstung, Accessoires, Haare, Viera-Ohren und Au-Ra-Hörner (am Gesicht); dieses Modell ist nichts davon.",
+    "message": "Matcaps gehören auf Ausrüstung, Accessoires, Haare, Schwänze, Viera-Ohren und Au-Ra-Hörner (am Gesicht); dieses Modell ist nichts davon.",
     "description": ""
   },
   "Matcap.Refused.RecordUnreadable": {
@@ -6499,6 +6499,10 @@
     "message": "Ohren {0} ({1})",
     "description": ""
   },
+  "Parts.Vanilla.Tail.Fmt": {
+    "message": "Schwanz {0} ({1})",
+    "description": ""
+  },
   "Settings.MatcapLibrary": {
     "message": "Matcap-Bilder",
     "description": ""
@@ -6528,7 +6532,7 @@
     "description": ""
   },
   "Parts.Matcap.MatcapsOnlyHere": {
-    "message": "Dein eigenes Gesicht und deine Ohren öffnen sich nur unter Matcaps, daher wurden sie geschlossen.",
+    "message": "Dein eigenes Gesicht, deine Ohren und dein Schwanz öffnen sich nur unter Matcaps, daher wurden sie geschlossen.",
     "description": ""
   },
   "Parts.Matcap.NoHorns": {

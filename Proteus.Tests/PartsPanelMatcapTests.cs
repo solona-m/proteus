@@ -100,9 +100,10 @@ public class PartsPanelMatcapTests
         var sw = Method(Main(), "private void SwitchTool(Tool value)");
         Assert.Contains("CustomizationMaterialPath.Parse(open.GamePath) != null", sw);
         Assert.Contains("CloseVanillaEar();", sw);
-        // Ears and the face (horns) are offered by the live pick and the worn list only under Matcaps.
-        Assert.Contains("tool == Tool.Matcap && (VanillaPick.FromEar(gamePath) ?? VanillaPick.FromFace(gamePath))", Main());
-        Assert.Contains("(tool == Tool.Matcap ? VanillaPick.FromEar(path) ?? VanillaPick.FromFace(path) : null)", Main());
+        // Ears, the face (horns) and tails are offered by the live pick, the worn list and the opener only under Matcaps.
+        Assert.Contains("tool == Tool.Matcap && VanillaPick.FromCharacterPart(gamePath)", Main());
+        Assert.Contains("(tool == Tool.Matcap ? VanillaPick.FromCharacterPart(path) : null)", Main());
+        Assert.Contains("(tool == Tool.Matcap ? VanillaPick.FromCharacterPart(gamePath) : null)", Main());
         // A managed face rewrite is never opened for editing: the overlay note instead.
         Assert.Contains("MatcapPanelModel.IsManagedFaceRewrite(", Main());
         Assert.Contains("Strings.Matcap.FaceOverlayOn", Main());

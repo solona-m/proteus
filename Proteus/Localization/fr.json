@@ -6232,7 +6232,7 @@
     "description": ""
   },
   "Matcap.Refused.NotTarget": {
-    "message": "Les matcaps vont sur l'équipement, les accessoires, les cheveux, les oreilles de Viera et les cornes d'Ao Ra (sur le visage) ; ce modèle n'est rien de cela.",
+    "message": "Les matcaps vont sur l'équipement, les accessoires, les cheveux, les queues, les oreilles de Viera et les cornes d'Ao Ra (sur le visage) ; ce modèle n'est rien de cela.",
     "description": ""
   },
   "Matcap.Refused.RecordUnreadable": {
@@ -6499,6 +6499,10 @@
     "message": "Oreilles {0} ({1})",
     "description": ""
   },
+  "Parts.Vanilla.Tail.Fmt": {
+    "message": "Queue {0} ({1})",
+    "description": ""
+  },
   "Settings.MatcapLibrary": {
     "message": "Images de matcap",
     "description": ""
@@ -6528,7 +6532,7 @@
     "description": ""
   },
   "Parts.Matcap.MatcapsOnlyHere": {
-    "message": "Votre propre visage et vos oreilles ne s'ouvrent que sous Matcaps, ils ont donc été fermés.",
+    "message": "Votre propre visage, vos oreilles et votre queue ne s'ouvrent que sous Matcaps, ils ont donc été fermés.",
     "description": ""
   },
   "Parts.Matcap.NoHorns": {

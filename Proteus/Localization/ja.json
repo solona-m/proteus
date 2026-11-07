@@ -6232,7 +6232,7 @@
     "description": ""
   },
   "Matcap.Refused.NotTarget": {
-    "message": "マットキャップは装備、アクセサリー、髪、ヴィエラの耳、アウラの角（顔の一部）に付けられます。このモデルはどれでもありません。",
+    "message": "マットキャップは装備、アクセサリー、髪、尻尾、ヴィエラの耳、アウラの角（顔の一部）に付けられます。このモデルはどれでもありません。",
     "description": ""
   },
   "Matcap.Refused.RecordUnreadable": {
@@ -6499,6 +6499,10 @@
     "message": "耳 {0}（{1}）",
     "description": ""
   },
+  "Parts.Vanilla.Tail.Fmt": {
+    "message": "尻尾 {0}（{1}）",
+    "description": ""
+  },
   "Settings.MatcapLibrary": {
     "message": "マットキャップ画像",
     "description": ""
@@ -6528,7 +6532,7 @@
     "description": ""
   },
   "Parts.Matcap.MatcapsOnlyHere": {
-    "message": "自分の顔と耳はマットキャップでのみ開けるため、閉じました。",
+    "message": "自分の顔、耳、尻尾はマットキャップでのみ開けるため、閉じました。",
     "description": ""
   },
   "Parts.Matcap.NoHorns": {

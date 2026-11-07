@@ -136,6 +136,75 @@ public class MatcapVieraEarLocalTests(ITestOutputHelper output)
     }
 }
 
+public class MatcapTailLocalTests(ITestOutputHelper output)
+{
+    [LocalDataFact(LocalData.GameData)]
+    public void Real_tail_models_take_matcap_published_beside_the_games_material()
+    {
+        var data = ModelMaterialWriterLocalTests.Game();
+        int tested = 0;
+        foreach (var (race, id) in new[] { (801, 1), (1401, 2), (1501, 1), (1601, 3) })
+        {
+            var path = $"chara/human/c{race:D4}/obj/tail/t{id:D4}/model/c{race:D4}t{id:D4}_til.mdl";
+            var bytes = data.GetFile(path)?.Data;
+            if (bytes == null) continue;
+            var parts = ModelPartReader.Read(bytes)!.Parts.Where(p => p.Island < 0 && MatcapPlan.Tickable(p)).ToList();
+            Assert.NotEmpty(parts);
+            var target = MatcapPlan.TargetOf(path, out _)!;
+            Assert.Equal(MatcapPlan.Kind.Tail, target.Kind);
+            var name = MatcapPlan.NewName(parts[0].Material, "abcdef", SecondSkinWriter.MaterialNames(bytes));
+            var result = ModelMaterialWriter.MoveToMaterial(bytes, [parts[0]], name);
+            Assert.Contains(name, SecondSkinWriter.MaterialNames(result.Model));
+            var paths = MatcapPlan.MaterialGamePaths(target, name, [path], null);
+            // Every folder the game ships the tail's own material in gets the new one.
+            var vanilla = CustomizationMaterialPath.GamePaths(path, parts[0].Material).Where(data.FileExists).ToList();
+            Assert.NotEmpty(vanilla);
+            foreach (var v in vanilla)
+                Assert.Contains(paths, p => Path.GetDirectoryName(p) == Path.GetDirectoryName(v));
+            output.WriteLine($"{path}: {parts[0].Label} -> {string.Join(", ", paths)}");
+
+            // The tail's own material reads: a header, a normal map for the matcap to keep.
+            var normals = new List<string>();
+            foreach (var v in vanilla)
+            {
+                var header = MatcapMaterial.ReadHeader(data.GetFile(v)!.Data);
+                Assert.NotNull(header);
+                var normal = header!.TextureOf(MatcapMaterial.SamplerNormal);
+                Assert.False(string.IsNullOrEmpty(normal), $"{v}: no normal map");
+                normals.Add(normal!);
+                output.WriteLine($"  {v}: {header.Shader}, normal {normal}, alpha threshold {header.AlphaThreshold?.ToString() ?? "none"}");
+            }
+            // One matcap material (built from the first fur pattern's normal map) is published for all five Hrothgar fur
+            // patterns. Their normal maps differ only in blue (the pattern, which the matcap replaces): the direction and
+            // the alpha cut-out match, so every pattern's tail keeps its shape.
+            if (normals.Count > 1) AssertSameShape(data, normals);
+            tested++;
+        }
+        Assert.True(tested > 0, "no tail model in game data");
+    }
+
+    private void AssertSameShape(Lumina.GameData data, List<string> normals)
+    {
+        var first = data.GetFile<Lumina.Data.Files.TexFile>(normals[0])!.ImageData;   // BGRA
+        foreach (var other in normals.Skip(1))
+        {
+            var img = data.GetFile<Lumina.Data.Files.TexFile>(other)!.ImageData;
+            Assert.Equal(first.Length, img.Length);
+            int n = img.Length / 4, cutFlips = 0;
+            double green = 0, red = 0;
+            for (int i = 0; i < n; i++)
+            {
+                green += Math.Abs(img[i * 4 + 1] - first[i * 4 + 1]);
+                red += Math.Abs(img[i * 4 + 2] - first[i * 4 + 2]);
+                if ((img[i * 4 + 3] >= 191) != (first[i * 4 + 3] >= 191)) cutFlips++;    // 0.75 threshold
+            }
+            output.WriteLine($"  {other}: mean normal diff G{green / n:F2} R{red / n:F2}, cut-out flips {cutFlips}/{n}");
+            Assert.True(green / n < 4 && red / n < 4, $"{other}: its normal direction differs from {normals[0]}");
+            Assert.True(cutFlips < n / 1000, $"{other}: its cut-out differs from {normals[0]}");
+        }
+    }
+}
+
 public class MatcapDownstreamLocalTests(ITestOutputHelper output)
 {
     /// <summary>Positions of one mesh's vertices straight from the file (its position element).</summary>
