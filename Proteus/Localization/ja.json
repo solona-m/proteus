@@ -6542,5 +6542,9 @@
   "Parts.Vanilla.FaceHorns.Fmt": {
     "message": "角（顔 {0}、{1}）",
     "description": ""
+  },
+  "Parts.Matcap.BackupKept.Fmt": {
+    "message": "古いバックアップを移動できませんでした: {0}。次にそこへマットキャップを付けるとき、先に移動します。",
+    "description": ""
   }
 }

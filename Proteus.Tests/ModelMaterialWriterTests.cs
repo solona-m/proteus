@@ -18,9 +18,11 @@ public class ModelMaterialWriterTests
 
     /// <summary>
     /// Every drawn triangle, as "material|corners", corners in index order and with <paramref name="shape"/>'s values
-    /// applied. Collapsed triangles draw nothing and are left out. Sorted, so two models compare as multisets.
+    /// applied. Collapsed triangles draw nothing and are left out. Sorted, so two models compare as multisets. With
+    /// <paramref name="allElements"/>, each corner also carries its vertex's raw bytes in every stream the mesh declares
+    /// (normals, UVs, weights, colours…), so a wrong stream offset in a copy shows.
     /// </summary>
-    internal static List<string> Drawn(byte[] mdl, string? shape = null)
+    internal static List<string> Drawn(byte[] mdl, string? shape = null, bool allElements = false)
     {
         var src = SecondSkinWriter.Parse(mdl);
         var s = src.S;
@@ -54,7 +56,15 @@ public class ModelMaterialWriterTests
                 {
                     Assert.True(v < vc, $"mesh {m} index {v} past its {vc} vertices");
                     SecondSkinWriter.ReadTyped(s, src.Vb + (int)vbo + v * stride + pe.Offset, pe.Type, tmp);
-                    corners.Add(string.Join(",", tmp[..3].ToArray().Select(f => f.ToString("F4", CultureInfo.InvariantCulture))));
+                    var corner = string.Join(",", tmp[..3].ToArray().Select(f => f.ToString("F4", CultureInfo.InvariantCulture)));
+                    if (allElements)
+                        foreach (var st in src.Decls[m].Select(e => e.Stream).Distinct().Order())
+                        {
+                            uint so = BitConverter.ToUInt32(s, mo + 20 + st * 4);
+                            byte sw = s[mo + 32 + st];
+                            corner += "/" + Convert.ToHexString(s, src.Vb + (int)so + v * sw, sw);
+                        }
+                    corners.Add(corner);
                 }
                 list.Add($"{mat}|{string.Join(";", corners)}");
             }

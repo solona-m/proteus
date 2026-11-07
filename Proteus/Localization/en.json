@@ -6542,5 +6542,9 @@
   "Parts.Vanilla.FaceHorns.Fmt": {
     "message": "Horns (face {0}, {1})",
     "description": "Studio Matcaps tool. A matcap is a sphere picture a shader samples by the surface's facing direction."
+  },
+  "Parts.Matcap.BackupKept.Fmt": {
+    "message": "Their old backups could not be moved aside: {0}. The next matcap there moves them first.",
+    "description": "Studio Matcaps tool. A matcap is a sphere picture a shader samples by the surface's facing direction."
   }
 }

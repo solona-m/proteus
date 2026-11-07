@@ -6542,5 +6542,9 @@
   "Parts.Vanilla.FaceHorns.Fmt": {
     "message": "Cuernos (cara {0}, {1})",
     "description": ""
+  },
+  "Parts.Matcap.BackupKept.Fmt": {
+    "message": "Sus copias de seguridad antiguas no se pudieron apartar: {0}. El próximo matcap allí las moverá primero.",
+    "description": ""
   }
 }

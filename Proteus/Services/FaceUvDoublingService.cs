@@ -74,6 +74,10 @@ public sealed class FaceUvDoublingService
         this.uvRemap = uvRemap;
     }
 
+    /// <summary>The disk file the face rewrite last read <paramref name="modelGamePath"/> from, or null (game data, or never).</summary>
+    public string? UpstreamPathOf(string modelGamePath) =>
+        _upstreamPaths.TryGetValue(modelGamePath, out var p) ? p : null;
+
     /// <summary>
     /// Forget the remembered pristine bytes of <paramref name="modelGamePath"/> (memory and the <c>models/upstream</c>
     /// mirror) and its rewrites, keeping where they came from. For an edit Proteus makes to the face file itself (a matcap
@@ -81,10 +85,6 @@ public sealed class FaceUvDoublingService
     /// this the next composite would republish the face as it was before the edit, or — after an undo — one naming
     /// materials that are gone. The next composite re-reads the remembered file instead, so nothing folds.
     /// </summary>
-    /// <summary>The disk file the face rewrite last read <paramref name="modelGamePath"/> from, or null (game data, or never).</summary>
-    public string? UpstreamPathOf(string modelGamePath) =>
-        _upstreamPaths.TryGetValue(modelGamePath, out var p) ? p : null;
-
     /// <param name="writtenFile">The face file the edit wrote, used as the upstream only when none is remembered (the
     /// game's own face, copied into an edit mod while our output already won the path).</param>
     public void ForgetUpstream(string modelGamePath, string outputRoot, string? writtenFile = null)

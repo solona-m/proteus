@@ -373,13 +373,13 @@ public partial class CompositorService
     /// <summary>The managed mod's folder; null while Penumbra's mod root is unknown.</summary>
     internal string? ManagedModFolder => string.IsNullOrEmpty(modsRoot) ? null : managedModDir;
 
+    /// <summary>The disk file the face rewrite reads a face from, or null — see <see cref="FaceUvDoublingService.UpstreamPathOf"/>.</summary>
+    internal string? FaceUpstreamPath(string modelGamePath) => faceUv.UpstreamPathOf(modelGamePath);
+
     /// <summary>
     /// A face model file was edited in its own mod (a matcap on Au Ra horns): the face rewrite must read it again rather
     /// than its remembered copy — see <see cref="FaceUvDoublingService.ForgetUpstream"/>. Call before the recomposite.
     /// </summary>
-    /// <summary>The disk file the face rewrite reads a face from, or null — see <see cref="FaceUvDoublingService.UpstreamPathOf"/>.</summary>
-    internal string? FaceUpstreamPath(string modelGamePath) => faceUv.UpstreamPathOf(modelGamePath);
-
     internal void ForgetFaceUpstream(string modelGamePath, string? writtenFile = null)
     {
         if (ManagedModFolder is { } root) faceUv.ForgetUpstream(modelGamePath, root, writtenFile);

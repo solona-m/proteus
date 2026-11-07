@@ -6542,5 +6542,9 @@
   "Parts.Vanilla.FaceHorns.Fmt": {
     "message": "Рога (лицо {0}, {1})",
     "description": ""
+  },
+  "Parts.Matcap.BackupKept.Fmt": {
+    "message": "Не удалось убрать их старые резервные копии: {0}. Следующий matcap там сначала переместит их.",
+    "description": ""
   }
 }

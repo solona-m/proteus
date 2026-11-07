@@ -6542,5 +6542,9 @@
   "Parts.Vanilla.FaceHorns.Fmt": {
     "message": "角（脸 {0}，{1}）",
     "description": ""
+  },
+  "Parts.Matcap.BackupKept.Fmt": {
+    "message": "无法移走它们的旧备份：{0}。下次在那里加 matcap 时会先移走它们。",
+    "description": ""
   }
 }

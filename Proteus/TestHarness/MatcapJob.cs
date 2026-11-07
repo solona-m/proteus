@@ -50,11 +50,30 @@ internal static class MatcapJob
         var read = ModelPartReader.Read(bytes);
         var parts = read?.Parts ?? [];
         var attrs = read?.AttributeNames ?? [];
-        var kind = MatcapPlan.TargetOf(gamePath!, out _)?.Kind;
+        var target = MatcapPlan.TargetOf(gamePath!, out _);
+        var kind = target?.Kind;
+        var redirects = PenumbraModMeta.ReadAllRedirects(modRoot);
+        // The panel's alpha-test rule, once per source material.
+        var alpha = new Dictionary<string, bool>(StringComparer.OrdinalIgnoreCase);
+        if (target != null)
+            foreach (var m in parts.Select(p => p.Material).Distinct(StringComparer.OrdinalIgnoreCase))
+                try { alpha[m] = MatcapStudio.IsAlphaTested(modRoot, target, m, redirects, port.Env); } catch { alpha[m] = false; }
+        var tickableParts = parts.Where(p => p.Island < 0 && MatcapPlan.Tickable(p, kind, attrs)).ToList();
         var record = MatcapRecord.Read(modRoot);
         var states = MatcapWriter.Detect(modRoot);
         var siblings = HatCompatService.SiblingFiles(modRoot, gamePath!, rel!)
-            .Where(s => !PenumbraModMeta.SameFile(s, rel!)).ToList();
+            .Where(s => !PenumbraModMeta.SameFile(s, rel!))
+            .Select(s =>
+            {
+                bool linesUp = false;
+                try
+                {
+                    var sp = ModelPartReader.Read(File.ReadAllBytes(MatcapWriter.Full(modRoot, s)))?.Parts;
+                    linesUp = sp != null && MatcapPlan.LinesUp(tickableParts, sp);
+                }
+                catch { }
+                return new { file = s, linesUp };
+            }).ToList();
         int room = 0;
         try { room = ModelMaterialWriter.MaterialRoom(bytes); } catch { }
         return new
@@ -65,9 +84,11 @@ internal static class MatcapJob
             {
                 label = p.Label, material = p.Material, skin = MatcapPlan.IsSkin(p), onMatcap = MatcapPlan.IsOnMatcap(p),
                 tickable = MatcapPlan.Tickable(p, kind, attrs), horn = MatcapPlan.IsHorn(p, attrs), island = p.Island,
+                alphaTested = alpha.TryGetValue(p.Material, out var at) && at,
             }),
             siblings,
-            group = record.Models.Select(m => m.File),
+            // The apply group: what an Undo of this model restores with it.
+            group = record.Model(rel!) != null ? MatcapWriter.ApplyGroupOf(record, rel!).Order(StringComparer.OrdinalIgnoreCase).ToList() : [rel!],
             entries = record.Materials.Select(m => new
             {
                 name = m.Name, gamePaths = m.GamePaths, meshes = m.Meshes.Select(x => new { model = x.Model, mesh = x.Mesh, from = x.From }),
@@ -132,6 +153,12 @@ internal static class MatcapJob
         ct.ThrowIfCancellationRequested();
 
         job.Progress("writing");
+        // Every face game path the model is published at, gathered before the job (an Undo in an edit mod drops them).
+        var facePaths = gamePath != null && MatcapPlan.TargetOf(gamePath, out _) is { Kind: MatcapPlan.Kind.Face }
+            ? PenumbraModMeta.ReadAllRedirects(args.ModRoot)
+                .Where(r => PenumbraModMeta.SameFile(r.File, rel!) && MatcapPlan.TargetOf(r.GamePath, out _) is { Kind: MatcapPlan.Kind.Face })
+                .Select(r => r.GamePath).Distinct(StringComparer.OrdinalIgnoreCase).ToList()
+            : [];
         MatcapWriter.Outcome outcome;
         MatcapStudio.Prepared? prepared = null;
         switch (args.Kind)
@@ -176,14 +203,12 @@ internal static class MatcapJob
         // Every successful job changed the mod (a Forget removes redirects), so every one ends in a reload and redraw.
         bool changed = outcome.Ok || librarySetting != null;
         // A face the face overlay rewrites is read again after our edit, not from its remembered copy.
-        if (changed && args.Kind != Action.Change && gamePath != null && MatcapPlan.TargetOf(gamePath, out _) is { Kind: MatcapPlan.Kind.Face }
-            && args.Port.ForgetFaceUpstream is { } forget)
-        {
-            var facePaths = PenumbraModMeta.ReadAllRedirects(args.ModRoot)
-                .Where(r => PenumbraModMeta.SameFile(r.File, rel!) && MatcapPlan.TargetOf(r.GamePath, out _) is { Kind: MatcapPlan.Kind.Face })
-                .Select(r => r.GamePath).Distinct(StringComparer.OrdinalIgnoreCase).ToList();
+        if (changed && args.Kind != Action.Change && facePaths.Count > 0 && args.Port.ForgetFaceUpstream is { } forget)
             await jobs.Dispatcher.RunAsync(() => { foreach (var p in facePaths) forget(p); return true; }, jobs.Timings.FrameworkStart).ConfigureAwait(false);
-        }
+        // The panel's drawn-file line after an Apply (EDGE-47/58), on the framework thread.
+        string? drawnLine = null;
+        if (outcome.Ok && args.Kind == Action.Apply && gamePath != null && args.Port.DrawnStatus is { } drawnOf)
+            drawnLine = await jobs.Dispatcher.RunAsync(() => drawnOf(args.ModRoot, gamePath, outcome.Files), jobs.Timings.FrameworkStart).ConfigureAwait(false);
         if (changed)
         {
             jobs.PostAfterChange(job, () => job.SetAfterChange(game.AfterModChange(args.ModDir)));
@@ -203,7 +228,10 @@ internal static class MatcapJob
             resultLine = outcome.Message,
             material = entry?.Name, gamePaths = entry?.GamePaths,
             files = prepared?.Request?.Models.Select(m => new { file = m.Rel, meshesAdded = prepared.Request.Materials.SelectMany(p => p.Meshes).Count(x => x.Rel == m.Rel && x.Source != x.Drawn), lod0Cut = m.Lod0Cut }),
-            materials = prepared?.Request?.Materials.Select(p => p.Name),
+            materials = prepared?.Request?.Materials.Select(p => new { name = p.Name, gamePaths = p.GamePaths, normal = p.Normal, alphaThreshold = p.AlphaThreshold }),
+            drawn = args.Kind == Action.Apply && outcome.Ok
+                ? new { line = drawnLine, ours = drawnLine == null, throughFace = drawnLine == Localization.Strings.Matcap.DrawnThroughFace }
+                : null,
             siblingsSkipped = prepared?.SiblingsSkipped,
             librarySetting,
         });

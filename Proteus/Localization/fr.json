@@ -6542,5 +6542,9 @@
   "Parts.Vanilla.FaceHorns.Fmt": {
     "message": "Cornes (visage {0}, {1})",
     "description": ""
+  },
+  "Parts.Matcap.BackupKept.Fmt": {
+    "message": "Leurs anciennes sauvegardes n'ont pas pu être mises de côté : {0}. La prochaine matcap à cet endroit les déplacera d'abord.",
+    "description": ""
   }
 }

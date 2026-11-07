@@ -396,6 +396,13 @@ internal static class ModelMaterialWriter
         W32(o, 28, (uint)ibOut);
         W32(o, 40, (uint)newVSize);
         W32(o, 52, (uint)newISize);
+        // One level of detail is left (a model with more is cut first): the other slots point at nothing, as
+        // ModelLodTrimmer writes them, so no reader follows a stale offset into the moved data.
+        for (int l = 1; l < 3; l++)
+        {
+            W32(o, 16 + l * 4, 0); W32(o, 28 + l * 4, 0);
+            W32(o, 40 + l * 4, 0); W32(o, 52 + l * 4, 0);
+        }
 
         // ── string block header ──────────────────────────────────────────────
         int decl = (int)declEndOut;

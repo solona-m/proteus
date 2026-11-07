@@ -119,7 +119,7 @@ internal static partial class MatcapPlan
     /// edits and groups, and the mod's own material redirects use, plus the worn variant's — an unredirected sister
     /// variant would otherwise ask for a file that does not exist and draw the parts invisible.</item>
     /// <item>Hair: the folder <see cref="HairMaterialPath"/> says each race the model is published for reads.</item>
-    /// <item>Ears/horns: <see cref="ZearMaterialPath"/>, for each published path.</item>
+    /// <item>Ears and faces (horns): <see cref="CustomizationMaterialPath"/>, for each published path.</item>
     /// </list>
     /// An absolute name is published at exactly that path.
     /// </summary>

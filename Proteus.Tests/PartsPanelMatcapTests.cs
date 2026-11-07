@@ -94,6 +94,7 @@ public class PartsPanelMatcapTests
 
     [Fact]
     [Trait("Plan", "EDGE-matcaps-43")]
+    [Trait("Plan", "EDGE-matcaps-63")]
     public void Leaving_Matcaps_closes_vanilla_face_or_ear()
     {
         var sw = Method(Main(), "private void SwitchTool(Tool value)");
@@ -114,6 +115,30 @@ public class PartsPanelMatcapTests
         var settings = File.ReadAllText(Path.Combine(Gui(), "SettingsTab.cs"));
         Assert.Contains("discovery.MatcapsLibraryPath()", settings);
         Assert.Contains("Strings.Matcap.SettingsLibrary", settings);
+    }
+
+    [Fact]
+    [Trait("Plan", "EDGE-matcaps-61")]
+    public void Face_upstream_forgotten_before_the_recomposite_on_apply_undo_forget_not_change()
+    {
+        var finish = Method(Wiring(), "private void Finish(MatcapJobResult r)");
+        int forget = finish.IndexOf("compositor.ForgetFaceUpstream(r.GamePath)", StringComparison.Ordinal);
+        int after = finish.IndexOf("AfterModChange(", StringComparison.Ordinal);
+        Assert.True(forget >= 0 && after > forget, "the face upstream is forgotten before AfterModChange");
+        Assert.Contains("Kind: MatcapPlan.Kind.Face } && !r.IsChange", finish);
+        // The drawn-file line only after an Apply.
+        Assert.Contains("r.IsApply && r.GamePath != null && DrawnElsewhere(", finish);
+    }
+
+    [Fact]
+    [Trait("Plan", "AC-matcaps-5")]
+    public void Library_off_is_asked_before_anything_is_written()
+    {
+        var apply = Method(Wiring(), "private void StartMatcapApply(");
+        int ask = apply.IndexOf("if (choice.Library is { } lib && !confirmEnable)", StringComparison.Ordinal);
+        int write = apply.IndexOf("MatcapWriter.Apply(", StringComparison.Ordinal);
+        int vanilla = apply.IndexOf("ApplyMatcapToVanilla(", StringComparison.Ordinal);
+        Assert.True(ask >= 0 && ask < write && ask < vanilla);
     }
 }
 

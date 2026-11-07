@@ -43,6 +43,17 @@ internal static class MatcapStudio
     /// Prepare a matcap on <paramref name="chosen"/> — parts read from <paramref name="modelBytes"/>, the file at
     /// <paramref name="modelRel"/> as it is now — and on every sibling file at the same game path whose parts line up.
     /// </summary>
+    /// <summary>Prepared textures an earlier apply left behind (placed, or never used): deleted after an hour.</summary>
+    internal static void SweepTemp(string dir)
+    {
+        try
+        {
+            foreach (var f in Directory.EnumerateFiles(dir, "*.tex"))
+                try { if (DateTime.UtcNow - File.GetLastWriteTimeUtc(f) > TimeSpan.FromHours(1)) File.Delete(f); } catch { }
+        }
+        catch { }
+    }
+
     public static Prepared Prepare(string modRoot, string modelRel, string modelGamePath, byte[] modelBytes,
                                    IReadOnlyList<ModelPart> chosen, MatcapChoice choice, Environment env)
     {
@@ -172,6 +183,7 @@ internal static class MatcapStudio
 
         // ── the shared textures ──
         Directory.CreateDirectory(env.TempDir);
+        SweepTemp(env.TempDir);
         string stamp = Guid.NewGuid().ToString("N")[..8];
         string? bakedImage = null;
         if (choice.Image is { } image)

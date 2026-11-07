@@ -303,6 +303,7 @@ public class MatcapWriterTests
 
     [Fact]
     [Trait("Plan", "AC-matcaps-7")]
+    [Trait("Plan", "EDGE-matcaps-23")]
     public void Undo_refused_while_later_feature_backup_newer()
     {
         using var f = new MatcapFixture();

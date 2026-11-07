@@ -6542,5 +6542,9 @@
   "Parts.Vanilla.FaceHorns.Fmt": {
     "message": "Hörner (Gesicht {0}, {1})",
     "description": ""
+  },
+  "Parts.Matcap.BackupKept.Fmt": {
+    "message": "Ihre alten Sicherungen konnten nicht beiseitegelegt werden: {0}. Die nächste Matcap dort verschiebt sie zuerst.",
+    "description": ""
   }
 }

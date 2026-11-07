@@ -177,6 +177,21 @@ public sealed partial class PartsPanel
         var chosen = parts.Parts.Where(p => ticked.Contains(p.Label)).ToList();
         var env = MatcapEnv();
 
+        // A library that is off is switched on only once the user says so: asked here, before anything is written —
+        // whatever the panel's cached status said (EDGE: "Cancel writes nothing").
+        if (choice.Library is { } lib && !confirmEnable)
+        {
+            var st = MatcapSelection.Read(new PenumbraMatcapAdapter(penumbra), lib);
+            if (!st.Known) { matcapError = Strings.Matcap.NoPenumbra; return; }
+            if (!st.Enabled)
+            {
+                matcapLibStatus.Clear();
+                matcapPanel.InvalidateStatus();   // the panel re-reads it and asks on the next Apply
+                matcapError = string.Format(Strings.Matcap.ConfirmEnableFmt, lib.Name, st.Collection, MatcapSelection.AlsoText(lib));
+                return;
+            }
+        }
+
         if (vanilla is { } piece)
         {
             ApplyMatcapToVanilla(piece, chosen, choice, confirmEnable, env);
@@ -335,6 +350,8 @@ public sealed partial class PartsPanel
         // the written files are published at (another race's path included).
         if (r.GamePath != null && MatcapPlan.TargetOf(r.GamePath, out _) is { Kind: MatcapPlan.Kind.Face } && !r.IsChange)
         {
+            // The open path always (an Undo in a game face's edit mod has just removed its redirect), then every other.
+            compositor.ForgetFaceUpstream(r.GamePath);
             var files = r.Outcome.Files.Where(f => f.EndsWith(".mdl", StringComparison.OrdinalIgnoreCase)).ToList();
             if (modelIndex >= 0 && modelIndex < models.Count) files.Add(models[modelIndex].File);
             foreach (var red in PenumbraModMeta.ReadAllRedirects(r.Root))

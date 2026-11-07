@@ -6542,5 +6542,9 @@
   "Parts.Vanilla.FaceHorns.Fmt": {
     "message": "뿔 (얼굴 {0}, {1})",
     "description": ""
+  },
+  "Parts.Matcap.BackupKept.Fmt": {
+    "message": "이전 백업을 옮기지 못했습니다: {0}. 다음에 그곳에 매트캡을 입힐 때 먼저 옮깁니다.",
+    "description": ""
   }
 }
