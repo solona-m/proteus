@@ -109,6 +109,17 @@ public class TextureLoaderMoveRetryTests : IDisposable
     }
 
     [Fact]
+    [Trait("Plan", "EDGE-issue-sweep-d-22")]
+    public void A_non_transient_move_failure_is_thrown_as_it_is_without_retrying()
+    {
+        // [EDGE-issue-sweep-d-22] A missing temp is not a held destination: no retry, never an OutputWriteException.
+        var path = Path.Combine(dir, "ss_3_norm.tex");
+        var sw = System.Diagnostics.Stopwatch.StartNew();
+        Assert.Throws<FileNotFoundException>(() => TextureLoader.MoveIntoPlace(Path.Combine(dir, "gone.tmp"), path, 5, 200));
+        Assert.True(sw.ElapsedMilliseconds < 150, $"retried ({sw.ElapsedMilliseconds}ms)");
+    }
+
+    [Fact]
     [Trait("Plan", "AC-issue-sweep-d-4")]
     public void A_free_destination_moves_at_once()
     {

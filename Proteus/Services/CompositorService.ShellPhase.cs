@@ -354,12 +354,15 @@ public partial class CompositorService
                 if (shells != null)
                 {
                     run.shellBuilt = true;
+                    // A host dropped only because its model could not be written (#91) is still wanted: its carrier stays on
+                    // for the retry, never taken off and then named in a message telling the user to take it off.
+                    var hostsInUse = shells.HostModelPaths.Concat(run.failedShellHosts).ToList();
                     // Where the shell landed, read off its published paths: this decides which item must be equipped for it to render.
-                    run.shellOnFacewear = shells.HostModelPaths.Any(
+                    run.shellOnFacewear = hostsInUse.Any(
                         p => p.EndsWith("_met.mdl", StringComparison.OrdinalIgnoreCase));
                     // ...and in which slots: a carrier only loads from the slot it published for.
                     run.shellCarrierSlots = InvisibleRing.CarrierSlots
-                        .Where(c => shells.HostModelPaths.Any(p =>
+                        .Where(c => hostsInUse.Any(p =>
                             p.Contains($"a{InvisibleRing.EmperorSetId:D4}", StringComparison.OrdinalIgnoreCase)
                          && p.EndsWith($"_{c.Slot}.mdl", StringComparison.OrdinalIgnoreCase)))
                         .Select(c => c.Slot).ToList();

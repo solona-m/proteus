@@ -139,7 +139,7 @@ drive issue sweep D's recovery flows on demand:
 - `shell-fault` leaves one shell texture redirect out of Proteus's **own** manifest
   at publish. Healed before Proteus's automatic redraw (rebuilt from the live
   manifest with its manipulations kept, recorded as a publish) or cleared by
-  put-back, `off` or unload with a recomposite; a crash loses it with the process
+  put-back or `off` with a recomposite (an unload clears it without one); a crash loses it with the process
   and the next composite publishes in full.
 - `auto-redraw` switches the compositor's auto redraw for the session in memory
   only, never written to the configuration; put-back or unload clears it.

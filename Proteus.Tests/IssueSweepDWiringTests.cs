@@ -118,6 +118,11 @@ public class IssueSweepDWiringTests
         // ...into a catch that drops only that host: the build and the other hosts go on (review FAIL 1).
         var buildHost = Method(Source("Services/SecondSkinService.ShellSetBuild.cs"), "private void BuildHostModel(");
         Before(buildHost, "try { new HostModelBuild(this, pushSweep, h).Run(); }", "catch (OutputWriteException ex)");
+        // A host dropped for its write is still in use for the carrier decisions: its carrier stays on (second look FAIL 1).
+        var apply = Method(Source("Services/CompositorService.ShellPhase.cs"), "private void ApplyShells(");
+        Assert.Contains("var hostsInUse = shells.HostModelPaths.Concat(run.failedShellHosts).ToList();", apply);
+        Before(apply, "var hostsInUse", "run.shellOnFacewear = hostsInUse.Any(");
+        Assert.Contains(".Where(c => hostsInUse.Any(p =>", apply);
     }
 
     [Fact]
