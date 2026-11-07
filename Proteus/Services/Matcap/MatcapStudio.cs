@@ -60,7 +60,7 @@ internal static class MatcapStudio
         if (MatcapPlan.TargetOf(modelGamePath, out _) is not { } target)
             return Prepared.Refuse("not-target", ProteusLoc.Localize("Matcap.Refused.NotTarget",
                 "Matcaps go on gear, accessories, hair, Viera ears and Au Ra horns (on the face); this model is none of those."));
-        if (MatcapPlan.Regenerated(modRoot, modelRel) is { } regen)
+        if (MatcapPlan.RefusedRegenerated(modRoot, modelRel) is { } regen)
             return Prepared.Refuse("regenerated-model", string.Format(ProteusLoc.Localize("Matcap.Refused.Regenerated.Fmt",
                 "This model is made by Proteus from another one ({0}), and remaking it would lose the matcap. Put the matcap on the model it was made from, then remake it."), regen));
         if (chosen.Count == 0) return Prepared.Refuse("unknown-part", ProteusLoc.Localize("Parts.Matcap.NeedParts", "Tick the parts that should take the matcap."));
@@ -95,7 +95,7 @@ internal static class MatcapStudio
         foreach (var sib in HatCompatService.SiblingFiles(modRoot, modelGamePath, modelRel))
         {
             if (PenumbraModMeta.SameFile(sib, modelRel)) continue;
-            if (MatcapPlan.Regenerated(modRoot, sib) != null) { skipped.Add(sib); continue; }
+            if (MatcapPlan.RefusedRegenerated(modRoot, sib) != null) { skipped.Add(sib); continue; }
             byte[] bytes;
             try { bytes = File.ReadAllBytes(MatcapWriter.Full(modRoot, sib)); } catch { skipped.Add(sib); continue; }
             var parts = ModelPartReader.Read(bytes)?.Parts;

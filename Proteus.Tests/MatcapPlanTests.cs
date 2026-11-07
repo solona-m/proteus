@@ -209,6 +209,11 @@ public class MatcapPlanTests
         Assert.Equal("hair-port", MatcapPlan.Regenerated(f.ModRoot, HairPortPlan.Folder + "/x.mdl"));
         Assert.Equal("earless", MatcapPlan.Regenerated(f.ModRoot, EarlessHairPlan.Folder + "/x.mdl"));
         Assert.Equal("refit", MatcapPlan.Regenerated(f.ModRoot, BodyRetargetWriter.Subfolder + "/x/top.mdl"));
+        // Only hair ports and earless copies refuse; refits take a matcap.
+        Assert.Equal("hair-port", MatcapPlan.RefusedRegenerated(f.ModRoot, HairPortPlan.Folder + "/x.mdl"));
+        Assert.Equal("earless", MatcapPlan.RefusedRegenerated(f.ModRoot, EarlessHairPlan.Folder + "/x.mdl"));
+        Assert.Null(MatcapPlan.RefusedRegenerated(f.ModRoot, BodyRetargetWriter.Subfolder + "/x/top.mdl"));
+        Assert.Null(MatcapPlan.RefusedRegenerated(f.ModRoot, MatcapFixture.ModelRel));
     }
 
     [Fact]

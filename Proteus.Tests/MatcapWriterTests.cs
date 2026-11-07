@@ -548,6 +548,34 @@ public class MatcapWriterTests
         Assert.Equal(snapshot, f.Snapshot());
     }
 
+    [Fact]
+    [Trait("Plan", "EDGE-matcaps-11")]
+    public void A_refit_takes_the_matcap_and_undo_after_a_remake_leaves_the_remade_file()
+    {
+        using var f = new MatcapFixture();
+        var rel = BodyRetargetWriter.Subfolder + "/x/top.mdl";
+        var full = MatcapWriter.Full(f.ModRoot, rel);
+        Directory.CreateDirectory(Path.GetDirectoryName(full)!);
+        File.Copy(MatcapWriter.Full(f.ModRoot, MatcapFixture.ModelRel), full);
+        Assert.Equal("refit", MatcapPlan.Regenerated(f.ModRoot, rel));
+
+        var bytes = File.ReadAllBytes(full);
+        var parts = ModelPartReader.Read(bytes)!.Parts.Where(p => p.Label == "1.2").ToList();
+        var prepared = MatcapStudio.Prepare(f.ModRoot, rel, MatcapFixture.ModelPath, bytes, parts,
+                                            MatcapChoice.OfImage(f.Image("gem.tex")), f.Env());
+        Assert.True(prepared.Ok, prepared.Message);
+        var outcome = MatcapWriter.Apply(f.ModRoot, prepared.Request!);
+        Assert.True(outcome.Ok, outcome.Message);
+        Assert.NotEqual(bytes, File.ReadAllBytes(full));
+
+        // A remake writes the refit again from its source: Undo must not put the old refit back over it.
+        var remade = (byte[])bytes.Clone();
+        remade[^1] ^= 0x5A;
+        File.WriteAllBytes(full, remade);
+        MatcapWriter.Undo(f.ModRoot, rel);
+        Assert.Equal(remade, File.ReadAllBytes(full));
+    }
+
     private static string WriteJunk(MatcapFixture f)
     {
         var p = Path.Combine(f.Images, "junk.png");
