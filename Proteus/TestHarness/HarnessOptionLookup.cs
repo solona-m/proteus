@@ -56,11 +56,20 @@ internal static class HarnessOptionLookup
     /// </summary>
     public static List<(string Name, IReadOnlyList<string> Options)>? ReadGroups(string modRoot)
     {
-        if (PenumbraModMeta.TryReadGroups(modRoot) is { } v4)
-            return v4.Select(g => (g.Name, (IReadOnlyList<string>)PenumbraModMeta.ReadOptionNames(g.Group))).ToList();
         try
         {
-            if (!File.Exists(Path.Combine(modRoot, PenumbraModMeta.MetaFile))) return null;
+            var meta = Path.Combine(modRoot, PenumbraModMeta.MetaFile);
+            if (!File.Exists(meta)) return null;
+            // Read here rather than through TryReadGroups, whose null means both "no Groups array" (the legacy layout)
+            // and "unparsable": a corrupt meta.json is unreadable (409), never an empty mod (404).
+            using (var doc = JsonDocument.Parse(File.ReadAllText(meta)))
+                if (doc.RootElement.ValueKind == JsonValueKind.Object
+                    && doc.RootElement.TryGetProperty("Groups", out var groups) && groups.ValueKind == JsonValueKind.Array)
+                    return groups.EnumerateArray()
+                                 .Where(g => g.ValueKind == JsonValueKind.Object && g.TryGetProperty("Name", out var n)
+                                             && n.ValueKind == JsonValueKind.String && n.GetString() is { Length: > 0 })
+                                 .Select(g => (g.GetProperty("Name").GetString()!, (IReadOnlyList<string>)PenumbraModMeta.ReadOptionNames(g)))
+                                 .ToList();
             var result = new List<(string, IReadOnlyList<string>)>();
             foreach (var file in Directory.EnumerateFiles(modRoot, "group_*.json").Order(StringComparer.OrdinalIgnoreCase))
             {

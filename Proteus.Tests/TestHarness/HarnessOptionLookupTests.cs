@@ -29,7 +29,8 @@ public class HarnessOptionLookupTests
         Assert.True(loose.Ok);
         Assert.Equal(("Lace", "Low"), (loose.Group, loose.Option));
 
-        Assert.Equal(("Size", "Small"), (HarnessOptionLookup.Resolve(Groups, "Size", "Small").Group, "Small"));
+        var size = HarnessOptionLookup.Resolve(Groups, "Size", "Small");
+        Assert.Equal(("Size", "Small"), (size.Group, size.Option));
         Assert.Equal("size", HarnessOptionLookup.Resolve(Groups, "size", "Big").Group);
         Assert.Equal("red", HarnessOptionLookup.Resolve(Groups, "Colour", "red").Option);
     }
@@ -71,6 +72,16 @@ public class HarnessOptionLookupTests
             Assert.Equal("Lace", groups[0].Name);
             Assert.Equal(["High"], groups[0].Options);
             File.WriteAllText(Path.Combine(root, "group_002_bad.json"), "{ nope");
+            Assert.Null(HarnessOptionLookup.ReadGroups(root));
+
+            // A v4 manifest: its Groups array is read; a corrupt one is unreadable, not an empty mod.
+            File.Delete(Path.Combine(root, "group_001_lace.json"));
+            File.Delete(Path.Combine(root, "group_002_bad.json"));
+            File.WriteAllText(Path.Combine(root, "meta.json"),
+                "{\"FileVersion\":4,\"Groups\":[{\"Name\":\"Size\",\"Options\":[{\"Name\":\"Big\"}]}]}");
+            var v4 = HarnessOptionLookup.ReadGroups(root)!;
+            Assert.Equal(("Size", "Big"), (v4[0].Name, v4[0].Options[0]));
+            File.WriteAllText(Path.Combine(root, "meta.json"), "{\"FileVersion\":4,\"Groups\":[");
             Assert.Null(HarnessOptionLookup.ReadGroups(root));
         }
         finally { Directory.Delete(root, true); }

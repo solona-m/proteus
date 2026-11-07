@@ -161,25 +161,34 @@ public class SkinMoveRigidLocalTests(ITestOutputHelper output)
             if (Vector3.Dot(authored, nrm) < 0f) f = -f;
             return Vector3.Dot(At(p, v) - (a * t.U + b * t.V + c * t.W), f);
         }
-        int beyond = 0, proven = 0;
+        int beyond = 0, proven = 0, face = 0;
+        var unexplained = new List<int>();
         for (int v = 0; v < start.Length / 3; v++)
         {
             if ((At(after, v) - At(start, v)).Length() <= Drag + 1e-5f) continue;
             beyond++;
             int node = inputs.NodeOf[v];
             var t = binding.TriangleOf(node);
-            if (!t.IsSet) continue;
-            float floor = MathF.Min(MathF.Min(0.001f, binding.AuthoredHeight(node)), Height(start, t, v));
-            if (Height(dragged, t, v) < floor - 1e-6f) proven++;
+            bool boundPoke = false;
+            if (t.IsSet)
+            {
+                float floor = MathF.Min(MathF.Min(0.001f, binding.AuthoredHeight(node)), Height(start, t, v));
+                boundPoke = Height(dragged, t, v) < floor - 1e-6f;
+            }
+            if (boundPoke && solve.LastBoundLifted.Contains(node)) proven++;
+            else if (solve.LastFaceLifted.Contains(node)) face++;
+            else unexplained.Add(v);
         }
-        output.WriteLine($"row 1.1: {beyond} vertices beyond the drag, {proven} of them pushed under their skin by the drag itself");
-        // Measured (build 1454): before the fix 29.77 mm, 420 vertices beyond the drag, 54 folded, 553 bound lifts. After,
-        // the bound check lifts no vertex beyond the drag that the drag did not push under its skin; what is left beyond
-        // it is the face check answering skin the move pushed through the cloth (outside its face further than the
-        // author and the move's start had it: a real poke, by design), 0.41 mm over on this garment. That check's corner
-        // lift folds a few triangles here — a pre-existing limit of its rule, filed as a known issue.
+        output.WriteLine($"row 1.1: {beyond} vertices beyond the drag: {proven} pushed under their skin by the drag itself, "
+                       + $"{face} lifted by the face check over skin the move pushed through it");
+        // Every vertex beyond the drag is a lift the guard answered to a poke this move made: a bound rider the drag sank
+        // under its skin (measured here, independently), or a corner of a face the moved skin came through (the face check
+        // fires only where the skin stands further outside the face than both the author and the move's start had it).
+        Assert.True(unexplained.Count == 0, $"beyond the drag with no poke behind it: {string.Join(", ", unexplained.Take(10))}");
+        // Measured (build 1455): before the fix 29.77 mm, 420 vertices beyond the drag, 54 folded, 553 bound lifts; after,
+        // 15.41 mm, 8 beyond (all face-check corners), 10 folded. The face check's corner lift folding a few triangles on
+        // a real poke is a pre-existing limit of its rule (#90): pinned here so it can only get better.
         Assert.True(WorstMm(start, after) <= Drag * 1000f + 0.5f, $"after the guard {WorstMm(start, after):F2} mm");
-        Assert.True(beyond <= 16, $"{beyond} vertices beyond the drag");
-        Assert.True(Folded(model, after) <= 10, $"{Folded(model, after)} folded");
+        Assert.True(Folded(model, after) <= 10, $"{Folded(model, after)} folded (#90)");
     }
 }

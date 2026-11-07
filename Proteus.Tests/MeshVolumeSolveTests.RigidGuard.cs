@@ -16,12 +16,13 @@ namespace Proteus.Tests;
 public partial class MeshVolumeSolveTests
 {
     /// <summary>
-    /// Tight cloth (3 mm) over a skin sheet whose authored vertex normals disagree with its faces, as split normals along
-    /// a seam do: alternate columns tilted ±40° about Z. Cloth is bound in vertex, edge and face regions alike.
+    /// Tight cloth (1 mm, at the guard's floor) over a skin sheet whose authored vertex normals disagree with its faces,
+    /// as split normals along a seam do: vertices tilted ±40° about Z in a checkerboard. Along such a normal the cloth
+    /// measures cos 40° × 1 mm, under the floor — the old check's misfire on a translation.
     /// </summary>
-    private static Layers SplitNormalLayers()
+    private static Layers SplitNormalLayers(float gap = 0.001f)
     {
-        var l = Layered(11, 0.003f, centred: true);
+        var l = Layered(11, gap, centred: true);
         var nrm = l.Model.Normals.ToArray();
         float s = MathF.Sin(0.7f), c = MathF.Cos(0.7f);
         for (int i = 0; i < 11; i++)
@@ -135,6 +136,84 @@ public partial class MeshVolumeSolveTests
         Assert.Contains("try { KeepRidersAboveSkin(start, relativeToStart: false); }", src);
         Assert.Contains("if (KeepAboveBoundSkin(n, nodeDelta[n], out var kept))", src);
         Assert.Contains("float since = relativeToStart ? OutsideAtStart(s, ca, cb, cc, face, start) : float.NegativeInfinity;", src);
+    }
+
+    [Fact]
+    [Trait("Plan", "EDGE-issue-sweep-c-41")]
+    public void Bind_stores_the_triangle_and_keeps_heights()
+    {
+        // Cloth straight over skin vertices: bound in a vertex region, one corner with a share — the triangle is kept all
+        // the same, its barycentrics summing to 1, and the height is the authored 3 mm.
+        var l = Layered(11, 0.003f);
+        var solve = new MeshVolumeSolve(l.Model) { MoveSkin = true };
+        var inputs = solve.FollowInputs;
+        var binding = SkinFollow.Bind(inputs);
+        int rider = inputs.NodeOf[l.ClothAt[5, 5]];
+        Assert.True(binding.CornersOf(rider).Count < 3);
+        var t = binding.TriangleOf(rider);
+        Assert.True(t.IsSet);
+        Assert.Equal(1f, t.U + t.V + t.W, 1e-5f);
+        Assert.Equal(0.003f, binding.AuthoredHeight(rider), 1e-5f);
+        Assert.False(binding.TriangleOf(inputs.NodeOf[l.SkinAt[5, 5]]).IsSet);   // skin binds nothing
+    }
+
+    [Fact]
+    [Trait("Plan", "EDGE-issue-sweep-c-6")]
+    [Trait("Plan", "EDGE-issue-sweep-c-41")]
+    public void A_skin_move_that_sinks_a_loose_rider_lifts_it_to_its_floor()
+    {
+        // Cloth 15 mm up follows the skin only 84 % (FollowWeight): a 120 mm move of the skin sinks it 19 mm, through the
+        // skin. The bound-skin check lifts it back to its floor (1 mm) above the triangle it rides.
+        var l = Layered(11, 0.015f);
+        var solve = SkinSolve(l.Model);
+        Assert.True(solve.BeginMove(l.Model.Parts[1].Triangles, adjacent: false, falloffRadius: 0f) > 0);
+        solve.MoveTo(new Vector3(0f, 0.12f, 0f));
+        Assert.True(solve.EndMove());
+        Assert.True(solve.LastGuard.Bound > 0, $"{solve.LastGuard}");
+        int cloth = l.ClothAt[5, 5];
+        Assert.Contains(solve.FollowInputs.NodeOf[cloth], solve.LastBoundLifted);
+        var after = solve.Positions();
+        Assert.True(At(after, cloth).Y - At(after, l.SkinAt[5, 5]).Y >= 0.001f - 1e-5f,
+                    $"{(At(after, cloth).Y - At(after, l.SkinAt[5, 5]).Y) * 1000f:F2} mm above the skin");
+    }
+
+    [Fact]
+    [Trait("Plan", "EDGE-issue-sweep-c-49")]
+    public void AllScaleWithSkinLiftsNoMoreThanItsHeightChange()
+    {
+        // A uniform scale is not rigid: heights grow with it. Cloth 3 mm up, scaled 1.2 about the middle with the skin:
+        // anything the guard lifts, it lifts no more than the scale's own change of height (0.2 × 3 mm).
+        var l = SplitNormalLayers(gap: 0.003f);
+        var solve = SkinSolve(l.Model);
+        var pivot = At(l.Model.Positions, l.SkinAt[5, 5]);
+        solve.BeginMove(EveryPart(l.Model), adjacent: false, falloffRadius: 0f);
+        solve.TransformTo(Matrix4x4.CreateScale(1.2f, pivot));
+        Assert.True(solve.EndMove());
+        Assert.True(solve.LastGuard.WorstMm <= 0.2f * 3f + 1e-3f, $"{solve.LastGuard}");
+        Assert.Equal(0, Folded(l.Model, solve.Positions()));
+    }
+
+    [Fact]
+    [Trait("Plan", "EDGE-issue-sweep-c-52")]
+    public void DegenerateBoundTriangleSkipsBoundCheckAndRigidMoveLiftsNothing()
+    {
+        // A skin vertex welded onto its neighbour leaves zero-area triangles there; riders bound to one keep no triangle
+        // (the bound check skips them) and a rigid move of everything lifts nothing.
+        var l = Layered(11, 0.003f);
+        var pos = l.Model.Positions.ToArray();
+        int from = l.SkinAt[5, 6], onto = l.SkinAt[5, 5];
+        for (int k = 0; k < 3; k++) pos[from * 3 + k] = pos[onto * 3 + k];
+        var model = new ModelParts
+        {
+            Positions = pos, Normals = l.Model.Normals, MeshSpans = l.Model.MeshSpans, Parts = l.Model.Parts,
+            AttributeNames = l.Model.AttributeNames, Min = l.Model.Min, Max = l.Model.Max, ShatteredSubmeshes = l.Model.ShatteredSubmeshes,
+        };
+        var solve = SkinSolve(model);
+        solve.BeginMove(EveryPart(model), adjacent: false, falloffRadius: 0f);
+        solve.MoveTo(new Vector3(0.002f, 0.01f, 0.003f));
+        Assert.True(solve.EndMove());
+        Assert.Equal(default, solve.LastGuard);
+        Assert.True(EveryPart(model).Max(v => (At(solve.Positions(), v) - At(pos, v) - new Vector3(0.002f, 0.01f, 0.003f)).Length()) < 1e-5f);
     }
 
     private static string RepoRoot([System.Runtime.CompilerServices.CallerFilePath] string here = "")

@@ -220,10 +220,11 @@ public class UpstreamGameDataTests
     [Trait("Plan", "EDGE-issue-sweep-c-47")]
     public void A_mod_file_prime_clears_the_mark()
     {
-        var settled = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase) { [Base] = @"E:\mods\Skinase.tex" };
+        var disk = Path.Combine(Path.GetTempPath(), "mods", "Skin", "base.tex");
+        var settled = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase) { [Base] = disk };
         var (memo, ok) = CompositorService.PrimeResult(Base, settled, false, true, false, sawGameDataBefore: true);
         Assert.True(ok);
-        Assert.Equal(@"E:\mods\Skinase.tex", memo);
+        Assert.Equal(disk, memo);
         Assert.False(CompositorService.TexGameDataMarkAfter(Base, ok, false, false));
         // Bodies still settle on their first game-data prime (#63 unchanged).
         Assert.Equal((Glv, true), CompositorService.PrimeResult(Glv, None, true, true, false, sawGameDataBefore: false));

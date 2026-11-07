@@ -324,6 +324,8 @@ internal sealed partial class MeshVolumeSolve
     private void KeepRidersAboveSkin(Dictionary<int, Was> start, bool relativeToStart = true)
     {
         LastGuard = default;
+        lastBoundLifted.Clear();
+        lastFaceLifted.Clear();
         if (!opSkin) return;
         var movedSkin = new List<int>();
         foreach (var (n, was) in start)
@@ -416,11 +418,20 @@ internal sealed partial class MeshVolumeSolve
     /// <summary>The last run of the guard's lifts; see <see cref="GuardLifts"/>.</summary>
     public GuardLifts LastGuard { get; private set; }
 
+    private readonly HashSet<int> lastBoundLifted = [], lastFaceLifted = [];
+
+    /// <summary>The nodes the last run of the guard lifted with the bound-skin check — for the tests (#86).</summary>
+    internal IReadOnlySet<int> LastBoundLifted => lastBoundLifted;
+
+    /// <summary>The nodes the last run of the guard lifted with the face check — for the tests (#86).</summary>
+    internal IReadOnlySet<int> LastFaceLifted => lastFaceLifted;
+
     private void NoteGuardLift(int n, Vec3 from, Vec3 to, bool bound)
     {
         var d = new Vector3(to.X - from.X, to.Y - from.Y, to.Z - from.Z);
         float mm = d.Length() * 1000f;
         if (mm <= 0f) return;
+        (bound ? lastBoundLifted : lastFaceLifted).Add(n);
         var g = LastGuard;
         // Inward: against the authored normal of the skin it is bound to, or its own for an unbound face corner.
         var way = follow != null && follow.BindWeight(n) > 0f ? SkinUnder(n, now: false).Normal : nodeNormal[n];
