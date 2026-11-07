@@ -32,6 +32,8 @@ internal sealed class BootBackoff
     private int step;
     private long nextDue;
     private bool latched;
+    private long armGen;           // moved by every Rearm
+    private long compositeGen = -1; // the arm a Composite was reported in, which Latch latches
 
     public BootBackoff(long now) => armedAt = now;
 
@@ -46,6 +48,7 @@ internal sealed class BootBackoff
         lock (gate)
         {
             latched = false;
+            armGen++;
             armedAt = now;
             step    = 0;
             nextDue = 0;
@@ -84,6 +87,7 @@ internal sealed class BootBackoff
             {
                 case BootProbeOutcome.Composite:
                     nextDue = now + RetryMs;
+                    compositeGen = armGen;
                     return true;
                 case BootProbeOutcome.Retry when now - armedAt < FastRetryWindowMs:
                     nextDue = now + RetryMs;
@@ -96,10 +100,12 @@ internal sealed class BootBackoff
         }
     }
 
-    /// <summary>The composite was triggered: no more probes until the next <see cref="Rearm"/>.</summary>
+    /// <summary>The composite was triggered: no more probes until the next <see cref="Rearm"/>. A re-arm since the
+    /// <see cref="BootProbeOutcome.Composite"/> was reported wins: the new arm gets its own composite.</summary>
     public void Latch()
     {
-        lock (gate) latched = true;
+        lock (gate)
+            if (compositeGen == armGen) latched = true;
     }
 
     /// <summary>Milliseconds from <paramref name="now"/> to the next probe, for the log.</summary>

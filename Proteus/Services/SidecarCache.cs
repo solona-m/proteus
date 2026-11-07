@@ -39,7 +39,31 @@ internal sealed class SidecarCache
 {
     private sealed record Presence(bool Present, long At);
 
-    private sealed record TextEntry(string ModDir, SidecarStamp Stamp, string? Text, long FirstSeenAt, bool Unparsable);
+    /// <param name="FirstSeenAt">When the file was first read under this stamp.</param>
+    /// <param name="LastReadAt">When <paramref name="Text"/> was read. Trust needs a read taken more than the racy window
+    /// after the first: a same-stamp rewrite lands within the timestamp's granularity of the original write, so a read that
+    /// late has seen it.</param>
+    private sealed record TextEntry(string ModDir, SidecarStamp Stamp, string? Text, long FirstSeenAt, long LastReadAt,
+                                    bool Unparsable)
+    {
+        public bool Trusted(long racyWindowMs) => LastReadAt - FirstSeenAt > racyWindowMs;
+    }
+
+    private enum StatKind { Found, Missing, IoError }
+
+    /// <summary>
+    /// One stat. An IO or access failure is <see cref="StatKind.IoError"/> (never cached); any other failure (an odd
+    /// path) is <see cref="StatKind.Missing"/>, as <see cref="File.Exists(string)"/> has always treated it.
+    /// </summary>
+    private (StatKind Kind, SidecarStamp Stamp) TryStat(string path)
+    {
+        SidecarStamp? s;
+        try { s = stat(path); }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { return (StatKind.IoError, default); }
+        catch { return (StatKind.Missing, default); }
+        count?.Invoke(PresenceStatsKey, 1);
+        return s is { } found ? (StatKind.Found, found) : (StatKind.Missing, default);
+    }
 
     private readonly Func<string, SidecarStamp?> stat;
     private readonly Func<string, string> readText;
@@ -101,17 +125,13 @@ internal sealed class SidecarCache
             e = epoch;
         }
 
-        SidecarStamp? s;
-        try
-        {
-            s = stat(MetaPath(modsRoot, modDir));
-            count?.Invoke(PresenceStatsKey, 1);
-        }
-        catch { return true; }
+        var (kind, _) = TryStat(MetaPath(modsRoot, modDir));
+        if (kind == StatKind.IoError) return true;
+        bool present = kind == StatKind.Found;
 
         lock (gate)
-            if (epoch == e) presence[modDir] = new Presence(s != null, nowMs());
-        return s != null;
+            if (epoch == e) presence[modDir] = new Presence(present, nowMs());
+        return present;
     }
 
     /// <summary>
@@ -128,15 +148,10 @@ internal sealed class SidecarCache
             texts.TryGetValue(metaPath, out cached);
         }
 
-        SidecarStamp? s;
-        try
-        {
-            s = stat(metaPath);
-            count?.Invoke(PresenceStatsKey, 1);
-        }
-        catch { return new MetaRead(MetaReadKind.IoError, null, default); }
+        var (kind, stamp) = TryStat(metaPath);
+        if (kind == StatKind.IoError) return new MetaRead(MetaReadKind.IoError, null, default);
 
-        if (s is not { } stamp)
+        if (kind == StatKind.Missing)
         {
             // Unknown, not absent: a sidecar missing for a moment (an atomic replace, a reinstall) is looked at again
             // on the very next call. Dropping an entry can never hide a mod, so no epoch check.
@@ -150,35 +165,34 @@ internal sealed class SidecarCache
 
         long now = nowMs();
         bool sameStamp = cached != null && cached.Stamp == stamp;
-        if (sameStamp && now - cached!.FirstSeenAt > racyWindowMs)
+        if (sameStamp && cached!.Trusted(racyWindowMs))
             return cached.Unparsable
                 ? new MetaRead(MetaReadKind.Unparsable, null, stamp)
                 : new MetaRead(MetaReadKind.Ok, cached.Text, stamp);
 
         string text;
-        try
-        {
-            text = readText(metaPath);
-            count?.Invoke(MetadataReadsKey, 1);
-        }
+        // Any failure to read is a failure this time, never a cached answer: the next call tries again.
+        try { text = readText(metaPath); }
         catch { return new MetaRead(MetaReadKind.IoError, null, stamp); }
+        count?.Invoke(MetadataReadsKey, 1);
 
         lock (gate)
             if (epoch == e)
             {
-                // The trust window runs from the first read under this stamp, not from this one.
-                texts[metaPath] = new TextEntry(modDir, stamp, text, sameStamp ? cached!.FirstSeenAt : now, false);
+                // The window runs from the first read under this stamp; this read is the newest text.
+                texts[metaPath] = new TextEntry(modDir, stamp, text, sameStamp ? cached!.FirstSeenAt : now, now, false);
                 presence[modDir] = new Presence(true, now);
             }
         return new MetaRead(MetaReadKind.Ok, text, stamp);
     }
 
-    /// <summary>The text cached at <paramref name="stamp"/> does not parse: serve <see cref="MetaReadKind.Unparsable"/>
-    /// for it, once trusted, instead of reading and parsing it again.</summary>
-    public void NoteUnparsable(string metaPath, SidecarStamp stamp)
+    /// <summary>The <paramref name="text"/> read at <paramref name="stamp"/> does not parse: serve
+    /// <see cref="MetaReadKind.Unparsable"/> for it, once trusted, instead of reading and parsing it again. Only when
+    /// that very text is still the one cached: a newer read under the same stamp may have parsed.</summary>
+    public void NoteUnparsable(string metaPath, SidecarStamp stamp, string? text)
     {
         lock (gate)
-            if (texts.TryGetValue(metaPath, out var t) && t.Stamp == stamp)
+            if (texts.TryGetValue(metaPath, out var t) && t.Stamp == stamp && ReferenceEquals(t.Text, text))
                 texts[metaPath] = t with { Text = null, Unparsable = true };
     }
 

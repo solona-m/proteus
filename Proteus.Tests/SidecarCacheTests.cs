@@ -111,6 +111,8 @@ public class SidecarCacheTests
 
         Assert.Equal("{\"x\":1}", cache.ReadMetadata("a", Meta("a")).Text);
         now += 3_001;
+        cache.ReadMetadata("a", Meta("a"));   // the read that earns trust: more than 3 s after the first
+        now += 1_000;
         d.Stats = d.Reads = 0;
         var again = cache.ReadMetadata("a", Meta("a"));
         Assert.Equal(MetaReadKind.Ok, again.Kind);
@@ -237,8 +239,11 @@ public class SidecarCacheTests
         cache.ReadMetadata("m", Meta("m"));
         Assert.Equal(3, d.Reads);
 
-        // 3 s after the first read under this stamp: trusted.
+        // A read taken more than 3 s after the first under this stamp earns trust; after it, no more reads.
         now += 600;
+        cache.ReadMetadata("m", Meta("m"));
+        Assert.Equal(4, d.Reads);
+        now += 5_000;
         d.Reads = 0;
         Assert.Equal("v2", cache.ReadMetadata("m", Meta("m")).Text);
         Assert.Equal(0, d.Reads);
@@ -249,6 +254,27 @@ public class SidecarCacheTests
         now += 1_000;
         cache.ReadMetadata("m", Meta("m"));
         Assert.Equal(2, d.Reads);
+    }
+
+    [Fact]
+    [Trait("Plan", "AC-idle-disk-io-4")]
+    [Trait("Plan", "EDGE-idle-disk-io-11")]
+    [Trait("Plan", "EDGE-idle-disk-io-18")]
+    public void SameStampRewriteAfterFirstRead_NeverServedStale()
+    {
+        // [AC-idle-disk-io-4] [EDGE-idle-disk-io-11] [EDGE-idle-disk-io-18]
+        // FAT32: written at T, read at T+0.1 s, rewritten at T+1 s to the same length in the same 2 s mtime bucket, and
+        // nothing reads it until T+10 s. Trust needs a read taken after the window, so the stale text is never served.
+        var d = new Drive();
+        d.Put("m", "AAAA", ticks: 70);
+        var cache = Make(d);
+        Assert.Equal("AAAA", cache.ReadMetadata("m", Meta("m")).Text);
+        now += 900;
+        d.Put("m", "BBBB", ticks: 70);
+        now += 9_000;
+        Assert.Equal("BBBB", cache.ReadMetadata("m", Meta("m")).Text);
+        now += 9_000;
+        Assert.Equal("BBBB", cache.ReadMetadata("m", Meta("m")).Text);
     }
 
     [Fact]
@@ -296,6 +322,11 @@ public class SidecarCacheTests
         Assert.Equal(MetaReadKind.IoError, cache.ReadMetadata("x", Meta("x")).Kind);
         d.StatThrows = null;
         Assert.False(cache.MayHaveSidecar(Root, "x"));
+
+        // Anything that is not an IO or access failure (an odd path) is "not there", as File.Exists treats it.
+        d.StatThrows = _ => new ArgumentException("bad path");
+        Assert.False(cache.MayHaveSidecar(Root, "odd"));
+        Assert.Equal(MetaReadKind.Missing, cache.ReadMetadata("odd", Meta("odd")).Kind);
     }
 
     [Fact]
@@ -306,8 +337,10 @@ public class SidecarCacheTests
         var d = new Drive();
         d.Put("m", "{not json", ticks: 5);
         var cache = Make(d);
-        var first = cache.ReadMetadata("m", Meta("m"));
-        cache.NoteUnparsable(Meta("m"), first.Stamp);
+        cache.ReadMetadata("m", Meta("m"));
+        now += 3_500;
+        var trusted = cache.ReadMetadata("m", Meta("m"));
+        cache.NoteUnparsable(Meta("m"), trusted.Stamp, trusted.Text);
 
         now += 5_000;
         d.Reads = 0;
@@ -317,6 +350,25 @@ public class SidecarCacheTests
         d.Put("m", "{}", ticks: 6);
         Assert.Equal(MetaReadKind.Ok, cache.ReadMetadata("m", Meta("m")).Kind);
         Assert.Equal(1, d.Reads);
+    }
+
+    [Fact]
+    [Trait("Plan", "EDGE-idle-disk-io-15")]
+    [Trait("Plan", "EDGE-idle-disk-io-16")]
+    public void NoteUnparsable_ForOlderText_DoesNotMarkNewerText()
+    {
+        // [EDGE-idle-disk-io-15] [EDGE-idle-disk-io-16]
+        // One discovery failed to parse the old text while another already stored the new one under the same stamp.
+        var d = new Drive();
+        d.Put("m", "{bad", ticks: 5, length: 9);
+        var cache = Make(d);
+        var old = cache.ReadMetadata("m", Meta("m"));
+        now += 3_500;
+        d.Put("m", "{\"ok\":1}", ticks: 5, length: 9);
+        cache.ReadMetadata("m", Meta("m"));
+        cache.NoteUnparsable(Meta("m"), old.Stamp, old.Text);
+        now += 1_000;
+        Assert.Equal(MetaReadKind.Ok, cache.ReadMetadata("m", Meta("m")).Kind);
     }
 
     [Fact]
@@ -333,6 +385,8 @@ public class SidecarCacheTests
         cache.ReadMetadata("m", Meta("m"));
         Assert.Equal(2, d.Reads);
         now += 1_500;
+        cache.ReadMetadata("m", Meta("m"));   // more than 3 s after the first read: earns trust
+        now += 1_000;
         d.Reads = 0;
         cache.ReadMetadata("m", Meta("m"));
         Assert.Equal(0, d.Reads);
@@ -347,7 +401,7 @@ public class SidecarCacheTests
         d.Put("m", "{half", ticks: 9, length: 99);
         var cache = Make(d);
         var first = cache.ReadMetadata("m", Meta("m"));
-        cache.NoteUnparsable(Meta("m"), first.Stamp);
+        cache.NoteUnparsable(Meta("m"), first.Stamp, first.Text);
 
         // Within the window the writer may still be writing: read again, and the finished text is served.
         now += 1_000;

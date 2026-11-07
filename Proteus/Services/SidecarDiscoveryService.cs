@@ -199,10 +199,14 @@ public class SidecarDiscoveryService
         new(s.Where(char.IsLetterOrDigit).Select(char.ToLowerInvariant).ToArray());
 
     public SidecarDiscoveryService(PenumbraBridge penumbra, IPluginLog log)
+        : this(penumbra, log, null) { }
+
+    /// <summary>For tests: the cache to read through (with its own clock and drive).</summary>
+    internal SidecarDiscoveryService(PenumbraBridge penumbra, IPluginLog log, SidecarCache? cache)
     {
         this.penumbra = penumbra;
         this.log = log;
-        Cache = new SidecarCache(count: (key, n) => Io?.Count(key, n));
+        Cache = cache ?? new SidecarCache(count: (key, n) => Io?.Count(key, n));
     }
 
     /// <summary>Which mod folders have a sidecar, and each sidecar's text: what saves discovery asking the drive again.</summary>
@@ -1246,6 +1250,9 @@ public class SidecarDiscoveryService
             case MetaReadKind.Missing:
                 return new DiscoveryRead(null, false, 0);
             case MetaReadKind.IoError:
+                // The editor's held edit needs no file: a lock taken while the write-behind writes must not drop the mod.
+                if (staged.Peek(modDir) is { } heldOnIo && ParseHeld(modDir, heldOnIo.Json) is { } fromHeld)
+                    return new DiscoveryRead(fromHeld, false, 0);
                 if (ioWarned.TryAdd(metaPath, 0))
                     log.Warning("[Proteus] could not read Proteus metadata {0} (locked or access denied) — will try again",
                                 metaPath);
@@ -1256,18 +1263,8 @@ public class SidecarDiscoveryService
         ioWarned.TryRemove(metaPath, out _);
         long stamp = read.Stamp.LastWriteTicksUtc;
 
-        if (staged.Peek(modDir) is { } held)
-        {
-            try
-            {
-                return new DiscoveryRead(JsonSerializer.Deserialize<ProteusMetadata>(held.Json, ProteusJson.MetadataRead),
-                                         false, stamp);
-            }
-            catch (Exception ex)
-            {
-                log.Warning(ex, "Failed to parse held Proteus metadata for {0}", modDir);
-            }
-        }
+        if (staged.Peek(modDir) is { } held && ParseHeld(modDir, held.Json) is { } fromHeldEdit)
+            return new DiscoveryRead(fromHeldEdit, false, stamp);
 
         if (read.Kind == MetaReadKind.Unparsable) return new DiscoveryRead(null, false, stamp);
         try
@@ -1279,8 +1276,19 @@ public class SidecarDiscoveryService
         {
             if (unparsableWarned.TryAdd($"{metaPath}\0{stamp}\0{read.Stamp.Length}", 0))
                 log.Warning(ex, "Failed to parse Proteus metadata: {0}", metaPath);
-            Cache.NoteUnparsable(metaPath, read.Stamp);
+            Cache.NoteUnparsable(metaPath, read.Stamp, read.Text);
             return new DiscoveryRead(null, false, stamp);
+        }
+    }
+
+    /// <summary>The editor's held edit as metadata; null, with a warning, when it will not parse (the file then decides).</summary>
+    private ProteusMetadata? ParseHeld(string modDir, string json)
+    {
+        try { return JsonSerializer.Deserialize<ProteusMetadata>(json, ProteusJson.MetadataRead); }
+        catch (Exception ex)
+        {
+            log.Warning(ex, "Failed to parse held Proteus metadata for {0}", modDir);
+            return null;
         }
     }
 

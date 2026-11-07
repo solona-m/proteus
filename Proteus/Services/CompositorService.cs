@@ -626,7 +626,12 @@ public partial class CompositorService : IDisposable
                 // Only latch AFTER the trigger, so a throw above leaves the poll armed to retry.
                 _boot.Latch();
             }
-            catch (Exception ex) { log.Debug("[Proteus] boot composite probe failed: {0}", ex.Message); }
+            catch (Exception ex)
+            {
+                log.Debug("[Proteus] boot composite probe failed: {0}", ex.Message);
+                // Paced like an incomplete answer, not retried every frame.
+                _boot.Report(BootProbeOutcome.Retry, Environment.TickCount64);
+            }
             finally { Interlocked.Exchange(ref _bootProbeRunning, 0); }
         });
     }

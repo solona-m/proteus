@@ -133,13 +133,23 @@ public class SidecarDiscoveryCoreTests : IDisposable
         Assert.Equal(["mod0010", "mod0500"], settingsAsked);
     }
 
-    private (SidecarDiscoveryService Service, string ModDir, string MetaPath) TempSidecar(string json)
+    /// <summary>The discovery cache's clock, advanced by the tests so they reach its trusted, cached path.</summary>
+    private long clock = 1_000_000;
+
+    private int reads;
+
+    private SidecarDiscoveryService Service(IPluginLog? log = null, Func<string, string>? readText = null)
+        => new(null!, log ?? Substitute.For<IPluginLog>(),
+               new SidecarCache(readText: p => { reads++; return (readText ?? File.ReadAllText)(p); }, nowMs: () => clock));
+
+    private (SidecarDiscoveryService Service, string ModDir, string MetaPath) TempSidecar(string json,
+        IPluginLog? log = null, Func<string, string>? readText = null)
     {
         var modDir = "Skin";
         var meta = Path.Combine(temp, modDir, SidecarDiscoveryService.SidecarSubdir, SidecarDiscoveryService.MetadataFile);
         Directory.CreateDirectory(Path.GetDirectoryName(meta)!);
         File.WriteAllText(meta, json);
-        return (new SidecarDiscoveryService(null!, Substitute.For<IPluginLog>()), modDir, meta);
+        return (Service(log, readText), modDir, meta);
     }
 
     [Fact]
@@ -155,12 +165,19 @@ public class SidecarDiscoveryCoreTests : IDisposable
         var written = File.ReadAllText(meta);
         var mtime = File.GetLastWriteTimeUtc(meta);
         Assert.Equal(3, svc.ReadForDiscovery(modDir, meta)!.ColorTableRows![0].Row);
+        clock += 4_000;
+        Assert.Equal(3, svc.ReadForDiscovery(modDir, meta)!.ColorTableRows![0].Row);   // now trusted
+        clock += 4_000;
+        reads = 0;
+        svc.ReadForDiscovery(modDir, meta);
+        Assert.Equal(0, reads);                                                        // served from the cache
 
         // Rewrite to the same length with the old mtime put back: the stamp cannot tell, the explicit forget can.
         entry.Metadata.ColorTableRows![0].Row = 4;
         svc.SaveMetadata(entry);
         Assert.Equal(written.Length, File.ReadAllText(meta).Length);
         File.SetLastWriteTimeUtc(meta, mtime);
+        clock += 4_000;
         Assert.Equal(4, svc.ReadForDiscovery(modDir, meta)!.ColorTableRows![0].Row);
     }
 
@@ -170,13 +187,57 @@ public class SidecarDiscoveryCoreTests : IDisposable
     {
         // [EDGE-idle-disk-io-13]
         var (svc, modDir, meta) = TempSidecar("{\"ColorTableRows\":[{\"Row\":1}]}");
+        svc.ReadForDiscovery(modDir, meta);
+        clock += 4_000;
         var a = svc.ReadForDiscovery(modDir, meta)!;
         a.ColorTableRows![0].Row = 99;
         a.ColorTableRows.Add(new ColorTableRowPreset { Row = 2 });
+        clock += 4_000;
+        reads = 0;
         var b = svc.ReadForDiscovery(modDir, meta)!;
+        Assert.Equal(0, reads);   // the cached text, parsed afresh
         Assert.NotSame(a, b);
         Assert.Single(b.ColorTableRows!);
         Assert.Equal(1, b.ColorTableRows![0].Row);
+    }
+
+    [Fact]
+    [Trait("Plan", "EDGE-idle-disk-io-14")]
+    [Trait("Plan", "EDGE-idle-disk-io-4")]
+    public void ReadForDiscovery_HeldEditWins_OverIoError()
+    {
+        // [EDGE-idle-disk-io-14] [EDGE-idle-disk-io-4]
+        bool locked = false;
+        var (svc, modDir, meta) = TempSidecar("{\"ColorTableRows\":[{\"Row\":1}]}",
+            readText: p => locked ? throw new IOException("locked by the write-behind") : File.ReadAllText(p));
+        var entry = new OverlayEntry(modDir, modDir, 0, true,
+            new ProteusMetadata { ColorTableRows = [new() { Row = 8 }] }, Path.GetDirectoryName(meta)!);
+        svc.StageMetadata(entry);
+        locked = true;
+        var read = svc.ReadForDiscoveryDetailed(modDir, meta);
+        Assert.False(read.IoFailed);
+        Assert.Equal(8, read.Meta!.ColorTableRows![0].Row);
+    }
+
+    [Fact]
+    [Trait("Plan", "EDGE-idle-disk-io-4")]
+    public void ReadForDiscovery_IoFailure_WarnsOnce_UntilItReadsAgain()
+    {
+        // [EDGE-idle-disk-io-4]
+        var log = Substitute.For<IPluginLog>();
+        bool locked = true;
+        var (svc, modDir, meta) = TempSidecar("{}", log,
+            readText: p => locked ? throw new IOException("locked") : File.ReadAllText(p));
+
+        for (int i = 0; i < 3; i++) Assert.True(svc.ReadForDiscoveryDetailed(modDir, meta).IoFailed);
+        log.Received(1).Warning(Arg.Is<string>(s => s.Contains("could not read Proteus metadata")), Arg.Any<object[]>());
+        log.Received(2).Debug(Arg.Is<string>(s => s.Contains("still could not read")), Arg.Any<object[]>());
+
+        locked = false;
+        Assert.False(svc.ReadForDiscoveryDetailed(modDir, meta).IoFailed);
+        locked = true;
+        svc.ReadForDiscoveryDetailed(modDir, meta);
+        log.Received(2).Warning(Arg.Is<string>(s => s.Contains("could not read Proteus metadata")), Arg.Any<object[]>());
     }
 
     [Fact]
@@ -221,31 +282,61 @@ public class SidecarDiscoveryCoreTests : IDisposable
     public void AttachHandlers_NullOrEmptyFolder_Ignored_NoThrow()
     {
         // [EDGE-idle-disk-io-31]
-        var (svc, modDir, meta) = TempSidecar("{}");
-        var root = temp;
+        var svc = Service();
+        // A cached "no sidecar" for a folder that has since gained one: only a real forget makes it visible.
+        Assert.False(svc.Cache.MayHaveSidecar(temp, "absent"));
+        MakeSidecar("absent");
 
         svc.OnPenumbraModAdded(null);
         svc.OnPenumbraModAdded("");
         svc.OnPenumbraModDeleted(null);
+        svc.OnPenumbraModDeleted("");
         svc.OnPenumbraModMoved(null, "");
         svc.OnPenumbraModSettingChanged(Penumbra.Api.Enums.ModSettingChange.Edited, Guid.Empty, null, false);
-        svc.OnPenumbraReady();
+        svc.OnPenumbraModSettingChanged(Penumbra.Api.Enums.ModSettingChange.Edited, Guid.Empty, "", false);
+        Assert.False(svc.Cache.MayHaveSidecar(temp, "absent"));   // null and empty folders changed nothing
 
-        // A real folder name is forgotten: a sidecar made since is seen at once.
-        Assert.False(svc.Cache.MayHaveSidecar(root, "absent"));
-        var absentMeta = Path.Combine(root, "absent", SidecarDiscoveryService.SidecarSubdir, SidecarDiscoveryService.MetadataFile);
-        Directory.CreateDirectory(Path.GetDirectoryName(absentMeta)!);
-        File.WriteAllText(absentMeta, "{}");
-        Assert.False(svc.Cache.MayHaveSidecar(root, "absent"));
         svc.OnPenumbraModAdded("absent");
-        Assert.True(svc.Cache.MayHaveSidecar(root, "absent"));
+        Assert.True(svc.Cache.MayHaveSidecar(temp, "absent"));
+    }
+
+    private void MakeSidecar(string modDir)
+    {
+        var meta = Path.Combine(temp, modDir, SidecarDiscoveryService.SidecarSubdir, SidecarDiscoveryService.MetadataFile);
+        Directory.CreateDirectory(Path.GetDirectoryName(meta)!);
+        File.WriteAllText(meta, "{}");
+    }
+
+    [Fact]
+    [Trait("Plan", "AC-idle-disk-io-4")]
+    [Trait("Plan", "EDGE-idle-disk-io-17")]
+    public void PenumbraEvents_ForgetTheirFolder_SettingChangesDoNot()
+    {
+        // [AC-idle-disk-io-4] [EDGE-idle-disk-io-17]
+        var svc = Service();
+        foreach (var dir in new[] { "edited", "deleted", "old", "new", "toggled" })
+            Assert.False(svc.Cache.MayHaveSidecar(temp, dir));
+        foreach (var dir in new[] { "edited", "deleted", "new", "toggled" }) MakeSidecar(dir);
+
+        // A setting change is not an edit: the cache keeps its answer.
+        foreach (var change in new[] { Penumbra.Api.Enums.ModSettingChange.Setting,
+                                       Penumbra.Api.Enums.ModSettingChange.EnableState,
+                                       Penumbra.Api.Enums.ModSettingChange.TemporarySetting })
+            svc.OnPenumbraModSettingChanged(change, Guid.Empty, "toggled", false);
+        Assert.False(svc.Cache.MayHaveSidecar(temp, "toggled"));
+
+        svc.OnPenumbraModSettingChanged(Penumbra.Api.Enums.ModSettingChange.Edited, Guid.NewGuid(), "edited", false);
+        Assert.True(svc.Cache.MayHaveSidecar(temp, "edited"));
+
+        svc.OnPenumbraModDeleted("deleted");
+        Assert.True(svc.Cache.MayHaveSidecar(temp, "deleted"));
 
         // Renamed: both names are forgotten.
-        Assert.False(svc.Cache.MayHaveSidecar(root, "renamed"));
-        var renamedMeta = Path.Combine(root, "renamed", SidecarDiscoveryService.SidecarSubdir, SidecarDiscoveryService.MetadataFile);
-        Directory.CreateDirectory(Path.GetDirectoryName(renamedMeta)!);
-        File.WriteAllText(renamedMeta, "{}");
-        svc.OnPenumbraModMoved("absent", "renamed");
-        Assert.True(svc.Cache.MayHaveSidecar(root, "renamed"));
+        svc.OnPenumbraModMoved("old", "new");
+        Assert.True(svc.Cache.MayHaveSidecar(temp, "new"));
+
+        // Penumbra coming back forgets everything.
+        svc.OnPenumbraReady();
+        Assert.True(svc.Cache.MayHaveSidecar(temp, "toggled"));
     }
 }

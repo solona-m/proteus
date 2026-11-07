@@ -142,6 +142,21 @@ public class BootBackoffTests
     }
 
     [Fact]
+    [Trait("Plan", "EDGE-idle-disk-io-4")]
+    [Trait("Plan", "EDGE-idle-disk-io-5")]
+    public void RearmBetweenCompositeAndLatch_NewArmGetsItsOwnComposite()
+    {
+        // [EDGE-idle-disk-io-4] [EDGE-idle-disk-io-5]
+        // A zone change lands while the last arm's composite is being triggered: that latch must not swallow the new arm.
+        var b = new BootBackoff(T0);
+        Assert.True(b.Report(BootProbeOutcome.Composite, T0));
+        b.Rearm(T0 + 10);
+        b.Latch();
+        Assert.False(b.Latched);
+        Assert.True(b.Due(T0 + 10));
+    }
+
+    [Fact]
     [Trait("Plan", "EDGE-idle-disk-io-5")]
     public void ConcurrentCalls_StateConsistent()
     {
