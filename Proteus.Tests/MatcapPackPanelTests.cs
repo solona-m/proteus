@@ -331,17 +331,46 @@ public sealed class MatcapPackPanelTests : IDisposable
             }
         });
         observer.Start();
+        var dir = Path.Combine(root, "DefaultMatcaps");
+        int readies = 0;
         for (int i = 0; i < 20; i++)
         {
+            // Every fifth run finds every file in place and ends Ready with no fetch; the rest end Failed.
+            if (i % 5 == 4)
+            {
+                Directory.CreateDirectory(dir);
+                foreach (var (name, bytes, _) in DefaultMatcapsDownloadService.Matcaps) File.WriteAllBytes(Path.Combine(dir, name), new byte[bytes]);
+            }
             s.EnsureAsync(retryFailed: true, evenIfReady: true);
             Assert.True(SpinWait.SpinUntil(() => s.Status.State != MatcapPackState.Downloading, 5000));
             // Right after a final state, the next re-arm wins at once.
             Assert.False(s.IsRunActive);
-            if (i % 2 == 0) foreach (var f in Directory.GetFiles(Path.Combine(root, "DefaultMatcaps")).Take(2)) File.Delete(f);
+            if (s.Status.State == MatcapPackState.Ready) readies++;
+            if (i % 2 == 0) foreach (var f in Directory.GetFiles(dir).Take(2)) File.Delete(f);
         }
         Volatile.Write(ref stop, true);
         observer.Join();
         Assert.False(bad);
+        Assert.True(readies >= 3, $"only {readies} runs ended Ready");
+    }
+
+    [Fact]
+    [Trait("Plan", "EDGE-matcap-pack-9")]
+    public void A_cancelled_run_publishes_idle_with_no_run_active()
+    {
+        var entered = new TaskCompletionSource();
+        var s = new DefaultMatcapsDownloadService(Substitute.For<IPluginLog>(), root, async (u, n, b, sha, dest, _, ct) =>
+        {
+            entered.TrySetResult();
+            await Task.Delay(Timeout.Infinite, ct);
+            return FetchResult.Success;
+        });
+        s.EnsureAsync();
+        Assert.True(entered.Task.Wait(5000));
+        Assert.Equal((MatcapPackState.Downloading, true), s.Snapshot());
+        s.Dispose();
+        Assert.True(SpinWait.SpinUntil(() => !s.IsRunActive, 5000));
+        Assert.Equal((MatcapPackState.Idle, false), s.Snapshot());
     }
 
     [Fact]
