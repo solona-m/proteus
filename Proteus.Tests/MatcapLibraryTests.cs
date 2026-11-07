@@ -34,7 +34,7 @@ public sealed class MatcapLibraryTests : IDisposable
         Assert.Equal("Texture Slot A", lib.Group);
         Assert.Equal(SlotA, lib.Texture);
         Assert.Equal(["Gem Red", "Pearl"], lib.Options.Select(o => o.Name));
-        Assert.Equal("Test Library â€” Texture Slot A", lib.Label);
+        Assert.Equal("Test Library — Texture Slot A", lib.Label);
     }
 
     [Fact]
@@ -198,7 +198,7 @@ public sealed class MatcapIndexTests : IDisposable
     }
 }
 
-/// <summary>The real MatCap Library (Westlaketea), unpacked to a temp folder â€” owner's machine only.</summary>
+/// <summary>The real MatCap Library (Westlaketea), unpacked to a temp folder — owner's machine only.</summary>
 public sealed class MatcapIndexLocalTests(ITestOutputHelper output) : IDisposable
 {
     private readonly string root = Path.Combine(Path.GetTempPath(), "proteus-matcap-real-" + Guid.NewGuid().ToString("N"));

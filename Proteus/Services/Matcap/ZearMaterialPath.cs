@@ -12,9 +12,9 @@ namespace Proteus.Services.Matcap;
 /// <c>Variant.None</c> for ears) and no race substitution — unlike hair (<see cref="HairMaterialPath"/>). Ported here
 /// because Proteus does not reference that assembly.
 /// <para/>
-/// Until the in-game pin confirms the folder, the <c>material/v0001</c> form is published too, and where a name's race or
-/// id disagrees with its folder, the name re-derived from the folder as well: the names are Proteus's own, so the extra
-/// redirect keys cost nothing and draw nothing anywhere else.
+/// Pinned against the game's own horn and ear models (<c>ZearMaterialPathLocalTests</c>: every material each names sits
+/// at exactly this path). Where a name's race or id disagrees with its folder, the name re-derived from the folder is
+/// published as well: the names are Proteus's own, so the extra redirect key costs nothing and draws nothing elsewhere.
 /// </summary>
 internal static partial class ZearMaterialPath
 {
@@ -47,8 +47,8 @@ internal static partial class ZearMaterialPath
 
         void Add(string n)
         {
-            foreach (var p in new[] { $"{Folder(model.Race, model.Id)}{n}", $"{Folder(model.Race, model.Id)}/v0001{n}" })
-                if (!paths.Contains(p, StringComparer.OrdinalIgnoreCase)) paths.Add(p);
+            var p = $"{Folder(model.Race, model.Id)}{n}";
+            if (!paths.Contains(p, StringComparer.OrdinalIgnoreCase)) paths.Add(p);
         }
         Add(name);
         var m = NameRe().Match(name);
