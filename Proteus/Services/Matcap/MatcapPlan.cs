@@ -198,17 +198,20 @@ internal static partial class MatcapPlan
         var norm = rel.Replace('\\', '/').ToLowerInvariant();
         if (norm.StartsWith(HairPortPlan.Folder.ToLowerInvariant() + "/", StringComparison.Ordinal)) return "hair-port";
         if (norm.StartsWith(EarlessHairPlan.Folder.ToLowerInvariant() + "/", StringComparison.Ordinal)) return "earless";
-        if (SizeSetRefit.IsOurFile(SizeSetRefit.OurFiles(BodyRetargetWriter.ReadRecord(modRoot)), rel)) return "refit";
+        if (SizeSetRefit.IsOurFile(SizeSetRefit.OurFiles(BodyRetargetWriter.ReadRecord(modRoot)), rel)) return RefitKind;
         return null;
     }
 
+    /// <summary><see cref="Regenerated"/>'s kind for a size-set or refit output.</summary>
+    public const string RefitKind = "refit";
+
     /// <summary>
-    /// Why the model file can't take a matcap, or null. Refits take one: they are seldom remade, and a remake only drops
-    /// the matcap (Undo then leaves the remade file alone; the next Apply retires the old backup). Hair ports and earless
-    /// copies are still refused: they are rewritten whenever their source hair changes.
+    /// Why the model file can't take a matcap, or null. Refits take one: they are seldom remade. A remake writes the file
+    /// again from its source: Undo then forgets the remade file instead of refusing, and the next Apply there retires the
+    /// old backup. Hair ports and earless copies are still refused: they are rewritten whenever their source hair changes.
     /// </summary>
     public static string? RefusedRegenerated(string modRoot, string rel) =>
-        Regenerated(modRoot, rel) is { } kind && kind != "refit" ? kind : null;
+        Regenerated(modRoot, rel) is { } kind && kind != RefitKind ? kind : null;
 
     // ── siblings ────────────────────────────────────────────────────────────
 

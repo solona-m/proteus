@@ -572,8 +572,124 @@ public class MatcapWriterTests
         var remade = (byte[])bytes.Clone();
         remade[^1] ^= 0x5A;
         File.WriteAllBytes(full, remade);
-        MatcapWriter.Undo(f.ModRoot, rel);
+        var undo = MatcapWriter.Undo(f.ModRoot, rel);
+        Assert.True(undo.Ok, undo.Message);
         Assert.Equal(remade, File.ReadAllBytes(full));
+        var record = MatcapRecord.Read(f.ModRoot);
+        Assert.Null(record.Model(rel));
+        Assert.Empty(record.Materials);
+        Assert.False(File.Exists(MatcapWriter.BackupPath(f.ModRoot, MatcapWriter.BackupSubdir, rel)));
+        Assert.DoesNotContain(Defaults(f.ModRoot).Keys, k => k.Contains("_mcap", StringComparison.Ordinal));
+    }
+
+    private const string RefitRel = BodyRetargetWriter.Subfolder + "/x/top.mdl";
+
+    private static MatcapWriter.Outcome ApplyOn(MatcapFixture f, string rel, string image, out MatcapStudio.Prepared prepared)
+    {
+        var bytes = f.Current(rel);
+        var part = ModelPartReader.Read(bytes)!.Parts.First(p => MatcapPlan.Tickable(p) && p.Island < 0);
+        prepared = MatcapStudio.Prepare(f.ModRoot, rel, MatcapFixture.ModelPath, bytes, [part],
+                                        MatcapChoice.OfImage(f.Image(image)), f.Env());
+        Assert.True(prepared.Ok, prepared.Message);
+        return MatcapWriter.Apply(f.ModRoot, prepared.Request!);
+    }
+
+    /// <summary>The author's file plus a refit of it, both at the model's game path (a Single group).</summary>
+    private static MatcapFixture WithRefit()
+    {
+        var f = new MatcapFixture();
+        var full = MatcapWriter.Full(f.ModRoot, RefitRel);
+        Directory.CreateDirectory(Path.GetDirectoryName(full)!);
+        File.Copy(MatcapWriter.Full(f.ModRoot, MatcapFixture.ModelRel), full);
+        AddOption(f, "Size", ("Author", MatcapFixture.ModelRel), ("Refit", RefitRel));
+        return f;
+    }
+
+    [Fact]
+    [Trait("Plan", "EDGE-matcaps-11")]
+    public void Refits_and_the_authors_file_never_share_an_apply_group()
+    {
+        using var f = WithRefit();
+        var refitBefore = f.Current(RefitRel);
+        Assert.True(ApplyOn(f, MatcapFixture.ModelRel, "a.tex", out var onAuthor).Ok);
+        Assert.Single(onAuthor.Request!.Models);
+        Assert.Contains(onAuthor.SiblingsSkipped, s => PenumbraModMeta.SameFile(s, RefitRel));
+        Assert.Equal(refitBefore, f.Current(RefitRel));
+
+        Assert.True(ApplyOn(f, RefitRel, "b.tex", out var onRefit).Ok);
+        Assert.Single(onRefit.Request!.Models);
+        var record = MatcapRecord.Read(f.ModRoot);
+        Assert.DoesNotContain(MatcapWriter.ApplyGroupOf(record, MatcapFixture.ModelRel), g => PenumbraModMeta.SameFile(g, RefitRel));
+    }
+
+    [Fact]
+    [Trait("Plan", "EDGE-matcaps-11")]
+    public void A_refit_remade_from_a_matcapped_file_never_strands_undo_or_draws_a_missing_material()
+    {
+        using var f = WithRefit();
+        var author = f.Current(MatcapFixture.ModelRel);
+        Assert.True(ApplyOn(f, RefitRel, "r.tex", out _).Ok);                  // M1 on the refit
+        Assert.True(ApplyOn(f, MatcapFixture.ModelRel, "s.tex", out _).Ok);    // M2 on the author's file
+        var m2 = MatcapRecord.Read(f.ModRoot).MaterialsOf(MatcapFixture.ModelRel).Single();
+
+        // The remake: the refit written again from the author's file, so it now draws M2.
+        var remade = f.Current(MatcapFixture.ModelRel);
+        remade[^1] ^= 0x5A;
+        File.WriteAllBytes(MatcapWriter.Full(f.ModRoot, RefitRel), remade);
+
+        // Undo on the refit: forgotten, not refused; the remade file is left alone; M1 goes, M2 stays.
+        var undoRefit = MatcapWriter.Undo(f.ModRoot, RefitRel);
+        Assert.True(undoRefit.Ok, undoRefit.Message);
+        Assert.Equal(remade, f.Current(RefitRel));
+        var record = MatcapRecord.Read(f.ModRoot);
+        Assert.Null(record.Model(RefitRel));
+        Assert.Equal(m2.Name, Assert.Single(record.Materials).Name);
+
+        // Undo on the author's file: restored, but M2's files and redirects stay while the remade refit draws it.
+        var undoAuthor = MatcapWriter.Undo(f.ModRoot, MatcapFixture.ModelRel);
+        Assert.True(undoAuthor.Ok, undoAuthor.Message);
+        Assert.Contains(RefitRel, undoAuthor.Message, StringComparison.OrdinalIgnoreCase);
+        Assert.Equal(author, f.Current(MatcapFixture.ModelRel));
+        Assert.True(File.Exists(MatcapWriter.Full(f.ModRoot, m2.File)));
+        Assert.All(m2.GamePaths, p => Assert.True(Defaults(f.ModRoot).ContainsKey(p)));
+
+        // Once no refit draws it, the next Forget removes it.
+        File.WriteAllBytes(MatcapWriter.Full(f.ModRoot, RefitRel), author);
+        Assert.True(MatcapWriter.Forget(f.ModRoot, MatcapFixture.ModelRel).Ok);
+        Assert.False(File.Exists(MatcapWriter.Full(f.ModRoot, m2.File)));
+        Assert.Empty(MatcapRecord.Read(f.ModRoot).Materials);
+    }
+
+    [Fact]
+    [Trait("Plan", "EDGE-matcaps-11")]
+    public void A_matcap_on_a_remade_refit_backs_up_the_remade_file_not_the_old_one()
+    {
+        using var f = WithRefit();
+        Assert.True(ApplyOn(f, RefitRel, "r.tex", out _).Ok);                  // M1 on the refit, backup = old refit
+        Assert.True(ApplyOn(f, MatcapFixture.ModelRel, "s.tex", out _).Ok);    // M2 on the author's file
+        var remade = f.Current(MatcapFixture.ModelRel);                         // remake: draws M2, one of ours
+        remade[^1] ^= 0x5A;
+        File.WriteAllBytes(MatcapWriter.Full(f.ModRoot, RefitRel), remade);
+
+        Assert.True(ApplyOn(f, RefitRel, "t.tex", out _).Ok);
+        var undo = MatcapWriter.Undo(f.ModRoot, RefitRel);
+        Assert.True(undo.Ok, undo.Message);
+        Assert.Equal(remade, f.Current(RefitRel));                              // never the pre-remake refit
+    }
+
+    [Fact]
+    [Trait("Plan", "EDGE-matcaps-11")]
+    public void A_matcapped_partner_hashes_as_the_refit_wrote_it()
+    {
+        using var f = WithRefit();
+        var before = f.Current(RefitRel);
+        var partner = new OutfitPartners.Partner("top", MatcapFixture.ModelRel, RefitRel);
+        var layers = OutfitPartners.LayersOf(f.ModRoot, partner);
+        Assert.True(ApplyOn(f, RefitRel, "r.tex", out _).Ok);
+        Assert.NotEqual(before, f.Current(RefitRel));
+        Assert.Equal(layers, OutfitPartners.LayersOf(f.ModRoot, partner));
+        Assert.True(MatcapWriter.Undo(f.ModRoot, RefitRel).Ok);
+        Assert.Equal(layers, OutfitPartners.LayersOf(f.ModRoot, partner));
     }
 
     private static string WriteJunk(MatcapFixture f)

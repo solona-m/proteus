@@ -132,14 +132,16 @@ internal static class MatcapWriter
             // A backup is the original only while the file still carries one of our matcaps (as written, or edited on
             // top by a later feature such as the brush, which keeps its own backup in the order). A backup over a file
             // that names none of them — left by a failed retire or a deleted record, the author's update since — is
-            // stale: retired, and a fresh one taken, so an Undo never brings back an older model.
+            // stale: retired, and a fresh one taken, so an Undo never brings back an older model. A refit must also still
+            // be as we wrote it: a remake writes it again from its source, which can carry one of our matcaps too.
             var staleBackups = new List<string>();
             foreach (var m in req.Models)
             {
                 var backup = BackupPath(modRoot, BackupSubdir, m.Rel);
                 if (!File.Exists(backup)) continue;
                 var names = TryNames(m.SourceBytes);
-                if (record.Model(m.Rel) != null && names != null && record.Materials.Any(x => names.Contains(x.Name))) continue;
+                if (record.Model(m.Rel) is { } known && names != null && record.Materials.Any(x => names.Contains(x.Name))
+                    && !RemadeRefit(modRoot, m.Rel, known, m.SourceBytes)) continue;
                 staleBackups.Add(m.Rel);
             }
 
@@ -389,6 +391,8 @@ internal static class MatcapWriter
             var removeKeys = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
             var kept = new List<string>();
             var touched = new List<string>();
+            // Refits remade from a file carrying one of our matcaps draw it too: its files stay while one names it.
+            var refitUsers = new List<string>();
 
             // ── reconcile: a material no recorded model still names is forgotten with its own files ──
             foreach (var mat in record.Materials.ToList())
@@ -396,8 +400,7 @@ internal static class MatcapWriter
                 bool named = mat.Meshes.Select(x => x.Model).Distinct(StringComparer.OrdinalIgnoreCase)
                                 .Any(m => NamesIn(modRoot, m)?.Contains(mat.Name) == true);
                 if (named) continue;
-                DropMaterial(modRoot, mat, removeKeys, kept);
-                record.Materials.Remove(mat);
+                if (DropMaterial(modRoot, mat, removeKeys, kept, refitUsers)) record.Materials.Remove(mat);
             }
 
             // ── the group: this model plus every model sharing a remaining material with it ──
@@ -416,9 +419,12 @@ internal static class MatcapWriter
                 if (forgetOnly) continue;
                 if (ModelBackupOrder.LaterFeature(modRoot, BackupSubdir, g) is { } later)   // (a) a later feature
                     return Outcome.Refuse(CodeLaterFeature, ModelBackupOrder.BlockedMessage(later));
-                var sha = HairPortPlan.Sha8(File.ReadAllBytes(full));
+                var bytes = File.ReadAllBytes(full);
+                var sha = HairPortPlan.Sha8(bytes);
                 if (record.Model(g) is { } me && me.WrittenSha8s.Contains(sha) && File.Exists(backup))
                     restore.Add((g, backup));                                               // (b) ours: restore it
+                else if (record.Model(g) is { } was && RemadeRefit(modRoot, g, was, bytes))
+                    forget.Add(g);                                                          // (f) a remade refit: forget it
                 else                                                                        // (d) edited on top
                     return Outcome.Refuse(CodeEdited, string.Format(ProteusLoc.Localize("Matcap.Refused.Edited.Fmt",
                         "{0} was changed after its matcap was applied, so it was not undone. Its original is kept at {1}."),
@@ -442,8 +448,7 @@ internal static class MatcapWriter
             {
                 // A material leaves with its models: every model it draws in was restored or forgotten.
                 if (!mat.Meshes.All(x => gone.Contains(x.Model))) continue;
-                DropMaterial(modRoot, mat, removeKeys, kept);
-                record.Materials.Remove(mat);
+                if (DropMaterial(modRoot, mat, removeKeys, kept, refitUsers)) record.Materials.Remove(mat);
             }
             record.Models.RemoveAll(m => gone.Contains(m.File));
 
@@ -485,6 +490,10 @@ internal static class MatcapWriter
             if (kept.Count > 0)
                 msg += " " + string.Format(ProteusLoc.Localize("Parts.Matcap.KeptEdited.Fmt", "Left in place because they were edited by hand: {0}."),
                     string.Join(", ", kept.Distinct()));
+            if (refitUsers.Count > 0)
+                msg += " " + string.Format(ProteusLoc.Localize("Parts.Matcap.KeptForRefits.Fmt",
+                    "Refits made from it still draw the matcap, so its files stay until the sizes are remade: {0}."),
+                    string.Join(", ", refitUsers));
             if (unretired.Count > 0)
                 msg += " " + string.Format(ProteusLoc.Localize("Parts.Matcap.BackupKept.Fmt",
                     "Their old backups could not be moved aside: {0}. The next matcap there moves them first."), string.Join(", ", unretired));
@@ -492,8 +501,16 @@ internal static class MatcapWriter
         }
     }
 
-    private static void DropMaterial(string modRoot, MatcapRecord.MaterialEntry mat, Dictionary<string, string> removeKeys, List<string> kept)
+    /// <summary>
+    /// Removes the material's files and redirects — unless a refit on disk still names it (remade from a file that
+    /// carried it), which would then draw a missing material: kept, the refit noted in <paramref name="refitUsers"/>,
+    /// and false returned so the record keeps it until no refit names it (a later Undo or Forget checks again).
+    /// </summary>
+    private static bool DropMaterial(string modRoot, MatcapRecord.MaterialEntry mat, Dictionary<string, string> removeKeys,
+                                     List<string> kept, List<string> refitUsers)
     {
+        var users = RefitsNaming(modRoot, mat.Name);
+        if (users.Count > 0) { refitUsers.AddRange(users.Where(u => !refitUsers.Contains(u, StringComparer.OrdinalIgnoreCase))); return false; }
         foreach (var p in mat.GamePaths) removeKeys[p] = mat.File;
         if (Edited(modRoot, mat.File, mat.Sha8) && mat.Sha8.Length > 0) kept.Add(mat.File); else TryDelete(Full(modRoot, mat.File));
         if (mat.Source.Tex is { } tex)
@@ -501,7 +518,52 @@ internal static class MatcapWriter
             removeKeys[tex.GamePath] = tex.File;
             if (Edited(modRoot, tex.File, tex.Sha8) && tex.Sha8.Length > 0) kept.Add(tex.File); else TryDelete(Full(modRoot, tex.File));
         }
+        return true;
     }
+
+    /// <summary>
+    /// <paramref name="bytes"/> (the file at <paramref name="rel"/>) as it was before our matcap: the backup while the
+    /// file is still as the matcap wrote it, else the bytes themselves. What the auto refit compares a partner by.
+    /// </summary>
+    internal static byte[] AsWrittenBeforeMatcap(string modRoot, string rel, byte[] bytes)
+    {
+        try
+        {
+            var record = MatcapRecord.Read(modRoot);
+            var backup = BackupPath(modRoot, BackupSubdir, rel);
+            return !record.Unreadable && record.Model(rel) is { } me && me.WrittenSha8s.Contains(HairPortPlan.Sha8(bytes))
+                   && File.Exists(backup) ? File.ReadAllBytes(backup) : bytes;
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            return bytes;
+        }
+    }
+
+    /// <summary>The mod's refit files on disk whose model names <paramref name="materialName"/>.</summary>
+    private static List<string> RefitsNaming(string modRoot, string materialName)
+    {
+        var files = SizeSetRefit.OurFiles(BodyRetargetWriter.ReadRecord(modRoot));
+        var dir = Path.Combine(modRoot, BodyRetargetWriter.Subfolder);
+        try
+        {
+            if (Directory.Exists(dir))
+                foreach (var f in Directory.EnumerateFiles(dir, "*.mdl", SearchOption.AllDirectories))
+                    files.Add(RefitCore.Normal(Path.GetRelativePath(modRoot, f)));
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { }
+        var found = new List<string>();
+        foreach (var rel in files.Order(StringComparer.Ordinal))
+            if (NamesIn(modRoot, rel)?.Contains(materialName) == true) found.Add(rel);
+        return found;
+    }
+
+    /// <summary>
+    /// A refit Proteus wrote again since our matcap went on (a remake from its source): not as we wrote it, and not an
+    /// edit on top of ours either — the remake replaced the file whole, so its old backup is stale.
+    /// </summary>
+    private static bool RemadeRefit(string modRoot, string rel, MatcapRecord.ModelEntry known, byte[] bytes) =>
+        !known.WrittenSha8s.Contains(HairPortPlan.Sha8(bytes)) && MatcapPlan.Regenerated(modRoot, rel) == MatcapPlan.RefitKind;
 
     /// <summary>
     /// <paramref name="rel"/>'s apply group: it plus every model sharing one of the record's materials with it, closed

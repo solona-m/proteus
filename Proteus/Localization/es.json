@@ -6546,5 +6546,9 @@
   "Parts.Matcap.BackupKept.Fmt": {
     "message": "Sus copias de seguridad antiguas no se pudieron apartar: {0}. El próximo matcap allí las moverá primero.",
     "description": ""
+  },
+  "Parts.Matcap.KeptForRefits.Fmt": {
+    "message": "Los reajustes hechos a partir de él aún dibujan el matcap, así que sus archivos se quedan hasta que se rehagan las tallas: {0}.",
+    "description": ""
   }
 }

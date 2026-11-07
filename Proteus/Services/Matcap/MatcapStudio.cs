@@ -90,12 +90,15 @@ internal static class MatcapStudio
         var redirects = PenumbraModMeta.ReadAllRedirects(modRoot);
 
         // ── siblings: every file at this game path whose parts line up ──
+        // A refit's matcap stays on that file alone, and an author's file never spreads one to its refits: a remake
+        // writes the refits again from the author's file, so tying them into one apply group would leave Undo stuck.
+        bool onRefit = MatcapPlan.Regenerated(modRoot, modelRel) == MatcapPlan.RefitKind;
         var models = new List<(string Rel, byte[] Bytes, IReadOnlyList<ModelPart> Parts)> { (modelRel, modelBytes, chosen) };
         var skipped = new List<string>();
         foreach (var sib in HatCompatService.SiblingFiles(modRoot, modelGamePath, modelRel))
         {
             if (PenumbraModMeta.SameFile(sib, modelRel)) continue;
-            if (MatcapPlan.RefusedRegenerated(modRoot, sib) != null) { skipped.Add(sib); continue; }
+            if (onRefit || MatcapPlan.Regenerated(modRoot, sib) != null) { skipped.Add(sib); continue; }
             byte[] bytes;
             try { bytes = File.ReadAllBytes(MatcapWriter.Full(modRoot, sib)); } catch { skipped.Add(sib); continue; }
             var parts = ModelPartReader.Read(bytes)?.Parts;
