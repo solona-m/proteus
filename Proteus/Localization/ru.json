@@ -4427,6 +4427,22 @@
     "message": "Закрыть",
     "description": ""
   },
+  "WhatsNew.Matcaps.Head": {
+    "message": "Мэткапы: блестящие, стеклянные и самоцветные детали",
+    "description": "Release-notes section heading: the Studio's Matcaps tool. A matcap is a picture of a lit sphere a shader samples by the surface's facing direction."
+  },
+  "WhatsNew.Matcaps.Body": {
+    "message": "Студия получила новый инструмент — «Мэткапы». Отметьте части снаряжения, аксессуаров, волос, хвостов, ушей виэра или рогов ау ра, выберите мэткап (изображение освещённой сферы) и нажмите «Применить мэткап»: части получат собственный материал, записанный в мод, так что вид сохраняется и с выключенным Proteus. «Мэткапы Proteus» — набор, который идёт вместе с Proteus и включает пак мэткапов 23Minks от sivka, — скачивается, когда вы впервые открываете мэткапы. Свои изображения кладите в папку из пункта «Изображения мэткапов» на вкладке «Настройки»; установленные моды-библиотеки мэткапов тоже есть в списке. «Отменить мэткапы на этой модели» убирает всё обратно.",
+    "description": "Release-notes section. 'Studio' matches Tab.Parts and 'Settings' Tab.Settings; \"Matcaps\" matches Parts.Tool.Matcap, \"Apply matcap\" Parts.Matcap.Apply, \"Proteus matcaps\" Parts.Matcap.SourceProteus, \"Matcap images\" Settings.MatcapLibrary, \"Undo matcaps on this model\" Parts.Matcap.Undo. Keep 23Minks and sivka verbatim."
+  },
+  "WhatsNew.MoveAll.Head": {
+    "message": "Перемещать, вращать и масштабировать все отмеченные части как одно целое",
+    "description": "Release-notes section heading: the All mode of Move, Rotate and Scale. Keep it true to 'ticked': unticked parts stay where they are."
+  },
+  "WhatsNew.MoveAll.Body": {
+    "message": "У инструментов «Перемещение», «Повернуть» и «Масштаб» на вкладке «Студия» появился новый режим рядом с целыми деталями и полигонами — «Все»: все отмеченные части открытой модели перемещаются, вращаются или масштабируются вместе, как одно целое. Снимите отметку с части в списке частей, чтобы она осталась на месте. Кожа двигается, только если включено «Двигать и кожу».",
+    "description": "Release-notes section. 'Studio' matches Tab.Parts; \"Move\", \"Rotate\" and \"Scale\" match Parts.Tool.Move, Parts.Tool.Rotate and Parts.Tool.Scale; \"All\" matches Parts.Move.SelectAll; \"Move skin too\" matches Parts.SkinMoves. 'Whole parts' and 'polygons' are the other two modes (Parts.Move.SelectParts, Parts.Move.SelectPolygons)."
+  },
   "Parts.Retarget.Guide.Title": {
     "message": "Размер тела: советы",
     "description": ""

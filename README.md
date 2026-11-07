@@ -339,6 +339,24 @@ Things worth knowing:
 - **Undo the refit of what I'm wearing** (hold Ctrl or Shift and click) removes the sizes the automatic refit made for the gear you have on, deletes the mods it made for vanilla gear, and puts back the options you had before. Those pieces won't be refitted again unless you press **Refit what I'm wearing now**. Sizes you made yourself in the Studio stay.
 - **Forget this collection's body** turns it off for that collection.
 
+##### Gear shaders
+
+Gear made before Dawntrail still uses the game's old shader (`characterlegacy.shpk`). With **Upgrade old gear to Dawntrail shaders** ticked, Proteus rewrites the old-shader materials of the mods you put on to Dawntrail's shader (`character.shpk`), inside the mod, backing each file up first in `Proteus/shaderupgrade-backup/`. It's off by default. Like the Studio, the change is in the mod's own files, so it keeps working with Proteus turned off and travels with the mod if you export it.
+
+- The section counts what was upgraded and what was left on the old shader. Hover the count to see which pieces, and why.
+- **Upgrade what I'm wearing now** upgrades what you have on, including pieces you undid before.
+- **Undo for what I'm wearing** puts the author's files back and leaves those pieces alone until you upgrade them again. An update the author shipped since is kept. A file edited after its upgrade is left as it is, and its original stays in the backup folder.
+- Turning it off stops further upgrades but doesn't undo them.
+
+##### Gear variants
+
+Many gear mods replace an item's model but ship its material for one variant only, so the item worn in another variant shows the game's material, another outfit's or none on the mod's model. **Point every variant of worn gear at its mod's material**, on by default, fixes that as you put the piece on: Proteus copies the mod's material paths to the other variant folders, inside the mod's own options, like TexTools' "Apply to All Variants" for the material only. Parts, VFX and sound stay their own. The change keeps working with Proteus turned off and travels with the mod if you export it.
+
+- The section counts the pieces repointed and the pieces left. Hover the count to see which, and why a piece was left: the mod ships several variants of its own, sets the variant itself, or its material comes from another mod, for example.
+- **Repoint what I'm wearing now** repoints what you have on, including pieces you undid before.
+- **Undo for what I'm wearing** takes Proteus's entries back out and leaves those pieces alone until you repoint them. An entry someone changed since is kept.
+- Turning it off stops further changes but doesn't undo them.
+
 ### Presets
 
 A **preset** is a named look for **one mod**: which of its options are ticked, all its colors, and its glow and layer settings. Complex packs — bodysuits, stockings — ship a dozen groups, and finding a combination worth wearing means poking at checkboxes until something clicks. A preset keeps that combination.

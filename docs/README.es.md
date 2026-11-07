@@ -333,6 +333,24 @@ Conviene saber:
 - **Deshacer el ajuste de lo que llevo puesto** (mantén Ctrl o Mayús y haz clic) quita las tallas que el ajuste automático creó para el equipo que llevas, borra los mods que creó para el equipo vanilla y devuelve las opciones que tenías antes. Esas piezas no se volverán a reajustar salvo que pulses **Ajustar lo que llevo puesto**. Las tallas que hiciste tú en el Estudio se quedan.
 - **Olvidar el cuerpo de esta colección** lo desactiva para esa colección.
 
+##### Sombreadores del equipo
+
+El equipo hecho antes de Dawntrail aún usa el sombreador antiguo del juego (`characterlegacy.shpk`). Con **Actualizar el equipo antiguo a los sombreadores de Dawntrail** marcado, Proteus reescribe al sombreador de Dawntrail (`character.shpk`) los materiales con el sombreador antiguo de los mods que te pongas, dentro del mod y guardando antes una copia de cada archivo en `Proteus/shaderupgrade-backup/`. Está desactivado por defecto. Igual que con el Estudio, el cambio está en los propios archivos del mod, así que sigue funcionando con Proteus apagado y viaja con el mod si lo exportas.
+
+- La sección cuenta lo que se actualizó y lo que se quedó con el sombreador antiguo. Pasa el ratón por la cuenta para ver qué piezas y por qué.
+- **Actualizar lo que llevo puesto** actualiza lo que llevas, incluidas las piezas que deshiciste antes.
+- **Deshacer en lo que llevo puesto** devuelve los archivos del autor y deja esas piezas en paz hasta que las vuelvas a actualizar. Una actualización que el autor haya publicado desde entonces se conserva. Un archivo editado después de actualizarlo se queda como está, y su original sigue en la carpeta de copias.
+- Desactivarlo detiene las siguientes actualizaciones, pero no las deshace.
+
+##### Variantes del equipo
+
+Muchos mods de equipo sustituyen el modelo de una pieza pero solo traen su material para una variante, así que al llevar la pieza en otra variante el modelo del mod muestra el material del juego, el de otro conjunto o ninguno. **Apuntar todas las variantes del equipo puesto al material de su mod**, activado por defecto, lo arregla al ponerte la pieza: Proteus copia las rutas de material del mod a las carpetas de las demás variantes, dentro de las propias opciones del mod, como «Apply to All Variants» de TexTools pero solo para el material. Las partes, los VFX y el sonido siguen siendo los suyos. El cambio sigue funcionando con Proteus apagado y viaja con el mod si lo exportas.
+
+- La sección cuenta las piezas reapuntadas y las que se dejaron. Pasa el ratón por la cuenta para ver cuáles y por qué se dejó una pieza: por ejemplo, el mod trae varias variantes propias, fija él mismo la variante o su material viene de otro mod.
+- **Reapuntar lo que llevo puesto** reapunta lo que llevas, incluidas las piezas que deshiciste antes.
+- **Deshacer en lo que llevo puesto** quita las entradas de Proteus y deja esas piezas en paz hasta que las vuelvas a reapuntar. Una entrada que alguien haya cambiado desde entonces se conserva.
+- Desactivarlo detiene los siguientes cambios, pero no los deshace.
+
 ### Preajustes
 
 Un **preajuste** es un aspecto con nombre para **un solo mod**: qué opciones tiene marcadas, todos sus colores y su brillo y ajustes de capa. Los paquetes complejos — monos, medias — traen una docena de grupos, y dar con una combinación que merezca la pena significa toquetear casillas hasta que algo encaje. Un preajuste conserva esa combinación.

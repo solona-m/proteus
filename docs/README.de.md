@@ -333,6 +333,24 @@ Gut zu wissen:
 - **Anpassung meiner getragenen Ausrüstung rückgängig machen** (Strg oder Shift gedrückt halten und klicken) entfernt die Größen, die die automatische Anpassung für die Ausrüstung erstellt hat, die du trägst, löscht die Mods, die sie für Vanilla-Ausrüstung erstellt hat, und stellt die Optionen wieder her, die du vorher hattest. Diese Teile werden nicht erneut angepasst, es sei denn, du drückst **Was ich gerade trage anpassen**. Größen, die du selbst im Studio erstellt hast, bleiben.
 - **Körper dieser Kollektion vergessen** schaltet es für diese Kollektion aus.
 
+##### Ausrüstungs-Shader
+
+Ausrüstung, die vor Dawntrail entstand, nutzt noch den alten Shader des Spiels (`characterlegacy.shpk`). Mit dem Haken bei **Alte Ausrüstung auf Dawntrail-Shader umstellen** schreibt Proteus die Materialien der Mods, die du anlegst, vom alten Shader auf den Shader von Dawntrail (`character.shpk`) um, innerhalb des Mods, und sichert jede Datei vorher in `Proteus/shaderupgrade-backup/`. Standardmäßig ist es aus. Wie beim Studio steckt die Änderung in den eigenen Dateien des Mods, sie funktioniert also weiter, wenn Proteus aus ist, und reist mit dem Mod mit, wenn du ihn exportierst.
+
+- Der Abschnitt zählt, was umgestellt wurde und was beim alten Shader blieb. Fahre mit der Maus über die Zahl, um zu sehen, welche Teile und warum.
+- **Getragenes jetzt umstellen** stellt um, was du trägst, auch Teile, die du vorher rückgängig gemacht hast.
+- **Für das Getragene rückgängig machen** stellt die Dateien des Autors wieder her und lässt diese Teile in Ruhe, bis du sie wieder umstellst. Ein Update, das der Autor seitdem veröffentlicht hat, bleibt erhalten. Eine Datei, die nach dem Umstellen bearbeitet wurde, bleibt, wie sie ist, und ihr Original liegt weiter im Sicherungsordner.
+- Ausschalten verhindert weitere Umstellungen, macht sie aber nicht rückgängig.
+
+##### Ausrüstungsvarianten
+
+Viele Ausrüstungs-Mods ersetzen das Modell eines Gegenstands, liefern sein Material aber nur für eine Variante mit. Trägst du den Gegenstand in einer anderen Variante, zeigt das Modell des Mods das Material des Spiels, das eines anderen Outfits oder gar keins. **Alle Varianten getragener Ausrüstung auf das Material ihres Mods zeigen lassen**, standardmäßig an, behebt das, sobald du das Teil anlegst: Proteus kopiert die Materialpfade des Mods in die Ordner der anderen Varianten, innerhalb der eigenen Optionen des Mods, wie TexTools' „Apply to All Variants“, nur für das Material. Teile, VFX und Sound bleiben, wie sie sind. Die Änderung funktioniert weiter, wenn Proteus aus ist, und reist mit dem Mod mit, wenn du ihn exportierst.
+
+- Der Abschnitt zählt die umgeleiteten und die belassenen Teile. Fahre mit der Maus über die Zahl, um zu sehen, welche, und warum ein Teil belassen wurde: etwa weil der Mod selbst mehrere Varianten mitbringt, die Variante selbst festlegt oder sein Material aus einem anderen Mod kommt.
+- **Getragenes jetzt umleiten** leitet um, was du trägst, auch Teile, die du vorher rückgängig gemacht hast.
+- **Für das Getragene rückgängig machen** nimmt die Einträge von Proteus wieder heraus und lässt diese Teile in Ruhe, bis du sie wieder umleitest. Ein Eintrag, den seitdem jemand geändert hat, bleibt erhalten.
+- Ausschalten verhindert weitere Änderungen, macht sie aber nicht rückgängig.
+
 ### Presets
 
 Ein **Preset** ist ein benannter Look für **einen Mod**: welche seiner Optionen angehakt sind, all seine Farben und seine Leucht- und Ebeneneinstellungen. Aufwendige Pakete — Bodysuits, Strümpfe — bringen ein Dutzend Gruppen mit, und eine sehenswerte Kombination zu finden heißt, so lange an Kästchen herumzuklicken, bis es passt. Ein Preset bewahrt diese Kombination.

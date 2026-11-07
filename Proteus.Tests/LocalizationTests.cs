@@ -204,6 +204,207 @@ public sealed class LocalizationTests
         Assert.Contains(tr["Settings.GearShaders.UndoWorn"].Message, tr["WhatsNew.ShaderUpgrade.Body"].Message);
     }
 
+    private static readonly string[] FifthNotesKeys =
+        ["WhatsNew.Matcaps.Head", "WhatsNew.Matcaps.Body", "WhatsNew.MoveAll.Head", "WhatsNew.MoveAll.Body"];
+
+    /// <summary>
+    /// The quote marks each language's release notes put around a control's label. Short labels ("All", "Tout",
+    /// "全部", "Все") turn up inside other words, so the fifth notes are checked for the label in its quotes. French
+    /// uses plain spaces inside « », as the fourth notes do.
+    /// </summary>
+    private static readonly Dictionary<string, (string Open, string Close)> NotesQuotes = new()
+    {
+        ["en"] = ("\"", "\""), ["ko"] = ("\"", "\""), ["de"] = ("„", "“"), ["es"] = ("«", "»"),
+        ["ru"] = ("«", "»"), ["fr"] = ("« ", " »"), ["ja"] = ("「", "」"), ["zh"] = ("「", "」"),
+    };
+
+    private static void AssertFifthNotesQuoteTheirLabels(string lang)
+    {
+        var t = Load(lang);
+        var (open, close) = NotesQuotes[lang];
+        string Q(string key) => open + t[key].Message + close;
+
+        string matcaps = t["WhatsNew.Matcaps.Body"].Message;
+        foreach (string key in new[]
+                 {
+                     "Parts.Tool.Matcap", "Parts.Matcap.Apply", "Parts.Matcap.SourceProteus", "Settings.MatcapLibrary",
+                     "Parts.Matcap.Undo",
+                 })
+            Assert.True(matcaps.Contains(Q(key), StringComparison.Ordinal), $"[{lang}] Matcaps notes don't quote {Q(key)}");
+        Assert.Contains(t["Tab.Parts"].Message, matcaps);
+        Assert.Contains(t["Tab.Settings"].Message, matcaps);
+        Assert.Contains("23Minks", matcaps);
+        Assert.Contains("sivka", matcaps);
+
+        string all = t["WhatsNew.MoveAll.Body"].Message;
+        foreach (string key in new[]
+                 {
+                     "Parts.Tool.Move", "Parts.Tool.Rotate", "Parts.Tool.Scale", "Parts.Move.SelectAll", "Parts.SkinMoves",
+                 })
+            Assert.True(all.Contains(Q(key), StringComparison.Ordinal), $"[{lang}] All-mode notes don't quote {Q(key)}");
+        Assert.Contains(t["Tab.Parts"].Message, all);
+    }
+
+    /// <summary>The fifth release notes (matcaps, and Move/Rotate/Scale "All") are translated, not copied, keep their
+    /// line breaks, and quote each language's own labels for the controls they name.</summary>
+    [Theory]
+    [MemberData(nameof(Translations))]
+    [Trait("Plan", "AC-whats-new-5-4")]
+    [Trait("Plan", "AC-whats-new-5-5")]
+    [Trait("Plan", "AC-whats-new-5-6")]
+    [Trait("Plan", "EDGE-whats-new-5-4")]
+    [Trait("Plan", "EDGE-whats-new-5-5")]
+    [Trait("Plan", "EDGE-whats-new-5-7")]
+    [Trait("Plan", "EDGE-whats-new-5-8")]
+    public void WhatsNew_fifth_notes_are_translated_and_quote_the_UI_labels(string lang)
+    {
+        var en = Load(Source);
+        var tr = Load(lang);
+        foreach (string key in FifthNotesKeys)
+        {
+            Assert.True(tr.ContainsKey(key), $"[{lang}] has no {key}");
+            Assert.NotEqual(en[key].Message, tr[key].Message);
+            Assert.Equal(en[key].Message.Count(c => c == '\n'), tr[key].Message.Count(c => c == '\n'));
+        }
+
+        AssertFifthNotesQuoteTheirLabels(lang);
+    }
+
+    /// <summary>The English source of the fifth notes quotes the English labels too, and the All heading stays true to
+    /// "ticked": unticked parts stay where they are.</summary>
+    [Fact]
+    [Trait("Plan", "AC-whats-new-5-4")]
+    [Trait("Plan", "AC-whats-new-5-5")]
+    [Trait("Plan", "EDGE-whats-new-5-4")]
+    [Trait("Plan", "EDGE-whats-new-5-8")]
+    public void WhatsNew_fifth_notes_quote_the_English_labels()
+    {
+        AssertFifthNotesQuoteTheirLabels(Source);
+        Assert.Contains("ticked", Load(Source)["WhatsNew.MoveAll.Head"].Message);
+    }
+
+    /// <summary>Hair across the sexes was announced in the fourth notes; no later generation repeats it.</summary>
+    [Fact]
+    [Trait("Plan", "AC-whats-new-5-7")]
+    [Trait("Plan", "EDGE-whats-new-5-9")]
+    public void WhatsNew_hair_across_the_sexes_keys_stay_generation_four()
+    {
+        var keys = Load(Source).Keys
+            .Where(k => k.StartsWith("WhatsNew.", StringComparison.Ordinal) && k.Contains("HairOtherSex", StringComparison.Ordinal))
+            .OrderBy(k => k, StringComparer.Ordinal);
+        Assert.Equal(["WhatsNew.HairOtherSex.Body", "WhatsNew.HairOtherSex.Head"], keys);
+    }
+
+    private static string ReadmeText(string lang)
+    {
+        var dir = new System.IO.DirectoryInfo(AppContext.BaseDirectory);
+        while (dir != null && !System.IO.File.Exists(System.IO.Path.Combine(dir.FullName, "proteus.slnx"))) dir = dir.Parent;
+        Assert.True(dir != null, $"Could not find proteus.slnx above {AppContext.BaseDirectory}.");
+        return System.IO.File.ReadAllText(System.IO.Path.Combine(
+            dir!.FullName, lang == Source ? "README.md" : System.IO.Path.Combine("docs", $"README.{lang}.md"))).Replace("\r\n", "\n");
+    }
+
+    /// <summary>The README's Gear shaders and Gear variants sections, each from its heading to the next heading. Both
+    /// headings occur once, right after Body refit and in that order, before the next <c>###</c> section.</summary>
+    private static (string Shaders, string Variants) ReadmeGearSections(string lang)
+    {
+        var t = Load(lang);
+        string[] lines = ReadmeText(lang).Split('\n');
+        int Once(string heading)
+        {
+            int[] at = Enumerable.Range(0, lines.Length).Where(i => lines[i].TrimEnd() == heading).ToArray();
+            Assert.True(at.Length == 1, $"[{lang}] README has {at.Length} \"{heading}\" lines; expected exactly one");
+            return at[0];
+        }
+
+        int refit = Once("##### " + t["Settings.Section.AutoRefit"].Message);
+        int shaders = Once("##### " + t["Settings.Section.GearShaders"].Message);
+        int variants = Once("##### " + t["Settings.Section.GearVariants"].Message);
+        int next = Enumerable.Range(variants + 1, lines.Length - variants - 1)
+            .First(i => lines[i].StartsWith('#'));
+        int nextSection = Enumerable.Range(refit + 1, lines.Length - refit - 1)
+            .First(i => lines[i].StartsWith("### ", StringComparison.Ordinal));
+
+        Assert.True(refit < shaders && shaders < variants && variants < nextSection,
+            $"[{lang}] README must have Body refit, Gear shaders, Gear variants in that order, inside Settings");
+        Assert.True(Enumerable.Range(refit + 1, shaders - refit - 1).All(i => !lines[i].StartsWith('#')),
+            $"[{lang}] Gear shaders must come right after Body refit");
+        return (string.Join('\n', lines[shaders..variants]), string.Join('\n', lines[variants..next]));
+    }
+
+    /// <summary>Every README describes Gear shaders and Gear variants under Settings, quoting that language's labels —
+    /// each section its own Undo button, which differs in Chinese — and keeping the tokens a reader types or matches
+    /// verbatim. Neither section says IMC: Gear variants copies material paths, never IMC entries.</summary>
+    [Theory]
+    [MemberData(nameof(AllLocales))]
+    [Trait("Plan", "AC-whats-new-5-8")]
+    [Trait("Plan", "AC-whats-new-5-9")]
+    [Trait("Plan", "EDGE-whats-new-5-10")]
+    [Trait("Plan", "EDGE-whats-new-5-11")]
+    [Trait("Plan", "EDGE-whats-new-5-12")]
+    [Trait("Plan", "EDGE-whats-new-5-13")]
+    [Trait("Plan", "EDGE-whats-new-5-16")]
+    public void Readme_has_Gear_shaders_and_Gear_variants_sections(string lang)
+    {
+        var t = Load(lang);
+        var (shaders, variants) = ReadmeGearSections(lang);
+
+        foreach (string key in new[]
+                 {
+                     "Settings.GearShaders.AutoUpgrade.Label", "Settings.GearShaders.UpgradeNow", "Settings.GearShaders.UndoWorn",
+                 })
+            Assert.True(shaders.Contains("**" + t[key].Message + "**", StringComparison.Ordinal),
+                $"[{lang}] README Gear shaders section doesn't name **{t[key].Message}**");
+        foreach (string token in new[] { "`characterlegacy.shpk`", "`character.shpk`", "`Proteus/shaderupgrade-backup/`" })
+            Assert.True(shaders.Contains(token, StringComparison.Ordinal), $"[{lang}] README Gear shaders section lost {token}");
+
+        foreach (string key in new[]
+                 {
+                     "Settings.GearVariants.Auto.Label", "Settings.GearVariants.RepointNow", "Settings.GearVariants.UndoWorn",
+                 })
+            Assert.True(variants.Contains("**" + t[key].Message + "**", StringComparison.Ordinal),
+                $"[{lang}] README Gear variants section doesn't name **{t[key].Message}**");
+        foreach (string token in new[] { "TexTools", "Apply to All Variants" })
+            Assert.True(variants.Contains(token, StringComparison.Ordinal), $"[{lang}] README Gear variants section lost {token}");
+
+        Assert.DoesNotContain("IMC", shaders);
+        Assert.DoesNotContain("IMC", variants);
+    }
+
+    /// <summary>English sentences from the README's Gear shaders and Gear variants sections. The translated sections must
+    /// contain none of them, so English prose with only the labels translated can't pass.</summary>
+    private static readonly (bool Shaders, string Phrase)[] ReadmeGearEnglishPhrases =
+    [
+        (true, "still uses the game's old shader"), (true, "backing each file up first"),
+        (true, "keeps working with Proteus turned off"),
+        (false, "replace an item's model"), (false, "the other variant folders"), (false, "stay their own"),
+        (false, "keeps working with Proteus turned off"),
+    ];
+
+    /// <summary>The translated README sections for Gear shaders and Gear variants are written in that language, not
+    /// English with the labels swapped. The phrases are checked against the English sections too, so rewording those
+    /// can't leave the guard checking nothing.</summary>
+    [Theory]
+    [MemberData(nameof(AllLocales))]
+    [Trait("Plan", "EDGE-whats-new-5-15")]
+    [Trait("Plan", "AC-whats-new-5-8")]
+    [Trait("Plan", "AC-whats-new-5-9")]
+    public void Readme_gear_sections_are_translated_not_English(string lang)
+    {
+        var (shaders, variants) = ReadmeGearSections(lang);
+        foreach (var (inShaders, phrase) in ReadmeGearEnglishPhrases)
+        {
+            string section = inShaders ? shaders : variants;
+            string name = inShaders ? "Gear shaders" : "Gear variants";
+            if (lang == Source)
+                Assert.True(section.Contains(phrase, StringComparison.Ordinal),
+                    $"[en] README {name} section no longer says \"{phrase}\"; update {nameof(ReadmeGearEnglishPhrases)}");
+            else
+                Assert.False(section.Contains(phrase, StringComparison.Ordinal),
+                    $"[{lang}] README {name} section still has the English \"{phrase}\"; translate it");
+        }
+    }
+
     /// <summary>Every README's colour-row section names the "Show all rows" tick by its label in that language, and says
     /// that pointing at a row button (#01–#16) lights it.</summary>
     [Theory]
