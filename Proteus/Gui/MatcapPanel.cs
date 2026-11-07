@@ -245,7 +245,8 @@ internal sealed class MatcapPanel
                     clicked = false;
                 // No thumbnail drew nothing, so the name button takes the tile's place where it already stands.
                 if (!hasThumb)
-                    clicked |= ImGui.Button($"{ProteusStyle.Ellipsize(name, size)}##mcn_{name}", new Vector2(tile, tile));
+                    clicked |= ImGui.Button($"{ProteusStyle.Ellipsize(name, size)}##mcn_{name}",
+                                            new Vector2(tile, size + 2f * style.FramePadding.Y));
             }
             if (ImGui.IsItemHovered()) ImGui.SetTooltip(tip);
             if (clicked) pick(name);
