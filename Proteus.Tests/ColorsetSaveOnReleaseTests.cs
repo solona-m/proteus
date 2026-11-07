@@ -534,8 +534,8 @@ public class ColorsetSaveOnReleaseTests : IDisposable
     {
         // [AC-colorset-save-on-release-2]
         var discover = Method(Source(Path.Combine("Services", "SidecarDiscoveryService.cs")),
-                              "private List<OverlayEntry> Discover(bool enabledOnly)");
-        Assert.Contains("ReadForDiscovery(modDir, metaPath)", discover);
+                              "private List<OverlayEntry> Discover(bool enabledOnly, out bool complete)");
+        Assert.Contains("ReadForDiscoveryDetailed(modDir, metaPath)", discover);
         Assert.DoesNotContain("TryParseMetadata(", discover);
     }
 
