@@ -58,6 +58,21 @@ internal sealed class FakeStudio(Action<string> fw) : IStudioHarness
             && string.Equals(OpenFile, file, StringComparison.OrdinalIgnoreCase);
     }
 
+    public bool Pending;
+    public Func<MatcapHarnessPort>? MatcapPort;
+
+    public bool EditPending()
+    {
+        fw(nameof(EditPending));
+        return Pending;
+    }
+
+    public MatcapHarnessPort Matcaps()
+    {
+        fw(nameof(Matcaps));
+        return MatcapPort?.Invoke() ?? throw new InvalidOperationException("no matcap port scripted");
+    }
+
     public StudioOpenOutcome Open(string modDir, string model, bool show)
     {
         fw(nameof(Open));

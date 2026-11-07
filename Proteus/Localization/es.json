@@ -6174,5 +6174,377 @@
   "Chat.VariantRepoint.Fmt": {
     "message": "[Proteus] Se copiaron las rutas de material de «{1}» a {0} carpeta(s) de variante más, para que esas variantes muestren el material propio del mod allí donde gana. Deshazlo en /proteus > Ajustes > Variantes del equipo.",
     "description": ""
+  },
+  "Matcap.Refused.AlreadyMatcap": {
+    "message": "Algunas de esas partes ya tienen un matcap. Usa «Usar el matcap elegido» para cambiarlo.",
+    "description": ""
+  },
+  "Matcap.Refused.Changed.Fmt": {
+    "message": "{0} cambió mientras se preparaba el matcap, así que no se escribió nada. Inténtalo de nuevo.",
+    "description": ""
+  },
+  "Matcap.Refused.Edited.Fmt": {
+    "message": "{0} cambió después de aplicar su matcap, así que no se deshizo. Su original se guarda en {1}.",
+    "description": ""
+  },
+  "Matcap.Refused.Failed.Fmt": {
+    "message": "No se pudo escribir el matcap ({0}). No se cambió nada.",
+    "description": ""
+  },
+  "Matcap.Refused.HandEdited.Fmt": {
+    "message": "{0} se editó a mano después de que Proteus lo escribiera, así que se dejó como estaba.",
+    "description": ""
+  },
+  "Matcap.Refused.ImageUnreadable.Fmt": {
+    "message": "{0} no se pudo leer como imagen.",
+    "description": ""
+  },
+  "Matcap.Refused.ImportedPiece": {
+    "message": "Esta pieza pertenece a un paquete importado, que Proteus reconstruye por sí mismo. Pon el matcap en el mod propio del paquete.",
+    "description": ""
+  },
+  "Matcap.Refused.Legacy": {
+    "message": "Este mod todavía tiene la estructura de carpetas antigua de Penumbra. Ábrelo una vez en Penumbra para que se actualice y vuelve a intentarlo.",
+    "description": ""
+  },
+  "Matcap.Refused.MaterialCap.Fmt": {
+    "message": "Este modelo no admite otro material: {0}.",
+    "description": ""
+  },
+  "Matcap.Refused.ModelLayout.Fmt": {
+    "message": "Este modelo no se puede dividir: {0}.",
+    "description": ""
+  },
+  "Matcap.Refused.NoEntry": {
+    "message": "Ese matcap no está en el registro de este mod.",
+    "description": ""
+  },
+  "Matcap.Refused.NoName": {
+    "message": "Proteus no pudo saber dónde lee el juego los materiales de este modelo.",
+    "description": ""
+  },
+  "Matcap.Refused.NoTemplate": {
+    "message": "No se pudo leer el material de reflejo del juego, así que no se pudo crear ningún material de matcap.",
+    "description": ""
+  },
+  "Matcap.Refused.NotSquare.Fmt": {
+    "message": "{0} no es cuadrada. Un matcap es la imagen de una esfera que llena un cuadrado.",
+    "description": ""
+  },
+  "Matcap.Refused.NotTarget": {
+    "message": "Los matcaps van en equipo, accesorios, pelo, orejas de viera y cuernos de au ra (en la cara); este modelo no es nada de eso.",
+    "description": ""
+  },
+  "Matcap.Refused.RecordUnreadable": {
+    "message": "No se pudo leer el registro de Proteus de los matcaps de este mod (Proteus/matcaps.json), así que no se cambió nada.",
+    "description": ""
+  },
+  "Matcap.Refused.Regenerated.Fmt": {
+    "message": "Proteus crea este modelo a partir de otro ({0}), y al rehacerlo se perdería el matcap. Pon el matcap en el modelo de origen y luego rehazlo.",
+    "description": ""
+  },
+  "Matcap.Refused.Skin": {
+    "message": "La piel no puede llevar un matcap.",
+    "description": ""
+  },
+  "Matcap.Refused.UnknownOption.Fmt": {
+    "message": "{0} no tiene ninguna opción llamada {1}.",
+    "description": ""
+  },
+  "MeshVolume.Feature.Matcaps": {
+    "message": "matcaps",
+    "description": ""
+  },
+  "Parts.Matcap.AlphaWarn": {
+    "message": "Algunas partes marcadas tienen bordes transparentes (mechones de pelo, encaje). Revisa los bordes en el juego después de aplicarlo.",
+    "description": ""
+  },
+  "Parts.Matcap.AlreadyTip": {
+    "message": "Esta parte ya tiene un matcap. Cámbialo en «Matcaps en este modelo».",
+    "description": ""
+  },
+  "Parts.Matcap.AlsoMore.Fmt": {
+    "message": "+{0} más",
+    "description": ""
+  },
+  "Parts.Matcap.AlsoNothing": {
+    "message": "nada más",
+    "description": ""
+  },
+  "Parts.Matcap.Applied.Fmt": {
+    "message": "Matcap aplicado: {0} en {1} archivo(s) de modelo.",
+    "description": ""
+  },
+  "Parts.Matcap.Apply": {
+    "message": "Aplicar matcap",
+    "description": ""
+  },
+  "Parts.Matcap.BaseCollection.Fmt": {
+    "message": "{0} es tu colección base: todos los que la usan verán el matcap elegido.",
+    "description": ""
+  },
+  "Parts.Matcap.Change": {
+    "message": "Usar el matcap elegido",
+    "description": ""
+  },
+  "Parts.Matcap.Changed.Fmt": {
+    "message": "Matcap cambiado: {0}.",
+    "description": ""
+  },
+  "Parts.Matcap.ChangeKindTip": {
+    "message": "Un matcap de tus imágenes solo puede cambiar a otra imagen, y el de una biblioteca a otra opción de biblioteca. Deshazlo para cambiar de tipo.",
+    "description": ""
+  },
+  "Parts.Matcap.ConfirmEnable.Fmt": {
+    "message": "{0} está desactivado en {1}. Activarlo también activa: {2}",
+    "description": ""
+  },
+  "Parts.Matcap.ConfirmNo": {
+    "message": "Cancelar",
+    "description": ""
+  },
+  "Parts.Matcap.ConfirmYes": {
+    "message": "Activarlo",
+    "description": ""
+  },
+  "Parts.Matcap.DrawnElsewhere.Fmt": {
+    "message": "Tu personaje dibuja otro archivo para este modelo ({0}), así que el matcap aún no se verá en él.",
+    "description": ""
+  },
+  "Parts.Matcap.Duplicates.Fmt": {
+    "message": "Otros mods también aportan la textura de esta ranura ({0}); el que Penumbra sitúa más alto decide lo que se ve.",
+    "description": ""
+  },
+  "Parts.Matcap.Edited": {
+    "message": "El modelo ha cambiado desde entonces.",
+    "description": ""
+  },
+  "Parts.Matcap.ExistingHeader": {
+    "message": "Matcaps en este modelo",
+    "description": ""
+  },
+  "Parts.Matcap.Forget": {
+    "message": "Olvidar",
+    "description": ""
+  },
+  "Parts.Matcap.Forgotten.Fmt": {
+    "message": "Se olvidaron los matcaps que este modelo ya no usa ({0} archivo(s)).",
+    "description": ""
+  },
+  "Parts.Matcap.Guide": {
+    "message": "Un matcap es la imagen de una esfera iluminada; las partes toman su color de ella según hacia dónde miran. Marca partes, elige un matcap y pulsa Aplicar.",
+    "description": ""
+  },
+  "Parts.Matcap.Held.Fmt": {
+    "message": "{0} retiene por ahora el ajuste de esta biblioteca; el matcap elegido se verá cuando lo suelte.",
+    "description": ""
+  },
+  "Parts.Matcap.Inherited.Fmt": {
+    "message": "{0} hereda el ajuste de esta biblioteca; elegir un matcap le da un ajuste propio.",
+    "description": ""
+  },
+  "Parts.Matcap.KeptEdited.Fmt": {
+    "message": "Se dejaron en su sitio porque se editaron a mano: {0}.",
+    "description": ""
+  },
+  "Parts.Matcap.LibraryMissing.Fmt": {
+    "message": "{0} no está instalado: este matcap no tiene nada que mostrar.",
+    "description": ""
+  },
+  "Parts.Matcap.LibraryOff.Fmt": {
+    "message": "{0} está desactivado.",
+    "description": ""
+  },
+  "Parts.Matcap.LibraryOffTag": {
+    "message": "(desactivado)",
+    "description": ""
+  },
+  "Parts.Matcap.ListTip": {
+    "message": "Marca las partes que deben llevar el matcap. La piel y las partes que ya tienen uno no se pueden marcar.",
+    "description": ""
+  },
+  "Parts.Matcap.Lod0Cut": {
+    "message": "El modelo se recortó a su nivel de detalle más cercano para que el matcap se vea a cualquier distancia.",
+    "description": ""
+  },
+  "Parts.Matcap.MaterialCap.Fmt": {
+    "message": "Este modelo ya tiene {0} materiales, el máximo que puede llevar un modelo. Deshaz un matcap para hacer sitio.",
+    "description": ""
+  },
+  "Parts.Matcap.NeedMatcap": {
+    "message": "Elige primero un matcap.",
+    "description": ""
+  },
+  "Parts.Matcap.NeedParts": {
+    "message": "Marca las partes que deben llevar el matcap.",
+    "description": ""
+  },
+  "Parts.Matcap.NoImages.Fmt": {
+    "message": "Todavía no hay imágenes de matcap. Pon imágenes cuadradas de una esfera iluminada (PNG o JPG) en {0} y pulsa Actualizar.",
+    "description": ""
+  },
+  "Parts.Matcap.NoLibraries": {
+    "message": "No hay mods de biblioteca de matcaps instalados. Una biblioteca es un mod con una selección de matcaps para una textura compartida.",
+    "description": ""
+  },
+  "Parts.Matcap.NoPenumbra": {
+    "message": "Penumbra no está disponible.",
+    "description": ""
+  },
+  "Parts.Matcap.NothingToForget": {
+    "message": "Todos los matcaps de este modelo siguen en uso; no hay nada que olvidar.",
+    "description": ""
+  },
+  "Parts.Matcap.NothingToUndo": {
+    "message": "No hay ningún matcap en este modelo que deshacer.",
+    "description": ""
+  },
+  "Parts.Matcap.NotWinning.Fmt": {
+    "message": "En esta ranura se dibuja en su lugar la textura de otro mod ({0}). Sube la prioridad de la biblioteca en Penumbra.",
+    "description": ""
+  },
+  "Parts.Matcap.OpenFolder": {
+    "message": "Abrir carpeta de matcaps",
+    "description": ""
+  },
+  "Parts.Matcap.Refresh": {
+    "message": "Actualizar",
+    "description": ""
+  },
+  "Parts.Matcap.RemakeSizes": {
+    "message": "Ese archivo es uno de los reajustes de Proteus: rehaz las tallas para llevar el matcap.",
+    "description": ""
+  },
+  "Parts.Matcap.Rescan": {
+    "message": "Volver a buscar",
+    "description": ""
+  },
+  "Parts.Matcap.Room.Fmt": {
+    "message": "Hay sitio para {0} material(es) más en este modelo (un reajuste también necesita algunos para uñas y ropa interior).",
+    "description": ""
+  },
+  "Parts.Matcap.Scanning": {
+    "message": "Buscando bibliotecas de matcaps en tus mods…",
+    "description": ""
+  },
+  "Parts.Matcap.SelectFailed": {
+    "message": "Penumbra no aceptó el ajuste de la biblioteca.",
+    "description": ""
+  },
+  "Parts.Matcap.SharedSlot.Fmt": {
+    "message": "Esta ranura muestra un solo matcap a la vez: {0} matcap(s) más de este mod la usan y también cambiarán.",
+    "description": ""
+  },
+  "Parts.Matcap.ShareNote.Fmt": {
+    "message": "Quien reciba este mod también necesita {0} ({1}), con el mismo matcap elegido. Sus texturas nunca se copian a tu mod.",
+    "description": ""
+  },
+  "Parts.Matcap.SiblingsSkipped.Fmt": {
+    "message": "No se aplicó a estas otras opciones de cuerpo, cuyas partes son distintas: {0}.",
+    "description": ""
+  },
+  "Parts.Matcap.SkinTip": {
+    "message": "La piel no puede llevar un matcap.",
+    "description": ""
+  },
+  "Parts.Matcap.Source.Fmt": {
+    "message": "de {0}",
+    "description": ""
+  },
+  "Parts.Matcap.SourceImages": {
+    "message": "Tus imágenes",
+    "description": ""
+  },
+  "Parts.Matcap.SourceLibraries": {
+    "message": "Mods de biblioteca",
+    "description": ""
+  },
+  "Parts.Matcap.Superseded": {
+    "message": "El modelo ya no usa este matcap (el mod se actualizó).",
+    "description": ""
+  },
+  "Parts.Matcap.ThisMod": {
+    "message": "(este mod)",
+    "description": ""
+  },
+  "Parts.Matcap.Ticked.Fmt": {
+    "message": "{0} parte(s) marcada(s).",
+    "description": ""
+  },
+  "Parts.Matcap.Undo": {
+    "message": "Deshacer matcaps en este modelo",
+    "description": ""
+  },
+  "Parts.Matcap.UndoGroup.Fmt": {
+    "message": "También deshace las otras opciones de cuerpo que comparten estos matcaps: {0}.",
+    "description": ""
+  },
+  "Parts.Matcap.Undone.Fmt": {
+    "message": "Matcaps deshechos en {0} archivo(s) de modelo.",
+    "description": ""
+  },
+  "Parts.Matcap.Working": {
+    "message": "Escribiendo el matcap…",
+    "description": ""
+  },
+  "Parts.Tool.Matcap": {
+    "message": "Matcaps",
+    "description": ""
+  },
+  "Parts.Tool.Matcap.Tip": {
+    "message": "Da a las partes que marques un matcap: un aspecto brillante, de cristal o de gema pintado a partir de la imagen de una esfera. Las partes reciben un material propio, escrito en el mod, así que se ve con Proteus apagado.",
+    "description": ""
+  },
+  "Parts.Vanilla.Ears.Fmt": {
+    "message": "Orejas {0} ({1})",
+    "description": ""
+  },
+  "Settings.MatcapLibrary": {
+    "message": "Imágenes de matcap",
+    "description": ""
+  },
+  "Settings.MatcapLibrary.Tip.Fmt": {
+    "message": "Abre la carpeta donde están tus propias imágenes de matcap: {0}",
+    "description": ""
+  },
+  "Matcap.Refused.NoHorns": {
+    "message": "Esta cara no tiene cuernos. En una cara, solo los cuernos pueden llevar un matcap.",
+    "description": ""
+  },
+  "Matcap.Refused.NotHorn": {
+    "message": "En una cara, solo los cuernos pueden llevar un matcap.",
+    "description": ""
+  },
+  "Parts.Matcap.DrawnThroughFace": {
+    "message": "Tu cara se dibuja a través de la reescritura de la superposición facial; el matcap se verá tras la próxima actualización.",
+    "description": ""
+  },
+  "Parts.Matcap.FaceOverlayOn": {
+    "message": "Esa cara se dibuja a través de una superposición facial. Desactívala para elegir tu cara, o abre tu mod de cara desde la lista.",
+    "description": ""
+  },
+  "Parts.Matcap.HornColourNote": {
+    "message": "Los cuernos con un matcap ya no toman el color de cuernos de tu personaje, y los sombreros siguen ocultándolos.",
+    "description": ""
+  },
+  "Parts.Matcap.MatcapsOnlyHere": {
+    "message": "Tu propia cara y tus orejas solo se abren en Matcaps, así que se cerraron.",
+    "description": ""
+  },
+  "Parts.Matcap.NoHorns": {
+    "message": "Esta cara no tiene cuernos. En una cara, solo los cuernos pueden llevar un matcap.",
+    "description": ""
+  },
+  "Parts.Matcap.NotHornTip": {
+    "message": "En una cara, solo los cuernos pueden llevar un matcap.",
+    "description": ""
+  },
+  "Parts.Vanilla.FaceHorns.Fmt": {
+    "message": "Cuernos (cara {0}, {1})",
+    "description": ""
+  },
+  "Parts.Matcap.BackupKept.Fmt": {
+    "message": "Sus copias de seguridad antiguas no se pudieron apartar: {0}. El próximo matcap allí las moverá primero.",
+    "description": ""
   }
 }

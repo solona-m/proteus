@@ -187,6 +187,33 @@ internal sealed class HarnessBindings(IHarnessGame game, Func<string, string> sc
         });
     }
 
+    /// <summary>
+    /// A third-party mod's permanent setting a harness job is about to change — a matcap job selecting a library's option.
+    /// Its Before is read and the session record written first; null when the caller may write, else the refusal.
+    /// Put-back restores it only while it is still what the harness left (<see cref="NoteExternalPermanent"/>).
+    /// </summary>
+    public ChangeResult? BeginExternalPermanent(Guid coll, string modDir, out PermanentSetting before)
+    {
+        before = PermanentSetting.Inherits;
+        if (collection is { } recorded && coll != recorded)
+            return ChangeResult.Fail(409, "collection-changed", "the character's collection changed since this session began; put back first");
+        if (game.PermanentSettings(coll) is not { } all)
+            return ChangeResult.Fail(503, "penumbra-unavailable", "Penumbra could not read the mod's permanent settings");
+        before = all.GetValueOrDefault(modDir) ?? PermanentSetting.Inherits;
+        return EnsureRecord(glamourerBefore, carriersBefore, liveBefore ?? game.LiveSnapshot(), coll, all);
+    }
+
+    /// <summary>After the write <see cref="BeginExternalPermanent"/> allowed: record what the harness left, to put back.</summary>
+    public void NoteExternalPermanent(Guid coll, string modDir, PermanentSetting before)
+    {
+        var now = game.PermanentSettings(coll)?.GetValueOrDefault(modDir) ?? PermanentSetting.Inherits;
+        if (now.Equals(before) && !permanent.ContainsKey(modDir)) return;
+        NotePermanent(modDir, before, now);
+        collection ??= coll;
+        since ??= DateTime.UtcNow;
+        log?.Information("[Proteus] test harness: {0}'s setting changed by a matcap job; recorded for put-back", modDir);
+    }
+
     private void NotePermanent(string mod, PermanentSetting was, PermanentSetting now)
         => permanent[mod] = (permanent.TryGetValue(mod, out var old) ? old.Before : was, now);
 

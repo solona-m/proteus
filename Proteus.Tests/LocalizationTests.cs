@@ -222,6 +222,28 @@ public sealed class LocalizationTests
         Assert.Contains(readme.Split('\n'), l => l.Contains("#01"));
     }
 
+    /// <summary>Each README has the Matcaps tool row and section: the Apply button as translated, the image folder, the
+    /// material room, the library example with its link, and the horns.</summary>
+    [Theory]
+    [MemberData(nameof(AllLocales))]
+    [Trait("Plan", "AC-matcaps-9")]
+    public void Readme_has_Matcaps_row_section_material_room_and_horns(string lang)
+    {
+        var dir = new System.IO.DirectoryInfo(AppContext.BaseDirectory);
+        while (dir != null && !System.IO.File.Exists(System.IO.Path.Combine(dir.FullName, "proteus.slnx"))) dir = dir.Parent;
+        Assert.True(dir != null, $"Could not find proteus.slnx above {AppContext.BaseDirectory}.");
+        string readme = System.IO.File.ReadAllText(System.IO.Path.Combine(
+            dir!.FullName, lang == Source ? "README.md" : System.IO.Path.Combine("docs", $"README.{lang}.md")));
+        var t = Load(lang);
+        Assert.Contains("**" + t["Parts.Matcap.Apply"].Message + "**", readme);
+        Assert.Contains("**" + t["Parts.Matcap.Undo"].Message + "**", readme);
+        Assert.Contains("`Penumbra/Proteus/Matcaps`", readme);
+        Assert.Contains("https://westlaketeamods.carrd.co/", readme);
+        Assert.Contains("10", readme[readme.IndexOf("`Penumbra/Proteus/Matcaps`", StringComparison.Ordinal)..]);
+        // The tools table has a Matcaps row linking to the section.
+        Assert.Contains(readme.Split('\n'), l => l.StartsWith("| ", StringComparison.Ordinal) && l.Contains("](#"));
+    }
+
     /// <summary>The README's gear-refits-itself bullet names accessories that cover the body, in each language — and the
     /// Settings intro says it too.</summary>
     [Theory]
@@ -323,6 +345,34 @@ public sealed class LocalizationTests
         Assert.Contains("TexTools", tr["Settings.GearVariants.Auto.Tip"].Message);
         Assert.Contains("/proteus", tr["Chat.VariantRepoint.Fmt"].Message);
         Assert.Contains(tr["Settings.Section.GearVariants"].Message, tr["Chat.VariantRepoint.Fmt"].Message);
+    }
+
+    /// <summary>
+    /// The Matcaps tool's words are translated, not copied, and keep English's line breaks and placeholders. The tool's
+    /// own name stays "Matcaps" where a language borrows the word, so it alone may match English.
+    /// </summary>
+    [Theory]
+    [MemberData(nameof(Translations))]
+    [Trait("Plan", "AC-matcaps-9")]
+    public void Matcap_strings_are_translated_not_copied(string lang)
+    {
+        var en = Load(Source);
+        var tr = Load(lang);
+        var keys = en.Keys.Where(k => k.StartsWith("Parts.Matcap.", StringComparison.Ordinal)
+                                   || k.StartsWith("Matcap.Refused.", StringComparison.Ordinal)
+                                   || k is "Parts.Tool.Matcap.Tip" or "Parts.Vanilla.FaceHorns.Fmt" or "Parts.Vanilla.Ears.Fmt"
+                                         or "Settings.MatcapLibrary" or "Settings.MatcapLibrary.Tip.Fmt").ToList();
+        Assert.True(keys.Count >= 80, $"only {keys.Count} matcap keys");
+        foreach (var key in keys)
+        {
+            Assert.True(tr.ContainsKey(key), $"[{lang}] has no {key}");
+            Assert.NotEqual(en[key].Message, tr[key].Message);
+            Assert.Equal(en[key].Message.Count(c => c == '\n'), tr[key].Message.Count(c => c == '\n'));
+            Assert.Equal(Placeholders(en[key].Message), Placeholders(tr[key].Message));
+        }
+        // The quoted button names match the buttons as translated.
+        Assert.Contains(tr["Parts.Matcap.Change"].Message, tr["Matcap.Refused.AlreadyMatcap"].Message);
+        Assert.Contains(tr["Parts.Matcap.ExistingHeader"].Message, tr["Parts.Matcap.AlreadyTip"].Message);
     }
 
     /// <summary>The keys the temporary-copy design used are gone from every locale and from the code.</summary>

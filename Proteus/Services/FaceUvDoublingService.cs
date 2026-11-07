@@ -55,6 +55,12 @@ public sealed class FaceUvDoublingService
     private readonly ConcurrentDictionary<string, byte[]> _upstreamFaces = new(StringComparer.OrdinalIgnoreCase);
 
     /// <summary>
+    /// Where each upstream face was last read from on disk (a mod's file), kept when its bytes are forgotten
+    /// (<see cref="ForgetUpstream"/>) so the rewrite can read the edited file again while our own output wins the path.
+    /// </summary>
+    private readonly ConcurrentDictionary<string, string> _upstreamPaths = new(StringComparer.OrdinalIgnoreCase);
+
+    /// <summary>
     /// The last rewrite of each (model, material), against the exact upstream bytes it was made from; matched
     /// by reference, so a changed face mod re-resolves to a fresh array and misses.
     /// </summary>
@@ -66,6 +72,31 @@ public sealed class FaceUvDoublingService
         this.log = log;
         this.textureLoader = textureLoader;
         this.uvRemap = uvRemap;
+    }
+
+    /// <summary>The disk file the face rewrite last read <paramref name="modelGamePath"/> from, or null (game data, or never).</summary>
+    public string? UpstreamPathOf(string modelGamePath) =>
+        _upstreamPaths.TryGetValue(modelGamePath, out var p) ? p : null;
+
+    /// <summary>
+    /// Forget the remembered pristine bytes of <paramref name="modelGamePath"/> (memory and the <c>models/upstream</c>
+    /// mirror) and its rewrites, keeping where they came from. For an edit Proteus makes to the face file itself (a matcap
+    /// on Au Ra horns): while our rewrite wins the path, <see cref="LoadUpstream"/> trusts the remembered copy, so without
+    /// this the next composite would republish the face as it was before the edit, or — after an undo — one naming
+    /// materials that are gone. The next composite re-reads the remembered file instead, so nothing folds.
+    /// </summary>
+    /// <param name="writtenFile">The face file the edit wrote, used as the upstream only when none is remembered (the
+    /// game's own face, copied into an edit mod while our output already won the path).</param>
+    public void ForgetUpstream(string modelGamePath, string outputRoot, string? writtenFile = null)
+    {
+        _upstreamFaces.TryRemove(modelGamePath, out _);
+        if (writtenFile != null && File.Exists(writtenFile)) _upstreamPaths.TryAdd(modelGamePath, writtenFile);
+        foreach (var key in _rewrites.Keys.Where(k => string.Equals(k.Path, modelGamePath, StringComparison.OrdinalIgnoreCase)).ToList())
+            _rewrites.TryRemove(key, out _);
+        var mirror = Path.Combine(outputRoot, "models", "upstream", CompositorService.SanitizeName(modelGamePath) + ".mdl");
+        try { if (File.Exists(mirror)) File.Delete(mirror); }
+        catch (Exception ex) { log.Warning(ex, "[Proteus] face uv: could not forget the kept upstream {0}", mirror); }
+        log.Information("[Proteus] face uv: forgot the kept upstream of {0} (its face file was edited)", modelGamePath);
     }
 
     /// <summary>
@@ -307,7 +338,7 @@ public sealed class FaceUvDoublingService
     /// Refuses when the path resolves to our own output and no copy is kept: game data would publish vanilla
     /// over an installed face mod.
     /// </summary>
-    private byte[]? LoadUpstream(string modelPath, Func<string, string?> resolvePlayer,
+    internal byte[]? LoadUpstream(string modelPath, Func<string, string?> resolvePlayer,
                                  Func<string?, bool> isOwnOutput, string modelsDir)
     {
         var disk = resolvePlayer(modelPath);
@@ -318,6 +349,22 @@ public sealed class FaceUvDoublingService
         if (ours)
         {
             if (_upstreamFaces.TryGetValue(modelPath, out var remembered)) return remembered;
+            // Forgotten after an edit to the face file itself: read that file again — never game data, which would
+            // publish the vanilla face over an installed face mod.
+            if (_upstreamPaths.TryGetValue(modelPath, out var known) && File.Exists(known) && !isOwnOutput(known))
+            {
+                try
+                {
+                    var fresh = File.ReadAllBytes(known);
+                    _upstreamFaces[modelPath] = fresh;
+                    Directory.CreateDirectory(upstreamDir);
+                    SecondSkinService.WriteIfChanged(mirror, fresh);
+                    log.Information("[Proteus] face uv: re-read the edited upstream of {0}", modelPath);
+                    return fresh;
+                }
+                catch (Exception ex)
+                { log.Warning(ex, "[Proteus] face uv: could not re-read the upstream {0}", known); }
+            }
             if (File.Exists(mirror))
             {
                 try
@@ -342,6 +389,9 @@ public sealed class FaceUvDoublingService
             return null;
         }
         _upstreamFaces[modelPath] = bytes;
+        // A mod's file (not game data, which has no disk path): where to read it again after ForgetUpstream.
+        if (disk != null && !string.Equals(disk, modelPath, StringComparison.OrdinalIgnoreCase) && File.Exists(disk))
+            _upstreamPaths[modelPath] = disk;
         try
         {
             Directory.CreateDirectory(upstreamDir);

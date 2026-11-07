@@ -197,7 +197,8 @@ public class HarnessRouterTests : IDisposable
                       "/actions/shader-upgrade", "/actions/variant-repoint", "/actions/hair-port", "/actions/equip",
                       "/actions/mod-settings", "/actions/put-back", "/bindings", "/actions/glamourer-apply",
                       "/actions/binding-edit", "/jobs/{id}",
-                      "/studio", "/actions/studio-open", "/actions/studio-set", "/actions/studio-drag"],
+                      "/studio", "/actions/studio-open", "/actions/studio-set", "/actions/studio-drag",
+                      "/matcaps", "/actions/matcap-image", "/actions/matcap"],
                      HarnessRouter.Routes.Select(r => r.Path));
     }
 

@@ -152,7 +152,13 @@ public sealed partial class PartsPanel
 
         /// <summary>Press on the surface and drag it like rubber — Blender's elastic grab.</summary>
         Grab,
+
+        /// <summary>Tick parts and give them a matcap material of their own — see <see cref="MatcapPanel"/>.</summary>
+        Matcap,
     }
+
+    /// <summary>The tools whose part rows tick parts (rather than lock them or choose one to move).</summary>
+    private static bool TicksParts(Tool t) => t is Tool.Navigate or Tool.Matcap;
 
     /// <summary>The tools that work on one chosen part rather than painting: Move, Rotate and Scale share its choice.</summary>
     private static bool IsPartTool(Tool t) => t is Tool.Move or Tool.Rotate or Tool.Scale;
@@ -399,6 +405,7 @@ public sealed partial class PartsPanel
         };
         this.textureLoader = textureLoader;
         this.log = log;
+        matcapConfig = config;
     }
 
 
@@ -600,6 +607,7 @@ public sealed partial class PartsPanel
                 frame.Mark("part list");
 
                 if (tool == Tool.Navigate) DrawStaging();
+                else if (tool == Tool.Matcap) DrawMatcaps();
                 else if (tool == Tool.Retarget) DrawRetarget();
                 else if (PartTool) DrawMove();
                 else DrawBrush();
@@ -629,7 +637,7 @@ public sealed partial class PartsPanel
         {
 
             // Under Toggle Parts a click on the open garment ticks the part under it; a click on another worn garment opens that one.
-            bool pickParts = tool == Tool.Navigate;
+            bool pickParts = TicksParts(tool);
             bool moving = PartTool;
             if (volume != null && brushBase != null
                 && ArmedModelFile(vanilla?.GamePath ?? CopyNotDrawnOpen(), ModRoot(), models[modelIndex].File) is { } armed)
@@ -871,7 +879,7 @@ public sealed partial class PartsPanel
     /// The tool leaves the brush locks' parts undrawn: every tool that honours them. Not Toggle Parts, which locks
     /// nothing, nor Body size, whose holds are a set of their own and are refitted with the rest.
     /// </summary>
-    private bool HidesLocked => tool is not (Tool.Navigate or Tool.Retarget);
+    private bool HidesLocked => tool is not (Tool.Navigate or Tool.Retarget or Tool.Matcap);
 
     /// <summary>Counts the previews pushed, so a grab can tell whether the character saw any of it mid-drag.</summary>
     private int previewPushes;
@@ -1013,6 +1021,8 @@ public sealed partial class PartsPanel
             string gamePath = BodyShapeReader.PathKey(file);
             itemNames ??= ItemNames.Lookup(Plugin.DataManager, log);
             if (VanillaPick.From(gamePath, itemNames) is { } item) OpenGameGear(item);
+            // Horns and ears open only under Matcaps: no other tool knows what to do with a character part.
+            else if (tool == Tool.Matcap && (VanillaPick.FromEar(gamePath) ?? VanillaPick.FromFace(gamePath)) is { } ear) OpenGameGear(ear);
             else if (tool == Tool.Retarget) OpenVanilla(gamePath);   // says why it can't be refitted
             return;
         }
@@ -1022,7 +1032,9 @@ public sealed partial class PartsPanel
         // edited in the mod it was imported from.
         if (string.Equals(dir, SidecarDiscoveryService.ManagedModDir, StringComparison.OrdinalIgnoreCase))
         {
-            status = Strings.Parts.LivePickedShell;
+            // Under Matcaps a face drawn through the face overlay's rewrite is not the face to edit: say how to reach it.
+            status = tool == Tool.Matcap && MatcapPanelModel.IsManagedFaceRewrite(file)
+                ? Strings.Matcap.FaceOverlayOn : Strings.Parts.LivePickedShell;
             statusIsError = false;
             return;
         }
@@ -1291,7 +1303,8 @@ public sealed partial class PartsPanel
 
         foreach (string path in drawn.OrderBy(p => p, StringComparer.OrdinalIgnoreCase))
         {
-            if (VanillaPick.From(path, itemNames) is not { } pick) continue;
+            if ((VanillaPick.From(path, itemNames) ?? (tool == Tool.Matcap ? VanillaPick.FromEar(path) ?? VanillaPick.FromFace(path) : null)) is not { } pick)
+                continue;
 
             // An unredirected path echoes back. A redirect to a file that is not there is not a redirect at all.
             var resolved = penumbra.ResolvePlayer(path);
@@ -1746,7 +1759,7 @@ public sealed partial class PartsPanel
     private void OpenVanilla(string gamePath)
     {
         itemNames ??= ItemNames.Lookup(Plugin.DataManager, log);
-        if (VanillaPick.From(gamePath, itemNames) is not { } pick)
+        if ((VanillaPick.From(gamePath, itemNames) ?? (tool == Tool.Matcap ? VanillaPick.FromEar(gamePath) ?? VanillaPick.FromFace(gamePath) : null)) is not { } pick)
         {
             status = string.Format(Strings.Parts.LivePickedNotGearFmt, Path.GetFileName(gamePath));
             statusIsError = true;
@@ -2607,7 +2620,7 @@ public sealed partial class PartsPanel
                           : tool == Tool.Retarget ? NoSelection : ticked;
 
         // Told every frame rather than on change: the mode also resets when a model is picked.
-        viewport.Mode = tool is Tool.Navigate or Tool.Retarget ? PartViewport.ViewportMode.Navigate
+        viewport.Mode = tool is Tool.Navigate or Tool.Retarget or Tool.Matcap ? PartViewport.ViewportMode.Navigate
                       : PartTool ? PartViewport.ViewportMode.Move
                       : PartViewport.ViewportMode.Brush;
         viewport.GizmoCapture = gizmoCaptureFn;
@@ -2768,9 +2781,11 @@ public sealed partial class PartsPanel
             else
             {
                 bool on = ticked.Contains(part.Label);
-                using (ImRaii.Disabled(!part.Toggleable))
+                using (ImRaii.Disabled(!CanTick(part)))
                     if (ImGui.Checkbox($"{part.Label}##p_{part.Label}", ref on))
                         Toggle(part.Label);
+                if (tool == Tool.Matcap && !CanTick(part) && ImGui.IsItemHovered(ImGuiHoveredFlags.AllowWhenDisabled))
+                    ImGui.SetTooltip(MatcapPanelModel.UntickableTip(part));
             }
 
             if (ImGui.IsItemHovered(ImGuiHoveredFlags.AllowWhenDisabled)) hoveredRow = part.Label;
@@ -2799,7 +2814,7 @@ public sealed partial class PartsPanel
 
             if (isIsland) ImGui.Unindent(ProteusStyle.S(IslandIndent));
 
-            if (hoveredRow == part.Label && !brushing && !moving)
+            if (hoveredRow == part.Label && !brushing && !moving && tool != Tool.Matcap)
             {
                 if (!part.Toggleable)          ImGui.SetTooltip(ps.UnreadableTagTip);
                 else if (part.AuthorSwitched)  ImGui.SetTooltip(ps.StacksWithAuthorTip);
@@ -2918,6 +2933,7 @@ public sealed partial class PartsPanel
         return tool switch
         {
             Tool.Navigate => ps.ClickTip,
+            Tool.Matcap   => Strings.Matcap.ListTip,
             Tool.Move or Tool.Rotate or Tool.Scale => moveAll ? ps.MoveAllListTip : ps.MoveListTip,
             Tool.Retarget => ps.RetargetLockListTip,
             _             => ps.BrushLockListTip,
@@ -2993,6 +3009,7 @@ public sealed partial class PartsPanel
             (Tool.Grab,     FontAwesomeIcon.HandRock,          ps.ToolGrab,     ps.ToolGrabTip),
             (Tool.Bridge,  FontAwesomeIcon.Archway,           ps.ToolBridge,   ps.ToolBridgeTip),
             (Tool.Wind,     FontAwesomeIcon.Wind,              ps.ToolWind,     ps.ToolWindTip),
+            (Tool.Matcap,   FontAwesomeIcon.Gem,               Strings.Matcap.Tool, Strings.Matcap.ToolTip),
             (Tool.Retarget, FontAwesomeIcon.PeopleArrows,      ps.ToolRetarget, ps.ToolRetargetTip),
             (Tool.Navigate, FontAwesomeIcon.MousePointer,      ps.ToolNavigate, ps.ToolNavigateTip),
         };
@@ -3018,7 +3035,7 @@ public sealed partial class PartsPanel
     /// <summary>Tick or untick one part, from wherever the click came from.</summary>
     private void Toggle(string label)
     {
-        if (parts?.Parts.FirstOrDefault(p => p.Label == label) is not { Toggleable: true }) return;
+        if (parts?.Parts.FirstOrDefault(p => p.Label == label) is not { } part || !CanTick(part)) return;
 
         if (!ticked.Add(label)) ticked.Remove(label);
         viewport.Recolour();
@@ -3046,7 +3063,7 @@ public sealed partial class PartsPanel
             // never by choosing a tool.
             if (clicked) SwitchTool(value);
             if (ImGui.IsItemHovered())
-                ImGui.SetTooltip(value is Tool.Navigate or Tool.Retarget || IsPartTool(value)
+                ImGui.SetTooltip(ShowsBrushLockHint(value) is false
                                      ? tip
                                      : tip + "\n\n" + ps.BrushLockHint);
         }
@@ -3069,7 +3086,15 @@ public sealed partial class PartsPanel
             movePart = null;
             ClearPolygons();
         }
+        // Horns and ears are opened only under Matcaps: leaving it closes them.
+        bool closeEar = tool == Tool.Matcap && vanilla is { } open && Services.Matcap.CustomizationMaterialPath.Parse(open.GamePath) != null;
         tool = value;
+        if (closeEar)
+        {
+            CloseVanillaEar();
+            status = Strings.Matcap.MatcapsOnlyHere;
+            statusIsError = false;
+        }
         ApplyLocks();   // Body size shows its own holds, every other tool the brush locks; and syncs the hiding
         // Staged parts are a Pick-parts thing; a selection carried into the brush would sit there invisibly.
         ticked.Clear();

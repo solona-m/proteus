@@ -756,6 +756,24 @@ public class SidecarDiscoveryService
         return dir;
     }
 
+    /// <summary>Where matcap images live: <c>Matcaps</c> beside <see cref="EffectsSubdir"/> in the managed mod, and in a
+    /// mod's own <c>Proteus</c> folder.</summary>
+    internal const string MatcapsSubdir = "Matcaps";
+
+    /// <summary>
+    /// The global matcap image library, <c>&lt;penumbra mods&gt;\Proteus\Matcaps\</c>, beside the effects library.
+    /// Created on demand. Nothing is seeded into it: Proteus ships no third-party matcaps.
+    /// </summary>
+    public string? MatcapsLibraryPath()
+    {
+        var root = penumbra.GetModDirectory();
+        if (string.IsNullOrWhiteSpace(root)) return null;
+
+        var dir = Path.Combine(root, ManagedModDir, MatcapsSubdir);
+        try { Directory.CreateDirectory(dir); } catch { return null; }
+        return dir;
+    }
+
     /// <summary>
     /// Copy the starter effects from <see cref="DefaultEffectsDir"/> into the global effects library, skipping any
     /// file already there. Never overwrites a user's copy.

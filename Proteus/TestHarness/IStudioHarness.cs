@@ -70,6 +70,20 @@ internal sealed class StudioSession(string modDir, string file, object snapshot,
 /// <param name="Keep">The session stays recorded: a failure to retry, or something else touched it.</param>
 internal sealed record StudioPutBack(string Mod, string Files, string Panel, string? Code, bool Keep);
 
+/// <summary>The Matcaps tool's dependencies, as the harness's matcap routes reach them.</summary>
+/// <param name="Index">The shared library index (null before the plugin hands it over).</param>
+/// <param name="ImageFolder">The global matcap image folder, or null without Penumbra.</param>
+/// <param name="Penumbra">The library-selection seam (framework thread).</param>
+/// <param name="Env">The environment <see cref="Services.Matcap.MatcapStudio.Prepare"/> runs in.</param>
+/// <param name="ModsRoot">Penumbra's mods folder, or null.</param>
+/// <param name="Mods">Penumbra's mod list (folder → name), or null.</param>
+internal sealed record MatcapHarnessPort(
+    Services.Matcap.MatcapIndex? Index, string? ImageFolder, Services.Matcap.IMatcapPenumbra Penumbra,
+    Services.Matcap.MatcapStudio.Environment Env, string? ModsRoot, IReadOnlyDictionary<string, string>? Mods,
+    System.Action<string>? ForgetFaceUpstream = null,
+    // (mod root, game path, written files) -> the panel's drawn-file line after an Apply; framework thread.
+    System.Func<string, string, IReadOnlyList<string>, string?>? DrawnStatus = null);
+
 /// <summary>
 /// The Studio as the test harness drives it: the panel's own code for each control, run on the framework thread between
 /// frames. Implemented by the Studio panel in harness builds only.
@@ -81,6 +95,13 @@ internal interface IStudioHarness
 
     /// <summary>Whether <paramref name="file"/> of <paramref name="modDir"/> is the model open. Framework thread.</summary>
     bool IsOpen(string modDir, string file);
+
+    /// <summary>A Studio edit is under way or not saved yet (a matcap job refuses rather than flush it). Framework thread.</summary>
+    bool EditPending();
+
+    /// <summary>What the Matcaps tool works with — its library index, image folder, Penumbra seam and environment — so the
+    /// harness's matcap routes run the panel's own entry points. Framework thread.</summary>
+    MatcapHarnessPort Matcaps();
 
     /// <summary>Open a mod's model as picking it does, keeping the panel as it was. Framework thread.</summary>
     StudioOpenOutcome Open(string modDir, string model, bool show);

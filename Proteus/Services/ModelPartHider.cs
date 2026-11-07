@@ -52,6 +52,31 @@ internal static class ModelPartHider
     }
 
     /// <summary>
+    /// Collapse, in place, the triangles that start at the given ABSOLUTE index-buffer slots (each a multiple of three
+    /// from its mesh's start), rewiring every shape value on those slots as <see cref="Hide"/> does. For a writer that
+    /// already knows which triangles go — the matcap split addresses them by submesh and ordinal, not by polygon.
+    /// </summary>
+    /// <returns>How many triangles were collapsed.</returns>
+    internal static int CollapseTriangles(byte[] mdl, IEnumerable<long> triangleStarts)
+    {
+        var src = SecondSkinWriter.Parse(mdl);
+        var collapsed = new Dictionary<long, ushort>();
+        int count = 0;
+        foreach (var start in triangleStarts)
+        {
+            int at = src.Ib + (int)start * 2;
+            if (start < 0 || at + 6 > mdl.Length) continue;
+            ushort a = BitConverter.ToUInt16(mdl, at);
+            BitConverter.TryWriteBytes(mdl.AsSpan(at + 2), a);
+            BitConverter.TryWriteBytes(mdl.AsSpan(at + 4), a);
+            for (long k = 0; k < 3; k++) collapsed[start + k] = a;
+            count++;
+        }
+        if (count > 0) CollapseShapes(mdl, src, collapsed);
+        return count;
+    }
+
+    /// <summary>
     /// A shape key rewires index slots to vertices of its own, so with a body slider on, two corners of a collapsed
     /// triangle could be put back apart and draw a sliver of the part. Every slot a collapse took is rewired to the
     /// collapse's corner instead, in every shape, so no shape can open it again.

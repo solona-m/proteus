@@ -6174,5 +6174,377 @@
   "Chat.VariantRepoint.Fmt": {
     "message": "[Proteus] Copied the material paths of \"{1}\" to {0} more variant folder(s), so those variants show the mod's own material wherever it wins. Undo under /proteus > Settings > Gear variants.",
     "description": "Chat notice, once per mod per session. {0} = number of variant folders the mod's material paths were copied into, {1} = the mod's name. Keep /proteus and the \"[Proteus]\" prefix; \"Settings\" and \"Gear variants\" name a tab and a section (match Tab.Settings and Settings.Section.GearVariants)."
+  },
+  "Matcap.Refused.AlreadyMatcap": {
+    "message": "Some of those parts already have a matcap. Use \"Use the chosen matcap\" to change it.",
+    "description": "Studio Matcaps tool. A matcap is a sphere picture a shader samples by the surface's facing direction."
+  },
+  "Matcap.Refused.Changed.Fmt": {
+    "message": "{0} changed while the matcap was being prepared, so nothing was written. Try again.",
+    "description": "Studio Matcaps tool. A matcap is a sphere picture a shader samples by the surface's facing direction."
+  },
+  "Matcap.Refused.Edited.Fmt": {
+    "message": "{0} was changed after its matcap was applied, so it was not undone. Its original is kept at {1}.",
+    "description": "Studio Matcaps tool. A matcap is a sphere picture a shader samples by the surface's facing direction."
+  },
+  "Matcap.Refused.Failed.Fmt": {
+    "message": "The matcap could not be written ({0}). Nothing was changed.",
+    "description": "Studio Matcaps tool. A matcap is a sphere picture a shader samples by the surface's facing direction."
+  },
+  "Matcap.Refused.HandEdited.Fmt": {
+    "message": "{0} was edited by hand since Proteus wrote it, so it was left alone.",
+    "description": "Studio Matcaps tool. A matcap is a sphere picture a shader samples by the surface's facing direction."
+  },
+  "Matcap.Refused.ImageUnreadable.Fmt": {
+    "message": "{0} could not be read as an image.",
+    "description": "Studio Matcaps tool. A matcap is a sphere picture a shader samples by the surface's facing direction."
+  },
+  "Matcap.Refused.ImportedPiece": {
+    "message": "This piece belongs to an imported pack, which Proteus rebuilds itself. Put the matcap on the pack's own mod instead.",
+    "description": "Studio Matcaps tool. A matcap is a sphere picture a shader samples by the surface's facing direction."
+  },
+  "Matcap.Refused.Legacy": {
+    "message": "This mod is still in Penumbra's old folder layout. Open it in Penumbra once so it is updated, then try again.",
+    "description": "Studio Matcaps tool. A matcap is a sphere picture a shader samples by the surface's facing direction."
+  },
+  "Matcap.Refused.MaterialCap.Fmt": {
+    "message": "This model can't take another material: {0}.",
+    "description": "Studio Matcaps tool. A matcap is a sphere picture a shader samples by the surface's facing direction."
+  },
+  "Matcap.Refused.ModelLayout.Fmt": {
+    "message": "This model can't be split: {0}.",
+    "description": "Studio Matcaps tool. A matcap is a sphere picture a shader samples by the surface's facing direction."
+  },
+  "Matcap.Refused.NoEntry": {
+    "message": "That matcap is not in this mod's record.",
+    "description": "Studio Matcaps tool. A matcap is a sphere picture a shader samples by the surface's facing direction."
+  },
+  "Matcap.Refused.NoName": {
+    "message": "Proteus could not tell where the game reads this model's materials.",
+    "description": "Studio Matcaps tool. A matcap is a sphere picture a shader samples by the surface's facing direction."
+  },
+  "Matcap.Refused.NoTemplate": {
+    "message": "The game's reflection material could not be read, so no matcap material could be made.",
+    "description": "Studio Matcaps tool. A matcap is a sphere picture a shader samples by the surface's facing direction."
+  },
+  "Matcap.Refused.NotSquare.Fmt": {
+    "message": "{0} is not square. A matcap is a picture of a sphere filling a square.",
+    "description": "Studio Matcaps tool. A matcap is a sphere picture a shader samples by the surface's facing direction."
+  },
+  "Matcap.Refused.NotTarget": {
+    "message": "Matcaps go on gear, accessories, hair, Viera ears and Au Ra horns (on the face); this model is none of those.",
+    "description": "Studio Matcaps tool. A matcap is a sphere picture a shader samples by the surface's facing direction."
+  },
+  "Matcap.Refused.RecordUnreadable": {
+    "message": "Proteus's record of this mod's matcaps (Proteus/matcaps.json) could not be read, so nothing was changed.",
+    "description": "Studio Matcaps tool. A matcap is a sphere picture a shader samples by the surface's facing direction."
+  },
+  "Matcap.Refused.Regenerated.Fmt": {
+    "message": "This model is made by Proteus from another one ({0}), and remaking it would lose the matcap. Put the matcap on the model it was made from, then remake it.",
+    "description": "Studio Matcaps tool. A matcap is a sphere picture a shader samples by the surface's facing direction."
+  },
+  "Matcap.Refused.Skin": {
+    "message": "Skin can't take a matcap.",
+    "description": "Studio Matcaps tool. A matcap is a sphere picture a shader samples by the surface's facing direction."
+  },
+  "Matcap.Refused.UnknownOption.Fmt": {
+    "message": "{0} has no option called {1}.",
+    "description": "Studio Matcaps tool. A matcap is a sphere picture a shader samples by the surface's facing direction."
+  },
+  "MeshVolume.Feature.Matcaps": {
+    "message": "matcaps",
+    "description": "Studio Matcaps tool. A matcap is a sphere picture a shader samples by the surface's facing direction."
+  },
+  "Parts.Matcap.AlphaWarn": {
+    "message": "Some ticked parts use see-through edges (hair strands, lace). Check the edges in game after applying.",
+    "description": "Studio Matcaps tool. A matcap is a sphere picture a shader samples by the surface's facing direction."
+  },
+  "Parts.Matcap.AlreadyTip": {
+    "message": "This part already has a matcap. Change it under \"Matcaps on this model\".",
+    "description": "Studio Matcaps tool. A matcap is a sphere picture a shader samples by the surface's facing direction."
+  },
+  "Parts.Matcap.AlsoMore.Fmt": {
+    "message": "+{0} more",
+    "description": "Studio Matcaps tool. A matcap is a sphere picture a shader samples by the surface's facing direction."
+  },
+  "Parts.Matcap.AlsoNothing": {
+    "message": "nothing else",
+    "description": "Studio Matcaps tool. A matcap is a sphere picture a shader samples by the surface's facing direction."
+  },
+  "Parts.Matcap.Applied.Fmt": {
+    "message": "Matcap applied: {0} on {1} model file(s).",
+    "description": "Studio Matcaps tool. A matcap is a sphere picture a shader samples by the surface's facing direction."
+  },
+  "Parts.Matcap.Apply": {
+    "message": "Apply matcap",
+    "description": "Studio Matcaps tool. A matcap is a sphere picture a shader samples by the surface's facing direction."
+  },
+  "Parts.Matcap.BaseCollection.Fmt": {
+    "message": "{0} is your base collection: everyone using it will see the chosen matcap.",
+    "description": "Studio Matcaps tool. A matcap is a sphere picture a shader samples by the surface's facing direction."
+  },
+  "Parts.Matcap.Change": {
+    "message": "Use the chosen matcap",
+    "description": "Studio Matcaps tool. A matcap is a sphere picture a shader samples by the surface's facing direction."
+  },
+  "Parts.Matcap.Changed.Fmt": {
+    "message": "Matcap changed: {0}.",
+    "description": "Studio Matcaps tool. A matcap is a sphere picture a shader samples by the surface's facing direction."
+  },
+  "Parts.Matcap.ChangeKindTip": {
+    "message": "A matcap from your images can only change to another image, and a library's to another library option. Undo it to switch kinds.",
+    "description": "Studio Matcaps tool. A matcap is a sphere picture a shader samples by the surface's facing direction."
+  },
+  "Parts.Matcap.ConfirmEnable.Fmt": {
+    "message": "{0} is off in {1}. Switching it on also turns on: {2}",
+    "description": "Studio Matcaps tool. A matcap is a sphere picture a shader samples by the surface's facing direction."
+  },
+  "Parts.Matcap.ConfirmNo": {
+    "message": "Cancel",
+    "description": "Studio Matcaps tool. A matcap is a sphere picture a shader samples by the surface's facing direction."
+  },
+  "Parts.Matcap.ConfirmYes": {
+    "message": "Switch it on",
+    "description": "Studio Matcaps tool. A matcap is a sphere picture a shader samples by the surface's facing direction."
+  },
+  "Parts.Matcap.DrawnElsewhere.Fmt": {
+    "message": "Your character draws another file for this model ({0}), so the matcap won't show on it yet.",
+    "description": "Studio Matcaps tool. A matcap is a sphere picture a shader samples by the surface's facing direction."
+  },
+  "Parts.Matcap.Duplicates.Fmt": {
+    "message": "Other mods also supply this slot's texture ({0}); the one Penumbra ranks highest decides what shows.",
+    "description": "Studio Matcaps tool. A matcap is a sphere picture a shader samples by the surface's facing direction."
+  },
+  "Parts.Matcap.Edited": {
+    "message": "The model was changed since.",
+    "description": "Studio Matcaps tool. A matcap is a sphere picture a shader samples by the surface's facing direction."
+  },
+  "Parts.Matcap.ExistingHeader": {
+    "message": "Matcaps on this model",
+    "description": "Studio Matcaps tool. A matcap is a sphere picture a shader samples by the surface's facing direction."
+  },
+  "Parts.Matcap.Forget": {
+    "message": "Forget",
+    "description": "Studio Matcaps tool. A matcap is a sphere picture a shader samples by the surface's facing direction."
+  },
+  "Parts.Matcap.Forgotten.Fmt": {
+    "message": "Forgot the matcaps this model no longer uses ({0} file(s)).",
+    "description": "Studio Matcaps tool. A matcap is a sphere picture a shader samples by the surface's facing direction."
+  },
+  "Parts.Matcap.Guide": {
+    "message": "A matcap is a picture of a lit sphere; the parts take their colour from it by which way they face you. Tick parts, pick a matcap, then Apply.",
+    "description": "Studio Matcaps tool. A matcap is a sphere picture a shader samples by the surface's facing direction."
+  },
+  "Parts.Matcap.Held.Fmt": {
+    "message": "{0} is holding this library's setting for now; the chosen matcap shows once it lets go.",
+    "description": "Studio Matcaps tool. A matcap is a sphere picture a shader samples by the surface's facing direction."
+  },
+  "Parts.Matcap.Inherited.Fmt": {
+    "message": "{0} inherits this library's setting; choosing a matcap gives it a setting of its own.",
+    "description": "Studio Matcaps tool. A matcap is a sphere picture a shader samples by the surface's facing direction."
+  },
+  "Parts.Matcap.KeptEdited.Fmt": {
+    "message": "Left in place because they were edited by hand: {0}.",
+    "description": "Studio Matcaps tool. A matcap is a sphere picture a shader samples by the surface's facing direction."
+  },
+  "Parts.Matcap.LibraryMissing.Fmt": {
+    "message": "{0} is not installed: this matcap has nothing to show.",
+    "description": "Studio Matcaps tool. A matcap is a sphere picture a shader samples by the surface's facing direction."
+  },
+  "Parts.Matcap.LibraryOff.Fmt": {
+    "message": "{0} is switched off.",
+    "description": "Studio Matcaps tool. A matcap is a sphere picture a shader samples by the surface's facing direction."
+  },
+  "Parts.Matcap.LibraryOffTag": {
+    "message": "(off)",
+    "description": "Studio Matcaps tool. A matcap is a sphere picture a shader samples by the surface's facing direction."
+  },
+  "Parts.Matcap.ListTip": {
+    "message": "Tick the parts that should take the matcap. Skin, and parts that already have one, can't be ticked.",
+    "description": "Studio Matcaps tool. A matcap is a sphere picture a shader samples by the surface's facing direction."
+  },
+  "Parts.Matcap.Lod0Cut": {
+    "message": "The model was cut to its nearest level of detail, so the matcap shows at every distance.",
+    "description": "Studio Matcaps tool. A matcap is a sphere picture a shader samples by the surface's facing direction."
+  },
+  "Parts.Matcap.MaterialCap.Fmt": {
+    "message": "This model already has {0} materials, the most a model can carry. Undo a matcap to make room.",
+    "description": "Studio Matcaps tool. A matcap is a sphere picture a shader samples by the surface's facing direction."
+  },
+  "Parts.Matcap.NeedMatcap": {
+    "message": "Pick a matcap first.",
+    "description": "Studio Matcaps tool. A matcap is a sphere picture a shader samples by the surface's facing direction."
+  },
+  "Parts.Matcap.NeedParts": {
+    "message": "Tick the parts that should take the matcap.",
+    "description": "Studio Matcaps tool. A matcap is a sphere picture a shader samples by the surface's facing direction."
+  },
+  "Parts.Matcap.NoImages.Fmt": {
+    "message": "No matcap images yet. Put square pictures of a lit sphere (PNG or JPG) in {0}, then press Refresh.",
+    "description": "Studio Matcaps tool. A matcap is a sphere picture a shader samples by the surface's facing direction."
+  },
+  "Parts.Matcap.NoLibraries": {
+    "message": "No matcap library mods are installed. A library is a mod with a choice of matcaps for one shared texture.",
+    "description": "Studio Matcaps tool. A matcap is a sphere picture a shader samples by the surface's facing direction."
+  },
+  "Parts.Matcap.NoPenumbra": {
+    "message": "Penumbra is not available.",
+    "description": "Studio Matcaps tool. A matcap is a sphere picture a shader samples by the surface's facing direction."
+  },
+  "Parts.Matcap.NothingToForget": {
+    "message": "Every matcap on this model is still in use; there is nothing to forget.",
+    "description": "Studio Matcaps tool. A matcap is a sphere picture a shader samples by the surface's facing direction."
+  },
+  "Parts.Matcap.NothingToUndo": {
+    "message": "There is no matcap on this model to undo.",
+    "description": "Studio Matcaps tool. A matcap is a sphere picture a shader samples by the surface's facing direction."
+  },
+  "Parts.Matcap.NotWinning.Fmt": {
+    "message": "Another mod's texture is drawn on this slot instead ({0}). Raise the library's priority in Penumbra.",
+    "description": "Studio Matcaps tool. A matcap is a sphere picture a shader samples by the surface's facing direction."
+  },
+  "Parts.Matcap.OpenFolder": {
+    "message": "Open matcap folder",
+    "description": "Studio Matcaps tool. A matcap is a sphere picture a shader samples by the surface's facing direction."
+  },
+  "Parts.Matcap.Refresh": {
+    "message": "Refresh",
+    "description": "Studio Matcaps tool. A matcap is a sphere picture a shader samples by the surface's facing direction."
+  },
+  "Parts.Matcap.RemakeSizes": {
+    "message": "That file is one of Proteus's refits: remake the sizes to carry the matcap over.",
+    "description": "Studio Matcaps tool. A matcap is a sphere picture a shader samples by the surface's facing direction."
+  },
+  "Parts.Matcap.Rescan": {
+    "message": "Rescan",
+    "description": "Studio Matcaps tool. A matcap is a sphere picture a shader samples by the surface's facing direction."
+  },
+  "Parts.Matcap.Room.Fmt": {
+    "message": "Room for {0} more material(s) on this model (a refit needs some for nails and underwear too).",
+    "description": "Studio Matcaps tool. A matcap is a sphere picture a shader samples by the surface's facing direction."
+  },
+  "Parts.Matcap.Scanning": {
+    "message": "Looking through your mods for matcap libraries…",
+    "description": "Studio Matcaps tool. A matcap is a sphere picture a shader samples by the surface's facing direction."
+  },
+  "Parts.Matcap.SelectFailed": {
+    "message": "Penumbra did not accept the library's setting.",
+    "description": "Studio Matcaps tool. A matcap is a sphere picture a shader samples by the surface's facing direction."
+  },
+  "Parts.Matcap.SharedSlot.Fmt": {
+    "message": "This slot shows one matcap at a time: {0} other matcap(s) in this mod use it and will change too.",
+    "description": "Studio Matcaps tool. A matcap is a sphere picture a shader samples by the surface's facing direction."
+  },
+  "Parts.Matcap.ShareNote.Fmt": {
+    "message": "Anyone you share this mod with needs {0} too ({1}), set to the same matcap. Its textures are never copied into your mod.",
+    "description": "Studio Matcaps tool. A matcap is a sphere picture a shader samples by the surface's facing direction."
+  },
+  "Parts.Matcap.SiblingsSkipped.Fmt": {
+    "message": "Not applied to these other body options, whose parts differ: {0}.",
+    "description": "Studio Matcaps tool. A matcap is a sphere picture a shader samples by the surface's facing direction."
+  },
+  "Parts.Matcap.SkinTip": {
+    "message": "Skin can't take a matcap.",
+    "description": "Studio Matcaps tool. A matcap is a sphere picture a shader samples by the surface's facing direction."
+  },
+  "Parts.Matcap.Source.Fmt": {
+    "message": "from {0}",
+    "description": "Studio Matcaps tool. A matcap is a sphere picture a shader samples by the surface's facing direction."
+  },
+  "Parts.Matcap.SourceImages": {
+    "message": "Your images",
+    "description": "Studio Matcaps tool. A matcap is a sphere picture a shader samples by the surface's facing direction."
+  },
+  "Parts.Matcap.SourceLibraries": {
+    "message": "Library mods",
+    "description": "Studio Matcaps tool. A matcap is a sphere picture a shader samples by the surface's facing direction."
+  },
+  "Parts.Matcap.Superseded": {
+    "message": "The model no longer uses this matcap (the mod was updated).",
+    "description": "Studio Matcaps tool. A matcap is a sphere picture a shader samples by the surface's facing direction."
+  },
+  "Parts.Matcap.ThisMod": {
+    "message": "(this mod)",
+    "description": "Studio Matcaps tool. A matcap is a sphere picture a shader samples by the surface's facing direction."
+  },
+  "Parts.Matcap.Ticked.Fmt": {
+    "message": "{0} part(s) ticked.",
+    "description": "Studio Matcaps tool. A matcap is a sphere picture a shader samples by the surface's facing direction."
+  },
+  "Parts.Matcap.Undo": {
+    "message": "Undo matcaps on this model",
+    "description": "Studio Matcaps tool. A matcap is a sphere picture a shader samples by the surface's facing direction."
+  },
+  "Parts.Matcap.UndoGroup.Fmt": {
+    "message": "Also undoes the other body options sharing these matcaps: {0}.",
+    "description": "Studio Matcaps tool. A matcap is a sphere picture a shader samples by the surface's facing direction."
+  },
+  "Parts.Matcap.Undone.Fmt": {
+    "message": "Matcaps undone on {0} model file(s).",
+    "description": "Studio Matcaps tool. A matcap is a sphere picture a shader samples by the surface's facing direction."
+  },
+  "Parts.Matcap.Working": {
+    "message": "Writing the matcap…",
+    "description": "Studio Matcaps tool. A matcap is a sphere picture a shader samples by the surface's facing direction."
+  },
+  "Parts.Tool.Matcap": {
+    "message": "Matcaps",
+    "description": "Studio Matcaps tool. A matcap is a sphere picture a shader samples by the surface's facing direction."
+  },
+  "Parts.Tool.Matcap.Tip": {
+    "message": "Give the parts you tick a matcap: a shiny, glassy or gem-like look painted from a picture of a sphere. The parts get a material of their own, written into the mod, so it shows with Proteus turned off.",
+    "description": "Studio Matcaps tool. A matcap is a sphere picture a shader samples by the surface's facing direction."
+  },
+  "Parts.Vanilla.Ears.Fmt": {
+    "message": "Ears {0} ({1})",
+    "description": "Studio Matcaps tool. A matcap is a sphere picture a shader samples by the surface's facing direction."
+  },
+  "Settings.MatcapLibrary": {
+    "message": "Matcap images",
+    "description": "Studio Matcaps tool. A matcap is a sphere picture a shader samples by the surface's facing direction."
+  },
+  "Settings.MatcapLibrary.Tip.Fmt": {
+    "message": "Open the folder your own matcap images live in: {0}",
+    "description": "Studio Matcaps tool. A matcap is a sphere picture a shader samples by the surface's facing direction."
+  },
+  "Matcap.Refused.NoHorns": {
+    "message": "This face has no horns. On a face, only the horns can take a matcap.",
+    "description": "Studio Matcaps tool. A matcap is a sphere picture a shader samples by the surface's facing direction."
+  },
+  "Matcap.Refused.NotHorn": {
+    "message": "On a face, only the horns can take a matcap.",
+    "description": "Studio Matcaps tool. A matcap is a sphere picture a shader samples by the surface's facing direction."
+  },
+  "Parts.Matcap.DrawnThroughFace": {
+    "message": "Your face is drawn through the face overlay's rewrite; the matcap shows after the next refresh.",
+    "description": "Studio Matcaps tool. A matcap is a sphere picture a shader samples by the surface's facing direction."
+  },
+  "Parts.Matcap.FaceOverlayOn": {
+    "message": "That face is drawn through a face overlay. Turn the overlay off to pick your face, or open your face mod from the list.",
+    "description": "Studio Matcaps tool. A matcap is a sphere picture a shader samples by the surface's facing direction."
+  },
+  "Parts.Matcap.HornColourNote": {
+    "message": "Horns with a matcap no longer take your character's horn colour, and hats still hide them.",
+    "description": "Studio Matcaps tool. A matcap is a sphere picture a shader samples by the surface's facing direction."
+  },
+  "Parts.Matcap.MatcapsOnlyHere": {
+    "message": "Your own face and ears open only under Matcaps, so they were closed.",
+    "description": "Studio Matcaps tool. A matcap is a sphere picture a shader samples by the surface's facing direction."
+  },
+  "Parts.Matcap.NoHorns": {
+    "message": "This face has no horns. On a face, only the horns can take a matcap.",
+    "description": "Studio Matcaps tool. A matcap is a sphere picture a shader samples by the surface's facing direction."
+  },
+  "Parts.Matcap.NotHornTip": {
+    "message": "On a face, only the horns can take a matcap.",
+    "description": "Studio Matcaps tool. A matcap is a sphere picture a shader samples by the surface's facing direction."
+  },
+  "Parts.Vanilla.FaceHorns.Fmt": {
+    "message": "Horns (face {0}, {1})",
+    "description": "Studio Matcaps tool. A matcap is a sphere picture a shader samples by the surface's facing direction."
+  },
+  "Parts.Matcap.BackupKept.Fmt": {
+    "message": "Their old backups could not be moved aside: {0}. The next matcap there moves them first.",
+    "description": "Studio Matcaps tool. A matcap is a sphere picture a shader samples by the surface's facing direction."
   }
 }

@@ -6174,5 +6174,377 @@
   "Chat.VariantRepoint.Fmt": {
     "message": "[Proteus] Пути материалов «{1}» скопированы ещё в {0} папк(и) вариантов, чтобы эти варианты показывали собственный материал мода везде, где он побеждает. Отменить: /proteus > Настройки > Варианты снаряжения.",
     "description": ""
+  },
+  "Matcap.Refused.AlreadyMatcap": {
+    "message": "У некоторых из этих частей уже есть мэткап. Чтобы его сменить, нажмите «Использовать выбранный мэткап».",
+    "description": ""
+  },
+  "Matcap.Refused.Changed.Fmt": {
+    "message": "{0} изменился, пока готовился мэткап, поэтому ничего не записано. Попробуйте ещё раз.",
+    "description": ""
+  },
+  "Matcap.Refused.Edited.Fmt": {
+    "message": "{0} изменили после применения мэткапа, поэтому он не отменён. Оригинал хранится в {1}.",
+    "description": ""
+  },
+  "Matcap.Refused.Failed.Fmt": {
+    "message": "Не удалось записать мэткап ({0}). Ничего не изменено.",
+    "description": ""
+  },
+  "Matcap.Refused.HandEdited.Fmt": {
+    "message": "{0} отредактировали вручную после того, как Proteus его записал, поэтому он оставлен как есть.",
+    "description": ""
+  },
+  "Matcap.Refused.ImageUnreadable.Fmt": {
+    "message": "Не удалось прочитать {0} как изображение.",
+    "description": ""
+  },
+  "Matcap.Refused.ImportedPiece": {
+    "message": "Эта часть принадлежит импортированному пакету, который Proteus пересобирает сам. Поставьте мэткап на собственный мод пакета.",
+    "description": ""
+  },
+  "Matcap.Refused.Legacy": {
+    "message": "У этого мода ещё старая структура папок Penumbra. Откройте его один раз в Penumbra, чтобы он обновился, и попробуйте снова.",
+    "description": ""
+  },
+  "Matcap.Refused.MaterialCap.Fmt": {
+    "message": "Эта модель не может получить ещё один материал: {0}.",
+    "description": ""
+  },
+  "Matcap.Refused.ModelLayout.Fmt": {
+    "message": "Эту модель нельзя разделить: {0}.",
+    "description": ""
+  },
+  "Matcap.Refused.NoEntry": {
+    "message": "Этого мэткапа нет в записях этого мода.",
+    "description": ""
+  },
+  "Matcap.Refused.NoName": {
+    "message": "Proteus не смог определить, откуда игра читает материалы этой модели.",
+    "description": ""
+  },
+  "Matcap.Refused.NoTemplate": {
+    "message": "Не удалось прочитать материал отражения игры, поэтому материал мэткапа создать нельзя.",
+    "description": ""
+  },
+  "Matcap.Refused.NotSquare.Fmt": {
+    "message": "{0} не квадратное. Мэткап — это изображение сферы, заполняющей квадрат.",
+    "description": ""
+  },
+  "Matcap.Refused.NotTarget": {
+    "message": "Matcap накладывается на снаряжение, аксессуары, волосы, уши виэра и рога ау ра (на лице); эта модель не относится ни к чему из этого.",
+    "description": ""
+  },
+  "Matcap.Refused.RecordUnreadable": {
+    "message": "Не удалось прочитать запись Proteus о мэткапах этого мода (Proteus/matcaps.json), поэтому ничего не изменено.",
+    "description": ""
+  },
+  "Matcap.Refused.Regenerated.Fmt": {
+    "message": "Эту модель Proteus делает из другой ({0}), и при пересоздании мэткап пропадёт. Поставьте мэткап на исходную модель, а затем пересоздайте.",
+    "description": ""
+  },
+  "Matcap.Refused.Skin": {
+    "message": "На кожу нельзя поставить мэткап.",
+    "description": ""
+  },
+  "Matcap.Refused.UnknownOption.Fmt": {
+    "message": "У {0} нет варианта {1}.",
+    "description": ""
+  },
+  "MeshVolume.Feature.Matcaps": {
+    "message": "мэткапы",
+    "description": ""
+  },
+  "Parts.Matcap.AlphaWarn": {
+    "message": "У некоторых отмеченных частей прозрачные края (пряди волос, кружево). После применения проверьте края в игре.",
+    "description": ""
+  },
+  "Parts.Matcap.AlreadyTip": {
+    "message": "У этой части уже есть мэткап. Измените его в разделе «Мэткапы на этой модели».",
+    "description": ""
+  },
+  "Parts.Matcap.AlsoMore.Fmt": {
+    "message": "ещё +{0}",
+    "description": ""
+  },
+  "Parts.Matcap.AlsoNothing": {
+    "message": "больше ничего",
+    "description": ""
+  },
+  "Parts.Matcap.Applied.Fmt": {
+    "message": "Мэткап применён: {0} на {1} файл(ах) модели.",
+    "description": ""
+  },
+  "Parts.Matcap.Apply": {
+    "message": "Применить мэткап",
+    "description": ""
+  },
+  "Parts.Matcap.BaseCollection.Fmt": {
+    "message": "{0} — ваша базовая коллекция: все, кто её использует, увидят выбранный мэткап.",
+    "description": ""
+  },
+  "Parts.Matcap.Change": {
+    "message": "Использовать выбранный мэткап",
+    "description": ""
+  },
+  "Parts.Matcap.Changed.Fmt": {
+    "message": "Мэткап изменён: {0}.",
+    "description": ""
+  },
+  "Parts.Matcap.ChangeKindTip": {
+    "message": "Мэткап из ваших изображений можно сменить только на другое изображение, а мэткап библиотеки — только на другой вариант библиотеки. Чтобы сменить вид, отмените его.",
+    "description": ""
+  },
+  "Parts.Matcap.ConfirmEnable.Fmt": {
+    "message": "{0} выключен в {1}. При включении включится также: {2}",
+    "description": ""
+  },
+  "Parts.Matcap.ConfirmNo": {
+    "message": "Отмена",
+    "description": ""
+  },
+  "Parts.Matcap.ConfirmYes": {
+    "message": "Включить",
+    "description": ""
+  },
+  "Parts.Matcap.DrawnElsewhere.Fmt": {
+    "message": "Ваш персонаж рисует для этой модели другой файл ({0}), поэтому мэткап на нём пока не виден.",
+    "description": ""
+  },
+  "Parts.Matcap.Duplicates.Fmt": {
+    "message": "Текстуру этого слота дают и другие моды ({0}); что видно, решает тот, у которого выше приоритет в Penumbra.",
+    "description": ""
+  },
+  "Parts.Matcap.Edited": {
+    "message": "С тех пор модель изменилась.",
+    "description": ""
+  },
+  "Parts.Matcap.ExistingHeader": {
+    "message": "Мэткапы на этой модели",
+    "description": ""
+  },
+  "Parts.Matcap.Forget": {
+    "message": "Забыть",
+    "description": ""
+  },
+  "Parts.Matcap.Forgotten.Fmt": {
+    "message": "Забыты мэткапы, которые эта модель больше не использует ({0} файл(ов)).",
+    "description": ""
+  },
+  "Parts.Matcap.Guide": {
+    "message": "Мэткап — это изображение освещённой сферы; части берут из него цвет в зависимости от того, куда они обращены к вам. Отметьте части, выберите мэткап и нажмите «Применить».",
+    "description": ""
+  },
+  "Parts.Matcap.Held.Fmt": {
+    "message": "{0} пока удерживает настройку этой библиотеки; выбранный мэткап появится, когда он её отпустит.",
+    "description": ""
+  },
+  "Parts.Matcap.Inherited.Fmt": {
+    "message": "{0} наследует настройку этой библиотеки; выбор мэткапа даст ей собственную настройку.",
+    "description": ""
+  },
+  "Parts.Matcap.KeptEdited.Fmt": {
+    "message": "Оставлены на месте, потому что отредактированы вручную: {0}.",
+    "description": ""
+  },
+  "Parts.Matcap.LibraryMissing.Fmt": {
+    "message": "{0} не установлен: этому мэткапу нечего показать.",
+    "description": ""
+  },
+  "Parts.Matcap.LibraryOff.Fmt": {
+    "message": "{0} выключен.",
+    "description": ""
+  },
+  "Parts.Matcap.LibraryOffTag": {
+    "message": "(выкл.)",
+    "description": ""
+  },
+  "Parts.Matcap.ListTip": {
+    "message": "Отметьте части, которые должны получить мэткап. Кожу и части, у которых он уже есть, отметить нельзя.",
+    "description": ""
+  },
+  "Parts.Matcap.Lod0Cut": {
+    "message": "Модель урезана до ближайшего уровня детализации, чтобы мэткап был виден на любом расстоянии.",
+    "description": ""
+  },
+  "Parts.Matcap.MaterialCap.Fmt": {
+    "message": "У этой модели уже {0} материалов — больше модель не вмещает. Отмените мэткап, чтобы освободить место.",
+    "description": ""
+  },
+  "Parts.Matcap.NeedMatcap": {
+    "message": "Сначала выберите мэткап.",
+    "description": ""
+  },
+  "Parts.Matcap.NeedParts": {
+    "message": "Отметьте части, которые должны получить мэткап.",
+    "description": ""
+  },
+  "Parts.Matcap.NoImages.Fmt": {
+    "message": "Изображений мэткапов пока нет. Положите квадратные изображения освещённой сферы (PNG или JPG) в {0} и нажмите «Обновить».",
+    "description": ""
+  },
+  "Parts.Matcap.NoLibraries": {
+    "message": "Моды-библиотеки мэткапов не установлены. Библиотека — это мод с выбором мэткапов для одной общей текстуры.",
+    "description": ""
+  },
+  "Parts.Matcap.NoPenumbra": {
+    "message": "Penumbra недоступна.",
+    "description": ""
+  },
+  "Parts.Matcap.NothingToForget": {
+    "message": "Все мэткапы на этой модели ещё используются; забывать нечего.",
+    "description": ""
+  },
+  "Parts.Matcap.NothingToUndo": {
+    "message": "На этой модели нет мэткапа для отмены.",
+    "description": ""
+  },
+  "Parts.Matcap.NotWinning.Fmt": {
+    "message": "Вместо этого в этом слоте рисуется текстура другого мода ({0}). Поднимите приоритет библиотеки в Penumbra.",
+    "description": ""
+  },
+  "Parts.Matcap.OpenFolder": {
+    "message": "Открыть папку мэткапов",
+    "description": ""
+  },
+  "Parts.Matcap.Refresh": {
+    "message": "Обновить",
+    "description": ""
+  },
+  "Parts.Matcap.RemakeSizes": {
+    "message": "Этот файл — одна из подгонок Proteus: пересоздайте размеры, чтобы перенести мэткап.",
+    "description": ""
+  },
+  "Parts.Matcap.Rescan": {
+    "message": "Искать снова",
+    "description": ""
+  },
+  "Parts.Matcap.Room.Fmt": {
+    "message": "На этой модели есть место ещё для {0} материал(ов) (подгонке они тоже нужны — для ногтей и белья).",
+    "description": ""
+  },
+  "Parts.Matcap.Scanning": {
+    "message": "Ищу библиотеки мэткапов среди ваших модов…",
+    "description": ""
+  },
+  "Parts.Matcap.SelectFailed": {
+    "message": "Penumbra не приняла настройку библиотеки.",
+    "description": ""
+  },
+  "Parts.Matcap.SharedSlot.Fmt": {
+    "message": "Этот слот показывает один мэткап за раз: его используют ещё {0} мэткап(ов) этого мода, и они тоже изменятся.",
+    "description": ""
+  },
+  "Parts.Matcap.ShareNote.Fmt": {
+    "message": "Тем, с кем вы делитесь этим модом, тоже нужен {0} ({1}) с тем же мэткапом. Его текстуры никогда не копируются в ваш мод.",
+    "description": ""
+  },
+  "Parts.Matcap.SiblingsSkipped.Fmt": {
+    "message": "Не применено к этим другим вариантам тела, где части отличаются: {0}.",
+    "description": ""
+  },
+  "Parts.Matcap.SkinTip": {
+    "message": "На кожу нельзя поставить мэткап.",
+    "description": ""
+  },
+  "Parts.Matcap.Source.Fmt": {
+    "message": "из {0}",
+    "description": ""
+  },
+  "Parts.Matcap.SourceImages": {
+    "message": "Ваши изображения",
+    "description": ""
+  },
+  "Parts.Matcap.SourceLibraries": {
+    "message": "Моды-библиотеки",
+    "description": ""
+  },
+  "Parts.Matcap.Superseded": {
+    "message": "Модель больше не использует этот мэткап (мод обновлён).",
+    "description": ""
+  },
+  "Parts.Matcap.ThisMod": {
+    "message": "(этот мод)",
+    "description": ""
+  },
+  "Parts.Matcap.Ticked.Fmt": {
+    "message": "Отмечено частей: {0}.",
+    "description": ""
+  },
+  "Parts.Matcap.Undo": {
+    "message": "Отменить мэткапы на этой модели",
+    "description": ""
+  },
+  "Parts.Matcap.UndoGroup.Fmt": {
+    "message": "Также отменяет другие варианты тела с этими мэткапами: {0}.",
+    "description": ""
+  },
+  "Parts.Matcap.Undone.Fmt": {
+    "message": "Мэткапы отменены на {0} файл(ах) модели.",
+    "description": ""
+  },
+  "Parts.Matcap.Working": {
+    "message": "Записываю мэткап…",
+    "description": ""
+  },
+  "Parts.Tool.Matcap": {
+    "message": "Мэткапы",
+    "description": ""
+  },
+  "Parts.Tool.Matcap.Tip": {
+    "message": "Дайте отмеченным частям мэткап: блестящий, стеклянный или самоцветный вид, нарисованный по изображению сферы. Части получают собственный материал, записанный в мод, поэтому он виден и с выключенным Proteus.",
+    "description": ""
+  },
+  "Parts.Vanilla.Ears.Fmt": {
+    "message": "Уши {0} ({1})",
+    "description": ""
+  },
+  "Settings.MatcapLibrary": {
+    "message": "Изображения мэткапов",
+    "description": ""
+  },
+  "Settings.MatcapLibrary.Tip.Fmt": {
+    "message": "Открыть папку с вашими изображениями мэткапов: {0}",
+    "description": ""
+  },
+  "Matcap.Refused.NoHorns": {
+    "message": "У этого лица нет рогов. На лице matcap можно наложить только на рога.",
+    "description": ""
+  },
+  "Matcap.Refused.NotHorn": {
+    "message": "На лице matcap можно наложить только на рога.",
+    "description": ""
+  },
+  "Parts.Matcap.DrawnThroughFace": {
+    "message": "Ваше лицо рисуется через переписанную модель наложения на лицо; matcap появится после следующего обновления.",
+    "description": ""
+  },
+  "Parts.Matcap.FaceOverlayOn": {
+    "message": "Это лицо рисуется через наложение на лицо. Выключите наложение, чтобы выбрать лицо, или откройте мод лица из списка.",
+    "description": ""
+  },
+  "Parts.Matcap.HornColourNote": {
+    "message": "Рога с matcap больше не принимают цвет рогов вашего персонажа, а шляпы по-прежнему их скрывают.",
+    "description": ""
+  },
+  "Parts.Matcap.MatcapsOnlyHere": {
+    "message": "Ваше собственное лицо и уши открываются только в Matcaps, поэтому они закрыты.",
+    "description": ""
+  },
+  "Parts.Matcap.NoHorns": {
+    "message": "У этого лица нет рогов. На лице matcap можно наложить только на рога.",
+    "description": ""
+  },
+  "Parts.Matcap.NotHornTip": {
+    "message": "На лице matcap можно наложить только на рога.",
+    "description": ""
+  },
+  "Parts.Vanilla.FaceHorns.Fmt": {
+    "message": "Рога (лицо {0}, {1})",
+    "description": ""
+  },
+  "Parts.Matcap.BackupKept.Fmt": {
+    "message": "Не удалось убрать их старые резервные копии: {0}. Следующий matcap там сначала переместит их.",
+    "description": ""
   }
 }

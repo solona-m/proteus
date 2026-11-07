@@ -43,6 +43,18 @@ public sealed partial class PartsPanel : IStudioHarness
 
     private string? HarnessRoot(string dir) => penumbra.GetModDirectory() is { } root ? Path.Combine(root, dir) : null;
 
+    /// <summary>A Studio edit is under way or not saved yet: a matcap job refuses (studio-busy) rather than flush it.</summary>
+    public bool EditPending() => HarnessDragOpen || brushChangedAt >= 0;
+
+    MatcapHarnessPort IStudioHarness.Matcaps()
+    {
+        matcapIndex ??= new Services.Matcap.MatcapIndex(null);
+        return new MatcapHarnessPort(matcapIndex, MatcapImageFolder(), new Services.Matcap.PenumbraMatcapAdapter(penumbra),
+                                     MatcapEnv(), penumbra.GetModDirectory(), penumbra.GetAllModsQuiet(),
+                                     gamePath => compositor.ForgetFaceUpstream(gamePath),
+                                     (root, gamePath, written) => DrawnElsewhere(root, gamePath, written));
+    }
+
     public bool IsOpen(string modDir, string file)
     {
         HarnessSync();
@@ -63,7 +75,7 @@ public sealed partial class PartsPanel : IStudioHarness
         {
             ["open"] = open,
             ["window"] = new { shown = harnessWindowOpen?.Invoke() ?? false },
-            ["tool"] = tool switch { Tool.Move => "move", Tool.Rotate => "rotate", Tool.Scale => "scale", _ => "other" },
+            ["tool"] = tool switch { Tool.Move => "move", Tool.Rotate => "rotate", Tool.Scale => "scale", Tool.Matcap => "matcap", _ => "other" },
             ["mode"] = moveSelect switch { MoveSelectMode.Polygons => "polygons", MoveSelectMode.All => "all", _ => "parts" },
             ["view"] = showModelView ? "model" : "character",
             ["settings"] = new { mirror = mirrorBrush, adjacent = moveAdjacent, moveSkin },

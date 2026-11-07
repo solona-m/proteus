@@ -48,6 +48,11 @@ internal static class LocalData
     /// <summary>Bijeon's "Frost Veil Plus+": an invisible a0002 bracelet whose whole look is an item effect, in the v3 layout.</summary>
     internal const string FrostVeilPack = ModPacks + ":Frost Veil Plus+.pmp";
 
+    /// <summary>Westlaketea's "MatCap Library" v1.1.0 (v3 layout): Single groups "Texture Slot A"/"B" switching
+    /// <c>chara/common/texture/matcaplib_a|b.tex</c>, read by its own <c>characterreflection</c> materials in an
+    /// off-by-default option. Read only — its textures are never copied into the repository or a mod.</summary>
+    internal const string MatcapLibraryPack = ModPacks + ":MatCap Library.pmp";
+
     /// <summary>"BWM - Spike Heels with stockings - no strap", installed: an e0666 Feet piece whose "Stocking Toggle"
     /// Single group switches <c>atr_sv_a</c> by an <c>Imc</c> edit (On 1023, Off 1022) beside a same-set <c>Eqp</c>.</summary>
     internal const string ImcToggleMod = Mods + ":BWM - Spike Heels with stockings - no strap";

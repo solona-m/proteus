@@ -23,13 +23,25 @@ namespace Proteus.Services;
 internal static class ModelBackupOrder
 {
     /// <summary>Every feature that backs a model up before editing it, by backup folder and display name.</summary>
-    private static IEnumerable<(string Subdir, string Name)> Features()
+    /// <remarks>
+    /// <c>Applies</c>, when given, says whether the feature's backup still stands for an edit in the file. A matcap the
+    /// author's update replaced keeps its backup until forgotten, but must not block anything meanwhile.
+    /// </remarks>
+    private static IEnumerable<(string Subdir, string Name, Func<string, string, bool>? Applies)> Features()
     {
-        yield return (MeshToggleService.BackupSubdir, ProteusLoc.Localize("MeshVolume.Feature.Toggles", "part switches"));
-        yield return (HatCompatService.BackupSubdir, ProteusLoc.Localize("MeshVolume.Feature.HatCompat", "hat fitting"));
-        yield return (MeshVolumeService.BackupSubdir, ProteusLoc.Localize("MeshVolume.Feature.Brush", "the brush"));
+        yield return (MeshToggleService.BackupSubdir, ProteusLoc.Localize("MeshVolume.Feature.Toggles", "part switches"), null);
+        yield return (HatCompatService.BackupSubdir, ProteusLoc.Localize("MeshVolume.Feature.HatCompat", "hat fitting"), null);
+        yield return (MeshVolumeService.BackupSubdir, ProteusLoc.Localize("MeshVolume.Feature.Brush", "the brush"), null);
         yield return (ShaderUpgradeWriter.BackupSubdir,
-                      ProteusLoc.Localize("MeshVolume.Feature.ShaderUpgrade", "gear shader upgrade"));
+                      ProteusLoc.Localize("MeshVolume.Feature.ShaderUpgrade", "gear shader upgrade"), null);
+        yield return (Matcap.MatcapWriter.BackupSubdir, ProteusLoc.Localize("MeshVolume.Feature.Matcaps", "matcaps"),
+                      Matcap.MatcapWriter.StillApplies);
+    }
+
+    /// <summary>The feature names in order, for tests.</summary>
+    internal static IEnumerable<string> FeatureSubdirs()
+    {
+        foreach (var (subdir, _, _) in Features()) yield return subdir;
     }
 
     /// <summary>
@@ -41,10 +53,10 @@ internal static class ModelBackupOrder
         var mine = BackupTime(modRoot, ownSubdir, rel);
         if (mine == null) return null;
 
-        foreach (var (subdir, name) in Features())
+        foreach (var (subdir, name, applies) in Features())
         {
             if (string.Equals(subdir, ownSubdir, StringComparison.OrdinalIgnoreCase)) continue;
-            if (BackupTime(modRoot, subdir, rel) > mine) return name;
+            if (BackupTime(modRoot, subdir, rel) > mine && (applies == null || applies(modRoot, rel))) return name;
         }
         return null;
     }

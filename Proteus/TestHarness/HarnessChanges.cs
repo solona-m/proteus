@@ -26,6 +26,12 @@ internal sealed record PutBackReport(IReadOnlyList<UndoEntry> Gear, IReadOnlyLis
 {
     /// <summary>The Studio session put-back ended (or left recorded), if there was one.</summary>
     public IReadOnlyList<StudioPutBack> Studio { get; init; } = [];
+
+    /// <summary>The test images the matcap seed route wrote: deleted, changed (left) or gone.</summary>
+    public IReadOnlyList<UndoEntry> MatcapImages { get; init; } = [];
+
+    /// <summary>The library mods a matcap job changed the setting of (put back through the binding session's ledger).</summary>
+    public IReadOnlyList<string> MatcapMods { get; init; } = [];
 }
 
 /// <summary>A change route's answer: 200 with a body, or an error status, code and message.</summary>
@@ -52,6 +58,42 @@ internal sealed class HarnessChanges(IHarnessGame game, SessionNames names, IPlu
 
     private readonly Dictionary<string, GearRecord> gear = new(StringComparer.Ordinal);
     private readonly Dictionary<(Guid, string), HoldRecord> holds = new();
+
+    /// <summary>Test images the matcap seed route wrote (path → hash): deleted at put-back while unchanged.</summary>
+    private readonly Dictionary<string, string> seededImages = new(StringComparer.OrdinalIgnoreCase);
+
+    /// <summary>Library mods a matcap job wrote a setting of this session.</summary>
+    private readonly HashSet<string> matcapMods = new(StringComparer.OrdinalIgnoreCase);
+
+    /// <summary>Record a test image the seed route wrote, to delete at put-back.</summary>
+    public void NoteSeededImage(string path, byte[] bytes) => seededImages[path] = HairPortPlan.Sha8(bytes);
+
+    /// <summary>Record that a matcap job changed a library's setting (the Before is in the binding session's ledger).</summary>
+    public void NoteMatcapMod(string modDir) => matcapMods.Add(modDir);
+
+    private List<UndoEntry> PutBackSeededImages()
+    {
+        var results = new List<UndoEntry>();
+        foreach (var (path, sha) in seededImages.ToList())
+        {
+            string name = System.IO.Path.GetFileName(path);
+            UndoEntry entry;
+            try
+            {
+                if (!System.IO.File.Exists(path)) entry = new UndoEntry(name, "gone");
+                else if (HairPortPlan.Sha8(System.IO.File.ReadAllBytes(path)) != sha) entry = new UndoEntry(name, "changed");
+                else { System.IO.File.Delete(path); entry = new UndoEntry(name, "deleted"); }
+            }
+            catch (Exception ex)
+            {
+                log?.Warning(ex, "[Proteus] test harness: putting back the seeded image {0} failed", name);
+                entry = new UndoEntry(name, "failed", "internal");
+            }
+            if (entry.Result != "failed") seededImages.Remove(path);
+            results.Add(entry);
+        }
+        return results;
+    }
     private volatile bool stopping;
     private volatile bool applySettling;
     private HarnessBindings? bindings;
@@ -277,8 +319,15 @@ internal sealed class HarnessChanges(IHarnessGame game, SessionNames names, IPlu
         BindingPutBack? binding = null;
         try { binding = bindings?.PutBack(skipHalfRecordedBinding); }
         catch (Exception ex) { log?.Warning(ex, "[Proteus] test harness: putting back the binding session failed"); }
+
+        // The matcap seed route's images: files of the harness's own, deleted while still what it wrote.
+        List<UndoEntry> images;
+        try { images = PutBackSeededImages(); }
+        catch (Exception ex) { log?.Warning(ex, "[Proteus] test harness: putting back the matcap images failed"); images = []; }
+        var mods = matcapMods.ToList();
+        matcapMods.Clear();
         return new PutBackReport(gearResults, holdResults, sweep, redraw || binding?.Restored == true, binding)
-               { Studio = studioResults };
+               { Studio = studioResults, MatcapImages = images, MatcapMods = mods };
     }
 
     // ── the Studio ──────────────────────────────────────────────────────────
