@@ -91,6 +91,18 @@ hashes as the harness last wrote it, and the model is untouched in the Studio;
 otherwise it leaves everything and reports `changed`. The panel's settings, locks
 and open model are restored. The panel's harness code is a partial compiled out
 with the rest.
+It can also drive the Studio's Matcaps tool (`/matcaps`, `matcap-image`, `matcap`).
+A matcap job writes into a mod through the panel's own entry points, after a
+whole-mod backup like a refit's, and refuses while the user has a Studio edit
+pending (it never flushes it). Three things are new on this path: it writes a
+**third-party** library mod's permanent option and enabled state in the player's
+collection — the Before is written to the session record first, and put-back
+restores it only while it is still what the harness left (the binding ledger's
+rule); it writes and later deletes test images of its own (`qa-*.png`) in the
+global matcap folder, leaving any one changed since; and matcap Undo and Forget
+delete or retire the `matcap-backup` files they restore from or no longer need — a
+second, narrow exception to "never deletes a backup", backed by the job's
+whole-mod backup.
 
 ## Consequences
 

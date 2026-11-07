@@ -89,6 +89,7 @@ Las herramientas:
 | Agarrar | Presiona sobre la tela y arrastra: la tela alrededor del pincel sigue al ratón como si fuera goma, con más fuerza en el centro y sin borde duro. El tamaño del pincel fija cuánta tela acompaña, y Ctrl+Z deshace un agarre. |
 | Puente | Pinta sobre un hueco, como la hendidura entre los glúteos o un pliegue, para estirar la tela recta por encima en lugar de que siga al cuerpo hacia dentro. Solo levanta. |
 | Viento | Pinta cuánto mece el viento del juego la prenda, mostrado en rojo. Mantén Ctrl, o pon **Cantidad** a 0 %, para borrar. |
+| Matcaps | Da a las partes que marques un matcap: un aspecto brillante, de cristal o de gema pintado a partir de la imagen de una esfera. Ver [Matcaps](#matcaps) más abajo. |
 | Mover | Arrastra una pieza, unos pocos polígonos o, con **Todo**, todas las piezas marcadas a la vez, con flechas: una flecha la mueve a lo largo de ese eje, un cuadrado por ese plano. Ver [Mover, girar y escalar](#mover-girar-y-escalar) más abajo. |
 | Girar | Gira una pieza alrededor de su centro: arrastra un anillo de color para girarla sobre ese eje, o el anillo exterior para girarla respecto a tu vista. |
 | Escalar | Agranda, encoge o estira una pieza alrededor de su centro: arrastra un tirador de color para estirarla a lo largo de ese eje, o presiona sobre la pieza y arrastra a la derecha para agrandarla, a la izquierda para encogerla. |
@@ -113,6 +114,15 @@ Las herramientas:
 - Los deslizadores de cuerpo de un modelo no siempre pueden seguir una edición. Cuando algunos puntos no pudieron moverse con ella, Proteus dice cuántos, y activar ese deslizador puede hacer que la ropa vuelva a atravesarse en algunos sitios.
 - La mayoría de las mallas con mods no tienen canal de viento. El primer trazo de viento que se guarda añade uno, y ajusta los materiales de la prenda para que el viento pueda moverla. Los materiales que vienen del juego y no del mod no se pueden ajustar.
 - **Tus amigos con un plugin de sincronización ven tus ediciones.** En cuanto un trazo se asienta y se guarda, quienes están emparejados contigo mediante un plugin de sincronización como PlayerSync o Lightless reciben la prenda editada en unos segundos, mientras el Estudio sigue abierto. Los trazos en curso siguen siendo privados. Si has bloqueado piezas, reaparecen unos segundos después de que dejes de trabajar para que pueda compartirse la prenda entera; pasar el ratón o pintar las vuelve a ocultar.
+
+##### Matcaps
+
+Un matcap es la imagen de una esfera iluminada; las partes toman su color de ella según hacia dónde miran, lo que facilita el cristal, las gemas, las perlas y el metal brillante. Marca las partes, elige un matcap y pulsa **Aplicar matcap**: las partes reciben un material propio (una malla nueva en el modelo, con el shader de reflejo del juego), escrito en el mod para que se vea con Proteus apagado. La piel no puede llevar uno.
+
+- **Tus imágenes**: pon imágenes cuadradas de una esfera (PNG o JPG) en `Penumbra/Proteus/Matcaps` (**Abrir carpeta de matcaps**, o **Imágenes de matcap** en Ajustes), o en la carpeta `Proteus/Matcaps` propia de un mod. Cada una se convierte en una textura propia dentro del mod, así que una pieza puede llevar varios matcaps distintos, hasta los 10 materiales que admite un modelo, de los que un reajuste también necesita algunos para uñas y ropa interior.
+- **Mods de biblioteca**: se encuentran y listan los mods instalados con una selección de matcaps para una textura compartida (como la [MatCap Library](https://westlaketeamods.carrd.co/) de Westlaketea). Elegir uno hace que las partes usen la textura de la biblioteca y selecciona esa opción en tu colección; las texturas de la biblioteca nunca se copian a tu mod, así que quien reciba el mod también necesita la biblioteca. Cada ranura muestra un solo matcap a la vez. Una biblioteca desactivada solo se activa cuando lo confirmas, porque eso también activa sus otros archivos.
+- **El pelo** funciona, y también las otras opciones de cuerpo del mod en la misma ruta cuyas partes coinciden. **Los cuernos de Au Ra** forman parte del modelo de la cara: abre tu mod de cara, o tu propia cara en Matcaps, y solo se pueden marcar los cuernos; los sombreros los siguen ocultando y el color de cuernos deja de aplicarse a los que llevan matcap. **Las orejas de Viera** también funcionan.
+- **Usar el matcap elegido** cambia uno existente sin volver a dividir (una imagen por otra, una opción de biblioteca por otra). **Deshacer matcaps en este modelo** deja cada archivo de modelo exactamente como estaba y quita todo lo que Proteus añadió. Si el autor actualiza el modelo, el matcap antiguo aparece como ya no usado; **Olvidar** lo recoge.
 
 ##### Mover, girar y escalar
 

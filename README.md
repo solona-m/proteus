@@ -88,6 +88,7 @@ The tools:
 | Grab | Press on the cloth and drag: the cloth around the brush follows the mouse like rubber, strongest in the middle, with no hard edge. Brush size sets how much cloth comes along, and Ctrl+Z takes a grab back. |
 | Bridge | Paint across a hollow, like the cleft between cheeks or a crease, to stretch the cloth straight over it instead of following the body down into it. It only ever lifts. |
 | Wind | Paints how much the game's wind sways the garment, shown in red. Hold Ctrl, or set **Amount** to 0%, to erase. |
+| Matcaps | Gives the parts you tick a matcap: a shiny, glassy or gem-like look painted from a picture of a sphere. See [Matcaps](#matcaps) below. |
 | Move | Drags a part, a few polygons or, with **All**, every ticked part at once, with arrows: one arrow moves it along that axis, a square across that plane. See [Moving, turning and scaling](#moving-turning-and-scaling) below. |
 | Rotate | Turns a part about its centre: drag a coloured ring to turn it about that axis, or the outer ring to turn it about your view. |
 | Scale | Grows, shrinks or stretches a part about its centre: drag a coloured handle to stretch it along that axis, or press on the part and drag right to grow it, left to shrink it. |
@@ -112,6 +113,15 @@ The tools:
 - A model's body sliders can't always follow an edit. When some points couldn't move with it, Proteus says how many, and turning that slider on may bring the clipping back in places.
 - Most modded meshes have no wind channel. The first wind stroke to save adds one, and sets the garment's materials so the wind can move it. Materials that come from the game rather than the mod can't be set.
 - **Friends using a sync plugin see your edits.** Once a stroke has settled and saved, people paired with you through a sync plugin such as PlayerSync or Lightless receive the edited garment within a few seconds, while the Studio stays open. Strokes still in progress stay private. If you've locked parts, they reappear a few seconds after you stop working so the whole garment can be shared; hovering or painting hides them again.
+
+##### Matcaps
+
+A matcap is a picture of a lit sphere; the parts take their colour from it by which way they face you, which makes glass, gems, pearls and shiny metal easy. Tick the parts, pick a matcap, and press **Apply matcap**: the parts get a material of their own (a new mesh in the model, on the game's reflection shader), written into the mod so it shows with Proteus turned off. Skin can't take one.
+
+- **Your images**: put square pictures of a sphere (PNG or JPG) in `Penumbra/Proteus/Matcaps` (**Open matcap folder**, or **Matcap images** in Settings), or in a mod's own `Proteus/Matcaps`. Each one is baked into its own texture in the mod, so one piece can carry several different matcaps — up to the 10 materials a model can carry, which a refit also needs room in for nails and underwear.
+- **Library mods**: installed mods with a choice of matcaps for one shared texture (such as Westlaketea's [MatCap Library](https://westlaketeamods.carrd.co/)) are found and listed. Picking one points the parts at the library's texture and selects that option in your collection; the library's textures are never copied into your mod, so anyone you share the mod with needs the library too. One slot shows one matcap at a time. A library that is off is only switched on after you confirm, since that turns on its other files too.
+- **Hair** works, and so do the mod's other body options at the same path whose parts line up. **Au Ra horns** are part of the face model: open your face mod, or your own face under Matcaps, and only the horns can be ticked; hats still hide them, and the horn colour no longer applies to matcapped horns. **Viera ears** work too.
+- **Use the chosen matcap** changes an existing one without splitting again (an image for another image, a library option for another). **Undo matcaps on this model** puts every model file back exactly as it was and removes everything Proteus added. If the author updates the model, the old matcap shows as no longer used; **Forget** tidies it away.
 
 ##### Moving, turning and scaling
 

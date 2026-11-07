@@ -222,6 +222,28 @@ public sealed class LocalizationTests
         Assert.Contains(readme.Split('\n'), l => l.Contains("#01"));
     }
 
+    /// <summary>Each README has the Matcaps tool row and section: the Apply button as translated, the image folder, the
+    /// material room, the library example with its link, and the horns.</summary>
+    [Theory]
+    [MemberData(nameof(AllLocales))]
+    [Trait("Plan", "AC-matcaps-9")]
+    public void Readme_has_Matcaps_row_section_material_room_and_horns(string lang)
+    {
+        var dir = new System.IO.DirectoryInfo(AppContext.BaseDirectory);
+        while (dir != null && !System.IO.File.Exists(System.IO.Path.Combine(dir.FullName, "proteus.slnx"))) dir = dir.Parent;
+        Assert.True(dir != null, $"Could not find proteus.slnx above {AppContext.BaseDirectory}.");
+        string readme = System.IO.File.ReadAllText(System.IO.Path.Combine(
+            dir!.FullName, lang == Source ? "README.md" : System.IO.Path.Combine("docs", $"README.{lang}.md")));
+        var t = Load(lang);
+        Assert.Contains("**" + t["Parts.Matcap.Apply"].Message + "**", readme);
+        Assert.Contains("**" + t["Parts.Matcap.Undo"].Message + "**", readme);
+        Assert.Contains("`Penumbra/Proteus/Matcaps`", readme);
+        Assert.Contains("https://westlaketeamods.carrd.co/", readme);
+        Assert.Contains("10", readme[readme.IndexOf("`Penumbra/Proteus/Matcaps`", StringComparison.Ordinal)..]);
+        // The tools table has a Matcaps row linking to the section.
+        Assert.Contains(readme.Split('\n'), l => l.StartsWith("| ", StringComparison.Ordinal) && l.Contains("](#"));
+    }
+
     /// <summary>The README's gear-refits-itself bullet names accessories that cover the body, in each language — and the
     /// Settings intro says it too.</summary>
     [Theory]
