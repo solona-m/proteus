@@ -110,15 +110,35 @@ internal sealed class HarnessSidecar(string backupsRoot, string session, IPlugin
                 entries[mod] = entry;
             }
 
-            if (!save())
+            var shaBefore = ShaOf(metaPath);
+            bool ok;
+            try { ok = save(); }
+            finally
+            {
+                // Whatever the save left on disk is the harness's to put back, even when something after it threw (an
+                // mtime restore on a file a scanner holds): record it before the exception leaves.
+                var shaAfter = ShaOf(metaPath);
+                if (shaAfter != null && shaAfter != shaBefore)
+                {
+                    entry.LastWrittenSha = shaAfter;
+                    entry.Edits++;
+                    entry.AtUtc = DateTime.UtcNow;
+                    WriteRecord(entry);
+                }
+            }
+            if (!ok)
             {
                 log?.Warning("[Proteus] test harness: the sidecar save of {0} failed; its backup is kept", mod);
                 return ChangeResult.Fail(500, "save-failed", $"the sidecar save of {mod} failed; the backup is kept");
             }
-            entry.LastWrittenSha = ShaOf(metaPath);
-            entry.Edits++;
-            entry.AtUtc = DateTime.UtcNow;
-            WriteRecord(entry);
+            if (entry.LastWrittenSha == null || entry.LastWrittenSha != ShaOf(metaPath))
+            {
+                // Saved bytes identical to what was there (a no-op colour): still the harness's last word on the file.
+                entry.LastWrittenSha = ShaOf(metaPath);
+                entry.Edits++;
+                entry.AtUtc = DateTime.UtcNow;
+                WriteRecord(entry);
+            }
             log?.Information("[Proteus] test harness: saved a colour edit into {0}'s sidecar (edit {1})", mod, entry.Edits);
             return ChangeResult.Ok(answer(Relative(entry.Dir)));
         }

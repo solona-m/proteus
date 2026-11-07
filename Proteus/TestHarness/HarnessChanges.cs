@@ -132,12 +132,12 @@ internal sealed class HarnessChanges(IHarnessGame game, SessionNames names, IPlu
 
     // ── sidecar edits and the auto-refit override (idle disk I/O routes) ────
 
-    private HarnessSidecar? sidecar;
+    /// <summary>Made with the session, never lazily: a stop and the first edit on two threads must see the same ledger.</summary>
+    private readonly HarnessSidecar sidecar =
+        new(recordRoot ?? System.IO.Path.Combine(System.IO.Path.GetTempPath(), "proteus-harness-records"), session, log);
 
     /// <summary>The sidecar-edit route's backups and ledger.</summary>
-    public HarnessSidecar Sidecar
-        => sidecar ??= new HarnessSidecar(recordRoot ?? System.IO.Path.Combine(System.IO.Path.GetTempPath(), "proteus-harness-records"),
-                                          session, log);
+    public HarnessSidecar Sidecar => sidecar;
 
     /// <summary>Earlier sessions' sidecar ledgers left without a put-back, found at start (<c>/state.leftoverSidecar</c>).</summary>
     public IReadOnlyList<LeftoverSidecar> LeftoverSidecars { get; set; } = [];
@@ -153,7 +153,7 @@ internal sealed class HarnessChanges(IHarnessGame game, SessionNames names, IPlu
     internal (List<SidecarUndo> Sidecar, (string, IReadOnlyList<string>) AutoRefit) PutBackOffThreadParts()
     {
         List<SidecarUndo> sidecars;
-        try { sidecars = sidecar is { } s ? s.PutBack(game.HasStaged, game.ForgetSidecar) : []; }
+        try { sidecars = sidecar.PutBack(game.HasStaged, game.ForgetSidecar); }
         catch (Exception ex) { log?.Warning(ex, "[Proteus] test harness: putting back the sidecars failed"); sidecars = []; }
 
         (string, IReadOnlyList<string>) refit = ("none", []);
@@ -545,7 +545,7 @@ internal sealed class HarnessChanges(IHarnessGame game, SessionNames names, IPlu
         studio = StudioSessionView(),
         binding = bindings?.View(),
         applySettling,
-        sidecar = sidecar?.View(),
+        sidecar = sidecar.View(),
         autoRefitOverride = autoRefitOverride is { } o ? new { enabled = o.Enabled, before = o.BeforeEffective, atUtc = o.AtUtc } : null,
     };
 
@@ -555,9 +555,9 @@ internal sealed class HarnessChanges(IHarnessGame game, SessionNames names, IPlu
                                  .Concat(studio is { } s
                                      ? [$"Studio edits in {s.ModDir} ({(s.Files.Count == 0 ? "nothing saved" : string.Join(", ", s.Files.Keys))}): press Undo saved changes"]
                                      : [])
-                                 .Concat(sidecar?.Leftovers() ?? [])
+                                 .Concat(sidecar.Leftovers())
                                  .Concat(autoRefitOverride != null ? ["the auto-refit override"] : []));
 
     internal bool Empty => gear.Count == 0 && holds.Count == 0 && bindings?.HasSession != true && studio == null
-                        && sidecar?.Empty != false && autoRefitOverride == null;
+                        && sidecar.Empty && autoRefitOverride == null;
 }

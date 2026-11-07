@@ -61,10 +61,9 @@ public class HarnessBuildFlagTests
         const System.Reflection.BindingFlags all = System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.Static
                                                  | System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.NonPublic
                                                  | System.Reflection.BindingFlags.DeclaredOnly;
-        return type.GetMembers(all).Where(m => m.Name.StartsWith("Harness", StringComparison.OrdinalIgnoreCase)
-                                             // A partial method declared without a body is compiled away, but keep the check honest.
-                                             && !m.Name.StartsWith("HarnessEnabled", StringComparison.Ordinal)
-                                             && !m.Name.StartsWith("HarnessNoteRefit", StringComparison.Ordinal))
+        // No exemptions: a bodiless partial declaration (HarnessEnabled, HarnessNoteRefit) is erased from metadata, so under
+        // CI either name appears only if a body leaked out of its #if.
+        return type.GetMembers(all).Where(m => m.Name.StartsWith("Harness", StringComparison.OrdinalIgnoreCase))
                    .Select(m => m.Name).ToList();
     }
 

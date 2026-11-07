@@ -395,7 +395,9 @@ What Proteus reads from the drive while nothing changes, and the routes that dri
   write time and length; `readBack` must still be the new colour. `/actions/put-back` restores the file while it is
   still what the harness wrote (`sidecar[].result`: `restored`, `unchanged`, `changed`, `failed`), and deletes a
   `metadata.default.json` only when the harness's save created it and it is unchanged (`defaults`). A mod with an unsaved
-  user colour edit answers `user-edit-held`: never work around it. Whether a held edit wins over a locked file is
+  user colour edit answers `user-edit-held`: never work around it. A user colour edit made in the few milliseconds
+  between that check and the save would be saved first and then saved over (it stays in the editor until its next
+  change): do not edit colours by hand during a harness run. Whether a held edit wins over a locked file is
   **covered by unit test only** (`ReadForDiscovery_HeldEditWins_OverIoError`): driving it in game needs an exclusive file
   lock that hitches the framework thread and could let a write land after the hold.
 - **Leftover sidecar backups.** A crash with sidecar edits recorded leaves the ledger under

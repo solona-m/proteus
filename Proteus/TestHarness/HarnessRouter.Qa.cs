@@ -96,12 +96,15 @@ internal sealed partial class HarnessRouter
 
         // Under the sidecar lock: back up, save through Proteus's own save, record. No framework hop in here.
         SidecarStamp? stampBefore = null, stampAfter = null;
-        bool mtimeRestored = false;
+        bool mtimeRestored = false, stagedSince = false;
         var edit = changes.Sidecar.Edit(dir, metaPath, () => Game.HasStaged(dir), () =>
         {
             stampBefore = SidecarCache.StatFile(metaPath);
             var target = subB ? (row.SubRowB ??= new ColorTableSubRowPreset()) : (row.SubRowA ??= new ColorTableSubRowPreset());
             target.Diffuse = diffuse;
+            // Narrows (cannot close) the window in which a user's edit staged since the check would be flushed first and
+            // then saved over; see the QA guide.
+            if (Game.HasStaged(dir)) { stagedSince = true; return false; }
             if (!Game.SaveSidecar(entry)) return false;
             if (restoreMtime && stampBefore is { } sb)
             {
@@ -111,6 +114,8 @@ internal sealed partial class HarnessRouter
             stampAfter = SidecarCache.StatFile(metaPath);
             return true;
         }, backup => backup!);
+        if (stagedSince)
+            return HarnessResponse.Error(409, "user-edit-held", $"{dir} gained a colour edit that is not saved yet; nothing was saved");
         if (edit.Status != 200) return Answer(edit);
 
         // After the lock: read it back through discovery (its cache), then recomposite.

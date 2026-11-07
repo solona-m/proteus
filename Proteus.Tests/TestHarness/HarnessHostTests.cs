@@ -278,6 +278,34 @@ public class HarnessHostTests : IDisposable
     }
 
     [Fact]
+    [Trait("Plan", "EDGE-idle-disk-io-41")]
+    public async Task OffThreadStop_RestoresSidecars_NoRecomposite_WarnsOnlyFailures()
+    {
+        // [EDGE-idle-disk-io-41] An unload off the framework thread puts the sidecar back (file work only), asks for no
+        // recomposite, and warns about nothing when nothing failed.
+        AddMod();
+        game.PutSidecar("Outfit", (16, "#111111"));
+        var original = File.ReadAllBytes(game.MetaPath("Outfit"));
+        var host = Host();
+        host.Command("on");
+        using (var c = Client(SessionFile!))
+        {
+            var r = await c.PostAsync("/actions/sidecar-edit",
+                new StringContent("{\"mod\":\"Outfit\",\"row\":16,\"diffuse\":\"#ABCDEF\"}", System.Text.Encoding.UTF8, "application/json"));
+            Assert.Equal(200, (int)r.StatusCode);
+        }
+        Assert.NotEqual(original, File.ReadAllBytes(game.MetaPath("Outfit")));
+        int recompositesBefore = game.Recomposites.Count;
+
+        Assert.False(dispatcher.OnFrameworkThread);
+        host.Dispose();
+
+        Assert.Equal(original, File.ReadAllBytes(game.MetaPath("Outfit")));
+        Assert.Equal(recompositesBefore, game.Recomposites.Count);
+        log.DidNotReceive().Warning(Arg.Is<string>(s => s.Contains("sidecars not put back")), Arg.Any<object[]>());
+    }
+
+    [Fact]
     public async Task Token_NeverLogged()
     {
         // [EDGE-qa-harness-11]

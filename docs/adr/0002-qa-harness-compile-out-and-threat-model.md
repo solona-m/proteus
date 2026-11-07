@@ -106,6 +106,7 @@ whole-mod backup. `GET /matcaps` also starts (and with `retry=1` re-arms) the
 download of Proteus's own matcaps into the plugin's config directory — the same
 first-use download the pane makes; it writes no mod and no setting, so there is
 nothing to put back.
+
 **Amendment (2026-11-07, idle disk I/O checks).** Four more abilities, so QA can
 check what Proteus reads from the drive while nothing changes:
 - `boot-rearm` re-arms the compositor's boot probe as a zone change does. It writes

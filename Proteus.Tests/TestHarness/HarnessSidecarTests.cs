@@ -234,6 +234,23 @@ public class HarnessSidecarTests : IDisposable
     }
 
     [Fact]
+    [Trait("Plan", "EDGE-idle-disk-io-41")]
+    public void SaveWritesThenThrows_StillRecorded_PutBackRestores()
+    {
+        // A save that wrote the file and then failed (an mtime restore on a file a scanner holds) is still the harness's.
+        var s = Make();
+        var path = PutMeta("Skin", "ORIGINAL");
+        Assert.Throws<IOException>(() => Edit(s, "Skin", path, () =>
+        {
+            File.WriteAllText(path, "HARNESS");
+            throw new IOException("the file is in use");
+        }));
+        var undo = Assert.Single(s.PutBack(NoneStaged, _ => { }));
+        Assert.Equal("restored", undo.Result);
+        Assert.Equal("ORIGINAL", File.ReadAllText(path));
+    }
+
+    [Fact]
     public void SaveFailed_KeepsBackup_500()
     {
         var s = Make();
