@@ -175,6 +175,7 @@ public partial class MeshVolumeSolveTests
         var after = solve.Positions();
         Assert.True(At(after, cloth).Y - At(after, l.SkinAt[5, 5]).Y >= 0.001f - 1e-5f,
                     $"{(At(after, cloth).Y - At(after, l.SkinAt[5, 5]).Y) * 1000f:F2} mm above the skin");
+        Assert.Equal(0, Folded(l.Model, after));
     }
 
     [Fact]
@@ -197,23 +198,35 @@ public partial class MeshVolumeSolveTests
     [Trait("Plan", "EDGE-issue-sweep-c-52")]
     public void DegenerateBoundTriangleSkipsBoundCheckAndRigidMoveLiftsNothing()
     {
-        // A skin vertex welded onto its neighbour leaves zero-area triangles there; riders bound to one keep no triangle
-        // (the bound check skips them) and a rigid move of everything lifts nothing.
+        // Bind never binds to a triangle with no face, so the degenerate case is one an earlier operation made: a skin
+        // vertex moved onto its neighbour flattens the triangles between them. The riders bound to those keep their
+        // binding, the bound check skips them (no face to measure along), and a rigid move of everything lifts nothing.
         var l = Layered(11, 0.003f);
-        var pos = l.Model.Positions.ToArray();
+        var solve = SkinSolve(l.Model);
         int from = l.SkinAt[5, 6], onto = l.SkinAt[5, 5];
-        for (int k = 0; k < 3; k++) pos[from * 3 + k] = pos[onto * 3 + k];
-        var model = new ModelParts
+        Assert.True(solve.BeginMove([from], adjacent: false, falloffRadius: 0f) > 0);
+        solve.MoveTo(At(l.Model.Positions, onto) - At(l.Model.Positions, from));
+        Assert.True(solve.EndMove());
+        var flat = solve.Positions().ToArray();
+
+        var inputs = solve.FollowInputs;
+        var binding = SkinFollow.Bind(inputs);
+        var vertexOf = new Dictionary<int, int>();
+        for (int v = 0; v < inputs.NodeOf.Length; v++) vertexOf.TryAdd(inputs.NodeOf[v], v);
+        bool Flattened(SkinFollow.BoundTriangle t)
         {
-            Positions = pos, Normals = l.Model.Normals, MeshSpans = l.Model.MeshSpans, Parts = l.Model.Parts,
-            AttributeNames = l.Model.AttributeNames, Min = l.Model.Min, Max = l.Model.Max, ShatteredSubmeshes = l.Model.ShatteredSubmeshes,
-        };
-        var solve = SkinSolve(model);
-        solve.BeginMove(EveryPart(model), adjacent: false, falloffRadius: 0f);
-        solve.MoveTo(new Vector3(0.002f, 0.01f, 0.003f));
+            var a = At(flat, vertexOf[t.A]); var b = At(flat, vertexOf[t.B]); var c = At(flat, vertexOf[t.C]);
+            return Vector3.Cross(b - a, c - a).LengthSquared() < 1e-14f;
+        }
+        Assert.Contains(Enumerable.Range(0, inputs.NodeCount),
+                        n => binding.BindWeight(n) > 0f && binding.TriangleOf(n).IsSet && Flattened(binding.TriangleOf(n)));
+
+        var drag = new Vector3(0.002f, 0.01f, 0.003f);
+        solve.BeginMove(EveryPart(l.Model), adjacent: false, falloffRadius: 0f);
+        solve.MoveTo(drag);
         Assert.True(solve.EndMove());
         Assert.Equal(default, solve.LastGuard);
-        Assert.True(EveryPart(model).Max(v => (At(solve.Positions(), v) - At(pos, v) - new Vector3(0.002f, 0.01f, 0.003f)).Length()) < 1e-5f);
+        Assert.True(EveryPart(l.Model).Max(v => (At(solve.Positions(), v) - At(flat, v) - drag).Length()) < 1e-5f);
     }
 
     private static string RepoRoot([System.Runtime.CompilerServices.CallerFilePath] string here = "")
