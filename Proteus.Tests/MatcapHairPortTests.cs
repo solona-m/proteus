@@ -586,6 +586,7 @@ public sealed class MatcapHairPortTests : IDisposable
     }
 
     [Fact]
+    [Trait("Plan", "EDGE-matcap-hair-ports-13")]
     [Trait("Plan", "EDGE-matcap-hair-ports-19")]
     public void The_port_button_still_remakes_an_unmatcapped_sharer_alone()
     {
@@ -606,6 +607,13 @@ public sealed class MatcapHairPortTests : IDisposable
         Assert.Equal(before, mod.Get(highlander));
         Assert.Equal(matcapKeys, Defaults(mod).Where(kv => kv.Key.Contains("_mcap")).ToList());
         foreach (var (f, bytes) in matcapFiles) Assert.Equal(bytes, mod.Get(f));
+
+        // By hand for the matcapped Highlander itself: refused for its matcap, no verdict, nothing but a strip written.
+        var mine = HairPortBuilder.Build(mod.Root, source, [401], Pbd(), g, withSharers: false);
+        Assert.Contains((ushort)401, mine.EditBlocked);
+        Assert.Contains(Blocked, mine.Refused[401]);
+        Assert.False(mine.IsVerdict(401));
+        Assert.DoesNotContain(mine.Writes, w => !w.Stripped && w.TargetGamePath == HairPortPlan.HairPath(401, 105));
     }
 
     [Theory]

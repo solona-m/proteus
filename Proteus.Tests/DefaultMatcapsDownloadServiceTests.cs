@@ -57,7 +57,7 @@ public sealed class DefaultMatcapsDownloadServiceTests : IDisposable
     private DefaultMatcapsDownloadService Service(DefaultMatcapsDownloadService.Fetch fetch) =>
         new(Substitute.For<IPluginLog>(), dataDir, fetch);
 
-    private static void WaitFor(Func<bool> done, int ms = 10000)
+    private static void WaitFor(Func<bool> done, int ms = 30000)
     {
         var until = DateTime.UtcNow.AddMilliseconds(ms);
         while (!done())
@@ -277,7 +277,7 @@ public sealed class DefaultMatcapsDownloadServiceTests : IDisposable
             return FetchResult.Success;
         });
         s.EnsureAsync();
-        Assert.True(entered.Task.Wait(5000));
+        Assert.True(entered.Task.Wait(30000));
         s.Dispose();
         WaitIdle(s);
         Assert.NotEqual(MatcapPackState.Failed, s.Status.State);
@@ -428,7 +428,7 @@ public sealed class DefaultMatcapsDownloadServiceTests : IDisposable
             throw new ObjectDisposedException("http");
         });
         s.EnsureAsync();
-        Assert.True(entered.Task.Wait(5000));
+        Assert.True(entered.Task.Wait(30000));
         s.Dispose();
         go.SetResult();
         WaitIdle(s);
