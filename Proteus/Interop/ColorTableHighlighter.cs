@@ -31,6 +31,7 @@ public sealed class ColorTableHighlighter : IDisposable
     private volatile GearTarget? _pinned;
     private volatile GearTarget? _preview;
     private readonly PreviewKeepAlive _keep = new();
+    private readonly PreviewKeepAlive _pinKeep = new();   // #82: the pin lives while an open Colors window renews it
     private HashSet<string> _appliedLeaves = new(StringComparer.OrdinalIgnoreCase);
 
     /// <summary>Ghosts the shell layers stacked above the highlighted one so an occluded glow shows through.
@@ -48,9 +49,13 @@ public sealed class ColorTableHighlighter : IDisposable
     public void SetTarget(IReadOnlyList<string> materialLeaves, int gameRow)
     {
         _pinned = new GearTarget(ToSet(materialLeaves), ColorRowMask.Row(gameRow));
+        _pinKeep.Renew(RowHighlightClock.NowMs());
         // Ghost the shell layers stacked above this one so the glow shows even if an upper layer is opaque.
         Ghost?.GhostAbove(MaxLetter(materialLeaves));
     }
+
+    /// <summary>Keeps the pin lit for another moment: called every frame an open Colors window draws (#82).</summary>
+    public void RenewPin(long nowMs) => _pinKeep.Renew(nowMs);
 
     /// <summary>Drops the pin and any preview.</summary>
     public void Clear()
@@ -109,7 +114,11 @@ public sealed class ColorTableHighlighter : IDisposable
     private void OnFramework(IFramework fw)
     {
         _keep.Tick();
-        if (_preview != null && _keep.Expired(RowHighlightClock.NowMs())) _preview = null;
+        _pinKeep.Tick();
+        var now = RowHighlightClock.NowMs();
+        if (_preview != null && _keep.Expired(now)) _preview = null;
+        // The UI stopped drawing the Colors window (hidden, cutscene): the pin goes too, restored on this same tick.
+        if (RowHighlight.PinExpired(_pinned != null, _pinKeep, now)) Clear();
         Apply(objects.LocalPlayer?.Address ?? 0);
     }
 

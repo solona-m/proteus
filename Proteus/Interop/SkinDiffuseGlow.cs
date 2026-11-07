@@ -70,6 +70,7 @@ public sealed unsafe class SkinDiffuseGlow : IDisposable
     private volatile SkinTarget? _pinned;
     private volatile SkinTarget? _preview;
     private readonly PreviewKeepAlive _keep = new();
+    private readonly PreviewKeepAlive _pinKeep = new();   // #82: the pin lives while an open Colors window renews it
     // Currently-swapped textures keyed by the live texture slot (Texture** address — stable per handle, so
     // two handles sharing one path don't collide): our created texture, the original we displaced, and
     // WHICH target build produced it (so switching rows on the same material re-swaps instead of seeing
@@ -98,11 +99,15 @@ public sealed unsafe class SkinDiffuseGlow : IDisposable
         var old = _pinned;
         var st = NewTarget(targets, row, isA ? SubRowPick.A : SubRowPick.B, 1);
         _pinned = st;
+        _pinKeep.Renew(RowHighlightClock.NowMs());
         Abandon(old);
         Start(st);
         // Skin sits below every gear shell, so ghost them all while the skin glow is active.
         Ghost?.GhostAbove(null);
     }
+
+    /// <summary>Keeps the pin lit for another moment: called every frame an open Colors window draws (#82).</summary>
+    public void RenewPin(long nowMs) => _pinKeep.Renew(nowMs);
 
     /// <summary>Drops the pin and any preview.</summary>
     public void Clear()
@@ -318,12 +323,16 @@ public sealed unsafe class SkinDiffuseGlow : IDisposable
     private void OnFramework(IFramework fw)
     {
         _keep.Tick();
+        _pinKeep.Tick();
+        var now = RowHighlightClock.NowMs();
         var v = _preview;
-        if (v != null && _keep.Expired(RowHighlightClock.NowMs()))
+        if (v != null && _keep.Expired(now))
         {
             _preview = null;
             Abandon(v);
         }
+        // The UI stopped drawing the Colors window (hidden, cutscene): the pin goes too, the original back on this tick.
+        if (RowHighlight.PinExpired(_pinned != null, _pinKeep, now)) Clear();
         Apply(objects.LocalPlayer?.Address ?? 0);
     }
 

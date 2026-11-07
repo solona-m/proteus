@@ -710,6 +710,11 @@ public class StatusWindow : Window
         var entry = compositor.LastDiscovered.FirstOrDefault(e => e.ModDirectory == _colorWindowMod);
         if (entry == null) { _colorWindowMod = null; ClearColorHighlights(); return; }
 
+        // A pinned Glow lives while this window draws (#82): outside Begin, so a collapsed window still renews it.
+        var pinNow = RowHighlightClock.NowMs();
+        ColorTableEditor.Highlighter?.RenewPin(pinNow);
+        ColorTableEditor.SkinGlow?.RenewPin(pinNow);
+
         bool open = true;
         // Scaled by hand: a bare ImGui.Begin never gets Dalamud's UI scale. Wide enough for the 16 row buttons 8-across.
         ImGui.SetNextWindowSize(ProteusStyle.S(720f, 580f), ImGuiCond.FirstUseEver);

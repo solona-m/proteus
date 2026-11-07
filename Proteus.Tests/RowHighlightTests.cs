@@ -242,6 +242,53 @@ public class RowHighlightTests
         Assert.False(k.Expired(921));
     }
 
+    // ── #82: a pinned Glow lives while the Colors window renews it ─────────
+
+    [Fact]
+    [Trait("Plan", "AC-issue-sweep-c-7")]
+    public void Pin_expires_after_ttl_and_two_ticks_without_renewal()
+    {
+        var k = new PreviewKeepAlive();
+        k.Renew(1000);                    // pressed Glow (SetTarget)
+        k.Tick();
+        k.Tick();
+        Assert.False(RowHighlight.PinExpired(true, k, 1499));
+        Assert.True(RowHighlight.PinExpired(true, k, 1500));   // UI hidden: no renewal for 500 ms and 2 ticks
+    }
+
+    [Fact]
+    [Trait("Plan", "AC-issue-sweep-c-7")]
+    public void Pin_renewed_each_frame_never_expires()
+    {
+        var k = new PreviewKeepAlive();
+        for (long t = 0; t < 10_000; t += 16)
+        {
+            k.Renew(t);                   // DrawColorWindow, every frame
+            k.Tick();
+            Assert.False(RowHighlight.PinExpired(true, k, t + 8));
+        }
+    }
+
+    [Fact]
+    [Trait("Plan", "AC-issue-sweep-c-7")]
+    public void No_pin_never_expires()
+    {
+        var k = new PreviewKeepAlive();
+        k.Tick();
+        k.Tick();
+        Assert.False(RowHighlight.PinExpired(false, k, 100_000));
+    }
+
+    [Fact]
+    [Trait("Plan", "EDGE-issue-sweep-c-20")]
+    public void Pin_one_long_frame_does_not_expire()
+    {
+        var k = new PreviewKeepAlive();
+        k.Renew(0);
+        k.Tick();                         // one tick after a 900 ms hitch
+        Assert.False(RowHighlight.PinExpired(true, k, 900));
+    }
+
     // ── dwell and grace ─────────────────────────────────────────────────────
 
     [Fact]
