@@ -412,10 +412,12 @@ internal static class MatcapWriter
             var removeKeys = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
             var kept = new List<string>();
             var touched = new List<string>();
-            // Refits remade from a file carrying one of our matcaps draw it too: its files stay while one names it.
+            // Refits, hair ports and earless copies remade from a file carrying one of our matcaps draw it too: its files
+            // stay while one names it.
             var refitUsers = new List<string>();
-            // The refits' material names, read once per pass (a size set can hold hundreds of refits).
-            var refits = new Lazy<List<(string Rel, HashSet<string> Names)>>(() => RefitNames(modRoot));
+            var portUsers = new List<string>();
+            // Their material names, read once per pass (a size set can hold hundreds of refits).
+            var refits = new Lazy<List<Regenerated>>(() => RegeneratedNames(modRoot));
 
             // ── reconcile: a material no recorded model still names is forgotten with its own files ──
             foreach (var mat in record.Materials.ToList())
@@ -423,7 +425,7 @@ internal static class MatcapWriter
                 bool named = mat.Meshes.Select(x => x.Model).Distinct(StringComparer.OrdinalIgnoreCase)
                                 .Any(m => NamesIn(modRoot, m)?.Contains(mat.Name) == true);
                 if (named) continue;
-                if (DropMaterial(modRoot, mat, removeKeys, kept, refitUsers, refits.Value)) record.Materials.Remove(mat);
+                if (DropMaterial(modRoot, mat, removeKeys, kept, refitUsers, portUsers, refits.Value)) record.Materials.Remove(mat);
             }
 
             // ── the group: this model plus every model sharing a remaining material with it ──
@@ -473,13 +475,13 @@ internal static class MatcapWriter
             var unretired = forget.Where(g => !Retire(modRoot, g)).ToList();
 
             var gone = new HashSet<string>(restore.Select(r => r.Rel).Concat(forget), StringComparer.OrdinalIgnoreCase);
-            // Read again after the restores: a restored refit no longer names what it drew.
-            var refitsNow = restore.Count > 0 ? new Lazy<List<(string Rel, HashSet<string> Names)>>(() => RefitNames(modRoot)) : refits;
+            // Read again after the restores: a restored refit or port no longer names what it drew.
+            var refitsNow = restore.Count > 0 ? new Lazy<List<Regenerated>>(() => RegeneratedNames(modRoot)) : refits;
             foreach (var mat in record.Materials.ToList())
             {
                 // A material leaves with its models: every model it draws in was restored or forgotten.
                 if (!mat.Meshes.All(x => gone.Contains(x.Model))) continue;
-                if (DropMaterial(modRoot, mat, removeKeys, kept, refitUsers, refitsNow.Value)) record.Materials.Remove(mat);
+                if (DropMaterial(modRoot, mat, removeKeys, kept, refitUsers, portUsers, refitsNow.Value)) record.Materials.Remove(mat);
             }
             record.Models.RemoveAll(m => gone.Contains(m.File));
 
@@ -525,6 +527,10 @@ internal static class MatcapWriter
                 msg += " " + string.Format(ProteusLoc.Localize("Parts.Matcap.KeptForRefits.Fmt",
                     "Refits made from it still draw the matcap, so its files stay until the sizes are remade: {0}."),
                     string.Join(", ", refitUsers));
+            if (portUsers.Count > 0)
+                msg += " " + string.Format(ProteusLoc.Localize("Parts.Matcap.KeptForPorts.Fmt",
+                    "Hair ports or earless copies made from it still draw the matcap, so its files stay until they are remade: {0}."),
+                    string.Join(", ", portUsers));
             if (unretired.Count > 0)
                 msg += " " + string.Format(ProteusLoc.Localize("Parts.Matcap.BackupKept.Fmt",
                     "Their old backups could not be moved aside: {0}. The next matcap there moves them first."), string.Join(", ", unretired));
@@ -533,15 +539,24 @@ internal static class MatcapWriter
     }
 
     /// <summary>
-    /// Removes the material's files and redirects — unless a refit on disk still names it (remade from a file that
-    /// carried it), which would then draw a missing material: kept, the refit noted in <paramref name="refitUsers"/>,
-    /// and false returned so the record keeps it until no refit names it (a later Undo or Forget checks again).
+    /// Removes the material's files and redirects — unless a refit, hair port or earless copy on disk still names it
+    /// (remade from a file that carried it), which would then draw a missing material: kept, the file noted in
+    /// <paramref name="refitUsers"/> or <paramref name="portUsers"/>, and false returned so the record keeps it until
+    /// nothing names it (a later Undo or Forget checks again).
     /// </summary>
     private static bool DropMaterial(string modRoot, MatcapRecord.MaterialEntry mat, Dictionary<string, string> removeKeys,
-                                     List<string> kept, List<string> refitUsers, List<(string Rel, HashSet<string> Names)> refits)
+                                     List<string> kept, List<string> refitUsers, List<string> portUsers, List<Regenerated> regenerated)
     {
-        var users = refits.Where(r => r.Names.Contains(mat.Name)).Select(r => r.Rel).ToList();
-        if (users.Count > 0) { refitUsers.AddRange(users.Where(u => !refitUsers.Contains(u, StringComparer.OrdinalIgnoreCase))); return false; }
+        var users = regenerated.Where(r => r.Names.Contains(mat.Name)).ToList();
+        if (users.Count > 0)
+        {
+            foreach (var u in users)
+            {
+                var into = u.Port ? portUsers : refitUsers;
+                if (!into.Contains(u.Rel, StringComparer.OrdinalIgnoreCase)) into.Add(u.Rel);
+            }
+            return false;
+        }
         foreach (var p in mat.GamePaths) removeKeys[p] = mat.File;
         if (Edited(modRoot, mat.File, mat.Sha8) && mat.Sha8.Length > 0) kept.Add(mat.File); else TryDelete(Full(modRoot, mat.File));
         if (mat.Source.Tex is { } tex)
@@ -571,24 +586,39 @@ internal static class MatcapWriter
         }
     }
 
-    /// <summary>The mod's refit files on disk (its refit record's, and any under the refit folder) with the material
-    /// names each model uses.</summary>
-    private static List<(string Rel, HashSet<string> Names)> RefitNames(string modRoot)
+    /// <summary>A file Proteus remakes from a source (a refit, or a hair port / earless copy when <see cref="Port"/>)
+    /// naming at least one matcap material, with the material names it uses.</summary>
+    private readonly record struct Regenerated(string Rel, HashSet<string> Names, bool Port);
+
+    /// <summary>The mod's remade files on disk that name a matcap material: its refits (the refit record's, and any under
+    /// the refit folder), its hair ports (under <see cref="HairPortPlan.Folder"/>) and its earless copies (under
+    /// <see cref="EarlessHairPlan.Folder"/>) — #87: a port or copy remade from a matcapped hairstyle names its material.</summary>
+    private static List<Regenerated> RegeneratedNames(string modRoot)
     {
-        var files = SizeSetRefit.OurFiles(BodyRetargetWriter.ReadRecord(modRoot));
-        var dir = Path.Combine(modRoot, BodyRetargetWriter.Subfolder);
+        var refitFiles = SizeSetRefit.OurFiles(BodyRetargetWriter.ReadRecord(modRoot));
+        AddModels(modRoot, BodyRetargetWriter.Subfolder, refitFiles);
+        var portFiles = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        AddModels(modRoot, HairPortPlan.Folder, portFiles);
+        AddModels(modRoot, EarlessHairPlan.Folder, portFiles);
+        var found = new List<Regenerated>();
+        var all = refitFiles.Select(r => (Rel: r, Port: false)).Concat(portFiles.Select(r => (Rel: r, Port: true)));
+        foreach (var (rel, port) in all.OrderBy(x => x.Rel, StringComparer.Ordinal))
+            if (NamesIn(modRoot, rel) is { Count: > 0 } names && names.Any(n => n.Contains("_mcap", StringComparison.OrdinalIgnoreCase)))
+                found.Add(new Regenerated(rel, names, port));
+        return found;
+    }
+
+    /// <summary>Every <c>.mdl</c> under <paramref name="folder"/> of the mod, as normalised rels, into <paramref name="into"/>.</summary>
+    private static void AddModels(string modRoot, string folder, ISet<string> into)
+    {
+        var dir = Path.Combine(modRoot, folder);
         try
         {
             if (Directory.Exists(dir))
                 foreach (var f in Directory.EnumerateFiles(dir, "*.mdl", SearchOption.AllDirectories))
-                    files.Add(RefitCore.Normal(Path.GetRelativePath(modRoot, f)));
+                    into.Add(RefitCore.Normal(Path.GetRelativePath(modRoot, f)));
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { }
-        var found = new List<(string Rel, HashSet<string> Names)>();
-        foreach (var rel in files.Order(StringComparer.Ordinal))
-            if (NamesIn(modRoot, rel) is { Count: > 0 } names && names.Any(n => n.Contains("_mcap", StringComparison.OrdinalIgnoreCase)))
-                found.Add((rel, names));
-        return found;
     }
 
     /// <summary>

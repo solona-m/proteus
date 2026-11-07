@@ -6575,6 +6575,10 @@
     "message": "Refits made from it still draw the matcap, so its files stay until the sizes are remade: {0}.",
     "description": "Studio Matcaps tool. A matcap is a sphere picture a shader samples by the surface's facing direction."
   },
+  "Parts.Matcap.KeptForPorts.Fmt": {
+    "message": "Hair ports or earless copies made from it still draw the matcap, so its files stay until they are remade: {0}.",
+    "description": "Studio Matcaps tool. A matcap is a sphere picture a shader samples by the surface's facing direction. {0} is a list of file paths inside the mod."
+  },
   "Parts.Matcap.PortKept": {
     "message": "That model is one of Proteus's hair ports. While it has a matcap, Proteus keeps it as it is, and doesn't by itself remake the ports of other races that share its material, until you undo the matcap. Porting one of those races by hand in the Studio still remakes it.",
     "description": "Studio Matcaps tool. A matcap is a sphere picture a shader samples by the surface's facing direction."

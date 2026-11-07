@@ -6575,6 +6575,10 @@
     "message": "由它制作的重贴合模型仍在绘制该材质球，因此在重新制作尺寸之前其文件会保留：{0}。",
     "description": ""
   },
+  "Parts.Matcap.KeptForPorts.Fmt": {
+    "message": "由它制作的发型移植或无耳副本仍在绘制该材质球，因此在重新生成它们之前其文件会保留：{0}。",
+    "description": ""
+  },
   "Parts.Matcap.PortKept": {
     "message": "该模型是 Proteus 移植的发型之一。在它带有 matcap 期间，Proteus 会让它保持原样，也不会自动重新生成与它共用材质的其他种族的移植，直到你撤销 matcap。在工作室中手动移植这些种族时，仍会重新生成。",
     "description": ""
