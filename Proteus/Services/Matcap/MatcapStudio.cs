@@ -65,14 +65,6 @@ internal static class MatcapStudio
         var token = record.Token.Length > 0 ? record.Token : MatcapPlan.TokenFor(Path.GetFileName(modRoot.TrimEnd('\\', '/')));
         var redirects = PenumbraModMeta.ReadAllRedirects(modRoot);
 
-        // ── the parts' own material: its normal and alpha threshold ──
-        var sourceName = chosen[0].Material;
-        var sourceMtrl = SourceMaterial(modRoot, target, sourceName, redirects, env);
-        var sh = sourceMtrl != null ? MatcapMaterial.ReadHeader(sourceMtrl) : null;
-        var normal = sh?.TextureOf(MatcapMaterial.SamplerNormal);
-        float? alpha = sh?.AlphaThreshold;
-        bool alphaTested = alpha is > 0f || string.Equals(sh?.Shader, "hair.shpk", StringComparison.OrdinalIgnoreCase);
-
         // ── siblings: every file at this game path whose parts line up ──
         var models = new List<(string Rel, byte[] Bytes, IReadOnlyList<ModelPart> Parts)> { (modelRel, modelBytes, chosen) };
         var skipped = new List<string>();
@@ -87,36 +79,65 @@ internal static class MatcapStudio
             models.Add((sib, bytes, chosen.Select(c => parts.First(p => PartClaims.LineUp(c, p))).ToList()));
         }
 
-        // ── the name, free everywhere it could clash ──
+        // ── one matcap material per source material among the ticked parts ──
+        // Each keeps its own normal map and alpha threshold: parts drawn by two materials (an Au Ra face's two horn
+        // materials, a garment's two cloths) would otherwise sample one of them through the other's UVs.
+        var sources = chosen.Select(p => p.Material).Distinct(StringComparer.OrdinalIgnoreCase).ToList();
+        int room = 0;
+        try { room = ModelMaterialWriter.MaterialRoom(modelBytes); } catch { }
+        if (room < sources.Count)
+            return Prepared.Refuse(ModelMaterialWriter.CodeMaterialCap, string.Format(ProteusLoc.Localize("Matcap.Refused.MaterialCap.Fmt",
+                "This model can't take another material: {0}."), $"{sources.Count} needed, {room} free of {SecondSkinWriter.MaxMaterials}"));
+
         var taken = new List<string>();
         foreach (var (_, bytes, _) in models)
             try { taken.AddRange(SecondSkinWriter.MaterialNames(bytes)); } catch { }
         taken.AddRange(record.Materials.Select(m => m.Name));
         taken.AddRange(redirects.Select(r => r.GamePath));
-        var name = MatcapPlan.NewName(sourceName, token, taken);
-
-        // ── the splits ──
-        var edits = new List<MatcapWriter.ModelEdit>();
-        bool cut = false;
-        foreach (var (rel, bytes, parts) in models)
+        var names = new List<string>();
+        foreach (var s in sources)
         {
-            try
-            {
-                var r = ModelMaterialWriter.MoveToMaterial(bytes, parts, name);
-                edits.Add(new MatcapWriter.ModelEdit(rel, modelGamePath, bytes, r.Model, r.Lod0Cut, r.Meshes));
-                cut |= r.Lod0Cut;
-            }
-            catch (ModelMaterialWriter.Refused ex)
-            {
-                if (rel != modelRel) { skipped.Add(rel); continue; }
-                return Prepared.Refuse(ex.Code, ex.Code == ModelMaterialWriter.CodeMaterialCap
-                    ? string.Format(ProteusLoc.Localize("Matcap.Refused.MaterialCap.Fmt", "This model can't take another material: {0}."), ex.Message)
-                    : string.Format(ProteusLoc.Localize("Matcap.Refused.ModelLayout.Fmt", "This model can't be split: {0}."), ex.Message));
-            }
+            var n = MatcapPlan.NewName(s, token, taken);
+            names.Add(n);
+            taken.Add(n);
         }
 
-        // ── where the material is published ──
-        var publishedAt = redirects.Where(r => models.Any(m => PenumbraModMeta.SameFile(r.File, m.Rel)))
+        // ── the splits, one source material at a time, on each model's running bytes ──
+        var running = models.Select(m => (m.Rel, Original: m.Bytes, Current: m.Bytes, m.Parts, Cut: false, Ok: true)).ToList();
+        var meshesOf = names.ToDictionary(n => n, _ => new List<(string Rel, int Source, int Drawn)>(), StringComparer.Ordinal);
+        for (int si = 0; si < sources.Count; si++)
+        {
+            for (int mi = 0; mi < running.Count; mi++)
+            {
+                var m = running[mi];
+                if (!m.Ok) continue;
+                // The parts of this source, as the model's current bytes read them (an earlier split appends meshes
+                // only, so every part still lines up).
+                var current = ModelPartReader.Read(m.Current)?.Parts ?? [];
+                var mine = m.Parts.Where(p => string.Equals(p.Material, sources[si], StringComparison.OrdinalIgnoreCase))
+                                  .Select(p => current.FirstOrDefault(c => PartClaims.LineUp(p, c))).ToList();
+                try
+                {
+                    if (mine.Any(p => p == null)) throw new ModelMaterialWriter.Refused(ModelMaterialWriter.CodeUnknownPart, "a part moved during the split");
+                    var r = ModelMaterialWriter.MoveToMaterial(m.Current, mine!, names[si]);
+                    meshesOf[names[si]].AddRange(r.Meshes.Select(x => (m.Rel, x.Source, x.Drawn)));
+                    running[mi] = m with { Current = r.Model, Cut = m.Cut || r.Lod0Cut };
+                }
+                catch (ModelMaterialWriter.Refused ex)
+                {
+                    if (mi != 0) { skipped.Add(m.Rel); running[mi] = m with { Ok = false }; continue; }
+                    return Prepared.Refuse(ex.Code, ex.Code == ModelMaterialWriter.CodeMaterialCap
+                        ? string.Format(ProteusLoc.Localize("Matcap.Refused.MaterialCap.Fmt", "This model can't take another material: {0}."), ex.Message)
+                        : string.Format(ProteusLoc.Localize("Matcap.Refused.ModelLayout.Fmt", "This model can't be split: {0}."), ex.Message));
+                }
+            }
+        }
+        var okModels = running.Where(m => m.Ok).ToList();
+        var edits = okModels.Select(m => new MatcapWriter.ModelEdit(m.Rel, modelGamePath, m.Original, m.Current, m.Cut)).ToList();
+        bool cut = okModels.Any(m => m.Cut);
+
+        // ── where the materials are published ──
+        var publishedAt = redirects.Where(r => okModels.Any(m => PenumbraModMeta.SameFile(r.File, m.Rel)))
                                    .Select(r => r.GamePath).Distinct(StringComparer.OrdinalIgnoreCase).ToList();
         IEnumerable<int>? folders = null;
         if (target.Kind == MatcapPlan.Kind.Gear)
@@ -125,66 +146,93 @@ internal static class MatcapStudio
             folders = MatcapPlan.GearFolders(item, ImcEntrySource.GameEntries(env.ReadGameFile, item.SetTag, item.SlotLabel),
                                              MatcapPlan.ModImcEntries(modRoot, item), redirects.Select(r => r.GamePath), env.WornFolder);
         }
-        var gamePaths = MatcapPlan.MaterialGamePaths(target, name, publishedAt, folders);
-        if (gamePaths.Count == 0)
-            return Prepared.Refuse("no-name", ProteusLoc.Localize("Matcap.Refused.NoName", "Proteus could not tell where the game reads this model's materials."));
 
-        // ── the textures ──
+        // ── the shared textures ──
         Directory.CreateDirectory(env.TempDir);
         string stamp = Guid.NewGuid().ToString("N")[..8];
-        var source = new MatcapRecord.SourceRef();
-        string matcapPath;
-        string? imageTemp = null;
+        string? bakedImage = null;
         if (choice.Image is { } image)
         {
-            imageTemp = Path.Combine(env.TempDir, $"matcap_{stamp}.tex");
-            var baked = MatcapImages.Bake(env.Loader, image.Path, imageTemp, env.Compress);
+            bakedImage = Path.Combine(env.TempDir, $"matcap_{stamp}.tex");
+            var baked = MatcapImages.Bake(env.Loader, image.Path, bakedImage, env.Compress);
             if (baked.Refusal != null)
                 return Prepared.Refuse(baked.Refusal == "not-square" ? "not-square" : "image-unreadable", baked.Refusal == "not-square"
                     ? string.Format(ProteusLoc.Localize("Matcap.Refused.NotSquare.Fmt", "{0} is not square. A matcap is a picture of a sphere filling a square."), image.Name)
                     : string.Format(ProteusLoc.Localize("Matcap.Refused.ImageUnreadable.Fmt", "{0} could not be read as an image."), image.Name));
-            matcapPath = MatcapWriter.ImageTexGamePath(token, name);
-            source.Kind = MatcapRecord.SourceRef.KindImage;
-            source.Image = image.Name;
-            source.ImageSha8 = HairPortPlan.Sha8(File.ReadAllBytes(image.Path));
-            source.Tex = new MatcapRecord.FileRef { File = MatcapWriter.ImageTexFile(name), GamePath = matcapPath };
         }
-        else if (choice.Library is { } lib && choice.Option is { } option)
+        else if (choice.Library is { } lib0 && choice.Option is { } option0)
         {
-            if (!lib.Options.Any(o => o.Name == option))
-                return Prepared.Refuse("unknown-option", string.Format(ProteusLoc.Localize("Matcap.Refused.UnknownOption.Fmt", "{0} has no option called {1}."), lib.Label, option));
-            matcapPath = lib.Texture;
-            source.Kind = MatcapRecord.SourceRef.KindLibrary;
-            source.Library = new MatcapRecord.LibraryRef
-            {
-                Mod = lib.Mod, Name = lib.Name, Website = lib.Website, Group = lib.Group, Option = option, Texture = lib.Texture,
-            };
+            if (!lib0.Options.Any(o => o.Name == option0))
+                return Prepared.Refuse("unknown-option", string.Format(ProteusLoc.Localize("Matcap.Refused.UnknownOption.Fmt", "{0} has no option called {1}."), lib0.Label, option0));
         }
         else return Prepared.Refuse("unknown-image", ProteusLoc.Localize("Parts.Matcap.NeedMatcap", "Pick a matcap first."));
 
         var maskTemp = Path.Combine(env.TempDir, $"mask_{stamp}.tex");
         if (!env.Loader.WriteTex(MatcapMaterial.Solid(MatcapMaterial.WhiteRgba), 16, 16, maskTemp))
             return Prepared.Refuse("failed", ProteusLoc.Localize("Matcap.Refused.Failed.Fmt", "The matcap could not be written ({0}). Nothing was changed.").Replace("{0}", "mask"));
-        string? flatTemp = null;
-        if (string.IsNullOrEmpty(normal))
-        {
-            flatTemp = Path.Combine(env.TempDir, $"flatnormal_{stamp}.tex");
-            env.Loader.WriteTex(MatcapMaterial.Solid(MatcapMaterial.FlatNormalRgba), 16, 16, flatTemp);
-            normal = MatcapWriter.FlatNormalGamePath(token);
-        }
-
-        // ── the material ──
         var template = env.ReadGameFile(MatcapMaterial.VanillaTemplatePath);
         if (template == null)
             return Prepared.Refuse("no-template", ProteusLoc.Localize("Matcap.Refused.NoTemplate", "The game's reflection material could not be read, so no matcap material could be made."));
-        byte[] mtrl;
-        try { mtrl = MatcapMaterial.Build(template, normal!, MatcapWriter.MaskGamePath(token), matcapPath, alpha); }
-        catch (InvalidDataException ex)
+
+        // ── each material: its own normal, alpha threshold, texture and game paths ──
+        string? flatTemp = null;
+        bool alphaTested = false;
+        var plans = new List<MatcapWriter.MaterialPlan>();
+        for (int si = 0; si < sources.Count; si++)
         {
-            return Prepared.Refuse("no-template", string.Format(ProteusLoc.Localize("Matcap.Refused.Failed.Fmt", "The matcap could not be written ({0}). Nothing was changed."), ex.Message));
+            string name = names[si];
+            var sourceMtrl = SourceMaterial(modRoot, target, sources[si], redirects, env);
+            var sh = sourceMtrl != null ? MatcapMaterial.ReadHeader(sourceMtrl) : null;
+            var normal = sh?.TextureOf(MatcapMaterial.SamplerNormal);
+            float? alpha = sh?.AlphaThreshold;
+            alphaTested |= alpha is > 0f || string.Equals(sh?.Shader, "hair.shpk", StringComparison.OrdinalIgnoreCase);
+            if (string.IsNullOrEmpty(normal))
+            {
+                if (flatTemp == null)
+                {
+                    flatTemp = Path.Combine(env.TempDir, $"flatnormal_{stamp}.tex");
+                    env.Loader.WriteTex(MatcapMaterial.Solid(MatcapMaterial.FlatNormalRgba), 16, 16, flatTemp);
+                }
+                normal = MatcapWriter.FlatNormalGamePath(token);
+            }
+
+            var source = new MatcapRecord.SourceRef();
+            string matcapPath;
+            string? texTemp = null;
+            if (choice.Image is { } img)
+            {
+                matcapPath = MatcapWriter.ImageTexGamePath(token, name);
+                texTemp = bakedImage;
+                source.Kind = MatcapRecord.SourceRef.KindImage;
+                source.Image = img.Name;
+                source.ImageSha8 = HairPortPlan.Sha8(File.ReadAllBytes(img.Path));
+                source.Tex = new MatcapRecord.FileRef { File = MatcapWriter.ImageTexFile(name), GamePath = matcapPath };
+            }
+            else
+            {
+                var lib = choice.Library!;
+                matcapPath = lib.Texture;
+                source.Kind = MatcapRecord.SourceRef.KindLibrary;
+                source.Library = new MatcapRecord.LibraryRef
+                {
+                    Mod = lib.Mod, Name = lib.Name, Website = lib.Website, Group = lib.Group, Option = choice.Option!, Texture = lib.Texture,
+                };
+            }
+
+            var gamePaths = MatcapPlan.MaterialGamePaths(target, name, publishedAt, folders);
+            if (gamePaths.Count == 0)
+                return Prepared.Refuse("no-name", ProteusLoc.Localize("Matcap.Refused.NoName", "Proteus could not tell where the game reads this model's materials."));
+            byte[] mtrl;
+            try { mtrl = MatcapMaterial.Build(template, normal!, MatcapWriter.MaskGamePath(token), matcapPath, alpha); }
+            catch (InvalidDataException ex)
+            {
+                return Prepared.Refuse("no-template", string.Format(ProteusLoc.Localize("Matcap.Refused.Failed.Fmt", "The matcap could not be written ({0}). Nothing was changed."), ex.Message));
+            }
+            plans.Add(new MatcapWriter.MaterialPlan(name, mtrl, gamePaths, normal!, alpha, source, texTemp,
+                                                    meshesOf[name].Where(x => okModels.Any(m => m.Rel == x.Rel)).ToList()));
         }
 
-        var req = new MatcapWriter.ApplyRequest(token, name, mtrl, gamePaths, normal!, alpha, edits, source, imageTemp, maskTemp, flatTemp);
+        var req = new MatcapWriter.ApplyRequest(token, plans, edits, maskTemp, flatTemp);
         return new Prepared(req, "", "", skipped, alphaTested, cut);
     }
 

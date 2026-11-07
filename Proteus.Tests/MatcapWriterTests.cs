@@ -671,6 +671,60 @@ public class MatcapWriterTests
     }
 }
 
+public class MatcapPerSourceMaterialTests
+{
+    private const string MatB = "chara/equipment/e6255/material/v0001/mt_c0201e6255_top_b.mtrl";
+    private const string NormalB = "chara/equipment/e6255/texture/v01_c0201e6255_top_b_n.tex";
+
+    [Fact]
+    [Trait("Plan", "AM-7")]
+    [Trait("Plan", "AC-matcaps-4")]
+    public void Parts_from_two_materials_get_one_matcap_material_each_with_its_own_normal()
+    {
+        using var f = new MatcapFixture(extra: new Dictionary<string, (string, byte[])>
+        {
+            [MatB] = ("mat/top_b.mtrl", SyntheticMatcapMod.Gear(NormalB, alphaThreshold: 0.3f)),
+        });
+        var original = f.Current();
+        var p = f.Prepare(MatcapChoice.OfImage(f.Image("gem.tex")), "1.2", "2.1");
+        Assert.True(p.Ok, p.Message);
+        Assert.Equal(2, p.Request!.Materials.Count);
+        Assert.True(MatcapWriter.Apply(f.ModRoot, p.Request).Ok);
+
+        var record = MatcapRecord.Read(f.ModRoot);
+        Assert.Equal(2, record.Materials.Count);
+        var a = record.Materials.Single(m => m.Name.Contains("_top_a_mcap"));
+        var b = record.Materials.Single(m => m.Name.Contains("_top_b_mcap"));
+        Assert.Equal(MatcapFixture.Normal, a.Normal);
+        Assert.Equal(NormalB, b.Normal);
+        Assert.Equal(0.3f, b.AlphaThreshold);
+        Assert.NotEqual(a.Source.Tex!.File, b.Source.Tex!.File);
+        foreach (var m in record.Materials)
+            Assert.Equal(m.Normal, MatcapMaterial.ReadHeader(File.ReadAllBytes(MatcapWriter.Full(f.ModRoot, m.File)))!
+                                                 .TextureOf(MatcapMaterial.SamplerNormal));
+        var names = SecondSkinWriter.MaterialNames(f.Current());
+        Assert.Contains(a.Name, names);
+        Assert.Contains(b.Name, names);
+
+        Assert.True(MatcapWriter.Undo(f.ModRoot, MatcapFixture.ModelRel).Ok);
+        Assert.Equal(original, f.Current());
+        Assert.False(MatcapRecord.Exists(f.ModRoot));
+    }
+
+    [Fact]
+    [Trait("Plan", "AM-7")]
+    public void Not_enough_room_for_every_source_material_is_refused()
+    {
+        var meshes = Enumerable.Range(0, SecondSkinWriter.MaxMaterials - 1)
+            .Select(i => new SyntheticModel.Mesh($"/mt_c0201e6255_top_{(char)('a' + i)}.mtrl",
+                                                 new SyntheticModel.Sub(0, TrianglesPerIsland: 2, OffsetX: i * 20f)))
+            .ToArray();
+        using var f = new MatcapFixture(SyntheticModel.Build([], meshes));
+        var p = f.Prepare(MatcapChoice.OfImage(f.Image("gem.tex")), "1.1", "2.1");
+        Assert.Equal(ModelMaterialWriter.CodeMaterialCap, p.Code);
+    }
+}
+
 public class ModelBackupOrderMatcapTests
 {
     [Fact]

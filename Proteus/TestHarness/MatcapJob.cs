@@ -189,7 +189,8 @@ internal static class MatcapJob
             code = outcome.Code.Length > 0 ? outcome.Code : null,
             resultLine = outcome.Message,
             material = entry?.Name, gamePaths = entry?.GamePaths,
-            files = prepared?.Request?.Models.Select(m => new { file = m.Rel, meshesAdded = m.Meshes.Count(x => x.Source != x.Drawn), lod0Cut = m.Lod0Cut }),
+            files = prepared?.Request?.Models.Select(m => new { file = m.Rel, meshesAdded = prepared.Request.Materials.SelectMany(p => p.Meshes).Count(x => x.Rel == m.Rel && x.Source != x.Drawn), lod0Cut = m.Lod0Cut }),
+            materials = prepared?.Request?.Materials.Select(p => p.Name),
             siblingsSkipped = prepared?.SiblingsSkipped,
             librarySetting,
         });

@@ -53,15 +53,29 @@ internal static class MatcapWriter
 
     // ── requests and outcomes ───────────────────────────────────────────────
 
-    /// <summary>One model file the apply rewrites: the bytes planned against, and the split.</summary>
-    public sealed record ModelEdit(string Rel, string GamePath, byte[] SourceBytes, byte[] NewBytes, bool Lod0Cut,
-                                   IReadOnlyList<(int Source, int Drawn)> Meshes);
+    /// <summary>One model file the apply rewrites: the bytes planned against, and the bytes after every split.</summary>
+    public sealed record ModelEdit(string Rel, string GamePath, byte[] SourceBytes, byte[] NewBytes, bool Lod0Cut);
 
-    /// <summary>Everything an apply needs, prepared on a worker (<see cref="MatcapStudio"/>).</summary>
-    public sealed record ApplyRequest(
-        string Token, string MaterialName, byte[] MaterialBytes, IReadOnlyList<string> MaterialGamePaths,
-        string Normal, float? AlphaThreshold, IReadOnlyList<ModelEdit> Models, MatcapRecord.SourceRef Source,
-        string? ImageTexTemp, string MaskTemp, string? FlatNormalTemp);
+    /// <summary>
+    /// One new matcap material: its bytes and game paths, the normal and alpha threshold it took from its source
+    /// material, where its matcap comes from (and the baked texture for an image), and the meshes that draw it.
+    /// </summary>
+    public sealed record MaterialPlan(string Name, byte[] Bytes, IReadOnlyList<string> GamePaths, string Normal,
+                                      float? AlphaThreshold, MatcapRecord.SourceRef Source, string? ImageTexTemp,
+                                      IReadOnlyList<(string Rel, int Source, int Drawn)> Meshes);
+
+    /// <summary>
+    /// Everything an apply needs, prepared on a worker (<see cref="MatcapStudio"/>): one material per source material
+    /// among the ticked parts, and every model file after all of their splits.
+    /// </summary>
+    public sealed record ApplyRequest(string Token, IReadOnlyList<MaterialPlan> Materials, IReadOnlyList<ModelEdit> Models,
+                                      string MaskTemp, string? FlatNormalTemp)
+    {
+        /// <summary>The first material's name (most applies have one).</summary>
+        public string MaterialName => Materials[0].Name;
+        public string Normal => Materials[0].Normal;
+        public float? AlphaThreshold => Materials[0].AlphaThreshold;
+    }
 
     /// <summary>What a call did. <see cref="Code"/> is empty on success, else a stable refusal code.</summary>
     public sealed record Outcome(string Code, string Message, IReadOnlyList<string> Files)
@@ -109,12 +123,12 @@ internal static class MatcapWriter
             var backups = new List<string>();          // backups this call took
             var addedKeys = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
             var written = new List<ModelEdit>();
-            var entry = new MatcapRecord.MaterialEntry
+            var entries = req.Materials.Select(p => new MatcapRecord.MaterialEntry
             {
-                Name = req.MaterialName, File = MaterialFile(req.MaterialName), GamePaths = [.. req.MaterialGamePaths],
-                Normal = req.Normal, AlphaThreshold = req.AlphaThreshold, Pending = true, Source = req.Source,
-                Meshes = req.Models.SelectMany(m => m.Meshes.Select(x => new MatcapRecord.MeshRef { Model = m.Rel, Mesh = x.Drawn, From = x.Source })).ToList(),
-            };
+                Name = p.Name, File = MaterialFile(p.Name), GamePaths = [.. p.GamePaths],
+                Normal = p.Normal, AlphaThreshold = p.AlphaThreshold, Pending = true, Source = p.Source,
+                Meshes = p.Meshes.Select(x => new MatcapRecord.MeshRef { Model = x.Rel, Mesh = x.Drawn, From = x.Source }).ToList(),
+            }).ToList();
             try
             {
                 // Backups, the first time a model is edited only: the original is the original.
@@ -127,24 +141,28 @@ internal static class MatcapWriter
                     backups.Add(backup);
                 }
 
-                record.Materials.Add(entry);
+                record.Materials.AddRange(entries);
                 foreach (var m in req.Models)
                     if (record.Model(m.Rel) == null)
                         record.Models.Add(new MatcapRecord.ModelEntry { File = m.Rel, GamePath = m.GamePath });
                 MatcapRecord.Write(modRoot, record);
                 AfterStep?.Invoke("pending");
 
-                // Files: the material, the baked texture, and the shared mask and flat normal on first need.
-                Place(modRoot, entry.File, req.MaterialBytes, created);
-                entry.Sha8 = HairPortPlan.Sha8(req.MaterialBytes);
-                foreach (var p in req.MaterialGamePaths) addedKeys[p] = entry.File;
-
-                if (req.Source.Tex is { } tex && req.ImageTexTemp != null)
+                // Files: each material and its baked texture, and the shared mask and flat normal on first need.
+                for (int i = 0; i < req.Materials.Count; i++)
                 {
-                    var bytes = File.ReadAllBytes(req.ImageTexTemp);
-                    Place(modRoot, tex.File, bytes, created);
-                    tex.Sha8 = HairPortPlan.Sha8(bytes);
-                    addedKeys[tex.GamePath] = tex.File;
+                    var plan = req.Materials[i];
+                    var entry = entries[i];
+                    Place(modRoot, entry.File, plan.Bytes, created);
+                    entry.Sha8 = HairPortPlan.Sha8(plan.Bytes);
+                    foreach (var p in plan.GamePaths) addedKeys[p] = entry.File;
+                    if (entry.Source.Tex is { } tex && plan.ImageTexTemp != null)
+                    {
+                        var bytes = File.ReadAllBytes(plan.ImageTexTemp);
+                        Place(modRoot, tex.File, bytes, created);
+                        tex.Sha8 = HairPortPlan.Sha8(bytes);
+                        addedKeys[tex.GamePath] = tex.File;
+                    }
                 }
                 if (record.Shared.Mask == null || !File.Exists(Full(modRoot, record.Shared.Mask.File)))
                 {
@@ -176,10 +194,10 @@ internal static class MatcapWriter
                 }
                 AfterStep?.Invoke("model");
 
-                entry.Pending = false;
+                foreach (var e in entries) e.Pending = false;
                 MatcapRecord.Write(modRoot, record);
                 return Outcome.Done(string.Format(ProteusLoc.Localize("Parts.Matcap.Applied.Fmt", "Matcap applied: {0} on {1} model file(s)."),
-                    StemOf(req.MaterialName), req.Models.Count), [.. req.Models.Select(m => m.Rel), .. created]);
+                    string.Join(", ", req.Materials.Select(p => StemOf(p.Name))), req.Models.Count), [.. req.Models.Select(m => m.Rel), .. created]);
             }
             catch (Exception ex)
             {
@@ -200,7 +218,7 @@ internal static class MatcapWriter
                     var fresh = MatcapRecord.Read(modRoot);
                     if (!fresh.Unreadable)
                     {
-                        fresh.Materials.RemoveAll(x => string.Equals(x.Name, req.MaterialName, StringComparison.OrdinalIgnoreCase));
+                        fresh.Materials.RemoveAll(x => req.Materials.Any(p => string.Equals(x.Name, p.Name, StringComparison.OrdinalIgnoreCase)));
                         fresh.Models.RemoveAll(x => !fresh.MaterialsOf(x.File).Any() && req.Models.Any(r => PenumbraModMeta.SameFile(r.Rel, x.File)) && x.WrittenSha8s.Count == 0);
                         if (fresh.Shared.Mask is { } mk && created.Contains(mk.File)) fresh.Shared.Mask = null;
                         if (fresh.Shared.FlatNormal is { } fn && created.Contains(fn.File)) fresh.Shared.FlatNormal = null;
