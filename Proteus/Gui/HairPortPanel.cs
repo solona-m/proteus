@@ -26,15 +26,18 @@ internal sealed class HairPortPanel(Func<string, byte[]?> readGameFile, IPluginL
 {
     /// <summary>What the mod has of one race. <see cref="OtherSexAuthored"/>: a race of the other sex, which the mod has
     /// its own model of the hairstyle for (for some race of that sex) — the author's look for that sex, not ours to
-    /// replace.</summary>
-    public enum State { Open, Covered, Ported, Stale, NoStyle, OtherSexAuthored }
+    /// replace. <see cref="PortedElsewhere"/>: another hairstyle of the mod has a port of the race in a place this one is
+    /// published from, which porting this one there replaces (#71).</summary>
+    public enum State { Open, Covered, Ported, Stale, NoStyle, OtherSexAuthored, PortedElsewhere }
 
     /// <param name="OtherSex">Listed under "Also for the other sex".</param>
     /// <param name="OwnVersion">A port across the sexes the mod has since made its own model of that sex for: left as it
     /// is, never remade.</param>
     /// <param name="OwnSkeleton">A port across the sexes the mod has since given the race a skeleton of its own for:
     /// its carried skeleton taken out once, never remade.</param>
-    public sealed record Row(ushort Race, State State, bool OtherSex = false, bool OwnVersion = false, bool OwnSkeleton = false);
+    /// <param name="PortedFrom">For <see cref="State.PortedElsewhere"/>, the other hairstyle's game path.</param>
+    public sealed record Row(ushort Race, State State, bool OtherSex = false, bool OwnVersion = false, bool OwnSkeleton = false,
+                             string? PortedFrom = null);
 
     /// <summary>Whether the open model is a hairstyle, whose Body size tool is this panel instead of the garment refit.</summary>
     public static bool Shows(string? gamePath) => gamePath != null && HairPortPlan.Parse(gamePath) != null;
@@ -46,8 +49,11 @@ internal sealed class HairPortPanel(Func<string, byte[]?> readGameFile, IPluginL
     /// </summary>
     /// <param name="gameHas">Whether the game has its own model of this hairstyle for a race.</param>
     /// <param name="isStale">Whether an existing port is out of date.</param>
+    /// <param name="serving">The places the hairstyle is published from (<see cref="HairPortBuilder.Serving"/>): a port of
+    /// another hairstyle in one of them is <see cref="State.PortedElsewhere"/>. Null: none is looked for.</param>
     public static List<Row> Rows(string sourceGamePath, IReadOnlyList<HairPortPlan.Owner> owners, HairPortRecord record,
-                                 Func<ushort, bool> gameHas, Func<HairPortRecord.Entry, bool> isStale)
+                                 Func<ushort, bool> gameHas, Func<HairPortRecord.Entry, bool> isStale,
+                                 IReadOnlyList<HairPortPlan.Owner>? serving = null)
     {
         var rows = new List<Row>();
         if (HairPortPlan.Parse(sourceGamePath) is not { } at) return rows;
@@ -61,28 +67,40 @@ internal sealed class HairPortPanel(Func<string, byte[]?> readGameFile, IPluginL
             var ports = record.Ports.Where(e => e.TargetGamePath.Equals(target, StringComparison.OrdinalIgnoreCase)
                                                 && e.SourceGamePath.Equals(sourceGamePath, StringComparison.OrdinalIgnoreCase))
                               .ToList();
+            // Another hairstyle's port of the race where this one is published: porting this one replaces it.
+            var elsewhere = serving == null ? null
+                : record.Ports.FirstOrDefault(e => e.TargetGamePath.Equals(target, StringComparison.OrdinalIgnoreCase)
+                                                   && !SamePath(e.SourceGamePath, sourceGamePath)
+                                                   && serving.Any(o => HairPortPlan.Same(o, e.Owner)));
             var state = authored.Contains(race) ? State.Covered
                       : ports.Count > 0 ? (ports.Any(isStale) ? State.Stale : State.Ported)
                       : otherSex && otherSexAuthored ? State.OtherSexAuthored
                       : !gameHas(race) ? State.NoStyle
+                      : elsewhere != null ? State.PortedElsewhere
                       : State.Open;
             bool held = otherSex && state is State.Ported or State.Stale;
             bool ownSkeleton = held && ports.Any(e => owners.FirstOrDefault(o => HairPortPlan.Same(o, e.Owner)) is { } o
                 && HairPortBuilder.AuthorTargetEst(o, defaults, e, race, at.Id,
                                                    HairPortBuilder.DefaultsPortEst(record.Ports, target)) != null);
-            rows.Add(new Row(race, state, otherSex, held && otherSexAuthored, ownSkeleton));
+            rows.Add(new Row(race, state, otherSex, held && otherSexAuthored, ownSkeleton,
+                             state == State.PortedElsewhere ? elsewhere!.SourceGamePath : null));
         }
         return rows;
     }
 
+    private static bool SamePath(string a, string b)
+        => string.Equals(a.Replace('\\', '/'), b.Replace('\\', '/'), StringComparison.OrdinalIgnoreCase);
+
     /// <summary>Whether a row can be ticked: open or out of date, and not a port across the sexes the mod has since
     /// answered itself (which is left as it is; Remove ports still takes it out).</summary>
-    internal static bool CanTick(Row r) => !r.OwnVersion && !r.OwnSkeleton && r.State is State.Open or State.Stale;
+    internal static bool CanTick(Row r) => !r.OwnVersion && !r.OwnSkeleton && r.State is State.Open or State.Stale or State.PortedElsewhere;
 
     /// <summary>The races ticked on opening: every one there is something to do for — of the other sex, only an
-    /// out-of-date port the user made there before.</summary>
+    /// out-of-date port the user made there before. Never one another hairstyle has ported (#71): replacing it is the
+    /// user's call.</summary>
     public static IEnumerable<ushort> DefaultTicks(IEnumerable<Row> rows)
-        => rows.Where(r => CanTick(r) && (!r.OtherSex || r.State == State.Stale)).Select(r => r.Race);
+        => rows.Where(r => CanTick(r) && r.State != State.PortedElsewhere && (!r.OtherSex || r.State == State.Stale))
+               .Select(r => r.Race);
 
     /// <summary>The note under "Also for the other sex": the number is another style for that sex in the game.</summary>
     internal static string OtherSexNote(int id) => string.Format(Strings.HairPort.OtherSexNoteFmt, id);
@@ -98,12 +116,17 @@ internal sealed class HairPortPanel(Func<string, byte[]?> readGameFile, IPluginL
             State.Stale => s.RaceStale,
             State.NoStyle => s.RaceNoStyle,
             State.OtherSexAuthored => s.RaceOtherSexAuthored,
+            State.PortedElsewhere => string.Format(s.RacePortedFromFmt, StyleName(r.PortedFrom)),
             _ => s.RaceOpen,
         };
         return r.OwnSkeleton ? $"{text} — {s.RaceOtherSexSkeleton}"
              : r.OwnVersion ? $"{text} — {s.RaceOtherSexAuthored}"
              : text;
     }
+
+    /// <summary>A hairstyle's short name, <c>c0201h0108</c>, from its game path (the path itself when it isn't one).</summary>
+    internal static string StyleName(string? gamePath)
+        => gamePath != null && HairPortPlan.Parse(gamePath) is { } p ? $"c{p.Race:D4}h{p.Id:D4}" : gamePath ?? "";
 
     private string? openKey;
     private Task<(string Source, List<Row> Rows)>? reading;
@@ -233,8 +256,12 @@ internal sealed class HairPortPanel(Func<string, byte[]?> readGameFile, IPluginL
         var record = HairPortRecord.Read(modRoot);
         var author = HairPortPlan.AuthorSource(owners, record, sourceGamePath, openFile);
         var id = HairPortPlan.Parse(author)!.Value.Id;
+        // The places a port of another hairstyle would be replaced in: Build's own (#71). A combining group or an
+        // unreadable earless record keeps them (Build refuses then, the list stays as it reads); copies whose author's
+        // file is gone are left out.
+        var serving = HairPortBuilder.Serving(modRoot, owners, author).Owners;
         return (author, Rows(author, owners, record, race => readGame(HairPortPlan.HairPath(race, id)) != null,
-                             OutOfDate(modRoot, owners, record, readGame)));
+                             OutOfDate(modRoot, owners, record, readGame), serving));
     }
 
     /// <summary>The Port button's bend: the ports of <paramref name="source"/> for the ticked races, by hand (no sharers
@@ -317,6 +344,11 @@ internal sealed class HairPortPanel(Func<string, byte[]?> readGameFile, IPluginL
         if (outcome.SavedWrites.Count(w => !w.Stripped) is > 0 and var ported)
         {
             string text = string.Format(Strings.HairPort.DoneFmt, ported);
+            // A port another hairstyle had made there was replaced: which race, and from which hairstyle (#71).
+            var saved = outcome.SavedWrites.Where(w => !w.Stripped).Select(w => w.TargetGamePath).ToHashSet(StringComparer.OrdinalIgnoreCase);
+            foreach (var (race, from) in (plan.Replaced ?? new Dictionary<ushort, string>()).OrderBy(r => r.Key))
+                if (saved.Any(t => HairPortPlan.Parse(t)?.Race == race))
+                    text += "\n" + string.Format(Strings.HairPort.ReplacedFmt, race, StyleName(from));
             // Saved all the same, but worth a look in game: which race, and why.
             if (plan.Warnings is { Count: > 0 } warnings)
                 return (text + "\n" + string.Join("\n", warnings.Select(w => $"c{w.Key:D4}: {w.Value}")), false, true);

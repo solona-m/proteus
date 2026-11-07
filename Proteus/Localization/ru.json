@@ -5571,6 +5571,14 @@
     "message": "она движется костями, которых у c{0:D4} для этой причёски нет ({1})",
     "description": ""
   },
+  "HairPort.Refused.BonesSourceSkeleton.Fmt": {
+    "message": "она движется костями, которых нет в собственном скелете c{0:D4} для причёски {2} ({1}), а к другому полу можно перенести только этот скелет",
+    "description": ""
+  },
+  "HairPort.Refused.BonesCarry.Fmt": {
+    "message": "она движется костями, которые есть только в скелете c{0:D4} для причёски {2} ({1}), а этот скелет не удалось перенести к c{3:D4}",
+    "description": ""
+  },
   "HairPort.Refused.Unknown.Fmt": {
     "message": "расовый деформер не знает, как двигать {0}",
     "description": ""
@@ -5718,6 +5726,14 @@
   "HairPort.Studio.OtherSexAuthored": {
     "message": "у мода есть своя версия для этого пола",
     "description": "Per-race status in the Studio port list for a race of the other sex: the mod ships its own model of this hairstyle for that sex."
+  },
+  "HairPort.Studio.PortedFrom.Fmt": {
+    "message": "перенесено с причёски {0} — перенос этой заменит его",
+    "description": ""
+  },
+  "HairPort.Replaced.Fmt": {
+    "message": "c{0:D4}: заменён перенос, сделанный с причёски {1}.",
+    "description": ""
   },
   "HairPort.Studio.OtherSexSkeleton": {
     "message": "мод даёт этой расе свой скелет",

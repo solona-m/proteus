@@ -5571,6 +5571,14 @@
     "message": "c{0:D4}에게는 이 헤어스타일용으로 없는 본으로 움직입니다 ({1})",
     "description": ""
   },
+  "HairPort.Refused.BonesSourceSkeleton.Fmt": {
+    "message": "c{0:D4} 자신의 머리 모양 {2} 스켈레톤에 없는 본({1})으로 움직이며, 다른 성별로 가져갈 수 있는 것은 그 스켈레톤뿐입니다",
+    "description": ""
+  },
+  "HairPort.Refused.BonesCarry.Fmt": {
+    "message": "c{0:D4}의 머리 모양 {2} 스켈레톤에만 있는 본({1})으로 움직이지만, 그 스켈레톤을 c{3:D4}에 가져갈 수 없었습니다",
+    "description": ""
+  },
   "HairPort.Refused.Unknown.Fmt": {
     "message": "종족 디포머가 {0}을(를) 움직이는 방법을 모릅니다",
     "description": ""
@@ -5718,6 +5726,14 @@
   "HairPort.Studio.OtherSexAuthored": {
     "message": "모드에 이 성별용 자체 버전이 있습니다",
     "description": "Per-race status in the Studio port list for a race of the other sex: the mod ships its own model of this hairstyle for that sex."
+  },
+  "HairPort.Studio.PortedFrom.Fmt": {
+    "message": "머리 모양 {0}에서 이식됨 — 이것을 이식하면 그것을 대체합니다",
+    "description": ""
+  },
+  "HairPort.Replaced.Fmt": {
+    "message": "c{0:D4}: 머리 모양 {1}에서 만든 이식을 대체했습니다.",
+    "description": ""
   },
   "HairPort.Studio.OtherSexSkeleton": {
     "message": "모드가 이 종족에 자체 스켈레톤을 줍니다",

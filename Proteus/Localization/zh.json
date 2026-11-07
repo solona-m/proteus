@@ -5571,6 +5571,14 @@
     "message": "它依靠 c{0:D4} 在此发型上没有的骨骼来活动（{1}）",
     "description": ""
   },
+  "HairPort.Refused.BonesSourceSkeleton.Fmt": {
+    "message": "它使用 c{0:D4} 自己的发型 {2} 骨架中没有的骨骼（{1}）活动，而只有该骨架能带到另一性别",
+    "description": ""
+  },
+  "HairPort.Refused.BonesCarry.Fmt": {
+    "message": "它使用只有 c{0:D4} 的发型 {2} 骨架才有的骨骼（{1}）活动，而该骨架无法带到 c{3:D4}",
+    "description": ""
+  },
   "HairPort.Refused.Unknown.Fmt": {
     "message": "种族变形器不知道如何移动 {0}",
     "description": ""
@@ -5718,6 +5726,14 @@
   "HairPort.Studio.OtherSexAuthored": {
     "message": "该 Mod 有此性别的自有版本",
     "description": "Per-race status in the Studio port list for a race of the other sex: the mod ships its own model of this hairstyle for that sex."
+  },
+  "HairPort.Studio.PortedFrom.Fmt": {
+    "message": "已从发型 {0} 移植 — 移植这个会替换它",
+    "description": ""
+  },
+  "HairPort.Replaced.Fmt": {
+    "message": "c{0:D4}：已替换从发型 {1} 制作的移植。",
+    "description": ""
   },
   "HairPort.Studio.OtherSexSkeleton": {
     "message": "该 Mod 为此种族提供了自己的骨架",

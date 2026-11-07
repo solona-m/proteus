@@ -5571,6 +5571,14 @@
     "message": "c{0:D4} がこの髪型で持たないボーンで動きます（{1}）",
     "description": ""
   },
+  "HairPort.Refused.BonesSourceSkeleton.Fmt": {
+    "message": "c{0:D4} 自身の髪型 {2} 用スケルトンにないボーン（{1}）で動くため移植できません。異性へ持っていけるのはそのスケルトンだけです",
+    "description": ""
+  },
+  "HairPort.Refused.BonesCarry.Fmt": {
+    "message": "c{0:D4} の髪型 {2} 用スケルトンにしかないボーン（{1}）で動きますが、そのスケルトンを c{3:D4} に持っていけませんでした",
+    "description": ""
+  },
   "HairPort.Refused.Unknown.Fmt": {
     "message": "種族デフォーマーが {0} の動かし方を知りません",
     "description": ""
@@ -5718,6 +5726,14 @@
   "HairPort.Studio.OtherSexAuthored": {
     "message": "このModにはこの性別用の独自版があります",
     "description": "Per-race status in the Studio port list for a race of the other sex: the mod ships its own model of this hairstyle for that sex."
+  },
+  "HairPort.Studio.PortedFrom.Fmt": {
+    "message": "髪型 {0} から移植済み — これを移植するとそれが置き換わります",
+    "description": ""
+  },
+  "HairPort.Replaced.Fmt": {
+    "message": "c{0:D4}: 髪型 {1} から作った移植を置き換えました。",
+    "description": ""
   },
   "HairPort.Studio.OtherSexSkeleton": {
     "message": "このModはこの種族に独自のスケルトンを与えています",

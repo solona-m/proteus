@@ -5571,6 +5571,14 @@
     "message": "se mueve con huesos que c{0:D4} no tiene para este peinado ({1})",
     "description": ""
   },
+  "HairPort.Refused.BonesSourceSkeleton.Fmt": {
+    "message": "se mueve con huesos que el esqueleto propio de c{0:D4} para el peinado {2} no tiene ({1}), y solo ese esqueleto puede llevarse al otro sexo",
+    "description": ""
+  },
+  "HairPort.Refused.BonesCarry.Fmt": {
+    "message": "se mueve con huesos que solo tiene el esqueleto de c{0:D4} para el peinado {2} ({1}), y ese esqueleto no se pudo llevar a c{3:D4}",
+    "description": ""
+  },
   "HairPort.Refused.Unknown.Fmt": {
     "message": "el deformador racial no sabe cómo mover {0}",
     "description": ""
@@ -5718,6 +5726,14 @@
   "HairPort.Studio.OtherSexAuthored": {
     "message": "el mod tiene su propia versión para este sexo",
     "description": "Per-race status in the Studio port list for a race of the other sex: the mod ships its own model of this hairstyle for that sex."
+  },
+  "HairPort.Studio.PortedFrom.Fmt": {
+    "message": "adaptado desde el peinado {0}: adaptar este lo sustituye",
+    "description": ""
+  },
+  "HairPort.Replaced.Fmt": {
+    "message": "c{0:D4}: se sustituyó la adaptación hecha desde el peinado {1}.",
+    "description": ""
   },
   "HairPort.Studio.OtherSexSkeleton": {
     "message": "el mod da a esta raza su propio esqueleto",

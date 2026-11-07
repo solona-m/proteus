@@ -75,6 +75,7 @@ internal static class HairPortJob
         HairPortPanel.State.Ported => "ported",
         HairPortPanel.State.Stale => "stale",
         HairPortPanel.State.NoStyle => "no-style",
+        HairPortPanel.State.PortedElsewhere => "ported-elsewhere",
         _ => "other-sex-authored",
     };
 
@@ -104,7 +105,7 @@ internal static class HairPortJob
                 race = RaceCode(r.Race), state = Code(r.State), otherSex = r.OtherSex, ownVersion = r.OwnVersion,
                 ownSkeleton = r.OwnSkeleton, tickable = HairPortPanel.CanTick(r), defaultTicked = ticks.Contains(r.Race),
                 declined = record!.Declined.Contains(HairPortPlan.DeclineKey(Target(r.Race))),
-                stateText = HairPortPanel.StateText(r),
+                stateText = HairPortPanel.StateText(r), portedFrom = r.PortedFrom,
                 // A warning remembered for a target is only the row's while its port is there.
                 warning = r.State is HairPortPanel.State.Ported or HairPortPanel.State.Stale
                     ? names.Scrub(HairPortScan.WarningFor(modRoot, Target(r.Race))) : "",
@@ -234,6 +235,9 @@ internal static class HairPortJob
             warnings = (plan.Warnings ?? new Dictionary<ushort, string>()).OrderBy(w => w.Key)
                        .Select(w => new { race = RaceCode(w.Key), warning = w.Value }),
             current = plan.Current.Order().Select(RaceCode), saved = outcome.Count,
+            replaced = (plan.Replaced ?? new Dictionary<ushort, string>()).OrderBy(r => r.Key)
+                       .Where(r => saved.Any(w => !w.Stripped && HairPortPlan.Parse(w.TargetGamePath)?.Race == r.Key))
+                       .Select(r => new { race = RaceCode(r.Key), from = r.Value }),
         });
         if (!outcome.Ok) job.Fail(new JobError("run-failed", outcome.Message));
 
