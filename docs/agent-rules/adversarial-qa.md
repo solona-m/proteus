@@ -346,6 +346,14 @@ put back at put-back (in `matcap.settings`) while it is still what the harness l
     horns are **face** parts (see the plan's AM-7): with a non-Au Ra character, or no
     installed face mod with horns, the in-game half of horns is **UNVERIFIED**;
     Viera ears likewise need a Viera character.
+  - **G2 hair ports:** port the worn hairstyle to your race (`POST /actions/hair-port`,
+    or use a port that already exists), then apply a matcap to the **port file**
+    (`model` = the port's file under `Hair Ports/`: its game path may be ambiguous
+    across options) and screenshot it — the result line ends with the "kept as it is"
+    sentence. `POST /actions/hair-port {"remove":true}` must then refuse with "Undo
+    matcaps first" while `GET /hair-port` still lists the port; undo the matcap, and
+    the remove succeeds. Restore every job. Without a hairstyle Proteus can port to
+    your race, this step is **UNVERIFIED**.
   - **G2 horns with a face overlay:** with an Au Ra character, put an asymmetric face
     overlay on and apply a matcap to the horns, in both orders (overlay first, then
     matcap; matcap first, then overlay), then Undo with the overlay still on. After

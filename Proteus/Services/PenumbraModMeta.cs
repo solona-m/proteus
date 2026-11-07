@@ -416,7 +416,8 @@ internal static class PenumbraModMeta
     /// One file the mod publishes: the game path it claims, the file backing it (relative to the mod root),
     /// and where in the mod that claim is made.
     /// </summary>
-    /// <param name="Source">"" for the mod's default data, else "Group" or "Group / Option"; display only.</param>
+    /// <param name="Source">"" for the mod's default data, else "Group" or "Group / Option": shown to the user, and used
+    /// as the place's identity where only which place matters (the matcap tool's own-option material lookup).</param>
     public readonly record struct Redirect(string GamePath, string File, string Source);
 
     /// <summary>

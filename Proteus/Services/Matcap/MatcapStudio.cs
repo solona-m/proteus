@@ -90,8 +90,8 @@ internal static class MatcapStudio
         var redirects = PenumbraModMeta.ReadAllRedirects(modRoot);
 
         // ── siblings: every file at this game path whose parts line up ──
-        // A refit's matcap stays on that file alone, and an author's file never spreads one to its refits: a remake
-        // writes the refits again from the author's file, so tying them into one apply group would leave Undo stuck.
+        // A refit's or hair port's matcap stays on that file alone, and an author's file never spreads one to them: a
+        // remake writes them again from the author's file, so tying them into one apply group would leave Undo stuck.
         bool onRegenerated = MatcapPlan.Regenerated(modRoot, modelRel) is MatcapPlan.RefitKind or MatcapPlan.HairPortKind;
         var models = new List<(string Rel, byte[] Bytes, IReadOnlyList<ModelPart> Parts)> { (modelRel, modelBytes, chosen) };
         var skipped = new List<string>();

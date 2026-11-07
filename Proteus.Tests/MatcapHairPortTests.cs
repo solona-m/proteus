@@ -196,8 +196,6 @@ public sealed class MatcapHairPortTests : IDisposable
     [Fact]
     [Trait("Plan", "AC-matcap-hair-ports-3")]
     [Trait("Plan", "EDGE-matcap-hair-ports-10")]
-    [Trait("Plan", "EDGE-matcap-hair-ports-12")]
-    [Trait("Plan", "EDGE-matcap-hair-ports-13")]
     public void A_matcapped_port_is_not_remade_whatever_asks()
     {
         using var mod = HairMod();
@@ -345,6 +343,7 @@ public sealed class MatcapHairPortTests : IDisposable
         mod.Put($"{SidecarDiscoveryService.SidecarSubdir}/{MatcapWriter.BackupSubdir}/{rel}", mod.Get(rel));
         Assert.Null(HairPortWriter.EditedBy(mod.Root, rel));
         Assert.True(HairPortWriter.Save(mod.Root, [Port(mod, "Long") with { Model = HairModel(201, null, null) }], auto: true).Ok);
+        Assert.True(HairPortWriter.Undo(mod.Root, _ => true, decline: false).Ok);
     }
 
     [Fact]
@@ -429,7 +428,9 @@ public sealed class MatcapHairPortTests : IDisposable
         // The other option's port remade, then undone: own-material bookkeeping runs, and leaves the matcap alone.
         Assert.True(HairPortWriter.Save(mod.Root, [Port(mod, "Short", 101, "/mt_c0101h0130_hir_a_port0101.mtrl")
                                                        with { Model = HairModel(101, "/mt_c0101h0130_hir_a_port0101.mtrl", null) }], auto: true).Ok);
-        HairPortWriter.Undo(mod.Root, e => e.Option == "Short", decline: false);
+        var undone = HairPortWriter.Undo(mod.Root, e => e.Option == "Short", decline: false);
+        Assert.True(undone.Ok, undone.Message);
+        Assert.Equal(1, undone.Count);
         Assert.All(mat.GamePaths, gp => Assert.True(Defaults(mod).ContainsKey(gp)));
     }
 
@@ -558,7 +559,30 @@ public sealed class MatcapHairPortTests : IDisposable
         Assert.Contains(Blocked, plan.Refused[401]);
         Assert.False(plan.IsVerdict(401));
         Assert.False(plan.IsVerdict(201));
-        Assert.DoesNotContain(plan.Writes, w => w.TargetGamePath == HairPortPlan.HairPath(401, 105));
+        Assert.Contains(Blocked, plan.Refused[201]);                  // the sharer's refusal wraps the reason…
+        Assert.Contains("c0401", plan.Refused[201]);                  // …and names the race holding it
+        Assert.DoesNotContain(plan.Writes, w => !w.Stripped && w.TargetGamePath == HairPortPlan.HairPath(401, 105));
+        Assert.DoesNotContain(plan.Writes, w => !w.Stripped && w.TargetGamePath == HairPortPlan.HairPath(201, 105));
+    }
+
+    [Fact]
+    [Trait("Plan", "EDGE-matcap-hair-ports-16")]
+    public void Undoing_an_unmatcapped_sharer_is_refused_with_its_matcapped_set()
+    {
+        var (mod, _, _) = SharedStyle();
+        using var __ = mod;
+        var highlander = PortOf(mod, 401);
+        var midlander = PortOf(mod, 201);
+        Assert.True(Apply(mod, highlander, HairPortPlan.HairPath(401, 105)).Ok);
+        var mat = MatcapRecord.Read(mod.Root).Materials.Single();
+
+        // Picking only the unmatcapped Midlander pulls in its set, which holds the matcapped Highlander: refused.
+        var outcome = HairPortWriter.Undo(mod.Root, e => e.TargetGamePath == HairPortPlan.HairPath(201, 105), decline: false);
+        Assert.False(outcome.Ok);
+        Assert.Contains(Blocked, outcome.Message);
+        Assert.True(mod.Has(highlander));
+        Assert.True(mod.Has(midlander));
+        Assert.All(mat.GamePaths, gp => Assert.True(Defaults(mod).ContainsKey(gp)));
     }
 
     [Fact]
@@ -571,6 +595,7 @@ public sealed class MatcapHairPortTests : IDisposable
         Assert.True(Apply(mod, highlander, HairPortPlan.HairPath(401, 105)).Ok);
         var before = mod.Get(highlander);
         var matcapKeys = Defaults(mod).Where(kv => kv.Key.Contains("_mcap")).ToList();
+        var matcapFiles = matcapKeys.Select(kv => kv.Value).Distinct().ToDictionary(f => f, f => mod.Get(f));
         ChangeAuthor(mod);
 
         // By hand, for the Midlander only (no sharers): remade; the matcapped Highlander port is untouched.
@@ -580,6 +605,7 @@ public sealed class MatcapHairPortTests : IDisposable
         Assert.True(HairPortWriter.Save(mod.Root, plan.Writes, auto: false).Ok);
         Assert.Equal(before, mod.Get(highlander));
         Assert.Equal(matcapKeys, Defaults(mod).Where(kv => kv.Key.Contains("_mcap")).ToList());
+        foreach (var (f, bytes) in matcapFiles) Assert.Equal(bytes, mod.Get(f));
     }
 
     [Theory]
@@ -611,6 +637,7 @@ public sealed class MatcapHairPortTests : IDisposable
         Assert.All(m2.GamePaths, gp => Assert.True(Defaults(mod).ContainsKey(gp)));
         Assert.DoesNotContain(m1.GamePaths, gp => Defaults(mod).ContainsKey(gp));
         Assert.False(File.Exists(MatcapWriter.BackupPath(mod.Root, MatcapWriter.BackupSubdir, rel)));
+        Assert.True(File.Exists(MatcapWriter.BackupPath(mod.Root, MatcapWriter.BackupSubdir + "-superseded", rel)));
     }
 
     [Fact]
@@ -660,5 +687,31 @@ public sealed class MatcapHairPortTests : IDisposable
         Assert.Equal("chara/x/short_n.tex", onShort.Request!.Materials.Single().Normal);
         var onLong = Prepare(mod, PortFile(mod, "Long"), Target);
         Assert.Equal(AuthorNormal, onLong.Request!.Materials.Single().Normal);
+    }
+
+    [Theory]
+    [Trait("Plan", "EDGE-matcap-hair-ports-20")]
+    [InlineData(true)]
+    [InlineData(false)]
+    public void SourceMaterial_takes_the_own_option_then_the_default_data_then_another_option(bool ownOption)
+    {
+        // The author's own hair (not a port), in option Long; its material at the path it reads is published by the default
+        // data and by option Short — and, in one case, by Long itself.
+        var mtrlPath = HairMaterialPath.GamePath(801, Id, $"/mt_c0801h{Id:D4}_hir_a.mtrl")!;
+        var longFiles = new Dictionary<string, string> { [Source] = "long/c0801h0130_hir.mdl" };
+        if (ownOption) longFiles[mtrlPath] = "mats/own.mtrl";
+        using var mod = new Mod("[" + Group("Cut", "Single",
+                                    ("Long", longFiles),
+                                    ("Short", new() { [Source] = "short/c0801h0130_hir.mdl", [mtrlPath] = "mats/other.mtrl" })) + "]",
+                                new Dictionary<string, string> { [mtrlPath] = "mats/default.mtrl" });
+        mod.Put("long/c0801h0130_hir.mdl", HairModel(801));
+        mod.Put("short/c0801h0130_hir.mdl", HairModel(801));
+        mod.Put("mats/own.mtrl", SyntheticMatcapMod.Gear("chara/x/own_n.tex", 0.5f, "hair.shpk"));
+        mod.Put("mats/other.mtrl", SyntheticMatcapMod.Gear("chara/x/other_n.tex", 0.5f, "hair.shpk"));
+        mod.Put("mats/default.mtrl", SyntheticMatcapMod.Gear("chara/x/default_n.tex", 0.5f, "hair.shpk"));
+
+        var p = Prepare(mod, "long/c0801h0130_hir.mdl", Source);
+        Assert.True(p.Ok, p.Message);
+        Assert.Equal(ownOption ? "chara/x/own_n.tex" : "chara/x/default_n.tex", p.Request!.Materials.Single().Normal);
     }
 }

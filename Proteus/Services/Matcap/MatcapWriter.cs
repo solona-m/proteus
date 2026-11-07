@@ -453,7 +453,7 @@ internal static class MatcapWriter
                 if (record.Model(g) is { } me && me.WrittenSha8s.Contains(sha) && File.Exists(backup))
                     restore.Add((g, backup));                                               // (b) ours: restore it
                 else if (record.Model(g) is { } was && RemadeRegenerated(modRoot, g, record, was, bytes))
-                    forget.Add(g);                                                          // (f) a remade refit: forget it
+                    forget.Add(g);                                                          // (f) a remade refit or port: forget it
                 else                                                                        // (d) edited on top
                     return Outcome.Refuse(CodeEdited, string.Format(ProteusLoc.Localize("Matcap.Refused.Edited.Fmt",
                         "{0} was changed after its matcap was applied, so it was not undone. Its original is kept at {1}."),
@@ -592,7 +592,7 @@ internal static class MatcapWriter
     }
 
     /// <summary>
-    /// A refit Proteus wrote again since our matcap went on (a remake from its source): not as we wrote it, and not an
+    /// A refit or hair port Proteus wrote again since our matcap went on (a remake from its source): not as we wrote it, and not an
     /// edit on top of ours either — the remake replaced the file whole, so its old backup is stale.
     /// </summary>
     /// (A refit or a hair port.) A remake writes the file from its source, so it never carries the file's own matcaps: one still naming one
