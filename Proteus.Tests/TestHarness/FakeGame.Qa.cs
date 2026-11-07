@@ -106,7 +106,14 @@ internal sealed partial class FakeGame
     }
 
     public ConcurrentDictionary<string, byte> StagedMods { get; } = new(StringComparer.OrdinalIgnoreCase);
-    public bool HasStaged(string modDir) => StagedMods.ContainsKey(modDir);
+
+    /// <summary>From this call on (1-based), every mod reads as having a staged edit: a user edit made mid-request.</summary>
+    public int? StagedFromCall { get; set; }
+    private int stagedCalls;
+
+    public bool HasStaged(string modDir)
+        => System.Threading.Interlocked.Increment(ref stagedCalls) >= (StagedFromCall ?? int.MaxValue)
+        || StagedMods.ContainsKey(modDir);
 
     public ConcurrentQueue<string> Forgotten { get; } = new();
     public void ForgetSidecar(string modDir) => Forgotten.Enqueue(modDir);

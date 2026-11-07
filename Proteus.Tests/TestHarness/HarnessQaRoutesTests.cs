@@ -165,6 +165,27 @@ public class HarnessQaRoutesTests : IDisposable
 
     [Fact]
     [Trait("Plan", "AC-idle-disk-io-10")]
+    [Trait("Plan", "EDGE-idle-disk-io-40")]
+    public async Task SidecarEdit_UserEditStagedMidRequest_409_NoSave()
+    {
+        // [AC-idle-disk-io-10] [EDGE-idle-disk-io-40] The first check passes; the user stages an edit before the save; the
+        // re-check right before the save refuses it.
+        var mod = SidecarMod();
+        var before = File.ReadAllBytes(fx.Game.MetaPath(mod));
+        fx.Game.StagedFromCall = 2;
+        var (status, body) = await fx.Post("/actions/sidecar-edit", $"{{\"mod\":\"{mod}\",\"row\":16,\"diffuse\":\"#ABCDEF\"}}");
+        Assert.Equal(409, status);
+        Assert.Equal("user-edit-held", body.GetProperty("error").GetProperty("code").GetString());
+        Assert.Equal(0, fx.Game.Saves);
+        Assert.Equal(before, File.ReadAllBytes(fx.Game.MetaPath(mod)));
+
+        fx.Game.StagedFromCall = null;
+        var (_, putBack) = await fx.Post("/actions/put-back", "{}");
+        Assert.Equal("unchanged", Assert.Single(putBack.GetProperty("sidecar").EnumerateArray()).GetProperty("result").GetString());
+    }
+
+    [Fact]
+    [Trait("Plan", "AC-idle-disk-io-10")]
     public async Task SidecarView_ReadsThroughDiscovery()
     {
         // [AC-idle-disk-io-10]
