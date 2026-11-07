@@ -1158,7 +1158,7 @@ public sealed partial class PartsPanel
     }
 
     /// <summary>The brush size slider's range, in millimetres — down to a millimetre for sculpting a face.</summary>
-    private const float MinBrushMm = 1f, MaxBrushMm = 300f;
+    internal const float MinBrushMm = 1f, MaxBrushMm = 300f;
 
     /// <summary>
     /// <c>[</c> and <c>]</c> shrink and grow the current tool's brush by a proportion, Shift for fine steps; held,

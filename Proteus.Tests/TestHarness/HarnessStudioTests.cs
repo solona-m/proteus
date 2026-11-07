@@ -30,9 +30,32 @@ public class HarnessStudioTests
         Assert.Equal(["1.2"], r.Unlock);
         Assert.Equal("1.3", r.Part);
         // The order they are applied in is the panel's, fixed: the fields list names it.
-        Assert.Equal(["tool", "mode", "view", "mirror", "adjacent", "moveSkin", "unlockAll", "lock", "unlock", "part"], HarnessStudio.SetFields);
+        Assert.Equal(["tool", "mode", "view", "mirror", "adjacent", "falloffMm", "moveSkin", "unlockAll", "lock", "unlock", "part"], HarnessStudio.SetFields);
         Assert.DoesNotContain("drawer", HarnessStudio.SetFields);
-        Assert.DoesNotContain("falloffMm", HarnessStudio.SetFields);
+        Assert.Null(r.FalloffMm);
+    }
+
+    [Fact]
+    [Trait("Plan", "EDGE-issue-sweep-c-50")]
+    public void ParseSet_FalloffMm_in_the_sliders_range()
+    {
+        // #86: QA reproduces a Whole-parts drag with the falloff it was made with — the slider's 1–300 mm.
+        Assert.Equal(50f, HarnessStudio.ParseSet(Body("""{"falloffMm":50}""")).Request!.FalloffMm);
+        Assert.Equal(1f, HarnessStudio.ParseSet(Body("""{"falloffMm":1}""")).Request!.FalloffMm);
+        Assert.Equal(300f, HarnessStudio.ParseSet(Body("""{"falloffMm":300}""")).Request!.FalloffMm);
+        foreach (var bad in new[] { """{"falloffMm":0.5}""", """{"falloffMm":301}""", """{"falloffMm":"50"}""", """{"falloffMm":null}""" })
+            Assert.NotNull(HarnessStudio.ParseSet(Body(bad)).Error);
+    }
+
+    [Fact]
+    [Trait("Plan", "EDGE-issue-sweep-c-50")]
+    public void FalloffMm_reported_set_and_put_back()
+    {
+        var src = System.IO.File.ReadAllText(System.IO.Path.Combine(DefaultMatcapsDownloadServiceTests.RepoRoot(), "Proteus", "Gui", "PartsPanel.Harness.cs"));
+        Assert.Contains("falloffMm = moveFalloffMm, moveSkin }", src);
+        Assert.Contains("falloffMm = AdjacentNow ? moveFalloffMm : 0f,", src);
+        Assert.Contains("if (request.FalloffMm is { } falloff && falloff != moveFalloffMm) { moveFalloffMm = falloff; ForgetMoveFalloff(); }", src);
+        Assert.Contains("if (moveFalloffMm != snap.FalloffMm) { moveFalloffMm = snap.FalloffMm; ForgetMoveFalloff(); }", src);
     }
 
     [Theory]
@@ -46,7 +69,7 @@ public class HarnessStudioTests
     [InlineData("""{"lock":["1.1"],"unlock":["1.1"]}""")]
     [InlineData("""{"part":""}""")]
     [InlineData("""{"drawer":true}""")]
-    [InlineData("""{"falloffMm":10}""")]
+    [InlineData("""{"falloffMm":1000}""")]
     public void ParseSet_Rejects(string json) => Assert.NotNull(HarnessStudio.ParseSet(Body(json)).Error);
 
     [Fact]

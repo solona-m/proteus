@@ -21,8 +21,11 @@ internal sealed record StudioOpenOutcome(StudioRefusal? Refused, string? File, o
                                          int EditVersion, IReadOnlyDictionary<string, object?>? State);
 
 /// <summary>The controls <c>studio-set</c> changes, already validated; null or empty for those not given.</summary>
+/// <param name="FalloffMm">The Move tools' falloff ("adjacent" reach), in millimetres (#86: QA reproduces a Whole-parts
+/// drag with the falloff it was made with).</param>
 internal sealed record StudioSetRequest(string? Tool, string? Mode, string? View, bool? Mirror, bool? Adjacent, bool? MoveSkin,
-                                        bool UnlockAll, IReadOnlyList<string> Lock, IReadOnlyList<string> Unlock, string? Part);
+                                        bool UnlockAll, IReadOnlyList<string> Lock, IReadOnlyList<string> Unlock, string? Part,
+                                        float? FalloffMm = null);
 
 /// <summary>What <c>studio-set</c> did: per lock label locked / unlocked / unchanged / refused, and whether the part was taken.</summary>
 /// <param name="EditVersion">The solve's edit counter after the controls changed.</param>
