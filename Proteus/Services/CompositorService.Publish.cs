@@ -240,14 +240,20 @@ public partial class CompositorService
     internal string? HatCompatKeyFor(IReadOnlyList<string>? parts)
         => HatCompatService.EquippedHairKey(parts, penumbra.ResolvePlayer, modsRoot);
 
-    /// <summary>Until this tick, per mod, an Edited event is the live brush's own reload of that mod.</summary>
-    private readonly ConcurrentDictionary<string, long> _ownModEditUntil = new(StringComparer.OrdinalIgnoreCase);
+    /// <summary>Until this tick, per mod, an Edited event is Proteus's own reload of that mod, and who made it.</summary>
+    private readonly ConcurrentDictionary<string, (long Until, string By)> _ownModEditUntil = new(StringComparer.OrdinalIgnoreCase);
 
     /// <summary>
-    /// The live brush is about to reload <paramref name="modDir"/> after saving a garment into it, which Penumbra reports
-    /// as an edit that looks like a moved base. Marks the coming edit as our own for a moment.
+    /// Some part of Proteus (<paramref name="by"/>: the live brush, the Studio, auto refit, the test harness…) is about to
+    /// reload <paramref name="modDir"/> after writing into it, which Penumbra reports as an edit that looks like a moved
+    /// base. Marks the coming edit as our own for a moment; the log line names <paramref name="by"/>.
     /// </summary>
-    public void ExpectOwnModEdit(string modDir) => _ownModEditUntil[modDir] = Environment.TickCount64 + 2000;
+    public void ExpectOwnModEdit(string modDir, string by)
+        => _ownModEditUntil[modDir] = (Environment.TickCount64 + 2000, by);
+
+    /// <summary>The log line for an expected Edited event, naming who reloaded the mod.</summary>
+    internal static string OwnEditLine(string modDir, string by)
+        => $"[Proteus] ModSettingChanged:Edited:{modDir} is {by}'s own save — no recomposite";
 
     /// <summary>Until this tick, Glamourer state changes are the echo of a reload Proteus caused.</summary>
     private long _glamourerEchoUntil;

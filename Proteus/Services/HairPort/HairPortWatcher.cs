@@ -557,7 +557,7 @@ public sealed partial class HairPortWatcher : IDisposable
         {
             if (w.disposed) return;
             w.schedule.OwnReload(modDir, Environment.TickCount64);
-            w.compositor.ExpectOwnModEdit(modDir);
+            w.compositor.ExpectOwnModEdit(modDir, "the hair watcher");
             var ec = w.penumbra.ReloadModDirectory(modDir);
             w.log.Information("hair port: asked Penumbra to reload {0} — {1}", modDir, ec);
         }

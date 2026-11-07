@@ -3569,7 +3569,7 @@ public sealed partial class PartsPanel
             return;
         }
 
-        if (previewed || (wind && !showModelView)) compositor.ExpectOwnModEdit(modDir);
+        if (previewed || (wind && !showModelView)) compositor.ExpectOwnModEdit(modDir, "the live brush");
         penumbra.ReloadModDirectory(modDir);
 
         // The previewed push now shows the saved file itself, shared with sync pairs (see TickLivePreview).
@@ -3731,7 +3731,7 @@ public sealed partial class PartsPanel
 
         if (r.Applied == 0) return;
         // Sizes nobody is wearing need only Penumbra told; one the character IS wearing has to be redrawn to show.
-        if (!r.WornChanged) compositor.ExpectOwnModEdit(r.ModDir);
+        if (!r.WornChanged) compositor.ExpectOwnModEdit(r.ModDir, "the Studio");
         penumbra.ReloadModDirectory(r.ModDir);
         if (!r.WornChanged) return;
         if (preview.Active) EndLivePreview(refreshGame: true);
@@ -3779,7 +3779,7 @@ public sealed partial class PartsPanel
         {
             hairPort.Draw(ModRoot()!, modDir!, models[modelIndex].GamePath, models[modelIndex].File, changed =>
             {
-                compositor.ExpectOwnModEdit(changed);
+                compositor.ExpectOwnModEdit(changed, "the Studio");
                 penumbra.ReloadModDirectory(changed);
                 compositor.RedrawForChangedModel("Studio parts");
                 refreshModelsPending = true;   // the ports are models of the mod: list them
@@ -3806,7 +3806,7 @@ public sealed partial class PartsPanel
                 changed ??= modDir ?? lastRefitModDir;
                 if (changed != null)
                 {
-                    compositor.ExpectOwnModEdit(changed);
+                    compositor.ExpectOwnModEdit(changed, "the Studio");
                     penumbra.ReloadModDirectory(changed);
                     afterReload?.Invoke(changed);
                 }
@@ -3831,7 +3831,7 @@ public sealed partial class PartsPanel
                 ImGui.Separator();
                 sizeSet.Draw(root, dir, changed =>
                 {
-                    compositor.ExpectOwnModEdit(changed);
+                    compositor.ExpectOwnModEdit(changed, "the Studio");
                     penumbra.ReloadModDirectory(changed);
                     compositor.RedrawForChangedModel("Studio parts");
                     refreshModelsPending = true;   // the new sizes are models of the mod: list them

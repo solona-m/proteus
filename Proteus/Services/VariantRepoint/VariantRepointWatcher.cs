@@ -478,7 +478,7 @@ public sealed class VariantRepointWatcher : IDisposable
         foreach (var root in modRoots)
         {
             var dir = Path.GetFileName(root.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar));
-            compositor.ExpectOwnModEdit(dir);
+            compositor.ExpectOwnModEdit(dir, "gear variants");
             var ec = penumbra.ReloadModDirectory(dir);
             reloaded &= ec == PenumbraApiEc.Success;
             if (counts != null)

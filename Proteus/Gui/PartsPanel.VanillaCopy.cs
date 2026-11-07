@@ -216,7 +216,7 @@ public sealed partial class PartsPanel
             statusIsError = false;
             if (!outcome.Made)
             {
-                compositor.ExpectOwnModEdit(outcome.Dir);
+                compositor.ExpectOwnModEdit(outcome.Dir, "the Studio");
                 penumbra.ReloadModDirectory(outcome.Dir);
             }
             return null;
@@ -228,7 +228,7 @@ public sealed partial class PartsPanel
         }
         else
         {
-            compositor.ExpectOwnModEdit(outcome.Dir);
+            compositor.ExpectOwnModEdit(outcome.Dir, "the Studio");
         }
         lastCopyRefusal = null;
         log.Information("[Proteus] parts: copied {0} into {1} on its first edit", piece.GamePath, outcome.Dir);

@@ -416,7 +416,7 @@ public sealed partial class AutoRefitWatcher : IDisposable
                             log.Information("[Proteus] auto refit undo: deleting {0}: {1}", r.Dir, penumbra.DeleteModDirectory(r.Dir));
                         else if (r.Removed.Count > 0)
                         {
-                            compositor.ExpectOwnModEdit(r.Dir);
+                            compositor.ExpectOwnModEdit(r.Dir, "auto refit");
                             penumbra.ReloadModDirectory(r.Dir);
                         }
                     }
@@ -2294,7 +2294,7 @@ public sealed partial class AutoRefitWatcher : IDisposable
         lock (queueGate) batchSwitchedDirs.Add(dir);
         await OnFramework(() =>
         {
-            compositor.ExpectOwnModEdit(dir);
+            compositor.ExpectOwnModEdit(dir, "auto refit");
             compositor.ExpectOwnRefitWrite(dir);
             return penumbra.ReloadModDirectory(dir);
         });

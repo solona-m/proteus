@@ -255,7 +255,7 @@ internal sealed class GameHarnessAdapter : IHarnessGame, IDisposable
 
     public AfterChangeResult AfterModChange(string modDir)
     {
-        compositor.ExpectOwnModEdit(modDir);
+        compositor.ExpectOwnModEdit(modDir, "the test harness");
         bool reloaded = penumbra.ReloadModDirectory(modDir) == PenumbraApiEc.Success;
         long baseline = RedrawCount;
         compositor.RedrawForChangedModel("test harness");
