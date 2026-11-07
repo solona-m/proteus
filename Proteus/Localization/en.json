@@ -6380,7 +6380,27 @@
     "description": "Studio Matcaps tool. A matcap is a sphere picture a shader samples by the surface's facing direction."
   },
   "Parts.Matcap.Guide": {
-    "message": "A matcap is a picture of a lit sphere; the parts take their colour from it by which way they face you. Tick parts, pick a matcap, then Apply.",
+    "message": "A matcap is a picture of a lit sphere; the parts take their colour from it by which way they face you. Tick parts, click a matcap to see it on your character, then Apply.",
+    "description": "Studio Matcaps tool. A matcap is a sphere picture a shader samples by the surface's facing direction."
+  },
+  "Parts.Matcap.PreviewFailed.Fmt": {
+    "message": "The matcap could not be shown on your character ({0}).",
+    "description": "Studio Matcaps tool. A matcap is a sphere picture a shader samples by the surface's facing direction."
+  },
+  "Parts.Matcap.Previewing": {
+    "message": "Shown on your character only: nothing is saved until you press Apply matcap.",
+    "description": "Studio Matcaps tool. A matcap is a sphere picture a shader samples by the surface's facing direction."
+  },
+  "Parts.Matcap.PreviewGameGear": {
+    "message": "Game gear shows the matcap once you apply it.",
+    "description": "Studio Matcaps tool. A matcap is a sphere picture a shader samples by the surface's facing direction."
+  },
+  "Parts.Matcap.PreviewGearOnly": {
+    "message": "Hair, tails, ears and horns show the matcap once you apply it.",
+    "description": "Studio Matcaps tool. A matcap is a sphere picture a shader samples by the surface's facing direction."
+  },
+  "Parts.Matcap.PreviewTick": {
+    "message": "Tick parts to see the matcap on your character.",
     "description": "Studio Matcaps tool. A matcap is a sphere picture a shader samples by the surface's facing direction."
   },
   "Parts.Matcap.Held.Fmt": {

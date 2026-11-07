@@ -45,6 +45,14 @@ internal sealed record StudioDragOutcome(StudioRefusal? Refused, string Kind, bo
                                          bool Saved, string? Status, bool StatusIsError, IReadOnlyList<StudioFile> Files,
                                          int EditVersion, IReadOnlyDictionary<string, object?>? State);
 
+/// <summary>The Matcaps tool's click preview, already validated: tick <see cref="Parts"/> and click an image or a library
+/// option, or <see cref="End"/> the preview.</summary>
+internal sealed record StudioMatcapPreviewRequest(IReadOnlyList<string> Parts, string? Image, bool Pack, string? Library,
+                                                  string? Group, string? Option, bool End);
+
+/// <summary>What <c>matcap-preview</c> did: refused, or the preview's state (see <c>/studio</c>'s <c>matcapPreview</c>).</summary>
+internal sealed record StudioMatcapPreviewOutcome(StudioRefusal? Refused, object? Preview, IReadOnlyDictionary<string, object?>? State);
+
 /// <summary>The harness's Studio session: what it opened, what it saved, and the panel to put back.</summary>
 internal sealed class StudioSession(string modDir, string file, object snapshot, bool windowOpened)
 {
@@ -122,4 +130,8 @@ internal interface IStudioHarness
 
     /// <summary>End the session at put-back: check, revert and restore in one call. Framework thread.</summary>
     StudioPutBack EndSession(StudioSession session, bool refreshGame);
+
+    /// <summary>The Matcaps tool's click preview on the session's model, as a thumbnail click runs it: switch to Matcaps,
+    /// tick the parts, pick and request. Writes nothing into any mod. Framework thread.</summary>
+    StudioMatcapPreviewOutcome MatcapPreview(StudioMatcapPreviewRequest request, StudioSession session);
 }

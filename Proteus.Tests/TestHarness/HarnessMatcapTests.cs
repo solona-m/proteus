@@ -345,6 +345,91 @@ public class HarnessMatcapTests : IDisposable
         Assert.False(f.Game.Permanent["Lib"].Enabled);
     }
 
+    // ── the click preview's route ────────────────────────────────────────────────────────────────────────────────────
+
+    private async Task OpenSession()
+    {
+        AddGearMod();
+        var (s, _) = await f.Post("/actions/studio-open", """{"mod":"Gear","model":"model/top.mdl"}""");
+        Assert.Equal(200, s);
+    }
+
+    [Fact]
+    [Trait("Plan", "AC-matcap-preview-5")]
+    [Trait("Plan", "AC-matcap-preview-9")]
+    public async Task Preview_route_ticks_picks_and_requests()
+    {
+        await OpenSession();
+        var (s, body) = await f.Post("/actions/matcap-preview", """{"parts":["1.2"],"image":"qa-x.png"}""");
+        Assert.Equal(200, s);
+        Assert.Equal("building", body.GetProperty("preview").GetProperty("state").GetString());
+        var req = Assert.Single(studio.Previews);
+        Assert.Equal(["1.2"], req.Parts);
+        Assert.Equal("qa-x.png", req.Image);
+        Assert.False(req.End);
+        Assert.Equal("matcap", body.GetProperty("state").GetProperty("tool").GetString());
+    }
+
+    [Fact]
+    [Trait("Plan", "AC-matcap-preview-9")]
+    [Trait("Plan", "EDGE-matcap-preview-24")]
+    public async Task Preview_route_end_and_putback()
+    {
+        await OpenSession();
+        await f.Post("/actions/matcap-preview", """{"parts":["1.2"],"library":"Lib","group":"Slot","option":"Pearl"}""");
+        var (s, body) = await f.Post("/actions/matcap-preview", """{"end":true}""");
+        Assert.Equal(200, s);
+        Assert.Equal("none", body.GetProperty("preview").GetProperty("state").GetString());
+        Assert.True(studio.Previews[^1].End);
+
+        await f.Post("/actions/matcap-preview", """{"parts":["1.2"],"image":"qa-x.png"}""");
+        var (sp, _) = await f.Post("/actions/put-back", "{}");
+        Assert.Equal(200, sp);
+        Assert.Single(studio.Ended);
+        Assert.Equal("none", studio.PreviewState);
+    }
+
+    [Theory]
+    [Trait("Plan", "EDGE-matcap-preview-24")]
+    [InlineData("""{"image":"qa-x.png"}""", "parts")]
+    [InlineData("""{"parts":["1.2"]}""", "image or library")]
+    [InlineData("""{"parts":["1.2"],"image":"a.png","library":"L","group":"g","option":"o"}""", "not both")]
+    [InlineData("""{"parts":["1.2"],"library":"L"}""", "group and option")]
+    [InlineData("""{"parts":["1.2"],"pack":true}""", "pack goes with image")]
+    [InlineData("""{"end":true,"parts":["1.2"]}""", "end takes nothing else")]
+    [InlineData("""{"end":"yes"}""", "end must be true or false")]
+    [InlineData("""{"parts":[]}""", "non-empty")]
+    [InlineData("""{"parts":["1.2"],"image":"a.png","nope":1}""", "unknown field")]
+    public async Task Preview_route_refusals(string json, string fragment)
+    {
+        await OpenSession();
+        var (s, body) = await f.Post("/actions/matcap-preview", json);
+        Assert.Equal(400, s);
+        Assert.Equal("invalid-field", Code(body));
+        Assert.Contains(fragment, body.GetProperty("error").GetProperty("message").GetString());
+        Assert.Empty(studio.Previews);
+    }
+
+    [Fact]
+    [Trait("Plan", "EDGE-matcap-preview-24")]
+    public async Task Preview_route_needs_a_session_and_passes_the_panels_refusals()
+    {
+        AddGearMod();
+        var (s1, b1) = await f.Post("/actions/matcap-preview", """{"parts":["1.2"],"image":"qa-x.png"}""");
+        Assert.Equal(409, s1);
+        Assert.Equal("no-studio-session", Code(b1));
+
+        await f.Post("/actions/studio-open", """{"mod":"Gear","model":"model/top.mdl"}""");
+        studio.PreviewRefusal = new StudioRefusal(409, "untickable-part", "1.1 can't take a matcap");
+        var (s2, b2) = await f.Post("/actions/matcap-preview", """{"parts":["1.1"],"image":"qa-x.png"}""");
+        Assert.Equal(409, s2);
+        Assert.Equal("untickable-part", Code(b2));
+        studio.PreviewRefusal = new StudioRefusal(404, "unknown-image", "no matcap image called nope.png");
+        var (s3, b3) = await f.Post("/actions/matcap-preview", """{"parts":["1.2"],"image":"nope.png"}""");
+        Assert.Equal(404, s3);
+        Assert.Equal("unknown-image", Code(b3));
+    }
+
     // ── Proteus's own matcaps (matcap-pack) ──────────────────────────────────────────────────────────────────────────
 
     /// <summary>A scripted pack: records how it was asked, lists real PNGs from its own folder.</summary>

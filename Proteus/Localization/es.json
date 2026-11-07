@@ -6380,7 +6380,27 @@
     "description": ""
   },
   "Parts.Matcap.Guide": {
-    "message": "Un matcap es la imagen de una esfera iluminada; las partes toman su color de ella según hacia dónde miran. Marca partes, elige un matcap y pulsa Aplicar.",
+    "message": "Un matcap es la imagen de una esfera iluminada; las partes toman su color de ella según hacia dónde miran. Marca partes, haz clic en un matcap para verlo en tu personaje y pulsa Aplicar.",
+    "description": ""
+  },
+  "Parts.Matcap.PreviewFailed.Fmt": {
+    "message": "No se pudo mostrar el matcap en tu personaje ({0}).",
+    "description": ""
+  },
+  "Parts.Matcap.Previewing": {
+    "message": "Solo se muestra en tu personaje: no se guarda nada hasta que pulses Aplicar matcap.",
+    "description": ""
+  },
+  "Parts.Matcap.PreviewGameGear": {
+    "message": "El equipo del juego muestra el matcap cuando lo aplicas.",
+    "description": ""
+  },
+  "Parts.Matcap.PreviewGearOnly": {
+    "message": "El pelo, las colas, las orejas y los cuernos muestran el matcap cuando lo aplicas.",
+    "description": ""
+  },
+  "Parts.Matcap.PreviewTick": {
+    "message": "Marca partes para ver el matcap en tu personaje.",
     "description": ""
   },
   "Parts.Matcap.Held.Fmt": {

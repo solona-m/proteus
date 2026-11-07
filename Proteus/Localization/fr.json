@@ -6380,7 +6380,27 @@
     "description": ""
   },
   "Parts.Matcap.Guide": {
-    "message": "Un matcap est l'image d'une sphère éclairée ; les parties y prennent leur couleur selon leur orientation vers vous. Cochez des parties, choisissez un matcap, puis Appliquer.",
+    "message": "Un matcap est l'image d'une sphère éclairée ; les parties y prennent leur couleur selon leur orientation vers vous. Cochez des parties, cliquez sur un matcap pour le voir sur votre personnage, puis Appliquer.",
+    "description": ""
+  },
+  "Parts.Matcap.PreviewFailed.Fmt": {
+    "message": "Le matcap n'a pas pu être affiché sur votre personnage ({0}).",
+    "description": ""
+  },
+  "Parts.Matcap.Previewing": {
+    "message": "Affiché sur votre personnage seulement : rien n'est enregistré avant que vous cliquiez sur Appliquer le matcap.",
+    "description": ""
+  },
+  "Parts.Matcap.PreviewGameGear": {
+    "message": "L'équipement du jeu montre le matcap une fois appliqué.",
+    "description": ""
+  },
+  "Parts.Matcap.PreviewGearOnly": {
+    "message": "Les cheveux, queues, oreilles et cornes montrent le matcap une fois appliqué.",
+    "description": ""
+  },
+  "Parts.Matcap.PreviewTick": {
+    "message": "Cochez des parties pour voir le matcap sur votre personnage.",
     "description": ""
   },
   "Parts.Matcap.Held.Fmt": {

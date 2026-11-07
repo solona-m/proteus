@@ -6380,7 +6380,27 @@
     "description": ""
   },
   "Parts.Matcap.Guide": {
-    "message": "マットキャップは照らされた球の画像で、パーツはこちらへ向いている方向に応じてその色を取ります。パーツをチェックし、マットキャップを選んで適用してください。",
+    "message": "マットキャップは照らされた球の画像で、パーツはこちらへ向いている方向に応じてその色を取ります。パーツをチェックし、マットキャップをクリックしてキャラクターで確かめてから適用してください。",
+    "description": ""
+  },
+  "Parts.Matcap.PreviewFailed.Fmt": {
+    "message": "マットキャップをキャラクターに表示できませんでした（{0}）。",
+    "description": ""
+  },
+  "Parts.Matcap.Previewing": {
+    "message": "キャラクターに表示しているだけです。マットキャップを適用を押すまで何も保存されません。",
+    "description": ""
+  },
+  "Parts.Matcap.PreviewGameGear": {
+    "message": "ゲームの装備は、適用するとマットキャップが表示されます。",
+    "description": ""
+  },
+  "Parts.Matcap.PreviewGearOnly": {
+    "message": "髪・尻尾・耳・角は、適用するとマットキャップが表示されます。",
+    "description": ""
+  },
+  "Parts.Matcap.PreviewTick": {
+    "message": "パーツをチェックすると、マットキャップをキャラクターで確認できます。",
     "description": ""
   },
   "Parts.Matcap.Held.Fmt": {

@@ -78,6 +78,25 @@ internal static class MatcapPanelModel
     }
 
     /// <summary>
+    /// Why a clicked matcap can't be shown on the character, or null: nothing ticked, not gear (hair, tails, ears and
+    /// horns redraw the character rather than reload in place, and a hair resolved outside its mod could set off an
+    /// automatic hair port), the game's own gear (for now), an imported piece, or whatever Apply would refuse.
+    /// </summary>
+    /// <param name="kind">The open model's kind; null when unknown (the build refuses it as not a target).</param>
+    public static string? PreviewBlocked(bool penumbra, IReadOnlyList<ModelPart> ticked, MatcapPlan.Kind? kind, bool gamePiece,
+                                         bool importedPiece, MatcapChoice? choice, int room, MatcapRecord record)
+    {
+        var s = Strings.Matcap;
+        if (!penumbra) return s.NoPenumbra;
+        if (ticked.Count == 0) return s.PreviewTick;
+        if (kind is { } k && k != MatcapPlan.Kind.Gear) return s.PreviewGearOnly;
+        if (gamePiece) return s.PreviewGameGear;
+        if (importedPiece) return ProteusLoc.Localize("Matcap.Refused.ImportedPiece",
+            "This piece belongs to an imported pack, which Proteus rebuilds itself. Put the matcap on the pack's own mod instead.");
+        return ApplyDisabledReason(penumbra, ticked, choice, room, record);
+    }
+
+    /// <summary>
     /// What an Apply that changes matcaps reaches beyond the ticks, shown before it is pressed: the matcaps (in every file
     /// of the mod using them, refits included); how many of this model's parts on them are not ticked; and the other model
     /// files Proteus recorded on them, as examples (carried-in files such as refits are not scanned for).

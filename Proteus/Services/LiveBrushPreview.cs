@@ -118,13 +118,13 @@ internal sealed class LiveBrushPreview(PenumbraBridge penumbra, CompositorServic
         if (Busy || gamePaths.Count == 0) return false;
         int gen = NextGeneration();
         var file = Path.Combine(Dir, FileName(Environment.ProcessId, Nonce, gen));
-        Start(gen, gamePaths, () =>
+        Start(gen, () =>
         {
             Directory.CreateDirectory(Dir);
             try { WriteTemporary(file, model); }
             catch { TryDelete(file); throw; }   // never leave half a model behind
-            return (file, false);
-        }, onApplied: null);
+            return Single(gamePaths, file, false);
+        }, onApplied: null, Reload.InPlace);
         return true;
     }
 
@@ -177,10 +177,10 @@ internal sealed class LiveBrushPreview(PenumbraBridge penumbra, CompositorServic
         if (sweep) sharedSwept = true;
         var stamp = saved.Stamp;
 
-        Start(gen, gamePaths, () =>
+        Start(gen, () =>
         {
             if (sweep) SweepShared(sharedDir!);
-            if (reuse != null && File.Exists(reuse)) return (reuse, true);
+            if (reuse != null && File.Exists(reuse)) return Single(gamePaths, reuse, true);
 
             var written = CopyPreview(saved.FullPath, sharedDir, Dir, name);
             if (sharedDir != null && !written.Shared && !warnedWrite)
@@ -188,14 +188,87 @@ internal sealed class LiveBrushPreview(PenumbraBridge penumbra, CompositorServic
                 warnedWrite = true;
                 log.Warning("[Proteus] live brush: could not write the shared preview into \"{0}\"; shown privately", sharedDir);
             }
-            return written;
+            return Single(gamePaths, written.Path, written.Shared);
         }, onApplied: (path, shared) =>
         {
             if (!shared) return;
             lock (gate)
                 if (gen > endedAt) lastShared = (stamp, path);   // not after End took it down
-        });
+        }, Reload.InPlace);
         return sharedDir != null ? PushResult.Shared : PushResult.Private;
+    }
+
+    /// <summary>One file of a multi-file preview: the game paths it stands in for, its extension, its bytes.</summary>
+    internal sealed record PreviewFile(IReadOnlyCollection<string> GamePaths, string Extension, byte[] Bytes);
+
+    /// <summary>
+    /// Put several files on the character at once, privately: a model with its new materials and textures (the
+    /// Matcaps tool's click preview). Each is written under a name never handed out before, so the game loads every one
+    /// afresh: a temporary mod does not bump Penumbra's change counter, and materials are cached by resolved path.
+    /// </summary>
+    /// <param name="redraw">Redraw rather than reload the gear in place (Glamourer cannot); a failed in-place reload
+    /// redraws too.</param>
+    /// <returns>False when a preview is still in flight, or there is nothing to show.</returns>
+    public bool PushFiles(IReadOnlyList<PreviewFile> previewFiles, bool redraw)
+    {
+        if (Busy || previewFiles.All(f => f.GamePaths.Count == 0)) return false;
+        int gen = NextGeneration();
+        var (map, writes) = LayOut(previewFiles, Dir, Environment.ProcessId, Nonce, gen);
+        Start(gen, () =>
+        {
+            Directory.CreateDirectory(Dir);
+            var written = new List<string>();
+            try
+            {
+                foreach (var (path, bytes) in writes)
+                {
+                    written.Add(path);
+                    WriteTemporary(path, bytes);
+                }
+            }
+            catch { foreach (var w in written) TryDelete(w); throw; }   // never leave part of a preview behind
+            return (map, written, false);
+        }, onApplied: null, redraw ? Reload.Redraw : Reload.InPlaceOrRedraw);
+        return true;
+    }
+
+    /// <summary>
+    /// Where each of <paramref name="previewFiles"/> is written (under <paramref name="privateDir"/>, a name of its own
+    /// per generation and index) and the redirect map from every game path to its file.
+    /// </summary>
+    internal static (Dictionary<string, string> Map, List<(string Path, byte[] Bytes)> Writes) LayOut(
+        IReadOnlyList<PreviewFile> previewFiles, string privateDir, int pid, string nonce, int gen)
+    {
+        var map = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        var writes = new List<(string, byte[])>();
+        for (int i = 0; i < previewFiles.Count; i++)
+        {
+            var f = previewFiles[i];
+            if (f.GamePaths.Count == 0) continue;
+            var path = Path.Combine(privateDir, FileName(pid, nonce, gen, i, f.Extension));
+            writes.Add((path, f.Bytes));
+            foreach (var gp in f.GamePaths) map[gp] = path;
+        }
+        return (map, writes);
+    }
+
+    /// <summary>A multi-file preview's file name, private only: <c>{pid}-{nonce}-{gen}-{index}{ext}</c>.</summary>
+    internal static string FileName(int pid, string nonce, int gen, int index, string extension) =>
+        $"{pid}-{nonce}-{gen:D6}-{index}{extension}";
+
+    private static (Dictionary<string, string> Map, IReadOnlyList<string> Owned, bool Shared) Single(
+        IReadOnlyCollection<string> gamePaths, string file, bool shared) =>
+        (gamePaths.ToDictionary(p => p, _ => file, StringComparer.OrdinalIgnoreCase), [file], shared);
+
+    /// <summary>How a push puts its files on the character once redirected.</summary>
+    private enum Reload
+    {
+        /// <summary>Glamourer's in-place gear reload; when it can't, <see cref="Unsupported"/> and the caller redraws.</summary>
+        InPlace,
+        /// <summary>The in-place reload, or a redraw at once when it can't.</summary>
+        InPlaceOrRedraw,
+        /// <summary>A redraw.</summary>
+        Redraw,
     }
 
     private const uint GenericWrite = 0x40000000, FileShareRead = 1, CreateAlways = 2, FileAttributeTemporary = 0x100;
@@ -230,19 +303,18 @@ internal sealed class LiveBrushPreview(PenumbraBridge penumbra, CompositorServic
     }
 
     /// <summary>Write the preview (off the framework thread), then put its redirect on and reload the gear in place.</summary>
-    private void Start(int gen, IReadOnlyCollection<string> gamePaths, Func<(string Path, bool Shared)> write,
-                       Action<string, bool>? onApplied)
+    private void Start(int gen, Func<(Dictionary<string, string> Map, IReadOnlyList<string> Owned, bool Shared)> write,
+                       Action<string, bool>? onApplied, Reload reload)
     {
         inFlight = Task.Run(() =>
         {
-            string? file = null;
-            bool shared = false;
             try
             {
-                (file, shared) = write();
+                var (map, owned, shared) = write();
+                var file = owned[0];
 
                 // Kept before it is applied, so an End landing between the two still finds it and deletes it.
-                foreach (var gone in files.Add(file, shared)) TryDelete(gone);
+                foreach (var gone in files.Add(owned, shared)) TryDelete(gone);
 
                 bool applied = Plugin.Framework.RunOnFrameworkThread(() =>
                 {
@@ -257,15 +329,16 @@ internal sealed class LiveBrushPreview(PenumbraBridge penumbra, CompositorServic
 
                         // Recorded before asking, so End removes it even if Penumbra took it and still reported failure.
                         holding.Add(collection);
-                        var map = gamePaths.ToDictionary(p => p, _ => file, StringComparer.OrdinalIgnoreCase);
                         if (!penumbra.SetTemporaryMod(Tag, collection, map, Priority)) return false;
                     }
 
                     // The gear reloads in place to pick the new file up — see ReloadGearInPlace.
-                    if (!compositor.ReloadGearInPlace())
+                    if (reload == Reload.Redraw) compositor.RedrawForChangedModel("matcap preview");
+                    else if (!compositor.ReloadGearInPlace())
                     {
                         if (!Unsupported) log.Warning("[Proteus] live brush: Glamourer cannot reload gear in place; previews fall back to redraws");
                         Unsupported = true;
+                        if (reload == Reload.InPlaceOrRedraw) compositor.RedrawForChangedModel("matcap preview");
                     }
                     return true;
                 }).GetAwaiter().GetResult();
@@ -275,8 +348,11 @@ internal sealed class LiveBrushPreview(PenumbraBridge penumbra, CompositorServic
                 lock (gate) fate = LateFileFate(applied, takenDown: gen <= endedAt, holding.Count);
                 if (fate == LateFile.Delete)
                 {
-                    files.Remove(file);
-                    TryDelete(file);
+                    foreach (var f in owned)
+                    {
+                        files.Remove(f);
+                        TryDelete(f);
+                    }
                 }
                 else if (fate == LateFile.WarnRefused) log.Warning("[Proteus] live brush: Penumbra refused the preview redirect");
             }
@@ -408,18 +484,25 @@ internal sealed class LiveBrushPreview(PenumbraBridge penumbra, CompositorServic
     /// <param name="managedRoot">The managed mod folder, whose shared previews are swept too; null when not yet known.</param>
     public static void CleanUp(string? managedRoot)
     {
-        try
-        {
-            if (Directory.Exists(Dir))
-                foreach (var f in Directory.GetFiles(Dir, "*.mdl")) TryDelete(f);
-        }
-        catch { /* temp space; nothing depends on it being tidy */ }
+        SweepPrivate(Dir);
 
         if (managedRoot == null) return;
         // Known from here on, so a preview still drawn from an earlier load of the plugin is recognised before this one
         // shares anything.
         knownManagedRoot = managedRoot;
         SweepShared(ManagedModPaths.LivePreviewDir(managedRoot));
+    }
+
+    /// <summary>Delete every private preview in <paramref name="dir"/>: models, and the matcap preview's materials and textures.</summary>
+    internal static void SweepPrivate(string dir)
+    {
+        try
+        {
+            if (!Directory.Exists(dir)) return;
+            foreach (var pattern in new[] { "*.mdl", "*.mtrl", "*.tex" })
+                foreach (var f in Directory.GetFiles(dir, pattern)) TryDelete(f);
+        }
+        catch { /* temp space; nothing depends on it being tidy */ }
     }
 
     /// <summary>Delete the shared previews no running game is using (see <see cref="StaleShared"/>).</summary>
@@ -472,27 +555,33 @@ internal sealed class LiveBrushPreview(PenumbraBridge penumbra, CompositorServic
     }
 
     /// <summary>
-    /// The preview files kept after they are replaced, a few of each kind. Separate, so a stroke's private previews never
-    /// push out a shared file a sync plugin may still be reading. A file added again moves to the back.
+    /// The preview files kept after they are replaced, a few pushes of each kind. Separate, so a stroke's private
+    /// previews never push out a shared file a sync plugin may still be reading. Counted in pushes (groups): a push of
+    /// several files (a model with its materials) is kept or let go whole, and never pushes its own files out. A file
+    /// added again moves to the back.
     /// </summary>
     internal sealed class PreviewFiles(int keep)
     {
         private readonly object sync = new();
-        private readonly List<string> priv = [];
-        private readonly List<string> pub = [];
+        private readonly List<List<string>> priv = [];
+        private readonly List<List<string>> pub = [];
 
         /// <returns>The files pushed out, to be deleted.</returns>
-        public List<string> Add(string path, bool shared)
+        public List<string> Add(string path, bool shared) => Add([path], shared);
+
+        /// <returns>The files pushed out, to be deleted.</returns>
+        public List<string> Add(IReadOnlyList<string> group, bool shared)
         {
             lock (sync)
             {
                 var list = shared ? pub : priv;
-                list.RemoveAll(p => string.Equals(p, path, StringComparison.OrdinalIgnoreCase));
-                list.Add(path);
+                foreach (var g in list) g.RemoveAll(p => group.Contains(p, StringComparer.OrdinalIgnoreCase));
+                list.RemoveAll(g => g.Count == 0);
+                list.Add([.. group]);
                 var evicted = new List<string>();
                 while (list.Count > keep)
                 {
-                    evicted.Add(list[0]);
+                    evicted.AddRange(list[0]);
                     list.RemoveAt(0);
                 }
                 return evicted;
@@ -502,23 +591,24 @@ internal sealed class LiveBrushPreview(PenumbraBridge penumbra, CompositorServic
         public void Remove(string path)
         {
             lock (sync)
-            {
-                priv.RemoveAll(p => string.Equals(p, path, StringComparison.OrdinalIgnoreCase));
-                pub.RemoveAll(p => string.Equals(p, path, StringComparison.OrdinalIgnoreCase));
-            }
+                foreach (var list in new[] { priv, pub })
+                {
+                    foreach (var g in list) g.RemoveAll(p => string.Equals(p, path, StringComparison.OrdinalIgnoreCase));
+                    list.RemoveAll(g => g.Count == 0);
+                }
         }
 
         public bool Contains(string path)
         {
             lock (sync)
-                return priv.Concat(pub).Any(p => string.Equals(p, path, StringComparison.OrdinalIgnoreCase));
+                return priv.Concat(pub).SelectMany(g => g).Any(p => string.Equals(p, path, StringComparison.OrdinalIgnoreCase));
         }
 
         public List<string> TakeAll()
         {
             lock (sync)
             {
-                var all = priv.Concat(pub).ToList();
+                var all = priv.Concat(pub).SelectMany(g => g).ToList();
                 priv.Clear();
                 pub.Clear();
                 return all;

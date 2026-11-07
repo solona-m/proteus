@@ -6380,7 +6380,27 @@
     "description": ""
   },
   "Parts.Matcap.Guide": {
-    "message": "Eine Matcap ist das Bild einer beleuchteten Kugel; die Teile nehmen ihre Farbe daraus, je nachdem, wohin sie zu dir zeigen. Hake Teile an, wähle eine Matcap und klicke auf Anwenden.",
+    "message": "Eine Matcap ist das Bild einer beleuchteten Kugel; die Teile nehmen ihre Farbe daraus, je nachdem, wohin sie zu dir zeigen. Hake Teile an, klicke auf eine Matcap, um sie an deinem Charakter zu sehen, und klicke dann auf Anwenden.",
+    "description": ""
+  },
+  "Parts.Matcap.PreviewFailed.Fmt": {
+    "message": "Die Matcap konnte nicht an deinem Charakter gezeigt werden ({0}).",
+    "description": ""
+  },
+  "Parts.Matcap.Previewing": {
+    "message": "Nur an deinem Charakter gezeigt: Gespeichert wird erst, wenn du auf Matcap anwenden klickst.",
+    "description": ""
+  },
+  "Parts.Matcap.PreviewGameGear": {
+    "message": "Spielausrüstung zeigt die Matcap erst, wenn du sie anwendest.",
+    "description": ""
+  },
+  "Parts.Matcap.PreviewGearOnly": {
+    "message": "Haare, Schweife, Ohren und Hörner zeigen die Matcap erst, wenn du sie anwendest.",
+    "description": ""
+  },
+  "Parts.Matcap.PreviewTick": {
+    "message": "Hake Teile an, um die Matcap an deinem Charakter zu sehen.",
     "description": ""
   },
   "Parts.Matcap.Held.Fmt": {

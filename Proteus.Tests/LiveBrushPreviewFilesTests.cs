@@ -265,4 +265,116 @@ public class LiveBrushPreviewFilesTests : IDisposable
     [Trait("Plan", "AC-brush-pair-sync-5")]
     public void Preview_names_carry_the_process_and_the_load()
         => Assert.Equal("42-abcd-000007.mdl", LiveBrushPreview.FileName(42, "abcd", 7));
+
+    [Fact]
+    [Trait("Plan", "EDGE-matcap-preview-22")]
+    public void Single_file_eviction_keeps_four_of_each_kind()
+    {
+        // Pinned before the matcap preview's groups: one-file pushes keep exactly the last four of each kind.
+        var kept = new LiveBrushPreview.PreviewFiles(keep: 4);
+        var priv = Enumerable.Range(1, 6).SelectMany(i => kept.Add($"p{i}", shared: false)).ToList();
+        var pub = Enumerable.Range(1, 5).SelectMany(i => kept.Add($"s{i}", shared: true)).ToList();
+        Assert.Equal(["p1", "p2"], priv);
+        Assert.Equal(["s1"], pub);
+        Assert.Equal(["p3", "p4", "p5", "p6", "s2", "s3", "s4", "s5"], kept.TakeAll().Order().ToList());
+    }
+
+    // ── the matcap click preview's multi-file pushes ──────────────────────
+
+    private static readonly string PrivateDir = Path.Combine(Path.GetTempPath(), "proteus-live-brush");
+
+    private static string Here([System.Runtime.CompilerServices.CallerFilePath] string path = "") => Path.GetDirectoryName(path)!;
+
+    private static LiveBrushPreview.PreviewFile[] Files() =>
+    [
+        new(["chara/equipment/e6255/model/c0201e6255_top.mdl", "chara/equipment/e6255/model/c0101e6255_top.mdl"], ".mdl", [1]),
+        new(["chara/equipment/e6255/material/v0001/mt_x_mcapabcdef1.mtrl"], ".mtrl", [2]),
+        new([], ".tex", [9]),   // nowhere to show: not written
+        new(["chara/common/texture/testlib_a.tex"], ".tex", [3]),
+    ];
+
+    [Fact]
+    [Trait("Plan", "AC-matcap-preview-5")]
+    public void LayOut_names_each_file_and_maps_every_game_path()
+    {
+        var (map, writes) = LiveBrushPreview.LayOut(Files(), tmp, 42, "abcd", 7);
+        Assert.Equal(3, writes.Count);
+        Assert.Equal(Path.Combine(tmp, "42-abcd-000007-0.mdl"), map["chara/equipment/e6255/model/c0201e6255_top.mdl"]);
+        Assert.Equal(map["chara/equipment/e6255/model/c0201e6255_top.mdl"], map["CHARA/equipment/e6255/model/c0101e6255_top.mdl"]);
+        Assert.Equal(Path.Combine(tmp, "42-abcd-000007-1.mtrl"), map["chara/equipment/e6255/material/v0001/mt_x_mcapabcdef1.mtrl"]);
+        Assert.Equal(Path.Combine(tmp, "42-abcd-000007-3.tex"), map["chara/common/texture/testlib_a.tex"]);
+        Assert.Equal([3], writes.Single(w => w.Path.EndsWith("-3.tex")).Bytes);
+        Assert.Equal("42-abcd-000007-2.tex", LiveBrushPreview.FileName(42, "abcd", 7, 2, ".tex"));
+    }
+
+    [Fact]
+    [Trait("Plan", "EDGE-matcap-preview-19")]
+    public void LayOut_writes_only_under_the_private_dir()
+    {
+        var (map, writes) = LiveBrushPreview.LayOut(Files(), PrivateDir, 1, "ab", 1);
+        Assert.All(writes, w => Assert.Equal(PrivateDir, Path.GetDirectoryName(w.Path)));
+        Assert.All(map.Values, v => Assert.StartsWith(PrivateDir, v));
+    }
+
+    [Fact]
+    [Trait("Plan", "EDGE-matcap-preview-19")]
+    public void Every_pushed_file_is_a_preview_file()
+    {
+        // Recognised on the character as the brush's own previews are (live pick, the compositor's redirect-loss check).
+        var (map, _) = LiveBrushPreview.LayOut(Files(), PrivateDir, 1, "ab", 1);
+        Assert.All(map.Values, v => Assert.True(LiveBrushPreview.IsPreviewFile(v, null)));
+    }
+
+    [Fact]
+    [Trait("Plan", "EDGE-matcap-preview-29")]
+    public void Two_generations_share_no_path()
+    {
+        var a = LiveBrushPreview.LayOut(Files(), PrivateDir, 1, "ab", 1).Map.Values.ToHashSet();
+        var b = LiveBrushPreview.LayOut(Files(), PrivateDir, 1, "ab", 2).Map.Values.ToHashSet();
+        Assert.Empty(a.Intersect(b));
+        // Nor with the brush's one-file names.
+        Assert.DoesNotContain(Path.Combine(PrivateDir, LiveBrushPreview.FileName(1, "ab", 1)), a);
+    }
+
+    [Fact]
+    [Trait("Plan", "EDGE-matcap-preview-22")]
+    public void A_group_larger_than_keep_is_never_evicted_by_itself()
+    {
+        var kept = new LiveBrushPreview.PreviewFiles(keep: 4);
+        string[] big = ["m.mdl", "a.mtrl", "b.mtrl", "t.tex", "mask.tex", "n.tex"];
+        Assert.Empty(kept.Add(big, shared: false));
+        Assert.All(big, f => Assert.True(kept.Contains(f)));
+        // Four pushes later it goes, whole.
+        var evicted = Enumerable.Range(1, 4).SelectMany(i => kept.Add([$"p{i}.mdl", $"p{i}.mtrl"], shared: false)).ToList();
+        Assert.Equal(big, evicted);
+        kept.Remove("p1.mdl");
+        Assert.True(kept.Contains("p1.mtrl"));
+    }
+
+    [Fact]
+    [Trait("Plan", "AC-matcap-preview-7")]
+    [Trait("Plan", "EDGE-matcap-preview-18")]
+    public void CleanUp_sweeps_mdl_mtrl_tex()
+    {
+        foreach (var n in new[] { "1-ab-000001.mdl", "1-ab-000002-1.mtrl", "1-ab-000002-2.tex", "keep.txt" })
+            File.WriteAllBytes(Path.Combine(tmp, n), [0]);
+        LiveBrushPreview.SweepPrivate(tmp);
+        Assert.Equal(["keep.txt"], Directory.GetFiles(tmp).Select(Path.GetFileName));
+    }
+
+    [Fact]
+    [Trait("Plan", "EDGE-matcap-preview-17")]
+    public void PushFiles_goes_through_Start_and_End()
+    {
+        // The same Start as the brush's pushes: the collection held (and taken down by End), the late-push guard, the
+        // files kept as one group.
+        var src = File.ReadAllText(Path.Combine(Here(), "..", "Proteus", "Services", "LiveBrushPreview.cs"));
+        int at = src.IndexOf("public bool PushFiles(", StringComparison.Ordinal);
+        var body = src[at..src.IndexOf("internal static (Dictionary<string, string> Map", at, StringComparison.Ordinal)];
+        Assert.Contains("Start(gen, () =>", body);
+        Assert.Contains("if (Busy ||", body);
+        Assert.Contains("foreach (var gone in files.Add(owned, shared)) TryDelete(gone);", src);
+        Assert.Contains("CleanUp(", src);
+        Assert.Contains("SweepPrivate(Dir);", src);
+    }
 }

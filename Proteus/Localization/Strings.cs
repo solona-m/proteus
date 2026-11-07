@@ -106,7 +106,21 @@ public sealed class MatcapStrings
 
     public readonly string Guide = ProteusLoc.Localize("Parts.Matcap.Guide",
         "A matcap is a picture of a lit sphere; the parts take their colour from it by which way they face you. Tick "
-      + "parts, pick a matcap, then Apply.");
+      + "parts, click a matcap to see it on your character, then Apply.");
+
+    public readonly string PreviewTick = ProteusLoc.Localize("Parts.Matcap.PreviewTick", "Tick parts to see the matcap on your character.");
+
+    public readonly string PreviewGearOnly = ProteusLoc.Localize("Parts.Matcap.PreviewGearOnly",
+        "Hair, tails, ears and horns show the matcap once you apply it.");
+
+    public readonly string PreviewGameGear = ProteusLoc.Localize("Parts.Matcap.PreviewGameGear", "Game gear shows the matcap once you apply it.");
+
+    public readonly string Previewing = ProteusLoc.Localize("Parts.Matcap.Previewing",
+        "Shown on your character only: nothing is saved until you press Apply matcap.");
+
+    /// <summary>{0} why the preview could not be put on the character.</summary>
+    public readonly string PreviewFailedFmt = ProteusLoc.Localize("Parts.Matcap.PreviewFailed.Fmt",
+        "The matcap could not be shown on your character ({0}).");
 
     public readonly string SkinTip = ProteusLoc.Localize("Parts.Matcap.SkinTip", "Skin can't take a matcap.");
 

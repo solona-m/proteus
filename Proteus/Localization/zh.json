@@ -6380,7 +6380,27 @@
     "description": ""
   },
   "Parts.Matcap.Guide": {
-    "message": "matcap 是一张受光照的球体图片；部件根据朝向你的方向从中取色。勾选部件，选择 matcap，然后点击应用。",
+    "message": "matcap 是一张受光照的球体图片；部件根据朝向你的方向从中取色。勾选部件，点击某个 matcap 在角色身上查看，然后点击应用。",
+    "description": ""
+  },
+  "Parts.Matcap.PreviewFailed.Fmt": {
+    "message": "无法在你的角色身上显示 matcap（{0}）。",
+    "description": ""
+  },
+  "Parts.Matcap.Previewing": {
+    "message": "仅在你的角色身上显示：在点击“应用 matcap”之前不会保存任何内容。",
+    "description": ""
+  },
+  "Parts.Matcap.PreviewGameGear": {
+    "message": "游戏自带装备在应用后才会显示 matcap。",
+    "description": ""
+  },
+  "Parts.Matcap.PreviewGearOnly": {
+    "message": "头发、尾巴、耳朵和角在应用后才会显示 matcap。",
+    "description": ""
+  },
+  "Parts.Matcap.PreviewTick": {
+    "message": "勾选部件即可在角色身上查看 matcap。",
     "description": ""
   },
   "Parts.Matcap.Held.Fmt": {

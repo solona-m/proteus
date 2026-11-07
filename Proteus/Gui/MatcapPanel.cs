@@ -59,6 +59,14 @@ internal sealed class MatcapPanel
         public IReadOnlyList<ModelPart> AllParts = [];
         /// <summary>The open model's file in its mod.</summary>
         public string ModelFile = "";
+        /// <summary>A thumbnail was clicked (after the pick is set): preview it on the character.</summary>
+        public Action<MatcapChoice>? Clicked;
+        /// <summary>Why the clicked matcap isn't shown on the character, or null.</summary>
+        public string? PreviewNote;
+        /// <summary>The preview shows, but the character draws another file for the model once applied.</summary>
+        public string? PreviewDrawnNote;
+        /// <summary>A preview is on the character.</summary>
+        public bool PreviewShown;
     }
 
     /// <summary>Where the matcap is picked from.</summary>
@@ -114,6 +122,7 @@ internal sealed class MatcapPanel
             case SourceKind.Proteus: DrawProteus(ctx); break;
             default: DrawImages(ctx); break;
         }
+        DrawPreviewNotes(ctx);
 
         ImGui.Separator();
         DrawApply(ctx);
@@ -137,7 +146,7 @@ internal sealed class MatcapPanel
             return;
         }
         DrawGrid(ctx.Images.Select(i => (i.Name, i.Path, i.FromMod ? $"{i.Name} {s.ThisMod}" : i.Name)).ToList(),
-                 image, picked => image = picked);
+                 image, picked => Click(ctx, SourceKind.Images, picked));
     }
 
     /// <summary>Picks <paramref name="name"/> from <paramref name="kind"/>, as a click would: the tests' way in.</summary>
@@ -145,6 +154,44 @@ internal sealed class MatcapPanel
     {
         source = kind;
         if (kind == SourceKind.Proteus) packImage = name; else if (kind == SourceKind.Images) image = name;
+    }
+
+    /// <summary>
+    /// A thumbnail clicked: it becomes the pick (an image, one of Proteus's matcaps, or the open library's option), then
+    /// the Studio is asked to show it on the character.
+    /// </summary>
+    internal void Click(Context ctx, SourceKind kind, string name)
+    {
+        source = kind;
+        switch (kind)
+        {
+            case SourceKind.Images: image = name; break;
+            case SourceKind.Proteus: packImage = name; break;
+            default: option = name; break;
+        }
+        if (Choice(ctx) is { } c) ctx.Clicked?.Invoke(c);
+    }
+
+    /// <summary>The library whose options the grid shows, by its key: the tests' way in.</summary>
+    internal void OpenLibrary(MatcapLibrary lib)
+    {
+        source = SourceKind.Libraries;
+        libraryKey = Key(lib);
+        option = null;
+    }
+
+    /// <summary>Under the thumbnails: the preview is on the character, or why not.</summary>
+    private static void DrawPreviewNotes(Context ctx)
+    {
+        var s = Strings.Matcap;
+        ImGui.PushTextWrapPos(0f);
+        if (ctx.PreviewShown)
+        {
+            ImGui.TextDisabled(s.Previewing);
+            if (ctx.PreviewDrawnNote is { Length: > 0 } drawn) ImGui.TextColored(ProteusStyle.Warn, drawn);
+        }
+        else if (ctx.PreviewNote is { Length: > 0 } note) ImGui.TextColored(ProteusStyle.Warn, note);
+        ImGui.PopTextWrapPos();
     }
 
     private void DrawProteus(Context ctx)
@@ -160,7 +207,7 @@ internal sealed class MatcapPanel
             if (st.State == MatcapPackState.Failed && ImGui.Button(s.PackRetry)) ctx.RetryPack?.Invoke();
         }
         if (ctx.PackImages.Count == 0) return;
-        DrawGrid(ctx.PackImages.Select(i => (i.Name, i.Path, i.Name)).ToList(), packImage, picked => packImage = picked);
+        DrawGrid(ctx.PackImages.Select(i => (i.Name, i.Path, i.Name)).ToList(), packImage, picked => Click(ctx, SourceKind.Proteus, picked));
     }
 
     private void DrawLibraries(Context ctx)
@@ -201,7 +248,7 @@ internal sealed class MatcapPanel
         var root = ctx.ModsRoot ?? "";
         DrawGrid(lib.Options.Select(o => (o.Name, Path.Combine(root, lib.Mod, o.File.Replace('\\', Path.DirectorySeparatorChar)),
                                           o.Name == status.CurrentOption ? $"{o.Name} ✓" : o.Name)).ToList(),
-                 option, picked => option = picked);
+                 option, picked => Click(ctx, SourceKind.Libraries, picked));
 
         ImGui.PushTextWrapPos(0f);
         foreach (var w in MatcapPanelModel.LibraryWarnings(lib, status, ctx.Record, ctx.Libraries!.ProvidersOf(lib.Texture)))
