@@ -301,6 +301,20 @@ public class HarnessSidecarTests : IDisposable
     }
 
     [Fact]
+    [Trait("Plan", "AC-idle-disk-io-10")]
+    public void PutBack_RestoresWriteTimeToo()
+    {
+        // [AC-idle-disk-io-10] Found in game (QA pass 3): the bytes came back but the file's write time was the put-back's.
+        var s = Make();
+        var path = PutMeta("Skin", "ORIGINAL");
+        var original = new DateTime(2026, 7, 28, 3, 38, 18, DateTimeKind.Utc);
+        File.SetLastWriteTimeUtc(path, original);
+        Edit(s, "Skin", path, Saving(path, "HARNESS"));
+        Assert.Equal("restored", Assert.Single(s.PutBack(NoneStaged, _ => { })).Result);
+        Assert.Equal(original, File.GetLastWriteTimeUtc(path));
+    }
+
+    [Fact]
     public void BomFile_RestoredByteForByte()
     {
         var s = Make();

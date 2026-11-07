@@ -44,6 +44,8 @@ internal sealed class HarnessSidecar(string backupsRoot, string session, IPlugin
         public required string Dir { get; init; }
         public required string BackupSha { get; init; }
         public required bool DefaultsExisted { get; init; }
+        /// <summary>The file's write time before the first edit, put back with its bytes.</summary>
+        public long OriginalWriteTicksUtc { get; init; }
         public string? LastWrittenSha { get; set; }
         public int Edits { get; set; }
         public DateTime AtUtc { get; set; }
@@ -105,6 +107,7 @@ internal sealed class HarnessSidecar(string backupsRoot, string session, IPlugin
                 {
                     Mod = mod, MetaPath = metaPath, Dir = dir, BackupSha = Sha(bytes),
                     DefaultsExisted = File.Exists(DefaultsPath(metaPath)), AtUtc = DateTime.UtcNow,
+                    OriginalWriteTicksUtc = File.GetLastWriteTimeUtc(metaPath).Ticks,
                 };
                 WriteRecord(entry);   // before the save: a crash after it still leaves a ledger to find
                 entries[mod] = entry;
@@ -187,6 +190,13 @@ internal sealed class HarnessSidecar(string backupsRoot, string session, IPlugin
             return new SidecarUndo(entry.Mod, "changed", now == null ? "gone" : null, DefaultsLeft(entry));
 
         PenumbraModMeta.AtomicWrite(entry.MetaPath, File.ReadAllBytes(Path.Combine(entry.Dir, BackupFile)), maxRetries: 2);
+        // Its write time too, so the file is as the user had it, not merely the same bytes. Best effort: the bytes are
+        // what matter, and Proteus re-reads on any stamp change.
+        if (entry.OriginalWriteTicksUtc > 0)
+        {
+            try { File.SetLastWriteTimeUtc(entry.MetaPath, new DateTime(entry.OriginalWriteTicksUtc, DateTimeKind.Utc)); }
+            catch (Exception ex) { log?.Debug("[Proteus] test harness: could not put {0}'s write time back: {1}", entry.Mod, ex.Message); }
+        }
         log?.Information("[Proteus] test harness: put {0}'s sidecar back", entry.Mod);
         return new SidecarUndo(entry.Mod, "restored", null, DefaultsAfter(entry, restored: true));
     }
