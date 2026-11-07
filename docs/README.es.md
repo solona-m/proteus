@@ -337,7 +337,7 @@ Conviene saber:
 
 El equipo hecho antes de Dawntrail aún usa el sombreador antiguo del juego (`characterlegacy.shpk`). Con **Actualizar el equipo antiguo a los sombreadores de Dawntrail** marcado, Proteus reescribe al sombreador de Dawntrail (`character.shpk`) los materiales con el sombreador antiguo de los mods que te pongas, dentro del mod y guardando antes una copia de cada archivo en `Proteus/shaderupgrade-backup/`. Está desactivado por defecto. Igual que con el Estudio, el cambio está en los propios archivos del mod, así que sigue funcionando con Proteus apagado y viaja con el mod si lo exportas.
 
-- La sección cuenta lo que se actualizó y lo que se quedó con el sombreador antiguo. Pasa el ratón por la cuenta para ver qué piezas y por qué.
+- La sección cuenta lo que se actualizó y lo que se quedó con el sombreador antiguo. Pasa el ratón por la cuenta para ver por qué se quedaron piezas con el sombreador antiguo y cuántas por cada motivo.
 - **Actualizar lo que llevo puesto** actualiza lo que llevas, incluidas las piezas que deshiciste antes.
 - **Deshacer en lo que llevo puesto** devuelve los archivos del autor y deja esas piezas en paz hasta que las vuelvas a actualizar. Una actualización que el autor haya publicado desde entonces se conserva. Un archivo editado después de actualizarlo se queda como está, y su original sigue en la carpeta de copias.
 - Desactivarlo detiene las siguientes actualizaciones, pero no las deshace.

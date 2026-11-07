@@ -4432,7 +4432,7 @@
     "description": "Release-notes section heading: the Studio's Matcaps tool. A matcap is a picture of a lit sphere a shader samples by the surface's facing direction."
   },
   "WhatsNew.Matcaps.Body": {
-    "message": "スタジオに新しいツール「マットキャップ」が加わりました。装備、アクセサリー、髪、尻尾、ヴィエラの耳、アウラの角のパーツにチェックを入れ、マットキャップ（光の当たった球の画像）を選んで「マットキャップを適用」を押すと、パーツに専用の素材が付きます。素材はMODに書き込まれるので、Proteus をオフにしても見た目はそのままです。Proteus に付属し、sivka による 23Minks のマットキャップパックを含む「Proteusのマットキャップ」は、マットキャップを初めて開いたときにダウンロードされます。自分の画像は設定の「マットキャップ画像」のフォルダーに入れます。インストール済みのマットキャップライブラリMODも一覧に出ます。「このモデルのマットキャップを元に戻す」ですべて取り除けます。",
+    "message": "スタジオに新しいツール「マットキャップ」が加わりました。装備、アクセサリー、髪、尻尾、ヴィエラの耳、アウラの角のパーツにチェックを入れ、マットキャップ（光の当たった球の画像）を選んで「マットキャップを適用」を押すと、パーツに専用のマテリアルが付きます。マテリアルはMODに書き込まれるので、Proteus をオフにしても見た目はそのままです。Proteus に付属し、sivka による 23Minks のマットキャップパックを含む「Proteusのマットキャップ」は、マットキャップを初めて開いたときにダウンロードされます。自分の画像は設定の「マットキャップ画像」のフォルダーに入れます。インストール済みのマットキャップライブラリMODも一覧に出ます。「このモデルのマットキャップを元に戻す」ですべて取り除けます。",
     "description": "Release-notes section. 'Studio' matches Tab.Parts and 'Settings' Tab.Settings; \"Matcaps\" matches Parts.Tool.Matcap, \"Apply matcap\" Parts.Matcap.Apply, \"Proteus matcaps\" Parts.Matcap.SourceProteus, \"Matcap images\" Settings.MatcapLibrary, \"Undo matcaps on this model\" Parts.Matcap.Undo. Keep 23Minks and sivka verbatim."
   },
   "WhatsNew.MoveAll.Head": {

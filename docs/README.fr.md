@@ -337,7 +337,7 @@ Bon à savoir :
 
 L'équipement créé avant Dawntrail utilise encore l'ancien shader du jeu (`characterlegacy.shpk`). Avec **Passer l'ancien équipement aux shaders de Dawntrail** coché, Proteus réécrit vers le shader de Dawntrail (`character.shpk`) les matériaux à l'ancien shader des mods que vous portez, dans le mod, en sauvegardant chaque fichier d'abord dans `Proteus/shaderupgrade-backup/`. C'est désactivé par défaut. Comme le Studio, le changement est dans les fichiers du mod lui-même, donc il continue de fonctionner avec Proteus désactivé et suit le mod si vous l'exportez.
 
-- La section compte ce qui a été mis à jour et ce qui est resté sur l'ancien shader. Survolez le compte pour voir quelles pièces, et pourquoi.
+- La section compte ce qui a été mis à jour et ce qui est resté sur l'ancien shader. Survolez le compte pour voir pourquoi des pièces sont restées sur l'ancien shader, et combien pour chaque raison.
 - **Mettre à jour ce que je porte** met à jour ce que vous portez, y compris les pièces que vous aviez annulées.
 - **Annuler pour ce que je porte** remet les fichiers de l'auteur et laisse ces pièces tranquilles jusqu'à ce que vous les mettiez à jour à nouveau. Une mise à jour publiée depuis par l'auteur est conservée. Un fichier modifié après sa mise à jour est laissé tel quel, et son original reste dans le dossier de sauvegarde.
 - Le désactiver arrête les mises à jour suivantes, mais ne les annule pas.

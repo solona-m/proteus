@@ -343,7 +343,7 @@ Things worth knowing:
 
 Gear made before Dawntrail still uses the game's old shader (`characterlegacy.shpk`). With **Upgrade old gear to Dawntrail shaders** ticked, Proteus rewrites the old-shader materials of the mods you put on to Dawntrail's shader (`character.shpk`), inside the mod, backing each file up first in `Proteus/shaderupgrade-backup/`. It's off by default. Like the Studio, the change is in the mod's own files, so it keeps working with Proteus turned off and travels with the mod if you export it.
 
-- The section counts what was upgraded and what was left on the old shader. Hover the count to see which pieces, and why.
+- The section counts what was upgraded and what was left on the old shader. Hover the count to see why pieces were left on the old shader, and how many for each reason.
 - **Upgrade what I'm wearing now** upgrades what you have on, including pieces you undid before.
 - **Undo for what I'm wearing** puts the author's files back and leaves those pieces alone until you upgrade them again. An update the author shipped since is kept. A file edited after its upgrade is left as it is, and its original stays in the backup folder.
 - Turning it off stops further upgrades but doesn't undo them.

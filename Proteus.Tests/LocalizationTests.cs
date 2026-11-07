@@ -281,6 +281,7 @@ public sealed class LocalizationTests
     {
         AssertFifthNotesQuoteTheirLabels(Source);
         Assert.Contains("ticked", Load(Source)["WhatsNew.MoveAll.Head"].Message);
+        Assert.Contains("Untick", Load(Source)["WhatsNew.MoveAll.Body"].Message);
     }
 
     /// <summary>Hair across the sexes was announced in the fourth notes; no later generation repeats it.</summary>
@@ -376,9 +377,10 @@ public sealed class LocalizationTests
     private static readonly (bool Shaders, string Phrase)[] ReadmeGearEnglishPhrases =
     [
         (true, "still uses the game's old shader"), (true, "backing each file up first"),
-        (true, "keeps working with Proteus turned off"),
+        (true, "keeps working with Proteus turned off"), (true, "travels with the mod"), (true, "off by default"),
         (false, "replace an item's model"), (false, "the other variant folders"), (false, "stay their own"),
-        (false, "keeps working with Proteus turned off"),
+        (false, "keeps working with Proteus turned off"), (false, "travels with the mod"), (false, "on by default"),
+        (false, "changed since is kept"),
     ];
 
     /// <summary>The translated README sections for Gear shaders and Gear variants are written in that language, not
