@@ -15,8 +15,8 @@ namespace Proteus.Services.Matcap;
 /// folders <c>v0001</c>–<c>v0005</c> (one per fur pattern; the game ships exactly those five). Ported here because Proteus
 /// does not reference that assembly.
 /// <para/>
-/// Pinned against the game's own models (<c>CustomizationMaterialPathLocalTests</c>: every material each names sits at
-/// exactly this path, flat). Where a name's race or id disagrees with its folder, the name re-derived from the folder is
+/// Pinned against the game's own models (<c>CustomizationMaterialPathLocalTests</c>: every material a face or ear names
+/// sits at exactly this path, flat; every variant folder the game ships a tail's material in is among these). Where a name's race or id disagrees with its folder, the name re-derived from the folder is
 /// published as well: the names are Proteus's own, so the extra redirect key costs nothing and draws nothing elsewhere.
 /// </summary>
 internal static partial class CustomizationMaterialPath
@@ -28,8 +28,8 @@ internal static partial class CustomizationMaterialPath
     {
         var m = ModelRe().Match(modelGamePath.Replace('\\', '/'));
         if (!m.Success) return null;
-        var slot = m.Groups[2].Value.ToLowerInvariant() switch { "face" => Slot.Face, "tail" => Slot.Tail, _ => Slot.Ear };
-        return (slot, ushort.Parse(m.Groups[1].Value), int.Parse(m.Groups[4].Value));
+        var slot = m.Groups[2].Value.ToLowerInvariant() switch { "face/f" => Slot.Face, "tail/t" => Slot.Tail, _ => Slot.Ear };
+        return (slot, ushort.Parse(m.Groups[1].Value), int.Parse(m.Groups[3].Value));
     }
 
     /// <summary>The ear models the label reads as horns: Au Ra's (13, 14). Viera's (17, 18) read as ears.</summary>
@@ -41,7 +41,8 @@ internal static partial class CustomizationMaterialPath
     private static string Abbrev(Slot s) => s switch { Slot.Face => "f", Slot.Tail => "t", _ => "z" };
     private static string Folder(Slot s) => s switch { Slot.Face => "face", Slot.Tail => "tail", _ => "zear" };
 
-    /// <summary>The folder Penumbra's rule names for a face or ear model of this slot, race and id.</summary>
+    /// <summary>The <c>material</c> folder of a model of this slot, race and id — a face's or ear's whole folder; a tail
+    /// reads variant folders under it (<see cref="Folders"/>).</summary>
     public static string Folder(Slot slot, ushort race, int id) =>
         $"chara/human/c{race:D4}/obj/{Folder(slot)}/{Abbrev(slot)}{id:D4}/material";
 
@@ -54,9 +55,8 @@ internal static partial class CustomizationMaterialPath
             yield return Folder(slot, race, id);
             yield break;
         }
-        bool hrothgar = IsHrothgar(race);
-        for (int v = 1; v <= (hrothgar ? 5 : 1); v++)
-            yield return $"{Folder(slot, race, hrothgar ? 1 : id)}/v{v:D4}";
+        for (int v = 1; v <= (IsHrothgar(race) ? 5 : 1); v++)
+            yield return $"{Folder(slot, race, FolderId(slot, race, id))}/v{v:D4}";
     }
 
     /// <summary>The id whose folders the rule reads for a model of this slot and race: Hrothgar tails read t0001.</summary>
@@ -93,7 +93,7 @@ internal static partial class CustomizationMaterialPath
         return paths;
     }
 
-    [GeneratedRegex(@"(?:^|/)chara/human/c(\d{4})/obj/(face|zear|tail)/(f|z|t)(\d{4})/model/[^/]+\.mdl$", RegexOptions.IgnoreCase)]
+    [GeneratedRegex(@"(?:^|/)chara/human/c(\d{4})/obj/(face/f|zear/z|tail/t)(\d{4})/model/[^/]+\.mdl$", RegexOptions.IgnoreCase)]
     private static partial Regex ModelRe();
 
     [GeneratedRegex(@"^/mt_c(\d{4})([fzt])(\d{4})(.*)$", RegexOptions.IgnoreCase)]

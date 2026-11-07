@@ -6499,6 +6499,10 @@
     "message": "Уши {0} ({1})",
     "description": ""
   },
+  "Parts.Vanilla.Tail.Fmt": {
+    "message": "Хвост {0} ({1})",
+    "description": ""
+  },
   "Settings.MatcapLibrary": {
     "message": "Изображения мэткапов",
     "description": ""
@@ -6528,7 +6532,7 @@
     "description": ""
   },
   "Parts.Matcap.MatcapsOnlyHere": {
-    "message": "Ваше собственное лицо и уши открываются только в Matcaps, поэтому они закрыты.",
+    "message": "Ваше собственное лицо, уши и хвост открываются только в Matcaps, поэтому они закрыты.",
     "description": ""
   },
   "Parts.Matcap.NoHorns": {

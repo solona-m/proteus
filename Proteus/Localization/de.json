@@ -6499,6 +6499,10 @@
     "message": "Ohren {0} ({1})",
     "description": ""
   },
+  "Parts.Vanilla.Tail.Fmt": {
+    "message": "Schwanz {0} ({1})",
+    "description": ""
+  },
   "Settings.MatcapLibrary": {
     "message": "Matcap-Bilder",
     "description": ""
@@ -6528,7 +6532,7 @@
     "description": ""
   },
   "Parts.Matcap.MatcapsOnlyHere": {
-    "message": "Dein eigenes Gesicht und deine Ohren öffnen sich nur unter Matcaps, daher wurden sie geschlossen.",
+    "message": "Dein eigenes Gesicht, deine Ohren und dein Schwanz öffnen sich nur unter Matcaps, daher wurden sie geschlossen.",
     "description": ""
   },
   "Parts.Matcap.NoHorns": {

@@ -6499,6 +6499,10 @@
     "message": "耳朵 {0}（{1}）",
     "description": ""
   },
+  "Parts.Vanilla.Tail.Fmt": {
+    "message": "尾巴 {0}（{1}）",
+    "description": ""
+  },
   "Settings.MatcapLibrary": {
     "message": "matcap 图片",
     "description": ""
@@ -6528,7 +6532,7 @@
     "description": ""
   },
   "Parts.Matcap.MatcapsOnlyHere": {
-    "message": "你自己的脸和耳朵只能在 Matcap 下打开，因此已关闭。",
+    "message": "你自己的脸、耳朵和尾巴只能在 Matcap 下打开，因此已关闭。",
     "description": ""
   },
   "Parts.Matcap.NoHorns": {

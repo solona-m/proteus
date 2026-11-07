@@ -30,6 +30,23 @@ public class MatcapPlanTests
     }
 
     [Fact]
+    public void The_games_own_tail_opens_under_Matcaps_only()
+    {
+        const string tailPath = "chara/human/c0801/obj/tail/t0003/model/c0801t0003_til.mdl";
+        var pick = VanillaPick.FromTail(tailPath)!.Value;
+        Assert.Equal(tailPath, pick.GamePath);
+        Assert.Contains("t0003", pick.ItemName);
+        Assert.False(pick.Refittable);
+        Assert.Equal(tailPath, VanillaPick.FromCharacterPart(tailPath)!.Value.GamePath);
+        Assert.Null(VanillaPick.FromEar(tailPath));
+        Assert.Null(VanillaPick.FromFace(tailPath));
+        Assert.Null(VanillaPick.From(tailPath, (_, _) => null));                // gear-only: no other tool sees it
+        Assert.NotNull(VanillaPick.FromCharacterPart("chara/human/c1801/obj/zear/z0001/model/c1801z0001_zer.mdl"));
+        // A folder and an abbreviation that disagree are no model path.
+        Assert.Null(CustomizationMaterialPath.Parse("chara/human/c0801/obj/tail/z0001/model/c0801z0001_til.mdl"));
+    }
+
+    [Fact]
     public void Tail_materials_publish_at_the_variant_folders_the_game_reads()
     {
         // Every race but Hrothgar: the model's own id, v0001.
@@ -341,6 +358,17 @@ public class CustomizationMaterialPathLocalTests(ITestOutputHelper output)
                     // c0701t0008 names t0004's material, which the game ships only under t0004: no rule path exists.
                     if (race == 701 && id == 8) continue;
                     Assert.True(data.FileExists(paths[0]), $"{model}: the rule's path for {name} is not shipped ({paths[0]})");
+                    // Every variant folder the game ships the material in, under the model's id or Hrothgar's t0001, is
+                    // published: a sixth fur pattern or a v0002 on another race would otherwise draw the matcap invisible.
+                    var published = paths.Select(Path.GetDirectoryName).ToHashSet();
+                    foreach (var folderId in new[] { id, 1 }.Distinct())
+                        foreach (var v in Enumerable.Range(1, 20))
+                        {
+                            var shipped = $"chara/human/c{race:D4}/obj/tail/t{folderId:D4}/material/v{v:D4}{name}";
+                            if (folderId != id && !CustomizationMaterialPath.IsHrothgar((ushort)race)) continue;
+                            if (data.FileExists(shipped))
+                                Assert.Contains(Path.GetDirectoryName(shipped), published);
+                        }
                     // Hrothgar: each of the five fur-pattern folders is shipped and published.
                     if (CustomizationMaterialPath.IsHrothgar((ushort)race))
                         Assert.Equal(5, paths.Count(data.FileExists));

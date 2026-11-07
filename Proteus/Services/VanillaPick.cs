@@ -72,6 +72,20 @@ internal readonly record struct VanillaPick(string GamePath, string ItemName, st
     }
 
     /// <summary>
+    /// The game's own tail (<c>chara/human/cNNNN/obj/tail/tNNNN</c>), or null for any other path: "Tail t0003 (c0801)".
+    /// Only the Matcaps tool asks this, as it does <see cref="FromEar"/>; never refittable.
+    /// </summary>
+    internal static VanillaPick? FromTail(string gamePath)
+    {
+        if (Matcap.CustomizationMaterialPath.Parse(gamePath) is not { Slot: Matcap.CustomizationMaterialPath.Slot.Tail } tail) return null;
+        string name = string.Format(Localization.Strings.Matcap.VanillaTailFmt, $"t{tail.Id:D4}", $"c{tail.Race:D4}");
+        return new VanillaPick(gamePath, name, $"t{tail.Id:D4}", name);
+    }
+
+    /// <summary>The game's own character part the Matcaps tool opens: ears, horns (the face) or a tail.</summary>
+    internal static VanillaPick? FromCharacterPart(string gamePath) => FromEar(gamePath) ?? FromFace(gamePath) ?? FromTail(gamePath);
+
+    /// <summary>
     /// The game's own face, for its horns (Au Ra horns are face submeshes tagged <c>atr_hrn</c>): "Horns (face f0001, c1401)".
     /// Only the Matcaps tool asks this, as it does <see cref="FromEar"/>; never refittable. A face without horns opens with
     /// nothing tickable, and is never copied (Apply refuses it).

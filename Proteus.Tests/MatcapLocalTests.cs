@@ -162,9 +162,46 @@ public class MatcapTailLocalTests(ITestOutputHelper output)
             foreach (var v in vanilla)
                 Assert.Contains(paths, p => Path.GetDirectoryName(p) == Path.GetDirectoryName(v));
             output.WriteLine($"{path}: {parts[0].Label} -> {string.Join(", ", paths)}");
+
+            // The tail's own material reads: a header, a normal map for the matcap to keep.
+            var normals = new List<string>();
+            foreach (var v in vanilla)
+            {
+                var header = MatcapMaterial.ReadHeader(data.GetFile(v)!.Data);
+                Assert.NotNull(header);
+                var normal = header!.TextureOf(MatcapMaterial.SamplerNormal);
+                Assert.False(string.IsNullOrEmpty(normal), $"{v}: no normal map");
+                normals.Add(normal!);
+                output.WriteLine($"  {v}: {header.Shader}, normal {normal}, alpha threshold {header.AlphaThreshold?.ToString() ?? "none"}");
+            }
+            // One matcap material (built from the first fur pattern's normal map) is published for all five Hrothgar fur
+            // patterns. Their normal maps differ only in blue (the pattern, which the matcap replaces): the direction and
+            // the alpha cut-out match, so every pattern's tail keeps its shape.
+            if (normals.Count > 1) AssertSameShape(data, normals);
             tested++;
         }
         Assert.True(tested > 0, "no tail model in game data");
+    }
+
+    private void AssertSameShape(Lumina.GameData data, List<string> normals)
+    {
+        var first = data.GetFile<Lumina.Data.Files.TexFile>(normals[0])!.ImageData;   // BGRA
+        foreach (var other in normals.Skip(1))
+        {
+            var img = data.GetFile<Lumina.Data.Files.TexFile>(other)!.ImageData;
+            Assert.Equal(first.Length, img.Length);
+            int n = img.Length / 4, cutFlips = 0;
+            double green = 0, red = 0;
+            for (int i = 0; i < n; i++)
+            {
+                green += Math.Abs(img[i * 4 + 1] - first[i * 4 + 1]);
+                red += Math.Abs(img[i * 4 + 2] - first[i * 4 + 2]);
+                if ((img[i * 4 + 3] >= 191) != (first[i * 4 + 3] >= 191)) cutFlips++;    // 0.75 threshold
+            }
+            output.WriteLine($"  {other}: mean normal diff G{green / n:F2} R{red / n:F2}, cut-out flips {cutFlips}/{n}");
+            Assert.True(green / n < 4 && red / n < 4, $"{other}: its normal direction differs from {normals[0]}");
+            Assert.True(cutFlips < n / 1000, $"{other}: its cut-out differs from {normals[0]}");
+        }
     }
 }
 

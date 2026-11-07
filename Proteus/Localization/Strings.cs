@@ -237,7 +237,7 @@ public sealed class MatcapStrings
     public readonly string SourceFmt = ProteusLoc.Localize("Parts.Matcap.Source.Fmt", "from {0}");
 
     public readonly string MatcapsOnlyHere = ProteusLoc.Localize("Parts.Matcap.MatcapsOnlyHere",
-        "Your own face and ears open only under Matcaps, so they were closed.");
+        "Your own face, ears and tail open only under Matcaps, so they were closed.");
 
     public readonly string NotHornTip = ProteusLoc.Localize("Parts.Matcap.NotHornTip",
         "On a face, only the horns can take a matcap.");
@@ -259,6 +259,9 @@ public sealed class MatcapStrings
 
     /// <summary>{0} the ear id, {1} the race code.</summary>
     public readonly string VanillaEarsFmt = ProteusLoc.Localize("Parts.Vanilla.Ears.Fmt", "Ears {0} ({1})");
+
+    /// <summary>{0} the tail id (t0003), {1} the race code (c0801).</summary>
+    public readonly string VanillaTailFmt = ProteusLoc.Localize("Parts.Vanilla.Tail.Fmt", "Tail {0} ({1})");
 
     public readonly string SettingsLibrary = ProteusLoc.Localize("Settings.MatcapLibrary", "Matcap images") + "###matcapLibrary";
 
