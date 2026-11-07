@@ -16,7 +16,7 @@ internal sealed class OutputWriteRetry
     internal enum Kind { Clean, Retry, GiveUp }
 
     /// <summary>What to do after a publish: <see cref="DelayMs"/> and <see cref="Attempt"/> for a retry; <see cref="Warn"/>
-    /// when a give-up should be said out loud (once per set of inputs and once per minute).</summary>
+    /// when a give-up should be said out loud (once per set of inputs).</summary>
     internal readonly record struct Decision(Kind Kind, int DelayMs, int Attempt, bool Warn);
 
     internal const int PerFingerprint = 3;
@@ -28,7 +28,6 @@ internal sealed class OutputWriteRetry
     private string? fingerprint;
     private int attempts;
     private string? warnedFingerprint;
-    private long lastWarnMs = long.MinValue;
     private readonly Queue<long> scheduled = new();
 
     /// <summary>The last decision, for the harness's /state.</summary>
@@ -63,13 +62,9 @@ internal sealed class OutputWriteRetry
                 return Remember(new Decision(Kind.Retry, Delays[attempt - 1], attempt, false));
             }
 
-            bool warn = !string.Equals(warnedFingerprint, fp, StringComparison.Ordinal)
-                     && (lastWarnMs == long.MinValue || nowMs - lastWarnMs >= WindowMs);
-            if (warn)
-            {
-                warnedFingerprint = fp;
-                lastWarnMs = nowMs;
-            }
+            // Once per set of inputs (AC-11): another set's give-up within the minute is still named.
+            bool warn = !string.Equals(warnedFingerprint, fp, StringComparison.Ordinal);
+            if (warn) warnedFingerprint = fp;
             return Remember(new Decision(Kind.GiveUp, 0, attempt, warn));
         }
     }

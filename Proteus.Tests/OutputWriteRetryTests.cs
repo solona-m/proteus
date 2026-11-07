@@ -73,6 +73,19 @@ public class OutputWriteRetryTests
     }
 
     [Fact]
+    [Trait("Plan", "AC-issue-sweep-d-11")]
+    public void Each_set_of_inputs_that_gives_up_is_named_once()
+    {
+        // [AC-issue-sweep-d-11] Another set's give-up within the same minute is still said out loud, once.
+        var latch = new OutputWriteRetry();
+        for (int i = 0; i < 3; i++) latch.OnPublished("A", 1, 0, i, false);
+        Assert.True(latch.OnPublished("A", 1, 0, 10, false).Warn);
+        Assert.False(latch.OnPublished("A", 1, 0, 20, false).Warn);
+        for (int i = 0; i < 3; i++) latch.OnPublished("B", 1, 0, 30 + i, false);
+        Assert.True(latch.OnPublished("B", 1, 0, 40, false).Warn);
+    }
+
+    [Fact]
     [Trait("Plan", "EDGE-issue-sweep-d-23")]
     public void Alternating_fingerprints_hit_the_global_cap()
     {

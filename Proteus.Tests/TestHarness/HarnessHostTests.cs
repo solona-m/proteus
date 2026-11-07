@@ -306,6 +306,45 @@ public class HarnessHostTests : IDisposable
     }
 
     [Fact]
+    [Trait("Plan", "AC-issue-sweep-d-13")]
+    [Trait("Plan", "AC-issue-sweep-d-14")]
+    [Trait("Plan", "AC-issue-sweep-d-15")]
+    public async Task Off_releases_output_locks_and_clears_the_fault_and_override()
+    {
+        // [AC-issue-sweep-d-13] [AC-issue-sweep-d-14] [AC-issue-sweep-d-15] On and off the framework thread.
+        foreach (bool onFramework in new[] { true, false })
+        {
+            var output = temp.Sub("out-" + onFramework);
+            Directory.CreateDirectory(Path.Combine(output, "textures"));
+            File.WriteAllBytes(Path.Combine(output, "textures", "ss_1_norm.tex"), [1, 2]);
+            game.OutputDir = output;
+            var host = Host();
+            host.Command("on");
+            using (var c = Client(SessionFile!))
+            {
+                async Task Post(string route, string json)
+                {
+                    var r = await c.PostAsync(route, new StringContent(json, System.Text.Encoding.UTF8, "application/json"));
+                    Assert.Equal(200, (int)r.StatusCode);
+                }
+                await Post("/actions/output-lock", "{\"files\":[\"textures/ss_1_norm.tex\"],\"ms\":60000}");
+                await Post("/actions/shell-fault", "{\"shell\":\"any\",\"until\":\"put-back\"}");
+                await Post("/actions/auto-redraw", "{\"enabled\":false}");
+            }
+            if (onFramework) dispatcher.Run(() => host.Command("off"));
+            else host.Dispose();
+
+            Assert.Null(game.ShellFaultValue);
+            Assert.Null(game.AutoRedrawOverrideValue);
+            // The handle is gone: the file can be replaced again.
+            var tmp = Path.Combine(output, "textures", "x.tmp");
+            File.WriteAllBytes(tmp, [3]);
+            File.Move(tmp, Path.Combine(output, "textures", "ss_1_norm.tex"), overwrite: true);
+            if (onFramework) host.Dispose();
+        }
+    }
+
+    [Fact]
     public async Task Token_NeverLogged()
     {
         // [EDGE-qa-harness-11]

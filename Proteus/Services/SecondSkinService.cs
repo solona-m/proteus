@@ -1925,6 +1925,8 @@ public sealed partial class SecondSkinService
             }
             catch (Exception ex)
             {
+                // Only a file that could not be put in place is worth a retry (#91); a missing source is not.
+                if (ex is OutputWriteException) onOutputWriteFailed?.Invoke();
                 log.Warning("[Proteus] content: could not republish {0} ({1}) — naming the pack's own path "
                           + "instead: {2}", slot, file, ex.Message);
                 return packPath;

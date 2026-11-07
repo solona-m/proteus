@@ -64,7 +64,7 @@ internal sealed partial class HarnessRouter
 
             if (failEl.ValueKind != JsonValueKind.Number || !failEl.TryGetInt32(out int n) || n is < 1 or > HarnessOutputLocks.MaxFailMoves)
                 return HarnessResponse.Error(400, "invalid-field", $"failMoves must be 1 to {HarnessOutputLocks.MaxFailMoves}");
-            var until = changes.OutputLocks.ArmMoves(files, n);
+            var until = changes.OutputLocks.ArmMoves(Game.ManagedOutputDir(), files, n);
             return HarnessResponse.Json(200, new { mode = "fail-moves", patterns = files, failMoves = n, untilUtc = until });
         }
         catch (InvalidOperationException)

@@ -19,6 +19,7 @@ internal static class HarnessMoveFault
     private static readonly object Gate = new();
     private static List<Regex> patterns = [];
     private static int movesLeft;
+    private static string? root;
 
     /// <summary>The patterns armed (as given) and how many failures are left; null when disarmed.</summary>
     public static (IReadOnlyList<string> Patterns, int MovesLeft)? State
@@ -30,12 +31,15 @@ internal static class HarnessMoveFault
         }
     }
 
-    /// <summary>Fail the next <paramref name="moves"/> moves whose target's leaf (or "folder/leaf") matches one of
+    /// <summary>Fail the next <paramref name="moves"/> moves into <paramref name="outputRoot"/> (Proteus's own output mod;
+    /// nothing outside it is ever touched) whose target's leaf (or "folder/leaf") matches one of
     /// <paramref name="filePatterns"/> (<c>*</c> wildcards, case-insensitive).</summary>
-    public static void Arm(IEnumerable<string> filePatterns, int moves)
+    public static void Arm(string outputRoot, IEnumerable<string> filePatterns, int moves)
     {
         lock (Gate)
         {
+            root = Path.GetFullPath(outputRoot).TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar)
+                 + Path.DirectorySeparatorChar;
             patterns = filePatterns.Select(Compile).ToList();
             movesLeft = moves;
         }
@@ -47,6 +51,7 @@ internal static class HarnessMoveFault
         {
             patterns = [];
             movesLeft = 0;
+            root = null;
         }
     }
 
@@ -55,7 +60,8 @@ internal static class HarnessMoveFault
     {
         lock (Gate)
         {
-            if (movesLeft <= 0) return;
+            if (movesLeft <= 0 || root == null) return;
+            if (!Path.GetFullPath(destination).StartsWith(root, StringComparison.OrdinalIgnoreCase)) return;
             var leaf = Path.GetFileName(destination);
             var folder = Path.GetFileName(Path.GetDirectoryName(destination) ?? "");
             if (!patterns.Any(p => p.IsMatch(leaf) || p.IsMatch(folder + "/" + leaf))) return;

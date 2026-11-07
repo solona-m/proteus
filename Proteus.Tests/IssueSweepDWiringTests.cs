@@ -69,6 +69,9 @@ public class IssueSweepDWiringTests
         Assert.Contains("catch (OutputWriteException ex)", bake);
         Assert.Contains("catch (OutputWriteException ex)", set);
         Assert.Contains("if (ex is OutputWriteException) CountWriteFailure(hIdx);", set);
+        var glow = Method(Source("Services/SecondSkinService.cs"), "private byte[]? BuildContentGlowMaterial(");
+        Assert.Contains("if (ex is OutputWriteException) onOutputWriteFailed?.Invoke();", glow);
+        Assert.Contains("if (outcome == WriteOutcome.OutputWriteFailed) onOutputWriteFailed?.Invoke();", glow);
         Assert.Contains("catch (OutputWriteException)", host);
         // The source is read as the argument, before WriteIfChanged runs: its failure is never wrapped.
         var copy = Method(Source("Services/SecondSkinService.cs"), "internal static bool CopyPackFile(");
@@ -112,6 +115,9 @@ public class IssueSweepDWiringTests
         Assert.Contains("{host.Prefix}{host.SetId:D4}/", c);
         Assert.Contains("_{host.Slot}_", c);
         Before(c, "build.redirects.Remove(k)", "throw;");
+        // ...into a catch that drops only that host: the build and the other hosts go on (review FAIL 1).
+        var buildHost = Method(Source("Services/SecondSkinService.ShellSetBuild.cs"), "private void BuildHostModel(");
+        Before(buildHost, "try { new HostModelBuild(this, pushSweep, h).Run(); }", "catch (OutputWriteException ex)");
     }
 
     [Fact]

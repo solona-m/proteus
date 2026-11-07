@@ -142,7 +142,8 @@ internal sealed partial class HarnessRouter
                 ? new
                 {
                     locks = o.Locks.Select(l => new { file = l.Name, result = l.Result }),
-                    moveFault = o.MoveFault, fault = o.Fault, autoRedraw = o.AutoRedraw,
+                    moveFault = new { result = o.MoveFault }, fault = new { result = o.Fault },
+                    autoRedraw = new { result = o.AutoRedraw },
                 }
                 : null,
         });

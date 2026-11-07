@@ -143,8 +143,9 @@ public class HarnessOutputRoutesTests : IDisposable
         var (_, report) = await fx.Post("/actions/put-back", "{}");
         var o = report.GetProperty("output");
         Assert.Equal("released", o.GetProperty("locks")[0].GetProperty("result").GetString());
-        Assert.Equal("cleared", o.GetProperty("fault").GetString());
-        Assert.Equal("cleared", o.GetProperty("autoRedraw").GetString());
+        Assert.Equal("cleared", o.GetProperty("fault").GetProperty("result").GetString());
+        Assert.Equal("cleared", o.GetProperty("autoRedraw").GetProperty("result").GetString());
+        Assert.Equal("none", o.GetProperty("moveFault").GetProperty("result").GetString());
         Assert.False(fx.Changes.OutputLocks.Active);
         Assert.Null(fx.Game.ShellFaultValue);
         Assert.Null(fx.Game.AutoRedrawOverrideValue);
@@ -188,6 +189,17 @@ public class HarnessOutputRoutesTests : IDisposable
         Assert.True(body.GetProperty("before").GetBoolean());
         Assert.True(fx.Game.AutoRedrawConfig);
         Assert.Equal(400, (await fx.Post("/actions/auto-redraw", "{}")).Item1);
+    }
+
+    [Fact]
+    [Trait("Plan", "AC-issue-sweep-d-14")]
+    public async Task State_carries_the_recovery_block()
+    {
+        // [AC-issue-sweep-d-14] /state.compositor.recovery is the game's RecoveryState (the shell fault included).
+        await fx.Post("/actions/shell-fault", "{\"shell\":\"any\",\"until\":\"put-back\"}");
+        var (_, state) = await fx.Get("/state");
+        var recovery = state.GetProperty("compositor").GetProperty("recovery");
+        Assert.Equal("any", recovery.GetProperty("shellFault").GetProperty("shell").GetString());
     }
 
     [Fact]

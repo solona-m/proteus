@@ -1797,7 +1797,14 @@ public sealed partial class SecondSkinService
         /// <summary>Builds one host's shell model (or reuses a memoised one) and publishes it with its EQDP and variant redirects.</summary>
         private void BuildHostModel(PushSweep? pushSweep, int h)
         {
-            new HostModelBuild(this, pushSweep, h).Run();
+            try { new HostModelBuild(this, pushSweep, h).Run(); }
+            catch (OutputWriteException ex)
+            {
+                // Counted, and its material redirects removed, in PublishModel (#91): only this host is dropped, the others
+                // still publish, and the give-up message can name it.
+                service.log.Error(ex, "[Proteus] second skin: could not write the shell model for host {0}{1:D4}/{2} — "
+                                    + "that host is left out", hosts[h].Prefix, hosts[h].SetId, hosts[h].Slot);
+            }
         }
 
         private Result? Finish()

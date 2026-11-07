@@ -706,6 +706,23 @@ public class MatcapWriterTests
     }
 
     [Fact]
+    [Trait("Plan", "EDGE-issue-sweep-d-3")]
+    public void A_kept_material_no_longer_drawn_proceeds()
+    {
+        // [EDGE-issue-sweep-d-3] The author was undone while a refit kept M2; the refit is then remade without it. The next
+        // Undo has real work: M2's files and record entry go.
+        var (f, m2) = AuthorUndoneWhileARefitDrawsIt();
+        using (f)
+        {
+            File.WriteAllBytes(MatcapWriter.Full(f.ModRoot, RefitRel), f.Current(MatcapFixture.ModelRel));
+            var again = MatcapWriter.Undo(f.ModRoot, MatcapFixture.ModelRel);
+            Assert.True(again.Ok, again.Message);
+            Assert.False(File.Exists(MatcapWriter.Full(f.ModRoot, m2.File)));
+            Assert.DoesNotContain(MatcapRecord.Read(f.ModRoot).Materials, m => m.Name == m2.Name);
+        }
+    }
+
+    [Fact]
     [Trait("Plan", "EDGE-issue-sweep-d-1")]
     public void An_unrecorded_member_with_a_leftover_backup_is_still_retired()
     {

@@ -192,6 +192,17 @@ public class ShellNotDrawnNoticeTests
     }
 
     [Fact]
+    [Trait("Plan", "AC-issue-sweep-d-10")]
+    public void Localized_picks_the_same_wording_as_StringFor()
+    {
+        // [AC-issue-sweep-d-10] With no translation loaded, the localized template is StringFor's English, every combination.
+        foreach (var p in new[] { false, true })
+        foreach (var c in new[] { false, true })
+        foreach (var r in new[] { false, true })
+            Assert.Equal(StringFor(p, c, r).Fallback, Localized(p, c, r));
+    }
+
+    [Fact]
     [Trait("Plan", "EDGE-issue-sweep-d-32")]
     public void Redraw_off_picks_the_redraw_off_string()
     {

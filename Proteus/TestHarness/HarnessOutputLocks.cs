@@ -105,12 +105,12 @@ internal sealed class HarnessOutputLocks(IPluginLog? log) : IDisposable
 
     /// <summary>Fails the next <paramref name="moves"/> moves of matching output files (expiring after
     /// <see cref="MaxMs"/>). Throws <see cref="InvalidOperationException"/> when a set stands already.</summary>
-    public DateTime ArmMoves(IReadOnlyList<string> patterns, int moves)
+    public DateTime ArmMoves(string root, IReadOnlyList<string> patterns, int moves)
     {
         lock (gate)
         {
             if (held.Count > 0 || (moveFaultArmed && HarnessMoveFault.State != null)) throw new InvalidOperationException("locks-held");
-            HarnessMoveFault.Arm(patterns, moves);
+            HarnessMoveFault.Arm(root, patterns, moves);
             moveFaultArmed = true;
             Arm(MaxMs);
             log?.Information("[Proteus] test harness: the next {0} move(s) of {1} will fail", moves, string.Join(", ", patterns));

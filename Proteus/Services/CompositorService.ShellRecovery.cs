@@ -166,7 +166,8 @@ public partial class CompositorService
     {
         if (hostModels.Count == 0) return;
         int? glassesSet = null;
-        try { glassesSet = InvisibleGlasses.Resolve(Plugin.DataManager, log)?.ModelSet; } catch { }
+        try { glassesSet = InvisibleGlasses.Resolve(Plugin.DataManager, log)?.ModelSet; }
+        catch (Exception ex) { log.Debug("[Proteus] invisible glasses unknown — no carrier wording for them ({0})", ex.Message); }
         bool redrawOff = !AutoRedrawOn;
         foreach (var group in hostModels.GroupBy(m => ShellNotDrawnNotice.IsCarrierHost(m, glassesSet)).OrderBy(g => g.Key))
         {
