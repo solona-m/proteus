@@ -94,6 +94,28 @@ public partial class CompositorService
         private ConcurrentDictionary<string, byte> prefetchIssued = null!;
         private SemaphoreSlim prefetchGate = null!;
         private long tSetupEnd;
+
+        // Setup sub-phase stamps (stutter fixes, item 7): the same inputs took 0.2–3.4 s in a user's log, and the one
+        // "setup" figure could not say where. Printed on the skip line and the phases line.
+        private readonly List<(string Name, long At)> setupMarks = [];
+        private void SetupMark(string name) => setupMarks.Add((name, PhaseCounter.Begin()));
+
+        /// <summary>"discover 12 | plan+resolve 40 | … | gate 3" from the run start to <paramref name="end"/>.</summary>
+        internal string DescribeSetup(long end)
+        {
+            var parts = new List<string>();
+            long prev = tRunStart;
+            foreach (var (name, at) in setupMarks)
+            {
+                parts.Add($"{name} {PhaseCounter.MsBetween(prev, at):F0}");
+                prev = at;
+            }
+            parts.Add($"gate {PhaseCounter.MsBetween(prev, end):F0}");
+            return string.Join(" | ", parts);
+        }
+
+        // Another composite was in flight during this run: shared stage counters then mix two runs' figures.
+        internal bool overlapSeen;
         private IReadOnlyList<ChannelContribution> nextChannelContributions = null!;
         private Dictionary<(string, string?, string?), List<SkinGlowTarget>> nextSkinGlowTargets = null!;
         private Dictionary<string, string> skinRedirectsThisRun = null!;
@@ -137,18 +159,23 @@ public partial class CompositorService
             {
                 latchStamp = compositor._bodyAtrLatch.Stamp();
                 if (!Discover()) return;
+                SetupMark("discover");
                 PlanOverlays();
                 ResolveEntries();
+                SetupMark("plan+resolve");
                 PlanFaces();
                 RouteOverlays();
                 FilterLiveMaterials();
                 if (!SynthesiseSiblings()) return;
+                SetupMark("filter+siblings");
                 CarryWomensArtToMen();
                 PrepareOutputs();
                 AddBodyMaterials();
                 ResolveMasks();
+                SetupMark("masks");
                 SortStacks();
                 if (!PrimeBases()) return;
+                SetupMark("prime");
                 if (!GateUnchanged()) return;
                 GateSkinReuse();
                 InheritMaskColorsets();
@@ -978,8 +1005,8 @@ public partial class CompositorService
 
                 // Nothing published, so nothing to record: RecordPublish would let PruneSupersededOutput collect live files.
                 // No write, reload or redraw.
-                compositor.log.Information("[Proteus] recomposite skipped — inputs unchanged ({0:F0}ms)",
-                    PhaseCounter.MsSince(tRunStart));
+                compositor.log.Information("[Proteus] recomposite skipped — inputs unchanged ({0:F0}ms; setup: {1})",
+                    PhaseCounter.MsSince(tRunStart), DescribeSetup(PhaseCounter.Begin()));
                 timeline.Mark("setup");
                 compositor.LogRefreshTimeline(timeline, "skipped, inputs unchanged");
                 return false;
@@ -1082,6 +1109,7 @@ public partial class CompositorService
                 }
 
             tSetupEnd = PhaseCounter.Begin();
+            overlapSeen |= Volatile.Read(ref compositor._compositesInFlight) > 1;
             timeline.MarkAt("setup", tSetupEnd);
         }
 
@@ -1127,7 +1155,9 @@ public partial class CompositorService
                     .OrderBy(c => c.Material, StringComparer.OrdinalIgnoreCase)
                     .ToList();
 
-            compositor.LogPhaseBreakdown(tRunStart, tSetupEnd, skinReused ? 0 : byMaterial.Count);
+            overlapSeen |= Volatile.Read(ref compositor._compositesInFlight) > 1;
+            compositor.LogPhaseBreakdown(tRunStart, tSetupEnd, skinReused ? 0 : byMaterial.Count,
+                                         DescribeSetup(tSetupEnd), overlapSeen);
             timeline.Mark(skinReused ? "skin (reused)" : "skin");
 
             // The glow recipes gathered above (empty if no indexed skin overlays).
@@ -1257,6 +1287,11 @@ public partial class CompositorService
             }
             timeline.Mark("second skin");
 
+            // Ring carriers this build no longer hosts on come off BEFORE the manifest that withdraws their redirects is
+            // written and reloaded: after the supersede check above, outside the config gate (it blocks on the framework).
+            bool hostWantedNow = (gearOverlays.Count > 0 && !shellAllHeld) || contentLayers.Count > 0;
+            compositor.ReleaseVacatedCarriers(hostWantedNow, shellBuilt, shellBuilt ? shellCarrierSlots : []);
+
             compositor.WriteManagedModJson(redirects, manipulations);
             return true;
         }
@@ -1312,7 +1347,7 @@ public partial class CompositorService
             compositor.RememberHostDecision(hostWanted, shellBuilt, shellOnFacewear,
                                  shellBuilt ? shellCarrierSlots : []);
             compositor.ReconcileInvisibleGlasses(hostWanted, shellBuilt, shellOnFacewear, glassesPreHosted);
-            compositor.ReconcileEmperorRing(hostWanted, shellBuilt, shellBuilt ? shellCarrierSlots : []);
+            compositor.ReconcileEmperorRing(hostWanted, shellBuilt, shellBuilt ? shellCarrierSlots : [], selfScheduleRetry: true);
             timeline.Mark("carriers");
 
             // Every path, not just the shell's: the skin textures are held only by priority against the body mod that invented

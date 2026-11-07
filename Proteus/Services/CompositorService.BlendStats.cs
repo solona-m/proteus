@@ -344,7 +344,8 @@ public partial class CompositorService
         return "(identical?)";
     }
 
-    private void LogPhaseBreakdown(long runStart, long setupEnd, int materialCount)
+    private void LogPhaseBreakdown(long runStart, long setupEnd, int materialCount, string setupSteps = "",
+                                   bool otherCompositeInFlight = false)
     {
         var totalMs     = PhaseCounter.MsSince(runStart);
         var compositeMs = PhaseCounter.MsSince(setupEnd);
@@ -365,7 +366,15 @@ public partial class CompositorService
         // Foreground counters sum across workers, so the split is exact only for one material.
         // `encode` belongs here for the same reason swizzle does: it is the OTHER branch of the same write, and with
         // EnableCompression on it dwarfs everything else. Leaving it out charged every BC7 second to the blender.
-        var blendMs = compositeMs - (wait.Ms + remap.Ms + swizzle.Ms + write.Ms + encode.Ms);
+        // A residual, clamped: the stage counters sum parallel workers and are shared between runs, so they can exceed
+        // the wall time (a user's log showed blend -791ms). Said so on the line when they overlap.
+        var stagesMs = wait.Ms + remap.Ms + swizzle.Ms + write.Ms + encode.Ms;
+        var (blendRounded, overlapped) = PhaseResidual.Blend((long)Math.Round(compositeMs), (long)Math.Round(stagesMs));
+        double blendMs = overlapped ? 0 : compositeMs - stagesMs;
+        string blendText = overlapped || otherCompositeInFlight
+            ? $"≥{blendRounded}ms (stage figures overlap: Σ {stagesMs:F0} ms over {compositeMs:F0} ms wall"
+              + (otherCompositeInFlight ? ", another composite in flight" : "") + ")"
+            : $"{blendMs:F0}ms";
 
         // Cache state beside the miss count shows how far the budget is under the working set.
         var (cacheEntries, cacheBytes) = textureLoader.CacheState();
@@ -389,17 +398,17 @@ public partial class CompositorService
         log.Information(
             "[Proteus] recomposite phases: setup {0:F0}ms | decode-wait {1:F0}ms ({2} miss, {3} hit, {4} blocked) | " +
             "prefetch {5:F0}ms bg (decode work {6:F0}ms, {7} native of {8}) | remap {9:F0}ms ({10}) | " +
-            "blend {11:F0}ms (islands {12:F0} | seam {13:F0}/{14} | ao {15:F0} [sil {16:F0}/{17} + blur {18:F0}/{19} ({59} cached) " +
+            "blend {11} (islands {12:F0} | seam {13:F0}/{14} | ao {15:F0} [sil {16:F0}/{17} + blur {18:F0}/{19} ({59} cached) " +
             "+ apply {20:F0}] | tag {21:F0}/{22} | overlays {23:F0} [cov {24:F0}/{25} + idxmerge {26:F0}/{27} " +
             "+ diffuse {28:F0}/{29} + normal {30:F0}/{31} + seamdrop {32:F0}/{33} + load {34:F0}/{35} (gen2 {57:F0}/{58}, men {62:F0}/{63}) " +
             "+ baseload {36:F0}/{37} + resolve {38:F0}/{39} + suppress {40:F0}/{41} + glue {42:F0}] | " +
             "maskrelief {43:F0} | maskdiffuse {44:F0} | rest {45:F0}) | " +
             "swizzle {46:F0}ms | encode {60:F0}ms ({61} surface(s)) | " +
             "write {47:F0}ms ({48} files, {49:F0} MB) | composite {50:F0}ms | total {51:F0}ms | " +
-            "{52} material(s) | cache {53} entries, {54:F0} MB, {55} evicted (budget {56:F0} MB)",
+            "{52} material(s) | cache {53} entries, {54:F0} MB, {55} evicted (budget {56:F0} MB) | setup steps: {64}",
             setupMs, wait.Ms, decode.Calls, hits.Calls, blocked.Calls,
             prefetch.Ms, decode.Ms, nativeD.Calls, decode.Calls, remap.Ms, remap.Calls,
-            blendMs, blendIslandStats.Ms, blendSeamStats.Ms, blendSeamStats.Calls, aoMs,
+            blendText, blendIslandStats.Ms, blendSeamStats.Ms, blendSeamStats.Calls, aoMs,
             blendSilhouetteStats.Ms, blendSilhouetteStats.Calls, blendBlurStats.Ms, blendBlurStats.Calls,
             aoApplyMs, blendTagStats.Ms, blendTagStats.Calls,
             blendOverlayStats.Ms,
@@ -415,6 +424,6 @@ public partial class CompositorService
             cacheEntries, cacheBytes / (1024.0 * 1024.0), textureLoader.Evictions,
             textureLoader.DecodeCacheBudgetBytes / (1024.0 * 1024.0),
             blendGen2Stats.Ms, blendGen2Stats.Calls, blendBlurCacheHits.Calls,
-            encode.Ms, encode.Calls, blendMenStats.Ms, blendMenStats.Calls);
+            encode.Ms, encode.Calls, blendMenStats.Ms, blendMenStats.Calls, setupSteps);
     }
 }

@@ -222,7 +222,10 @@ public class GlamourerBridge : IDisposable
         if (objectTable.LocalPlayer == null) return false;
         try
         {
-            var ec = setBonusItem.Invoke(0, ApiBonusSlot.Glasses, itemId, key: 0, ApplyFlag.Once);
+            GlamourerApiEc ec;
+            ownCarrierWriteDepth++;
+            try { ec = setBonusItem.Invoke(0, ApiBonusSlot.Glasses, itemId, key: 0, ApplyFlag.Once); }
+            finally { ownCarrierWriteDepth--; }
             if (ec != GlamourerApiEc.Success)
             {
                 if (ec == GlamourerApiEc.InvalidKey)
@@ -331,7 +334,10 @@ public class GlamourerBridge : IDisposable
         try
         {
             // Two explicit zero stains, not an empty list (see NoStains).
-            var ec = setItem.Invoke(0, slot, itemId, NoStains, key: 0, ApplyFlag.Once);
+            GlamourerApiEc ec;
+            ownCarrierWriteDepth++;
+            try { ec = setItem.Invoke(0, slot, itemId, NoStains, key: 0, ApplyFlag.Once); }
+            finally { ownCarrierWriteDepth--; }
             if (ec != GlamourerApiEc.Success)
             {
                 if (ec == GlamourerApiEc.InvalidKey)
@@ -402,6 +408,13 @@ public class GlamourerBridge : IDisposable
         }
     }
 
+    /// <summary>
+    /// Our carrier write (SetAccessory/SetGlasses) is in progress on THIS thread. Glamourer raises StateChanged
+    /// synchronously inside the call, so an Equip seen while it is set is our own echo; thread-static, so an Equip raised
+    /// on another thread meanwhile is still the player's. Fails open if Glamourer ever delivers asynchronously.
+    /// </summary>
+    [ThreadStatic] private static int ownCarrierWriteDepth;
+
     private void OnStateChanged(nint address, StateChangeType changeType)
     {
         var localPlayer = objectTable.LocalPlayer;
@@ -429,7 +442,13 @@ public class GlamourerBridge : IDisposable
         {
             // Our own ReapplyState raises an Equip per slot, and each one schedules another composite
             // that reapplies again. Cost: a foreign equip inside the window is dropped until the next trigger.
-            if (WithinOwnReapplyEcho()) return;
+            // Our own carrier write raises one too, synchronously inside the call on this thread: not a player change.
+            if (!GlamourerSignals.RaisesEquipmentChange(changeType, WithinOwnReapplyEcho(), ownCarrierWriteDepth > 0))
+            {
+                if (ownCarrierWriteDepth > 0)
+                    log.Debug("[Proteus] glamourer signal: changeType={0} (our own carrier write, ignored)", changeType);
+                return;
+            }
 
             LocalPlayerEquipmentChanged?.Invoke();
             return;

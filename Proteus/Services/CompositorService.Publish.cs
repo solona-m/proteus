@@ -122,6 +122,12 @@ public partial class CompositorService
             if (_manifestWrites == stamp) _emptyOutputDrawn = true;
     }
 
+    /// <summary>The empty output is live and drawn (read under the manifest lock).</summary>
+    private bool IsEmptyOutputDrawn()
+    {
+        lock (_manifestLock) return _emptyOutputDrawn;
+    }
+
     /// <summary>A user refresh must reload the character even when idle: forget the flag and refuse any mark in flight.</summary>
     private void ForgetEmptyOutputDrawn()
     {

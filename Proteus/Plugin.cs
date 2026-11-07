@@ -23,6 +23,7 @@ public sealed class Plugin : IDalamudPlugin
     [PluginService] public static IClientState ClientState { get; private set; } = null!;
     [PluginService] public static IChatGui ChatGui { get; private set; } = null!;
     [PluginService] public static ITextureProvider TextureProvider { get; private set; } = null!;
+    [PluginService] public static IReliableFileStorage ReliableStorage { get; private set; } = null!;
 #if PROTEUS_TEST_HARNESS
     /// <summary>The QA test harness's screenshot readback (dev builds only).</summary>
     [PluginService] public static ITextureReadbackProvider TextureReadback { get; private set; } = null!;
@@ -116,7 +117,13 @@ public sealed class Plugin : IDalamudPlugin
         config.Initialize(pluginInterface);
         // From here on a save from a worker is written on the framework thread, a quarter second later: a burst of
         // body-mod classifications is then a few writes, not one a frame.
-        config.AttachSaver(new ConfigSaveScheduler(config.Gate, () => pluginInterface.SavePluginConfig(config),
+        // The text is made on the framework thread inside the gate; the disk write goes through Dalamud's reliable storage
+        // (same file and container as SavePluginConfig, under its lock) off the framework thread. Unload writes last.
+        var configPath = pluginInterface.ConfigFile.FullName;
+        config.AttachSaver(new ConfigSaveScheduler(config.Gate,
+                                                   () => ConfigJson.Serialize(config),
+                                                   json => ReliableStorage.WriteAllTextAsync(configPath, json),
+                                                   () => pluginInterface.SavePluginConfig(config),
                                                    () => framework.IsInFrameworkUpdateThread,
                                                    a => _ = framework.RunOnTick(a, TimeSpan.FromMilliseconds(250)),
                                                    log));
