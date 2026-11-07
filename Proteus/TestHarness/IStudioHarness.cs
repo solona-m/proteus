@@ -82,7 +82,9 @@ internal sealed record MatcapHarnessPort(
     Services.Matcap.MatcapStudio.Environment Env, string? ModsRoot, IReadOnlyDictionary<string, string>? Mods,
     System.Action<string>? ForgetFaceUpstream = null,
     // (mod root, game path, written files) -> the panel's drawn-file line after an Apply; framework thread.
-    System.Func<string, string, IReadOnlyList<string>, string?>? DrawnStatus = null);
+    System.Func<string, string, IReadOnlyList<string>, string?>? DrawnStatus = null,
+    // Proteus's own matcaps (downloaded into the plugin's config directory; nothing to put back).
+    Services.Matcap.IMatcapPack? Pack = null);
 
 /// <summary>
 /// The Studio as the test harness drives it: the panel's own code for each control, run on the framework thread between

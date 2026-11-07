@@ -6459,6 +6459,26 @@
     "message": "库模组",
     "description": ""
   },
+  "Parts.Matcap.SourceProteus": {
+    "message": "Proteus 自带 matcap",
+    "description": ""
+  },
+  "Parts.Matcap.SourceProteus.Tip": {
+    "message": "Proteus 自带的 matcap，在你第一次打开 Matcap 时下载。",
+    "description": ""
+  },
+  "Parts.Matcap.PackDownloading.Fmt": {
+    "message": "正在下载 Proteus 自带 matcap… {0} / {1}",
+    "description": ""
+  },
+  "Parts.Matcap.PackFailed": {
+    "message": "无法下载 Proteus 自带 matcap。请检查网络连接，然后重试。",
+    "description": ""
+  },
+  "Parts.Matcap.PackRetry": {
+    "message": "重试",
+    "description": ""
+  },
   "Parts.Matcap.Superseded": {
     "message": "模型已不再使用此 matcap（模组已更新）。",
     "description": ""

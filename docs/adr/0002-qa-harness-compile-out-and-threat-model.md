@@ -102,7 +102,10 @@ rule); it writes and later deletes test images of its own (`qa-*.png`) in the
 global matcap folder, leaving any one changed since; and matcap Undo and Forget
 delete or retire the `matcap-backup` files they restore from or no longer need — a
 second, narrow exception to "never deletes a backup", backed by the job's
-whole-mod backup.
+whole-mod backup. `GET /matcaps` also starts (and with `retry=1` re-arms) the
+download of Proteus's own matcaps into the plugin's config directory — the same
+first-use download the pane makes; it writes no mod and no setting, so there is
+nothing to put back.
 
 ## Consequences
 

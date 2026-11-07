@@ -6459,6 +6459,26 @@
     "message": "Моды-библиотеки",
     "description": ""
   },
+  "Parts.Matcap.SourceProteus": {
+    "message": "Мэткапы Proteus",
+    "description": ""
+  },
+  "Parts.Matcap.SourceProteus.Tip": {
+    "message": "Мэткапы, которые идут с Proteus; они скачиваются, когда вы впервые открываете Matcaps.",
+    "description": ""
+  },
+  "Parts.Matcap.PackDownloading.Fmt": {
+    "message": "Скачиваются мэткапы Proteus… {0} из {1}",
+    "description": ""
+  },
+  "Parts.Matcap.PackFailed": {
+    "message": "Не удалось скачать мэткапы Proteus. Проверьте подключение и попробуйте снова.",
+    "description": ""
+  },
+  "Parts.Matcap.PackRetry": {
+    "message": "Повторить",
+    "description": ""
+  },
   "Parts.Matcap.Superseded": {
     "message": "Модель больше не использует этот мэткап (мод обновлён).",
     "description": ""

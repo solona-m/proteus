@@ -6459,6 +6459,26 @@
     "message": "ライブラリ Mod",
     "description": ""
   },
+  "Parts.Matcap.SourceProteus": {
+    "message": "Proteusのマットキャップ",
+    "description": ""
+  },
+  "Parts.Matcap.SourceProteus.Tip": {
+    "message": "Proteusに付属するマットキャップです。初めてマットキャップを開いたときにダウンロードされます。",
+    "description": ""
+  },
+  "Parts.Matcap.PackDownloading.Fmt": {
+    "message": "Proteusのマットキャップをダウンロード中… {0} / {1}",
+    "description": ""
+  },
+  "Parts.Matcap.PackFailed": {
+    "message": "Proteusのマットキャップをダウンロードできませんでした。接続を確認してから、もう一度お試しください。",
+    "description": ""
+  },
+  "Parts.Matcap.PackRetry": {
+    "message": "再試行",
+    "description": ""
+  },
   "Parts.Matcap.Superseded": {
     "message": "モデルはもうこのマットキャップを使っていません（Mod が更新されました）。",
     "description": ""

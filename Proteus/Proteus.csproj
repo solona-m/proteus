@@ -145,6 +145,10 @@
        DefaultEffectsDownloadService, which also holds the checksums that must be regenerated whenever
        the art changes. -->
 
+  <!-- Proteus's own matcaps (DefaultMatcaps\) likewise are NOT copied to the output: published as pinned
+       release assets under the matcaps-* tag (upload-matcaps.yml) and fetched into the config directory the
+       first time the Studio's Matcaps pane is shown — see DefaultMatcapsDownloadService and its checksums. -->
+
   <ItemGroup>
     <!-- Authored meshes the shell builder can graft in. toecap.mdl is a hand-modelled toe box that
          replaces the procedurally generated cap: a stocking shell is a displaced copy of the body, so

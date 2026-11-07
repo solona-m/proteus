@@ -6459,6 +6459,26 @@
     "message": "라이브러리 모드",
     "description": ""
   },
+  "Parts.Matcap.SourceProteus": {
+    "message": "Proteus 매트캡",
+    "description": ""
+  },
+  "Parts.Matcap.SourceProteus.Tip": {
+    "message": "Proteus에 포함된 매트캡으로, 매트캡을 처음 열 때 내려받습니다.",
+    "description": ""
+  },
+  "Parts.Matcap.PackDownloading.Fmt": {
+    "message": "Proteus 매트캡을 내려받는 중… {0} / {1}",
+    "description": ""
+  },
+  "Parts.Matcap.PackFailed": {
+    "message": "Proteus 매트캡을 내려받지 못했습니다. 연결을 확인한 뒤 다시 시도하세요.",
+    "description": ""
+  },
+  "Parts.Matcap.PackRetry": {
+    "message": "다시 시도",
+    "description": ""
+  },
   "Parts.Matcap.Superseded": {
     "message": "모델이 더 이상 이 매트캡을 쓰지 않습니다(모드가 업데이트됨).",
     "description": ""

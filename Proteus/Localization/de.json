@@ -6459,6 +6459,26 @@
     "message": "Bibliotheks-Mods",
     "description": ""
   },
+  "Parts.Matcap.SourceProteus": {
+    "message": "Proteus-Matcaps",
+    "description": ""
+  },
+  "Parts.Matcap.SourceProteus.Tip": {
+    "message": "Matcaps, die mit Proteus kommen; sie werden heruntergeladen, wenn du Matcaps zum ersten Mal öffnest.",
+    "description": ""
+  },
+  "Parts.Matcap.PackDownloading.Fmt": {
+    "message": "Proteus-Matcaps werden heruntergeladen… {0} von {1}",
+    "description": ""
+  },
+  "Parts.Matcap.PackFailed": {
+    "message": "Die Proteus-Matcaps konnten nicht heruntergeladen werden. Prüfe deine Verbindung und versuche es erneut.",
+    "description": ""
+  },
+  "Parts.Matcap.PackRetry": {
+    "message": "Erneut versuchen",
+    "description": ""
+  },
   "Parts.Matcap.Superseded": {
     "message": "Das Modell nutzt diese Matcap nicht mehr (der Mod wurde aktualisiert).",
     "description": ""

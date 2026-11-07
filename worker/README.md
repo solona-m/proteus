@@ -143,6 +143,7 @@ about.
 |---|---|
 | `/uvmaps-v1/bibo_to_gen3_transfer.tif` | `releases/download/uvmaps-v1/…` |
 | `/effects-v1/hello.kitty.png` | `releases/download/effects-v1/…` |
+| `/matcaps-v1/Gold.Metal.png` | `releases/download/matcaps-v1/…` |
 | `/v2608.309.0.0/latest.zip` | `releases/download/v2608.309.0.0/…` |
 | `/camera-tools/v2609.12.0.0/latest.zip` | the same, in `solona-m/camera-tools-ffxiv` |
 | `/pickles/aiscan-v1/ffmpeg.exe` (and `.onnx`, `.onnx.data`) | the same, in `solona-m/Pickles-Playlist-Editor` |

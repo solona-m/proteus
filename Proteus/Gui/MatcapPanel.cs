@@ -49,10 +49,20 @@ internal sealed class MatcapPanel
         public bool FaceTarget;
         /// <summary>For a face: it has horn parts at all.</summary>
         public bool HasHorns = true;
+        /// <summary>Proteus's own matcaps on disk (see <see cref="IMatcapPack"/>).</summary>
+        public IReadOnlyList<MatcapImage> PackImages = [];
+        /// <summary>Their download, or null when there is no pack.</summary>
+        public MatcapPackStatus? PackStatus;
+        /// <summary>Try the download again after a failure.</summary>
+        public Action? RetryPack;
     }
 
-    private bool showLibraries;
+    /// <summary>Where the matcap is picked from.</summary>
+    internal enum SourceKind { Images, Proteus, Libraries }
+
+    private SourceKind source;
     private string? image;
+    private string? packImage;
     private string? libraryKey;
     private string? option;
     private bool confirmOpen;
@@ -65,8 +75,10 @@ internal sealed class MatcapPanel
     /// <summary>The current choice, or null.</summary>
     public MatcapChoice? Choice(Context ctx)
     {
-        if (!showLibraries)
+        if (source == SourceKind.Images)
             return image != null && ctx.Images.FirstOrDefault(i => i.Name == image) is { } img ? MatcapChoice.OfImage(img) : null;
+        if (source == SourceKind.Proteus)
+            return packImage != null && ctx.PackImages.FirstOrDefault(i => i.Name == packImage) is { } p ? MatcapChoice.OfImage(p) : null;
         var lib = SelectedLibrary(ctx);
         return lib != null && option != null && lib.Options.Any(o => o.Name == option) ? MatcapChoice.OfLibrary(lib, option) : null;
     }
@@ -84,12 +96,20 @@ internal sealed class MatcapPanel
         ImGui.PopTextWrapPos();
         ImGui.Spacing();
 
-        if (ImGui.RadioButton(s.SourceImages, !showLibraries)) showLibraries = false;
+        if (ImGui.RadioButton(s.SourceImages, source == SourceKind.Images)) source = SourceKind.Images;
         ImGui.SameLine();
-        if (ImGui.RadioButton(s.SourceLibraries, showLibraries)) { showLibraries = true; InvalidateStatus(); }
+        if (ImGui.RadioButton(s.SourceProteus, source == SourceKind.Proteus)) source = SourceKind.Proteus;
+        if (ImGui.IsItemHovered()) ImGui.SetTooltip(s.SourceProteusTip);
+        ImGui.SameLine();
+        if (ImGui.RadioButton(s.SourceLibraries, source == SourceKind.Libraries)) { source = SourceKind.Libraries; InvalidateStatus(); }
         ImGui.Separator();
 
-        if (showLibraries) DrawLibraries(ctx); else DrawImages(ctx);
+        switch (source)
+        {
+            case SourceKind.Libraries: DrawLibraries(ctx); break;
+            case SourceKind.Proteus: DrawProteus(ctx); break;
+            default: DrawImages(ctx); break;
+        }
 
         ImGui.Separator();
         DrawApply(ctx);
@@ -114,6 +134,29 @@ internal sealed class MatcapPanel
         }
         DrawGrid(ctx.Images.Select(i => (i.Name, i.Path, i.FromMod ? $"{i.Name} {s.ThisMod}" : i.Name)).ToList(),
                  image, picked => image = picked);
+    }
+
+    /// <summary>Picks <paramref name="name"/> from <paramref name="kind"/>, as a click would: the tests' way in.</summary>
+    internal void Pick(SourceKind kind, string name)
+    {
+        source = kind;
+        if (kind == SourceKind.Proteus) packImage = name; else if (kind == SourceKind.Images) image = name;
+    }
+
+    private void DrawProteus(Context ctx)
+    {
+        var s = Strings.Matcap;
+        var st = ctx.PackStatus;
+        if (st != null && MatcapPanelModel.PackLine(st, ctx.PackImages.Count) is { } line)
+        {
+            ImGui.PushTextWrapPos(0f);
+            if (st.State == MatcapPackState.Failed) ImGui.TextColored(ProteusStyle.Warn, line); else ImGui.TextDisabled(line);
+            ImGui.PopTextWrapPos();
+            if (st.State == MatcapPackState.Failed && st.Detail.Length > 0 && ImGui.IsItemHovered()) ImGui.SetTooltip(st.Detail);
+            if (st.State == MatcapPackState.Failed && ImGui.Button(s.PackRetry)) ctx.RetryPack?.Invoke();
+        }
+        if (ctx.PackImages.Count == 0) return;
+        DrawGrid(ctx.PackImages.Select(i => (i.Name, i.Path, i.Name)).ToList(), packImage, picked => packImage = picked);
     }
 
     private void DrawLibraries(Context ctx)

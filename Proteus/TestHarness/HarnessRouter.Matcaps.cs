@@ -28,9 +28,15 @@ internal sealed partial class HarnessRouter
         if ((mod is { Length: > 0 }) != (model is { Length: > 0 }))
             return HarnessResponse.Error(400, "invalid-field", "give mod and model together, or neither");
 
+        bool retry = request.Query.TryGetValue("retry", out var rt) && rt == "1";
         var port = await OnFramework(() => Game.Studio?.Matcaps());
         if (port == null) return HarnessResponse.Error(503, "studio-unavailable", "the Studio is not available");
-        if (port.ModsRoot == null || port.Mods == null) return HarnessResponse.Error(503, "penumbra-unavailable", "Penumbra is not available");
+        // Asking counts as first use, as showing the pane does; retry=1 also re-arms a finished or failed run (QA only).
+        // Before the Penumbra check: Proteus's own matcaps need no Penumbra.
+        port.Pack?.EnsureAsync(retryFailed: retry, evenIfReady: retry);
+        var packView = port.Pack is { } pk ? PackView(pk) : null;
+        if (port.ModsRoot == null || port.Mods == null)
+            return Scrubbed(503, new { error = new { code = "penumbra-unavailable", message = "Penumbra is not available" }, pack = packView });
         if (refresh || port.Index?.Current == null)
             await Task.Run(() => port.Index!.Refresh(port.Mods, port.ModsRoot, force: refresh)).ConfigureAwait(false);
         var state = port.Index!.Current ?? MatcapIndex.State.Empty;
@@ -51,7 +57,9 @@ internal sealed partial class HarnessRouter
         return Scrubbed(200, new
         {
             scanned = port.Index.Current != null, scanning = port.Index.Scanning,
-            images = MatcapImages.List(port.ImageFolder, null).Select(i => new { name = i.Name, path = i.Path }),
+            images = MatcapImages.List(port.ImageFolder, null).Select(i => new { name = i.Name, path = i.Path, source = "global" })
+                .Concat((port.Pack?.Available() ?? []).Select(i => new { name = i.Name, path = i.Path, source = "proteus" })),
+            pack = packView,
             libraries = state.Libraries.Select(l =>
             {
                 var s = statuses[l.Mod + "|" + l.Group];
@@ -64,6 +72,13 @@ internal sealed partial class HarnessRouter
             }),
             model = modelView,
         });
+    }
+
+    /// <summary>The download as the harness reports it.</summary>
+    internal static object PackView(IMatcapPack pack)
+    {
+        var st = pack.Status;
+        return new { state = st.State.ToString().ToLowerInvariant(), have = st.Have, total = st.Total, detail = st.Detail };
     }
 
     /// <summary>A plain test image name: starts "qa-", ends ".png", no folder.</summary>
@@ -122,7 +137,7 @@ internal sealed partial class HarnessRouter
     private async Task<HarnessResponse> MatcapAction(HarnessRequest request)
     {
         var (body, bad) = JsonBody(request, "mod", "model", "parts", "image", "library", "group", "option", "confirmEnable",
-                                   "entry", "undo", "forget");
+                                   "entry", "undo", "forget", "pack");
         if (bad != null) return bad;
         string? mod = OptionalString(body, "mod", out bad); if (bad != null) return bad;
         string? model = OptionalString(body, "model", out bad); if (bad != null) return bad;
@@ -133,10 +148,13 @@ internal sealed partial class HarnessRouter
         string? entry = OptionalString(body, "entry", out bad); if (bad != null) return bad;
         if (mod == null || model == null) return HarnessResponse.Error(400, "invalid-field", "mod and model are required");
         bool Flag(string field) => body.TryGetProperty(field, out var v) && v.ValueKind == JsonValueKind.True;
-        foreach (var f in new[] { "confirmEnable", "undo", "forget" })
+        foreach (var f in new[] { "confirmEnable", "undo", "forget", "pack" })
             if (body.TryGetProperty(f, out var v) && v.ValueKind is not (JsonValueKind.True or JsonValueKind.False))
                 return HarnessResponse.Error(400, "invalid-field", $"{f} must be true or false");
         bool undo = Flag("undo"), forget = Flag("forget");
+        // pack: true picks Proteus's own matcap of that name over a user image of the same name.
+        if (body.TryGetProperty("pack", out _) && image == null)
+            return HarnessResponse.Error(400, "invalid-field", "pack goes with image");
 
         var labels = new List<string>();
         if (body.TryGetProperty("parts", out var parts))
@@ -196,7 +214,7 @@ internal sealed partial class HarnessRouter
                 MatcapJob.Action.Change => "matcap-change", _ => "matcap",
             }, dir!);
             var args = new MatcapJob.Args(dir!, modRoot, model, kind, labels, image, library, group, option, Flag("confirmEnable"),
-                                          entry, port!, changes);
+                                          entry, port!, changes, Pack: Flag("pack"));
             _ = jobs.Start(job, j => MatcapJob.Run(jobs, j, args));
             started = true;
             return HarnessResponse.Json(202, new { job = job.Id, modDir = dir, state = "queued" });

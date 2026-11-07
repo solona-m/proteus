@@ -6459,6 +6459,26 @@
     "message": "Library mods",
     "description": "Studio Matcaps tool. A matcap is a sphere picture a shader samples by the surface's facing direction."
   },
+  "Parts.Matcap.SourceProteus": {
+    "message": "Proteus matcaps",
+    "description": "Studio Matcaps tool. A matcap is a sphere picture a shader samples by the surface's facing direction."
+  },
+  "Parts.Matcap.SourceProteus.Tip": {
+    "message": "Matcaps that come with Proteus, downloaded the first time you open Matcaps.",
+    "description": "Studio Matcaps tool. A matcap is a sphere picture a shader samples by the surface's facing direction."
+  },
+  "Parts.Matcap.PackDownloading.Fmt": {
+    "message": "Downloading Proteus's matcaps… {0} of {1}",
+    "description": "Studio Matcaps tool. A matcap is a sphere picture a shader samples by the surface's facing direction."
+  },
+  "Parts.Matcap.PackFailed": {
+    "message": "Proteus's matcaps could not be downloaded. Check your connection, then try again.",
+    "description": "Studio Matcaps tool. A matcap is a sphere picture a shader samples by the surface's facing direction."
+  },
+  "Parts.Matcap.PackRetry": {
+    "message": "Try again",
+    "description": "Studio Matcaps tool. A matcap is a sphere picture a shader samples by the surface's facing direction."
+  },
   "Parts.Matcap.Superseded": {
     "message": "The model no longer uses this matcap (the mod was updated).",
     "description": "Studio Matcaps tool. A matcap is a sphere picture a shader samples by the surface's facing direction."
