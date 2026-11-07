@@ -54,7 +54,8 @@ public sealed class PbdFile
         int p = start + 4;
         for (int i = 0; i < boneCount; i++, p += 2)
         {
-            int at = start + BitConverter.ToInt16(data[p..]);
+            // Unsigned: a deformer of 600-odd bones (NIRÆ's) puts its names more than 32 KB past its start.
+            int at = start + BitConverter.ToUInt16(data[p..]);
             int end = at;
             while (end < data.Length && data[end] != 0) end++;
             names[i] = Encoding.UTF8.GetString(data[at..end]);

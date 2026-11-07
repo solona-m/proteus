@@ -20,7 +20,7 @@ public sealed class DefaultMatcapsDownloadService : IMatcapPack, IDisposable
     /// Immutable by contract, like the effects tag: bump it whenever <see cref="Matcaps"/> changes, and never re-upload
     /// assets under an existing tag, or a mirror keeps serving the old bytes. upload-matcaps.yml publishes it.
     /// </summary>
-    internal const string MatcapsTag = "matcaps-v1";
+    internal const string MatcapsTag = "matcaps-v2";
 
     /// <summary>
     /// Shipped loose (zip bytes are not reproducible, so a pinned checksum would break). Must equal the committed
@@ -29,15 +29,20 @@ public sealed class DefaultMatcapsDownloadService : IMatcapPack, IDisposable
     internal static readonly (string Name, long Bytes, string Sha256)[] Matcaps =
     [
         ("Amber Orange.png", 325396L, "87eeff2ab056bd163fda699a4e51db38b31129f172507792508c0ad33ca1fb6e"),
+        ("Amethyst.png", 151935L, "f20e40eceaf99dbd4daa7c3ec6396f69c24285a3dfff4dae8c31e99ea3c07479"),
         ("apple.png", 362170L, "cec04620a42b381568ce8b669ec5517782360deb4a665ccb9e545e29ad054c7e"),
+        ("Aquamarine.png", 144219L, "f8b27b7c4111096fbaf987ce5d8b2519eb6f77baf77984b5972bbcdabe6d2b08"),
         ("Beige Travertine.png", 260873L, "f393a14a98b9581fc526313a32abba0961bae15a35d6d2029277c9fa0d0a0996"),
         ("Brushed Steel.png", 136747L, "65e0bea2d87396fd345b5f8c177e1973d04dde7e5ba1013c337b1709c56900ab"),
+        ("Citrine.png", 135289L, "0544326f98daa3a5a1a6858ae0bf33f65aac93954b0e67fa01497efac55e239c"),
         ("Copper Metal.png", 286071L, "7409c8d65a1e1a1dd5aa2afd41ef80b3bc772b88d1c26aaaa6f53dd6d553b682"),
         ("copper.png", 39467L, "bd6bb3b9d7e6462d0ba9579e1b5791c53c1d169f5e4231f3b6dbb5ad6be662c6"),
         ("Coral Gloss.png", 148296L, "1e0505f23c01986b8a122c712ac426280bb0214ca766d7c5310fe4891f550a3c"),
         ("Cornflower Blue.png", 198144L, "b6213f0eb8eaac9ed457dcf5d2effc9459560100fbb09423fcc84f41070dde39"),
         ("Cream Speckled Stone.png", 287652L, "59e7d20b1725576cf8c60637e52c033cacefde3ca44f4f760b478d9cea7ae64b"),
+        ("Diamond.png", 175320L, "7a3499904e214d33df198ba20f9cb46a6839ea7db3471a7632bf174e719b4e21"),
         ("embossed.png", 489673L, "51b278e1f17923508a43d82fd8473f16f7ad814adbe9245112310472373a1ede"),
+        ("Emerald.png", 101740L, "4f63d8a5afe681f7b883963ca1611c3c820bc6065a833620727b2ea83b63c251"),
         ("Gold Car Paint.png", 264461L, "acb9ff6e0ce49d20c4549b09c2eef948c5da0646401edb75dc72e84659b927cc"),
         ("Gold Metal.png", 206616L, "d8bf4a3bdf237b97522daf5da1a872417f26bc793534a2643098e38c169f88ef"),
         ("Grey Glass Car Paint.png", 107547L, "f678aa9f40283600d76500f9dd3cedbdb57d611cc4e446c9b8f3ce06a526cf5e"),
@@ -53,19 +58,25 @@ public sealed class DefaultMatcapsDownloadService : IMatcapPack, IDisposable
         ("Lime Green Satin.png", 267167L, "41cf61382fcc144104f1e839f7b4be7573824024ef363a7eca095e7ab0ac44dc"),
         ("matte red.png", 225400L, "769973cb8239f951252a11cfcc8773118c9d6d9b1646982d3eb1a40ec7d9e4cb"),
         ("motherofpearl.png", 303724L, "ac7df66db155e07ddf92dfe01589d94bde6fa18d243d2448e829470a65bc02ab"),
+        ("NeonPink.png", 310349L, "7a362262e8c7fdb9a42efd4148a784922b9575ed82758dc24e113f8815a228d5"),
         ("Peach Satin.png", 336647L, "4f3120f333f83cb2b4607673f142c387596de3efc9b8094637b720c180f4577f"),
         ("Pearl White.png", 125388L, "7f229a849aa2f2da5038a5b13492e65f03386177540e681614b8b7549a43aaf3"),
         ("Pink Pearl.png", 126282L, "5450b2325fa1ce7356bccab11470dfa047970dc2fecf143aaf9cca80eb17e8e4"),
+        ("Pink Topaz.png", 136693L, "8b562c44ebadee588da60dcdadde85423f33677b880e7194d9d670efec32c868"),
+        ("Rainbow Flecks.png", 211560L, "b59454852b2c8b631419ff3840b6ffe5746480fd8a846cad93a8d8095f11faad"),
         ("rainbow.png", 273721L, "45fbbe3f0ea4b2ff1733b2a6076fb22a498f52bee38c92e37d3cd101bdf41bdd"),
         ("redgold.png", 496717L, "5dd6bd118d20e7a2de107a29e7792291a952575ca73f4191b93d95ca1e1dae9b"),
+        ("Ruby.png", 122484L, "8defa801e2c120d21d2fcd858ec2d07b7895b9930bbcbbd885c7d764c8cd9bb9"),
         ("Saffron Yellow.png", 284055L, "7211bc3d8e35ae5dd9db56a62bd1dca0d38df1904bf94acaad0d2ac6b623a54f"),
         ("Sage Grey Car Paint.png", 95895L, "e85f3c6b6e089d76718b7faa3905f6b78f3ea3dc09afbea1107091a3e41ec621"),
         ("Sand Satin.png", 269564L, "680868d96b209f2fa7e33d37f5912a348c2ae0efcab78505057c5aa96e19eb9a"),
+        ("Sapphire.png", 138270L, "9ad85145192423bc160380e81b7a35c614c8f2bf93316233c6e5c7acbf2b7375"),
         ("Silver Satin.png", 201668L, "941b6c669a4e1726c7ac4e0ffb036d47b3b06362a9e4a692af407d5fd461f395"),
         ("Slate Blue Grey.png", 240744L, "c2444bf12c4b6391dac32e78bb5310241d93ab73a9dda07b8321c54cafe4196d"),
         ("Teal Blue Gloss.png", 414255L, "813a1be5535856334b5b661f9ff8f536e91eb572ebb68d78095d5295821230f8"),
         ("Tomato Red.png", 304945L, "ca500efdb536181a54a0f0848c8bf3d8ff6d8896ac3dfdbb2954d04ccc061447"),
         ("Turquoise Satin.png", 205224L, "1172473ea62842d6bbf7a98f3518dce5d86e4d17f7c13d990b21e036101217fb"),
+        ("Violet.png", 225188L, "66fdbc11c7e88fb3edd0b6c88a554cce9c6299901b41e716e5716f24eaea8bee"),
         ("White Marble.png", 99579L, "b2d143ed054136df7207aa642a91672f2d53d782a00169c5fe0578e774f7d7bf"),
     ];
 
