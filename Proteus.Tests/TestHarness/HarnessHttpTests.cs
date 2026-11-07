@@ -25,6 +25,29 @@ public class HarnessHttpTests
         Assert.Equal("{}", Encoding.UTF8.GetString(r.Request.Body));
     }
 
+    [Fact]
+    [Trait("Plan", "AC-issue-sweep-c-5")]
+    public async Task RepeatedQueryKey_Is400()
+    {
+        var r = await Parse("GET /bindings?mod=A&mod=B HTTP/1.1\r\nHost: 127.0.0.1:5\r\n\r\n");
+        Assert.Null(r.Request);
+        Assert.Equal(400, r.Error!.Status);
+        Assert.Contains("repeated query parameter mod", Encoding.UTF8.GetString(r.Error.Body));
+    }
+
+    [Fact]
+    [Trait("Plan", "EDGE-issue-sweep-c-13")]
+    public async Task RepeatedQueryKey_OnLog_400_EmptyValueStillAbsent()
+    {
+        var r = await Parse("GET /log?since=1&since=2 HTTP/1.1\r\nHost: 127.0.0.1:5\r\n\r\n");
+        Assert.Equal(400, r.Error!.Status);
+        Assert.Contains("bad-request", Encoding.UTF8.GetString(r.Error.Body));
+
+        var ok = await Parse("GET /bindings?mod= HTTP/1.1\r\nHost: 127.0.0.1:5\r\n\r\n");
+        Assert.Null(ok.Error);
+        Assert.Equal("", ok.Request!.Query["mod"]);   // an empty value: the route treats it as absent, as before
+    }
+
     [Theory]
     [InlineData("GARBAGE\r\n\r\n")]
     [InlineData("GET /x\r\n\r\n")]

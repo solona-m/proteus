@@ -20,8 +20,30 @@ internal sealed partial class HarnessRouter
     /// <summary>The hops a design apply waits at least, so the restore's next-tick unequip has run before it reads After.</summary>
     private const int ApplyMinHops = 3;
 
+    /// <summary>The query keys <c>GET /bindings</c> takes; any other is refused (#84).</summary>
+    private static readonly string[] BindingsKeys = ["mod", "group", "option", "design", "names"];
+
+    /// <summary>
+    /// #84: <paramref name="group"/>/<paramref name="option"/> in <paramref name="mod"/>'s own spelling, read off the
+    /// framework thread (the folder is found on it first). Null names pass through; a refusal comes back as Error.
+    /// </summary>
+    private async Task<(string? Group, string? Option, HarnessResponse? Error)> ResolveOption(string mod, string? group, string? option)
+    {
+        if (group == null || option == null) return (group, option, null);
+        var found = await OnFramework(() =>
+        {
+            var (dir, mods, error) = FindMod(mod);
+            return (Root: error == null ? System.IO.Path.Combine(mods!.ModsRoot, dir!) : null, Error: error);
+        });
+        if (found.Error != null) return (null, null, Answer(found.Error));
+        var r = await Task.Run(() => HarnessOptionLookup.Resolve(HarnessOptionLookup.ReadGroups(found.Root!), group, option));
+        return r.Ok ? (r.Group, r.Option, null) : (null, null, HarnessResponse.Error(r.Status, r.Code!, Proteus.Services.LogAnonymizer.Scrub(r.Message ?? "")));
+    }
+
     private async Task<HarnessResponse> BindingsView(HarnessRequest request)
     {
+        if (request.Query.Keys.FirstOrDefault(k => !BindingsKeys.Contains(k, StringComparer.Ordinal)) is { } unknown)
+            return HarnessResponse.Error(400, "invalid-field", $"unknown query parameter {unknown}");
         string? mod = request.Query.TryGetValue("mod", out var m) && m.Length > 0 ? m : null;
         string? group = request.Query.TryGetValue("group", out var g) && g.Length > 0 ? g : null;
         string? option = request.Query.TryGetValue("option", out var o) && o.Length > 0 ? o : null;
@@ -39,6 +61,12 @@ internal sealed partial class HarnessRouter
         {
             if (!Guid.TryParse(d, out var id)) return HarnessResponse.Error(400, "invalid-field", "design must be a GUID");
             design = id;
+        }
+        if (mod != null)
+        {
+            var (cg, co, refused) = await ResolveOption(mod, group, option);
+            if (refused != null) return refused;
+            (group, option) = (cg, co);
         }
 
         var result = await OnFramework(() =>
@@ -176,6 +204,9 @@ internal sealed partial class HarnessRouter
             row = (int)r;
             if (!HexColour.IsMatch(diffuse)) return HarnessResponse.Error(400, "invalid-field", "diffuse must be #RRGGBB");
         }
+        var (cg, co, refusedOption) = await ResolveOption(mod, group, option);
+        if (refusedOption != null) return refusedOption;
+        (group, option) = (cg, co);
 
         var result = await OnFramework(() =>
         {
