@@ -433,14 +433,18 @@ internal static class MatcapWriter
 
             var restore = new List<(string Rel, string Backup)>();
             var forget = new List<string>();
+            // #96: a model an earlier Undo already restored — no longer recorded, no backup left — that a kept material
+            // still lists: nothing to restore, retire or forget. It leaves with the rest, but is no work done.
+            var alreadyUndone = new List<string>();
             foreach (var g in group)
             {
                 var full = Full(modRoot, g);
                 var backup = BackupPath(modRoot, BackupSubdir, g);
-                if (!File.Exists(full)) { forget.Add(g); continue; }                       // (e) gone: forget it
+                bool undoneBefore = record.Model(g) == null && !File.Exists(backup);
+                if (!File.Exists(full)) { (undoneBefore ? alreadyUndone : forget).Add(g); continue; }   // (e) gone: forget it
                 var names = NamesIn(modRoot, g);
                 bool namesOurs = names != null && record.Materials.Any(m => names.Contains(m.Name));
-                if (!namesOurs) { forget.Add(g); continue; }                                // (c) superseded: forget it
+                if (!namesOurs) { (undoneBefore ? alreadyUndone : forget).Add(g); continue; }            // (c) superseded: forget it
                 if (forgetOnly)
                 {
                     // A refit or hair port written again from its source since (naming none of its own matcaps): forgotten
@@ -462,8 +466,13 @@ internal static class MatcapWriter
                         g, Path.GetRelativePath(modRoot, backup)));
             }
 
-            if (forgetOnly && forget.Count == 0 && removeKeys.Count == 0)
-                return Outcome.Refuse(CodeNothing, ProteusLoc.Localize("Parts.Matcap.NothingToForget", "Every matcap on this model is still in use; there is nothing to forget."));
+            // Nothing to restore, forget or remove — the model was undone already and what is left is kept for refits or
+            // ports (#96): said so, and nothing is written, reloaded or redrawn.
+            if (restore.Count == 0 && forget.Count == 0 && removeKeys.Count == 0)
+                return Outcome.Refuse(CodeNothing, (forgetOnly
+                    ? ProteusLoc.Localize("Parts.Matcap.NothingToForget", "Every matcap on this model is still in use; there is nothing to forget.")
+                    : ProteusLoc.Localize("Parts.Matcap.NothingToUndo", "There is no matcap on this model to undo."))
+                    + KeptLines(refitUsers, portUsers));
 
             // ── write ──
             foreach (var (g, backup) in restore)
@@ -474,7 +483,7 @@ internal static class MatcapWriter
             }
             var unretired = forget.Where(g => !Retire(modRoot, g)).ToList();
 
-            var gone = new HashSet<string>(restore.Select(r => r.Rel).Concat(forget), StringComparer.OrdinalIgnoreCase);
+            var gone = new HashSet<string>(restore.Select(r => r.Rel).Concat(forget).Concat(alreadyUndone), StringComparer.OrdinalIgnoreCase);
             // Read again after the restores: a restored refit or port no longer names what it drew.
             var refitsNow = restore.Count > 0 ? new Lazy<List<Regenerated>>(() => RegeneratedNames(modRoot)) : refits;
             foreach (var mat in record.Materials.ToList())
@@ -523,19 +532,28 @@ internal static class MatcapWriter
             if (kept.Count > 0)
                 msg += " " + string.Format(ProteusLoc.Localize("Parts.Matcap.KeptEdited.Fmt", "Left in place because they were edited by hand: {0}."),
                     string.Join(", ", kept.Distinct()));
-            if (refitUsers.Count > 0)
-                msg += " " + string.Format(ProteusLoc.Localize("Parts.Matcap.KeptForRefits.Fmt",
-                    "Refits made from it still draw the matcap, so its files stay until the sizes are remade: {0}."),
-                    string.Join(", ", refitUsers));
-            if (portUsers.Count > 0)
-                msg += " " + string.Format(ProteusLoc.Localize("Parts.Matcap.KeptForPorts.Fmt",
-                    "Hair ports or earless copies made from it still draw the matcap, so its files stay until they are remade: {0}."),
-                    string.Join(", ", portUsers));
+            msg += KeptLines(refitUsers, portUsers);
             if (unretired.Count > 0)
                 msg += " " + string.Format(ProteusLoc.Localize("Parts.Matcap.BackupKept.Fmt",
                     "Their old backups could not be moved aside: {0}. The next matcap there moves them first."), string.Join(", ", unretired));
             return Outcome.Done(msg, touched);
         }
+    }
+
+    /// <summary>The sentences naming the refits and the hair ports / earless copies that keep a matcap's files, each with a
+    /// leading space; empty when there are none.</summary>
+    private static string KeptLines(List<string> refitUsers, List<string> portUsers)
+    {
+        var msg = "";
+        if (refitUsers.Count > 0)
+            msg += " " + string.Format(ProteusLoc.Localize("Parts.Matcap.KeptForRefits.Fmt",
+                "Refits made from it still draw the matcap, so its files stay until the sizes are remade: {0}."),
+                string.Join(", ", refitUsers));
+        if (portUsers.Count > 0)
+            msg += " " + string.Format(ProteusLoc.Localize("Parts.Matcap.KeptForPorts.Fmt",
+                "Hair ports or earless copies made from it still draw the matcap, so its files stay until they are remade: {0}."),
+                string.Join(", ", portUsers));
+        return msg;
     }
 
     /// <summary>
