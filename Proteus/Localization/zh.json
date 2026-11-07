@@ -4435,6 +4435,22 @@
     "message": "关闭",
     "description": ""
   },
+  "WhatsNew.Matcaps.Head": {
+    "message": "Matcap：闪亮、玻璃质感和宝石般的部件",
+    "description": "Release-notes section heading: the Studio's Matcaps tool. A matcap is a picture of a lit sphere a shader samples by the surface's facing direction."
+  },
+  "WhatsNew.Matcaps.Body": {
+    "message": "工作室新增了一个工具「Matcap」。勾选装备、饰品、头发、尾巴、维埃拉族的耳朵或敖龙族的角上的部件，选一个 matcap（一张受光球体的图片），再按「应用 matcap」：这些部件会得到自己的材质并写入模组，所以关闭 Proteus 后外观依然可见。「Proteus 自带 matcap」是 Proteus 附带的一套 matcap，包含 sivka 制作的 23Minks matcap 包，会在你第一次打开 Matcap 时下载。你自己的图片放在设置中「matcap 图片」下的文件夹里，已安装的 matcap 库模组也会列出。「撤销此模型上的 matcap」可将其全部撤回。",
+    "description": "Release-notes section. 'Studio' matches Tab.Parts and 'Settings' Tab.Settings; \"Matcaps\" matches Parts.Tool.Matcap, \"Apply matcap\" Parts.Matcap.Apply, \"Proteus matcaps\" Parts.Matcap.SourceProteus, \"Matcap images\" Settings.MatcapLibrary, \"Undo matcaps on this model\" Parts.Matcap.Undo. Keep 23Minks and sivka verbatim."
+  },
+  "WhatsNew.MoveAll.Head": {
+    "message": "将所有勾选的部件作为一个整体移动、旋转或缩放",
+    "description": "Release-notes section heading: the All mode of Move, Rotate and Scale. Keep it true to 'ticked': unticked parts stay where they are."
+  },
+  "WhatsNew.MoveAll.Body": {
+    "message": "工作室中的「移动」「旋转」「缩放」在整个部件和多边形之外新增了一个模式「全部」：打开的模型中所有勾选的部件会作为一个整体一起移动、旋转或缩放。在部件列表中取消勾选某个部件，它就会留在原处。只有开启「同时移动皮肤」时，皮肤才会跟着移动。",
+    "description": "Release-notes section. 'Studio' matches Tab.Parts; \"Move\", \"Rotate\" and \"Scale\" match Parts.Tool.Move, Parts.Tool.Rotate and Parts.Tool.Scale; \"All\" matches Parts.Move.SelectAll; \"Move skin too\" matches Parts.SkinMoves. 'Whole parts' and 'polygons' are the other two modes (Parts.Move.SelectParts, Parts.Move.SelectPolygons)."
+  },
   "Parts.Retarget.Guide.Title": {
     "message": "体型尺寸提示",
     "description": ""

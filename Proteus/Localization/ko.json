@@ -4435,6 +4435,22 @@
     "message": "닫기",
     "description": ""
   },
+  "WhatsNew.Matcaps.Head": {
+    "message": "매트캡: 반짝이고 유리 같고 보석 같은 파츠",
+    "description": "Release-notes section heading: the Studio's Matcaps tool. A matcap is a picture of a lit sphere a shader samples by the surface's facing direction."
+  },
+  "WhatsNew.Matcaps.Body": {
+    "message": "스튜디오에 새 도구 \"매트캡\"이 생겼습니다. 장비, 액세서리, 머리카락, 꼬리, 비에라 귀, 아우라 뿔의 파츠를 체크하고 매트캡(빛을 받은 구의 그림)을 고른 뒤 \"매트캡 적용\"을 누르면, 파츠에 전용 재질이 생깁니다. 재질은 모드에 기록되므로 Proteus를 꺼도 그 모습이 그대로 보입니다. Proteus와 함께 제공되며 sivka의 23Minks 매트캡 팩이 들어 있는 \"Proteus 매트캡\"은 매트캡을 처음 열 때 내려받습니다. 직접 만든 그림은 설정의 \"매트캡 이미지\"에 있는 폴더에 넣으며, 설치된 매트캡 라이브러리 모드도 목록에 나옵니다. \"이 모델의 매트캡 되돌리기\"로 모두 다시 뺄 수 있습니다.",
+    "description": "Release-notes section. 'Studio' matches Tab.Parts and 'Settings' Tab.Settings; \"Matcaps\" matches Parts.Tool.Matcap, \"Apply matcap\" Parts.Matcap.Apply, \"Proteus matcaps\" Parts.Matcap.SourceProteus, \"Matcap images\" Settings.MatcapLibrary, \"Undo matcaps on this model\" Parts.Matcap.Undo. Keep 23Minks and sivka verbatim."
+  },
+  "WhatsNew.MoveAll.Head": {
+    "message": "체크한 파츠를 한 덩어리로 이동, 회전, 크기 조절",
+    "description": "Release-notes section heading: the All mode of Move, Rotate and Scale. Keep it true to 'ticked': unticked parts stay where they are."
+  },
+  "WhatsNew.MoveAll.Body": {
+    "message": "스튜디오의 \"이동\", \"회전\", \"크기 조절\"에 파츠 전체, 폴리곤과 나란히 새 모드 \"전체\"가 생겼습니다. 열린 모델에서 체크한 파츠가 모두 한 덩어리로 함께 이동, 회전, 크기 조절됩니다. 제자리에 둘 파츠는 파츠 목록에서 체크를 해제하세요. 피부는 \"피부도 움직이기\"가 켜져 있을 때만 움직입니다.",
+    "description": "Release-notes section. 'Studio' matches Tab.Parts; \"Move\", \"Rotate\" and \"Scale\" match Parts.Tool.Move, Parts.Tool.Rotate and Parts.Tool.Scale; \"All\" matches Parts.Move.SelectAll; \"Move skin too\" matches Parts.SkinMoves. 'Whole parts' and 'polygons' are the other two modes (Parts.Move.SelectParts, Parts.Move.SelectPolygons)."
+  },
   "Parts.Retarget.Guide.Title": {
     "message": "체형 크기 팁",
     "description": ""

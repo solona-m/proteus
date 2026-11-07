@@ -1,3 +1,4 @@
+using System;
 using Newtonsoft.Json;
 using Proteus;
 using Xunit;
@@ -79,6 +80,12 @@ public class WhatsNewTests
     /// install is shown everything.
     /// </summary>
     [Fact]
+    [Trait("Plan", "AC-whats-new-5-1")]
+    [Trait("Plan", "AC-whats-new-5-2")]
+    [Trait("Plan", "AC-whats-new-5-3")]
+    [Trait("Plan", "EDGE-whats-new-5-1")]
+    [Trait("Plan", "EDGE-whats-new-5-2")]
+    [Trait("Plan", "EDGE-whats-new-5-3")]
     public void Each_reader_is_shown_only_what_is_new_to_them()
     {
         const int first = Gui.WhatsNewWindow.FirstNotes, refit = Gui.WhatsNewWindow.AutoRefitNotes,
@@ -111,9 +118,46 @@ public class WhatsNewTests
         Assert.True(Gui.WhatsNewWindow.IsNew(rows, readHair.WhatsNewShown));
         Assert.True(Gui.WhatsNewWindow.IsNew(rows, 0));
 
-        // The colour-row sections belong to the current notes, so reading them retires them.
-        Assert.Equal(Plugin.CurrentWhatsNew, rows);
-        Assert.False(Gui.WhatsNewWindow.IsNew(rows, Plugin.CurrentWhatsNew));
+        // Read the colour-row notes: the window opens again, with matcaps and the "All" mode alone.
+        const int matcaps = Gui.WhatsNewWindow.MatcapsNotes;
+        var readRows = new Configuration { WhatsNewShown = rows };
+        Assert.True(readRows.WantsWhatsNew(Plugin.CurrentWhatsNew));
+        Assert.False(Gui.WhatsNewWindow.IsNew(rows, readRows.WhatsNewShown));
+        Assert.True(Gui.WhatsNewWindow.IsNew(matcaps, readRows.WhatsNewShown));
+        Assert.True(Gui.WhatsNewWindow.IsNew(matcaps, 0));
+        Assert.True(Gui.WhatsNewWindow.IsNew(matcaps, first));
+        Assert.True(Gui.WhatsNewWindow.IsNew(rows, first));
+
+        // The matcap sections belong to the current notes, so reading them retires them; an install ahead of this
+        // build is shown nothing.
+        Assert.Equal(Plugin.CurrentWhatsNew, matcaps);
+        Assert.False(Gui.WhatsNewWindow.IsNew(matcaps, Plugin.CurrentWhatsNew));
+        Assert.False(new Configuration { WhatsNewShown = Plugin.CurrentWhatsNew + 1 }.WantsWhatsNew(Plugin.CurrentWhatsNew));
+    }
+
+    /// <summary>
+    /// The newest notes are drawn at the top: matcaps, then the "All" mode, above the colour-row generation. Hair
+    /// across the sexes stays a fourth-generation section and is not announced a second time.
+    /// </summary>
+    [Fact]
+    [Trait("Plan", "AC-whats-new-5-2")]
+    [Trait("Plan", "AC-whats-new-5-7")]
+    [Trait("Plan", "EDGE-whats-new-5-9")]
+    public void Newest_notes_are_drawn_first_and_hair_across_the_sexes_once()
+    {
+        string src = System.IO.File.ReadAllText(ShaderUpgradePlanTests.SourceFile("Proteus/Gui/WhatsNewWindow.cs"));
+        int gen5 = src.IndexOf("IsNew(MatcapsNotes, read)", StringComparison.Ordinal);
+        int gen4 = src.IndexOf("IsNew(ColorRowsNotes, read)", StringComparison.Ordinal);
+        int matcaps = src.IndexOf("Section(s.MatcapsHead, s.MatcapsBody)", StringComparison.Ordinal);
+        int all = src.IndexOf("Section(s.MoveAllHead, s.MoveAllBody)", StringComparison.Ordinal);
+
+        Assert.True(gen5 >= 0 && gen4 >= 0 && matcaps >= 0 && all >= 0, "a generation or section is missing");
+        Assert.True(gen5 < matcaps && matcaps < all && all < gen4,
+            "the fifth notes must be drawn first, matcaps before the All mode");
+
+        int hair = src.IndexOf("s.HairOtherSexHead", StringComparison.Ordinal);
+        Assert.True(hair > gen4, "hair across the sexes belongs to the fourth notes");
+        Assert.Equal(-1, src.IndexOf("s.HairOtherSexHead", hair + 1, StringComparison.Ordinal));
     }
 
     /// <summary>

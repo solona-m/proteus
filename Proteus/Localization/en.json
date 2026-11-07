@@ -4435,6 +4435,22 @@
     "message": "Close",
     "description": "Button. Dismisses the release-notes window."
   },
+  "WhatsNew.Matcaps.Head": {
+    "message": "Matcaps: shiny, glassy and gem-like parts",
+    "description": "Release-notes section heading: the Studio's Matcaps tool. A matcap is a picture of a lit sphere a shader samples by the surface's facing direction."
+  },
+  "WhatsNew.Matcaps.Body": {
+    "message": "The Studio has a new tool, \"Matcaps\". Tick parts of gear, accessories, hair, tails, Viera ears or Au Ra horns, pick a matcap (a picture of a lit sphere) and press \"Apply matcap\": the parts get a material of their own, written into the mod, so the look shows with Proteus turned off. \"Proteus matcaps\", a set that comes with Proteus and includes the 23Minks matcap pack by sivka, is downloaded the first time you open Matcaps. Your own pictures go in the folder under \"Matcap images\" in Settings, and installed matcap library mods are listed too. \"Undo matcaps on this model\" takes it all back out.",
+    "description": "Release-notes section. 'Studio' matches Tab.Parts and 'Settings' Tab.Settings; \"Matcaps\" matches Parts.Tool.Matcap, \"Apply matcap\" Parts.Matcap.Apply, \"Proteus matcaps\" Parts.Matcap.SourceProteus, \"Matcap images\" Settings.MatcapLibrary, \"Undo matcaps on this model\" Parts.Matcap.Undo. Keep 23Minks and sivka verbatim."
+  },
+  "WhatsNew.MoveAll.Head": {
+    "message": "Move, turn or scale every ticked part as one piece",
+    "description": "Release-notes section heading: the All mode of Move, Rotate and Scale. Keep it true to 'ticked': unticked parts stay where they are."
+  },
+  "WhatsNew.MoveAll.Body": {
+    "message": "\"Move\", \"Rotate\" and \"Scale\" in the Studio have a new mode beside whole parts and polygons, \"All\": every ticked part of the open model moves, turns or scales together, as one piece. Untick a part in the part list to leave it where it is. Skin moves only with \"Move skin too\" on.",
+    "description": "Release-notes section. 'Studio' matches Tab.Parts; \"Move\", \"Rotate\" and \"Scale\" match Parts.Tool.Move, Parts.Tool.Rotate and Parts.Tool.Scale; \"All\" matches Parts.Move.SelectAll; \"Move skin too\" matches Parts.SkinMoves. 'Whole parts' and 'polygons' are the other two modes (Parts.Move.SelectParts, Parts.Move.SelectPolygons)."
+  },
   "Parts.Retarget.Guide.Title": {
     "message": "Body size tips",
     "description": "Title of the one-time tips popup shown the first time the Studio's Body size tool is chosen. 'Body size' is the tool's name (Parts.Tool.Retarget) - write it exactly as that key reads in your language."
