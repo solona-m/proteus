@@ -589,7 +589,10 @@ internal static class MatcapWriter
     /// <summary>A file Proteus remakes from a source (a refit, or a hair port / earless copy when <see cref="Port"/>)
     /// naming at least one matcap material, with the material names it uses — and, for a file at a hairstyle's game path,
     /// that hairstyle's race and number (0 otherwise).</summary>
-    private readonly record struct Regenerated(string Rel, HashSet<string> Names, bool Port, ushort Race = 0, int Id = 0);
+    /// <param name="Redirects">For a hair port, the files its own redirects point at (<see cref="HairPortRecord.Entry.Materials"/>):
+    /// a port to a race that reads its own material folder publishes the source's material there — the matcap's file.</param>
+    private readonly record struct Regenerated(string Rel, HashSet<string> Names, bool Port, ushort Race = 0, int Id = 0,
+                                               IReadOnlyList<string>? Redirects = null);
 
     /// <summary>
     /// Whether <paramref name="r"/> draws <paramref name="mat"/>: it names it, or — a hair port renames its materials for
@@ -599,7 +602,9 @@ internal static class MatcapWriter
     private static bool Draws(Regenerated r, MatcapRecord.MaterialEntry mat)
         => r.Names.Contains(mat.Name)
            || r.Race > 0 && r.Names.Any(n => HairMaterialPath.GamePath(r.Race, r.Id, n) is { } gp
-                                             && mat.GamePaths.Contains(gp, StringComparer.OrdinalIgnoreCase));
+                                             && mat.GamePaths.Contains(gp, StringComparer.OrdinalIgnoreCase))
+           // A port into a race with its own material folder redirects its own path to the source's file: the matcap's.
+           || r.Redirects is { } to && to.Any(t => PenumbraModMeta.SameFile(t, mat.File));
 
     /// <summary>The hairstyle a file of the mod stands for, from the game path its rel ends in (a port's place:
     /// <c>Hair Ports/&lt;option&gt;/chara/human/c0401/obj/hair/h0108/model/c0401h0108_hir.mdl</c>).</summary>
@@ -619,12 +624,19 @@ internal static class MatcapWriter
         var portFiles = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         AddModels(modRoot, HairPortPlan.Folder, portFiles);
         AddModels(modRoot, EarlessHairPlan.Folder, portFiles);
+        // Each port file's own redirects, from the record: an unreadable record redirects nothing here (the names still count).
+        var portRecord = portFiles.Count > 0 ? HairPortRecord.Read(modRoot) : null;
+        IReadOnlyList<string>? RedirectsOf(string rel)
+            => portRecord is { Unreadable: false } rec
+                ? rec.Ports.Where(e => PenumbraModMeta.SameFile(e.File, rel)).SelectMany(e => e.Materials.Values).ToList()
+                : null;
         var found = new List<Regenerated>();
         var all = refitFiles.Select(r => (Rel: r, Port: false)).Concat(portFiles.Select(r => (Rel: r, Port: true)));
         foreach (var (rel, port) in all.OrderBy(x => x.Rel, StringComparer.Ordinal))
             if (NamesIn(modRoot, rel) is { Count: > 0 } names && names.Any(n => n.Contains("_mcap", StringComparison.OrdinalIgnoreCase)))
-                found.Add(port && HairOf(rel) is { } hair ? new Regenerated(rel, names, true, hair.Race, hair.Id)
-                                                          : new Regenerated(rel, names, port));
+                found.Add(!port ? new Regenerated(rel, names, false)
+                        : HairOf(rel) is { } hair ? new Regenerated(rel, names, true, hair.Race, hair.Id, RedirectsOf(rel))
+                        : new Regenerated(rel, names, true, Redirects: RedirectsOf(rel)));
         return found;
     }
 

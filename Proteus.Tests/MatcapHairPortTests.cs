@@ -835,6 +835,34 @@ public sealed class MatcapHairPortTests : IDisposable
     }
 
     [Fact]
+    [Trait("Plan", "AC-issue-sweep-c-1")]
+    public void Undoing_an_authors_matcap_keeps_it_while_a_ports_own_redirect_points_at_its_file()
+    {
+        // A race that reads its own hair material folder (Hrothgar): the port publishes its own path, redirected to the
+        // source's material file — the matcap's. Its name loads from nowhere the matcap publishes; only the redirect
+        // says it draws the matcap.
+        using var mod = HairMod();
+        Assert.True(Apply(mod, "long/c0801h0130_hir.mdl", Source, Image("m2.tex", 5)).Ok);
+        var m2 = MatcapRecord.Read(mod.Root).MaterialsOf("long/c0801h0130_hir.mdl").Single();
+        const ushort hroth = 1601;
+        var renamed = HairMaterialPath.RenameRace(m2.Name, hroth);
+        var ownPath = HairMaterialPath.GamePath(hroth, Id, renamed)!;
+        Assert.DoesNotContain(ownPath, m2.GamePaths, StringComparer.OrdinalIgnoreCase);
+        var owner = mod.Owner("Cut", "Long");
+        var write = new HairPortWriter.PortWrite(owner, Source, HairPortPlan.FileFor(owner, Source)!, "abcd1234",
+                                                 HairPortPlan.HairPath(hroth, Id), Naming(renamed),
+                                                 [new HairPortWriter.MaterialWrite(ownPath, m2.File, null)]);
+        Assert.True(HairPortWriter.Save(mod.Root, [write], auto: false).Ok);
+        var port = PortFile(mod, "Long", hroth);
+        Assert.Contains(HairPortRecord.Read(mod.Root).Ports, e => e.Materials.Values.Any(v => PenumbraModMeta.SameFile(v, m2.File)));
+
+        var undo = MatcapWriter.Undo(mod.Root, "long/c0801h0130_hir.mdl");
+        Assert.True(undo.Ok, undo.Message);
+        AssertKept(mod, m2);
+        Assert.Contains(PortsSentence(RefitCore.Normal(port)), undo.Message);
+    }
+
+    [Fact]
     [Trait("Plan", "EDGE-issue-sweep-c-1")]
     public void Undoing_an_authors_matcap_a_matcapped_port_carrying_the_authors_material_keeps_it()
     {
