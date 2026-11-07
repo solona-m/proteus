@@ -93,7 +93,7 @@ four requests were open at once: retry when one finishes; it is never a busy run
 | `POST /actions/auto-refit` | `{"enabled":true\|false}` → 200 `{config, harnessOverride, effective, before}`. Switches auto refit for this harness session only: in memory, never saved; put-back or unload clears it. 400 `invalid-field`; 409 `busy`; 503 `harness-stopping`. |
 | `POST /actions/output-lock` | `{"files":["textures/ss_*_*.tex"],"ms":1..120000}` (hold the files), `{"files":[…],"failMoves":1..20}` (fail their next moves) or `{"release":true}` → 200 `{mode:"lock", held:[{file,bytes}], untilUtc}` / `{mode:"fail-moves", patterns, failMoves, untilUtc}` / `{released:[file], movesLeft}`. Paths are into Proteus's **own** output mod: `textures`, `materials` or `models`, a slash, and a leaf that may hold `*`. `ms` holds up to 32 existing files read-only (no write or delete sharing): a replace fails as when the game holds them. `failMoves` makes the next N moves of matching files into place fail with a sharing violation (patterns may name files not yet written); only moves into Proteus's own output folder are ever failed, never a user's mod. One set at a time; released at expiry, on release, at put-back, on `off` and on unload. 400 `invalid-field`; 404 `no-match` (`ms` only); 409 `locks-held`; 503 `harness-stopping`. |
 | `POST /actions/shell-fault` | `{"shell":"ss_1"\|"any","slot":"norm\|mask\|id\|base\|catc" (default norm),"until":"auto-redraw\|put-back"}` or `{"clear":true}` → 200 `{armed, shell, slot, until}` / `{cleared, recomposite}`. Every publishing composite while armed leaves that shell texture out of Proteus's own manifest, so the shell's material fails to load and the shell is partly drawn. `auto-redraw`: healed just before Proteus's automatic redraw (manifest rebuilt from the live one, manipulations kept), so the redraw draws it; `put-back`: stays withheld, so the named message follows. Clear, put-back and `off` clear it and recomposite; an unload or a stop off the framework thread clears it without one (the next composite after reload publishes in full). Never counts as a write failure. 400 `invalid-field`; 409 `fault-armed`; 503 `harness-stopping`. |
-| `POST /actions/auto-redraw` | `{"enabled":true\|false}` → 200 `{config, harnessOverride, effective, before}`. Switches auto redraw for the compositor for this harness session only: in memory, never saved; put-back or unload clears it. 400 `invalid-field`; 503 `harness-stopping`. |
+| `POST /actions/auto-redraw` | `{"enabled":true\|false}` → 200 `{config, harnessOverride, effective, before, recomposite}`. Switches auto redraw for the compositor for this harness session only: in memory, never saved; put-back or unload clears it. Switching it back on recomposites (`recomposite: true`), as the Settings checkbox does. 400 `invalid-field`; 503 `harness-stopping`. |
 | `GET /jobs/{id}` | `{id, kind, modDir, state: queued\|running\|done\|failed\|cancelled, progress, backup, reloaded, redrawRequested, redrawObserved, autoRefitFollowed, result, restored, error}` |
 
 `mod` is the **folder name** Penumbra keeps the mod in (case-insensitive), never its
@@ -429,8 +429,12 @@ lastHeal: healed|gave-up}` and `moveFault {patterns, movesLeft}`.
   failed" line — is reported **not exercised**, never a pass.
 - **Automatic redraws are limited to 2 per 5 minutes** (`/state.compositor.recovery.shellDrawn.autoRedraws5m`). Do not
   repeat the redraw steps within 5 minutes: a 3rd run goes straight to the message, which is the rate limit, not a defect.
-- Keep the auto writers off. Toggle the **shell's own Proteus mod** (the one whose layer is on the host) with
+- Keep the auto writers off. Toggle the **shell's own Proteus mod** (the one whose layer is on the host — for the Iris
+  layer on a0053/rir that is "DT ButterflyEffect Proteus", not the dress mod "Iris - by Solona") with
   `/actions/mod-settings`, so the shell's materials reload; an unrelated mod's toggle may never re-request them.
+- **With auto redraw off, ambient triggers do nothing**: temporary `mod-settings` holds and `boot-rearm` answer
+  "Recomposite skipped … auto redraw is off". Drive a composite with a permanent `mod-settings` change
+  (`"permanent":true`), which forces one, or `shell-fault {"clear":true}`.
 - **Write retry:** `output-lock {"files":["textures/ss_*_*.tex"],"failMoves":2}`, toggle → `/log` "was locked; written
   after 2 retr(ies)", no `Failed to write`, `moveFault` null after.
 - **Latch:** `failMoves: 6`, toggle → "output write failed … retrying in 1500ms (attempt 1/3)", then

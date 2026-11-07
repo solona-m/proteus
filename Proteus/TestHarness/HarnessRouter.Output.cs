@@ -124,7 +124,11 @@ internal sealed partial class HarnessRouter
             Game.SetAutoRedrawOverride(enabled);
             var record = changes.NoteAutoRedrawOverride(enabled, before.Effective);
             var now = Game.AutoRedrawEnabled();
-            return new { config = now.Config, harnessOverride = now.Override, effective = now.Effective, before = record.BeforeEffective };
+            // Switching it back on recomposites, as the Settings checkbox does: a layer left out while it was off returns.
+            bool recomposite = now.Effective && !before.Effective;
+            if (recomposite) Game.Recomposite("test harness: auto redraw back on");
+            return new { config = now.Config, harnessOverride = now.Override, effective = now.Effective, before = record.BeforeEffective,
+                         recomposite };
         });
         return HarnessResponse.Json(200, answer);
     }

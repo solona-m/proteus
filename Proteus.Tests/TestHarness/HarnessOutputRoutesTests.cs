@@ -188,7 +188,13 @@ public class HarnessOutputRoutesTests : IDisposable
         Assert.False(body.GetProperty("effective").GetBoolean());
         Assert.True(body.GetProperty("before").GetBoolean());
         Assert.True(fx.Game.AutoRedrawConfig);
+        Assert.False(body.GetProperty("recomposite").GetBoolean());
         Assert.Equal(400, (await fx.Post("/actions/auto-redraw", "{}")).Item1);
+
+        // Back on: recomposites, as the Settings checkbox does (QA finding 2).
+        var (_, on) = await fx.Post("/actions/auto-redraw", "{\"enabled\":true}");
+        Assert.True(on.GetProperty("recomposite").GetBoolean());
+        Assert.Contains("test harness: auto redraw back on", fx.Game.Recomposites);
     }
 
     [Fact]
