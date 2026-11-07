@@ -59,7 +59,7 @@ public sealed class MatcapPackPanelTests : IDisposable
     {
         Penumbra = true, Busy = false, Ticked = [], MaterialRoom = 1, Images = images, ImageFolder = null, Libraries = null,
         Scanning = false, ModsRoot = null, Record = new MatcapRecord(), States = new Dictionary<string, MatcapWriter.State>(),
-        Entries = [], GroupFiles = [], LibraryStatus = _ => null!, Apply = (_, _) => { }, Change = (_, _) => { }, Undo = () => { },
+        Entries = [], GroupFiles = [], LibraryStatus = _ => null!, Apply = (_, _) => { }, Undo = () => { },
         Forget = () => { }, Rescan = () => { }, RefreshImages = () => { }, PackImages = pack,
     };
 
@@ -379,17 +379,27 @@ public sealed class MatcapPackPanelTests : IDisposable
     {
         var pack = new FakePack { List = [new MatcapImage("a.png", "a", false, true)] };
         Assert.Single(new MatcapPackView().Images(pack));
-        Assert.Equal(Strings.Matcap.NoPenumbra, MatcapPanelModel.ApplyDisabledReason(penumbra: false, 1, true, 1));
+        Assert.Equal(Strings.Matcap.NoPenumbra, MatcapPanelModel.ApplyDisabledReason(penumbra: false, [MatcapPart("/a.mtrl")],
+            MatcapChoice.OfImage(pack.List[0]), 1, new MatcapRecord()));
     }
+
+    private static Services.ModelPart MatcapPart(string material) => new()
+    {
+        Mesh = 0, Submesh = 0, Island = -1, Label = "1.1", Material = material, Triangles = [0, 1, 2], Ordinals = [0],
+        AttributeMask = 0, Min = default, Max = default, Toggleable = true,
+    };
 
     [Fact]
     [Trait("Plan", "EDGE-matcap-pack-14")]
+    [Trait("Plan", "EDGE-matcap-preview-3")]
     public void Change_kind_rule_holds_for_pack_images()
     {
+        // Apply on a matcap part changes it: a pack image changes an image's matcap, never a library's.
         var packChoice = MatcapChoice.OfImage(new MatcapImage("Gold Metal.png", "p", false, true));
-        var imageEntry = new MatcapRecord.MaterialEntry { Source = new MatcapRecord.SourceRef { Kind = MatcapRecord.SourceRef.KindImage } };
-        var libraryEntry = new MatcapRecord.MaterialEntry { Source = new MatcapRecord.SourceRef { Kind = MatcapRecord.SourceRef.KindLibrary } };
-        Assert.True(MatcapPanelModel.CanChange(imageEntry, packChoice));
-        Assert.False(MatcapPanelModel.CanChange(libraryEntry, packChoice));
+        var record = new MatcapRecord();
+        record.Materials.Add(new MatcapRecord.MaterialEntry { Name = "/img_mcap3fa21c1.mtrl", Source = new MatcapRecord.SourceRef { Kind = MatcapRecord.SourceRef.KindImage } });
+        record.Materials.Add(new MatcapRecord.MaterialEntry { Name = "/lib_mcap3fa21c2.mtrl", Source = new MatcapRecord.SourceRef { Kind = MatcapRecord.SourceRef.KindLibrary } });
+        Assert.Null(MatcapPanelModel.ApplyDisabledReason(true, [MatcapPart("/img_mcap3fa21c1.mtrl")], packChoice, 0, record));
+        Assert.Equal(Strings.Matcap.ChangeKindTip, MatcapPanelModel.ApplyDisabledReason(true, [MatcapPart("/lib_mcap3fa21c2.mtrl")], packChoice, 0, record));
     }
 }

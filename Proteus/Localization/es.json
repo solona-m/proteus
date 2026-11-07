@@ -6216,7 +6216,7 @@
     "description": ""
   },
   "Matcap.Refused.AlreadyMatcap": {
-    "message": "Algunas de esas partes ya tienen un matcap. Usa «Usar el matcap elegido» para cambiarlo.",
+    "message": "Marca o bien partes sin matcap, para añadir uno, o bien partes que ya tienen uno, para cambiarlo; no ambas.",
     "description": ""
   },
   "Matcap.Refused.Changed.Fmt": {
@@ -6299,10 +6299,6 @@
     "message": "Algunas partes marcadas tienen bordes transparentes (mechones de pelo, encaje). Revisa los bordes en el juego después de aplicarlo.",
     "description": ""
   },
-  "Parts.Matcap.AlreadyTip": {
-    "message": "Esta parte ya tiene un matcap. Cámbialo en «Matcaps en este modelo».",
-    "description": ""
-  },
   "Parts.Matcap.AlsoMore.Fmt": {
     "message": "+{0} más",
     "description": ""
@@ -6323,12 +6319,24 @@
     "message": "{0} es tu colección base: todos los que la usan verán el matcap elegido.",
     "description": ""
   },
-  "Parts.Matcap.Change": {
-    "message": "Usar el matcap elegido",
-    "description": ""
-  },
   "Parts.Matcap.Changed.Fmt": {
     "message": "Matcap cambiado: {0}.",
+    "description": ""
+  },
+  "Parts.Matcap.ChangePartial.Fmt": {
+    "message": "Sin cambiar: {0}.",
+    "description": ""
+  },
+  "Parts.Matcap.ChangesFiles.Fmt": {
+    "message": "Entre ellos: {0}.",
+    "description": ""
+  },
+  "Parts.Matcap.ChangesUnticked.Fmt": {
+    "message": "Eso incluye {0} parte(s) de aquí que no marcaste.",
+    "description": ""
+  },
+  "Parts.Matcap.Changes.Fmt": {
+    "message": "Aplicar cambia {0} en todos los archivos de este mod que lo usan, refits incluidos.",
     "description": ""
   },
   "Parts.Matcap.ChangeKindTip": {
@@ -6400,7 +6408,7 @@
     "description": ""
   },
   "Parts.Matcap.ListTip": {
-    "message": "Marca las partes que deben llevar el matcap. La piel y las partes que ya tienen uno no se pueden marcar.",
+    "message": "Marca las partes que deben llevar el matcap. Marca partes que ya tienen uno para cambiarlo. La piel no se puede marcar.",
     "description": ""
   },
   "Parts.Matcap.Lod0Cut": {

@@ -15,7 +15,8 @@ namespace Proteus.TestHarness;
 /// <item><c>GET /matcaps[?refresh=1][&amp;mod=&amp;model=]</c>: images, libraries with their status, and for a model its parts,
 /// siblings, apply group and existing matcaps.</item>
 /// <item><c>POST /actions/matcap-image</c>: a generated sphere PNG in the global folder, deleted at put-back if unchanged.</item>
-/// <item><c>POST /actions/matcap</c>: apply, change, undo or forget, as a backed-up job.</item>
+/// <item><c>POST /actions/matcap</c>: apply (on parts that all have a matcap, a change of it), undo or forget, as a
+/// backed-up job.</item>
 /// </list>
 /// </summary>
 internal sealed partial class HarnessRouter
@@ -137,7 +138,7 @@ internal sealed partial class HarnessRouter
     private async Task<HarnessResponse> MatcapAction(HarnessRequest request)
     {
         var (body, bad) = JsonBody(request, "mod", "model", "parts", "image", "library", "group", "option", "confirmEnable",
-                                   "entry", "undo", "forget", "pack");
+                                   "undo", "forget", "pack");
         if (bad != null) return bad;
         string? mod = OptionalString(body, "mod", out bad); if (bad != null) return bad;
         string? model = OptionalString(body, "model", out bad); if (bad != null) return bad;
@@ -145,7 +146,6 @@ internal sealed partial class HarnessRouter
         string? library = OptionalString(body, "library", out bad); if (bad != null) return bad;
         string? group = OptionalString(body, "group", out bad); if (bad != null) return bad;
         string? option = OptionalString(body, "option", out bad); if (bad != null) return bad;
-        string? entry = OptionalString(body, "entry", out bad); if (bad != null) return bad;
         if (mod == null || model == null) return HarnessResponse.Error(400, "invalid-field", "mod and model are required");
         bool Flag(string field) => body.TryGetProperty(field, out var v) && v.ValueKind == JsonValueKind.True;
         foreach (var f in new[] { "confirmEnable", "undo", "forget", "pack" })
@@ -175,14 +175,9 @@ internal sealed partial class HarnessRouter
         MatcapJob.Action kind;
         if (undo || forget)
         {
-            if (undo && forget || hasSource || labels.Count > 0 || entry != null)
+            if (undo && forget || hasSource || labels.Count > 0)
                 return HarnessResponse.Error(400, "invalid-field", "undo and forget take mod and model only");
             kind = undo ? MatcapJob.Action.Undo : MatcapJob.Action.Forget;
-        }
-        else if (entry != null)
-        {
-            if (!hasSource || labels.Count > 0) return HarnessResponse.Error(400, "invalid-field", "a change takes entry and a source, no parts");
-            kind = MatcapJob.Action.Change;
         }
         else
         {
@@ -210,11 +205,10 @@ internal sealed partial class HarnessRouter
             string modRoot = Path.Combine(mods!.ModsRoot, dir!);
             var job = new HarnessJob(HarnessJobs.NewJobId(), kind switch
             {
-                MatcapJob.Action.Undo => "matcap-undo", MatcapJob.Action.Forget => "matcap-forget",
-                MatcapJob.Action.Change => "matcap-change", _ => "matcap",
+                MatcapJob.Action.Undo => "matcap-undo", MatcapJob.Action.Forget => "matcap-forget", _ => "matcap",
             }, dir!);
             var args = new MatcapJob.Args(dir!, modRoot, model, kind, labels, image, library, group, option, Flag("confirmEnable"),
-                                          entry, port!, changes, Pack: Flag("pack"));
+                                          port!, changes, Pack: Flag("pack"));
             _ = jobs.Start(job, j => MatcapJob.Run(jobs, j, args));
             started = true;
             return HarnessResponse.Json(202, new { job = job.Id, modDir = dir, state = "queued" });

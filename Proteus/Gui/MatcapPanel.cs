@@ -13,7 +13,8 @@ namespace Proteus.Gui;
 
 /// <summary>
 /// The Matcaps tool's settings pane in the Studio: which matcap (your images or a library's options, with thumbnails),
-/// Apply, and the matcaps already on the open model with Change, Forget and Undo. It holds only what the user picked;
+/// Apply (on parts that already have a matcap it changes that matcap), and the matcaps already on the open model with
+/// Forget and Undo. It holds only what the user picked;
 /// everything it decides comes from <see cref="MatcapPanelModel"/>, and everything it does is a callback the Studio
 /// wires (<see cref="Context"/>).
 /// </summary>
@@ -39,7 +40,6 @@ internal sealed class MatcapPanel
         public required IReadOnlyList<string> GroupFiles;
         public required Func<MatcapLibrary, MatcapSelection.Status> LibraryStatus;
         public required Action<MatcapChoice, bool> Apply;
-        public required Action<string, MatcapChoice> Change;
         public required Action Undo;
         public required Action Forget;
         public required Action Rescan;
@@ -55,6 +55,10 @@ internal sealed class MatcapPanel
         public MatcapPackStatus? PackStatus;
         /// <summary>Try the download again after a failure.</summary>
         public Action? RetryPack;
+        /// <summary>Every part of the open model (for what a change reaches beyond the ticks).</summary>
+        public IReadOnlyList<ModelPart> AllParts = [];
+        /// <summary>The open model's file in its mod.</summary>
+        public string ModelFile = "";
     }
 
     /// <summary>Where the matcap is picked from.</summary>
@@ -267,6 +271,14 @@ internal sealed class MatcapPanel
         }
         ImGui.TextDisabled(string.Format(s.TickedFmt, ctx.Ticked.Count));
         ImGui.TextDisabled(string.Format(s.RoomFmt, Math.Max(0, ctx.MaterialRoom)));
+        // Apply on parts that have a matcap changes those matcaps wherever they are used: say so before it is pressed.
+        if (MatcapPlan.KindOfApply(ctx.Ticked) == MatcapPlan.ApplyKind.Change)
+        {
+            ImGui.PushTextWrapPos(0f);
+            foreach (var line in MatcapPanelModel.ChangesLines(ctx.Ticked, ctx.AllParts, ctx.Record, ctx.ModelFile))
+                ImGui.TextColored(ProteusStyle.Warn, line);
+            ImGui.PopTextWrapPos();
+        }
         if (ctx.Ticked.Any(p => p.Material.Contains("hir", StringComparison.OrdinalIgnoreCase)))
         {
             ImGui.PushTextWrapPos(0f);
@@ -274,7 +286,7 @@ internal sealed class MatcapPanel
             ImGui.PopTextWrapPos();
         }
 
-        var why = MatcapPanelModel.ApplyDisabledReason(ctx.Penumbra, ctx.Ticked.Count, choice != null, ctx.MaterialRoom);
+        var why = MatcapPanelModel.ApplyDisabledReason(ctx.Penumbra, ctx.Ticked, choice, ctx.MaterialRoom, ctx.Record);
         using (ImRaii.Disabled(why != null || ctx.Busy))
             if (ImGui.Button(s.Apply, new Vector2(-1f, 0f)) && choice != null)
             {
@@ -314,7 +326,6 @@ internal sealed class MatcapPanel
         if (ctx.Entries.Count == 0) return;
         ImGui.Spacing();
         if (!ImGui.CollapsingHeader(s.ExistingHeader, ImGuiTreeNodeFlags.DefaultOpen)) return;
-        var choice = Choice(ctx);
         bool anySuperseded = false;
         foreach (var entry in ctx.Entries)
         {
@@ -332,11 +343,6 @@ internal sealed class MatcapPanel
             ImGui.TextDisabled(MatcapPanelModel.SourceText(entry.Source));
             if (MatcapPanelModel.EntryState(entry, state, installed, enabled) is { } line)
                 ImGui.TextColored(ProteusStyle.Warn, line);
-            using (ImRaii.PushId(entry.Name))
-            using (ImRaii.Disabled(!MatcapPanelModel.CanChange(entry, choice) || ctx.Busy || state == MatcapWriter.State.Superseded))
-                if (ImGui.SmallButton(s.Change) && choice != null) { ctx.Change(entry.Name, choice); InvalidateStatus(); }
-            if (choice != null && !MatcapPanelModel.CanChange(entry, choice) && ImGui.IsItemHovered(ImGuiHoveredFlags.AllowWhenDisabled))
-                ImGui.SetTooltip(s.ChangeKindTip);
         }
         if (anySuperseded)
             using (ImRaii.Disabled(ctx.Busy))

@@ -6216,7 +6216,7 @@
     "description": ""
   },
   "Matcap.Refused.AlreadyMatcap": {
-    "message": "Certaines de ces parties ont déjà un matcap. Utilisez « Utiliser le matcap choisi » pour le changer.",
+    "message": "Cochez soit des parties sans matcap, pour en ajouter un, soit des parties qui en ont un, pour le changer — pas les deux.",
     "description": ""
   },
   "Matcap.Refused.Changed.Fmt": {
@@ -6299,10 +6299,6 @@
     "message": "Certaines parties cochées ont des bords transparents (mèches de cheveux, dentelle). Vérifiez les bords en jeu après l'application.",
     "description": ""
   },
-  "Parts.Matcap.AlreadyTip": {
-    "message": "Cette partie a déjà un matcap. Changez-le sous « Matcaps sur ce modèle ».",
-    "description": ""
-  },
   "Parts.Matcap.AlsoMore.Fmt": {
     "message": "+{0} de plus",
     "description": ""
@@ -6323,12 +6319,24 @@
     "message": "{0} est votre collection de base : tous ceux qui l'utilisent verront le matcap choisi.",
     "description": ""
   },
-  "Parts.Matcap.Change": {
-    "message": "Utiliser le matcap choisi",
-    "description": ""
-  },
   "Parts.Matcap.Changed.Fmt": {
     "message": "Matcap changé : {0}.",
+    "description": ""
+  },
+  "Parts.Matcap.ChangePartial.Fmt": {
+    "message": "Non changé(s) : {0}.",
+    "description": ""
+  },
+  "Parts.Matcap.ChangesFiles.Fmt": {
+    "message": "Notamment : {0}.",
+    "description": ""
+  },
+  "Parts.Matcap.ChangesUnticked.Fmt": {
+    "message": "Cela inclut {0} partie(s) ici que vous n'avez pas cochée(s).",
+    "description": ""
+  },
+  "Parts.Matcap.Changes.Fmt": {
+    "message": "Appliquer change {0} dans chaque fichier de ce mod qui l'utilise, refits compris.",
     "description": ""
   },
   "Parts.Matcap.ChangeKindTip": {
@@ -6400,7 +6408,7 @@
     "description": ""
   },
   "Parts.Matcap.ListTip": {
-    "message": "Cochez les parties qui doivent recevoir le matcap. La peau et les parties qui en ont déjà un ne peuvent pas être cochées.",
+    "message": "Cochez les parties qui doivent recevoir le matcap. Cochez des parties qui en ont déjà un pour le changer. La peau ne peut pas être cochée.",
     "description": ""
   },
   "Parts.Matcap.Lod0Cut": {

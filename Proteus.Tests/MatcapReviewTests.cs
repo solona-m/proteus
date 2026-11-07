@@ -246,7 +246,7 @@ public class MatcapReadbackLocalTests(ITestOutputHelper output)
         {
             var bytes = data.GetFile(path)!.Data;
             var read = ModelPartReader.Read(bytes)!;
-            var tickable = read.Parts.Where(p => p.Island < 0 && MatcapPlan.Tickable(p, kind, read.AttributeNames)).ToList();
+            var tickable = read.Parts.Where(p => p.Island < 0 && MatcapPlan.Tickable(p, kind, read.AttributeNames) && !MatcapPlan.IsOnMatcap(p)).ToList();
             // A part sharing its mesh with another, so the split appends a mesh (a lone part would be rebound whole).
             var part = tickable.FirstOrDefault(p => read.Parts.Count(q => q.Island < 0 && q.Mesh == p.Mesh) > 1) ?? tickable[0];
             var result = ModelMaterialWriter.MoveToMaterial(bytes, [part], MatcapPlan.NewName(part.Material, "abcdef", SecondSkinWriter.MaterialNames(bytes)));

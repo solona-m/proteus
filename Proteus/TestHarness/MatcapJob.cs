@@ -9,7 +9,8 @@ using Proteus.Services.Matcap;
 namespace Proteus.TestHarness;
 
 /// <summary>
-/// The Studio's Matcaps tool for QA: what it lists (<see cref="Read"/>), and Apply, Change, Undo and Forget as a job
+/// The Studio's Matcaps tool for QA: what it lists (<see cref="Read"/>), and Apply (new, or a change of parts that have a
+/// matcap), Undo and Forget as a job
 /// (<see cref="Run"/>) through the same entry points the panel's buttons call (<see cref="MatcapStudio"/>,
 /// <see cref="MatcapWriter"/>, <see cref="MatcapSelection"/>), after a whole-mod backup. A library setting the job changes is
 /// recorded in the binding session's ledger (Before written first) and put back at put-back. A Studio edit pending is
@@ -17,12 +18,30 @@ namespace Proteus.TestHarness;
 /// </summary>
 internal static class MatcapJob
 {
-    internal enum Action { Apply, Change, Undo, Forget }
+    /// <summary>Apply is the panel's one button: a new matcap, or a change when every named part already has one.</summary>
+    internal enum Action { Apply, Undo, Forget }
 
     /// <param name="Model">The model as QA named it: a mod-relative file or a game path the mod publishes.</param>
     internal sealed record Args(string ModDir, string ModRoot, string Model, Action Kind, IReadOnlyList<string> Parts,
                                 string? Image, string? Library, string? Group, string? Option, bool ConfirmEnable,
-                                string? Entry, MatcapHarnessPort Port, HarnessChanges Changes, bool Pack = false);
+                                MatcapHarnessPort Port, HarnessChanges Changes, bool Pack = false);
+
+    /// <summary>The matcap QA named, found as the panel finds it, or the job error.</summary>
+    internal static (MatcapChoice? Choice, JobError? Error) ResolveChoice(MatcapHarnessPort port, string modRoot, string? image, bool pack,
+                                                                         string? library, string? group, string? option)
+    {
+        if (image != null)
+        {
+            if (MatcapImages.Find(image, port.ImageFolder, MatcapImages.ModFolder(modRoot), port.Pack?.Available(), packOnly: pack) is not { } img)
+                return (null, new JobError("unknown-image", $"no matcap image called {image}"));
+            return (MatcapChoice.OfImage(img), null);
+        }
+        if (port.Index?.Current?.Find(library!, group!) is not { } lib)
+            return (null, new JobError("unknown-library", $"no matcap library {library} / {group}; GET /matcaps?refresh=1 first"));
+        if (!lib.Options.Any(o => o.Name == option))
+            return (null, new JobError("unknown-option", $"{lib.Label} has no option {option}"));
+        return (MatcapChoice.OfLibrary(lib, option!), null);
+    }
 
     /// <summary>The model file and game path QA named, or the job error refusing it.</summary>
     internal static (string? Rel, string? GamePath, JobError? Error) ResolveModel(string modRoot, string model)
@@ -58,7 +77,8 @@ internal static class MatcapJob
         if (target != null)
             foreach (var m in parts.Select(p => p.Material).Distinct(StringComparer.OrdinalIgnoreCase))
                 try { alpha[m] = MatcapStudio.IsAlphaTested(modRoot, target, m, redirects, port.Env, rel); } catch { alpha[m] = false; }
-        var tickableParts = parts.Where(p => p.Island < 0 && MatcapPlan.Tickable(p, kind, attrs)).ToList();
+        // Siblings line up for a NEW apply: against the tickable parts not already on a matcap.
+        var tickableParts = parts.Where(p => p.Island < 0 && MatcapPlan.Tickable(p, kind, attrs) && !MatcapPlan.IsOnMatcap(p)).ToList();
         var record = MatcapRecord.Read(modRoot);
         var states = MatcapWriter.Detect(modRoot);
         var siblings = HatCompatService.SiblingFiles(modRoot, gamePath!, rel!)
@@ -117,22 +137,13 @@ internal static class MatcapJob
 
         // The matcap chosen, as the panel finds it.
         MatcapChoice? choice = null;
-        if (args.Kind is Action.Apply or Action.Change)
+        if (args.Kind is Action.Apply)
         {
-            if (args.Image != null)
+            var (found, choiceError) = ResolveChoice(args.Port, args.ModRoot, args.Image, args.Pack, args.Library, args.Group, args.Option);
+            if (choiceError != null) { job.Fail(choiceError); return; }
+            choice = found;
+            if (choice!.Library is { } lib)
             {
-                if (MatcapImages.Find(args.Image, args.Port.ImageFolder, MatcapImages.ModFolder(args.ModRoot),
-                                      args.Port.Pack?.Available(), packOnly: args.Pack) is not { } img)
-                { job.Fail(new JobError("unknown-image", $"no matcap image called {args.Image}")); return; }
-                choice = MatcapChoice.OfImage(img);
-            }
-            else
-            {
-                if (args.Port.Index?.Current?.Find(args.Library!, args.Group!) is not { } lib)
-                { job.Fail(new JobError("unknown-library", $"no matcap library {args.Library} / {args.Group}; GET /matcaps?refresh=1 first")); return; }
-                if (!lib.Options.Any(o => o.Name == args.Option))
-                { job.Fail(new JobError("unknown-option", $"{lib.Label} has no option {args.Option}")); return; }
-                choice = MatcapChoice.OfLibrary(lib, args.Option!);
                 // Switching a library on is never silent: without the confirmation nothing is written.
                 var status = await jobs.Dispatcher.RunAsync(() => MatcapSelection.Read(args.Port.Penumbra, lib), jobs.Timings.FrameworkStart)
                                        .ConfigureAwait(false);
@@ -163,6 +174,7 @@ internal static class MatcapJob
             : [];
         MatcapWriter.Outcome outcome;
         MatcapStudio.Prepared? prepared = null;
+        IReadOnlyList<string>? changeNames = null;   // set when the Apply changed existing matcaps
         switch (args.Kind)
         {
             case Action.Apply:
@@ -176,14 +188,21 @@ internal static class MatcapJob
                     { job.Fail(new JobError("unknown-part", $"the model has no part {label}")); return; }
                     chosen.Add(part);
                 }
-                prepared = MatcapStudio.Prepare(args.ModRoot, rel!, gamePath!, bytes, chosen, choice!, args.Port.Env);
-                outcome = prepared.Ok ? MatcapWriter.Apply(args.ModRoot, prepared.Request!) : MatcapWriter.Outcome.Refuse(prepared.Code, prepared.Message);
-                break;
-            }
-            case Action.Change:
-            {
-                var (src, mtrl, temp, code, msg) = MatcapStudio.PrepareChange(args.ModRoot, args.Entry!, choice!, args.Port.Env);
-                outcome = src == null ? MatcapWriter.Outcome.Refuse(code, msg) : MatcapWriter.Change(args.ModRoot, args.Entry!, src, mtrl, temp);
+                // As the panel's Apply: parts that all have a matcap change it in place; a mix is refused.
+                switch (MatcapPlan.KindOfApply(chosen))
+                {
+                    case MatcapPlan.ApplyKind.Change:
+                        changeNames = MatcapPlan.ChangeNames(chosen);
+                        outcome = MatcapStudio.ChangeAll(args.ModRoot, changeNames, choice!, args.Port.Env);
+                        break;
+                    case MatcapPlan.ApplyKind.Mixed:
+                        outcome = MatcapWriter.Outcome.Refuse("already-matcap", Localization.Strings.Matcap.AlreadyMatcap);
+                        break;
+                    default:
+                        prepared = MatcapStudio.Prepare(args.ModRoot, rel!, gamePath!, bytes, chosen, choice!, args.Port.Env);
+                        outcome = prepared.Ok ? MatcapWriter.Apply(args.ModRoot, prepared.Request!) : MatcapWriter.Outcome.Refuse(prepared.Code, prepared.Message);
+                        break;
+                }
                 break;
             }
             case Action.Undo:
@@ -205,11 +224,12 @@ internal static class MatcapJob
         // Every successful job changed the mod (a Forget removes redirects), so every one ends in a reload and redraw.
         bool changed = outcome.Ok || librarySetting != null;
         // A face the face overlay rewrites is read again after our edit, not from its remembered copy.
-        if (changed && args.Kind != Action.Change && facePaths.Count > 0 && args.Port.ForgetFaceUpstream is { } forget)
+        bool isChange = changeNames != null;
+        if (changed && !isChange && facePaths.Count > 0 && args.Port.ForgetFaceUpstream is { } forget)
             await jobs.Dispatcher.RunAsync(() => { foreach (var p in facePaths) forget(p); return true; }, jobs.Timings.FrameworkStart).ConfigureAwait(false);
         // The panel's drawn-file line after an Apply (EDGE-47/58), on the framework thread.
         string? drawnLine = null;
-        if (outcome.Ok && args.Kind == Action.Apply && gamePath != null && args.Port.DrawnStatus is { } drawnOf)
+        if (outcome.Ok && args.Kind == Action.Apply && !isChange && gamePath != null && args.Port.DrawnStatus is { } drawnOf)
             drawnLine = await jobs.Dispatcher.RunAsync(() => drawnOf(args.ModRoot, gamePath, outcome.Files), jobs.Timings.FrameworkStart).ConfigureAwait(false);
         if (changed)
         {
@@ -220,18 +240,25 @@ internal static class MatcapJob
         catch (Exception e) { jobs.Log?.Warning(e, "[Proteus] test harness: could not record {0}'s state after the matcap", args.ModDir); }
 
         var record = MatcapRecord.Read(args.ModRoot);
-        var entry = prepared?.Request is { } req ? record.Materials.FirstOrDefault(m => m.Name == req.MaterialName) : null;
+        var entry = prepared?.Request is { } req ? record.Materials.FirstOrDefault(m => m.Name == req.MaterialName)
+                  : changeNames is [var firstName, ..] ? record.Materials.FirstOrDefault(m => string.Equals(m.Name, firstName, StringComparison.OrdinalIgnoreCase))
+                  : null;
+        // nothing-to-undo is Undo's and Forget's: a refused change is "refused".
+        bool undoing = args.Kind is Action.Undo or Action.Forget;
         job.SetResult(new
         {
             action = args.Kind.ToString().ToLowerInvariant(),
-            summary = !outcome.Ok ? (outcome.Code == MatcapWriter.CodeNothing ? "nothing-to-undo" : "refused")
-                    : args.Kind switch { Action.Apply => "applied", Action.Change => "changed", Action.Undo => "undone", _ => "forgotten" },
+            summary = !outcome.Ok ? (undoing && outcome.Code == MatcapWriter.CodeNothing ? "nothing-to-undo" : "refused")
+                    : args.Kind switch { Action.Apply => isChange ? "changed" : "applied", Action.Undo => "undone", _ => "forgotten" },
             code = outcome.Code.Length > 0 ? outcome.Code : null,
             resultLine = outcome.Message,
             material = entry?.Name, gamePaths = entry?.GamePaths,
             files = prepared?.Request?.Models.Select(m => new { file = m.Rel, meshesAdded = prepared.Request.Materials.SelectMany(p => p.Meshes).Count(x => x.Rel == m.Rel && x.Source != x.Drawn), lod0Cut = m.Lod0Cut }),
-            materials = prepared?.Request?.Materials.Select(p => new { name = p.Name, gamePaths = p.GamePaths, normal = p.Normal, alphaThreshold = p.AlphaThreshold }),
-            drawn = args.Kind == Action.Apply && outcome.Ok
+            materials = prepared?.Request?.Materials.Select(p => (object)new { name = p.Name, gamePaths = p.GamePaths, normal = p.Normal, alphaThreshold = (float?)p.AlphaThreshold })
+                     ?? changeNames?.Select(n => record.Materials.FirstOrDefault(m => string.Equals(m.Name, n, StringComparison.OrdinalIgnoreCase)))
+                                    .OfType<MatcapRecord.MaterialEntry>()
+                                    .Select(m => (object)new { name = m.Name, gamePaths = m.GamePaths }),
+            drawn = args.Kind == Action.Apply && !isChange && outcome.Ok
                 ? new { line = drawnLine, ours = drawnLine == null, throughFace = drawnLine == Localization.Strings.Matcap.DrawnThroughFace }
                 : null,
             siblingsSkipped = prepared?.SiblingsSkipped,

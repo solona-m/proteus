@@ -117,7 +117,7 @@ public class MatcapVieraEarLocalTests(ITestOutputHelper output)
                 var path = $"chara/human/c{race:D4}/obj/zear/z{id:D4}/model/c{race:D4}z{id:D4}_zer.mdl";
                 var bytes = data.GetFile(path)?.Data;
                 if (bytes == null) continue;
-                var parts = ModelPartReader.Read(bytes)!.Parts.Where(p => p.Island < 0 && MatcapPlan.Tickable(p)).ToList();
+                var parts = ModelPartReader.Read(bytes)!.Parts.Where(p => p.Island < 0 && MatcapPlan.Tickable(p) && !MatcapPlan.IsOnMatcap(p)).ToList();
                 if (parts.Count == 0) continue;
                 var target = MatcapPlan.TargetOf(path, out _)!;
                 Assert.Equal(MatcapPlan.Kind.Ear, target.Kind);
@@ -148,7 +148,7 @@ public class MatcapTailLocalTests(ITestOutputHelper output)
             var path = $"chara/human/c{race:D4}/obj/tail/t{id:D4}/model/c{race:D4}t{id:D4}_til.mdl";
             var bytes = data.GetFile(path)?.Data;
             if (bytes == null) continue;
-            var parts = ModelPartReader.Read(bytes)!.Parts.Where(p => p.Island < 0 && MatcapPlan.Tickable(p)).ToList();
+            var parts = ModelPartReader.Read(bytes)!.Parts.Where(p => p.Island < 0 && MatcapPlan.Tickable(p) && !MatcapPlan.IsOnMatcap(p)).ToList();
             Assert.NotEmpty(parts);
             var target = MatcapPlan.TargetOf(path, out _)!;
             Assert.Equal(MatcapPlan.Kind.Tail, target.Kind);
@@ -299,7 +299,7 @@ public class MatcapDownstreamLocalTests(ITestOutputHelper output)
         var file = Path.Combine(LocalData.Path(LocalData.StryxMod), "default group", "chara", "human", "c0201", "obj", "hair", "h0168", "model", "c0201h0168_hir.mdl");
         var hair = File.ReadAllBytes(file);
         var cut = ModelLodTrimmer.LodCount(hair) > 1 ? ModelLodTrimmer.KeepLod0(hair, out _)! : hair;
-        var part = ModelPartReader.Read(cut)!.Parts.Where(p => p.Island < 0 && MatcapPlan.Tickable(p)).OrderBy(p => p.TriangleCount).First();
+        var part = ModelPartReader.Read(cut)!.Parts.Where(p => p.Island < 0 && MatcapPlan.Tickable(p) && !MatcapPlan.IsOnMatcap(p)).OrderBy(p => p.TriangleCount).First();
         var split = ModelMaterialWriter.MoveToMaterial(cut, [part], "/mt_c0201h0168_hir_b_mcapabcdef1.mtrl");
 
         // The hat fit, as the automatic one runs it on a worn hairstyle.

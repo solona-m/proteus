@@ -15,9 +15,7 @@ internal static class MatcapPanelModel
 {
     /// <summary>Why a part's tick box is disabled under Matcaps.</summary>
     public static string UntickableTip(ModelPart part) =>
-        MatcapPlan.IsSkin(part) ? Strings.Matcap.SkinTip
-        : MatcapPlan.IsOnMatcap(part) ? Strings.Matcap.AlreadyTip
-        : Strings.Matcap.NotHornTip;
+        MatcapPlan.IsSkin(part) ? Strings.Matcap.SkinTip : Strings.Matcap.NotHornTip;
 
     /// <summary>
     /// The line after an Apply about the file the character draws for <paramref name="gamePath"/>
@@ -51,15 +49,56 @@ internal static class MatcapPanelModel
     public static bool IsManagedFaceRewrite(string file) =>
         System.IO.Path.GetFileName(file).StartsWith("facelr_", StringComparison.OrdinalIgnoreCase);
 
-    /// <summary>Why Apply can't be pressed, or null when it can.</summary>
-    public static string? ApplyDisabledReason(bool penumbra, int ticked, bool hasChoice, int materialRoom)
+    /// <summary>
+    /// Why Apply can't be pressed, or null when it can. Ticked parts that all have a matcap change it (in the record, same
+    /// kind; no material room needed); none having one makes a new one (room needed); a mix is refused.
+    /// </summary>
+    public static string? ApplyDisabledReason(bool penumbra, IReadOnlyList<ModelPart> ticked, MatcapChoice? choice, int materialRoom,
+                                              MatcapRecord record)
     {
         var s = Strings.Matcap;
         if (!penumbra) return s.NoPenumbra;
-        if (ticked == 0) return s.NeedParts;
-        if (!hasChoice) return s.NeedMatcap;
-        if (materialRoom <= 0) return string.Format(s.MaterialCapFmt, SecondSkinWriter.MaxMaterials);
-        return null;
+        if (ticked.Count == 0) return s.NeedParts;
+        if (choice == null) return s.NeedMatcap;
+        switch (MatcapPlan.KindOfApply(ticked))
+        {
+            case MatcapPlan.ApplyKind.Mixed:
+                return s.AlreadyMatcap;
+            case MatcapPlan.ApplyKind.Change:
+                foreach (var name in MatcapPlan.ChangeNames(ticked))
+                {
+                    var entry = record.Materials.FirstOrDefault(m => string.Equals(m.Name, name, StringComparison.OrdinalIgnoreCase));
+                    if (entry == null) return s.NoEntry;
+                    if (entry.Source.IsLibrary != choice.IsLibrary) return s.ChangeKindTip;
+                }
+                return null;
+            default:
+                return materialRoom <= 0 ? string.Format(s.MaterialCapFmt, SecondSkinWriter.MaxMaterials) : null;
+        }
+    }
+
+    /// <summary>
+    /// What an Apply that changes matcaps reaches beyond the ticks, shown before it is pressed: the matcaps (in every file
+    /// of the mod using them, refits included); how many of this model's parts on them are not ticked; and the other model
+    /// files Proteus recorded on them, as examples (carried-in files such as refits are not scanned for).
+    /// </summary>
+    public static List<string> ChangesLines(IReadOnlyList<ModelPart> ticked, IReadOnlyList<ModelPart> allParts, MatcapRecord record,
+                                            string modelFile)
+    {
+        var s = Strings.Matcap;
+        var names = MatcapPlan.ChangeNames(ticked);
+        if (names.Count == 0) return [];
+        var lines = new List<string> { string.Format(s.ChangesFmt, string.Join(", ", names.Select(MatcapWriter.StemOf))) };
+        var tickedLabels = ticked.Select(p => p.Label).ToHashSet(StringComparer.Ordinal);
+        int unticked = allParts.Count(p => p.Island < 0 && !tickedLabels.Contains(p.Label)
+                                           && names.Contains(p.Material, StringComparer.OrdinalIgnoreCase));
+        if (unticked > 0) lines.Add(string.Format(s.ChangesUntickedFmt, unticked));
+        var files = record.Materials.Where(m => names.Contains(m.Name, StringComparer.OrdinalIgnoreCase))
+                          .SelectMany(m => m.Meshes).Select(x => x.Model)
+                          .Where(f => !PenumbraModMeta.SameFile(f, modelFile))
+                          .Distinct(StringComparer.OrdinalIgnoreCase).Order(StringComparer.OrdinalIgnoreCase).ToList();
+        if (files.Count > 0) lines.Add(string.Format(s.ChangesFilesFmt, string.Join(", ", files)));
+        return lines;
     }
 
     /// <summary>The empty-library note, naming the folder to put images in.</summary>
@@ -123,8 +162,4 @@ internal static class MatcapPanelModel
     /// <summary>"gem.png" or "Library — option": where an existing matcap comes from.</summary>
     public static string SourceText(MatcapRecord.SourceRef src) =>
         string.Format(Strings.Matcap.SourceFmt, src.IsLibrary && src.Library is { } l ? $"{l.Name} — {l.Option}" : src.Image ?? "?");
-
-    /// <summary>Whether Change may be pressed for an entry with this choice: same kind only.</summary>
-    public static bool CanChange(MatcapRecord.MaterialEntry entry, MatcapChoice? choice) =>
-        choice != null && entry.Source.IsLibrary == choice.IsLibrary;
 }

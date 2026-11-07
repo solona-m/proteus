@@ -30,6 +30,18 @@ internal static class MatcapStudio
     public sealed record Environment(Func<string, byte[]?> ReadGameFile, TextureLoader Loader, bool Compress, string TempDir,
                                      int? WornFolder = null);
 
+    /// <summary>The ticked parts mix parts with and without a matcap (Apply's and Prepare's refusal).</summary>
+    internal const string AlreadyMatcapText =
+        "Tick either parts without a matcap, to add one, or parts that have one, to change it — not both.";
+
+    internal const string NoEntryText = "That matcap is not in this mod's record.";
+
+    /// <summary>{0} the matcaps not changed, each with why.</summary>
+    internal const string ChangePartialText = "Not changed: {0}.";
+
+    /// <summary>Test seam: runs before each material's change in <see cref="ChangeAll"/>, with its name.</summary>
+    [ThreadStatic] internal static Action<string>? BeforeChange;
+
     /// <summary>A prepared apply, or why not.</summary>
     public sealed record Prepared(MatcapWriter.ApplyRequest? Request, string Code, string Message,
                                   IReadOnlyList<string> SiblingsSkipped, bool AlphaTested, bool Lod0Cut)
@@ -54,8 +66,9 @@ internal static class MatcapStudio
     /// Prepare a matcap on <paramref name="chosen"/> — parts read from <paramref name="modelBytes"/>, the file at
     /// <paramref name="modelRel"/> as it is now — and on every sibling file at the same game path whose parts line up.
     /// </summary>
+    /// <param name="withSiblings">False for a preview: only the open model is split.</param>
     public static Prepared Prepare(string modRoot, string modelRel, string modelGamePath, byte[] modelBytes,
-                                   IReadOnlyList<ModelPart> chosen, MatcapChoice choice, Environment env)
+                                   IReadOnlyList<ModelPart> chosen, MatcapChoice choice, Environment env, bool withSiblings = true)
     {
         if (MatcapPlan.TargetOf(modelGamePath, out _) is not { } target)
             return Prepared.Refuse("not-target", ProteusLoc.Localize("Matcap.Refused.NotTarget",
@@ -65,9 +78,9 @@ internal static class MatcapStudio
                 "This model is made by Proteus from another one ({0}), and remaking it would lose the matcap. Put the matcap on the model it was made from, then remake it."), regen));
         if (chosen.Count == 0) return Prepared.Refuse("unknown-part", ProteusLoc.Localize("Parts.Matcap.NeedParts", "Tick the parts that should take the matcap."));
         if (chosen.Any(MatcapPlan.IsSkin)) return Prepared.Refuse("skin-part", ProteusLoc.Localize("Matcap.Refused.Skin", "Skin can't take a matcap."));
+        // A change of an existing matcap goes through ChangeAll; a new apply never splits a matcap part again.
         if (chosen.Any(MatcapPlan.IsOnMatcap))
-            return Prepared.Refuse("already-matcap", ProteusLoc.Localize("Matcap.Refused.AlreadyMatcap",
-                "Some of those parts already have a matcap. Use \"Use the chosen matcap\" to change it."));
+            return Prepared.Refuse("already-matcap", ProteusLoc.Localize("Matcap.Refused.AlreadyMatcap", AlreadyMatcapText));
 
         // A face takes a matcap on its horns only (Au Ra horns are face submeshes tagged atr_hrn).
         if (target.Kind == MatcapPlan.Kind.Face)
@@ -95,7 +108,7 @@ internal static class MatcapStudio
         bool onRegenerated = MatcapPlan.Regenerated(modRoot, modelRel) is MatcapPlan.RefitKind or MatcapPlan.HairPortKind;
         var models = new List<(string Rel, byte[] Bytes, IReadOnlyList<ModelPart> Parts)> { (modelRel, modelBytes, chosen) };
         var skipped = new List<string>();
-        foreach (var sib in HatCompatService.SiblingFiles(modRoot, modelGamePath, modelRel))
+        foreach (var sib in withSiblings ? HatCompatService.SiblingFiles(modRoot, modelGamePath, modelRel) : [])
         {
             if (PenumbraModMeta.SameFile(sib, modelRel)) continue;
             if (onRegenerated || MatcapPlan.Regenerated(modRoot, sib) != null) { skipped.Add(sib); continue; }
@@ -345,12 +358,13 @@ internal static class MatcapStudio
     /// Prepare a change of an existing matcap to <paramref name="choice"/>: for an image, the new bake; for a library,
     /// the material rebuilt when the new slot reads another path. Same kind only (<see cref="MatcapWriter.Change"/>).
     /// </summary>
+    /// <param name="bakedTex">An image already baked (by <see cref="ChangeAll"/>, once for every material): used as is.</param>
     public static (MatcapRecord.SourceRef? Source, byte[]? Material, string? TexTemp, string Code, string Message) PrepareChange(
-        string modRoot, string materialName, MatcapChoice choice, Environment env)
+        string modRoot, string materialName, MatcapChoice choice, Environment env, string? bakedTex = null)
     {
         var record = MatcapRecord.Read(modRoot);
         var entry = record.Materials.FirstOrDefault(m => string.Equals(m.Name, materialName, StringComparison.OrdinalIgnoreCase));
-        if (entry == null) return (null, null, null, MatcapWriter.CodeNothing, ProteusLoc.Localize("Matcap.Refused.NoEntry", "That matcap is not in this mod's record."));
+        if (entry == null) return (null, null, null, MatcapWriter.CodeNothing, ProteusLoc.Localize("Matcap.Refused.NoEntry", NoEntryText));
         if (entry.Source.IsLibrary != choice.IsLibrary)
             return (null, null, null, MatcapWriter.CodeCrossKind, ProteusLoc.Localize("Parts.Matcap.ChangeKindTip",
                 "A matcap from your images can only change to another image, and a library's to another library option. Undo it to switch kinds."));
@@ -358,12 +372,8 @@ internal static class MatcapStudio
         Directory.CreateDirectory(env.TempDir);
         if (choice.Image is { } image)
         {
-            var temp = Path.Combine(env.TempDir, $"matcap_{Guid.NewGuid():N}.tex");
-            var baked = MatcapImages.Bake(env.Loader, image.Path, temp, env.Compress);
-            if (baked.Refusal != null)
-                return (null, null, null, baked.Refusal == "not-square" ? "not-square" : "image-unreadable", baked.Refusal == "not-square"
-                    ? string.Format(ProteusLoc.Localize("Matcap.Refused.NotSquare.Fmt", "{0} is not square. A matcap is a picture of a sphere filling a square."), image.Name)
-                    : string.Format(ProteusLoc.Localize("Matcap.Refused.ImageUnreadable.Fmt", "{0} could not be read as an image."), image.Name));
+            var temp = bakedTex ?? Path.Combine(env.TempDir, $"matcap_{Guid.NewGuid():N}.tex");
+            if (bakedTex == null && Bake(image, temp, env) is { } refused) return (null, null, null, refused.Code, refused.Message);
             return (new MatcapRecord.SourceRef
             {
                 Kind = MatcapRecord.SourceRef.KindImage, Image = image.Name, ImageSha8 = HairPortPlan.Sha8(File.ReadAllBytes(image.Path)),
@@ -386,5 +396,110 @@ internal static class MatcapStudio
             mtrl = MatcapMaterial.Build(template, entry.Normal, MatcapWriter.MaskGamePath(record.Token), lib.Texture, entry.AlphaThreshold);
         }
         return (src, mtrl, null, "", "");
+    }
+
+    /// <summary>Bake <paramref name="image"/> to <paramref name="temp"/>, or the refusal.</summary>
+    private static (string Code, string Message)? Bake(MatcapImage image, string temp, Environment env)
+    {
+        var baked = MatcapImages.Bake(env.Loader, image.Path, temp, env.Compress);
+        if (baked.Refusal == null) return null;
+        return baked.Refusal == "not-square"
+            ? ("not-square", string.Format(ProteusLoc.Localize("Matcap.Refused.NotSquare.Fmt", "{0} is not square. A matcap is a picture of a sphere filling a square."), image.Name))
+            : ("image-unreadable", string.Format(ProteusLoc.Localize("Matcap.Refused.ImageUnreadable.Fmt", "{0} could not be read as an image."), image.Name));
+    }
+
+    /// <summary>
+    /// Apply on parts that already have a matcap: each of <paramref name="names"/> changes in place to
+    /// <paramref name="choice"/> (<see cref="PrepareChange"/> + <see cref="MatcapWriter.Change"/>, the whole material).
+    /// Everything that would refuse is checked first, with nothing written: the record, every entry, its kind, and the
+    /// files a change rewrites still as Proteus wrote them (<see cref="MatcapWriter"/>'s own rule). An image is baked once
+    /// for every material. A failure after an earlier material changed still returns Ok, with a line naming what was not
+    /// changed, so the caller selects the library option and reloads for the ones that did.
+    /// </summary>
+    public static MatcapWriter.Outcome ChangeAll(string modRoot, IReadOnlyList<string> names, MatcapChoice choice, Environment env)
+    {
+        var record = MatcapRecord.Read(modRoot);
+        if (record.Unreadable)
+            return MatcapWriter.Outcome.Refuse(MatcapWriter.CodeUnreadable, ProteusLoc.Localize("Matcap.Refused.RecordUnreadable",
+                "Proteus's record of this mod's matcaps (Proteus/matcaps.json) could not be read, so nothing was changed."));
+        if (names.Count == 0)
+            return MatcapWriter.Outcome.Refuse(MatcapWriter.CodeNothing, ProteusLoc.Localize("Matcap.Refused.NoEntry", NoEntryText));
+        foreach (var name in names)
+        {
+            var entry = record.Materials.FirstOrDefault(m => string.Equals(m.Name, name, StringComparison.OrdinalIgnoreCase));
+            if (entry == null)
+                return MatcapWriter.Outcome.Refuse(MatcapWriter.CodeNothing, ProteusLoc.Localize("Matcap.Refused.NoEntry", NoEntryText));
+            if (entry.Source.IsLibrary != choice.IsLibrary)
+                return MatcapWriter.Outcome.Refuse(MatcapWriter.CodeCrossKind, ProteusLoc.Localize("Parts.Matcap.ChangeKindTip",
+                    "A matcap from your images can only change to another image, and a library's to another library option. Undo it to switch kinds."));
+            // The file the change rewrites: an image's texture, or a library's material when the slot path moves.
+            (string File, string Sha8)? rewritten = choice.Library is { } lib
+                ? (!string.Equals(entry.Source.Library?.Texture, lib.Texture, StringComparison.OrdinalIgnoreCase) ? (entry.File, entry.Sha8) : null)
+                : entry.Source.Tex is { } tex ? (tex.File, tex.Sha8) : null;
+            if (rewritten is { } rw && EditedSinceWritten(modRoot, rw.File, rw.Sha8))
+                return MatcapWriter.Outcome.Refuse(MatcapWriter.CodeEdited, string.Format(ProteusLoc.Localize("Matcap.Refused.HandEdited.Fmt",
+                    "{0} was edited by hand since Proteus wrote it, so it was left alone."), rw.File));
+        }
+
+        string? baked = null;
+        try
+        {
+            if (choice.Image is { } image)
+            {
+                Directory.CreateDirectory(env.TempDir);
+                SweepTemp(env.TempDir);
+                baked = Path.Combine(env.TempDir, $"matcap_{Guid.NewGuid():N}.tex");
+                if (Bake(image, baked, env) is { } refused) return MatcapWriter.Outcome.Refuse(refused.Code, refused.Message);
+            }
+
+            var changed = new List<string>();
+            var lines = new List<string>();
+            var notChanged = new List<string>();
+            MatcapWriter.Outcome? first = null;
+            foreach (var name in names)
+            {
+                MatcapWriter.Outcome outcome;
+                try
+                {
+                    BeforeChange?.Invoke(name);
+                    var (src, mtrl, temp, code, msg) = PrepareChange(modRoot, name, choice, env, baked);
+                    outcome = src == null ? MatcapWriter.Outcome.Refuse(code, msg) : MatcapWriter.Change(modRoot, name, src, mtrl, temp);
+                }
+                catch (Exception ex)
+                {
+                    outcome = MatcapWriter.Outcome.Refuse(MatcapWriter.CodeFailed, string.Format(ProteusLoc.Localize("Matcap.Refused.Failed.Fmt",
+                        "The matcap could not be written ({0}). Nothing was changed."), ex.Message));
+                }
+                if (outcome.Ok)
+                {
+                    lines.Add(outcome.Message);
+                    changed.AddRange(outcome.Files);
+                }
+                else
+                {
+                    first ??= outcome;
+                    notChanged.Add($"{MatcapWriter.StemOf(name)} ({outcome.Message})");
+                }
+            }
+            if (lines.Count == 0) return first!;
+            if (notChanged.Count > 0)
+                lines.Add(string.Format(ProteusLoc.Localize("Parts.Matcap.ChangePartial.Fmt", ChangePartialText), string.Join("; ", notChanged)));
+            return MatcapWriter.Outcome.Done(string.Join("\n", lines), changed);
+        }
+        finally
+        {
+            if (baked != null) try { File.Delete(baked); } catch { }
+        }
+    }
+
+    /// <summary>
+    /// <see cref="MatcapWriter"/>'s hand-edit rule, case for case: a missing file or an unrecorded hash is not an edit;
+    /// a file that can't be read counts as one.
+    /// </summary>
+    private static bool EditedSinceWritten(string modRoot, string rel, string sha8)
+    {
+        var full = MatcapWriter.Full(modRoot, rel);
+        try { return File.Exists(full) && sha8.Length > 0 && HairPortPlan.Sha8(File.ReadAllBytes(full)) != sha8; }
+        catch { return true; }
     }
 }

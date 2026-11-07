@@ -10,7 +10,8 @@ using Proteus.Services.Matcap;
 namespace Proteus.Gui;
 
 /// <summary>
-/// The Matcaps tool's wiring: the pane's context, and Apply, Change, Undo and Forget. The heavy half of each runs on a
+/// The Matcaps tool's wiring: the pane's context, and Apply (a new matcap, or a change of the ticked parts' matcaps),
+/// Undo and Forget. The heavy half of each runs on a
 /// worker (<see cref="MatcapStudio.Prepare"/> and <see cref="MatcapWriter"/> take the write locks themselves); the
 /// library's collection setting, the drawn-file check and the redraw run back on the framework thread when it is done.
 /// </summary>
@@ -167,7 +168,6 @@ public sealed partial class PartsPanel
                 : [],
             LibraryStatus = lib => CachedLibraryStatus(adapter, lib),
             Apply = (choice, confirm) => StartMatcapApply(choice, confirm),
-            Change = (name, choice) => StartMatcapChange(name, choice),
             Undo = () => StartMatcapUndo(forget: false),
             Forget = () => StartMatcapUndo(forget: true),
             Rescan = () => RescanMatcaps(true),
@@ -178,6 +178,8 @@ public sealed partial class PartsPanel
             PackImages = packImages,
             PackStatus = matcapPack?.Status,
             RetryPack = () => matcapPack?.EnsureAsync(retryFailed: true),
+            AllParts = parts?.Parts ?? [],
+            ModelFile = rel,
         });
     }
 
@@ -203,6 +205,24 @@ public sealed partial class PartsPanel
                 matcapError = string.Format(Strings.Matcap.ConfirmEnableFmt, lib.Name, st.Collection, MatcapSelection.AlsoText(lib));
                 return;
             }
+        }
+
+        // Parts that all have a matcap: those matcaps change in place (the whole material, wherever it is used). A mix of
+        // parts with and without one is refused: two writes in one click are not atomic.
+        var kind = MatcapPlan.KindOfApply(chosen);
+        if (kind == MatcapPlan.ApplyKind.Mixed) { matcapError = Strings.Matcap.AlreadyMatcap; return; }
+        if (kind == MatcapPlan.ApplyKind.Change)
+        {
+            if (ModRoot() is not { } changeRoot) return;
+            var names = MatcapPlan.ChangeNames(chosen);
+            var changePath = models[modelIndex].GamePath;
+            matcapJob = Task.Run(() =>
+            {
+                var outcome = MatcapStudio.ChangeAll(changeRoot, names, choice, env);
+                return new MatcapJobResult(changeRoot, outcome, outcome.Ok && choice.IsLibrary ? choice : null, confirmEnable,
+                                           [], false, false, changePath) { IsChange = true };
+            });
+            return;
         }
 
         if (vanilla is { } piece)
@@ -253,20 +273,6 @@ public sealed partial class PartsPanel
     }
 
     private (VanillaPick Piece, List<ModelPart> Chosen, MatcapChoice Original)? pendingVanillaMatcap;
-
-    private void StartMatcapChange(string materialName, MatcapChoice choice)
-    {
-        matcapError = null;
-        if (matcapJob is { IsCompleted: false } || ModRoot() is not { } root) return;
-        var env = MatcapEnv();
-        var gamePath = modelIndex >= 0 && modelIndex < models.Count ? models[modelIndex].GamePath : null;
-        matcapJob = Task.Run(() =>
-        {
-            var (src, mtrl, temp, code, msg) = MatcapStudio.PrepareChange(root, materialName, choice, env);
-            var outcome = src == null ? MatcapWriter.Outcome.Refuse(code, msg) : MatcapWriter.Change(root, materialName, src, mtrl, temp);
-            return new MatcapJobResult(root, outcome, outcome.Ok && choice.IsLibrary ? choice : null, true, [], false, false, gamePath) { IsChange = true };
-        });
-    }
 
     private void StartMatcapUndo(bool forget)
     {

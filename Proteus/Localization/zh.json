@@ -6216,7 +6216,7 @@
     "description": ""
   },
   "Matcap.Refused.AlreadyMatcap": {
-    "message": "其中一些部件已经有材质捕获（matcap）了。请用“使用所选 matcap”来更改。",
+    "message": "请只勾选没有 matcap 的部件（添加）或已有 matcap 的部件（更改），不要两者混选。",
     "description": ""
   },
   "Matcap.Refused.Changed.Fmt": {
@@ -6299,10 +6299,6 @@
     "message": "部分已勾选的部件有透明边缘（发丝、蕾丝）。应用后请在游戏中检查边缘。",
     "description": ""
   },
-  "Parts.Matcap.AlreadyTip": {
-    "message": "该部件已经有 matcap 了。请在“此模型上的 matcap”中更改。",
-    "description": ""
-  },
   "Parts.Matcap.AlsoMore.Fmt": {
     "message": "另外 {0} 项",
     "description": ""
@@ -6323,12 +6319,24 @@
     "message": "{0} 是你的基础合集：所有使用它的人都会看到所选的 matcap。",
     "description": ""
   },
-  "Parts.Matcap.Change": {
-    "message": "使用所选 matcap",
-    "description": ""
-  },
   "Parts.Matcap.Changed.Fmt": {
     "message": "已更改 matcap：{0}。",
+    "description": ""
+  },
+  "Parts.Matcap.ChangePartial.Fmt": {
+    "message": "未更改：{0}。",
+    "description": ""
+  },
+  "Parts.Matcap.ChangesFiles.Fmt": {
+    "message": "包括：{0}。",
+    "description": ""
+  },
+  "Parts.Matcap.ChangesUnticked.Fmt": {
+    "message": "其中包括此处未勾选的 {0} 个部件。",
+    "description": ""
+  },
+  "Parts.Matcap.Changes.Fmt": {
+    "message": "应用会在此模组中使用 {0} 的每个文件里更改它，包括重新适配（refit）的文件。",
     "description": ""
   },
   "Parts.Matcap.ChangeKindTip": {
@@ -6400,7 +6408,7 @@
     "description": ""
   },
   "Parts.Matcap.ListTip": {
-    "message": "勾选要使用 matcap 的部件。皮肤和已有 matcap 的部件不能勾选。",
+    "message": "勾选要使用 matcap 的部件。勾选已有 matcap 的部件即可更改它。皮肤不能勾选。",
     "description": ""
   },
   "Parts.Matcap.Lod0Cut": {
