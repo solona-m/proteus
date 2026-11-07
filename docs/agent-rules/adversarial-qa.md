@@ -86,6 +86,11 @@ four requests were open at once: retry when one finishes; it is never a busy run
 | `GET /matcaps` | `[?refresh=1][&retry=1][&mod=<folder>&model=<file or game path>]` → 200 `{scanned, scanning, images:[{name,path,source: global\|proteus}], pack:{state: idle\|downloading\|ready\|failed, have, total, detail}, libraries:[{mod,name,website,group,texture,options:[{name}],selected,enabled,inherited,heldBy,providers}], model}`; with `mod`+`model`, `model` is `{model, gamePath, images:[{name,fromMod,fromPack}], parts:[{label,material,skin,onMatcap,tickable,horn,island,alphaTested}] (on a face only `horn` parts are `tickable`), siblings:[{file,linesUp}], group (the apply group: what an Undo here restores with it), entries:[{name,gamePaths,meshes,source,state: ok\|superseded\|edited}], materialRoom}`. `refresh=1` rescans every mod. Asking starts the download of Proteus's own matcaps (first use, as showing the pane does) into the plugin's config folder — never a mod, nothing to put back; `retry=1` re-arms a failed or finished download (QA only). `pack` is reported even with Penumbra unavailable (in the 503 body). 400 `invalid-field`; 404 `mod-not-found`, `model-not-in-mod`; 409 `model-ambiguous`, `legacy-mod`; 503 `penumbra-unavailable`, `studio-unavailable`. |
 | `POST /actions/matcap-image` | `{"name":"qa-<x>.png","color":"#RRGGBB"}` → 200 `{name, path}`. Writes a generated 256×256 shaded sphere into the global matcap folder; put-back deletes it while unchanged (`matcap.images`: `deleted`, `changed`, `gone`). 400 `invalid-field`; 409 `exists`; 503 `harness-stopping`. |
 | `POST /actions/matcap` | Apply `{"mod","model","parts":[labels],"image":"<name>"[,"pack":true]}` (an image name is looked up in the mod's folder, then the global one, then Proteus's own; `pack: true` takes Proteus's only) or `{…,"library":"<folder>","group","option","confirmEnable":b}`; change `{"mod","model","entry":"<material name>",<image or library fields>}`; `{"mod","model","undo":true}`; `{"mod","model","forget":true}` → 202 `{job, modDir, state}` (kinds `matcap`, `matcap-change`, `matcap-undo`, `matcap-forget`), after a whole-mod backup. `result` = `{action, summary: applied\|changed\|undone\|forgotten\|refused\|nothing-to-undo, code, resultLine, material, gamePaths, files:[{file,meshesAdded,lod0Cut}], materials:[{name,gamePaths,normal,alphaThreshold}], drawn:{line,ours,throughFace} (Apply only: the panel's drawn-file line, null when the written file draws), siblingsSkipped, librarySetting}`. Every successful job, Forget included, ends in the reload and redraw. A library that is off needs `confirmEnable` (`needs-confirm` otherwise, nothing written). Refusal codes: `legacy-mod`, `imported-piece`, `not-target`, `no-horns`, `not-horn`, `skin-part`, `already-matcap`, `regenerated-model` (earless copies only; refits and hair ports take a matcap — an Apply on a hair port ends `resultLine` with the "kept as it is" sentence), `model-layout`, `material-cap`, `not-square`, `image-unreadable`, `no-template`, `edited`, `later-feature`, `cross-kind-change`, `unknown-part\|image\|library\|option`. Request refusals: 400 `invalid-field`; 409 `busy`, `auto-refit-busy`, `studio-busy` (never flushed); 503 `harness-stopping`, `studio-unavailable`. |
+| `POST /actions/mod-settings` with `"collection"` | `{"mod","enabled":false,"collection":"<guid>"}`: the same temporary hold, in another collection (one `/state.collections` lists, e.g. a sync plugin's). No redraw is asked for (`redrawRequested:false`): only the player's collection changes what the character draws. Put-back removes it, and its sweep covers every collection Penumbra lists. 400 `invalid-field` (not a guid, or with `permanent`); 404 `collection-not-found`. The player's own id behaves as no `collection`. |
+| `POST /actions/boot-rearm` | `{}` → 200 `{rearmed, boot:{latched, step, nextDueInMs}}`. Re-arms the compositor's boot probe as a zone change does (see **Idle disk I/O checks**). Nothing to put back. 503 `harness-stopping`. |
+| `POST /actions/sidecar-edit` | `{"mod","row":<n>,"diffuse":"#RRGGBB"}` (optionally `"group"`+`"option"`, `"sub":"A"\|"B"`, `"restoreMtime":true`) → 200 `{mode:"save", mod, before, after, readBack, stampBefore, stampAfter, sameLength, mtimeRestored, backup, recomposite, governed}`. `governed:true`: the active design binding drives that mod's colours, so the saved colour cannot show in the composite — check the composite on an ungoverned mod. Changes one colour row through Proteus's **own** sidecar save, after backing `Proteus/metadata.json` up; put-back restores it. 400 `invalid-field`; 404 `mod-not-found`, `not-a-proteus-mod`, `row-not-found`; 409 `busy`, `auto-refit-busy`, `user-edit-held`; 500 `save-failed`; 503 `harness-stopping`. |
+| `GET /sidecar?mod=<folder>&group=<g>&option=<o>&row=<n>` | Read-only, through discovery (and its cache): `{mod, found, rows:[{row, diffuseA, diffuseB}], staged}`. 404 `mod-not-found`, `not-a-proteus-mod`. |
+| `POST /actions/auto-refit` | `{"enabled":true\|false}` → 200 `{config, harnessOverride, effective, before}`. Switches auto refit for this harness session only: in memory, never saved; put-back or unload clears it. 400 `invalid-field`; 409 `busy`; 503 `harness-stopping`. |
 | `GET /jobs/{id}` | `{id, kind, modDir, state: queued\|running\|done\|failed\|cancelled, progress, backup, reloaded, redrawRequested, redrawObserved, autoRefitFollowed, result, restored, error}` |
 
 `mod` is the **folder name** Penumbra keeps the mod in (case-insensitive), never its
@@ -372,6 +377,41 @@ put back at put-back (in `matcap.settings`) while it is still what the harness l
   library you would switch on by hand, and say what else it turns on (the message
   lists it).
 - `studio-busy` means the user has an unsaved Studio edit: never work around it.
+
+## Idle disk I/O checks
+
+What Proteus reads from the drive while nothing changes, and the routes that drive it.
+
+- **Counters.** `/state.io` is the current window of the idle I/O counters, read without resetting them:
+  `discovery calls`, `presence stats` (the 30 s sweep of mod folders), `metadata stats` (one stamp check per Proteus
+  mod per discovery), `metadata reads`, `boot probes`, `gear variants runs`, `gear shaders runs`, `body index
+  refreshes`, `body index deferred`, `redraws`, `redraw tree reads` (one per redraw). `/log` also gets one Debug line
+  `[Proteus] idle I/O, last N s: …` at most once a minute, covering the window that just ended.
+- **Boot back-off.** `/state.compositor.boot` is `{latched, step, nextDueInMs}`. With every Proteus overlay mod off,
+  `POST /actions/boot-rearm` and watch `/log` for `no Proteus overlay mod enabled … looking again in N s`, then the
+  probe at 5 s, 30 s, 60 s, 60 s… — never every 500 ms. A re-arm with a Proteus mod enabled runs a normal boot composite
+  (it rewrites Proteus's own output mod, as a zone change does): nothing to put back.
+- **Sidecar cache.** `POST /actions/sidecar-edit` with `restoreMtime: true` saves a colour change whose file keeps its
+  write time and length; `readBack` must still be the new colour. `/actions/put-back` restores the file while it is
+  still what the harness wrote (`sidecar[].result`: `restored`, `unchanged`, `changed`, `failed`), and deletes a
+  `metadata.default.json` only when the harness's save created it and it is unchanged (`defaults`). A mod with an unsaved
+  user colour edit answers `user-edit-held`: never work around it. A user colour edit made in the few milliseconds
+  between that check and the save would be saved first and then saved over (it stays in the editor until its next
+  change): do not edit colours by hand during a harness run. Whether a held edit wins over a locked file is
+  **covered by unit test only** (`ReadForDiscovery_HeldEditWins_OverIoError`): driving it in game needs an exclusive file
+  lock that hitches the framework thread and could let a write land after the hold.
+- **Leftover sidecar backups.** A crash with sidecar edits recorded leaves the ledger under
+  `test-harness/backups/<session>/sidecar/<mod>/`; the next harness start logs a Warning and lists it in
+  `/state.leftoverSidecar` (`fileMatchesHarnessWrite` says whether the file is still the harness's). Nothing is restored
+  by itself. To recover by hand: with the harness off, copy that folder's `metadata.json` over
+  `<Penumbra mods>/<mod>/Proteus/metadata.json`, then reload the mod in Penumbra.
+- **Other collections.** Hold a mod in another collection (`/actions/mod-settings` with `collection`, an id from
+  `/state.collections`) and check `/state` `variantRepoint.lastRun.atUtc` and `shaderUpgrade.lastRun.atUtc` do not move;
+  the same change in the player's collection moves them.
+- **Auto refit off.** `POST /actions/auto-refit {"enabled":false}`, then watch `/state.autoRefit.bodyIndex`
+  (`built`, `stale`, `refreshing`, `generation`): mod events mark it stale and nothing lists the mods folders.
+  **Do not equip while auto refit is overridden on**: a refit writes into the worn mod, which put-back cannot undo; the
+  put-back report lists any such mod in `autoRefit.refitsWhileOverridden` (auto refit's own Undo takes it back).
 
 ## Waiting for the game
 

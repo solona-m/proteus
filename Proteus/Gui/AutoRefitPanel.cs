@@ -105,6 +105,8 @@ internal sealed class AutoRefitPanel(AutoRefitWatcher watcher, PenumbraBridge pe
             askedForBodies = true;
             watcher.RefreshBodies();
         }
+        // On screen: mod events keep the list fresh, and a list dropped while auto refit was off is read again.
+        watcher.NoteBodiesShown();
         var bodies = watcher.Index.Snapshot;
         DrawParts(bodies, pref, key, collection);
 

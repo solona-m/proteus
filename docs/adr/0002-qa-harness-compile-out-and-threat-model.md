@@ -107,6 +107,28 @@ download of Proteus's own matcaps into the plugin's config directory — the sam
 first-use download the pane makes; it writes no mod and no setting, so there is
 nothing to put back.
 
+**Amendment (2026-11-07, idle disk I/O checks).** Four more abilities, so QA can
+check what Proteus reads from the drive while nothing changes:
+- `boot-rearm` re-arms the compositor's boot probe as a zone change does. It writes
+  nothing of its own; with a Proteus mod enabled the probe runs a normal boot
+  composite, which rewrites only Proteus's own output mod.
+- `sidecar-edit` writes one colour row of a Proteus mod's own sidecar
+  (`Proteus/metadata.json`) through Proteus's own save. It backs the file up and
+  writes a ledger (`backups/<session>/sidecar/<mod>/`) before the first save, refuses
+  a mod with an unsaved user edit, and holds one lock across the edit and each
+  restore. Put-back (on or off the framework thread) restores the file only while
+  it still hashes as the harness wrote it, and deletes a `metadata.default.json`
+  only when the harness's save created it, it is unchanged and the file was
+  restored — a third narrow exception to "never deletes". A crash leaves the ledger:
+  the next start reports it and restores nothing by itself.
+- `mod-settings` takes another collection: still a Penumbra temporary hold under the
+  harness key, never saved; put-back's sweep covers every collection Penumbra lists.
+  `/state` lists collection ids only, never names.
+- `auto-refit` switches auto refit for the session in memory only. It is never
+  written to the configuration, so no save can keep it; put-back or unload clears
+  it, and put-back lists any mod a refit wrote into while it stood (those writes are
+  not undone by the harness).
+
 ## Consequences
 
 Easier: QA can test the plugin in a running game unattended once the user turns

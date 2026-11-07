@@ -84,9 +84,13 @@ public sealed partial class AutoRefitWatcher : IDisposable
     /// <summary>When the next walk of the character is due, as a tick count, or zero for none.</summary>
     private long walkDueAt;
 
-    /// <summary>When the body-mod index is next due to be re-read, or zero for not.</summary>
-    private long indexDueAt;
+    /// <summary>When the body-mod index is next re-read: only when someone needs it while auto refit is off.</summary>
+    private readonly BodyIndexSchedule indexSchedule = new();
     private int indexing;
+    private int deferralLogged;
+
+    /// <summary>Counts index refreshes and deferrals for the idle I/O summary; null counts nothing.</summary>
+    public IoCounters? Io { get; set; }
 
     /// <summary>What each slot drew at the last walk; null before the first, which only takes note. Framework thread.</summary>
     private Dictionary<string, Worn>? lastSeen;
@@ -281,7 +285,30 @@ public sealed partial class AutoRefitWatcher : IDisposable
         detections.Flush();   // a reading made in a batch the unload cut short is still a good reading
     }
 
-    private bool Enabled => config.PluginEnabled && config.AutoRefitEnabled;
+    private bool Enabled
+    {
+        get
+        {
+            bool? harness = null;
+            HarnessEnabled(ref harness);
+            return EffectiveEnabled(config.PluginEnabled, config.AutoRefitEnabled, harness);
+        }
+    }
+
+    /// <summary>Whether auto refit acts: the plugin is on, and the test harness's session override (when it set one) or
+    /// else the user's setting says so. Also what <c>AutoWritersOn</c> reports.</summary>
+    internal static bool EffectiveEnabled(bool pluginEnabled, bool setting, bool? harnessOverride)
+        => pluginEnabled && (harnessOverride ?? setting);
+
+    /// <summary>The effective switch, for the harness's <c>AutoWritersOn</c>.</summary>
+    internal bool EffectivelyEnabled => Enabled;
+
+    /// <summary>The QA test harness's session-only override (local builds only; compiled out of every CI build).</summary>
+    partial void HarnessEnabled(ref bool? on);
+
+    /// <summary>A refit was written into <paramref name="modDir"/> and switched on; the harness lists those made while
+    /// its override stands. Worker or framework thread.</summary>
+    partial void HarnessNoteRefit(string modDir);
 
     // ── signals ─────────────────────────────────────────────────────────────
 
@@ -317,10 +344,28 @@ public sealed partial class AutoRefitWatcher : IDisposable
 
     private void RequestIndexSoon() => RequestIndexIn(0);
 
-    private void RequestIndexIn(int ms) => Interlocked.Exchange(ref indexDueAt, Environment.TickCount64 + Math.Max(ms, 1));
+    /// <summary>
+    /// The mods changed. With auto refit off and the body list off screen, nobody needs the index now: drop it instead of
+    /// listing every mod folder, and let whoever needs it next refresh it (a refit does so inline).
+    /// </summary>
+    private void RequestIndexIn(int ms)
+    {
+        if (indexSchedule.Changed(Environment.TickCount64, ms, Enabled) != BodyIndexSchedule.Change.MarkStale) return;
+        Index.MarkStale();
+        Io?.Count(IoCounters.BodyIndexDeferred);
+        if (Interlocked.Exchange(ref deferralLogged, 1) == 0)
+            log.Debug("[Proteus] auto refit: off — body mod index left until it is needed");
+    }
 
     /// <summary>Re-read the body mods now, for the settings' body list. Safe from the framework thread.</summary>
-    public void RefreshBodies() => RequestIndexSoon();
+    public void RefreshBodies() => indexSchedule.Asked(Environment.TickCount64);
+
+    /// <summary>
+    /// The settings' body list is on screen this frame: mod events refresh the index while it is, and reopening it after
+    /// the index was dropped reads the bodies again. Framework thread.
+    /// </summary>
+    public void NoteBodiesShown()
+        => indexSchedule.Shown(Environment.TickCount64, Index.Current != null, Volatile.Read(ref indexing) != 0);
 
     /// <summary>Refit every piece being worn now, as if each had just been put on.</summary>
     public void RunNow()
@@ -536,18 +581,16 @@ public sealed partial class AutoRefitWatcher : IDisposable
 
         if (refitMods.Pump() is { } made) log.Information("[Proteus] auto refit: {0}", made);
 
-        long indexDue = Interlocked.Read(ref indexDueAt);
-        if (indexDue != 0 && Environment.TickCount64 >= indexDue && Volatile.Read(ref indexing) == 0)
-        {
-            Interlocked.CompareExchange(ref indexDueAt, 0, indexDue);
+        if (Volatile.Read(ref indexing) == 0 && indexSchedule.TakeDue(Environment.TickCount64))
             StartIndexRefresh();
-        }
 
         PumpFills();
 
         bool enabled = Enabled;
         if (enabled && !wasEnabled)
         {
+            // Mods changed while it was off, or the bodies were never read: read them now.
+            indexSchedule.Enabled(Environment.TickCount64, Index.Current != null);
             // Switching it on takes note of what is worn rather than refitting all of it.
             lastSeen = null;
             RequestWalkIn(RedrawDebounceMs);
@@ -701,6 +744,7 @@ public sealed partial class AutoRefitWatcher : IDisposable
         string? modsRoot = penumbra.GetModDirectory();
         if (mods == null || modsRoot == null) return;
         if (Interlocked.CompareExchange(ref indexing, 1, 0) != 0) return;
+        Io?.Count(IoCounters.BodyIndexRefreshes);
         Task.Run(() =>
         {
             try
@@ -1853,6 +1897,8 @@ public sealed partial class AutoRefitWatcher : IDisposable
                                outcome.Message));
             return null;
         }
+        // Every refit's write into a mod comes through here: the one place the test harness hears of it.
+        HarnessNoteRefit(targetMod.Dir);
 
         if (await Apply(r, root, group, refit.Option, cutFrom, isVanilla, CancellationToken.None) is { } off)
         {
