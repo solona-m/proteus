@@ -472,7 +472,7 @@ public class MatcapPreviewWiringTests
 
     [Fact]
     [Trait("Plan", "EDGE-matcap-preview-23")]
-    public void Entering_Matcaps_with_locked_parts_hidden_ends_the_brush_preview()
+    public void Entering_Matcaps_ends_any_brush_preview()
     {
         // Any brush preview (hiding locked parts, or a shared save) comes down on entering Matcaps.
         var sw = Method(Main(), "private void SwitchTool(Tool value)");
