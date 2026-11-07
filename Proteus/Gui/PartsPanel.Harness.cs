@@ -51,7 +51,7 @@ public sealed partial class PartsPanel : IStudioHarness
         matcapIndex ??= new Services.Matcap.MatcapIndex(null);
         return new MatcapHarnessPort(matcapIndex, MatcapImageFolder(), new Services.Matcap.PenumbraMatcapAdapter(penumbra),
                                      MatcapEnv(), penumbra.GetModDirectory(), penumbra.GetAllModsQuiet(),
-                                     gamePath => compositor.ForgetFaceUpstream(gamePath),
+                                     (gamePath, gameData) => compositor.ForgetFaceUpstream(gamePath, gameData: gameData),
                                      (root, gamePath, written) => DrawnElsewhere(root, gamePath, written));
     }
 

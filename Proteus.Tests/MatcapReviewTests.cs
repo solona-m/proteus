@@ -208,7 +208,7 @@ public sealed class MatcapDrawnStatusTests : IDisposable
     }
 }
 
-/// <summary>Real game data: the written model read back by Lumina, and the face rewrite over split horns.</summary>
+/// <summary>Real game data: a split that appends a mesh read back stream by stream, and the face rewrite over split faces.</summary>
 public class MatcapReadbackLocalTests(ITestOutputHelper output)
 {
     private static string WriteTemp(byte[] bytes)
@@ -218,44 +218,91 @@ public class MatcapReadbackLocalTests(ITestOutputHelper output)
         return p;
     }
 
+    /// <summary>Every vertex's uv0 in every mesh, NaN anywhere is a failure.</summary>
+    internal static void AssertNoNaNUv(byte[] mdl)
+    {
+        var src = SecondSkinWriter.Parse(mdl);
+        var s = src.S;
+        Span<float> tmp = stackalloc float[4];
+        for (int m = 0; m < src.MeshCount; m++)
+        {
+            int mo = src.MeshStart + m * 36;
+            ushort vc = BitConverter.ToUInt16(s, mo);
+            foreach (var e in src.Decls[m].Where(e => e.Usage == SecondSkinWriter.UseUV))
+            {
+                uint vbo = BitConverter.ToUInt32(s, mo + 20 + e.Stream * 4);
+                byte stride = s[mo + 32 + e.Stream];
+                for (int v = 0; v < vc; v++)
+                {
+                    SecondSkinWriter.ReadTyped(s, src.Vb + (int)vbo + v * stride + e.Offset, e.Type, tmp);
+                    Assert.False(float.IsNaN(tmp[0]) || float.IsNaN(tmp[1]), $"mesh {m} vertex {v}: uv NaN");
+                }
+            }
+        }
+    }
+
     [LocalDataFact(LocalData.GameData)]
     [Trait("Plan", "AC-matcaps-4")]
-    [Trait("Plan", "EDGE-matcaps-55")]
-    public void Split_face_parses_with_Lumina_keeps_every_stream_and_rewrites_without_NaN()
+    [Trait("Plan", "EDGE-matcaps-54")]
+    public void A_split_that_adds_a_mesh_keeps_every_stream_and_reads_back()
     {
         var data = ModelMaterialWriterLocalTests.Game();
-        const string path = "chara/human/c1401/obj/face/f0001/model/c1401f0001_fac.mdl";
-        var bytes = data.GetFile(path)!.Data;
-        var read = ModelPartReader.Read(bytes)!;
-        var horn = read.Parts.First(p => p.Island < 0 && MatcapPlan.Tickable(p, MatcapPlan.Kind.Face, read.AttributeNames));
-        var result = ModelMaterialWriter.MoveToMaterial(bytes, [horn], MatcapPlan.NewName(horn.Material, "abcdef", SecondSkinWriter.MaterialNames(bytes)));
-        var cut = ModelLodTrimmer.KeepLod0(bytes, out _)!;
-
-        // Every drawn triangle keeps every vertex stream byte for byte (normals, UVs, weights, colours).
-        Assert.Equal(ModelMaterialWriterTests.Drawn(cut, allElements: true).Select(d => d[(d.IndexOf('|') + 1)..]).Order(),
-                     ModelMaterialWriterTests.Drawn(result.Model, allElements: true).Select(d => d[(d.IndexOf('|') + 1)..]).Order());
-
-        // Lumina's structural reader (MdlFile — its model builder cannot read even the game's own Dawntrail faces, so
-        // it is no oracle) parses every table of the written file, with counts that agree with ours.
-        var tmp = WriteTemp(result.Model);
-        try
+        int added = 0;
+        foreach (var (path, kind) in new[] { ("chara/equipment/e6200/model/c0201e6200_top.mdl", MatcapPlan.Kind.Gear),
+                                             ("chara/human/c1401/obj/face/f0001/model/c1401f0001_fac.mdl", MatcapPlan.Kind.Face) })
         {
-            var mdl = data.GetFileFromDisk<Lumina.Data.Files.MdlFile>(tmp);
-            var ours = SecondSkinWriter.Parse(result.Model);
-            Assert.Equal(ours.MeshCount, mdl.Meshes.Length);
-            Assert.Equal(ours.MatNames.Count, mdl.MaterialNameOffsets.Length);
-            Assert.Equal(1, mdl.FileHeader.LodCount);
-            Assert.Equal(mdl.Meshes.Sum(m => (long)m.SubMeshCount), mdl.Submeshes.Length);
-            output.WriteLine($"Lumina MdlFile: {mdl.Meshes.Length} meshes, {mdl.MaterialNameOffsets.Length} materials, {mdl.Submeshes.Length} submeshes");
-        }
-        finally { File.Delete(tmp); }
+            var bytes = data.GetFile(path)!.Data;
+            var read = ModelPartReader.Read(bytes)!;
+            var tickable = read.Parts.Where(p => p.Island < 0 && MatcapPlan.Tickable(p, kind, read.AttributeNames)).ToList();
+            // A part sharing its mesh with another, so the split appends a mesh (a lone part would be rebound whole).
+            var part = tickable.FirstOrDefault(p => read.Parts.Count(q => q.Island < 0 && q.Mesh == p.Mesh) > 1) ?? tickable[0];
+            var result = ModelMaterialWriter.MoveToMaterial(bytes, [part], MatcapPlan.NewName(part.Material, "abcdef", SecondSkinWriter.MaterialNames(bytes)));
+            added += result.MeshesAdded;
+            var cut = ModelLodTrimmer.LodCount(bytes) > 1 ? ModelLodTrimmer.KeepLod0(bytes, out _)! : bytes;
 
-        // The face overlay's rewrite over the split face: the skin converts, nothing turns NaN.
+            // Every drawn triangle keeps every vertex stream byte for byte (normals, UVs, weights, colours), copies too.
+            Assert.Equal(ModelMaterialWriterTests.Drawn(cut, allElements: true).Select(d => d[(d.IndexOf('|') + 1)..]).Order(StringComparer.Ordinal),
+                         ModelMaterialWriterTests.Drawn(result.Model, allElements: true).Select(d => d[(d.IndexOf('|') + 1)..]).Order(StringComparer.Ordinal));
+
+            // No Lumina read-back: its MdlFile throws on ModelLodTrimmer's plain LOD0 cut of this very model (a file that
+            // loads in game), and its model builder on the game's own Dawntrail faces — it cannot judge these files.
+            // The tables are read back by the part reader and the parser instead, appended mesh included.
+            var after = SecondSkinWriter.Parse(result.Model);
+            Assert.Equal(SecondSkinWriter.Parse(cut).MeshCount + result.MeshesAdded, after.MeshCount);
+            Assert.Contains(after.MatNames, n => n.Contains("_mcap", StringComparison.Ordinal));
+            Assert.NotNull(ModelPartReader.Read(result.Model));
+            output.WriteLine($"{path}: part {part.Label}, meshes added {result.MeshesAdded}, {after.MeshCount} meshes");
+
+            // EDGE-54: the face overlay's rewrite of the face's skin after the split converts, and no uv turns NaN.
+            if (kind == MatcapPlan.Kind.Face)
+            {
+                var convert = new UVRemapService(NSubstitute.Substitute.For<Dalamud.Plugin.Services.IPluginLog>(), ".")
+                    .UvConverter(UVRemapService.FaceSpace, UVRemapService.FaceSplitSpace, unmirror: true)!;
+                var rewritten = FaceUvRewriter.RewriteFaceUv0(result.Model, n => n.Contains("_fac_a", StringComparison.Ordinal), convert, out _);
+                Assert.NotNull(rewritten);
+                AssertNoNaNUv(rewritten!);
+                Assert.Equal(SecondSkinWriter.MaterialNames(result.Model), SecondSkinWriter.MaterialNames(rewritten!));
+            }
+        }
+        Assert.True(added > 0, "no split appended a mesh");
+    }
+
+    [Fact]
+    [Trait("Plan", "EDGE-matcaps-55")]
+    public void Overlay_on_a_horn_material_after_a_split_rewrites_over_collapsed_triangles_without_NaN()
+    {
+        // fac_b holds a horn submesh and an untagged one: moving the horn appends M' and leaves collapsed triangles in M.
+        var face = MatcapPlanTests.SyntheticFace();
+        var read = ModelPartReader.Read(face)!;
+        var result = ModelMaterialWriter.MoveToMaterial(face, [read.Parts.Single(p => p.Label == "3.1")], "/mt_c1401f0001_fac_b_mcapabcdef1.mtrl");
+        Assert.True(result.MeshesAdded > 0);
         var convert = new UVRemapService(NSubstitute.Substitute.For<Dalamud.Plugin.Services.IPluginLog>(), ".")
             .UvConverter(UVRemapService.FaceSpace, UVRemapService.FaceSplitSpace, unmirror: true)!;
-        var rewritten = FaceUvRewriter.RewriteFaceUv0(result.Model, n => n.Contains("_fac_a", StringComparison.Ordinal), convert, out _);
+        byte[]? rewritten = null;
+        var ex = Record.Exception(() => rewritten = FaceUvRewriter.RewriteFaceUv0(result.Model, n => n.Contains("_fac_b", StringComparison.Ordinal), convert, out _));
+        Assert.Null(ex);
+        // Rewritten (or refused, which folds instead): either way no uv is NaN in what would be published.
+        AssertNoNaNUv(rewritten ?? result.Model);
         Assert.NotNull(rewritten);
-        Assert.DoesNotContain(ModelMaterialWriterTests.Drawn(rewritten!), d => d.Contains("NaN", StringComparison.Ordinal));
-        Assert.Equal(SecondSkinWriter.MaterialNames(result.Model), SecondSkinWriter.MaterialNames(rewritten!));
     }
 }

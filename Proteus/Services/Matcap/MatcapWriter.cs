@@ -447,7 +447,6 @@ internal static class MatcapWriter
             }
             record.Models.RemoveAll(m => gone.Contains(m.File));
 
-            // Shared files go with the last material.
             // A game piece's "— Proteus edit" mod: a file that is the game's own again leaves the mod, so the copy stops
             // outranking face mods installed later (EDGE-59). Only when nothing else edited it (VanillaEditCopy.HoldsEdit).
             var dropped = new List<string>();
@@ -462,6 +461,7 @@ internal static class MatcapWriter
                     dropped.Add(g);
                 }
 
+            // Shared files go with the last material.
             if (record.Materials.Count == 0)
             {
                 foreach (var shared in new[] { record.Shared.Mask, record.Shared.FlatNormal })
@@ -503,7 +503,6 @@ internal static class MatcapWriter
         }
     }
 
-    /// <summary>A backup no longer needed for an undo is retired, not deleted: moved to <see cref="SupersededSubdir"/>.</summary>
     /// <summary>
     /// <paramref name="rel"/>'s apply group: it plus every model sharing one of the record's materials with it, closed
     /// over. What an Undo restores together, and what the panel and the harness show as "the group".
@@ -529,6 +528,7 @@ internal static class MatcapWriter
         return record.Materials.Where(m => m.Meshes.Any(x => group.Contains(x.Model))).ToList();
     }
 
+    /// <summary>A backup no longer needed for an undo is retired, not deleted: moved to <see cref="SupersededSubdir"/>.</summary>
     /// <returns>False when the backup is still in place (the move failed).</returns>
     private static bool Retire(string modRoot, string rel)
     {

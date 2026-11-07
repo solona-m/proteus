@@ -351,7 +351,10 @@ public sealed partial class PartsPanel
         if (r.GamePath != null && MatcapPlan.TargetOf(r.GamePath, out _) is { Kind: MatcapPlan.Kind.Face } && !r.IsChange)
         {
             // The open path always (an Undo in a game face's edit mod has just removed its redirect), then every other.
-            compositor.ForgetFaceUpstream(r.GamePath);
+            // An undo that removed the file from its mod (a game face's edit mod, EDGE-59): the game's face is upstream again.
+            bool removed = !r.IsApply && modelIndex >= 0 && modelIndex < models.Count
+                           && !File.Exists(Path.Combine(r.Root, models[modelIndex].File.Replace('\\', Path.DirectorySeparatorChar)));
+            compositor.ForgetFaceUpstream(r.GamePath, gameData: removed);
             var files = r.Outcome.Files.Where(f => f.EndsWith(".mdl", StringComparison.OrdinalIgnoreCase)).ToList();
             if (modelIndex >= 0 && modelIndex < models.Count) files.Add(models[modelIndex].File);
             foreach (var red in PenumbraModMeta.ReadAllRedirects(r.Root))

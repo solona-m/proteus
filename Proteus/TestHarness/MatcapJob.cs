@@ -89,7 +89,7 @@ internal static class MatcapJob
             siblings,
             // The apply group: what an Undo of this model restores with it.
             group = record.Model(rel!) != null ? MatcapWriter.ApplyGroupOf(record, rel!).Order(StringComparer.OrdinalIgnoreCase).ToList() : [rel!],
-            entries = record.Materials.Select(m => new
+            entries = record.MaterialsOf(rel!).Select(m => new
             {
                 name = m.Name, gamePaths = m.GamePaths, meshes = m.Meshes.Select(x => new { model = x.Model, mesh = x.Mesh, from = x.From }),
                 source = m.Source.IsLibrary
@@ -204,7 +204,11 @@ internal static class MatcapJob
         bool changed = outcome.Ok || librarySetting != null;
         // A face the face overlay rewrites is read again after our edit, not from its remembered copy.
         if (changed && args.Kind != Action.Change && facePaths.Count > 0 && args.Port.ForgetFaceUpstream is { } forget)
-            await jobs.Dispatcher.RunAsync(() => { foreach (var p in facePaths) forget(p); return true; }, jobs.Timings.FrameworkStart).ConfigureAwait(false);
+        {
+            // An undo that removed the file from its mod (a game face's edit mod, EDGE-59): the game's face is upstream again.
+            bool removed = args.Kind != Action.Apply && !File.Exists(MatcapWriter.Full(args.ModRoot, rel!));
+            await jobs.Dispatcher.RunAsync(() => { foreach (var p in facePaths) forget(p, removed); return true; }, jobs.Timings.FrameworkStart).ConfigureAwait(false);
+        }
         // The panel's drawn-file line after an Apply (EDGE-47/58), on the framework thread.
         string? drawnLine = null;
         if (outcome.Ok && args.Kind == Action.Apply && gamePath != null && args.Port.DrawnStatus is { } drawnOf)

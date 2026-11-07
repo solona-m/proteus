@@ -60,6 +60,9 @@ public sealed class FaceUvDoublingService
     /// </summary>
     private readonly ConcurrentDictionary<string, string> _upstreamPaths = new(StringComparer.OrdinalIgnoreCase);
 
+    /// <summary>Faces an edit said are the game's own again (see <see cref="ForgetUpstream"/>'s gameData).</summary>
+    private readonly ConcurrentDictionary<string, byte> _upstreamFromGame = new(StringComparer.OrdinalIgnoreCase);
+
     /// <summary>
     /// The last rewrite of each (model, material), against the exact upstream bytes it was made from; matched
     /// by reference, so a changed face mod re-resolves to a fresh array and misses.
@@ -87,9 +90,12 @@ public sealed class FaceUvDoublingService
     /// </summary>
     /// <param name="writtenFile">The face file the edit wrote, used as the upstream only when none is remembered (the
     /// game's own face, copied into an edit mod while our output already won the path).</param>
-    public void ForgetUpstream(string modelGamePath, string outputRoot, string? writtenFile = null)
+    /// <param name="gameData">The edit removed the face from its mod (an undo in a game piece's edit mod): the game's own
+    /// face is the upstream again.</param>
+    public void ForgetUpstream(string modelGamePath, string outputRoot, string? writtenFile = null, bool gameData = false)
     {
         _upstreamFaces.TryRemove(modelGamePath, out _);
+        if (gameData) { _upstreamPaths.TryRemove(modelGamePath, out _); _upstreamFromGame[modelGamePath] = 0; }
         if (writtenFile != null && File.Exists(writtenFile)) _upstreamPaths.TryAdd(modelGamePath, writtenFile);
         foreach (var key in _rewrites.Keys.Where(k => string.Equals(k.Path, modelGamePath, StringComparison.OrdinalIgnoreCase)).ToList())
             _rewrites.TryRemove(key, out _);
@@ -349,6 +355,17 @@ public sealed class FaceUvDoublingService
         if (ours)
         {
             if (_upstreamFaces.TryGetValue(modelPath, out var remembered)) return remembered;
+            // Said outright by the edit that removed the face from its "— Proteus edit" mod: the game's own face is
+            // the upstream again (no face mod is involved), so game data is read once, and nothing folds.
+            if (_upstreamFromGame.TryRemove(modelPath, out _) && textureLoader.LoadRawFile(null, modelPath) is { } game)
+            {
+                _upstreamFaces[modelPath] = game;
+                _upstreamPaths.TryRemove(modelPath, out _);
+                try { Directory.CreateDirectory(upstreamDir); SecondSkinService.WriteIfChanged(mirror, game); }
+                catch (Exception ex) { log.Warning(ex, "[Proteus] face uv: could not keep the upstream {0}", modelPath); }
+                log.Information("[Proteus] face uv: {0} is the game's own face again", modelPath);
+                return game;
+            }
             // Forgotten after an edit to the face file itself: read that file again — never game data, which would
             // publish the vanilla face over an installed face mod.
             if (_upstreamPaths.TryGetValue(modelPath, out var known) && File.Exists(known) && !isOwnOutput(known))

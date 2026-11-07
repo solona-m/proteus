@@ -39,10 +39,6 @@ internal static class MatcapStudio
     }
 
 
-    /// <summary>
-    /// Prepare a matcap on <paramref name="chosen"/> — parts read from <paramref name="modelBytes"/>, the file at
-    /// <paramref name="modelRel"/> as it is now — and on every sibling file at the same game path whose parts line up.
-    /// </summary>
     /// <summary>Prepared textures an earlier apply left behind (placed, or never used): deleted after an hour.</summary>
     internal static void SweepTemp(string dir)
     {
@@ -54,6 +50,10 @@ internal static class MatcapStudio
         catch { }
     }
 
+    /// <summary>
+    /// Prepare a matcap on <paramref name="chosen"/> — parts read from <paramref name="modelBytes"/>, the file at
+    /// <paramref name="modelRel"/> as it is now — and on every sibling file at the same game path whose parts line up.
+    /// </summary>
     public static Prepared Prepare(string modRoot, string modelRel, string modelGamePath, byte[] modelBytes,
                                    IReadOnlyList<ModelPart> chosen, MatcapChoice choice, Environment env)
     {
