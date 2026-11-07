@@ -25,6 +25,20 @@ public sealed partial class PartsPanel
     private List<MatcapImage>? matcapImages;
     private string? matcapImagesFor;
     private MatcapRecord? matcapRecord;
+    private byte[]? matcapRoomFor;
+    private string? matcapFolderMade;
+    private int matcapRoom;
+    private readonly Dictionary<string, (DateTime At, MatcapSelection.Status Status)> matcapLibStatus = new(StringComparer.OrdinalIgnoreCase);
+
+    /// <summary>A library's collection status, read over IPC at most every 10 s per library and after each job (the list draws every frame, and Penumbra logs every call).</summary>
+    private MatcapSelection.Status CachedLibraryStatus(IMatcapPenumbra adapter, MatcapLibrary lib)
+    {
+        var key = lib.Mod + "|" + lib.Group;
+        if (matcapLibStatus.TryGetValue(key, out var c) && (DateTime.UtcNow - c.At).TotalSeconds < 10) return c.Status;
+        var status = MatcapSelection.Read(adapter, lib);
+        matcapLibStatus[key] = (DateTime.UtcNow, status);
+        return status;
+    }
     private IReadOnlyDictionary<string, MatcapWriter.State>? matcapStates;
     private string? matcapRecordFor;
 
@@ -60,13 +74,17 @@ public sealed partial class PartsPanel
     {
         /// <summary>A Change: no model file was written.</summary>
         public bool IsChange { get; init; }
+        /// <summary>An Apply: only then is the drawn file checked (Change and Forget write no model).</summary>
+        public bool IsApply { get; init; }
     }
 
     private string? MatcapImageFolder()
     {
         if (penumbra.GetModDirectory() is not { } root) return null;
         var dir = Path.Combine(root, SidecarDiscoveryService.ManagedModDir, SidecarDiscoveryService.MatcapsSubdir);
+        if (matcapFolderMade == dir) return dir;   // created once, not every frame
         try { Directory.CreateDirectory(dir); } catch { return null; }
+        matcapFolderMade = dir;
         return dir;
     }
 
@@ -107,8 +125,14 @@ public sealed partial class PartsPanel
 
         var model = modelIndex >= 0 && modelIndex < models.Count ? models[modelIndex] : (PenumbraModMeta.Redirect?)null;
         var chosen = parts?.Parts.Where(p => ticked.Contains(p.Label)).ToList() ?? [];
-        int room = 0;
-        try { if (brushBase != null) room = ModelMaterialWriter.MaterialRoom(brushBase); } catch { }
+        // Parsed once per model, not every frame.
+        if (!ReferenceEquals(matcapRoomFor, brushBase))
+        {
+            matcapRoom = 0;
+            try { if (brushBase != null) matcapRoom = ModelMaterialWriter.MaterialRoom(brushBase); } catch { }
+            matcapRoomFor = brushBase;
+        }
+        int room = matcapRoom;
         var record = matcapRecord ?? new MatcapRecord();
         var rel = model?.File ?? "";
         var adapter = new PenumbraMatcapAdapter(penumbra);
@@ -126,8 +150,12 @@ public sealed partial class PartsPanel
             ModsRoot = penumbra.GetModDirectory(),
             Record = record,
             States = matcapStates ?? new Dictionary<string, MatcapWriter.State>(),
-            GroupFiles = record.Models.Select(m => m.File).ToList(),
-            LibraryStatus = lib => MatcapSelection.Read(adapter, lib),
+            Entries = rel.Length > 0 ? [.. record.MaterialsOf(rel)] : [],
+            // The files an Undo here restores with this one: the apply group, without the open model.
+            GroupFiles = rel.Length > 0 && record.Model(rel) != null
+                ? [.. MatcapWriter.ApplyGroupOf(record, rel).Where(f => !PenumbraModMeta.SameFile(f, rel)).Order(StringComparer.OrdinalIgnoreCase)]
+                : [],
+            LibraryStatus = lib => CachedLibraryStatus(adapter, lib),
             Apply = (choice, confirm) => StartMatcapApply(choice, confirm),
             Change = (name, choice) => StartMatcapChange(name, choice),
             Undo = () => StartMatcapUndo(forget: false),
@@ -163,7 +191,7 @@ public sealed partial class PartsPanel
             var outcome = prepared.Ok ? MatcapWriter.Apply(root, prepared.Request!)
                                       : MatcapWriter.Outcome.Refuse(prepared.Code, prepared.Message);
             return new MatcapJobResult(root, outcome, outcome.Ok && choice.IsLibrary ? choice : null, confirmEnable,
-                                       prepared.SiblingsSkipped, prepared.Lod0Cut, prepared.AlphaTested, model.GamePath);
+                                       prepared.SiblingsSkipped, prepared.Lod0Cut, prepared.AlphaTested, model.GamePath) { IsApply = true };
         });
     }
 
@@ -219,7 +247,8 @@ public sealed partial class PartsPanel
         if (!FlushPending()) return;
         var rel = models[modelIndex].File;
         var undoPath = models[modelIndex].GamePath;
-        matcapJob = Task.Run(() => new MatcapJobResult(root, forget ? MatcapWriter.Forget(root, rel) : MatcapWriter.Undo(root, rel),
+        var undoEnv = MatcapEnv();
+        matcapJob = Task.Run(() => new MatcapJobResult(root, forget ? MatcapWriter.Forget(root, rel) : MatcapWriter.Undo(root, rel, undoEnv.ReadGameFile),
                                                        null, false, [], false, false, undoPath));
     }
 
@@ -274,13 +303,14 @@ public sealed partial class PartsPanel
             MatcapRecord.Write(c.Root, rec);
         }
         Finish(new MatcapJobResult(c.Root, outcome, outcome.Ok && original.IsLibrary ? original : null, confirm,
-                                   prepared?.SiblingsSkipped ?? [], prepared?.Lod0Cut ?? false, prepared?.AlphaTested ?? false, piece.GamePath));
+                                   prepared?.SiblingsSkipped ?? [], prepared?.Lod0Cut ?? false, prepared?.AlphaTested ?? false, piece.GamePath) { IsApply = true });
     }
 
     private void Finish(MatcapJobResult r)
     {
         var s = Strings.Matcap;
         matcapRecordFor = null;   // re-read
+        matcapLibStatus.Clear();
         if (!r.Outcome.Ok)
         {
             matcapError = r.Outcome.Message;
@@ -299,7 +329,7 @@ public sealed partial class PartsPanel
         if (r.Lod0Cut) lines.Add(s.Lod0Cut);
         if (r.SiblingsSkipped.Count > 0) lines.Add(string.Format(s.SiblingsSkippedFmt, string.Join(", ", r.SiblingsSkipped)));
         if (r.AlphaTested) lines.Add(s.AlphaWarn);
-        if (r.GamePath != null && DrawnElsewhere(r.Root, r.GamePath, r.Outcome.Files) is { } drawn) lines.Add(drawn);
+        if (r.IsApply && r.GamePath != null && DrawnElsewhere(r.Root, r.GamePath, r.Outcome.Files) is { } drawn) lines.Add(drawn);
         // A face file the face overlay rewrites must be read again, not from its remembered copy (before the recomposite).
         // Only when a face model was written (Apply, Undo, Forget — a Change rewrites no model), for every face game path
         // the written files are published at (another race's path included).
@@ -325,20 +355,6 @@ public sealed partial class PartsPanel
     {
         if (penumbra.ResolvePlayerPaths([gamePath]) is not { } resolved || !resolved.TryGetValue(gamePath, out var file) || file == null)
             return null;
-        if (!HatCompatService.InMods(file, penumbra.GetModDirectory() ?? "", out var modRoot, out var rel)) return null;
-        // A face drawn through the face overlay's rewrite (the managed mod): it is rebuilt from our file on the next composite.
-        // Unless the rewrite reads the face from another mod's file, which outranks ours: then the matcap won't show.
-        if (string.Equals(Path.GetFileName(modRoot), SidecarDiscoveryService.ManagedModDir, StringComparison.OrdinalIgnoreCase)
-            && MatcapPlan.TargetOf(gamePath, out _) is { Kind: MatcapPlan.Kind.Face })
-        {
-            var upstream = compositor.FaceUpstreamPath(gamePath);
-            bool ours = upstream == null
-                || written.Any(w => PenumbraModMeta.SameFile(Path.GetFullPath(Path.Combine(root, w)), Path.GetFullPath(upstream)));
-            return ours ? Strings.Matcap.DrawnThroughFace : string.Format(Strings.Matcap.DrawnElsewhereFmt, upstream);
-        }
-        if (PenumbraModMeta.SameFile(modRoot, root) && written.Any(w => PenumbraModMeta.SameFile(w, rel))) return null;
-        var line = string.Format(Strings.Matcap.DrawnElsewhereFmt, rel);
-        if (PenumbraModMeta.SameFile(modRoot, root) && MatcapPlan.Regenerated(root, rel) == "refit") line += " " + Strings.Matcap.RemakeSizes;
-        return line;
+        return MatcapPanelModel.DrawnStatus(root, gamePath, written, file, penumbra.GetModDirectory() ?? "", compositor.FaceUpstreamPath(gamePath));
     }
 }

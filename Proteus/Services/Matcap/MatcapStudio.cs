@@ -96,8 +96,13 @@ internal static class MatcapStudio
         // Each keeps its own normal map and alpha threshold: parts drawn by two materials (an Au Ra face's two horn
         // materials, a garment's two cloths) would otherwise sample one of them through the other's UVs.
         var sources = chosen.Select(p => p.Material).Distinct(StringComparer.OrdinalIgnoreCase).ToList();
-        int room = 0;
-        try { room = ModelMaterialWriter.MaterialRoom(modelBytes); } catch { }
+        int room;
+        try { room = ModelMaterialWriter.MaterialRoom(modelBytes); }
+        catch (Exception ex)
+        {
+            return Prepared.Refuse(ModelMaterialWriter.CodeLayout,
+                string.Format(ProteusLoc.Localize("Matcap.Refused.ModelLayout.Fmt", "This model can't be split: {0}."), ex.Message));
+        }
         if (room < sources.Count)
             return Prepared.Refuse(ModelMaterialWriter.CodeMaterialCap, string.Format(ProteusLoc.Localize("Matcap.Refused.MaterialCap.Fmt",
                 "This model can't take another material: {0}."), $"{sources.Count} needed, {room} free of {SecondSkinWriter.MaxMaterials}"));
@@ -107,6 +112,11 @@ internal static class MatcapStudio
             try { taken.AddRange(SecondSkinWriter.MaterialNames(bytes)); } catch { }
         taken.AddRange(record.Materials.Select(m => m.Name));
         taken.AddRange(redirects.Select(r => r.GamePath));
+        // Files already in our folder (kept by an undo because they were edited by hand) are never written over.
+        var filesDir = MatcapWriter.Full(modRoot, MatcapWriter.FilesFolder);
+        if (Directory.Exists(filesDir))
+            foreach (var f in Directory.EnumerateFiles(filesDir))
+                taken.Add(Path.GetFileNameWithoutExtension(f) + ".mtrl");
         var names = new List<string>();
         foreach (var s in sources)
         {
@@ -204,7 +214,9 @@ internal static class MatcapStudio
                 if (flatTemp == null)
                 {
                     flatTemp = Path.Combine(env.TempDir, $"flatnormal_{stamp}.tex");
-                    env.Loader.WriteTex(MatcapMaterial.Solid(MatcapMaterial.FlatNormalRgba), 16, 16, flatTemp);
+                    if (!env.Loader.WriteTex(MatcapMaterial.Solid(MatcapMaterial.FlatNormalRgba), 16, 16, flatTemp))
+                        return Prepared.Refuse("failed", ProteusLoc.Localize("Matcap.Refused.Failed.Fmt",
+                            "The matcap could not be written ({0}). Nothing was changed.").Replace("{0}", "flat normal"));
                 }
                 normal = MatcapWriter.FlatNormalGamePath(token);
             }
@@ -247,6 +259,17 @@ internal static class MatcapStudio
 
         var req = new MatcapWriter.ApplyRequest(token, plans, edits, maskTemp, flatTemp);
         return new Prepared(req, "", "", skipped, alphaTested, cut);
+    }
+
+    /// <summary>
+    /// Whether parts drawn with material <paramref name="name"/> are alpha-tested (a threshold above 0, or the hair
+    /// shader): their cut-outs follow the normal map's alpha under a matcap. The rule Prepare warns by.
+    /// </summary>
+    internal static bool IsAlphaTested(string modRoot, MatcapPlan.Target target, string name,
+                                       List<PenumbraModMeta.Redirect> redirects, Environment env)
+    {
+        var sh = SourceMaterial(modRoot, target, name, redirects, env) is { } m ? MatcapMaterial.ReadHeader(m) : null;
+        return sh?.AlphaThreshold is > 0f || string.Equals(sh?.Shader, "hair.shpk", StringComparison.OrdinalIgnoreCase);
     }
 
     /// <summary>

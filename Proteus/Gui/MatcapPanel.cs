@@ -33,6 +33,9 @@ internal sealed class MatcapPanel
         public required string? ModsRoot;
         public required MatcapRecord Record;
         public required IReadOnlyDictionary<string, MatcapWriter.State> States;
+        /// <summary>The matcaps drawn in the open model.</summary>
+        public required IReadOnlyList<MatcapRecord.MaterialEntry> Entries;
+        /// <summary>The other files of the open model's apply group: an Undo here restores them too.</summary>
         public required IReadOnlyList<string> GroupFiles;
         public required Func<MatcapLibrary, MatcapSelection.Status> LibraryStatus;
         public required Action<MatcapChoice, bool> Apply;
@@ -255,12 +258,12 @@ internal sealed class MatcapPanel
     private void DrawExisting(Context ctx)
     {
         var s = Strings.Matcap;
-        if (ctx.Record.Materials.Count == 0) return;
+        if (ctx.Entries.Count == 0) return;
         ImGui.Spacing();
         if (!ImGui.CollapsingHeader(s.ExistingHeader, ImGuiTreeNodeFlags.DefaultOpen)) return;
         var choice = Choice(ctx);
         bool anySuperseded = false;
-        foreach (var entry in ctx.Record.Materials)
+        foreach (var entry in ctx.Entries)
         {
             var state = ctx.States.TryGetValue(entry.Name, out var st) ? st : MatcapWriter.State.Ok;
             anySuperseded |= state == MatcapWriter.State.Superseded;
@@ -287,7 +290,7 @@ internal sealed class MatcapPanel
                 if (ImGui.Button(s.Forget)) ctx.Forget();
         using (ImRaii.Disabled(ctx.Busy))
             if (ImGui.Button(s.Undo)) ctx.Undo();
-        if (ctx.GroupFiles.Count > 1 && ImGui.IsItemHovered())
-            ImGui.SetTooltip(string.Format(s.UndoGroupFmt, string.Join(", ", ctx.GroupFiles.Skip(1))));
+        if (ctx.GroupFiles.Count > 0 && ImGui.IsItemHovered())
+            ImGui.SetTooltip(string.Format(s.UndoGroupFmt, string.Join(", ", ctx.GroupFiles)));
     }
 }

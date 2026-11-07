@@ -158,7 +158,7 @@ internal static class MatcapJob
                 break;
             }
             case Action.Undo:
-                outcome = MatcapWriter.Undo(args.ModRoot, rel!);
+                outcome = MatcapWriter.Undo(args.ModRoot, rel!, args.Port.Env.ReadGameFile);
                 break;
             default:
                 outcome = MatcapWriter.Forget(args.ModRoot, rel!);
@@ -173,7 +173,8 @@ internal static class MatcapJob
                                        .ConfigureAwait(false);
         }
 
-        bool changed = outcome.Ok && outcome.Files.Count > 0 || librarySetting != null;
+        // Every successful job changed the mod (a Forget removes redirects), so every one ends in a reload and redraw.
+        bool changed = outcome.Ok || librarySetting != null;
         // A face the face overlay rewrites is read again after our edit, not from its remembered copy.
         if (changed && args.Kind != Action.Change && gamePath != null && MatcapPlan.TargetOf(gamePath, out _) is { Kind: MatcapPlan.Kind.Face }
             && args.Port.ForgetFaceUpstream is { } forget)

@@ -129,8 +129,30 @@ internal static class MatcapWriter
                 Normal = p.Normal, AlphaThreshold = p.AlphaThreshold, Pending = true, Source = p.Source,
                 Meshes = p.Meshes.Select(x => new MatcapRecord.MeshRef { Model = x.Rel, Mesh = x.Drawn, From = x.Source }).ToList(),
             }).ToList();
+            // A backup is the original only while the file still carries one of our matcaps (as written, or edited on
+            // top by a later feature such as the brush, which keeps its own backup in the order). A backup over a file
+            // that names none of them — left by a failed retire or a deleted record, the author's update since — is
+            // stale: retired, and a fresh one taken, so an Undo never brings back an older model.
+            var staleBackups = new List<string>();
+            foreach (var m in req.Models)
+            {
+                var backup = BackupPath(modRoot, BackupSubdir, m.Rel);
+                if (!File.Exists(backup)) continue;
+                var names = TryNames(m.SourceBytes);
+                if (record.Model(m.Rel) != null && names != null && record.Materials.Any(x => names.Contains(x.Name))) continue;
+                staleBackups.Add(m.Rel);
+            }
+
+            // Everything this call will place, recorded before anything is placed: a crash at any later step leaves
+            // a record Undo can act on (the model's new hash is known; shared files are named).
+            var addedShas = new List<(string Rel, string Sha)>();
+            bool maskSet = false, flatSet = false;
+            byte[]? maskBytes = null, flatBytes = null;
             try
             {
+                foreach (var rel in staleBackups)
+                    if (!Retire(modRoot, rel)) throw new IOException($"could not retire the old backup of {rel}");
+
                 // Backups, the first time a model is edited only: the original is the original.
                 foreach (var m in req.Models)
                 {
@@ -142,9 +164,32 @@ internal static class MatcapWriter
                 }
 
                 record.Materials.AddRange(entries);
+                for (int i = 0; i < req.Materials.Count; i++)
+                {
+                    entries[i].Sha8 = HairPortPlan.Sha8(req.Materials[i].Bytes);
+                    if (entries[i].Source.Tex is { } tex && req.Materials[i].ImageTexTemp is { } tt)
+                        tex.Sha8 = HairPortPlan.Sha8(File.ReadAllBytes(tt));
+                }
                 foreach (var m in req.Models)
+                {
                     if (record.Model(m.Rel) == null)
                         record.Models.Add(new MatcapRecord.ModelEntry { File = m.Rel, GamePath = m.GamePath });
+                    var me = record.Model(m.Rel)!;
+                    var sha = HairPortPlan.Sha8(m.NewBytes);
+                    if (!me.WrittenSha8s.Contains(sha)) { me.WrittenSha8s.Add(sha); addedShas.Add((m.Rel, sha)); }
+                }
+                if (record.Shared.Mask == null || !File.Exists(Full(modRoot, record.Shared.Mask.File)))
+                {
+                    maskBytes = File.ReadAllBytes(req.MaskTemp);
+                    record.Shared.Mask = new MatcapRecord.FileRef { File = MaskFile(record.Token), GamePath = MaskGamePath(record.Token), Sha8 = HairPortPlan.Sha8(maskBytes) };
+                    maskSet = true;
+                }
+                if (req.FlatNormalTemp != null && (record.Shared.FlatNormal == null || !File.Exists(Full(modRoot, record.Shared.FlatNormal.File))))
+                {
+                    flatBytes = File.ReadAllBytes(req.FlatNormalTemp);
+                    record.Shared.FlatNormal = new MatcapRecord.FileRef { File = FlatNormalFile(record.Token), GamePath = FlatNormalGamePath(record.Token), Sha8 = HairPortPlan.Sha8(flatBytes) };
+                    flatSet = true;
+                }
                 MatcapRecord.Write(modRoot, record);
                 AfterStep?.Invoke("pending");
 
@@ -154,28 +199,21 @@ internal static class MatcapWriter
                     var plan = req.Materials[i];
                     var entry = entries[i];
                     Place(modRoot, entry.File, plan.Bytes, created);
-                    entry.Sha8 = HairPortPlan.Sha8(plan.Bytes);
                     foreach (var p in plan.GamePaths) addedKeys[p] = entry.File;
                     if (entry.Source.Tex is { } tex && plan.ImageTexTemp != null)
                     {
-                        var bytes = File.ReadAllBytes(plan.ImageTexTemp);
-                        Place(modRoot, tex.File, bytes, created);
-                        tex.Sha8 = HairPortPlan.Sha8(bytes);
+                        Place(modRoot, tex.File, File.ReadAllBytes(plan.ImageTexTemp), created);
                         addedKeys[tex.GamePath] = tex.File;
                     }
                 }
-                if (record.Shared.Mask == null || !File.Exists(Full(modRoot, record.Shared.Mask.File)))
+                if (maskSet)
                 {
-                    var bytes = File.ReadAllBytes(req.MaskTemp);
-                    Place(modRoot, MaskFile(record.Token), bytes, created);
-                    record.Shared.Mask = new MatcapRecord.FileRef { File = MaskFile(record.Token), GamePath = MaskGamePath(record.Token), Sha8 = HairPortPlan.Sha8(bytes) };
+                    Place(modRoot, record.Shared.Mask!.File, maskBytes!, created);
                     addedKeys[record.Shared.Mask.GamePath] = record.Shared.Mask.File;
                 }
-                if (req.FlatNormalTemp != null && (record.Shared.FlatNormal == null || !File.Exists(Full(modRoot, record.Shared.FlatNormal.File))))
+                if (flatSet)
                 {
-                    var bytes = File.ReadAllBytes(req.FlatNormalTemp);
-                    Place(modRoot, FlatNormalFile(record.Token), bytes, created);
-                    record.Shared.FlatNormal = new MatcapRecord.FileRef { File = FlatNormalFile(record.Token), GamePath = FlatNormalGamePath(record.Token), Sha8 = HairPortPlan.Sha8(bytes) };
+                    Place(modRoot, record.Shared.FlatNormal!.File, flatBytes!, created);
                     addedKeys[record.Shared.FlatNormal.GamePath] = record.Shared.FlatNormal.File;
                 }
                 AfterStep?.Invoke("files");
@@ -188,9 +226,7 @@ internal static class MatcapWriter
                 {
                     PenumbraModMeta.AtomicWrite(Full(modRoot, m.Rel), m.NewBytes);
                     written.Add(m);
-                    var me = record.Model(m.Rel)!;
-                    me.WrittenSha8s.Add(HairPortPlan.Sha8(m.NewBytes));
-                    me.Lod0Cut |= m.Lod0Cut;
+                    record.Model(m.Rel)!.Lod0Cut |= m.Lod0Cut;
                 }
                 AfterStep?.Invoke("model");
 
@@ -219,9 +255,10 @@ internal static class MatcapWriter
                     if (!fresh.Unreadable)
                     {
                         fresh.Materials.RemoveAll(x => req.Materials.Any(p => string.Equals(x.Name, p.Name, StringComparison.OrdinalIgnoreCase)));
+                        foreach (var (rel, sha) in addedShas) fresh.Model(rel)?.WrittenSha8s.Remove(sha);
                         fresh.Models.RemoveAll(x => !fresh.MaterialsOf(x.File).Any() && req.Models.Any(r => PenumbraModMeta.SameFile(r.Rel, x.File)) && x.WrittenSha8s.Count == 0);
-                        if (fresh.Shared.Mask is { } mk && created.Contains(mk.File)) fresh.Shared.Mask = null;
-                        if (fresh.Shared.FlatNormal is { } fn && created.Contains(fn.File)) fresh.Shared.FlatNormal = null;
+                        if (maskSet) fresh.Shared.Mask = null;
+                        if (flatSet) fresh.Shared.FlatNormal = null;
                         MatcapRecord.Write(modRoot, fresh);
                     }
                 }
@@ -328,13 +365,16 @@ internal static class MatcapWriter
     /// backup and remove everything Proteus added. Refused whole when any file was changed by a later feature or edited
     /// on top of ours.
     /// </summary>
-    public static Outcome Undo(string modRoot, string rel) => UndoOrForget(modRoot, rel, forgetOnly: false);
+    /// <param name="readGameFile">The game's own files: given, a game piece's edit mod drops a file that is the game's
+    /// own again (see EDGE-59).</param>
+    public static Outcome Undo(string modRoot, string rel, Func<string, byte[]?>? readGameFile = null) =>
+        UndoOrForget(modRoot, rel, forgetOnly: false, readGameFile);
 
     /// <summary>Forget matcaps the model no longer names (the author updated it): retire their backups, remove their
     /// files and redirects. Changes no model.</summary>
     public static Outcome Forget(string modRoot, string rel) => UndoOrForget(modRoot, rel, forgetOnly: true);
 
-    private static Outcome UndoOrForget(string modRoot, string rel, bool forgetOnly)
+    private static Outcome UndoOrForget(string modRoot, string rel, bool forgetOnly, Func<string, byte[]?>? readGameFile = null)
     {
         lock (ModManifestLock.Gate)
         lock (MeshVolumeService.WriteLock)
@@ -361,15 +401,7 @@ internal static class MatcapWriter
             }
 
             // ── the group: this model plus every model sharing a remaining material with it ──
-            var group = new HashSet<string>(StringComparer.OrdinalIgnoreCase) { record.Model(rel)?.File ?? rel };
-            for (bool grew = true; grew;)
-            {
-                grew = false;
-                foreach (var mat in record.Materials)
-                    if (mat.Meshes.Any(x => group.Contains(x.Model)))
-                        foreach (var x in mat.Meshes)
-                            grew |= group.Add(x.Model);
-            }
+            var group = ApplyGroupOf(record, rel);
 
             var restore = new List<(string Rel, string Backup)>();
             var forget = new List<string>();
@@ -403,7 +435,7 @@ internal static class MatcapWriter
                 TryDelete(backup);
                 touched.Add(g);
             }
-            foreach (var g in forget) Retire(modRoot, g);
+            var unretired = forget.Where(g => !Retire(modRoot, g)).ToList();
 
             var gone = new HashSet<string>(restore.Select(r => r.Rel).Concat(forget), StringComparer.OrdinalIgnoreCase);
             foreach (var mat in record.Materials.ToList())
@@ -416,6 +448,20 @@ internal static class MatcapWriter
             record.Models.RemoveAll(m => gone.Contains(m.File));
 
             // Shared files go with the last material.
+            // A game piece's "— Proteus edit" mod: a file that is the game's own again leaves the mod, so the copy stops
+            // outranking face mods installed later (EDGE-59). Only when nothing else edited it (VanillaEditCopy.HoldsEdit).
+            var dropped = new List<string>();
+            if (readGameFile != null && Path.GetFileName(modRoot.TrimEnd('\\', '/')).Contains(RefitModService.EditQualifier, StringComparison.OrdinalIgnoreCase))
+                foreach (var (g, _) in restore)
+                {
+                    var gamePath = g.Replace('\\', '/');
+                    if (readGameFile(gamePath) is not { } game || VanillaEditCopy.HoldsEdit(modRoot, gamePath, game)) continue;
+                    if (PenumbraModMeta.TryReadDefaultData(modRoot) is not { } data || !data.Files.TryGetValue(gamePath, out var target)
+                        || !PenumbraModMeta.SameFile(target, g)) continue;
+                    removeKeys[gamePath] = target;
+                    dropped.Add(g);
+                }
+
             if (record.Materials.Count == 0)
             {
                 foreach (var shared in new[] { record.Shared.Mask, record.Shared.FlatNormal })
@@ -430,6 +476,7 @@ internal static class MatcapWriter
             if (removeKeys.Count > 0)
                 PenumbraModMeta.EditContainers(modRoot, [new PenumbraModMeta.ContainerEdit(
                     new PenumbraModMeta.ContainerRef(""), new Dictionary<string, string>(), removeKeys)]);
+            foreach (var g in dropped) TryDelete(Full(modRoot, g));
             MatcapRecord.Write(modRoot, record);
 
             var msg = forgetOnly
@@ -438,6 +485,9 @@ internal static class MatcapWriter
             if (kept.Count > 0)
                 msg += " " + string.Format(ProteusLoc.Localize("Parts.Matcap.KeptEdited.Fmt", "Left in place because they were edited by hand: {0}."),
                     string.Join(", ", kept.Distinct()));
+            if (unretired.Count > 0)
+                msg += " " + string.Format(ProteusLoc.Localize("Parts.Matcap.BackupKept.Fmt",
+                    "Their old backups could not be moved aside: {0}. The next matcap there moves them first."), string.Join(", ", unretired));
             return Outcome.Done(msg, touched);
         }
     }
@@ -454,18 +504,45 @@ internal static class MatcapWriter
     }
 
     /// <summary>A backup no longer needed for an undo is retired, not deleted: moved to <see cref="SupersededSubdir"/>.</summary>
-    private static void Retire(string modRoot, string rel)
+    /// <summary>
+    /// <paramref name="rel"/>'s apply group: it plus every model sharing one of the record's materials with it, closed
+    /// over. What an Undo restores together, and what the panel and the harness show as "the group".
+    /// </summary>
+    public static HashSet<string> ApplyGroupOf(MatcapRecord record, string rel)
+    {
+        var group = new HashSet<string>(StringComparer.OrdinalIgnoreCase) { record.Model(rel)?.File ?? rel };
+        for (bool grew = true; grew;)
+        {
+            grew = false;
+            foreach (var mat in record.Materials)
+                if (mat.Meshes.Any(x => group.Contains(x.Model)))
+                    foreach (var x in mat.Meshes)
+                        grew |= group.Add(x.Model);
+        }
+        return group;
+    }
+
+    /// <summary>The record's materials drawn in <paramref name="rel"/>'s apply group.</summary>
+    public static List<MatcapRecord.MaterialEntry> GroupMaterials(MatcapRecord record, string rel)
+    {
+        var group = ApplyGroupOf(record, rel);
+        return record.Materials.Where(m => m.Meshes.Any(x => group.Contains(x.Model))).ToList();
+    }
+
+    /// <returns>False when the backup is still in place (the move failed).</returns>
+    private static bool Retire(string modRoot, string rel)
     {
         var from = BackupPath(modRoot, BackupSubdir, rel);
-        if (!File.Exists(from)) return;
+        if (!File.Exists(from)) return true;
         var to = BackupPath(modRoot, SupersededSubdir, rel);
         try
         {
             Directory.CreateDirectory(Path.GetDirectoryName(to)!);
             if (File.Exists(to)) File.Delete(to);
             File.Move(from, to);
+            return true;
         }
-        catch { }
+        catch { return false; }
     }
 
     // ── helpers ─────────────────────────────────────────────────────────────

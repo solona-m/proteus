@@ -80,7 +80,9 @@ internal sealed record StudioPutBack(string Mod, string Files, string Panel, str
 internal sealed record MatcapHarnessPort(
     Services.Matcap.MatcapIndex? Index, string? ImageFolder, Services.Matcap.IMatcapPenumbra Penumbra,
     Services.Matcap.MatcapStudio.Environment Env, string? ModsRoot, IReadOnlyDictionary<string, string>? Mods,
-    System.Action<string>? ForgetFaceUpstream = null);
+    System.Action<string>? ForgetFaceUpstream = null,
+    // (mod root, game path, written files) -> the panel's drawn-file line after an Apply; framework thread.
+    System.Func<string, string, IReadOnlyList<string>, string?>? DrawnStatus = null);
 
 /// <summary>
 /// The Studio as the test harness drives it: the panel's own code for each control, run on the framework thread between

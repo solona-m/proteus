@@ -19,6 +19,34 @@ internal static class MatcapPanelModel
         : MatcapPlan.IsOnMatcap(part) ? Strings.Matcap.AlreadyTip
         : Strings.Matcap.NotHornTip;
 
+    /// <summary>
+    /// The line after an Apply about the file the character draws for <paramref name="gamePath"/>
+    /// (<paramref name="drawnFile"/>, resolved through Penumbra): null when it is one of the files written; the neutral
+    /// <see cref="MatcapStrings.DrawnThroughFace"/> when the face overlay's rewrite draws it from the edited face; else the
+    /// EDGE-47 warning naming the file that wins (for a refit size, with the hint to remake sizes).
+    /// </summary>
+    /// <param name="faceUpstream">The disk file the face rewrite reads the face from, if known.</param>
+    public static string? DrawnStatus(string root, string gamePath, IReadOnlyList<string> written, string drawnFile,
+                                      string modsRoot, string? faceUpstream)
+    {
+        if (!HatCompatService.InMods(drawnFile, modsRoot, out var modRoot, out var rel)) return null;
+        if (string.Equals(System.IO.Path.GetFileName(modRoot), SidecarDiscoveryService.ManagedModDir, StringComparison.OrdinalIgnoreCase)
+            && MatcapPlan.TargetOf(gamePath, out _) is { Kind: MatcapPlan.Kind.Face })
+        {
+            // Rebuilt from our file on the next composite — unless the rewrite reads another mod's file, which outranks ours.
+            bool ours = faceUpstream == null || written.Any(w => PenumbraModMeta.SameFile(
+                System.IO.Path.GetFullPath(System.IO.Path.Combine(root, w)), System.IO.Path.GetFullPath(faceUpstream)));
+            if (ours) return Strings.Matcap.DrawnThroughFace;
+            var shown = HatCompatService.InMods(faceUpstream!, modsRoot, out var upRoot, out var upRel)
+                ? System.IO.Path.GetFileName(upRoot) + "/" + upRel : System.IO.Path.GetFileName(faceUpstream!);
+            return string.Format(Strings.Matcap.DrawnElsewhereFmt, shown);
+        }
+        if (PenumbraModMeta.SameFile(modRoot, root) && written.Any(w => PenumbraModMeta.SameFile(w, rel))) return null;
+        var line = string.Format(Strings.Matcap.DrawnElsewhereFmt, rel);
+        if (PenumbraModMeta.SameFile(modRoot, root) && MatcapPlan.Regenerated(root, rel) == "refit") line += " " + Strings.Matcap.RemakeSizes;
+        return line;
+    }
+
     /// <summary>A file of the managed mod the face overlay's rewrite published (<c>facelr_*.mdl</c>).</summary>
     public static bool IsManagedFaceRewrite(string file) =>
         System.IO.Path.GetFileName(file).StartsWith("facelr_", StringComparison.OrdinalIgnoreCase);
