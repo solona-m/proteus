@@ -6574,5 +6574,9 @@
   "Parts.Matcap.KeptForRefits.Fmt": {
     "message": "Los reajustes hechos a partir de él aún dibujan el matcap, así que sus archivos se quedan hasta que se rehagan las tallas: {0}.",
     "description": ""
+  },
+  "Parts.Matcap.PortKept": {
+    "message": "Ese modelo es una de las adaptaciones de pelo de Proteus. Mientras tenga un matcap, Proteus lo deja como está y no rehace por sí solo las adaptaciones de otras razas que comparten su material, hasta que deshagas el matcap. Adaptar a mano una de esas razas en el Estudio sigue rehaciéndola.",
+    "description": ""
   }
 }

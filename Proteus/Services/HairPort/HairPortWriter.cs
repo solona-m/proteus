@@ -544,8 +544,10 @@ internal static class HairPortWriter
     [ThreadStatic] internal static Action<int>? BeforeMerge;
 
     /// <summary>
-    /// The feature that edited a port in place since it was written — part switches or the brush, which each keep a
-    /// backup — or null. Hat fitting is not one: it is redone on whatever the port becomes.
+    /// The feature that edited a port in place since it was written — part switches, the brush or a matcap, which each
+    /// keep a backup — or null. A matcap counts only while the port still draws one of its own (an unreadable matcap
+    /// record counts: never overwritten by mistake); a retired matcap backup never does. Hat fitting is not one: it is
+    /// redone on whatever the port becomes. An edited port is neither remade nor undone until that edit is undone.
     /// </summary>
     internal static string? EditedBy(string modRoot, string rel)
     {
@@ -556,6 +558,9 @@ internal static class HairPortWriter
                  })
             if (File.Exists(Path.Combine(modRoot, SidecarDiscoveryService.SidecarSubdir, subdir, NativeRel(rel))))
                 return name;
+        if (File.Exists(Path.Combine(modRoot, SidecarDiscoveryService.SidecarSubdir, Matcap.MatcapWriter.BackupSubdir, NativeRel(rel)))
+            && Matcap.MatcapWriter.NamesOwnMatcap(modRoot, rel.Replace('\\', '/')))
+            return ProteusLoc.Localize("MeshVolume.Feature.Matcaps", "matcaps");
         return null;
     }
 

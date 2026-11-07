@@ -47,6 +47,21 @@ public class MatcapPlanTests
     }
 
     [Fact]
+    [Trait("Plan", "EDGE-matcap-hair-ports-5")]
+    public void NewName_skips_a_number_whose_game_path_is_taken()
+    {
+        // The Midlander's port took mt_c0201h0130_hir_a_mcapT1 in the shared folder; the Highlander's port reads that
+        // folder too, so its own N=1 (named for c0401 but resolving to the same c0201 path) must be skipped.
+        var hl = MatcapPlan.TargetOf(HairPortPlan.HairPath(401, 130), out _)!;
+        var taken = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+            { HairMaterialPath.GamePath(201, 130, "/mt_c0201h0130_hir_a_mcapT1.mtrl")! };
+        var name = MatcapPlan.NewName("/mt_c0401h0130_hir_a.mtrl", "T", [],
+            c => MatcapPlan.MaterialGamePaths(hl, c, [], null).Any(taken.Contains));
+        Assert.Equal("/mt_c0401h0130_hir_a_mcapT2.mtrl", name);
+        Assert.Equal("/mt_c0401h0130_hir_a_mcapT1.mtrl", MatcapPlan.NewName("/mt_c0401h0130_hir_a.mtrl", "T", []));
+    }
+
+    [Fact]
     public void Tail_materials_publish_at_the_variant_folders_the_game_reads()
     {
         // Every race but Hrothgar: the model's own id, v0001.
@@ -247,6 +262,8 @@ public class MatcapPlanTests
 
     [Fact]
     [Trait("Plan", "EDGE-matcaps-11")]
+    [Trait("Plan", "AC-matcap-hair-ports-1")]
+    [Trait("Plan", "AC-matcap-hair-ports-7")]
     public void SizeSet_refit_and_hairport_outputs_refused()
     {
         using var f = new MatcapFixture();
@@ -255,7 +272,9 @@ public class MatcapPlanTests
         Assert.Equal("earless", MatcapPlan.Regenerated(f.ModRoot, EarlessHairPlan.Folder + "/x.mdl"));
         Assert.Equal("refit", MatcapPlan.Regenerated(f.ModRoot, BodyRetargetWriter.Subfolder + "/x/top.mdl"));
         // Only hair ports and earless copies refuse; refits take a matcap.
-        Assert.Equal("hair-port", MatcapPlan.RefusedRegenerated(f.ModRoot, HairPortPlan.Folder + "/x.mdl"));
+        // Hair ports take a matcap now (a matcapped port is kept as it is), still known as ports.
+        Assert.Null(MatcapPlan.RefusedRegenerated(f.ModRoot, HairPortPlan.Folder + "/x.mdl"));
+        Assert.Equal(MatcapPlan.HairPortKind, MatcapPlan.Regenerated(f.ModRoot, HairPortPlan.Folder + "/x.mdl"));
         Assert.Equal("earless", MatcapPlan.RefusedRegenerated(f.ModRoot, EarlessHairPlan.Folder + "/x.mdl"));
         Assert.Null(MatcapPlan.RefusedRegenerated(f.ModRoot, BodyRetargetWriter.Subfolder + "/x/top.mdl"));
         Assert.Null(MatcapPlan.RefusedRegenerated(f.ModRoot, MatcapFixture.ModelRel));

@@ -6574,5 +6574,9 @@
   "Parts.Matcap.KeptForRefits.Fmt": {
     "message": "Daraus erstellte Refits zeichnen die Matcap noch, daher bleiben ihre Dateien, bis die Größen neu erstellt werden: {0}.",
     "description": ""
+  },
+  "Parts.Matcap.PortKept": {
+    "message": "Dieses Modell ist eine Haar-Portierung von Proteus. Solange es eine Matcap hat, lässt Proteus es, wie es ist, und erstellt die Portierungen anderer Völker, die sein Material teilen, nicht von selbst neu, bis du die Matcap rückgängig machst. Portierst du eines dieser Völker von Hand im Studio, wird es trotzdem neu erstellt.",
+    "description": ""
   }
 }
