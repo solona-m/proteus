@@ -209,8 +209,6 @@ public sealed class MatcapPackPanelTests : IDisposable
         var user = new MatcapImage("Gold Metal.png", @"C:\user\Gold Metal.png", false);
         var pack = new MatcapImage("Gold Metal.png", @"C:\cfg\DefaultMatcaps\Gold Metal.png", false, true);
         var ctx = Ctx([user], [pack]);
-        Assert.Contains(ctx.Images, i => i.Name == "Gold Metal.png");
-        Assert.Contains(ctx.PackImages, i => i.Name == "Gold Metal.png");
         var panel = new MatcapPanel();
         panel.Pick(MatcapPanel.SourceKind.Proteus, "Gold Metal.png");
         var a = panel.Choice(ctx)!.Image!.Path;
@@ -280,26 +278,70 @@ public sealed class MatcapPackPanelTests : IDisposable
 
     [Fact]
     [Trait("Plan", "AC-matcap-pack-9")]
-    public void Rearming_from_Ready_is_Downloading_before_EnsureAsync_returns()
+    [Trait("Plan", "EDGE-matcap-pack-9")]
+    public void Winning_call_is_Downloading_before_it_returns()
     {
         var dir = Path.Combine(root, "DefaultMatcaps");
         Directory.CreateDirectory(dir);
         foreach (var (name, bytes, _) in DefaultMatcapsDownloadService.Matcaps) File.WriteAllBytes(Path.Combine(dir, name), new byte[bytes]);
         var gate = new SemaphoreSlim(0);
+        int fetches = 0;
         using var s = new DefaultMatcapsDownloadService(Substitute.For<IPluginLog>(), root, async (u, n, bytes, sha, dest, _, ct) =>
         {
+            Interlocked.Increment(ref fetches);
             await gate.WaitAsync(ct);
             File.WriteAllBytes(dest, new byte[bytes]);
             return FetchResult.Success;
         });
         s.EnsureAsync();
-        SpinWait.SpinUntil(() => s.Status.State == MatcapPackState.Ready, 5000);
+        Assert.True(SpinWait.SpinUntil(() => s.Status.State == MatcapPackState.Ready, 5000));
         File.Delete(Path.Combine(dir, DefaultMatcapsDownloadService.Matcaps[0].Name));
+
         s.EnsureAsync(retryFailed: true, evenIfReady: true);
-        Assert.Equal(MatcapPackState.Downloading, s.Status.State);   // never the stale Ready
+        var st = s.Status;
+        Assert.Equal(MatcapPackState.Downloading, st.State);           // never the stale Ready
+        Assert.Equal(DefaultMatcapsDownloadService.Matcaps.Length - 1, st.Have);   // nor its stale count
+        s.EnsureAsync(retryFailed: true, evenIfReady: true);            // a second call while running: no second run
         gate.Release(10);
-        SpinWait.SpinUntil(() => s.Status.State == MatcapPackState.Ready, 5000);
-        Assert.Equal(MatcapPackState.Ready, s.Status.State);
+        Assert.True(SpinWait.SpinUntil(() => s.Status.State == MatcapPackState.Ready, 5000));
+        Assert.Equal(1, fetches);
+    }
+
+    [Fact]
+    [Trait("Plan", "EDGE-matcap-pack-9")]
+    public void Final_state_is_never_seen_with_a_run_active()
+    {
+        int n = 0;
+        using var s = new DefaultMatcapsDownloadService(Substitute.For<IPluginLog>(), root, (u, name, bytes, sha, dest, _, ct) =>
+        {
+            // Alternate success and a stopping failure, so runs end both Ready and Failed.
+            if (Interlocked.Increment(ref n) % 3 == 0) return Task.FromResult(new FetchResult(false, FetchFailure.Transport, 0, 0, "x"));
+            Directory.CreateDirectory(Path.GetDirectoryName(dest)!);
+            File.WriteAllBytes(dest, new byte[bytes]);
+            return Task.FromResult(FetchResult.Success);
+        });
+        bool stop = false, bad = false;
+        var observer = new Thread(() =>
+        {
+            // Read together: a run is active exactly while the state is Downloading — never a final state with a run on.
+            while (!Volatile.Read(ref stop))
+            {
+                var (state, running) = s.Snapshot();
+                if (running != (state == MatcapPackState.Downloading)) bad = true;
+            }
+        });
+        observer.Start();
+        for (int i = 0; i < 20; i++)
+        {
+            s.EnsureAsync(retryFailed: true, evenIfReady: true);
+            Assert.True(SpinWait.SpinUntil(() => s.Status.State != MatcapPackState.Downloading, 5000));
+            // Right after a final state, the next re-arm wins at once.
+            Assert.False(s.IsRunActive);
+            if (i % 2 == 0) foreach (var f in Directory.GetFiles(Path.Combine(root, "DefaultMatcaps")).Take(2)) File.Delete(f);
+        }
+        Volatile.Write(ref stop, true);
+        observer.Join();
+        Assert.False(bad);
     }
 
     [Fact]

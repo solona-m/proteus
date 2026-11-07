@@ -105,6 +105,12 @@ public sealed class DefaultMatcapsDownloadService : IMatcapPack, IDisposable
 
     public long Version => Interlocked.Read(ref version);
 
+    /// <summary>A run is under way (tests: the final state is never published while one still is).</summary>
+    internal bool IsRunActive { get { lock (gate) return running; } }
+
+    /// <summary>The state and whether a run is active, read together (tests: a run is active exactly while Downloading).</summary>
+    internal (MatcapPackState State, bool Running) Snapshot() { lock (gate) return (status.State, running); }
+
     public IReadOnlyList<MatcapImage> Available()
     {
         var list = new List<MatcapImage>();
@@ -126,9 +132,9 @@ public sealed class DefaultMatcapsDownloadService : IMatcapPack, IDisposable
             if (started && !rearm) return;
             started = true;
             running = true;
-            status = status with { State = MatcapPackState.Downloading, Detail = "" };
+            status = status with { State = MatcapPackState.Downloading, Detail = "", Have = CountHave() };
+            Interlocked.Increment(ref version);
         }
-        Interlocked.Increment(ref version);
         Task.Run(Run);
     }
 
@@ -177,12 +183,13 @@ public sealed class DefaultMatcapsDownloadService : IMatcapPack, IDisposable
         }
         finally
         {
+            int have = CountHave();
             lock (gate)
             {
                 running = false;
-                status = status with { State = end, Detail = detail, Have = CountHave() };
+                status = status with { State = end, Detail = detail, Have = have };
+                Interlocked.Increment(ref version);
             }
-            Interlocked.Increment(ref version);
         }
     }
 
