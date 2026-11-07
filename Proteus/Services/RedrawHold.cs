@@ -290,6 +290,28 @@ internal sealed class RedrawHold
     /// </summary>
     internal static bool EmptyPublishRedraws(bool emptyAlreadyDrawn, bool withdrawing) => withdrawing || !emptyAlreadyDrawn;
 
+    /// <summary>The trigger reasons an idle early-out may skip: equipment moves only.</summary>
+    internal static readonly string[] IdleSkippableReasons = ["glamourer-equip", "equipment-change"];
+
+    /// <summary>The burst-reason list holds at most this many; a full list may have dropped a reason, so it never skips.</summary>
+    internal const int BurstReasonCap = 4;
+
+    /// <summary>
+    /// With no overlay mod enabled and the empty output already drawn, an equipment-only burst has nothing to do: no
+    /// draw-state sampling, manifest write or Penumbra reload (a user's log showed 118 such runs, each a publish and a
+    /// reload). Every reason in the burst must be skippable; a forced trigger, a carrier record, or a withdrawal never
+    /// skips. <paramref name="anyOverlayEnabled"/> is a Penumbra read, asked last and only when all else allows.
+    /// </summary>
+    internal static bool IdleNothingToDo(IReadOnlyCollection<string> burstReasons, bool forced, bool emptyOutputDrawn,
+                                         bool holdsCarrierRecord, bool withdrawing, Func<bool> anyOverlayEnabled)
+    {
+        if (forced || !emptyOutputDrawn || holdsCarrierRecord || withdrawing) return false;
+        if (burstReasons.Count == 0 || burstReasons.Count >= BurstReasonCap) return false;
+        foreach (var r in burstReasons)
+            if (Array.IndexOf(IdleSkippableReasons, r) < 0) return false;
+        return !anyOverlayEnabled();
+    }
+
     /// <summary>What a composite does before sampling about a body mod's materials (see <see cref="PlanPreamble"/>).</summary>
     internal enum Preamble { None, Reload, KeepDirty }
 

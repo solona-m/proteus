@@ -626,6 +626,7 @@ public partial class CompositorService
                 var humanParts = HumanPartModelsFromModels(modelPaths);
                 _equippedPartModels = equipped;
                 _equippedAccessoryModels = accessories;
+                NoteAccessoryWalk();
                 _equippedMetModels = metModels;
                 _bareBodyModels = bare;
                 _humanPartModels = humanParts;

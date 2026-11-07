@@ -128,6 +128,7 @@ public partial class CompositorService
         {
             _equippedPartModels = EquippedPartModelsFromModels(equipped);
             _equippedAccessoryModels = EquippedAccessoryModelsFromModels(equipped);
+            NoteAccessoryWalk();
             _equippedMetModels = EquippedMetModelsFromModels(equipped, InvisibleGlasses.FacewearModelSets(Plugin.DataManager));
             _bareBodyModels = BareBodyModelsFromModels(equipped);
             _humanPartModels = HumanPartModelsFromModels(equipped);
@@ -210,6 +211,10 @@ public partial class CompositorService
                 return;
             }
             var tDebounced = PhaseCounter.Begin();
+
+            // Idle and equipment-only: nothing is enabled and the empty output is already drawn, so there is nothing
+            // to sample, write or reload. Before the race and draw-state settle, which sample the draw object.
+            if (IdleEarlyOut(force)) return;
 
             // Read the Glamourer char code if still unknown, or the first composites after a load fingerprint differently
             // and cannot skip or reuse the skin.
@@ -499,5 +504,26 @@ public partial class CompositorService
             catch (OperationCanceledException) { return null; }
             catch (Exception ex) when (_disposed || IsLoadContextUnloading(ex)) { return null; }
         }
+    }
+
+    /// <summary>
+    /// The idle early-out (see <see cref="RedrawHold.IdleNothingToDo"/>): an equipment-only burst while no overlay
+    /// mod is enabled and the empty output is drawn ends here, claimed and logged, with no draw-state sampling, no
+    /// manifest write and no Penumbra reload.
+    /// </summary>
+    private bool IdleEarlyOut(bool force)
+    {
+        // A composite already running may be about to write the manifest: never skip beside it.
+        bool forced = force || Volatile.Read(ref _forcePending) != 0 || Volatile.Read(ref _skinForcePending) != 0
+                   || Volatile.Read(ref _compositesInFlight) > 0;
+        bool withdrawing = _secondSkinActive || _lastSkinMaterialRedirects.Count > 0 || _lastHeadRedirects.Count > 0;
+        if (!RedrawHold.IdleNothingToDo(RefreshBurstReasonsSnapshot(), forced, IsEmptyOutputDrawn(),
+                holdsCarrierRecord: _injectedCarrierSlots.Count > 0 || _injectedGlasses, withdrawing,
+                anyOverlayEnabled: () => discovery.DiscoverEnabled().Count > 0))
+            return false;
+        var tl = ClaimRefresh();
+        log.Debug("[Proteus] Recomposite not needed: no enabled mods and the empty output is already drawn ({0})", tl.Reasons);
+        LogRefreshTimeline(tl, "no enabled mods (already drawn) — nothing to do");
+        return true;
     }
 }

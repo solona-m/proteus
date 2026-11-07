@@ -1787,8 +1787,8 @@ public partial class DesignBindingService : IDisposable
 
     // Glamourer's "Nothing" item for an equipment slot is uint.MaxValue - 128 - slot index (ItemManager.NothingId);
     // matched as a window so the slot-index mapping isn't copied here.
-    private const ulong NothingIdHigh = uint.MaxValue - 128UL;
-    private const ulong NothingIdLow  = NothingIdHigh - 31UL;
+    private const ulong NothingIdHigh = GlamourerItemIds.NothingIdHigh;
+    private const ulong NothingIdLow  = GlamourerItemIds.NothingIdLow;
 
     /// <summary>
     /// The slots to unequip so the character wears only what <paramref name="design"/> puts on it: every filled slot
@@ -1807,7 +1807,7 @@ public partial class DesignBindingService : IDisposable
                 if (dEquip?[slot] is JObject d && d["Apply"]?.ToObject<bool>() == true) continue;
                 if (sEquip[slot] is not JObject s || s["ItemId"] is not { } idToken) continue;
                 var id = idToken.ToObject<ulong>();
-                if (id == 0 || id is >= NothingIdLow and <= NothingIdHigh) continue;       // already empty
+                if (GlamourerItemIds.IsEmpty(id)) continue;       // already empty
                 if (carriers.OwnedSlots?.Contains(slot, StringComparer.Ordinal) == true) continue;
                 if (carriers.AccessoryItems?.Contains(id) == true) continue;                 // our carrier item
                 result.Add(slot);

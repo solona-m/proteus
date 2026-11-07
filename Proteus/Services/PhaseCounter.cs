@@ -22,6 +22,9 @@ public sealed class PhaseCounter
     public static double MsSince(long start)
         => (Stopwatch.GetTimestamp() - start) * 1000.0 / Stopwatch.Frequency;
 
+    /// <summary>Milliseconds between two <see cref="Begin"/> timestamps.</summary>
+    public static double MsBetween(long start, long end) => (end - start) * 1000.0 / Stopwatch.Frequency;
+
     /// <summary>Record one completed call that started at <paramref name="start"/>.</summary>
     public void Stop(long start, long byteCount = 0)
     {

@@ -1011,6 +1011,14 @@ public class TextureLoader
                 var cand = Path.Combine(dir, stem + ext);
                 if (File.Exists(cand)) { path = cand; break; }
             }
+            // Neither the file nor a sibling: a mod pointing at an image it does not ship. Warned once per path per
+            // session, with no stack trace (a user's log had this as an Error with a stack on every composite).
+            // Checked every call, so a file added later loads.
+            if (!File.Exists(path))
+            {
+                WarnMissingOverlay(path);
+                return null;
+            }
         }
 
         bool isTex = path.EndsWith(".tex", StringComparison.OrdinalIgnoreCase);
@@ -1039,6 +1047,11 @@ public class TextureLoader
                     : Resample(img.Data, img.Width, img.Height, targetW, targetH, filter);
                 return (pdata, targetW, targetH);
             }
+            catch (Exception ex) when (ex is FileNotFoundException or DirectoryNotFoundException)
+            {
+                WarnMissingOverlay(path);   // removed between the check and the read
+                return null;
+            }
             catch (Exception ex)
             {
                 log.Error(ex, "[Proteus] Failed to load overlay image: {0}", path);
@@ -1055,6 +1068,20 @@ public class TextureLoader
 
         // Read-only for callers, so the cached array is shared (no clone).
         return GetOrDecode(key + "|" + targetW + "x" + targetH + fkey, Decode)?.Rgba;
+    }
+
+    /// <summary>Overlay paths already warned missing this session (normalised, Windows separators).</summary>
+    private readonly System.Collections.Concurrent.ConcurrentDictionary<string, byte> _missingOverlayWarned =
+        new(StringComparer.OrdinalIgnoreCase);
+
+    private void WarnMissingOverlay(string path)
+    {
+        string full;
+        try { full = Path.GetFullPath(path); }
+        catch { full = path.Replace('/', Path.DirectorySeparatorChar); }
+        if (_missingOverlayWarned.TryAdd(full, 0))
+            log.Warning("[Proteus] Overlay image not found: {0} — the mod points at an image it does not ship; "
+                      + "that layer is skipped (said once per session)", full);
     }
 
     /// <summary>
