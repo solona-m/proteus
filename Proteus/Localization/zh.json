@@ -459,12 +459,20 @@
     "message": "[Proteus]“{0}”覆盖了 {1}，而 Proteus 正是将叠加层合成到该处——因此它们不会显示。解决方法：在 Penumbra 中将“Proteus”模组的优先级提升到“{0}”之上。",
     "description": ""
   },
-  "Chat.ShellNotDrawing": {
-    "message": "[Proteus] 第二层皮肤已构建，但游戏没有绘制它。承载它的饰品已装备，可角色并未加载 Proteus 的版本。请脱下该饰品再重新装备，或换用另一件。",
+  "Chat.ShellPartNotDrawn.Fmt": {
+    "message": "[Proteus] 第二层皮肤仍有一部分没有显示。这部分承载在{0}上。请脱下后重新装备，或把该图层换到其他饰品上。",
     "description": ""
   },
-  "Chat.ShellMaterialFailed": {
-    "message": "[Proteus] 第二层皮肤有一部分没有被绘制。其余部分已在角色身上，所以要么是该部件所需的纹理缺失，要么是游戏仍保留着之前的版本。请先尝试“立即重新合成”，然后再脱下并重新装备承载它的饰品。",
+  "Chat.ShellNotDrawn.Fmt": {
+    "message": "[Proteus] 虽然已装备{0}，第二层皮肤仍然没有显示。请脱下后重新装备，或把图层换到其他饰品上。",
+    "description": ""
+  },
+  "Chat.ShellCarrierNotDrawn.Fmt": {
+    "message": "[Proteus] 第二层皮肤有一部分没有显示。它承载在{0}上，这是 Proteus 为承载它而装备的隐形饰品。请在 Proteus 窗口中点击“立即重新合成”；如果仍未显示，请脱下该饰品，Proteus 会重新为你装备。",
+    "description": ""
+  },
+  "Chat.ShellNotDrawnRedrawOff.Fmt": {
+    "message": "[Proteus] 第二层皮肤有一部分没有显示。它承载在{0}上。自动重绘已关闭，所以 Proteus 没有重绘你的角色：请使用 Penumbra 的 Redraw 按钮或切换区域，如果仍未显示，请脱下并重新装备该饰品。",
     "description": ""
   },
   "Chat.ShellNeedsRedraw": {

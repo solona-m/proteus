@@ -16,7 +16,7 @@ public sealed partial class SecondSkinService
         {
             private readonly ShellSetBuild build;
             private Dictionary<int, byte[]?> maskAlphaByLayer = null!;
-            private Dictionary<int, (char Disk, string Prefix, Dictionary<string, string> Redirects, bool Changed, List<string>? Paths)> specTextures = null!;
+            private Dictionary<int, (char Disk, string Prefix, Dictionary<string, string> Redirects, bool Changed, List<string>? Paths, bool OutputWriteFailed)> specTextures = null!;
 
             public ShellTextureBake(ShellSetBuild build)
             {
@@ -38,7 +38,7 @@ public sealed partial class SecondSkinService
                 // Penumbra calls and per-layer logging run serially first; only the pixel work fans out.
                 maskAlphaByLayer = new Dictionary<int, byte[]?>();
                 specTextures = new Dictionary<int, (char Disk, string Prefix, Dictionary<string, string> Redirects,
-                                                        bool Changed, List<string>? Paths)>();
+                                                        bool Changed, List<string>? Paths, bool OutputWriteFailed)>();
                 {
                     var specJobs = new List<(int I, char Disk, string Prefix, byte[]? Alpha, byte[] Template, bool MergeMasks,
                                              List<byte[]>? Siblings,
@@ -89,7 +89,7 @@ public sealed partial class SecondSkinService
                     if (specJobs.Count > 1)
                     {
                         var tSpec = PhaseCounter.Begin();
-                        var results = new (Dictionary<string, string> Redirects, bool Changed, List<string>? Paths)[specJobs.Count];
+                        var results = new (Dictionary<string, string> Redirects, bool Changed, List<string>? Paths, bool OutputWriteFailed)[specJobs.Count];
                         // Bounded: each layer holds several 4K buffers, and the pixel kernels are already parallel.
                         Parallel.For(0, specJobs.Count,
                             new ParallelOptions { MaxDegreeOfParallelism = Math.Clamp(Environment.ProcessorCount / 4, 2, 4) },
@@ -98,13 +98,14 @@ public sealed partial class SecondSkinService
                                 var job = specJobs[j];
                                 var (entry, ov) = build.gearOverlays[job.I];
                                 var local = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
-                                bool changed = false;
+                                bool changed = false, writeFailed = false;
                                 List<string>? paths = null;
                                 try
                                 {
+                                    // Not counted here (#91): the slot loop below counts a failure at the drop.
                                     paths = build.service.WriteTextures(entry, ov.Descriptor, ov.Descriptor.ShaderPackage, job.Prefix,
                                         build.texturesDir, local, job.Disk, job.Alpha, job.Src, job.Dst, ov.ColorTableRows,
-                                        build.effectsFolder, build.texSize, ref changed, job.MergeMasks, job.Siblings,
+                                        build.effectsFolder, build.texSize, ref changed, out writeFailed, job.MergeMasks, job.Siblings,
                                         GearMaterialWriter.TextureNames(job.Template), deferNormal: null,
                                         maskAssets: job.Masks);
                                 }
@@ -115,12 +116,12 @@ public sealed partial class SecondSkinService
                                             + "the slot loop will build it", job.I, ex.Message);
                                     return;
                                 }
-                                results[j] = (local, changed, paths);
+                                results[j] = (local, changed, paths, writeFailed);
                             });
                         for (int j = 0; j < specJobs.Count; j++)
                             if (results[j].Redirects != null)
                                 specTextures[specJobs[j].I] = (specJobs[j].Disk, specJobs[j].Prefix, results[j].Redirects,
-                                                               results[j].Changed, results[j].Paths);
+                                                               results[j].Changed, results[j].Paths, results[j].OutputWriteFailed);
                         build.service.statsLayerTextures.Stop(tSpec);
                     }
                 }
@@ -197,6 +198,7 @@ public sealed partial class SecondSkinService
                         toeCap != null && !isMaskShell && ov.Descriptor.ToeCapDensity > 0 ? new DeferredShellNormal() : null;
 
                     List<string>? texPaths;
+                    bool texWriteFailed;
                     if (deferredNormal == null && specTextures.TryGetValue(i, out var spec)
                         && spec.Disk == diskChar && string.Equals(spec.Prefix, texPrefix, StringComparison.Ordinal))
                     {
@@ -204,20 +206,26 @@ public sealed partial class SecondSkinService
                         foreach (var (gp, rel) in spec.Redirects) build.redirects[gp] = rel;
                         build.shellChanged |= spec.Changed;
                         texPaths = spec.Paths;
+                        texWriteFailed = spec.OutputWriteFailed;
                     }
                     else
                     {
                         var tTex = PhaseCounter.Begin();
                         texPaths = build.service.WriteTextures(entry, ov.Descriptor, shader, texPrefix, build.texturesDir, build.redirects, diskChar,
-                            alpha, srcType, dstType, ov.ColorTableRows, build.effectsFolder, build.texSize, ref build.shellChanged, mergeMasks,
-                            siblingReliefs, GearMaterialWriter.TextureNames(template), deferredNormal);
+                            alpha, srcType, dstType, ov.ColorTableRows, build.effectsFolder, build.texSize, ref build.shellChanged,
+                            out texWriteFailed, mergeMasks, siblingReliefs, GearMaterialWriter.TextureNames(template), deferredNormal);
                         build.service.statsLayerTextures.Stop(tTex);
                     }
                     // Registered even if the textures then failed: the normal's redirect is already published. The "/" is how the model
                     // stores material names.
                     if (deferredNormal?.Norm != null)
                         build.pendingNormals.Add(("/" + matName, ov.Descriptor.ToeCapDensity, deferredNormal));
-                    if (texPaths == null) continue;
+                    if (texPaths == null)
+                    {
+                        // Counted at the drop (#91): a texture that could not be put in place, not art that failed.
+                        if (texWriteFailed) build.CountWriteFailure(hIdx);
+                        continue;
+                    }
 
                     var scroll = new ScrollSettings(
                         ov.Descriptor.ScrollSpeedX ?? ScrollSettings.Default.SpeedX,
@@ -239,7 +247,14 @@ public sealed partial class SecondSkinService
                     catch (Exception ex) { build.service.log.Error(ex, "[Proteus] second skin: material build failed for {0}", shader); continue; }
 
                     var matDisk = Path.Combine(build.materialsDir, $"ss_{diskChar}.mtrl");
-                    build.shellChanged |= WriteIfChanged(matDisk, mtrl);
+                    try { build.shellChanged |= WriteIfChanged(matDisk, mtrl); }
+                    catch (OutputWriteException ex)
+                    {
+                        // Only this layer is dropped (#91); the retry composite brings it back.
+                        build.service.log.Error(ex, "[Proteus] second skin: could not write {0} — that layer is left out", matDisk);
+                        build.CountWriteFailure(hIdx);
+                        continue;
+                    }
                     build.service.statsLayerMaterial.Stop(tMat);
                     build.redirects[matGamePath] = Rel(build.outputRoot, matDisk);
                     var shellKey = (entry.ModDirectory, ov.OptionGroup, ov.Option);

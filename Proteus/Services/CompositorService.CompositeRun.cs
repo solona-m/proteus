@@ -53,6 +53,10 @@ public partial class CompositorService
         private bool raceUnsettled;
         // The shell build held every one of its layers off this man (see SecondSkinService.LastBuildHeldAll).
         internal bool shellAllHeld;
+        // Output writes this run could not put in place (#91): shell and skin, and the shell hosts they dropped from.
+        internal int shellWriteFailures;
+        internal int skinWriteFailures;
+        internal readonly List<string> failedShellHosts = new();
         // "Overlay on men" switched off, snapshotted under the config gate for this run (see OverlaysMenFor).
         private HashSet<string> menOffMods = null!;
         // What CarryWomensArtToMen decided: which mods wait for the maps, which gear layers the shell will hold.
@@ -314,7 +318,7 @@ public partial class CompositorService
                 timeline.Mark(redrawsCharacter ? "publish+reload" : "publish");
                 compositor.LogRefreshTimeline(timeline,
                     !redrawsCharacter ? "no enabled mods (already drawn)"
-                    : compositor.config.AutoRedraw ? "no enabled mods" : "no enabled mods (redraw withheld)");
+                    : compositor.AutoRedrawOn ? "no enabled mods" : "no enabled mods (redraw withheld)");
                 compositor.LastResult = new CompositorResult { Success = true, TexturesPatched = 0, OverlayModsUsed = 0, Epoch = epoch };
                 compositor.ResultChanged?.Invoke();
                 return false;
@@ -992,7 +996,7 @@ public partial class CompositorService
             // or by a Glamourer design): asked last, only when everything else says skip, and only of watched mods.
             string shapesWhy = "";
             bool shapesMoved = false;
-            if (SkipUnchanged(force, Volatile.Read(ref compositor._forcePending) != 0,
+            if (SkipUnchanged(force, Volatile.Read(ref compositor._forcePending) != 0, compositor._shellOutputIncomplete,
                     compositor._lastCompositeFingerprint, fingerprint,
                     () => shapesMoved = ShellBodyAtr.Moved(compositor._lastBodyAtrUses, null,
                                                            compositor.secondSkin.PlayerModSettings, out shapesWhy, out var t)
@@ -1292,6 +1296,10 @@ public partial class CompositorService
             bool hostWantedNow = (gearOverlays.Count > 0 && !shellAllHeld) || contentLayers.Count > 0;
             compositor.ReleaseVacatedCarriers(hostWantedNow, shellBuilt, shellBuilt ? shellCarrierSlots : []);
 
+#if PROTEUS_TEST_HARNESS
+            // The harness's shell load fault (ADR 0002): leaves one shell texture out of this manifest.
+            compositor.HarnessFilterPublish(redirects);
+#endif
             compositor.WriteManagedModJson(redirects, manipulations);
             return true;
         }
@@ -1299,7 +1307,7 @@ public partial class CompositorService
         private void Publish()
         {
             // For the log's reload kind. Nothing clears the flag on a redraw; only the next composite's commit reassigns it.
-            reloadKind = !compositor.config.AutoRedraw ? "withheld" : compositor._needFullRedraw ? "full redraw" : "in-place";
+            reloadKind = !compositor.AutoRedrawOn ? "withheld" : compositor._needFullRedraw ? "full redraw" : "in-place";
 
             // Publish only: nothing is deleted in this composite; superseded output is collected at the top of the next one
             // (see PruneSupersededOutput).
@@ -1307,9 +1315,13 @@ public partial class CompositorService
                 $"composite ({(timeline.Reasons.Length == 0 ? "?" : timeline.Reasons)})");
             timeline.Mark("publish+reload");
 
-            // Published: the manifest is now exactly these inputs' output, so set the fingerprint and settle the forced-work
-            // latch. Only on this path, so the gate never claims unproduced output.
-            compositor._lastCompositeFingerprint = fingerprint;
+            // Published: set the fingerprint and settle the forced-work latch. Only on this path, so the gate never claims
+            // unproduced output — and through the retry latch (#91), so a publish that dropped a layer whose file could not
+            // be written is never recorded as these inputs' output.
+            long stamp = Interlocked.Increment(ref compositor._publishStamp);
+            bool keepSkin = true;
+            compositor.RecordPublishOutcome(fingerprint, shellWriteFailures, Volatile.Read(ref skinWriteFailures),
+                failedShellHosts, stamp, k => keepSkin = k);
             // The settings may have moved while this run built (a chest picked mid-composite): look once more, off this
             // thread. Bounded by the shape-force latch, so it cannot chain.
             if (compositor._lastBodyAtrUses.Count > 0)
@@ -1319,8 +1331,10 @@ public partial class CompositorService
                     catch (Exception ex) { compositor.log.Debug("[Proteus] body-shapes re-check failed: {0}", ex.Message); }
                 });
             // The skin half, in one reference swap, only on publish (assigned even on reuse).
-            compositor._lastSkinPublish = new SkinPublish(
-                skinFingerprint, skinRedirectsThisRun, compositor._channelContributions, compositor._skinGlowTargets);
+            // Not when a skin texture could not be written (#91): the next composite rebuilds the skin rather than reuse it.
+            compositor._lastSkinPublish = keepSkin
+                ? new SkinPublish(skinFingerprint, skinRedirectsThisRun, compositor._channelContributions, compositor._skinGlowTargets)
+                : null;
             Interlocked.Exchange(ref compositor._forcePending, 0);
             Interlocked.Exchange(ref compositor._skinForcePending, 0);
 
@@ -1358,7 +1372,7 @@ public partial class CompositorService
 
             // Winning the path is not the game having drawn it; this check runs after the redraw. Withheld only when the shell
             // needed the reload and auto redraw is off.
-            compositor.SchedulePostRedrawShellCheck(reloadWithheld: !compositor.config.AutoRedraw && shellNeedsReload, timeline);
+            compositor.SchedulePostRedrawShellCheck(reloadWithheld: !compositor.AutoRedrawOn && shellNeedsReload, timeline);
 
             compositor.LastResult = new CompositorResult
             {

@@ -465,13 +465,17 @@ public sealed partial class SecondSkinService
         catch { /* unreadable — fall through and rewrite */ }
 
         var tmp = path + "." + Guid.NewGuid().ToString("N") + ".tmp";
-        File.WriteAllBytes(tmp, data);
-        for (int i = 0; ; i++)
+        try { File.WriteAllBytes(tmp, data); }
+        catch (Exception ex)
         {
-            try { File.Move(tmp, path, overwrite: true); return true; }
-            catch (Exception) when (i < 5) { Thread.Sleep(50 << i); }  // the game may hold it open mid-load
-            catch { try { File.Delete(tmp); } catch { } throw; }       // don't leave the temp behind
+            try { File.Delete(tmp); } catch { }
+            if (OutputWriteException.IsTransient(ex)) throw new OutputWriteException(path, ex);
+            throw;
         }
+        // The game may hold the old file open mid-load: retried, then thrown as an OutputWriteException (#91), which is
+        // what counts the layer as dropped for the retry composite. The temp never stays behind.
+        TextureLoader.MoveIntoPlace(tmp, path);
+        return true;
     }
 
     /// <summary>
@@ -1108,6 +1112,9 @@ public sealed partial class SecondSkinService
         string outputRoot,
         string? bodyType,
         string? effectsFolder,
+        // Output files that could not be put in place (#91), and the hosts whose layer or model that dropped: handed back
+        // on every return path, so the compositor's retry latch never mistakes a dropped layer for a published one.
+        out ShellWriteFailures writes,
         IReadOnlyDictionary<string, string>? equippedPartModels = null,
         IReadOnlyDictionary<string, string>? equippedAccessories = null,
         Func<string, bool>? gen2Allowed = null,
@@ -1150,11 +1157,22 @@ public sealed partial class SecondSkinService
         // The run's shared settings reads (#55), so the shell and the skin's bust standoff judge one reading.
         Func<string, ShellBodyAtr.ModSettings?>? settingsOf = null)
     {
-        return new ShellSetBuild(this, charCode, gearOverlays, outputRoot, bodyType, effectsFolder, equippedPartModels, equippedAccessories, gen2Allowed, invisibleGlassesSet, metModels, enabledBodyShapes, maskShellMods, bareBodyModels, drawnRaceCode, activeMaterials, emperorRingVariant, invisibleGlassesVariant, humanPartModels, contentLayers, allEntries, pristineHumanModels, shellTexSize, equippedSlotVariants, hiddenParts)
+        var build = new ShellSetBuild(this, charCode, gearOverlays, outputRoot, bodyType, effectsFolder, equippedPartModels, equippedAccessories, gen2Allowed, invisibleGlassesSet, metModels, enabledBodyShapes, maskShellMods, bareBodyModels, drawnRaceCode, activeMaterials, emperorRingVariant, invisibleGlassesVariant, humanPartModels, contentLayers, allEntries, pristineHumanModels, shellTexSize, equippedSlotVariants, hiddenParts)
         {
             WearerIsMan = wearerIsMan, MenMapsReady = menMapsReady, MenAllowed = menAllowed, ToeCaps = toeCaps,
             SettingsReader = settingsOf,
-        }.Run();
+        };
+        try { return build.Run(); }
+        finally { writes = build.WriteFailures(); }
+    }
+
+    /// <summary>
+    /// The output writes a shell build could not put in place (#91): how many, and the game paths of the host models
+    /// whose layer, material or model was dropped for it (empty when the failure was not tied to one host).
+    /// </summary>
+    internal sealed record ShellWriteFailures(int Count, IReadOnlyList<string> HostModelPaths)
+    {
+        public static readonly ShellWriteFailures None = new(0, Array.Empty<string>());
     }
 
     /// <summary>
@@ -1593,7 +1611,10 @@ public sealed partial class SecondSkinService
         string? srcType, string? dstType, List<ColorTableRowPreset>? rows, string? effectsFolder,
         // The build's sheet size (see Build); every buffer here, and the caller's `alpha`/`siblingReliefs`, is square at it.
         int texSize,
-        ref bool texturesChanged, bool mergeMasks = true,
+        ref bool texturesChanged,
+        // Whether a null result is a file that could not be put in place (#91), as opposed to art that failed.
+        out bool outputWriteFailed,
+        bool mergeMasks = true,
         IReadOnlyList<byte[]>? siblingReliefs = null,   // each: a normal RGBA with coverage in its alpha lane
         // The template's own texture paths, in slot order; a slot that cannot be fabricated inherits the template's.
         IReadOnlyList<string>? templateTextures = null,
@@ -1603,7 +1624,9 @@ public sealed partial class SecondSkinService
         // The mod's active mask assets, when already resolved; the parallel texture build must not ask Penumbra from several threads.
         List<(string MaskPath, string? NormalPath, string? IndexPath)>? maskAssets = null)
     {
-        return new ShellTextureWrite(this, entry, d, shader, texPrefix, texturesDir, redirects, letter, alpha, srcType, dstType, rows, effectsFolder, texSize, mergeMasks, siblingReliefs, templateTextures, deferNormal, maskAssets).Run(ref texturesChanged);
+        var write = new ShellTextureWrite(this, entry, d, shader, texPrefix, texturesDir, redirects, letter, alpha, srcType, dstType, rows, effectsFolder, texSize, mergeMasks, siblingReliefs, templateTextures, deferNormal, maskAssets);
+        try { return write.Run(ref texturesChanged); }
+        finally { outputWriteFailed = write.OutputWriteFailed; }
     }
 
     /// <summary>
@@ -1624,8 +1647,8 @@ public sealed partial class SecondSkinService
     /// Write one shell texture slot, skipping it when nothing changed. Shared by WriteTextures and the held-back normal
     /// so they agree on compression and on "unchanged".
     /// </summary>
-    private bool WriteShellSlot(string slot, byte[] data, int w, int h, string disk, bool compress,
-                                ref bool texturesChanged)
+    private WriteOutcome WriteShellSlot(string slot, byte[] data, int w, int h, string disk, bool compress,
+                                        ref bool texturesChanged)
     {
         // Compression (opt-in). "id" is compressed only when the trial encode proves it keeps every texel's row
         // (see IndexPlanFor): lossy error there picks the wrong row. The normal uses BC5 only when its blue (the
@@ -1664,15 +1687,16 @@ public sealed partial class SecondSkinService
             if (plan == TextureLoader.IndexPlan.Bc5AfterSnap)
                 data = snapped ?? TextureLoader.SnapIndexForBc5(data, w, h, out _, out _);
 
-            if (!textureLoader.WriteTex(data, w, h, disk, encoding))
+            var outcome = textureLoader.TryWriteTex(data, w, h, disk, encoding);
+            if (outcome != WriteOutcome.Written)
             {
                 log.Error("[Proteus] second skin: failed to write {0}", disk);
-                return false;
+                return outcome;
             }
             _texHashes[disk] = hash;
             texturesChanged = true;
         }
-        return true;
+        return WriteOutcome.Written;
     }
 
     /// <summary>
@@ -1683,7 +1707,9 @@ public sealed partial class SecondSkinService
     private void WriteDeferredNormals(
         List<(string Material, int Density, DeferredShellNormal Normal)> pending,
         Dictionary<string, (byte[] Mask, int Size)> regions, Dictionary<string, string> redirects,
-        ref bool texturesChanged)
+        ref bool texturesChanged,
+        // Called once per normal that could not be put in place (#91).
+        Action? onOutputWriteFailed = null)
     {
         bool compress = config.EnableCompression && textureLoader.CompressionAffordable();
         foreach (var (material, density, pn) in pending)
@@ -1727,11 +1753,13 @@ public sealed partial class SecondSkinService
             // The name moves with the bytes and the compression setting.
             ulong nameHash = Hash(norm) ^ (compress ? 0xC0FFEE_0000_C0DEul : 0ul);
             var disk = Path.Combine(pn.TexturesDir, ShellTextureNames.ContentAddressedNormal(pn.Letter, nameHash));
-            if (WriteShellSlot("norm", norm, pn.Size, pn.Size, disk, compress, ref texturesChanged))
+            var outcome = WriteShellSlot("norm", norm, pn.Size, pn.Size, disk, compress, ref texturesChanged);
+            if (outcome == WriteOutcome.Written)
             {
                 redirects[pn.GamePath] = Rel(pn.OutputRoot, disk);
                 continue;
             }
+            if (outcome == WriteOutcome.OutputWriteFailed) onOutputWriteFailed?.Invoke();
 
             // The write failed, but the material already names this path and a missing resource fails the whole material:
             // serve the shell's last normal instead (wrong density for one composite rather than no shell).
@@ -1780,7 +1808,9 @@ public sealed partial class SecondSkinService
         ContentUnit unit, string texPrefix, string texturesDir, char letter, string? effectsFolder,
         // The build's sheet size (see Build); only the flat fallbacks use it.
         int texSize,
-        Dictionary<string, string> redirects, ref bool texturesChanged)
+        Dictionary<string, string> redirects, ref bool texturesChanged,
+        // Called once per texture that could not be put in place (#91).
+        Action? onOutputWriteFailed = null)
     {
         var glow = unit.Glow;
         // ToScrollSettings returns null exactly when Scroll is empty, so a non-null result also pins the effect name.
@@ -1853,8 +1883,10 @@ public sealed partial class SecondSkinService
                 if (plan == TextureLoader.IndexPlan.Bc5AfterSnap)
                     rgba = snapped ?? TextureLoader.SnapIndexForBc5(rgba, w, h, out _, out _);
 
-                if (!textureLoader.WriteTex(rgba, w, h, disk, encoding))
+                var outcome = textureLoader.TryWriteTex(rgba, w, h, disk, encoding);
+                if (outcome != WriteOutcome.Written)
                 {
+                    if (outcome == WriteOutcome.OutputWriteFailed) onOutputWriteFailed?.Invoke();
                     log.Error("[Proteus] content: failed to write {0}", disk);
                     return null;
                 }
@@ -1893,6 +1925,8 @@ public sealed partial class SecondSkinService
             }
             catch (Exception ex)
             {
+                // Only a file that could not be put in place is worth a retry (#91); a missing source is not.
+                if (ex is OutputWriteException) onOutputWriteFailed?.Invoke();
                 log.Warning("[Proteus] content: could not republish {0} ({1}) — naming the pack's own path "
                           + "instead: {2}", slot, file, ex.Message);
                 return packPath;

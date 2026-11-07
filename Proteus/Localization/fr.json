@@ -459,12 +459,20 @@
     "message": "[Proteus] « {0} » écrase {1}, où Proteus compose vos calques — ils n'apparaîtront donc pas. Solution : dans Penumbra, montez la priorité du mod « Proteus » au-dessus de « {0} ».",
     "description": ""
   },
-  "Chat.ShellNotDrawing": {
-    "message": "[Proteus] Votre seconde peau a été construite mais le jeu ne la dessine pas. L'accessoire qui la porte est équipé, pourtant le personnage ne charge pas la version de Proteus. Déséquipez puis rééquipez cet accessoire, ou choisissez-en un autre.",
+  "Chat.ShellPartNotDrawn.Fmt": {
+    "message": "[Proteus] Une partie de votre seconde peau n'apparaît toujours pas. Cette partie est portée par {0}. Déséquipez-le puis rééquipez-le, ou portez ce calque sur un autre accessoire.",
     "description": ""
   },
-  "Chat.ShellMaterialFailed": {
-    "message": "[Proteus] Une partie de votre seconde peau n'est pas dessinée. Le reste est bien sur votre personnage : soit une texture dont cette pièce a besoin est manquante, soit le jeu conserve encore la version précédente. Essayez d'abord « Recomposer maintenant », puis déséquipez et rééquipez l'accessoire qui la porte.",
+  "Chat.ShellNotDrawn.Fmt": {
+    "message": "[Proteus] Votre seconde peau n'apparaît toujours pas, bien que {0} soit équipé. Déséquipez-le puis rééquipez-le, ou portez le calque sur un autre accessoire.",
+    "description": ""
+  },
+  "Chat.ShellCarrierNotDrawn.Fmt": {
+    "message": "[Proteus] Une partie de votre seconde peau n'apparaît pas. Elle est portée par {0}, l'accessoire invisible que Proteus vous équipe pour la porter. Cliquez sur « Recomposer maintenant » dans la fenêtre de Proteus ; si elle n'apparaît toujours pas, retirez cet accessoire et Proteus le remettra.",
+    "description": ""
+  },
+  "Chat.ShellNotDrawnRedrawOff.Fmt": {
+    "message": "[Proteus] Une partie de votre seconde peau n'apparaît pas. Elle est portée par {0}. Le redessin automatique est désactivé, donc Proteus n'a pas redessiné votre personnage : utilisez le bouton Redraw de Penumbra ou changez de zone, et si elle n'apparaît toujours pas, déséquipez puis rééquipez cet accessoire.",
     "description": ""
   },
   "Chat.ShellNeedsRedraw": {

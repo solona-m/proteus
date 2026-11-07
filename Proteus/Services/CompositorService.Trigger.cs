@@ -158,7 +158,9 @@ public partial class CompositorService
     /// release's redraw already did. That composite is never held itself.</param>
     public void TriggerRecomposite(string reason, int delayMs = 200, bool force = true,
         bool skinFingerprintAuthoritative = false, bool autoRedrawExempt = false, bool drawStateStable = false,
-        bool deferWhileHeld = false, int releaseToken = 0)
+        bool deferWhileHeld = false, int releaseToken = 0,
+        // A retry of a failed write (#91) leaves the colour-row highlight alone: the user did not change anything.
+        bool keepHighlight = false)
     {
         if (_disposed || !config.PluginEnabled || !penumbra.IsAvailable) return;
 
@@ -167,7 +169,7 @@ public partial class CompositorService
         // not a stale look. A forced composite cancelled by an ambient one must not be lost, so the force is latched
         // (cleared only when a composite publishes) whether or not the trigger is then held. Held before the
         // debounce token is taken, so a held trigger never cancels the composite in flight.
-        var admission = RedrawHold.Admit(force, config.AutoRedraw, autoRedrawExempt, deferWhileHeld,
+        var admission = RedrawHold.Admit(force, AutoRedrawOn, autoRedrawExempt, deferWhileHeld,
             latchForce: () =>
             {
                 Interlocked.Exchange(ref _forcePending, 1);
@@ -187,7 +189,7 @@ public partial class CompositorService
             return;
         }
 
-        Highlighter?.Clear();
+        if (!keepHighlight) Highlighter?.Clear();
 
         // Cancels whatever composite was pending and gives us the token for this one (see DebounceGate).
         var token = recompositeGate.Next();
@@ -269,7 +271,7 @@ public partial class CompositorService
                 // there is nothing to composite: the snapshot stays dirty for the first composite that has one.
                 var preamble = RedrawHold.Preamble.None;
                 if (fresh != null)
-                    preamble = RedrawHold.PlanPreamble(wasDirty, config.AutoRedraw,
+                    preamble = RedrawHold.PlanPreamble(wasDirty, AutoRedrawOn,
                         string.Equals(BodyTypeKey(fresh), _lastCompositedBodyType, StringComparison.OrdinalIgnoreCase),
                         wasDirty && ReleaseTokenValid(releaseToken),
                         () => discovery.DiscoverEnabled().Count > 0);

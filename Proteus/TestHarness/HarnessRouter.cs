@@ -30,6 +30,7 @@ internal sealed partial class HarnessRouter(HarnessJobs jobs, LogRing ring, Sess
         ("GET", "/studio"), ("POST", "/actions/studio-open"), ("POST", "/actions/studio-set"), ("POST", "/actions/studio-drag"),
         ("GET", "/matcaps"), ("POST", "/actions/matcap-image"), ("POST", "/actions/matcap"),
         ("POST", "/actions/boot-rearm"), ("POST", "/actions/sidecar-edit"), ("GET", "/sidecar"), ("POST", "/actions/auto-refit"),
+        ("POST", "/actions/output-lock"), ("POST", "/actions/shell-fault"), ("POST", "/actions/auto-redraw"),
     ];
 
     private IHarnessGame Game => jobs.Game;
@@ -76,6 +77,9 @@ internal sealed partial class HarnessRouter(HarnessJobs jobs, LogRing ring, Sess
                 "/actions/sidecar-edit" => await SidecarEdit(request),
                 "/sidecar" => await SidecarView(request),
                 "/actions/auto-refit" => await AutoRefitAction(request),
+                "/actions/output-lock" => OutputLockAction(request),
+                "/actions/shell-fault" => await ShellFaultAction(request),
+                "/actions/auto-redraw" => await AutoRedrawAction(request),
                 _ => Job(path["/jobs/".Length..]),
             };
         }
@@ -110,6 +114,7 @@ internal sealed partial class HarnessRouter(HarnessJobs jobs, LogRing ring, Sess
     private async Task<HarnessResponse> State()
     {
         var (s, harnessChanges, qa) = await OnFramework(() => (Game.State(), changes.View(), QaState()));
+        var recovery = Game.RecoveryState();
         var models = ModelJoin.Join(s.Loaded, s.ResourceMap, s.ModsRoot);
         var c = s.Compositor;
         var a = s.AutoRefit;
@@ -129,6 +134,8 @@ internal sealed partial class HarnessRouter(HarnessJobs jobs, LogRing ring, Sess
                     : null,
                 lastRefresh = s.LastRefresh is { } t ? new { outcome = t.Outcome, totalMs = t.TotalMs, spans = t.Spans, at = t.AtUtc } : null,
                 boot = qa.Boot,
+                // Issue sweep D: the write-retry latch, the drawn check's steps, the shell and move faults. No names.
+                recovery,
             },
             collections = qa.Collections,
             io = qa.Io,

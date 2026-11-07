@@ -834,6 +834,73 @@ public sealed class MatcapHairPortTests : IDisposable
         AssertGone(mod, m2);
     }
 
+    // ── #96: once the author's matcap is undone and a port keeps it, Undo/Forget have nothing left to do ──────────────
+
+    private static Dictionary<string, (string Sha, DateTime Written)> SnapshotWithTimes(Mod mod) =>
+        Directory.EnumerateFiles(mod.Root, "*", SearchOption.AllDirectories)
+                 .ToDictionary(p => Path.GetRelativePath(mod.Root, p),
+                               p => (HairPortPlan.Sha8(File.ReadAllBytes(p)), File.GetLastWriteTimeUtc(p)));
+
+    /// <summary>The author's matcap undone while a port remade from the matcapped hairstyle still names it.</summary>
+    private (string PortRel, MatcapRecord.MaterialEntry M2) AuthorUndoneWhileAPortDrawsIt(Mod mod)
+    {
+        var (rel, m2) = PortedAuthorWithMatcap(mod);
+        mod.Put(rel, Naming(m2.Name));
+        Assert.True(MatcapWriter.Undo(mod.Root, "long/c0801h0130_hir.mdl").Ok);
+        AssertKept(mod, m2);
+        return (rel, m2);
+    }
+
+    [Fact]
+    [Trait("Plan", "AC-issue-sweep-d-1")]
+    public void A_second_undo_while_a_port_draws_the_matcap_has_nothing_to_undo()
+    {
+        using var mod = HairMod();
+        var (rel, m2) = AuthorUndoneWhileAPortDrawsIt(mod);
+        var before = SnapshotWithTimes(mod);
+        var again = MatcapWriter.Undo(mod.Root, "long/c0801h0130_hir.mdl");
+        Assert.Equal(MatcapWriter.CodeNothing, again.Code);
+        Assert.StartsWith(ProteusLoc.Localize("Parts.Matcap.NothingToUndo", "There is no matcap on this model to undo."), again.Message);
+        Assert.Contains(PortsSentence(rel.Replace('\\', '/')), again.Message);
+        AssertKept(mod, m2);
+        Assert.Equal(before, SnapshotWithTimes(mod));
+    }
+
+    [Fact]
+    [Trait("Plan", "AC-issue-sweep-d-2")]
+    public void Forget_while_a_port_still_draws_the_matcap_has_nothing_to_forget()
+    {
+        using var mod = HairMod();
+        var (rel, m2) = AuthorUndoneWhileAPortDrawsIt(mod);
+        var before = SnapshotWithTimes(mod);
+        var forget = MatcapWriter.Forget(mod.Root, "long/c0801h0130_hir.mdl");
+        Assert.Equal(MatcapWriter.CodeNothing, forget.Code);
+        Assert.StartsWith(ProteusLoc.Localize("Parts.Matcap.NothingToForget",
+            "Every matcap on this model is still in use; there is nothing to forget."), forget.Message);
+        Assert.Contains(PortsSentence(rel.Replace('\\', '/')), forget.Message);
+        AssertKept(mod, m2);
+        Assert.Equal(before, SnapshotWithTimes(mod));
+    }
+
+    [Fact]
+    [Trait("Plan", "EDGE-issue-sweep-d-4")]
+    public void Second_author_undo_with_a_matcapped_port_has_nothing_to_undo_and_the_port_still_undoes()
+    {
+        // The port has its own matcap (M1) and still names the author's (M2).
+        using var mod = HairMod();
+        var (rel, m2) = PortedAuthorWithMatcap(mod);
+        mod.Put(rel, HairModel(201, null, null, Naming(m2.Name, 1)));
+        Assert.True(Apply(mod, rel, Target).Ok);
+        var m1 = MatcapRecord.Read(mod.Root).MaterialsOf(rel).Single(m => m.Name != m2.Name);
+        Assert.True(MatcapWriter.Undo(mod.Root, "long/c0801h0130_hir.mdl").Ok);
+
+        Assert.Equal(MatcapWriter.CodeNothing, MatcapWriter.Undo(mod.Root, "long/c0801h0130_hir.mdl").Code);
+        var own = MatcapWriter.Undo(mod.Root, rel);
+        Assert.True(own.Ok, own.Message);
+        AssertGone(mod, m1);
+        AssertKept(mod, m2);
+    }
+
     [Fact]
     [Trait("Plan", "AC-issue-sweep-c-1")]
     public void Undoing_an_authors_matcap_keeps_it_while_a_ports_own_redirect_points_at_its_file()

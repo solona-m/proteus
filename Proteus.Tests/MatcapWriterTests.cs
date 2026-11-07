@@ -661,6 +661,113 @@ public class MatcapWriterTests
         Assert.Empty(MatcapRecord.Read(f.ModRoot).Materials);
     }
 
+    // ── #96: an Undo with nothing left to undo says so, and changes nothing ─────────────────────────────────────────
+
+    /// <summary>Every file of the mod with its hash and write time: what "nothing changed" compares.</summary>
+    private static Dictionary<string, (string Sha, DateTime Written)> Snapshot(string modRoot) =>
+        Directory.EnumerateFiles(modRoot, "*", SearchOption.AllDirectories)
+                 .ToDictionary(p => Path.GetRelativePath(modRoot, p),
+                               p => (HairPortPlan.Sha8(File.ReadAllBytes(p)), File.GetLastWriteTimeUtc(p)));
+
+    private static string NothingToUndo => ProteusLoc.Localize("Parts.Matcap.NothingToUndo", "There is no matcap on this model to undo.");
+
+    /// <summary>The author's matcap (M2) undone while a refit remade from the matcapped file still draws it.</summary>
+    private static (MatcapFixture F, MatcapRecord.MaterialEntry M2) AuthorUndoneWhileARefitDrawsIt()
+    {
+        var f = WithRefit();
+        Assert.True(ApplyOn(f, MatcapFixture.ModelRel, "s.tex", out _).Ok);
+        var m2 = MatcapRecord.Read(f.ModRoot).MaterialsOf(MatcapFixture.ModelRel).Single();
+        var remade = f.Current(MatcapFixture.ModelRel);
+        remade[^1] ^= 0x5A;
+        File.WriteAllBytes(MatcapWriter.Full(f.ModRoot, RefitRel), remade);
+        var first = MatcapWriter.Undo(f.ModRoot, MatcapFixture.ModelRel);
+        Assert.True(first.Ok, first.Message);
+        Assert.StartsWith(string.Format(ProteusLoc.Localize("Parts.Matcap.Undone.Fmt", "Matcaps undone on {0} model file(s)."), 1), first.Message);
+        return (f, m2);
+    }
+
+    [Fact]
+    [Trait("Plan", "AC-issue-sweep-d-1")]
+    [Trait("Plan", "AC-issue-sweep-d-3")]
+    public void A_second_undo_after_a_refit_kept_the_material_has_nothing_to_undo()
+    {
+        var (f, m2) = AuthorUndoneWhileARefitDrawsIt();
+        using (f)
+        {
+            var before = Snapshot(f.ModRoot);
+            var again = MatcapWriter.Undo(f.ModRoot, MatcapFixture.ModelRel);
+            Assert.False(again.Ok);
+            Assert.Equal(MatcapWriter.CodeNothing, again.Code);
+            Assert.StartsWith(NothingToUndo, again.Message);
+            Assert.Contains(RefitRel, again.Message, StringComparison.OrdinalIgnoreCase);   // the refit keeping it is named
+            Assert.Equal(before, Snapshot(f.ModRoot));                                       // nothing written, record included
+            Assert.True(File.Exists(MatcapWriter.Full(f.ModRoot, m2.File)));
+        }
+    }
+
+    [Fact]
+    [Trait("Plan", "EDGE-issue-sweep-d-3")]
+    public void A_kept_material_no_longer_drawn_proceeds()
+    {
+        // [EDGE-issue-sweep-d-3] The author was undone while a refit kept M2; the refit is then remade without it. The next
+        // Undo has real work: M2's files and record entry go.
+        var (f, m2) = AuthorUndoneWhileARefitDrawsIt();
+        using (f)
+        {
+            File.WriteAllBytes(MatcapWriter.Full(f.ModRoot, RefitRel), f.Current(MatcapFixture.ModelRel));
+            var again = MatcapWriter.Undo(f.ModRoot, MatcapFixture.ModelRel);
+            Assert.True(again.Ok, again.Message);
+            Assert.False(File.Exists(MatcapWriter.Full(f.ModRoot, m2.File)));
+            Assert.DoesNotContain(MatcapRecord.Read(f.ModRoot).Materials, m => m.Name == m2.Name);
+        }
+    }
+
+    [Fact]
+    [Trait("Plan", "EDGE-issue-sweep-d-1")]
+    public void An_unrecorded_member_with_a_leftover_backup_is_still_retired()
+    {
+        var (f, _) = AuthorUndoneWhileARefitDrawsIt();
+        using (f)
+        {
+            // The first Undo's backup delete failed: the backup is still there, so moving it aside is real work.
+            var backup = MatcapWriter.BackupPath(f.ModRoot, MatcapWriter.BackupSubdir, MatcapFixture.ModelRel);
+            Directory.CreateDirectory(Path.GetDirectoryName(backup)!);
+            File.WriteAllBytes(backup, f.Current(MatcapFixture.ModelRel));
+            var again = MatcapWriter.Undo(f.ModRoot, MatcapFixture.ModelRel);
+            Assert.True(again.Ok, again.Message);
+            Assert.False(File.Exists(backup));
+        }
+    }
+
+    [Fact]
+    [Trait("Plan", "EDGE-issue-sweep-d-2")]
+    [Trait("Plan", "AC-issue-sweep-d-3")]
+    public void Already_undone_author_plus_matcapped_sibling_restores_the_sibling_only()
+    {
+        // One apply covered the author's file and a sibling option's copy (M2 on both). The author's entry is then left as
+        // an earlier Undo would leave it — restored, unrecorded, no backup — while the sibling still carries M2.
+        const string otherRel = "model/other.mdl";
+        using var f = new MatcapFixture();
+        var original = f.Current(MatcapFixture.ModelRel);
+        var otherFull = MatcapWriter.Full(f.ModRoot, otherRel);
+        Directory.CreateDirectory(Path.GetDirectoryName(otherFull)!);
+        File.WriteAllBytes(otherFull, original);
+        AddOption(f, "Size", ("Author", MatcapFixture.ModelRel), ("Other", otherRel));
+        Assert.True(ApplyOn(f, MatcapFixture.ModelRel, "s.tex", out var applied).Ok);
+        Assert.Equal(2, applied.Request!.Models.Count);
+
+        var record = MatcapRecord.Read(f.ModRoot);
+        record.Models.RemoveAll(m => PenumbraModMeta.SameFile(m.File, MatcapFixture.ModelRel));
+        MatcapRecord.Write(f.ModRoot, record);
+        File.Delete(MatcapWriter.BackupPath(f.ModRoot, MatcapWriter.BackupSubdir, MatcapFixture.ModelRel));
+        File.WriteAllBytes(MatcapWriter.Full(f.ModRoot, MatcapFixture.ModelRel), original);
+
+        var undo = MatcapWriter.Undo(f.ModRoot, MatcapFixture.ModelRel);
+        Assert.True(undo.Ok, undo.Message);
+        Assert.StartsWith(string.Format(ProteusLoc.Localize("Parts.Matcap.Undone.Fmt", "Matcaps undone on {0} model file(s)."), 1), undo.Message);
+        Assert.Equal(original, f.Current(otherRel));
+    }
+
     [Fact]
     [Trait("Plan", "EDGE-matcaps-11")]
     public void A_matcap_on_a_remade_refit_backs_up_the_remade_file_not_the_old_one()

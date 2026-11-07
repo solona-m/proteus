@@ -44,14 +44,19 @@ public partial class CompositorService
         var expected = _shellDrawnCheck;
         if (expected == null || expected.Materials.Count == 0) return;
 
-        _ = Task.Run(() => CheckShellDrawnAsync(expected, reloadWithheld, timeline));
+        // Counted from scheduling to the end (Copy Logs waits on it), on every way out.
+        _ = InFlight.ScheduleAsync(_shellChecksInFlight, () => Task.CompletedTask, () => true,
+            () => CheckShellDrawnAsync(expected, reloadWithheld, timeline));
     }
 
     /// <summary>Waits for the redraw to settle, then reports shell materials the game did not draw.</summary>
     /// <param name="recheck">0 for the check after a publish; 1 and 2 for the drawn check's own re-checks of a shell
     /// whose carrier host was not drawn (see <see cref="CarrierRecheck"/>).</param>
+    /// <param name="afterOwnRedraw">This check follows Proteus's own automatic redraw for this shell: it ends in a
+    /// confirmation or the message, never silently (see <see cref="EndAfterOwnRedraw"/>).</param>
+    /// <param name="extra">How many deferral or after-redraw re-checks this shell has had.</param>
     private async Task CheckShellDrawnAsync(ShellDrawnProbe expected, bool reloadWithheld, RefreshTimeline? timeline,
-                                            int recheck = 0)
+                                            int recheck = 0, bool afterOwnRedraw = false, int extra = 0)
     {
         try
         {
@@ -107,6 +112,7 @@ public partial class CompositorService
                 {
                     // The one place this is set; everything below is a failure, inconclusive read or deferral.
                     _shellConfirmedDrawnKey = ShellProbeKey(expected);
+                    ClearUndrawnKeys(expected);
                     // Stamped with the key: a carrier ask or a game redraw after this makes it stale (ShellConfirmedSince).
                     Interlocked.Exchange(ref _shellConfirmedDrawnAtTick, Environment.TickCount64);
                     if (timeline != null)
@@ -131,23 +137,26 @@ public partial class CompositorService
                 hostMaterials = materials;
             }
 
-            if (!anyRead) return;   // never got an answer at all — not in game / IPC down
+            // Never got an answer at all — not in game / IPC down. After our own redraw, once more, then the message.
+            if (!anyRead) { EndAfterOwnRedraw(expected, reloadWithheld, afterOwnRedraw, extra); return; }
 
             // The host was seen, but the window ended on a read that could not judge it: no verdict either way.
             if (hostEverDrawn && !lastJudged)
             {
                 log.Information("[Proteus] second skin drawn check inconclusive — the character was not "
                         + "drawable, or its host not back, on the last read of the sampling window (not a failure)");
+                EndAfterOwnRedraw(expected, reloadWithheld, afterOwnRedraw, extra);
                 return;
             }
 
             if (!hostEverDrawn)
             {
                 // Every host undrawn: when they are our ring carriers, re-check on our own as below (no echo composite).
-                if (CarrierRecheck(expected, reloadWithheld, timeline, recheck, expected.Materials)) return;
+                if (CarrierRecheck(expected, reloadWithheld, timeline, recheck, expected.Materials, afterOwnRedraw, extra)) return;
                 log.Information("[Proteus] second skin drawn check inconclusive — the host accessory was not back "
                         + "in the draw object within the sampling window, so whether our mesh loaded is "
                         + "unknown (not a failure)");
+                EndAfterOwnRedraw(expected, reloadWithheld, afterOwnRedraw, extra);
                 return;
             }
 
@@ -155,10 +164,11 @@ public partial class CompositorService
             if (missing.Count == 0)
             {
                 // A host that is one of our carriers: no echo composite re-checks it any more, so this check does.
-                if (CarrierRecheck(expected, reloadWithheld, timeline, recheck, hostGone)) return;
+                if (CarrierRecheck(expected, reloadWithheld, timeline, recheck, hostGone, afterOwnRedraw, extra)) return;
                 log.Information("[Proteus] second skin drawn check inconclusive — {0} shell material(s) ride a "
                               + "host that is not drawn right now ({1}); everything on a drawn host loaded",
                     hostGone.Count, string.Join(", ", hostGone));
+                EndAfterOwnRedraw(expected, reloadWithheld, afterOwnRedraw, extra);
                 return;
             }
 
@@ -173,11 +183,15 @@ public partial class CompositorService
                     log.Information("[Proteus] second skin drawn check deferred — a carrier was equipped {0}ms ago "
                             + "and is still loading; re-checking", sinceCarrier);
                     ScheduleShellRecheck(expected, reloadWithheld, timeline, recheck + 1,
-                        ShellRecheck.DelayMs(Environment.TickCount64, lastCarrierAsk, RingInjectCooldownMs, CarrierDecisions.SettleMs));
+                        ShellRecheck.DelayMs(Environment.TickCount64, lastCarrierAsk, RingInjectCooldownMs, CarrierDecisions.SettleMs),
+                        afterOwnRedraw, extra);
                 }
                 else
+                {
                     log.Information("[Proteus] second skin drawn check still deferred — a carrier was equipped {0}ms ago "
                             + "and is still loading; no further re-check", sinceCarrier);
+                    EndAfterOwnRedraw(expected, reloadWithheld, afterOwnRedraw, extra);
+                }
                 return;
             }
 
@@ -233,13 +247,8 @@ public partial class CompositorService
                           + "before it), or the game is still drawing the previous shell model",
                     missing.Count, expected.Materials.Count, string.Join(", ", missing));
 
-                var failed = ProteusLoc.Localize("Chat.ShellMaterialFailed",
-                    "[Proteus] Part of your second skin isn't being drawn. The rest of it is on your character, so "
-                    + "either a texture that piece needs is missing, or the game is still holding the previous "
-                    + "version. Try \"Recomposite now\" first, then unequipping and re-equipping the accessory it "
-                    + "rides on.");
-                _ = Plugin.Framework.RunOnFrameworkThread(
-                    () => Plugin.ChatGui.Print(new SeStringBuilder().AddUiForeground(failed, 17).Build()));
+                // One automatic redraw before any chat; the message names the accessory if it is still missing after.
+                DecideUndrawn(expected, reloadWithheld, timeline, missing, partly: true, afterOwnRedraw, extra);
                 return;
             }
 
@@ -250,12 +259,7 @@ public partial class CompositorService
                 missing.Count, expected.Materials.Count, string.Join(", ", missing),
                 siblings.Count == 0 ? "(none — the host loads no material of its own)" : string.Join(", ", siblings));
 
-            var msg = ProteusLoc.Localize("Chat.ShellNotDrawing",
-                "[Proteus] Your second skin was built but the game isn't drawing it. The accessory "
-                + "it rides on is equipped, yet the character isn't loading Proteus' version. Try "
-                + "unequipping and re-equipping that accessory, or pick a different one.");
-            _ = Plugin.Framework.RunOnFrameworkThread(
-                () => Plugin.ChatGui.Print(new SeStringBuilder().AddUiForeground(msg, 17).Build()));
+            DecideUndrawn(expected, reloadWithheld, timeline, missing, partly: false, afterOwnRedraw, extra);
         }
         catch (Exception ex) when (_disposed || IsLoadContextUnloading(ex)) { }
         catch (Exception ex) { log.Error(ex, "[Proteus] post-redraw shell check failed"); }
@@ -413,14 +417,14 @@ public partial class CompositorService
 
     /// <summary>Run the drawn check again for the same probe after <paramref name="delayMs"/>, if it is still current.</summary>
     private void ScheduleShellRecheck(ShellDrawnProbe expected, bool reloadWithheld, RefreshTimeline? timeline,
-                                      int recheck, long delayMs)
+                                      int recheck, long delayMs, bool afterOwnRedraw = false, int extra = 0)
     {
-        _ = Task.Run(async () =>
-        {
-            await Task.Delay((int)Math.Clamp(delayMs, 0, 60_000) + 250).ConfigureAwait(false);
-            if (_disposed || !ReferenceEquals(_shellDrawnCheck, expected)) return;   // superseded: the newer check owns it
-            await CheckShellDrawnAsync(expected, reloadWithheld, timeline, recheck).ConfigureAwait(false);
-        });
+        // Counted from scheduling to the end, released on every way out — superseded included (Copy Logs waits on it).
+        _ = InFlight.ScheduleAsync(_shellChecksInFlight,
+            () => Task.Delay((int)Math.Clamp(delayMs, 0, 60_000) + 250),
+            () => !_disposed && ReferenceEquals(_shellDrawnCheck, expected),   // superseded: the newer check owns it
+            () => CheckShellDrawnAsync(expected, reloadWithheld, timeline, recheck, afterOwnRedraw, extra),
+            ex => log.Debug("[Proteus] shell re-check failed: {0}", ex.Message));
     }
 
     /// <summary>
@@ -431,7 +435,7 @@ public partial class CompositorService
     /// when no carrier host is involved (today's inconclusive line applies).
     /// </summary>
     private bool CarrierRecheck(ShellDrawnProbe expected, bool reloadWithheld, RefreshTimeline? timeline, int recheck,
-                                IReadOnlyList<string> hostGone)
+                                IReadOnlyList<string> hostGone, bool afterOwnRedraw = false, int extra = 0)
     {
         var slots = InvisibleRing.CarrierSlots
             .Select(c => c.Slot)
@@ -467,7 +471,7 @@ public partial class CompositorService
                                                                 CarrierDecisions.SettleMs));
             log.Information("[Proteus] second skin drawn check: carrier {0} is not drawn yet — re-checking in {1}ms",
                 string.Join(",", slots), delay + 250);
-            ScheduleShellRecheck(expected, reloadWithheld, timeline, 1, delay);
+            ScheduleShellRecheck(expected, reloadWithheld, timeline, 1, delay, afterOwnRedraw, extra);
             return true;
         }
 
@@ -487,7 +491,7 @@ public partial class CompositorService
             long retryAt = _carrierRetry.Deadline;
             long delay = verdicts.Max(v => ShellRecheck.NextDelayMs(now, v.LastAsk, retryAt, v.OwedNotPending,
                                                                     RingInjectCooldownMs, CarrierDecisions.SettleMs));
-            ScheduleShellRecheck(expected, reloadWithheld, timeline, recheck + 1, delay);
+            ScheduleShellRecheck(expected, reloadWithheld, timeline, recheck + 1, delay, afterOwnRedraw, extra);
             return true;
         }
         if (verdicts.Any(v => v.Verdict == ShellRecheck.Verdict.Info))
@@ -495,6 +499,7 @@ public partial class CompositorService
             log.Information("[Proteus] second skin drawn check inconclusive — carrier {0} is not drawn, but no retry "
                           + "was owed or it was still pending when the last re-check ran (not reported as a failure)",
                 string.Join(",", verdicts.Where(v => v.Verdict == ShellRecheck.Verdict.Info).Select(v => v.Slot)));
+            EndAfterOwnRedraw(expected, reloadWithheld, afterOwnRedraw, extra);
             return true;
         }
 
@@ -504,12 +509,11 @@ public partial class CompositorService
         var probeKey = ShellProbeKey(expected);
         if (string.Equals(_carrierUndrawnNoticeKey, probeKey, StringComparison.Ordinal)) return true;
         _carrierUndrawnNoticeKey = probeKey;
-        var msg = ProteusLoc.Localize("Chat.ShellNotDrawing",
-            "[Proteus] Your second skin was built but the game isn't drawing it. The accessory "
-            + "it rides on is equipped, yet the character isn't loading Proteus' version. Try "
-            + "unequipping and re-equipping that accessory, or pick a different one.");
-        _ = Plugin.Framework.RunOnFrameworkThread(
-            () => Plugin.ChatGui.Print(new SeStringBuilder().AddUiForeground(msg, 17).Build()));
+        // Named: the carrier is Proteus's own invisible accessory, so it gets the carrier wording (#91 / owner's report).
+        var carrierHosts = expected.Models
+            .Where(m => failed.Any(slot => m.EndsWith($"_{slot}.mdl", StringComparison.OrdinalIgnoreCase)))
+            .ToList();
+        PrintShellNotice(carrierHosts.Count > 0 ? carrierHosts : HostsOf(expected, hostGone), partly: true);
         return true;
     }
 }

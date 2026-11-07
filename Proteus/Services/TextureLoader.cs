@@ -1181,6 +1181,14 @@ public class TextureLoader
     /// </list>
     /// </summary>
     public bool WriteTex(byte[] rgba, int width, int height, string outputPath, TexEncoding encoding)
+        => TryWriteTex(rgba, width, height, outputPath, encoding) == WriteOutcome.Written;
+
+    /// <summary>
+    /// <see cref="WriteTex(byte[],int,int,string,TexEncoding)"/>, telling a failure to put the file in place — the
+    /// destination held by the game or a sync tool past the move's retries (#91), <see cref="WriteOutcome.OutputWriteFailed"/>
+    /// — from any other failure. Only the first is worth a retry composite.
+    /// </summary>
+    internal WriteOutcome TryWriteTex(byte[] rgba, int width, int height, string outputPath, TexEncoding encoding)
     {
         try
         {
@@ -1242,18 +1250,25 @@ public class TextureLoader
             BitConverter.TryWriteBytes(header.AsSpan(28), 80u);
 
             var tWrite = PhaseCounter.Begin();
-            WriteWithRetry(outputPath, stream =>
+            int retries = WriteWithRetry(outputPath, stream =>
             {
                 stream.Write(header,  0, header.Length);
                 stream.Write(payload, 0, payload.Length);
             });
             WriteStats.Stop(tWrite, header.Length + payload.Length);
-            return true;
+            if (retries > 0)
+                log.Information("[Proteus] {0} was locked; written after {1} retr(ies)", outputPath, retries);
+            return WriteOutcome.Written;
+        }
+        catch (OutputWriteException ex)
+        {
+            log.Error(ex, "[Proteus] Failed to write .tex: {0}", outputPath);
+            return WriteOutcome.OutputWriteFailed;
         }
         catch (Exception ex)
         {
             log.Error(ex, "[Proteus] Failed to write .tex: {0}", outputPath);
-            return false;
+            return WriteOutcome.Failed;
         }
     }
 
@@ -2088,20 +2103,55 @@ public class TextureLoader
     }
 
     // Writes a unique .tmp in the same directory, then atomically moves it into place, so file watchers (Mare
-    // Synchronos) only ever see a fully written file.
-    private static void WriteWithRetry(string path, Action<FileStream> write, int attempts = 5, int delayMs = 40)
+    // Synchronos) only ever see a fully written file. Returns how many times the move had to be retried. A transient
+    // failure (the destination held, #91) that outlasts the retries — or hits the temp file itself — is thrown as an
+    // OutputWriteException; anything else as it is. The temp file never stays behind.
+    private static int WriteWithRetry(string path, Action<FileStream> write)
     {
         var tmp = path + "." + Path.GetRandomFileName() + ".tmp";
         try
         {
             using (var stream = File.Create(tmp))
                 write(stream);
-            File.Move(tmp, path, overwrite: true);
         }
-        catch
+        catch (Exception ex)
         {
             try { File.Delete(tmp); } catch { }
+            if (OutputWriteException.IsTransient(ex) && ex is not OutputWriteException) throw new OutputWriteException(path, ex);
             throw;
+        }
+        return MoveIntoPlace(tmp, path);
+    }
+
+    /// <summary>
+    /// Moves a fully written <paramref name="tmp"/> over <paramref name="path"/>, retrying a transient failure — the game
+    /// streaming the old file, a sync tool hashing it — up to <paramref name="retries"/> times, waiting
+    /// <paramref name="baseDelayMs"/> &lt;&lt; i between tries (about 1.55 s in all by default). Returns the retries used.
+    /// On a final transient failure the temp is deleted and an <see cref="OutputWriteException"/> thrown; a non-transient
+    /// failure deletes the temp and propagates as it is.
+    /// </summary>
+    internal static int MoveIntoPlace(string tmp, string path, int retries = 5, int baseDelayMs = 50)
+    {
+        for (int i = 0; ; i++)
+        {
+            try
+            {
+#if PROTEUS_TEST_HARNESS
+                HarnessMoveFault.TryFail(path);
+#endif
+                File.Move(tmp, path, overwrite: true);
+                return i;
+            }
+            catch (Exception ex) when (OutputWriteException.IsTransient(ex) && i < retries)
+            {
+                Thread.Sleep(baseDelayMs << i);
+            }
+            catch (Exception ex)
+            {
+                try { File.Delete(tmp); } catch { }
+                if (OutputWriteException.IsTransient(ex)) throw new OutputWriteException(path, ex);
+                throw;
+            }
         }
     }
 

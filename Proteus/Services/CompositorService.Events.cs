@@ -353,11 +353,13 @@ public partial class CompositorService
     /// <summary>
     /// The unchanged-inputs gate: skip when nothing forced the composite and its inputs hash to what is published, and
     /// the shapes the published shell's body draws by its options have not moved. <paramref name="shapesMoved"/> is
-    /// asked last, only when everything else says skip: it reads Penumbra.
+    /// asked last, only when everything else says skip: it reads Penumbra. Never skips while
+    /// <paramref name="outputIncomplete"/>: the last publish dropped a shell layer whose write failed (#91).
     /// </summary>
-    internal static bool SkipUnchanged(bool force, bool forcePending, string? lastFingerprint, string fingerprint,
-                                       Func<bool> shapesMoved)
-        => !force && !forcePending && lastFingerprint != null && fingerprint == lastFingerprint && !shapesMoved();
+    internal static bool SkipUnchanged(bool force, bool forcePending, bool outputIncomplete, string? lastFingerprint,
+                                       string fingerprint, Func<bool> shapesMoved)
+        => !force && !forcePending && !outputIncomplete && lastFingerprint != null && fingerprint == lastFingerprint
+           && !shapesMoved();
 
     /// <summary>
     /// Force a rebuild when the shapes the published shell's body draws by its options have changed since — of

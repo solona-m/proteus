@@ -45,4 +45,31 @@ public static class ItemNames
             return static (_, _) => null;
         }
     }
+
+    /// <summary>
+    /// A <c>facewear model set → name</c> resolver from the game's Glasses sheet (facewear has no Item row), lowest row
+    /// winning per set like <see cref="Lookup"/>. Answers null for everything when the sheet cannot be read.
+    /// </summary>
+    public static Func<int, string?> FacewearLookup(IDataManager data, IPluginLog? log = null)
+    {
+        try
+        {
+            var sheet = data.GetExcelSheet<Glasses>();
+            if (sheet == null) return static _ => null;
+            var names = new Dictionary<int, string>();
+            foreach (var row in sheet)
+            {
+                int set = (int)row.Model & 0xFFFF;   // Model packs set | variant<<16
+                if (set <= 0 || names.ContainsKey(set)) continue;
+                var name = row.Name.ExtractText();
+                if (!string.IsNullOrWhiteSpace(name)) names[set] = name;
+            }
+            return set => names.TryGetValue(set, out var n) ? n : null;
+        }
+        catch (Exception ex)
+        {
+            log?.Warning(ex, "[Proteus] facewear names unavailable — glasses will be listed by set id");
+            return static _ => null;
+        }
+    }
 }

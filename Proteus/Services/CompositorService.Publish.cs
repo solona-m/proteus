@@ -92,7 +92,7 @@ public partial class CompositorService
     {
         var ec = penumbra.ReloadModDirectory(SidecarDiscoveryService.ManagedModDir);
         log.Debug("[Proteus] ReloadMod -> {0}", ec);
-        if (redraw && RedrawHold.AutoRedrawAllows(config.AutoRedraw, userRequested))
+        if (redraw && RedrawHold.AutoRedrawAllows(AutoRedrawOn, userRequested))
         {
             // Give Penumbra's async reload time to process before the refresh re-requests textures.
             Thread.Sleep(300);
@@ -336,7 +336,7 @@ public partial class CompositorService
     {
         // The chokepoint every self-initiated reload goes through, so the auto-redraw check is enforced here as well as at
         // call sites (which also skip other reload-dependent work).
-        if (!RedrawHold.AutoRedrawAllows(config.AutoRedraw, userRequested))
+        if (!RedrawHold.AutoRedrawAllows(AutoRedrawOn, userRequested))
         {
             log.Debug("[Proteus] Player reload skipped — auto redraw is off.");
             return;
@@ -402,7 +402,7 @@ public partial class CompositorService
     {
         var ec = penumbra.ReloadModDirectory(SidecarDiscoveryService.ManagedModDir);
         log.Debug("[Proteus] ReloadMod -> {0}", ec);
-        if (!config.AutoRedraw) return false;
+        if (!AutoRedrawOn) return false;
 
         bool live = WaitForManifestLive(redirects, previous);
 
