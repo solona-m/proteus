@@ -75,7 +75,6 @@ internal static class MatcapWriter
                         CodeNothing = "nothing-to-undo", CodeCrossKind = "cross-kind-change", CodeUnreadable = "record-unreadable",
                         CodeFailed = "failed", CodeManaged = "imported-piece";
 
-    private static string L(string key, string fallback) => ProteusLoc.Localize(key, fallback);
 
     // ── apply ───────────────────────────────────────────────────────────────
 
@@ -85,15 +84,15 @@ internal static class MatcapWriter
         lock (MeshVolumeService.WriteLock)
         {
             if (string.Equals(Path.GetFileName(modRoot.TrimEnd('\\', '/')), SidecarDiscoveryService.ManagedModDir, StringComparison.OrdinalIgnoreCase))
-                return Outcome.Refuse(CodeManaged, L("Matcap.Refused.ImportedPiece",
+                return Outcome.Refuse(CodeManaged, ProteusLoc.Localize("Matcap.Refused.ImportedPiece",
                     "This piece belongs to an imported pack, which Proteus rebuilds itself. Put the matcap on the pack's own mod instead."));
             if (PenumbraModMeta.IsLegacyFolder(modRoot))
-                return Outcome.Refuse(CodeLegacy, L("Matcap.Refused.Legacy",
+                return Outcome.Refuse(CodeLegacy, ProteusLoc.Localize("Matcap.Refused.Legacy",
                     "This mod is still in Penumbra's old folder layout. Open it in Penumbra once so it is updated, then try again."));
 
             var record = MatcapRecord.Read(modRoot);
             if (record.Unreadable)
-                return Outcome.Refuse(CodeUnreadable, L("Matcap.Refused.RecordUnreadable",
+                return Outcome.Refuse(CodeUnreadable, ProteusLoc.Localize("Matcap.Refused.RecordUnreadable",
                     "Proteus's record of this mod's matcaps (Proteus/matcaps.json) could not be read, so nothing was changed."));
 
             foreach (var m in req.Models)
@@ -101,7 +100,7 @@ internal static class MatcapWriter
                 var full = Full(modRoot, m.Rel);
                 var now = File.Exists(full) ? File.ReadAllBytes(full) : [];
                 if (!now.AsSpan().SequenceEqual(m.SourceBytes))
-                    return Outcome.Refuse(CodeEdited, string.Format(L("Matcap.Refused.Changed.Fmt",
+                    return Outcome.Refuse(CodeEdited, string.Format(ProteusLoc.Localize("Matcap.Refused.Changed.Fmt",
                         "{0} changed while the matcap was being prepared, so nothing was written. Try again."), m.Rel));
             }
 
@@ -179,7 +178,7 @@ internal static class MatcapWriter
 
                 entry.Pending = false;
                 MatcapRecord.Write(modRoot, record);
-                return Outcome.Done(string.Format(L("Parts.Matcap.Applied.Fmt", "Matcap applied: {0} on {1} model file(s)."),
+                return Outcome.Done(string.Format(ProteusLoc.Localize("Parts.Matcap.Applied.Fmt", "Matcap applied: {0} on {1} model file(s)."),
                     StemOf(req.MaterialName), req.Models.Count), [.. req.Models.Select(m => m.Rel), .. created]);
             }
             catch (Exception ex)
@@ -209,7 +208,7 @@ internal static class MatcapWriter
                     }
                 }
                 catch { }
-                return Outcome.Refuse(CodeFailed, string.Format(L("Matcap.Refused.Failed.Fmt",
+                return Outcome.Refuse(CodeFailed, string.Format(ProteusLoc.Localize("Matcap.Refused.Failed.Fmt",
                     "The matcap could not be written ({0}). Nothing was changed."), ex.Message));
             }
         }
@@ -230,12 +229,12 @@ internal static class MatcapWriter
         {
             var record = MatcapRecord.Read(modRoot);
             if (record.Unreadable)
-                return Outcome.Refuse(CodeUnreadable, L("Matcap.Refused.RecordUnreadable",
+                return Outcome.Refuse(CodeUnreadable, ProteusLoc.Localize("Matcap.Refused.RecordUnreadable",
                     "Proteus's record of this mod's matcaps (Proteus/matcaps.json) could not be read, so nothing was changed."));
             var entry = record.Materials.FirstOrDefault(m => string.Equals(m.Name, materialName, StringComparison.OrdinalIgnoreCase));
-            if (entry == null) return Outcome.Refuse(CodeNothing, L("Matcap.Refused.NoEntry", "That matcap is not in this mod's record."));
+            if (entry == null) return Outcome.Refuse(CodeNothing, ProteusLoc.Localize("Matcap.Refused.NoEntry", "That matcap is not in this mod's record."));
             if (entry.Source.Kind != source.Kind)
-                return Outcome.Refuse(CodeCrossKind, L("Parts.Matcap.ChangeKindTip",
+                return Outcome.Refuse(CodeCrossKind, ProteusLoc.Localize("Parts.Matcap.ChangeKindTip",
                     "A matcap from your images can only change to another image, and a library's to another library option. Undo it to switch kinds."));
 
             var files = new List<string>();
@@ -253,7 +252,7 @@ internal static class MatcapWriter
             else
             {
                 var tex = entry.Source.Tex;
-                if (tex == null || imageTexTemp == null) return Outcome.Refuse(CodeFailed, L("Matcap.Refused.NoEntry", "That matcap is not in this mod's record."));
+                if (tex == null || imageTexTemp == null) return Outcome.Refuse(CodeFailed, ProteusLoc.Localize("Matcap.Refused.NoEntry", "That matcap is not in this mod's record."));
                 if (Edited(modRoot, tex.File, tex.Sha8)) return HandEdited(tex.File);
                 var bytes = File.ReadAllBytes(imageTexTemp);
                 PenumbraModMeta.AtomicWrite(Full(modRoot, tex.File), bytes);
@@ -262,7 +261,7 @@ internal static class MatcapWriter
                 files.Add(tex.File);
             }
             MatcapRecord.Write(modRoot, record);
-            return Outcome.Done(string.Format(L("Parts.Matcap.Changed.Fmt", "Matcap changed: {0}."), StemOf(materialName)), files);
+            return Outcome.Done(string.Format(ProteusLoc.Localize("Parts.Matcap.Changed.Fmt", "Matcap changed: {0}."), StemOf(materialName)), files);
         }
     }
 
@@ -324,10 +323,10 @@ internal static class MatcapWriter
         {
             var record = MatcapRecord.Read(modRoot);
             if (record.Unreadable)
-                return Outcome.Refuse(CodeUnreadable, L("Matcap.Refused.RecordUnreadable",
+                return Outcome.Refuse(CodeUnreadable, ProteusLoc.Localize("Matcap.Refused.RecordUnreadable",
                     "Proteus's record of this mod's matcaps (Proteus/matcaps.json) could not be read, so nothing was changed."));
             if (record.Model(rel) == null && !record.MaterialsOf(rel).Any())
-                return Outcome.Refuse(CodeNothing, L("Parts.Matcap.NothingToUndo", "There is no matcap on this model to undo."));
+                return Outcome.Refuse(CodeNothing, ProteusLoc.Localize("Parts.Matcap.NothingToUndo", "There is no matcap on this model to undo."));
 
             var removeKeys = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
             var kept = new List<string>();
@@ -371,13 +370,13 @@ internal static class MatcapWriter
                 if (record.Model(g) is { } me && me.WrittenSha8s.Contains(sha) && File.Exists(backup))
                     restore.Add((g, backup));                                               // (b) ours: restore it
                 else                                                                        // (d) edited on top
-                    return Outcome.Refuse(CodeEdited, string.Format(L("Matcap.Refused.Edited.Fmt",
+                    return Outcome.Refuse(CodeEdited, string.Format(ProteusLoc.Localize("Matcap.Refused.Edited.Fmt",
                         "{0} was changed after its matcap was applied, so it was not undone. Its original is kept at {1}."),
                         g, Path.GetRelativePath(modRoot, backup)));
             }
 
             if (forgetOnly && forget.Count == 0 && removeKeys.Count == 0)
-                return Outcome.Refuse(CodeNothing, L("Parts.Matcap.NothingToForget", "Every matcap on this model is still in use; there is nothing to forget."));
+                return Outcome.Refuse(CodeNothing, ProteusLoc.Localize("Parts.Matcap.NothingToForget", "Every matcap on this model is still in use; there is nothing to forget."));
 
             // ── write ──
             foreach (var (g, backup) in restore)
@@ -416,10 +415,10 @@ internal static class MatcapWriter
             MatcapRecord.Write(modRoot, record);
 
             var msg = forgetOnly
-                ? string.Format(L("Parts.Matcap.Forgotten.Fmt", "Forgot the matcaps this model no longer uses ({0} file(s))."), forget.Count)
-                : string.Format(L("Parts.Matcap.Undone.Fmt", "Matcaps undone on {0} model file(s)."), restore.Count + forget.Count);
+                ? string.Format(ProteusLoc.Localize("Parts.Matcap.Forgotten.Fmt", "Forgot the matcaps this model no longer uses ({0} file(s))."), forget.Count)
+                : string.Format(ProteusLoc.Localize("Parts.Matcap.Undone.Fmt", "Matcaps undone on {0} model file(s)."), restore.Count + forget.Count);
             if (kept.Count > 0)
-                msg += " " + string.Format(L("Parts.Matcap.KeptEdited.Fmt", "Left in place because they were edited by hand: {0}."),
+                msg += " " + string.Format(ProteusLoc.Localize("Parts.Matcap.KeptEdited.Fmt", "Left in place because they were edited by hand: {0}."),
                     string.Join(", ", kept.Distinct()));
             return Outcome.Done(msg, touched);
         }
@@ -453,7 +452,7 @@ internal static class MatcapWriter
 
     // ── helpers ─────────────────────────────────────────────────────────────
 
-    private static Outcome HandEdited(string file) => Outcome.Refuse(CodeEdited, string.Format(L("Matcap.Refused.HandEdited.Fmt",
+    private static Outcome HandEdited(string file) => Outcome.Refuse(CodeEdited, string.Format(ProteusLoc.Localize("Matcap.Refused.HandEdited.Fmt",
         "{0} was edited by hand since Proteus wrote it, so it was left alone."), file));
 
     internal static string Full(string modRoot, string rel) => Path.Combine(modRoot, rel.Replace('/', Path.DirectorySeparatorChar).Replace('\\', Path.DirectorySeparatorChar));

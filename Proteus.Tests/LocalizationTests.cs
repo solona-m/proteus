@@ -325,6 +325,34 @@ public sealed class LocalizationTests
         Assert.Contains(tr["Settings.Section.GearVariants"].Message, tr["Chat.VariantRepoint.Fmt"].Message);
     }
 
+    /// <summary>
+    /// The Matcaps tool's words are translated, not copied, and keep English's line breaks and placeholders. The tool's
+    /// own name stays "Matcaps" where a language borrows the word, so it alone may match English.
+    /// </summary>
+    [Theory]
+    [MemberData(nameof(Translations))]
+    [Trait("Plan", "AC-matcaps-9")]
+    public void Matcap_strings_are_translated_not_copied(string lang)
+    {
+        var en = Load(Source);
+        var tr = Load(lang);
+        var keys = en.Keys.Where(k => k.StartsWith("Parts.Matcap.", StringComparison.Ordinal)
+                                   || k.StartsWith("Matcap.Refused.", StringComparison.Ordinal)
+                                   || k is "Parts.Tool.Matcap.Tip" or "Parts.Vanilla.Horns.Fmt" or "Parts.Vanilla.Ears.Fmt"
+                                         or "Settings.MatcapLibrary" or "Settings.MatcapLibrary.Tip.Fmt").ToList();
+        Assert.True(keys.Count >= 80, $"only {keys.Count} matcap keys");
+        foreach (var key in keys)
+        {
+            Assert.True(tr.ContainsKey(key), $"[{lang}] has no {key}");
+            Assert.NotEqual(en[key].Message, tr[key].Message);
+            Assert.Equal(en[key].Message.Count(c => c == '\n'), tr[key].Message.Count(c => c == '\n'));
+            Assert.Equal(Placeholders(en[key].Message), Placeholders(tr[key].Message));
+        }
+        // The quoted button names match the buttons as translated.
+        Assert.Contains(tr["Parts.Matcap.Change"].Message, tr["Matcap.Refused.AlreadyMatcap"].Message);
+        Assert.Contains(tr["Parts.Matcap.ExistingHeader"].Message, tr["Parts.Matcap.AlreadyTip"].Message);
+    }
+
     /// <summary>The keys the temporary-copy design used are gone from every locale and from the code.</summary>
     [Theory]
     [MemberData(nameof(AllLocales))]

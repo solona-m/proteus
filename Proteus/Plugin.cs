@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Linq;
 using CheapLoc;
 using Dalamud.Interface.Windowing;
@@ -29,7 +29,7 @@ public sealed class Plugin : IDalamudPlugin
 #endif
 
     /// <summary>Hand-maintained; bump it for in-game testing. <see cref="BuildStamp"/> is the one that can't go stale.</summary>
-    public const int BuildNumber = 1440;
+    public const int BuildNumber = 1441;
 
     /// <summary>
     /// Which set of release notes is current. Raise it when a release has something new to say: the window
@@ -241,6 +241,8 @@ public sealed class Plugin : IDalamudPlugin
         autoRefit = new AutoRefitWatcher(compositor, penumbra, glamourer, designBindings, uvRemap,
                                          path => textureLoader.LoadRawFile(null, path), config, log, dataDir);
         partsPanel.UseBodyIndex(autoRefit.Index);
+        // The matcap libraries among the installed mods, cached under the config folder across sessions.
+        partsPanel.UseMatcapIndex(new Services.Matcap.MatcapIndex(dataDir));
 
         // The same: old gear is moved to Dawntrail's shader in its own mod as it is put on, window shut or open.
         shaderUpgrade = new ShaderUpgradeWatcher(compositor, penumbra, glamourer, autoRefit, textureLoader, config, log);

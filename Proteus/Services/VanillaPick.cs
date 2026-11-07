@@ -57,4 +57,18 @@ internal readonly record struct VanillaPick(string GamePath, string ItemName, st
         return new VanillaPick(gamePath, string.IsNullOrWhiteSpace(name) ? p.SetTag : name!, p.SetTag,
                                ContentSlot.Label(p, name));
     }
+
+    /// <summary>
+    /// The game's own horns or ears (an ear-slot model, <c>chara/human/cNNNN/obj/zear/zNNNN</c>), or null for any other
+    /// path. Only the Matcaps tool asks this: <see cref="From"/> stays gear-only, so no other tool and no automatic refit
+    /// ever sees a character part. Named "Horns z0001 (c1401)" for Au Ra, "Ears …" for anyone else; never refittable.
+    /// </summary>
+    internal static VanillaPick? FromEar(string gamePath)
+    {
+        if (Matcap.ZearMaterialPath.Parse(gamePath) is not { } ear) return null;
+        var s = Localization.Strings.Matcap;
+        string name = string.Format(Matcap.ZearMaterialPath.IsHorn(ear.Race) ? s.VanillaHornsFmt : s.VanillaEarsFmt,
+                                    $"z{ear.Id:D4}", $"c{ear.Race:D4}");
+        return new VanillaPick(gamePath, name, $"z{ear.Id:D4}", name);
+    }
 }

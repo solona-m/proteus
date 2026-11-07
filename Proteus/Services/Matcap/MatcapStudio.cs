@@ -38,7 +38,6 @@ internal static class MatcapStudio
         public static Prepared Refuse(string code, string message) => new(null, code, message, [], false, false);
     }
 
-    private static string L(string key, string fallback) => ProteusLoc.Localize(key, fallback);
 
     /// <summary>
     /// Prepare a matcap on <paramref name="chosen"/> — parts read from <paramref name="modelBytes"/>, the file at
@@ -48,20 +47,20 @@ internal static class MatcapStudio
                                    IReadOnlyList<ModelPart> chosen, MatcapChoice choice, Environment env)
     {
         if (MatcapPlan.TargetOf(modelGamePath, out _) is not { } target)
-            return Prepared.Refuse("not-target", L("Matcap.Refused.NotTarget.Fmt",
+            return Prepared.Refuse("not-target", ProteusLoc.Localize("Matcap.Refused.NotTarget",
                 "Matcaps go on gear, accessories, hair and ears or horns; this model is none of those."));
         if (MatcapPlan.Regenerated(modRoot, modelRel) is { } regen)
-            return Prepared.Refuse("regenerated-model", string.Format(L("Matcap.Refused.Regenerated.Fmt",
+            return Prepared.Refuse("regenerated-model", string.Format(ProteusLoc.Localize("Matcap.Refused.Regenerated.Fmt",
                 "This model is made by Proteus from another one ({0}), and remaking it would lose the matcap. Put the matcap on the model it was made from, then remake it."), regen));
-        if (chosen.Count == 0) return Prepared.Refuse("unknown-part", L("Parts.Matcap.NeedParts", "Tick the parts that should take the matcap."));
-        if (chosen.Any(MatcapPlan.IsSkin)) return Prepared.Refuse("skin-part", L("Matcap.Refused.Skin", "Skin can't take a matcap."));
+        if (chosen.Count == 0) return Prepared.Refuse("unknown-part", ProteusLoc.Localize("Parts.Matcap.NeedParts", "Tick the parts that should take the matcap."));
+        if (chosen.Any(MatcapPlan.IsSkin)) return Prepared.Refuse("skin-part", ProteusLoc.Localize("Matcap.Refused.Skin", "Skin can't take a matcap."));
         if (chosen.Any(MatcapPlan.IsOnMatcap))
-            return Prepared.Refuse("already-matcap", L("Matcap.Refused.AlreadyMatcap",
+            return Prepared.Refuse("already-matcap", ProteusLoc.Localize("Matcap.Refused.AlreadyMatcap",
                 "Some of those parts already have a matcap. Use \"Use the chosen matcap\" to change it."));
 
         var record = MatcapRecord.Read(modRoot);
         if (record.Unreadable)
-            return Prepared.Refuse(MatcapWriter.CodeUnreadable, L("Matcap.Refused.RecordUnreadable",
+            return Prepared.Refuse(MatcapWriter.CodeUnreadable, ProteusLoc.Localize("Matcap.Refused.RecordUnreadable",
                 "Proteus's record of this mod's matcaps (Proteus/matcaps.json) could not be read, so nothing was changed."));
         var token = record.Token.Length > 0 ? record.Token : MatcapPlan.TokenFor(Path.GetFileName(modRoot.TrimEnd('\\', '/')));
         var redirects = PenumbraModMeta.ReadAllRedirects(modRoot);
@@ -111,8 +110,8 @@ internal static class MatcapStudio
             {
                 if (rel != modelRel) { skipped.Add(rel); continue; }
                 return Prepared.Refuse(ex.Code, ex.Code == ModelMaterialWriter.CodeMaterialCap
-                    ? string.Format(L("Matcap.Refused.MaterialCap.Fmt", "This model can't take another material: {0}."), ex.Message)
-                    : string.Format(L("Matcap.Refused.ModelLayout.Fmt", "This model can't be split: {0}."), ex.Message));
+                    ? string.Format(ProteusLoc.Localize("Matcap.Refused.MaterialCap.Fmt", "This model can't take another material: {0}."), ex.Message)
+                    : string.Format(ProteusLoc.Localize("Matcap.Refused.ModelLayout.Fmt", "This model can't be split: {0}."), ex.Message));
             }
         }
 
@@ -128,7 +127,7 @@ internal static class MatcapStudio
         }
         var gamePaths = MatcapPlan.MaterialGamePaths(target, name, publishedAt, folders);
         if (gamePaths.Count == 0)
-            return Prepared.Refuse("no-name", L("Matcap.Refused.NoName", "Proteus could not tell where the game reads this model's materials."));
+            return Prepared.Refuse("no-name", ProteusLoc.Localize("Matcap.Refused.NoName", "Proteus could not tell where the game reads this model's materials."));
 
         // ── the textures ──
         Directory.CreateDirectory(env.TempDir);
@@ -142,8 +141,8 @@ internal static class MatcapStudio
             var baked = MatcapImages.Bake(env.Loader, image.Path, imageTemp, env.Compress);
             if (baked.Refusal != null)
                 return Prepared.Refuse(baked.Refusal == "not-square" ? "not-square" : "image-unreadable", baked.Refusal == "not-square"
-                    ? string.Format(L("Matcap.Refused.NotSquare.Fmt", "{0} is not square. A matcap is a picture of a sphere filling a square."), image.Name)
-                    : string.Format(L("Matcap.Refused.ImageUnreadable.Fmt", "{0} could not be read as an image."), image.Name));
+                    ? string.Format(ProteusLoc.Localize("Matcap.Refused.NotSquare.Fmt", "{0} is not square. A matcap is a picture of a sphere filling a square."), image.Name)
+                    : string.Format(ProteusLoc.Localize("Matcap.Refused.ImageUnreadable.Fmt", "{0} could not be read as an image."), image.Name));
             matcapPath = MatcapWriter.ImageTexGamePath(token, name);
             source.Kind = MatcapRecord.SourceRef.KindImage;
             source.Image = image.Name;
@@ -153,7 +152,7 @@ internal static class MatcapStudio
         else if (choice.Library is { } lib && choice.Option is { } option)
         {
             if (!lib.Options.Any(o => o.Name == option))
-                return Prepared.Refuse("unknown-option", string.Format(L("Matcap.Refused.UnknownOption.Fmt", "{0} has no option called {1}."), lib.Label, option));
+                return Prepared.Refuse("unknown-option", string.Format(ProteusLoc.Localize("Matcap.Refused.UnknownOption.Fmt", "{0} has no option called {1}."), lib.Label, option));
             matcapPath = lib.Texture;
             source.Kind = MatcapRecord.SourceRef.KindLibrary;
             source.Library = new MatcapRecord.LibraryRef
@@ -161,11 +160,11 @@ internal static class MatcapStudio
                 Mod = lib.Mod, Name = lib.Name, Website = lib.Website, Group = lib.Group, Option = option, Texture = lib.Texture,
             };
         }
-        else return Prepared.Refuse("unknown-image", L("Parts.Matcap.NeedMatcap", "Pick a matcap first."));
+        else return Prepared.Refuse("unknown-image", ProteusLoc.Localize("Parts.Matcap.NeedMatcap", "Pick a matcap first."));
 
         var maskTemp = Path.Combine(env.TempDir, $"mask_{stamp}.tex");
         if (!env.Loader.WriteTex(MatcapMaterial.Solid(MatcapMaterial.WhiteRgba), 16, 16, maskTemp))
-            return Prepared.Refuse("failed", L("Matcap.Refused.Failed.Fmt", "The matcap could not be written ({0}). Nothing was changed.").Replace("{0}", "mask"));
+            return Prepared.Refuse("failed", ProteusLoc.Localize("Matcap.Refused.Failed.Fmt", "The matcap could not be written ({0}). Nothing was changed.").Replace("{0}", "mask"));
         string? flatTemp = null;
         if (string.IsNullOrEmpty(normal))
         {
@@ -177,12 +176,12 @@ internal static class MatcapStudio
         // ── the material ──
         var template = env.ReadGameFile(MatcapMaterial.VanillaTemplatePath);
         if (template == null)
-            return Prepared.Refuse("no-template", L("Matcap.Refused.NoTemplate", "The game's reflection material could not be read, so no matcap material could be made."));
+            return Prepared.Refuse("no-template", ProteusLoc.Localize("Matcap.Refused.NoTemplate", "The game's reflection material could not be read, so no matcap material could be made."));
         byte[] mtrl;
         try { mtrl = MatcapMaterial.Build(template, normal!, MatcapWriter.MaskGamePath(token), matcapPath, alpha); }
         catch (InvalidDataException ex)
         {
-            return Prepared.Refuse("no-template", string.Format(L("Matcap.Refused.Failed.Fmt", "The matcap could not be written ({0}). Nothing was changed."), ex.Message));
+            return Prepared.Refuse("no-template", string.Format(ProteusLoc.Localize("Matcap.Refused.Failed.Fmt", "The matcap could not be written ({0}). Nothing was changed."), ex.Message));
         }
 
         var req = new MatcapWriter.ApplyRequest(token, name, mtrl, gamePaths, normal!, alpha, edits, source, imageTemp, maskTemp, flatTemp);
@@ -224,9 +223,9 @@ internal static class MatcapStudio
     {
         var record = MatcapRecord.Read(modRoot);
         var entry = record.Materials.FirstOrDefault(m => string.Equals(m.Name, materialName, StringComparison.OrdinalIgnoreCase));
-        if (entry == null) return (null, null, null, MatcapWriter.CodeNothing, L("Matcap.Refused.NoEntry", "That matcap is not in this mod's record."));
+        if (entry == null) return (null, null, null, MatcapWriter.CodeNothing, ProteusLoc.Localize("Matcap.Refused.NoEntry", "That matcap is not in this mod's record."));
         if (entry.Source.IsLibrary != choice.IsLibrary)
-            return (null, null, null, MatcapWriter.CodeCrossKind, L("Parts.Matcap.ChangeKindTip",
+            return (null, null, null, MatcapWriter.CodeCrossKind, ProteusLoc.Localize("Parts.Matcap.ChangeKindTip",
                 "A matcap from your images can only change to another image, and a library's to another library option. Undo it to switch kinds."));
 
         Directory.CreateDirectory(env.TempDir);
@@ -236,8 +235,8 @@ internal static class MatcapStudio
             var baked = MatcapImages.Bake(env.Loader, image.Path, temp, env.Compress);
             if (baked.Refusal != null)
                 return (null, null, null, baked.Refusal == "not-square" ? "not-square" : "image-unreadable", baked.Refusal == "not-square"
-                    ? string.Format(L("Matcap.Refused.NotSquare.Fmt", "{0} is not square. A matcap is a picture of a sphere filling a square."), image.Name)
-                    : string.Format(L("Matcap.Refused.ImageUnreadable.Fmt", "{0} could not be read as an image."), image.Name));
+                    ? string.Format(ProteusLoc.Localize("Matcap.Refused.NotSquare.Fmt", "{0} is not square. A matcap is a picture of a sphere filling a square."), image.Name)
+                    : string.Format(ProteusLoc.Localize("Matcap.Refused.ImageUnreadable.Fmt", "{0} could not be read as an image."), image.Name));
             return (new MatcapRecord.SourceRef
             {
                 Kind = MatcapRecord.SourceRef.KindImage, Image = image.Name, ImageSha8 = HairPortPlan.Sha8(File.ReadAllBytes(image.Path)),
@@ -245,7 +244,7 @@ internal static class MatcapStudio
         }
         var lib = choice.Library!;
         if (choice.Option is not { } option || !lib.Options.Any(o => o.Name == option))
-            return (null, null, null, "unknown-option", string.Format(L("Matcap.Refused.UnknownOption.Fmt", "{0} has no option called {1}."), lib.Label, choice.Option));
+            return (null, null, null, "unknown-option", string.Format(ProteusLoc.Localize("Matcap.Refused.UnknownOption.Fmt", "{0} has no option called {1}."), lib.Label, choice.Option));
         var src = new MatcapRecord.SourceRef
         {
             Kind = MatcapRecord.SourceRef.KindLibrary,
@@ -256,7 +255,7 @@ internal static class MatcapStudio
         {
             var template = env.ReadGameFile(MatcapMaterial.VanillaTemplatePath);
             if (template == null)
-                return (null, null, null, "no-template", L("Matcap.Refused.NoTemplate", "The game's reflection material could not be read, so no matcap material could be made."));
+                return (null, null, null, "no-template", ProteusLoc.Localize("Matcap.Refused.NoTemplate", "The game's reflection material could not be read, so no matcap material could be made."));
             mtrl = MatcapMaterial.Build(template, entry.Normal, MatcapWriter.MaskGamePath(record.Token), lib.Texture, entry.AlphaThreshold);
         }
         return (src, mtrl, null, "", "");

@@ -68,7 +68,6 @@ internal static class MatcapSelection
 
     public const string CodeNeedsConfirm = "needs-confirm", CodeNoPenumbra = "penumbra-unavailable", CodeFailed = "failed";
 
-    private static string L(string key, string fallback) => ProteusLoc.Localize(key, fallback);
 
     /// <summary>
     /// Switch <paramref name="option"/> on. A library that is off is switched on only with
@@ -78,16 +77,16 @@ internal static class MatcapSelection
     {
         var st = Read(p, lib);
         if (!st.Known || p.PlayerCollection() is not { } c)
-            return new Result(CodeNoPenumbra, L("Parts.Matcap.NoPenumbra", "Penumbra is not available."), false, null, false, false, null);
+            return new Result(CodeNoPenumbra, ProteusLoc.Localize("Parts.Matcap.NoPenumbra", "Penumbra is not available."), false, null, false, false, null);
         if (!st.Enabled && !confirmEnable)
-            return new Result(CodeNeedsConfirm, string.Format(L("Parts.Matcap.ConfirmEnable.Fmt",
+            return new Result(CodeNeedsConfirm, string.Format(ProteusLoc.Localize("Parts.Matcap.ConfirmEnable.Fmt",
                 "{0} is off in {1}. Switching it on also turns on: {2}"), lib.Name, st.Collection, AlsoText(lib)),
                 st.Enabled, st.CurrentOption, st.Inherited, false, null);
 
         if (!st.Enabled && !p.SetEnabled(c.Id, lib.Mod, true))
-            return new Result(CodeFailed, L("Parts.Matcap.SelectFailed", "Penumbra did not accept the library's setting."), st.Enabled, st.CurrentOption, st.Inherited, false, null);
+            return new Result(CodeFailed, ProteusLoc.Localize("Parts.Matcap.SelectFailed", "Penumbra did not accept the library's setting."), st.Enabled, st.CurrentOption, st.Inherited, false, null);
         if (!p.SetOption(c.Id, lib.Mod, lib.Group, option))
-            return new Result(CodeFailed, L("Parts.Matcap.SelectFailed", "Penumbra did not accept the library's setting."), st.Enabled, st.CurrentOption, st.Inherited, false, null);
+            return new Result(CodeFailed, ProteusLoc.Localize("Parts.Matcap.SelectFailed", "Penumbra did not accept the library's setting."), st.Enabled, st.CurrentOption, st.Inherited, false, null);
 
         // Who draws the slot now: the chosen option's file, or another mod's.
         bool winning = true;
@@ -105,10 +104,10 @@ internal static class MatcapSelection
     /// <summary>The library's other default redirects, for the confirmation: five, then "+N more".</summary>
     public static string AlsoText(MatcapLibrary lib)
     {
-        if (lib.AlsoRedirects.Count == 0) return L("Parts.Matcap.AlsoNothing", "nothing else");
+        if (lib.AlsoRedirects.Count == 0) return ProteusLoc.Localize("Parts.Matcap.AlsoNothing", "nothing else");
         var shown = string.Join(", ", lib.AlsoRedirects.Take(5));
         return lib.AlsoRedirects.Count > 5
-            ? shown + " " + string.Format(L("Parts.Matcap.AlsoMore.Fmt", "+{0} more"), lib.AlsoRedirects.Count - 5)
+            ? shown + " " + string.Format(ProteusLoc.Localize("Parts.Matcap.AlsoMore.Fmt", "+{0} more"), lib.AlsoRedirects.Count - 5)
             : shown;
     }
 }

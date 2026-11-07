@@ -84,6 +84,17 @@ public static class MatcapImages
         var own = loader.LoadImageAsRgba(imagePath);
         if (own == null) return new Baked(null, 0, "unreadable");
         if (BakeSide(own.Value.width, own.Value.height, out var why) is not { } side) return new Baked(null, 0, why);
+        // A .tex already at the baked size (one baked before, on a worker) is used as it is: no second encode.
+        if (side == own.Value.width && imagePath.EndsWith(".tex", StringComparison.OrdinalIgnoreCase))
+        {
+            try
+            {
+                Directory.CreateDirectory(System.IO.Path.GetDirectoryName(tempTex)!);
+                File.Copy(imagePath, tempTex, overwrite: true);
+                return new Baked(tempTex, side, null);
+            }
+            catch { /* fall through to a fresh encode */ }
+        }
         var rgba = side == own.Value.width ? own.Value.rgba : loader.LoadPngAsRgba(imagePath, side, side);
         if (rgba == null) return new Baked(null, 0, "unreadable");
         return loader.WriteTex(rgba, side, side, tempTex, compress ? TexEncoding.Bc7 : TexEncoding.Uncompressed)

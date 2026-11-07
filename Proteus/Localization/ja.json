@@ -6174,5 +6174,345 @@
   "Chat.VariantRepoint.Fmt": {
     "message": "[Proteus] 「{1}」の素材パスを、さらに{0}個のバリアントフォルダーにコピーしました。これらのバリアントは、MODが優先される場所でMOD自身の素材を表示します。元に戻すには /proteus > 設定 > 装備のバリアント。",
     "description": ""
+  },
+  "Matcap.Refused.AlreadyMatcap": {
+    "message": "そのパーツの一部にはすでにマットキャップがあります。「選んだマットキャップを使う」で変更してください。",
+    "description": ""
+  },
+  "Matcap.Refused.Changed.Fmt": {
+    "message": "マットキャップの準備中に {0} が変更されたため、何も書き込みませんでした。もう一度お試しください。",
+    "description": ""
+  },
+  "Matcap.Refused.Edited.Fmt": {
+    "message": "{0} はマットキャップ適用後に変更されたため、元に戻しませんでした。元のファイルは {1} にあります。",
+    "description": ""
+  },
+  "Matcap.Refused.Failed.Fmt": {
+    "message": "マットキャップを書き込めませんでした（{0}）。何も変更していません。",
+    "description": ""
+  },
+  "Matcap.Refused.HandEdited.Fmt": {
+    "message": "{0} は Proteus が書き込んだ後に手で編集されたため、そのままにしました。",
+    "description": ""
+  },
+  "Matcap.Refused.ImageUnreadable.Fmt": {
+    "message": "{0} を画像として読み込めませんでした。",
+    "description": ""
+  },
+  "Matcap.Refused.ImportedPiece": {
+    "message": "このパーツはインポートしたパックのもので、Proteus が自動で作り直します。マットキャップはパック自身の Mod に付けてください。",
+    "description": ""
+  },
+  "Matcap.Refused.Legacy": {
+    "message": "この Mod はまだ Penumbra の古いフォルダ構成です。Penumbra で一度開いて更新してから、もう一度お試しください。",
+    "description": ""
+  },
+  "Matcap.Refused.MaterialCap.Fmt": {
+    "message": "このモデルにはこれ以上マテリアルを追加できません: {0}。",
+    "description": ""
+  },
+  "Matcap.Refused.ModelLayout.Fmt": {
+    "message": "このモデルは分割できません: {0}。",
+    "description": ""
+  },
+  "Matcap.Refused.NoEntry": {
+    "message": "そのマットキャップはこの Mod の記録にありません。",
+    "description": ""
+  },
+  "Matcap.Refused.NoName": {
+    "message": "このモデルのマテリアルをゲームがどこから読むのか、Proteus には判断できませんでした。",
+    "description": ""
+  },
+  "Matcap.Refused.NoTemplate": {
+    "message": "ゲームの反射マテリアルを読み込めなかったため、マットキャップのマテリアルを作れませんでした。",
+    "description": ""
+  },
+  "Matcap.Refused.NotSquare.Fmt": {
+    "message": "{0} は正方形ではありません。マットキャップは正方形いっぱいに描かれた球の画像です。",
+    "description": ""
+  },
+  "Matcap.Refused.NotTarget": {
+    "message": "マットキャップを付けられるのは装備、アクセサリー、髪、耳や角だけです。このモデルはどれでもありません。",
+    "description": ""
+  },
+  "Matcap.Refused.RecordUnreadable": {
+    "message": "この Mod のマットキャップの記録（Proteus/matcaps.json）を読み込めなかったため、何も変更していません。",
+    "description": ""
+  },
+  "Matcap.Refused.Regenerated.Fmt": {
+    "message": "このモデルは Proteus が別のモデル（{0}）から作ったもので、作り直すとマットキャップが消えます。元のモデルにマットキャップを付けてから作り直してください。",
+    "description": ""
+  },
+  "Matcap.Refused.Skin": {
+    "message": "肌にはマットキャップを付けられません。",
+    "description": ""
+  },
+  "Matcap.Refused.UnknownOption.Fmt": {
+    "message": "{0} に {1} という選択肢はありません。",
+    "description": ""
+  },
+  "MeshVolume.Feature.Matcaps": {
+    "message": "マットキャップ",
+    "description": ""
+  },
+  "Parts.Matcap.AlphaWarn": {
+    "message": "チェックしたパーツの一部に透ける縁（髪の毛束、レース）があります。適用後にゲーム内で縁を確認してください。",
+    "description": ""
+  },
+  "Parts.Matcap.AlreadyTip": {
+    "message": "このパーツにはすでにマットキャップがあります。「このモデルのマットキャップ」で変更してください。",
+    "description": ""
+  },
+  "Parts.Matcap.AlsoMore.Fmt": {
+    "message": "ほか {0} 件",
+    "description": ""
+  },
+  "Parts.Matcap.AlsoNothing": {
+    "message": "ほかにはありません",
+    "description": ""
+  },
+  "Parts.Matcap.Applied.Fmt": {
+    "message": "マットキャップを適用しました: {0}（モデルファイル {1} 個）。",
+    "description": ""
+  },
+  "Parts.Matcap.Apply": {
+    "message": "マットキャップを適用",
+    "description": ""
+  },
+  "Parts.Matcap.BaseCollection.Fmt": {
+    "message": "{0} はベースコレクションです。これを使う全員に選んだマットキャップが表示されます。",
+    "description": ""
+  },
+  "Parts.Matcap.Change": {
+    "message": "選んだマットキャップを使う",
+    "description": ""
+  },
+  "Parts.Matcap.Changed.Fmt": {
+    "message": "マットキャップを変更しました: {0}。",
+    "description": ""
+  },
+  "Parts.Matcap.ChangeKindTip": {
+    "message": "自分の画像のマットキャップは別の画像に、ライブラリのマットキャップは別のライブラリの選択肢にしか変更できません。種類を変えるには元に戻してください。",
+    "description": ""
+  },
+  "Parts.Matcap.ConfirmEnable.Fmt": {
+    "message": "{0} は {1} でオフになっています。オンにすると次もオンになります: {2}",
+    "description": ""
+  },
+  "Parts.Matcap.ConfirmNo": {
+    "message": "キャンセル",
+    "description": ""
+  },
+  "Parts.Matcap.ConfirmYes": {
+    "message": "オンにする",
+    "description": ""
+  },
+  "Parts.Matcap.DrawnElsewhere.Fmt": {
+    "message": "このモデルにはキャラクターが別のファイル（{0}）を使っているため、まだマットキャップは表示されません。",
+    "description": ""
+  },
+  "Parts.Matcap.Duplicates.Fmt": {
+    "message": "ほかの Mod もこのスロットのテクスチャを提供しています（{0}）。Penumbra で優先度が最も高いものが表示されます。",
+    "description": ""
+  },
+  "Parts.Matcap.EarOnlyHere": {
+    "message": "角と耳はマットキャップでしか開けないため、閉じました。",
+    "description": ""
+  },
+  "Parts.Matcap.Edited": {
+    "message": "その後モデルが変更されました。",
+    "description": ""
+  },
+  "Parts.Matcap.ExistingHeader": {
+    "message": "このモデルのマットキャップ",
+    "description": ""
+  },
+  "Parts.Matcap.Forget": {
+    "message": "忘れる",
+    "description": ""
+  },
+  "Parts.Matcap.Forgotten.Fmt": {
+    "message": "このモデルが使わなくなったマットキャップを忘れました（ファイル {0} 個）。",
+    "description": ""
+  },
+  "Parts.Matcap.Guide": {
+    "message": "マットキャップは照らされた球の画像で、パーツはこちらへ向いている方向に応じてその色を取ります。パーツをチェックし、マットキャップを選んで適用してください。",
+    "description": ""
+  },
+  "Parts.Matcap.Held.Fmt": {
+    "message": "{0} がこのライブラリの設定を一時的に固定しています。解除されると選んだマットキャップが表示されます。",
+    "description": ""
+  },
+  "Parts.Matcap.Inherited.Fmt": {
+    "message": "{0} はこのライブラリの設定を継承しています。マットキャップを選ぶと独自の設定になります。",
+    "description": ""
+  },
+  "Parts.Matcap.KeptEdited.Fmt": {
+    "message": "手で編集されていたためそのままにしました: {0}。",
+    "description": ""
+  },
+  "Parts.Matcap.LibraryMissing.Fmt": {
+    "message": "{0} がインストールされていません。このマットキャップには表示するものがありません。",
+    "description": ""
+  },
+  "Parts.Matcap.LibraryOff.Fmt": {
+    "message": "{0} はオフになっています。",
+    "description": ""
+  },
+  "Parts.Matcap.LibraryOffTag": {
+    "message": "（オフ）",
+    "description": ""
+  },
+  "Parts.Matcap.ListTip": {
+    "message": "マットキャップを付けるパーツをチェックしてください。肌とすでにマットキャップがあるパーツはチェックできません。",
+    "description": ""
+  },
+  "Parts.Matcap.Lod0Cut": {
+    "message": "どの距離でもマットキャップが見えるよう、モデルを最も近い詳細レベルだけにしました。",
+    "description": ""
+  },
+  "Parts.Matcap.MaterialCap.Fmt": {
+    "message": "このモデルにはすでにマテリアルが {0} 個あり、これが上限です。空きを作るにはマットキャップを一つ元に戻してください。",
+    "description": ""
+  },
+  "Parts.Matcap.NeedMatcap": {
+    "message": "先にマットキャップを選んでください。",
+    "description": ""
+  },
+  "Parts.Matcap.NeedParts": {
+    "message": "マットキャップを付けるパーツをチェックしてください。",
+    "description": ""
+  },
+  "Parts.Matcap.NoImages.Fmt": {
+    "message": "マットキャップ画像はまだありません。照らされた球の正方形の画像（PNG か JPG）を {0} に入れて、更新を押してください。",
+    "description": ""
+  },
+  "Parts.Matcap.NoLibraries": {
+    "message": "マットキャップのライブラリ Mod がインストールされていません。ライブラリとは、一つの共有テクスチャに複数のマットキャップを選べる Mod です。",
+    "description": ""
+  },
+  "Parts.Matcap.NoPenumbra": {
+    "message": "Penumbra が利用できません。",
+    "description": ""
+  },
+  "Parts.Matcap.NothingToForget": {
+    "message": "このモデルのマットキャップはすべて使用中です。忘れるものはありません。",
+    "description": ""
+  },
+  "Parts.Matcap.NothingToUndo": {
+    "message": "このモデルには元に戻すマットキャップがありません。",
+    "description": ""
+  },
+  "Parts.Matcap.NotWinning.Fmt": {
+    "message": "このスロットには代わりにほかの Mod のテクスチャが表示されています（{0}）。Penumbra でライブラリの優先度を上げてください。",
+    "description": ""
+  },
+  "Parts.Matcap.OpenFolder": {
+    "message": "マットキャップのフォルダを開く",
+    "description": ""
+  },
+  "Parts.Matcap.Refresh": {
+    "message": "更新",
+    "description": ""
+  },
+  "Parts.Matcap.RemakeSizes": {
+    "message": "そのファイルは Proteus のリフィットです。サイズを作り直すとマットキャップが引き継がれます。",
+    "description": ""
+  },
+  "Parts.Matcap.Rescan": {
+    "message": "再検索",
+    "description": ""
+  },
+  "Parts.Matcap.Room.Fmt": {
+    "message": "このモデルにはあと {0} 個マテリアルを追加できます（リフィットでも爪や下着に使います）。",
+    "description": ""
+  },
+  "Parts.Matcap.Scanning": {
+    "message": "Mod からマットキャップのライブラリを探しています…",
+    "description": ""
+  },
+  "Parts.Matcap.SelectFailed": {
+    "message": "Penumbra がライブラリの設定を受け付けませんでした。",
+    "description": ""
+  },
+  "Parts.Matcap.SharedSlot.Fmt": {
+    "message": "このスロットに表示できるマットキャップは一度に一つです。この Mod のほかのマットキャップ {0} 個も使っているため、一緒に変わります。",
+    "description": ""
+  },
+  "Parts.Matcap.ShareNote.Fmt": {
+    "message": "この Mod を共有する相手にも、同じマットキャップに設定した {0}（{1}）が必要です。そのテクスチャがあなたの Mod にコピーされることはありません。",
+    "description": ""
+  },
+  "Parts.Matcap.SiblingsSkipped.Fmt": {
+    "message": "パーツが異なるため、次のほかの体型オプションには適用していません: {0}。",
+    "description": ""
+  },
+  "Parts.Matcap.SkinTip": {
+    "message": "肌にはマットキャップを付けられません。",
+    "description": ""
+  },
+  "Parts.Matcap.Source.Fmt": {
+    "message": "{0} から",
+    "description": ""
+  },
+  "Parts.Matcap.SourceImages": {
+    "message": "自分の画像",
+    "description": ""
+  },
+  "Parts.Matcap.SourceLibraries": {
+    "message": "ライブラリ Mod",
+    "description": ""
+  },
+  "Parts.Matcap.Superseded": {
+    "message": "モデルはもうこのマットキャップを使っていません（Mod が更新されました）。",
+    "description": ""
+  },
+  "Parts.Matcap.ThisMod": {
+    "message": "（この Mod）",
+    "description": ""
+  },
+  "Parts.Matcap.Ticked.Fmt": {
+    "message": "{0} 個のパーツをチェック中。",
+    "description": ""
+  },
+  "Parts.Matcap.Undo": {
+    "message": "このモデルのマットキャップを元に戻す",
+    "description": ""
+  },
+  "Parts.Matcap.UndoGroup.Fmt": {
+    "message": "これらのマットキャップを共有するほかの体型オプションも元に戻します: {0}。",
+    "description": ""
+  },
+  "Parts.Matcap.Undone.Fmt": {
+    "message": "モデルファイル {0} 個のマットキャップを元に戻しました。",
+    "description": ""
+  },
+  "Parts.Matcap.Working": {
+    "message": "マットキャップを書き込み中…",
+    "description": ""
+  },
+  "Parts.Tool.Matcap": {
+    "message": "マットキャップ",
+    "description": ""
+  },
+  "Parts.Tool.Matcap.Tip": {
+    "message": "チェックしたパーツにマットキャップを付けます。球の画像から描く、つやのある、ガラスや宝石のような見た目です。パーツには Mod に書き込まれる専用のマテリアルが付くので、Proteus をオフにしても表示されます。",
+    "description": ""
+  },
+  "Parts.Vanilla.Ears.Fmt": {
+    "message": "耳 {0}（{1}）",
+    "description": ""
+  },
+  "Parts.Vanilla.Horns.Fmt": {
+    "message": "角 {0}（{1}）",
+    "description": ""
+  },
+  "Settings.MatcapLibrary": {
+    "message": "マットキャップ画像",
+    "description": ""
+  },
+  "Settings.MatcapLibrary.Tip.Fmt": {
+    "message": "自分のマットキャップ画像を入れるフォルダを開きます: {0}",
+    "description": ""
   }
 }

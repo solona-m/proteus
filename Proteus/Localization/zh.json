@@ -6174,5 +6174,345 @@
   "Chat.VariantRepoint.Fmt": {
     "message": "[Proteus] 已将“{1}”的材质路径复制到另外 {0} 个变体文件夹，使这些变体在模组优先的地方显示模组自己的材质。撤销位置：/proteus > 设置 > 装备变体。",
     "description": ""
+  },
+  "Matcap.Refused.AlreadyMatcap": {
+    "message": "其中一些部件已经有材质捕获（matcap）了。请用“使用所选 matcap”来更改。",
+    "description": ""
+  },
+  "Matcap.Refused.Changed.Fmt": {
+    "message": "准备 matcap 时 {0} 发生了变化，因此没有写入任何内容。请重试。",
+    "description": ""
+  },
+  "Matcap.Refused.Edited.Fmt": {
+    "message": "{0} 在应用 matcap 之后被修改过，因此没有撤销。原件保存在 {1}。",
+    "description": ""
+  },
+  "Matcap.Refused.Failed.Fmt": {
+    "message": "无法写入 matcap（{0}）。没有做任何更改。",
+    "description": ""
+  },
+  "Matcap.Refused.HandEdited.Fmt": {
+    "message": "{0} 在 Proteus 写入后被手动编辑过，因此保持原样。",
+    "description": ""
+  },
+  "Matcap.Refused.ImageUnreadable.Fmt": {
+    "message": "无法将 {0} 读取为图像。",
+    "description": ""
+  },
+  "Matcap.Refused.ImportedPiece": {
+    "message": "该部件属于导入的包，由 Proteus 自行重建。请把 matcap 加在该包自己的模组上。",
+    "description": ""
+  },
+  "Matcap.Refused.Legacy": {
+    "message": "该模组仍使用 Penumbra 的旧文件夹结构。请先在 Penumbra 中打开一次以更新，然后重试。",
+    "description": ""
+  },
+  "Matcap.Refused.MaterialCap.Fmt": {
+    "message": "此模型无法再添加材质：{0}。",
+    "description": ""
+  },
+  "Matcap.Refused.ModelLayout.Fmt": {
+    "message": "此模型无法拆分：{0}。",
+    "description": ""
+  },
+  "Matcap.Refused.NoEntry": {
+    "message": "该 matcap 不在此模组的记录中。",
+    "description": ""
+  },
+  "Matcap.Refused.NoName": {
+    "message": "Proteus 无法确定游戏从哪里读取此模型的材质。",
+    "description": ""
+  },
+  "Matcap.Refused.NoTemplate": {
+    "message": "无法读取游戏的反射材质，因此无法创建 matcap 材质。",
+    "description": ""
+  },
+  "Matcap.Refused.NotSquare.Fmt": {
+    "message": "{0} 不是正方形。matcap 是一张铺满正方形的球体图片。",
+    "description": ""
+  },
+  "Matcap.Refused.NotTarget": {
+    "message": "matcap 只能用于装备、饰品、头发以及耳朵或角；此模型都不是。",
+    "description": ""
+  },
+  "Matcap.Refused.RecordUnreadable": {
+    "message": "无法读取 Proteus 对此模组 matcap 的记录（Proteus/matcaps.json），因此没有做任何更改。",
+    "description": ""
+  },
+  "Matcap.Refused.Regenerated.Fmt": {
+    "message": "此模型由 Proteus 从另一个模型（{0}）生成，重新生成会丢失 matcap。请把 matcap 加在源模型上，然后重新生成。",
+    "description": ""
+  },
+  "Matcap.Refused.Skin": {
+    "message": "皮肤不能使用 matcap。",
+    "description": ""
+  },
+  "Matcap.Refused.UnknownOption.Fmt": {
+    "message": "{0} 没有名为 {1} 的选项。",
+    "description": ""
+  },
+  "MeshVolume.Feature.Matcaps": {
+    "message": "matcap",
+    "description": ""
+  },
+  "Parts.Matcap.AlphaWarn": {
+    "message": "部分已勾选的部件有透明边缘（发丝、蕾丝）。应用后请在游戏中检查边缘。",
+    "description": ""
+  },
+  "Parts.Matcap.AlreadyTip": {
+    "message": "该部件已经有 matcap 了。请在“此模型上的 matcap”中更改。",
+    "description": ""
+  },
+  "Parts.Matcap.AlsoMore.Fmt": {
+    "message": "另外 {0} 项",
+    "description": ""
+  },
+  "Parts.Matcap.AlsoNothing": {
+    "message": "没有其他",
+    "description": ""
+  },
+  "Parts.Matcap.Applied.Fmt": {
+    "message": "已应用 matcap：{0}（{1} 个模型文件）。",
+    "description": ""
+  },
+  "Parts.Matcap.Apply": {
+    "message": "应用 matcap",
+    "description": ""
+  },
+  "Parts.Matcap.BaseCollection.Fmt": {
+    "message": "{0} 是你的基础合集：所有使用它的人都会看到所选的 matcap。",
+    "description": ""
+  },
+  "Parts.Matcap.Change": {
+    "message": "使用所选 matcap",
+    "description": ""
+  },
+  "Parts.Matcap.Changed.Fmt": {
+    "message": "已更改 matcap：{0}。",
+    "description": ""
+  },
+  "Parts.Matcap.ChangeKindTip": {
+    "message": "来自你图片的 matcap 只能换成另一张图片，来自库的只能换成库的另一个选项。要切换类型请先撤销。",
+    "description": ""
+  },
+  "Parts.Matcap.ConfirmEnable.Fmt": {
+    "message": "{0} 在 {1} 中处于关闭状态。开启它还会同时开启：{2}",
+    "description": ""
+  },
+  "Parts.Matcap.ConfirmNo": {
+    "message": "取消",
+    "description": ""
+  },
+  "Parts.Matcap.ConfirmYes": {
+    "message": "开启",
+    "description": ""
+  },
+  "Parts.Matcap.DrawnElsewhere.Fmt": {
+    "message": "你的角色为此模型绘制的是另一个文件（{0}），因此 matcap 暂时不会显示在上面。",
+    "description": ""
+  },
+  "Parts.Matcap.Duplicates.Fmt": {
+    "message": "其他模组也提供该槽位的纹理（{0}）；显示哪个由 Penumbra 中优先级最高的决定。",
+    "description": ""
+  },
+  "Parts.Matcap.EarOnlyHere": {
+    "message": "角和耳朵只能在 matcap 工具下打开，因此已关闭。",
+    "description": ""
+  },
+  "Parts.Matcap.Edited": {
+    "message": "此后模型已被修改。",
+    "description": ""
+  },
+  "Parts.Matcap.ExistingHeader": {
+    "message": "此模型上的 matcap",
+    "description": ""
+  },
+  "Parts.Matcap.Forget": {
+    "message": "忘记",
+    "description": ""
+  },
+  "Parts.Matcap.Forgotten.Fmt": {
+    "message": "已忘记此模型不再使用的 matcap（{0} 个文件）。",
+    "description": ""
+  },
+  "Parts.Matcap.Guide": {
+    "message": "matcap 是一张受光照的球体图片；部件根据朝向你的方向从中取色。勾选部件，选择 matcap，然后点击应用。",
+    "description": ""
+  },
+  "Parts.Matcap.Held.Fmt": {
+    "message": "{0} 暂时锁定了此库的设置；它松开后所选的 matcap 才会显示。",
+    "description": ""
+  },
+  "Parts.Matcap.Inherited.Fmt": {
+    "message": "{0} 继承了此库的设置；选择 matcap 会为它创建独立的设置。",
+    "description": ""
+  },
+  "Parts.Matcap.KeptEdited.Fmt": {
+    "message": "因被手动编辑而保留原处：{0}。",
+    "description": ""
+  },
+  "Parts.Matcap.LibraryMissing.Fmt": {
+    "message": "{0} 未安装：此 matcap 没有可显示的内容。",
+    "description": ""
+  },
+  "Parts.Matcap.LibraryOff.Fmt": {
+    "message": "{0} 已关闭。",
+    "description": ""
+  },
+  "Parts.Matcap.LibraryOffTag": {
+    "message": "（已关闭）",
+    "description": ""
+  },
+  "Parts.Matcap.ListTip": {
+    "message": "勾选要使用 matcap 的部件。皮肤和已有 matcap 的部件不能勾选。",
+    "description": ""
+  },
+  "Parts.Matcap.Lod0Cut": {
+    "message": "模型已裁剪为最近的细节层级，使 matcap 在任何距离都能显示。",
+    "description": ""
+  },
+  "Parts.Matcap.MaterialCap.Fmt": {
+    "message": "此模型已有 {0} 个材质，已达上限。请撤销一个 matcap 来腾出空间。",
+    "description": ""
+  },
+  "Parts.Matcap.NeedMatcap": {
+    "message": "请先选择一个 matcap。",
+    "description": ""
+  },
+  "Parts.Matcap.NeedParts": {
+    "message": "勾选要使用 matcap 的部件。",
+    "description": ""
+  },
+  "Parts.Matcap.NoImages.Fmt": {
+    "message": "还没有 matcap 图片。请把受光照球体的正方形图片（PNG 或 JPG）放进 {0}，然后点击刷新。",
+    "description": ""
+  },
+  "Parts.Matcap.NoLibraries": {
+    "message": "未安装 matcap 库模组。库是为一张共享纹理提供多种 matcap 可选的模组。",
+    "description": ""
+  },
+  "Parts.Matcap.NoPenumbra": {
+    "message": "Penumbra 不可用。",
+    "description": ""
+  },
+  "Parts.Matcap.NothingToForget": {
+    "message": "此模型上的 matcap 都仍在使用，没有可忘记的。",
+    "description": ""
+  },
+  "Parts.Matcap.NothingToUndo": {
+    "message": "此模型上没有可撤销的 matcap。",
+    "description": ""
+  },
+  "Parts.Matcap.NotWinning.Fmt": {
+    "message": "此槽位实际绘制的是另一个模组的纹理（{0}）。请在 Penumbra 中提高该库的优先级。",
+    "description": ""
+  },
+  "Parts.Matcap.OpenFolder": {
+    "message": "打开 matcap 文件夹",
+    "description": ""
+  },
+  "Parts.Matcap.Refresh": {
+    "message": "刷新",
+    "description": ""
+  },
+  "Parts.Matcap.RemakeSizes": {
+    "message": "该文件是 Proteus 的重新适配之一：请重新生成尺寸以沿用 matcap。",
+    "description": ""
+  },
+  "Parts.Matcap.Rescan": {
+    "message": "重新搜索",
+    "description": ""
+  },
+  "Parts.Matcap.Room.Fmt": {
+    "message": "此模型还能再添加 {0} 个材质（重新适配也需要一些用于指甲和内衣）。",
+    "description": ""
+  },
+  "Parts.Matcap.Scanning": {
+    "message": "正在你的模组中查找 matcap 库…",
+    "description": ""
+  },
+  "Parts.Matcap.SelectFailed": {
+    "message": "Penumbra 没有接受该库的设置。",
+    "description": ""
+  },
+  "Parts.Matcap.SharedSlot.Fmt": {
+    "message": "该槽位一次只显示一个 matcap：此模组中另有 {0} 个 matcap 使用它，也会一起改变。",
+    "description": ""
+  },
+  "Parts.Matcap.ShareNote.Fmt": {
+    "message": "你分享此模组的对象也需要 {0}（{1}），并设为同一个 matcap。它的纹理绝不会被复制进你的模组。",
+    "description": ""
+  },
+  "Parts.Matcap.SiblingsSkipped.Fmt": {
+    "message": "以下其他体型选项的部件不同，因此未应用：{0}。",
+    "description": ""
+  },
+  "Parts.Matcap.SkinTip": {
+    "message": "皮肤不能使用 matcap。",
+    "description": ""
+  },
+  "Parts.Matcap.Source.Fmt": {
+    "message": "来自 {0}",
+    "description": ""
+  },
+  "Parts.Matcap.SourceImages": {
+    "message": "你的图片",
+    "description": ""
+  },
+  "Parts.Matcap.SourceLibraries": {
+    "message": "库模组",
+    "description": ""
+  },
+  "Parts.Matcap.Superseded": {
+    "message": "模型已不再使用此 matcap（模组已更新）。",
+    "description": ""
+  },
+  "Parts.Matcap.ThisMod": {
+    "message": "（此模组）",
+    "description": ""
+  },
+  "Parts.Matcap.Ticked.Fmt": {
+    "message": "已勾选 {0} 个部件。",
+    "description": ""
+  },
+  "Parts.Matcap.Undo": {
+    "message": "撤销此模型上的 matcap",
+    "description": ""
+  },
+  "Parts.Matcap.UndoGroup.Fmt": {
+    "message": "同时撤销共享这些 matcap 的其他体型选项：{0}。",
+    "description": ""
+  },
+  "Parts.Matcap.Undone.Fmt": {
+    "message": "已撤销 {0} 个模型文件上的 matcap。",
+    "description": ""
+  },
+  "Parts.Matcap.Working": {
+    "message": "正在写入 matcap…",
+    "description": ""
+  },
+  "Parts.Tool.Matcap": {
+    "message": "Matcap",
+    "description": ""
+  },
+  "Parts.Tool.Matcap.Tip": {
+    "message": "为勾选的部件加上 matcap：用球体图片绘出的光亮、玻璃或宝石般的外观。部件会获得写入模组的独立材质，因此关闭 Proteus 后也能显示。",
+    "description": ""
+  },
+  "Parts.Vanilla.Ears.Fmt": {
+    "message": "耳朵 {0}（{1}）",
+    "description": ""
+  },
+  "Parts.Vanilla.Horns.Fmt": {
+    "message": "角 {0}（{1}）",
+    "description": ""
+  },
+  "Settings.MatcapLibrary": {
+    "message": "matcap 图片",
+    "description": ""
+  },
+  "Settings.MatcapLibrary.Tip.Fmt": {
+    "message": "打开存放你自己 matcap 图片的文件夹：{0}",
+    "description": ""
   }
 }
