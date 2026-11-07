@@ -88,6 +88,7 @@ public class HarnessMatcapTests : IDisposable
 
     [Theory]
     [Trait("Plan", "AC-matcaps-10")]
+    [Trait("Plan", "EDGE-matcap-pack-16")]
     [InlineData("""{"model":"x.mdl","image":"a.png","parts":["1.1"]}""", "mod and model")]
     [InlineData("""{"mod":"Gear","model":"x.mdl","image":"a.png","library":"L","group":"g","option":"o","parts":["1.1"]}""", "not both")]
     [InlineData("""{"mod":"Gear","model":"x.mdl","library":"L","parts":["1.1"]}""", "group and option")]
@@ -95,6 +96,8 @@ public class HarnessMatcapTests : IDisposable
     [InlineData("""{"mod":"Gear","model":"x.mdl","image":"a.png"}""", "parts")]
     [InlineData("""{"mod":"Gear","model":"x.mdl","parts":[]}""", "non-empty")]
     [InlineData("""{"mod":"Gear","model":"x.mdl","nope":1}""", "unknown field")]
+    [InlineData("""{"mod":"Gear","model":"x.mdl","image":"a.png","parts":["1.1"],"pack":"yes"}""", "pack must be true or false")]
+    [InlineData("""{"mod":"Gear","model":"x.mdl","parts":["1.1"],"pack":true}""", "pack goes with image")]
     public async Task Route_parsing_and_refusals(string json, string fragment)
     {
         AddGearMod();
@@ -222,5 +225,141 @@ public class HarnessMatcapTests : IDisposable
         Assert.Equal("needs-confirm", job.GetProperty("error").GetProperty("code").GetString());
         Assert.Equal(before, File.ReadAllBytes(Path.Combine(root, "model", "top.mdl")));
         Assert.False(f.Game.Permanent["Lib"].Enabled);
+    }
+
+    // ── Proteus's own matcaps (matcap-pack) ──────────────────────────────────────────────────────────────────────────
+
+    /// <summary>A scripted pack: records how it was asked, lists real PNGs from its own folder.</summary>
+    private sealed class FakePack(string dir) : IMatcapPack
+    {
+        public readonly List<(bool Retry, bool EvenIfReady)> Calls = [];
+        public MatcapPackStatus Status { get; set; } = new(MatcapPackState.Downloading, 3, 39, "");
+        public long Version => 1;
+        public IReadOnlyList<MatcapImage> Available() =>
+            Directory.Exists(dir)
+                ? Directory.GetFiles(dir).Order(StringComparer.OrdinalIgnoreCase)
+                    .Select(p => new MatcapImage(Path.GetFileName(p), p, false, FromPack: true)).ToList()
+                : [];
+        public void EnsureAsync(bool retryFailed = false, bool evenIfReady = false)
+        {
+            lock (Calls) Calls.Add((retryFailed, evenIfReady));
+        }
+    }
+
+    private FakePack UsePack(bool penumbra = true, params string[] packImages)
+    {
+        var dir = Path.Combine(f.Temp.Path, "pack");
+        Directory.CreateDirectory(dir);
+        foreach (var n in packImages) File.WriteAllBytes(Path.Combine(dir, n), HarnessRouter.SpherePng((200, 160, 40)));
+        var pack = new FakePack(dir);
+        studio.MatcapPort = () => new MatcapHarnessPort(index, images, this.penumbra,
+            new MatcapStudio.Environment(p => p == MatcapMaterial.VanillaTemplatePath ? SyntheticMatcapMod.Reflection() : null,
+                                         loader, false, Path.Combine(f.Temp.Path, "matcap-temp")),
+            penumbra ? f.ModsRoot : null, penumbra ? new Dictionary<string, string>(f.Game.ModFolders) : null, Pack: pack);
+        return pack;
+    }
+
+    [Fact]
+    [Trait("Plan", "AC-matcap-pack-9")]
+    public async Task Get_starts_the_pack_and_reports_its_state()
+    {
+        var pack = UsePack();
+        var (s, view) = await f.Get("/matcaps");
+        Assert.Equal(200, s);
+        Assert.Equal([(false, false)], pack.Calls);
+        var p = view.GetProperty("pack");
+        Assert.Equal("downloading", p.GetProperty("state").GetString());
+        Assert.Equal(3, p.GetProperty("have").GetInt32());
+        Assert.Equal(39, p.GetProperty("total").GetInt32());
+        Assert.Equal(JsonValueKind.String, p.GetProperty("detail").ValueKind);
+    }
+
+    [Fact]
+    [Trait("Plan", "AC-matcap-pack-9")]
+    public async Task Get_retry_rearms_the_pack()
+    {
+        var pack = UsePack();
+        await f.Get("/matcaps?retry=1");
+        await f.Get("/matcaps?retry=0");
+        await f.Get("/matcaps");
+        Assert.Equal([(true, true), (false, false), (false, false)], pack.Calls);
+    }
+
+    [Fact]
+    [Trait("Plan", "AC-matcap-pack-5")]
+    [Trait("Plan", "EDGE-matcap-pack-1")]
+    public async Task Get_lists_global_and_proteus_images_with_source()
+    {
+        AddGearMod();
+        File.WriteAllBytes(Path.Combine(images, "Gold Metal.png"), HarnessRouter.SpherePng((10, 10, 10)));
+        UsePack(true, "Gold Metal.png");
+        var (s, view) = await f.Get("/matcaps?mod=Gear&model=model/top.mdl");
+        Assert.Equal(200, s);
+        var gold = view.GetProperty("images").EnumerateArray().Where(i => i.GetProperty("name").GetString() == "Gold Metal.png").ToList();
+        Assert.Equal(["global", "proteus"], gold.Select(i => i.GetProperty("source").GetString()));
+        var modelImages = view.GetProperty("model").GetProperty("images").EnumerateArray().ToList();
+        Assert.Contains(modelImages, i => i.GetProperty("name").GetString() == "Gold Metal.png" && i.GetProperty("fromPack").GetBoolean());
+        Assert.Contains(modelImages, i => i.GetProperty("name").GetString() == "Gold Metal.png" && !i.GetProperty("fromPack").GetBoolean());
+    }
+
+    [Fact]
+    [Trait("Plan", "EDGE-matcap-pack-10")]
+    public async Task Get_without_Penumbra_still_starts_the_pack()
+    {
+        var pack = UsePack(penumbra: false);
+        var (s, body) = await f.Get("/matcaps");
+        Assert.Equal(503, s);
+        Assert.Equal("penumbra-unavailable", Code(body));
+        Assert.Single(pack.Calls);
+        Assert.Equal("downloading", body.GetProperty("pack").GetProperty("state").GetString());
+    }
+
+    [Fact]
+    [Trait("Plan", "AC-matcap-pack-4")]
+    public async Task Apply_with_a_pack_image_records_its_name()
+    {
+        var root = AddGearMod();
+        UsePack(true, "Gold Metal.png");
+        var (s, queued) = await f.Post("/actions/matcap", """{"mod":"Gear","model":"model/top.mdl","parts":["1.2"],"image":"Gold Metal.png"}""");
+        Assert.Equal(202, s);
+        var job = await f.WaitJob(queued.GetProperty("job").GetString()!);
+        Assert.Equal("applied", job.GetProperty("result").GetProperty("summary").GetString());
+        Assert.Equal("Gold Metal.png", Assert.Single(MatcapRecord.Read(root).Materials).Source.Image);
+    }
+
+    [Fact]
+    [Trait("Plan", "AC-matcap-pack-9")]
+    public async Task Pack_true_picks_the_proteus_copy_over_a_user_image()
+    {
+        var root = AddGearMod();
+        // Different bytes per source, so the baked texture's hash tells which one was used.
+        File.WriteAllBytes(Path.Combine(images, "Gold Metal.png"), HarnessRouter.SpherePng((10, 200, 10)));
+        UsePack(true, "Gold Metal.png");
+        string Sha(string path) => Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(File.ReadAllBytes(path)))[..8].ToLowerInvariant();
+        var packSha = Sha(Path.Combine(f.Temp.Path, "pack", "Gold Metal.png"));
+        var userSha = Sha(Path.Combine(images, "Gold Metal.png"));
+        Assert.NotEqual(packSha, userSha);
+
+        var (_, q1) = await f.Post("/actions/matcap", """{"mod":"Gear","model":"model/top.mdl","parts":["1.2"],"image":"Gold Metal.png","pack":true}""");
+        await f.WaitJob(q1.GetProperty("job").GetString()!);
+        Assert.Equal(packSha, Assert.Single(MatcapRecord.Read(root).Materials).Source.ImageSha8);
+
+        var (_, u) = await f.Post("/actions/matcap", """{"mod":"Gear","model":"model/top.mdl","undo":true}""");
+        await f.WaitJob(u.GetProperty("job").GetString()!);
+        var (_, q2) = await f.Post("/actions/matcap", """{"mod":"Gear","model":"model/top.mdl","parts":["1.2"],"image":"Gold Metal.png"}""");
+        await f.WaitJob(q2.GetProperty("job").GetString()!);
+        Assert.Equal(userSha, Assert.Single(MatcapRecord.Read(root).Materials).Source.ImageSha8);
+    }
+
+    [Fact]
+    [Trait("Plan", "EDGE-matcap-pack-16")]
+    public async Task Pack_true_with_a_user_only_name_is_unknown_image()
+    {
+        AddGearMod();
+        File.WriteAllBytes(Path.Combine(images, "mine.png"), HarnessRouter.SpherePng((10, 10, 200)));
+        UsePack(true, "Gold Metal.png");
+        var (_, q) = await f.Post("/actions/matcap", """{"mod":"Gear","model":"model/top.mdl","parts":["1.2"],"image":"mine.png","pack":true}""");
+        var job = await f.WaitJob(q.GetProperty("job").GetString()!);
+        Assert.Equal("unknown-image", job.GetProperty("error").GetProperty("code").GetString());
     }
 }

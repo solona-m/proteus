@@ -22,7 +22,7 @@ internal static class MatcapJob
     /// <param name="Model">The model as QA named it: a mod-relative file or a game path the mod publishes.</param>
     internal sealed record Args(string ModDir, string ModRoot, string Model, Action Kind, IReadOnlyList<string> Parts,
                                 string? Image, string? Library, string? Group, string? Option, bool ConfirmEnable,
-                                string? Entry, MatcapHarnessPort Port, HarnessChanges Changes);
+                                string? Entry, MatcapHarnessPort Port, HarnessChanges Changes, bool Pack = false);
 
     /// <summary>The model file and game path QA named, or the job error refusing it.</summary>
     internal static (string? Rel, string? GamePath, JobError? Error) ResolveModel(string modRoot, string model)
@@ -79,7 +79,8 @@ internal static class MatcapJob
         return new
         {
             model = rel, gamePath,
-            images = MatcapImages.List(port.ImageFolder, MatcapImages.ModFolder(modRoot)).Select(i => new { name = i.Name, fromMod = i.FromMod }),
+            images = MatcapImages.List(port.ImageFolder, MatcapImages.ModFolder(modRoot)).Select(i => new { name = i.Name, fromMod = i.FromMod, fromPack = false })
+                .Concat((port.Pack?.Available() ?? []).Select(i => new { name = i.Name, fromMod = false, fromPack = true })),
             parts = parts.Select(p => new
             {
                 label = p.Label, material = p.Material, skin = MatcapPlan.IsSkin(p), onMatcap = MatcapPlan.IsOnMatcap(p),
@@ -120,7 +121,8 @@ internal static class MatcapJob
         {
             if (args.Image != null)
             {
-                if (MatcapImages.Find(args.Image, args.Port.ImageFolder, MatcapImages.ModFolder(args.ModRoot)) is not { } img)
+                if (MatcapImages.Find(args.Image, args.Port.ImageFolder, MatcapImages.ModFolder(args.ModRoot),
+                                      args.Port.Pack?.Available(), packOnly: args.Pack) is not { } img)
                 { job.Fail(new JobError("unknown-image", $"no matcap image called {args.Image}")); return; }
                 choice = MatcapChoice.OfImage(img);
             }

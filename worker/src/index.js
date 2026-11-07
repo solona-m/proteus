@@ -39,7 +39,8 @@ const README_TTL = 300;
 
 // Anchored, and each segment is a tight character class rather than a wildcard: the path decides
 // which upstream URL we build, so a loose pattern here would be an open proxy for any GitHub file.
-// Kept in sync with ProteusAssets.BaseUrls / UVMapDownloadService / DefaultEffectsDownloadService.
+// Kept in sync with ProteusAssets.BaseUrls / UVMapDownloadService / DefaultEffectsDownloadService /
+// DefaultMatcapsDownloadService.
 // Paths are `/<tag>/<file>` and map 1:1 onto `releases/download/<tag>/<file>` — the tag already says
 // what kind of asset it is, so there is no category segment to keep in sync with the client. That is
 // deliberate: it lets ProteusAssets.BaseUrls be nothing more than `MirrorBase + tag + "/"`, and a
@@ -58,6 +59,8 @@ const ROUTES = [
   // No space in the class: effect assets are uploaded with spaces already replaced by dots, because
   // GitHub rewrites spaces in asset names (see upload-effects.yml).
   { rx: /^\/(effects-[a-z0-9.-]{1,32})\/([A-Za-z0-9_.-]{1,80}\.(?:png|jpe?g))$/, repo: REPO },
+  // Proteus's own matcaps (upload-matcaps.yml): PNG only, spaces already replaced by dots.
+  { rx: /^\/(matcaps-[a-z0-9.-]{1,32})\/([A-Za-z0-9_.-]{1,80}\.png)$/, repo: REPO },
   { rx: /^\/(v[0-9][0-9.]{0,30}|testing-[0-9]{1,10})\/(latest\.zip)$/, repo: REPO },
   // Camera Tools. The prefix cannot collide with the route above it: that one requires the first
   // segment to start `v<digit>` or `testing-<digit>`, which `camera-tools` does not.

@@ -45,6 +45,12 @@ public sealed partial class PartsPanel
     /// <summary>The plugin's index of matcap libraries, shared and cached across sessions.</summary>
     internal void UseMatcapIndex(MatcapIndex shared) => matcapIndex = shared;
 
+    /// <summary>Proteus's own matcaps: downloaded the first time the Matcaps pane is shown, listed beside the user's.</summary>
+    private IMatcapPack? matcapPack;
+    private readonly MatcapPackView matcapPackView = new();
+
+    internal void UseMatcapPack(IMatcapPack pack) => matcapPack = pack;
+
     /// <summary>A part's tick box is enabled: under Matcaps by the matcap rule, else by the switch rule.</summary>
     private bool CanTick(ModelPart part) =>
         tool == Tool.Matcap ? MatcapPlan.Tickable(part, MatcapTargetKind(), parts?.AttributeNames ?? []) : part.Toggleable;
@@ -115,6 +121,10 @@ public sealed partial class PartsPanel
             matcapStates = root != null ? MatcapWriter.Detect(root) : new Dictionary<string, MatcapWriter.State>();
             matcapRecordFor = key;
         }
+        // First use: the pane is shown. Idempotent, so calling it every frame starts one download per session.
+        matcapPack?.EnsureAsync();
+        var packImages = matcapPackView.Images(matcapPack);
+
         var folder = MatcapImageFolder();
         var imagesKey = (folder ?? "") + "|" + key;
         if (matcapImages == null || matcapImagesFor != imagesKey)
@@ -165,6 +175,9 @@ public sealed partial class PartsPanel
             Error = matcapError,
             FaceTarget = MatcapTargetKind() == MatcapPlan.Kind.Face,
             HasHorns = parts != null && MatcapPlan.HasHorns(parts.Parts, parts.AttributeNames),
+            PackImages = packImages,
+            PackStatus = matcapPack?.Status,
+            RetryPack = () => matcapPack?.EnsureAsync(retryFailed: true),
         });
     }
 

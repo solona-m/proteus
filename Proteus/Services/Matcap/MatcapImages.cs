@@ -5,11 +5,12 @@ using System.Linq;
 
 namespace Proteus.Services.Matcap;
 
-/// <summary>One of the user's own matcap images.</summary>
+/// <summary>One matcap image: the user's own, or one of Proteus's (see <see cref="IMatcapPack"/>).</summary>
 /// <param name="Name">The file name — what a record stores.</param>
 /// <param name="Path">Where it is on disk.</param>
 /// <param name="FromMod">It is the open mod's own copy (<c>&lt;mod&gt;\Proteus\Matcaps</c>), not the global library's.</param>
-public sealed record MatcapImage(string Name, string Path, bool FromMod);
+/// <param name="FromPack">It is one of Proteus's own matcaps, downloaded into the plugin's config directory.</param>
+public sealed record MatcapImage(string Name, string Path, bool FromMod, bool FromPack = false);
 
 /// <summary>
 /// The user's own matcap images — listed the way the glow effects are (the mod's folder first, then the global library,
@@ -54,6 +55,17 @@ public static class MatcapImages
     /// <summary>The image by name, from the same lookup <see cref="List"/> makes, or null.</summary>
     public static MatcapImage? Find(string name, string? globalFolder, string? modFolder) =>
         List(globalFolder, modFolder).FirstOrDefault(i => string.Equals(i.Name, name, StringComparison.OrdinalIgnoreCase));
+
+    /// <summary>
+    /// The image by name: the mod's, then the global library's, then Proteus's own (<paramref name="pack"/>); with
+    /// <paramref name="packOnly"/>, Proteus's only.
+    /// </summary>
+    public static MatcapImage? Find(string name, string? globalFolder, string? modFolder, IReadOnlyList<MatcapImage>? pack,
+                                    bool packOnly = false)
+    {
+        if (!packOnly && Find(name, globalFolder, modFolder) is { } own) return own;
+        return pack?.FirstOrDefault(i => string.Equals(i.Name, name, StringComparison.OrdinalIgnoreCase));
+    }
 
     /// <summary>
     /// The side a <paramref name="width"/>×<paramref name="height"/> image is baked at, or null with a reason: matcaps are

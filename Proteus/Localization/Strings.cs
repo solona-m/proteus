@@ -117,6 +117,20 @@ public sealed class MatcapStrings
 
     public readonly string SourceLibraries = ProteusLoc.Localize("Parts.Matcap.SourceLibraries", "Library mods") + "###matcapSrcLibs";
 
+    public readonly string SourceProteus = ProteusLoc.Localize("Parts.Matcap.SourceProteus", "Proteus matcaps") + "###matcapSrcProteus";
+
+    public readonly string SourceProteusTip = ProteusLoc.Localize("Parts.Matcap.SourceProteus.Tip",
+        "Matcaps that come with Proteus, downloaded the first time you open Matcaps.");
+
+    /// <summary>{0} how many are on disk, {1} how many there are.</summary>
+    public readonly string PackDownloadingFmt = ProteusLoc.Localize("Parts.Matcap.PackDownloading.Fmt",
+        "Downloading Proteus's matcaps… {0} of {1}");
+
+    public readonly string PackFailed = ProteusLoc.Localize("Parts.Matcap.PackFailed",
+        "Proteus's matcaps could not be downloaded. Check your connection, then try again.");
+
+    public readonly string PackRetry = ProteusLoc.Localize("Parts.Matcap.PackRetry", "Try again") + "###matcapPackRetry";
+
     public readonly string OpenFolder = ProteusLoc.Localize("Parts.Matcap.OpenFolder", "Open matcap folder") + "###matcapOpenFolder";
 
     public readonly string Refresh = ProteusLoc.Localize("Parts.Matcap.Refresh", "Refresh") + "###matcapRefresh";

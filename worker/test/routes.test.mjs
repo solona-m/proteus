@@ -70,6 +70,8 @@ await check('uv map', '/uvmaps-v1/bibo_to_gen3_transfer.tif', 200,
   `${GH}/uvmaps-v1/bibo_to_gen3_transfer.tif`);
 await check('effect (dotted name)', '/effects-v1/hello.kitty.png', 200,
   `${GH}/effects-v1/hello.kitty.png`);
+await check('matcap (dotted name)', '/matcaps-v1/Gold.Metal.png', 200,
+  `${GH}/matcaps-v1/Gold.Metal.png`);
 await check('stable plugin zip', '/v2608.309.0.0/latest.zip', 200,
   `${GH}/v2608.309.0.0/latest.zip`);
 await check('testing plugin zip', '/testing-309/latest.zip', 200,
@@ -137,6 +139,17 @@ for (const [name, p] of [
     pass++; console.log('  ok   pickles upstream 404 not cached');
   } else { fail++; console.log(`  FAIL pickles upstream 404: ${first.status} ${cc}, refetched ${fetched.length}`); }
 }
+{
+  // A matcap release not published yet 404s; publishing it later must just work, so the 404 is never cached.
+  fetched = [];
+  const first = await worker.fetch(new Request('https://dl.example.com/matcaps-v1/missing.png'), {}, ctx);
+  const cc = first.headers.get('cache-control') ?? '';
+  fetched = [];
+  await worker.fetch(new Request('https://dl.example.com/matcaps-v1/missing.png'), {}, ctx);
+  if (first.status === 404 && cc.includes('no-store') && fetched.length === 1) {
+    pass++; console.log('  ok   matcap upstream 404 not cached');
+  } else { fail++; console.log(`  FAIL matcap upstream 404: ${first.status} ${cc}, refetched ${fetched.length}`); }
+}
 
 console.log('rejected paths (must never reach an origin):');
 await check('traversal', '/uvmaps-v1/../../../etc/passwd', 404, null);
@@ -150,6 +163,10 @@ await check('zip under uvmaps tag', '/uvmaps-v1/latest.zip', 404, null);
 // Effect assets are uploaded with spaces already replaced by dots (upload-effects.yml), so a name
 // with a real space is never legitimate and must not be forwarded.
 await check('space in effect name', '/effects-v1/hello kitty.png', 404, null);
+// Matcaps are PNG only and, like effects, uploaded with spaces already replaced by dots (upload-matcaps.yml).
+await check('matcap wrong ext', '/matcaps-v1/payload.jpg', 404, null);
+await check('space in matcap name', '/matcaps-v1/Gold Metal.png', 404, null);
+await check('matcap nested', '/matcaps-v1/sub/Gold.Metal.png', 404, null);
 
 console.log('readme endpoint (the mirror\'s own docs, inlined):');
 {

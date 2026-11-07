@@ -65,6 +65,17 @@ internal static class MatcapPanelModel
     /// <summary>The empty-library note, naming the folder to put images in.</summary>
     public static string NoImages(string? folder) => string.Format(Strings.Matcap.NoImagesFmt, folder ?? "Penumbra/Proteus/Matcaps");
 
+    /// <summary>
+    /// The Proteus source's status line, or null for none: the failure while failed, nothing once every matcap is on
+    /// disk (so a complete cache never flickers a progress line), and "n of total" while some are still missing.
+    /// </summary>
+    public static string? PackLine(MatcapPackStatus st, int available)
+    {
+        if (st.State == MatcapPackState.Failed) return Strings.Matcap.PackFailed;
+        if (available >= st.Total || st.State == MatcapPackState.Ready) return null;
+        return string.Format(Strings.Matcap.PackDownloadingFmt, Math.Max(available, st.Have), st.Total);
+    }
+
     /// <summary>The other matcaps of this mod on the same library slot, by material name.</summary>
     public static List<string> SlotUsers(MatcapRecord record, string texture, string? except = null) =>
         record.Materials.Where(m => m.Source.IsLibrary

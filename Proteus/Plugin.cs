@@ -29,7 +29,7 @@ public sealed class Plugin : IDalamudPlugin
 #endif
 
     /// <summary>Hand-maintained; bump it for in-game testing. <see cref="BuildStamp"/> is the one that can't go stale.</summary>
-    public const int BuildNumber = 1445;
+    public const int BuildNumber = 1446;
 
     /// <summary>
     /// Which set of release notes is current. Raise it when a release has something new to say: the window
@@ -58,6 +58,8 @@ public sealed class Plugin : IDalamudPlugin
     private readonly UVMapDownloadService uvMapDl;
     private readonly UvMapsCoordinator uvMaps;
     private readonly DefaultEffectsDownloadService effectsDl;
+    /// <summary>Proteus's own matcaps: constructed here, but only fetched when the Studio's Matcaps pane is first shown.</summary>
+    private readonly DefaultMatcapsDownloadService matcapPackDl;
     private readonly CompositorService compositor;
     private volatile bool _disposed;
     private readonly DesignBindingService designBindings;
@@ -130,6 +132,7 @@ public sealed class Plugin : IDalamudPlugin
         var assemblyDir = pluginInterface.AssemblyLocation.DirectoryName;
 
         effectsDl = new DefaultEffectsDownloadService(log, dataDir, assemblyDir);
+        matcapPackDl = new DefaultMatcapsDownloadService(log, dataDir);
         discovery = new SidecarDiscoveryService(penumbra, log)
         {
             DefaultEffectsDir = effectsDl.EffectsDir,
@@ -243,6 +246,7 @@ public sealed class Plugin : IDalamudPlugin
         partsPanel.UseBodyIndex(autoRefit.Index);
         // The matcap libraries among the installed mods, cached under the config folder across sessions.
         partsPanel.UseMatcapIndex(new Services.Matcap.MatcapIndex(dataDir));
+        partsPanel.UseMatcapPack(matcapPackDl);
 
         // The same: old gear is moved to Dawntrail's shader in its own mod as it is put on, window shut or open.
         shaderUpgrade = new ShaderUpgradeWatcher(compositor, penumbra, glamourer, autoRefit, textureLoader, config, log);
@@ -608,6 +612,7 @@ public sealed class Plugin : IDalamudPlugin
         uvMaps.Dispose();      // before the downloads: no recomposite after this
         uvMapDl.Dispose();
         effectsDl.Dispose();
+        matcapPackDl.Dispose();
         variantRepoint.Dispose();  // before the shader upgrade and auto refit, which it asks
         shaderUpgrade.Dispose();   // before auto refit, which it asks, and the bridges it unsubscribes from
         autoRefit.Dispose();   // before the compositor and the bridges, whose events it unsubscribes from

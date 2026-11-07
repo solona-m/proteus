@@ -762,7 +762,8 @@ public class SidecarDiscoveryService
 
     /// <summary>
     /// The global matcap image library, <c>&lt;penumbra mods&gt;\Proteus\Matcaps\</c>, beside the effects library.
-    /// Created on demand. Nothing is seeded into it: Proteus ships no third-party matcaps.
+    /// Created on demand. Nothing is seeded into it: it is the user's own. Proteus's own matcaps stay in the plugin's
+    /// config directory (<see cref="DefaultMatcapsDownloadService"/>) and are listed beside it.
     /// </summary>
     public string? MatcapsLibraryPath()
     {

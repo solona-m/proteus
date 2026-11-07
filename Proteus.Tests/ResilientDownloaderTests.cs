@@ -87,6 +87,30 @@ public sealed class ResilientDownloaderTests : IDisposable
 
     private static readonly string[] OneSource = ["https://example.test/tag/"];
 
+    /// <summary>
+    /// A mirror without the route yet (a plain 404) is not retried: the next source is asked at once and the file lands.
+    /// What lets Proteus's matcaps download from GitHub before the worker is redeployed.
+    /// </summary>
+    [Fact]
+    [Trait("Plan", "EDGE-matcap-pack-8")]
+    public async Task Mirror_404_falls_through_to_GitHub()
+    {
+        var body = MakeBody(4096);
+        var dest = Path.Combine(dir, "Gold Metal.png");
+        int mirror = 0;
+        var d = new ResilientDownloader(Log, new ScriptedHandler(req =>
+        {
+            if (req.RequestUri!.Host == "mirror.test") { mirror++; return new HttpResponseMessage(HttpStatusCode.NotFound); }
+            return Full(body);
+        }));
+        var r = await d.FetchAsync(["https://mirror.test/matcaps-v1/", "https://github.test/matcaps-v1/"], "Gold.Metal.png",
+                                   body.Length, Sha(body), dest, null, CancellationToken.None);
+        Assert.True(r.Ok, r.Detail);
+        Assert.Equal(1, mirror);
+        Assert.Equal(body, File.ReadAllBytes(dest));
+        d.Dispose();
+    }
+
     [Fact]
     public async Task CleanDownload_ReportsAbsoluteProgressEndingAtTheFullSize()
     {
