@@ -171,6 +171,9 @@ internal sealed class HarnessHost : IDisposable
             try
             {
                 var (sidecars, _) = c.PutBackOffThreadParts();
+                // Handles, the move fault, the shell fault and the auto-redraw override: memory only. The recomposite that
+                // would put a withheld texture back is skipped here; the next composite after reload publishes in full.
+                c.PutBackOutput();
                 var failed = sidecars.Where(s => s.Result is not ("restored" or "unchanged")).ToList();
                 if (failed.Count > 0)
                     log.Warning("[Proteus] test harness stopped off the framework thread; sidecars not put back: {0}",

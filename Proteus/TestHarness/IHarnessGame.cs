@@ -327,6 +327,26 @@ internal interface IHarnessGame
 
     /// <summary>Ask for a recomposite. Framework thread.</summary>
     void Recomposite(string reason);
+
+    // ── shell output failures (HarnessRouter.Output, issue sweep D) ─────────
+
+    /// <summary>The folder of Proteus's own output mod (textures/, materials/, models/). Any thread.</summary>
+    string ManagedOutputDir();
+
+    /// <summary>Arm the shell load fault; false when one is armed already. Any thread.</summary>
+    bool ArmShellFault(string shell, string slot, string until);
+
+    /// <summary>Clear the shell load fault; true when one was there. The recomposite is the caller's. Any thread.</summary>
+    bool ClearShellFault();
+
+    /// <summary>Auto redraw: the user's setting, the harness's session override (null: none), and the effect. Any thread.</summary>
+    (bool Config, bool? Override, bool Effective) AutoRedrawEnabled();
+
+    /// <summary>Set (or with null, clear) the harness's session-only auto-redraw override: memory only. Any thread.</summary>
+    void SetAutoRedrawOverride(bool? enabled);
+
+    /// <summary>The write-retry latch, the drawn check's steps, the shell fault and the move fault, for /state. Any thread.</summary>
+    object RecoveryState();
 }
 
 /// <summary>A mod's own (permanent) settings in a collection. <see cref="Own"/> false: the collection has no setting of its

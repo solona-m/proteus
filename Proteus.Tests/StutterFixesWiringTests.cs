@@ -97,12 +97,14 @@ public class StutterFixesWiringTests
     public void ReChecksAreScheduledAndKeyedOnProbe()
     {
         var check = Method(PostRedraw, "private async Task CheckShellDrawnAsync(");
-        Before(check, "CarrierRecheck(expected, reloadWithheld, timeline, recheck, hostGone)", "ride a ");
+        Before(check, "CarrierRecheck(expected, reloadWithheld, timeline, recheck, hostGone, afterOwnRedraw, extra)", "ride a ");
         Assert.Contains("ScheduleShellRecheck(expected, reloadWithheld, timeline, recheck + 1", check);
         var schedule = Method(PostRedraw, "private void ScheduleShellRecheck(");
-        Assert.Contains("!ReferenceEquals(_shellDrawnCheck, expected)", schedule);
+        // Issue sweep D: the superseded test moved into InFlight.ScheduleAsync's proceed (same meaning, new spelling).
+        Assert.Contains("() => !_disposed && ReferenceEquals(_shellDrawnCheck, expected)", schedule);
         var recheck = Method(PostRedraw, "private bool CarrierRecheck(");
-        Before(recheck, "string.Equals(_carrierUndrawnNoticeKey, probeKey", "Chat.ShellNotDrawing");
+        // Issue sweep D: the carrier notice is named (PrintShellNotice), still behind the same once-key.
+        Before(recheck, "string.Equals(_carrierUndrawnNoticeKey, probeKey", "PrintShellNotice(");
         Assert.Contains("var probeKey = ShellProbeKey(expected);", recheck);
     }
 
@@ -236,8 +238,8 @@ public class StutterFixesWiringTests
     public void AnAllCarrierShellNeverBackIsReCheckedToo()
     {
         var check = Method(PostRedraw, "private async Task CheckShellDrawnAsync(");
-        Before(check, "if (!hostEverDrawn)", "CarrierRecheck(expected, reloadWithheld, timeline, recheck, expected.Materials)");
-        Before(check, "CarrierRecheck(expected, reloadWithheld, timeline, recheck, expected.Materials)", "the host accessory was not back");
+        Before(check, "if (!hostEverDrawn)", "CarrierRecheck(expected, reloadWithheld, timeline, recheck, expected.Materials, afterOwnRedraw, extra)");
+        Before(check, "CarrierRecheck(expected, reloadWithheld, timeline, recheck, expected.Materials, afterOwnRedraw, extra)", "the host accessory was not back");
     }
 
     // [AC-stutter-fixes-7]

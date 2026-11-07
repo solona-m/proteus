@@ -38,7 +38,20 @@ internal sealed record PutBackReport(IReadOnlyList<UndoEntry> Gear, IReadOnlyLis
 
     /// <summary>The auto-refit override: cleared or none, and the mods auto refit wrote into while it stood (not undone).</summary>
     public (string Result, IReadOnlyList<string> RefitsWhileOverridden) AutoRefit { get; init; } = ("none", []);
+
+    /// <summary>The output locks, move fault, shell fault and auto-redraw override (issue sweep D).</summary>
+    public OutputPutBack? Output { get; init; }
 }
+
+/// <summary>What put-back did about the shell output routes: each held file, the move fault, the shell fault (cleared and
+/// recomposited) and the auto-redraw override.</summary>
+internal sealed record OutputPutBack(IReadOnlyList<UndoEntry> Locks, string MoveFault, string Fault, string AutoRedraw)
+{
+    public static readonly OutputPutBack Nothing = new([], "none", "none", "none");
+}
+
+/// <summary>The harness's session-only auto-redraw switch: what it set, and the effective state before the first set.</summary>
+internal sealed record AutoRedrawOverrideRecord(bool Enabled, bool BeforeEffective, DateTime AtUtc);
 
 /// <summary>The harness's session-only auto-refit switch: what it set, and the effective state before the first set.</summary>
 internal sealed record AutoRefitOverrideRecord(bool Enabled, bool BeforeEffective, DateTime AtUtc);
@@ -143,6 +156,54 @@ internal sealed class HarnessChanges(IHarnessGame game, SessionNames names, IPlu
     public IReadOnlyList<LeftoverSidecar> LeftoverSidecars { get; set; } = [];
 
     private AutoRefitOverrideRecord? autoRefitOverride;
+
+    // ── shell output failures (issue sweep D) ──
+
+    /// <summary>The output-lock route's handles and move fault.</summary>
+    public HarnessOutputLocks OutputLocks { get; } = new(log);
+
+    private bool shellFaultArmed;
+    private AutoRedrawOverrideRecord? autoRedrawOverride;
+
+    /// <summary>Record that the shell-fault route armed the fault (cleared at put-back, with a recomposite).</summary>
+    public void NoteShellFault(bool armed) => shellFaultArmed = armed;
+
+    /// <summary>Record the session override the auto-redraw route set; the first set keeps its Before.</summary>
+    public AutoRedrawOverrideRecord NoteAutoRedrawOverride(bool enabled, bool beforeEffective)
+        => autoRedrawOverride = new AutoRedrawOverrideRecord(enabled, autoRedrawOverride?.BeforeEffective ?? beforeEffective, DateTime.UtcNow);
+
+    /// <summary>
+    /// Releases the output locks, disarms the move fault, clears the shell fault and the auto-redraw override — memory and
+    /// handles only, no framework hop, so the off-thread stop runs it too. Whether a recomposite is owed (the fault left a
+    /// texture out of the manifest) is in the result's <see cref="OutputPutBack.Fault"/> == "cleared".
+    /// </summary>
+    internal OutputPutBack PutBackOutput()
+    {
+        try
+        {
+            var (released, _, moveFault) = OutputLocks.ReleaseAll("put back");
+            string fault = "none";
+            if (shellFaultArmed || game.ClearShellFault())
+            {
+                game.ClearShellFault();
+                fault = "cleared";
+            }
+            shellFaultArmed = false;
+            string redraw = "none";
+            if (autoRedrawOverride != null)
+            {
+                game.SetAutoRedrawOverride(null);
+                autoRedrawOverride = null;
+                redraw = "cleared";
+            }
+            return new OutputPutBack(released.Select(r => new UndoEntry(r.File, r.Result)).ToList(), moveFault, fault, redraw);
+        }
+        catch (Exception ex)
+        {
+            log?.Warning(ex, "[Proteus] test harness: putting back the output routes failed");
+            return OutputPutBack.Nothing;
+        }
+    }
 
     /// <summary>Record the session override the auto-refit route set; the first set keeps its Before.</summary>
     public AutoRefitOverrideRecord NoteAutoRefitOverride(bool enabled, bool beforeEffective)
@@ -375,6 +436,13 @@ internal sealed class HarnessChanges(IHarnessGame game, SessionNames names, IPlu
 
         // After the Studio and before the binding session: the sidecars the harness saved, and the auto-refit override.
         var (sidecars, autoRefit) = PutBackOffThreadParts();
+        // The shell output routes: a cleared shell fault left a texture out of the manifest, so the composite puts it back.
+        var output = PutBackOutput();
+        if (output.Fault == "cleared")
+        {
+            try { game.Recomposite("test harness: shell fault cleared"); }
+            catch (Exception ex) { log?.Warning(ex, "[Proteus] test harness: the recomposite after clearing the shell fault failed"); }
+        }
         if (sidecars.Any(s => s.Result == "restored"))
         {
             try { game.Recomposite("test harness: sidecar put back"); }
@@ -398,7 +466,8 @@ internal sealed class HarnessChanges(IHarnessGame game, SessionNames names, IPlu
         var mods = matcapMods.ToList();
         matcapMods.Clear();
         return new PutBackReport(gearResults, holdResults, sweep, redraw || binding?.Restored == true, binding)
-               { Studio = studioResults, MatcapImages = images, MatcapMods = mods, Sidecar = sidecars, AutoRefit = autoRefit };
+               { Studio = studioResults, MatcapImages = images, MatcapMods = mods, Sidecar = sidecars, AutoRefit = autoRefit,
+                 Output = output };
     }
 
     // ── the Studio ──────────────────────────────────────────────────────────
@@ -550,6 +619,12 @@ internal sealed class HarnessChanges(IHarnessGame game, SessionNames names, IPlu
         applySettling,
         sidecar = sidecar.View(),
         autoRefitOverride = autoRefitOverride is { } o ? new { enabled = o.Enabled, before = o.BeforeEffective, atUtc = o.AtUtc } : null,
+        output = new
+        {
+            locksActive = OutputLocks.Active,
+            shellFault = shellFaultArmed,
+            autoRedrawOverride = autoRedrawOverride is { } r ? new { enabled = r.Enabled, before = r.BeforeEffective, atUtc = r.AtUtc } : null,
+        },
     };
 
     /// <summary>The slots and mods still recorded, for the warning when put-back cannot run.</summary>
@@ -559,8 +634,12 @@ internal sealed class HarnessChanges(IHarnessGame game, SessionNames names, IPlu
                                      ? [$"Studio edits in {s.ModDir} ({(s.Files.Count == 0 ? "nothing saved" : string.Join(", ", s.Files.Keys))}): press Undo saved changes"]
                                      : [])
                                  .Concat(sidecar.Leftovers())
-                                 .Concat(autoRefitOverride != null ? ["the auto-refit override"] : []));
+                                 .Concat(autoRefitOverride != null ? ["the auto-refit override"] : [])
+                                 .Concat(OutputLocks.Active ? ["output locks"] : [])
+                                 .Concat(shellFaultArmed ? ["the shell fault"] : [])
+                                 .Concat(autoRedrawOverride != null ? ["the auto-redraw override"] : []));
 
     internal bool Empty => gear.Count == 0 && holds.Count == 0 && bindings?.HasSession != true && studio == null
-                        && sidecar.Empty && autoRefitOverride == null;
+                        && sidecar.Empty && autoRefitOverride == null
+                        && !OutputLocks.Active && !shellFaultArmed && autoRedrawOverride == null;
 }

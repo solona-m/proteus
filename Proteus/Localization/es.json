@@ -459,12 +459,20 @@
     "message": "[Proteus] «{0}» sobrescribe {1}, que es justo donde Proteus compone tus superposiciones, así que no aparecerán. Solución: en Penumbra, sube la prioridad del mod «Proteus» por encima de «{0}».",
     "description": ""
   },
-  "Chat.ShellNotDrawing": {
-    "message": "[Proteus] Tu segunda piel se ha construido, pero el juego no la está dibujando. El accesorio que la sostiene está equipado y aun así el personaje no carga la versión de Proteus. Quítate ese accesorio y vuelve a ponértelo, o elige otro.",
+  "Chat.ShellPartNotDrawn.Fmt": {
+    "message": "[Proteus] Una parte de tu segunda piel sigue sin verse. Esa parte va sobre {0}. Quítatelo y vuelve a ponértelo, o lleva esa capa en otro accesorio.",
     "description": ""
   },
-  "Chat.ShellMaterialFailed": {
-    "message": "[Proteus] Una parte de tu segunda piel no se está dibujando. El resto sí está en tu personaje, así que o falta una textura que esa pieza necesita, o el juego sigue conservando la versión anterior. Prueba primero «Recomponer ahora» y después quítate y vuelve a ponerte el accesorio que la sostiene.",
+  "Chat.ShellNotDrawn.Fmt": {
+    "message": "[Proteus] Tu segunda piel sigue sin verse, aunque llevas puesto {0}. Quítatelo y vuelve a ponértelo, o lleva la capa en otro accesorio.",
+    "description": ""
+  },
+  "Chat.ShellCarrierNotDrawn.Fmt": {
+    "message": "[Proteus] Una parte de tu segunda piel no se ve. Va sobre {0}, el accesorio invisible que Proteus te pone para sostenerla. Pulsa «Recomponer ahora» en la ventana de Proteus; si sigue sin verse, quítate ese accesorio y Proteus volverá a ponértelo.",
+    "description": ""
+  },
+  "Chat.ShellNotDrawnRedrawOff.Fmt": {
+    "message": "[Proteus] Una parte de tu segunda piel no se ve. Va sobre {0}. El redibujado automático está desactivado, así que Proteus no ha redibujado tu personaje: usa el botón Redraw de Penumbra o cambia de zona y, si sigue sin verse, quítate y vuelve a ponerte ese accesorio.",
     "description": ""
   },
   "Chat.ShellNeedsRedraw": {

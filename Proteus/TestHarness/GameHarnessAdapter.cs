@@ -452,6 +452,19 @@ internal sealed class GameHarnessAdapter : IHarnessGame, IDisposable
 
     public void Recomposite(string reason) => compositor.TriggerRecomposite(reason);
 
+    public string ManagedOutputDir() => compositor.ManagedOutputDir;
+
+    public bool ArmShellFault(string shell, string slot, string until) => compositor.HarnessArmShellFault(shell, slot, until);
+
+    public bool ClearShellFault() => compositor.HarnessClearShellFault();
+
+    public (bool Config, bool? Override, bool Effective) AutoRedrawEnabled()
+        => (config.AutoRedraw, compositor.HarnessAutoRedrawOverride, compositor.AutoRedrawOn);
+
+    public void SetAutoRedrawOverride(bool? enabled) => compositor.HarnessAutoRedrawOverride = enabled;
+
+    public object RecoveryState() => compositor.HarnessRecoveryState();
+
     private void OnStateFinalized(StateFinalizationType type)
     {
         if (type == StateFinalizationType.DesignApplied) Interlocked.Increment(ref designApplied);

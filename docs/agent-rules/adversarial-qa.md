@@ -91,6 +91,9 @@ four requests were open at once: retry when one finishes; it is never a busy run
 | `POST /actions/sidecar-edit` | `{"mod","row":<n>,"diffuse":"#RRGGBB"}` (optionally `"group"`+`"option"`, `"sub":"A"\|"B"`, `"restoreMtime":true`) → 200 `{mode:"save", mod, before, after, readBack, stampBefore, stampAfter, sameLength, mtimeRestored, backup, recomposite, governed}`. `governed:true`: the active design binding drives that mod's colours, so the saved colour cannot show in the composite — check the composite on an ungoverned mod. Changes one colour row through Proteus's **own** sidecar save, after backing `Proteus/metadata.json` up; put-back restores it. 400 `invalid-field`; 404 `mod-not-found`, `not-a-proteus-mod`, `row-not-found`; 409 `busy`, `auto-refit-busy`, `user-edit-held`; 500 `save-failed`; 503 `harness-stopping`. |
 | `GET /sidecar?mod=<folder>&group=<g>&option=<o>&row=<n>` | Read-only, through discovery (and its cache): `{mod, found, rows:[{row, diffuseA, diffuseB}], staged}`. 404 `mod-not-found`, `not-a-proteus-mod`. |
 | `POST /actions/auto-refit` | `{"enabled":true\|false}` → 200 `{config, harnessOverride, effective, before}`. Switches auto refit for this harness session only: in memory, never saved; put-back or unload clears it. 400 `invalid-field`; 409 `busy`; 503 `harness-stopping`. |
+| `POST /actions/output-lock` | `{"files":["textures/ss_*_*.tex"],"ms":1..120000}` (hold the files), `{"files":[…],"failMoves":1..20}` (fail their next moves) or `{"release":true}` → 200 `{mode:"lock", held:[{file,bytes}], untilUtc}` / `{mode:"fail-moves", patterns, failMoves, untilUtc}` / `{released:[file], movesLeft}`. Paths are into Proteus's **own** output mod: `textures`, `materials` or `models`, a slash, and a leaf that may hold `*`. `ms` holds up to 32 existing files read-only (no write or delete sharing): a replace fails as when the game holds them. `failMoves` makes the next N moves of matching files into place fail with a sharing violation (patterns may name files not yet written). One set at a time; released at expiry, on release, at put-back, on `off` and on unload. 400 `invalid-field`; 404 `no-match` (`ms` only); 409 `locks-held`; 503 `harness-stopping`. |
+| `POST /actions/shell-fault` | `{"shell":"ss_1"\|"any","slot":"norm\|mask\|id\|base\|catc" (default norm),"until":"auto-redraw\|put-back"}` or `{"clear":true}` → 200 `{armed, shell, slot, until}` / `{cleared, recomposite}`. Every publishing composite while armed leaves that shell texture out of Proteus's own manifest, so the shell's material fails to load and the shell is partly drawn. `auto-redraw`: healed just before Proteus's automatic redraw (manifest rebuilt from the live one, manipulations kept), so the redraw draws it; `put-back`: stays withheld, so the named message follows. Clear, put-back, `off` and unload clear it and recomposite. Never counts as a write failure. 400 `invalid-field`; 409 `fault-armed`; 503 `harness-stopping`. |
+| `POST /actions/auto-redraw` | `{"enabled":true\|false}` → 200 `{config, harnessOverride, effective, before}`. Switches auto redraw for the compositor for this harness session only: in memory, never saved; put-back or unload clears it. 400 `invalid-field`; 503 `harness-stopping`. |
 | `GET /jobs/{id}` | `{id, kind, modDir, state: queued\|running\|done\|failed\|cancelled, progress, backup, reloaded, redrawRequested, redrawObserved, autoRefitFollowed, result, restored, error}` |
 
 `mod` is the **folder name** Penumbra keeps the mod in (case-insensitive), never its
@@ -412,6 +415,34 @@ What Proteus reads from the drive while nothing changes, and the routes that dri
   (`built`, `stale`, `refreshing`, `generation`): mod events mark it stale and nothing lists the mods folders.
   **Do not equip while auto refit is overridden on**: a refit writes into the worn mod, which put-back cannot undo; the
   put-back report lists any such mod in `autoRefit.refitsWhileOverridden` (auto refit's own Undo takes it back).
+
+## Shell output failures (issue sweep D)
+
+What Proteus does when a shell output file cannot be written (#91), and when a published shell is not drawn.
+`/state.compositor.recovery` has `writeRetry {lastDecision: clean|retry|give-up, attempt, scheduledRetries60s,
+outputIncomplete, timerPending}`, `shellDrawn {lastStep: auto-redraw|notify|notify-redraw-off|silent|defer|confirmed,
+autoRedraws5m, autoRedrawKeySet, noticeKeySet, checksInFlight}`, `shellFault {armed, shell, slot, until, withheld,
+lastHeal: healed|gave-up}` and `moveFault {patterns, movesLeft}`.
+
+- **Not exercised is never a pass.** A step whose fault or lock was not confirmed taken — no `shellFault.withheld`, no
+  "PARTLY drawn" Warning or Penumbra `FailedSubResource` in `/log`, no "was locked; written after" or "output write
+  failed" line — is reported **not exercised**, never a pass.
+- **Automatic redraws are limited to 2 per 5 minutes** (`/state.compositor.recovery.shellDrawn.autoRedraws5m`). Do not
+  repeat the redraw steps within 5 minutes: a 3rd run goes straight to the message, which is the rate limit, not a defect.
+- Keep the auto writers off. Toggle the **shell's own Proteus mod** (the one whose layer is on the host) with
+  `/actions/mod-settings`, so the shell's materials reload; an unrelated mod's toggle may never re-request them.
+- **Write retry:** `output-lock {"files":["textures/ss_*_*.tex"],"failMoves":2}`, toggle → `/log` "was locked; written
+  after 2 retr(ies)", no `Failed to write`, `moveFault` null after.
+- **Latch:** `failMoves: 6`, toggle → "output write failed … retrying in 1500ms (attempt 1/3)", then
+  `writeRetry.lastDecision: clean`; never "skipped — inputs unchanged" while `outputIncomplete` is true.
+- **Give-up without a loop:** `output-lock {"files":["textures/ss_*_*.tex"],"ms":60000}`, toggle → three retries, a
+  Warning and one chat line naming the accessory; `/state.redraws.count` stops rising. Release, toggle, recovered.
+- **Redraw heals it:** `shell-fault {"shell":"any","until":"auto-redraw"}`, toggle, confirm the fault took, then
+  "redrawing the character once", `shellFault.lastHeal: healed`, "second skin is drawn", no chat, `lastStep: confirmed`.
+- **Named message:** `until:"put-back"` → one automatic redraw, then exactly one chat line naming the accessory; a
+  further toggle gives no second redraw and no second line.
+- **Auto redraw off:** `auto-redraw {"enabled":false}` → no automatic redraw and the "Auto redraw is off" message; no
+  retry timer and `scheduledRetries60s` unchanged.
 
 ## Waiting for the game
 

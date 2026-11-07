@@ -129,6 +129,21 @@ check what Proteus reads from the drive while nothing changes:
   it, and put-back lists any mod a refit wrote into while it stood (those writes are
   not undone by the harness).
 
+**Amendment (2026-11-08, shell output failures).** Three more abilities, so QA can
+drive issue sweep D's recovery flows on demand:
+- `output-lock` either holds read-only handles (no write or delete sharing) on up
+  to 32 existing files of Proteus's **own** output mod for at most 120 s, or makes
+  the next N (at most 20) moves of matching output files fail in memory. It writes
+  nothing; handles die with the process and are released at expiry, on release, at
+  put-back, on `off` and on unload.
+- `shell-fault` leaves one shell texture redirect out of Proteus's **own** manifest
+  at publish. Healed before Proteus's automatic redraw (rebuilt from the live
+  manifest with its manipulations kept, recorded as a publish) or cleared by
+  put-back, `off` or unload with a recomposite; a crash loses it with the process
+  and the next composite publishes in full.
+- `auto-redraw` switches the compositor's auto redraw for the session in memory
+  only, never written to the configuration; put-back or unload clears it.
+
 ## Consequences
 
 Easier: QA can test the plugin in a running game unattended once the user turns

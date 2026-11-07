@@ -256,7 +256,12 @@ public partial class CompositorService : IDisposable
     /// <paramref name="Materials"/> is the test (only drawn meshes load them); <paramref name="Models"/> is the
     /// anchor that separates "our mesh didn't load" from "the redraw hasn't finished".
     /// </summary>
-    private sealed record ShellDrawnProbe(IReadOnlyList<string> Materials, IReadOnlyList<string> Models);
+    private sealed record ShellDrawnProbe(IReadOnlyList<string> Materials, IReadOnlyList<string> Models)
+    {
+        /// <summary>The run that published this shell had output writes it could not put in place (#91): the retry
+        /// composite owns recovery, so the drawn check defers rather than redraws. Not part of <see cref="ShellProbeKey"/>.</summary>
+        public bool PublishedWithWriteFailures { get; init; }
+    }
 
     /// <summary>
     /// The last shell build's probe, or null when no shell was built. Same publish contract as

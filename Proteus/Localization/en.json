@@ -459,13 +459,21 @@
     "message": "[Proteus] \"{0}\" overrides {1}, which Proteus composites your overlays into — so they will not show up. Fix: in Penumbra, raise the \"Proteus\" mod's priority above \"{0}\".",
     "description": "Appears in an in-game chat notice from Proteus. Takes arguments - keep every {0}, {1} ... exactly once; you may reorder them."
   },
-  "Chat.ShellNotDrawing": {
-    "message": "[Proteus] Your second skin was built but the game isn't drawing it. The accessory it rides on is equipped, yet the character isn't loading Proteus' version. Try unequipping and re-equipping that accessory, or pick a different one.",
-    "description": "Appears in an in-game chat notice from Proteus."
+  "Chat.ShellPartNotDrawn.Fmt": {
+    "message": "[Proteus] Part of your second skin still isn't showing. That part rides on {0}. Unequip and re-equip it, or wear that layer on a different accessory.",
+    "description": "Appears in an in-game chat notice from Proteus. {0} is the accessory the missing part rides on (item name and slot). Takes arguments - keep every {0}, {1} ... exactly once; you may reorder them."
   },
-  "Chat.ShellMaterialFailed": {
-    "message": "[Proteus] Part of your second skin isn't being drawn. The rest of it is on your character, so either a texture that piece needs is missing, or the game is still holding the previous version. Try \"Recomposite now\" first, then unequipping and re-equipping the accessory it rides on.",
-    "description": "Appears in an in-game chat notice from Proteus. \"Recomposite now\" is the button Band.Recomposite.Tip - use the same words."
+  "Chat.ShellNotDrawn.Fmt": {
+    "message": "[Proteus] Your second skin still isn't showing, although {0} is equipped. Unequip and re-equip it, or wear the layer on a different accessory.",
+    "description": "Appears in an in-game chat notice from Proteus. {0} is the accessory the second skin rides on (item name and slot). Takes arguments - keep every {0}, {1} ... exactly once; you may reorder them."
+  },
+  "Chat.ShellCarrierNotDrawn.Fmt": {
+    "message": "[Proteus] Part of your second skin isn't showing. It rides on {0}, the invisible accessory Proteus puts on to carry it. Click \"Recomposite now\" in Proteus's window; if it still doesn't show, take that accessory off and Proteus will put it back on.",
+    "description": "Appears in an in-game chat notice from Proteus. {0} is the invisible ring, bracelet or glasses Proteus equips to carry the second skin. \"Recomposite now\" is the button Band.Recomposite.Tip - use the same words. Takes arguments - keep every {0}, {1} ... exactly once; you may reorder them."
+  },
+  "Chat.ShellNotDrawnRedrawOff.Fmt": {
+    "message": "[Proteus] Part of your second skin isn't showing. It rides on {0}. Auto redraw is off, so Proteus didn't redraw your character: use Penumbra's Redraw button or change zones, and if it still doesn't show, unequip and re-equip that accessory.",
+    "description": "Appears in an in-game chat notice from Proteus. {0} is the accessory the second skin rides on. \"Auto redraw\" is the checkbox Settings.General.AutoRedraw.Label; \"Redraw\" is a button in Penumbra - use the name Penumbra shows in your language. Takes arguments - keep every {0}, {1} ... exactly once; you may reorder them."
   },
   "Chat.ShellNeedsRedraw": {
     "message": "[Proteus] Your second skin changed, but auto redraw is off, so your character is still wearing the previous version. Zone or use Penumbra's Redraw button to see it.",

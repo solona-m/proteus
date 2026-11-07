@@ -138,6 +138,13 @@ internal sealed partial class HarnessRouter
             },
             sidecar = report.Sidecar.Select(e => new { mod = e.Mod, result = e.Result, code = e.Code, defaults = e.Defaults }),
             autoRefit = new { result = report.AutoRefit.Result, refitsWhileOverridden = report.AutoRefit.RefitsWhileOverridden },
+            output = report.Output is { } o
+                ? new
+                {
+                    locks = o.Locks.Select(l => new { file = l.Name, result = l.Result }),
+                    moveFault = o.MoveFault, fault = o.Fault, autoRedraw = o.AutoRedraw,
+                }
+                : null,
         });
     }
 

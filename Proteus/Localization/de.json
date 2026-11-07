@@ -459,12 +459,20 @@
     "message": "[Proteus] „{0}“ überschreibt {1}, worein Proteus deine Overlays komponiert — sie werden also nicht erscheinen. Lösung: hebe in Penumbra die Priorität des Mods „Proteus“ über „{0}“ an.",
     "description": ""
   },
-  "Chat.ShellNotDrawing": {
-    "message": "[Proteus] Deine zweite Haut wurde gebaut, aber das Spiel zeichnet sie nicht. Das Accessoire, auf dem sie sitzt, ist angelegt, doch der Charakter lädt Proteus' Version nicht. Lege das Accessoire ab und wieder an oder wähle ein anderes.",
+  "Chat.ShellPartNotDrawn.Fmt": {
+    "message": "[Proteus] Ein Teil deiner zweiten Haut ist immer noch nicht zu sehen. Dieser Teil sitzt auf {0}. Lege es ab und wieder an, oder trage diese Ebene auf einem anderen Accessoire.",
     "description": ""
   },
-  "Chat.ShellMaterialFailed": {
-    "message": "[Proteus] Ein Teil deiner zweiten Haut wird nicht gezeichnet. Der Rest ist auf deinem Charakter, also fehlt entweder eine Textur, die dieses Teil braucht, oder das Spiel hält noch die vorherige Version. Versuche zuerst „Jetzt neu komponieren“, dann lege das Accessoire, auf dem sie sitzt, ab und wieder an.",
+  "Chat.ShellNotDrawn.Fmt": {
+    "message": "[Proteus] Deine zweite Haut ist immer noch nicht zu sehen, obwohl {0} angelegt ist. Lege es ab und wieder an, oder trage die Ebene auf einem anderen Accessoire.",
+    "description": ""
+  },
+  "Chat.ShellCarrierNotDrawn.Fmt": {
+    "message": "[Proteus] Ein Teil deiner zweiten Haut ist nicht zu sehen. Er sitzt auf {0}, dem unsichtbaren Accessoire, das Proteus anlegt, um sie zu tragen. Klicke in Proteus' Fenster auf „Jetzt neu komponieren“; ist sie dann immer noch nicht zu sehen, lege dieses Accessoire ab und Proteus legt es wieder an.",
+    "description": ""
+  },
+  "Chat.ShellNotDrawnRedrawOff.Fmt": {
+    "message": "[Proteus] Ein Teil deiner zweiten Haut ist nicht zu sehen. Er sitzt auf {0}. Das automatische Neuzeichnen ist aus, deshalb hat Proteus deinen Charakter nicht neu gezeichnet: nutze Penumbras Redraw-Schaltfläche oder wechsle das Gebiet, und ist sie dann immer noch nicht zu sehen, lege das Accessoire ab und wieder an.",
     "description": ""
   },
   "Chat.ShellNeedsRedraw": {

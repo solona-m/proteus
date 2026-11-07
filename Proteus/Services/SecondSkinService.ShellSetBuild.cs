@@ -187,6 +187,38 @@ public sealed partial class SecondSkinService
         /// <summary>Whether the vanilla parts of a man were un-mirrored into a woman's asymmetric art's space by the men's maps.</summary>
         private bool menUnmirror;
 
+        // Output writes that could not be put in place this build (#91), and the host models they dropped a layer or model
+        // from. Locked: the content and model writers run serially today, but the counter must not depend on that.
+        private readonly object writeFailureGate = new();
+        private int writeFailures;
+        private readonly List<string> failedHosts = new();
+
+        /// <summary>Counts one output write that could not be put in place, naming host <paramref name="hIdx"/> if known.</summary>
+        internal void CountWriteFailure(int? hIdx)
+        {
+            var path = hIdx is int h && h >= 0 && h < hosts.Count ? HostModelPathFor(h) : null;
+            lock (writeFailureGate)
+            {
+                writeFailures++;
+                if (path != null && !failedHosts.Contains(path, StringComparer.OrdinalIgnoreCase)) failedHosts.Add(path);
+            }
+        }
+
+        /// <summary>The write failures counted so far (see <see cref="SecondSkinService.Build"/>).</summary>
+        internal ShellWriteFailures WriteFailures()
+        {
+            lock (writeFailureGate)
+                return writeFailures == 0 ? ShellWriteFailures.None : new ShellWriteFailures(writeFailures, failedHosts.ToList());
+        }
+
+        /// <summary>The game path host <paramref name="hIdx"/>'s shell model is published under (as PublishModel builds it).</summary>
+        private string HostModelPathFor(int hIdx)
+        {
+            var host = hosts[hIdx];
+            return host.ModelPath
+                ?? $"chara/{host.Tree}/{host.Prefix}{host.SetId:D4}/model/c{plan[hIdx].PublishCode}{host.Prefix}{host.SetId:D4}_{host.Slot}.mdl";
+        }
+
         public Result? Run()
         {
             if (!Begin()) return Abandoned();
@@ -1348,8 +1380,9 @@ public sealed partial class SecondSkinService
                 bool glowBuilt = false;
                 if (unit.Glow != null)
                 {
+                    int glowHost = hIdx;
                     mtrl = service.BuildContentGlowMaterial(unit, texPrefix, texturesDir, diskChar, effectsFolder,
-                        texSize, redirects, ref shellChanged);
+                        texSize, redirects, ref shellChanged, onOutputWriteFailed: () => CountWriteFailure(glowHost));
                     glowBuilt = mtrl != null;
                     // The pack's own material rather than nothing, so a missing effect or template never removes the piece.
                     mtrl ??= GearMaterialWriter.PatchColorTable(unit.Mtrl, unit.Rows);
@@ -1361,7 +1394,14 @@ public sealed partial class SecondSkinService
                 }
 
                 var matDisk = Path.Combine(materialsDir, $"ss_{diskChar}.mtrl");
-                shellChanged |= WriteIfChanged(matDisk, mtrl);
+                try { shellChanged |= WriteIfChanged(matDisk, mtrl); }
+                catch (OutputWriteException ex)
+                {
+                    // Only this piece is dropped (#91); the retry composite brings it back.
+                    service.log.Error(ex, "[Proteus] content: could not write {0} — that piece is left out", matDisk);
+                    CountWriteFailure(hIdx);
+                    continue;
+                }
                 redirects[matGamePath] = Rel(outputRoot, matDisk);
 
                 // ── the pack's own textures, republished ──────────────────────────────
@@ -1386,6 +1426,8 @@ public sealed partial class SecondSkinService
                     try { shellChanged |= service.RepublishPackTexture(unit.Entry.ModRoot, texGamePath, srcDisk, dstDisk); }
                     catch (Exception ex)
                     {
+                        // Only a file that could not be put in place is worth a retry (#91); a missing source is not.
+                        if (ex is OutputWriteException) CountWriteFailure(hIdx);
                         // Left to Penumbra: a texture that will not copy is not worth dropping the piece over.
                         service.log.Warning("[Proteus] content: {0} — could not republish {1} from {2} ({3}); that "
                                   + "texture falls back to whichever mod Penumbra resolves it to",
@@ -1764,7 +1806,8 @@ public sealed partial class SecondSkinService
             if (pendingNormals.Count > 0)
             {
                 var tNormals = PhaseCounter.Begin();
-                service.WriteDeferredNormals(pendingNormals, toeReinforceMaps, redirects, ref shellChanged);
+                service.WriteDeferredNormals(pendingNormals, toeReinforceMaps, redirects, ref shellChanged,
+                    onOutputWriteFailed: () => CountWriteFailure(null));
                 service.statsDeferredNormals.Stop(tNormals);
             }
 

@@ -45,6 +45,30 @@ internal sealed partial class FakeGame
 
     public void SetAutoRefitOverride(bool? enabled) => AutoRefitOverrideValue = enabled;
 
+    // ── shell output failures (issue sweep D) ──
+    public string OutputDir { get; set; } = Path.Combine(Path.GetTempPath(), "proteus-fake-output");
+    public string ManagedOutputDir() => OutputDir;
+    public (string Shell, string Slot, string Until)? ShellFaultValue { get; set; }
+    public bool ArmShellFault(string shell, string slot, string until)
+    {
+        if (ShellFaultValue != null) return false;
+        ShellFaultValue = (shell, slot, until);
+        return true;
+    }
+    public bool ClearShellFault()
+    {
+        bool had = ShellFaultValue != null;
+        ShellFaultValue = null;
+        return had;
+    }
+    public bool AutoRedrawConfig { get; set; } = true;
+    public bool? AutoRedrawOverrideValue { get; set; }
+    public (bool Config, bool? Override, bool Effective) AutoRedrawEnabled()
+        => (AutoRedrawConfig, AutoRedrawOverrideValue, AutoRedrawOverrideValue ?? AutoRedrawConfig);
+    public void SetAutoRedrawOverride(bool? enabled) => AutoRedrawOverrideValue = enabled;
+    public object RecoveryState() => new { writeRetry = (object?)null, shellDrawn = (object?)null,
+                                           shellFault = ShellFaultValue is { } f ? new { shell = f.Shell } : null };
+
     public ConcurrentQueue<string> RefitsWhileOverridden { get; } = new();
 
     public IReadOnlyList<string> TakeRefitsWhileOverridden()

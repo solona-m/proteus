@@ -164,6 +164,12 @@ public partial class CompositorService
                             BuildAndApply(gs, charCode);
                             ApplyShells();
                         }
+                        catch (OutputWriteException ex)
+                        {
+                            // A write no site above counted (#91): no host known, but the latch still retries it.
+                            run.shellWriteFailures++;
+                            run.compositor.log.Error(ex, "[Proteus] second skin build failed");
+                        }
                         catch (Exception ex) { run.compositor.log.Error(ex, "[Proteus] second skin build failed"); }
                 }
                 return true;
@@ -314,7 +320,7 @@ public partial class CompositorService
             {
                 // gen2 shell parts follow the per-mod gen2 checkbox, except for a mod whose art must be un-mirrored (vanilla is the worn body).
                 shells = run.compositor.secondSkin.Build(charCode!, run.gearOverlays, run.compositor.managedModDir, bodyType,
-                    run.compositor.discovery.EffectsLibraryPath(), equippedModels, equippedAccessories,
+                    run.compositor.discovery.EffectsLibraryPath(), out var writes, equippedModels, equippedAccessories,
                     modDir => run.unmirrorMods.Contains(modDir) || run.compositor.config.OverlaysVanillaFor(modDir),
                     invisibleGlassesSet, metModels, bodyShapes, run.maskShellMods, bareBodyModels,
                     run.compositor._drawnRaceCode, hostMtrl,
@@ -337,6 +343,10 @@ public partial class CompositorService
                     // One settings read per run, shared with the skin phase's bust standoff (#55).
                     settingsOf: run.RunModSettings);
                 run.shellAllHeld = run.compositor.secondSkin.LastBuildHeldAll;
+                // Handed to the retry latch at publish (#91).
+                run.shellWriteFailures += writes.Count;
+                foreach (var host in writes.HostModelPaths)
+                    if (!run.failedShellHosts.Contains(host, StringComparer.OrdinalIgnoreCase)) run.failedShellHosts.Add(host);
             }
 
             private void ApplyShells()
@@ -410,7 +420,10 @@ public partial class CompositorService
                     // Materials to test, models to anchor the test against (see ShellDrawnProbe).
                     run.nextShellDrawnCheck = new ShellDrawnProbe(
                         [.. shells.Redirects.Keys.Where(k => k.EndsWith(".mtrl", StringComparison.OrdinalIgnoreCase))],
-                        [.. shells.Redirects.Keys.Where(k => k.EndsWith(".mdl", StringComparison.OrdinalIgnoreCase))]);
+                        [.. shells.Redirects.Keys.Where(k => k.EndsWith(".mdl", StringComparison.OrdinalIgnoreCase))])
+                    {
+                        PublishedWithWriteFailures = run.shellWriteFailures + System.Threading.Volatile.Read(ref run.skinWriteFailures) > 0,
+                    };
 
                     // Which hosts we appended into, for PrimeUpstreamCache. Persisted, since the manifest masks them after a restart.
                     // Captured here, compared and saved below the supersede check.

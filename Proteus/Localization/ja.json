@@ -459,12 +459,20 @@
     "message": "[Proteus]「{0}」が{1}を上書きしています。ここはProteusがオーバーレイを合成する場所なので、表示されません。対処：Penumbraで「Proteus」MODの優先度を「{0}」より上に設定してください。",
     "description": ""
   },
-  "Chat.ShellNotDrawing": {
-    "message": "[Proteus] セカンドスキンは作成されましたが、ゲームが描画していません。土台となるアクセサリは装備されているのに、キャラクターがProteus版を読み込んでいません。そのアクセサリを外して付け直すか、別のものを選んでください。",
+  "Chat.ShellPartNotDrawn.Fmt": {
+    "message": "[Proteus] セカンドスキンの一部がまだ表示されていません。その部分は{0}に乗っています。外して付け直すか、そのレイヤーを別のアクセサリに乗せてください。",
     "description": ""
   },
-  "Chat.ShellMaterialFailed": {
-    "message": "[Proteus] セカンドスキンの一部が描画されていません。残りはキャラクターに表示されているため、そのパーツに必要なテクスチャが見つからないか、ゲームが以前のバージョンを保持したままです。まず「今すぐ再合成」を試し、それでも直らなければ土台のアクセサリを外して付け直してください。",
+  "Chat.ShellNotDrawn.Fmt": {
+    "message": "[Proteus] {0}を装備していますが、セカンドスキンがまだ表示されていません。外して付け直すか、レイヤーを別のアクセサリに乗せてください。",
+    "description": ""
+  },
+  "Chat.ShellCarrierNotDrawn.Fmt": {
+    "message": "[Proteus] セカンドスキンの一部が表示されていません。それはProteusが運ぶために装備する透明なアクセサリ、{0}に乗っています。Proteusのウィンドウで「今すぐ再合成」をクリックしてください。それでも表示されなければ、そのアクセサリを外すとProteusが付け直します。",
+    "description": ""
+  },
+  "Chat.ShellNotDrawnRedrawOff.Fmt": {
+    "message": "[Proteus] セカンドスキンの一部が表示されていません。それは{0}に乗っています。自動再描画がオフのため、Proteusはキャラクターを再描画していません。PenumbraのRedrawボタンを使うかエリアを移動し、それでも表示されなければそのアクセサリを外して付け直してください。",
     "description": ""
   },
   "Chat.ShellNeedsRedraw": {
