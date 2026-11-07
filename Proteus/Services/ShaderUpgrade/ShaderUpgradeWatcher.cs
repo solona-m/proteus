@@ -470,7 +470,7 @@ public sealed class ShaderUpgradeWatcher : IDisposable
         foreach (var root in modRoots)
         {
             var dir = Path.GetFileName(root.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar));
-            compositor.ExpectOwnModEdit(dir);
+            compositor.ExpectOwnModEdit(dir, "the gear shader upgrade");
             var ec = penumbra.ReloadModDirectory(dir);
             reloaded &= ec == PenumbraApiEc.Success;
             if (counts != null && counts.TryGetValue(root, out var n) && ShouldAnnounce(announced, dir))

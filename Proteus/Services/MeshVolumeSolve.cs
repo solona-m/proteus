@@ -1709,7 +1709,7 @@ internal sealed partial class MeshVolumeSolve : IMeshEdit
         undo.Add(touched!);
         foreach (var (n, w) in moveWeights)
             if (w < 1f) nodeWeight[n] = MathF.Max(nodeWeight[n], w);
-        KeepRidersAboveSkin(touched!);
+        KeepRidersAboveSkin(touched!, relativeToStart: true);
         RebaseNormals(touched!);
         moveWeights.Clear();
         moveMatrix = null;
@@ -2073,7 +2073,7 @@ internal sealed partial class MeshVolumeSolve : IMeshEdit
             float w = len > 1e-9f ? Math.Clamp(went / len, 0f, 1f) : 0f;
             nodeWeight[n] = MathF.Max(nodeWeight[n], w);
         }
-        KeepRidersAboveSkin(touched!);
+        KeepRidersAboveSkin(touched!, relativeToStart: true);
         grabTerms.Clear();
         grabRiders.Clear();
         Settle(null);

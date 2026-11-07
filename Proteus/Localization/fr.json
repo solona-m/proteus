@@ -5571,6 +5571,14 @@
     "message": "elle bouge avec des os que c{0:D4} n'a pas pour cette coiffure ({1})",
     "description": ""
   },
+  "HairPort.Refused.BonesSourceSkeleton.Fmt": {
+    "message": "elle bouge avec des os que le squelette propre de c{0:D4} pour la coiffure {2} n'a pas ({1}), et seul ce squelette peut être emmené vers l'autre sexe",
+    "description": ""
+  },
+  "HairPort.Refused.BonesCarry.Fmt": {
+    "message": "elle bouge avec des os que seul le squelette de c{0:D4} pour la coiffure {2} possède ({1}), et ce squelette n'a pas pu être apporté à c{3:D4}",
+    "description": ""
+  },
   "HairPort.Refused.Unknown.Fmt": {
     "message": "le déformeur racial ne sait pas comment déplacer {0}",
     "description": ""
@@ -5718,6 +5726,14 @@
   "HairPort.Studio.OtherSexAuthored": {
     "message": "le mod a sa propre version pour ce sexe",
     "description": "Per-race status in the Studio port list for a race of the other sex: the mod ships its own model of this hairstyle for that sex."
+  },
+  "HairPort.Studio.PortedFrom.Fmt": {
+    "message": "porté depuis la coiffure {0} — porter celle-ci le remplace",
+    "description": ""
+  },
+  "HairPort.Replaced.Fmt": {
+    "message": "c{0:D4} : le portage fait depuis la coiffure {1} a été remplacé.",
+    "description": ""
   },
   "HairPort.Studio.OtherSexSkeleton": {
     "message": "le mod donne à cette race son propre squelette",
@@ -6573,6 +6589,10 @@
   },
   "Parts.Matcap.KeptForRefits.Fmt": {
     "message": "Des refits faits à partir de lui dessinent encore la matcap, donc ses fichiers restent jusqu'à ce que les tailles soient refaites : {0}.",
+    "description": ""
+  },
+  "Parts.Matcap.KeptForPorts.Fmt": {
+    "message": "Des portages de coiffure ou des copies sans oreilles faits à partir de lui dessinent encore la matcap, donc ses fichiers restent jusqu'à ce qu'ils soient refaits : {0}.",
     "description": ""
   },
   "Parts.Matcap.PortKept": {

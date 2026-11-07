@@ -444,7 +444,7 @@ internal sealed class HarnessChanges(IHarnessGame game, SessionNames names, IPlu
         {
             ["applied"] = new
             {
-                tool = request.Tool, mode = request.Mode, view = request.View, mirror = request.Mirror, adjacent = request.Adjacent,
+                tool = request.Tool, mode = request.Mode, view = request.View, mirror = request.Mirror, adjacent = request.Adjacent, falloffMm = request.FalloffMm,
                 moveSkin = request.MoveSkin, unlockAll = request.UnlockAll ? true : (bool?)null,
                 part = request.Part,
             },

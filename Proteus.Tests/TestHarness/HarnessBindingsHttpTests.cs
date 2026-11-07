@@ -17,7 +17,10 @@ public class HarnessBindingsHttpTests : IDisposable
 
     public HarnessBindingsHttpTests()
     {
-        fx.AddMod("Panties");
+        var panties = fx.AddMod("Panties");
+        // The option the live rows below sit in, as the mod's own manifest names it (#84 resolves names against it).
+        System.IO.File.WriteAllText(System.IO.Path.Combine(panties, "group_001_lace.json"),
+            """{"Name":"Lace","Type":"Single","Options":[{"Name":"High","Files":{}},{"Name":"Low","Files":{}}]}""");
         Game.Proteus.Add("Panties");
         Game.Permanent["Panties"] = new PermanentSetting(true, 2);
         Game.DesignNames[Design] = "Hidden Person's look";
@@ -54,6 +57,84 @@ public class HarnessBindingsHttpTests : IDisposable
         Assert.Equal(400, (await fx.Get("/bindings?design=nope")).Status);
         Assert.Equal(404, (await fx.Get("/bindings?mod=Missing")).Status);
         Assert.Equal(404, (await fx.Get($"/bindings?design={Guid.NewGuid()}")).Status);
+    }
+
+    // ── #84: group/option resolved against the mod; repeated and unknown query keys refused ────────────────────────
+
+    [Fact]
+    [Trait("Plan", "AC-issue-sweep-c-4")]
+    public async Task GetBindings_UnknownGroupOrOption_404_WrongCase_Resolves()
+    {
+        var (s1, missingGroup) = await fx.Get("/bindings?mod=Panties&group=NoSuchGroup&option=x");
+        Assert.Equal(404, s1);
+        Assert.Equal("option-not-found", Code(missingGroup));
+
+        var (s2, body) = await fx.Get("/bindings?mod=panties&group=lace&option=high");
+        Assert.Equal(200, s2);
+        var mod = body.GetProperty("mod");
+        Assert.Equal("Lace", mod.GetProperty("group").GetString());
+        Assert.Equal("High", mod.GetProperty("option").GetString());
+        Assert.Equal("#FFFFFF", mod.GetProperty("live")[0].GetProperty("diffuse").GetString());
+    }
+
+    [Fact]
+    [Trait("Plan", "EDGE-issue-sweep-c-10")]
+    [Trait("Plan", "EDGE-issue-sweep-c-40")]
+    public async Task GetBindings_MissingOption_404_BindingEdit_MissingOption_404()
+    {
+        var (s1, b1) = await fx.Get("/bindings?mod=Panties&group=Lace&option=Medium");
+        Assert.Equal(404, s1);
+        Assert.Equal("option-not-found", Code(b1));
+        var (s2, b2) = await fx.Post("/actions/binding-edit", """{"mod":"Panties","group":"Lace","option":"Medium","clear":true}""");
+        Assert.Equal(404, s2);
+        Assert.Equal("option-not-found", Code(b2));
+    }
+
+    [Fact]
+    [Trait("Plan", "AC-issue-sweep-c-4")]
+    [Trait("Plan", "EDGE-issue-sweep-c-40")]
+    public async Task BindingEdit_WrongCase_EditsCanonicalOption()
+    {
+        var (status, _) = await fx.Post("/actions/binding-edit", """{"mod":"Panties","group":"LACE","option":"high","row":0,"diffuse":"#ff00ff"}""");
+        Assert.Equal(200, status);
+        Assert.False(Game.Live.ContainsKey(("Panties", "LACE", "high")));
+        var (_, body) = await fx.Get("/bindings?mod=Panties&group=Lace&option=High");
+        Assert.Equal("#FF00FF", body.GetProperty("mod").GetProperty("live")[0].GetProperty("diffuse").GetString());
+    }
+
+    [Fact]
+    [Trait("Plan", "EDGE-issue-sweep-c-39")]
+    public async Task UnreadableGroups_409()
+    {
+        var root = System.IO.Path.Combine(fx.Temp.Path, "mods", "Panties");
+        System.IO.File.WriteAllText(System.IO.Path.Combine(root, "group_002_broken.json"), "{ not json");
+        var (s1, b1) = await fx.Get("/bindings?mod=Panties&group=Lace&option=High");
+        Assert.Equal(409, s1);
+        Assert.Equal("mod-unreadable", Code(b1));
+        var (s2, b2) = await fx.Post("/actions/binding-edit", """{"mod":"Panties","group":"Lace","option":"High","clear":true}""");
+        Assert.Equal(409, s2);
+        Assert.Equal("mod-unreadable", Code(b2));
+    }
+
+    [Fact]
+    [Trait("Plan", "AC-issue-sweep-c-5")]
+    public async Task GetBindings_UnknownParameter_400()
+    {
+        var (status, body) = await fx.Get("/bindings?mod=Panties&grop=Lace");
+        Assert.Equal(400, status);
+        Assert.Equal("invalid-field", Code(body));
+        Assert.Contains("grop", body.GetProperty("error").GetProperty("message").GetString());
+    }
+
+    [Fact]
+    [Trait("Plan", "EDGE-issue-sweep-c-12")]
+    public async Task GetBindings_SimpleMod_WithOption_404_TopLevelUnchanged()
+    {
+        fx.AddMod("Plain");
+        Assert.Equal(404, (await fx.Get("/bindings?mod=Plain&group=Lace&option=High")).Status);
+        var (status, body) = await fx.Get("/bindings?mod=Plain");
+        Assert.Equal(200, status);
+        Assert.Equal(JsonValueKind.Null, body.GetProperty("mod").GetProperty("group").ValueKind);
     }
 
     [Fact]

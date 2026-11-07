@@ -13,7 +13,7 @@ namespace Proteus.TestHarness;
 /// </summary>
 internal static class HarnessStudio
 {
-    internal static readonly string[] SetFields = ["tool", "mode", "view", "mirror", "adjacent", "moveSkin", "unlockAll", "lock", "unlock", "part"];
+    internal static readonly string[] SetFields = ["tool", "mode", "view", "mirror", "adjacent", "falloffMm", "moveSkin", "unlockAll", "lock", "unlock", "part"];
     internal static readonly string[] DragFields = ["offsetMm", "axis", "degrees", "factor", "factors", "undo"];
 
     // ── bodies ──────────────────────────────────────────────────────────────
@@ -24,6 +24,7 @@ internal static class HarnessStudio
     {
         string? tool = null, mode = null, view = null, part = null;
         bool? mirror = null, adjacent = null, moveSkin = null;
+        float? falloffMm = null;
         bool unlockAll = false;
         var lockList = new List<string>();
         var unlockList = new List<string>();
@@ -51,6 +52,12 @@ internal static class HarnessStudio
                     if (!Bool(p.Value, out var a)) return (null, "adjacent must be true or false");
                     adjacent = a;
                     break;
+                case "falloffMm":
+                    if (p.Value.ValueKind != JsonValueKind.Number || !p.Value.TryGetDouble(out var f)
+                        || !double.IsFinite(f) || f < PartsPanel.MinBrushMm || f > PartsPanel.MaxBrushMm)
+                        return (null, $"falloffMm must be a number from {PartsPanel.MinBrushMm} to {PartsPanel.MaxBrushMm}");
+                    falloffMm = (float)f;
+                    break;
                 case "moveSkin":
                     if (!Bool(p.Value, out var s)) return (null, "moveSkin must be true or false");
                     moveSkin = s;
@@ -77,7 +84,7 @@ internal static class HarnessStudio
         if (given == 0) return (null, "give at least one of " + string.Join(", ", SetFields));
         if (lockList.Intersect(unlockList, StringComparer.Ordinal).FirstOrDefault() is { } both)
             return (null, $"{both} is in both lock and unlock");
-        return (new StudioSetRequest(tool, mode, view, mirror, adjacent, moveSkin, unlockAll, lockList, unlockList, part), null);
+        return (new StudioSetRequest(tool, mode, view, mirror, adjacent, moveSkin, unlockAll, lockList, unlockList, part, falloffMm), null);
     }
 
     /// <summary>A <c>studio-drag</c> body: exactly one kind of drag, or <c>undo</c> alone.</summary>

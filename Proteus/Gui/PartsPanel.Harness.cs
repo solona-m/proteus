@@ -34,7 +34,8 @@ public sealed partial class PartsPanel : IStudioHarness
 
     /// <summary>The panel as it was before the harness first changed it, to put back.</summary>
     private sealed record HarnessSnapshot(string? ModDir, string? ModelFile, Tool Tool, MoveSelectMode Mode, bool ModelView,
-                                          bool Mirror, bool Adjacent, bool MoveSkin, string LockKey, string[]? Locks);
+                                          bool Mirror, bool Adjacent, bool MoveSkin, string LockKey, string[]? Locks,
+                                          float FalloffMm);
 
     /// <summary>The per-frame state a route depends on, brought up to date: the window may be closed, and Draw not running.</summary>
     private void HarnessSync() => UpdateSkinMoves();
@@ -79,9 +80,9 @@ public sealed partial class PartsPanel : IStudioHarness
             ["tool"] = tool switch { Tool.Move => "move", Tool.Rotate => "rotate", Tool.Scale => "scale", Tool.Matcap => "matcap", _ => "other" },
             ["mode"] = moveSelect switch { MoveSelectMode.Polygons => "polygons", MoveSelectMode.All => "all", _ => "parts" },
             ["view"] = showModelView ? "model" : "character",
-            ["settings"] = new { mirror = mirrorBrush, adjacent = moveAdjacent, moveSkin },
-            ["effective"] = new { mirrorNow = MirrorNow, adjacentNow = AdjacentNow, skinMovesNow = SkinMovesNow,
-                                  followReady = (parts != null ? volume : null)?.FollowReady == true },
+            ["settings"] = new { mirror = mirrorBrush, adjacent = moveAdjacent, falloffMm = moveFalloffMm, moveSkin },
+            ["effective"] = new { mirrorNow = MirrorNow, adjacentNow = AdjacentNow, falloffMm = AdjacentNow ? moveFalloffMm : 0f,
+                                  skinMovesNow = SkinMovesNow, followReady = (parts != null ? volume : null)?.FollowReady == true },
             ["parts"] = parts?.Parts.Select(p => new
             {
                 label = p.Label, material = Path.GetFileName(p.Material.TrimStart('/')), island = p.Island, skin = IsSkin(p),
@@ -128,7 +129,8 @@ public sealed partial class PartsPanel : IStudioHarness
                                            vanilla == null && modelIndex >= 0 && modelIndex < models.Count ? models[modelIndex].File : null,
                                            tool, moveSelect, showModelView, mirrorBrush, moveAdjacent, moveSkin,
                                            modDir + "|" + listed[index].File,
-                                           lockedParts.TryGetValue(modDir + "|" + listed[index].File, out var had) ? had.ToArray() : null);
+                                           lockedParts.TryGetValue(modDir + "|" + listed[index].File, out var had) ? had.ToArray() : null,
+                                           moveFalloffMm);
 
         SelectMod(modDir);
         int at = models.FindIndex(m => string.Equals(m.File, listed[index].File, StringComparison.OrdinalIgnoreCase));
@@ -168,6 +170,7 @@ public sealed partial class PartsPanel : IStudioHarness
         if (request.View is { } v) SwitchView(v == "model");
         if (request.Mirror is { } mirror && mirror != mirrorBrush) { mirrorBrush = mirror; viewport.Recolour(); }
         if (request.Adjacent is { } adjacent) moveAdjacent = adjacent;
+        if (request.FalloffMm is { } falloff && falloff != moveFalloffMm) { moveFalloffMm = falloff; ForgetMoveFalloff(); }
         if (request.MoveSkin is { } skin && skin != moveSkin) SetMoveSkin(skin);
         HarnessSync();
         if (request.UnlockAll) UnlockAll();
@@ -386,6 +389,7 @@ public sealed partial class PartsPanel : IStudioHarness
         SwitchView(snap.ModelView);
         if (mirrorBrush != snap.Mirror) { mirrorBrush = snap.Mirror; viewport.Recolour(); }
         moveAdjacent = snap.Adjacent;
+        if (moveFalloffMm != snap.FalloffMm) { moveFalloffMm = snap.FalloffMm; ForgetMoveFalloff(); }
         if (moveSkin != snap.MoveSkin) SetMoveSkin(snap.MoveSkin);
         HarnessSync();
     }

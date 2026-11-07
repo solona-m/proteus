@@ -5571,6 +5571,14 @@
     "message": "it moves with bones c{0:D4} does not have for this hairstyle ({1})",
     "description": "Reason (lowercase sentence fragment) why a hairstyle could not be ported to another race; shown after a race or file name and a colon. {0} is a race code number, {1} lists the bone names."
   },
+  "HairPort.Refused.BonesSourceSkeleton.Fmt": {
+    "message": "it moves with bones c{0:D4}'s own skeleton for hairstyle {2} does not have ({1}), and only that skeleton can come along to the other sex",
+    "description": "Why a hair port across the sexes is refused: the source race's own hairstyle skeleton lacks bones the model moves with, and only that skeleton can be brought to the other sex. {0} is the source race number (shown as c0201), {1} a list of bone names, {2} the hairstyle number."
+  },
+  "HairPort.Refused.BonesCarry.Fmt": {
+    "message": "it moves with bones only c{0:D4}'s skeleton for hairstyle {2} has ({1}), and that skeleton could not be brought to c{3:D4}",
+    "description": "Why a hair port across the sexes is refused: only the source race's hairstyle skeleton has the bones the model moves with, and it could not be brought to the target race (no free slot or place). {0} is the source race number, {1} a list of bone names, {2} the hairstyle number, {3} the target race number."
+  },
   "HairPort.Refused.Unknown.Fmt": {
     "message": "the racial deformer does not know how to move {0}",
     "description": "Reason (lowercase sentence fragment) why a hairstyle could not be ported to another race; shown after a race or file name and a colon. {0} is a bone or part name."
@@ -5718,6 +5726,14 @@
   "HairPort.Studio.OtherSexAuthored": {
     "message": "the mod has its own version for this sex",
     "description": "Per-race status in the Studio port list for a race of the other sex: the mod ships its own model of this hairstyle for that sex."
+  },
+  "HairPort.Studio.PortedFrom.Fmt": {
+    "message": "ported from hairstyle {0} — porting this one replaces it",
+    "description": "Per-race status in the Studio port list: another hairstyle of the same mod already has a port of this race in the same option, and porting this hairstyle replaces it. {0} is the other hairstyle's short name, e.g. c0201h0108."
+  },
+  "HairPort.Replaced.Fmt": {
+    "message": "c{0:D4}: replaced the port made from hairstyle {1}.",
+    "description": "Result line after porting in the Studio: the port replaced one another hairstyle of the same mod had made for that race. {0} is the race number (shown as c0701), {1} the other hairstyle's short name, e.g. c0201h0108."
   },
   "HairPort.Studio.OtherSexSkeleton": {
     "message": "the mod gives this race its own skeleton",
@@ -6574,6 +6590,10 @@
   "Parts.Matcap.KeptForRefits.Fmt": {
     "message": "Refits made from it still draw the matcap, so its files stay until the sizes are remade: {0}.",
     "description": "Studio Matcaps tool. A matcap is a sphere picture a shader samples by the surface's facing direction."
+  },
+  "Parts.Matcap.KeptForPorts.Fmt": {
+    "message": "Hair ports or earless copies made from it still draw the matcap, so its files stay until they are remade: {0}.",
+    "description": "Studio Matcaps tool. A matcap is a sphere picture a shader samples by the surface's facing direction. {0} is a list of file paths inside the mod."
   },
   "Parts.Matcap.PortKept": {
     "message": "That model is one of Proteus's hair ports. While it has a matcap, Proteus keeps it as it is, and doesn't by itself remake the ports of other races that share its material, until you undo the matcap. Porting one of those races by hand in the Studio still remakes it.",

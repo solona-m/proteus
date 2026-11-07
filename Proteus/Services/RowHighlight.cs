@@ -84,6 +84,16 @@ public sealed class PreviewKeepAlive
 }
 
 /// <summary>
+/// #82: a pinned Glow lives only while an open Colors window keeps renewing it, so the plugin UI being hidden (a cutscene,
+/// the UI toggled off) can't leave a pin lit with no window to turn it off. Same keep-alive rule as a hover preview.
+/// </summary>
+public static class RowHighlight
+{
+    /// <summary>Whether the pin (if any) has gone unrenewed past <see cref="PreviewKeepAlive"/>'s time and tick rule.</summary>
+    public static bool PinExpired(bool pinned, PreviewKeepAlive keep, long nowMs) => pinned && keep.Expired(nowMs);
+}
+
+/// <summary>
 /// Turns the row under the pointer, frame by frame, into the row to highlight. A new row must be held for the dwell
 /// (skin only: each skin preview is a full-resolution repaint, so a sweep must not start one per row passed); until
 /// then the previous row stays lit. With nothing hovered the active row survives the grace, so the gap between two

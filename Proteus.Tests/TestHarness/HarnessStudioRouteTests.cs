@@ -40,7 +40,9 @@ public class HarnessStudioRouteTests : IDisposable
         foreach (var field in new[] { "open", "tool", "mode", "view", "settings", "effective", "parts", "chosen", "all", "help", "edit", "status", "session" })
             Assert.True(body.TryGetProperty(field, out _), field);
         Assert.False(body.TryGetProperty("drawer", out _));
-        Assert.False(body.GetProperty("settings").TryGetProperty("falloffMm", out _));
+        // #86: the falloff is reported (settings) and how far it reaches now (effective; 0 where it does not apply).
+        Assert.True(body.GetProperty("settings").TryGetProperty("falloffMm", out _));
+        Assert.True(body.GetProperty("effective").TryGetProperty("falloffMm", out _));
         Assert.True(body.GetProperty("parts")[0].GetProperty("moves").GetBoolean());
         var session = body.GetProperty("session");
         Assert.Equal("Outfit", session.GetProperty("modDir").GetString());
@@ -175,6 +177,24 @@ public class HarnessStudioRouteTests : IDisposable
         Assert.False(body.GetProperty("saved").GetBoolean());
         Assert.True(body.GetProperty("status").GetProperty("isError").GetBoolean());
         Assert.DoesNotContain("someone", body.GetProperty("status").GetProperty("text").GetString());
+    }
+
+    [Fact]
+    [Trait("Plan", "EDGE-issue-sweep-c-50")]
+    public async Task StudioSet_falloffMm_reaches_the_studio_and_out_of_range_is_400()
+    {
+        await Open();
+        var (ok, answer) = await f.Post("/actions/studio-set", """{"falloffMm":80}""");
+        Assert.Equal(200, ok);
+        Assert.Equal(80f, studio.Sets[^1].FalloffMm);
+        Assert.Equal(80f, answer.GetProperty("applied").GetProperty("falloffMm").GetSingle());   // echoed as applied
+        int sets = studio.Sets.Count;
+        foreach (var bad in new[] { """{"falloffMm":0}""", """{"falloffMm":301}""", """{"falloffMm":"80"}""" })
+        {
+            var (status, body) = await f.Post("/actions/studio-set", bad);
+            Assert.Equal((400, "invalid-field"), (status, Code(body)));
+        }
+        Assert.Equal(sets, studio.Sets.Count);   // a refused body changes nothing
     }
 
     [Fact]

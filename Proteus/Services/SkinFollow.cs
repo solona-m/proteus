@@ -41,6 +41,18 @@ internal sealed class SkinFollow
     private readonly float[] height;
     private readonly (int Skin, float Share)[][] corners;
     private readonly List<(int Rider, float Weight)>[] riders;
+    private readonly BoundTriangle[] triangles;
+
+    /// <summary>
+    /// The skin triangle a rider was bound to, as three nodes and the rider's barycentric point on it (shares that may be
+    /// 0 — <see cref="CornersOf"/> keeps only the shares above 0, so a rider bound in a vertex or edge region has fewer
+    /// than three corners there). The guard measures a rider's height along this triangle's own face, which turns with
+    /// the skin exactly under a rigid move (#86).
+    /// </summary>
+    internal readonly record struct BoundTriangle(int A, int B, int C, float U, float V, float W)
+    {
+        public bool IsSet => A != B || B != C;
+    }
 
     /// <summary>The solve this binding belongs to — see <see cref="Inputs.Owner"/>.</summary>
     internal object Owner { get; }
@@ -52,12 +64,13 @@ internal sealed class SkinFollow
     public double BuildMilliseconds { get; }
 
     private SkinFollow(float[] bind, float[] height, (int, float)[][] corners, List<(int, float)>[] riders,
-                       int riderCount, object owner, double ms)
+                       BoundTriangle[] triangles, int riderCount, object owner, double ms)
     {
         this.bind = bind;
         this.height = height;
         this.corners = corners;
         this.riders = riders;
+        this.triangles = triangles;
         RiderCount = riderCount;
         Owner = owner;
         BuildMilliseconds = ms;
@@ -79,6 +92,10 @@ internal sealed class SkinFollow
     /// <summary>The cloth nodes that ride skin node <paramref name="skinNode"/>, each with bind weight × its share.</summary>
     public IReadOnlyList<(int Rider, float Weight)> RidersOf(int skinNode) => riders[skinNode] ?? NoRiders;
 
+    /// <summary>The skin triangle a rider was bound to (see <see cref="BoundTriangle"/>); unset for an unbound node or one
+    /// whose three corners are welded into fewer nodes.</summary>
+    public BoundTriangle TriangleOf(int node) => node >= 0 && node < triangles.Length ? triangles[node] : default;
+
     /// <summary>
     /// Bind every cloth node within <see cref="FollowReach"/> of the skin to the skin triangle nearest it, on the
     /// author's positions. Safe on a worker: it reads only <paramref name="inputs"/>.
@@ -92,6 +109,7 @@ internal sealed class SkinFollow
         var height = new float[n];
         var corners = new (int, float)[n][];
         var riders = new List<(int, float)>[n];
+        var triangles = new BoundTriangle[n];
         int riderCount = 0;
 
         var surface = new BodySurface(model, BodySurface.CellFor(inputs.MeanEdge));
@@ -128,13 +146,15 @@ internal sealed class SkinFollow
                 bind[node] = b;
                 height[node] = h;
                 corners[node] = shares.ToArray();
+                int ta = inputs.NodeOf[hit.A], tb = inputs.NodeOf[hit.B], tc = inputs.NodeOf[hit.C];
+                if (ta != tb && tb != tc && ta != tc) triangles[node] = new BoundTriangle(ta, tb, tc, hit.U, hit.V, hit.W);
                 riderCount++;
                 foreach (var (s, share) in shares)
                     (riders[s] ??= []).Add((node, b * share));
             }
         }
 
-        return new SkinFollow(bind, height, corners, riders, riderCount, inputs.Owner, clock.Elapsed.TotalMilliseconds);
+        return new SkinFollow(bind, height, corners, riders, triangles, riderCount, inputs.Owner, clock.Elapsed.TotalMilliseconds);
     }
 
     /// <summary>How strongly cloth <paramref name="distance"/> off the skin follows it — see <see cref="BindWeight"/>.</summary>

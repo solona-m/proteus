@@ -786,6 +786,21 @@ public partial class DesignBindingService : IDisposable
     /// </summary>
     private IReadOnlyDictionary<string, PenumbraModSetting> StillHeld(Guid collId)
     {
+        var live = HeldNowCore(collId, out int dropped);
+        if (dropped > 0)
+            log.Information("[Proteus] design-binding: {0} of {1} held mod(s) are no longer held — captured from the collection instead.",
+                dropped, heldTemporary.Count);
+        return live;
+    }
+
+    /// <summary>
+    /// <see cref="StillHeld"/> without its capture wording, for callers that aren't capturing (a design restore, #83):
+    /// the holds Penumbra still reports as temporary, and how many it no longer does. Unreadable settings keep the
+    /// whole record.
+    /// </summary>
+    private IReadOnlyDictionary<string, PenumbraModSetting> HeldNowCore(Guid collId, out int dropped)
+    {
+        dropped = 0;
         if (heldTemporary.Count == 0) return heldTemporary;
         var effective = penumbra.GetCollectionModSettings(collId, ignoreTemporary: false);
         if (effective == null) return heldTemporary;
@@ -794,11 +809,30 @@ public partial class DesignBindingService : IDisposable
         foreach (var (dir, recorded) in heldTemporary)
             if (effective.TryGetValue(dir, out var s) && s.Temporary)
                 live[dir] = recorded;
-
-        if (live.Count != heldTemporary.Count)
-            log.Information("[Proteus] design-binding: {0} of {1} held mod(s) are no longer held — captured from the collection instead.",
-                heldTemporary.Count - live.Count, heldTemporary.Count);
+        dropped = heldTemporary.Count - live.Count;
         return live;
+    }
+
+    /// <summary>
+    /// #83: the strays a restore of the same design must hold off again. A restore releases every hold, and the sweep it
+    /// arms reads the drawn resources from the last redraw — made while those strays were held off, so they look
+    /// undrawn and a re-apply with no redraw leaves them drawn. Carried: what Proteus still holds off (a disabled hold in
+    /// <paramref name="held"/>, already filtered to what Penumbra still reports as held, so a hold the player dropped
+    /// stays dropped) that the design still doesn't have — not bound, not a Proteus mod, not the managed mod, installed.
+    /// Nothing when <paramref name="designId"/> is not the design the last sweep ran for.
+    /// </summary>
+    internal static List<string> SweepHoldsToCarry(IReadOnlyDictionary<string, PenumbraModSetting> held, Guid sweepDesign, Guid designId,
+                                                  IReadOnlySet<string> bound, IReadOnlySet<string> proteusDirs,
+                                                  IReadOnlySet<string> installed, string managedDir)
+    {
+        if (designId == Guid.Empty || designId != sweepDesign) return [];
+        return held.Where(kv => !kv.Value.Enabled
+                                && !bound.Contains(kv.Key) && !proteusDirs.Contains(kv.Key)
+                                && !string.Equals(kv.Key, managedDir, StringComparison.OrdinalIgnoreCase)
+                                && installed.Contains(kv.Key))
+                   .Select(kv => kv.Key)
+                   .Order(StringComparer.OrdinalIgnoreCase)
+                   .ToList();
     }
 
     /// <summary>
@@ -1226,6 +1260,14 @@ public partial class DesignBindingService : IDisposable
                               .Concat(b.Mods.Select(m => m.ModDirectory))
                               .ToHashSet(StringComparer.OrdinalIgnoreCase);
 
+        // #83: a re-apply of the design the last sweep ran for keeps holding off the strays that sweep held off. Read
+        // before the release below drops them.
+        var carry = designId == postLoadSweepDesign
+            ? SweepHoldsToCarry(HeldNowCore(collId.Value, out _), postLoadSweepDesign, designId, boundDirs, proteusDirs,
+                                names.Keys.ToHashSet(StringComparer.OrdinalIgnoreCase), SidecarDiscoveryService.ManagedModDir)
+            : [];
+        var carried = new List<string>();
+
         RestorePlan? plan = null;
         var held = 0;
         // Both feed the summary below. A character restore is the only path that writes a priority to a mod that
@@ -1281,8 +1323,26 @@ public partial class DesignBindingService : IDisposable
                             recorded.ModDirectory, ec);
                     }
                 }
+
+                // #83: the previous sweep's strays, held off again (the sweep below can't see them drawn).
+                var planned = plan.Hold.Select(h => h.Recorded.ModDirectory).ToHashSet(StringComparer.OrdinalIgnoreCase);
+                foreach (var dir in carry.Where(d => !planned.Contains(d)))
+                {
+                    var ec = penumbra.SetTemporaryModSettings(collId.Value, dir, enabled: false, priority: 0,
+                        new Dictionary<string, List<string>>(), TemporarySource, TemporaryKey);
+                    if (ec != PenumbraApiEc.Success)
+                    {
+                        log.Warning("[Proteus] design-restore: couldn't hold {0} off again ({1}).", dir, ec);
+                        continue;
+                    }
+                    heldTemporary[dir] = new PenumbraModSetting { ModDirectory = dir, Enabled = false };
+                    carried.Add(dir);
+                }
             }
         }
+        if (carried.Count > 0)
+            log.Information("[Proteus] design-restore: still holding off mod(s) the previous sweep held off for this design: {0}",
+                string.Join(", ", carried));
 
         if (plan == null)
         {

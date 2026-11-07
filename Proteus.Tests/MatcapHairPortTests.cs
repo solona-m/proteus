@@ -749,4 +749,216 @@ public sealed class MatcapHairPortTests : IDisposable
         Assert.True(p.Ok, p.Message);
         Assert.Equal(ownOption ? "chara/x/own_n.tex" : "chara/x/default_n.tex", p.Request!.Materials.Single().Normal);
     }
+
+    // ── #87: undoing an author's matcap keeps it while a port or earless copy still names it ─────────────────────────
+
+    /// <summary>A model naming <paramref name="names"/>' materials (one mesh each), as a port or copy remade from the
+    /// matcapped author file would.</summary>
+    private static byte[] Naming(params string[] names)
+        => SyntheticModel.BuildSurface([], names.Select((n, i) => Naming(n, i)).ToArray());
+
+    /// <summary>One mesh naming <paramref name="name"/>, set <paramref name="slot"/> × 0.3 m aside.</summary>
+    private static SyntheticModel.SurfaceMesh Naming(string name, int slot)
+        => Sphere($"/{name.TrimStart('/')}", Head + Offset(201) + new System.Numerics.Vector3(0.3f * slot, 0f, 0f), 0.1f,
+                  [("j_kao", 1f)], minY: -0.2f);
+
+    /// <summary>The author's Long cut matcapped (its material returned), with an automatic port of it to c0201.</summary>
+    private (string PortRel, MatcapRecord.MaterialEntry M2) PortedAuthorWithMatcap(Mod mod)
+    {
+        Assert.True(HairPortWriter.Save(mod.Root, [Port(mod, "Long")], auto: true).Ok);
+        Assert.True(Apply(mod, "long/c0801h0130_hir.mdl", Source, Image("m2.tex", 5)).Ok);
+        return (PortFile(mod, "Long"), MatcapRecord.Read(mod.Root).MaterialsOf("long/c0801h0130_hir.mdl").Single());
+    }
+
+    private static void AssertKept(Mod mod, MatcapRecord.MaterialEntry m)
+    {
+        Assert.True(mod.Has(m.File), m.File);
+        Assert.Contains(MatcapRecord.Read(mod.Root).Materials, x => x.Name == m.Name);
+        Assert.All(m.GamePaths, gp => Assert.True(Defaults(mod).ContainsKey(gp), gp));
+    }
+
+    private static void AssertGone(Mod mod, MatcapRecord.MaterialEntry m)
+    {
+        Assert.False(mod.Has(m.File), m.File);
+        Assert.DoesNotContain(MatcapRecord.Read(mod.Root).Materials, x => x.Name == m.Name);
+        Assert.DoesNotContain(m.GamePaths, gp => Defaults(mod).ContainsKey(gp));
+    }
+
+    private static string PortsSentence(string files) => string.Format(ProteusLoc.Localize("Parts.Matcap.KeptForPorts.Fmt",
+        "Hair ports or earless copies made from it still draw the matcap, so its files stay until they are remade: {0}."), files);
+
+    [Fact]
+    [Trait("Plan", "AC-issue-sweep-c-1")]
+    [Trait("Plan", "EDGE-issue-sweep-c-3")]
+    public void Undoing_an_authors_matcap_keeps_it_while_a_port_names_it()
+    {
+        using var mod = HairMod();
+        var (rel, m2) = PortedAuthorWithMatcap(mod);
+        mod.Put(rel, Naming(m2.Name));                        // the watcher's remake from the matcapped author file
+
+        var undo = MatcapWriter.Undo(mod.Root, "long/c0801h0130_hir.mdl");
+        Assert.True(undo.Ok, undo.Message);
+        Assert.False(SecondSkinWriter.MaterialNames(mod.Get("long/c0801h0130_hir.mdl")).Any(MatcapPlan.IsMatcapName));   // restored
+        AssertKept(mod, m2);
+        Assert.Contains(PortsSentence(rel.Replace('\\', '/')), undo.Message);
+
+        // Remade again from the restored author file: nothing names it, so the next Forget takes its files away.
+        mod.Put(rel, HairModel(201));
+        var forget = MatcapWriter.Forget(mod.Root, "long/c0801h0130_hir.mdl");
+        Assert.True(forget.Ok, forget.Message);
+        AssertGone(mod, m2);
+    }
+
+    [Fact]
+    [Trait("Plan", "AC-issue-sweep-c-1")]
+    public void Undoing_an_authors_matcap_keeps_it_while_a_port_names_it_under_its_own_race()
+    {
+        // As in game (QA, build 1455): a port renames the hair materials for its own race — c0801… becomes c0201… — and
+        // the game loads that name, for the port's hairstyle, from the folder the matcap published into (hairstyle
+        // 130 shares Midlander's). The port names no file of the matcap's by name, yet draws it.
+        using var mod = HairMod();
+        var (rel, m2) = PortedAuthorWithMatcap(mod);
+        var renamed = HairMaterialPath.RenameRace(m2.Name, 201);
+        Assert.NotEqual(m2.Name, renamed);
+        Assert.Contains(HairMaterialPath.GamePath(201, Id, renamed), m2.GamePaths, StringComparer.OrdinalIgnoreCase);
+        mod.Put(rel, Naming(renamed));
+
+        var undo = MatcapWriter.Undo(mod.Root, "long/c0801h0130_hir.mdl");
+        Assert.True(undo.Ok, undo.Message);
+        AssertKept(mod, m2);
+        Assert.Contains(PortsSentence(rel.Replace('\\', '/')), undo.Message);
+
+        // A port remade without it lets it go.
+        mod.Put(rel, HairModel(201));
+        Assert.True(MatcapWriter.Forget(mod.Root, "long/c0801h0130_hir.mdl").Ok);
+        AssertGone(mod, m2);
+    }
+
+    [Fact]
+    [Trait("Plan", "AC-issue-sweep-c-1")]
+    public void Undoing_an_authors_matcap_keeps_it_while_a_ports_own_redirect_points_at_its_file()
+    {
+        // A race that reads its own hair material folder (Hrothgar): the port publishes its own path, redirected to the
+        // source's material file — the matcap's. Its name loads from nowhere the matcap publishes; only the redirect
+        // says it draws the matcap.
+        using var mod = HairMod();
+        Assert.True(Apply(mod, "long/c0801h0130_hir.mdl", Source, Image("m2.tex", 5)).Ok);
+        var m2 = MatcapRecord.Read(mod.Root).MaterialsOf("long/c0801h0130_hir.mdl").Single();
+        const ushort hroth = 1601;
+        var renamed = HairMaterialPath.RenameRace(m2.Name, hroth);
+        var ownPath = HairMaterialPath.GamePath(hroth, Id, renamed)!;
+        Assert.DoesNotContain(ownPath, m2.GamePaths, StringComparer.OrdinalIgnoreCase);
+        var owner = mod.Owner("Cut", "Long");
+        var write = new HairPortWriter.PortWrite(owner, Source, HairPortPlan.FileFor(owner, Source)!, "abcd1234",
+                                                 HairPortPlan.HairPath(hroth, Id), Naming(renamed),
+                                                 [new HairPortWriter.MaterialWrite(ownPath, m2.File, null)]);
+        Assert.True(HairPortWriter.Save(mod.Root, [write], auto: false).Ok);
+        var port = PortFile(mod, "Long", hroth);
+        Assert.Contains(HairPortRecord.Read(mod.Root).Ports, e => e.Materials.Values.Any(v => PenumbraModMeta.SameFile(v, m2.File)));
+
+        var undo = MatcapWriter.Undo(mod.Root, "long/c0801h0130_hir.mdl");
+        Assert.True(undo.Ok, undo.Message);
+        AssertKept(mod, m2);
+        Assert.Contains(PortsSentence(port.Replace('\\', '/')), undo.Message);
+    }
+
+    [Fact]
+    [Trait("Plan", "AC-issue-sweep-c-1")]
+    public void Undoing_an_authors_matcap_with_an_unreadable_ports_record_keeps_it_for_a_port_naming_a_matcap()
+    {
+        // The ports record can't be read, so which file a port redirects to is unknown: a port naming a matcap material is
+        // taken to draw it, and the material is kept — never deleted under a port that may still use it. The port is
+        // named as the user finds it on disk ("Hair Ports/…", not lower-cased).
+        using var mod = HairMod();
+        Assert.True(Apply(mod, "long/c0801h0130_hir.mdl", Source, Image("m2.tex", 5)).Ok);
+        var m2 = MatcapRecord.Read(mod.Root).MaterialsOf("long/c0801h0130_hir.mdl").Single();
+        const ushort hroth = 1601;
+        var renamed = HairMaterialPath.RenameRace(m2.Name, hroth);
+        var owner = mod.Owner("Cut", "Long");
+        var write = new HairPortWriter.PortWrite(owner, Source, HairPortPlan.FileFor(owner, Source)!, "abcd1234",
+                                                 HairPortPlan.HairPath(hroth, Id), Naming(renamed),
+                                                 [new HairPortWriter.MaterialWrite(HairMaterialPath.GamePath(hroth, Id, renamed)!, m2.File, null)]);
+        Assert.True(HairPortWriter.Save(mod.Root, [write], auto: false).Ok);
+        var port = PortFile(mod, "Long", hroth).Replace('\\', '/');
+        mod.Put("Proteus/hairport.json", System.Text.Encoding.UTF8.GetBytes("{ not json"));
+        Assert.True(HairPortRecord.Read(mod.Root).Unreadable);
+
+        var undo = MatcapWriter.Undo(mod.Root, "long/c0801h0130_hir.mdl");
+        Assert.True(undo.Ok, undo.Message);
+        AssertKept(mod, m2);
+        Assert.Contains(PortsSentence(port), undo.Message);
+        Assert.StartsWith(HairPortPlan.Folder + "/", port);
+    }
+
+    [Fact]
+    [Trait("Plan", "EDGE-issue-sweep-c-1")]
+    public void Undoing_an_authors_matcap_a_matcapped_port_carrying_the_authors_material_keeps_it()
+    {
+        using var mod = HairMod();
+        var (rel, m2) = PortedAuthorWithMatcap(mod);
+        mod.Put(rel, HairModel(201, null, null, Naming(m2.Name, 1)));   // remade from the matcapped author file …
+        Assert.True(Apply(mod, rel, Target).Ok);             // … then given its own matcap (M1), still naming M2
+        var m1 = MatcapRecord.Read(mod.Root).MaterialsOf(rel).Single(m => m.Name != m2.Name);
+        Assert.Contains(m2.Name, SecondSkinWriter.MaterialNames(mod.Get(rel)));
+
+        Assert.True(MatcapWriter.Undo(mod.Root, "long/c0801h0130_hir.mdl").Ok);
+        AssertKept(mod, m2);
+        AssertKept(mod, m1);
+
+        // The port's own Undo restores its backup, which still names M2: M2 stays, M1 goes.
+        var own = MatcapWriter.Undo(mod.Root, rel);
+        Assert.True(own.Ok, own.Message);
+        AssertGone(mod, m1);
+        AssertKept(mod, m2);
+    }
+
+    [Fact]
+    [Trait("Plan", "EDGE-issue-sweep-c-2")]
+    public void Undoing_an_authors_matcap_an_earless_copy_naming_it_keeps_it()
+    {
+        using var mod = HairMod();
+        var (_, m2) = PortedAuthorWithMatcap(mod);
+        var copy = EarlessHairPlan.Folder + "/long/c0801h0130_hir.mdl";
+        mod.Put(copy, Naming(m2.Name));
+
+        var undo = MatcapWriter.Undo(mod.Root, "long/c0801h0130_hir.mdl");
+        Assert.True(undo.Ok, undo.Message);
+        AssertKept(mod, m2);
+        Assert.Contains(PortsSentence(copy), undo.Message);
+    }
+
+    [Fact]
+    [Trait("Plan", "EDGE-issue-sweep-c-4")]
+    public void Undoing_an_authors_matcap_refit_and_port_both_listed()
+    {
+        using var mod = HairMod();
+        var (rel, m2) = PortedAuthorWithMatcap(mod);
+        mod.Put(rel, Naming(m2.Name));
+        var refit = BodyRetargetWriter.Subfolder + "/long/c0801h0130_hir.mdl";
+        mod.Put(refit, Naming(m2.Name));
+
+        var undo = MatcapWriter.Undo(mod.Root, "long/c0801h0130_hir.mdl");
+        Assert.True(undo.Ok, undo.Message);
+        AssertKept(mod, m2);
+        Assert.Contains(PortsSentence(rel.Replace('\\', '/')), undo.Message);
+        Assert.Contains(string.Format(ProteusLoc.Localize("Parts.Matcap.KeptForRefits.Fmt",
+            "Refits made from it still draw the matcap, so its files stay until the sizes are remade: {0}."), RefitCore.Normal(refit)), undo.Message);
+    }
+
+    [Fact]
+    [Trait("Plan", "AC-issue-sweep-c-1")]
+    public void KeptForPorts_is_translated_in_every_locale()
+    {
+        var dir = Path.Combine(DefaultMatcapsDownloadServiceTests.RepoRoot(), "Proteus", "Localization");
+        string Message(string lang) =>
+            System.Text.Json.JsonDocument.Parse(File.ReadAllText(Path.Combine(dir, lang + ".json")))
+                .RootElement.GetProperty("Parts.Matcap.KeptForPorts.Fmt").GetProperty("message").GetString()!;
+        var en = Message("en");
+        foreach (var lang in new[] { "de", "es", "fr", "ja", "ko", "ru", "zh" })
+        {
+            var m = Message(lang);
+            Assert.Contains("{0}", m);
+            Assert.NotEqual(en, m);
+        }
+    }
 }

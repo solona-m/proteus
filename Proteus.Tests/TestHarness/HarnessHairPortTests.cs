@@ -741,4 +741,55 @@ public class HarnessHairPortTests : IDisposable
         Assert.Equal("backup-too-large", job.GetProperty("error").GetProperty("code").GetString());
         FolderState.AssertSame(before, mod.Root);
     }
+
+    // ── #71: another hairstyle's port of a race in the same option ────────────────────────────────────
+
+    private const string Miqo = "chara/human/c0801/obj/hair/h0005/model/c0801h0005_hir.mdl";
+
+    /// <summary>The women's hair mod with a Miqo'te hairstyle 5 published from the same option and file (as "wavy"
+    /// publishes two races' hairstyle in one option), already ported by hand to c0401.</summary>
+    private async Task<HairPortFixtures.Mod> MiqoPortedTo0401()
+    {
+        var mod = f.AddHairMod();
+        CrossSexFixtures.AddFile(mod, "Long", Miqo, "miqo.mdl", CrossSexFixtures.Cap(801, 5));
+        var first = await Job($"\"mod\":\"Hair\",\"hair\":\"{Miqo}\",\"races\":[\"c0401\"]");
+        Assert.True(first.GetProperty("state").GetString() == "done", first.ToString());
+        Assert.True(Codes(Result(first).GetProperty("ported")).SequenceEqual(["c0401"]), Result(first).ToString());
+        return mod;
+    }
+
+    [Fact]
+    [Trait("Plan", "AC-issue-sweep-c-10")]
+    [Trait("Plan", "EDGE-issue-sweep-c-28")]
+    public async Task PortedElsewhere_row_and_replaced_result()
+    {
+        using var mod = await MiqoPortedTo0401();
+
+        var row = Row(await View(), "c0401");
+        Assert.Equal("ported-elsewhere", row.GetProperty("state").GetString());
+        Assert.Equal(Miqo, row.GetProperty("portedFrom").GetString(), StringComparer.OrdinalIgnoreCase);
+        Assert.True(row.GetProperty("tickable").GetBoolean());
+        Assert.False(row.GetProperty("defaultTicked").GetBoolean());
+
+        // Asked for explicitly: ported, and the result names the port it replaced.
+        var job = await Job(Port("c0401"));
+        var result = Result(job);
+        Assert.Equal(["c0401"], Codes(result.GetProperty("ported")));
+        var replaced = Assert.Single(result.GetProperty("replaced").EnumerateArray());
+        Assert.Equal("c0401", replaced.GetProperty("race").GetString());
+        Assert.Equal(Miqo, replaced.GetProperty("from").GetString(), StringComparer.OrdinalIgnoreCase);
+        Assert.Contains("c0801h0005", result.GetProperty("resultLine").GetString());
+    }
+
+    [Fact]
+    [Trait("Plan", "EDGE-issue-sweep-c-28")]
+    public async Task Default_ticks_skip_ported_elsewhere()
+    {
+        using var mod = await MiqoPortedTo0401();
+        var job = await Job(Port());
+        var result = Result(job);
+        Assert.DoesNotContain("c0401", Codes2(result.GetProperty("asked")));
+        Assert.DoesNotContain("c0401", Codes(result.GetProperty("ported")));
+        Assert.Empty(result.GetProperty("replaced").EnumerateArray());
+    }
 }

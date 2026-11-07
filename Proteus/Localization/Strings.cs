@@ -862,6 +862,14 @@ public sealed class HairPortStrings
     public readonly string RaceOtherSexSkeleton = ProteusLoc.Localize("HairPort.Studio.OtherSexSkeleton",
         "the mod gives this race its own skeleton");
 
+    /// <summary>{0} is the other hairstyle, e.g. c0201h0108.</summary>
+    public readonly string RacePortedFromFmt = ProteusLoc.Localize("HairPort.Studio.PortedFrom.Fmt",
+        "ported from hairstyle {0} — porting this one replaces it");
+
+    /// <summary>{0} is the race number, {1} the other hairstyle, e.g. c0201h0108.</summary>
+    public readonly string ReplacedFmt = ProteusLoc.Localize("HairPort.Replaced.Fmt",
+        "c{0:D4}: replaced the port made from hairstyle {1}.");
+
     public readonly string OtherSex = ProteusLoc.Localize("HairPort.Studio.OtherSex", "Also for the other sex") + "###hairPortOtherSex";
 
     /// <summary>{0} is the hairstyle number.</summary>

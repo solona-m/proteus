@@ -40,8 +40,8 @@ internal sealed class FakeStudio(Action<string> fw) : IStudioHarness
         {
             ["open"] = OpenMod is { } m ? new { modDir = m, file = OpenFile, gamePath = "chara/x.mdl" } : null,
             ["tool"] = Tool, ["mode"] = "all", ["view"] = "character",
-            ["settings"] = new { mirror = false, adjacent = true, moveSkin = false },
-            ["effective"] = new { mirrorNow = false, adjacentNow = false, skinMovesNow = false, followReady = false },
+            ["settings"] = new { mirror = false, adjacent = true, falloffMm = 50f, moveSkin = false },
+            ["effective"] = new { mirrorNow = false, adjacentNow = false, falloffMm = 0f, skinMovesNow = false, followReady = false },
             ["parts"] = new[] { new { label = "1.1", material = "mt_top.mtrl", island = -1, skin = false, locked = false, moves = true } },
             ["chosen"] = new { part = (string?)null, polygons = 0 },
             ["all"] = new { seeds = 4, movingRows = 1, rows = 1, includesSkin = false, pivot = new[] { 0f, 1f, 0f } },

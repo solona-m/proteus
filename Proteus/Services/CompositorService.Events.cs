@@ -27,11 +27,11 @@ public partial class CompositorService
         if (playerColl == null || collId != playerColl.Value)
             return;
 
-        // The live brush reloading the mod it just saved a garment into — see ExpectOwnModEdit.
-        if (change == ModSettingChange.Edited && _ownModEditUntil.TryGetValue(modDir, out long ownUntil)
-            && Environment.TickCount64 < ownUntil)
+        // Proteus reloading a mod it just wrote into (live brush, Studio, auto refit, harness…) — see ExpectOwnModEdit.
+        if (change == ModSettingChange.Edited && _ownModEditUntil.TryGetValue(modDir, out var ownEdit)
+            && Environment.TickCount64 < ownEdit.Until)
         {
-            log.Debug("[Proteus] ModSettingChanged:Edited:{0} is the live brush's own save — no recomposite", modDir);
+            log.Debug(OwnEditLine(modDir, ownEdit.By));
             return;
         }
 
@@ -155,6 +155,7 @@ public partial class CompositorService
         _upstreamUnsettled.Clear();
         _upstreamSettled.Clear();
         _upstreamIsGameData.Clear();
+        _texGameDataSeen.Clear();   // #70: a texture settles as game data only on two fresh primes after a change
         if (_upstreamByGamePath.IsEmpty) return;
         _upstreamByGamePath.Clear();
         log.Debug("[Proteus] upstream cache cleared ({0})", reason);
