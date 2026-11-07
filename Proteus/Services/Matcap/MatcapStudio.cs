@@ -59,7 +59,7 @@ internal static class MatcapStudio
     {
         if (MatcapPlan.TargetOf(modelGamePath, out _) is not { } target)
             return Prepared.Refuse("not-target", ProteusLoc.Localize("Matcap.Refused.NotTarget",
-                "Matcaps go on gear, accessories, hair, Viera ears and Au Ra horns (on the face); this model is none of those."));
+                "Matcaps go on gear, accessories, hair, tails, Viera ears and Au Ra horns (on the face); this model is none of those."));
         if (MatcapPlan.RefusedRegenerated(modRoot, modelRel) is { } regen)
             return Prepared.Refuse("regenerated-model", string.Format(ProteusLoc.Localize("Matcap.Refused.Regenerated.Fmt",
                 "This model is made by Proteus from another one ({0}), and remaking it would lose the matcap. Put the matcap on the model it was made from, then remake it."), regen));

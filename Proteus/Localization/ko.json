@@ -6232,7 +6232,7 @@
     "description": ""
   },
   "Matcap.Refused.NotTarget": {
-    "message": "매트캡은 장비, 액세서리, 머리카락, 비에라 귀, 아우라 뿔(얼굴)에 입힐 수 있습니다. 이 모델은 그 어느 것도 아닙니다.",
+    "message": "매트캡은 장비, 액세서리, 머리카락, 꼬리, 비에라 귀, 아우라 뿔(얼굴)에 입힐 수 있습니다. 이 모델은 그 어느 것도 아닙니다.",
     "description": ""
   },
   "Matcap.Refused.RecordUnreadable": {

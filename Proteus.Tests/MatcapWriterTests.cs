@@ -528,7 +528,7 @@ public class MatcapWriterTests
             File.WriteAllText(Path.Combine(f.ModRoot, "default_mod.json"), "{\"Files\":{}}");
             File.WriteAllText(Path.Combine(f.ModRoot, "meta.json"), "{\"FileVersion\":3,\"Name\":\"x\"}");
         }
-        if (code == "not-target") gamePath = "chara/human/c1401/obj/tail/t0001/model/c1401t0001_til.mdl";
+        if (code == "not-target") gamePath = "chara/human/c0201/obj/body/b0001/model/c0201b0001_top.mdl";
         if (code == "no-horns") gamePath = "chara/human/c1401/obj/face/f0001/model/c1401f0001_fac.mdl";
         if (code == "regenerated-model")
         {

@@ -6232,7 +6232,7 @@
     "description": ""
   },
   "Matcap.Refused.NotTarget": {
-    "message": "Les matcaps vont sur l'équipement, les accessoires, les cheveux, les oreilles de Viera et les cornes d'Ao Ra (sur le visage) ; ce modèle n'est rien de cela.",
+    "message": "Les matcaps vont sur l'équipement, les accessoires, les cheveux, les queues, les oreilles de Viera et les cornes d'Ao Ra (sur le visage) ; ce modèle n'est rien de cela.",
     "description": ""
   },
   "Matcap.Refused.RecordUnreadable": {

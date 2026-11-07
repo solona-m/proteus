@@ -6232,7 +6232,7 @@
     "description": ""
   },
   "Matcap.Refused.NotTarget": {
-    "message": "matcap 可用于装备、饰品、头发、维埃拉族的耳朵和敖龙族的角（脸部）；此模型都不是。",
+    "message": "matcap 可用于装备、饰品、头发、尾巴、维埃拉族的耳朵和敖龙族的角（脸部）；此模型都不是。",
     "description": ""
   },
   "Matcap.Refused.RecordUnreadable": {

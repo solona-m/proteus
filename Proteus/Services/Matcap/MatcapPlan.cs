@@ -14,7 +14,7 @@ namespace Proteus.Services.Matcap;
 /// </summary>
 internal static partial class MatcapPlan
 {
-    public enum Kind { Gear, Hair, Ear, Face }
+    public enum Kind { Gear, Hair, Ear, Face, Tail }
 
     /// <summary>The attribute that marks a face model's horn submeshes (Au Ra). Only these face parts take a matcap.</summary>
     public const string HornAttribute = "atr_hrn";
@@ -31,7 +31,12 @@ internal static partial class MatcapPlan
         refusal = "";
         var p = gamePath.Replace('\\', '/').ToLowerInvariant();
         if (CustomizationMaterialPath.Parse(p) is { } cust)
-            return new Target(cust.Slot == CustomizationMaterialPath.Slot.Face ? Kind.Face : Kind.Ear, p, null, cust.Race, cust.Id);
+            return new Target(cust.Slot switch
+            {
+                CustomizationMaterialPath.Slot.Face => Kind.Face,
+                CustomizationMaterialPath.Slot.Tail => Kind.Tail,
+                _ => Kind.Ear,
+            }, p, null, cust.Race, cust.Id);
         if (HairPortPlan.Parse(p) is { } hair) return new Target(Kind.Hair, p, null, hair.Race, hair.Id);
         if (ContentSlot.Parse(p) is { } slot && ContentSlot.SetIdOf(slot.SetTag) is { } set
             && (p.StartsWith("chara/equipment/", StringComparison.Ordinal) || p.StartsWith("chara/accessory/", StringComparison.Ordinal)))
@@ -119,7 +124,7 @@ internal static partial class MatcapPlan
     /// edits and groups, and the mod's own material redirects use, plus the worn variant's — an unredirected sister
     /// variant would otherwise ask for a file that does not exist and draw the parts invisible.</item>
     /// <item>Hair: the folder <see cref="HairMaterialPath"/> says each race the model is published for reads.</item>
-    /// <item>Ears and faces (horns): <see cref="CustomizationMaterialPath"/>, for each published path.</item>
+    /// <item>Ears, tails and faces (horns): <see cref="CustomizationMaterialPath"/>, for each published path.</item>
     /// </list>
     /// An absolute name is published at exactly that path.
     /// </summary>
@@ -151,6 +156,7 @@ internal static partial class MatcapPlan
                     if (HairPortPlan.Parse(gp) is { } h) Add(HairMaterialPath.GamePath(h.Race, h.Id, name));
                 break;
             case Kind.Ear:
+            case Kind.Tail:
             case Kind.Face:
                 foreach (var gp in publishedAt.Prepend(target.GamePath))
                     foreach (var p in CustomizationMaterialPath.GamePaths(gp, name)) Add(p);

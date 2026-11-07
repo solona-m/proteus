@@ -136,6 +136,38 @@ public class MatcapVieraEarLocalTests(ITestOutputHelper output)
     }
 }
 
+public class MatcapTailLocalTests(ITestOutputHelper output)
+{
+    [LocalDataFact(LocalData.GameData)]
+    public void Real_tail_models_take_matcap_published_beside_the_games_material()
+    {
+        var data = ModelMaterialWriterLocalTests.Game();
+        int tested = 0;
+        foreach (var (race, id) in new[] { (801, 1), (1401, 2), (1501, 1), (1601, 3) })
+        {
+            var path = $"chara/human/c{race:D4}/obj/tail/t{id:D4}/model/c{race:D4}t{id:D4}_til.mdl";
+            var bytes = data.GetFile(path)?.Data;
+            if (bytes == null) continue;
+            var parts = ModelPartReader.Read(bytes)!.Parts.Where(p => p.Island < 0 && MatcapPlan.Tickable(p)).ToList();
+            Assert.NotEmpty(parts);
+            var target = MatcapPlan.TargetOf(path, out _)!;
+            Assert.Equal(MatcapPlan.Kind.Tail, target.Kind);
+            var name = MatcapPlan.NewName(parts[0].Material, "abcdef", SecondSkinWriter.MaterialNames(bytes));
+            var result = ModelMaterialWriter.MoveToMaterial(bytes, [parts[0]], name);
+            Assert.Contains(name, SecondSkinWriter.MaterialNames(result.Model));
+            var paths = MatcapPlan.MaterialGamePaths(target, name, [path], null);
+            // Every folder the game ships the tail's own material in gets the new one.
+            var vanilla = CustomizationMaterialPath.GamePaths(path, parts[0].Material).Where(data.FileExists).ToList();
+            Assert.NotEmpty(vanilla);
+            foreach (var v in vanilla)
+                Assert.Contains(paths, p => Path.GetDirectoryName(p) == Path.GetDirectoryName(v));
+            output.WriteLine($"{path}: {parts[0].Label} -> {string.Join(", ", paths)}");
+            tested++;
+        }
+        Assert.True(tested > 0, "no tail model in game data");
+    }
+}
+
 public class MatcapDownstreamLocalTests(ITestOutputHelper output)
 {
     /// <summary>Positions of one mesh's vertices straight from the file (its position element).</summary>

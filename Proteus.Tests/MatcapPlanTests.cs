@@ -22,8 +22,36 @@ public class MatcapPlanTests
         Assert.Equal(MatcapPlan.Kind.Hair, MatcapPlan.TargetOf("chara/human/c0201/obj/hair/h0168/model/c0201h0168_hir.mdl", out _)!.Kind);
         Assert.Equal(MatcapPlan.Kind.Gear, MatcapPlan.TargetOf("chara/equipment/e6255/model/c0201e6255_top.mdl", out _)!.Kind);
         Assert.Equal(MatcapPlan.Kind.Gear, MatcapPlan.TargetOf("chara/accessory/a0053/model/c0201a0053_rir.mdl", out _)!.Kind);
-        Assert.Null(MatcapPlan.TargetOf("chara/human/c1401/obj/tail/t0001/model/c1401t0001_til.mdl", out var why));
+        var tail = MatcapPlan.TargetOf("chara/human/c1401/obj/tail/t0001/model/c1401t0001_til.mdl", out _)!;
+        Assert.Equal(MatcapPlan.Kind.Tail, tail.Kind);
+        Assert.Equal((ushort)1401, tail.Race);
+        Assert.Null(MatcapPlan.TargetOf("chara/human/c0201/obj/body/b0001/model/c0201b0001_top.mdl", out var why));
         Assert.Equal("not-target", why);
+    }
+
+    [Fact]
+    public void Tail_materials_publish_at_the_variant_folders_the_game_reads()
+    {
+        // Every race but Hrothgar: the model's own id, v0001.
+        var miqo = MatcapPlan.TargetOf("chara/human/c0801/obj/tail/t0003/model/c0801t0003_til.mdl", out _)!;
+        Assert.Equal(["chara/human/c0801/obj/tail/t0003/material/v0001/mt_c0801t0003_a_mcapabcdef1.mtrl"],
+                     MatcapPlan.MaterialGamePaths(miqo, "/mt_c0801t0003_a_mcapabcdef1.mtrl", [], null));
+
+        // Hrothgar: every tail reads t0001's folders, v0001–v0005 (one per fur pattern).
+        var hroth = MatcapPlan.TargetOf("chara/human/c1501/obj/tail/t0002/model/c1501t0002_til.mdl", out _)!;
+        var paths = MatcapPlan.MaterialGamePaths(hroth, "/mt_c1501t0001_a_mcapabcdef1.mtrl", [], null);
+        Assert.Equal(Enumerable.Range(1, 5).Select(v => $"chara/human/c1501/obj/tail/t0001/material/v{v:D4}/mt_c1501t0001_a_mcapabcdef1.mtrl"), paths);
+
+        // A name of another id (the game's c0701t0008 names t0004's): published as written, and re-derived for the model.
+        var other = MatcapPlan.TargetOf("chara/human/c0701/obj/tail/t0008/model/c0701t0008_til.mdl", out _)!;
+        Assert.Equal(["chara/human/c0701/obj/tail/t0008/material/v0001/mt_c0701t0004_a_mcapabcdef1.mtrl",
+                      "chara/human/c0701/obj/tail/t0008/material/v0001/mt_c0701t0008_a_mcapabcdef1.mtrl"],
+                     MatcapPlan.MaterialGamePaths(other, "/mt_c0701t0004_a_mcapabcdef1.mtrl", [], null));
+
+        // The other body options the model is published for each add their own folder (checked below).
+        var both = MatcapPlan.MaterialGamePaths(miqo, "/mt_c0801t0003_a_mcapabcdef1.mtrl",
+                                                ["chara/human/c0701/obj/tail/t0003/model/c0701t0003_til.mdl"], null);
+        Assert.Contains("chara/human/c0701/obj/tail/t0003/material/v0001/mt_c0801t0003_a_mcapabcdef1.mtrl", both);
     }
 
     /// <summary>A face like an Au Ra's: skin, a horn mesh (fac_c, whole), a mesh with a horn and an untagged submesh
@@ -289,6 +317,33 @@ public class CustomizationMaterialPathLocalTests(ITestOutputHelper output)
                     Assert.True(found != null, $"{model}: no rule path for {name} exists ({string.Join(", ", paths)})");
                     // The rule's own path (no variant folder) is the one the game ships.
                     Assert.Equal(paths[0], found);
+                    checkedCount++;
+                }
+            }
+        Assert.True(checkedCount > 0);
+    }
+
+    [LocalDataFact(LocalData.GameData)]
+    public void Vanilla_tail_materials_resolve_by_rule()
+    {
+        var data = new Lumina.GameData(LocalData.Path(LocalData.GameData));
+        int checkedCount = 0;
+        foreach (var race in new[] { 701, 801, 1301, 1401, 1501, 1601 })
+            for (int id = 1; id <= 12; id++)
+            {
+                var model = $"chara/human/c{race:D4}/obj/tail/t{id:D4}/model/c{race:D4}t{id:D4}_til.mdl";
+                var bytes = data.GetFile(model)?.Data;
+                if (bytes == null) continue;
+                foreach (var name in SecondSkinWriter.MaterialNames(bytes))
+                {
+                    var paths = CustomizationMaterialPath.GamePaths(model, name);
+                    output.WriteLine($"{model} {name} -> {string.Join(" | ", paths.Where(data.FileExists))}");
+                    // c0701t0008 names t0004's material, which the game ships only under t0004: no rule path exists.
+                    if (race == 701 && id == 8) continue;
+                    Assert.True(data.FileExists(paths[0]), $"{model}: the rule's path for {name} is not shipped ({paths[0]})");
+                    // Hrothgar: each of the five fur-pattern folders is shipped and published.
+                    if (CustomizationMaterialPath.IsHrothgar((ushort)race))
+                        Assert.Equal(5, paths.Count(data.FileExists));
                     checkedCount++;
                 }
             }

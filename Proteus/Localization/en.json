@@ -6232,7 +6232,7 @@
     "description": "Studio Matcaps tool. A matcap is a sphere picture a shader samples by the surface's facing direction."
   },
   "Matcap.Refused.NotTarget": {
-    "message": "Matcaps go on gear, accessories, hair, Viera ears and Au Ra horns (on the face); this model is none of those.",
+    "message": "Matcaps go on gear, accessories, hair, tails, Viera ears and Au Ra horns (on the face); this model is none of those.",
     "description": "Studio Matcaps tool. A matcap is a sphere picture a shader samples by the surface's facing direction."
   },
   "Matcap.Refused.RecordUnreadable": {

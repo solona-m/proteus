@@ -6232,7 +6232,7 @@
     "description": ""
   },
   "Matcap.Refused.NotTarget": {
-    "message": "Los matcaps van en equipo, accesorios, pelo, orejas de viera y cuernos de au ra (en la cara); este modelo no es nada de eso.",
+    "message": "Los matcaps van en equipo, accesorios, pelo, colas, orejas de viera y cuernos de au ra (en la cara); este modelo no es nada de eso.",
     "description": ""
   },
   "Matcap.Refused.RecordUnreadable": {
