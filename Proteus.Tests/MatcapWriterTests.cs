@@ -679,6 +679,37 @@ public class MatcapWriterTests
 
     [Fact]
     [Trait("Plan", "EDGE-matcaps-11")]
+    public void A_brushed_refit_is_not_taken_for_a_remake()
+    {
+        using var f = WithRefit();
+        var original = f.Current(RefitRel);
+        Assert.True(ApplyOn(f, RefitRel, "r.tex", out _).Ok);
+        var matcapBackup = MatcapWriter.BackupPath(f.ModRoot, MatcapWriter.BackupSubdir, RefitRel);
+
+        // The brush backs the matcapped file up (a later backup time), then edits it; it still draws our matcap.
+        var brushBackup = Path.Combine(f.ModRoot, SidecarDiscoveryService.SidecarSubdir, MeshVolumeService.BackupSubdir,
+                                       RefitRel.Replace('/', Path.DirectorySeparatorChar));
+        Directory.CreateDirectory(Path.GetDirectoryName(brushBackup)!);
+        File.Copy(MatcapWriter.Full(f.ModRoot, RefitRel), brushBackup);
+        var brushed = f.Current(RefitRel);
+        brushed[^1] ^= 0x5A;
+        File.WriteAllBytes(MatcapWriter.Full(f.ModRoot, RefitRel), brushed);
+
+        Assert.True(ApplyOn(f, RefitRel, "t.tex", out _).Ok);
+        Assert.Equal(original, File.ReadAllBytes(matcapBackup));               // the true original is kept
+        var undo = MatcapWriter.Undo(f.ModRoot, RefitRel);
+        Assert.Equal(MatcapWriter.CodeLaterFeature, undo.Code);                 // undo the brush first
+
+        // The brush undone: the matcap's Undo brings back the original refit.
+        File.WriteAllBytes(MatcapWriter.Full(f.ModRoot, RefitRel), File.ReadAllBytes(brushBackup));
+        File.Delete(brushBackup);
+        var again = MatcapWriter.Undo(f.ModRoot, RefitRel);
+        Assert.True(again.Ok, again.Message);
+        Assert.Equal(original, f.Current(RefitRel));
+    }
+
+    [Fact]
+    [Trait("Plan", "EDGE-matcaps-11")]
     public void A_matcapped_partner_hashes_as_the_refit_wrote_it()
     {
         using var f = WithRefit();
