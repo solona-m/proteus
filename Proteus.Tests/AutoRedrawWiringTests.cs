@@ -66,7 +66,7 @@ public class AutoRedrawWiringTests
     public void Both_reload_gates_go_through_AutoRedrawAllows()
     {
         var publish = Source("Services/CompositorService.Publish.cs");
-        const string gate = "RedrawHold.AutoRedrawAllows(config.AutoRedraw, userRequested)";
+        const string gate = "RedrawHold.AutoRedrawAllows(AutoRedrawOn, userRequested)";   // issue sweep D: via AutoRedrawOn
         var reload = Method(publish, "bool ReloadAndRedraw(");
         Assert.Contains(gate, reload);
         // The withdrawal reaches Penumbra whatever the setting; only the redraw is gated.
@@ -124,7 +124,7 @@ public class AutoRedrawWiringTests
     public void The_normal_publish_withholds_its_redraw_with_auto_redraw_off()
     {
         var body = Method(Source("Services/CompositorService.Publish.cs"), "bool ReloadAndRedrawWhenReady(");
-        int withheld = body.IndexOf("if (!config.AutoRedraw) return false;", System.StringComparison.Ordinal);
+        int withheld = body.IndexOf("if (!AutoRedrawOn) return false;", System.StringComparison.Ordinal);   // issue sweep D
         Assert.True(withheld >= 0 && withheld < body.IndexOf("RefreshPlayerTextures(", System.StringComparison.Ordinal));
     }
 
