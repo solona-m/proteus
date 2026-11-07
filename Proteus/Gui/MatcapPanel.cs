@@ -215,15 +215,26 @@ internal sealed class MatcapPanel
         return cachedStatus;
     }
 
+    /// <summary>
+    /// The width a tile takes: an image button adds the frame padding on both sides of the picture, so a grid that
+    /// counted only the picture ran its last column past the pane's edge.
+    /// </summary>
+    internal static float TileWidth(float picture, float framePaddingX) => picture + 2f * framePaddingX;
+
+    /// <summary>Whether the next tile starts a new row: a row's first tile never wraps, however narrow the pane.</summary>
+    internal static bool WrapsBefore(float rowWidth, float tile, float avail) => rowWidth > 0f && rowWidth + tile > avail;
+
     /// <summary>A wrapping grid of thumbnail buttons; a failed thumbnail falls back to the name.</summary>
     private static void DrawGrid(List<(string Name, string Path, string Tip)> items, string? selected, Action<string> pick)
     {
         float size = ProteusStyle.S(56f);
         float avail = ImGui.GetContentRegionAvail().X;
-        float x = 0f, gap = ImGui.GetStyle().ItemSpacing.X;
+        var style = ImGui.GetStyle();
+        float tile = TileWidth(size, style.FramePadding.X), gap = style.ItemSpacing.X;
+        float x = 0f;
         foreach (var (name, path, tip) in items)
         {
-            if (x > 0f && x + size > avail) x = 0f; else if (x > 0f) ImGui.SameLine();
+            if (WrapsBefore(x, tile, avail)) x = 0f; else if (x > 0f) ImGui.SameLine();
             bool clicked;
             bool hasThumb = false;
             using (ProteusStyle.Selected(name == selected))
@@ -232,15 +243,14 @@ internal sealed class MatcapPanel
                     clicked = thumbs.DrawButton($"##mc_{name}", path, size, out hasThumb);
                 else
                     clicked = false;
+                // No thumbnail drew nothing, so the name button takes the tile's place where it already stands.
                 if (!hasThumb)
-                {
-                    if (ColorTableEditor.EffectThumbs != null) ImGui.SameLine(0, 0);
-                    clicked |= ImGui.Button($"{ProteusStyle.Ellipsize(name, size)}##mcn_{name}", new Vector2(size, size));
-                }
+                    clicked |= ImGui.Button($"{ProteusStyle.Ellipsize(name, size)}##mcn_{name}",
+                                            new Vector2(tile, size + 2f * style.FramePadding.Y));
             }
             if (ImGui.IsItemHovered()) ImGui.SetTooltip(tip);
             if (clicked) pick(name);
-            x += size + gap;
+            x += tile + gap;
         }
     }
 
