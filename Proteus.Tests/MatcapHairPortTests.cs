@@ -515,20 +515,19 @@ public sealed class MatcapHairPortTests : IDisposable
     // ── sharers, the Port button, carried matcaps, fresh ports, the material's own place ──────────────────────────────
 
     /// <summary>A Miqo'te's own hairstyle 105, ported to Hyur Midlander and Highlander: both read one Midlander material.</summary>
-    private (Mod Mod, string Source, Func<string, byte[]?> Game) SharedStyle()
+    private (Mod Mod, string Source, Func<string, byte[]?> Game) SharedStyle(int id = 105)
     {
-        const int id = 105;
         string source = HairPortPlan.HairPath(801, id);
         var mod = new Mod(defaults: new Dictionary<string, string> { [source] = "a.mdl" });
-        mod.Put("a.mdl", HairModel(801, material: "/mt_c0801h0105_hir_a.mtrl"));
+        mod.Put("a.mdl", HairModel(801, material: $"/mt_c0801h{id:D4}_hir_a.mtrl"));
         var files = new Dictionary<string, byte[]>(StringComparer.OrdinalIgnoreCase)
         {
-            ["chara/human/c0801/obj/hair/h0105/material/v0001/mt_c0801h0105_hir_a.mtrl"] = SyntheticMatcapMod.Gear(AuthorNormal, 0.5f, "hair.shpk"),
+            [$"chara/human/c0801/obj/hair/h{id:D4}/material/v0001/mt_c0801h{id:D4}_hir_a.mtrl"] = SyntheticMatcapMod.Gear(AuthorNormal, 0.5f, "hair.shpk"),
         };
         foreach (ushort r in new ushort[] { 101, 201, 401, 601, 801, 1001, 1101, 1201, 1401, 1601, 1801 })
         {
             files[HairPortPlan.HeadPaths(r).First()] = HeadModel(r);
-            files[HairPortPlan.HairPath(r, id)] = HairModel(r);
+            files[HairPortPlan.HairPath(r, id)] = HairModelOf(r, id);
         }
         foreach (var (k, v) in files) game[k] = v;
         Func<string, byte[]?> g = p => files.GetValueOrDefault(p);
@@ -583,6 +582,34 @@ public sealed class MatcapHairPortTests : IDisposable
         Assert.True(mod.Has(highlander));
         Assert.True(mod.Has(midlander));
         Assert.All(mat.GamePaths, gp => Assert.True(Defaults(mod).ContainsKey(gp)));
+    }
+
+    [Fact]
+    [Trait("Plan", "EDGE-matcap-hair-ports-12")]
+    [Trait("Plan", "AC-matcap-hair-ports-3")]
+    public void A_bend_version_bump_freezes_the_matcapped_port_only_when_nothing_shares_its_material()
+    {
+        // Hairstyle 50: every race reads its own folder, so the Midlander's and Highlander's ports share nothing.
+        const int id = 50;
+        var (mod, source, g) = SharedStyle(id);
+        using var _ = mod;
+        Assert.True(HairPortWriter.Save(mod.Root, HairPortBuilder.Build(mod.Root, source, [401], Pbd(), g, true).Writes, true).Ok);
+        var highlander = HairPortRecord.Read(mod.Root).Ports.Single(e => e.TargetGamePath == HairPortPlan.HairPath(401, id)).File;
+        Assert.True(Apply(mod, highlander, HairPortPlan.HairPath(401, id)).Ok);
+        var matcapped = mod.Get(highlander);
+
+        // An older bend on both ports: both are out of date.
+        var record = HairPortRecord.Read(mod.Root);
+        foreach (var e in record.Ports) e.PortVersion = HairPortBaker.Version - 1;
+        HairPortRecord.Write(mod.Root, record);
+
+        var plan = HairPortBuilder.Build(mod.Root, source, [201, 401], Pbd(), g, withSharers: true);
+        Assert.Contains((ushort)401, plan.EditBlocked);
+        Assert.DoesNotContain((ushort)201, plan.EditBlocked);                   // no sharer: not held back
+        Assert.Contains(plan.Writes, w => !w.Stripped && w.TargetGamePath == HairPortPlan.HairPath(201, id));
+        Assert.DoesNotContain(plan.Writes, w => !w.Stripped && w.TargetGamePath == HairPortPlan.HairPath(401, id));
+        Assert.True(HairPortWriter.Save(mod.Root, plan.Writes, auto: true).Ok);
+        Assert.Equal(matcapped, mod.Get(highlander));
     }
 
     [Fact]
