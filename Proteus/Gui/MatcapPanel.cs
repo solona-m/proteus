@@ -42,6 +42,10 @@ internal sealed class MatcapPanel
         public required Action Rescan;
         public required Action RefreshImages;
         public string? Error;
+        /// <summary>The open model is a face: only its horns take a matcap.</summary>
+        public bool FaceTarget;
+        /// <summary>For a face: it has horn parts at all.</summary>
+        public bool HasHorns = true;
     }
 
     private bool showLibraries;
@@ -198,6 +202,13 @@ internal sealed class MatcapPanel
     {
         var s = Strings.Matcap;
         var choice = Choice(ctx);
+        if (ctx.FaceTarget)
+        {
+            ImGui.PushTextWrapPos(0f);
+            if (!ctx.HasHorns) ImGui.TextColored(ProteusStyle.Warn, s.NoHorns);
+            else ImGui.TextDisabled(s.HornColourNote);
+            ImGui.PopTextWrapPos();
+        }
         ImGui.TextDisabled(string.Format(s.TickedFmt, ctx.Ticked.Count));
         ImGui.TextDisabled(string.Format(s.RoomFmt, Math.Max(0, ctx.MaterialRoom)));
         if (ctx.Ticked.Any(p => p.Material.Contains("hir", StringComparison.OrdinalIgnoreCase)))

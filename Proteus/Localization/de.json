@@ -6232,7 +6232,7 @@
     "description": ""
   },
   "Matcap.Refused.NotTarget": {
-    "message": "Matcaps gehören auf Ausrüstung, Accessoires, Haare und Ohren oder Hörner; dieses Modell ist nichts davon.",
+    "message": "Matcaps gehören auf Ausrüstung, Accessoires, Haare, Viera-Ohren und Au-Ra-Hörner (am Gesicht); dieses Modell ist nichts davon.",
     "description": ""
   },
   "Matcap.Refused.RecordUnreadable": {
@@ -6313,10 +6313,6 @@
   },
   "Parts.Matcap.Duplicates.Fmt": {
     "message": "Andere Mods liefern ebenfalls die Textur dieses Platzes ({0}); der, den Penumbra am höchsten einstuft, entscheidet, was zu sehen ist.",
-    "description": ""
-  },
-  "Parts.Matcap.EarOnlyHere": {
-    "message": "Hörner und Ohren öffnen sich nur unter Matcaps, daher wurden sie geschlossen.",
     "description": ""
   },
   "Parts.Matcap.Edited": {
@@ -6503,16 +6499,48 @@
     "message": "Ohren {0} ({1})",
     "description": ""
   },
-  "Parts.Vanilla.Horns.Fmt": {
-    "message": "Hörner {0} ({1})",
-    "description": ""
-  },
   "Settings.MatcapLibrary": {
     "message": "Matcap-Bilder",
     "description": ""
   },
   "Settings.MatcapLibrary.Tip.Fmt": {
     "message": "Öffne den Ordner, in dem deine eigenen Matcap-Bilder liegen: {0}",
+    "description": ""
+  },
+  "Matcap.Refused.NoHorns": {
+    "message": "Dieses Gesicht hat keine Hörner. Auf einem Gesicht können nur die Hörner eine Matcap bekommen.",
+    "description": ""
+  },
+  "Matcap.Refused.NotHorn": {
+    "message": "Auf einem Gesicht können nur die Hörner eine Matcap bekommen.",
+    "description": ""
+  },
+  "Parts.Matcap.DrawnThroughFace": {
+    "message": "Dein Gesicht wird über die Umschreibung des Gesichts-Overlays gezeichnet; die Matcap erscheint nach der nächsten Aktualisierung.",
+    "description": ""
+  },
+  "Parts.Matcap.FaceOverlayOn": {
+    "message": "Dieses Gesicht wird über ein Gesichts-Overlay gezeichnet. Schalte das Overlay aus, um dein Gesicht zu wählen, oder öffne deinen Gesichtsmod aus der Liste.",
+    "description": ""
+  },
+  "Parts.Matcap.HornColourNote": {
+    "message": "Hörner mit einer Matcap übernehmen nicht mehr die Hornfarbe deines Charakters, und Hüte verbergen sie weiterhin.",
+    "description": ""
+  },
+  "Parts.Matcap.MatcapsOnlyHere": {
+    "message": "Dein eigenes Gesicht und deine Ohren öffnen sich nur unter Matcaps, daher wurden sie geschlossen.",
+    "description": ""
+  },
+  "Parts.Matcap.NoHorns": {
+    "message": "Dieses Gesicht hat keine Hörner. Auf einem Gesicht können nur die Hörner eine Matcap bekommen.",
+    "description": ""
+  },
+  "Parts.Matcap.NotHornTip": {
+    "message": "Auf einem Gesicht können nur die Hörner eine Matcap bekommen.",
+    "description": ""
+  },
+  "Parts.Vanilla.FaceHorns.Fmt": {
+    "message": "Hörner (Gesicht {0}, {1})",
     "description": ""
   }
 }

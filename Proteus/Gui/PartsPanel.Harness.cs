@@ -1,4 +1,4 @@
-#if PROTEUS_TEST_HARNESS
+﻿#if PROTEUS_TEST_HARNESS
 using System;
 using System.Collections.Generic;
 using System.IO;
@@ -50,7 +50,8 @@ public sealed partial class PartsPanel : IStudioHarness
     {
         matcapIndex ??= new Services.Matcap.MatcapIndex(null);
         return new MatcapHarnessPort(matcapIndex, MatcapImageFolder(), new Services.Matcap.PenumbraMatcapAdapter(penumbra),
-                                     MatcapEnv(), penumbra.GetModDirectory(), penumbra.GetAllModsQuiet());
+                                     MatcapEnv(), penumbra.GetModDirectory(), penumbra.GetAllModsQuiet(),
+                                     gamePath => compositor.ForgetFaceUpstream(gamePath));
     }
 
     public bool IsOpen(string modDir, string file)

@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using Proteus.Services;
@@ -12,28 +13,105 @@ public class MatcapPlanTests
 {
     [Fact]
     [Trait("Plan", "AC-matcaps-11")]
-    public void Zear_paths_are_targets_faces_tails_not()
+    public void Face_and_zear_paths_are_targets_tails_not()
     {
-        var horn = MatcapPlan.TargetOf("chara/human/c1401/obj/zear/z0001/model/c1401z0001_zer.mdl", out _)!;
-        Assert.Equal(MatcapPlan.Kind.Ear, horn.Kind);
-        Assert.Equal((ushort)1401, horn.Race);
+        var face = MatcapPlan.TargetOf("chara/human/c1401/obj/face/f0001/model/c1401f0001_fac.mdl", out _)!;
+        Assert.Equal(MatcapPlan.Kind.Face, face.Kind);
+        Assert.Equal((ushort)1401, face.Race);
+        Assert.Equal(MatcapPlan.Kind.Ear, MatcapPlan.TargetOf("chara/human/c1801/obj/zear/z0001/model/c1801z0001_zer.mdl", out _)!.Kind);
         Assert.Equal(MatcapPlan.Kind.Hair, MatcapPlan.TargetOf("chara/human/c0201/obj/hair/h0168/model/c0201h0168_hir.mdl", out _)!.Kind);
         Assert.Equal(MatcapPlan.Kind.Gear, MatcapPlan.TargetOf("chara/equipment/e6255/model/c0201e6255_top.mdl", out _)!.Kind);
         Assert.Equal(MatcapPlan.Kind.Gear, MatcapPlan.TargetOf("chara/accessory/a0053/model/c0201a0053_rir.mdl", out _)!.Kind);
-        Assert.Null(MatcapPlan.TargetOf("chara/human/c0201/obj/face/f0001/model/c0201f0001_fac.mdl", out var why));
+        Assert.Null(MatcapPlan.TargetOf("chara/human/c1401/obj/tail/t0001/model/c1401t0001_til.mdl", out var why));
         Assert.Equal("not-target", why);
-        Assert.Null(MatcapPlan.TargetOf("chara/human/c1401/obj/tail/t0001/model/c1401t0001_til.mdl", out _));
+    }
+
+    /// <summary>A face like an Au Ra's: skin, a horn mesh (fac_c, whole), a mesh with a horn and an untagged submesh
+    /// (fac_b), and irises. Attribute bit 2 is atr_hrn.</summary>
+    internal static byte[] SyntheticFace() => SyntheticModel.Build(["atr_kao", "atr_fv_a", "atr_hrn"],
+        [new SyntheticModel.Mesh("/mt_c1401f0001_fac_a.mtrl", new SyntheticModel.Sub(0b001, TrianglesPerIsland: 3)),
+         new SyntheticModel.Mesh("/mt_c1401f0001_fac_c.mtrl", new SyntheticModel.Sub(0b100, TrianglesPerIsland: 2, OffsetX: 20f)),
+         new SyntheticModel.Mesh("/mt_c1401f0001_fac_b.mtrl", new SyntheticModel.Sub(0b100, TrianglesPerIsland: 2, OffsetX: 40f),
+                                                             new SyntheticModel.Sub(0b001, OffsetX: 40f, OffsetY: 5f)),
+         new SyntheticModel.Mesh("/mt_c1401f0001_iri_a.mtrl", new SyntheticModel.Sub(0b001, OffsetX: 60f))],
+        SyntheticModel.V6, (IReadOnlyList<string>?)null);
+
+    [Fact]
+    [Trait("Plan", "AC-matcaps-11")]
+    [Trait("Plan", "EDGE-matcaps-42")]
+    public void Face_only_hrn_parts_tickable()
+    {
+        var read = ModelPartReader.Read(SyntheticFace())!;
+        bool Tick(string label) => MatcapPlan.Tickable(read.Parts.Single(p => p.Label == label), MatcapPlan.Kind.Face, read.AttributeNames);
+        Assert.False(Tick("1.1"));   // face skin
+        Assert.True(Tick("2.1"));    // horn, whole mesh
+        Assert.True(Tick("3.1"));    // horn submesh
+        Assert.False(Tick("3.2"));   // untagged submesh of the same mesh
+        Assert.False(Tick("4.1"));   // irises
+        Assert.True(MatcapPlan.HasHorns(read.Parts, read.AttributeNames));
+        // Elsewhere the attribute is not asked for.
+        Assert.True(MatcapPlan.Tickable(read.Parts.Single(p => p.Label == "4.1"), MatcapPlan.Kind.Gear, read.AttributeNames));
+        Assert.False(CustomizationMaterialPath.IsHorn(1801));
+        Assert.True(CustomizationMaterialPath.IsHorn(1301));
     }
 
     [Fact]
     [Trait("Plan", "EDGE-matcaps-42")]
-    public void Viera_ears_allowed_faces_tails_refused()
+    public void Face_non_horn_part_refused_not_horn_and_hornless_face_no_horns()
     {
-        var ear = MatcapPlan.TargetOf("chara/human/c1801/obj/zear/z0003/model/c1801z0003_zer.mdl", out _)!;
-        Assert.Equal(MatcapPlan.Kind.Ear, ear.Kind);
-        Assert.False(ZearMaterialPath.IsHorn(1801));
-        Assert.True(ZearMaterialPath.IsHorn(1301));
-        Assert.Null(MatcapPlan.TargetOf("chara/human/c1801/obj/face/f0001/model/c1801f0001_fac.mdl", out _));
+        const string FacePath = "chara/human/c1401/obj/face/f0001/model/c1401f0001_fac.mdl";
+        using var f = new MatcapFixture(SyntheticFace(), extra: new Dictionary<string, (string, byte[])>
+        {
+            [FacePath] = (MatcapFixture.ModelRel, SyntheticFace()),
+        });
+        var bytes = f.Current();
+        var parts = ModelPartReader.Read(bytes)!.Parts;
+        var image = MatcapChoice.OfImage(f.Image("gem.tex"));
+        Assert.Equal("not-horn", MatcapStudio.Prepare(f.ModRoot, MatcapFixture.ModelRel, FacePath, bytes,
+            [parts.Single(p => p.Label == "1.1")], image, f.Env()).Code);
+        var ok = MatcapStudio.Prepare(f.ModRoot, MatcapFixture.ModelRel, FacePath, bytes,
+            [parts.Single(p => p.Label == "2.1"), parts.Single(p => p.Label == "3.1")], image, f.Env());
+        Assert.True(ok.Ok, ok.Message);
+        Assert.Equal(2, ok.Request!.Materials.Count);   // one per horn material
+        Assert.All(ok.Request.Materials.SelectMany(m => m.GamePaths), p =>
+        {
+            Assert.StartsWith("chara/human/c1401/obj/face/f0001/material/mt_c1401f0001_fac_", p);
+            Assert.DoesNotContain("/v0001/", p);
+        });
+
+        var hornless = SyntheticModel.Build(["atr_kao"], new SyntheticModel.Mesh("/mt_c1401f0091_fac_a.mtrl", new SyntheticModel.Sub(1)));
+        var hp = ModelPartReader.Read(hornless)!.Parts;
+        Assert.Equal("no-horns", MatcapStudio.Prepare(f.ModRoot, MatcapFixture.ModelRel, "chara/human/c1401/obj/face/f0091/model/c1401f0091_fac.mdl",
+            hornless, [hp[0]], image, f.Env()).Code);
+    }
+
+    [Fact]
+    [Trait("Plan", "EDGE-matcaps-56")]
+    public void Face_horn_submesh_moved_keeps_atr_hrn()
+    {
+        var face = SyntheticFace();
+        var read = ModelPartReader.Read(face)!;
+        var result = ModelMaterialWriter.MoveToMaterial(face, [read.Parts.Single(p => p.Label == "3.1")], "/mt_c1401f0001_fac_b_mcapabcdef1.mtrl");
+        var after = ModelPartReader.Read(result.Model)!;
+        var moved = after.Parts.Where(p => p.Material.Contains("_mcap") && p.Island < 0).ToList();
+        Assert.NotEmpty(moved);
+        Assert.All(moved, p => Assert.True(MatcapPlan.IsHorn(p, after.AttributeNames)));
+        // A whole horn mesh is rebound in place, keeping its mask too.
+        var whole = ModelMaterialWriter.MoveToMaterial(face, [read.Parts.Single(p => p.Label == "2.1")], "/mt_c1401f0001_fac_c_mcapabcdef1.mtrl");
+        Assert.Equal(0, whole.MeshesAdded);
+        Assert.True(MatcapPlan.IsHorn(ModelPartReader.Read(whole.Model)!.Parts.Single(p => p.Label == "2.1"), after.AttributeNames));
+    }
+
+    [Fact]
+    [Trait("Plan", "EDGE-matcaps-60")]
+    public void Face_material_paths_never_v0001()
+    {
+        var target = MatcapPlan.TargetOf("chara/human/c1401/obj/face/f0001/model/c1401f0001_fac.mdl", out _)!;
+        var paths = MatcapPlan.MaterialGamePaths(target, "/mt_c1401f0001_fac_c_mcapabcdef1.mtrl",
+            ["chara/human/c1301/obj/face/f0001/model/c1301f0001_fac.mdl"], null);
+        Assert.Contains("chara/human/c1401/obj/face/f0001/material/mt_c1401f0001_fac_c_mcapabcdef1.mtrl", paths);
+        Assert.Contains("chara/human/c1301/obj/face/f0001/material/mt_c1301f0001_fac_c_mcapabcdef1.mtrl", paths);   // EDGE-41
+        Assert.All(paths, p => Assert.DoesNotContain("/v0001/", p));
     }
 
     [Fact]
@@ -157,13 +235,13 @@ public class MatcapPlanTests
     }
 }
 
-public class ZearMaterialPathTests
+public class CustomizationMaterialPathTests
 {
     [Fact]
     [Trait("Plan", "EDGE-matcaps-50")]
     public void Name_race_id_differs_from_folder_yields_all_derivations()
     {
-        var paths = ZearMaterialPath.GamePaths("chara/human/c1301/obj/zear/z0002/model/c1301z0002_zer.mdl", "/mt_c1401z0001_a_mcapx1.mtrl");
+        var paths = CustomizationMaterialPath.GamePaths("chara/human/c1301/obj/zear/z0002/model/c1301z0002_zer.mdl", "/mt_c1401z0001_a_mcapx1.mtrl");
         Assert.Equal([
             "chara/human/c1301/obj/zear/z0002/material/mt_c1401z0001_a_mcapx1.mtrl",
             "chara/human/c1301/obj/zear/z0002/material/mt_c1301z0002_a_mcapx1.mtrl"], paths);
@@ -174,14 +252,14 @@ public class ZearMaterialPathTests
     [Trait("Plan", "AC-matcaps-11")]
     public void The_rule_s_path_has_no_variant_folder_and_keeps_the_name()
     {
-        var paths = ZearMaterialPath.GamePaths("chara/human/c1401/obj/zear/z0001/model/c1401z0001_zer.mdl", "/mt_c1401z0001_a.mtrl");
+        var paths = CustomizationMaterialPath.GamePaths("chara/human/c1401/obj/zear/z0001/model/c1401z0001_zer.mdl", "/mt_c1401z0001_a.mtrl");
         Assert.Equal(["chara/human/c1401/obj/zear/z0001/material/mt_c1401z0001_a.mtrl"], paths);
-        Assert.Equal(["chara/x/y.mtrl"], ZearMaterialPath.GamePaths("chara/human/c1401/obj/zear/z0001/model/c1401z0001_zer.mdl", "chara/x/y.mtrl"));
+        Assert.Equal(["chara/x/y.mtrl"], CustomizationMaterialPath.GamePaths("chara/human/c1401/obj/zear/z0001/model/c1401z0001_zer.mdl", "chara/x/y.mtrl"));
     }
 }
 
 /// <summary>The ear rule against the game's own horn and ear models: every material each names resolves by the rule.</summary>
-public class ZearMaterialPathLocalTests(ITestOutputHelper output)
+public class CustomizationMaterialPathLocalTests(ITestOutputHelper output)
 {
     [LocalDataFact(LocalData.GameData)]
     [Trait("Plan", "AC-matcaps-11")]
@@ -189,15 +267,18 @@ public class ZearMaterialPathLocalTests(ITestOutputHelper output)
     {
         var data = new Lumina.GameData(LocalData.Path(LocalData.GameData));
         int checkedCount = 0;
-        foreach (var race in new[] { 1301, 1401, 1701, 1801 })
-            for (int id = 1; id <= 6; id++)
+        var models = new[] { 1301, 1401, 1701, 1801 }.SelectMany(race => Enumerable.Range(1, 6).SelectMany(id => new[]
+        {
+            $"chara/human/c{race:D4}/obj/zear/z{id:D4}/model/c{race:D4}z{id:D4}_zer.mdl",
+            $"chara/human/c{race:D4}/obj/face/f{id:D4}/model/c{race:D4}f{id:D4}_fac.mdl",
+        }));
+        foreach (var model in models)
             {
-                var model = $"chara/human/c{race:D4}/obj/zear/z{id:D4}/model/c{race:D4}z{id:D4}_zer.mdl";
                 var bytes = data.GetFile(model)?.Data;
                 if (bytes == null) continue;
                 foreach (var name in SecondSkinWriter.MaterialNames(bytes))
                 {
-                    var paths = ZearMaterialPath.GamePaths(model, name);
+                    var paths = CustomizationMaterialPath.GamePaths(model, name);
                     var found = paths.FirstOrDefault(p => data.FileExists(p));
                     output.WriteLine($"{model} {name} -> {found ?? "(none)"}");
                     Assert.True(found != null, $"{model}: no rule path for {name} exists ({string.Join(", ", paths)})");

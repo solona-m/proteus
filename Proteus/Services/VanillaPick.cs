@@ -65,10 +65,23 @@ internal readonly record struct VanillaPick(string GamePath, string ItemName, st
     /// </summary>
     internal static VanillaPick? FromEar(string gamePath)
     {
-        if (Matcap.ZearMaterialPath.Parse(gamePath) is not { } ear) return null;
+        if (Matcap.CustomizationMaterialPath.Parse(gamePath) is not { Slot: Matcap.CustomizationMaterialPath.Slot.Ear } ear) return null;
         var s = Localization.Strings.Matcap;
-        string name = string.Format(Matcap.ZearMaterialPath.IsHorn(ear.Race) ? s.VanillaHornsFmt : s.VanillaEarsFmt,
-                                    $"z{ear.Id:D4}", $"c{ear.Race:D4}");
+        string name = string.Format(s.VanillaEarsFmt, $"z{ear.Id:D4}", $"c{ear.Race:D4}");
         return new VanillaPick(gamePath, name, $"z{ear.Id:D4}", name);
+    }
+
+    /// <summary>
+    /// The game's own face, for its horns (Au Ra horns are face submeshes tagged <c>atr_hrn</c>): "Horns (face f0001, c1401)".
+    /// Only the Matcaps tool asks this, as it does <see cref="FromEar"/>; never refittable. A face without horns opens with
+    /// nothing tickable, and is never copied (Apply refuses it).
+    /// </summary>
+    internal static VanillaPick? FromFace(string gamePath)
+    {
+        // Only the horned races: no other face has a part a matcap may go on.
+        if (Matcap.CustomizationMaterialPath.Parse(gamePath) is not { Slot: Matcap.CustomizationMaterialPath.Slot.Face } face
+            || !Matcap.CustomizationMaterialPath.IsHorn(face.Race)) return null;
+        string name = string.Format(Localization.Strings.Matcap.VanillaFaceHornsFmt, $"f{face.Id:D4}", $"c{face.Race:D4}");
+        return new VanillaPick(gamePath, name, $"f{face.Id:D4}", name);
     }
 }

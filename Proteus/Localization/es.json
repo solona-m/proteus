@@ -6232,7 +6232,7 @@
     "description": ""
   },
   "Matcap.Refused.NotTarget": {
-    "message": "Los matcaps van en equipo, accesorios, pelo y orejas o cuernos; este modelo no es nada de eso.",
+    "message": "Los matcaps van en equipo, accesorios, pelo, orejas de viera y cuernos de au ra (en la cara); este modelo no es nada de eso.",
     "description": ""
   },
   "Matcap.Refused.RecordUnreadable": {
@@ -6313,10 +6313,6 @@
   },
   "Parts.Matcap.Duplicates.Fmt": {
     "message": "Otros mods también aportan la textura de esta ranura ({0}); el que Penumbra sitúa más alto decide lo que se ve.",
-    "description": ""
-  },
-  "Parts.Matcap.EarOnlyHere": {
-    "message": "Los cuernos y las orejas solo se abren en Matcaps, así que se cerraron.",
     "description": ""
   },
   "Parts.Matcap.Edited": {
@@ -6503,16 +6499,48 @@
     "message": "Orejas {0} ({1})",
     "description": ""
   },
-  "Parts.Vanilla.Horns.Fmt": {
-    "message": "Cuernos {0} ({1})",
-    "description": ""
-  },
   "Settings.MatcapLibrary": {
     "message": "Imágenes de matcap",
     "description": ""
   },
   "Settings.MatcapLibrary.Tip.Fmt": {
     "message": "Abre la carpeta donde están tus propias imágenes de matcap: {0}",
+    "description": ""
+  },
+  "Matcap.Refused.NoHorns": {
+    "message": "Esta cara no tiene cuernos. En una cara, solo los cuernos pueden llevar un matcap.",
+    "description": ""
+  },
+  "Matcap.Refused.NotHorn": {
+    "message": "En una cara, solo los cuernos pueden llevar un matcap.",
+    "description": ""
+  },
+  "Parts.Matcap.DrawnThroughFace": {
+    "message": "Tu cara se dibuja a través de la reescritura de la superposición facial; el matcap se verá tras la próxima actualización.",
+    "description": ""
+  },
+  "Parts.Matcap.FaceOverlayOn": {
+    "message": "Esa cara se dibuja a través de una superposición facial. Desactívala para elegir tu cara, o abre tu mod de cara desde la lista.",
+    "description": ""
+  },
+  "Parts.Matcap.HornColourNote": {
+    "message": "Los cuernos con un matcap ya no toman el color de cuernos de tu personaje, y los sombreros siguen ocultándolos.",
+    "description": ""
+  },
+  "Parts.Matcap.MatcapsOnlyHere": {
+    "message": "Tu propia cara y tus orejas solo se abren en Matcaps, así que se cerraron.",
+    "description": ""
+  },
+  "Parts.Matcap.NoHorns": {
+    "message": "Esta cara no tiene cuernos. En una cara, solo los cuernos pueden llevar un matcap.",
+    "description": ""
+  },
+  "Parts.Matcap.NotHornTip": {
+    "message": "En una cara, solo los cuernos pueden llevar un matcap.",
+    "description": ""
+  },
+  "Parts.Vanilla.FaceHorns.Fmt": {
+    "message": "Cuernos (cara {0}, {1})",
     "description": ""
   }
 }

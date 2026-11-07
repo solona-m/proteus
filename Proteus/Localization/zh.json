@@ -6232,7 +6232,7 @@
     "description": ""
   },
   "Matcap.Refused.NotTarget": {
-    "message": "matcap 只能用于装备、饰品、头发以及耳朵或角；此模型都不是。",
+    "message": "matcap 可用于装备、饰品、头发、维埃拉族的耳朵和敖龙族的角（脸部）；此模型都不是。",
     "description": ""
   },
   "Matcap.Refused.RecordUnreadable": {
@@ -6313,10 +6313,6 @@
   },
   "Parts.Matcap.Duplicates.Fmt": {
     "message": "其他模组也提供该槽位的纹理（{0}）；显示哪个由 Penumbra 中优先级最高的决定。",
-    "description": ""
-  },
-  "Parts.Matcap.EarOnlyHere": {
-    "message": "角和耳朵只能在 matcap 工具下打开，因此已关闭。",
     "description": ""
   },
   "Parts.Matcap.Edited": {
@@ -6503,16 +6499,48 @@
     "message": "耳朵 {0}（{1}）",
     "description": ""
   },
-  "Parts.Vanilla.Horns.Fmt": {
-    "message": "角 {0}（{1}）",
-    "description": ""
-  },
   "Settings.MatcapLibrary": {
     "message": "matcap 图片",
     "description": ""
   },
   "Settings.MatcapLibrary.Tip.Fmt": {
     "message": "打开存放你自己 matcap 图片的文件夹：{0}",
+    "description": ""
+  },
+  "Matcap.Refused.NoHorns": {
+    "message": "这张脸没有角。在脸上，只有角可以加上 matcap。",
+    "description": ""
+  },
+  "Matcap.Refused.NotHorn": {
+    "message": "在脸上，只有角可以加上 matcap。",
+    "description": ""
+  },
+  "Parts.Matcap.DrawnThroughFace": {
+    "message": "你的脸通过脸部叠加的重写绘制；matcap 会在下次刷新后显示。",
+    "description": ""
+  },
+  "Parts.Matcap.FaceOverlayOn": {
+    "message": "那张脸通过脸部叠加绘制。关闭叠加即可选择你的脸，或从列表中打开你的脸部模组。",
+    "description": ""
+  },
+  "Parts.Matcap.HornColourNote": {
+    "message": "加上 matcap 的角不再使用角色的角颜色，帽子仍会遮住它们。",
+    "description": ""
+  },
+  "Parts.Matcap.MatcapsOnlyHere": {
+    "message": "你自己的脸和耳朵只能在 Matcap 下打开，因此已关闭。",
+    "description": ""
+  },
+  "Parts.Matcap.NoHorns": {
+    "message": "这张脸没有角。在脸上，只有角可以加上 matcap。",
+    "description": ""
+  },
+  "Parts.Matcap.NotHornTip": {
+    "message": "在脸上，只有角可以加上 matcap。",
+    "description": ""
+  },
+  "Parts.Vanilla.FaceHorns.Fmt": {
+    "message": "角（脸 {0}，{1}）",
     "description": ""
   }
 }

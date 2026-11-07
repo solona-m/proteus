@@ -496,7 +496,7 @@ public class MatcapWriterTests
 
     public static TheoryData<string> RefusalCodes() => new()
     {
-        "legacy-mod", "imported-piece", "not-target", "skin-part", "regenerated-model",
+        "legacy-mod", "imported-piece", "not-target", "no-horns", "skin-part", "regenerated-model",
         "model-layout", "material-cap", "not-square", "image-unreadable", "no-template",
     };
 
@@ -527,7 +527,8 @@ public class MatcapWriterTests
             File.WriteAllText(Path.Combine(f.ModRoot, "default_mod.json"), "{\"Files\":{}}");
             File.WriteAllText(Path.Combine(f.ModRoot, "meta.json"), "{\"FileVersion\":3,\"Name\":\"x\"}");
         }
-        if (code == "not-target") gamePath = "chara/human/c0201/obj/face/f0001/model/c0201f0001_fac.mdl";
+        if (code == "not-target") gamePath = "chara/human/c1401/obj/tail/t0001/model/c1401t0001_til.mdl";
+        if (code == "no-horns") gamePath = "chara/human/c1401/obj/face/f0001/model/c1401f0001_fac.mdl";
         if (code == "regenerated-model")
         {
             rel = HairPortPlan.Folder + "/top.mdl";

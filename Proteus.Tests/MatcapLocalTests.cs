@@ -57,15 +57,61 @@ public class ModelMaterialWriterLocalTests(ITestOutputHelper output)
         drawn.Select(d => d[(d.IndexOf('|') + 1)..]).OrderBy(x => x, StringComparer.Ordinal).ToList();
 }
 
-public class MatcapHornLocalTests(ITestOutputHelper output)
+/// <summary>
+/// Gate G5: the game's own Au Ra faces take a matcap on their horns — the atr_hrn parts — through the LOD cut and the
+/// split, with every non-horn triangle where it was and room for one material per horn material.
+/// </summary>
+public class MatcapFaceHornLocalTests(ITestOutputHelper output)
 {
     [LocalDataFact(LocalData.GameData)]
     [Trait("Plan", "AC-matcaps-11")]
-    public void Real_au_ra_horn_model_takes_matcap()
+    [Trait("Plan", "EDGE-matcaps-57")]
+    public void Real_c1401_and_c1301_f0001_horns_take_matcap()
+    {
+        var data = ModelMaterialWriterLocalTests.Game();
+        foreach (var race in new[] { 1301, 1401 })
+        {
+            var path = $"chara/human/c{race:D4}/obj/face/f0001/model/c{race:D4}f0001_fac.mdl";
+            var bytes = data.GetFile(path)!.Data;
+            var read = ModelPartReader.Read(bytes)!;
+            var horns = read.Parts.Where(p => p.Island < 0 && MatcapPlan.Tickable(p, MatcapPlan.Kind.Face, read.AttributeNames)).ToList();
+            Assert.NotEmpty(horns);
+            Assert.DoesNotContain(horns, p => p.Material.Contains("_fac_a", StringComparison.Ordinal));   // never the skin
+            var sources = horns.Select(p => p.Material).Distinct().ToList();
+            output.WriteLine($"{path}: LODs {ModelLodTrimmer.LodCount(bytes)}, horns {string.Join(", ", horns.Select(h => $"{h.Label} {h.Material}"))}, room {ModelMaterialWriter.MaterialRoom(bytes)}");
+            Assert.True(ModelMaterialWriter.MaterialRoom(bytes) >= sources.Count, "room for one matcap material per horn material");
+
+            // One material per horn material, split in turn as Prepare does.
+            var model = ModelLodTrimmer.LodCount(bytes) > 1 ? ModelLodTrimmer.KeepLod0(bytes, out var why) ?? throw new Exception(why) : bytes;
+            var cut = model;
+            foreach (var s in sources)
+            {
+                var now = ModelPartReader.Read(model)!;
+                var mine = horns.Where(h => h.Material == s).Select(h => now.Parts.First(p => PartClaims.LineUp(h, p))).ToList();
+                model = ModelMaterialWriter.MoveToMaterial(model, mine, MatcapPlan.NewName(s, "abcdef", SecondSkinWriter.MaterialNames(model))).Model;
+            }
+            var was = ModelMaterialWriterTests.Drawn(cut);
+            var after = ModelMaterialWriterTests.Drawn(model);
+            Assert.Equal(was.Select(d => d[(d.IndexOf('|') + 1)..]).Order(), after.Select(d => d[(d.IndexOf('|') + 1)..]).Order());
+            var afterRead = ModelPartReader.Read(model)!;
+            Assert.All(afterRead.Parts.Where(p => MatcapPlan.IsOnMatcap(p)), p => Assert.True(MatcapPlan.IsHorn(p, afterRead.AttributeNames)));
+            // The material is published beside the face's own, flat.
+            var target = MatcapPlan.TargetOf(path, out _)!;
+            var paths = MatcapPlan.MaterialGamePaths(target, "/mt_x_mcapabcdef1.mtrl", [path], null);
+            Assert.All(paths, p => Assert.StartsWith($"chara/human/c{race:D4}/obj/face/f0001/material/", p));
+        }
+    }
+}
+
+public class MatcapVieraEarLocalTests(ITestOutputHelper output)
+{
+    [LocalDataFact(LocalData.GameData)]
+    [Trait("Plan", "AC-matcaps-11")]
+    public void Real_viera_ear_model_takes_matcap()
     {
         var data = ModelMaterialWriterLocalTests.Game();
         int tested = 0;
-        foreach (var race in new[] { 1301, 1401 })
+        foreach (var race in new[] { 1701, 1801 })
             for (int id = 1; id <= 4; id++)
             {
                 var path = $"chara/human/c{race:D4}/obj/zear/z{id:D4}/model/c{race:D4}z{id:D4}_zer.mdl";
@@ -79,14 +125,14 @@ public class MatcapHornLocalTests(ITestOutputHelper output)
                 var result = ModelMaterialWriter.MoveToMaterial(bytes, [parts[0]], name);
                 Assert.Contains(name, SecondSkinWriter.MaterialNames(result.Model));
                 var paths = MatcapPlan.MaterialGamePaths(target, name, [path], null);
-                // Published beside the game's own material for that horn (the rule's folder exists in game data).
-                var vanillaPaths = ZearMaterialPath.GamePaths(path, parts[0].Material);
+                // Published beside the game's own material for that ear (the rule's folder exists in game data).
+                var vanillaPaths = CustomizationMaterialPath.GamePaths(path, parts[0].Material);
                 Assert.True(data.FileExists(vanillaPaths[0]), vanillaPaths[0]);
                 Assert.Equal(Path.GetDirectoryName(vanillaPaths[0]), Path.GetDirectoryName(paths[0]));
                 output.WriteLine($"{path}: {parts[0].Label} -> {paths[0]}");
                 tested++;
             }
-        Assert.True(tested > 0, "no Au Ra horn model in game data");
+        Assert.True(tested > 0, "no Viera ear model in game data");
     }
 }
 

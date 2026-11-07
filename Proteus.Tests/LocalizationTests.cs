@@ -360,7 +360,7 @@ public sealed class LocalizationTests
         var tr = Load(lang);
         var keys = en.Keys.Where(k => k.StartsWith("Parts.Matcap.", StringComparison.Ordinal)
                                    || k.StartsWith("Matcap.Refused.", StringComparison.Ordinal)
-                                   || k is "Parts.Tool.Matcap.Tip" or "Parts.Vanilla.Horns.Fmt" or "Parts.Vanilla.Ears.Fmt"
+                                   || k is "Parts.Tool.Matcap.Tip" or "Parts.Vanilla.FaceHorns.Fmt" or "Parts.Vanilla.Ears.Fmt"
                                          or "Settings.MatcapLibrary" or "Settings.MatcapLibrary.Tip.Fmt").ToList();
         Assert.True(keys.Count >= 80, $"only {keys.Count} matcap keys");
         foreach (var key in keys)

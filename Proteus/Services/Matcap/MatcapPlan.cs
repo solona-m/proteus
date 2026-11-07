@@ -14,7 +14,10 @@ namespace Proteus.Services.Matcap;
 /// </summary>
 internal static partial class MatcapPlan
 {
-    public enum Kind { Gear, Hair, Ear }
+    public enum Kind { Gear, Hair, Ear, Face }
+
+    /// <summary>The attribute that marks a face model's horn submeshes (Au Ra). Only these face parts take a matcap.</summary>
+    public const string HornAttribute = "atr_hrn";
 
     /// <summary>A model the tool can edit: its kind, and for gear the item.</summary>
     public sealed record Target(Kind Kind, string GamePath, VariantRepointPlan.Item? Item, ushort Race, int Id);
@@ -27,7 +30,8 @@ internal static partial class MatcapPlan
     {
         refusal = "";
         var p = gamePath.Replace('\\', '/').ToLowerInvariant();
-        if (ZearMaterialPath.Parse(p) is { } ear) return new Target(Kind.Ear, p, null, ear.Race, ear.Id);
+        if (CustomizationMaterialPath.Parse(p) is { } cust)
+            return new Target(cust.Slot == CustomizationMaterialPath.Slot.Face ? Kind.Face : Kind.Ear, p, null, cust.Race, cust.Id);
         if (HairPortPlan.Parse(p) is { } hair) return new Target(Kind.Hair, p, null, hair.Race, hair.Id);
         if (ContentSlot.Parse(p) is { } slot && ContentSlot.SetIdOf(slot.SetTag) is { } set
             && (p.StartsWith("chara/equipment/", StringComparison.Ordinal) || p.StartsWith("chara/accessory/", StringComparison.Ordinal)))
@@ -53,6 +57,26 @@ internal static partial class MatcapPlan
 
     /// <summary>Whether a part may be ticked under the Matcaps tool.</summary>
     public static bool Tickable(ModelPart part) => !IsSkin(part) && !IsOnMatcap(part);
+
+    /// <summary>
+    /// <see cref="Tickable(ModelPart)"/>, and on a face model only a horn part (its submesh carries <see cref="HornAttribute"/>,
+    /// looked up by name): the face's skin, eyes and the rest never take a matcap.
+    /// </summary>
+    public static bool Tickable(ModelPart part, Kind? kind, IReadOnlyList<string> attributeNames) =>
+        Tickable(part) && (kind != Kind.Face || IsHorn(part, attributeNames));
+
+    /// <summary>Whether a part's submesh carries the horn attribute.</summary>
+    public static bool IsHorn(ModelPart part, IReadOnlyList<string> attributeNames)
+    {
+        int bit = -1;
+        for (int i = 0; i < attributeNames.Count; i++)
+            if (string.Equals(attributeNames[i], HornAttribute, StringComparison.Ordinal)) { bit = i; break; }
+        return bit is >= 0 and < 32 && (part.AttributeMask & (1u << bit)) != 0;
+    }
+
+    /// <summary>Whether any part of the model is a horn.</summary>
+    public static bool HasHorns(IReadOnlyList<ModelPart> parts, IReadOnlyList<string> attributeNames) =>
+        parts.Any(p => IsHorn(p, attributeNames));
 
     // ── names ───────────────────────────────────────────────────────────────
 
@@ -127,8 +151,9 @@ internal static partial class MatcapPlan
                     if (HairPortPlan.Parse(gp) is { } h) Add(HairMaterialPath.GamePath(h.Race, h.Id, name));
                 break;
             case Kind.Ear:
+            case Kind.Face:
                 foreach (var gp in publishedAt.Prepend(target.GamePath))
-                    foreach (var p in ZearMaterialPath.GamePaths(gp, name)) Add(p);
+                    foreach (var p in CustomizationMaterialPath.GamePaths(gp, name)) Add(p);
                 break;
         }
         return paths;

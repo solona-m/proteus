@@ -48,7 +48,7 @@ internal static class MatcapStudio
     {
         if (MatcapPlan.TargetOf(modelGamePath, out _) is not { } target)
             return Prepared.Refuse("not-target", ProteusLoc.Localize("Matcap.Refused.NotTarget",
-                "Matcaps go on gear, accessories, hair and ears or horns; this model is none of those."));
+                "Matcaps go on gear, accessories, hair, Viera ears and Au Ra horns (on the face); this model is none of those."));
         if (MatcapPlan.Regenerated(modRoot, modelRel) is { } regen)
             return Prepared.Refuse("regenerated-model", string.Format(ProteusLoc.Localize("Matcap.Refused.Regenerated.Fmt",
                 "This model is made by Proteus from another one ({0}), and remaking it would lose the matcap. Put the matcap on the model it was made from, then remake it."), regen));
@@ -57,6 +57,19 @@ internal static class MatcapStudio
         if (chosen.Any(MatcapPlan.IsOnMatcap))
             return Prepared.Refuse("already-matcap", ProteusLoc.Localize("Matcap.Refused.AlreadyMatcap",
                 "Some of those parts already have a matcap. Use \"Use the chosen matcap\" to change it."));
+
+        // A face takes a matcap on its horns only (Au Ra horns are face submeshes tagged atr_hrn).
+        if (target.Kind == MatcapPlan.Kind.Face)
+        {
+            var read = ModelPartReader.Read(modelBytes);
+            var attrs = read?.AttributeNames ?? [];
+            if (read == null || !MatcapPlan.HasHorns(read.Parts, attrs))
+                return Prepared.Refuse("no-horns", ProteusLoc.Localize("Matcap.Refused.NoHorns",
+                    "This face has no horns. On a face, only the horns can take a matcap."));
+            if (chosen.Any(p => !MatcapPlan.IsHorn(p, attrs)))
+                return Prepared.Refuse("not-horn", ProteusLoc.Localize("Matcap.Refused.NotHorn",
+                    "On a face, only the horns can take a matcap."));
+        }
 
         var record = MatcapRecord.Read(modRoot);
         if (record.Unreadable)

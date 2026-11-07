@@ -47,7 +47,10 @@ internal static class MatcapJob
         var (rel, gamePath, err) = ResolveModel(modRoot, model);
         if (err != null) { error = err; return null; }
         var bytes = File.ReadAllBytes(MatcapWriter.Full(modRoot, rel!));
-        var parts = ModelPartReader.Read(bytes)?.Parts ?? [];
+        var read = ModelPartReader.Read(bytes);
+        var parts = read?.Parts ?? [];
+        var attrs = read?.AttributeNames ?? [];
+        var kind = MatcapPlan.TargetOf(gamePath!, out _)?.Kind;
         var record = MatcapRecord.Read(modRoot);
         var states = MatcapWriter.Detect(modRoot);
         var siblings = HatCompatService.SiblingFiles(modRoot, gamePath!, rel!)
@@ -61,7 +64,7 @@ internal static class MatcapJob
             parts = parts.Select(p => new
             {
                 label = p.Label, material = p.Material, skin = MatcapPlan.IsSkin(p), onMatcap = MatcapPlan.IsOnMatcap(p),
-                tickable = MatcapPlan.Tickable(p), island = p.Island,
+                tickable = MatcapPlan.Tickable(p, kind, attrs), horn = MatcapPlan.IsHorn(p, attrs), island = p.Island,
             }),
             siblings,
             group = record.Models.Select(m => m.File),
@@ -171,6 +174,15 @@ internal static class MatcapJob
         }
 
         bool changed = outcome.Ok && outcome.Files.Count > 0 || librarySetting != null;
+        // A face the face overlay rewrites is read again after our edit, not from its remembered copy.
+        if (changed && args.Kind != Action.Change && gamePath != null && MatcapPlan.TargetOf(gamePath, out _) is { Kind: MatcapPlan.Kind.Face }
+            && args.Port.ForgetFaceUpstream is { } forget)
+        {
+            var facePaths = PenumbraModMeta.ReadAllRedirects(args.ModRoot)
+                .Where(r => PenumbraModMeta.SameFile(r.File, rel!) && MatcapPlan.TargetOf(r.GamePath, out _) is { Kind: MatcapPlan.Kind.Face })
+                .Select(r => r.GamePath).Distinct(StringComparer.OrdinalIgnoreCase).ToList();
+            await jobs.Dispatcher.RunAsync(() => { foreach (var p in facePaths) forget(p); return true; }, jobs.Timings.FrameworkStart).ConfigureAwait(false);
+        }
         if (changed)
         {
             jobs.PostAfterChange(job, () => job.SetAfterChange(game.AfterModChange(args.ModDir)));

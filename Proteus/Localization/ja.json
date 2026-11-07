@@ -6232,7 +6232,7 @@
     "description": ""
   },
   "Matcap.Refused.NotTarget": {
-    "message": "マットキャップを付けられるのは装備、アクセサリー、髪、耳や角だけです。このモデルはどれでもありません。",
+    "message": "マットキャップは装備、アクセサリー、髪、ヴィエラの耳、アウラの角（顔の一部）に付けられます。このモデルはどれでもありません。",
     "description": ""
   },
   "Matcap.Refused.RecordUnreadable": {
@@ -6313,10 +6313,6 @@
   },
   "Parts.Matcap.Duplicates.Fmt": {
     "message": "ほかの Mod もこのスロットのテクスチャを提供しています（{0}）。Penumbra で優先度が最も高いものが表示されます。",
-    "description": ""
-  },
-  "Parts.Matcap.EarOnlyHere": {
-    "message": "角と耳はマットキャップでしか開けないため、閉じました。",
     "description": ""
   },
   "Parts.Matcap.Edited": {
@@ -6503,16 +6499,48 @@
     "message": "耳 {0}（{1}）",
     "description": ""
   },
-  "Parts.Vanilla.Horns.Fmt": {
-    "message": "角 {0}（{1}）",
-    "description": ""
-  },
   "Settings.MatcapLibrary": {
     "message": "マットキャップ画像",
     "description": ""
   },
   "Settings.MatcapLibrary.Tip.Fmt": {
     "message": "自分のマットキャップ画像を入れるフォルダを開きます: {0}",
+    "description": ""
+  },
+  "Matcap.Refused.NoHorns": {
+    "message": "この顔には角がありません。顔では角だけにマットキャップを付けられます。",
+    "description": ""
+  },
+  "Matcap.Refused.NotHorn": {
+    "message": "顔では角だけにマットキャップを付けられます。",
+    "description": ""
+  },
+  "Parts.Matcap.DrawnThroughFace": {
+    "message": "顔はフェイスオーバーレイの書き換えを通して描画されています。マットキャップは次の更新後に表示されます。",
+    "description": ""
+  },
+  "Parts.Matcap.FaceOverlayOn": {
+    "message": "その顔はフェイスオーバーレイを通して描画されています。顔を選ぶにはオーバーレイをオフにするか、一覧から顔のModを開いてください。",
+    "description": ""
+  },
+  "Parts.Matcap.HornColourNote": {
+    "message": "マットキャップを付けた角はキャラクターの角の色を反映しなくなり、帽子では引き続き隠れます。",
+    "description": ""
+  },
+  "Parts.Matcap.MatcapsOnlyHere": {
+    "message": "自分の顔と耳はマットキャップでのみ開けるため、閉じました。",
+    "description": ""
+  },
+  "Parts.Matcap.NoHorns": {
+    "message": "この顔には角がありません。顔では角だけにマットキャップを付けられます。",
+    "description": ""
+  },
+  "Parts.Matcap.NotHornTip": {
+    "message": "顔では角だけにマットキャップを付けられます。",
+    "description": ""
+  },
+  "Parts.Vanilla.FaceHorns.Fmt": {
+    "message": "角（顔 {0}、{1}）",
     "description": ""
   }
 }

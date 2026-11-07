@@ -63,7 +63,7 @@ public class PartsPanelMatcapTests
         Assert.Contains("tool is Tool.Navigate or Tool.Retarget or Tool.Matcap ? PartViewport.ViewportMode.Navigate", main);
         Assert.Contains("else if (tool == Tool.Matcap) DrawMatcaps();", main);
         Assert.Contains("!CanTick(part)", Method(main, "private void DrawPartRows("));
-        Assert.Contains("CanTick(ModelPart part) => tool == Tool.Matcap ? MatcapPlan.Tickable(part) : part.Toggleable", Wiring());
+        Assert.Contains("tool == Tool.Matcap ? MatcapPlan.Tickable(part, MatcapTargetKind(), parts?.AttributeNames ?? []) : part.Toggleable", Wiring());
     }
 
     [Fact]
@@ -94,14 +94,17 @@ public class PartsPanelMatcapTests
 
     [Fact]
     [Trait("Plan", "EDGE-matcaps-43")]
-    public void Leaving_Matcaps_closes_vanilla_ear()
+    public void Leaving_Matcaps_closes_vanilla_face_or_ear()
     {
         var sw = Method(Main(), "private void SwitchTool(Tool value)");
-        Assert.Contains("ZearMaterialPath.Parse(open.GamePath) != null", sw);
+        Assert.Contains("CustomizationMaterialPath.Parse(open.GamePath) != null", sw);
         Assert.Contains("CloseVanillaEar();", sw);
-        // Horns are offered by the live pick and the worn list only under Matcaps.
-        Assert.Contains("tool == Tool.Matcap && VanillaPick.FromEar(gamePath)", Main());
-        Assert.Contains("(tool == Tool.Matcap ? VanillaPick.FromEar(path) : null)", Main());
+        // Ears and the face (horns) are offered by the live pick and the worn list only under Matcaps.
+        Assert.Contains("tool == Tool.Matcap && (VanillaPick.FromEar(gamePath) ?? VanillaPick.FromFace(gamePath))", Main());
+        Assert.Contains("(tool == Tool.Matcap ? VanillaPick.FromEar(path) ?? VanillaPick.FromFace(path) : null)", Main());
+        // A managed face rewrite is never opened for editing: the overlay note instead.
+        Assert.Contains("MatcapPanelModel.IsManagedFaceRewrite(", Main());
+        Assert.Contains("Strings.Matcap.FaceOverlayOn", Main());
     }
 
     [Fact]
@@ -118,12 +121,16 @@ public class VanillaPickEarTests
 {
     [Fact]
     [Trait("Plan", "EDGE-matcaps-43")]
-    public void FromEar_horn_label_not_refittable()
+    public void FromEar_and_FromFace_labels_not_refittable()
     {
-        var horn = VanillaPick.FromEar("chara/human/c1401/obj/zear/z0003/model/c1401z0003_zer.mdl")!.Value;
-        Assert.Equal("Horns z0003 (c1401)", horn.ItemName);
-        Assert.False(horn.Refittable);
-        Assert.StartsWith("Ears", VanillaPick.FromEar("chara/human/c1801/obj/zear/z0001/model/c1801z0001_zer.mdl")!.Value.ItemName);
+        var ear = VanillaPick.FromEar("chara/human/c1801/obj/zear/z0001/model/c1801z0001_zer.mdl")!.Value;
+        Assert.Equal("Ears z0001 (c1801)", ear.ItemName);
+        Assert.False(ear.Refittable);
+        var face = VanillaPick.FromFace("chara/human/c1401/obj/face/f0001/model/c1401f0001_fac.mdl")!.Value;
+        Assert.Equal("Horns (face f0001, c1401)", face.ItemName);
+        Assert.False(face.Refittable);
+        Assert.Null(VanillaPick.FromFace("chara/human/c1801/obj/zear/z0001/model/c1801z0001_zer.mdl"));
+        Assert.Null(VanillaPick.FromFace("chara/human/c0201/obj/face/f0001/model/c0201f0001_fac.mdl"));   // no horns
         Assert.Null(VanillaPick.FromEar("chara/equipment/e6255/model/c0201e6255_top.mdl"));
     }
 

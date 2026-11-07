@@ -79,7 +79,8 @@ internal sealed record StudioPutBack(string Mod, string Files, string Panel, str
 /// <param name="Mods">Penumbra's mod list (folder → name), or null.</param>
 internal sealed record MatcapHarnessPort(
     Services.Matcap.MatcapIndex? Index, string? ImageFolder, Services.Matcap.IMatcapPenumbra Penumbra,
-    Services.Matcap.MatcapStudio.Environment Env, string? ModsRoot, IReadOnlyDictionary<string, string>? Mods);
+    Services.Matcap.MatcapStudio.Environment Env, string? ModsRoot, IReadOnlyDictionary<string, string>? Mods,
+    System.Action<string>? ForgetFaceUpstream = null);
 
 /// <summary>
 /// The Studio as the test harness drives it: the panel's own code for each control, run on the framework thread between

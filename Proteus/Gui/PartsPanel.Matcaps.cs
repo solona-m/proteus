@@ -32,7 +32,12 @@ public sealed partial class PartsPanel
     internal void UseMatcapIndex(MatcapIndex shared) => matcapIndex = shared;
 
     /// <summary>A part's tick box is enabled: under Matcaps by the matcap rule, else by the switch rule.</summary>
-    private bool CanTick(ModelPart part) => tool == Tool.Matcap ? MatcapPlan.Tickable(part) : part.Toggleable;
+    private bool CanTick(ModelPart part) =>
+        tool == Tool.Matcap ? MatcapPlan.Tickable(part, MatcapTargetKind(), parts?.AttributeNames ?? []) : part.Toggleable;
+
+    /// <summary>What the open model is to the Matcaps tool (gear, hair, ear, face), or null.</summary>
+    private MatcapPlan.Kind? MatcapTargetKind() =>
+        modelIndex >= 0 && modelIndex < models.Count ? MatcapPlan.TargetOf(models[modelIndex].GamePath, out _)?.Kind : null;
 
     /// <summary>Whether a tool's button tooltip carries the brush's lock hint: only the painting tools lock parts.</summary>
     private static bool ShowsBrushLockHint(Tool value) =>
@@ -51,7 +56,11 @@ public sealed partial class PartsPanel
 
     /// <summary>What a matcap job left for the framework thread to finish.</summary>
     private sealed record MatcapJobResult(string Root, MatcapWriter.Outcome Outcome, MatcapChoice? Select, bool ConfirmEnable,
-                                          IReadOnlyList<string> SiblingsSkipped, bool Lod0Cut, bool AlphaTested, string? GamePath);
+                                          IReadOnlyList<string> SiblingsSkipped, bool Lod0Cut, bool AlphaTested, string? GamePath)
+    {
+        /// <summary>A Change: no model file was written.</summary>
+        public bool IsChange { get; init; }
+    }
 
     private string? MatcapImageFolder()
     {
@@ -126,6 +135,8 @@ public sealed partial class PartsPanel
             Rescan = () => RescanMatcaps(true),
             RefreshImages = () => matcapImages = null,
             Error = matcapError,
+            FaceTarget = MatcapTargetKind() == MatcapPlan.Kind.Face,
+            HasHorns = parts != null && MatcapPlan.HasHorns(parts.Parts, parts.AttributeNames),
         });
     }
 
@@ -192,11 +203,12 @@ public sealed partial class PartsPanel
         matcapError = null;
         if (matcapJob is { IsCompleted: false } || ModRoot() is not { } root) return;
         var env = MatcapEnv();
+        var gamePath = modelIndex >= 0 && modelIndex < models.Count ? models[modelIndex].GamePath : null;
         matcapJob = Task.Run(() =>
         {
             var (src, mtrl, temp, code, msg) = MatcapStudio.PrepareChange(root, materialName, choice, env);
             var outcome = src == null ? MatcapWriter.Outcome.Refuse(code, msg) : MatcapWriter.Change(root, materialName, src, mtrl, temp);
-            return new MatcapJobResult(root, outcome, outcome.Ok && choice.IsLibrary ? choice : null, true, [], false, false, null);
+            return new MatcapJobResult(root, outcome, outcome.Ok && choice.IsLibrary ? choice : null, true, [], false, false, gamePath) { IsChange = true };
         });
     }
 
@@ -206,8 +218,9 @@ public sealed partial class PartsPanel
         if (matcapJob is { IsCompleted: false } || ModRoot() is not { } root || modelIndex < 0) return;
         if (!FlushPending()) return;
         var rel = models[modelIndex].File;
+        var undoPath = models[modelIndex].GamePath;
         matcapJob = Task.Run(() => new MatcapJobResult(root, forget ? MatcapWriter.Forget(root, rel) : MatcapWriter.Undo(root, rel),
-                                                       null, false, [], false, false, null));
+                                                       null, false, [], false, false, undoPath));
     }
 
     /// <summary>On the framework thread, once a job is done: the vanilla copy, the library setting, checks, redraw.</summary>
@@ -287,6 +300,17 @@ public sealed partial class PartsPanel
         if (r.SiblingsSkipped.Count > 0) lines.Add(string.Format(s.SiblingsSkippedFmt, string.Join(", ", r.SiblingsSkipped)));
         if (r.AlphaTested) lines.Add(s.AlphaWarn);
         if (r.GamePath != null && DrawnElsewhere(r.Root, r.GamePath, r.Outcome.Files) is { } drawn) lines.Add(drawn);
+        // A face file the face overlay rewrites must be read again, not from its remembered copy (before the recomposite).
+        // Only when a face model was written (Apply, Undo, Forget — a Change rewrites no model), for every face game path
+        // the written files are published at (another race's path included).
+        if (r.GamePath != null && MatcapPlan.TargetOf(r.GamePath, out _) is { Kind: MatcapPlan.Kind.Face } && !r.IsChange)
+        {
+            var files = r.Outcome.Files.Where(f => f.EndsWith(".mdl", StringComparison.OrdinalIgnoreCase)).ToList();
+            if (modelIndex >= 0 && modelIndex < models.Count) files.Add(models[modelIndex].File);
+            foreach (var red in PenumbraModMeta.ReadAllRedirects(r.Root))
+                if (files.Any(f => PenumbraModMeta.SameFile(f, red.File)) && MatcapPlan.TargetOf(red.GamePath, out _) is { Kind: MatcapPlan.Kind.Face })
+                    compositor.ForgetFaceUpstream(red.GamePath, Path.Combine(r.Root, red.File.Replace('\\', Path.DirectorySeparatorChar)));
+        }
 
         status = string.Join("\n", lines.Where(l => l.Length > 0));
         statusIsError = false;
@@ -302,6 +326,16 @@ public sealed partial class PartsPanel
         if (penumbra.ResolvePlayerPaths([gamePath]) is not { } resolved || !resolved.TryGetValue(gamePath, out var file) || file == null)
             return null;
         if (!HatCompatService.InMods(file, penumbra.GetModDirectory() ?? "", out var modRoot, out var rel)) return null;
+        // A face drawn through the face overlay's rewrite (the managed mod): it is rebuilt from our file on the next composite.
+        // Unless the rewrite reads the face from another mod's file, which outranks ours: then the matcap won't show.
+        if (string.Equals(Path.GetFileName(modRoot), SidecarDiscoveryService.ManagedModDir, StringComparison.OrdinalIgnoreCase)
+            && MatcapPlan.TargetOf(gamePath, out _) is { Kind: MatcapPlan.Kind.Face })
+        {
+            var upstream = compositor.FaceUpstreamPath(gamePath);
+            bool ours = upstream == null
+                || written.Any(w => PenumbraModMeta.SameFile(Path.GetFullPath(Path.Combine(root, w)), Path.GetFullPath(upstream)));
+            return ours ? Strings.Matcap.DrawnThroughFace : string.Format(Strings.Matcap.DrawnElsewhereFmt, upstream);
+        }
         if (PenumbraModMeta.SameFile(modRoot, root) && written.Any(w => PenumbraModMeta.SameFile(w, rel))) return null;
         var line = string.Format(Strings.Matcap.DrawnElsewhereFmt, rel);
         if (PenumbraModMeta.SameFile(modRoot, root) && MatcapPlan.Regenerated(root, rel) == "refit") line += " " + Strings.Matcap.RemakeSizes;

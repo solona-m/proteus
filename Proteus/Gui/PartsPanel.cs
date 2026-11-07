@@ -1022,7 +1022,7 @@ public sealed partial class PartsPanel
             itemNames ??= ItemNames.Lookup(Plugin.DataManager, log);
             if (VanillaPick.From(gamePath, itemNames) is { } item) OpenGameGear(item);
             // Horns and ears open only under Matcaps: no other tool knows what to do with a character part.
-            else if (tool == Tool.Matcap && VanillaPick.FromEar(gamePath) is { } ear) OpenGameGear(ear);
+            else if (tool == Tool.Matcap && (VanillaPick.FromEar(gamePath) ?? VanillaPick.FromFace(gamePath)) is { } ear) OpenGameGear(ear);
             else if (tool == Tool.Retarget) OpenVanilla(gamePath);   // says why it can't be refitted
             return;
         }
@@ -1032,7 +1032,9 @@ public sealed partial class PartsPanel
         // edited in the mod it was imported from.
         if (string.Equals(dir, SidecarDiscoveryService.ManagedModDir, StringComparison.OrdinalIgnoreCase))
         {
-            status = Strings.Parts.LivePickedShell;
+            // Under Matcaps a face drawn through the face overlay's rewrite is not the face to edit: say how to reach it.
+            status = tool == Tool.Matcap && MatcapPanelModel.IsManagedFaceRewrite(file)
+                ? Strings.Matcap.FaceOverlayOn : Strings.Parts.LivePickedShell;
             statusIsError = false;
             return;
         }
@@ -1301,7 +1303,7 @@ public sealed partial class PartsPanel
 
         foreach (string path in drawn.OrderBy(p => p, StringComparer.OrdinalIgnoreCase))
         {
-            if ((VanillaPick.From(path, itemNames) ?? (tool == Tool.Matcap ? VanillaPick.FromEar(path) : null)) is not { } pick)
+            if ((VanillaPick.From(path, itemNames) ?? (tool == Tool.Matcap ? VanillaPick.FromEar(path) ?? VanillaPick.FromFace(path) : null)) is not { } pick)
                 continue;
 
             // An unredirected path echoes back. A redirect to a file that is not there is not a redirect at all.
@@ -1757,7 +1759,7 @@ public sealed partial class PartsPanel
     private void OpenVanilla(string gamePath)
     {
         itemNames ??= ItemNames.Lookup(Plugin.DataManager, log);
-        if ((VanillaPick.From(gamePath, itemNames) ?? (tool == Tool.Matcap ? VanillaPick.FromEar(gamePath) : null)) is not { } pick)
+        if ((VanillaPick.From(gamePath, itemNames) ?? (tool == Tool.Matcap ? VanillaPick.FromEar(gamePath) ?? VanillaPick.FromFace(gamePath) : null)) is not { } pick)
         {
             status = string.Format(Strings.Parts.LivePickedNotGearFmt, Path.GetFileName(gamePath));
             statusIsError = true;
@@ -3085,12 +3087,12 @@ public sealed partial class PartsPanel
             ClearPolygons();
         }
         // Horns and ears are opened only under Matcaps: leaving it closes them.
-        bool closeEar = tool == Tool.Matcap && vanilla is { } open && Services.Matcap.ZearMaterialPath.Parse(open.GamePath) != null;
+        bool closeEar = tool == Tool.Matcap && vanilla is { } open && Services.Matcap.CustomizationMaterialPath.Parse(open.GamePath) != null;
         tool = value;
         if (closeEar)
         {
             CloseVanillaEar();
-            status = Strings.Matcap.EarOnlyHere;
+            status = Strings.Matcap.MatcapsOnlyHere;
             statusIsError = false;
         }
         ApplyLocks();   // Body size shows its own holds, every other tool the brush locks; and syncs the hiding

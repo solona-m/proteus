@@ -236,11 +236,26 @@ public sealed class MatcapStrings
     /// <summary>{0} the image or "library — option".</summary>
     public readonly string SourceFmt = ProteusLoc.Localize("Parts.Matcap.Source.Fmt", "from {0}");
 
-    public readonly string EarOnlyHere = ProteusLoc.Localize("Parts.Matcap.EarOnlyHere",
-        "Horns and ears open only under Matcaps, so they were closed.");
+    public readonly string MatcapsOnlyHere = ProteusLoc.Localize("Parts.Matcap.MatcapsOnlyHere",
+        "Your own face and ears open only under Matcaps, so they were closed.");
 
-    /// <summary>{0} the ear id ("z0001"), {1} the race code ("c1401").</summary>
-    public readonly string VanillaHornsFmt = ProteusLoc.Localize("Parts.Vanilla.Horns.Fmt", "Horns {0} ({1})");
+    public readonly string NotHornTip = ProteusLoc.Localize("Parts.Matcap.NotHornTip",
+        "On a face, only the horns can take a matcap.");
+
+    public readonly string NoHorns = ProteusLoc.Localize("Parts.Matcap.NoHorns",
+        "This face has no horns. On a face, only the horns can take a matcap.");
+
+    public readonly string HornColourNote = ProteusLoc.Localize("Parts.Matcap.HornColourNote",
+        "Horns with a matcap no longer take your character's horn colour, and hats still hide them.");
+
+    public readonly string DrawnThroughFace = ProteusLoc.Localize("Parts.Matcap.DrawnThroughFace",
+        "Your face is drawn through the face overlay's rewrite; the matcap shows after the next refresh.");
+
+    public readonly string FaceOverlayOn = ProteusLoc.Localize("Parts.Matcap.FaceOverlayOn",
+        "That face is drawn through a face overlay. Turn the overlay off to pick your face, or open your face mod from the list.");
+
+    /// <summary>{0} the face id ("f0001"), {1} the race code ("c1401").</summary>
+    public readonly string VanillaFaceHornsFmt = ProteusLoc.Localize("Parts.Vanilla.FaceHorns.Fmt", "Horns (face {0}, {1})");
 
     /// <summary>{0} the ear id, {1} the race code.</summary>
     public readonly string VanillaEarsFmt = ProteusLoc.Localize("Parts.Vanilla.Ears.Fmt", "Ears {0} ({1})");

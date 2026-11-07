@@ -15,7 +15,13 @@ internal static class MatcapPanelModel
 {
     /// <summary>Why a part's tick box is disabled under Matcaps.</summary>
     public static string UntickableTip(ModelPart part) =>
-        MatcapPlan.IsSkin(part) ? Strings.Matcap.SkinTip : Strings.Matcap.AlreadyTip;
+        MatcapPlan.IsSkin(part) ? Strings.Matcap.SkinTip
+        : MatcapPlan.IsOnMatcap(part) ? Strings.Matcap.AlreadyTip
+        : Strings.Matcap.NotHornTip;
+
+    /// <summary>A file of the managed mod the face overlay's rewrite published (<c>facelr_*.mdl</c>).</summary>
+    public static bool IsManagedFaceRewrite(string file) =>
+        System.IO.Path.GetFileName(file).StartsWith("facelr_", StringComparison.OrdinalIgnoreCase);
 
     /// <summary>Why Apply can't be pressed, or null when it can.</summary>
     public static string? ApplyDisabledReason(bool penumbra, int ticked, bool hasChoice, int materialRoom)

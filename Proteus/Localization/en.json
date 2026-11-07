@@ -6232,7 +6232,7 @@
     "description": "Studio Matcaps tool. A matcap is a sphere picture a shader samples by the surface's facing direction."
   },
   "Matcap.Refused.NotTarget": {
-    "message": "Matcaps go on gear, accessories, hair and ears or horns; this model is none of those.",
+    "message": "Matcaps go on gear, accessories, hair, Viera ears and Au Ra horns (on the face); this model is none of those.",
     "description": "Studio Matcaps tool. A matcap is a sphere picture a shader samples by the surface's facing direction."
   },
   "Matcap.Refused.RecordUnreadable": {
@@ -6313,10 +6313,6 @@
   },
   "Parts.Matcap.Duplicates.Fmt": {
     "message": "Other mods also supply this slot's texture ({0}); the one Penumbra ranks highest decides what shows.",
-    "description": "Studio Matcaps tool. A matcap is a sphere picture a shader samples by the surface's facing direction."
-  },
-  "Parts.Matcap.EarOnlyHere": {
-    "message": "Horns and ears open only under Matcaps, so they were closed.",
     "description": "Studio Matcaps tool. A matcap is a sphere picture a shader samples by the surface's facing direction."
   },
   "Parts.Matcap.Edited": {
@@ -6503,16 +6499,48 @@
     "message": "Ears {0} ({1})",
     "description": "Studio Matcaps tool. A matcap is a sphere picture a shader samples by the surface's facing direction."
   },
-  "Parts.Vanilla.Horns.Fmt": {
-    "message": "Horns {0} ({1})",
-    "description": "Studio Matcaps tool. A matcap is a sphere picture a shader samples by the surface's facing direction."
-  },
   "Settings.MatcapLibrary": {
     "message": "Matcap images",
     "description": "Studio Matcaps tool. A matcap is a sphere picture a shader samples by the surface's facing direction."
   },
   "Settings.MatcapLibrary.Tip.Fmt": {
     "message": "Open the folder your own matcap images live in: {0}",
+    "description": "Studio Matcaps tool. A matcap is a sphere picture a shader samples by the surface's facing direction."
+  },
+  "Matcap.Refused.NoHorns": {
+    "message": "This face has no horns. On a face, only the horns can take a matcap.",
+    "description": "Studio Matcaps tool. A matcap is a sphere picture a shader samples by the surface's facing direction."
+  },
+  "Matcap.Refused.NotHorn": {
+    "message": "On a face, only the horns can take a matcap.",
+    "description": "Studio Matcaps tool. A matcap is a sphere picture a shader samples by the surface's facing direction."
+  },
+  "Parts.Matcap.DrawnThroughFace": {
+    "message": "Your face is drawn through the face overlay's rewrite; the matcap shows after the next refresh.",
+    "description": "Studio Matcaps tool. A matcap is a sphere picture a shader samples by the surface's facing direction."
+  },
+  "Parts.Matcap.FaceOverlayOn": {
+    "message": "That face is drawn through a face overlay. Turn the overlay off to pick your face, or open your face mod from the list.",
+    "description": "Studio Matcaps tool. A matcap is a sphere picture a shader samples by the surface's facing direction."
+  },
+  "Parts.Matcap.HornColourNote": {
+    "message": "Horns with a matcap no longer take your character's horn colour, and hats still hide them.",
+    "description": "Studio Matcaps tool. A matcap is a sphere picture a shader samples by the surface's facing direction."
+  },
+  "Parts.Matcap.MatcapsOnlyHere": {
+    "message": "Your own face and ears open only under Matcaps, so they were closed.",
+    "description": "Studio Matcaps tool. A matcap is a sphere picture a shader samples by the surface's facing direction."
+  },
+  "Parts.Matcap.NoHorns": {
+    "message": "This face has no horns. On a face, only the horns can take a matcap.",
+    "description": "Studio Matcaps tool. A matcap is a sphere picture a shader samples by the surface's facing direction."
+  },
+  "Parts.Matcap.NotHornTip": {
+    "message": "On a face, only the horns can take a matcap.",
+    "description": "Studio Matcaps tool. A matcap is a sphere picture a shader samples by the surface's facing direction."
+  },
+  "Parts.Vanilla.FaceHorns.Fmt": {
+    "message": "Horns (face {0}, {1})",
     "description": "Studio Matcaps tool. A matcap is a sphere picture a shader samples by the surface's facing direction."
   }
 }

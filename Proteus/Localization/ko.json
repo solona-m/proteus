@@ -6232,7 +6232,7 @@
     "description": ""
   },
   "Matcap.Refused.NotTarget": {
-    "message": "매트캡은 장비, 액세서리, 머리카락, 귀나 뿔에만 적용됩니다. 이 모델은 그 어느 것도 아닙니다.",
+    "message": "매트캡은 장비, 액세서리, 머리카락, 비에라 귀, 아우라 뿔(얼굴)에 입힐 수 있습니다. 이 모델은 그 어느 것도 아닙니다.",
     "description": ""
   },
   "Matcap.Refused.RecordUnreadable": {
@@ -6313,10 +6313,6 @@
   },
   "Parts.Matcap.Duplicates.Fmt": {
     "message": "다른 모드도 이 슬롯의 텍스처를 제공합니다({0}). Penumbra에서 순위가 가장 높은 것이 보입니다.",
-    "description": ""
-  },
-  "Parts.Matcap.EarOnlyHere": {
-    "message": "뿔과 귀는 매트캡에서만 열리므로 닫았습니다.",
     "description": ""
   },
   "Parts.Matcap.Edited": {
@@ -6503,16 +6499,48 @@
     "message": "귀 {0} ({1})",
     "description": ""
   },
-  "Parts.Vanilla.Horns.Fmt": {
-    "message": "뿔 {0} ({1})",
-    "description": ""
-  },
   "Settings.MatcapLibrary": {
     "message": "매트캡 이미지",
     "description": ""
   },
   "Settings.MatcapLibrary.Tip.Fmt": {
     "message": "내 매트캡 이미지가 있는 폴더를 엽니다: {0}",
+    "description": ""
+  },
+  "Matcap.Refused.NoHorns": {
+    "message": "이 얼굴에는 뿔이 없습니다. 얼굴에서는 뿔에만 매트캡을 입힐 수 있습니다.",
+    "description": ""
+  },
+  "Matcap.Refused.NotHorn": {
+    "message": "얼굴에서는 뿔에만 매트캡을 입힐 수 있습니다.",
+    "description": ""
+  },
+  "Parts.Matcap.DrawnThroughFace": {
+    "message": "얼굴이 얼굴 오버레이의 재작성을 통해 그려지고 있습니다. 매트캡은 다음 새로 고침 후에 보입니다.",
+    "description": ""
+  },
+  "Parts.Matcap.FaceOverlayOn": {
+    "message": "그 얼굴은 얼굴 오버레이를 통해 그려지고 있습니다. 얼굴을 고르려면 오버레이를 끄거나 목록에서 얼굴 모드를 여세요.",
+    "description": ""
+  },
+  "Parts.Matcap.HornColourNote": {
+    "message": "매트캡을 입힌 뿔은 더 이상 캐릭터의 뿔 색을 따르지 않으며, 모자는 여전히 뿔을 가립니다.",
+    "description": ""
+  },
+  "Parts.Matcap.MatcapsOnlyHere": {
+    "message": "자신의 얼굴과 귀는 매트캡에서만 열리므로 닫았습니다.",
+    "description": ""
+  },
+  "Parts.Matcap.NoHorns": {
+    "message": "이 얼굴에는 뿔이 없습니다. 얼굴에서는 뿔에만 매트캡을 입힐 수 있습니다.",
+    "description": ""
+  },
+  "Parts.Matcap.NotHornTip": {
+    "message": "얼굴에서는 뿔에만 매트캡을 입힐 수 있습니다.",
+    "description": ""
+  },
+  "Parts.Vanilla.FaceHorns.Fmt": {
+    "message": "뿔 (얼굴 {0}, {1})",
     "description": ""
   }
 }
