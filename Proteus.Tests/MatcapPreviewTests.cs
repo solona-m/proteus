@@ -145,7 +145,7 @@ public class MatcapPreviewTests
     [Fact]
     [Trait("Plan", "EDGE-matcap-preview-12")]
     [Trait("Plan", "AC-matcap-preview-8")]
-    public void Build_not_square_and_material_cap_refused()
+    public void Build_not_square_refused()
     {
         using var f = new MatcapFixture();
         var built = MatcapPreview.Build(Input(f, MatcapChoice.OfImage(f.Image("wide.tex", w: 64, h: 32)), f.Parts("1.2")));
@@ -474,10 +474,21 @@ public class MatcapPreviewWiringTests
     [Trait("Plan", "EDGE-matcap-preview-23")]
     public void Entering_Matcaps_with_locked_parts_hidden_ends_the_brush_preview()
     {
+        // Any brush preview (hiding locked parts, or a shared save) comes down on entering Matcaps.
         var sw = Method(Main(), "private void SwitchTool(Tool value)");
-        int enter = sw.IndexOf("if (preview.Active && previewHides != 0) EndLivePreview(refreshGame: true);", StringComparison.Ordinal);
-        Assert.True(enter >= 0 && enter < sw.IndexOf("tool = value;", StringComparison.Ordinal));
-        Assert.Contains("if (value == Tool.Matcap)", sw);
+        int at = sw.IndexOf("if (value == Tool.Matcap)", StringComparison.Ordinal);
+        int enter = sw.IndexOf("if (preview.Active) EndLivePreview(refreshGame: true);", at, StringComparison.Ordinal);
+        Assert.True(at >= 0 && enter > at && enter < sw.IndexOf("tool = value;", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    [Trait("Plan", "EDGE-matcap-preview-30")]
+    public void Drawn_note_resolves_with_nothing_of_ours_redirected()
+    {
+        // A brush preview still up would win the game path at int.MaxValue: it comes down before the drawn-file check.
+        var push = Method(Wiring(), "private void PushMatcapPreview(");
+        int down = push.IndexOf("if (preview.Active) preview.End(redraw: false);", StringComparison.Ordinal);
+        Assert.True(down >= 0 && down < push.IndexOf("DrawnElsewhere(", StringComparison.Ordinal));
     }
 
     [Fact]

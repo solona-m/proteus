@@ -409,8 +409,10 @@ public class MatcapApplyChangeTests
         int ask = apply.IndexOf("if (choice.Library is { } lib && !confirmEnable)", StringComparison.Ordinal);
         int change = apply.IndexOf("MatcapStudio.ChangeAll(", StringComparison.Ordinal);
         Assert.True(ask >= 0 && change > ask, "the library-off question comes before the change");
-        // The job carries the user's answer, never a literal true.
-        Assert.DoesNotContain(", true, [], false, false, gamePath)", apply);
+        // The change job carries the user's answer, never a literal true.
+        var job = apply[apply.IndexOf("new MatcapJobResult(changeRoot", StringComparison.Ordinal)..];
+        job = job[..job.IndexOf("IsChange = true", StringComparison.Ordinal)];
+        Assert.Contains("choice.IsLibrary ? choice : null, confirmEnable,", job);
     }
 
     [Fact]

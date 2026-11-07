@@ -237,10 +237,14 @@ public sealed partial class PartsPanel
             QueueMatcapPump(PreviewIntervalMs - (nowMs - lastMatcapPushAt));
             return;
         }
-        // Worked out before our first redirect, which wins every game path while it is on.
+        // Worked out before our first redirect, which wins every game path while it is on: anything of ours still up
+        // (a brush preview) comes down first, without a redraw — this push replaces it.
         string? drawn = null;
         if (matcapPreview.ShownKey == null && ModRoot() is { } root && modelIndex >= 0)
+        {
+            if (preview.Active) preview.End(redraw: false);
             drawn = DrawnElsewhere(root, models[modelIndex].GamePath, [models[modelIndex].File]);
+        }
         if (!preview.PushFiles(built.Files, redraw))
         {
             matcapPending = (gen, key, built);
@@ -385,6 +389,7 @@ public sealed partial class PartsPanel
         // parts with and without one is refused: two writes in one click are not atomic.
         var kind = MatcapPlan.KindOfApply(chosen);
         if (kind == MatcapPlan.ApplyKind.Mixed) { matcapError = Strings.Matcap.AlreadyMatcap; return; }
+        if (vanilla == null && ModRoot() == null) return;   // before the preview comes down: no job, no redraw owed
         TakeDownMatcapPreviewForJob();
         if (kind == MatcapPlan.ApplyKind.Change)
         {

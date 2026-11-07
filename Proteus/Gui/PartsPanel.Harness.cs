@@ -269,7 +269,9 @@ public sealed partial class PartsPanel : IStudioHarness
     /// <summary>The click preview as <c>/studio</c> and <c>matcap-preview</c> report it.</summary>
     private object MatcapPreviewView() => new
     {
-        state = matcapPreview.ShownKey != null ? "shown" : matcapPreview.BuildingKey != null || matcapPending != null ? "building"
+        // Shown only once the redirect is actually on (a push that starts can still be refused by Penumbra).
+        state = matcapPreview.ShownKey != null && preview.Active ? "shown"
+              : matcapPreview.ShownKey != null || matcapPreview.BuildingKey != null || matcapPending != null ? "building"
               : matcapPreview.Wanted && matcapPreview.Note != null ? "note" : matcapPreview.Wanted ? "building" : "none",
         note = matcapPreview.Wanted ? matcapPreview.Note : null,
         drawnNote = matcapPreview.DrawnNote,

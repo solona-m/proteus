@@ -3095,10 +3095,11 @@ public sealed partial class PartsPanel
         bool closeEar = tool == Tool.Matcap && vanilla is { } open && Services.Matcap.CustomizationMaterialPath.Parse(open.GamePath) != null;
         // Leaving Matcaps takes its click preview off the character.
         if (tool == Tool.Matcap && matcapPreview.Active) EndLivePreview(refreshGame: true);
-        // Entering it: a brush preview hiding locked parts comes down, so every part is drawn (and can be ticked) again.
+        // Entering it: any brush preview comes down, so every part is drawn (and can be ticked) again, and the click
+        // preview's drawn-file check resolves the mod's own files rather than the brush's redirect.
         if (value == Tool.Matcap)
         {
-            if (preview.Active && previewHides != 0) EndLivePreview(refreshGame: true);
+            if (preview.Active) EndLivePreview(refreshGame: true);
             else previewDirty = false;
         }
         tool = value;
