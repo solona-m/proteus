@@ -6546,5 +6546,9 @@
   "Parts.Matcap.BackupKept.Fmt": {
     "message": "古いバックアップを移動できませんでした: {0}。次にそこへマットキャップを付けるとき、先に移動します。",
     "description": ""
+  },
+  "Parts.Matcap.KeptForRefits.Fmt": {
+    "message": "これから作られたリフィットがまだマットキャップを描画しているため、サイズを作り直すまでファイルは残ります: {0}。",
+    "description": ""
   }
 }

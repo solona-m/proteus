@@ -6546,5 +6546,9 @@
   "Parts.Matcap.BackupKept.Fmt": {
     "message": "Leurs anciennes sauvegardes n'ont pas pu être mises de côté : {0}. La prochaine matcap à cet endroit les déplacera d'abord.",
     "description": ""
+  },
+  "Parts.Matcap.KeptForRefits.Fmt": {
+    "message": "Des refits faits à partir de lui dessinent encore la matcap, donc ses fichiers restent jusqu'à ce que les tailles soient refaites : {0}.",
+    "description": ""
   }
 }

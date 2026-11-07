@@ -6546,5 +6546,9 @@
   "Parts.Matcap.BackupKept.Fmt": {
     "message": "无法移走它们的旧备份：{0}。下次在那里加 matcap 时会先移走它们。",
     "description": ""
+  },
+  "Parts.Matcap.KeptForRefits.Fmt": {
+    "message": "由它制作的重贴合模型仍在绘制该材质球，因此在重新制作尺寸之前其文件会保留：{0}。",
+    "description": ""
   }
 }

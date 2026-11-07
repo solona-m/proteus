@@ -6546,5 +6546,9 @@
   "Parts.Matcap.BackupKept.Fmt": {
     "message": "이전 백업을 옮기지 못했습니다: {0}. 다음에 그곳에 매트캡을 입힐 때 먼저 옮깁니다.",
     "description": ""
+  },
+  "Parts.Matcap.KeptForRefits.Fmt": {
+    "message": "이것으로 만든 리핏이 아직 매트캡을 그리고 있어, 사이즈를 다시 만들 때까지 파일이 남습니다: {0}.",
+    "description": ""
   }
 }

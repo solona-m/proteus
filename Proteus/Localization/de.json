@@ -6546,5 +6546,9 @@
   "Parts.Matcap.BackupKept.Fmt": {
     "message": "Ihre alten Sicherungen konnten nicht beiseitegelegt werden: {0}. Die nächste Matcap dort verschiebt sie zuerst.",
     "description": ""
+  },
+  "Parts.Matcap.KeptForRefits.Fmt": {
+    "message": "Daraus erstellte Refits zeichnen die Matcap noch, daher bleiben ihre Dateien, bis die Größen neu erstellt werden: {0}.",
+    "description": ""
   }
 }

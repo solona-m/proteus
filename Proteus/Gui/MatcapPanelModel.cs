@@ -43,7 +43,7 @@ internal static class MatcapPanelModel
         }
         if (PenumbraModMeta.SameFile(modRoot, root) && written.Any(w => PenumbraModMeta.SameFile(w, rel))) return null;
         var line = string.Format(Strings.Matcap.DrawnElsewhereFmt, rel);
-        if (PenumbraModMeta.SameFile(modRoot, root) && MatcapPlan.Regenerated(root, rel) == "refit") line += " " + Strings.Matcap.RemakeSizes;
+        if (PenumbraModMeta.SameFile(modRoot, root) && MatcapPlan.Regenerated(root, rel) == MatcapPlan.RefitKind) line += " " + Strings.Matcap.RemakeSizes;
         return line;
     }
 
