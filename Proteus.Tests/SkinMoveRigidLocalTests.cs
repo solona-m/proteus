@@ -125,10 +125,13 @@ public class SkinMoveRigidLocalTests(ITestOutputHelper output)
         Report("All Scale 1.2 (information)", s3, start, grownDrag, s3.Positions().ToArray(), sw);
     }
 
-    [LocalDataFact(Top)]
+    [LocalDataTheory(Top)]
     [Trait("Plan", "AC-issue-sweep-c-3")]
     [Trait("Plan", "EDGE-issue-sweep-c-43")]
-    public void RebelGirlTopSkinRow11MoveIsTheDragOrAPoke()
+    [InlineData(Adjacent, FalloffMm, 0.5f, 10)]   // the Studio's defaults: 15.41 mm, 10 folded
+    [InlineData(true, 1f, 1.0f, 22)]              // the slider's smallest falloff (QA, build 1455): 15.90 mm
+    [InlineData(false, 0f, 1.0f, 22)]             // adjacent off: the row tears loose from its neighbours (4 folded by the drag)
+    public void RebelGirlTopSkinRow11MoveIsTheDragOrAPoke(bool adjacent, float falloffMm, float overMm, int foldedPin)
     {
         var sw = Stopwatch.StartNew();
         var (model, solve) = Open();
@@ -136,12 +139,12 @@ public class SkinMoveRigidLocalTests(ITestOutputHelper output)
         var row = model.Parts.Single(p => p.Island < 0 && p.Label == "1.1");
         output.WriteLine($"row 1.1: {row.Material}, skin {SecondSkinWriter.IsBodySkinMaterial(row.Material)}");
 
-        Assert.True(solve.BeginMove(row.Triangles, Adjacent, FalloffMm / 1000f) > 0);
+        Assert.True(solve.BeginMove(row.Triangles, adjacent, falloffMm / 1000f) > 0);
         solve.MoveTo(new Vector3(0f, 0f, Drag));
         var dragged = solve.Positions().ToArray();
         Assert.True(solve.EndMove());
         var after = solve.Positions().ToArray();
-        Report("Whole parts row 1.1 Move 15 mm", solve, start, dragged, after, sw);
+        Report($"Whole parts row 1.1 Move 15 mm (adjacent {adjacent}, falloff {falloffMm} mm)", solve, start, dragged, after, sw);
         Assert.True(WorstMm(start, dragged) <= 15.01f, "the drag itself never goes further than the drag");
         output.WriteLine($"row 1.1: folded {Folded(model, dragged)} by the drag, {Folded(model, after)} after the guard");
 
@@ -214,7 +217,7 @@ public class SkinMoveRigidLocalTests(ITestOutputHelper output)
         // Measured (build 1455): before the fix 29.77 mm, 420 vertices beyond the drag, 54 folded, 553 bound lifts; after,
         // 15.41 mm, 8 beyond (all face-check corners), 10 folded. The face check's corner lift folding a few triangles on
         // a real poke is a pre-existing limit of its rule (#90): pinned here so it can only get better.
-        Assert.True(WorstMm(start, after) <= Drag * 1000f + 0.5f, $"after the guard {WorstMm(start, after):F2} mm");
-        Assert.True(Folded(model, after) <= 10, $"{Folded(model, after)} folded (#90)");
+        Assert.True(WorstMm(start, after) <= Drag * 1000f + overMm, $"after the guard {WorstMm(start, after):F2} mm");
+        Assert.True(Folded(model, after) <= foldedPin, $"{Folded(model, after)} folded (#90)");
     }
 }

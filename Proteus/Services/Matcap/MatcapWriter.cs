@@ -547,7 +547,7 @@ internal static class MatcapWriter
     private static bool DropMaterial(string modRoot, MatcapRecord.MaterialEntry mat, Dictionary<string, string> removeKeys,
                                      List<string> kept, List<string> refitUsers, List<string> portUsers, List<Regenerated> regenerated)
     {
-        var users = regenerated.Where(r => r.Names.Contains(mat.Name)).ToList();
+        var users = regenerated.Where(r => Draws(r, mat)).ToList();
         if (users.Count > 0)
         {
             foreach (var u in users)
@@ -587,8 +587,27 @@ internal static class MatcapWriter
     }
 
     /// <summary>A file Proteus remakes from a source (a refit, or a hair port / earless copy when <see cref="Port"/>)
-    /// naming at least one matcap material, with the material names it uses.</summary>
-    private readonly record struct Regenerated(string Rel, HashSet<string> Names, bool Port);
+    /// naming at least one matcap material, with the material names it uses — and, for a file at a hairstyle's game path,
+    /// that hairstyle's race and number (0 otherwise).</summary>
+    private readonly record struct Regenerated(string Rel, HashSet<string> Names, bool Port, ushort Race = 0, int Id = 0);
+
+    /// <summary>
+    /// Whether <paramref name="r"/> draws <paramref name="mat"/>: it names it, or — a hair port renames its materials for
+    /// its own race (c0201… → c0401…) — one of its names is loaded, for that race's hairstyle, from a game path the
+    /// matcap publishes (#87: the game reads a race's hair material from the folder its hairstyle shares).
+    /// </summary>
+    private static bool Draws(Regenerated r, MatcapRecord.MaterialEntry mat)
+        => r.Names.Contains(mat.Name)
+           || r.Race > 0 && r.Names.Any(n => HairMaterialPath.GamePath(r.Race, r.Id, n) is { } gp
+                                             && mat.GamePaths.Contains(gp, StringComparer.OrdinalIgnoreCase));
+
+    /// <summary>The hairstyle a file of the mod stands for, from the game path its rel ends in (a port's place:
+    /// <c>Hair Ports/&lt;option&gt;/chara/human/c0401/obj/hair/h0108/model/c0401h0108_hir.mdl</c>).</summary>
+    private static (ushort Race, int Id)? HairOf(string rel)
+    {
+        int at = rel.IndexOf("chara/", StringComparison.OrdinalIgnoreCase);
+        return at >= 0 ? HairPortPlan.Parse(rel[at..]) : null;
+    }
 
     /// <summary>The mod's remade files on disk that name a matcap material: its refits (the refit record's, and any under
     /// the refit folder), its hair ports (under <see cref="HairPortPlan.Folder"/>) and its earless copies (under
@@ -604,7 +623,8 @@ internal static class MatcapWriter
         var all = refitFiles.Select(r => (Rel: r, Port: false)).Concat(portFiles.Select(r => (Rel: r, Port: true)));
         foreach (var (rel, port) in all.OrderBy(x => x.Rel, StringComparer.Ordinal))
             if (NamesIn(modRoot, rel) is { Count: > 0 } names && names.Any(n => n.Contains("_mcap", StringComparison.OrdinalIgnoreCase)))
-                found.Add(new Regenerated(rel, names, port));
+                found.Add(port && HairOf(rel) is { } hair ? new Regenerated(rel, names, true, hair.Race, hair.Id)
+                                                          : new Regenerated(rel, names, port));
         return found;
     }
 

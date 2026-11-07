@@ -184,9 +184,10 @@ public class HarnessStudioRouteTests : IDisposable
     public async Task StudioSet_falloffMm_reaches_the_studio_and_out_of_range_is_400()
     {
         await Open();
-        var (ok, _) = await f.Post("/actions/studio-set", """{"falloffMm":80}""");
+        var (ok, answer) = await f.Post("/actions/studio-set", """{"falloffMm":80}""");
         Assert.Equal(200, ok);
         Assert.Equal(80f, studio.Sets[^1].FalloffMm);
+        Assert.Equal(80f, answer.GetProperty("applied").GetProperty("falloffMm").GetSingle());   // echoed as applied
         int sets = studio.Sets.Count;
         foreach (var bad in new[] { """{"falloffMm":0}""", """{"falloffMm":301}""", """{"falloffMm":"80"}""" })
         {

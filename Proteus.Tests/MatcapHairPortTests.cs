@@ -810,6 +810,31 @@ public sealed class MatcapHairPortTests : IDisposable
     }
 
     [Fact]
+    [Trait("Plan", "AC-issue-sweep-c-1")]
+    public void Undoing_an_authors_matcap_keeps_it_while_a_port_names_it_under_its_own_race()
+    {
+        // As in game (QA, build 1455): a port renames the hair materials for its own race — c0801… becomes c0201… — and
+        // the game loads that name, for the port's hairstyle, from the folder the matcap published into (hairstyle
+        // 130 shares Midlander's). The port names no file of the matcap's by name, yet draws it.
+        using var mod = HairMod();
+        var (rel, m2) = PortedAuthorWithMatcap(mod);
+        var renamed = HairMaterialPath.RenameRace(m2.Name, 201);
+        Assert.NotEqual(m2.Name, renamed);
+        Assert.Contains(HairMaterialPath.GamePath(201, Id, renamed), m2.GamePaths, StringComparer.OrdinalIgnoreCase);
+        mod.Put(rel, Naming(renamed));
+
+        var undo = MatcapWriter.Undo(mod.Root, "long/c0801h0130_hir.mdl");
+        Assert.True(undo.Ok, undo.Message);
+        AssertKept(mod, m2);
+        Assert.Contains(PortsSentence(RefitCore.Normal(rel)), undo.Message);
+
+        // A port remade without it lets it go.
+        mod.Put(rel, HairModel(201));
+        Assert.True(MatcapWriter.Forget(mod.Root, "long/c0801h0130_hir.mdl").Ok);
+        AssertGone(mod, m2);
+    }
+
+    [Fact]
     [Trait("Plan", "EDGE-issue-sweep-c-1")]
     public void Undoing_an_authors_matcap_a_matcapped_port_carrying_the_authors_material_keeps_it()
     {
