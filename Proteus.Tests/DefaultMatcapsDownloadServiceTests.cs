@@ -134,7 +134,7 @@ public sealed class DefaultMatcapsDownloadServiceTests : IDisposable
         failing = false;
         s.EnsureAsync(retryFailed: true);
         WaitIdle(s);
-        Assert.Equal(Pins.Length - 2, calls.Count);         // 3–39 only
+        Assert.Equal(Pins.Length - 2, calls.Count);         // all but the first two
         Assert.Equal(MatcapPackState.Ready, s.Status.State);
     }
 
