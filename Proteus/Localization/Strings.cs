@@ -657,6 +657,25 @@ public sealed class WhatsNewStrings
     public readonly string IntroSince = ProteusLoc.Localize("WhatsNew.IntroSince",
         "Something new since you last saw this window. It opens once, and not again.");
 
+    public readonly string MatcapsHead = ProteusLoc.Localize("WhatsNew.Matcaps.Head",
+        "Matcaps: shiny, glassy and gem-like parts");
+
+    public readonly string MatcapsBody = ProteusLoc.Localize("WhatsNew.Matcaps.Body",
+        "The Studio has a new tool, \"Matcaps\". Tick parts of gear, accessories, hair, tails, Viera ears or Au Ra "
+      + "horns, pick a matcap (a picture of a lit sphere) and press \"Apply matcap\": the parts get a material of their "
+      + "own, written into the mod, so the look shows with Proteus turned off. \"Proteus matcaps\", a set that comes "
+      + "with Proteus and includes the 23Minks matcap pack by sivka, is downloaded the first time you open Matcaps. "
+      + "Your own pictures go in the folder under \"Matcap images\" in Settings, and installed matcap library mods are "
+      + "listed too. \"Undo matcaps on this model\" takes it all back out.");
+
+    public readonly string MoveAllHead = ProteusLoc.Localize("WhatsNew.MoveAll.Head",
+        "Move, turn or scale every ticked part as one piece");
+
+    public readonly string MoveAllBody = ProteusLoc.Localize("WhatsNew.MoveAll.Body",
+        "\"Move\", \"Rotate\" and \"Scale\" in the Studio have a new mode beside whole parts and polygons, \"All\": "
+      + "every ticked part of the open model moves, turns or scales together, as one piece. Untick a part in the part "
+      + "list to leave it where it is. Skin moves only with \"Move skin too\" on.");
+
     public readonly string ColorRowsHead = ProteusLoc.Localize("WhatsNew.ColorRows.Head",
         "Point at a colour row to see where it goes");
 

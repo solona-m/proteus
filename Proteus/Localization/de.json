@@ -4427,6 +4427,22 @@
     "message": "Schließen",
     "description": ""
   },
+  "WhatsNew.Matcaps.Head": {
+    "message": "Matcaps: glänzende, gläserne und edelsteinartige Teile",
+    "description": "Release-notes section heading: the Studio's Matcaps tool. A matcap is a picture of a lit sphere a shader samples by the surface's facing direction."
+  },
+  "WhatsNew.Matcaps.Body": {
+    "message": "Das Studio hat ein neues Werkzeug, „Matcaps“. Hake Teile von Ausrüstung, Accessoires, Haaren, Schwänzen, Viera-Ohren oder Au-Ra-Hörnern an, wähle eine Matcap (das Bild einer beleuchteten Kugel) und drücke „Matcap anwenden“: Die Teile bekommen ein eigenes Material, das in den Mod geschrieben wird, sodass der Look auch bei ausgeschaltetem Proteus zu sehen ist. „Proteus-Matcaps“, eine Sammlung, die mit Proteus kommt und das 23Minks-Matcap-Paket von sivka enthält, wird heruntergeladen, wenn du Matcaps zum ersten Mal öffnest. Eigene Bilder kommen in den Ordner unter „Matcap-Bilder“ in den Einstellungen, und installierte Matcap-Bibliotheks-Mods werden ebenfalls aufgeführt. „Matcaps auf diesem Modell rückgängig machen“ nimmt alles wieder heraus.",
+    "description": "Release-notes section. 'Studio' matches Tab.Parts and 'Settings' Tab.Settings; \"Matcaps\" matches Parts.Tool.Matcap, \"Apply matcap\" Parts.Matcap.Apply, \"Proteus matcaps\" Parts.Matcap.SourceProteus, \"Matcap images\" Settings.MatcapLibrary, \"Undo matcaps on this model\" Parts.Matcap.Undo. Keep 23Minks and sivka verbatim."
+  },
+  "WhatsNew.MoveAll.Head": {
+    "message": "Jedes angehakte Teil als ein Stück verschieben, drehen oder skalieren",
+    "description": "Release-notes section heading: the All mode of Move, Rotate and Scale. Keep it true to 'ticked': unticked parts stay where they are."
+  },
+  "WhatsNew.MoveAll.Body": {
+    "message": "„Verschieben“, „Drehen“ und „Skalieren“ im Studio haben neben ganzen Teilen und Polygonen einen neuen Modus, „Alle“: Alle angehakten Teile des offenen Modells werden zusammen verschoben, gedreht oder skaliert, als ein Stück. Entferne das Häkchen bei einem Teil in der Teileliste, damit es bleibt, wo es ist. Die Haut bewegt sich nur mit, wenn „Haut mitbewegen“ an ist.",
+    "description": "Release-notes section. 'Studio' matches Tab.Parts; \"Move\", \"Rotate\" and \"Scale\" match Parts.Tool.Move, Parts.Tool.Rotate and Parts.Tool.Scale; \"All\" matches Parts.Move.SelectAll; \"Move skin too\" matches Parts.SkinMoves. 'Whole parts' and 'polygons' are the other two modes (Parts.Move.SelectParts, Parts.Move.SelectPolygons)."
+  },
   "Parts.Retarget.Guide.Title": {
     "message": "Körpergröße: Tipps",
     "description": ""

@@ -333,6 +333,24 @@ Bon à savoir :
 - **Annuler l'ajustement de ce que je porte** (maintenez Ctrl ou Maj et cliquez) retire les tailles que l'ajustement automatique a créées pour l'équipement que vous portez, supprime les mods qu'il a créés pour l'équipement vanilla, et remet les options que vous aviez avant. Ces pièces ne seront plus réajustées à moins que vous n'appuyiez sur **Ajuster ce que je porte maintenant**. Les tailles que vous avez créées vous-même dans le Studio restent.
 - **Oublier le corps de cette collection** le désactive pour cette collection.
 
+##### Shaders d'équipement
+
+L'équipement créé avant Dawntrail utilise encore l'ancien shader du jeu (`characterlegacy.shpk`). Avec **Passer l'ancien équipement aux shaders de Dawntrail** coché, Proteus réécrit vers le shader de Dawntrail (`character.shpk`) les matériaux à l'ancien shader des mods que vous portez, dans le mod, en sauvegardant chaque fichier d'abord dans `Proteus/shaderupgrade-backup/`. C'est désactivé par défaut. Comme le Studio, le changement est dans les fichiers du mod lui-même, donc il continue de fonctionner avec Proteus désactivé et suit le mod si vous l'exportez.
+
+- La section compte ce qui a été mis à jour et ce qui est resté sur l'ancien shader. Survolez le compte pour voir pourquoi des pièces sont restées sur l'ancien shader, et combien pour chaque raison.
+- **Mettre à jour ce que je porte** met à jour ce que vous portez, y compris les pièces que vous aviez annulées.
+- **Annuler pour ce que je porte** remet les fichiers de l'auteur et laisse ces pièces tranquilles jusqu'à ce que vous les mettiez à jour à nouveau. Une mise à jour publiée depuis par l'auteur est conservée. Un fichier modifié après sa mise à jour est laissé tel quel, et son original reste dans le dossier de sauvegarde.
+- Le désactiver arrête les mises à jour suivantes, mais ne les annule pas.
+
+##### Variantes d'équipement
+
+Beaucoup de mods d'équipement remplacent le modèle d'un objet mais ne fournissent son matériau que pour une variante : porté dans une autre variante, le modèle du mod affiche le matériau du jeu, celui d'une autre tenue, ou rien. **Pointer chaque variante de l'équipement porté vers le matériau de son mod**, activé par défaut, corrige cela quand vous mettez la pièce : Proteus copie les chemins de matériau du mod vers les dossiers des autres variantes, dans les options du mod lui-même, comme « Apply to All Variants » de TexTools, mais pour le matériau seulement. Les parties, les VFX et le son restent les leurs. Le changement continue de fonctionner avec Proteus désactivé et suit le mod si vous l'exportez.
+
+- La section compte les pièces repointées et celles laissées telles quelles. Survolez le compte pour voir lesquelles, et pourquoi une pièce a été laissée : par exemple le mod fournit lui-même plusieurs variantes, fixe lui-même la variante, ou son matériau vient d'un autre mod.
+- **Repointer ce que je porte** repointe ce que vous portez, y compris les pièces que vous aviez annulées.
+- **Annuler pour ce que je porte** retire les entrées de Proteus et laisse ces pièces tranquilles jusqu'à ce que vous les repointiez. Une entrée modifiée depuis par quelqu'un est conservée.
+- Le désactiver arrête les changements suivants, mais ne les annule pas.
+
 ### Préréglages
 
 Un **préréglage** est un look nommé pour **un seul mod** : les options cochées, toutes ses couleurs, et ses réglages de lueur et de calque. Les gros paquets — combinaisons, bas — embarquent une douzaine de groupes, et trouver une combinaison qui vaille le coup revient à cocher des cases jusqu'à ce que ça tombe juste. Un préréglage conserve cette combinaison.
