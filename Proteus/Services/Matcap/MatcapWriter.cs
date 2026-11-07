@@ -591,8 +591,10 @@ internal static class MatcapWriter
     /// that hairstyle's race and number (0 otherwise).</summary>
     /// <param name="Redirects">For a hair port, the files its own redirects point at (<see cref="HairPortRecord.Entry.Materials"/>):
     /// a port to a race that reads its own material folder publishes the source's material there — the matcap's file.</param>
+    /// <param name="RedirectsUnknown">The ports record could not be read: which file the port redirects to is unknown, so
+    /// it is taken to draw every matcap it names one of — kept rather than deleted under a port still using it.</param>
     private readonly record struct Regenerated(string Rel, HashSet<string> Names, bool Port, ushort Race = 0, int Id = 0,
-                                               IReadOnlyList<string>? Redirects = null);
+                                               IReadOnlyList<string>? Redirects = null, bool RedirectsUnknown = false);
 
     /// <summary>
     /// Whether <paramref name="r"/> draws <paramref name="mat"/>: it names it, or — a hair port renames its materials for
@@ -604,7 +606,9 @@ internal static class MatcapWriter
            || r.Race > 0 && r.Names.Any(n => HairMaterialPath.GamePath(r.Race, r.Id, n) is { } gp
                                              && mat.GamePaths.Contains(gp, StringComparer.OrdinalIgnoreCase))
            // A port into a race with its own material folder redirects its own path to the source's file: the matcap's.
-           || r.Redirects is { } to && to.Any(t => PenumbraModMeta.SameFile(t, mat.File));
+           || r.Redirects is { } to && to.Any(t => PenumbraModMeta.SameFile(t, mat.File))
+           // No record to tell: a port naming a matcap material may redirect to this one's file.
+           || r.RedirectsUnknown;
 
     /// <summary>The hairstyle a file of the mod stands for, from the game path its rel ends in (a port's place:
     /// <c>Hair Ports/&lt;option&gt;/chara/human/c0401/obj/hair/h0108/model/c0401h0108_hir.mdl</c>).</summary>
@@ -621,11 +625,13 @@ internal static class MatcapWriter
     {
         var refitFiles = SizeSetRefit.OurFiles(BodyRetargetWriter.ReadRecord(modRoot));
         AddModels(modRoot, BodyRetargetWriter.Subfolder, refitFiles);
+        // Ports and earless copies keep their own spelling: the message names them as the user finds them on disk.
         var portFiles = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-        AddModels(modRoot, HairPortPlan.Folder, portFiles);
-        AddModels(modRoot, EarlessHairPlan.Folder, portFiles);
-        // Each port file's own redirects, from the record: an unreadable record redirects nothing here (the names still count).
+        AddModels(modRoot, HairPortPlan.Folder, portFiles, normalise: false);
+        AddModels(modRoot, EarlessHairPlan.Folder, portFiles, normalise: false);
+        // Each port file's own redirects, from the record. Unreadable, they are unknown — see Regenerated.RedirectsUnknown.
         var portRecord = portFiles.Count > 0 ? HairPortRecord.Read(modRoot) : null;
+        bool unknown = portRecord is { Unreadable: true };
         IReadOnlyList<string>? RedirectsOf(string rel)
             => portRecord is { Unreadable: false } rec
                 ? rec.Ports.Where(e => PenumbraModMeta.SameFile(e.File, rel)).SelectMany(e => e.Materials.Values).ToList()
@@ -635,20 +641,24 @@ internal static class MatcapWriter
         foreach (var (rel, port) in all.OrderBy(x => x.Rel, StringComparer.Ordinal))
             if (NamesIn(modRoot, rel) is { Count: > 0 } names && names.Any(n => n.Contains("_mcap", StringComparison.OrdinalIgnoreCase)))
                 found.Add(!port ? new Regenerated(rel, names, false)
-                        : HairOf(rel) is { } hair ? new Regenerated(rel, names, true, hair.Race, hair.Id, RedirectsOf(rel))
-                        : new Regenerated(rel, names, true, Redirects: RedirectsOf(rel)));
+                        : HairOf(rel) is { } hair ? new Regenerated(rel, names, true, hair.Race, hair.Id, RedirectsOf(rel), unknown)
+                        : new Regenerated(rel, names, true, Redirects: RedirectsOf(rel), RedirectsUnknown: unknown));
         return found;
     }
 
-    /// <summary>Every <c>.mdl</c> under <paramref name="folder"/> of the mod, as normalised rels, into <paramref name="into"/>.</summary>
-    private static void AddModels(string modRoot, string folder, ISet<string> into)
+    /// <summary>Every <c>.mdl</c> under <paramref name="folder"/> of the mod into <paramref name="into"/>: as normalised rels
+    /// (lower case, the refit record's form), or with <paramref name="normalise"/> off as spelled on disk, forward slashes.</summary>
+    private static void AddModels(string modRoot, string folder, ISet<string> into, bool normalise = true)
     {
         var dir = Path.Combine(modRoot, folder);
         try
         {
             if (Directory.Exists(dir))
                 foreach (var f in Directory.EnumerateFiles(dir, "*.mdl", SearchOption.AllDirectories))
-                    into.Add(RefitCore.Normal(Path.GetRelativePath(modRoot, f)));
+                {
+                    var rel = Path.GetRelativePath(modRoot, f);
+                    into.Add(normalise ? RefitCore.Normal(rel) : rel.Replace('\\', '/'));
+                }
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { }
     }

@@ -800,7 +800,7 @@ public sealed class MatcapHairPortTests : IDisposable
         Assert.True(undo.Ok, undo.Message);
         Assert.False(SecondSkinWriter.MaterialNames(mod.Get("long/c0801h0130_hir.mdl")).Any(MatcapPlan.IsMatcapName));   // restored
         AssertKept(mod, m2);
-        Assert.Contains(PortsSentence(RefitCore.Normal(rel)), undo.Message);
+        Assert.Contains(PortsSentence(rel.Replace('\\', '/')), undo.Message);
 
         // Remade again from the restored author file: nothing names it, so the next Forget takes its files away.
         mod.Put(rel, HairModel(201));
@@ -826,7 +826,7 @@ public sealed class MatcapHairPortTests : IDisposable
         var undo = MatcapWriter.Undo(mod.Root, "long/c0801h0130_hir.mdl");
         Assert.True(undo.Ok, undo.Message);
         AssertKept(mod, m2);
-        Assert.Contains(PortsSentence(RefitCore.Normal(rel)), undo.Message);
+        Assert.Contains(PortsSentence(rel.Replace('\\', '/')), undo.Message);
 
         // A port remade without it lets it go.
         mod.Put(rel, HairModel(201));
@@ -859,7 +859,35 @@ public sealed class MatcapHairPortTests : IDisposable
         var undo = MatcapWriter.Undo(mod.Root, "long/c0801h0130_hir.mdl");
         Assert.True(undo.Ok, undo.Message);
         AssertKept(mod, m2);
-        Assert.Contains(PortsSentence(RefitCore.Normal(port)), undo.Message);
+        Assert.Contains(PortsSentence(port.Replace('\\', '/')), undo.Message);
+    }
+
+    [Fact]
+    [Trait("Plan", "AC-issue-sweep-c-1")]
+    public void Undoing_an_authors_matcap_with_an_unreadable_ports_record_keeps_it_for_a_port_naming_a_matcap()
+    {
+        // The ports record can't be read, so which file a port redirects to is unknown: a port naming a matcap material is
+        // taken to draw it, and the material is kept — never deleted under a port that may still use it. The port is
+        // named as the user finds it on disk ("Hair Ports/…", not lower-cased).
+        using var mod = HairMod();
+        Assert.True(Apply(mod, "long/c0801h0130_hir.mdl", Source, Image("m2.tex", 5)).Ok);
+        var m2 = MatcapRecord.Read(mod.Root).MaterialsOf("long/c0801h0130_hir.mdl").Single();
+        const ushort hroth = 1601;
+        var renamed = HairMaterialPath.RenameRace(m2.Name, hroth);
+        var owner = mod.Owner("Cut", "Long");
+        var write = new HairPortWriter.PortWrite(owner, Source, HairPortPlan.FileFor(owner, Source)!, "abcd1234",
+                                                 HairPortPlan.HairPath(hroth, Id), Naming(renamed),
+                                                 [new HairPortWriter.MaterialWrite(HairMaterialPath.GamePath(hroth, Id, renamed)!, m2.File, null)]);
+        Assert.True(HairPortWriter.Save(mod.Root, [write], auto: false).Ok);
+        var port = PortFile(mod, "Long", hroth).Replace('\\', '/');
+        mod.Put("Proteus/hairport.json", System.Text.Encoding.UTF8.GetBytes("{ not json"));
+        Assert.True(HairPortRecord.Read(mod.Root).Unreadable);
+
+        var undo = MatcapWriter.Undo(mod.Root, "long/c0801h0130_hir.mdl");
+        Assert.True(undo.Ok, undo.Message);
+        AssertKept(mod, m2);
+        Assert.Contains(PortsSentence(port), undo.Message);
+        Assert.StartsWith(HairPortPlan.Folder + "/", port);
     }
 
     [Fact]
@@ -896,7 +924,7 @@ public sealed class MatcapHairPortTests : IDisposable
         var undo = MatcapWriter.Undo(mod.Root, "long/c0801h0130_hir.mdl");
         Assert.True(undo.Ok, undo.Message);
         AssertKept(mod, m2);
-        Assert.Contains(PortsSentence(RefitCore.Normal(copy)), undo.Message);
+        Assert.Contains(PortsSentence(copy), undo.Message);
     }
 
     [Fact]
@@ -912,7 +940,7 @@ public sealed class MatcapHairPortTests : IDisposable
         var undo = MatcapWriter.Undo(mod.Root, "long/c0801h0130_hir.mdl");
         Assert.True(undo.Ok, undo.Message);
         AssertKept(mod, m2);
-        Assert.Contains(PortsSentence(RefitCore.Normal(rel)), undo.Message);
+        Assert.Contains(PortsSentence(rel.Replace('\\', '/')), undo.Message);
         Assert.Contains(string.Format(ProteusLoc.Localize("Parts.Matcap.KeptForRefits.Fmt",
             "Refits made from it still draw the matcap, so its files stay until the sizes are remade: {0}."), RefitCore.Normal(refit)), undo.Message);
     }
