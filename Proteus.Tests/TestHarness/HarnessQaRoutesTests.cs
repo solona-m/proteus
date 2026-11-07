@@ -130,6 +130,7 @@ public class HarnessQaRoutesTests : IDisposable
     {
         // [AC-idle-disk-io-10] [EDGE-idle-disk-io-11]
         var mod = SidecarMod();
+        fx.Game.EditStates[mod] = new BindingEditState(true, true, Governed: false, false);
         var original = File.ReadAllBytes(fx.Game.MetaPath(mod));
         var (status, body) = await fx.Post("/actions/sidecar-edit",
             $"{{\"mod\":\"{mod}\",\"row\":16,\"diffuse\":\"#ABCDEF\",\"restoreMtime\":true}}");
@@ -141,12 +142,26 @@ public class HarnessQaRoutesTests : IDisposable
                      body.GetProperty("stampAfter").GetProperty("ticks").GetInt64());
         Assert.StartsWith("test-harness/backups/", body.GetProperty("backup").GetString());
         Assert.Contains("test harness: sidecar edit", fx.Game.Recomposites);
+        Assert.False(body.GetProperty("governed").GetBoolean());
 
         var (_, putBack) = await fx.Post("/actions/put-back", "{}");
         var undo = Assert.Single(putBack.GetProperty("sidecar").EnumerateArray());
         Assert.Equal("restored", undo.GetProperty("result").GetString());
         Assert.Equal("deleted", undo.GetProperty("defaults").GetString());
         Assert.Equal(original, File.ReadAllBytes(fx.Game.MetaPath(mod)));
+    }
+
+    [Fact]
+    [Trait("Plan", "AC-idle-disk-io-10")]
+    public async Task SidecarEdit_GovernedMod_SaysSo()
+    {
+        // [AC-idle-disk-io-10] Found in game (QA pass 2): a mod the active binding governs composites from the binding's
+        // colours, so the saved colour cannot show there; the answer says so.
+        var mod = SidecarMod();
+        fx.Game.EditStates[mod] = new BindingEditState(true, true, Governed: true, false);
+        var (status, body) = await fx.Post("/actions/sidecar-edit", $"{{\"mod\":\"{mod}\",\"row\":16,\"diffuse\":\"#ABCDEF\"}}");
+        Assert.Equal(200, status);
+        Assert.True(body.GetProperty("governed").GetBoolean());
     }
 
     [Fact]
@@ -253,6 +268,9 @@ public class HarnessQaRoutesTests : IDisposable
         Assert.Equal(200, status);
         Assert.Equal(FakeGame.OtherCollection, body.GetProperty("collection").GetGuid());
         Assert.Equal(FakeGame.OtherCollection, fx.Game.HoldSets.Last().Collection);
+        // No redraw for another collection's hold: it would wake the watchers QA is checking stay asleep.
+        Assert.False(body.GetProperty("redrawRequested").GetBoolean());
+        Assert.Equal(0, fx.Game.RedrawRequests);
 
         await fx.Post("/actions/put-back", "{}");
         Assert.DoesNotContain((FakeGame.OtherCollection, "Outfit"), fx.Game.Temporary.Keys);

@@ -33,7 +33,10 @@ public class SidecarDiscoveryCoreTests : IDisposable
         Func<string, SidecarDiscoveryService.DiscoveryRead>? read = null,
         string? root = Root, Guid? coll = null, bool noColl = false)
         => new(root, mods, noColl ? null : coll ?? Coll,
-               (_, dir) => settings != null ? settings(dir) : (true, 0),
+               // A null answer here stands for an unreadable one; tests of "never configured" use NotConfigured below.
+               (_, dir) => settings == null ? SidecarDiscoveryService.SettingsAnswer.Of(true, 0)
+                         : settings(dir) is { } s ? SidecarDiscoveryService.SettingsAnswer.Of(s.Item1, s.Item2)
+                         : SidecarDiscoveryService.SettingsAnswer.Unreadable,
                cache,
                (dir, _) => read != null ? read(dir) : new SidecarDiscoveryService.DiscoveryRead(Meta, false, 1));
 
@@ -90,6 +93,25 @@ public class SidecarDiscoveryCoreTests : IDisposable
             Inputs(Mods("unreadable"), cache2, settings: _ => null), true, out var complete2);
         Assert.Empty(none);
         Assert.False(complete2);
+    }
+
+    [Fact]
+    [Trait("Plan", "AC-idle-disk-io-1")]
+    [Trait("Plan", "EDGE-idle-disk-io-2")]
+    public void DiscoverCore_NeverConfiguredMod_IsNotEnabled_AnswerStillComplete()
+    {
+        // [AC-idle-disk-io-1] [EDGE-idle-disk-io-2] Found in game (QA pass 2): a Proteus mod installed but never configured
+        // in the player's collection read as "unreadable", so the idle probe never saw a complete answer.
+        var (cache, _) = CacheFor("off", "never");
+        var inputs = new SidecarDiscoveryService.DiscoveryInputs(Root, Mods("off", "never"), Coll,
+            (_, dir) => dir == "never" ? SidecarDiscoveryService.SettingsAnswer.NotConfigured
+                                       : SidecarDiscoveryService.SettingsAnswer.Of(false, 0),
+            cache, (_, _) => new SidecarDiscoveryService.DiscoveryRead(Meta, false, 1));
+        var found = SidecarDiscoveryService.DiscoverCore(inputs, true, out var complete);
+        Assert.Empty(found);
+        Assert.True(complete);
+        // DiscoverAll leaves the never-configured mod out, as before.
+        Assert.Equal(["off"], SidecarDiscoveryService.DiscoverCore(inputs, false, out _).Select(e => e.ModDirectory));
     }
 
     [Fact]

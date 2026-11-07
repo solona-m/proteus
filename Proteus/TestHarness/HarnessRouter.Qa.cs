@@ -118,20 +118,21 @@ internal sealed partial class HarnessRouter
             return HarnessResponse.Error(409, "user-edit-held", $"{dir} gained a colour edit that is not saved yet; nothing was saved");
         if (edit.Status != 200) return Answer(edit);
 
-        // After the lock: read it back through discovery (its cache), then recomposite.
-        string? readBack = await OnFramework(() =>
+        // After the lock: read it back through discovery (its cache), then recomposite. A mod the active design binding
+        // governs composites from the binding's colours, so the saved colour cannot show there: say so.
+        var (readBack, governed) = await OnFramework(() =>
         {
             var again = Game.DiscoverEntry(dir);
             var r = again is null ? null : RowsOf(again.Metadata, group, option)?.FirstOrDefault(x => x.Row == (int)rowNo);
             Game.Recomposite("test harness: sidecar edit");
-            return r is null ? null : DiffuseOf(r, subB);
+            return (r is null ? null : DiffuseOf(r, subB), Game.EditState(dir).Governed);
         });
         return Scrubbed(200, new
         {
             mode = "save", mod = dir, before, after = diffuse, readBack,
             stampBefore = StampJson(stampBefore), stampAfter = StampJson(stampAfter),
             sameLength = stampBefore is { } b0 && stampAfter is { } a0 && b0.Length == a0.Length,
-            mtimeRestored, backup = edit.Body, recomposite = true,
+            mtimeRestored, backup = edit.Body, recomposite = true, governed,
         });
     }
 

@@ -266,14 +266,17 @@ internal sealed class HarnessChanges(IHarnessGame game, SessionNames names, IPlu
         var before = holds.TryGetValue(key, out var old) ? old.Before
                    : new HoldBefore(baseEnabled, basePriority, q.Present || s?.Temporary == true, s != null);
         holds[key] = new HoldRecord(collection, modDir, newEnabled, newPriority, before, DateTime.UtcNow);
-        game.RequestRedraw();
+        // Only a hold in the player's own collection changes what the character draws; a redraw for another collection's
+        // would itself wake every watcher and hide what QA is checking (that they ignore other collections).
+        bool redraw = game.PlayerCollection() == collection;
+        if (redraw) game.RequestRedraw();
         log?.Information("[Proteus] test harness: holding {0} enabled={1} priority={2}", modDir, newEnabled, newPriority);
         return ChangeResult.Ok(new Dictionary<string, object?>
         {
             ["mod"] = modDir, ["collection"] = collection, ["enabled"] = newEnabled, ["priority"] = newPriority,
             ["before"] = new { enabled = before.Enabled, priority = before.Priority, temporary = before.Temporary,
                                configured = before.Configured },
-            ["redrawRequested"] = true,
+            ["redrawRequested"] = redraw,
         });
     }
 

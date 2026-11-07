@@ -306,12 +306,21 @@ public partial class SidecarDiscoveryService
     /// </summary>
     public List<OverlayEntry> DiscoverEnabled(out bool complete) => Discover(enabledOnly: true, out complete);
 
+    /// <summary>A mod's settings in the player's collection: unreadable (the answer is incomplete), never configured there
+    /// (simply not enabled), or its enabled state and priority.</summary>
+    internal readonly record struct SettingsAnswer(bool Failed, bool Configured, bool Enabled, int Priority)
+    {
+        public static readonly SettingsAnswer Unreadable = new(true, false, false, 0);
+        public static readonly SettingsAnswer NotConfigured = new(false, false, false, 0);
+        public static SettingsAnswer Of(bool enabled, int priority) => new(false, true, enabled, priority);
+    }
+
     /// <summary>What <see cref="DiscoverCore"/> needs, as delegates so it can be tested without Penumbra.</summary>
     internal sealed record DiscoveryInputs(
         string? ModsRoot,
         IReadOnlyDictionary<string, string>? AllMods,
         Guid? CollectionId,
-        Func<Guid, string, (bool Enabled, int Priority)?> GetSettings,
+        Func<Guid, string, SettingsAnswer> GetSettings,
         SidecarCache Cache,
         Func<string, string, DiscoveryRead> Read,
         Action<string, string, ProteusMetadata, long>? OnFound = null);
@@ -328,7 +337,14 @@ public partial class SidecarDiscoveryService
             penumbra.GetModDirectory(),
             allMods,
             allMods == null ? null : penumbra.GetPlayerCollectionId(),
-            (coll, dir) => penumbra.GetModSettings(coll, dir) is { } s ? (s.Enabled, s.Priority) : null,
+            // A mod the collection never configured is "not enabled", not "Penumbra could not answer": only a failed read
+            // leaves the answer incomplete.
+            (coll, dir) => penumbra.ReadModSettings(coll, dir) switch
+            {
+                { Kind: PenumbraBridge.SettingsReadKind.Ok, Settings: { } s } => SettingsAnswer.Of(s.Enabled, s.Priority),
+                { Kind: PenumbraBridge.SettingsReadKind.Failed } => SettingsAnswer.Unreadable,
+                _ => SettingsAnswer.NotConfigured,
+            },
             Cache,
             (modDir, metaPath) => ReadForDiscoveryDetailed(modDir, metaPath),
             (modDir, modRoot, metadata, stamp) => CheckStaleEffect(modDir, modRoot, metadata, stamp));
@@ -362,24 +378,26 @@ public partial class SidecarDiscoveryService
             var metaPath   = Path.Combine(sidecarDir, MetadataFile);
 
             var settings = inp.GetSettings(collId, modDir);
-            if (settings == null)
+            if (settings.Failed)
             {
                 complete = false;
                 continue;
             }
-            if (enabledOnly && !settings.Value.Enabled) continue;
+            // Never configured in this collection: not enabled, and (as before) not listed.
+            if (!settings.Configured) continue;
+            if (enabledOnly && !settings.Enabled) continue;
 
             var read = inp.Read(modDir, metaPath);
             if (read.Meta is not { } metadata)
             {
-                if (read.IoFailed && settings.Value.Enabled) complete = false;
+                if (read.IoFailed && settings.Enabled) complete = false;
                 continue;
             }
 
             inp.OnFound?.Invoke(modDir, Path.Combine(modsRoot, modDir), metadata, read.StampTicks);
 
-            results.Add(new OverlayEntry(modDir, modName, settings.Value.Priority,
-                settings.Value.Enabled, metadata, sidecarDir));
+            results.Add(new OverlayEntry(modDir, modName, settings.Priority,
+                settings.Enabled, metadata, sidecarDir));
         }
 
         results.Sort((a, b) => a.Priority.CompareTo(b.Priority));
