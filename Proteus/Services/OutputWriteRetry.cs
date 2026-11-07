@@ -46,6 +46,8 @@ internal sealed class OutputWriteRetry
             {
                 fingerprint = null;
                 attempts = 0;
+                // A clean publish ends the episode: a later give-up of the same inputs is news, and named again.
+                warnedFingerprint = null;
                 return Remember(new Decision(Kind.Clean, 0, 0, false));
             }
 

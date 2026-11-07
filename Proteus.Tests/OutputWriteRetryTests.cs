@@ -86,6 +86,19 @@ public class OutputWriteRetryTests
     }
 
     [Fact]
+    [Trait("Plan", "AC-issue-sweep-d-11")]
+    public void A_new_failure_episode_after_a_clean_publish_is_named_again()
+    {
+        // [AC-issue-sweep-d-11] Give up, publish cleanly, give up again on the same inputs: said out loud again.
+        var latch = new OutputWriteRetry();
+        for (int i = 0; i < 3; i++) latch.OnPublished("A", 1, 0, i, false);
+        Assert.True(latch.OnPublished("A", 1, 0, 10, false).Warn);
+        Assert.Equal(Kind.Clean, latch.OnPublished("A", 0, 0, 20, false).Kind);
+        for (int i = 0; i < 3; i++) latch.OnPublished("A", 1, 0, 30 + i, false);
+        Assert.True(latch.OnPublished("A", 1, 0, 40, false).Warn);
+    }
+
+    [Fact]
     [Trait("Plan", "EDGE-issue-sweep-d-23")]
     public void Alternating_fingerprints_hit_the_global_cap()
     {
