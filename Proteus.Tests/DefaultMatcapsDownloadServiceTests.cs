@@ -94,7 +94,7 @@ public sealed class DefaultMatcapsDownloadServiceTests : IDisposable
         s.EnsureAsync();
         WaitIdle(s);
         Assert.Equal(Pins.Length, calls.Count);
-        var expectedBases = ProteusAssets.BaseUrls("matcaps-v2");
+        var expectedBases = ProteusAssets.BaseUrls("matcaps-v3");
         foreach (var c in calls)
         {
             Assert.Equal(expectedBases, c.Urls);
@@ -196,7 +196,7 @@ public sealed class DefaultMatcapsDownloadServiceTests : IDisposable
     [Trait("Plan", "AC-matcap-pack-7")]
     public void Pinned_list_matches_the_committed_folder()
     {
-        Assert.Equal("matcaps-v2", DefaultMatcapsDownloadService.MatcapsTag);
+        Assert.Equal("matcaps-v3", DefaultMatcapsDownloadService.MatcapsTag);
         var folder = CommittedFolder();
         var onDisk = Directory.GetFiles(folder).Select(Path.GetFileName).Order(StringComparer.Ordinal).ToList();
         Assert.Equal(Pins.Select(p => p.Name).Order(StringComparer.Ordinal), onDisk);
