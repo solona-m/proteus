@@ -55,13 +55,13 @@ internal sealed class SidecarCache
     /// One stat. An IO or access failure is <see cref="StatKind.IoError"/> (never cached); any other failure (an odd
     /// path) is <see cref="StatKind.Missing"/>, as <see cref="File.Exists(string)"/> has always treated it.
     /// </summary>
-    private (StatKind Kind, SidecarStamp Stamp) TryStat(string path)
+    private (StatKind Kind, SidecarStamp Stamp) TryStat(string path, string countKey)
     {
         SidecarStamp? s;
         try { s = stat(path); }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { return (StatKind.IoError, default); }
         catch { return (StatKind.Missing, default); }
-        count?.Invoke(PresenceStatsKey, 1);
+        count?.Invoke(countKey, 1);
         return s is { } found ? (StatKind.Found, found) : (StatKind.Missing, default);
     }
 
@@ -78,7 +78,10 @@ internal sealed class SidecarCache
     private string? root;
     private long epoch;
 
+    /// <summary>Stats made looking for a sidecar in a mod folder: the 30 s sweep.</summary>
     internal const string PresenceStatsKey = "presence stats";
+    /// <summary>Stats made checking a known sidecar's stamp: one per Proteus mod per discovery.</summary>
+    internal const string MetadataStatsKey = "metadata stats";
     internal const string MetadataReadsKey = "metadata reads";
 
     public SidecarCache(Func<string, SidecarStamp?>? stat = null, Func<string, string>? readText = null,
@@ -125,7 +128,7 @@ internal sealed class SidecarCache
             e = epoch;
         }
 
-        var (kind, _) = TryStat(MetaPath(modsRoot, modDir));
+        var (kind, _) = TryStat(MetaPath(modsRoot, modDir), PresenceStatsKey);
         if (kind == StatKind.IoError) return true;
         bool present = kind == StatKind.Found;
 
@@ -148,7 +151,7 @@ internal sealed class SidecarCache
             texts.TryGetValue(metaPath, out cached);
         }
 
-        var (kind, stamp) = TryStat(metaPath);
+        var (kind, stamp) = TryStat(metaPath, MetadataStatsKey);
         if (kind == StatKind.IoError) return new MetaRead(MetaReadKind.IoError, null, default);
 
         if (kind == StatKind.Missing)

@@ -298,7 +298,7 @@ public sealed class Plugin : IDalamudPlugin
                                                TextureProvider, TextureReadback, config, uvRemap,
                                                path => textureLoader.LoadRawFile(null, path),
                                                dir => partsPanel.NoteModelsChanged(dir), log,
-                                               pluginInterface, designBindings, editRouter, presets,
+                                               pluginInterface, designBindings, editRouter, presets, discovery,
                                                partsPanel.AsHarnessStudio(statusWindow.OpenToStudio,
                                                                         () => statusWindow.IsOpen,
                                                                         () => statusWindow.IsOpen = false)),

@@ -60,6 +60,7 @@ internal sealed class GameHarnessAdapter : IHarnessGame, IDisposable
     private readonly DesignBindingService designBindings;
     private readonly OverlayEditRouter editRouter;
     private readonly PresetService presets;
+    private readonly SidecarDiscoveryService discovery;
     private readonly Glamourer.Api.IpcSubscribers.ApplyDesign applyDesign;
     private readonly Glamourer.Api.IpcSubscribers.ApplyState applyState;
     private long designApplied;
@@ -77,9 +78,11 @@ internal sealed class GameHarnessAdapter : IHarnessGame, IDisposable
                               ITextureProvider textures, ITextureReadbackProvider readback, Configuration config,
                               UVRemapService uvRemap, Func<string, byte[]?> readGameFile, Action<string> onModChanged,
                               IPluginLog log, IDalamudPluginInterface pluginInterface, DesignBindingService designBindings,
-                              OverlayEditRouter editRouter, PresetService presets, IStudioHarness? studio = null)
+                              OverlayEditRouter editRouter, PresetService presets, SidecarDiscoveryService discovery,
+                              IStudioHarness? studio = null)
     {
         Studio = studio;
+        this.discovery = discovery;
         this.penumbra = penumbra;
         this.glamourer = glamourer;
         this.compositor = compositor;
@@ -405,13 +408,49 @@ internal sealed class GameHarnessAdapter : IHarnessGame, IDisposable
     public IReadOnlyList<string> AutoWritersOn()
     {
         var on = new List<string>();
-        if (config.AutoRefitEnabled) on.Add("auto refit");
+        // The effective switch: the harness's session override counts.
+        if (autoRefit.EffectivelyEnabled) on.Add("auto refit");
         if (config.AutoUpgradeLegacyShaders) on.Add("gear shader upgrade");
         if (config.AutoRepointVariants) on.Add("Gear variants");
         if (config.AutoHairPort) on.Add("auto hair port");
         if (config.AutoHatCompat) on.Add("auto hat compat");
         return on;
     }
+
+    // ── idle disk I/O checks ────────────────────────────────────────────────
+
+    public (bool Latched, int Step, long NextDueInMs) Boot() => compositor.HarnessBootState();
+
+    public void RearmBoot() => compositor.HarnessRearmBoot();
+
+    public IReadOnlyList<(Guid Id, bool Player)>? Collections()
+    {
+        if (penumbra.GetCollections() is not { } all) return null;
+        var player = penumbra.GetPlayerCollectionId();
+        return all.Keys.Select(id => (id, id == player)).ToList();
+    }
+
+    public (bool Config, bool? Override, bool Effective) AutoRefitEnabled()
+        => (config.AutoRefitEnabled, autoRefit.HarnessOverride, autoRefit.EffectivelyEnabled);
+
+    public void SetAutoRefitOverride(bool? enabled) => autoRefit.HarnessOverride = enabled;
+
+    public IReadOnlyList<string> TakeRefitsWhileOverridden() => autoRefit.HarnessTakeRefitsWhileOverridden();
+
+    public (bool Built, bool Stale, bool Refreshing, long Generation) BodyIndex() => autoRefit.HarnessBodyIndexState();
+
+    public (long WindowAgeMs, IReadOnlyDictionary<string, long> Counts)? Io() => compositor.Io?.Snapshot();
+
+    public OverlayEntry? DiscoverEntry(string modDir)
+        => discovery.DiscoverAll().FirstOrDefault(e => string.Equals(e.ModDirectory, modDir, StringComparison.OrdinalIgnoreCase));
+
+    public bool SaveSidecar(OverlayEntry entry) => discovery.SaveMetadata(entry);
+
+    public bool HasStaged(string modDir) => discovery.HarnessHasStaged(modDir);
+
+    public void ForgetSidecar(string modDir) => discovery.Forget(modDir);
+
+    public void Recomposite(string reason) => compositor.TriggerRecomposite(reason);
 
     private void OnStateFinalized(StateFinalizationType type)
     {

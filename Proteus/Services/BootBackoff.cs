@@ -108,6 +108,12 @@ internal sealed class BootBackoff
             if (compositeGen == armGen) latched = true;
     }
 
+    /// <summary>The latch, the ladder step and the time to the next probe, read together (the harness's <c>/state</c>).</summary>
+    public (bool Latched, int Step, long NextDueInMs) Snapshot(long now)
+    {
+        lock (gate) return (latched, step, latched ? 0 : Math.Max(0, nextDue - now));
+    }
+
     /// <summary>Milliseconds from <paramref name="now"/> to the next probe, for the log.</summary>
     public long DelayFrom(long now)
     {

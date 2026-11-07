@@ -140,6 +140,33 @@ public class BodyIndexScheduleTests : IDisposable
         Assert.True(s.Shown(T0 + BodyIndexSchedule.ShownAskThrottleMs, built: false, refreshing: false));
     }
 
+    [Fact]
+    [Trait("Plan", "AC-idle-disk-io-12")]
+    [Trait("Plan", "EDGE-idle-disk-io-43")]
+    public void EffectiveEnabled_OverrideWins_NullFallsBackToConfig_PluginOffIsOff()
+    {
+        // [AC-idle-disk-io-12] [EDGE-idle-disk-io-43]
+        Assert.True(AutoRefitWatcher.EffectiveEnabled(true, false, true));
+        Assert.False(AutoRefitWatcher.EffectiveEnabled(true, true, false));
+        Assert.True(AutoRefitWatcher.EffectiveEnabled(true, true, null));
+        Assert.False(AutoRefitWatcher.EffectiveEnabled(true, false, null));
+        Assert.False(AutoRefitWatcher.EffectiveEnabled(false, true, true));
+    }
+
+    [Fact]
+    [Trait("Plan", "AC-idle-disk-io-12")]
+    public void Schedule_Stale_TrueAfterDeferredChange_FalseAfterTake()
+    {
+        // [AC-idle-disk-io-12]
+        var s = new BodyIndexSchedule();
+        Assert.False(s.Stale);
+        s.Changed(T0, 2000, enabled: false);
+        Assert.True(s.Stale);
+        s.Asked(T0 + 1);
+        Assert.True(s.TakeDue(T0 + 1));
+        Assert.False(s.Stale);
+    }
+
     private (Dictionary<string, string> Mods, string Root) SyntheticModsRoot()
     {
         Directory.CreateDirectory(Path.Combine(temp, "Plain Mod"));

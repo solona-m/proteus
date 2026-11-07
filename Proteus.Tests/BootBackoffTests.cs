@@ -183,6 +183,33 @@ public class BootBackoffTests
     }
 
     [Fact]
+    [Trait("Plan", "AC-idle-disk-io-9")]
+    public void Snapshot_ReportsLatchStepAndDelay()
+    {
+        // [AC-idle-disk-io-9]
+        var b = new BootBackoff(T0);
+        b.Report(BootProbeOutcome.Idle, T0);
+        b.Report(BootProbeOutcome.Idle, T0 + 5_000);
+        Assert.Equal((false, 2, 30_000L), b.Snapshot(T0 + 5_000));
+        b.Report(BootProbeOutcome.Composite, T0 + 35_000);
+        b.Latch();
+        Assert.Equal((true, 2, 0L), b.Snapshot(T0 + 35_000));
+    }
+
+    [Fact]
+    [Trait("Plan", "AC-idle-disk-io-9")]
+    public void Snapshot_AfterRearm_Unlatched_StepZero()
+    {
+        // [AC-idle-disk-io-9]
+        var b = new BootBackoff(T0);
+        b.Report(BootProbeOutcome.Idle, T0);
+        b.Report(BootProbeOutcome.Composite, T0 + 5_000);
+        b.Latch();
+        b.Rearm(T0 + 6_000);
+        Assert.Equal((false, 0, 0L), b.Snapshot(T0 + 6_000));
+    }
+
+    [Fact]
     [Trait("Plan", "EDGE-idle-disk-io-3")]
     public void Classify_SomeEnabledIncomplete_IsComposite()
     {

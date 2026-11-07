@@ -597,7 +597,10 @@ public partial class CompositorService
     {
         log.Information("{0}", redrawLedger.Observed());
         NoteRedrawObserved();
-        // One walk of the resource tree for both sets: this runs on the framework thread after every redraw.
+        // One walk of the resource tree for both sets: this runs on the framework thread after every redraw. Counted beside
+        // the redraws, so the idle I/O numbers show one read per redraw.
+        Io?.Count(IoCounters.Redraws);
+        Io?.Count(IoCounters.RedrawTreeReads);
         var (modelPaths, snapshot) = penumbra.GetActivePlayerResourcePaths();
         bool equipChanged = false;
         bool modelWalkOk = false;   // a draw object we actually read — see the carrier reconcile below

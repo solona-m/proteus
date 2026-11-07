@@ -136,6 +136,75 @@ public class IdleDiskIoWiringTests
     }
 
     [Fact]
+    [Trait("Plan", "AC-idle-disk-io-7")]
+    [Trait("Plan", "AC-idle-disk-io-13")]
+    public void RedrawHook_CountsRedrawAndOneTreeRead()
+    {
+        // [AC-idle-disk-io-7] [AC-idle-disk-io-13]
+        var hook = Method(Source("Services/CompositorService.Events.cs"), "private void OnLocalPlayerRedrawn()");
+        Assert.Equal(1, Count(hook, "Io?.Count(IoCounters.Redraws)"));
+        Assert.Equal(1, Count(hook, "Io?.Count(IoCounters.RedrawTreeReads)"));
+        int read = hook.IndexOf("GetActivePlayerResourcePaths(", System.StringComparison.Ordinal);
+        int counted = hook.IndexOf("Io?.Count(IoCounters.RedrawTreeReads)", System.StringComparison.Ordinal);
+        Assert.True(counted >= 0 && counted < read, "the tree read is counted beside its one call");
+    }
+
+    [Fact]
+    [Trait("Plan", "EDGE-idle-disk-io-43")]
+    public void AutoRefitEnabled_UsesEffectiveEnabled_NoConfigWrite()
+    {
+        // [EDGE-idle-disk-io-43]
+        var watcher = Source("Services/AutoRefit/AutoRefitWatcher.cs");
+        Assert.Contains("return EffectiveEnabled(config.PluginEnabled, config.AutoRefitEnabled, harness);",
+                        Method(watcher, "private bool Enabled"));
+        var partial = Source("Services/AutoRefit/AutoRefitWatcher.Harness.cs");
+        Assert.DoesNotContain("AutoRefitEnabled", partial);
+        Assert.DoesNotContain("Save(", partial);
+        Assert.DoesNotContain("config.", partial);
+    }
+
+    [Fact]
+    [Trait("Plan", "EDGE-idle-disk-io-45")]
+    public void AutoWritersOn_ReportsEffective()
+    {
+        // [EDGE-idle-disk-io-45]
+        var adapter = Method(Source("TestHarness/GameHarnessAdapter.cs"), "public IReadOnlyList<string> AutoWritersOn()");
+        Assert.Contains("autoRefit.EffectivelyEnabled", adapter);
+        Assert.DoesNotContain("config.AutoRefitEnabled", adapter);
+    }
+
+    [Fact]
+    [Trait("Plan", "EDGE-idle-disk-io-54")]
+    public void NoteRefit_CalledOnceInSaveAndWear_AfterSave()
+    {
+        // [EDGE-idle-disk-io-54]
+        var dir = Path.Combine(ProteusDir(), "Services", "AutoRefit");
+        int calls = Directory.EnumerateFiles(dir, "AutoRefitWatcher*.cs")
+                             .Where(f => !f.EndsWith(".Harness.cs", System.StringComparison.Ordinal))
+                             .Sum(f => Count(File.ReadAllText(f), "HarnessNoteRefit(") );
+        // The declaration plus the one call.
+        Assert.Equal(2, calls);
+        var save = Method(Source("Services/AutoRefit/AutoRefitWatcher.cs"), "private async Task<string?> SaveAndWear(");
+        int saved = save.IndexOf("BodyRetargetWriter.Save(", System.StringComparison.Ordinal);
+        int noted = save.IndexOf("HarnessNoteRefit(targetMod.Dir);", System.StringComparison.Ordinal);
+        Assert.True(saved >= 0 && noted > saved, "the refit is noted after its save succeeds");
+    }
+
+    [Fact]
+    [Trait("Plan", "EDGE-idle-disk-io-58")]
+    public void HarnessPartials_AreCompiledOut()
+    {
+        // [EDGE-idle-disk-io-58]
+        foreach (var file in new[] { "Services/CompositorService.Harness.cs", "Services/SidecarDiscoveryService.Harness.cs",
+                                     "Services/AutoRefit/AutoRefitWatcher.Harness.cs" })
+        {
+            var src = Source(file).TrimStart();
+            Assert.StartsWith("#if PROTEUS_TEST_HARNESS", src);
+            Assert.EndsWith("#endif", src.TrimEnd());
+        }
+    }
+
+    [Fact]
     [Trait("Plan", "AC-idle-disk-io-1")]
     public void BootPoll_BacksOffThroughTheGate()
     {

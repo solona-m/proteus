@@ -285,7 +285,30 @@ public sealed partial class AutoRefitWatcher : IDisposable
         detections.Flush();   // a reading made in a batch the unload cut short is still a good reading
     }
 
-    private bool Enabled => config.PluginEnabled && config.AutoRefitEnabled;
+    private bool Enabled
+    {
+        get
+        {
+            bool? harness = null;
+            HarnessEnabled(ref harness);
+            return EffectiveEnabled(config.PluginEnabled, config.AutoRefitEnabled, harness);
+        }
+    }
+
+    /// <summary>Whether auto refit acts: the plugin is on, and the test harness's session override (when it set one) or
+    /// else the user's setting says so. Also what <c>AutoWritersOn</c> reports.</summary>
+    internal static bool EffectiveEnabled(bool pluginEnabled, bool setting, bool? harnessOverride)
+        => pluginEnabled && (harnessOverride ?? setting);
+
+    /// <summary>The effective switch, for the harness's <c>AutoWritersOn</c>.</summary>
+    internal bool EffectivelyEnabled => Enabled;
+
+    /// <summary>The QA test harness's session-only override (local builds only; compiled out of every CI build).</summary>
+    partial void HarnessEnabled(ref bool? on);
+
+    /// <summary>A refit was written into <paramref name="modDir"/> and switched on; the harness lists those made while
+    /// its override stands. Worker or framework thread.</summary>
+    partial void HarnessNoteRefit(string modDir);
 
     // ── signals ─────────────────────────────────────────────────────────────
 
@@ -1874,6 +1897,8 @@ public sealed partial class AutoRefitWatcher : IDisposable
                                outcome.Message));
             return null;
         }
+        // Every refit's write into a mod comes through here: the one place the test harness hears of it.
+        HarnessNoteRefit(targetMod.Dir);
 
         if (await Apply(r, root, group, refit.Option, cutFrom, isVanilla, CancellationToken.None) is { } off)
         {

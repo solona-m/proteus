@@ -24,6 +24,9 @@ internal sealed class BodyIndexSchedule
     private long lastShownAsk = long.MinValue / 2;
     private bool stale;
 
+    /// <summary>Mods changed while nobody needed the index, and it has not been read since.</summary>
+    public bool Stale { get { lock (gate) return stale; } }
+
     /// <summary>A mod changed. Scheduled after <paramref name="debounceMs"/> when auto refit is on or the list is on
     /// screen; otherwise the caller drops the index (<see cref="Change.MarkStale"/>).</summary>
     public Change Changed(long now, int debounceMs, bool enabled)

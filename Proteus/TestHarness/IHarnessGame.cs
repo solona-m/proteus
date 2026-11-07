@@ -283,6 +283,50 @@ internal interface IHarnessGame
     /// <summary>The automatic writers switched on (auto refit, gear shader upgrade, Gear variants, auto hair port, auto hat
     /// compat), by name: they write into worn mods as gear changes, which put-back cannot undo. Framework thread.</summary>
     IReadOnlyList<string> AutoWritersOn();
+
+    // ── idle disk I/O checks (HarnessRouter.Qa) ─────────────────────────────
+
+    /// <summary>The boot probe's latch, ladder step and time to its next look. Any thread.</summary>
+    (bool Latched, int Step, long NextDueInMs) Boot();
+
+    /// <summary>Re-arm the boot probe as the character going away does. Any thread.</summary>
+    void RearmBoot();
+
+    /// <summary>Every collection id and whether it is the player's: ids only, never names. Null when Penumbra cannot answer.
+    /// Framework thread.</summary>
+    IReadOnlyList<(Guid Id, bool Player)>? Collections();
+
+    /// <summary>Auto refit's switch: the user's setting, the harness's session override (null: none), and the effect. Any thread.</summary>
+    (bool Config, bool? Override, bool Effective) AutoRefitEnabled();
+
+    /// <summary>Set (or with null, clear) the harness's session-only auto-refit override: memory only, never saved. Any thread.</summary>
+    void SetAutoRefitOverride(bool? enabled);
+
+    /// <summary>The mods auto refit wrote into while the override stood; the list is emptied. Any thread.</summary>
+    IReadOnlyList<string> TakeRefitsWhileOverridden();
+
+    /// <summary>The body index: built, stale, being read, generation. Any thread.</summary>
+    (bool Built, bool Stale, bool Refreshing, long Generation) BodyIndex();
+
+    /// <summary>The idle I/O counters' current window, copied without resetting; null when there are none. Any thread.</summary>
+    (long WindowAgeMs, IReadOnlyDictionary<string, long> Counts)? Io();
+
+    /// <summary>A Proteus mod as discovery sees it (through its cache), with a freshly parsed metadata graph; null when it
+    /// has no sidecar. Framework thread.</summary>
+    OverlayEntry? DiscoverEntry(string modDir);
+
+    /// <summary>Save an entry's metadata through Proteus's own save. File work only, no framework hop: worker thread, under
+    /// <see cref="HarnessSidecar"/>'s lock.</summary>
+    bool SaveSidecar(OverlayEntry entry);
+
+    /// <summary>Whether the colour editor holds an unsaved edit of the mod. Any thread.</summary>
+    bool HasStaged(string modDir);
+
+    /// <summary>Forget what discovery's cache holds about the mod. Any thread.</summary>
+    void ForgetSidecar(string modDir);
+
+    /// <summary>Ask for a recomposite. Framework thread.</summary>
+    void Recomposite(string reason);
 }
 
 /// <summary>A mod's own (permanent) settings in a collection. <see cref="Own"/> false: the collection has no setting of its

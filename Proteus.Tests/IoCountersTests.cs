@@ -43,9 +43,68 @@ public class IoCountersTests
         now += 60_000;
         c.Count(IoCounters.BootProbes);
         Assert.Equal(2, lines.Count);
-        // Counts reset after each line: the second holds only what came after the first.
-        Assert.DoesNotContain("presence stats=1000", lines[1]);
-        Assert.Contains("boot probes=1", lines[1]);
+        // Counts reset after each line: the second holds only what came after the first, and the count that wrote it
+        // opens the next window.
+        Assert.Contains("presence stats=400", lines[1]);
+        Assert.DoesNotContain("boot probes", lines[1]);
+        now += 60_000;
+        c.MaybeSummarise();
+        Assert.Equal(3, lines.Count);
+        Assert.Contains("boot probes=1", lines[2]);
+    }
+
+    [Fact]
+    [Trait("Plan", "AC-idle-disk-io-14")]
+    [Trait("Plan", "EDGE-idle-disk-io-47")]
+    public void Count_SummarisesBeforeAdding()
+    {
+        // [AC-idle-disk-io-14] [EDGE-idle-disk-io-47]
+        var c = Make();
+        c.Count(IoCounters.DiscoveryCalls);
+        c.Count(IoCounters.PresenceStats, 50);
+        now += 61_000;
+        c.Count(IoCounters.DiscoveryCalls);
+        c.Count(IoCounters.MetadataStats, 2);
+        Assert.Equal(["[Proteus] idle I/O, last 61 s: discovery calls=1, presence stats=50"], lines);
+        now += 60_000;
+        c.MaybeSummarise();
+        Assert.Equal("[Proteus] idle I/O, last 60 s: discovery calls=1, metadata stats=2", lines[1]);
+    }
+
+    [Fact]
+    [Trait("Plan", "EDGE-idle-disk-io-47")]
+    public void EmptyCheck_RestartsWindow()
+    {
+        // [EDGE-idle-disk-io-47]
+        var c = Make();
+        now += 200_000;           // a long quiet stretch
+        c.Count(IoCounters.BootProbes);
+        Assert.Empty(lines);      // nothing to summarise: the window restarted at this count
+        now += 59_000;
+        c.MaybeSummarise();
+        Assert.Empty(lines);
+        now += 1_000;
+        c.MaybeSummarise();
+        Assert.Equal(["[Proteus] idle I/O, last 60 s: boot probes=1"], lines);
+    }
+
+    [Fact]
+    [Trait("Plan", "AC-idle-disk-io-13")]
+    [Trait("Plan", "EDGE-idle-disk-io-46")]
+    public void Snapshot_CopiesWithoutReset()
+    {
+        // [AC-idle-disk-io-13] [EDGE-idle-disk-io-46]
+        var c = Make();
+        c.Count(IoCounters.Redraws, 3);
+        c.Count(IoCounters.RedrawTreeReads, 3);
+        now += 20_000;
+        var (age, counts) = c.Snapshot();
+        Assert.Equal(20_000, age);
+        Assert.Equal(3, counts[IoCounters.Redraws]);
+        Assert.Equal(3, counts[IoCounters.RedrawTreeReads]);
+        now += 41_000;
+        c.MaybeSummarise();
+        Assert.Equal(["[Proteus] idle I/O, last 61 s: redraws=3, redraw tree reads=3"], lines);
     }
 
     [Fact]
@@ -69,8 +128,9 @@ public class IoCountersTests
     {
         // [AC-idle-disk-io-8]
         var c = Make();
-        now += 60_000;
         c.Count(IoCounters.MetadataReads);
+        now += 60_000;
+        c.MaybeSummarise();
         Assert.Single(lines);
         for (int i = 0; i < 10_000; i++)
         {

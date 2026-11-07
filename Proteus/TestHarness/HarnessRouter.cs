@@ -29,6 +29,7 @@ internal sealed partial class HarnessRouter(HarnessJobs jobs, LogRing ring, Sess
         ("POST", "/actions/glamourer-apply"), ("POST", "/actions/binding-edit"), ("GET", "/jobs/{id}"),
         ("GET", "/studio"), ("POST", "/actions/studio-open"), ("POST", "/actions/studio-set"), ("POST", "/actions/studio-drag"),
         ("GET", "/matcaps"), ("POST", "/actions/matcap-image"), ("POST", "/actions/matcap"),
+        ("POST", "/actions/boot-rearm"), ("POST", "/actions/sidecar-edit"), ("GET", "/sidecar"), ("POST", "/actions/auto-refit"),
     ];
 
     private IHarnessGame Game => jobs.Game;
@@ -71,6 +72,10 @@ internal sealed partial class HarnessRouter(HarnessJobs jobs, LogRing ring, Sess
                 "/matcaps" => await MatcapsView(request),
                 "/actions/matcap-image" => await MatcapImageAction(request),
                 "/actions/matcap" => await MatcapAction(request),
+                "/actions/boot-rearm" => await BootRearm(request),
+                "/actions/sidecar-edit" => await SidecarEdit(request),
+                "/sidecar" => await SidecarView(request),
+                "/actions/auto-refit" => await AutoRefitAction(request),
                 _ => Job(path["/jobs/".Length..]),
             };
         }
@@ -104,7 +109,7 @@ internal sealed partial class HarnessRouter(HarnessJobs jobs, LogRing ring, Sess
 
     private async Task<HarnessResponse> State()
     {
-        var (s, harnessChanges) = await OnFramework(() => (Game.State(), changes.View()));
+        var (s, harnessChanges, qa) = await OnFramework(() => (Game.State(), changes.View(), QaState()));
         var models = ModelJoin.Join(s.Loaded, s.ResourceMap, s.ModsRoot);
         var c = s.Compositor;
         var a = s.AutoRefit;
@@ -123,7 +128,11 @@ internal sealed partial class HarnessRouter(HarnessJobs jobs, LogRing ring, Sess
                             overlayModsUsed = r.OverlayModsUsed, epoch = r.Epoch, at = r.Timestamp }
                     : null,
                 lastRefresh = s.LastRefresh is { } t ? new { outcome = t.Outcome, totalMs = t.TotalMs, spans = t.Spans, at = t.AtUtc } : null,
+                boot = qa.Boot,
             },
+            collections = qa.Collections,
+            io = qa.Io,
+            leftoverSidecar = qa.LeftoverSidecar,
             redraws = new { count = Game.RedrawCount, lastAtUtc = Game.LastRedrawUtc },
             autoRefit = new
             {
@@ -131,6 +140,8 @@ internal sealed partial class HarnessRouter(HarnessJobs jobs, LogRing ring, Sess
                 busy = a.Busy, failed = a.View.Failed, message = names.Scrub(a.View.Message),
                 pending = new { running = a.Activity.Running, queued = a.Activity.Queued, walkDue = a.Activity.WalkDue,
                                 undoing = a.Activity.Undoing },
+                enabled = qa.AutoRefitEnabled,
+                bodyIndex = qa.BodyIndex,
             },
             shaderUpgrade = ShaderUpgradeBlock(Game.ShaderUpgrade()),
             variantRepoint = VariantRepointBlock(Game.VariantRepoint()),

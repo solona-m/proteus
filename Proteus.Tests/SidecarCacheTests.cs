@@ -412,6 +412,40 @@ public class SidecarCacheTests
     }
 
     [Fact]
+    [Trait("Plan", "AC-idle-disk-io-14")]
+    [Trait("Plan", "EDGE-idle-disk-io-48")]
+    public void PresenceSweep_CountsPresenceOnly()
+    {
+        // [AC-idle-disk-io-14] [EDGE-idle-disk-io-48]
+        var d = new Drive();
+        d.Put("m1", "{}");
+        var counted = new List<string>();
+        var cache = new SidecarCache(d.Stat, d.Read, () => now, (k, n) => counted.AddRange(Enumerable.Repeat(k, n)));
+        for (int i = 0; i < 5; i++) cache.MayHaveSidecar(Root, $"m{i}");
+        Assert.Equal(5, counted.Count);
+        Assert.All(counted, k => Assert.Equal(SidecarCache.PresenceStatsKey, k));
+    }
+
+    [Fact]
+    [Trait("Plan", "AC-idle-disk-io-14")]
+    [Trait("Plan", "EDGE-idle-disk-io-48")]
+    public void ReadMetadata_CountsMetadataStatsOnly()
+    {
+        // [AC-idle-disk-io-14] [EDGE-idle-disk-io-48]
+        var d = new Drive();
+        d.Put("m", "{}");
+        var counted = new List<string>();
+        var cache = new SidecarCache(d.Stat, d.Read, () => now, (k, n) => counted.AddRange(Enumerable.Repeat(k, n)));
+        cache.ReadMetadata("m", Meta("m"));
+        now += 4_000;
+        cache.ReadMetadata("m", Meta("m"));   // earns trust
+        counted.Clear();
+        now += 1_000;
+        cache.ReadMetadata("m", Meta("m"));   // a cache hit: one stamp stat, no read
+        Assert.Equal([SidecarCache.MetadataStatsKey], counted);
+    }
+
+    [Fact]
     [Trait("Plan", "EDGE-idle-disk-io-16")]
     public void ParallelLookupsAndForgets_Consistent()
     {

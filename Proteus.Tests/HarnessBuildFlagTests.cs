@@ -54,4 +54,50 @@ public class HarnessBuildFlagTests
             Assert.NotEmpty(types);
         }
     }
+
+    /// <summary>A type's members named Harness… in any case (a lower-case backing field included).</summary>
+    private static System.Collections.Generic.List<string> HarnessMembers(Type type)
+    {
+        const System.Reflection.BindingFlags all = System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.Static
+                                                 | System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.NonPublic
+                                                 | System.Reflection.BindingFlags.DeclaredOnly;
+        return type.GetMembers(all).Where(m => m.Name.StartsWith("Harness", StringComparison.OrdinalIgnoreCase)
+                                             // A partial method declared without a body is compiled away, but keep the check honest.
+                                             && !m.Name.StartsWith("HarnessEnabled", StringComparison.Ordinal)
+                                             && !m.Name.StartsWith("HarnessNoteRefit", StringComparison.Ordinal))
+                   .Select(m => m.Name).ToList();
+    }
+
+    private static void AssertPartial(Type type, string expected)
+    {
+        var members = HarnessMembers(type);
+        if (UnderCi)
+            Assert.True(members.Count == 0, $"a CI build must compile the harness partial out, but {type.Name} has {string.Join(", ", members)}");
+        else
+            Assert.Contains(expected, members);
+    }
+
+    [Fact]
+    [Trait("Plan", "EDGE-idle-disk-io-43")]
+    [Trait("Plan", "EDGE-idle-disk-io-58")]
+    public void CompositorHarnessMembers_MatchRuntimeCiEnvironment()
+        // [EDGE-idle-disk-io-43] [EDGE-idle-disk-io-58]
+        => AssertPartial(typeof(Services.CompositorService), "HarnessRearmBoot");
+
+    [Fact]
+    [Trait("Plan", "EDGE-idle-disk-io-43")]
+    [Trait("Plan", "EDGE-idle-disk-io-58")]
+    public void SidecarDiscoveryHarnessMembers_MatchRuntimeCiEnvironment()
+        // [EDGE-idle-disk-io-43] [EDGE-idle-disk-io-58]
+        => AssertPartial(typeof(Services.SidecarDiscoveryService), "HarnessHasStaged");
+
+    [Fact]
+    [Trait("Plan", "EDGE-idle-disk-io-43")]
+    [Trait("Plan", "EDGE-idle-disk-io-58")]
+    public void AutoRefitHarnessMembers_MatchRuntimeCiEnvironment()
+    {
+        // [EDGE-idle-disk-io-43] [EDGE-idle-disk-io-58] The lower-case backing fields count too.
+        AssertPartial(typeof(Services.AutoRefitWatcher), "HarnessOverride");
+        if (!UnderCi) Assert.Contains("harnessOverride", HarnessMembers(typeof(Services.AutoRefitWatcher)));
+    }
 }

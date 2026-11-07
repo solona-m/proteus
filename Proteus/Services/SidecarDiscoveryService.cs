@@ -147,7 +147,7 @@ public readonly record struct ResolutionDiagnostic(
         PenumbraGroups.Count > 0 ? PenumbraGroups : other.PenumbraGroups);
 }
 
-public class SidecarDiscoveryService
+public partial class SidecarDiscoveryService
 {
     private readonly PenumbraBridge penumbra;
     private readonly IPluginLog log;
