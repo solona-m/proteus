@@ -107,7 +107,7 @@ public class BodySourceTests
             File.WriteAllBytes(remembered, [1]);
             bool named = CompositorService.NamesModFile(glv, remembered, null, mods, File.Exists);
             var (memo, settled) = CompositorService.PrimeResult(glv, new System.Collections.Generic.Dictionary<string, string>(),
-                                                                settledAsGameData: true, republishedBody: true, named);
+                                                                settledAsGameData: true, gameDataMaySettle: true, named);
             Assert.False(settled);
             Assert.Null(CompositorService.SettledAnswer(glv, settled, memo, File.Exists, _ => false));
             Assert.Equal(K.Remembered, SecondSkinService.ChooseBodySource(true, hasSettled: false, hasRemembered: true, false));

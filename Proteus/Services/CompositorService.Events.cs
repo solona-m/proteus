@@ -155,6 +155,7 @@ public partial class CompositorService
         _upstreamUnsettled.Clear();
         _upstreamSettled.Clear();
         _upstreamIsGameData.Clear();
+        _texGameDataSeen.Clear();   // #70: a texture settles as game data only on two fresh primes after a change
         if (_upstreamByGamePath.IsEmpty) return;
         _upstreamByGamePath.Clear();
         log.Debug("[Proteus] upstream cache cleared ({0})", reason);

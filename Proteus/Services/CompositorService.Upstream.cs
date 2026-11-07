@@ -234,17 +234,38 @@ public partial class CompositorService
     }
 
     /// <summary>
-    /// What the prime memoises for a path: a settled disk; the game path itself for a republished body that settled as
-    /// game data with no known mod file behind it (so a vanilla body we republish smoothed stops being re-primed and its
-    /// shell is never cut from our own output, #63); else nothing — missed and retried, as every other path.
+    /// What the prime memoises for a path: a settled disk; the game path itself for a path that settled as game data with
+    /// no known mod file behind it — a republished body on its first such prime (so a vanilla body we republish smoothed
+    /// stops being re-primed and its shell is never cut from our own output, #63), or a texture on its second in a row
+    /// since the last change (<paramref name="sawGameDataBefore"/>: one echo mid-rebuild is not "nobody provides this",
+    /// #70); else nothing — missed and retried, as every other path.
     /// </summary>
     internal static (string? Memo, bool Settled) PrimeResult(string path, IReadOnlyDictionary<string, string> settled,
-                                                             bool settledAsGameData, bool republishedBody, bool namesModFile)
+                                                             bool settledAsGameData, bool gameDataMaySettle, bool namesModFile,
+                                                             bool sawGameDataBefore = false)
     {
         if (settled.TryGetValue(path, out var disk)) return (disk, true);
-        if (settledAsGameData && republishedBody && !namesModFile) return (path, true);
+        if (settledAsGameData && gameDataMaySettle && !namesModFile
+            && (sawGameDataBefore || !IsTexture(path))) return (path, true);
         return (null, false);
     }
+
+    /// <summary>
+    /// Whether a game-data answer may settle <paramref name="path"/>: a republished body (#63) or a texture (#70: the
+    /// vanilla skin textures we composite from would otherwise be re-primed, and warned about, on every composite).
+    /// Materials keep missing, as before.
+    /// </summary>
+    internal static bool GameDataMaySettle(string path, bool republishedBody) => republishedBody || IsTexture(path);
+
+    private static bool IsTexture(string path) => path.EndsWith(".tex", StringComparison.OrdinalIgnoreCase);
+
+    /// <summary>
+    /// Whether a texture is marked after this prime (#70): only a first unsettled game-data answer with no mod file
+    /// behind it marks it, so the next such answer settles it. A settle consumes the mark; any other answer (a mod
+    /// file, timed out, a named echo) drops it.
+    /// </summary>
+    internal static bool TexGameDataMarkAfter(string path, bool settledNow, bool settledAsGameData, bool namesModFile)
+        => IsTexture(path) && !settledNow && settledAsGameData && !namesModFile;
 
     /// <summary>
     /// Resolve <paramref name="gamePath"/> to the mod file a composite should read as its base, never our own previous
@@ -431,7 +452,8 @@ public partial class CompositorService
     /// </summary>
     public IReadOnlyList<(string GamePath, string Source, bool Settled)> BaseUpstreams()
         => _upstreamByGamePath
-            .Where(kv => kv.Key.EndsWith(".tex", StringComparison.OrdinalIgnoreCase))
+            .Where(kv => kv.Key.EndsWith(".tex", StringComparison.OrdinalIgnoreCase)
+                         && !string.Equals(kv.Key, kv.Value, StringComparison.OrdinalIgnoreCase))   // game data: no mod behind it
             .OrderBy(kv => kv.Key, StringComparer.OrdinalIgnoreCase)
             .Select(kv => (kv.Key, ModFolderOf(kv.Value) ?? kv.Value, !_upstreamUnsettled.ContainsKey(kv.Key)))
             .ToList();
@@ -474,6 +496,13 @@ public partial class CompositorService
     /// with the rest of the upstream memo.
     /// </summary>
     private readonly ConcurrentDictionary<string, byte> _upstreamIsGameData = new(StringComparer.OrdinalIgnoreCase);
+
+    /// <summary>
+    /// Textures whose last prime answered game data with no mod file behind them (#70): the next such answer settles
+    /// them as game data. Any other answer drops the mark, a settle consumes it, and <see cref="InvalidateUpstreamCache"/>
+    /// clears every mark, so each settle after a change takes two fresh game-data primes.
+    /// </summary>
+    private readonly ConcurrentDictionary<string, byte> _texGameDataSeen = new(StringComparer.OrdinalIgnoreCase);
 
     /// <summary>
     /// Resolve <paramref name="paths"/> to their real upstreams while our own redirects are narrowed away, waiting until
@@ -642,6 +671,7 @@ public partial class CompositorService
                     var settled = SettleUpstreams(needPrime, sw);
 
                     int missed = 0;
+                    var lastUpstreams = _lastBaseUpstreams;
                     foreach (var p in needPrime)
                     {
                         bool gameData = _upstreamIsGameData.ContainsKey(p);
@@ -651,7 +681,17 @@ public partial class CompositorService
                             var (remembered, keptSource) = secondSkin.KnownBodyFiles(p, managedModDir, modsRoot);
                             named = NamesModFile(p, remembered, keptSource, modsRoot, File.Exists);
                         }
-                        var (memo, isSettled) = PrimeResult(p, settled, gameData, republishedBodies.Contains(p), named);
+                        else if (gameData && IsTexture(p))
+                        {
+                            // The last composite's upstream survives the invalidation that cleared the memo (#70).
+                            string? lastRead = lastUpstreams != null && lastUpstreams.TryGetValue(p, out var lr) ? lr : null;
+                            named = NamesModFile(p, lastRead, null, modsRoot, File.Exists);
+                        }
+                        bool sawBefore = _texGameDataSeen.ContainsKey(p);
+                        var (memo, isSettled) = PrimeResult(p, settled, gameData, GameDataMaySettle(p, republishedBodies.Contains(p)),
+                                                            named, sawBefore);
+                        if (TexGameDataMarkAfter(p, isSettled, gameData, named)) _texGameDataSeen[p] = 0;
+                        else _texGameDataSeen.TryRemove(p, out _);
                         if (isSettled && memo is { } disk)
                         {
                             // Log the transition: a genuine skin change and a racy read produce identical output.
