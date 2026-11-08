@@ -63,6 +63,7 @@ async function check(name, path, expectStatus, expectOrigin) {
 const GH = 'https://github.com/solona-m/proteus/releases/download';
 const CAM = 'https://github.com/solona-m/camera-tools-ffxiv/releases/download';
 const PKL = 'https://github.com/solona-m/Pickles-Playlist-Editor/releases/download';
+const MIL = 'https://github.com/solona-m/milieu/releases/download';
 const stripEpoch = (u) => (u ?? '').replace(/\?e=\d+$/, '');
 
 console.log('accepted paths:');
@@ -95,6 +96,30 @@ await check('camera tools rejects nesting', '/camera-tools/v1.0/sub/latest.zip',
 await check('camera tools prefix alone', '/camera-tools/latest.zip', 404, null);
 // Proteus's asset tags do not leak through the prefixed route into the camera tools repo.
 await check('camera tools rejects uvmaps tag', '/camera-tools/uvmaps-v1/x.tif', 404, null);
+
+// Milieu: its own prefix; plugin zips and the bundled scene textures only.
+console.log('milieu (fourth origin repo):');
+await check('milieu stable zip', '/milieu/v2611.40.0.0/latest.zip', 200, `${MIL}/v2611.40.0.0/latest.zip`);
+await check('milieu testing zip', '/milieu/testing-40/latest.zip', 200, `${MIL}/testing-40/latest.zip`);
+await check('milieu bundled scene', '/milieu/backdrops-v2/moon.atex', 200, `${MIL}/backdrops-v2/moon.atex`);
+await check('milieu rejects other files', '/milieu/v1.0/payload.exe', 404, null);
+await check('milieu rejects jpeg scenes', '/milieu/backdrops-v2/moon.jpeg', 404, null);
+await check('milieu rejects bad tag', '/milieu/random/latest.zip', 404, null);
+await check('milieu rejects nesting', '/milieu/backdrops-v2/sub/moon.atex', 404, null);
+await check('milieu rejects uppercase stem', '/milieu/backdrops-v2/Moon.atex', 404, null);
+await check('milieu prefix alone', '/milieu/latest.zip', 404, null);
+await check('milieu rejects proteus asset tags', '/milieu/uvmaps-v1/x.tif', 404, null);
+await check('bare backdrops tag is not milieu', '/backdrops-v2/moon.atex', 404, null);
+await check('milieu 40-char stem accepted', `/milieu/backdrops-v2/${'a'.repeat(40)}.atex`, 200, `${MIL}/backdrops-v2/${'a'.repeat(40)}.atex`);
+await check('milieu 41-char stem rejected', `/milieu/backdrops-v2/${'a'.repeat(41)}.atex`, 404, null);
+await check('milieu rejects dotted stem', '/milieu/backdrops-v2/moon.night.atex', 404, null);
+await check('milieu rejects hyphenated stem', '/milieu/backdrops-v2/living-room.atex', 404, null);
+await check('milieu rejects atex under a zip tag', '/milieu/v1.0/moon.atex', 404, null);
+await check('milieu rejects zip under a backdrops tag', '/milieu/backdrops-v2/latest.zip', 404, null);
+await check('milieu rejects over-long backdrops tag', '/milieu/backdrops-v1234567/moon.atex', 404, null);
+await check('milieu rejects traversal', '/milieu/backdrops-v2/../../etc/passwd', 404, null);
+await check('milieu rejects encoded traversal', '/milieu/backdrops-v2/%2e%2e/moon.atex', 404, null);
+await check('milieu rejects encoded slash', '/milieu/backdrops-v2%2Fmoon.atex', 404, null);
 
 // A third repo: Pickles Playlist Editor's AI-score assets, under its own prefix.
 // [AC-ai-assets-download-9] [EDGE-ai-assets-download-22] [EDGE-ai-assets-download-24] (Pickles plan ids)

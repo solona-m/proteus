@@ -147,6 +147,8 @@ about.
 | `/v2608.309.0.0/latest.zip` | `releases/download/v2608.309.0.0/…` |
 | `/camera-tools/v2609.12.0.0/latest.zip` | the same, in `solona-m/camera-tools-ffxiv` |
 | `/pickles/aiscan-v1/ffmpeg.exe` (and `.onnx`, `.onnx.data`) | the same, in `solona-m/Pickles-Playlist-Editor` |
+| `/milieu/v2611.40.0.0/latest.zip`, `/milieu/testing-40/latest.zip` | the same, in `solona-m/milieu` |
+| `/milieu/backdrops-v2/moon.atex` | the same, in `solona-m/milieu` |
 | `/` and `/README.md` | the project README, from `raw.githubusercontent.com` |
 | `/ja`, `/ja/`, `/ja/README.md` (and `en de fr zh ko es ru`) | that language's README — English is the repo root, the rest are `docs/README.<lang>.md` |
 | `/TROUBLESHOOTING.md`, `/For%20Creators.md` | the docs the README links to |
@@ -177,6 +179,23 @@ curl.exe -sL --limit-rate 2M "https://dl.solona.info/pickles/aiscan-v1/ffmpeg.ex
 (Get-Item ff.exe).Length                                   # 227823104
 (Get-FileHash ff.exe -Algorithm SHA256).Hash.ToLower()     # 589e50b766d251afdf181dd664d40bd94407e200b019989fd7468c7d118a28d0
 curl.exe -sI "https://dl.solona.info/pickles/aiscan-v1/ffmpeg.exe" | findstr /i cf-cache-status   # HIT
+```
+
+### A fourth origin: Milieu
+
+Milieu's release zips and its bundled scenes are mirrored under `/milieu/`, resolving against `solona-m/milieu`.
+Zips use the same tag shapes as Proteus (`v<version>`, `testing-<n>`). Scenes match only `backdrops-v<N>` tags and
+lowercase alphanumeric `<stem>.atex` files, which is exactly what Milieu's `tools/publish-backdrops.ps1` uploads; the
+plugin pins each file's size and SHA-256 (`Milieu/Assets/BackdropPins.cs`) and falls back to GitHub on any failure.
+
+Each scene is a pre-converted 8192x4096 BC7 texture of 44,739,312 bytes, under the 512 MB cacheable-object limit.
+After a deploy, check one end to end before trusting the cache:
+
+```powershell
+curl.exe -sL "https://dl.solona.info/milieu/backdrops-v2/moon.atex" -o moon.atex
+(Get-Item moon.atex).Length                                  # 44739312
+(Get-FileHash moon.atex -Algorithm SHA256).Hash.ToLower()    # 74d3deb3519573150760287fd876eed2fa88f8735778e11456515a353bd64f5f
+curl.exe -sI "https://dl.solona.info/milieu/backdrops-v2/moon.atex" | findstr /i cf-cache-status   # HIT
 ```
 
 ### Documents render for browsers, stay raw for tools

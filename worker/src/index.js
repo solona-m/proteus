@@ -28,6 +28,9 @@ const CAMERA_TOOLS_REPO = 'camera-tools-ffxiv';
 // Pickles Playlist Editor's AI-score downloads (big binaries that don't fit in its installer). Kept in sync
 // with that repo's Tools/AiAssets.cs and devtools/aiscan/releases.json.
 const PICKLES_REPO = 'Pickles-Playlist-Editor';
+// Milieu (solona-m/milieu), own prefix like Camera Tools: its plugin zips and the pre-converted bundled scenes
+// that tools/publish-backdrops.ps1 publishes under backdrops-v<N> (pinned by size and SHA-256 in BackdropPins.cs).
+const MILIEU_REPO = 'milieu';
 
 // Served at / and /README.md so the host explains itself instead of answering a bare 404. Inlined at
 // build time (scripts/embed-readme.mjs) rather than fetched, so it always describes THIS deployment
@@ -49,7 +52,8 @@ const README_TTL = 300;
 // The first capture is the tag VERBATIM — no normalisation — so what is asked for is what is fetched.
 // Stable releases tag `v2608.309.0.0`, testing builds tag `testing-309`.
 //
-// Each entry carries the repo its paths resolve against, because the mirror now fronts two plugins.
+// Each entry carries the repo its paths resolve against, because the mirror fronts several repos (Proteus,
+// Camera Tools, Pickles Playlist Editor, Milieu).
 // Proteus's paths are the bare `/<tag>/<file>` forms and MUST stay that way: ProteusAssets.BaseUrls
 // builds them as `MirrorBase + tag + "/"` in every shipped build, so adding a prefix to them would
 // break every copy of the plugin already installed. A second plugin therefore gets a prefix segment
@@ -71,6 +75,9 @@ const ROUTES = [
   // Pickles Playlist Editor, own prefix like Camera Tools. Only the aiscan-v<N> tags its upload workflow can
   // create, and only the file kinds it publishes.
   { rx: /^\/pickles\/(aiscan-v[0-9]{1,6})\/([A-Za-z0-9_.-]{1,80}\.(?:exe|onnx|data))$/, repo: PICKLES_REPO },
+  // Milieu: release zips, and the bundled scene textures (lowercase stems, .atex only).
+  { rx: /^\/milieu\/(v[0-9][0-9.]{0,30}|testing-[0-9]{1,10})\/(latest\.zip)$/, repo: MILIEU_REPO },
+  { rx: /^\/milieu\/(backdrops-v[0-9]{1,6})\/([a-z0-9]{1,40}\.atex)$/, repo: MILIEU_REPO },
 ];
 
 const YEAR = 31536000;
