@@ -284,11 +284,23 @@ public class DesignRestoreSweepTests
 
     [Fact]
     [Trait("Plan", "EDGE-sweep-keeps-deps-21")]
-    public void FindProviders_ReleasedProvider_SparedNotHeld()
+    [Trait("Plan", "AC-sweep-keeps-deps-3")]
+    public void FindProviders_StaysOnDirsStillNeed_ChainHoldsAcrossSweeps()
     {
-        // A player-released stray is not a candidate for holding; if it is a provider it is still found and spared.
-        var (kept, resolved) = MatteCase();
-        Assert.True(FindProviders(In(kept, CliaTextures(), resolved: resolved)).ContainsKey(Clia));
+        // Sweep 1 left clia on (or the player put it back): it is no candidate now, never held — but its active bibo
+        // material needs stray T's game-less texture, so T, drawn only by sweep 2, is a provider, not held.
+        const string tTex = "chara/custom/t_overlay.tex";
+        var staysOn = D((Clia, M(F(Clia, BiboMtrl, [BiboBase, tTex]))));
+        var candidates = D(("T", M(F("T", tTex))));
+        var resolved = R((BiboMtrl, Full(Clia, BiboMtrl)), (tTex, Full("T", tTex)));
+        var inputs = In(D((Yab, M())), candidates, resolved: resolved) with { StaysOn = staysOn };
+        var p = FindProviders(inputs);
+        Assert.Equal(["T"], p.Keys);
+        Assert.Equal(Clia, p["T"].Single().NeededBy);
+        Assert.Contains(NormGame(BiboMtrl), ResolveQuery(inputs));
+        // A StaysOn mod's unreadable file never blocks a round.
+        var bad = inputs with { StaysOn = D((Clia, M(F(Clia, BiboMtrl, bad: true)))) };
+        Assert.Equal(SweepBlock.None, Blocked(bad).Block);
     }
 
     [Fact]
@@ -495,12 +507,15 @@ public class DesignRestoreSweepTests
     public void Second_same_design_restore_before_phase_2_keeps_the_carry()
     {
         var none = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-        var installed = new HashSet<string>(StringComparer.OrdinalIgnoreCase) { "Stray", "Pending", "Released", "Taken", "Bound" };
+        var installed = new HashSet<string>(StringComparer.OrdinalIgnoreCase) { "Stray", "Pending", "Released", "Taken", "Bound", "Overlay" };
         var released = new HashSet<string>(StringComparer.OrdinalIgnoreCase) { "Released" };
         var source = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase) { ["Taken"] = "Glamourer" };
-        var merged = MergeCarry(["Stray"], ["Pending", "Released", "Taken", "Bound", "Gone", Managed],
-                                new HashSet<string>(StringComparer.OrdinalIgnoreCase) { "Bound" }, none, installed, Managed,
+        var pending = new HashSet<string>(StringComparer.OrdinalIgnoreCase) { "Pending", "Released", "Taken", "Bound", "Overlay", "Gone", Managed };
+        var merged = MergeCarry(["Stray"], pending,
+                                new HashSet<string>(StringComparer.OrdinalIgnoreCase) { "Bound" },
+                                new HashSet<string>(StringComparer.OrdinalIgnoreCase) { "Overlay" }, installed, Managed,
                                 released, source, DesignBindingService.TemporarySource);
-        Assert.Equal(["Pending", "Stray"], merged);
+        Assert.Equal(["Pending", "Stray"], merged.Order(StringComparer.OrdinalIgnoreCase));
+        _ = none;
     }
 }

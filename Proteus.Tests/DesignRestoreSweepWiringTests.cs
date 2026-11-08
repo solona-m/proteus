@@ -140,7 +140,12 @@ public class DesignRestoreSweepWiringTests
     [Fact]
     [Trait("Plan", "EDGE-sweep-keeps-deps-13")]
     public void Candidates_exclude_holds_another_plugin_took_over()
-        => Assert.Contains("bool Ours(string d) => !sweepHoldSource.TryGetValue(d, out var s) || s == TemporarySource;", Phase1());
+    {
+        var p1 = Phase1();
+        Assert.Contains("bool Ours(string d) => !sweepHoldSource.TryGetValue(d, out var s)", p1);
+        Assert.Contains("string.Equals(s, TemporarySource, StringComparison.OrdinalIgnoreCase)", p1);
+        Assert.Contains("&& Ours(d))", p1);
+    }
 
     [Fact]
     [Trait("Plan", "EDGE-sweep-keeps-deps-26")]
@@ -148,6 +153,8 @@ public class DesignRestoreSweepWiringTests
     {
         var p2 = Phase2();
         Assert.Contains("files[dir].ManifestFailed) continue;", p2);
+        Assert.Contains("var unreadStrays = job.Candidates.Where(d => !providers.ContainsKey(d) && files[d].ManifestFailed)", p2);
+        Assert.Contains("not holding off this round, their file list could not be read", p2);
         // A held stray with no readable files can't be a provider, so it is never in the let-go loop's providers.
         Assert.Contains("if (!providers.TryGetValue(dir, out var needs)) continue;", p2);
     }

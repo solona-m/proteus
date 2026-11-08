@@ -148,9 +148,12 @@ public sealed class SweepModReaderTests : IDisposable
         var files = reader.Files(mods, "Body");
         Assert.False(files.ManifestFailed);
         Assert.True(files.Files.Single(f => f.GamePath.EndsWith("_bibo.mtrl")).Unreadable);
-        Assert.True(files.Files.Single(f => f.GamePath.EndsWith("_top.mdl")).Unreadable);
+        // Missing on disk: Penumbra can't load it either, so it references nothing rather than blocking a sweep.
+        var top = files.Files.Single(f => f.GamePath.EndsWith("_top.mdl"));
+        Assert.False(top.Unreadable);
+        Assert.Empty(top.Refs);
         Assert.False(files.Files.Single(f => f.GamePath.EndsWith(".tex")).Unreadable);
-        Assert.Equal(2, reader.Unreadable);
+        Assert.Equal(1, reader.Unreadable);
     }
 
     [Fact]

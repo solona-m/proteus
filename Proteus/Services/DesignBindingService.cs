@@ -199,6 +199,7 @@ public partial class DesignBindingService : IDisposable
         penumbra.PenumbraReady -= OnPenumbraReadyClearSweep;
         disposed = true;
         sweepCts.Cancel();   // a sweep's background read in flight never marshals back
+        sweepCts.Dispose();
         Volatile.Write(ref bootRestoreDone, 1);
         framework.Update -= OnBootRestoreTick;   // idempotent; safe when it was never subscribed
     }
@@ -1279,7 +1280,7 @@ public partial class DesignBindingService : IDisposable
         // once the next completed sweep has checked them, so a hold on a mod something kept needs is never carried
         // blind. Read before the release below drops them; this read of the settings is the one the carry reuses.
         var heldBefore = HeldNowCore(collId.Value, out _, out var effectiveBefore);
-        List<string> carry = [];
+        IReadOnlyCollection<string> carry = [];
         if (designId != postLoadSweepDesign || collId.Value != postLoadSweepCollection)
             ClearSweepRecords(null);
         else
@@ -1525,7 +1526,7 @@ public partial class DesignBindingService : IDisposable
     /// <summary>What one sweep's first phase hands its second: the state it was decided for, and its reads.</summary>
     private sealed record SweepJob(
         int Token, int Generation, Guid Design, Guid Collection, string ModsRoot,
-        HashSet<string> Kept, HashSet<string> Sanity, List<string> Candidates, List<string> Held,
+        HashSet<string> Kept, HashSet<string> Sanity, List<string> Candidates, List<string> Held, List<string> StaysOn,
         List<(string GamePath, string Source)> Upstreams, int MapFiles, long MapMs, long SettingsMs);
 
     /// <summary>The background read's result: every needed mod's files, and what reading them cost.</summary>
@@ -1553,7 +1554,8 @@ public partial class DesignBindingService : IDisposable
 
         NoteSweepHoldChanges(collId, effective);
 
-        bool Ours(string d) => !sweepHoldSource.TryGetValue(d, out var s) || s == TemporarySource;
+        bool Ours(string d) => !sweepHoldSource.TryGetValue(d, out var s)
+                               || string.Equals(s, TemporarySource, StringComparison.OrdinalIgnoreCase);
         var candidates = StrayDrawnMods(modsRoot, tree, postLoadSweepBound, postLoadSweepProteus)
             .Concat(sweepCarried)
             .Where(d => !sweepPlayerReleased.Contains(d) && !sweepSpared.ContainsKey(d) && !sweepHeld.Contains(d) && Ours(d))
@@ -1570,8 +1572,11 @@ public partial class DesignBindingService : IDisposable
             .Where(d => !postLoadSweepProteus.Contains(d) && kept.Contains(d)
                         && heldTemporary.TryGetValue(d, out var h) && h.Enabled)
             .ToHashSet(StringComparer.OrdinalIgnoreCase);
+        // Strays left on earlier, or put back by the player, still need what their materials need.
+        var staysOn = sweepSpared.Keys.Concat(sweepPlayerReleased).Where(d => !kept.Contains(d))
+            .Distinct(StringComparer.OrdinalIgnoreCase).ToList();
         var job = new SweepJob(postLoadSweepToken, characterWorkGeneration, postLoadSweepDesign, collId, modsRoot,
-            kept, sanity, candidates, held, compositor.BaseUpstreams().Select(u => (u.GamePath, u.Source)).ToList(),
+            kept, sanity, candidates, held, staysOn, compositor.BaseUpstreams().Select(u => (u.GamePath, u.Source)).ToList(),
             tree.Count, mapMs, settingsMs);
 
         var ct = sweepCts.Token;
@@ -1580,7 +1585,7 @@ public partial class DesignBindingService : IDisposable
             var clockRead = System.Diagnostics.Stopwatch.StartNew();
             int cold = sweepReader.ColdReads, bad = sweepReader.Unreadable;
             var files = new Dictionary<string, ModDirFiles>(StringComparer.OrdinalIgnoreCase);
-            foreach (var dir in job.Kept.Concat(job.Candidates).Concat(job.Held))
+            foreach (var dir in job.Kept.Concat(job.Candidates).Concat(job.Held).Concat(job.StaysOn))
             {
                 ct.ThrowIfCancellationRequested();
                 if (!files.ContainsKey(dir)) files[dir] = sweepReader.Files(job.ModsRoot, dir);
@@ -1633,7 +1638,7 @@ public partial class DesignBindingService : IDisposable
 
         var inputs = new DesignRestoreSweep.SweepInputs(job.ModsRoot, SidecarDiscoveryService.ManagedModDir,
             Pick(job.Kept), job.Sanity, Pick(job.Candidates), Pick(job.Held),
-            new Dictionary<string, string?>(), job.Upstreams, Exists);
+            new Dictionary<string, string?>(), job.Upstreams, Exists, Pick(job.StaysOn));
         var query = DesignRestoreSweep.ResolveQuery(inputs);
         var resolved = penumbra.ResolvePlayerPaths(query);
         if (resolved == null) { BlockSweep(DesignRestoreSweep.SweepBlock.ResolveFailed, null); return; }
@@ -1650,6 +1655,8 @@ public partial class DesignBindingService : IDisposable
         var collId = job.Collection;
         var off = new List<string>();
         var letGo = new List<string>();
+        // Not held this round: a stray whose file list can't be read can't be shown not to be a provider.
+        var unreadStrays = job.Candidates.Where(d => !providers.ContainsKey(d) && files[d].ManifestFailed).ToList();
         using (compositor.SuppressModSettingEvents())
         {
             foreach (var dir in job.Candidates)
@@ -1696,6 +1703,9 @@ public partial class DesignBindingService : IDisposable
         if (off.Count > 0)
             log.Information("[Proteus] design-restore: holding off mod(s) the design doesn't have that were still drawn: {0}",
                 string.Join(", ", off));
+        if (unreadStrays.Count > 0)
+            log.Information("[Proteus] design-restore: not holding off this round, their file list could not be read: {0}",
+                string.Join(", ", unreadStrays));
         if (letGo.Count > 0)
         {
             bool redraw = compositor.AutoRedrawOn;

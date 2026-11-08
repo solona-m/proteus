@@ -30,6 +30,8 @@ internal static partial class DesignRestoreSweep
     /// One sweep's evidence. <see cref="Candidates"/> are the drawn mods the design lacks plus the strays a same-design
     /// re-apply carried; <see cref="Held"/> the strays the sweep holds off now. <see cref="Resolved"/> is keyed by
     /// normalised game path and holds what the player's collection resolves it to (null: nothing).
+    /// <see cref="StaysOn"/> are strays an earlier sweep left on or the player put back: never held, but what their
+    /// active files need still counts, so a chain through them holds across sweeps. They never block a round.
     /// </summary>
     internal sealed record SweepInputs(
         string ModsRoot,
@@ -40,7 +42,8 @@ internal static partial class DesignRestoreSweep
         IReadOnlyDictionary<string, ModDirFiles> Held,
         IReadOnlyDictionary<string, string?> Resolved,
         IReadOnlyList<(string GamePath, string Source)> Upstreams,
-        Func<string, bool> GameFileExists);
+        Func<string, bool> GameFileExists,
+        IReadOnlyDictionary<string, ModDirFiles>? StaysOn = null);
 
     internal enum SweepBlock { None, MapUnreadable, SettingsUnreadable, KeptManifest, KeptActiveFileUnreadable, ResolveFailed, ResolveInsane }
 
@@ -81,6 +84,8 @@ internal static partial class DesignRestoreSweep
         return m.Success ? "skin:" + m.Groups["suffix"].Value : "file:" + name;
     }
 
+    private static readonly IReadOnlyDictionary<string, ModDirFiles> Empty = new Dictionary<string, ModDirFiles>();
+
     private static bool IsMaterial(string gamePath) => gamePath.EndsWith(".mtrl", StringComparison.OrdinalIgnoreCase);
     private static bool IsModel(string gamePath) => gamePath.EndsWith(".mdl", StringComparison.OrdinalIgnoreCase);
 
@@ -107,6 +112,12 @@ internal static partial class DesignRestoreSweep
     {
         var exists = Safe(i.GameFileExists);
         var q = new SortedSet<string>(StringComparer.Ordinal);
+        foreach (var files in (i.StaysOn ?? Empty).Values)
+            foreach (var f in files.Files)
+            {
+                var g = NormGame(f.GamePath);
+                if (IsMaterial(g) || IsModel(g)) q.Add(g);
+            }
         foreach (var (dir, files) in i.Kept)
         {
             foreach (var f in files.Files)
@@ -187,7 +198,7 @@ internal static partial class DesignRestoreSweep
                 foreach (var m in f.Refs) keyNeeds.TryAdd(MaterialKey(m), dir);
         }
 
-        foreach (var (dir, files) in i.Kept)
+        foreach (var (dir, files) in i.Kept.Concat(i.StaysOn ?? Empty))
             foreach (var f in files.Files)
                 if (Active(i, f)) AddNeeds(dir, f);
 
@@ -307,13 +318,13 @@ internal static partial class DesignRestoreSweep
     /// A same-design re-apply's carry: the strays the sweep still held, joined with the ones an earlier re-apply carried
     /// that no completed check has decided yet — filtered by the same rules, so a second quick re-apply can't drop them.
     /// </summary>
-    internal static List<string> MergeCarry(IEnumerable<string> carry, IEnumerable<string> pending,
+    internal static HashSet<string> MergeCarry(IEnumerable<string> fresh, IReadOnlySet<string> pending,
                                             IReadOnlySet<string> bound, IReadOnlySet<string> proteusDirs,
                                             IReadOnlySet<string> installed, string managedDir,
                                             IReadOnlySet<string> playerReleased, IReadOnlyDictionary<string, string> lastSource,
                                             string ourSource)
     {
-        var merged = new SortedSet<string>(carry, StringComparer.OrdinalIgnoreCase);
+        var merged = new HashSet<string>(fresh, StringComparer.OrdinalIgnoreCase);
         foreach (var d in pending)
         {
             if (bound.Contains(d) || proteusDirs.Contains(d) || !installed.Contains(d) || playerReleased.Contains(d)) continue;
@@ -321,6 +332,6 @@ internal static partial class DesignRestoreSweep
             if (lastSource.TryGetValue(d, out var src) && !string.Equals(src, ourSource, StringComparison.OrdinalIgnoreCase)) continue;
             merged.Add(d);
         }
-        return merged.ToList();
+        return merged;
     }
 }

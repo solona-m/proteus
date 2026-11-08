@@ -10,7 +10,8 @@ namespace Proteus.Services;
 /// <summary>One file a mod redirects, with what it references: a material's texture paths, a model's material names.</summary>
 /// <param name="FullPath">The file on disk, normalised (<see cref="DesignRestoreSweep.NormFile"/>).</param>
 /// <param name="DefaultData">Whether the redirect is in the mod's default data rather than an option.</param>
-/// <param name="Unreadable">The file is a material or model that couldn't be read; it contributes no references.</param>
+/// <param name="Unreadable">The file is a material or model that couldn't be read or parsed; it contributes no
+/// references. A file missing on disk is not unreadable: it simply references nothing.</param>
 internal sealed record ModFile(string GamePath, string FullPath, bool DefaultData, IReadOnlyList<string> Refs, bool Unreadable);
 
 /// <summary>A mod's redirected files, or <see cref="ManifestFailed"/> when its file list couldn't be read at all.</summary>
@@ -100,7 +101,8 @@ internal sealed class SweepModReader
         try
         {
             fi = new FileInfo(fullPath);
-            if (!fi.Exists) { Interlocked.Increment(ref unreadable); return null; }
+            // Missing on disk: Penumbra can't load it either, so it needs nothing — and it isn't a read to retry.
+            if (!fi.Exists) return [];
         }
         catch { Interlocked.Increment(ref unreadable); return null; }
 
