@@ -239,6 +239,9 @@ internal static class MatcapJob
         {
             jobs.PostAfterChange(job, () => job.SetAfterChange(game.AfterModChange(args.ModDir)));
             await jobs.AwaitAfterChange(job).ConfigureAwait(false);
+            // The Studio open on this mod reads the model again (its parts now name the matcap, or no longer do).
+            if (args.Port.StudioModChanged is { } studioChanged)
+                await jobs.Dispatcher.RunAsync(() => { studioChanged(args.ModDir); return true; }, jobs.Timings.FrameworkStart).ConfigureAwait(false);
         }
         try { jobs.Backups.WriteAfter(backup, args.ModRoot); }
         catch (Exception e) { jobs.Log?.Warning(e, "[Proteus] test harness: could not record {0}'s state after the matcap", args.ModDir); }

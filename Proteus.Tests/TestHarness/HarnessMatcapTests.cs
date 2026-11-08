@@ -273,11 +273,18 @@ public class HarnessMatcapTests : IDisposable
         await f.Post("/actions/matcap-image", """{"name":"qa-red.png","color":"#ff2020"}""");
         string? recordWhenEnded = "never";
         var basePort = studio.MatcapPort!;
-        studio.MatcapPort = () => basePort() with { EndClickPreview = () => recordWhenEnded = MatcapRecord.Exists(root) ? "after" : "before" };
+        var reread = new List<(string Dir, bool Written)>();
+        studio.MatcapPort = () => basePort() with
+        {
+            EndClickPreview = () => recordWhenEnded = MatcapRecord.Exists(root) ? "after" : "before",
+            StudioModChanged = dir => reread.Add((dir, MatcapRecord.Exists(root))),
+        };
         var (_, q) = await f.Post("/actions/matcap", """{"mod":"Gear","model":"model/top.mdl","parts":["1.2"],"image":"qa-red.png"}""");
         var job = await f.WaitJob(q.GetProperty("job").GetString()!);
         Assert.Equal("applied", job.GetProperty("result").GetProperty("summary").GetString());
         Assert.Equal("before", recordWhenEnded);
+        // After the write, the Studio open on the mod reads its model again (its parts now name the matcap).
+        Assert.Equal([("Gear", true)], reread);
     }
 
     [Fact]

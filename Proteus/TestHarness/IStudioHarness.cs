@@ -97,7 +97,10 @@ internal sealed record MatcapHarnessPort(
     // Proteus's own matcaps (downloaded into the plugin's config directory; nothing to put back).
     Services.Matcap.IMatcapPack? Pack = null,
     // Takes the Studio's matcap click preview off the character before a job writes, as the panel's Apply does; framework thread.
-    System.Action? EndClickPreview = null);
+    System.Action? EndClickPreview = null,
+    // After a job changed the mod (by folder): the Studio re-reads the open model if it is that mod's, as the panel's own
+    // Apply does through its AfterModChange; framework thread.
+    System.Action<string>? StudioModChanged = null);
 
 /// <summary>
 /// The Studio as the test harness drives it: the panel's own code for each control, run on the framework thread between

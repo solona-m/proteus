@@ -55,7 +55,15 @@ public sealed partial class PartsPanel : IStudioHarness
                                      gamePath => compositor.ForgetFaceUpstream(gamePath),
                                      (root, gamePath, written) => DrawnElsewhere(root, gamePath, written),
                                      matcapPack,
-                                     () => { if (matcapPreview.Active) EndLivePreview(refreshGame: true); });
+                                     () => { if (matcapPreview.Active) EndLivePreview(refreshGame: true); },
+                                     dir =>
+                                     {
+                                         // The open model is that mod's: read it again, as the panel's own Apply does.
+                                         if (vanilla != null || modelIndex < 0 || modelIndex >= models.Count
+                                             || !string.Equals(modDir, dir, StringComparison.OrdinalIgnoreCase)) return;
+                                         matcapRecordFor = null;
+                                         SelectModel(modelIndex);
+                                     });
     }
 
     public bool IsOpen(string modDir, string file)
@@ -270,8 +278,9 @@ public sealed partial class PartsPanel : IStudioHarness
     /// <summary>The click preview as <c>/studio</c> and <c>matcap-preview</c> report it.</summary>
     private object MatcapPreviewView() => new
     {
-        // Shown only once the redirect is actually on (a push that starts can still be refused by Penumbra).
-        state = matcapPreview.ShownKey != null && preview.Active ? "shown"
+        // Shown only once the redirect is actually on (a push that starts can still be refused by Penumbra), and only
+        // for what is ticked and chosen now: a new click's build reads "building", not the last preview's "shown".
+        state = matcapPreview.ShownKey != null && preview.Active && MatcapPreviewNow()?.Key == matcapPreview.ShownKey ? "shown"
               : matcapPreview.ShownKey != null || matcapPreview.BuildingKey != null || matcapPending != null ? "building"
               : matcapPreview.Wanted && matcapPreview.Note != null ? "note" : matcapPreview.Wanted ? "building" : "none",
         note = matcapPreview.Wanted ? matcapPreview.Note : null,
