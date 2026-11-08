@@ -57,20 +57,22 @@ public class SizeSetKeepSkinWiringTests
     }
 
     [Fact]
+    [Trait("Plan", "AC-size-set-keep-skin-2")]
     [Trait("Plan", "AC-size-set-keep-skin-3")]
     public void Own_sex_plan_takes_the_request()
     {
-        // [AC-size-set-keep-skin-3]
+        // [AC-size-set-keep-skin-2] [AC-size-set-keep-skin-3] Unticked still cuts: the cut follows the box, never fixed off.
         string code = Code(Refit);
         Assert.Contains("cutHidden: !request.KeepHiddenSkin", code);
         Assert.DoesNotContain("cutHidden: true", code);
     }
 
     [Fact]
+    [Trait("Plan", "AC-size-set-keep-skin-2")]
     [Trait("Plan", "AC-size-set-keep-skin-4")]
     public void Mens_versions_take_the_request()
     {
-        // [AC-size-set-keep-skin-4]
+        // [AC-size-set-keep-skin-2] [AC-size-set-keep-skin-4]
         string code = Code("Proteus/Services/SizeSet/SizeSetRefit.CrossSex.cs");
         int run = code.IndexOf("CrossSexRefitJob.Run(new CrossSexRefitJob.Inputs(", StringComparison.Ordinal);
         Assert.True(run >= 0);

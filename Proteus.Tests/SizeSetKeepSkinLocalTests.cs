@@ -37,8 +37,9 @@ public sealed class KeepSkinRuns : IDisposable
     internal Run? Default, Off, On;
     /// <summary>(d) a copy of (a) run again ticked without "Make again"; (e) the same copy again with it (Bibo+ only).</summary>
     internal Run? Again, Remade;
-    /// <summary>(a) and (d) as they were before (d) and (e) ran over the copy: the author's own files and ours.</summary>
-    internal Dictionary<string, byte[]> BeforeAgain = new(StringComparer.OrdinalIgnoreCase);
+    /// <summary>The copy of (a) before (d) ran over it, and again after (d) and before (e): every file, by relative path.</summary>
+    internal Dictionary<string, byte[]> BeforeAgain = new(StringComparer.OrdinalIgnoreCase),
+                                        AfterAgain = new(StringComparer.OrdinalIgnoreCase);
     /// <summary>The men's versions, unticked and ticked.</summary>
     internal Run? MenOff, MenOn;
     /// <summary>A shoe and a bare chest, unticked and ticked.</summary>
@@ -61,9 +62,9 @@ public sealed class KeepSkinRuns : IDisposable
         string again = Data.NewCopy();
         roots.Add(again);
         SizeSetRefitTests.CopyModels(Default.Root, again, withRecord: true);
-        foreach (string file in Directory.EnumerateFiles(again, "*", SearchOption.AllDirectories))
-            BeforeAgain[Path.GetRelativePath(again, file)] = File.ReadAllBytes(file);
+        Snapshot(again, BeforeAgain);
         Again = Go(again, ["bibo", "rue"], keep: true);
+        Snapshot(again, AfterAgain);
         Remade = Go(again, ["bibo"], keep: true, remake: true);
 
         MenOff = Go(Mod(coat, Coat, "Orig"), ["tbse@women"], keep: false, men: true);
@@ -73,6 +74,12 @@ public sealed class KeepSkinRuns : IDisposable
         ShoeOn = Go(Mod(shoe, Shoe, "YAB WC", "Shoes"), ["bibo"], keep: true);
         BareOff = Go(Mod(bare, BareTop, "Rue M"), ["yab"], keep: false);
         BareOn = Go(Mod(bare, BareTop, "Rue M"), ["yab"], keep: true);
+    }
+
+    private static void Snapshot(string root, Dictionary<string, byte[]> into)
+    {
+        foreach (string file in Directory.EnumerateFiles(root, "*", SearchOption.AllDirectories))
+            into[Path.GetRelativePath(root, file)] = File.ReadAllBytes(file);
     }
 
     /// <summary>A mod of one model in one Single group's one option.</summary>
@@ -168,6 +175,9 @@ public class SizeSetKeepSkinLocalTests(ITestOutputHelper output, KeepSkinRuns ru
         var b = Saved(runs.Off!, KeepSkinRuns.Coat);
         Assert.NotEmpty(b);
         foreach (var (option, bytes) in b) Assert.Equal(a[option], bytes);
+        // And both still carry the author's cut: unticked is today's behaviour, not merely the same as each other.
+        Assert.Contains(SkinLogged(runs.Default!).Values, v => v.Cut > 0);
+        Assert.Contains(SkinLogged(runs.Off!).Values, v => v.Cut > 0);
     }
 
     [LocalDataFact(KeepSkinRuns.Sirius, Data.Rue, Data.Yab, Data.Bibo, Data.Neolithe, Data.Tbse, LocalData.ShiftPack, LocalData.GameData,
@@ -288,13 +298,12 @@ public class SizeSetKeepSkinLocalTests(ITestOutputHelper output, KeepSkinRuns ru
     [Trait("Plan", "EDGE-size-set-keep-skin-6")]
     public void Ticked_without_make_again_leaves_every_file()
     {
-        // [EDGE-size-set-keep-skin-6] Run (d) wrote nothing: every file of the copy as it was before it — checked on (d)'s
-        // own record, so run (e) after it does not hide a write.
-        var record = Saved(runs.Again!, KeepSkinRuns.Coat);
-        var before = Saved(runs.Default!, KeepSkinRuns.Coat);
-        Assert.NotEmpty(before);
-        foreach (var (option, bytes) in before)
-            if (!option.StartsWith("Bibo", StringComparison.OrdinalIgnoreCase)) Assert.Equal(bytes, record[option]);
+        // [EDGE-size-set-keep-skin-6] Run (d) wrote nothing: every file of the copy, the manifest and our record included,
+        // as it was before (d) — snapshotted after (d) and before (e) ran over the same copy.
+        Assert.NotEmpty(runs.BeforeAgain);
+        Assert.Equal(runs.BeforeAgain.Keys.Order(StringComparer.OrdinalIgnoreCase),
+                     runs.AfterAgain.Keys.Order(StringComparer.OrdinalIgnoreCase));
+        foreach (var (file, bytes) in runs.BeforeAgain) Assert.True(bytes.AsSpan().SequenceEqual(runs.AfterAgain[file]), file);
     }
 
     [LocalDataFact(KeepSkinRuns.Sirius, Data.Rue, Data.Yab, Data.Bibo, Data.Neolithe, Data.Tbse, LocalData.ShiftPack, LocalData.GameData,

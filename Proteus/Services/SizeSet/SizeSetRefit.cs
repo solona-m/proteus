@@ -981,9 +981,10 @@ internal static partial class SizeSetRefit
                                              carryPiercings: request.Piercings);
                 plan = RefitCore.MatchSkinToBody(plan, chosen.SourcePath, targetPath, uvRemap, male, log);
                 // Folds are said, never refused (cross-sex-tops-yas).
+                // The body's skin triangles put in and left out where the author cut theirs (Keep hidden skin).
                 log.Information("[Proteus] size set: {0} onto {1} (moved up to {2:F1} mm, {3} folded; skin {4} added, "
-                              + "{5} cut, {6} kept)", piece.Label, option, plan.Report.WorstMove * 1000f, plan.Report.Folded,
-                                plan.Report.Swap?.Added ?? 0, plan.Report.Swap?.Cut ?? 0, plan.Report.Swap?.Kept ?? 0);
+                              + "{5} cut)", piece.Label, option, plan.Report.WorstMove * 1000f, plan.Report.Folded,
+                                plan.Report.Swap?.Added ?? 0, plan.Report.Swap?.Cut ?? 0);
                 if (RefitCore.ReleasedLog(plan.Report, chosen.ShapeNames) is { } released)
                     log.Information("[Proteus] size set: {0} {1}: let go of kept piece(s) that would sink moved whole: {2}",
                                     piece.Label, option, released);
