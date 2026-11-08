@@ -53,7 +53,6 @@ const MIRRORED = new Map([
   ['README.md', '/en/README.md'],
   ['TROUBLESHOOTING.md', '/TROUBLESHOOTING.md'],
   ['For Creators.md', '/For Creators.md'],
-  ['mirror.md', '/mirror.md'],
   ...LANGS.filter((l) => l.code !== 'en').map((l) => [docPathFor(l.code), mirrorPathFor(l.code)]),
 ]);
 
@@ -215,13 +214,14 @@ function switcherHtml(current) {
  * switcher on; documents with no translations render without one.
  *
  * NOTE: marked does not sanitise, and passes raw HTML in the source straight through. Every document
- * rendered here comes from solona-m/proteus, whose only raw HTML is the i18n nav markers stripped
- * below, and which nobody can edit without already being able to ship plugin code — so this is a
- * trust argument, not a safety one. Do not point this at markdown from anywhere else without adding
- * a sanitiser first.
+ * rendered here comes from solona-m/proteus (whose only raw HTML is the i18n nav markers stripped
+ * below) or from solona-m/milieu's README on `test`. Both belong to the same owner, have no automation
+ * that can push to them, and nobody can edit either without already being able to ship plugin code
+ * listed in the same repo.json — so this is a trust argument, not a safety one. Do not point this at
+ * markdown from anywhere else without adding a sanitiser first.
  */
 export function renderMarkdown(md, fallbackTitle = 'Proteus', opts = {}) {
-  const { lang = null, docPath = 'README.md' } = opts;
+  const { lang = null, docPath = 'README.md', icon = '/icon.png' } = opts;
 
   const renderer = new marked.Renderer();
   const baseLink = renderer.link.bind(renderer);
@@ -270,7 +270,7 @@ export function renderMarkdown(md, fallbackTitle = 'Proteus', opts = {}) {
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>${escapeHtml(title)}</title>
-<link rel="icon" href="/icon.png">
+<link rel="icon" href="${escapeHtml(icon)}">
 <style>${CSS}</style>
 </head>
 <body><main>${withNav}</main></body>

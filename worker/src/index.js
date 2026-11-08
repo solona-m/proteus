@@ -14,7 +14,6 @@
  * the problem it exists to solve strictly worse.
  */
 
-import README from './readme.generated.js';
 import { renderMarkdown, LANGS, docPathFor, mirrorPathFor } from './render.js';
 
 const OWNER = 'solona-m';
@@ -31,14 +30,6 @@ const PICKLES_REPO = 'Pickles-Playlist-Editor';
 // Milieu (solona-m/milieu), own prefix like Camera Tools: its plugin zips and the pre-converted bundled scenes
 // that tools/publish-backdrops.ps1 publishes under backdrops-v<N> (pinned by size and SHA-256 in BackdropPins.cs).
 const MILIEU_REPO = 'milieu';
-
-// Served at / and /README.md so the host explains itself instead of answering a bare 404. Inlined at
-// build time (scripts/embed-readme.mjs) rather than fetched, so it always describes THIS deployment
-// and the page has no runtime dependency on anything.
-//
-// Short TTL, unlike the assets: the README is the one mutable thing here, and it is small enough that
-// re-fetching it every few minutes costs nothing.
-const README_TTL = 300;
 
 // Anchored, and each segment is a tight character class rather than a wildcard: the path decides
 // which upstream URL we build, so a loose pattern here would be an open proxy for any GitHub file.
@@ -176,6 +167,25 @@ const STATIC_PROXIES = {
     docPath: 'For Creators.md',
   },
 
+  // Milieu's user README, the page to point new Milieu users at (install steps, how to use it). Proxied from the
+  // milieu repo's `test` branch: testing builds are what players can install, and `test` is what they're built
+  // from (switch to `main` once Milieu has a stable release). English only, no negotiation. Its links must stay
+  // ABSOLUTE: resolveHref rewrites relative links against the proteus repo, so a relative one would point there.
+  '/milieu/README.md': {
+    origin: `https://raw.githubusercontent.com/${OWNER}/${MILIEU_REPO}/test/README.md`,
+    type: 'text/markdown; charset=utf-8',
+    ttl: 900,
+    markdown: true,
+    docPath: 'README.md',
+    title: 'Milieu',
+    icon: '/milieu/icon.png',
+  },
+  '/milieu/icon.png': {
+    origin: `https://raw.githubusercontent.com/${OWNER}/${MILIEU_REPO}/test/Milieu/images/icon.png`,
+    type: 'image/png',
+    ttl: 86400,
+  },
+
   // One pinned path per shipped language, `/ja/README.md` and friends, including `/en/README.md`.
   // These are the paths the switcher links to and the ones every translated README's own links
   // resolve to. They are PINNED: whatever the browser's Accept-Language says, the path decides, so a
@@ -201,6 +211,8 @@ const STATIC_PROXIES = {
  */
 const STATIC_ALIASES = {
   '/': '/README.md',
+  '/milieu': '/milieu/README.md',
+  '/milieu/': '/milieu/README.md',
   ...Object.fromEntries(LANGS.flatMap(({ code }) =>
     [[`/${code}`, mirrorPathFor(code)], [`/${code}/`, mirrorPathFor(code)]])),
 };
@@ -243,27 +255,8 @@ export default {
     // getting the markdown source, so nothing that consumes these URLs programmatically changes.
     const wantsHtml = (request.headers.get('accept') ?? '').includes('text/html');
 
-    // This worker's OWN documentation — deploy steps, path scheme, caching caveats. Inlined at build
-    // time rather than proxied so it always describes the deployment serving it, and static, so it
-    // never builds an upstream URL and cannot participate in the open-proxy risk the route patterns
-    // below exist to contain. The PROJECT readme is a different document, served from `/` via
-    // STATIC_PROXIES.
-    if (url.pathname === '/mirror.md') {
-      // docPath is where this file lives in the REPO — worker/README.md — so its relative links
-      // ("wrangler.toml", "../Proteus/Services/ProteusAssets.cs") resolve the way a checkout would.
-      const body = wantsHtml
-        ? renderMarkdown(README, 'Proteus asset mirror', { docPath: 'worker/README.md' })
-        : README;
-      return new Response(request.method === 'HEAD' ? null : body, {
-        status: 200,
-        headers: {
-          'content-type': wantsHtml ? 'text/html; charset=utf-8' : 'text/markdown; charset=utf-8',
-          'cache-control': `public, max-age=${README_TTL}`,
-          vary: 'Accept',
-          'x-proteus-mirror': 'readme',
-        },
-      });
-    }
+    // The worker's own README (worker/README.md: deploy steps, operating notes) is maintainer documentation and is
+    // deliberately NOT served: /mirror.md is a 404 like any other unknown path.
 
     // Fixed-upstream proxies (the plugin manifest and its icon). Cached at the edge with their own
     // short TTLs, and re-asked on any failure so a transient upstream error is not pinned.
@@ -318,8 +311,8 @@ export default {
         // Rendered once per TTL and cached, rather than per request: marked on a 400-line document is
         // cheap but not free, and the free plan allows 10 ms of CPU per request.
         const body = renderHtml
-          ? renderMarkdown(await upstream.text(), 'Proteus',
-            { lang: entry.lang ?? null, docPath: entry.docPath })
+          ? renderMarkdown(await upstream.text(), entry.title ?? 'Proteus',
+            { lang: entry.lang ?? null, docPath: entry.docPath, icon: entry.icon })
           : upstream.body;
 
         hit = new Response(body, {
