@@ -358,7 +358,8 @@ console.log('markdown rendering + content negotiation:');
       && res.headers.get('vary') === 'Accept, Accept-Language'
       && body.includes('<h1')
       && body.includes('<table')          // the README is mostly tables; GFM must be on
-      && body.includes('<title>Proteus</title>');   // title from the first heading
+      && body.includes('<title>Proteus</title>')   // title from the first heading
+      && body.includes('href="/icon.png"');         // Proteus pages keep Proteus's own favicon
     if (ok) { pass++; console.log('  ok   Accept: text/html -> rendered page'); }
     else {
       fail++;

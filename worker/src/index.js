@@ -169,7 +169,8 @@ const STATIC_PROXIES = {
 
   // Milieu's user README, the page to point new Milieu users at (install steps, how to use it). Proxied from the
   // milieu repo's `test` branch: testing builds are what players can install, and `test` is what they're built
-  // from. English only, no negotiation; its links are all absolute, so docPath only matters for a stray relative one.
+  // from (switch to `main` once Milieu has a stable release). English only, no negotiation. Its links must stay
+  // ABSOLUTE: resolveHref rewrites relative links against the proteus repo, so a relative one would point there.
   '/milieu/README.md': {
     origin: `https://raw.githubusercontent.com/${OWNER}/${MILIEU_REPO}/test/README.md`,
     type: 'text/markdown; charset=utf-8',
