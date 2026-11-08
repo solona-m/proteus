@@ -6216,7 +6216,7 @@
     "description": ""
   },
   "Matcap.Refused.AlreadyMatcap": {
-    "message": "そのパーツの一部にはすでにマットキャップがあります。「選んだマットキャップを使う」で変更してください。",
+    "message": "マットキャップのないパーツ（追加する場合）か、マットキャップのあるパーツ（変更する場合）のどちらか一方だけをチェックしてください。",
     "description": ""
   },
   "Matcap.Refused.Changed.Fmt": {
@@ -6299,10 +6299,6 @@
     "message": "チェックしたパーツの一部に透ける縁（髪の毛束、レース）があります。適用後にゲーム内で縁を確認してください。",
     "description": ""
   },
-  "Parts.Matcap.AlreadyTip": {
-    "message": "このパーツにはすでにマットキャップがあります。「このモデルのマットキャップ」で変更してください。",
-    "description": ""
-  },
   "Parts.Matcap.AlsoMore.Fmt": {
     "message": "ほか {0} 件",
     "description": ""
@@ -6323,12 +6319,24 @@
     "message": "{0} はベースコレクションです。これを使う全員に選んだマットキャップが表示されます。",
     "description": ""
   },
-  "Parts.Matcap.Change": {
-    "message": "選んだマットキャップを使う",
-    "description": ""
-  },
   "Parts.Matcap.Changed.Fmt": {
     "message": "マットキャップを変更しました: {0}。",
+    "description": ""
+  },
+  "Parts.Matcap.ChangePartial.Fmt": {
+    "message": "変更されなかったもの: {0}。",
+    "description": ""
+  },
+  "Parts.Matcap.ChangesFiles.Fmt": {
+    "message": "対象の例: {0}。",
+    "description": ""
+  },
+  "Parts.Matcap.ChangesUnticked.Fmt": {
+    "message": "ここでチェックしていないパーツ {0} 個も含まれます。",
+    "description": ""
+  },
+  "Parts.Matcap.Changes.Fmt": {
+    "message": "適用すると、この Mod 内で {0} を使うすべてのファイル（リフィットを含む）で変更されます。",
     "description": ""
   },
   "Parts.Matcap.ChangeKindTip": {
@@ -6372,7 +6380,27 @@
     "description": ""
   },
   "Parts.Matcap.Guide": {
-    "message": "マットキャップは照らされた球の画像で、パーツはこちらへ向いている方向に応じてその色を取ります。パーツをチェックし、マットキャップを選んで適用してください。",
+    "message": "マットキャップは照らされた球の画像で、パーツはこちらへ向いている方向に応じてその色を取ります。パーツをチェックし、マットキャップをクリックしてキャラクターで確かめてから適用してください。",
+    "description": ""
+  },
+  "Parts.Matcap.PreviewFailed.Fmt": {
+    "message": "マットキャップをキャラクターに表示できませんでした（{0}）。",
+    "description": ""
+  },
+  "Parts.Matcap.Previewing": {
+    "message": "キャラクターに表示しているだけです。マットキャップを適用を押すまで何も保存されません。",
+    "description": ""
+  },
+  "Parts.Matcap.PreviewGameGear": {
+    "message": "ゲームの装備は、適用するとマットキャップが表示されます。",
+    "description": ""
+  },
+  "Parts.Matcap.PreviewGearOnly": {
+    "message": "髪・尻尾・耳・角は、適用するとマットキャップが表示されます。",
+    "description": ""
+  },
+  "Parts.Matcap.PreviewTick": {
+    "message": "パーツをチェックすると、マットキャップをキャラクターで確認できます。",
     "description": ""
   },
   "Parts.Matcap.Held.Fmt": {
@@ -6400,7 +6428,7 @@
     "description": ""
   },
   "Parts.Matcap.ListTip": {
-    "message": "マットキャップを付けるパーツをチェックしてください。肌とすでにマットキャップがあるパーツはチェックできません。",
+    "message": "マットキャップを付けるパーツをチェックしてください。すでにマットキャップがあるパーツをチェックすると、それを変更できます。肌はチェックできません。",
     "description": ""
   },
   "Parts.Matcap.Lod0Cut": {

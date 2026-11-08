@@ -10,7 +10,8 @@ using Proteus.Services.Matcap;
 namespace Proteus.Gui;
 
 /// <summary>
-/// The Matcaps tool's wiring: the pane's context, and Apply, Change, Undo and Forget. The heavy half of each runs on a
+/// The Matcaps tool's wiring: the pane's context, and Apply (a new matcap, or a change of the ticked parts' matcaps),
+/// Undo and Forget. The heavy half of each runs on a
 /// worker (<see cref="MatcapStudio.Prepare"/> and <see cref="MatcapWriter"/> take the write locks themselves); the
 /// library's collection setting, the drawn-file check and the redraw run back on the framework thread when it is done.
 /// </summary>
@@ -107,9 +108,183 @@ public sealed partial class PartsPanel
         matcapScan = Task.Run(() => index.Refresh(all, root, force));
     }
 
+    // ── the click preview ──────────────────────────────────────────────────
+
+    private readonly MatcapPreviewState matcapPreview = new();
+    /// <summary>A preview was taken down without a redraw for a job; the job's success redraws, a refusal pays it.</summary>
+    private bool matcapRedrawOwed;
+    private Task? matcapBuild;
+    /// <summary>A built preview waiting to be pushed: the push was refused (busy) or held back (a redraw too soon).</summary>
+    private (int Gen, string Key, MatcapPreview.Built Built)? matcapPending;
+    private bool matcapPumpQueued;
+    private long lastMatcapPushAt = long.MinValue / 2;
+    /// <summary>The game paths the shown preview redirects (for the harness's view).</summary>
+    private List<string> matcapShownPaths = [];
+
+    /// <summary>A thumbnail was clicked (the panel, or the harness): show it on the character, following the ticks.</summary>
+    internal void RequestMatcapPreview(MatcapChoice choice)
+    {
+        matcapPreview.Click(choice);
+        PumpMatcapPreview();
+    }
+
+    /// <summary>What the preview would be for now: the key, and why it can't be shown (null when it can).</summary>
+    private (string Key, string? Blocked)? MatcapPreviewNow()
+    {
+        if (matcapPreview.Choice is not { } choice || modelIndex < 0 || modelIndex >= models.Count) return null;
+        var chosen = parts?.Parts.Where(p => ticked.Contains(p.Label)).ToList() ?? [];
+        var key = MatcapPreviewState.Key(models[modelIndex].File, choice, chosen);
+        var blocked = MatcapPanelModel.PreviewBlocked(penumbra.IsAvailable, chosen, MatcapTargetKind(), vanilla != null, TargetIsContent,
+                                                      choice, matcapRoom, matcapRecord ?? MatcapRecord.Read(ModRoot() ?? ""));
+        return (key, blocked);
+    }
+
+    /// <summary>
+    /// Bring the character's preview in line with the ticks and the choice: build, push, or take it down. Each frame from
+    /// the pane, after each build, and on a short retry while something else is busy (so the harness needs no window).
+    /// </summary>
+    private void PumpMatcapPreview()
+    {
+        if (!matcapPreview.Wanted && matcapPending == null) return;
+        if (tool != Tool.Matcap) { if (matcapPreview.Active) EndLivePreview(refreshGame: true); return; }
+        if (MatcapPreviewNow() is not { } now) return;
+
+        if (matcapPending is { } pending)
+        {
+            if (pending.Gen != matcapPreview.Generation || pending.Key != now.Key || now.Blocked != null) matcapPending = null;
+            else { PushMatcapPreview(pending.Gen, pending.Key, pending.Built); return; }
+        }
+
+        bool busy = matcapJob is { IsCompleted: false } || preview.Busy || matcapBuild is { IsCompleted: false };
+        switch (matcapPreview.Next(now.Key, now.Blocked, busy))
+        {
+            case MatcapPreviewState.Step.Build:
+                StartMatcapPreviewBuild(now.Key);
+                break;
+            case MatcapPreviewState.Step.End:
+                EndLivePreview(refreshGame: true, keepMatcapWanted: true);
+                break;
+        }
+        if (busy) QueueMatcapPump(100);
+    }
+
+    /// <summary>One retry of <see cref="PumpMatcapPreview"/> on the framework thread after <paramref name="ms"/>.</summary>
+    private void QueueMatcapPump(long ms)
+    {
+        if (matcapPumpQueued) return;
+        matcapPumpQueued = true;
+        _ = Plugin.Framework.RunOnTick(() => { matcapPumpQueued = false; PumpMatcapPreview(); }, TimeSpan.FromMilliseconds(Math.Max(1, ms)));
+    }
+
+    private void StartMatcapPreviewBuild(string key)
+    {
+        int gen = matcapPreview.Generation;
+        var choice = matcapPreview.Choice!;
+        if (ModRoot() is not { } root || modelIndex < 0 || parts == null)
+        {
+            matcapPreview.Accept(gen, key, "");
+            return;
+        }
+        var model = models[modelIndex];
+        var chosen = parts.Parts.Where(p => ticked.Contains(p.Label)).ToList();
+        var drawnAt = OpenModelGamePaths();
+        var modsRoot = penumbra.GetModDirectory() ?? "";
+        var env = MatcapEnv() with { TempDir = Path.Combine(Path.GetTempPath(), "Proteus", "matcap-preview") };
+        matcapBuild = Task.Run(() =>
+        {
+            MatcapPreview.Built built;
+            try
+            {
+                // The bytes on disk, as Apply reads them.
+                var bytes = File.ReadAllBytes(Path.Combine(root, model.File.Replace('\\', Path.DirectorySeparatorChar)));
+                built = MatcapPreview.Build(new MatcapPreview.Input(root, model.File, model.GamePath, drawnAt, bytes, chosen, choice, env, modsRoot));
+            }
+            catch (Exception ex)
+            {
+                built = MatcapPreview.Built.Refuse(MatcapWriter.CodeFailed, string.Format(Strings.Matcap.PreviewFailedFmt, ex.Message));
+            }
+            return built;
+        }).ContinueWith(t => Plugin.Framework.RunOnFrameworkThread(() => FinishMatcapPreviewBuild(gen, key, t.Result)));
+    }
+
+    private void FinishMatcapPreviewBuild(int gen, string key, MatcapPreview.Built built)
+    {
+        var now = MatcapPreviewNow();
+        if (!matcapPreview.Accept(gen, key, now?.Key ?? "") || now?.Blocked != null)
+        {
+            PumpMatcapPreview();   // something changed while it was built: catch up
+            return;
+        }
+        if (!built.Ok)
+        {
+            matcapPreview.Failed(key, built.Message);
+            log.Information("[Proteus] matcap preview: not shown ({0}): {1}", built.Code, built.Message);
+            // What is on the character no longer matches what is ticked: take it down.
+            if (matcapPreview.ShownKey != null) EndLivePreview(refreshGame: true, keepMatcapWanted: true);
+            return;
+        }
+        PushMatcapPreview(gen, key, built);
+    }
+
+    private void PushMatcapPreview(int gen, string key, MatcapPreview.Built built)
+    {
+        long nowMs = Environment.TickCount64;
+        bool redraw = preview.Unsupported;
+        // Without an in-place reload every push redraws the character: at most one per interval.
+        if (!MatcapPreviewState.PushDue(nowMs, lastMatcapPushAt, redraw, PreviewIntervalMs))
+        {
+            matcapPending = (gen, key, built);
+            QueueMatcapPump(PreviewIntervalMs - (nowMs - lastMatcapPushAt));
+            return;
+        }
+        // Worked out before our first redirect, which wins every game path while it is on: anything of ours still up
+        // (a brush preview) comes down first, without a redraw — this push replaces it.
+        string? drawn = null;
+        if (matcapPreview.ShownKey == null && ModRoot() is { } root && modelIndex >= 0)
+        {
+            if (preview.Active) preview.End(redraw: false);
+            drawn = DrawnElsewhere(root, models[modelIndex].GamePath, [models[modelIndex].File]);
+        }
+        if (!preview.PushFiles(built.Files, redraw))
+        {
+            matcapPending = (gen, key, built);
+            QueueMatcapPump(100);
+            return;
+        }
+        matcapPending = null;
+        lastMatcapPushAt = nowMs;
+        matcapShownPaths = [.. built.Files.SelectMany(f => f.GamePaths).Distinct(StringComparer.OrdinalIgnoreCase).Order(StringComparer.OrdinalIgnoreCase)];
+        matcapPreview.Shown(key, drawn);
+        previewDirty = false;
+        previewHides = 0;
+        share.NotSharing();
+        log.Debug("[Proteus] matcap preview: {0} file(s) on the character", built.Files.Count);
+    }
+
+    /// <summary>
+    /// Before a matcap job: the preview comes off without a redraw (the job's own reload follows), and a redraw is owed
+    /// in case the job is refused.
+    /// </summary>
+    private void TakeDownMatcapPreviewForJob()
+    {
+        bool shown = matcapPreview.ShownKey != null;
+        matcapPending = null;
+        EndLivePreview(refreshGame: false);
+        matcapRedrawOwed |= shown;
+    }
+
+    /// <summary>A job refused (or failed) after the preview came down: redraw so the mod's own files are drawn again.</summary>
+    private void PayMatcapRedraw()
+    {
+        if (!matcapRedrawOwed) return;
+        matcapRedrawOwed = false;
+        compositor.RedrawForChangedModel("matcap preview");
+    }
+
     private void DrawMatcaps()
     {
         FinishMatcapJob();
+        PumpMatcapPreview();
         var root = vanilla == null ? ModRoot() : null;
         if (matcapIndex?.Current == null && matcapScan == null) RescanMatcaps(false);
 
@@ -167,7 +342,6 @@ public sealed partial class PartsPanel
                 : [],
             LibraryStatus = lib => CachedLibraryStatus(adapter, lib),
             Apply = (choice, confirm) => StartMatcapApply(choice, confirm),
-            Change = (name, choice) => StartMatcapChange(name, choice),
             Undo = () => StartMatcapUndo(forget: false),
             Forget = () => StartMatcapUndo(forget: true),
             Rescan = () => RescanMatcaps(true),
@@ -178,6 +352,12 @@ public sealed partial class PartsPanel
             PackImages = packImages,
             PackStatus = matcapPack?.Status,
             RetryPack = () => matcapPack?.EnsureAsync(retryFailed: true),
+            AllParts = parts?.Parts ?? [],
+            ModelFile = rel,
+            Clicked = RequestMatcapPreview,
+            PreviewShown = matcapPreview.ShownKey != null,
+            PreviewNote = matcapPreview.Wanted ? matcapPreview.Note : null,
+            PreviewDrawnNote = matcapPreview.DrawnNote,
         });
     }
 
@@ -203,6 +383,26 @@ public sealed partial class PartsPanel
                 matcapError = string.Format(Strings.Matcap.ConfirmEnableFmt, lib.Name, st.Collection, MatcapSelection.AlsoText(lib));
                 return;
             }
+        }
+
+        // Parts that all have a matcap: those matcaps change in place (the whole material, wherever it is used). A mix of
+        // parts with and without one is refused: two writes in one click are not atomic.
+        var kind = MatcapPlan.KindOfApply(chosen);
+        if (kind == MatcapPlan.ApplyKind.Mixed) { matcapError = Strings.Matcap.AlreadyMatcap; return; }
+        if (vanilla == null && ModRoot() == null) return;   // before the preview comes down: no job, no redraw owed
+        TakeDownMatcapPreviewForJob();
+        if (kind == MatcapPlan.ApplyKind.Change)
+        {
+            if (ModRoot() is not { } changeRoot) return;
+            var names = MatcapPlan.ChangeNames(chosen);
+            var changePath = models[modelIndex].GamePath;
+            matcapJob = Task.Run(() =>
+            {
+                var outcome = MatcapStudio.ChangeAll(changeRoot, names, choice, env);
+                return new MatcapJobResult(changeRoot, outcome, outcome.Ok && choice.IsLibrary ? choice : null, confirmEnable,
+                                           [], false, false, changePath) { IsChange = true };
+            });
+            return;
         }
 
         if (vanilla is { } piece)
@@ -254,25 +454,12 @@ public sealed partial class PartsPanel
 
     private (VanillaPick Piece, List<ModelPart> Chosen, MatcapChoice Original)? pendingVanillaMatcap;
 
-    private void StartMatcapChange(string materialName, MatcapChoice choice)
-    {
-        matcapError = null;
-        if (matcapJob is { IsCompleted: false } || ModRoot() is not { } root) return;
-        var env = MatcapEnv();
-        var gamePath = modelIndex >= 0 && modelIndex < models.Count ? models[modelIndex].GamePath : null;
-        matcapJob = Task.Run(() =>
-        {
-            var (src, mtrl, temp, code, msg) = MatcapStudio.PrepareChange(root, materialName, choice, env);
-            var outcome = src == null ? MatcapWriter.Outcome.Refuse(code, msg) : MatcapWriter.Change(root, materialName, src, mtrl, temp);
-            return new MatcapJobResult(root, outcome, outcome.Ok && choice.IsLibrary ? choice : null, true, [], false, false, gamePath) { IsChange = true };
-        });
-    }
-
     private void StartMatcapUndo(bool forget)
     {
         matcapError = null;
         if (matcapJob is { IsCompleted: false } || ModRoot() is not { } root || modelIndex < 0) return;
         if (!FlushPending()) return;
+        TakeDownMatcapPreviewForJob();
         var rel = models[modelIndex].File;
         var undoPath = models[modelIndex].GamePath;
         var undoEnv = MatcapEnv();
@@ -291,6 +478,7 @@ public sealed partial class PartsPanel
         {
             log.Error(ex, "[Proteus] matcap: the job failed");
             matcapError = ex.Message;
+            PayMatcapRedraw();
             return;
         }
 
@@ -321,6 +509,7 @@ public sealed partial class PartsPanel
         if (copy is not { } c || outcome == null)
         {
             matcapError = outcome?.Message ?? status;
+            PayMatcapRedraw();
             return;
         }
         // The record names the image the user chose, not the pre-baked temp file.
@@ -343,8 +532,10 @@ public sealed partial class PartsPanel
         {
             matcapError = r.Outcome.Message;
             log.Warning("[Proteus] matcap: {0} ({1})", r.Outcome.Message, r.Outcome.Code);
+            PayMatcapRedraw();
             return;
         }
+        matcapRedrawOwed = false;   // AfterModChange below reloads and redraws
 
         var lines = new List<string> { r.Outcome.Message };
         if (r.Select is { Library: { } lib, Option: { } option })

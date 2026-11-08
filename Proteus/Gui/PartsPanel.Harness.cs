@@ -54,7 +54,16 @@ public sealed partial class PartsPanel : IStudioHarness
                                      MatcapEnv(), penumbra.GetModDirectory(), penumbra.GetAllModsQuiet(),
                                      gamePath => compositor.ForgetFaceUpstream(gamePath),
                                      (root, gamePath, written) => DrawnElsewhere(root, gamePath, written),
-                                     matcapPack);
+                                     matcapPack,
+                                     () => { if (matcapPreview.Active) EndLivePreview(refreshGame: true); },
+                                     dir =>
+                                     {
+                                         // The open model is that mod's: read it again, as the panel's own Apply does.
+                                         if (vanilla != null || modelIndex < 0 || modelIndex >= models.Count
+                                             || !string.Equals(modDir, dir, StringComparison.OrdinalIgnoreCase)) return;
+                                         matcapRecordFor = null;
+                                         SelectModel(modelIndex);
+                                     });
     }
 
     public bool IsOpen(string modDir, string file)
@@ -100,6 +109,7 @@ public sealed partial class PartsPanel : IStudioHarness
                 ? new { dirty = v.Dirty, canUndo = v.CanUndo, worstMm = v.Worst * 1000f, saveOwed = brushChangedAt >= 0, editVersion = v.EditVersion }
                 : null,
             ["status"] = status is { } text ? new StudioStatusLine(text, statusIsError) : null,
+            ["matcapPreview"] = MatcapPreviewView(),
         };
     }
 
@@ -265,9 +275,62 @@ public sealed partial class PartsPanel : IStudioHarness
                                      files, volume.EditVersion, View());
     }
 
+    /// <summary>The click preview as <c>/studio</c> and <c>matcap-preview</c> report it.</summary>
+    private object MatcapPreviewView() => new
+    {
+        // Shown only once the redirect is actually on (a push that starts can still be refused by Penumbra), and only
+        // for what is ticked and chosen now: a new click's build reads "building", not the last preview's "shown".
+        state = matcapPreview.ShownKey != null && preview.Active && MatcapPreviewNow()?.Key == matcapPreview.ShownKey ? "shown"
+              : matcapPreview.ShownKey != null || matcapPreview.BuildingKey != null || matcapPending != null ? "building"
+              : matcapPreview.Wanted && matcapPreview.Note != null ? "note" : matcapPreview.Wanted ? "building" : "none",
+        note = matcapPreview.Wanted ? matcapPreview.Note : null,
+        drawnNote = matcapPreview.DrawnNote,
+        gamePaths = matcapPreview.ShownKey != null ? matcapShownPaths : [],
+    };
+
+    StudioMatcapPreviewOutcome IStudioHarness.MatcapPreview(StudioMatcapPreviewRequest request, StudioSession session)
+    {
+        HarnessSync();
+        static StudioMatcapPreviewOutcome Refuse(int status, string code, string message) => new(new StudioRefusal(status, code, message), null, null);
+        if (HarnessDragOpen) return Refuse(409, "dragging", "a drag, grab or stroke is under way");
+        if (parts is not { } model || HarnessRoot(session.ModDir) is not { } root) return Refuse(409, "studio-changed", "no model is open");
+        if (Touched(session, root) is { } touched)
+            return Refuse(409, "studio-changed", $"the model or its files changed since the harness last left them ({touched}); put back");
+        if (request.End)
+        {
+            if (matcapPreview.Active) EndLivePreview(refreshGame: true);
+            return new StudioMatcapPreviewOutcome(null, MatcapPreviewView(), View());
+        }
+
+        // Everything checked before anything changes: the parts, as the Matcaps part list allows them, and the matcap.
+        var kind = MatcapTargetKind();
+        foreach (var label in request.Parts)
+        {
+            if (model.Parts.FirstOrDefault(p => p.Label == label) is not { } part)
+                return Refuse(404, "unknown-part", $"no part {label} in the open model");
+            if (!Services.Matcap.MatcapPlan.Tickable(part, kind, model.AttributeNames))
+                return Refuse(409, "untickable-part", $"{label} can't take a matcap ({MatcapPanelModel.UntickableTip(part)})");
+        }
+        var port = ((IStudioHarness)this).Matcaps();
+        var (choice, error) = MatcapJob.ResolveChoice(port, root, request.Image, request.Pack, request.Library, request.Group, request.Option);
+        if (error != null) return Refuse(404, error.Code, error.Message);
+
+        if (tool != Tool.Matcap) SwitchTool(Tool.Matcap);
+        ticked.Clear();
+        foreach (var label in request.Parts) ticked.Add(label);
+        // What the pane reads each frame, brought up to date: the window may be closed.
+        matcapRecord = Services.Matcap.MatcapRecord.Read(root);
+        matcapRecordFor = null;
+        try { matcapRoom = brushBase != null ? ModelMaterialWriter.MaterialRoom(brushBase) : 0; } catch { matcapRoom = 0; }
+        RequestMatcapPreview(choice!);
+        return new StudioMatcapPreviewOutcome(null, MatcapPreviewView(), View());
+    }
+
     StudioPutBack IStudioHarness.EndSession(StudioSession session, bool refreshGame)
     {
         HarnessSync();
+        // The click preview is the harness's for the session: taken off the character first.
+        if (matcapPreview.Active) EndLivePreview(refreshGame);
         if (HarnessRoot(session.ModDir) is not { } root)
             return new StudioPutBack(session.ModDir, "failed", "none", "penumbra-unavailable", true);
 

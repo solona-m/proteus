@@ -28,7 +28,7 @@ internal sealed partial class HarnessRouter(HarnessJobs jobs, LogRing ring, Sess
         ("POST", "/actions/mod-settings"), ("POST", "/actions/put-back"), ("GET", "/bindings"),
         ("POST", "/actions/glamourer-apply"), ("POST", "/actions/binding-edit"), ("GET", "/jobs/{id}"),
         ("GET", "/studio"), ("POST", "/actions/studio-open"), ("POST", "/actions/studio-set"), ("POST", "/actions/studio-drag"),
-        ("GET", "/matcaps"), ("POST", "/actions/matcap-image"), ("POST", "/actions/matcap"),
+        ("GET", "/matcaps"), ("POST", "/actions/matcap-image"), ("POST", "/actions/matcap"), ("POST", "/actions/matcap-preview"),
         ("POST", "/actions/boot-rearm"), ("POST", "/actions/sidecar-edit"), ("GET", "/sidecar"), ("POST", "/actions/auto-refit"),
         ("POST", "/actions/output-lock"), ("POST", "/actions/shell-fault"), ("POST", "/actions/auto-redraw"),
     ];
@@ -73,6 +73,7 @@ internal sealed partial class HarnessRouter(HarnessJobs jobs, LogRing ring, Sess
                 "/matcaps" => await MatcapsView(request),
                 "/actions/matcap-image" => await MatcapImageAction(request),
                 "/actions/matcap" => await MatcapAction(request),
+                "/actions/matcap-preview" => await MatcapPreviewAction(request),
                 "/actions/boot-rearm" => await BootRearm(request),
                 "/actions/sidecar-edit" => await SidecarEdit(request),
                 "/sidecar" => await SidecarView(request),

@@ -102,16 +102,27 @@ public sealed class MatcapStrings
       + "parts get a material of their own, written into the mod, so it shows with Proteus turned off.");
 
     public readonly string ListTip = ProteusLoc.Localize("Parts.Matcap.ListTip",
-        "Tick the parts that should take the matcap. Skin, and parts that already have one, can't be ticked.");
+        "Tick the parts that should take the matcap. Tick parts that already have one to change it. Skin can't be ticked.");
 
     public readonly string Guide = ProteusLoc.Localize("Parts.Matcap.Guide",
         "A matcap is a picture of a lit sphere; the parts take their colour from it by which way they face you. Tick "
-      + "parts, pick a matcap, then Apply.");
+      + "parts, click a matcap to see it on your character, then Apply.");
+
+    public readonly string PreviewTick = ProteusLoc.Localize("Parts.Matcap.PreviewTick", "Tick parts to see the matcap on your character.");
+
+    public readonly string PreviewGearOnly = ProteusLoc.Localize("Parts.Matcap.PreviewGearOnly",
+        "Hair, tails, ears and horns show the matcap once you apply it.");
+
+    public readonly string PreviewGameGear = ProteusLoc.Localize("Parts.Matcap.PreviewGameGear", "Game gear shows the matcap once you apply it.");
+
+    public readonly string Previewing = ProteusLoc.Localize("Parts.Matcap.Previewing",
+        "Shown on your character only: nothing is saved until you press Apply matcap.");
+
+    /// <summary>{0} why the preview could not be put on the character.</summary>
+    public readonly string PreviewFailedFmt = ProteusLoc.Localize("Parts.Matcap.PreviewFailed.Fmt",
+        "The matcap could not be shown on your character ({0}).");
 
     public readonly string SkinTip = ProteusLoc.Localize("Parts.Matcap.SkinTip", "Skin can't take a matcap.");
-
-    public readonly string AlreadyTip = ProteusLoc.Localize("Parts.Matcap.AlreadyTip",
-        "This part already has a matcap. Change it under \"Matcaps on this model\".");
 
     public readonly string SourceImages = ProteusLoc.Localize("Parts.Matcap.SourceImages", "Your images") + "###matcapSrcImages";
 
@@ -234,7 +245,25 @@ public sealed class MatcapStrings
     public readonly string Superseded = ProteusLoc.Localize("Parts.Matcap.Superseded",
         "The model no longer uses this matcap (the mod was updated).");
 
-    public readonly string Change = ProteusLoc.Localize("Parts.Matcap.Change", "Use the chosen matcap") + "###matcapChange";
+    /// <summary>Apply with some ticked parts on a matcap and some not (also <see cref="MatcapStudio"/>'s refusal).</summary>
+    public readonly string AlreadyMatcap = ProteusLoc.Localize("Matcap.Refused.AlreadyMatcap", Services.Matcap.MatcapStudio.AlreadyMatcapText);
+
+    /// <summary>A ticked matcap part whose material is not in the mod's record.</summary>
+    public readonly string NoEntry = ProteusLoc.Localize("Matcap.Refused.NoEntry", Services.Matcap.MatcapStudio.NoEntryText);
+
+    /// <summary>{0} the matcaps an Apply changes (their names without the marker).</summary>
+    public readonly string ChangesFmt = ProteusLoc.Localize("Parts.Matcap.Changes.Fmt",
+        "Apply changes {0} in every file of this mod that uses it, refits included.");
+
+    /// <summary>{0} how many parts of this model on those matcaps are not ticked.</summary>
+    public readonly string ChangesUntickedFmt = ProteusLoc.Localize("Parts.Matcap.ChangesUnticked.Fmt",
+        "That includes {0} part(s) here you didn't tick.");
+
+    /// <summary>{0} other model files Proteus recorded on those matcaps.</summary>
+    public readonly string ChangesFilesFmt = ProteusLoc.Localize("Parts.Matcap.ChangesFiles.Fmt", "Those include: {0}.");
+
+    /// <summary>{0} the matcaps a change left as they were, with why.</summary>
+    public readonly string ChangePartialFmt = ProteusLoc.Localize("Parts.Matcap.ChangePartial.Fmt", Services.Matcap.MatcapStudio.ChangePartialText);
 
     public readonly string ChangeKindTip = ProteusLoc.Localize("Parts.Matcap.ChangeKindTip",
         "A matcap from your images can only change to another image, and a library's to another library option. Undo it to switch kinds.");
