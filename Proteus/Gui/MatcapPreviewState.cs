@@ -43,6 +43,12 @@ internal sealed class MatcapPreviewState
     /// <summary>Requested, building or shown: brush pushes stand down.</summary>
     public bool Active => Wanted || BuildingKey != null || ShownKey != null;
 
+    /// <summary>
+    /// The ticked parts' tint is off on the character: a preview is being built, waits to be pushed
+    /// (<paramref name="pushPending"/>) or is shown. A note, a failed build or an ended preview brings it back.
+    /// </summary>
+    public bool HidesTicks(bool pushPending) => ShownKey != null || BuildingKey != null || pushPending;
+
     public void Click(MatcapChoice choice)
     {
         Wanted = true;

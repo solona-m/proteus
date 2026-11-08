@@ -1970,16 +1970,22 @@ public sealed partial class PartsPanel
         Toggle(parts.Parts[partOfVertex[vertex]].Label);
     }
 
-    /// <summary>Whether part <paramref name="index"/> is ticked — itself, or through its whole submesh.</summary>
+    /// <summary>Whether part <paramref name="index"/> is ticked — itself, or through its whole submesh — as the live brush
+    /// tints it. Nothing is, while a matcap click preview is on its way to or on the character: the amber wash would
+    /// cover the very parts the preview shows (the part list still shows the ticks).</summary>
     private bool PartTicked(int index)
     {
-        if (parts == null || index < 0 || index >= parts.Parts.Count) return false;
+        if (MatcapPreviewHidesTicks || parts == null || index < 0 || index >= parts.Parts.Count) return false;
         var part = parts.Parts[index];
         return ticked.Contains(part.Label) || (ParentOf(part) is { } parent && ticked.Contains(parent.Label));
     }
 
-    /// <summary>A value that changes whenever the ticked set does, for the live tint's cache.</summary>
-    private int TickedVersion() => VersionOf(ticked);
+    /// <summary>A matcap click preview is building or shown under Matcaps: the ticked parts aren't tinted on the character.</summary>
+    private bool MatcapPreviewHidesTicks => tool == Tool.Matcap && matcapPreview.HidesTicks(matcapPending != null);
+
+    /// <summary>A value that changes whenever the ticked set does, or the matcap preview hides or shows the tint, for the
+    /// live tint's cache.</summary>
+    private int TickedVersion() => VersionOf(ticked) ^ (MatcapPreviewHidesTicks ? 0x5A5A5A5A : 0);
 
     /// <summary>A value that changes whenever <paramref name="labels"/> does, for a live wash's cache.</summary>
     private static int VersionOf(HashSet<string> labels)

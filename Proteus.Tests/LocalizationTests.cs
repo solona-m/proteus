@@ -614,6 +614,10 @@ public sealed class LocalizationTests
         Assert.Contains(preview, text);
         var apply = Load(lang)["Parts.Matcap.Apply"].Message;
         Assert.True(text.Split($"**{apply}**").Length - 1 >= 2, $"[{lang}] README names **{apply}** for the change and the preview");
+        // The sources in the pane's order: Proteus's own matcaps first.
+        int proteus = text.IndexOf($"- **{Load(lang)["Parts.Matcap.SourceProteus"].Message}**", StringComparison.Ordinal);
+        int images = text.IndexOf($"- **{Load(lang)["Parts.Matcap.SourceImages"].Message}**", StringComparison.Ordinal);
+        Assert.True(proteus >= 0 && images > proteus, $"[{lang}] README lists Proteus matcaps before your images");
     }
 
     /// <summary>The "Use the chosen matcap" button is gone (Apply changes a matcap): its keys are in no locale.</summary>
