@@ -358,6 +358,8 @@ internal static partial class SizeSetRefit
                     ? OutfitPartners.ForSizeSet(record, option, sibling, limb, fromPick, to!.Rel, Note)
                     : null;
                 var outfit = partner != null ? OutfitPartners.Load(root, partner, Note) : null;
+                // A kept foot or hand is always cut, whatever Request.KeepHiddenSkin says: uncut, a shoe would carry the
+                // whole legs body through any skirt worn over it (see KeepEnds.Plan).
                 var plan = KeepEnds.Plan(from.Garment, from.Bytes, from.Reading, limbPair, endPair, across,
                                          line => log.Debug("[Proteus] size set: {0}", line),
                                          line => log.Warning("[Proteus] size set: {0}", line), outfit,

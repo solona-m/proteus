@@ -74,7 +74,7 @@ public sealed class MatcapHairPortTests : IDisposable
     private MatcapStudio.Prepared Prepare(Mod mod, string rel, string gamePath, MatcapChoice? choice = null)
     {
         var bytes = mod.Get(rel);
-        var parts = ModelPartReader.Read(bytes)!.Parts.Where(p => p.Island < 0 && MatcapPlan.Tickable(p)).ToList();
+        var parts = ModelPartReader.Read(bytes)!.Parts.Where(p => p.Island < 0 && MatcapPlan.Tickable(p) && !MatcapPlan.IsOnMatcap(p)).ToList();
         Assert.NotEmpty(parts);
         return MatcapStudio.Prepare(mod.Root, rel, gamePath, bytes, parts, choice ?? Image(), Env());
     }

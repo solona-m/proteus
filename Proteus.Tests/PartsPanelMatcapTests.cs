@@ -178,13 +178,14 @@ public class MatcapPanelModelTests
 
     [Fact]
     [Trait("Plan", "AC-matcaps-1")]
-    public void Tickable_excludes_skin_and_matcap_parts()
+    [Trait("Plan", "AC-matcap-preview-2")]
+    public void Tickable_excludes_skin_only()
     {
         Assert.True(MatcapPlan.Tickable(Part("/mt_c0201e6255_top_a.mtrl")));
         Assert.False(MatcapPlan.Tickable(Part("/mt_c0201b0001_a.mtrl")));
-        Assert.False(MatcapPlan.Tickable(Part("/mt_c0201e6255_top_a_mcap3fa21c1.mtrl")));
+        // A part with a matcap is ticked to change it.
+        Assert.True(MatcapPlan.Tickable(Part("/mt_c0201e6255_top_a_mcap3fa21c1.mtrl")));
         Assert.Equal(Strings.Matcap.SkinTip, MatcapPanelModel.UntickableTip(Part("/mt_c0201b0001_bibo.mtrl")));
-        Assert.Equal(Strings.Matcap.AlreadyTip, MatcapPanelModel.UntickableTip(Part("/mt_x_mcap3fa21c1.mtrl")));
     }
 
     [Fact]
@@ -192,11 +193,14 @@ public class MatcapPanelModelTests
     public void Apply_disabled_reasons()
     {
         var s = Strings.Matcap;
-        Assert.Equal(s.NoPenumbra, MatcapPanelModel.ApplyDisabledReason(false, 2, true, 3));
-        Assert.Equal(s.NeedParts, MatcapPanelModel.ApplyDisabledReason(true, 0, true, 3));
-        Assert.Equal(s.NeedMatcap, MatcapPanelModel.ApplyDisabledReason(true, 2, false, 3));
-        Assert.Contains("10", MatcapPanelModel.ApplyDisabledReason(true, 2, true, 0));
-        Assert.Null(MatcapPanelModel.ApplyDisabledReason(true, 2, true, 3));
+        var choice = MatcapChoice.OfImage(new MatcapImage("a.png", "a.png", false));
+        IReadOnlyList<ModelPart> two = [Part("/a.mtrl"), Part("/b.mtrl", "1.2")];
+        var record = new MatcapRecord();
+        Assert.Equal(s.NoPenumbra, MatcapPanelModel.ApplyDisabledReason(false, two, choice, 3, record));
+        Assert.Equal(s.NeedParts, MatcapPanelModel.ApplyDisabledReason(true, [], choice, 3, record));
+        Assert.Equal(s.NeedMatcap, MatcapPanelModel.ApplyDisabledReason(true, two, null, 3, record));
+        Assert.Contains("10", MatcapPanelModel.ApplyDisabledReason(true, two, choice, 0, record));
+        Assert.Null(MatcapPanelModel.ApplyDisabledReason(true, two, choice, 3, record));
     }
 
     [Fact]
@@ -287,6 +291,7 @@ public class MatcapPanelModelTests
     [Trait("Plan", "EDGE-matcaps-30")]
     public void No_penumbra_no_write()
     {
-        Assert.Equal(Strings.Matcap.NoPenumbra, MatcapPanelModel.ApplyDisabledReason(false, 1, true, 5));
+        Assert.Equal(Strings.Matcap.NoPenumbra, MatcapPanelModel.ApplyDisabledReason(false, [Part("/a.mtrl")],
+            MatcapChoice.OfImage(new MatcapImage("a.png", "a.png", false)), 5, new MatcapRecord()));
     }
 }

@@ -107,6 +107,17 @@ download of Proteus's own matcaps into the plugin's config directory — the sam
 first-use download the pane makes; it writes no mod and no setting, so there is
 nothing to put back.
 
+**Amendment (2026-11-07, matcap click preview).** `matcap-preview` runs the Matcaps
+pane's thumbnail click on the Studio session's model: it switches the tool, ticks
+parts and asks for the preview. It writes no mod and no collection setting; what it
+puts on is a Penumbra temporary mod on the player's collection (the live brush's own,
+one at a time) redirecting the model and its new materials and textures to private
+files in `%TEMP%`, a library option's texture as a copy rather than the library's
+file. Put-back ends it with the Studio session, as do the panel's own end paths, and
+the files are swept at the next load after a crash. The matcap job's separate change
+form (`entry`) is gone: Apply on parts that already have a matcap changes it, as the
+pane's Apply does.
+
 **Amendment (2026-11-07, idle disk I/O checks).** Four more abilities, so QA can
 check what Proteus reads from the drive while nothing changes:
 - `boot-rearm` re-arms the compositor's boot probe as a zone change does. It writes

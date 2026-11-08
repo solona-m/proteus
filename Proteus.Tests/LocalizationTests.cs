@@ -587,9 +587,46 @@ public sealed class LocalizationTests
             Assert.Equal(en[key].Message.Count(c => c == '\n'), tr[key].Message.Count(c => c == '\n'));
             Assert.Equal(Placeholders(en[key].Message), Placeholders(tr[key].Message));
         }
-        // The quoted button names match the buttons as translated.
-        Assert.Contains(tr["Parts.Matcap.Change"].Message, tr["Matcap.Refused.AlreadyMatcap"].Message);
-        Assert.Contains(tr["Parts.Matcap.ExistingHeader"].Message, tr["Parts.Matcap.AlreadyTip"].Message);
+    }
+
+    /// <summary>Each language's old "Use the chosen matcap" label, and a phrase of its new README sentence about the preview.</summary>
+    private static readonly Dictionary<string, (string OldLabel, string PreviewPhrase)> MatcapReadme = new()
+    {
+        ["en"] = ("Use the chosen matcap", "Click a matcap to see it on your character first"),
+        ["de"] = ("Gewählte Matcap verwenden", "Klicke auf eine Matcap, um sie vorher an deinem Charakter zu sehen"),
+        ["es"] = ("Usar el matcap elegido", "Haz clic en un matcap para verlo antes en tu personaje"),
+        ["fr"] = ("Utiliser le matcap choisi", "Cliquez sur un matcap pour le voir d'abord sur votre personnage"),
+        ["ja"] = ("選んだマットキャップを使う", "マットキャップをクリックすると、先にキャラクターで確認できます"),
+        ["ko"] = ("선택한 매트캡 사용", "매트캡을 클릭하면 먼저 캐릭터에서 볼 수 있습니다"),
+        ["ru"] = ("Использовать выбранный мэткап", "Щёлкните мэткап, чтобы сначала увидеть его на персонаже"),
+        ["zh"] = ("使用所选 matcap", "点击某个 matcap 可先在角色身上预览"),
+    };
+
+    /// <summary>Every README says Apply changes an existing matcap and a click previews it, and never names the old button.</summary>
+    [Theory]
+    [MemberData(nameof(AllLocales))]
+    [Trait("Plan", "AC-matcap-preview-10")]
+    public void Readme_matcaps_say_apply_changes_and_click_previews(string lang)
+    {
+        var text = ReadmeText(lang);
+        var (old, preview) = MatcapReadme[lang];
+        Assert.DoesNotContain(old, text);
+        Assert.Contains(preview, text);
+        var apply = Load(lang)["Parts.Matcap.Apply"].Message;
+        Assert.True(text.Split($"**{apply}**").Length - 1 >= 2, $"[{lang}] README names **{apply}** for the change and the preview");
+    }
+
+    /// <summary>The "Use the chosen matcap" button is gone (Apply changes a matcap): its keys are in no locale.</summary>
+    [Theory]
+    [MemberData(nameof(AllLocales))]
+    [Trait("Plan", "AC-matcap-preview-1")]
+    public void Removed_change_keys_are_gone(string lang)
+    {
+        var keys = Load(lang).Keys;
+        Assert.DoesNotContain("Parts.Matcap.Change", keys);
+        Assert.DoesNotContain("Parts.Matcap.AlreadyTip", keys);
+        foreach (var k in new[] { "Parts.Matcap.Changes.Fmt", "Parts.Matcap.ChangesUnticked.Fmt", "Parts.Matcap.ChangesFiles.Fmt", "Parts.Matcap.ChangePartial.Fmt" })
+            Assert.Contains(k, keys);
     }
 
     /// <summary>The keys the temporary-copy design used are gone from every locale and from the code.</summary>
@@ -908,6 +945,59 @@ public sealed class LocalizationTests
         var strings = Load(lang);
         foreach (string key in new[] { "AutoRefit.Piercings.Label", "Parts.Retarget.Piercings", "SizeSet.Piercings" })
             Assert.Contains("**" + strings[key].Message + "**", readme);
+    }
+
+    /// <summary>The size set's "Keep hidden skin" box and tooltip are in every language in its own words, line for line.</summary>
+    [Theory]
+    [MemberData(nameof(Translations))]
+    [Trait("Plan", "AC-size-set-keep-skin-8")]
+    public void SizeSetKeepHiddenSkin_strings_are_translated_not_copied(string lang)
+    {
+        // [AC-size-set-keep-skin-8]
+        var en = Load(Source);
+        var tr = Load(lang);
+        foreach (string key in new[] { "SizeSet.KeepHiddenSkin", "SizeSet.KeepHiddenSkin.Tip" })
+        {
+            Assert.True(tr.ContainsKey(key), $"[{lang}] has no {key}");
+            Assert.NotEqual(en[key].Message, tr[key].Message);
+            Assert.Equal(en[key].Message.Count(c => c == '\n'), tr[key].Message.Count(c => c == '\n'));
+        }
+    }
+
+    /// <summary>The tooltip says what the box brings back, warns of skin through tight cloth, and that shoes and gloves
+    /// are always cut.</summary>
+    [Fact]
+    [Trait("Plan", "AC-size-set-keep-skin-5")]
+    [Trait("Plan", "AC-size-set-keep-skin-8")]
+    public void SizeSetKeepHiddenSkin_tip_says_what_it_restores_and_warns()
+    {
+        // [AC-size-set-keep-skin-5] [AC-size-set-keep-skin-8]
+        string tip = Load(Source)["SizeSet.KeepHiddenSkin.Tip"].Message;
+        Assert.Contains("skin missing under or around the cloth", tip);
+        Assert.Contains("may show through tight cloth", tip);
+        Assert.Contains("Shoes and gloves are always cut", tip);
+        Assert.Contains("Sizes already made change only when made again", tip);
+    }
+
+    /// <summary>Every README names the box as its own language's checkbox does; the English one warns of tight cloth.</summary>
+    [Theory]
+    [MemberData(nameof(AllLocales))]
+    [Trait("Plan", "AC-size-set-keep-skin-8")]
+    public void Readme_mentions_keep_hidden_skin(string lang)
+    {
+        // [AC-size-set-keep-skin-8]
+        var dir = new System.IO.DirectoryInfo(AppContext.BaseDirectory);
+        while (dir != null && !System.IO.File.Exists(System.IO.Path.Combine(dir.FullName, "proteus.slnx"))) dir = dir.Parent;
+        Assert.True(dir != null, $"Could not find proteus.slnx above {AppContext.BaseDirectory}.");
+        string readme = System.IO.File.ReadAllText(System.IO.Path.Combine(
+            dir!.FullName, lang == Source ? "README.md" : System.IO.Path.Combine("docs", $"README.{lang}.md")));
+        string label = "**" + Load(lang)["SizeSet.KeepHiddenSkin"].Message + "**";
+        Assert.Contains(label, readme);
+        if (lang == Source)
+        {
+            string line = readme.Split('\n').Single(l => l.Contains(label, StringComparison.Ordinal));
+            Assert.Contains("tight cloth", line);
+        }
     }
 
     /// <summary>The Scale tool's three strings were re-keyed when it gained axis handles; every language has its own words.</summary>

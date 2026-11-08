@@ -55,13 +55,37 @@ internal static partial class MatcapPlan
     /// <summary>A part drawn with body skin (the toggles' and brush's own test), which a matcap never takes.</summary>
     public static bool IsSkin(ModelPart part) => SecondSkinWriter.SkinMaterialBodyType(part.Material) != null;
 
-    /// <summary>A part already drawn by one of Proteus's matcap materials (move it with Change, not Apply).</summary>
+    /// <summary>A part already drawn by one of Proteus's matcap materials (an Apply on it changes that matcap).</summary>
     public static bool IsOnMatcap(ModelPart part) => IsMatcapName(part.Material);
 
     public static bool IsMatcapName(string material) => McapRe().IsMatch(material);
 
-    /// <summary>Whether a part may be ticked under the Matcaps tool.</summary>
-    public static bool Tickable(ModelPart part) => !IsSkin(part) && !IsOnMatcap(part);
+    /// <summary>Whether a part may be ticked under the Matcaps tool: anything but skin (a matcap part to change it).</summary>
+    public static bool Tickable(ModelPart part) => !IsSkin(part);
+
+    /// <summary>What Apply does with the ticked parts.</summary>
+    public enum ApplyKind
+    {
+        /// <summary>Nothing ticked.</summary>
+        None,
+        /// <summary>No ticked part has a matcap: a new matcap material.</summary>
+        New,
+        /// <summary>Every ticked part has one: those matcaps change in place.</summary>
+        Change,
+        /// <summary>Some have one and some don't: refused (two writes in one click are not atomic).</summary>
+        Mixed,
+    }
+
+    public static ApplyKind KindOfApply(IReadOnlyList<ModelPart> ticked)
+    {
+        if (ticked.Count == 0) return ApplyKind.None;
+        int on = ticked.Count(IsOnMatcap);
+        return on == 0 ? ApplyKind.New : on == ticked.Count ? ApplyKind.Change : ApplyKind.Mixed;
+    }
+
+    /// <summary>The matcap materials among the ticked parts, each once (case-insensitive), in the order first seen.</summary>
+    public static IReadOnlyList<string> ChangeNames(IReadOnlyList<ModelPart> ticked) =>
+        ticked.Where(IsOnMatcap).Select(p => p.Material).Distinct(StringComparer.OrdinalIgnoreCase).ToList();
 
     /// <summary>
     /// <see cref="Tickable(ModelPart)"/>, and on a face model only a horn part (its submesh carries <see cref="HornAttribute"/>,

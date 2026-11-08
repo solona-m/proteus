@@ -110,6 +110,21 @@ internal sealed class FakeStudio(Action<string> fw) : IStudioHarness
     {
         fw(nameof(EndSession));
         Ended.Add(session);
+        PreviewState = "none";
         return EndAnswer?.Invoke(session) ?? new StudioPutBack(session.ModDir, "reverted", "restored", null, false);
+    }
+
+    public List<StudioMatcapPreviewRequest> Previews = [];
+    public StudioRefusal? PreviewRefusal;
+    public string PreviewState = "none";
+
+    public StudioMatcapPreviewOutcome MatcapPreview(StudioMatcapPreviewRequest request, StudioSession session)
+    {
+        fw(nameof(MatcapPreview));
+        if (PreviewRefusal != null) return new StudioMatcapPreviewOutcome(PreviewRefusal, null, null);
+        Previews.Add(request);
+        PreviewState = request.End ? "none" : "building";
+        if (!request.End) Tool = "matcap";
+        return new StudioMatcapPreviewOutcome(null, new { state = PreviewState, note = (string?)null, drawnNote = (string?)null, gamePaths = Array.Empty<string>() }, View());
     }
 }

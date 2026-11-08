@@ -25,7 +25,10 @@ internal sealed record SkippedBody(string Key, string Reason);
 /// </summary>
 internal static class RefitJob
 {
-    internal sealed record Args(string ModDir, string ModRoot, IReadOnlyList<string> Keys, bool Remake, ModList Mods);
+    /// <param name="KeepHiddenSkin">The request's override of the Studio's saved "Keep hidden skin" for this run alone,
+    /// never saved; null runs with the saved choice.</param>
+    internal sealed record Args(string ModDir, string ModRoot, IReadOnlyList<string> Keys, bool Remake, ModList Mods,
+                                bool? KeepHiddenSkin = null);
 
     internal static async Task Run(HarnessJobs jobs, HarnessJob job, Args args)
     {
@@ -63,6 +66,8 @@ internal static class RefitJob
             else keys.Add(key);
         }
         var options = game.Options(args.Remake);
+        // Before the nothing-to-make answer too, so every result reports the choice the run would use.
+        if (args.KeepHiddenSkin is { } keepSkin) options = options with { KeepHiddenSkin = keepSkin };
         if (keys.Count == 0)
         {
             job.SetResult(new

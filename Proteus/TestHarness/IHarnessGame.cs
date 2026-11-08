@@ -48,7 +48,7 @@ internal sealed record HairPortInfo(HairPortWatcher.View View, HairPortWatcher.S
 internal sealed record ModList(IReadOnlyDictionary<string, string> Mods, string ModsRoot);
 
 /// <summary>The size set's settings a harness refit runs with: the Studio's current ones.</summary>
-internal sealed record RefitOptions(bool Yas, bool Ends, bool Piercings, bool Remake);
+internal sealed record RefitOptions(bool Yas, bool Ends, bool Piercings, bool Remake, bool KeepHiddenSkin = false);
 
 /// <summary>What an after-change did.</summary>
 /// <param name="Reloaded">Penumbra answered Success to the reload.</param>

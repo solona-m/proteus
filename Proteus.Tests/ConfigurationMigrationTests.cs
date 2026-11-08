@@ -278,6 +278,30 @@ public class ConfigurationMigrationTests
         Assert.False(new Proteus.Services.SizeSetRefit.Request("mod", [], true, false, []).Piercings);
     }
 
+    [Fact]
+    [Trait("Plan", "AC-size-set-keep-skin-1")]
+    [Trait("Plan", "EDGE-size-set-keep-skin-1")]
+    public void SizeSetKeepHiddenSkin_defaults_off_and_round_trips()
+    {
+        // [AC-size-set-keep-skin-1] [EDGE-size-set-keep-skin-1] Off for a new config and for one saved before the
+        // setting existed, with no migration; a saved "on" is read back.
+        Assert.False(new Configuration().SizeSetKeepHiddenSkin);
+
+        var old = Newtonsoft.Json.JsonConvert.DeserializeObject<Configuration>(
+            $$"""{"Version":{{Configuration.CurrentVersion}},"SizeSetPiercings":true}""")!;
+        old.Migrate();
+        Assert.False(old.SizeSetKeepHiddenSkin);
+        Assert.Equal(Configuration.CurrentVersion, old.Version);
+
+        var on = Newtonsoft.Json.JsonConvert.DeserializeObject<Configuration>(
+            $$"""{"Version":{{Configuration.CurrentVersion}},"SizeSetKeepHiddenSkin":true}""")!;
+        on.Migrate();
+        Assert.True(on.SizeSetKeepHiddenSkin);
+        var back = Newtonsoft.Json.JsonConvert.DeserializeObject<Configuration>(
+            Newtonsoft.Json.JsonConvert.SerializeObject(on))!;
+        Assert.True(back.SizeSetKeepHiddenSkin);
+    }
+
     /// <summary>
     /// v7 -> v8 turns hat compatibility on for every existing config, once. A user who then switches it
     /// off keeps it off: the second migration sees a config already stamped current.
