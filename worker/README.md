@@ -251,15 +251,16 @@ structurally from the English source.
 
 Rendering uses `marked`, which does **not** sanitise — raw HTML in the source passes through. The only
 raw HTML in these documents is the `<!--i18n-->` markers, which are stripped before parsing. Every
-document here comes from `solona-m/proteus`, which anyone who could inject into already has commit
-access to the plugin, so this is a trust argument rather than a safety one. Do not point the renderer
-at markdown from anywhere else without adding a sanitiser.
+document here comes from `solona-m/proteus` or Milieu's README on `solona-m/milieu`'s `test` branch: same
+owner, no automation that can push to either, and anyone who could inject into them can already ship a
+plugin listed in the same `repo.json`. So this is a trust argument rather than a safety one. Do not point
+the renderer at markdown from anywhere else without adding a sanitiser.
 
 This file is maintainer documentation and is **not** served by the worker (`/mirror.md` is a 404).
 
-The project docs are the opposite: proxied live from the repo with a 15-minute TTL, because their
-whole value is being current and they should not need a worker redeploy to update. Neither is
-immutable, so none of them take the assets' one-year TTL.
+The project docs, and Milieu's README, are proxied live with a 15-minute TTL, because their whole value
+is being current and they should not need a worker redeploy to update. They are mutable, so none of
+them take the assets' one-year TTL.
 
 Every one is immutable, which is what makes the one-year TTL safe: a tag's assets are never replaced,
 and the upload workflows refuse to overwrite an existing release. Revised content gets a new tag.
