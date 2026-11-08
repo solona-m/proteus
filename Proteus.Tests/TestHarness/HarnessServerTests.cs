@@ -535,6 +535,24 @@ public class HarnessServerTests : IDisposable
         Assert.Equal(400, (await f.Post("/actions/refit", """{"mod":5,"bodies":["rue"]}""")).Status);
     }
 
+    [Theory]
+    [InlineData("\"yes\"")]
+    [InlineData("1")]
+    [InlineData("null")]
+    [Trait("Plan", "EDGE-size-set-keep-skin-9")]
+    public async Task Refit_keepHiddenSkin_must_be_bool(string value)
+    {
+        // [EDGE-size-set-keep-skin-9] Refused before anything is reserved, backed up or prepared.
+        f.AddMod();
+        var (status, b) = await f.Post("/actions/refit", "{\"mod\":\"Outfit\",\"bodies\":[\"rue\"],\"keepHiddenSkin\":" + value + "}");
+        Assert.Equal(400, status);
+        Assert.Equal("invalid-field", b.GetProperty("error").GetProperty("code").GetString());
+        Assert.Equal("keepHiddenSkin must be true or false", b.GetProperty("error").GetProperty("message").GetString());
+        Assert.Null(f.Game.LastOptions);
+        Assert.Empty(f.Backups.List("Outfit"));
+        Assert.Equal(202, (await f.Post("/actions/refit", """{"mod":"Outfit","bodies":["rue"],"keepHiddenSkin":false}""")).Status);
+    }
+
     [Fact]
     public async Task UnknownField_400()
     {

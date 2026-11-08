@@ -364,6 +364,15 @@ public sealed class SizeSetStrings
         "On: each body's piercings come in with its skin where the piece shows that skin. Nails always come along.\n"
       + "Sizes already made change only when made again.");
 
+    public readonly string KeepHiddenSkin = ProteusLoc.Localize("SizeSet.KeepHiddenSkin", "Keep hidden skin")
+                                          + "###sizeSetKeepHiddenSkin";
+
+    public readonly string KeepHiddenSkinTip = ProteusLoc.Localize("SizeSet.KeepHiddenSkin.Tip",
+        "Off: each body's skin is left out where the author deleted theirs, usually under and around the cloth. "
+      + "On: it goes in whole, bringing back skin missing under or around the cloth, but it may show through tight "
+      + "cloth. Shoes and gloves are always cut.\n"
+      + "Sizes already made change only when made again.");
+
     public readonly string Remake = ProteusLoc.Localize("SizeSet.Remake", "Make again the sizes Proteus added before")
                                   + "###sizeSetRemake";
 

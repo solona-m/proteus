@@ -366,6 +366,11 @@ public class Configuration : IPluginConfiguration
     /// config saved before it existed has no such key and reads false (no migration). Nails come in either way.</summary>
     public bool SizeSetPiercings { get; set; }
 
+    /// <summary>With <see cref="SizeSetBodies"/>, keep each new body's skin whole on chest and legs sizes, rather than
+    /// leaving it out where the author deleted theirs. Off by default; a config saved before it existed has no such key
+    /// and reads false (no migration). Shoes and gloves are cut either way.</summary>
+    public bool SizeSetKeepHiddenSkin { get; set; }
+
     /// <summary>
     /// Refit chest, legs, hands and feet gear onto the collection's preferred body as it is equipped — see
     /// <see cref="Services.AutoRefitWatcher"/>. Off by default: it writes into the gear's own mod.

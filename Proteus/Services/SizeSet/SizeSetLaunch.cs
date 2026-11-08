@@ -34,7 +34,8 @@ internal static class SizeSetLaunch
     internal static Prepared Prepare(IReadOnlyDictionary<string, string> mods, string modsRoot,
                                      Func<IReadOnlyList<string>, IReadOnlyDictionary<string, string?>?> resolvePlayerPaths,
                                      string modRoot, IReadOnlyList<string> keys, bool yas, bool remake, bool ends,
-                                     bool piercings, string? madeOn, Func<string, byte[]?> readGameFile, IPluginLog log)
+                                     bool piercings, bool keepHiddenSkin, string? madeOn,
+                                     Func<string, byte[]?> readGameFile, IPluginLog log)
     {
         var gameBodies = SizeSetRefit.GameBodies(keys, readGameFile, ends);
         // A women's mod's men's versions are made for the men's skeleton the player's collection gives (IVCS when
@@ -49,7 +50,8 @@ internal static class SizeSetLaunch
             across = new SizeSetRefit.AcrossInputs(path => resolved?.GetValueOrDefault(path));
         }
         var request = new SizeSetRefit.Request(modRoot, keys, yas, remake, [], readGameFile, ends,
-                                               race => gameBodies.GetValueOrDefault(race), piercings, across, madeOn);
+                                               race => gameBodies.GetValueOrDefault(race), piercings, across, madeOn,
+                                               KeepHiddenSkin: keepHiddenSkin);
         return new Prepared(request, mods, modsRoot);
     }
 

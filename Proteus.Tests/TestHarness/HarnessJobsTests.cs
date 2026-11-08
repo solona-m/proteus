@@ -217,6 +217,52 @@ public class HarnessJobsTests : IDisposable
     }
 
     [Fact]
+    [Trait("Plan", "AC-size-set-keep-skin-7")]
+    [Trait("Plan", "EDGE-size-set-keep-skin-10")]
+    public async Task Refit_keepHiddenSkin_overrides_for_the_run()
+    {
+        // [AC-size-set-keep-skin-7] [EDGE-size-set-keep-skin-10] The override reaches the prepared request and the
+        // echoed options; the saved choice is left as it was.
+        f.AddMod();
+        f.Game.ConfigKeepHiddenSkin = false;
+        var job = await Refit("""{"mod":"Outfit","bodies":["rue"],"keepHiddenSkin":true}""");
+        Assert.Equal("done", job.GetProperty("state").GetString());
+        Assert.True(f.Game.LastOptions!.KeepHiddenSkin);
+        Assert.True(f.Game.LastPrepared!.Request.KeepHiddenSkin);
+        Assert.True(job.GetProperty("result").GetProperty("options").GetProperty("keepHiddenSkin").GetBoolean());
+        Assert.False(f.Game.ConfigKeepHiddenSkin);
+    }
+
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    [Trait("Plan", "EDGE-size-set-keep-skin-8")]
+    public async Task Refit_without_keepHiddenSkin_uses_the_saved_choice(bool saved)
+    {
+        // [EDGE-size-set-keep-skin-8]
+        f.AddMod();
+        f.Game.ConfigKeepHiddenSkin = saved;
+        var job = await Refit();
+        Assert.Equal(saved, f.Game.LastOptions!.KeepHiddenSkin);
+        Assert.Equal(saved, f.Game.LastPrepared!.Request.KeepHiddenSkin);
+        Assert.Equal(saved, job.GetProperty("result").GetProperty("options").GetProperty("keepHiddenSkin").GetBoolean());
+    }
+
+    [Fact]
+    [Trait("Plan", "EDGE-size-set-keep-skin-13")]
+    public async Task Refit_nothing_to_make_reports_keepHiddenSkin()
+    {
+        // [EDGE-size-set-keep-skin-13] The override is applied before the early answer.
+        f.AddMod();
+        f.Game.Offered = [];
+        f.Game.ConfigKeepHiddenSkin = false;
+        var job = await Refit("""{"mod":"Outfit","bodies":["rue"],"keepHiddenSkin":true}""");
+        var result = job.GetProperty("result");
+        Assert.Equal("nothing-to-make", result.GetProperty("summary").GetString());
+        Assert.True(result.GetProperty("options").GetProperty("keepHiddenSkin").GetBoolean());
+    }
+
+    [Fact]
     public async Task Refit_AutoRefitNotQuiet_409()
     {
         // [EDGE-qa-harness-36]

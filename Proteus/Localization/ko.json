@@ -5363,6 +5363,14 @@
     "message": "켬: 파츠가 그 피부를 보여 주는 곳에서는 각 체형의 피어싱이 피부와 함께 들어갑니다. 손톱은 항상 함께 들어갑니다.\n이미 만든 사이즈는 다시 만들 때만 바뀝니다.",
     "description": ""
   },
+  "SizeSet.KeepHiddenSkin": {
+    "message": "숨겨진 피부 유지",
+    "description": ""
+  },
+  "SizeSet.KeepHiddenSkin.Tip": {
+    "message": "끔: 제작자가 자기 피부를 지운 곳(주로 옷감 아래와 주변)에서는 각 체형의 피부도 빠집니다. 켬: 피부를 통째로 넣어 옷감 아래나 주변에서 빠진 피부를 되살리지만, 몸에 붙는 옷감 밖으로 비쳐 보일 수 있습니다. 신발과 장갑은 항상 잘립니다.\n이미 만든 사이즈는 다시 만들 때만 바뀝니다.",
+    "description": ""
+  },
   "SizeSet.EndsUnreadable.Fmt": {
     "message": "{0}: 리그를 읽을 수 없어 발이나 손을 유지할 수 없으므로 사이즈를 만들지 않았습니다.",
     "description": ""
