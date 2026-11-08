@@ -229,6 +229,37 @@ console.log('readme endpoint (the mirror\'s own docs, inlined):');
   } else { fail++; console.log(`  FAIL cache-control on /mirror.md: ${cc}`); }
 }
 
+console.log('milieu readme (the page for new Milieu users):');
+{
+  const MILIEU_README = 'https://raw.githubusercontent.com/solona-m/milieu/test/README.md';
+  for (const p of ['/milieu', '/milieu/', '/milieu/README.md']) {
+    store.clear();
+    fetched = [];
+    const res = await worker.fetch(new Request('https://dl.example.com' + p), {}, ctx);
+    const ok = res.status === 200 && fetched[0] === MILIEU_README
+      && res.headers.get('content-type')?.startsWith('text/markdown');
+    if (ok) { pass++; console.log(`  ok   ${p} proxies Milieu's README`); }
+    else { fail++; console.log(`  FAIL ${p}: status ${res.status}, fetched ${fetched[0]}`); }
+  }
+  store.clear();
+  fetched = [];
+  const html = await worker.fetch(new Request('https://dl.example.com/milieu', { headers: { accept: 'text/html' } }), {}, ctx);
+  const page = await html.text();
+  const ok = html.headers.get('content-type')?.startsWith('text/html') && /<title>[^<]*Milieu/.test(page) && !/<title>[^<]*Proteus/.test(page) && page.includes('href="/milieu/icon.png"');
+  if (ok) { pass++; console.log('  ok   /milieu renders for a browser, titled Milieu, with its own icon'); }
+  else { fail++; console.log(`  FAIL /milieu html: ${html.headers.get('content-type')} ${page.slice(0, 200)}`); }
+}
+
+{
+  store.clear();
+  fetched = [];
+  const res = await worker.fetch(new Request('https://dl.example.com/milieu/icon.png'), {}, ctx);
+  const ok = res.status === 200 && fetched[0] === 'https://raw.githubusercontent.com/solona-m/milieu/test/Milieu/images/icon.png'
+    && res.headers.get('content-type') === 'image/png';
+  if (ok) { pass++; console.log('  ok   /milieu/icon.png proxies the Milieu icon'); }
+  else { fail++; console.log(`  FAIL /milieu/icon.png: ${res.status} ${fetched[0]}`); }
+}
+
 console.log('project readme (proxied, and the front door):');
 {
   const PROJECT = 'https://raw.githubusercontent.com/solona-m/proteus/main/README.md';

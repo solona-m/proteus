@@ -176,6 +176,24 @@ const STATIC_PROXIES = {
     docPath: 'For Creators.md',
   },
 
+  // Milieu's user README, the page to point new Milieu users at (install steps, how to use it). Proxied from the
+  // milieu repo's `test` branch: testing builds are what players can install, and `test` is what they're built
+  // from. English only, no negotiation; its links are all absolute, so docPath only matters for a stray relative one.
+  '/milieu/README.md': {
+    origin: `https://raw.githubusercontent.com/${OWNER}/${MILIEU_REPO}/test/README.md`,
+    type: 'text/markdown; charset=utf-8',
+    ttl: 900,
+    markdown: true,
+    docPath: 'README.md',
+    title: 'Milieu',
+    icon: '/milieu/icon.png',
+  },
+  '/milieu/icon.png': {
+    origin: `https://raw.githubusercontent.com/${OWNER}/${MILIEU_REPO}/test/Milieu/images/icon.png`,
+    type: 'image/png',
+    ttl: 86400,
+  },
+
   // One pinned path per shipped language, `/ja/README.md` and friends, including `/en/README.md`.
   // These are the paths the switcher links to and the ones every translated README's own links
   // resolve to. They are PINNED: whatever the browser's Accept-Language says, the path decides, so a
@@ -201,6 +219,8 @@ const STATIC_PROXIES = {
  */
 const STATIC_ALIASES = {
   '/': '/README.md',
+  '/milieu': '/milieu/README.md',
+  '/milieu/': '/milieu/README.md',
   ...Object.fromEntries(LANGS.flatMap(({ code }) =>
     [[`/${code}`, mirrorPathFor(code)], [`/${code}/`, mirrorPathFor(code)]])),
 };
@@ -318,8 +338,8 @@ export default {
         // Rendered once per TTL and cached, rather than per request: marked on a 400-line document is
         // cheap but not free, and the free plan allows 10 ms of CPU per request.
         const body = renderHtml
-          ? renderMarkdown(await upstream.text(), 'Proteus',
-            { lang: entry.lang ?? null, docPath: entry.docPath })
+          ? renderMarkdown(await upstream.text(), entry.title ?? 'Proteus',
+            { lang: entry.lang ?? null, docPath: entry.docPath, icon: entry.icon })
           : upstream.body;
 
         hit = new Response(body, {

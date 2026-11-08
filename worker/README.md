@@ -153,6 +153,8 @@ about.
 | `/ja`, `/ja/`, `/ja/README.md` (and `en de fr zh ko es ru`) | that language's README — English is the repo root, the rest are `docs/README.<lang>.md` |
 | `/TROUBLESHOOTING.md`, `/For%20Creators.md` | the docs the README links to |
 | `/mirror.md` | this file |
+| `/milieu`, `/milieu/`, `/milieu/README.md` | Milieu's user README, from the milieu repo's `test` branch |
+| `/milieu/icon.png` | Milieu's icon, same branch |
 
 ### A second plugin
 

@@ -221,7 +221,7 @@ function switcherHtml(current) {
  * a sanitiser first.
  */
 export function renderMarkdown(md, fallbackTitle = 'Proteus', opts = {}) {
-  const { lang = null, docPath = 'README.md' } = opts;
+  const { lang = null, docPath = 'README.md', icon = '/icon.png' } = opts;
 
   const renderer = new marked.Renderer();
   const baseLink = renderer.link.bind(renderer);
@@ -270,7 +270,7 @@ export function renderMarkdown(md, fallbackTitle = 'Proteus', opts = {}) {
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>${escapeHtml(title)}</title>
-<link rel="icon" href="/icon.png">
+<link rel="icon" href="${icon}">
 <style>${CSS}</style>
 </head>
 <body><main>${withNav}</main></body>
