@@ -152,7 +152,6 @@ about.
 | `/` and `/README.md` | the project README, from `raw.githubusercontent.com` |
 | `/ja`, `/ja/`, `/ja/README.md` (and `en de fr zh ko es ru`) | that language's README — English is the repo root, the rest are `docs/README.<lang>.md` |
 | `/TROUBLESHOOTING.md`, `/For%20Creators.md` | the docs the README links to |
-| `/mirror.md` | this file |
 | `/milieu`, `/milieu/`, `/milieu/README.md` | Milieu's user README, from the milieu repo's `test` branch |
 | `/milieu/icon.png` | Milieu's icon, same branch |
 
@@ -256,11 +255,7 @@ document here comes from `solona-m/proteus`, which anyone who could inject into 
 access to the plugin, so this is a trust argument rather than a safety one. Do not point the renderer
 at markdown from anywhere else without adding a sanitiser.
 
-This file is inlined into the worker at build time by
-[`scripts/embed-readme.mjs`](scripts/embed-readme.mjs), so `/mirror.md` always describes the
-deployment serving it and has no runtime dependency. **That means deploying with `npm run deploy`, not
-`npx wrangler deploy`** — the plain wrangler command skips the `predeploy` hook that regenerates it,
-and would ship whatever text was embedded last.
+This file is maintainer documentation and is **not** served by the worker (`/mirror.md` is a 404).
 
 The project docs are the opposite: proxied live from the repo with a 15-minute TTL, because their
 whole value is being current and they should not need a worker redeploy to update. Neither is

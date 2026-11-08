@@ -193,40 +193,16 @@ await check('matcap wrong ext', '/matcaps-v1/payload.jpg', 404, null);
 await check('space in matcap name', '/matcaps-v1/Gold Metal.png', 404, null);
 await check('matcap nested', '/matcaps-v1/sub/Gold.Metal.png', 404, null);
 
-console.log('readme endpoint (the mirror\'s own docs, inlined):');
+console.log('the worker README is not published:');
 {
-  for (const p of ['/mirror.md']) {
+  for (const method of ['GET', 'HEAD']) {
     fetched = [];
-    const res = await worker.fetch(new Request('https://dl.example.com' + p), {}, ctx);
+    const res = await worker.fetch(new Request('https://dl.example.com/mirror.md', { method }), {}, ctx);
     const body = await res.text();
-    const ok = res.status === 200
-      && res.headers.get('content-type')?.startsWith('text/markdown')
-      && body.includes('Proteus asset mirror')
-      // Static content must never build an upstream URL — that is what keeps it outside the
-      // open-proxy surface the route patterns above exist to contain.
-      && fetched.length === 0;
-    if (ok) { pass++; console.log(`  ok   ${p} serves the README`); }
-    else {
-      fail++;
-      console.log(`  FAIL ${p}: status ${res.status}, type ${res.headers.get('content-type')}, ` +
-                  `len ${body.length}, origin ${fetched[0] ?? '(none)'}`);
-    }
+    const ok = res.status === 404 && !body.includes('Proteus asset mirror') && fetched.length === 0;
+    if (ok) { pass++; console.log(`  ok   ${method} /mirror.md is a 404`); }
+    else { fail++; console.log(`  FAIL ${method} /mirror.md: status ${res.status}, fetched ${fetched.join(',')}`); }
   }
-
-  // HEAD must not carry a body, but must still report the same headers.
-  const head = await worker.fetch(
-    new Request('https://dl.example.com/mirror.md', { method: 'HEAD' }), {}, ctx);
-  const headBody = await head.text();
-  if (head.status === 200 && headBody === '') { pass++; console.log('  ok   HEAD /mirror.md has no body'); }
-  else { fail++; console.log(`  FAIL HEAD /mirror.md: status ${head.status}, body len ${headBody.length}`); }
-
-  // Documentation is MUTABLE, so it must not inherit the assets' immutable one-year TTL — a stale
-  // year-old copy of the docs would be worse than none.
-  const res = await worker.fetch(new Request('https://dl.example.com/mirror.md'), {}, ctx);
-  const cc = res.headers.get('cache-control') ?? '';
-  if (!cc.includes('immutable') && /max-age=(\d+)/.test(cc) && +RegExp.$1 <= 3600) {
-    pass++; console.log(`  ok   short, mutable cache-control (${cc})`);
-  } else { fail++; console.log(`  FAIL cache-control on /mirror.md: ${cc}`); }
 }
 
 console.log('milieu readme (the page for new Milieu users):');
@@ -463,14 +439,6 @@ console.log('markdown rendering + content negotiation:');
     if (res.status === 404 && fetched.length === 0) {
       pass++; console.log('  ok   malformed percent-escape 404s without throwing');
     } else { fail++; console.log(`  FAIL malformed escape: ${res.status}, upstream ${fetched[0]}`); }
-  }
-
-  // The worker's own inlined docs render under the same rule.
-  {
-    const { res, body } = await get('/mirror.md', HTML);
-    const ok = res.headers.get('content-type')?.startsWith('text/html') && body.includes('<h1');
-    if (ok) { pass++; console.log('  ok   /mirror.md renders for a browser'); }
-    else { fail++; console.log(`  FAIL /mirror.md: ${res.headers.get('content-type')}`); }
   }
 
   // Restore the shared stub for the suites below.
