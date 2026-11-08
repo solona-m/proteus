@@ -540,6 +540,15 @@ internal sealed class HarnessChanges(IHarnessGame game, SessionNames names, IPlu
         });
     }
 
+    /// <summary>The Matcaps tool's click preview on the session's model: a Penumbra temporary mod, never a mod write.</summary>
+    public ChangeResult StudioMatcapPreview(StudioMatcapPreviewRequest request)
+    {
+        if (SessionRefusal() is { } refused) return refused;
+        var o = game.Studio!.MatcapPreview(request, studio!);
+        if (o.Refused is { } r) return ChangeResult.Fail(r.Status, r.Code, r.Message);
+        return ChangeResult.Ok(new Dictionary<string, object?> { ["preview"] = o.Preview, ["state"] = WithSession(o.State) });
+    }
+
     /// <summary>The state body with the session added.</summary>
     internal Dictionary<string, object?> WithSession(IReadOnlyDictionary<string, object?>? state)
     {

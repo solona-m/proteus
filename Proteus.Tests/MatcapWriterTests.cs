@@ -483,13 +483,15 @@ public class MatcapWriterTests
 
     [Fact]
     [Trait("Plan", "EDGE-matcaps-9")]
+    [Trait("Plan", "AC-matcap-preview-2")]
     public void Already_matcap_parts_refused()
     {
+        // Ticked to change the matcap (Apply → ChangeAll); a new apply's Prepare still never splits them again.
         using var f = new MatcapFixture();
         f.Apply(MatcapChoice.OfImage(f.Image("gem.tex")), "1.2");
         var parts = ModelPartReader.Read(f.Current())!.Parts;
         var onMatcap = parts.First(p => MatcapPlan.IsOnMatcap(p) && p.Island < 0);
-        Assert.False(MatcapPlan.Tickable(onMatcap));
+        Assert.True(MatcapPlan.Tickable(onMatcap));
         var p = MatcapStudio.Prepare(f.ModRoot, MatcapFixture.ModelRel, MatcapFixture.ModelPath, f.Current(), [onMatcap],
                                      MatcapChoice.OfImage(f.Image("b.tex", seed: 1)), f.Env());
         Assert.Equal("already-matcap", p.Code);
@@ -588,7 +590,7 @@ public class MatcapWriterTests
     private static MatcapWriter.Outcome ApplyOn(MatcapFixture f, string rel, string image, out MatcapStudio.Prepared prepared)
     {
         var bytes = f.Current(rel);
-        var part = ModelPartReader.Read(bytes)!.Parts.First(p => MatcapPlan.Tickable(p) && p.Island < 0);
+        var part = ModelPartReader.Read(bytes)!.Parts.First(p => MatcapPlan.Tickable(p) && !MatcapPlan.IsOnMatcap(p) && p.Island < 0);
         prepared = MatcapStudio.Prepare(f.ModRoot, rel, MatcapFixture.ModelPath, bytes, [part],
                                         MatcapChoice.OfImage(f.Image(image)), f.Env());
         Assert.True(prepared.Ok, prepared.Message);

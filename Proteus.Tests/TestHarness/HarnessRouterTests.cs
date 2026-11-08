@@ -198,7 +198,7 @@ public class HarnessRouterTests : IDisposable
                       "/actions/mod-settings", "/actions/put-back", "/bindings", "/actions/glamourer-apply",
                       "/actions/binding-edit", "/jobs/{id}",
                       "/studio", "/actions/studio-open", "/actions/studio-set", "/actions/studio-drag",
-                      "/matcaps", "/actions/matcap-image", "/actions/matcap",
+                      "/matcaps", "/actions/matcap-image", "/actions/matcap", "/actions/matcap-preview",
                       "/actions/boot-rearm", "/actions/sidecar-edit", "/sidecar", "/actions/auto-refit",
                       "/actions/output-lock", "/actions/shell-fault", "/actions/auto-redraw"],
                      HarnessRouter.Routes.Select(r => r.Path));

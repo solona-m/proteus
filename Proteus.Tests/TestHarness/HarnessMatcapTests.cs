@@ -227,6 +227,231 @@ public class HarnessMatcapTests : IDisposable
         Assert.False(f.Game.Permanent["Lib"].Enabled);
     }
 
+    // ── Apply changes a matcap (matcap-preview) ──────────────────────────────────────────────────────────────────────
+
+    /// <summary>Apply qa-red on 1.2, then the labels of the parts on a matcap and of the rest, from GET /matcaps.</summary>
+    private async Task<(string Root, List<string> OnMatcap, List<string> Plain)> AppliedOnce()
+    {
+        var root = AddGearMod();
+        await f.Post("/actions/matcap-image", """{"name":"qa-red.png","color":"#ff2020"}""");
+        await f.Post("/actions/matcap-image", """{"name":"qa-blue.png","color":"#2040ff"}""");
+        var (_, q) = await f.Post("/actions/matcap", """{"mod":"Gear","model":"model/top.mdl","parts":["1.2"],"image":"qa-red.png"}""");
+        var job = await f.WaitJob(q.GetProperty("job").GetString()!);
+        Assert.Equal("applied", job.GetProperty("result").GetProperty("summary").GetString());
+        var (_, view) = await f.Get("/matcaps?mod=Gear&model=model/top.mdl");
+        var parts = view.GetProperty("model").GetProperty("parts").EnumerateArray().Where(p => p.GetProperty("island").GetInt32() < 0).ToList();
+        return (root,
+                parts.Where(p => p.GetProperty("onMatcap").GetBoolean()).Select(p => p.GetProperty("label").GetString()!).ToList(),
+                parts.Where(p => !p.GetProperty("onMatcap").GetBoolean() && !p.GetProperty("skin").GetBoolean()).Select(p => p.GetProperty("label").GetString()!).ToList());
+    }
+
+    [Fact]
+    [Trait("Plan", "AC-matcap-preview-9")]
+    public async Task Apply_on_matcap_parts_changes_it()
+    {
+        var (root, onMatcap, _) = await AppliedOnce();
+        Assert.NotEmpty(onMatcap);
+        var model = File.ReadAllBytes(Path.Combine(root, "model", "top.mdl"));
+        var (s, q) = await f.Post("/actions/matcap", JsonSerializer.Serialize(new { mod = "Gear", model = "model/top.mdl", parts = onMatcap, image = "qa-blue.png" }));
+        Assert.Equal(202, s);
+        var job = await f.WaitJob(q.GetProperty("job").GetString()!);
+        Assert.Equal("matcap", job.GetProperty("kind").GetString());
+        var result = job.GetProperty("result");
+        Assert.Equal("changed", result.GetProperty("summary").GetString());
+        Assert.Equal(JsonValueKind.Null, result.GetProperty("files").ValueKind);
+        Assert.Equal(JsonValueKind.Null, result.GetProperty("drawn").ValueKind);
+        Assert.Single(result.GetProperty("materials").EnumerateArray());
+        Assert.Equal("qa-blue.png", Assert.Single(MatcapRecord.Read(root).Materials).Source.Image);
+        Assert.Equal(model, File.ReadAllBytes(Path.Combine(root, "model", "top.mdl")));
+    }
+
+    [Fact]
+    [Trait("Plan", "AC-matcap-preview-7")]
+    public async Task Job_takes_the_click_preview_down_before_writing()
+    {
+        var root = AddGearMod();
+        await f.Post("/actions/matcap-image", """{"name":"qa-red.png","color":"#ff2020"}""");
+        string? recordWhenEnded = "never";
+        var basePort = studio.MatcapPort!;
+        var reread = new List<(string Dir, bool Written)>();
+        studio.MatcapPort = () => basePort() with
+        {
+            EndClickPreview = () => recordWhenEnded = MatcapRecord.Exists(root) ? "after" : "before",
+            StudioModChanged = dir => reread.Add((dir, MatcapRecord.Exists(root))),
+        };
+        var (_, q) = await f.Post("/actions/matcap", """{"mod":"Gear","model":"model/top.mdl","parts":["1.2"],"image":"qa-red.png"}""");
+        var job = await f.WaitJob(q.GetProperty("job").GetString()!);
+        Assert.Equal("applied", job.GetProperty("result").GetProperty("summary").GetString());
+        Assert.Equal("before", recordWhenEnded);
+        // After the write, the Studio open on the mod reads its model again (its parts now name the matcap).
+        Assert.Equal([("Gear", true)], reread);
+    }
+
+    [Fact]
+    [Trait("Plan", "AC-matcap-preview-9")]
+    public async Task Entry_field_is_refused()
+    {
+        AddGearMod();
+        var (s, body) = await f.Post("/actions/matcap", """{"mod":"Gear","model":"model/top.mdl","entry":"/x_mcapabcdef1.mtrl","image":"a.png"}""");
+        Assert.Equal(400, s);
+        Assert.Equal("invalid-field", Code(body));
+        Assert.Contains("unknown field", body.GetProperty("error").GetProperty("message").GetString());
+    }
+
+    [Fact]
+    [Trait("Plan", "AC-matcap-preview-9")]
+    public async Task Get_reports_matcap_parts_tickable()
+    {
+        await AppliedOnce();
+        var (_, view) = await f.Get("/matcaps?mod=Gear&model=model/top.mdl");
+        Assert.All(view.GetProperty("model").GetProperty("parts").EnumerateArray().Where(p => p.GetProperty("onMatcap").GetBoolean()),
+                   p => Assert.True(p.GetProperty("tickable").GetBoolean()));
+    }
+
+    [Fact]
+    [Trait("Plan", "EDGE-matcap-preview-2")]
+    public async Task Mixed_parts_already_matcap_writes_nothing()
+    {
+        var (root, onMatcap, plain) = await AppliedOnce();
+        var before = Directory.EnumerateFiles(root, "*", SearchOption.AllDirectories).Where(p => !p.Contains("meta.json"))
+                              .ToDictionary(p => p, p => Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(File.ReadAllBytes(p))));
+        var (_, q) = await f.Post("/actions/matcap", JsonSerializer.Serialize(new { mod = "Gear", model = "model/top.mdl", parts = new[] { onMatcap[0], plain[0] }, image = "qa-blue.png" }));
+        var job = await f.WaitJob(q.GetProperty("job").GetString()!);
+        Assert.Equal("refused", job.GetProperty("result").GetProperty("summary").GetString());
+        Assert.Equal("already-matcap", job.GetProperty("result").GetProperty("code").GetString());
+        var after = Directory.EnumerateFiles(root, "*", SearchOption.AllDirectories).Where(p => !p.Contains("meta.json"))
+                             .ToDictionary(p => p, p => Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(File.ReadAllBytes(p))));
+        Assert.Equal(before.OrderBy(k => k.Key), after.OrderBy(k => k.Key));
+    }
+
+    [Fact]
+    [Trait("Plan", "EDGE-matcap-preview-5")]
+    [Trait("Plan", "EDGE-matcap-preview-3")]
+    public async Task Change_refusal_summary_is_refused()
+    {
+        var (root, onMatcap, _) = await AppliedOnce();
+        SyntheticMatcapMod.Library(f.ModsRoot, "Lib", "Test Library", "", ["chara/common/texture/testlib_a.tex"], ["Gem Red", "Pearl"]);
+        f.Game.ModFolders["Lib"] = "Lib";
+        f.Game.Permanent["Lib"] = new PermanentSetting(true, 0);
+        await f.Get("/matcaps?refresh=1");
+        var (_, q) = await f.Post("/actions/matcap", JsonSerializer.Serialize(new { mod = "Gear", model = "model/top.mdl", parts = onMatcap, library = "Lib", group = "Texture Slot A", option = "Pearl" }));
+        var job = await f.WaitJob(q.GetProperty("job").GetString()!);
+        Assert.Equal("refused", job.GetProperty("result").GetProperty("summary").GetString());
+        Assert.Equal(MatcapWriter.CodeCrossKind, job.GetProperty("result").GetProperty("code").GetString());
+        Assert.Equal("qa-red.png", Assert.Single(MatcapRecord.Read(root).Materials).Source.Image);
+    }
+
+    [Fact]
+    [Trait("Plan", "AC-matcap-preview-4")]
+    [Trait("Plan", "EDGE-matcap-preview-6")]
+    public async Task Change_to_off_library_needs_confirm_and_writes_nothing()
+    {
+        var root = AddGearMod();
+        SyntheticMatcapMod.Library(f.ModsRoot, "Lib", "Test Library", "", ["chara/common/texture/testlib_a.tex"], ["Gem Red", "Pearl"]);
+        f.Game.ModFolders["Lib"] = "Lib";
+        f.Game.Permanent["Lib"] = new PermanentSetting(true, 0);
+        await f.Get("/matcaps?refresh=1");
+        var (_, q1) = await f.Post("/actions/matcap", """{"mod":"Gear","model":"model/top.mdl","parts":["1.2"],"library":"Lib","group":"Texture Slot A","option":"Gem Red"}""");
+        Assert.Equal("applied", (await f.WaitJob(q1.GetProperty("job").GetString()!)).GetProperty("result").GetProperty("summary").GetString());
+        var (_, view) = await f.Get("/matcaps?mod=Gear&model=model/top.mdl");
+        var onMatcap = view.GetProperty("model").GetProperty("parts").EnumerateArray()
+            .Where(p => p.GetProperty("onMatcap").GetBoolean() && p.GetProperty("island").GetInt32() < 0).Select(p => p.GetProperty("label").GetString()).ToList();
+
+        f.Game.Permanent["Lib"] = f.Game.Permanent["Lib"] with { Enabled = false };
+        var record = File.ReadAllText(MatcapRecord.PathOf(root));
+        var (_, q2) = await f.Post("/actions/matcap", JsonSerializer.Serialize(new { mod = "Gear", model = "model/top.mdl", parts = onMatcap, library = "Lib", group = "Texture Slot A", option = "Pearl" }));
+        var job = await f.WaitJob(q2.GetProperty("job").GetString()!);
+        Assert.Equal("failed", job.GetProperty("state").GetString());
+        Assert.Equal("needs-confirm", job.GetProperty("error").GetProperty("code").GetString());
+        Assert.Equal(record, File.ReadAllText(MatcapRecord.PathOf(root)));
+        Assert.False(f.Game.Permanent["Lib"].Enabled);
+    }
+
+    // ── the click preview's route ────────────────────────────────────────────────────────────────────────────────────
+
+    private async Task OpenSession()
+    {
+        AddGearMod();
+        var (s, _) = await f.Post("/actions/studio-open", """{"mod":"Gear","model":"model/top.mdl"}""");
+        Assert.Equal(200, s);
+    }
+
+    [Fact]
+    [Trait("Plan", "AC-matcap-preview-5")]
+    [Trait("Plan", "AC-matcap-preview-9")]
+    public async Task Preview_route_ticks_picks_and_requests()
+    {
+        await OpenSession();
+        var (s, body) = await f.Post("/actions/matcap-preview", """{"parts":["1.2"],"image":"qa-x.png"}""");
+        Assert.Equal(200, s);
+        Assert.Equal("building", body.GetProperty("preview").GetProperty("state").GetString());
+        var req = Assert.Single(studio.Previews);
+        Assert.Equal(["1.2"], req.Parts);
+        Assert.Equal("qa-x.png", req.Image);
+        Assert.False(req.End);
+        Assert.Equal("matcap", body.GetProperty("state").GetProperty("tool").GetString());
+    }
+
+    [Fact]
+    [Trait("Plan", "AC-matcap-preview-9")]
+    [Trait("Plan", "EDGE-matcap-preview-24")]
+    public async Task Preview_route_end_and_putback()
+    {
+        await OpenSession();
+        await f.Post("/actions/matcap-preview", """{"parts":["1.2"],"library":"Lib","group":"Slot","option":"Pearl"}""");
+        var (s, body) = await f.Post("/actions/matcap-preview", """{"end":true}""");
+        Assert.Equal(200, s);
+        Assert.Equal("none", body.GetProperty("preview").GetProperty("state").GetString());
+        Assert.True(studio.Previews[^1].End);
+
+        await f.Post("/actions/matcap-preview", """{"parts":["1.2"],"image":"qa-x.png"}""");
+        var (sp, _) = await f.Post("/actions/put-back", "{}");
+        Assert.Equal(200, sp);
+        Assert.Single(studio.Ended);
+        Assert.Equal("none", studio.PreviewState);
+    }
+
+    [Theory]
+    [Trait("Plan", "EDGE-matcap-preview-24")]
+    [InlineData("""{"image":"qa-x.png"}""", "parts")]
+    [InlineData("""{"parts":["1.2"]}""", "image or library")]
+    [InlineData("""{"parts":["1.2"],"image":"a.png","library":"L","group":"g","option":"o"}""", "not both")]
+    [InlineData("""{"parts":["1.2"],"library":"L"}""", "group and option")]
+    [InlineData("""{"parts":["1.2"],"pack":true}""", "pack goes with image")]
+    [InlineData("""{"end":true,"parts":["1.2"]}""", "end takes nothing else")]
+    [InlineData("""{"end":"yes"}""", "end must be true or false")]
+    [InlineData("""{"parts":[]}""", "non-empty")]
+    [InlineData("""{"parts":["1.2"],"image":"a.png","nope":1}""", "unknown field")]
+    public async Task Preview_route_refusals(string json, string fragment)
+    {
+        await OpenSession();
+        var (s, body) = await f.Post("/actions/matcap-preview", json);
+        Assert.Equal(400, s);
+        Assert.Equal("invalid-field", Code(body));
+        Assert.Contains(fragment, body.GetProperty("error").GetProperty("message").GetString());
+        Assert.Empty(studio.Previews);
+    }
+
+    [Fact]
+    [Trait("Plan", "EDGE-matcap-preview-24")]
+    public async Task Preview_route_needs_a_session_and_passes_the_panels_refusals()
+    {
+        AddGearMod();
+        var (s1, b1) = await f.Post("/actions/matcap-preview", """{"parts":["1.2"],"image":"qa-x.png"}""");
+        Assert.Equal(409, s1);
+        Assert.Equal("no-studio-session", Code(b1));
+
+        await f.Post("/actions/studio-open", """{"mod":"Gear","model":"model/top.mdl"}""");
+        studio.PreviewRefusal = new StudioRefusal(409, "untickable-part", "1.1 can't take a matcap");
+        var (s2, b2) = await f.Post("/actions/matcap-preview", """{"parts":["1.1"],"image":"qa-x.png"}""");
+        Assert.Equal(409, s2);
+        Assert.Equal("untickable-part", Code(b2));
+        studio.PreviewRefusal = new StudioRefusal(404, "unknown-image", "no matcap image called nope.png");
+        var (s3, b3) = await f.Post("/actions/matcap-preview", """{"parts":["1.2"],"image":"nope.png"}""");
+        Assert.Equal(404, s3);
+        Assert.Equal("unknown-image", Code(b3));
+    }
+
     // ── Proteus's own matcaps (matcap-pack) ──────────────────────────────────────────────────────────────────────────
 
     /// <summary>A scripted pack: records how it was asked, lists real PNGs from its own folder.</summary>

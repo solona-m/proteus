@@ -6224,7 +6224,7 @@
     "description": ""
   },
   "Matcap.Refused.AlreadyMatcap": {
-    "message": "그 파츠 중 일부에는 이미 매트캡이 있습니다. \"선택한 매트캡 사용\"으로 바꾸세요.",
+    "message": "매트캡이 없는 파츠(추가하려면)나 매트캡이 있는 파츠(바꾸려면) 중 한쪽만 체크하세요. 둘을 섞을 수는 없습니다.",
     "description": ""
   },
   "Matcap.Refused.Changed.Fmt": {
@@ -6307,10 +6307,6 @@
     "message": "체크한 파츠 중 일부에 비치는 가장자리(머리카락 가닥, 레이스)가 있습니다. 적용한 뒤 게임에서 가장자리를 확인하세요.",
     "description": ""
   },
-  "Parts.Matcap.AlreadyTip": {
-    "message": "이 파츠에는 이미 매트캡이 있습니다. \"이 모델의 매트캡\"에서 바꾸세요.",
-    "description": ""
-  },
   "Parts.Matcap.AlsoMore.Fmt": {
     "message": "외 {0}개",
     "description": ""
@@ -6331,12 +6327,24 @@
     "message": "{0}은(는) 기본 컬렉션입니다. 이를 쓰는 모든 사람에게 선택한 매트캡이 보입니다.",
     "description": ""
   },
-  "Parts.Matcap.Change": {
-    "message": "선택한 매트캡 사용",
-    "description": ""
-  },
   "Parts.Matcap.Changed.Fmt": {
     "message": "매트캡 변경: {0}.",
+    "description": ""
+  },
+  "Parts.Matcap.ChangePartial.Fmt": {
+    "message": "바뀌지 않음: {0}.",
+    "description": ""
+  },
+  "Parts.Matcap.ChangesFiles.Fmt": {
+    "message": "예: {0}.",
+    "description": ""
+  },
+  "Parts.Matcap.ChangesUnticked.Fmt": {
+    "message": "여기서 체크하지 않은 파츠 {0}개도 포함됩니다.",
+    "description": ""
+  },
+  "Parts.Matcap.Changes.Fmt": {
+    "message": "적용하면 이 모드에서 {0}을(를) 쓰는 모든 파일(리핏 포함)에서 바뀝니다.",
     "description": ""
   },
   "Parts.Matcap.ChangeKindTip": {
@@ -6380,7 +6388,27 @@
     "description": ""
   },
   "Parts.Matcap.Guide": {
-    "message": "매트캡은 빛을 받은 구의 그림으로, 파츠는 나를 향한 방향에 따라 그 색을 가져옵니다. 파츠를 체크하고 매트캡을 고른 뒤 적용하세요.",
+    "message": "매트캡은 빛을 받은 구의 그림으로, 파츠는 나를 향한 방향에 따라 그 색을 가져옵니다. 파츠를 체크하고 매트캡을 클릭해 캐릭터에서 확인한 뒤 적용하세요.",
+    "description": ""
+  },
+  "Parts.Matcap.PreviewFailed.Fmt": {
+    "message": "캐릭터에 매트캡을 보여 줄 수 없었습니다({0}).",
+    "description": ""
+  },
+  "Parts.Matcap.Previewing": {
+    "message": "캐릭터에만 보여 줍니다. 매트캡 적용을 누르기 전에는 아무것도 저장되지 않습니다.",
+    "description": ""
+  },
+  "Parts.Matcap.PreviewGameGear": {
+    "message": "게임 장비는 적용해야 매트캡이 보입니다.",
+    "description": ""
+  },
+  "Parts.Matcap.PreviewGearOnly": {
+    "message": "머리카락, 꼬리, 귀, 뿔은 적용해야 매트캡이 보입니다.",
+    "description": ""
+  },
+  "Parts.Matcap.PreviewTick": {
+    "message": "파츠를 체크하면 캐릭터에서 매트캡을 볼 수 있습니다.",
     "description": ""
   },
   "Parts.Matcap.Held.Fmt": {
@@ -6408,7 +6436,7 @@
     "description": ""
   },
   "Parts.Matcap.ListTip": {
-    "message": "매트캡을 적용할 파츠를 체크하세요. 피부와 이미 매트캡이 있는 파츠는 체크할 수 없습니다.",
+    "message": "매트캡을 적용할 파츠를 체크하세요. 이미 매트캡이 있는 파츠를 체크하면 그것을 바꿉니다. 피부는 체크할 수 없습니다.",
     "description": ""
   },
   "Parts.Matcap.Lod0Cut": {

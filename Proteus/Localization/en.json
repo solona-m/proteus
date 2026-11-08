@@ -6224,7 +6224,7 @@
     "description": "Chat notice, once per mod per session. {0} = number of variant folders the mod's material paths were copied into, {1} = the mod's name. Keep /proteus and the \"[Proteus]\" prefix; \"Settings\" and \"Gear variants\" name a tab and a section (match Tab.Settings and Settings.Section.GearVariants)."
   },
   "Matcap.Refused.AlreadyMatcap": {
-    "message": "Some of those parts already have a matcap. Use \"Use the chosen matcap\" to change it.",
+    "message": "Tick either parts without a matcap, to add one, or parts that have one, to change it — not both.",
     "description": "Studio Matcaps tool. A matcap is a sphere picture a shader samples by the surface's facing direction."
   },
   "Matcap.Refused.Changed.Fmt": {
@@ -6307,10 +6307,6 @@
     "message": "Some ticked parts use see-through edges (hair strands, lace). Check the edges in game after applying.",
     "description": "Studio Matcaps tool. A matcap is a sphere picture a shader samples by the surface's facing direction."
   },
-  "Parts.Matcap.AlreadyTip": {
-    "message": "This part already has a matcap. Change it under \"Matcaps on this model\".",
-    "description": "Studio Matcaps tool. A matcap is a sphere picture a shader samples by the surface's facing direction."
-  },
   "Parts.Matcap.AlsoMore.Fmt": {
     "message": "+{0} more",
     "description": "Studio Matcaps tool. A matcap is a sphere picture a shader samples by the surface's facing direction."
@@ -6331,12 +6327,24 @@
     "message": "{0} is your base collection: everyone using it will see the chosen matcap.",
     "description": "Studio Matcaps tool. A matcap is a sphere picture a shader samples by the surface's facing direction."
   },
-  "Parts.Matcap.Change": {
-    "message": "Use the chosen matcap",
-    "description": "Studio Matcaps tool. A matcap is a sphere picture a shader samples by the surface's facing direction."
-  },
   "Parts.Matcap.Changed.Fmt": {
     "message": "Matcap changed: {0}.",
+    "description": "Studio Matcaps tool. A matcap is a sphere picture a shader samples by the surface's facing direction."
+  },
+  "Parts.Matcap.ChangePartial.Fmt": {
+    "message": "Not changed: {0}.",
+    "description": "Studio Matcaps tool. A matcap is a sphere picture a shader samples by the surface's facing direction."
+  },
+  "Parts.Matcap.ChangesFiles.Fmt": {
+    "message": "Those include: {0}.",
+    "description": "Studio Matcaps tool. A matcap is a sphere picture a shader samples by the surface's facing direction."
+  },
+  "Parts.Matcap.ChangesUnticked.Fmt": {
+    "message": "That includes {0} part(s) here you didn't tick.",
+    "description": "Studio Matcaps tool. A matcap is a sphere picture a shader samples by the surface's facing direction."
+  },
+  "Parts.Matcap.Changes.Fmt": {
+    "message": "Apply changes {0} in every file of this mod that uses it, refits included.",
     "description": "Studio Matcaps tool. A matcap is a sphere picture a shader samples by the surface's facing direction."
   },
   "Parts.Matcap.ChangeKindTip": {
@@ -6380,7 +6388,27 @@
     "description": "Studio Matcaps tool. A matcap is a sphere picture a shader samples by the surface's facing direction."
   },
   "Parts.Matcap.Guide": {
-    "message": "A matcap is a picture of a lit sphere; the parts take their colour from it by which way they face you. Tick parts, pick a matcap, then Apply.",
+    "message": "A matcap is a picture of a lit sphere; the parts take their colour from it by which way they face you. Tick parts, click a matcap to see it on your character, then Apply.",
+    "description": "Studio Matcaps tool. A matcap is a sphere picture a shader samples by the surface's facing direction."
+  },
+  "Parts.Matcap.PreviewFailed.Fmt": {
+    "message": "The matcap could not be shown on your character ({0}).",
+    "description": "Studio Matcaps tool. A matcap is a sphere picture a shader samples by the surface's facing direction."
+  },
+  "Parts.Matcap.Previewing": {
+    "message": "Shown on your character only: nothing is saved until you press Apply matcap.",
+    "description": "Studio Matcaps tool. A matcap is a sphere picture a shader samples by the surface's facing direction."
+  },
+  "Parts.Matcap.PreviewGameGear": {
+    "message": "Game gear shows the matcap once you apply it.",
+    "description": "Studio Matcaps tool. A matcap is a sphere picture a shader samples by the surface's facing direction."
+  },
+  "Parts.Matcap.PreviewGearOnly": {
+    "message": "Hair, tails, ears and horns show the matcap once you apply it.",
+    "description": "Studio Matcaps tool. A matcap is a sphere picture a shader samples by the surface's facing direction."
+  },
+  "Parts.Matcap.PreviewTick": {
+    "message": "Tick parts to see the matcap on your character.",
     "description": "Studio Matcaps tool. A matcap is a sphere picture a shader samples by the surface's facing direction."
   },
   "Parts.Matcap.Held.Fmt": {
@@ -6408,7 +6436,7 @@
     "description": "Studio Matcaps tool. A matcap is a sphere picture a shader samples by the surface's facing direction."
   },
   "Parts.Matcap.ListTip": {
-    "message": "Tick the parts that should take the matcap. Skin, and parts that already have one, can't be ticked.",
+    "message": "Tick the parts that should take the matcap. Tick parts that already have one to change it. Skin can't be ticked.",
     "description": "Studio Matcaps tool. A matcap is a sphere picture a shader samples by the surface's facing direction."
   },
   "Parts.Matcap.Lod0Cut": {

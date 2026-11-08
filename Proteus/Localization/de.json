@@ -6224,7 +6224,7 @@
     "description": ""
   },
   "Matcap.Refused.AlreadyMatcap": {
-    "message": "Einige dieser Teile haben schon eine Matcap. Ändere sie mit „Gewählte Matcap verwenden“.",
+    "message": "Hake entweder Teile ohne Matcap an, um eine hinzuzufügen, oder Teile mit einer, um sie zu ändern – nicht beides.",
     "description": ""
   },
   "Matcap.Refused.Changed.Fmt": {
@@ -6307,10 +6307,6 @@
     "message": "Einige angehakte Teile haben durchsichtige Ränder (Haarsträhnen, Spitze). Prüfe die Ränder nach dem Anwenden im Spiel.",
     "description": ""
   },
-  "Parts.Matcap.AlreadyTip": {
-    "message": "Dieses Teil hat schon eine Matcap. Ändere sie unter „Matcaps auf diesem Modell“.",
-    "description": ""
-  },
   "Parts.Matcap.AlsoMore.Fmt": {
     "message": "+{0} weitere",
     "description": ""
@@ -6331,12 +6327,24 @@
     "message": "{0} ist deine Basis-Sammlung: Alle, die sie nutzen, sehen die gewählte Matcap.",
     "description": ""
   },
-  "Parts.Matcap.Change": {
-    "message": "Gewählte Matcap verwenden",
-    "description": ""
-  },
   "Parts.Matcap.Changed.Fmt": {
     "message": "Matcap geändert: {0}.",
+    "description": ""
+  },
+  "Parts.Matcap.ChangePartial.Fmt": {
+    "message": "Nicht geändert: {0}.",
+    "description": ""
+  },
+  "Parts.Matcap.ChangesFiles.Fmt": {
+    "message": "Darunter: {0}.",
+    "description": ""
+  },
+  "Parts.Matcap.ChangesUnticked.Fmt": {
+    "message": "Das betrifft auch {0} Teil(e) hier, die du nicht angehakt hast.",
+    "description": ""
+  },
+  "Parts.Matcap.Changes.Fmt": {
+    "message": "Anwenden ändert {0} in jeder Datei dieses Mods, die sie nutzt, Refits eingeschlossen.",
     "description": ""
   },
   "Parts.Matcap.ChangeKindTip": {
@@ -6380,7 +6388,27 @@
     "description": ""
   },
   "Parts.Matcap.Guide": {
-    "message": "Eine Matcap ist das Bild einer beleuchteten Kugel; die Teile nehmen ihre Farbe daraus, je nachdem, wohin sie zu dir zeigen. Hake Teile an, wähle eine Matcap und klicke auf Anwenden.",
+    "message": "Eine Matcap ist das Bild einer beleuchteten Kugel; die Teile nehmen ihre Farbe daraus, je nachdem, wohin sie zu dir zeigen. Hake Teile an, klicke auf eine Matcap, um sie an deinem Charakter zu sehen, und klicke dann auf Anwenden.",
+    "description": ""
+  },
+  "Parts.Matcap.PreviewFailed.Fmt": {
+    "message": "Die Matcap konnte nicht an deinem Charakter gezeigt werden ({0}).",
+    "description": ""
+  },
+  "Parts.Matcap.Previewing": {
+    "message": "Nur an deinem Charakter gezeigt: Gespeichert wird erst, wenn du auf Matcap anwenden klickst.",
+    "description": ""
+  },
+  "Parts.Matcap.PreviewGameGear": {
+    "message": "Spielausrüstung zeigt die Matcap erst, wenn du sie anwendest.",
+    "description": ""
+  },
+  "Parts.Matcap.PreviewGearOnly": {
+    "message": "Haare, Schweife, Ohren und Hörner zeigen die Matcap erst, wenn du sie anwendest.",
+    "description": ""
+  },
+  "Parts.Matcap.PreviewTick": {
+    "message": "Hake Teile an, um die Matcap an deinem Charakter zu sehen.",
     "description": ""
   },
   "Parts.Matcap.Held.Fmt": {
@@ -6408,7 +6436,7 @@
     "description": ""
   },
   "Parts.Matcap.ListTip": {
-    "message": "Hake die Teile an, die die Matcap bekommen sollen. Haut und Teile, die schon eine haben, lassen sich nicht anhaken.",
+    "message": "Hake die Teile an, die die Matcap bekommen sollen. Hake Teile an, die schon eine haben, um sie zu ändern. Haut lässt sich nicht anhaken.",
     "description": ""
   },
   "Parts.Matcap.Lod0Cut": {

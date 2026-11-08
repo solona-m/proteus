@@ -13,7 +13,8 @@ namespace Proteus.Gui;
 
 /// <summary>
 /// The Matcaps tool's settings pane in the Studio: which matcap (your images or a library's options, with thumbnails),
-/// Apply, and the matcaps already on the open model with Change, Forget and Undo. It holds only what the user picked;
+/// Apply (on parts that already have a matcap it changes that matcap), and the matcaps already on the open model with
+/// Forget and Undo. It holds only what the user picked;
 /// everything it decides comes from <see cref="MatcapPanelModel"/>, and everything it does is a callback the Studio
 /// wires (<see cref="Context"/>).
 /// </summary>
@@ -39,7 +40,6 @@ internal sealed class MatcapPanel
         public required IReadOnlyList<string> GroupFiles;
         public required Func<MatcapLibrary, MatcapSelection.Status> LibraryStatus;
         public required Action<MatcapChoice, bool> Apply;
-        public required Action<string, MatcapChoice> Change;
         public required Action Undo;
         public required Action Forget;
         public required Action Rescan;
@@ -55,6 +55,18 @@ internal sealed class MatcapPanel
         public MatcapPackStatus? PackStatus;
         /// <summary>Try the download again after a failure.</summary>
         public Action? RetryPack;
+        /// <summary>Every part of the open model (for what a change reaches beyond the ticks).</summary>
+        public IReadOnlyList<ModelPart> AllParts = [];
+        /// <summary>The open model's file in its mod.</summary>
+        public string ModelFile = "";
+        /// <summary>A thumbnail was clicked (after the pick is set): preview it on the character.</summary>
+        public Action<MatcapChoice>? Clicked;
+        /// <summary>Why the clicked matcap isn't shown on the character, or null.</summary>
+        public string? PreviewNote;
+        /// <summary>The preview shows, but the character draws another file for the model once applied.</summary>
+        public string? PreviewDrawnNote;
+        /// <summary>A preview is on the character.</summary>
+        public bool PreviewShown;
     }
 
     /// <summary>Where the matcap is picked from.</summary>
@@ -110,6 +122,7 @@ internal sealed class MatcapPanel
             case SourceKind.Proteus: DrawProteus(ctx); break;
             default: DrawImages(ctx); break;
         }
+        DrawPreviewNotes(ctx);
 
         ImGui.Separator();
         DrawApply(ctx);
@@ -133,7 +146,7 @@ internal sealed class MatcapPanel
             return;
         }
         DrawGrid(ctx.Images.Select(i => (i.Name, i.Path, i.FromMod ? $"{i.Name} {s.ThisMod}" : i.Name)).ToList(),
-                 image, picked => image = picked);
+                 image, picked => Click(ctx, SourceKind.Images, picked));
     }
 
     /// <summary>Picks <paramref name="name"/> from <paramref name="kind"/>, as a click would: the tests' way in.</summary>
@@ -141,6 +154,44 @@ internal sealed class MatcapPanel
     {
         source = kind;
         if (kind == SourceKind.Proteus) packImage = name; else if (kind == SourceKind.Images) image = name;
+    }
+
+    /// <summary>
+    /// A thumbnail clicked: it becomes the pick (an image, one of Proteus's matcaps, or the open library's option), then
+    /// the Studio is asked to show it on the character.
+    /// </summary>
+    internal void Click(Context ctx, SourceKind kind, string name)
+    {
+        source = kind;
+        switch (kind)
+        {
+            case SourceKind.Images: image = name; break;
+            case SourceKind.Proteus: packImage = name; break;
+            default: option = name; break;
+        }
+        if (Choice(ctx) is { } c) ctx.Clicked?.Invoke(c);
+    }
+
+    /// <summary>The library whose options the grid shows, by its key: the tests' way in.</summary>
+    internal void OpenLibrary(MatcapLibrary lib)
+    {
+        source = SourceKind.Libraries;
+        libraryKey = Key(lib);
+        option = null;
+    }
+
+    /// <summary>Under the thumbnails: the preview is on the character, or why not.</summary>
+    private static void DrawPreviewNotes(Context ctx)
+    {
+        var s = Strings.Matcap;
+        ImGui.PushTextWrapPos(0f);
+        if (ctx.PreviewShown)
+        {
+            ImGui.TextDisabled(s.Previewing);
+            if (ctx.PreviewDrawnNote is { Length: > 0 } drawn) ImGui.TextColored(ProteusStyle.Warn, drawn);
+        }
+        else if (ctx.PreviewNote is { Length: > 0 } note) ImGui.TextColored(ProteusStyle.Warn, note);
+        ImGui.PopTextWrapPos();
     }
 
     private void DrawProteus(Context ctx)
@@ -156,7 +207,7 @@ internal sealed class MatcapPanel
             if (st.State == MatcapPackState.Failed && ImGui.Button(s.PackRetry)) ctx.RetryPack?.Invoke();
         }
         if (ctx.PackImages.Count == 0) return;
-        DrawGrid(ctx.PackImages.Select(i => (i.Name, i.Path, i.Name)).ToList(), packImage, picked => packImage = picked);
+        DrawGrid(ctx.PackImages.Select(i => (i.Name, i.Path, i.Name)).ToList(), packImage, picked => Click(ctx, SourceKind.Proteus, picked));
     }
 
     private void DrawLibraries(Context ctx)
@@ -197,7 +248,7 @@ internal sealed class MatcapPanel
         var root = ctx.ModsRoot ?? "";
         DrawGrid(lib.Options.Select(o => (o.Name, Path.Combine(root, lib.Mod, o.File.Replace('\\', Path.DirectorySeparatorChar)),
                                           o.Name == status.CurrentOption ? $"{o.Name} ✓" : o.Name)).ToList(),
-                 option, picked => option = picked);
+                 option, picked => Click(ctx, SourceKind.Libraries, picked));
 
         ImGui.PushTextWrapPos(0f);
         foreach (var w in MatcapPanelModel.LibraryWarnings(lib, status, ctx.Record, ctx.Libraries!.ProvidersOf(lib.Texture)))
@@ -267,6 +318,14 @@ internal sealed class MatcapPanel
         }
         ImGui.TextDisabled(string.Format(s.TickedFmt, ctx.Ticked.Count));
         ImGui.TextDisabled(string.Format(s.RoomFmt, Math.Max(0, ctx.MaterialRoom)));
+        // Apply on parts that have a matcap changes those matcaps wherever they are used: say so before it is pressed.
+        if (MatcapPlan.KindOfApply(ctx.Ticked) == MatcapPlan.ApplyKind.Change)
+        {
+            ImGui.PushTextWrapPos(0f);
+            foreach (var line in MatcapPanelModel.ChangesLines(ctx.Ticked, ctx.AllParts, ctx.Record, ctx.ModelFile))
+                ImGui.TextColored(ProteusStyle.Warn, line);
+            ImGui.PopTextWrapPos();
+        }
         if (ctx.Ticked.Any(p => p.Material.Contains("hir", StringComparison.OrdinalIgnoreCase)))
         {
             ImGui.PushTextWrapPos(0f);
@@ -274,7 +333,7 @@ internal sealed class MatcapPanel
             ImGui.PopTextWrapPos();
         }
 
-        var why = MatcapPanelModel.ApplyDisabledReason(ctx.Penumbra, ctx.Ticked.Count, choice != null, ctx.MaterialRoom);
+        var why = MatcapPanelModel.ApplyDisabledReason(ctx.Penumbra, ctx.Ticked, choice, ctx.MaterialRoom, ctx.Record);
         using (ImRaii.Disabled(why != null || ctx.Busy))
             if (ImGui.Button(s.Apply, new Vector2(-1f, 0f)) && choice != null)
             {
@@ -314,7 +373,6 @@ internal sealed class MatcapPanel
         if (ctx.Entries.Count == 0) return;
         ImGui.Spacing();
         if (!ImGui.CollapsingHeader(s.ExistingHeader, ImGuiTreeNodeFlags.DefaultOpen)) return;
-        var choice = Choice(ctx);
         bool anySuperseded = false;
         foreach (var entry in ctx.Entries)
         {
@@ -332,11 +390,6 @@ internal sealed class MatcapPanel
             ImGui.TextDisabled(MatcapPanelModel.SourceText(entry.Source));
             if (MatcapPanelModel.EntryState(entry, state, installed, enabled) is { } line)
                 ImGui.TextColored(ProteusStyle.Warn, line);
-            using (ImRaii.PushId(entry.Name))
-            using (ImRaii.Disabled(!MatcapPanelModel.CanChange(entry, choice) || ctx.Busy || state == MatcapWriter.State.Superseded))
-                if (ImGui.SmallButton(s.Change) && choice != null) { ctx.Change(entry.Name, choice); InvalidateStatus(); }
-            if (choice != null && !MatcapPanelModel.CanChange(entry, choice) && ImGui.IsItemHovered(ImGuiHoveredFlags.AllowWhenDisabled))
-                ImGui.SetTooltip(s.ChangeKindTip);
         }
         if (anySuperseded)
             using (ImRaii.Disabled(ctx.Busy))

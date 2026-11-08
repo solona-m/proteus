@@ -679,6 +679,8 @@ public sealed partial class PartsPanel
     /// </summary>
     private void TickLivePreview()
     {
+        // A matcap click preview owns the character's redirect while requested, building or shown.
+        if (matcapPreview.Active) return;
         RetryOwedShare();
         if (showModelView || !previewDirty || preview.Busy) return;
         if (volume == null || brushBase == null || modelIndex < 0) { NoPreview(); return; }
@@ -838,7 +840,7 @@ public sealed partial class PartsPanel
     /// </summary>
     private void RetryOwedShare()
     {
-        if (previewDirty || preview.Busy) return;
+        if (previewDirty || preview.Busy || matcapPreview.Active) return;
         // Neither shows the saved file: a refit preview, or a part that is redrawn rather than previewed.
         if (tool == Tool.Retarget || preview.UnsupportedFor(TargetIsCustomizePart)) return;
         if (share.OwedShareDue(Environment.TickCount64, preview.SharedStamp, () => ShareToken(CurrentSave())))
@@ -897,11 +899,14 @@ public sealed partial class PartsPanel
         => modelIndex >= 0 && modelIndex < models.Count && LiveBrushPreview.IsCustomizePart(models[modelIndex].GamePath);
 
     /// <summary>Take the preview off the character, so it draws the mod's own (saved) file again.</summary>
-    private void EndLivePreview(bool refreshGame)
+    /// <param name="keepMatcapWanted">A matcap click preview still follows the ticks (they just don't allow one now).</param>
+    private void EndLivePreview(bool refreshGame, bool keepMatcapWanted = false)
     {
         previewDirty = false;
         previewHides = 0;
         share.Reset();
+        matcapPending = null;
+        matcapPreview.Ended(keepMatcapWanted);
         preview.End(redraw: refreshGame);
     }
 
@@ -3088,6 +3093,15 @@ public sealed partial class PartsPanel
         }
         // Horns, ears and tails are opened only under Matcaps: leaving it closes them.
         bool closeEar = tool == Tool.Matcap && vanilla is { } open && Services.Matcap.CustomizationMaterialPath.Parse(open.GamePath) != null;
+        // Leaving Matcaps takes its click preview off the character.
+        if (tool == Tool.Matcap && matcapPreview.Active) EndLivePreview(refreshGame: true);
+        // Entering it: any brush preview comes down, so every part is drawn (and can be ticked) again, and the click
+        // preview's drawn-file check resolves the mod's own files rather than the brush's redirect.
+        if (value == Tool.Matcap)
+        {
+            if (preview.Active) EndLivePreview(refreshGame: true);
+            else previewDirty = false;
+        }
         tool = value;
         if (closeEar)
         {
