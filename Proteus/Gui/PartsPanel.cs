@@ -1981,8 +1981,7 @@ public sealed partial class PartsPanel
     }
 
     /// <summary>A matcap click preview is building or shown under Matcaps: the ticked parts aren't tinted on the character.</summary>
-    private bool MatcapPreviewHidesTicks =>
-        tool == Tool.Matcap && (matcapPreview.ShownKey != null || matcapPreview.BuildingKey != null || matcapPending != null);
+    private bool MatcapPreviewHidesTicks => tool == Tool.Matcap && matcapPreview.HidesTicks(matcapPending != null);
 
     /// <summary>A value that changes whenever the ticked set does, or the matcap preview hides or shows the tint, for the
     /// live tint's cache.</summary>

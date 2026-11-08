@@ -570,9 +570,34 @@ public class MatcapPreviewWiringTests
         // The amber tint of ticked parts covered the parts the preview recolours: under Matcaps it is off meanwhile.
         var main = Main();
         Assert.Contains("if (MatcapPreviewHidesTicks ||", Method(main, "private bool PartTicked(int index)"));
-        Assert.Contains("tool == Tool.Matcap && (matcapPreview.ShownKey != null || matcapPreview.BuildingKey != null || matcapPending != null)", main);
+        Assert.Contains("tool == Tool.Matcap && matcapPreview.HidesTicks(matcapPending != null)", main);
         // The tint's cache is rebuilt when the preview starts or ends.
-        Assert.Contains("MatcapPreviewHidesTicks ?", main[main.IndexOf("private int TickedVersion()", StringComparison.Ordinal)..]);
+        int at = main.IndexOf("private int TickedVersion()", StringComparison.Ordinal);
+        Assert.Contains("MatcapPreviewHidesTicks ?", main[at..main.IndexOf(';', at)]);
+    }
+
+    [Fact]
+    [Trait("Plan", "AC-matcap-preview-5")]
+    public void Ticks_are_hidden_only_while_building_pending_or_shown()
+    {
+        var s = new MatcapPreviewState();
+        Assert.False(s.HidesTicks(false));
+        s.Click(MatcapChoice.OfImage(new MatcapImage("a.png", "a.png", false)));
+        Assert.False(s.HidesTicks(false));                    // wanted, nothing built yet
+        s.Next("a", null, false);
+        Assert.True(s.HidesTicks(false));                     // building
+        Assert.True(s.Accept(s.Generation, "a", "a"));
+        Assert.True(s.HidesTicks(true));                      // built, push waiting
+        Assert.False(s.HidesTicks(false));
+        s.Failed("a", "not square");
+        Assert.False(s.HidesTicks(false));                    // a refused build brings the tint back
+        s.Next("b", null, false);
+        s.Accept(s.Generation, "b", "b");
+        s.Shown("b", null);
+        Assert.True(s.HidesTicks(false));                     // shown
+        Assert.Equal(MatcapPreviewState.Step.End, s.Next("", Strings.Matcap.PreviewTick, false));
+        s.Ended(keepWanted: true);
+        Assert.False(s.HidesTicks(false));                    // ended (still following the ticks): tint back
     }
 
     [Fact]
