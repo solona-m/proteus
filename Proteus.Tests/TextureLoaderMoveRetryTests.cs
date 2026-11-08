@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Threading;
 using System.Threading.Tasks;
 using Proteus.Services;
 using Xunit;
@@ -39,11 +40,15 @@ public class TextureLoaderMoveRetryTests : IDisposable
         var path = Path.Combine(dir, "ss_1_norm.tex");
         File.WriteAllBytes(path, [1, 2, 3]);
         var hold = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.Read);
-        var release = Task.Run(async () => { await Task.Delay(60); hold.Dispose(); });
+        // Released on a thread of its own: a thread-pool task could start late under the parallel suite's load and miss
+        // the retry budget (seen once: the release landed after five retries' ~310 ms). Eight retries give ~2.5 s.
+        var released = new TaskCompletionSource();
+        var release = new Thread(() => { Thread.Sleep(60); hold.Dispose(); released.SetResult(); }) { IsBackground = true };
+        release.Start();
         var tmp = Tmp(path, [9, 9, 9, 9]);
 
-        int retries = TextureLoader.MoveIntoPlace(tmp, path, 5, 10);
-        await release;
+        int retries = TextureLoader.MoveIntoPlace(tmp, path, 8, 10);
+        await released.Task;
 
         Assert.True(retries >= 1);
         Assert.Equal(new byte[] { 9, 9, 9, 9 }, File.ReadAllBytes(path));
