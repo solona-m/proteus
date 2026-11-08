@@ -448,7 +448,7 @@ public class Gen2LayoutRefitLocalTests(ITestOutputHelper output)
             Assert.DoesNotContain(log, l => l.Contains("refused:", StringComparison.Ordinal));
             // The made legs' folds, said and bounded by what was measured — never a refusal (the user's decision).
             var made = log.Single(l => l.Contains("onto TBSE-X (moved up to", StringComparison.Ordinal));
-            int folded = int.Parse(System.Text.RegularExpressions.Regex.Match(made, @"(\d+) folded\)").Groups[1].Value);
+            int folded = int.Parse(System.Text.RegularExpressions.Regex.Match(made, @"(\d+) folded[;)]").Groups[1].Value);
             output.WriteLine($"TBSE-X legs: {folded} folded");
             Assert.True(folded <= KnownTbseXFolds, $"{folded} faces folded, more than the {KnownTbseXFolds} measured");
         }
