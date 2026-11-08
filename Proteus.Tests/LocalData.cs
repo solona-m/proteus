@@ -67,6 +67,15 @@ internal static class LocalData
     /// hat fit. The mod whose ports showed the bald spot at the back of the head (2026-11-05). Only ever read, or copied.</summary>
     internal const string StryxMod = Mods + ":LM Stryx Rainbow";
 
+    /// <summary>"Yet Another Body+" 4.2.0 (tmi), installed: a Bibo-layout body whose "Skin Materials" options (Matte,
+    /// Pores, Oily; Off ships no files) redirect <c>mt_c0201b0001_bibo.mtrl</c> (and per-race bibo materials) naming the
+    /// mod-invented <c>chara/bibo_mid_*.tex</c>, and whose Smallclothes models declare that material. Only ever read.</summary>
+    internal const string YabMod = Mods + ":hs-Yet Another Body+-4.2.0-tmi";
+
+    /// <summary>"clia skin - by solona", installed: default data supplying <c>chara/bibo_mid_base|mask|norm.tex</c> and
+    /// the c0201 bibo material — the mod the design-restore sweep held off on 2026-11-07, leaving the body invisible.</summary>
+    internal const string CliaMod = Mods + ":clia skin - by solona";
+
     /// <summary>
     /// The uv transfer maps, which live in the repository (<c>Proteus/uvmaps</c>) but through Git LFS, so a checkout
     /// may hold only their pointers. Not a variable: found by walking up from the test binaries. <see cref="Path"/> gives
