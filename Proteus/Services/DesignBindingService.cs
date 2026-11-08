@@ -1423,6 +1423,7 @@ public partial class DesignBindingService : IDisposable
     private readonly Dictionary<string, List<DesignRestoreSweep.SweepNeed>> sweepSpared = new(StringComparer.OrdinalIgnoreCase);
     private readonly HashSet<string> sweepCarried = new(StringComparer.OrdinalIgnoreCase);
     private bool sweepFailureLogged;
+    private readonly HashSet<string> sweepUnreadLogged = new(StringComparer.OrdinalIgnoreCase);
     private int sweepBlockRetries;
     // Game data can't change while the game runs, so a path's answer is kept for the session.
     private readonly Dictionary<string, bool> existsMemo = new(StringComparer.Ordinal);
@@ -1440,6 +1441,7 @@ public partial class DesignBindingService : IDisposable
         postLoadSweepUntil      = Environment.TickCount64 + PostLoadSweepWindowMs;
         sweepFailureLogged      = false;
         sweepBlockRetries       = 0;
+        sweepUnreadLogged.Clear();
         // One sweep is queued regardless: neither the recomposite nor Penumbra is guaranteed to redraw.
         QueuePostLoadSweep();
     }
@@ -1703,6 +1705,7 @@ public partial class DesignBindingService : IDisposable
         if (off.Count > 0)
             log.Information("[Proteus] design-restore: holding off mod(s) the design doesn't have that were still drawn: {0}",
                 string.Join(", ", off));
+        unreadStrays.RemoveAll(d => !sweepUnreadLogged.Add(d));   // once per window per mod
         if (unreadStrays.Count > 0)
             log.Information("[Proteus] design-restore: not holding off this round, their file list could not be read: {0}",
                 string.Join(", ", unreadStrays));

@@ -506,7 +506,6 @@ public class DesignRestoreSweepTests
     [Trait("Plan", "EDGE-sweep-keeps-deps-45")]
     public void Second_same_design_restore_before_phase_2_keeps_the_carry()
     {
-        var none = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         var installed = new HashSet<string>(StringComparer.OrdinalIgnoreCase) { "Stray", "Pending", "Released", "Taken", "Bound", "Overlay" };
         var released = new HashSet<string>(StringComparer.OrdinalIgnoreCase) { "Released" };
         var source = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase) { ["Taken"] = "Glamourer" };
@@ -516,6 +515,5 @@ public class DesignRestoreSweepTests
                                 new HashSet<string>(StringComparer.OrdinalIgnoreCase) { "Overlay" }, installed, Managed,
                                 released, source, DesignBindingService.TemporarySource);
         Assert.Equal(["Pending", "Stray"], merged.Order(StringComparer.OrdinalIgnoreCase));
-        _ = none;
     }
 }

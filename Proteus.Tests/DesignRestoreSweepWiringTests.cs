@@ -155,8 +155,21 @@ public class DesignRestoreSweepWiringTests
         Assert.Contains("files[dir].ManifestFailed) continue;", p2);
         Assert.Contains("var unreadStrays = job.Candidates.Where(d => !providers.ContainsKey(d) && files[d].ManifestFailed)", p2);
         Assert.Contains("not holding off this round, their file list could not be read", p2);
+        Assert.Contains("unreadStrays.RemoveAll(d => !sweepUnreadLogged.Add(d));", p2);   // once per window per mod
+        Assert.Contains("sweepUnreadLogged.Clear();", Method(Service(), "private void ArmPostLoadSweep("));
         // A held stray with no readable files can't be a provider, so it is never in the let-go loop's providers.
         Assert.Contains("if (!providers.TryGetValue(dir, out var needs)) continue;", p2);
+    }
+
+    [Fact]
+    [Trait("Plan", "EDGE-sweep-keeps-deps-21")]
+    [Trait("Plan", "AC-sweep-keeps-deps-3")]
+    public void StaysOn_dirs_are_read_in_phase_1_and_reach_phase_2()
+    {
+        var p1 = Phase1();
+        Assert.Contains("sweepSpared.Keys.Concat(sweepPlayerReleased).Where(d => !kept.Contains(d))", p1);
+        Assert.Contains(".Concat(job.StaysOn)", p1);
+        Assert.Contains("Pick(job.StaysOn)", Phase2());
     }
 
     [Fact]
