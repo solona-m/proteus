@@ -266,6 +266,21 @@ public class HarnessMatcapTests : IDisposable
     }
 
     [Fact]
+    [Trait("Plan", "AC-matcap-preview-7")]
+    public async Task Job_takes_the_click_preview_down_before_writing()
+    {
+        var root = AddGearMod();
+        await f.Post("/actions/matcap-image", """{"name":"qa-red.png","color":"#ff2020"}""");
+        string? recordWhenEnded = "never";
+        var basePort = studio.MatcapPort!;
+        studio.MatcapPort = () => basePort() with { EndClickPreview = () => recordWhenEnded = MatcapRecord.Exists(root) ? "after" : "before" };
+        var (_, q) = await f.Post("/actions/matcap", """{"mod":"Gear","model":"model/top.mdl","parts":["1.2"],"image":"qa-red.png"}""");
+        var job = await f.WaitJob(q.GetProperty("job").GetString()!);
+        Assert.Equal("applied", job.GetProperty("result").GetProperty("summary").GetString());
+        Assert.Equal("before", recordWhenEnded);
+    }
+
+    [Fact]
     [Trait("Plan", "AC-matcap-preview-9")]
     public async Task Entry_field_is_refused()
     {

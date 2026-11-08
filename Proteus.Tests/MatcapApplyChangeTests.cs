@@ -336,6 +336,75 @@ public class MatcapApplyChangeTests
     }
 
     [Fact]
+    [Trait("Plan", "AC-matcap-preview-3")]
+    public void ChangeAll_unreadable_record_refuses_and_writes_nothing()
+    {
+        using var f = new MatcapFixture();
+        f.Apply(MatcapChoice.OfImage(f.Image("gem.tex")), "1.2");
+        var names = MatcapPlan.ChangeNames(OnMatcap(f));
+        File.WriteAllText(MatcapRecord.PathOf(f.ModRoot), "{ not json");
+        var snapshot = f.Snapshot();
+        var outcome = MatcapStudio.ChangeAll(f.ModRoot, names, MatcapChoice.OfImage(f.Image("pearl.tex", seed: 7)), f.Env());
+        Assert.Equal(MatcapWriter.CodeUnreadable, outcome.Code);
+        Assert.Equal(snapshot, f.Snapshot());
+    }
+
+    [Fact]
+    [Trait("Plan", "AC-matcap-preview-3")]
+    public void ChangeAll_not_square_refuses_writes_nothing_and_leaves_no_temp()
+    {
+        using var f = new MatcapFixture();
+        f.Apply(MatcapChoice.OfImage(f.Image("gem.tex")), "1.2");
+        var snapshot = f.Snapshot();
+        var temps = Directory.GetFiles(f.Temp, "*.tex").ToHashSet();
+        var outcome = MatcapStudio.ChangeAll(f.ModRoot, MatcapPlan.ChangeNames(OnMatcap(f)), MatcapChoice.OfImage(f.Image("wide.tex", w: 64, h: 32)), f.Env());
+        Assert.Equal("not-square", outcome.Code);
+        Assert.Equal(snapshot, f.Snapshot());
+        Assert.Empty(Directory.GetFiles(f.Temp, "*.tex").Where(t => !temps.Contains(t)));
+    }
+
+    [Fact]
+    [Trait("Plan", "EDGE-matcap-preview-1")]
+    public void ChangeAll_every_material_failing_is_a_refusal_not_ok()
+    {
+        using var f = new MatcapFixture();
+        f.Apply(MatcapChoice.OfImage(f.Image("gem.tex")), "1.2", "2.1");
+        var names = MatcapPlan.ChangeNames(OnMatcap(f));
+        var snapshot = f.Snapshot();
+        MatcapStudio.BeforeChange = _ => throw new IOException("disk full");
+        MatcapWriter.Outcome outcome;
+        try { outcome = MatcapStudio.ChangeAll(f.ModRoot, names, MatcapChoice.OfImage(f.Image("pearl.tex", seed: 7)), f.Env()); }
+        finally { MatcapStudio.BeforeChange = null; }
+        Assert.False(outcome.Ok);
+        Assert.Equal(MatcapWriter.CodeFailed, outcome.Code);
+        Assert.Equal(snapshot, f.Snapshot());
+    }
+
+    [Fact]
+    [Trait("Plan", "EDGE-matcap-preview-1")]
+    public void ChangeAll_partial_line_gives_the_short_reason()
+    {
+        using var f = new MatcapFixture();
+        f.Apply(MatcapChoice.OfImage(f.Image("gem.tex")), "1.2", "2.1");
+        var names = MatcapPlan.ChangeNames(OnMatcap(f));
+        MatcapStudio.BeforeChange = n => { if (n == names[1]) throw new IOException("disk full"); };
+        MatcapWriter.Outcome outcome;
+        try { outcome = MatcapStudio.ChangeAll(f.ModRoot, names, MatcapChoice.OfImage(f.Image("pearl.tex", seed: 7)), f.Env()); }
+        finally { MatcapStudio.BeforeChange = null; }
+        Assert.True(outcome.Ok, outcome.Message);
+        Assert.Contains($"{MatcapWriter.StemOf(names[1])} (disk full)", outcome.Message);
+        Assert.DoesNotContain("Nothing was changed", outcome.Message);
+    }
+
+    [Fact]
+    [Trait("Plan", "EDGE-matcap-preview-5")]
+    public void ChangeAll_no_names_refused()
+    {
+        using var f = new MatcapFixture();
+        Assert.Equal(MatcapWriter.CodeNothing, MatcapStudio.ChangeAll(f.ModRoot, [], MatcapChoice.OfImage(f.Image("pearl.tex")), f.Env()).Code);
+    }
+
+    [Fact]
     [Trait("Plan", "EDGE-matcap-preview-5")]
     public void ChangeAll_missing_entry_refused()
     {

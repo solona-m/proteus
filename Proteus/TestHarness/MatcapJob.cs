@@ -165,6 +165,10 @@ internal static class MatcapJob
         job.SetBackup(new BackupRef(backup.Id, backup.Path));
         ct.ThrowIfCancellationRequested();
 
+        // As the panel's Apply, Undo and Forget: a click preview on the character comes down before anything is written.
+        if (args.Port.EndClickPreview is { } endPreview)
+            await jobs.Dispatcher.RunAsync(() => { endPreview(); return true; }, jobs.Timings.FrameworkStart).ConfigureAwait(false);
+
         job.Progress("writing");
         // Every face game path the model is published at, gathered before the job (an Undo in an edit mod drops them).
         var facePaths = gamePath != null && MatcapPlan.TargetOf(gamePath, out _) is { Kind: MatcapPlan.Kind.Face }

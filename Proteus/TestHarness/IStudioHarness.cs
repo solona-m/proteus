@@ -95,7 +95,9 @@ internal sealed record MatcapHarnessPort(
     // (mod root, game path, written files) -> the panel's drawn-file line after an Apply; framework thread.
     System.Func<string, string, IReadOnlyList<string>, string?>? DrawnStatus = null,
     // Proteus's own matcaps (downloaded into the plugin's config directory; nothing to put back).
-    Services.Matcap.IMatcapPack? Pack = null);
+    Services.Matcap.IMatcapPack? Pack = null,
+    // Takes the Studio's matcap click preview off the character before a job writes, as the panel's Apply does; framework thread.
+    System.Action? EndClickPreview = null);
 
 /// <summary>
 /// The Studio as the test harness drives it: the panel's own code for each control, run on the framework thread between

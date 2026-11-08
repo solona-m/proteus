@@ -459,6 +459,7 @@ internal static class MatcapStudio
             foreach (var name in names)
             {
                 MatcapWriter.Outcome outcome;
+                string? reason = null;   // the short why for the "not changed" line (never "Nothing was changed")
                 try
                 {
                     BeforeChange?.Invoke(name);
@@ -467,6 +468,7 @@ internal static class MatcapStudio
                 }
                 catch (Exception ex)
                 {
+                    reason = ex.Message;
                     outcome = MatcapWriter.Outcome.Refuse(MatcapWriter.CodeFailed, string.Format(ProteusLoc.Localize("Matcap.Refused.Failed.Fmt",
                         "The matcap could not be written ({0}). Nothing was changed."), ex.Message));
                 }
@@ -478,7 +480,7 @@ internal static class MatcapStudio
                 else
                 {
                     first ??= outcome;
-                    notChanged.Add($"{MatcapWriter.StemOf(name)} ({outcome.Message})");
+                    notChanged.Add($"{MatcapWriter.StemOf(name)} ({reason ?? outcome.Message})");
                 }
             }
             if (lines.Count == 0) return first!;

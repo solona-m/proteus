@@ -54,7 +54,8 @@ public sealed partial class PartsPanel : IStudioHarness
                                      MatcapEnv(), penumbra.GetModDirectory(), penumbra.GetAllModsQuiet(),
                                      gamePath => compositor.ForgetFaceUpstream(gamePath),
                                      (root, gamePath, written) => DrawnElsewhere(root, gamePath, written),
-                                     matcapPack);
+                                     matcapPack,
+                                     () => { if (matcapPreview.Active) EndLivePreview(refreshGame: true); });
     }
 
     public bool IsOpen(string modDir, string file)

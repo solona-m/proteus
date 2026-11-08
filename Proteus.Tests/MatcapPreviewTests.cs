@@ -134,6 +134,48 @@ public class MatcapPreviewTests
     }
 
     [Fact]
+    [Trait("Plan", "AC-matcap-preview-8")]
+    public void Build_change_unreadable_record_and_not_square_refused_without_temps()
+    {
+        using var f = new MatcapFixture();
+        f.Apply(MatcapChoice.OfImage(f.Image("gem.tex")), "1.2");
+        var on = OnMatcap(f);
+        var temps = Directory.GetFiles(f.Temp, "*.tex").ToHashSet();
+        Assert.Equal("not-square", MatcapPreview.Build(Input(f, MatcapChoice.OfImage(f.Image("wide.tex", w: 64, h: 32)), on)).Code);
+        Assert.Empty(Directory.GetFiles(f.Temp, "*.tex").Where(t => !temps.Contains(t)));
+        File.WriteAllText(MatcapRecord.PathOf(f.ModRoot), "{ not json");
+        Assert.Equal(MatcapWriter.CodeUnreadable, MatcapPreview.Build(Input(f, MatcapChoice.OfImage(f.Image("b.tex", seed: 3)), on)).Code);
+    }
+
+    [Fact]
+    [Trait("Plan", "EDGE-matcap-preview-9")]
+    public void Build_non_gear_or_nowhere_drawn_refused()
+    {
+        using var f = new MatcapFixture();
+        var hair = new MatcapPreview.Input(f.ModRoot, MatcapFixture.ModelRel, "chara/human/c0101/obj/hair/h0001/model/c0101h0001_hir.mdl",
+                                           ["chara/human/c0101/obj/hair/h0001/model/c0101h0001_hir.mdl"], f.Current(), f.Parts("1.2"),
+                                           MatcapChoice.OfImage(f.Image("gem.tex")), f.Env(), f.Mods);
+        Assert.Equal(MatcapPreview.CodeNotGear, MatcapPreview.Build(hair).Code);
+        var nowhere = Input(f, MatcapChoice.OfImage(f.Image("gem.tex")), f.Parts("1.2")) with { DrawnAt = [] };
+        Assert.Equal(MatcapPreview.CodeNotGear, MatcapPreview.Build(nowhere).Code);
+    }
+
+    [Fact]
+    [Trait("Plan", "AC-matcap-preview-8")]
+    public void Build_change_unreadable_material_becomes_a_note()
+    {
+        using var f = new MatcapFixture();
+        var lib = f.Library();
+        f.Apply(MatcapChoice.OfLibrary(lib, "Pearl"), "1.2");
+        var mat = MatcapRecord.Read(f.ModRoot).Materials.Single();
+        MatcapPreview.Built built;
+        using (new FileStream(MatcapWriter.Full(f.ModRoot, mat.File), FileMode.Open, FileAccess.Read, FileShare.None))
+            built = MatcapPreview.Build(Input(f, MatcapChoice.OfLibrary(lib, "Gem Red"), OnMatcap(f)));
+        Assert.Equal(MatcapWriter.CodeFailed, built.Code);
+        Assert.StartsWith(Strings.Matcap.PreviewFailedFmt[..Strings.Matcap.PreviewFailedFmt.IndexOf('(')], built.Message);
+    }
+
+    [Fact]
     [Trait("Plan", "EDGE-matcap-preview-10")]
     public void Build_managed_root_refused()
     {
