@@ -178,6 +178,8 @@ internal static class OutfitPartners
         try
         {
             var bytes = File.ReadAllBytes(BodySizeCatalog.ResolveCaseInsensitive(modRoot, partner.RefittedRel));
+            // A matcap on the partner is not a new partner: hashed as the refit wrote it (the matcap's backup).
+            bytes = Matcap.MatcapWriter.AsWrittenBeforeMatcap(modRoot, partner.RefittedRel, bytes);
             hash = Convert.ToHexString(SHA256.HashData(bytes))[..8].ToLowerInvariant();
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)

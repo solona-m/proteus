@@ -69,7 +69,7 @@ public class IdleRedrawWiringTests
 
         // Penumbra re-reads the managed mod whatever the decision; true only when the character reload was handed off.
         var reload = Method(Publish(), "private bool ReloadAndRedraw(");
-        int gate = At(reload, "RedrawHold.AutoRedrawAllows(config.AutoRedraw, userRequested)");
+        int gate = At(reload, "RedrawHold.AutoRedrawAllows(AutoRedrawOn, userRequested)");   // issue sweep D: via AutoRedrawOn
         Assert.True(At(reload, "ReloadModDirectory(") < gate);
         // A withheld reload must answer false, or it would mark the empty output drawn (EDGE-1).
         var gated = Method(reload[reload.LastIndexOf("if (", gate, System.StringComparison.Ordinal)..], "if (");
@@ -144,7 +144,7 @@ public class IdleRedrawWiringTests
         int latch = At(body, "compositor._needFullRedraw = true");
         int reload = At(body, "ReloadAndRedraw(");
         Assert.True(latch < reload);   // and no ReloadAndRedraw( text, comment or code, above the latch
-        Assert.True(reload < At(body, "config.AutoRedraw"));
+        Assert.True(reload < At(body, "AutoRedrawOn"));   // issue sweep D: via AutoRedrawOn
     }
 
     [Fact]

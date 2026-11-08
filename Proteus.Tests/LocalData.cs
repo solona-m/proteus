@@ -48,6 +48,11 @@ internal static class LocalData
     /// <summary>Bijeon's "Frost Veil Plus+": an invisible a0002 bracelet whose whole look is an item effect, in the v3 layout.</summary>
     internal const string FrostVeilPack = ModPacks + ":Frost Veil Plus+.pmp";
 
+    /// <summary>Westlaketea's "MatCap Library" v1.1.0 (v3 layout): Single groups "Texture Slot A"/"B" switching
+    /// <c>chara/common/texture/matcaplib_a|b.tex</c>, read by its own <c>characterreflection</c> materials in an
+    /// off-by-default option. Read only — its textures are never copied into the repository or a mod.</summary>
+    internal const string MatcapLibraryPack = ModPacks + ":MatCap Library.pmp";
+
     /// <summary>"BWM - Spike Heels with stockings - no strap", installed: an e0666 Feet piece whose "Stocking Toggle"
     /// Single group switches <c>atr_sv_a</c> by an <c>Imc</c> edit (On 1023, Off 1022) beside a same-set <c>Eqp</c>.</summary>
     internal const string ImcToggleMod = Mods + ":BWM - Spike Heels with stockings - no strap";
@@ -61,6 +66,15 @@ internal static class LocalData
     /// <c>_hir_b</c> (default group) and <c>_hir_c</c> (<c>common/1</c>, shared with h0133); the source carries Proteus's
     /// hat fit. The mod whose ports showed the bald spot at the back of the head (2026-11-05). Only ever read, or copied.</summary>
     internal const string StryxMod = Mods + ":LM Stryx Rainbow";
+
+    /// <summary>"Yet Another Body+" 4.2.0 (tmi), installed: a Bibo-layout body whose "Skin Materials" options (Matte,
+    /// Pores, Oily; Off ships no files) redirect <c>mt_c0201b0001_bibo.mtrl</c> (and per-race bibo materials) naming the
+    /// mod-invented <c>chara/bibo_mid_*.tex</c>, and whose Smallclothes models declare that material. Only ever read.</summary>
+    internal const string YabMod = Mods + ":hs-Yet Another Body+-4.2.0-tmi";
+
+    /// <summary>"clia skin - by solona", installed: default data supplying <c>chara/bibo_mid_base|mask|norm.tex</c> and
+    /// the c0201 bibo material — the mod the design-restore sweep held off on 2026-11-07, leaving the body invisible.</summary>
+    internal const string CliaMod = Mods + ":clia skin - by solona";
 
     /// <summary>
     /// The uv transfer maps, which live in the repository (<c>Proteus/uvmaps</c>) but through Git LFS, so a checkout

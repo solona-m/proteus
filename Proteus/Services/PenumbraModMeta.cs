@@ -416,25 +416,57 @@ internal static class PenumbraModMeta
     /// One file the mod publishes: the game path it claims, the file backing it (relative to the mod root),
     /// and where in the mod that claim is made.
     /// </summary>
-    /// <param name="Source">"" for the mod's default data, else "Group" or "Group / Option"; display only.</param>
+    /// <param name="Source">"" for the mod's default data, else "Group" or "Group / Option": shown to the user, and used
+    /// as the place's identity where only which place matters (the matcap tool's own-option material lookup).</param>
     public readonly record struct Redirect(string GamePath, string File, string Source);
 
     /// <summary>
     /// Every file redirect in the mod — default data, every option and Combining container — in either format.
     /// Not deduplicated by game path: an edit must reach every option's file. Empty (not null) when unreadable.
     /// </summary>
-    public static List<Redirect> ReadAllRedirects(string modRoot)
+    public static List<Redirect> ReadAllRedirects(string modRoot) => ReadAllRedirectsCore(modRoot, strict: false, out _);
+
+    /// <summary>
+    /// <see cref="ReadAllRedirects"/> for a caller that must not mistake an unreadable mod for one with no files: null
+    /// when the manifest is missing, held open past a short wait, malformed, structurally wrong, or a legacy group file
+    /// fails to parse. Waits briefly on a held manifest, so not for the framework thread.
+    /// </summary>
+    public static List<Redirect>? TryReadAllRedirects(string modRoot)
     {
+        var found = ReadAllRedirectsCore(modRoot, strict: true, out bool failed);
+        return failed ? null : found;
+    }
+
+    /// <param name="strict">False is <see cref="ReadAllRedirects"/>' path exactly: no wait on a held manifest, and a
+    /// failure part-way returns what was read so far. True waits on a held manifest and reports every failure.</param>
+    private static List<Redirect> ReadAllRedirectsCore(string modRoot, bool strict, out bool failed)
+    {
+        failed = false;
         var found = new List<Redirect>();
         try
         {
-            var manifest = ReadManifest(modRoot);
+            Dictionary<string, JsonElement> manifest;
+            if (strict)
+            {
+                manifest = ReadManifest(modRoot, out bool readable, waitIfHeld: true);
+                if (!readable) { failed = true; return found; }
+            }
+            else manifest = ReadManifest(modRoot);
+
             if (FileVersionOf(manifest) >= SingleFileVersion)
             {
-                if (manifest.TryGetValue("DefaultData", out var dd)) AddFiles(dd, "", found);
-                if (manifest.TryGetValue("Groups", out var groups) && groups.ValueKind == JsonValueKind.Array)
-                    foreach (var g in groups.EnumerateArray())
-                        AddGroup(g, found);
+                if (manifest.TryGetValue("DefaultData", out var dd))
+                {
+                    if (strict && dd.ValueKind != JsonValueKind.Object) { failed = true; return found; }
+                    AddFiles(dd, "", found);
+                }
+                if (manifest.TryGetValue("Groups", out var groups))
+                {
+                    if (groups.ValueKind == JsonValueKind.Array)
+                        foreach (var g in groups.EnumerateArray())
+                            AddGroup(g, found);
+                    else if (strict) { failed = true; return found; }
+                }
                 return found;
             }
 
@@ -450,7 +482,7 @@ internal static class PenumbraModMeta
                 AddGroup(doc.RootElement, found);
             }
         }
-        catch { /* missing or malformed — the caller shows an empty list */ }
+        catch { failed = true; /* missing or malformed — ReadAllRedirects' caller shows what was read */ }
         return found;
     }
 

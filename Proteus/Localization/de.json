@@ -459,12 +459,20 @@
     "message": "[Proteus] „{0}“ überschreibt {1}, worein Proteus deine Overlays komponiert — sie werden also nicht erscheinen. Lösung: hebe in Penumbra die Priorität des Mods „Proteus“ über „{0}“ an.",
     "description": ""
   },
-  "Chat.ShellNotDrawing": {
-    "message": "[Proteus] Deine zweite Haut wurde gebaut, aber das Spiel zeichnet sie nicht. Das Accessoire, auf dem sie sitzt, ist angelegt, doch der Charakter lädt Proteus' Version nicht. Lege das Accessoire ab und wieder an oder wähle ein anderes.",
+  "Chat.ShellPartNotDrawn.Fmt": {
+    "message": "[Proteus] Ein Teil deiner zweiten Haut ist immer noch nicht zu sehen. Dieser Teil sitzt auf {0}. Lege es ab und wieder an, oder trage diese Ebene auf einem anderen Accessoire.",
     "description": ""
   },
-  "Chat.ShellMaterialFailed": {
-    "message": "[Proteus] Ein Teil deiner zweiten Haut wird nicht gezeichnet. Der Rest ist auf deinem Charakter, also fehlt entweder eine Textur, die dieses Teil braucht, oder das Spiel hält noch die vorherige Version. Versuche zuerst „Jetzt neu komponieren“, dann lege das Accessoire, auf dem sie sitzt, ab und wieder an.",
+  "Chat.ShellNotDrawn.Fmt": {
+    "message": "[Proteus] Deine zweite Haut ist immer noch nicht zu sehen, obwohl {0} angelegt ist. Lege es ab und wieder an, oder trage die Ebene auf einem anderen Accessoire.",
+    "description": ""
+  },
+  "Chat.ShellCarrierNotDrawn.Fmt": {
+    "message": "[Proteus] Ein Teil deiner zweiten Haut ist nicht zu sehen. Er sitzt auf {0}, dem unsichtbaren Accessoire, das Proteus anlegt, um sie zu tragen. Klicke in Proteus' Fenster auf „Jetzt neu komponieren“; ist sie dann immer noch nicht zu sehen, lege dieses Accessoire ab und Proteus legt es wieder an.",
+    "description": ""
+  },
+  "Chat.ShellNotDrawnRedrawOff.Fmt": {
+    "message": "[Proteus] Ein Teil deiner zweiten Haut ist nicht zu sehen. Er sitzt auf {0}. Das automatische Neuzeichnen ist aus, deshalb hat Proteus deinen Charakter nicht neu gezeichnet: nutze Penumbras Redraw-Schaltfläche oder wechsle das Gebiet, und ist sie dann immer noch nicht zu sehen, lege das Accessoire ab und wieder an.",
     "description": ""
   },
   "Chat.ShellNeedsRedraw": {
@@ -924,7 +932,7 @@
     "description": ""
   },
   "Colors.Reset.Tip": {
-    "message": "Halte Strg und klicke, um Farben, Leuchten und Modus dieser Option auf die\nEinstellungen zurückzusetzen, die Proteus für diesen Mod zuerst festgehalten hat.\nKann nicht rückgängig gemacht werden.\n\nIst ein Design angewendet, entfernt das auch dessen gespeicherte Überschreibung für\ndiese Option — sonst würde das Design sie gleich wieder aufzwingen. Andere Designs\nbehalten ihre.\n\nHinweis: Diese Originale wurden erfasst, als Proteus diesen Mod zum ersten Mal\ngespeichert hat — hattest du ihn davor schon bearbeitet, ist dieser Zustand der „Standard“.",
+    "message": "Halte Strg und klicke, um Farben, Leuchten und Modus dieser Option auf die\nEinstellungen zurückzusetzen, die Proteus für diesen Mod zuerst festgehalten hat.\nKann nicht rückgängig gemacht werden.\n\nIst ein Design angewendet, behält es seine eigenen gespeicherten Werte für diese Option\nund zeigt sie beim nächsten Anwenden des Designs wieder — bis du im Tab „Bindungen“\nauf „Aktualisieren“ drückst.\n\nHinweis: Diese Originale wurden erfasst, als Proteus diesen Mod zum ersten Mal\ngespeichert hat — hattest du ihn davor schon bearbeitet, ist dieser Zustand der „Standard“.",
     "description": ""
   },
   "Colors.Roughness.Label": {
@@ -4095,6 +4103,62 @@
     "message": "Einzelne Polygone statt ganzer Teile verschieben, drehen oder skalieren. Klicke ein Polygon an, um es auszuwählen;\nUmschalt-Klick fügt eins hinzu oder entfernt es. Ein Teil in der Liste wählt alle seine Polygone aus.",
     "description": ""
   },
+  "Parts.Move.SelectAll": {
+    "message": "Alle",
+    "description": ""
+  },
+  "Parts.Move.SelectAll.Tip": {
+    "message": "Alle angehakten Teile dieses Modells zusammen verschieben, drehen oder skalieren, als ein Stück.\nEntferne das Häkchen bei einem Teil in der Teileliste, damit es bleibt, wo es ist. Haut bewegt sich nur mit „Haut mitbewegen“.",
+    "description": ""
+  },
+  "Parts.Move.All.Fmt": {
+    "message": "{0} von {1} Teilen dieses Modells bewegen sich zusammen.",
+    "description": ""
+  },
+  "Parts.Move.All.Skin.Fmt": {
+    "message": "{0} von {1} Teilen dieses Modells bewegen sich zusammen, Haut eingeschlossen.",
+    "description": ""
+  },
+  "Parts.Move.AllNone": {
+    "message": "Nichts zu bewegen: Hake Teile in der Teileliste an.",
+    "description": ""
+  },
+  "Parts.Move.AllNothingFree": {
+    "message": "Nichts Angehaktes kann sich bewegen: Es ist alles Haut oder gesperrt.",
+    "description": ""
+  },
+  "Parts.Move.AllListTip": {
+    "message": "Alle angehakten Teile bewegen sich zusammen. Entferne das Häkchen bei einem Teil, damit es bleibt, wo es ist: Es wird am Modell und an deinem Charakter ausgeblendet.",
+    "description": ""
+  },
+  "Parts.Move.AllOff.Tip": {
+    "message": "Bei „Alle“ nicht genutzt: Alle angehakten Teile bewegen sich als ein Stück.",
+    "description": ""
+  },
+  "Parts.Move.All.Help": {
+    "message": "Alle angehakten Teile bewegen sich zusammen: Ziehe einen Pfeil oder ein Quadrat. Ziehen anderswo dreht das Modell, Umschalt-Ziehen verschiebt die Ansicht, Scrollen zoomt.",
+    "description": ""
+  },
+  "Parts.Move.All.LiveHint": {
+    "message": "Alle angehakten Teile bewegen sich zusammen: Ziehe einen Pfeil oder ein Quadrat an deinem Charakter. Halte Alt, um die Kamera zu bewegen. Jede Verschiebung wird beim Loslassen gespeichert.",
+    "description": ""
+  },
+  "Parts.Rotate.All.Help": {
+    "message": "Alle angehakten Teile drehen sich zusammen: Ziehe an einem der Ringe in ihrer Mitte. Ziehen anderswo dreht das Modell, Umschalt-Ziehen verschiebt die Ansicht, Scrollen zoomt.",
+    "description": ""
+  },
+  "Parts.Rotate.All.LiveHint": {
+    "message": "Alle angehakten Teile drehen sich zusammen: Ziehe an deinem Charakter an einem der Ringe in ihrer Mitte. Halte Alt, um die Kamera zu bewegen. Jede Drehung wird beim Loslassen gespeichert.",
+    "description": ""
+  },
+  "Parts.ScaleAxes.All.Help": {
+    "message": "Alle angehakten Teile skalieren zusammen: Ziehe an einem Griff, um sie entlang dieser Achse zu strecken, oder drücke auf ein angehaktes Teil und ziehe nach rechts zum Vergrößern oder nach links zum Verkleinern. Ziehen anderswo dreht das Modell, Umschalt-Ziehen verschiebt die Ansicht, Scrollen zoomt.",
+    "description": ""
+  },
+  "Parts.ScaleAxes.All.LiveHint": {
+    "message": "Alle angehakten Teile skalieren zusammen: Ziehe an einem Griff, um sie entlang dieser Achse zu strecken, oder drücke auf ein angehaktes Teil und ziehe nach rechts zum Vergrößern oder nach links zum Verkleinern. Halte Alt, um die Kamera zu bewegen. Jede Änderung wird beim Loslassen gespeichert.",
+    "description": ""
+  },
   "Parts.Move.Shrink": {
     "message": "Verkleinern",
     "description": ""
@@ -4370,6 +4434,22 @@
   "WhatsNew.Close": {
     "message": "Schließen",
     "description": ""
+  },
+  "WhatsNew.Matcaps.Head": {
+    "message": "Matcaps: glänzende, gläserne und edelsteinartige Teile",
+    "description": "Release-notes section heading: the Studio's Matcaps tool. A matcap is a picture of a lit sphere a shader samples by the surface's facing direction."
+  },
+  "WhatsNew.Matcaps.Body": {
+    "message": "Das Studio hat ein neues Werkzeug, „Matcaps“. Hake Teile von Ausrüstung, Accessoires, Haaren, Schwänzen, Viera-Ohren oder Au-Ra-Hörnern an, wähle eine Matcap (das Bild einer beleuchteten Kugel) und drücke „Matcap anwenden“: Die Teile bekommen ein eigenes Material, das in den Mod geschrieben wird, sodass der Look auch bei ausgeschaltetem Proteus zu sehen ist. „Proteus-Matcaps“, eine Sammlung, die mit Proteus kommt und das 23Minks-Matcap-Paket von sivka enthält, wird heruntergeladen, wenn du Matcaps zum ersten Mal öffnest. Eigene Bilder kommen in den Ordner unter „Matcap-Bilder“ in den Einstellungen, und installierte Matcap-Bibliotheks-Mods werden ebenfalls aufgeführt. „Matcaps auf diesem Modell rückgängig machen“ nimmt alles wieder heraus.",
+    "description": "Release-notes section. 'Studio' matches Tab.Parts and 'Settings' Tab.Settings; \"Matcaps\" matches Parts.Tool.Matcap, \"Apply matcap\" Parts.Matcap.Apply, \"Proteus matcaps\" Parts.Matcap.SourceProteus, \"Matcap images\" Settings.MatcapLibrary, \"Undo matcaps on this model\" Parts.Matcap.Undo. Keep 23Minks and sivka verbatim."
+  },
+  "WhatsNew.MoveAll.Head": {
+    "message": "Jedes angehakte Teil als ein Stück verschieben, drehen oder skalieren",
+    "description": "Release-notes section heading: the All mode of Move, Rotate and Scale. Keep it true to 'ticked': unticked parts stay where they are."
+  },
+  "WhatsNew.MoveAll.Body": {
+    "message": "„Verschieben“, „Drehen“ und „Skalieren“ im Studio haben neben ganzen Teilen und Polygonen einen neuen Modus, „Alle“: Alle angehakten Teile des offenen Modells werden zusammen verschoben, gedreht oder skaliert, als ein Stück. Entferne das Häkchen bei einem Teil in der Teileliste, damit es bleibt, wo es ist. Die Haut bewegt sich nur mit, wenn „Haut mitbewegen“ an ist.",
+    "description": "Release-notes section. 'Studio' matches Tab.Parts; \"Move\", \"Rotate\" and \"Scale\" match Parts.Tool.Move, Parts.Tool.Rotate and Parts.Tool.Scale; \"All\" matches Parts.Move.SelectAll; \"Move skin too\" matches Parts.SkinMoves. 'Whole parts' and 'polygons' are the other two modes (Parts.Move.SelectParts, Parts.Move.SelectPolygons)."
   },
   "Parts.Retarget.Guide.Title": {
     "message": "Körpergröße: Tipps",
@@ -5283,6 +5363,14 @@
     "message": "An: Die Piercings jedes Körpers kommen mit seiner Haut, wo das Teil diese Haut zeigt. Nägel kommen immer mit.\nBereits erstellte Größen ändern sich erst, wenn sie neu erstellt werden.",
     "description": ""
   },
+  "SizeSet.KeepHiddenSkin": {
+    "message": "Verdeckte Haut behalten",
+    "description": ""
+  },
+  "SizeSet.KeepHiddenSkin.Tip": {
+    "message": "Aus: Die Haut jedes Körpers wird dort weggelassen, wo der Autor seine gelöscht hat, meist unter und um den Stoff. An: Sie kommt ganz hinein und bringt fehlende Haut unter oder um den Stoff zurück, kann aber durch eng anliegenden Stoff scheinen. Schuhe und Handschuhe werden immer beschnitten.\nBereits erstellte Größen ändern sich erst, wenn sie neu erstellt werden.",
+    "description": ""
+  },
   "SizeSet.EndsUnreadable.Fmt": {
     "message": "{0}: Sein Rig lässt sich nicht lesen, also kann Fuß oder Hand nicht behalten werden und es wurden keine Größen davon gemacht.",
     "description": ""
@@ -5515,6 +5603,14 @@
     "message": "sie bewegt sich mit Knochen, die c{0:D4} für diese Frisur nicht hat ({1})",
     "description": ""
   },
+  "HairPort.Refused.BonesSourceSkeleton.Fmt": {
+    "message": "es bewegt sich mit Knochen, die das eigene Skelett von c{0:D4} für Frisur {2} nicht hat ({1}), und nur dieses Skelett kann zum anderen Geschlecht mitgenommen werden",
+    "description": ""
+  },
+  "HairPort.Refused.BonesCarry.Fmt": {
+    "message": "es bewegt sich mit Knochen, die nur das Skelett von c{0:D4} für Frisur {2} hat ({1}), und dieses Skelett konnte nicht zu c{3:D4} gebracht werden",
+    "description": ""
+  },
   "HairPort.Refused.Unknown.Fmt": {
     "message": "der Volks-Deformer weiß nicht, wie er {0} bewegen soll",
     "description": ""
@@ -5662,6 +5758,14 @@
   "HairPort.Studio.OtherSexAuthored": {
     "message": "der Mod hat eine eigene Version für dieses Geschlecht",
     "description": "Per-race status in the Studio port list for a race of the other sex: the mod ships its own model of this hairstyle for that sex."
+  },
+  "HairPort.Studio.PortedFrom.Fmt": {
+    "message": "von Frisur {0} portiert – diese zu portieren ersetzt sie",
+    "description": ""
+  },
+  "HairPort.Replaced.Fmt": {
+    "message": "c{0:D4}: die aus Frisur {1} erstellte Portierung wurde ersetzt.",
+    "description": ""
   },
   "HairPort.Studio.OtherSexSkeleton": {
     "message": "der Mod gibt diesem Volk ein eigenes Skelett",
@@ -6117,6 +6221,442 @@
   },
   "Chat.VariantRepoint.Fmt": {
     "message": "[Proteus] Die Materialpfade von „{1}“ wurden in {0} weitere(n) Variantenordner kopiert, sodass diese Varianten das eigene Material des Mods zeigen, wo immer er gewinnt. Rückgängig unter /proteus > Einstellungen > Ausrüstungsvarianten.",
+    "description": ""
+  },
+  "Matcap.Refused.AlreadyMatcap": {
+    "message": "Hake entweder Teile ohne Matcap an, um eine hinzuzufügen, oder Teile mit einer, um sie zu ändern – nicht beides.",
+    "description": ""
+  },
+  "Matcap.Refused.Changed.Fmt": {
+    "message": "{0} wurde geändert, während die Matcap vorbereitet wurde, daher wurde nichts geschrieben. Versuche es erneut.",
+    "description": ""
+  },
+  "Matcap.Refused.Edited.Fmt": {
+    "message": "{0} wurde nach dem Anwenden der Matcap geändert und daher nicht rückgängig gemacht. Das Original liegt unter {1}.",
+    "description": ""
+  },
+  "Matcap.Refused.Failed.Fmt": {
+    "message": "Die Matcap konnte nicht geschrieben werden ({0}). Nichts wurde geändert.",
+    "description": ""
+  },
+  "Matcap.Refused.HandEdited.Fmt": {
+    "message": "{0} wurde von Hand bearbeitet, seit Proteus sie geschrieben hat, und wurde daher in Ruhe gelassen.",
+    "description": ""
+  },
+  "Matcap.Refused.ImageUnreadable.Fmt": {
+    "message": "{0} konnte nicht als Bild gelesen werden.",
+    "description": ""
+  },
+  "Matcap.Refused.ImportedPiece": {
+    "message": "Dieses Teil gehört zu einem importierten Paket, das Proteus selbst neu baut. Setze die Matcap stattdessen auf den eigenen Mod des Pakets.",
+    "description": ""
+  },
+  "Matcap.Refused.Legacy": {
+    "message": "Dieser Mod hat noch Penumbras alte Ordnerstruktur. Öffne ihn einmal in Penumbra, damit er aktualisiert wird, und versuche es dann erneut.",
+    "description": ""
+  },
+  "Matcap.Refused.MaterialCap.Fmt": {
+    "message": "Dieses Modell kann kein weiteres Material aufnehmen: {0}.",
+    "description": ""
+  },
+  "Matcap.Refused.ModelLayout.Fmt": {
+    "message": "Dieses Modell kann nicht aufgeteilt werden: {0}.",
+    "description": ""
+  },
+  "Matcap.Refused.NoEntry": {
+    "message": "Diese Matcap steht nicht in der Aufzeichnung dieses Mods.",
+    "description": ""
+  },
+  "Matcap.Refused.NoName": {
+    "message": "Proteus konnte nicht feststellen, wo das Spiel die Materialien dieses Modells liest.",
+    "description": ""
+  },
+  "Matcap.Refused.NoTemplate": {
+    "message": "Das Reflexionsmaterial des Spiels konnte nicht gelesen werden, daher konnte kein Matcap-Material erstellt werden.",
+    "description": ""
+  },
+  "Matcap.Refused.NotSquare.Fmt": {
+    "message": "{0} ist nicht quadratisch. Eine Matcap ist das Bild einer Kugel, die ein Quadrat ausfüllt.",
+    "description": ""
+  },
+  "Matcap.Refused.NotTarget": {
+    "message": "Matcaps gehören auf Ausrüstung, Accessoires, Haare, Schwänze, Viera-Ohren und Au-Ra-Hörner (am Gesicht); dieses Modell ist nichts davon.",
+    "description": ""
+  },
+  "Matcap.Refused.RecordUnreadable": {
+    "message": "Proteus' Aufzeichnung der Matcaps dieses Mods (Proteus/matcaps.json) konnte nicht gelesen werden, daher wurde nichts geändert.",
+    "description": ""
+  },
+  "Matcap.Refused.Regenerated.Fmt": {
+    "message": "Dieses Modell erstellt Proteus aus einem anderen ({0}), und beim Neuerstellen ginge die Matcap verloren. Setze die Matcap auf das Ausgangsmodell und erstelle es dann neu.",
+    "description": ""
+  },
+  "Matcap.Refused.Skin": {
+    "message": "Haut kann keine Matcap bekommen.",
+    "description": ""
+  },
+  "Matcap.Refused.UnknownOption.Fmt": {
+    "message": "{0} hat keine Option namens {1}.",
+    "description": ""
+  },
+  "MeshVolume.Feature.Matcaps": {
+    "message": "Matcaps",
+    "description": ""
+  },
+  "Parts.Matcap.AlphaWarn": {
+    "message": "Einige angehakte Teile haben durchsichtige Ränder (Haarsträhnen, Spitze). Prüfe die Ränder nach dem Anwenden im Spiel.",
+    "description": ""
+  },
+  "Parts.Matcap.AlsoMore.Fmt": {
+    "message": "+{0} weitere",
+    "description": ""
+  },
+  "Parts.Matcap.AlsoNothing": {
+    "message": "sonst nichts",
+    "description": ""
+  },
+  "Parts.Matcap.Applied.Fmt": {
+    "message": "Matcap angewendet: {0} auf {1} Modelldatei(en).",
+    "description": ""
+  },
+  "Parts.Matcap.Apply": {
+    "message": "Matcap anwenden",
+    "description": ""
+  },
+  "Parts.Matcap.BaseCollection.Fmt": {
+    "message": "{0} ist deine Basis-Sammlung: Alle, die sie nutzen, sehen die gewählte Matcap.",
+    "description": ""
+  },
+  "Parts.Matcap.Changed.Fmt": {
+    "message": "Matcap geändert: {0}.",
+    "description": ""
+  },
+  "Parts.Matcap.ChangePartial.Fmt": {
+    "message": "Nicht geändert: {0}.",
+    "description": ""
+  },
+  "Parts.Matcap.ChangesFiles.Fmt": {
+    "message": "Darunter: {0}.",
+    "description": ""
+  },
+  "Parts.Matcap.ChangesUnticked.Fmt": {
+    "message": "Das betrifft auch {0} Teil(e) hier, die du nicht angehakt hast.",
+    "description": ""
+  },
+  "Parts.Matcap.Changes.Fmt": {
+    "message": "Anwenden ändert {0} in jeder Datei dieses Mods, die sie nutzt, Refits eingeschlossen.",
+    "description": ""
+  },
+  "Parts.Matcap.ChangeKindTip": {
+    "message": "Eine Matcap aus deinen Bildern kann nur zu einem anderen Bild wechseln und die einer Bibliothek nur zu einer anderen Bibliotheksoption. Mache sie rückgängig, um die Art zu wechseln.",
+    "description": ""
+  },
+  "Parts.Matcap.ConfirmEnable.Fmt": {
+    "message": "{0} ist in {1} ausgeschaltet. Beim Einschalten wird außerdem aktiviert: {2}",
+    "description": ""
+  },
+  "Parts.Matcap.ConfirmNo": {
+    "message": "Abbrechen",
+    "description": ""
+  },
+  "Parts.Matcap.ConfirmYes": {
+    "message": "Einschalten",
+    "description": ""
+  },
+  "Parts.Matcap.DrawnElsewhere.Fmt": {
+    "message": "Dein Charakter zeichnet für dieses Modell eine andere Datei ({0}), daher ist die Matcap dort noch nicht zu sehen.",
+    "description": ""
+  },
+  "Parts.Matcap.Duplicates.Fmt": {
+    "message": "Andere Mods liefern ebenfalls die Textur dieses Platzes ({0}); der, den Penumbra am höchsten einstuft, entscheidet, was zu sehen ist.",
+    "description": ""
+  },
+  "Parts.Matcap.Edited": {
+    "message": "Das Modell wurde seitdem geändert.",
+    "description": ""
+  },
+  "Parts.Matcap.ExistingHeader": {
+    "message": "Matcaps auf diesem Modell",
+    "description": ""
+  },
+  "Parts.Matcap.Forget": {
+    "message": "Vergessen",
+    "description": ""
+  },
+  "Parts.Matcap.Forgotten.Fmt": {
+    "message": "Die Matcaps, die dieses Modell nicht mehr nutzt, wurden vergessen ({0} Datei(en)).",
+    "description": ""
+  },
+  "Parts.Matcap.Guide": {
+    "message": "Eine Matcap ist das Bild einer beleuchteten Kugel; die Teile nehmen ihre Farbe daraus, je nachdem, wohin sie zu dir zeigen. Hake Teile an, klicke auf eine Matcap, um sie an deinem Charakter zu sehen, und klicke dann auf Anwenden.",
+    "description": ""
+  },
+  "Parts.Matcap.PreviewFailed.Fmt": {
+    "message": "Die Matcap konnte nicht an deinem Charakter gezeigt werden ({0}).",
+    "description": ""
+  },
+  "Parts.Matcap.Previewing": {
+    "message": "Nur an deinem Charakter gezeigt: Gespeichert wird erst, wenn du auf Matcap anwenden klickst.",
+    "description": ""
+  },
+  "Parts.Matcap.PreviewGameGear": {
+    "message": "Spielausrüstung zeigt die Matcap erst, wenn du sie anwendest.",
+    "description": ""
+  },
+  "Parts.Matcap.PreviewGearOnly": {
+    "message": "Haare, Schweife, Ohren und Hörner zeigen die Matcap erst, wenn du sie anwendest.",
+    "description": ""
+  },
+  "Parts.Matcap.PreviewTick": {
+    "message": "Hake Teile an, um die Matcap an deinem Charakter zu sehen.",
+    "description": ""
+  },
+  "Parts.Matcap.Held.Fmt": {
+    "message": "{0} hält die Einstellung dieser Bibliothek gerade fest; die gewählte Matcap erscheint, sobald es sie freigibt.",
+    "description": ""
+  },
+  "Parts.Matcap.Inherited.Fmt": {
+    "message": "{0} erbt die Einstellung dieser Bibliothek; eine Matcap zu wählen gibt ihr eine eigene Einstellung.",
+    "description": ""
+  },
+  "Parts.Matcap.KeptEdited.Fmt": {
+    "message": "An Ort und Stelle gelassen, weil von Hand bearbeitet: {0}.",
+    "description": ""
+  },
+  "Parts.Matcap.LibraryMissing.Fmt": {
+    "message": "{0} ist nicht installiert: Diese Matcap hat nichts zu zeigen.",
+    "description": ""
+  },
+  "Parts.Matcap.LibraryOff.Fmt": {
+    "message": "{0} ist ausgeschaltet.",
+    "description": ""
+  },
+  "Parts.Matcap.LibraryOffTag": {
+    "message": "(aus)",
+    "description": ""
+  },
+  "Parts.Matcap.ListTip": {
+    "message": "Hake die Teile an, die die Matcap bekommen sollen. Hake Teile an, die schon eine haben, um sie zu ändern. Haut lässt sich nicht anhaken.",
+    "description": ""
+  },
+  "Parts.Matcap.Lod0Cut": {
+    "message": "Das Modell wurde auf seine nächste Detailstufe gekürzt, damit die Matcap in jeder Entfernung zu sehen ist.",
+    "description": ""
+  },
+  "Parts.Matcap.MaterialCap.Fmt": {
+    "message": "Dieses Modell hat schon {0} Materialien, so viele, wie ein Modell tragen kann. Mache eine Matcap rückgängig, um Platz zu schaffen.",
+    "description": ""
+  },
+  "Parts.Matcap.NeedMatcap": {
+    "message": "Wähle zuerst eine Matcap.",
+    "description": ""
+  },
+  "Parts.Matcap.NeedParts": {
+    "message": "Hake die Teile an, die die Matcap bekommen sollen.",
+    "description": ""
+  },
+  "Parts.Matcap.NoImages.Fmt": {
+    "message": "Noch keine Matcap-Bilder. Lege quadratische Bilder einer beleuchteten Kugel (PNG oder JPG) in {0} und klicke dann auf Aktualisieren.",
+    "description": ""
+  },
+  "Parts.Matcap.NoLibraries": {
+    "message": "Es sind keine Matcap-Bibliotheks-Mods installiert. Eine Bibliothek ist ein Mod mit einer Auswahl an Matcaps für eine gemeinsame Textur.",
+    "description": ""
+  },
+  "Parts.Matcap.NoPenumbra": {
+    "message": "Penumbra ist nicht verfügbar.",
+    "description": ""
+  },
+  "Parts.Matcap.NothingToForget": {
+    "message": "Jede Matcap auf diesem Modell wird noch genutzt; es gibt nichts zu vergessen.",
+    "description": ""
+  },
+  "Parts.Matcap.NothingToUndo": {
+    "message": "Auf diesem Modell gibt es keine Matcap zum Rückgängigmachen.",
+    "description": ""
+  },
+  "Parts.Matcap.NotWinning.Fmt": {
+    "message": "Auf diesem Platz wird stattdessen die Textur eines anderen Mods gezeichnet ({0}). Erhöhe die Priorität der Bibliothek in Penumbra.",
+    "description": ""
+  },
+  "Parts.Matcap.OpenFolder": {
+    "message": "Matcap-Ordner öffnen",
+    "description": ""
+  },
+  "Parts.Matcap.Refresh": {
+    "message": "Aktualisieren",
+    "description": ""
+  },
+  "Parts.Matcap.RemakeSizes": {
+    "message": "Diese Datei ist eine von Proteus' Anpassungen: Erstelle die Größen neu, um die Matcap zu übernehmen.",
+    "description": ""
+  },
+  "Parts.Matcap.Rescan": {
+    "message": "Neu suchen",
+    "description": ""
+  },
+  "Parts.Matcap.Room.Fmt": {
+    "message": "Platz für {0} weitere(s) Material(ien) auf diesem Modell (eine Anpassung braucht auch welche für Nägel und Unterwäsche).",
+    "description": ""
+  },
+  "Parts.Matcap.Scanning": {
+    "message": "Durchsuche deine Mods nach Matcap-Bibliotheken…",
+    "description": ""
+  },
+  "Parts.Matcap.SelectFailed": {
+    "message": "Penumbra hat die Einstellung der Bibliothek nicht angenommen.",
+    "description": ""
+  },
+  "Parts.Matcap.SharedSlot.Fmt": {
+    "message": "Dieser Platz zeigt immer nur eine Matcap: {0} andere Matcap(s) in diesem Mod nutzen ihn und ändern sich mit.",
+    "description": ""
+  },
+  "Parts.Matcap.ShareNote.Fmt": {
+    "message": "Alle, mit denen du diesen Mod teilst, brauchen auch {0} ({1}), auf dieselbe Matcap gestellt. Ihre Texturen werden nie in deinen Mod kopiert.",
+    "description": ""
+  },
+  "Parts.Matcap.SiblingsSkipped.Fmt": {
+    "message": "Nicht auf diese anderen Körperoptionen angewendet, deren Teile sich unterscheiden: {0}.",
+    "description": ""
+  },
+  "Parts.Matcap.SkinTip": {
+    "message": "Haut kann keine Matcap bekommen.",
+    "description": ""
+  },
+  "Parts.Matcap.Source.Fmt": {
+    "message": "aus {0}",
+    "description": ""
+  },
+  "Parts.Matcap.SourceImages": {
+    "message": "Deine Bilder",
+    "description": ""
+  },
+  "Parts.Matcap.SourceLibraries": {
+    "message": "Bibliotheks-Mods",
+    "description": ""
+  },
+  "Parts.Matcap.SourceProteus": {
+    "message": "Proteus-Matcaps",
+    "description": ""
+  },
+  "Parts.Matcap.SourceProteus.Tip": {
+    "message": "Matcaps, die mit Proteus kommen; sie werden heruntergeladen, wenn du Matcaps zum ersten Mal öffnest.",
+    "description": ""
+  },
+  "Parts.Matcap.PackDownloading.Fmt": {
+    "message": "Proteus-Matcaps werden heruntergeladen… {0} von {1}",
+    "description": ""
+  },
+  "Parts.Matcap.PackFailed": {
+    "message": "Die Proteus-Matcaps konnten nicht heruntergeladen werden. Prüfe deine Verbindung und versuche es erneut.",
+    "description": ""
+  },
+  "Parts.Matcap.PackRetry": {
+    "message": "Erneut versuchen",
+    "description": ""
+  },
+  "Parts.Matcap.Superseded": {
+    "message": "Das Modell nutzt diese Matcap nicht mehr (der Mod wurde aktualisiert).",
+    "description": ""
+  },
+  "Parts.Matcap.ThisMod": {
+    "message": "(dieser Mod)",
+    "description": ""
+  },
+  "Parts.Matcap.Ticked.Fmt": {
+    "message": "{0} Teil(e) angehakt.",
+    "description": ""
+  },
+  "Parts.Matcap.Undo": {
+    "message": "Matcaps auf diesem Modell rückgängig machen",
+    "description": ""
+  },
+  "Parts.Matcap.UndoGroup.Fmt": {
+    "message": "Macht auch die anderen Körperoptionen rückgängig, die diese Matcaps teilen: {0}.",
+    "description": ""
+  },
+  "Parts.Matcap.Undone.Fmt": {
+    "message": "Matcaps auf {0} Modelldatei(en) rückgängig gemacht.",
+    "description": ""
+  },
+  "Parts.Matcap.Working": {
+    "message": "Matcap wird geschrieben…",
+    "description": ""
+  },
+  "Parts.Tool.Matcap": {
+    "message": "Matcaps",
+    "description": ""
+  },
+  "Parts.Tool.Matcap.Tip": {
+    "message": "Gib den angehakten Teilen eine Matcap: einen glänzenden, gläsernen oder edelsteinartigen Look, gemalt aus dem Bild einer Kugel. Die Teile bekommen ein eigenes Material, das in den Mod geschrieben wird, sodass es auch bei ausgeschaltetem Proteus zu sehen ist.",
+    "description": ""
+  },
+  "Parts.Vanilla.Ears.Fmt": {
+    "message": "Ohren {0} ({1})",
+    "description": ""
+  },
+  "Parts.Vanilla.Tail.Fmt": {
+    "message": "Schwanz {0} ({1})",
+    "description": ""
+  },
+  "Settings.MatcapLibrary": {
+    "message": "Matcap-Bilder",
+    "description": ""
+  },
+  "Settings.MatcapLibrary.Tip.Fmt": {
+    "message": "Öffne den Ordner, in dem deine eigenen Matcap-Bilder liegen: {0}",
+    "description": ""
+  },
+  "Matcap.Refused.NoHorns": {
+    "message": "Dieses Gesicht hat keine Hörner. Auf einem Gesicht können nur die Hörner eine Matcap bekommen.",
+    "description": ""
+  },
+  "Matcap.Refused.NotHorn": {
+    "message": "Auf einem Gesicht können nur die Hörner eine Matcap bekommen.",
+    "description": ""
+  },
+  "Parts.Matcap.DrawnThroughFace": {
+    "message": "Dein Gesicht wird über die Umschreibung des Gesichts-Overlays gezeichnet; die Matcap erscheint nach der nächsten Aktualisierung.",
+    "description": ""
+  },
+  "Parts.Matcap.FaceOverlayOn": {
+    "message": "Dieses Gesicht wird über ein Gesichts-Overlay gezeichnet. Schalte das Overlay aus, um dein Gesicht zu wählen, oder öffne deinen Gesichtsmod aus der Liste.",
+    "description": ""
+  },
+  "Parts.Matcap.HornColourNote": {
+    "message": "Hörner mit einer Matcap übernehmen nicht mehr die Hornfarbe deines Charakters, und Hüte verbergen sie weiterhin.",
+    "description": ""
+  },
+  "Parts.Matcap.MatcapsOnlyHere": {
+    "message": "Dein eigenes Gesicht, deine Ohren und dein Schwanz öffnen sich nur unter Matcaps, daher wurden sie geschlossen.",
+    "description": ""
+  },
+  "Parts.Matcap.NoHorns": {
+    "message": "Dieses Gesicht hat keine Hörner. Auf einem Gesicht können nur die Hörner eine Matcap bekommen.",
+    "description": ""
+  },
+  "Parts.Matcap.NotHornTip": {
+    "message": "Auf einem Gesicht können nur die Hörner eine Matcap bekommen.",
+    "description": ""
+  },
+  "Parts.Vanilla.FaceHorns.Fmt": {
+    "message": "Hörner (Gesicht {0}, {1})",
+    "description": ""
+  },
+  "Parts.Matcap.BackupKept.Fmt": {
+    "message": "Ihre alten Sicherungen konnten nicht beiseitegelegt werden: {0}. Die nächste Matcap dort verschiebt sie zuerst.",
+    "description": ""
+  },
+  "Parts.Matcap.KeptForRefits.Fmt": {
+    "message": "Daraus erstellte Refits zeichnen die Matcap noch, daher bleiben ihre Dateien, bis die Größen neu erstellt werden: {0}.",
+    "description": ""
+  },
+  "Parts.Matcap.KeptForPorts.Fmt": {
+    "message": "Daraus erstellte Haar-Portierungen oder ohrlose Kopien zeichnen die Matcap noch, daher bleiben ihre Dateien, bis sie neu erstellt werden: {0}.",
+    "description": ""
+  },
+  "Parts.Matcap.PortKept": {
+    "message": "Dieses Modell ist eine Haar-Portierung von Proteus. Solange es eine Matcap hat, lässt Proteus es, wie es ist, und erstellt die Portierungen anderer Völker, die sein Material teilen, nicht von selbst neu, bis du die Matcap rückgängig machst. Portierst du eines dieser Völker von Hand im Studio, wird es trotzdem neu erstellt.",
     "description": ""
   }
 }

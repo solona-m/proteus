@@ -23,6 +23,7 @@ public class HarnessDocsTests
     }
 
     [Fact]
+    [Trait("Plan", "EDGE-binding-reapply-37")]
     public void AdversarialQaDoc_CoversRequiredTopics()
     {
         // [AC-qa-harness-10] [EDGE-qa-harness-3]
@@ -40,10 +41,21 @@ public class HarnessDocsTests
                      "/actions/equip", "/actions/mod-settings", "/actions/put-back", "harnessChanges", "held-elsewhere",
                      "harness-stopping", "put back every equip and hold", "One in-game QA at a time", "/state.session",
                      "/state.models",
+                     // [AC-move-all-parts-16] [EDGE-move-all-parts-37]
+                     "studio-has-edits", "studio-changed", "Undo saved changes", "blocked:", "hash-changed",
+                     "studio:[{mod,files,panel,code,kept}]", "put-back-first", "{applied, locks:[{label,result}], chosen, state}",
+                     "`harnessOpened`", "`wrong-tool` (locks outside Move, Rotate or Scale)",
                      // [AC-hair-port-qa-10] [EDGE-hair-port-qa-23]
                      "/hair-port", "/actions/hair-port", "hairPort", "hair-port-busy", "hair-not-in-mod", "hair-ported",
                      "check.owed", "check.running", "\"auto\"", "off in the player's collection", "UNVERIFIED",
                      "never blocks a restore",
+                     // design bindings
+                     "/bindings", "/actions/glamourer-apply", "/actions/binding-edit", "\"permanent\"", "presets-pinned",
+                     "put-back-first", "model-change", "auto-writers-on", "allowAutoWriters", "record-failed",
+                     "skipped-inconsistent", "echoWindowOpen", "binding.json", "Design bindings",
+                     // [EDGE-binding-reapply-37] what an IPC apply leaves out, and what no route drives
+                     "IpcManual", "are not put back by the harness", "automation, zone changes and relogin", "binding-2.json",
+                     "back to inheriting", "collection-changed",
                  })
             Assert.True(doc.Contains(required, StringComparison.Ordinal), $"adversarial-qa.md must mention '{required}'");
         Assert.Contains("Never put names", doc);

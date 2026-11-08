@@ -607,6 +607,10 @@ internal static class SkinTuckSheet
         return new BodyRetarget.SlotPair(slot, built!, target, body, body, hidden);
     }
 
+    /// <summary><see cref="ReachingDress"/>'s chest body running <paramref name="extra"/> rows higher than the dress's
+    /// skin: skin the author did not draw on the slot the dress lies mostly on.</summary>
+    internal static byte[] TallChest(int extra) => SyntheticModel.BuildSurface([], Sheet(Skin, Waist, Rows - 1 + extra, _ => 0f));
+
     /// <summary>The body skin triangles a rebuilt model draws, by their centre row (rounded down) — which rows of the
     /// sheet the swap put in.</summary>
     internal static SortedDictionary<int, int> DrawnRows(byte[] model)

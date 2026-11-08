@@ -18,9 +18,30 @@ public partial class CompositorService
     private const int GlassesInjectCooldownMs = 5000;
     private long _lastGlassesInjectTick;
 
-    // Same guard for the Emperor's-ring injection.
+    // Same guard for the Emperor's-ring injection, kept per slot: taking one host's carrier off must never delay
+    // equipping the next host's (a host move rir->ril).
     private const int RingInjectCooldownMs = 5000;
-    private long _lastRingInjectTick;
+    private readonly CarrierCooldowns _carrierCooldowns = new();
+
+    // Consecutive asks per ring slot (CarrierDecisions.AskCap), counted per host-decision epoch and reset whenever the
+    // slot is seen drawn. A user's log showed an unbounded ask loop, one every 5.25 s.
+    private readonly CarrierAskCounter _carrierAsks = new();
+    private long _hostDecisionEpoch;
+    private readonly ConcurrentDictionary<string, byte> _carrierGaveUpLogged = new(StringComparer.OrdinalIgnoreCase);
+
+    // When Proteus last took its carrier off a slot: a walk still showing it inside CarrierDecisions.RemovalGraceMs is
+    // that removal in flight, not a piece the player put on (the log's false "no record" 0.9 s after a removal).
+    private readonly ConcurrentDictionary<string, long> _carrierRemovedAt = new(StringComparer.OrdinalIgnoreCase);
+
+    // When _equippedAccessoryModels was last assigned: a walk older than the slot's last ask + settle is stale evidence.
+    private long _accessoryWalkTick;
+
+    /// <summary>Stamp the accessory walk; called wherever <see cref="_equippedAccessoryModels"/> is assigned.</summary>
+    private void NoteAccessoryWalk() => Interlocked.Exchange(ref _accessoryWalkTick, Environment.TickCount64);
+
+    /// <summary>The newest ring-carrier ask on any slot (for the drawn check's "equipped just now" deferral).</summary>
+    private long LastRingAskTick
+        => InvisibleRing.CarrierSlots.Max(c => _carrierAsks.LastAskTick(c.Slot));
 
     // What we equipped, remembered rather than inferred, so teardown works before the first successful walk; never
     // acted on when the walk says another item is there. Persisted (Configuration.InjectedRingSlot), since the ring
@@ -41,16 +62,26 @@ public partial class CompositorService
         }
     }
 
+    // The record is read, changed and written back; reconciles run on several threads (the composite, the redraw hook,
+    // the retry timer), so the two changes are serialised: an interleaving could drop a slot and strand its carrier.
+    private readonly object _carrierRecordLock = new();
+
     private void MarkCarrierInjected(string slot)
     {
-        if (_injectedCarrierSlots.Contains(slot, StringComparer.Ordinal)) return;
-        _injectedCarrierSlots = [.. _injectedCarrierSlots, slot];
+        lock (_carrierRecordLock)
+        {
+            if (_injectedCarrierSlots.Contains(slot, StringComparer.Ordinal)) return;
+            _injectedCarrierSlots = [.. _injectedCarrierSlots, slot];
+        }
     }
 
     private void MarkCarrierRemoved(string slot)
     {
-        if (!_injectedCarrierSlots.Contains(slot, StringComparer.Ordinal)) return;
-        _injectedCarrierSlots = _injectedCarrierSlots.Where(s => s != slot).ToList();
+        lock (_carrierRecordLock)
+        {
+            if (!_injectedCarrierSlots.Contains(slot, StringComparer.Ordinal)) return;
+            _injectedCarrierSlots = _injectedCarrierSlots.Where(s => s != slot).ToList();
+        }
     }
 
     // Persisted like the ring slots: removing the pair is only safe when we put it there, and that must survive a reload.
@@ -99,35 +130,51 @@ public partial class CompositorService
         _lastShellBuilt         = shellBuilt;
         _lastShellOnFacewear    = onFacewear;
         _lastShellCarrierSlots  = [.. carrierSlots];
+        // A new decision is a new epoch: every slot's consecutive-ask count starts again.
+        Interlocked.Increment(ref _hostDecisionEpoch);
+        _carrierGaveUpLogged.Clear();
     }
 
-    /// <summary>At most one outstanding <see cref="ScheduleCarrierRetry"/>; extra requests coalesce onto it.</summary>
-    private int _carrierRetryPending;
+    /// <summary>One pending carrier retry, coalesced to the earliest deadline any slot asked for.</summary>
+    private readonly CoalescingRetry _carrierRetry = new();
+
+    /// <summary>A retry that fires while a composite runs is re-armed this much later, not dropped.</summary>
+    private const int CarrierRetryRearmMs = 1000;
 
     /// <summary>
-    /// Re-run the carrier reconciles once <paramref name="cooldownRemainingMs"/> has elapsed, when one wanted to
-    /// equip and was refused only by its inject cooldown. Goes through the same guards; does not touch the cooldown.
+    /// Re-run the carrier reconciles once <paramref name="cooldownRemainingMs"/> has elapsed (for
+    /// <paramref name="slot"/>: a ring slot, or "glasses"). Coalesced to the earliest deadline asked for; goes through
+    /// the same guards; does not touch any cooldown.
     /// </summary>
-    private void ScheduleCarrierRetry(int cooldownRemainingMs)
+    private void ScheduleCarrierRetry(int cooldownRemainingMs, string slot = "glasses")
     {
-        if (Interlocked.Exchange(ref _carrierRetryPending, 1) == 1) return;
-
         // A margin past the window: TickCount64 and the timer are different clocks.
-        _ = Task.Delay(Math.Clamp(cooldownRemainingMs, 0, GlassesInjectCooldownMs) + 250)
-            .ContinueWith(_ =>
+        int delay = Math.Clamp(cooldownRemainingMs, 0, RingInjectCooldownMs + CarrierDecisions.SettleMs) + 250;
+        if (!_carrierRetry.Request(slot, Environment.TickCount64 + delay, out var generation)) return;
+        _ = Task.Delay(delay).ContinueWith(_ => OnCarrierRetry(generation));
+    }
+
+    private void OnCarrierRetry(int generation)
+    {
+        if (!_carrierRetry.Fire(generation, out var slots)) return;   // superseded by an earlier deadline
+        try
+        {
+            if (_disposed || !config.PluginEnabled || !_secondSkinActive) return;
+            // A composite in flight runs its own reconcile first, with fresher arguments; come back after it, re-armed.
+            if (Volatile.Read(ref _compositesInFlight) > 0)
             {
-                Interlocked.Exchange(ref _carrierRetryPending, 0);
-                try
-                {
-                    if (_disposed || !config.PluginEnabled || !_secondSkinActive) return;
-                    // A composite in flight runs its own reconcile with fresher arguments than these.
-                    if (Volatile.Read(ref _compositesInFlight) > 0) return;
-                    ReconcileInvisibleGlasses(_lastGearWanted, _lastShellBuilt, _lastShellOnFacewear,
-                                              alreadyHosted: true);
-                    ReconcileEmperorRing(_lastGearWanted, _lastShellBuilt, _lastShellCarrierSlots);
-                }
-                catch (Exception ex) { log.Debug("[Proteus] carrier retry failed: {0}", ex.Message); }
-            });
+                foreach (var slot in slots) ScheduleCarrierRetry(CarrierRetryRearmMs - 250, slot);
+                return;
+            }
+            // Only the carriers that asked: a ring's retry must not re-ask a drawn pair of glasses (QA: an extra
+            // Glamourer write 6.8 s after every boot composite).
+            if (slots.Contains("glasses"))
+                ReconcileInvisibleGlasses(_lastGearWanted, _lastShellBuilt, _lastShellOnFacewear,
+                                          alreadyHosted: true);
+            if (slots.Any(s => !string.Equals(s, "glasses", StringComparison.OrdinalIgnoreCase)))
+                ReconcileEmperorRing(_lastGearWanted, _lastShellBuilt, _lastShellCarrierSlots);
+        }
+        catch (Exception ex) { log.Debug("[Proteus] carrier retry failed: {0}", ex.Message); }
     }
 
     /// <summary>The equipment set number from a head "_met" model path, e.g. "…/e5524/model/…_met.mdl" → 5524.</summary>
@@ -271,7 +318,7 @@ public partial class CompositorService
             var sinceInject = unchecked(Environment.TickCount64 - _lastGlassesInjectTick);
             if (MetSnapshotKnown && !AnyMetWorn() && sinceInject <= GlassesInjectCooldownMs)
                 // Refused only by the cooldown: schedule a retry, since fast callers would otherwise leave the shell hostless.
-                ScheduleCarrierRetry((int)(GlassesInjectCooldownMs - sinceInject));
+                ScheduleCarrierRetry((int)(GlassesInjectCooldownMs - sinceInject), "glasses");
 
             if (MetSnapshotKnown && !AnyMetWorn() && sinceInject > GlassesInjectCooldownMs)
             {
@@ -403,55 +450,90 @@ public partial class CompositorService
     /// <param name="gearWanted">Gear overlays are active, so a shell is supposed to exist.</param>
     /// <param name="shellBuilt">A shell actually built this composite.</param>
     /// <param name="carrierSlots">The accessory slots the shell published a carrier onto; empty for none.</param>
-    private void ReconcileEmperorRing(bool gearWanted, bool shellBuilt, IReadOnlyList<string>? carrierSlots)
+    /// <param name="selfScheduleRetry">True only from a publishing composite's ReconcileAndVerify, where the drawn
+    /// check follows: a successful ask then schedules its own checked retry.</param>
+    private void ReconcileEmperorRing(bool gearWanted, bool shellBuilt, IReadOnlyList<string>? carrierSlots,
+                                      bool selfScheduleRetry = false)
     {
         // One pass per carrier slot, then one removal sweep. Each slot resolves its own item id (same model set, different items).
         foreach (var slot in carrierSlots ?? [])
-            ReconcileOneCarrier(slot);
+            ReconcileOneCarrier(slot, selfScheduleRetry);
 
         SweepUnusedCarriers(gearWanted, shellBuilt, carrierSlots ?? []);
     }
 
     /// <summary>
-    /// Equip the invisible piece for one slot the shell published a carrier onto. Idempotent.
+    /// Equip the invisible piece for one slot the shell published a carrier onto. Idempotent. Asks only on fresh
+    /// evidence that the slot is undrawn, at most <see cref="CarrierDecisions.AskCap"/> times in a row.
     /// </summary>
-    private void ReconcileOneCarrier(string ringSlot)
+    private void ReconcileOneCarrier(string ringSlot, bool selfScheduleRetry = false)
     {
         if (InvisibleRing.ResolveFor(Plugin.DataManager, log, ringSlot) is not { } r) return;
+        long epoch = Interlocked.Read(ref _hostDecisionEpoch);
 
-        // An invisible piece of that set is already in the slot: nothing to equip. Do not claim ownership: players wear
-        // these by choice, and the sweep would later take their glamour off.
-        if (IsOurRingWorn(ringSlot, r.ModelSet)) return;
-
-        // Never write to a slot we have not seen to be empty (before the first walk the map is null).
-        if (!AccessorySnapshotKnown)
+        for (int pass = 0; pass < 2; pass++)
         {
-            log.Debug("[Proteus] invisible carrier: no accessory snapshot yet — not equipping into {0} until "
-                    + "a walk confirms it is empty", ringSlot);
+            long now = Environment.TickCount64;
+            long lastAsk = _carrierAsks.LastAskTick(ringSlot);
+            // Players wear these by choice: an invisible piece of that set already in the slot is not claimed.
+            bool walkShowsOurs = IsOurRingWorn(ringSlot, r.ModelSet);
+            bool walkFresh = Interlocked.Read(ref _accessoryWalkTick) > lastAsk + CarrierDecisions.SettleMs;
+            var d = CarrierDecisions.Equip(walkShowsOurs, walkFresh, ShellConfirmedSince(lastAsk),
+                                           AccessorySnapshotKnown, RingModel(ringSlot) != null && !walkShowsOurs,
+                                           _carrierCooldowns.LeftMs(ringSlot, now, RingInjectCooldownMs),
+                                           _carrierAsks.Count(ringSlot, epoch));
+            switch (d.Action)
+            {
+                case CarrierDecisions.EquipAction.None:
+                    if (d.Drawn) { _carrierAsks.Reset(ringSlot); _carrierGaveUpLogged.TryRemove(ringSlot, out _); }
+                    else if (!AccessorySnapshotKnown)
+                        log.Debug("[Proteus] invisible carrier: no accessory snapshot yet — not equipping into {0} until "
+                                + "a walk confirms it is empty", ringSlot);
+                    return;
+                case CarrierDecisions.EquipAction.GaveUp:
+                    if (_carrierGaveUpLogged.TryAdd(ringSlot, 0))
+                        log.Information("[Proteus] invisible carrier: asked twice for {0} but the game is not drawing it — "
+                                      + "not asking again until it is drawn or the next composite", ringSlot);
+                    return;
+                case CarrierDecisions.EquipAction.RewalkFirst:
+                    // The held walk predates the last ask's load: look again (a framework-thread resource walk) once.
+                    if (pass == 0 && RefreshEquippedModels()) continue;
+                    return;
+                case CarrierDecisions.EquipAction.RetryAfter:
+                    ScheduleCarrierRetry(d.RetryMs, ringSlot);
+                    return;
+            }
+
+            // Equip. Counted atomically first: two reconciles can race on one slot.
+            if (!_carrierAsks.TryBeginAsk(ringSlot, epoch, CarrierDecisions.AskCap, now)) return;
+            // Charge the cooldown on the attempt, not the success (see the glasses).
+            _carrierCooldowns.Charge(ringSlot, now);
+            if (SetAccessoryOnFramework(r.ItemId, ringSlot))
+            {
+                MarkCarrierInjected(ringSlot);
+                _carrierRemovedAt.TryRemove(ringSlot, out _);
+                // No follow-up recomposite: the shell is already published at the path this piece loads.
+                log.Information("[Proteus] invisible carrier: equipped item #{0} (model a{1:D4}) in {2} — shell already hosted on it",
+                    r.ItemId, r.ModelSet, ringSlot);
+                // The checked retry, which no longer rides on the echo composite or the racing redraw hook.
+                if (selfScheduleRetry) ScheduleCarrierRetry(RingInjectCooldownMs + CarrierDecisions.SettleMs, ringSlot);
+            }
+            else _carrierAsks.Undo(ringSlot);   // never reached the player (gone, locked, IPC failed): not an ask
             return;
         }
+    }
 
-        // Occupied by the player's own piece: the walk and the build disagree, so leave their jewellery be.
-        if (RingModel(ringSlot) != null) return;
-
-        // Same cooldown as the glasses, with a scheduled retry behind it.
-        var sinceRing = unchecked(Environment.TickCount64 - _lastRingInjectTick);
-        if (sinceRing <= RingInjectCooldownMs)
-        {
-            ScheduleCarrierRetry((int)(RingInjectCooldownMs - sinceRing));
-            return;
-        }
-
-        // Charge the cooldown on the attempt, not the success (see the glasses).
-        var equipped = SetAccessoryOnFramework(r.ItemId, ringSlot);
-        _lastRingInjectTick = Environment.TickCount64;
-        if (equipped)
-        {
-            MarkCarrierInjected(ringSlot);
-            // No follow-up recomposite: the shell is already published at the path this piece loads.
-            log.Information("[Proteus] invisible carrier: equipped item #{0} (model a{1:D4}) in {2} — shell already hosted on it",
-                r.ItemId, r.ModelSet, ringSlot);
-        }
+    /// <summary>
+    /// The drawn check confirmed the current shell after <paramref name="lastAskTick"/> and after the last observed
+    /// redraw. A confirmation from before a game redraw (a zone change reverts carriers) no longer counts.
+    /// </summary>
+    private bool ShellConfirmedSince(long lastAskTick)
+    {
+        var probe = _shellDrawnCheck;
+        if (probe == null || _shellConfirmedDrawnKey is not { } key) return false;
+        if (!string.Equals(key, ShellProbeKey(probe), StringComparison.Ordinal)) return false;
+        return CarrierDecisions.ConfirmationCounts(Interlocked.Read(ref _shellConfirmedDrawnAtTick), lastAskTick,
+                                                   Interlocked.Read(ref _lastObservedRedrawTick));
     }
 
     /// <summary>
@@ -459,37 +541,106 @@ public partial class CompositorService
     /// must sweep slots the current build never mentioned.
     /// </summary>
     private void SweepUnusedCarriers(bool gearWanted, bool shellBuilt, IReadOnlyList<string> inUse)
+        => SweepCarriers(gearWanted, shellBuilt, inUse, localWalk: false);
+
+    /// <summary>
+    /// Take off the ring carriers a composite stops hosting on BEFORE its manifest withdraws their redirects (called in
+    /// CommitLocators after the supersede check). The removal used to run after the reload and redraw, so the game
+    /// reloaded a still-worn carrier whose redirects were gone (a SqPack load of the ring model). Local walks only.
+    /// </summary>
+    private void ReleaseVacatedCarriers(bool hostWanted, bool shellBuilt, IReadOnlyList<string> shellCarrierSlots)
+        => SweepCarriers(hostWanted, shellBuilt, shellCarrierSlots, localWalk: true);
+
+    private void SweepCarriers(bool gearWanted, bool shellBuilt, IReadOnlyList<string> inUse, bool localWalk)
     {
         // Remove our piece when nothing is hosted or the shell built and went elsewhere; not on a merely failed build.
-        // Only the "shell moved" removal charges the cooldown (see the glasses).
+        if (!CarrierDecisions.MayRelease(gearWanted, shellBuilt)) return;
         bool hostMoved = gearWanted && shellBuilt;
-        if (gearWanted && !shellBuilt) return;
 
-        foreach (var (slot, _, _) in InvisibleRing.CarrierSlots)
+        foreach (var (slot, eqdpSlot, _) in InvisibleRing.CarrierSlots)
         {
-            // Still hosting on it — leave it on.
-            if (inUse.Contains(slot, StringComparer.Ordinal)) continue;
+            if (inUse.Contains(slot, StringComparer.Ordinal)) continue;   // still hosting on it — leave it on
             if (InvisibleRing.ResolveFor(Plugin.DataManager, log, slot) is not { } r) continue;
-            if (!IsOurRingWorn(slot, r.ModelSet)) continue;
+            bool walkShowsOurs = IsOurRingWorn(slot, r.ModelSet);
+            bool recorded = _injectedCarrierSlots.Contains(slot, StringComparer.Ordinal);
+            // The walk shows the slot without our piece: a removal of ours has landed.
+            if (!walkShowsOurs && AccessorySnapshotKnown) _carrierRemovedAt.TryRemove(slot, out _);
+            if (!walkShowsOurs && !recorded) continue;
 
-            // Worn but not recorded as ours: could be the player's own, so do nothing and say so once.
-            if (!_injectedCarrierSlots.Contains(slot, StringComparer.Ordinal))
+            // Only for a recorded slot the walk cannot see: what Glamourer holds there, and a valid walk taken after.
+            ulong? held = null;
+            bool? after = null;
+            if (recorded && !walkShowsOurs)
             {
-                if (_unclaimedRingSlots.TryAdd(slot, 0))
-                    log.Information("[Proteus] invisible carrier: a{0:D4} is worn in {1} but Proteus has no "
-                                  + "record of equipping it — leaving it alone. If you did not put it "
-                                  + "there yourself (an older build could equip one and forget), take "
-                                  + "it off manually.", r.ModelSet, slot);
-                continue;
+                held = GlamourerSlotItem(eqdpSlot);
+                if (held is { } h && GlamourerItemIds.IsEmpty(h)) after = PostReadWalkShowsOurs(slot, r.ModelSet);
             }
+            long? sinceRemoval = _carrierRemovedAt.TryGetValue(slot, out var at) ? Environment.TickCount64 - at : null;
 
-            if (SetAccessoryOnFramework(0, slot))
+            switch (CarrierDecisions.Sweep(false, walkShowsOurs, recorded, held, r.ItemId, after, sinceRemoval))
             {
-                if (hostMoved) _lastRingInjectTick = Environment.TickCount64;
-                MarkCarrierRemoved(slot);
-                log.Information("[Proteus] invisible carrier: removed our injected piece (a{0:D4}) from {1}",
-                    r.ModelSet, slot);
+                case CarrierDecisions.SweepAction.Unclaimed:
+                    // Worn but not recorded as ours: could be the player's own, so do nothing and say so once.
+                    if (_unclaimedRingSlots.TryAdd(slot, 0))
+                        log.Information("[Proteus] invisible carrier: a{0:D4} is worn in {1} but Proteus has no "
+                                      + "record of equipping it — leaving it alone. If you did not put it "
+                                      + "there yourself (an older build could equip one and forget), take "
+                                      + "it off manually.", r.ModelSet, slot);
+                    break;
+                case CarrierDecisions.SweepAction.ForgetRecord:
+                    MarkCarrierRemoved(slot);
+                    log.Information("[Proteus] invisible carrier: {0} no longer holds our piece — record dropped", slot);
+                    break;
+                case CarrierDecisions.SweepAction.Remove:
+                    if (SetAccessoryOnFramework(0, slot))
+                    {
+                        // Only this slot's cooldown: the next host's equip is not held back.
+                        if (hostMoved) _carrierCooldowns.Charge(slot, Environment.TickCount64);
+                        _carrierRemovedAt[slot] = Environment.TickCount64;
+                        MarkCarrierRemoved(slot);
+                        log.Information(localWalk
+                            ? "[Proteus] invisible carrier: removed our injected piece (a{0:D4}) from {1} before withdrawing its host"
+                            : "[Proteus] invisible carrier: removed our injected piece (a{0:D4}) from {1}", r.ModelSet, slot);
+                    }
+                    break;
             }
+        }
+    }
+
+    /// <summary>Glamourer's item in an equipment slot ("RFinger"/"LFinger"), or null when its state cannot be read.</summary>
+    private ulong? GlamourerSlotItem(string eqdpSlot)
+    {
+        try
+        {
+            return Plugin.Framework.RunOnFrameworkThread(
+                () => glamourer.GetObjectState(0)?["Equipment"]?[eqdpSlot]?["ItemId"]?.ToObject<ulong?>())
+                .GetAwaiter().GetResult();
+        }
+        catch (Exception ex) when (ex is not OutOfMemoryException)
+        {
+            log.Debug("[Proteus] invisible carrier: Glamourer state read failed ({0})", ex.GetType().Name);
+            return null;
+        }
+    }
+
+    /// <summary>
+    /// A walk taken after the Glamourer read, kept local: it publishes nothing to the shared walk maps and raises no
+    /// hair event (it can run mid-composite). Null when it is not a real walk (null, empty, or no body-slot model —
+    /// the rule ApplyEquippedModels uses), so a mid-redraw teardown never drops a record.
+    /// </summary>
+    private bool? PostReadWalkShowsOurs(string slot, int modelSet)
+    {
+        try
+        {
+            var models = Plugin.Framework.RunOnFrameworkThread(penumbra.GetActivePlayerModelPaths).GetAwaiter().GetResult();
+            if (!CarrierDecisions.IsValidWalk(models, m => DrawnModelPaths.HasBodySlotModel((HashSet<string>)m))) return null;
+            var accessories = DrawnModelPaths.EquippedAccessoryModelsFromModels(models!);
+            return accessories.TryGetValue(slot, out var p) && p.Contains($"a{modelSet:D4}", StringComparison.OrdinalIgnoreCase);
+        }
+        catch (Exception ex) when (ex is not OutOfMemoryException)
+        {
+            log.Debug("[Proteus] invisible carrier: walk after the Glamourer read failed ({0})", ex.GetType().Name);
+            return null;
         }
     }
 
@@ -549,14 +700,20 @@ public partial class CompositorService
     /// </summary>
     public void RemoveInjectedRing()
     {
-        foreach (var (slot, _, _) in InvisibleRing.CarrierSlots)
+        foreach (var (slot, eqdpSlot, _) in InvisibleRing.CarrierSlots)
         {
             if (InvisibleRing.ResolveFor(Plugin.DataManager, log, slot) is not { } r) continue;
             // Teardown takes back only what we equipped; the model is not ownership.
-            bool ours = _injectedCarrierSlots.Contains(slot, StringComparer.Ordinal)
-                     && (IsOurRingWorn(slot, r.ModelSet) || !AccessorySnapshotKnown);
+            bool recorded = _injectedCarrierSlots.Contains(slot, StringComparer.Ordinal);
+            bool ours = recorded && (IsOurRingWorn(slot, r.ModelSet) || !AccessorySnapshotKnown);
+            // The walk can predate the carrier being drawn (a walk taken just before the ask): then Glamourer decides,
+            // as in the sweep. QA saw a recorded rir carrier survive an unload that took the glasses off.
+            if (recorded && !ours && GlamourerSlotItem(eqdpSlot) == r.ItemId) ours = true;
             if (ours && SetAccessoryOnFramework(0, slot))
+            {
+                _carrierRemovedAt[slot] = Environment.TickCount64;
                 MarkCarrierRemoved(slot);
+            }
         }
     }
 

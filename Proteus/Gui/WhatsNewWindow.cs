@@ -49,6 +49,9 @@ internal sealed class WhatsNewWindow : Window
     /// Dawntrail shader upgrade.</summary>
     internal const int ColorRowsNotes = 4;
 
+    /// <summary>The generation that introduced Studio matcaps and the Move/Rotate/Scale "All" mode.</summary>
+    internal const int MatcapsNotes = 5;
+
     /// <summary>
     /// Whether a section introduced in <paramref name="generation"/> is news to someone who has read up to
     /// <paramref name="read"/>. Someone who closed the first notes is shown only what came after them.
@@ -65,6 +68,11 @@ internal sealed class WhatsNewWindow : Window
         ImGui.Spacing();
 
         // Newest first: someone who missed more than one release reads the latest at the top.
+        if (IsNew(MatcapsNotes, read))
+        {
+            Section(s.MatcapsHead, s.MatcapsBody);
+            Section(s.MoveAllHead, s.MoveAllBody);
+        }
         if (IsNew(ColorRowsNotes, read))
         {
             Section(s.ColorRowsHead, s.ColorRowsBody);

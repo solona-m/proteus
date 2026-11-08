@@ -256,7 +256,12 @@ public partial class CompositorService : IDisposable
     /// <paramref name="Materials"/> is the test (only drawn meshes load them); <paramref name="Models"/> is the
     /// anchor that separates "our mesh didn't load" from "the redraw hasn't finished".
     /// </summary>
-    private sealed record ShellDrawnProbe(IReadOnlyList<string> Materials, IReadOnlyList<string> Models);
+    private sealed record ShellDrawnProbe(IReadOnlyList<string> Materials, IReadOnlyList<string> Models)
+    {
+        /// <summary>The run that published this shell had output writes it could not put in place (#91): the retry
+        /// composite owns recovery, so the drawn check defers rather than redraws. Not part of <see cref="ShellProbeKey"/>.</summary>
+        public bool PublishedWithWriteFailures { get; init; }
+    }
 
     /// <summary>
     /// The last shell build's probe, or null when no shell was built. Same publish contract as
@@ -445,9 +450,14 @@ public partial class CompositorService : IDisposable
 
     // Boot composite: no event reliably fires once both Penumbra's mod list is readable and the local player's
     // draw object exists, so a framework poll waits for both and fires once per login (re-armed on logout).
-    private int _bootComposited;      // 1 once the boot composite has fired this login; reset on logout
+    // When the boot probe looks: latched once the boot composite has fired this login, re-armed when the character goes
+    // away, backing off while there is nothing to composite.
+    private readonly BootBackoff _boot = new(Environment.TickCount64);
     private int _bootProbeRunning;    // one off-thread discovery check at a time
-    private long _lastBootPollTick;
+    private int _bootIdleLogged;      // the "nothing enabled" line, once per arm
+
+    /// <summary>Counts boot probes for the idle I/O summary, and is flushed by the idle timer; null counts nothing.</summary>
+    public IoCounters? Io { get; set; }
 
     /// <summary>
     /// Withholds the boot composite while <c>DesignBindingService</c> decides whether a bound design is still
@@ -553,6 +563,7 @@ public partial class CompositorService : IDisposable
         {
             try
             {
+                Io?.MaybeSummarise();   // a quiet tail of counts is written within a minute too
                 int dropped = textureLoader.ReleaseIfIdle(DecodeCacheIdleRelease);
                 if (dropped > 0)
                     log.Debug("[Proteus] decode cache: released {0} entries after {1:F0}s idle",
@@ -584,17 +595,15 @@ public partial class CompositorService : IDisposable
         // lets the next login run its own boot composite (character swaps don't otherwise reach here).
         if ((Plugin.ObjectTable.LocalPlayer?.Address ?? 0) == 0)
         {
-            Volatile.Write(ref _bootComposited, 0);
+            _boot.Rearm(Environment.TickCount64);
+            Volatile.Write(ref _bootIdleLogged, 0);
             return;
         }
         // After the logout re-arm and before the latch: the design-binding boot restore owes us its overrides first.
         if (BootCompositeHold) return;
-        if (Volatile.Read(ref _bootComposited) == 1) return;        // already composited this login
-        if (!config.PluginEnabled || !penumbra.IsAvailable) return; // wait for Penumbra IPC
-
         var now = Environment.TickCount64;
-        if (unchecked(now - _lastBootPollTick) < 500) return;
-        _lastBootPollTick = now;
+        if (!_boot.Due(now)) return;                                // composited this login, or backing off
+        if (!config.PluginEnabled || !penumbra.IsAvailable) return; // wait for Penumbra IPC
         if (Interlocked.Exchange(ref _bootProbeRunning, 1) == 1) return;
 
         Task.Run(() =>
@@ -602,17 +611,32 @@ public partial class CompositorService : IDisposable
             try
             {
                 if (_disposed) return;
-                // Penumbra's mod list can still be unreadable for a moment after the player draws;
-                // an empty result just means "not yet", so leave the flag clear and try again next tick.
-                if (discovery.DiscoverEnabled().Count == 0) return;
+                Io?.Count(IoCounters.BootProbes);
+                // Penumbra's mod list can still be unreadable for a moment after the player draws: an incomplete answer
+                // is "not yet". A complete one with nothing enabled backs off instead of asking twice a second.
+                int enabled = discovery.DiscoverEnabled(out bool complete).Count;
+                var outcome = BootBackoff.Classify(enabled, complete);
+                long at = Environment.TickCount64;
+                if (!_boot.Report(outcome, at))
+                {
+                    if (outcome == BootProbeOutcome.Idle && Interlocked.Exchange(ref _bootIdleLogged, 1) == 0)
+                        log.Debug("[Proteus] boot composite: no Proteus overlay mod enabled in this collection — "
+                                + "looking again in {0} s", _boot.DelayFrom(at) / 1000);
+                    return;
+                }
                 log.Debug("[Proteus] boot composite: player + discovery ready");
                 // Ambient: the boot poll re-arms whenever the local player goes away, so every zone
                 // transition queues one of these on arrival.
                 TriggerRecomposite("boot-ready", force: false);
                 // Only latch AFTER the trigger, so a throw above leaves the poll armed to retry.
-                Volatile.Write(ref _bootComposited, 1);
+                _boot.Latch();
             }
-            catch (Exception ex) { log.Debug("[Proteus] boot composite probe failed: {0}", ex.Message); }
+            catch (Exception ex)
+            {
+                log.Debug("[Proteus] boot composite probe failed: {0}", ex.Message);
+                // Paced like an incomplete answer, not retried every frame.
+                _boot.Report(BootProbeOutcome.Retry, Environment.TickCount64);
+            }
             finally { Interlocked.Exchange(ref _bootProbeRunning, 0); }
         });
     }

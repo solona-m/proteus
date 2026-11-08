@@ -72,8 +72,14 @@ internal sealed class FakeFrameworkDispatcher : IFrameworkDispatcher, IDisposabl
         return tcs.Task;
     }
 
+    /// <summary>When it answers true on the calling thread, a framework hop throws (EDGE-idle-disk-io-59: no hop under the
+    /// sidecar lock).</summary>
+    public Func<bool>? RefuseHopWhen { get; set; }
+
     public Task<T> RunAsync<T>(Func<T> work, TimeSpan startTimeout, CancellationToken ct = default)
     {
+        if (RefuseHopWhen?.Invoke() == true)
+            throw new InvalidOperationException("a framework hop was asked for while the sidecar lock is held");
         var ticket = new DispatchTicket();
         var started = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         var run = Post(() =>
@@ -108,7 +114,7 @@ internal sealed class FakeFrameworkDispatcher : IFrameworkDispatcher, IDisposabl
 }
 
 /// <summary>The game as the harness sees it, scripted. Framework-thread members record the thread they ran on.</summary>
-internal sealed class FakeGame : IHarnessGame
+internal sealed partial class FakeGame : IHarnessGame
 {
     private readonly FakeFrameworkDispatcher dispatcher;
     public FakeGame(FakeFrameworkDispatcher dispatcher, string modsRoot)
@@ -286,6 +292,14 @@ internal sealed class FakeGame : IHarnessGame
 
     public void RequestRedraw() { Fw(nameof(RequestRedraw)); Interlocked.Increment(ref RedrawRequests); }
 
+    /// <summary>The scripted Studio; set to null for a build with none.</summary>
+    public FakeStudio? FakeStudio { get; set; }
+
+    public IStudioHarness? Studio => FakeStudio;
+
+    /// <summary>A fresh scripted Studio whose members record the thread they ran on into <see cref="Calls"/>.</summary>
+    public FakeStudio UseStudio() => FakeStudio = new FakeStudio(Fw);
+
     public (IReadOnlyCollection<string> Collections, string? Character) NamesNow()
     {
         Fw(nameof(NamesNow));
@@ -329,7 +343,13 @@ internal sealed class FakeGame : IHarnessGame
     }
     private string Where() => dispatcher.OnFramework ? "framework" : "worker";
 
-    public RefitOptions Options(bool remake) => new(true, true, false, remake);
+    /// <summary>The Studio's saved "Keep hidden skin", as the game's config would hold it. Never set by the harness.</summary>
+    public bool ConfigKeepHiddenSkin { get; set; }
+    public RefitOptions Options(bool remake) => new(true, true, false, remake, ConfigKeepHiddenSkin);
+
+    /// <summary>The options and request the last PrepareSizeSet was handed and made; null until one ran.</summary>
+    public RefitOptions? LastOptions { get; private set; }
+    public SizeSetLaunch.Prepared? LastPrepared { get; private set; }
 
     /// <summary>Thrown by PrepareSizeSet when set: the game's bodies or the skeletons could not be read.</summary>
     public Exception? PrepareThrows { get; set; }
@@ -337,8 +357,11 @@ internal sealed class FakeGame : IHarnessGame
     {
         Fw(nameof(PrepareSizeSet));
         if (PrepareThrows != null) throw PrepareThrows;
-        return new SizeSetLaunch.Prepared(new SizeSetRefit.Request(modRoot, keys, options.Yas, options.Remake, []),
-                                          mods.Mods, mods.ModsRoot);
+        LastOptions = options;
+        LastPrepared = new SizeSetLaunch.Prepared(new SizeSetRefit.Request(modRoot, keys, options.Yas, options.Remake, [],
+                                                                           KeepHiddenSkin: options.KeepHiddenSkin),
+                                                  mods.Mods, mods.ModsRoot);
+        return LastPrepared;
     }
 
     public Task<SizeSetLaunch.Outcome> RunSizeSet(SizeSetLaunch.Prepared prepared, Action<string> progress, Action afterChange,
@@ -496,7 +519,8 @@ internal sealed class HarnessFixture : IDisposable
                                 _ => long.MaxValue);
         Jobs = new HarnessJobs(Game, Dispatcher, Backups, session, () => Disposing, timings ?? FastTimings);
         Ring = new LogRing(Names);
-        Changes = new HarnessChanges(Game, Names, Log);
+        Changes = new HarnessChanges(Game, Names, Log, System.IO.Path.Combine(Temp.Path, "config", "test-harness", "backups"),
+                                     session, 1411);
         Router = new HarnessRouter(Jobs, Ring, Names, new CaptureGate((timings ?? FastTimings).Capture), 1411, "11-01 12:00:00",
                                    Substitute.For<IPluginLog>(), Changes);
         Server = new HarnessServer(Router.Handle, Token, readTimeout ?? TimeSpan.FromMilliseconds(500));

@@ -6,7 +6,10 @@ using System.Threading.Tasks;
 using Dalamud.Bindings.ImGui;
 using Dalamud.Game.ClientState.Objects.Types;
 using Dalamud.Interface.Textures;
+using Dalamud.Plugin;
 using Dalamud.Plugin.Services;
+using Glamourer.Api.Enums;
+using Newtonsoft.Json.Linq;
 using Penumbra.Api.Enums;
 using Proteus.Interop;
 using Proteus.Services;
@@ -54,6 +57,13 @@ internal sealed class GameHarnessAdapter : IHarnessGame, IDisposable
     private readonly Action<string> onModChanged;
     private readonly IPluginLog log;
     private readonly LiveModelDump models;
+    private readonly DesignBindingService designBindings;
+    private readonly OverlayEditRouter editRouter;
+    private readonly PresetService presets;
+    private readonly SidecarDiscoveryService discovery;
+    private readonly Glamourer.Api.IpcSubscribers.ApplyDesign applyDesign;
+    private readonly Glamourer.Api.IpcSubscribers.ApplyState applyState;
+    private long designApplied;
 
     private readonly RedrawCounter redraws = new();
     private long nextNameSample;
@@ -67,8 +77,12 @@ internal sealed class GameHarnessAdapter : IHarnessGame, IDisposable
                               IObjectTable objects, IClientState clientState, IFramework framework,
                               ITextureProvider textures, ITextureReadbackProvider readback, Configuration config,
                               UVRemapService uvRemap, Func<string, byte[]?> readGameFile, Action<string> onModChanged,
-                              IPluginLog log)
+                              IPluginLog log, IDalamudPluginInterface pluginInterface, DesignBindingService designBindings,
+                              OverlayEditRouter editRouter, PresetService presets, SidecarDiscoveryService discovery,
+                              IStudioHarness? studio = null)
     {
+        Studio = studio;
+        this.discovery = discovery;
         this.penumbra = penumbra;
         this.glamourer = glamourer;
         this.compositor = compositor;
@@ -87,6 +101,13 @@ internal sealed class GameHarnessAdapter : IHarnessGame, IDisposable
         this.onModChanged = onModChanged;
         this.log = log;
         models = new LiveModelDump(objects);
+        this.designBindings = designBindings;
+        this.editRouter = editRouter;
+        this.presets = presets;
+        // Created here, not in GlamourerBridge: apply and state-write IPC never ship outside a harness build.
+        applyDesign = new Glamourer.Api.IpcSubscribers.ApplyDesign(pluginInterface);
+        applyState = new Glamourer.Api.IpcSubscribers.ApplyState(pluginInterface);
+        glamourer.LocalPlayerStateFinalized += OnStateFinalized;
         penumbra.LocalPlayerRedrawn += redraws.Note;
         framework.Update += OnUpdate;
     }
@@ -198,6 +219,9 @@ internal sealed class GameHarnessAdapter : IHarnessGame, IDisposable
 
     public void RequestRedraw() => compositor.RedrawForChangedModel("test harness");
 
+    /// <summary>The Studio panel, in harness builds; its members run on the framework thread.</summary>
+    public IStudioHarness? Studio { get; }
+
     public (IReadOnlyCollection<string> Collections, string? Character) NamesNow()
         => ((IReadOnlyCollection<string>?)penumbra.GetCollections()?.Values.ToList() ?? [],
             objects.LocalPlayer?.Name.TextValue);
@@ -222,11 +246,13 @@ internal sealed class GameHarnessAdapter : IHarnessGame, IDisposable
                               .ToHashSet(StringComparer.Ordinal);
     }
 
-    public RefitOptions Options(bool remake) => new(config.SizeSetYas, config.SizeSetEnds, config.SizeSetPiercings, remake);
+    public RefitOptions Options(bool remake) => new(config.SizeSetYas, config.SizeSetEnds, config.SizeSetPiercings, remake,
+                                                    config.SizeSetKeepHiddenSkin);
 
     public SizeSetLaunch.Prepared PrepareSizeSet(string modRoot, IReadOnlyList<string> keys, RefitOptions options, ModList mods)
         => SizeSetLaunch.Prepare(mods.Mods, mods.ModsRoot, penumbra.ResolvePlayerPaths, modRoot, keys, options.Yas,
-                                 options.Remake, options.Ends, options.Piercings, null, readGameFile, log);
+                                 options.Remake, options.Ends, options.Piercings, options.KeepHiddenSkin, null,
+                                 readGameFile, log);
 
     public Task<SizeSetLaunch.Outcome> RunSizeSet(SizeSetLaunch.Prepared prepared, Action<string> progress, Action afterChange,
                                                   Action<Action> postToFramework, CancellationToken ct)
@@ -234,7 +260,7 @@ internal sealed class GameHarnessAdapter : IHarnessGame, IDisposable
 
     public AfterChangeResult AfterModChange(string modDir)
     {
-        compositor.ExpectOwnModEdit(modDir);
+        compositor.ExpectOwnModEdit(modDir, "the test harness");
         bool reloaded = penumbra.ReloadModDirectory(modDir) == PenumbraApiEc.Success;
         long baseline = RedrawCount;
         compositor.RedrawForChangedModel("test harness");
@@ -259,8 +285,196 @@ internal sealed class GameHarnessAdapter : IHarnessGame, IDisposable
         }
     }
 
+    // ── design binding ──────────────────────────────────────────────────────
+
+    public IReadOnlyDictionary<Guid, string>? Designs() => glamourer.IsAvailable ? glamourer.GetDesigns() : null;
+
+    public JObject? DesignJson(Guid id) => glamourer.GetDesign(id);
+
+    public JObject? GlamourerState() => objects.LocalPlayer == null ? null : glamourer.GetObjectState(0);
+
+    public string? ApplyDesign(Guid id)
+    {
+        try
+        {
+            var ec = applyDesign.Invoke(id, 0, 0, ApplyFlagEx.DesignDefault);
+            return ec == GlamourerApiEc.Success ? null : ec.ToString();
+        }
+        catch (Exception e)
+        {
+            log.Warning(e, "[Proteus] test harness: Glamourer's ApplyDesign failed");
+            return "unavailable";
+        }
+    }
+
+    public long DesignAppliedCount => Interlocked.Read(ref designApplied);
+
+    public string? RestoreGlamourerState(JObject state, IReadOnlyCollection<string> skipSlots, bool skipGlasses)
+    {
+        var copy = (JObject)state.DeepClone();
+        if (copy["Equipment"] is JObject equip)
+            foreach (var slot in skipSlots)
+                if (equip[slot] is JObject s) { s["Apply"] = false; s["ApplyStain"] = false; }
+        if (skipGlasses && copy["Bonus"]?["Glasses"] is JObject g) g["Apply"] = false;
+
+        designBindings.HarnessSuppressApplySignals();   // the restore raises DesignApplied: never read as an apply
+        try
+        {
+            var ec = applyState.Invoke(copy, 0, 0, ApplyFlag.Once | ApplyFlag.Equipment | ApplyFlag.Customization);
+            return ec == GlamourerApiEc.Success ? null : ec.ToString();
+        }
+        catch (Exception e)
+        {
+            log.Warning(e, "[Proteus] test harness: Glamourer's ApplyState failed");
+            return "unavailable";
+        }
+    }
+
+    public DesignBindingService.Carriers CarriersNow()
+    {
+        var glasses = compositor.InjectedGlassesItemId;
+        return new DesignBindingService.Carriers(glasses, compositor.InjectedCarrierItemIds, compositor.InjectedCarrierSlots,
+                                                 GlassesSlotOwned: glasses != null);
+    }
+
+    public long EchoMsLeft() => designBindings.HarnessEchoMsLeft();
+
+    public void QuiesceBinding() => designBindings.HarnessQuiesce();
+
+    public HarnessBindingView BindingView(string? mod, string? group, string? option) => designBindings.HarnessView(mod, group, option);
+
+    public IReadOnlyList<string>? DesignFields(Guid id) => designBindings.HarnessDesignFields(id);
+
+    public bool IsBound(Guid id) => designBindings.HarnessIsBound(id);
+
+    public bool PresetsPinned() => presets.Overrides.Active;
+
+    public BindingEditState EditState(string modDir)
+        => new(config.PluginEnabled && config.DesignBindingEnabled, designBindings.ActiveDesignId != null,
+               designBindings.IsOverrideActiveFor(modDir), editRouter.IsPresetDriven(modDir));
+
+    public List<ColorTableRowPreset>? LiveRows(string modDir, string? group, string? option)
+        => editRouter.PeekOverrideRows(modDir, group, option);
+
+    public bool SetLiveRows(string modDir, string? group, string? option, List<ColorTableRowPreset> rows)
+    {
+        if (!editRouter.SetOverrideRows(modDir, group, option, rows)) return false;
+        compositor.TriggerRecomposite("test harness: binding edit");
+        return true;
+    }
+
+    public bool ClearLiveOption(string modDir, string? group, string? option)
+    {
+        if (!editRouter.ClearOptionOverride(modDir, group, option)) return false;
+        compositor.TriggerRecomposite("test harness: binding clear");
+        return true;
+    }
+
+    public HarnessLiveSnapshot LiveSnapshot() => designBindings.HarnessSnapshotLive();
+
+    public void RestoreLive(HarnessLiveSnapshot snapshot) => designBindings.HarnessRestoreLive(snapshot);
+
+    public IReadOnlySet<string> ProteusDirs() => designBindings.HarnessProteusDirs();
+
+    public IReadOnlyDictionary<string, PermanentSetting>? PermanentSettings(Guid collection)
+    {
+        if (penumbra.GetCollectionModSettings(collection, ignoreTemporary: true) is not { } all) return null;
+        return all.ToDictionary(kv => kv.Key,
+            // An inherited mod keeps the values it inherits (a partial write starts from them), with Own false.
+            kv => new PermanentSetting(kv.Value.Enabled, kv.Value.Priority, kv.Value.Options, Own: !kv.Value.Inherited),
+            StringComparer.OrdinalIgnoreCase);
+    }
+
+    public string? WritePermanent(Guid collection, string modDir, PermanentSetting setting)
+    {
+        var codes = new List<PenumbraApiEc>();
+        using (compositor.SuppressModSettingEvents())
+        {
+            if (!setting.Own)
+                codes.Add(penumbra.SetModInherited(collection, modDir));   // back to no setting of its own
+            else
+            {
+                codes.Add(penumbra.SetModEnabled(collection, modDir, setting.Enabled));
+                codes.Add(penumbra.SetModPriority(collection, modDir, setting.Priority));
+                foreach (var (group, options) in setting.Options)
+                    codes.Add(penumbra.SetModOption(collection, modDir, group, options));
+            }
+        }
+        var bad = codes.Where(ec => ec is not (PenumbraApiEc.Success or PenumbraApiEc.NothingChanged)).ToList();
+        if (bad.Count == 0) { compositor.TriggerRecomposite("test harness: permanent mod setting"); return null; }
+        return bad[0].ToString();
+    }
+
+    public bool CompositorIdle() => CompositorPhase.Of(compositor.Activity()) == "idle";
+
+    public IReadOnlyList<string> AutoWritersOn()
+    {
+        var on = new List<string>();
+        // The effective switch: the harness's session override counts.
+        if (autoRefit.EffectivelyEnabled) on.Add("auto refit");
+        if (config.AutoUpgradeLegacyShaders) on.Add("gear shader upgrade");
+        if (config.AutoRepointVariants) on.Add("Gear variants");
+        if (config.AutoHairPort) on.Add("auto hair port");
+        if (config.AutoHatCompat) on.Add("auto hat compat");
+        return on;
+    }
+
+    // ── idle disk I/O checks ────────────────────────────────────────────────
+
+    public (bool Latched, int Step, long NextDueInMs) Boot() => compositor.HarnessBootState();
+
+    public void RearmBoot() => compositor.HarnessRearmBoot();
+
+    public IReadOnlyList<(Guid Id, bool Player)>? Collections()
+    {
+        if (penumbra.GetCollections() is not { } all) return null;
+        var player = penumbra.GetPlayerCollectionId();
+        return all.Keys.Select(id => (id, id == player)).ToList();
+    }
+
+    public (bool Config, bool? Override, bool Effective) AutoRefitEnabled()
+        => (config.AutoRefitEnabled, autoRefit.HarnessOverride, autoRefit.EffectivelyEnabled);
+
+    public void SetAutoRefitOverride(bool? enabled) => autoRefit.HarnessOverride = enabled;
+
+    public IReadOnlyList<string> TakeRefitsWhileOverridden() => autoRefit.HarnessTakeRefitsWhileOverridden();
+
+    public (bool Built, bool Stale, bool Refreshing, long Generation) BodyIndex() => autoRefit.HarnessBodyIndexState();
+
+    public (long WindowAgeMs, IReadOnlyDictionary<string, long> Counts)? Io() => compositor.Io?.Snapshot();
+
+    public OverlayEntry? DiscoverEntry(string modDir)
+        => discovery.DiscoverAll().FirstOrDefault(e => string.Equals(e.ModDirectory, modDir, StringComparison.OrdinalIgnoreCase));
+
+    public bool SaveSidecar(OverlayEntry entry) => discovery.SaveMetadata(entry);
+
+    public bool HasStaged(string modDir) => discovery.HarnessHasStaged(modDir);
+
+    public void ForgetSidecar(string modDir) => discovery.Forget(modDir);
+
+    public void Recomposite(string reason) => compositor.TriggerRecomposite(reason);
+
+    public string ManagedOutputDir() => compositor.ManagedOutputDir;
+
+    public bool ArmShellFault(string shell, string slot, string until) => compositor.HarnessArmShellFault(shell, slot, until);
+
+    public bool ClearShellFault() => compositor.HarnessClearShellFault();
+
+    public (bool Config, bool? Override, bool Effective) AutoRedrawEnabled()
+        => (config.AutoRedraw, compositor.HarnessAutoRedrawOverride, compositor.AutoRedrawOn);
+
+    public void SetAutoRedrawOverride(bool? enabled) => compositor.HarnessAutoRedrawOverride = enabled;
+
+    public object RecoveryState() => compositor.HarnessRecoveryState();
+
+    private void OnStateFinalized(StateFinalizationType type)
+    {
+        if (type == StateFinalizationType.DesignApplied) Interlocked.Increment(ref designApplied);
+    }
+
     public void Dispose()
     {
+        glamourer.LocalPlayerStateFinalized -= OnStateFinalized;
         penumbra.LocalPlayerRedrawn -= redraws.Note;
         framework.Update -= OnUpdate;
         NameSink = null;

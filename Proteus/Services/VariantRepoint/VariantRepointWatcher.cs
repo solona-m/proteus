@@ -86,8 +86,10 @@ public sealed class VariantRepointWatcher : IDisposable
 
     public VariantRepointWatcher(CompositorService compositor, PenumbraBridge penumbra, GlamourerBridge glamourer,
                                  AutoRefitWatcher autoRefit, ShaderUpgradeWatcher shaderUpgrade,
-                                 Func<string, byte[]?> readGameFile, Configuration config, IPluginLog log)
+                                 Func<string, byte[]?> readGameFile, Configuration config, IPluginLog log,
+                                 PlayerSettingsFilter settings)
     {
+        this.settings = settings;
         this.compositor = compositor;
         this.penumbra = penumbra;
         this.glamourer = glamourer;
@@ -101,11 +103,17 @@ public sealed class VariantRepointWatcher : IDisposable
         glamourer.LocalPlayerStateChangedAny += OnStateChangedAny;
         penumbra.LocalPlayerRedrawn += OnRedrawn;
         penumbra.PlayerCollectionChanged += OnCollectionChanged;
-        penumbra.ModSettingChanged += OnModSettingChanged;
+        // Only changes that can reach what the player wears: not sync plugins' collections, not our own mod.
+        settings.Passed += OnModSettingChanged;
         penumbra.PenumbraReady += OnPenumbraReady;
         penumbra.ModMoved += OnModMoved;
         Plugin.Framework.Update += OnFrameworkUpdate;
     }
+
+    private readonly PlayerSettingsFilter settings;
+
+    /// <summary>Counts runs for the idle I/O summary; null counts nothing.</summary>
+    public IoCounters? Io { get; set; }
 
     public void Dispose()
     {
@@ -116,7 +124,7 @@ public sealed class VariantRepointWatcher : IDisposable
         glamourer.LocalPlayerStateChangedAny -= OnStateChangedAny;
         penumbra.LocalPlayerRedrawn -= OnRedrawn;
         penumbra.PlayerCollectionChanged -= OnCollectionChanged;
-        penumbra.ModSettingChanged -= OnModSettingChanged;
+        settings.Passed -= OnModSettingChanged;
         penumbra.PenumbraReady -= OnPenumbraReady;
         penumbra.ModMoved -= OnModMoved;
     }
@@ -160,11 +168,8 @@ public sealed class VariantRepointWatcher : IDisposable
     private void OnPenumbraReady() => Request(ShaderUpgradePlan.Signal.PenumbraReady);
     private void OnModMoved(string oldDir, string newDir) => Request(ShaderUpgradePlan.Signal.ModMoved);
 
-    private void OnModSettingChanged(ModSettingChange change, Guid collection, string modDirectory, bool inherited)
-    {
-        if (string.Equals(modDirectory, SidecarDiscoveryService.ManagedModDir, StringComparison.OrdinalIgnoreCase)) return;
-        Request(ShaderUpgradePlan.Signal.ModSetting);
-    }
+    private void OnModSettingChanged(ModSettingChange change, string modDirectory)
+        => Request(ShaderUpgradePlan.Signal.ModSetting);
 
     // ── the frame ───────────────────────────────────────────────────────────
 
@@ -229,11 +234,14 @@ public sealed class VariantRepointWatcher : IDisposable
         => Plugin.Framework.RunOnFrameworkThread(() =>
         {
             var clock = Stopwatch.StartNew();
+            var gc = new GcPauseProbe();
+            lastReadSubSteps = null;
             try { return work(); }
             finally
             {
                 if (clock.ElapsedMilliseconds > SlowFrameMs)
-                    log.Warning("[Proteus] gear variants: framework-thread step {0} took {1} ms", step, clock.ElapsedMilliseconds);
+                    log.Warning("[Proteus] gear variants: framework-thread step {0} took {1} ms ({2}gc pause {3} ms)", step,
+                        clock.ElapsedMilliseconds, lastReadSubSteps is { } subs ? subs + ", " : "", gc.ElapsedPauseMs);
             }
         }).GetAwaiter().GetResult();
 
@@ -249,9 +257,27 @@ public sealed class VariantRepointWatcher : IDisposable
         @"^chara/(?:equipment|accessory)/(?<tag>[ea]\d{4})/material/v(?<v>\d{4})/mt_c\d{4}\k<tag>_(?<suffix>[a-z]{3})_",
         RegexOptions.IgnoreCase | RegexOptions.CultureInvariant | RegexOptions.Compiled);
 
-    /// <summary>The worn pieces, read on the framework thread; null when there is nothing to read yet.</summary>
+    /// <summary>What the framework thread reads for a run: draw objects and game memory only, returned raw.</summary>
+    private sealed record RawWorn(string ModsRoot, Dictionary<string, HashSet<string>> Map,
+                                  List<EquippedSlotVariants.Slot> Slots);
+
+    /// <summary>
+    /// The worn pieces; null when there is nothing to read yet. Only the draw-object and game-memory reads run on the
+    /// framework thread (<see cref="ReadWornRaw"/>); the path parse and Penumbra's mod list run here, on the worker.
+    /// A user's log showed this step at 302 and 706 ms on the framework thread.
+    /// </summary>
     private WornState? ReadWorn()
     {
+        var raw = OnFramework(ReadWornRaw, "read");
+        if (raw == null) return null;
+        var names = penumbra.GetAllModsQuiet() ?? new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        return new WornState(WornItems(raw.Slots, raw.Map), raw.ModsRoot, names);
+    }
+
+    /// <summary>The framework-thread half of <see cref="ReadWorn"/>, timed per sub-step.</summary>
+    private RawWorn? ReadWornRaw()
+    {
+        var sub = Stopwatch.StartNew();
         var modsRoot = penumbra.GetModDirectory();
         if (ShaderUpgradePlan.WaitingFor(penumbra.IsAvailable, modsRoot) != ShaderUpgradePlan.Waiting.None)
         {
@@ -260,6 +286,7 @@ public sealed class VariantRepointWatcher : IDisposable
             return null;
         }
         var map = penumbra.GetActivePlayerResourceMap();
+        long mapMs = sub.ElapsedMilliseconds;
         var models = map?.Values.SelectMany(g => g).Where(g => g.EndsWith(".mdl", StringComparison.OrdinalIgnoreCase))
                         .ToHashSet(StringComparer.OrdinalIgnoreCase);
         if (map == null || models == null || !DrawnModelPaths.HasBodySlotModel(models))
@@ -269,9 +296,12 @@ public sealed class VariantRepointWatcher : IDisposable
         }
         blanks = 0;
         var slots = EquippedSlotVariants.Read(Plugin.ObjectTable.LocalPlayer?.Address ?? 0);
-        var names = penumbra.GetAllModsQuiet() ?? new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
-        return new WornState(WornItems(slots, map), modsRoot!, names);
+        lastReadSubSteps = $"resource map {mapMs} ms, slots {sub.ElapsedMilliseconds - mapMs} ms";
+        return new RawWorn(modsRoot!, map, slots);
     }
+
+    /// <summary>The last framework read's sub-step times, for the slow-step warning.</summary>
+    private volatile string? lastReadSubSteps;
 
     /// <summary>The worn gear pieces: each slot's item and variant, with the model it is drawn with and the folder loaded.</summary>
     internal static List<WornItem> WornItems(IEnumerable<EquippedSlotVariants.Slot> slots,
@@ -328,12 +358,13 @@ public sealed class VariantRepointWatcher : IDisposable
     private void Run(RunKind kind, bool decline)
     {
         if (stopped) return;
-        var worn = OnFramework(ReadWorn, "read");
+        Io?.Count(IoCounters.GearVariantsRuns);
+        var worn = ReadWorn();
         // A button pressed mid-redraw (or before Penumbra is up) waits for the character rather than doing nothing.
         for (int tries = 0; worn == null && kind != RunKind.Repoint && tries < BlanksBeforeNone && !stopped; tries++)
         {
             Thread.Sleep(ShaderUpgradePlan.SignalFor(ShaderUpgradePlan.Signal.BlankRetry));
-            worn = OnFramework(ReadWorn, "read");
+            worn = ReadWorn();
         }
         if (worn == null || stopped)
         {
@@ -478,7 +509,7 @@ public sealed class VariantRepointWatcher : IDisposable
         foreach (var root in modRoots)
         {
             var dir = Path.GetFileName(root.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar));
-            compositor.ExpectOwnModEdit(dir);
+            compositor.ExpectOwnModEdit(dir, "gear variants");
             var ec = penumbra.ReloadModDirectory(dir);
             reloaded &= ec == PenumbraApiEc.Success;
             if (counts != null)

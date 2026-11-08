@@ -444,9 +444,11 @@ public class RowHoverWiringTests
         {
             var tick = Method(src, "private void OnFramework(");
             int t = tick.IndexOf("_keep.Tick();", StringComparison.Ordinal);
-            int e = tick.IndexOf("_keep.Expired(RowHighlightClock.NowMs())", StringComparison.Ordinal);
+            // The clock is read once per tick (#82 shares it with the pin's expiry), then the preview's expiry uses it.
+            int c = tick.IndexOf("var now = RowHighlightClock.NowMs();", StringComparison.Ordinal);
+            int e = tick.IndexOf("_keep.Expired(now)", StringComparison.Ordinal);
             int a = tick.IndexOf("Apply(", StringComparison.Ordinal);
-            Assert.True(t >= 0 && e > t && a > e);
+            Assert.True(t >= 0 && c > t && e > c && a > e);
             Assert.Contains("private readonly PreviewKeepAlive _keep = new();", src);
             Assert.DoesNotContain("Environment.TickCount64", src);
         }
@@ -518,5 +520,44 @@ public class RowHoverWiringTests
         var shared = Method(Source("Services/TextureLoader.cs"), "public (byte[] Rgba, int Width, int Height)? LoadTexShared(");
         Assert.Contains("DiskKey(\"TEXS\", diskPath)", shared);
         Assert.Contains("GetOrDecode(key, () => LoadTexAsRgba(diskPath))", shared);
+    }
+
+    // ── #82: a pinned Glow stops outliving a hidden UI ────────────────────────────────────────────────────────────────
+
+    [Fact]
+    [Trait("Plan", "AC-issue-sweep-c-7")]
+    [Trait("Plan", "EDGE-issue-sweep-c-21")]
+    public void Both_pins_expire_on_the_tick_through_Clear_before_Apply()
+    {
+        foreach (var src in new[] { Gear, Skin })
+        {
+            Assert.Contains("private readonly PreviewKeepAlive _pinKeep = new();", src);
+            var tick = Method(src, "private void OnFramework(");
+            int expiry = tick.IndexOf("if (RowHighlight.PinExpired(_pinned != null, _pinKeep, now)) Clear();", StringComparison.Ordinal);
+            Assert.True(expiry > 0, "pin expiry goes through Clear()");
+            Assert.True(tick.IndexOf("_pinKeep.Tick();", StringComparison.Ordinal) is var t && t >= 0 && t < expiry);
+            Assert.True(expiry < tick.IndexOf("Apply(", StringComparison.Ordinal), "cleared before Apply, restored the same tick");
+            // SetTarget renews, so a fresh pin isn't expired by an old keep-alive.
+            Assert.Contains("_pinKeep.Renew(RowHighlightClock.NowMs());", Method(src, "public void SetTarget("));
+            Assert.Contains("public void RenewPin(long nowMs) => _pinKeep.Renew(nowMs);", src);
+        }
+        // Skin's Clear abandons its texture; gear's drops the ghost.
+        Assert.Contains("Abandon(p);", Method(Skin, "public void Clear("));
+        Assert.Contains("Ghost?.Clear();", Method(Gear, "public void Clear("));
+    }
+
+    [Fact]
+    [Trait("Plan", "AC-issue-sweep-c-7")]
+    [Trait("Plan", "EDGE-issue-sweep-c-19")]
+    public void Colors_window_renews_both_pins_every_frame_outside_Begin()
+    {
+        var draw = Method(Status, "private void DrawColorWindow(");
+        int entryCheck = draw.IndexOf("if (entry == null)", StringComparison.Ordinal);
+        int gear = draw.IndexOf("ColorTableEditor.Highlighter?.RenewPin(pinNow);", StringComparison.Ordinal);
+        int skin = draw.IndexOf("ColorTableEditor.SkinGlow?.RenewPin(pinNow);", StringComparison.Ordinal);
+        int begin = draw.IndexOf("ImGui.Begin(", StringComparison.Ordinal);
+        Assert.True(entryCheck > 0 && gear > entryCheck && skin > entryCheck, "renewed once the window has a mod to draw");
+        Assert.True(gear < begin && skin < begin, "outside Begin: a collapsed window still renews");
+        Assert.Contains("public override void PostDraw() => DrawColorWindow();", Status);
     }
 }

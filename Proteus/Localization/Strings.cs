@@ -56,6 +56,7 @@ public static class Strings
     public static AutoRefitStrings  AutoRefit  { get; private set; } = new();
     public static SizeSetStrings    SizeSet    { get; private set; } = new();
     public static WhatsNewStrings   WhatsNew   { get; private set; } = new();
+    public static MatcapStrings     Matcap     { get; private set; } = new();
 
     /// <summary>
     /// Rebuilds every holder against the language CheapLoc was just set up with. Called from
@@ -87,7 +88,229 @@ public static class Strings
         AutoRefit  = new AutoRefitStrings();
         SizeSet    = new SizeSetStrings();
         WhatsNew   = new WhatsNewStrings();
+        Matcap     = new MatcapStrings();
     }
+}
+
+/// <summary>The Studio's Matcaps tool: tick parts, pick one of your images or an installed library's matcap.</summary>
+public sealed class MatcapStrings
+{
+    public readonly string Tool = ProteusLoc.Localize("Parts.Tool.Matcap", "Matcaps") + "###partsToolMatcap";
+
+    public readonly string ToolTip = ProteusLoc.Localize("Parts.Tool.Matcap.Tip",
+        "Give the parts you tick a matcap: a shiny, glassy or gem-like look painted from a picture of a sphere. The "
+      + "parts get a material of their own, written into the mod, so it shows with Proteus turned off.");
+
+    public readonly string ListTip = ProteusLoc.Localize("Parts.Matcap.ListTip",
+        "Tick the parts that should take the matcap. Tick parts that already have one to change it. Skin can't be ticked.");
+
+    public readonly string Guide = ProteusLoc.Localize("Parts.Matcap.Guide",
+        "A matcap is a picture of a lit sphere; the parts take their colour from it by which way they face you. Tick "
+      + "parts, click a matcap to see it on your character, then Apply.");
+
+    public readonly string PreviewTick = ProteusLoc.Localize("Parts.Matcap.PreviewTick", "Tick parts to see the matcap on your character.");
+
+    public readonly string PreviewGearOnly = ProteusLoc.Localize("Parts.Matcap.PreviewGearOnly",
+        "Hair, tails, ears and horns show the matcap once you apply it.");
+
+    public readonly string PreviewGameGear = ProteusLoc.Localize("Parts.Matcap.PreviewGameGear", "Game gear shows the matcap once you apply it.");
+
+    public readonly string Previewing = ProteusLoc.Localize("Parts.Matcap.Previewing",
+        "Shown on your character only: nothing is saved until you press Apply matcap.");
+
+    /// <summary>{0} why the preview could not be put on the character.</summary>
+    public readonly string PreviewFailedFmt = ProteusLoc.Localize("Parts.Matcap.PreviewFailed.Fmt",
+        "The matcap could not be shown on your character ({0}).");
+
+    public readonly string SkinTip = ProteusLoc.Localize("Parts.Matcap.SkinTip", "Skin can't take a matcap.");
+
+    public readonly string SourceImages = ProteusLoc.Localize("Parts.Matcap.SourceImages", "Your images") + "###matcapSrcImages";
+
+    public readonly string SourceLibraries = ProteusLoc.Localize("Parts.Matcap.SourceLibraries", "Library mods") + "###matcapSrcLibs";
+
+    public readonly string SourceProteus = ProteusLoc.Localize("Parts.Matcap.SourceProteus", "Proteus matcaps") + "###matcapSrcProteus";
+
+    public readonly string SourceProteusTip = ProteusLoc.Localize("Parts.Matcap.SourceProteus.Tip",
+        "Matcaps that come with Proteus, downloaded the first time you open Matcaps.");
+
+    /// <summary>{0} how many are on disk, {1} how many there are.</summary>
+    public readonly string PackDownloadingFmt = ProteusLoc.Localize("Parts.Matcap.PackDownloading.Fmt",
+        "Downloading Proteus's matcaps… {0} of {1}");
+
+    public readonly string PackFailed = ProteusLoc.Localize("Parts.Matcap.PackFailed",
+        "Proteus's matcaps could not be downloaded. Check your connection, then try again.");
+
+    public readonly string PackRetry = ProteusLoc.Localize("Parts.Matcap.PackRetry", "Try again") + "###matcapPackRetry";
+
+    public readonly string OpenFolder = ProteusLoc.Localize("Parts.Matcap.OpenFolder", "Open matcap folder") + "###matcapOpenFolder";
+
+    public readonly string Refresh = ProteusLoc.Localize("Parts.Matcap.Refresh", "Refresh") + "###matcapRefresh";
+
+    /// <summary>{0} is the global matcap folder.</summary>
+    public readonly string NoImagesFmt = ProteusLoc.Localize("Parts.Matcap.NoImages.Fmt",
+        "No matcap images yet. Put square pictures of a lit sphere (PNG or JPG) in {0}, then press Refresh.");
+
+    public readonly string ThisMod = ProteusLoc.Localize("Parts.Matcap.ThisMod", "(this mod)");
+
+    public readonly string Rescan = ProteusLoc.Localize("Parts.Matcap.Rescan", "Rescan") + "###matcapRescan";
+
+    public readonly string Scanning = ProteusLoc.Localize("Parts.Matcap.Scanning", "Looking through your mods for matcap libraries…");
+
+    public readonly string NoLibraries = ProteusLoc.Localize("Parts.Matcap.NoLibraries",
+        "No matcap library mods are installed. A library is a mod with a choice of matcaps for one shared texture.");
+
+    public readonly string LibraryOffTag = ProteusLoc.Localize("Parts.Matcap.LibraryOffTag", "(off)");
+
+    /// <summary>{0} is the number of other matcaps in this mod on the same slot.</summary>
+    public readonly string SharedSlotFmt = ProteusLoc.Localize("Parts.Matcap.SharedSlot.Fmt",
+        "This slot shows one matcap at a time: {0} other matcap(s) in this mod use it and will change too.");
+
+    public readonly string InheritedFmt = ProteusLoc.Localize("Parts.Matcap.Inherited.Fmt",
+        "{0} inherits this library's setting; choosing a matcap gives it a setting of its own.");
+
+    public readonly string BaseCollectionFmt = ProteusLoc.Localize("Parts.Matcap.BaseCollection.Fmt",
+        "{0} is your base collection: everyone using it will see the chosen matcap.");
+
+    public readonly string HeldFmt = ProteusLoc.Localize("Parts.Matcap.Held.Fmt",
+        "{0} is holding this library's setting for now; the chosen matcap shows once it lets go.");
+
+    public readonly string DuplicatesFmt = ProteusLoc.Localize("Parts.Matcap.Duplicates.Fmt",
+        "Other mods also supply this slot's texture ({0}); the one Penumbra ranks highest decides what shows.");
+
+    /// <summary>{0} the library's name, {1} its website.</summary>
+    public readonly string ShareNoteFmt = ProteusLoc.Localize("Parts.Matcap.ShareNote.Fmt",
+        "Anyone you share this mod with needs {0} too ({1}), set to the same matcap. Its textures are never copied into your mod.");
+
+    public readonly string AlphaWarn = ProteusLoc.Localize("Parts.Matcap.AlphaWarn",
+        "Some ticked parts use see-through edges (hair strands, lace). Check the edges in game after applying.");
+
+    /// <summary>{0} is the number of parts ticked.</summary>
+    public readonly string TickedFmt = ProteusLoc.Localize("Parts.Matcap.Ticked.Fmt", "{0} part(s) ticked.");
+
+    public readonly string Apply = ProteusLoc.Localize("Parts.Matcap.Apply", "Apply matcap") + "###matcapApply";
+
+    public readonly string NeedParts = ProteusLoc.Localize("Parts.Matcap.NeedParts", "Tick the parts that should take the matcap.");
+
+    public readonly string NeedMatcap = ProteusLoc.Localize("Parts.Matcap.NeedMatcap", "Pick a matcap first.");
+
+    public readonly string NoPenumbra = ProteusLoc.Localize("Parts.Matcap.NoPenumbra", "Penumbra is not available.");
+
+    /// <summary>{0} is the model's material limit.</summary>
+    public readonly string MaterialCapFmt = ProteusLoc.Localize("Parts.Matcap.MaterialCap.Fmt",
+        "This model already has {0} materials, the most a model can carry. Undo a matcap to make room.");
+
+    /// <summary>{0} the number of materials this model can still take.</summary>
+    public readonly string RoomFmt = ProteusLoc.Localize("Parts.Matcap.Room.Fmt",
+        "Room for {0} more material(s) on this model (a refit needs some for nails and underwear too).");
+
+    public readonly string Working = ProteusLoc.Localize("Parts.Matcap.Working", "Writing the matcap…");
+
+    /// <summary>{0} the library, {1} the collection, {2} what else it publishes.</summary>
+    public readonly string ConfirmEnableFmt = ProteusLoc.Localize("Parts.Matcap.ConfirmEnable.Fmt",
+        "{0} is off in {1}. Switching it on also turns on: {2}");
+
+    public readonly string ConfirmYes = ProteusLoc.Localize("Parts.Matcap.ConfirmYes", "Switch it on") + "###matcapConfirmYes";
+
+    public readonly string ConfirmNo = ProteusLoc.Localize("Parts.Matcap.ConfirmNo", "Cancel") + "###matcapConfirmNo";
+
+    public readonly string Lod0Cut = ProteusLoc.Localize("Parts.Matcap.Lod0Cut",
+        "The model was cut to its nearest level of detail, so the matcap shows at every distance.");
+
+    /// <summary>{0} the files that did not line up.</summary>
+    public readonly string SiblingsSkippedFmt = ProteusLoc.Localize("Parts.Matcap.SiblingsSkipped.Fmt",
+        "Not applied to these other body options, whose parts differ: {0}.");
+
+    /// <summary>{0} the file Penumbra draws instead.</summary>
+    public readonly string NotWinningFmt = ProteusLoc.Localize("Parts.Matcap.NotWinning.Fmt",
+        "Another mod's texture is drawn on this slot instead ({0}). Raise the library's priority in Penumbra.");
+
+    /// <summary>{0} the file the character draws for this model.</summary>
+    public readonly string DrawnElsewhereFmt = ProteusLoc.Localize("Parts.Matcap.DrawnElsewhere.Fmt",
+        "Your character draws another file for this model ({0}), so the matcap won't show on it yet.");
+
+    public readonly string RemakeSizes = ProteusLoc.Localize("Parts.Matcap.RemakeSizes",
+        "That file is one of Proteus's refits: remake the sizes to carry the matcap over.");
+
+    public readonly string ExistingHeader = ProteusLoc.Localize("Parts.Matcap.ExistingHeader", "Matcaps on this model") + "###matcapExisting";
+
+    /// <summary>{0} the library's name.</summary>
+    public readonly string LibraryMissingFmt = ProteusLoc.Localize("Parts.Matcap.LibraryMissing.Fmt",
+        "{0} is not installed: this matcap has nothing to show.");
+
+    /// <summary>{0} the library's name.</summary>
+    public readonly string LibraryOffFmt = ProteusLoc.Localize("Parts.Matcap.LibraryOff.Fmt", "{0} is switched off.");
+
+    public readonly string Edited = ProteusLoc.Localize("Parts.Matcap.Edited", "The model was changed since.");
+
+    public readonly string Superseded = ProteusLoc.Localize("Parts.Matcap.Superseded",
+        "The model no longer uses this matcap (the mod was updated).");
+
+    /// <summary>Apply with some ticked parts on a matcap and some not (also <see cref="MatcapStudio"/>'s refusal).</summary>
+    public readonly string AlreadyMatcap = ProteusLoc.Localize("Matcap.Refused.AlreadyMatcap", Services.Matcap.MatcapStudio.AlreadyMatcapText);
+
+    /// <summary>A ticked matcap part whose material is not in the mod's record.</summary>
+    public readonly string NoEntry = ProteusLoc.Localize("Matcap.Refused.NoEntry", Services.Matcap.MatcapStudio.NoEntryText);
+
+    /// <summary>{0} the matcaps an Apply changes (their names without the marker).</summary>
+    public readonly string ChangesFmt = ProteusLoc.Localize("Parts.Matcap.Changes.Fmt",
+        "Apply changes {0} in every file of this mod that uses it, refits included.");
+
+    /// <summary>{0} how many parts of this model on those matcaps are not ticked.</summary>
+    public readonly string ChangesUntickedFmt = ProteusLoc.Localize("Parts.Matcap.ChangesUnticked.Fmt",
+        "That includes {0} part(s) here you didn't tick.");
+
+    /// <summary>{0} other model files Proteus recorded on those matcaps.</summary>
+    public readonly string ChangesFilesFmt = ProteusLoc.Localize("Parts.Matcap.ChangesFiles.Fmt", "Those include: {0}.");
+
+    /// <summary>{0} the matcaps a change left as they were, with why.</summary>
+    public readonly string ChangePartialFmt = ProteusLoc.Localize("Parts.Matcap.ChangePartial.Fmt", Services.Matcap.MatcapStudio.ChangePartialText);
+
+    public readonly string ChangeKindTip = ProteusLoc.Localize("Parts.Matcap.ChangeKindTip",
+        "A matcap from your images can only change to another image, and a library's to another library option. Undo it to switch kinds.");
+
+    public readonly string Forget = ProteusLoc.Localize("Parts.Matcap.Forget", "Forget") + "###matcapForget";
+
+    public readonly string Undo = ProteusLoc.Localize("Parts.Matcap.Undo", "Undo matcaps on this model") + "###matcapUndo";
+
+    /// <summary>{0} the other model files undone with it.</summary>
+    public readonly string UndoGroupFmt = ProteusLoc.Localize("Parts.Matcap.UndoGroup.Fmt",
+        "Also undoes the other body options sharing these matcaps: {0}.");
+
+    /// <summary>{0} the image or "library — option".</summary>
+    public readonly string SourceFmt = ProteusLoc.Localize("Parts.Matcap.Source.Fmt", "from {0}");
+
+    public readonly string MatcapsOnlyHere = ProteusLoc.Localize("Parts.Matcap.MatcapsOnlyHere",
+        "Your own face, ears and tail open only under Matcaps, so they were closed.");
+
+    public readonly string NotHornTip = ProteusLoc.Localize("Parts.Matcap.NotHornTip",
+        "On a face, only the horns can take a matcap.");
+
+    public readonly string NoHorns = ProteusLoc.Localize("Parts.Matcap.NoHorns",
+        "This face has no horns. On a face, only the horns can take a matcap.");
+
+    public readonly string HornColourNote = ProteusLoc.Localize("Parts.Matcap.HornColourNote",
+        "Horns with a matcap no longer take your character's horn colour, and hats still hide them.");
+
+    public readonly string DrawnThroughFace = ProteusLoc.Localize("Parts.Matcap.DrawnThroughFace",
+        "Your face is drawn through the face overlay's rewrite; the matcap shows after the next refresh.");
+
+    public readonly string FaceOverlayOn = ProteusLoc.Localize("Parts.Matcap.FaceOverlayOn",
+        "That face is drawn through a face overlay. Turn the overlay off to pick your face, or open your face mod from the list.");
+
+    /// <summary>{0} the face id ("f0001"), {1} the race code ("c1401").</summary>
+    public readonly string VanillaFaceHornsFmt = ProteusLoc.Localize("Parts.Vanilla.FaceHorns.Fmt", "Horns (face {0}, {1})");
+
+    /// <summary>{0} the ear id, {1} the race code.</summary>
+    public readonly string VanillaEarsFmt = ProteusLoc.Localize("Parts.Vanilla.Ears.Fmt", "Ears {0} ({1})");
+
+    /// <summary>{0} the tail id (t0003), {1} the race code (c0801).</summary>
+    public readonly string VanillaTailFmt = ProteusLoc.Localize("Parts.Vanilla.Tail.Fmt", "Tail {0} ({1})");
+
+    public readonly string SettingsLibrary = ProteusLoc.Localize("Settings.MatcapLibrary", "Matcap images") + "###matcapLibrary";
+
+    /// <summary>{0} the folder.</summary>
+    public readonly string SettingsLibraryTipFmt = ProteusLoc.Localize("Settings.MatcapLibrary.Tip.Fmt",
+        "Open the folder your own matcap images live in: {0}");
 }
 
 /// <summary>The Body size tool's "every size for other bodies", which adds a whole set of sizes to a mod.</summary>
@@ -139,6 +362,15 @@ public sealed class SizeSetStrings
 
     public readonly string PiercingsTip = ProteusLoc.Localize("SizeSet.Piercings.Tip",
         "On: each body's piercings come in with its skin where the piece shows that skin. Nails always come along.\n"
+      + "Sizes already made change only when made again.");
+
+    public readonly string KeepHiddenSkin = ProteusLoc.Localize("SizeSet.KeepHiddenSkin", "Keep hidden skin")
+                                          + "###sizeSetKeepHiddenSkin";
+
+    public readonly string KeepHiddenSkinTip = ProteusLoc.Localize("SizeSet.KeepHiddenSkin.Tip",
+        "Off: each body's skin is left out where the author deleted theirs, usually under and around the cloth. "
+      + "On: it goes in whole, bringing back skin missing under or around the cloth, but it may show through tight "
+      + "cloth. Shoes and gloves are always cut.\n"
       + "Sizes already made change only when made again.");
 
     public readonly string Remake = ProteusLoc.Localize("SizeSet.Remake", "Make again the sizes Proteus added before")
@@ -463,6 +695,25 @@ public sealed class WhatsNewStrings
     public readonly string IntroSince = ProteusLoc.Localize("WhatsNew.IntroSince",
         "Something new since you last saw this window. It opens once, and not again.");
 
+    public readonly string MatcapsHead = ProteusLoc.Localize("WhatsNew.Matcaps.Head",
+        "Matcaps: shiny, glassy and gem-like parts");
+
+    public readonly string MatcapsBody = ProteusLoc.Localize("WhatsNew.Matcaps.Body",
+        "The Studio has a new tool, \"Matcaps\". Tick parts of gear, accessories, hair, tails, Viera ears or Au Ra "
+      + "horns, pick a matcap (a picture of a lit sphere) and press \"Apply matcap\": the parts get a material of their "
+      + "own, written into the mod, so the look shows with Proteus turned off. \"Proteus matcaps\", a set that comes "
+      + "with Proteus and includes the 23Minks matcap pack by sivka, is downloaded the first time you open Matcaps. "
+      + "Your own pictures go in the folder under \"Matcap images\" in Settings, and installed matcap library mods are "
+      + "listed too. \"Undo matcaps on this model\" takes it all back out.");
+
+    public readonly string MoveAllHead = ProteusLoc.Localize("WhatsNew.MoveAll.Head",
+        "Move, turn or scale every ticked part as one piece");
+
+    public readonly string MoveAllBody = ProteusLoc.Localize("WhatsNew.MoveAll.Body",
+        "\"Move\", \"Rotate\" and \"Scale\" in the Studio have a new mode beside whole parts and polygons, \"All\": "
+      + "every ticked part of the open model moves, turns or scales together, as one piece. Untick a part in the part "
+      + "list to leave it where it is. Skin moves only with \"Move skin too\" on.");
+
     public readonly string ColorRowsHead = ProteusLoc.Localize("WhatsNew.ColorRows.Head",
         "Point at a colour row to see where it goes");
 
@@ -667,6 +918,14 @@ public sealed class HairPortStrings
         "the mod has its own version for this sex");
     public readonly string RaceOtherSexSkeleton = ProteusLoc.Localize("HairPort.Studio.OtherSexSkeleton",
         "the mod gives this race its own skeleton");
+
+    /// <summary>{0} is the other hairstyle, e.g. c0201h0108.</summary>
+    public readonly string RacePortedFromFmt = ProteusLoc.Localize("HairPort.Studio.PortedFrom.Fmt",
+        "ported from hairstyle {0} — porting this one replaces it");
+
+    /// <summary>{0} is the race number, {1} the other hairstyle, e.g. c0201h0108.</summary>
+    public readonly string ReplacedFmt = ProteusLoc.Localize("HairPort.Replaced.Fmt",
+        "c{0:D4}: replaced the port made from hairstyle {1}.");
 
     public readonly string OtherSex = ProteusLoc.Localize("HairPort.Studio.OtherSex", "Also for the other sex") + "###hairPortOtherSex";
 
@@ -2054,8 +2313,8 @@ public sealed class ColorsStrings
     public readonly string ResetTip = ProteusLoc.Localize("Colors.Reset.Tip",
         "Hold Ctrl and click to restore this option's colours, glow and mode to the\n" +
         "settings Proteus first recorded for this mod. Cannot be undone.\n\n" +
-        "If a design is applied, this also drops that design's saved override for this\n" +
-        "option — otherwise the design would just re-impose it. Other designs keep theirs.\n\n" +
+        "If a design is applied, it keeps its own saved values for this option and shows them\n" +
+        "again the next time the design is applied, until you press Update on the Bindings tab.\n\n" +
         "Note: those originals were captured the first time Proteus saved this mod —\n" +
         "if you had already edited it before then, that edited state is the \"default\".");
 
@@ -2792,6 +3051,55 @@ public sealed class PartsStrings
     public readonly string MoveSelectPolygonsTip = ProteusLoc.Localize("Parts.Move.SelectPolygons.Tip",
         "Move, turn or scale single polygons instead of whole parts. Click a polygon to select it; Shift-click adds\n"
       + "or removes one. Choosing a part in the list selects all of its polygons.");
+
+    public readonly string MoveSelectAll = ProteusLoc.Localize("Parts.Move.SelectAll", "All") + "###partsMoveSelectAll";
+
+    public readonly string MoveSelectAllTip = ProteusLoc.Localize("Parts.Move.SelectAll.Tip",
+        "Move, turn or scale every ticked part of this model together, as one piece.\n"
+      + "Untick a part in the part list to leave it where it is. Skin moves only with “Move skin too” on.");
+
+    /// <summary>{0} is how many parts move, {1} how many there are.</summary>
+    public readonly string MoveAllFmt = ProteusLoc.Localize("Parts.Move.All.Fmt", "{0} of {1} parts of this model move together.");
+
+    /// <summary>{0} is how many parts move, {1} how many there are.</summary>
+    public readonly string MoveAllSkinFmt = ProteusLoc.Localize("Parts.Move.All.Skin.Fmt",
+        "{0} of {1} parts of this model move together, including skin.");
+
+    public readonly string MoveAllNone = ProteusLoc.Localize("Parts.Move.AllNone", "Nothing to move: tick parts in the part list.");
+
+    public readonly string MoveAllNothingFree = ProteusLoc.Localize("Parts.Move.AllNothingFree",
+        "Nothing ticked can move: it is all skin or locked.");
+
+    public readonly string MoveAllListTip = ProteusLoc.Localize("Parts.Move.AllListTip",
+        "Every ticked part moves together. Untick a part's box to leave it where it is: it is hidden on the model and on your character.");
+
+    public readonly string MoveAllOffTip = ProteusLoc.Localize("Parts.Move.AllOff.Tip",
+        "Not used with All: every ticked part moves as one piece.");
+
+    public readonly string MoveAllHelp = ProteusLoc.Localize("Parts.Move.All.Help",
+        "Every ticked part moves together: drag an arrow or a square. Drag anywhere else to turn the model, "
+      + "shift-drag to move the view, scroll to zoom.");
+
+    public readonly string MoveAllLiveHint = ProteusLoc.Localize("Parts.Move.All.LiveHint",
+        "Every ticked part moves together: drag an arrow or a square on your character. Hold Alt to move the camera. "
+      + "Each move is saved when you let go.");
+
+    public readonly string RotateAllHelp = ProteusLoc.Localize("Parts.Rotate.All.Help",
+        "Every ticked part turns together: drag one of the rings at their centre. Drag anywhere else to turn the model, "
+      + "shift-drag to move the view, scroll to zoom.");
+
+    public readonly string RotateAllLiveHint = ProteusLoc.Localize("Parts.Rotate.All.LiveHint",
+        "Every ticked part turns together: drag one of the rings at their centre on your character. Hold Alt to move "
+      + "the camera. Each turn is saved when you let go.");
+
+    public readonly string ScaleAllHelp = ProteusLoc.Localize("Parts.ScaleAxes.All.Help",
+        "Every ticked part scales together: drag a handle to stretch them along that axis, or press on a ticked part "
+      + "and drag right to grow or left to shrink. Drag anywhere else to turn the model, shift-drag to move the view, "
+      + "scroll to zoom.");
+
+    public readonly string ScaleAllLiveHint = ProteusLoc.Localize("Parts.ScaleAxes.All.LiveHint",
+        "Every ticked part scales together: drag a handle to stretch them along that axis, or press on a ticked part "
+      + "and drag right to grow or left to shrink. Hold Alt to move the camera. Each change is saved when you let go.");
 
     public readonly string MoveNoPolygons = ProteusLoc.Localize("Parts.Move.NoPolygons",
         "Click a polygon on the model to select it. Shift-click adds or removes one.");

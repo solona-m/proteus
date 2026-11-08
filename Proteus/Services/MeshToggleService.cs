@@ -439,16 +439,7 @@ internal sealed class MeshToggleService
     private static bool ClaimsLineUp(ModelParts sibling, IReadOnlyList<Plan> toggles)
     {
         foreach (var claim in toggles.SelectMany(t => t.Parts))
-        {
-            var theirs = sibling.Parts.FirstOrDefault(
-                p => p.Mesh == claim.Mesh && p.Submesh == claim.Submesh && p.Island == claim.Island);
-
-            if (theirs == null
-                || theirs.AttributeMask != claim.AttributeMask
-                || !string.Equals(theirs.Material, claim.Material, StringComparison.OrdinalIgnoreCase)
-                || !theirs.Ordinals.AsSpan().SequenceEqual(claim.Ordinals))
-                return false;
-        }
+            if (!sibling.Parts.Any(p => PartClaims.LineUp(claim, p))) return false;
         return true;
     }
 

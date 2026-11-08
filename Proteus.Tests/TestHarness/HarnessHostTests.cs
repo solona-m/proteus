@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Collections.Concurrent;
 using System.IO;
 using System.Linq;
@@ -277,6 +278,73 @@ public class HarnessHostTests : IDisposable
     }
 
     [Fact]
+    [Trait("Plan", "EDGE-idle-disk-io-41")]
+    public async Task OffThreadStop_RestoresSidecars_NoRecomposite_WarnsOnlyFailures()
+    {
+        // [EDGE-idle-disk-io-41] An unload off the framework thread puts the sidecar back (file work only), asks for no
+        // recomposite, and warns about nothing when nothing failed.
+        AddMod();
+        game.PutSidecar("Outfit", (16, "#111111"));
+        var original = File.ReadAllBytes(game.MetaPath("Outfit"));
+        var host = Host();
+        host.Command("on");
+        using (var c = Client(SessionFile!))
+        {
+            var r = await c.PostAsync("/actions/sidecar-edit",
+                new StringContent("{\"mod\":\"Outfit\",\"row\":16,\"diffuse\":\"#ABCDEF\"}", System.Text.Encoding.UTF8, "application/json"));
+            Assert.Equal(200, (int)r.StatusCode);
+        }
+        Assert.NotEqual(original, File.ReadAllBytes(game.MetaPath("Outfit")));
+        int recompositesBefore = game.Recomposites.Count;
+
+        Assert.False(dispatcher.OnFrameworkThread);
+        host.Dispose();
+
+        Assert.Equal(original, File.ReadAllBytes(game.MetaPath("Outfit")));
+        Assert.Equal(recompositesBefore, game.Recomposites.Count);
+        log.DidNotReceive().Warning(Arg.Is<string>(s => s.Contains("sidecars not put back")), Arg.Any<object[]>());
+    }
+
+    [Fact]
+    [Trait("Plan", "AC-issue-sweep-d-13")]
+    [Trait("Plan", "AC-issue-sweep-d-14")]
+    [Trait("Plan", "AC-issue-sweep-d-15")]
+    public async Task Off_releases_output_locks_and_clears_the_fault_and_override()
+    {
+        // [AC-issue-sweep-d-13] [AC-issue-sweep-d-14] [AC-issue-sweep-d-15] On and off the framework thread.
+        foreach (bool onFramework in new[] { true, false })
+        {
+            var output = temp.Sub("out-" + onFramework);
+            Directory.CreateDirectory(Path.Combine(output, "textures"));
+            File.WriteAllBytes(Path.Combine(output, "textures", "ss_1_norm.tex"), [1, 2]);
+            game.OutputDir = output;
+            var host = Host();
+            host.Command("on");
+            using (var c = Client(SessionFile!))
+            {
+                async Task Post(string route, string json)
+                {
+                    var r = await c.PostAsync(route, new StringContent(json, System.Text.Encoding.UTF8, "application/json"));
+                    Assert.Equal(200, (int)r.StatusCode);
+                }
+                await Post("/actions/output-lock", "{\"files\":[\"textures/ss_1_norm.tex\"],\"ms\":60000}");
+                await Post("/actions/shell-fault", "{\"shell\":\"any\",\"until\":\"put-back\"}");
+                await Post("/actions/auto-redraw", "{\"enabled\":false}");
+            }
+            if (onFramework) dispatcher.Run(() => host.Command("off"));
+            else host.Dispose();
+
+            Assert.Null(game.ShellFaultValue);
+            Assert.Null(game.AutoRedrawOverrideValue);
+            // The handle is gone: the file can be replaced again.
+            var tmp = Path.Combine(output, "textures", "x.tmp");
+            File.WriteAllBytes(tmp, [3]);
+            File.Move(tmp, Path.Combine(output, "textures", "ss_1_norm.tex"), overwrite: true);
+            if (onFramework) host.Dispose();
+        }
+    }
+
+    [Fact]
     public async Task Token_NeverLogged()
     {
         // [EDGE-qa-harness-11]
@@ -390,6 +458,62 @@ public class HarnessHostTests : IDisposable
         Assert.Equal(gearBefore, game.Gear);
         Assert.Empty(game.Temporary);
         Assert.True(sinkAtUndo);
+    }
+
+    // ── the binding session as the harness stops ────────────────────────────
+
+    private static readonly Guid BoundDesign = Guid.Parse("dddddddd-0000-0000-0000-000000000009");
+
+    private async Task ApplyDesign(HarnessSession s)
+    {
+        game.DesignNames[BoundDesign] = "Look";
+        game.ApplyEffects[BoundDesign] = () => game.GlamourerNow = FakeGame.GlamState(("Body", 100), ("Legs", 555));
+        await Post(s, "/actions/glamourer-apply", $$"""{"design":"{{BoundDesign}}"}""");
+    }
+
+    private List<string> Logged(string level)
+        => log.ReceivedCalls().Where(c => c.GetMethodInfo().Name == level)
+              .SelectMany(c => c.GetArguments()).SelectMany(a => a is object[] arr ? arr : [a]).OfType<string>().ToList();
+
+    [Fact]
+    [Trait("Plan", "EDGE-binding-reapply-34")]
+    public async Task Stop_PutsBackBinding()
+    {
+        using var host = Host();
+        host.Command("on");
+        await ApplyDesign(SessionFile!);
+        dispatcher.Run(() => host.Command("off"));
+        Assert.Single(game.Restores);
+        Assert.Equal(101UL, game.GlamourerNow["Equipment"]!["Legs"]!["ItemId"]!.ToObject<ulong>());
+        Assert.Contains(Logged("Information"), l => l.Contains("binding: glamourer restored"));
+    }
+
+    [Fact]
+    [Trait("Plan", "EDGE-binding-reapply-46")]
+    public async Task Stop_DuringSettle_LeavesBindingRecorded_LogsAndNeverThrows()
+    {
+        using var host = Host();
+        host.Command("on");
+        await ApplyDesign(SessionFile!);
+        host.Changes!.ApplySettling = true;   // as if an apply were still settling when the harness stops
+        var ex = Record.Exception(() => dispatcher.Run(() => host.Command("off")));
+        Assert.Null(ex);
+        Assert.Empty(game.Restores);
+        Assert.Contains(Logged("Warning"), w => w.Contains("still settling"));
+    }
+
+    [Fact]
+    [Trait("Plan", "EDGE-binding-reapply-34")]
+    public async Task Stop_OffFramework_LogsBindingLeftoversWithRecordPath()
+    {
+        var host = Host();
+        host.Command("on");
+        await ApplyDesign(SessionFile!);
+        await Task.Run(host.Dispose);
+        Assert.Empty(game.Restores);
+        var warned = Logged("Warning");
+        Assert.Contains(warned, w => w.Contains("not put back"));
+        Assert.Contains(warned, w => w.Contains("glamourer state") && w.Contains("binding.json"));
     }
 
     [Fact]

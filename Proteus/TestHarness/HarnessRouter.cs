@@ -25,7 +25,12 @@ internal sealed partial class HarnessRouter(HarnessJobs jobs, LogRing ring, Sess
         ("GET", "/health"), ("GET", "/state"), ("GET", "/log"), ("GET", "/screenshot"), ("GET", "/hair-port"),
         ("POST", "/actions/refit"), ("POST", "/actions/restore"), ("POST", "/actions/shader-upgrade"),
         ("POST", "/actions/variant-repoint"), ("POST", "/actions/hair-port"), ("POST", "/actions/equip"),
-        ("POST", "/actions/mod-settings"), ("POST", "/actions/put-back"), ("GET", "/jobs/{id}"),
+        ("POST", "/actions/mod-settings"), ("POST", "/actions/put-back"), ("GET", "/bindings"),
+        ("POST", "/actions/glamourer-apply"), ("POST", "/actions/binding-edit"), ("GET", "/jobs/{id}"),
+        ("GET", "/studio"), ("POST", "/actions/studio-open"), ("POST", "/actions/studio-set"), ("POST", "/actions/studio-drag"),
+        ("GET", "/matcaps"), ("POST", "/actions/matcap-image"), ("POST", "/actions/matcap"), ("POST", "/actions/matcap-preview"),
+        ("POST", "/actions/boot-rearm"), ("POST", "/actions/sidecar-edit"), ("GET", "/sidecar"), ("POST", "/actions/auto-refit"),
+        ("POST", "/actions/output-lock"), ("POST", "/actions/shell-fault"), ("POST", "/actions/auto-redraw"),
     ];
 
     private IHarnessGame Game => jobs.Game;
@@ -58,6 +63,24 @@ internal sealed partial class HarnessRouter(HarnessJobs jobs, LogRing ring, Sess
                 "/actions/equip" => await Equip(request),
                 "/actions/mod-settings" => await ModSettings(request),
                 "/actions/put-back" => await PutBack(request),
+                "/studio" => await StudioView(),
+                "/actions/studio-open" => await StudioOpen(request),
+                "/actions/studio-set" => await StudioSet(request),
+                "/actions/studio-drag" => await StudioDrag(request),
+                "/bindings" => await BindingsView(request),
+                "/actions/glamourer-apply" => await GlamourerApply(request),
+                "/actions/binding-edit" => await BindingEdit(request),
+                "/matcaps" => await MatcapsView(request),
+                "/actions/matcap-image" => await MatcapImageAction(request),
+                "/actions/matcap" => await MatcapAction(request),
+                "/actions/matcap-preview" => await MatcapPreviewAction(request),
+                "/actions/boot-rearm" => await BootRearm(request),
+                "/actions/sidecar-edit" => await SidecarEdit(request),
+                "/sidecar" => await SidecarView(request),
+                "/actions/auto-refit" => await AutoRefitAction(request),
+                "/actions/output-lock" => OutputLockAction(request),
+                "/actions/shell-fault" => await ShellFaultAction(request),
+                "/actions/auto-redraw" => await AutoRedrawAction(request),
                 _ => Job(path["/jobs/".Length..]),
             };
         }
@@ -91,7 +114,8 @@ internal sealed partial class HarnessRouter(HarnessJobs jobs, LogRing ring, Sess
 
     private async Task<HarnessResponse> State()
     {
-        var (s, harnessChanges) = await OnFramework(() => (Game.State(), changes.View()));
+        var (s, harnessChanges, qa) = await OnFramework(() => (Game.State(), changes.View(), QaState()));
+        var recovery = Game.RecoveryState();
         var models = ModelJoin.Join(s.Loaded, s.ResourceMap, s.ModsRoot);
         var c = s.Compositor;
         var a = s.AutoRefit;
@@ -110,7 +134,13 @@ internal sealed partial class HarnessRouter(HarnessJobs jobs, LogRing ring, Sess
                             overlayModsUsed = r.OverlayModsUsed, epoch = r.Epoch, at = r.Timestamp }
                     : null,
                 lastRefresh = s.LastRefresh is { } t ? new { outcome = t.Outcome, totalMs = t.TotalMs, spans = t.Spans, at = t.AtUtc } : null,
+                boot = qa.Boot,
+                // Issue sweep D: the write-retry latch, the drawn check's steps, the shell and move faults. No names.
+                recovery,
             },
+            collections = qa.Collections,
+            io = qa.Io,
+            leftoverSidecar = qa.LeftoverSidecar,
             redraws = new { count = Game.RedrawCount, lastAtUtc = Game.LastRedrawUtc },
             autoRefit = new
             {
@@ -118,6 +148,8 @@ internal sealed partial class HarnessRouter(HarnessJobs jobs, LogRing ring, Sess
                 busy = a.Busy, failed = a.View.Failed, message = names.Scrub(a.View.Message),
                 pending = new { running = a.Activity.Running, queued = a.Activity.Queued, walkDue = a.Activity.WalkDue,
                                 undoing = a.Activity.Undoing },
+                enabled = qa.AutoRefitEnabled,
+                bodyIndex = qa.BodyIndex,
             },
             shaderUpgrade = ShaderUpgradeBlock(Game.ShaderUpgrade()),
             variantRepoint = VariantRepointBlock(Game.VariantRepoint()),
@@ -571,7 +603,7 @@ internal sealed partial class HarnessRouter(HarnessJobs jobs, LogRing ring, Sess
 
     private async Task<HarnessResponse> Refit(HarnessRequest request)
     {
-        var (body, bad) = JsonBody(request, "mod", "bodies", "remake");
+        var (body, bad) = JsonBody(request, "mod", "bodies", "remake", "keepHiddenSkin");
         if (bad != null) return bad;
         string? mod = OptionalString(body, "mod", out bad);
         if (bad != null) return bad;
@@ -586,6 +618,14 @@ internal sealed partial class HarnessRouter(HarnessJobs jobs, LogRing ring, Sess
                 return HarnessResponse.Error(400, "invalid-field", "remake must be true or false");
             remake = remakeValue.GetBoolean();
         }
+        // Optional: this run alone, never saved; absent runs with the Studio's saved choice.
+        bool? keepHiddenSkin = null;
+        if (body.TryGetProperty("keepHiddenSkin", out var keepValue))
+        {
+            if (keepValue.ValueKind is not (JsonValueKind.True or JsonValueKind.False))
+                return HarnessResponse.Error(400, "invalid-field", "keepHiddenSkin must be true or false");
+            keepHiddenSkin = keepValue.GetBoolean();
+        }
 
         if (!jobs.TryReserve()) return HarnessResponse.Error(409, "busy", "a job is already running");
         bool started = false;
@@ -595,7 +635,7 @@ internal sealed partial class HarnessRouter(HarnessJobs jobs, LogRing ring, Sess
             if (error != null) return error;
             if (HairBusy("refit", Path.Combine(mods!.ModsRoot, dir!)) is { } hairBusy) return hairBusy;
             var job = new HarnessJob(HarnessJobs.NewJobId(), "refit", dir!);
-            var args = new RefitJob.Args(dir!, Path.Combine(mods!.ModsRoot, dir!), keys, remake, mods);
+            var args = new RefitJob.Args(dir!, Path.Combine(mods!.ModsRoot, dir!), keys, remake, mods, keepHiddenSkin);
             _ = jobs.Start(job, j => RefitJob.Run(jobs, j, args));
             started = true;
             return HarnessResponse.Json(202, new { job = job.Id, modDir = dir, state = "queued" });

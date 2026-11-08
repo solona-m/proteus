@@ -28,10 +28,10 @@ public class UpstreamGameDataTests
     {
         var settled = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase) { [Glv] = @"E:\mods\Hands\glv.mdl" };
         Assert.Equal((@"E:\mods\Hands\glv.mdl", true), CompositorService.PrimeResult(Glv, settled, false, true, false));
-        Assert.Equal((Glv, true), CompositorService.PrimeResult(Glv, None, settledAsGameData: true, republishedBody: true, namesModFile: false));
+        Assert.Equal((Glv, true), CompositorService.PrimeResult(Glv, None, settledAsGameData: true, gameDataMaySettle: true, namesModFile: false));
         Assert.Equal((null, false), CompositorService.PrimeResult(Glv, None, true, true, namesModFile: true));   // a false echo
-        const string tex = "chara/common/texture/skin_m.tex";
-        Assert.Equal((null, false), CompositorService.PrimeResult(tex, None, true, republishedBody: false, false));   // as today
+        const string mtrl = "chara/human/c0201/obj/body/b0001/material/v0001/mt_c0201b0001_a.mtrl";
+        Assert.Equal((null, false), CompositorService.PrimeResult(mtrl, None, true, CompositorService.GameDataMaySettle(mtrl, false), false));   // as today
         Assert.Equal((null, false), CompositorService.PrimeResult(Glv, None, settledAsGameData: false, true, false));   // timed out
     }
 
@@ -105,7 +105,7 @@ public class UpstreamGameDataTests
     public void Upstream_wiring()
     {
         var up = Source("Services/CompositorService.Upstream.cs");
-        Assert.Contains("PrimeResult(p, settled, gameData, republishedBodies.Contains(p), named)", up);
+        Assert.Contains("PrimeResult(p, settled, gameData, GameDataMaySettle(p, republishedBodies.Contains(p)),", up);
         Assert.Contains("NamesModFile(p, remembered, keptSource, modsRoot, File.Exists)", up);
         Assert.Contains("&& ModFolderOf(c, modsRoot) != null", up);
         Assert.Contains("else _upstreamIsGameData[p] = 0;", up);   // MaterialComposite's game-data flag unchanged
@@ -114,6 +114,120 @@ public class UpstreamGameDataTests
         int miss = up.IndexOf("missed++;", StringComparison.Ordinal);
         Assert.True(miss > up.IndexOf("if (isSettled && memo is { } disk)", StringComparison.Ordinal), "missed only on the not-settled branch");
         Assert.Contains("ResolveUpstream(p, bookkeeping: true)", Source("Services/CompositorService.Events.cs"));
+    }
+
+    // ── #70: vanilla skin textures we composite from settle as game data on the second game-data prime ──────────────
+
+    private const string Base = "chara/human/c0201/obj/body/b0001/texture/c0201b0001_base.tex";
+
+    [Fact]
+    [Trait("Plan", "AC-issue-sweep-c-11")]
+    public void Prime_settles_vanilla_textures_on_the_second_game_data_prime()
+    {
+        Assert.True(CompositorService.GameDataMaySettle(Base, false));
+        // First game-data prime since the change: missed, and marked.
+        Assert.Equal((null, false), CompositorService.PrimeResult(Base, None, true, true, false, sawGameDataBefore: false));
+        Assert.True(CompositorService.TexGameDataMarkAfter(Base, settledNow: false, true, false));
+        // Second: settled as game data (the memo is the game path), the mark consumed — and the answer is quiet.
+        Assert.Equal((Base, true), CompositorService.PrimeResult(Base, None, true, true, false, sawGameDataBefore: true));
+        Assert.False(CompositorService.TexGameDataMarkAfter(Base, settledNow: true, true, false));
+        Assert.Equal(((string?)null, false), CompositorService.MaskedAnswer(Base, Base, _ => true));
+    }
+
+    [Fact]
+    [Trait("Plan", "EDGE-issue-sweep-c-31")]
+    public void Prime_does_not_settle_a_texture_named_by_a_mod_file()
+    {
+        Assert.Equal((null, false), CompositorService.PrimeResult(Base, None, true, true, namesModFile: true, sawGameDataBefore: true));
+        Assert.False(CompositorService.TexGameDataMarkAfter(Base, false, true, namesModFile: true));
+    }
+
+    [Fact]
+    [Trait("Plan", "EDGE-issue-sweep-c-32")]
+    public void Materials_keep_missing_and_the_status_window_hides_game_data()
+    {
+        const string mtrl = "chara/human/c0201/obj/body/b0001/material/v0001/mt_c0201b0001_a.mtrl";
+        Assert.False(CompositorService.GameDataMaySettle(mtrl, false));
+        Assert.Equal((null, false), CompositorService.PrimeResult(mtrl, None, true, false, false, sawGameDataBefore: true));
+        Assert.False(CompositorService.TexGameDataMarkAfter(mtrl, false, true, false));
+        var up = Source("Services/CompositorService.Upstream.cs");
+        Assert.Contains("else _upstreamIsGameData[p] = 0;", up);
+        Assert.Contains("&& !string.Equals(kv.Key, kv.Value, StringComparison.OrdinalIgnoreCase))   // game data: no mod behind it", up);
+    }
+
+    [Fact]
+    [Trait("Plan", "EDGE-issue-sweep-c-33")]
+    public void A_timed_out_texture_prime_is_missed_and_drops_the_mark()
+    {
+        Assert.Equal((null, false), CompositorService.PrimeResult(Base, None, settledAsGameData: false, true, false, sawGameDataBefore: true));
+        Assert.False(CompositorService.TexGameDataMarkAfter(Base, false, settledAsGameData: false, false));
+    }
+
+    [Fact]
+    [Trait("Plan", "EDGE-issue-sweep-c-34")]
+    public void Texture_named_by_last_composite_is_not_settled_after_invalidation()
+    {
+        var root = Path.Combine(Path.GetTempPath(), "proteus-tex-" + Guid.NewGuid().ToString("N"));
+        var mods = Path.Combine(root, "mods");
+        Directory.CreateDirectory(Path.Combine(mods, "Skin"));
+        try
+        {
+            // The memo was cleared by the mod change; the last composite read the texture from a mod that is still there.
+            var lastRead = Path.Combine(mods, "Skin", "base.tex");
+            File.WriteAllBytes(lastRead, [1]);
+            bool named = CompositorService.NamesModFile(Base, lastRead, null, mods, File.Exists);
+            Assert.True(named);
+            Assert.Equal((null, false), CompositorService.PrimeResult(Base, None, true, true, named, sawGameDataBefore: true));
+        }
+        finally { Directory.Delete(root, true); }
+        var up = Source("Services/CompositorService.Upstream.cs");
+        Assert.Contains("lastUpstreams.TryGetValue(p, out var lr) ? lr : null;", up);
+        Assert.Contains("named = NamesModFile(p, lastRead, null, modsRoot, File.Exists);", up);
+    }
+
+    [Fact]
+    [Trait("Plan", "EDGE-issue-sweep-c-30")]
+    [Trait("Plan", "EDGE-issue-sweep-c-48")]
+    public void Invalidation_clears_the_texture_marks()
+    {
+        // Vanilla settled; a texture mod enabled (invalidate: every mark cleared); one game-data echo → not settled.
+        var ev = Source("Services/CompositorService.Events.cs");
+        int inv = ev.IndexOf("private void InvalidateUpstreamCache(", StringComparison.Ordinal);
+        Assert.True(inv > 0);
+        var body = ev[inv..ev.IndexOf("}", ev.IndexOf("_upstreamByGamePath.Clear();", inv, StringComparison.Ordinal), StringComparison.Ordinal)];
+        Assert.Contains("_texGameDataSeen.Clear();", body);
+        Assert.Contains("_upstreamByGamePath.Clear();", body);
+        bool sawBefore = false;   // cleared
+        Assert.Equal((null, false), CompositorService.PrimeResult(Base, None, true, true, false, sawBefore));
+    }
+
+    [Fact]
+    [Trait("Plan", "EDGE-issue-sweep-c-47")]
+    public void Disabled_texture_mod_settles_on_the_composite_after_next()
+    {
+        // The mod is switched off (invalidate). Prime 1: game data, marked. Prime 2: game data again, settled.
+        bool mark = false;
+        var (_, first) = CompositorService.PrimeResult(Base, None, true, true, false, mark);
+        mark = CompositorService.TexGameDataMarkAfter(Base, first, true, false);
+        Assert.False(first);
+        Assert.True(mark);
+        var (memo, second) = CompositorService.PrimeResult(Base, None, true, true, false, mark);
+        Assert.True(second);
+        Assert.Equal(Base, memo);
+    }
+
+    [Fact]
+    [Trait("Plan", "EDGE-issue-sweep-c-47")]
+    public void A_mod_file_prime_clears_the_mark()
+    {
+        var disk = Path.Combine(Path.GetTempPath(), "mods", "Skin", "base.tex");
+        var settled = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase) { [Base] = disk };
+        var (memo, ok) = CompositorService.PrimeResult(Base, settled, false, true, false, sawGameDataBefore: true);
+        Assert.True(ok);
+        Assert.Equal(disk, memo);
+        Assert.False(CompositorService.TexGameDataMarkAfter(Base, ok, false, false));
+        // Bodies still settle on their first game-data prime (#63 unchanged).
+        Assert.Equal((Glv, true), CompositorService.PrimeResult(Glv, None, true, true, false, sawGameDataBefore: false));
     }
 
     private static string Source(string relative, [CallerFilePath] string here = "")

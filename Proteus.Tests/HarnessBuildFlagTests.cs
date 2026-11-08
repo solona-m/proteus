@@ -29,4 +29,74 @@ public class HarnessBuildFlagTests
         else
             Assert.True(harness.Count > 0, "a local build must compile the QA test harness in (is CI=true set in this shell?)");
     }
+
+    [Fact]
+    [Trait("Plan", "AC-binding-reapply-13")]
+    [Trait("Plan", "EDGE-binding-reapply-36")]
+    public void DesignBindingHarnessMembers_MatchRuntimeCiEnvironment()
+    {
+        // The harness-only DesignBindingService partial (namespace Proteus.Services, so the type check above can't see it).
+        const System.Reflection.BindingFlags all = System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.Static
+                                                 | System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.NonPublic;
+        var members = typeof(Services.DesignBindingService).GetMembers(all)
+                                                           .Where(m => m.Name.StartsWith("Harness", StringComparison.Ordinal))
+                                                           .Select(m => m.Name).ToList();
+        var types = typeof(Plugin).Assembly.GetTypes().Where(t => t.Name.StartsWith("HarnessBinding", StringComparison.Ordinal)
+                                                               || t.Name == "HarnessLiveSnapshot").ToList();
+        if (UnderCi)
+        {
+            Assert.True(members.Count == 0, $"a CI build must compile the harness partial out, but DesignBindingService has {string.Join(", ", members)}");
+            Assert.True(types.Count == 0, $"a CI build must compile the harness records out, but has {string.Join(", ", types.Select(t => t.Name))}");
+        }
+        else
+        {
+            Assert.Contains("HarnessSuppressApplySignals", members);
+            Assert.NotEmpty(types);
+        }
+    }
+
+    /// <summary>A type's members named Harness… in any case (a lower-case backing field included).</summary>
+    private static System.Collections.Generic.List<string> HarnessMembers(Type type)
+    {
+        const System.Reflection.BindingFlags all = System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.Static
+                                                 | System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.NonPublic
+                                                 | System.Reflection.BindingFlags.DeclaredOnly;
+        // No exemptions: a bodiless partial declaration (HarnessEnabled, HarnessNoteRefit) is erased from metadata, so under
+        // CI either name appears only if a body leaked out of its #if.
+        return type.GetMembers(all).Where(m => m.Name.StartsWith("Harness", StringComparison.OrdinalIgnoreCase))
+                   .Select(m => m.Name).ToList();
+    }
+
+    private static void AssertPartial(Type type, string expected)
+    {
+        var members = HarnessMembers(type);
+        if (UnderCi)
+            Assert.True(members.Count == 0, $"a CI build must compile the harness partial out, but {type.Name} has {string.Join(", ", members)}");
+        else
+            Assert.Contains(expected, members);
+    }
+
+    [Fact]
+    [Trait("Plan", "EDGE-idle-disk-io-43")]
+    [Trait("Plan", "EDGE-idle-disk-io-58")]
+    public void CompositorHarnessMembers_MatchRuntimeCiEnvironment()
+        // [EDGE-idle-disk-io-43] [EDGE-idle-disk-io-58]
+        => AssertPartial(typeof(Services.CompositorService), "HarnessRearmBoot");
+
+    [Fact]
+    [Trait("Plan", "EDGE-idle-disk-io-43")]
+    [Trait("Plan", "EDGE-idle-disk-io-58")]
+    public void SidecarDiscoveryHarnessMembers_MatchRuntimeCiEnvironment()
+        // [EDGE-idle-disk-io-43] [EDGE-idle-disk-io-58]
+        => AssertPartial(typeof(Services.SidecarDiscoveryService), "HarnessHasStaged");
+
+    [Fact]
+    [Trait("Plan", "EDGE-idle-disk-io-43")]
+    [Trait("Plan", "EDGE-idle-disk-io-58")]
+    public void AutoRefitHarnessMembers_MatchRuntimeCiEnvironment()
+    {
+        // [EDGE-idle-disk-io-43] [EDGE-idle-disk-io-58] The lower-case backing fields count too.
+        AssertPartial(typeof(Services.AutoRefitWatcher), "HarnessOverride");
+        if (!UnderCi) Assert.Contains("harnessOverride", HarnessMembers(typeof(Services.AutoRefitWatcher)));
+    }
 }

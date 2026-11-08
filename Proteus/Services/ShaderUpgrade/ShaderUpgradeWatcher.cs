@@ -73,8 +73,9 @@ public sealed class ShaderUpgradeWatcher : IDisposable
 
     public ShaderUpgradeWatcher(CompositorService compositor, PenumbraBridge penumbra, GlamourerBridge glamourer,
                                 AutoRefitWatcher autoRefit, TextureLoader textureLoader, Configuration config,
-                                IPluginLog log)
+                                IPluginLog log, PlayerSettingsFilter settings)
     {
+        this.settings = settings;
         this.compositor = compositor;
         this.penumbra = penumbra;
         this.glamourer = glamourer;
@@ -87,11 +88,17 @@ public sealed class ShaderUpgradeWatcher : IDisposable
         glamourer.LocalPlayerStateChangedAny += OnStateChangedAny;
         penumbra.LocalPlayerRedrawn += OnRedrawn;
         penumbra.PlayerCollectionChanged += OnCollectionChanged;
-        penumbra.ModSettingChanged += OnModSettingChanged;
+        // Only changes that can reach what the player wears: not sync plugins' collections, not our own mod.
+        settings.Passed += OnModSettingChanged;
         penumbra.PenumbraReady += OnPenumbraReady;
         penumbra.ModMoved += OnModMoved;
         Plugin.Framework.Update += OnFrameworkUpdate;
     }
+
+    private readonly PlayerSettingsFilter settings;
+
+    /// <summary>Counts runs for the idle I/O summary; null counts nothing.</summary>
+    public IoCounters? Io { get; set; }
 
     public void Dispose()
     {
@@ -102,7 +109,7 @@ public sealed class ShaderUpgradeWatcher : IDisposable
         glamourer.LocalPlayerStateChangedAny -= OnStateChangedAny;
         penumbra.LocalPlayerRedrawn -= OnRedrawn;
         penumbra.PlayerCollectionChanged -= OnCollectionChanged;
-        penumbra.ModSettingChanged -= OnModSettingChanged;
+        settings.Passed -= OnModSettingChanged;
         penumbra.PenumbraReady -= OnPenumbraReady;
         penumbra.ModMoved -= OnModMoved;
     }
@@ -189,9 +196,8 @@ public sealed class ShaderUpgradeWatcher : IDisposable
         Request(Signal.ModMoved);
     }
 
-    private void OnModSettingChanged(ModSettingChange change, Guid collection, string modDirectory, bool inherited)
+    private void OnModSettingChanged(ModSettingChange change, string modDirectory)
     {
-        if (string.Equals(modDirectory, SidecarDiscoveryService.ManagedModDir, StringComparison.OrdinalIgnoreCase)) return;
         if (change == ModSettingChange.Edited) memo.Clear();
         Request(Signal.ModSetting);
     }
@@ -306,6 +312,7 @@ public sealed class ShaderUpgradeWatcher : IDisposable
     private void Run(RunKind kind, bool decline)
     {
         if (stopped) return;
+        Io?.Count(IoCounters.GearShadersRuns);
         var worn = OnFramework(ReadWorn, "read");
         // A button pressed mid-redraw (or before Penumbra is up) waits for the character rather than doing nothing.
         for (int tries = 0; worn == null && kind != RunKind.Upgrade && tries < BlanksBeforeNone && !stopped; tries++)
@@ -463,7 +470,7 @@ public sealed class ShaderUpgradeWatcher : IDisposable
         foreach (var root in modRoots)
         {
             var dir = Path.GetFileName(root.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar));
-            compositor.ExpectOwnModEdit(dir);
+            compositor.ExpectOwnModEdit(dir, "the gear shader upgrade");
             var ec = penumbra.ReloadModDirectory(dir);
             reloaded &= ec == PenumbraApiEc.Success;
             if (counts != null && counts.TryGetValue(root, out var n) && ShouldAnnounce(announced, dir))

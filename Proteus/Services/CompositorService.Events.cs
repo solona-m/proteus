@@ -27,11 +27,11 @@ public partial class CompositorService
         if (playerColl == null || collId != playerColl.Value)
             return;
 
-        // The live brush reloading the mod it just saved a garment into — see ExpectOwnModEdit.
-        if (change == ModSettingChange.Edited && _ownModEditUntil.TryGetValue(modDir, out long ownUntil)
-            && Environment.TickCount64 < ownUntil)
+        // Proteus reloading a mod it just wrote into (live brush, Studio, auto refit, harness…) — see ExpectOwnModEdit.
+        if (change == ModSettingChange.Edited && _ownModEditUntil.TryGetValue(modDir, out var ownEdit)
+            && Environment.TickCount64 < ownEdit.Until)
         {
-            log.Debug("[Proteus] ModSettingChanged:Edited:{0} is the live brush's own save — no recomposite", modDir);
+            log.Debug(OwnEditLine(modDir, ownEdit.By));
             return;
         }
 
@@ -155,6 +155,7 @@ public partial class CompositorService
         _upstreamUnsettled.Clear();
         _upstreamSettled.Clear();
         _upstreamIsGameData.Clear();
+        _texGameDataSeen.Clear();   // #70: a texture settles as game data only on two fresh primes after a change
         if (_upstreamByGamePath.IsEmpty) return;
         _upstreamByGamePath.Clear();
         log.Debug("[Proteus] upstream cache cleared ({0})", reason);
@@ -352,11 +353,13 @@ public partial class CompositorService
     /// <summary>
     /// The unchanged-inputs gate: skip when nothing forced the composite and its inputs hash to what is published, and
     /// the shapes the published shell's body draws by its options have not moved. <paramref name="shapesMoved"/> is
-    /// asked last, only when everything else says skip: it reads Penumbra.
+    /// asked last, only when everything else says skip: it reads Penumbra. Never skips while
+    /// <paramref name="outputIncomplete"/>: the last publish dropped a shell layer whose write failed (#91).
     /// </summary>
-    internal static bool SkipUnchanged(bool force, bool forcePending, string? lastFingerprint, string fingerprint,
-                                       Func<bool> shapesMoved)
-        => !force && !forcePending && lastFingerprint != null && fingerprint == lastFingerprint && !shapesMoved();
+    internal static bool SkipUnchanged(bool force, bool forcePending, bool outputIncomplete, string? lastFingerprint,
+                                       string fingerprint, Func<bool> shapesMoved)
+        => !force && !forcePending && !outputIncomplete && lastFingerprint != null && fingerprint == lastFingerprint
+           && !shapesMoved();
 
     /// <summary>
     /// Force a rebuild when the shapes the published shell's body draws by its options have changed since — of
@@ -564,6 +567,8 @@ public partial class CompositorService
 
     private void OnPenumbraReady()
     {
+        // Penumbra is back: the boot probe looks again soon rather than at the end of a long back-off.
+        _boot.ResetBackoff(Environment.TickCount64);
         modsRoot      = penumbra.GetModDirectory() ?? string.Empty;
         managedModDir = Path.Combine(modsRoot, SidecarDiscoveryService.ManagedModDir);
         // Now that the mod directory is resolvable, make sure the bundled starter effects are present.
@@ -580,6 +585,7 @@ public partial class CompositorService
     private void OnPlayerCollectionChanged()
     {
         // The player's collection changed; everything is collection-scoped, so force one full walk.
+        _boot.ResetBackoff(Environment.TickCount64);
         _activeMtrlSnapshotDirty = true;
         InvalidateUpstreamCache("collection-changed");
         // Enabled state is collection-scoped, so every remembered disabled verdict is now for the wrong collection.
@@ -594,7 +600,11 @@ public partial class CompositorService
     {
         log.Information("{0}", redrawLedger.Observed());
         NoteRedrawObserved();
-        var snapshot = penumbra.GetActivePlayerMaterialPaths();
+        // One walk of the resource tree for both sets: this runs on the framework thread after every redraw. Counted beside
+        // the redraws, so the idle I/O numbers show one read per redraw.
+        Io?.Count(IoCounters.Redraws);
+        Io?.Count(IoCounters.RedrawTreeReads);
+        var (modelPaths, snapshot) = penumbra.GetActivePlayerResourcePaths();
         bool equipChanged = false;
         bool modelWalkOk = false;   // a draw object we actually read — see the carrier reconcile below
         if (snapshot is { Count: > 0 })
@@ -606,8 +616,7 @@ public partial class CompositorService
             config.CachedActiveMaterialPaths = snapshot.ToList();
 
             // Did the gear the second skin cuts its shells from change? Equipping fires no mod or design event.
-            // Guarded on its own null/empty: a failed second walk must not wipe the caches and report a phantom unequip.
-            var modelPaths = penumbra.GetActivePlayerModelPaths();
+            // Guarded on its own null/empty: a walk without models must not wipe the caches and report a phantom unequip.
             // Empty is the same failure as null. A walk with no body part (face/hair loaded, body not yet) must not
             // update the maps, but the carrier reconcile below still runs: it is what puts back carriers this redraw removed.
             if (modelPaths is { Count: > 0 }) modelWalkOk = true;
@@ -620,6 +629,7 @@ public partial class CompositorService
                 var humanParts = HumanPartModelsFromModels(modelPaths);
                 _equippedPartModels = equipped;
                 _equippedAccessoryModels = accessories;
+                NoteAccessoryWalk();
                 _equippedMetModels = metModels;
                 _bareBodyModels = bare;
                 _humanPartModels = humanParts;

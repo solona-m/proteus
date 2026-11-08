@@ -440,7 +440,7 @@ public partial class CompositorService
                     var outPath = Path.Combine(run.texturesDir, name);
                     var relPath = "textures/" + name;
                     if (run.compositor.AlreadyWritten(outPath)
-                     || run.compositor.textureLoader.WriteTex(baseD, wD, hD, outPath, compress ? TexEncoding.Bc7 : TexEncoding.Uncompressed))
+                     || WriteSkin(baseD, wD, hD, outPath, compress))
                     {
                         var key = PublishKey(texPaths.Diffuse, "d");
                         run.redirects[key] = relPath; Interlocked.Increment(ref run.texturesPatched);
@@ -463,7 +463,7 @@ public partial class CompositorService
                     var outPath = Path.Combine(run.texturesDir, name);
                     var relPath = "textures/" + name;
                     if (run.compositor.AlreadyWritten(outPath)
-                     || run.compositor.textureLoader.WriteTex(baseN, wN, hN, outPath, compress ? TexEncoding.Bc7 : TexEncoding.Uncompressed))
+                     || WriteSkin(baseN, wN, hN, outPath, compress))
                     {
                         var key = PublishKey(texPaths.Normal, "n");
                         run.redirects[key] = relPath; Interlocked.Increment(ref run.texturesPatched);
@@ -478,7 +478,7 @@ public partial class CompositorService
                     var outPath = Path.Combine(run.texturesDir, name);
                     var relPath = "textures/" + name;
                     if (run.compositor.AlreadyWritten(outPath)
-                     || run.compositor.textureLoader.WriteTex(baseM, wM, hM, outPath, compress ? TexEncoding.Bc7 : TexEncoding.Uncompressed))
+                     || WriteSkin(baseM, wM, hM, outPath, compress))
                     {
                         var key = PublishKey(texPaths.Mask, "m");
                         run.redirects[key] = relPath; Interlocked.Increment(ref run.texturesPatched);
@@ -487,6 +487,18 @@ public partial class CompositorService
                         published.Add($"{key} -> {relPath}");
                     }
                 }
+            }
+
+            /// <summary>
+            /// Writes one skin texture. A file that could not be put in place (#91) is counted for the retry latch, which then
+            /// rebuilds the skin rather than reusing a publish that never landed.
+            /// </summary>
+            private bool WriteSkin(byte[] px, int w, int h, string outPath, bool compress)
+            {
+                var outcome = run.compositor.textureLoader.TryWriteTex(px, w, h, outPath,
+                    compress ? TexEncoding.Bc7 : TexEncoding.Uncompressed);
+                if (outcome == WriteOutcome.OutputWriteFailed) Interlocked.Increment(ref run.skinWriteFailures);
+                return outcome == WriteOutcome.Written;
             }
 
             private void PublishRetargets()

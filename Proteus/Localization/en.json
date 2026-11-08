@@ -459,13 +459,21 @@
     "message": "[Proteus] \"{0}\" overrides {1}, which Proteus composites your overlays into — so they will not show up. Fix: in Penumbra, raise the \"Proteus\" mod's priority above \"{0}\".",
     "description": "Appears in an in-game chat notice from Proteus. Takes arguments - keep every {0}, {1} ... exactly once; you may reorder them."
   },
-  "Chat.ShellNotDrawing": {
-    "message": "[Proteus] Your second skin was built but the game isn't drawing it. The accessory it rides on is equipped, yet the character isn't loading Proteus' version. Try unequipping and re-equipping that accessory, or pick a different one.",
-    "description": "Appears in an in-game chat notice from Proteus."
+  "Chat.ShellPartNotDrawn.Fmt": {
+    "message": "[Proteus] Part of your second skin still isn't showing. That part rides on {0}. Unequip and re-equip it, or wear that layer on a different accessory.",
+    "description": "Appears in an in-game chat notice from Proteus. {0} is the accessory the missing part rides on (item name and slot). Takes arguments - keep every {0}, {1} ... exactly once; you may reorder them."
   },
-  "Chat.ShellMaterialFailed": {
-    "message": "[Proteus] Part of your second skin isn't being drawn. The rest of it is on your character, so either a texture that piece needs is missing, or the game is still holding the previous version. Try \"Recomposite now\" first, then unequipping and re-equipping the accessory it rides on.",
-    "description": "Appears in an in-game chat notice from Proteus. \"Recomposite now\" is the button Band.Recomposite.Tip - use the same words."
+  "Chat.ShellNotDrawn.Fmt": {
+    "message": "[Proteus] Your second skin still isn't showing, although {0} is equipped. Unequip and re-equip it, or wear the layer on a different accessory.",
+    "description": "Appears in an in-game chat notice from Proteus. {0} is the accessory the second skin rides on (item name and slot). Takes arguments - keep every {0}, {1} ... exactly once; you may reorder them."
+  },
+  "Chat.ShellCarrierNotDrawn.Fmt": {
+    "message": "[Proteus] Part of your second skin isn't showing. It rides on {0}, the invisible accessory Proteus puts on to carry it. Click \"Recomposite now\" in Proteus's window; if it still doesn't show, take that accessory off and Proteus will put it back on.",
+    "description": "Appears in an in-game chat notice from Proteus. {0} is the invisible ring, bracelet or glasses Proteus equips to carry the second skin. \"Recomposite now\" is the button Band.Recomposite.Tip - use the same words. Takes arguments - keep every {0}, {1} ... exactly once; you may reorder them."
+  },
+  "Chat.ShellNotDrawnRedrawOff.Fmt": {
+    "message": "[Proteus] Part of your second skin isn't showing. It rides on {0}. Auto redraw is off, so Proteus didn't redraw your character: use Penumbra's Redraw button or change zones, and if it still doesn't show, unequip and re-equip that accessory.",
+    "description": "Appears in an in-game chat notice from Proteus. {0} is the accessory the second skin rides on. \"Auto redraw\" is the checkbox Settings.General.AutoRedraw.Label; \"Redraw\" is a button in Penumbra - use the name Penumbra shows in your language. Takes arguments - keep every {0}, {1} ... exactly once; you may reorder them."
   },
   "Chat.ShellNeedsRedraw": {
     "message": "[Proteus] Your second skin changed, but auto redraw is off, so your character is still wearing the previous version. Zone or use Penumbra's Redraw button to see it.",
@@ -924,7 +932,7 @@
     "description": "Button caption. Appears in the colour-table editor window."
   },
   "Colors.Reset.Tip": {
-    "message": "Hold Ctrl and click to restore this option's colours, glow and mode to the\nsettings Proteus first recorded for this mod. Cannot be undone.\n\nIf a design is applied, this also drops that design's saved override for this\noption — otherwise the design would just re-impose it. Other designs keep theirs.\n\nNote: those originals were captured the first time Proteus saved this mod —\nif you had already edited it before then, that edited state is the \"default\".",
+    "message": "Hold Ctrl and click to restore this option's colours, glow and mode to the\nsettings Proteus first recorded for this mod. Cannot be undone.\n\nIf a design is applied, it keeps its own saved values for this option and shows them\nagain the next time the design is applied, until you press Update on the Bindings tab.\n\nNote: those originals were captured the first time Proteus saved this mod —\nif you had already edited it before then, that edited state is the \"default\".",
     "description": "Mentions the Ctrl key. Three paragraphs - keep the blank lines. Contains deliberate line breaks - keep the same number, moving them where your language needs."
   },
   "Colors.Roughness.Label": {
@@ -4095,6 +4103,62 @@
     "message": "Move, turn or scale single polygons instead of whole parts. Click a polygon to select it; Shift-click adds\nor removes one. Choosing a part in the list selects all of its polygons.",
     "description": ""
   },
+  "Parts.Move.SelectAll": {
+    "message": "All",
+    "description": "Third radio of the Move/Rotate/Scale mode switch, after 'Whole parts' and 'Polygons' (Parts.Move.SelectParts, Parts.Move.SelectPolygons): every ticked part moves together. Keep it short."
+  },
+  "Parts.Move.SelectAll.Tip": {
+    "message": "Move, turn or scale every ticked part of this model together, as one piece.\nUntick a part in the part list to leave it where it is. Skin moves only with “Move skin too” on.",
+    "description": "Tooltip on the 'All' radio under Move, Rotate and Scale. 'Move skin too' is the checkbox Parts.SkinMoves - reuse your translation."
+  },
+  "Parts.Move.All.Fmt": {
+    "message": "{0} of {1} parts of this model move together.",
+    "description": "Line under the mode switch with 'All' chosen. {0} is how many parts move, {1} how many parts the model has."
+  },
+  "Parts.Move.All.Skin.Fmt": {
+    "message": "{0} of {1} parts of this model move together, including skin.",
+    "description": "As Parts.Move.All.Fmt, when the body's skin is among the parts that move."
+  },
+  "Parts.Move.AllNone": {
+    "message": "Nothing to move: tick parts in the part list.",
+    "description": "Warning under the mode switch with 'All' chosen when no ticked part can move."
+  },
+  "Parts.Move.AllNothingFree": {
+    "message": "Nothing ticked can move: it is all skin or locked.",
+    "description": "Error when an 'All' drag starts but every ticked point is held (skin or locked)."
+  },
+  "Parts.Move.AllListTip": {
+    "message": "Every ticked part moves together. Untick a part's box to leave it where it is: it is hidden on the model and on your character.",
+    "description": "Above the part list under Move, Rotate or Scale with 'All' chosen."
+  },
+  "Parts.Move.AllOff.Tip": {
+    "message": "Not used with All: every ticked part moves as one piece.",
+    "description": "Tooltip on 'Move adjacent parts', 'Falloff' and 'Mirror left/right', greyed out while 'All' is chosen."
+  },
+  "Parts.Move.All.Help": {
+    "message": "Every ticked part moves together: drag an arrow or a square. Drag anywhere else to turn the model, shift-drag to move the view, scroll to zoom.",
+    "description": "Help above the Move tool's controls in the model view, with 'All' chosen."
+  },
+  "Parts.Move.All.LiveHint": {
+    "message": "Every ticked part moves together: drag an arrow or a square on your character. Hold Alt to move the camera. Each move is saved when you let go.",
+    "description": "Help above the Move tool's controls on the character in the game world, with 'All' chosen."
+  },
+  "Parts.Rotate.All.Help": {
+    "message": "Every ticked part turns together: drag one of the rings at their centre. Drag anywhere else to turn the model, shift-drag to move the view, scroll to zoom.",
+    "description": "Help above the Rotate tool's controls in the model view, with 'All' chosen."
+  },
+  "Parts.Rotate.All.LiveHint": {
+    "message": "Every ticked part turns together: drag one of the rings at their centre on your character. Hold Alt to move the camera. Each turn is saved when you let go.",
+    "description": "Help above the Rotate tool's controls on the character in the game world, with 'All' chosen."
+  },
+  "Parts.ScaleAxes.All.Help": {
+    "message": "Every ticked part scales together: drag a handle to stretch them along that axis, or press on a ticked part and drag right to grow or left to shrink. Drag anywhere else to turn the model, shift-drag to move the view, scroll to zoom.",
+    "description": "Help above the Scale tool's controls in the model view, with 'All' chosen."
+  },
+  "Parts.ScaleAxes.All.LiveHint": {
+    "message": "Every ticked part scales together: drag a handle to stretch them along that axis, or press on a ticked part and drag right to grow or left to shrink. Hold Alt to move the camera. Each change is saved when you let go.",
+    "description": "Help above the Scale tool's controls on the character in the game world, with 'All' chosen."
+  },
   "Parts.Move.Shrink": {
     "message": "Shrink",
     "description": ""
@@ -4370,6 +4434,22 @@
   "WhatsNew.Close": {
     "message": "Close",
     "description": "Button. Dismisses the release-notes window."
+  },
+  "WhatsNew.Matcaps.Head": {
+    "message": "Matcaps: shiny, glassy and gem-like parts",
+    "description": "Release-notes section heading: the Studio's Matcaps tool. A matcap is a picture of a lit sphere a shader samples by the surface's facing direction."
+  },
+  "WhatsNew.Matcaps.Body": {
+    "message": "The Studio has a new tool, \"Matcaps\". Tick parts of gear, accessories, hair, tails, Viera ears or Au Ra horns, pick a matcap (a picture of a lit sphere) and press \"Apply matcap\": the parts get a material of their own, written into the mod, so the look shows with Proteus turned off. \"Proteus matcaps\", a set that comes with Proteus and includes the 23Minks matcap pack by sivka, is downloaded the first time you open Matcaps. Your own pictures go in the folder under \"Matcap images\" in Settings, and installed matcap library mods are listed too. \"Undo matcaps on this model\" takes it all back out.",
+    "description": "Release-notes section. 'Studio' matches Tab.Parts and 'Settings' Tab.Settings; \"Matcaps\" matches Parts.Tool.Matcap, \"Apply matcap\" Parts.Matcap.Apply, \"Proteus matcaps\" Parts.Matcap.SourceProteus, \"Matcap images\" Settings.MatcapLibrary, \"Undo matcaps on this model\" Parts.Matcap.Undo. Keep 23Minks and sivka verbatim."
+  },
+  "WhatsNew.MoveAll.Head": {
+    "message": "Move, turn or scale every ticked part as one piece",
+    "description": "Release-notes section heading: the All mode of Move, Rotate and Scale. Keep it true to 'ticked': unticked parts stay where they are."
+  },
+  "WhatsNew.MoveAll.Body": {
+    "message": "\"Move\", \"Rotate\" and \"Scale\" in the Studio have a new mode beside whole parts and polygons, \"All\": every ticked part of the open model moves, turns or scales together, as one piece. Untick a part in the part list to leave it where it is. Skin moves only with \"Move skin too\" on.",
+    "description": "Release-notes section. 'Studio' matches Tab.Parts; \"Move\", \"Rotate\" and \"Scale\" match Parts.Tool.Move, Parts.Tool.Rotate and Parts.Tool.Scale; \"All\" matches Parts.Move.SelectAll; \"Move skin too\" matches Parts.SkinMoves. 'Whole parts' and 'polygons' are the other two modes (Parts.Move.SelectParts, Parts.Move.SelectPolygons)."
   },
   "Parts.Retarget.Guide.Title": {
     "message": "Body size tips",
@@ -5283,6 +5363,14 @@
     "message": "On: each body's piercings come in with its skin where the piece shows that skin. Nails always come along.\nSizes already made change only when made again.",
     "description": "Tooltip on the size set's piercings checkbox."
   },
+  "SizeSet.KeepHiddenSkin": {
+    "message": "Keep hidden skin",
+    "description": "Checkbox in the size set ('Every size for other bodies'). Use this language's term for 'hidden skin' from Parts.Retarget.CutHidden."
+  },
+  "SizeSet.KeepHiddenSkin.Tip": {
+    "message": "Off: each body's skin is left out where the author deleted theirs, usually under and around the cloth. On: it goes in whole, bringing back skin missing under or around the cloth, but it may show through tight cloth. Shoes and gloves are always cut.\nSizes already made change only when made again.",
+    "description": "Tooltip on the size set's Keep hidden skin checkbox. Use this language's term for 'hidden skin' from Parts.Retarget.CutHidden."
+  },
   "SizeSet.EndsUnreadable.Fmt": {
     "message": "{0}: its rig can't be read, so its foot or hand can't be kept and no sizes were made of it.",
     "description": "Note after a run: a shoe or glove whose rig can't be read got no sizes. {0} = the piece's name."
@@ -5515,6 +5603,14 @@
     "message": "it moves with bones c{0:D4} does not have for this hairstyle ({1})",
     "description": "Reason (lowercase sentence fragment) why a hairstyle could not be ported to another race; shown after a race or file name and a colon. {0} is a race code number, {1} lists the bone names."
   },
+  "HairPort.Refused.BonesSourceSkeleton.Fmt": {
+    "message": "it moves with bones c{0:D4}'s own skeleton for hairstyle {2} does not have ({1}), and only that skeleton can come along to the other sex",
+    "description": "Why a hair port across the sexes is refused: the source race's own hairstyle skeleton lacks bones the model moves with, and only that skeleton can be brought to the other sex. {0} is the source race number (shown as c0201), {1} a list of bone names, {2} the hairstyle number."
+  },
+  "HairPort.Refused.BonesCarry.Fmt": {
+    "message": "it moves with bones only c{0:D4}'s skeleton for hairstyle {2} has ({1}), and that skeleton could not be brought to c{3:D4}",
+    "description": "Why a hair port across the sexes is refused: only the source race's hairstyle skeleton has the bones the model moves with, and it could not be brought to the target race (no free slot or place). {0} is the source race number, {1} a list of bone names, {2} the hairstyle number, {3} the target race number."
+  },
   "HairPort.Refused.Unknown.Fmt": {
     "message": "the racial deformer does not know how to move {0}",
     "description": "Reason (lowercase sentence fragment) why a hairstyle could not be ported to another race; shown after a race or file name and a colon. {0} is a bone or part name."
@@ -5662,6 +5758,14 @@
   "HairPort.Studio.OtherSexAuthored": {
     "message": "the mod has its own version for this sex",
     "description": "Per-race status in the Studio port list for a race of the other sex: the mod ships its own model of this hairstyle for that sex."
+  },
+  "HairPort.Studio.PortedFrom.Fmt": {
+    "message": "ported from hairstyle {0} — porting this one replaces it",
+    "description": "Per-race status in the Studio port list: another hairstyle of the same mod already has a port of this race in the same option, and porting this hairstyle replaces it. {0} is the other hairstyle's short name, e.g. c0201h0108."
+  },
+  "HairPort.Replaced.Fmt": {
+    "message": "c{0:D4}: replaced the port made from hairstyle {1}.",
+    "description": "Result line after porting in the Studio: the port replaced one another hairstyle of the same mod had made for that race. {0} is the race number (shown as c0701), {1} the other hairstyle's short name, e.g. c0201h0108."
   },
   "HairPort.Studio.OtherSexSkeleton": {
     "message": "the mod gives this race its own skeleton",
@@ -6118,5 +6222,441 @@
   "Chat.VariantRepoint.Fmt": {
     "message": "[Proteus] Copied the material paths of \"{1}\" to {0} more variant folder(s), so those variants show the mod's own material wherever it wins. Undo under /proteus > Settings > Gear variants.",
     "description": "Chat notice, once per mod per session. {0} = number of variant folders the mod's material paths were copied into, {1} = the mod's name. Keep /proteus and the \"[Proteus]\" prefix; \"Settings\" and \"Gear variants\" name a tab and a section (match Tab.Settings and Settings.Section.GearVariants)."
+  },
+  "Matcap.Refused.AlreadyMatcap": {
+    "message": "Tick either parts without a matcap, to add one, or parts that have one, to change it — not both.",
+    "description": "Studio Matcaps tool. A matcap is a sphere picture a shader samples by the surface's facing direction."
+  },
+  "Matcap.Refused.Changed.Fmt": {
+    "message": "{0} changed while the matcap was being prepared, so nothing was written. Try again.",
+    "description": "Studio Matcaps tool. A matcap is a sphere picture a shader samples by the surface's facing direction."
+  },
+  "Matcap.Refused.Edited.Fmt": {
+    "message": "{0} was changed after its matcap was applied, so it was not undone. Its original is kept at {1}.",
+    "description": "Studio Matcaps tool. A matcap is a sphere picture a shader samples by the surface's facing direction."
+  },
+  "Matcap.Refused.Failed.Fmt": {
+    "message": "The matcap could not be written ({0}). Nothing was changed.",
+    "description": "Studio Matcaps tool. A matcap is a sphere picture a shader samples by the surface's facing direction."
+  },
+  "Matcap.Refused.HandEdited.Fmt": {
+    "message": "{0} was edited by hand since Proteus wrote it, so it was left alone.",
+    "description": "Studio Matcaps tool. A matcap is a sphere picture a shader samples by the surface's facing direction."
+  },
+  "Matcap.Refused.ImageUnreadable.Fmt": {
+    "message": "{0} could not be read as an image.",
+    "description": "Studio Matcaps tool. A matcap is a sphere picture a shader samples by the surface's facing direction."
+  },
+  "Matcap.Refused.ImportedPiece": {
+    "message": "This piece belongs to an imported pack, which Proteus rebuilds itself. Put the matcap on the pack's own mod instead.",
+    "description": "Studio Matcaps tool. A matcap is a sphere picture a shader samples by the surface's facing direction."
+  },
+  "Matcap.Refused.Legacy": {
+    "message": "This mod is still in Penumbra's old folder layout. Open it in Penumbra once so it is updated, then try again.",
+    "description": "Studio Matcaps tool. A matcap is a sphere picture a shader samples by the surface's facing direction."
+  },
+  "Matcap.Refused.MaterialCap.Fmt": {
+    "message": "This model can't take another material: {0}.",
+    "description": "Studio Matcaps tool. A matcap is a sphere picture a shader samples by the surface's facing direction."
+  },
+  "Matcap.Refused.ModelLayout.Fmt": {
+    "message": "This model can't be split: {0}.",
+    "description": "Studio Matcaps tool. A matcap is a sphere picture a shader samples by the surface's facing direction."
+  },
+  "Matcap.Refused.NoEntry": {
+    "message": "That matcap is not in this mod's record.",
+    "description": "Studio Matcaps tool. A matcap is a sphere picture a shader samples by the surface's facing direction."
+  },
+  "Matcap.Refused.NoName": {
+    "message": "Proteus could not tell where the game reads this model's materials.",
+    "description": "Studio Matcaps tool. A matcap is a sphere picture a shader samples by the surface's facing direction."
+  },
+  "Matcap.Refused.NoTemplate": {
+    "message": "The game's reflection material could not be read, so no matcap material could be made.",
+    "description": "Studio Matcaps tool. A matcap is a sphere picture a shader samples by the surface's facing direction."
+  },
+  "Matcap.Refused.NotSquare.Fmt": {
+    "message": "{0} is not square. A matcap is a picture of a sphere filling a square.",
+    "description": "Studio Matcaps tool. A matcap is a sphere picture a shader samples by the surface's facing direction."
+  },
+  "Matcap.Refused.NotTarget": {
+    "message": "Matcaps go on gear, accessories, hair, tails, Viera ears and Au Ra horns (on the face); this model is none of those.",
+    "description": "Studio Matcaps tool. A matcap is a sphere picture a shader samples by the surface's facing direction."
+  },
+  "Matcap.Refused.RecordUnreadable": {
+    "message": "Proteus's record of this mod's matcaps (Proteus/matcaps.json) could not be read, so nothing was changed.",
+    "description": "Studio Matcaps tool. A matcap is a sphere picture a shader samples by the surface's facing direction."
+  },
+  "Matcap.Refused.Regenerated.Fmt": {
+    "message": "This model is made by Proteus from another one ({0}), and remaking it would lose the matcap. Put the matcap on the model it was made from, then remake it.",
+    "description": "Studio Matcaps tool. A matcap is a sphere picture a shader samples by the surface's facing direction."
+  },
+  "Matcap.Refused.Skin": {
+    "message": "Skin can't take a matcap.",
+    "description": "Studio Matcaps tool. A matcap is a sphere picture a shader samples by the surface's facing direction."
+  },
+  "Matcap.Refused.UnknownOption.Fmt": {
+    "message": "{0} has no option called {1}.",
+    "description": "Studio Matcaps tool. A matcap is a sphere picture a shader samples by the surface's facing direction."
+  },
+  "MeshVolume.Feature.Matcaps": {
+    "message": "matcaps",
+    "description": "Studio Matcaps tool. A matcap is a sphere picture a shader samples by the surface's facing direction."
+  },
+  "Parts.Matcap.AlphaWarn": {
+    "message": "Some ticked parts use see-through edges (hair strands, lace). Check the edges in game after applying.",
+    "description": "Studio Matcaps tool. A matcap is a sphere picture a shader samples by the surface's facing direction."
+  },
+  "Parts.Matcap.AlsoMore.Fmt": {
+    "message": "+{0} more",
+    "description": "Studio Matcaps tool. A matcap is a sphere picture a shader samples by the surface's facing direction."
+  },
+  "Parts.Matcap.AlsoNothing": {
+    "message": "nothing else",
+    "description": "Studio Matcaps tool. A matcap is a sphere picture a shader samples by the surface's facing direction."
+  },
+  "Parts.Matcap.Applied.Fmt": {
+    "message": "Matcap applied: {0} on {1} model file(s).",
+    "description": "Studio Matcaps tool. A matcap is a sphere picture a shader samples by the surface's facing direction."
+  },
+  "Parts.Matcap.Apply": {
+    "message": "Apply matcap",
+    "description": "Studio Matcaps tool. A matcap is a sphere picture a shader samples by the surface's facing direction."
+  },
+  "Parts.Matcap.BaseCollection.Fmt": {
+    "message": "{0} is your base collection: everyone using it will see the chosen matcap.",
+    "description": "Studio Matcaps tool. A matcap is a sphere picture a shader samples by the surface's facing direction."
+  },
+  "Parts.Matcap.Changed.Fmt": {
+    "message": "Matcap changed: {0}.",
+    "description": "Studio Matcaps tool. A matcap is a sphere picture a shader samples by the surface's facing direction."
+  },
+  "Parts.Matcap.ChangePartial.Fmt": {
+    "message": "Not changed: {0}.",
+    "description": "Studio Matcaps tool. A matcap is a sphere picture a shader samples by the surface's facing direction."
+  },
+  "Parts.Matcap.ChangesFiles.Fmt": {
+    "message": "Those include: {0}.",
+    "description": "Studio Matcaps tool. A matcap is a sphere picture a shader samples by the surface's facing direction."
+  },
+  "Parts.Matcap.ChangesUnticked.Fmt": {
+    "message": "That includes {0} part(s) here you didn't tick.",
+    "description": "Studio Matcaps tool. A matcap is a sphere picture a shader samples by the surface's facing direction."
+  },
+  "Parts.Matcap.Changes.Fmt": {
+    "message": "Apply changes {0} in every file of this mod that uses it, refits included.",
+    "description": "Studio Matcaps tool. A matcap is a sphere picture a shader samples by the surface's facing direction."
+  },
+  "Parts.Matcap.ChangeKindTip": {
+    "message": "A matcap from your images can only change to another image, and a library's to another library option. Undo it to switch kinds.",
+    "description": "Studio Matcaps tool. A matcap is a sphere picture a shader samples by the surface's facing direction."
+  },
+  "Parts.Matcap.ConfirmEnable.Fmt": {
+    "message": "{0} is off in {1}. Switching it on also turns on: {2}",
+    "description": "Studio Matcaps tool. A matcap is a sphere picture a shader samples by the surface's facing direction."
+  },
+  "Parts.Matcap.ConfirmNo": {
+    "message": "Cancel",
+    "description": "Studio Matcaps tool. A matcap is a sphere picture a shader samples by the surface's facing direction."
+  },
+  "Parts.Matcap.ConfirmYes": {
+    "message": "Switch it on",
+    "description": "Studio Matcaps tool. A matcap is a sphere picture a shader samples by the surface's facing direction."
+  },
+  "Parts.Matcap.DrawnElsewhere.Fmt": {
+    "message": "Your character draws another file for this model ({0}), so the matcap won't show on it yet.",
+    "description": "Studio Matcaps tool. A matcap is a sphere picture a shader samples by the surface's facing direction."
+  },
+  "Parts.Matcap.Duplicates.Fmt": {
+    "message": "Other mods also supply this slot's texture ({0}); the one Penumbra ranks highest decides what shows.",
+    "description": "Studio Matcaps tool. A matcap is a sphere picture a shader samples by the surface's facing direction."
+  },
+  "Parts.Matcap.Edited": {
+    "message": "The model was changed since.",
+    "description": "Studio Matcaps tool. A matcap is a sphere picture a shader samples by the surface's facing direction."
+  },
+  "Parts.Matcap.ExistingHeader": {
+    "message": "Matcaps on this model",
+    "description": "Studio Matcaps tool. A matcap is a sphere picture a shader samples by the surface's facing direction."
+  },
+  "Parts.Matcap.Forget": {
+    "message": "Forget",
+    "description": "Studio Matcaps tool. A matcap is a sphere picture a shader samples by the surface's facing direction."
+  },
+  "Parts.Matcap.Forgotten.Fmt": {
+    "message": "Forgot the matcaps this model no longer uses ({0} file(s)).",
+    "description": "Studio Matcaps tool. A matcap is a sphere picture a shader samples by the surface's facing direction."
+  },
+  "Parts.Matcap.Guide": {
+    "message": "A matcap is a picture of a lit sphere; the parts take their colour from it by which way they face you. Tick parts, click a matcap to see it on your character, then Apply.",
+    "description": "Studio Matcaps tool. A matcap is a sphere picture a shader samples by the surface's facing direction."
+  },
+  "Parts.Matcap.PreviewFailed.Fmt": {
+    "message": "The matcap could not be shown on your character ({0}).",
+    "description": "Studio Matcaps tool. A matcap is a sphere picture a shader samples by the surface's facing direction."
+  },
+  "Parts.Matcap.Previewing": {
+    "message": "Shown on your character only: nothing is saved until you press Apply matcap.",
+    "description": "Studio Matcaps tool. A matcap is a sphere picture a shader samples by the surface's facing direction."
+  },
+  "Parts.Matcap.PreviewGameGear": {
+    "message": "Game gear shows the matcap once you apply it.",
+    "description": "Studio Matcaps tool. A matcap is a sphere picture a shader samples by the surface's facing direction."
+  },
+  "Parts.Matcap.PreviewGearOnly": {
+    "message": "Hair, tails, ears and horns show the matcap once you apply it.",
+    "description": "Studio Matcaps tool. A matcap is a sphere picture a shader samples by the surface's facing direction."
+  },
+  "Parts.Matcap.PreviewTick": {
+    "message": "Tick parts to see the matcap on your character.",
+    "description": "Studio Matcaps tool. A matcap is a sphere picture a shader samples by the surface's facing direction."
+  },
+  "Parts.Matcap.Held.Fmt": {
+    "message": "{0} is holding this library's setting for now; the chosen matcap shows once it lets go.",
+    "description": "Studio Matcaps tool. A matcap is a sphere picture a shader samples by the surface's facing direction."
+  },
+  "Parts.Matcap.Inherited.Fmt": {
+    "message": "{0} inherits this library's setting; choosing a matcap gives it a setting of its own.",
+    "description": "Studio Matcaps tool. A matcap is a sphere picture a shader samples by the surface's facing direction."
+  },
+  "Parts.Matcap.KeptEdited.Fmt": {
+    "message": "Left in place because they were edited by hand: {0}.",
+    "description": "Studio Matcaps tool. A matcap is a sphere picture a shader samples by the surface's facing direction."
+  },
+  "Parts.Matcap.LibraryMissing.Fmt": {
+    "message": "{0} is not installed: this matcap has nothing to show.",
+    "description": "Studio Matcaps tool. A matcap is a sphere picture a shader samples by the surface's facing direction."
+  },
+  "Parts.Matcap.LibraryOff.Fmt": {
+    "message": "{0} is switched off.",
+    "description": "Studio Matcaps tool. A matcap is a sphere picture a shader samples by the surface's facing direction."
+  },
+  "Parts.Matcap.LibraryOffTag": {
+    "message": "(off)",
+    "description": "Studio Matcaps tool. A matcap is a sphere picture a shader samples by the surface's facing direction."
+  },
+  "Parts.Matcap.ListTip": {
+    "message": "Tick the parts that should take the matcap. Tick parts that already have one to change it. Skin can't be ticked.",
+    "description": "Studio Matcaps tool. A matcap is a sphere picture a shader samples by the surface's facing direction."
+  },
+  "Parts.Matcap.Lod0Cut": {
+    "message": "The model was cut to its nearest level of detail, so the matcap shows at every distance.",
+    "description": "Studio Matcaps tool. A matcap is a sphere picture a shader samples by the surface's facing direction."
+  },
+  "Parts.Matcap.MaterialCap.Fmt": {
+    "message": "This model already has {0} materials, the most a model can carry. Undo a matcap to make room.",
+    "description": "Studio Matcaps tool. A matcap is a sphere picture a shader samples by the surface's facing direction."
+  },
+  "Parts.Matcap.NeedMatcap": {
+    "message": "Pick a matcap first.",
+    "description": "Studio Matcaps tool. A matcap is a sphere picture a shader samples by the surface's facing direction."
+  },
+  "Parts.Matcap.NeedParts": {
+    "message": "Tick the parts that should take the matcap.",
+    "description": "Studio Matcaps tool. A matcap is a sphere picture a shader samples by the surface's facing direction."
+  },
+  "Parts.Matcap.NoImages.Fmt": {
+    "message": "No matcap images yet. Put square pictures of a lit sphere (PNG or JPG) in {0}, then press Refresh.",
+    "description": "Studio Matcaps tool. A matcap is a sphere picture a shader samples by the surface's facing direction."
+  },
+  "Parts.Matcap.NoLibraries": {
+    "message": "No matcap library mods are installed. A library is a mod with a choice of matcaps for one shared texture.",
+    "description": "Studio Matcaps tool. A matcap is a sphere picture a shader samples by the surface's facing direction."
+  },
+  "Parts.Matcap.NoPenumbra": {
+    "message": "Penumbra is not available.",
+    "description": "Studio Matcaps tool. A matcap is a sphere picture a shader samples by the surface's facing direction."
+  },
+  "Parts.Matcap.NothingToForget": {
+    "message": "Every matcap on this model is still in use; there is nothing to forget.",
+    "description": "Studio Matcaps tool. A matcap is a sphere picture a shader samples by the surface's facing direction."
+  },
+  "Parts.Matcap.NothingToUndo": {
+    "message": "There is no matcap on this model to undo.",
+    "description": "Studio Matcaps tool. A matcap is a sphere picture a shader samples by the surface's facing direction."
+  },
+  "Parts.Matcap.NotWinning.Fmt": {
+    "message": "Another mod's texture is drawn on this slot instead ({0}). Raise the library's priority in Penumbra.",
+    "description": "Studio Matcaps tool. A matcap is a sphere picture a shader samples by the surface's facing direction."
+  },
+  "Parts.Matcap.OpenFolder": {
+    "message": "Open matcap folder",
+    "description": "Studio Matcaps tool. A matcap is a sphere picture a shader samples by the surface's facing direction."
+  },
+  "Parts.Matcap.Refresh": {
+    "message": "Refresh",
+    "description": "Studio Matcaps tool. A matcap is a sphere picture a shader samples by the surface's facing direction."
+  },
+  "Parts.Matcap.RemakeSizes": {
+    "message": "That file is one of Proteus's refits: remake the sizes to carry the matcap over.",
+    "description": "Studio Matcaps tool. A matcap is a sphere picture a shader samples by the surface's facing direction."
+  },
+  "Parts.Matcap.Rescan": {
+    "message": "Rescan",
+    "description": "Studio Matcaps tool. A matcap is a sphere picture a shader samples by the surface's facing direction."
+  },
+  "Parts.Matcap.Room.Fmt": {
+    "message": "Room for {0} more material(s) on this model (a refit needs some for nails and underwear too).",
+    "description": "Studio Matcaps tool. A matcap is a sphere picture a shader samples by the surface's facing direction."
+  },
+  "Parts.Matcap.Scanning": {
+    "message": "Looking through your mods for matcap libraries…",
+    "description": "Studio Matcaps tool. A matcap is a sphere picture a shader samples by the surface's facing direction."
+  },
+  "Parts.Matcap.SelectFailed": {
+    "message": "Penumbra did not accept the library's setting.",
+    "description": "Studio Matcaps tool. A matcap is a sphere picture a shader samples by the surface's facing direction."
+  },
+  "Parts.Matcap.SharedSlot.Fmt": {
+    "message": "This slot shows one matcap at a time: {0} other matcap(s) in this mod use it and will change too.",
+    "description": "Studio Matcaps tool. A matcap is a sphere picture a shader samples by the surface's facing direction."
+  },
+  "Parts.Matcap.ShareNote.Fmt": {
+    "message": "Anyone you share this mod with needs {0} too ({1}), set to the same matcap. Its textures are never copied into your mod.",
+    "description": "Studio Matcaps tool. A matcap is a sphere picture a shader samples by the surface's facing direction."
+  },
+  "Parts.Matcap.SiblingsSkipped.Fmt": {
+    "message": "Not applied to these other body options, whose parts differ: {0}.",
+    "description": "Studio Matcaps tool. A matcap is a sphere picture a shader samples by the surface's facing direction."
+  },
+  "Parts.Matcap.SkinTip": {
+    "message": "Skin can't take a matcap.",
+    "description": "Studio Matcaps tool. A matcap is a sphere picture a shader samples by the surface's facing direction."
+  },
+  "Parts.Matcap.Source.Fmt": {
+    "message": "from {0}",
+    "description": "Studio Matcaps tool. A matcap is a sphere picture a shader samples by the surface's facing direction."
+  },
+  "Parts.Matcap.SourceImages": {
+    "message": "Your images",
+    "description": "Studio Matcaps tool. A matcap is a sphere picture a shader samples by the surface's facing direction."
+  },
+  "Parts.Matcap.SourceLibraries": {
+    "message": "Library mods",
+    "description": "Studio Matcaps tool. A matcap is a sphere picture a shader samples by the surface's facing direction."
+  },
+  "Parts.Matcap.SourceProteus": {
+    "message": "Proteus matcaps",
+    "description": "Studio Matcaps tool. A matcap is a sphere picture a shader samples by the surface's facing direction."
+  },
+  "Parts.Matcap.SourceProteus.Tip": {
+    "message": "Matcaps that come with Proteus, downloaded the first time you open Matcaps.",
+    "description": "Studio Matcaps tool. A matcap is a sphere picture a shader samples by the surface's facing direction."
+  },
+  "Parts.Matcap.PackDownloading.Fmt": {
+    "message": "Downloading Proteus's matcaps… {0} of {1}",
+    "description": "Studio Matcaps tool. A matcap is a sphere picture a shader samples by the surface's facing direction."
+  },
+  "Parts.Matcap.PackFailed": {
+    "message": "Proteus's matcaps could not be downloaded. Check your connection, then try again.",
+    "description": "Studio Matcaps tool. A matcap is a sphere picture a shader samples by the surface's facing direction."
+  },
+  "Parts.Matcap.PackRetry": {
+    "message": "Try again",
+    "description": "Studio Matcaps tool. A matcap is a sphere picture a shader samples by the surface's facing direction."
+  },
+  "Parts.Matcap.Superseded": {
+    "message": "The model no longer uses this matcap (the mod was updated).",
+    "description": "Studio Matcaps tool. A matcap is a sphere picture a shader samples by the surface's facing direction."
+  },
+  "Parts.Matcap.ThisMod": {
+    "message": "(this mod)",
+    "description": "Studio Matcaps tool. A matcap is a sphere picture a shader samples by the surface's facing direction."
+  },
+  "Parts.Matcap.Ticked.Fmt": {
+    "message": "{0} part(s) ticked.",
+    "description": "Studio Matcaps tool. A matcap is a sphere picture a shader samples by the surface's facing direction."
+  },
+  "Parts.Matcap.Undo": {
+    "message": "Undo matcaps on this model",
+    "description": "Studio Matcaps tool. A matcap is a sphere picture a shader samples by the surface's facing direction."
+  },
+  "Parts.Matcap.UndoGroup.Fmt": {
+    "message": "Also undoes the other body options sharing these matcaps: {0}.",
+    "description": "Studio Matcaps tool. A matcap is a sphere picture a shader samples by the surface's facing direction."
+  },
+  "Parts.Matcap.Undone.Fmt": {
+    "message": "Matcaps undone on {0} model file(s).",
+    "description": "Studio Matcaps tool. A matcap is a sphere picture a shader samples by the surface's facing direction."
+  },
+  "Parts.Matcap.Working": {
+    "message": "Writing the matcap…",
+    "description": "Studio Matcaps tool. A matcap is a sphere picture a shader samples by the surface's facing direction."
+  },
+  "Parts.Tool.Matcap": {
+    "message": "Matcaps",
+    "description": "Studio Matcaps tool. A matcap is a sphere picture a shader samples by the surface's facing direction."
+  },
+  "Parts.Tool.Matcap.Tip": {
+    "message": "Give the parts you tick a matcap: a shiny, glassy or gem-like look painted from a picture of a sphere. The parts get a material of their own, written into the mod, so it shows with Proteus turned off.",
+    "description": "Studio Matcaps tool. A matcap is a sphere picture a shader samples by the surface's facing direction."
+  },
+  "Parts.Vanilla.Ears.Fmt": {
+    "message": "Ears {0} ({1})",
+    "description": "Studio Matcaps tool. A matcap is a sphere picture a shader samples by the surface's facing direction."
+  },
+  "Parts.Vanilla.Tail.Fmt": {
+    "message": "Tail {0} ({1})",
+    "description": "Studio, Matcaps: the game's own tail, opened to take a matcap. {0} the tail id (t0003), {1} the race code (c0801)."
+  },
+  "Settings.MatcapLibrary": {
+    "message": "Matcap images",
+    "description": "Studio Matcaps tool. A matcap is a sphere picture a shader samples by the surface's facing direction."
+  },
+  "Settings.MatcapLibrary.Tip.Fmt": {
+    "message": "Open the folder your own matcap images live in: {0}",
+    "description": "Studio Matcaps tool. A matcap is a sphere picture a shader samples by the surface's facing direction."
+  },
+  "Matcap.Refused.NoHorns": {
+    "message": "This face has no horns. On a face, only the horns can take a matcap.",
+    "description": "Studio Matcaps tool. A matcap is a sphere picture a shader samples by the surface's facing direction."
+  },
+  "Matcap.Refused.NotHorn": {
+    "message": "On a face, only the horns can take a matcap.",
+    "description": "Studio Matcaps tool. A matcap is a sphere picture a shader samples by the surface's facing direction."
+  },
+  "Parts.Matcap.DrawnThroughFace": {
+    "message": "Your face is drawn through the face overlay's rewrite; the matcap shows after the next refresh.",
+    "description": "Studio Matcaps tool. A matcap is a sphere picture a shader samples by the surface's facing direction."
+  },
+  "Parts.Matcap.FaceOverlayOn": {
+    "message": "That face is drawn through a face overlay. Turn the overlay off to pick your face, or open your face mod from the list.",
+    "description": "Studio Matcaps tool. A matcap is a sphere picture a shader samples by the surface's facing direction."
+  },
+  "Parts.Matcap.HornColourNote": {
+    "message": "Horns with a matcap no longer take your character's horn colour, and hats still hide them.",
+    "description": "Studio Matcaps tool. A matcap is a sphere picture a shader samples by the surface's facing direction."
+  },
+  "Parts.Matcap.MatcapsOnlyHere": {
+    "message": "Your own face, ears and tail open only under Matcaps, so they were closed.",
+    "description": "Studio Matcaps tool. A matcap is a sphere picture a shader samples by the surface's facing direction."
+  },
+  "Parts.Matcap.NoHorns": {
+    "message": "This face has no horns. On a face, only the horns can take a matcap.",
+    "description": "Studio Matcaps tool. A matcap is a sphere picture a shader samples by the surface's facing direction."
+  },
+  "Parts.Matcap.NotHornTip": {
+    "message": "On a face, only the horns can take a matcap.",
+    "description": "Studio Matcaps tool. A matcap is a sphere picture a shader samples by the surface's facing direction."
+  },
+  "Parts.Vanilla.FaceHorns.Fmt": {
+    "message": "Horns (face {0}, {1})",
+    "description": "Studio Matcaps tool. A matcap is a sphere picture a shader samples by the surface's facing direction."
+  },
+  "Parts.Matcap.BackupKept.Fmt": {
+    "message": "Their old backups could not be moved aside: {0}. The next matcap there moves them first.",
+    "description": "Studio Matcaps tool. A matcap is a sphere picture a shader samples by the surface's facing direction."
+  },
+  "Parts.Matcap.KeptForRefits.Fmt": {
+    "message": "Refits made from it still draw the matcap, so its files stay until the sizes are remade: {0}.",
+    "description": "Studio Matcaps tool. A matcap is a sphere picture a shader samples by the surface's facing direction."
+  },
+  "Parts.Matcap.KeptForPorts.Fmt": {
+    "message": "Hair ports or earless copies made from it still draw the matcap, so its files stay until they are remade: {0}.",
+    "description": "Studio Matcaps tool. A matcap is a sphere picture a shader samples by the surface's facing direction. {0} is a list of file paths inside the mod."
+  },
+  "Parts.Matcap.PortKept": {
+    "message": "That model is one of Proteus's hair ports. While it has a matcap, Proteus keeps it as it is, and doesn't by itself remake the ports of other races that share its material, until you undo the matcap. Porting one of those races by hand in the Studio still remakes it.",
+    "description": "Studio Matcaps tool. A matcap is a sphere picture a shader samples by the surface's facing direction."
   }
 }

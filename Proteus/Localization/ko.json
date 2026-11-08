@@ -459,12 +459,20 @@
     "message": "[Proteus] \"{0}\"이(가) {1}을(를) 덮어쓰고 있습니다. 바로 그곳이 Proteus가 오버레이를 합성하는 지점이므로 표시되지 않습니다. 해결 방법: Penumbra에서 \"Proteus\" 모드의 우선도를 \"{0}\"보다 높게 설정하세요.",
     "description": ""
   },
-  "Chat.ShellNotDrawing": {
-    "message": "[Proteus] 세컨드 스킨은 만들어졌지만 게임이 그리지 않고 있습니다. 그것을 얹은 장신구는 착용되어 있는데도 캐릭터가 Proteus 버전을 불러오지 않습니다. 해당 장신구를 벗었다가 다시 착용하거나 다른 것을 선택해 보세요.",
+  "Chat.ShellPartNotDrawn.Fmt": {
+    "message": "[Proteus] 세컨드 스킨의 일부가 여전히 보이지 않습니다. 그 부분은 {0}에 얹혀 있습니다. 벗었다가 다시 착용하거나, 그 레이어를 다른 장신구에 얹으세요.",
     "description": ""
   },
-  "Chat.ShellMaterialFailed": {
-    "message": "[Proteus] 세컨드 스킨의 일부가 그려지지 않고 있습니다. 나머지는 캐릭터에 표시되어 있으므로, 해당 부분에 필요한 텍스처가 없거나 게임이 아직 이전 버전을 붙들고 있는 것입니다. 먼저 \"지금 다시 합성\"을 눌러 보고, 그래도 안 되면 그것을 얹은 장신구를 벗었다가 다시 착용하세요.",
+  "Chat.ShellNotDrawn.Fmt": {
+    "message": "[Proteus] {0}을(를) 착용하고 있지만 세컨드 스킨이 여전히 보이지 않습니다. 벗었다가 다시 착용하거나, 레이어를 다른 장신구에 얹으세요.",
+    "description": ""
+  },
+  "Chat.ShellCarrierNotDrawn.Fmt": {
+    "message": "[Proteus] 세컨드 스킨의 일부가 보이지 않습니다. Proteus가 이를 얹기 위해 착용시키는 투명 장신구인 {0}에 얹혀 있습니다. Proteus 창에서 \"지금 다시 합성\"을 누르세요. 그래도 보이지 않으면 그 장신구를 벗으세요. Proteus가 다시 착용시킵니다.",
+    "description": ""
+  },
+  "Chat.ShellNotDrawnRedrawOff.Fmt": {
+    "message": "[Proteus] 세컨드 스킨의 일부가 보이지 않습니다. {0}에 얹혀 있습니다. 자동 다시 그리기가 꺼져 있어 Proteus가 캐릭터를 다시 그리지 않았습니다. Penumbra의 Redraw 버튼을 누르거나 지역을 이동하고, 그래도 보이지 않으면 그 장신구를 벗었다가 다시 착용하세요.",
     "description": ""
   },
   "Chat.ShellNeedsRedraw": {
@@ -924,7 +932,7 @@
     "description": ""
   },
   "Colors.Reset.Tip": {
-    "message": "Ctrl을 누른 채 클릭하면 이 옵션의 색상, 발광, 모드를 Proteus가 이 모드를\n처음 저장했을 때의 설정으로 되돌립니다. 되돌릴 수 없습니다.\n\n디자인이 적용되어 있다면, 그 디자인이 이 옵션에 저장해 둔 재정의도 함께\n삭제됩니다. 그러지 않으면 디자인이 곧바로 다시 적용하기 때문입니다. 다른\n디자인의 설정은 그대로 유지됩니다.\n\n참고: 이 \"원래 설정\"은 Proteus가 이 모드를 처음 저장한 시점의 것입니다.\n그 전에 이미 편집했다면, 편집된 그 상태가 \"기본값\"이 됩니다.",
+    "message": "Ctrl을 누른 채 클릭하면 이 옵션의 색상, 발광, 모드를 Proteus가 이 모드를\n처음 저장했을 때의 설정으로 되돌립니다. 되돌릴 수 없습니다.\n\n디자인이 적용되어 있다면, 그 디자인은 이 옵션에 저장된 자신의 값을 유지하고\n다음에 디자인을 적용할 때 다시 보여줍니다. 연결 탭에서 업데이트를 누를\n때까지 그렇습니다.\n\n참고: 이 \"원래 설정\"은 Proteus가 이 모드를 처음 저장한 시점의 것입니다.\n그 전에 이미 편집했다면, 편집된 그 상태가 \"기본값\"이 됩니다.",
     "description": ""
   },
   "Colors.Roughness.Label": {
@@ -4095,6 +4103,62 @@
     "message": "파츠 전체 대신 개별 폴리곤을 이동·회전·크기 조절합니다. 폴리곤을 클릭해 선택하고,\nShift+클릭으로 추가하거나 제거합니다. 목록에서 파츠를 고르면 그 폴리곤이 모두 선택됩니다.",
     "description": ""
   },
+  "Parts.Move.SelectAll": {
+    "message": "전체",
+    "description": ""
+  },
+  "Parts.Move.SelectAll.Tip": {
+    "message": "이 모델에서 체크한 파츠를 모두 한 덩어리로 함께 이동, 회전, 크기 조절합니다.\n파츠 목록에서 체크를 해제한 파츠는 제자리에 남습니다. 피부는 '피부도 움직이기'가 켜져 있을 때만 움직입니다.",
+    "description": ""
+  },
+  "Parts.Move.All.Fmt": {
+    "message": "이 모델의 파츠 {1}개 중 {0}개가 함께 움직입니다.",
+    "description": ""
+  },
+  "Parts.Move.All.Skin.Fmt": {
+    "message": "이 모델의 파츠 {1}개 중 {0}개가 피부를 포함해 함께 움직입니다.",
+    "description": ""
+  },
+  "Parts.Move.AllNone": {
+    "message": "움직일 것이 없습니다: 파츠 목록에서 파츠를 체크하세요.",
+    "description": ""
+  },
+  "Parts.Move.AllNothingFree": {
+    "message": "체크한 것 중 움직일 수 있는 것이 없습니다: 모두 피부이거나 잠겨 있습니다.",
+    "description": ""
+  },
+  "Parts.Move.AllListTip": {
+    "message": "체크한 파츠는 모두 함께 움직입니다. 파츠의 체크를 해제하면 제자리에 남고, 모델과 캐릭터에서 숨겨집니다.",
+    "description": ""
+  },
+  "Parts.Move.AllOff.Tip": {
+    "message": "'전체'에서는 쓰지 않습니다: 체크한 파츠가 모두 한 덩어리로 움직입니다.",
+    "description": ""
+  },
+  "Parts.Move.All.Help": {
+    "message": "체크한 파츠가 모두 함께 움직입니다: 화살표나 사각형을 드래그합니다. 다른 곳을 드래그하면 모델이 회전하고, Shift+드래그로 시점을 옮기며, 스크롤로 확대/축소합니다.",
+    "description": ""
+  },
+  "Parts.Move.All.LiveHint": {
+    "message": "체크한 파츠가 모두 함께 움직입니다: 캐릭터 위에서 화살표나 사각형을 드래그합니다. Alt를 누르고 있으면 카메라를 움직일 수 있습니다. 이동은 버튼을 놓을 때 저장됩니다.",
+    "description": ""
+  },
+  "Parts.Rotate.All.Help": {
+    "message": "체크한 파츠가 모두 함께 회전합니다: 중심의 링 하나를 드래그합니다. 다른 곳을 드래그하면 모델이 회전하고, Shift+드래그로 시점을 옮기며, 스크롤로 확대/축소합니다.",
+    "description": ""
+  },
+  "Parts.Rotate.All.LiveHint": {
+    "message": "체크한 파츠가 모두 함께 회전합니다: 캐릭터 위에서 중심의 링 하나를 드래그합니다. Alt를 누르면 카메라를 움직일 수 있습니다. 회전은 손을 뗄 때 저장됩니다.",
+    "description": ""
+  },
+  "Parts.ScaleAxes.All.Help": {
+    "message": "체크한 파츠가 모두 함께 크기가 바뀝니다: 핸들을 드래그하면 그 축 방향으로 늘이거나 줄이고, 체크한 파츠 위를 누르고 오른쪽으로 드래그하면 커지고 왼쪽으로 드래그하면 작아집니다. 다른 곳을 드래그하면 모델이 회전하고, Shift+드래그로 시점을 옮기며, 스크롤로 확대/축소합니다.",
+    "description": ""
+  },
+  "Parts.ScaleAxes.All.LiveHint": {
+    "message": "체크한 파츠가 모두 함께 크기가 바뀝니다: 핸들을 드래그하면 그 축 방향으로 늘이거나 줄이고, 체크한 파츠 위를 누르고 오른쪽으로 드래그하면 커지고 왼쪽으로 드래그하면 작아집니다. Alt를 누르면 카메라를 움직일 수 있습니다. 변경은 손을 뗄 때 저장됩니다.",
+    "description": ""
+  },
   "Parts.Move.Shrink": {
     "message": "줄이기",
     "description": ""
@@ -4370,6 +4434,22 @@
   "WhatsNew.Close": {
     "message": "닫기",
     "description": ""
+  },
+  "WhatsNew.Matcaps.Head": {
+    "message": "매트캡: 반짝이고 유리 같고 보석 같은 파츠",
+    "description": "Release-notes section heading: the Studio's Matcaps tool. A matcap is a picture of a lit sphere a shader samples by the surface's facing direction."
+  },
+  "WhatsNew.Matcaps.Body": {
+    "message": "스튜디오에 새 도구 \"매트캡\"이 생겼습니다. 장비, 액세서리, 머리카락, 꼬리, 비에라 귀, 아우라 뿔의 파츠를 체크하고 매트캡(빛을 받은 구의 그림)을 고른 뒤 \"매트캡 적용\"을 누르면, 파츠에 전용 재질이 생깁니다. 재질은 모드에 기록되므로 Proteus를 꺼도 그 모습이 그대로 보입니다. Proteus와 함께 제공되며 sivka의 23Minks 매트캡 팩이 들어 있는 \"Proteus 매트캡\"은 매트캡을 처음 열 때 내려받습니다. 직접 만든 그림은 설정의 \"매트캡 이미지\"에 있는 폴더에 넣으며, 설치된 매트캡 라이브러리 모드도 목록에 나옵니다. \"이 모델의 매트캡 되돌리기\"로 모두 다시 뺄 수 있습니다.",
+    "description": "Release-notes section. 'Studio' matches Tab.Parts and 'Settings' Tab.Settings; \"Matcaps\" matches Parts.Tool.Matcap, \"Apply matcap\" Parts.Matcap.Apply, \"Proteus matcaps\" Parts.Matcap.SourceProteus, \"Matcap images\" Settings.MatcapLibrary, \"Undo matcaps on this model\" Parts.Matcap.Undo. Keep 23Minks and sivka verbatim."
+  },
+  "WhatsNew.MoveAll.Head": {
+    "message": "체크한 파츠를 한 덩어리로 이동, 회전, 크기 조절",
+    "description": "Release-notes section heading: the All mode of Move, Rotate and Scale. Keep it true to 'ticked': unticked parts stay where they are."
+  },
+  "WhatsNew.MoveAll.Body": {
+    "message": "스튜디오의 \"이동\", \"회전\", \"크기 조절\"에 파츠 전체, 폴리곤과 나란히 새 모드 \"전체\"가 생겼습니다. 열린 모델에서 체크한 파츠가 모두 한 덩어리로 함께 이동, 회전, 크기 조절됩니다. 제자리에 둘 파츠는 파츠 목록에서 체크를 해제하세요. 피부는 \"피부도 움직이기\"가 켜져 있을 때만 움직입니다.",
+    "description": "Release-notes section. 'Studio' matches Tab.Parts; \"Move\", \"Rotate\" and \"Scale\" match Parts.Tool.Move, Parts.Tool.Rotate and Parts.Tool.Scale; \"All\" matches Parts.Move.SelectAll; \"Move skin too\" matches Parts.SkinMoves. 'Whole parts' and 'polygons' are the other two modes (Parts.Move.SelectParts, Parts.Move.SelectPolygons)."
   },
   "Parts.Retarget.Guide.Title": {
     "message": "체형 크기 팁",
@@ -5283,6 +5363,14 @@
     "message": "켬: 파츠가 그 피부를 보여 주는 곳에서는 각 체형의 피어싱이 피부와 함께 들어갑니다. 손톱은 항상 함께 들어갑니다.\n이미 만든 사이즈는 다시 만들 때만 바뀝니다.",
     "description": ""
   },
+  "SizeSet.KeepHiddenSkin": {
+    "message": "숨겨진 피부 유지",
+    "description": ""
+  },
+  "SizeSet.KeepHiddenSkin.Tip": {
+    "message": "끔: 제작자가 자기 피부를 지운 곳(주로 옷감 아래와 주변)에서는 각 체형의 피부도 빠집니다. 켬: 피부를 통째로 넣어 옷감 아래나 주변에서 빠진 피부를 되살리지만, 몸에 붙는 옷감 밖으로 비쳐 보일 수 있습니다. 신발과 장갑은 항상 잘립니다.\n이미 만든 사이즈는 다시 만들 때만 바뀝니다.",
+    "description": ""
+  },
   "SizeSet.EndsUnreadable.Fmt": {
     "message": "{0}: 리그를 읽을 수 없어 발이나 손을 유지할 수 없으므로 사이즈를 만들지 않았습니다.",
     "description": ""
@@ -5515,6 +5603,14 @@
     "message": "c{0:D4}에게는 이 헤어스타일용으로 없는 본으로 움직입니다 ({1})",
     "description": ""
   },
+  "HairPort.Refused.BonesSourceSkeleton.Fmt": {
+    "message": "c{0:D4} 자신의 머리 모양 {2} 스켈레톤에 없는 본({1})으로 움직이며, 다른 성별로 가져갈 수 있는 것은 그 스켈레톤뿐입니다",
+    "description": ""
+  },
+  "HairPort.Refused.BonesCarry.Fmt": {
+    "message": "c{0:D4}의 머리 모양 {2} 스켈레톤에만 있는 본({1})으로 움직이지만, 그 스켈레톤을 c{3:D4}에 가져갈 수 없었습니다",
+    "description": ""
+  },
   "HairPort.Refused.Unknown.Fmt": {
     "message": "종족 디포머가 {0}을(를) 움직이는 방법을 모릅니다",
     "description": ""
@@ -5662,6 +5758,14 @@
   "HairPort.Studio.OtherSexAuthored": {
     "message": "모드에 이 성별용 자체 버전이 있습니다",
     "description": "Per-race status in the Studio port list for a race of the other sex: the mod ships its own model of this hairstyle for that sex."
+  },
+  "HairPort.Studio.PortedFrom.Fmt": {
+    "message": "머리 모양 {0}에서 이식됨 — 이것을 이식하면 그것을 대체합니다",
+    "description": ""
+  },
+  "HairPort.Replaced.Fmt": {
+    "message": "c{0:D4}: 머리 모양 {1}에서 만든 이식을 대체했습니다.",
+    "description": ""
   },
   "HairPort.Studio.OtherSexSkeleton": {
     "message": "모드가 이 종족에 자체 스켈레톤을 줍니다",
@@ -6117,6 +6221,442 @@
   },
   "Chat.VariantRepoint.Fmt": {
     "message": "[Proteus] \"{1}\"의 재질 경로를 변형 폴더 {0}개에 더 복사했습니다. 그 변형들은 모드가 우선하는 곳에서 모드 자체의 재질을 보여 줍니다. 되돌리기: /proteus > 설정 > 장비 변형.",
+    "description": ""
+  },
+  "Matcap.Refused.AlreadyMatcap": {
+    "message": "매트캡이 없는 파츠(추가하려면)나 매트캡이 있는 파츠(바꾸려면) 중 한쪽만 체크하세요. 둘을 섞을 수는 없습니다.",
+    "description": ""
+  },
+  "Matcap.Refused.Changed.Fmt": {
+    "message": "매트캡을 준비하는 동안 {0}이(가) 바뀌어 아무것도 쓰지 않았습니다. 다시 시도하세요.",
+    "description": ""
+  },
+  "Matcap.Refused.Edited.Fmt": {
+    "message": "{0}은(는) 매트캡을 적용한 뒤 바뀌어 되돌리지 않았습니다. 원본은 {1}에 있습니다.",
+    "description": ""
+  },
+  "Matcap.Refused.Failed.Fmt": {
+    "message": "매트캡을 쓸 수 없었습니다({0}). 아무것도 바뀌지 않았습니다.",
+    "description": ""
+  },
+  "Matcap.Refused.HandEdited.Fmt": {
+    "message": "{0}은(는) Proteus가 쓴 뒤 손으로 편집되어 그대로 두었습니다.",
+    "description": ""
+  },
+  "Matcap.Refused.ImageUnreadable.Fmt": {
+    "message": "{0}을(를) 이미지로 읽을 수 없었습니다.",
+    "description": ""
+  },
+  "Matcap.Refused.ImportedPiece": {
+    "message": "이 파츠는 가져온 팩의 것으로, Proteus가 직접 다시 만듭니다. 매트캡은 팩 자체의 모드에 적용하세요.",
+    "description": ""
+  },
+  "Matcap.Refused.Legacy": {
+    "message": "이 모드는 아직 Penumbra의 옛 폴더 구조입니다. Penumbra에서 한 번 열어 업데이트한 뒤 다시 시도하세요.",
+    "description": ""
+  },
+  "Matcap.Refused.MaterialCap.Fmt": {
+    "message": "이 모델에는 재질을 더 추가할 수 없습니다: {0}.",
+    "description": ""
+  },
+  "Matcap.Refused.ModelLayout.Fmt": {
+    "message": "이 모델은 나눌 수 없습니다: {0}.",
+    "description": ""
+  },
+  "Matcap.Refused.NoEntry": {
+    "message": "그 매트캡은 이 모드의 기록에 없습니다.",
+    "description": ""
+  },
+  "Matcap.Refused.NoName": {
+    "message": "Proteus는 게임이 이 모델의 재질을 어디서 읽는지 알 수 없었습니다.",
+    "description": ""
+  },
+  "Matcap.Refused.NoTemplate": {
+    "message": "게임의 반사 재질을 읽을 수 없어 매트캡 재질을 만들지 못했습니다.",
+    "description": ""
+  },
+  "Matcap.Refused.NotSquare.Fmt": {
+    "message": "{0}은(는) 정사각형이 아닙니다. 매트캡은 정사각형을 가득 채운 구의 그림입니다.",
+    "description": ""
+  },
+  "Matcap.Refused.NotTarget": {
+    "message": "매트캡은 장비, 액세서리, 머리카락, 꼬리, 비에라 귀, 아우라 뿔(얼굴)에 입힐 수 있습니다. 이 모델은 그 어느 것도 아닙니다.",
+    "description": ""
+  },
+  "Matcap.Refused.RecordUnreadable": {
+    "message": "이 모드의 매트캡 기록(Proteus/matcaps.json)을 읽을 수 없어 아무것도 바꾸지 않았습니다.",
+    "description": ""
+  },
+  "Matcap.Refused.Regenerated.Fmt": {
+    "message": "이 모델은 Proteus가 다른 모델({0})에서 만든 것이라 다시 만들면 매트캡이 사라집니다. 원본 모델에 매트캡을 적용한 뒤 다시 만드세요.",
+    "description": ""
+  },
+  "Matcap.Refused.Skin": {
+    "message": "피부에는 매트캡을 적용할 수 없습니다.",
+    "description": ""
+  },
+  "Matcap.Refused.UnknownOption.Fmt": {
+    "message": "{0}에는 {1}(이)라는 옵션이 없습니다.",
+    "description": ""
+  },
+  "MeshVolume.Feature.Matcaps": {
+    "message": "매트캡",
+    "description": ""
+  },
+  "Parts.Matcap.AlphaWarn": {
+    "message": "체크한 파츠 중 일부에 비치는 가장자리(머리카락 가닥, 레이스)가 있습니다. 적용한 뒤 게임에서 가장자리를 확인하세요.",
+    "description": ""
+  },
+  "Parts.Matcap.AlsoMore.Fmt": {
+    "message": "외 {0}개",
+    "description": ""
+  },
+  "Parts.Matcap.AlsoNothing": {
+    "message": "그 밖에는 없음",
+    "description": ""
+  },
+  "Parts.Matcap.Applied.Fmt": {
+    "message": "매트캡 적용: {0} (모델 파일 {1}개).",
+    "description": ""
+  },
+  "Parts.Matcap.Apply": {
+    "message": "매트캡 적용",
+    "description": ""
+  },
+  "Parts.Matcap.BaseCollection.Fmt": {
+    "message": "{0}은(는) 기본 컬렉션입니다. 이를 쓰는 모든 사람에게 선택한 매트캡이 보입니다.",
+    "description": ""
+  },
+  "Parts.Matcap.Changed.Fmt": {
+    "message": "매트캡 변경: {0}.",
+    "description": ""
+  },
+  "Parts.Matcap.ChangePartial.Fmt": {
+    "message": "바뀌지 않음: {0}.",
+    "description": ""
+  },
+  "Parts.Matcap.ChangesFiles.Fmt": {
+    "message": "예: {0}.",
+    "description": ""
+  },
+  "Parts.Matcap.ChangesUnticked.Fmt": {
+    "message": "여기서 체크하지 않은 파츠 {0}개도 포함됩니다.",
+    "description": ""
+  },
+  "Parts.Matcap.Changes.Fmt": {
+    "message": "적용하면 이 모드에서 {0}을(를) 쓰는 모든 파일(리핏 포함)에서 바뀝니다.",
+    "description": ""
+  },
+  "Parts.Matcap.ChangeKindTip": {
+    "message": "내 이미지의 매트캡은 다른 이미지로만, 라이브러리의 매트캡은 다른 라이브러리 옵션으로만 바꿀 수 있습니다. 종류를 바꾸려면 되돌리세요.",
+    "description": ""
+  },
+  "Parts.Matcap.ConfirmEnable.Fmt": {
+    "message": "{0}은(는) {1}에서 꺼져 있습니다. 켜면 다음도 함께 켜집니다: {2}",
+    "description": ""
+  },
+  "Parts.Matcap.ConfirmNo": {
+    "message": "취소",
+    "description": ""
+  },
+  "Parts.Matcap.ConfirmYes": {
+    "message": "켜기",
+    "description": ""
+  },
+  "Parts.Matcap.DrawnElsewhere.Fmt": {
+    "message": "캐릭터가 이 모델에 다른 파일({0})을 그리고 있어 아직 매트캡이 보이지 않습니다.",
+    "description": ""
+  },
+  "Parts.Matcap.Duplicates.Fmt": {
+    "message": "다른 모드도 이 슬롯의 텍스처를 제공합니다({0}). Penumbra에서 순위가 가장 높은 것이 보입니다.",
+    "description": ""
+  },
+  "Parts.Matcap.Edited": {
+    "message": "그 뒤로 모델이 바뀌었습니다.",
+    "description": ""
+  },
+  "Parts.Matcap.ExistingHeader": {
+    "message": "이 모델의 매트캡",
+    "description": ""
+  },
+  "Parts.Matcap.Forget": {
+    "message": "잊기",
+    "description": ""
+  },
+  "Parts.Matcap.Forgotten.Fmt": {
+    "message": "이 모델이 더 이상 쓰지 않는 매트캡을 잊었습니다(파일 {0}개).",
+    "description": ""
+  },
+  "Parts.Matcap.Guide": {
+    "message": "매트캡은 빛을 받은 구의 그림으로, 파츠는 나를 향한 방향에 따라 그 색을 가져옵니다. 파츠를 체크하고 매트캡을 클릭해 캐릭터에서 확인한 뒤 적용하세요.",
+    "description": ""
+  },
+  "Parts.Matcap.PreviewFailed.Fmt": {
+    "message": "캐릭터에 매트캡을 보여 줄 수 없었습니다({0}).",
+    "description": ""
+  },
+  "Parts.Matcap.Previewing": {
+    "message": "캐릭터에만 보여 줍니다. 매트캡 적용을 누르기 전에는 아무것도 저장되지 않습니다.",
+    "description": ""
+  },
+  "Parts.Matcap.PreviewGameGear": {
+    "message": "게임 장비는 적용해야 매트캡이 보입니다.",
+    "description": ""
+  },
+  "Parts.Matcap.PreviewGearOnly": {
+    "message": "머리카락, 꼬리, 귀, 뿔은 적용해야 매트캡이 보입니다.",
+    "description": ""
+  },
+  "Parts.Matcap.PreviewTick": {
+    "message": "파츠를 체크하면 캐릭터에서 매트캡을 볼 수 있습니다.",
+    "description": ""
+  },
+  "Parts.Matcap.Held.Fmt": {
+    "message": "{0}이(가) 이 라이브러리 설정을 잠시 붙잡고 있습니다. 풀리면 선택한 매트캡이 보입니다.",
+    "description": ""
+  },
+  "Parts.Matcap.Inherited.Fmt": {
+    "message": "{0}은(는) 이 라이브러리 설정을 상속합니다. 매트캡을 고르면 자체 설정이 생깁니다.",
+    "description": ""
+  },
+  "Parts.Matcap.KeptEdited.Fmt": {
+    "message": "손으로 편집되어 그대로 두었습니다: {0}.",
+    "description": ""
+  },
+  "Parts.Matcap.LibraryMissing.Fmt": {
+    "message": "{0}이(가) 설치되어 있지 않아 이 매트캡은 보여 줄 것이 없습니다.",
+    "description": ""
+  },
+  "Parts.Matcap.LibraryOff.Fmt": {
+    "message": "{0}이(가) 꺼져 있습니다.",
+    "description": ""
+  },
+  "Parts.Matcap.LibraryOffTag": {
+    "message": "(꺼짐)",
+    "description": ""
+  },
+  "Parts.Matcap.ListTip": {
+    "message": "매트캡을 적용할 파츠를 체크하세요. 이미 매트캡이 있는 파츠를 체크하면 그것을 바꿉니다. 피부는 체크할 수 없습니다.",
+    "description": ""
+  },
+  "Parts.Matcap.Lod0Cut": {
+    "message": "어느 거리에서도 매트캡이 보이도록 모델을 가장 가까운 세부 단계만 남겼습니다.",
+    "description": ""
+  },
+  "Parts.Matcap.MaterialCap.Fmt": {
+    "message": "이 모델에는 이미 재질이 {0}개 있어 한도에 도달했습니다. 자리를 만들려면 매트캡 하나를 되돌리세요.",
+    "description": ""
+  },
+  "Parts.Matcap.NeedMatcap": {
+    "message": "먼저 매트캡을 고르세요.",
+    "description": ""
+  },
+  "Parts.Matcap.NeedParts": {
+    "message": "매트캡을 적용할 파츠를 체크하세요.",
+    "description": ""
+  },
+  "Parts.Matcap.NoImages.Fmt": {
+    "message": "아직 매트캡 이미지가 없습니다. 빛을 받은 구의 정사각형 그림(PNG 또는 JPG)을 {0}에 넣고 새로 고침을 누르세요.",
+    "description": ""
+  },
+  "Parts.Matcap.NoLibraries": {
+    "message": "매트캡 라이브러리 모드가 설치되어 있지 않습니다. 라이브러리는 공유 텍스처 하나에 여러 매트캡을 고를 수 있는 모드입니다.",
+    "description": ""
+  },
+  "Parts.Matcap.NoPenumbra": {
+    "message": "Penumbra를 사용할 수 없습니다.",
+    "description": ""
+  },
+  "Parts.Matcap.NothingToForget": {
+    "message": "이 모델의 매트캡은 모두 사용 중이라 잊을 것이 없습니다.",
+    "description": ""
+  },
+  "Parts.Matcap.NothingToUndo": {
+    "message": "이 모델에는 되돌릴 매트캡이 없습니다.",
+    "description": ""
+  },
+  "Parts.Matcap.NotWinning.Fmt": {
+    "message": "이 슬롯에는 대신 다른 모드의 텍스처가 그려지고 있습니다({0}). Penumbra에서 라이브러리 우선순위를 올리세요.",
+    "description": ""
+  },
+  "Parts.Matcap.OpenFolder": {
+    "message": "매트캡 폴더 열기",
+    "description": ""
+  },
+  "Parts.Matcap.Refresh": {
+    "message": "새로 고침",
+    "description": ""
+  },
+  "Parts.Matcap.RemakeSizes": {
+    "message": "그 파일은 Proteus의 리핏입니다. 사이즈를 다시 만들면 매트캡이 옮겨집니다.",
+    "description": ""
+  },
+  "Parts.Matcap.Rescan": {
+    "message": "다시 찾기",
+    "description": ""
+  },
+  "Parts.Matcap.Room.Fmt": {
+    "message": "이 모델에 재질을 {0}개 더 추가할 수 있습니다(리핏도 손톱과 속옷에 일부를 씁니다).",
+    "description": ""
+  },
+  "Parts.Matcap.Scanning": {
+    "message": "모드에서 매트캡 라이브러리를 찾는 중…",
+    "description": ""
+  },
+  "Parts.Matcap.SelectFailed": {
+    "message": "Penumbra가 라이브러리 설정을 받아들이지 않았습니다.",
+    "description": ""
+  },
+  "Parts.Matcap.SharedSlot.Fmt": {
+    "message": "이 슬롯은 한 번에 매트캡 하나만 보여 줍니다. 이 모드의 다른 매트캡 {0}개도 이를 써서 함께 바뀝니다.",
+    "description": ""
+  },
+  "Parts.Matcap.ShareNote.Fmt": {
+    "message": "이 모드를 공유받는 사람도 같은 매트캡으로 설정한 {0}({1})이(가) 필요합니다. 그 텍스처는 절대 내 모드에 복사되지 않습니다.",
+    "description": ""
+  },
+  "Parts.Matcap.SiblingsSkipped.Fmt": {
+    "message": "파츠가 달라 다음 다른 체형 옵션에는 적용하지 않았습니다: {0}.",
+    "description": ""
+  },
+  "Parts.Matcap.SkinTip": {
+    "message": "피부에는 매트캡을 적용할 수 없습니다.",
+    "description": ""
+  },
+  "Parts.Matcap.Source.Fmt": {
+    "message": "{0}에서",
+    "description": ""
+  },
+  "Parts.Matcap.SourceImages": {
+    "message": "내 이미지",
+    "description": ""
+  },
+  "Parts.Matcap.SourceLibraries": {
+    "message": "라이브러리 모드",
+    "description": ""
+  },
+  "Parts.Matcap.SourceProteus": {
+    "message": "Proteus 매트캡",
+    "description": ""
+  },
+  "Parts.Matcap.SourceProteus.Tip": {
+    "message": "Proteus에 포함된 매트캡으로, 매트캡을 처음 열 때 내려받습니다.",
+    "description": ""
+  },
+  "Parts.Matcap.PackDownloading.Fmt": {
+    "message": "Proteus 매트캡을 내려받는 중… {0} / {1}",
+    "description": ""
+  },
+  "Parts.Matcap.PackFailed": {
+    "message": "Proteus 매트캡을 내려받지 못했습니다. 연결을 확인한 뒤 다시 시도하세요.",
+    "description": ""
+  },
+  "Parts.Matcap.PackRetry": {
+    "message": "다시 시도",
+    "description": ""
+  },
+  "Parts.Matcap.Superseded": {
+    "message": "모델이 더 이상 이 매트캡을 쓰지 않습니다(모드가 업데이트됨).",
+    "description": ""
+  },
+  "Parts.Matcap.ThisMod": {
+    "message": "(이 모드)",
+    "description": ""
+  },
+  "Parts.Matcap.Ticked.Fmt": {
+    "message": "파츠 {0}개 체크됨.",
+    "description": ""
+  },
+  "Parts.Matcap.Undo": {
+    "message": "이 모델의 매트캡 되돌리기",
+    "description": ""
+  },
+  "Parts.Matcap.UndoGroup.Fmt": {
+    "message": "이 매트캡을 공유하는 다른 체형 옵션도 되돌립니다: {0}.",
+    "description": ""
+  },
+  "Parts.Matcap.Undone.Fmt": {
+    "message": "모델 파일 {0}개의 매트캡을 되돌렸습니다.",
+    "description": ""
+  },
+  "Parts.Matcap.Working": {
+    "message": "매트캡을 쓰는 중…",
+    "description": ""
+  },
+  "Parts.Tool.Matcap": {
+    "message": "매트캡",
+    "description": ""
+  },
+  "Parts.Tool.Matcap.Tip": {
+    "message": "체크한 파츠에 매트캡을 적용합니다. 구의 그림으로 칠한 반짝이고 유리나 보석 같은 모습입니다. 파츠에는 모드에 쓰이는 전용 재질이 생기므로 Proteus를 꺼도 보입니다.",
+    "description": ""
+  },
+  "Parts.Vanilla.Ears.Fmt": {
+    "message": "귀 {0} ({1})",
+    "description": ""
+  },
+  "Parts.Vanilla.Tail.Fmt": {
+    "message": "꼬리 {0} ({1})",
+    "description": ""
+  },
+  "Settings.MatcapLibrary": {
+    "message": "매트캡 이미지",
+    "description": ""
+  },
+  "Settings.MatcapLibrary.Tip.Fmt": {
+    "message": "내 매트캡 이미지가 있는 폴더를 엽니다: {0}",
+    "description": ""
+  },
+  "Matcap.Refused.NoHorns": {
+    "message": "이 얼굴에는 뿔이 없습니다. 얼굴에서는 뿔에만 매트캡을 입힐 수 있습니다.",
+    "description": ""
+  },
+  "Matcap.Refused.NotHorn": {
+    "message": "얼굴에서는 뿔에만 매트캡을 입힐 수 있습니다.",
+    "description": ""
+  },
+  "Parts.Matcap.DrawnThroughFace": {
+    "message": "얼굴이 얼굴 오버레이의 재작성을 통해 그려지고 있습니다. 매트캡은 다음 새로 고침 후에 보입니다.",
+    "description": ""
+  },
+  "Parts.Matcap.FaceOverlayOn": {
+    "message": "그 얼굴은 얼굴 오버레이를 통해 그려지고 있습니다. 얼굴을 고르려면 오버레이를 끄거나 목록에서 얼굴 모드를 여세요.",
+    "description": ""
+  },
+  "Parts.Matcap.HornColourNote": {
+    "message": "매트캡을 입힌 뿔은 더 이상 캐릭터의 뿔 색을 따르지 않으며, 모자는 여전히 뿔을 가립니다.",
+    "description": ""
+  },
+  "Parts.Matcap.MatcapsOnlyHere": {
+    "message": "자신의 얼굴, 귀, 꼬리는 매트캡에서만 열리므로 닫았습니다.",
+    "description": ""
+  },
+  "Parts.Matcap.NoHorns": {
+    "message": "이 얼굴에는 뿔이 없습니다. 얼굴에서는 뿔에만 매트캡을 입힐 수 있습니다.",
+    "description": ""
+  },
+  "Parts.Matcap.NotHornTip": {
+    "message": "얼굴에서는 뿔에만 매트캡을 입힐 수 있습니다.",
+    "description": ""
+  },
+  "Parts.Vanilla.FaceHorns.Fmt": {
+    "message": "뿔 (얼굴 {0}, {1})",
+    "description": ""
+  },
+  "Parts.Matcap.BackupKept.Fmt": {
+    "message": "이전 백업을 옮기지 못했습니다: {0}. 다음에 그곳에 매트캡을 입힐 때 먼저 옮깁니다.",
+    "description": ""
+  },
+  "Parts.Matcap.KeptForRefits.Fmt": {
+    "message": "이것으로 만든 리핏이 아직 매트캡을 그리고 있어, 사이즈를 다시 만들 때까지 파일이 남습니다: {0}.",
+    "description": ""
+  },
+  "Parts.Matcap.KeptForPorts.Fmt": {
+    "message": "이것으로 만든 머리카락 이식이나 귀 없는 사본이 아직 매트캡을 그리고 있어, 그것들을 다시 만들 때까지 파일이 남습니다: {0}.",
+    "description": ""
+  },
+  "Parts.Matcap.PortKept": {
+    "message": "이 모델은 Proteus가 이식한 머리카락입니다. 매트캡이 있는 동안 Proteus는 이 모델을 그대로 두며, 매트캡을 되돌릴 때까지 같은 재질을 공유하는 다른 종족의 이식도 저절로 다시 만들지 않습니다. 스튜디오에서 그 종족을 직접 이식하면 다시 만들어집니다.",
     "description": ""
   }
 }

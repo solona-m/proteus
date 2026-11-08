@@ -51,10 +51,15 @@ internal static partial class SizeSetRefit
     /// automatic reading cannot place (see <c>SizeSetRefit.Source.cs</c>); null reads every size automatically. A shoe's
     /// or glove's own sizes never read it; a skinless women's one made a men's is read there first, when its cloth sits
     /// on it (see <c>SizeSetRefit.CrossSexEnds.cs</c>).</param>
+    /// <param name="KeepHiddenSkin">Chest and legs keep each new body's skin whole where the author deleted theirs
+    /// (<see cref="BodyRetarget.Plan"/>'s cutHidden off — the Studio's "Remove hidden skin" rule, own-sex sizes and men's
+    /// versions alike). A slot the piece only reaches onto, and every shoe and glove, are cut whatever this says:
+    /// <see cref="Configuration.SizeSetKeepHiddenSkin"/>. Off by default.</param>
     internal sealed record Request(string ModRoot, IReadOnlyList<string> Keys, bool Yas, bool Remake,
                                    IReadOnlyList<BodyModIndex.Entry> Bodies, Func<string, byte[]?>? ReadGameFile = null,
                                    bool Ends = true, Func<string, BodySizeCatalog?>? GameBody = null,
-                                   bool Piercings = false, AcrossInputs? Across = null, string? MadeOn = null)
+                                   bool Piercings = false, AcrossInputs? Across = null, string? MadeOn = null,
+                                   bool KeepHiddenSkin = false)
     {
         /// <summary>
         /// Whether a mod is one the size table resolves a body to (<see cref="SupportedBodies.Recognised"/>, women's and
@@ -548,6 +553,8 @@ internal static partial class SizeSetRefit
     {
         var notes = runLog.Notes;
         int made = 0;
+        // Said once, so a log export shows the choice the sizes were made with.
+        if (request.KeepHiddenSkin) log.Information("[Proteus] size set: hidden skin kept whole");
         var (pieces, endsLeftOut, all) = ReadPieces(request.ModRoot, request.ReadGameFile, request.Ends,
             path => log.Debug("[Proteus] size set: {0} is the game's own model or a copy of it, not a piece", path),
             (path, was, now, rivals) => log.Information(
@@ -967,14 +974,17 @@ internal static partial class SizeSetRefit
                 }
 
                 var plan = BodyRetarget.Plan(chosen.Garment, chosen.Bytes, pairs, piece.Slot, held: new HashSet<int>(),
-                                             replaceSkin: true, acrossBodies: across, clearBody: false, cutHidden: true,
+                                             replaceSkin: true, acrossBodies: across, clearBody: false,
+                                             cutHidden: !request.KeepHiddenSkin,
                                              keepShape: chosen.Shape, log: line => log.Debug("[Proteus] size set: {0}", line),
                                              warn: line => log.Warning("[Proteus] size set: {0}", line),
                                              carryPiercings: request.Piercings);
                 plan = RefitCore.MatchSkinToBody(plan, chosen.SourcePath, targetPath, uvRemap, male, log);
                 // Folds are said, never refused (cross-sex-tops-yas).
-                log.Information("[Proteus] size set: {0} onto {1} (moved up to {2:F1} mm, {3} folded)", piece.Label, option,
-                                plan.Report.WorstMove * 1000f, plan.Report.Folded);
+                // The body's skin triangles put in and left out where the author cut theirs (Keep hidden skin).
+                log.Information("[Proteus] size set: {0} onto {1} (moved up to {2:F1} mm, {3} folded; skin {4} added, "
+                              + "{5} cut)", piece.Label, option, plan.Report.WorstMove * 1000f, plan.Report.Folded,
+                                plan.Report.Swap?.Added ?? 0, plan.Report.Swap?.Cut ?? 0);
                 if (RefitCore.ReleasedLog(plan.Report, chosen.ShapeNames) is { } released)
                     log.Information("[Proteus] size set: {0} {1}: let go of kept piece(s) that would sink moved whole: {2}",
                                     piece.Label, option, released);

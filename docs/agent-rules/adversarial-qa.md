@@ -58,7 +58,7 @@ Errors are always `{"error":{"code","message"}}`. A `503 framework-timeout` mean
 game's framework did not run the request within 10 s (a loading screen): wait and
 retry — abandoned work never runs later. A `503 too-many-connections` means more than
 four requests were open at once: retry when one finishes; it is never a busy run
-(`409 busy`). A body that repeats a field is refused: `400 bad-json`.
+(`409 busy`). A body that repeats a field is refused: `400 bad-json`; a query string that repeats a key, on any route: `400 bad-request`.
 
 | Route | What it does |
 |---|---|
@@ -66,15 +66,35 @@ four requests were open at once: retry when one finishes; it is never a busy run
 | `GET /state` | The live character (race, tribe, gender, body type, drawn race code), the player collection's id, every drawn model (`slot`, `loaded`, `gamePath`, `resolved`, `modDir`; `slot:-1` = Penumbra resolves it but it is not drawn), the compositor (`phase`: `boot-hold`/`compositing`/`pending`/`idle`, last result, last refresh), `redraws` (`count`, `lastAtUtc`), `autoRefit` (`busy`, `pending`), `shaderUpgrade` and `variantRepoint` (below), the current `job`, `gear` (the ten slots in order: `slot`, `item`, `dyes`, and `set`/`variant` only for a Glamourer custom id; nulls when Glamourer cannot be read) and `harnessChanges` (`stopping`, and this session's recorded equips `gear[]` with `original`, `applied`, `requested`, `verified`, and holds `holds[]` with `before`). No names. |
 | `GET /log?since=<n>&max=<m>` | Plugin log lines after cursor `n` (`max` default 200, cap 2000): `{session, next, oldest, dropped, lines:[{seq,text}]}`. Pass `next` back as `since`. `dropped:true` = lines were lost to the ring. |
 | `GET /screenshot?ui=true\|false` | The game screen as PNG (`ui=false` = before Dalamud's UI). 429 while another is taken; 503 `capture-timeout` when the game is minimised or not rendering. |
-| `POST /actions/refit` | `{"mod":"<Penumbra folder name>","bodies":["rue","tbse@women"],"remake":false}` → 202 `{job, modDir, state}`. Runs the Studio's "Make every size" with the Studio's current settings, after backing the mod up; then reloads the mod and redraws. |
+| `POST /actions/refit` | `{"mod":"<Penumbra folder name>","bodies":["rue","tbse@women"],"remake":false}` → 202 `{job, modDir, state}`. Runs the Studio's "Make every size" with the Studio's current settings, after backing the mod up; then reloads the mod and redraws. Optional `"keepHiddenSkin":true\|false` overrides the Studio's "Keep hidden skin" for that run alone (never saved; anything but a bool → 400 `invalid-field`); the result's `options.keepHiddenSkin` is the choice used, and a ticked run logs "size set: hidden skin kept whole". Each size's log line names its skin triangles added and cut. |
 | `POST /actions/restore` | `{"job":"<refit job id>"}`, or `{"mod":"<folder>"}`, or `{"mod":"<folder>","backup":"<backupId>"}` → 202. |
 | `POST /actions/shader-upgrade` | `{"enabled":true\|false}` and/or `{"maskGloss":"inverse-specular"\|"low"\|"mid"}` → 200 `{enabled, maskGloss}`; `{"undoWorn":true}` (optionally `"decline":false`) or `{"upgradeWornNow":true}` → 202 `{started}`. Switches the gear shader upgrade as its Settings checkbox does; `maskGloss` picks how the diffuse form's derived mask fills its roughness channel, for this session only (never saved) and only for files written after it; `undoWorn` / `upgradeWornNow` run the two Settings buttons. 409 `busy` while a run or auto refit is working; 400 `invalid-field` for an unknown field or value, a wrong type, no field, `decline` without `undoWorn`, or both runs at once. |
 | `POST /actions/variant-repoint` | `{"enabled":true\|false}` → 200 `{enabled}`; `{"undoWorn":true}` (optionally `"decline":false`) or `{"repointWornNow":true}` → 202 `{started}`. Switches "Gear variants" as its Settings checkbox does; `undoWorn` / `repointWornNow` run the two Settings buttons. 409 `busy` while a run, the shader upgrade or auto refit is working; 400 `invalid-field` for an unknown field, a wrong type, no field, `decline` without `undoWorn`, or both runs at once. |
-| `GET /hair-port?mod=<folder>&hair=<hair model game path>` | Read-only: what the Studio's "Port to all races" lists for that hairstyle — `{modDir, hair, source, sourceRace, id, otherSexNote, rows:[{race:"c0101", state: open\|covered\|ported\|stale\|no-style\|other-sex-authored, otherSex, ownVersion, ownSkeleton, tickable, defaultTicked, declined, stateText, warning}], ports:[{race, targetGamePath, sourceGamePath, group, option, file, auto, est, skeletonFrom, portVersion}]}`. `hair` may use either slash and any case; a port of ours stands for the author's hairstyle it was made from (`source`). `warning` is set only on `ported`/`stale` rows. 404 `hair-not-in-mod`, 409 `legacy-mod`, 409 `mod-unreadable`. |
-| `POST /actions/hair-port` | `{"mod":"<folder>","hair":"<hair model game path>","races":["c0101","c0401"]}` → 202 `{job, modDir, state}`: the Studio's **Port** button for those races (leave `races` out for the Studio's default ticks), after a backup; then reloads the mod and redraws. `{"mod","hair","remove":true}` is the **Remove ports** button. Only races the Studio lets you tick are ported; the rest come back in `result.skippedRaces` (`not-listed`, `covered`, `ported`, `no-style`, `other-sex-authored`, `own-version`, `own-skeleton`). Job kinds `hair-port` / `hair-remove`; `result` = `{action, summary: ported\|nothing-to-port\|nothing-ported\|removed\|nothing-to-remove, resultLine, source, asked, skippedRaces, ported:[{race, group, option, est, skeletonFrom}], stripped, refused:[{race, reason}], warnings, current, saved}` (remove: `removed, message, remaining`). No backup is taken when nothing would be written. 400 `invalid-field` for a bad `hair`, `races` that are not playable `cNNNN` codes, `remove` other than `true`, or both; 409 `hair-port-busy` (below). |
+| `GET /hair-port?mod=<folder>&hair=<hair model game path>` | Read-only: what the Studio's "Port to all races" lists for that hairstyle — `{modDir, hair, source, sourceRace, id, otherSexNote, rows:[{race:"c0101", state: open\|covered\|ported\|stale\|no-style\|other-sex-authored\|ported-elsewhere, otherSex, ownVersion, ownSkeleton, tickable, defaultTicked, declined, stateText, warning, portedFrom}], ports:[{race, targetGamePath, sourceGamePath, group, option, file, auto, est, skeletonFrom, portVersion}]}`. `hair` may use either slash and any case; a port of ours stands for the author's hairstyle it was made from (`source`). `warning` is set only on `ported`/`stale` rows. `ported-elsewhere`: another hairstyle of the mod has a port of that race in a place this one is published from — tickable, never default-ticked; `portedFrom` is that hairstyle's game path (null otherwise). 404 `hair-not-in-mod`, 409 `legacy-mod`, 409 `mod-unreadable`. |
+| `POST /actions/hair-port` | `{"mod":"<folder>","hair":"<hair model game path>","races":["c0101","c0401"]}` → 202 `{job, modDir, state}`: the Studio's **Port** button for those races (leave `races` out for the Studio's default ticks), after a backup; then reloads the mod and redraws. `{"mod","hair","remove":true}` is the **Remove ports** button. Only races the Studio lets you tick are ported; the rest come back in `result.skippedRaces` (`not-listed`, `covered`, `ported`, `no-style`, `other-sex-authored`, `own-version`, `own-skeleton`). Job kinds `hair-port` / `hair-remove`; `result` = `{action, summary: ported\|nothing-to-port\|nothing-ported\|removed\|nothing-to-remove, resultLine, source, asked, skippedRaces, ported:[{race, group, option, est, skeletonFrom}], stripped, refused:[{race, reason}], warnings, current, saved, replaced:[{race, from}]}` — `replaced` lists races whose port replaced another hairstyle's (`from`, its game path); a `ported-elsewhere` race is ported only when listed in `races` (remove: `removed, message, remaining`). No backup is taken when nothing would be written. 400 `invalid-field` for a bad `hair`, `races` that are not playable `cNNNN` codes, `remove` other than `true`, or both; 409 `hair-port-busy` (below). |
 | `POST /actions/equip` | `{"slot":"Body","item":12345}` or `{"slot":"Body","set":317,"variant":2}` → 200 `{slot, sent, item, set, variant, dyes, previous, original}` (`readBack:false` when the worn item could not be read back). Equips through Glamourer for this session only (no lock, no design). Slots: Head, Body, Hands, Legs, Feet, Ears, Neck, Wrists, RFinger, LFinger (any case). `set`/`variant` equip that model even when no item uses it. 400 `invalid-field` / `item-invalid`; 409 `busy`, `auto-refit-busy`, `not-logged-in`, `carrier-slot`, `glamourer-refused`; 503 `glamourer-unavailable`, `harness-stopping`. |
 | `POST /actions/mod-settings` | `{"mod":"<folder>","enabled":false}` and/or `"priority":1000` → 200 `{mod, collection, enabled, priority, before, redrawRequested}`. Holds the mod in the player's collection with a Penumbra **temporary** setting (its options kept), never saved. 409 `held-elsewhere` when another plugin (Glamourer, design binding) holds it; 404 `mod-not-found`; 400 `managed-mod`; 409 `no-collection`, `penumbra-refused`; 503 `penumbra-unavailable`, `harness-stopping`. |
-| `POST /actions/put-back` | `{}` → 200 `{gear:[{slot,result}], holds:[{mod,result}], sweep, redrawRequested}`. Undoes every equip and hold of this session. Never refused. |
+| `POST /actions/mod-settings` with `"permanent":true` | `{"mod":"<Proteus mod folder>","enabled":false,"permanent":true}` → 200 `{mod, collection, permanent:true, enabled, priority, before:{enabled,priority}, redrawRequested}`. Writes a **Proteus** mod's own enabled/priority (not a hold), recorded for put-back (see **Design bindings**). 409 `not-a-proteus-mod`, `penumbra-refused`; 503 `record-failed`. |
+| `POST /actions/put-back` | `{}` → 200 `{gear:[{slot,result}], holds:[{mod,result}], sweep, redrawRequested, studio:[{mod,files,panel,code,kept}], binding}`. Undoes every equip and hold of this session, then ends the Studio session (see *The Studio*), then the binding session (`binding` is null when there is none: see **Design bindings**). `output` is `{locks:[{file,result: released\|gone}], moveFault:{result: disarmed\|none}, fault:{result: cleared\|none}, autoRedraw:{result: cleared\|none}}` for the shell output routes (a cleared shell fault recomposites). 409 `busy` only while a design apply is settling. |
+| `GET /bindings?mod=<folder>&group=<g>&option=<o>&design=<guid>&names=1` | Read-only design-binding state: `{enabled, followsAutomation, restoresCharacterMods, unequipUnset, echoWindowOpen, echoMsLeft, active:{id, fields}, storeSha256, bindings:[{id, capturedUtc, mods, sha256}], designs:[{id, bound}], mod, design}`. With `mod` (and `group`+`option`): `{mod, governed, presetDriven, live:[{row,diffuse,emissive}], stored:[…], settings:{enabled,priority,options,temporary}}`; with `design`: its applied `fields`. Names appear only with `names=1`, scrubbed. `group`/`option` are looked up in the mod's own groups: an exact name wins, else a single case-insensitive match is used and echoed in the mod's spelling (`mod.group`, `mod.option`). Only these five query keys are taken. 400 `invalid-field` (an unknown query key; a name matching several groups/options when case is ignored); 404 `mod-not-found`, `design-not-found`, `option-not-found` (no such group or option, a simple mod included); 409 `mod-unreadable` (its groups can't be read); 503 `glamourer-unavailable`. |
+| `POST /actions/glamourer-apply` | `{"design":"<guid>"}` (optionally `"allowAutoWriters":true`) → 200 `{design, activeBefore, activeAfter, finalizedSeen, settled, echoWindowOpen, echoMsLeft}`. Applies a Glamourer design to the character through Glamourer's own `ApplyDesign` IPC, as a user or plugin does (Proteus sees `finalized=DesignApplied`), and answers once its deferred work has settled. 409 `busy`, `auto-refit-busy`, `shader-upgrade-busy`, `variant-repoint-busy`, `hair-port-busy`, `not-logged-in`, `presets-pinned`, `put-back-first`, `auto-writers-on`, `model-change`, `glamourer-refused`; 404 `design-not-found`; 503 `glamourer-unavailable`, `record-failed`, `harness-stopping`. |
+| `POST /actions/binding-edit` | `{"mod","group","option","row":<n>,"diffuse":"#RRGGBB"}` sets one live colour row (sub-row A) of a mod the active binding captured, through the colour editor's path; `{"mod","group","option","clear":true}` clears that option's live override, through **Reset to defaults**' (live-only) path. Leave `group`/`option` out for a simple mod's top level. → 200 `{mod, group, option, governed, live}`. Never writes the binding store or the mod's files. `group`/`option` resolve as on `GET /bindings` (wrong case edits the mod's own option). 409 `binding-off`, `no-active-binding`, `not-bound`, `preset-driven`, `no-override-rows`, `busy`, `mod-unreadable`; 404 `row-not-found`, `mod-not-found`, `option-not-found`. |
+| `GET /studio` | The Studio's state: `open {modDir,file,gamePath}`, `window`, `tool`, `mode` (parts/polygons/all), `view`, `settings {mirror,adjacent,falloffMm,moveSkin}`, `effective {mirrorNow,adjacentNow,falloffMm,skinMovesNow,followReady}` (`effective.falloffMm` is 0 when the falloff does not apply: All mode, or adjacent off), `parts [{label,material,island,skin,locked,moves}]`, `chosen`, `all {seeds,movingRows,rows,includesSkin,pivot}`, `pivot`, `help`, `edit {dirty,canUndo,worstMm,saveOwed,editVersion}`, `status`, `matcapPreview {state: none|building|shown|note, note, drawnNote, gamePaths}` (the Matcaps click preview), `harnessOpened`, `session`. Positions are model space, metres. |
+| `POST /actions/studio-open` | `{"mod":"<folder>","model":"<file or game path>","show":true}` → 200 the `/studio` body. Opens the model as picking it does; `show` brings the window up on the Studio tab. Refused: `managed-mod`, `mod-not-found`, `model-not-in-mod` (the message lists the models), `model-ambiguous` (give the file), `legacy-mod`, `studio-has-edits`, `studio-busy`, `put-back-first` (a session is already recorded), `busy`, `auto-refit-busy`, `harness-stopping`. |
+| `POST /actions/studio-set` | Any of `{"tool":"move\|rotate\|scale","mode":"parts\|polygons\|all","view":"character\|model","mirror":b,"adjacent":b,"falloffMm":1..300,"moveSkin":b,"unlockAll":true,"lock":[label],"unlock":[label],"part":"<label>"}`, applied in that order → 200 `{applied, locks:[{label,result}], chosen, state}`. Refused: `invalid-field`, `wrong-tool` (locks outside Move, Rotate or Scale), `no-studio-session`, `studio-changed`, `dragging`, `busy`, `auto-refit-busy`, `harness-stopping`. |
+| `POST /actions/studio-drag` | One of `{"offsetMm":[x,y,z]}` (Move), `{"axis":"x\|y\|z" or [x,y,z],"degrees":d}` (Rotate), `{"factor":f}` / `{"factors":[x,y,z]}` (Scale), `{"undo":true}` → 200 `{kind, moved, nodes, worstMm, pivot, saved, status, state}`. Runs the gizmo's own drag about its pivot and saves at once. Refused: `invalid-field`, `wrong-tool`, `nothing-to-move`, `nothing-to-undo`, `no-studio-session`, `studio-changed`, `dragging`, `busy`, `auto-refit-busy`, `harness-stopping`. |
+| `GET /matcaps` | `[?refresh=1][&retry=1][&mod=<folder>&model=<file or game path>]` → 200 `{scanned, scanning, images:[{name,path,source: global\|proteus}], pack:{state: idle\|downloading\|ready\|failed, have, total, detail}, libraries:[{mod,name,website,group,texture,options:[{name}],selected,enabled,inherited,heldBy,providers}], model}`; with `mod`+`model`, `model` is `{model, gamePath, images:[{name,fromMod,fromPack}], parts:[{label,material,skin,onMatcap,tickable,horn,island,alphaTested}] (every part but skin is `tickable`, matcap parts too — ticked to change their matcap; on a face only `horn` parts), siblings:[{file,linesUp}] (`linesUp` against the tickable parts not on a matcap: what a new Apply reaches), group (the apply group: what an Undo here restores with it), entries:[{name,gamePaths,meshes,source,state: ok\|superseded\|edited}], materialRoom}`. `refresh=1` rescans every mod. Asking starts the download of Proteus's own matcaps (first use, as showing the pane does) into the plugin's config folder — never a mod, nothing to put back; `retry=1` re-arms a failed or finished download (QA only). `pack` is reported even with Penumbra unavailable (in the 503 body). 400 `invalid-field`; 404 `mod-not-found`, `model-not-in-mod`; 409 `model-ambiguous`, `legacy-mod`; 503 `penumbra-unavailable`, `studio-unavailable`. |
+| `POST /actions/matcap-image` | `{"name":"qa-<x>.png","color":"#RRGGBB"}` → 200 `{name, path}`. Writes a generated 256×256 shaded sphere into the global matcap folder; put-back deletes it while unchanged (`matcap.images`: `deleted`, `changed`, `gone`). 400 `invalid-field`; 409 `exists`; 503 `harness-stopping`. |
+| `POST /actions/matcap` | Apply `{"mod","model","parts":[labels],"image":"<name>"[,"pack":true]}` (an image name is looked up in the mod's folder, then the global one, then Proteus's own; `pack: true` takes Proteus's only) or `{…,"library":"<folder>","group","option","confirmEnable":b}` — when every named part already has a matcap, Apply **changes** those matcaps in place (the panel's Apply; there is no separate change form: `entry` is an unknown field), parts with and without one together refuse `already-matcap`; `{"mod","model","undo":true}`; `{"mod","model","forget":true}` → 202 `{job, modDir, state}` (kinds `matcap`, `matcap-undo`, `matcap-forget`), after a whole-mod backup. `result` = `{action, summary: applied\|changed\|undone\|forgotten\|refused\|nothing-to-undo (Undo/Forget only), code, resultLine, material, gamePaths, files:[{file,meshesAdded,lod0Cut}] (null for a change), materials:[{name,gamePaths,normal,alphaThreshold}] (a change: `{name,gamePaths}` of each changed matcap), drawn:{line,ours,throughFace} (a new Apply only: the panel's drawn-file line, null when the written file draws), siblingsSkipped, librarySetting}`. Every successful job, Forget included, ends in the reload and redraw. A library that is off needs `confirmEnable` (`needs-confirm` otherwise, nothing written). Refusal codes: `legacy-mod`, `imported-piece`, `not-target`, `no-horns`, `not-horn`, `skin-part`, `already-matcap`, `regenerated-model` (earless copies only; refits and hair ports take a matcap — an Apply on a hair port ends `resultLine` with the "kept as it is" sentence), `model-layout`, `material-cap`, `not-square`, `image-unreadable`, `no-template`, `edited`, `later-feature`, `cross-kind-change`, `unknown-part\|image\|library\|option`. Request refusals: 400 `invalid-field`; 409 `busy`, `auto-refit-busy`, `studio-busy` (never flushed); 503 `harness-stopping`, `studio-unavailable`. |
+| `POST /actions/matcap-preview` | The Matcaps tool's click preview on the Studio session's model (open it with `studio-open` first): `{"parts":[labels],"image":"<name>"[,"pack":true]}` or `{"parts":[…],"library":"<folder>","group","option"}` — switches the tool to Matcaps, ticks the parts as the part list does and clicks the matcap, as the pane does — or `{"end":true}`. → 200 `{preview:{state: none|building|shown|note, note, drawnNote, gamePaths}, state}`; poll `GET /studio` until `matcapPreview.state` is `shown` or `note`. Writes **no mod and no collection setting**: a Penumbra temporary mod on the player's collection redirects the open model, its new materials and textures (a library option's texture as a private copy) to files in `%TEMP%\proteus-live-brush`; put-back, Apply, Undo, Forget, a tool, model or view switch end it. Gear and accessories only: hair, tails, ears, horns and the game's own gear answer `note`. Refusals: 400 `invalid-field`; 404 `unknown-part`, `unknown-image`, `unknown-library`, `unknown-option`; 409 `untickable-part`, `no-studio-session`, `studio-changed`, `dragging`, `busy`, `auto-refit-busy`; 503 `harness-stopping`, `studio-unavailable`. |
+| `POST /actions/mod-settings` with `"collection"` | `{"mod","enabled":false,"collection":"<guid>"}`: the same temporary hold, in another collection (one `/state.collections` lists, e.g. a sync plugin's). No redraw is asked for (`redrawRequested:false`): only the player's collection changes what the character draws. Put-back removes it, and its sweep covers every collection Penumbra lists. 400 `invalid-field` (not a guid, or with `permanent`); 404 `collection-not-found`. The player's own id behaves as no `collection`. |
+| `POST /actions/boot-rearm` | `{}` → 200 `{rearmed, boot:{latched, step, nextDueInMs}}`. Re-arms the compositor's boot probe as a zone change does (see **Idle disk I/O checks**). Nothing to put back. 503 `harness-stopping`. |
+| `POST /actions/sidecar-edit` | `{"mod","row":<n>,"diffuse":"#RRGGBB"}` (optionally `"group"`+`"option"`, `"sub":"A"\|"B"`, `"restoreMtime":true`) → 200 `{mode:"save", mod, before, after, readBack, stampBefore, stampAfter, sameLength, mtimeRestored, backup, recomposite, governed}`. `governed:true`: the active design binding drives that mod's colours, so the saved colour cannot show in the composite — check the composite on an ungoverned mod. Changes one colour row through Proteus's **own** sidecar save, after backing `Proteus/metadata.json` up; put-back restores it. 400 `invalid-field`; 404 `mod-not-found`, `not-a-proteus-mod`, `row-not-found`; 409 `busy`, `auto-refit-busy`, `user-edit-held`; 500 `save-failed`; 503 `harness-stopping`. |
+| `GET /sidecar?mod=<folder>&group=<g>&option=<o>&row=<n>` | Read-only, through discovery (and its cache): `{mod, found, rows:[{row, diffuseA, diffuseB}], staged}`. 404 `mod-not-found`, `not-a-proteus-mod`. |
+| `POST /actions/auto-refit` | `{"enabled":true\|false}` → 200 `{config, harnessOverride, effective, before}`. Switches auto refit for this harness session only: in memory, never saved; put-back or unload clears it. 400 `invalid-field`; 409 `busy`; 503 `harness-stopping`. |
+| `POST /actions/output-lock` | `{"files":["textures/ss_*_*.tex"],"ms":1..120000}` (hold the files), `{"files":[…],"failMoves":1..20}` (fail their next moves) or `{"release":true}` → 200 `{mode:"lock", held:[{file,bytes}], untilUtc}` / `{mode:"fail-moves", patterns, failMoves, untilUtc}` / `{released:[file], movesLeft}`. Paths are into Proteus's **own** output mod: `textures`, `materials` or `models`, a slash, and a leaf that may hold `*`. `ms` holds up to 32 existing files read-only (no write or delete sharing): a replace fails as when the game holds them. `failMoves` makes the next N moves of matching files into place fail with a sharing violation (patterns may name files not yet written); only moves into Proteus's own output folder are ever failed, never a user's mod. One set at a time; released at expiry, on release, at put-back, on `off` and on unload. 400 `invalid-field`; 404 `no-match` (`ms` only); 409 `locks-held`; 503 `harness-stopping`. |
+| `POST /actions/shell-fault` | `{"shell":"ss_1"\|"any","slot":"norm\|mask\|id\|base\|catc" (default norm),"until":"auto-redraw\|put-back"}` or `{"clear":true}` → 200 `{armed, shell, slot, until}` / `{cleared, recomposite}`. Every publishing composite while armed leaves that shell texture out of Proteus's own manifest, so the shell's material fails to load and the shell is partly drawn. `auto-redraw`: healed just before Proteus's automatic redraw (manifest rebuilt from the live one, manipulations kept), so the redraw draws it; `put-back`: stays withheld, so the named message follows. Clear, put-back and `off` clear it and recomposite; an unload or a stop off the framework thread clears it without one (the next composite after reload publishes in full). Never counts as a write failure. 400 `invalid-field`; 409 `fault-armed`; 503 `harness-stopping`. |
+| `POST /actions/auto-redraw` | `{"enabled":true\|false}` → 200 `{config, harnessOverride, effective, before, recomposite}`. Switches auto redraw for the compositor for this harness session only: in memory, never saved; put-back or unload clears it. Switching it back on recomposites (`recomposite: true`), as the Settings checkbox does. 400 `invalid-field`; 503 `harness-stopping`. |
 | `GET /jobs/{id}` | `{id, kind, modDir, state: queued\|running\|done\|failed\|cancelled, progress, backup, reloaded, redrawRequested, redrawObserved, autoRefitFollowed, result, restored, error}` |
 
 `mod` is the **folder name** Penumbra keeps the mod in (case-insensitive), never its
@@ -148,6 +168,9 @@ outcome:
 
 **Where backups live:** `$APPDATA/XIVLauncher/pluginConfigs/Proteus/test-harness/backups/<modDir>/<backupId>/`.
 The harness never deletes or overwrites a backup; the user may delete them by hand.
+(The one exception is inside the mod: the Studio's own `meshvolume-backup`, which a
+harness Studio drag created and put-back's Undo saved changes removes — see
+*The Studio*.)
 
 ## You must put back every equip and hold
 
@@ -176,6 +199,81 @@ Equips and holds change the shared character for everyone, so:
 - Start with a smoke check: one equip and put-back of one slot, one hold and
   put-back, with `/state` read before and after each.
 
+## Design bindings
+
+`GET /bindings`, `POST /actions/glamourer-apply`, `POST /actions/binding-edit` and
+`/actions/mod-settings` with `"permanent": true` let you drive design binding as a
+player does: apply a Glamourer design, edit a live colour, change a Proteus mod's
+own setting. The harness never writes the binding store (`design_bindings.json`) or
+a mod's files: there is no harness Update, and **Reset to defaults**' rewrite of the
+mod's metadata is not driven (only its live half, `clear`). Those stay UNVERIFIED for
+the user, and so do automation, zone changes and relogin (no route drives them).
+
+- **An IPC apply is not quite a UI apply.** Glamourer marks the state's source
+  `IpcManual` instead of `Manual`, and may not re-assert a design's associated mod
+  temporary settings. Temporary settings a restore cleared (another plugin's, with
+  "Restore every mod on the character" on) are not put back by the harness: their
+  owner re-asserts them on its next apply. Report a difference that may come from
+  this as such, not as a Proteus defect.
+
+- **Record first.** Before the session's first change that outlives the game (a
+  design apply, whose restore writes Proteus mods' permanent settings, or a
+  `permanent` write), the harness writes the Before values to
+  `test-harness/backups/<session>/binding.json`: the Glamourer state, the carriers,
+  the live binding state and every configured mod's own setting in the collection. If it cannot,
+  the change is refused with 503 `record-failed`. Put-back is the undo; the record is
+  for recovering by hand if put-back never ran (a crash, an unload off the framework
+  thread). A later binding session in the same harness session writes
+  `binding-2.json`, `binding-3.json`…: none is overwritten. With "Restore every mod on
+  the character" on, a design apply's restore writes other mods' own settings too;
+  every mod whose own setting changed is recorded and put back (back to inheriting
+  when it had no setting of its own). Never copy the record's content into a report.
+- **Refusals.** A design apply is refused while a per-mod preset is pinned
+  (`presets-pinned`: the apply would drop it for good), while harness equips are
+  recorded (`put-back-first`: put back, then apply, then equip), when the character's
+  collection changed since the session began (`collection-changed`, also for
+  `permanent`: put back first), when the design
+  would change race, gender, clan or body type (`model-change`), and while any
+  automatic writer is switched on: auto refit, the gear shader upgrade, Gear
+  variants, Fit hair automatically or Auto Hat Compat (`auto-writers-on`). Those
+  write into worn mods after the apply and put-back cannot undo that. Pass
+  `"allowAutoWriters": true` only when you will hash the worn mods first and clean up
+  as the shader upgrade, Gear variants, hair and auto refit sections say; with Fit
+  hair automatically on, a design that changes the hairstyle is still
+  `model-change`.
+- **Settling.** The apply answers only once the compositor and every automatic
+  writer are quiet (at most the redraw wait; `settled:false` otherwise: wait and
+  re-read). While it settles, every change route and put-back answer 409 `busy`:
+  wait for the apply's answer before sending anything else.
+- **The echo window.** For 2 s after a restore Proteus ignores the next design
+  apply as its own echo (`echoWindowOpen`, `echoMsLeft` in the apply's answer and
+  `/bindings`). Between any two applies wait until `echoWindowOpen` is false (at
+  least 2.5 s) and `compositor.phase` is `idle`, or the second apply is swallowed and
+  your check fails, or passes, for the wrong reason.
+- **Put-back** stops the restore's deferred work first, then puts the Glamourer
+  state back (carrier slots left alone) and re-reads it: `glamourer` is `restored`,
+  `partial` (something, such as advanced dyes, did not come back), `changed`
+  (someone applied something since: left alone), `failed` or `none`. Only after
+  `restored` (or `none`) does it write back each `permanent` setting and the `live`
+  binding state, so the character never wears one look with another's binding:
+  after `partial` or `failed` they are `skipped-inconsistent` and stay recorded for the
+  next put-back; after `changed` they are `skipped-inconsistent` and dropped for good
+  (the log names the record holding their Before values: tell the user). Each is
+  restored only while it is still what the harness left (`changed` otherwise). Retry
+  once; report what is left. `/state.harnessChanges.binding` shows the session (null
+  when none).
+- **Script** (AC-binding-reapply). Read `/bindings` first and note `active`,
+  `storeSha256` and each `sha256`; pick a governed mod M with live rows
+  (`?mod=M&group=G&option=O`). (1) `binding-edit` a row to `#FF00FF`, then
+  `glamourer-apply` the active design: `/log` shows `finalized=DesignApplied` and
+  "re-applied — restoring its binding", `live` equals `stored`, `storeSha256`
+  unchanged. (2) `permanent` a captured Proteus mod off, re-apply: it is back on. (3)
+  edit, `equip` a slot, hold another mod: the edit stays, no "re-applied" line, then
+  put back. (4) an unbound design whose fields don't overlap the active one's:
+  "another design applied over", the edit stays. (5) edit, `clear`, re-apply: `live`
+  equals `stored`. Finish with put-back and check `storeSha256`, each `sha256`,
+  `active` and `live` equal what you read first.
+
 Example (a variant case): hold the competing mod off, equip the model, assert, put
 back:
 
@@ -188,6 +286,178 @@ curl -s -X POST -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/
 curl -s -X POST -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" \
   -d '{}' http://127.0.0.1:$PORT/actions/put-back
 ```
+
+## The Studio (Move, Rotate, Scale)
+
+The Studio routes drive the Studio panel through the code its controls run: a drag
+goes through the gizmo's own begin, place and finish, and is **saved into the mod**
+at once (the brush save, which keeps the author's original in the mod's
+`Proteus/meshvolume-backup`). So:
+
+- **Pick a mod with no saved Studio edits** (`studio-has-edits` otherwise), and not
+  one the user is editing: `studio-busy` means the Studio has their drag, stroke or
+  unsaved edit, which the harness never flushes. Wear it if you want screenshots.
+- **Hash the mod's files before you start, and check them after put-back.**
+- Put-back closes the harness's model without saving, puts the files back with the
+  Studio's own **Undo saved changes**, restores the Studio's settings, locks and the
+  model that was open, and closes the window if `show` opened it. It reverts only
+  what is provably the harness's: every file the Studio record lists must be one a
+  harness save wrote and still hash as it wrote it, and the model must be untouched in
+  the Studio. Otherwise it reports `files: changed` / `panel: changed` with the
+  reason (`hash-changed`, `not-harness-saved`, `model-edited`, `save-owed`,
+  `drag-open`, `applying-sizes`) and touches nothing; tell the user, who can press
+  Undo saved changes. `failed` with `still-patched` is retried by the next put-back;
+  `blocked:<feature>` means a later feature (hat fitting, part switches) changed the
+  same model: undo that first, most recent first, as the Studio says, then put back
+  again.
+- A session left recorded (`changed` or `failed`) keeps refusing a second
+  `studio-open` (`put-back-first`), and design binding's apply, until a put-back
+  ends it or the harness is switched `off`.
+- If the user opens another model meanwhile, or edits the harness's model (a
+  brush, a save owed, a file that no longer hashes as the harness wrote it),
+  `studio-set` and `studio-drag` answer `studio-changed` and change nothing; put
+  back then. Put-back still reverts the harness's files when it may, reloads that
+  mod by name, and leaves the user's panel as it is.
+- `moveSkin:true` answers before the skin binding is built: poll `GET /studio` until
+  `effective.followReady` and `effective.skinMovesNow` are true before a drag that
+  should carry skin (until then skin stays put, as in the panel).
+- Locks (`lock`, `unlock`, `unlockAll`) are set only under Move, Rotate or Scale
+  (`wrong-tool` otherwise): Body size's holds are never touched.
+- A drag whose save fails answers `saved: false` and is taken back at once, so it
+  is never written into the mod later.
+- After a drag, wait as after a refit: `autoRefit.busy == false` and
+  `compositor.phase == "idle"`. Auto refit and the hair watcher react to the save,
+  and put-back does not undo their writes.
+- Drive it from PowerShell with JSON bodies read from a file (Git Bash rewrites
+  path-like arguments).
+
+All-mode recipe: open with `show`, `{"tool":"move","mode":"all"}`, lock one part,
+read `all` and `effective` (mirror and adjacent off), drag `{"offsetMm":[0,20,0]}`,
+check `moved`, `nodes` and a screenshot, `{"tool":"rotate"}` and
+`{"axis":"y","degrees":30}`, `{"tool":"scale"}` and `{"factor":1.2}`,
+`{"undo":true}`, then put back and compare the hashes. Still UNVERIFIED after
+that: only the visual judgement of the handle against a whole garment on a posed
+character, and the radio row in German and Russian (screenshot both for the user).
+
+## Matcaps
+
+The matcap routes run the Studio's Matcaps tool through the panel's own entry
+points, after a whole-mod backup. A library's option is a **permanent** collection
+setting of a third-party mod: its Before is written to the session record first and
+put back at put-back (in `matcap.settings`) while it is still what the harness left.
+
+- **Restore every job** (`POST /actions/restore {"job"}`) and **put back** when done;
+  a seeded `qa-` image is deleted then too.
+- The first steps are the in-game gates; do them before anything else:
+  - **G2 (looks right):** read `/state` and its character `code` (`c1401` …, never
+    the customize byte). Seed an image (`matcap-image`), apply it to a gear part, a
+    hair mod's part and a lace or fringe part (alpha-cut), screenshot each. Au Ra
+    horns are **face** parts (see the plan's AM-7): with a non-Au Ra character, or no
+    installed face mod with horns, the in-game half of horns is **UNVERIFIED**;
+    Viera ears likewise need a Viera character.
+  - **G2 hair ports:** port the worn hairstyle to your race (`POST /actions/hair-port`,
+    or use a port that already exists), then apply a matcap to the **port file**
+    (`model` = the port's file under `Hair Ports/`: its game path may be ambiguous
+    across options) and screenshot it — the result line ends with the "kept as it is"
+    sentence. `POST /actions/hair-port {"remove":true}` must then refuse with "Undo
+    matcaps first" while `GET /hair-port` still lists the port; undo the matcap, and
+    the remove succeeds. Restore every job. Without a hairstyle Proteus can port to
+    your race, this step is **UNVERIFIED**.
+  - **G2 horns with a face overlay:** with an Au Ra character, put an asymmetric face
+    overlay on and apply a matcap to the horns, in both orders (overlay first, then
+    matcap; matcap first, then overlay), then Undo with the overlay still on. After
+    each composite, wait with no other action and confirm the overlay is still
+    doubled: a fresh `face uv: … -> facelr_…` line in `/log`, no unresolved
+    "resolves to our own output … refusing" line, and a face screenshot (not just
+    the horns). A non-horn face part must refuse `not-horn`; a face with no horns
+    `no-horns`.
+  - **G3 (library missing):** apply a library option, then hold the library **off**
+    (`/actions/mod-settings`) and screenshot and read `/log`. If more than the
+    matcap parts disappear (the whole model, or errors), stop and report: the plan
+    re-plans library mode.
+  - **G4 (names resolve):** a gear `_mcap…` material must draw; a missing look
+    after apply is a Blocker to report, not to work around.
+  - **G5 (click preview):** `studio-open` a gear mod with `show:true`, seed `qa-red.png`,
+    then `matcap-preview` on gear parts; once `/studio` says `shown`, screenshot (the parts
+    are red), check `/state.models` resolves the model outside the mod and hash the mod's
+    files (unchanged). Apply red, seed `qa-blue.png`, then preview blue on the now-matcapped
+    parts: the screenshot must differ (blue). If a change preview does not visibly update,
+    report it (the fix is a redraw for change previews). Preview a library option: no
+    collection setting changes (`/actions/mod-settings` read-back). `end` → the mod's own
+    look is back. Then Apply blue on the same parts through `/actions/matcap` and screenshot:
+    the character shows blue, not red — a stale look after the job's reload is a finding.
+    Watch `/log` for any watcher reacting to the preview's `%TEMP%` files.
+- `needs-confirm` is the panel's confirmation: send `confirmEnable:true` only for a
+  library you would switch on by hand, and say what else it turns on (the message
+  lists it).
+- `studio-busy` means the user has an unsaved Studio edit: never work around it.
+
+## Idle disk I/O checks
+
+What Proteus reads from the drive while nothing changes, and the routes that drive it.
+
+- **Counters.** `/state.io` is the current window of the idle I/O counters, read without resetting them:
+  `discovery calls`, `presence stats` (the 30 s sweep of mod folders), `metadata stats` (one stamp check per Proteus
+  mod per discovery), `metadata reads`, `boot probes`, `gear variants runs`, `gear shaders runs`, `body index
+  refreshes`, `body index deferred`, `redraws`, `redraw tree reads` (one per redraw). `/log` also gets one Debug line
+  `[Proteus] idle I/O, last N s: …` at most once a minute, covering the window that just ended.
+- **Boot back-off.** `/state.compositor.boot` is `{latched, step, nextDueInMs}`. With every Proteus overlay mod off,
+  `POST /actions/boot-rearm` and watch `/log` for `no Proteus overlay mod enabled … looking again in N s`, then the
+  probe at 5 s, 30 s, 60 s, 60 s… — never every 500 ms. A re-arm with a Proteus mod enabled runs a normal boot composite
+  (it rewrites Proteus's own output mod, as a zone change does): nothing to put back.
+- **Sidecar cache.** `POST /actions/sidecar-edit` with `restoreMtime: true` saves a colour change whose file keeps its
+  write time and length; `readBack` must still be the new colour. `/actions/put-back` restores the file while it is
+  still what the harness wrote (`sidecar[].result`: `restored`, `unchanged`, `changed`, `failed`), and deletes a
+  `metadata.default.json` only when the harness's save created it and it is unchanged (`defaults`). A mod with an unsaved
+  user colour edit answers `user-edit-held`: never work around it. A user colour edit made in the few milliseconds
+  between that check and the save would be saved first and then saved over (it stays in the editor until its next
+  change): do not edit colours by hand during a harness run. Whether a held edit wins over a locked file is
+  **covered by unit test only** (`ReadForDiscovery_HeldEditWins_OverIoError`): driving it in game needs an exclusive file
+  lock that hitches the framework thread and could let a write land after the hold.
+- **Leftover sidecar backups.** A crash with sidecar edits recorded leaves the ledger under
+  `test-harness/backups/<session>/sidecar/<mod>/`; the next harness start logs a Warning and lists it in
+  `/state.leftoverSidecar` (`fileMatchesHarnessWrite` says whether the file is still the harness's). Nothing is restored
+  by itself. To recover by hand: with the harness off, copy that folder's `metadata.json` over
+  `<Penumbra mods>/<mod>/Proteus/metadata.json`, then reload the mod in Penumbra.
+- **Other collections.** Hold a mod in another collection (`/actions/mod-settings` with `collection`, an id from
+  `/state.collections`) and check `/state` `variantRepoint.lastRun.atUtc` and `shaderUpgrade.lastRun.atUtc` do not move;
+  the same change in the player's collection moves them.
+- **Auto refit off.** `POST /actions/auto-refit {"enabled":false}`, then watch `/state.autoRefit.bodyIndex`
+  (`built`, `stale`, `refreshing`, `generation`): mod events mark it stale and nothing lists the mods folders.
+  **Do not equip while auto refit is overridden on**: a refit writes into the worn mod, which put-back cannot undo; the
+  put-back report lists any such mod in `autoRefit.refitsWhileOverridden` (auto refit's own Undo takes it back).
+
+## Shell output failures (issue sweep D)
+
+What Proteus does when a shell output file cannot be written (#91), and when a published shell is not drawn.
+`/state.compositor.recovery` has `writeRetry {lastDecision: clean|retry|give-up, attempt, scheduledRetries60s,
+outputIncomplete, timerPending}`, `shellDrawn {lastStep: auto-redraw|notify|notify-redraw-off|silent|defer|confirmed,
+autoRedraws5m, autoRedrawKeySet, noticeKeySet, checksInFlight}`, `shellFault {armed, shell, slot, until, withheld,
+lastHeal: healed|gave-up}` and `moveFault {patterns, movesLeft}`.
+
+- **Not exercised is never a pass.** A step whose fault or lock was not confirmed taken — no `shellFault.withheld`, no
+  "PARTLY drawn" Warning or Penumbra `FailedSubResource` in `/log`, no "was locked; written after" or "output write
+  failed" line — is reported **not exercised**, never a pass.
+- **Automatic redraws are limited to 2 per 5 minutes** (`/state.compositor.recovery.shellDrawn.autoRedraws5m`). Do not
+  repeat the redraw steps within 5 minutes: a 3rd run goes straight to the message, which is the rate limit, not a defect.
+- Keep the auto writers off. Toggle the **shell's own Proteus mod** (the one whose layer is on the host — for the Iris
+  layer on a0053/rir that is "DT ButterflyEffect Proteus", not the dress mod "Iris - by Solona") with
+  `/actions/mod-settings`, so the shell's materials reload; an unrelated mod's toggle may never re-request them.
+- **With auto redraw off, ambient triggers do nothing**: temporary `mod-settings` holds and `boot-rearm` answer
+  "Recomposite skipped … auto redraw is off". Drive a composite with a permanent `mod-settings` change
+  (`"permanent":true`), which forces one, or `shell-fault {"clear":true}`.
+- **Write retry:** `output-lock {"files":["textures/ss_*_*.tex"],"failMoves":2}`, toggle → `/log` "was locked; written
+  after 2 retr(ies)", no `Failed to write`, `moveFault` null after.
+- **Latch:** `failMoves: 6`, toggle → "output write failed … retrying in 1500ms (attempt 1/3)", then
+  `writeRetry.lastDecision: clean`; never "skipped — inputs unchanged" while `outputIncomplete` is true.
+- **Give-up without a loop:** `output-lock {"files":["textures/ss_*_*.tex"],"ms":60000}`, toggle → three retries, a
+  Warning and one chat line naming the accessory; `/state.redraws.count` stops rising. Release, toggle, recovered.
+- **Redraw heals it:** `shell-fault {"shell":"any","until":"auto-redraw"}`, toggle, confirm the fault took, then
+  "redrawing the character once", `shellFault.lastHeal: healed`, "second skin is drawn", no chat, `lastStep: confirmed`.
+- **Named message:** `until:"put-back"` → one automatic redraw, then exactly one chat line naming the accessory; a
+  further toggle gives no second redraw and no second line.
+- **Auto redraw off:** `auto-redraw {"enabled":false}` → no automatic redraw and the "Auto redraw is off" message; no
+  retry timer and `scheduledRetries60s` unchanged.
 
 ## Waiting for the game
 

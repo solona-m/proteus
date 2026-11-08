@@ -135,6 +135,7 @@ public partial class HairPortBuilderTests
     /// <summary>A Miqo'te's own hairstyle 105: every other race of her sex reads ONE Midlander material for it.</summary>
     [Fact]
     [Trait("Plan", "EDGE-hair-race-port-7")]
+    [Trait("Plan", "EDGE-issue-sweep-c-25")]
     public void Shared_material_drags_its_sharers_along_or_refuses()
     {
         const int id = 105;

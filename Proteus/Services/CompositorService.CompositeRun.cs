@@ -53,6 +53,10 @@ public partial class CompositorService
         private bool raceUnsettled;
         // The shell build held every one of its layers off this man (see SecondSkinService.LastBuildHeldAll).
         internal bool shellAllHeld;
+        // Output writes this run could not put in place (#91): shell and skin, and the shell hosts they dropped from.
+        internal int shellWriteFailures;
+        internal int skinWriteFailures;
+        internal readonly List<string> failedShellHosts = new();
         // "Overlay on men" switched off, snapshotted under the config gate for this run (see OverlaysMenFor).
         private HashSet<string> menOffMods = null!;
         // What CarryWomensArtToMen decided: which mods wait for the maps, which gear layers the shell will hold.
@@ -94,6 +98,28 @@ public partial class CompositorService
         private ConcurrentDictionary<string, byte> prefetchIssued = null!;
         private SemaphoreSlim prefetchGate = null!;
         private long tSetupEnd;
+
+        // Setup sub-phase stamps (stutter fixes, item 7): the same inputs took 0.2–3.4 s in a user's log, and the one
+        // "setup" figure could not say where. Printed on the skip line and the phases line.
+        private readonly List<(string Name, long At)> setupMarks = [];
+        private void SetupMark(string name) => setupMarks.Add((name, PhaseCounter.Begin()));
+
+        /// <summary>"discover 12 | plan+resolve 40 | … | gate 3" from the run start to <paramref name="end"/>.</summary>
+        internal string DescribeSetup(long end)
+        {
+            var parts = new List<string>();
+            long prev = tRunStart;
+            foreach (var (name, at) in setupMarks)
+            {
+                parts.Add($"{name} {PhaseCounter.MsBetween(prev, at):F0}");
+                prev = at;
+            }
+            parts.Add($"gate {PhaseCounter.MsBetween(prev, end):F0}");
+            return string.Join(" | ", parts);
+        }
+
+        // Another composite was in flight during this run: shared stage counters then mix two runs' figures.
+        internal bool overlapSeen;
         private IReadOnlyList<ChannelContribution> nextChannelContributions = null!;
         private Dictionary<(string, string?, string?), List<SkinGlowTarget>> nextSkinGlowTargets = null!;
         private Dictionary<string, string> skinRedirectsThisRun = null!;
@@ -137,18 +163,23 @@ public partial class CompositorService
             {
                 latchStamp = compositor._bodyAtrLatch.Stamp();
                 if (!Discover()) return;
+                SetupMark("discover");
                 PlanOverlays();
                 ResolveEntries();
+                SetupMark("plan+resolve");
                 PlanFaces();
                 RouteOverlays();
                 FilterLiveMaterials();
                 if (!SynthesiseSiblings()) return;
+                SetupMark("filter+siblings");
                 CarryWomensArtToMen();
                 PrepareOutputs();
                 AddBodyMaterials();
                 ResolveMasks();
+                SetupMark("masks");
                 SortStacks();
                 if (!PrimeBases()) return;
+                SetupMark("prime");
                 if (!GateUnchanged()) return;
                 GateSkinReuse();
                 InheritMaskColorsets();
@@ -287,7 +318,7 @@ public partial class CompositorService
                 timeline.Mark(redrawsCharacter ? "publish+reload" : "publish");
                 compositor.LogRefreshTimeline(timeline,
                     !redrawsCharacter ? "no enabled mods (already drawn)"
-                    : compositor.config.AutoRedraw ? "no enabled mods" : "no enabled mods (redraw withheld)");
+                    : compositor.AutoRedrawOn ? "no enabled mods" : "no enabled mods (redraw withheld)");
                 compositor.LastResult = new CompositorResult { Success = true, TexturesPatched = 0, OverlayModsUsed = 0, Epoch = epoch };
                 compositor.ResultChanged?.Invoke();
                 return false;
@@ -965,7 +996,7 @@ public partial class CompositorService
             // or by a Glamourer design): asked last, only when everything else says skip, and only of watched mods.
             string shapesWhy = "";
             bool shapesMoved = false;
-            if (SkipUnchanged(force, Volatile.Read(ref compositor._forcePending) != 0,
+            if (SkipUnchanged(force, Volatile.Read(ref compositor._forcePending) != 0, compositor._shellOutputIncomplete,
                     compositor._lastCompositeFingerprint, fingerprint,
                     () => shapesMoved = ShellBodyAtr.Moved(compositor._lastBodyAtrUses, null,
                                                            compositor.secondSkin.PlayerModSettings, out shapesWhy, out var t)
@@ -978,8 +1009,8 @@ public partial class CompositorService
 
                 // Nothing published, so nothing to record: RecordPublish would let PruneSupersededOutput collect live files.
                 // No write, reload or redraw.
-                compositor.log.Information("[Proteus] recomposite skipped — inputs unchanged ({0:F0}ms)",
-                    PhaseCounter.MsSince(tRunStart));
+                compositor.log.Information("[Proteus] recomposite skipped — inputs unchanged ({0:F0}ms; setup: {1})",
+                    PhaseCounter.MsSince(tRunStart), DescribeSetup(PhaseCounter.Begin()));
                 timeline.Mark("setup");
                 compositor.LogRefreshTimeline(timeline, "skipped, inputs unchanged");
                 return false;
@@ -1082,6 +1113,7 @@ public partial class CompositorService
                 }
 
             tSetupEnd = PhaseCounter.Begin();
+            overlapSeen |= Volatile.Read(ref compositor._compositesInFlight) > 1;
             timeline.MarkAt("setup", tSetupEnd);
         }
 
@@ -1127,7 +1159,9 @@ public partial class CompositorService
                     .OrderBy(c => c.Material, StringComparer.OrdinalIgnoreCase)
                     .ToList();
 
-            compositor.LogPhaseBreakdown(tRunStart, tSetupEnd, skinReused ? 0 : byMaterial.Count);
+            overlapSeen |= Volatile.Read(ref compositor._compositesInFlight) > 1;
+            compositor.LogPhaseBreakdown(tRunStart, tSetupEnd, skinReused ? 0 : byMaterial.Count,
+                                         DescribeSetup(tSetupEnd), overlapSeen);
             timeline.Mark(skinReused ? "skin (reused)" : "skin");
 
             // The glow recipes gathered above (empty if no indexed skin overlays).
@@ -1257,6 +1291,15 @@ public partial class CompositorService
             }
             timeline.Mark("second skin");
 
+            // Ring carriers this build no longer hosts on come off BEFORE the manifest that withdraws their redirects is
+            // written and reloaded: after the supersede check above, outside the config gate (it blocks on the framework).
+            bool hostWantedNow = (gearOverlays.Count > 0 && !shellAllHeld) || contentLayers.Count > 0;
+            compositor.ReleaseVacatedCarriers(hostWantedNow, shellBuilt, shellBuilt ? shellCarrierSlots : []);
+
+#if PROTEUS_TEST_HARNESS
+            // The harness's shell load fault (ADR 0002): leaves one shell texture out of this manifest.
+            compositor.HarnessFilterPublish(redirects);
+#endif
             compositor.WriteManagedModJson(redirects, manipulations);
             return true;
         }
@@ -1264,7 +1307,7 @@ public partial class CompositorService
         private void Publish()
         {
             // For the log's reload kind. Nothing clears the flag on a redraw; only the next composite's commit reassigns it.
-            reloadKind = !compositor.config.AutoRedraw ? "withheld" : compositor._needFullRedraw ? "full redraw" : "in-place";
+            reloadKind = !compositor.AutoRedrawOn ? "withheld" : compositor._needFullRedraw ? "full redraw" : "in-place";
 
             // Publish only: nothing is deleted in this composite; superseded output is collected at the top of the next one
             // (see PruneSupersededOutput).
@@ -1272,9 +1315,13 @@ public partial class CompositorService
                 $"composite ({(timeline.Reasons.Length == 0 ? "?" : timeline.Reasons)})");
             timeline.Mark("publish+reload");
 
-            // Published: the manifest is now exactly these inputs' output, so set the fingerprint and settle the forced-work
-            // latch. Only on this path, so the gate never claims unproduced output.
-            compositor._lastCompositeFingerprint = fingerprint;
+            // Published: set the fingerprint and settle the forced-work latch. Only on this path, so the gate never claims
+            // unproduced output — and through the retry latch (#91), so a publish that dropped a layer whose file could not
+            // be written is never recorded as these inputs' output.
+            long stamp = Interlocked.Increment(ref compositor._publishStamp);
+            bool keepSkin = true;
+            compositor.RecordPublishOutcome(fingerprint, shellWriteFailures, Volatile.Read(ref skinWriteFailures),
+                failedShellHosts, stamp, k => keepSkin = k);
             // The settings may have moved while this run built (a chest picked mid-composite): look once more, off this
             // thread. Bounded by the shape-force latch, so it cannot chain.
             if (compositor._lastBodyAtrUses.Count > 0)
@@ -1284,8 +1331,10 @@ public partial class CompositorService
                     catch (Exception ex) { compositor.log.Debug("[Proteus] body-shapes re-check failed: {0}", ex.Message); }
                 });
             // The skin half, in one reference swap, only on publish (assigned even on reuse).
-            compositor._lastSkinPublish = new SkinPublish(
-                skinFingerprint, skinRedirectsThisRun, compositor._channelContributions, compositor._skinGlowTargets);
+            // Not when a skin texture could not be written (#91): the next composite rebuilds the skin rather than reuse it.
+            compositor._lastSkinPublish = keepSkin
+                ? new SkinPublish(skinFingerprint, skinRedirectsThisRun, compositor._channelContributions, compositor._skinGlowTargets)
+                : null;
             Interlocked.Exchange(ref compositor._forcePending, 0);
             Interlocked.Exchange(ref compositor._skinForcePending, 0);
 
@@ -1312,7 +1361,7 @@ public partial class CompositorService
             compositor.RememberHostDecision(hostWanted, shellBuilt, shellOnFacewear,
                                  shellBuilt ? shellCarrierSlots : []);
             compositor.ReconcileInvisibleGlasses(hostWanted, shellBuilt, shellOnFacewear, glassesPreHosted);
-            compositor.ReconcileEmperorRing(hostWanted, shellBuilt, shellBuilt ? shellCarrierSlots : []);
+            compositor.ReconcileEmperorRing(hostWanted, shellBuilt, shellBuilt ? shellCarrierSlots : [], selfScheduleRetry: true);
             timeline.Mark("carriers");
 
             // Every path, not just the shell's: the skin textures are held only by priority against the body mod that invented
@@ -1323,7 +1372,7 @@ public partial class CompositorService
 
             // Winning the path is not the game having drawn it; this check runs after the redraw. Withheld only when the shell
             // needed the reload and auto redraw is off.
-            compositor.SchedulePostRedrawShellCheck(reloadWithheld: !compositor.config.AutoRedraw && shellNeedsReload, timeline);
+            compositor.SchedulePostRedrawShellCheck(reloadWithheld: !compositor.AutoRedrawOn && shellNeedsReload, timeline);
 
             compositor.LastResult = new CompositorResult
             {

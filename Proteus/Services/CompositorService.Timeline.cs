@@ -43,6 +43,12 @@ public partial class CompositorService
         }
     }
 
+    /// <summary>The short reasons of every trigger in the pending burst (what the idle early-out must all allow).</summary>
+    private IReadOnlyList<string> RefreshBurstReasonsSnapshot()
+    {
+        lock (_refreshBurstLock) return [.. _refreshBurstReasons];
+    }
+
     /// <summary>The last refresh to finish: what it came to, its total time from first trigger, and its spans.</summary>
     internal sealed record RefreshRecord(string Outcome, double TotalMs, string Spans, DateTime AtUtc);
 

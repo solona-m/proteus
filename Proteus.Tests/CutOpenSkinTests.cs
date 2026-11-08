@@ -250,6 +250,30 @@ public class CutOpenSkinTests
     }
 
     [Fact]
+    [Trait("Plan", "EDGE-size-set-keep-skin-14")]
+    [Trait("Plan", "EDGE-size-set-keep-skin-3")]
+    public void With_the_cut_off_the_slot_lain_mostly_on_goes_whole_and_one_reached_onto_stays_cut()
+    {
+        // [EDGE-size-set-keep-skin-14] [EDGE-size-set-keep-skin-3] The Studio's rule the size set's "Keep hidden skin"
+        // inherits: the dress lies mostly on the chest, whose body runs two rows higher than the dress's skin. Cut on,
+        // those rows are left out; cut off, they go in. The legs it only reaches onto are cut either way, below its hem.
+        var dress = ReachingDress(dip: 0f);
+        var tall = (dress.Garment, TallChest(2), dress.Legs);
+        var cut = Swap(tall, cutHidden: true, openSkin: false);
+        var whole = Swap(tall, cutHidden: false, openSkin: false);
+        var cutRows = DrawnRows(cut.Model);
+        var wholeRows = DrawnRows(whole.Model);
+        string said = $"cut: {string.Join(", ", cutRows)} {cut.Report}; whole: {string.Join(", ", wholeRows)} {whole.Report}";
+
+        // Row Rows - 1 lies against the author's edge and is drawn either way; the rows past it are the body's own.
+        Assert.False(cutRows.Keys.Any(r => r >= Rows), said);
+        Assert.True(wholeRows.Keys.Any(r => r >= Rows), said);
+        Assert.True(whole.Report.Cut > 0, "the legs the dress only reaches onto were not cut");
+        Assert.True(whole.Report.Cut < cut.Report.Cut, $"cut {whole.Report.Cut} against {cut.Report.Cut}");
+        Assert.Equal(Below(cut.Model, Hem), Below(whole.Model, Hem));
+    }
+
+    [Fact]
     [Trait("Plan", "EDGE-cut-open-skin-11")]
     public void A_ring_in_a_kept_dip_is_judged_on_the_authors_cut()
     {

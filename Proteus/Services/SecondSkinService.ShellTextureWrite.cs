@@ -64,6 +64,9 @@ public sealed partial class SecondSkinService
             this.maskAssets = maskAssets;
         }
 
+        /// <summary>Whether <see cref="Run"/> returned null because a texture could not be put in place (#91).</summary>
+        public bool OutputWriteFailed { get; private set; }
+
         public List<string>? Run(ref bool texturesChanged)
         {
             LoadArt();
@@ -334,8 +337,12 @@ public sealed partial class SecondSkinService
                     continue;
                 }
 
-                if (!service.WriteShellSlot(slot, slots[slot], sw, sh, disk, compress, ref texturesChanged))
+                var outcome = service.WriteShellSlot(slot, slots[slot], sw, sh, disk, compress, ref texturesChanged);
+                if (outcome != WriteOutcome.Written)
+                {
+                    OutputWriteFailed = outcome == WriteOutcome.OutputWriteFailed;
                     return null;
+                }
 
                 redirects[gamePath] = Rel(outputRoot, disk);
                 paths.Add(gamePath);

@@ -333,6 +333,7 @@ internal static partial class SizeSetRefit
 
             progress(string.Format(Strings.SizeSet.WorkingFmt, piece.Label, option));
             long started = clock.ElapsedMilliseconds;
+            // A kept foot or hand is always cut, whatever Request.KeepHiddenSkin says (RunEnd → KeepEnds.Plan).
             var job = CrossSexRefitJob.RunEnd(new CrossSexRefitJob.Inputs(
                 src.Bytes, piece.GamePath, CrossSexRefit.Men, src.MadeFor, src.FromPick, men,
                 o => RefitCore.Normal(o.Rel) == RefitCore.Normal(rel), wearer, uvRemap, log,

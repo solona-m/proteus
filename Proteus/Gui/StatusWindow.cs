@@ -467,6 +467,15 @@ public class StatusWindow : Window
         Show(forceExpand: true);
     }
 
+    /// <summary>Open the window with the Studio tab selected (the test harness's <c>show</c>, so screenshots see the panel).</summary>
+    internal void OpenToStudio()
+    {
+        _forceStudioTab = true;
+        Show(forceExpand: true);
+    }
+
+    private bool _forceStudioTab;
+
     /// <summary>Open, un-collapse if needed, and bring to front; setting <see cref="Window.IsOpen"/> alone can leave it collapsed or behind the installer.</summary>
     /// <param name="forceExpand">Un-collapse even when reopening from closed; a plain open leaves a deliberate collapse alone.</param>
     public void Show(bool forceExpand = false)
@@ -587,7 +596,9 @@ public class StatusWindow : Window
                     if (t) { _tabDrawn = "mods"; modsTab.DrawModsTab(); }
 
                 // The Studio second, right after the mods it works on.
-                using (var t = ProteusStyle.HeaderTabItem(Strings.Tab.Parts, "toggles"))
+                var studioFlags = _forceStudioTab ? ImGuiTabItemFlags.SetSelected : ImGuiTabItemFlags.None;
+                _forceStudioTab = false;
+                using (var t = ProteusStyle.HeaderTabItem(Strings.Tab.Parts, "toggles", studioFlags))
                     if (t)
                     {
                         _tabDrawn = "toggles";
@@ -698,6 +709,11 @@ public class StatusWindow : Window
         compositor.RefreshDisplayNames();   // the editor's title names the mod
         var entry = compositor.LastDiscovered.FirstOrDefault(e => e.ModDirectory == _colorWindowMod);
         if (entry == null) { _colorWindowMod = null; ClearColorHighlights(); return; }
+
+        // A pinned Glow lives while this window draws (#82): outside Begin, so a collapsed window still renews it.
+        var pinNow = RowHighlightClock.NowMs();
+        ColorTableEditor.Highlighter?.RenewPin(pinNow);
+        ColorTableEditor.SkinGlow?.RenewPin(pinNow);
 
         bool open = true;
         // Scaled by hand: a bare ImGui.Begin never gets Dalamud's UI scale. Wide enough for the 16 row buttons 8-across.
@@ -2553,7 +2569,7 @@ public class StatusWindow : Window
         var defaults = discovery.TryLoadDefaults(entry);
         if (defaults == null) return false;
 
-        // Validate before mutating: the binding clear below is persisted and must not run on a path that restores nothing.
+        // Validate before mutating: neither the metadata reset nor the live binding clear below may run on a path that restores nothing.
         if (groupName == null)
         {
             // Simple mod: the top-level overlays and colour rows ARE the option.
@@ -2578,7 +2594,8 @@ public class StatusWindow : Window
             ReplaceOverlays(option.Overlays, srcOpt.Overlays);
         }
 
-        // A design binding would re-impose its own captured values for this option, so clear its override.
+        // A live design override would hide the reset, so clear it. Live only: the stored binding keeps its values for
+        // this option until Update, and applying the design again shows them.
         editRouter.ClearOptionOverride(entry.ModDirectory, groupName, option?.Name);
 
         // Descriptor Index paths may differ from the edited ones, so the cached row scans are stale.

@@ -80,7 +80,7 @@ public class ProteusModBinding
 /// options but applies colors as a non-destructive in-memory override (metadata.json is untouched).
 /// Apply detection is heuristic — a unique gear match against the player's current state.
 /// </summary>
-public class DesignBindingService : IDisposable
+public partial class DesignBindingService : IDisposable
 {
     // A design must apply at least this many equipment slots to be a heuristic candidate; gearless designs never match.
     private const int MinGearSlots = 3;
@@ -167,6 +167,7 @@ public class DesignBindingService : IDisposable
         glamourer.LocalPlayerStateChangedAny += OnGlamourerStateChangedAny;
         penumbra.ModSettingChanged += OnPenumbraModSettingChanged;
         penumbra.LocalPlayerRedrawn += OnLocalPlayerRedrawn;
+        penumbra.PenumbraReady += OnPenumbraReadyClearSweep;
 
         Plugin.ClientState.Logout += OnLogout;
 
@@ -195,6 +196,10 @@ public class DesignBindingService : IDisposable
         glamourer.LocalPlayerStateChangedAny -= OnGlamourerStateChangedAny;
         penumbra.ModSettingChanged -= OnPenumbraModSettingChanged;
         penumbra.LocalPlayerRedrawn -= OnLocalPlayerRedrawn;
+        penumbra.PenumbraReady -= OnPenumbraReadyClearSweep;
+        disposed = true;
+        sweepCts.Cancel();   // a sweep's background read in flight never marshals back
+        sweepCts.Dispose();
         Volatile.Write(ref bootRestoreDone, 1);
         framework.Update -= OnBootRestoreTick;   // idempotent; safe when it was never subscribed
     }
@@ -370,13 +375,26 @@ public class DesignBindingService : IDisposable
 
             // Only a design the character is actually wearing may be captured: Glamourer rewrites a design's
             // file on every edit. Judged exactly as an apply is, so the apply path can recognise it again.
-            lock (gate) designCache.Remove(designId);   // the file just changed; never judge a stale copy
+            JObject? cachedDesign;
+            lock (gate)
+            {
+                designCache.TryGetValue(designId, out cachedDesign);
+                designCache.Remove(designId);   // the file just changed; never judge a stale copy
+            }
             var design = GetDesignCached(designId);
             var state  = glamourer.GetObjectState(0);
             if (design == null || state == null)
             {
                 log.Debug("[Proteus] Skipping design capture for {0}: {1} unreadable, so it can't be checked against the character.",
                     designId, design == null ? "design" : "Glamourer state");
+                return;
+            }
+
+            // Glamourer also rewrites the file for things that are no edit of the design (write protection, a folder
+            // move, the quick bar): those keep its LastEdit, and must not fold unsaved live edits into the binding.
+            if (!IsDesignEdit(cachedDesign, design))
+            {
+                log.Information("[Proteus] Skipping design capture for {0}: its file was rewritten without an edit (LastEdit unchanged).", designId);
                 return;
             }
             string? mismatch = null;
@@ -739,6 +757,9 @@ public class DesignBindingService : IDisposable
     // Framework thread only.
     private int characterWorkGeneration;
 
+    // Bumped only by the test harness's put-back, to cancel a queued UnequipUnsetSlots. Framework thread only.
+    private int unequipEpoch = 0;   // explicit: with the harness compiled out nothing assigns it (CS0649)
+
     /// <summary>
     /// The settings of every mod on the character right now, or null when unreadable (the caller then keeps
     /// the snapshot it had).
@@ -770,19 +791,63 @@ public class DesignBindingService : IDisposable
     /// </summary>
     private IReadOnlyDictionary<string, PenumbraModSetting> StillHeld(Guid collId)
     {
+        var live = HeldNowCore(collId, out int dropped, out _);
+        if (dropped > 0)
+            log.Information("[Proteus] design-binding: {0} of {1} held mod(s) are no longer held — captured from the collection instead.",
+                dropped, heldTemporary.Count);
+        return live;
+    }
+
+    /// <summary>
+    /// <see cref="StillHeld"/> without its capture wording, for callers that aren't capturing (a design restore, #83):
+    /// the holds Penumbra still reports as temporary, and how many it no longer does. Unreadable settings keep the
+    /// whole record.
+    /// </summary>
+    /// <param name="effective">The collection's settings as Penumbra applies them, read here once so a restore can reuse
+    /// them; null when nothing is held (no read is made) or they are unreadable.</param>
+    private IReadOnlyDictionary<string, PenumbraModSetting> HeldNowCore(Guid collId, out int dropped,
+        out IReadOnlyDictionary<string, PenumbraBridge.ModSettingsSnapshot>? effective)
+    {
+        dropped = 0;
+        effective = null;
         if (heldTemporary.Count == 0) return heldTemporary;
-        var effective = penumbra.GetCollectionModSettings(collId, ignoreTemporary: false);
+        effective = penumbra.GetCollectionModSettings(collId, ignoreTemporary: false);
         if (effective == null) return heldTemporary;
 
         var live = new Dictionary<string, PenumbraModSetting>(heldTemporary.Count, StringComparer.OrdinalIgnoreCase);
         foreach (var (dir, recorded) in heldTemporary)
             if (effective.TryGetValue(dir, out var s) && s.Temporary)
                 live[dir] = recorded;
-
-        if (live.Count != heldTemporary.Count)
-            log.Information("[Proteus] design-binding: {0} of {1} held mod(s) are no longer held — captured from the collection instead.",
-                heldTemporary.Count - live.Count, heldTemporary.Count);
+        dropped = heldTemporary.Count - live.Count;
         return live;
+    }
+
+    /// <summary>
+    /// #83: the strays a restore of the same design must hold off again. A restore releases every hold, and the sweep it
+    /// arms reads the drawn resources from the last redraw — made while those strays were held off, so they look
+    /// undrawn and a re-apply with no redraw leaves them drawn. Carried: what the sweep itself still holds off (a
+    /// disabled hold in <paramref name="held"/>, already filtered to what Penumbra still reports as held, placed by the
+    /// sweep, last seen as Proteus's, not put back by the player) that the design still doesn't have — not bound, not a
+    /// Proteus mod, not the managed mod, installed. Nothing when <paramref name="designId"/> is not the design the last
+    /// sweep ran for. The carry is not held at restore: the next completed sweep decides each one.
+    /// </summary>
+    internal static List<string> SweepHoldsToCarry(IReadOnlyDictionary<string, PenumbraModSetting> held, Guid sweepDesign, Guid designId,
+                                                  IReadOnlySet<string> bound, IReadOnlySet<string> proteusDirs,
+                                                  IReadOnlySet<string> installed, string managedDir,
+                                                  IReadOnlySet<string> sweepHeld, IReadOnlySet<string> playerReleased,
+                                                  IReadOnlyDictionary<string, string> lastSource, string ourSource)
+    {
+        if (designId == Guid.Empty || designId != sweepDesign) return [];
+        return held.Where(kv => !kv.Value.Enabled
+                                && sweepHeld.Contains(kv.Key) && !playerReleased.Contains(kv.Key)
+                                && (!lastSource.TryGetValue(kv.Key, out var src)
+                                    || string.Equals(src, ourSource, StringComparison.OrdinalIgnoreCase))
+                                && !bound.Contains(kv.Key) && !proteusDirs.Contains(kv.Key)
+                                && !string.Equals(kv.Key, managedDir, StringComparison.OrdinalIgnoreCase)
+                                && installed.Contains(kv.Key))
+                   .Select(kv => kv.Key)
+                   .Order(StringComparer.OrdinalIgnoreCase)
+                   .ToList();
     }
 
     /// <summary>
@@ -1006,6 +1071,7 @@ public class DesignBindingService : IDisposable
         if (penumbra.GetPlayerCollectionId() is not { } collId) return false;
         var had = heldTemporary.Count > 0;
         heldTemporary.Clear();
+        ClearSweepRecords(null);
         // No suppression scope: NothingChanged raises no events, and a real release should recomposite.
         var released = ReleaseEveryKey(collId);
         if (released)
@@ -1210,6 +1276,28 @@ public class DesignBindingService : IDisposable
                               .Concat(b.Mods.Select(m => m.ModDirectory))
                               .ToHashSet(StringComparer.OrdinalIgnoreCase);
 
+        // #83: a re-apply of the design the last sweep ran for holds off again the strays that sweep held off — but only
+        // once the next completed sweep has checked them, so a hold on a mod something kept needs is never carried
+        // blind. Read before the release below drops them; this read of the settings is the one the carry reuses.
+        var heldBefore = HeldNowCore(collId.Value, out _, out var effectiveBefore);
+        IReadOnlyCollection<string> carry = [];
+        if (designId != postLoadSweepDesign || collId.Value != postLoadSweepCollection)
+            ClearSweepRecords(null);
+        else
+        {
+            NoteSweepHoldChanges(collId.Value, effectiveBefore);
+            var installed = names.Keys.ToHashSet(StringComparer.OrdinalIgnoreCase);
+            carry = DesignRestoreSweep.MergeCarry(
+                SweepHoldsToCarry(heldBefore, postLoadSweepDesign, designId, boundDirs, proteusDirs, installed,
+                                  SidecarDiscoveryService.ManagedModDir, sweepHeld, sweepPlayerReleased, sweepHoldSource,
+                                  TemporarySource),
+                sweepCarried, boundDirs, proteusDirs, installed, SidecarDiscoveryService.ManagedModDir,
+                sweepPlayerReleased, sweepHoldSource, TemporarySource);
+        }
+        sweepCarried.Clear();
+        sweepCarried.UnionWith(carry);
+        sweepHeld.Clear();   // the release below drops every hold; the carried dirs keep their last-seen source
+
         RestorePlan? plan = null;
         var held = 0;
         // Both feed the summary below. A character restore is the only path that writes a priority to a mod that
@@ -1267,6 +1355,9 @@ public class DesignBindingService : IDisposable
                 }
             }
         }
+        if (sweepCarried.Count > 0)
+            log.Information("[Proteus] design-restore: will hold off again, once checked, mod(s) the previous sweep held off for this design: {0}",
+                string.Join(", ", sweepCarried.Order(StringComparer.OrdinalIgnoreCase)));
 
         if (plan == null)
         {
@@ -1302,6 +1393,15 @@ public class DesignBindingService : IDisposable
     // The second step of a character restore. A mod the design lacks can still show where the design has nothing
     // to outrank it, so for a while after a restore each redraw is followed by a look at the resource tree, and
     // any drawn mod the design doesn't have is held off temporarily.
+    //
+    // Except one that supplies a file the game has none of and something the design keeps needs: a kept material's
+    // texture, a kept model's skin material, a base the composite stands on (a skin mod's bibo_mid_* textures under a
+    // body mod's material — held off, the material fails and the body isn't drawn). That is decided from the player's
+    // collection and the mods' own files, not from what happens to be drawn, so a body that loads late is still seen;
+    // nothing is held until it has been decided, and any doubt about the kept mods' evidence holds nothing that round.
+    // A sweep hold the player puts back stays back, and a same-design re-apply's carried strays are held again only
+    // by a completed check. Each sweep reads on the framework thread, reads the mods' files on a background task,
+    // then decides and writes back on the framework thread.
 
     private const int PostLoadSweepWindowMs = 20000;
     private const int PostLoadSweepSettleMs = 1500;
@@ -1314,6 +1414,23 @@ public class DesignBindingService : IDisposable
     private HashSet<string> postLoadSweepBound = new(StringComparer.OrdinalIgnoreCase);
     private HashSet<string> postLoadSweepProteus = new(StringComparer.OrdinalIgnoreCase);
 
+    // The sweep's own records, all framework thread. sweepHeld: strays it holds off now, with the source last seen on
+    // each hold; sweepPlayerReleased: holds the player put back, never held again for this design; sweepSpared: strays
+    // left on because something kept needs their files; sweepCarried: a same-design re-apply's strays awaiting a check.
+    private readonly HashSet<string> sweepHeld = new(StringComparer.OrdinalIgnoreCase);
+    private readonly Dictionary<string, string> sweepHoldSource = new(StringComparer.OrdinalIgnoreCase);
+    private readonly HashSet<string> sweepPlayerReleased = new(StringComparer.OrdinalIgnoreCase);
+    private readonly Dictionary<string, List<DesignRestoreSweep.SweepNeed>> sweepSpared = new(StringComparer.OrdinalIgnoreCase);
+    private readonly HashSet<string> sweepCarried = new(StringComparer.OrdinalIgnoreCase);
+    private bool sweepFailureLogged;
+    private readonly HashSet<string> sweepUnreadLogged = new(StringComparer.OrdinalIgnoreCase);
+    private int sweepBlockRetries;
+    // Game data can't change while the game runs, so a path's answer is kept for the session.
+    private readonly Dictionary<string, bool> existsMemo = new(StringComparer.Ordinal);
+    private readonly SweepModReader sweepReader = new();
+    private readonly CancellationTokenSource sweepCts = new();
+    private volatile bool disposed;
+
     private void ArmPostLoadSweep(Guid designId, Guid collId, HashSet<string> bound, HashSet<string> proteusDirs)
     {
         postLoadSweepDesign     = designId;
@@ -1322,14 +1439,78 @@ public class DesignBindingService : IDisposable
         postLoadSweepBound      = bound;
         postLoadSweepProteus    = proteusDirs;
         postLoadSweepUntil      = Environment.TickCount64 + PostLoadSweepWindowMs;
+        sweepFailureLogged      = false;
+        sweepBlockRetries       = 0;
+        sweepUnreadLogged.Clear();
         // One sweep is queued regardless: neither the recomposite nor Penumbra is guaranteed to redraw.
         QueuePostLoadSweep();
     }
 
+    /// <summary>The only window check: a redraw inside it queues a sweep, and every queued sweep runs, even one that
+    /// lands after the window — a late redraw superseding a sweep in flight must not leave the restore unswept.</summary>
     private void OnLocalPlayerRedrawn()
     {
         if (!FeatureOn) return;
         if (Environment.TickCount64 < postLoadSweepUntil) QueuePostLoadSweep();
+    }
+
+    private void OnPenumbraReadyClearSweep()
+        => framework.RunOnFrameworkThread(() => ClearSweepRecords("Penumbra restarted"));
+
+    /// <summary>Forget every sweep record (not the holds themselves, which a release drops by key).</summary>
+    private void ClearSweepRecords(string? why)
+    {
+        bool had = sweepHeld.Count + sweepPlayerReleased.Count + sweepSpared.Count + sweepCarried.Count > 0;
+        sweepHeld.Clear();
+        sweepHoldSource.Clear();
+        sweepPlayerReleased.Clear();
+        sweepSpared.Clear();
+        sweepCarried.Clear();
+        if (had && why != null) log.Debug("[Proteus] design-restore: sweep records cleared ({0})", why);
+    }
+
+    /// <summary>
+    /// What became of the sweep's own holds since it placed them: the player put one back (it is never held again for this
+    /// design), another plugin took one over and dropped it (forgotten), or nothing. A collection change or Penumbra losing
+    /// every one of the design's holds clears the records instead, so neither reads as the player putting mods back.
+    /// </summary>
+    private void NoteSweepHoldChanges(Guid collection, IReadOnlyDictionary<string, PenumbraBridge.ModSettingsSnapshot>? effective)
+    {
+        if (penumbra.GetPlayerCollectionId() is { } current && current != collection)
+        {
+            ClearSweepRecords("collection changed");
+            return;
+        }
+        var designHolds = heldTemporary.Keys.Where(d => !sweepHeld.Contains(d)).ToList();
+        if (DesignRestoreSweep.DesignHoldsLost(designHolds, effective))
+        {
+            ClearSweepRecords("Penumbra dropped the temporary settings");
+            return;
+        }
+        if (sweepHeld.Count == 0) return;
+
+        var holds = sweepHeld.ToDictionary(d => d, d => penumbra.QueryTemporaryModSettings(collection, d),
+                                           StringComparer.OrdinalIgnoreCase);
+        var verdicts = DesignRestoreSweep.ClassifySweepHolds(holds, sweepHoldSource, TemporarySource, out var seen);
+        foreach (var (dir, source) in seen) sweepHoldSource[dir] = source;
+
+        var released = new List<string>();
+        var forgot = new List<string>();
+        foreach (var (dir, verdict) in verdicts)
+        {
+            if (verdict == DesignRestoreSweep.HoldVerdict.Keep) continue;
+            sweepHeld.Remove(dir);
+            heldTemporary.Remove(dir);
+            sweepHoldSource.Remove(dir);
+            if (verdict == DesignRestoreSweep.HoldVerdict.Released) { sweepPlayerReleased.Add(dir); released.Add(dir); }
+            else forgot.Add(dir);
+        }
+        if (released.Count > 0)
+            log.Information("[Proteus] design-restore: not holding off again mod(s) the player put back: {0}",
+                string.Join(", ", released.Order(StringComparer.OrdinalIgnoreCase)));
+        if (forgot.Count > 0)
+            log.Debug("[Proteus] design-restore: forgot hold(s) another plugin had taken over: {0}",
+                string.Join(", ", forgot.Order(StringComparer.OrdinalIgnoreCase)));
     }
 
     /// <summary>Sweep once the draw object has been quiet for <see cref="PostLoadSweepSettleMs"/>; a burst of
@@ -1344,27 +1525,145 @@ public class DesignBindingService : IDisposable
         }, TimeSpan.FromMilliseconds(PostLoadSweepSettleMs));
     }
 
+    /// <summary>What one sweep's first phase hands its second: the state it was decided for, and its reads.</summary>
+    private sealed record SweepJob(
+        int Token, int Generation, Guid Design, Guid Collection, string ModsRoot,
+        HashSet<string> Kept, HashSet<string> Sanity, List<string> Candidates, List<string> Held, List<string> StaysOn,
+        List<(string GamePath, string Source)> Upstreams, int MapFiles, long MapMs, long SettingsMs);
+
+    /// <summary>The background read's result: every needed mod's files, and what reading them cost.</summary>
+    private sealed record SweepRead(Dictionary<string, ModDirFiles> Files, int Cold, int Unreadable, long Ms);
+
+    /// <summary>Phase 1, framework thread: read what's drawn and the collection, note what became of the sweep's holds,
+    /// pick the candidates, then read their files and the kept mods' on a background task.</summary>
     private void RunPostLoadSweep()
     {
         // Re-checked here as well as at the trigger: a sweep queued before the switch was thrown lands a
-        // tick later, and it writes temporary mod settings.
-        if (!FeatureOn) return;
-        if (Environment.TickCount64 >= postLoadSweepUntil) return;
+        // tick later, and it writes temporary mod settings. No window check: every queued sweep runs.
+        if (disposed || !FeatureOn) return;
         if (postLoadSweepGeneration != characterWorkGeneration || ActiveDesignId != postLoadSweepDesign) return;
 
+        var clock    = System.Diagnostics.Stopwatch.StartNew();
         var modsRoot = penumbra.GetModDirectory();
-        var tree     = penumbra.GetActivePlayerResourceMap();
-        if (modsRoot == null || tree == null) return;
+        var tree     = modsRoot == null ? null : penumbra.GetActivePlayerResourceMap();
+        long mapMs   = clock.ElapsedMilliseconds;
+        if (modsRoot == null || tree == null) { BlockSweep(DesignRestoreSweep.SweepBlock.MapUnreadable, null); return; }
 
-        var strays = StrayDrawnMods(modsRoot, tree, postLoadSweepBound, postLoadSweepProteus);
-        if (strays.Count == 0) return;
+        var collId    = postLoadSweepCollection;
+        var effective = penumbra.GetCollectionModSettings(collId, ignoreTemporary: false);
+        long settingsMs = clock.ElapsedMilliseconds - mapMs;
+        if (effective == null) { BlockSweep(DesignRestoreSweep.SweepBlock.SettingsUnreadable, null); return; }
 
-        var collId = postLoadSweepCollection;
-        var off    = new List<string>(strays.Count);
+        NoteSweepHoldChanges(collId, effective);
+
+        bool Ours(string d) => !sweepHoldSource.TryGetValue(d, out var s)
+                               || string.Equals(s, TemporarySource, StringComparison.OrdinalIgnoreCase);
+        var candidates = StrayDrawnMods(modsRoot, tree, postLoadSweepBound, postLoadSweepProteus)
+            .Concat(sweepCarried)
+            .Where(d => !sweepPlayerReleased.Contains(d) && !sweepSpared.ContainsKey(d) && !sweepHeld.Contains(d) && Ours(d))
+            .Distinct(StringComparer.OrdinalIgnoreCase).Order(StringComparer.OrdinalIgnoreCase).ToList();
+        var held = sweepHeld.Where(Ours).Order(StringComparer.OrdinalIgnoreCase).ToList();
+        if (candidates.Count == 0 && held.Count == 0)
+        {
+            sweepCarried.Clear();   // nothing left to decide: every carried stray was put back or spared
+            return;
+        }
+
+        var kept   = DesignRestoreSweep.KeptDirs(postLoadSweepBound, postLoadSweepProteus, SidecarDiscoveryService.ManagedModDir, effective);
+        var sanity = postLoadSweepBound
+            .Where(d => !postLoadSweepProteus.Contains(d) && kept.Contains(d)
+                        && heldTemporary.TryGetValue(d, out var h) && h.Enabled)
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+        // Strays left on earlier, or put back by the player, still need what their materials need.
+        var staysOn = sweepSpared.Keys.Concat(sweepPlayerReleased).Where(d => !kept.Contains(d))
+            .Distinct(StringComparer.OrdinalIgnoreCase).ToList();
+        var job = new SweepJob(postLoadSweepToken, characterWorkGeneration, postLoadSweepDesign, collId, modsRoot,
+            kept, sanity, candidates, held, staysOn, compositor.BaseUpstreams().Select(u => (u.GamePath, u.Source)).ToList(),
+            tree.Count, mapMs, settingsMs);
+
+        var ct = sweepCts.Token;
+        Task.Run(() =>
+        {
+            var clockRead = System.Diagnostics.Stopwatch.StartNew();
+            int cold = sweepReader.ColdReads, bad = sweepReader.Unreadable;
+            var files = new Dictionary<string, ModDirFiles>(StringComparer.OrdinalIgnoreCase);
+            foreach (var dir in job.Kept.Concat(job.Candidates).Concat(job.Held).Concat(job.StaysOn))
+            {
+                ct.ThrowIfCancellationRequested();
+                if (!files.ContainsKey(dir)) files[dir] = sweepReader.Files(job.ModsRoot, dir);
+            }
+            return new SweepRead(files, sweepReader.ColdReads - cold, sweepReader.Unreadable - bad, clockRead.ElapsedMilliseconds);
+        }, ct).ContinueWith(t =>
+        {
+            if (disposed || ct.IsCancellationRequested) return;
+            framework.RunOnFrameworkThread(() =>
+                SweepPhase2(job, t.IsCompletedSuccessfully ? t.Result : null, t.Exception?.GetBaseException()));
+        }, TaskScheduler.Default);
+    }
+
+    /// <summary>
+    /// Phase 2, framework thread: resolve the paths that matter, decide the providers, then hold the candidates that
+    /// aren't and let go of held strays that are. Discarded when anything moved on since phase 1.
+    /// </summary>
+    private void SweepPhase2(SweepJob job, SweepRead? read, Exception? error)
+    {
+        if (disposed || !FeatureOn) return;
+        if (job.Token != postLoadSweepToken || job.Generation != characterWorkGeneration
+            || job.Design != postLoadSweepDesign || ActiveDesignId != job.Design) return;
+        if (read == null)
+        {
+            WarnSweepOnce($"reading the mods failed: {error?.Message ?? "unknown"}");
+            return;
+        }
+        if (penumbra.GetPlayerCollectionId() != job.Collection)
+        {
+            WarnSweepOnce("Penumbra's paths don't match the design's collection: collection changed");
+            return;
+        }
+
+        var files = read.Files;
+        var clock = System.Diagnostics.Stopwatch.StartNew();
+        int existsBefore = existsMemo.Count, existsAsked = 0;
+        bool Exists(string g)
+        {
+            existsAsked++;
+            if (!existsMemo.TryGetValue(g, out var e))
+            {
+                try { e = Plugin.DataManager.FileExists(g); }
+                catch { e = false; }   // can't tell: absent, which spares
+                existsMemo[g] = e;
+            }
+            return e;
+        }
+        IReadOnlyDictionary<string, ModDirFiles> Pick(IEnumerable<string> dirs)
+            => dirs.ToDictionary(d => d, d => files[d], StringComparer.OrdinalIgnoreCase);
+
+        var inputs = new DesignRestoreSweep.SweepInputs(job.ModsRoot, SidecarDiscoveryService.ManagedModDir,
+            Pick(job.Kept), job.Sanity, Pick(job.Candidates), Pick(job.Held),
+            new Dictionary<string, string?>(), job.Upstreams, Exists, Pick(job.StaysOn));
+        var query = DesignRestoreSweep.ResolveQuery(inputs);
+        var resolved = penumbra.ResolvePlayerPaths(query);
+        if (resolved == null) { BlockSweep(DesignRestoreSweep.SweepBlock.ResolveFailed, null); return; }
+        inputs = inputs with { Resolved = resolved };
+
+        var (block, blockDir) = DesignRestoreSweep.Blocked(inputs);
+        if (block != DesignRestoreSweep.SweepBlock.None) { BlockSweep(block, blockDir); return; }
+
+        var providers = DesignRestoreSweep.FindProviders(inputs);
+        var spared = new List<string>();
+        foreach (var dir in job.Candidates)
+            if (providers.TryGetValue(dir, out var needs) && sweepSpared.TryAdd(dir, needs)) spared.Add(dir);
+
+        var collId = job.Collection;
+        var off = new List<string>();
+        var letGo = new List<string>();
+        // Not held this round: a stray whose file list can't be read can't be shown not to be a provider.
+        var unreadStrays = job.Candidates.Where(d => !providers.ContainsKey(d) && files[d].ManifestFailed).ToList();
         using (compositor.SuppressModSettingEvents())
         {
-            foreach (var dir in strays)
+            foreach (var dir in job.Candidates)
             {
+                if (providers.ContainsKey(dir) || files[dir].ManifestFailed) continue;
                 var ec = penumbra.SetTemporaryModSettings(collId, dir, enabled: false, priority: 0,
                     new Dictionary<string, List<string>>(), TemporarySource, TemporaryKey);
                 if (ec != PenumbraApiEc.Success)
@@ -1373,14 +1672,90 @@ public class DesignBindingService : IDisposable
                     continue;
                 }
                 heldTemporary[dir] = new PenumbraModSetting { ModDirectory = dir, Enabled = false };
+                sweepHeld.Add(dir);
+                sweepHoldSource[dir] = TemporarySource;
                 off.Add(dir);
             }
-        }
-        if (off.Count == 0) return;
 
-        compositor.TriggerRecomposite($"design-restore-sweep:{postLoadSweepDesign}");
-        log.Information("[Proteus] design-restore: holding off mod(s) the design doesn't have that were still drawn: {0}",
-            string.Join(", ", off));
+            foreach (var dir in job.Held)
+            {
+                if (!providers.TryGetValue(dir, out var needs)) continue;
+                // Fresh: the key-0 clear would remove anyone's hold, and phase 1's record is a frame hop old.
+                var hold = penumbra.QueryTemporaryModSettings(collId, dir);
+                if (hold is not { Present: true } h) continue;
+                if (!string.Equals(h.Source, TemporarySource, StringComparison.OrdinalIgnoreCase))
+                {
+                    sweepHoldSource[dir] = h.Source;
+                    continue;
+                }
+                if (penumbra.ClearTemporaryModSettings(collId, dir) is not (PenumbraApiEc.Success or PenumbraApiEc.NothingChanged))
+                    continue;
+                heldTemporary.Remove(dir);
+                sweepHeld.Remove(dir);
+                sweepHoldSource.Remove(dir);
+                sweepSpared[dir] = needs;
+                letGo.Add(dir);
+            }
+        }
+        sweepCarried.Clear();   // this completed check decided every carried stray
+
+        if (spared.Count > 0)
+            log.Information("[Proteus] design-restore: left on mod(s) the design doesn't have, because something kept needs a file only they supply and the game has none: {0}",
+                Needs(spared, sweepSpared));
+        if (off.Count > 0)
+            log.Information("[Proteus] design-restore: holding off mod(s) the design doesn't have that were still drawn: {0}",
+                string.Join(", ", off));
+        unreadStrays.RemoveAll(d => !sweepUnreadLogged.Add(d));   // once per window per mod
+        if (unreadStrays.Count > 0)
+            log.Information("[Proteus] design-restore: not holding off this round, their file list could not be read: {0}",
+                string.Join(", ", unreadStrays));
+        if (letGo.Count > 0)
+        {
+            bool redraw = compositor.AutoRedrawOn;
+            log.Information("[Proteus] design-restore: let go of mod(s) the sweep had held off: something kept needs a file only they supply: {0}{1}",
+                Needs(letGo, sweepSpared), redraw ? "; redrawing" : "; a redraw is needed to draw them (auto redraw is off)");
+            // One full redraw: the material that failed without them is reloaded only by a redraw.
+            if (redraw) compositor.RedrawForChangedModel($"design-restore: let go of {string.Join(", ", letGo)}");
+        }
+        if (off.Count > 0 || letGo.Count > 0)
+            compositor.TriggerRecomposite($"design-restore-sweep:{job.Design}");
+
+        log.Debug("[Proteus] design-restore: sweep map {0} file(s) {1} ms, settings {2} ms; read {3} mod(s), {4} file(s) cold, {5} unreadable, {6} ms; exists {7} checked ({8} new); resolved {9} path(s); decided in {10} ms",
+            job.MapFiles, job.MapMs, job.SettingsMs, files.Count,
+            read.Cold, read.Unreadable, read.Ms, existsAsked, existsMemo.Count - existsBefore,
+            query.Count, clock.ElapsedMilliseconds);
+    }
+
+    private static string Needs(IEnumerable<string> dirs, IReadOnlyDictionary<string, List<DesignRestoreSweep.SweepNeed>> needs)
+        => string.Join("; ", dirs.Select(d => needs.TryGetValue(d, out var n)
+            ? $"{d} ({string.Join(", ", n.Select(x => $"{x.GamePath} ← {x.NeededBy}"))})"
+            : d));
+
+    /// <summary>A round that can't be trusted holds nothing: warn once per window, and for a transient cause try again,
+    /// at most <see cref="DesignRestoreSweep.MaxBlockRetriesPerWindow"/> times.</summary>
+    private void BlockSweep(DesignRestoreSweep.SweepBlock reason, string? dir)
+    {
+        bool retry = DesignRestoreSweep.IsTransient(reason) && sweepBlockRetries < DesignRestoreSweep.MaxBlockRetriesPerWindow;
+        if (retry) sweepBlockRetries++;
+        var why = reason switch
+        {
+            DesignRestoreSweep.SweepBlock.MapUnreadable            => "the drawn resources are unreadable",
+            DesignRestoreSweep.SweepBlock.SettingsUnreadable       => "the collection's settings are unreadable",
+            DesignRestoreSweep.SweepBlock.KeptManifest             => $"a kept mod's files could not be read: {dir}",
+            DesignRestoreSweep.SweepBlock.KeptActiveFileUnreadable => $"a kept mod's files could not be read: {dir}",
+            DesignRestoreSweep.SweepBlock.ResolveFailed            => "Penumbra could not resolve paths",
+            DesignRestoreSweep.SweepBlock.ResolveInsane            => "Penumbra's paths don't match the design's collection: the design's mods resolve nowhere",
+            _ => reason.ToString(),
+        };
+        WarnSweepOnce(why + (retry ? "; trying again" : ""));
+        if (retry) QueuePostLoadSweep();
+    }
+
+    private void WarnSweepOnce(string why)
+    {
+        if (sweepFailureLogged) return;
+        sweepFailureLogged = true;
+        log.Warning("[Proteus] design-restore: sweep held nothing, {0}", why);
     }
 
     /// <summary>
@@ -1568,44 +1943,21 @@ public class DesignBindingService : IDisposable
         => overrides.GetEditableMaskGear(modDir, seed);
 
     /// <summary>
-    /// Drop one option's colour + gear override from the active design, both live and persisted, so "Reset to
-    /// defaults" sticks on a bound mod. False when no design is active or nothing was stored.
+    /// Drop one option's colour + gear override from the active design's live override, so "Reset to defaults" shows
+    /// the mod's own values now. Live only: the stored binding keeps this option until Update, and applying the
+    /// design again brings it back. False when no design is active or nothing was live.
     /// </summary>
     public bool ClearOptionOverride(string modDir, string? group, string? option)
     {
-        Guid id;
         lock (gate)
         {
-            if (activeDesignId is not { } active) return false;
-            id = active;
+            if (activeDesignId == null) return false;
         }
 
         // Outside `gate`: the bag has its own lock, and the two must never nest.
-        bool touched = overrides.ClearOption(modDir, group, option);
+        if (!overrides.ClearOption(modDir, group, option)) return false;
 
-        lock (gate)
-        {
-            // Persisted binding, so the design stops re-applying it.
-            if (store.Bindings.TryGetValue(id, out var b))
-            {
-                var mod = b.Mods.FirstOrDefault(m =>
-                    string.Equals(m.ModDirectory, modDir, StringComparison.OrdinalIgnoreCase));
-                if (mod != null)
-                {
-                    touched |= OverlayOverrideBag.ClearScope(mod.Colors.Options, group, option,
-                        () => { bool had = mod.Colors.Top != null; mod.Colors.Top = null; return had; });
-                    touched |= OverlayOverrideBag.ClearScope(mod.Gear.Options, group, option,
-                        () => OverlayOverrideBag.ClearTopGear(mod.Gear));
-                }
-            }
-
-            // Serialise under the lock, write outside it: the store reaches tens of MB and the caller is the UI thread.
-            if (touched) SaveDeferred();
-        }
-
-        if (!touched) return false;
-
-        log.Information("[Proteus] cleared binding override for {0} [{1}/{2}] from the active design",
+        log.Information("[Proteus] cleared the live design override for {0} [{1}/{2}]; the binding keeps it until Update",
             modDir, group ?? "(top)", option ?? "(top)");
         return true;
     }
@@ -1775,8 +2127,10 @@ public class DesignBindingService : IDisposable
                 Elapsed(sinceReapply));
         }
 
-        // Only an explicit design apply may strip slots: automation merges several designs.
+        // Only an explicit design apply may strip slots: automation merges several designs. Only an explicit apply
+        // re-restores the design already active, too: ReapplyAutomation fires on every zone-in.
         EvaluateAppliedDesign(allowUnbind: !inferred,
+            explicitApply: type is StateFinalizationType.DesignApplied,
             unequipUnset: type is StateFinalizationType.DesignApplied && config.DesignBindingUnequipUnsetSlots,
             preApply: type is StateFinalizationType.DesignApplied ? preApply : null);
     }
@@ -1792,8 +2146,8 @@ public class DesignBindingService : IDisposable
 
     // Glamourer's "Nothing" item for an equipment slot is uint.MaxValue - 128 - slot index (ItemManager.NothingId);
     // matched as a window so the slot-index mapping isn't copied here.
-    private const ulong NothingIdHigh = uint.MaxValue - 128UL;
-    private const ulong NothingIdLow  = NothingIdHigh - 31UL;
+    private const ulong NothingIdHigh = GlamourerItemIds.NothingIdHigh;
+    private const ulong NothingIdLow  = GlamourerItemIds.NothingIdLow;
 
     /// <summary>
     /// The slots to unequip so the character wears only what <paramref name="design"/> puts on it: every filled slot
@@ -1812,7 +2166,7 @@ public class DesignBindingService : IDisposable
                 if (dEquip?[slot] is JObject d && d["Apply"]?.ToObject<bool>() == true) continue;
                 if (sEquip[slot] is not JObject s || s["ItemId"] is not { } idToken) continue;
                 var id = idToken.ToObject<ulong>();
-                if (id == 0 || id is >= NothingIdLow and <= NothingIdHigh) continue;       // already empty
+                if (GlamourerItemIds.IsEmpty(id)) continue;       // already empty
                 if (carriers.OwnedSlots?.Contains(slot, StringComparer.Ordinal) == true) continue;
                 if (carriers.AccessoryItems?.Contains(id) == true) continue;                 // our carrier item
                 result.Add(slot);
@@ -1874,8 +2228,11 @@ public class DesignBindingService : IDisposable
     {
         if (GetDesignCached(designId) is not { } design) return;
 
+        // Captured so a harness put-back (HarnessQuiesce) can cancel an unequip still queued; nothing else bumps it.
+        var epoch = unequipEpoch;
         framework.RunOnTick(() =>
         {
+            if (epoch != unequipEpoch) return;
             if (glamourer.GetObjectState(0) is not { } state) return;
             var slots = UnsetSlots(design, state, carriers);
             if (slots.Count == 0) return;
@@ -1905,7 +2262,9 @@ public class DesignBindingService : IDisposable
     /// <param name="unequipUnset">Also clear the gear slots the matched design leaves unset. Explicit applies only.</param>
     /// <param name="preApply">The state from before this apply, for explicit applies only — see
     /// <see cref="AppliedInsteadOfActive"/>.</param>
-    private void EvaluateAppliedDesign(bool allowUnbind, bool unequipUnset = false, JObject? preApply = null)
+    /// <param name="explicitApply">A <c>DesignApplied</c> finalization: the player applied a design themselves. The only
+    /// signal that re-restores the design already active — see <see cref="DecideActiveApply"/>.</param>
+    private void EvaluateAppliedDesign(bool allowUnbind, bool explicitApply = false, bool unequipUnset = false, JObject? preApply = null)
     {
         bool anyBindings;
         lock (gate) anyBindings = store.Bindings.Count > 0;
@@ -1943,8 +2302,28 @@ public class DesignBindingService : IDisposable
 
         if (activeDesignId == pick)
         {
-            // Already applied, so no restore runs, but packs switched on since still have to come off.
-            if (unequipUnset) DisableUnboundImportedPacks(pick.Value);
+            // Applying the active design again puts back what its binding holds: live edits are never saved into a
+            // binding by re-applying (only a design save or Update writes one). Anything else re-asserting it keeps them.
+            var isReapply = explicitApply && GetDesignCached(pick.Value) is { } activeDesign
+                         && IsReapplyOfActive(activeDesign, preApply, state, carriers);
+            var name = DesignNameOf(pick.Value);
+            switch (DecideActiveApply(explicitApply, isReapply, unequipUnset))
+            {
+                case ActiveApplyAction.Restore:
+                    log.Information("[Proteus] design-binding: {0} re-applied — restoring its binding; unsaved edits dropped.", name);
+                    Restore(pick.Value, stripImported: unequipUnset);
+                    break;
+                case ActiveApplyAction.KeepAndStripPacks:
+                    if (explicitApply)
+                        log.Information("[Proteus] design-binding: another design applied over {0} — keeping unsaved edits.", name);
+                    // Already applied, so no restore runs, but packs switched on since still have to come off.
+                    DisableUnboundImportedPacks(pick.Value);
+                    break;
+                default:
+                    if (explicitApply)
+                        log.Information("[Proteus] design-binding: another design applied over {0} — keeping unsaved edits.", name);
+                    break;
+            }
             return;
         }
         Restore(pick.Value, stripImported: unequipUnset);
@@ -1987,6 +2366,117 @@ public class DesignBindingService : IDisposable
             }
         }
         return pick;
+    }
+
+    /// <summary>
+    /// Whether a rewritten design file is an edit of the design: Glamourer bumps <c>LastEdit</c> on every edit, and not
+    /// for the rewrites that change nothing about it. No earlier copy, or no <c>LastEdit</c> on either side, counts as an
+    /// edit (today's behaviour: capture).
+    /// </summary>
+    internal static bool IsDesignEdit(JObject? previous, JObject current)
+        => previous?["LastEdit"] is not { Type: not JTokenType.Null } before
+        || current["LastEdit"] is not { Type: not JTokenType.Null } after
+        || !JToken.DeepEquals(before, after);
+
+    /// <summary>The stored binding's design name for the log, else the GUID.</summary>
+    private string DesignNameOf(Guid id)
+    {
+        lock (gate) return store.Bindings.TryGetValue(id, out var b) && b.DesignName != null ? b.DesignName : id.ToString();
+    }
+
+    /// <summary>What an apply signal does when its best match is the design already active.</summary>
+    internal enum ActiveApplyAction { Keep, KeepAndStripPacks, Restore }
+
+    /// <summary>
+    /// The action for an apply whose best match is the active design. Only an explicit apply that reads as that
+    /// design applied again restores its binding (dropping unsaved live edits); everything else keeps the edits and,
+    /// with unequip-unset on, still switches off imported packs turned on since.
+    /// </summary>
+    internal static ActiveApplyAction DecideActiveApply(bool explicitApply, bool isReapply, bool unequipUnset)
+    {
+        if (explicitApply && isReapply) return ActiveApplyAction.Restore;
+        return unequipUnset ? ActiveApplyAction.KeepAndStripPacks : ActiveApplyAction.Keep;
+    }
+
+    /// <summary>
+    /// Whether an explicit apply that left the active design matching was that design applied again, rather than
+    /// another design applied over it: true when nothing outside the active design's own fields changed during the
+    /// apply. Proteus's carrier slots never decide. No before-reading (the first apply after a load) counts as a
+    /// re-apply, honouring the explicit action. Fields <see cref="StateMatches"/> doesn't compare (advanced dyes,
+    /// meta toggles, weapons, wetness) never decide either.
+    /// </summary>
+    internal static bool IsReapplyOfActive(JObject activeDesign, JObject? preApply, JObject state, Carriers carriers)
+    {
+        if (preApply == null) return true;
+
+        var own = AppliedFieldKeys(activeDesign);
+        var universe = StateFieldKeys(preApply);
+        universe.UnionWith(StateFieldKeys(state));
+        universe.RemoveWhere(k => IsCarrierKey(k, preApply, state, carriers));
+
+        return !universe.Where(k => !own.Contains(k)).Any(k => FieldChanged(preApply, state, k));
+    }
+
+    /// <summary>Whether a <see cref="StateFieldKeys"/> key names a slot Proteus is borrowing or filling with a carrier.</summary>
+    internal static bool IsCarrierKey(string key, JObject before, JObject after, Carriers carriers)
+    {
+        var parts = key.Split('/');
+        if (parts.Length != 3) return false;
+
+        if (parts[0] == "Equipment")
+        {
+            if (carriers.OwnedSlots?.Contains(parts[1], StringComparer.Ordinal) == true) return true;
+            if (carriers.AccessoryItems is not { Count: > 0 } items) return false;
+            return CarriesItem(before) || CarriesItem(after);
+
+            bool CarriesItem(JObject s) => s["Equipment"]?[parts[1]]?["ItemId"] is { } id
+                                        && id.Type == JTokenType.Integer && items.Contains(id.ToObject<ulong>());
+        }
+
+        if (parts[0] == "Bonus" && parts[1] == "Glasses")
+        {
+            if (carriers.GlassesSlotOwned) return true;
+            if (carriers.GlassesRow is not { } row) return false;
+            return IsRow(before) || IsRow(after);
+
+            bool IsRow(JObject s) => s["Bonus"]?["Glasses"]?["BonusId"] is { } id
+                                  && id.Type == JTokenType.Integer && (id.ToObject<ulong>() & BonusIdRowMask) == row;
+        }
+
+        return false;
+    }
+
+    /// <summary>
+    /// Every field a Glamourer state carries, as <see cref="AppliedFieldKeys"/> keys, whatever its <c>Apply</c> flag:
+    /// the comparison universe of <see cref="IsReapplyOfActive"/>. Weapons, meta entries and wetness are left out,
+    /// as <see cref="StateMatches"/> leaves them out.
+    /// </summary>
+    internal static HashSet<string> StateFieldKeys(JObject state)
+    {
+        var keys = new HashSet<string>(StringComparer.Ordinal);
+
+        if (state["Equipment"] is JObject equip)
+            foreach (var p in equip.Properties())
+            {
+                if (NonMatchedSlots.Contains(p.Name) || p.Value is not JObject slot || slot["ItemId"] == null) continue;
+                keys.Add($"Equipment/{p.Name}/Item");
+                keys.Add($"Equipment/{p.Name}/Stain");
+            }
+
+        if (state["Bonus"] is JObject bonus)
+            foreach (var p in bonus.Properties())
+                if (p.Value is JObject) keys.Add($"Bonus/{p.Name}/Item");
+
+        if (state["Customize"] is JObject cust)
+            foreach (var p in cust.Properties())
+                if (p.Name != "Wetness" && p.Value is JObject c && c["Value"] != null)
+                    keys.Add($"Customize/{p.Name}/Value");
+
+        if (state["Parameters"] is JObject pars)
+            foreach (var p in pars.Properties())
+                if (p.Value is JObject) keys.Add($"Parameters/{p.Name}/Value");
+
+        return keys;
     }
 
     /// <summary>
@@ -2683,6 +3173,11 @@ public class DesignBindingService : IDisposable
         ModMoveMigration.RekeyKey(temporaryGuardClears, oldDir, newDir);
         ModMoveMigration.RekeySet(postLoadSweepBound, oldDir, newDir);
         ModMoveMigration.RekeySet(postLoadSweepProteus, oldDir, newDir);
+        ModMoveMigration.RekeySet(sweepHeld, oldDir, newDir);
+        ModMoveMigration.RekeyKey(sweepHoldSource, oldDir, newDir);
+        ModMoveMigration.RekeySet(sweepPlayerReleased, oldDir, newDir);
+        ModMoveMigration.RekeyKey(sweepSpared, oldDir, newDir);
+        ModMoveMigration.RekeySet(sweepCarried, oldDir, newDir);
 
         if (records > 0 || look || held)
             log.Information("[Proteus] design-binding: {0} renamed to {1} — {2} binding record(s) follow it{3}{4}",

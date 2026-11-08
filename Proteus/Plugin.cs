@@ -23,19 +23,20 @@ public sealed class Plugin : IDalamudPlugin
     [PluginService] public static IClientState ClientState { get; private set; } = null!;
     [PluginService] public static IChatGui ChatGui { get; private set; } = null!;
     [PluginService] public static ITextureProvider TextureProvider { get; private set; } = null!;
+    [PluginService] public static IReliableFileStorage ReliableStorage { get; private set; } = null!;
 #if PROTEUS_TEST_HARNESS
     /// <summary>The QA test harness's screenshot readback (dev builds only).</summary>
     [PluginService] public static ITextureReadbackProvider TextureReadback { get; private set; } = null!;
 #endif
 
     /// <summary>Hand-maintained; bump it for in-game testing. <see cref="BuildStamp"/> is the one that can't go stale.</summary>
-    public const int BuildNumber = 1438;
+    public const int BuildNumber = 1464;
 
     /// <summary>
     /// Which set of release notes is current. Raise it when a release has something new to say: the window
     /// then opens once more for everyone whose <see cref="Configuration.WhatsNewShown"/> is below it.
     /// </summary>
-    public const int CurrentWhatsNew = 4;
+    public const int CurrentWhatsNew = 5;
 
     /// <summary>
     /// When this assembly was compiled, as MM-dd HH:mm:ss, baked in by the csproj: Dalamud loads plugins from a stream,
@@ -58,6 +59,8 @@ public sealed class Plugin : IDalamudPlugin
     private readonly UVMapDownloadService uvMapDl;
     private readonly UvMapsCoordinator uvMaps;
     private readonly DefaultEffectsDownloadService effectsDl;
+    /// <summary>Proteus's own matcaps: constructed here, but only fetched when the Studio's Matcaps pane is first shown.</summary>
+    private readonly DefaultMatcapsDownloadService matcapPackDl;
     private readonly CompositorService compositor;
     private volatile bool _disposed;
     private readonly DesignBindingService designBindings;
@@ -76,6 +79,8 @@ public sealed class Plugin : IDalamudPlugin
     private readonly HairPortWatcher hairPort;
     private readonly ShaderUpgradeWatcher shaderUpgrade;
     private readonly VariantRepointWatcher variantRepoint;
+    private readonly PlayerSettingsFilter settingsFilter;
+    private readonly IoCounters ioCounters;
     private readonly AutoRefitWatcher autoRefit;
     private readonly ModMoveService modMoves;
     private readonly Gui.ProteusFonts fonts;
@@ -112,7 +117,13 @@ public sealed class Plugin : IDalamudPlugin
         config.Initialize(pluginInterface);
         // From here on a save from a worker is written on the framework thread, a quarter second later: a burst of
         // body-mod classifications is then a few writes, not one a frame.
-        config.AttachSaver(new ConfigSaveScheduler(config.Gate, () => pluginInterface.SavePluginConfig(config),
+        // The text is made on the framework thread inside the gate; the disk write goes through Dalamud's reliable storage
+        // (same file and container as SavePluginConfig, under its lock) off the framework thread. Unload writes last.
+        var configPath = pluginInterface.ConfigFile.FullName;
+        config.AttachSaver(new ConfigSaveScheduler(config.Gate,
+                                                   () => ConfigJson.Serialize(config),
+                                                   json => ReliableStorage.WriteAllTextAsync(configPath, json),
+                                                   () => pluginInterface.SavePluginConfig(config),
                                                    () => framework.IsInFrameworkUpdateThread,
                                                    a => _ = framework.RunOnTick(a, TimeSpan.FromMilliseconds(250)),
                                                    log));
@@ -130,11 +141,17 @@ public sealed class Plugin : IDalamudPlugin
         var assemblyDir = pluginInterface.AssemblyLocation.DirectoryName;
 
         effectsDl = new DefaultEffectsDownloadService(log, dataDir, assemblyDir);
+        matcapPackDl = new DefaultMatcapsDownloadService(log, dataDir);
         discovery = new SidecarDiscoveryService(penumbra, log)
         {
             DefaultEffectsDir = effectsDl.EffectsDir,
             AssemblyDir       = assemblyDir,
         };
+        // Order is load-bearing: discovery subscribes to the bridge's mod events before anything else does, so its cache
+        // forgets a changed mod before any other handler of the same event discovers (IdleDiskIoWiringTests).
+        ioCounters = new IoCounters(line => log.Debug(line));
+        discovery.Io = ioCounters;
+        discovery.AttachTo(penumbra);
         // Seed the global effects library with the starter set. No-ops until Penumbra's mod directory resolves;
         // OnPenumbraReady and each finished starter download call it again.
         discovery.SeedDefaultEffects();
@@ -143,7 +160,10 @@ public sealed class Plugin : IDalamudPlugin
         // Nothing may read a UV map before this: the download service swaps an upgraded men's pair into place as it is
         // made, and a map read (or cached) first would be the old one, or a file mid-move.
         uvMapDl = new UVMapDownloadService(log, dataDir, assemblyDir);
-        compositor = new CompositorService(penumbra, glamourer, discovery, textureLoader, config, log, uvRemap);
+        compositor = new CompositorService(penumbra, glamourer, discovery, textureLoader, config, log, uvRemap)
+        {
+            Io = ioCounters,
+        };
 
         // Subscribed before the first download starts, so its arrival is never missed.
         uvMaps = new UvMapsCoordinator(uvRemap, uvMapDl,
@@ -239,15 +259,31 @@ public sealed class Plugin : IDalamudPlugin
 
         // The same: gear put on is refitted onto the collection's body whether or not any window is open.
         autoRefit = new AutoRefitWatcher(compositor, penumbra, glamourer, designBindings, uvRemap,
-                                         path => textureLoader.LoadRawFile(null, path), config, log, dataDir);
+                                         path => textureLoader.LoadRawFile(null, path), config, log, dataDir)
+        {
+            Io = ioCounters,
+        };
         partsPanel.UseBodyIndex(autoRefit.Index);
+        // The matcap libraries among the installed mods, cached under the config folder across sessions.
+        partsPanel.UseMatcapIndex(new Services.Matcap.MatcapIndex(dataDir));
+        partsPanel.UseMatcapPack(matcapPackDl);
 
         // The same: old gear is moved to Dawntrail's shader in its own mod as it is put on, window shut or open.
-        shaderUpgrade = new ShaderUpgradeWatcher(compositor, penumbra, glamourer, autoRefit, textureLoader, config, log);
+        // Both see only the setting changes that can reach what the player wears, not sync plugins' collections.
+        settingsFilter = PlayerSettingsFilter.Attach(penumbra);
+        shaderUpgrade = new ShaderUpgradeWatcher(compositor, penumbra, glamourer, autoRefit, textureLoader, config, log,
+                                                 settingsFilter)
+        {
+            Io = ioCounters,
+        };
 
         // The same: a piece worn in a variant its mod does not dress has its variants pointed at the mod's material.
         variantRepoint = new VariantRepointWatcher(compositor, penumbra, glamourer, autoRefit, shaderUpgrade,
-                                                   path => textureLoader.LoadRawFile(null, path), config, log);
+                                                   path => textureLoader.LoadRawFile(null, path), config, log,
+                                                   settingsFilter)
+        {
+            Io = ioCounters,
+        };
 
         // A mod renamed in Penumbra: every owner of per-mod state follows it, in one fixed order.
         modMoves = new ModMoveService(penumbra, config, presets, designBindings, compositor, hatCompat, hairPort,
@@ -268,7 +304,11 @@ public sealed class Plugin : IDalamudPlugin
             new TestHarness.GameHarnessAdapter(penumbra, glamourer, compositor, autoRefit, shaderUpgrade, variantRepoint, hairPort, ObjectTable, ClientState, framework,
                                                TextureProvider, TextureReadback, config, uvRemap,
                                                path => textureLoader.LoadRawFile(null, path),
-                                               dir => partsPanel.NoteModelsChanged(dir), log),
+                                               dir => partsPanel.NoteModelsChanged(dir), log,
+                                               pluginInterface, designBindings, editRouter, presets, discovery,
+                                               partsPanel.AsHarnessStudio(statusWindow.OpenToStudio,
+                                                                        () => statusWindow.IsOpen,
+                                                                        () => statusWindow.IsOpen = false)),
             new TestHarness.DalamudFrameworkDispatcher(framework), observer => capture.LineObserver = observer, log,
             BuildNumber, BuildStamp);
 #endif
@@ -602,12 +642,15 @@ public sealed class Plugin : IDalamudPlugin
         uvMaps.Dispose();      // before the downloads: no recomposite after this
         uvMapDl.Dispose();
         effectsDl.Dispose();
+        matcapPackDl.Dispose();
         variantRepoint.Dispose();  // before the shader upgrade and auto refit, which it asks
         shaderUpgrade.Dispose();   // before auto refit, which it asks, and the bridges it unsubscribes from
+        settingsFilter.Dispose();  // after both watchers that listen to it
         autoRefit.Dispose();   // before the compositor and the bridges, whose events it unsubscribes from
         hatCompat.Dispose();   // before the compositor: it unsubscribes from that object's event
         hairPort.Dispose();    // the same
         compositor.Dispose();
+        discovery.Detach();    // its cache's subscriptions, before the bridge goes
         glamourer.Dispose();
         penumbra.Dispose();
         Interop.LunaLog.Detach();

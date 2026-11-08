@@ -286,10 +286,10 @@ public class ShellBodyAtrTests
     [Trait("Plan", "AC-nirae-shell-chest-4")]
     public void Gate_skips_when_nothing_moved()
     {
-        Assert.True(CompositorService.SkipUnchanged(false, false, "fp", "fp", () => false));
-        Assert.False(CompositorService.SkipUnchanged(true, false, "fp", "fp", () => false));
-        Assert.False(CompositorService.SkipUnchanged(false, true, "fp", "fp", () => false));
-        Assert.False(CompositorService.SkipUnchanged(false, false, null, "fp", () => false));
+        Assert.True(CompositorService.SkipUnchanged(false, false, false, "fp", "fp", () => false));
+        Assert.False(CompositorService.SkipUnchanged(true, false, false, "fp", "fp", () => false));
+        Assert.False(CompositorService.SkipUnchanged(false, true, false, "fp", "fp", () => false));
+        Assert.False(CompositorService.SkipUnchanged(false, false, false, null, "fp", () => false));
     }
 
     // ── AC-5: every other body is untouched, at no cost ───────────────────────────────────────────────────
@@ -325,8 +325,8 @@ public class ShellBodyAtrTests
         Assert.Equal(0, s.Calls);
 
         // The gate asks only when everything else says skip.
-        Assert.False(CompositorService.SkipUnchanged(false, false, "a", "b", () => throw new InvalidOperationException()));
-        Assert.False(CompositorService.SkipUnchanged(true, false, "a", "a", () => throw new InvalidOperationException()));
+        Assert.False(CompositorService.SkipUnchanged(false, false, false, "a", "b", () => throw new InvalidOperationException()));
+        Assert.False(CompositorService.SkipUnchanged(true, false, false, "a", "a", () => throw new InvalidOperationException()));
 
         var gate = Method(Source("Services/CompositorService.CompositeRun.cs"), "private bool GateUnchanged(");
         Assert.Contains("SkipUnchanged(", gate);
@@ -388,7 +388,7 @@ public class ShellBodyAtrTests
         var uses = new[] { Top(m, new Settings()).Use! };
         var latch = new ShellBodyAtr.ForceLatch();
         var other = new Settings(Pick("Chest", "Small Perky"));
-        Assert.False(CompositorService.SkipUnchanged(false, false, "fp", "fp",
+        Assert.False(CompositorService.SkipUnchanged(false, false, false, "fp", "fp",
             () => ShellBodyAtr.Moved(uses, null, other.Of, out _, out var t) && !latch.IsExhausted(t)));
 
         var gate = Method(Source("Services/CompositorService.CompositeRun.cs"), "private bool GateUnchanged(");
@@ -550,7 +550,8 @@ public class ShellBodyAtrTests
 
         var run = Source("Services/CompositorService.CompositeRun.cs");
         var publish = Method(run, "private void Publish(");
-        int fp = publish.IndexOf("compositor._lastCompositeFingerprint = fingerprint", StringComparison.Ordinal);
+        // Issue sweep D: the fingerprint is recorded through the write-retry latch (#91).
+        int fp = publish.IndexOf("compositor.RecordPublishOutcome(fingerprint", StringComparison.Ordinal);
         int force = publish.IndexOf("TryForceForShapes(null", StringComparison.Ordinal);
         Assert.True(fp >= 0 && force > fp, "the post-publish re-check must follow the fingerprint");
         Assert.Contains("_bodyAtrLatch.OnPublished(", Method(run, "private bool CommitLocators("));

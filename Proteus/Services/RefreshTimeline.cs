@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using System.Text;
 
@@ -53,12 +54,20 @@ internal sealed class RefreshTimeline
     /// whole wait.</summary>
     public bool Completed { get; set; }
 
+    /// <summary>GC pause over the refresh (stutter fixes, item 7): the leading suspect for the outliers.</summary>
+    private readonly GcPauseProbe gcPause;
+
+    /// <summary>For tests: the GC pause clock.</summary>
+    internal RefreshTimeline(long start, int triggers, string reasons, Func<TimeSpan> gcClock)
+        : this(start, triggers, reasons) => gcPause = new GcPauseProbe(gcClock);
+
     public RefreshTimeline(long start, int triggers, string reasons)
     {
         Start = start;
         Triggers = triggers;
         Reasons = reasons;
         mark = start;
+        gcPause = new GcPauseProbe();
     }
 
     /// <summary>Close the span that began at the previous mark (or the first trigger).</summary>
@@ -99,6 +108,12 @@ internal sealed class RefreshTimeline
                 if (sb.Length > 0) sb.Append(" | ");
                 sb.Append(name).Append(' ').Append(ms.ToString("F0"));
             }
+        }
+        long gcMs = gcPause.ElapsedPauseMs;
+        if (gcMs >= 1)
+        {
+            if (sb.Length > 0) sb.Append(" | ");
+            sb.Append("gc pause ").Append(gcMs);
         }
         return sb.Length == 0 ? "-" : sb.ToString();
     }

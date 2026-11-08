@@ -124,7 +124,8 @@ internal static class HarnessHttp
         string path;
         try { path = Uri.UnescapeDataString(rawPath); }
         catch (UriFormatException) { return new ParseResult(null, HarnessResponse.Error(400, "bad-request", "malformed path")); }
-        var query = ParseQuery(q < 0 ? "" : target[(q + 1)..]);
+        var query = ParseQuery(q < 0 ? "" : target[(q + 1)..], out var repeated);
+        if (repeated != null) return new ParseResult(null, HarnessResponse.Error(400, "bad-request", $"repeated query parameter {repeated}"));
         if (query == null) return new ParseResult(null, HarnessResponse.Error(400, "bad-request", "malformed query"));
 
         return new ParseResult(new HarnessRequest(parts[0], path, query, headers, body, target), null);
@@ -137,8 +138,11 @@ internal static class HarnessHttp
         return -1;
     }
 
-    private static Dictionary<string, string>? ParseQuery(string query)
+    /// <summary>The query's keys and values; null when malformed. A key given twice is refused (<paramref name="repeated"/>,
+    /// #84), as a repeated header is: no route takes one, and last-wins would hide a script's mistake.</summary>
+    private static Dictionary<string, string>? ParseQuery(string query, out string? repeated)
     {
+        repeated = null;
         var result = new Dictionary<string, string>(StringComparer.Ordinal);
         if (query.Length == 0) return result;
         foreach (var pair in query.Split('&', StringSplitOptions.RemoveEmptyEntries))
@@ -148,7 +152,7 @@ internal static class HarnessHttp
             {
                 string key = Uri.UnescapeDataString((eq < 0 ? pair : pair[..eq]).Replace('+', ' '));
                 string value = eq < 0 ? "" : Uri.UnescapeDataString(pair[(eq + 1)..].Replace('+', ' '));
-                result[key] = value;
+                if (!result.TryAdd(key, value)) { repeated = key; return null; }
             }
             catch (UriFormatException) { return null; }
         }

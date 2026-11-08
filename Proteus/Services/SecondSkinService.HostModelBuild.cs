@@ -183,7 +183,20 @@ public sealed partial class SecondSkinService
                     ?? $"chara/{host.Tree}/{host.Prefix}{host.SetId:D4}/model/c{publishCode}{host.Prefix}{host.SetId:D4}_{host.Slot}.mdl";
                 mdlDisk = Path.Combine(build.modelsDir, $"secondskin_{h}.mdl");
                 var tModelWrite = PhaseCounter.Begin();
-                var modelChanged = WriteIfChanged(mdlDisk, shell);
+                bool modelChanged;
+                try { modelChanged = WriteIfChanged(mdlDisk, shell); }
+                catch (OutputWriteException)
+                {
+                    // The host is dropped (#91). Its materials, already redirected by the slot loop, go with it, so neither the
+                    // manifest nor the drawn check expects a material the game has no model for: one fault, one message.
+                    build.CountWriteFailure(h);
+                    var orphaned = build.redirects.Keys.Where(k =>
+                        k.EndsWith(".mtrl", StringComparison.OrdinalIgnoreCase)
+                     && k.Contains($"{host.Prefix}{host.SetId:D4}/", StringComparison.OrdinalIgnoreCase)
+                     && k.Contains($"_{host.Slot}_", StringComparison.OrdinalIgnoreCase)).ToList();
+                    foreach (var k in orphaned) build.redirects.Remove(k);
+                    throw;
+                }
 
                 // What the model ON DISK asks the game for, read back from the FILE, not the built bytes: shell files are keyed by
                 // host index and the host list changes between composites, so only the file catches a write that did not land.

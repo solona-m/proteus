@@ -17,6 +17,9 @@ public sealed class LogExportService
     // Covers SchedulePostRedrawShellCheck (about 2.4 s of polling), the DONE and timeline lines after ResultChanged,
     // and Dalamud's buffered file writer.
     private static readonly TimeSpan Settle = TimeSpan.FromSeconds(3);
+    // How much longer it waits while a write retry, a drawn re-check or a composite is still to finish (#91), so the
+    // export catches the retry and drawn-check lines that follow its refresh.
+    private static readonly TimeSpan SettleCap = TimeSpan.FromSeconds(20);
 
     private readonly CapturingPluginLog capture;
     private readonly CompositorService compositor;
@@ -33,6 +36,24 @@ public sealed class LogExportService
         this.config = config;
         // ConfigDirectory is XIVLauncher\pluginConfigs\Proteus; dalamud.log sits in XIVLauncher.
         dalamudLogPath = Path.GetFullPath(Path.Combine(configDirectory, "..", "..", "dalamud.log"));
+    }
+
+    /// <summary>
+    /// Waits <paramref name="settle"/>, then keeps waiting in short steps while <paramref name="pending"/> holds, for at
+    /// most <paramref name="cap"/> more. Returns how long it waited beyond the base.
+    /// </summary>
+    internal static async Task<TimeSpan> SettleAsync(Func<bool> pending, TimeSpan settle, TimeSpan cap,
+                                                    Func<TimeSpan, Task> delay)
+    {
+        await delay(settle).ConfigureAwait(false);
+        var step = TimeSpan.FromMilliseconds(500);
+        var extra = TimeSpan.Zero;
+        while (extra < cap && pending())
+        {
+            await delay(step).ConfigureAwait(false);
+            extra += step;
+        }
+        return extra;
     }
 
     /// <summary>Returns the written file's path. Throws only on a failed write.</summary>
@@ -52,7 +73,8 @@ public sealed class LogExportService
                 : result.Success ? $"done ({result.OverlayModsUsed} mods, {result.TexturesPatched} textures)"
                 : $"FAILED: {result.ErrorMessage}";
             if (notRun == null)
-                await Task.Delay(Settle).ConfigureAwait(false);
+                await SettleAsync(() => compositor.DiagnosticsPending, Settle, SettleCap,
+                    t => Task.Delay(t)).ConfigureAwait(false);
         }
         catch (Exception ex)
         {
@@ -64,7 +86,9 @@ public sealed class LogExportService
         sb.AppendLine("Proteus log");
         sb.AppendLine($"Build:     #{Plugin.BuildNumber} ({Plugin.BuildStamp}), v{typeof(Plugin).Assembly.GetName().Version}");
         sb.AppendLine($"Captured:  {started:yyyy-MM-dd HH:mm:ss} to {DateTime.Now:HH:mm:ss}");
-        sb.AppendLine($"Enabled:   {config.PluginEnabled}   Auto redraw: {config.AutoRedraw}   Penumbra: {(penumbra.IsAvailable ? "available" : "unavailable")}");
+        sb.AppendLine($"Enabled:   {config.PluginEnabled}   Auto redraw: {config.AutoRedraw}"
+                    + (compositor.AutoRedrawOn != config.AutoRedraw ? $" (effective {compositor.AutoRedrawOn}, test harness override)" : "")
+                    + $"   Penumbra: {(penumbra.IsAvailable ? "available" : "unavailable")}");
         sb.AppendLine($"Refresh:   {outcome}");
         sb.AppendLine();
         sb.AppendLine($"==== Proteus, all levels ({lines.Count} lines) ====");

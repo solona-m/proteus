@@ -186,6 +186,7 @@ public partial class MeshVolumeSolveTests
     [Theory]
     [MemberData(nameof(Operations))]
     [Trait("Plan", "AC-studio-move-skin-1")]
+    [Trait("Plan", "EDGE-issue-sweep-c-7")]
     public void SkinStaysPutWithMoveSkinOff(string op)
     {
         var l = Layered(21, 0.005f);
@@ -217,6 +218,7 @@ public partial class MeshVolumeSolveTests
     [Theory]
     [MemberData(nameof(Operations))]
     [Trait("Plan", "AC-studio-move-skin-1")]
+    [Trait("Plan", "EDGE-issue-sweep-c-7")]
     public void AttachedThenOffMatchesNeverAttached(string op)
     {
         var l = Layered(21, 0.005f);
@@ -628,6 +630,7 @@ public partial class MeshVolumeSolveTests
     [Theory]
     [MemberData(nameof(Operations))]
     [Trait("Plan", "EDGE-studio-move-skin-3")]
+    [Trait("Plan", "EDGE-issue-sweep-c-7")]
     public void MoveSkinOnAModelWithNoSkinMatchesOff(string op)
     {
         var l = Layered(21, 0.005f, skinMaterial: "/mt_c0201e6255_top_b.mtrl");

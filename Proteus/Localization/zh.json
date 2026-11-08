@@ -459,12 +459,20 @@
     "message": "[Proteus]“{0}”覆盖了 {1}，而 Proteus 正是将叠加层合成到该处——因此它们不会显示。解决方法：在 Penumbra 中将“Proteus”模组的优先级提升到“{0}”之上。",
     "description": ""
   },
-  "Chat.ShellNotDrawing": {
-    "message": "[Proteus] 第二层皮肤已构建，但游戏没有绘制它。承载它的饰品已装备，可角色并未加载 Proteus 的版本。请脱下该饰品再重新装备，或换用另一件。",
+  "Chat.ShellPartNotDrawn.Fmt": {
+    "message": "[Proteus] 第二层皮肤仍有一部分没有显示。这部分承载在{0}上。请脱下后重新装备，或把该图层换到其他饰品上。",
     "description": ""
   },
-  "Chat.ShellMaterialFailed": {
-    "message": "[Proteus] 第二层皮肤有一部分没有被绘制。其余部分已在角色身上，所以要么是该部件所需的纹理缺失，要么是游戏仍保留着之前的版本。请先尝试“立即重新合成”，然后再脱下并重新装备承载它的饰品。",
+  "Chat.ShellNotDrawn.Fmt": {
+    "message": "[Proteus] 虽然已装备{0}，第二层皮肤仍然没有显示。请脱下后重新装备，或把图层换到其他饰品上。",
+    "description": ""
+  },
+  "Chat.ShellCarrierNotDrawn.Fmt": {
+    "message": "[Proteus] 第二层皮肤有一部分没有显示。它承载在{0}上，这是 Proteus 为承载它而装备的隐形饰品。请在 Proteus 窗口中点击“立即重新合成”；如果仍未显示，请脱下该饰品，Proteus 会重新为你装备。",
+    "description": ""
+  },
+  "Chat.ShellNotDrawnRedrawOff.Fmt": {
+    "message": "[Proteus] 第二层皮肤有一部分没有显示。它承载在{0}上。自动重绘已关闭，所以 Proteus 没有重绘你的角色：请使用 Penumbra 的 Redraw 按钮或切换区域，如果仍未显示，请脱下并重新装备该饰品。",
     "description": ""
   },
   "Chat.ShellNeedsRedraw": {
@@ -924,7 +932,7 @@
     "description": ""
   },
   "Colors.Reset.Tip": {
-    "message": "按住 Ctrl 并点击，可将此选项的颜色、发光和模式恢复为 Proteus 首次\n保存此模组时记录的设置。此操作无法撤销。\n\n若已应用某个设计，这还会删除该设计为此选项保存的覆盖设置——否则设计\n会立刻再次施加它。其他设计的设置保持不变。\n\n注意：这些“原始设置”是 Proteus 首次保存此模组时记录的——如果你在那之前\n就已修改过，那么被修改后的状态就是“默认值”。",
+    "message": "按住 Ctrl 并点击，可将此选项的颜色、发光和模式恢复为 Proteus 首次\n保存此模组时记录的设置。此操作无法撤销。\n\n若已应用某个设计，它会保留自己为此选项保存的值，并在下次应用该设计时再次显示，\n直到你在“绑定”标签页中点击“更新”。\n\n注意：这些“原始设置”是 Proteus 首次保存此模组时记录的——如果你在那之前\n就已修改过，那么被修改后的状态就是“默认值”。",
     "description": ""
   },
   "Colors.Roughness.Label": {
@@ -4095,6 +4103,62 @@
     "message": "移动、旋转或缩放单个多边形，而不是整个部件。单击多边形以选中；\nShift+单击可添加或移除。在列表中选择部件会选中其全部多边形。",
     "description": ""
   },
+  "Parts.Move.SelectAll": {
+    "message": "全部",
+    "description": ""
+  },
+  "Parts.Move.SelectAll.Tip": {
+    "message": "将此模型中所有勾选的部件作为一个整体一起移动、旋转或缩放。\n在部件列表中取消勾选某个部件，它就会留在原处。只有开启“同时移动皮肤”时皮肤才会移动。",
+    "description": ""
+  },
+  "Parts.Move.All.Fmt": {
+    "message": "此模型 {1} 个部件中有 {0} 个一起移动。",
+    "description": ""
+  },
+  "Parts.Move.All.Skin.Fmt": {
+    "message": "此模型 {1} 个部件中有 {0} 个一起移动，包括皮肤。",
+    "description": ""
+  },
+  "Parts.Move.AllNone": {
+    "message": "没有可移动的内容：请在部件列表中勾选部件。",
+    "description": ""
+  },
+  "Parts.Move.AllNothingFree": {
+    "message": "勾选的内容都无法移动：全部是皮肤或已锁定。",
+    "description": ""
+  },
+  "Parts.Move.AllListTip": {
+    "message": "所有勾选的部件一起移动。取消勾选某个部件可让它留在原处：它会在模型和你的角色上隐藏。",
+    "description": ""
+  },
+  "Parts.Move.AllOff.Tip": {
+    "message": "“全部”模式下不使用：所有勾选的部件作为一个整体移动。",
+    "description": ""
+  },
+  "Parts.Move.All.Help": {
+    "message": "所有勾选的部件一起移动：拖动箭头或方块。在其他地方拖动可旋转模型，Shift+拖动平移视图，滚轮缩放。",
+    "description": ""
+  },
+  "Parts.Move.All.LiveHint": {
+    "message": "所有勾选的部件一起移动：在角色身上拖动箭头或方块。按住 Alt 可移动镜头。每次移动在松开时保存。",
+    "description": ""
+  },
+  "Parts.Rotate.All.Help": {
+    "message": "所有勾选的部件一起旋转：拖动它们中心的某个圆环。在其他地方拖动可旋转模型，Shift+拖动平移视图，滚轮缩放。",
+    "description": ""
+  },
+  "Parts.Rotate.All.LiveHint": {
+    "message": "所有勾选的部件一起旋转：在角色身上拖动它们中心的某个圆环。按住 Alt 可移动镜头。每次旋转在松开时保存。",
+    "description": ""
+  },
+  "Parts.ScaleAxes.All.Help": {
+    "message": "所有勾选的部件一起缩放：拖动某个手柄沿该轴拉伸，或按住某个勾选的部件向右拖动放大、向左拖动缩小。在其他地方拖动可旋转模型，Shift+拖动平移视图，滚轮缩放。",
+    "description": ""
+  },
+  "Parts.ScaleAxes.All.LiveHint": {
+    "message": "所有勾选的部件一起缩放：拖动某个手柄沿该轴拉伸，或按住某个勾选的部件向右拖动放大、向左拖动缩小。按住 Alt 可移动镜头。每次更改在松开时保存。",
+    "description": ""
+  },
   "Parts.Move.Shrink": {
     "message": "缩小",
     "description": ""
@@ -4370,6 +4434,22 @@
   "WhatsNew.Close": {
     "message": "关闭",
     "description": ""
+  },
+  "WhatsNew.Matcaps.Head": {
+    "message": "Matcap：闪亮、玻璃质感和宝石般的部件",
+    "description": "Release-notes section heading: the Studio's Matcaps tool. A matcap is a picture of a lit sphere a shader samples by the surface's facing direction."
+  },
+  "WhatsNew.Matcaps.Body": {
+    "message": "工作室新增了一个工具「Matcap」。勾选装备、饰品、头发、尾巴、维埃拉族的耳朵或敖龙族的角上的部件，选一个 matcap（一张受光球体的图片），再按「应用 matcap」：这些部件会得到自己的材质并写入模组，所以关闭 Proteus 后外观依然可见。「Proteus 自带 matcap」是 Proteus 附带的一套 matcap，包含 sivka 制作的 23Minks matcap 包，会在你第一次打开 Matcap 时下载。你自己的图片放在设置中「matcap 图片」下的文件夹里，已安装的 matcap 库模组也会列出。「撤销此模型上的 matcap」可将其全部撤回。",
+    "description": "Release-notes section. 'Studio' matches Tab.Parts and 'Settings' Tab.Settings; \"Matcaps\" matches Parts.Tool.Matcap, \"Apply matcap\" Parts.Matcap.Apply, \"Proteus matcaps\" Parts.Matcap.SourceProteus, \"Matcap images\" Settings.MatcapLibrary, \"Undo matcaps on this model\" Parts.Matcap.Undo. Keep 23Minks and sivka verbatim."
+  },
+  "WhatsNew.MoveAll.Head": {
+    "message": "将所有勾选的部件作为一个整体移动、旋转或缩放",
+    "description": "Release-notes section heading: the All mode of Move, Rotate and Scale. Keep it true to 'ticked': unticked parts stay where they are."
+  },
+  "WhatsNew.MoveAll.Body": {
+    "message": "工作室中的「移动」「旋转」「缩放」在整个部件和多边形之外新增了一个模式「全部」：打开的模型中所有勾选的部件会作为一个整体一起移动、旋转或缩放。在部件列表中取消勾选某个部件，它就会留在原处。只有开启「同时移动皮肤」时，皮肤才会跟着移动。",
+    "description": "Release-notes section. 'Studio' matches Tab.Parts; \"Move\", \"Rotate\" and \"Scale\" match Parts.Tool.Move, Parts.Tool.Rotate and Parts.Tool.Scale; \"All\" matches Parts.Move.SelectAll; \"Move skin too\" matches Parts.SkinMoves. 'Whole parts' and 'polygons' are the other two modes (Parts.Move.SelectParts, Parts.Move.SelectPolygons)."
   },
   "Parts.Retarget.Guide.Title": {
     "message": "体型尺寸提示",
@@ -5283,6 +5363,14 @@
     "message": "开启：在部件露出该皮肤的地方，每个体型的穿孔随皮肤一同加入。指甲始终会带上。\n已制作的尺码只有在重新制作时才会改变。",
     "description": ""
   },
+  "SizeSet.KeepHiddenSkin": {
+    "message": "保留隐藏皮肤",
+    "description": ""
+  },
+  "SizeSet.KeepHiddenSkin.Tip": {
+    "message": "关闭：在作者删除了自己皮肤的地方（通常在布料下方和周围），每个体型的皮肤也会被省去。开启：皮肤会完整加入，补回布料下方或周围缺失的皮肤，但可能透过紧身布料露出来。鞋子和手套始终会被裁剪。\n已制作的尺码只有在重新制作时才会改变。",
+    "description": ""
+  },
   "SizeSet.EndsUnreadable.Fmt": {
     "message": "{0}：无法读取它的骨骼绑定，无法保留脚或手，因此没有为它制作尺码。",
     "description": ""
@@ -5515,6 +5603,14 @@
     "message": "它依靠 c{0:D4} 在此发型上没有的骨骼来活动（{1}）",
     "description": ""
   },
+  "HairPort.Refused.BonesSourceSkeleton.Fmt": {
+    "message": "它使用 c{0:D4} 自己的发型 {2} 骨架中没有的骨骼（{1}）活动，而只有该骨架能带到另一性别",
+    "description": ""
+  },
+  "HairPort.Refused.BonesCarry.Fmt": {
+    "message": "它使用只有 c{0:D4} 的发型 {2} 骨架才有的骨骼（{1}）活动，而该骨架无法带到 c{3:D4}",
+    "description": ""
+  },
   "HairPort.Refused.Unknown.Fmt": {
     "message": "种族变形器不知道如何移动 {0}",
     "description": ""
@@ -5662,6 +5758,14 @@
   "HairPort.Studio.OtherSexAuthored": {
     "message": "该 Mod 有此性别的自有版本",
     "description": "Per-race status in the Studio port list for a race of the other sex: the mod ships its own model of this hairstyle for that sex."
+  },
+  "HairPort.Studio.PortedFrom.Fmt": {
+    "message": "已从发型 {0} 移植 — 移植这个会替换它",
+    "description": ""
+  },
+  "HairPort.Replaced.Fmt": {
+    "message": "c{0:D4}：已替换从发型 {1} 制作的移植。",
+    "description": ""
   },
   "HairPort.Studio.OtherSexSkeleton": {
     "message": "该 Mod 为此种族提供了自己的骨架",
@@ -6117,6 +6221,442 @@
   },
   "Chat.VariantRepoint.Fmt": {
     "message": "[Proteus] 已将“{1}”的材质路径复制到另外 {0} 个变体文件夹，使这些变体在模组优先的地方显示模组自己的材质。撤销位置：/proteus > 设置 > 装备变体。",
+    "description": ""
+  },
+  "Matcap.Refused.AlreadyMatcap": {
+    "message": "请只勾选没有 matcap 的部件（添加）或已有 matcap 的部件（更改），不要两者混选。",
+    "description": ""
+  },
+  "Matcap.Refused.Changed.Fmt": {
+    "message": "准备 matcap 时 {0} 发生了变化，因此没有写入任何内容。请重试。",
+    "description": ""
+  },
+  "Matcap.Refused.Edited.Fmt": {
+    "message": "{0} 在应用 matcap 之后被修改过，因此没有撤销。原件保存在 {1}。",
+    "description": ""
+  },
+  "Matcap.Refused.Failed.Fmt": {
+    "message": "无法写入 matcap（{0}）。没有做任何更改。",
+    "description": ""
+  },
+  "Matcap.Refused.HandEdited.Fmt": {
+    "message": "{0} 在 Proteus 写入后被手动编辑过，因此保持原样。",
+    "description": ""
+  },
+  "Matcap.Refused.ImageUnreadable.Fmt": {
+    "message": "无法将 {0} 读取为图像。",
+    "description": ""
+  },
+  "Matcap.Refused.ImportedPiece": {
+    "message": "该部件属于导入的包，由 Proteus 自行重建。请把 matcap 加在该包自己的模组上。",
+    "description": ""
+  },
+  "Matcap.Refused.Legacy": {
+    "message": "该模组仍使用 Penumbra 的旧文件夹结构。请先在 Penumbra 中打开一次以更新，然后重试。",
+    "description": ""
+  },
+  "Matcap.Refused.MaterialCap.Fmt": {
+    "message": "此模型无法再添加材质：{0}。",
+    "description": ""
+  },
+  "Matcap.Refused.ModelLayout.Fmt": {
+    "message": "此模型无法拆分：{0}。",
+    "description": ""
+  },
+  "Matcap.Refused.NoEntry": {
+    "message": "该 matcap 不在此模组的记录中。",
+    "description": ""
+  },
+  "Matcap.Refused.NoName": {
+    "message": "Proteus 无法确定游戏从哪里读取此模型的材质。",
+    "description": ""
+  },
+  "Matcap.Refused.NoTemplate": {
+    "message": "无法读取游戏的反射材质，因此无法创建 matcap 材质。",
+    "description": ""
+  },
+  "Matcap.Refused.NotSquare.Fmt": {
+    "message": "{0} 不是正方形。matcap 是一张铺满正方形的球体图片。",
+    "description": ""
+  },
+  "Matcap.Refused.NotTarget": {
+    "message": "matcap 可用于装备、饰品、头发、尾巴、维埃拉族的耳朵和敖龙族的角（脸部）；此模型都不是。",
+    "description": ""
+  },
+  "Matcap.Refused.RecordUnreadable": {
+    "message": "无法读取 Proteus 对此模组 matcap 的记录（Proteus/matcaps.json），因此没有做任何更改。",
+    "description": ""
+  },
+  "Matcap.Refused.Regenerated.Fmt": {
+    "message": "此模型由 Proteus 从另一个模型（{0}）生成，重新生成会丢失 matcap。请把 matcap 加在源模型上，然后重新生成。",
+    "description": ""
+  },
+  "Matcap.Refused.Skin": {
+    "message": "皮肤不能使用 matcap。",
+    "description": ""
+  },
+  "Matcap.Refused.UnknownOption.Fmt": {
+    "message": "{0} 没有名为 {1} 的选项。",
+    "description": ""
+  },
+  "MeshVolume.Feature.Matcaps": {
+    "message": "matcap",
+    "description": ""
+  },
+  "Parts.Matcap.AlphaWarn": {
+    "message": "部分已勾选的部件有透明边缘（发丝、蕾丝）。应用后请在游戏中检查边缘。",
+    "description": ""
+  },
+  "Parts.Matcap.AlsoMore.Fmt": {
+    "message": "另外 {0} 项",
+    "description": ""
+  },
+  "Parts.Matcap.AlsoNothing": {
+    "message": "没有其他",
+    "description": ""
+  },
+  "Parts.Matcap.Applied.Fmt": {
+    "message": "已应用 matcap：{0}（{1} 个模型文件）。",
+    "description": ""
+  },
+  "Parts.Matcap.Apply": {
+    "message": "应用 matcap",
+    "description": ""
+  },
+  "Parts.Matcap.BaseCollection.Fmt": {
+    "message": "{0} 是你的基础合集：所有使用它的人都会看到所选的 matcap。",
+    "description": ""
+  },
+  "Parts.Matcap.Changed.Fmt": {
+    "message": "已更改 matcap：{0}。",
+    "description": ""
+  },
+  "Parts.Matcap.ChangePartial.Fmt": {
+    "message": "未更改：{0}。",
+    "description": ""
+  },
+  "Parts.Matcap.ChangesFiles.Fmt": {
+    "message": "包括：{0}。",
+    "description": ""
+  },
+  "Parts.Matcap.ChangesUnticked.Fmt": {
+    "message": "其中包括此处未勾选的 {0} 个部件。",
+    "description": ""
+  },
+  "Parts.Matcap.Changes.Fmt": {
+    "message": "应用会在此模组中使用 {0} 的每个文件里更改它，包括重新适配（refit）的文件。",
+    "description": ""
+  },
+  "Parts.Matcap.ChangeKindTip": {
+    "message": "来自你图片的 matcap 只能换成另一张图片，来自库的只能换成库的另一个选项。要切换类型请先撤销。",
+    "description": ""
+  },
+  "Parts.Matcap.ConfirmEnable.Fmt": {
+    "message": "{0} 在 {1} 中处于关闭状态。开启它还会同时开启：{2}",
+    "description": ""
+  },
+  "Parts.Matcap.ConfirmNo": {
+    "message": "取消",
+    "description": ""
+  },
+  "Parts.Matcap.ConfirmYes": {
+    "message": "开启",
+    "description": ""
+  },
+  "Parts.Matcap.DrawnElsewhere.Fmt": {
+    "message": "你的角色为此模型绘制的是另一个文件（{0}），因此 matcap 暂时不会显示在上面。",
+    "description": ""
+  },
+  "Parts.Matcap.Duplicates.Fmt": {
+    "message": "其他模组也提供该槽位的纹理（{0}）；显示哪个由 Penumbra 中优先级最高的决定。",
+    "description": ""
+  },
+  "Parts.Matcap.Edited": {
+    "message": "此后模型已被修改。",
+    "description": ""
+  },
+  "Parts.Matcap.ExistingHeader": {
+    "message": "此模型上的 matcap",
+    "description": ""
+  },
+  "Parts.Matcap.Forget": {
+    "message": "忘记",
+    "description": ""
+  },
+  "Parts.Matcap.Forgotten.Fmt": {
+    "message": "已忘记此模型不再使用的 matcap（{0} 个文件）。",
+    "description": ""
+  },
+  "Parts.Matcap.Guide": {
+    "message": "matcap 是一张受光照的球体图片；部件根据朝向你的方向从中取色。勾选部件，点击某个 matcap 在角色身上查看，然后点击应用。",
+    "description": ""
+  },
+  "Parts.Matcap.PreviewFailed.Fmt": {
+    "message": "无法在你的角色身上显示 matcap（{0}）。",
+    "description": ""
+  },
+  "Parts.Matcap.Previewing": {
+    "message": "仅在你的角色身上显示：在点击“应用 matcap”之前不会保存任何内容。",
+    "description": ""
+  },
+  "Parts.Matcap.PreviewGameGear": {
+    "message": "游戏自带装备在应用后才会显示 matcap。",
+    "description": ""
+  },
+  "Parts.Matcap.PreviewGearOnly": {
+    "message": "头发、尾巴、耳朵和角在应用后才会显示 matcap。",
+    "description": ""
+  },
+  "Parts.Matcap.PreviewTick": {
+    "message": "勾选部件即可在角色身上查看 matcap。",
+    "description": ""
+  },
+  "Parts.Matcap.Held.Fmt": {
+    "message": "{0} 暂时锁定了此库的设置；它松开后所选的 matcap 才会显示。",
+    "description": ""
+  },
+  "Parts.Matcap.Inherited.Fmt": {
+    "message": "{0} 继承了此库的设置；选择 matcap 会为它创建独立的设置。",
+    "description": ""
+  },
+  "Parts.Matcap.KeptEdited.Fmt": {
+    "message": "因被手动编辑而保留原处：{0}。",
+    "description": ""
+  },
+  "Parts.Matcap.LibraryMissing.Fmt": {
+    "message": "{0} 未安装：此 matcap 没有可显示的内容。",
+    "description": ""
+  },
+  "Parts.Matcap.LibraryOff.Fmt": {
+    "message": "{0} 已关闭。",
+    "description": ""
+  },
+  "Parts.Matcap.LibraryOffTag": {
+    "message": "（已关闭）",
+    "description": ""
+  },
+  "Parts.Matcap.ListTip": {
+    "message": "勾选要使用 matcap 的部件。勾选已有 matcap 的部件即可更改它。皮肤不能勾选。",
+    "description": ""
+  },
+  "Parts.Matcap.Lod0Cut": {
+    "message": "模型已裁剪为最近的细节层级，使 matcap 在任何距离都能显示。",
+    "description": ""
+  },
+  "Parts.Matcap.MaterialCap.Fmt": {
+    "message": "此模型已有 {0} 个材质，已达上限。请撤销一个 matcap 来腾出空间。",
+    "description": ""
+  },
+  "Parts.Matcap.NeedMatcap": {
+    "message": "请先选择一个 matcap。",
+    "description": ""
+  },
+  "Parts.Matcap.NeedParts": {
+    "message": "勾选要使用 matcap 的部件。",
+    "description": ""
+  },
+  "Parts.Matcap.NoImages.Fmt": {
+    "message": "还没有 matcap 图片。请把受光照球体的正方形图片（PNG 或 JPG）放进 {0}，然后点击刷新。",
+    "description": ""
+  },
+  "Parts.Matcap.NoLibraries": {
+    "message": "未安装 matcap 库模组。库是为一张共享纹理提供多种 matcap 可选的模组。",
+    "description": ""
+  },
+  "Parts.Matcap.NoPenumbra": {
+    "message": "Penumbra 不可用。",
+    "description": ""
+  },
+  "Parts.Matcap.NothingToForget": {
+    "message": "此模型上的 matcap 都仍在使用，没有可忘记的。",
+    "description": ""
+  },
+  "Parts.Matcap.NothingToUndo": {
+    "message": "此模型上没有可撤销的 matcap。",
+    "description": ""
+  },
+  "Parts.Matcap.NotWinning.Fmt": {
+    "message": "此槽位实际绘制的是另一个模组的纹理（{0}）。请在 Penumbra 中提高该库的优先级。",
+    "description": ""
+  },
+  "Parts.Matcap.OpenFolder": {
+    "message": "打开 matcap 文件夹",
+    "description": ""
+  },
+  "Parts.Matcap.Refresh": {
+    "message": "刷新",
+    "description": ""
+  },
+  "Parts.Matcap.RemakeSizes": {
+    "message": "该文件是 Proteus 的重新适配之一：请重新生成尺寸以沿用 matcap。",
+    "description": ""
+  },
+  "Parts.Matcap.Rescan": {
+    "message": "重新搜索",
+    "description": ""
+  },
+  "Parts.Matcap.Room.Fmt": {
+    "message": "此模型还能再添加 {0} 个材质（重新适配也需要一些用于指甲和内衣）。",
+    "description": ""
+  },
+  "Parts.Matcap.Scanning": {
+    "message": "正在你的模组中查找 matcap 库…",
+    "description": ""
+  },
+  "Parts.Matcap.SelectFailed": {
+    "message": "Penumbra 没有接受该库的设置。",
+    "description": ""
+  },
+  "Parts.Matcap.SharedSlot.Fmt": {
+    "message": "该槽位一次只显示一个 matcap：此模组中另有 {0} 个 matcap 使用它，也会一起改变。",
+    "description": ""
+  },
+  "Parts.Matcap.ShareNote.Fmt": {
+    "message": "你分享此模组的对象也需要 {0}（{1}），并设为同一个 matcap。它的纹理绝不会被复制进你的模组。",
+    "description": ""
+  },
+  "Parts.Matcap.SiblingsSkipped.Fmt": {
+    "message": "以下其他体型选项的部件不同，因此未应用：{0}。",
+    "description": ""
+  },
+  "Parts.Matcap.SkinTip": {
+    "message": "皮肤不能使用 matcap。",
+    "description": ""
+  },
+  "Parts.Matcap.Source.Fmt": {
+    "message": "来自 {0}",
+    "description": ""
+  },
+  "Parts.Matcap.SourceImages": {
+    "message": "你的图片",
+    "description": ""
+  },
+  "Parts.Matcap.SourceLibraries": {
+    "message": "库模组",
+    "description": ""
+  },
+  "Parts.Matcap.SourceProteus": {
+    "message": "Proteus 自带 matcap",
+    "description": ""
+  },
+  "Parts.Matcap.SourceProteus.Tip": {
+    "message": "Proteus 自带的 matcap，在你第一次打开 Matcap 时下载。",
+    "description": ""
+  },
+  "Parts.Matcap.PackDownloading.Fmt": {
+    "message": "正在下载 Proteus 自带 matcap… {0} / {1}",
+    "description": ""
+  },
+  "Parts.Matcap.PackFailed": {
+    "message": "无法下载 Proteus 自带 matcap。请检查网络连接，然后重试。",
+    "description": ""
+  },
+  "Parts.Matcap.PackRetry": {
+    "message": "重试",
+    "description": ""
+  },
+  "Parts.Matcap.Superseded": {
+    "message": "模型已不再使用此 matcap（模组已更新）。",
+    "description": ""
+  },
+  "Parts.Matcap.ThisMod": {
+    "message": "（此模组）",
+    "description": ""
+  },
+  "Parts.Matcap.Ticked.Fmt": {
+    "message": "已勾选 {0} 个部件。",
+    "description": ""
+  },
+  "Parts.Matcap.Undo": {
+    "message": "撤销此模型上的 matcap",
+    "description": ""
+  },
+  "Parts.Matcap.UndoGroup.Fmt": {
+    "message": "同时撤销共享这些 matcap 的其他体型选项：{0}。",
+    "description": ""
+  },
+  "Parts.Matcap.Undone.Fmt": {
+    "message": "已撤销 {0} 个模型文件上的 matcap。",
+    "description": ""
+  },
+  "Parts.Matcap.Working": {
+    "message": "正在写入 matcap…",
+    "description": ""
+  },
+  "Parts.Tool.Matcap": {
+    "message": "Matcap",
+    "description": ""
+  },
+  "Parts.Tool.Matcap.Tip": {
+    "message": "为勾选的部件加上 matcap：用球体图片绘出的光亮、玻璃或宝石般的外观。部件会获得写入模组的独立材质，因此关闭 Proteus 后也能显示。",
+    "description": ""
+  },
+  "Parts.Vanilla.Ears.Fmt": {
+    "message": "耳朵 {0}（{1}）",
+    "description": ""
+  },
+  "Parts.Vanilla.Tail.Fmt": {
+    "message": "尾巴 {0}（{1}）",
+    "description": ""
+  },
+  "Settings.MatcapLibrary": {
+    "message": "matcap 图片",
+    "description": ""
+  },
+  "Settings.MatcapLibrary.Tip.Fmt": {
+    "message": "打开存放你自己 matcap 图片的文件夹：{0}",
+    "description": ""
+  },
+  "Matcap.Refused.NoHorns": {
+    "message": "这张脸没有角。在脸上，只有角可以加上 matcap。",
+    "description": ""
+  },
+  "Matcap.Refused.NotHorn": {
+    "message": "在脸上，只有角可以加上 matcap。",
+    "description": ""
+  },
+  "Parts.Matcap.DrawnThroughFace": {
+    "message": "你的脸通过脸部叠加的重写绘制；matcap 会在下次刷新后显示。",
+    "description": ""
+  },
+  "Parts.Matcap.FaceOverlayOn": {
+    "message": "那张脸通过脸部叠加绘制。关闭叠加即可选择你的脸，或从列表中打开你的脸部模组。",
+    "description": ""
+  },
+  "Parts.Matcap.HornColourNote": {
+    "message": "加上 matcap 的角不再使用角色的角颜色，帽子仍会遮住它们。",
+    "description": ""
+  },
+  "Parts.Matcap.MatcapsOnlyHere": {
+    "message": "你自己的脸、耳朵和尾巴只能在 Matcap 下打开，因此已关闭。",
+    "description": ""
+  },
+  "Parts.Matcap.NoHorns": {
+    "message": "这张脸没有角。在脸上，只有角可以加上 matcap。",
+    "description": ""
+  },
+  "Parts.Matcap.NotHornTip": {
+    "message": "在脸上，只有角可以加上 matcap。",
+    "description": ""
+  },
+  "Parts.Vanilla.FaceHorns.Fmt": {
+    "message": "角（脸 {0}，{1}）",
+    "description": ""
+  },
+  "Parts.Matcap.BackupKept.Fmt": {
+    "message": "无法移走它们的旧备份：{0}。下次在那里加 matcap 时会先移走它们。",
+    "description": ""
+  },
+  "Parts.Matcap.KeptForRefits.Fmt": {
+    "message": "由它制作的重贴合模型仍在绘制该材质球，因此在重新制作尺寸之前其文件会保留：{0}。",
+    "description": ""
+  },
+  "Parts.Matcap.KeptForPorts.Fmt": {
+    "message": "由它制作的发型移植或无耳副本仍在绘制该材质球，因此在重新生成它们之前其文件会保留：{0}。",
+    "description": ""
+  },
+  "Parts.Matcap.PortKept": {
+    "message": "该模型是 Proteus 移植的发型之一。在它带有 matcap 期间，Proteus 会让它保持原样，也不会自动重新生成与它共用材质的其他种族的移植，直到你撤销 matcap。在工作室中手动移植这些种族时，仍会重新生成。",
     "description": ""
   }
 }

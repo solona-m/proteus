@@ -200,6 +200,18 @@ internal sealed class SettingsTab
             if (ImGui.IsItemHovered())
                 ImGui.SetTooltip(string.Format(s.GlowLibraryTipFmt, lib));
         }
+
+        // Beside it, the user's own matcap images (the Studio's Matcaps tool lists them).
+        var matcaps = discovery.MatcapsLibraryPath();
+        if (matcaps != null)
+        {
+            ImGui.SameLine();
+            if (ImGui.Button(Strings.Matcap.SettingsLibrary))
+                try { System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(matcaps) { UseShellExecute = true }); }
+                catch { /* no file manager — the path is in the tooltip anyway */ }
+            if (ImGui.IsItemHovered())
+                ImGui.SetTooltip(string.Format(Strings.Matcap.SettingsLibraryTipFmt, matcaps));
+        }
     }
 
     private void DrawOutputSettings()

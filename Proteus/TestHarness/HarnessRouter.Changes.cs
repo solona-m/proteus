@@ -51,7 +51,7 @@ internal sealed partial class HarnessRouter
 
     private async Task<HarnessResponse> ModSettings(HarnessRequest request)
     {
-        var (body, bad) = JsonBody(request, "mod", "enabled", "priority");
+        var (body, bad) = JsonBody(request, "mod", "enabled", "priority", "permanent", "collection");
         if (bad != null) return bad;
         string? mod = OptionalString(body, "mod", out bad);
         if (bad != null) return bad;
@@ -70,17 +70,44 @@ internal sealed partial class HarnessRouter
                 return HarnessResponse.Error(400, "invalid-field", "priority must be a whole number that fits in 32 bits");
             priority = pr;
         }
+        bool permanent = false;
+        if (body.TryGetProperty("permanent", out var pm))
+        {
+            if (pm.ValueKind is not (JsonValueKind.True or JsonValueKind.False))
+                return HarnessResponse.Error(400, "invalid-field", "permanent must be true or false");
+            permanent = pm.GetBoolean();
+        }
         if (enabled == null && priority == null) return HarnessResponse.Error(400, "invalid-field", "give enabled, priority or both");
         if (!ModBackup.SafeModDir(mod)) return HarnessResponse.Error(400, "invalid-field", "the mod folder name is not a plain folder name");
+        // Another collection (a sync plugin's, say): a temporary hold there too, never permanent.
+        string? rawCollection = OptionalString(body, "collection", out bad);
+        if (bad != null) return bad;
+        Guid? asked = null;
+        if (rawCollection != null)
+        {
+            if (!Guid.TryParse(rawCollection, out var g)) return HarnessResponse.Error(400, "invalid-field", "collection must be a collection id (a guid)");
+            if (permanent) return HarnessResponse.Error(400, "invalid-field", "permanent writes are for the player's collection only");
+            asked = g;
+        }
 
         var result = await OnFramework(() =>
         {
             if (changes.Gate(jobs.Busy, Game.AutoRefit().Busy) is { } refused) return refused;
             var (dir, _, error) = FindMod(mod);
             if (error != null) return error;
+            if (asked is { } other && other != Game.PlayerCollection())
+            {
+                if (Game.Collections() is not { } listed)
+                    return ChangeResult.Fail(503, "penumbra-unavailable", "Penumbra could not list its collections");
+                if (!listed.Any(c => c.Id == other))
+                    return ChangeResult.Fail(404, "collection-not-found", $"Penumbra has no collection {other}");
+                return changes.Hold(other, dir!, enabled, priority);
+            }
             if (Game.PlayerCollection() is not { } collection)
                 return ChangeResult.Fail(409, "no-collection", "the character has no Penumbra collection");
-            return changes.Hold(collection, dir!, enabled, priority);
+            // Permanent: a Proteus mod's own setting, recorded (on disk first) and written back by put-back.
+            return permanent ? changes.Bindings.WritePermanent(collection, dir!, enabled, priority)
+                             : changes.Hold(collection, dir!, enabled, priority);
         });
         return Answer(result);
     }
@@ -89,12 +116,36 @@ internal sealed partial class HarnessRouter
     {
         var (_, bad) = JsonBody(request);
         if (bad != null) return bad;
-        var report = await OnFramework(changes.PutBack);
+        var report = await OnFramework(() => changes.ApplySettling ? null : changes.PutBack());
+        if (report == null) return HarnessResponse.Error(409, "busy", "a design apply is still settling; wait for its answer");
+        var b = report.Binding;
         return Scrubbed(200, new
         {
             gear = report.Gear.Select(g => new { slot = g.Name, result = g.Result, code = g.Code }),
             holds = report.Holds.Select(h => new { mod = h.Name, result = h.Result, code = h.Code }),
             sweep = report.Sweep, redrawRequested = report.RedrawRequested,
+            studio = StudioPutBackBlock(report),
+            binding = b == null ? null : new
+            {
+                glamourer = b.Glamourer, live = b.Live, record = b.Record,
+                permanent = b.Permanent.Select(e => new { mod = e.Name, result = e.Result, code = e.Code }),
+            },
+            matcap = new
+            {
+                settings = (b?.Permanent ?? []).Where(e => report.MatcapMods.Contains(e.Name, StringComparer.OrdinalIgnoreCase))
+                                               .Select(e => new { mod = e.Name, result = e.Result, code = e.Code }),
+                images = report.MatcapImages.Select(e => new { name = e.Name, result = e.Result, code = e.Code }),
+            },
+            sidecar = report.Sidecar.Select(e => new { mod = e.Mod, result = e.Result, code = e.Code, defaults = e.Defaults }),
+            autoRefit = new { result = report.AutoRefit.Result, refitsWhileOverridden = report.AutoRefit.RefitsWhileOverridden },
+            output = report.Output is { } o
+                ? new
+                {
+                    locks = o.Locks.Select(l => new { file = l.Name, result = l.Result }),
+                    moveFault = new { result = o.MoveFault }, fault = new { result = o.Fault },
+                    autoRedraw = new { result = o.AutoRedraw },
+                }
+                : null,
         });
     }
 

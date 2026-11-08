@@ -76,7 +76,12 @@ public class RedrawHoldWiringTests
             .Where(f => !f.Contains($"{Path.DirectorySeparatorChar}obj{Path.DirectorySeparatorChar}")
                      && Regex.IsMatch(File.ReadAllText(f), @"deferWhileHeld:"))
             .Select(f => Path.GetFileName(f)).OrderBy(f => f).ToArray();
-        Assert.Equal(["AutoRefitWatcher.cs", "CompositorService.Events.cs", "RefitModService.cs"], optIns);
+        // Issue sweep D (EDGE-39): the write-retry timer opts in too, so a retry that meets a batch folds into its release
+        // composite instead of redrawing mid-batch. Exactly that one call.
+        Assert.Equal(["AutoRefitWatcher.cs", "CompositorService.Events.cs", "CompositorService.ShellRecovery.cs", "RefitModService.cs"], optIns);
+        var recovery = Source("Services/CompositorService.ShellRecovery.cs");
+        Assert.Single(Regex.Matches(recovery, @"deferWhileHeld:"));
+        Assert.Contains("TriggerRecomposite(\"output-write-retry\", force: false, deferWhileHeld: true, keepHighlight: true)", recovery);
         Assert.Single(Regex.Matches(Source("Services/AutoRefit/AutoRefitWatcher.cs"), @"deferWhileHeld:"));
         Assert.Single(Regex.Matches(Source("Services/RefitModService.cs"), @"deferWhileHeld:"));
 

@@ -467,7 +467,11 @@ public class HairPortCrossSexTests
             : inner;
         var plan = CrossSexFixtures.Build(mod, [101], auto: false, game);
         Assert.DoesNotContain(plan.Writes, w => w.TargetGamePath == Target);
-        Assert.Contains("c0101", plan.Refused[101]);
+        // #72: across the sexes only the source race's skeleton is consulted, so the refusal names it — and, when it has
+        // the bones but found no slot, the target it could not be brought to. Never "bones c0101 does not have".
+        Assert.Contains("c0201", plan.Refused[101]);
+        if (noFreeSlot) Assert.Contains("c0101", plan.Refused[101]);
+        Assert.DoesNotContain("bones c0101 does not have", plan.Refused[101]);
         Assert.Contains(CrossSexFixtures.Bone, plan.Refused[101]);
     }
 

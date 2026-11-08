@@ -24,6 +24,8 @@ public partial class CompositorService
     public void RefreshAndRecomposite(bool full = false)
     {
         InvalidateUpstreamCache(full ? "manual-full" : "manual");
+        // The user's refresh is also the fix for anything the discovery cache missed.
+        discovery.ForgetAll();
         // The user's fix for "not drawn" reloads the character even with no overlay mod enabled.
         ForgetEmptyOutputDrawn();
         if (full)
@@ -126,6 +128,7 @@ public partial class CompositorService
         {
             _equippedPartModels = EquippedPartModelsFromModels(equipped);
             _equippedAccessoryModels = EquippedAccessoryModelsFromModels(equipped);
+            NoteAccessoryWalk();
             _equippedMetModels = EquippedMetModelsFromModels(equipped, InvisibleGlasses.FacewearModelSets(Plugin.DataManager));
             _bareBodyModels = BareBodyModelsFromModels(equipped);
             _humanPartModels = HumanPartModelsFromModels(equipped);
@@ -155,7 +158,9 @@ public partial class CompositorService
     /// release's redraw already did. That composite is never held itself.</param>
     public void TriggerRecomposite(string reason, int delayMs = 200, bool force = true,
         bool skinFingerprintAuthoritative = false, bool autoRedrawExempt = false, bool drawStateStable = false,
-        bool deferWhileHeld = false, int releaseToken = 0)
+        bool deferWhileHeld = false, int releaseToken = 0,
+        // A retry of a failed write (#91) leaves the colour-row highlight alone: the user did not change anything.
+        bool keepHighlight = false)
     {
         if (_disposed || !config.PluginEnabled || !penumbra.IsAvailable) return;
 
@@ -164,7 +169,7 @@ public partial class CompositorService
         // not a stale look. A forced composite cancelled by an ambient one must not be lost, so the force is latched
         // (cleared only when a composite publishes) whether or not the trigger is then held. Held before the
         // debounce token is taken, so a held trigger never cancels the composite in flight.
-        var admission = RedrawHold.Admit(force, config.AutoRedraw, autoRedrawExempt, deferWhileHeld,
+        var admission = RedrawHold.Admit(force, AutoRedrawOn, autoRedrawExempt, deferWhileHeld,
             latchForce: () =>
             {
                 Interlocked.Exchange(ref _forcePending, 1);
@@ -184,7 +189,7 @@ public partial class CompositorService
             return;
         }
 
-        Highlighter?.Clear();
+        if (!keepHighlight) Highlighter?.Clear();
 
         // Cancels whatever composite was pending and gives us the token for this one (see DebounceGate).
         var token = recompositeGate.Next();
@@ -208,6 +213,10 @@ public partial class CompositorService
                 return;
             }
             var tDebounced = PhaseCounter.Begin();
+
+            // Idle and equipment-only: nothing is enabled and the empty output is already drawn, so there is nothing
+            // to sample, write or reload. Before the race and draw-state settle, which sample the draw object.
+            if (IdleEarlyOut(force)) return;
 
             // Read the Glamourer char code if still unknown, or the first composites after a load fingerprint differently
             // and cannot skip or reuse the skin.
@@ -262,7 +271,7 @@ public partial class CompositorService
                 // there is nothing to composite: the snapshot stays dirty for the first composite that has one.
                 var preamble = RedrawHold.Preamble.None;
                 if (fresh != null)
-                    preamble = RedrawHold.PlanPreamble(wasDirty, config.AutoRedraw,
+                    preamble = RedrawHold.PlanPreamble(wasDirty, AutoRedrawOn,
                         string.Equals(BodyTypeKey(fresh), _lastCompositedBodyType, StringComparison.OrdinalIgnoreCase),
                         wasDirty && ReleaseTokenValid(releaseToken),
                         () => discovery.DiscoverEnabled().Count > 0);
@@ -497,5 +506,26 @@ public partial class CompositorService
             catch (OperationCanceledException) { return null; }
             catch (Exception ex) when (_disposed || IsLoadContextUnloading(ex)) { return null; }
         }
+    }
+
+    /// <summary>
+    /// The idle early-out (see <see cref="RedrawHold.IdleNothingToDo"/>): an equipment-only burst while no overlay
+    /// mod is enabled and the empty output is drawn ends here, claimed and logged, with no draw-state sampling, no
+    /// manifest write and no Penumbra reload.
+    /// </summary>
+    private bool IdleEarlyOut(bool force)
+    {
+        // A composite already running may be about to write the manifest: never skip beside it.
+        bool forced = force || Volatile.Read(ref _forcePending) != 0 || Volatile.Read(ref _skinForcePending) != 0
+                   || Volatile.Read(ref _compositesInFlight) > 0;
+        bool withdrawing = _secondSkinActive || _lastSkinMaterialRedirects.Count > 0 || _lastHeadRedirects.Count > 0;
+        if (!RedrawHold.IdleNothingToDo(RefreshBurstReasonsSnapshot(), forced, IsEmptyOutputDrawn(),
+                holdsCarrierRecord: _injectedCarrierSlots.Count > 0 || _injectedGlasses, withdrawing,
+                anyOverlayEnabled: () => discovery.DiscoverEnabled().Count > 0))
+            return false;
+        var tl = ClaimRefresh();
+        log.Debug("[Proteus] Recomposite not needed: no enabled mods and the empty output is already drawn ({0})", tl.Reasons);
+        LogRefreshTimeline(tl, "no enabled mods (already drawn) — nothing to do");
+        return true;
     }
 }
