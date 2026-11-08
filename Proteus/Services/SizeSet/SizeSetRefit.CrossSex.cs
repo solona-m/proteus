@@ -847,12 +847,15 @@ internal static partial class SizeSetRefit
             var job = CrossSexRefitJob.Run(new CrossSexRefitJob.Inputs(
                 c.Bytes, piece.GamePath, CrossSexRefit.Men, chosen.MadeFor, null, men,
                 o => RefitCore.Normal(o.Rel) == RefitCore.Normal(rel), chosen.Wearer, uvRemap, log,
-                CarryPiercings: request.Piercings, Nude: NudeFor(men.For(piece.Slot), size, log)));
+                CutHidden: !request.KeepHiddenSkin, CarryPiercings: request.Piercings,
+                Nude: NudeFor(men.For(piece.Slot), size, log)));
             var made = job.Sizes.FirstOrDefault();
             var (ok, refusal, said) = Judge(piece.Label, option, job, made, chosen.SkeletonFrom);
             log.Information("[Proteus] size set: {0} for men: {1} in {2} ms (source in {3} ms, {4} bodies bent): {5}",
                             piece.Label, option, clock.ElapsedMilliseconds - started, started, mens.Bent,
-                            ok ? $"{made!.Folds} folded, {made.Landed?.VertexCoverage:P1} matched" + NudeSaid(made, targetPath)
+                            ok ? $"{made!.Folds} folded, {made.Landed?.VertexCoverage:P1} matched, skin "
+                               + $"{made.Plan?.Report.Swap?.Added ?? 0} added, {made.Plan?.Report.Swap?.Cut ?? 0} cut"
+                               + NudeSaid(made, targetPath)
                                : refusal ?? "");
             if (!ok)
             {

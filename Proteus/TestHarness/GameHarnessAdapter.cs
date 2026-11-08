@@ -246,11 +246,13 @@ internal sealed class GameHarnessAdapter : IHarnessGame, IDisposable
                               .ToHashSet(StringComparer.Ordinal);
     }
 
-    public RefitOptions Options(bool remake) => new(config.SizeSetYas, config.SizeSetEnds, config.SizeSetPiercings, remake);
+    public RefitOptions Options(bool remake) => new(config.SizeSetYas, config.SizeSetEnds, config.SizeSetPiercings, remake,
+                                                    config.SizeSetKeepHiddenSkin);
 
     public SizeSetLaunch.Prepared PrepareSizeSet(string modRoot, IReadOnlyList<string> keys, RefitOptions options, ModList mods)
         => SizeSetLaunch.Prepare(mods.Mods, mods.ModsRoot, penumbra.ResolvePlayerPaths, modRoot, keys, options.Yas,
-                                 options.Remake, options.Ends, options.Piercings, null, readGameFile, log);
+                                 options.Remake, options.Ends, options.Piercings, options.KeepHiddenSkin, null,
+                                 readGameFile, log);
 
     public Task<SizeSetLaunch.Outcome> RunSizeSet(SizeSetLaunch.Prepared prepared, Action<string> progress, Action afterChange,
                                                   Action<Action> postToFramework, CancellationToken ct)

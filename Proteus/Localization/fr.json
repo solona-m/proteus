@@ -5363,6 +5363,14 @@
     "message": "Activé : les piercings de chaque corps arrivent avec sa peau là où la pièce montre cette peau. Les ongles sont toujours inclus.\nLes tailles déjà faites ne changent que si elles sont refaites.",
     "description": ""
   },
+  "SizeSet.KeepHiddenSkin": {
+    "message": "Garder la peau cachée",
+    "description": ""
+  },
+  "SizeSet.KeepHiddenSkin.Tip": {
+    "message": "Désactivé : la peau de chaque corps est omise là où l'auteur a supprimé la sienne, généralement sous et autour du tissu. Activé : elle est mise entière et rend la peau manquante sous ou autour du tissu, mais elle peut transparaître à travers un tissu moulant. Les chaussures et les gants sont toujours découpés.\nLes tailles déjà faites ne changent que si elles sont refaites.",
+    "description": ""
+  },
   "SizeSet.EndsUnreadable.Fmt": {
     "message": "{0} : son rig est illisible, le pied ou la main ne peut donc pas être gardé et aucune taille n'en a été faite.",
     "description": ""

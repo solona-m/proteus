@@ -910,6 +910,59 @@ public sealed class LocalizationTests
             Assert.Contains("**" + strings[key].Message + "**", readme);
     }
 
+    /// <summary>The size set's "Keep hidden skin" box and tooltip are in every language in its own words, line for line.</summary>
+    [Theory]
+    [MemberData(nameof(Translations))]
+    [Trait("Plan", "AC-size-set-keep-skin-8")]
+    public void SizeSetKeepHiddenSkin_strings_are_translated_not_copied(string lang)
+    {
+        // [AC-size-set-keep-skin-8]
+        var en = Load(Source);
+        var tr = Load(lang);
+        foreach (string key in new[] { "SizeSet.KeepHiddenSkin", "SizeSet.KeepHiddenSkin.Tip" })
+        {
+            Assert.True(tr.ContainsKey(key), $"[{lang}] has no {key}");
+            Assert.NotEqual(en[key].Message, tr[key].Message);
+            Assert.Equal(en[key].Message.Count(c => c == '\n'), tr[key].Message.Count(c => c == '\n'));
+        }
+    }
+
+    /// <summary>The tooltip says what the box brings back, warns of skin through tight cloth, and that shoes and gloves
+    /// are always cut.</summary>
+    [Fact]
+    [Trait("Plan", "AC-size-set-keep-skin-5")]
+    [Trait("Plan", "AC-size-set-keep-skin-8")]
+    public void SizeSetKeepHiddenSkin_tip_says_what_it_restores_and_warns()
+    {
+        // [AC-size-set-keep-skin-5] [AC-size-set-keep-skin-8]
+        string tip = Load(Source)["SizeSet.KeepHiddenSkin.Tip"].Message;
+        Assert.Contains("skin missing under or around the cloth", tip);
+        Assert.Contains("may show through tight cloth", tip);
+        Assert.Contains("Shoes and gloves are always cut", tip);
+        Assert.Contains("Sizes already made change only when made again", tip);
+    }
+
+    /// <summary>Every README names the box as its own language's checkbox does; the English one warns of tight cloth.</summary>
+    [Theory]
+    [MemberData(nameof(AllLocales))]
+    [Trait("Plan", "AC-size-set-keep-skin-8")]
+    public void Readme_mentions_keep_hidden_skin(string lang)
+    {
+        // [AC-size-set-keep-skin-8]
+        var dir = new System.IO.DirectoryInfo(AppContext.BaseDirectory);
+        while (dir != null && !System.IO.File.Exists(System.IO.Path.Combine(dir.FullName, "proteus.slnx"))) dir = dir.Parent;
+        Assert.True(dir != null, $"Could not find proteus.slnx above {AppContext.BaseDirectory}.");
+        string readme = System.IO.File.ReadAllText(System.IO.Path.Combine(
+            dir!.FullName, lang == Source ? "README.md" : System.IO.Path.Combine("docs", $"README.{lang}.md")));
+        string label = "**" + Load(lang)["SizeSet.KeepHiddenSkin"].Message + "**";
+        Assert.Contains(label, readme);
+        if (lang == Source)
+        {
+            string line = readme.Split('\n').Single(l => l.Contains(label, StringComparison.Ordinal));
+            Assert.Contains("tight cloth", line);
+        }
+    }
+
     /// <summary>The Scale tool's three strings were re-keyed when it gained axis handles; every language has its own words.</summary>
     [Theory]
     [MemberData(nameof(Translations))]

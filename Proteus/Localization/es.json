@@ -5363,6 +5363,14 @@
     "message": "Activado: los piercings de cada cuerpo llegan con su piel donde la pieza muestra esa piel. Las uñas siempre se incluyen.\nLas tallas ya hechas solo cambian cuando se vuelven a hacer.",
     "description": ""
   },
+  "SizeSet.KeepHiddenSkin": {
+    "message": "Conservar la piel oculta",
+    "description": ""
+  },
+  "SizeSet.KeepHiddenSkin.Tip": {
+    "message": "Desactivado: la piel de cada cuerpo se omite donde el autor borró la suya, normalmente bajo la tela y a su alrededor. Activado: entra entera y recupera la piel que falta bajo la tela o a su alrededor, pero puede asomar a través de la tela ajustada. Los zapatos y guantes siempre se recortan.\nLas tallas ya hechas solo cambian cuando se vuelven a hacer.",
+    "description": ""
+  },
   "SizeSet.EndsUnreadable.Fmt": {
     "message": "{0}: no se puede leer su rig, así que no se puede conservar el pie o la mano y no se hicieron tallas de él.",
     "description": ""

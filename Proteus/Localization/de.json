@@ -5363,6 +5363,14 @@
     "message": "An: Die Piercings jedes Körpers kommen mit seiner Haut, wo das Teil diese Haut zeigt. Nägel kommen immer mit.\nBereits erstellte Größen ändern sich erst, wenn sie neu erstellt werden.",
     "description": ""
   },
+  "SizeSet.KeepHiddenSkin": {
+    "message": "Verdeckte Haut behalten",
+    "description": ""
+  },
+  "SizeSet.KeepHiddenSkin.Tip": {
+    "message": "Aus: Die Haut jedes Körpers wird dort weggelassen, wo der Autor seine gelöscht hat, meist unter und um den Stoff. An: Sie kommt ganz hinein und bringt fehlende Haut unter oder um den Stoff zurück, kann aber durch eng anliegenden Stoff scheinen. Schuhe und Handschuhe werden immer beschnitten.\nBereits erstellte Größen ändern sich erst, wenn sie neu erstellt werden.",
+    "description": ""
+  },
   "SizeSet.EndsUnreadable.Fmt": {
     "message": "{0}: Sein Rig lässt sich nicht lesen, also kann Fuß oder Hand nicht behalten werden und es wurden keine Größen davon gemacht.",
     "description": ""

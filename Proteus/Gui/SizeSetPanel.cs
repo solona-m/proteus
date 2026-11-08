@@ -177,6 +177,14 @@ internal sealed class SizeSetPanel(PenumbraBridge penumbra, UVRemapService uvRem
                 config.Save();
             }
             if (ImGui.IsItemHovered()) ImGui.SetTooltip(s.PiercingsTip);
+
+            bool keepSkin = config.SizeSetKeepHiddenSkin;
+            if (ImGui.Checkbox(s.KeepHiddenSkin, ref keepSkin))
+            {
+                config.SizeSetKeepHiddenSkin = keepSkin;
+                config.Save();
+            }
+            if (ImGui.IsItemHovered()) ImGui.SetTooltip(s.KeepHiddenSkinTip);
             ImGui.Checkbox(s.Remake, ref remake);
             if (ImGui.IsItemHovered()) ImGui.SetTooltip(s.RemakeTip);
         }
@@ -300,7 +308,8 @@ internal sealed class SizeSetPanel(PenumbraBridge penumbra, UVRemapService uvRem
         if (penumbra.GetAllMods() is not { } mods || penumbra.GetModDirectory() is not { } modsRoot) return;
 
         var prepared = SizeSetLaunch.Prepare(mods, modsRoot, penumbra.ResolvePlayerPaths, modRoot, keys, config.SizeSetYas,
-                                             remake, config.SizeSetEnds, config.SizeSetPiercings, madeOn.Dir,
+                                             remake, config.SizeSetEnds, config.SizeSetPiercings,
+                                             config.SizeSetKeepHiddenSkin, madeOn.Dir,
                                              readGameFile, log);
         cancel = new CancellationTokenSource();
         var ct = cancel.Token;

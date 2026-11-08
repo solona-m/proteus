@@ -5363,6 +5363,14 @@
     "message": "开启：在部件露出该皮肤的地方，每个体型的穿孔随皮肤一同加入。指甲始终会带上。\n已制作的尺码只有在重新制作时才会改变。",
     "description": ""
   },
+  "SizeSet.KeepHiddenSkin": {
+    "message": "保留隐藏皮肤",
+    "description": ""
+  },
+  "SizeSet.KeepHiddenSkin.Tip": {
+    "message": "关闭：在作者删除了自己皮肤的地方（通常在布料下方和周围），每个体型的皮肤也会被省去。开启：皮肤会完整加入，补回布料下方或周围缺失的皮肤，但可能透过紧身布料露出来。鞋子和手套始终会被裁剪。\n已制作的尺码只有在重新制作时才会改变。",
+    "description": ""
+  },
   "SizeSet.EndsUnreadable.Fmt": {
     "message": "{0}：无法读取它的骨骼绑定，无法保留脚或手，因此没有为它制作尺码。",
     "description": ""

@@ -28,9 +28,28 @@ public class SizeSetLaunchTests
 
     private static SizeSetLaunch.Prepared Prepare(IReadOnlyList<string> keys, Func<IReadOnlyList<string>, IReadOnlyDictionary<string, string?>?>? resolve = null,
                                                   bool yas = true, bool remake = false, bool ends = false, bool piercings = false,
-                                                  string? madeOn = null)
+                                                  string? madeOn = null, bool keepHiddenSkin = false)
         => SizeSetLaunch.Prepare(NoMods, @"C:\mods", resolve ?? (_ => null), @"C:\mods\Outfit", keys, yas, remake, ends,
-                                 piercings, madeOn, _ => null, Log);
+                                 piercings, keepHiddenSkin, madeOn, _ => null, Log);
+
+    [Fact]
+    [Trait("Plan", "AC-size-set-keep-skin-1")]
+    [Trait("Plan", "EDGE-size-set-keep-skin-2")]
+    public void Prepare_carries_keep_hidden_skin()
+    {
+        // [AC-size-set-keep-skin-1] [EDGE-size-set-keep-skin-2] The panel's choice is copied into the immutable request
+        // when the run is prepared; the default is off.
+        Assert.True(Prepare(["rue"], keepHiddenSkin: true).Request.KeepHiddenSkin);
+        Assert.False(Prepare(["rue"]).Request.KeepHiddenSkin);
+    }
+
+    [Fact]
+    [Trait("Plan", "EDGE-size-set-keep-skin-11")]
+    public void Request_default_keeps_cutting()
+    {
+        // [EDGE-size-set-keep-skin-11] The CLI's --size-set and the mod packer build the request without the field.
+        Assert.False(new SizeSetRefit.Request("mod", [], true, false, []).KeepHiddenSkin);
+    }
 
     [Fact]
     public void Prepare_RequestMatchesPanelInputs()
@@ -38,8 +57,10 @@ public class SizeSetLaunchTests
         // [EDGE-qa-harness-51] The request is the panel's own: every setting carried, the mod's folder, no bodies yet.
         var asked = new List<string>();
         var prepared = Prepare(["rue", "tbse@women"], paths => { asked.AddRange(paths); return new Dictionary<string, string?>(); },
-                               yas: false, remake: true, ends: false, piercings: true, madeOn: "Some Body");
+                               yas: false, remake: true, ends: false, piercings: true, madeOn: "Some Body",
+                               keepHiddenSkin: true);
         var r = prepared.Request;
+        Assert.True(r.KeepHiddenSkin);
         Assert.Equal(@"C:\mods\Outfit", r.ModRoot);
         Assert.Equal(["rue", "tbse@women"], r.Keys);
         Assert.False(r.Yas);
