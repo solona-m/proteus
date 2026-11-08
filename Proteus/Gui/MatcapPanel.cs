@@ -72,7 +72,7 @@ internal sealed class MatcapPanel
     /// <summary>Where the matcap is picked from.</summary>
     internal enum SourceKind { Images, Proteus, Libraries }
 
-    private SourceKind source;
+    private SourceKind source = SourceKind.Proteus;   // listed first
     private string? image;
     private string? packImage;
     private string? libraryKey;
@@ -108,10 +108,11 @@ internal sealed class MatcapPanel
         ImGui.PopTextWrapPos();
         ImGui.Spacing();
 
-        if (ImGui.RadioButton(s.SourceImages, source == SourceKind.Images)) source = SourceKind.Images;
-        ImGui.SameLine();
+        // Proteus's own matcaps first: what most people pick from.
         if (ImGui.RadioButton(s.SourceProteus, source == SourceKind.Proteus)) source = SourceKind.Proteus;
         if (ImGui.IsItemHovered()) ImGui.SetTooltip(s.SourceProteusTip);
+        ImGui.SameLine();
+        if (ImGui.RadioButton(s.SourceImages, source == SourceKind.Images)) source = SourceKind.Images;
         ImGui.SameLine();
         if (ImGui.RadioButton(s.SourceLibraries, source == SourceKind.Libraries)) { source = SourceKind.Libraries; InvalidateStatus(); }
         ImGui.Separator();

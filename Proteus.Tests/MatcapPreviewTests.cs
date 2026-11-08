@@ -562,4 +562,25 @@ public class MatcapPreviewWiringTests
         Assert.Contains("matcapJob is { IsCompleted: false }", pump);
         Assert.Contains("preview.Busy", pump);
     }
+
+    [Fact]
+    [Trait("Plan", "AC-matcap-preview-5")]
+    public void Ticked_wash_steps_aside_while_a_preview_is_building_or_shown()
+    {
+        // The amber tint of ticked parts covered the parts the preview recolours: under Matcaps it is off meanwhile.
+        var main = Main();
+        Assert.Contains("if (MatcapPreviewHidesTicks ||", Method(main, "private bool PartTicked(int index)"));
+        Assert.Contains("tool == Tool.Matcap && (matcapPreview.ShownKey != null || matcapPreview.BuildingKey != null || matcapPending != null)", main);
+        // The tint's cache is rebuilt when the preview starts or ends.
+        Assert.Contains("MatcapPreviewHidesTicks ?", main[main.IndexOf("private int TickedVersion()", StringComparison.Ordinal)..]);
+    }
+
+    [Fact]
+    public void Proteus_matcaps_are_listed_first_and_open_first()
+    {
+        var panel = File.ReadAllText(Path.Combine(Gui(), "MatcapPanel.cs"));
+        var draw = Method(panel, "public void Draw(Context ctx)");
+        Assert.True(draw.IndexOf("s.SourceProteus", StringComparison.Ordinal) < draw.IndexOf("s.SourceImages", StringComparison.Ordinal));
+        Assert.Contains("private SourceKind source = SourceKind.Proteus;", panel);
+    }
 }
