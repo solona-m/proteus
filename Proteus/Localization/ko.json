@@ -5451,6 +5451,18 @@
     "message": "{0}: \"{1}\"은(는) \"원본 바디\"에서 고른 {3}이(가) 아니라 {2}용으로 읽혀, 그 사이즈를 {2}용으로 만들었습니다.",
     "description": ""
   },
+  "SizeSet.MadeOnNoSizeName.Fmt": {
+    "message": "{0}: 사이즈를 구별할 만큼 피부가 충분하지 않고, 옵션 이름 중 어느 것도 {1}의 사이즈를 나타내지 않아 사이즈를 만들지 않았습니다.",
+    "description": ""
+  },
+  "SizeSet.MadeOnNoSizeTable.Fmt": {
+    "message": "{0}: 사이즈를 구별할 만큼 피부가 충분하지 않고, Proteus가 이 부위에 맞는 {1}의 이름 있는 사이즈를 알지 못해 사이즈를 만들지 않았습니다.",
+    "description": ""
+  },
+  "SizeSet.MadeOnTrusted.Fmt": {
+    "message": "{0}: 사이즈를 구별할 만큼 피부가 충분하지 않아, 각 사이즈를 그 이름이 나타내는 {1} 사이즈로 간주했습니다(Small은 S 등). 이름이 어떤 사이즈도 나타내지 않는 것은 사용하지 않았습니다.",
+    "description": ""
+  },
   "SizeSet.LeftOut": {
     "message": "만들지 않은 것:",
     "description": ""

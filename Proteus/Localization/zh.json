@@ -5451,6 +5451,18 @@
     "message": "{0}：“{1}”被判断为基于 {2} 制作，而不是“制作所用体型”中选择的 {3}，因此它的尺码按基于 {2} 制作。",
     "description": ""
   },
+  "SizeSet.MadeOnNoSizeName.Fmt": {
+    "message": "{0}：它没有足够的皮肤来分辨尺码，且其选项名称都不对应 {1} 的任何尺码，因此未制作任何尺码。",
+    "description": ""
+  },
+  "SizeSet.MadeOnNoSizeTable.Fmt": {
+    "message": "{0}：它没有足够的皮肤来分辨尺码，且 Proteus 不知道 {1} 适用于它的具名尺码，因此未制作任何尺码。",
+    "description": ""
+  },
+  "SizeSet.MadeOnTrusted.Fmt": {
+    "message": "{0}：它没有足够的皮肤来分辨尺码，因此其尺码按名称对应的 {1} 尺码处理（Small 即 S，依此类推）；名称不对应任何尺码的未被使用。",
+    "description": ""
+  },
   "SizeSet.LeftOut": {
     "message": "未制作：",
     "description": ""
