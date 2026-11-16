@@ -1,8 +1,8 @@
 # Hand-off: clean-room rewrite of `XivLiveMesh/PbdFile.cs`, ready to run
 
 This is the approved plan for carrying out `docs/pbd-clean-room.md`, written for the agent that runs it.
-Everything after the next rule is the plan itself (revision 5). The planner wrote it, the plan-critic
-reviewed it in three rounds (the third with a re-check), and every amendment was folded back in through the planner.
+Everything after the next rule is the plan itself (revision 6). The planner wrote it, the plan-critic
+reviewed it in four rounds (the third with a re-check), and every amendment was folded back in through the planner.
 
 ## Where things stand (2026-11-16)
 
@@ -13,7 +13,8 @@ reviewed it in three rounds (the third with a re-check), and every amendment was
   - Round 1: the critic rated it MEDIUM-HIGH. Its 12 amendments were folded in as revision 2.
   - Round 2: the critic rated it MEDIUM. Its 11 amendments were folded in as revision 3.
   - Round 3: the critic rated revision 3 MEDIUM-HIGH (2 blocking findings, 3 suggestions). All 5 were folded in as revision 4.
-  - Round 3 re-check: the critic rated revision 4 MEDIUM-HIGH (1 blocking finding, 1 cheap one, 1 suggestion). All 3, plus one orchestrator finding, were folded in as revision 5 (the Delta below).
+  - Round 3 re-check: the critic rated revision 4 MEDIUM-HIGH (1 blocking finding, 1 cheap one, 1 suggestion). All 3, plus one orchestrator finding, were folded in as revision 5.
+  - Round 4: the critic rated revision 5 MEDIUM-HIGH (1 cheap blocking finding). It was folded in as revision 6 (the Delta below), together with a correction of a fact the orchestrator had given for revision 5.
   - **First step:** run
     `plan-critic` (model `opus`) on this file once, and fold in any blocking findings through `planner`.
 - **Decisions already made:**
@@ -38,7 +39,7 @@ You are the orchestrator. Stay clean:
 
 ## Log inputs from the planning session
 
-The plan's *Environment & Preconditions* section lists what the planner (revisions 1–3, 4 and 5) and the plan-critics (Plan-critic 1–3, and Plan-critic 3's re-check of revision 4) opened. The log's Planning orchestrator section copies the reads below verbatim (Decision 8).
+The plan's *Environment & Preconditions* section lists what the planner (revisions 1–3, 4, 5 and 6) and the plan-critics (Plan-critic 1–3, Plan-critic 3's re-check of revision 4, and Plan-critic 4's check of revision 5) opened. The log's Planning orchestrator section copies the reads below verbatim (Decision 8).
 
 The planning orchestrator also opened only:
 
@@ -72,28 +73,24 @@ The orchestrator never opened the old file.
 
 # Implementation Plan: Clean-room rewrite of the racial deformer reader (`XivLiveMesh/PbdFile.cs`)
 
-## Delta (rev 5: Plan-critic 3's re-check of revision 4 (1 blocking, 1 cheap, 1 suggestion) and one orchestrator finding, all accepted by the orchestrator)
-- **D1 (shell allowlist):**
-  - The gap: C1's leak check covered only `ls`/`dir`/`find`/`git grep`/`Get-ChildItem`. A shell read or search (`grep -r`, `rg`, `Select-String`, `findstr`, `tree`, `cat`, `head`) was neither counted nor turned into an `Opened:` entry. So `grep -rn PbdFile .` would have leaked `Glamourer/` code and still reported 0.
-  - B may run only two shell commands:
-    - `dotnet build E:/orca/workspaces/Proteus/meddle/Proteus/Proteus.csproj -c Release`;
-    - `dotnet test E:/orca/workspaces/Proteus/meddle/Proteus.Tests/Proteus.Tests.csproj -c Release --filter "…"`.
-  - The code-critic and the re-reviewer may run only the git commands Decisions 4 and 14 give them, plus that targeted `dotnet test`.
-  - Every read goes through Read, and every search and listing through Grep/Glob. Any other shell command voids the work (EDGE-17).
-  - B's and the critic's log sections get a verbatim `Shell commands:` list in place of `Git commands:`. The record test checks each entry against the allowlist and the forbidden markers.
-  - The script keeps the leak check for Grep/Glob results, and it flags any shell command outside the allowlist.
-  - Changed in: Key decisions, AC-2, Decisions 1, 4, 8 and 14, steps 5, 8 and 9, Files, EDGE-17, the record test, Risks, and the hand-off's practical notes.
-- **D2 (an open participant list):**
-  - Decision 8 and the record test accept any header matching `Plan-critic <n>` (with an optional bracketed sub-part, such as "(re-check of rev 4)") or `Planner (rev <n>)`. Each must have `Opened:`.
-  - They require at least the sections already known.
-  - "Plan-critic 3 (re-check of rev 4)" and "Planner (rev 5)" are added.
-- **D3 (parsing content-mode results):** a content-mode result line is split at the first `:<digits>:`, not at the first `:`, so a Windows drive letter doesn't break the parse.
-- **D4 (the session's start folder):**
-  - Sub-agents start in the session's start folder. For the planning session that was `E:\orca\workspaces\Proteus\E-orca-workspaces-Proteus-meddle-docs-pbd-clean-room-plan.md`, a separate checkout of the same repo, not `meddle`.
-  - So Plan-critic 3's relative `ls Luna` and `git -C Luna grep -l -i -e pbd -e deformer` ran against that checkout's `Luna/`. It saw file names only, with no hits and no code. Its Read calls and its other git commands used absolute `meddle` paths. This is recorded under its reads.
-  - B, the code-critic and the re-reviewer use absolute `E:/orca/workspaces/Proteus/meddle/...` paths for every tool input, including the `dotnet` project paths and `git -C`. A relative path, or a Grep/Glob call with no `path`, counts as a hit.
-  - The planning orchestrator's auto-loaded AGENTS.md and CLAUDE.md came from that start folder. The hand-off's log inputs now say so.
-- **Log inputs:** the reads of Plan-critic 3's re-check and of Planner (rev 5) are added under Environment & Preconditions.
+## Delta (rev 6: Plan-critic 4's check of revision 5 (1 cheap blocking finding) and a corrected fact, all accepted by the orchestrator)
+- **E1 (parsing results by output mode):**
+  - The gap: D3 parsed only content-mode lines that have line numbers. Grep's count mode prints `path:N`, and content mode with `-n: false` prints `path:text`. Both fell back to "a line with no path part counts as the tool's `path` input", so a hit inside `Glamourer/` could count as allowed.
+  - The script now parses each result line by output mode:
+    - Glob, or Grep in `files_with_matches` mode: the whole line;
+    - Grep in `count` mode: the part before the trailing `:<digits>`;
+    - Grep in `content` mode with line numbers: the part before the first `:<digits>:` (as D3 says).
+  - A content-mode Grep with `-n: false` is outside what B and the critic may do. It voids the work (EDGE-17), and it is in their briefings.
+  - The "no path part" fallback applies only to a search of a single file. In any other search, a line whose path can't be parsed counts as a hit.
+  - Changed in: Decisions 4 and 8, step 5, EDGE-17 and the record test.
+- **E2 (a corrected fact):**
+  - Revision 5 wrongly said that Plan-critic 3's `ls` and `git -C … grep` on `Luna/` ran in the session's start folder.
+  - The commands in its transcript are `ls E:/orca/workspaces/Proteus/meddle/Luna` and `git -C E:/orca/workspaces/Proteus/meddle/Luna grep -l -i -e pbd -e deformer`. Both use absolute `meddle` paths. The orchestrator's extraction script had shortened them to repo-relative form, which made them look relative.
+  - They ran on `meddle`'s `Luna/`: file names only, no hits and no code, before revision 4 forbade it.
+  - The general D4 rule stays as a precaution, because the start-folder fact itself is true. B, the code-critic and the re-reviewer use absolute `meddle` paths.
+  - New log rule: shell commands are recorded verbatim, never shortened to repo-relative form, because shortening is what hid this.
+  - Changed in: the start-folder fact, Decision 8's extraction, and Plan-critic 3's reads.
+- **E3 (log inputs):** "Plan-critic 4 (check of rev 5)" and "Planner (rev 6)" are added under Environment & Preconditions, to the "at least these sections" lists, and to the hand-off's plan-review lines.
 - **Earlier revisions** (still in force):
   - rev 2 folded in the first critic's 12 amendments: wide filter, old-code baseline, NewBehaviour trait, 1e-5 tolerance, A5 forbidden list, deleting `bin/`/`obj/`, transcript-based logs, A's identifier grep, the guard, R-1 count checks, bump after review, golden wording;
   - rev 3 folded in the second critic's 11 amendments:
@@ -114,6 +111,11 @@ The orchestrator never opened the old file.
     - no sub-agents for B or the critic, and extraction by agent ID only (C3);
     - a warning to other sessions before the step 11e/f tests (C4);
     - `Luna/` forbidden and excluded from searches (C5);
+  - rev 5 folded in Plan-critic 3's re-check of revision 4, plus one orchestrator finding:
+    - a shell allowlist for B, the critic and the re-reviewer, with reads through Read and searches through Grep/Glob only (D1);
+    - an open participant list (D2);
+    - content-mode lines split at `:<digits>:` (D3; widened to every output mode by E1);
+    - absolute `meddle` paths for every tool input, because sub-agents start in the session's start folder (D4; its claim about Plan-critic 3's Luna commands is corrected by E2);
   - both NEEDS_DECISION items are decided (Decisions 11 and 12).
 
 ## Approval Summary
@@ -123,7 +125,7 @@ The orchestrator never opened the old file.
 
 **Acceptance Criteria:**
 - AC-pbd-clean-room-1: `docs/pbd-format-spec.md` exists with the seven required sections, written as tables and rules, with no code or pseudo-code. Every "Required change from the old reader:" marker cites R-1 or a doc §3 item.
-- AC-pbd-clean-room-2: `docs/pbd-clean-room-log.md` lists the files, URLs and commands of every participant. At least these: Planner, Plan-critic 1, 2 and 3, Plan-critic 3 (re-check of rev 4), Planner (rev 4), Planner (rev 5), Planning orchestrator, Agent A, Orchestrator, Agent B and Code-critic. Any later plan-critic or planner pass adds its own section.
+- AC-pbd-clean-room-2: `docs/pbd-clean-room-log.md` lists the files, URLs and commands of every participant. At least these: Planner, Plan-critic 1, 2 and 3, Plan-critic 3 (re-check of rev 4), Plan-critic 4 (check of rev 5), Planner (rev 4), Planner (rev 5), Planner (rev 6), Planning orchestrator, Agent A, Orchestrator, Agent B and Code-critic. Any later plan-critic or planner pass adds its own section.
   - The Planning orchestrator section says plainly that two of its touches came before the Decision 5 rule, and that they covered only the doc and file names, with no code content.
   - B's and the code-critic's lists are extracted from their transcripts. They touch nothing forbidden, start no sub-agents, run only the shell commands on their allowlists with absolute `meddle` paths, and report 0 forbidden locations in listing/search results.
   - A's section is a labelled self-report, with its identifier-grep hit count.
@@ -186,13 +188,13 @@ The orchestrator never opened the old file.
 - **Where "Meddle" appears.** Only in `THIRD_PARTY_NOTICES.txt`, `XivLiveMesh/NOTICE.md` and `docs/pbd-clean-room.md`.
 - **Licence pinned to AGPL.** `ReadmeTermsTests.Licence_stays_AGPL_and_drafts_are_drafts` requires `docs/pbd-clean-room.md` to exist and the root licence to stay AGPL.
 - **Build number.** `Plugin.BuildNumber` is 1464 (`Proteus/Plugin.cs:33`).
-- **Forbidden code in the submodules.** The Glamourer submodule contains Penumbra's GPL `Glamourer/Penumbra.GameData/Files/PbdFile.cs` and `PbdFile.Write.cs`. Every clean-side search must exclude `Glamourer/`, `Penumbra.Api/`, `Luna/`, `bin/` and `obj/`. `Luna/` is a third submodule (Ottermandias). Plan-critic 3's file-name-only grep of it for `pbd` and `deformer` found nothing, but it is forbidden like the other two.
+- **Forbidden code in the submodules.** The Glamourer submodule contains Penumbra's GPL `Glamourer/Penumbra.GameData/Files/PbdFile.cs` and `PbdFile.Write.cs`. Every clean-side search must exclude `Glamourer/`, `Penumbra.Api/`, `Luna/`, `bin/` and `obj/`. `Luna/` is a third submodule (Ottermandias). Plan-critic 3's file-name-only grep of `meddle`'s `Luna/` for `pbd` and `deformer` found nothing, but it is forbidden like the other two.
 - **Build output looks like a leak but isn't.** `Proteus.csproj` references both API projects (lines 168 and 174), so every allowed build prints `Penumbra.Api -> …\Penumbra.Api\bin\Release…` and `Glamourer.Api -> …`, and `dotnet test` prints `Test run for …\bin\Release…`. That is why the leak check (Decision 8) looks only at Grep and Glob results.
 - **Auto-loaded memory index.** The memory index is loaded into every agent's context. It holds one-line descriptions, and its only fact about the deformer ("signed offsets") is already in the doc. The memory topic files themselves are forbidden.
 - **Sub-agents start in the session's start folder.**
   - For the planning session that is `E:\orca\workspaces\Proteus\E-orca-workspaces-Proteus-meddle-docs-pbd-clean-room-plan.md`, a separate checkout of the same repo, not `meddle`.
   - A sub-agent's relative paths and its default search folder land there. So B, the code-critic and the re-reviewer use absolute `meddle` paths (Decision 8).
-  - Plan-critic 3's relative `ls Luna` and `git -C Luna grep` ran there.
+  - The rule is a precaution. Plan-critic 3's `ls` and `git -C … grep` on `Luna/` used absolute `meddle` paths. Revision 5 wrongly said they ran in the start folder; revision 6 corrects that.
 
 **Decisions (and alternatives rejected):**
 1. **Roles.**
@@ -218,7 +220,7 @@ The orchestrator never opened the old file.
    - Its findings for B cite only lines of the new file and spec sections.
    - Any history or diff command on the old path without the exclusion voids the review: it is re-run fresh and the void is logged.
    - It starts no sub-agents of its own, in the review or in the short re-review (Decision 8).
-   - Its only shell commands are the two git commands above, the re-review's three (Decision 14) and targeted `dotnet test` runs, all with absolute `meddle` paths (Decision 8's allowlist). It reads with Read and searches with Grep/Glob.
+   - Its only shell commands are the two git commands above, the re-review's three (Decision 14) and targeted `dotnet test` runs, all with absolute `meddle` paths (Decision 8's allowlist). It reads with Read and searches with Grep/Glob. A content-mode Grep keeps line numbers on; one with `-n: false` voids the review.
    - Its count of forbidden locations in listing/search results (Decision 8) must be 0.
 5. **Forbidden for every clean-side agent** (B, every plan-critic, the code-critic, the orchestrator, the planner):
    - the old `XivLiveMesh/PbdFile.cs`, and any revision, commit body or history of it;
@@ -241,32 +243,37 @@ The orchestrator never opened the old file.
 7. **The licence header** is `// SPDX-License-Identifier: AGPL-3.0-or-later`, because the draft licence isn't in force.
 8. **The log.**
    - It opens with a note: the last short re-review (of the final commit) is recorded in the merge commit message, not in this file, because recording it here would need yet another review.
-   - **Sections, at least:** Planner, Plan-critic 1, Plan-critic 2, Plan-critic 3, Plan-critic 3 (re-check of rev 4), Planner (rev 4), Planner (rev 5), Planning orchestrator, Agent A, Orchestrator, Agent B, Code-critic.
+   - **Sections, at least:** Planner, Plan-critic 1, Plan-critic 2, Plan-critic 3, Plan-critic 3 (re-check of rev 4), Plan-critic 4 (check of rev 5), Planner (rev 4), Planner (rev 5), Planner (rev 6), Planning orchestrator, Agent A, Orchestrator, Agent B, Code-critic.
      - The list is open. Any further pass adds a section whose header matches `Plan-critic <n>` (optionally followed by a bracketed sub-part, such as "(re-check of rev 4)") or `Planner (rev <n>)`.
      - Each section has `Opened:` and `Git commands:` lists. B's and the code-critic's have a verbatim `Shell commands:` list in place of `Git commands:`.
      - B's section also has `Written:`, and B's and the code-critic's sections also have `Sub-agents:`.
    - **Planner, every Plan-critic section and every Planner (rev <n>) section:** their reports (see Environment & Preconditions).
    - **Planning orchestrator:** a verbatim copy of the reads in the hand-off's "Log inputs from the planning session" (above the plan's `---` rule). It also states plainly that two of those touches came before the rule now in Decision 5: opening `docs/pbd-clean-room.md` in the `readme-update` worktree, and a Grep that listed file NAMES under `Glamourer/Penumbra.GameData/Files/`. Both covered only the doc and file names, with no code content.
    - **Agent A:** A's self-report. It says the orchestrator never read A's transcript, gives the identifier-grep hit count, and names the probe file and its deletion.
-   - **Agent B and code-critic:** extracted mechanically from their transcripts. Each section also gives its `Shell commands:` verbatim, `Sub-agents: none`, and the "forbidden locations in listing/search results: N" count, which must be 0.
+   - **Agent B and code-critic:** extracted mechanically from their transcripts. Each section also gives its `Shell commands:` verbatim, `Sub-agents: none`, "Grep without line numbers: 0", and the "forbidden locations in listing/search results: N" count, which must be 0.
    - **Orchestrator:** its own actions, the pre-flight result, the skip lists and run counts from steps 3 and 6, the baseline failures with their messages, the never-skip tests it named, the guard counts and the NewBehaviour list.
    - **The extraction script** lives in the session scratchpad and is not committed; it is written with Write, not a heredoc.
      - It is pointed at B's and the code-critic's transcript files by agent ID only: the IDs the Agent tool returned, and for the critic both the review and the short re-review. It opens no other transcript, so it never opens A's.
-     - It reads tool names and the `file_path`, `path`, `pattern`, `glob`, `type`, `output_mode` and `command` inputs. It also counts `Agent`/`Task` calls for the `Sub-agents:` line, which must be none.
+     - It reads tool names and the `file_path`, `path`, `pattern`, `glob`, `type`, `output_mode`, `-n` and `command` inputs. It also counts `Agent`/`Task` calls for the `Sub-agents:` line, which must be none.
      - **Shell allowlist and absolute paths (rev 5).**
        - B may run only:
          - `dotnet build E:/orca/workspaces/Proteus/meddle/Proteus/Proteus.csproj -c Release`;
          - `dotnet test E:/orca/workspaces/Proteus/meddle/Proteus.Tests/Proteus.Tests.csproj -c Release --filter "…"`, optionally with `--logger "console;verbosity=normal"`.
        - The code-critic may run only the two git commands in Decision 4, and the re-reviewer only the three in Decision 14, each through `git -C E:/orca/workspaces/Proteus/meddle`. Both may also run the targeted `dotnet test` above.
-       - Every read goes through Read, and every search and listing through Grep/Glob.
+       - Every read goes through Read, and every search and listing through Grep/Glob. A content-mode Grep keeps line numbers on. One with `-n: false` voids the work (EDGE-17), and the script counts such calls for the "Grep without line numbers" line.
        - The script copies every Bash/PowerShell command verbatim into `Shell commands:`, and flags any command outside the sender's allowlist. One such command voids the work (EDGE-17).
+       - Commands are never shortened to repo-relative form. Shortening once made Plan-critic 3's absolute `meddle` commands on `Luna/` look relative (corrected in revision 6).
        - Every tool input path is absolute under `E:/orca/workspaces/Proteus/meddle/`. Sub-agents start in the session's start folder, which may be another checkout (it was for the planning session).
        - So a relative path, or a Grep/Glob call with no `path`, counts as a hit in the leak check. The script resolves such a path against the start folder, so its `Opened:` entry stays absolute, and the record test rejects it.
-     - It writes paths under the worktree as repo-relative.
+     - It writes `Opened:` paths under the worktree as repo-relative. Shell commands stay verbatim.
      - **Leak check (listing and search results only).**
-       - It covers Grep and Glob only. Shell listings and searches are outside the allowlist, so they void the work instead. It checks each result line without printing it.
-       - A line counts if the path it names is inside a forbidden location. The path is:
-         - the line itself, or for content-mode results the part before the first `:<digits>:` (the line-number separator). It is never split at the first `:`, so a drive letter such as `E:` doesn't break the parse. A line with no path part counts as the tool's `path` input;
+       - It covers Grep and Glob only. Shell listings and searches are outside the allowlist, so they void the work instead. It checks each result line without printing it, reading the Grep `output_mode` and `-n` inputs to know the line format.
+       - A line counts if the path it names is inside a forbidden location. The path is taken by output mode (rev 6):
+         - Glob, or Grep in `files_with_matches` mode: the whole line;
+         - Grep in `count` mode: the part before the trailing `:<digits>`;
+         - Grep in `content` mode with line numbers: the part before the first `:<digits>:` (the line-number separator);
+         - the line is never split at the first `:`, so a drive letter such as `E:` doesn't break the parse;
+         - only when the Grep `path` is a single file does a line with no path part count as that file. In any other search, a line whose path can't be parsed counts as a hit;
          - resolved against the listed directory or the tool's `path` input;
          - with `\` normalised to `/`, and lowercased.
        - Forbidden locations:
@@ -399,7 +406,7 @@ Derived requirements (from callers, repo rules and the critiques; none from the 
 None. This is a pure library replacement: the public C# surface above is pinned exactly, and no route, UI, schema or persisted field changes.
 
 ## Approach
-1. **Planning** (done): the planner (revisions 1–5), four plan-critic passes (Plan-critic 1–3, and Plan-critic 3's re-check of revision 4) and the planning orchestrator. Their reads go into the log (Decision 8).
+1. **Planning** (done): the planner (revisions 1–6), five plan-critic passes (Plan-critic 1–3, Plan-critic 3's re-check of revision 4, and Plan-critic 4's check of revision 5) and the planning orchestrator. Their reads go into the log (Decision 8).
 2. **Agent A: the spec.**
    - **Briefing:** the doc, its allowed-reading list, R-1, the A5 forbidden list for everything else, and A's own folder `…\scratchpad-agentA\` (a sibling of the session scratchpad) for notes and probe output.
    - **Required headings:**
@@ -487,7 +494,7 @@ None. This is a pure library replacement: the public C# surface above is pinned 
      - the allowed list: the spec, the doc, the callers in `Proteus/` and `XivLiveMesh/`, and `Proteus.Tests/`;
      - the full forbidden list (Decision 5);
      - no git commands and no sub-agents;
-     - shell commands: only the two on its allowlist (Decision 8). Every read goes through Read, and every search and listing through Grep/Glob;
+     - shell commands: only the two on its allowlist (Decision 8). Every read goes through Read, and every search and listing through Grep/Glob. A content-mode Grep keeps line numbers on; one with `-n: false` voids the work;
      - absolute `E:/orca/workspaces/Proteus/meddle/...` paths for every tool input. A relative path, or a Grep/Glob call with no `path`, voids the work;
      - every search scoped to this worktree, with `Glamourer/`, `Penumbra.Api/`, `Luna/`, `bin/` and `obj/` excluded.
    - **B writes:** `XivLiveMesh/PbdFile.cs` with the AC-4 header. B may build (`dotnet build E:/orca/workspaces/Proteus/meddle/Proteus/Proteus.csproj -c Release`) and run targeted filters (`dotnet test E:/orca/workspaces/Proteus/meddle/Proteus.Tests/Proteus.Tests.csproj -c Release --filter "…"`), including the NewBehaviour tests.
@@ -551,7 +558,7 @@ None. This is a pure library replacement: the public C# surface above is pinned 
 - NEW    `docs/pbd-format-spec.md`: Agent A's spec of facts only: seven headings, tables and rules, departure markers.
 - NEW    `docs/pbd-clean-room-log.md`:
   - the top note about the final re-review;
-  - a section per participant: at least Planner, Plan-critic 1–3, Plan-critic 3 (re-check of rev 4), Planner (rev 4), Planner (rev 5), Planning orchestrator, Agent A, Orchestrator, Agent B and Code-critic, plus any later `Plan-critic <n>` or `Planner (rev <n>)` pass;
+  - a section per participant: at least Planner, Plan-critic 1–3, Plan-critic 3 (re-check of rev 4), Plan-critic 4 (check of rev 5), Planner (rev 4), Planner (rev 5), Planner (rev 6), Planning orchestrator, Agent A, Orchestrator, Agent B and Code-critic, plus any later `Plan-critic <n>` or `Planner (rev <n>)` pass;
   - B's and the critic's lists from their transcripts (found by agent ID), with their verbatim `Shell commands:`, their `Sub-agents:` lines and their counts of forbidden locations in listing/search results;
   - run counts, skip lists, baseline failures, guard counts and the NewBehaviour list.
 - DELETE `XivLiveMesh/PbdFile.cs` (the orchestrator's commit), then NEW `XivLiveMesh/PbdFile.cs` (B's commit): the clean-room reader, with the same public surface.
@@ -603,6 +610,7 @@ The expected results for EDGE-2, 3, 4, 5, 10, 11, 12 and 14 come from the spec. 
   - opens something forbidden;
   - gets a line in one of its Grep or Glob results that is a path inside a forbidden location (Decision 8);
   - gives a tool a relative path, or makes a Grep/Glob call with no `path`;
+  - makes a content-mode Grep call with `-n: false`;
   - runs a shell command outside its allowlist;
   - starts a sub-agent;
   - runs a diff or history command on the old path without the exclusion.
@@ -623,14 +631,15 @@ All new tests carry `[Trait("Plan", "<ID>")]`. Departure tests also carry `[Trai
   - **Header and sections:**
     - the top note says the final re-review is in the merge commit message;
     - every header matching `Plan-critic <n>` (with an optional bracketed sub-part) or `Planner (rev <n>)` has `Opened:`;
-    - at least these sections exist, each with `Opened:`: Planner, Plan-critic 1, Plan-critic 2, Plan-critic 3, Plan-critic 3 (re-check of rev 4), Planner (rev 4), Planner (rev 5), Planning orchestrator, Agent A, Orchestrator, Agent B and Code-critic.
+    - at least these sections exist, each with `Opened:`: Planner, Plan-critic 1, Plan-critic 2, Plan-critic 3, Plan-critic 3 (re-check of rev 4), Plan-critic 4 (check of rev 5), Planner (rev 4), Planner (rev 5), Planner (rev 6), Planning orchestrator, Agent A, Orchestrator, Agent B and Code-critic.
   - **Planning orchestrator:** the section contains `readme-update`, `Glamourer/Penumbra.GameData/Files/` and "no code content", and says those two touches came before the rule. The path and marker checks below don't apply to it.
   - **Agent A:** labelled a self-report, with an identifier-grep count of 0.
   - **B and code-critic paths:** after normalising (`\` to `/`, lowercase), every `Opened:` entry is either repo-relative (no drive letter, no leading `/`, no `..`) or a tool path. Tool paths are under `c:/users/solon/.claude/plugins/`, or contain `/temp/claude/` and `/scratchpad/` but not `scratchpad-agenta`. The allowed set is built at runtime, not from a session path.
   - **Forbidden markers:** no `Opened:` entry in B's or the critic's section contains `glamourer/`, `penumbra.api/`, `luna/`, `/bin/`, `/obj/`, `meddle.utils`, `skintattoo`, `draganddroptexturing`, `/memory/` or `scratchpad-agenta`, or starts with `bin/` or `obj/`. The other sections, the doc and the plan name these on purpose and are not checked.
   - **Leak counts and sub-agents:**
-    - B's and the critic's sections each report "forbidden locations in listing/search results: 0" and `Sub-agents: none`;
-    - the log states that `dotnet build`/`dotnet test` output and reads of allowed files are not counted.
+    - B's and the critic's sections each report "forbidden locations in listing/search results: 0", "Grep without line numbers: 0" and `Sub-agents: none`;
+    - the log states that `dotnet build`/`dotnet test` output and reads of allowed files are not counted;
+    - the log describes the per-mode parsing (whole line for Glob and `files_with_matches`, before the trailing `:<digits>` for `count`, before the first `:<digits>:` for `content`), and says the no-path fallback applies only to a single-file search.
   - **Shell commands:**
     - B's and the critic's sections each have a `Shell commands:` list.
     - Each entry is normalised: `\` to `/`, lowercase, runs of spaces collapsed.
@@ -742,12 +751,12 @@ All new tests carry `[Trait("Plan", "<ID>")]`. Departure tests also carry `[Trai
     - `docs/pbd-clean-room.md`
     - `docs/agent-rules/plan-critic.md`
     - `.gitmodules`
-  - **Listings:** `ls Luna` (top level). It ran with a relative path, so it listed the `Luna/` of the session's start folder (`E:\orca\workspaces\Proteus\E-orca-workspaces-Proteus-meddle-docs-pbd-clean-room-plan.md`, a separate checkout of the same repo), not `meddle`'s.
+  - **Listings:** `ls E:/orca/workspaces/Proteus/meddle/Luna` (top level), on `meddle`'s `Luna/`.
   - **Searches:**
     - `git grep -n "ProjectReference" -- '*.csproj'`, with the exclusions;
     - `git grep -n -i -c "draganddroptexturing\|glamourer/" -- docs/pbd-clean-room.md docs/pbd-clean-room-plan.md AGENTS.md` (counts only);
-    - `git -C Luna grep -l -i -e pbd -e deformer` (file names only, no hits). It was also relative, so it ran in that start folder's `Luna/`.
-  - Both touches of `Luna/` came before revision 4 forbade it. Both reached the start folder through a relative path; that folder is another checkout, which Decision 5 forbids. They saw file names only, with no hits and no code. Its Read calls and its other git commands used absolute `meddle` paths.
+    - `git -C E:/orca/workspaces/Proteus/meddle/Luna grep -l -i -e pbd -e deformer` (file names only, no hits).
+  - Both touches of `Luna/` were on `meddle`'s `Luna/`, through absolute paths, before revision 4 forbade it. They saw file names only, with no hits and no code. Revision 5 wrongly said they ran in the session's start folder: the orchestrator's extraction script had shortened them to repo-relative form. Revision 6 corrects this.
   - No show, log, diff or blame, and no URLs. AGENTS.md, CLAUDE.md and the memory index were loaded automatically.
 - **Planner (rev 4)'s reads, for the log:** it stayed on the clean side.
   - **Files read:** `docs/pbd-clean-room-plan.md` in the `meddle` worktree, whole, in two reads (lines 1–566 and 566–707).
@@ -766,6 +775,14 @@ All new tests carry `[Trait("Plan", "<ID>")]`. Departure tests also carry `[Trai
   - No listings, git commands or URLs. AGENTS.md, CLAUDE.md, the memory index and the plan-critic skill text were loaded automatically.
 - **Planner (rev 5)'s reads, for the log:** it stayed on the clean side, in the same session as Planner (rev 4).
   - **Files read:** `E:\orca\workspaces\Proteus\meddle\docs\pbd-clean-room-plan.md` lines 1–300 and 360–767, in two reads. Lines 301–359, the verbatim Requirements, were not re-read.
+  - **Listings, searches, shell or git commands, URLs:** none.
+  - **Loaded automatically, not opened:** as for Planner (rev 4).
+- **Plan-critic 4 (check of rev 5)'s reads, for the log:**
+  - **Files read:** `E:/orca/workspaces/Proteus/meddle/docs/pbd-clean-room-plan.md`, whole, in two Read calls (lines 1–526 and 526–823), with absolute paths.
+  - **Listings, searches, shell or git commands, URLs:** none.
+  - **Loaded automatically:** AGENTS.md and CLAUDE.md from the start folder, the user's global CLAUDE.md, the memory index and the plan-critic skill text.
+- **Planner (rev 6)'s reads, for the log:** it stayed on the clean side, in the same session as Planner (rev 4) and Planner (rev 5).
+  - **Files read:** `E:\orca\workspaces\Proteus\meddle\docs\pbd-clean-room-plan.md` lines 1–320, 400–403, 480–509 and 548–823, in four Read calls with absolute paths.
   - **Listings, searches, shell or git commands, URLs:** none.
   - **Loaded automatically, not opened:** as for Planner (rev 4).
 - **Planning orchestrator's reads, for the log:** they are listed in the hand-off's "Log inputs from the planning session" (above the `---` rule). The log copies them verbatim (Decision 8). Its session's AGENTS.md and CLAUDE.md were loaded automatically from the start folder named there.
