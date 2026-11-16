@@ -1,8 +1,8 @@
 # Hand-off: clean-room rewrite of `XivLiveMesh/PbdFile.cs`, ready to run
 
 This is the approved plan for carrying out `docs/pbd-clean-room.md`, written for the agent that runs it.
-Everything after the next rule is the plan itself (revision 3). The planner wrote it, the plan-critic
-reviewed it twice, and every amendment was folded back in through the planner.
+Everything after the next rule is the plan itself (revision 4). The planner wrote it, the plan-critic
+reviewed it three times, and every amendment was folded back in through the planner.
 
 ## Where things stand (2026-11-16)
 
@@ -12,7 +12,8 @@ reviewed it twice, and every amendment was folded back in through the planner.
 - **Plan reviews:**
   - Round 1: the critic rated it MEDIUM-HIGH. Its 12 amendments were folded in as revision 2.
   - Round 2: the critic rated it MEDIUM. Its 11 amendments were folded in as revision 3 (the Delta below).
-  - A final critic pass on revision 3 started but didn't finish before the session ended. **First step:** run
+  - Round 3: the critic rated revision 3 MEDIUM-HIGH (2 blocking findings, 3 suggestions). All 5 were folded in as revision 4 (the Delta below).
+  - **First step:** run
     `plan-critic` (model `opus`) on this file once, and fold in any blocking findings through `planner`.
 - **Decisions already made:**
   - No resemblance check by Agent A (Decision 11).
@@ -26,17 +27,17 @@ You are the orchestrator. Stay clean:
 
 - **Never open:**
   - `XivLiveMesh/PbdFile.cs`, any revision or history of it, or a diff of the deletion;
-  - anything under `Glamourer/` (it holds Penumbra's GPL `Penumbra.GameData/Files/PbdFile.cs`), `Penumbra.Api/`, `bin/` or `obj/`;
+  - anything under `Glamourer/` (it holds Penumbra's GPL `Penumbra.GameData/Files/PbdFile.cs`), `Penumbra.Api/`, `Luna/` (a third submodule, Ottermandias's), `bin/` or `obj/`;
   - `E:\repos\Proteus` files, other Proteus worktrees, the dev-load folder or `E:\repos\DragAndDropTexturing`;
   - the memory topic files under `C:\Users\solon\.claude\projects\*\memory\` (several describe the old reader);
   - Agent A's folder or transcript.
 - **Searches:** exclude every path above from every search. Use `git grep` with
-  `':!XivLiveMesh/PbdFile.cs' ':!Glamourer' ':!Penumbra.Api'`. Never run a bare repo-wide grep for `PbdFile`.
+  `':!XivLiveMesh/PbdFile.cs' ':!Glamourer' ':!Penumbra.Api' ':!Luna'`. Never run a bare repo-wide grep for `PbdFile`.
 - **Fixes:** only Agent A ever reads the old code. Every fix to the new `PbdFile.cs` goes back to Agent B.
 
 ## Log inputs from the planning session
 
-The plan's *Environment & Preconditions* section lists what the planner and both plan-critics opened.
+The plan's *Environment & Preconditions* section lists what the planner (revisions 1–3, and revision 4) and the three plan-critics opened. The log's Planning orchestrator section copies the reads below verbatim (Decision 8).
 
 The planning orchestrator also opened only:
 
@@ -56,52 +57,55 @@ The orchestrator never opened the old file.
 
 - Start the keep-awake script with the **PowerShell** tool, not Bash, with `timeout: 7200000`. Bash strips the
   backslashes from the path, and the default timeout kills the script after 30 minutes.
-- Sub-agent transcripts sit next to the session as JSONL. A small script that prints only the last assistant
-  text, or only the `tool_use` inputs, is enough for Decision 8's extraction. Never print tool results,
-  only the count of forbidden strings found in them.
+- Sub-agent transcripts sit next to the session as JSONL. Point the extraction script at B's and the
+  code-critic's transcript files by agent ID only, so it never opens A's. A small script that prints only
+  the last assistant text, or only the `tool_use` inputs, is enough for Decision 8's extraction. Never print
+  tool results. For listing and search calls, print only the count of result lines that are paths inside a
+  forbidden location (Decision 8). Build and test output and reads of allowed files are not counted.
 
 ---
 
 # Implementation Plan: Clean-room rewrite of the racial deformer reader (`XivLiveMesh/PbdFile.cs`)
 
-## Delta (rev 3: second plan-critic's 11 amendments, all accepted by the orchestrator)
-- **B1 (allowed skips instead of "0 skips"):**
-  - Step 3 records its skip list by name and reason. Only two kinds of skip are allowed: a static `Skip =` attribute (inside the wide filter that is only `EarringBonesLocalTests`, line 36, "Step 0 diagnostic"), or a named missing-mod skip.
-  - Step 6's skip list must match step 3's exactly.
-  - A never-skip set is added: `PbdFileTests.RealFile.*`, `RacialRouteLocalTests`, `LiveMeshTests`, and at least one named cross-race test each in `CrossSexRefitLocal*` and `KeepEndsLocal*`.
-  - Before step 3, a pre-flight run proves the data paths resolve; checking that the env vars are set is not enough.
-  - Corrected fact: the `SizeSetMadeOnLocalTests` (line 40) and `CrossSexGloveReshapeLocalTests` (line 28) fixtures return early when data is missing. The tests' own `[LocalDataFact]`/`[LocalDataTheory]` attributes then report the skip. So "never silently passed" holds for the tests but not for those fixtures.
-- **B2 (breaking the review/log loop):**
-  - The code-critic's log section and the build-number bump go in one final commit.
-  - Its short re-review reads only that commit: `git show --stat HEAD` plus the diffs of those two files, away from the old path.
-  - That last review's extracted reads go into the merge commit message, which is not reviewed. The log says so at the top.
-- **B3 (merge conflicts):**
-  - A conflict on the path keeps the feature branch's side (`git checkout --theirs XivLiveMesh/PbdFile.cs` when merging into `test`). The other side is never opened.
-  - `PbdCleanRoomRecordTests` runs straight after the merge, before the quick suite.
-- **B4 (wider transcript extraction):**
-  - The extraction also records `glob`, `type` and `output_mode`.
-  - The script also counts forbidden path strings in tool results and prints only the count, which must be 0 for B and for the critic.
-- **B5 (A's own folder):**
-  - A works in its own temp folder `…\scratchpad-agentA\`, a sibling of the session scratchpad. It is forbidden to the clean side and deleted after hand-over.
-  - The probe has one location: a temporary test file in this worktree, deleted before hand-over. Its printed output and A's notes go to A's folder.
-- **B6 (markers):**
-  - A "Required change from the old reader:" marker may cite R-1 or a doc §3 "must tolerate" case that the old reader doesn't tolerate. The orchestrator sends any other marker back to A.
-  - "Without throwing" is dropped from EDGE-5, EDGE-11 and EDGE-14, and "Identity" from EDGE-12, unless the spec says so.
-- **B7 (exception to A5):** The orchestrator may run git, build and test commands in `E:\repos\Proteus` for the merge, the guard and the quick suite. It may not open any file there, and must not view conflict content.
-- **B8 (guard prints a count only):**
-  - The guard is now `git rev-list --count solona-m/pbd-clean-room..test -- XivLiveMesh/PbdFile.cs` and prints a count only.
-  - Before the pre-merge run, `git pull` updates `test` in the primary checkout (Dependabot merges on GitHub).
-- **B9 (what "fails the same way" means):**
-  - It means the same assertion message, word for word, on both runs.
-  - Deformer tests that already failed on the old code are listed as gaps in the proof in the final report.
-- **B10 (allowed paths in the record test):**
-  - The extraction writes paths under the worktree as repo-relative.
-  - The record test accepts only repo-relative paths plus a short list of generic tool paths: the plugin cache under `C:\Users\solon\.claude\plugins\`, and any path containing `\Temp\claude\` and `\scratchpad\` but not `scratchpad-agentA`.
-  - No session path is hard-coded, so the test also passes after the merge in the primary checkout.
-- **B11 (existing test untouched):** AC-5 adds that `git diff test --numstat -- Proteus.Tests/PbdFileTests.cs` must show 0 deleted lines.
-- **Log inputs:** the second plan-critic's reads are added to the list under Environment & Preconditions.
+## Delta (rev 4: third plan-critic's 2 blocking findings and 3 suggestions, all accepted by the orchestrator)
+- **C1 (a leak check that can pass):**
+  - The old rule, "forbidden strings in tool results: 0", could never pass:
+    - allowed builds print `Penumbra.Api -> …\Penumbra.Api\bin\Release…` and `Glamourer.Api -> …`, because `Proteus.csproj` references both API projects;
+    - `dotnet test` prints `Test run for …\bin\Release…`;
+    - `docs/pbd-clean-room.md` names DragAndDropTexturing;
+    - the plan, the log and the record test name the markers on purpose.
+  - The new check, in three parts:
+    - (a) In results of listing and search tools (Grep, Glob, and `ls`/`dir`/`find`/`git grep`/`Get-ChildItem` output), no result line may be a path inside a forbidden location: `Glamourer/`, `Penumbra.Api/`, `Luna/`, any `bin/` or `obj/`, `E:\repos\Proteus`, other checkouts, memory, or A's folder.
+    - (b) Read-type results are covered by the `Opened:` path check.
+    - (c) Output of `dotnet build`/`dotnet test` and reads of allowed files are not counted. The log says so.
+  - It is reported as "forbidden locations in listing/search results: N", which must be 0.
+  - Changed in: Decisions 4 and 8, AC-2, steps 5, 8 and 9, Files, EDGE-17, the record test, Risks, and the hand-off's practical notes.
+- **C2 (every participant in the log):**
+  - Three sections are added: "Plan-critic 3", "Planner (rev 4)" and "Planning orchestrator".
+  - The Planning orchestrator section copies verbatim the reads listed in the hand-off's "Log inputs from the planning session".
+  - It also says plainly that two of those touches came before the rule now in Decision 5: opening the doc in the `readme-update` worktree, and a Grep that listed file NAMES under `Glamourer/Penumbra.GameData/Files/`. They covered only the doc and file names, with no code content.
+  - Changed in: Decision 8, AC-2, step 1, Files and the record test.
+- **C3 (no sub-agents for B or the critic):**
+  - B and the code-critic (both the review and the short re-review) start no sub-agents.
+  - The extraction script is given their transcript files by agent ID only, so it never opens A's.
+  - Each of their log sections carries `Sub-agents: none`. A sub-agent voids the work (EDGE-17).
+- **C4 (warning before the merge tests):** the step 11e/f `dotnet test` runs in `E:\repos\Proteus` rebuild `Proteus\bin\Release\win-x64`, which is the dev-load folder. Other sessions are warned before them too, as before step 10.
+- **C5 (`Luna/`):** `Luna/`, the third submodule (Ottermandias), is added to every forbidden list and every search exclusion (`':!Luna'`).
+- **Log inputs:** Plan-critic 3's and Planner (rev 4)'s reads are added under Environment & Preconditions. Plan-critic 3's `ls Luna` and `git -C Luna grep -l` ran before C5, and are recorded that way.
 - **Earlier revisions** (still in force):
   - rev 2 folded in the first critic's 12 amendments: wide filter, old-code baseline, NewBehaviour trait, 1e-5 tolerance, A5 forbidden list, deleting `bin/`/`obj/`, transcript-based logs, A's identifier grep, the guard, R-1 count checks, bump after review, golden wording;
+  - rev 3 folded in the second critic's 11 amendments:
+    - allowed skips, the never-skip set and a pre-flight (B1);
+    - one final bump-and-log commit, whose short re-review goes in the merge message (B2);
+    - `--theirs` on a merge conflict, and the record test straight after the merge (B3);
+    - the wider transcript extraction (B4; its result count is replaced by C1);
+    - A's own folder and a single probe location (B5);
+    - the marker rules (B6);
+    - the command-only exception for `E:\repos\Proteus` (B7);
+    - the count-only guard after `git pull` (B8);
+    - "fails the same way" means the same message word for word (B9);
+    - repo-relative allowed paths in the record test (B10);
+    - 0 deleted lines in `PbdFileTests.cs` (B11);
   - both NEEDS_DECISION items are decided (Decisions 11 and 12).
 
 ## Approval Summary
@@ -111,8 +115,9 @@ The orchestrator never opened the old file.
 
 **Acceptance Criteria:**
 - AC-pbd-clean-room-1: `docs/pbd-format-spec.md` exists with the seven required sections, written as tables and rules, with no code or pseudo-code. Every "Required change from the old reader:" marker cites R-1 or a doc §3 item.
-- AC-pbd-clean-room-2: `docs/pbd-clean-room-log.md` lists the files, URLs and git commands of every participant.
-  - B's and the code-critic's lists are extracted from their transcripts, touch nothing forbidden, and report 0 forbidden strings in tool results.
+- AC-pbd-clean-room-2: `docs/pbd-clean-room-log.md` lists the files, URLs and git commands of every participant: Planner, Plan-critic 1, 2 and 3, Planner (rev 4), Planning orchestrator, Agent A, Orchestrator, Agent B and Code-critic.
+  - The Planning orchestrator section says plainly that two of its touches came before the Decision 5 rule, and that they covered only the doc and file names, with no code content.
+  - B's and the code-critic's lists are extracted from their transcripts, touch nothing forbidden, start no sub-agents, and report 0 forbidden locations in listing/search results.
   - A's section is a labelled self-report, with its identifier-grep hit count.
   - The final re-review's reads are in the merge commit message, and the log says so.
 - AC-pbd-clean-room-3: the new `PbdFile` has exactly the documented public surface, and no caller file changes.
@@ -127,8 +132,8 @@ The orchestrator never opened the old file.
 
 **Key decisions:**
 - **Tests before deletion:** the orchestrator, who never sees the old code, writes the vector and edge tests from the spec. It runs them, plus the wide baseline filter, against the old code before deleting it. Tests the spec marks as new behaviour are left out of that gate.
-- **Clean review:** the code-critic stays on the clean side. It sees the diff vs `test` with the old path excluded, plus the new file as a whole. Every fix to `PbdFile.cs` goes to B.
-- **Isolating B:** B runs no git commands, works with `bin/` and `obj/` deleted, and searches only this worktree. Its log comes from its transcript.
+- **Clean review:** the code-critic stays on the clean side and starts no sub-agents. It sees the diff vs `test` with the old path excluded, plus the new file as a whole. Every fix to `PbdFile.cs` goes to B.
+- **Isolating B:** B runs no git commands, starts no sub-agents, works with `bin/` and `obj/` deleted, and searches only this worktree. Its log comes from its transcript, which the extraction finds by B's agent ID.
 - **Final commit:** the bump and the code-critic log go in one last commit, which gets a short re-review.
 - **No adversarial QA in game:** nothing user-facing changes. In-game bending is UNVERIFIED (only the owner can check it).
 
@@ -173,14 +178,15 @@ The orchestrator never opened the old file.
 - **Where "Meddle" appears.** Only in `THIRD_PARTY_NOTICES.txt`, `XivLiveMesh/NOTICE.md` and `docs/pbd-clean-room.md`.
 - **Licence pinned to AGPL.** `ReadmeTermsTests.Licence_stays_AGPL_and_drafts_are_drafts` requires `docs/pbd-clean-room.md` to exist and the root licence to stay AGPL.
 - **Build number.** `Plugin.BuildNumber` is 1464 (`Proteus/Plugin.cs:33`).
-- **Forbidden code in the submodule.** The Glamourer submodule contains Penumbra's GPL `Glamourer/Penumbra.GameData/Files/PbdFile.cs` and `PbdFile.Write.cs`. Every clean-side search must exclude `Glamourer/`, `Penumbra.Api/`, `bin/` and `obj/`.
+- **Forbidden code in the submodules.** The Glamourer submodule contains Penumbra's GPL `Glamourer/Penumbra.GameData/Files/PbdFile.cs` and `PbdFile.Write.cs`. Every clean-side search must exclude `Glamourer/`, `Penumbra.Api/`, `Luna/`, `bin/` and `obj/`. `Luna/` is a third submodule (Ottermandias). Plan-critic 3's file-name-only grep of it for `pbd` and `deformer` found nothing, but it is forbidden like the other two.
+- **Build output looks like a leak but isn't.** `Proteus.csproj` references both API projects (lines 168 and 174), so every allowed build prints `Penumbra.Api -> …\Penumbra.Api\bin\Release…` and `Glamourer.Api -> …`, and `dotnet test` prints `Test run for …\bin\Release…`. That is why the leak check (Decision 8) looks only at listing and search results.
 - **Auto-loaded memory index.** The memory index is loaded into every agent's context. It holds one-line descriptions, and its only fact about the deformer ("signed offsets") is already in the doc. The memory topic files themselves are forbidden.
 
 **Decisions (and alternatives rejected):**
 1. **Roles.**
    - **Agent A:** a fresh `general-purpose` sub-agent (opus). It may read what the doc allows.
    - **Orchestrator:** never opens the old file or anything forbidden.
-   - **Agent B:** a second fresh `general-purpose` sub-agent (opus). It is briefed only with the doc, the spec, the allowed and forbidden lists, R-1 to R-3 and the search restrictions.
+   - **Agent B:** a second fresh `general-purpose` sub-agent (opus). It is briefed only with the doc, the spec, the allowed and forbidden lists, R-1 to R-3 and the search restrictions. It starts no sub-agents of its own, because their transcripts would fall outside the extraction (Decision 8).
    - Departing from the /feature rule "only the main agent implements" is required by the doc.
    - Rejected: the orchestrator implementing. The doc asks for split roles, and the split keeps the reviewer and committer separate from the author.
 2. **Tests are written from the spec and proven on the old code before the deletion.**
@@ -199,10 +205,12 @@ The orchestrator never opened the old file.
    - It never views the `test`-side revision of that path, and it follows Decision 5.
    - Its findings for B cite only lines of the new file and spec sections.
    - Any history or diff command on the old path without the exclusion voids the review: it is re-run fresh and the void is logged.
-   - B4's count of forbidden strings in tool results must be 0.
-5. **Forbidden for every clean-side agent** (B, both plan-critics, the code-critic, the orchestrator, the planner):
+   - It starts no sub-agents of its own, in the review or in the short re-review (Decision 8).
+   - Its count of forbidden locations in listing/search results (Decision 8) must be 0.
+5. **Forbidden for every clean-side agent** (B, all three plan-critics, the code-critic, the orchestrator, the planner):
    - the old `XivLiveMesh/PbdFile.cs`, and any revision, commit body or history of it;
    - Meddle, SkinTattoo, Ktisis, Brio, DragAndDropTexturing (including `E:\repos\DragAndDropTexturing`), TexTools/xivModdingFramework, and Penumbra's or Glamourer's deformer code (all of `Glamourer/` and `Penumbra.Api/`);
+   - the `Luna/` submodule (Ottermandias);
    - any GPL/AGPL source, and any SkinTattoo or Meddle clone anywhere;
    - web searches for pbd-parser code;
    - `E:\repos\Proteus` (except as in Decision 15) and every other checkout or worktree under `E:\orca\workspaces\Proteus\` except `meddle`;
@@ -220,15 +228,35 @@ The orchestrator never opened the old file.
 7. **The licence header** is `// SPDX-License-Identifier: AGPL-3.0-or-later`, because the draft licence isn't in force.
 8. **The log.**
    - It opens with a note: the last short re-review (of the final commit) is recorded in the merge commit message, not in this file, because recording it here would need yet another review.
-   - Sections: Planner, Plan-critic 1, Plan-critic 2, Agent A, Orchestrator, Agent B, Code-critic. Each has `Opened:` and `Git commands:` lists; B's section also has `Written:`.
-   - **Planner and plan-critics:** their reports (see Environment & Preconditions).
+   - Sections: Planner, Plan-critic 1, Plan-critic 2, Plan-critic 3, Planner (rev 4), Planning orchestrator, Agent A, Orchestrator, Agent B, Code-critic. Each has `Opened:` and `Git commands:` lists. B's section also has `Written:`, and B's and the code-critic's sections also have `Sub-agents:`.
+   - **Planner, Plan-critic 1–3 and Planner (rev 4):** their reports (see Environment & Preconditions).
+   - **Planning orchestrator:** a verbatim copy of the reads in the hand-off's "Log inputs from the planning session" (above the plan's `---` rule). It also states plainly that two of those touches came before the rule now in Decision 5: opening `docs/pbd-clean-room.md` in the `readme-update` worktree, and a Grep that listed file NAMES under `Glamourer/Penumbra.GameData/Files/`. Both covered only the doc and file names, with no code content.
    - **Agent A:** A's self-report. It says the orchestrator never read A's transcript, gives the identifier-grep hit count, and names the probe file and its deletion.
-   - **Agent B and code-critic:** extracted mechanically from their transcripts. Each section also gives the "forbidden strings in tool results: N" count.
+   - **Agent B and code-critic:** extracted mechanically from their transcripts. Each section also gives `Sub-agents: none` and the "forbidden locations in listing/search results: N" count, which must be 0.
    - **Orchestrator:** its own actions, the pre-flight result, the skip lists and run counts from steps 3 and 6, the baseline failures with their messages, the never-skip tests it named, the guard counts and the NewBehaviour list.
    - **The extraction script** lives in the session scratchpad and is not committed; it is written with Write, not a heredoc.
-     - It reads only tool names and the `file_path`, `path`, `pattern`, `glob`, `type`, `output_mode` and `command` inputs.
+     - It is pointed at B's and the code-critic's transcript files by agent ID only: the IDs the Agent tool returned, and for the critic both the review and the short re-review. It opens no other transcript, so it never opens A's.
+     - It reads tool names and the `file_path`, `path`, `pattern`, `glob`, `type`, `output_mode` and `command` inputs. It also counts `Agent`/`Task` calls for the `Sub-agents:` line, which must be none.
      - It writes paths under the worktree as repo-relative.
-     - It counts forbidden path strings in tool results without printing them: `glamourer/`, `penumbra.api/`, `/bin/`, `/obj/`, `repos/proteus/`, the other `workspaces/proteus/` checkouts, `draganddroptexturing`, `/memory/` and `scratchpad-agenta`, matched case-insensitively with `\` normalised to `/`.
+     - **Leak check (listing and search results only).**
+       - It covers Grep, Glob, and shell commands that run `ls`, `dir`, `find`, `git grep` or `Get-ChildItem`. It checks each result line without printing it.
+       - A line counts if the path it names is inside a forbidden location. The path is:
+         - the line itself, or for content-mode results the part before the line-number separator (a line with no path part counts as the tool's `path` input);
+         - resolved against the listed directory or the tool's `path` input;
+         - with `\` normalised to `/`, and lowercased.
+       - Forbidden locations:
+         - `glamourer/`, `penumbra.api/` and `luna/` at the repo root;
+         - any path with a `bin` or `obj` segment;
+         - `e:/repos/proteus/` and `e:/repos/draganddroptexturing/`;
+         - any `e:/orca/workspaces/proteus/` checkout other than `meddle`;
+         - `c:/users/solon/.claude/projects/*/memory/`;
+         - any path containing `scratchpad-agenta`.
+       - It prints only "forbidden locations in listing/search results: N", which must be 0.
+     - **Not counted:**
+       - read-type results (Read, `cat`, `type`, `Get-Content`, `git show <rev>:<path>`), whose paths are in `Opened:` and checked there;
+       - the output of `dotnet build` and `dotnet test`, and the contents of allowed files.
+       - Why: allowed builds print `Penumbra.Api -> …\bin\Release…` and `Glamourer.Api -> …`, `dotnet test` prints `Test run for …\bin\Release…`, and the doc, the plan, the log and the record test name the markers on purpose.
+       - The log says so.
    - The log describes the method.
 9. **The real-data vectors** go in a nested class `PbdFileTests.RealFile`. It is marked `[Trait("Speed","Slow")]` if its setup takes 5 s or more. The synthetic edge tests stay in `PbdFileTests`, in the quick suite.
 10. **`PbdCleanRoomRecordTests.cs`** holds the record tests, mirroring `ReadmeTermsTests`'s repo-root helpers. It is run only after B and the paperwork, and again after the merge.
@@ -240,10 +268,11 @@ The orchestrator never opened the old file.
     - Its short re-review reads only that commit: `git show --stat HEAD`, `git show HEAD -- docs/pbd-clean-room-log.md` and `git show HEAD -- Proteus/Plugin.cs`.
     - The reads of that re-review are extracted the same way and put in the merge commit message.
     - Any change after that commit means redoing the bump commit and its re-review.
-    - Before the copy to the load folder, other sessions are warned.
+    - Before the copy to the load folder, and again before the step 11e/f test runs in `E:\repos\Proteus` (which rebuild that same folder), other sessions are warned.
 15. **Exception to Decision 5 for `E:\repos\Proteus` (B7).**
     - The orchestrator may run git, build and test commands there: `git pull`, the guard, `git merge`, `git checkout --theirs` on a conflict, `dotnet test` for the record tests and the quick suite, and `git push`.
     - It may not open any file there, and must not view conflict content (no `git diff` during a conflict).
+    - Its `dotnet test` runs build into `E:\repos\Proteus\Proteus\bin\Release\win-x64`, which is the dev-load folder, so a running game reloads the plugin. Other sessions are warned before them, as before step 10's copy.
 16. **The guard (B8).**
     - Command: `git rev-list --count solona-m/pbd-clean-room..test -- XivLiveMesh/PbdFile.cs`, which prints a count only.
     - It runs after the deletion, and again before the merge, after `git pull` updates `test` in the primary checkout.
@@ -345,7 +374,7 @@ Derived requirements (from callers, repo rules and the critiques; none from the 
 None. This is a pure library replacement: the public C# surface above is pinned exactly, and no route, UI, schema or persisted field changes.
 
 ## Approach
-1. **Planner and both plan-critics** (done). Their reads go into the log.
+1. **Planning** (done): the planner (revisions 1–4), three plan-critic passes and the planning orchestrator. Their reads go into the log (Decision 8).
 2. **Agent A: the spec.**
    - **Briefing:** the doc, its allowed-reading list, R-1, the A5 forbidden list for everything else, and A's own folder `…\scratchpad-agentA\` (a sibling of the session scratchpad) for notes and probe output.
    - **Required headings:**
@@ -432,10 +461,10 @@ None. This is a pure library replacement: the public C# surface above is pinned 
      - R-1 to R-3;
      - the allowed list: the spec, the doc, the callers in `Proteus/` and `XivLiveMesh/`, and `Proteus.Tests/`;
      - the full forbidden list (Decision 5);
-     - no git commands;
-     - every search scoped to this worktree, with `Glamourer/`, `Penumbra.Api/`, `bin/` and `obj/` excluded.
+     - no git commands and no sub-agents;
+     - every search scoped to this worktree, with `Glamourer/`, `Penumbra.Api/`, `Luna/`, `bin/` and `obj/` excluded.
    - **B writes:** `XivLiveMesh/PbdFile.cs` with the AC-4 header. B may build (`dotnet build Proteus/Proteus.csproj -c Release`) and run targeted filters, including the NewBehaviour tests.
-   - **B's narrative** for the log is short. The orchestrator builds B's lists and its count of forbidden strings in results from B's transcript (Decision 8), then commits.
+   - **B's narrative** for the log is short. The orchestrator builds B's lists, its `Sub-agents:` line and its count of forbidden locations in listing/search results from B's transcript, found by B's agent ID (Decision 8), then commits.
 6. **Proof on the new code.**
    - Run the step 3c command without `CleanRoom!=NewBehaviour`.
    - It must show:
@@ -458,13 +487,14 @@ None. This is a pure library replacement: the public C# surface above is pinned 
    - Commit. (Record tests: see step 8.)
 8. **code-critic** (opus, clean side, Decision 4).
    - It gets the step 6 summary, with the full suite deferred to release.
+   - It starts no sub-agents of its own (Decision 4).
    - Findings on `PbdFile.cs` go to B. Findings on tests and paperwork go to the orchestrator. Any commit after the review means a re-review.
-   - Once it passes, the orchestrator extracts the critic's lists and its count of forbidden strings in results (a void review is re-run).
+   - Once it passes, the orchestrator takes the critic's transcript by its agent ID and extracts its lists, its `Sub-agents:` line and its count of forbidden locations in listing/search results (a void review is re-run).
    - Then it makes the **final commit**: the Code-critic log section plus the `Plugin.BuildNumber` bump to the next free number on `test`.
    - Then it runs `--filter "FullyQualifiedName~PbdCleanRoomRecordTests"`, which must pass.
 9. **Short re-review of the final commit** (Decision 14).
    - It reads only `git show --stat HEAD` and the diffs of those two files.
-   - Its extracted reads, with the forbidden-strings count, are kept for the merge message.
+   - The re-reviewer starts no sub-agents. Its extracted reads (from its transcript, by agent ID), with its `Sub-agents:` line and its count of forbidden locations in listing/search results, are kept for the merge message.
    - A finding means: fix it, redo the final commit, and re-review.
 10. **Build for the game** (Rule 5).
     - `git submodule update --init --recursive`, then `dotnet build Proteus/Proteus.csproj -c Release`.
@@ -481,7 +511,7 @@ None. This is a pure library replacement: the public C# surface above is pinned 
       - includes the step 9 re-review's reads;
       - has no Co-Authored-By.
     - **d.** If the merge conflicts on the path, run `git checkout --theirs XivLiveMesh/PbdFile.cs` (the feature branch's side) without viewing the conflict.
-    - **e.** Straight after the merge, run `--filter "FullyQualifiedName~PbdCleanRoomRecordTests"` in the primary checkout.
+    - **e.** Warn other sessions first, as in step 10. This `dotnet test`, and the one in f, rebuild `Proteus\bin\Release\win-x64` in `E:\repos\Proteus`, which is the dev-load folder, so a running game reloads the plugin. Then, straight after the merge, run `--filter "FullyQualifiedName~PbdCleanRoomRecordTests"` in the primary checkout.
     - **f.** Run the quick suite (`--filter "Speed!=Slow"`) once.
     - **g.** Push `test` per the user's auto-mode rules: check `.github/workflows` and the hosting config first.
     - **h.** Final report:
@@ -494,8 +524,8 @@ None. This is a pure library replacement: the public C# surface above is pinned 
 - NEW    `docs/pbd-format-spec.md`: Agent A's spec of facts only: seven headings, tables and rules, departure markers.
 - NEW    `docs/pbd-clean-room-log.md`:
   - the top note about the final re-review;
-  - a section per participant;
-  - B's and the critic's lists from their transcripts, with their counts of forbidden strings in results;
+  - a section per participant (Planner, Plan-critic 1–3, Planner (rev 4), Planning orchestrator, Agent A, Orchestrator, Agent B, Code-critic);
+  - B's and the critic's lists from their transcripts (found by agent ID), with their `Sub-agents:` lines and their counts of forbidden locations in listing/search results;
   - run counts, skip lists, baseline failures, guard counts and the NewBehaviour list.
 - DELETE `XivLiveMesh/PbdFile.cs` (the orchestrator's commit), then NEW `XivLiveMesh/PbdFile.cs` (B's commit): the clean-room reader, with the same public surface.
 - EDIT   `Proteus.Tests/PbdFileTests.cs`: additions only. Synthetic edge tests, NewBehaviour tests, and the nested `RealFile` class with the §7 vectors.
@@ -542,7 +572,7 @@ The expected results for EDGE-2, 3, 4, 5, 10, 11, 12 and 14 come from the spec. 
 
   A spec error goes back to A first.
 - EDGE-pbd-clean-room-16: golden output drifts at float-noise level. Fixed from the order in §6, never by re-blessing a baseline.
-- EDGE-pbd-clean-room-17: B or the code-critic opens something forbidden, a tool result contains a forbidden string, or it runs a diff or history command on the old path without the exclusion. B's file is discarded and a new B starts, or the review is re-run fresh. The void is logged.
+- EDGE-pbd-clean-room-17: B or the code-critic opens something forbidden, a line of one of its listing or search results is a path inside a forbidden location (Decision 8), it starts a sub-agent, or it runs a diff or history command on the old path without the exclusion. B's file is discarded and a new B starts, or the review is re-run fresh. The void is logged.
 - EDGE-pbd-clean-room-18: a count far larger than the bytes left (for example `0x7FFFFFFF` in an 8-byte file, or a block's bone count running past the end). The reader refuses with an R-1 exception before allocating anything. This is a NewBehaviour test if §3 marks it.
 - EDGE-pbd-clean-room-19: a skip appears on the new-code run that was not on the old-code run, or a never-skip test skips. That is a failure of AC-5 or AC-6, never a pass.
 
@@ -555,11 +585,14 @@ All new tests carry `[Trait("Plan", "<ID>")]`. Departure tests also carry `[Trai
   - §7 states the 1e-5 tolerance and the parent table;
   - every "Required change from the old reader:" line cites `R-1` or a doc §3 item (offset 0/negative/past end, shared block, link or parent out of range).
 - [AC-pbd-clean-room-2] [EDGE-pbd-clean-room-17] `PbdCleanRoomRecordTests.Log_lists_every_participant_and_the_clean_side_kept_clear`:
-  - **Header and sections:** the top note says the final re-review is in the merge commit message. The sections are Planner, Plan-critic 1, Plan-critic 2, Agent A, Orchestrator, Agent B and Code-critic, each with `Opened:`.
+  - **Header and sections:** the top note says the final re-review is in the merge commit message. The sections are Planner, Plan-critic 1, Plan-critic 2, Plan-critic 3, Planner (rev 4), Planning orchestrator, Agent A, Orchestrator, Agent B and Code-critic, each with `Opened:`.
+  - **Planning orchestrator:** the section contains `readme-update`, `Glamourer/Penumbra.GameData/Files/` and "no code content", and says those two touches came before the rule. The path and marker checks below don't apply to it.
   - **Agent A:** labelled a self-report, with an identifier-grep count of 0.
   - **B and code-critic paths:** after normalising (`\` to `/`, lowercase), every `Opened:` entry is either repo-relative (no drive letter, no leading `/`, no `..`) or a tool path. Tool paths are under `c:/users/solon/.claude/plugins/`, or contain `/temp/claude/` and `/scratchpad/` but not `scratchpad-agenta`. The allowed set is built at runtime, not from a session path.
-  - **Forbidden markers:** no entry contains `glamourer/`, `penumbra.api/`, `/bin/`, `/obj/`, `meddle.utils`, `skintattoo`, `draganddroptexturing`, `/memory/` or `scratchpad-agenta`.
-  - **Result counts:** each section reports "forbidden strings in tool results: 0".
+  - **Forbidden markers:** no `Opened:` entry in B's or the critic's section contains `glamourer/`, `penumbra.api/`, `luna/`, `/bin/`, `/obj/`, `meddle.utils`, `skintattoo`, `draganddroptexturing`, `/memory/` or `scratchpad-agenta`, or starts with `bin/` or `obj/`. The other sections, the doc and the plan name these on purpose and are not checked.
+  - **Leak counts and sub-agents:**
+    - B's and the critic's sections each report "forbidden locations in listing/search results: 0" and `Sub-agents: none`;
+    - the log states that `dotnet build`/`dotnet test` output and reads of allowed files are not counted.
   - **Git commands:** B's list is "none". Every critic git command that contains `diff`, `log -p`, `show` or `blame` either has the `:!XivLiveMesh/PbdFile.cs` exclusion, or is `git show HEAD:XivLiveMesh/PbdFile.cs` or `--stat`.
 - [AC-pbd-clean-room-3] `PbdCleanRoomRecordTests.Public_surface_is_exactly_the_documented_one`: by reflection, a public sealed class with exactly the constructor `(ReadOnlySpan<byte>)`, the instance method `Chain(ushort, ushort)`, the static `Resolve` and `Lists` with the documented signatures, and no other public declared members.
 - [AC-pbd-clean-room-4] `PbdCleanRoomRecordTests.Header_names_the_spec_not_a_port`:
@@ -601,9 +634,9 @@ All new tests carry `[Trait("Plan", "<ID>")]`. Departure tests also carry `[Trai
 
 ## Environment & Preconditions
 - **Real-data tests:** they need `PROTEUS_GAME`, `PROTEUS_MODS` and `PROTEUS_MODPACKS` resolving on the owner's machine, which the step 3a pre-flight checks. On CI they skip, so the proof runs must be local.
-- **Submodules:** run `git submodule update --init --recursive` before building. It brings in Penumbra's GPL `PbdFile.cs` under `Glamourer/`, which is excluded from every clean-side search.
+- **Submodules:** run `git submodule update --init --recursive` before building. It brings in Penumbra's GPL `PbdFile.cs` under `Glamourer/`, plus `Penumbra.Api/` and `Luna/`. All three are excluded from every clean-side search (`':!Glamourer' ':!Penumbra.Api' ':!Luna'`).
 - **Broken build:** between step 4 and step 5 the solution doesn't build, and `bin/` and `obj/` are gone. If the first build after B fails for a reason other than B's code (for example a native `proteus_bcn.dll` that isn't restored), stop and diagnose (Rule 2).
-- **Dev-load folder:** never copy there just to test. Only the finished build is copied, after warning other sessions, and the folder is write-only for the clean side.
+- **Dev-load folder:** never copy there just to test. Only the finished build is copied, after warning other sessions, and the folder is write-only for the clean side. The step 11e/f test runs in `E:\repos\Proteus` also write to it, because they build that checkout's `Proteus\bin\Release\win-x64`, so other sessions are warned before them too.
 - **`E:\repos\Proteus`:** commands only, no file opened (Decision 15).
 - **Planner's reads, for the log.** The planner stayed on the clean side throughout. It never opened the old file, its history, the submodules, other checkouts, the memory topic files or A's folder. It opened no URLs and ran no show, log -p, diff or blame.
   - **Files read:**
@@ -660,6 +693,28 @@ All new tests carry `[Trait("Plan", "<ID>")]`. Departure tests also carry `[Trai
     - `LocalData(Fact|Theory)` in 8 local test classes;
     - the `BuildPbd`, `Pbd` and `HighlanderPbd` signatures.
   - No show, log, diff or blame.
+- **Plan-critic 3's reads, for the log:**
+  - **Files read** (each whole):
+    - `docs/pbd-clean-room-plan.md`
+    - `docs/pbd-clean-room.md`
+    - `docs/agent-rules/plan-critic.md`
+    - `.gitmodules`
+  - **Listings:** `ls Luna` (top level).
+  - **Searches:**
+    - `git grep -n "ProjectReference" -- '*.csproj'`, with the exclusions;
+    - `git grep -n -i -c "draganddroptexturing\|glamourer/" -- docs/pbd-clean-room.md docs/pbd-clean-room-plan.md AGENTS.md` (counts only);
+    - `git -C Luna grep -l -i -e pbd -e deformer` (file names only, no hits).
+  - The two touches of `Luna/` came before revision 4 forbade it. They covered only top-level names, and a file-name search with no hits.
+  - No show, log, diff or blame, and no URLs. AGENTS.md, CLAUDE.md and the memory index were loaded automatically.
+- **Planner (rev 4)'s reads, for the log:** it stayed on the clean side.
+  - **Files read:** `docs/pbd-clean-room-plan.md` in the `meddle` worktree, whole, in two reads (lines 1–566 and 566–707).
+  - **Listings, searches, git commands, URLs:** none.
+  - **Loaded automatically, not opened:**
+    - AGENTS.md and CLAUDE.md of the session's start worktree, `E:\orca\workspaces\Proteus\E-orca-workspaces-Proteus-meddle-docs-pbd-clean-room-plan.md`. Nothing else in that worktree was opened.
+    - the user's global CLAUDE.md;
+    - the memory index.
+  - The revision 1–3 searches listed under the Planner's reads did not name `Luna/` among their exclusions.
+- **Planning orchestrator's reads, for the log:** they are listed in the hand-off's "Log inputs from the planning session" (above the `---` rule). The log copies them verbatim (Decision 8).
 
 ## NEEDS_DECISION
 None. Both earlier items are decided (Decisions 11 and 12).
@@ -667,16 +722,17 @@ None. Both earlier items are decided (Decisions 11 and 12).
 ## Risks
 - **Old code leaking to the clean side.** Possible routes:
   - the deletion's diff, or a full `git diff test` given to the critic;
-  - the submodule's GPL file;
+  - the submodules: the GPL file under `Glamourer/`, plus `Penumbra.Api/` and `Luna/`;
   - `bin/` and `obj/`;
   - other checkouts, the memory topic files, or A's folder;
   - the conflict content during the merge;
-  - private identifiers in A's spec.
+  - private identifiers in A's spec;
+  - a sub-agent started by B or the critic, whose transcript the extraction would not read.
 
   Mitigations:
   - Decisions 4–6, 8 and 15;
   - deleting the build folders;
-  - counting forbidden strings in tool results (B4);
+  - checking B's and the critic's listing and search results for paths inside forbidden locations, and forbidding them sub-agents (Decision 8);
   - A's identifier grep.
 
   The orchestrator can't check identifiers itself; the log states that limit.
@@ -689,6 +745,10 @@ None. Both earlier items are decided (Decisions 11 and 12).
 - **Single responsibility.** `PbdFile` mixes parsing with chain and bone maths. The fixed public surface requires that, so it is accepted; B may split private helpers within the file.
 - **Process departure.** B, not the main agent, writes the production code. The doc requires it, and it is noted in the PR description and the *Review & traceability* section.
 - **High scrutiny.** This reader decides where other-race vertices land in files that the Sensitive-Area writers put into users' mods. That is why the wide real-data run with its skip-list comparison is mandatory.
+- **Plugin reloads during the merge tests.**
+  - The step 11e/f `dotnet test` runs in `E:\repos\Proteus` rebuild that checkout's `Proteus\bin\Release\win-x64`, which is the dev-load folder. A running game reloads the plugin under whatever another session is testing.
+  - This goes against AGENTS.md Rule 5's "do not overwrite that DLL just to run tests". It is accepted because the record tests and the pre-push suite must run on the merged `test`.
+  - Other sessions are warned first (Decision 14).
 - **Left to the owner.** Other-race bending in game is UNVERIFIED, and the lawyer's review of the record is the owner's next step.
 
 Relevant paths:
