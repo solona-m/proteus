@@ -294,6 +294,112 @@ internal static class SupportedBodies
         return string.Format(template.Pattern, word);
     }
 
+    // ── a skinless piece placed on the "Made on" body by its option names (KAN-6) ──
+
+    private static readonly (string From, string To)[] SizeFolds =
+    [
+        ("extra-large", "xlarge"), ("extra large", "xlarge"), ("x-large", "xlarge"), ("x large", "xlarge"),
+        ("extra-small", "xsmall"), ("extra small", "xsmall"), ("x-small", "xsmall"), ("x small", "xsmall"),
+    ];
+
+    private static readonly System.Text.RegularExpressions.Regex Multiplied =
+        new(@"^x{2,}(l|s|large|small)$", System.Text.RegularExpressions.RegexOptions.Compiled);
+
+    /// <summary>
+    /// The one size an option name gives — "XS", "S", "M", "L" or "XL" — or null when it gives none or more than one.
+    /// Strict: a letter after an apostrophe is no size ("Women's" is not S), and a name with a digit or a repeated
+    /// multiplier ("2XL", "XXL") gives none, there being no such size in the table to put it on.
+    /// </summary>
+    internal static string? SizeToken(string? name)
+    {
+        if (string.IsNullOrWhiteSpace(name) || name.Any(char.IsDigit)) return null;
+        string text = name.ToLowerInvariant();
+        foreach (var (from, to) in SizeFolds) text = text.Replace(from, to, StringComparison.Ordinal);
+        var tokens = new HashSet<string>(StringComparer.Ordinal);
+        int i = 0;
+        while (i < text.Length)
+        {
+            if (!char.IsLetter(text[i])) { i++; continue; }
+            int start = i;
+            while (i < text.Length && char.IsLetter(text[i])) i++;
+            string run = text[start..i];
+            if (run.Length == 1 && start > 0 && text[start - 1] is '\'' or '’') continue;
+            if (Multiplied.IsMatch(run)) return null;
+            string? token = run switch
+            {
+                "xs" or "xsmall" => "XS",
+                "s" or "small" => "S",
+                "m" or "med" or "medium" => "M",
+                "l" or "large" => "L",
+                "xl" or "xlarge" => "XL",
+                _ => null,
+            };
+            if (token != null) tokens.Add(token);
+        }
+        return tokens.Count == 1 ? tokens.First() : null;
+    }
+
+    /// <summary>
+    /// The label of another supported body than <paramref name="madeOnKey"/> an option name carries as a whole word or
+    /// phrase — its label or a name hint ("Rue Small", "TBSE Large") — or null. A body whose hints the "Made on" body
+    /// shares (YAB, YAB Buff) is not another body.
+    /// </summary>
+    internal static string? NamesOtherBody(string? name, string madeOnKey)
+    {
+        if (string.IsNullOrWhiteSpace(name)) return null;
+        var own = NameHints.GetValueOrDefault(madeOnKey, []);
+        foreach (var (key, label, _) in Choices)
+        {
+            if (key == madeOnKey) continue;
+            var hints = NameHints.GetValueOrDefault(key, []);
+            if (hints.Intersect(own, StringComparer.OrdinalIgnoreCase).Any()) continue;
+            if (hints.Prepend(label).Any(word => HasWord(name, word))) return label;
+        }
+        return null;
+    }
+
+    /// <summary>Whether <paramref name="word"/> stands in <paramref name="text"/> with no letter or digit either side.</summary>
+    private static bool HasWord(string text, string word)
+    {
+        for (int at = text.IndexOf(word, StringComparison.OrdinalIgnoreCase); at >= 0;
+             at = text.IndexOf(word, at + 1, StringComparison.OrdinalIgnoreCase))
+        {
+            int end = at + word.Length;
+            if ((at == 0 || !char.IsLetterOrDigit(text[at - 1])) && (end == text.Length || !char.IsLetterOrDigit(text[end])))
+                return true;
+        }
+        return false;
+    }
+
+    /// <summary>
+    /// The table of the body chosen under "Made on" for a slot and race: of the tables whose files the mod holds
+    /// (<see cref="Find"/> on it alone), the one its name says (Rue+ and Yet Another Body+ file their sizes alike), then
+    /// the one it holds most of, then one it holds whole (a renamed Rosaline is not YAS Tre, which shares a folder
+    /// number), then one rigged like the garment, then the table's order. Null when it holds none.
+    /// </summary>
+    internal static Body? MadeOnTable(BodyModIndex.Entry madeOn, string slot, string race, bool yas)
+    {
+        var held = madeOn.Catalog.Options.Select(o => RefitCore.Normal(o.Rel)).ToHashSet(StringComparer.Ordinal);
+        bool Says(string word) => madeOn.Name.Contains(word, StringComparison.OrdinalIgnoreCase)
+                                  || madeOn.Dir.Contains(word, StringComparison.OrdinalIgnoreCase);
+        return All.Select((b, order) => (Body: b, Order: order))
+                  .Where(t => t.Body.Slot == slot && t.Body.Race == race && Find(t.Body, [madeOn]) != null)
+                  .Select(t =>
+                  {
+                      var files = t.Body.Sizes.SelectMany(s => new[] { s.Rel, s.LegsRel }).OfType<string>()
+                                   .Select(RefitCore.Normal).Distinct(StringComparer.Ordinal).ToList();
+                      int count = files.Count(held.Contains);
+                      return (t.Body, t.Order, Held: count, Whole: count == files.Count);
+                  })
+                  .OrderByDescending(t => NameHints.GetValueOrDefault(t.Body.Key, []).Any(Says))
+                  .ThenByDescending(t => t.Held)
+                  .ThenByDescending(t => t.Whole)
+                  .ThenByDescending(t => t.Body.Yas == yas)
+                  .ThenBy(t => t.Order)
+                  .Select(t => t.Body)
+                  .FirstOrDefault();
+    }
+
     /// <summary>Whether a model's bones are Yet Another Skeleton's — names the game's own skeleton has none of.</summary>
     internal static bool IsYas(IEnumerable<string> bones)
         => bones.Any(b => b.StartsWith("iv_", StringComparison.Ordinal) || b.StartsWith("ya_", StringComparison.Ordinal));

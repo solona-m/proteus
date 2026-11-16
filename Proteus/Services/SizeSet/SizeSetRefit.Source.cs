@@ -291,6 +291,90 @@ internal static partial class SizeSetRefit
         Unclear,
         /// <summary>Its skin lies further than <see cref="MadeOnMaxOff"/> off the size it was read as.</summary>
         TooFar,
+        /// <summary>Not enough skin to tell by, and placed on the body's size its option name gives (KAN-6).</summary>
+        Trusted,
+        /// <summary>Not enough skin to tell by, and its option name gives none of the body's sizes.</summary>
+        NoMatch,
+        /// <summary>Not enough skin to tell by, and Proteus knows no named sizes of the body for the piece.</summary>
+        NoTable,
+    }
+
+    /// <summary>
+    /// A size placed on the "Made on" body by its option name, its garment having too little skin to read
+    /// (<see cref="TrustOn"/>).
+    /// </summary>
+    /// <param name="Key">The table's body (<see cref="SupportedBodies.Body.Key"/>).</param>
+    /// <param name="Size">The table's size name ("S", "WC").</param>
+    /// <param name="On">The body's option it was placed on: the size's own model, or, for legs following a chest, the
+    /// legs that chest size is worn with.</param>
+    /// <param name="Legs">For a chest, the legs its hem sits on; null to leave the hips as they are.</param>
+    internal sealed record TrustedSize(string Key, string Size, BodyOption On, BodyOption? Legs);
+
+    /// <summary>
+    /// Whether a size whose reading on the "Made on" body came to <paramref name="fit"/> is placed there by its name: only
+    /// when the garment itself has nothing to say — no skin (<see cref="Confidence.NoBodyMesh"/>), or too little even for
+    /// the cloth (<see cref="Confidence.TooLittle"/>). Skin that disagrees with the body is never overruled, nor a body
+    /// whose files could not be read.
+    /// </summary>
+    internal static bool Trusts(Confidence confidence, MadeOnFit fit)
+        => fit == MadeOnFit.NoEvidence && confidence is Confidence.NoBodyMesh or Confidence.TooLittle;
+
+    /// <summary>
+    /// The "Made on" body's size an option name gives (KAN-6): the table size named so exactly ("WC", "Rue WC"), else the
+    /// one size word it carries (<see cref="SupportedBodies.SizeToken"/>); never one naming another body. Legs following a
+    /// chest are named by the chest group, so <paramref name="table"/> is then the chest table, and they go onto the legs
+    /// that chest size is worn with. Never guessed by the author's order.
+    /// </summary>
+    /// <param name="slot">The piece's slot.</param>
+    /// <param name="madeOn">The "Made on" body's catalog.</param>
+    internal static (TrustedSize? Trusted, MadeOnFit Fit, string Why) TrustOn(string? option, SupportedBodies.Body? table,
+                                                                                BodySizeCatalog madeOn, string slot,
+                                                                                string race, bool followsChest)
+    {
+        if (table == null || table.Sizes.All(s => s.Name.Length == 0))
+            return (null, MadeOnFit.NoTable, "no named sizes of the body for this piece");
+        if (option == null) return (null, MadeOnFit.NoMatch, "no option name");
+        if (SupportedBodies.NamesOtherBody(option, table.Key) is { } other)
+            return (null, MadeOnFit.NoMatch, $"names another body ({other})");
+        string name = option.Trim();
+        var size = table.Sizes.FirstOrDefault(s => s.Name.Length > 0
+                                                   && (string.Equals(s.Name, name, StringComparison.OrdinalIgnoreCase)
+                                                       || string.Equals(SupportedBodies.OptionName(table, s), name,
+                                                                        StringComparison.OrdinalIgnoreCase)));
+        if (size == null && SupportedBodies.SizeToken(name) is { } token)
+        {
+            var byWord = table.Sizes.Where(s => SupportedBodies.SizeToken(s.Name) == token).ToList();
+            if (byWord.Count == 1) size = byWord[0];
+        }
+        if (size == null) return (null, MadeOnFit.NoMatch, $"its name gives no size of {table.Label}");
+
+        string label = SupportedBodies.OptionName(table, size);
+        if (followsChest)
+        {
+            if (size.LegsRel == null) return (null, MadeOnFit.NoMatch, $"{label} has no legs of its own");
+            return OptionByFile(madeOn.For("_dwn", race), size.LegsRel) is { } legsOn
+                ? (new TrustedSize(table.Key, size.Name, legsOn, null), MadeOnFit.Trusted, $"the legs of {label}")
+                : (null, MadeOnFit.NoMatch, $"the body lacks {size.LegsRel}");
+        }
+        if (OptionByFile(madeOn.For(slot, race), size.Rel) is not { } on)
+            return (null, MadeOnFit.NoMatch, $"the body lacks {size.Rel}");
+        BodyOption? legs = size.LegsRel != null ? OptionByFile(madeOn.For("_dwn", race), size.LegsRel) : null;
+        string why = slot == "_top" && legs == null ? $"{label}, hips left as they are" : label;
+        return (new TrustedSize(table.Key, size.Name, on, legs), MadeOnFit.Trusted, why);
+    }
+
+    /// <summary>
+    /// The author's option placed by name (<see cref="TrustOn"/>) on the very size a target is — the same table body and
+    /// the same model — or null: that size is the author's own, never remade. By model, not by body folder, so a second
+    /// installed copy of the body is still that size, and a YAS size is never a plain one.
+    /// </summary>
+    internal static string? TrustedOwn(IEnumerable<(string? Option, TrustedSize? Trusted)> choices, string key, string rel)
+    {
+        string want = RefitCore.Normal(rel);
+        foreach (var (option, trusted) in choices)
+            if (option != null && trusted != null && trusted.Key == key && RefitCore.Normal(trusted.On.Rel) == want)
+                return option;
+        return null;
     }
 
     /// <summary>
@@ -316,7 +400,9 @@ internal static partial class SizeSetRefit
     /// </summary>
     /// <param name="Pick">The size it was read as; null when the reading was not taken.</param>
     /// <param name="Fit">The verdict; null when the "Made on" body is not installed.</param>
-    internal sealed record SourceReading(AutoRefitDecisions.Pick? Pick, bool ReadByMadeOn, MadeOnFit? Fit);
+    /// <param name="Trusted">Placed by its name, its garment having too little skin to read (KAN-6); else null.</param>
+    internal sealed record SourceReading(AutoRefitDecisions.Pick? Pick, bool ReadByMadeOn, MadeOnFit? Fit,
+                                         TrustedSize? Trusted = null);
 
     /// <summary>
     /// Whether a chest or legs size read automatically is said under "Check in game" once a size is cut from it: with
@@ -349,7 +435,12 @@ internal static partial class SizeSetRefit
         if (missing) return (string.Format(s.MadeOnMissingFmt, piece, name), Codes.NotMadeOn);
         // None read on it at all: its files could not be read, which is no reason to doubt the body chosen.
         if (fits.Count == 0) return (string.Format(s.UnreadableFmt, piece), Codes.Unreadable);
-        if (fits.Count > 0 && fits.All(f => f == MadeOnFit.Unclear))
+        // Too little skin to read anywhere, and nothing to place it by: the body has no named sizes, or the names none.
+        if (fits.All(f => f == MadeOnFit.NoTable))
+            return (string.Format(s.MadeOnNoSizeTableFmt, piece, name), Codes.NotMadeOn);
+        if (fits.All(f => f is MadeOnFit.NoMatch or MadeOnFit.NoTable))
+            return (string.Format(s.MadeOnNoSizeNameFmt, piece, name), Codes.NotMadeOn);
+        if (fits.All(f => f == MadeOnFit.Unclear))
             return (string.Format(s.MadeOnUnclearFmt, piece, name), Codes.NotMadeOn);
         return (string.Format(s.NotMadeOnFmt, piece, name), Codes.NotMadeOn);
     }
@@ -366,14 +457,34 @@ internal static partial class SizeSetRefit
     /// One of the author's sizes ranked among the "Made on" body's sizes of its slot and race, and judged
     /// (<see cref="JudgeMadeOn"/>). Every reading is logged, with the runner-up of a taken Ambiguous one.
     /// </summary>
+    /// <param name="option">The author's option, which names the size a garment too bare to read is placed on.</param>
+    /// <param name="yas">The garment is rigged for YAS: the table it is placed on by name is the body's YAS one.</param>
+    /// <param name="followsChest">Legs following a chest: named by the chest group (see <see cref="TrustOn"/>).</param>
     private static SourceReading ReadOn(ModelParts garment, IReadOnlySet<string> bones, string slot, string race,
-                                        BodyModIndex.Entry body, Vector3[] skinProbes, string name, Action<string> note)
+                                        BodyModIndex.Entry body, Vector3[] skinProbes, string name, Action<string> note,
+                                        string? option, bool yas, bool followsChest)
     {
         var options = body.Catalog.For(slot, race);
         if (options.Count == 0) return new SourceReading(null, true, MadeOnFit.NoSizes);
         var ranking = BodySizeMatch.Rank(garment, options, body.Catalog.PathOf, bones);
         float? own = ranking.Best is { } top ? OwnSkinFit(skinProbes, body.Catalog.PathOf(top.Option)) : null;
         var fit = JudgeMadeOn(options.Count, ranking, own);
+        // Nothing on the garment to read it by: the author's name for the size says which of the body's it is (KAN-6).
+        if (Trusts(ranking.Confidence, fit))
+        {
+            var table = SupportedBodies.MadeOnTable(body, followsChest ? "_top" : slot, race, yas);
+            var (trusted, placed, why) = TrustOn(option, table, body.Catalog, slot, race, followsChest);
+            if (trusted is { } t)
+            {
+                note($"{name} hasn't enough skin to tell its size by ({ranking.Confidence}): taken as {body.Name} "
+                     + $"{t.On.Label} by its name ({why})");
+                return new SourceReading(new AutoRefitDecisions.Pick(body.Dir, t.On, Confidence.NoBodyMesh, false), true,
+                                         MadeOnFit.Trusted, t);
+            }
+            note($"{name} hasn't enough skin to tell its size by ({ranking.Confidence}), and is not placed on {body.Name} "
+                 + $"by its name: {why}");
+            return new SourceReading(null, true, placed);
+        }
         string said = ranking.Best is { } b
             ? $"{b.Option.Label} ({ranking.Confidence}{(ranking.FromCloth ? ", from the cloth" : "")}, rms {b.Rms * 1000f:F2} mm"
               + (own is { } o ? $", own body {o * 1000f:F1} mm" : "") + ")"
@@ -459,6 +570,9 @@ internal static partial class SizeSetRefit
         /// (<see cref="WarnsOtherBody"/>): a size cut from it is said under "Check in game".</summary>
         public bool OtherBody { get; set; }
 
+        /// <summary>Placed on the "Made on" body by its option name, too bare of skin to read (KAN-6); else null.</summary>
+        public TrustedSize? Trusted { get; set; }
+
         /// <summary>Its distances, with its kind and threshold.</summary>
         public SourceDistance Distance(float bodyP90, float bodyMean, float skinP90, float skinMean)
             => new(bodyP90, bodyMean, skinP90, skinMean, Order, OwnFit, ReadByMadeOn, MisfitMm);
@@ -500,6 +614,7 @@ internal static partial class SizeSetRefit
     private sealed class Sources
     {
         private readonly string root, slot, race, preferred;
+        private readonly bool followsChest;
         private readonly Request request;
         private readonly IReadOnlyList<(string Dir, BodySizeCatalog Catalog)> mods;
         private readonly Dictionary<string, AutoRefitDecisions.Pick?> readings;
@@ -532,6 +647,7 @@ internal static partial class SizeSetRefit
             root = request.ModRoot;
             slot = piece.Slot;
             race = piece.Race;
+            followsChest = piece.FollowsChest;
             this.preferred = preferred;
             this.mods = mods;
             this.readings = readings;
@@ -622,6 +738,9 @@ internal static partial class SizeSetRefit
                             c.ReadByMadeOn = read.ReadByMadeOn;
                             c.MisfitMm = read.ReadByMadeOn ? MadeOnMisfitMm(slot) : MisfitMm;
                             c.OtherBody = WarnsOtherBody(request.MadeOn, slot, read);
+                            // Placed by name: its hem's legs are the table's, the garment having nothing to read them by.
+                            if (read.Trusted is { } trusted)
+                                (c.Trusted, c.SourceLegs, c.LegsRead) = (trusted, trusted.Legs, true);
                             if (c.OtherBody)
                                 note($"{c.Name}: read as made on {c.Entry.Name} ({took.Confidence}), not on the body chosen "
                                      + "under Made on; sized from it as read");
@@ -653,7 +772,8 @@ internal static partial class SizeSetRefit
                 note($"{c.Name}: \"{request.MadeOn}\", chosen under Made on, is not installed");
                 return madeOnReadings[key] = new SourceReading(null, true, null);
             }
-            return madeOnReadings[key] = ReadOn(c.Garment, c.Bones, slot, race, madeOn, c.SkinProbes, c.Name, note);
+            return madeOnReadings[key] = ReadOn(c.Garment, c.Bones, slot, race, madeOn, c.SkinProbes, c.Name, note,
+                                                c.Option, c.Yas, followsChest);
         }
     }
 

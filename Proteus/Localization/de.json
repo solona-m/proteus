@@ -5451,6 +5451,18 @@
     "message": "{0}: „{1}“ wurde als für {2} gemacht erkannt, nicht für das unter „Gemacht für“ gewählte {3}, und seine Größen wurden als für {2} gemacht erstellt.",
     "description": ""
   },
+  "SizeSet.MadeOnNoSizeName.Fmt": {
+    "message": "{0}: Es hat nicht genug Haut, um seine Größen daran zu erkennen, und keiner seiner Optionsnamen nennt eine Größe von {1} (S, M, L…), daher wurden keine Größen davon erstellt.",
+    "description": ""
+  },
+  "SizeSet.MadeOnNoSizeTable.Fmt": {
+    "message": "{0}: Es hat nicht genug Haut, um seine Größen daran zu erkennen, und Proteus kennt keine benannten Größen von {1} dafür, daher wurden keine Größen davon erstellt.",
+    "description": ""
+  },
+  "SizeSet.MadeOnTrusted.Fmt": {
+    "message": "{0}: Es hat nicht genug Haut, um seine Größen daran zu erkennen, daher wurde jede seiner Größen als die Größe von {1} genommen, die ihr Name nennt (Small als {1} S usw.).",
+    "description": ""
+  },
   "SizeSet.LeftOut": {
     "message": "Ausgelassen:",
     "description": ""

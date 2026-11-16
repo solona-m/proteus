@@ -5451,6 +5451,18 @@
     "message": "{0}：「{1}」は「元のボディ」で選んだ{3}ではなく{2}用と判別されたため、そのサイズは{2}用として作りました。",
     "description": ""
   },
+  "SizeSet.MadeOnNoSizeName.Fmt": {
+    "message": "{0}：サイズを見分けるだけの肌がなく、オプション名のどれも{1}のサイズ（S、M、L…）を示していないため、サイズは作られませんでした。",
+    "description": ""
+  },
+  "SizeSet.MadeOnNoSizeTable.Fmt": {
+    "message": "{0}：サイズを見分けるだけの肌がなく、Proteusはこれに合う{1}の名前付きサイズを知らないため、サイズは作られませんでした。",
+    "description": ""
+  },
+  "SizeSet.MadeOnTrusted.Fmt": {
+    "message": "{0}：サイズを見分けるだけの肌がないため、各サイズはその名前が示す{1}のサイズとして扱われました（Smallは{1} S、など）。",
+    "description": ""
+  },
   "SizeSet.LeftOut": {
     "message": "作成しなかったもの：",
     "description": ""
