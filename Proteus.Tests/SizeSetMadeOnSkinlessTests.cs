@@ -56,6 +56,8 @@ public class SizeSetMadeOnSkinlessTests
             ["XLarge"] = "XL", ["X-Large"] = "XL", ["Extra Large"] = "XL", ["XL"] = "XL", ["Med"] = "M", ["Bibo+ Small"] = "S",
             ["Small Tummy"] = "S", ["s"] = "S", ["Women's Small"] = "S", ["Small"] = "S", ["Medium"] = "M", ["Large"] = "L",
             ["S"] = "S", ["XS"] = "XS", ["X-Small"] = "XS", ["extra small"] = "XS",
+            // A word merely ending in "x" or "extra" is no multiplier: its size word stands.
+            ["Max Large"] = "L", ["Relax Small"] = "S", ["Box-Large"] = "L",
         };
         foreach (var (name, token) in expect) Assert.True(SupportedBodies.SizeToken(name) == token, $"{name} → {token}");
         foreach (string? name in new[]
@@ -304,6 +306,12 @@ public class SizeSetMadeOnSkinlessTests
         var small = SizeSetRefit.TrustOn("Small", biboLegs, bibo, "_dwn", "0201", false).Trusted!;
         var tummy = SizeSetRefit.TrustOn("Small Tummy", biboLegs, bibo, "_dwn", "0201", false).Trusted!;
         var medium = SizeSetRefit.TrustOn("Medium", biboLegs, bibo, "_dwn", "0201", false).Trusted!;
+        // A placing by name is re-placed for each piece that reads the file (its option, whether it follows a chest);
+        // a reading of the skin is kept as read.
+        Assert.True(SizeSetRefit.ByName(new(null, true, Fit.NoMatch)));
+        Assert.True(SizeSetRefit.ByName(new(null, true, Fit.NoTable)));
+        Assert.False(SizeSetRefit.ByName(new(null, true, Fit.TooFar)));
+        Assert.False(SizeSetRefit.ByName(new(null, true, null)));
         // Read again — the men's pass does, with caches of its own — it comes to the very same size.
         Assert.Equal(small, SizeSetRefit.TrustOn("Small", biboLegs, bibo, "_dwn", "0201", false).Trusted);
         Assert.Equal(small.On, tummy.On);

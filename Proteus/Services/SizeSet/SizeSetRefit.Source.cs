@@ -471,20 +471,7 @@ internal static partial class SizeSetRefit
         var fit = JudgeMadeOn(options.Count, ranking, own);
         // Nothing on the garment to read it by: the author's name for the size says which of the body's it is (KAN-6).
         if (Trusts(ranking.Confidence, fit))
-        {
-            var table = SupportedBodies.MadeOnTable(body, followsChest ? "_top" : slot, race, yas);
-            var (trusted, placed, why) = TrustOn(option, table, body.Catalog, slot, race, followsChest);
-            if (trusted is { } t)
-            {
-                note($"{name} hasn't enough skin to tell its size by ({ranking.Confidence}): taken as {body.Name} "
-                     + $"{t.On.Label} by its name ({why})");
-                return new SourceReading(new AutoRefitDecisions.Pick(body.Dir, t.On, Confidence.NoBodyMesh, false), true,
-                                         MadeOnFit.Trusted, t);
-            }
-            note($"{name} hasn't enough skin to tell its size by ({ranking.Confidence}), and is not placed on {body.Name} "
-                 + $"by its name: {why}");
-            return new SourceReading(null, true, placed);
-        }
+            return PlaceByName(body, slot, race, name, note, option, yas, followsChest, ranking.Confidence.ToString());
         string said = ranking.Best is { } b
             ? $"{b.Option.Label} ({ranking.Confidence}{(ranking.FromCloth ? ", from the cloth" : "")}, rms {b.Rms * 1000f:F2} mm"
               + (own is { } o ? $", own body {o * 1000f:F1} mm" : "") + ")"
@@ -497,6 +484,30 @@ internal static partial class SizeSetRefit
                                                             ranking.FromCloth), true, fit)
             : new SourceReading(null, true, fit);
     }
+
+    /// <summary>
+    /// A size too bare of skin to read, placed on the "Made on" body by its option name (<see cref="TrustOn"/>), and the
+    /// placing logged.
+    /// </summary>
+    /// <param name="read">What the reading on the body came to, for the log.</param>
+    private static SourceReading PlaceByName(BodyModIndex.Entry body, string slot, string race, string name,
+                                             Action<string> note, string? option, bool yas, bool followsChest, string read)
+    {
+        var table = SupportedBodies.MadeOnTable(body, followsChest ? "_top" : slot, race, yas);
+        var (trusted, placed, why) = TrustOn(option, table, body.Catalog, slot, race, followsChest);
+        if (trusted is { } t)
+        {
+            note($"{name} hasn't enough skin to tell its size by ({read}): taken as {body.Name} {t.On.Label} by its name ({why})");
+            return new SourceReading(new AutoRefitDecisions.Pick(body.Dir, t.On, Confidence.NoBodyMesh, false), true,
+                                     MadeOnFit.Trusted, t);
+        }
+        note($"{name} hasn't enough skin to tell its size by ({read}), and is not placed on {body.Name} by its name: {why}");
+        return new SourceReading(null, true, placed);
+    }
+
+    /// <summary>Whether a reading on the "Made on" body was a placing by name, which hangs on the option and on whether
+    /// the piece follows a chest — not on the file alone, as the run's readings are kept.</summary>
+    internal static bool ByName(SourceReading reading) => reading.Fit is MadeOnFit.Trusted or MadeOnFit.NoMatch or MadeOnFit.NoTable;
 
     /// <summary>The key followers find their lead's choice by: an option is one size per race of its group.</summary>
     internal static string LeadKey(string group, string race, string option) => group + "|" + race + "|" + option;
@@ -764,6 +775,10 @@ internal static partial class SizeSetRefit
             {
                 note($"{file} was read on the Made on body before in this run");
                 if (known.Fit == null) MadeOnMissing = true;
+                // Too bare to read, whoever reads it; but where it goes by name depends on this piece's option and on
+                // whether it follows a chest (one file can be both a follower and a piece of its own: Equinox's legs).
+                if (ByName(known) && madeOn != null)
+                    return PlaceByName(madeOn, slot, race, c.Name, note, c.Option, c.Yas, followsChest, "read before");
                 return known;
             }
             if (madeOn == null)

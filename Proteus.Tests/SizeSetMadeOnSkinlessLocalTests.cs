@@ -270,6 +270,87 @@ public class SizeSetMadeOnSkinlessLocalTests(ITestOutputHelper output, DanceRun 
         finally { Data.Delete(copy); }
     }
 
+    /// <summary>
+    /// The paths Tutting itself never takes: a skinless chest, and skinless legs following it. Tutting's top made
+    /// skinless (its body material renamed, same length, so the file stays valid) and its pants moved into the top's
+    /// group, so they follow it; Made on Bibo+, sized for Rue and Tre.
+    /// </summary>
+    [LocalDataFact(Data.DancePack, Data.Bibo, Data.Rue, Data.TreYas, LocalData.GameData, LocalData.UvMaps)]
+    [Trait("Plan", "AC-kan-6-skinless-made-on-8")]
+    [Trait("Plan", "EDGE-kan-6-skinless-made-on-15")]
+    [Trait("Plan", "EDGE-kan-6-skinless-made-on-21")]
+    [Trait("Speed", "Slow")]
+    public void A_skinless_chest_and_the_legs_following_it_are_placed_by_name() // [AC-kan-6-skinless-made-on-8] [EDGE-kan-6-skinless-made-on-15] [EDGE-kan-6-skinless-made-on-21]
+    {
+        string copy = Data.UnpackedPack(Data.DancePack);
+        try
+        {
+            byte[] skin = System.Text.Encoding.ASCII.GetBytes("mt_c0201b0001_bibo.mtrl");
+            byte[] cloth = System.Text.Encoding.ASCII.GetBytes("mt_c0201x0001_bibo.mtrl");
+            foreach (string top in Directory.GetFiles(copy, "c0201e6118_top.mdl", SearchOption.AllDirectories))
+            {
+                byte[] bytes = File.ReadAllBytes(top);
+                int replaced = 0;
+                for (int i = bytes.AsSpan().IndexOf(skin); i >= 0; i = bytes.AsSpan().IndexOf(skin))
+                {
+                    cloth.CopyTo(bytes, i);
+                    replaced++;
+                }
+                Assert.True(replaced > 0, $"{top}: no body material to rename");
+                File.WriteAllBytes(top, bytes);
+                Assert.DoesNotContain(ModelPartReader.Read(bytes)!.Parts, p => SecondSkinWriter.IsBodySkinMaterial(p.Material));
+            }
+            // The pants into the top's group: each top size wears the pant size of its name (XLarge the Large).
+            string topGroup = Directory.GetFiles(copy, "group_*.json")
+                                       .Single(f => (string?)JsonNode.Parse(File.ReadAllText(f))!["Name"] == "Top Size");
+            string pantGroup = Directory.GetFiles(copy, "group_*.json")
+                                        .Single(f => (string?)JsonNode.Parse(File.ReadAllText(f))!["Name"] == "Pant Size");
+            var json = JsonNode.Parse(File.ReadAllText(topGroup))!;
+            foreach (var option in json["Options"]!.AsArray())
+            {
+                string size = ((string)option!["Name"]!).ToLowerInvariant() == "xlarge" ? "large" : ((string)option["Name"]!).ToLowerInvariant();
+                option["Files"]![Pants] = $"pant size\\{size}\\chara\\equipment\\e6118\\model\\c0201e6118_dwn.mdl";
+            }
+            File.WriteAllText(topGroup, json.ToJsonString());
+            File.Delete(pantGroup);
+            PenumbraModMeta.MigrateWorkCopy(copy, LocalData.Path(LocalData.Mods));
+
+            var readGame = Data.Game();
+            var pieces = SizeSetRefit.PiecesOf(copy, readGame);
+            var chest = pieces.Single(p => p.GamePath.Equals(Top, StringComparison.OrdinalIgnoreCase));
+            var legs = pieces.Single(p => p.GamePath.Equals(Pants, StringComparison.OrdinalIgnoreCase));
+            Assert.True(legs.FollowsChest);
+            var said = new StringWriter();
+            var (_, log) = Data.Batch(copy, ["bibo", "rue", "tre"], men: false, [Data.Bibo, Data.Rue, Data.TreYas],
+                                      readGame: readGame, madeOn: Data.Folder(Data.Bibo),
+                                      log: RefitCli::Proteus.Refit.ConsoleLog.To(said));
+            Print(log);
+            string text = said.ToString();
+            string bibo = SizeSetBatch.ScanBodies(LocalData.Path(LocalData.Mods), [Data.Folder(Data.Bibo)])[0].Name;
+
+            // The chest, placed by name: Bibo's own sizes are the author's, the others are cut from them, and each hem
+            // follows the legs its Bibo size is worn with.
+            Assert.Contains(string.Format(Strings.SizeSet.MadeOnTrustedFmt, chest.Label, bibo), log.Warnings);
+            foreach (string option in new[] { "Bibo S", "Bibo M", "Bibo L" })
+                Assert.Contains(log.Sizes, s => Is(s, Top) && s.Option == option && s.ReasonCode == SizeSetRefit.Codes.AuthorsOwn);
+            var madeChest = log.Sizes.Where(s => Is(s, Top) && s.Status == SizeStatus.Made).ToList();
+            Assert.Contains(madeChest, s => s.Body == "rue");
+            Assert.Contains(madeChest, s => s.Body == "tre");
+            foreach (var s in madeChest)
+                Assert.True(text.Split('\n').Any(l => l.Contains($"size set: {chest.Label} {s.Option}: hips:", StringComparison.Ordinal)),
+                            $"{s.Option}: the hem's hips were not moved");
+
+            // The legs follow it, placed through the chest table: "Medium" is the legs Bibo M is worn with.
+            Assert.Contains("(the legs of Bibo M)", text);
+            Assert.Contains(string.Format(Strings.SizeSet.MadeOnTrustedFmt, legs.Label, bibo), log.Warnings);
+            Assert.Contains(log.Sizes, s => Is(s, Pants) && s.Body == "rue" && s.Status == SizeStatus.Made);
+            Assert.Contains(log.Sizes, s => Is(s, Pants) && s.Body == "tre" && s.Status == SizeStatus.Made);
+            // On Bibo itself the chest made nothing, so its legs have nothing to join: never remade from the author's own.
+            Assert.DoesNotContain(log.Sizes, s => Is(s, Pants) && s.Body == "bibo" && s.Status == SizeStatus.Made);
+        }
+        finally { Data.Delete(copy); }
+    }
+
     [LocalDataFact(Data.DancePack, Data.Bibo, Data.Rue, LocalData.GameData, LocalData.UvMaps)]
     [Trait("Plan", "AC-kan-6-skinless-made-on-7")]
     [Trait("Speed", "Slow")]

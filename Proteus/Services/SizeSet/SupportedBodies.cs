@@ -296,11 +296,10 @@ internal static class SupportedBodies
 
     // ── a skinless piece placed on the "Made on" body by its option names (KAN-6) ──
 
-    private static readonly (string From, string To)[] SizeFolds =
-    [
-        ("extra-large", "xlarge"), ("extra large", "xlarge"), ("x-large", "xlarge"), ("x large", "xlarge"),
-        ("extra-small", "xsmall"), ("extra small", "xsmall"), ("x-small", "xsmall"), ("x small", "xsmall"),
-    ];
+    // "X-Large", "Extra Large" and the like made one word — only where the "x" or "extra" starts a word, so "Max Large"
+    // stays "max" and "large".
+    private static readonly System.Text.RegularExpressions.Regex SizeFold =
+        new(@"(?<![\p{L}\p{N}])(?:extra|x)[- ](large|small)", System.Text.RegularExpressions.RegexOptions.Compiled);
 
     private static readonly System.Text.RegularExpressions.Regex Multiplied =
         new(@"^x{2,}(l|s|large|small)$", System.Text.RegularExpressions.RegexOptions.Compiled);
@@ -313,8 +312,7 @@ internal static class SupportedBodies
     internal static string? SizeToken(string? name)
     {
         if (string.IsNullOrWhiteSpace(name) || name.Any(char.IsDigit)) return null;
-        string text = name.ToLowerInvariant();
-        foreach (var (from, to) in SizeFolds) text = text.Replace(from, to, StringComparison.Ordinal);
+        string text = SizeFold.Replace(name.ToLowerInvariant(), "x$1");
         var tokens = new HashSet<string>(StringComparer.Ordinal);
         int i = 0;
         while (i < text.Length)
