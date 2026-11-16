@@ -121,6 +121,7 @@ public sealed class ReadmeTermsTests
     [Fact]
     [Trait("Plan", "AC-readme-tos-10")]
     [Trait("Plan", "EDGE-readme-tos-21")]
+    [Trait("Plan", "EDGE-readme-tos-22")]
     public void Licence_stays_AGPL_and_drafts_are_drafts()
     {
         Assert.Contains("GNU AFFERO GENERAL PUBLIC LICENSE", Read("LICENSE"));

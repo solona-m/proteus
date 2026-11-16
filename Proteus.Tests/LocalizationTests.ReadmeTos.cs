@@ -148,6 +148,7 @@ public sealed partial class LocalizationTests
     [Trait("Plan", "AC-readme-tos-7")]
     [Trait("Plan", "EDGE-readme-tos-19")]
     [Trait("Plan", "EDGE-readme-tos-20")]
+    [Trait("Plan", "EDGE-readme-tos-23")]
     public void Readme_new_sections_keep_every_bullet(string lang)
     {
         static int Bullets(string s) => s.Split('\n').Count(l => l.StartsWith("- ", StringComparison.Ordinal));

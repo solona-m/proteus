@@ -66,6 +66,7 @@ public sealed class ReadmeLinksTests
 
     [Theory]
     [MemberData(nameof(Links))]
+    [Trait("Plan", "EDGE-readme-tos-2")]
     public void AnchorNamesARealHeading(string lang, string sectionName)
     {
         var section = Enum.Parse<ReadmeSection>(sectionName);

@@ -141,6 +141,8 @@ public sealed class ReadmeTranslationTests
 
     [Theory]
     [MemberData(nameof(Translations))]
+    [Trait("Plan", "AC-readme-tos-7")]
+    [Trait("Plan", "EDGE-readme-tos-1")]
     public void SameSectionsAndTablesAsEnglish(string lang)
     {
         var en = Skeleton(Load("en"));
