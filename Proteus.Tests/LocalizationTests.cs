@@ -14,7 +14,7 @@ namespace Proteus.Tests;
 /// malformed locale file and falls back to English, so a translation that never loads looks exactly like
 /// one that was never written. Nothing at runtime will tell you. These tests are the only thing that will.
 /// </summary>
-public sealed class LocalizationTests
+public sealed partial class LocalizationTests
 {
     private const string Source = "en";
 
