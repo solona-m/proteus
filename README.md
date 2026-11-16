@@ -11,8 +11,15 @@ Proteus is a Dalamud plugin for FFXIV that offers the following capabilities:
 - **Studio.** Provides blender-like tools to manipulate meshes right on your character to fix clipping, add wind effects, and batch upscale gear to many bodies in seconds.
 - **Wear mods without giving up a gear slot.** A second skin has to be drawn as an item, but Proteus hides it on something you aren't using — invisible glasses, or a ring you don't have on, or appends it to your equipped accessories — so your actual glamour is untouched. There's nothing to set up; it picks a host on its own and never takes an item you're wearing.
 - **Add toggles to any part of any mod, not just Proteus ones.** When a mod welds a bow, a collar or a strap into geometry its author never made optional, the **Studio** tab can split that piece out and give it a real switch.
+- **Give any part of a mod a matcap.** In the **Studio**, tick parts of gear, accessories, hair, tails, Viera ears or Au Ra horns and give them a shiny, glassy or gem-like look painted from a picture of a sphere: from the set that comes with Proteus, your own pictures, or a matcap library mod you have installed. See [Matcaps](#matcaps).
+- **Every size for other bodies, in one go.** The **Studio** refits a whole mod to every size of the body mods you tick, such as Rue, YAB or Neolithe, and saves them beside the author's own sizes. For a women's mod it can add men's versions for TBSE and TBSE-X, in a **Men's body** group of their own whose default is Original. See [Every size for other bodies](#every-size-for-other-bodies).
 - **Wear hair mods made for another race.** Many hair mods are made for one race only, so on anyone else the game shows its own hairstyle instead. Proteus bends the mod's hairstyle onto your race's head and adds it to the same mod, physics included, so it just works.
 - **Make modded hair fit under hats.** Proteus presses the hair a hat would cover flat against your head, so a hat stops going straight through it. It's on by default and only acts while you're wearing a hat.
+- **Tie your look to Glamourer designs.** Save a design and Proteus remembers which mods were on, their options and every colour; apply it again and they come back. By default only Proteus mods are restored; tick **Restore every mod on the character** to bring back the rest. See [Bindings](#bindings).
+- **Recolour, glow and save looks without touching any files.** The color editor tints each region of an overlay, makes it glow — even only in the dark — and turns it into shiny cloth. Keep a combination as a preset and share it as a code or a `.ptp` file. See [Color Editor](#color-editor) and [Presets](#presets).
+- **Turn other mods into Proteus mods.** **Import** converts regular Penumbra mods, Onion overlay packs, Atramentum Luminis glow tattoos, emissive skin packs and eye texture packs, and adds presets someone shared with you. See [Import](#import).
+- **Make and share overlay mods without leaving the game.** **Create** writes a new overlay mod from your pictures, glowing tattoos included, and **Export** packs any Proteus mod as a `.pmp` to share. See [Create](#create) and [Export](#export).
+- **Bring old gear up to date.** Proteus can move gear made before Dawntrail onto Dawntrail's shaders, and points every variant of a worn piece at its mod's material, so it doesn't fall back to the game's. See [Gear shaders](#gear-shaders) and [Gear variants](#gear-variants).
 
 
 If you need help, please look at this [Troubleshooting Guide](TROUBLESHOOTING.md).
@@ -21,6 +28,8 @@ Then, join https://discord.gg/solona and ask in the #help channel. This is still
 If you're a creator and want to make mods for Proteus, read the [Creator's Guide](For%20Creators.md).
 
 How AI was and wasn't used to make Proteus (There is no AI used at runtime in your game): [AI declaration](AI-DECLARATION.md)
+
+Solona's mods, Discord, help and downloads come with [Terms of Service](TERMS.md): no hateful, racist or harassing content, and nothing sexual with childlike characters.
 
 ---
 
@@ -234,7 +243,7 @@ Skin can't emit, so a glowing overlay renders on a second skin rather than being
 
 #### Import
 
-Takes a mod pack and converts it to a Proteus mod. Three types are supported — and it also accepts a shared preset:
+Takes a mod pack and converts it to a Proteus mod. Five kinds are supported — and it also accepts a shared preset:
 
 **Regular Penumbra mods (`.pmp`)** — wear parts of a normal gear mod without using a gear slot, and get the advanced colour-table features on top. To convert a mod you've already installed in Penumbra, pick the `meta.json` in its folder instead of a pack file. Packs in Penumbra's older format are upgraded by Penumbra first, then converted.
 
@@ -257,11 +266,29 @@ Atramentum Luminis packs hide their glow in a texture's alpha channel, and witho
 - The pack's own body texture comes in too, as a separate **Author's skin** option, and it's on by default — it carries the parts of a tattoo that don't glow, and it keeps your own skin tone rather than the author's. Untick it in Penumbra if you only want the glow.
 - Proteus recognises bibo and gen3 outright. For any other body it paints onto the one you're wearing without resizing, and says so; the **Body** picker overrides it if the pack was made for something else.
 - There's no race or sex filter, so the mod paints any character on a body with the same material. Turn it off in Penumbra for characters it wasn't painted for.
-- Eye glow isn't imported today, but message if you're interested.
+- A pack's eye glow isn't imported. For glowing eyes, import an eye texture pack (below).
+
+**Emissive skin packs (`.pmp`)** — glow art made for a replaced skin shader, worn as a Proteus overlay you can recolour and dim, with no shader mod needed.
+
+A `.pmp` that holds only glow art and no models is read as an emissive skin pack rather than a regular mod. Proteus reads the glow out of each texture's alpha channel and paints it onto the skin you already wear; the pack's own body materials are left behind, since they only work with the replaced shader.
+
+- Proteus recognises bibo and gen3 outright. For any other body it paints onto the one you're wearing without resizing, and says so; the **Body** picker overrides it if the pack was made for something else.
+- If Proteus can't tell which body a texture was painted for and your character isn't drawn yet, that texture is skipped: load in and open the pack again.
+- As with Atramentum Luminis packs, there's no race or sex filter: turn the mod off in Penumbra for characters it wasn't painted for.
+
+**Eye texture packs (`.zip`)** — eyes with a glow that moves.
+
+Pick a `.zip` of loose eye images whose names end in base, mask or norm. The eyes go in as ordinary textures, and the shape the mask's red channel marks out gets an animated glow you can recolour or dim in Colors.
+
+- The glow is cut for the face you're wearing when you import it, on every race's iris for that face, so it follows you across races. If your character isn't drawn yet, it's cut for the game's first face. To wear it with another face, import the pack again while you wear that face.
+- **Glow shape** chooses how much of the mask glows: **Artwork and its falloff**, the default, keeps the soft fade around the artwork, and **Artwork only** keeps the glow inside it. It's baked in at import, so pick it before you import.
+- A pack with no mask, or a mask that marks nothing, still imports its eyes, only without the glow.
 
 **Presets (`.ptp`)** — a look someone shared for a mod you already have.
 
 A preset isn't a mod, so nothing is installed: Proteus reads which mod it was made for, offers to add it to that one, and says so if you don't have it under that name — pick the right mod yourself and it goes there instead. It's saved, not worn; wear it from that mod's Presets section in Colors when you want it.
+
+Onion, Atramentum Luminis and emissive skin packs also offer **Convert layers to BC7 .tex**, off by default. It stores the imported art block-compressed: about a quarter of the size on disk, and no PNG to decode each time Proteus composites. Block compression is lossy, so leave it off to keep the pack's images exactly as their author made them. It's greyed out when Proteus's compressor isn't loaded.
 
 #### Export
 
@@ -289,16 +316,19 @@ The pack is a straight copy of the mod folder, so nothing is lost: options, colo
 | Background glow | The soft ember glow drifting behind the window. On by default. |
 | Reduce motion | Holds the window still: hover effects land at once, and the background glow and the pulse on active mods stop moving. |
 
-Four buttons here are worth knowing about:
+Five buttons here are worth knowing about:
 
 - **Copy Logs** — runs a full refresh and saves everything Proteus logs while it runs to a text file on your desktop, with your Windows user name removed. Attach that file when you report a problem.
 - **Restore changed accessory** — forces a full redraw if a second skin ever gets stuck on a ring or bracelet after disabling or swapping.
 - **Clear texture cache** — use when a texture edit isn't showing up, e.g. you re-exported an overlay at the same size.
 - **Glow Effect Textures** — opens the folder Proteus reads animated-glow scroll maps from. Drop images in it and they appear in every gear overlay's Effect dropdown. Hover the button to see the full path.
+- **Matcap images** — opens the folder your own matcap pictures live in, `Penumbra/Proteus/Matcaps`. Pictures you put there are listed under **Your images** in the Studio's Matcaps tool.
+
+Under **Diagnostics**, two lists show what the last composite did. **Base skin** names the mod each skin texture is read from; hover a line for its game path. A mod marked *(unconfirmed)* isn't confirmed as the owner yet, and if a line names the wrong mod, **Clear texture cache** works it out again. **Overlay reach** shows, for each material, how many overlays reached its diffuse, normal and mask: a line in red is a material an overlay meant to reach and didn't, and *effects only* means only ambient occlusion or skin-tint suppression touched it. A screenshot of both helps when you report a texture that doesn't show.
 
 ##### Hair
 
-The **Hair** section fits hair mods to you in two ways: hair made for another race onto your race's head, and hair under hats. Like the Studio, both edit the hair mod's own files, so they keep working with Proteus turned off and travel with the mod if you export it.
+The **Hair** section fits hair mods to you: hair made for another race onto your race's head, and hair under hats, and it can take the cat ears off Miqo'te hair. Like the Studio, each writes into the hair mod itself, so it keeps working with Proteus turned off and travels with the mod if you export it.
 
 **Hair made for another race.** Many hair mods are made for one race only, so on any other race the game shows its own hairstyle instead. With **Fit hair mods made for another race** on, Proteus bends the mod's hairstyle onto your race's head and adds it to the same option of the same mod, so it follows that mod's own switches.
 
@@ -311,6 +341,14 @@ The **Hair** section fits hair mods to you in two ways: hair made for another ra
 - Heads differ in shape, not just size, so bending a hairstyle onto a bigger head can sink part of it into the back of the skull and show a bald patch. Proteus pushes that hair back out to where it sat on the original head, and no further. On a much bigger head (Hrothgar) the hair stretches a little to cover it. If some still sinks in, Proteus says so. Hair Proteus fitted before this update is fitted again the next time you wear it, or from the Studio.
 - To cover every race at once, open a hair model in the **Studio** and use **Port to all races**. Under **Also for the other sex** you can tick races of the other sex too: they then wear this hairstyle instead of the game's style of that number. Proteus keeps such ports up to date but never makes one by itself. Each race of the other sex can be ported on its own: its port gets its own copy of the material, so the other races keep the game's style.
 - A port you change in the Studio (the brush, part switches or a matcap) is kept as it is: Proteus doesn't remake or undo it, or by itself remake the ports of other races that share its material, until you undo that change. Porting one of those races by hand still remakes it.
+
+**Miqo'te ears.** Many hair mods for Miqo'te model cat ears into the hairstyle. With **Take the ears off Miqo'te hair mods** ticked (off by default), Proteus makes an earless copy of the hairstyle you're wearing as a Miqo'te and points the mod's option at that copy.
+
+- The author's own files are never changed: the copies go in a `Proteus Earless` folder inside the mod.
+- It changes the mod itself, so every character drawn with that mod on — in every collection, and anyone you share it with — has no ears with it. Chat says when it happens.
+- If the mod already has an earless option of its own, the section names it, so you can choose that in Penumbra instead.
+- Turning it off puts the ears back in every mod Proteus changed.
+- It works with or without **Fit hair mods made for another race**.
 
 **Hats.** Most modded hair has no hat support, so a hat worn over it goes straight through. Proteus presses the hair a hat would cover flat against your head.
 

@@ -145,10 +145,11 @@ const STATIC_PROXIES = {
     docPath: 'README.md',
     negotiate: true,
   },
-  // The two documents the README links to. Mirrored so those links resolve to rendered pages here
-  // rather than bouncing the reader back to GitHub halfway through the install instructions.
+  // The documents the README links to: troubleshooting, the creator's guide and the Terms of Service.
+  // Mirrored so those links resolve to rendered pages here rather than bouncing the reader back to
+  // GitHub halfway through the install instructions.
   //
-  // No `lang`: these two are English-only, and a switcher on them would promise translations that do
+  // No `lang`: these are English-only, and a switcher on them would promise translations that do
   // not exist. A reader following a link out of a translated README lands on English and can see that
   // for themselves.
   '/TROUBLESHOOTING.md': {
@@ -165,6 +166,13 @@ const STATIC_PROXIES = {
     ttl: 900,
     markdown: true,
     docPath: 'For Creators.md',
+  },
+  '/TERMS.md': {
+    origin: rawUrl('TERMS.md'),
+    type: 'text/markdown; charset=utf-8',
+    ttl: 900,
+    markdown: true,
+    docPath: 'TERMS.md',
   },
 
   // Milieu's user README, the page to point new Milieu users at (install steps, how to use it). Proxied from the

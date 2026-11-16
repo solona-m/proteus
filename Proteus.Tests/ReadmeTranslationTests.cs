@@ -244,6 +244,7 @@ public sealed class ReadmeTranslationTests
                 "Penumbra", "Glamourer", "Proteus", "Skindent",
                 "../TROUBLESHOOTING.md",          // resolved by the mirror; must stay relative
                 "../For%20Creators.md",
+                "../TERMS.md",                    // [AC-readme-tos-6] [EDGE-readme-tos-5]
             ];
 
             var d = new TheoryData<string, string>();
